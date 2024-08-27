@@ -1,0 +1,13 @@
+[package]
+name = "generic-front"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cpal = "0.15.3"
+generic-back = { path = "../generic-back" }
+iced = "0.12.1"
+rfd = "0.14.1"
+
+[lints]
+workspace = true

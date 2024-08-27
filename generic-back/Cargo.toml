@@ -1,0 +1,17 @@
+[package]
+name = "generic-back"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clack-host = { git = "https://github.com/prokopyl/clack.git" }
+cpal = "0.15.3"
+dirs = "5.0.1"
+hound = "3.5.1"
+rubato = "0.15.0"
+symphonia = { version = "0.5.4", features = ["all-formats", "all-codecs"] }
+walkdir = "2.5.0"
+wmidi = "4.0.10"
+
+[lints]
+workspace = true
