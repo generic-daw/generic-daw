@@ -13,12 +13,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - run: sudo apt install lld libasound2-dev
-    - run: rustup update stable && rustup default stable
-    - run: rustc --version
-    - run: cargo --version
-    - run: cargo update
-    - run: cargo check
-    - run: cargo clippy --version
+    - run: rustup default stable
     - run: cargo clippy -- -D warnings
-    - run: cargo fmt --version
     - run: cargo fmt --all -- --check
