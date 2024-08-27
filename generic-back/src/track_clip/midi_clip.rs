@@ -1,4 +1,6 @@
-use crate::{clap_host::StreamPluginAudioProcessor, track_clip::TrackClip};
+use crate::clap_host::host_shared::{HostThreadMessage, PluginThreadMessage};
+
+use super::TrackClip;
 use clack_host::{
     events::{
         event_types::{NoteOffEvent, NoteOnEvent},
@@ -8,6 +10,7 @@ use clack_host::{
 };
 use std::sync::{
     atomic::{AtomicU32, AtomicU8, Ordering::SeqCst},
+    mpsc::{Receiver, Sender},
     Arc, Mutex,
 };
 use wmidi::{MidiMessage, Velocity};
@@ -31,15 +34,16 @@ enum DirtyEvent<'a> {
 }
 
 pub struct MidiClip<'a> {
-    plugin: Arc<Mutex<StreamPluginAudioProcessor>>, // plugin audio processor
-    global_start: u32,                              // global start time of the clip
-    pattern: Vec<Arc<MidiNote<'a>>>,                // pattern of events and their times
-    started_notes: Mutex<Vec<Arc<MidiNote<'a>>>>,   // notes that have been started
-    last_global_time: AtomicU32,                    // last global time the clip was updated
-    running_buffer: Mutex<[f32; 16]>,               // running buffer of the clip
-    last_buffer_index: AtomicU8,                    // last accessed index in the buffer
-    buffer_dirty: Mutex<DirtyEvent<'a>>,            // whether the buffer needs to be refreshed
-    audio_ports: Mutex<AudioPorts>,                 // audio ports for the plugin
+    plugin_sender: Sender<PluginThreadMessage>,
+    host_receiver: Mutex<Receiver<HostThreadMessage>>,
+    global_start: u32,
+    pattern: Vec<Arc<MidiNote<'a>>>,
+    started_notes: Mutex<Vec<Arc<MidiNote<'a>>>>,
+    last_global_time: AtomicU32,
+    running_buffer: Mutex<[f32; 16]>,
+    last_buffer_index: AtomicU8,
+    buffer_dirty: Mutex<DirtyEvent<'a>>,
+    audio_ports: Arc<Mutex<AudioPorts>>,
 }
 
 impl<'a> TrackClip for MidiClip<'a> {
@@ -81,9 +85,13 @@ impl<'a> TrackClip for MidiClip<'a> {
 }
 
 impl<'a> MidiClip<'a> {
-    pub fn new(plugin: Arc<Mutex<StreamPluginAudioProcessor>>) -> Self {
+    pub fn new(
+        plugin_sender: Sender<PluginThreadMessage>,
+        plugin_receiver: Receiver<HostThreadMessage>,
+    ) -> Self {
         Self {
-            plugin,
+            plugin_sender,
+            host_receiver: Mutex::new(plugin_receiver),
             global_start: 0,
             pattern: Vec::new(),
             started_notes: Mutex::new(Vec::new()),
@@ -91,7 +99,7 @@ impl<'a> MidiClip<'a> {
             running_buffer: Mutex::new([0.0; 16]),
             last_buffer_index: AtomicU8::new(15),
             buffer_dirty: Mutex::new(DirtyEvent::None),
-            audio_ports: Mutex::new(AudioPorts::with_capacity(2, 1)),
+            audio_ports: Arc::new(Mutex::new(AudioPorts::with_capacity(2, 1))),
         }
     }
 
@@ -150,97 +158,102 @@ impl<'a> MidiClip<'a> {
     }
 
     fn refresh_buffer(&self, global_time: u32) {
-        let mut buffers = [[0.0; 8]; 2];
-
-        let mut audio_ports = self.audio_ports.lock().unwrap();
-        let mut output_audio = audio_ports.with_output_buffers([AudioPortBuffer {
-            latency: 0,
-            channels: AudioPortBufferType::f32_output_only(
-                buffers.iter_mut().map(<[f32; 8]>::as_mut_slice),
-            ),
-        }]);
-
         let buffer = self.get_input_events(global_time);
 
-        self.plugin.lock().unwrap().process(
-            &InputAudioBuffers::empty(),
-            &mut output_audio,
-            &InputEvents::from_buffer(&buffer),
-            &mut OutputEvents::void(),
-        );
+        self.plugin_sender
+            .send(PluginThreadMessage::ProcessAudio(
+                [[0.0; 8]; 2],
+                self.audio_ports.clone(),
+                self.audio_ports.clone(),
+                buffer,
+                EventBuffer::new(),
+            ))
+            .unwrap();
 
-        (0..16).step_by(2).for_each(|i| {
-            self.running_buffer.lock().unwrap()[i] = buffers[0][i];
-            self.running_buffer.lock().unwrap()[i + 1] = buffers[1][i];
-        });
+        if let HostThreadMessage::AudioProcessed(buffers, _) =
+            self.host_receiver.lock().unwrap().recv().unwrap()
+        {
+            (0..16).step_by(2).for_each(|i| {
+                self.running_buffer.lock().unwrap()[i] = buffers[0][i];
+                self.running_buffer.lock().unwrap()[i + 1] = buffers[1][i];
+            });
 
-        *self.buffer_dirty.lock().unwrap() = DirtyEvent::None;
+            *self.buffer_dirty.lock().unwrap() = DirtyEvent::None;
+        };
     }
 
     fn get_input_events(&self, global_time: u32) -> EventBuffer {
-        let plugin_counter = self.plugin.lock().unwrap().get_counter();
         let mut buffer = EventBuffer::new();
-        let buffer_dirty = self.buffer_dirty.lock().unwrap().clone();
-        match buffer_dirty {
-            DirtyEvent::None => {}
-            DirtyEvent::Jump => {
-                self.jump_refresh(&mut buffer, global_time, plugin_counter);
+
+        self.plugin_sender
+            .send(PluginThreadMessage::GetCounter)
+            .unwrap();
+        if let HostThreadMessage::Counter(plugin_counter) =
+            self.host_receiver.lock().unwrap().recv().unwrap()
+        {
+            let buffer_dirty = self.buffer_dirty.lock().unwrap().clone();
+            match buffer_dirty {
+                DirtyEvent::None => {}
+                DirtyEvent::Jump => {
+                    self.jump_refresh(&mut buffer, global_time, plugin_counter);
+                }
+                DirtyEvent::NoteAdded => {
+                    self.note_add_refresh(&mut buffer, global_time, plugin_counter);
+                }
+                DirtyEvent::NoteRemoved => {
+                    self.note_remove_refresh(&mut buffer, global_time, plugin_counter);
+                }
+                DirtyEvent::NoteEndChanged((note, new_note)) => {
+                    self.note_end_changed_refresh(&note, &new_note);
+                }
+                DirtyEvent::NoteReplaced => {
+                    self.note_remove_refresh(&mut buffer, global_time, plugin_counter);
+                    self.note_add_refresh(&mut buffer, global_time, plugin_counter);
+                }
             }
-            DirtyEvent::NoteAdded => {
-                self.note_add_refresh(&mut buffer, global_time, plugin_counter);
-            }
-            DirtyEvent::NoteRemoved => {
-                self.note_remove_refresh(&mut buffer, global_time, plugin_counter);
-            }
-            DirtyEvent::NoteEndChanged((note, new_note)) => {
-                self.note_end_changed_refresh(&note, &new_note);
-            }
-            DirtyEvent::NoteReplaced => {
-                self.note_remove_refresh(&mut buffer, global_time, plugin_counter);
-                self.note_add_refresh(&mut buffer, global_time, plugin_counter);
-            }
+
+            self.pattern
+                .iter()
+                .filter(|midi_note| {
+                    midi_note.global_start >= global_time
+                        && midi_note.global_start < global_time + 16
+                })
+                .for_each(|midi_note| {
+                    // notes that start during the running buffer
+                    if let MidiMessage::NoteOn(channel, note, velocity) = midi_note.note {
+                        buffer.push(&NoteOnEvent::new(
+                            midi_note.global_start + plugin_counter,
+                            Pckn::new(0u8, channel.index(), note as u16, Match::All),
+                            u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                        ));
+                        self.started_notes.lock().unwrap().push(midi_note.clone());
+                    };
+                });
+
+            let mut indices = Vec::new();
+
+            self.started_notes
+                .lock()
+                .unwrap()
+                .iter()
+                .enumerate()
+                .filter(|(_, note)| note.global_end < global_time + 16)
+                .for_each(|(index, midi_note)| {
+                    // notes that end before the running buffer ends
+                    if let MidiMessage::NoteOn(channel, note, velocity) = midi_note.note {
+                        buffer.push(&NoteOffEvent::new(
+                            midi_note.global_end + plugin_counter,
+                            Pckn::new(0u8, channel.index(), note as u16, Match::All),
+                            u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                        ));
+                        indices.push(index);
+                    };
+                });
+
+            indices.iter().rev().for_each(|i| {
+                self.started_notes.lock().unwrap().remove(*i);
+            });
         }
-
-        self.pattern
-            .iter()
-            .filter(|midi_note| {
-                midi_note.global_start >= global_time && midi_note.global_start < global_time + 16
-            })
-            .for_each(|midi_note| {
-                // notes that start during the running buffer
-                if let MidiMessage::NoteOn(channel, note, velocity) = midi_note.note {
-                    buffer.push(&NoteOnEvent::new(
-                        midi_note.global_start + plugin_counter,
-                        Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                        u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
-                    ));
-                    self.started_notes.lock().unwrap().push(midi_note.clone());
-                };
-            });
-
-        let mut indices = Vec::new();
-
-        self.started_notes
-            .lock()
-            .unwrap()
-            .iter()
-            .enumerate()
-            .filter(|(_, note)| note.global_end < global_time + 16)
-            .for_each(|(index, midi_note)| {
-                // notes that end before the running buffer ends
-                if let MidiMessage::NoteOn(channel, note, velocity) = midi_note.note {
-                    buffer.push(&NoteOffEvent::new(
-                        midi_note.global_end + plugin_counter,
-                        Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                        u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
-                    ));
-                    indices.push(index);
-                };
-            });
-
-        indices.iter().rev().for_each(|i| {
-            self.started_notes.lock().unwrap().remove(*i);
-        });
 
         buffer
     }

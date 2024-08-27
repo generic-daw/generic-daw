@@ -1,4 +1,4 @@
-use crate::track_clip::TrackClip;
+use super::TrackClip;
 use cpal::StreamConfig;
 use rubato::{
     SincFixedIn, SincInterpolationParameters, SincInterpolationType, VecResampler, WindowFunction,
@@ -14,9 +14,8 @@ use symphonia::core::{
     probe::Hint,
 };
 
-// Structure to store interleaved audio data
 pub struct InterleavedAudio {
-    samples: Arc<[f32]>, // Audio samples alternate between left and right channels
+    samples: Arc<[f32]>,
     name: String,
 }
 
@@ -25,34 +24,29 @@ impl InterleavedAudio {
         Self { samples, name }
     }
 
-    // Method to get the length of the sample in samples
     pub fn len(&self) -> u32 {
         self.samples.len() as u32
     }
 
-    // Method to check if the sample is empty
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    // Method to get the sample name
     pub fn get_name(&self) -> String {
         self.name.clone()
     }
 
-    // Method to get the sample at a specific index
     pub fn get_sample_at_index(&self, index: u32) -> &f32 {
         self.samples.get(index as usize).unwrap_or(&0.0)
     }
 }
 
-// Structure to manage an individual audio clip
 pub struct AudioClip {
-    audio: Arc<InterleavedAudio>, // The audio sample
-    global_start: u32,            // The start time of the clip within the arrangement
-    global_end: u32,              // The end time of the clip within the arrangement
-    clip_start: u32,              // The start time within the clip
-    volume: f32,                  // The volume of the clip
+    audio: Arc<InterleavedAudio>,
+    global_start: u32,
+    global_end: u32,
+    clip_start: u32,
+    volume: f32,
 }
 
 impl TrackClip for AudioClip {
@@ -62,7 +56,6 @@ impl TrackClip for AudioClip {
             * self.volume
     }
 
-    // Method to get the global end time of the audio clip
     fn get_global_end(&self) -> u32 {
         self.global_end
     }
@@ -80,44 +73,41 @@ impl AudioClip {
         }
     }
 
-    // Method to trim a number of samples from the start of the clip
     pub fn trim_start(&mut self, samples: i32) {
         if samples < 0 {
             let samples = -samples as u32;
-            let samples = min(samples, self.global_start); // a clip can't extend beyond the start of the playlist
-            let samples = min(samples, self.clip_start); // a clip can't extend beyond the start of the audio it contains
+            let samples = min(samples, self.global_start);
+            let samples = min(samples, self.clip_start);
 
             self.global_start -= samples;
             self.clip_start -= samples;
         } else {
             let samples = samples as u32;
-            let samples = min(samples, self.global_end - self.global_start); // a clip can't have negative length
+            let samples = min(samples, self.global_end - self.global_start);
 
             self.global_start += samples;
             self.clip_start += samples;
         }
     }
 
-    // Method to trim a number of samples from the end of the clip
     pub fn trim_end(&mut self, samples: i32) {
         if samples < 0 {
             let samples = -samples as u32;
-            let samples = min(samples, self.global_end - self.global_start); // a clip can't have negative length
+            let samples = min(samples, self.global_end - self.global_start);
 
             self.global_end -= samples;
         } else {
             let samples = samples as u32;
-            let samples = min(samples, self.audio.len() - self.clip_start); // a clip can't be extended beyond the audio it contains
+            let samples = min(samples, self.audio.len() - self.clip_start);
 
             self.global_end += samples;
         }
     }
 
-    // Method to move the clip by a number of samples
     pub fn move_by(&mut self, samples: i32) {
         if samples < 0 {
             let samples = -samples as u32;
-            let samples = min(samples, self.global_end - self.global_start); // a clip can't start before the start of the playlist
+            let samples = min(samples, self.global_end - self.global_start);
 
             self.global_start -= samples;
             self.global_end -= samples;
@@ -130,11 +120,9 @@ impl AudioClip {
     }
 }
 
-// Function to read an audio file and return its data as InterleavedAudio
 pub fn read_audio_file(path: &PathBuf, config: &StreamConfig) -> Arc<InterleavedAudio> {
     let mut samples = Vec::new();
 
-    // Probe the audio format and get the format reader
     let mut format = symphonia::default::get_probe()
         .format(
             &Hint::new(),
@@ -152,7 +140,6 @@ pub fn read_audio_file(path: &PathBuf, config: &StreamConfig) -> Arc<Interleaved
     let sample_rate = track.codec_params.sample_rate.unwrap();
     let name = path.file_name().unwrap().to_str().unwrap().to_string();
 
-    // Create a decoder for the track
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
         .unwrap();
@@ -161,13 +148,11 @@ pub fn read_audio_file(path: &PathBuf, config: &StreamConfig) -> Arc<Interleaved
 
     let mut sample_buffer = None;
     while let Ok(packet) = format.next_packet() {
-        // Loop through packets in the audio file
         if packet.track_id() != track_id {
-            continue; // Skip packets that do not match the track ID
+            continue;
         }
 
         match decoder.decode(&packet) {
-            // Decode the packet
             Ok(audio_buf) => {
                 if sample_buffer.is_none() {
                     let spec = *audio_buf.spec();
@@ -184,12 +169,10 @@ pub fn read_audio_file(path: &PathBuf, config: &StreamConfig) -> Arc<Interleaved
         }
     }
 
-    // If the sample rate matches the target sample rate, return the audio data
     if sample_rate == config.sample_rate.0 {
         return Arc::new(InterleavedAudio::new(samples.into(), name));
     }
 
-    // If the sample rate does not match, resample the audio
     let mut resampler = SincFixedIn::<f32>::new(
         config.sample_rate.0 as f64 / sample_rate as f64,
         2.0,
@@ -221,6 +204,5 @@ pub fn read_audio_file(path: &PathBuf, config: &StreamConfig) -> Arc<Interleaved
         samples.extend(resampled_file.iter().map(|s| s[i]));
     }
 
-    // Return the resampled audio data
     Arc::new(InterleavedAudio::new(samples.into(), name))
 }

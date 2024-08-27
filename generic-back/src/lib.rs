@@ -10,14 +10,11 @@ use cpal::{
 };
 use std::sync::{Arc, Mutex};
 
-// Function to get the default audio output device and its configuration
 pub fn cpal_get_default_device() -> (Device, StreamConfig) {
-    // Get the default output device
     let device = cpal::default_host()
         .default_output_device()
         .expect("no output device available");
 
-    // Get the supported output configuration for stereo channels
     let supported_config = device
         .default_output_config()
         .expect("no output config available");
@@ -25,7 +22,6 @@ pub fn cpal_get_default_device() -> (Device, StreamConfig) {
     (device, supported_config.into())
 }
 
-// Function to create an output stream
 pub fn get_output_stream(
     device: &Device,
     config: &StreamConfig,
@@ -34,7 +30,6 @@ pub fn get_output_stream(
 ) -> Stream {
     let mut global_time = play_from;
 
-    // Build the output stream
     device
         .build_output_stream(
             config,
@@ -52,7 +47,6 @@ pub fn get_output_stream(
         .unwrap()
 }
 
-// Function to convert seconds to interleaved samples
 pub fn seconds_to_interleaved_samples(seconds: f32, sample_rate: u32) -> i32 {
     (seconds * sample_rate as f32) as i32 * 2 // Multiply by SAMPLE_RATE and by 2 (for interleaved stereo)
 }
