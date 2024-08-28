@@ -50,9 +50,14 @@ impl Sandbox for Daw {
                 }
             }
             Message::FileSelected(Some(path)) => {
-                let clip = Arc::new(AudioClip::new(self.audio_engine.load_sample(&path)));
-                let index = self.audio_engine.add_track();
-                self.audio_engine.add_audio_clip(index, clip);
+                let sample = self.audio_engine.load_sample(&path);
+                if let Ok(sample) = sample {
+                    let clip = Arc::new(AudioClip::new(sample));
+                    let index = self.audio_engine.add_track();
+                    self.audio_engine.add_audio_clip(index, clip);
+                } else {
+                    eprintln!("{}: {path}", sample.err().unwrap());
+                }
             }
             Message::FileSelected(None) => {
                 // Handle case where no file was selected, if necessary

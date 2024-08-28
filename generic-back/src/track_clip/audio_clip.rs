@@ -1,4 +1,5 @@
 use super::TrackClip;
+use anyhow::{anyhow, Result};
 use cpal::StreamConfig;
 use rubato::{
     SincFixedIn, SincInterpolationParameters, SincInterpolationType, VecResampler, WindowFunction,
@@ -120,21 +121,24 @@ impl AudioClip {
     }
 }
 
-pub fn read_audio_file(path: &PathBuf, config: &StreamConfig) -> Arc<InterleavedAudio> {
+pub fn read_audio_file(path: &PathBuf, config: &StreamConfig) -> Result<Arc<InterleavedAudio>> {
     let mut samples = Vec::new();
 
-    let mut format = symphonia::default::get_probe()
-        .format(
-            &Hint::new(),
-            MediaSourceStream::new(
-                Box::new(File::open(path).expect("Can't open file")),
-                MediaSourceStreamOptions::default(),
-            ),
-            &FormatOptions::default(),
-            &MetadataOptions::default(),
-        )
-        .unwrap()
-        .format;
+    let format = symphonia::default::get_probe().format(
+        &Hint::new(),
+        MediaSourceStream::new(
+            Box::new(File::open(path).expect("Can't open file")),
+            MediaSourceStreamOptions::default(),
+        ),
+        &FormatOptions::default(),
+        &MetadataOptions::default(),
+    );
+
+    if let Err(err) = format {
+        return Err(anyhow!(err));
+    }
+
+    let mut format = format.unwrap().format;
 
     let track = format.default_track().unwrap();
     let sample_rate = track.codec_params.sample_rate.unwrap();
@@ -170,7 +174,7 @@ pub fn read_audio_file(path: &PathBuf, config: &StreamConfig) -> Arc<Interleaved
     }
 
     if sample_rate == config.sample_rate.0 {
-        return Arc::new(InterleavedAudio::new(samples.into(), name));
+        return Ok(Arc::new(InterleavedAudio::new(samples.into(), name)));
     }
 
     let mut resampler = SincFixedIn::<f32>::new(
@@ -204,5 +208,5 @@ pub fn read_audio_file(path: &PathBuf, config: &StreamConfig) -> Arc<Interleaved
         samples.extend(resampled_file.iter().map(|s| s[i]));
     }
 
-    Arc::new(InterleavedAudio::new(samples.into(), name))
+    Ok(Arc::new(InterleavedAudio::new(samples.into(), name)))
 }

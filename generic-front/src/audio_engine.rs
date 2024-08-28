@@ -1,3 +1,4 @@
+use anyhow::Result;
 use cpal::{traits::StreamTrait, Device, Stream, StreamConfig};
 use generic_back::{
     arrangement::Arrangement,
@@ -27,7 +28,7 @@ impl AudioEngine {
         }
     }
 
-    pub fn load_sample(&self, path: &str) -> Arc<InterleavedAudio> {
+    pub fn load_sample(&self, path: &str) -> Result<Arc<InterleavedAudio>> {
         read_audio_file(&PathBuf::from(path), &self.config)
     }
 
