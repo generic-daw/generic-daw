@@ -1,29 +1,7 @@
+use super::PluginThreadMessage;
 use clack_extensions::gui::{GuiSize, HostGuiImpl, PluginGui};
-use clack_host::{
-    host::{HostError, MainThreadHandler, SharedHandler},
-    plugin::InitializedPluginHandle,
-    prelude::{AudioPorts, EventBuffer},
-};
-use std::sync::{mpsc::Sender, Arc, Mutex};
-
-pub enum PluginThreadMessage {
-    RunOnMainThread,
-    GuiClosed,
-    GuiRequestResized(GuiSize),
-    ProcessAudio(
-        [[f32; 8]; 2],
-        Arc<Mutex<AudioPorts>>,
-        Arc<Mutex<AudioPorts>>,
-        EventBuffer,
-        EventBuffer,
-    ),
-    GetCounter,
-}
-
-pub enum HostThreadMessage {
-    AudioProcessed([[f32; 8]; 2], EventBuffer),
-    Counter(u32),
-}
+use clack_host::prelude::*;
+use std::sync::mpsc::Sender;
 
 pub struct HostShared {
     sender: Sender<PluginThreadMessage>,

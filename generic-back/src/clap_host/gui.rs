@@ -1,5 +1,5 @@
 use clack_extensions::gui::{GuiApiType, GuiConfiguration, GuiError, GuiSize, PluginGui};
-use clack_host::plugin::PluginMainThreadHandle;
+use clack_host::prelude::*;
 use winit::dpi::{LogicalSize, PhysicalSize, Size};
 
 pub struct Gui {
@@ -23,16 +23,21 @@ impl Gui {
         gui: &PluginGui,
         plugin: &mut PluginMainThreadHandle,
     ) -> Option<GuiConfiguration<'static>> {
-        let api_type = GuiApiType::default_for_current_platform()?; // TODO: wayland
-        let config = GuiConfiguration {
+        let api_type = GuiApiType::default_for_current_platform()?;
+        let mut config = GuiConfiguration {
             api_type,
-            is_floating: true, // wayland doesn't support embedded windows
+            is_floating: false,
         };
 
         if gui.is_api_supported(plugin, config) {
             Some(config)
         } else {
-            None
+            config.is_floating = true;
+            if gui.is_api_supported(plugin, config) {
+                Some(config)
+            } else {
+                None
+            }
         }
     }
 
@@ -54,6 +59,11 @@ impl Gui {
             }
             .into()
         }
+    }
+
+    pub fn needs_floating(&self) -> Option<bool> {
+        self.configuration
+            .map(|GuiConfiguration { is_floating, .. }| is_floating)
     }
 
     pub fn open_floating(&self, plugin: &mut PluginMainThreadHandle) -> Result<(), GuiError> {

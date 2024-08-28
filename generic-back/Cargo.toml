@@ -7,6 +7,7 @@ edition = "2021"
 clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
     "clack-host",
     "gui",
+    "raw-window-handle_06",
 ] }
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
 cpal = "0.15.3"

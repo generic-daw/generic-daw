@@ -1,21 +1,40 @@
 mod gui;
-pub mod host_shared;
+mod host_shared;
 
-use clack_extensions::gui::HostGui;
+use clack_extensions::gui::{GuiSize, HostGui};
 use clack_host::{prelude::*, process::StartedPluginAudioProcessor};
 use cpal::StreamConfig;
 use gui::Gui;
-use host_shared::{HostPluginThread, HostShared, HostThreadMessage, PluginThreadMessage};
+use host_shared::{HostPluginThread, HostShared};
 use std::{
     path::PathBuf,
     result::Result,
     sync::{
         atomic::{AtomicU32, Ordering::SeqCst},
         mpsc::{Receiver, Sender},
-        Mutex,
+        Arc, Mutex,
     },
 };
 use walkdir::WalkDir;
+
+pub enum PluginThreadMessage {
+    RunOnMainThread,
+    GuiClosed,
+    GuiRequestResized(GuiSize),
+    ProcessAudio(
+        [[f32; 8]; 2],
+        Arc<Mutex<AudioPorts>>,
+        Arc<Mutex<AudioPorts>>,
+        EventBuffer,
+        EventBuffer,
+    ),
+    GetCounter,
+}
+
+pub enum HostThreadMessage {
+    AudioProcessed([[f32; 8]; 2], EventBuffer),
+    Counter(u32),
+}
 
 pub struct Host;
 
@@ -168,19 +187,43 @@ pub fn run(
             .map(|gui| Gui::new(gui, &mut instance.plugin_handle()))
             .unwrap();
 
-        run_gui_floating(
-            instance,
-            &sender_host,
-            receiver_plugin,
-            gui,
-            &StreamPluginAudioProcessor {
-                audio_processor: Mutex::new(audio_processor),
-                plugin_sample_counter: AtomicU32::new(0),
-            },
-        );
+        if gui.needs_floating().unwrap() {
+            run_gui_floating(
+                instance,
+                &sender_host,
+                receiver_plugin,
+                gui,
+                &StreamPluginAudioProcessor {
+                    audio_processor: Mutex::new(audio_processor),
+                    plugin_sample_counter: AtomicU32::new(0),
+                },
+            );
+        } else {
+            run_gui_embedded(
+                instance,
+                &sender_host,
+                receiver_plugin,
+                gui,
+                &StreamPluginAudioProcessor {
+                    audio_processor: Mutex::new(audio_processor),
+                    plugin_sample_counter: AtomicU32::new(0),
+                },
+            );
+        }
     });
 
     (sender_plugin, receiver_host)
+}
+
+#[allow(clippy::needless_pass_by_value)]
+fn run_gui_embedded(
+    mut _instance: PluginInstance<Host>,
+    _sender: &Sender<HostThreadMessage>,
+    _receiver: Receiver<PluginThreadMessage>,
+    mut _gui: Gui,
+    _audio_processor: &StreamPluginAudioProcessor,
+) {
+    todo!()
 }
 
 #[allow(clippy::significant_drop_tightening)]
