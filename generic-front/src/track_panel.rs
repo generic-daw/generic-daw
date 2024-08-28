@@ -23,7 +23,7 @@ impl Sandbox for TrackPanel {
     type Message = Message;
 
     fn new() -> Self {
-        panic!("TrackPanel should be created with an arrangement")
+        unimplemented!()
     }
 
     fn update(&mut self, message: Message) {
