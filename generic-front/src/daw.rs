@@ -61,7 +61,7 @@ impl Sandbox for Daw {
                         .expect("Failed to load sample"),
                 ));
                 let index = self.audio_engine.add_track();
-                self.audio_engine.add_audio_clip(index, clip.clone());
+                self.audio_engine.add_audio_clip(index, clip);
                 self.update(Message::ArrangementUpdated);
             }
             Message::ArrangementUpdated => {

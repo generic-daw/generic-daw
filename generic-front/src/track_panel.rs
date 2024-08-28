@@ -32,20 +32,21 @@ impl Sandbox for TrackPanel {
                 // Handle arrangement updates, if necessary
                 // For example, you could trigger a re-render or refresh here
             }
-            _ => {}
         }
     }
 
     fn view(&self) -> Element<Message> {
-        let arrangement = self.arrangement.lock().unwrap();
-
-        let tracks = arrangement.tracks().iter().enumerate().fold(
-            column![].spacing(10),
-            |col, (index, _)| {
+        let tracks = self
+            .arrangement
+            .lock()
+            .unwrap()
+            .tracks()
+            .iter()
+            .enumerate()
+            .fold(column![].spacing(10), |col, (index, _)| {
                 let track_name = format!("Track {}", index + 1);
                 col.push(text(track_name))
-            },
-        );
+            });
 
         container(tracks)
             .width(Length::FillPortion(2))

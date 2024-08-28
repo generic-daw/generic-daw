@@ -32,19 +32,20 @@ impl Sandbox for Timeline {
                 // Handle arrangement updates, if necessary
                 // For example, you could trigger a re-render or refresh here
             }
-            _ => {}
         }
     }
 
     fn view(&self) -> Element<Message> {
-        let arrangement = self.arrangement.lock().unwrap();
-
-        let clips = arrangement.tracks().iter().enumerate().fold(
-            column![].spacing(10),
-            |col, (track_index, track)| {
-                let track = track.lock().unwrap();
+        let clips = self
+            .arrangement
+            .lock()
+            .unwrap()
+            .tracks()
+            .iter()
+            .enumerate()
+            .fold(column![].spacing(10), |col, (track_index, track)| {
                 let track_name = format!("Track {}", track_index + 1);
-                let track_clips = track.clips().iter().enumerate().fold(
+                let track_clips = track.lock().unwrap().clips().iter().enumerate().fold(
                     column![].spacing(5),
                     |col, (clip_index, clip)| {
                         let clip_info = format!(
@@ -56,8 +57,7 @@ impl Sandbox for Timeline {
                     },
                 );
                 col.push(text(track_name)).push(track_clips)
-            },
-        );
+            });
 
         container(clips)
             .width(Length::FillPortion(3))

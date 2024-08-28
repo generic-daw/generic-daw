@@ -17,7 +17,7 @@ impl Default for Arrangement {
 }
 
 impl Arrangement {
-    pub fn tracks(&self) -> &Vec<Arc<Mutex<Track>>> {
+    pub const fn tracks(&self) -> &Vec<Arc<Mutex<Track>>> {
         &self.tracks
     }
 
