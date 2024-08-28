@@ -12,6 +12,10 @@ impl Default for Track {
 }
 
 impl Track {
+    pub fn new() -> Self {
+        Self { clips: Vec::new() }
+    }
+
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {
         self.clips
             .iter()
@@ -31,8 +35,8 @@ impl Track {
         self.len() == 0
     }
 
-    pub fn add(&mut self, track_clip: Arc<dyn TrackClip>) {
-        self.clips.push(track_clip);
+    pub fn push(&mut self, audio_clip: Arc<dyn TrackClip>) {
+        self.clips.push(audio_clip);
     }
 
     pub fn get(&self, index: usize) -> &Arc<dyn TrackClip> {
@@ -41,13 +45,5 @@ impl Track {
 
     pub fn remove(&mut self, index: usize) {
         self.clips.remove(index);
-    }
-
-    pub fn new() -> Self {
-        Self { clips: Vec::new() }
-    }
-
-    pub fn push(&mut self, audio_clip: Arc<dyn TrackClip>) {
-        self.clips.push(audio_clip);
     }
 }

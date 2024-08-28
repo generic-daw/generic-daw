@@ -3,7 +3,6 @@ resolver = "2"
 members = ["generic-front", "generic-back"]
 
 [workspace.lints.rust]
-dead_code = "allow"
 unused_crate_dependencies = "warn"
 
 [workspace.lints.clippy]
@@ -17,6 +16,7 @@ missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
+struct_field_names = "allow"
 
 [profile.release]
 lto = true

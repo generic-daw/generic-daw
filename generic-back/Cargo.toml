@@ -5,14 +5,8 @@ edition = "2021"
 
 [dependencies]
 clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
-    "audio-ports",
     "clack-host",
     "gui",
-    "log",
-    "note-ports",
-    "params",
-    "raw-window-handle_06",
-    "timer",
 ] }
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
 cpal = "0.15.3"

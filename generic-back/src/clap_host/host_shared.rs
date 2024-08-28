@@ -1,10 +1,7 @@
-use clack_extensions::{
-    gui::{GuiSize, HostGuiImpl},
-    log::{HostLogImpl, LogSeverity},
-    params::HostParamsImplShared,
-};
+use clack_extensions::gui::{GuiSize, HostGuiImpl, PluginGui};
 use clack_host::{
-    host::{HostError, SharedHandler},
+    host::{HostError, MainThreadHandler, SharedHandler},
+    plugin::InitializedPluginHandle,
     prelude::{AudioPorts, EventBuffer},
 };
 use std::sync::{mpsc::Sender, Arc, Mutex};
@@ -38,20 +35,6 @@ impl<'a> SharedHandler<'a> for HostShared {
     fn request_restart(&self) {}
 }
 
-impl HostLogImpl for HostShared {
-    fn log(&self, severity: LogSeverity, message: &str) {
-        if severity <= LogSeverity::Debug {
-            return;
-        }
-
-        eprintln!("{severity:?}: {message}");
-    }
-}
-
-impl HostParamsImplShared for HostShared {
-    fn request_flush(&self) {}
-}
-
 impl HostGuiImpl for HostShared {
     fn resize_hints_changed(&self) {}
 
@@ -77,5 +60,32 @@ impl HostGuiImpl for HostShared {
 impl HostShared {
     pub const fn new(sender: Sender<PluginThreadMessage>) -> Self {
         Self { sender }
+    }
+}
+
+pub struct HostPluginThread<'a> {
+    plugin: Option<InitializedPluginHandle<'a>>,
+    pub gui: Option<PluginGui>,
+}
+
+impl<'a> MainThreadHandler<'a> for HostPluginThread<'a> {
+    fn initialized(&mut self, instance: InitializedPluginHandle<'a>) {
+        self.gui = instance.get_extension();
+        self.plugin = Some(instance);
+    }
+}
+
+impl<'a> HostPluginThread<'a> {
+    pub const fn new() -> Self {
+        Self {
+            plugin: None,
+            gui: None,
+        }
+    }
+}
+
+impl<'a> Default for HostPluginThread<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }

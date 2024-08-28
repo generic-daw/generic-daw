@@ -56,11 +56,6 @@ impl Gui {
         }
     }
 
-    pub fn needs_floating(&self) -> Option<bool> {
-        self.configuration
-            .map(|GuiConfiguration { is_floating, .. }| is_floating)
-    }
-
     pub fn open_floating(&self, plugin: &mut PluginMainThreadHandle) -> Result<(), GuiError> {
         let Some(configuration) = self.configuration else {
             panic!("Called open_floating on incompatible plugin")
@@ -80,7 +75,7 @@ impl Gui {
     pub fn resize(
         &self,
         plugin: &mut PluginMainThreadHandle,
-        size: PhysicalSize<u32>,
+        size: Size,
         scale_factor: f64,
     ) -> Size {
         let uses_logical_pixels = self.configuration.unwrap().api_type.uses_logical_size();
@@ -92,6 +87,7 @@ impl Gui {
                 height: size.height,
             }
         } else {
+            let size = size.to_physical(scale_factor);
             GuiSize {
                 width: size.width,
                 height: size.height,

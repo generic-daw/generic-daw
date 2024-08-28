@@ -17,7 +17,7 @@ pub struct Daw {
 pub enum Message {
     TrackPanel(<TrackPanel as Sandbox>::Message),
     Timeline(<Timeline as Sandbox>::Message),
-    LoadSample(String),
+    LoadSample(#[allow(dead_code)] String),
     Play,
     Stop,
     FileSelected(Option<String>), // Add a new variant for file selection

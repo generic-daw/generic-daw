@@ -43,7 +43,7 @@ impl AudioEngine {
             .get(index)
             .lock()
             .unwrap()
-            .add(clip);
+            .push(clip);
     }
 
     pub fn play(&mut self) {

@@ -1,14 +1,11 @@
-pub mod gui;
-pub mod host_plugin_thread;
+mod gui;
 pub mod host_shared;
-pub mod timer;
 
-use clack_extensions::{gui::HostGui, log::HostLog, params::HostParams, timer::HostTimer};
+use clack_extensions::gui::HostGui;
 use clack_host::{prelude::*, process::StartedPluginAudioProcessor};
 use cpal::StreamConfig;
 use gui::Gui;
-use host_plugin_thread::HostPluginThread;
-use host_shared::{HostShared, HostThreadMessage, PluginThreadMessage};
+use host_shared::{HostPluginThread, HostShared, HostThreadMessage, PluginThreadMessage};
 use std::{
     path::PathBuf,
     result::Result,
@@ -28,11 +25,7 @@ impl HostHandlers for Host {
     type AudioProcessor<'a> = ();
 
     fn declare_extensions(builder: &mut HostExtensions<Self>, _shared: &Self::Shared<'_>) {
-        builder
-            .register::<HostLog>()
-            .register::<HostGui>()
-            .register::<HostTimer>()
-            .register::<HostParams>();
+        builder.register::<HostGui>();
     }
 }
 
@@ -42,60 +35,7 @@ struct StreamPluginAudioProcessor {
 }
 
 impl StreamPluginAudioProcessor {
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn run(
-        bundle: PluginBundle,
-        config: StreamConfig,
-    ) -> (Sender<PluginThreadMessage>, Receiver<HostThreadMessage>) {
-        let (sender_plugin, receiver_plugin) = std::sync::mpsc::channel();
-        let (sender_host, receiver_host) = std::sync::mpsc::channel();
-
-        let sender_plugin_clone = sender_plugin.clone();
-        std::thread::spawn(move || {
-            let factory = bundle.get_plugin_factory().unwrap();
-            let plugin_descriptor = factory.plugin_descriptors().next().unwrap();
-            let mut instance = PluginInstance::<Host>::new(
-                |()| HostShared::new(sender_plugin_clone),
-                |_| HostPluginThread::new(),
-                &bundle,
-                plugin_descriptor.id().unwrap(),
-                &HostInfo::new("", "", "", "").unwrap(),
-            )
-            .unwrap();
-
-            let audio_config = PluginAudioConfiguration {
-                sample_rate: config.sample_rate.0 as f64,
-                min_frames_count: 16,
-                max_frames_count: 16,
-            };
-
-            let audio_processor = instance
-                .activate(|_, _| {}, audio_config)
-                .unwrap()
-                .start_processing()
-                .unwrap();
-
-            let gui = instance
-                .access_handler(|h| h.gui)
-                .map(|gui| Gui::new(gui, &mut instance.plugin_handle()))
-                .unwrap();
-
-            run_gui_floating(
-                instance,
-                &sender_host,
-                receiver_plugin,
-                gui,
-                &Self {
-                    audio_processor: Mutex::new(audio_processor),
-                    plugin_sample_counter: AtomicU32::new(0),
-                },
-            );
-        });
-
-        (sender_plugin, receiver_host)
-    }
-
-    pub fn process(
+    fn process(
         &self,
         input_audio: &InputAudioBuffers,
         output_audio: &mut OutputAudioBuffers,
@@ -120,12 +60,8 @@ impl StreamPluginAudioProcessor {
             .store(current_counter + 1, SeqCst);
     }
 
-    pub fn get_counter(&self) -> u32 {
+    fn get_counter(&self) -> u32 {
         self.plugin_sample_counter.load(SeqCst)
-    }
-
-    pub fn reset_counter(&self) {
-        self.plugin_sample_counter.store(0, SeqCst);
     }
 }
 
@@ -194,6 +130,59 @@ fn standard_clap_paths() -> Vec<PathBuf> {
     paths
 }
 
+#[allow(clippy::needless_pass_by_value)]
+pub fn run(
+    bundle: PluginBundle,
+    config: StreamConfig,
+) -> (Sender<PluginThreadMessage>, Receiver<HostThreadMessage>) {
+    let (sender_plugin, receiver_plugin) = std::sync::mpsc::channel();
+    let (sender_host, receiver_host) = std::sync::mpsc::channel();
+
+    let sender_plugin_clone = sender_plugin.clone();
+    std::thread::spawn(move || {
+        let factory = bundle.get_plugin_factory().unwrap();
+        let plugin_descriptor = factory.plugin_descriptors().next().unwrap();
+        let mut instance = PluginInstance::<Host>::new(
+            |()| HostShared::new(sender_plugin_clone),
+            |_| HostPluginThread::new(),
+            &bundle,
+            plugin_descriptor.id().unwrap(),
+            &HostInfo::new("", "", "", "").unwrap(),
+        )
+        .unwrap();
+
+        let audio_config = PluginAudioConfiguration {
+            sample_rate: config.sample_rate.0 as f64,
+            min_frames_count: 16,
+            max_frames_count: 16,
+        };
+
+        let audio_processor = instance
+            .activate(|_, _| {}, audio_config)
+            .unwrap()
+            .start_processing()
+            .unwrap();
+
+        let gui = instance
+            .access_handler(|h| h.gui)
+            .map(|gui| Gui::new(gui, &mut instance.plugin_handle()))
+            .unwrap();
+
+        run_gui_floating(
+            instance,
+            &sender_host,
+            receiver_plugin,
+            gui,
+            &StreamPluginAudioProcessor {
+                audio_processor: Mutex::new(audio_processor),
+                plugin_sample_counter: AtomicU32::new(0),
+            },
+        );
+    });
+
+    (sender_plugin, receiver_host)
+}
+
 #[allow(clippy::significant_drop_tightening)]
 fn run_gui_floating(
     mut instance: PluginInstance<Host>,
@@ -211,7 +200,13 @@ fn run_gui_floating(
                 println!("Window closed!");
                 break;
             }
-            PluginThreadMessage::GuiRequestResized(_) => {}
+            PluginThreadMessage::GuiRequestResized(gui_size) => {
+                gui.resize(
+                    &mut instance.plugin_handle(),
+                    gui.gui_size_to_winit_size(gui_size),
+                    1.0f64,
+                );
+            }
             PluginThreadMessage::ProcessAudio(
                 mut input_buffers,
                 input_audio_ports,

@@ -36,7 +36,6 @@ enum DirtyEvent<'a> {
 pub struct MidiClip<'a> {
     plugin_sender: Sender<PluginThreadMessage>,
     host_receiver: Mutex<Receiver<HostThreadMessage>>,
-    global_start: u32,
     pattern: Vec<Arc<MidiNote<'a>>>,
     started_notes: Mutex<Vec<Arc<MidiNote<'a>>>>,
     last_global_time: AtomicU32,
@@ -92,7 +91,6 @@ impl<'a> MidiClip<'a> {
         Self {
             plugin_sender,
             host_receiver: Mutex::new(plugin_receiver),
-            global_start: 0,
             pattern: Vec::new(),
             started_notes: Mutex::new(Vec::new()),
             last_global_time: AtomicU32::new(0),
