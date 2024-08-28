@@ -17,6 +17,10 @@ impl Default for Arrangement {
 }
 
 impl Arrangement {
+    pub fn tracks(&self) -> &Vec<Arc<Mutex<Track>>> {
+        &self.tracks
+    }
+
     pub const fn new() -> Self {
         Self { tracks: Vec::new() }
     }

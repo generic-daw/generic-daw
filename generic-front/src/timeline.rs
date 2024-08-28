@@ -1,24 +1,65 @@
-use iced::widget::{container, text};
+use generic_back::arrangement::Arrangement;
+use iced::widget::{column, container, text};
 use iced::{Element, Length, Sandbox};
+use std::sync::{Arc, Mutex};
 
-pub struct Timeline {}
+pub struct Timeline {
+    arrangement: Arc<Mutex<Arrangement>>, // Add this field
+}
 
 #[derive(Debug, Clone)]
-pub enum Message {}
+pub enum Message {
+    ArrangementUpdated,
+}
+
+impl Timeline {
+    // Add a constructor that takes an arrangement
+    pub fn new(arrangement: Arc<Mutex<Arrangement>>) -> Self {
+        Self { arrangement }
+    }
+}
 
 impl Sandbox for Timeline {
     type Message = Message;
 
     fn new() -> Self {
-        Self {}
+        panic!("Timeline should be created with an arrangement")
     }
 
-    fn update(&mut self, _message: Message) {
-        // Update logic for timeline
+    fn update(&mut self, message: Message) {
+        match message {
+            Message::ArrangementUpdated => {
+                // Handle arrangement updates, if necessary
+                // For example, you could trigger a re-render or refresh here
+            }
+            _ => {}
+        }
     }
 
     fn view(&self) -> Element<Message> {
-        container(text("Timeline"))
+        let arrangement = self.arrangement.lock().unwrap();
+
+        let clips = arrangement.tracks().iter().enumerate().fold(
+            column![].spacing(10),
+            |col, (track_index, track)| {
+                let track = track.lock().unwrap();
+                let track_name = format!("Track {}", track_index + 1);
+                let track_clips = track.clips().iter().enumerate().fold(
+                    column![].spacing(5),
+                    |col, (clip_index, clip)| {
+                        let clip_info = format!(
+                            "Clip {}: Starts at {}",
+                            clip_index + 1,
+                            clip.get_global_end()
+                        );
+                        col.push(text(clip_info))
+                    },
+                );
+                col.push(text(track_name)).push(track_clips)
+            },
+        );
+
+        container(clips)
             .width(Length::FillPortion(3))
             .height(Length::Fill)
             .center_x()
@@ -28,7 +69,6 @@ impl Sandbox for Timeline {
     }
 
     fn title(&self) -> String {
-        todo!()
-        // self.name.clone()
+        "Timeline".to_string()
     }
 }

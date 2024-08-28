@@ -16,6 +16,10 @@ impl Track {
         Self { clips: Vec::new() }
     }
 
+    pub fn clips(&self) -> &Vec<Arc<dyn TrackClip>> {
+        &self.clips
+    }
+
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {
         self.clips
             .iter()
