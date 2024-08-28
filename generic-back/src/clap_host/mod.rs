@@ -240,7 +240,6 @@ fn run_gui_floating(
         match message {
             PluginThreadMessage::RunOnMainThread => instance.call_on_main_thread_callback(),
             PluginThreadMessage::GuiClosed { .. } => {
-                println!("Window closed!");
                 break;
             }
             PluginThreadMessage::GuiRequestResized(gui_size) => {
