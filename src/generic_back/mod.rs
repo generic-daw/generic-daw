@@ -8,7 +8,7 @@ use cpal::{
     traits::{DeviceTrait, HostTrait},
     Device, Stream, StreamConfig,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc::Receiver, Arc, Mutex};
 
 pub fn cpal_get_default_device() -> (Device, StreamConfig) {
     let device = cpal::default_host()
@@ -22,13 +22,21 @@ pub fn cpal_get_default_device() -> (Device, StreamConfig) {
     (device, supported_config.into())
 }
 
+pub enum StreamMessage {
+    Play,
+    Pause,
+    Stop,
+    Jump(u32),
+}
+
 pub fn get_output_stream(
     device: &Device,
     config: &StreamConfig,
     audio: Arc<Mutex<Arrangement>>,
-    play_from: u32,
+    receiver: Receiver<StreamMessage>,
 ) -> Stream {
-    let mut global_time = play_from;
+    let mut global_time = 0;
+    let mut playing = false;
 
     device
         .build_output_stream(
@@ -36,7 +44,27 @@ pub fn get_output_stream(
             move |data, _| {
                 for sample in data.iter_mut() {
                     *sample = audio.lock().unwrap().get_at_global_time(global_time);
-                    global_time += 1;
+
+                    match receiver.try_recv() {
+                        Ok(StreamMessage::Play) => {
+                            playing = true;
+                        }
+                        Ok(StreamMessage::Pause) => {
+                            playing = false;
+                        }
+                        Ok(StreamMessage::Stop) => {
+                            playing = false;
+                            global_time = 0;
+                        }
+                        Ok(StreamMessage::Jump(time)) => {
+                            global_time = time;
+                        }
+                        _ => {}
+                    }
+
+                    if playing {
+                        global_time += 1;
+                    }
                 }
             },
             move |err| {

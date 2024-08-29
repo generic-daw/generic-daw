@@ -24,7 +24,7 @@ impl Sandbox for Timeline {
     type Message = Message;
 
     fn new() -> Self {
-        panic!("Timeline should be created with an arrangement")
+        unimplemented!()
     }
 
     fn update(&mut self, message: Message) {
@@ -52,7 +52,7 @@ impl Sandbox for Timeline {
                         let clip_info = format!(
                             "Clip {}: Starts at {}",
                             clip_index + 1,
-                            clip.get_global_end()
+                            clip.get_global_start()
                         );
                         col.push(text(clip_info))
                     },

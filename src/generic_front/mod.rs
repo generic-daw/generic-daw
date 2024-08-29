@@ -1,16 +1,23 @@
-mod audio_engine;
 mod timeline;
-mod track;
 mod track_panel;
 
-use crate::generic_back::{arrangement::Arrangement, track_clip::audio_clip::AudioClip};
-use audio_engine::AudioEngine;
+use crate::generic_back::{
+    arrangement::Arrangement,
+    cpal_get_default_device, get_output_stream,
+    track::Track,
+    track_clip::audio_clip::{read_audio_file, AudioClip},
+    StreamMessage,
+};
+use cpal::{traits::StreamTrait, Stream, StreamConfig};
 use iced::{
     widget::{button, column, row},
     Element, Sandbox,
 };
 use rfd::FileDialog;
-use std::sync::{Arc, Mutex};
+use std::{
+    path::PathBuf,
+    sync::{mpsc::Sender, Arc, Mutex},
+};
 use timeline::Timeline;
 use track_panel::TrackPanel;
 
@@ -19,7 +26,9 @@ pub struct Daw {
     arrangement: Arc<Mutex<Arrangement>>,
     track_panel: TrackPanel,
     timeline: Timeline,
-    audio_engine: AudioEngine,
+    stream: Stream,
+    stream_config: StreamConfig,
+    stream_sender: Sender<StreamMessage>,
 }
 
 #[derive(Debug, Clone)]
@@ -38,10 +47,23 @@ impl Sandbox for Daw {
 
     fn new() -> Self {
         let arrangement = Arc::new(Mutex::new(Arrangement::new()));
+
+        let (stream_device, stream_config) = cpal_get_default_device();
+        let (stream_sender, stream_receiver) = std::sync::mpsc::channel();
+        let stream = get_output_stream(
+            &stream_device,
+            &stream_config,
+            arrangement.clone(),
+            stream_receiver,
+        );
+        stream.play().unwrap();
+
         Self {
             track_panel: TrackPanel::new(arrangement.clone()),
             timeline: Timeline::new(arrangement.clone()),
-            audio_engine: AudioEngine::new(),
+            stream,
+            stream_config,
+            stream_sender,
             arrangement,
         }
     }
@@ -62,12 +84,12 @@ impl Sandbox for Daw {
             }
             Message::FileSelected(Some(path)) => {
                 let clip = Arc::new(AudioClip::new(
-                    self.audio_engine
-                        .load_sample(&path)
+                    read_audio_file(&PathBuf::from(path), &self.stream_config)
                         .expect("Failed to load sample"),
                 ));
-                let index = self.audio_engine.add_track();
-                self.audio_engine.add_audio_clip(index, clip);
+                let mut track = Track::new();
+                track.push(clip);
+                self.arrangement.lock().unwrap().push(track);
                 self.update(Message::ArrangementUpdated);
             }
             Message::ArrangementUpdated => {
@@ -76,8 +98,12 @@ impl Sandbox for Daw {
                 self.timeline.update(timeline::Message::ArrangementUpdated);
             }
             Message::FileSelected(None) => {}
-            Message::Play => self.audio_engine.play(),
-            Message::Stop => self.audio_engine.stop(),
+            Message::Play => {
+                _ = self.stream_sender.send(StreamMessage::Play);
+            }
+            Message::Stop => {
+                _ = self.stream_sender.send(StreamMessage::Stop);
+            }
         }
     }
 

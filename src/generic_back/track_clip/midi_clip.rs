@@ -72,6 +72,15 @@ impl<'a> TrackClip for MidiClip<'a> {
         self.running_buffer.lock().unwrap()[last_buffer_index as usize]
     }
 
+    fn get_global_start(&self) -> u32 {
+        self.pattern
+            .iter()
+            .map(|note| note.global_start)
+            .min()
+            .unwrap_or(0)
+            .to_owned()
+    }
+
     fn get_global_end(&self) -> u32 {
         self.pattern
             .iter()

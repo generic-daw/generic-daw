@@ -57,6 +57,10 @@ impl TrackClip for AudioClip {
             * self.volume
     }
 
+    fn get_global_start(&self) -> u32 {
+        self.global_start
+    }
+
     fn get_global_end(&self) -> u32 {
         self.global_end
     }
