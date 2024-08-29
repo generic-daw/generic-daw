@@ -3,12 +3,10 @@ mod track_panel;
 
 use crate::generic_back::{
     arrangement::Arrangement,
-    cpal_get_default_device, get_output_stream,
     track::Track,
     track_clip::audio_clip::{read_audio_file, AudioClip},
-    StreamMessage,
+    DawStream,
 };
-use cpal::{traits::StreamTrait, Stream, StreamConfig};
 use iced::{
     widget::{button, column, row},
     Element, Sandbox,
@@ -16,7 +14,7 @@ use iced::{
 use rfd::FileDialog;
 use std::{
     path::PathBuf,
-    sync::{mpsc::Sender, Arc, Mutex},
+    sync::{Arc, Mutex},
 };
 use timeline::Timeline;
 use track_panel::TrackPanel;
@@ -26,9 +24,7 @@ pub struct Daw {
     arrangement: Arc<Mutex<Arrangement>>,
     track_panel: TrackPanel,
     timeline: Timeline,
-    stream: Stream,
-    stream_config: StreamConfig,
-    stream_sender: Sender<StreamMessage>,
+    stream: DawStream,
 }
 
 #[derive(Debug, Clone)]
@@ -36,7 +32,7 @@ pub enum Message {
     TrackPanel(<TrackPanel as Sandbox>::Message),
     Timeline(<Timeline as Sandbox>::Message),
     LoadSample(#[allow(dead_code)] String),
-    Play,
+    TogglePlay,
     Stop,
     FileSelected(Option<String>),
     ArrangementUpdated,
@@ -48,22 +44,12 @@ impl Sandbox for Daw {
     fn new() -> Self {
         let arrangement = Arc::new(Mutex::new(Arrangement::new()));
 
-        let (stream_device, stream_config) = cpal_get_default_device();
-        let (stream_sender, stream_receiver) = std::sync::mpsc::channel();
-        let stream = get_output_stream(
-            &stream_device,
-            &stream_config,
-            arrangement.clone(),
-            stream_receiver,
-        );
-        stream.play().unwrap();
+        let stream = DawStream::new(arrangement.clone());
 
         Self {
             track_panel: TrackPanel::new(arrangement.clone()),
             timeline: Timeline::new(arrangement.clone()),
             stream,
-            stream_config,
-            stream_sender,
             arrangement,
         }
     }
@@ -84,7 +70,7 @@ impl Sandbox for Daw {
             }
             Message::FileSelected(Some(path)) => {
                 let clip = Arc::new(AudioClip::new(
-                    read_audio_file(&PathBuf::from(path), &self.stream_config)
+                    read_audio_file(&PathBuf::from(path), self.stream.config())
                         .expect("Failed to load sample"),
                 ));
                 let mut track = Track::new();
@@ -98,19 +84,20 @@ impl Sandbox for Daw {
                 self.timeline.update(timeline::Message::ArrangementUpdated);
             }
             Message::FileSelected(None) => {}
-            Message::Play => {
-                _ = self.stream_sender.send(StreamMessage::Play);
-            }
-            Message::Stop => {
-                _ = self.stream_sender.send(StreamMessage::Stop);
-            }
+            Message::TogglePlay => self.stream.toggle_play(),
+            Message::Stop => self.stream.stop(),
         }
     }
 
     fn view(&self) -> Element<Message> {
         let controls = row![
             button("Load Sample").on_press(Message::LoadSample(String::new())),
-            button("Play").on_press(Message::Play),
+            button(if self.stream.playing() {
+                "Pause"
+            } else {
+                "Play"
+            })
+            .on_press(Message::TogglePlay),
             button("Stop").on_press(Message::Stop)
         ];
 
