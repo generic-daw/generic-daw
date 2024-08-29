@@ -170,16 +170,16 @@ impl<'a> MidiClip<'a> {
         if samples < 0 {
             let samples = -samples as u32;
             let samples = min(samples, self.global_start);
-            let samples = min(samples, self.pattern_start);
+            let samples = min(samples, self.global_start);
 
             self.global_start -= samples;
-            self.pattern_start -= samples;
+            self.global_start -= samples;
         } else {
             let samples = samples as u32;
             let samples = min(samples, self.global_end - self.global_start);
 
             self.global_start += samples;
-            self.pattern_start += samples;
+            self.global_start += samples;
         }
     }
 
@@ -193,7 +193,7 @@ impl<'a> MidiClip<'a> {
             let samples = samples as u32;
             let samples = min(
                 samples,
-                self.pattern.lock().unwrap().len() - self.pattern_start,
+                self.pattern.lock().unwrap().len() - self.global_start,
             );
 
             self.global_end += samples;
@@ -290,7 +290,9 @@ impl<'a> MidiClip<'a> {
             match dirty {
                 DirtyEvent::None => {
                     let last_global_time = self.last_global_time.load(SeqCst);
-                    if global_time != last_global_time + 1 {
+                    if global_time != last_global_time + 1
+                        || (self.pattern_start != 0 && global_time == self.global_start)
+                    {
                         self.jump_refresh(&mut buffer, global_time, plugin_counter);
                     }
                 }
@@ -306,7 +308,8 @@ impl<'a> MidiClip<'a> {
                 }
             }
 
-            let offset = plugin_counter + self.pattern_start;
+            let offset = self.global_start - self.pattern_start;
+            let plugin_offset = plugin_counter + offset;
 
             self.pattern
                 .lock()
@@ -314,14 +317,14 @@ impl<'a> MidiClip<'a> {
                 .notes
                 .iter()
                 .filter(|midi_note| {
-                    self.pattern_start + midi_note.local_start >= global_time
-                        && self.pattern_start + midi_note.local_start < global_time + 16
+                    offset + midi_note.local_start >= global_time
+                        && offset + midi_note.local_start < global_time + 16
                 })
                 .for_each(|midi_note| {
                     // notes that start during the running buffer
                     if let MidiMessage::NoteOn(channel, note, velocity) = midi_note.note {
                         buffer.push(&NoteOnEvent::new(
-                            midi_note.local_start + offset,
+                            midi_note.local_start + plugin_offset,
                             Pckn::new(0u8, channel.index(), note as u16, Match::All),
                             u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
                         ));
@@ -336,12 +339,14 @@ impl<'a> MidiClip<'a> {
                 .unwrap()
                 .iter()
                 .enumerate()
-                .filter(|(_, note)| self.pattern_start + note.local_end < global_time + 16)
+                .filter(|(_, note)| {
+                    self.global_start - self.pattern_start + note.local_end < global_time + 16
+                })
                 .for_each(|(index, midi_note)| {
                     // notes that end before the running buffer ends
                     if let MidiMessage::NoteOn(channel, note, velocity) = midi_note.note {
                         buffer.push(&NoteOffEvent::new(
-                            midi_note.local_end + offset,
+                            midi_note.local_end + plugin_offset,
                             Pckn::new(0u8, channel.index(), note as u16, Match::All),
                             u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
                         ));
@@ -358,12 +363,14 @@ impl<'a> MidiClip<'a> {
     }
 
     fn jump_refresh(&self, buffer: &mut EventBuffer, global_time: u32, plugin_counter: u32) {
-        let offset = plugin_counter + self.pattern_start;
+        let offset = self.global_start - self.pattern_start;
+        let plugin_offset = plugin_counter + offset;
+
         self.started_notes.lock().unwrap().iter().for_each(|note| {
             // stop all started notes
             if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
                 buffer.push(&NoteOffEvent::new(
-                    global_time + offset,
+                    global_time + plugin_offset,
                     Pckn::new(0u8, channel.index(), note as u16, Match::All),
                     u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
                 ));
@@ -378,14 +385,13 @@ impl<'a> MidiClip<'a> {
             .notes
             .iter()
             .filter(|note| {
-                self.pattern_start + note.local_start <= global_time
-                    && self.pattern_start + note.local_end > global_time
+                offset + note.local_start <= global_time && offset + note.local_end > global_time
             })
             .for_each(|note| {
                 // start all notes that would be currently playing
                 if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
                     buffer.push(&NoteOnEvent::new(
-                        global_time + offset,
+                        global_time + plugin_offset,
                         Pckn::new(0u8, channel.index(), note as u16, Match::All),
                         u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
                     ));
@@ -395,7 +401,9 @@ impl<'a> MidiClip<'a> {
     }
 
     fn note_add_refresh(&self, buffer: &mut EventBuffer, global_time: u32, plugin_counter: u32) {
-        let offset = plugin_counter + self.pattern_start;
+        let offset = self.global_start - self.pattern_start;
+        let plugin_offset = plugin_counter + offset;
+
         self.pattern
             .lock()
             .unwrap()
@@ -403,14 +411,13 @@ impl<'a> MidiClip<'a> {
             .iter()
             .filter(|note| !self.started_notes.lock().unwrap().contains(note))
             .filter(|note| {
-                self.pattern_start + note.local_start <= global_time
-                    && self.pattern_start + note.local_end > global_time
+                offset + note.local_start <= global_time && offset + note.local_end > global_time
             })
             .for_each(|note| {
                 // start all new notes that would be currently playing
                 if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
                     buffer.push(&NoteOnEvent::new(
-                        global_time + offset,
+                        global_time + plugin_offset,
                         Pckn::new(0u8, channel.index(), note as u16, Match::All),
                         u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
                     ));
@@ -420,7 +427,8 @@ impl<'a> MidiClip<'a> {
     }
 
     fn note_remove_refresh(&self, buffer: &mut EventBuffer, global_time: u32, plugin_counter: u32) {
-        let offset = plugin_counter + self.pattern_start;
+        let plugin_offset = plugin_counter + self.global_start - self.pattern_start;
+
         let mut indices = Vec::new();
 
         self.started_notes
@@ -433,7 +441,7 @@ impl<'a> MidiClip<'a> {
                 // stop all started notes that are no longer in the pattern
                 if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
                     buffer.push(&NoteOffEvent::new(
-                        global_time + offset,
+                        global_time + plugin_offset,
                         Pckn::new(0u8, channel.index(), note as u16, Match::All),
                         u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
                     ));
