@@ -1,17 +1,17 @@
-use anyhow::Result;
-use cpal::{traits::StreamTrait, Device, Stream, StreamConfig};
-use generic_back::{
+use crate::generic_back::{
     arrangement::Arrangement,
     cpal_get_default_device, get_output_stream,
     track::Track,
     track_clip::audio_clip::{read_audio_file, AudioClip, InterleavedAudio},
 };
+use anyhow::Result;
+use cpal::{traits::StreamTrait, Device, Stream, StreamConfig};
 use std::{path::PathBuf, sync::Arc, sync::Mutex};
 
 pub struct AudioEngine {
     device: Device,
     config: StreamConfig,
-    arrangement: Arc<Mutex<Arrangement>>, // Use Mutex here
+    arrangement: Arc<Mutex<Arrangement>>,
     stream: Option<Stream>,
 }
 

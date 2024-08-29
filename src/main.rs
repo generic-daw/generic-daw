@@ -1,10 +1,7 @@
-mod audio_engine;
-mod daw;
-mod timeline;
-mod track;
-mod track_panel;
+mod generic_back;
+mod generic_front;
 
-use daw::Daw;
+use generic_front::Daw;
 use iced::{Sandbox, Settings};
 
 fn main() -> iced::Result {

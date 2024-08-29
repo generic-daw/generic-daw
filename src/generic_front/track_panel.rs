@@ -1,10 +1,12 @@
-use generic_back::arrangement::Arrangement;
-use iced::widget::{column, container, text};
-use iced::{Element, Length, Sandbox};
+use crate::generic_back::arrangement::Arrangement;
+use iced::{
+    widget::{column, container, text},
+    Element, Length, Sandbox,
+};
 use std::sync::{Arc, Mutex};
 
 pub struct TrackPanel {
-    arrangement: Arc<Mutex<Arrangement>>, // Add this field
+    arrangement: Arc<Mutex<Arrangement>>,
 }
 
 #[derive(Debug, Clone)]
@@ -13,7 +15,6 @@ pub enum Message {
 }
 
 impl TrackPanel {
-    // Add a constructor that takes an arrangement
     pub fn new(arrangement: Arc<Mutex<Arrangement>>) -> Self {
         Self { arrangement }
     }

@@ -1,8 +1,8 @@
-use crate::track_clip::TrackClip;
+use super::track_clip::TrackClip;
 use std::sync::Arc;
 
 pub struct Track {
-    clips: Vec<Arc<dyn TrackClip>>, // track clips
+    clips: Vec<Arc<dyn TrackClip>>,
 }
 
 impl Default for Track {

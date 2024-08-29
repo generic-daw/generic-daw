@@ -48,5 +48,5 @@ pub fn get_output_stream(
 }
 
 pub fn seconds_to_interleaved_samples(seconds: f32, sample_rate: u32) -> i32 {
-    (seconds * sample_rate as f32) as i32 * 2 // Multiply by SAMPLE_RATE and by 2 (for interleaved stereo)
+    (seconds * sample_rate as f32) as i32 * 2
 }

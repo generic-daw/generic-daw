@@ -1,5 +1,5 @@
 use super::TrackClip;
-use crate::clap_host::{HostThreadMessage, PluginThreadMessage};
+use crate::generic_back::clap_host::{HostThreadMessage, PluginThreadMessage};
 use clack_host::{
     events::{
         event_types::{NoteOffEvent, NoteOnEvent},

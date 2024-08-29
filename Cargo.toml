@@ -1,11 +1,32 @@
-[workspace]
-resolver = "2"
-members = ["generic-front", "generic-back"]
+[package]
+name = "generic-daw"
+version = "0.1.0"
+edition = "2021"
 
-[workspace.lints.rust]
+[dependencies]
+anyhow = "1.0.86"
+clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
+    "clack-host",
+    "gui",
+    "raw-window-handle_06",
+] }
+clack-host = { git = "https://github.com/prokopyl/clack.git" }
+cpal = "0.15.3"
+dirs = "5.0.1"
+hound = "3.5.1"
+iced = "0.12.1"
+rfd = "0.14.1"
+rubato = "0.15.0"
+symphonia = { version = "0.5.4", features = ["all-formats", "all-codecs"] }
+walkdir = "2.5.0"
+winit = "0.30.5"
+wmidi = "4.0.10"
+
+[lints.rust]
 unused_crate_dependencies = "warn"
+dead_code = "allow"
 
-[workspace.lints.clippy]
+[lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 cast_lossless = "allow"

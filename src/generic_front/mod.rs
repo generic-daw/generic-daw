@@ -1,12 +1,18 @@
-use crate::audio_engine::AudioEngine;
-use crate::timeline::Timeline;
-use crate::track_panel::TrackPanel;
-use generic_back::arrangement::Arrangement;
-use generic_back::track_clip::audio_clip::AudioClip;
-use iced::widget::{button, column, row};
-use iced::{Element, Sandbox};
-use rfd::FileDialog; // Import the file dialog
+mod audio_engine;
+mod timeline;
+mod track;
+mod track_panel;
+
+use crate::generic_back::{arrangement::Arrangement, track_clip::audio_clip::AudioClip};
+use audio_engine::AudioEngine;
+use iced::{
+    widget::{button, column, row},
+    Element, Sandbox,
+};
+use rfd::FileDialog;
 use std::sync::{Arc, Mutex};
+use timeline::Timeline;
+use track_panel::TrackPanel;
 
 pub struct Daw {
     #[allow(dead_code)]
@@ -66,9 +72,8 @@ impl Sandbox for Daw {
             }
             Message::ArrangementUpdated => {
                 self.track_panel
-                    .update(crate::track_panel::Message::ArrangementUpdated);
-                self.timeline
-                    .update(crate::timeline::Message::ArrangementUpdated);
+                    .update(track_panel::Message::ArrangementUpdated);
+                self.timeline.update(timeline::Message::ArrangementUpdated);
             }
             Message::FileSelected(None) => {}
             Message::Play => self.audio_engine.play(),
