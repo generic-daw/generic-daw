@@ -1,4 +1,5 @@
 pub mod arrangement;
+pub mod bpm;
 pub mod clap_host;
 pub mod track;
 pub mod track_clip;
@@ -114,8 +115,4 @@ fn get_output_stream(
             None,
         )
         .unwrap()
-}
-
-pub fn seconds_to_interleaved_samples(seconds: f32, sample_rate: u32) -> i32 {
-    (seconds * sample_rate as f32) as i32 * 2
 }

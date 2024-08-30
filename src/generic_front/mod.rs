@@ -69,7 +69,7 @@ impl Sandbox for Daw {
                 }
             }
             Message::FileSelected(Some(path)) => {
-                let clip = Arc::new(AudioClip::new(
+                let clip = Box::new(AudioClip::new(
                     read_audio_file(&PathBuf::from(path), self.stream.config())
                         .expect("Failed to load sample"),
                 ));

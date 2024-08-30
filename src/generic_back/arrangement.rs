@@ -34,7 +34,7 @@ impl Arrangement {
     }
 
     pub fn len_tracks(&self) -> u32 {
-        self.tracks.len() as u32
+        u32::try_from(self.tracks.len()).unwrap()
     }
 
     pub fn len_samples(&self) -> u32 {
@@ -57,8 +57,8 @@ impl Arrangement {
         self.tracks.remove(index);
     }
 
-    pub fn get(&self, index: u32) -> &Arc<Mutex<Track>> {
-        &self.tracks[index as usize]
+    pub fn get(&self, index: u32) -> Arc<Mutex<Track>> {
+        self.tracks[index as usize].clone()
     }
 
     pub fn export(&self, path: &Path, config: &StreamConfig) {

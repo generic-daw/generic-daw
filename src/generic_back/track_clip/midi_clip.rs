@@ -69,26 +69,20 @@ impl<'a> MidiPattern<'a> {
         self.dirty = DirtyEvent::None;
     }
 
-    fn push(&mut self, note: &Arc<MidiNote<'a>>) {
-        self.notes.push(note.clone());
+    fn push(&mut self, note: Arc<MidiNote<'a>>) {
+        self.notes.push(note);
         self.dirty = DirtyEvent::NoteAdded;
     }
 
     fn remove(&mut self, note: &Arc<MidiNote<'a>>) {
-        let pos = self
-            .notes
-            .iter()
-            .enumerate()
-            .find(|(_, n)| n == &note)
-            .map(|(pos, _)| pos)
-            .unwrap();
+        let pos = self.notes.iter().position(|n| n == note).unwrap();
         self.notes.remove(pos);
         self.dirty = DirtyEvent::NoteRemoved;
     }
 
-    fn replace(&mut self, note: &Arc<MidiNote<'a>>, new_note: &Arc<MidiNote<'a>>) {
+    fn replace(&mut self, note: &Arc<MidiNote<'a>>, new_note: Arc<MidiNote<'a>>) {
         let pos = self.notes.iter().position(|n| n == note).unwrap();
-        self.notes[pos] = new_note.clone();
+        self.notes[pos] = new_note;
         self.dirty = DirtyEvent::NoteReplaced;
     }
 }
@@ -154,7 +148,7 @@ impl<'a> MidiClip<'a> {
         }
     }
 
-    pub fn push(&self, note: &Arc<MidiNote<'a>>) {
+    pub fn push(&self, note: Arc<MidiNote<'a>>) {
         self.pattern.lock().unwrap().push(note);
     }
 
@@ -162,7 +156,7 @@ impl<'a> MidiClip<'a> {
         self.pattern.lock().unwrap().remove(note);
     }
 
-    pub fn replace(&self, note: &Arc<MidiNote<'a>>, new_note: &Arc<MidiNote<'a>>) {
+    pub fn replace(&self, note: &Arc<MidiNote<'a>>, new_note: Arc<MidiNote<'a>>) {
         self.pattern.lock().unwrap().replace(note, new_note);
     }
 
