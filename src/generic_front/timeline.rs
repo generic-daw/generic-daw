@@ -50,9 +50,10 @@ impl Sandbox for Timeline {
                     column![].spacing(5),
                     |col, (clip_index, clip)| {
                         let clip_info = format!(
-                            "Clip {}: Starts at {}",
+                            "Clip {}: Starts at {}, ends at {}",
                             clip_index + 1,
-                            clip.get_global_start()
+                            clip.get_global_start(),
+                            clip.get_global_end()
                         );
                         col.push(text(clip_info))
                     },
