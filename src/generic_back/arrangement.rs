@@ -50,10 +50,6 @@ impl Arrangement {
         self.tracks.remove(index);
     }
 
-    pub fn get(&self, index: u32) -> Arc<Mutex<Track>> {
-        self.tracks[index as usize].clone()
-    }
-
     pub fn export(&self, path: &Path, config: &StreamConfig, meter: &Arc<Meter>) {
         let mut writer = WavWriter::create(
             path,

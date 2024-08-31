@@ -3,10 +3,11 @@ mod track_panel;
 
 use crate::generic_back::{
     arrangement::Arrangement,
+    build_output_stream,
     position::Meter,
     track::Track,
     track_clip::audio_clip::{read_audio_file, AudioClip},
-    DawStream,
+    StreamMessage,
 };
 use cpal::traits::{DeviceTrait, HostTrait};
 use iced::{
@@ -16,7 +17,7 @@ use iced::{
 use rfd::FileDialog;
 use std::{
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{mpsc::Sender, Arc, Mutex},
 };
 use timeline::{Timeline, TimelineMessage};
 use track_panel::TrackPanel;
@@ -25,7 +26,8 @@ pub struct Daw {
     arrangement: Arc<Mutex<Arrangement>>,
     track_panel: TrackPanel,
     timeline: Timeline,
-    stream: DawStream,
+    stream_sender: Sender<StreamMessage>,
+    playing: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -58,13 +60,14 @@ impl Sandbox for Daw {
         ));
 
         let arrangement = Arc::new(Mutex::new(Arrangement::new(meter.clone())));
-        let stream = DawStream::new(arrangement.clone(), meter);
+        let stream_sender = build_output_stream(arrangement.clone(), meter);
 
         Self {
             track_panel: TrackPanel::new(arrangement.clone()),
             timeline: Timeline::new(arrangement.clone()),
-            stream,
             arrangement,
+            stream_sender,
+            playing: false,
         }
     }
 
@@ -100,8 +103,14 @@ impl Sandbox for Daw {
                     .update(timeline::TimelineMessage::ArrangementUpdated);
             }
             Message::FileSelected(None) => {}
-            Message::TogglePlay => self.stream.toggle_play(),
-            Message::Stop => self.stream.stop(),
+            Message::TogglePlay => {
+                self.stream_sender.send(StreamMessage::TogglePlay).unwrap();
+                self.playing ^= true;
+            }
+            Message::Stop => {
+                self.stream_sender.send(StreamMessage::Stop).unwrap();
+                self.playing = false;
+            }
             Message::TimelineMessage(timeline_msg) => {
                 self.timeline.update(timeline_msg);
             }
@@ -111,12 +120,7 @@ impl Sandbox for Daw {
     fn view(&self) -> Element<Message> {
         let controls = row![
             button("Load Sample").on_press(Message::LoadSample(String::new())),
-            button(if self.stream.playing() {
-                "Pause"
-            } else {
-                "Play"
-            })
-            .on_press(Message::TogglePlay),
+            button(if self.playing { "Pause" } else { "Play" }).on_press(Message::TogglePlay),
             button("Stop").on_press(Message::Stop)
         ];
 

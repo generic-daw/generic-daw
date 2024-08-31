@@ -19,12 +19,11 @@ use super::TrackClip;
 
 pub struct InterleavedAudio {
     samples: Arc<[f32]>,
-    name: String,
 }
 
 impl InterleavedAudio {
-    pub fn new(samples: Arc<[f32]>, name: String) -> Self {
-        Self { samples, name }
+    pub fn new(samples: Arc<[f32]>) -> Self {
+        Self { samples }
     }
 
     pub fn len(&self) -> u32 {
@@ -37,10 +36,6 @@ impl InterleavedAudio {
 
     pub fn get_sample_at_index(&self, index: u32) -> &f32 {
         self.samples.get(index as usize).unwrap_or(&0.0)
-    }
-
-    pub fn samples(&self) -> &[f32] {
-        &self.samples
     }
 }
 
@@ -62,10 +57,6 @@ impl AudioClip {
             clip_start: Position::new(0, 0),
             volume: 1.0,
         }
-    }
-
-    pub const fn audio(&self) -> &Arc<InterleavedAudio> {
-        &self.audio
     }
 }
 
@@ -127,7 +118,6 @@ pub fn read_audio_file(path: &PathBuf, meter: &Arc<Meter>) -> Result<Arc<Interle
 
     let track = format.default_track().unwrap();
     let sample_rate = track.codec_params.sample_rate.unwrap();
-    let name = path.file_name().unwrap().to_str().unwrap().to_string();
 
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
@@ -159,7 +149,7 @@ pub fn read_audio_file(path: &PathBuf, meter: &Arc<Meter>) -> Result<Arc<Interle
     }
 
     if sample_rate == meter.sample_rate {
-        return Ok(Arc::new(InterleavedAudio::new(samples.into(), name)));
+        return Ok(Arc::new(InterleavedAudio::new(samples.into())));
     }
 
     let mut resampler = SincFixedIn::<f32>::new(
@@ -193,5 +183,5 @@ pub fn read_audio_file(path: &PathBuf, meter: &Arc<Meter>) -> Result<Arc<Interle
         samples.extend(resampled_file.iter().map(|s| s[i]));
     }
 
-    Ok(Arc::new(InterleavedAudio::new(samples.into(), name)))
+    Ok(Arc::new(InterleavedAudio::new(samples.into())))
 }
