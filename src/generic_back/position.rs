@@ -79,7 +79,7 @@ impl Sub for Position {
     fn sub(self, rhs: Self) -> Self::Output {
         assert!(self >= rhs);
         let new_sub_quarter_note =
-            i32::from(self.sub_quarter_note) + i32::from(rhs.sub_quarter_note);
+            i32::from(self.sub_quarter_note) - i32::from(rhs.sub_quarter_note);
         Self {
             quarter_note: u32::try_from(
                 i32::try_from(self.quarter_note - rhs.quarter_note).unwrap()
@@ -105,7 +105,6 @@ pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Arc<Meter>) -> u32 {
     samples as u32
 }
 
-#[derive(PartialEq)]
 pub struct Meter {
     pub bpm: f64,
     pub numerator: u8,
