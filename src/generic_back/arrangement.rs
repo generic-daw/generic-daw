@@ -21,7 +21,7 @@ impl Arrangement {
         Self { tracks: Vec::new() }
     }
 
-    pub fn tracks(&self) -> &Vec<Arc<Mutex<Track>>> {
+    pub const fn tracks(&self) -> &Vec<Arc<Mutex<Track>>> {
         &self.tracks
     }
 

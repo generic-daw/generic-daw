@@ -67,7 +67,7 @@ impl AudioClip {
         }
     }
 
-    pub fn audio(&self) -> &Arc<InterleavedAudio> {
+    pub const fn audio(&self) -> &Arc<InterleavedAudio> {
         &self.audio
     }
 

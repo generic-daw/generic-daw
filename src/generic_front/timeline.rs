@@ -53,7 +53,7 @@ impl Sandbox for Timeline {
     type Message = TimelineMessage;
 
     fn new() -> Self {
-        Timeline::new(Arc::new(Mutex::new(Arrangement::new())))
+        Self::new(Arc::new(Mutex::new(Arrangement::new())))
     }
 
     fn title(&self) -> String {
@@ -62,9 +62,9 @@ impl Sandbox for Timeline {
 
     fn update(&mut self, message: TimelineMessage) {
         match message {
-            TimelineMessage::UpdateWaveforms => self.update_waveforms(),
-            TimelineMessage::ArrangementUpdated => self.update_waveforms(),
-            // ... handle other timeline-specific messages
+            TimelineMessage::UpdateWaveforms | TimelineMessage::ArrangementUpdated => {
+                self.update_waveforms();
+            } // ... handle other timeline-specific messages
         }
     }
 
@@ -90,7 +90,7 @@ impl canvas::Program<TimelineMessage> for Timeline {
             let path = iced::widget::canvas::Path::new(|path| {
                 for (x, sample) in waveform.iter().enumerate() {
                     let x_pos = x as f32;
-                    let y_pos = y_offset + (*sample * 100.0);
+                    let y_pos = (*sample).mul_add(100.0, y_offset);
                     path.line_to(iced::Point::new(x_pos, y_pos));
                 }
             });
