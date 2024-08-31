@@ -1,50 +1,25 @@
-use crate::generic_back::{arrangement::Arrangement, track_clip::audio_clip::AudioClip};
+use crate::generic_back::arrangement::Arrangement;
 use iced::widget::{canvas, Canvas};
 use iced::{Element, Length, Sandbox};
 use std::sync::{Arc, Mutex};
 
-// use super::Message;
-
 #[derive(Debug, Clone)]
 pub enum TimelineMessage {
-    // Add specific messages for Timeline here
-    UpdateWaveforms,
-    ArrangementUpdated, // ... other timeline-specific messages
+    ArrangementUpdated,
 }
 
 pub struct Timeline {
     arrangement: Arc<Mutex<Arrangement>>,
-    waveforms: Vec<Vec<f32>>,
+    timeline_x_scale: usize,
+    timeline_y_scale: usize,
 }
 
 impl Timeline {
     pub fn new(arrangement: Arc<Mutex<Arrangement>>) -> Self {
-        let mut timeline = Self {
+        Self {
             arrangement,
-            waveforms: Vec::new(),
-        };
-        timeline.update_waveforms();
-        timeline
-    }
-
-    pub fn update_waveforms(&mut self) {
-        self.waveforms.clear();
-        let arrangement = self.arrangement.lock().unwrap();
-
-        for track in arrangement.tracks() {
-            let track = track.lock().unwrap();
-            for clip in track.clips() {
-                if let Some(audio_clip) = clip.as_any().downcast_ref::<AudioClip>() {
-                    let waveform: Vec<f32> = audio_clip
-                        .audio()
-                        .samples()
-                        .iter()
-                        .step_by(100)
-                        .copied()
-                        .collect();
-                    self.waveforms.push(waveform);
-                }
-            }
+            timeline_x_scale: 100,
+            timeline_y_scale: 100,
         }
     }
 }
@@ -62,9 +37,7 @@ impl Sandbox for Timeline {
 
     fn update(&mut self, message: TimelineMessage) {
         match message {
-            TimelineMessage::UpdateWaveforms | TimelineMessage::ArrangementUpdated => {
-                self.update_waveforms();
-            } // ... handle other timeline-specific messages
+            TimelineMessage::ArrangementUpdated => {}
         }
     }
 
@@ -85,17 +58,32 @@ impl canvas::Program<TimelineMessage> for Timeline {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<iced::widget::canvas::Geometry> {
         let mut frame = iced::widget::canvas::Frame::new(renderer, bounds.size());
-        for (i, waveform) in self.waveforms.iter().enumerate() {
-            let y_offset = i as f32 * 100.0;
-            let path = iced::widget::canvas::Path::new(|path| {
-                for (x, sample) in waveform.iter().enumerate() {
-                    let x_pos = x as f32;
-                    let y_pos = (*sample).mul_add(100.0, y_offset);
-                    path.line_to(iced::Point::new(x_pos, y_pos));
-                }
+
+        self.arrangement
+            .lock()
+            .unwrap()
+            .tracks()
+            .iter()
+            .enumerate()
+            .for_each(|(i, track)| {
+                let path = iced::widget::canvas::Path::new(|path| {
+                    let track = track.lock().unwrap();
+
+                    let y_offset = i * (self.timeline_y_scale) + self.timeline_y_scale / 2;
+                    (0..track.len())
+                        .step_by(self.timeline_x_scale)
+                        .enumerate()
+                        .for_each(|(x, global_time)| {
+                            let y_pos = track
+                                .get_at_global_time(global_time)
+                                .mul_add(self.timeline_y_scale as f32, y_offset as f32);
+                            path.line_to(iced::Point::new(x as f32, y_pos));
+                        });
+                });
+
+                frame.stroke(&path, iced::widget::canvas::Stroke::default());
             });
-            frame.stroke(&path, iced::widget::canvas::Stroke::default());
-        }
+
         vec![frame.into_geometry()]
     }
 }
