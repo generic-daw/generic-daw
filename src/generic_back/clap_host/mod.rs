@@ -69,7 +69,7 @@ impl StreamPluginAudioProcessor {
                 output_audio,
                 input_events,
                 output_events,
-                Some(self.get_counter() as u64),
+                Some(u64::from(self.get_counter())),
                 None,
             )
             .unwrap();
@@ -171,7 +171,7 @@ pub fn run(
         .unwrap();
 
         let audio_config = PluginAudioConfiguration {
-            sample_rate: config.sample_rate.0 as f64,
+            sample_rate: f64::from(config.sample_rate.0),
             min_frames_count: 16,
             max_frames_count: 16,
         };

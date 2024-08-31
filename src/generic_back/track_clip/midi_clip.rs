@@ -242,7 +242,7 @@ impl<'a> MidiClip<'a> {
                         buffer.push(&NoteOffEvent::new(
                             global_time + plugin_counter,
                             Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                            u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                            f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
                         ));
                     };
                 });
@@ -316,7 +316,7 @@ impl<'a> MidiClip<'a> {
                     buffer.push(&NoteOnEvent::new(
                         midi_note.local_start + plugin_offset,
                         Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                        u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                        f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
                     ));
                     self.started_notes.lock().unwrap().push(midi_note.clone());
                 };
@@ -340,7 +340,7 @@ impl<'a> MidiClip<'a> {
                     buffer.push(&NoteOffEvent::new(
                         midi_note.local_end + plugin_offset,
                         Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                        u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                        f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
                     ));
                     indices.push(index);
                 };
@@ -367,7 +367,7 @@ impl<'a> MidiClip<'a> {
                 buffer.push(&NoteOffEvent::new(
                     global_time + plugin_offset,
                     Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                    u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                    f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
                 ));
             };
         });
@@ -388,7 +388,7 @@ impl<'a> MidiClip<'a> {
                     buffer.push(&NoteOnEvent::new(
                         global_time + plugin_offset,
                         Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                        u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                        f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
                     ));
                 };
                 self.started_notes.lock().unwrap().push(note.clone());
@@ -420,7 +420,7 @@ impl<'a> MidiClip<'a> {
                     buffer.push(&NoteOnEvent::new(
                         global_time + plugin_offset,
                         Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                        u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                        f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
                     ));
                 };
                 self.started_notes.lock().unwrap().push(note.clone());
@@ -451,7 +451,7 @@ impl<'a> MidiClip<'a> {
                     buffer.push(&NoteOffEvent::new(
                         global_time + plugin_offset,
                         Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                        u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                        f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
                     ));
                     indices.push(index);
                 };

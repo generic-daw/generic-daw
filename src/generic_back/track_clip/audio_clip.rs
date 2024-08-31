@@ -28,7 +28,7 @@ impl InterleavedAudio {
     }
 
     pub fn len(&self) -> u32 {
-        self.samples.len() as u32
+        u32::try_from(self.samples.len()).unwrap()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -149,7 +149,7 @@ pub fn read_audio_file(path: &PathBuf, meter: &Arc<Meter>) -> Result<Arc<Interle
             Ok(audio_buf) => {
                 if sample_buffer.is_none() {
                     let spec = *audio_buf.spec();
-                    let duration = audio_buf.capacity() as u64;
+                    let duration = u64::try_from(audio_buf.capacity()).unwrap();
                     sample_buffer = Some(SampleBuffer::<f32>::new(duration, spec));
                 }
                 if let Some(buf) = &mut sample_buffer {
