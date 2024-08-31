@@ -17,12 +17,12 @@ impl Default for Arrangement {
 }
 
 impl Arrangement {
-    pub const fn tracks(&self) -> &Vec<Arc<Mutex<Track>>> {
-        &self.tracks
-    }
-
     pub const fn new() -> Self {
         Self { tracks: Vec::new() }
+    }
+
+    pub fn tracks(&self) -> &Vec<Arc<Mutex<Track>>> {
+        &self.tracks
     }
 
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {

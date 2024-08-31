@@ -1,10 +1,9 @@
-use super::TrackClip;
 use anyhow::{anyhow, Result};
 use cpal::StreamConfig;
 use rubato::{
     SincFixedIn, SincInterpolationParameters, SincInterpolationType, VecResampler, WindowFunction,
 };
-use std::{cmp::min, fs::File, path::PathBuf, sync::Arc};
+use std::{any::Any, cmp::min, fs::File, path::PathBuf, sync::Arc};
 use symphonia::core::{
     audio::SampleBuffer,
     codecs::DecoderOptions,
@@ -14,6 +13,8 @@ use symphonia::core::{
     meta::MetadataOptions,
     probe::Hint,
 };
+
+use super::TrackClip;
 
 pub struct InterleavedAudio {
     samples: Arc<[f32]>,
@@ -40,6 +41,10 @@ impl InterleavedAudio {
     pub fn get_sample_at_index(&self, index: u32) -> &f32 {
         self.samples.get(index as usize).unwrap_or(&0.0)
     }
+
+    pub fn samples(&self) -> &[f32] {
+        &self.samples
+    }
 }
 
 pub struct AudioClip {
@@ -48,22 +53,6 @@ pub struct AudioClip {
     global_end: u32,
     clip_start: u32,
     volume: f32,
-}
-
-impl TrackClip for AudioClip {
-    fn get_at_global_time(&self, global_time: u32) -> f32 {
-        self.audio
-            .get_sample_at_index(global_time - self.global_start + self.clip_start)
-            * self.volume
-    }
-
-    fn get_global_start(&self) -> u32 {
-        self.global_start
-    }
-
-    fn get_global_end(&self) -> u32 {
-        self.global_end
-    }
 }
 
 impl AudioClip {
@@ -76,6 +65,10 @@ impl AudioClip {
             clip_start: 0,
             volume: 1.0,
         }
+    }
+
+    pub fn audio(&self) -> &Arc<InterleavedAudio> {
+        &self.audio
     }
 
     pub fn trim_start(&mut self, samples: i32) {
@@ -122,6 +115,26 @@ impl AudioClip {
             self.global_start += samples;
             self.global_end += samples;
         }
+    }
+}
+
+impl TrackClip for AudioClip {
+    fn get_at_global_time(&self, global_time: u32) -> f32 {
+        self.audio
+            .get_sample_at_index(global_time - self.global_start + self.clip_start)
+            * self.volume
+    }
+
+    fn get_global_start(&self) -> u32 {
+        self.global_start
+    }
+
+    fn get_global_end(&self) -> u32 {
+        self.global_end
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

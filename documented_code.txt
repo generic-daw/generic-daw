@@ -1,0 +1,1807 @@
+File Path: E:\generic-daw\src\main.rs
+mod generic_back;
+mod generic_front;
+
+use generic_front::Daw;
+use iced::{Sandbox, Settings};
+
+fn main() -> iced::Result {
+    Daw::run(Settings::default())
+}
+
+
+File Path: E:\generic-daw\src\generic_back\arrangement.rs
+use super::track::Track;
+use cpal::StreamConfig;
+use hound::WavWriter;
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
+
+pub struct Arrangement {
+    tracks: Vec<Arc<Mutex<Track>>>,
+}
+
+impl Default for Arrangement {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Arrangement {
+    pub const fn tracks(&self) -> &Vec<Arc<Mutex<Track>>> {
+        &self.tracks
+    }
+
+    pub const fn new() -> Self {
+        Self { tracks: Vec::new() }
+    }
+
+    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
+        self.tracks
+            .iter()
+            .map(|track| track.lock().unwrap().get_at_global_time(global_time))
+            .sum::<f32>()
+            .clamp(-1.0, 1.0)
+    }
+
+    pub fn len_tracks(&self) -> u32 {
+        u32::try_from(self.tracks.len()).unwrap()
+    }
+
+    pub fn len_samples(&self) -> u32 {
+        self.tracks
+            .iter()
+            .map(|track| track.lock().unwrap().len())
+            .max()
+            .unwrap()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len_samples() == 0
+    }
+
+    pub fn push(&mut self, track: Track) {
+        self.tracks.push(Arc::new(Mutex::new(track)));
+    }
+
+    pub fn remove(&mut self, index: usize) {
+        self.tracks.remove(index);
+    }
+
+    pub fn get(&self, index: u32) -> Arc<Mutex<Track>> {
+        self.tracks[index as usize].clone()
+    }
+
+    pub fn export(&self, path: &Path, config: &StreamConfig) {
+        let mut writer = WavWriter::create(
+            path,
+            hound::WavSpec {
+                channels: config.channels,
+                sample_rate: config.sample_rate.0,
+                bits_per_sample: 32,
+                sample_format: hound::SampleFormat::Float,
+            },
+        )
+        .unwrap();
+
+        for i in 0..self.len_samples() {
+            writer.write_sample(self.get_at_global_time(i)).unwrap();
+        }
+    }
+}
+
+
+File Path: E:\generic-daw\src\generic_back\bpm.rs
+pub struct Position {
+    quarter_note: u32,
+    sub_quarter_note: u8,
+}
+
+impl Position {
+    pub const fn new(quarter_note: u32, sub_quarter_note: u8) -> Self {
+        Self {
+            quarter_note,
+            sub_quarter_note,
+        }
+    }
+
+    pub fn to_interleaved_samples(&self, meter: &Meter, sample_rate: u32) -> u32 {
+        let global_beat = f64::from(self.quarter_note * u32::from(meter.denominator)) / 4.0
+            + f64::from(self.sub_quarter_note) / 256.0;
+
+        seconds_to_interleaved_samples(global_beat * meter.bpm / 60.0, sample_rate)
+    }
+}
+
+pub fn seconds_to_interleaved_samples(seconds: f64, sample_rate: u32) -> u32 {
+    let samples = (seconds * f64::from(sample_rate) * 2f64).floor();
+    assert!(samples <= f64::from(u32::MAX));
+    samples as u32
+}
+
+#[derive(PartialEq)]
+pub struct Meter {
+    bpm: f64,
+    numerator: u8,
+    denominator: u8,
+}
+
+impl Meter {
+    fn new(bpm: f64, numerator: u8, denominator: u8) -> Self {
+        assert_eq!(denominator.count_ones(), 1);
+
+        Self {
+            bpm,
+            numerator,
+            denominator,
+        }
+    }
+}
+
+
+File Path: E:\generic-daw\src\generic_back\mod.rs
+pub mod arrangement;
+pub mod bpm;
+pub mod clap_host;
+pub mod track;
+pub mod track_clip;
+
+use arrangement::Arrangement;
+use cpal::{
+    traits::{DeviceTrait, HostTrait, StreamTrait},
+    Device, Stream, StreamConfig,
+};
+use std::sync::{
+    mpsc::{Receiver, Sender},
+    Arc, Mutex,
+};
+
+pub enum StreamMessage {
+    TogglePlay,
+    Stop,
+    Jump(u32),
+}
+
+pub struct DawStream {
+    stream: Stream,
+    config: StreamConfig,
+    playing: bool,
+    sender: Sender<StreamMessage>,
+}
+
+impl DawStream {
+    pub fn new(audio: Arc<Mutex<Arrangement>>) -> Self {
+        let device = cpal::default_host()
+            .default_output_device()
+            .expect("no output device available");
+
+        let config = device
+            .default_output_config()
+            .expect("no output config available")
+            .into();
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+
+        let stream = get_output_stream(&device, &config, audio, receiver);
+        stream.play().unwrap();
+
+        Self {
+            stream,
+            config,
+            playing: false,
+            sender,
+        }
+    }
+
+    pub const fn config(&self) -> &StreamConfig {
+        &self.config
+    }
+
+    pub const fn playing(&self) -> bool {
+        self.playing
+    }
+
+    pub fn toggle_play(&mut self) {
+        self.playing ^= true;
+        _ = self.sender.send(StreamMessage::TogglePlay);
+    }
+
+    pub fn stop(&mut self) {
+        self.playing = false;
+        _ = self.sender.send(StreamMessage::Stop);
+    }
+
+    pub fn jump(&self, time: u32) {
+        self.sender.send(StreamMessage::Jump(time)).unwrap();
+    }
+}
+
+fn get_output_stream(
+    device: &Device,
+    config: &StreamConfig,
+    audio: Arc<Mutex<Arrangement>>,
+    receiver: Receiver<StreamMessage>,
+) -> Stream {
+    let mut global_time = 0;
+    let mut playing = false;
+
+    device
+        .build_output_stream(
+            config,
+            move |data, _| {
+                for sample in data.iter_mut() {
+                    *sample = audio.lock().unwrap().get_at_global_time(global_time);
+
+                    match receiver.try_recv() {
+                        Ok(StreamMessage::TogglePlay) => {
+                            playing ^= true;
+                        }
+                        Ok(StreamMessage::Stop) => {
+                            playing = false;
+                            global_time = 0;
+                        }
+                        Ok(StreamMessage::Jump(time)) => {
+                            global_time = time;
+                        }
+                        _ => {}
+                    }
+
+                    if playing {
+                        global_time += 1;
+                    }
+                }
+            },
+            move |err| {
+                eprintln!("an error occurred on stream: {err}");
+            },
+            None,
+        )
+        .unwrap()
+}
+
+
+File Path: E:\generic-daw\src\generic_back\track.rs
+use super::track_clip::TrackClip;
+
+pub struct Track {
+    clips: Vec<Box<dyn TrackClip>>,
+}
+
+impl Default for Track {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Track {
+    pub fn new() -> Self {
+        Self { clips: Vec::new() }
+    }
+
+    pub fn clips(&self) -> &Vec<Box<dyn TrackClip>> {
+        &self.clips
+    }
+
+    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
+        self.clips
+            .iter()
+            .map(|clip| clip.get_at_global_time(global_time))
+            .sum()
+    }
+
+    pub fn len(&self) -> u32 {
+        self.clips
+            .iter()
+            .map(|clip| clip.get_global_end())
+            .max()
+            .unwrap_or(0)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn push(&mut self, audio_clip: Box<dyn TrackClip>) {
+        self.clips.push(audio_clip);
+    }
+
+    pub fn get(&self, index: usize) -> &dyn TrackClip {
+        self.clips.get(index).unwrap().as_ref()
+    }
+
+    pub fn remove(&mut self, index: usize) {
+        self.clips.remove(index);
+    }
+}
+
+
+File Path: E:\generic-daw\src\generic_back\clap_host\gui.rs
+use clack_extensions::gui::{GuiApiType, GuiConfiguration, GuiError, GuiSize, PluginGui};
+use clack_host::prelude::*;
+use winit::dpi::{LogicalSize, PhysicalSize, Size};
+
+pub struct Gui {
+    plugin_gui: PluginGui,
+    pub configuration: Option<GuiConfiguration<'static>>,
+    is_open: bool,
+    is_resizeable: bool,
+}
+
+impl Gui {
+    pub fn new(plugin_gui: PluginGui, instance: &mut PluginMainThreadHandle) -> Self {
+        Self {
+            plugin_gui,
+            configuration: Self::negotiate_configuration(&plugin_gui, instance),
+            is_open: false,
+            is_resizeable: false,
+        }
+    }
+
+    fn negotiate_configuration(
+        gui: &PluginGui,
+        plugin: &mut PluginMainThreadHandle,
+    ) -> Option<GuiConfiguration<'static>> {
+        let api_type = GuiApiType::default_for_current_platform()?;
+        let mut config = GuiConfiguration {
+            api_type,
+            is_floating: false,
+        };
+
+        if gui.is_api_supported(plugin, config) {
+            Some(config)
+        } else {
+            config.is_floating = true;
+            if gui.is_api_supported(plugin, config) {
+                Some(config)
+            } else {
+                None
+            }
+        }
+    }
+
+    pub fn gui_size_to_winit_size(&self, size: GuiSize) -> Size {
+        let Some(GuiConfiguration { api_type, .. }) = self.configuration else {
+            panic!("Called gui_size_to_winit_size on incompatible plugin")
+        };
+
+        if api_type.uses_logical_size() {
+            LogicalSize {
+                width: size.width,
+                height: size.height,
+            }
+            .into()
+        } else {
+            PhysicalSize {
+                width: size.width,
+                height: size.height,
+            }
+            .into()
+        }
+    }
+
+    pub fn needs_floating(&self) -> Option<bool> {
+        self.configuration
+            .map(|GuiConfiguration { is_floating, .. }| is_floating)
+    }
+
+    pub fn open_floating(&self, plugin: &mut PluginMainThreadHandle) -> Result<(), GuiError> {
+        let Some(configuration) = self.configuration else {
+            panic!("Called open_floating on incompatible plugin")
+        };
+        assert!(
+            configuration.is_floating,
+            "Called open_floating on incompatible plugin"
+        );
+
+        self.plugin_gui.create(plugin, configuration)?;
+        self.plugin_gui.suggest_title(plugin, c"");
+        self.plugin_gui.show(plugin)?;
+
+        Ok(())
+    }
+
+    pub fn resize(
+        &self,
+        plugin: &mut PluginMainThreadHandle,
+        size: Size,
+        scale_factor: f64,
+    ) -> Size {
+        let uses_logical_pixels = self.configuration.unwrap().api_type.uses_logical_size();
+
+        let size = if uses_logical_pixels {
+            let size = size.to_logical(scale_factor);
+            GuiSize {
+                width: size.width,
+                height: size.height,
+            }
+        } else {
+            let size = size.to_physical(scale_factor);
+            GuiSize {
+                width: size.width,
+                height: size.height,
+            }
+        };
+
+        if !self.is_resizeable {
+            let forced_size = self.plugin_gui.get_size(plugin).unwrap_or(size);
+
+            return self.gui_size_to_winit_size(forced_size);
+        }
+
+        let working_size = self.plugin_gui.adjust_size(plugin, size).unwrap_or(size);
+        self.plugin_gui.set_size(plugin, working_size).unwrap();
+
+        self.gui_size_to_winit_size(working_size)
+    }
+
+    pub fn destroy(&mut self, plugin: &mut PluginMainThreadHandle) {
+        if self.is_open {
+            self.plugin_gui.destroy(plugin);
+            self.is_open = false;
+        }
+    }
+}
+
+
+File Path: E:\generic-daw\src\generic_back\clap_host\host_shared.rs
+use super::PluginThreadMessage;
+use clack_extensions::gui::{GuiSize, HostGuiImpl, PluginGui};
+use clack_host::prelude::*;
+use std::sync::mpsc::Sender;
+
+pub struct HostShared {
+    sender: Sender<PluginThreadMessage>,
+}
+
+impl<'a> SharedHandler<'a> for HostShared {
+    fn request_process(&self) {}
+    fn request_callback(&self) {}
+    fn request_restart(&self) {}
+}
+
+impl HostGuiImpl for HostShared {
+    fn resize_hints_changed(&self) {}
+
+    fn request_resize(&self, new_size: GuiSize) -> Result<(), HostError> {
+        Ok(self
+            .sender
+            .send(PluginThreadMessage::GuiRequestResized(new_size))?)
+    }
+
+    fn request_show(&self) -> Result<(), HostError> {
+        Ok(())
+    }
+
+    fn request_hide(&self) -> Result<(), HostError> {
+        Ok(())
+    }
+
+    fn closed(&self, _was_destroyed: bool) {
+        self.sender.send(PluginThreadMessage::GuiClosed).unwrap();
+    }
+}
+
+impl HostShared {
+    pub const fn new(sender: Sender<PluginThreadMessage>) -> Self {
+        Self { sender }
+    }
+}
+
+pub struct HostPluginThread<'a> {
+    plugin: Option<InitializedPluginHandle<'a>>,
+    pub gui: Option<PluginGui>,
+}
+
+impl<'a> MainThreadHandler<'a> for HostPluginThread<'a> {
+    fn initialized(&mut self, instance: InitializedPluginHandle<'a>) {
+        self.gui = instance.get_extension();
+        self.plugin = Some(instance);
+    }
+}
+
+impl<'a> HostPluginThread<'a> {
+    pub const fn new() -> Self {
+        Self {
+            plugin: None,
+            gui: None,
+        }
+    }
+}
+
+impl<'a> Default for HostPluginThread<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
+File Path: E:\generic-daw\src\generic_back\clap_host\mod.rs
+mod gui;
+mod host_shared;
+
+use clack_extensions::gui::{GuiSize, HostGui};
+use clack_host::{prelude::*, process::StartedPluginAudioProcessor};
+use cpal::StreamConfig;
+use gui::Gui;
+use host_shared::{HostPluginThread, HostShared};
+use std::{
+    path::PathBuf,
+    result::Result,
+    sync::{
+        atomic::{AtomicU32, Ordering::SeqCst},
+        mpsc::{Receiver, Sender},
+        Arc, Mutex,
+    },
+};
+use walkdir::WalkDir;
+
+pub enum PluginThreadMessage {
+    RunOnMainThread,
+    GuiClosed,
+    GuiRequestResized(GuiSize),
+    ProcessAudio(
+        [[f32; 8]; 2],
+        Arc<Mutex<AudioPorts>>,
+        Arc<Mutex<AudioPorts>>,
+        EventBuffer,
+        EventBuffer,
+    ),
+    GetCounter,
+}
+
+pub enum HostThreadMessage {
+    AudioProcessed([[f32; 8]; 2], EventBuffer),
+    Counter(u32),
+}
+
+pub struct Host;
+
+impl HostHandlers for Host {
+    type Shared<'a> = HostShared;
+    type MainThread<'a> = HostPluginThread<'a>;
+    type AudioProcessor<'a> = ();
+
+    fn declare_extensions(builder: &mut HostExtensions<Self>, _shared: &Self::Shared<'_>) {
+        builder.register::<HostGui>();
+    }
+}
+
+struct StreamPluginAudioProcessor {
+    audio_processor: Mutex<StartedPluginAudioProcessor<Host>>,
+    plugin_sample_counter: AtomicU32,
+}
+
+impl StreamPluginAudioProcessor {
+    fn process(
+        &self,
+        input_audio: &InputAudioBuffers,
+        output_audio: &mut OutputAudioBuffers,
+        input_events: &InputEvents,
+        output_events: &mut OutputEvents,
+    ) {
+        self.audio_processor
+            .lock()
+            .unwrap()
+            .process(
+                input_audio,
+                output_audio,
+                input_events,
+                output_events,
+                Some(self.get_counter() as u64),
+                None,
+            )
+            .unwrap();
+
+        let current_counter = self.plugin_sample_counter.load(SeqCst);
+        self.plugin_sample_counter
+            .store(current_counter + 1, SeqCst);
+    }
+
+    fn get_counter(&self) -> u32 {
+        self.plugin_sample_counter.load(SeqCst)
+    }
+}
+
+pub fn get_installed_plugins() -> Vec<PluginBundle> {
+    standard_clap_paths()
+        .iter()
+        .flat_map(|path| {
+            WalkDir::new(path)
+                .follow_links(true)
+                .into_iter()
+                .filter_map(Result::ok)
+                .filter(|dir_entry| dir_entry.file_type().is_file())
+                .filter(|dir_entry| {
+                    dir_entry
+                        .path()
+                        .extension()
+                        .is_some_and(|ext| ext == "clap")
+                })
+        })
+        .filter_map(|path| unsafe { PluginBundle::load(path.path()) }.ok())
+        .filter(|bundle| {
+            bundle
+                .get_plugin_factory()
+                .is_some_and(|factory| factory.plugin_descriptors().next().is_some())
+        })
+        .collect()
+}
+
+fn standard_clap_paths() -> Vec<PathBuf> {
+    let mut paths = vec![];
+
+    if let Some(home_dir) = dirs::home_dir() {
+        paths.push(home_dir.join(".clap"));
+
+        #[cfg(target_os = "macos")]
+        {
+            paths.push(home_dir.join("Library/Audio/Plug-Ins/CLAP"));
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        if let Some(val) = std::env::var_os("CommonProgramFiles") {
+            paths.push(PathBuf::from(val).join("CLAP"));
+        }
+
+        if let Some(dir) = dirs::config_local_dir() {
+            paths.push(dir.join("Programs\\Common\\CLAP"));
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        paths.push(PathBuf::from("/Library/Audio/Plug-Ins/CLAP"));
+    }
+
+    #[cfg(target_family = "unix")]
+    {
+        paths.push("/usr/lib/clap".into());
+    }
+
+    if let Some(env_var) = std::env::var_os("CLAP_PATH") {
+        paths.extend(std::env::split_paths(&env_var));
+    }
+
+    paths
+}
+
+#[allow(clippy::needless_pass_by_value)]
+pub fn run(
+    bundle: PluginBundle,
+    config: StreamConfig,
+) -> (Sender<PluginThreadMessage>, Receiver<HostThreadMessage>) {
+    let (sender_plugin, receiver_plugin) = std::sync::mpsc::channel();
+    let (sender_host, receiver_host) = std::sync::mpsc::channel();
+
+    let sender_plugin_clone = sender_plugin.clone();
+    std::thread::spawn(move || {
+        let factory = bundle.get_plugin_factory().unwrap();
+        let plugin_descriptor = factory.plugin_descriptors().next().unwrap();
+        let mut instance = PluginInstance::<Host>::new(
+            |()| HostShared::new(sender_plugin_clone),
+            |_| HostPluginThread::new(),
+            &bundle,
+            plugin_descriptor.id().unwrap(),
+            &HostInfo::new("", "", "", "").unwrap(),
+        )
+        .unwrap();
+
+        let audio_config = PluginAudioConfiguration {
+            sample_rate: config.sample_rate.0 as f64,
+            min_frames_count: 16,
+            max_frames_count: 16,
+        };
+
+        let audio_processor = instance
+            .activate(|_, _| {}, audio_config)
+            .unwrap()
+            .start_processing()
+            .unwrap();
+
+        let gui = instance
+            .access_handler(|h| h.gui)
+            .map(|gui| Gui::new(gui, &mut instance.plugin_handle()))
+            .unwrap();
+
+        if gui.needs_floating().unwrap() {
+            run_gui_floating(
+                instance,
+                &sender_host,
+                receiver_plugin,
+                gui,
+                &StreamPluginAudioProcessor {
+                    audio_processor: Mutex::new(audio_processor),
+                    plugin_sample_counter: AtomicU32::new(0),
+                },
+            );
+        } else {
+            run_gui_embedded(
+                instance,
+                &sender_host,
+                receiver_plugin,
+                gui,
+                &StreamPluginAudioProcessor {
+                    audio_processor: Mutex::new(audio_processor),
+                    plugin_sample_counter: AtomicU32::new(0),
+                },
+            );
+        }
+    });
+
+    (sender_plugin, receiver_host)
+}
+
+#[allow(clippy::needless_pass_by_value)]
+fn run_gui_embedded(
+    mut _instance: PluginInstance<Host>,
+    _sender: &Sender<HostThreadMessage>,
+    _receiver: Receiver<PluginThreadMessage>,
+    mut _gui: Gui,
+    _audio_processor: &StreamPluginAudioProcessor,
+) {
+    todo!()
+}
+
+#[allow(clippy::significant_drop_tightening)]
+fn run_gui_floating(
+    mut instance: PluginInstance<Host>,
+    sender: &Sender<HostThreadMessage>,
+    receiver: Receiver<PluginThreadMessage>,
+    mut gui: Gui,
+    audio_processor: &StreamPluginAudioProcessor,
+) {
+    gui.open_floating(&mut instance.plugin_handle()).unwrap();
+
+    for message in receiver {
+        match message {
+            PluginThreadMessage::RunOnMainThread => instance.call_on_main_thread_callback(),
+            PluginThreadMessage::GuiClosed { .. } => {
+                break;
+            }
+            PluginThreadMessage::GuiRequestResized(gui_size) => {
+                gui.resize(
+                    &mut instance.plugin_handle(),
+                    gui.gui_size_to_winit_size(gui_size),
+                    1.0f64,
+                );
+            }
+            PluginThreadMessage::ProcessAudio(
+                mut input_buffers,
+                input_audio_ports,
+                output_audio_ports,
+                input_events,
+                mut output_events,
+            ) => {
+                let mut input_audio_ports = input_audio_ports.lock().unwrap();
+                let input_audio = input_audio_ports.with_input_buffers([AudioPortBuffer {
+                    latency: 0,
+                    channels: AudioPortBufferType::f32_input_only(
+                        input_buffers.iter_mut().map(InputChannel::constant),
+                    ),
+                }]);
+
+                let mut output_buffers = [[0.0; 8]; 2];
+                let mut output_audio_ports = output_audio_ports.lock().unwrap();
+                let mut output_audio = output_audio_ports.with_output_buffers([AudioPortBuffer {
+                    latency: 0,
+                    channels: AudioPortBufferType::f32_output_only(
+                        output_buffers.iter_mut().map(<[f32; 8]>::as_mut_slice),
+                    ),
+                }]);
+
+                audio_processor.process(
+                    &input_audio,
+                    &mut output_audio,
+                    &InputEvents::from_buffer(&input_events),
+                    &mut OutputEvents::from_buffer(&mut output_events),
+                );
+
+                sender
+                    .send(HostThreadMessage::AudioProcessed(
+                        output_buffers,
+                        output_events,
+                    ))
+                    .unwrap();
+            }
+            PluginThreadMessage::GetCounter => {
+                sender
+                    .send(HostThreadMessage::Counter(audio_processor.get_counter()))
+                    .unwrap();
+            }
+        }
+    }
+
+    gui.destroy(&mut instance.plugin_handle());
+}
+
+
+File Path: E:\generic-daw\src\generic_back\track_clip\audio_clip.rs
+use super::TrackClip;
+use anyhow::{anyhow, Result};
+use cpal::StreamConfig;
+use rubato::{
+    SincFixedIn, SincInterpolationParameters, SincInterpolationType, VecResampler, WindowFunction,
+};
+use std::{cmp::min, fs::File, path::PathBuf, sync::Arc};
+use symphonia::core::{
+    audio::SampleBuffer,
+    codecs::DecoderOptions,
+    errors::Error,
+    formats::FormatOptions,
+    io::{MediaSourceStream, MediaSourceStreamOptions},
+    meta::MetadataOptions,
+    probe::Hint,
+};
+
+pub struct InterleavedAudio {
+    samples: Arc<[f32]>,
+    name: String,
+}
+
+impl InterleavedAudio {
+    pub fn new(samples: Arc<[f32]>, name: String) -> Self {
+        Self { samples, name }
+    }
+
+    pub fn len(&self) -> u32 {
+        self.samples.len() as u32
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn get_name(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn get_sample_at_index(&self, index: u32) -> &f32 {
+        self.samples.get(index as usize).unwrap_or(&0.0)
+    }
+
+    pub fn samples(&self) -> &[f32] {
+        &self.samples
+    }
+}
+
+pub struct AudioClip {
+    audio: Arc<InterleavedAudio>,
+    global_start: u32,
+    global_end: u32,
+    clip_start: u32,
+    volume: f32,
+}
+
+impl TrackClip for AudioClip {
+    fn get_at_global_time(&self, global_time: u32) -> f32 {
+        self.audio
+            .get_sample_at_index(global_time - self.global_start + self.clip_start)
+            * self.volume
+    }
+
+    fn get_global_start(&self) -> u32 {
+        self.global_start
+    }
+
+    fn get_global_end(&self) -> u32 {
+        self.global_end
+    }
+
+    fn as_any(&self) -> &(dyn std::any::Any + '_) {
+        self
+    }
+}
+
+impl AudioClip {
+    pub fn new(audio: Arc<InterleavedAudio>) -> Self {
+        let global_end = audio.len();
+        Self {
+            audio,
+            global_start: 0,
+            global_end,
+            clip_start: 0,
+            volume: 1.0,
+        }
+    }
+
+    pub fn audio(&self) -> &Arc<InterleavedAudio> {
+        &self.audio
+    }
+
+    pub fn trim_start(&mut self, samples: i32) {
+        if samples < 0 {
+            let samples = -samples as u32;
+            let samples = min(samples, self.global_start);
+            let samples = min(samples, self.clip_start);
+
+            self.global_start -= samples;
+            self.clip_start -= samples;
+        } else {
+            let samples = samples as u32;
+            let samples = min(samples, self.global_end - self.global_start);
+
+            self.global_start += samples;
+            self.clip_start += samples;
+        }
+    }
+
+    pub fn trim_end(&mut self, samples: i32) {
+        if samples < 0 {
+            let samples = -samples as u32;
+            let samples = min(samples, self.global_end - self.global_start);
+
+            self.global_end -= samples;
+        } else {
+            let samples = samples as u32;
+            let samples = min(samples, self.audio.len() - self.clip_start);
+
+            self.global_end += samples;
+        }
+    }
+
+    pub fn move_by(&mut self, samples: i32) {
+        if samples < 0 {
+            let samples = -samples as u32;
+            let samples = min(samples, self.global_end - self.global_start);
+
+            self.global_start -= samples;
+            self.global_end -= samples;
+        } else {
+            let samples = samples as u32;
+
+            self.global_start += samples;
+            self.global_end += samples;
+        }
+    }
+}
+
+pub fn read_audio_file(path: &PathBuf, config: &StreamConfig) -> Result<Arc<InterleavedAudio>> {
+    let mut samples = Vec::new();
+
+    let format = symphonia::default::get_probe().format(
+        &Hint::new(),
+        MediaSourceStream::new(
+            Box::new(File::open(path).expect("Can't open file")),
+            MediaSourceStreamOptions::default(),
+        ),
+        &FormatOptions::default(),
+        &MetadataOptions::default(),
+    );
+
+    if let Err(err) = format {
+        return Err(anyhow!(err));
+    }
+
+    let mut format = format.unwrap().format;
+
+    let track = format.default_track().unwrap();
+    let sample_rate = track.codec_params.sample_rate.unwrap();
+    let name = path.file_name().unwrap().to_str().unwrap().to_string();
+
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&track.codec_params, &DecoderOptions::default())
+        .unwrap();
+
+    let track_id = track.id;
+
+    let mut sample_buffer = None;
+    while let Ok(packet) = format.next_packet() {
+        if packet.track_id() != track_id {
+            continue;
+        }
+
+        match decoder.decode(&packet) {
+            Ok(audio_buf) => {
+                if sample_buffer.is_none() {
+                    let spec = *audio_buf.spec();
+                    let duration = audio_buf.capacity() as u64;
+                    sample_buffer = Some(SampleBuffer::<f32>::new(duration, spec));
+                }
+                if let Some(buf) = &mut sample_buffer {
+                    buf.copy_interleaved_ref(audio_buf);
+                    samples.extend(buf.samples().iter());
+                }
+            }
+            Err(Error::DecodeError(_)) => (),
+            Err(_) => break,
+        }
+    }
+
+    if sample_rate == config.sample_rate.0 {
+        return Ok(Arc::new(InterleavedAudio::new(samples.into(), name)));
+    }
+
+    let mut resampler = SincFixedIn::<f32>::new(
+        config.sample_rate.0 as f64 / sample_rate as f64,
+        2.0,
+        SincInterpolationParameters {
+            sinc_len: 256,
+            f_cutoff: 0.95,
+            interpolation: SincInterpolationType::Linear,
+            oversampling_factor: 128,
+            window: WindowFunction::Blackman,
+        },
+        samples.len() / 2,
+        2,
+    )
+    .unwrap();
+
+    let deinterleaved_samples: Vec<Vec<f32>> = vec![
+        samples.iter().step_by(2).copied().collect(),
+        samples.iter().skip(1).step_by(2).copied().collect(),
+    ];
+    assert_eq!(
+        deinterleaved_samples[0].len(),
+        deinterleaved_samples[1].len()
+    );
+
+    let resampled_file = resampler.process(&deinterleaved_samples, None).unwrap();
+
+    samples.clear();
+    for i in 0..resampled_file[0].len() {
+        samples.extend(resampled_file.iter().map(|s| s[i]));
+    }
+
+    Ok(Arc::new(InterleavedAudio::new(samples.into(), name)))
+}
+
+
+File Path: E:\generic-daw\src\generic_back\track_clip\midi_clip.rs
+use super::TrackClip;
+use crate::generic_back::clap_host::{HostThreadMessage, PluginThreadMessage};
+use clack_host::{
+    events::{
+        event_types::{NoteOffEvent, NoteOnEvent},
+        Match,
+    },
+    prelude::*,
+};
+use std::{
+    cmp::min,
+    sync::{
+        atomic::{AtomicU32, AtomicU8, Ordering::SeqCst},
+        mpsc::{Receiver, Sender},
+        Arc, Mutex,
+    },
+};
+use wmidi::{MidiMessage, Velocity};
+
+#[derive(PartialEq, Eq)]
+pub struct MidiNote<'a> {
+    pub note: MidiMessage<'a>,
+    pub local_start: u32,
+    pub local_end: u32,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+enum DirtyEvent {
+    // can we reasonably assume that only one of these will happen per sample?
+    None,
+    NoteAdded,
+    NoteRemoved,
+    NoteReplaced,
+}
+
+pub struct MidiPattern<'a> {
+    notes: Vec<Arc<MidiNote<'a>>>,
+    dirty: DirtyEvent,
+    plugin_sender: Sender<PluginThreadMessage>,
+    host_receiver: Mutex<Receiver<HostThreadMessage>>,
+}
+
+impl<'a> MidiPattern<'a> {
+    fn new(
+        plugin_sender: Sender<PluginThreadMessage>,
+        host_receiver: Receiver<HostThreadMessage>,
+    ) -> Self {
+        Self {
+            notes: Vec::new(),
+            dirty: DirtyEvent::None,
+            plugin_sender,
+            host_receiver: Mutex::new(host_receiver),
+        }
+    }
+
+    fn len(&self) -> u32 {
+        self.notes
+            .iter()
+            .map(|note| note.local_end)
+            .max()
+            .unwrap_or(0)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn clear_dirty(&mut self) {
+        self.dirty = DirtyEvent::None;
+    }
+
+    fn push(&mut self, note: Arc<MidiNote<'a>>) {
+        self.notes.push(note);
+        self.dirty = DirtyEvent::NoteAdded;
+    }
+
+    fn remove(&mut self, note: &Arc<MidiNote<'a>>) {
+        let pos = self.notes.iter().position(|n| n == note).unwrap();
+        self.notes.remove(pos);
+        self.dirty = DirtyEvent::NoteRemoved;
+    }
+
+    fn replace(&mut self, note: &Arc<MidiNote<'a>>, new_note: Arc<MidiNote<'a>>) {
+        let pos = self.notes.iter().position(|n| n == note).unwrap();
+        self.notes[pos] = new_note;
+        self.dirty = DirtyEvent::NoteReplaced;
+    }
+}
+
+pub struct MidiClip<'a> {
+    pattern: Arc<Mutex<MidiPattern<'a>>>,
+    global_start: u32,
+    global_end: u32,
+    pattern_start: u32,
+    started_notes: Mutex<Vec<Arc<MidiNote<'a>>>>,
+    last_global_time: AtomicU32,
+    running_buffer: Mutex<[f32; 16]>,
+    last_buffer_index: AtomicU8,
+    audio_ports: Arc<Mutex<AudioPorts>>,
+}
+
+impl<'a> TrackClip for MidiClip<'a> {
+    fn get_at_global_time(&self, global_time: u32) -> f32 {
+        let last_global_time = self.last_global_time.load(SeqCst);
+        let mut last_buffer_index = self.last_buffer_index.load(SeqCst);
+
+        if last_global_time != global_time {
+            if global_time != last_global_time + 1
+                || self.pattern.lock().unwrap().dirty.clone() != DirtyEvent::None
+            {
+                self.last_buffer_index.store(15, SeqCst);
+            }
+
+            last_buffer_index = (last_buffer_index + 1) % 16;
+            if last_buffer_index == 0 {
+                self.refresh_buffer(global_time);
+            }
+
+            self.last_global_time.store(global_time, SeqCst);
+            self.last_buffer_index.store(last_buffer_index, SeqCst);
+        }
+
+        self.running_buffer.lock().unwrap()[last_buffer_index as usize]
+    }
+
+    fn get_global_start(&self) -> u32 {
+        self.global_start
+    }
+
+    fn get_global_end(&self) -> u32 {
+        self.global_end
+    }
+    fn as_any(&self) -> &(dyn std::any::Any + '_) {
+        self
+    }
+}
+
+impl<'a> MidiClip<'a> {
+    pub fn new(pattern: Arc<Mutex<MidiPattern<'a>>>) -> Self {
+        let len = pattern.lock().unwrap().len();
+        Self {
+            pattern,
+            global_start: 0,
+            global_end: len,
+            pattern_start: 0,
+            started_notes: Mutex::new(Vec::new()),
+            last_global_time: AtomicU32::new(0),
+            running_buffer: Mutex::new([0.0; 16]),
+            last_buffer_index: AtomicU8::new(15),
+            audio_ports: Arc::new(Mutex::new(AudioPorts::with_capacity(2, 1))),
+        }
+    }
+
+    pub fn push(&self, note: Arc<MidiNote<'a>>) {
+        self.pattern.lock().unwrap().push(note);
+    }
+
+    pub fn remove(&self, note: &Arc<MidiNote<'a>>) {
+        self.pattern.lock().unwrap().remove(note);
+    }
+
+    pub fn replace(&self, note: &Arc<MidiNote<'a>>, new_note: Arc<MidiNote<'a>>) {
+        self.pattern.lock().unwrap().replace(note, new_note);
+    }
+
+    pub fn trim_start(&mut self, samples: i32) {
+        if samples < 0 {
+            let samples = -samples as u32;
+            let samples = min(samples, self.global_start);
+            let samples = min(samples, self.global_start);
+
+            self.global_start -= samples;
+            self.global_start -= samples;
+        } else {
+            let samples = samples as u32;
+            let samples = min(samples, self.global_end - self.global_start);
+
+            self.global_start += samples;
+            self.global_start += samples;
+        }
+    }
+
+    pub fn trim_end(&mut self, samples: i32) {
+        if samples < 0 {
+            let samples = -samples as u32;
+            let samples = min(samples, self.global_end - self.global_start);
+
+            self.global_end -= samples;
+        } else {
+            let samples = samples as u32;
+            let samples = min(
+                samples,
+                self.pattern.lock().unwrap().len() - self.global_start,
+            );
+
+            self.global_end += samples;
+        }
+    }
+
+    pub fn move_by(&mut self, samples: i32) {
+        if samples < 0 {
+            let samples = -samples as u32;
+            let samples = min(samples, self.global_end - self.global_start);
+
+            self.global_start -= samples;
+            self.global_end -= samples;
+        } else {
+            let samples = samples as u32;
+
+            self.global_start += samples;
+            self.global_end += samples;
+        }
+    }
+
+    fn refresh_buffer(&self, global_time: u32) {
+        let buffer = self.get_input_events(global_time);
+
+        self.pattern
+            .lock()
+            .unwrap()
+            .plugin_sender
+            .send(PluginThreadMessage::ProcessAudio(
+                [[0.0; 8]; 2],
+                self.audio_ports.clone(),
+                self.audio_ports.clone(),
+                buffer,
+                EventBuffer::new(),
+            ))
+            .unwrap();
+
+        if let HostThreadMessage::AudioProcessed(buffers, _) = self
+            .pattern
+            .lock()
+            .unwrap()
+            .host_receiver
+            .lock()
+            .unwrap()
+            .recv()
+            .unwrap()
+        {
+            (0..16).step_by(2).for_each(|i| {
+                self.running_buffer.lock().unwrap()[i] = buffers[0][i];
+                self.running_buffer.lock().unwrap()[i + 1] = buffers[1][i];
+            });
+
+            self.pattern.lock().unwrap().clear_dirty();
+        };
+    }
+
+    fn get_input_events(&self, global_time: u32) -> EventBuffer {
+        let mut buffer = EventBuffer::new();
+
+        self.pattern
+            .lock()
+            .unwrap()
+            .plugin_sender
+            .send(PluginThreadMessage::GetCounter)
+            .unwrap();
+        if let HostThreadMessage::Counter(plugin_counter) = self
+            .pattern
+            .lock()
+            .unwrap()
+            .host_receiver
+            .lock()
+            .unwrap()
+            .recv()
+            .unwrap()
+        {
+            if global_time == self.global_end {
+                self.started_notes.lock().unwrap().iter().for_each(|note| {
+                    // stop all started notes
+                    if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
+                        buffer.push(&NoteOffEvent::new(
+                            global_time + plugin_counter,
+                            Pckn::new(0u8, channel.index(), note as u16, Match::All),
+                            u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                        ));
+                    };
+                });
+
+                self.started_notes.lock().unwrap().clear();
+
+                return buffer;
+            }
+
+            let dirty = self.pattern.lock().unwrap().dirty.clone();
+            match dirty {
+                DirtyEvent::None => {
+                    let last_global_time = self.last_global_time.load(SeqCst);
+                    if global_time != last_global_time + 1
+                        || (self.pattern_start != 0 && global_time == self.global_start)
+                    {
+                        self.jump_refresh(&mut buffer, global_time, plugin_counter);
+                    }
+                }
+                DirtyEvent::NoteAdded => {
+                    self.note_add_refresh(&mut buffer, global_time, plugin_counter);
+                }
+                DirtyEvent::NoteRemoved => {
+                    self.note_remove_refresh(&mut buffer, global_time, plugin_counter);
+                }
+                DirtyEvent::NoteReplaced => {
+                    self.note_remove_refresh(&mut buffer, global_time, plugin_counter);
+                    self.note_add_refresh(&mut buffer, global_time, plugin_counter);
+                }
+            }
+
+            let offset = self.global_start - self.pattern_start;
+            let plugin_offset = plugin_counter + offset;
+
+            self.pattern
+                .lock()
+                .unwrap()
+                .notes
+                .iter()
+                .filter(|midi_note| {
+                    offset + midi_note.local_start >= global_time
+                        && offset + midi_note.local_start < global_time + 16
+                })
+                .for_each(|midi_note| {
+                    // notes that start during the running buffer
+                    if let MidiMessage::NoteOn(channel, note, velocity) = midi_note.note {
+                        buffer.push(&NoteOnEvent::new(
+                            midi_note.local_start + plugin_offset,
+                            Pckn::new(0u8, channel.index(), note as u16, Match::All),
+                            u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                        ));
+                        self.started_notes.lock().unwrap().push(midi_note.clone());
+                    };
+                });
+
+            let mut indices = Vec::new();
+
+            self.started_notes
+                .lock()
+                .unwrap()
+                .iter()
+                .enumerate()
+                .filter(|(_, note)| {
+                    self.global_start - self.pattern_start + note.local_end < global_time + 16
+                })
+                .for_each(|(index, midi_note)| {
+                    // notes that end before the running buffer ends
+                    if let MidiMessage::NoteOn(channel, note, velocity) = midi_note.note {
+                        buffer.push(&NoteOffEvent::new(
+                            midi_note.local_end + plugin_offset,
+                            Pckn::new(0u8, channel.index(), note as u16, Match::All),
+                            u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                        ));
+                        indices.push(index);
+                    };
+                });
+
+            indices.iter().rev().for_each(|i| {
+                self.started_notes.lock().unwrap().remove(*i);
+            });
+        }
+
+        buffer
+    }
+
+    fn jump_refresh(&self, buffer: &mut EventBuffer, global_time: u32, plugin_counter: u32) {
+        let offset = self.global_start - self.pattern_start;
+        let plugin_offset = plugin_counter + offset;
+
+        self.started_notes.lock().unwrap().iter().for_each(|note| {
+            // stop all started notes
+            if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
+                buffer.push(&NoteOffEvent::new(
+                    global_time + plugin_offset,
+                    Pckn::new(0u8, channel.index(), note as u16, Match::All),
+                    u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                ));
+            };
+        });
+
+        self.started_notes.lock().unwrap().clear();
+
+        self.pattern
+            .lock()
+            .unwrap()
+            .notes
+            .iter()
+            .filter(|note| {
+                offset + note.local_start <= global_time && offset + note.local_end > global_time
+            })
+            .for_each(|note| {
+                // start all notes that would be currently playing
+                if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
+                    buffer.push(&NoteOnEvent::new(
+                        global_time + plugin_offset,
+                        Pckn::new(0u8, channel.index(), note as u16, Match::All),
+                        u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                    ));
+                };
+                self.started_notes.lock().unwrap().push(note.clone());
+            });
+    }
+
+    fn note_add_refresh(&self, buffer: &mut EventBuffer, global_time: u32, plugin_counter: u32) {
+        let offset = self.global_start - self.pattern_start;
+        let plugin_offset = plugin_counter + offset;
+
+        self.pattern
+            .lock()
+            .unwrap()
+            .notes
+            .iter()
+            .filter(|note| !self.started_notes.lock().unwrap().contains(note))
+            .filter(|note| {
+                offset + note.local_start <= global_time && offset + note.local_end > global_time
+            })
+            .for_each(|note| {
+                // start all new notes that would be currently playing
+                if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
+                    buffer.push(&NoteOnEvent::new(
+                        global_time + plugin_offset,
+                        Pckn::new(0u8, channel.index(), note as u16, Match::All),
+                        u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                    ));
+                };
+                self.started_notes.lock().unwrap().push(note.clone());
+            });
+    }
+
+    fn note_remove_refresh(&self, buffer: &mut EventBuffer, global_time: u32, plugin_counter: u32) {
+        let plugin_offset = plugin_counter + self.global_start - self.pattern_start;
+
+        let mut indices = Vec::new();
+
+        self.started_notes
+            .lock()
+            .unwrap()
+            .iter()
+            .enumerate()
+            .filter(|(_, note)| !self.pattern.lock().unwrap().notes.contains(note))
+            .for_each(|(index, note)| {
+                // stop all started notes that are no longer in the pattern
+                if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
+                    buffer.push(&NoteOffEvent::new(
+                        global_time + plugin_offset,
+                        Pckn::new(0u8, channel.index(), note as u16, Match::All),
+                        u8::from(velocity) as f64 / (u8::from(Velocity::MAX) as f64),
+                    ));
+                    indices.push(index);
+                };
+            });
+
+        indices.iter().rev().for_each(|i| {
+            self.started_notes.lock().unwrap().remove(*i);
+        });
+    }
+}
+
+
+File Path: E:\generic-daw\src\generic_back\track_clip\mod.rs
+pub mod audio_clip;
+pub mod midi_clip;
+
+pub trait TrackClip: Send + Sync {
+    fn get_at_global_time(&self, global_time: u32) -> f32;
+    fn get_global_start(&self) -> u32;
+    fn get_global_end(&self) -> u32;
+    fn as_any(&self) -> &(dyn std::any::Any + '_);
+}
+
+
+File Path: E:\generic-daw\src\generic_front\mod.rs
+mod timeline;
+mod track_panel;
+
+use crate::generic_back::{
+    arrangement::Arrangement,
+    track::Track,
+    track_clip::audio_clip::{read_audio_file, AudioClip},
+    DawStream,
+};
+use iced::{
+    widget::{button, column, row},
+    Element, Sandbox,
+};
+use rfd::FileDialog;
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
+use timeline::Timeline;
+use track_panel::TrackPanel;
+
+pub struct Daw {
+    arrangement: Arc<Mutex<Arrangement>>,
+    track_panel: TrackPanel,
+    timeline: Timeline,
+    stream: DawStream,
+}
+
+#[derive(Debug, Clone)]
+pub enum Message {
+    TrackPanel(<TrackPanel as Sandbox>::Message),
+    Timeline(<Timeline as Sandbox>::Message),
+    LoadSample(String),
+    TogglePlay,
+    Stop,
+    FileSelected(Option<String>),
+    ArrangementUpdated,
+}
+
+impl Sandbox for Daw {
+    type Message = Message;
+
+    fn new() -> Self {
+        let arrangement = Arc::new(Mutex::new(Arrangement::new()));
+
+        let stream = DawStream::new(arrangement.clone());
+
+        Self {
+            track_panel: TrackPanel::new(arrangement.clone()),
+            timeline: Timeline::new(arrangement.clone()),
+            stream,
+            arrangement,
+        }
+    }
+
+    fn title(&self) -> String {
+        String::from("GenericDAW")
+    }
+
+    fn update(&mut self, message: Message) {
+        match message {
+            Message::TrackPanel(msg) => self.track_panel.update(msg),
+            Message::Timeline(msg) => self.timeline.update(msg),
+            Message::LoadSample(_) => {
+                if let Some(path) = FileDialog::new().pick_file() {
+                    let path_str = path.display().to_string();
+                    self.update(Message::FileSelected(Some(path_str)));
+                }
+            }
+            Message::FileSelected(Some(path)) => {
+                let clip = Box::new(AudioClip::new(
+                    read_audio_file(&PathBuf::from(path), self.stream.config())
+                        .expect("Failed to load sample"),
+                ));
+                let mut track = Track::new();
+                track.push(clip);
+                self.arrangement.lock().unwrap().push(track);
+                self.update(Message::ArrangementUpdated);
+            }
+            Message::ArrangementUpdated => {
+                self.track_panel
+                    .update(track_panel::Message::ArrangementUpdated);
+                self.timeline
+                    .update(crate::generic_front::Message::ArrangementUpdated);
+            }
+            Message::FileSelected(None) => {}
+            Message::TogglePlay => self.stream.toggle_play(),
+            Message::Stop => self.stream.stop(),
+        }
+    }
+
+    fn view(&self) -> Element<Message> {
+        let controls = row![
+            button("Load Sample").on_press(Message::LoadSample(String::new())),
+            button(if self.stream.playing() {
+                "Pause"
+            } else {
+                "Play"
+            })
+            .on_press(Message::TogglePlay),
+            button("Stop").on_press(Message::Stop)
+        ];
+
+        let content = column![
+            controls,
+            row![
+                self.track_panel.view().map(Message::TrackPanel),
+                self.timeline.view().map(Message::Timeline)
+            ]
+        ]
+        .padding(20)
+        .spacing(20);
+
+        content.into()
+    }
+}
+
+
+File Path: E:\generic-daw\src\generic_front\timeline.rs
+use std::sync::{Arc, Mutex};
+
+// Import the necessary modules
+use crate::generic_back::{arrangement::Arrangement, track_clip::audio_clip::AudioClip};
+use iced::widget::{canvas, Canvas};
+use iced::{Element, Length, Sandbox};
+
+use super::Message;
+
+pub struct Timeline {
+    arrangement: Arc<Mutex<Arrangement>>,
+    waveforms: Vec<Vec<f32>>, // Store the waveform data here
+}
+
+impl Timeline {
+    pub fn new(arrangement: Arc<Mutex<Arrangement>>) -> Self {
+        let waveforms = generate_waveforms(&arrangement);
+        Self {
+            arrangement,
+            waveforms,
+        }
+    }
+}
+
+fn generate_waveforms(arrangement: &Arc<Mutex<Arrangement>>) -> Vec<Vec<f32>> {
+    let mut waveforms = Vec::new();
+
+    // Lock the arrangement and store the result in a variable to extend its lifetime
+    let arrangement_lock = arrangement.lock().unwrap();
+    for track in arrangement_lock.tracks().iter() {
+        // Lock the track and store the result in a variable to extend its lifetime
+        let track_lock = track.lock().unwrap();
+        for clip in track_lock.clips().iter() {
+            if let Some(audio_clip) = clip.as_any().downcast_ref::<AudioClip>() {
+                let waveform = audio_clip
+                    .audio()
+                    .samples()
+                    .iter()
+                    .step_by(100)
+                    .copied()
+                    .collect();
+                waveforms.push(waveform);
+            }
+        }
+    }
+
+    waveforms
+}
+
+impl Sandbox for Timeline {
+    type Message = Message;
+    fn new() -> Self {
+        // Initialization code here
+        Timeline::new(Arc::new(Mutex::new(Arrangement::new())))
+    }
+
+    fn title(&self) -> String {
+        String::from("Timeline")
+    }
+    #[allow(unused_variables)]
+    fn update(&mut self, message: Self::Message) {
+        // Handle messages here
+    }
+    fn view(&self) -> Element<Message> {
+        let canvas = Canvas::new(self).width(Length::Fill).height(Length::Fill);
+        canvas.into()
+    }
+}
+
+impl canvas::Program<Message> for Timeline {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        renderer: &iced::Renderer,
+        _theme: &iced::Theme,
+        bounds: iced::Rectangle,
+        _cursor: iced::mouse::Cursor,
+    ) -> Vec<iced::widget::canvas::Geometry> {
+        let mut frame = iced::widget::canvas::Frame::new(renderer, bounds.size()); // Use the renderer argument
+        for (i, waveform) in self.waveforms.iter().enumerate() {
+            let y_offset = i as f32 * 100.0;
+            let path = waveform.iter().enumerate().fold(
+                iced::widget::canvas::Path::new(|path| {
+                    for (x, sample) in waveform.iter().enumerate() {
+                        let x_pos = x as f32;
+                        let y_pos = y_offset + (*sample * 100.0);
+                        path.line_to(iced::Point::new(x_pos, y_pos));
+                    }
+                }),
+                |path, _| path,
+            );
+
+            frame.stroke(&path, iced::widget::canvas::Stroke::default());
+        }
+
+        vec![frame.into_geometry()]
+    }
+}
+
+
+File Path: E:\generic-daw\src\generic_front\track_panel.rs
+use crate::generic_back::arrangement::Arrangement;
+use iced::{
+    widget::{column, container, text},
+    Element, Length, Sandbox,
+};
+use std::sync::{Arc, Mutex};
+
+pub struct TrackPanel {
+    arrangement: Arc<Mutex<Arrangement>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Message {
+    ArrangementUpdated,
+}
+
+impl TrackPanel {
+    pub fn new(arrangement: Arc<Mutex<Arrangement>>) -> Self {
+        Self { arrangement }
+    }
+}
+
+impl Sandbox for TrackPanel {
+    type Message = Message;
+
+    fn new() -> Self {
+        unimplemented!()
+    }
+
+    fn update(&mut self, message: Message) {
+        match message {
+            Message::ArrangementUpdated => {
+                // Handle arrangement updates, if necessary
+                // For example, you could trigger a re-render or refresh here
+            }
+        }
+    }
+
+    fn view(&self) -> Element<Message> {
+        let tracks = self
+            .arrangement
+            .lock()
+            .unwrap()
+            .tracks()
+            .iter()
+            .enumerate()
+            .fold(column![].spacing(10), |col, (index, _)| {
+                let track_name = format!("Track {}", index + 1);
+                col.push(text(track_name))
+            });
+
+        container(tracks)
+            .width(Length::FillPortion(2))
+            .height(Length::Fill)
+            .style(iced::theme::Container::Box)
+            .into()
+    }
+
+    fn title(&self) -> String {
+        "Track Panel".to_string()
+    }
+}
+
+

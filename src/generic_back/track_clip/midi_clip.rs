@@ -8,6 +8,7 @@ use clack_host::{
     prelude::*,
 };
 use std::{
+    any::Any,
     cmp::min,
     sync::{
         atomic::{AtomicU32, AtomicU8, Ordering::SeqCst},
@@ -87,7 +88,7 @@ impl<'a> MidiPattern<'a> {
     }
 }
 
-pub struct MidiClip<'a> {
+pub struct MidiClip<'a: 'static> {
     pattern: Arc<Mutex<MidiPattern<'a>>>,
     global_start: u32,
     global_end: u32,
@@ -129,6 +130,9 @@ impl<'a> TrackClip for MidiClip<'a> {
 
     fn get_global_end(&self) -> u32 {
         self.global_end
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

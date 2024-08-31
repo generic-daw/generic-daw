@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use super::track_clip::TrackClip;
 
 pub struct Track {
-    clips: Vec<Box<dyn TrackClip>>,
+    clips: Vec<Arc<dyn TrackClip>>,
 }
 
 impl Default for Track {
@@ -15,7 +17,7 @@ impl Track {
         Self { clips: Vec::new() }
     }
 
-    pub fn clips(&self) -> &Vec<Box<dyn TrackClip>> {
+    pub fn clips(&self) -> &Vec<Arc<dyn TrackClip>> {
         &self.clips
     }
 
@@ -38,7 +40,7 @@ impl Track {
         self.len() == 0
     }
 
-    pub fn push(&mut self, audio_clip: Box<dyn TrackClip>) {
+    pub fn push(&mut self, audio_clip: Arc<dyn TrackClip>) {
         self.clips.push(audio_clip);
     }
 

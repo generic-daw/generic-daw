@@ -16,11 +16,10 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
-use timeline::Timeline;
+use timeline::{Timeline, TimelineMessage};
 use track_panel::TrackPanel;
 
 pub struct Daw {
-    #[allow(dead_code)]
     arrangement: Arc<Mutex<Arrangement>>,
     track_panel: TrackPanel,
     timeline: Timeline,
@@ -31,7 +30,8 @@ pub struct Daw {
 pub enum Message {
     TrackPanel(<TrackPanel as Sandbox>::Message),
     Timeline(<Timeline as Sandbox>::Message),
-    LoadSample(#[allow(dead_code)] String),
+    TimelineMessage(TimelineMessage),
+    LoadSample(String),
     TogglePlay,
     Stop,
     FileSelected(Option<String>),
@@ -69,7 +69,7 @@ impl Sandbox for Daw {
                 }
             }
             Message::FileSelected(Some(path)) => {
-                let clip = Box::new(AudioClip::new(
+                let clip = Arc::new(AudioClip::new(
                     read_audio_file(&PathBuf::from(path), self.stream.config())
                         .expect("Failed to load sample"),
                 ));
@@ -81,11 +81,15 @@ impl Sandbox for Daw {
             Message::ArrangementUpdated => {
                 self.track_panel
                     .update(track_panel::Message::ArrangementUpdated);
-                self.timeline.update(timeline::Message::ArrangementUpdated);
+                self.timeline
+                    .update(timeline::TimelineMessage::ArrangementUpdated);
             }
             Message::FileSelected(None) => {}
             Message::TogglePlay => self.stream.toggle_play(),
             Message::Stop => self.stream.stop(),
+            Message::TimelineMessage(timeline_msg) => {
+                self.timeline.update(timeline_msg);
+            }
         }
     }
 
