@@ -25,12 +25,7 @@ impl Arrangement {
     pub fn get_at_global_time(&self, global_time: u32, meter: &Arc<Meter>) -> f32 {
         self.tracks
             .iter()
-            .map(|track| {
-                track
-                    .lock()
-                    .unwrap()
-                    .get_at_global_time(global_time, &meter.clone())
-            })
+            .map(|track| track.lock().unwrap().get_at_global_time(global_time, meter))
             .sum::<f32>()
             .clamp(-1.0, 1.0)
     }
@@ -71,9 +66,9 @@ impl Arrangement {
         )
         .unwrap();
 
-        (0..self.len().in_interleaved_samples(&meter.clone())).for_each(|i| {
+        (0..self.len().in_interleaved_samples(meter)).for_each(|i| {
             writer
-                .write_sample(self.get_at_global_time(i, &meter.clone()))
+                .write_sample(self.get_at_global_time(i, meter))
                 .unwrap();
         });
     }

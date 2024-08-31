@@ -74,12 +74,12 @@ impl canvas::Program<TimelineMessage> for Timeline {
                     let track = track.lock().unwrap();
 
                     let y_offset = i * (self.timeline_y_scale * 2) + self.timeline_y_scale;
-                    (0..track.len().in_interleaved_samples(&meter.clone()))
+                    (0..track.len().in_interleaved_samples(&meter))
                         .step_by(self.timeline_x_scale)
                         .enumerate()
                         .for_each(|(x, global_time)| {
                             let y_pos = track
-                                .get_at_global_time(global_time, &meter.clone())
+                                .get_at_global_time(global_time, &meter)
                                 .mul_add(self.timeline_y_scale as f32, y_offset as f32);
                             path.line_to(iced::Point::new(x as f32, y_pos));
                         });

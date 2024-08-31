@@ -235,7 +235,7 @@ impl<'a> MidiClip<'a> {
             .recv()
             .unwrap()
         {
-            if global_time == self.global_end.in_interleaved_samples(&meter.clone()) {
+            if global_time == self.global_end.in_interleaved_samples(meter) {
                 self.started_notes.lock().unwrap().iter().for_each(|note| {
                     // stop all started notes
                     if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
@@ -257,32 +257,21 @@ impl<'a> MidiClip<'a> {
                 DirtyEvent::None => {
                     let last_global_time = self.last_global_time.load(SeqCst);
                     if global_time != last_global_time + 1
-                        || (self.pattern_start.in_interleaved_samples(&meter.clone()) != 0
-                            && global_time
-                                == self.global_start.in_interleaved_samples(&meter.clone()))
+                        || (self.pattern_start.in_interleaved_samples(meter) != 0
+                            && global_time == self.global_start.in_interleaved_samples(meter))
                     {
-                        self.jump_events_refresh(
-                            &mut buffer,
-                            global_time,
-                            plugin_counter,
-                            &meter.clone(),
-                        );
+                        self.jump_events_refresh(&mut buffer, global_time, plugin_counter, meter);
                     }
                 }
                 DirtyEvent::NoteAdded => {
-                    self.note_add_events_refresh(
-                        &mut buffer,
-                        global_time,
-                        plugin_counter,
-                        &meter.clone(),
-                    );
+                    self.note_add_events_refresh(&mut buffer, global_time, plugin_counter, meter);
                 }
                 DirtyEvent::NoteRemoved => {
                     self.note_remove_events_refresh(
                         &mut buffer,
                         global_time,
                         plugin_counter,
-                        &meter.clone(),
+                        meter,
                     );
                 }
                 DirtyEvent::NoteReplaced => {
@@ -290,14 +279,9 @@ impl<'a> MidiClip<'a> {
                         &mut buffer,
                         global_time,
                         plugin_counter,
-                        &meter.clone(),
+                        meter,
                     );
-                    self.note_add_events_refresh(
-                        &mut buffer,
-                        global_time,
-                        plugin_counter,
-                        &meter.clone(),
-                    );
+                    self.note_add_events_refresh(&mut buffer, global_time, plugin_counter, meter);
                 }
             }
 
@@ -314,8 +298,7 @@ impl<'a> MidiClip<'a> {
         plugin_counter: u32,
         meter: &Arc<Meter>,
     ) {
-        let offset =
-            (self.global_start - self.pattern_start).in_interleaved_samples(&meter.clone());
+        let offset = (self.global_start - self.pattern_start).in_interleaved_samples(meter);
         let plugin_offset = plugin_counter + offset;
 
         self.pattern
@@ -347,7 +330,7 @@ impl<'a> MidiClip<'a> {
             .iter()
             .enumerate()
             .filter(|(_, note)| {
-                (self.global_start - self.pattern_start).in_interleaved_samples(&meter.clone())
+                (self.global_start - self.pattern_start).in_interleaved_samples(meter)
                     + note.local_end
                     < global_time + 16
             })

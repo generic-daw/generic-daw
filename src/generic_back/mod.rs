@@ -83,7 +83,7 @@ fn get_output_stream(
                     *sample = audio
                         .lock()
                         .unwrap()
-                        .get_at_global_time(global_time, &meter.clone());
+                        .get_at_global_time(global_time, &meter);
 
                     match receiver.try_recv() {
                         Ok(StreamMessage::TogglePlay) => {
