@@ -35,10 +35,6 @@ impl InterleavedAudio {
         self.len() == 0
     }
 
-    pub fn get_name(&self) -> String {
-        self.name.clone()
-    }
-
     pub fn get_sample_at_index(&self, index: u32) -> &f32 {
         self.samples.get(index as usize).unwrap_or(&0.0)
     }
@@ -74,9 +70,9 @@ impl AudioClip {
 }
 
 impl TrackClip for AudioClip {
-    fn get_at_global_time(&self, global_time: u32, meter: Arc<Meter>) -> f32 {
+    fn get_at_global_time(&self, global_time: u32, meter: &Arc<Meter>) -> f32 {
         self.audio.get_sample_at_index(
-            global_time - (self.global_start + self.clip_start).in_interleaved_samples(&meter),
+            global_time - (self.global_start + self.clip_start).in_interleaved_samples(meter),
         ) * self.volume
     }
 

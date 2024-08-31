@@ -58,11 +58,11 @@ impl Sandbox for Daw {
         ));
 
         let arrangement = Arc::new(Mutex::new(Arrangement::new(meter.clone())));
-        let stream = DawStream::new(arrangement.clone(), meter.clone());
+        let stream = DawStream::new(arrangement.clone(), meter);
 
         Self {
             track_panel: TrackPanel::new(arrangement.clone()),
-            timeline: Timeline::new(arrangement.clone(), meter),
+            timeline: Timeline::new(arrangement.clone()),
             stream,
             arrangement,
         }

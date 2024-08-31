@@ -27,7 +27,7 @@ impl Track {
     pub fn get_at_global_time(&self, global_time: u32, meter: &Arc<Meter>) -> f32 {
         self.clips
             .iter()
-            .map(|clip| clip.get_at_global_time(global_time, meter.clone()))
+            .map(|clip| clip.get_at_global_time(global_time, meter))
             .sum()
     }
 

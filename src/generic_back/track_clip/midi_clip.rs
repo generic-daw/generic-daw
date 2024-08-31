@@ -24,7 +24,7 @@ pub struct MidiNote<'a> {
     pub local_end: u32,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 enum DirtyEvent {
     // can we reasonably assume that only one of these will happen per sample?
     None,
@@ -100,20 +100,20 @@ pub struct MidiClip<'a: 'static> {
 }
 
 impl<'a> TrackClip for MidiClip<'a> {
-    fn get_at_global_time(&self, global_time: u32, meter: Arc<Meter>) -> f32 {
+    fn get_at_global_time(&self, global_time: u32, meter: &Arc<Meter>) -> f32 {
         let last_global_time = self.last_global_time.load(SeqCst);
         let mut last_buffer_index = self.last_buffer_index.load(SeqCst);
 
         if last_global_time != global_time {
             if global_time != last_global_time + 1
-                || self.pattern.lock().unwrap().dirty.clone() != DirtyEvent::None
+                || self.pattern.lock().unwrap().dirty != DirtyEvent::None
             {
                 self.last_buffer_index.store(15, SeqCst);
             }
 
             last_buffer_index = (last_buffer_index + 1) % 16;
             if last_buffer_index == 0 {
-                self.refresh_buffer(global_time, &meter);
+                self.refresh_buffer(global_time, meter);
             }
 
             self.last_global_time.store(global_time, SeqCst);
@@ -252,8 +252,7 @@ impl<'a> MidiClip<'a> {
                 return buffer;
             }
 
-            let dirty = self.pattern.lock().unwrap().dirty.clone();
-            match dirty {
+            match self.pattern.lock().unwrap().dirty {
                 DirtyEvent::None => {
                     let last_global_time = self.last_global_time.load(SeqCst);
                     if global_time != last_global_time + 1

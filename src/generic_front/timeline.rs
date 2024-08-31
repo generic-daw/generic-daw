@@ -1,5 +1,4 @@
 use crate::generic_back::arrangement::Arrangement;
-use crate::generic_back::position::Meter;
 use iced::widget::{canvas, Canvas};
 use iced::{Element, Length, Sandbox};
 use std::sync::{Arc, Mutex};
@@ -11,16 +10,14 @@ pub enum TimelineMessage {
 
 pub struct Timeline {
     arrangement: Arc<Mutex<Arrangement>>,
-    meter: Arc<Meter>,
     timeline_x_scale: usize,
     timeline_y_scale: usize,
 }
 
 impl Timeline {
-    pub fn new(arrangement: Arc<Mutex<Arrangement>>, meter: Arc<Meter>) -> Self {
+    pub fn new(arrangement: Arc<Mutex<Arrangement>>) -> Self {
         Self {
             arrangement,
-            meter,
             timeline_x_scale: 100,
             timeline_y_scale: 100,
         }
