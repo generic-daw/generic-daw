@@ -1,4 +1,7 @@
-use super::track::Track;
+use super::{
+    position::{Meter, Position},
+    track::Track,
+};
 use cpal::StreamConfig;
 use hound::WavWriter;
 use std::{
@@ -7,37 +10,32 @@ use std::{
 };
 
 pub struct Arrangement {
-    tracks: Vec<Arc<Mutex<Track>>>,
-}
-
-impl Default for Arrangement {
-    fn default() -> Self {
-        Self::new()
-    }
+    pub tracks: Vec<Arc<Mutex<Track>>>,
+    pub meter: Arc<Meter>,
 }
 
 impl Arrangement {
-    pub const fn new() -> Self {
-        Self { tracks: Vec::new() }
+    pub const fn new(meter: Arc<Meter>) -> Self {
+        Self {
+            tracks: Vec::new(),
+            meter,
+        }
     }
 
-    pub const fn tracks(&self) -> &Vec<Arc<Mutex<Track>>> {
-        &self.tracks
-    }
-
-    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
+    pub fn get_at_global_time(&self, global_time: u32, meter: &Arc<Meter>) -> f32 {
         self.tracks
             .iter()
-            .map(|track| track.lock().unwrap().get_at_global_time(global_time))
+            .map(|track| {
+                track
+                    .lock()
+                    .unwrap()
+                    .get_at_global_time(global_time, &meter.clone())
+            })
             .sum::<f32>()
             .clamp(-1.0, 1.0)
     }
 
-    pub fn len_tracks(&self) -> u32 {
-        u32::try_from(self.tracks.len()).unwrap()
-    }
-
-    pub fn len_samples(&self) -> u32 {
+    pub fn len(&self) -> Position {
         self.tracks
             .iter()
             .map(|track| track.lock().unwrap().len())
@@ -46,7 +44,7 @@ impl Arrangement {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len_samples() == 0
+        self.len() == Position::new(0, 0)
     }
 
     pub fn push(&mut self, track: Track) {
@@ -61,7 +59,7 @@ impl Arrangement {
         self.tracks[index as usize].clone()
     }
 
-    pub fn export(&self, path: &Path, config: &StreamConfig) {
+    pub fn export(&self, path: &Path, config: &StreamConfig, meter: &Arc<Meter>) {
         let mut writer = WavWriter::create(
             path,
             hound::WavSpec {
@@ -73,8 +71,10 @@ impl Arrangement {
         )
         .unwrap();
 
-        for i in 0..self.len_samples() {
-            writer.write_sample(self.get_at_global_time(i)).unwrap();
-        }
+        (0..self.len().in_interleaved_samples(&meter.clone())).for_each(|i| {
+            writer
+                .write_sample(self.get_at_global_time(i, &meter.clone()))
+                .unwrap();
+        });
     }
 }

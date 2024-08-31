@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use super::track_clip::TrackClip;
+use super::{
+    position::{Meter, Position},
+    track_clip::TrackClip,
+};
 
 pub struct Track {
     clips: Vec<Arc<dyn TrackClip>>,
@@ -21,23 +24,23 @@ impl Track {
         &self.clips
     }
 
-    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
+    pub fn get_at_global_time(&self, global_time: u32, meter: &Arc<Meter>) -> f32 {
         self.clips
             .iter()
-            .map(|clip| clip.get_at_global_time(global_time))
+            .map(|clip| clip.get_at_global_time(global_time, meter.clone()))
             .sum()
     }
 
-    pub fn len(&self) -> u32 {
+    pub fn len(&self) -> Position {
         self.clips
             .iter()
             .map(|clip| clip.get_global_end())
             .max()
-            .unwrap_or(0)
+            .unwrap_or(Position::new(0, 0))
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.len() == Position::new(0, 0)
     }
 
     pub fn push(&mut self, audio_clip: Arc<dyn TrackClip>) {

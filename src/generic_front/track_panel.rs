@@ -41,7 +41,7 @@ impl Sandbox for TrackPanel {
             .arrangement
             .lock()
             .unwrap()
-            .tracks()
+            .tracks
             .iter()
             .enumerate()
             .fold(column![].spacing(10), |col, (index, _)| {

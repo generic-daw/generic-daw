@@ -1,9 +1,8 @@
 use anyhow::{anyhow, Result};
-use cpal::StreamConfig;
 use rubato::{
     SincFixedIn, SincInterpolationParameters, SincInterpolationType, VecResampler, WindowFunction,
 };
-use std::{any::Any, cmp::min, fs::File, path::PathBuf, sync::Arc};
+use std::{fs::File, path::PathBuf, sync::Arc};
 use symphonia::core::{
     audio::SampleBuffer,
     codecs::DecoderOptions,
@@ -13,6 +12,8 @@ use symphonia::core::{
     meta::MetadataOptions,
     probe::Hint,
 };
+
+use crate::generic_back::position::{Meter, Position};
 
 use super::TrackClip;
 
@@ -49,20 +50,20 @@ impl InterleavedAudio {
 
 pub struct AudioClip {
     audio: Arc<InterleavedAudio>,
-    global_start: u32,
-    global_end: u32,
-    clip_start: u32,
+    global_start: Position,
+    global_end: Position,
+    clip_start: Position,
     volume: f32,
 }
 
 impl AudioClip {
-    pub fn new(audio: Arc<InterleavedAudio>) -> Self {
-        let global_end = audio.len();
+    pub fn new(audio: Arc<InterleavedAudio>, meter: &Arc<Meter>) -> Self {
+        let samples = audio.len();
         Self {
             audio,
-            global_start: 0,
-            global_end,
-            clip_start: 0,
+            global_start: Position::new(0, 0),
+            global_end: Position::from_interleaved_samples(samples, meter),
+            clip_start: Position::new(0, 0),
             volume: 1.0,
         }
     }
@@ -70,81 +71,52 @@ impl AudioClip {
     pub const fn audio(&self) -> &Arc<InterleavedAudio> {
         &self.audio
     }
-
-    pub fn trim_start(&mut self, samples: i32) {
-        if samples < 0 {
-            let samples = -samples as u32;
-            let samples = min(samples, self.global_start);
-            let samples = min(samples, self.clip_start);
-
-            self.global_start -= samples;
-            self.clip_start -= samples;
-        } else {
-            let samples = samples as u32;
-            let samples = min(samples, self.global_end - self.global_start);
-
-            self.global_start += samples;
-            self.clip_start += samples;
-        }
-    }
-
-    pub fn trim_end(&mut self, samples: i32) {
-        if samples < 0 {
-            let samples = -samples as u32;
-            let samples = min(samples, self.global_end - self.global_start);
-
-            self.global_end -= samples;
-        } else {
-            let samples = samples as u32;
-            let samples = min(samples, self.audio.len() - self.clip_start);
-
-            self.global_end += samples;
-        }
-    }
-
-    pub fn move_by(&mut self, samples: i32) {
-        if samples < 0 {
-            let samples = -samples as u32;
-            let samples = min(samples, self.global_end - self.global_start);
-
-            self.global_start -= samples;
-            self.global_end -= samples;
-        } else {
-            let samples = samples as u32;
-
-            self.global_start += samples;
-            self.global_end += samples;
-        }
-    }
 }
 
 impl TrackClip for AudioClip {
-    fn get_at_global_time(&self, global_time: u32) -> f32 {
-        self.audio
-            .get_sample_at_index(global_time - self.global_start + self.clip_start)
-            * self.volume
+    fn get_at_global_time(&self, global_time: u32, meter: Arc<Meter>) -> f32 {
+        self.audio.get_sample_at_index(
+            global_time - (self.global_start + self.clip_start).in_interleaved_samples(&meter),
+        ) * self.volume
     }
 
-    fn get_global_start(&self) -> u32 {
+    fn get_global_start(&self) -> Position {
         self.global_start
     }
 
-    fn get_global_end(&self) -> u32 {
+    fn get_global_end(&self) -> Position {
         self.global_end
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
+    fn trim_start_to(&mut self, clip_start: Position) {
+        self.clip_start = clip_start;
+    }
+
+    fn trim_end_to(&mut self, global_end: Position) {
+        self.global_end = global_end;
+    }
+
+    fn move_start_to(&mut self, global_start: Position) {
+        match self.global_start.cmp(&global_start) {
+            std::cmp::Ordering::Less => {
+                self.global_end += global_start - self.global_start;
+            }
+            std::cmp::Ordering::Equal => {}
+            std::cmp::Ordering::Greater => {
+                self.global_end += self.global_start - global_start;
+            }
+        }
+        self.global_start = global_start;
     }
 }
 
-pub fn read_audio_file(path: &PathBuf, config: &StreamConfig) -> Result<Arc<InterleavedAudio>> {
+pub fn read_audio_file(path: &PathBuf, meter: &Arc<Meter>) -> Result<Arc<InterleavedAudio>> {
     let mut samples = Vec::new();
 
     let format = symphonia::default::get_probe().format(
         &Hint::new(),
         MediaSourceStream::new(
-            Box::new(File::open(path).expect("Can't open file")),
+            Box::new(File::open(path).unwrap()),
             MediaSourceStreamOptions::default(),
         ),
         &FormatOptions::default(),
@@ -190,12 +162,12 @@ pub fn read_audio_file(path: &PathBuf, config: &StreamConfig) -> Result<Arc<Inte
         }
     }
 
-    if sample_rate == config.sample_rate.0 {
+    if sample_rate == meter.sample_rate {
         return Ok(Arc::new(InterleavedAudio::new(samples.into(), name)));
     }
 
     let mut resampler = SincFixedIn::<f32>::new(
-        config.sample_rate.0 as f64 / sample_rate as f64,
+        f64::from(meter.sample_rate) / f64::from(sample_rate),
         2.0,
         SincInterpolationParameters {
             sinc_len: 256,

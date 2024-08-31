@@ -1,6 +1,6 @@
 pub mod arrangement;
-pub mod bpm;
 pub mod clap_host;
+pub mod position;
 pub mod track;
 pub mod track_clip;
 
@@ -9,6 +9,7 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, Stream, StreamConfig,
 };
+use position::Meter;
 use std::sync::{
     mpsc::{Receiver, Sender},
     Arc, Mutex,
@@ -22,37 +23,27 @@ pub enum StreamMessage {
 
 pub struct DawStream {
     stream: Stream,
-    config: StreamConfig,
     playing: bool,
     sender: Sender<StreamMessage>,
 }
 
 impl DawStream {
-    pub fn new(audio: Arc<Mutex<Arrangement>>) -> Self {
-        let device = cpal::default_host()
-            .default_output_device()
-            .expect("no output device available");
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new(audio: Arc<Mutex<Arrangement>>, meter: Arc<Meter>) -> Self {
+        let device = cpal::default_host().default_output_device().unwrap();
 
-        let config = device
-            .default_output_config()
-            .expect("no output config available")
-            .into();
+        let config = device.default_output_config().unwrap().into();
 
         let (sender, receiver) = std::sync::mpsc::channel();
 
-        let stream = get_output_stream(&device, &config, audio, receiver);
+        let stream = get_output_stream(&device, &config, meter, audio, receiver);
         stream.play().unwrap();
 
         Self {
             stream,
-            config,
             playing: false,
             sender,
         }
-    }
-
-    pub const fn config(&self) -> &StreamConfig {
-        &self.config
     }
 
     pub const fn playing(&self) -> bool {
@@ -77,6 +68,7 @@ impl DawStream {
 fn get_output_stream(
     device: &Device,
     config: &StreamConfig,
+    meter: Arc<Meter>,
     audio: Arc<Mutex<Arrangement>>,
     receiver: Receiver<StreamMessage>,
 ) -> Stream {
@@ -88,7 +80,10 @@ fn get_output_stream(
             config,
             move |data, _| {
                 for sample in data.iter_mut() {
-                    *sample = audio.lock().unwrap().get_at_global_time(global_time);
+                    *sample = audio
+                        .lock()
+                        .unwrap()
+                        .get_at_global_time(global_time, &meter.clone());
 
                     match receiver.try_recv() {
                         Ok(StreamMessage::TogglePlay) => {

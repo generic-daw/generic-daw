@@ -3,10 +3,12 @@ mod track_panel;
 
 use crate::generic_back::{
     arrangement::Arrangement,
+    position::Meter,
     track::Track,
     track_clip::audio_clip::{read_audio_file, AudioClip},
     DawStream,
 };
+use cpal::traits::{DeviceTrait, HostTrait};
 use iced::{
     widget::{button, column, row},
     Element, Sandbox,
@@ -42,13 +44,25 @@ impl Sandbox for Daw {
     type Message = Message;
 
     fn new() -> Self {
-        let arrangement = Arc::new(Mutex::new(Arrangement::new()));
+        let meter = Arc::new(Meter::new(
+            120.0,
+            4,
+            4,
+            cpal::default_host()
+                .default_output_device()
+                .unwrap()
+                .default_output_config()
+                .unwrap()
+                .sample_rate()
+                .0,
+        ));
 
-        let stream = DawStream::new(arrangement.clone());
+        let arrangement = Arc::new(Mutex::new(Arrangement::new(meter.clone())));
+        let stream = DawStream::new(arrangement.clone(), meter.clone());
 
         Self {
             track_panel: TrackPanel::new(arrangement.clone()),
-            timeline: Timeline::new(arrangement.clone()),
+            timeline: Timeline::new(arrangement.clone(), meter),
             stream,
             arrangement,
         }
@@ -69,9 +83,10 @@ impl Sandbox for Daw {
                 }
             }
             Message::FileSelected(Some(path)) => {
+                let meter = self.arrangement.lock().unwrap().meter.clone();
                 let clip = Arc::new(AudioClip::new(
-                    read_audio_file(&PathBuf::from(path), self.stream.config())
-                        .expect("Failed to load sample"),
+                    read_audio_file(&PathBuf::from(path), &meter).unwrap(),
+                    &meter,
                 ));
                 let mut track = Track::new();
                 track.push(clip);
