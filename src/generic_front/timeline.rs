@@ -69,7 +69,7 @@ impl canvas::Program<TimelineMessage> for Timeline {
                 let path = iced::widget::canvas::Path::new(|path| {
                     let track = track.lock().unwrap();
 
-                    let y_offset = i * (self.timeline_y_scale) + self.timeline_y_scale / 2;
+                    let y_offset = i * (self.timeline_y_scale * 2) + self.timeline_y_scale;
                     (0..track.len())
                         .step_by(self.timeline_x_scale)
                         .enumerate()
