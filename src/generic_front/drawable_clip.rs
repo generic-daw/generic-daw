@@ -5,7 +5,6 @@ use crate::generic_back::{
 use iced::widget::canvas::Frame;
 use itertools::Itertools;
 use std::cmp::min;
-use std::sync::{Arc, RwLock};
 
 pub trait DrawableClip {
     fn draw(
@@ -15,7 +14,7 @@ pub trait DrawableClip {
         timeline_y_scale: usize,
         width: usize,
         y_offset: usize,
-        meter: &Arc<RwLock<Meter>>,
+        meter: &Meter,
     );
 }
 
@@ -27,7 +26,7 @@ impl DrawableClip for AudioClip {
         timeline_y_scale: usize,
         width: usize,
         y_offset: usize,
-        meter: &Arc<RwLock<Meter>>,
+        meter: &Meter,
     ) {
         let mut minmax = false;
         let path = iced::widget::canvas::Path::new(|path| {
@@ -81,7 +80,7 @@ impl<'a> DrawableClip for MidiClip<'a> {
         _timeline_y_scale: usize,
         _width: usize,
         _y_offset: usize,
-        _meter: &Arc<RwLock<Meter>>,
+        _meter: &Meter,
     ) {
         unimplemented!()
     }

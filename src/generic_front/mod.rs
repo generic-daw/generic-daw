@@ -10,7 +10,6 @@ use crate::generic_back::{
     track_clip::audio_clip::{read_audio_file, AudioClip},
     StreamMessage,
 };
-use cpal::traits::{DeviceTrait, HostTrait};
 use iced::{
     widget::{button, column, row, slider},
     window::frames,
@@ -52,21 +51,10 @@ impl Application for Daw {
     type Flags = ();
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
-        let meter = Arc::new(RwLock::new(Meter::new(
-            120.0,
-            4,
-            4,
-            cpal::default_host()
-                .default_output_device()
-                .unwrap()
-                .default_output_config()
-                .unwrap()
-                .sample_rate()
-                .0,
-        )));
+        let meter = Meter::new(120.0, 4, 4, 0);
 
-        let arrangement = Arc::new(RwLock::new(Arrangement::new(meter.clone())));
-        let (stream_sender, global_time) = build_output_stream(arrangement.clone(), meter);
+        let arrangement = Arc::new(RwLock::new(Arrangement::new(meter)));
+        let (stream_sender, global_time) = build_output_stream(arrangement.clone());
 
         (
             Self {
@@ -99,10 +87,13 @@ impl Application for Daw {
                 }
             }
             Message::FileSelected(Some(path)) => {
-                let meter = self.arrangement.read().unwrap().meter.clone();
                 let clip = Arc::new(AudioClip::new(
-                    read_audio_file(&PathBuf::from(path), &meter).unwrap(),
-                    &meter,
+                    read_audio_file(
+                        &PathBuf::from(path),
+                        &self.arrangement.read().unwrap().meter,
+                    )
+                    .unwrap(),
+                    &self.arrangement.read().unwrap().meter,
                 ));
                 let track = Arc::new(RwLock::new(Track::new()));
                 track.write().unwrap().clips.push(clip);

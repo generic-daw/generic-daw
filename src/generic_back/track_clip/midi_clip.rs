@@ -96,7 +96,7 @@ pub struct MidiClip<'a: 'static> {
 }
 
 impl<'a> TrackClip for MidiClip<'a> {
-    fn get_at_global_time(&self, global_time: u32, meter: &Arc<RwLock<Meter>>) -> f32 {
+    fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
         let last_global_time = self.last_global_time.load(SeqCst);
         let mut last_buffer_index = self.last_buffer_index.load(SeqCst);
 
@@ -150,7 +150,7 @@ impl<'a> TrackClip for MidiClip<'a> {
 }
 
 impl<'a> MidiClip<'a> {
-    pub fn new(pattern: Arc<Mutex<MidiPattern<'a>>>, meter: &Arc<RwLock<Meter>>) -> Self {
+    pub fn new(pattern: Arc<Mutex<MidiPattern<'a>>>, meter: &Meter) -> Self {
         let len = pattern.lock().unwrap().len();
         Self {
             pattern,
@@ -177,7 +177,7 @@ impl<'a> MidiClip<'a> {
         self.pattern.lock().unwrap().replace(note, new_note);
     }
 
-    fn refresh_buffer(&self, global_time: u32, meter: &Arc<RwLock<Meter>>) {
+    fn refresh_buffer(&self, global_time: u32, meter: &Meter) {
         let buffer = self.get_input_events(global_time, meter);
 
         self.pattern
@@ -212,7 +212,7 @@ impl<'a> MidiClip<'a> {
         };
     }
 
-    fn get_input_events(&self, global_time: u32, meter: &Arc<RwLock<Meter>>) -> EventBuffer {
+    fn get_input_events(&self, global_time: u32, meter: &Meter) -> EventBuffer {
         let mut buffer = EventBuffer::new();
 
         self.pattern
@@ -291,7 +291,7 @@ impl<'a> MidiClip<'a> {
         buffer: &mut EventBuffer,
         global_time: u32,
         plugin_counter: u32,
-        meter: &Arc<RwLock<Meter>>,
+        meter: &Meter,
     ) {
         let offset = (self.global_start - self.pattern_start).in_interleaved_samples(meter);
         let plugin_offset = plugin_counter + offset;
@@ -351,7 +351,7 @@ impl<'a> MidiClip<'a> {
         buffer: &mut EventBuffer,
         global_time: u32,
         plugin_counter: u32,
-        meter: &Arc<RwLock<Meter>>,
+        meter: &Meter,
     ) {
         let offset = (self.global_start - self.pattern_start).in_interleaved_samples(meter);
         let plugin_offset = plugin_counter + offset;
@@ -395,7 +395,7 @@ impl<'a> MidiClip<'a> {
         buffer: &mut EventBuffer,
         global_time: u32,
         plugin_counter: u32,
-        meter: &Arc<RwLock<Meter>>,
+        meter: &Meter,
     ) {
         let offset = (self.global_start - self.pattern_start).in_interleaved_samples(meter);
         let plugin_offset = plugin_counter + offset;
@@ -427,7 +427,7 @@ impl<'a> MidiClip<'a> {
         buffer: &mut EventBuffer,
         global_time: u32,
         plugin_counter: u32,
-        meter: &Arc<RwLock<Meter>>,
+        meter: &Meter,
     ) {
         let plugin_offset =
             plugin_counter + (self.global_start - self.pattern_start).in_interleaved_samples(meter);

@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use super::{
     position::{Meter, Position},
@@ -20,7 +20,7 @@ impl Track {
         Self { clips: Vec::new() }
     }
 
-    pub fn get_at_global_time(&self, global_time: u32, meter: &Arc<RwLock<Meter>>) -> f32 {
+    pub fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
         self.clips
             .iter()
             .map(|clip| clip.get_at_global_time(global_time, meter))
