@@ -34,10 +34,6 @@ impl InterleavedAudio {
         u32::try_from(self.samples.len()).unwrap()
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
     pub fn get_sample_at_index(&self, index: u32) -> &f32 {
         self.samples.get(index as usize).unwrap_or(&0.0)
     }

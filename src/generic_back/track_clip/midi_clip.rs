@@ -61,10 +61,6 @@ impl<'a> MidiPattern<'a> {
             .unwrap_or(0)
     }
 
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
     fn clear_dirty(&mut self) {
         self.dirty = DirtyEvent::None;
     }
