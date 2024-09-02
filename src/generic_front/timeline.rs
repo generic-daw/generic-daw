@@ -80,36 +80,36 @@ impl canvas::Program<TimelineMessage> for Timeline {
             .for_each(|(i, track)| {
                 let track = track.read().unwrap();
                 let y_offset = i * (self.timeline_y_scale * 2) + self.timeline_y_scale;
+                let width = frame.width() as usize;
 
                 track.clips.iter().for_each(|clip| {
-                    let path = iced::widget::canvas::Path::new(|path| {
-                        (clip.get_global_start().in_interleaved_samples(&meter)
-                            ..clip.get_global_end().in_interleaved_samples(&meter))
-                            .chunks(self.timeline_x_scale)
-                            .into_iter()
-                            .enumerate()
-                            .filter(|(x, _)| *x <= frame.width() as usize)
-                            .for_each(|(x, samples_group)| {
-                                let (min, max) = samples_group
+                    (clip.get_global_start().in_interleaved_samples(&meter)
+                        ..clip.get_global_end().in_interleaved_samples(&meter))
+                        .chunks(self.timeline_x_scale)
+                        .into_iter()
+                        .enumerate()
+                        .filter(|(x, _)| *x <= width)
+                        .for_each(|(x, samples_group)| {
+                            let path = iced::widget::canvas::Path::new(|path| {
+                                let (a, b) = samples_group
                                     .map(|global_time| {
                                         track.get_at_global_time(global_time, &meter)
                                     })
-                                    .minmax_by(|a, b| a.partial_cmp(b).unwrap())
+                                    .minmax()
                                     .into_option()
                                     .unwrap();
 
                                 path.line_to(iced::Point::new(
                                     x as f32,
-                                    min.mul_add(self.timeline_y_scale as f32, y_offset as f32),
+                                    a.mul_add(self.timeline_y_scale as f32, y_offset as f32),
                                 ));
-
                                 path.line_to(iced::Point::new(
                                     x as f32,
-                                    max.mul_add(self.timeline_y_scale as f32, y_offset as f32),
+                                    b.mul_add(self.timeline_y_scale as f32, y_offset as f32),
                                 ));
                             });
-                    });
-                    frame.stroke(&path, iced::widget::canvas::Stroke::default());
+                            frame.stroke(&path, iced::widget::canvas::Stroke::default());
+                        });
                 });
             });
 

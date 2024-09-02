@@ -5,8 +5,5 @@ use generic_front::Daw;
 use iced::{Sandbox, Settings};
 
 fn main() -> iced::Result {
-    Daw::run(Settings::<()> {
-        antialiasing: true,
-        ..Default::default()
-    })
+    Daw::run(Settings::default())
 }
