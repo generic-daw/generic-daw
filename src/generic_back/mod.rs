@@ -38,28 +38,27 @@ pub fn build_output_stream(
             .build_output_stream(
                 config,
                 move |data, _| {
-                    let global_time_r = global_time.load(Ordering::SeqCst);
-                    for (i, sample) in data.iter_mut().enumerate() {
+                    for sample in data.iter_mut() {
                         *sample = arrangement
                             .read()
                             .unwrap()
-                            .get_at_global_time(global_time_r + i as u32, &meter);
-                    }
-                    match receiver.try_recv() {
-                        Ok(StreamMessage::TogglePlay) => {
-                            playing ^= true;
+                            .get_at_global_time(global_time.load(Ordering::SeqCst), &meter);
+                        match receiver.try_recv() {
+                            Ok(StreamMessage::TogglePlay) => {
+                                playing ^= true;
+                            }
+                            Ok(StreamMessage::Stop) => {
+                                playing = false;
+                                global_time.store(0, Ordering::SeqCst);
+                            }
+                            Ok(StreamMessage::Jump(time)) => {
+                                global_time.store(time, Ordering::SeqCst);
+                            }
+                            _ => {}
                         }
-                        Ok(StreamMessage::Stop) => {
-                            playing = false;
-                            global_time.store(0, Ordering::SeqCst);
+                        if playing {
+                            global_time.fetch_add(1, Ordering::SeqCst);
                         }
-                        Ok(StreamMessage::Jump(time)) => {
-                            global_time.store(time, Ordering::SeqCst);
-                        }
-                        _ => {}
-                    }
-                    if playing {
-                        global_time.fetch_add(u32::try_from(data.len()).unwrap(), Ordering::SeqCst);
                     }
                 },
                 move |err| {
