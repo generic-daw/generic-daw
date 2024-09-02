@@ -50,7 +50,7 @@ impl Sandbox for TrackPanel {
             });
 
         container(tracks)
-            .width(Length::FillPortion(2))
+            .width(Length::Fill)
             .height(Length::Fill)
             .style(iced::theme::Container::Box)
             .into()
