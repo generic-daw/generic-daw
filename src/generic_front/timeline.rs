@@ -9,12 +9,14 @@ use std::sync::{Arc, RwLock};
 #[derive(Debug, Clone)]
 pub enum TimelineMessage {
     ArrangementUpdated,
+    XScaleChanged(usize),
+    YScaleChanged(usize),
 }
 
 pub struct Timeline {
     arrangement: Arc<RwLock<Arrangement>>,
-    timeline_x_scale: usize,
-    timeline_y_scale: usize,
+    pub timeline_x_scale: usize,
+    pub timeline_y_scale: usize,
 }
 
 impl Timeline {
@@ -22,7 +24,7 @@ impl Timeline {
         Self {
             arrangement,
             timeline_x_scale: 100,
-            timeline_y_scale: 100,
+            timeline_y_scale: 50,
         }
     }
 }
@@ -41,6 +43,12 @@ impl Sandbox for Timeline {
     fn update(&mut self, message: TimelineMessage) {
         match message {
             TimelineMessage::ArrangementUpdated => {}
+            TimelineMessage::XScaleChanged(x_scale) => {
+                self.timeline_x_scale = x_scale;
+            }
+            TimelineMessage::YScaleChanged(y_scale) => {
+                self.timeline_y_scale = y_scale;
+            }
         }
     }
 
@@ -81,14 +89,23 @@ impl canvas::Program<TimelineMessage> for Timeline {
                             .into_iter()
                             .enumerate()
                             .for_each(|(x, samples_group)| {
-                                let y_pos = (samples_group
+                                let (min, max) = samples_group
                                     .map(|global_time| {
                                         track.get_at_global_time(global_time, &meter)
                                     })
-                                    .sum::<f32>()
-                                    / self.timeline_x_scale as f32)
-                                    .mul_add(self.timeline_y_scale as f32, y_offset as f32);
-                                path.line_to(iced::Point::new(x as f32, y_pos));
+                                    .minmax_by(|a, b| a.partial_cmp(b).unwrap())
+                                    .into_option()
+                                    .unwrap();
+
+                                path.line_to(iced::Point::new(
+                                    x as f32,
+                                    min.mul_add(self.timeline_y_scale as f32, y_offset as f32),
+                                ));
+
+                                path.line_to(iced::Point::new(
+                                    x as f32,
+                                    max.mul_add(self.timeline_y_scale as f32, y_offset as f32),
+                                ));
                             });
                     });
                     frame.stroke(&path, iced::widget::canvas::Stroke::default());

@@ -47,10 +47,12 @@ impl Sandbox for TrackPanel {
             .fold(column![].spacing(10), |col, (index, _)| {
                 let track_name = format!("Track {}", index + 1);
                 col.push(text(track_name))
-            });
+            })
+            .padding(20)
+            .spacing(20);
 
         container(tracks)
-            .width(Length::Fill)
+            .width(Length::Shrink)
             .height(Length::Fill)
             .style(iced::theme::Container::Box)
             .into()

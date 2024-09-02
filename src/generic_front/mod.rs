@@ -11,7 +11,7 @@ use crate::generic_back::{
 };
 use cpal::traits::{DeviceTrait, HostTrait};
 use iced::{
-    widget::{button, column, row},
+    widget::{button, column, row, slider},
     Element, Sandbox,
 };
 use rfd::FileDialog;
@@ -38,6 +38,7 @@ pub enum Message {
     LoadSample(String),
     TogglePlay,
     Stop,
+    Clear,
     FileSelected(Option<String>),
     ArrangementUpdated,
 }
@@ -111,6 +112,10 @@ impl Sandbox for Daw {
                 self.stream_sender.send(StreamMessage::Stop).unwrap();
                 self.playing = false;
             }
+            Message::Clear => {
+                self.arrangement.write().unwrap().tracks.clear();
+                self.update(Message::ArrangementUpdated);
+            }
             Message::TimelineMessage(timeline_msg) => {
                 self.timeline.update(timeline_msg);
             }
@@ -121,7 +126,20 @@ impl Sandbox for Daw {
         let controls = row![
             button("Load Sample").on_press(Message::LoadSample(String::new())),
             button(if self.playing { "Pause" } else { "Play" }).on_press(Message::TogglePlay),
-            button("Stop").on_press(Message::Stop)
+            button("Stop").on_press(Message::Stop),
+            button("Clear").on_press(Message::Clear),
+            slider(
+                1.0..=1000.0,
+                self.timeline.timeline_x_scale as f32,
+                |scale| { Message::Timeline(TimelineMessage::XScaleChanged(scale as usize)) }
+            )
+            .width(200),
+            slider(
+                1.0..=100.0,
+                self.timeline.timeline_y_scale as f32,
+                |scale| { Message::Timeline(TimelineMessage::YScaleChanged(scale as usize)) }
+            )
+            .width(200)
         ];
 
         let content = column![
@@ -130,6 +148,7 @@ impl Sandbox for Daw {
                 self.track_panel.view().map(Message::TrackPanel),
                 self.timeline.view().map(Message::Timeline)
             ]
+            .padding(20)
         ]
         .padding(20)
         .spacing(20);
