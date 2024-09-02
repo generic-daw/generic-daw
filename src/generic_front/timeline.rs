@@ -8,7 +8,7 @@ use iced::{
 };
 use std::{
     sync::{
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicU32, Ordering::SeqCst},
         Arc, RwLock,
     },
     time::Instant,
@@ -116,7 +116,7 @@ impl canvas::Program<TimelineMessage> for Timeline {
 
         let mut frame = iced::widget::canvas::Frame::new(renderer, bounds.size());
         let path = iced::widget::canvas::Path::new(|path| {
-            let x = self.global_time.load(Ordering::SeqCst) as f32 / self.timeline_x_scale as f32;
+            let x = self.global_time.load(SeqCst) as f32 / self.timeline_x_scale as f32;
             path.line_to(iced::Point::new(x, 0.0));
             path.line_to(iced::Point::new(x, bounds.height));
         });

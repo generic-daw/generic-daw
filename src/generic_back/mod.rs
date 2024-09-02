@@ -10,7 +10,7 @@ use cpal::{
     StreamConfig,
 };
 use std::sync::{
-    atomic::{AtomicU32, Ordering},
+    atomic::{AtomicBool, AtomicU32, Ordering::SeqCst},
     mpsc::Sender,
     Arc, RwLock,
 };
@@ -24,7 +24,7 @@ pub enum StreamMessage {
 
 pub fn build_output_stream(
     arrangement: Arc<RwLock<Arrangement>>,
-) -> (Sender<StreamMessage>, Arc<AtomicU32>) {
+) -> (Sender<StreamMessage>, Arc<AtomicU32>, Arc<AtomicBool>) {
     let device = cpal::default_host().default_output_device().unwrap();
     let config: &StreamConfig = &device.default_output_config().unwrap().into();
     arrangement.write().unwrap().meter.sample_rate = config.sample_rate.0;
@@ -32,8 +32,9 @@ pub fn build_output_stream(
     let (sender, receiver) = std::sync::mpsc::channel();
     let global_time = Arc::new(AtomicU32::new(0));
     let global_time_clone = global_time.clone();
+    let playing = Arc::new(AtomicBool::new(false));
+    let playing_clone = playing.clone();
 
-    let mut playing = false;
     let stream = Box::new(
         device
             .build_output_stream(
@@ -43,22 +44,22 @@ pub fn build_output_stream(
                         *sample = arrangement
                             .read()
                             .unwrap()
-                            .get_at_global_time(global_time.load(Ordering::SeqCst));
+                            .get_at_global_time(global_time.load(SeqCst));
                         match receiver.try_recv() {
                             Ok(StreamMessage::TogglePlay) => {
-                                playing ^= true;
+                                playing.fetch_xor(true, SeqCst);
                             }
                             Ok(StreamMessage::Stop) => {
-                                playing = false;
-                                global_time.store(0, Ordering::SeqCst);
+                                playing.store(false, SeqCst);
+                                global_time.store(0, SeqCst);
                             }
                             Ok(StreamMessage::Jump(time)) => {
-                                global_time.store(time, Ordering::SeqCst);
+                                global_time.store(time, SeqCst);
                             }
                             _ => {}
                         }
-                        if playing {
-                            global_time.fetch_add(1, Ordering::SeqCst);
+                        if playing.load(SeqCst) {
+                            global_time.fetch_add(1, SeqCst);
                         }
                     }
                 },
@@ -69,9 +70,8 @@ pub fn build_output_stream(
             )
             .unwrap(),
     );
-
     stream.play().unwrap();
     Box::leak(stream);
 
-    (sender, global_time_clone)
+    (sender, global_time_clone, playing_clone)
 }

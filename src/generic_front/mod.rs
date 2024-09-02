@@ -18,7 +18,11 @@ use iced::{
 use rfd::FileDialog;
 use std::{
     path::PathBuf,
-    sync::{mpsc::Sender, Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering::SeqCst},
+        mpsc::Sender,
+        Arc, RwLock,
+    },
 };
 use timeline::{Timeline, TimelineMessage};
 use track_panel::TrackPanel;
@@ -27,7 +31,7 @@ pub struct Daw {
     track_panel: TrackPanel,
     timeline: Timeline,
     stream_sender: Sender<StreamMessage>,
-    playing: bool,
+    playing: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Clone)]
@@ -52,14 +56,14 @@ impl Application for Daw {
     fn new(_flags: ()) -> (Self, Command<Message>) {
         let meter = Meter::new(120.0, 4, 4, 0);
         let arrangement = Arc::new(RwLock::new(Arrangement::new(meter)));
-        let (stream_sender, global_time) = build_output_stream(arrangement.clone());
+        let (stream_sender, global_time, playing) = build_output_stream(arrangement.clone());
 
         (
             Self {
                 track_panel: TrackPanel::new(arrangement.clone()),
                 timeline: Timeline::new(arrangement, global_time),
                 stream_sender,
-                playing: false,
+                playing,
             },
             Command::none(),
         )
@@ -115,11 +119,9 @@ impl Application for Daw {
             Message::FileSelected(None) => {}
             Message::TogglePlay => {
                 self.stream_sender.send(StreamMessage::TogglePlay).unwrap();
-                self.playing ^= true;
             }
             Message::Stop => {
                 self.stream_sender.send(StreamMessage::Stop).unwrap();
-                self.playing = false;
             }
             Message::Clear => {
                 self.timeline.arrangement.write().unwrap().tracks.clear();
@@ -135,7 +137,12 @@ impl Application for Daw {
     fn view(&self) -> Element<Message> {
         let controls = row![
             button("Load Sample").on_press(Message::LoadSample(String::new())),
-            button(if self.playing { "Pause" } else { "Play" }).on_press(Message::TogglePlay),
+            button(if self.playing.load(SeqCst) {
+                "Pause"
+            } else {
+                "Play"
+            })
+            .on_press(Message::TogglePlay),
             button("Stop").on_press(Message::Stop),
             button("Clear").on_press(Message::Clear),
             slider(
