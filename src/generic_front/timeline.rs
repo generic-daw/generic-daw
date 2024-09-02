@@ -1,6 +1,9 @@
 use crate::generic_back::arrangement::Arrangement;
-use iced::widget::{canvas, Canvas};
-use iced::{Element, Length, Sandbox};
+use iced::{
+    widget::{canvas, Canvas},
+    Element, Length, Sandbox,
+};
+use itertools::Itertools;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
@@ -72,11 +75,14 @@ impl canvas::Program<TimelineMessage> for Timeline {
 
                     let y_offset = i * (self.timeline_y_scale * 2) + self.timeline_y_scale;
                     (0..track.len().in_interleaved_samples(&meter))
-                        .step_by(self.timeline_x_scale)
+                        .chunks(self.timeline_x_scale)
+                        .into_iter()
                         .enumerate()
-                        .for_each(|(x, global_time)| {
-                            let y_pos = track
-                                .get_at_global_time(global_time, &meter)
+                        .for_each(|(x, samples_group)| {
+                            let y_pos = (samples_group
+                                .map(|global_time| track.get_at_global_time(global_time, &meter))
+                                .sum::<f32>()
+                                / self.timeline_x_scale as f32)
                                 .mul_add(self.timeline_y_scale as f32, y_offset as f32);
                             path.line_to(iced::Point::new(x as f32, y_pos));
                         });
