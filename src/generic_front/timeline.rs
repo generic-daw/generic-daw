@@ -4,11 +4,15 @@ use iced::{
         canvas::{self, Cache},
         Canvas,
     },
-    Element, Length, Sandbox,
+    window::frames,
+    Application, Command, Element, Length, Subscription,
 };
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Arc, RwLock,
+use std::{
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc, RwLock,
+    },
+    time::Instant,
 };
 
 #[derive(Debug, Clone)]
@@ -16,6 +20,7 @@ pub enum TimelineMessage {
     ArrangementUpdated,
     XScaleChanged(usize),
     YScaleChanged(usize),
+    Tick(Instant),
 }
 
 pub struct Timeline {
@@ -24,6 +29,7 @@ pub struct Timeline {
     global_time: Arc<AtomicU32>,
     pub timeline_x_scale: usize,
     pub timeline_y_scale: usize,
+    last_tick: Instant,
 }
 
 impl Timeline {
@@ -34,14 +40,18 @@ impl Timeline {
             global_time,
             timeline_x_scale: 100,
             timeline_y_scale: 50,
+            last_tick: Instant::now(),
         }
     }
 }
 
-impl Sandbox for Timeline {
+impl Application for Timeline {
+    type Executor = iced::executor::Default;
     type Message = TimelineMessage;
+    type Theme = iced::Theme;
+    type Flags = ();
 
-    fn new() -> Self {
+    fn new(_flags: Self::Flags) -> (Self, Command<TimelineMessage>) {
         unimplemented!()
     }
 
@@ -49,7 +59,11 @@ impl Sandbox for Timeline {
         String::from("Timeline")
     }
 
-    fn update(&mut self, message: TimelineMessage) {
+    fn subscription(&self) -> Subscription<TimelineMessage> {
+        frames().map(TimelineMessage::Tick)
+    }
+
+    fn update(&mut self, message: TimelineMessage) -> Command<TimelineMessage> {
         match message {
             TimelineMessage::ArrangementUpdated => {
                 self.tracks_cache.clear();
@@ -62,7 +76,13 @@ impl Sandbox for Timeline {
                 self.timeline_y_scale = y_scale;
                 self.tracks_cache.clear();
             }
+            TimelineMessage::Tick(instant) => {
+                self.last_tick = instant;
+                _ = self.update(TimelineMessage::ArrangementUpdated);
+            }
         }
+
+        Command::none()
     }
 
     fn view(&self) -> Element<TimelineMessage> {

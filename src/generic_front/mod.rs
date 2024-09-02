@@ -13,7 +13,7 @@ use crate::generic_back::{
 use cpal::traits::{DeviceTrait, HostTrait};
 use iced::{
     widget::{button, column, row, slider},
-    Element, Sandbox,
+    Application, Element, Sandbox,
 };
 use rfd::FileDialog;
 use std::{
@@ -34,7 +34,7 @@ pub struct Daw {
 #[derive(Debug, Clone)]
 pub enum Message {
     TrackPanel(<TrackPanel as Sandbox>::Message),
-    Timeline(<Timeline as Sandbox>::Message),
+    Timeline(<Timeline as Application>::Message),
     TimelineMessage(TimelineMessage),
     LoadSample(String),
     TogglePlay,
@@ -79,12 +79,16 @@ impl Sandbox for Daw {
 
     fn update(&mut self, message: Message) {
         match message {
-            Message::TrackPanel(msg) => self.track_panel.update(msg),
-            Message::Timeline(msg) => self.timeline.update(msg),
+            Message::TrackPanel(msg) => {
+                Sandbox::update(&mut self.track_panel, msg);
+            }
+            Message::Timeline(msg) => {
+                _ = Application::update(&mut self.timeline, msg);
+            }
             Message::LoadSample(_) => {
                 if let Some(path) = FileDialog::new().pick_file() {
                     let path_str = path.display().to_string();
-                    self.update(Message::FileSelected(Some(path_str)));
+                    Sandbox::update(self, Message::FileSelected(Some(path_str)));
                 }
             }
             Message::FileSelected(Some(path)) => {
@@ -96,13 +100,17 @@ impl Sandbox for Daw {
                 let track = Arc::new(RwLock::new(Track::new()));
                 track.write().unwrap().clips.push(clip);
                 self.arrangement.write().unwrap().tracks.push(track);
-                self.update(Message::ArrangementUpdated);
+                Sandbox::update(self, Message::ArrangementUpdated);
             }
             Message::ArrangementUpdated => {
-                self.track_panel
-                    .update(track_panel::Message::ArrangementUpdated);
-                self.timeline
-                    .update(timeline::TimelineMessage::ArrangementUpdated);
+                Sandbox::update(
+                    &mut self.track_panel,
+                    track_panel::Message::ArrangementUpdated,
+                );
+                _ = Application::update(
+                    &mut self.timeline,
+                    timeline::TimelineMessage::ArrangementUpdated,
+                );
             }
             Message::FileSelected(None) => {}
             Message::TogglePlay => {
@@ -115,10 +123,10 @@ impl Sandbox for Daw {
             }
             Message::Clear => {
                 self.arrangement.write().unwrap().tracks.clear();
-                self.update(Message::ArrangementUpdated);
+                Sandbox::update(self, Message::ArrangementUpdated);
             }
             Message::TimelineMessage(timeline_msg) => {
-                self.timeline.update(timeline_msg);
+                _ = self.timeline.update(timeline_msg);
             }
         }
     }
@@ -146,7 +154,7 @@ impl Sandbox for Daw {
         let content = column![
             controls,
             row![
-                self.track_panel.view().map(Message::TrackPanel),
+                Sandbox::view(&self.track_panel).map(Message::TrackPanel),
                 self.timeline.view().map(Message::Timeline)
             ]
         ]
