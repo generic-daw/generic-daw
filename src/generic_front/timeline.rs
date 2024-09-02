@@ -4,8 +4,7 @@ use iced::{
         canvas::{self, Cache},
         Canvas,
     },
-    window::frames,
-    Application, Command, Element, Length, Subscription,
+    Element, Length, Sandbox,
 };
 use std::{
     sync::{
@@ -45,13 +44,10 @@ impl Timeline {
     }
 }
 
-impl Application for Timeline {
-    type Executor = iced::executor::Default;
+impl Sandbox for Timeline {
     type Message = TimelineMessage;
-    type Theme = iced::Theme;
-    type Flags = ();
 
-    fn new(_flags: Self::Flags) -> (Self, Command<TimelineMessage>) {
+    fn new() -> Self {
         unimplemented!()
     }
 
@@ -59,11 +55,7 @@ impl Application for Timeline {
         String::from("Timeline")
     }
 
-    fn subscription(&self) -> Subscription<TimelineMessage> {
-        frames().map(TimelineMessage::Tick)
-    }
-
-    fn update(&mut self, message: TimelineMessage) -> Command<TimelineMessage> {
+    fn update(&mut self, message: TimelineMessage) {
         match message {
             TimelineMessage::ArrangementUpdated => {
                 self.tracks_cache.clear();
@@ -78,11 +70,9 @@ impl Application for Timeline {
             }
             TimelineMessage::Tick(instant) => {
                 self.last_tick = instant;
-                _ = self.update(TimelineMessage::ArrangementUpdated);
+                self.update(TimelineMessage::ArrangementUpdated);
             }
         }
-
-        Command::none()
     }
 
     fn view(&self) -> Element<TimelineMessage> {

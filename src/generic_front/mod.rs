@@ -13,7 +13,8 @@ use crate::generic_back::{
 use cpal::traits::{DeviceTrait, HostTrait};
 use iced::{
     widget::{button, column, row, slider},
-    Application, Element, Sandbox,
+    window::frames,
+    Application, Command, Element, Sandbox,
 };
 use rfd::FileDialog;
 use std::{
@@ -44,10 +45,13 @@ pub enum Message {
     ArrangementUpdated,
 }
 
-impl Sandbox for Daw {
+impl Application for Daw {
+    type Executor = iced::executor::Default;
     type Message = Message;
+    type Theme = iced::Theme;
+    type Flags = ();
 
-    fn new() -> Self {
+    fn new(_flags: ()) -> (Self, Command<Message>) {
         let meter = Arc::new(RwLock::new(Meter::new(
             120.0,
             4,
@@ -64,20 +68,23 @@ impl Sandbox for Daw {
         let arrangement = Arc::new(RwLock::new(Arrangement::new(meter.clone())));
         let (stream_sender, global_time) = build_output_stream(arrangement.clone(), meter);
 
-        Self {
-            track_panel: TrackPanel::new(arrangement.clone()),
-            timeline: Timeline::new(arrangement.clone(), global_time),
-            arrangement,
-            stream_sender,
-            playing: false,
-        }
+        (
+            Self {
+                track_panel: TrackPanel::new(arrangement.clone()),
+                timeline: Timeline::new(arrangement.clone(), global_time),
+                arrangement,
+                stream_sender,
+                playing: false,
+            },
+            Command::none(),
+        )
     }
 
     fn title(&self) -> String {
         String::from("GenericDAW")
     }
 
-    fn update(&mut self, message: Message) {
+    fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::TrackPanel(msg) => {
                 Sandbox::update(&mut self.track_panel, msg);
@@ -88,7 +95,7 @@ impl Sandbox for Daw {
             Message::LoadSample(_) => {
                 if let Some(path) = FileDialog::new().pick_file() {
                     let path_str = path.display().to_string();
-                    Sandbox::update(self, Message::FileSelected(Some(path_str)));
+                    _ = self.update(Message::FileSelected(Some(path_str)));
                 }
             }
             Message::FileSelected(Some(path)) => {
@@ -100,7 +107,7 @@ impl Sandbox for Daw {
                 let track = Arc::new(RwLock::new(Track::new()));
                 track.write().unwrap().clips.push(clip);
                 self.arrangement.write().unwrap().tracks.push(track);
-                Sandbox::update(self, Message::ArrangementUpdated);
+                _ = self.update(Message::ArrangementUpdated);
             }
             Message::ArrangementUpdated => {
                 Sandbox::update(
@@ -123,12 +130,13 @@ impl Sandbox for Daw {
             }
             Message::Clear => {
                 self.arrangement.write().unwrap().tracks.clear();
-                Sandbox::update(self, Message::ArrangementUpdated);
+                _ = self.update(Message::ArrangementUpdated);
             }
             Message::TimelineMessage(timeline_msg) => {
-                _ = self.timeline.update(timeline_msg);
+                Sandbox::update(&mut self.timeline, timeline_msg);
             }
         }
+        Command::none()
     }
 
     fn view(&self) -> Element<Message> {
@@ -155,12 +163,16 @@ impl Sandbox for Daw {
             controls,
             row![
                 Sandbox::view(&self.track_panel).map(Message::TrackPanel),
-                self.timeline.view().map(Message::Timeline)
+                Sandbox::view(&self.timeline).map(Message::Timeline)
             ]
         ]
         .padding(20)
         .spacing(20);
 
         content.into()
+    }
+
+    fn subscription(&self) -> iced::Subscription<Self::Message> {
+        frames().map(|_| Message::TimelineMessage(TimelineMessage::ArrangementUpdated))
     }
 }
