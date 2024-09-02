@@ -62,11 +62,11 @@ impl Sandbox for Daw {
         )));
 
         let arrangement = Arc::new(RwLock::new(Arrangement::new(meter.clone())));
-        let stream_sender = build_output_stream(arrangement.clone(), meter);
+        let (stream_sender, global_time) = build_output_stream(arrangement.clone(), meter);
 
         Self {
             track_panel: TrackPanel::new(arrangement.clone()),
-            timeline: Timeline::new(arrangement.clone()),
+            timeline: Timeline::new(arrangement.clone(), global_time),
             arrangement,
             stream_sender,
             playing: false,
