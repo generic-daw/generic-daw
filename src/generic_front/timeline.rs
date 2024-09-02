@@ -23,7 +23,7 @@ pub enum TimelineMessage {
 }
 
 pub struct Timeline {
-    arrangement: Arc<RwLock<Arrangement>>,
+    pub arrangement: Arc<RwLock<Arrangement>>,
     tracks_cache: Cache,
     global_time: Arc<AtomicU32>,
     pub timeline_x_scale: usize,

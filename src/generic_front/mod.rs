@@ -24,7 +24,6 @@ use timeline::{Timeline, TimelineMessage};
 use track_panel::TrackPanel;
 
 pub struct Daw {
-    arrangement: Arc<RwLock<Arrangement>>,
     track_panel: TrackPanel,
     timeline: Timeline,
     stream_sender: Sender<StreamMessage>,
@@ -52,15 +51,13 @@ impl Application for Daw {
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
         let meter = Meter::new(120.0, 4, 4, 0);
-
         let arrangement = Arc::new(RwLock::new(Arrangement::new(meter)));
         let (stream_sender, global_time) = build_output_stream(arrangement.clone());
 
         (
             Self {
                 track_panel: TrackPanel::new(arrangement.clone()),
-                timeline: Timeline::new(arrangement.clone(), global_time),
-                arrangement,
+                timeline: Timeline::new(arrangement, global_time),
                 stream_sender,
                 playing: false,
             },
@@ -90,14 +87,19 @@ impl Application for Daw {
                 let clip = Arc::new(AudioClip::new(
                     read_audio_file(
                         &PathBuf::from(path),
-                        &self.arrangement.read().unwrap().meter,
+                        &self.timeline.arrangement.read().unwrap().meter,
                     )
                     .unwrap(),
-                    &self.arrangement.read().unwrap().meter,
+                    &self.timeline.arrangement.read().unwrap().meter,
                 ));
-                let track = Arc::new(RwLock::new(Track::new()));
+                let track = RwLock::new(Track::new());
                 track.write().unwrap().clips.push(clip);
-                self.arrangement.write().unwrap().tracks.push(track);
+                self.timeline
+                    .arrangement
+                    .write()
+                    .unwrap()
+                    .tracks
+                    .push(track);
                 _ = self.update(Message::ArrangementUpdated);
             }
             Message::ArrangementUpdated => {
@@ -120,7 +122,7 @@ impl Application for Daw {
                 self.playing = false;
             }
             Message::Clear => {
-                self.arrangement.write().unwrap().tracks.clear();
+                self.timeline.arrangement.write().unwrap().tracks.clear();
                 _ = self.update(Message::ArrangementUpdated);
             }
             Message::TimelineMessage(timeline_msg) => {

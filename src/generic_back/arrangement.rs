@@ -4,13 +4,10 @@ use super::{
 };
 use cpal::StreamConfig;
 use hound::WavWriter;
-use std::{
-    path::Path,
-    sync::{Arc, RwLock},
-};
+use std::{path::Path, sync::RwLock};
 
 pub struct Arrangement {
-    pub tracks: Vec<Arc<RwLock<Track>>>,
+    pub tracks: Vec<RwLock<Track>>,
     pub meter: Meter,
 }
 
