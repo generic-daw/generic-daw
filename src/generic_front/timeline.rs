@@ -88,6 +88,7 @@ impl canvas::Program<TimelineMessage> for Timeline {
                             .chunks(self.timeline_x_scale)
                             .into_iter()
                             .enumerate()
+                            .filter(|(x, _)| *x <= frame.width() as usize)
                             .for_each(|(x, samples_group)| {
                                 let (min, max) = samples_group
                                     .map(|global_time| {
