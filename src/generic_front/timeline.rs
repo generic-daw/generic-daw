@@ -6,12 +6,9 @@ use iced::{
     },
     Element, Length, Sandbox,
 };
-use std::{
-    sync::{
-        atomic::{AtomicU32, Ordering::SeqCst},
-        Arc, RwLock,
-    },
-    time::Instant,
+use std::sync::{
+    atomic::{AtomicU32, Ordering::SeqCst},
+    Arc, RwLock,
 };
 
 #[derive(Debug, Clone)]
@@ -19,7 +16,7 @@ pub enum TimelineMessage {
     ArrangementUpdated,
     XScaleChanged(usize),
     YScaleChanged(usize),
-    Tick(Instant),
+    Tick,
 }
 
 pub struct Timeline {
@@ -28,7 +25,6 @@ pub struct Timeline {
     global_time: Arc<AtomicU32>,
     pub timeline_x_scale: usize,
     pub timeline_y_scale: usize,
-    last_tick: Instant,
 }
 
 impl Timeline {
@@ -39,7 +35,6 @@ impl Timeline {
             global_time,
             timeline_x_scale: 100,
             timeline_y_scale: 50,
-            last_tick: Instant::now(),
         }
     }
 }
@@ -68,10 +63,7 @@ impl Sandbox for Timeline {
                 self.timeline_y_scale = y_scale;
                 self.tracks_cache.clear();
             }
-            TimelineMessage::Tick(instant) => {
-                self.last_tick = instant;
-                self.update(TimelineMessage::ArrangementUpdated);
-            }
+            TimelineMessage::Tick => {}
         }
     }
 

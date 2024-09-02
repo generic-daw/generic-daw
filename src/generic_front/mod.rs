@@ -173,6 +173,6 @@ impl Application for Daw {
     }
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {
-        frames().map(|_| Message::TimelineMessage(TimelineMessage::ArrangementUpdated))
+        frames().map(|_| Message::TimelineMessage(TimelineMessage::Tick))
     }
 }
