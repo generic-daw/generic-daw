@@ -149,7 +149,6 @@ impl Sandbox for Daw {
                 self.track_panel.view().map(Message::TrackPanel),
                 self.timeline.view().map(Message::Timeline)
             ]
-            .padding(20)
         ]
         .padding(20)
         .spacing(20);
