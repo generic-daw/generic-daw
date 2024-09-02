@@ -4,7 +4,7 @@ use iced::{
     Element, Length, Sandbox,
 };
 use itertools::Itertools;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone)]
 pub enum TimelineMessage {
@@ -12,13 +12,13 @@ pub enum TimelineMessage {
 }
 
 pub struct Timeline {
-    arrangement: Arc<Mutex<Arrangement>>,
+    arrangement: Arc<RwLock<Arrangement>>,
     timeline_x_scale: usize,
     timeline_y_scale: usize,
 }
 
 impl Timeline {
-    pub fn new(arrangement: Arc<Mutex<Arrangement>>) -> Self {
+    pub fn new(arrangement: Arc<RwLock<Arrangement>>) -> Self {
         Self {
             arrangement,
             timeline_x_scale: 100,
@@ -61,34 +61,38 @@ impl canvas::Program<TimelineMessage> for Timeline {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<iced::widget::canvas::Geometry> {
         let mut frame = iced::widget::canvas::Frame::new(renderer, bounds.size());
-        let meter = self.arrangement.lock().unwrap().meter.clone();
+        let meter = self.arrangement.read().unwrap().meter.clone();
 
         self.arrangement
-            .lock()
+            .read()
             .unwrap()
             .tracks
             .iter()
             .enumerate()
             .for_each(|(i, track)| {
-                let path = iced::widget::canvas::Path::new(|path| {
-                    let track = track.lock().unwrap();
+                let track = track.read().unwrap();
+                let y_offset = i * (self.timeline_y_scale * 2) + self.timeline_y_scale;
 
-                    let y_offset = i * (self.timeline_y_scale * 2) + self.timeline_y_scale;
-                    (0..track.len().in_interleaved_samples(&meter))
-                        .chunks(self.timeline_x_scale)
-                        .into_iter()
-                        .enumerate()
-                        .for_each(|(x, samples_group)| {
-                            let y_pos = (samples_group
-                                .map(|global_time| track.get_at_global_time(global_time, &meter))
-                                .sum::<f32>()
-                                / self.timeline_x_scale as f32)
-                                .mul_add(self.timeline_y_scale as f32, y_offset as f32);
-                            path.line_to(iced::Point::new(x as f32, y_pos));
-                        });
+                track.clips.iter().for_each(|clip| {
+                    let path = iced::widget::canvas::Path::new(|path| {
+                        (clip.get_global_start().in_interleaved_samples(&meter)
+                            ..clip.get_global_end().in_interleaved_samples(&meter))
+                            .chunks(self.timeline_x_scale)
+                            .into_iter()
+                            .enumerate()
+                            .for_each(|(x, samples_group)| {
+                                let y_pos = (samples_group
+                                    .map(|global_time| {
+                                        track.get_at_global_time(global_time, &meter)
+                                    })
+                                    .sum::<f32>()
+                                    / self.timeline_x_scale as f32)
+                                    .mul_add(self.timeline_y_scale as f32, y_offset as f32);
+                                path.line_to(iced::Point::new(x as f32, y_pos));
+                            });
+                    });
+                    frame.stroke(&path, iced::widget::canvas::Stroke::default());
                 });
-
-                frame.stroke(&path, iced::widget::canvas::Stroke::default());
             });
 
         vec![frame.into_geometry()]

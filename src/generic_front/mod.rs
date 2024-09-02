@@ -17,13 +17,13 @@ use iced::{
 use rfd::FileDialog;
 use std::{
     path::PathBuf,
-    sync::{mpsc::Sender, Arc, Mutex},
+    sync::{mpsc::Sender, Arc, RwLock},
 };
 use timeline::{Timeline, TimelineMessage};
 use track_panel::TrackPanel;
 
 pub struct Daw {
-    arrangement: Arc<Mutex<Arrangement>>,
+    arrangement: Arc<RwLock<Arrangement>>,
     track_panel: TrackPanel,
     timeline: Timeline,
     stream_sender: Sender<StreamMessage>,
@@ -46,7 +46,7 @@ impl Sandbox for Daw {
     type Message = Message;
 
     fn new() -> Self {
-        let meter = Arc::new(Meter::new(
+        let meter = Arc::new(RwLock::new(Meter::new(
             120.0,
             4,
             4,
@@ -57,9 +57,9 @@ impl Sandbox for Daw {
                 .unwrap()
                 .sample_rate()
                 .0,
-        ));
+        )));
 
-        let arrangement = Arc::new(Mutex::new(Arrangement::new(meter.clone())));
+        let arrangement = Arc::new(RwLock::new(Arrangement::new(meter.clone())));
         let stream_sender = build_output_stream(arrangement.clone(), meter);
 
         Self {
@@ -86,14 +86,14 @@ impl Sandbox for Daw {
                 }
             }
             Message::FileSelected(Some(path)) => {
-                let meter = self.arrangement.lock().unwrap().meter.clone();
+                let meter = self.arrangement.read().unwrap().meter.clone();
                 let clip = Arc::new(AudioClip::new(
                     read_audio_file(&PathBuf::from(path), &meter).unwrap(),
                     &meter,
                 ));
-                let mut track = Track::new();
-                track.push(clip);
-                self.arrangement.lock().unwrap().push(track);
+                let track = Arc::new(RwLock::new(Track::new()));
+                track.write().unwrap().clips.push(clip);
+                self.arrangement.write().unwrap().tracks.push(track);
                 self.update(Message::ArrangementUpdated);
             }
             Message::ArrangementUpdated => {

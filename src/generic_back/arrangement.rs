@@ -6,51 +6,39 @@ use cpal::StreamConfig;
 use hound::WavWriter;
 use std::{
     path::Path,
-    sync::{Arc, Mutex},
+    sync::{Arc, RwLock},
 };
 
 pub struct Arrangement {
-    pub tracks: Vec<Arc<Mutex<Track>>>,
-    pub meter: Arc<Meter>,
+    pub tracks: Vec<Arc<RwLock<Track>>>,
+    pub meter: Arc<RwLock<Meter>>,
 }
 
 impl Arrangement {
-    pub const fn new(meter: Arc<Meter>) -> Self {
+    pub const fn new(meter: Arc<RwLock<Meter>>) -> Self {
         Self {
             tracks: Vec::new(),
             meter,
         }
     }
 
-    pub fn get_at_global_time(&self, global_time: u32, meter: &Arc<Meter>) -> f32 {
+    pub fn get_at_global_time(&self, global_time: u32, meter: &Arc<RwLock<Meter>>) -> f32 {
         self.tracks
             .iter()
-            .map(|track| track.lock().unwrap().get_at_global_time(global_time, meter))
+            .map(|track| track.read().unwrap().get_at_global_time(global_time, meter))
             .sum::<f32>()
             .clamp(-1.0, 1.0)
     }
 
-    pub fn len(&self) -> Position {
+    fn len(&self) -> Position {
         self.tracks
             .iter()
-            .map(|track| track.lock().unwrap().len())
+            .map(|track| track.read().unwrap().len())
             .max()
             .unwrap()
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.len() == Position::new(0, 0)
-    }
-
-    pub fn push(&mut self, track: Track) {
-        self.tracks.push(Arc::new(Mutex::new(track)));
-    }
-
-    pub fn remove(&mut self, index: usize) {
-        self.tracks.remove(index);
-    }
-
-    pub fn export(&self, path: &Path, config: &StreamConfig, meter: &Arc<Meter>) {
+    pub fn export(&self, path: &Path, config: &StreamConfig, meter: &Arc<RwLock<Meter>>) {
         let mut writer = WavWriter::create(
             path,
             hound::WavSpec {

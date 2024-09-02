@@ -3,10 +3,10 @@ use iced::{
     widget::{column, container, text},
     Element, Length, Sandbox,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 pub struct TrackPanel {
-    arrangement: Arc<Mutex<Arrangement>>,
+    arrangement: Arc<RwLock<Arrangement>>,
 }
 
 #[derive(Debug, Clone)]
@@ -15,7 +15,7 @@ pub enum Message {
 }
 
 impl TrackPanel {
-    pub fn new(arrangement: Arc<Mutex<Arrangement>>) -> Self {
+    pub fn new(arrangement: Arc<RwLock<Arrangement>>) -> Self {
         Self { arrangement }
     }
 }
@@ -39,7 +39,7 @@ impl Sandbox for TrackPanel {
     fn view(&self) -> Element<Message> {
         let tracks = self
             .arrangement
-            .lock()
+            .read()
             .unwrap()
             .tracks
             .iter()

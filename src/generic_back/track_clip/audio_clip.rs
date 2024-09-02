@@ -2,7 +2,11 @@ use anyhow::{anyhow, Result};
 use rubato::{
     SincFixedIn, SincInterpolationParameters, SincInterpolationType, VecResampler, WindowFunction,
 };
-use std::{fs::File, path::PathBuf, sync::Arc};
+use std::{
+    fs::File,
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 use symphonia::core::{
     audio::SampleBuffer,
     codecs::DecoderOptions,
@@ -48,7 +52,7 @@ pub struct AudioClip {
 }
 
 impl AudioClip {
-    pub fn new(audio: Arc<InterleavedAudio>, meter: &Arc<Meter>) -> Self {
+    pub fn new(audio: Arc<InterleavedAudio>, meter: &Arc<RwLock<Meter>>) -> Self {
         let samples = audio.len();
         Self {
             audio,
@@ -61,7 +65,7 @@ impl AudioClip {
 }
 
 impl TrackClip for AudioClip {
-    fn get_at_global_time(&self, global_time: u32, meter: &Arc<Meter>) -> f32 {
+    fn get_at_global_time(&self, global_time: u32, meter: &Arc<RwLock<Meter>>) -> f32 {
         self.audio.get_sample_at_index(
             global_time - (self.global_start + self.clip_start).in_interleaved_samples(meter),
         ) * self.volume
@@ -97,7 +101,10 @@ impl TrackClip for AudioClip {
     }
 }
 
-pub fn read_audio_file(path: &PathBuf, meter: &Arc<Meter>) -> Result<Arc<InterleavedAudio>> {
+pub fn read_audio_file(
+    path: &PathBuf,
+    meter: &Arc<RwLock<Meter>>,
+) -> Result<Arc<InterleavedAudio>> {
     let mut samples = Vec::new();
 
     let format = symphonia::default::get_probe().format(
@@ -148,12 +155,12 @@ pub fn read_audio_file(path: &PathBuf, meter: &Arc<Meter>) -> Result<Arc<Interle
         }
     }
 
-    if sample_rate == meter.sample_rate {
+    if sample_rate == meter.read().unwrap().sample_rate {
         return Ok(Arc::new(InterleavedAudio::new(samples.into())));
     }
 
     let mut resampler = SincFixedIn::<f32>::new(
-        f64::from(meter.sample_rate) / f64::from(sample_rate),
+        f64::from(meter.read().unwrap().sample_rate) / f64::from(sample_rate),
         2.0,
         SincInterpolationParameters {
             sinc_len: 256,

@@ -7,7 +7,7 @@ pub mod track_clip;
 use arrangement::Arrangement;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use position::Meter;
-use std::sync::{mpsc::Sender, Arc, Mutex};
+use std::sync::{mpsc::Sender, Arc, RwLock};
 
 pub enum StreamMessage {
     TogglePlay,
@@ -17,8 +17,8 @@ pub enum StreamMessage {
 
 #[allow(clippy::needless_pass_by_value)]
 pub fn build_output_stream(
-    arrangement: Arc<Mutex<Arrangement>>,
-    meter: Arc<Meter>,
+    arrangement: Arc<RwLock<Arrangement>>,
+    meter: Arc<RwLock<Meter>>,
 ) -> Sender<StreamMessage> {
     let device = cpal::default_host().default_output_device().unwrap();
 
@@ -35,7 +35,7 @@ pub fn build_output_stream(
                 move |data, _| {
                     for sample in data.iter_mut() {
                         *sample = arrangement
-                            .lock()
+                            .read()
                             .unwrap()
                             .get_at_global_time(global_time, &meter);
 

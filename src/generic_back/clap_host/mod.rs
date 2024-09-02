@@ -12,7 +12,7 @@ use std::{
     sync::{
         atomic::{AtomicU32, Ordering::SeqCst},
         mpsc::{Receiver, Sender},
-        Arc, Mutex,
+        Arc, RwLock,
     },
 };
 use walkdir::WalkDir;
@@ -23,8 +23,8 @@ pub enum PluginThreadMessage {
     GuiRequestResized(GuiSize),
     ProcessAudio(
         [[f32; 8]; 2],
-        Arc<Mutex<AudioPorts>>,
-        Arc<Mutex<AudioPorts>>,
+        Arc<RwLock<AudioPorts>>,
+        Arc<RwLock<AudioPorts>>,
         EventBuffer,
         EventBuffer,
     ),
@@ -49,7 +49,7 @@ impl HostHandlers for Host {
 }
 
 struct StreamPluginAudioProcessor {
-    audio_processor: Mutex<StartedPluginAudioProcessor<Host>>,
+    audio_processor: RwLock<StartedPluginAudioProcessor<Host>>,
     plugin_sample_counter: AtomicU32,
 }
 
@@ -62,7 +62,7 @@ impl StreamPluginAudioProcessor {
         output_events: &mut OutputEvents,
     ) {
         self.audio_processor
-            .lock()
+            .write()
             .unwrap()
             .process(
                 input_audio,
@@ -194,7 +194,7 @@ pub fn run(
                 receiver_plugin,
                 gui,
                 &StreamPluginAudioProcessor {
-                    audio_processor: Mutex::new(audio_processor),
+                    audio_processor: RwLock::new(audio_processor),
                     plugin_sample_counter: AtomicU32::new(0),
                 },
             );
@@ -205,7 +205,7 @@ pub fn run(
                 receiver_plugin,
                 gui,
                 &StreamPluginAudioProcessor {
-                    audio_processor: Mutex::new(audio_processor),
+                    audio_processor: RwLock::new(audio_processor),
                     plugin_sample_counter: AtomicU32::new(0),
                 },
             );
@@ -256,7 +256,7 @@ fn run_gui_floating(
                 input_events,
                 mut output_events,
             ) => {
-                let mut input_audio_ports = input_audio_ports.lock().unwrap();
+                let mut input_audio_ports = input_audio_ports.write().unwrap();
                 let input_audio = input_audio_ports.with_input_buffers([AudioPortBuffer {
                     latency: 0,
                     channels: AudioPortBufferType::f32_input_only(
@@ -265,7 +265,7 @@ fn run_gui_floating(
                 }]);
 
                 let mut output_buffers = [[0.0; 8]; 2];
-                let mut output_audio_ports = output_audio_ports.lock().unwrap();
+                let mut output_audio_ports = output_audio_ports.write().unwrap();
                 let mut output_audio = output_audio_ports.with_output_buffers([AudioPortBuffer {
                     latency: 0,
                     channels: AudioPortBufferType::f32_output_only(
