@@ -1,5 +1,6 @@
-mod timeline;
-mod track_panel;
+pub mod drawable_clip;
+pub mod timeline;
+pub mod track_panel;
 
 use crate::generic_back::{
     arrangement::Arrangement,

@@ -3,7 +3,6 @@ use iced::{
     widget::{canvas, Canvas},
     Element, Length, Sandbox,
 };
-use itertools::Itertools;
 use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone)]
@@ -69,7 +68,6 @@ impl canvas::Program<TimelineMessage> for Timeline {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<iced::widget::canvas::Geometry> {
         let mut frame = iced::widget::canvas::Frame::new(renderer, bounds.size());
-        let meter = self.arrangement.read().unwrap().meter.clone();
 
         self.arrangement
             .read()
@@ -78,38 +76,18 @@ impl canvas::Program<TimelineMessage> for Timeline {
             .iter()
             .enumerate()
             .for_each(|(i, track)| {
-                let track = track.read().unwrap();
                 let y_offset = i * (self.timeline_y_scale * 2) + self.timeline_y_scale;
                 let width = frame.width() as usize;
 
-                track.clips.iter().for_each(|clip| {
-                    (clip.get_global_start().in_interleaved_samples(&meter)
-                        ..clip.get_global_end().in_interleaved_samples(&meter))
-                        .chunks(self.timeline_x_scale)
-                        .into_iter()
-                        .enumerate()
-                        .filter(|(x, _)| *x <= width)
-                        .for_each(|(x, samples_group)| {
-                            let path = iced::widget::canvas::Path::new(|path| {
-                                let (a, b) = samples_group
-                                    .map(|global_time| {
-                                        track.get_at_global_time(global_time, &meter)
-                                    })
-                                    .minmax()
-                                    .into_option()
-                                    .unwrap();
-
-                                path.line_to(iced::Point::new(
-                                    x as f32,
-                                    a.mul_add(self.timeline_y_scale as f32, y_offset as f32),
-                                ));
-                                path.line_to(iced::Point::new(
-                                    x as f32,
-                                    b.mul_add(self.timeline_y_scale as f32, y_offset as f32),
-                                ));
-                            });
-                            frame.stroke(&path, iced::widget::canvas::Stroke::default());
-                        });
+                track.read().unwrap().clips.iter().for_each(|clip| {
+                    clip.draw(
+                        &mut frame,
+                        self.timeline_x_scale,
+                        self.timeline_y_scale,
+                        width,
+                        y_offset,
+                        &self.arrangement.read().unwrap().meter,
+                    );
                 });
             });
 
