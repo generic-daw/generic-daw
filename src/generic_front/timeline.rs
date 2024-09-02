@@ -106,7 +106,6 @@ impl canvas::Program<TimelineMessage> for Timeline {
                             frame,
                             self.timeline_x_scale,
                             self.timeline_y_scale,
-                            bounds.width as usize,
                             y_offset,
                             &self.arrangement.read().unwrap().meter,
                         );

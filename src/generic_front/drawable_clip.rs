@@ -12,7 +12,6 @@ pub trait DrawableClip {
         frame: &mut Frame,
         timeline_x_scale: usize,
         timeline_y_scale: usize,
-        width: usize,
         y_offset: usize,
         meter: &Meter,
     );
@@ -24,7 +23,6 @@ impl DrawableClip for AudioClip {
         frame: &mut Frame,
         timeline_x_scale: usize,
         timeline_y_scale: usize,
-        width: usize,
         y_offset: usize,
         meter: &Meter,
     ) {
@@ -33,7 +31,7 @@ impl DrawableClip for AudioClip {
             (self.get_global_start().in_interleaved_samples(meter)
                 ..min(
                     self.get_global_end().in_interleaved_samples(meter),
-                    u32::try_from(width * timeline_x_scale).unwrap(),
+                    u32::try_from(frame.width() as usize * timeline_x_scale).unwrap(),
                 ))
                 .chunks(timeline_x_scale)
                 .into_iter()
@@ -78,7 +76,6 @@ impl<'a> DrawableClip for MidiClip<'a> {
         _frame: &mut Frame,
         _timeline_x_scale: usize,
         _timeline_y_scale: usize,
-        _width: usize,
         _y_offset: usize,
         _meter: &Meter,
     ) {
