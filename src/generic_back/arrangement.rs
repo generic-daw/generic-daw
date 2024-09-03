@@ -32,12 +32,12 @@ impl Arrangement {
             .clamp(-1.0, 1.0)
     }
 
-    fn len(&self) -> Position {
+    pub fn len(&self) -> Position {
         self.tracks
             .iter()
             .map(|track| track.read().unwrap().len())
             .max()
-            .unwrap()
+            .unwrap_or(Position::new(0, 0))
     }
 
     pub fn export(&self, path: &Path, config: &StreamConfig, meter: &Meter) {

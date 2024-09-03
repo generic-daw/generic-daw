@@ -11,9 +11,10 @@ use crate::generic_back::{
     StreamMessage,
 };
 use iced::{
+    event, mouse,
     widget::{button, column, row, slider},
     window::frames,
-    Element, Subscription,
+    Element, Event, Subscription,
 };
 use rfd::FileDialog;
 use std::{
@@ -133,21 +134,13 @@ impl Daw {
             .on_press(Message::TogglePlay),
             button("Stop").on_press(Message::Stop),
             button("Clear").on_press(Message::Clear),
-            slider(
-                1.0..=1000.0,
-                self.timeline.timeline_x_scale as f32,
-                |scale| {
-                    Message::TimelineMessage(TimelineMessage::XScaleChanged(scale as usize))
-                }
-            )
+            slider(1.0..=1000.0, self.timeline.scale.x as f32, |scale| {
+                Message::TimelineMessage(TimelineMessage::XScaleChanged(scale as usize))
+            })
             .width(200),
-            slider(
-                1.0..=100.0,
-                self.timeline.timeline_y_scale as f32,
-                |scale| {
-                    Message::TimelineMessage(TimelineMessage::YScaleChanged(scale as usize))
-                }
-            )
+            slider(1.0..=100.0, self.timeline.scale.y as f32, |scale| {
+                Message::TimelineMessage(TimelineMessage::YScaleChanged(scale as usize))
+            })
             .width(200)
         ];
 
@@ -165,6 +158,15 @@ impl Daw {
     }
 
     pub fn subscription(_state: &Self) -> Subscription<Message> {
-        frames().map(|_| Message::TimelineMessage(TimelineMessage::Tick))
+        Subscription::batch([
+            frames().map(|_| Message::TimelineMessage(TimelineMessage::Tick)),
+            event::listen().map(|e| {
+                if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = e {
+                    Message::TimelineMessage(TimelineMessage::Scrolled(delta))
+                } else {
+                    Message::TimelineMessage(TimelineMessage::Tick)
+                }
+            }),
+        ])
     }
 }

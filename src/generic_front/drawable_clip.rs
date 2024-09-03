@@ -4,38 +4,43 @@ use crate::generic_back::{
 };
 use iced::{widget::canvas::Frame, Theme};
 use itertools::Itertools;
-use std::cmp::min;
+use std::cmp::{max, min};
+
+pub struct Position {
+    pub x: usize,
+    pub y: isize,
+}
+
+#[derive(Clone, Copy)]
+pub struct Scale {
+    pub x: usize,
+    pub y: usize,
+}
 
 pub trait DrawableClip {
-    fn draw(
-        &self,
-        frame: &mut Frame,
-        timeline_x_scale: usize,
-        timeline_y_scale: usize,
-        y_offset: usize,
-        meter: &Meter,
-        theme: &Theme,
-    );
+    fn draw(&self, frame: &mut Frame, scale: Scale, offset: Position, meter: &Meter, theme: &Theme);
 }
 
 impl DrawableClip for AudioClip {
     fn draw(
         &self,
         frame: &mut Frame,
-        timeline_x_scale: usize,
-        timeline_y_scale: usize,
-        y_offset: usize,
+        scale: Scale,
+        offset: Position,
         meter: &Meter,
         theme: &Theme,
     ) {
         let mut minmax = false;
         let path = iced::widget::canvas::Path::new(|path| {
-            (self.get_global_start().in_interleaved_samples(meter)
+            (max(
+                self.get_global_start().in_interleaved_samples(meter),
+                offset.x as u32,
+            )
                 ..min(
                     self.get_global_end().in_interleaved_samples(meter),
-                    u32::try_from(frame.width() as usize * timeline_x_scale).unwrap(),
+                    u32::try_from(frame.width() as usize * scale.x).unwrap() + offset.x as u32,
                 ))
-                .chunks(timeline_x_scale)
+                .chunks(scale.x)
                 .into_iter()
                 .enumerate()
                 .for_each(|(x, samples_group)| {
@@ -57,13 +62,13 @@ impl DrawableClip for AudioClip {
 
                     path.line_to(iced::Point::new(
                         x as f32,
-                        a.mul_add(timeline_y_scale as f32, y_offset as f32),
+                        a.mul_add(scale.y as f32, offset.y as f32),
                     ));
 
                     if (a - b).abs() > f32::EPSILON {
                         path.line_to(iced::Point::new(
                             x as f32,
-                            b.mul_add(timeline_y_scale as f32, y_offset as f32),
+                            b.mul_add(scale.y as f32, offset.y as f32),
                         ));
                     }
 
@@ -81,9 +86,8 @@ impl<'a> DrawableClip for MidiClip<'a> {
     fn draw(
         &self,
         _frame: &mut Frame,
-        _timeline_x_scale: usize,
-        _timeline_y_scale: usize,
-        _y_offset: usize,
+        _scale: Scale,
+        _offset: Position,
         _meter: &Meter,
         _theme: &Theme,
     ) {
