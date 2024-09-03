@@ -12,8 +12,8 @@ pub struct Position {
 
 #[derive(Clone, Copy)]
 pub struct Scale {
-    pub x: usize,
-    pub y: usize,
+    pub x: f32,
+    pub y: f32,
 }
 
 pub trait DrawableClip {
@@ -31,9 +31,9 @@ impl DrawableClip for AudioClip {
     ) {
         let path = iced::widget::canvas::Path::new(|path| {
             let mut minmax = false;
-            let ver = f32::log2(scale.x as f32);
+            let ver = f32::log2(scale.x);
             let ver_pow = f32::powf(2.0, ver.floor()) as usize;
-            let ratio = ver_pow as f32 / scale.x as f32;
+            let ratio = ver_pow as f32 / scale.x;
             let start = max(
                 self.get_global_start().in_interleaved_samples(meter) as usize / ver_pow,
                 offset.x / ver_pow,
@@ -54,13 +54,13 @@ impl DrawableClip for AudioClip {
 
                 path.line_to(iced::Point::new(
                     x as f32 * ratio,
-                    a.mul_add(scale.y as f32, offset.y as f32),
+                    a.mul_add(scale.y, offset.y as f32),
                 ));
 
                 if (a - b).abs() > f32::EPSILON {
                     path.line_to(iced::Point::new(
                         x as f32 * ratio,
-                        b.mul_add(scale.y as f32, offset.y as f32),
+                        b.mul_add(scale.y, offset.y as f32),
                     ));
                 }
 

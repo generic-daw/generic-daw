@@ -135,12 +135,12 @@ impl Daw {
             .on_press(Message::TogglePlay),
             button("Stop").on_press(Message::Stop),
             button("Clear").on_press(Message::Clear),
-            slider(1.0..=1023.0, self.timeline.scale.x as f32, |scale| {
-                Message::TimelineMessage(TimelineMessage::XScaleChanged(scale as usize))
+            slider(1.0..=8191.0, self.timeline.scale.x, |scale| {
+                Message::TimelineMessage(TimelineMessage::XScaleChanged(scale))
             })
             .width(200),
-            slider(1.0..=100.0, self.timeline.scale.y as f32, |scale| {
-                Message::TimelineMessage(TimelineMessage::YScaleChanged(scale as usize))
+            slider(1.0..=100.0, self.timeline.scale.y, |scale| {
+                Message::TimelineMessage(TimelineMessage::YScaleChanged(scale))
             })
             .width(200)
         ];

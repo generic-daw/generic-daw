@@ -17,8 +17,8 @@ use std::sync::{
 #[derive(Debug, Clone)]
 pub enum Message {
     ArrangementUpdated,
-    XScaleChanged(usize),
-    YScaleChanged(usize),
+    XScaleChanged(f32),
+    YScaleChanged(f32),
     Tick,
     Scrolled(ScrollDelta),
 }
@@ -38,7 +38,7 @@ impl Timeline {
         Self {
             arrangement,
             tracks_cache: Cache::new(),
-            scale: Scale { x: 100, y: 50 },
+            scale: Scale { x: 256.0, y: 50.0 },
             scroll_delta: ScrollDelta::Pixels { x: 0.0, y: 0.0 },
             samples_sender,
             samples_receiver,
@@ -72,7 +72,7 @@ impl Timeline {
                     {
                         let arrangement = self.arrangement.read().unwrap();
 
-                        let x = x.mul_add(self.scale.x as f32, self_x).clamp(
+                        let x = x.mul_add(self.scale.x, self_x).clamp(
                             -(arrangement.len().in_interleaved_samples(&arrangement.meter) as f32),
                             0.0,
                         );
@@ -80,7 +80,7 @@ impl Timeline {
                             0.0,
                             (arrangement.tracks.len().saturating_sub(1)) as f32
                                 * 2.0
-                                * self.scale.y as f32,
+                                * self.scale.y,
                         );
                         drop(arrangement);
 
@@ -121,7 +121,7 @@ impl canvas::Program<Message> for Timeline {
                 .iter()
                 .enumerate()
                 .for_each(|(i, track)| {
-                    let y = isize::try_from(i * (self.scale.y * 2) + self.scale.y).unwrap()
+                    let y = (i as f32).mul_add(self.scale.y * 2.0, self.scale.y) as isize
                         - if let ScrollDelta::Pixels { x: _, y } = self.scroll_delta {
                             y as isize
                         } else {
@@ -143,7 +143,7 @@ impl canvas::Program<Message> for Timeline {
         let mut frame = iced::widget::canvas::Frame::new(renderer, bounds.size());
         let path = iced::widget::canvas::Path::new(|path| {
             let x = if let ScrollDelta::Pixels { x, y: _ } = self.scroll_delta {
-                x / self.scale.x as f32
+                x / self.scale.x
             } else {
                 0.0
             };
@@ -154,7 +154,7 @@ impl canvas::Program<Message> for Timeline {
                 .meter
                 .global_time
                 .load(SeqCst) as f32
-                / self.scale.x as f32;
+                / self.scale.x;
             path.line_to(iced::Point::new(x, 0.0));
             path.line_to(iced::Point::new(x, bounds.height));
         });
