@@ -6,7 +6,7 @@ use std::{
     cmp::{max_by, min_by},
     fs::File,
     path::PathBuf,
-    sync::{mpsc::Sender, Arc, RwLock},
+    sync::{atomic::Ordering::SeqCst, mpsc::Sender, Arc, RwLock},
 };
 use symphonia::core::{
     audio::SampleBuffer,
@@ -93,6 +93,9 @@ impl AudioClip {
 
 impl TrackClip for AudioClip {
     fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
+        if !meter.playing.load(SeqCst) {
+            return 0.0;
+        }
         self.get_ver_at_index(
             0,
             (global_time - (self.global_start + self.clip_start).in_interleaved_samples(meter))
