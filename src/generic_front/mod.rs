@@ -80,6 +80,7 @@ impl Daw {
                     read_audio_file(
                         &PathBuf::from(path),
                         &self.timeline.arrangement.read().unwrap().meter,
+                        self.timeline.samples_sender.clone(),
                     )
                     .unwrap(),
                     &self.timeline.arrangement.read().unwrap().meter,
@@ -134,7 +135,7 @@ impl Daw {
             .on_press(Message::TogglePlay),
             button("Stop").on_press(Message::Stop),
             button("Clear").on_press(Message::Clear),
-            slider(1.0..=1000.0, self.timeline.scale.x as f32, |scale| {
+            slider(1.0..=1023.0, self.timeline.scale.x as f32, |scale| {
                 Message::TimelineMessage(TimelineMessage::XScaleChanged(scale as usize))
             })
             .width(200),

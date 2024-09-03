@@ -8,7 +8,11 @@ use iced::{
     },
     Element, Length,
 };
-use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
+use std::sync::{
+    atomic::Ordering::SeqCst,
+    mpsc::{Receiver, Sender},
+    Arc, RwLock,
+};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -24,15 +28,20 @@ pub struct Timeline {
     tracks_cache: Cache,
     pub scale: Scale,
     pub scroll_delta: ScrollDelta,
+    pub samples_sender: Sender<Message>,
+    samples_receiver: Receiver<Message>,
 }
 
 impl Timeline {
     pub fn new(arrangement: Arc<RwLock<Arrangement>>) -> Self {
+        let (samples_sender, samples_receiver) = std::sync::mpsc::channel();
         Self {
             arrangement,
             tracks_cache: Cache::new(),
             scale: Scale { x: 100, y: 50 },
             scroll_delta: ScrollDelta::Pixels { x: 0.0, y: 0.0 },
+            samples_sender,
+            samples_receiver,
         }
     }
 
@@ -49,7 +58,11 @@ impl Timeline {
                 self.scale.y = *y_scale;
                 self.tracks_cache.clear();
             }
-            Message::Tick => {}
+            Message::Tick => {
+                if let Ok(msg) = self.samples_receiver.try_recv() {
+                    self.update(&msg);
+                }
+            }
             Message::Scrolled(delta) => {
                 if let ScrollDelta::Pixels { x, y } = *delta {
                     if let ScrollDelta::Pixels {

@@ -3,7 +3,6 @@ use crate::generic_back::{
     track_clip::{audio_clip::AudioClip, midi_clip::MidiClip, TrackClip},
 };
 use iced::{widget::canvas::Frame, Theme};
-use itertools::Itertools;
 use std::cmp::{max, min};
 
 pub struct Position {
@@ -30,50 +29,43 @@ impl DrawableClip for AudioClip {
         meter: &Meter,
         theme: &Theme,
     ) {
-        let mut minmax = false;
         let path = iced::widget::canvas::Path::new(|path| {
-            (max(
-                self.get_global_start().in_interleaved_samples(meter),
-                offset.x as u32,
-            )
-                ..min(
-                    self.get_global_end().in_interleaved_samples(meter),
-                    u32::try_from(frame.width() as usize * scale.x).unwrap() + offset.x as u32,
-                ))
-                .chunks(scale.x)
-                .into_iter()
-                .enumerate()
-                .for_each(|(x, samples_group)| {
-                    let (mut a, mut b) = samples_group
-                        .map(|global_time| {
-                            self.get_at_global_time(global_time, meter).clamp(-1.0, 1.0)
-                        })
-                        .minmax()
-                        .into_option()
-                        .unwrap();
-
-                    if minmax {
-                        if a < b {
-                            std::mem::swap(&mut a, &mut b);
-                        }
-                    } else if a > b {
+            let mut minmax = false;
+            let ver = f32::log2(scale.x as f32);
+            let ver_pow = f32::powf(2.0, ver.floor()) as usize;
+            let ratio = ver_pow as f32 / scale.x as f32;
+            let start = max(
+                self.get_global_start().in_interleaved_samples(meter) as usize / ver_pow,
+                offset.x / ver_pow,
+            );
+            let end = min(
+                self.get_global_end().in_interleaved_samples(meter) as usize / ver_pow,
+                start + (frame.width() / ratio) as usize,
+            );
+            (start..end).enumerate().for_each(|(x, i)| {
+                let (mut a, mut b) = self.get_ver_at_index(ver as usize, i);
+                if minmax {
+                    if a < b {
                         std::mem::swap(&mut a, &mut b);
                     }
+                } else if a > b {
+                    std::mem::swap(&mut a, &mut b);
+                }
 
+                path.line_to(iced::Point::new(
+                    x as f32 * ratio,
+                    a.mul_add(scale.y as f32, offset.y as f32),
+                ));
+
+                if (a - b).abs() > f32::EPSILON {
                     path.line_to(iced::Point::new(
-                        x as f32,
-                        a.mul_add(scale.y as f32, offset.y as f32),
+                        x as f32 * ratio,
+                        b.mul_add(scale.y as f32, offset.y as f32),
                     ));
+                }
 
-                    if (a - b).abs() > f32::EPSILON {
-                        path.line_to(iced::Point::new(
-                            x as f32,
-                            b.mul_add(scale.y as f32, offset.y as f32),
-                        ));
-                    }
-
-                    minmax ^= true;
-                });
+                minmax ^= true;
+            });
         });
         frame.stroke(
             &path,
