@@ -13,7 +13,7 @@ clack-host = { git = "https://github.com/prokopyl/clack.git" }
 cpal = "0.15.3"
 dirs = "5.0.1"
 hound = "3.5.1"
-iced = { version = "0.12.1", features = ["canvas"] }
+iced = { git = "https://github.com/iced-rs/iced", features = ["canvas"] }
 itertools = "0.13.0"
 rfd = "0.14.1"
 rubato = "0.15.0"

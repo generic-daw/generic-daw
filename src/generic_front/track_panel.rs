@@ -1,7 +1,7 @@
 use crate::generic_back::arrangement::Arrangement;
 use iced::{
     widget::{column, container, text},
-    Element, Length, Sandbox,
+    Element, Length,
 };
 use std::sync::{Arc, RwLock};
 
@@ -18,16 +18,9 @@ impl TrackPanel {
     pub fn new(arrangement: Arc<RwLock<Arrangement>>) -> Self {
         Self { arrangement }
     }
-}
 
-impl Sandbox for TrackPanel {
-    type Message = Message;
-
-    fn new() -> Self {
-        unimplemented!()
-    }
-
-    fn update(&mut self, message: Message) {
+    #[allow(clippy::unused_self, clippy::needless_pass_by_ref_mut)]
+    pub fn update(&mut self, message: &Message) {
         match message {
             Message::ArrangementUpdated => {
                 // Handle arrangement updates, if necessary
@@ -36,7 +29,7 @@ impl Sandbox for TrackPanel {
         }
     }
 
-    fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<Message> {
         let tracks = self
             .arrangement
             .read()
@@ -53,11 +46,6 @@ impl Sandbox for TrackPanel {
         container(tracks)
             .width(Length::Shrink)
             .height(Length::Fill)
-            .style(iced::theme::Container::Box)
             .into()
-    }
-
-    fn title(&self) -> String {
-        "Track Panel".to_string()
     }
 }

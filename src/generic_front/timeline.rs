@@ -4,12 +4,12 @@ use iced::{
         canvas::{self, Cache},
         Canvas,
     },
-    Element, Length, Sandbox,
+    Element, Length,
 };
 use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
 #[derive(Debug, Clone)]
-pub enum TimelineMessage {
+pub enum Message {
     ArrangementUpdated,
     XScaleChanged(usize),
     YScaleChanged(usize),
@@ -32,42 +32,30 @@ impl Timeline {
             timeline_y_scale: 50,
         }
     }
-}
 
-impl Sandbox for Timeline {
-    type Message = TimelineMessage;
-
-    fn new() -> Self {
-        unimplemented!()
-    }
-
-    fn title(&self) -> String {
-        String::from("Timeline")
-    }
-
-    fn update(&mut self, message: TimelineMessage) {
+    pub fn update(&mut self, message: &Message) {
         match message {
-            TimelineMessage::ArrangementUpdated => {
+            Message::ArrangementUpdated => {
                 self.tracks_cache.clear();
             }
-            TimelineMessage::XScaleChanged(x_scale) => {
-                self.timeline_x_scale = x_scale;
+            Message::XScaleChanged(x_scale) => {
+                self.timeline_x_scale = *x_scale;
                 self.tracks_cache.clear();
             }
-            TimelineMessage::YScaleChanged(y_scale) => {
-                self.timeline_y_scale = y_scale;
+            Message::YScaleChanged(y_scale) => {
+                self.timeline_y_scale = *y_scale;
                 self.tracks_cache.clear();
             }
-            TimelineMessage::Tick => {}
+            Message::Tick => {}
         }
     }
 
-    fn view(&self) -> Element<TimelineMessage> {
+    pub fn view(&self) -> Element<Message> {
         Element::from(Canvas::new(self).width(Length::Fill).height(Length::Fill))
     }
 }
 
-impl canvas::Program<TimelineMessage> for Timeline {
+impl canvas::Program<Message> for Timeline {
     type State = ();
 
     fn draw(
@@ -95,6 +83,7 @@ impl canvas::Program<TimelineMessage> for Timeline {
                             self.timeline_y_scale,
                             y_offset,
                             &self.arrangement.read().unwrap().meter,
+                            theme,
                         );
                     });
                 });

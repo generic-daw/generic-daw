@@ -2,7 +2,7 @@ use crate::generic_back::{
     position::Meter,
     track_clip::{audio_clip::AudioClip, midi_clip::MidiClip, TrackClip},
 };
-use iced::widget::canvas::Frame;
+use iced::{widget::canvas::Frame, Theme};
 use itertools::Itertools;
 use std::cmp::min;
 
@@ -14,6 +14,7 @@ pub trait DrawableClip {
         timeline_y_scale: usize,
         y_offset: usize,
         meter: &Meter,
+        theme: &Theme,
     );
 }
 
@@ -25,6 +26,7 @@ impl DrawableClip for AudioClip {
         timeline_y_scale: usize,
         y_offset: usize,
         meter: &Meter,
+        theme: &Theme,
     ) {
         let mut minmax = false;
         let path = iced::widget::canvas::Path::new(|path| {
@@ -68,7 +70,10 @@ impl DrawableClip for AudioClip {
                     minmax ^= true;
                 });
         });
-        frame.stroke(&path, iced::widget::canvas::Stroke::default());
+        frame.stroke(
+            &path,
+            iced::widget::canvas::Stroke::default().with_color(theme.palette().text),
+        );
     }
 }
 
@@ -80,6 +85,7 @@ impl<'a> DrawableClip for MidiClip<'a> {
         _timeline_y_scale: usize,
         _y_offset: usize,
         _meter: &Meter,
+        _theme: &Theme,
     ) {
         unimplemented!()
     }
