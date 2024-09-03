@@ -31,19 +31,18 @@ impl DrawableClip for AudioClip {
     ) {
         let path = iced::widget::canvas::Path::new(|path| {
             let mut minmax = false;
-            let ver = f32::log2(scale.x);
-            let ver_pow = f32::powf(2.0, ver.floor()) as usize;
-            let ratio = ver_pow as f32 / scale.x;
+            let ver_len = scale.x.floor().exp2() as usize;
+            let ratio = ver_len as f32 / scale.x.exp2();
             let start = max(
-                self.get_global_start().in_interleaved_samples(meter) as usize / ver_pow,
-                offset.x / ver_pow,
+                self.get_global_start().in_interleaved_samples(meter) as usize / ver_len,
+                offset.x / ver_len,
             );
             let end = min(
-                self.get_global_end().in_interleaved_samples(meter) as usize / ver_pow,
+                self.get_global_end().in_interleaved_samples(meter) as usize / ver_len,
                 start + (frame.width() / ratio) as usize,
             );
             (start..end).enumerate().for_each(|(x, i)| {
-                let (mut a, mut b) = self.get_ver_at_index(ver as usize, i);
+                let (mut a, mut b) = self.get_ver_at_index(scale.x as usize, i);
                 if minmax {
                     if a < b {
                         std::mem::swap(&mut a, &mut b);

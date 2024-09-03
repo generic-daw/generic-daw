@@ -135,9 +135,10 @@ impl Daw {
             .on_press(Message::TogglePlay),
             button("Stop").on_press(Message::Stop),
             button("Clear").on_press(Message::Clear),
-            slider(1.0..=8191.0, self.timeline.scale.x, |scale| {
+            slider(1.0..=13.99999, self.timeline.scale.x, |scale| {
                 Message::TimelineMessage(TimelineMessage::XScaleChanged(scale))
             })
+            .step(0.1)
             .width(200),
             slider(1.0..=100.0, self.timeline.scale.y, |scale| {
                 Message::TimelineMessage(TimelineMessage::YScaleChanged(scale))
