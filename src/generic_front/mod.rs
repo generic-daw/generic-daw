@@ -18,11 +18,7 @@ use iced::{
 use rfd::FileDialog;
 use std::{
     path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering::SeqCst},
-        mpsc::Sender,
-        Arc, RwLock,
-    },
+    sync::{atomic::Ordering::SeqCst, mpsc::Sender, Arc, RwLock},
 };
 use timeline::{Timeline, TimelineMessage};
 use track_panel::TrackPanel;
@@ -31,7 +27,6 @@ pub struct Daw {
     track_panel: TrackPanel,
     timeline: Timeline,
     stream_sender: Sender<StreamMessage>,
-    playing: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,16 +49,15 @@ impl Application for Daw {
     type Flags = ();
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
-        let meter = Meter::new(120.0, 4, 4, 0);
+        let meter = Meter::new(120.0, 4, 4);
         let arrangement = Arc::new(RwLock::new(Arrangement::new(meter)));
-        let (stream_sender, global_time, playing) = build_output_stream(arrangement.clone());
+        let stream_sender = build_output_stream(arrangement.clone());
 
         (
             Self {
                 track_panel: TrackPanel::new(arrangement.clone()),
-                timeline: Timeline::new(arrangement, global_time),
+                timeline: Timeline::new(arrangement),
                 stream_sender,
-                playing,
             },
             Command::none(),
         )
@@ -137,11 +131,21 @@ impl Application for Daw {
     fn view(&self) -> Element<Message> {
         let controls = row![
             button("Load Sample").on_press(Message::LoadSample(String::new())),
-            button(if self.playing.load(SeqCst) {
-                "Pause"
-            } else {
-                "Play"
-            })
+            button(
+                if self
+                    .timeline
+                    .arrangement
+                    .read()
+                    .unwrap()
+                    .meter
+                    .playing
+                    .load(SeqCst)
+                {
+                    "Pause"
+                } else {
+                    "Play"
+                }
+            )
             .on_press(Message::TogglePlay),
             button("Stop").on_press(Message::Stop),
             button("Clear").on_press(Message::Clear),

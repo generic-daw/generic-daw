@@ -1,4 +1,10 @@
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::{
+    ops::{Add, AddAssign, Sub, SubAssign},
+    sync::{
+        atomic::{AtomicBool, AtomicU32},
+        Arc,
+    },
+};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Position {
@@ -107,17 +113,21 @@ pub struct Meter {
     pub numerator: u8,
     pub denominator: u8,
     pub sample_rate: u32,
+    pub playing: Arc<AtomicBool>,
+    pub global_time: Arc<AtomicU32>,
 }
 
 impl Meter {
-    pub fn new(bpm: f64, numerator: u8, denominator: u8, sample_rate: u32) -> Self {
+    pub fn new(bpm: f64, numerator: u8, denominator: u8) -> Self {
         assert_eq!(denominator.count_ones(), 1);
 
         Self {
             bpm,
             numerator,
             denominator,
-            sample_rate,
+            sample_rate: 0,
+            playing: Arc::new(AtomicBool::new(false)),
+            global_time: Arc::new(AtomicU32::new(0)),
         }
     }
 }

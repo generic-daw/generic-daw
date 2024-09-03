@@ -9,11 +9,7 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     StreamConfig,
 };
-use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering::SeqCst},
-    mpsc::Sender,
-    Arc, RwLock,
-};
+use std::sync::{atomic::Ordering::SeqCst, mpsc::Sender, Arc, RwLock};
 
 pub enum StreamMessage {
     TogglePlay,
@@ -22,18 +18,14 @@ pub enum StreamMessage {
     GetGlobalTime(u32),
 }
 
-pub fn build_output_stream(
-    arrangement: Arc<RwLock<Arrangement>>,
-) -> (Sender<StreamMessage>, Arc<AtomicU32>, Arc<AtomicBool>) {
+pub fn build_output_stream(arrangement: Arc<RwLock<Arrangement>>) -> Sender<StreamMessage> {
     let device = cpal::default_host().default_output_device().unwrap();
     let config: &StreamConfig = &device.default_output_config().unwrap().into();
     arrangement.write().unwrap().meter.sample_rate = config.sample_rate.0;
 
     let (sender, receiver) = std::sync::mpsc::channel();
-    let global_time = Arc::new(AtomicU32::new(0));
-    let global_time_clone = global_time.clone();
-    let playing = Arc::new(AtomicBool::new(false));
-    let playing_clone = playing.clone();
+    let global_time = arrangement.read().unwrap().meter.global_time.clone();
+    let playing = arrangement.read().unwrap().meter.playing.clone();
 
     let stream = Box::new(
         device
@@ -73,5 +65,5 @@ pub fn build_output_stream(
     stream.play().unwrap();
     Box::leak(stream);
 
-    (sender, global_time_clone, playing_clone)
+    sender
 }

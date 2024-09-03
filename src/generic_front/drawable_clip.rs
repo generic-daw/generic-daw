@@ -38,7 +38,9 @@ impl DrawableClip for AudioClip {
                 .enumerate()
                 .for_each(|(x, samples_group)| {
                     let (mut a, mut b) = samples_group
-                        .map(|global_time| self.get_at_global_time(global_time, meter))
+                        .map(|global_time| {
+                            self.get_at_global_time(global_time, meter).clamp(-1.0, 1.0)
+                        })
                         .minmax()
                         .into_option()
                         .unwrap();
