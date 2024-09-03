@@ -8,7 +8,6 @@ anyhow = "1.0.86"
 clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
     "clack-host",
     "gui",
-    "raw-window-handle_06",
 ] }
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
 cpal = "0.15.3"
@@ -18,7 +17,7 @@ iced = { version = "0.12.1", features = ["canvas"] }
 itertools = "0.13.0"
 rfd = "0.14.1"
 rubato = "0.15.0"
-symphonia = { version = "0.5.4", features = ["all-formats", "all-codecs"] }
+symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
 walkdir = "2.5.0"
 winit = "0.30.5"
 wmidi = "4.0.10"
