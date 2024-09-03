@@ -20,6 +20,7 @@ pub enum Message {
     XScaleChanged(f32),
     YScaleChanged(f32),
     Tick,
+    None,
     Scrolled(ScrollDelta),
 }
 
@@ -27,7 +28,7 @@ pub struct Timeline {
     pub arrangement: Arc<RwLock<Arrangement>>,
     tracks_cache: Cache,
     pub scale: Scale,
-    pub scroll_delta: ScrollDelta,
+    pub position: Position,
     pub samples_sender: Sender<Message>,
     samples_receiver: Receiver<Message>,
 }
@@ -39,7 +40,7 @@ impl Timeline {
             arrangement,
             tracks_cache: Cache::new(),
             scale: Scale { x: 8.0, y: 50.0 },
-            scroll_delta: ScrollDelta::Pixels { x: 0.0, y: 0.0 },
+            position: Position { x: 0, y: 0 },
             samples_sender,
             samples_receiver,
         }
@@ -64,19 +65,18 @@ impl Timeline {
                 }
             }
             Message::Scrolled(delta) => {
-                if let ScrollDelta::Pixels { x, y } = *delta {
-                    if let ScrollDelta::Pixels {
-                        x: self_x,
-                        y: self_y,
-                    } = self.scroll_delta
-                    {
+                match *delta {
+                    ScrollDelta::Pixels { x, y } => {
                         let arrangement = self.arrangement.read().unwrap();
 
-                        let x = x.mul_add(self.scale.x.exp2(), self_x).clamp(
-                            -(arrangement.len().in_interleaved_samples(&arrangement.meter) as f32),
-                            0.0,
-                        );
-                        let y = (self_y - y).clamp(
+                        let x = (-x)
+                            .mul_add(self.scale.x.exp2(), self.position.x as f32)
+                            .clamp(
+                                0.0,
+                                arrangement.len().in_interleaved_samples(&arrangement.meter) as f32,
+                            );
+
+                        let y = (self.position.y as f32 - y).clamp(
                             0.0,
                             (arrangement.tracks.len().saturating_sub(1)) as f32
                                 * 2.0
@@ -84,11 +84,19 @@ impl Timeline {
                         );
                         drop(arrangement);
 
-                        self.scroll_delta = ScrollDelta::Pixels { x, y };
+                        self.position.x = x as usize;
+                        self.position.y = y as isize;
+                    }
+                    ScrollDelta::Lines { x, y } => {
+                        self.update(&Message::Scrolled(ScrollDelta::Pixels {
+                            x: x * 50.0,
+                            y: y * 50.0,
+                        }));
                     }
                 }
                 self.tracks_cache.clear();
             }
+            Message::None => {}
         }
     }
 
@@ -109,11 +117,6 @@ impl canvas::Program<Message> for Timeline {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<iced::widget::canvas::Geometry> {
         let playlist_clips = self.tracks_cache.draw(renderer, bounds.size(), |frame| {
-            let x = if let ScrollDelta::Pixels { x, y: _ } = self.scroll_delta {
-                -x as usize
-            } else {
-                0
-            };
             self.arrangement
                 .read()
                 .unwrap()
@@ -121,20 +124,17 @@ impl canvas::Program<Message> for Timeline {
                 .iter()
                 .enumerate()
                 .for_each(|(i, track)| {
-                    let y = ((i as f32 + 0.5) * self.scale.y).mul_add(
-                        2.0,
-                        -(if let ScrollDelta::Pixels { x: _, y } = self.scroll_delta {
-                            y
-                        } else {
-                            0.0
-                        }),
-                    ) as isize;
+                    let y = ((i as f32 + 0.5) * self.scale.y).mul_add(2.0, -self.position.y as f32)
+                        as isize;
 
                     track.read().unwrap().clips.iter().for_each(|clip| {
                         clip.draw(
                             frame,
                             self.scale,
-                            Position { x, y },
+                            Position {
+                                x: self.position.x,
+                                y,
+                            },
                             &self.arrangement.read().unwrap().meter,
                             theme,
                         );
@@ -144,19 +144,15 @@ impl canvas::Program<Message> for Timeline {
 
         let mut frame = iced::widget::canvas::Frame::new(renderer, bounds.size());
         let path = iced::widget::canvas::Path::new(|path| {
-            let x = if let ScrollDelta::Pixels { x, y: _ } = self.scroll_delta {
-                x / self.scale.x.exp2()
-            } else {
-                0.0
-            };
-            let x = x + self
-                .arrangement
-                .read()
-                .unwrap()
-                .meter
-                .global_time
-                .load(SeqCst) as f32
-                / self.scale.x.exp2();
+            let x = -(self.position.x as f32) / self.scale.x.exp2()
+                + self
+                    .arrangement
+                    .read()
+                    .unwrap()
+                    .meter
+                    .global_time
+                    .load(SeqCst) as f32
+                    / self.scale.x.exp2();
             path.line_to(iced::Point::new(x, 0.0));
             path.line_to(iced::Point::new(x, bounds.height));
         });

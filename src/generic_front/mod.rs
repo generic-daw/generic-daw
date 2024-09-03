@@ -166,7 +166,7 @@ impl Daw {
                 if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = e {
                     Message::TimelineMessage(TimelineMessage::Scrolled(delta))
                 } else {
-                    Message::TimelineMessage(TimelineMessage::Tick)
+                    Message::TimelineMessage(TimelineMessage::None)
                 }
             }),
         ])

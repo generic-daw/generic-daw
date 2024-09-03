@@ -25,7 +25,7 @@ impl DrawableClip for AudioClip {
         &self,
         frame: &mut Frame,
         scale: Scale,
-        offset: Position,
+        position: Position,
         meter: &Meter,
         theme: &Theme,
     ) {
@@ -35,7 +35,7 @@ impl DrawableClip for AudioClip {
             let ratio = ver_len as f32 / scale.x.exp2();
             let start = max(
                 self.get_global_start().in_interleaved_samples(meter) as usize / ver_len,
-                offset.x / ver_len,
+                position.x / ver_len,
             );
             let end = min(
                 self.get_global_end().in_interleaved_samples(meter) as usize / ver_len,
@@ -53,13 +53,13 @@ impl DrawableClip for AudioClip {
 
                 path.line_to(iced::Point::new(
                     x as f32 * ratio,
-                    a.mul_add(scale.y, offset.y as f32),
+                    a.mul_add(scale.y, position.y as f32),
                 ));
 
                 if (a - b).abs() > f32::EPSILON {
                     path.line_to(iced::Point::new(
                         x as f32 * ratio,
-                        b.mul_add(scale.y, offset.y as f32),
+                        b.mul_add(scale.y, position.y as f32),
                     ));
                 }
 
