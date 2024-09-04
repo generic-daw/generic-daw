@@ -157,7 +157,7 @@ impl canvas::Program<Message> for Timeline {
         frame.stroke(
             &path,
             iced::widget::canvas::Stroke::default()
-                .with_color(theme.palette().primary)
+                .with_color(theme.extended_palette().primary.base.color)
                 .with_width(2.0),
         );
 

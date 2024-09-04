@@ -68,7 +68,8 @@ impl DrawableClip for AudioClip {
         });
         frame.stroke(
             &path,
-            iced::widget::canvas::Stroke::default().with_color(theme.palette().text),
+            iced::widget::canvas::Stroke::default()
+                .with_color(theme.extended_palette().secondary.strong.color),
         );
     }
 }
