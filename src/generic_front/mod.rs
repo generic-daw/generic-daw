@@ -140,7 +140,7 @@ impl Daw {
             })
             .step(0.1)
             .width(200),
-            slider(1.0..=100.0, self.timeline.scale.y, |scale| {
+            slider(20.0..=200.0, self.timeline.scale.y, |scale| {
                 Message::TimelineMessage(TimelineMessage::YScaleChanged(scale))
             })
             .width(200)

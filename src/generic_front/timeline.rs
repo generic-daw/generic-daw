@@ -1,5 +1,5 @@
-use super::drawable_clip::{Position, Scale};
-use crate::generic_back::arrangement::Arrangement;
+use super::drawable_clip::{TimelinePosition, TimelineScale};
+use crate::generic_back::{arrangement::Arrangement, position::Position};
 use iced::{
     mouse::ScrollDelta,
     widget::{
@@ -26,8 +26,8 @@ pub enum Message {
 pub struct Timeline {
     pub arrangement: Arc<RwLock<Arrangement>>,
     tracks_cache: Cache,
-    pub scale: Scale,
-    pub position: Position,
+    pub scale: TimelineScale,
+    pub position: TimelinePosition,
     pub samples_sender: Sender<Message>,
     samples_receiver: Receiver<Message>,
 }
@@ -38,8 +38,11 @@ impl Timeline {
         Self {
             arrangement,
             tracks_cache: Cache::new(),
-            scale: Scale { x: 8.0, y: 50.0 },
-            position: Position { x: 0.0, y: 0.0 },
+            scale: TimelineScale { x: 8.0, y: 100.0 },
+            position: TimelinePosition {
+                x: Position::new(0, 0),
+                y: 0.0,
+            },
             samples_sender,
             samples_receiver,
         }
@@ -55,7 +58,6 @@ impl Timeline {
                 self.tracks_cache.clear();
             }
             Message::YScaleChanged(y_scale) => {
-                self.position.y *= y_scale / self.scale.y;
                 self.scale.y = *y_scale;
                 self.tracks_cache.clear();
             }
@@ -69,21 +71,26 @@ impl Timeline {
                     ScrollDelta::Pixels { x, y } => {
                         let arrangement = self.arrangement.read().unwrap();
 
-                        let x = (-x).mul_add(self.scale.x.exp2(), self.position.x).clamp(
-                            0.0,
-                            arrangement.len().in_interleaved_samples(&arrangement.meter) as f32,
-                        );
+                        if x.abs() > f32::EPSILON {
+                            let x = (-x)
+                                .mul_add(
+                                    self.scale.x.exp2(),
+                                    self.position.x.in_interleaved_samples(&arrangement.meter)
+                                        as f32,
+                                )
+                                .clamp(
+                                    0.0,
+                                    arrangement.len().in_interleaved_samples(&arrangement.meter)
+                                        as f32,
+                                );
+                            self.position.x =
+                                Position::from_interleaved_samples(x as u32, &arrangement.meter);
+                        }
 
-                        let y = (self.position.y - y).clamp(
-                            0.0,
-                            (arrangement.tracks.len().saturating_sub(1)) as f32
-                                * 2.0
-                                * self.scale.y,
-                        );
-                        drop(arrangement);
-
-                        self.position.x = x;
-                        self.position.y = y;
+                        if y.abs() > f32::EPSILON {
+                            self.position.y = (self.position.y - y / self.scale.y / 2.0)
+                                .clamp(0.0, arrangement.tracks.len().saturating_sub(1) as f32);
+                        }
                     }
                     ScrollDelta::Lines { x, y } => {
                         self.update(&Message::Scrolled(ScrollDelta::Pixels {
@@ -121,13 +128,13 @@ impl canvas::Program<Message> for Timeline {
                 .iter()
                 .enumerate()
                 .for_each(|(i, track)| {
-                    let y = ((i as f32 + 0.5) * self.scale.y).mul_add(2.0, -self.position.y);
+                    let y = i as f32 - self.position.y;
 
                     track.read().unwrap().clips.iter().for_each(|clip| {
                         clip.draw(
                             frame,
                             self.scale,
-                            Position {
+                            TimelinePosition {
                                 x: self.position.x,
                                 y,
                             },
@@ -140,7 +147,12 @@ impl canvas::Program<Message> for Timeline {
 
         let mut frame = iced::widget::canvas::Frame::new(renderer, bounds.size());
         let path = iced::widget::canvas::Path::new(|path| {
-            let x = -self.position.x / self.scale.x.exp2()
+            let x = -(self
+                .position
+                .x
+                .in_interleaved_samples(&self.arrangement.read().unwrap().meter)
+                as f32)
+                / self.scale.x.exp2()
                 + self
                     .arrangement
                     .read()

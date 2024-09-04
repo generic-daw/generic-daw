@@ -87,7 +87,7 @@ impl AudioClip {
 
     pub fn get_ver_at_index(&self, ver: usize, index: usize) -> (f32, f32) {
         let (min, max) = self.audio.get_sample_at_index(ver, index);
-        (min * self.volume, max * self.volume)
+        (min * self.volume / 2.0 + 0.5, max * self.volume / 2.0 + 0.5)
     }
 }
 
@@ -96,12 +96,14 @@ impl TrackClip for AudioClip {
         if !meter.playing.load(SeqCst) {
             return 0.0;
         }
-        self.get_ver_at_index(
-            0,
-            (global_time - (self.global_start + self.clip_start).in_interleaved_samples(meter))
-                as usize,
-        )
-        .0
+        self.audio
+            .get_sample_at_index(
+                0,
+                (global_time - (self.global_start + self.clip_start).in_interleaved_samples(meter))
+                    as usize,
+            )
+            .0
+            * self.volume
     }
 
     fn get_global_start(&self) -> Position {
