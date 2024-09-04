@@ -8,10 +8,9 @@ use crate::generic_back::{
     position::Meter,
     track::Track,
     track_clip::audio_clip::{read_audio_file, AudioClip},
-    StreamMessage,
 };
 use iced::{
-    event, mouse,
+    event, keyboard, mouse,
     widget::{button, column, row, slider},
     window::frames,
     Element, Event, Subscription,
@@ -19,15 +18,15 @@ use iced::{
 use rfd::FileDialog;
 use std::{
     path::PathBuf,
-    sync::{atomic::Ordering::SeqCst, mpsc::Sender, Arc, RwLock},
+    sync::{atomic::Ordering::SeqCst, Arc, RwLock},
 };
 use timeline::{Message as TimelineMessage, Timeline};
 use track_panel::{Message as TrackPanelMessage, TrackPanel};
 
 pub struct Daw {
+    arrangement: Arc<RwLock<Arrangement>>,
     track_panel: TrackPanel,
     timeline: Timeline,
-    stream_sender: Sender<StreamMessage>,
 }
 
 #[derive(Debug, Clone)]
@@ -37,7 +36,8 @@ pub enum Message {
     LoadSample(String),
     TogglePlay,
     Stop,
-    Clear,
+    New,
+    Export,
     FileSelected(Option<String>),
     ArrangementUpdated,
 }
@@ -52,12 +52,12 @@ impl Daw {
     fn new(_flags: ()) -> Self {
         let meter = Meter::new(120.0, 4, 4);
         let arrangement = Arc::new(RwLock::new(Arrangement::new(meter)));
-        let stream_sender = build_output_stream(arrangement.clone());
+        build_output_stream(arrangement.clone());
 
         Self {
+            arrangement: arrangement.clone(),
             track_panel: TrackPanel::new(arrangement.clone()),
             timeline: Timeline::new(arrangement),
-            stream_sender,
         }
     }
 
@@ -79,37 +79,59 @@ impl Daw {
                 let clip = Arc::new(AudioClip::new(
                     read_audio_file(
                         &PathBuf::from(path),
-                        &self.timeline.arrangement.read().unwrap().meter,
+                        &self.arrangement.read().unwrap().meter,
                         self.timeline.samples_sender.clone(),
                     )
                     .unwrap(),
-                    &self.timeline.arrangement.read().unwrap().meter,
+                    &self.arrangement.read().unwrap().meter,
                 ));
                 let track = RwLock::new(Track::new());
                 track.write().unwrap().clips.push(clip);
-                self.timeline
-                    .arrangement
-                    .write()
-                    .unwrap()
-                    .tracks
-                    .push(track);
+                self.arrangement.write().unwrap().tracks.push(track);
                 self.update(Message::ArrangementUpdated);
             }
+            Message::FileSelected(None) => {}
             Message::ArrangementUpdated => {
                 self.track_panel
                     .update(&TrackPanelMessage::ArrangementUpdated);
                 self.timeline.update(&TimelineMessage::ArrangementUpdated);
             }
-            Message::FileSelected(None) => {}
             Message::TogglePlay => {
-                self.stream_sender.send(StreamMessage::TogglePlay).unwrap();
+                self.arrangement
+                    .read()
+                    .unwrap()
+                    .meter
+                    .playing
+                    .fetch_xor(true, SeqCst);
             }
             Message::Stop => {
-                self.stream_sender.send(StreamMessage::Stop).unwrap();
+                self.arrangement
+                    .read()
+                    .unwrap()
+                    .meter
+                    .playing
+                    .store(false, SeqCst);
+                self.arrangement
+                    .read()
+                    .unwrap()
+                    .meter
+                    .global_time
+                    .store(0, SeqCst);
             }
-            Message::Clear => {
-                self.timeline.arrangement.write().unwrap().tracks.clear();
+            Message::New => {
+                self.arrangement.write().unwrap().tracks.clear();
                 self.update(Message::ArrangementUpdated);
+            }
+            Message::Export => {
+                if let Some(path) = FileDialog::new()
+                    .add_filter("Wave File", &["wav"])
+                    .save_file()
+                {
+                    self.arrangement
+                        .read()
+                        .unwrap()
+                        .export(&path, &self.arrangement.read().unwrap().meter);
+                }
             }
         }
     }
@@ -118,15 +140,7 @@ impl Daw {
         let controls = row![
             button("Load Sample").on_press(Message::LoadSample(String::new())),
             button(
-                if self
-                    .timeline
-                    .arrangement
-                    .read()
-                    .unwrap()
-                    .meter
-                    .playing
-                    .load(SeqCst)
-                {
+                if self.arrangement.read().unwrap().meter.playing.load(SeqCst) {
                     "Pause"
                 } else {
                     "Play"
@@ -134,16 +148,15 @@ impl Daw {
             )
             .on_press(Message::TogglePlay),
             button("Stop").on_press(Message::Stop),
-            button("Clear").on_press(Message::Clear),
+            button("Export").on_press(Message::Export),
+            button("New").on_press(Message::New),
             slider(0.0..=13.99999, self.timeline.scale.x, |scale| {
                 Message::TimelineMessage(TimelineMessage::XScaleChanged(scale))
             })
-            .step(0.1)
-            .width(200),
+            .step(0.1),
             slider(20.0..=200.0, self.timeline.scale.y, |scale| {
                 Message::TimelineMessage(TimelineMessage::YScaleChanged(scale))
             })
-            .width(200)
         ];
 
         let content = column![
@@ -162,12 +175,30 @@ impl Daw {
     pub fn subscription(_state: &Self) -> Subscription<Message> {
         Subscription::batch([
             frames().map(|_| Message::TimelineMessage(TimelineMessage::Tick)),
-            event::listen_with(|e, _, _| {
-                if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = e {
+            event::listen_with(|e, _, _| match e {
+                Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
                     Some(Message::TimelineMessage(TimelineMessage::Scrolled(delta)))
-                } else {
-                    None
                 }
+                Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
+                    match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
+                        (false, false, false) => match key {
+                            keyboard::Key::Named(keyboard::key::Named::Space) => {
+                                Some(Message::TogglePlay)
+                            }
+                            _ => None,
+                        },
+                        (true, false, false) => match key {
+                            keyboard::Key::Character(c) => match c.to_string().as_str() {
+                                "n" => Some(Message::New),
+                                "e" => Some(Message::Export),
+                                _ => None,
+                            },
+                            _ => None,
+                        },
+                        _ => None,
+                    }
+                }
+                _ => None,
             }),
         ])
     }

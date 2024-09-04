@@ -9,23 +9,16 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     StreamConfig,
 };
-use std::sync::{atomic::Ordering::SeqCst, mpsc::Sender, Arc, RwLock};
+use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
-pub enum StreamMessage {
-    TogglePlay,
-    Stop,
-    Jump(u32),
-    GetGlobalTime(u32),
-}
-
-pub fn build_output_stream(arrangement: Arc<RwLock<Arrangement>>) -> Sender<StreamMessage> {
+pub fn build_output_stream(arrangement: Arc<RwLock<Arrangement>>) {
     let device = cpal::default_host().default_output_device().unwrap();
     let config: &StreamConfig = &device.default_output_config().unwrap().into();
     arrangement.write().unwrap().meter.sample_rate = config.sample_rate.0;
 
-    let (sender, receiver) = std::sync::mpsc::channel();
     let global_time = arrangement.read().unwrap().meter.global_time.clone();
     let playing = arrangement.read().unwrap().meter.playing.clone();
+    let exporting = arrangement.read().unwrap().meter.exporting.clone();
 
     let stream = Box::new(
         device
@@ -37,20 +30,7 @@ pub fn build_output_stream(arrangement: Arc<RwLock<Arrangement>>) -> Sender<Stre
                             .read()
                             .unwrap()
                             .get_at_global_time(global_time.load(SeqCst));
-                        match receiver.try_recv() {
-                            Ok(StreamMessage::TogglePlay) => {
-                                playing.fetch_xor(true, SeqCst);
-                            }
-                            Ok(StreamMessage::Stop) => {
-                                playing.store(false, SeqCst);
-                                global_time.store(0, SeqCst);
-                            }
-                            Ok(StreamMessage::Jump(time)) => {
-                                global_time.store(time, SeqCst);
-                            }
-                            _ => {}
-                        }
-                        if playing.load(SeqCst) {
+                        if playing.load(SeqCst) && !exporting.load(SeqCst) {
                             global_time.fetch_add(1, SeqCst);
                         }
                     }
@@ -64,6 +44,4 @@ pub fn build_output_stream(arrangement: Arc<RwLock<Arrangement>>) -> Sender<Stre
     );
     stream.play().unwrap();
     Box::leak(stream);
-
-    sender
 }

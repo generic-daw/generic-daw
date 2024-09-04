@@ -2,9 +2,11 @@ use super::{
     position::{Meter, Position},
     track::Track,
 };
-use cpal::StreamConfig;
 use hound::WavWriter;
-use std::{path::Path, sync::RwLock};
+use std::{
+    path::Path,
+    sync::{atomic::Ordering::SeqCst, RwLock},
+};
 
 pub struct Arrangement {
     pub tracks: Vec<RwLock<Track>>,
@@ -40,12 +42,15 @@ impl Arrangement {
             .unwrap_or(Position::new(0, 0))
     }
 
-    pub fn export(&self, path: &Path, config: &StreamConfig, meter: &Meter) {
+    pub fn export(&self, path: &Path, meter: &Meter) {
+        self.meter.playing.store(true, SeqCst);
+        self.meter.exporting.store(true, SeqCst);
+
         let mut writer = WavWriter::create(
             path,
             hound::WavSpec {
-                channels: config.channels,
-                sample_rate: config.sample_rate.0,
+                channels: 2,
+                sample_rate: meter.sample_rate,
                 bits_per_sample: 32,
                 sample_format: hound::SampleFormat::Float,
             },
@@ -55,5 +60,8 @@ impl Arrangement {
         (0..self.len().in_interleaved_samples(meter)).for_each(|i| {
             writer.write_sample(self.get_at_global_time(i)).unwrap();
         });
+
+        self.meter.playing.store(false, SeqCst);
+        self.meter.exporting.store(false, SeqCst);
     }
 }

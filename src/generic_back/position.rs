@@ -114,6 +114,7 @@ pub struct Meter {
     pub denominator: u8,
     pub sample_rate: u32,
     pub playing: Arc<AtomicBool>,
+    pub exporting: Arc<AtomicBool>,
     pub global_time: Arc<AtomicU32>,
 }
 
@@ -127,6 +128,7 @@ impl Meter {
             denominator,
             sample_rate: 0,
             playing: Arc::new(AtomicBool::new(false)),
+            exporting: Arc::new(AtomicBool::new(false)),
             global_time: Arc::new(AtomicU32::new(0)),
         }
     }
