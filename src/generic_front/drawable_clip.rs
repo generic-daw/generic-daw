@@ -66,13 +66,13 @@ impl DrawableClip for AudioClip {
 
                 path.line_to(iced::Point::new(
                     x as f32 * ratio,
-                    (a + position.y) * scale.y,
+                    (a.mul_add(0.9, 0.05) + position.y) * scale.y,
                 ));
 
                 if (a - b).abs() > f32::EPSILON {
                     path.line_to(iced::Point::new(
                         x as f32 * ratio,
-                        (b + position.y) * scale.y,
+                        (b.mul_add(0.9, 0.05) + position.y) * scale.y,
                     ));
                 }
 
@@ -82,7 +82,7 @@ impl DrawableClip for AudioClip {
         frame.stroke(
             &path,
             iced::widget::canvas::Stroke::default()
-                .with_color(theme.extended_palette().secondary.strong.color),
+                .with_color(theme.extended_palette().secondary.base.text),
         );
     }
 }

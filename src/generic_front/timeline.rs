@@ -3,7 +3,7 @@ use crate::generic_back::{arrangement::Arrangement, position::Position};
 use iced::{
     mouse::ScrollDelta,
     widget::{
-        canvas::{self, Cache},
+        canvas::{self, Cache, Geometry},
         Canvas,
     },
     Element, Length,
@@ -107,6 +107,111 @@ impl Timeline {
     pub fn view(&self) -> Element<Message> {
         Element::from(Canvas::new(self).width(Length::Fill).height(Length::Fill))
     }
+
+    fn draw_grid(
+        &self,
+        renderer: &iced::Renderer,
+        bounds: iced::Rectangle,
+        theme: &iced::Theme,
+    ) -> Geometry {
+        let mut grid = iced::widget::canvas::Frame::new(renderer, bounds.size());
+        (0..=self.arrangement.read().unwrap().tracks.len()).for_each(|i| {
+            let path = iced::widget::canvas::Path::new(|path| {
+                let y = (i as f32 - self.position.y) * self.scale.y;
+                path.line_to(iced::Point::new(0.0, y));
+                path.line_to(iced::Point::new(bounds.width, y));
+            });
+            grid.stroke(
+                &path,
+                iced::widget::canvas::Stroke::default()
+                    .with_color(theme.extended_palette().secondary.base.color),
+            );
+
+            let mut beat = self.position.x;
+            let mut end_beat = beat
+                + Position::from_interleaved_samples(
+                    (bounds.width * self.scale.x.exp2()) as u32,
+                    &self.arrangement.read().unwrap().meter,
+                );
+            if beat.sub_quarter_note != 0 {
+                beat.sub_quarter_note = 0;
+                beat.quarter_note += 1;
+            }
+            end_beat.sub_quarter_note = 0;
+
+            while beat <= end_beat {
+                let color = if beat.quarter_note
+                    % u32::from(self.arrangement.read().unwrap().meter.numerator)
+                    == 0
+                {
+                    if self.scale.x > 11.0 {
+                        theme.extended_palette().secondary.weak.color
+                    } else {
+                        theme.extended_palette().secondary.strong.color
+                    }
+                } else {
+                    if self.scale.x > 11.0 {
+                        beat.quarter_note += 1;
+                        continue;
+                    }
+                    theme.extended_palette().secondary.weak.color
+                };
+
+                let path = iced::widget::canvas::Path::new(|path| {
+                    let x = (beat.in_interleaved_samples(&self.arrangement.read().unwrap().meter)
+                        as f32
+                        - self
+                            .position
+                            .x
+                            .in_interleaved_samples(&self.arrangement.read().unwrap().meter)
+                            as f32)
+                        / self.scale.x.exp2();
+                    path.line_to(iced::Point::new(x, 0.0));
+                    path.line_to(iced::Point::new(x, bounds.height));
+                });
+                grid.stroke(
+                    &path,
+                    iced::widget::canvas::Stroke::default().with_color(color),
+                );
+                beat.quarter_note += 1;
+            }
+        });
+        grid.into_geometry()
+    }
+
+    fn draw_playhead(
+        &self,
+        renderer: &iced::Renderer,
+        bounds: iced::Rectangle,
+        theme: &iced::Theme,
+    ) -> Geometry {
+        let mut playhead = iced::widget::canvas::Frame::new(renderer, bounds.size());
+        let path = iced::widget::canvas::Path::new(|path| {
+            let x = -(self
+                .position
+                .x
+                .in_interleaved_samples(&self.arrangement.read().unwrap().meter)
+                as f32)
+                / self.scale.x.exp2()
+                + self
+                    .arrangement
+                    .read()
+                    .unwrap()
+                    .meter
+                    .global_time
+                    .load(SeqCst) as f32
+                    / self.scale.x.exp2();
+            path.line_to(iced::Point::new(x, 0.0));
+            path.line_to(iced::Point::new(x, bounds.height));
+        });
+        playhead.stroke(
+            &path,
+            iced::widget::canvas::Stroke::default()
+                .with_color(theme.extended_palette().primary.base.color)
+                .with_width(2.0),
+        );
+        playhead.into_geometry()
+    }
 }
 
 impl canvas::Program<Message> for Timeline {
@@ -120,6 +225,8 @@ impl canvas::Program<Message> for Timeline {
         bounds: iced::Rectangle,
         _cursor: iced::mouse::Cursor,
     ) -> Vec<iced::widget::canvas::Geometry> {
+        let grid = self.draw_grid(renderer, bounds, theme);
+
         let playlist_clips = self.tracks_cache.draw(renderer, bounds.size(), |frame| {
             self.arrangement
                 .read()
@@ -145,32 +252,8 @@ impl canvas::Program<Message> for Timeline {
                 });
         });
 
-        let mut frame = iced::widget::canvas::Frame::new(renderer, bounds.size());
-        let path = iced::widget::canvas::Path::new(|path| {
-            let x = -(self
-                .position
-                .x
-                .in_interleaved_samples(&self.arrangement.read().unwrap().meter)
-                as f32)
-                / self.scale.x.exp2()
-                + self
-                    .arrangement
-                    .read()
-                    .unwrap()
-                    .meter
-                    .global_time
-                    .load(SeqCst) as f32
-                    / self.scale.x.exp2();
-            path.line_to(iced::Point::new(x, 0.0));
-            path.line_to(iced::Point::new(x, bounds.height));
-        });
-        frame.stroke(
-            &path,
-            iced::widget::canvas::Stroke::default()
-                .with_color(theme.extended_palette().primary.base.color)
-                .with_width(2.0),
-        );
+        let playhead = self.draw_playhead(renderer, bounds, theme);
 
-        vec![playlist_clips, frame.into_geometry()]
+        vec![grid, playlist_clips, playhead]
     }
 }

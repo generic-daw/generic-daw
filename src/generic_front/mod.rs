@@ -50,7 +50,7 @@ impl Default for Daw {
 
 impl Daw {
     fn new(_flags: ()) -> Self {
-        let meter = Meter::new(120.0, 4, 4);
+        let meter = Meter::new(140.0, 4, 4);
         let arrangement = Arc::new(RwLock::new(Arrangement::new(meter)));
         build_output_stream(arrangement.clone());
 
