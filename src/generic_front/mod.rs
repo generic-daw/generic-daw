@@ -162,11 +162,11 @@ impl Daw {
     pub fn subscription(_state: &Self) -> Subscription<Message> {
         Subscription::batch([
             frames().map(|_| Message::TimelineMessage(TimelineMessage::Tick)),
-            event::listen().map(|e| {
+            event::listen_with(|e, _, _| {
                 if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = e {
-                    Message::TimelineMessage(TimelineMessage::Scrolled(delta))
+                    Some(Message::TimelineMessage(TimelineMessage::Scrolled(delta)))
                 } else {
-                    Message::TimelineMessage(TimelineMessage::None)
+                    None
                 }
             }),
         ])

@@ -20,7 +20,6 @@ pub enum Message {
     XScaleChanged(f32),
     YScaleChanged(f32),
     Tick,
-    None,
     Scrolled(ScrollDelta),
 }
 
@@ -96,7 +95,6 @@ impl Timeline {
                 }
                 self.tracks_cache.clear();
             }
-            Message::None => {}
         }
     }
 
