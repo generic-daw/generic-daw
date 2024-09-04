@@ -144,10 +144,14 @@ impl Timeline {
                     % u32::from(self.arrangement.read().unwrap().meter.numerator)
                     == 0
                 {
-                    if self.scale.x > 11.0 {
-                        theme.extended_palette().secondary.weak.color
-                    } else {
+                    if self.scale.x > 11.0
+                        && beat.quarter_note
+                            % u32::from(self.arrangement.read().unwrap().meter.numerator * 4)
+                            != 0
+                    {
                         theme.extended_palette().secondary.strong.color
+                    } else {
+                        theme.extended_palette().secondary.weak.color
                     }
                 } else {
                     if self.scale.x > 11.0 {
