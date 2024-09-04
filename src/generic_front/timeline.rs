@@ -39,7 +39,7 @@ impl Timeline {
             arrangement,
             tracks_cache: Cache::new(),
             scale: Scale { x: 8.0, y: 50.0 },
-            position: Position { x: 0, y: 0 },
+            position: Position { x: 0.0, y: 0.0 },
             samples_sender,
             samples_receiver,
         }
@@ -55,6 +55,7 @@ impl Timeline {
                 self.tracks_cache.clear();
             }
             Message::YScaleChanged(y_scale) => {
+                self.position.y *= y_scale / self.scale.y;
                 self.scale.y = *y_scale;
                 self.tracks_cache.clear();
             }
@@ -68,14 +69,12 @@ impl Timeline {
                     ScrollDelta::Pixels { x, y } => {
                         let arrangement = self.arrangement.read().unwrap();
 
-                        let x = (-x)
-                            .mul_add(self.scale.x.exp2(), self.position.x as f32)
-                            .clamp(
-                                0.0,
-                                arrangement.len().in_interleaved_samples(&arrangement.meter) as f32,
-                            );
+                        let x = (-x).mul_add(self.scale.x.exp2(), self.position.x).clamp(
+                            0.0,
+                            arrangement.len().in_interleaved_samples(&arrangement.meter) as f32,
+                        );
 
-                        let y = (self.position.y as f32 - y).clamp(
+                        let y = (self.position.y - y).clamp(
                             0.0,
                             (arrangement.tracks.len().saturating_sub(1)) as f32
                                 * 2.0
@@ -83,8 +82,8 @@ impl Timeline {
                         );
                         drop(arrangement);
 
-                        self.position.x = x as usize;
-                        self.position.y = y as isize;
+                        self.position.x = x;
+                        self.position.y = y;
                     }
                     ScrollDelta::Lines { x, y } => {
                         self.update(&Message::Scrolled(ScrollDelta::Pixels {
@@ -122,8 +121,7 @@ impl canvas::Program<Message> for Timeline {
                 .iter()
                 .enumerate()
                 .for_each(|(i, track)| {
-                    let y = ((i as f32 + 0.5) * self.scale.y).mul_add(2.0, -self.position.y as f32)
-                        as isize;
+                    let y = ((i as f32 + 0.5) * self.scale.y).mul_add(2.0, -self.position.y);
 
                     track.read().unwrap().clips.iter().for_each(|clip| {
                         clip.draw(
@@ -142,7 +140,7 @@ impl canvas::Program<Message> for Timeline {
 
         let mut frame = iced::widget::canvas::Frame::new(renderer, bounds.size());
         let path = iced::widget::canvas::Path::new(|path| {
-            let x = -(self.position.x as f32) / self.scale.x.exp2()
+            let x = -self.position.x / self.scale.x.exp2()
                 + self
                     .arrangement
                     .read()

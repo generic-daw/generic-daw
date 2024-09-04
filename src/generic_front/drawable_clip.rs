@@ -6,8 +6,8 @@ use iced::{widget::canvas::Frame, Theme};
 use std::cmp::{max, min};
 
 pub struct Position {
-    pub x: usize,
-    pub y: isize,
+    pub x: f32,
+    pub y: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -31,18 +31,18 @@ impl DrawableClip for AudioClip {
     ) {
         let path = iced::widget::canvas::Path::new(|path| {
             let mut minmax = false;
-            let ver_len = scale.x.floor().exp2() as usize;
-            let ratio = ver_len as f32 / scale.x.exp2();
+            let ver_len = scale.x.floor().exp2();
+            let ratio = ver_len / scale.x.exp2();
             let start = max(
-                self.get_global_start().in_interleaved_samples(meter) as usize / ver_len,
-                position.x / ver_len,
+                self.get_global_start().in_interleaved_samples(meter) / ver_len as u32,
+                (position.x / ver_len) as u32,
             );
             let end = min(
-                self.get_global_end().in_interleaved_samples(meter) as usize / ver_len,
-                start + (frame.width() / ratio) as usize,
+                self.get_global_end().in_interleaved_samples(meter) / ver_len as u32,
+                start + (frame.width() / ratio) as u32,
             );
             (start..end).enumerate().for_each(|(x, i)| {
-                let (mut a, mut b) = self.get_ver_at_index(scale.x as usize, i);
+                let (mut a, mut b) = self.get_ver_at_index(scale.x as usize, i as usize);
                 if minmax {
                     if a < b {
                         std::mem::swap(&mut a, &mut b);
@@ -53,13 +53,13 @@ impl DrawableClip for AudioClip {
 
                 path.line_to(iced::Point::new(
                     x as f32 * ratio,
-                    a.mul_add(scale.y, position.y as f32),
+                    a.mul_add(scale.y, position.y),
                 ));
 
                 if (a - b).abs() > f32::EPSILON {
                     path.line_to(iced::Point::new(
                         x as f32 * ratio,
-                        b.mul_add(scale.y, position.y as f32),
+                        b.mul_add(scale.y, position.y),
                     ));
                 }
 
