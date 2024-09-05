@@ -40,8 +40,9 @@ impl DrawableClip for AudioClip {
         meter: &Meter,
         theme: &Theme,
     ) {
+        // this sometimes breaks, see https://github.com/iced-rs/iced/issues/2567
+
         let path = iced::widget::canvas::Path::new(|path| {
-            let mut minmax = false;
             let ver_len = scale.x.floor().exp2() as u32;
             let ratio = ver_len as f32 / scale.x.exp2();
             let start = max(
@@ -53,16 +54,7 @@ impl DrawableClip for AudioClip {
                 start + (frame.width() / ratio) as u32,
             );
             (start..end).enumerate().for_each(|(x, i)| {
-                let (mut a, mut b) = self.get_ver_at_index(scale.x as usize, i as usize);
-
-                // this is a workaround for iced not rendering too steep lines
-                if minmax {
-                    if a < b {
-                        std::mem::swap(&mut a, &mut b);
-                    }
-                } else if a > b {
-                    std::mem::swap(&mut a, &mut b);
-                }
+                let (a, b) = self.get_ver_at_index(scale.x as usize, i as usize);
 
                 path.line_to(iced::Point::new(
                     x as f32 * ratio,
@@ -75,8 +67,6 @@ impl DrawableClip for AudioClip {
                         (b.mul_add(0.9, 0.05) + position.y) * scale.y,
                     ));
                 }
-
-                minmax ^= true;
             });
         });
         frame.stroke(
