@@ -47,7 +47,6 @@ impl InterleavedAudio {
                 RwLock::new(vec![(0.0, 0.0); (length + 1023) / 1024]),
                 RwLock::new(vec![(0.0, 0.0); (length + 2047) / 2048]),
                 RwLock::new(vec![(0.0, 0.0); (length + 4095) / 4096]),
-                RwLock::new(vec![(0.0, 0.0); (length + 8191) / 8192]),
             ]),
         }
     }

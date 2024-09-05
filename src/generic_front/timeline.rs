@@ -140,24 +140,27 @@ impl Timeline {
             end_beat.sub_quarter_note = 0;
 
             while beat <= end_beat {
-                let color = if beat.quarter_note
-                    % u32::from(self.arrangement.read().unwrap().meter.numerator)
-                    == 0
-                {
-                    if self.scale.x > 11.0
-                        && beat.quarter_note
-                            % u32::from(self.arrangement.read().unwrap().meter.numerator * 4)
-                            != 0
+                let color = if self.scale.x > 11.0 {
+                    if beat.quarter_note
+                        % u32::from(self.arrangement.read().unwrap().meter.numerator * 4)
+                        == 0
                     {
                         theme.extended_palette().secondary.strong.color
-                    } else {
+                    } else if beat.quarter_note
+                        % u32::from(self.arrangement.read().unwrap().meter.numerator)
+                        == 0
+                    {
                         theme.extended_palette().secondary.weak.color
-                    }
-                } else {
-                    if self.scale.x > 11.0 {
+                    } else {
                         beat.quarter_note += 1;
                         continue;
                     }
+                } else if beat.quarter_note
+                    % u32::from(self.arrangement.read().unwrap().meter.numerator)
+                    == 0
+                {
+                    theme.extended_palette().secondary.strong.color
+                } else {
                     theme.extended_palette().secondary.weak.color
                 };
 

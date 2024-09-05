@@ -150,7 +150,7 @@ impl Daw {
             button("Stop").on_press(Message::Stop),
             button("Export").on_press(Message::Export),
             button("New").on_press(Message::New),
-            slider(0.0..=13.99999, self.timeline.scale.x, |scale| {
+            slider(0.0..=12.99999, self.timeline.scale.x, |scale| {
                 Message::TimelineMessage(TimelineMessage::XScaleChanged(scale))
             })
             .step(0.1),
