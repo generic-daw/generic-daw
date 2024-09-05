@@ -41,7 +41,7 @@ pub struct MidiPattern<'a> {
 }
 
 impl<'a> MidiPattern<'a> {
-    fn new(
+    const fn new(
         plugin_sender: Sender<PluginThreadMessage>,
         host_receiver: Receiver<HostThreadMessage>,
     ) -> Self {
@@ -193,7 +193,7 @@ impl<'a> MidiClip<'a> {
             ))
             .unwrap();
 
-        if let HostThreadMessage::AudioProcessed(buffers, _) = self
+        let message = self
             .pattern
             .lock()
             .unwrap()
@@ -201,8 +201,8 @@ impl<'a> MidiClip<'a> {
             .read()
             .unwrap()
             .recv()
-            .unwrap()
-        {
+            .unwrap();
+        if let HostThreadMessage::AudioProcessed(buffers, _) = message {
             (0..16).step_by(2).for_each(|i| {
                 self.running_buffer.write().unwrap()[i] = buffers[0][i];
                 self.running_buffer.write().unwrap()[i + 1] = buffers[1][i];
@@ -221,7 +221,8 @@ impl<'a> MidiClip<'a> {
             .plugin_sender
             .send(PluginThreadMessage::GetCounter)
             .unwrap();
-        if let HostThreadMessage::Counter(plugin_counter) = self
+
+        let message = self
             .pattern
             .lock()
             .unwrap()
@@ -229,8 +230,8 @@ impl<'a> MidiClip<'a> {
             .read()
             .unwrap()
             .recv()
-            .unwrap()
-        {
+            .unwrap();
+        if let HostThreadMessage::Counter(plugin_counter) = message {
             if global_time == self.global_end.in_interleaved_samples(meter) {
                 self.started_notes.read().unwrap().iter().for_each(|note| {
                     // stop all started notes
