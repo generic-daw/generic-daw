@@ -142,15 +142,16 @@ impl Timeline {
             while beat <= end_beat {
                 let color = if self.scale.x > 11.0 {
                     if beat.quarter_note
-                        % u32::from(self.arrangement.read().unwrap().meter.numerator * 4)
-                        == 0
-                    {
-                        theme.extended_palette().secondary.strong.color
-                    } else if beat.quarter_note
                         % u32::from(self.arrangement.read().unwrap().meter.numerator)
                         == 0
                     {
-                        theme.extended_palette().secondary.weak.color
+                        let bar = beat.quarter_note
+                            / u32::from(self.arrangement.read().unwrap().meter.numerator);
+                        if bar % 4 == 0 {
+                            theme.extended_palette().secondary.strong.color
+                        } else {
+                            theme.extended_palette().secondary.weak.color
+                        }
                     } else {
                         beat.quarter_note += 1;
                         continue;
