@@ -26,17 +26,18 @@ use symphonia::core::{
     probe::Hint,
 };
 
-type Wave = Vec<(f32, f32)>;
+type Ver = Vec<(f32, f32)>;
 pub struct InterleavedAudio {
-    samples: Arc<[RwLock<Wave>]>,
+    samples: Vec<f32>,
+    vers: Arc<[RwLock<Ver>]>,
 }
 
 impl InterleavedAudio {
-    pub fn new(samples: &[f32]) -> Self {
+    pub fn new(samples: Vec<f32>) -> Self {
         let length = samples.len();
         Self {
-            samples: Arc::new([
-                RwLock::new(samples.iter().map(|s| (*s, *s)).collect()),
+            samples,
+            vers: Arc::new([
                 RwLock::new(vec![(0.0, 0.0); (length + 1) / 2]),
                 RwLock::new(vec![(0.0, 0.0); (length + 3) / 4]),
                 RwLock::new(vec![(0.0, 0.0); (length + 7) / 8]),
@@ -49,16 +50,21 @@ impl InterleavedAudio {
                 RwLock::new(vec![(0.0, 0.0); (length + 1023) / 1024]),
                 RwLock::new(vec![(0.0, 0.0); (length + 2047) / 2048]),
                 RwLock::new(vec![(0.0, 0.0); (length + 4095) / 4096]),
+                RwLock::new(vec![(0.0, 0.0); (length + 8191) / 8192]),
             ]),
         }
     }
 
     pub fn len(&self) -> u32 {
-        u32::try_from(self.samples[0].read().unwrap().len()).unwrap()
+        u32::try_from(self.samples.len()).unwrap()
     }
 
-    pub fn get_sample_at_index(&self, ver: usize, index: usize) -> (f32, f32) {
-        *self.samples[ver]
+    pub fn get_sample_at_index(&self, index: usize) -> f32 {
+        *self.samples.get(index).unwrap_or(&0.0)
+    }
+
+    pub fn get_ver_at_index(&self, ver: usize, index: usize) -> (f32, f32) {
+        *self.vers[ver]
             .read()
             .unwrap()
             .get(index)
@@ -87,22 +93,18 @@ impl AudioClip {
     }
 
     pub fn get_ver_at_index(&self, ver: usize, index: usize) -> (f32, f32) {
-        let (min, max) = self.audio.get_sample_at_index(ver, index);
-        (min * self.volume / 2.0 + 0.5, max * self.volume / 2.0 + 0.5)
+        let (a, b) = self.audio.get_ver_at_index(ver, index);
+        (a * self.volume / 2.0 + 0.5, b * self.volume / 2.0 + 0.5)
     }
 
     pub fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
         if !meter.playing.load(SeqCst) {
             return 0.0;
         }
-        self.audio
-            .get_sample_at_index(
-                0,
-                (global_time - (self.global_start + self.clip_start).in_interleaved_samples(meter))
-                    as usize,
-            )
-            .0
-            * self.volume
+        self.audio.get_sample_at_index(
+            (global_time - (self.global_start + self.clip_start).in_interleaved_samples(meter))
+                as usize,
+        ) * self.volume
     }
 
     pub const fn get_global_start(&self) -> Position {
@@ -191,7 +193,7 @@ pub fn read_audio_file(
     }
 
     if sample_rate == meter.sample_rate {
-        let interleaved_audio = Arc::new(InterleavedAudio::new(&samples));
+        let interleaved_audio = Arc::new(InterleavedAudio::new(samples));
         return Ok(create_downscaled_audio(interleaved_audio, sender));
     }
 
@@ -226,7 +228,7 @@ pub fn read_audio_file(
         samples.extend(resampled_file.iter().map(|s| s[i]));
     }
 
-    let interleaved_audio = Arc::new(InterleavedAudio::new(&samples));
+    let interleaved_audio = Arc::new(InterleavedAudio::new(samples));
     Ok(create_downscaled_audio(interleaved_audio, sender))
 }
 
@@ -236,11 +238,22 @@ fn create_downscaled_audio(
 ) -> Arc<InterleavedAudio> {
     let audio_clone = audio.clone();
     std::thread::spawn(move || {
-        (1..audio.samples.len()).for_each(|i| {
-            let len = audio.samples[i].read().unwrap().len();
-            let last = audio.samples[i - 1].read().unwrap();
+        let len = audio.vers[0].read().unwrap().len();
+        (0..len).for_each(|i| {
+            let ver = (audio.samples[2 * i]
+                + audio
+                    .samples
+                    .get(2 * i + 1)
+                    .unwrap_or(&audio.samples[2 * i]))
+                / 2.0;
+            audio.vers[0].write().unwrap()[i] = (ver, ver);
+        });
+
+        (1..audio.vers.len()).for_each(|i| {
+            let len = audio.vers[i].read().unwrap().len();
+            let last = audio.vers[i - 1].read().unwrap();
             (0..len).for_each(|j| {
-                audio.samples[i].write().unwrap()[j] = (
+                audio.vers[i].write().unwrap()[j] = (
                     min_by(
                         last[2 * j].0,
                         last.get(2 * j + 1).unwrap_or(&(f32::MAX, f32::MAX)).0,
