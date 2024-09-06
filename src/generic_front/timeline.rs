@@ -70,6 +70,8 @@ impl Timeline {
                 match *delta {
                     ScrollDelta::Pixels { x, y } => {
                         let arrangement = self.arrangement.read().unwrap();
+                        let x = if x > 0.0 { x.ceil() } else { x.floor() };
+                        let y = if y > 0.0 { y.ceil() } else { y.floor() };
 
                         if x.abs() > f32::EPSILON {
                             let x = (-x)
