@@ -53,10 +53,6 @@ impl Track for AudioTrack {
             .max()
             .unwrap_or(Position::new(0, 0))
     }
-
-    fn push(&self, clip: Arc<AudioClip>) {
-        self.clips.write().unwrap().push(clip);
-    }
 }
 
 impl Drawable for AudioTrack {

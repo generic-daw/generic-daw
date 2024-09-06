@@ -49,10 +49,6 @@ impl<'a> Track for MidiTrack<'a> {
             .max()
             .unwrap_or(Position::new(0, 0))
     }
-
-    fn push(&self, clip: Arc<MidiClip<'a>>) {
-        self.clips.write().unwrap().push(clip);
-    }
 }
 
 impl<'a> Drawable for MidiTrack<'a> {

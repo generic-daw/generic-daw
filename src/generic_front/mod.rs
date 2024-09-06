@@ -6,7 +6,7 @@ use crate::generic_back::{
     arrangement::Arrangement,
     build_output_stream,
     meter::Meter,
-    track::{audio_track::AudioTrack, Track},
+    track::audio_track::AudioTrack,
     track_clip::audio_clip::{read_audio_file, AudioClip},
 };
 use iced::{
@@ -86,7 +86,7 @@ impl Daw {
                     &self.arrangement.read().unwrap().meter,
                 ));
                 let track = Arc::new(AudioTrack::new());
-                track.push(clip);
+                track.clips.write().unwrap().push(clip);
                 self.arrangement.write().unwrap().tracks.push(track);
                 self.update(Message::ArrangementUpdated);
             }
