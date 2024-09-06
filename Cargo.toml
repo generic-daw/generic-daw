@@ -13,7 +13,6 @@ iced = { git = "https://github.com/iced-rs/iced", features = ["canvas"] }
 rfd = "0.14.1"
 rubato = "0.15.0"
 symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
-wmidi = "4.0.10"
 
 [lints.rust]
 unused_crate_dependencies = "warn"

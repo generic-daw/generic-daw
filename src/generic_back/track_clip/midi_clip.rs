@@ -16,18 +16,18 @@ use std::sync::{
     mpsc::{Receiver, Sender},
     Arc, Mutex, RwLock,
 };
-use wmidi::{Channel, Note, Velocity};
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq)]
 pub struct MidiNote {
-    pub channel: Channel,
-    pub note: Note,
-    pub velocity: Velocity,
+    pub channel: u8,
+    pub note: u16,
+    /// between 0.0 and 1.0
+    pub velocity: f64,
     pub local_start: u32,
     pub local_end: u32,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq)]
 enum DirtyEvent {
     // can we reasonably assume that only one of these will happen per sample?
     None,
@@ -239,8 +239,8 @@ impl MidiClip {
                     // stop all started notes
                     buffer.push(&NoteOffEvent::new(
                         u32::try_from(steady_time).unwrap(),
-                        Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
-                        f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+                        Pckn::new(0u8, note.channel, note.note, Match::All),
+                        note.velocity,
                     ));
                 });
 
@@ -299,8 +299,8 @@ impl MidiClip {
                 // notes that start during the running buffer
                 buffer.push(&NoteOnEvent::new(
                     note.local_start - global_time + u32::try_from(steady_time).unwrap(),
-                    Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
-                    f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+                    Pckn::new(0u8, note.channel, note.note, Match::All),
+                    note.velocity,
                 ));
                 self.started_notes.write().unwrap().push(note.clone());
             });
@@ -321,8 +321,8 @@ impl MidiClip {
                 // notes that end before the running buffer ends
                 buffer.push(&NoteOffEvent::new(
                     note.local_end - global_time + u32::try_from(steady_time).unwrap(),
-                    Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
-                    f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+                    Pckn::new(0u8, note.channel, note.note, Match::All),
+                    note.velocity,
                 ));
                 indices.push(index);
             });
@@ -345,8 +345,8 @@ impl MidiClip {
             // stop all started notes
             buffer.push(&NoteOffEvent::new(
                 u32::try_from(steady_time).unwrap(),
-                Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
-                f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+                Pckn::new(0u8, note.channel, note.note, Match::All),
+                note.velocity,
             ));
         });
 
@@ -364,8 +364,8 @@ impl MidiClip {
                 // start all notes that would be currently playing
                 buffer.push(&NoteOnEvent::new(
                     u32::try_from(steady_time).unwrap(),
-                    Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
-                    f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+                    Pckn::new(0u8, note.channel, note.note, Match::All),
+                    note.velocity,
                 ));
                 self.started_notes.write().unwrap().push(note.clone());
             });
@@ -393,8 +393,8 @@ impl MidiClip {
                 // start all new notes that would be currently playing
                 buffer.push(&NoteOnEvent::new(
                     u32::try_from(steady_time).unwrap(),
-                    Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
-                    f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+                    Pckn::new(0u8, note.channel, note.note, Match::All),
+                    note.velocity,
                 ));
                 self.started_notes.write().unwrap().push(note.clone());
             });
@@ -413,8 +413,8 @@ impl MidiClip {
                 // stop all started notes that are no longer in the pattern
                 buffer.push(&NoteOffEvent::new(
                     u32::try_from(steady_time).unwrap(),
-                    Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
-                    f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+                    Pckn::new(0u8, note.channel, note.note, Match::All),
+                    note.velocity,
                 ));
                 indices.push(index);
             });
