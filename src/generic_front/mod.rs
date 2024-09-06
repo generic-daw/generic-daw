@@ -1,12 +1,12 @@
-pub mod drawable_clip;
+pub mod drawable;
 pub mod timeline;
 pub mod track_panel;
 
 use crate::generic_back::{
     arrangement::Arrangement,
     build_output_stream,
-    position::Meter,
-    track::Track,
+    meter::Meter,
+    track::{audio_track::AudioTrack, Track},
     track_clip::audio_clip::{read_audio_file, AudioClip},
 };
 use iced::{
@@ -85,8 +85,8 @@ impl Daw {
                     .unwrap(),
                     &self.arrangement.read().unwrap().meter,
                 ));
-                let track = RwLock::new(Track::new());
-                track.write().unwrap().clips.push(clip);
+                let track = Arc::new(AudioTrack::new());
+                track.push(clip);
                 self.arrangement.write().unwrap().tracks.push(track);
                 self.update(Message::ArrangementUpdated);
             }

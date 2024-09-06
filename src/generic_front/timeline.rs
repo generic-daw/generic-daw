@@ -1,4 +1,4 @@
-use super::drawable_clip::{TimelinePosition, TimelineScale};
+use super::drawable::{TimelinePosition, TimelineScale};
 use crate::generic_back::{arrangement::Arrangement, position::Position};
 use iced::{
     mouse::ScrollDelta,
@@ -235,7 +235,7 @@ impl canvas::Program<Message> for Timeline {
     ) -> Vec<iced::widget::canvas::Geometry> {
         let grid = self.draw_grid(renderer, bounds, theme);
 
-        let playlist_clips = self.tracks_cache.draw(renderer, bounds.size(), |frame| {
+        let playlist = self.tracks_cache.draw(renderer, bounds.size(), |frame| {
             self.arrangement
                 .read()
                 .unwrap()
@@ -243,25 +243,21 @@ impl canvas::Program<Message> for Timeline {
                 .iter()
                 .enumerate()
                 .for_each(|(i, track)| {
-                    let y = i as f32 - self.position.y;
-
-                    track.read().unwrap().clips.iter().for_each(|clip| {
-                        clip.draw(
-                            frame,
-                            self.scale,
-                            TimelinePosition {
-                                x: self.position.x,
-                                y,
-                            },
-                            &self.arrangement.read().unwrap().meter,
-                            theme,
-                        );
-                    });
+                    track.draw(
+                        frame,
+                        self.scale,
+                        &TimelinePosition {
+                            x: self.position.x,
+                            y: i as f32 - self.position.y,
+                        },
+                        &self.arrangement.read().unwrap().meter,
+                        theme,
+                    );
                 });
         });
 
         let playhead = self.draw_playhead(renderer, bounds, theme);
 
-        vec![grid, playlist_clips, playhead]
+        vec![grid, playlist, playhead]
     }
 }

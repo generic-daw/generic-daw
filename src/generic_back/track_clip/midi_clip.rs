@@ -1,5 +1,8 @@
 use super::TrackClip;
-use crate::generic_back::position::{Meter, Position};
+use crate::{
+    generic_back::{meter::Meter, position::Position},
+    generic_front::drawable::{Drawable, TimelinePosition, TimelineScale},
+};
 use clack_host::{
     events::{
         event_types::{NoteOffEvent, NoteOnEvent},
@@ -8,6 +11,7 @@ use clack_host::{
     prelude::*,
 };
 use generic_clap_host::{host::HostThreadMessage, main_thread::MainThreadMessage};
+use iced::{widget::canvas::Frame, Theme};
 use std::sync::{
     atomic::{AtomicU32, AtomicU8, Ordering::SeqCst},
     mpsc::{Receiver, Sender},
@@ -81,7 +85,7 @@ impl<'a> MidiPattern<'a> {
     }
 }
 
-pub struct MidiClip<'a: 'static> {
+pub struct MidiClip<'a> {
     pattern: Arc<Mutex<MidiPattern<'a>>>,
     global_start: Position,
     global_end: Position,
@@ -433,5 +437,18 @@ impl<'a> MidiClip<'a> {
         indices.iter().rev().for_each(|i| {
             self.started_notes.write().unwrap().remove(*i);
         });
+    }
+}
+
+impl<'a> Drawable for MidiClip<'a> {
+    fn draw(
+        &self,
+        _frame: &mut Frame,
+        _scale: TimelineScale,
+        _offset: &TimelinePosition,
+        _meter: &Meter,
+        _theme: &Theme,
+    ) {
+        unimplemented!()
     }
 }

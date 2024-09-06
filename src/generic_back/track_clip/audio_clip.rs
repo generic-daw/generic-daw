@@ -1,9 +1,18 @@
+use super::TrackClip;
+use crate::{
+    generic_back::{meter::Meter, position::Position},
+    generic_front::{
+        drawable::{Drawable, TimelinePosition, TimelineScale},
+        timeline::Message,
+    },
+};
 use anyhow::{anyhow, Result};
+use iced::{widget::canvas::Frame, Theme};
 use rubato::{
     SincFixedIn, SincInterpolationParameters, SincInterpolationType, VecResampler, WindowFunction,
 };
 use std::{
-    cmp::{max_by, min_by},
+    cmp::{max, max_by, min, min_by},
     fs::File,
     path::PathBuf,
     sync::{atomic::Ordering::SeqCst, mpsc::Sender, Arc, RwLock},
@@ -18,12 +27,6 @@ use symphonia::core::{
     probe::Hint,
 };
 
-use crate::{
-    generic_back::position::{Meter, Position},
-    generic_front::timeline::Message,
-};
-
-use super::TrackClip;
 type Wave = Vec<(f32, f32)>;
 pub struct InterleavedAudio {
     samples: Arc<[RwLock<Wave>]>,
@@ -257,4 +260,50 @@ fn create_downscaled_audio(
         });
     });
     audio_clone
+}
+
+impl Drawable for AudioClip {
+    fn draw(
+        &self,
+        frame: &mut Frame,
+        scale: TimelineScale,
+        position: &TimelinePosition,
+        meter: &Meter,
+        theme: &Theme,
+    ) {
+        // this sometimes breaks, see https://github.com/iced-rs/iced/issues/2567
+
+        let path = iced::widget::canvas::Path::new(|path| {
+            let ver_len = scale.x.floor().exp2() as u32;
+            let ratio = ver_len as f32 / scale.x.exp2();
+            let start = max(
+                self.get_global_start().in_interleaved_samples(meter) / ver_len,
+                position.x.in_interleaved_samples(meter) / ver_len,
+            );
+            let end = min(
+                self.get_global_end().in_interleaved_samples(meter) / ver_len,
+                start + (frame.width() / ratio) as u32,
+            );
+            (start..end).enumerate().for_each(|(x, i)| {
+                let (a, b) = self.get_ver_at_index(scale.x as usize, i as usize);
+
+                path.line_to(iced::Point::new(
+                    x as f32 * ratio,
+                    (a.mul_add(0.9, 0.05) + position.y) * scale.y,
+                ));
+
+                if (a - b).abs() > f32::EPSILON {
+                    path.line_to(iced::Point::new(
+                        x as f32 * ratio,
+                        (b.mul_add(0.9, 0.05) + position.y) * scale.y,
+                    ));
+                }
+            });
+        });
+        frame.stroke(
+            &path,
+            iced::widget::canvas::Stroke::default()
+                .with_color(theme.extended_palette().secondary.base.text),
+        );
+    }
 }

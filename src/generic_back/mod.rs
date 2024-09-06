@@ -1,4 +1,5 @@
 pub mod arrangement;
+pub mod meter;
 pub mod position;
 pub mod track;
 pub mod track_clip;
