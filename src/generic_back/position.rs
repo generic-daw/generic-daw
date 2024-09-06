@@ -1,6 +1,5 @@
-use std::ops::{Add, AddAssign, Sub, SubAssign};
-
 use super::meter::{seconds_to_interleaved_samples, Meter};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Position {
