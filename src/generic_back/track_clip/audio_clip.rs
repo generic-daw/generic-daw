@@ -38,6 +38,7 @@ impl InterleavedAudio {
         Self {
             samples,
             vers: Arc::new([
+                RwLock::new(vec![(0.0, 0.0); length]),
                 RwLock::new(vec![(0.0, 0.0); (length + 1) / 2]),
                 RwLock::new(vec![(0.0, 0.0); (length + 3) / 4]),
                 RwLock::new(vec![(0.0, 0.0); (length + 7) / 8]),
@@ -50,7 +51,6 @@ impl InterleavedAudio {
                 RwLock::new(vec![(0.0, 0.0); (length + 1023) / 1024]),
                 RwLock::new(vec![(0.0, 0.0); (length + 2047) / 2048]),
                 RwLock::new(vec![(0.0, 0.0); (length + 4095) / 4096]),
-                RwLock::new(vec![(0.0, 0.0); (length + 8191) / 8192]),
             ]),
         }
     }
@@ -238,14 +238,9 @@ fn create_downscaled_audio(
 ) -> Arc<InterleavedAudio> {
     let audio_clone = audio.clone();
     std::thread::spawn(move || {
-        let len = audio.vers[0].read().unwrap().len();
-        (0..len).for_each(|i| {
-            let ver = (audio.samples[2 * i]
-                + audio
-                    .samples
-                    .get(2 * i + 1)
-                    .unwrap_or(&audio.samples[2 * i]))
-                / 2.0;
+        (0..audio.samples.len()).for_each(|i| {
+            let ver =
+                (audio.samples[i] + audio.samples.get(i + 1).unwrap_or(&audio.samples[i])) / 2.0;
             audio.vers[0].write().unwrap()[i] = (ver, ver);
         });
 
