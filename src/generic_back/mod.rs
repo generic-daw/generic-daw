@@ -1,5 +1,4 @@
 pub mod arrangement;
-pub mod clap_host;
 pub mod position;
 pub mod track;
 pub mod track_clip;

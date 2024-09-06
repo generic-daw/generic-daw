@@ -5,20 +5,14 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.86"
-clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
-    "clack-host",
-    "gui",
-] }
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
 cpal = "0.15.3"
-dirs = "5.0.1"
+generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host" }
 hound = "3.5.1"
 iced = { git = "https://github.com/iced-rs/iced", features = ["canvas"] }
 rfd = "0.14.1"
 rubato = "0.15.0"
 symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
-walkdir = "2.5.0"
-winit = "0.30.5"
 wmidi = "4.0.10"
 
 [lints.rust]
