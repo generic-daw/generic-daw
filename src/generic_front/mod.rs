@@ -70,25 +70,29 @@ impl Daw {
                 self.timeline.update(&msg);
             }
             Message::LoadSample(_) => {
-                if let Some(path) = FileDialog::new().pick_file() {
-                    let path_str = path.display().to_string();
-                    self.update(Message::FileSelected(Some(path_str)));
+                if let Some(paths) = FileDialog::new().pick_files() {
+                    for path in paths {
+                        let path_str = path.display().to_string();
+                        self.update(Message::FileSelected(Some(path_str)));
+                    }
                 }
             }
             Message::FileSelected(Some(path)) => {
-                let clip = Arc::new(AudioClip::new(
-                    read_audio_file(
-                        &PathBuf::from(path),
-                        &self.arrangement.read().unwrap().meter,
-                        self.timeline.samples_sender.clone(),
-                    )
-                    .unwrap(),
+                let audio_file = read_audio_file(
+                    &PathBuf::from(path),
                     &self.arrangement.read().unwrap().meter,
-                ));
-                let track = Arc::new(AudioTrack::new());
-                track.clips.write().unwrap().push(clip);
-                self.arrangement.write().unwrap().tracks.push(track);
-                self.update(Message::ArrangementUpdated);
+                    self.timeline.samples_sender.clone(),
+                );
+                if let Ok(audio_file) = audio_file {
+                    let clip = Arc::new(AudioClip::new(
+                        audio_file,
+                        &self.arrangement.read().unwrap().meter,
+                    ));
+                    let track = Arc::new(AudioTrack::new());
+                    track.clips.write().unwrap().push(clip);
+                    self.arrangement.write().unwrap().tracks.push(track);
+                    self.update(Message::ArrangementUpdated);
+                }
             }
             Message::FileSelected(None) => {}
             Message::ArrangementUpdated => {
