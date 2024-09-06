@@ -1,4 +1,3 @@
-use super::TrackClip;
 use crate::{
     generic_back::{meter::Meter, position::Position},
     generic_front::{
@@ -91,10 +90,8 @@ impl AudioClip {
         let (min, max) = self.audio.get_sample_at_index(ver, index);
         (min * self.volume / 2.0 + 0.5, max * self.volume / 2.0 + 0.5)
     }
-}
 
-impl TrackClip for AudioClip {
-    fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
+    pub fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
         if !meter.playing.load(SeqCst) {
             return 0.0;
         }
@@ -108,23 +105,23 @@ impl TrackClip for AudioClip {
             * self.volume
     }
 
-    fn get_global_start(&self) -> Position {
+    pub const fn get_global_start(&self) -> Position {
         self.global_start
     }
 
-    fn get_global_end(&self) -> Position {
+    pub const fn get_global_end(&self) -> Position {
         self.global_end
     }
 
-    fn trim_start_to(&mut self, clip_start: Position) {
+    pub fn trim_start_to(&mut self, clip_start: Position) {
         self.clip_start = clip_start;
     }
 
-    fn trim_end_to(&mut self, global_end: Position) {
+    pub fn trim_end_to(&mut self, global_end: Position) {
         self.global_end = global_end;
     }
 
-    fn move_start_to(&mut self, global_start: Position) {
+    pub fn move_start_to(&mut self, global_start: Position) {
         match self.global_start.cmp(&global_start) {
             std::cmp::Ordering::Less => {
                 self.global_end += global_start - self.global_start;

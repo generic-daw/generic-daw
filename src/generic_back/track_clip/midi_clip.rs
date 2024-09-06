@@ -1,4 +1,3 @@
-use super::TrackClip;
 use crate::{
     generic_back::{meter::Meter, position::Position},
     generic_front::drawable::{Drawable, TimelinePosition, TimelineScale},
@@ -17,11 +16,13 @@ use std::sync::{
     mpsc::{Receiver, Sender},
     Arc, Mutex, RwLock,
 };
-use wmidi::{MidiMessage, Velocity};
+use wmidi::{Channel, Note, Velocity};
 
 #[derive(PartialEq, Eq)]
-pub struct MidiNote<'a> {
-    pub note: MidiMessage<'a>,
+pub struct MidiNote {
+    pub channel: Channel,
+    pub note: Note,
+    pub velocity: Velocity,
     pub local_start: u32,
     pub local_end: u32,
 }
@@ -35,14 +36,14 @@ enum DirtyEvent {
     NoteReplaced,
 }
 
-pub struct MidiPattern<'a> {
-    notes: Vec<Arc<MidiNote<'a>>>,
+pub struct MidiPattern {
+    pub notes: Vec<Arc<MidiNote>>,
     dirty: DirtyEvent,
     plugin_sender: Sender<MainThreadMessage>,
     host_receiver: RwLock<Receiver<HostThreadMessage>>,
 }
 
-impl<'a> MidiPattern<'a> {
+impl MidiPattern {
     const fn new(
         plugin_sender: Sender<MainThreadMessage>,
         host_receiver: Receiver<HostThreadMessage>,
@@ -67,38 +68,38 @@ impl<'a> MidiPattern<'a> {
         self.dirty = DirtyEvent::None;
     }
 
-    fn push(&mut self, note: Arc<MidiNote<'a>>) {
+    fn push(&mut self, note: Arc<MidiNote>) {
         self.notes.push(note);
         self.dirty = DirtyEvent::NoteAdded;
     }
 
-    fn remove(&mut self, note: &Arc<MidiNote<'a>>) {
+    fn remove(&mut self, note: &Arc<MidiNote>) {
         let pos = self.notes.iter().position(|n| n == note).unwrap();
         self.notes.remove(pos);
         self.dirty = DirtyEvent::NoteRemoved;
     }
 
-    fn replace(&mut self, note: &Arc<MidiNote<'a>>, new_note: Arc<MidiNote<'a>>) {
+    fn replace(&mut self, note: &Arc<MidiNote>, new_note: Arc<MidiNote>) {
         let pos = self.notes.iter().position(|n| n == note).unwrap();
         self.notes[pos] = new_note;
         self.dirty = DirtyEvent::NoteReplaced;
     }
 }
 
-pub struct MidiClip<'a> {
-    pattern: Arc<Mutex<MidiPattern<'a>>>,
+pub struct MidiClip {
+    pub pattern: Arc<Mutex<MidiPattern>>,
     global_start: Position,
     global_end: Position,
     pattern_start: Position,
-    started_notes: RwLock<Vec<Arc<MidiNote<'a>>>>,
+    started_notes: RwLock<Vec<Arc<MidiNote>>>,
     last_global_time: AtomicU32,
     running_buffer: RwLock<[f32; 16]>,
     last_buffer_index: AtomicU8,
     audio_ports: Arc<RwLock<AudioPorts>>,
 }
 
-impl<'a> TrackClip for MidiClip<'a> {
-    fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
+impl MidiClip {
+    pub fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
         let last_global_time = self.last_global_time.load(SeqCst);
         let mut last_buffer_index = self.last_buffer_index.load(SeqCst);
 
@@ -121,23 +122,23 @@ impl<'a> TrackClip for MidiClip<'a> {
         self.running_buffer.read().unwrap()[last_buffer_index as usize]
     }
 
-    fn get_global_start(&self) -> Position {
+    pub const fn get_global_start(&self) -> Position {
         self.global_start
     }
 
-    fn get_global_end(&self) -> Position {
+    pub const fn get_global_end(&self) -> Position {
         self.global_end
     }
 
-    fn trim_start_to(&mut self, clip_start: Position) {
+    pub fn trim_start_to(&mut self, clip_start: Position) {
         self.pattern_start = clip_start;
     }
 
-    fn trim_end_to(&mut self, global_end: Position) {
+    pub fn trim_end_to(&mut self, global_end: Position) {
         self.global_end = global_end;
     }
 
-    fn move_start_to(&mut self, global_start: Position) {
+    pub fn move_start_to(&mut self, global_start: Position) {
         match self.global_start.cmp(&global_start) {
             std::cmp::Ordering::Less => {
                 self.global_end += global_start - self.global_start;
@@ -149,10 +150,8 @@ impl<'a> TrackClip for MidiClip<'a> {
         }
         self.global_start = global_start;
     }
-}
 
-impl<'a> MidiClip<'a> {
-    pub fn new(pattern: Arc<Mutex<MidiPattern<'a>>>, meter: &Meter) -> Self {
+    pub fn new(pattern: Arc<Mutex<MidiPattern>>, meter: &Meter) -> Self {
         let len = pattern.lock().unwrap().len();
         Self {
             pattern,
@@ -167,15 +166,15 @@ impl<'a> MidiClip<'a> {
         }
     }
 
-    pub fn push(&self, note: Arc<MidiNote<'a>>) {
+    pub fn push(&self, note: Arc<MidiNote>) {
         self.pattern.lock().unwrap().push(note);
     }
 
-    pub fn remove(&self, note: &Arc<MidiNote<'a>>) {
+    pub fn remove(&self, note: &Arc<MidiNote>) {
         self.pattern.lock().unwrap().remove(note);
     }
 
-    pub fn replace(&self, note: &Arc<MidiNote<'a>>, new_note: Arc<MidiNote<'a>>) {
+    pub fn replace(&self, note: &Arc<MidiNote>, new_note: Arc<MidiNote>) {
         self.pattern.lock().unwrap().replace(note, new_note);
     }
 
@@ -238,13 +237,11 @@ impl<'a> MidiClip<'a> {
             if global_time == self.global_end.in_interleaved_samples(meter) {
                 self.started_notes.read().unwrap().iter().for_each(|note| {
                     // stop all started notes
-                    if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
-                        buffer.push(&NoteOffEvent::new(
-                            u32::try_from(steady_time).unwrap(),
-                            Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                            f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
-                        ));
-                    };
+                    buffer.push(&NoteOffEvent::new(
+                        u32::try_from(steady_time).unwrap(),
+                        Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
+                        f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+                    ));
                 });
 
                 self.started_notes.write().unwrap().clear();
@@ -298,16 +295,14 @@ impl<'a> MidiClip<'a> {
                 offset + midi_note.local_start >= global_time
                     && offset + midi_note.local_start < global_time + 16
             })
-            .for_each(|midi_note| {
+            .for_each(|note| {
                 // notes that start during the running buffer
-                if let MidiMessage::NoteOn(channel, note, velocity) = midi_note.note {
-                    buffer.push(&NoteOnEvent::new(
-                        midi_note.local_start - global_time + u32::try_from(steady_time).unwrap(),
-                        Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                        f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
-                    ));
-                    self.started_notes.write().unwrap().push(midi_note.clone());
-                };
+                buffer.push(&NoteOnEvent::new(
+                    note.local_start - global_time + u32::try_from(steady_time).unwrap(),
+                    Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
+                    f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+                ));
+                self.started_notes.write().unwrap().push(note.clone());
             });
 
         let mut indices = Vec::new();
@@ -322,16 +317,14 @@ impl<'a> MidiClip<'a> {
                     + note.local_end
                     < global_time + 16
             })
-            .for_each(|(index, midi_note)| {
+            .for_each(|(index, note)| {
                 // notes that end before the running buffer ends
-                if let MidiMessage::NoteOn(channel, note, velocity) = midi_note.note {
-                    buffer.push(&NoteOffEvent::new(
-                        midi_note.local_end - global_time + u32::try_from(steady_time).unwrap(),
-                        Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                        f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
-                    ));
-                    indices.push(index);
-                };
+                buffer.push(&NoteOffEvent::new(
+                    note.local_end - global_time + u32::try_from(steady_time).unwrap(),
+                    Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
+                    f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+                ));
+                indices.push(index);
             });
 
         indices.iter().rev().for_each(|i| {
@@ -350,13 +343,11 @@ impl<'a> MidiClip<'a> {
 
         self.started_notes.read().unwrap().iter().for_each(|note| {
             // stop all started notes
-            if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
-                buffer.push(&NoteOffEvent::new(
-                    u32::try_from(steady_time).unwrap(),
-                    Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                    f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
-                ));
-            };
+            buffer.push(&NoteOffEvent::new(
+                u32::try_from(steady_time).unwrap(),
+                Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
+                f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+            ));
         });
 
         self.started_notes.write().unwrap().clear();
@@ -371,13 +362,11 @@ impl<'a> MidiClip<'a> {
             })
             .for_each(|note| {
                 // start all notes that would be currently playing
-                if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
-                    buffer.push(&NoteOnEvent::new(
-                        u32::try_from(steady_time).unwrap(),
-                        Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                        f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
-                    ));
-                };
+                buffer.push(&NoteOnEvent::new(
+                    u32::try_from(steady_time).unwrap(),
+                    Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
+                    f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+                ));
                 self.started_notes.write().unwrap().push(note.clone());
             });
     }
@@ -402,13 +391,11 @@ impl<'a> MidiClip<'a> {
             })
             .for_each(|note| {
                 // start all new notes that would be currently playing
-                if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
-                    buffer.push(&NoteOnEvent::new(
-                        u32::try_from(steady_time).unwrap(),
-                        Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                        f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
-                    ));
-                };
+                buffer.push(&NoteOnEvent::new(
+                    u32::try_from(steady_time).unwrap(),
+                    Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
+                    f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+                ));
                 self.started_notes.write().unwrap().push(note.clone());
             });
     }
@@ -424,14 +411,12 @@ impl<'a> MidiClip<'a> {
             .filter(|(_, note)| !self.pattern.lock().unwrap().notes.contains(note))
             .for_each(|(index, note)| {
                 // stop all started notes that are no longer in the pattern
-                if let MidiMessage::NoteOn(channel, note, velocity) = note.note {
-                    buffer.push(&NoteOffEvent::new(
-                        u32::try_from(steady_time).unwrap(),
-                        Pckn::new(0u8, channel.index(), note as u16, Match::All),
-                        f64::from(u8::from(velocity)) / f64::from(u8::from(Velocity::MAX)),
-                    ));
-                    indices.push(index);
-                };
+                buffer.push(&NoteOffEvent::new(
+                    u32::try_from(steady_time).unwrap(),
+                    Pckn::new(0u8, note.channel.index(), note.note as u16, Match::All),
+                    f64::from(u8::from(note.velocity)) / f64::from(u8::from(Velocity::MAX)),
+                ));
+                indices.push(index);
             });
 
         indices.iter().rev().for_each(|i| {
@@ -440,7 +425,7 @@ impl<'a> MidiClip<'a> {
     }
 }
 
-impl<'a> Drawable for MidiClip<'a> {
+impl Drawable for MidiClip {
     fn draw(
         &self,
         _frame: &mut Frame,

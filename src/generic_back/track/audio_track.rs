@@ -1,10 +1,6 @@
 use super::Track;
 use crate::{
-    generic_back::{
-        meter::Meter,
-        position::Position,
-        track_clip::{audio_clip::AudioClip, TrackClip},
-    },
+    generic_back::{meter::Meter, position::Position, track_clip::audio_clip::AudioClip},
     generic_front::drawable::{Drawable, TimelinePosition, TimelineScale},
 };
 use iced::{widget::canvas::Frame, Theme};
@@ -29,8 +25,6 @@ impl AudioTrack {
 }
 
 impl Track for AudioTrack {
-    type Clip = AudioClip;
-
     fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
         if !meter.playing.load(SeqCst) {
             return 0.0;

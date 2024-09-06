@@ -1,26 +1,16 @@
 use super::Track;
 use crate::{
-    generic_back::{
-        meter::Meter,
-        position::Position,
-        track_clip::{midi_clip::MidiClip, TrackClip},
-    },
+    generic_back::{meter::Meter, position::Position, track_clip::midi_clip::MidiClip},
     generic_front::drawable::{Drawable, TimelinePosition, TimelineScale},
 };
 use iced::{widget::canvas::Frame, Theme};
 use std::sync::{Arc, RwLock};
 
-pub struct MidiTrack<'a> {
-    pub clips: RwLock<Vec<Arc<MidiClip<'a>>>>,
+pub struct MidiTrack {
+    pub clips: RwLock<Vec<Arc<MidiClip>>>,
 }
 
-impl<'a> Default for MidiTrack<'a> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<'a> MidiTrack<'a> {
+impl MidiTrack {
     pub const fn new() -> Self {
         Self {
             clips: RwLock::new(Vec::new()),
@@ -28,9 +18,7 @@ impl<'a> MidiTrack<'a> {
     }
 }
 
-impl<'a> Track for MidiTrack<'a> {
-    type Clip = MidiClip<'a>;
-
+impl Track for MidiTrack {
     fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
         self.clips
             .read()
@@ -51,7 +39,7 @@ impl<'a> Track for MidiTrack<'a> {
     }
 }
 
-impl<'a> Drawable for MidiTrack<'a> {
+impl Drawable for MidiTrack {
     fn draw(
         &self,
         _frame: &mut Frame,
