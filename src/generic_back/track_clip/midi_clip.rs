@@ -2,20 +2,9 @@ use crate::{
     generic_back::{meter::Meter, position::Position},
     generic_front::drawable::{Drawable, TimelinePosition, TimelineScale},
 };
-use clack_host::{
-    events::{
-        event_types::{NoteOffEvent, NoteOnEvent},
-        Match,
-    },
-    prelude::*,
-};
-use generic_clap_host::{host::HostThreadMessage, main_thread::MainThreadMessage};
+use atomic_enum::atomic_enum;
 use iced::{widget::canvas::Frame, Theme};
-use std::sync::{
-    atomic::{AtomicU32, AtomicU8, Ordering::SeqCst},
-    mpsc::{Receiver, Sender},
-    Arc, Mutex, RwLock,
-};
+use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
 #[derive(PartialEq)]
 pub struct MidiNote {
@@ -27,8 +16,9 @@ pub struct MidiNote {
     pub local_end: u32,
 }
 
-#[derive(PartialEq)]
-enum DirtyEvent {
+#[atomic_enum]
+#[derive(PartialEq, Eq)]
+pub enum DirtyEvent {
     // can we reasonably assume that only one of these will happen per sample?
     None,
     NoteAdded,
@@ -38,21 +28,14 @@ enum DirtyEvent {
 
 pub struct MidiPattern {
     pub notes: Vec<Arc<MidiNote>>,
-    dirty: DirtyEvent,
-    plugin_sender: Sender<MainThreadMessage>,
-    host_receiver: Mutex<Receiver<HostThreadMessage>>,
+    dirty: Arc<AtomicDirtyEvent>,
 }
 
 impl MidiPattern {
-    const fn new(
-        plugin_sender: Sender<MainThreadMessage>,
-        host_receiver: Receiver<HostThreadMessage>,
-    ) -> Self {
+    const fn new(dirty: Arc<AtomicDirtyEvent>) -> Self {
         Self {
             notes: Vec::new(),
-            dirty: DirtyEvent::None,
-            plugin_sender,
-            host_receiver: Mutex::new(host_receiver),
+            dirty,
         }
     }
 
@@ -64,25 +47,21 @@ impl MidiPattern {
             .unwrap_or(0)
     }
 
-    fn clear_dirty(&mut self) {
-        self.dirty = DirtyEvent::None;
-    }
-
     fn push(&mut self, note: Arc<MidiNote>) {
         self.notes.push(note);
-        self.dirty = DirtyEvent::NoteAdded;
+        self.dirty.store(DirtyEvent::NoteAdded, SeqCst);
     }
 
     fn remove(&mut self, note: &Arc<MidiNote>) {
         let pos = self.notes.iter().position(|n| n == note).unwrap();
         self.notes.remove(pos);
-        self.dirty = DirtyEvent::NoteRemoved;
+        self.dirty.store(DirtyEvent::NoteRemoved, SeqCst);
     }
 
     fn replace(&mut self, note: &Arc<MidiNote>, new_note: Arc<MidiNote>) {
         let pos = self.notes.iter().position(|n| n == note).unwrap();
         self.notes[pos] = new_note;
-        self.dirty = DirtyEvent::NoteReplaced;
+        self.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
     }
 }
 
@@ -91,35 +70,17 @@ pub struct MidiClip {
     global_start: Position,
     global_end: Position,
     pattern_start: Position,
-    started_notes: RwLock<Vec<Arc<MidiNote>>>,
-    last_global_time: AtomicU32,
-    running_buffer: RwLock<[f32; 16]>,
-    last_buffer_index: AtomicU8,
-    audio_ports: Arc<RwLock<AudioPorts>>,
 }
 
 impl MidiClip {
-    pub fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
-        let last_global_time = self.last_global_time.load(SeqCst);
-        let mut last_buffer_index = self.last_buffer_index.load(SeqCst);
-
-        if last_global_time != global_time {
-            if global_time != last_global_time + 1
-                || self.pattern.read().unwrap().dirty != DirtyEvent::None
-            {
-                self.last_buffer_index.store(15, SeqCst);
-            }
-
-            last_buffer_index = (last_buffer_index + 1) % 16;
-            if last_buffer_index == 0 {
-                self.refresh_buffer(global_time, meter);
-            }
-
-            self.last_global_time.store(global_time, SeqCst);
-            self.last_buffer_index.store(last_buffer_index, SeqCst);
+    pub fn new(pattern: Arc<RwLock<MidiPattern>>, meter: &Meter) -> Self {
+        let len = pattern.read().unwrap().len();
+        Self {
+            pattern,
+            global_start: Position::new(0, 0),
+            global_end: Position::from_interleaved_samples(len, meter),
+            pattern_start: Position::new(0, 0),
         }
-
-        self.running_buffer.read().unwrap()[last_buffer_index as usize]
     }
 
     pub const fn get_global_start(&self) -> Position {
@@ -151,7 +112,7 @@ impl MidiClip {
         self.global_start = global_start;
     }
 
-    pub fn get_global_midi(&self, meter: &Meter) -> Vec<MidiNote> {
+    pub fn get_global_midi(&self, meter: &Meter) -> Vec<Arc<MidiNote>> {
         let global_start = self.global_start.in_interleaved_samples(meter);
         let global_end = self.global_end.in_interleaved_samples(meter);
         self.pattern
@@ -159,278 +120,19 @@ impl MidiClip {
             .unwrap()
             .notes
             .iter()
-            .map(|note| MidiNote {
-                channel: note.channel,
-                note: note.note,
-                velocity: note.velocity,
-                local_start: (note.local_start + global_start - global_end)
-                    .clamp(global_start, global_end),
-                local_end: (note.local_end + global_start - global_end)
-                    .clamp(global_start, global_end),
+            .map(|note| {
+                Arc::new(MidiNote {
+                    channel: note.channel,
+                    note: note.note,
+                    velocity: note.velocity,
+                    local_start: (note.local_start + global_start - global_end)
+                        .clamp(global_start, global_end),
+                    local_end: (note.local_end + global_start - global_end)
+                        .clamp(global_start, global_end),
+                })
             })
             .filter(|note| note.local_start != note.local_end)
             .collect()
-    }
-
-    pub fn new(pattern: Arc<RwLock<MidiPattern>>, meter: &Meter) -> Self {
-        let len = pattern.read().unwrap().len();
-        Self {
-            pattern,
-            global_start: Position::new(0, 0),
-            global_end: Position::from_interleaved_samples(len, meter),
-            pattern_start: Position::new(0, 0),
-            started_notes: RwLock::new(Vec::new()),
-            last_global_time: AtomicU32::new(0),
-            running_buffer: RwLock::new([0.0; 16]),
-            last_buffer_index: AtomicU8::new(15),
-            audio_ports: Arc::new(RwLock::new(AudioPorts::with_capacity(2, 1))),
-        }
-    }
-
-    fn refresh_buffer(&self, global_time: u32, meter: &Meter) {
-        let buffer = self.get_input_events(global_time, meter);
-
-        let input_audio = [vec![0.0; 8], vec![0.0; 8]];
-
-        self.pattern
-            .read()
-            .unwrap()
-            .plugin_sender
-            .send(MainThreadMessage::ProcessAudio(
-                input_audio,
-                self.audio_ports.clone(),
-                self.audio_ports.clone(),
-                buffer,
-            ))
-            .unwrap();
-
-        let message = self
-            .pattern
-            .read()
-            .unwrap()
-            .host_receiver
-            .lock()
-            .unwrap()
-            .recv()
-            .unwrap();
-        if let HostThreadMessage::AudioProcessed(buffers, _) = message {
-            (0..16).step_by(2).for_each(|i| {
-                self.running_buffer.write().unwrap()[i] = buffers[0][i];
-                self.running_buffer.write().unwrap()[i + 1] = buffers[1][i];
-            });
-
-            self.pattern.write().unwrap().clear_dirty();
-        };
-    }
-
-    fn get_input_events(&self, global_time: u32, meter: &Meter) -> EventBuffer {
-        let mut buffer = EventBuffer::new();
-
-        self.pattern
-            .read()
-            .unwrap()
-            .plugin_sender
-            .send(MainThreadMessage::GetCounter)
-            .unwrap();
-
-        let message = self
-            .pattern
-            .read()
-            .unwrap()
-            .host_receiver
-            .lock()
-            .unwrap()
-            .recv()
-            .unwrap();
-        if let HostThreadMessage::Counter(steady_time) = message {
-            if global_time == self.global_end.in_interleaved_samples(meter) {
-                self.started_notes.read().unwrap().iter().for_each(|note| {
-                    // stop all started notes
-                    buffer.push(&NoteOffEvent::new(
-                        u32::try_from(steady_time).unwrap(),
-                        Pckn::new(0u8, note.channel, note.note, Match::All),
-                        note.velocity,
-                    ));
-                });
-
-                self.started_notes.write().unwrap().clear();
-
-                return buffer;
-            }
-
-            match self.pattern.read().unwrap().dirty {
-                DirtyEvent::None => {
-                    let last_global_time = self.last_global_time.load(SeqCst);
-                    if global_time != last_global_time + 1
-                        || (self.pattern_start.in_interleaved_samples(meter) != 0
-                            && global_time == self.global_start.in_interleaved_samples(meter))
-                    {
-                        self.jump_events_refresh(&mut buffer, global_time, steady_time, meter);
-                    }
-                }
-                DirtyEvent::NoteAdded => {
-                    self.note_add_events_refresh(&mut buffer, global_time, steady_time, meter);
-                }
-                DirtyEvent::NoteRemoved => {
-                    self.note_remove_events_refresh(&mut buffer, steady_time);
-                }
-                DirtyEvent::NoteReplaced => {
-                    self.note_remove_events_refresh(&mut buffer, steady_time);
-                    self.note_add_events_refresh(&mut buffer, global_time, steady_time, meter);
-                }
-            }
-
-            self.events_refresh(&mut buffer, global_time, steady_time, meter);
-        }
-
-        buffer
-    }
-
-    fn events_refresh(
-        &self,
-        buffer: &mut EventBuffer,
-        global_time: u32,
-        steady_time: u64,
-        meter: &Meter,
-    ) {
-        let offset = (self.global_start - self.pattern_start).in_interleaved_samples(meter);
-
-        self.pattern
-            .read()
-            .unwrap()
-            .notes
-            .iter()
-            .filter(|midi_note| {
-                offset + midi_note.local_start >= global_time
-                    && offset + midi_note.local_start < global_time + 16
-            })
-            .for_each(|note| {
-                // notes that start during the running buffer
-                buffer.push(&NoteOnEvent::new(
-                    note.local_start - global_time + u32::try_from(steady_time).unwrap(),
-                    Pckn::new(0u8, note.channel, note.note, Match::All),
-                    note.velocity,
-                ));
-                self.started_notes.write().unwrap().push(note.clone());
-            });
-
-        let mut indices = Vec::new();
-
-        self.started_notes
-            .read()
-            .unwrap()
-            .iter()
-            .enumerate()
-            .filter(|(_, note)| {
-                (self.global_start - self.pattern_start).in_interleaved_samples(meter)
-                    + note.local_end
-                    < global_time + 16
-            })
-            .for_each(|(index, note)| {
-                // notes that end before the running buffer ends
-                buffer.push(&NoteOffEvent::new(
-                    note.local_end - global_time + u32::try_from(steady_time).unwrap(),
-                    Pckn::new(0u8, note.channel, note.note, Match::All),
-                    note.velocity,
-                ));
-                indices.push(index);
-            });
-
-        indices.iter().rev().for_each(|i| {
-            self.started_notes.write().unwrap().remove(*i);
-        });
-    }
-
-    fn jump_events_refresh(
-        &self,
-        buffer: &mut EventBuffer,
-        global_time: u32,
-        steady_time: u64,
-        meter: &Meter,
-    ) {
-        let offset = (self.global_start - self.pattern_start).in_interleaved_samples(meter);
-
-        self.started_notes.read().unwrap().iter().for_each(|note| {
-            // stop all started notes
-            buffer.push(&NoteOffEvent::new(
-                u32::try_from(steady_time).unwrap(),
-                Pckn::new(0u8, note.channel, note.note, Match::All),
-                note.velocity,
-            ));
-        });
-
-        self.started_notes.write().unwrap().clear();
-
-        self.pattern
-            .read()
-            .unwrap()
-            .notes
-            .iter()
-            .filter(|note| {
-                offset + note.local_start <= global_time && offset + note.local_end > global_time
-            })
-            .for_each(|note| {
-                // start all notes that would be currently playing
-                buffer.push(&NoteOnEvent::new(
-                    u32::try_from(steady_time).unwrap(),
-                    Pckn::new(0u8, note.channel, note.note, Match::All),
-                    note.velocity,
-                ));
-                self.started_notes.write().unwrap().push(note.clone());
-            });
-    }
-
-    fn note_add_events_refresh(
-        &self,
-        buffer: &mut EventBuffer,
-        global_time: u32,
-        steady_time: u64,
-        meter: &Meter,
-    ) {
-        let offset = (self.global_start - self.pattern_start).in_interleaved_samples(meter);
-
-        self.pattern
-            .read()
-            .unwrap()
-            .notes
-            .iter()
-            .filter(|note| !self.started_notes.read().unwrap().contains(note))
-            .filter(|note| {
-                offset + note.local_start <= global_time && offset + note.local_end > global_time
-            })
-            .for_each(|note| {
-                // start all new notes that would be currently playing
-                buffer.push(&NoteOnEvent::new(
-                    u32::try_from(steady_time).unwrap(),
-                    Pckn::new(0u8, note.channel, note.note, Match::All),
-                    note.velocity,
-                ));
-                self.started_notes.write().unwrap().push(note.clone());
-            });
-    }
-
-    fn note_remove_events_refresh(&self, buffer: &mut EventBuffer, steady_time: u64) {
-        let mut indices = Vec::new();
-
-        self.started_notes
-            .read()
-            .unwrap()
-            .iter()
-            .enumerate()
-            .filter(|(_, note)| !self.pattern.read().unwrap().notes.contains(note))
-            .for_each(|(index, note)| {
-                // stop all started notes that are no longer in the pattern
-                buffer.push(&NoteOffEvent::new(
-                    u32::try_from(steady_time).unwrap(),
-                    Pckn::new(0u8, note.channel, note.note, Match::All),
-                    note.velocity,
-                ));
-                indices.push(index);
-            });
-
-        indices.iter().rev().for_each(|i| {
-            self.started_notes.write().unwrap().remove(*i);
-        });
     }
 }
 
