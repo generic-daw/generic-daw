@@ -1,6 +1,10 @@
 use super::Track;
 use crate::{
-    generic_back::{meter::Meter, position::Position, track_clip::midi_clip::MidiClip},
+    generic_back::{
+        meter::Meter,
+        position::Position,
+        track_clip::midi_clip::{MidiClip, MidiNote},
+    },
     generic_front::drawable::{Drawable, TimelinePosition, TimelineScale},
 };
 use iced::{widget::canvas::Frame, Theme};
@@ -15,6 +19,15 @@ impl MidiTrack {
         Self {
             clips: RwLock::new(Vec::new()),
         }
+    }
+
+    fn get_global_midi(&self, meter: &Meter) -> Vec<MidiNote> {
+        self.clips
+            .read()
+            .unwrap()
+            .iter()
+            .flat_map(|clip| clip.get_global_midi(meter))
+            .collect()
     }
 }
 

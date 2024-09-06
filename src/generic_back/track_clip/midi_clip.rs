@@ -40,7 +40,7 @@ pub struct MidiPattern {
     pub notes: Vec<Arc<MidiNote>>,
     dirty: DirtyEvent,
     plugin_sender: Sender<MainThreadMessage>,
-    host_receiver: RwLock<Receiver<HostThreadMessage>>,
+    host_receiver: Mutex<Receiver<HostThreadMessage>>,
 }
 
 impl MidiPattern {
@@ -52,7 +52,7 @@ impl MidiPattern {
             notes: Vec::new(),
             dirty: DirtyEvent::None,
             plugin_sender,
-            host_receiver: RwLock::new(host_receiver),
+            host_receiver: Mutex::new(host_receiver),
         }
     }
 
@@ -87,7 +87,7 @@ impl MidiPattern {
 }
 
 pub struct MidiClip {
-    pub pattern: Arc<Mutex<MidiPattern>>,
+    pub pattern: Arc<RwLock<MidiPattern>>,
     global_start: Position,
     global_end: Position,
     pattern_start: Position,
@@ -105,7 +105,7 @@ impl MidiClip {
 
         if last_global_time != global_time {
             if global_time != last_global_time + 1
-                || self.pattern.lock().unwrap().dirty != DirtyEvent::None
+                || self.pattern.read().unwrap().dirty != DirtyEvent::None
             {
                 self.last_buffer_index.store(15, SeqCst);
             }
@@ -151,8 +151,29 @@ impl MidiClip {
         self.global_start = global_start;
     }
 
-    pub fn new(pattern: Arc<Mutex<MidiPattern>>, meter: &Meter) -> Self {
-        let len = pattern.lock().unwrap().len();
+    pub fn get_global_midi(&self, meter: &Meter) -> Vec<MidiNote> {
+        let global_start = self.global_start.in_interleaved_samples(meter);
+        let global_end = self.global_end.in_interleaved_samples(meter);
+        self.pattern
+            .read()
+            .unwrap()
+            .notes
+            .iter()
+            .map(|note| MidiNote {
+                channel: note.channel,
+                note: note.note,
+                velocity: note.velocity,
+                local_start: (note.local_start + global_start - global_end)
+                    .clamp(global_start, global_end),
+                local_end: (note.local_end + global_start - global_end)
+                    .clamp(global_start, global_end),
+            })
+            .filter(|note| note.local_start != note.local_end)
+            .collect()
+    }
+
+    pub fn new(pattern: Arc<RwLock<MidiPattern>>, meter: &Meter) -> Self {
+        let len = pattern.read().unwrap().len();
         Self {
             pattern,
             global_start: Position::new(0, 0),
@@ -166,25 +187,13 @@ impl MidiClip {
         }
     }
 
-    pub fn push(&self, note: Arc<MidiNote>) {
-        self.pattern.lock().unwrap().push(note);
-    }
-
-    pub fn remove(&self, note: &Arc<MidiNote>) {
-        self.pattern.lock().unwrap().remove(note);
-    }
-
-    pub fn replace(&self, note: &Arc<MidiNote>, new_note: Arc<MidiNote>) {
-        self.pattern.lock().unwrap().replace(note, new_note);
-    }
-
     fn refresh_buffer(&self, global_time: u32, meter: &Meter) {
         let buffer = self.get_input_events(global_time, meter);
 
         let input_audio = [vec![0.0; 8], vec![0.0; 8]];
 
         self.pattern
-            .lock()
+            .read()
             .unwrap()
             .plugin_sender
             .send(MainThreadMessage::ProcessAudio(
@@ -197,10 +206,10 @@ impl MidiClip {
 
         let message = self
             .pattern
-            .lock()
+            .read()
             .unwrap()
             .host_receiver
-            .read()
+            .lock()
             .unwrap()
             .recv()
             .unwrap();
@@ -210,7 +219,7 @@ impl MidiClip {
                 self.running_buffer.write().unwrap()[i + 1] = buffers[1][i];
             });
 
-            self.pattern.lock().unwrap().clear_dirty();
+            self.pattern.write().unwrap().clear_dirty();
         };
     }
 
@@ -218,7 +227,7 @@ impl MidiClip {
         let mut buffer = EventBuffer::new();
 
         self.pattern
-            .lock()
+            .read()
             .unwrap()
             .plugin_sender
             .send(MainThreadMessage::GetCounter)
@@ -226,10 +235,10 @@ impl MidiClip {
 
         let message = self
             .pattern
-            .lock()
+            .read()
             .unwrap()
             .host_receiver
-            .read()
+            .lock()
             .unwrap()
             .recv()
             .unwrap();
@@ -249,7 +258,7 @@ impl MidiClip {
                 return buffer;
             }
 
-            match self.pattern.lock().unwrap().dirty {
+            match self.pattern.read().unwrap().dirty {
                 DirtyEvent::None => {
                     let last_global_time = self.last_global_time.load(SeqCst);
                     if global_time != last_global_time + 1
@@ -287,7 +296,7 @@ impl MidiClip {
         let offset = (self.global_start - self.pattern_start).in_interleaved_samples(meter);
 
         self.pattern
-            .lock()
+            .read()
             .unwrap()
             .notes
             .iter()
@@ -353,7 +362,7 @@ impl MidiClip {
         self.started_notes.write().unwrap().clear();
 
         self.pattern
-            .lock()
+            .read()
             .unwrap()
             .notes
             .iter()
@@ -381,7 +390,7 @@ impl MidiClip {
         let offset = (self.global_start - self.pattern_start).in_interleaved_samples(meter);
 
         self.pattern
-            .lock()
+            .read()
             .unwrap()
             .notes
             .iter()
@@ -408,7 +417,7 @@ impl MidiClip {
             .unwrap()
             .iter()
             .enumerate()
-            .filter(|(_, note)| !self.pattern.lock().unwrap().notes.contains(note))
+            .filter(|(_, note)| !self.pattern.read().unwrap().notes.contains(note))
             .for_each(|(index, note)| {
                 // stop all started notes that are no longer in the pattern
                 buffer.push(&NoteOffEvent::new(
