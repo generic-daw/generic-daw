@@ -276,12 +276,14 @@ impl Track for MidiTrack {
 impl Drawable for MidiTrack {
     fn draw(
         &self,
-        _frame: &mut Frame,
-        _scale: TimelineScale,
-        _offset: &TimelinePosition,
-        _meter: &Meter,
-        _theme: &Theme,
+        frame: &mut Frame,
+        scale: TimelineScale,
+        offset: &TimelinePosition,
+        meter: &Meter,
+        theme: &Theme,
     ) {
-        unimplemented!()
+        self.clips.read().unwrap().iter().for_each(|track| {
+            track.draw(frame, scale, offset, meter, theme);
+        });
     }
 }
