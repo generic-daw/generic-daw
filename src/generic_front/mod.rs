@@ -15,6 +15,7 @@ use iced::{
     window::frames,
     Element, Event, Subscription,
 };
+use iced_aw::number_input;
 use rfd::FileDialog;
 use std::{
     path::PathBuf,
@@ -40,6 +41,9 @@ pub enum Message {
     Export,
     FileSelected(Option<String>),
     ArrangementUpdated,
+    BpmChanged(u16),
+    NumeratorChanged(u8),
+    DenominatorChanged(u8),
 }
 
 impl Default for Daw {
@@ -50,7 +54,7 @@ impl Default for Daw {
 
 impl Daw {
     fn new(_flags: ()) -> Self {
-        let meter = Meter::new(140.0, 4, 4);
+        let meter = Meter::new(140, 4, 4);
         let arrangement = Arc::new(RwLock::new(Arrangement::new(meter)));
         build_output_stream(arrangement.clone());
 
@@ -137,6 +141,21 @@ impl Daw {
                         .export(&path, &self.arrangement.read().unwrap().meter);
                 }
             }
+            Message::BpmChanged(bpm) => {
+                self.arrangement.write().unwrap().meter.bpm = bpm;
+            }
+            Message::NumeratorChanged(numerator) => {
+                self.arrangement.write().unwrap().meter.numerator = numerator;
+            }
+            Message::DenominatorChanged(denominator) => {
+                let c = u8::from(
+                    (1 << self.arrangement.read().unwrap().meter.denominator) < denominator
+                        && !(self.arrangement.read().unwrap().meter.denominator == 0
+                            && denominator == 2),
+                ) + 7;
+                self.arrangement.write().unwrap().meter.denominator =
+                    c - denominator.leading_zeros() as u8;
+            }
         }
     }
 
@@ -160,7 +179,22 @@ impl Daw {
             .step(0.1),
             slider(20.0..=200.0, self.timeline.scale.y, |scale| {
                 Message::TimelineMessage(TimelineMessage::YScaleChanged(scale))
-            })
+            }),
+            number_input(
+                self.arrangement.read().unwrap().meter.numerator,
+                1..=255,
+                Message::NumeratorChanged
+            ),
+            number_input(
+                1 << self.arrangement.read().unwrap().meter.denominator,
+                1..=128,
+                Message::DenominatorChanged
+            ),
+            number_input(
+                self.arrangement.read().unwrap().meter.bpm,
+                1..=65535,
+                Message::BpmChanged
+            )
         ];
 
         let content = column![
