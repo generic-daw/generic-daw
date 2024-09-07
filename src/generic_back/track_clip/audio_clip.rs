@@ -41,15 +41,17 @@ impl AudioClip {
 
     pub fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
         if !meter.playing.load(SeqCst)
-            || global_time < self.global_start.in_interleaved_samples(meter) as u32
-            || global_time > self.global_end.in_interleaved_samples(meter) as u32
+            || global_time < self.global_start.in_interleaved_samples(meter)
+            || global_time > self.global_end.in_interleaved_samples(meter)
         {
             return 0.0;
         }
         self.audio.get_sample_at_index(
-            (global_time
-                - (self.global_start + self.clip_start).in_interleaved_samples(meter) as u32)
-                as usize,
+            usize::try_from(global_time).unwrap()
+                - usize::try_from(
+                    (self.global_start + self.clip_start).in_interleaved_samples(meter),
+                )
+                .unwrap(),
         ) * self.volume
     }
 
@@ -92,7 +94,7 @@ impl Drawable for AudioClip {
         meter: &Meter,
         theme: &Theme,
     ) {
-        let ver_len = scale.x.floor().exp2() as i32;
+        let ver_len = scale.x.floor().exp2() as u32;
         let ratio = ver_len as f32 / scale.x.exp2();
         let start = if position.x > self.get_global_start() {
             (position.x - self.get_global_start()).in_interleaved_samples(meter) / ver_len
@@ -106,7 +108,7 @@ impl Drawable for AudioClip {
         };
         let end = min(
             self.get_global_end().in_interleaved_samples(meter) / ver_len,
-            start - offset + (frame.width() / ratio) as i32,
+            start - offset + (frame.width() / ratio) as u32,
         );
 
         let text_scale = 12.0 * 1.5;
@@ -139,17 +141,18 @@ impl Drawable for AudioClip {
 
         let path = iced::widget::canvas::Path::new(|path| {
             (start..end).enumerate().for_each(|(x, i)| {
-                let (min, max) = self.get_ver_at_index(scale.x as usize, i as usize);
+                let (min, max) =
+                    self.get_ver_at_index(scale.x as usize, usize::try_from(i).unwrap());
 
                 path.line_to(iced::Point::new(
-                    (i32::try_from(x).unwrap() + offset) as f32 * ratio,
+                    (x + usize::try_from(offset).unwrap()) as f32 * ratio,
                     min.mul_add(text_scale_ratio, position.y)
                         .mul_add(scale.y, text_scale),
                 ));
 
                 if (min - max).abs() > f32::EPSILON {
                     path.line_to(iced::Point::new(
-                        (i32::try_from(x).unwrap() + offset) as f32 * ratio,
+                        (x + usize::try_from(offset).unwrap()) as f32 * ratio,
                         max.mul_add(text_scale_ratio, position.y)
                             .mul_add(scale.y, text_scale),
                     ));

@@ -87,7 +87,8 @@ impl Track for MidiTrack {
                 .store(last_buffer_index, SeqCst);
         }
 
-        self.plugin_state.running_buffer.read().unwrap()[last_buffer_index as usize] * self.volume
+        self.plugin_state.running_buffer.read().unwrap()[usize::from(last_buffer_index)]
+            * self.volume
     }
 
     fn get_global_end(&self) -> Position {

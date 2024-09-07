@@ -151,7 +151,7 @@ impl Daw {
                             && denominator == 2),
                 ) + 7;
                 self.arrangement.write().unwrap().meter.denominator =
-                    c - denominator.leading_zeros() as u8;
+                    c - u8::try_from(denominator.leading_zeros()).unwrap();
             }
         }
     }
