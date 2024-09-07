@@ -40,10 +40,7 @@ impl Timeline {
             arrangement,
             tracks_cache: Cache::new(),
             scale: TimelineScale { x: 8.0, y: 100.0 },
-            position: TimelinePosition {
-                x: Position::new(0, 0),
-                y: 0.0,
-            },
+            position: TimelinePosition { x: 0.0, y: 0.0 },
             samples_sender,
             samples_receiver,
         }
@@ -71,23 +68,14 @@ impl Timeline {
                 match *delta {
                     ScrollDelta::Pixels { x, y } => {
                         let arrangement = self.arrangement.read().unwrap();
-                        let x = if x > 0.0 { x.ceil() } else { x.floor() };
-                        let y = if y > 0.0 { y.ceil() } else { y.floor() };
 
                         if x.abs() > f32::EPSILON {
-                            let x = (-x)
-                                .mul_add(
-                                    self.scale.x.exp2(),
-                                    self.position.x.in_interleaved_samples(&arrangement.meter)
-                                        as f32,
-                                )
-                                .clamp(
+                            self.position.x =
+                                x.mul_add(-self.scale.x.exp2(), self.position.x).clamp(
                                     0.0,
                                     arrangement.len().in_interleaved_samples(&arrangement.meter)
                                         as f32,
                                 );
-                            self.position.x =
-                                Position::from_interleaved_samples(x as u32, &arrangement.meter);
                         }
 
                         if y.abs() > f32::EPSILON {
@@ -106,10 +94,7 @@ impl Timeline {
             }
             Message::MovePlayToStart => {
                 let arrangement = self.arrangement.read().unwrap();
-                self.position.x = Position::from_interleaved_samples(
-                    arrangement.meter.global_time.load(SeqCst),
-                    &arrangement.meter,
-                );
+                self.position.x = arrangement.meter.global_time.load(SeqCst) as f32;
                 drop(arrangement);
                 self.update(&Message::ArrangementUpdated);
             }
@@ -128,7 +113,10 @@ impl Timeline {
     ) -> Geometry {
         let mut lines = iced::widget::canvas::Frame::new(renderer, bounds.size());
 
-        let mut beat = self.position.x;
+        let mut beat = Position::from_interleaved_samples(
+            self.position.x as u32,
+            &self.arrangement.read().unwrap().meter,
+        );
         let mut end_beat = beat
             + Position::from_interleaved_samples(
                 (bounds.width * self.scale.x.exp2()) as u32,
@@ -169,11 +157,7 @@ impl Timeline {
             let path = iced::widget::canvas::Path::new(|path| {
                 let x = (beat.in_interleaved_samples(&self.arrangement.read().unwrap().meter)
                     as f32
-                    - self
-                        .position
-                        .x
-                        .in_interleaved_samples(&self.arrangement.read().unwrap().meter)
-                        as f32)
+                    - self.position.x)
                     / self.scale.x.exp2();
                 path.line_to(iced::Point::new(x, 0.0));
                 path.line_to(iced::Point::new(x, bounds.height));
@@ -196,12 +180,7 @@ impl Timeline {
     ) -> Geometry {
         let mut playhead = iced::widget::canvas::Frame::new(renderer, bounds.size());
         let path = iced::widget::canvas::Path::new(|path| {
-            let x = -(self
-                .position
-                .x
-                .in_interleaved_samples(&self.arrangement.read().unwrap().meter)
-                as f32)
-                / self.scale.x.exp2()
+            let x = -(self.position.x) / self.scale.x.exp2()
                 + self
                     .arrangement
                     .read()

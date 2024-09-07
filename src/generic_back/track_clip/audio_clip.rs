@@ -96,15 +96,11 @@ impl Drawable for AudioClip {
     ) {
         let ver_len = scale.x.floor().exp2() as u32;
         let ratio = ver_len as f32 / scale.x.exp2();
-        let start = if position.x > self.get_global_start() {
-            (position.x - self.get_global_start()).in_interleaved_samples(meter) / ver_len
+        let global_start = self.get_global_start().in_interleaved_samples(meter) as f32;
+        let (start, offset) = if position.x > global_start {
+            ((position.x - global_start) as u32 / ver_len, 0)
         } else {
-            0
-        };
-        let offset = if self.get_global_start() > position.x {
-            (self.get_global_start() - position.x).in_interleaved_samples(meter) / ver_len
-        } else {
-            0
+            (0, (global_start - position.x) as u32 / ver_len)
         };
         let end = min(
             self.get_global_end().in_interleaved_samples(meter) / ver_len,
