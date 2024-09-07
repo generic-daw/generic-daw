@@ -7,7 +7,7 @@ use crate::generic_back::{
     build_output_stream,
     meter::Meter,
     track::audio_track::AudioTrack,
-    track_clip::audio_clip::{read_audio_file, AudioClip},
+    track_clip::audio_clip::{interleaved_audio::InterleavedAudio, AudioClip},
 };
 use iced::{
     event, keyboard, mouse,
@@ -83,7 +83,7 @@ impl Daw {
                 }
             }
             Message::FileSelected(Some(path)) => {
-                let audio_file = read_audio_file(
+                let audio_file = InterleavedAudio::new(
                     &PathBuf::from(path),
                     &self.arrangement.read().unwrap().meter,
                     self.timeline.samples_sender.clone(),
