@@ -143,13 +143,15 @@ impl Drawable for AudioClip {
 
                 path.line_to(iced::Point::new(
                     (i32::try_from(x).unwrap() + offset) as f32 * ratio,
-                    ((min + position.y) * scale.y).mul_add(text_scale_ratio, text_scale),
+                    min.mul_add(text_scale_ratio, position.y)
+                        .mul_add(scale.y, text_scale),
                 ));
 
                 if (min - max).abs() > f32::EPSILON {
                     path.line_to(iced::Point::new(
                         (i32::try_from(x).unwrap() + offset) as f32 * ratio,
-                        ((max + position.y) * scale.y).mul_add(text_scale_ratio, text_scale),
+                        max.mul_add(text_scale_ratio, position.y)
+                            .mul_add(scale.y, text_scale),
                     ));
                 }
             });
