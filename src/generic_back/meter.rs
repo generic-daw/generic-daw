@@ -31,8 +31,6 @@ impl Meter {
     }
 }
 
-pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Meter) -> u32 {
-    let samples = (seconds * f64::from(meter.sample_rate) * 2.0).floor();
-    assert!(samples <= f64::from(u32::MAX));
-    samples as u32
+pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Meter) -> i32 {
+    (seconds * f64::from(meter.sample_rate) * 2.0) as i32
 }

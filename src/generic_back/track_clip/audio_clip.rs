@@ -10,7 +10,7 @@ use iced::{
 };
 use interleaved_audio::InterleavedAudio;
 use std::{
-    cmp::{max, min, min_by},
+    cmp::min,
     sync::{atomic::Ordering::SeqCst, Arc},
 };
 
@@ -40,11 +40,15 @@ impl AudioClip {
     }
 
     pub fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
-        if !meter.playing.load(SeqCst) {
+        if !meter.playing.load(SeqCst)
+            || global_time < self.global_start.in_interleaved_samples(meter) as u32
+            || global_time > self.global_end.in_interleaved_samples(meter) as u32
+        {
             return 0.0;
         }
         self.audio.get_sample_at_index(
-            (global_time - (self.global_start + self.clip_start).in_interleaved_samples(meter))
+            (global_time
+                - (self.global_start + self.clip_start).in_interleaved_samples(meter) as u32)
                 as usize,
         ) * self.volume
     }
@@ -88,15 +92,21 @@ impl Drawable for AudioClip {
         meter: &Meter,
         theme: &Theme,
     ) {
-        let ver_len = scale.x.floor().exp2() as u32;
+        let ver_len = scale.x.floor().exp2() as i32;
         let ratio = ver_len as f32 / scale.x.exp2();
-        let start = max(
-            self.get_global_start().in_interleaved_samples(meter) / ver_len,
-            position.x.in_interleaved_samples(meter) / ver_len,
-        );
+        let start = if position.x > self.get_global_start() {
+            (position.x - self.get_global_start()).in_interleaved_samples(meter) / ver_len
+        } else {
+            0
+        };
+        let offset = if self.get_global_start() > position.x {
+            (self.get_global_start() - position.x).in_interleaved_samples(meter) / ver_len
+        } else {
+            0
+        };
         let end = min(
             self.get_global_end().in_interleaved_samples(meter) / ver_len,
-            start + (frame.width() / ratio) as u32,
+            start - offset + (frame.width() / ratio) as i32,
         );
 
         let text_scale = 12.0 * 1.5;
@@ -104,10 +114,10 @@ impl Drawable for AudioClip {
 
         let background = iced::widget::canvas::Path::rectangle(
             Point::new(
-                start as f32 * -ratio,
+                offset as f32 * ratio,
                 position.y.mul_add(scale.y, text_scale),
             ),
-            Size::new(end as f32 * ratio, scale.y - text_scale),
+            Size::new((end - start) as f32 * ratio, scale.y - text_scale),
         );
         frame.fill(
             &background,
@@ -118,9 +128,10 @@ impl Drawable for AudioClip {
                 .color
                 .scale_alpha(0.25),
         );
+
         let background = iced::widget::canvas::Path::rectangle(
-            Point::new(start as f32 * -ratio, position.y * scale.y),
-            Size::new(end as f32 * ratio, text_scale),
+            Point::new(offset as f32 * ratio, position.y * scale.y),
+            Size::new((end - start) as f32 * ratio, text_scale),
         );
         frame.fill(&background, theme.extended_palette().primary.weak.color);
 
@@ -131,13 +142,13 @@ impl Drawable for AudioClip {
                 let (min, max) = self.get_ver_at_index(scale.x as usize, i as usize);
 
                 path.line_to(iced::Point::new(
-                    x as f32 * ratio,
+                    (i32::try_from(x).unwrap() + offset) as f32 * ratio,
                     ((min + position.y) * scale.y).mul_add(text_scale_ratio, text_scale),
                 ));
 
                 if (min - max).abs() > f32::EPSILON {
                     path.line_to(iced::Point::new(
-                        x as f32 * ratio,
+                        (i32::try_from(x).unwrap() + offset) as f32 * ratio,
                         ((max + position.y) * scale.y).mul_add(text_scale_ratio, text_scale),
                     ));
                 }
@@ -152,12 +163,7 @@ impl Drawable for AudioClip {
         let text = Text {
             content: self.audio.name.to_string(),
             position: Point::new(
-                min_by(
-                    self.get_global_start().in_interleaved_samples(meter) as f32,
-                    0.0,
-                    |a, b| a.partial_cmp(b).unwrap(),
-                )
-                .mul_add(scale.y, 2.0),
+                (offset as f32).mul_add(ratio, 2.0),
                 position.y.mul_add(scale.y, 2.0),
             ),
             color: theme.extended_palette().secondary.base.text,

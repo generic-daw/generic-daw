@@ -61,7 +61,7 @@ impl InterleavedAudio {
     }
 
     pub fn get_sample_at_index(&self, index: usize) -> f32 {
-        *self.samples.get(index).unwrap_or(&0.0)
+        *self.samples.get(index).unwrap()
     }
 
     pub fn get_ver_at_index(&self, ver: usize, index: usize) -> (f32, f32) {

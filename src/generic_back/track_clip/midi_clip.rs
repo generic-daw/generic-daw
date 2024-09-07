@@ -56,8 +56,8 @@ impl MidiClip {
     }
 
     pub fn get_global_midi(&self, meter: &Meter) -> Vec<Arc<MidiNote>> {
-        let global_start = self.global_start.in_interleaved_samples(meter);
-        let global_end = self.global_end.in_interleaved_samples(meter);
+        let global_start = self.global_start.in_interleaved_samples(meter) as u32;
+        let global_end = self.global_end.in_interleaved_samples(meter) as u32;
         self.pattern
             .notes
             .iter()

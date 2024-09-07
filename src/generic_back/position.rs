@@ -27,7 +27,7 @@ impl Position {
         }
     }
 
-    pub fn in_interleaved_samples(self, meter: &Meter) -> u32 {
+    pub fn in_interleaved_samples(self, meter: &Meter) -> i32 {
         let global_beat = f64::from(self.quarter_note) + f64::from(self.sub_quarter_note) / 256.0;
 
         seconds_to_interleaved_samples(global_beat / f64::from(meter.bpm) * 60.0, meter)
@@ -77,13 +77,14 @@ impl Sub for Position {
         assert!(self >= rhs);
         let new_sub_quarter_note =
             i32::from(self.sub_quarter_note) - i32::from(rhs.sub_quarter_note);
+        let sub_quarter_note = new_sub_quarter_note.rem_euclid(256);
         Self {
             quarter_note: u32::try_from(
                 i32::try_from(self.quarter_note - rhs.quarter_note).unwrap()
-                    + (new_sub_quarter_note / 256),
+                    + (new_sub_quarter_note - sub_quarter_note) / 256,
             )
             .unwrap(),
-            sub_quarter_note: u8::try_from(new_sub_quarter_note.rem_euclid(256)).unwrap(),
+            sub_quarter_note: u8::try_from(sub_quarter_note).unwrap(),
         }
     }
 }

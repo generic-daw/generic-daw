@@ -50,7 +50,9 @@ impl Arrangement {
         .unwrap();
 
         (0..self.len().in_interleaved_samples(meter)).for_each(|i| {
-            writer.write_sample(self.get_at_global_time(i)).unwrap();
+            writer
+                .write_sample(self.get_at_global_time(i as u32))
+                .unwrap();
         });
 
         self.meter.playing.store(false, SeqCst);
