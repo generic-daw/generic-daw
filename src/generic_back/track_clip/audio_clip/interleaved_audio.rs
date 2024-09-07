@@ -23,7 +23,7 @@ use crate::{generic_back::meter::Meter, generic_front::timeline::Message};
 type Ver = Vec<(f32, f32)>;
 pub struct InterleavedAudio {
     samples: Vec<f32>,
-    vers: Arc<[RwLock<Ver>]>,
+    vers: [RwLock<Ver>; 13],
     pub name: String,
 }
 
@@ -34,7 +34,7 @@ impl InterleavedAudio {
         let length = samples.len();
         let audio = Arc::new(Self {
             samples,
-            vers: Arc::new([
+            vers: [
                 RwLock::new(vec![(0.0, 0.0); length]),
                 RwLock::new(vec![(0.0, 0.0); (length + 1) / 2]),
                 RwLock::new(vec![(0.0, 0.0); (length + 3) / 4]),
@@ -48,7 +48,7 @@ impl InterleavedAudio {
                 RwLock::new(vec![(0.0, 0.0); (length + 1023) / 1024]),
                 RwLock::new(vec![(0.0, 0.0); (length + 2047) / 2048]),
                 RwLock::new(vec![(0.0, 0.0); (length + 4095) / 4096]),
-            ]),
+            ],
             name: path.file_name().unwrap().to_str().unwrap().to_string(),
         });
 

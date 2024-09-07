@@ -89,10 +89,7 @@ impl Daw {
                     self.timeline.samples_sender.clone(),
                 );
                 if let Ok(audio_file) = audio_file {
-                    let clip = Arc::new(AudioClip::new(
-                        audio_file,
-                        &self.arrangement.read().unwrap().meter,
-                    ));
+                    let clip = AudioClip::new(audio_file, &self.arrangement.read().unwrap().meter);
                     let track = Arc::new(AudioTrack::new());
                     track.clips.write().unwrap().push(clip);
                     self.arrangement.write().unwrap().tracks.push(track);

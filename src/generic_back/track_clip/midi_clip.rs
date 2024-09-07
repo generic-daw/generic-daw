@@ -6,18 +6,18 @@ use crate::{
 };
 use iced::{widget::canvas::Frame, Theme};
 use midi_pattern::{MidiNote, MidiPattern};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 pub struct MidiClip {
-    pub pattern: Arc<RwLock<MidiPattern>>,
+    pub pattern: MidiPattern,
     global_start: Position,
     global_end: Position,
     pattern_start: Position,
 }
 
 impl MidiClip {
-    pub fn new(pattern: Arc<RwLock<MidiPattern>>, meter: &Meter) -> Self {
-        let len = pattern.read().unwrap().len();
+    pub fn new(pattern: MidiPattern, meter: &Meter) -> Self {
+        let len = pattern.len();
         Self {
             pattern,
             global_start: Position::new(0, 0),
@@ -59,8 +59,6 @@ impl MidiClip {
         let global_start = self.global_start.in_interleaved_samples(meter);
         let global_end = self.global_end.in_interleaved_samples(meter);
         self.pattern
-            .read()
-            .unwrap()
             .notes
             .iter()
             .map(|note| {

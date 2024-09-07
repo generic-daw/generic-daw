@@ -4,10 +4,10 @@ use crate::{
     generic_front::drawable::{Drawable, TimelinePosition, TimelineScale},
 };
 use iced::{widget::canvas::Frame, Theme};
-use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
+use std::sync::{atomic::Ordering::SeqCst, RwLock};
 
 pub struct AudioTrack {
-    pub clips: RwLock<Vec<Arc<AudioClip>>>,
+    pub clips: RwLock<Vec<AudioClip>>,
     volume: f32,
 }
 
@@ -46,7 +46,7 @@ impl Track for AudioTrack {
             .read()
             .unwrap()
             .iter()
-            .map(|clip| clip.get_global_end())
+            .map(AudioClip::get_global_end)
             .max()
             .unwrap_or(Position::new(0, 0))
     }

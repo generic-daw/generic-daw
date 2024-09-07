@@ -23,7 +23,7 @@ use std::sync::{
 };
 
 pub struct MidiTrack {
-    pub clips: RwLock<Vec<Arc<MidiClip>>>,
+    pub clips: RwLock<Vec<MidiClip>>,
     volume: f32,
     plugin_state: PluginState,
 }
@@ -95,7 +95,7 @@ impl Track for MidiTrack {
             .read()
             .unwrap()
             .iter()
-            .map(|clip| clip.get_global_end())
+            .map(MidiClip::get_global_end)
             .max()
             .unwrap_or(Position::new(0, 0))
     }
