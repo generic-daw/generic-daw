@@ -24,6 +24,7 @@ use std::sync::{
 
 pub struct MidiTrack {
     pub clips: RwLock<Vec<Arc<MidiClip>>>,
+    volume: f32,
     plugin_sender: Sender<MainThreadMessage>,
     host_receiver: Mutex<Receiver<HostThreadMessage>>,
     global_midi_cache: RwLock<Vec<Arc<MidiNote>>>,
@@ -42,6 +43,7 @@ impl MidiTrack {
     ) -> Self {
         Self {
             clips: RwLock::new(Vec::new()),
+            volume: 1.0,
             plugin_sender,
             host_receiver: Mutex::new(host_receiver),
             global_midi_cache: RwLock::new(Vec::new()),
@@ -259,7 +261,7 @@ impl Track for MidiTrack {
             self.last_buffer_index.store(last_buffer_index, SeqCst);
         }
 
-        self.running_buffer.read().unwrap()[last_buffer_index as usize]
+        self.running_buffer.read().unwrap()[last_buffer_index as usize] * self.volume
     }
 
     fn get_global_end(&self) -> Position {
@@ -270,6 +272,14 @@ impl Track for MidiTrack {
             .map(|clip| clip.get_global_end())
             .max()
             .unwrap_or(Position::new(0, 0))
+    }
+
+    fn get_volume(&self) -> f32 {
+        self.volume
+    }
+
+    fn set_volume(&mut self, volume: f32) {
+        self.volume = volume;
     }
 }
 

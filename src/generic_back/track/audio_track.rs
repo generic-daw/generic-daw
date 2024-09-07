@@ -8,6 +8,7 @@ use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
 pub struct AudioTrack {
     pub clips: RwLock<Vec<Arc<AudioClip>>>,
+    volume: f32,
 }
 
 impl Default for AudioTrack {
@@ -20,6 +21,7 @@ impl AudioTrack {
     pub const fn new() -> Self {
         Self {
             clips: RwLock::new(Vec::new()),
+            volume: 1.0,
         }
     }
 }
@@ -35,7 +37,8 @@ impl Track for AudioTrack {
             .unwrap()
             .iter()
             .map(|clip| clip.get_at_global_time(global_time, meter))
-            .sum()
+            .sum::<f32>()
+            * self.volume
     }
 
     fn get_global_end(&self) -> Position {
@@ -46,6 +49,14 @@ impl Track for AudioTrack {
             .map(|clip| clip.get_global_end())
             .max()
             .unwrap_or(Position::new(0, 0))
+    }
+
+    fn get_volume(&self) -> f32 {
+        self.volume
+    }
+
+    fn set_volume(&mut self, volume: f32) {
+        self.volume = volume;
     }
 }
 
