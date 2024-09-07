@@ -21,6 +21,7 @@ pub enum Message {
     YScaleChanged(f32),
     Tick,
     Scrolled(ScrollDelta),
+    MovePlayToStart,
 }
 
 pub struct Timeline {
@@ -55,11 +56,11 @@ impl Timeline {
             }
             Message::XScaleChanged(x_scale) => {
                 self.scale.x = *x_scale;
-                self.tracks_cache.clear();
+                self.update(&Message::ArrangementUpdated);
             }
             Message::YScaleChanged(y_scale) => {
                 self.scale.y = *y_scale;
-                self.tracks_cache.clear();
+                self.update(&Message::ArrangementUpdated);
             }
             Message::Tick => {
                 if let Ok(msg) = self.samples_receiver.try_recv() {
@@ -101,7 +102,16 @@ impl Timeline {
                         }));
                     }
                 }
-                self.tracks_cache.clear();
+                self.update(&Message::ArrangementUpdated);
+            }
+            Message::MovePlayToStart => {
+                let arrangement = self.arrangement.read().unwrap();
+                self.position.x = Position::from_interleaved_samples(
+                    arrangement.meter.global_time.load(SeqCst),
+                    &arrangement.meter,
+                );
+                drop(arrangement);
+                self.update(&Message::ArrangementUpdated);
             }
         }
     }

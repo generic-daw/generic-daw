@@ -65,6 +65,7 @@ impl Daw {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) {
         match message {
             Message::TrackPanelMessage(msg) => {
@@ -105,12 +106,11 @@ impl Daw {
                 self.timeline.update(&TimelineMessage::ArrangementUpdated);
             }
             Message::TogglePlay => {
-                self.arrangement
-                    .read()
-                    .unwrap()
-                    .meter
-                    .playing
-                    .fetch_xor(true, SeqCst);
+                let arrangement = self.arrangement.read().unwrap();
+                arrangement.meter.playing.fetch_xor(true, SeqCst);
+                if arrangement.meter.playing.load(SeqCst) {
+                    self.timeline.update(&TimelineMessage::MovePlayToStart);
+                }
             }
             Message::Stop => {
                 self.arrangement

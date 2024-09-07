@@ -93,8 +93,8 @@ impl AudioClip {
     }
 
     pub fn get_ver_at_index(&self, ver: usize, index: usize) -> (f32, f32) {
-        let (a, b) = self.audio.get_ver_at_index(ver, index);
-        (a * self.volume / 2.0 + 0.5, b * self.volume / 2.0 + 0.5)
+        let (min, max) = self.audio.get_ver_at_index(ver, index);
+        (min * self.volume / 2.0 + 0.5, max * self.volume / 2.0 + 0.5)
     }
 
     pub fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
@@ -305,17 +305,17 @@ impl Drawable for AudioClip {
 
         let path = iced::widget::canvas::Path::new(|path| {
             (start..end).enumerate().for_each(|(x, i)| {
-                let (a, b) = self.get_ver_at_index(scale.x as usize, i as usize);
+                let (min, max) = self.get_ver_at_index(scale.x as usize, i as usize);
 
                 path.line_to(iced::Point::new(
                     x as f32 * ratio,
-                    (a.mul_add(0.9, 0.05) + position.y) * scale.y,
+                    (min + position.y) * scale.y,
                 ));
 
-                if (a - b).abs() > f32::EPSILON {
+                if (min - max).abs() > f32::EPSILON {
                     path.line_to(iced::Point::new(
                         x as f32 * ratio,
-                        (b.mul_add(0.9, 0.05) + position.y) * scale.y,
+                        (max + position.y) * scale.y,
                     ));
                 }
             });
