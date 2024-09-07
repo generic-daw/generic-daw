@@ -23,7 +23,8 @@ use crate::{generic_back::meter::Meter, generic_front::timeline::Message};
 type Ver = Vec<(f32, f32)>;
 pub struct InterleavedAudio {
     samples: Vec<f32>,
-    pub vers: Arc<[RwLock<Ver>]>,
+    vers: Arc<[RwLock<Ver>]>,
+    pub name: String,
 }
 
 impl InterleavedAudio {
@@ -48,6 +49,7 @@ impl InterleavedAudio {
                 RwLock::new(vec![(0.0, 0.0); (length + 2047) / 2048]),
                 RwLock::new(vec![(0.0, 0.0); (length + 4095) / 4096]),
             ]),
+            name: path.file_name().unwrap().to_str().unwrap().to_string(),
         });
 
         Self::create_downscaled_audio(audio.clone(), sender);

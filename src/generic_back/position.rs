@@ -83,7 +83,7 @@ impl Sub for Position {
                     + (new_sub_quarter_note / 256),
             )
             .unwrap(),
-            sub_quarter_note: u8::try_from(new_sub_quarter_note % 256).unwrap(),
+            sub_quarter_note: u8::try_from(new_sub_quarter_note.rem_euclid(256)).unwrap(),
         }
     }
 }

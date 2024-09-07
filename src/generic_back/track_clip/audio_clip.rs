@@ -4,10 +4,13 @@ use crate::{
     generic_back::{meter::Meter, position::Position},
     generic_front::drawable::{Drawable, TimelinePosition, TimelineScale},
 };
-use iced::{widget::canvas::Frame, Point, Size, Theme};
+use iced::{
+    widget::canvas::{Frame, Text},
+    Pixels, Point, Size, Theme,
+};
 use interleaved_audio::InterleavedAudio;
 use std::{
-    cmp::{max, min},
+    cmp::{max, min, min_by},
     sync::{atomic::Ordering::SeqCst, Arc},
 };
 
@@ -96,9 +99,15 @@ impl Drawable for AudioClip {
             start + (frame.width() / ratio) as u32,
         );
 
+        let text_scale = 12.0 * 1.5;
+        let text_scale_ratio = 1.0 - (text_scale / scale.y);
+
         let background = iced::widget::canvas::Path::rectangle(
-            Point::new(start as f32 * -ratio, position.y * scale.y),
-            Size::new(end as f32 * ratio, scale.y),
+            Point::new(
+                start as f32 * -ratio,
+                position.y.mul_add(scale.y, text_scale),
+            ),
+            Size::new(end as f32 * ratio, scale.y - text_scale),
         );
         frame.fill(
             &background,
@@ -109,6 +118,11 @@ impl Drawable for AudioClip {
                 .color
                 .scale_alpha(0.25),
         );
+        let background = iced::widget::canvas::Path::rectangle(
+            Point::new(start as f32 * -ratio, position.y * scale.y),
+            Size::new(end as f32 * ratio, text_scale),
+        );
+        frame.fill(&background, theme.extended_palette().primary.weak.color);
 
         // this sometimes breaks, see https://github.com/iced-rs/iced/issues/2567
 
@@ -118,13 +132,13 @@ impl Drawable for AudioClip {
 
                 path.line_to(iced::Point::new(
                     x as f32 * ratio,
-                    (min + position.y) * scale.y,
+                    ((min + position.y) * scale.y).mul_add(text_scale_ratio, text_scale),
                 ));
 
                 if (min - max).abs() > f32::EPSILON {
                     path.line_to(iced::Point::new(
                         x as f32 * ratio,
-                        (max + position.y) * scale.y,
+                        ((max + position.y) * scale.y).mul_add(text_scale_ratio, text_scale),
                     ));
                 }
             });
@@ -134,5 +148,22 @@ impl Drawable for AudioClip {
             iced::widget::canvas::Stroke::default()
                 .with_color(theme.extended_palette().secondary.base.text),
         );
+
+        let text = Text {
+            content: self.audio.name.to_string(),
+            position: Point::new(
+                min_by(
+                    self.get_global_start().in_interleaved_samples(meter) as f32,
+                    0.0,
+                    |a, b| a.partial_cmp(b).unwrap(),
+                )
+                .mul_add(scale.y, 2.0),
+                position.y.mul_add(scale.y, 2.0),
+            ),
+            color: theme.extended_palette().secondary.base.text,
+            size: Pixels(text_scale / 1.5),
+            ..Text::default()
+        };
+        frame.fill_text(text);
     }
 }
