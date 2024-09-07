@@ -110,83 +110,86 @@ impl Timeline {
         Element::from(Canvas::new(self).width(Length::Fill).height(Length::Fill))
     }
 
-    fn draw_grid(
+    fn draw_bpm_lines(
         &self,
         renderer: &iced::Renderer,
         bounds: iced::Rectangle,
         theme: &iced::Theme,
     ) -> Geometry {
-        let mut grid = iced::widget::canvas::Frame::new(renderer, bounds.size());
-        (0..=self.arrangement.read().unwrap().tracks.len()).for_each(|i| {
-            let path = iced::widget::canvas::Path::new(|path| {
-                let y = (i as f32 - self.position.y) * self.scale.y;
-                path.line_to(iced::Point::new(0.0, y));
-                path.line_to(iced::Point::new(bounds.width, y));
-            });
-            grid.stroke(
-                &path,
-                iced::widget::canvas::Stroke::default()
-                    .with_color(theme.extended_palette().secondary.base.color),
+        let mut lines = iced::widget::canvas::Frame::new(renderer, bounds.size());
+
+        // border around the timeline
+        let path = iced::widget::canvas::Path::new(|path| {
+            path.line_to(iced::Point::new(0.0, 0.0));
+            path.line_to(iced::Point::new(bounds.width - 1.0, 0.0));
+            path.line_to(iced::Point::new(bounds.width - 1.0, bounds.height - 2.0));
+            path.line_to(iced::Point::new(0.0, bounds.height - 2.0));
+            path.line_to(iced::Point::new(0.0, 0.0));
+        });
+        lines.stroke(
+            &path,
+            iced::widget::canvas::Stroke::default()
+                .with_color(theme.extended_palette().secondary.weak.color),
+        );
+
+        let mut beat = self.position.x;
+        let mut end_beat = beat
+            + Position::from_interleaved_samples(
+                (bounds.width * self.scale.x.exp2()) as u32,
+                &self.arrangement.read().unwrap().meter,
             );
+        if beat.sub_quarter_note != 0 {
+            beat.sub_quarter_note = 0;
+            beat.quarter_note += 1;
+        }
+        end_beat.sub_quarter_note = 0;
 
-            let mut beat = self.position.x;
-            let mut end_beat = beat
-                + Position::from_interleaved_samples(
-                    (bounds.width * self.scale.x.exp2()) as u32,
-                    &self.arrangement.read().unwrap().meter,
-                );
-            if beat.sub_quarter_note != 0 {
-                beat.sub_quarter_note = 0;
-                beat.quarter_note += 1;
-            }
-            end_beat.sub_quarter_note = 0;
-
-            while beat <= end_beat {
-                let color = if self.scale.x > 11.0 {
-                    if beat.quarter_note
-                        % u32::from(self.arrangement.read().unwrap().meter.numerator)
-                        == 0
-                    {
-                        let bar = beat.quarter_note
-                            / u32::from(self.arrangement.read().unwrap().meter.numerator);
-                        if bar % 4 == 0 {
-                            theme.extended_palette().secondary.strong.color
-                        } else {
-                            theme.extended_palette().secondary.weak.color
-                        }
-                    } else {
-                        beat.quarter_note += 1;
-                        continue;
-                    }
-                } else if beat.quarter_note
-                    % u32::from(self.arrangement.read().unwrap().meter.numerator)
+        // grid lines
+        while beat <= end_beat {
+            let color = if self.scale.x > 11.0 {
+                if beat.quarter_note % u32::from(self.arrangement.read().unwrap().meter.numerator)
                     == 0
                 {
-                    theme.extended_palette().secondary.strong.color
+                    let bar = beat.quarter_note
+                        / u32::from(self.arrangement.read().unwrap().meter.numerator);
+                    if bar % 4 == 0 {
+                        theme.extended_palette().secondary.strong.color
+                    } else {
+                        theme.extended_palette().secondary.weak.color
+                    }
                 } else {
-                    theme.extended_palette().secondary.weak.color
-                };
+                    beat.quarter_note += 1;
+                    continue;
+                }
+            } else if beat.quarter_note
+                % u32::from(self.arrangement.read().unwrap().meter.numerator)
+                == 0
+            {
+                theme.extended_palette().secondary.strong.color
+            } else {
+                theme.extended_palette().secondary.weak.color
+            };
 
-                let path = iced::widget::canvas::Path::new(|path| {
-                    let x = (beat.in_interleaved_samples(&self.arrangement.read().unwrap().meter)
-                        as f32
-                        - self
-                            .position
-                            .x
-                            .in_interleaved_samples(&self.arrangement.read().unwrap().meter)
-                            as f32)
-                        / self.scale.x.exp2();
-                    path.line_to(iced::Point::new(x, 0.0));
-                    path.line_to(iced::Point::new(x, bounds.height));
-                });
-                grid.stroke(
-                    &path,
-                    iced::widget::canvas::Stroke::default().with_color(color),
-                );
-                beat.quarter_note += 1;
-            }
-        });
-        grid.into_geometry()
+            let path = iced::widget::canvas::Path::new(|path| {
+                let x = (beat.in_interleaved_samples(&self.arrangement.read().unwrap().meter)
+                    as f32
+                    - self
+                        .position
+                        .x
+                        .in_interleaved_samples(&self.arrangement.read().unwrap().meter)
+                        as f32)
+                    / self.scale.x.exp2();
+                path.line_to(iced::Point::new(x, 0.0));
+                path.line_to(iced::Point::new(x, bounds.height));
+            });
+            lines.stroke(
+                &path,
+                iced::widget::canvas::Stroke::default().with_color(color),
+            );
+            beat.quarter_note += 1;
+        }
+
+        lines.into_geometry()
     }
 
     fn draw_playhead(
@@ -235,7 +238,7 @@ impl canvas::Program<Message> for Timeline {
         bounds: iced::Rectangle,
         _cursor: iced::mouse::Cursor,
     ) -> Vec<iced::widget::canvas::Geometry> {
-        let grid = self.draw_grid(renderer, bounds, theme);
+        let grid = self.draw_bpm_lines(renderer, bounds, theme);
 
         let playlist = self.tracks_cache.draw(renderer, bounds.size(), |frame| {
             self.arrangement

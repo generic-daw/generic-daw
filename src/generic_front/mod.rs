@@ -184,17 +184,20 @@ impl Daw {
                 self.arrangement.read().unwrap().meter.numerator,
                 1..=255,
                 Message::NumeratorChanged
-            ),
+            )
+            .ignore_buttons(true),
             number_input(
                 1 << self.arrangement.read().unwrap().meter.denominator,
                 1..=128,
                 Message::DenominatorChanged
-            ),
+            )
+            .ignore_buttons(true),
             number_input(
                 self.arrangement.read().unwrap().meter.bpm,
                 1..=65535,
                 Message::BpmChanged
             )
+            .ignore_buttons(true)
         ];
 
         let content = column![

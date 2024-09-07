@@ -141,7 +141,7 @@ impl Drawable for MidiClip {
         &self,
         _frame: &mut Frame,
         _scale: TimelineScale,
-        _offset: &TimelinePosition,
+        _position: &TimelinePosition,
         _meter: &Meter,
         _theme: &Theme,
     ) {

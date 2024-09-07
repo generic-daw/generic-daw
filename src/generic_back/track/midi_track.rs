@@ -278,12 +278,24 @@ impl Drawable for MidiTrack {
         &self,
         frame: &mut Frame,
         scale: TimelineScale,
-        offset: &TimelinePosition,
+        position: &TimelinePosition,
         meter: &Meter,
         theme: &Theme,
     ) {
+        let path = iced::widget::canvas::Path::new(|path| {
+            let y = (position.y + 1.0) * scale.y;
+            dbg!(y);
+            path.line_to(iced::Point::new(0.0, y));
+            path.line_to(iced::Point::new(frame.width(), y));
+        });
+        frame.stroke(
+            &path,
+            iced::widget::canvas::Stroke::default()
+                .with_color(theme.extended_palette().secondary.base.color),
+        );
+
         self.clips.read().unwrap().iter().for_each(|track| {
-            track.draw(frame, scale, offset, meter, theme);
+            track.draw(frame, scale, position, meter, theme);
         });
     }
 }
