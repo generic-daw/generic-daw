@@ -60,7 +60,6 @@ impl Drawable for AudioTrack {
     ) {
         let path = iced::widget::canvas::Path::new(|path| {
             let y = (position.y + 1.0) * scale.y;
-            dbg!(y);
             path.line_to(iced::Point::new(0.0, y));
             path.line_to(iced::Point::new(frame.width(), y));
         });

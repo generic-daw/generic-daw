@@ -118,20 +118,6 @@ impl Timeline {
     ) -> Geometry {
         let mut lines = iced::widget::canvas::Frame::new(renderer, bounds.size());
 
-        // border around the timeline
-        let path = iced::widget::canvas::Path::new(|path| {
-            path.line_to(iced::Point::new(0.0, 0.0));
-            path.line_to(iced::Point::new(bounds.width - 1.0, 0.0));
-            path.line_to(iced::Point::new(bounds.width - 1.0, bounds.height - 2.0));
-            path.line_to(iced::Point::new(0.0, bounds.height - 2.0));
-            path.line_to(iced::Point::new(0.0, 0.0));
-        });
-        lines.stroke(
-            &path,
-            iced::widget::canvas::Stroke::default()
-                .with_color(theme.extended_palette().secondary.weak.color),
-        );
-
         let mut beat = self.position.x;
         let mut end_beat = beat
             + Position::from_interleaved_samples(
@@ -263,6 +249,21 @@ impl canvas::Program<Message> for Timeline {
 
         let playhead = self.draw_playhead(renderer, bounds, theme);
 
-        vec![grid, playlist, playhead]
+        // border around the timeline
+        let mut border = iced::widget::canvas::Frame::new(renderer, bounds.size());
+        let path = iced::widget::canvas::Path::new(|path| {
+            path.line_to(iced::Point::new(0.0, 0.0));
+            path.line_to(iced::Point::new(bounds.width - 1.0, 0.0));
+            path.line_to(iced::Point::new(bounds.width - 1.0, bounds.height - 1.0));
+            path.line_to(iced::Point::new(0.0, bounds.height - 1.0));
+            path.line_to(iced::Point::new(0.0, 0.0));
+        });
+        border.stroke(
+            &path,
+            iced::widget::canvas::Stroke::default()
+                .with_color(theme.extended_palette().secondary.weak.color),
+        );
+
+        vec![grid, playlist, playhead, border.into_geometry()]
     }
 }

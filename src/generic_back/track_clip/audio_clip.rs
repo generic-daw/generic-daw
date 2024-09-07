@@ -6,7 +6,7 @@ use crate::{
     },
 };
 use anyhow::{anyhow, Result};
-use iced::{widget::canvas::Frame, Theme};
+use iced::{widget::canvas::Frame, Point, Size, Theme};
 use rubato::{
     SincFixedIn, SincInterpolationParameters, SincInterpolationType, VecResampler, WindowFunction,
 };
@@ -276,19 +276,34 @@ impl Drawable for AudioClip {
         meter: &Meter,
         theme: &Theme,
     ) {
+        let ver_len = scale.x.floor().exp2() as u32;
+        let ratio = ver_len as f32 / scale.x.exp2();
+        let start = max(
+            self.get_global_start().in_interleaved_samples(meter) / ver_len,
+            position.x.in_interleaved_samples(meter) / ver_len,
+        );
+        let end = min(
+            self.get_global_end().in_interleaved_samples(meter) / ver_len,
+            start + (frame.width() / ratio) as u32,
+        );
+
+        let background = iced::widget::canvas::Path::rectangle(
+            Point::new(start as f32 * -ratio, position.y * scale.y),
+            Size::new(end as f32 * ratio, scale.y),
+        );
+        frame.fill(
+            &background,
+            theme
+                .extended_palette()
+                .primary
+                .weak
+                .color
+                .scale_alpha(0.25),
+        );
+
         // this sometimes breaks, see https://github.com/iced-rs/iced/issues/2567
 
         let path = iced::widget::canvas::Path::new(|path| {
-            let ver_len = scale.x.floor().exp2() as u32;
-            let ratio = ver_len as f32 / scale.x.exp2();
-            let start = max(
-                self.get_global_start().in_interleaved_samples(meter) / ver_len,
-                position.x.in_interleaved_samples(meter) / ver_len,
-            );
-            let end = min(
-                self.get_global_end().in_interleaved_samples(meter) / ver_len,
-                start + (frame.width() / ratio) as u32,
-            );
             (start..end).enumerate().for_each(|(x, i)| {
                 let (a, b) = self.get_ver_at_index(scale.x as usize, i as usize);
 
