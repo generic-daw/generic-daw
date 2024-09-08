@@ -11,7 +11,7 @@ cpal = "0.15.3"
 generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host" }
 hound = "3.5.1"
 iced = { git = "https://github.com/iced-rs/iced", features = ["canvas"] }
-iced_aw = { git = "https://github.com/edwloef/iced_aw", features = [
+iced_aw = { git = "https://github.com/iced-rs/iced_aw", features = [
     "number_input",
 ] }
 rfd = "0.14.1"
