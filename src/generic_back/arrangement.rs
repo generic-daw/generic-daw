@@ -18,7 +18,7 @@ impl Arrangement {
         }
     }
 
-    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
+    pub fn get_at_global_time(&self, global_time: usize) -> f32 {
         self.tracks
             .iter()
             .map(|track| track.get_at_global_time(global_time, &self.meter))

@@ -10,7 +10,7 @@ use clack_host::{
 };
 use generic_clap_host::{host::HostThreadMessage, main_thread::MainThreadMessage};
 use std::sync::{
-    atomic::{AtomicU32, AtomicU8, Ordering::SeqCst},
+    atomic::{AtomicU8, AtomicUsize, Ordering::SeqCst},
     mpsc::{Receiver, Sender},
     Arc, Mutex, RwLock,
 };
@@ -21,14 +21,14 @@ pub struct PluginState {
     pub global_midi_cache: RwLock<Vec<Arc<MidiNote>>>,
     pub dirty: Arc<AtomicDirtyEvent>,
     pub started_notes: RwLock<Vec<Arc<MidiNote>>>,
-    pub last_global_time: AtomicU32,
+    pub last_global_time: AtomicUsize,
     pub running_buffer: RwLock<[f32; 16]>,
     pub last_buffer_index: AtomicU8,
     pub audio_ports: Arc<RwLock<AudioPorts>>,
 }
 
 impl PluginState {
-    pub fn refresh_buffer(&self, global_time: u32) {
+    pub fn refresh_buffer(&self, global_time: usize) {
         let buffer = self.get_input_events(global_time);
 
         let input_audio = [vec![0.0; 8], vec![0.0; 8]];
@@ -53,7 +53,7 @@ impl PluginState {
         };
     }
 
-    fn get_input_events(&self, global_time: u32) -> EventBuffer {
+    fn get_input_events(&self, global_time: usize) -> EventBuffer {
         let mut buffer = EventBuffer::new();
 
         self.plugin_sender
@@ -88,7 +88,7 @@ impl PluginState {
         buffer
     }
 
-    fn events_refresh(&self, buffer: &mut EventBuffer, global_time: u32, steady_time: u64) {
+    fn events_refresh(&self, buffer: &mut EventBuffer, global_time: usize, steady_time: u64) {
         self.global_midi_cache
             .read()
             .unwrap()
@@ -97,7 +97,10 @@ impl PluginState {
             .for_each(|note| {
                 // notes that start during the running buffer
                 buffer.push(&NoteOnEvent::new(
-                    note.local_start - global_time + u32::try_from(steady_time).unwrap(),
+                    u32::try_from(
+                        note.local_start - global_time + usize::try_from(steady_time).unwrap(),
+                    )
+                    .unwrap(),
                     Pckn::new(0u8, note.channel, note.note, Match::All),
                     note.velocity,
                 ));
@@ -115,7 +118,10 @@ impl PluginState {
             .for_each(|(index, note)| {
                 // notes that end before the running buffer ends
                 buffer.push(&NoteOffEvent::new(
-                    note.local_end - global_time + u32::try_from(steady_time).unwrap(),
+                    u32::try_from(
+                        note.local_end - global_time + usize::try_from(steady_time).unwrap(),
+                    )
+                    .unwrap(),
                     Pckn::new(0u8, note.channel, note.note, Match::All),
                     note.velocity,
                 ));
@@ -127,7 +133,7 @@ impl PluginState {
         });
     }
 
-    fn jump_events_refresh(&self, buffer: &mut EventBuffer, global_time: u32, steady_time: u64) {
+    fn jump_events_refresh(&self, buffer: &mut EventBuffer, global_time: usize, steady_time: u64) {
         self.started_notes.read().unwrap().iter().for_each(|note| {
             // stop all started notes
             buffer.push(&NoteOffEvent::new(
@@ -158,7 +164,7 @@ impl PluginState {
     fn note_add_events_refresh(
         &self,
         buffer: &mut EventBuffer,
-        global_time: u32,
+        global_time: usize,
         steady_time: u64,
     ) {
         self.global_midi_cache

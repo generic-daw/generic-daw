@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32},
+    atomic::{AtomicBool, AtomicUsize},
     Arc,
 };
 
@@ -12,7 +12,7 @@ pub struct Meter {
     pub sample_rate: u32,
     pub playing: Arc<AtomicBool>,
     pub exporting: Arc<AtomicBool>,
-    pub global_time: Arc<AtomicU32>,
+    pub global_time: Arc<AtomicUsize>,
 }
 
 impl Meter {
@@ -26,11 +26,11 @@ impl Meter {
             sample_rate: 0,
             playing: Arc::new(AtomicBool::new(false)),
             exporting: Arc::new(AtomicBool::new(false)),
-            global_time: Arc::new(AtomicU32::new(0)),
+            global_time: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
 
-pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Meter) -> u32 {
-    (seconds * f64::from(meter.sample_rate) * 2.0) as u32
+pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Meter) -> usize {
+    (seconds * f64::from(meter.sample_rate) * 2.0) as usize
 }

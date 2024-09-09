@@ -23,7 +23,7 @@ use crate::{generic_back::meter::Meter, generic_front::timeline::Message};
 type Ver = Vec<(f32, f32)>;
 pub struct InterleavedAudio {
     samples: Vec<f32>,
-    vers: [RwLock<Ver>; 13],
+    downscaled: [RwLock<Ver>; 13],
     pub name: String,
 }
 
@@ -34,7 +34,7 @@ impl InterleavedAudio {
         let length = samples.len();
         let audio = Arc::new(Self {
             samples,
-            vers: [
+            downscaled: [
                 RwLock::new(vec![(0.0, 0.0); length]),
                 RwLock::new(vec![(0.0, 0.0); (length + 1) / 2]),
                 RwLock::new(vec![(0.0, 0.0); (length + 3) / 4]),
@@ -56,16 +56,16 @@ impl InterleavedAudio {
         Ok(audio)
     }
 
-    pub fn len(&self) -> u32 {
-        u32::try_from(self.samples.len()).unwrap()
+    pub fn len(&self) -> usize {
+        self.samples.len()
     }
 
     pub fn get_sample_at_index(&self, index: usize) -> f32 {
         *self.samples.get(index).unwrap()
     }
 
-    pub fn get_ver_at_index(&self, ver: usize, index: usize) -> (f32, f32) {
-        *self.vers[ver]
+    pub fn get_downscaled_at_index(&self, ds_index: usize, index: usize) -> (f32, f32) {
+        *self.downscaled[ds_index]
             .read()
             .unwrap()
             .get(index)
@@ -170,14 +170,14 @@ impl InterleavedAudio {
                 let ver = (audio.samples[i]
                     + audio.samples.get(i + 1).unwrap_or(&audio.samples[i]))
                     / 2.0;
-                audio.vers[0].write().unwrap()[i] = (ver, ver);
+                audio.downscaled[0].write().unwrap()[i] = (ver, ver);
             });
 
-            (1..audio.vers.len()).for_each(|i| {
-                let len = audio.vers[i].read().unwrap().len();
-                let last = audio.vers[i - 1].read().unwrap();
+            (1..audio.downscaled.len()).for_each(|i| {
+                let len = audio.downscaled[i].read().unwrap().len();
+                let last = audio.downscaled[i - 1].read().unwrap();
                 (0..len).for_each(|j| {
-                    audio.vers[i].write().unwrap()[j] = (
+                    audio.downscaled[i].write().unwrap()[j] = (
                         min_by(
                             last[2 * j].0,
                             last.get(2 * j + 1).unwrap_or(&(f32::MAX, f32::MAX)).0,

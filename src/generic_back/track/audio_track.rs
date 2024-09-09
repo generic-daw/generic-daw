@@ -27,7 +27,7 @@ impl AudioTrack {
 }
 
 impl Track for AudioTrack {
-    fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
+    fn get_at_global_time(&self, global_time: usize, meter: &Meter) -> f32 {
         if !meter.playing.load(SeqCst) {
             return 0.0;
         }

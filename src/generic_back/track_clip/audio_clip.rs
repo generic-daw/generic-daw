@@ -34,12 +34,12 @@ impl AudioClip {
         }
     }
 
-    pub fn get_ver_at_index(&self, ver: usize, index: usize) -> (f32, f32) {
-        let (min, max) = self.audio.get_ver_at_index(ver, index);
+    pub fn get_downscaled_at_index(&self, ds_index: usize, index: usize) -> (f32, f32) {
+        let (min, max) = self.audio.get_downscaled_at_index(ds_index, index);
         (min * self.volume / 2.0 + 0.5, max * self.volume / 2.0 + 0.5)
     }
 
-    pub fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
+    pub fn get_at_global_time(&self, global_time: usize, meter: &Meter) -> f32 {
         if !meter.playing.load(SeqCst)
             || global_time < self.global_start.in_interleaved_samples(meter)
             || global_time > self.global_end.in_interleaved_samples(meter)
@@ -47,11 +47,7 @@ impl AudioClip {
             return 0.0;
         }
         self.audio.get_sample_at_index(
-            usize::try_from(global_time).unwrap()
-                - usize::try_from(
-                    (self.global_start + self.clip_start).in_interleaved_samples(meter),
-                )
-                .unwrap(),
+            global_time - (self.global_start + self.clip_start).in_interleaved_samples(meter),
         ) * self.volume
     }
 
@@ -94,28 +90,39 @@ impl Drawable for AudioClip {
         meter: &Meter,
         theme: &Theme,
     ) {
-        let ver_len = scale.x.floor().exp2() as u32;
-        let ratio = ver_len as f32 / scale.x.exp2();
+        // length of the downscaled audio we're using to draw
+        let downscaled_len = scale.x.floor().exp2() as usize;
+
+        // ratio of the length of the downscaled audio to the width of the timeline
+        let width_ratio = downscaled_len as f32 / scale.x.exp2();
+
         let global_start = self.get_global_start().in_interleaved_samples(meter) as f32;
-        let (start, offset) = if position.x > global_start {
-            ((position.x - global_start) as u32 / ver_len, 0)
+
+        // first_index: index of the first sample in the downscaled audio to draw
+        //
+        // index_offset: offset of the first drawn index from the left edge of the timeline
+        // add this to the x position of whatever is being drawn
+        let (first_index, index_offset) = if position.x > global_start {
+            ((position.x - global_start) as usize / downscaled_len, 0)
         } else {
-            (0, (global_start - position.x) as u32 / ver_len)
+            (0, (global_start - position.x) as usize / downscaled_len)
         };
-        let end = min(
-            self.get_global_end().in_interleaved_samples(meter) / ver_len,
-            start - offset + (frame.width() / ratio) as u32,
+
+        // index of the last sample in the downscaled audio to draw
+        let last_index = min(
+            self.get_global_end().in_interleaved_samples(meter) / downscaled_len,
+            first_index - index_offset + (frame.width() / width_ratio) as usize,
         );
 
+        // maximum height of the text
         let text_scale = 12.0 * 1.5;
+        // ratio of the text height to the height of the track
         let text_scale_ratio = 1.0 - (text_scale / scale.y);
 
+        // the translucent background of the track
         let background = iced::widget::canvas::Path::rectangle(
-            Point::new(
-                offset as f32 * ratio,
-                position.y.mul_add(scale.y, text_scale),
-            ),
-            Size::new((end - start) as f32 * ratio, scale.y - text_scale),
+            Point::new(index_offset as f32 * width_ratio, position.y * scale.y),
+            Size::new((last_index - first_index) as f32 * width_ratio, scale.y),
         );
         frame.fill(
             &background,
@@ -127,28 +134,28 @@ impl Drawable for AudioClip {
                 .scale_alpha(0.25),
         );
 
+        // the opaque background of the text
         let background = iced::widget::canvas::Path::rectangle(
-            Point::new(offset as f32 * ratio, position.y * scale.y),
-            Size::new((end - start) as f32 * ratio, text_scale),
+            Point::new(index_offset as f32 * width_ratio, position.y * scale.y),
+            Size::new((last_index - first_index) as f32 * width_ratio, text_scale),
         );
         frame.fill(&background, theme.extended_palette().primary.weak.color);
 
+        // the path of the audio clip
         // this sometimes breaks, see https://github.com/iced-rs/iced/issues/2567
-
         let path = iced::widget::canvas::Path::new(|path| {
-            (start..end).enumerate().for_each(|(x, i)| {
-                let (min, max) =
-                    self.get_ver_at_index(scale.x as usize, usize::try_from(i).unwrap());
+            (first_index..last_index).enumerate().for_each(|(x, i)| {
+                let (min, max) = self.get_downscaled_at_index(scale.x as usize, i);
 
                 path.line_to(iced::Point::new(
-                    (x + usize::try_from(offset).unwrap()) as f32 * ratio,
+                    (x + index_offset) as f32 * width_ratio,
                     min.mul_add(text_scale_ratio, position.y)
                         .mul_add(scale.y, text_scale),
                 ));
 
                 if (min - max).abs() > f32::EPSILON {
                     path.line_to(iced::Point::new(
-                        (x + usize::try_from(offset).unwrap()) as f32 * ratio,
+                        (x + index_offset) as f32 * width_ratio,
                         max.mul_add(text_scale_ratio, position.y)
                             .mul_add(scale.y, text_scale),
                     ));
@@ -161,10 +168,12 @@ impl Drawable for AudioClip {
                 .with_color(theme.extended_palette().secondary.base.text),
         );
 
+        // the name of the sample of the audio clip
+        // TODO: clip this to the end of the track
         let text = Text {
             content: self.audio.name.to_string(),
             position: Point::new(
-                (offset as f32).mul_add(ratio, 2.0),
+                (index_offset as f32).mul_add(width_ratio, 2.0),
                 position.y.mul_add(scale.y, 2.0),
             ),
             color: theme.extended_palette().secondary.base.text,

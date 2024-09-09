@@ -15,9 +15,9 @@ impl Position {
         }
     }
 
-    pub fn from_interleaved_samples(samples: u32, meter: &Meter) -> Self {
-        let global_beat = f64::from(samples)
-            / (f64::from(meter.sample_rate) * 2.0 / (f64::from(meter.bpm) / 60.0));
+    pub fn from_interleaved_samples(samples: usize, meter: &Meter) -> Self {
+        let global_beat =
+            samples as f64 / (f64::from(meter.sample_rate) * 2.0 / (f64::from(meter.bpm) / 60.0));
         let quarter_note = global_beat as u32;
         let sub_quarter_note = ((global_beat - f64::from(quarter_note)) * 256.0) as u8;
 
@@ -27,7 +27,7 @@ impl Position {
         }
     }
 
-    pub fn in_interleaved_samples(self, meter: &Meter) -> u32 {
+    pub fn in_interleaved_samples(self, meter: &Meter) -> usize {
         let global_beat = f64::from(self.quarter_note) + f64::from(self.sub_quarter_note) / 256.0;
 
         seconds_to_interleaved_samples(global_beat / f64::from(meter.bpm) * 60.0, meter)
