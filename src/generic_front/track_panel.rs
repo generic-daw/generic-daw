@@ -19,7 +19,7 @@ impl TrackPanel {
         Self { arrangement }
     }
 
-    #[allow(clippy::unused_self, clippy::needless_pass_by_ref_mut)]
+    #[expect(clippy::unused_self, clippy::needless_pass_by_ref_mut)]
     pub fn update(&mut self, message: &Message) {
         match message {
             Message::ArrangementUpdated => {

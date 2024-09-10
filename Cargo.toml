@@ -36,6 +36,8 @@ must_use_candidate = "allow"
 similar_names = "allow"
 struct_field_names = "allow"
 
+allow_attributes = "warn"
+
 [profile.release]
 lto = true
 codegen-units = 1

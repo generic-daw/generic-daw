@@ -65,7 +65,6 @@ impl Daw {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) {
         match message {
             Message::TrackPanelMessage(msg) => {
