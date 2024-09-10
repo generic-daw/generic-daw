@@ -30,7 +30,7 @@ impl Position {
     pub fn in_interleaved_samples(self, meter: &Meter) -> u32 {
         let global_beat = f64::from(self.quarter_note + self.sub_quarter_note / 256);
 
-        seconds_to_interleaved_samples(global_beat / meter.bpm as f64 * 60.0, meter)
+        seconds_to_interleaved_samples(global_beat / f64::from(meter.bpm) * 60.0, meter)
     }
 }
 
