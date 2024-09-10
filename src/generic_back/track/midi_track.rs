@@ -14,10 +14,13 @@ use crate::{
 };
 use clack_host::prelude::*;
 use generic_clap_host::{host::HostThreadMessage, main_thread::MainThreadMessage};
-use iced::{widget::canvas::Frame, Theme};
+use iced::{
+    widget::canvas::{Frame, Path, Stroke},
+    Point, Theme,
+};
 use plugin_state::PluginState;
 use std::sync::{
-    atomic::{AtomicU8, AtomicUsize, Ordering::SeqCst},
+    atomic::{AtomicUsize, Ordering::SeqCst},
     mpsc::{Receiver, Sender},
     Arc, Mutex, RwLock,
 };
@@ -29,6 +32,7 @@ pub struct MidiTrack {
 }
 
 impl MidiTrack {
+    #[expect(dead_code)]
     pub fn new(
         plugin_sender: Sender<MainThreadMessage>,
         host_receiver: Receiver<HostThreadMessage>,
@@ -44,7 +48,7 @@ impl MidiTrack {
                 started_notes: RwLock::new(Vec::new()),
                 last_global_time: AtomicUsize::new(0),
                 running_buffer: RwLock::new([0.0; 16]),
-                last_buffer_index: AtomicU8::new(15),
+                last_buffer_index: AtomicUsize::new(15),
                 audio_ports: Arc::new(RwLock::new(AudioPorts::with_capacity(2, 1))),
             },
         }
@@ -87,8 +91,7 @@ impl Track for MidiTrack {
                 .store(last_buffer_index, SeqCst);
         }
 
-        self.plugin_state.running_buffer.read().unwrap()[usize::from(last_buffer_index)]
-            * self.volume
+        self.plugin_state.running_buffer.read().unwrap()[last_buffer_index] * self.volume
     }
 
     fn get_global_end(&self) -> Position {
@@ -119,15 +122,14 @@ impl Drawable for MidiTrack {
         meter: &Meter,
         theme: &Theme,
     ) {
-        let path = iced::widget::canvas::Path::new(|path| {
+        let path = Path::new(|path| {
             let y = (position.y + 1.0) * scale.y;
-            path.line_to(iced::Point::new(0.0, y));
-            path.line_to(iced::Point::new(frame.width(), y));
+            path.line_to(Point::new(0.0, y));
+            path.line_to(Point::new(frame.width(), y));
         });
         frame.stroke(
             &path,
-            iced::widget::canvas::Stroke::default()
-                .with_color(theme.extended_palette().secondary.base.color),
+            Stroke::default().with_color(theme.extended_palette().secondary.base.color),
         );
 
         self.clips.read().unwrap().iter().for_each(|track| {

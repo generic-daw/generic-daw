@@ -10,7 +10,7 @@ use clack_host::{
 };
 use generic_clap_host::{host::HostThreadMessage, main_thread::MainThreadMessage};
 use std::sync::{
-    atomic::{AtomicU8, AtomicUsize, Ordering::SeqCst},
+    atomic::{AtomicUsize, Ordering::SeqCst},
     mpsc::{Receiver, Sender},
     Arc, Mutex, RwLock,
 };
@@ -23,7 +23,7 @@ pub struct PluginState {
     pub started_notes: RwLock<Vec<Arc<MidiNote>>>,
     pub last_global_time: AtomicUsize,
     pub running_buffer: RwLock<[f32; 16]>,
-    pub last_buffer_index: AtomicU8,
+    pub last_buffer_index: AtomicUsize,
     pub audio_ports: Arc<RwLock<AudioPorts>>,
 }
 

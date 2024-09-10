@@ -4,11 +4,11 @@ use std::sync::{
 };
 
 pub struct Meter {
-    pub bpm: u16,
-    pub numerator: u8,
+    pub bpm: usize,
+    pub numerator: usize,
     /// this isn't actually the denominator
     /// get the actual denominator with `1 << denominator`
-    pub denominator: u8,
+    pub denominator: usize,
     pub sample_rate: u32,
     pub playing: Arc<AtomicBool>,
     pub exporting: Arc<AtomicBool>,
@@ -16,13 +16,13 @@ pub struct Meter {
 }
 
 impl Meter {
-    pub fn new(bpm: u16, numerator: u8, denominator: u8) -> Self {
+    pub fn new(bpm: usize, numerator: usize, denominator: usize) -> Self {
         assert_eq!(denominator.count_ones(), 1);
 
         Self {
             bpm,
             numerator,
-            denominator: u8::try_from(denominator.trailing_zeros()).unwrap(),
+            denominator: usize::try_from(denominator.trailing_zeros()).unwrap(),
             sample_rate: 0,
             playing: Arc::new(AtomicBool::new(false)),
             exporting: Arc::new(AtomicBool::new(false)),

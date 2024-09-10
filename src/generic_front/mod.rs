@@ -34,16 +34,16 @@ pub struct Daw {
 pub enum Message {
     TrackPanelMessage(TrackPanelMessage),
     TimelineMessage(TimelineMessage),
-    LoadSample(String),
+    LoadSample,
     TogglePlay,
     Stop,
     New,
     Export,
     FileSelected(Option<String>),
     ArrangementUpdated,
-    BpmChanged(u16),
-    NumeratorChanged(u8),
-    DenominatorChanged(u8),
+    BpmChanged(usize),
+    NumeratorChanged(usize),
+    DenominatorChanged(usize),
 }
 
 impl Default for Daw {
@@ -73,7 +73,7 @@ impl Daw {
             Message::TimelineMessage(msg) => {
                 self.timeline.update(&msg);
             }
-            Message::LoadSample(_) => {
+            Message::LoadSample => {
                 if let Some(paths) = FileDialog::new().pick_files() {
                     for path in paths {
                         let path_str = path.display().to_string();
@@ -144,20 +144,20 @@ impl Daw {
                 self.arrangement.write().unwrap().meter.numerator = numerator;
             }
             Message::DenominatorChanged(denominator) => {
-                let c = u8::from(
+                let c = usize::from(
                     (1 << self.arrangement.read().unwrap().meter.denominator) < denominator
                         && !(self.arrangement.read().unwrap().meter.denominator == 0
                             && denominator == 2),
                 ) + 7;
                 self.arrangement.write().unwrap().meter.denominator =
-                    c - u8::try_from(denominator.leading_zeros()).unwrap();
+                    c - usize::try_from(denominator.leading_zeros()).unwrap();
             }
         }
     }
 
     pub fn view(&self) -> Element<Message> {
         let controls = row![
-            button("Load Sample").on_press(Message::LoadSample(String::new())),
+            button("Load Sample").on_press(Message::LoadSample),
             button(
                 if self.arrangement.read().unwrap().meter.playing.load(SeqCst) {
                     "Pause"
