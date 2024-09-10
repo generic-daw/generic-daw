@@ -20,7 +20,7 @@ use iced::{
 };
 use plugin_state::PluginState;
 use std::sync::{
-    atomic::{AtomicUsize, Ordering::SeqCst},
+    atomic::{AtomicU32, Ordering::SeqCst},
     mpsc::{Receiver, Sender},
     Arc, Mutex, RwLock,
 };
@@ -46,9 +46,9 @@ impl MidiTrack {
                 global_midi_cache: RwLock::new(Vec::new()),
                 dirty: Arc::new(AtomicDirtyEvent::new(DirtyEvent::None)),
                 started_notes: RwLock::new(Vec::new()),
-                last_global_time: AtomicUsize::new(0),
+                last_global_time: AtomicU32::new(0),
                 running_buffer: RwLock::new([0.0; 16]),
-                last_buffer_index: AtomicUsize::new(15),
+                last_buffer_index: AtomicU32::new(15),
                 audio_ports: Arc::new(RwLock::new(AudioPorts::with_capacity(2, 1))),
             },
         }
@@ -66,7 +66,7 @@ impl MidiTrack {
 }
 
 impl Track for MidiTrack {
-    fn get_at_global_time(&self, global_time: usize, meter: &Meter) -> f32 {
+    fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
         let last_global_time = self.plugin_state.last_global_time.load(SeqCst);
         let mut last_buffer_index = self.plugin_state.last_buffer_index.load(SeqCst);
 
@@ -91,7 +91,7 @@ impl Track for MidiTrack {
                 .store(last_buffer_index, SeqCst);
         }
 
-        self.plugin_state.running_buffer.read().unwrap()[last_buffer_index] * self.volume
+        self.plugin_state.running_buffer.read().unwrap()[last_buffer_index as usize] * self.volume
     }
 
     fn get_global_end(&self) -> Position {

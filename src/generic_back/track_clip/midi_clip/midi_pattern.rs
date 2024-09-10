@@ -7,8 +7,8 @@ pub struct MidiNote {
     pub note: u16,
     /// between 0.0 and 1.0
     pub velocity: f64,
-    pub local_start: usize,
-    pub local_end: usize,
+    pub local_start: u32,
+    pub local_end: u32,
 }
 
 #[atomic_enum]
@@ -35,7 +35,7 @@ impl MidiPattern {
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub fn len(&self) -> u32 {
         self.notes
             .iter()
             .map(|note| note.local_end)

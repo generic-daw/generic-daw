@@ -28,18 +28,18 @@ impl AudioClip {
         Self {
             audio,
             global_start: Position::new(0, 0),
-            global_end: Position::from_interleaved_samples(samples, meter),
+            global_end: Position::from_interleaved_samples(samples as u32, meter),
             clip_start: Position::new(0, 0),
             volume: 1.0,
         }
     }
 
-    pub fn get_downscaled_at_index(&self, ds_index: usize, index: usize) -> (f32, f32) {
+    pub fn get_downscaled_at_index(&self, ds_index: u32, index: u32) -> (f32, f32) {
         let (min, max) = self.audio.get_downscaled_at_index(ds_index, index);
         (min * self.volume / 2.0 + 0.5, max * self.volume / 2.0 + 0.5)
     }
 
-    pub fn get_at_global_time(&self, global_time: usize, meter: &Meter) -> f32 {
+    pub fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
         if !meter.playing.load(SeqCst)
             || global_time < self.global_start.in_interleaved_samples(meter)
             || global_time > self.global_end.in_interleaved_samples(meter)
@@ -94,7 +94,7 @@ impl Drawable for AudioClip {
         theme: &Theme,
     ) {
         // length of the downscaled audio we're using to draw
-        let downscaled_len = scale.x.floor().exp2() as usize;
+        let downscaled_len = scale.x.floor().exp2() as u32;
 
         // ratio of the length of the downscaled audio to the width of the timeline
         let width_ratio = downscaled_len as f32 / scale.x.exp2();
@@ -103,15 +103,15 @@ impl Drawable for AudioClip {
 
         // first_index: index of the first sample in the downscaled audio to draw
         let (first_index, index_offset) = if position.x > global_start {
-            ((position.x - global_start) as usize / downscaled_len, 0)
+            ((position.x - global_start) as u32 / downscaled_len, 0)
         } else {
-            (0, (global_start - position.x) as usize / downscaled_len)
+            (0, (global_start - position.x) as u32 / downscaled_len)
         };
 
         // index of the last sample in the downscaled audio to draw
         let last_index = min(
             self.get_global_end().in_interleaved_samples(meter) / downscaled_len,
-            first_index - index_offset + (frame.width() / width_ratio) as usize,
+            first_index - index_offset + (frame.width() / width_ratio) as u32,
         );
 
         // first horizontal pixel of the clip
@@ -158,7 +158,7 @@ impl Drawable for AudioClip {
         // this sometimes breaks, see https://github.com/iced-rs/iced/issues/2567
         let path = Path::new(|path| {
             (first_index..last_index).enumerate().for_each(|(x, i)| {
-                let (min, max) = self.get_downscaled_at_index(scale.x as usize, i);
+                let (min, max) = self.get_downscaled_at_index(scale.x as u32, i);
 
                 path.line_to(Point::new(
                     (x as f32).mul_add(width_ratio, clip_first_x_pixel),

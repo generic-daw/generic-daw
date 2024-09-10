@@ -41,9 +41,9 @@ pub enum Message {
     Export,
     FileSelected(Option<String>),
     ArrangementUpdated,
-    BpmChanged(usize),
-    NumeratorChanged(usize),
-    DenominatorChanged(usize),
+    BpmChanged(u32),
+    NumeratorChanged(u32),
+    DenominatorChanged(u32),
 }
 
 impl Default for Daw {
@@ -144,13 +144,13 @@ impl Daw {
                 self.arrangement.write().unwrap().meter.numerator = numerator;
             }
             Message::DenominatorChanged(denominator) => {
-                let c = usize::from(
+                let c = u32::from(
                     (1 << self.arrangement.read().unwrap().meter.denominator) < denominator
                         && !(self.arrangement.read().unwrap().meter.denominator == 0
                             && denominator == 2),
                 ) + 7;
                 self.arrangement.write().unwrap().meter.denominator =
-                    c - usize::try_from(denominator.leading_zeros()).unwrap();
+                    c - denominator.leading_zeros();
             }
         }
     }

@@ -3,23 +3,23 @@ use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Position {
-    pub quarter_note: usize,
-    pub sub_quarter_note: usize,
+    pub quarter_note: u32,
+    pub sub_quarter_note: u32,
 }
 
 impl Position {
-    pub const fn new(quarter_note: usize, sub_quarter_note: usize) -> Self {
+    pub const fn new(quarter_note: u32, sub_quarter_note: u32) -> Self {
         Self {
             quarter_note,
             sub_quarter_note,
         }
     }
 
-    pub fn from_interleaved_samples(samples: usize, meter: &Meter) -> Self {
-        let global_beat =
-            samples as f64 / (f64::from(meter.sample_rate) * 2.0 / (meter.bpm as f64 / 60.0));
-        let quarter_note = global_beat as usize;
-        let sub_quarter_note = ((global_beat - quarter_note as f64) * 256.0) as usize;
+    pub fn from_interleaved_samples(samples: u32, meter: &Meter) -> Self {
+        let global_beat = f64::from(samples)
+            / (f64::from(meter.sample_rate) * 2.0 / (f64::from(meter.bpm) / 60.0));
+        let quarter_note = global_beat as u32;
+        let sub_quarter_note = ((global_beat - f64::from(quarter_note)) * 256.0) as u32;
 
         Self {
             quarter_note,
@@ -27,8 +27,8 @@ impl Position {
         }
     }
 
-    pub fn in_interleaved_samples(self, meter: &Meter) -> usize {
-        let global_beat = (self.quarter_note + self.sub_quarter_note) as f64 / 256.0;
+    pub fn in_interleaved_samples(self, meter: &Meter) -> u32 {
+        let global_beat = f64::from(self.quarter_note + self.sub_quarter_note / 256);
 
         seconds_to_interleaved_samples(global_beat / meter.bpm as f64 * 60.0, meter)
     }

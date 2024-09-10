@@ -109,12 +109,12 @@ impl Timeline {
         let mut lines = Frame::new(renderer, bounds.size());
 
         let mut beat = Position::from_interleaved_samples(
-            self.position.x as usize,
+            self.position.x as u32,
             &self.arrangement.read().unwrap().meter,
         );
         let mut end_beat = beat
             + Position::from_interleaved_samples(
-                (bounds.width * self.scale.x.exp2()) as usize,
+                (bounds.width * self.scale.x.exp2()) as u32,
                 &self.arrangement.read().unwrap().meter,
             );
         if beat.sub_quarter_note != 0 {
