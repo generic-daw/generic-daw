@@ -1,37 +1,27 @@
-use super::Track;
-use crate::{
-    generic_back::{meter::Meter, position::Position, track_clip::audio_clip::AudioClip},
-    generic_front::drawable::{Drawable, TimelinePosition, TimelineScale},
+pub mod widget;
+
+use crate::generic_back::{
+    arrangement::Arrangement, position::Position, track_clip::audio_clip::AudioClip,
 };
-use iced::{
-    widget::canvas::{Frame, Path, Stroke},
-    Point, Theme,
-};
-use std::sync::{atomic::Ordering::SeqCst, RwLock};
+use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
 pub struct AudioTrack {
     pub clips: RwLock<Vec<AudioClip>>,
-    volume: f32,
-}
-
-impl Default for AudioTrack {
-    fn default() -> Self {
-        Self::new()
-    }
+    pub volume: f32,
+    arrangement: Arc<Arrangement>,
 }
 
 impl AudioTrack {
-    pub const fn new() -> Self {
+    pub const fn new(arrangement: Arc<Arrangement>) -> Self {
         Self {
             clips: RwLock::new(Vec::new()),
             volume: 1.0,
+            arrangement,
         }
     }
-}
 
-impl Track for AudioTrack {
-    fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
-        if !meter.playing.load(SeqCst) {
+    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
+        if !self.arrangement.meter.playing.load(SeqCst) {
             return 0.0;
         }
 
@@ -39,12 +29,12 @@ impl Track for AudioTrack {
             .read()
             .unwrap()
             .iter()
-            .map(|clip| clip.get_at_global_time(global_time, meter))
+            .map(|clip| clip.get_at_global_time(global_time))
             .sum::<f32>()
             * self.volume
     }
 
-    fn get_global_end(&self) -> Position {
+    pub fn get_global_end(&self) -> Position {
         self.clips
             .read()
             .unwrap()
@@ -52,38 +42,5 @@ impl Track for AudioTrack {
             .map(AudioClip::get_global_end)
             .max()
             .unwrap_or(Position::new(0, 0))
-    }
-
-    fn get_volume(&self) -> f32 {
-        self.volume
-    }
-
-    fn set_volume(&mut self, volume: f32) {
-        self.volume = volume;
-    }
-}
-
-impl Drawable for AudioTrack {
-    fn draw(
-        &self,
-        frame: &mut Frame,
-        scale: TimelineScale,
-        position: &TimelinePosition,
-        meter: &Meter,
-        theme: &Theme,
-    ) {
-        let path = Path::new(|path| {
-            let y = (position.y + 1.0) * scale.y;
-            path.line_to(Point::new(0.0, y));
-            path.line_to(Point::new(frame.width(), y));
-        });
-        frame.stroke(
-            &path,
-            Stroke::default().with_color(theme.extended_palette().secondary.base.color),
-        );
-
-        self.clips.read().unwrap().iter().for_each(|track| {
-            track.draw(frame, scale, position, meter, theme);
-        });
     }
 }

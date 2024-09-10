@@ -9,16 +9,17 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     StreamConfig,
 };
-use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
+use std::sync::{atomic::Ordering::SeqCst, Arc};
 
-pub fn build_output_stream(arrangement: Arc<RwLock<Arrangement>>) {
+pub fn build_output_stream(arrangement: Arc<Arrangement>) {
     let device = cpal::default_host().default_output_device().unwrap();
     let config: &StreamConfig = &device.default_output_config().unwrap().into();
-    arrangement.write().unwrap().meter.sample_rate = config.sample_rate.0;
+    arrangement
+        .meter
+        .sample_rate
+        .store(config.sample_rate.0, SeqCst);
 
-    let global_time = arrangement.read().unwrap().meter.global_time.clone();
-    let playing = arrangement.read().unwrap().meter.playing.clone();
-    let exporting = arrangement.read().unwrap().meter.exporting.clone();
+    let meter = arrangement.meter.clone();
 
     let stream = Box::new(
         device
@@ -26,12 +27,9 @@ pub fn build_output_stream(arrangement: Arc<RwLock<Arrangement>>) {
                 config,
                 move |data, _| {
                     for sample in data.iter_mut() {
-                        *sample = arrangement
-                            .read()
-                            .unwrap()
-                            .get_at_global_time(global_time.load(SeqCst));
-                        if playing.load(SeqCst) && !exporting.load(SeqCst) {
-                            global_time.fetch_add(1, SeqCst);
+                        *sample = arrangement.get_at_global_time(meter.global_time.load(SeqCst));
+                        if meter.playing.load(SeqCst) && !meter.exporting.load(SeqCst) {
+                            meter.global_time.fetch_add(1, SeqCst);
                         }
                     }
                 },

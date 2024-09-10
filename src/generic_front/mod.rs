@@ -1,13 +1,16 @@
-pub mod drawable;
 pub mod timeline;
+pub mod timeline_state;
 pub mod track_panel;
 
 use crate::generic_back::{
     arrangement::Arrangement,
     build_output_stream,
     meter::Meter,
-    track::audio_track::AudioTrack,
-    track_clip::audio_clip::{interleaved_audio::InterleavedAudio, AudioClip},
+    track::{audio_track::AudioTrack, TrackType},
+    track_clip::{
+        audio_clip::{interleaved_audio::InterleavedAudio, AudioClip},
+        ClipType,
+    },
 };
 use iced::{
     event, keyboard, mouse,
@@ -22,10 +25,11 @@ use std::{
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
 };
 use timeline::{Message as TimelineMessage, Timeline};
+use timeline_state::{TimelinePosition, TimelineScale};
 use track_panel::{Message as TrackPanelMessage, TrackPanel};
 
 pub struct Daw {
-    arrangement: Arc<RwLock<Arrangement>>,
+    arrangement: Arc<Arrangement>,
     track_panel: TrackPanel,
     timeline: Timeline,
 }
@@ -40,7 +44,6 @@ pub enum Message {
     New,
     Export,
     FileSelected(Option<String>),
-    ArrangementUpdated,
     BpmChanged(u32),
     NumeratorChanged(u32),
     DenominatorChanged(u32),
@@ -54,8 +57,10 @@ impl Default for Daw {
 
 impl Daw {
     fn new(_flags: ()) -> Self {
-        let meter = Meter::new(140, 4, 4);
-        let arrangement = Arc::new(RwLock::new(Arrangement::new(meter)));
+        let meter = Arc::new(Meter::new());
+        let position = Arc::new(RwLock::new(TimelinePosition { x: 0.0, y: 0.0 }));
+        let scale = Arc::new(RwLock::new(TimelineScale { x: 8.0, y: 100.0 }));
+        let arrangement = Arc::new(Arrangement::new(meter, scale, position));
         build_output_stream(arrangement.clone());
 
         Self {
@@ -82,82 +87,63 @@ impl Daw {
                 }
             }
             Message::FileSelected(Some(path)) => {
-                let audio_file = InterleavedAudio::new(
-                    &PathBuf::from(path),
-                    &self.arrangement.read().unwrap().meter,
-                    self.timeline.samples_sender.clone(),
-                );
-                if let Ok(audio_file) = audio_file {
-                    let clip = AudioClip::new(audio_file, &self.arrangement.read().unwrap().meter);
-                    let track = AudioTrack::new(); // Create an AudioTrack
-                    track.clips.write().unwrap().push(clip);
+                let arrangement = self.arrangement.clone();
+                let sender = self.timeline.samples_sender.clone();
+                std::thread::spawn(move || {
+                    let audio_file =
+                        InterleavedAudio::new(&PathBuf::from(path), &arrangement.meter, sender);
+                    if let Ok(audio_file) = audio_file {
+                        let clip = AudioClip::new(audio_file, arrangement.clone());
+                        let mut track = TrackType::Audio(Arc::new(RwLock::new(AudioTrack::new(
+                            arrangement.clone(),
+                        ))));
+                        track.push(ClipType::Audio(clip));
 
-                    // Wrap the track directly in Arc<RwLock<dyn Track>>
-                    self.arrangement
-                        .write()
-                        .unwrap()
-                        .tracks
-                        .push(Arc::new(RwLock::new(track)));
-
-                    self.update(Message::ArrangementUpdated);
-                }
+                        arrangement.tracks.write().unwrap().push(Arc::new(track));
+                    }
+                });
             }
             Message::FileSelected(None) => {}
-            Message::ArrangementUpdated => {
-                self.track_panel
-                    .update(&TrackPanelMessage::ArrangementUpdated);
-                self.timeline.update(&TimelineMessage::ArrangementUpdated);
-            }
             Message::TogglePlay => {
-                let arrangement = self.arrangement.read().unwrap();
-                arrangement.meter.playing.fetch_xor(true, SeqCst);
-                if arrangement.meter.playing.load(SeqCst) {
+                self.arrangement.meter.playing.fetch_xor(true, SeqCst);
+                if self.arrangement.meter.playing.load(SeqCst)
+                    && ((self.arrangement.meter.global_time.load(SeqCst) as f32)
+                        < self.arrangement.position.read().unwrap().x)
+                {
                     self.timeline.update(&TimelineMessage::MovePlayToStart);
                 }
             }
             Message::Stop => {
-                self.arrangement
-                    .read()
-                    .unwrap()
-                    .meter
-                    .playing
-                    .store(false, SeqCst);
-                self.arrangement
-                    .read()
-                    .unwrap()
-                    .meter
-                    .global_time
-                    .store(0, SeqCst);
+                self.arrangement.meter.playing.store(false, SeqCst);
+                self.arrangement.meter.global_time.store(0, SeqCst);
             }
             Message::New => {
-                self.arrangement.write().unwrap().tracks.clear();
-                self.update(Message::ArrangementUpdated);
+                self.arrangement.tracks.write().unwrap().clear();
             }
             Message::Export => {
                 if let Some(path) = FileDialog::new()
                     .add_filter("Wave File", &["wav"])
                     .save_file()
                 {
-                    self.arrangement
-                        .read()
-                        .unwrap()
-                        .export(&path, &self.arrangement.read().unwrap().meter);
+                    self.arrangement.export(&path);
                 }
             }
             Message::BpmChanged(bpm) => {
-                self.arrangement.write().unwrap().meter.bpm = bpm;
+                self.arrangement.meter.bpm.store(bpm, SeqCst);
             }
             Message::NumeratorChanged(numerator) => {
-                self.arrangement.write().unwrap().meter.numerator = numerator;
+                self.arrangement.meter.numerator.store(numerator, SeqCst);
             }
             Message::DenominatorChanged(denominator) => {
                 let c = u32::from(
-                    (1 << self.arrangement.read().unwrap().meter.denominator) < denominator
-                        && !(self.arrangement.read().unwrap().meter.denominator == 0
+                    (1 << self.arrangement.meter.denominator.load(SeqCst)) < denominator
+                        && !(self.arrangement.meter.denominator.load(SeqCst) == 0
                             && denominator == 2),
                 ) + 7;
-                self.arrangement.write().unwrap().meter.denominator =
-                    c - denominator.leading_zeros();
+                self.arrangement
+                    .meter
+                    .denominator
+                    .store(c - denominator.leading_zeros(), SeqCst);
             }
         }
     }
@@ -165,38 +151,40 @@ impl Daw {
     pub fn view(&self) -> Element<Message> {
         let controls = row![
             button("Load Sample").on_press(Message::LoadSample),
-            button(
-                if self.arrangement.read().unwrap().meter.playing.load(SeqCst) {
-                    "Pause"
-                } else {
-                    "Play"
-                }
-            )
+            button(if self.arrangement.meter.playing.load(SeqCst) {
+                "Pause"
+            } else {
+                "Play"
+            })
             .on_press(Message::TogglePlay),
             button("Stop").on_press(Message::Stop),
             button("Export").on_press(Message::Export),
             button("New").on_press(Message::New),
-            slider(0.0..=12.99999, self.timeline.scale.x, |scale| {
-                Message::TimelineMessage(TimelineMessage::XScaleChanged(scale))
-            })
+            slider(
+                0.0..=12.99999,
+                self.arrangement.scale.read().unwrap().x,
+                |scale| { Message::TimelineMessage(TimelineMessage::XScaleChanged(scale)) }
+            )
             .step(0.1),
-            slider(20.0..=200.0, self.timeline.scale.y, |scale| {
-                Message::TimelineMessage(TimelineMessage::YScaleChanged(scale))
-            }),
+            slider(
+                20.0..=200.0,
+                self.arrangement.scale.read().unwrap().y,
+                |scale| { Message::TimelineMessage(TimelineMessage::YScaleChanged(scale)) }
+            ),
             number_input(
-                self.arrangement.read().unwrap().meter.numerator,
+                self.arrangement.meter.numerator.load(SeqCst),
                 1..=255,
                 Message::NumeratorChanged
             )
             .ignore_buttons(true),
             number_input(
-                1 << self.arrangement.read().unwrap().meter.denominator,
+                1 << self.arrangement.meter.denominator.load(SeqCst),
                 1..=128,
                 Message::DenominatorChanged
             )
             .ignore_buttons(true),
             number_input(
-                self.arrangement.read().unwrap().meter.bpm,
+                self.arrangement.meter.bpm.load(SeqCst),
                 1..=65535,
                 Message::BpmChanged
             )

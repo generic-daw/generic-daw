@@ -1,13 +1,12 @@
+use anyhow::{anyhow, Result};
+use rubato::{
+    Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
+};
 use std::{
     cmp::{max_by, min_by},
     fs::File,
     path::PathBuf,
-    sync::{mpsc::Sender, Arc, RwLock},
-};
-
-use anyhow::{anyhow, Result};
-use rubato::{
-    Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
+    sync::{atomic::Ordering::SeqCst, mpsc::Sender, Arc, RwLock},
 };
 use symphonia::core::{
     audio::SampleBuffer,
@@ -28,7 +27,7 @@ pub struct InterleavedAudio {
 }
 
 impl InterleavedAudio {
-    pub fn new(path: &PathBuf, meter: &Meter, sender: Sender<Message>) -> Result<Arc<Self>> {
+    pub fn new(path: &PathBuf, meter: &Arc<Meter>, sender: Sender<Message>) -> Result<Arc<Self>> {
         let samples = Self::read_audio_file(path, meter)?;
 
         let length = samples.len();
@@ -72,7 +71,7 @@ impl InterleavedAudio {
             .unwrap_or(&(0.0, 0.0))
     }
 
-    pub fn read_audio_file(path: &PathBuf, meter: &Meter) -> Result<Vec<f32>> {
+    pub fn read_audio_file(path: &PathBuf, meter: &Arc<Meter>) -> Result<Vec<f32>> {
         let mut samples = Vec::<f32>::new();
 
         let format = symphonia::default::get_probe().format(
@@ -126,12 +125,12 @@ impl InterleavedAudio {
             }
         }
 
-        if sample_rate == meter.sample_rate {
+        if sample_rate == meter.sample_rate.load(SeqCst) {
             return Ok(samples);
         }
 
         let mut resampler = SincFixedIn::<f32>::new(
-            f64::from(meter.sample_rate) / f64::from(sample_rate),
+            f64::from(meter.sample_rate.load(SeqCst)) / f64::from(sample_rate),
             2.0,
             SincInterpolationParameters {
                 sinc_len: 256,
@@ -190,7 +189,7 @@ impl InterleavedAudio {
                         ),
                     );
                 });
-                sender.send(Message::ArrangementUpdated).unwrap();
+                sender.send(Message::Tick).unwrap();
             });
         });
     }
