@@ -60,15 +60,15 @@ impl InterleavedAudio {
         self.samples.len()
     }
 
-    pub fn get_sample_at_index(&self, index: usize) -> f32 {
-        *self.samples.get(index).unwrap()
+    pub fn get_sample_at_index(&self, index: u32) -> f32 {
+        *self.samples.get(index as usize).unwrap()
     }
 
-    pub fn get_downscaled_at_index(&self, ds_index: usize, index: usize) -> (f32, f32) {
-        *self.downscaled[ds_index]
+    pub fn get_downscaled_at_index(&self, ds_index: u32, index: u32) -> (f32, f32) {
+        *self.downscaled[ds_index as usize]
             .read()
             .unwrap()
-            .get(index)
+            .get(index as usize)
             .unwrap_or(&(0.0, 0.0))
     }
 

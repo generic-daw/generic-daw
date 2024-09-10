@@ -3,7 +3,10 @@ use crate::{
     generic_back::{meter::Meter, position::Position, track_clip::audio_clip::AudioClip},
     generic_front::drawable::{Drawable, TimelinePosition, TimelineScale},
 };
-use iced::{widget::canvas::Frame, Theme};
+use iced::{
+    widget::canvas::{Frame, Path, Stroke},
+    Point, Theme,
+};
 use std::sync::{atomic::Ordering::SeqCst, RwLock};
 
 pub struct AudioTrack {
@@ -27,7 +30,7 @@ impl AudioTrack {
 }
 
 impl Track for AudioTrack {
-    fn get_at_global_time(&self, global_time: usize, meter: &Meter) -> f32 {
+    fn get_at_global_time(&self, global_time: u32, meter: &Meter) -> f32 {
         if !meter.playing.load(SeqCst) {
             return 0.0;
         }
@@ -69,15 +72,14 @@ impl Drawable for AudioTrack {
         meter: &Meter,
         theme: &Theme,
     ) {
-        let path = iced::widget::canvas::Path::new(|path| {
+        let path = Path::new(|path| {
             let y = (position.y + 1.0) * scale.y;
-            path.line_to(iced::Point::new(0.0, y));
-            path.line_to(iced::Point::new(frame.width(), y));
+            path.line_to(Point::new(0.0, y));
+            path.line_to(Point::new(frame.width(), y));
         });
         frame.stroke(
             &path,
-            iced::widget::canvas::Stroke::default()
-                .with_color(theme.extended_palette().secondary.base.color),
+            Stroke::default().with_color(theme.extended_palette().secondary.base.color),
         );
 
         self.clips.read().unwrap().iter().for_each(|track| {

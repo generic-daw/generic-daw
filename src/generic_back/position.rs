@@ -4,22 +4,22 @@ use std::ops::{Add, AddAssign, Sub, SubAssign};
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Position {
     pub quarter_note: u32,
-    pub sub_quarter_note: u8,
+    pub sub_quarter_note: u32,
 }
 
 impl Position {
-    pub const fn new(quarter_note: u32, sub_quarter_note: u8) -> Self {
+    pub const fn new(quarter_note: u32, sub_quarter_note: u32) -> Self {
         Self {
             quarter_note,
             sub_quarter_note,
         }
     }
 
-    pub fn from_interleaved_samples(samples: usize, meter: &Meter) -> Self {
-        let global_beat =
-            samples as f64 / (f64::from(meter.sample_rate) * 2.0 / (f64::from(meter.bpm) / 60.0));
+    pub fn from_interleaved_samples(samples: u32, meter: &Meter) -> Self {
+        let global_beat = f64::from(samples)
+            / (f64::from(meter.sample_rate) * 2.0 / (f64::from(meter.bpm) / 60.0));
         let quarter_note = global_beat as u32;
-        let sub_quarter_note = ((global_beat - f64::from(quarter_note)) * 256.0) as u8;
+        let sub_quarter_note = ((global_beat - f64::from(quarter_note)) * 256.0) as u32;
 
         Self {
             quarter_note,
@@ -27,8 +27,8 @@ impl Position {
         }
     }
 
-    pub fn in_interleaved_samples(self, meter: &Meter) -> usize {
-        let global_beat = f64::from(self.quarter_note) + f64::from(self.sub_quarter_note) / 256.0;
+    pub fn in_interleaved_samples(self, meter: &Meter) -> u32 {
+        let global_beat = f64::from(self.quarter_note + self.sub_quarter_note / 256);
 
         seconds_to_interleaved_samples(global_beat / f64::from(meter.bpm) * 60.0, meter)
     }
@@ -53,11 +53,10 @@ impl Add for Position {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        let new_sub_quarter_note =
-            u32::from(self.sub_quarter_note) + u32::from(rhs.sub_quarter_note);
+        let new_sub_quarter_note = self.sub_quarter_note + rhs.sub_quarter_note;
         Self {
             quarter_note: self.quarter_note + rhs.quarter_note + (new_sub_quarter_note / 256),
-            sub_quarter_note: u8::try_from(new_sub_quarter_note % 256).unwrap(),
+            sub_quarter_note: new_sub_quarter_note % 256,
         }
     }
 }
@@ -75,16 +74,17 @@ impl Sub for Position {
 
     fn sub(self, rhs: Self) -> Self::Output {
         assert!(self >= rhs);
-        let new_sub_quarter_note =
-            i32::from(self.sub_quarter_note) - i32::from(rhs.sub_quarter_note);
-        let sub_quarter_note = new_sub_quarter_note.rem_euclid(256);
-        Self {
-            quarter_note: u32::try_from(
-                i32::try_from(self.quarter_note - rhs.quarter_note).unwrap()
-                    + (new_sub_quarter_note - sub_quarter_note) / 256,
-            )
-            .unwrap(),
-            sub_quarter_note: u8::try_from(sub_quarter_note).unwrap(),
+
+        if self.sub_quarter_note > rhs.sub_quarter_note {
+            Self {
+                quarter_note: self.quarter_note - rhs.quarter_note,
+                sub_quarter_note: self.sub_quarter_note - rhs.sub_quarter_note,
+            }
+        } else {
+            Self {
+                quarter_note: self.quarter_note - rhs.quarter_note - 1,
+                sub_quarter_note: 256 + self.sub_quarter_note - rhs.sub_quarter_note,
+            }
         }
     }
 }

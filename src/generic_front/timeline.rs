@@ -1,12 +1,12 @@
 use super::drawable::{TimelinePosition, TimelineScale};
 use crate::generic_back::{arrangement::Arrangement, position::Position};
 use iced::{
-    mouse::ScrollDelta,
+    mouse::{Cursor, ScrollDelta},
     widget::{
-        canvas::{self, Cache, Geometry},
+        canvas::{self, Cache, Frame, Geometry, Path, Stroke},
         Canvas,
     },
-    Element, Length,
+    Element, Length, Point, Rectangle, Renderer, Theme,
 };
 use std::sync::{
     atomic::Ordering::SeqCst,
@@ -105,21 +105,16 @@ impl Timeline {
         Element::from(Canvas::new(self).width(Length::Fill).height(Length::Fill))
     }
 
-    fn draw_bpm_lines(
-        &self,
-        renderer: &iced::Renderer,
-        bounds: iced::Rectangle,
-        theme: &iced::Theme,
-    ) -> Geometry {
-        let mut lines = iced::widget::canvas::Frame::new(renderer, bounds.size());
+    fn draw_bpm_lines(&self, renderer: &Renderer, bounds: Rectangle, theme: &Theme) -> Geometry {
+        let mut lines = Frame::new(renderer, bounds.size());
 
         let mut beat = Position::from_interleaved_samples(
-            self.position.x as usize,
+            self.position.x as u32,
             &self.arrangement.read().unwrap().meter,
         );
         let mut end_beat = beat
             + Position::from_interleaved_samples(
-                (bounds.width * self.scale.x.exp2()) as usize,
+                (bounds.width * self.scale.x.exp2()) as u32,
                 &self.arrangement.read().unwrap().meter,
             );
         if beat.sub_quarter_note != 0 {
@@ -131,11 +126,8 @@ impl Timeline {
         // grid lines
         while beat <= end_beat {
             let color = if self.scale.x > 11.0 {
-                if beat.quarter_note % u32::from(self.arrangement.read().unwrap().meter.numerator)
-                    == 0
-                {
-                    let bar = beat.quarter_note
-                        / u32::from(self.arrangement.read().unwrap().meter.numerator);
+                if beat.quarter_note % self.arrangement.read().unwrap().meter.numerator == 0 {
+                    let bar = beat.quarter_note / self.arrangement.read().unwrap().meter.numerator;
                     if bar % 4 == 0 {
                         theme.extended_palette().secondary.strong.color
                     } else {
@@ -145,41 +137,30 @@ impl Timeline {
                     beat.quarter_note += 1;
                     continue;
                 }
-            } else if beat.quarter_note
-                % u32::from(self.arrangement.read().unwrap().meter.numerator)
-                == 0
-            {
+            } else if beat.quarter_note % self.arrangement.read().unwrap().meter.numerator == 0 {
                 theme.extended_palette().secondary.strong.color
             } else {
                 theme.extended_palette().secondary.weak.color
             };
 
-            let path = iced::widget::canvas::Path::new(|path| {
+            let path = Path::new(|path| {
                 let x = (beat.in_interleaved_samples(&self.arrangement.read().unwrap().meter)
                     as f32
                     - self.position.x)
                     / self.scale.x.exp2();
-                path.line_to(iced::Point::new(x, 0.0));
-                path.line_to(iced::Point::new(x, bounds.height));
+                path.line_to(Point::new(x, 0.0));
+                path.line_to(Point::new(x, bounds.height));
             });
-            lines.stroke(
-                &path,
-                iced::widget::canvas::Stroke::default().with_color(color),
-            );
+            lines.stroke(&path, Stroke::default().with_color(color));
             beat.quarter_note += 1;
         }
 
         lines.into_geometry()
     }
 
-    fn draw_playhead(
-        &self,
-        renderer: &iced::Renderer,
-        bounds: iced::Rectangle,
-        theme: &iced::Theme,
-    ) -> Geometry {
-        let mut playhead = iced::widget::canvas::Frame::new(renderer, bounds.size());
-        let path = iced::widget::canvas::Path::new(|path| {
+    fn draw_playhead(&self, renderer: &Renderer, bounds: Rectangle, theme: &Theme) -> Geometry {
+        let mut playhead = Frame::new(renderer, bounds.size());
+        let path = Path::new(|path| {
             let x = -(self.position.x) / self.scale.x.exp2()
                 + self
                     .arrangement
@@ -189,12 +170,12 @@ impl Timeline {
                     .global_time
                     .load(SeqCst) as f32
                     / self.scale.x.exp2();
-            path.line_to(iced::Point::new(x, 0.0));
-            path.line_to(iced::Point::new(x, bounds.height));
+            path.line_to(Point::new(x, 0.0));
+            path.line_to(Point::new(x, bounds.height));
         });
         playhead.stroke(
             &path,
-            iced::widget::canvas::Stroke::default()
+            Stroke::default()
                 .with_color(theme.extended_palette().primary.base.color)
                 .with_width(2.0),
         );
@@ -208,11 +189,11 @@ impl canvas::Program<Message> for Timeline {
     fn draw(
         &self,
         _state: &Self::State,
-        renderer: &iced::Renderer,
-        theme: &iced::Theme,
-        bounds: iced::Rectangle,
-        _cursor: iced::mouse::Cursor,
-    ) -> Vec<iced::widget::canvas::Geometry> {
+        renderer: &Renderer,
+        theme: &Theme,
+        bounds: Rectangle,
+        _cursor: Cursor,
+    ) -> Vec<Geometry> {
         let grid = self.draw_bpm_lines(renderer, bounds, theme);
 
         let playlist = self.tracks_cache.draw(renderer, bounds.size(), |frame| {
@@ -239,18 +220,17 @@ impl canvas::Program<Message> for Timeline {
         let playhead = self.draw_playhead(renderer, bounds, theme);
 
         // border around the timeline
-        let mut border = iced::widget::canvas::Frame::new(renderer, bounds.size());
-        let path = iced::widget::canvas::Path::new(|path| {
-            path.line_to(iced::Point::new(0.0, 0.0));
-            path.line_to(iced::Point::new(bounds.width - 1.0, 0.0));
-            path.line_to(iced::Point::new(bounds.width - 1.0, bounds.height - 1.0));
-            path.line_to(iced::Point::new(0.0, bounds.height - 1.0));
-            path.line_to(iced::Point::new(0.0, 0.0));
+        let mut border = Frame::new(renderer, bounds.size());
+        let path = Path::new(|path| {
+            path.line_to(Point::new(0.0, 0.0));
+            path.line_to(Point::new(bounds.width - 1.0, 0.0));
+            path.line_to(Point::new(bounds.width - 1.0, bounds.height - 1.0));
+            path.line_to(Point::new(0.0, bounds.height - 1.0));
+            path.line_to(Point::new(0.0, 0.0));
         });
         border.stroke(
             &path,
-            iced::widget::canvas::Stroke::default()
-                .with_color(theme.extended_palette().secondary.weak.color),
+            Stroke::default().with_color(theme.extended_palette().secondary.weak.color),
         );
 
         vec![grid, playlist, playhead, border.into_geometry()]
