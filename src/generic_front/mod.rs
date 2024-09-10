@@ -6,7 +6,6 @@ use crate::generic_back::{
     arrangement::Arrangement,
     build_output_stream,
     meter::Meter,
-    track,
     track::audio_track::AudioTrack,
     track_clip::audio_clip::{interleaved_audio::InterleavedAudio, AudioClip},
 };
@@ -90,7 +89,7 @@ impl Daw {
                 );
                 if let Ok(audio_file) = audio_file {
                     let clip = AudioClip::new(audio_file, &self.arrangement.read().unwrap().meter);
-                    let mut track = AudioTrack::new(); // Create an AudioTrack
+                    let track = AudioTrack::new(); // Create an AudioTrack
                     track.clips.write().unwrap().push(clip);
 
                     // Wrap the track directly in Arc<RwLock<dyn Track>>
@@ -98,7 +97,7 @@ impl Daw {
                         .write()
                         .unwrap()
                         .tracks
-                        .push(Arc::new(RwLock::new(track)) as Arc<RwLock<dyn track::Track>>);
+                        .push(Arc::new(RwLock::new(track)));
 
                     self.update(Message::ArrangementUpdated);
                 }

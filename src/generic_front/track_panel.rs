@@ -57,6 +57,8 @@ impl TrackPanel {
                     slider(0.0..=1.0, volume, move |v| {
                         Message::TrackVolumeChanged(index, v) // Handle volume change
                     })
+                    .step(0.01)
+                    .width(Length::Fixed(150.0))
                 ])
             })
             .padding(20);
