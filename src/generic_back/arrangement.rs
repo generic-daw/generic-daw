@@ -2,11 +2,11 @@ use super::{meter::Meter, position::Position, track::Track};
 use hound::WavWriter;
 use std::{
     path::Path,
-    sync::{atomic::Ordering::SeqCst, Arc},
+    sync::{atomic::Ordering::SeqCst, Arc, RwLock},
 };
 
 pub struct Arrangement {
-    pub tracks: Vec<Arc<dyn Track>>,
+    pub tracks: Vec<Arc<RwLock<dyn Track>>>,
     pub meter: Meter,
 }
 
@@ -21,7 +21,12 @@ impl Arrangement {
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {
         self.tracks
             .iter()
-            .map(|track| track.get_at_global_time(global_time, &self.meter))
+            .map(|track| {
+                track
+                    .read()
+                    .unwrap()
+                    .get_at_global_time(global_time, &self.meter)
+            })
             .sum::<f32>()
             .clamp(-1.0, 1.0)
     }
@@ -29,7 +34,7 @@ impl Arrangement {
     pub fn len(&self) -> Position {
         self.tracks
             .iter()
-            .map(|track| track.get_global_end())
+            .map(|track| track.read().unwrap().get_global_end())
             .max()
             .unwrap_or(Position::new(0, 0))
     }

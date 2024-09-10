@@ -1,6 +1,6 @@
 use crate::generic_back::arrangement::Arrangement;
 use iced::{
-    widget::{column, container, text},
+    widget::{column, container, row, slider, text},
     Element, Length,
 };
 use std::sync::{Arc, RwLock};
@@ -12,6 +12,7 @@ pub struct TrackPanel {
 #[derive(Debug, Clone)]
 pub enum Message {
     ArrangementUpdated,
+    TrackVolumeChanged(usize, f32),
 }
 
 impl TrackPanel {
@@ -26,6 +27,17 @@ impl TrackPanel {
                 // Handle arrangement updates, if necessary
                 // For example, you could trigger a re-render or refresh here
             }
+            Message::TrackVolumeChanged(track_index, volume) => {
+                if let Some(track) = self
+                    .arrangement
+                    .write()
+                    .unwrap()
+                    .tracks
+                    .get_mut(*track_index)
+                {
+                    track.write().unwrap().set_volume(*volume);
+                }
+            }
         }
     }
 
@@ -37,9 +49,15 @@ impl TrackPanel {
             .tracks
             .iter()
             .enumerate()
-            .fold(column![].spacing(20), |col, (index, _)| {
+            .fold(column![].spacing(20), |col, (index, track)| {
                 let track_name = format!("Track {}", index + 1);
-                col.push(text(track_name))
+                let volume = track.read().unwrap().get_volume(); // Get current volume
+                col.push(row![
+                    text(track_name),
+                    slider(0.0..=1.0, volume, move |v| {
+                        Message::TrackVolumeChanged(index, v) // Handle volume change
+                    })
+                ])
             })
             .padding(20);
 

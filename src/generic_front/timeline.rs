@@ -204,7 +204,7 @@ impl canvas::Program<Message> for Timeline {
                 .iter()
                 .enumerate()
                 .for_each(|(i, track)| {
-                    track.draw(
+                    track.read().unwrap().draw(
                         frame,
                         self.scale,
                         &TimelinePosition {
