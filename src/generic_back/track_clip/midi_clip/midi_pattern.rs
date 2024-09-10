@@ -7,8 +7,8 @@ pub struct MidiNote {
     pub note: u16,
     /// between 0.0 and 1.0
     pub velocity: f64,
-    pub local_start: usize,
-    pub local_end: usize,
+    pub local_start: u32,
+    pub local_end: u32,
 }
 
 #[atomic_enum]
@@ -27,6 +27,7 @@ pub struct MidiPattern {
 }
 
 impl MidiPattern {
+    #[expect(dead_code)]
     pub const fn new(dirty: Arc<AtomicDirtyEvent>) -> Self {
         Self {
             notes: Vec::new(),
@@ -34,7 +35,7 @@ impl MidiPattern {
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub fn len(&self) -> u32 {
         self.notes
             .iter()
             .map(|note| note.local_end)
@@ -42,17 +43,20 @@ impl MidiPattern {
             .unwrap_or(0)
     }
 
+    #[expect(dead_code)]
     pub fn push(&mut self, note: Arc<MidiNote>) {
         self.notes.push(note);
         self.dirty.store(DirtyEvent::NoteAdded, SeqCst);
     }
 
+    #[expect(dead_code)]
     pub fn remove(&mut self, note: &Arc<MidiNote>) {
         let pos = self.notes.iter().position(|n| n == note).unwrap();
         self.notes.remove(pos);
         self.dirty.store(DirtyEvent::NoteRemoved, SeqCst);
     }
 
+    #[expect(dead_code)]
     pub fn replace(&mut self, note: &Arc<MidiNote>, new_note: Arc<MidiNote>) {
         let pos = self.notes.iter().position(|n| n == note).unwrap();
         self.notes[pos] = new_note;

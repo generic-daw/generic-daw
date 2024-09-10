@@ -20,7 +20,6 @@ symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
 
 [lints.rust]
 unused_crate_dependencies = "warn"
-dead_code = "allow"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

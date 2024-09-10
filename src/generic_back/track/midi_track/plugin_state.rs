@@ -10,7 +10,7 @@ use clack_host::{
 };
 use generic_clap_host::{host::HostThreadMessage, main_thread::MainThreadMessage};
 use std::sync::{
-    atomic::{AtomicU8, AtomicUsize, Ordering::SeqCst},
+    atomic::{AtomicU32, Ordering::SeqCst},
     mpsc::{Receiver, Sender},
     Arc, Mutex, RwLock,
 };
@@ -21,14 +21,14 @@ pub struct PluginState {
     pub global_midi_cache: RwLock<Vec<Arc<MidiNote>>>,
     pub dirty: Arc<AtomicDirtyEvent>,
     pub started_notes: RwLock<Vec<Arc<MidiNote>>>,
-    pub last_global_time: AtomicUsize,
+    pub last_global_time: AtomicU32,
     pub running_buffer: RwLock<[f32; 16]>,
-    pub last_buffer_index: AtomicU8,
+    pub last_buffer_index: AtomicU32,
     pub audio_ports: Arc<RwLock<AudioPorts>>,
 }
 
 impl PluginState {
-    pub fn refresh_buffer(&self, global_time: usize) {
+    pub fn refresh_buffer(&self, global_time: u32) {
         let buffer = self.get_input_events(global_time);
 
         let input_audio = [vec![0.0; 8], vec![0.0; 8]];
@@ -53,7 +53,7 @@ impl PluginState {
         };
     }
 
-    fn get_input_events(&self, global_time: usize) -> EventBuffer {
+    fn get_input_events(&self, global_time: u32) -> EventBuffer {
         let mut buffer = EventBuffer::new();
 
         self.plugin_sender
@@ -62,6 +62,7 @@ impl PluginState {
 
         let message = self.host_receiver.lock().unwrap().recv().unwrap();
         if let HostThreadMessage::Counter(steady_time) = message {
+            let steady_time = u32::try_from(steady_time).unwrap();
             let dirty = self.dirty.load(SeqCst);
             match dirty {
                 DirtyEvent::None => {
@@ -88,7 +89,7 @@ impl PluginState {
         buffer
     }
 
-    fn events_refresh(&self, buffer: &mut EventBuffer, global_time: usize, steady_time: u64) {
+    fn events_refresh(&self, buffer: &mut EventBuffer, global_time: u32, steady_time: u32) {
         self.global_midi_cache
             .read()
             .unwrap()
@@ -97,10 +98,7 @@ impl PluginState {
             .for_each(|note| {
                 // notes that start during the running buffer
                 buffer.push(&NoteOnEvent::new(
-                    u32::try_from(
-                        note.local_start - global_time + usize::try_from(steady_time).unwrap(),
-                    )
-                    .unwrap(),
+                    note.local_start - global_time + steady_time,
                     Pckn::new(0u8, note.channel, note.note, Match::All),
                     note.velocity,
                 ));
@@ -118,10 +116,7 @@ impl PluginState {
             .for_each(|(index, note)| {
                 // notes that end before the running buffer ends
                 buffer.push(&NoteOffEvent::new(
-                    u32::try_from(
-                        note.local_end - global_time + usize::try_from(steady_time).unwrap(),
-                    )
-                    .unwrap(),
+                    note.local_end - global_time + steady_time,
                     Pckn::new(0u8, note.channel, note.note, Match::All),
                     note.velocity,
                 ));
@@ -133,11 +128,11 @@ impl PluginState {
         });
     }
 
-    fn jump_events_refresh(&self, buffer: &mut EventBuffer, global_time: usize, steady_time: u64) {
+    fn jump_events_refresh(&self, buffer: &mut EventBuffer, global_time: u32, steady_time: u32) {
         self.started_notes.read().unwrap().iter().for_each(|note| {
             // stop all started notes
             buffer.push(&NoteOffEvent::new(
-                u32::try_from(steady_time).unwrap(),
+                steady_time,
                 Pckn::new(0u8, note.channel, note.note, Match::All),
                 note.velocity,
             ));
@@ -153,7 +148,7 @@ impl PluginState {
             .for_each(|note| {
                 // start all notes that would be currently playing
                 buffer.push(&NoteOnEvent::new(
-                    u32::try_from(steady_time).unwrap(),
+                    steady_time,
                     Pckn::new(0u8, note.channel, note.note, Match::All),
                     note.velocity,
                 ));
@@ -164,8 +159,8 @@ impl PluginState {
     fn note_add_events_refresh(
         &self,
         buffer: &mut EventBuffer,
-        global_time: usize,
-        steady_time: u64,
+        global_time: u32,
+        steady_time: u32,
     ) {
         self.global_midi_cache
             .read()
@@ -176,7 +171,7 @@ impl PluginState {
             .for_each(|note| {
                 // start all new notes that would be currently playing
                 buffer.push(&NoteOnEvent::new(
-                    u32::try_from(steady_time).unwrap(),
+                    steady_time,
                     Pckn::new(0u8, note.channel, note.note, Match::All),
                     note.velocity,
                 ));
@@ -184,7 +179,7 @@ impl PluginState {
             });
     }
 
-    fn note_remove_events_refresh(&self, buffer: &mut EventBuffer, steady_time: u64) {
+    fn note_remove_events_refresh(&self, buffer: &mut EventBuffer, steady_time: u32) {
         let mut indices = Vec::new();
 
         self.started_notes
@@ -196,7 +191,7 @@ impl PluginState {
             .for_each(|(index, note)| {
                 // stop all started notes that are no longer in the pattern
                 buffer.push(&NoteOffEvent::new(
-                    u32::try_from(steady_time).unwrap(),
+                    steady_time,
                     Pckn::new(0u8, note.channel, note.note, Match::All),
                     note.velocity,
                 ));
