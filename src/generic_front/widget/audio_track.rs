@@ -4,14 +4,11 @@ use crate::{
 };
 use iced::{
     advanced::{
-        graphics::geometry::{Frame, Renderer as _},
         layout::{self, Layout, Node},
         renderer,
         widget::{self, Widget},
     },
-    mouse,
-    widget::canvas::Path,
-    Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    mouse, Length, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::{
     cmp::{max_by, min_by},
@@ -46,19 +43,6 @@ impl Widget<Message, Theme, Renderer> for Arc<RwLock<AudioTrack>> {
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let mut frame = Frame::new(renderer, bounds.size());
-        let path = Path::new(|path| {
-            path.line_to(Point::new(0.0, bounds.height - 2.0));
-            path.line_to(Point::new(bounds.width, bounds.height - 2.0));
-        });
-
-        frame.with_clip(bounds, |frame| {
-            frame.stroke(
-                &path,
-                iced::widget::canvas::Stroke::default()
-                    .with_color(theme.extended_palette().secondary.weak.color),
-            );
-        });
 
         self.read().unwrap().clips.iter().for_each(|clip| {
             let left_bound = max_by(
@@ -88,7 +72,5 @@ impl Widget<Message, Theme, Renderer> for Arc<RwLock<AudioTrack>> {
                 clip, tree, renderer, theme, style, layout, cursor, viewport,
             );
         });
-
-        renderer.draw_geometry(frame.into_geometry());
     }
 }
