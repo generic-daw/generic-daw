@@ -2,40 +2,19 @@ use crate::generic_back::track_clip::midi_clip::MidiClip;
 use iced::{
     advanced::{
         graphics::geometry::{frame::Backend, Renderer as _},
-        layout::{self, Layout},
-        renderer,
-        widget::{self, Widget},
+        layout::Layout,
     },
-    mouse,
     widget::canvas::Path,
-    Length, Point, Rectangle, Renderer, Size, Theme,
+    Point, Rectangle, Renderer, Size, Theme,
 };
 
-impl<Message> Widget<Message, Theme, Renderer> for MidiClip {
-    fn size(&self) -> Size<Length> {
-        Size {
-            width: Length::Fill,
-            height: Length::Fill,
-        }
-    }
-
-    fn layout(
+impl MidiClip {
+    #[expect(clippy::unused_self)]
+    pub fn draw(
         &self,
-        _tree: &mut widget::Tree,
-        _renderer: &Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        layout::Node::new(Size::new(limits.max().width, limits.max().height))
-    }
-
-    fn draw(
-        &self,
-        _tree: &widget::Tree,
         renderer: &mut Renderer,
         theme: &Theme,
-        _style: &renderer::Style,
-        layout: Layout<'_>,
-        _cursor: mouse::Cursor,
+        layout: Layout,
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();

@@ -19,7 +19,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
     fn size(&self) -> Size<Length> {
         Size {
             width: Length::Fill,
-            height: Length::Shrink,
+            height: Length::Fill,
         }
     }
 
@@ -34,12 +34,12 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
 
     fn draw(
         &self,
-        tree: &widget::Tree,
+        _tree: &widget::Tree,
         renderer: &mut Renderer,
         theme: &Theme,
-        style: &renderer::Style,
+        _style: &renderer::Style,
         layout: Layout,
-        cursor: mouse::Cursor,
+        _cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
@@ -62,10 +62,16 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                 );
                 match track {
                     TrackType::Audio(track) => {
-                        track.draw(tree, renderer, theme, style, layout, cursor, viewport);
+                        track
+                            .read()
+                            .unwrap()
+                            .draw(renderer, theme, layout, viewport);
                     }
                     TrackType::Midi(track) => {
-                        track.draw(tree, renderer, theme, style, layout, cursor, viewport);
+                        track
+                            .read()
+                            .unwrap()
+                            .draw(renderer, theme, layout, viewport);
                     }
                 }
             });

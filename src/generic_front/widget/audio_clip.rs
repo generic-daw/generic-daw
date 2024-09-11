@@ -1,42 +1,17 @@
 use crate::generic_back::track_clip::audio_clip::AudioClip;
 use iced::{
-    advanced::{
-        graphics::geometry::Renderer as _,
-        layout::{self, Layout},
-        renderer,
-        widget::{self, Widget},
-    },
-    mouse,
+    advanced::{graphics::geometry::Renderer as _, layout::Layout},
     widget::canvas::{Frame, Path, Stroke, Text},
-    Length, Pixels, Point, Rectangle, Renderer, Size, Theme,
+    Pixels, Point, Rectangle, Renderer, Size, Theme,
 };
 use std::cmp::min;
 
-impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
-    fn size(&self) -> Size<Length> {
-        Size {
-            width: Length::Fill,
-            height: Length::Fill,
-        }
-    }
-
-    fn layout(
+impl AudioClip {
+    pub fn draw(
         &self,
-        _tree: &mut widget::Tree,
-        _renderer: &Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        layout::Node::new(Size::new(limits.max().width, limits.max().height))
-    }
-
-    fn draw(
-        &self,
-        _tree: &widget::Tree,
         renderer: &mut Renderer,
         theme: &Theme,
-        _style: &renderer::Style,
-        layout: Layout<'_>,
-        _cursor: mouse::Cursor,
+        layout: Layout,
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
