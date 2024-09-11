@@ -16,7 +16,7 @@ impl Widget<Message, Theme, Renderer> for Arc<RwLock<MidiTrack>> {
     fn size(&self) -> Size<Length> {
         Size {
             width: Length::Fill,
-            height: Length::Shrink,
+            height: Length::Fill,
         }
     }
 

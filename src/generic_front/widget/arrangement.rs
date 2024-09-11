@@ -1,5 +1,5 @@
 use crate::{
-    generic_back::{arrangement::Arrangement, position::Position},
+    generic_back::{arrangement::Arrangement, position::Position, track::TrackType},
     generic_front::timeline::Message,
 };
 use iced::{
@@ -60,8 +60,33 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                     ),
                     &node,
                 );
-                track.draw(tree, renderer, theme, style, layout, cursor, viewport);
+                match track {
+                    TrackType::Audio(track) => {
+                        track.draw(tree, renderer, theme, style, layout, cursor, viewport);
+                    }
+                    TrackType::Midi(track) => {
+                        track.draw(tree, renderer, theme, style, layout, cursor, viewport);
+                    }
+                }
             });
+
+        // self.tracks
+        //     .read()
+        //     .unwrap()
+        //     .iter()
+        //     .fold(column![], |col, track| match track {
+        //         TrackType::Audio(track) => col.push(
+        //             container(Element::new(track.clone()))
+        //                 .width(Length::Fill)
+        //                 .height(self.scale.read().unwrap().y),
+        //         ),
+        //         TrackType::Midi(track) => col.push(
+        //             container(Element::new(track.clone()))
+        //                 .width(Length::Fill)
+        //                 .height(self.scale.read().unwrap().y),
+        //         ),
+        //     })
+        //     .draw(tree, renderer, theme, style, layout, cursor, viewport);
 
         renderer.draw_geometry(self.playhead(renderer, bounds, theme));
     }

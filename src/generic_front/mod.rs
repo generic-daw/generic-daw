@@ -8,10 +8,7 @@ use crate::generic_back::{
     build_output_stream,
     meter::Meter,
     track::{audio_track::AudioTrack, TrackType},
-    track_clip::{
-        audio_clip::{interleaved_audio::InterleavedAudio, AudioClip},
-        ClipType,
-    },
+    track_clip::audio_clip::{interleaved_audio::InterleavedAudio, AudioClip},
 };
 use iced::{
     event, keyboard, mouse,
@@ -95,12 +92,14 @@ impl Daw {
                         InterleavedAudio::new(&PathBuf::from(path), &arrangement.meter, sender);
                     if let Ok(audio_file) = audio_file {
                         let clip = AudioClip::new(audio_file, arrangement.clone());
-                        let mut track = TrackType::Audio(Arc::new(RwLock::new(AudioTrack::new(
-                            arrangement.clone(),
-                        ))));
-                        track.push(ClipType::Audio(clip));
+                        let mut track = AudioTrack::new(arrangement.clone());
+                        track.clips.push(clip);
 
-                        arrangement.tracks.write().unwrap().push(Arc::new(track));
+                        arrangement
+                            .tracks
+                            .write()
+                            .unwrap()
+                            .push(TrackType::Audio(Arc::new(RwLock::new(track))));
                     }
                 });
             }

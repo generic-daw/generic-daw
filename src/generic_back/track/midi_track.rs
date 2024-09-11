@@ -17,7 +17,7 @@ use std::sync::{
 };
 
 pub struct MidiTrack {
-    pub clips: RwLock<Vec<MidiClip>>,
+    pub clips: Vec<MidiClip>,
     pub volume: f32,
     plugin_state: PluginState,
 }
@@ -28,7 +28,7 @@ impl MidiTrack {
         host_receiver: Receiver<HostThreadMessage>,
     ) -> Self {
         Self {
-            clips: RwLock::new(Vec::new()),
+            clips: Vec::new(),
             volume: 1.0,
             plugin_state: PluginState {
                 plugin_sender,
@@ -47,8 +47,6 @@ impl MidiTrack {
     fn refresh_global_midi(&self) {
         *self.plugin_state.global_midi_cache.write().unwrap() = self
             .clips
-            .read()
-            .unwrap()
             .iter()
             .flat_map(MidiClip::get_global_midi)
             .collect();
@@ -86,8 +84,6 @@ impl MidiTrack {
 
     pub fn get_global_end(&self) -> Position {
         self.clips
-            .read()
-            .unwrap()
             .iter()
             .map(MidiClip::get_global_end)
             .max()

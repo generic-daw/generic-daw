@@ -15,7 +15,7 @@ impl<Message> Widget<Message, Theme, Renderer> for MidiClip {
     fn size(&self) -> Size<Length> {
         Size {
             width: Length::Fill,
-            height: Length::Shrink,
+            height: Length::Fill,
         }
     }
 

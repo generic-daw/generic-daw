@@ -7,7 +7,7 @@ use std::{
 };
 
 pub struct Arrangement {
-    pub tracks: RwLock<Vec<Arc<TrackType>>>,
+    pub tracks: RwLock<Vec<TrackType>>,
     pub meter: Arc<Meter>,
     pub scale: Arc<RwLock<TimelineScale>>,
     pub position: Arc<RwLock<TimelinePosition>>,
@@ -42,7 +42,7 @@ impl Arrangement {
             .read()
             .unwrap()
             .iter()
-            .map(|track| track.get_global_end())
+            .map(super::track::TrackType::get_global_end)
             .max()
             .unwrap_or(Position::new(0, 0))
     }

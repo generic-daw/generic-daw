@@ -22,7 +22,7 @@ impl Widget<Message, Theme, Renderer> for Arc<RwLock<AudioTrack>> {
     fn size(&self) -> Size<Length> {
         Size {
             width: Length::Fill,
-            height: Length::Shrink,
+            height: Length::Fill,
         }
     }
 
@@ -60,42 +60,34 @@ impl Widget<Message, Theme, Renderer> for Arc<RwLock<AudioTrack>> {
             );
         });
 
-        self.read()
-            .unwrap()
-            .clips
-            .read()
-            .unwrap()
-            .iter()
-            .for_each(|clip| {
-                let left_bound = max_by(
-                    0.0,
-                    (clip
-                        .get_global_start()
-                        .in_interleaved_samples(&clip.arrangement.meter)
-                        as f32
-                        - clip.arrangement.position.read().unwrap().x)
-                        / clip.arrangement.scale.read().unwrap().x.exp2(),
-                    |a, b| a.partial_cmp(b).unwrap(),
-                ) + bounds.x;
+        self.read().unwrap().clips.iter().for_each(|clip| {
+            let left_bound = max_by(
+                0.0,
+                (clip
+                    .get_global_start()
+                    .in_interleaved_samples(&clip.arrangement.meter) as f32
+                    - clip.arrangement.position.read().unwrap().x)
+                    / clip.arrangement.scale.read().unwrap().x.exp2(),
+                |a, b| a.partial_cmp(b).unwrap(),
+            ) + bounds.x;
 
-                let right_bound = min_by(
-                    bounds.width,
-                    (clip
-                        .get_global_end()
-                        .in_interleaved_samples(&clip.arrangement.meter)
-                        as f32
-                        - clip.arrangement.position.read().unwrap().x)
-                        / clip.arrangement.scale.read().unwrap().x.exp2(),
-                    |a, b| a.partial_cmp(b).unwrap(),
-                ) + bounds.x;
+            let right_bound = min_by(
+                bounds.width,
+                (clip
+                    .get_global_end()
+                    .in_interleaved_samples(&clip.arrangement.meter) as f32
+                    - clip.arrangement.position.read().unwrap().x)
+                    / clip.arrangement.scale.read().unwrap().x.exp2(),
+                |a, b| a.partial_cmp(b).unwrap(),
+            ) + bounds.x;
 
-                let node = Node::new(Size::new(right_bound - left_bound, bounds.height));
-                let layout = Layout::with_offset(Vector::new(left_bound, bounds.y), &node);
+            let node = Node::new(Size::new(right_bound - left_bound, bounds.height));
+            let layout = Layout::with_offset(Vector::new(left_bound, bounds.y), &node);
 
-                <AudioClip as Widget<Message, Theme, Renderer>>::draw(
-                    clip, tree, renderer, theme, style, layout, cursor, viewport,
-                );
-            });
+            <AudioClip as Widget<Message, Theme, Renderer>>::draw(
+                clip, tree, renderer, theme, style, layout, cursor, viewport,
+            );
+        });
 
         renderer.draw_geometry(frame.into_geometry());
     }
