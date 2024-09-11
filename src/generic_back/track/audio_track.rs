@@ -1,11 +1,13 @@
 use crate::generic_back::{
-    arrangement::Arrangement, position::Position, track_clip::audio_clip::AudioClip,
+    arrangement::Arrangement, meter::pan, position::Position, track_clip::audio_clip::AudioClip,
 };
 use std::sync::{atomic::Ordering::SeqCst, Arc};
 
 pub struct AudioTrack {
     pub clips: Vec<AudioClip>,
     pub volume: f32,
+    /// between -1.0 (left) and 1.0 (right)
+    pub pan: f32,
     arrangement: Arc<Arrangement>,
 }
 
@@ -14,6 +16,7 @@ impl AudioTrack {
         Self {
             clips: Vec::new(),
             volume: 1.0,
+            pan: 0.0,
             arrangement,
         }
     }
@@ -28,6 +31,7 @@ impl AudioTrack {
             .map(|clip| clip.get_at_global_time(global_time))
             .sum::<f32>()
             * self.volume
+            * pan(self.pan, global_time)
     }
 
     pub fn get_global_end(&self) -> Position {

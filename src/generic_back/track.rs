@@ -39,4 +39,18 @@ impl TrackType {
             Self::Midi(track) => track.write().unwrap().volume = volume,
         }
     }
+
+    pub fn get_pan(&self) -> f32 {
+        match self {
+            Self::Audio(track) => track.read().unwrap().pan,
+            Self::Midi(track) => track.read().unwrap().pan,
+        }
+    }
+
+    pub fn set_pan(&self, pan: f32) {
+        match self {
+            Self::Audio(track) => track.write().unwrap().pan = pan,
+            Self::Midi(track) => track.write().unwrap().pan = pan,
+        }
+    }
 }

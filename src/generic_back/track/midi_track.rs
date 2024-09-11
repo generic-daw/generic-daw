@@ -1,6 +1,7 @@
 mod plugin_state;
 
 use crate::generic_back::{
+    meter::pan,
     position::Position,
     track_clip::midi_clip::{
         midi_pattern::{AtomicDirtyEvent, DirtyEvent},
@@ -19,6 +20,7 @@ use std::sync::{
 pub struct MidiTrack {
     pub clips: Vec<MidiClip>,
     pub volume: f32,
+    pub pan: f32,
     plugin_state: PluginState,
 }
 
@@ -30,6 +32,7 @@ impl MidiTrack {
         Self {
             clips: Vec::new(),
             volume: 1.0,
+            pan: 0.0,
             plugin_state: PluginState {
                 plugin_sender,
                 host_receiver: Mutex::new(host_receiver),
@@ -80,6 +83,7 @@ impl MidiTrack {
         self.plugin_state.running_buffer.read().unwrap()
             [usize::try_from(last_buffer_index).unwrap()]
             * self.volume
+            * pan(self.pan, global_time)
     }
 
     pub fn get_global_end(&self) -> Position {
