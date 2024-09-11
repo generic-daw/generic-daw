@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.86"
+anyhow = "1.0.87"
 atomic_enum = "0.3.0"
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
 cpal = "0.15.3"
