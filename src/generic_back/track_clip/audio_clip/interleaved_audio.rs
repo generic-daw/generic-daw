@@ -27,7 +27,7 @@ pub struct InterleavedAudio {
 }
 
 impl InterleavedAudio {
-    pub fn new(path: &PathBuf, meter: &Arc<Meter>, sender: Sender<Message>) -> Result<Arc<Self>> {
+    pub fn new(path: &PathBuf, meter: &Meter, sender: Sender<Message>) -> Result<Arc<Self>> {
         let samples = Self::read_audio_file(path, meter)?;
 
         let length = samples.len();
@@ -71,7 +71,7 @@ impl InterleavedAudio {
             .unwrap_or(&(0.0, 0.0))
     }
 
-    pub fn read_audio_file(path: &PathBuf, meter: &Arc<Meter>) -> Result<Vec<f32>> {
+    pub fn read_audio_file(path: &PathBuf, meter: &Meter) -> Result<Vec<f32>> {
         let mut samples = Vec::<f32>::new();
 
         let format = symphonia::default::get_probe().format(

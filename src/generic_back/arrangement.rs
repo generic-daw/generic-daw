@@ -8,14 +8,14 @@ use std::{
 
 pub struct Arrangement {
     pub tracks: RwLock<Vec<TrackType>>,
-    pub meter: Arc<Meter>,
+    pub meter: Meter,
     pub scale: Arc<RwLock<TimelineScale>>,
     pub position: Arc<RwLock<TimelinePosition>>,
 }
 
 impl Arrangement {
     pub const fn new(
-        meter: Arc<Meter>,
+        meter: Meter,
         scale: Arc<RwLock<TimelineScale>>,
         position: Arc<RwLock<TimelinePosition>>,
     ) -> Self {

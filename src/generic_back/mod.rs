@@ -19,17 +19,18 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) {
         .sample_rate
         .store(config.sample_rate.0, SeqCst);
 
-    let meter = arrangement.meter.clone();
-
     let stream = Box::new(
         device
             .build_output_stream(
                 config,
                 move |data, _| {
                     for sample in data.iter_mut() {
-                        *sample = arrangement.get_at_global_time(meter.global_time.load(SeqCst));
-                        if meter.playing.load(SeqCst) && !meter.exporting.load(SeqCst) {
-                            meter.global_time.fetch_add(1, SeqCst);
+                        *sample = arrangement
+                            .get_at_global_time(arrangement.meter.global_time.load(SeqCst));
+                        if arrangement.meter.playing.load(SeqCst)
+                            && !arrangement.meter.exporting.load(SeqCst)
+                        {
+                            arrangement.meter.global_time.fetch_add(1, SeqCst);
                         }
                     }
                 },

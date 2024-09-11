@@ -55,10 +55,9 @@ impl Default for Daw {
 
 impl Daw {
     fn new(_flags: ()) -> Self {
-        let meter = Arc::new(Meter::new());
         let position = Arc::new(RwLock::new(TimelinePosition { x: 0.0, y: 0.0 }));
         let scale = Arc::new(RwLock::new(TimelineScale { x: 8.0, y: 100.0 }));
-        let arrangement = Arc::new(Arrangement::new(meter, scale, position));
+        let arrangement = Arc::new(Arrangement::new(Meter::new(), scale, position));
         build_output_stream(arrangement.clone());
 
         Self {

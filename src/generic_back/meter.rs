@@ -1,7 +1,4 @@
-use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering::SeqCst},
-    Arc,
-};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering::SeqCst};
 
 pub struct Meter {
     pub bpm: AtomicU32,
@@ -35,6 +32,6 @@ impl Meter {
     }
 }
 
-pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Arc<Meter>) -> u32 {
+pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Meter) -> u32 {
     (seconds * f64::from(meter.sample_rate.load(SeqCst)) * 2.0) as u32
 }

@@ -9,11 +9,11 @@ pub struct MidiClip {
     global_start: Position,
     global_end: Position,
     pattern_start: Position,
-    meter: Arc<Meter>,
+    meter: Meter,
 }
 
 impl MidiClip {
-    pub fn new(pattern: MidiPattern, meter: Arc<Meter>) -> Self {
+    pub fn new(pattern: MidiPattern, meter: Meter) -> Self {
         let len = pattern.len();
         Self {
             pattern,
