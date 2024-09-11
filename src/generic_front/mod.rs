@@ -1,6 +1,7 @@
 pub mod timeline;
 pub mod timeline_state;
 pub mod track_panel;
+pub mod widget;
 
 use crate::generic_back::{
     arrangement::Arrangement,

@@ -1,5 +1,3 @@
-pub mod widget;
-
 use crate::generic_back::{
     arrangement::Arrangement, position::Position, track_clip::audio_clip::AudioClip,
 };

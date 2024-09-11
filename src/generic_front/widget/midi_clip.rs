@@ -1,19 +1,17 @@
-use super::MidiTrack;
-use crate::generic_front::timeline::Message;
+use crate::generic_back::track_clip::midi_clip::MidiClip;
 use iced::{
     advanced::{
-        graphics::geometry::Renderer as _,
+        graphics::geometry::{frame::Backend, Renderer as _},
         layout::{self, Layout},
         renderer,
         widget::{self, Widget},
     },
     mouse,
-    widget::canvas::{Frame, Path},
+    widget::canvas::Path,
     Length, Point, Rectangle, Renderer, Size, Theme,
 };
-use std::sync::{Arc, RwLock};
 
-impl Widget<Message, Theme, Renderer> for Arc<RwLock<MidiTrack>> {
+impl<Message> Widget<Message, Theme, Renderer> for MidiClip {
     fn size(&self) -> Size<Length> {
         Size {
             width: Length::Fill,
@@ -38,23 +36,25 @@ impl Widget<Message, Theme, Renderer> for Arc<RwLock<MidiTrack>> {
         _style: &renderer::Style,
         layout: Layout<'_>,
         _cursor: mouse::Cursor,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let mut frame = Frame::new(renderer, bounds.size());
+        let mut frame = renderer.new_frame(bounds.size());
 
-        let path = Path::new(|path| {
-            path.line_to(Point::new(0.0, bounds.height - 2.0));
-            path.line_to(Point::new(bounds.width, bounds.height - 2.0));
-        });
-
-        frame.with_clip(bounds, |frame| {
-            frame.stroke(
-                &path,
-                iced::widget::canvas::Stroke::default()
-                    .with_color(theme.extended_palette().secondary.weak.color),
-            );
-        });
+        // the translucent background of the clip
+        let background = Path::rectangle(
+            Point::new(0.0, 0.0),
+            Size::new(viewport.width, viewport.height),
+        );
+        frame.fill(
+            &background,
+            theme
+                .extended_palette()
+                .primary
+                .weak
+                .color
+                .scale_alpha(0.25),
+        );
 
         renderer.draw_geometry(frame.into_geometry());
     }

@@ -1,5 +1,4 @@
 mod plugin_state;
-mod widget;
 
 use crate::generic_back::{
     position::Position,

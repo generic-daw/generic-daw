@@ -1,5 +1,7 @@
-use super::Arrangement;
-use crate::{generic_back::position::Position, generic_front::timeline::Message};
+use crate::{
+    generic_back::{arrangement::Arrangement, position::Position},
+    generic_front::timeline::Message,
+};
 use iced::{
     advanced::{
         graphics::geometry::Renderer as _,

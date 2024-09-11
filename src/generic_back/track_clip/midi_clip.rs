@@ -1,5 +1,4 @@
 pub mod midi_pattern;
-pub mod widget;
 
 use crate::generic_back::{meter::Meter, position::Position};
 use midi_pattern::{MidiNote, MidiPattern};

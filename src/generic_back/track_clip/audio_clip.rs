@@ -1,12 +1,11 @@
 pub mod interleaved_audio;
-pub mod widget;
 
 use crate::generic_back::{arrangement::Arrangement, position::Position};
 use interleaved_audio::InterleavedAudio;
 use std::sync::{atomic::Ordering::SeqCst, Arc};
 
 pub struct AudioClip {
-    audio: Arc<InterleavedAudio>,
+    pub audio: Arc<InterleavedAudio>,
     global_start: Position,
     global_end: Position,
     clip_start: Position,

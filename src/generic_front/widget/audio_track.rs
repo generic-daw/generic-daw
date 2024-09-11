@@ -1,5 +1,7 @@
-use super::AudioTrack;
-use crate::{generic_back::track_clip::audio_clip::AudioClip, generic_front::timeline::Message};
+use crate::{
+    generic_back::{track::audio_track::AudioTrack, track_clip::audio_clip::AudioClip},
+    generic_front::timeline::Message,
+};
 use iced::{
     advanced::{
         graphics::geometry::{Frame, Renderer as _},

@@ -1,5 +1,3 @@
-pub mod widget;
-
 use super::{meter::Meter, position::Position, track::TrackType};
 use crate::generic_front::timeline_state::{TimelinePosition, TimelineScale};
 use hound::WavWriter;
