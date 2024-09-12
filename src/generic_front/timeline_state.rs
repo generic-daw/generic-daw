@@ -5,6 +5,7 @@ pub struct TimelineScale {
     pub y: f32,
 }
 
+#[derive(Clone, PartialEq)]
 pub struct TimelinePosition {
     /// position of the left of the timeline relative to the start of the arrangement, in samples
     pub x: f32,

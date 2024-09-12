@@ -63,6 +63,7 @@ impl Timeline {
             }
             Message::Scrolled(delta) => match *delta {
                 ScrollDelta::Pixels { x, y } => {
+                    let prev_pos = self.arrangement.position.read().unwrap().clone();
                     let x = x
                         .mul_add(
                             -self.arrangement.scale.read().unwrap().x.exp2(),
@@ -90,7 +91,9 @@ impl Timeline {
                         );
                     self.arrangement.position.write().unwrap().y = y;
 
-                    self.update(&Message::ArrangementUpdated);
+                    if *self.arrangement.position.read().unwrap() != prev_pos {
+                        self.update(&Message::ArrangementUpdated);
+                    }
                 }
                 ScrollDelta::Lines { x, y } => {
                     self.update(&Message::Scrolled(ScrollDelta::Pixels {
