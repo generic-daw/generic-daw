@@ -12,6 +12,7 @@ pub struct TrackPanel {
 #[derive(Debug, Clone)]
 pub enum Message {
     TrackVolumeChanged(usize, f32),
+    TrackPanChanged(usize, f32),
 }
 
 impl TrackPanel {
@@ -25,6 +26,11 @@ impl TrackPanel {
             Message::TrackVolumeChanged(track_index, volume) => {
                 if let Some(track) = self.arrangement.tracks.read().unwrap().get(*track_index) {
                     track.set_volume(*volume);
+                }
+            }
+            Message::TrackPanChanged(track_index, pan) => {
+                if let Some(track) = self.arrangement.tracks.read().unwrap().get(*track_index) {
+                    track.set_pan(*pan);
                 }
             }
         }
@@ -45,6 +51,11 @@ impl TrackPanel {
                     text(track_name),
                     slider(0.0..=1.0, volume, move |v| {
                         Message::TrackVolumeChanged(index, v) // Handle volume change
+                    })
+                    .step(0.01)
+                    .width(Length::Fixed(150.0)),
+                    slider(-1.0..=1.0, track.get_pan(), move |v| {
+                        Message::TrackPanChanged(index, v) // Handle pan change
                     })
                     .step(0.01)
                     .width(Length::Fixed(150.0))
