@@ -1,4 +1,4 @@
-use crate::generic_back::{arrangement::Arrangement, track::TrackType};
+use crate::generic_back::arrangement::Arrangement;
 use iced::{
     advanced::layout::{Layout, Node},
     widget::canvas::Frame,
@@ -23,10 +23,7 @@ impl Arrangement {
                     ),
                     &node,
                 );
-                match track {
-                    TrackType::Audio(track) => track.read().unwrap().draw(frame, theme, layout),
-                    TrackType::Midi(track) => track.read().unwrap().draw(frame, theme, layout),
-                }
+                track.draw(frame, theme, layout);
             });
     }
 }

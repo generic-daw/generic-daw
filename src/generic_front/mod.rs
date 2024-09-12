@@ -98,14 +98,13 @@ impl Daw {
                             .tracks
                             .write()
                             .unwrap()
-                            .push(TrackType::Audio(Arc::new(RwLock::new(track))));
+                            .push(TrackType::Audio(RwLock::new(track)));
                     }
                 });
             }
             Message::FileSelected(None) => {}
             Message::TogglePlay => {
-                self.arrangement.meter.playing.fetch_xor(true, SeqCst);
-                if self.arrangement.meter.playing.load(SeqCst)
+                if !self.arrangement.meter.playing.fetch_xor(true, SeqCst)
                     && ((self.arrangement.meter.global_time.load(SeqCst) as f32)
                         < self.arrangement.position.read().unwrap().x)
                 {

@@ -87,7 +87,7 @@ impl AudioClip {
 
         // the name of the sample of the audio clip
         let text = Text {
-            content: self.audio.name.to_string(),
+            content: self.audio.name.clone(),
             position: Point::new(2.0, 2.0),
             color: theme.extended_palette().secondary.base.text,
             size: Pixels(text_size),

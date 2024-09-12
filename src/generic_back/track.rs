@@ -3,13 +3,14 @@ pub mod midi_track;
 
 use super::position::Position;
 use audio_track::AudioTrack;
+use iced::{advanced::Layout, widget::canvas::Frame, Theme};
 use midi_track::MidiTrack;
-use std::sync::{Arc, RwLock};
+use std::sync::RwLock;
 
 pub enum TrackType {
-    Audio(Arc<RwLock<AudioTrack>>),
+    Audio(RwLock<AudioTrack>),
     #[expect(dead_code)]
-    Midi(Arc<RwLock<MidiTrack>>),
+    Midi(RwLock<MidiTrack>),
 }
 
 impl TrackType {
@@ -17,6 +18,13 @@ impl TrackType {
         match self {
             Self::Audio(track) => track.read().unwrap().get_at_global_time(global_time),
             Self::Midi(track) => track.read().unwrap().get_at_global_time(global_time),
+        }
+    }
+
+    pub fn draw(&self, frame: &mut Frame, theme: &Theme, layout: Layout) {
+        match self {
+            Self::Audio(track) => track.read().unwrap().draw(frame, theme, layout),
+            Self::Midi(track) => track.read().unwrap().draw(frame, theme, layout),
         }
     }
 

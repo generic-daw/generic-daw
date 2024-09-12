@@ -145,11 +145,13 @@ impl Timeline {
         }
         end_beat.sub_quarter_note = 0;
 
+        let numerator = self.arrangement.meter.numerator.load(SeqCst);
+
         // grid lines
         while beat <= end_beat {
             let color = if self.arrangement.scale.read().unwrap().x > 11.0 {
-                if beat.quarter_note % self.arrangement.meter.numerator.load(SeqCst) == 0 {
-                    let bar = beat.quarter_note / self.arrangement.meter.numerator.load(SeqCst);
+                if beat.quarter_note % numerator == 0 {
+                    let bar = beat.quarter_note / numerator;
                     if bar % 4 == 0 {
                         theme.extended_palette().secondary.strong.color
                     } else {
@@ -159,7 +161,7 @@ impl Timeline {
                     beat.quarter_note += 1;
                     continue;
                 }
-            } else if beat.quarter_note % self.arrangement.meter.numerator.load(SeqCst) == 0 {
+            } else if beat.quarter_note % numerator == 0 {
                 theme.extended_palette().secondary.strong.color
             } else {
                 theme.extended_palette().secondary.weak.color
@@ -187,10 +189,9 @@ impl Timeline {
 
         let mut frame = Frame::new(renderer, bounds.size());
         let path = Path::new(|path| {
-            let x = -(self.arrangement.position.read().unwrap().x)
-                / self.arrangement.scale.read().unwrap().x.exp2()
-                + self.arrangement.meter.global_time.load(SeqCst) as f32
-                    / self.arrangement.scale.read().unwrap().x.exp2();
+            let x = (self.arrangement.meter.global_time.load(SeqCst) as f32
+                - self.arrangement.position.read().unwrap().x)
+                / self.arrangement.scale.read().unwrap().x.exp2();
             path.line_to(Point::new(x, 0.0));
             path.line_to(Point::new(x, bounds.height));
         });

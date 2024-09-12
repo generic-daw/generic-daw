@@ -48,7 +48,7 @@ impl InterleavedAudio {
                 RwLock::new(vec![(0.0, 0.0); (length + 2047) / 2048]),
                 RwLock::new(vec![(0.0, 0.0); (length + 4095) / 4096]),
             ],
-            name: path.file_name().unwrap().to_str().unwrap().to_string(),
+            name: path.file_name().unwrap().to_string_lossy().into_owned(),
         });
 
         Self::create_downscaled_audio(audio.clone(), sender);
@@ -171,6 +171,7 @@ impl InterleavedAudio {
                     / 2.0;
                 audio.downscaled[0].write().unwrap()[i] = (ver, ver);
             });
+            sender.send(Message::ArrangementUpdated).unwrap();
 
             (1..audio.downscaled.len()).for_each(|i| {
                 let len = audio.downscaled[i].read().unwrap().len();

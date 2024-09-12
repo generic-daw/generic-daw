@@ -34,9 +34,7 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) {
                         }
                     }
                 },
-                move |err| {
-                    eprintln!("an error occurred on stream: {err}");
-                },
+                move |err| panic!("{}", err),
                 None,
             )
             .unwrap(),
