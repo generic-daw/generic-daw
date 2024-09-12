@@ -1,12 +1,13 @@
 use crate::generic_back::track_clip::audio_clip::AudioClip;
 use iced::{
     advanced::layout::Layout,
-    widget::canvas::{Frame, Path, Text},
+    widget::canvas::{Frame, Path, Stroke, Text},
     Pixels, Point, Size, Theme,
 };
 use std::cmp::min;
 
 impl AudioClip {
+    #[expect(clippy::too_many_lines)]
     pub fn draw(&self, frame: &mut Frame, theme: &Theme, layout: Layout) {
         let bounds = layout.bounds();
 
@@ -89,44 +90,75 @@ impl AudioClip {
                 theme.extended_palette().primary.weak.color,
             );
 
-            // frame.fill() is O(n^2), so we split the waveform into many quads instead of filling it all at once
-            let mut last =
-                self.get_downscaled_at_index(self.arrangement.scale.read().unwrap().x as u32, 0);
-            (first_index + 1..last_index)
-                .enumerate()
-                .for_each(|(x, i)| {
-                    let waveform = Path::new(|path| {
-                        path.line_to(Point::new(
-                            (x as f32).mul_add(width_ratio, clip_first_x_pixel),
-                            last.0.mul_add(waveform_height, text_line_height),
-                        ));
+            // draw the average of the min and max of the waveform so that it doesn't disappear if the difference between the min and max is too small
+            let waveform = Path::new(|path| {
+                // frame.fill() is O(n^2), so we split the waveform into many quads instead of filling it all at once
+                let mut old = self
+                    .get_downscaled_at_index(self.arrangement.scale.read().unwrap().x as u32, 0);
 
-                        path.line_to(Point::new(
-                            (x as f32).mul_add(width_ratio, clip_first_x_pixel),
-                            last.1.mul_add(waveform_height, text_line_height),
-                        ));
+                path.line_to(Point::new(
+                    clip_first_x_pixel,
+                    ((old.0 + old.1) * 0.5).mul_add(waveform_height, text_line_height),
+                ));
 
-                        let new = self.get_downscaled_at_index(
-                            self.arrangement.scale.read().unwrap().x as u32,
-                            i,
-                        );
+                (first_index + 1..last_index)
+                    .enumerate()
+                    .for_each(|(x, i)| {
+                        let fill = Path::new(|fill| {
+                            fill.line_to(Point::new(
+                                (x as f32).mul_add(width_ratio, clip_first_x_pixel),
+                                old.0.mul_add(waveform_height, text_line_height),
+                            ));
 
-                        path.line_to(Point::new(
-                            (x as f32 + 1.0).mul_add(width_ratio, clip_first_x_pixel),
-                            new.1.mul_add(waveform_height, text_line_height),
-                        ));
+                            if (old.1 - old.0).abs() > f32::EPSILON {
+                                fill.line_to(Point::new(
+                                    (x as f32).mul_add(width_ratio, clip_first_x_pixel),
+                                    old.1.mul_add(waveform_height, text_line_height),
+                                ));
+                            }
 
-                        path.line_to(Point::new(
-                            (x as f32 + 1.0).mul_add(width_ratio, clip_first_x_pixel),
-                            new.0.mul_add(waveform_height, text_line_height),
-                        ));
+                            let new = self.get_downscaled_at_index(
+                                self.arrangement.scale.read().unwrap().x as u32,
+                                i,
+                            );
 
-                        path.close();
+                            fill.line_to(Point::new(
+                                (x as f32 + 1.0).mul_add(width_ratio, clip_first_x_pixel),
+                                new.1.mul_add(waveform_height, text_line_height),
+                            ));
 
-                        last = new;
+                            if (new.1 - new.0).abs() > f32::EPSILON {
+                                fill.line_to(Point::new(
+                                    (x as f32 + 1.0).mul_add(width_ratio, clip_first_x_pixel),
+                                    new.0.mul_add(waveform_height, text_line_height),
+                                ));
+                            }
+
+                            fill.close();
+
+                            if (new.0 + new.1 - old.0 - old.1).abs() > f32::EPSILON {
+                                path.line_to(Point::new(
+                                    (x as f32).mul_add(width_ratio, clip_first_x_pixel),
+                                    ((new.0 + new.1) * 0.5)
+                                        .mul_add(waveform_height, text_line_height),
+                                ));
+                            }
+
+                            old = new;
+                        });
+                        frame.fill(&fill, theme.extended_palette().secondary.base.text);
                     });
-                    frame.fill(&waveform, theme.extended_palette().secondary.base.text);
-                });
+
+                path.line_to(Point::new(
+                    bounds.width,
+                    ((old.0 + old.1) * 0.5).mul_add(waveform_height, text_line_height),
+                ));
+            });
+
+            frame.stroke(
+                &waveform,
+                Stroke::default().with_color(theme.extended_palette().secondary.base.text),
+            );
 
             frame.fill_text(text);
         });
