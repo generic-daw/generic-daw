@@ -1,7 +1,7 @@
 use crate::generic_back::track_clip::audio_clip::AudioClip;
 use iced::{
     advanced::layout::Layout,
-    widget::canvas::{Frame, Path, Stroke, Text},
+    widget::canvas::{Frame, Path, Text},
     Pixels, Point, Size, Theme,
 };
 use std::cmp::min;
@@ -64,27 +64,6 @@ impl AudioClip {
             Size::new(bounds.width, text_line_height),
         );
 
-        // the path of the audio clip
-        // this sometimes breaks, see https://github.com/iced-rs/iced/issues/2567
-        let waveform = Path::new(|path| {
-            (first_index..last_index).enumerate().for_each(|(x, i)| {
-                let (min, max) = self
-                    .get_downscaled_at_index(self.arrangement.scale.read().unwrap().x as u32, i);
-
-                path.line_to(Point::new(
-                    (x as f32).mul_add(width_ratio, clip_first_x_pixel),
-                    min.mul_add(waveform_height, text_line_height),
-                ));
-
-                if (min - max).abs() > f32::EPSILON {
-                    path.line_to(Point::new(
-                        (x as f32).mul_add(width_ratio, clip_first_x_pixel),
-                        max.mul_add(waveform_height, text_line_height),
-                    ));
-                }
-            });
-        });
-
         // the name of the sample of the audio clip
         let text = Text {
             content: self.audio.name.clone(),
@@ -110,10 +89,44 @@ impl AudioClip {
                 theme.extended_palette().primary.weak.color,
             );
 
-            frame.stroke(
-                &waveform,
-                Stroke::default().with_color(theme.extended_palette().secondary.base.text),
-            );
+            // frame.fill() is O(n^2), so we split the waveform into many quads instead of filling it all at once
+            let mut last =
+                self.get_downscaled_at_index(self.arrangement.scale.read().unwrap().x as u32, 0);
+            (first_index + 1..last_index)
+                .enumerate()
+                .for_each(|(x, i)| {
+                    let waveform = Path::new(|path| {
+                        path.line_to(Point::new(
+                            (x as f32).mul_add(width_ratio, clip_first_x_pixel),
+                            last.0.mul_add(waveform_height, text_line_height),
+                        ));
+
+                        path.line_to(Point::new(
+                            (x as f32).mul_add(width_ratio, clip_first_x_pixel),
+                            last.1.mul_add(waveform_height, text_line_height),
+                        ));
+
+                        let new = self.get_downscaled_at_index(
+                            self.arrangement.scale.read().unwrap().x as u32,
+                            i,
+                        );
+
+                        path.line_to(Point::new(
+                            (x as f32 + 1.0).mul_add(width_ratio, clip_first_x_pixel),
+                            new.1.mul_add(waveform_height, text_line_height),
+                        ));
+
+                        path.line_to(Point::new(
+                            (x as f32 + 1.0).mul_add(width_ratio, clip_first_x_pixel),
+                            new.0.mul_add(waveform_height, text_line_height),
+                        ));
+
+                        path.close();
+
+                        last = new;
+                    });
+                    frame.fill(&waveform, theme.extended_palette().secondary.base.text);
+                });
 
             frame.fill_text(text);
         });

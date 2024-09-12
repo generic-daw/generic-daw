@@ -78,8 +78,8 @@ impl Timeline {
                         );
                     self.arrangement.position.write().unwrap().x = x;
 
-                    let y = (self.arrangement.position.read().unwrap().y
-                        - y / self.arrangement.scale.read().unwrap().y / 2.0)
+                    let y = (y / self.arrangement.scale.read().unwrap().y)
+                        .mul_add(-0.5, self.arrangement.position.read().unwrap().y)
                         .clamp(
                             0.0,
                             self.arrangement

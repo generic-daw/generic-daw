@@ -29,7 +29,10 @@ impl AudioClip {
 
     pub fn get_downscaled_at_index(&self, ds_index: u32, index: u32) -> (f32, f32) {
         let (min, max) = self.audio.get_downscaled_at_index(ds_index, index);
-        (min * self.volume / 2.0 + 0.5, max * self.volume / 2.0 + 0.5)
+        (
+            (min * self.volume).mul_add(0.5, 0.5),
+            (max * self.volume).mul_add(0.5, 0.5),
+        )
     }
 
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {

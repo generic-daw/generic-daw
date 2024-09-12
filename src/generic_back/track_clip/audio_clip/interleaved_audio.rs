@@ -168,7 +168,7 @@ impl InterleavedAudio {
             (0..audio.samples.len()).for_each(|i| {
                 let ver = (audio.samples[i]
                     + audio.samples.get(i + 1).unwrap_or(&audio.samples[i]))
-                    / 2.0;
+                    * 0.5;
                 audio.downscaled[0].write().unwrap()[i] = (ver, ver);
             });
             sender.send(Message::ArrangementUpdated).unwrap();
