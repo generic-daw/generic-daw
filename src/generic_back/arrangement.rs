@@ -3,21 +3,21 @@ use crate::generic_front::timeline_state::{TimelinePosition, TimelineScale};
 use hound::WavWriter;
 use std::{
     path::Path,
-    sync::{atomic::Ordering::SeqCst, Arc, RwLock},
+    sync::{atomic::Ordering::SeqCst, RwLock},
 };
 
 pub struct Arrangement {
     pub tracks: RwLock<Vec<TrackType>>,
     pub meter: Meter,
-    pub scale: Arc<RwLock<TimelineScale>>,
-    pub position: Arc<RwLock<TimelinePosition>>,
+    pub scale: RwLock<TimelineScale>,
+    pub position: RwLock<TimelinePosition>,
 }
 
 impl Arrangement {
     pub const fn new(
         meter: Meter,
-        scale: Arc<RwLock<TimelineScale>>,
-        position: Arc<RwLock<TimelinePosition>>,
+        scale: RwLock<TimelineScale>,
+        position: RwLock<TimelinePosition>,
     ) -> Self {
         Self {
             tracks: RwLock::new(Vec::new()),

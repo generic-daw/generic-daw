@@ -8,6 +8,7 @@ use std::sync::{Arc, RwLock};
 
 pub enum TrackType {
     Audio(Arc<RwLock<AudioTrack>>),
+    #[expect(dead_code)]
     Midi(Arc<RwLock<MidiTrack>>),
 }
 

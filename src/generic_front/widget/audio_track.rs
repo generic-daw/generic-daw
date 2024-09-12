@@ -1,18 +1,13 @@
 use crate::generic_back::track::audio_track::AudioTrack;
 use iced::{
     advanced::layout::{Layout, Node},
-    Rectangle, Renderer, Size, Theme, Vector,
+    widget::canvas::Frame,
+    Size, Theme, Vector,
 };
 use std::cmp::{max_by, min_by};
 
 impl AudioTrack {
-    pub fn draw(
-        &self,
-        renderer: &mut Renderer,
-        theme: &Theme,
-        layout: Layout,
-        viewport: &Rectangle,
-    ) {
+    pub fn draw(&self, frame: &mut Frame, theme: &Theme, layout: Layout) {
         let bounds = layout.bounds();
 
         self.clips.iter().for_each(|clip| {
@@ -39,7 +34,7 @@ impl AudioTrack {
             let node = Node::new(Size::new(right_bound - left_bound, bounds.height));
             let layout = Layout::with_offset(Vector::new(left_bound, bounds.y), &node);
 
-            clip.draw(renderer, theme, layout, viewport);
+            clip.draw(frame, theme, layout);
         });
     }
 }

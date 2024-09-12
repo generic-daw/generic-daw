@@ -189,7 +189,7 @@ impl InterleavedAudio {
                         ),
                     );
                 });
-                sender.send(Message::Tick).unwrap();
+                sender.send(Message::ArrangementUpdated).unwrap();
             });
         });
     }

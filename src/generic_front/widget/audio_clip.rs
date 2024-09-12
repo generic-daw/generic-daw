@@ -1,21 +1,14 @@
 use crate::generic_back::track_clip::audio_clip::AudioClip;
 use iced::{
-    advanced::{graphics::geometry::Renderer as _, layout::Layout},
+    advanced::layout::Layout,
     widget::canvas::{Frame, Path, Stroke, Text},
-    Pixels, Point, Rectangle, Renderer, Size, Theme,
+    Pixels, Point, Size, Theme,
 };
 use std::cmp::min;
 
 impl AudioClip {
-    pub fn draw(
-        &self,
-        renderer: &mut Renderer,
-        theme: &Theme,
-        layout: Layout,
-        viewport: &Rectangle,
-    ) {
+    pub fn draw(&self, frame: &mut Frame, theme: &Theme, layout: Layout) {
         let bounds = layout.bounds();
-        let mut frame = Frame::new(renderer, bounds.size());
 
         // length of the downscaled audio we're using to draw
         let downscaled_len = self.arrangement.scale.read().unwrap().x.floor().exp2() as u32;
@@ -62,15 +55,13 @@ impl AudioClip {
         let waveform_height = self.arrangement.scale.read().unwrap().y - text_line_height;
 
         // the translucent background of the clip
-        let background = Path::rectangle(
-            Point::new(0.0, 0.0),
-            Size::new(viewport.width, viewport.height),
-        );
+        let background =
+            Path::rectangle(Point::new(0.0, 0.0), Size::new(bounds.width, bounds.height));
 
         // the opaque background of the text
         let text_background = Path::rectangle(
             Point::new(0.0, 0.0),
-            Size::new(viewport.width, text_line_height),
+            Size::new(bounds.width, text_line_height),
         );
 
         // the path of the audio clip
@@ -126,7 +117,5 @@ impl AudioClip {
 
             frame.fill_text(text);
         });
-
-        renderer.draw_geometry(frame.into_geometry());
     }
 }
