@@ -137,7 +137,7 @@ impl Daw {
                     (1 << self.arrangement.meter.denominator.load(SeqCst)) < denominator
                         && !(self.arrangement.meter.denominator.load(SeqCst) == 0
                             && denominator == 2),
-                ) + 7;
+                ) + 31;
                 self.arrangement
                     .meter
                     .denominator

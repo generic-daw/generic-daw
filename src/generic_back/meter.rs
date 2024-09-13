@@ -26,7 +26,7 @@ impl Meter {
         Self {
             bpm: AtomicU32::new(140),
             numerator: AtomicU32::new(4),
-            denominator: AtomicU32::new(4),
+            denominator: AtomicU32::new(2),
             sample_rate: AtomicU32::new(0),
             playing: AtomicBool::new(false),
             exporting: AtomicBool::new(false),
