@@ -1,15 +1,26 @@
 use crate::generic_back::track_clip::audio_clip::AudioClip;
 use iced::{
-    advanced::layout::Layout,
-    widget::canvas::{Frame, Path, Stroke, Text},
-    Pixels, Point, Size, Theme,
+    advanced::{
+        graphics::{
+            color,
+            geometry::Renderer as _,
+            mesh::Renderer as _,
+            mesh::{self, SolidVertex2D},
+            Mesh,
+        },
+        layout::Layout,
+        Renderer as _,
+    },
+    widget::canvas::{Frame, Path, Text},
+    Pixels, Point, Rectangle, Renderer, Size, Theme, Transformation, Vector,
 };
 use std::cmp::min;
 
 impl AudioClip {
-    #[expect(clippy::too_many_lines)]
-    pub fn draw(&self, frame: &mut Frame, theme: &Theme, layout: Layout) {
+    pub fn draw(&self, renderer: &mut Renderer, theme: &Theme, layout: Layout) {
         let bounds = layout.bounds();
+
+        let mut frame = Frame::new(renderer, bounds.size());
 
         // length of the downscaled audio we're using to draw
         let downscaled_len = self.arrangement.scale.read().unwrap().x.floor().exp2() as u32;
@@ -65,6 +76,46 @@ impl AudioClip {
             Size::new(bounds.width, text_line_height),
         );
 
+        // vertices of the waveform
+        let mut vertices = Vec::new();
+        (first_index..last_index).enumerate().for_each(|(x, i)| {
+            let (min, max) =
+                self.get_downscaled_at_index(self.arrangement.scale.read().unwrap().x as u32, i);
+            vertices.push(SolidVertex2D {
+                position: [
+                    (x as f32).mul_add(width_ratio, clip_first_x_pixel),
+                    min.mul_add(waveform_height, text_line_height),
+                ],
+                color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),
+            });
+            vertices.push(SolidVertex2D {
+                position: [
+                    (x as f32).mul_add(width_ratio, clip_first_x_pixel),
+                    max.mul_add(waveform_height, text_line_height),
+                ],
+                color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),
+            });
+        });
+
+        // triangles of the waveform
+        let mut indices = Vec::new();
+        (0..vertices.len() - 2).for_each(|i| {
+            let i = u32::try_from(i).unwrap();
+            indices.push(i);
+            indices.push(i + 1);
+            indices.push(i + 2);
+        });
+
+        let waveform_mesh = Mesh::Solid {
+            buffers: mesh::Indexed { vertices, indices },
+            transformation: Transformation::IDENTITY,
+            clip_bounds: Rectangle::INFINITE,
+        };
+
+        renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
+            renderer.draw_mesh(waveform_mesh);
+        });
+
         // the name of the sample of the audio clip
         let text = Text {
             content: self.audio.name.clone(),
@@ -90,77 +141,9 @@ impl AudioClip {
                 theme.extended_palette().primary.weak.color,
             );
 
-            // draw the average of the min and max of the waveform so that it doesn't disappear if the difference between the min and max is too small
-            let waveform = Path::new(|path| {
-                // frame.fill() is O(n^2), so we split the waveform into many quads instead of filling it all at once
-                let mut old = self
-                    .get_downscaled_at_index(self.arrangement.scale.read().unwrap().x as u32, 0);
-
-                path.line_to(Point::new(
-                    clip_first_x_pixel,
-                    ((old.0 + old.1) * 0.5).mul_add(waveform_height, text_line_height),
-                ));
-
-                (first_index + 1..last_index)
-                    .enumerate()
-                    .for_each(|(x, i)| {
-                        let fill = Path::new(|fill| {
-                            fill.line_to(Point::new(
-                                (x as f32).mul_add(width_ratio, clip_first_x_pixel),
-                                old.0.mul_add(waveform_height, text_line_height),
-                            ));
-
-                            if (old.1 - old.0).abs() > f32::EPSILON {
-                                fill.line_to(Point::new(
-                                    (x as f32).mul_add(width_ratio, clip_first_x_pixel),
-                                    old.1.mul_add(waveform_height, text_line_height),
-                                ));
-                            }
-
-                            let new = self.get_downscaled_at_index(
-                                self.arrangement.scale.read().unwrap().x as u32,
-                                i,
-                            );
-
-                            fill.line_to(Point::new(
-                                (x as f32 + 1.0).mul_add(width_ratio, clip_first_x_pixel),
-                                new.1.mul_add(waveform_height, text_line_height),
-                            ));
-
-                            if (new.1 - new.0).abs() > f32::EPSILON {
-                                fill.line_to(Point::new(
-                                    (x as f32 + 1.0).mul_add(width_ratio, clip_first_x_pixel),
-                                    new.0.mul_add(waveform_height, text_line_height),
-                                ));
-                            }
-
-                            fill.close();
-
-                            if (new.0 + new.1 - old.0 - old.1).abs() > f32::EPSILON {
-                                path.line_to(Point::new(
-                                    (x as f32).mul_add(width_ratio, clip_first_x_pixel),
-                                    ((new.0 + new.1) * 0.5)
-                                        .mul_add(waveform_height, text_line_height),
-                                ));
-                            }
-
-                            old = new;
-                        });
-                        frame.fill(&fill, theme.extended_palette().secondary.base.text);
-                    });
-
-                path.line_to(Point::new(
-                    bounds.width,
-                    ((old.0 + old.1) * 0.5).mul_add(waveform_height, text_line_height),
-                ));
-            });
-
-            frame.stroke(
-                &waveform,
-                Stroke::default().with_color(theme.extended_palette().secondary.base.text),
-            );
-
             frame.fill_text(text);
         });
+
+        renderer.draw_geometry(frame.into_geometry());
     }
 }

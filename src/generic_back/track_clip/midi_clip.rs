@@ -13,7 +13,6 @@ pub struct MidiClip {
 }
 
 impl MidiClip {
-    #[expect(dead_code)]
     pub fn new(pattern: MidiPattern, arrangement: Arc<Arrangement>) -> Self {
         let len = pattern.len();
         Self {
@@ -33,17 +32,14 @@ impl MidiClip {
         self.global_end
     }
 
-    #[expect(dead_code)]
     pub fn trim_start_to(&mut self, clip_start: Position) {
         self.pattern_start = clip_start;
     }
 
-    #[expect(dead_code)]
     pub fn trim_end_to(&mut self, global_end: Position) {
         self.global_end = global_end;
     }
 
-    #[expect(dead_code)]
     pub fn move_start_to(&mut self, global_start: Position) {
         match self.global_start.cmp(&global_start) {
             std::cmp::Ordering::Less => {

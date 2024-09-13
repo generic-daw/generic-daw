@@ -1,14 +1,16 @@
 use crate::generic_back::track_clip::midi_clip::MidiClip;
 use iced::{
-    advanced::layout::Layout,
+    advanced::{graphics::geometry::Renderer as _, layout::Layout},
     widget::canvas::{Frame, Path},
-    Point, Size, Theme,
+    Point, Renderer, Size, Theme,
 };
 
 impl MidiClip {
     #[expect(clippy::unused_self)]
-    pub fn draw(&self, frame: &mut Frame, theme: &Theme, layout: Layout) {
+    pub fn draw(&self, renderer: &mut Renderer, theme: &Theme, layout: Layout) {
         let bounds = layout.bounds();
+
+        let mut frame = Frame::new(renderer, bounds.size());
 
         // the translucent background of the clip
         let background =
@@ -22,5 +24,7 @@ impl MidiClip {
                 .color
                 .scale_alpha(0.25),
         );
+
+        renderer.draw_geometry(frame.into_geometry());
     }
 }

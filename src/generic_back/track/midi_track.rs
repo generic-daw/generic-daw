@@ -25,7 +25,6 @@ pub struct MidiTrack {
 }
 
 impl MidiTrack {
-    #[expect(dead_code)]
     pub fn new(
         plugin_sender: Sender<MainThreadMessage>,
         host_receiver: Receiver<HostThreadMessage>,

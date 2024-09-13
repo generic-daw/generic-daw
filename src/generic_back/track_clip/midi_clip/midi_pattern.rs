@@ -27,7 +27,6 @@ pub struct MidiPattern {
 }
 
 impl MidiPattern {
-    #[expect(dead_code)]
     pub const fn new(dirty: Arc<AtomicDirtyEvent>) -> Self {
         Self {
             notes: Vec::new(),
@@ -43,20 +42,17 @@ impl MidiPattern {
             .unwrap_or(0)
     }
 
-    #[expect(dead_code)]
     pub fn push(&mut self, note: Arc<MidiNote>) {
         self.notes.push(note);
         self.dirty.store(DirtyEvent::NoteAdded, SeqCst);
     }
 
-    #[expect(dead_code)]
     pub fn remove(&mut self, note: &Arc<MidiNote>) {
         let pos = self.notes.iter().position(|n| n == note).unwrap();
         self.notes.remove(pos);
         self.dirty.store(DirtyEvent::NoteRemoved, SeqCst);
     }
 
-    #[expect(dead_code)]
     pub fn replace(&mut self, note: &Arc<MidiNote>, new_note: Arc<MidiNote>) {
         let pos = self.notes.iter().position(|n| n == note).unwrap();
         self.notes[pos] = new_note;
