@@ -76,45 +76,48 @@ impl AudioClip {
             Size::new(bounds.width, text_line_height),
         );
 
-        // vertices of the waveform
-        let mut vertices = Vec::new();
-        (first_index..last_index).enumerate().for_each(|(x, i)| {
-            let (min, max) =
-                self.get_downscaled_at_index(self.arrangement.scale.read().unwrap().x as u32, i);
-            vertices.push(SolidVertex2D {
-                position: [
-                    (x as f32).mul_add(width_ratio, clip_first_x_pixel),
-                    min.mul_add(waveform_height, text_line_height),
-                ],
-                color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),
+        let vertices_len = 2 * (last_index - first_index) as usize;
+
+        if vertices_len > 2 {
+            // vertices of the waveform
+            let mut vertices = Vec::with_capacity(vertices_len);
+            (first_index..last_index).enumerate().for_each(|(x, i)| {
+                let (min, max) = self
+                    .get_downscaled_at_index(self.arrangement.scale.read().unwrap().x as u32, i);
+                vertices.push(SolidVertex2D {
+                    position: [
+                        (x as f32).mul_add(width_ratio, clip_first_x_pixel),
+                        min.mul_add(waveform_height, text_line_height),
+                    ],
+                    color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),
+                });
+                vertices.push(SolidVertex2D {
+                    position: [
+                        (x as f32).mul_add(width_ratio, clip_first_x_pixel),
+                        max.mul_add(waveform_height, text_line_height),
+                    ],
+                    color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),
+                });
             });
-            vertices.push(SolidVertex2D {
-                position: [
-                    (x as f32).mul_add(width_ratio, clip_first_x_pixel),
-                    max.mul_add(waveform_height, text_line_height),
-                ],
-                color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),
+
+            // triangles of the waveform
+            let mut indices = Vec::with_capacity(3 * (vertices_len - 2));
+            (0..vertices.len() - 2).for_each(|i| {
+                let i = u32::try_from(i).unwrap();
+                indices.push(i);
+                indices.push(i + 1);
+                indices.push(i + 2);
             });
-        });
+            let waveform_mesh = Mesh::Solid {
+                buffers: mesh::Indexed { vertices, indices },
+                transformation: Transformation::IDENTITY,
+                clip_bounds: Rectangle::INFINITE,
+            };
 
-        // triangles of the waveform
-        let mut indices = Vec::new();
-        (0..vertices.len() - 2).for_each(|i| {
-            let i = u32::try_from(i).unwrap();
-            indices.push(i);
-            indices.push(i + 1);
-            indices.push(i + 2);
-        });
-
-        let waveform_mesh = Mesh::Solid {
-            buffers: mesh::Indexed { vertices, indices },
-            transformation: Transformation::IDENTITY,
-            clip_bounds: Rectangle::INFINITE,
-        };
-
-        renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
-            renderer.draw_mesh(waveform_mesh);
-        });
+            renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
+                renderer.draw_mesh(waveform_mesh);
+            });
+        }
 
         // the name of the sample of the audio clip
         let text = Text {
