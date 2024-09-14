@@ -22,7 +22,7 @@ use crate::{generic_back::meter::Meter, generic_front::timeline::Message};
 type Ver = Vec<(f32, f32)>;
 pub struct InterleavedAudio {
     samples: Vec<f32>,
-    downscaled: [RwLock<Ver>; 13],
+    downscaled: [RwLock<Ver>; 10],
     pub name: String,
 }
 
@@ -34,9 +34,6 @@ impl InterleavedAudio {
         let audio = Arc::new(Self {
             samples,
             downscaled: [
-                RwLock::new(vec![(0.0, 0.0); length]),
-                RwLock::new(vec![(0.0, 0.0); (length + 1) / 2]),
-                RwLock::new(vec![(0.0, 0.0); (length + 3) / 4]),
                 RwLock::new(vec![(0.0, 0.0); (length + 7) / 8]),
                 RwLock::new(vec![(0.0, 0.0); (length + 15) / 16]),
                 RwLock::new(vec![(0.0, 0.0); (length + 31) / 32]),
@@ -165,11 +162,51 @@ impl InterleavedAudio {
 
     fn create_downscaled_audio(audio: Arc<Self>, sender: Sender<Message>) {
         std::thread::spawn(move || {
-            (0..audio.samples.len()).for_each(|i| {
-                let ver = (audio.samples[i]
-                    + audio.samples.get(i + 1).unwrap_or(&audio.samples[i]))
-                    * 0.5;
-                audio.downscaled[0].write().unwrap()[i] = (ver, ver);
+            let mut downscaled = Vec::with_capacity(audio.samples.len());
+            audio
+                .samples
+                .iter()
+                .for_each(|sample| downscaled.push((*sample, *sample)));
+
+            let mut downscaled_new = Vec::with_capacity(downscaled.len() / 2);
+            (0..2).for_each(|_| {
+                (0..downscaled.len() / 2).for_each(|j| {
+                    downscaled_new.push((
+                        min_by(
+                            downscaled[2 * j].0,
+                            downscaled.get(2 * j + 1).unwrap_or(&(f32::MAX, f32::MAX)).0,
+                            |a, b| a.partial_cmp(b).unwrap(),
+                        ),
+                        max_by(
+                            downscaled[2 * j].1,
+                            downscaled
+                                .get(2 * j + 1)
+                                .unwrap_or(&(-f32::MAX, -f32::MAX))
+                                .1,
+                            |a, b| a.partial_cmp(b).unwrap(),
+                        ),
+                    ));
+                });
+                std::mem::swap(&mut downscaled_new, &mut downscaled);
+                downscaled_new.clear();
+            });
+
+            (0..downscaled.len() / 2).for_each(|j| {
+                audio.downscaled[0].write().unwrap()[j] = (
+                    min_by(
+                        downscaled[2 * j].0,
+                        downscaled.get(2 * j + 1).unwrap_or(&(f32::MAX, f32::MAX)).0,
+                        |a, b| a.partial_cmp(b).unwrap(),
+                    ),
+                    max_by(
+                        downscaled[2 * j].1,
+                        downscaled
+                            .get(2 * j + 1)
+                            .unwrap_or(&(-f32::MAX, -f32::MAX))
+                            .1,
+                        |a, b| a.partial_cmp(b).unwrap(),
+                    ),
+                );
             });
             sender.send(Message::ArrangementUpdated).unwrap();
 

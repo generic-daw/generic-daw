@@ -82,8 +82,10 @@ impl AudioClip {
             // vertices of the waveform
             let mut vertices = Vec::with_capacity(vertices_len);
             (first_index..last_index).enumerate().for_each(|(x, i)| {
-                let (min, max) = self
-                    .get_downscaled_at_index(self.arrangement.scale.read().unwrap().x as u32, i);
+                let (min, max) = self.get_downscaled_at_index(
+                    self.arrangement.scale.read().unwrap().x as u32 - 3,
+                    i,
+                );
                 vertices.push(SolidVertex2D {
                     position: [
                         (x as f32).mul_add(width_ratio, clip_first_x_pixel),

@@ -159,7 +159,7 @@ impl Daw {
             button("Export").on_press(Message::Export),
             button("New").on_press(Message::New),
             slider(
-                0.0..=12.99999,
+                3.0..=12.999_999,
                 self.arrangement.scale.read().unwrap().x,
                 |scale| { Message::TimelineMessage(TimelineMessage::XScaleChanged(scale)) }
             )
