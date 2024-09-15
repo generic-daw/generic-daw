@@ -1,40 +1,25 @@
-use atomic_enum::atomic_enum;
+use crate::generic_back::track::midi_track::MidiTrack;
+
+use super::{
+    dirty_event::{AtomicDirtyEvent, DirtyEvent},
+    midi_note::MidiNote,
+};
 use std::sync::{atomic::Ordering::SeqCst, Arc};
-
-#[derive(PartialEq)]
-pub struct MidiNote {
-    pub channel: u8,
-    pub note: u16,
-    /// between 0.0 and 1.0
-    pub velocity: f64,
-    pub local_start: u32,
-    pub local_end: u32,
-}
-
-#[atomic_enum]
-#[derive(PartialEq, Eq)]
-pub enum DirtyEvent {
-    // can we reasonably assume that only one of these will happen per sample?
-    None,
-    NoteAdded,
-    NoteRemoved,
-    NoteReplaced,
-}
 
 pub struct MidiPattern {
     pub notes: Vec<Arc<MidiNote>>,
-    dirty: Arc<AtomicDirtyEvent>,
+    pub(super) dirty: Arc<AtomicDirtyEvent>,
 }
 
 impl MidiPattern {
-    pub const fn new(dirty: Arc<AtomicDirtyEvent>) -> Self {
+    pub fn new(track: &MidiTrack) -> Self {
         Self {
             notes: Vec::new(),
-            dirty,
+            dirty: track.plugin_state.read().unwrap().dirty.clone(),
         }
     }
 
-    pub fn len(&self) -> u32 {
+    pub(super) fn len(&self) -> u32 {
         self.notes
             .iter()
             .map(|note| note.local_end)

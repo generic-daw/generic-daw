@@ -1,5 +1,5 @@
 use crate::{
-    generic_back::{arrangement::Arrangement, position::Position, track::TrackType},
+    generic_back::{arrangement::Arrangement, position::Position, track::Track},
     generic_front::timeline::Message,
 };
 use iced::{
@@ -61,10 +61,10 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                     &node,
                 );
                 match track {
-                    TrackType::Audio(track) => {
+                    Track::Audio(track) => {
                         track.read().unwrap().draw(renderer, theme, layout);
                     }
-                    TrackType::Midi(track) => {
+                    Track::Midi(track) => {
                         track.read().unwrap().draw(renderer, theme, layout);
                     }
                 }
@@ -91,11 +91,10 @@ impl Arrangement {
         }
         end_beat.sub_quarter_note = 0;
 
-        // grid lines
         while beat <= end_beat {
             let color = if self.scale.read().unwrap().x > 11.0 {
-                if beat.quarter_note % self.meter.numerator.load(SeqCst) == 0 {
-                    let bar = beat.quarter_note / self.meter.numerator.load(SeqCst);
+                if beat.quarter_note % u16::from(self.meter.numerator.load(SeqCst)) == 0 {
+                    let bar = beat.quarter_note / u16::from(self.meter.numerator.load(SeqCst));
                     if bar % 4 == 0 {
                         theme.extended_palette().secondary.strong.color
                     } else {
@@ -105,7 +104,7 @@ impl Arrangement {
                     beat.quarter_note += 1;
                     continue;
                 }
-            } else if beat.quarter_note % self.meter.numerator.load(SeqCst) == 0 {
+            } else if beat.quarter_note % u16::from(self.meter.numerator.load(SeqCst)) == 0 {
                 theme.extended_palette().secondary.strong.color
             } else {
                 theme.extended_palette().secondary.weak.color
@@ -130,12 +129,14 @@ impl Arrangement {
 
     fn playhead(&self, renderer: &Renderer, bounds: Rectangle, theme: &Theme) -> Geometry {
         let mut frame = Frame::new(renderer, bounds.size());
+
         let path = Path::new(|path| {
             let x = -(self.position.read().unwrap().x) / self.scale.read().unwrap().x.exp2()
                 + self.meter.global_time.load(SeqCst) as f32 / self.scale.read().unwrap().x.exp2();
             path.line_to(Point::new(x, 0.0));
             path.line_to(Point::new(x, bounds.height));
         });
+
         frame.with_clip(bounds, |frame| {
             frame.stroke(
                 &path,
@@ -144,6 +145,7 @@ impl Arrangement {
                     .with_width(2.0),
             );
         });
+
         frame.into_geometry()
     }
 }

@@ -76,16 +76,15 @@ impl AudioClip {
             Size::new(bounds.width, text_line_height),
         );
 
-        let vertices_len = 2 * (last_index - first_index) as usize;
+        let vertices_len = usize::try_from(2 * (last_index - first_index)).unwrap();
 
         if vertices_len > 2 {
             // vertices of the waveform
             let mut vertices = Vec::with_capacity(vertices_len);
             (first_index..last_index).enumerate().for_each(|(x, i)| {
-                let (min, max) = self.get_downscaled_at_index(
-                    self.arrangement.scale.read().unwrap().x as u32 - 3,
-                    i,
-                );
+                let (min, max) = self
+                    .audio
+                    .get_lod_at_index(self.arrangement.scale.read().unwrap().x as u32 - 3, i);
                 vertices.push(SolidVertex2D {
                     position: [
                         (x as f32).mul_add(width_ratio, clip_first_x_pixel),
@@ -110,6 +109,7 @@ impl AudioClip {
                 indices.push(i + 1);
                 indices.push(i + 2);
             });
+
             let waveform_mesh = Mesh::Solid {
                 buffers: mesh::Indexed { vertices, indices },
                 transformation: Transformation::IDENTITY,

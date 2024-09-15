@@ -1,9 +1,4 @@
-pub struct TimelineScale {
-    /// log2 of the horizontal scale
-    pub x: f32,
-    /// height in pixels of each track in the timeline
-    pub y: f32,
-}
+use std::sync::RwLock;
 
 #[derive(Clone, PartialEq)]
 pub struct TimelinePosition {
@@ -11,4 +6,10 @@ pub struct TimelinePosition {
     pub x: f32,
     /// position of the top of the timeline relative to the top of the first track, in tracks
     pub y: f32,
+}
+
+impl TimelinePosition {
+    pub const fn create() -> RwLock<Self> {
+        RwLock::new(Self { x: 0.0, y: 0.0 })
+    }
 }

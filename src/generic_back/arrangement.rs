@@ -1,30 +1,29 @@
-use super::{meter::Meter, position::Position, track::TrackType};
-use crate::generic_front::timeline_state::{TimelinePosition, TimelineScale};
+use super::{meter::Meter, position::Position, track::Track};
+use crate::generic_front::{timeline_position::TimelinePosition, timeline_scale::TimelineScale};
 use hound::WavWriter;
 use std::{
     path::Path,
-    sync::{atomic::Ordering::SeqCst, RwLock},
+    sync::{atomic::Ordering::SeqCst, Arc, RwLock},
 };
 
 pub struct Arrangement {
-    pub tracks: RwLock<Vec<TrackType>>,
+    pub tracks: RwLock<Vec<Track>>,
+    /// information relating to the playback of the arrangement
     pub meter: Meter,
+    /// information about the scale of the timeline viewport
     pub scale: RwLock<TimelineScale>,
+    /// information about the position of the timeline viewport
     pub position: RwLock<TimelinePosition>,
 }
 
 impl Arrangement {
-    pub const fn new(
-        meter: Meter,
-        scale: RwLock<TimelineScale>,
-        position: RwLock<TimelinePosition>,
-    ) -> Self {
-        Self {
+    pub fn create() -> Arc<Self> {
+        Arc::new(Self {
             tracks: RwLock::new(Vec::new()),
-            meter,
-            scale,
-            position,
-        }
+            meter: Meter::new(),
+            scale: TimelineScale::create(),
+            position: TimelinePosition::create(),
+        })
     }
 
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {
@@ -42,7 +41,7 @@ impl Arrangement {
             .read()
             .unwrap()
             .iter()
-            .map(super::track::TrackType::get_global_end)
+            .map(super::track::Track::get_global_end)
             .max()
             .unwrap_or(Position::new(0, 0))
     }

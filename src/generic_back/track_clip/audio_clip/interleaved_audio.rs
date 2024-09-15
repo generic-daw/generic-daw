@@ -1,3 +1,4 @@
+use crate::{generic_back::arrangement::Arrangement, generic_front::timeline::Message};
 use anyhow::{anyhow, Result};
 use itertools::{
     Itertools,
@@ -21,23 +22,28 @@ use symphonia::core::{
     probe::Hint,
 };
 
-use crate::{generic_back::meter::Meter, generic_front::timeline::Message};
-
-type Ver = Vec<(f32, f32)>;
+type Lod = Vec<(f32, f32)>;
 pub struct InterleavedAudio {
+    /// these are used to play the sample back
     samples: Vec<f32>,
-    downscaled: [RwLock<Ver>; 10],
+    /// these are used to draw the sample in various quality levels
+    lods: [RwLock<Lod>; 10],
+    /// the file name associated with the sample
     pub name: String,
 }
 
 impl InterleavedAudio {
-    pub fn new(path: &PathBuf, meter: &Meter, sender: Sender<Message>) -> Result<Arc<Self>> {
-        let samples = Self::read_audio_file(path, meter)?;
+    pub fn create(
+        path: &PathBuf,
+        arrangement: &Arc<Arrangement>,
+        sender: Sender<Message>,
+    ) -> Result<Arc<Self>> {
+        let samples = Self::read_audio_file(path, arrangement)?;
 
         let length = samples.len();
         let audio = Arc::new(Self {
             samples,
-            downscaled: [
+            lods: [
                 RwLock::new(vec![(0.0, 0.0); (length + 7) / 8]),
                 RwLock::new(vec![(0.0, 0.0); (length + 15) / 16]),
                 RwLock::new(vec![(0.0, 0.0); (length + 31) / 32]),
@@ -52,27 +58,27 @@ impl InterleavedAudio {
             name: path.file_name().unwrap().to_string_lossy().into_owned(),
         });
 
-        Self::create_downscaled_audio(audio.clone(), sender);
+        Self::create_lod(audio.clone(), sender);
         Ok(audio)
     }
 
-    pub fn len(&self) -> u32 {
+    pub(super) fn len(&self) -> u32 {
         u32::try_from(self.samples.len()).unwrap()
     }
 
-    pub fn get_sample_at_index(&self, index: u32) -> f32 {
+    pub(super) fn get_sample_at_index(&self, index: u32) -> f32 {
         *self.samples.get(usize::try_from(index).unwrap()).unwrap()
     }
 
-    pub fn get_downscaled_at_index(&self, ds_index: u32, index: u32) -> (f32, f32) {
-        *self.downscaled[usize::try_from(ds_index).unwrap()]
+    pub fn get_lod_at_index(&self, lod: u32, index: u32) -> (f32, f32) {
+        *self.lods[usize::try_from(lod).unwrap()]
             .read()
             .unwrap()
             .get(usize::try_from(index).unwrap())
             .unwrap_or(&(0.0, 0.0))
     }
 
-    pub fn read_audio_file(path: &PathBuf, meter: &Meter) -> Result<Vec<f32>> {
+    fn read_audio_file(path: &PathBuf, arrangement: &Arc<Arrangement>) -> Result<Vec<f32>> {
         let mut samples = Vec::<f32>::new();
 
         let format = symphonia::default::get_probe().format(
@@ -126,12 +132,12 @@ impl InterleavedAudio {
             }
         }
 
-        if sample_rate == meter.sample_rate.load(SeqCst) {
+        if sample_rate == arrangement.meter.sample_rate.load(SeqCst) {
             return Ok(samples);
         }
 
         let mut resampler = SincFixedIn::<f32>::new(
-            f64::from(meter.sample_rate.load(SeqCst)) / f64::from(sample_rate),
+            f64::from(arrangement.meter.sample_rate.load(SeqCst)) / f64::from(sample_rate),
             2.0,
             SincInterpolationParameters {
                 sinc_len: 256,
@@ -164,7 +170,7 @@ impl InterleavedAudio {
         Ok(samples)
     }
 
-    fn create_downscaled_audio(audio: Arc<Self>, sender: Sender<Message>) {
+    fn create_lod(audio: Arc<Self>, sender: Sender<Message>) {
         std::thread::spawn(move || {
             audio
                 .samples
@@ -178,15 +184,16 @@ impl InterleavedAudio {
                         OneElement(x) => (x, x),
                         NoElements => unreachable!(),
                     };
-                    audio.downscaled[0].write().unwrap()[i] = (*min, *max);
+                    audio.lods[0].write().unwrap()[i] =
+                        ((*min).mul_add(0.5, 0.5), (*max).mul_add(0.5, 0.5));
                 });
             sender.send(Message::ArrangementUpdated).unwrap();
 
-            (1..audio.downscaled.len()).for_each(|i| {
-                let len = audio.downscaled[i].read().unwrap().len();
-                let last = audio.downscaled[i - 1].read().unwrap();
+            (1..audio.lods.len()).for_each(|i| {
+                let len = audio.lods[i].read().unwrap().len();
+                let last = audio.lods[i - 1].read().unwrap();
                 (0..len).for_each(|j| {
-                    audio.downscaled[i].write().unwrap()[j] = (
+                    audio.lods[i].write().unwrap()[j] = (
                         min_by(
                             last[2 * j].0,
                             last.get(2 * j + 1).unwrap_or(&(f32::MAX, f32::MAX)).0,

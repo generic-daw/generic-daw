@@ -1,10 +1,9 @@
-use std::cmp::{max_by, min_by};
-
 use crate::generic_back::track::midi_track::MidiTrack;
 use iced::{
     advanced::layout::{Layout, Node},
     Renderer, Size, Theme, Vector,
 };
+use std::cmp::{max_by, min_by};
 
 impl MidiTrack {
     pub fn draw(&self, renderer: &mut Renderer, theme: &Theme, layout: Layout) {

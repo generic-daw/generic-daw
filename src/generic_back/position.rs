@@ -1,4 +1,4 @@
-use super::meter::{seconds_to_interleaved_samples, Meter};
+use super::{meter::Meter, seconds_to_interleaved_samples};
 use std::{
     ops::{Add, AddAssign, Sub, SubAssign},
     sync::atomic::Ordering::SeqCst,
@@ -6,12 +6,14 @@ use std::{
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Position {
-    pub quarter_note: u32,
-    pub sub_quarter_note: u32,
+    /// the position in quarter notes, rounded down
+    pub quarter_note: u16,
+    /// the position relative to `quarter_note`, in 256ths of a quarter note
+    pub sub_quarter_note: u16,
 }
 
 impl Position {
-    pub const fn new(quarter_note: u32, sub_quarter_note: u32) -> Self {
+    pub const fn new(quarter_note: u16, sub_quarter_note: u16) -> Self {
         Self {
             quarter_note,
             sub_quarter_note,
@@ -22,8 +24,8 @@ impl Position {
         let global_beat = f64::from(samples)
             / (f64::from(meter.sample_rate.load(SeqCst)) * 2.0
                 / (f64::from(meter.bpm.load(SeqCst)) / 60.0));
-        let quarter_note = global_beat as u32;
-        let sub_quarter_note = ((global_beat - f64::from(quarter_note)) * 256.0) as u32;
+        let quarter_note = global_beat as u16;
+        let sub_quarter_note = ((global_beat - f64::from(quarter_note)) * 256.0) as u16;
 
         Self {
             quarter_note,
@@ -62,7 +64,7 @@ impl Add for Position {
     fn add(self, rhs: Self) -> Self::Output {
         let new_sub_quarter_note = self.sub_quarter_note + rhs.sub_quarter_note;
         Self {
-            quarter_note: self.quarter_note + rhs.quarter_note + (new_sub_quarter_note / 256),
+            quarter_note: self.quarter_note + rhs.quarter_note + new_sub_quarter_note / 256,
             sub_quarter_note: new_sub_quarter_note % 256,
         }
     }

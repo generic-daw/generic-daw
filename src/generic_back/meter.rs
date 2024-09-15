@@ -1,17 +1,25 @@
-use std::{
-    f32::consts::PI,
-    sync::atomic::{AtomicBool, AtomicU32, Ordering::SeqCst},
-};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8};
 
 pub struct Meter {
-    pub bpm: AtomicU32,
-    pub numerator: AtomicU32,
-    /// this isn't actually the denominator
+    /// BPM of the arrangement, between 30 and 600
+    pub bpm: AtomicU16,
+    // numerator of the time signature, between 1 and 255
+    pub numerator: AtomicU8,
+    /// log2 of the denominator of the time signature, between 0 and 7
+    ///
     /// get the actual denominator with `1 << denominator`
-    pub denominator: AtomicU32,
+    pub denominator: AtomicU8,
+    /// sample rate of the output stream
+    ///
+    /// typical values: 44100, 48000, 88200, 96000, 176400, 192000
     pub sample_rate: AtomicU32,
+    /// whether the arrangement is currently being played back
     pub playing: AtomicBool,
+    /// whether the arrangement is currently being exported
+    ///
+    /// this is a workaround to stop the output stream from starting playback while exporting
     pub exporting: AtomicBool,
+    /// the current global time of the playhead, in samples
     pub global_time: AtomicU32,
 }
 
@@ -24,26 +32,13 @@ impl Default for Meter {
 impl Meter {
     pub const fn new() -> Self {
         Self {
-            bpm: AtomicU32::new(140),
-            numerator: AtomicU32::new(4),
-            denominator: AtomicU32::new(2),
+            bpm: AtomicU16::new(140),
+            numerator: AtomicU8::new(4),
+            denominator: AtomicU8::new(2),
             sample_rate: AtomicU32::new(0),
             playing: AtomicBool::new(false),
             exporting: AtomicBool::new(false),
             global_time: AtomicU32::new(0),
         }
-    }
-}
-
-pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Meter) -> u32 {
-    (seconds * f64::from(meter.sample_rate.load(SeqCst)) * 2.0) as u32
-}
-
-pub fn pan(angle: f32, global_time: u32) -> f32 {
-    let angle = angle.mul_add(0.5, 0.5) * PI * 0.5;
-    if global_time % 2 == 0 {
-        angle.cos()
-    } else {
-        angle.sin()
     }
 }

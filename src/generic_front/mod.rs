@@ -1,13 +1,13 @@
 pub mod timeline;
-pub mod timeline_state;
+pub mod timeline_position;
+pub mod timeline_scale;
 pub mod track_panel;
 pub mod widget;
 
 use crate::generic_back::{
     arrangement::Arrangement,
     build_output_stream,
-    meter::Meter,
-    track::{audio_track::AudioTrack, TrackType},
+    track::audio_track::AudioTrack,
     track_clip::audio_clip::{interleaved_audio::InterleavedAudio, AudioClip},
 };
 use iced::{
@@ -20,10 +20,9 @@ use iced_aw::number_input;
 use rfd::FileDialog;
 use std::{
     path::PathBuf,
-    sync::{atomic::Ordering::SeqCst, Arc, RwLock},
+    sync::{atomic::Ordering::SeqCst, Arc},
 };
 use timeline::{Message as TimelineMessage, Timeline};
-use timeline_state::{TimelinePosition, TimelineScale};
 use track_panel::{Message as TrackPanelMessage, TrackPanel};
 
 pub struct Daw {
@@ -42,22 +41,20 @@ pub enum Message {
     New,
     Export,
     FileSelected(Option<String>),
-    BpmChanged(u32),
-    NumeratorChanged(u32),
-    DenominatorChanged(u32),
+    BpmChanged(u16),
+    NumeratorChanged(u8),
+    DenominatorChanged(u8),
 }
 
 impl Default for Daw {
     fn default() -> Self {
-        Self::new(())
+        Self::new()
     }
 }
 
 impl Daw {
-    fn new(_flags: ()) -> Self {
-        let position = RwLock::new(TimelinePosition { x: 0.0, y: 0.0 });
-        let scale = RwLock::new(TimelineScale { x: 8.0, y: 100.0 });
-        let arrangement = Arc::new(Arrangement::new(Meter::new(), scale, position));
+    fn new() -> Self {
+        let arrangement = Arrangement::create();
         build_output_stream(arrangement.clone());
 
         Self {
@@ -88,17 +85,11 @@ impl Daw {
                 let sender = self.timeline.samples_sender.clone();
                 std::thread::spawn(move || {
                     let audio_file =
-                        InterleavedAudio::new(&PathBuf::from(path), &arrangement.meter, sender);
+                        InterleavedAudio::create(&PathBuf::from(path), &arrangement, sender);
                     if let Ok(audio_file) = audio_file {
-                        let clip = AudioClip::new(audio_file, arrangement.clone());
-                        let mut track = AudioTrack::new(arrangement.clone());
-                        track.clips.push(clip);
-
-                        arrangement
-                            .tracks
-                            .write()
-                            .unwrap()
-                            .push(TrackType::Audio(RwLock::new(track)));
+                        let track = AudioTrack::create(arrangement.clone());
+                        track.try_push_audio(AudioClip::new(audio_file, arrangement.clone()));
+                        arrangement.tracks.write().unwrap().push(track);
                     }
                 });
             }
@@ -133,15 +124,15 @@ impl Daw {
                 self.arrangement.meter.numerator.store(numerator, SeqCst);
             }
             Message::DenominatorChanged(denominator) => {
-                let c = u32::from(
+                let c = u8::from(
                     (1 << self.arrangement.meter.denominator.load(SeqCst)) < denominator
                         && !(self.arrangement.meter.denominator.load(SeqCst) == 0
                             && denominator == 2),
-                ) + 31;
-                self.arrangement
-                    .meter
-                    .denominator
-                    .store(c - denominator.leading_zeros(), SeqCst);
+                ) + 7;
+                self.arrangement.meter.denominator.store(
+                    c - u8::try_from(denominator.leading_zeros()).unwrap(),
+                    SeqCst,
+                );
             }
         }
     }
