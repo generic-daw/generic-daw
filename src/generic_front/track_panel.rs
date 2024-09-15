@@ -1,6 +1,7 @@
 use crate::generic_back::arrangement::Arrangement;
 use iced::{
     widget::{column, container, row, slider, text},
+    Alignment::Center,
     Element, Length,
 };
 use std::sync::Arc;
@@ -44,24 +45,27 @@ impl TrackPanel {
             .unwrap()
             .iter()
             .enumerate()
-            .fold(column![].spacing(20), |col, (index, track)| {
+            .fold(column![], |col, (index, track)| {
                 let track_name = format!("Track {}", index + 1);
                 let volume = track.get_volume(); // Get current volume
-                col.push(row![
-                    text(track_name),
-                    slider(0.0..=1.0, volume, move |v| {
-                        Message::TrackVolumeChanged(index, v) // Handle volume change
-                    })
-                    .step(0.01)
-                    .width(Length::Fixed(150.0)),
-                    slider(-1.0..=1.0, track.get_pan(), move |v| {
-                        Message::TrackPanChanged(index, v) // Handle pan change
-                    })
-                    .step(0.01)
-                    .width(Length::Fixed(150.0))
-                ])
-            })
-            .padding(20);
+                col.push(
+                    row![
+                        text(track_name),
+                        slider(0.0..=1.0, volume, move |v| {
+                            Message::TrackVolumeChanged(index, v) // Handle volume change
+                        })
+                        .step(0.01)
+                        .width(Length::Fixed(150.0)),
+                        slider(-1.0..=1.0, track.get_pan(), move |v| {
+                            Message::TrackPanChanged(index, v) // Handle pan change
+                        })
+                        .step(0.01)
+                        .width(Length::Fixed(150.0))
+                    ]
+                    .height(self.arrangement.scale.read().unwrap().y)
+                    .align_y(Center),
+                )
+            });
 
         container(tracks)
             .width(Length::Shrink)

@@ -14,6 +14,7 @@ use iced::{
     event, keyboard, mouse,
     widget::{button, column, row, slider},
     window::frames,
+    Alignment::Center,
     Element, Event, Subscription,
 };
 use iced_aw::number_input;
@@ -178,7 +179,8 @@ impl Daw {
                 Message::BpmChanged
             )
             .ignore_buttons(true)
-        ];
+        ]
+        .align_y(Center);
 
         let content = column![
             controls,
@@ -186,6 +188,7 @@ impl Daw {
                 self.track_panel.view().map(Message::TrackPanelMessage),
                 self.timeline.view().map(Message::TimelineMessage)
             ]
+            .spacing(20)
         ]
         .padding(20)
         .spacing(20);
