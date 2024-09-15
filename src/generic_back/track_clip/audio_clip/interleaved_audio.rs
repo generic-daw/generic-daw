@@ -1,4 +1,8 @@
 use anyhow::{anyhow, Result};
+use itertools::{
+    Itertools,
+    MinMaxResult::{MinMax, NoElements, OneElement},
+};
 use rubato::{
     Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
@@ -162,52 +166,20 @@ impl InterleavedAudio {
 
     fn create_downscaled_audio(audio: Arc<Self>, sender: Sender<Message>) {
         std::thread::spawn(move || {
-            let mut downscaled = Vec::with_capacity(audio.samples.len());
             audio
                 .samples
                 .iter()
-                .for_each(|sample| downscaled.push((*sample, *sample)));
-
-            let mut downscaled_new = Vec::with_capacity(downscaled.len() / 2);
-            (0..2).for_each(|_| {
-                (0..downscaled.len() / 2).for_each(|j| {
-                    downscaled_new.push((
-                        min_by(
-                            downscaled[2 * j].0,
-                            downscaled.get(2 * j + 1).unwrap_or(&(f32::MAX, f32::MAX)).0,
-                            |a, b| a.partial_cmp(b).unwrap(),
-                        ),
-                        max_by(
-                            downscaled[2 * j].1,
-                            downscaled
-                                .get(2 * j + 1)
-                                .unwrap_or(&(-f32::MAX, -f32::MAX))
-                                .1,
-                            |a, b| a.partial_cmp(b).unwrap(),
-                        ),
-                    ));
+                .chunks(8)
+                .into_iter()
+                .enumerate()
+                .for_each(|(i, chunk)| {
+                    let (min, max) = match chunk.minmax_by(|a, b| a.partial_cmp(b).unwrap()) {
+                        MinMax(min, max) => (min, max),
+                        OneElement(x) => (x, x),
+                        NoElements => unreachable!(),
+                    };
+                    audio.downscaled[0].write().unwrap()[i] = (*min, *max);
                 });
-                std::mem::swap(&mut downscaled_new, &mut downscaled);
-                downscaled_new.clear();
-            });
-
-            (0..downscaled.len() / 2).for_each(|j| {
-                audio.downscaled[0].write().unwrap()[j] = (
-                    min_by(
-                        downscaled[2 * j].0,
-                        downscaled.get(2 * j + 1).unwrap_or(&(f32::MAX, f32::MAX)).0,
-                        |a, b| a.partial_cmp(b).unwrap(),
-                    ),
-                    max_by(
-                        downscaled[2 * j].1,
-                        downscaled
-                            .get(2 * j + 1)
-                            .unwrap_or(&(-f32::MAX, -f32::MAX))
-                            .1,
-                        |a, b| a.partial_cmp(b).unwrap(),
-                    ),
-                );
-            });
             sender.send(Message::ArrangementUpdated).unwrap();
 
             (1..audio.downscaled.len()).for_each(|i| {
