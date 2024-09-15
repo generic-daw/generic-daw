@@ -14,13 +14,16 @@ use iced::{
     widget::canvas::{Frame, Path, Text},
     Pixels, Point, Rectangle, Renderer, Size, Theme, Transformation, Vector,
 };
-use std::cmp::min;
+use std::cmp::{max_by, min, min_by};
 
 impl AudioClip {
-    pub fn draw(&self, renderer: &mut Renderer, theme: &Theme, layout: Layout) {
-        let bounds = layout.bounds();
-
+    #[expect(clippy::too_many_lines)]
+    pub fn draw(&self, renderer: &mut Renderer, theme: &Theme, layout: Layout, clip_top: f32) {
+        let mut bounds = layout.bounds();
         let mut frame = Frame::new(renderer, bounds.size());
+
+        // how many pixels of the top of the clip are clipped off by the top of the arrangement
+        let hidden = min_by(0.0, bounds.y - clip_top, |a, b| a.partial_cmp(b).unwrap());
 
         // length of the downscaled audio we're using to draw
         let downscaled_len = self.arrangement.scale.read().unwrap().x.floor().exp2() as u32;
@@ -67,12 +70,14 @@ impl AudioClip {
         let waveform_height = self.arrangement.scale.read().unwrap().y - text_line_height;
 
         // the translucent background of the clip
-        let background =
-            Path::rectangle(Point::new(0.0, 0.0), Size::new(bounds.width, bounds.height));
+        let background = Path::rectangle(
+            Point::new(0.0, hidden),
+            Size::new(bounds.width, bounds.height),
+        );
 
         // the opaque background of the text
         let text_background = Path::rectangle(
-            Point::new(0.0, 0.0),
+            Point::new(0.0, hidden),
             Size::new(bounds.width, text_line_height),
         );
 
@@ -88,14 +93,22 @@ impl AudioClip {
                 vertices.push(SolidVertex2D {
                     position: [
                         (x as f32).mul_add(width_ratio, clip_first_x_pixel),
-                        min.mul_add(waveform_height, text_line_height),
+                        max_by(
+                            min.mul_add(waveform_height, text_line_height),
+                            clip_top - bounds.y,
+                            |a, b| a.partial_cmp(b).unwrap(),
+                        ),
                     ],
                     color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),
                 });
                 vertices.push(SolidVertex2D {
                     position: [
                         (x as f32).mul_add(width_ratio, clip_first_x_pixel),
-                        max.mul_add(waveform_height, text_line_height),
+                        max_by(
+                            max.mul_add(waveform_height, text_line_height),
+                            clip_top - bounds.y,
+                            |a, b| a.partial_cmp(b).unwrap(),
+                        ),
                     ],
                     color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),
                 });
@@ -124,11 +137,13 @@ impl AudioClip {
         // the name of the sample of the audio clip
         let text = Text {
             content: self.audio.name.clone(),
-            position: Point::new(2.0, 2.0),
+            position: Point::new(2.0, 2.0 + hidden),
             color: theme.extended_palette().secondary.base.text,
             size: Pixels(text_size),
             ..Text::default()
         };
+
+        bounds.y -= hidden;
 
         frame.with_clip(bounds, |frame| {
             frame.fill(

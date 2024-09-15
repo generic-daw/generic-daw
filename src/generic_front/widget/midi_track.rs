@@ -6,7 +6,7 @@ use iced::{
 use std::cmp::{max_by, min_by};
 
 impl MidiTrack {
-    pub fn draw(&self, renderer: &mut Renderer, theme: &Theme, layout: Layout) {
+    pub fn draw(&self, renderer: &mut Renderer, theme: &Theme, layout: Layout, clip_top: f32) {
         let bounds = layout.bounds();
 
         self.clips.iter().for_each(|clip| {
@@ -33,7 +33,7 @@ impl MidiTrack {
             let node = Node::new(Size::new(right_bound - left_bound, bounds.height));
             let layout = Layout::with_offset(Vector::new(left_bound, bounds.y), &node);
 
-            clip.draw(renderer, theme, layout);
+            clip.draw(renderer, theme, layout, clip_top);
         });
     }
 }

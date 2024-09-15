@@ -23,10 +23,16 @@ impl Track {
         }
     }
 
-    pub fn draw(&self, renderer: &mut Renderer, theme: &Theme, layout: Layout) {
+    pub fn draw(&self, renderer: &mut Renderer, theme: &Theme, layout: Layout, clip_top: f32) {
         match self {
-            Self::Audio(track) => track.read().unwrap().draw(renderer, theme, layout),
-            Self::Midi(track) => track.read().unwrap().draw(renderer, theme, layout),
+            Self::Audio(track) => track
+                .read()
+                .unwrap()
+                .draw(renderer, theme, layout, clip_top),
+            Self::Midi(track) => track
+                .read()
+                .unwrap()
+                .draw(renderer, theme, layout, clip_top),
         }
     }
 

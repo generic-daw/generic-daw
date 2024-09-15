@@ -1,5 +1,5 @@
 use crate::{
-    generic_back::{arrangement::Arrangement, position::Position, track::Track},
+    generic_back::{arrangement::Arrangement, position::Position},
     generic_front::timeline::Message,
 };
 use iced::{
@@ -53,20 +53,18 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
             .enumerate()
             .for_each(|(i, track)| {
                 let node = Node::new(Size::new(bounds.width, self.scale.read().unwrap().y));
-                let layout = Layout::with_offset(
+                let sublayout = Layout::with_offset(
                     Vector::new(
                         bounds.x,
-                        (i as f32).mul_add(self.scale.read().unwrap().y, bounds.y),
+                        self.position.read().unwrap().y.mul_add(
+                            -self.scale.read().unwrap().y,
+                            (i as f32).mul_add(self.scale.read().unwrap().y, bounds.y),
+                        ),
                     ),
                     &node,
                 );
-                match track {
-                    Track::Audio(track) => {
-                        track.read().unwrap().draw(renderer, theme, layout);
-                    }
-                    Track::Midi(track) => {
-                        track.read().unwrap().draw(renderer, theme, layout);
-                    }
+                if sublayout.bounds().y + sublayout.bounds().height > bounds.y {
+                    track.draw(renderer, theme, sublayout, bounds.y);
                 }
             });
 
