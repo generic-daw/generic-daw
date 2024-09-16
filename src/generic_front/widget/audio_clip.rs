@@ -14,16 +14,24 @@ use iced::{
     widget::canvas::{Frame, Path, Text},
     Pixels, Point, Rectangle, Renderer, Size, Theme, Transformation, Vector,
 };
-use std::cmp::{max_by, min, min_by};
+use std::cmp::{min, min_by};
 
 impl AudioClip {
     #[expect(clippy::too_many_lines)]
-    pub fn draw(&self, renderer: &mut Renderer, theme: &Theme, layout: Layout, clip_top: f32) {
+    pub fn draw(
+        &self,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        layout: Layout,
+        clip_bounds: Rectangle,
+    ) {
         let mut bounds = layout.bounds();
         let mut frame = Frame::new(renderer, bounds.size());
 
         // how many pixels of the top of the clip are clipped off by the top of the arrangement
-        let hidden = min_by(0.0, bounds.y - clip_top, |a, b| a.partial_cmp(b).unwrap());
+        let hidden = min_by(0.0, bounds.y - clip_bounds.y, |a, b| {
+            a.partial_cmp(b).unwrap()
+        });
 
         // length of the downscaled audio we're using to draw
         let downscaled_len = self.arrangement.scale.read().unwrap().x.floor().exp2() as u32;
@@ -93,22 +101,14 @@ impl AudioClip {
                 vertices.push(SolidVertex2D {
                     position: [
                         (x as f32).mul_add(width_ratio, clip_first_x_pixel),
-                        max_by(
-                            min.mul_add(waveform_height, text_line_height),
-                            clip_top - bounds.y,
-                            |a, b| a.partial_cmp(b).unwrap(),
-                        ),
+                        min.mul_add(waveform_height, text_line_height),
                     ],
                     color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),
                 });
                 vertices.push(SolidVertex2D {
                     position: [
                         (x as f32).mul_add(width_ratio, clip_first_x_pixel),
-                        max_by(
-                            max.mul_add(waveform_height, text_line_height),
-                            clip_top - bounds.y,
-                            |a, b| a.partial_cmp(b).unwrap(),
-                        ),
+                        max.mul_add(waveform_height, text_line_height),
                     ],
                     color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),
                 });
@@ -126,7 +126,10 @@ impl AudioClip {
             let waveform_mesh = Mesh::Solid {
                 buffers: mesh::Indexed { vertices, indices },
                 transformation: Transformation::IDENTITY,
-                clip_bounds: Rectangle::INFINITE,
+                clip_bounds: Rectangle::new(
+                    Point::new(0.0, -hidden),
+                    bounds.intersection(&clip_bounds).unwrap().size(),
+                ),
             };
 
             renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
@@ -145,7 +148,7 @@ impl AudioClip {
 
         bounds.y -= hidden;
 
-        frame.with_clip(bounds, |frame| {
+        frame.with_clip(clip_bounds.intersection(&bounds).unwrap(), |frame| {
             frame.fill(
                 &background,
                 theme

@@ -4,17 +4,25 @@ use crate::generic_back::track_clip::midi_clip::MidiClip;
 use iced::{
     advanced::{graphics::geometry::Renderer as _, layout::Layout},
     widget::canvas::{Frame, Path},
-    Point, Renderer, Size, Theme,
+    Point, Rectangle, Renderer, Size, Theme,
 };
 
 impl MidiClip {
     #[expect(clippy::unused_self)]
-    pub fn draw(&self, renderer: &mut Renderer, theme: &Theme, layout: Layout, clip_top: f32) {
+    pub fn draw(
+        &self,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        layout: Layout,
+        clip_bounds: Rectangle,
+    ) {
         let mut bounds = layout.bounds();
         let mut frame = Frame::new(renderer, bounds.size());
 
         // how many pixels of the top of the clip are clipped off by the top of the arrangement
-        let hidden = min_by(0.0, bounds.y - clip_top, |a, b| a.partial_cmp(b).unwrap());
+        let hidden = min_by(0.0, bounds.y - clip_bounds.y, |a, b| {
+            a.partial_cmp(b).unwrap()
+        });
 
         // the translucent background of the clip
         let background = Path::rectangle(
@@ -24,7 +32,7 @@ impl MidiClip {
 
         bounds.y -= hidden;
 
-        frame.with_clip(bounds, |frame| {
+        frame.with_clip(clip_bounds.intersection(&bounds).unwrap(), |frame| {
             frame.fill(
                 &background,
                 theme

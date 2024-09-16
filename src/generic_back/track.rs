@@ -6,7 +6,7 @@ use super::{
     track_clip::{audio_clip::AudioClip, midi_clip::MidiClip},
 };
 use audio_track::AudioTrack;
-use iced::{advanced::Layout, Renderer, Theme};
+use iced::{advanced::Layout, Rectangle, Renderer, Theme};
 use midi_track::MidiTrack;
 use std::sync::RwLock;
 
@@ -23,16 +23,22 @@ impl Track {
         }
     }
 
-    pub fn draw(&self, renderer: &mut Renderer, theme: &Theme, layout: Layout, clip_top: f32) {
+    pub fn draw(
+        &self,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        layout: Layout,
+        clip_bounds: Rectangle,
+    ) {
         match self {
             Self::Audio(track) => track
                 .read()
                 .unwrap()
-                .draw(renderer, theme, layout, clip_top),
+                .draw(renderer, theme, layout, clip_bounds),
             Self::Midi(track) => track
                 .read()
                 .unwrap()
-                .draw(renderer, theme, layout, clip_top),
+                .draw(renderer, theme, layout, clip_bounds),
         }
     }
 

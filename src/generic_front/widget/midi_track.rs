@@ -1,12 +1,18 @@
 use crate::generic_back::track::midi_track::MidiTrack;
 use iced::{
     advanced::layout::{Layout, Node},
-    Renderer, Size, Theme, Vector,
+    Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::cmp::{max_by, min_by};
 
 impl MidiTrack {
-    pub fn draw(&self, renderer: &mut Renderer, theme: &Theme, layout: Layout, clip_top: f32) {
+    pub fn draw(
+        &self,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        layout: Layout,
+        clip_bounds: Rectangle,
+    ) {
         let bounds = layout.bounds();
 
         self.clips.iter().for_each(|clip| {
@@ -33,7 +39,7 @@ impl MidiTrack {
             let node = Node::new(Size::new(right_bound - left_bound, bounds.height));
             let layout = Layout::with_offset(Vector::new(left_bound, bounds.y), &node);
 
-            clip.draw(renderer, theme, layout, clip_top);
+            clip.draw(renderer, theme, layout, clip_bounds);
         });
     }
 }
