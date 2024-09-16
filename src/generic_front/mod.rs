@@ -96,7 +96,7 @@ impl Daw {
             }
             Message::FileSelected(None) => {}
             Message::TogglePlay => {
-                if !self.arrangement.meter.playing.fetch_xor(true, SeqCst)
+                if !self.arrangement.meter.playing.fetch_not(SeqCst)
                     && ((self.arrangement.meter.global_time.load(SeqCst) as f32)
                         < self.arrangement.position.read().unwrap().x)
                 {

@@ -12,6 +12,7 @@ use cpal::{
 use meter::Meter;
 use std::{
     f32::consts::PI,
+    ops::Rem,
     sync::{atomic::Ordering::SeqCst, Arc},
 };
 
@@ -57,5 +58,17 @@ pub fn pan(angle: f32, global_time: u32) -> f32 {
         angle.cos()
     } else {
         angle.sin()
+    }
+}
+
+fn gcd<T>(x: T, y: T) -> T
+where
+    T: Copy + PartialEq + PartialOrd + Rem<Output = T> + From<u8>,
+{
+    if y == 0.into() {
+        x
+    } else {
+        let v = x % y;
+        gcd(y, v)
     }
 }

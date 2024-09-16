@@ -1,4 +1,7 @@
-use crate::{generic_back::arrangement::Arrangement, generic_front::timeline::Message};
+use crate::{
+    generic_back::{arrangement::Arrangement, gcd},
+    generic_front::timeline::Message,
+};
 use anyhow::{anyhow, Result};
 use itertools::{
     Itertools,
@@ -98,7 +101,7 @@ impl InterleavedAudio {
         let mut format = format.unwrap().format;
 
         let track = format.default_track().unwrap();
-        let sample_rate = track.codec_params.sample_rate.unwrap();
+        let file_sample_rate = track.codec_params.sample_rate.unwrap();
 
         let mut decoder = symphonia::default::get_codecs()
             .make(
@@ -132,18 +135,25 @@ impl InterleavedAudio {
             }
         }
 
-        if sample_rate == arrangement.meter.sample_rate.load(SeqCst) {
+        let stream_sample_rate = arrangement.meter.sample_rate.load(SeqCst);
+
+        if file_sample_rate == stream_sample_rate {
             return Ok(samples);
         }
 
+        let resample_ratio = f64::from(stream_sample_rate) / f64::from(file_sample_rate);
+
         let mut resampler = SincFixedIn::<f32>::new(
-            f64::from(arrangement.meter.sample_rate.load(SeqCst)) / f64::from(sample_rate),
-            2.0,
+            resample_ratio,
+            1.0,
             SincInterpolationParameters {
                 sinc_len: 256,
                 f_cutoff: 0.95,
-                interpolation: SincInterpolationType::Linear,
-                oversampling_factor: 128,
+                interpolation: SincInterpolationType::Nearest,
+                oversampling_factor: usize::try_from(
+                    file_sample_rate / gcd(stream_sample_rate, file_sample_rate),
+                )
+                .unwrap(),
                 window: WindowFunction::Blackman,
             },
             samples.len() / 2,
