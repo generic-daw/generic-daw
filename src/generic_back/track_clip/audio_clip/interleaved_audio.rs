@@ -182,21 +182,15 @@ impl InterleavedAudio {
 
     fn create_lod(audio: Arc<Self>, sender: Sender<Message>) {
         std::thread::spawn(move || {
-            audio
-                .samples
-                .iter()
-                .chunks(8)
-                .into_iter()
-                .enumerate()
-                .for_each(|(i, chunk)| {
-                    let (min, max) = match chunk.minmax_by(|a, b| a.partial_cmp(b).unwrap()) {
-                        MinMax(min, max) => (min, max),
-                        OneElement(x) => (x, x),
-                        NoElements => unreachable!(),
-                    };
-                    audio.lods[0].write().unwrap()[i] =
-                        ((*min).mul_add(0.5, 0.5), (*max).mul_add(0.5, 0.5));
-                });
+            audio.samples.chunks(8).enumerate().for_each(|(i, chunk)| {
+                let (min, max) = match chunk.iter().minmax_by(|a, b| a.partial_cmp(b).unwrap()) {
+                    MinMax(min, max) => (min, max),
+                    OneElement(x) => (x, x),
+                    NoElements => unreachable!(),
+                };
+                audio.lods[0].write().unwrap()[i] =
+                    ((*min).mul_add(0.5, 0.5), (*max).mul_add(0.5, 0.5));
+            });
             sender.send(Message::ArrangementUpdated).unwrap();
 
             (1..audio.lods.len()).for_each(|i| {
