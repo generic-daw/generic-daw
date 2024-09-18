@@ -59,7 +59,7 @@ impl AudioClip {
             self.get_global_end()
                 .in_interleaved_samples(&self.arrangement.meter)
                 / downscaled_len,
-            first_index - index_offset + (bounds.width / width_ratio) as u32,
+            first_index + index_offset + (bounds.width / width_ratio) as u32,
         );
 
         let vertices_len = usize::try_from(2 * (last_index - first_index)).unwrap();
@@ -68,9 +68,6 @@ impl AudioClip {
         if vertices_len < 3 {
             return;
         }
-
-        // first horizontal pixel of the clip
-        let clip_first_x_pixel = index_offset as f32 * width_ratio;
 
         // how many pixels of the top of the clip are clipped off by the top of the arrangement
         let hidden = min_by(0.0, bounds.y - clip_bounds.y, |a, b| {
@@ -129,14 +126,14 @@ impl AudioClip {
                 .get_lod_at_index(self.arrangement.scale.read().unwrap().x as u32 - 3, i);
             vertices.push(SolidVertex2D {
                 position: [
-                    (x as f32).mul_add(width_ratio, clip_first_x_pixel),
+                    x as f32 * width_ratio,
                     min.mul_add(waveform_height, text_line_height),
                 ],
                 color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),
             });
             vertices.push(SolidVertex2D {
                 position: [
-                    (x as f32).mul_add(width_ratio, clip_first_x_pixel),
+                    x as f32 * width_ratio,
                     max.mul_add(waveform_height, text_line_height),
                 ],
                 color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),

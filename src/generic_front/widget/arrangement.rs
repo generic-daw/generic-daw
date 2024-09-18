@@ -63,9 +63,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                     ),
                     &node,
                 );
-                if sublayout.bounds().y + sublayout.bounds().height > bounds.y
-                    && sublayout.bounds().y < bounds.y + bounds.height
-                {
+                if sublayout.bounds().intersects(&layout.bounds()) {
                     track.draw(renderer, theme, sublayout, bounds);
                 }
             });

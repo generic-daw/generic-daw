@@ -3,7 +3,6 @@ use iced::{
     advanced::layout::{Layout, Node},
     Rectangle, Renderer, Size, Theme, Vector,
 };
-use std::cmp::{max_by, min_by};
 
 impl AudioTrack {
     pub fn draw(
@@ -16,30 +15,31 @@ impl AudioTrack {
         let bounds = layout.bounds();
 
         self.clips.iter().for_each(|clip| {
-            let left_bound = max_by(
-                0.0,
-                (clip
-                    .get_global_start()
-                    .in_interleaved_samples(&clip.arrangement.meter) as f32
-                    - clip.arrangement.position.read().unwrap().x)
-                    / clip.arrangement.scale.read().unwrap().x.exp2(),
-                |a, b| a.partial_cmp(b).unwrap(),
-            ) + bounds.x;
+            let first_pixel = (clip
+                .get_global_start()
+                .in_interleaved_samples(&clip.arrangement.meter)
+                as f32
+                - clip.arrangement.position.read().unwrap().x)
+                / clip.arrangement.scale.read().unwrap().x.exp2()
+                + bounds.x;
 
-            let right_bound = min_by(
-                bounds.width,
-                (clip
-                    .get_global_end()
-                    .in_interleaved_samples(&clip.arrangement.meter) as f32
-                    - clip.arrangement.position.read().unwrap().x)
-                    / clip.arrangement.scale.read().unwrap().x.exp2(),
-                |a, b| a.partial_cmp(b).unwrap(),
-            ) + bounds.x;
+            let last_pixel = (clip
+                .get_global_end()
+                .in_interleaved_samples(&clip.arrangement.meter)
+                as f32
+                - clip.arrangement.position.read().unwrap().x)
+                / clip.arrangement.scale.read().unwrap().x.exp2()
+                + bounds.x;
 
-            let node = Node::new(Size::new(right_bound - left_bound, bounds.height));
-            let layout = Layout::with_offset(Vector::new(left_bound, bounds.y), &node);
+            let node = Node::new(Size::new(last_pixel - first_pixel, bounds.height));
+            let sublayout = Layout::with_offset(Vector::new(first_pixel, bounds.y), &node);
 
-            clip.draw(renderer, theme, layout, clip_bounds);
+            let track_bounds = layout.bounds().intersection(&sublayout.bounds());
+            if let Some(new_bounds) = track_bounds {
+                let node = Node::new(new_bounds.size());
+                let sublayout = Layout::with_offset(Vector::new(new_bounds.x, new_bounds.y), &node);
+                clip.draw(renderer, theme, sublayout, clip_bounds);
+            }
         });
     }
 }
