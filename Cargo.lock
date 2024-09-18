@@ -1659,8 +1659,9 @@ dependencies = [
 
 [[package]]
 name = "iced_aw"
-version = "0.9.4"
-source = "git+https://github.com/iced-rs/iced_aw#e7b51366b754c3173a257d77659e9fd5f0e201c0"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b47215370062021ef31616348a0cb490d2e9004b8eaa50f1973feb76e9135ce"
 dependencies = [
  "cfg-if",
  "iced",

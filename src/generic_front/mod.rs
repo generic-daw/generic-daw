@@ -41,7 +41,7 @@ pub enum Message {
     Stop,
     New,
     Export,
-    FileSelected(Option<String>),
+    FileSelected(String),
     BpmChanged(u16),
     NumeratorChanged(u8),
     DenominatorChanged(u8),
@@ -77,11 +77,11 @@ impl Daw {
                 if let Some(paths) = FileDialog::new().pick_files() {
                     for path in paths {
                         let path_str = path.display().to_string();
-                        self.update(Message::FileSelected(Some(path_str)));
+                        self.update(Message::FileSelected(path_str));
                     }
                 }
             }
-            Message::FileSelected(Some(path)) => {
+            Message::FileSelected(path) => {
                 let arrangement = self.arrangement.clone();
                 let sender = self.timeline.samples_sender.clone();
                 std::thread::spawn(move || {
@@ -94,7 +94,6 @@ impl Daw {
                     }
                 });
             }
-            Message::FileSelected(None) => {}
             Message::TogglePlay => {
                 if !self.arrangement.meter.playing.fetch_not(SeqCst)
                     && ((self.arrangement.meter.global_time.load(SeqCst) as f32)
