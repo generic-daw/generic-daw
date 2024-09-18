@@ -117,23 +117,23 @@ impl AudioClip {
 
         // vertices of the waveform
         let mut vertices = Vec::with_capacity(vertices_len);
+        let color = color::pack(theme.extended_palette().secondary.base.text);
+        let lod = self.arrangement.scale.read().unwrap().x as u32 - 3;
         (first_index..last_index).enumerate().for_each(|(x, i)| {
-            let (min, max) = self
-                .audio
-                .get_lod_at_index(self.arrangement.scale.read().unwrap().x as u32 - 3, i);
+            let (min, max) = self.audio.get_lod_at_index(lod, i);
             vertices.push(SolidVertex2D {
                 position: [
                     x as f32 * width_ratio,
                     min.mul_add(waveform_height, text_line_height),
                 ],
-                color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),
+                color,
             });
             vertices.push(SolidVertex2D {
                 position: [
                     x as f32 * width_ratio,
                     max.mul_add(waveform_height, text_line_height),
                 ],
-                color: color::pack(theme.extended_palette().secondary.base.text.into_linear()),
+                color,
             });
         });
 
