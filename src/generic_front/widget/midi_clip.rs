@@ -1,11 +1,9 @@
-use std::cmp::min_by;
-
 use crate::generic_back::track_clip::midi_clip::MidiClip;
 use iced::{
-    advanced::{graphics::geometry::Renderer as _, layout::Layout},
-    widget::canvas::{Frame, Path},
-    Point, Rectangle, Renderer, Size, Theme,
+    advanced::{layout::Layout, renderer::Quad, Renderer as _},
+    Point, Rectangle, Renderer, Size, Theme, Vector,
 };
+use std::cmp::{max_by, min_by};
 
 impl MidiClip {
     #[expect(clippy::unused_self)]
@@ -16,8 +14,7 @@ impl MidiClip {
         layout: Layout,
         clip_bounds: Rectangle,
     ) {
-        let mut bounds = layout.bounds();
-        let mut frame = Frame::new(renderer, bounds.size());
+        let bounds = layout.bounds();
 
         // how many pixels of the top of the clip are clipped off by the top of the arrangement
         let hidden = min_by(0.0, bounds.y - clip_bounds.y, |a, b| {
@@ -25,16 +22,22 @@ impl MidiClip {
         });
 
         // the translucent background of the clip
-        let background = Path::rectangle(
-            Point::new(0.0, hidden),
-            Size::new(bounds.width, bounds.height),
-        );
+        let clip_background = Quad {
+            bounds: Rectangle::new(
+                Point::new(0.0, -hidden),
+                Size::new(
+                    bounds.width,
+                    max_by(bounds.height + hidden, 0.0, |a, b| {
+                        a.partial_cmp(b).unwrap()
+                    }),
+                ),
+            ),
+            ..Quad::default()
+        };
 
-        bounds.y -= hidden;
-
-        frame.with_clip(clip_bounds.intersection(&bounds).unwrap(), |frame| {
-            frame.fill(
-                &background,
+        renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
+            renderer.fill_quad(
+                clip_background,
                 theme
                     .extended_palette()
                     .primary
@@ -43,7 +46,5 @@ impl MidiClip {
                     .scale_alpha(0.25),
             );
         });
-
-        renderer.draw_geometry(frame.into_geometry());
     }
 }
