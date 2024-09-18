@@ -6,7 +6,6 @@ use iced::{
             mesh::{self, Renderer as _, SolidVertex2D},
             Mesh,
         },
-        layout::Layout,
         renderer::Quad,
         text::Renderer as _,
         Renderer as _, Text,
@@ -23,11 +22,9 @@ impl AudioClip {
         &self,
         renderer: &mut Renderer,
         theme: &Theme,
-        layout: Layout,
-        clip_bounds: Rectangle,
+        bounds: Rectangle,
+        arrangement_bounds: Rectangle,
     ) {
-        let bounds = layout.bounds();
-
         // length of the downscaled audio we're using to draw
         let downscaled_len = self.arrangement.scale.read().unwrap().x.floor().exp2() as u32;
 
@@ -70,7 +67,7 @@ impl AudioClip {
         }
 
         // how many pixels of the top of the clip are clipped off by the top of the arrangement
-        let hidden = min_by(0.0, bounds.y - clip_bounds.y, |a, b| {
+        let hidden = min_by(0.0, bounds.y - arrangement_bounds.y, |a, b| {
             a.partial_cmp(b).unwrap()
         });
 
@@ -83,7 +80,7 @@ impl AudioClip {
 
         let clip_bounds = Rectangle::new(
             Point::new(0.0, -hidden),
-            bounds.intersection(&clip_bounds).unwrap().size(),
+            bounds.intersection(&arrangement_bounds).unwrap().size(),
         );
 
         if clip_bounds.height < 1.0 {

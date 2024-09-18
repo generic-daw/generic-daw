@@ -1,6 +1,6 @@
 use crate::generic_back::track_clip::midi_clip::MidiClip;
 use iced::{
-    advanced::{layout::Layout, renderer::Quad, Renderer as _},
+    advanced::{renderer::Quad, Renderer as _},
     Point, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::cmp::{max_by, min_by};
@@ -11,13 +11,11 @@ impl MidiClip {
         &self,
         renderer: &mut Renderer,
         theme: &Theme,
-        layout: Layout,
-        clip_bounds: Rectangle,
+        bounds: Rectangle,
+        arrangement_bounds: Rectangle,
     ) {
-        let bounds = layout.bounds();
-
         // how many pixels of the top of the clip are clipped off by the top of the arrangement
-        let hidden = min_by(0.0, bounds.y - clip_bounds.y, |a, b| {
+        let hidden = min_by(0.0, bounds.y - arrangement_bounds.y, |a, b| {
             a.partial_cmp(b).unwrap()
         });
 

@@ -5,13 +5,13 @@ use crate::{
 use iced::{
     advanced::{
         graphics::geometry::Renderer as _,
-        layout::{self, Layout, Node},
+        layout::{self, Layout},
         renderer,
         widget::{self, Widget},
     },
     mouse,
     widget::canvas::{Frame, Geometry, Path, Stroke},
-    Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Length, Point, Rectangle, Renderer, Size, Theme,
 };
 use std::sync::{atomic::Ordering::SeqCst, Arc};
 
@@ -52,19 +52,18 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
             .iter()
             .enumerate()
             .for_each(|(i, track)| {
-                let node = Node::new(Size::new(bounds.width, self.scale.read().unwrap().y));
-                let sublayout = Layout::with_offset(
-                    Vector::new(
+                let track_bounds = Rectangle::new(
+                    Point::new(
                         bounds.x,
                         self.position.read().unwrap().y.mul_add(
                             -self.scale.read().unwrap().y,
                             (i as f32).mul_add(self.scale.read().unwrap().y, bounds.y),
                         ),
                     ),
-                    &node,
+                    Size::new(bounds.width, self.scale.read().unwrap().y),
                 );
-                if sublayout.bounds().intersects(&layout.bounds()) {
-                    track.draw(renderer, theme, sublayout, bounds);
+                if track_bounds.intersects(&bounds) {
+                    track.draw(renderer, theme, track_bounds, bounds);
                 }
             });
 

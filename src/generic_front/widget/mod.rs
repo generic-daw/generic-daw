@@ -3,3 +3,4 @@ pub mod audio_clip;
 pub mod audio_track;
 pub mod midi_clip;
 pub mod midi_track;
+pub mod track;
