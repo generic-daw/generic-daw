@@ -11,13 +11,16 @@ clack-host = { git = "https://github.com/prokopyl/clack.git" }
 cpal = "0.15.3"
 generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host" }
 hound = "3.5.1"
-iced = { git = "https://github.com/iced-rs/iced", default-features = false, features = [
+iced = { version = "0.13.0", default-features = false, features = [
     "auto-detect-theme",
+    "advanced",
     "canvas",
     "fira-sans",
     "wgpu",
 ] }
-iced_aw = { git = "https://github.com/iced-rs/iced_aw", default-features = false, features = ["number_input"] }
+iced_aw = { git = "https://github.com/iced-rs/iced_aw", default-features = false, features = [
+    "number_input",
+] }
 itertools = "0.13.0"
 rfd = "0.14.1"
 rubato = { version = "0.15.0", default-features = false }
