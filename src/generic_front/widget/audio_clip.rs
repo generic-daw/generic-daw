@@ -14,7 +14,7 @@ use iced::{
     widget::text::{LineHeight, Shaping, Wrapping},
     Font, Pixels, Point, Rectangle, Renderer, Size, Theme, Transformation, Vector,
 };
-use std::cmp::{max_by, min, min_by};
+use std::cmp::{max_by, min};
 
 impl AudioClip {
     #[expect(clippy::too_many_lines)]
@@ -25,77 +25,70 @@ impl AudioClip {
         bounds: Rectangle,
         arrangement_bounds: Rectangle,
     ) {
-        // length of the downscaled audio we're using to draw
-        let downscaled_len = self.arrangement.scale.read().unwrap().x.floor().exp2() as u32;
+        // samples of the original audio per sample of lod
+        let lod_sample_size = self.arrangement.scale.read().unwrap().x.floor().exp2() as u32;
 
-        // ratio of the length of the downscaled audio to the width of the clip
-        let width_ratio = downscaled_len as f32 / self.arrangement.scale.read().unwrap().x.exp2();
+        // samples of the original audio per pixel
+        let pixel_size = self.arrangement.scale.read().unwrap().x.exp2();
+
+        // samples in the lod per pixel
+        let lod_samples_per_pixel = lod_sample_size as f32 / pixel_size;
 
         let global_start = self
             .get_global_start()
             .in_interleaved_samples(&self.arrangement.meter) as f32;
 
-        // first_index: index of the first sample in the downscaled audio to draw
         let (first_index, index_offset) =
             if self.arrangement.position.read().unwrap().x > global_start {
                 (
                     (self.arrangement.position.read().unwrap().x - global_start) as u32
-                        / downscaled_len,
+                        / lod_sample_size,
                     0,
                 )
             } else {
                 (
                     0,
                     (global_start - self.arrangement.position.read().unwrap().x) as u32
-                        / downscaled_len,
+                        / lod_sample_size,
                 )
             };
 
-        // index of the last sample in the downscaled audio to draw
         let last_index = min(
             self.get_global_end()
                 .in_interleaved_samples(&self.arrangement.meter)
-                / downscaled_len,
-            first_index + index_offset + (bounds.width / width_ratio) as u32,
+                / lod_sample_size,
+            first_index + index_offset + (bounds.width / lod_samples_per_pixel) as u32,
         );
 
-        let vertices_len = usize::try_from(2 * (last_index - first_index)).unwrap();
-
         // if there are less than 3 vertices, there's nothing to draw
-        if vertices_len < 3 {
+        if (last_index - first_index) < 2 {
             return;
         }
 
         // how many pixels of the top of the clip are clipped off by the top of the arrangement
-        let hidden = min_by(0.0, bounds.y - arrangement_bounds.y, |a, b| {
+        let hidden = max_by(0.0, arrangement_bounds.y - bounds.y, |a, b| {
             a.partial_cmp(b).unwrap()
         });
 
-        // text size
-        let text_size = 12.0;
-        // maximum height of the text
-        let text_line_height = text_size * 1.5;
-        // height of the waveform: the height of the clip minus the height of the text
-        let waveform_height = self.arrangement.scale.read().unwrap().y - text_line_height;
-
+        // the part of the audio clip that is visible
         let clip_bounds = Rectangle::new(
-            Point::new(0.0, -hidden),
+            Point::new(0.0, hidden),
             bounds.intersection(&arrangement_bounds).unwrap().size(),
         );
 
-        if clip_bounds.height < 1.0 {
-            return;
-        }
+        let text_size = 12.0;
+        let text_line_height = text_size * 1.5;
+
+        // height of the waveform: the height of the clip minus the height of the text
+        let waveform_height = self.arrangement.scale.read().unwrap().y - text_line_height;
 
         // the translucent background of the clip
         let clip_background = Quad {
             bounds: Rectangle::new(
-                Point::new(0.0, -hidden),
+                Point::new(0.0, hidden),
                 Size::new(
-                    bounds.width,
-                    max_by(bounds.height + hidden, 0.0, |a, b| {
-                        a.partial_cmp(b).unwrap()
-                    }),
+                    clip_bounds.width,
+                    max_by(0.0, clip_bounds.height, |a, b| a.partial_cmp(b).unwrap()),
                 ),
             ),
             ..Quad::default()
@@ -104,10 +97,10 @@ impl AudioClip {
         // the opaque background of the text
         let text_background = Quad {
             bounds: Rectangle::new(
-                Point::new(0.0, -hidden),
+                Point::new(0.0, hidden),
                 Size::new(
-                    bounds.width,
-                    max_by(text_line_height + hidden, 0.0, |a, b| {
+                    clip_bounds.width,
+                    max_by(0.0, text_line_height - hidden, |a, b| {
                         a.partial_cmp(b).unwrap()
                     }),
                 ),
@@ -116,21 +109,22 @@ impl AudioClip {
         };
 
         // vertices of the waveform
-        let mut vertices = Vec::with_capacity(vertices_len);
+        let mut vertices =
+            Vec::with_capacity(2 * usize::try_from(last_index - first_index).unwrap());
         let color = color::pack(theme.extended_palette().secondary.base.text);
         let lod = self.arrangement.scale.read().unwrap().x as u32 - 3;
         (first_index..last_index).enumerate().for_each(|(x, i)| {
             let (min, max) = self.audio.get_lod_at_index(lod, i);
             vertices.push(SolidVertex2D {
                 position: [
-                    x as f32 * width_ratio,
+                    x as f32 * lod_samples_per_pixel,
                     min.mul_add(waveform_height, text_line_height),
                 ],
                 color,
             });
             vertices.push(SolidVertex2D {
                 position: [
-                    x as f32 * width_ratio,
+                    x as f32 * lod_samples_per_pixel,
                     max.mul_add(waveform_height, text_line_height),
                 ],
                 color,
@@ -138,7 +132,7 @@ impl AudioClip {
         });
 
         // triangles of the waveform
-        let mut indices = Vec::with_capacity(3 * (vertices_len - 2));
+        let mut indices = Vec::with_capacity(3 * (vertices.len() - 2));
         (0..vertices.len() - 2).for_each(|i| {
             let i = u32::try_from(i).unwrap();
             indices.push(i);
@@ -153,6 +147,7 @@ impl AudioClip {
             clip_bounds,
         };
 
+        // the text containing the name of the sample
         let text = Text {
             content: self.audio.name.clone(),
             bounds: Size::new(f32::INFINITY, 0.0),

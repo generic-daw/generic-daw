@@ -32,7 +32,9 @@ impl AudioTrack {
             );
             let clip_bounds = bounds.intersection(&clip_bounds);
             if let Some(clip_bounds) = clip_bounds {
-                clip.draw(renderer, theme, clip_bounds, arrangement_bounds);
+                if clip_bounds.height > 1.0 {
+                    clip.draw(renderer, theme, clip_bounds, arrangement_bounds);
+                }
             }
         });
     }
