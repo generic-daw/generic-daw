@@ -43,7 +43,11 @@ impl AudioClip {
         }
         self.audio.get_sample_at_index(
             global_time
-                - (self.global_start + self.clip_start)
+                - self
+                    .global_start
+                    .in_interleaved_samples(&self.arrangement.meter)
+                + self
+                    .clip_start
                     .in_interleaved_samples(&self.arrangement.meter),
         )
     }
@@ -54,6 +58,10 @@ impl AudioClip {
 
     pub const fn get_global_end(&self) -> Position {
         self.global_end
+    }
+
+    pub const fn get_clip_start(&self) -> Position {
+        self.clip_start
     }
 
     pub fn trim_start_to(&mut self, clip_start: Position) {

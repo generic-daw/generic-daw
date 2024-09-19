@@ -1410,7 +1410,7 @@ dependencies = [
 [[package]]
 name = "generic-clap-host"
 version = "0.1.0"
-source = "git+https://github.com/generic-daw/generic-clap-host#5115e9b24967b1d5b82b2b42f42d08d540026b54"
+source = "git+https://github.com/generic-daw/generic-clap-host#79e342b6f0d3adf7f63f67604635f3a2eb9d0ea9"
 dependencies = [
  "clack-extensions",
  "clack-host",
@@ -1663,12 +1663,13 @@ dependencies = [
 
 [[package]]
 name = "iced_aw"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b47215370062021ef31616348a0cb490d2e9004b8eaa50f1973feb76e9135ce"
+checksum = "42e05df3019f20c6decea93d035b32a2afc7b329d89cc5a68cca097d0e0a1889"
 dependencies = [
  "cfg-if",
  "iced",
+ "iced_fonts",
  "num-format",
  "num-traits",
 ]
@@ -1691,6 +1692,15 @@ dependencies = [
  "smol_str",
  "thiserror",
  "web-time",
+]
+
+[[package]]
+name = "iced_fonts"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df7deb0800a850ee25c8a42559f72c0f249e577feb3aad37b9b65dc1e517e52a"
+dependencies = [
+ "iced_core",
 ]
 
 [[package]]
@@ -3906,9 +3916,9 @@ checksum = "52ea75f83c0137a9b98608359a5f1af8144876eb67bcb1ce837368e906a9f524"
 
 [[package]]
 name = "unicode-script"
-version = "0.5.6"
+version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad8d71f5726e5f285a935e9fe8edfd53f0491eb6e9a5774097fdabee7cd8c9cd"
+checksum = "9fb421b350c9aff471779e262955939f565ec18b86c15364e6bdf0d662ca7c1f"
 
 [[package]]
 name = "unicode-segmentation"
@@ -3924,9 +3934,9 @@ checksum = "0336d538f7abc86d282a4189614dfaa90810dfc2c6f6427eaf88e16311dd225d"
 
 [[package]]
 name = "unicode-xid"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "229730647fbc343e3a80e463c1db7f78f3855d3f3739bee0dda773c9a037c90a"
+checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "url"
