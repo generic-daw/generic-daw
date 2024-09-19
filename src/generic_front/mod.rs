@@ -34,8 +34,8 @@ pub struct Daw {
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    TrackPanelMessage(TrackPanelMessage),
-    TimelineMessage(TimelineMessage),
+    TrackPanel(TrackPanelMessage),
+    Timeline(TimelineMessage),
     LoadSample,
     TogglePlay,
     Stop,
@@ -67,10 +67,10 @@ impl Daw {
 
     pub fn update(&mut self, message: Message) {
         match message {
-            Message::TrackPanelMessage(msg) => {
+            Message::TrackPanel(msg) => {
                 self.track_panel.update(&msg);
             }
-            Message::TimelineMessage(msg) => {
+            Message::Timeline(msg) => {
                 self.timeline.update(&msg);
             }
             Message::LoadSample => {
@@ -137,7 +137,7 @@ impl Daw {
         }
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         let controls = row![
             button("Load Sample").on_press(Message::LoadSample),
             button(if self.arrangement.meter.playing.load(SeqCst) {
@@ -152,13 +152,13 @@ impl Daw {
             slider(
                 3.0..=12.999_999,
                 self.arrangement.scale.read().unwrap().x,
-                |scale| { Message::TimelineMessage(TimelineMessage::XScaleChanged(scale)) }
+                |scale| { Message::Timeline(TimelineMessage::XScaleChanged(scale)) }
             )
             .step(0.1),
             slider(
                 20.0..=200.0,
                 self.arrangement.scale.read().unwrap().y,
-                |scale| { Message::TimelineMessage(TimelineMessage::YScaleChanged(scale)) }
+                |scale| { Message::Timeline(TimelineMessage::YScaleChanged(scale)) }
             ),
             number_input(
                 self.arrangement.meter.numerator.load(SeqCst),
@@ -184,8 +184,8 @@ impl Daw {
         let content = column![
             controls,
             row![
-                self.track_panel.view().map(Message::TrackPanelMessage),
-                self.timeline.view().map(Message::TimelineMessage)
+                self.track_panel.view().map(Message::TrackPanel),
+                self.timeline.view().map(Message::Timeline)
             ]
             .spacing(20)
         ]
@@ -197,10 +197,10 @@ impl Daw {
 
     pub fn subscription(_state: &Self) -> Subscription<Message> {
         Subscription::batch([
-            frames().map(|_| Message::TimelineMessage(TimelineMessage::Tick)),
+            frames().map(|_| Message::Timeline(TimelineMessage::Tick)),
             event::listen_with(|e, _, _| match e {
                 Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                    Some(Message::TimelineMessage(TimelineMessage::Scrolled(delta)))
+                    Some(Message::Timeline(TimelineMessage::Scrolled(delta)))
                 }
                 Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
                     match (modifiers.command(), modifiers.shift(), modifiers.alt()) {

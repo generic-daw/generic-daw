@@ -39,13 +39,11 @@ impl MidiTrack {
     }
 
     fn refresh_global_midi(&self) {
-        let _ = std::mem::replace(
-            &mut self.plugin_state.write().unwrap().global_midi_cache,
-            self.clips
-                .iter()
-                .flat_map(MidiClip::get_global_midi)
-                .collect(),
-        );
+        self.plugin_state.write().unwrap().global_midi_cache = self
+            .clips
+            .iter()
+            .flat_map(MidiClip::get_global_midi)
+            .collect();
     }
 
     pub(super) fn get_at_global_time(&self, global_time: u32) -> f32 {

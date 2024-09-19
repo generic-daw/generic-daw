@@ -70,7 +70,7 @@ impl InterleavedAudio {
     }
 
     pub(super) fn get_sample_at_index(&self, index: u32) -> f32 {
-        *self.samples.get(usize::try_from(index).unwrap()).unwrap()
+        self.samples[usize::try_from(index).unwrap()]
     }
 
     pub fn get_lod_at_index(&self, lod: u32, index: u32) -> (f32, f32) {

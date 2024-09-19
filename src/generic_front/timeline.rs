@@ -97,7 +97,7 @@ impl Timeline {
         }
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         container(Element::new(self.arrangement.clone()))
             .style(|_| container::Style {
                 border: iced::Border {

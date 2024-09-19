@@ -21,8 +21,7 @@ impl TrackPanel {
         Self { arrangement }
     }
 
-    #[expect(clippy::needless_pass_by_ref_mut)]
-    pub fn update(&mut self, message: &Message) {
+    pub fn update(&self, message: &Message) {
         match message {
             Message::TrackVolumeChanged(track_index, volume) => {
                 if let Some(track) = self.arrangement.tracks.read().unwrap().get(*track_index) {
@@ -37,7 +36,7 @@ impl TrackPanel {
         }
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         let tracks = self
             .arrangement
             .tracks

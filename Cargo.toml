@@ -27,21 +27,37 @@ rubato = { version = "0.15.0", default-features = false }
 symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
 
 [lints.rust]
+let-underscore = "warn"
+rust-2018-idioms = "warn"
+rust-2024-compatibility = "warn"
 unused_crate_dependencies = "warn"
+unused_qualifications = "warn"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
-nursery = { level = "warn", priority = -1 }
 cast_possible_truncation = "allow"
 cast_precision_loss = "allow"
 cast_sign_loss = "allow"
-enum_variant_names = "allow"
-missing_errors_doc = "allow"
-missing_panics_doc = "allow"
 module_name_repetitions = "allow"
 
+nursery = { level = "warn", priority = -1 }
+
+# Restriction, MachineApplicable
 allow_attributes = "warn"
+as_underscore = "warn"
+assertions_on_result_states = "warn"
+dbg_macro = "warn"
+get_unwrap = "warn"
+lossy_float_literal = "warn"
+needless_raw_strings = "warn"
+non_ascii_literal = "warn"
+semicolon_inside_block = "warn"
+separated_literal_suffix = "warn"
+str_to_string = "warn"
+string_lit_chars_any = "warn"
+try_err = "warn"
 
 [profile.release]
+overflow-checks = true
 lto = true
 codegen-units = 1

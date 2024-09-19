@@ -41,7 +41,7 @@ impl Arrangement {
             .read()
             .unwrap()
             .iter()
-            .map(super::track::Track::get_global_end)
+            .map(Track::get_global_end)
             .max()
             .unwrap_or(Position::new(0, 0))
     }

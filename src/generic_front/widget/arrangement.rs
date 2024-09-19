@@ -38,7 +38,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
         renderer: &mut Renderer,
         theme: &Theme,
         _style: &renderer::Style,
-        layout: Layout,
+        layout: Layout<'_>,
         _cursor: mouse::Cursor,
         _viewport: &Rectangle,
     ) {
