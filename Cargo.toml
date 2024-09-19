@@ -11,7 +11,7 @@ clack-host = { git = "https://github.com/prokopyl/clack.git" }
 cpal = "0.15.3"
 generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host" }
 hound = "3.5.1"
-iced = { version = "0.13.0", default-features = false, features = [
+iced = { version = "0.13.1", default-features = false, features = [
     "auto-detect-theme",
     "advanced",
     "canvas",

@@ -1649,9 +1649,9 @@ checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
 
 [[package]]
 name = "iced"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44ccdb0d1a25ff7581e75991229857c353c87d79c199d375af37d264f6fbd06d"
+checksum = "88acfabc84ec077eaf9ede3457ffa3a104626d79022a9bf7f296093b1d60c73f"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1675,9 +1675,9 @@ dependencies = [
 
 [[package]]
 name = "iced_core"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce264c157ad3968928d93f9b244ad8ad63465b5a5c31c86c13199b333629f16f"
+checksum = "afa341b914c93e1afc651c8b5c5b6c88aa68aa92e7d9923366b97a85a7f2ba46"
 dependencies = [
  "bitflags 2.6.0",
  "bytes",
@@ -1695,9 +1695,9 @@ dependencies = [
 
 [[package]]
 name = "iced_futures"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b47bd5c48706c57004c8a2d4cb127cb4535600843edb13aed10b09c7cd55eda4"
+checksum = "9b9b08fd632f5131344702869eea35fdebef9e548ab504942ac6b44fb42c90e2"
 dependencies = [
  "futures",
  "iced_core",
@@ -1806,9 +1806,9 @@ dependencies = [
 
 [[package]]
 name = "iced_widget"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e88dd57d414cc44427c523534b80e52a42b6828f0e27ad7b8478f839865ee3c"
+checksum = "23eef161bcd216f3472916570919dc3542647285da9cc81085b8d5cb434dc870"
 dependencies = [
  "iced_renderer",
  "iced_runtime",
