@@ -89,8 +89,7 @@ impl PluginState {
         let message = self.host_receiver.lock().unwrap().recv().unwrap();
         if let HostThreadMessage::Counter(steady_time) = message {
             let steady_time = u32::try_from(steady_time).unwrap();
-            let dirty = self.dirty.load(SeqCst);
-            match dirty {
+            match self.dirty.load(SeqCst) {
                 DirtyEvent::None => {
                     if global_time != self.last_global_time + 1 {
                         self.jump_events_refresh(&mut buffer, global_time, steady_time);

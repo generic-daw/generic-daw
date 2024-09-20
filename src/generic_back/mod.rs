@@ -31,32 +31,32 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) {
         .sample_rate
         .store(config.sample_rate.0, SeqCst);
 
-    let stream = Box::new(
-        device
-            .build_output_stream(
-                config,
-                move |data, _| {
-                    for sample in data.iter_mut() {
-                        *sample = arrangement
-                            .get_at_global_time(arrangement.meter.global_time.load(SeqCst));
-                        if arrangement.meter.playing.load(SeqCst)
-                            && !arrangement.meter.exporting.load(SeqCst)
-                        {
-                            arrangement.meter.global_time.fetch_add(1, SeqCst);
-                        }
+    let stream = device
+        .build_output_stream(
+            config,
+            move |data, _| {
+                for sample in data.iter_mut() {
+                    *sample =
+                        arrangement.get_at_global_time(arrangement.meter.global_time.load(SeqCst));
+
+                    if arrangement.meter.playing.load(SeqCst)
+                        && !arrangement.meter.exporting.load(SeqCst)
+                    {
+                        arrangement.meter.global_time.fetch_add(1, SeqCst);
                     }
-                },
-                move |err| panic!("{}", err),
-                None,
-            )
-            .unwrap(),
-    );
+                }
+            },
+            move |err| panic!("{}", err),
+            None,
+        )
+        .unwrap();
     stream.play().unwrap();
-    Box::leak(stream);
+
+    std::mem::forget(stream);
 }
 
 pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Meter) -> u32 {
-    (seconds * f64::from(meter.sample_rate.load(SeqCst)) * 2.0) as u32
+    (seconds * f64::from(meter.sample_rate.load(SeqCst) * 2)) as u32
 }
 
 pub fn pan(angle: f32, global_time: u32) -> f32 {

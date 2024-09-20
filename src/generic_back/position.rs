@@ -1,5 +1,6 @@
 use crate::generic_back::{seconds_to_interleaved_samples, Meter};
 use std::{
+    cmp::Ordering,
     ops::{Add, AddAssign, Sub, SubAssign},
     sync::atomic::Ordering::SeqCst,
 };
@@ -22,10 +23,10 @@ impl Position {
 
     pub fn from_interleaved_samples(samples: u32, meter: &Meter) -> Self {
         let global_beat = f64::from(samples)
-            / (f64::from(meter.sample_rate.load(SeqCst)) * 2.0
+            / (f64::from(meter.sample_rate.load(SeqCst) * 2)
                 / (f64::from(meter.bpm.load(SeqCst)) / 60.0));
         let quarter_note = global_beat as u16;
-        let sub_quarter_note = ((global_beat - f64::from(quarter_note)) * 256.0) as u16;
+        let sub_quarter_note = (global_beat - f64::from(quarter_note)) as u16 * 256;
 
         Self {
             quarter_note,
@@ -37,22 +38,22 @@ impl Position {
         let global_beat = f64::from(self.quarter_note) + f64::from(self.sub_quarter_note) / 256.0;
 
         seconds_to_interleaved_samples(
-            global_beat / f64::from(meter.bpm.load(SeqCst)) * 60.0,
+            global_beat * 60.0 / f64::from(meter.bpm.load(SeqCst)),
             meter,
         )
     }
 }
 
 impl PartialOrd for Position {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for Position {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         match self.quarter_note.cmp(&other.quarter_note) {
-            std::cmp::Ordering::Equal => self.sub_quarter_note.cmp(&other.sub_quarter_note),
+            Ordering::Equal => self.sub_quarter_note.cmp(&other.sub_quarter_note),
             other => other,
         }
     }
@@ -82,7 +83,7 @@ impl Sub for Position {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        debug_assert!(self >= rhs);
+        assert!(self >= rhs);
 
         if self.sub_quarter_note > rhs.sub_quarter_note {
             Self {

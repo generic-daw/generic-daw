@@ -24,9 +24,9 @@ use symphonia::core::{
 
 pub struct InterleavedAudio {
     /// these are used to play the sample back
-    samples: Vec<f32>,
+    pub samples: Vec<f32>,
     /// these are used to draw the sample in various quality levels
-    lods: [RwLock<Vec<(f32, f32)>>; 10],
+    pub lods: [RwLock<Vec<(f32, f32)>>; 10],
     /// the file name associated with the sample
     pub name: String,
 }
@@ -56,22 +56,6 @@ impl InterleavedAudio {
 
         Self::create_lod(audio.clone());
         Ok(audio)
-    }
-
-    pub fn len(&self) -> u32 {
-        u32::try_from(self.samples.len()).unwrap()
-    }
-
-    pub fn get_sample_at_index(&self, index: u32) -> f32 {
-        self.samples[usize::try_from(index).unwrap()]
-    }
-
-    pub fn get_lod_at_index(&self, lod: u32, index: u32) -> (f32, f32) {
-        *self.lods[usize::try_from(lod).unwrap()]
-            .read()
-            .unwrap()
-            .get(usize::try_from(index).unwrap())
-            .unwrap_or(&(0.0, 0.0))
     }
 
     fn read_audio_file(path: &PathBuf, arrangement: &Arc<Arrangement>) -> Result<Vec<f32>> {

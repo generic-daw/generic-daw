@@ -28,11 +28,14 @@ impl AudioClip {
         bounds: Rectangle,
         arrangement_bounds: Rectangle,
     ) {
+        let x_scale_log2 = self.arrangement.scale.x.load(SeqCst);
+        let x_position = self.arrangement.position.x.load(SeqCst);
+
         // samples of the original audio per sample of lod
-        let lod_sample_size = self.arrangement.scale.x.load(SeqCst).floor().exp2() as u32;
+        let lod_sample_size = x_scale_log2.floor().exp2() as u32;
 
         // samples of the original audio per pixel
-        let pixel_size = self.arrangement.scale.x.load(SeqCst).exp2();
+        let pixel_size = x_scale_log2.exp2();
 
         // samples in the lod per pixel
         let lod_samples_per_pixel = lod_sample_size as f32 / pixel_size;
@@ -46,20 +49,16 @@ impl AudioClip {
             .in_interleaved_samples(&self.arrangement.meter);
 
         // the first sample in the lod that is visible in the clip
-        let first_index = (max_by(
-            0.0,
-            self.arrangement.position.x.load(SeqCst) - global_start,
-            |a, b| a.partial_cmp(b).unwrap(),
-        ) as u32
+        let first_index = (max_by(0.0, x_position - global_start, |a, b| {
+            a.partial_cmp(b).unwrap()
+        }) as u32
             - clip_start)
             / lod_sample_size;
 
         // the distance between the left side of the timeline and the left side of the clip, in samples in the lod
-        let index_offset = (max_by(
-            0.0,
-            global_start - self.arrangement.position.x.load(SeqCst),
-            |a, b| a.partial_cmp(b).unwrap(),
-        ) as u32
+        let index_offset = (max_by(0.0, global_start - x_position, |a, b| {
+            a.partial_cmp(b).unwrap()
+        }) as u32
             - clip_start)
             / lod_sample_size;
 
@@ -93,7 +92,7 @@ impl AudioClip {
         let text_line_height = text_size * 1.5;
 
         // height of the waveform: the height of the clip minus the height of the text
-        let waveform_height = self.arrangement.scale.y.load(SeqCst) - text_line_height;
+        let waveform_height = clip_bounds.height - text_line_height;
 
         // the translucent background of the clip
         let clip_background = Quad {
@@ -125,9 +124,14 @@ impl AudioClip {
         let mut vertices =
             Vec::with_capacity(2 * usize::try_from(last_index - first_index).unwrap());
         let color = color::pack(theme.extended_palette().secondary.base.text);
-        let lod = self.arrangement.scale.x.load(SeqCst) as u32 - 3;
+        let lod = x_scale_log2 as usize - 3;
         (first_index..last_index).enumerate().for_each(|(x, i)| {
-            let (min, max) = self.audio.get_lod_at_index(lod, i);
+            let (min, max) = *self.audio.lods[lod]
+                .read()
+                .unwrap()
+                .get(usize::try_from(i).unwrap())
+                .unwrap_or(&(0.0, 0.0));
+
             vertices.push(SolidVertex2D {
                 position: [
                     x as f32 * lod_samples_per_pixel,

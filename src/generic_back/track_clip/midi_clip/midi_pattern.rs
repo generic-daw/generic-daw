@@ -3,7 +3,7 @@ use std::sync::{atomic::Ordering::SeqCst, Arc};
 
 pub struct MidiPattern {
     pub notes: Vec<Arc<MidiNote>>,
-    pub dirty: Arc<AtomicDirtyEvent>,
+    pub(in crate::generic_back) dirty: Arc<AtomicDirtyEvent>,
 }
 
 impl MidiPattern {

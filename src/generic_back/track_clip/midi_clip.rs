@@ -8,7 +8,10 @@ mod midi_pattern;
 pub use midi_pattern::MidiPattern;
 
 use crate::generic_back::{Arrangement, Position};
-use std::sync::{atomic::Ordering::SeqCst, Arc};
+use std::{
+    cmp::Ordering,
+    sync::{atomic::Ordering::SeqCst, Arc},
+};
 
 pub struct MidiClip {
     pub pattern: MidiPattern,
@@ -41,31 +44,42 @@ impl MidiClip {
         self.global_end
     }
 
-    pub fn trim_start_to(&mut self, clip_start: Position) {
-        self.pattern_start = clip_start;
+    pub fn trim_start_to(&mut self, pattern_start: Position) {
+        match self.pattern_start.cmp(&pattern_start) {
+            Ordering::Less => {
+                self.global_start += pattern_start - self.pattern_start;
+            }
+            Ordering::Equal => {}
+            Ordering::Greater => {
+                self.global_start -= self.pattern_start - pattern_start;
+            }
+        }
+        self.pattern_start = pattern_start;
         self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
+        assert!(self.global_start <= self.global_end);
     }
 
     pub fn trim_end_to(&mut self, global_end: Position) {
         self.global_end = global_end;
         self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
+        assert!(self.global_start <= self.global_end);
     }
 
-    pub fn move_start_to(&mut self, global_start: Position) {
+    pub fn move_to(&mut self, global_start: Position) {
         match self.global_start.cmp(&global_start) {
-            std::cmp::Ordering::Less => {
+            Ordering::Less => {
                 self.global_end += global_start - self.global_start;
             }
-            std::cmp::Ordering::Equal => {}
-            std::cmp::Ordering::Greater => {
-                self.global_end += self.global_start - global_start;
+            Ordering::Equal => {}
+            Ordering::Greater => {
+                self.global_end -= self.global_start - global_start;
             }
         }
         self.global_start = global_start;
         self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
     }
 
-    pub fn get_global_midi(&self) -> Vec<Arc<MidiNote>> {
+    pub(in crate::generic_back) fn get_global_midi(&self) -> Vec<Arc<MidiNote>> {
         let global_start = self
             .global_start
             .in_interleaved_samples(&self.arrangement.meter);

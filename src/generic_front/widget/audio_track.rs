@@ -11,20 +11,23 @@ impl AudioTrack {
         arrangement_bounds: Rectangle,
     ) {
         self.clips.read().unwrap().iter().for_each(|clip| {
+            let x_position = clip.arrangement.position.x.load(SeqCst);
+            let x_scale = clip.arrangement.scale.x.load(SeqCst).exp2();
+
             let first_pixel = (clip
                 .get_global_start()
                 .in_interleaved_samples(&clip.arrangement.meter)
                 as f32
-                - clip.arrangement.position.x.load(SeqCst))
-                / clip.arrangement.scale.x.load(SeqCst).exp2()
+                - x_position)
+                / x_scale
                 + bounds.x;
 
             let last_pixel = (clip
                 .get_global_end()
                 .in_interleaved_samples(&clip.arrangement.meter)
                 as f32
-                - clip.arrangement.position.x.load(SeqCst))
-                / clip.arrangement.scale.x.load(SeqCst).exp2()
+                - x_position)
+                / x_scale
                 + bounds.x;
 
             let clip_bounds = Rectangle::new(

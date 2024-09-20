@@ -5,6 +5,7 @@ mod midi_track;
 pub use midi_track::MidiTrack;
 
 use crate::generic_back::{AudioClip, MidiClip, Position};
+use std::sync::atomic::Ordering::SeqCst;
 
 pub enum Track {
     Audio(AudioTrack),
@@ -42,29 +43,29 @@ impl Track {
 
     pub fn get_volume(&self) -> f32 {
         match self {
-            Self::Audio(track) => track.get_volume(),
-            Self::Midi(track) => track.get_volume(),
+            Self::Audio(track) => track.volume.load(SeqCst),
+            Self::Midi(track) => track.volume.load(SeqCst),
         }
     }
 
     pub fn set_volume(&self, volume: f32) {
         match self {
-            Self::Audio(track) => track.set_volume(volume),
-            Self::Midi(track) => track.set_volume(volume),
+            Self::Audio(track) => track.volume.store(volume, SeqCst),
+            Self::Midi(track) => track.volume.store(volume, SeqCst),
         }
     }
 
     pub fn get_pan(&self) -> f32 {
         match self {
-            Self::Audio(track) => track.get_pan(),
-            Self::Midi(track) => track.get_pan(),
+            Self::Audio(track) => track.pan.load(SeqCst),
+            Self::Midi(track) => track.pan.load(SeqCst),
         }
     }
 
     pub fn set_pan(&self, pan: f32) {
         match self {
-            Self::Audio(track) => track.set_pan(pan),
-            Self::Midi(track) => track.set_pan(pan),
+            Self::Audio(track) => track.pan.store(pan, SeqCst),
+            Self::Midi(track) => track.pan.store(pan, SeqCst),
         }
     }
 }

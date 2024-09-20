@@ -2,7 +2,10 @@ mod interleaved_audio;
 pub use interleaved_audio::InterleavedAudio;
 
 use crate::generic_back::{Arrangement, Position};
-use std::sync::{atomic::Ordering::SeqCst, Arc};
+use std::{
+    cmp::Ordering,
+    sync::{atomic::Ordering::SeqCst, Arc},
+};
 
 pub struct AudioClip {
     pub audio: Arc<InterleavedAudio>,
@@ -17,7 +20,7 @@ pub struct AudioClip {
 
 impl AudioClip {
     pub fn new(audio: Arc<InterleavedAudio>, arrangement: Arc<Arrangement>) -> Self {
-        let samples = audio.len();
+        let samples = u32::try_from(audio.samples.len()).unwrap();
 
         Self {
             audio,
@@ -29,11 +32,12 @@ impl AudioClip {
     }
 
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {
+        let start = self
+            .global_start
+            .in_interleaved_samples(&self.arrangement.meter);
+
         if !&self.arrangement.meter.playing.load(SeqCst)
-            || global_time
-                < self
-                    .global_start
-                    .in_interleaved_samples(&self.arrangement.meter)
+            || global_time < start
             || global_time
                 > self
                     .global_end
@@ -41,15 +45,13 @@ impl AudioClip {
         {
             return 0.0;
         }
-        self.audio.get_sample_at_index(
-            global_time
-                - self
-                    .global_start
-                    .in_interleaved_samples(&self.arrangement.meter)
-                + self
-                    .clip_start
-                    .in_interleaved_samples(&self.arrangement.meter),
-        )
+
+        let index = global_time - start
+            + self
+                .clip_start
+                .in_interleaved_samples(&self.arrangement.meter);
+
+        self.audio.samples[usize::try_from(index).unwrap()]
     }
 
     pub const fn get_global_start(&self) -> Position {
@@ -65,21 +67,32 @@ impl AudioClip {
     }
 
     pub fn trim_start_to(&mut self, clip_start: Position) {
+        match self.clip_start.cmp(&clip_start) {
+            Ordering::Less => {
+                self.global_start += clip_start - self.clip_start;
+            }
+            Ordering::Equal => {}
+            Ordering::Greater => {
+                self.global_start -= self.clip_start - clip_start;
+            }
+        }
         self.clip_start = clip_start;
+        assert!(self.global_start <= self.global_end);
     }
 
     pub fn trim_end_to(&mut self, global_end: Position) {
         self.global_end = global_end;
+        assert!(self.global_start <= self.global_end);
     }
 
-    pub fn move_start_to(&mut self, global_start: Position) {
+    pub fn move_to(&mut self, global_start: Position) {
         match self.global_start.cmp(&global_start) {
-            std::cmp::Ordering::Less => {
+            Ordering::Less => {
                 self.global_end += global_start - self.global_start;
             }
-            std::cmp::Ordering::Equal => {}
-            std::cmp::Ordering::Greater => {
-                self.global_end += self.global_start - global_start;
+            Ordering::Equal => {}
+            Ordering::Greater => {
+                self.global_end -= self.global_start - global_start;
             }
         }
         self.global_start = global_start;

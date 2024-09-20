@@ -15,9 +15,9 @@ use std::sync::{
 pub struct MidiTrack {
     pub clips: RwLock<Vec<MidiClip>>,
     /// between 0.0 and 1.0
-    volume: AtomicF32,
+    pub volume: AtomicF32,
     /// between -1.0 (left) and 1.0 (right)
-    pan: AtomicF32,
+    pub pan: AtomicF32,
     /// holds all the state needed for a generator plugin to function properly
     pub plugin_state: RwLock<PluginState>,
 }
@@ -83,21 +83,5 @@ impl MidiTrack {
             .map(MidiClip::get_global_end)
             .max()
             .unwrap_or(Position::new(0, 0))
-    }
-
-    pub fn get_volume(&self) -> f32 {
-        self.volume.load(SeqCst)
-    }
-
-    pub fn set_volume(&self, volume: f32) {
-        self.volume.store(volume, SeqCst);
-    }
-
-    pub fn get_pan(&self) -> f32 {
-        self.pan.load(SeqCst)
-    }
-
-    pub fn set_pan(&self, pan: f32) {
-        self.pan.store(pan, SeqCst);
     }
 }

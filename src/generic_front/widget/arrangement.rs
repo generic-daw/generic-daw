@@ -46,6 +46,9 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
 
         renderer.draw_geometry(self.grid(renderer, bounds, theme));
 
+        let y_scale = self.scale.y.load(SeqCst);
+        let y_offset = self.position.y.load(SeqCst);
+
         self.tracks
             .read()
             .unwrap()
@@ -55,12 +58,9 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
                 let track_bounds = Rectangle::new(
                     Point::new(
                         bounds.x,
-                        self.position.y.load(SeqCst).mul_add(
-                            -self.scale.y.load(SeqCst),
-                            (i as f32).mul_add(self.scale.y.load(SeqCst), bounds.y),
-                        ),
+                        y_offset.mul_add(-y_scale, (i as f32).mul_add(y_scale, bounds.y)),
                     ),
-                    Size::new(bounds.width, self.scale.y.load(SeqCst)),
+                    Size::new(bounds.width, y_scale),
                 );
                 if track_bounds.intersects(&bounds) {
                     track.draw(renderer, theme, track_bounds, bounds);
@@ -75,23 +75,24 @@ impl Arrangement {
     fn grid(&self, renderer: &Renderer, bounds: Rectangle, theme: &Theme) -> Geometry {
         let mut frame = Frame::new(renderer, bounds.size());
 
-        let mut beat =
-            Position::from_interleaved_samples(self.position.x.load(SeqCst) as u32, &self.meter);
-        let mut end_beat = beat
-            + Position::from_interleaved_samples(
-                (bounds.width * self.scale.x.load(SeqCst).exp2()) as u32,
-                &self.meter,
-            );
+        let numerator = self.meter.numerator.load(SeqCst);
+        let x_position = self.position.x.load(SeqCst);
+        let x_scale = self.scale.x.load(SeqCst).exp2();
+
+        let mut beat = Position::from_interleaved_samples(x_position as u32, &self.meter);
         if beat.sub_quarter_note != 0 {
             beat.sub_quarter_note = 0;
             beat.quarter_note += 1;
         }
+
+        let mut end_beat =
+            beat + Position::from_interleaved_samples((bounds.width * x_scale) as u32, &self.meter);
         end_beat.sub_quarter_note = 0;
 
         while beat <= end_beat {
-            let color = if self.scale.x.load(SeqCst) > 11.0 {
-                if beat.quarter_note % u16::from(self.meter.numerator.load(SeqCst)) == 0 {
-                    let bar = beat.quarter_note / u16::from(self.meter.numerator.load(SeqCst));
+            let color = if x_scale > 11f32.exp2() {
+                if beat.quarter_note % u16::from(numerator) == 0 {
+                    let bar = beat.quarter_note / u16::from(numerator);
                     if bar % 4 == 0 {
                         theme.extended_palette().secondary.strong.color
                     } else {
@@ -101,16 +102,14 @@ impl Arrangement {
                     beat.quarter_note += 1;
                     continue;
                 }
-            } else if beat.quarter_note % u16::from(self.meter.numerator.load(SeqCst)) == 0 {
+            } else if beat.quarter_note % u16::from(numerator) == 0 {
                 theme.extended_palette().secondary.strong.color
             } else {
                 theme.extended_palette().secondary.weak.color
             };
 
             let path = Path::new(|path| {
-                let x = (beat.in_interleaved_samples(&self.meter) as f32
-                    - self.position.x.load(SeqCst))
-                    / self.scale.x.load(SeqCst).exp2();
+                let x = (beat.in_interleaved_samples(&self.meter) as f32 - x_position) / x_scale;
                 path.line_to(Point::new(x, 0.0));
                 path.line_to(Point::new(x, bounds.height));
             });
@@ -128,8 +127,8 @@ impl Arrangement {
         let mut frame = Frame::new(renderer, bounds.size());
 
         let path = Path::new(|path| {
-            let x = -(self.position.x.load(SeqCst)) / self.scale.x.load(SeqCst).exp2()
-                + self.meter.global_time.load(SeqCst) as f32 / self.scale.x.load(SeqCst).exp2();
+            let x = (self.meter.global_time.load(SeqCst) as f32 - self.position.x.load(SeqCst))
+                / self.scale.x.load(SeqCst).exp2();
             path.line_to(Point::new(x, 0.0));
             path.line_to(Point::new(x, bounds.height));
         });

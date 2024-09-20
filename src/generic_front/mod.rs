@@ -121,17 +121,20 @@ impl Daw {
             Message::BpmChanged(bpm) => {
                 self.arrangement.meter.bpm.store(bpm, SeqCst);
             }
-            Message::NumeratorChanged(numerator) => {
-                self.arrangement.meter.numerator.store(numerator, SeqCst);
+            Message::NumeratorChanged(new_numerator) => {
+                self.arrangement
+                    .meter
+                    .numerator
+                    .store(new_numerator, SeqCst);
             }
-            Message::DenominatorChanged(denominator) => {
+            Message::DenominatorChanged(new_denominator) => {
+                let old_denominator = self.arrangement.meter.denominator.load(SeqCst);
                 let c = u8::from(
-                    (1 << self.arrangement.meter.denominator.load(SeqCst)) < denominator
-                        && !(self.arrangement.meter.denominator.load(SeqCst) == 0
-                            && denominator == 2),
+                    (1 << old_denominator) < new_denominator
+                        && !(old_denominator == 0 && new_denominator == 2),
                 ) + 7;
                 self.arrangement.meter.denominator.store(
-                    c - u8::try_from(denominator.leading_zeros()).unwrap(),
+                    c - u8::try_from(new_denominator.leading_zeros()).unwrap(),
                     SeqCst,
                 );
             }
