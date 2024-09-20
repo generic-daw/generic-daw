@@ -1,5 +1,7 @@
-use super::{meter::Meter, position::Position, track::Track};
-use crate::generic_front::{timeline_position::TimelinePosition, timeline_scale::TimelineScale};
+use crate::{
+    generic_back::{Meter, Position, Track},
+    generic_front::{TimelinePosition, TimelineScale},
+};
 use hound::WavWriter;
 use std::{
     path::Path,

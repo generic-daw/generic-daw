@@ -1,4 +1,4 @@
-use crate::generic_back::track::Track;
+use crate::generic_back::Track;
 use iced::{Rectangle, Renderer, Theme};
 
 impl Track {

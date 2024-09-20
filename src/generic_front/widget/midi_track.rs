@@ -1,4 +1,4 @@
-use crate::generic_back::track::midi_track::MidiTrack;
+use crate::generic_back::MidiTrack;
 use iced::{Point, Rectangle, Renderer, Size, Theme};
 use std::sync::atomic::Ordering::SeqCst;
 

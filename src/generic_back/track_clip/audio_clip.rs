@@ -1,7 +1,7 @@
-pub mod interleaved_audio;
+mod interleaved_audio;
+pub use interleaved_audio::InterleavedAudio;
 
-use crate::generic_back::{arrangement::Arrangement, position::Position};
-use interleaved_audio::InterleavedAudio;
+use crate::generic_back::{Arrangement, Position};
 use std::sync::{atomic::Ordering::SeqCst, Arc};
 
 pub struct AudioClip {
@@ -28,7 +28,7 @@ impl AudioClip {
         }
     }
 
-    pub(in crate::generic_back) fn get_at_global_time(&self, global_time: u32) -> f32 {
+    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
         if !&self.arrangement.meter.playing.load(SeqCst)
             || global_time
                 < self

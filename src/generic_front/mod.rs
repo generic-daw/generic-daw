@@ -1,14 +1,19 @@
-pub mod timeline;
-pub mod timeline_position;
-pub mod timeline_scale;
-pub mod track_panel;
-pub mod widget;
+mod timeline;
+pub(in crate::generic_front) use timeline::{Timeline, TimelineMessage};
+
+mod timeline_position;
+pub use timeline_position::TimelinePosition;
+
+mod timeline_scale;
+pub use timeline_scale::TimelineScale;
+
+mod track_panel;
+pub(in crate::generic_front) use track_panel::{TrackPanel, TrackPanelMessage};
+
+mod widget;
 
 use crate::generic_back::{
-    arrangement::Arrangement,
-    build_output_stream,
-    track::audio_track::AudioTrack,
-    track_clip::audio_clip::{interleaved_audio::InterleavedAudio, AudioClip},
+    build_output_stream, Arrangement, AudioClip, AudioTrack, InterleavedAudio,
 };
 use iced::{
     event, keyboard, mouse,
@@ -23,8 +28,6 @@ use std::{
     path::PathBuf,
     sync::{atomic::Ordering::SeqCst, Arc},
 };
-use timeline::{Message as TimelineMessage, Timeline};
-use track_panel::{Message as TrackPanelMessage, TrackPanel};
 
 pub struct Daw {
     arrangement: Arc<Arrangement>,
@@ -83,10 +86,8 @@ impl Daw {
             }
             Message::FileSelected(path) => {
                 let arrangement = self.arrangement.clone();
-                let sender = self.timeline.samples_sender.clone();
                 std::thread::spawn(move || {
-                    let audio_file =
-                        InterleavedAudio::create(&PathBuf::from(path), &arrangement, sender);
+                    let audio_file = InterleavedAudio::create(&PathBuf::from(path), &arrangement);
                     if let Ok(audio_file) = audio_file {
                         let track = AudioTrack::create(arrangement.clone());
                         track.try_push_audio(AudioClip::new(audio_file, arrangement.clone()));

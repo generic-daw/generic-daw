@@ -1,15 +1,23 @@
-pub mod arrangement;
-pub mod meter;
-pub mod position;
-pub mod track;
-pub mod track_clip;
+mod arrangement;
+pub use arrangement::Arrangement;
 
-use arrangement::Arrangement;
+mod meter;
+pub use meter::Meter;
+
+mod position;
+pub use position::Position;
+
+mod track;
+pub use track::{AudioTrack, MidiTrack, Track};
+
+mod track_clip;
+pub(in crate::generic_back) use track_clip::{AtomicDirtyEvent, DirtyEvent};
+pub use track_clip::{AudioClip, InterleavedAudio, MidiClip, MidiNote};
+
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     StreamConfig,
 };
-use meter::Meter;
 use std::{
     f32::consts::PI,
     sync::{atomic::Ordering::SeqCst, Arc},

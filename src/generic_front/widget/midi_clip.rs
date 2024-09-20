@@ -1,4 +1,4 @@
-use crate::generic_back::track_clip::midi_clip::MidiClip;
+use crate::generic_back::MidiClip;
 use iced::{
     advanced::{renderer::Quad, Renderer as _},
     Point, Rectangle, Renderer, Size, Theme, Vector,

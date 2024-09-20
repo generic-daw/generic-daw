@@ -1,4 +1,4 @@
-use crate::helpers::atomic_f32::AtomicF32;
+use crate::helpers::AtomicF32;
 
 pub struct TimelineScale {
     /// log2 of the horizontal scale

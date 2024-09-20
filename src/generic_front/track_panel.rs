@@ -1,4 +1,4 @@
-use crate::generic_back::arrangement::Arrangement;
+use crate::generic_back::Arrangement;
 use iced::{
     widget::{column, container, row, slider, text},
     Alignment::Center,
@@ -11,7 +11,7 @@ pub struct TrackPanel {
 }
 
 #[derive(Debug, Clone)]
-pub enum Message {
+pub enum TrackPanelMessage {
     TrackVolumeChanged(usize, f32),
     TrackPanChanged(usize, f32),
 }
@@ -21,14 +21,14 @@ impl TrackPanel {
         Self { arrangement }
     }
 
-    pub fn update(&self, message: &Message) {
+    pub fn update(&self, message: &TrackPanelMessage) {
         match message {
-            Message::TrackVolumeChanged(track_index, volume) => {
+            TrackPanelMessage::TrackVolumeChanged(track_index, volume) => {
                 if let Some(track) = self.arrangement.tracks.read().unwrap().get(*track_index) {
                     track.set_volume(*volume);
                 }
             }
-            Message::TrackPanChanged(track_index, pan) => {
+            TrackPanelMessage::TrackPanChanged(track_index, pan) => {
                 if let Some(track) = self.arrangement.tracks.read().unwrap().get(*track_index) {
                     track.set_pan(*pan);
                 }
@@ -36,7 +36,7 @@ impl TrackPanel {
         }
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, TrackPanelMessage> {
         let tracks = self
             .arrangement
             .tracks
@@ -51,12 +51,12 @@ impl TrackPanel {
                     row![
                         text(track_name),
                         slider(0.0..=1.0, volume, move |v| {
-                            Message::TrackVolumeChanged(index, v) // Handle volume change
+                            TrackPanelMessage::TrackVolumeChanged(index, v) // Handle volume change
                         })
                         .step(0.01)
                         .width(Length::Fixed(150.0)),
                         slider(-1.0..=1.0, track.get_pan(), move |v| {
-                            Message::TrackPanChanged(index, v) // Handle pan change
+                            TrackPanelMessage::TrackPanChanged(index, v) // Handle pan change
                         })
                         .step(0.01)
                         .width(Length::Fixed(150.0))

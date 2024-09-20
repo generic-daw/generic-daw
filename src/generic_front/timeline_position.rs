@@ -1,4 +1,4 @@
-use crate::helpers::atomic_f32::AtomicF32;
+use crate::helpers::AtomicF32;
 
 pub struct TimelinePosition {
     /// position of the left of the timeline relative to the start of the arrangement, in samples

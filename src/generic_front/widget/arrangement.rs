@@ -1,6 +1,6 @@
 use crate::{
-    generic_back::{arrangement::Arrangement, position::Position},
-    generic_front::timeline::Message,
+    generic_back::{Arrangement, Position},
+    generic_front::TimelineMessage,
 };
 use iced::{
     advanced::{
@@ -15,7 +15,7 @@ use iced::{
 };
 use std::sync::{atomic::Ordering::SeqCst, Arc};
 
-impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
+impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
     fn size(&self) -> Size<Length> {
         Size {
             width: Length::Fill,

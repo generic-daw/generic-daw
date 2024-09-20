@@ -1,10 +1,13 @@
-pub mod dirty_event;
-pub mod midi_note;
-pub mod midi_pattern;
+mod dirty_event;
+pub use dirty_event::{AtomicDirtyEvent, DirtyEvent};
 
-use crate::generic_back::{arrangement::Arrangement, position::Position};
-use midi_note::MidiNote;
-use midi_pattern::MidiPattern;
+mod midi_note;
+pub use midi_note::MidiNote;
+
+mod midi_pattern;
+pub use midi_pattern::MidiPattern;
+
+use crate::generic_back::{Arrangement, Position};
 use std::sync::{atomic::Ordering::SeqCst, Arc};
 
 pub struct MidiClip {
@@ -40,16 +43,12 @@ impl MidiClip {
 
     pub fn trim_start_to(&mut self, clip_start: Position) {
         self.pattern_start = clip_start;
-        self.pattern
-            .dirty
-            .store(dirty_event::DirtyEvent::NoteReplaced, SeqCst);
+        self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
     }
 
     pub fn trim_end_to(&mut self, global_end: Position) {
         self.global_end = global_end;
-        self.pattern
-            .dirty
-            .store(dirty_event::DirtyEvent::NoteReplaced, SeqCst);
+        self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
     }
 
     pub fn move_start_to(&mut self, global_start: Position) {
@@ -63,12 +62,10 @@ impl MidiClip {
             }
         }
         self.global_start = global_start;
-        self.pattern
-            .dirty
-            .store(dirty_event::DirtyEvent::NoteReplaced, SeqCst);
+        self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
     }
 
-    pub(in crate::generic_back) fn get_global_midi(&self) -> Vec<Arc<MidiNote>> {
+    pub fn get_global_midi(&self) -> Vec<Arc<MidiNote>> {
         let global_start = self
             .global_start
             .in_interleaved_samples(&self.arrangement.meter);

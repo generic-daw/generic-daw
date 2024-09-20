@@ -1,4 +1,4 @@
-use super::{meter::Meter, seconds_to_interleaved_samples};
+use crate::generic_back::{seconds_to_interleaved_samples, Meter};
 use std::{
     ops::{Add, AddAssign, Sub, SubAssign},
     sync::atomic::Ordering::SeqCst,

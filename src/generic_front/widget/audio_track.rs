@@ -1,4 +1,4 @@
-use crate::generic_back::track::audio_track::AudioTrack;
+use crate::generic_back::AudioTrack;
 use iced::{Point, Rectangle, Renderer, Size, Theme};
 use std::sync::atomic::Ordering::SeqCst;
 

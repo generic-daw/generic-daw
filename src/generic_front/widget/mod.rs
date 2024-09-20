@@ -1,6 +1,6 @@
-pub mod arrangement;
-pub mod audio_clip;
-pub mod audio_track;
-pub mod midi_clip;
-pub mod midi_track;
-pub mod track;
+mod arrangement;
+mod audio_clip;
+mod audio_track;
+mod midi_clip;
+mod midi_track;
+mod track;

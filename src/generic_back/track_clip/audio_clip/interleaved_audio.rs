@@ -1,6 +1,4 @@
-use crate::{
-    generic_back::arrangement::Arrangement, generic_front::timeline::Message, helpers::gcd::gcd,
-};
+use crate::{generic_back::Arrangement, helpers::gcd};
 use anyhow::{anyhow, Result};
 use itertools::{
     Itertools,
@@ -13,7 +11,7 @@ use std::{
     cmp::{max_by, min_by},
     fs::File,
     path::PathBuf,
-    sync::{atomic::Ordering::SeqCst, mpsc::Sender, Arc, RwLock},
+    sync::{atomic::Ordering::SeqCst, Arc, RwLock},
 };
 use symphonia::core::{
     audio::SampleBuffer,
@@ -24,22 +22,17 @@ use symphonia::core::{
     probe::Hint,
 };
 
-type Lod = Vec<(f32, f32)>;
 pub struct InterleavedAudio {
     /// these are used to play the sample back
     samples: Vec<f32>,
     /// these are used to draw the sample in various quality levels
-    lods: [RwLock<Lod>; 10],
+    lods: [RwLock<Vec<(f32, f32)>>; 10],
     /// the file name associated with the sample
     pub name: String,
 }
 
 impl InterleavedAudio {
-    pub fn create(
-        path: &PathBuf,
-        arrangement: &Arc<Arrangement>,
-        sender: Sender<Message>,
-    ) -> Result<Arc<Self>> {
+    pub fn create(path: &PathBuf, arrangement: &Arc<Arrangement>) -> Result<Arc<Self>> {
         let mut samples = Self::read_audio_file(path, arrangement)?;
         samples.shrink_to_fit();
 
@@ -61,15 +54,15 @@ impl InterleavedAudio {
             name: path.file_name().unwrap().to_string_lossy().into_owned(),
         });
 
-        Self::create_lod(audio.clone(), sender);
+        Self::create_lod(audio.clone());
         Ok(audio)
     }
 
-    pub(super) fn len(&self) -> u32 {
+    pub fn len(&self) -> u32 {
         u32::try_from(self.samples.len()).unwrap()
     }
 
-    pub(super) fn get_sample_at_index(&self, index: u32) -> f32 {
+    pub fn get_sample_at_index(&self, index: u32) -> f32 {
         self.samples[usize::try_from(index).unwrap()]
     }
 
@@ -176,7 +169,7 @@ impl InterleavedAudio {
         Ok(samples)
     }
 
-    fn create_lod(audio: Arc<Self>, sender: Sender<Message>) {
+    fn create_lod(audio: Arc<Self>) {
         std::thread::spawn(move || {
             audio.samples.chunks(8).enumerate().for_each(|(i, chunk)| {
                 let (min, max) = match chunk.iter().minmax_by(|a, b| a.partial_cmp(b).unwrap()) {
@@ -187,7 +180,6 @@ impl InterleavedAudio {
                 audio.lods[0].write().unwrap()[i] =
                     ((*min).mul_add(0.5, 0.5), (*max).mul_add(0.5, 0.5));
             });
-            sender.send(Message::ArrangementUpdated).unwrap();
 
             (1..audio.lods.len()).for_each(|i| {
                 let len = audio.lods[i].read().unwrap().len();
@@ -206,7 +198,6 @@ impl InterleavedAudio {
                         ),
                     );
                 });
-                sender.send(Message::ArrangementUpdated).unwrap();
             });
         });
     }

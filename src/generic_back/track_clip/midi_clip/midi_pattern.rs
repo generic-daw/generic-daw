@@ -1,14 +1,9 @@
-use crate::generic_back::track::midi_track::MidiTrack;
-
-use super::{
-    dirty_event::{AtomicDirtyEvent, DirtyEvent},
-    midi_note::MidiNote,
-};
+use crate::generic_back::{AtomicDirtyEvent, DirtyEvent, MidiNote, MidiTrack};
 use std::sync::{atomic::Ordering::SeqCst, Arc};
 
 pub struct MidiPattern {
     pub notes: Vec<Arc<MidiNote>>,
-    pub(super) dirty: Arc<AtomicDirtyEvent>,
+    pub dirty: Arc<AtomicDirtyEvent>,
 }
 
 impl MidiPattern {
@@ -19,7 +14,7 @@ impl MidiPattern {
         }
     }
 
-    pub(super) fn len(&self) -> u32 {
+    pub fn len(&self) -> u32 {
         self.notes
             .iter()
             .map(|note| note.local_end)

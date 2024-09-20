@@ -1,54 +1,37 @@
-use crate::generic_back::arrangement::Arrangement;
+use crate::generic_back::Arrangement;
 use iced::{border::Radius, mouse::ScrollDelta, widget::container, Element, Theme};
-use std::sync::{
-    atomic::Ordering::SeqCst,
-    mpsc::{Receiver, Sender},
-    Arc,
-};
+use std::sync::{atomic::Ordering::SeqCst, Arc};
 
 #[derive(Debug, Clone)]
-pub enum Message {
+pub enum TimelineMessage {
     Tick,
     XScaleChanged(f32),
     YScaleChanged(f32),
     Scrolled(ScrollDelta),
     MovePlayToStart,
-    ArrangementUpdated,
 }
 
 pub struct Timeline {
     pub arrangement: Arc<Arrangement>,
-    pub samples_sender: Sender<Message>,
-    samples_receiver: Receiver<Message>,
 }
 
 impl Timeline {
-    pub fn new(arrangement: Arc<Arrangement>) -> Self {
-        let (samples_sender, samples_receiver) = std::sync::mpsc::channel();
-        Self {
-            arrangement,
-            samples_sender,
-            samples_receiver,
-        }
+    pub const fn new(arrangement: Arc<Arrangement>) -> Self {
+        Self { arrangement }
     }
 
-    pub fn update(&mut self, message: &Message) {
+    pub fn update(&mut self, message: &TimelineMessage) {
         match message {
-            Message::XScaleChanged(x_scale) => {
+            TimelineMessage::XScaleChanged(x_scale) => {
                 self.arrangement.scale.x.store(*x_scale, SeqCst);
-                self.update(&Message::ArrangementUpdated);
+                self.update(&TimelineMessage::Tick);
             }
-            Message::YScaleChanged(y_scale) => {
+            TimelineMessage::YScaleChanged(y_scale) => {
                 self.arrangement.scale.y.store(*y_scale, SeqCst);
-                self.update(&Message::ArrangementUpdated);
+                self.update(&TimelineMessage::Tick);
             }
-            Message::Tick => {
-                if let Ok(msg) = self.samples_receiver.try_recv() {
-                    self.update(&msg);
-                }
-            }
-            Message::ArrangementUpdated => {}
-            Message::Scrolled(delta) => match *delta {
+            TimelineMessage::Tick => {}
+            TimelineMessage::Scrolled(delta) => match *delta {
                 ScrollDelta::Pixels { x, y } => {
                     let x = x
                         .mul_add(
@@ -78,23 +61,23 @@ impl Timeline {
                     self.arrangement.position.y.store(y, SeqCst);
                 }
                 ScrollDelta::Lines { x, y } => {
-                    self.update(&Message::Scrolled(ScrollDelta::Pixels {
+                    self.update(&TimelineMessage::Scrolled(ScrollDelta::Pixels {
                         x: x * 50.0,
                         y: y * 50.0,
                     }));
                 }
             },
-            Message::MovePlayToStart => {
+            TimelineMessage::MovePlayToStart => {
                 self.arrangement.position.x.store(
                     self.arrangement.meter.global_time.load(SeqCst) as f32,
                     SeqCst,
                 );
-                self.update(&Message::ArrangementUpdated);
+                self.update(&TimelineMessage::Tick);
             }
         }
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, TimelineMessage> {
         container(Element::new(self.arrangement.clone()))
             .style(|_| container::Style {
                 border: iced::Border {

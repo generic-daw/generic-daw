@@ -1,9 +1,6 @@
-use super::Track;
 use crate::{
-    generic_back::{
-        arrangement::Arrangement, pan, position::Position, track_clip::audio_clip::AudioClip,
-    },
-    helpers::atomic_f32::AtomicF32,
+    generic_back::{pan, Arrangement, AudioClip, Position, Track},
+    helpers::AtomicF32,
 };
 use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
@@ -26,7 +23,7 @@ impl AudioTrack {
         })
     }
 
-    pub(super) fn get_at_global_time(&self, global_time: u32) -> f32 {
+    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
         if !self.arrangement.meter.playing.load(SeqCst) {
             return 0.0;
         }
@@ -41,7 +38,7 @@ impl AudioTrack {
             * pan(self.pan.load(SeqCst), global_time)
     }
 
-    pub(super) fn get_global_end(&self) -> Position {
+    pub fn get_global_end(&self) -> Position {
         self.clips
             .read()
             .unwrap()
@@ -51,19 +48,19 @@ impl AudioTrack {
             .unwrap_or(Position::new(0, 0))
     }
 
-    pub(super) fn get_volume(&self) -> f32 {
+    pub fn get_volume(&self) -> f32 {
         self.volume.load(SeqCst)
     }
 
-    pub(super) fn set_volume(&self, volume: f32) {
+    pub fn set_volume(&self, volume: f32) {
         self.volume.store(volume, SeqCst);
     }
 
-    pub(super) fn get_pan(&self) -> f32 {
+    pub fn get_pan(&self) -> f32 {
         self.pan.load(SeqCst)
     }
 
-    pub(super) fn set_pan(&self, pan: f32) {
+    pub fn set_pan(&self, pan: f32) {
         self.pan.store(pan, SeqCst);
     }
 }

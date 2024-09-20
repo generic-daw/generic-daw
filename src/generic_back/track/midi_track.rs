@@ -1,13 +1,8 @@
 mod plugin_state;
 
-use super::Track;
 use crate::{
-    generic_back::{
-        pan,
-        position::Position,
-        track_clip::midi_clip::{dirty_event::DirtyEvent, MidiClip},
-    },
-    helpers::atomic_f32::AtomicF32,
+    generic_back::{pan, DirtyEvent, MidiClip, Position, Track},
+    helpers::AtomicF32,
 };
 use generic_clap_host::{host::HostThreadMessage, main_thread::MainThreadMessage};
 use plugin_state::PluginState;
@@ -24,7 +19,7 @@ pub struct MidiTrack {
     /// between -1.0 (left) and 1.0 (right)
     pan: AtomicF32,
     /// holds all the state needed for a generator plugin to function properly
-    pub(in crate::generic_back) plugin_state: RwLock<PluginState>,
+    pub plugin_state: RwLock<PluginState>,
 }
 
 impl MidiTrack {
@@ -50,7 +45,7 @@ impl MidiTrack {
             .collect();
     }
 
-    pub(super) fn get_at_global_time(&self, global_time: u32) -> f32 {
+    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
         let last_global_time = self.plugin_state.read().unwrap().last_global_time;
         let mut last_buffer_index = self.plugin_state.read().unwrap().last_buffer_index;
 
@@ -80,7 +75,7 @@ impl MidiTrack {
             * pan(self.pan.load(SeqCst), global_time)
     }
 
-    pub(super) fn get_global_end(&self) -> Position {
+    pub fn get_global_end(&self) -> Position {
         self.clips
             .read()
             .unwrap()
@@ -90,19 +85,19 @@ impl MidiTrack {
             .unwrap_or(Position::new(0, 0))
     }
 
-    pub(super) fn get_volume(&self) -> f32 {
+    pub fn get_volume(&self) -> f32 {
         self.volume.load(SeqCst)
     }
 
-    pub(super) fn set_volume(&self, volume: f32) {
+    pub fn set_volume(&self, volume: f32) {
         self.volume.store(volume, SeqCst);
     }
 
-    pub(super) fn get_pan(&self) -> f32 {
+    pub fn get_pan(&self) -> f32 {
         self.pan.load(SeqCst)
     }
 
-    pub(super) fn set_pan(&self, pan: f32) {
+    pub fn set_pan(&self, pan: f32) {
         self.pan.store(pan, SeqCst);
     }
 }

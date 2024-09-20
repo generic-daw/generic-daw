@@ -1,12 +1,10 @@
-pub mod audio_track;
-pub mod midi_track;
+mod audio_track;
+pub use audio_track::AudioTrack;
 
-use super::{
-    position::Position,
-    track_clip::{audio_clip::AudioClip, midi_clip::MidiClip},
-};
-use audio_track::AudioTrack;
-use midi_track::MidiTrack;
+mod midi_track;
+pub use midi_track::MidiTrack;
+
+use crate::generic_back::{AudioClip, MidiClip, Position};
 
 pub enum Track {
     Audio(AudioTrack),
@@ -14,7 +12,7 @@ pub enum Track {
 }
 
 impl Track {
-    pub(super) fn get_at_global_time(&self, global_time: u32) -> f32 {
+    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
         match self {
             Self::Audio(track) => track.get_at_global_time(global_time),
             Self::Midi(track) => track.get_at_global_time(global_time),
