@@ -11,9 +11,9 @@ pub struct Arrangement {
     /// information relating to the playback of the arrangement
     pub meter: Meter,
     /// information about the scale of the timeline viewport
-    pub scale: RwLock<TimelineScale>,
+    pub scale: TimelineScale,
     /// information about the position of the timeline viewport
-    pub position: RwLock<TimelinePosition>,
+    pub position: TimelinePosition,
 }
 
 impl Arrangement {
@@ -21,8 +21,8 @@ impl Arrangement {
         Arc::new(Self {
             tracks: RwLock::new(Vec::new()),
             meter: Meter::new(),
-            scale: TimelineScale::create(),
-            position: TimelinePosition::create(),
+            scale: TimelineScale::new(),
+            position: TimelinePosition::new(),
         })
     }
 

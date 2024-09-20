@@ -35,11 +35,11 @@ impl Timeline {
     pub fn update(&mut self, message: &Message) {
         match message {
             Message::XScaleChanged(x_scale) => {
-                self.arrangement.scale.write().unwrap().x = *x_scale;
+                self.arrangement.scale.x.store(*x_scale, SeqCst);
                 self.update(&Message::ArrangementUpdated);
             }
             Message::YScaleChanged(y_scale) => {
-                self.arrangement.scale.write().unwrap().y = *y_scale;
+                self.arrangement.scale.y.store(*y_scale, SeqCst);
                 self.update(&Message::ArrangementUpdated);
             }
             Message::Tick => {
@@ -50,11 +50,10 @@ impl Timeline {
             Message::ArrangementUpdated => {}
             Message::Scrolled(delta) => match *delta {
                 ScrollDelta::Pixels { x, y } => {
-                    let prev_pos = self.arrangement.position.read().unwrap().clone();
                     let x = x
                         .mul_add(
-                            -self.arrangement.scale.read().unwrap().x.exp2(),
-                            self.arrangement.position.read().unwrap().x,
+                            -self.arrangement.scale.x.load(SeqCst).exp2(),
+                            self.arrangement.position.x.load(SeqCst),
                         )
                         .clamp(
                             0.0,
@@ -63,10 +62,10 @@ impl Timeline {
                                 .in_interleaved_samples(&self.arrangement.meter)
                                 as f32,
                         );
-                    self.arrangement.position.write().unwrap().x = x;
+                    self.arrangement.position.x.store(x, SeqCst);
 
-                    let y = (y / self.arrangement.scale.read().unwrap().y)
-                        .mul_add(-0.5, self.arrangement.position.read().unwrap().y)
+                    let y = (y / self.arrangement.scale.y.load(SeqCst))
+                        .mul_add(-0.5, self.arrangement.position.y.load(SeqCst))
                         .clamp(
                             0.0,
                             self.arrangement
@@ -76,11 +75,7 @@ impl Timeline {
                                 .len()
                                 .saturating_sub(1) as f32,
                         );
-                    self.arrangement.position.write().unwrap().y = y;
-
-                    if *self.arrangement.position.read().unwrap() != prev_pos {
-                        self.update(&Message::ArrangementUpdated);
-                    }
+                    self.arrangement.position.y.store(y, SeqCst);
                 }
                 ScrollDelta::Lines { x, y } => {
                     self.update(&Message::Scrolled(ScrollDelta::Pixels {
@@ -90,8 +85,10 @@ impl Timeline {
                 }
             },
             Message::MovePlayToStart => {
-                self.arrangement.position.write().unwrap().x =
-                    self.arrangement.meter.global_time.load(SeqCst) as f32;
+                self.arrangement.position.x.store(
+                    self.arrangement.meter.global_time.load(SeqCst) as f32,
+                    SeqCst,
+                );
                 self.update(&Message::ArrangementUpdated);
             }
         }

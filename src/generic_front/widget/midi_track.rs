@@ -1,5 +1,6 @@
 use crate::generic_back::track::midi_track::MidiTrack;
 use iced::{Point, Rectangle, Renderer, Size, Theme};
+use std::sync::atomic::Ordering::SeqCst;
 
 impl MidiTrack {
     pub fn draw(
@@ -9,21 +10,21 @@ impl MidiTrack {
         bounds: Rectangle,
         arrangement_bounds: Rectangle,
     ) {
-        self.clips.iter().for_each(|clip| {
+        self.clips.read().unwrap().iter().for_each(|clip| {
             let first_pixel = (clip
                 .get_global_start()
                 .in_interleaved_samples(&clip.arrangement.meter)
                 as f32
-                - clip.arrangement.position.read().unwrap().x)
-                / clip.arrangement.scale.read().unwrap().x.exp2()
+                - clip.arrangement.position.x.load(SeqCst))
+                / clip.arrangement.scale.x.load(SeqCst).exp2()
                 + bounds.x;
 
             let last_pixel = (clip
                 .get_global_end()
                 .in_interleaved_samples(&clip.arrangement.meter)
                 as f32
-                - clip.arrangement.position.read().unwrap().x)
-                / clip.arrangement.scale.read().unwrap().x.exp2()
+                - clip.arrangement.position.x.load(SeqCst))
+                / clip.arrangement.scale.x.load(SeqCst).exp2()
                 + bounds.x;
 
             let clip_bounds = Rectangle::new(

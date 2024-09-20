@@ -10,14 +10,8 @@ impl Track {
         clip_bounds: Rectangle,
     ) {
         match self {
-            Self::Audio(track) => track
-                .read()
-                .unwrap()
-                .draw(renderer, theme, bounds, clip_bounds),
-            Self::Midi(track) => track
-                .read()
-                .unwrap()
-                .draw(renderer, theme, bounds, clip_bounds),
+            Self::Audio(track) => track.draw(renderer, theme, bounds, clip_bounds),
+            Self::Midi(track) => track.draw(renderer, theme, bounds, clip_bounds),
         }
     }
 }

@@ -41,7 +41,8 @@ impl InterleavedAudio {
         arrangement: &Arc<Arrangement>,
         sender: Sender<Message>,
     ) -> Result<Arc<Self>> {
-        let samples = Self::read_audio_file(path, arrangement)?;
+        let mut samples = Self::read_audio_file(path, arrangement)?;
+        samples.shrink_to_fit();
 
         let length = samples.len();
         let audio = Arc::new(Self {

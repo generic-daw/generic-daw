@@ -1,14 +1,23 @@
-use std::sync::RwLock;
+use crate::helpers::atomic_f32::AtomicF32;
 
 pub struct TimelineScale {
     /// log2 of the horizontal scale
-    pub x: f32,
+    pub x: AtomicF32,
     /// height in pixels of each track in the timeline
-    pub y: f32,
+    pub y: AtomicF32,
+}
+
+impl Default for TimelineScale {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TimelineScale {
-    pub const fn create() -> RwLock<Self> {
-        RwLock::new(Self { x: 8.0, y: 100.0 })
+    pub fn new() -> Self {
+        Self {
+            x: AtomicF32::new(8.0),
+            y: AtomicF32::new(100.0),
+        }
     }
 }

@@ -1,9 +1,13 @@
 mod plugin_state;
 
-use crate::generic_back::{
-    pan,
-    position::Position,
-    track_clip::midi_clip::{dirty_event::DirtyEvent, MidiClip},
+use super::Track;
+use crate::{
+    generic_back::{
+        pan,
+        position::Position,
+        track_clip::midi_clip::{dirty_event::DirtyEvent, MidiClip},
+    },
+    helpers::atomic_f32::AtomicF32,
 };
 use generic_clap_host::{host::HostThreadMessage, main_thread::MainThreadMessage};
 use plugin_state::PluginState;
@@ -13,14 +17,12 @@ use std::sync::{
     Arc, Mutex, RwLock,
 };
 
-use super::Track;
-
 pub struct MidiTrack {
-    pub clips: Vec<MidiClip>,
+    pub clips: RwLock<Vec<MidiClip>>,
     /// between 0.0 and 1.0
-    volume: f32,
+    volume: AtomicF32,
     /// between -1.0 (left) and 1.0 (right)
-    pan: f32,
+    pan: AtomicF32,
     /// holds all the state needed for a generator plugin to function properly
     pub(in crate::generic_back) plugin_state: RwLock<PluginState>,
 }
@@ -30,17 +32,19 @@ impl MidiTrack {
         plugin_sender: Sender<MainThreadMessage>,
         host_receiver: Arc<Mutex<Receiver<HostThreadMessage>>>,
     ) -> Track {
-        Track::Midi(RwLock::new(Self {
-            clips: Vec::new(),
-            volume: 1.0,
-            pan: 0.0,
+        Track::Midi(Self {
+            clips: RwLock::new(Vec::new()),
+            volume: AtomicF32::new(1.0),
+            pan: AtomicF32::new(0.0),
             plugin_state: PluginState::create(plugin_sender, host_receiver),
-        }))
+        })
     }
 
     fn refresh_global_midi(&self) {
         self.plugin_state.write().unwrap().global_midi_cache = self
             .clips
+            .read()
+            .unwrap()
             .iter()
             .flat_map(MidiClip::get_global_midi)
             .collect();
@@ -72,31 +76,33 @@ impl MidiTrack {
 
         self.plugin_state.read().unwrap().running_buffer
             [usize::try_from(last_buffer_index).unwrap()]
-            * self.volume
-            * pan(self.pan, global_time)
+            * self.volume.load(SeqCst)
+            * pan(self.pan.load(SeqCst), global_time)
     }
 
     pub(super) fn get_global_end(&self) -> Position {
         self.clips
+            .read()
+            .unwrap()
             .iter()
             .map(MidiClip::get_global_end)
             .max()
             .unwrap_or(Position::new(0, 0))
     }
 
-    pub(super) const fn get_volume(&self) -> f32 {
-        self.volume
+    pub(super) fn get_volume(&self) -> f32 {
+        self.volume.load(SeqCst)
     }
 
-    pub(super) fn set_volume(&mut self, volume: f32) {
-        self.volume = volume;
+    pub(super) fn set_volume(&self, volume: f32) {
+        self.volume.store(volume, SeqCst);
     }
 
-    pub(super) const fn get_pan(&self) -> f32 {
-        self.pan
+    pub(super) fn get_pan(&self) -> f32 {
+        self.pan.load(SeqCst)
     }
 
-    pub(super) fn set_pan(&mut self, pan: f32) {
-        self.pan = pan;
+    pub(super) fn set_pan(&self, pan: f32) {
+        self.pan.store(pan, SeqCst);
     }
 }

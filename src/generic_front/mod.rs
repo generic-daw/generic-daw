@@ -97,7 +97,7 @@ impl Daw {
             Message::TogglePlay => {
                 if !self.arrangement.meter.playing.fetch_not(SeqCst)
                     && ((self.arrangement.meter.global_time.load(SeqCst) as f32)
-                        < self.arrangement.position.read().unwrap().x)
+                        < self.arrangement.position.x.load(SeqCst))
                 {
                     self.timeline.update(&TimelineMessage::MovePlayToStart);
                 }
@@ -151,13 +151,13 @@ impl Daw {
             button("New").on_press(Message::New),
             slider(
                 3.0..=12.999_999,
-                self.arrangement.scale.read().unwrap().x,
+                self.arrangement.scale.x.load(SeqCst),
                 |scale| { Message::Timeline(TimelineMessage::XScaleChanged(scale)) }
             )
             .step(0.1),
             slider(
                 20.0..=200.0,
-                self.arrangement.scale.read().unwrap().y,
+                self.arrangement.scale.y.load(SeqCst),
                 |scale| { Message::Timeline(TimelineMessage::YScaleChanged(scale)) }
             ),
             number_input(
