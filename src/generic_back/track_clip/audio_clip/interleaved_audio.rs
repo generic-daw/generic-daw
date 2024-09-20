@@ -1,6 +1,5 @@
 use crate::{
-    generic_back::{arrangement::Arrangement, gcd},
-    generic_front::timeline::Message,
+    generic_back::arrangement::Arrangement, generic_front::timeline::Message, helpers::gcd::gcd,
 };
 use anyhow::{anyhow, Result};
 use itertools::{
