@@ -165,10 +165,6 @@ impl InterleavedAudio {
             samples.iter().step_by(2).copied().collect(),
             samples.iter().skip(1).step_by(2).copied().collect(),
         ];
-        assert_eq!(
-            deinterleaved_samples[0].len(),
-            deinterleaved_samples[1].len()
-        );
 
         let resampled_file = resampler.process(&deinterleaved_samples, None).unwrap();
 

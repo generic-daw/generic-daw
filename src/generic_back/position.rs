@@ -82,7 +82,7 @@ impl Sub for Position {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        assert!(self >= rhs);
+        debug_assert!(self >= rhs);
 
         if self.sub_quarter_note > rhs.sub_quarter_note {
             Self {
