@@ -77,17 +77,17 @@ impl AudioClip {
             a.partial_cmp(b).unwrap()
         });
 
+        let text_size = 12.0;
+        let text_line_height = text_size * 1.5;
+
+        // height of the waveform: the height of the clip minus the height of the text
+        let waveform_height = bounds.height - text_line_height;
+
         // the part of the audio clip that is visible
         let clip_bounds = Rectangle::new(
             Point::new(0.0, hidden),
             bounds.intersection(&arrangement_bounds).unwrap().size(),
         );
-
-        let text_size = 12.0;
-        let text_line_height = text_size * 1.5;
-
-        // height of the waveform: the height of the clip minus the height of the text
-        let waveform_height = clip_bounds.height - text_line_height;
 
         // the translucent background of the clip
         let clip_background = Quad {
