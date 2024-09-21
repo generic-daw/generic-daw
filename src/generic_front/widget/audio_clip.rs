@@ -77,11 +77,8 @@ impl AudioClip {
             a.partial_cmp(b).unwrap()
         });
 
-        let text_size = 12.0;
-        let text_line_height = text_size * 1.5;
-
         // height of the waveform: the height of the clip minus the height of the text
-        let waveform_height = bounds.height - text_line_height;
+        let waveform_height = bounds.height - 18.0;
 
         // the part of the audio clip that is visible
         let clip_bounds = Rectangle::new(
@@ -107,9 +104,7 @@ impl AudioClip {
                 Point::new(0.0, hidden),
                 Size::new(
                     clip_bounds.width,
-                    max_by(0.0, text_line_height - hidden, |a, b| {
-                        a.partial_cmp(b).unwrap()
-                    }),
+                    max_by(0.0, 18.0 - hidden, |a, b| a.partial_cmp(b).unwrap()),
                 ),
             ),
             ..Quad::default()
@@ -130,14 +125,14 @@ impl AudioClip {
             vertices.push(SolidVertex2D {
                 position: [
                     x as f32 * lod_samples_per_pixel,
-                    min.mul_add(waveform_height, text_line_height),
+                    min.mul_add(waveform_height, 18.0),
                 ],
                 color,
             });
             vertices.push(SolidVertex2D {
                 position: [
                     x as f32 * lod_samples_per_pixel,
-                    max.mul_add(waveform_height, text_line_height),
+                    max.mul_add(waveform_height, 18.0),
                 ],
                 color,
             });
@@ -163,7 +158,7 @@ impl AudioClip {
         let text = Text {
             content: self.audio.name.clone(),
             bounds: Size::new(f32::INFINITY, 0.0),
-            size: Pixels(text_size),
+            size: Pixels(12.0),
             line_height: LineHeight::default(),
             font: Font::default(),
             horizontal_alignment: Horizontal::Left,
