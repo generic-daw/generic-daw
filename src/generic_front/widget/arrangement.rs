@@ -51,8 +51,8 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
         &mut self,
         tree: &mut Tree,
         event: Event,
-        _layout: Layout<'_>,
-        _cursor: Cursor,
+        layout: Layout<'_>,
+        cursor: Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
         _shell: &mut Shell<'_, TimelineMessage>,
@@ -62,6 +62,10 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
 
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
             state.modifiers = modifiers;
+            return Status::Ignored;
+        }
+
+        if !cursor.is_over(layout.bounds()) {
             return Status::Ignored;
         }
 
