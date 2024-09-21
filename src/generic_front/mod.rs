@@ -109,7 +109,7 @@ impl Daw {
             }
             Message::New => {
                 self.stream.pause().unwrap();
-                self.arrangement.tracks.write().unwrap().clear();
+                *self.arrangement.tracks.write().unwrap() = Vec::new();
                 self.stream.play().unwrap();
             }
             Message::Export => {
