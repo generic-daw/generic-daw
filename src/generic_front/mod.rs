@@ -17,7 +17,8 @@ use crate::generic_back::{
     build_output_stream, Arrangement, AudioClip, AudioTrack, InterleavedAudio,
 };
 use iced::{
-    event, keyboard,
+    event::{self, Status},
+    keyboard,
     widget::{button, column, row},
     window::frames,
     Alignment::Center,
@@ -187,27 +188,30 @@ impl Daw {
     pub fn subscription(_state: &Self) -> Subscription<Message> {
         Subscription::batch([
             frames().map(|_| Message::Timeline(TimelineMessage::Tick)),
-            event::listen_with(|e, _, _| match e {
-                Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
-                    match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-                        (false, false, false) => match key {
-                            keyboard::Key::Named(keyboard::key::Named::Space) => {
-                                Some(Message::TogglePlay)
-                            }
-                            _ => None,
-                        },
-                        (true, false, false) => match key {
-                            keyboard::Key::Character(c) => match c.to_string().as_str() {
-                                "n" => Some(Message::New),
-                                "e" => Some(Message::Export),
+            event::listen_with(|e, s, _| match s {
+                Status::Ignored => match e {
+                    Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
+                        match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
+                            (false, false, false) => match key {
+                                keyboard::Key::Named(keyboard::key::Named::Space) => {
+                                    Some(Message::TogglePlay)
+                                }
+                                _ => None,
+                            },
+                            (true, false, false) => match key {
+                                keyboard::Key::Character(c) => match c.to_string().as_str() {
+                                    "n" => Some(Message::New),
+                                    "e" => Some(Message::Export),
+                                    _ => None,
+                                },
                                 _ => None,
                             },
                             _ => None,
-                        },
-                        _ => None,
+                        }
                     }
-                }
-                _ => None,
+                    _ => None,
+                },
+                Status::Captured => None,
             }),
         ])
     }
