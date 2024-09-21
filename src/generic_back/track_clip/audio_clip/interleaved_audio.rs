@@ -59,8 +59,6 @@ impl InterleavedAudio {
     }
 
     fn read_audio_file(path: &PathBuf, arrangement: &Arc<Arrangement>) -> Result<Vec<f32>> {
-        let mut samples = Vec::<f32>::new();
-
         let format = symphonia::default::get_probe().format(
             &Hint::new(),
             MediaSourceStream::new(
@@ -78,7 +76,11 @@ impl InterleavedAudio {
         let mut format = format.unwrap().format;
 
         let track = format.default_track().unwrap();
+        let track_id = track.id;
         let file_sample_rate = track.codec_params.sample_rate.unwrap();
+
+        let mut interleaved_samples =
+            Vec::with_capacity(track.codec_params.n_frames.unwrap() as usize * 2);
 
         let mut decoder = symphonia::default::get_codecs()
             .make(
@@ -86,8 +88,6 @@ impl InterleavedAudio {
                 &symphonia::core::codecs::DecoderOptions::default(),
             )
             .unwrap();
-
-        let track_id = track.id;
 
         let mut sample_buffer = None;
         while let Ok(packet) = format.next_packet() {
@@ -104,7 +104,7 @@ impl InterleavedAudio {
                     }
                     if let Some(buf) = &mut sample_buffer {
                         buf.copy_interleaved_ref(audio_buf);
-                        samples.extend(buf.samples().iter());
+                        interleaved_samples.extend(buf.samples().iter());
                     }
                 }
                 Err(Error::DecodeError(_)) => (),
@@ -115,7 +115,7 @@ impl InterleavedAudio {
         let stream_sample_rate = arrangement.meter.sample_rate.load(SeqCst);
 
         if file_sample_rate == stream_sample_rate {
-            return Ok(samples);
+            return Ok(interleaved_samples);
         }
 
         let resample_ratio = f64::from(stream_sample_rate) / f64::from(file_sample_rate);
@@ -133,24 +133,30 @@ impl InterleavedAudio {
                 .unwrap(),
                 window: WindowFunction::Blackman,
             },
-            samples.len() / 2,
+            interleaved_samples.len() / 2,
             2,
         )
         .unwrap();
 
         let deinterleaved_samples: Vec<Vec<f32>> = vec![
-            samples.iter().step_by(2).copied().collect(),
-            samples.iter().skip(1).step_by(2).copied().collect(),
+            interleaved_samples.iter().step_by(2).copied().collect(),
+            interleaved_samples
+                .iter()
+                .skip(1)
+                .step_by(2)
+                .copied()
+                .collect(),
         ];
+        interleaved_samples.clear();
 
-        let resampled_file = resampler.process(&deinterleaved_samples, None).unwrap();
-
-        samples.clear();
-        for i in 0..resampled_file[0].len() {
-            samples.extend(resampled_file.iter().map(|s| s[i]));
+        let deinterleaved_samples = resampler.process(&deinterleaved_samples, None).unwrap();
+        interleaved_samples.reserve_exact(deinterleaved_samples[0].len() * 2);
+        for i in 0..deinterleaved_samples[0].len() {
+            interleaved_samples.push(deinterleaved_samples[0][i]);
+            interleaved_samples.push(deinterleaved_samples[1][i]);
         }
 
-        Ok(samples)
+        Ok(interleaved_samples)
     }
 
     fn create_lod(audio: Arc<Self>) {
