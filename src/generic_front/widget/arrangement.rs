@@ -214,10 +214,7 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
                 let track_bounds = Rectangle::new(
                     Point::new(
                         bounds.x,
-                        state
-                            .position
-                            .y
-                            .mul_add(-state.scale.y, (i as f32).mul_add(state.scale.y, bounds.y)),
+                        ((i as f32) - state.position.y).mul_add(state.scale.y, bounds.y),
                     ),
                     Size::new(bounds.width, state.scale.y),
                 );

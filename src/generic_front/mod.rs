@@ -48,7 +48,6 @@ pub enum Message {
     Stop,
     New,
     Export,
-    FileSelected(String),
     BpmChanged(u16),
     NumeratorChanged(u8),
     DenominatorChanged(u8),
@@ -83,22 +82,23 @@ impl Daw {
             }
             Message::LoadSample => {
                 if let Some(paths) = FileDialog::new().pick_files() {
-                    for path in paths {
-                        let path_str = path.display().to_string();
-                        self.update(Message::FileSelected(path_str));
-                    }
+                    let arrangement = self.arrangement.clone();
+                    std::thread::spawn(move || {
+                        for path in paths {
+                            let path = path.display().to_string();
+                            let audio_file =
+                                InterleavedAudio::create(&PathBuf::from(path), &arrangement);
+                            if let Ok(audio_file) = audio_file {
+                                let track = AudioTrack::create(arrangement.clone());
+                                track.try_push_audio(AudioClip::new(
+                                    audio_file,
+                                    arrangement.clone(),
+                                ));
+                                arrangement.tracks.write().unwrap().push(track);
+                            }
+                        }
+                    });
                 }
-            }
-            Message::FileSelected(path) => {
-                let arrangement = self.arrangement.clone();
-                std::thread::spawn(move || {
-                    let audio_file = InterleavedAudio::create(&PathBuf::from(path), &arrangement);
-                    if let Ok(audio_file) = audio_file {
-                        let track = AudioTrack::create(arrangement.clone());
-                        track.try_push_audio(AudioClip::new(audio_file, arrangement.clone()));
-                        arrangement.tracks.write().unwrap().push(track);
-                    }
-                });
             }
             Message::TogglePlay => {
                 self.arrangement.meter.playing.fetch_not(SeqCst);
