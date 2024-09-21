@@ -16,14 +16,14 @@ pub use track_clip::{AudioClip, InterleavedAudio, MidiClip, MidiNote};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    StreamConfig,
+    Stream, StreamConfig,
 };
 use std::{
     f32::consts::PI,
     sync::{atomic::Ordering::SeqCst, Arc},
 };
 
-pub fn build_output_stream(arrangement: Arc<Arrangement>) {
+pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
     let device = cpal::default_host().default_output_device().unwrap();
     let config: &StreamConfig = &device.default_output_config().unwrap().into();
     arrangement
@@ -52,7 +52,7 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) {
         .unwrap();
     stream.play().unwrap();
 
-    std::mem::forget(stream);
+    stream
 }
 
 pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Meter) -> u32 {

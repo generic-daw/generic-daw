@@ -1,4 +1,5 @@
 mod timeline;
+use cpal::{traits::StreamTrait, Stream};
 pub(in crate::generic_front) use timeline::{Timeline, TimelineMessage};
 
 mod timeline_position;
@@ -35,6 +36,7 @@ pub struct Daw {
     arrangement: Arc<Arrangement>,
     track_panel: TrackPanel,
     timeline: Timeline,
+    stream: Stream,
 }
 
 #[derive(Debug, Clone)]
@@ -61,12 +63,13 @@ impl Default for Daw {
 impl Daw {
     fn new() -> Self {
         let arrangement = Arrangement::create();
-        build_output_stream(arrangement.clone());
+        let stream = build_output_stream(arrangement.clone());
 
         Self {
             arrangement: arrangement.clone(),
             track_panel: TrackPanel::new(arrangement.clone()),
             timeline: Timeline::new(arrangement),
+            stream,
         }
     }
 
@@ -105,7 +108,9 @@ impl Daw {
                 self.arrangement.meter.global_time.store(0, SeqCst);
             }
             Message::New => {
+                self.stream.pause().unwrap();
                 self.arrangement.tracks.write().unwrap().clear();
+                self.stream.play().unwrap();
             }
             Message::Export => {
                 if let Some(path) = FileDialog::new()
