@@ -116,9 +116,7 @@ impl AudioClip {
         let color = color::pack(theme.extended_palette().secondary.base.text);
         let lod = state.scale.x as usize - 3;
         (first_index..last_index).enumerate().for_each(|(x, i)| {
-            let (min, max) = *self.audio.lods[lod]
-                .read()
-                .unwrap()
+            let (min, max) = *self.audio.lods.read().unwrap()[lod]
                 .get(usize::try_from(i).unwrap())
                 .unwrap_or(&(0.0, 0.0));
 

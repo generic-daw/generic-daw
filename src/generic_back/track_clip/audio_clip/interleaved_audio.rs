@@ -26,7 +26,7 @@ pub struct InterleavedAudio {
     /// these are used to play the sample back
     pub samples: Vec<f32>,
     /// these are used to draw the sample in various quality levels
-    pub lods: [RwLock<Vec<(f32, f32)>>; 10],
+    pub lods: RwLock<[Vec<(f32, f32)>; 10]>,
     /// the file name associated with the sample
     pub name: String,
 }
@@ -39,18 +39,18 @@ impl InterleavedAudio {
         let length = samples.len();
         let audio = Arc::new(Self {
             samples,
-            lods: [
-                RwLock::new(vec![(0.0, 0.0); length.div_ceil(1 << 3)]),
-                RwLock::new(vec![(0.0, 0.0); length.div_ceil(1 << 4)]),
-                RwLock::new(vec![(0.0, 0.0); length.div_ceil(1 << 5)]),
-                RwLock::new(vec![(0.0, 0.0); length.div_ceil(1 << 6)]),
-                RwLock::new(vec![(0.0, 0.0); length.div_ceil(1 << 7)]),
-                RwLock::new(vec![(0.0, 0.0); length.div_ceil(1 << 8)]),
-                RwLock::new(vec![(0.0, 0.0); length.div_ceil(1 << 9)]),
-                RwLock::new(vec![(0.0, 0.0); length.div_ceil(1 << 10)]),
-                RwLock::new(vec![(0.0, 0.0); length.div_ceil(1 << 11)]),
-                RwLock::new(vec![(0.0, 0.0); length.div_ceil(1 << 12)]),
-            ],
+            lods: RwLock::new([
+                vec![(0.0, 0.0); length.div_ceil(1 << 3)],
+                vec![(0.0, 0.0); length.div_ceil(1 << 4)],
+                vec![(0.0, 0.0); length.div_ceil(1 << 5)],
+                vec![(0.0, 0.0); length.div_ceil(1 << 6)],
+                vec![(0.0, 0.0); length.div_ceil(1 << 7)],
+                vec![(0.0, 0.0); length.div_ceil(1 << 8)],
+                vec![(0.0, 0.0); length.div_ceil(1 << 9)],
+                vec![(0.0, 0.0); length.div_ceil(1 << 10)],
+                vec![(0.0, 0.0); length.div_ceil(1 << 11)],
+                vec![(0.0, 0.0); length.div_ceil(1 << 12)],
+            ]),
             name: path.file_name().unwrap().to_string_lossy().into_owned(),
         });
 
@@ -161,26 +161,30 @@ impl InterleavedAudio {
                     OneElement(x) => (x, x),
                     NoElements => unreachable!(),
                 };
-                audio.lods[0].write().unwrap()[i] =
+                audio.lods.write().unwrap()[0][i] =
                     ((*min).mul_add(0.5, 0.5), (*max).mul_add(0.5, 0.5));
             });
 
-            (1..audio.lods.len()).for_each(|i| {
-                let len = audio.lods[i].read().unwrap().len();
-                let last = audio.lods[i - 1].read().unwrap();
+            (1..10).for_each(|i| {
+                let len = audio.lods.read().unwrap()[i].len();
                 (0..len).for_each(|j| {
-                    audio.lods[i].write().unwrap()[j] = (
-                        min_by(
-                            last[2 * j].0,
-                            last.get(2 * j + 1).unwrap_or(&(f32::MAX, f32::MAX)).0,
-                            |a, b| a.partial_cmp(b).unwrap(),
-                        ),
-                        max_by(
-                            last[2 * j].1,
-                            last.get(2 * j + 1).unwrap_or(&(-f32::MAX, -f32::MAX)).1,
-                            |a, b| a.partial_cmp(b).unwrap(),
-                        ),
+                    let min = min_by(
+                        audio.lods.read().unwrap()[i - 1][2 * j].0,
+                        audio.lods.read().unwrap()[i - 1]
+                            .get(2 * j + 1)
+                            .unwrap_or(&(f32::MAX, f32::MAX))
+                            .0,
+                        |a, b| a.partial_cmp(b).unwrap(),
                     );
+                    let max = max_by(
+                        audio.lods.read().unwrap()[i - 1][2 * j].1,
+                        audio.lods.read().unwrap()[i - 1]
+                            .get(2 * j + 1)
+                            .unwrap_or(&(f32::MAX, f32::MAX))
+                            .1,
+                        |a, b| a.partial_cmp(b).unwrap(),
+                    );
+                    audio.lods.write().unwrap()[i][j] = (min, max);
                 });
             });
         });
