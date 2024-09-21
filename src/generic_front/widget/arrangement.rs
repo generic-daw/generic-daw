@@ -77,8 +77,8 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
             (false, false, false) => match event {
                 Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
                     let (x, y) = match delta {
-                        ScrollDelta::Pixels { x, y } => (x, y),
-                        ScrollDelta::Lines { x, y } => (x * 50.0, y * 50.0),
+                        ScrollDelta::Pixels { x, y } => (x * 2.0, y * 4.0),
+                        ScrollDelta::Lines { x, y } => (x * 100.0, y * 200.0),
                     };
 
                     let x = x
