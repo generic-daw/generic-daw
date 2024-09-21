@@ -58,6 +58,5 @@ string_lit_chars_any = "warn"
 try_err = "warn"
 
 [profile.release]
-overflow-checks = true
 lto = true
 codegen-units = 1

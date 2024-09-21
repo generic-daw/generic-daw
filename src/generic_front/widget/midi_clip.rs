@@ -1,4 +1,4 @@
-use crate::generic_back::MidiClip;
+use crate::{generic_back::MidiClip, generic_front::ArrangementState};
 use iced::{
     advanced::{renderer::Quad, Renderer as _},
     Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -13,6 +13,7 @@ impl MidiClip {
         theme: &Theme,
         bounds: Rectangle,
         arrangement_bounds: Rectangle,
+        _state: &ArrangementState,
     ) {
         // how many pixels of the top of the clip are clipped off by the top of the arrangement
         let hidden = min_by(0.0, bounds.y - arrangement_bounds.y, |a, b| {

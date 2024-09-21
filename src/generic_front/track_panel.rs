@@ -4,7 +4,7 @@ use iced::{
     Alignment::Center,
     Element, Length,
 };
-use std::sync::{atomic::Ordering::SeqCst, Arc};
+use std::sync::Arc;
 
 pub struct TrackPanel {
     arrangement: Arc<Arrangement>,
@@ -61,7 +61,6 @@ impl TrackPanel {
                         .step(0.01)
                         .width(Length::Fixed(150.0))
                     ]
-                    .height(self.arrangement.scale.y.load(SeqCst))
                     .align_y(Center),
                 )
             });

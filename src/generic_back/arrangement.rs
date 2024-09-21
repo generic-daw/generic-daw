@@ -1,7 +1,4 @@
-use crate::{
-    generic_back::{Meter, Position, Track},
-    generic_front::{TimelinePosition, TimelineScale},
-};
+use crate::generic_back::{Meter, Position, Track};
 use hound::WavWriter;
 use std::{
     path::Path,
@@ -12,19 +9,13 @@ pub struct Arrangement {
     pub tracks: RwLock<Vec<Track>>,
     /// information relating to the playback of the arrangement
     pub meter: Meter,
-    /// information about the scale of the timeline viewport
-    pub scale: TimelineScale,
-    /// information about the position of the timeline viewport
-    pub position: TimelinePosition,
 }
 
 impl Arrangement {
     pub fn create() -> Arc<Self> {
         Arc::new(Self {
             tracks: RwLock::new(Vec::new()),
-            meter: Meter::new(),
-            scale: TimelineScale::new(),
-            position: TimelinePosition::new(),
+            meter: Meter::default(),
         })
     }
 

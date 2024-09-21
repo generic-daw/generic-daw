@@ -1,53 +1,151 @@
 use crate::{
     generic_back::{Arrangement, Position},
-    generic_front::TimelineMessage,
+    generic_front::{TimelineMessage, TimelinePosition, TimelineScale},
 };
 use iced::{
     advanced::{
         graphics::geometry::Renderer as _,
-        layout::{self, Layout},
-        renderer,
-        widget::{self, Widget},
+        layout::{Layout, Limits, Node},
+        renderer::Style,
+        widget::{tree, Tree, Widget},
+        Clipboard, Shell,
     },
-    mouse,
-    widget::canvas::{Frame, Geometry, Path, Stroke},
-    Length, Point, Rectangle, Renderer, Size, Theme,
+    event::Status,
+    keyboard::{self, Modifiers},
+    mouse::{self, Cursor, ScrollDelta},
+    widget::canvas::{Cache, Frame, Geometry, Path, Stroke},
+    Event, Length, Point, Rectangle, Renderer, Size, Theme,
 };
 use std::sync::{atomic::Ordering::SeqCst, Arc};
 
+#[derive(Default)]
+pub struct State {
+    /// information about the position of the timeline viewport
+    pub position: TimelinePosition,
+    /// information about the scale of the timeline viewport
+    pub scale: TimelineScale,
+    /// caches the geometry of the grid
+    pub grid_cache: Cache,
+    /// the current modifiers
+    pub modifiers: Modifiers,
+}
+
 impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
-    fn size(&self) -> Size<Length> {
-        Size {
-            width: Length::Fill,
-            height: Length::Fill,
-        }
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<State>()
     }
 
-    fn layout(
-        &self,
-        _tree: &mut widget::Tree,
+    fn state(&self) -> tree::State {
+        tree::State::new(State::default())
+    }
+
+    fn size(&self) -> Size<Length> {
+        Size::new(Length::Fill, Length::Fill)
+    }
+
+    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+        Node::new(Size::new(limits.max().width, limits.max().height))
+    }
+
+    fn on_event(
+        &mut self,
+        tree: &mut Tree,
+        event: Event,
+        _layout: Layout<'_>,
+        _cursor: Cursor,
         _renderer: &Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        layout::Node::new(Size::new(limits.max().width, limits.max().height))
+        _clipboard: &mut dyn Clipboard,
+        _shell: &mut Shell<'_, TimelineMessage>,
+        _viewport: &Rectangle,
+    ) -> Status {
+        let state = tree.state.downcast_mut::<State>();
+
+        if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
+            state.modifiers = modifiers;
+            return Status::Ignored;
+        }
+
+        match (
+            state.modifiers.command(),
+            state.modifiers.shift(),
+            state.modifiers.alt(),
+        ) {
+            (false, false, false) => match event {
+                Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
+                    let (x, y) = match delta {
+                        ScrollDelta::Pixels { x, y } => (x, y),
+                        ScrollDelta::Lines { x, y } => (x * 50.0, y * 50.0),
+                    };
+
+                    let x = x
+                        .mul_add(-state.scale.x.exp2(), state.position.x)
+                        .clamp(0.0, self.len().in_interleaved_samples(&self.meter) as f32);
+                    let y = (y / state.scale.y).mul_add(-0.5, state.position.y).clamp(
+                        0.0,
+                        self.tracks.read().unwrap().len().saturating_sub(1) as f32,
+                    );
+
+                    state.position.x = x;
+                    state.position.y = y;
+
+                    state.grid_cache.clear();
+                    Status::Captured
+                }
+                _ => Status::Ignored,
+            },
+            (true, false, false) => match event {
+                Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
+                    let x = match delta {
+                        ScrollDelta::Pixels { x: _, y } => -y * 0.01,
+                        ScrollDelta::Lines { x: _, y } => -y * 0.5,
+                    };
+
+                    let x = (x + state.scale.x).clamp(3.0, 12.999_999);
+
+                    state.scale.x = x;
+
+                    state.grid_cache.clear();
+                    Status::Captured
+                }
+                _ => Status::Ignored,
+            },
+            (false, true, false) => match event {
+                Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
+                    let y = match delta {
+                        ScrollDelta::Pixels { x: _, y } => y * 0.1,
+                        ScrollDelta::Lines { x: _, y } => y * 10.0,
+                    };
+
+                    let y = (y + state.scale.y).clamp(20.0, 200.0);
+
+                    state.scale.y = y;
+
+                    Status::Captured
+                }
+                _ => Status::Ignored,
+            },
+            _ => Status::Ignored,
+        }
     }
 
     fn draw(
         &self,
-        _tree: &widget::Tree,
+        tree: &Tree,
         renderer: &mut Renderer,
         theme: &Theme,
-        _style: &renderer::Style,
+        _style: &Style,
         layout: Layout<'_>,
-        _cursor: mouse::Cursor,
+        _cursor: Cursor,
         _viewport: &Rectangle,
     ) {
+        let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
 
-        renderer.draw_geometry(self.grid(renderer, bounds, theme));
-
-        let y_scale = self.scale.y.load(SeqCst);
-        let y_offset = self.position.y.load(SeqCst);
+        renderer.draw_geometry(state.grid_cache.draw(renderer, bounds.size(), |frame| {
+            frame.with_clip(bounds, |frame| {
+                self.grid(frame, theme, state);
+            });
+        }));
 
         self.tracks
             .read()
@@ -58,39 +156,42 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
                 let track_bounds = Rectangle::new(
                     Point::new(
                         bounds.x,
-                        y_offset.mul_add(-y_scale, (i as f32).mul_add(y_scale, bounds.y)),
+                        state
+                            .position
+                            .y
+                            .mul_add(-state.scale.y, (i as f32).mul_add(state.scale.y, bounds.y)),
                     ),
-                    Size::new(bounds.width, y_scale),
+                    Size::new(bounds.width, state.scale.y),
                 );
                 if track_bounds.intersects(&bounds) {
-                    track.draw(renderer, theme, track_bounds, bounds);
+                    track.draw(renderer, theme, track_bounds, bounds, state);
                 }
             });
 
-        renderer.draw_geometry(self.playhead(renderer, bounds, theme));
+        renderer.draw_geometry(self.playhead(renderer, bounds, theme, state));
     }
 }
 
 impl Arrangement {
-    fn grid(&self, renderer: &Renderer, bounds: Rectangle, theme: &Theme) -> Geometry {
-        let mut frame = Frame::new(renderer, bounds.size());
-
+    fn grid(&self, frame: &mut Frame, theme: &Theme, state: &State) {
+        let bounds = frame.size();
         let numerator = self.meter.numerator.load(SeqCst);
-        let x_position = self.position.x.load(SeqCst);
-        let x_scale = self.scale.x.load(SeqCst).exp2();
 
-        let mut beat = Position::from_interleaved_samples(x_position as u32, &self.meter);
+        let mut beat = Position::from_interleaved_samples(state.position.x as u32, &self.meter);
         if beat.sub_quarter_note != 0 {
             beat.sub_quarter_note = 0;
             beat.quarter_note += 1;
         }
 
-        let mut end_beat =
-            beat + Position::from_interleaved_samples((bounds.width * x_scale) as u32, &self.meter);
+        let mut end_beat = beat
+            + Position::from_interleaved_samples(
+                (bounds.width * state.scale.x.exp2()) as u32,
+                &self.meter,
+            );
         end_beat.sub_quarter_note = 0;
 
         while beat <= end_beat {
-            let color = if x_scale > 11f32.exp2() {
+            let color = if state.scale.x.exp2() > 11f32.exp2() {
                 if beat.quarter_note % u16::from(numerator) == 0 {
                     let bar = beat.quarter_note / u16::from(numerator);
                     if bar % 4 == 0 {
@@ -108,27 +209,31 @@ impl Arrangement {
                 theme.extended_palette().secondary.weak.color
             };
 
+            let x = (beat.in_interleaved_samples(&self.meter) as f32 - state.position.x)
+                / state.scale.x.exp2();
+
             let path = Path::new(|path| {
-                let x = (beat.in_interleaved_samples(&self.meter) as f32 - x_position) / x_scale;
                 path.line_to(Point::new(x, 0.0));
                 path.line_to(Point::new(x, bounds.height));
             });
 
-            frame.with_clip(bounds, |frame| {
-                frame.stroke(&path, Stroke::default().with_color(color));
-            });
+            frame.stroke(&path, Stroke::default().with_color(color));
             beat.quarter_note += 1;
         }
-
-        frame.into_geometry()
     }
 
-    fn playhead(&self, renderer: &Renderer, bounds: Rectangle, theme: &Theme) -> Geometry {
+    fn playhead(
+        &self,
+        renderer: &Renderer,
+        bounds: Rectangle,
+        theme: &Theme,
+        state: &State,
+    ) -> Geometry {
         let mut frame = Frame::new(renderer, bounds.size());
 
         let path = Path::new(|path| {
-            let x = (self.meter.global_time.load(SeqCst) as f32 - self.position.x.load(SeqCst))
-                / self.scale.x.load(SeqCst).exp2();
+            let x = (self.meter.global_time.load(SeqCst) as f32 - state.position.x)
+                / state.scale.x.exp2();
             path.line_to(Point::new(x, 0.0));
             path.line_to(Point::new(x, bounds.height));
         });

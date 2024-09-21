@@ -25,12 +25,6 @@ pub struct Meter {
 
 impl Default for Meter {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Meter {
-    pub const fn new() -> Self {
         Self {
             bpm: AtomicU16::new(140),
             numerator: AtomicU8::new(4),

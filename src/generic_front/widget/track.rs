@@ -1,4 +1,4 @@
-use crate::generic_back::Track;
+use crate::{generic_back::Track, generic_front::ArrangementState};
 use iced::{Rectangle, Renderer, Theme};
 
 impl Track {
@@ -8,10 +8,11 @@ impl Track {
         theme: &Theme,
         bounds: Rectangle,
         clip_bounds: Rectangle,
+        state: &ArrangementState,
     ) {
         match self {
-            Self::Audio(track) => track.draw(renderer, theme, bounds, clip_bounds),
-            Self::Midi(track) => track.draw(renderer, theme, bounds, clip_bounds),
+            Self::Audio(track) => track.draw(renderer, theme, bounds, clip_bounds, state),
+            Self::Midi(track) => track.draw(renderer, theme, bounds, clip_bounds, state),
         }
     }
 }

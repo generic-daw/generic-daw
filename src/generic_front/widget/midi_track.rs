@@ -1,6 +1,5 @@
-use crate::generic_back::MidiTrack;
+use crate::{generic_back::MidiTrack, generic_front::ArrangementState};
 use iced::{Point, Rectangle, Renderer, Size, Theme};
-use std::sync::atomic::Ordering::SeqCst;
 
 impl MidiTrack {
     pub fn draw(
@@ -9,25 +8,23 @@ impl MidiTrack {
         theme: &Theme,
         bounds: Rectangle,
         arrangement_bounds: Rectangle,
+        state: &ArrangementState,
     ) {
         self.clips.read().unwrap().iter().for_each(|clip| {
-            let x_position = clip.arrangement.position.x.load(SeqCst);
-            let x_scale = clip.arrangement.scale.x.load(SeqCst).exp2();
-
             let first_pixel = (clip
                 .get_global_start()
                 .in_interleaved_samples(&clip.arrangement.meter)
                 as f32
-                - x_position)
-                / x_scale
+                - state.position.x)
+                / state.scale.x.exp2()
                 + bounds.x;
 
             let last_pixel = (clip
                 .get_global_end()
                 .in_interleaved_samples(&clip.arrangement.meter)
                 as f32
-                - x_position)
-                / x_scale
+                - state.position.x)
+                / state.scale.x.exp2()
                 + bounds.x;
 
             let clip_bounds = Rectangle::new(
@@ -36,7 +33,7 @@ impl MidiTrack {
             );
             let clip_bounds = bounds.intersection(&clip_bounds);
             if let Some(clip_bounds) = clip_bounds {
-                clip.draw(renderer, theme, clip_bounds, arrangement_bounds);
+                clip.draw(renderer, theme, clip_bounds, arrangement_bounds, state);
             }
         });
     }

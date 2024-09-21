@@ -2,22 +2,23 @@ mod timeline;
 pub(in crate::generic_front) use timeline::{Timeline, TimelineMessage};
 
 mod timeline_position;
-pub use timeline_position::TimelinePosition;
+pub(in crate::generic_front) use timeline_position::TimelinePosition;
 
 mod timeline_scale;
-pub use timeline_scale::TimelineScale;
+pub(in crate::generic_front) use timeline_scale::TimelineScale;
 
 mod track_panel;
 pub(in crate::generic_front) use track_panel::{TrackPanel, TrackPanelMessage};
 
 mod widget;
+pub(in crate::generic_front) use widget::ArrangementState;
 
 use crate::generic_back::{
     build_output_stream, Arrangement, AudioClip, AudioTrack, InterleavedAudio,
 };
 use iced::{
-    event, keyboard, mouse,
-    widget::{button, column, row, slider},
+    event, keyboard,
+    widget::{button, column, row},
     window::frames,
     Alignment::Center,
     Element, Event, Subscription,
@@ -96,12 +97,7 @@ impl Daw {
                 });
             }
             Message::TogglePlay => {
-                if !self.arrangement.meter.playing.fetch_not(SeqCst)
-                    && ((self.arrangement.meter.global_time.load(SeqCst) as f32)
-                        < self.arrangement.position.x.load(SeqCst))
-                {
-                    self.timeline.update(&TimelineMessage::MovePlayToStart);
-                }
+                self.arrangement.meter.playing.fetch_not(SeqCst);
             }
             Message::Stop => {
                 self.arrangement.meter.playing.store(false, SeqCst);
@@ -153,17 +149,6 @@ impl Daw {
             button("Stop").on_press(Message::Stop),
             button("Export").on_press(Message::Export),
             button("New").on_press(Message::New),
-            slider(
-                3.0..=12.999_999,
-                self.arrangement.scale.x.load(SeqCst),
-                |scale| { Message::Timeline(TimelineMessage::XScaleChanged(scale)) }
-            )
-            .step(0.1),
-            slider(
-                20.0..=200.0,
-                self.arrangement.scale.y.load(SeqCst),
-                |scale| { Message::Timeline(TimelineMessage::YScaleChanged(scale)) }
-            ),
             number_input(
                 self.arrangement.meter.numerator.load(SeqCst),
                 1..=255,
@@ -203,9 +188,6 @@ impl Daw {
         Subscription::batch([
             frames().map(|_| Message::Timeline(TimelineMessage::Tick)),
             event::listen_with(|e, _, _| match e {
-                Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                    Some(Message::Timeline(TimelineMessage::Scrolled(delta)))
-                }
                 Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
                     match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
                         (false, false, false) => match key {
