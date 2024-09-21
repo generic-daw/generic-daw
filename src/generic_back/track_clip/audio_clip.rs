@@ -36,13 +36,7 @@ impl AudioClip {
             .global_start
             .in_interleaved_samples(&self.arrangement.meter);
 
-        if !&self.arrangement.meter.playing.load(SeqCst)
-            || global_time < start
-            || global_time
-                > self
-                    .global_end
-                    .in_interleaved_samples(&self.arrangement.meter)
-        {
+        if !&self.arrangement.meter.playing.load(SeqCst) {
             return 0.0;
         }
 
@@ -51,7 +45,11 @@ impl AudioClip {
                 .clip_start
                 .in_interleaved_samples(&self.arrangement.meter);
 
-        self.audio.samples[usize::try_from(index).unwrap()]
+        *self
+            .audio
+            .samples
+            .get(usize::try_from(index).unwrap())
+            .unwrap_or(&0.0)
     }
 
     pub const fn get_global_start(&self) -> Position {
