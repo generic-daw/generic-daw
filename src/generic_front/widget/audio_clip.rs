@@ -98,14 +98,14 @@ impl AudioClip {
             ..Quad::default()
         };
 
+        // height of the clip, excluding the text, clipped off by the top of the arrangement
+        let clip_height = max_by(0.0, 18.0 - hidden, |a, b| a.partial_cmp(b).unwrap());
+
         // the opaque background of the text
         let text_background = Quad {
             bounds: Rectangle::new(
                 Point::new(0.0, hidden),
-                Size::new(
-                    clip_bounds.width,
-                    max_by(0.0, 18.0 - hidden, |a, b| a.partial_cmp(b).unwrap()),
-                ),
+                Size::new(clip_bounds.width, clip_height),
             ),
             ..Quad::default()
         };
@@ -145,11 +145,15 @@ impl AudioClip {
             indices.push(i + 2);
         });
 
+        let mut waveform_clip_bounds = clip_bounds;
+        waveform_clip_bounds.y += clip_height;
+        waveform_clip_bounds.height -= clip_height;
+
         // the waveform mesh with the clip bounds
         let waveform_mesh = Mesh::Solid {
             buffers: mesh::Indexed { vertices, indices },
             transformation: Transformation::IDENTITY,
-            clip_bounds,
+            clip_bounds: waveform_clip_bounds,
         };
 
         // the text containing the name of the sample
