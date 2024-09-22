@@ -6,16 +6,15 @@ license = "GPL-3.0-only"
 
 [dependencies]
 anyhow = "1.0.89"
-atomic_enum = "0.3.0"
+atomic_enum = { version = "0.3.0", default-features = false }
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
 cpal = "0.15.3"
 generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host" }
 hound = "3.5.1"
 iced = { version = "0.13.1", default-features = false, features = [
-    "auto-detect-theme",
     "advanced",
+    "auto-detect-theme",
     "canvas",
-    "fira-sans",
     "wgpu",
 ] }
 iced_aw = { version = "0.11.0", default-features = false, features = [
