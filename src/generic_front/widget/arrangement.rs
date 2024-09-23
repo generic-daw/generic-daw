@@ -186,44 +186,46 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
         _viewport: &Rectangle,
     ) {
         let state = tree.state.downcast_ref::<State>();
-        let mut bounds = layout.bounds();
+        let bounds = layout.bounds();
 
-        renderer.draw_geometry(state.grid_cache.draw(renderer, bounds.size(), |frame| {
-            frame.with_clip(bounds, |frame| {
-                self.grid(frame, theme, state);
+        renderer.with_layer(bounds, |renderer| {
+            renderer.draw_geometry(state.grid_cache.draw(renderer, bounds.size(), |frame| {
+                frame.with_clip(bounds, |frame| {
+                    self.grid(frame, theme, state);
+                });
+            }));
+        });
+
+        {
+            let mut bounds = bounds;
+            bounds.y += 16.0;
+            bounds.height -= 16.0;
+
+            renderer.with_layer(bounds, |renderer| {
+                self.tracks
+                    .read()
+                    .unwrap()
+                    .iter()
+                    .enumerate()
+                    .for_each(|(i, track)| {
+                        let track_bounds = Rectangle::new(
+                            Point::new(
+                                bounds.x,
+                                ((i as f32) - state.position.y).mul_add(state.scale.y, bounds.y),
+                            ),
+                            Size::new(bounds.width, state.scale.y),
+                        );
+                        if track_bounds.intersects(&bounds) {
+                            track.draw(renderer, theme, track_bounds, bounds, state);
+                        }
+                    });
             });
-        }));
+        }
 
-        renderer.fill_quad(
-            Quad {
-                bounds: Rectangle::new(bounds.position(), Size::new(bounds.width, 16.0)),
-                ..Quad::default()
-            },
-            theme.extended_palette().primary.base.color,
-        );
-
-        bounds.y += 16.0;
-        bounds.height -= 16.0;
-
-        self.tracks
-            .read()
-            .unwrap()
-            .iter()
-            .enumerate()
-            .for_each(|(i, track)| {
-                let track_bounds = Rectangle::new(
-                    Point::new(
-                        bounds.x,
-                        ((i as f32) - state.position.y).mul_add(state.scale.y, bounds.y),
-                    ),
-                    Size::new(bounds.width, state.scale.y),
-                );
-                if track_bounds.intersects(&bounds) {
-                    track.draw(renderer, theme, track_bounds, bounds, state);
-                }
-            });
-
-        renderer.draw_geometry(self.playhead(renderer, bounds, theme, state));
+        let playhead = self.playhead(renderer, bounds, theme, state);
+        renderer.with_layer(bounds, |renderer| {
+            renderer.draw_geometry(playhead);
+        });
     }
 }
 
@@ -302,11 +304,19 @@ impl Arrangement {
 
     fn playhead(
         &self,
-        renderer: &Renderer,
+        renderer: &mut Renderer,
         bounds: Rectangle,
         theme: &Theme,
         state: &State,
     ) -> Geometry {
+        renderer.fill_quad(
+            Quad {
+                bounds: Rectangle::new(bounds.position(), Size::new(bounds.width, 16.0)),
+                ..Quad::default()
+            },
+            theme.extended_palette().primary.base.color,
+        );
+
         let mut frame = Frame::new(renderer, bounds.size());
 
         let path = Path::new(|path| {
