@@ -13,7 +13,7 @@ use iced::{
     event::Status,
     keyboard::{self, Modifiers},
     mouse::{self, Cursor, ScrollDelta},
-    widget::canvas::{Cache, Frame, Geometry, Path, Stroke, Text},
+    widget::canvas::{Cache, Frame, Path, Stroke, Text},
     Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme,
 };
 use std::sync::{atomic::Ordering::SeqCst, Arc};
@@ -222,9 +222,8 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
             });
         }
 
-        let playhead = self.playhead(renderer, bounds, theme, state);
         renderer.with_layer(bounds, |renderer| {
-            renderer.draw_geometry(playhead);
+            self.playhead(renderer, bounds, theme, state);
         });
     }
 }
@@ -302,13 +301,7 @@ impl Arrangement {
         }
     }
 
-    fn playhead(
-        &self,
-        renderer: &mut Renderer,
-        bounds: Rectangle,
-        theme: &Theme,
-        state: &State,
-    ) -> Geometry {
+    fn playhead(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme, state: &State) {
         renderer.fill_quad(
             Quad {
                 bounds: Rectangle::new(bounds.position(), Size::new(bounds.width, 16.0)),
@@ -335,6 +328,6 @@ impl Arrangement {
             );
         });
 
-        frame.into_geometry()
+        renderer.draw_geometry(frame.into_geometry());
     }
 }
