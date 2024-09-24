@@ -53,7 +53,7 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
-        Node::new(Size::new(limits.max().width, limits.max().height))
+        Node::new(limits.max())
     }
 
     fn on_event(
