@@ -74,12 +74,12 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
             return Status::Ignored;
         }
 
-        if !cursor.is_over(layout.bounds()) {
+        let bounds = layout.bounds();
+
+        if !cursor.is_over(bounds) {
             state.action = Action::None;
             return Status::Ignored;
         }
-
-        let bounds = layout.bounds();
 
         match (
             state.modifiers.command(),
@@ -110,15 +110,13 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
                             return Status::Captured;
                         }
                         mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                            let position = cursor.position_in(bounds);
-                            if let Some(position) = position {
-                                if position.y < 16.0 {
-                                    let time =
-                                        position.x.mul_add(state.scale.x.exp2(), state.position.x);
-                                    self.meter.global_time.store(time as u32, SeqCst);
-                                    state.action = Action::DraggingPlayhead;
-                                    return Status::Captured;
-                                }
+                            let position = cursor.position_in(bounds).unwrap();
+                            if position.y < 16.0 {
+                                let time =
+                                    position.x.mul_add(state.scale.x.exp2(), state.position.x);
+                                self.meter.global_time.store(time as u32, SeqCst);
+                                state.action = Action::DraggingPlayhead;
+                                return Status::Captured;
                             }
                         }
                         mouse::Event::CursorMoved { .. } => match state.action {
