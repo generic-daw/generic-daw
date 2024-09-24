@@ -7,6 +7,7 @@ use std::{
     sync::{atomic::Ordering::SeqCst, Arc},
 };
 
+#[derive(Debug)]
 pub struct AudioClip {
     pub audio: Arc<InterleavedAudio>,
     /// the start of the clip relative to the start of the arrangement

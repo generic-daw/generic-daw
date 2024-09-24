@@ -13,6 +13,7 @@ use std::sync::{
     Arc, Mutex, RwLock,
 };
 
+#[derive(Debug)]
 pub struct PluginState {
     /// send messages to the plugin
     pub plugin_sender: Sender<MainThreadMessage>,

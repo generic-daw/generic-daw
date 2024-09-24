@@ -1,3 +1,4 @@
+#[derive(Clone, Copy, Debug)]
 pub struct TimelineScale {
     /// log2 of the horizontal scale
     pub x: f32,

@@ -5,6 +5,7 @@ use std::{
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
 };
 
+#[derive(Debug)]
 pub struct Arrangement {
     pub tracks: RwLock<Vec<Track>>,
     /// information relating to the playback of the arrangement

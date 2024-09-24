@@ -4,6 +4,7 @@ use crate::{
 };
 use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
+#[derive(Debug)]
 pub struct AudioTrack {
     pub clips: RwLock<Vec<AudioClip>>,
     /// between 0.0 and 1.0

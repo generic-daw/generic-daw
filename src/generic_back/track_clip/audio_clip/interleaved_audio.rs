@@ -22,6 +22,7 @@ use symphonia::core::{
     probe::Hint,
 };
 
+#[derive(Debug)]
 pub struct InterleavedAudio {
     /// these are used to play the sample back
     pub samples: Vec<f32>,

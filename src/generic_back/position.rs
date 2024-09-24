@@ -5,7 +5,7 @@ use std::{
     sync::atomic::Ordering::SeqCst,
 };
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Position {
     /// the position in quarter notes, rounded down
     pub quarter_note: u16,

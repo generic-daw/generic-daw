@@ -39,7 +39,7 @@ pub struct Daw {
     stream: Stream,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub enum Message {
     TrackPanel(TrackPanelMessage),
     Timeline(TimelineMessage),
@@ -78,7 +78,7 @@ impl Daw {
                 self.track_panel.update(&msg);
             }
             Message::Timeline(msg) => {
-                self.timeline.update(&msg);
+                self.timeline.update(msg);
             }
             Message::LoadSample => {
                 if let Some(paths) = FileDialog::new().pick_files() {

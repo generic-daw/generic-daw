@@ -1,6 +1,7 @@
 use crate::generic_back::{AtomicDirtyEvent, DirtyEvent, MidiNote, MidiTrack};
 use std::sync::{atomic::Ordering::SeqCst, Arc};
 
+#[derive(Debug)]
 pub struct MidiPattern {
     pub notes: Vec<Arc<MidiNote>>,
     pub(in crate::generic_back) dirty: Arc<AtomicDirtyEvent>,

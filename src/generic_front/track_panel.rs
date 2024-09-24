@@ -10,7 +10,7 @@ pub struct TrackPanel {
     arrangement: Arc<Arrangement>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub enum TrackPanelMessage {
     TrackVolumeChanged(usize, f32),
     TrackPanChanged(usize, f32),

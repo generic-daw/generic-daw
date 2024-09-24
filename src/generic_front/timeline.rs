@@ -2,7 +2,7 @@ use crate::generic_back::Arrangement;
 use iced::{border::Radius, widget::container, Element, Theme};
 use std::sync::Arc;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug)]
 pub enum TimelineMessage {
     Tick,
 }
@@ -17,7 +17,7 @@ impl Timeline {
     }
 
     #[expect(clippy::unused_self)]
-    pub const fn update(&self, message: &TimelineMessage) {
+    pub const fn update(&self, message: TimelineMessage) {
         match message {
             TimelineMessage::Tick => {}
         }

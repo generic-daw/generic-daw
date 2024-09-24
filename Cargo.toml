@@ -27,6 +27,8 @@ symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
 
 [lints.rust]
 let-underscore = "warn"
+missing-copy-implementations = "warn"
+missing-debug-implementations = "warn"
 rust-2018-idioms = "warn"
 rust-2024-compatibility = "warn"
 unused_crate_dependencies = "warn"

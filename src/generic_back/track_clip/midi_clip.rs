@@ -13,6 +13,7 @@ use std::{
     sync::{atomic::Ordering::SeqCst, Arc},
 };
 
+#[derive(Debug)]
 pub struct MidiClip {
     pub pattern: MidiPattern,
     /// the start of the clip relative to the start of the arrangement

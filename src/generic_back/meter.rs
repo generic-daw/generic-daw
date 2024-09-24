@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8};
 
+#[derive(Debug)]
 pub struct Meter {
     /// BPM of the arrangement, between 30 and 600
     pub bpm: AtomicU16,

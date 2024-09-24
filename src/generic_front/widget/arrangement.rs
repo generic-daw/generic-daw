@@ -18,14 +18,14 @@ use iced::{
 };
 use std::sync::{atomic::Ordering::SeqCst, Arc};
 
-#[derive(Eq, PartialEq, Default)]
+#[derive(Debug, Default, Eq, PartialEq)]
 enum Action {
     #[default]
     None,
     DraggingPlayhead,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct State {
     /// information about the position of the timeline viewport
     pub position: TimelinePosition,

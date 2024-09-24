@@ -12,6 +12,7 @@ use std::sync::{
     Arc, Mutex, RwLock,
 };
 
+#[derive(Debug)]
 pub struct MidiTrack {
     pub clips: RwLock<Vec<MidiClip>>,
     /// between 0.0 and 1.0

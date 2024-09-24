@@ -7,6 +7,7 @@ pub use midi_track::MidiTrack;
 use crate::generic_back::{AudioClip, MidiClip, Position};
 use std::sync::atomic::Ordering::SeqCst;
 
+#[derive(Debug)]
 pub enum Track {
     Audio(AudioTrack),
     Midi(MidiTrack),

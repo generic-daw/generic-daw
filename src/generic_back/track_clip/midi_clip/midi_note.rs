@@ -1,4 +1,4 @@
-#[derive(PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MidiNote {
     pub channel: u8,
     pub note: u16,

@@ -1,4 +1,4 @@
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct TimelinePosition {
     /// position of the left of the timeline relative to the start of the arrangement, in samples
     pub x: f32,
