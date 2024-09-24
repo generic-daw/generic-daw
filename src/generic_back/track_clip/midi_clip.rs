@@ -30,9 +30,9 @@ impl MidiClip {
         let len = pattern.len();
         Self {
             pattern,
-            global_start: Position::new(0, 0),
+            global_start: Position::default(),
             global_end: Position::from_interleaved_samples(len, &arrangement.meter),
-            pattern_start: Position::new(0, 0),
+            pattern_start: Position::default(),
             arrangement,
         }
     }

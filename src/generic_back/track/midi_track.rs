@@ -29,7 +29,7 @@ impl MidiTrack {
         host_receiver: Arc<Mutex<Receiver<HostThreadMessage>>>,
     ) -> Track {
         Track::Midi(Self {
-            clips: RwLock::new(Vec::new()),
+            clips: RwLock::default(),
             volume: AtomicF32::new(1.0),
             pan: AtomicF32::new(0.0),
             plugin_state: PluginState::create(plugin_sender, host_receiver),
@@ -83,6 +83,6 @@ impl MidiTrack {
             .iter()
             .map(MidiClip::get_global_end)
             .max()
-            .unwrap_or(Position::new(0, 0))
+            .unwrap_or_else(Position::default)
     }
 }

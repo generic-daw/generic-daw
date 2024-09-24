@@ -25,9 +25,9 @@ impl AudioClip {
 
         Self {
             audio,
-            global_start: Position::new(0, 0),
+            global_start: Position::default(),
             global_end: Position::from_interleaved_samples(samples, &arrangement.meter),
-            clip_start: Position::new(0, 0),
+            clip_start: Position::default(),
             arrangement,
         }
     }

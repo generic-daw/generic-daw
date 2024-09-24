@@ -17,7 +17,7 @@ pub struct AudioTrack {
 impl AudioTrack {
     pub fn create(arrangement: Arc<Arrangement>) -> Track {
         Track::Audio(Self {
-            clips: RwLock::new(Vec::new()),
+            clips: RwLock::default(),
             volume: AtomicF32::new(1.0),
             pan: AtomicF32::new(0.0),
             arrangement,
@@ -46,6 +46,6 @@ impl AudioTrack {
             .iter()
             .map(AudioClip::get_global_end)
             .max()
-            .unwrap_or(Position::new(0, 0))
+            .unwrap_or_else(Position::default)
     }
 }

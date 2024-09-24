@@ -5,7 +5,7 @@ use std::{
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Arrangement {
     pub tracks: RwLock<Vec<Track>>,
     /// information relating to the playback of the arrangement
@@ -14,10 +14,7 @@ pub struct Arrangement {
 
 impl Arrangement {
     pub fn create() -> Arc<Self> {
-        Arc::new(Self {
-            tracks: RwLock::new(Vec::new()),
-            meter: Meter::default(),
-        })
+        Arc::new(Self::default())
     }
 
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {
@@ -37,7 +34,7 @@ impl Arrangement {
             .iter()
             .map(Track::get_global_end)
             .max()
-            .unwrap_or(Position::new(0, 0))
+            .unwrap_or_else(Position::default)
     }
 
     pub fn export(&self, path: &Path) {

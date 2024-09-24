@@ -30,10 +30,10 @@ impl Default for Meter {
             bpm: AtomicU16::new(140),
             numerator: AtomicU8::new(4),
             denominator: AtomicU8::new(2),
-            sample_rate: AtomicU32::new(0),
-            playing: AtomicBool::new(false),
-            exporting: AtomicBool::new(false),
-            global_time: AtomicU32::new(0),
+            sample_rate: AtomicU32::default(),
+            playing: AtomicBool::default(),
+            exporting: AtomicBool::default(),
+            global_time: AtomicU32::default(),
         }
     }
 }

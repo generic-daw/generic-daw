@@ -55,12 +55,6 @@ pub enum Message {
 
 impl Default for Daw {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Daw {
-    fn new() -> Self {
         let arrangement = Arrangement::create();
         let stream = build_output_stream(arrangement.clone());
 
@@ -71,7 +65,9 @@ impl Daw {
             stream,
         }
     }
+}
 
+impl Daw {
     pub fn update(&mut self, message: Message) {
         match message {
             Message::TrackPanel(msg) => {
