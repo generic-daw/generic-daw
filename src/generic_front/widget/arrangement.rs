@@ -56,6 +56,7 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
         Node::new(limits.max())
     }
 
+    #[expect(clippy::too_many_lines)]
     fn on_event(
         &mut self,
         tree: &mut Tree,
@@ -155,6 +156,23 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
                 }
             }
             (false, true, false) => {
+                if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = event {
+                    let x = match delta {
+                        ScrollDelta::Pixels { x: _, y } => y * 4.0,
+                        ScrollDelta::Lines { x: _, y } => y * 200.0,
+                    };
+
+                    let x = x
+                        .mul_add(-state.scale.x.exp2(), state.position.x)
+                        .clamp(0.0, self.len().in_interleaved_samples(&self.meter) as f32);
+
+                    state.position.x = x;
+
+                    state.grid_cache.clear();
+                    return Status::Captured;
+                }
+            }
+            (false, false, true) => {
                 if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = event {
                     let y = match delta {
                         ScrollDelta::Pixels { x: _, y } => y * 0.1,
