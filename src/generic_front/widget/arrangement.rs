@@ -6,7 +6,7 @@ use iced::{
     advanced::{
         graphics::geometry::Renderer as _,
         layout::{Layout, Limits, Node},
-        renderer::{Quad, Style},
+        renderer::Style,
         widget::{tree, Tree, Widget},
         Clipboard, Renderer as _, Shell,
     },
@@ -262,6 +262,12 @@ impl Arrangement {
             );
         end_beat.sub_quarter_note = 0;
 
+        frame.fill_rectangle(
+            Point::new(0.0, 0.0),
+            Size::new(bounds.width, 16.0),
+            theme.extended_palette().primary.base.color,
+        );
+
         while beat <= end_beat {
             let bar = beat.quarter_note / u16::from(numerator);
             let color = if state.scale.x.exp2() > 11f32.exp2() {
@@ -318,14 +324,6 @@ impl Arrangement {
     }
 
     fn playhead(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme, state: &State) {
-        renderer.fill_quad(
-            Quad {
-                bounds: Rectangle::new(bounds.position(), Size::new(bounds.width, 16.0)),
-                ..Quad::default()
-            },
-            theme.extended_palette().primary.base.color,
-        );
-
         let mut frame = Frame::new(renderer, bounds.size());
 
         let path = Path::new(|path| {
