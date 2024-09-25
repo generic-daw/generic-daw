@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, Ordering::SeqCst};
 
 #[derive(Debug)]
 pub struct Meter {
@@ -35,5 +35,13 @@ impl Default for Meter {
             exporting: AtomicBool::default(),
             global_time: AtomicU32::default(),
         }
+    }
+}
+
+impl Meter {
+    pub fn reset(&self) {
+        self.bpm.store(140, SeqCst);
+        self.numerator.store(4, SeqCst);
+        self.denominator.store(2, SeqCst);
     }
 }

@@ -96,7 +96,8 @@ impl Daw {
                 self.arrangement.meter.global_time.store(0, SeqCst);
             }
             Message::New => {
-                *self = Self::default();
+                *self.arrangement.tracks.write().unwrap() = Vec::new();
+                self.arrangement.meter.reset();
             }
             Message::Export => {
                 if let Some(path) = FileDialog::new()
