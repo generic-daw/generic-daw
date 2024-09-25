@@ -26,10 +26,7 @@ use iced::{
 };
 use iced_aw::number_input;
 use rfd::FileDialog;
-use std::{
-    path::PathBuf,
-    sync::{atomic::Ordering::SeqCst, Arc},
-};
+use std::sync::{atomic::Ordering::SeqCst, Arc};
 
 pub struct Daw {
     arrangement: Arc<Arrangement>,
@@ -78,9 +75,7 @@ impl Daw {
                     let arrangement = self.arrangement.clone();
                     std::thread::spawn(move || {
                         for path in paths {
-                            let path = path.display().to_string();
-                            let audio_file =
-                                InterleavedAudio::create(&PathBuf::from(path), &arrangement);
+                            let audio_file = InterleavedAudio::create(&path, &arrangement);
                             if let Ok(audio_file) = audio_file {
                                 let track = AudioTrack::create(arrangement.clone());
                                 track.try_push_audio(AudioClip::new(
