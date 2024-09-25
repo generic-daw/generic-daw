@@ -26,7 +26,7 @@ impl Position {
             / (f64::from(meter.sample_rate.load(SeqCst) * 2)
                 / (f64::from(meter.bpm.load(SeqCst)) / 60.0));
         let quarter_note = global_beat as u16;
-        let sub_quarter_note = (global_beat - f64::from(quarter_note)) as u16 * 256;
+        let sub_quarter_note = ((global_beat - f64::from(quarter_note)) * 256.0) as u16;
 
         Self {
             quarter_note,
