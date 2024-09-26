@@ -14,7 +14,7 @@ use iced::{
     keyboard::{self, Modifiers},
     mouse::{self, Cursor, ScrollDelta},
     widget::canvas::{Cache, Frame, Path, Stroke, Text},
-    Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme,
+    window, Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme,
 };
 use std::{
     cell::RefCell,
@@ -36,10 +36,8 @@ pub struct State {
     pub scale: TimelineScale,
     /// saves the number of tracks in the arrangement from the last draw
     tracks: RefCell<usize>,
-    /// saves the bounds of the arrangement from the last draw
-    bounds: RefCell<Rectangle>,
     /// caches the meshes of the waveforms
-    pub waveform_cache: RefCell<Vec<Mesh>>,
+    waveform_cache: RefCell<Vec<Mesh>>,
     /// caches the geometry of the grid
     grid_cache: Cache,
     /// the current modifiers
@@ -81,6 +79,11 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
 
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
             state.modifiers = modifiers;
+            return Status::Ignored;
+        }
+
+        if let Event::Window(window::Event::Resized { .. }) = event {
+            state.waveform_cache.borrow_mut().clear();
             return Status::Ignored;
         }
 
@@ -216,11 +219,6 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
     ) {
         let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
-
-        if bounds != *state.bounds.borrow() {
-            state.waveform_cache.borrow_mut().clear();
-            *state.bounds.borrow_mut() = bounds;
-        }
 
         if self.tracks.read().unwrap().len() != *state.tracks.borrow() {
             state.waveform_cache.borrow_mut().clear();
