@@ -1,5 +1,5 @@
 use crate::{generic_back::AudioTrack, generic_front::ArrangementState};
-use iced::{Point, Rectangle, Renderer, Size, Theme};
+use iced::{advanced::graphics::Mesh, Point, Rectangle, Renderer, Size, Theme};
 
 impl AudioTrack {
     pub fn draw(
@@ -33,8 +33,48 @@ impl AudioTrack {
             );
             let clip_bounds = bounds.intersection(&clip_bounds);
             if let Some(clip_bounds) = clip_bounds {
-                clip.draw(renderer, theme, clip_bounds, arrangement_bounds, state);
+                clip.draw(renderer, theme, clip_bounds, arrangement_bounds);
             }
         });
+    }
+
+    pub fn meshes(
+        &self,
+        theme: &Theme,
+        bounds: Rectangle,
+        arrangement_bounds: Rectangle,
+        state: &ArrangementState,
+    ) -> Vec<Mesh> {
+        self.clips
+            .read()
+            .unwrap()
+            .iter()
+            .filter_map(|clip| {
+                let first_pixel = (clip
+                    .get_global_start()
+                    .in_interleaved_samples(&clip.arrangement.meter)
+                    as f32
+                    - state.position.x)
+                    / state.scale.x.exp2()
+                    + bounds.x;
+
+                let last_pixel = (clip
+                    .get_global_end()
+                    .in_interleaved_samples(&clip.arrangement.meter)
+                    as f32
+                    - state.position.x)
+                    / state.scale.x.exp2()
+                    + bounds.x;
+
+                let clip_bounds = Rectangle::new(
+                    Point::new(first_pixel, bounds.y),
+                    Size::new(last_pixel - first_pixel, bounds.height),
+                );
+                let clip_bounds = bounds.intersection(&clip_bounds);
+                clip_bounds.and_then(|clip_bounds| {
+                    clip.meshes(theme, clip_bounds, arrangement_bounds, state)
+                })
+            })
+            .collect()
     }
 }

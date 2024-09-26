@@ -4,7 +4,7 @@ use crate::{
 };
 use iced::{
     advanced::{
-        graphics::geometry::Renderer as _,
+        graphics::{geometry::Renderer as _, mesh::Renderer as _, Mesh},
         layout::{Layout, Limits, Node},
         renderer::Style,
         widget::{tree, Tree, Widget},
@@ -16,7 +16,10 @@ use iced::{
     widget::canvas::{Cache, Frame, Path, Stroke, Text},
     Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme,
 };
-use std::sync::{atomic::Ordering::SeqCst, Arc};
+use std::{
+    cell::RefCell,
+    sync::{atomic::Ordering::SeqCst, Arc},
+};
 
 #[derive(Debug, Default, Eq, PartialEq)]
 enum Action {
@@ -31,6 +34,12 @@ pub struct State {
     pub position: TimelinePosition,
     /// information about the scale of the timeline viewport
     pub scale: TimelineScale,
+    /// saves the number of tracks in the arrangement from the last draw
+    tracks: RefCell<usize>,
+    /// saves the bounds of the arrangement from the last draw
+    bounds: RefCell<Rectangle>,
+    /// caches the meshes of the waveforms
+    pub waveform_cache: RefCell<Vec<Mesh>>,
     /// caches the geometry of the grid
     grid_cache: Cache,
     /// the current modifiers
@@ -107,6 +116,7 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
                             state.position.x = x;
                             state.position.y = y;
 
+                            state.waveform_cache.borrow_mut().clear();
                             state.grid_cache.clear();
                             return Status::Captured;
                         }
@@ -151,6 +161,7 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
 
                     state.scale.x = x;
 
+                    state.waveform_cache.borrow_mut().clear();
                     state.grid_cache.clear();
                     return Status::Captured;
                 }
@@ -168,6 +179,7 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
 
                     state.position.x = x;
 
+                    state.waveform_cache.borrow_mut().clear();
                     state.grid_cache.clear();
                     return Status::Captured;
                 }
@@ -183,6 +195,7 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
 
                     state.scale.y = y;
 
+                    state.waveform_cache.borrow_mut().clear();
                     return Status::Captured;
                 }
             }
@@ -203,6 +216,16 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
     ) {
         let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
+
+        if bounds != *state.bounds.borrow() {
+            state.waveform_cache.borrow_mut().clear();
+            *state.bounds.borrow_mut() = bounds;
+        }
+
+        if self.tracks.read().unwrap().len() != *state.tracks.borrow() {
+            state.waveform_cache.borrow_mut().clear();
+            *state.tracks.borrow_mut() = self.tracks.read().unwrap().len();
+        }
 
         renderer.with_layer(bounds, |renderer| {
             renderer.draw_geometry(state.grid_cache.draw(renderer, bounds.size(), |frame| {
@@ -235,6 +258,36 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
                             track.draw(renderer, theme, track_bounds, bounds, state);
                         }
                     });
+
+                let is_empty = state.waveform_cache.borrow().is_empty();
+                if is_empty {
+                    *state.waveform_cache.borrow_mut() = self
+                        .tracks
+                        .read()
+                        .unwrap()
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(i, track)| {
+                            let track_bounds = Rectangle::new(
+                                Point::new(
+                                    bounds.x,
+                                    ((i as f32) - state.position.y)
+                                        .mul_add(state.scale.y, bounds.y),
+                                ),
+                                Size::new(bounds.width, state.scale.y),
+                            );
+                            if track_bounds.intersects(&bounds) {
+                                track.meshes(theme, track_bounds, bounds, state)
+                            } else {
+                                Vec::new()
+                            }
+                        })
+                        .collect();
+                }
+
+                state.waveform_cache.borrow().iter().for_each(|mesh| {
+                    renderer.draw_mesh(mesh.to_owned());
+                });
             });
         }
 

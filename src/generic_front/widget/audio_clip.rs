@@ -3,7 +3,7 @@ use iced::{
     advanced::{
         graphics::{
             color,
-            mesh::{self, Renderer as _, SolidVertex2D},
+            mesh::{self, SolidVertex2D},
             Mesh,
         },
         renderer::Quad,
@@ -17,15 +17,90 @@ use iced::{
 use std::cmp::{max_by, min};
 
 impl AudioClip {
-    #[expect(clippy::too_many_lines)]
     pub fn draw(
         &self,
         renderer: &mut Renderer,
         theme: &Theme,
         bounds: Rectangle,
         arrangement_bounds: Rectangle,
-        state: &ArrangementState,
     ) {
+        // how many pixels of the top of the clip are clipped off by the top of the arrangement
+        let hidden = max_by(0.0, arrangement_bounds.y - bounds.y, |a, b| {
+            a.partial_cmp(b).unwrap()
+        });
+
+        // the part of the audio clip that is visible
+        let clip_bounds = Rectangle::new(
+            Point::new(0.0, hidden),
+            bounds.intersection(&arrangement_bounds).unwrap().size(),
+        );
+
+        // the translucent background of the clip
+        let clip_background = Quad {
+            bounds: Rectangle::new(
+                Point::new(0.0, hidden),
+                Size::new(
+                    clip_bounds.width,
+                    max_by(0.0, clip_bounds.height, |a, b| a.partial_cmp(b).unwrap()),
+                ),
+            ),
+            ..Quad::default()
+        };
+
+        // height of the clip, excluding the text, clipped off by the top of the arrangement
+        let clip_height = max_by(0.0, 18.0 - hidden, |a, b| a.partial_cmp(b).unwrap());
+
+        // the opaque background of the text
+        let text_background = Quad {
+            bounds: Rectangle::new(
+                Point::new(0.0, hidden),
+                Size::new(clip_bounds.width, clip_height),
+            ),
+            ..Quad::default()
+        };
+
+        // the text containing the name of the sample
+        let text = Text {
+            content: self.audio.name.clone(),
+            bounds: Size::new(f32::INFINITY, 0.0),
+            size: Pixels(12.0),
+            line_height: LineHeight::default(),
+            font: Font::default(),
+            horizontal_alignment: Horizontal::Left,
+            vertical_alignment: Vertical::Top,
+            shaping: Shaping::default(),
+            wrapping: Wrapping::default(),
+        };
+
+        renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
+            renderer.fill_quad(
+                clip_background,
+                theme
+                    .extended_palette()
+                    .primary
+                    .weak
+                    .color
+                    .scale_alpha(0.25),
+            );
+
+            renderer.fill_quad(text_background, theme.extended_palette().primary.weak.color);
+
+            renderer.fill_text(
+                text,
+                Point::new(2.0, 2.0),
+                theme.extended_palette().secondary.base.text,
+                clip_bounds,
+            );
+        });
+    }
+
+    pub fn meshes(
+        &self,
+        theme: &Theme,
+        bounds: Rectangle,
+        arrangement_bounds: Rectangle,
+        state: &ArrangementState,
+    ) -> Option<Mesh> {
         // samples of the original audio per sample of lod
         let lod_sample_size = state.scale.x.floor().exp2() as u32;
 
@@ -69,7 +144,7 @@ impl AudioClip {
 
         // if there are less than 3 vertices, there's nothing to draw
         if (last_index - first_index) < 2 {
-            return;
+            return None;
         }
 
         // how many pixels of the top of the clip are clipped off by the top of the arrangement
@@ -85,30 +160,6 @@ impl AudioClip {
             Point::new(0.0, hidden),
             bounds.intersection(&arrangement_bounds).unwrap().size(),
         );
-
-        // the translucent background of the clip
-        let clip_background = Quad {
-            bounds: Rectangle::new(
-                Point::new(0.0, hidden),
-                Size::new(
-                    clip_bounds.width,
-                    max_by(0.0, clip_bounds.height, |a, b| a.partial_cmp(b).unwrap()),
-                ),
-            ),
-            ..Quad::default()
-        };
-
-        // height of the clip, excluding the text, clipped off by the top of the arrangement
-        let clip_height = max_by(0.0, 18.0 - hidden, |a, b| a.partial_cmp(b).unwrap());
-
-        // the opaque background of the text
-        let text_background = Quad {
-            bounds: Rectangle::new(
-                Point::new(0.0, hidden),
-                Size::new(clip_bounds.width, clip_height),
-            ),
-            ..Quad::default()
-        };
 
         // vertices of the waveform
         let mut vertices =
@@ -145,51 +196,18 @@ impl AudioClip {
             indices.push(i + 2);
         });
 
+        // height of the clip, excluding the text, clipped off by the top of the arrangement
+        let clip_height = max_by(0.0, 18.0 - hidden, |a, b| a.partial_cmp(b).unwrap());
+
         let mut waveform_clip_bounds = clip_bounds;
         waveform_clip_bounds.y += clip_height;
         waveform_clip_bounds.height -= clip_height;
 
         // the waveform mesh with the clip bounds
-        let waveform_mesh = Mesh::Solid {
+        Some(Mesh::Solid {
             buffers: mesh::Indexed { vertices, indices },
-            transformation: Transformation::IDENTITY,
+            transformation: Transformation::translate(bounds.x, bounds.y),
             clip_bounds: waveform_clip_bounds,
-        };
-
-        // the text containing the name of the sample
-        let text = Text {
-            content: self.audio.name.clone(),
-            bounds: Size::new(f32::INFINITY, 0.0),
-            size: Pixels(12.0),
-            line_height: LineHeight::default(),
-            font: Font::default(),
-            horizontal_alignment: Horizontal::Left,
-            vertical_alignment: Vertical::Top,
-            shaping: Shaping::default(),
-            wrapping: Wrapping::default(),
-        };
-
-        renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
-            renderer.fill_quad(
-                clip_background,
-                theme
-                    .extended_palette()
-                    .primary
-                    .weak
-                    .color
-                    .scale_alpha(0.25),
-            );
-
-            renderer.fill_quad(text_background, theme.extended_palette().primary.weak.color);
-
-            renderer.fill_text(
-                text,
-                Point::new(2.0, 2.0),
-                theme.extended_palette().secondary.base.text,
-                clip_bounds,
-            );
-
-            renderer.draw_mesh(waveform_mesh);
-        });
+        })
     }
 }

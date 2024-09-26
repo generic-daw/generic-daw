@@ -55,7 +55,7 @@ impl InterleavedAudio {
             name: path.file_name().unwrap().to_string_lossy().into_owned(),
         });
 
-        Self::create_lod(audio.clone());
+        Self::create_lod(&audio);
         Ok(audio)
     }
 
@@ -160,39 +160,37 @@ impl InterleavedAudio {
         Ok(interleaved_samples)
     }
 
-    fn create_lod(audio: Arc<Self>) {
-        std::thread::spawn(move || {
-            audio.samples.chunks(8).enumerate().for_each(|(i, chunk)| {
-                let (min, max) = match chunk.iter().minmax_by(|a, b| a.partial_cmp(b).unwrap()) {
-                    MinMax(min, max) => (min, max),
-                    OneElement(x) => (x, x),
-                    NoElements => unreachable!(),
-                };
-                audio.lods.write().unwrap()[0][i] =
-                    ((*min).mul_add(0.5, 0.5), (*max).mul_add(0.5, 0.5));
-            });
+    fn create_lod(audio: &Arc<Self>) {
+        audio.samples.chunks(8).enumerate().for_each(|(i, chunk)| {
+            let (min, max) = match chunk.iter().minmax_by(|a, b| a.partial_cmp(b).unwrap()) {
+                MinMax(min, max) => (min, max),
+                OneElement(x) => (x, x),
+                NoElements => unreachable!(),
+            };
+            audio.lods.write().unwrap()[0][i] =
+                ((*min).mul_add(0.5, 0.5), (*max).mul_add(0.5, 0.5));
+        });
 
-            (1..10).for_each(|i| {
-                let len = audio.lods.read().unwrap()[i].len();
-                (0..len).for_each(|j| {
-                    let min = min_by(
-                        audio.lods.read().unwrap()[i - 1][2 * j].0,
-                        audio.lods.read().unwrap()[i - 1]
-                            .get(2 * j + 1)
-                            .unwrap_or(&(f32::MAX, f32::MAX))
-                            .0,
-                        |a, b| a.partial_cmp(b).unwrap(),
-                    );
-                    let max = max_by(
-                        audio.lods.read().unwrap()[i - 1][2 * j].1,
-                        audio.lods.read().unwrap()[i - 1]
-                            .get(2 * j + 1)
-                            .unwrap_or(&(f32::MAX, f32::MAX))
-                            .1,
-                        |a, b| a.partial_cmp(b).unwrap(),
-                    );
-                    audio.lods.write().unwrap()[i][j] = (min, max);
-                });
+        (1..10).for_each(|i| {
+            let len = audio.lods.read().unwrap()[i].len();
+            (0..len).for_each(|j| {
+                let min = min_by(
+                    audio.lods.read().unwrap()[i - 1][2 * j].0,
+                    audio.lods.read().unwrap()[i - 1]
+                        .get(2 * j + 1)
+                        .unwrap_or(&(f32::MAX, f32::MAX))
+                        .0,
+                    |a, b| a.partial_cmp(b).unwrap(),
+                );
+                let max = max_by(
+                    audio.lods.read().unwrap()[i - 1][2 * j].1,
+                    audio.lods.read().unwrap()[i - 1]
+                        .get(2 * j + 1)
+                        .unwrap_or(&(f32::MAX, f32::MAX))
+                        .1,
+                    |a, b| a.partial_cmp(b).unwrap(),
+                );
+                audio.lods.write().unwrap()[i][j] = (min, max);
             });
         });
     }
