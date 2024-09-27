@@ -42,6 +42,27 @@ impl TrackClip {
         }
     }
 
+    pub fn trim_start_to(&self, clip_start: Position) {
+        match self {
+            Self::Audio(audio) => audio.trim_start_to(clip_start),
+            Self::Midi(midi) => midi.trim_start_to(clip_start),
+        }
+    }
+
+    pub fn trim_end_to(&self, global_end: Position) {
+        match self {
+            Self::Audio(audio) => audio.trim_end_to(global_end),
+            Self::Midi(midi) => midi.trim_end_to(global_end),
+        }
+    }
+
+    pub fn move_to(&self, global_start: Position) {
+        match self {
+            Self::Audio(audio) => audio.move_to(global_start),
+            Self::Midi(midi) => midi.move_to(global_start),
+        }
+    }
+
     pub(in crate::generic_back) fn get_global_midi(&self) -> Vec<Arc<MidiNote>> {
         match self {
             Self::Audio(_) => Vec::new(),

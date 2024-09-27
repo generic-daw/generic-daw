@@ -42,6 +42,14 @@ impl Position {
             meter,
         )
     }
+
+    pub fn rounded(mut self, scale: f32) -> Self {
+        self.sub_quarter_note -= self.sub_quarter_note % (1 << (scale as u16 - 3));
+        if scale > 11f32 {
+            self.quarter_note -= self.quarter_note % 4;
+        }
+        self
+    }
 }
 
 impl PartialOrd for Position {

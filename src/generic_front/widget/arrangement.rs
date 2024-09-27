@@ -1,5 +1,5 @@
 use crate::{
-    generic_back::{Arrangement, Position},
+    generic_back::{Arrangement, Position, TrackClip},
     generic_front::{Message, TimelinePosition, TimelineScale},
 };
 use iced::{
@@ -12,7 +12,7 @@ use iced::{
     },
     event::Status,
     keyboard::{self, Modifiers},
-    mouse::{self, Cursor, ScrollDelta},
+    mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::canvas::{Cache, Frame, Path, Stroke, Text},
     window, Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme,
 };
@@ -21,11 +21,12 @@ use std::{
     sync::{atomic::Ordering::SeqCst, Arc},
 };
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default)]
 enum Action {
     #[default]
     None,
     DraggingPlayhead,
+    DraggingClip(Arc<TrackClip>, f32),
 }
 
 #[derive(Debug, Default)]
@@ -34,6 +35,8 @@ pub struct State {
     pub position: TimelinePosition,
     /// information about the scale of the timeline viewport
     pub scale: TimelineScale,
+    /// saves what cursor to show
+    pub interaction: Interaction,
     /// saves the number of tracks in the arrangement from the last draw
     tracks: RefCell<usize>,
     /// caches the meshes of the waveforms
@@ -91,7 +94,15 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
 
         if !cursor.is_over(bounds) {
             state.action = Action::None;
+            state.interaction = Interaction::default();
             return Status::Ignored;
+        }
+
+        state.interaction = self.hovering_interaction(cursor, bounds, state);
+
+        if event == Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) {
+            state.action = Action::None;
+            return Status::Captured;
         }
 
         match (
@@ -118,7 +129,6 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
 
                             state.position.x = x;
                             state.position.y = y;
-
                             state.waveform_cache.borrow_mut().clear();
                             state.grid_cache.clear();
                             return Status::Captured;
@@ -130,25 +140,60 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                                     position.x.mul_add(state.scale.x.exp2(), state.position.x);
                                 self.meter.global_time.store(time as u32, SeqCst);
                                 state.action = Action::DraggingPlayhead;
+                                state.interaction = Interaction::ResizingHorizontally;
                                 return Status::Captured;
                             }
+                            let index = (position.y - 16.0) / state.scale.y;
+                            if index >= self.tracks.read().unwrap().len() as f32 {
+                                return Status::Ignored;
+                            }
+                            let clip = self.tracks.read().unwrap()[index as usize]
+                                .get_clip_at_global_time(
+                                    position.x.mul_add(state.scale.x.exp2(), state.position.x)
+                                        as u32,
+                                );
+                            if let Some(clip) = clip {
+                                let start_pos =
+                                    (clip.get_global_start().in_interleaved_samples(&self.meter)
+                                        as f32
+                                        - state.position.x)
+                                        / state.scale.x.exp2()
+                                        - position.x;
+                                state.action = Action::DraggingClip(clip, start_pos);
+                                state.interaction = Interaction::Grab;
+                                return Status::Captured;
+                            }
+                            return Status::Ignored;
                         }
-                        mouse::Event::CursorMoved { .. } => match state.action {
+                        mouse::Event::CursorMoved { .. } => match &state.action {
                             Action::DraggingPlayhead => {
                                 let position = cursor.position_in(bounds).unwrap();
-                                let time =
-                                    position.x.mul_add(state.scale.x.exp2(), state.position.x);
-                                self.meter.global_time.store(time as u32, SeqCst);
+                                let time = Position::from_interleaved_samples(
+                                    position.x.mul_add(state.scale.x.exp2(), state.position.x)
+                                        as u32,
+                                    &self.meter,
+                                )
+                                .rounded(state.scale.x)
+                                .in_interleaved_samples(&self.meter);
+                                self.meter.global_time.store(time, SeqCst);
+                                return Status::Captured;
+                            }
+                            Action::DraggingClip(clip, start_pos) => {
+                                let position = cursor.position_in(bounds).unwrap();
+                                let time = (position.x + start_pos)
+                                    .mul_add(state.scale.x.exp2(), state.position.x)
+                                    + start_pos;
+                                let new_position =
+                                    Position::from_interleaved_samples(time as u32, &self.meter)
+                                        .rounded(state.scale.x);
+                                if new_position != clip.get_global_start() {
+                                    clip.move_to(new_position);
+                                    state.waveform_cache.borrow_mut().clear();
+                                }
                                 return Status::Captured;
                             }
                             Action::None => {}
                         },
-                        mouse::Event::ButtonReleased(mouse::Button::Left) => {
-                            if state.action != Action::None {
-                                state.action = Action::None;
-                                return Status::Captured;
-                            }
-                        }
                         _ => {}
                     }
                 }
@@ -163,7 +208,6 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                     let x = (x + state.scale.x).clamp(3.0, 12.999_999);
 
                     state.scale.x = x;
-
                     state.waveform_cache.borrow_mut().clear();
                     state.grid_cache.clear();
                     return Status::Captured;
@@ -181,7 +225,6 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                         .clamp(0.0, self.len().in_interleaved_samples(&self.meter) as f32);
 
                     state.position.x = x;
-
                     state.waveform_cache.borrow_mut().clear();
                     state.grid_cache.clear();
                     return Status::Captured;
@@ -197,7 +240,6 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                     let y = (y + state.scale.y).clamp(36.0, 200.0);
 
                     state.scale.y = y;
-
                     state.waveform_cache.borrow_mut().clear();
                     return Status::Captured;
                 }
@@ -205,6 +247,18 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
             _ => {}
         }
         Status::Ignored
+    }
+
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        _layout: Layout<'_>,
+        _cursor: Cursor,
+        _viewport: &Rectangle,
+        _renderer: &Renderer,
+    ) -> Interaction {
+        let state = tree.state.downcast_ref::<State>();
+        state.interaction
     }
 
     fn draw(
@@ -321,7 +375,7 @@ impl Arrangement {
 
         while beat <= end_beat {
             let bar = beat.quarter_note / u16::from(numerator);
-            let color = if state.scale.x.exp2() > 11f32.exp2() {
+            let color = if state.scale.x > 11f32 {
                 if beat.quarter_note % u16::from(numerator) == 0 {
                     if bar % 4 == 0 {
                         theme.extended_palette().secondary.strong.color
@@ -348,7 +402,7 @@ impl Arrangement {
 
             frame.stroke(&path, Stroke::default().with_color(color));
 
-            if state.scale.x.exp2() > 11f32.exp2() {
+            if state.scale.x > 11f32 {
                 if bar % 4 == 0 {
                     let bar = Text {
                         content: format!("{}", bar + 1),
@@ -394,5 +448,36 @@ impl Arrangement {
         });
 
         renderer.draw_geometry(frame.into_geometry());
+    }
+
+    fn hovering_interaction(
+        &self,
+        cursor: Cursor,
+        bounds: Rectangle,
+        state: &State,
+    ) -> Interaction {
+        match state.action {
+            Action::None => {}
+            _ => return state.interaction,
+        }
+
+        let position = cursor.position_in(bounds).unwrap();
+        if position.y < 16.0 {
+            return Interaction::ResizingHorizontally;
+        }
+        let index = (position.y - 16.0) / state.scale.y;
+        if index >= self.tracks.read().unwrap().len() as f32 {
+            return Interaction::default();
+        }
+        if self.tracks.read().unwrap()[index as usize]
+            .get_clip_at_global_time(
+                position.x.mul_add(state.scale.x.exp2(), state.position.x) as u32
+            )
+            .is_some()
+        {
+            Interaction::Grab
+        } else {
+            Interaction::default()
+        }
     }
 }

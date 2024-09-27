@@ -42,7 +42,7 @@ impl AudioClip {
             .unwrap()
             .in_interleaved_samples(&self.arrangement.meter);
 
-        if !&self.arrangement.meter.playing.load(SeqCst) {
+        if !&self.arrangement.meter.playing.load(SeqCst) || global_time < start {
             return 0.0;
         }
 

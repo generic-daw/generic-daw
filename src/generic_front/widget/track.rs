@@ -1,4 +1,9 @@
-use crate::{generic_back::Track, generic_front::ArrangementState};
+use std::sync::Arc;
+
+use crate::{
+    generic_back::{Track, TrackClip},
+    generic_front::ArrangementState,
+};
 use iced::{advanced::graphics::Mesh, Point, Rectangle, Renderer, Size, Theme};
 
 impl Track {
@@ -84,5 +89,28 @@ impl Track {
                 })
             })
             .collect()
+    }
+
+    pub fn get_clip_at_global_time(&self, global_time: u32) -> Option<Arc<TrackClip>> {
+        let arrangement = match self {
+            Self::Audio(track) => track.arrangement.clone(),
+            Self::Midi(track) => track.arrangement.clone(),
+        };
+
+        self.clips().read().unwrap().iter().find_map(|clip| {
+            if clip
+                .get_global_start()
+                .in_interleaved_samples(&arrangement.meter)
+                <= global_time
+                && global_time
+                    <= clip
+                        .get_global_end()
+                        .in_interleaved_samples(&arrangement.meter)
+            {
+                Some(clip.clone())
+            } else {
+                None
+            }
+        })
     }
 }
