@@ -1,6 +1,6 @@
 use crate::{
     generic_back::{Arrangement, Position},
-    generic_front::{TimelineMessage, TimelinePosition, TimelineScale},
+    generic_front::{Message, TimelinePosition, TimelineScale},
 };
 use iced::{
     advanced::{
@@ -46,7 +46,7 @@ pub struct State {
     action: Action,
 }
 
-impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
+impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
     }
@@ -72,7 +72,7 @@ impl Widget<TimelineMessage, Theme, Renderer> for Arc<Arrangement> {
         cursor: Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        _shell: &mut Shell<'_, TimelineMessage>,
+        _shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
     ) -> Status {
         let state = tree.state.downcast_mut::<State>();

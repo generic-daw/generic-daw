@@ -1,6 +1,3 @@
-mod timeline;
-pub(in crate::generic_front) use timeline::{Timeline, TimelineMessage};
-
 mod timeline_position;
 pub(in crate::generic_front) use timeline_position::TimelinePosition;
 
@@ -17,12 +14,13 @@ use crate::generic_back::{
     build_output_stream, Arrangement, AudioClip, AudioTrack, InterleavedAudio,
 };
 use iced::{
+    border::Radius,
     event::{self, Status},
     keyboard,
-    widget::{button, column, row},
+    widget::{button, column, container, row},
     window::frames,
     Alignment::Center,
-    Element, Event, Subscription,
+    Element, Event, Subscription, Theme,
 };
 use iced_aw::number_input;
 use rfd::FileDialog;
@@ -31,13 +29,11 @@ use std::sync::{atomic::Ordering::SeqCst, Arc};
 pub struct Daw {
     arrangement: Arc<Arrangement>,
     track_panel: TrackPanel,
-    timeline: Timeline,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Message {
     TrackPanel(TrackPanelMessage),
-    Timeline(TimelineMessage),
     LoadSample,
     TogglePlay,
     Stop,
@@ -46,6 +42,7 @@ pub enum Message {
     BpmChanged(u16),
     NumeratorChanged(u8),
     DenominatorChanged(u8),
+    Tick,
 }
 
 impl Default for Daw {
@@ -55,8 +52,7 @@ impl Default for Daw {
 
         Self {
             arrangement: arrangement.clone(),
-            track_panel: TrackPanel::new(arrangement.clone()),
-            timeline: Timeline::new(arrangement),
+            track_panel: TrackPanel::new(arrangement),
         }
     }
 }
@@ -66,9 +62,6 @@ impl Daw {
         match message {
             Message::TrackPanel(msg) => {
                 self.track_panel.update(&msg);
-            }
-            Message::Timeline(msg) => {
-                self.timeline.update(msg);
             }
             Message::LoadSample => {
                 if let Some(paths) = FileDialog::new().pick_files() {
@@ -127,6 +120,7 @@ impl Daw {
                     SeqCst,
                 );
             }
+            Message::Tick => {}
         }
     }
 
@@ -167,7 +161,14 @@ impl Daw {
             controls,
             row![
                 self.track_panel.view().map(Message::TrackPanel),
-                self.timeline.view().map(Message::Timeline)
+                container(Element::new(self.arrangement.clone())).style(|_| container::Style {
+                    border: iced::Border {
+                        color: Theme::default().extended_palette().secondary.weak.color,
+                        width: 1.0,
+                        radius: Radius::new(0.0),
+                    },
+                    ..container::Style::default()
+                })
             ]
             .spacing(20)
         ]
@@ -179,7 +180,7 @@ impl Daw {
 
     pub fn subscription(_state: &Self) -> Subscription<Message> {
         Subscription::batch([
-            frames().map(|_| Message::Timeline(TimelineMessage::Tick)),
+            frames().map(|_| Message::Tick),
             event::listen_with(|e, s, _| match s {
                 Status::Ignored => match e {
                     Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
