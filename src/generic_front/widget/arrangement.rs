@@ -231,17 +231,46 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                 }
             }
             (false, false, true) => {
-                if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = event {
-                    let y = match delta {
-                        ScrollDelta::Pixels { x: _, y } => y * 0.1,
-                        ScrollDelta::Lines { x: _, y } => y * 10.0,
-                    };
+                if let Event::Mouse(event) = event {
+                    match event {
+                        mouse::Event::WheelScrolled { delta } => {
+                            let y = match delta {
+                                ScrollDelta::Pixels { x: _, y } => y * 0.1,
+                                ScrollDelta::Lines { x: _, y } => y * 10.0,
+                            };
 
-                    let y = (y + state.scale.y).clamp(36.0, 200.0);
+                            let y = (y + state.scale.y).clamp(36.0, 200.0);
 
-                    state.scale.y = y;
-                    state.waveform_cache.borrow_mut().clear();
-                    return Status::Captured;
+                            state.scale.y = y;
+                            state.waveform_cache.borrow_mut().clear();
+                            return Status::Captured;
+                        }
+                        mouse::Event::CursorMoved { .. } => match &state.action {
+                            Action::DraggingPlayhead => {
+                                let position = cursor.position_in(bounds).unwrap();
+                                let time =
+                                    position.x.mul_add(state.scale.x.exp2(), state.position.x)
+                                        as u32;
+                                self.meter.global_time.store(time, SeqCst);
+                                return Status::Captured;
+                            }
+                            Action::DraggingClip(clip, start_pos) => {
+                                let position = cursor.position_in(bounds).unwrap();
+                                let time = (position.x + start_pos)
+                                    .mul_add(state.scale.x.exp2(), state.position.x)
+                                    + start_pos;
+                                let new_position =
+                                    Position::from_interleaved_samples(time as u32, &self.meter);
+                                if new_position != clip.get_global_start() {
+                                    clip.move_to(new_position);
+                                    state.waveform_cache.borrow_mut().clear();
+                                }
+                                return Status::Captured;
+                            }
+                            Action::None => {}
+                        },
+                        _ => {}
+                    }
                 }
             }
             _ => {}
