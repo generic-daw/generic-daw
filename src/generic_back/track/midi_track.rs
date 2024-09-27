@@ -1,7 +1,7 @@
 mod plugin_state;
 
 use crate::{
-    generic_back::{pan, DirtyEvent, MidiClip, Position, Track},
+    generic_back::{pan, Arrangement, DirtyEvent, Position, Track, TrackClip},
     helpers::AtomicF32,
 };
 use generic_clap_host::{host::HostThreadMessage, main_thread::MainThreadMessage};
@@ -14,25 +14,29 @@ use std::sync::{
 
 #[derive(Debug)]
 pub struct MidiTrack {
-    pub clips: RwLock<Vec<Arc<MidiClip>>>,
+    /// these are all guaranteed to be `TrackClip::Midi`
+    pub clips: RwLock<Vec<Arc<TrackClip>>>,
     /// between 0.0 and 1.0
     pub volume: AtomicF32,
     /// between -1.0 (left) and 1.0 (right)
     pub pan: AtomicF32,
     /// holds all the state needed for a generator plugin to function properly
     pub plugin_state: RwLock<PluginState>,
+    pub arrangement: Arc<Arrangement>,
 }
 
 impl MidiTrack {
     pub fn create(
         plugin_sender: Sender<MainThreadMessage>,
         host_receiver: Arc<Mutex<Receiver<HostThreadMessage>>>,
+        arrangement: Arc<Arrangement>,
     ) -> Track {
         Track::Midi(Self {
             clips: RwLock::default(),
             volume: AtomicF32::new(1.0),
             pan: AtomicF32::new(0.0),
             plugin_state: PluginState::create(plugin_sender, host_receiver),
+            arrangement,
         })
     }
 

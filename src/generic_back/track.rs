@@ -4,7 +4,7 @@ pub use audio_track::AudioTrack;
 mod midi_track;
 pub use midi_track::MidiTrack;
 
-use crate::generic_back::{AudioClip, MidiClip, Position};
+use crate::generic_back::{AudioClip, MidiClip, Position, TrackClip};
 use std::sync::{atomic::Ordering::SeqCst, Arc};
 
 #[derive(Debug)]
@@ -21,17 +21,32 @@ impl Track {
         }
     }
 
-    pub fn try_push_audio(&self, audio: Arc<AudioClip>) {
+    pub fn clips(&self) -> Vec<Arc<TrackClip>> {
         match self {
-            Self::Audio(track) => track.clips.write().unwrap().push(audio),
+            Self::Audio(track) => track.clips.read().unwrap().iter().cloned().collect(),
+            Self::Midi(track) => track.clips.read().unwrap().iter().cloned().collect(),
+        }
+    }
+
+    pub fn try_push_audio(&self, audio: AudioClip) {
+        match self {
+            Self::Audio(track) => track
+                .clips
+                .write()
+                .unwrap()
+                .push(Arc::new(TrackClip::Audio(audio))),
             Self::Midi(_) => {}
         }
     }
 
-    pub fn try_push_midi(&self, midi: Arc<MidiClip>) {
+    pub fn try_push_midi(&self, midi: MidiClip) {
         match self {
             Self::Audio(_) => {}
-            Self::Midi(track) => track.clips.write().unwrap().push(midi),
+            Self::Midi(track) => track
+                .clips
+                .write()
+                .unwrap()
+                .push(Arc::new(TrackClip::Midi(midi))),
         }
     }
 

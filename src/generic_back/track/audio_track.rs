@@ -1,17 +1,18 @@
 use crate::{
-    generic_back::{pan, Arrangement, AudioClip, Position, Track},
+    generic_back::{pan, Arrangement, Position, Track, TrackClip},
     helpers::AtomicF32,
 };
 use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
 #[derive(Debug)]
 pub struct AudioTrack {
-    pub clips: RwLock<Vec<Arc<AudioClip>>>,
+    /// these are all guaranteed to be `TrackClip::Audio`
+    pub clips: RwLock<Vec<Arc<TrackClip>>>,
     /// between 0.0 and 1.0
     pub volume: AtomicF32,
     /// between -1.0 (left) and 1.0 (right)
     pub pan: AtomicF32,
-    arrangement: Arc<Arrangement>,
+    pub arrangement: Arc<Arrangement>,
 }
 
 impl AudioTrack {

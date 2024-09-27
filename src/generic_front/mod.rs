@@ -71,7 +71,7 @@ impl Daw {
                             let audio_file = InterleavedAudio::create(&path, &arrangement);
                             if let Ok(audio_file) = audio_file {
                                 let track = AudioTrack::create(arrangement.clone());
-                                track.try_push_audio(AudioClip::create(
+                                track.try_push_audio(AudioClip::new(
                                     audio_file,
                                     arrangement.clone(),
                                 ));
