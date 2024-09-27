@@ -6,7 +6,7 @@ use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
 #[derive(Debug)]
 pub struct AudioTrack {
-    pub clips: RwLock<Vec<AudioClip>>,
+    pub clips: RwLock<Vec<Arc<AudioClip>>>,
     /// between 0.0 and 1.0
     pub volume: AtomicF32,
     /// between -1.0 (left) and 1.0 (right)
@@ -44,7 +44,7 @@ impl AudioTrack {
             .read()
             .unwrap()
             .iter()
-            .map(AudioClip::get_global_end)
+            .map(|clip| clip.get_global_end())
             .max()
             .unwrap_or_else(Position::default)
     }

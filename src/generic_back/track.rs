@@ -5,7 +5,7 @@ mod midi_track;
 pub use midi_track::MidiTrack;
 
 use crate::generic_back::{AudioClip, MidiClip, Position};
-use std::sync::atomic::Ordering::SeqCst;
+use std::sync::{atomic::Ordering::SeqCst, Arc};
 
 #[derive(Debug)]
 pub enum Track {
@@ -21,14 +21,14 @@ impl Track {
         }
     }
 
-    pub fn try_push_audio(&self, audio: AudioClip) {
+    pub fn try_push_audio(&self, audio: Arc<AudioClip>) {
         match self {
             Self::Audio(track) => track.clips.write().unwrap().push(audio),
             Self::Midi(_) => {}
         }
     }
 
-    pub fn try_push_midi(&self, midi: MidiClip) {
+    pub fn try_push_midi(&self, midi: Arc<MidiClip>) {
         match self {
             Self::Audio(_) => {}
             Self::Midi(track) => track.clips.write().unwrap().push(midi),

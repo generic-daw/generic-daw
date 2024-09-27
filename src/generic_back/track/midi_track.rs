@@ -14,7 +14,7 @@ use std::sync::{
 
 #[derive(Debug)]
 pub struct MidiTrack {
-    pub clips: RwLock<Vec<MidiClip>>,
+    pub clips: RwLock<Vec<Arc<MidiClip>>>,
     /// between 0.0 and 1.0
     pub volume: AtomicF32,
     /// between -1.0 (left) and 1.0 (right)
@@ -42,7 +42,7 @@ impl MidiTrack {
             .read()
             .unwrap()
             .iter()
-            .flat_map(MidiClip::get_global_midi)
+            .flat_map(|clip| clip.get_global_midi())
             .collect();
     }
 
@@ -81,7 +81,7 @@ impl MidiTrack {
             .read()
             .unwrap()
             .iter()
-            .map(MidiClip::get_global_end)
+            .map(|clip| clip.get_global_end())
             .max()
             .unwrap_or_else(Position::default)
     }
