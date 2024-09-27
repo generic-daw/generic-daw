@@ -4,7 +4,7 @@ pub use audio_track::AudioTrack;
 mod midi_track;
 pub use midi_track::MidiTrack;
 
-use crate::generic_back::{AudioClip, MidiClip, Position, TrackClip};
+use crate::generic_back::{Position, TrackClip};
 use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
 #[derive(Debug)]
@@ -28,25 +28,41 @@ impl Track {
         }
     }
 
-    pub fn try_push_audio(&self, audio: AudioClip) {
+    pub fn try_push(&self, clip: &Arc<TrackClip>) -> bool {
         match self {
-            Self::Audio(track) => track
-                .clips
-                .write()
-                .unwrap()
-                .push(Arc::new(TrackClip::Audio(audio))),
-            Self::Midi(_) => {}
+            Self::Audio(track) => match **clip {
+                TrackClip::Audio(_) => {
+                    track.clips.write().unwrap().push(clip.clone());
+                    true
+                }
+                TrackClip::Midi(_) => false,
+            },
+            Self::Midi(track) => match **clip {
+                TrackClip::Midi(_) => {
+                    track.clips.write().unwrap().push(clip.clone());
+                    true
+                }
+                TrackClip::Audio(_) => false,
+            },
         }
     }
 
-    pub fn try_push_midi(&self, midi: MidiClip) {
+    pub fn remove_clip(&self, clip: &Arc<TrackClip>) {
         match self {
-            Self::Audio(_) => {}
-            Self::Midi(track) => track
-                .clips
-                .write()
-                .unwrap()
-                .push(Arc::new(TrackClip::Midi(midi))),
+            Self::Audio(track) => {
+                track
+                    .clips
+                    .write()
+                    .unwrap()
+                    .retain(|c| Arc::as_ptr(c) != Arc::as_ptr(clip));
+            }
+            Self::Midi(track) => {
+                track
+                    .clips
+                    .write()
+                    .unwrap()
+                    .retain(|c| Arc::as_ptr(c) != Arc::as_ptr(clip));
+            }
         }
     }
 

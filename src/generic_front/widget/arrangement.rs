@@ -26,7 +26,7 @@ enum Action {
     #[default]
     None,
     DraggingPlayhead,
-    DraggingClip(Arc<TrackClip>, f32),
+    DraggingClip(Arc<TrackClip>, usize, f32),
 }
 
 #[derive(Debug, Default)]
@@ -98,7 +98,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
             return Status::Ignored;
         }
 
-        state.interaction = self.hovering_interaction(cursor, bounds, state);
+        state.interaction = self.interaction(cursor, bounds, state);
 
         if event == Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) {
             state.action = Action::None;
@@ -143,15 +143,13 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                                 state.interaction = Interaction::ResizingHorizontally;
                                 return Status::Captured;
                             }
-                            let index = (position.y - 16.0) / state.scale.y;
-                            if index >= self.tracks.read().unwrap().len() as f32 {
+                            let index = ((position.y - 16.0) / state.scale.y) as usize;
+                            if index >= self.tracks.read().unwrap().len() {
                                 return Status::Ignored;
                             }
-                            let clip = self.tracks.read().unwrap()[index as usize]
-                                .get_clip_at_global_time(
-                                    position.x.mul_add(state.scale.x.exp2(), state.position.x)
-                                        as u32,
-                                );
+                            let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
+                                position.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
+                            );
                             if let Some(clip) = clip {
                                 let start_pos =
                                     (clip.get_global_start().in_interleaved_samples(&self.meter)
@@ -159,7 +157,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                                         - state.position.x)
                                         / state.scale.x.exp2()
                                         - position.x;
-                                state.action = Action::DraggingClip(clip, start_pos);
+                                state.action = Action::DraggingClip(clip, index, start_pos);
                                 state.interaction = Interaction::Grabbing;
                                 return Status::Captured;
                             }
@@ -173,22 +171,32 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                                         as u32,
                                     &self.meter,
                                 )
-                                .rounded(state.scale.x)
+                                .snap(state.scale.x)
                                 .in_interleaved_samples(&self.meter);
                                 self.meter.global_time.store(time, SeqCst);
                                 return Status::Captured;
                             }
-                            Action::DraggingClip(clip, start_pos) => {
+                            Action::DraggingClip(clip, index, start_pos) => {
                                 let position = cursor.position_in(bounds).unwrap();
                                 let time = (position.x + start_pos)
                                     .mul_add(state.scale.x.exp2(), state.position.x)
                                     + start_pos;
                                 let new_position =
                                     Position::from_interleaved_samples(time as u32, &self.meter)
-                                        .rounded(state.scale.x);
+                                        .snap(state.scale.x);
                                 if new_position != clip.get_global_start() {
                                     clip.move_to(new_position);
                                     state.waveform_cache.borrow_mut().clear();
+                                }
+                                let new_index = ((position.y - 16.0) / state.scale.y) as usize;
+                                if index != &new_index
+                                    && new_index < self.tracks.read().unwrap().len()
+                                    && self.tracks.read().unwrap()[new_index].try_push(clip)
+                                {
+                                    self.tracks.read().unwrap()[*index].remove_clip(clip);
+                                    state.waveform_cache.borrow_mut().clear();
+                                    state.action =
+                                        Action::DraggingClip(clip.clone(), new_index, *start_pos);
                                 }
                                 return Status::Captured;
                             }
@@ -243,6 +251,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
 
                             state.scale.y = y;
                             state.waveform_cache.borrow_mut().clear();
+                            state.grid_cache.clear();
                             return Status::Captured;
                         }
                         mouse::Event::CursorMoved { .. } => match &state.action {
@@ -254,7 +263,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                                 self.meter.global_time.store(time, SeqCst);
                                 return Status::Captured;
                             }
-                            Action::DraggingClip(clip, start_pos) => {
+                            Action::DraggingClip(clip, index, start_pos) => {
                                 let position = cursor.position_in(bounds).unwrap();
                                 let time = (position.x + start_pos)
                                     .mul_add(state.scale.x.exp2(), state.position.x)
@@ -264,6 +273,16 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                                 if new_position != clip.get_global_start() {
                                     clip.move_to(new_position);
                                     state.waveform_cache.borrow_mut().clear();
+                                }
+                                let new_index = ((position.y - 16.0) / state.scale.y) as usize;
+                                if index != &new_index
+                                    && new_index < self.tracks.read().unwrap().len()
+                                    && self.tracks.read().unwrap()[new_index].try_push(clip)
+                                {
+                                    self.tracks.read().unwrap()[*index].remove_clip(clip);
+                                    state.waveform_cache.borrow_mut().clear();
+                                    state.action =
+                                        Action::DraggingClip(clip.clone(), new_index, *start_pos);
                                 }
                                 return Status::Captured;
                             }
@@ -304,6 +323,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
         let bounds = layout.bounds();
 
         if self.tracks.read().unwrap().len() != *state.tracks.borrow() {
+            state.grid_cache.clear();
             state.waveform_cache.borrow_mut().clear();
             *state.tracks.borrow_mut() = self.tracks.read().unwrap().len();
         }
@@ -455,6 +475,30 @@ impl Arrangement {
 
             beat.quarter_note += 1;
         }
+
+        let mut track_line = state
+            .position
+            .y
+            .rem_euclid(1.0)
+            .mul_add(state.scale.y, 16.0);
+        let last_track_line = (self.tracks.read().unwrap().len() as f32 - state.position.y)
+            .mul_add(state.scale.y, 16.0);
+
+        while track_line as u32 <= last_track_line as u32 {
+            let path = Path::new(|path| {
+                path.line_to(Point::new(0.0, track_line));
+                path.line_to(Point::new(bounds.width, track_line));
+            });
+
+            frame.stroke(
+                &path,
+                Stroke::default()
+                    .with_color(theme.extended_palette().secondary.weak.color)
+                    .with_width(1.0),
+            );
+
+            track_line += state.scale.y;
+        }
     }
 
     fn playhead(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme, state: &State) {
@@ -479,12 +523,7 @@ impl Arrangement {
         renderer.draw_geometry(frame.into_geometry());
     }
 
-    fn hovering_interaction(
-        &self,
-        cursor: Cursor,
-        bounds: Rectangle,
-        state: &State,
-    ) -> Interaction {
+    fn interaction(&self, cursor: Cursor, bounds: Rectangle, state: &State) -> Interaction {
         match state.action {
             Action::None => {}
             _ => return state.interaction,

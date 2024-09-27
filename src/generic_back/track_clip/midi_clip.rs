@@ -7,7 +7,7 @@ pub use midi_note::MidiNote;
 mod midi_pattern;
 pub use midi_pattern::MidiPattern;
 
-use crate::generic_back::{Arrangement, Position};
+use crate::generic_back::{Arrangement, Position, TrackClip};
 use std::{
     cmp::Ordering,
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
@@ -26,15 +26,15 @@ pub struct MidiClip {
 }
 
 impl MidiClip {
-    pub fn new(pattern: MidiPattern, arrangement: Arc<Arrangement>) -> Self {
+    pub fn create(pattern: MidiPattern, arrangement: Arc<Arrangement>) -> Arc<TrackClip> {
         let len = pattern.len();
-        Self {
+        Arc::new(TrackClip::Midi(Self {
             pattern,
             global_start: RwLock::default(),
             global_end: RwLock::new(Position::from_interleaved_samples(len, &arrangement.meter)),
             pattern_start: RwLock::default(),
             arrangement,
-        }
+        }))
     }
 
     pub fn get_global_start(&self) -> Position {

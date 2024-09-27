@@ -1,7 +1,7 @@
 mod interleaved_audio;
 pub use interleaved_audio::InterleavedAudio;
 
-use crate::generic_back::{Arrangement, Position};
+use crate::generic_back::{Arrangement, Position, TrackClip};
 use std::{
     cmp::Ordering,
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
@@ -20,10 +20,10 @@ pub struct AudioClip {
 }
 
 impl AudioClip {
-    pub fn new(audio: Arc<InterleavedAudio>, arrangement: Arc<Arrangement>) -> Self {
+    pub fn create(audio: Arc<InterleavedAudio>, arrangement: Arc<Arrangement>) -> Arc<TrackClip> {
         let samples = u32::try_from(audio.samples.len()).unwrap();
 
-        Self {
+        Arc::new(TrackClip::Audio(Self {
             audio,
             global_start: RwLock::default(),
             global_end: RwLock::new(Position::from_interleaved_samples(
@@ -32,7 +32,7 @@ impl AudioClip {
             )),
             clip_start: RwLock::default(),
             arrangement,
-        }
+        }))
     }
 
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {
