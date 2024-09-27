@@ -160,7 +160,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                                         / state.scale.x.exp2()
                                         - position.x;
                                 state.action = Action::DraggingClip(clip, start_pos);
-                                state.interaction = Interaction::Grab;
+                                state.interaction = Interaction::Grabbing;
                                 return Status::Captured;
                             }
                             return Status::Ignored;
