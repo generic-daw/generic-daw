@@ -12,7 +12,7 @@ pub use track::{AudioTrack, MidiTrack, Track};
 
 mod track_clip;
 pub(in crate::generic_back) use track_clip::{AtomicDirtyEvent, DirtyEvent};
-pub use track_clip::{AudioClip, InterleavedAudio, MidiClip, MidiNote, TrackClip};
+pub use track_clip::{AudioClip, InterleavedAudio, MidiNote, TrackClip};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
