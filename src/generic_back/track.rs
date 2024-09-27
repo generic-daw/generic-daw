@@ -5,7 +5,7 @@ mod midi_track;
 pub use midi_track::MidiTrack;
 
 use crate::generic_back::{AudioClip, MidiClip, Position, TrackClip};
-use std::sync::{atomic::Ordering::SeqCst, Arc};
+use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
 #[derive(Debug)]
 pub enum Track {
@@ -21,10 +21,10 @@ impl Track {
         }
     }
 
-    pub fn clips(&self) -> Vec<Arc<TrackClip>> {
+    pub fn clips(&self) -> Arc<RwLock<Vec<Arc<TrackClip>>>> {
         match self {
-            Self::Audio(track) => track.clips.read().unwrap().iter().cloned().collect(),
-            Self::Midi(track) => track.clips.read().unwrap().iter().cloned().collect(),
+            Self::Audio(track) => track.clips.clone(),
+            Self::Midi(track) => track.clips.clone(),
         }
     }
 

@@ -15,7 +15,7 @@ impl Track {
             Self::Midi(track) => track.arrangement.clone(),
         };
 
-        self.clips().iter().for_each(|clip| {
+        self.clips().read().unwrap().iter().for_each(|clip| {
             let first_pixel = (clip
                 .get_global_start()
                 .in_interleaved_samples(&arrangement.meter) as f32
@@ -54,6 +54,8 @@ impl Track {
         };
 
         self.clips()
+            .read()
+            .unwrap()
             .iter()
             .filter_map(|clip| {
                 let first_pixel = (clip

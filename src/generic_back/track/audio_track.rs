@@ -7,7 +7,7 @@ use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 #[derive(Debug)]
 pub struct AudioTrack {
     /// these are all guaranteed to be `TrackClip::Audio`
-    pub clips: RwLock<Vec<Arc<TrackClip>>>,
+    pub clips: Arc<RwLock<Vec<Arc<TrackClip>>>>,
     /// between 0.0 and 1.0
     pub volume: AtomicF32,
     /// between -1.0 (left) and 1.0 (right)
@@ -18,7 +18,7 @@ pub struct AudioTrack {
 impl AudioTrack {
     pub fn create(arrangement: Arc<Arrangement>) -> Track {
         Track::Audio(Self {
-            clips: RwLock::default(),
+            clips: Arc::new(RwLock::default()),
             volume: AtomicF32::new(1.0),
             pan: AtomicF32::new(0.0),
             arrangement,

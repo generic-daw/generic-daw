@@ -15,7 +15,7 @@ use std::sync::{
 #[derive(Debug)]
 pub struct MidiTrack {
     /// these are all guaranteed to be `TrackClip::Midi`
-    pub clips: RwLock<Vec<Arc<TrackClip>>>,
+    pub clips: Arc<RwLock<Vec<Arc<TrackClip>>>>,
     /// between 0.0 and 1.0
     pub volume: AtomicF32,
     /// between -1.0 (left) and 1.0 (right)
@@ -32,7 +32,7 @@ impl MidiTrack {
         arrangement: Arc<Arrangement>,
     ) -> Track {
         Track::Midi(Self {
-            clips: RwLock::default(),
+            clips: Arc::new(RwLock::default()),
             volume: AtomicF32::new(1.0),
             pan: AtomicF32::new(0.0),
             plugin_state: PluginState::create(plugin_sender, host_receiver),
