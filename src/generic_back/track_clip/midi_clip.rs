@@ -15,7 +15,7 @@ use std::{
 
 #[derive(Debug)]
 pub struct MidiClip {
-    pub pattern: MidiPattern,
+    pub pattern: Arc<MidiPattern>,
     /// the start of the clip relative to the start of the arrangement
     global_start: RwLock<Position>,
     /// the end of the clip relative to the start of the arrangement
@@ -25,8 +25,20 @@ pub struct MidiClip {
     pub arrangement: Arc<Arrangement>,
 }
 
+impl Clone for MidiClip {
+    fn clone(&self) -> Self {
+        Self {
+            pattern: self.pattern.clone(),
+            global_start: RwLock::new(*self.global_start.read().unwrap()),
+            global_end: RwLock::new(*self.global_end.read().unwrap()),
+            pattern_start: RwLock::new(*self.pattern_start.read().unwrap()),
+            arrangement: self.arrangement.clone(),
+        }
+    }
+}
+
 impl MidiClip {
-    pub fn create(pattern: MidiPattern, arrangement: Arc<Arrangement>) -> Arc<TrackClip> {
+    pub fn create(pattern: Arc<MidiPattern>, arrangement: Arc<Arrangement>) -> Arc<TrackClip> {
         let len = pattern.len();
         Arc::new(TrackClip::Midi(Self {
             pattern,

@@ -100,9 +100,55 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
 
         state.interaction = self.interaction(cursor, bounds, state);
 
-        if event == Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) {
-            state.action = Action::None;
-            return Status::Captured;
+        if let Event::Mouse(event) = event {
+            match event {
+                mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                    state.action = Action::None;
+                    return Status::Captured;
+                }
+                mouse::Event::CursorMoved { .. } => match &state.action {
+                    Action::DraggingPlayhead => {
+                        let position = cursor.position_in(bounds).unwrap();
+                        let mut time =
+                            position.x.mul_add(state.scale.x.exp2(), state.position.x) as u32;
+                        if !state.modifiers.alt() {
+                            time = Position::from_interleaved_samples(time, &self.meter)
+                                .snap(state.scale.x)
+                                .in_interleaved_samples(&self.meter);
+                        }
+                        self.meter.global_time.store(time, SeqCst);
+                        return Status::Captured;
+                    }
+                    Action::DraggingClip(clip, index, start_pos) => {
+                        let position = cursor.position_in(bounds).unwrap();
+                        let time = (position.x + start_pos)
+                            .mul_add(state.scale.x.exp2(), state.position.x)
+                            + start_pos;
+                        let mut new_position =
+                            Position::from_interleaved_samples(time as u32, &self.meter);
+                        if !state.modifiers.alt() {
+                            new_position = new_position.snap(state.scale.x);
+                        }
+                        if new_position != clip.get_global_start() {
+                            clip.move_to(new_position);
+                            state.waveform_cache.borrow_mut().clear();
+                        }
+                        let new_index = ((position.y - 16.0) / state.scale.y) as usize;
+                        if index != &new_index
+                            && new_index < self.tracks.read().unwrap().len()
+                            && self.tracks.read().unwrap()[new_index].try_push(clip)
+                        {
+                            self.tracks.read().unwrap()[*index].remove_clip(clip);
+                            state.waveform_cache.borrow_mut().clear();
+                            state.action =
+                                Action::DraggingClip(clip.clone(), new_index, *start_pos);
+                        }
+                        return Status::Captured;
+                    }
+                    Action::None => {}
+                },
+                _ => {}
+            }
         }
 
         match (
@@ -161,64 +207,55 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                                 state.interaction = Interaction::Grabbing;
                                 return Status::Captured;
                             }
-                            return Status::Ignored;
                         }
-                        mouse::Event::CursorMoved { .. } => match &state.action {
-                            Action::DraggingPlayhead => {
-                                let position = cursor.position_in(bounds).unwrap();
-                                let time = Position::from_interleaved_samples(
-                                    position.x.mul_add(state.scale.x.exp2(), state.position.x)
-                                        as u32,
-                                    &self.meter,
-                                )
-                                .snap(state.scale.x)
-                                .in_interleaved_samples(&self.meter);
-                                self.meter.global_time.store(time, SeqCst);
-                                return Status::Captured;
-                            }
-                            Action::DraggingClip(clip, index, start_pos) => {
-                                let position = cursor.position_in(bounds).unwrap();
-                                let time = (position.x + start_pos)
-                                    .mul_add(state.scale.x.exp2(), state.position.x)
-                                    + start_pos;
-                                let new_position =
-                                    Position::from_interleaved_samples(time as u32, &self.meter)
-                                        .snap(state.scale.x);
-                                if new_position != clip.get_global_start() {
-                                    clip.move_to(new_position);
-                                    state.waveform_cache.borrow_mut().clear();
-                                }
-                                let new_index = ((position.y - 16.0) / state.scale.y) as usize;
-                                if index != &new_index
-                                    && new_index < self.tracks.read().unwrap().len()
-                                    && self.tracks.read().unwrap()[new_index].try_push(clip)
-                                {
-                                    self.tracks.read().unwrap()[*index].remove_clip(clip);
-                                    state.waveform_cache.borrow_mut().clear();
-                                    state.action =
-                                        Action::DraggingClip(clip.clone(), new_index, *start_pos);
-                                }
-                                return Status::Captured;
-                            }
-                            Action::None => {}
-                        },
                         _ => {}
                     }
                 }
             }
             (true, false, false) => {
-                if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = event {
-                    let x = match delta {
-                        ScrollDelta::Pixels { x: _, y } => -y * 0.01,
-                        ScrollDelta::Lines { x: _, y } => -y * 0.5,
-                    };
+                if let Event::Mouse(event) = event {
+                    match event {
+                        mouse::Event::WheelScrolled { delta } => {
+                            let x = match delta {
+                                ScrollDelta::Pixels { x: _, y } => -y * 0.01,
+                                ScrollDelta::Lines { x: _, y } => -y * 0.5,
+                            };
 
-                    let x = (x + state.scale.x).clamp(3.0, 12.999_999);
+                            let x = (x + state.scale.x).clamp(3.0, 12.999_999);
 
-                    state.scale.x = x;
-                    state.waveform_cache.borrow_mut().clear();
-                    state.grid_cache.clear();
-                    return Status::Captured;
+                            state.scale.x = x;
+                            state.waveform_cache.borrow_mut().clear();
+                            state.grid_cache.clear();
+                            return Status::Captured;
+                        }
+                        mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                            let position = cursor.position_in(bounds).unwrap();
+                            if position.y < 16.0 {
+                                return Status::Ignored;
+                            }
+                            let index = ((position.y - 16.0) / state.scale.y) as usize;
+                            if index >= self.tracks.read().unwrap().len() {
+                                return Status::Ignored;
+                            }
+                            let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
+                                position.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
+                            );
+                            if let Some(clip) = clip {
+                                let clip = Arc::new((*clip).clone());
+                                self.tracks.read().unwrap()[index].try_push(&clip);
+                                let start_pos =
+                                    (clip.get_global_start().in_interleaved_samples(&self.meter)
+                                        as f32
+                                        - state.position.x)
+                                        / state.scale.x.exp2()
+                                        - position.x;
+                                state.action = Action::DraggingClip(clip, index, start_pos);
+                                state.interaction = Interaction::Grabbing;
+                                return Status::Captured;
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
             (false, true, false) => {
@@ -282,42 +319,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                                 state.interaction = Interaction::Grabbing;
                                 return Status::Captured;
                             }
-                            return Status::Ignored;
                         }
-                        mouse::Event::CursorMoved { .. } => match &state.action {
-                            Action::DraggingPlayhead => {
-                                let position = cursor.position_in(bounds).unwrap();
-                                let time =
-                                    position.x.mul_add(state.scale.x.exp2(), state.position.x)
-                                        as u32;
-                                self.meter.global_time.store(time, SeqCst);
-                                return Status::Captured;
-                            }
-                            Action::DraggingClip(clip, index, start_pos) => {
-                                let position = cursor.position_in(bounds).unwrap();
-                                let time = (position.x + start_pos)
-                                    .mul_add(state.scale.x.exp2(), state.position.x)
-                                    + start_pos;
-                                let new_position =
-                                    Position::from_interleaved_samples(time as u32, &self.meter);
-                                if new_position != clip.get_global_start() {
-                                    clip.move_to(new_position);
-                                    state.waveform_cache.borrow_mut().clear();
-                                }
-                                let new_index = ((position.y - 16.0) / state.scale.y) as usize;
-                                if index != &new_index
-                                    && new_index < self.tracks.read().unwrap().len()
-                                    && self.tracks.read().unwrap()[new_index].try_push(clip)
-                                {
-                                    self.tracks.read().unwrap()[*index].remove_clip(clip);
-                                    state.waveform_cache.borrow_mut().clear();
-                                    state.action =
-                                        Action::DraggingClip(clip.clone(), new_index, *start_pos);
-                                }
-                                return Status::Captured;
-                            }
-                            Action::None => {}
-                        },
                         _ => {}
                     }
                 }

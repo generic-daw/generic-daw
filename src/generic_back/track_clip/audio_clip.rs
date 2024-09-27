@@ -19,6 +19,18 @@ pub struct AudioClip {
     pub arrangement: Arc<Arrangement>,
 }
 
+impl Clone for AudioClip {
+    fn clone(&self) -> Self {
+        Self {
+            audio: self.audio.clone(),
+            global_start: RwLock::new(*self.global_start.read().unwrap()),
+            global_end: RwLock::new(*self.global_end.read().unwrap()),
+            clip_start: RwLock::new(*self.clip_start.read().unwrap()),
+            arrangement: self.arrangement.clone(),
+        }
+    }
+}
+
 impl AudioClip {
     pub fn create(audio: Arc<InterleavedAudio>, arrangement: Arc<Arrangement>) -> Arc<TrackClip> {
         let samples = u32::try_from(audio.samples.len()).unwrap();
