@@ -179,35 +179,63 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                             state.grid_cache.clear();
                             return Status::Captured;
                         }
-                        mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                            let position = cursor.position_in(bounds).unwrap();
-                            if position.y < 16.0 {
-                                let time =
-                                    position.x.mul_add(state.scale.x.exp2(), state.position.x);
-                                self.meter.global_time.store(time as u32, SeqCst);
-                                state.action = Action::DraggingPlayhead;
-                                state.interaction = Interaction::ResizingHorizontally;
-                                return Status::Captured;
-                            }
-                            let index = ((position.y - 16.0) / state.scale.y) as usize;
-                            if index >= self.tracks.read().unwrap().len() {
-                                return Status::Ignored;
-                            }
-                            let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
-                                position.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
-                            );
-                            if let Some(clip) = clip {
-                                let start_pos =
-                                    (clip.get_global_start().in_interleaved_samples(&self.meter)
+                        mouse::Event::ButtonPressed(button) => match button {
+                            mouse::Button::Left => {
+                                let position = cursor.position_in(bounds).unwrap();
+                                if position.y < 16.0 {
+                                    let time =
+                                        position.x.mul_add(state.scale.x.exp2(), state.position.x);
+                                    self.meter.global_time.store(time as u32, SeqCst);
+                                    state.action = Action::DraggingPlayhead;
+                                    state.interaction = Interaction::ResizingHorizontally;
+                                    return Status::Captured;
+                                }
+                                let index = ((position.y - 16.0) / state.scale.y) as usize;
+                                if index >= self.tracks.read().unwrap().len() {
+                                    return Status::Ignored;
+                                }
+                                let clip = self.tracks.read().unwrap()[index]
+                                    .get_clip_at_global_time(
+                                        position.x.mul_add(state.scale.x.exp2(), state.position.x)
+                                            as u32,
+                                    );
+                                if let Some(clip) = clip {
+                                    let start_pos = (clip
+                                        .get_global_start()
+                                        .in_interleaved_samples(&self.meter)
                                         as f32
                                         - state.position.x)
                                         / state.scale.x.exp2()
                                         - position.x;
-                                state.action = Action::DraggingClip(clip, index, start_pos);
-                                state.interaction = Interaction::Grabbing;
-                                return Status::Captured;
+                                    state.action = Action::DraggingClip(clip, index, start_pos);
+                                    state.interaction = Interaction::Grabbing;
+                                    return Status::Captured;
+                                }
                             }
-                        }
+                            mouse::Button::Right => {
+                                let position = cursor.position_in(bounds).unwrap();
+                                if position.y < 16.0 {
+                                    return Status::Ignored;
+                                }
+                                let index = ((position.y - 16.0) / state.scale.y) as usize;
+                                if index >= self.tracks.read().unwrap().len() {
+                                    return Status::Ignored;
+                                }
+                                let clip = self.tracks.read().unwrap()[index]
+                                    .get_clip_at_global_time(
+                                        position.x.mul_add(state.scale.x.exp2(), state.position.x)
+                                            as u32,
+                                    );
+                                if let Some(clip) = clip {
+                                    self.tracks.read().unwrap()[index].remove_clip(&clip);
+                                    state.waveform_cache.borrow_mut().clear();
+                                    state.action = Action::None;
+                                    state.interaction = Interaction::default();
+                                    return Status::Captured;
+                                }
+                            }
+                            _ => {}
+                        },
                         _ => {}
                     }
                 }
