@@ -54,14 +54,14 @@ impl Track {
                     .clips
                     .write()
                     .unwrap()
-                    .retain(|c| Arc::as_ptr(c) != Arc::as_ptr(clip));
+                    .retain(|c| !Arc::ptr_eq(c, clip));
             }
             Self::Midi(track) => {
                 track
                     .clips
                     .write()
                     .unwrap()
-                    .retain(|c| Arc::as_ptr(c) != Arc::as_ptr(clip));
+                    .retain(|c| !Arc::ptr_eq(c, clip));
             }
         }
     }
