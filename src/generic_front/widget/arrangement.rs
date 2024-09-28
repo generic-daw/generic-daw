@@ -483,9 +483,9 @@ impl Arrangement {
         );
 
         while beat <= end_beat {
-            let bar = beat.quarter_note / u16::from(numerator);
+            let bar = beat.quarter_note / numerator as u16;
             let color = if state.scale.x > 11f32 {
-                if beat.quarter_note % u16::from(numerator) == 0 {
+                if beat.quarter_note % numerator as u16 == 0 {
                     if bar % 4 == 0 {
                         theme.extended_palette().secondary.strong.color
                     } else {
@@ -495,7 +495,7 @@ impl Arrangement {
                     beat.quarter_note += 1;
                     continue;
                 }
-            } else if beat.quarter_note % u16::from(numerator) == 0 {
+            } else if beat.quarter_note % numerator as u16 == 0 {
                 theme.extended_palette().secondary.strong.color
             } else {
                 theme.extended_palette().secondary.weak.color
@@ -522,7 +522,7 @@ impl Arrangement {
                     };
                     frame.fill_text(bar);
                 }
-            } else if beat.quarter_note % u16::from(numerator) == 0 {
+            } else if beat.quarter_note % numerator as u16 == 0 {
                 let bar = Text {
                     content: format!("{}", bar + 1),
                     position: Point::new(x + 2.0, 2.0),

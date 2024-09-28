@@ -1,18 +1,65 @@
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, Ordering::SeqCst};
+use atomic_enum::atomic_enum;
+use std::{
+    fmt::Display,
+    sync::atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering::SeqCst},
+};
+use strum::VariantArray;
+
+#[atomic_enum]
+#[derive(Default, VariantArray, Eq, PartialEq)]
+pub enum Numerator {
+    _1 = 1,
+    _2 = 2,
+    _3 = 3,
+    #[default]
+    _4 = 4,
+    _5 = 5,
+    _6 = 6,
+    _7 = 7,
+    _8 = 8,
+    _9 = 9,
+    _10 = 10,
+    _11 = 11,
+    _12 = 12,
+    _13 = 13,
+    _14 = 14,
+    _15 = 15,
+    _16 = 16,
+}
+
+impl Display for Numerator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", *self as u16)
+    }
+}
+
+#[atomic_enum]
+#[derive(Default, VariantArray, Eq, PartialEq)]
+pub enum Denominator {
+    _2 = 2,
+    #[default]
+    _4 = 4,
+    _8 = 8,
+    _16 = 16,
+}
+
+impl Display for Denominator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", *self as u16)
+    }
+}
 
 #[derive(Debug)]
 pub struct Meter {
     /// BPM of the arrangement, between 30 and 600
     pub bpm: AtomicU16,
-    // numerator of the time signature, between 1 and 255
-    pub numerator: AtomicU8,
-    /// log2 of the denominator of the time signature, between 0 and 7
-    ///
-    /// get the actual denominator with `1 << denominator`
-    pub denominator: AtomicU8,
+    /// numerator of the time signature
+    pub numerator: AtomicNumerator,
+    /// denominator of the time signature
+    pub denominator: AtomicDenominator,
     /// sample rate of the output stream
     ///
-    /// typical values: 44100, 48000, 88200, 96000, 176400, 192000
+    /// typical values: 32000, 44100, 48000, 88200, 96000, 176400, 192000
     pub sample_rate: AtomicU32,
     /// whether the arrangement is currently being played back
     pub playing: AtomicBool,
@@ -28,8 +75,8 @@ impl Default for Meter {
     fn default() -> Self {
         Self {
             bpm: AtomicU16::new(140),
-            numerator: AtomicU8::new(4),
-            denominator: AtomicU8::new(2),
+            numerator: AtomicNumerator::new(Numerator::default()),
+            denominator: AtomicDenominator::new(Denominator::default()),
             sample_rate: AtomicU32::default(),
             playing: AtomicBool::default(),
             exporting: AtomicBool::default(),
@@ -41,7 +88,7 @@ impl Default for Meter {
 impl Meter {
     pub fn reset(&self) {
         self.bpm.store(140, SeqCst);
-        self.numerator.store(4, SeqCst);
-        self.denominator.store(2, SeqCst);
+        self.numerator.store(Numerator::default(), SeqCst);
+        self.denominator.store(Denominator::default(), SeqCst);
     }
 }

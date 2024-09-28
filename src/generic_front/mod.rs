@@ -1,4 +1,6 @@
 mod timeline_position;
+use iced_fonts::{bootstrap, BOOTSTRAP_FONT};
+use strum::VariantArray;
 pub(in crate::generic_front) use timeline_position::TimelinePosition;
 
 mod timeline_scale;
@@ -11,13 +13,14 @@ mod widget;
 pub(in crate::generic_front) use widget::ArrangementState;
 
 use crate::generic_back::{
-    build_output_stream, Arrangement, AudioClip, AudioTrack, InterleavedAudio,
+    build_output_stream, Arrangement, AudioClip, AudioTrack, Denominator, InterleavedAudio,
+    Numerator,
 };
 use iced::{
     border::Radius,
     event::{self, Status},
     keyboard,
-    widget::{button, column, container, row},
+    widget::{button, column, container, pick_list, row, Text},
     window::frames,
     Alignment::Center,
     Element, Event, Subscription, Theme,
@@ -40,8 +43,8 @@ pub enum Message {
     New,
     Export,
     BpmChanged(u16),
-    NumeratorChanged(u8),
-    DenominatorChanged(u8),
+    NumeratorChanged(Numerator),
+    DenominatorChanged(Denominator),
     Tick,
 }
 
@@ -107,15 +110,10 @@ impl Daw {
                     .store(new_numerator, SeqCst);
             }
             Message::DenominatorChanged(new_denominator) => {
-                let old_denominator = self.arrangement.meter.denominator.load(SeqCst);
-                let c = u8::from(
-                    (1 << old_denominator) < new_denominator
-                        && !(old_denominator == 0 && new_denominator == 2),
-                ) + 7;
-                self.arrangement.meter.denominator.store(
-                    c - u8::try_from(new_denominator.leading_zeros()).unwrap(),
-                    SeqCst,
-                );
+                self.arrangement
+                    .meter
+                    .denominator
+                    .store(new_denominator, SeqCst);
             }
             Message::Tick => {}
         }
@@ -123,35 +121,51 @@ impl Daw {
 
     pub fn view(&self) -> Element<'_, Message> {
         let controls = row![
-            button("Load Sample").on_press(Message::LoadSample),
-            button(if self.arrangement.meter.playing.load(SeqCst) {
-                "Pause"
-            } else {
-                "Play"
-            })
-            .on_press(Message::TogglePlay),
-            button("Stop").on_press(Message::Stop),
-            button("Export").on_press(Message::Export),
-            button("New").on_press(Message::New),
-            number_input(
-                self.arrangement.meter.numerator.load(SeqCst),
-                1..=255,
-                Message::NumeratorChanged
-            )
-            .ignore_buttons(true),
-            number_input(
-                1 << self.arrangement.meter.denominator.load(SeqCst),
-                1..=128,
-                Message::DenominatorChanged
-            )
-            .ignore_buttons(true),
+            row![
+                button("Load Sample").on_press(Message::LoadSample),
+                button("Export").on_press(Message::Export),
+                button("New").on_press(Message::New),
+            ],
+            row![
+                button(
+                    Text::new(bootstrap::icon_to_string(
+                        if self.arrangement.meter.playing.load(SeqCst) {
+                            bootstrap::Bootstrap::PauseFill
+                        } else {
+                            bootstrap::Bootstrap::PlayFill
+                        }
+                    ))
+                    .font(BOOTSTRAP_FONT)
+                )
+                .on_press(Message::TogglePlay),
+                button(
+                    Text::new(bootstrap::icon_to_string(bootstrap::Bootstrap::StopFill))
+                        .font(BOOTSTRAP_FONT)
+                )
+                .on_press(Message::Stop),
+            ],
+            row![
+                pick_list(
+                    Numerator::VARIANTS,
+                    Some(self.arrangement.meter.numerator.load(SeqCst)),
+                    Message::NumeratorChanged
+                )
+                .width(50),
+                pick_list(
+                    Denominator::VARIANTS,
+                    Some(self.arrangement.meter.denominator.load(SeqCst)),
+                    Message::DenominatorChanged
+                )
+                .width(50),
+            ],
             number_input(
                 self.arrangement.meter.bpm.load(SeqCst),
-                1..=65535,
+                30..=600,
                 Message::BpmChanged
             )
-            .ignore_buttons(true)
+            .width(50)
         ]
+        .spacing(20)
         .align_y(Center);
 
         let content = column![
@@ -167,7 +181,6 @@ impl Daw {
                     ..container::Style::default()
                 })
             ]
-            .spacing(20)
         ]
         .padding(20)
         .spacing(20);

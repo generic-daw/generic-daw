@@ -2,7 +2,7 @@ mod arrangement;
 pub use arrangement::Arrangement;
 
 mod meter;
-pub use meter::Meter;
+pub use meter::{Denominator, Meter, Numerator};
 
 mod position;
 pub use position::Position;

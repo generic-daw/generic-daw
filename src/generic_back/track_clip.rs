@@ -7,7 +7,7 @@ pub use midi_clip::{AtomicDirtyEvent, DirtyEvent, MidiClip, MidiNote};
 use crate::generic_back::Position;
 use std::sync::Arc;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub enum TrackClip {
     Audio(AudioClip),
     Midi(MidiClip),
