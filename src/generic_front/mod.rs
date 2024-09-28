@@ -67,9 +67,9 @@ impl Daw {
                 self.track_panel.update(&msg);
             }
             Message::LoadSample => {
-                if let Some(paths) = FileDialog::new().pick_files() {
-                    let arrangement = self.arrangement.clone();
-                    std::thread::spawn(move || {
+                let arrangement = self.arrangement.clone();
+                std::thread::spawn(move || {
+                    if let Some(paths) = FileDialog::new().pick_files() {
                         for path in paths {
                             let audio_file = InterleavedAudio::create(&path, &arrangement);
                             if let Ok(audio_file) = audio_file {
@@ -78,8 +78,8 @@ impl Daw {
                                 arrangement.tracks.write().unwrap().push(track);
                             }
                         }
-                    });
-                }
+                    }
+                });
             }
             Message::TogglePlay => {
                 self.arrangement.meter.playing.fetch_not(SeqCst);
