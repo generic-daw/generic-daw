@@ -63,25 +63,27 @@ impl TrackClip {
             wrapping: Wrapping::default(),
         };
 
-        renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
-            renderer.fill_quad(
-                clip_background,
-                theme
-                    .extended_palette()
-                    .primary
-                    .weak
-                    .color
-                    .scale_alpha(0.25),
-            );
+        renderer.with_layer(bounds, |renderer| {
+            renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
+                renderer.fill_quad(
+                    clip_background,
+                    theme
+                        .extended_palette()
+                        .primary
+                        .weak
+                        .color
+                        .scale_alpha(0.25),
+                );
 
-            renderer.fill_quad(text_background, theme.extended_palette().primary.weak.color);
+                renderer.fill_quad(text_background, theme.extended_palette().primary.weak.color);
 
-            renderer.fill_text(
-                text,
-                Point::new(2.0, 2.0),
-                theme.extended_palette().secondary.base.text,
-                clip_bounds,
-            );
+                renderer.fill_text(
+                    text,
+                    Point::new(2.0, 2.0),
+                    theme.extended_palette().secondary.base.text,
+                    clip_bounds,
+                );
+            });
         });
     }
 

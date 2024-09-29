@@ -178,13 +178,33 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
             bounds.y += 16.0;
             bounds.height -= 16.0;
 
-            renderer.with_layer(bounds, |renderer| {
-                self.tracks
+            self.tracks
+                .read()
+                .unwrap()
+                .iter()
+                .enumerate()
+                .for_each(|(i, track)| {
+                    let track_bounds = Rectangle::new(
+                        Point::new(
+                            bounds.x,
+                            ((i as f32) - state.position.y).mul_add(state.scale.y, bounds.y),
+                        ),
+                        Size::new(bounds.width, state.scale.y),
+                    );
+                    if track_bounds.intersects(&bounds) {
+                        track.draw(renderer, theme, track_bounds, bounds, state);
+                    }
+                });
+
+            let is_empty = state.waveform_cache.borrow().is_empty();
+            if is_empty {
+                *state.waveform_cache.borrow_mut() = self
+                    .tracks
                     .read()
                     .unwrap()
                     .iter()
                     .enumerate()
-                    .for_each(|(i, track)| {
+                    .flat_map(|(i, track)| {
                         let track_bounds = Rectangle::new(
                             Point::new(
                                 bounds.x,
@@ -193,36 +213,15 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                             Size::new(bounds.width, state.scale.y),
                         );
                         if track_bounds.intersects(&bounds) {
-                            track.draw(renderer, theme, track_bounds, bounds, state);
+                            track.meshes(theme, track_bounds, bounds, state)
+                        } else {
+                            Vec::new()
                         }
-                    });
+                    })
+                    .collect();
+            }
 
-                let is_empty = state.waveform_cache.borrow().is_empty();
-                if is_empty {
-                    *state.waveform_cache.borrow_mut() = self
-                        .tracks
-                        .read()
-                        .unwrap()
-                        .iter()
-                        .enumerate()
-                        .flat_map(|(i, track)| {
-                            let track_bounds = Rectangle::new(
-                                Point::new(
-                                    bounds.x,
-                                    ((i as f32) - state.position.y)
-                                        .mul_add(state.scale.y, bounds.y),
-                                ),
-                                Size::new(bounds.width, state.scale.y),
-                            );
-                            if track_bounds.intersects(&bounds) {
-                                track.meshes(theme, track_bounds, bounds, state)
-                            } else {
-                                Vec::new()
-                            }
-                        })
-                        .collect();
-                }
-
+            renderer.with_layer(bounds, |renderer| {
                 state.waveform_cache.borrow().iter().for_each(|mesh| {
                     renderer.draw_mesh(mesh.to_owned());
                 });

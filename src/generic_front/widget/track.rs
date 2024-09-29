@@ -97,7 +97,7 @@ impl Track {
             Self::Midi(track) => track.arrangement.clone(),
         };
 
-        self.clips().read().unwrap().iter().find_map(|clip| {
+        self.clips().read().unwrap().iter().rev().find_map(|clip| {
             if clip
                 .get_global_start()
                 .in_interleaved_samples(&arrangement.meter)
