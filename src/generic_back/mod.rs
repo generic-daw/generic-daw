@@ -18,6 +18,7 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     StreamConfig,
 };
+use no_denormals::no_denormals;
 use std::{
     f32::consts::PI,
     sync::{atomic::Ordering::SeqCst, Arc},
@@ -35,16 +36,18 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) {
         .build_output_stream(
             config,
             move |data, _| {
-                for sample in data.iter_mut() {
-                    *sample =
-                        arrangement.get_at_global_time(arrangement.meter.global_time.load(SeqCst));
+                no_denormals(|| {
+                    for sample in data.iter_mut() {
+                        *sample = arrangement
+                            .get_at_global_time(arrangement.meter.global_time.load(SeqCst));
 
-                    if arrangement.meter.playing.load(SeqCst)
-                        && !arrangement.meter.exporting.load(SeqCst)
-                    {
-                        arrangement.meter.global_time.fetch_add(1, SeqCst);
+                        if arrangement.meter.playing.load(SeqCst)
+                            && !arrangement.meter.exporting.load(SeqCst)
+                        {
+                            arrangement.meter.global_time.fetch_add(1, SeqCst);
+                        }
                     }
-                }
+                });
             },
             move |err| panic!("{}", err),
             None,

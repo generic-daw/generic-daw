@@ -1,2 +1,2 @@
 [build]
-rustflags = ["-Cforce-frame-pointers=yes", "-Clink-arg=-fuse-ld=lld"]
+rustflags = ["-Clink-arg=-fuse-ld=lld"]
