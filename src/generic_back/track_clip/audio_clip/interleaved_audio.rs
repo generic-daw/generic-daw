@@ -121,6 +121,7 @@ impl InterleavedAudio {
 
         let resample_ratio = f64::from(stream_sample_rate) / f64::from(file_sample_rate);
 
+        let frames = interleaved_samples.len() / 2;
         let mut resampler = SincFixedIn::<f32>::new(
             resample_ratio,
             1.0,
@@ -134,27 +135,34 @@ impl InterleavedAudio {
                 .unwrap(),
                 window: WindowFunction::Blackman,
             },
-            interleaved_samples.len() / 2,
+            frames,
             2,
         )
         .unwrap();
 
-        let deinterleaved_samples: Vec<Vec<f32>> = vec![
-            interleaved_samples.iter().step_by(2).copied().collect(),
-            interleaved_samples
-                .iter()
-                .skip(1)
-                .step_by(2)
-                .copied()
-                .collect(),
-        ];
-        interleaved_samples.clear();
+        let mut left = Vec::with_capacity(frames);
+        let mut right = Vec::with_capacity(frames);
+        interleaved_samples
+            .iter()
+            .enumerate()
+            .for_each(|(i, &sample)| {
+                if i % 2 == 0 {
+                    left.push(sample);
+                } else {
+                    right.push(sample);
+                }
+            });
 
-        let deinterleaved_samples = resampler.process(&deinterleaved_samples, None).unwrap();
-        interleaved_samples.reserve_exact(deinterleaved_samples[0].len() * 2);
-        for i in 0..deinterleaved_samples[0].len() {
-            interleaved_samples.push(deinterleaved_samples[0][i]);
-            interleaved_samples.push(deinterleaved_samples[1][i]);
+        let deinterleaved_samples = resampler.process(&[left, right], None).unwrap();
+
+        let frames = deinterleaved_samples[0].len();
+        interleaved_samples.clear();
+        interleaved_samples.reserve_exact(frames * 2);
+        let left = &deinterleaved_samples[0];
+        let right = &deinterleaved_samples[1];
+        for i in 0..frames {
+            interleaved_samples.push(left[i]);
+            interleaved_samples.push(right[i]);
         }
 
         Ok(interleaved_samples)
