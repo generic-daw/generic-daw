@@ -4,7 +4,7 @@ use crate::{
 };
 use iced::{
     advanced::{
-        graphics::{geometry::Renderer as _, mesh::Renderer as _, Mesh},
+        graphics::geometry::Renderer as _,
         layout::{Layout, Limits, Node},
         renderer::Style,
         widget::{tree, Tree, Widget},
@@ -13,9 +13,10 @@ use iced::{
     event::Status,
     keyboard::{self, Modifiers},
     mouse::{self, Cursor, Interaction, ScrollDelta},
-    widget::canvas::{Cache, Frame, Path, Stroke, Text},
+    widget::canvas::{Cache as CanvasCache, Frame, Group, Path, Stroke, Text},
     window, Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme,
 };
+use iced_wgpu::{geometry::Cache, graphics::cache::Cached, Geometry};
 use std::{
     cell::RefCell,
     sync::{atomic::Ordering::SeqCst, Arc},
@@ -30,7 +31,7 @@ enum Action {
     DeletingClips,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct State {
     /// information about the position of the timeline viewport
     pub position: TimelinePosition,
@@ -41,13 +42,32 @@ pub struct State {
     /// saves the number of tracks in the arrangement from the last draw
     tracks: RefCell<usize>,
     /// caches the meshes of the waveforms
-    waveform_cache: RefCell<Vec<Mesh>>,
+    waveform_cache: RefCell<Cache>,
     /// caches the geometry of the grid
-    grid_cache: Cache,
+    grid_cache: CanvasCache,
     /// the current modifiers
     modifiers: Modifiers,
     /// the current action
     action: Action,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            position: TimelinePosition::default(),
+            scale: TimelineScale::default(),
+            interaction: Interaction::default(),
+            tracks: RefCell::default(),
+            waveform_cache: RefCell::new(Cache {
+                meshes: None,
+                images: None,
+                text: None,
+            }),
+            grid_cache: CanvasCache::default(),
+            modifiers: Modifiers::default(),
+            action: Action::default(),
+        }
+    }
 }
 
 impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
@@ -86,7 +106,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
         }
 
         if let Event::Window(window::Event::Resized { .. }) = event {
-            state.waveform_cache.borrow_mut().clear();
+            state.waveform_cache.borrow_mut().meshes = None;
             return Status::Ignored;
         }
 
@@ -161,7 +181,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
 
         if self.tracks.read().unwrap().len() != *state.tracks.borrow() {
             state.grid_cache.clear();
-            state.waveform_cache.borrow_mut().clear();
+            state.waveform_cache.borrow_mut().meshes = None;
             *state.tracks.borrow_mut() = self.tracks.read().unwrap().len();
         }
 
@@ -196,9 +216,9 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                     }
                 });
 
-            let is_empty = state.waveform_cache.borrow().is_empty();
+            let is_empty = state.waveform_cache.borrow().meshes.is_none();
             if is_empty {
-                *state.waveform_cache.borrow_mut() = self
+                let meshes = self
                     .tracks
                     .read()
                     .unwrap()
@@ -219,12 +239,17 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
                         }
                     })
                     .collect();
+
+                *state.waveform_cache.borrow_mut() = Geometry::Live {
+                    meshes,
+                    images: Vec::new(),
+                    text: Vec::new(),
+                }
+                .cache(Group::unique(), None);
             }
 
             renderer.with_layer(bounds, |renderer| {
-                state.waveform_cache.borrow().iter().for_each(|mesh| {
-                    renderer.draw_mesh(mesh.to_owned());
-                });
+                renderer.draw_geometry(Geometry::load(&*state.waveform_cache.borrow()));
             });
         }
 
@@ -425,7 +450,7 @@ impl Arrangement {
                         }
                         if new_position != clip.get_global_start() {
                             clip.move_to(new_position);
-                            state.waveform_cache.borrow_mut().clear();
+                            state.waveform_cache.borrow_mut().meshes = None;
                         }
                         let new_index = ((position.y - 16.0) / state.scale.y) as usize;
                         if index != &new_index
@@ -434,7 +459,7 @@ impl Arrangement {
                         {
                             self.tracks.read().unwrap()[*index].remove_clip(clip);
 
-                            state.waveform_cache.borrow_mut().clear();
+                            state.waveform_cache.borrow_mut().meshes = None;
                             state.action =
                                 Action::DraggingClip(clip.clone(), new_index, *start_pos);
                         }
@@ -453,7 +478,7 @@ impl Arrangement {
                                 if let Some(clip) = clip {
                                     self.tracks.read().unwrap()[index].remove_clip(&clip);
 
-                                    state.waveform_cache.borrow_mut().clear();
+                                    state.waveform_cache.borrow_mut().meshes = None;
                                     state.interaction = Interaction::default();
 
                                     return Some(Status::Captured);
@@ -494,7 +519,7 @@ impl Arrangement {
 
                     state.position.x = x;
                     state.position.y = y;
-                    state.waveform_cache.borrow_mut().clear();
+                    state.waveform_cache.borrow_mut().meshes = None;
                     state.grid_cache.clear();
 
                     return Some(Status::Captured);
@@ -545,7 +570,7 @@ impl Arrangement {
                                 if let Some(clip) = clip {
                                     self.tracks.read().unwrap()[index].remove_clip(&clip);
 
-                                    state.waveform_cache.borrow_mut().clear();
+                                    state.waveform_cache.borrow_mut().meshes = None;
                                     state.action = Action::DeletingClips;
                                     state.interaction = Interaction::default();
 
@@ -580,7 +605,7 @@ impl Arrangement {
                     let x = (x + state.scale.x).clamp(3.0, 12.999_999);
 
                     state.scale.x = x;
-                    state.waveform_cache.borrow_mut().clear();
+                    state.waveform_cache.borrow_mut().meshes = None;
                     state.grid_cache.clear();
 
                     return Some(Status::Captured);
@@ -636,7 +661,7 @@ impl Arrangement {
                 .clamp(0.0, self.len().in_interleaved_samples(&self.meter) as f32);
 
             state.position.x = x;
-            state.waveform_cache.borrow_mut().clear();
+            state.waveform_cache.borrow_mut().meshes = None;
             state.grid_cache.clear();
             return Some(Status::Captured);
         }
@@ -661,7 +686,7 @@ impl Arrangement {
                     let y = (y + state.scale.y).clamp(36.0, 200.0);
 
                     state.scale.y = y;
-                    state.waveform_cache.borrow_mut().clear();
+                    state.waveform_cache.borrow_mut().meshes = None;
                     state.grid_cache.clear();
                     return Some(Status::Captured);
                 }

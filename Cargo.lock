@@ -1426,6 +1426,7 @@ dependencies = [
  "iced",
  "iced_aw",
  "iced_fonts",
+ "iced_wgpu",
  "itertools",
  "no_denormals",
  "rfd",
