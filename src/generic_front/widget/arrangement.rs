@@ -18,7 +18,7 @@ use iced::{
 };
 use iced_wgpu::{geometry::Cache, graphics::cache::Cached, Geometry};
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     sync::{atomic::Ordering::SeqCst, Arc},
 };
 
@@ -40,7 +40,7 @@ pub struct State {
     /// saves what cursor to show
     pub interaction: Interaction,
     /// saves the number of tracks in the arrangement from the last draw
-    tracks: RefCell<usize>,
+    tracks: Cell<usize>,
     /// caches the meshes of the waveforms
     waveform_cache: RefCell<Cache>,
     /// caches the geometry of the grid
@@ -57,7 +57,7 @@ impl Default for State {
             position: TimelinePosition::default(),
             scale: TimelineScale::default(),
             interaction: Interaction::default(),
-            tracks: RefCell::default(),
+            tracks: Cell::default(),
             waveform_cache: RefCell::new(Cache {
                 meshes: None,
                 images: None,
@@ -179,10 +179,10 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
         let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
 
-        if self.tracks.read().unwrap().len() != *state.tracks.borrow() {
+        if self.tracks.read().unwrap().len() != state.tracks.get() {
             state.grid_cache.clear();
             state.waveform_cache.borrow_mut().meshes = None;
-            *state.tracks.borrow_mut() = self.tracks.read().unwrap().len();
+            state.tracks.set(self.tracks.read().unwrap().len());
         }
 
         renderer.with_layer(bounds, |renderer| {

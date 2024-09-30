@@ -6,7 +6,7 @@ use std::{
 use strum::VariantArray;
 
 #[atomic_enum]
-#[derive(Default, VariantArray, Eq, PartialEq)]
+#[derive(Default, Eq, PartialEq, VariantArray)]
 pub enum Numerator {
     _1 = 1,
     _2 = 2,
@@ -34,7 +34,7 @@ impl Display for Numerator {
 }
 
 #[atomic_enum]
-#[derive(Default, VariantArray, Eq, PartialEq)]
+#[derive(Default, Eq, PartialEq, VariantArray)]
 pub enum Denominator {
     _2 = 2,
     #[default]
