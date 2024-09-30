@@ -112,13 +112,13 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
 
         let bounds = layout.bounds();
 
-        if !cursor.is_over(bounds) {
+        let Some(cursor) = cursor.position_in(bounds) else {
             state.action = Action::None;
             state.interaction = Interaction::default();
             return Status::Ignored;
-        }
+        };
 
-        if let Some(status) = self.on_event_modifiers_irrelevant(state, &event, bounds, cursor) {
+        if let Some(status) = self.on_event_modifiers_irrelevant(state, &event, cursor) {
             return status;
         }
 
@@ -128,22 +128,22 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
             state.modifiers.alt(),
         ) {
             (false, false, false) => {
-                if let Some(status) = self.on_event_no_modifiers(state, &event, bounds, cursor) {
+                if let Some(status) = self.on_event_no_modifiers(state, &event, cursor) {
                     return status;
                 }
             }
             (true, false, false) => {
-                if let Some(status) = self.on_event_command(state, &event, bounds, cursor) {
+                if let Some(status) = self.on_event_command(state, &event, cursor) {
                     return status;
                 }
             }
             (false, true, false) => {
-                if let Some(status) = self.on_event_shift(state, &event, bounds, cursor) {
+                if let Some(status) = self.on_event_shift(state, &event, cursor) {
                     return status;
                 }
             }
             (false, false, true) => {
-                if let Some(status) = self.on_event_alt(state, &event, bounds, cursor) {
+                if let Some(status) = self.on_event_alt(state, &event, cursor) {
                     return status;
                 }
             }
@@ -381,23 +381,22 @@ impl Arrangement {
         renderer.draw_geometry(frame.into_geometry());
     }
 
-    fn interaction(&self, cursor: Cursor, bounds: Rectangle, state: &State) -> Interaction {
+    fn interaction(&self, cursor: Point, state: &State) -> Interaction {
         match state.action {
             Action::None => {}
             _ => return state.interaction,
         }
 
-        let position = cursor.position_in(bounds).unwrap();
-        if position.y < 16.0 {
+        if cursor.y < 16.0 {
             return Interaction::ResizingHorizontally;
         }
-        let index = (position.y - 16.0) / state.scale.y;
+        let index = (cursor.y - 16.0) / state.scale.y;
         if index >= self.tracks.read().unwrap().len() as f32 {
             return Interaction::default();
         }
         if self.tracks.read().unwrap()[index as usize]
             .get_clip_at_global_time(
-                position.x.mul_add(state.scale.x.exp2(), state.position.x) as u32
+                cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32
             )
             .is_some()
         {
@@ -411,8 +410,7 @@ impl Arrangement {
         &self,
         state: &mut State,
         event: &Event,
-        bounds: Rectangle,
-        cursor: Cursor,
+        cursor: Point,
     ) -> Option<Status> {
         match event {
             Event::Mouse(event) => match event {
@@ -422,9 +420,8 @@ impl Arrangement {
                 }
                 mouse::Event::CursorMoved { .. } => match &state.action {
                     Action::DraggingPlayhead => {
-                        let position = cursor.position_in(bounds).unwrap();
                         let mut time =
-                            position.x.mul_add(state.scale.x.exp2(), state.position.x) as u32;
+                            cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32;
                         if !state.modifiers.alt() {
                             time = Position::from_interleaved_samples(time, &self.meter)
                                 .snap(state.scale.x)
@@ -436,8 +433,7 @@ impl Arrangement {
                         return Some(Status::Captured);
                     }
                     Action::DraggingClip(clip, index, start_pos) => {
-                        let position = cursor.position_in(bounds).unwrap();
-                        let time = (position.x + start_pos)
+                        let time = (cursor.x + start_pos)
                             .mul_add(state.scale.x.exp2(), state.position.x)
                             + start_pos;
                         let mut new_position =
@@ -449,7 +445,7 @@ impl Arrangement {
                             clip.move_to(new_position);
                             state.waveform_cache.borrow_mut().meshes = None;
                         }
-                        let new_index = ((position.y - 16.0) / state.scale.y) as usize;
+                        let new_index = ((cursor.y - 16.0) / state.scale.y) as usize;
                         if index != &new_index
                             && new_index < self.tracks.read().unwrap().len()
                             && self.tracks.read().unwrap()[new_index].try_push(clip)
@@ -463,13 +459,12 @@ impl Arrangement {
                         return Some(Status::Captured);
                     }
                     Action::DeletingClips => {
-                        let position = cursor.position_in(bounds).unwrap();
-                        if position.y > 16.0 {
-                            let index = ((position.y - 16.0) / state.scale.y) as usize;
+                        if cursor.y > 16.0 {
+                            let index = ((cursor.y - 16.0) / state.scale.y) as usize;
                             if index < self.tracks.read().unwrap().len() {
                                 let clip = self.tracks.read().unwrap()[index]
                                     .get_clip_at_global_time(
-                                        position.x.mul_add(state.scale.x.exp2(), state.position.x)
+                                        cursor.x.mul_add(state.scale.x.exp2(), state.position.x)
                                             as u32,
                                     );
                                 if let Some(clip) = clip {
@@ -488,7 +483,7 @@ impl Arrangement {
                 _ => {}
             },
             Event::Window(window::Event::RedrawRequested(_)) => {
-                state.interaction = self.interaction(cursor, bounds, state);
+                state.interaction = self.interaction(cursor, state);
                 return Some(Status::Ignored);
             }
             _ => {}
@@ -500,8 +495,7 @@ impl Arrangement {
         &self,
         state: &mut State,
         event: &Event,
-        bounds: Rectangle,
-        cursor: Cursor,
+        cursor: Point,
     ) -> Option<Status> {
         if let Event::Mouse(event) = event {
             match event {
@@ -528,9 +522,8 @@ impl Arrangement {
                 }
                 mouse::Event::ButtonPressed(button) => match button {
                     mouse::Button::Left => {
-                        let position = cursor.position_in(bounds).unwrap();
-                        if position.y < 16.0 {
-                            let time = position.x.mul_add(state.scale.x.exp2(), state.position.x);
+                        if cursor.y < 16.0 {
+                            let time = cursor.x.mul_add(state.scale.x.exp2(), state.position.x);
 
                             self.meter.global_time.store(time as u32, SeqCst);
 
@@ -539,10 +532,10 @@ impl Arrangement {
 
                             return Some(Status::Captured);
                         }
-                        let index = ((position.y - 16.0) / state.scale.y) as usize;
+                        let index = ((cursor.y - 16.0) / state.scale.y) as usize;
                         if index < self.tracks.read().unwrap().len() {
                             let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
-                                position.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
+                                cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
                             );
                             if let Some(clip) = clip {
                                 let start_pos =
@@ -550,7 +543,7 @@ impl Arrangement {
                                         as f32
                                         - state.position.x)
                                         / state.scale.x.exp2()
-                                        - position.x;
+                                        - cursor.x;
 
                                 state.action = Action::DraggingClip(clip, index, start_pos);
                                 state.interaction = Interaction::Grabbing;
@@ -560,13 +553,12 @@ impl Arrangement {
                         }
                     }
                     mouse::Button::Right => {
-                        let position = cursor.position_in(bounds).unwrap();
-                        if position.y > 16.0 {
-                            let index = ((position.y - 16.0) / state.scale.y) as usize;
+                        if cursor.y > 16.0 {
+                            let index = ((cursor.y - 16.0) / state.scale.y) as usize;
                             if index < self.tracks.read().unwrap().len() {
                                 let clip = self.tracks.read().unwrap()[index]
                                     .get_clip_at_global_time(
-                                        position.x.mul_add(state.scale.x.exp2(), state.position.x)
+                                        cursor.x.mul_add(state.scale.x.exp2(), state.position.x)
                                             as u32,
                                     );
                                 if let Some(clip) = clip {
@@ -589,13 +581,7 @@ impl Arrangement {
         None
     }
 
-    fn on_event_command(
-        &self,
-        state: &mut State,
-        event: &Event,
-        bounds: Rectangle,
-        cursor: Cursor,
-    ) -> Option<Status> {
+    fn on_event_command(&self, state: &mut State, event: &Event, cursor: Point) -> Option<Status> {
         if let Event::Mouse(event) = event {
             match event {
                 mouse::Event::WheelScrolled { delta } => {
@@ -613,12 +599,11 @@ impl Arrangement {
                     return Some(Status::Captured);
                 }
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                    let position = cursor.position_in(bounds).unwrap();
-                    if position.y > 16.0 {
-                        let index = ((position.y - 16.0) / state.scale.y) as usize;
+                    if cursor.y > 16.0 {
+                        let index = ((cursor.y - 16.0) / state.scale.y) as usize;
                         if index < self.tracks.read().unwrap().len() {
                             let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
-                                position.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
+                                cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
                             );
                             if let Some(clip) = clip {
                                 let clip = Arc::new((*clip).clone());
@@ -627,7 +612,7 @@ impl Arrangement {
                                         as f32
                                         - state.position.x)
                                         / state.scale.x.exp2()
-                                        - position.x;
+                                        - cursor.x;
 
                                 self.tracks.read().unwrap()[index].try_push(&clip);
 
@@ -645,13 +630,7 @@ impl Arrangement {
         None
     }
 
-    fn on_event_shift(
-        &self,
-        state: &mut State,
-        event: &Event,
-        _bounds: Rectangle,
-        _cursor: Cursor,
-    ) -> Option<Status> {
+    fn on_event_shift(&self, state: &mut State, event: &Event, _cursor: Point) -> Option<Status> {
         if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = event {
             let x = match delta {
                 ScrollDelta::Pixels { x: _, y } => y * 4.0,
@@ -670,13 +649,7 @@ impl Arrangement {
         None
     }
 
-    fn on_event_alt(
-        &self,
-        state: &mut State,
-        event: &Event,
-        bounds: Rectangle,
-        cursor: Cursor,
-    ) -> Option<Status> {
+    fn on_event_alt(&self, state: &mut State, event: &Event, cursor: Point) -> Option<Status> {
         if let Event::Mouse(event) = event {
             match event {
                 mouse::Event::WheelScrolled { delta } => {
@@ -693,18 +666,17 @@ impl Arrangement {
                     return Some(Status::Captured);
                 }
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                    let position = cursor.position_in(bounds).unwrap();
-                    if position.y < 16.0 {
-                        let time = position.x.mul_add(state.scale.x.exp2(), state.position.x);
+                    if cursor.y < 16.0 {
+                        let time = cursor.x.mul_add(state.scale.x.exp2(), state.position.x);
                         self.meter.global_time.store(time as u32, SeqCst);
                         state.action = Action::DraggingPlayhead;
                         state.interaction = Interaction::ResizingHorizontally;
                         return Some(Status::Captured);
                     }
-                    let index = ((position.y - 16.0) / state.scale.y) as usize;
+                    let index = ((cursor.y - 16.0) / state.scale.y) as usize;
                     if index < self.tracks.read().unwrap().len() {
                         let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
-                            position.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
+                            cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
                         );
                         if let Some(clip) = clip {
                             let start_pos =
@@ -712,7 +684,7 @@ impl Arrangement {
                                     as f32
                                     - state.position.x)
                                     / state.scale.x.exp2()
-                                    - position.x;
+                                    - cursor.x;
                             state.action = Action::DraggingClip(clip, index, start_pos);
                             state.interaction = Interaction::Grabbing;
                             return Some(Status::Captured);
