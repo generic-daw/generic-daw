@@ -118,8 +118,6 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
             return Status::Ignored;
         }
 
-        state.interaction = self.interaction(cursor, bounds, state);
-
         if let Some(status) = self.on_event_modifiers_irrelevant(state, &event, bounds, cursor) {
             return status;
         }
@@ -162,8 +160,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
         _viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> Interaction {
-        let state = tree.state.downcast_ref::<State>();
-        state.interaction
+        tree.state.downcast_ref::<State>().interaction
     }
 
     fn draw(
@@ -417,8 +414,8 @@ impl Arrangement {
         bounds: Rectangle,
         cursor: Cursor,
     ) -> Option<Status> {
-        if let Event::Mouse(event) = event {
-            match event {
+        match event {
+            Event::Mouse(event) => match event {
                 mouse::Event::ButtonReleased(mouse::Button::Left) => {
                     state.action = Action::None;
                     return Some(Status::Captured);
@@ -489,7 +486,12 @@ impl Arrangement {
                     Action::None => {}
                 },
                 _ => {}
+            },
+            Event::Window(window::Event::RedrawRequested(_)) => {
+                state.interaction = self.interaction(cursor, bounds, state);
+                return Some(Status::Ignored);
             }
+            _ => {}
         }
         None
     }
