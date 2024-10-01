@@ -334,9 +334,7 @@ impl Arrangement {
             beat.quarter_note += 1;
         }
 
-        let mut track_line = state
-            .position
-            .y
+        let mut track_line = (-state.position.y)
             .rem_euclid(1.0)
             .mul_add(state.scale.y, 16.0);
         let last_track_line = (self.tracks.read().unwrap().len() as f32 - state.position.y)

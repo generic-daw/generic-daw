@@ -16,7 +16,13 @@ pub enum TrackClip {
 impl TrackClip {
     pub fn get_name(&self) -> String {
         match self {
-            Self::Audio(audio) => audio.audio.name.clone(),
+            Self::Audio(audio) => audio
+                .audio
+                .name
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned(),
             Self::Midi(_) => "MIDI clip".to_owned(),
         }
     }

@@ -29,12 +29,12 @@ pub struct InterleavedAudio {
     /// these are used to draw the sample in various quality levels
     pub lods: RwLock<[Vec<(f32, f32)>; 10]>,
     /// the file name associated with the sample
-    pub name: String,
+    pub name: PathBuf,
 }
 
 impl InterleavedAudio {
-    pub fn create(path: &PathBuf, arrangement: &Arc<Arrangement>) -> Result<Arc<Self>> {
-        let mut samples = Self::read_audio_file(path, arrangement)?;
+    pub fn create(path: PathBuf, arrangement: &Arc<Arrangement>) -> Result<Arc<Self>> {
+        let mut samples = Self::read_audio_file(&path, arrangement)?;
         samples.shrink_to_fit();
 
         let length = samples.len();
@@ -52,7 +52,7 @@ impl InterleavedAudio {
                 vec![(0.0, 0.0); length.div_ceil(1 << 11)],
                 vec![(0.0, 0.0); length.div_ceil(1 << 12)],
             ]),
-            name: path.file_name().unwrap().to_string_lossy().into_owned(),
+            name: path,
         });
 
         Self::create_lod(&audio);

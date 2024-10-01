@@ -71,7 +71,7 @@ impl Daw {
                 std::thread::spawn(move || {
                     if let Some(paths) = FileDialog::new().pick_files() {
                         for path in paths {
-                            let audio_file = InterleavedAudio::create(&path, &arrangement);
+                            let audio_file = InterleavedAudio::create(path, &arrangement);
                             if let Ok(audio_file) = audio_file {
                                 let track = AudioTrack::create(arrangement.clone());
                                 track.try_push(&AudioClip::create(audio_file, arrangement.clone()));
