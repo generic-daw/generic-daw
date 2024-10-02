@@ -9,7 +9,9 @@ anyhow = "1.0.89"
 atomic_enum = { version = "0.3.0", default-features = false }
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
 cpal = "0.15.3"
-generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host" }
+generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host", features = [
+    "gui",
+] }
 hound = "3.5.1"
 iced = { version = "0.13.1", default-features = false, features = [
     "advanced",
