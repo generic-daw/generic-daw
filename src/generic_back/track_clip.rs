@@ -30,7 +30,7 @@ impl TrackClip {
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {
         match self {
             Self::Audio(audio) => audio.get_at_global_time(global_time),
-            Self::Midi(_) => panic!(),
+            Self::Midi(_) => unreachable!(),
         }
     }
 
