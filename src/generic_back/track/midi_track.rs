@@ -1,4 +1,5 @@
 mod plugin_state;
+pub use plugin_state::BUFFER_SIZE;
 
 use crate::{
     generic_back::{pan, Arrangement, DirtyEvent, Position, Track, TrackClip},
@@ -59,10 +60,10 @@ impl MidiTrack {
                 || self.plugin_state.read().unwrap().dirty.load(SeqCst) != DirtyEvent::None
             {
                 self.refresh_global_midi();
-                self.plugin_state.write().unwrap().last_buffer_index = 15;
+                self.plugin_state.write().unwrap().last_buffer_index = BUFFER_SIZE - 1;
             }
 
-            last_buffer_index = (last_buffer_index + 1) % 16;
+            last_buffer_index = (last_buffer_index + 1) % BUFFER_SIZE;
             if last_buffer_index == 0 {
                 self.plugin_state
                     .write()
@@ -74,8 +75,7 @@ impl MidiTrack {
             self.plugin_state.write().unwrap().last_buffer_index = last_buffer_index;
         }
 
-        self.plugin_state.read().unwrap().running_buffer
-            [usize::try_from(last_buffer_index).unwrap()]
+        self.plugin_state.read().unwrap().running_buffer[last_buffer_index]
             * self.volume.load(SeqCst)
             * pan(self.pan.load(SeqCst), global_time)
     }
