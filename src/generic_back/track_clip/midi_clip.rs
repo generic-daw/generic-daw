@@ -1,13 +1,10 @@
-mod dirty_event;
-pub use dirty_event::{AtomicDirtyEvent, DirtyEvent};
-
 mod midi_note;
 pub use midi_note::MidiNote;
 
 mod midi_pattern;
 pub use midi_pattern::MidiPattern;
 
-use crate::generic_back::{Arrangement, Position, TrackClip};
+use crate::generic_back::{Arrangement, DirtyEvent, Position, TrackClip};
 use std::{
     cmp::Ordering,
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},

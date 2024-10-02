@@ -2,7 +2,7 @@ mod audio_track;
 pub use audio_track::AudioTrack;
 
 mod midi_track;
-pub use midi_track::MidiTrack;
+pub use midi_track::{AtomicDirtyEvent, DirtyEvent, MidiTrack};
 
 use crate::generic_back::{Position, TrackClip};
 use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};

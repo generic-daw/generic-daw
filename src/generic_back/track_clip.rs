@@ -2,7 +2,7 @@ mod audio_clip;
 pub use audio_clip::{AudioClip, InterleavedAudio};
 
 mod midi_clip;
-pub use midi_clip::{AtomicDirtyEvent, DirtyEvent, MidiClip, MidiNote};
+pub use midi_clip::{MidiClip, MidiNote};
 
 use crate::generic_back::Position;
 use std::sync::Arc;

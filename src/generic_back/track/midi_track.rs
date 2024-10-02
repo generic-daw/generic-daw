@@ -1,8 +1,11 @@
+mod dirty_event;
+pub use dirty_event::{AtomicDirtyEvent, DirtyEvent};
+
 mod plugin_state;
 pub use plugin_state::BUFFER_SIZE;
 
 use crate::{
-    generic_back::{pan, Arrangement, DirtyEvent, Position, Track, TrackClip},
+    generic_back::{pan, Arrangement, Position, Track, TrackClip},
     helpers::AtomicF32,
 };
 use generic_clap_host::{host::HostThreadMessage, main_thread::MainThreadMessage};
