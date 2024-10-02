@@ -15,7 +15,7 @@ use std::{
 };
 use symphonia::core::{
     audio::SampleBuffer,
-    errors::Error,
+    codecs::DecoderOptions,
     formats::FormatOptions,
     io::{MediaSourceStream, MediaSourceStreamOptions},
     meta::MetadataOptions,
@@ -60,21 +60,17 @@ impl InterleavedAudio {
     }
 
     fn read_audio_file(path: &PathBuf, arrangement: &Arc<Arrangement>) -> Result<Vec<f32>> {
-        let format = symphonia::default::get_probe().format(
-            &Hint::new(),
-            MediaSourceStream::new(
-                Box::new(File::open(path).unwrap()),
-                MediaSourceStreamOptions::default(),
-            ),
-            &FormatOptions::default(),
-            &MetadataOptions::default(),
-        );
-
-        if let Err(err) = format {
-            return Err(anyhow!(err));
-        }
-
-        let mut format = format.unwrap().format;
+        let mut format = symphonia::default::get_probe()
+            .format(
+                &Hint::default(),
+                MediaSourceStream::new(
+                    Box::new(File::open(path).unwrap()),
+                    MediaSourceStreamOptions::default(),
+                ),
+                &FormatOptions::default(),
+                &MetadataOptions::default(),
+            )?
+            .format;
 
         let track = format.default_track().unwrap();
         let track_id = track.id;
@@ -84,11 +80,7 @@ impl InterleavedAudio {
             Vec::with_capacity(track.codec_params.n_frames.unwrap() as usize * 2);
 
         let mut decoder = symphonia::default::get_codecs()
-            .make(
-                &track.codec_params,
-                &symphonia::core::codecs::DecoderOptions::default(),
-            )
-            .unwrap();
+            .make(&track.codec_params, &DecoderOptions::default())?;
 
         let mut sample_buffer = None;
         while let Ok(packet) = format.next_packet() {
@@ -108,8 +100,7 @@ impl InterleavedAudio {
                         interleaved_samples.extend(buf.samples().iter());
                     }
                 }
-                Err(Error::DecodeError(_)) => (),
-                Err(_) => break,
+                Err(err) => return Err(anyhow!(err)),
             }
         }
 
@@ -137,8 +128,7 @@ impl InterleavedAudio {
             },
             frames,
             2,
-        )
-        .unwrap();
+        )?;
 
         let mut left = Vec::with_capacity(frames);
         let mut right = Vec::with_capacity(frames);
@@ -153,7 +143,7 @@ impl InterleavedAudio {
                 }
             });
 
-        let deinterleaved_samples = resampler.process(&[left, right], None).unwrap();
+        let deinterleaved_samples = resampler.process(&[left, right], None)?;
 
         let frames = deinterleaved_samples[0].len();
         interleaved_samples.clear();
