@@ -15,12 +15,12 @@ impl Track {
         arrangement_bounds: Rectangle,
         state: &ArrangementState,
     ) {
-        self.clips().read().unwrap().iter().for_each(|clip| {
-            let meter = match &**clip {
-                TrackClip::Audio(clip) => &clip.meter,
-                TrackClip::Midi(clip) => &clip.meter,
-            };
+        let meter = match self {
+            Self::Audio(track) => &track.meter,
+            Self::Midi(track) => &track.meter,
+        };
 
+        self.clips().read().unwrap().iter().for_each(|clip| {
             let first_pixel = (clip.get_global_start().in_interleaved_samples(meter) as f32
                 - state.position.x)
                 / state.scale.x.exp2()
@@ -49,16 +49,16 @@ impl Track {
         arrangement_bounds: Rectangle,
         state: &ArrangementState,
     ) -> Vec<Mesh> {
+        let meter = match self {
+            Self::Audio(track) => &track.meter,
+            Self::Midi(track) => &track.meter,
+        };
+
         self.clips()
             .read()
             .unwrap()
             .iter()
             .filter_map(|clip| {
-                let meter = match &**clip {
-                    TrackClip::Audio(clip) => &clip.meter,
-                    TrackClip::Midi(clip) => &clip.meter,
-                };
-
                 let first_pixel = (clip.get_global_start().in_interleaved_samples(meter) as f32
                     - state.position.x)
                     / state.scale.x.exp2()
