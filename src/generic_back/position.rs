@@ -13,6 +13,11 @@ pub struct Position {
     pub sub_quarter_note: u16,
 }
 
+pub const POSITION_MIN: Position = Position {
+    quarter_note: 0,
+    sub_quarter_note: 1,
+};
+
 impl Position {
     pub const fn new(quarter_note: u16, sub_quarter_note: u16) -> Self {
         Self {
@@ -93,15 +98,15 @@ impl Sub for Position {
     fn sub(self, rhs: Self) -> Self::Output {
         assert!(self >= rhs);
 
-        if self.sub_quarter_note > rhs.sub_quarter_note {
-            Self {
-                quarter_note: self.quarter_note - rhs.quarter_note,
-                sub_quarter_note: self.sub_quarter_note - rhs.sub_quarter_note,
-            }
-        } else {
+        if self.sub_quarter_note < rhs.sub_quarter_note {
             Self {
                 quarter_note: self.quarter_note - rhs.quarter_note - 1,
                 sub_quarter_note: 256 + self.sub_quarter_note - rhs.sub_quarter_note,
+            }
+        } else {
+            Self {
+                quarter_note: self.quarter_note - rhs.quarter_note,
+                sub_quarter_note: self.sub_quarter_note - rhs.sub_quarter_note,
             }
         }
     }

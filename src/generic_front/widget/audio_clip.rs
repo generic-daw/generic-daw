@@ -28,27 +28,18 @@ impl AudioClip {
 
         let global_start = self.get_global_start().in_interleaved_samples(&self.meter) as f32;
 
-        let clip_start = self.get_clip_start().in_interleaved_samples(&self.meter);
+        let clip_start = self.get_clip_start().in_interleaved_samples(&self.meter) as f32;
 
         // the first sample in the lod that is visible in the clip
-        let first_index = (max_by(0.0, state.position.x - global_start, |a, b| {
+        let first_index = ((max_by(0.0, state.position.x - global_start, |a, b| {
             a.partial_cmp(b).unwrap()
-        }) as u32
-            - clip_start)
-            / lod_sample_size;
-
-        // the distance between the left side of the timeline and the left side of the clip, in samples in the lod
-        let index_offset = (max_by(0.0, global_start - state.position.x, |a, b| {
-            a.partial_cmp(b).unwrap()
-        }) as u32
-            - clip_start)
+        }) + clip_start) as u32)
             / lod_sample_size;
 
         // the last sample in the lod that is visible in the clip
         let last_index = min(
-            (self.get_global_end().in_interleaved_samples(&self.meter) - clip_start)
-                / lod_sample_size,
-            first_index + index_offset + (bounds.width / lod_samples_per_pixel) as u32,
+            self.get_global_end().in_interleaved_samples(&self.meter) / lod_sample_size,
+            first_index + (bounds.width / lod_samples_per_pixel) as u32,
         );
 
         // if there are less than 3 vertices, there's nothing to draw

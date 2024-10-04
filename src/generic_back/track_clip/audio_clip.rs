@@ -1,7 +1,7 @@
 mod interleaved_audio;
 pub use interleaved_audio::InterleavedAudio;
 
-use crate::generic_back::{Meter, Position, TrackClip};
+use crate::generic_back::{Meter, Position, TrackClip, POSITION_MIN};
 use std::{
     cmp::Ordering,
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
@@ -50,8 +50,13 @@ impl AudioClip {
             .read()
             .unwrap()
             .in_interleaved_samples(&self.meter);
+        let end = self
+            .global_end
+            .read()
+            .unwrap()
+            .in_interleaved_samples(&self.meter);
 
-        if !&self.meter.playing.load(SeqCst) || global_time < start {
+        if !&self.meter.playing.load(SeqCst) || global_time < start || global_time > end {
             return 0.0;
         }
 
@@ -81,24 +86,30 @@ impl AudioClip {
         *self.clip_start.read().unwrap()
     }
 
-    pub fn trim_start_to(&self, clip_start: Position) {
-        let cmp = self.clip_start.read().unwrap().cmp(&clip_start);
+    pub fn trim_start_to(&self, global_start: Position) {
+        let global_start = self
+            .clamp(global_start)
+            .min(*self.global_end.read().unwrap() - POSITION_MIN);
+        let cmp = self.global_start.read().unwrap().cmp(&global_start);
         match cmp {
             Ordering::Less => {
-                *self.global_start.write().unwrap() +=
-                    clip_start - *self.clip_start.read().unwrap();
+                *self.clip_start.write().unwrap() +=
+                    global_start - *self.global_start.read().unwrap();
             }
             Ordering::Equal => {}
             Ordering::Greater => {
-                *self.global_start.write().unwrap() -=
-                    *self.clip_start.read().unwrap() - clip_start;
+                *self.clip_start.write().unwrap() -=
+                    *self.global_start.read().unwrap() - global_start;
             }
         }
-        *self.clip_start.write().unwrap() = clip_start;
+        *self.global_start.write().unwrap() = global_start;
         assert!(*self.global_start.read().unwrap() <= *self.global_end.read().unwrap());
     }
 
     pub fn trim_end_to(&self, global_end: Position) {
+        let global_end = self
+            .clamp(global_end)
+            .max(*self.global_start.read().unwrap() + POSITION_MIN);
         *self.global_end.write().unwrap() = global_end;
         assert!(*self.global_start.read().unwrap() <= *self.global_end.read().unwrap());
     }
@@ -117,5 +128,16 @@ impl AudioClip {
             }
         }
         *self.global_start.write().unwrap() = global_start;
+    }
+
+    fn clamp(&self, position: Position) -> Position {
+        position.clamp(
+            *self.global_start.read().unwrap() - *self.clip_start.read().unwrap(),
+            *self.global_start.read().unwrap()
+                + Position::from_interleaved_samples(
+                    u32::try_from(self.audio.samples.len()).unwrap(),
+                    &self.meter,
+                ),
+        )
     }
 }

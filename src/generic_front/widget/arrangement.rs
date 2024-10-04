@@ -29,6 +29,8 @@ enum Action {
     DraggingPlayhead,
     DraggingClip(Arc<TrackClip>, usize, f32),
     DeletingClips,
+    ClipTrimmingStart(Arc<TrackClip>, f32),
+    ClipTrimmingEnd(Arc<TrackClip>, f32),
 }
 
 #[derive(Debug)]
@@ -392,17 +394,25 @@ impl Arrangement {
         if index >= self.tracks.read().unwrap().len() as f32 {
             return Interaction::default();
         }
-        if self.tracks.read().unwrap()[index as usize]
+        self.tracks.read().unwrap()[index as usize]
             .get_clip_at_global_time(
                 &self.meter,
                 cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
             )
-            .is_some()
-        {
-            Interaction::Grab
-        } else {
-            Interaction::default()
-        }
+            .map_or_else(Interaction::default, |clip| {
+                let start_pixel = (clip.get_global_start().in_interleaved_samples(&self.meter)
+                    as f32
+                    - state.position.x)
+                    / state.scale.x.exp2();
+                let end_pixel = (clip.get_global_end().in_interleaved_samples(&self.meter) as f32
+                    - state.position.x)
+                    / state.scale.x.exp2();
+
+                match (cursor.x - start_pixel < 10.0, end_pixel - cursor.x < 10.0) {
+                    (false, false) => Interaction::Grab,
+                    _ => Interaction::ResizingHorizontally,
+                }
+            })
     }
 
     fn on_event_modifiers_irrelevant(
@@ -431,10 +441,9 @@ impl Arrangement {
 
                         return Some(Status::Captured);
                     }
-                    Action::DraggingClip(clip, index, start_pos) => {
-                        let time = (cursor.x + start_pos)
-                            .mul_add(state.scale.x.exp2(), state.position.x)
-                            + start_pos;
+                    Action::DraggingClip(clip, index, offset) => {
+                        let time =
+                            (cursor.x + offset).mul_add(state.scale.x.exp2(), state.position.x);
                         let mut new_position =
                             Position::from_interleaved_samples(time as u32, &self.meter);
                         if !state.modifiers.alt() {
@@ -452,8 +461,7 @@ impl Arrangement {
                             self.tracks.read().unwrap()[*index].remove_clip(clip);
 
                             state.waveform_cache.borrow_mut().meshes = None;
-                            state.action =
-                                Action::DraggingClip(clip.clone(), new_index, *start_pos);
+                            state.action = Action::DraggingClip(clip.clone(), new_index, *offset);
                         }
                         return Some(Status::Captured);
                     }
@@ -478,6 +486,36 @@ impl Arrangement {
                             }
                         }
                     }
+                    Action::ClipTrimmingStart(clip, offset) => {
+                        let time =
+                            (cursor.x + offset).mul_add(state.scale.x.exp2(), state.position.x);
+
+                        let mut new_position =
+                            Position::from_interleaved_samples(time as u32, &self.meter);
+                        if !state.modifiers.alt() {
+                            new_position = new_position.snap(state.scale.x);
+                        }
+                        if new_position != clip.get_global_start() {
+                            clip.trim_start_to(new_position);
+                            state.waveform_cache.borrow_mut().meshes = None;
+                        }
+                        return Some(Status::Captured);
+                    }
+                    Action::ClipTrimmingEnd(clip, offset) => {
+                        let time =
+                            (cursor.x + offset).mul_add(state.scale.x.exp2(), state.position.x);
+                        let mut new_position =
+                            Position::from_interleaved_samples(time as u32, &self.meter);
+                        if !state.modifiers.alt() {
+                            new_position = new_position.snap(state.scale.x);
+                        }
+
+                        if new_position != clip.get_global_start() {
+                            clip.trim_end_to(new_position);
+                            state.waveform_cache.borrow_mut().meshes = None;
+                        }
+                        return Some(Status::Captured);
+                    }
                     Action::None => {}
                 },
                 _ => {}
@@ -491,6 +529,7 @@ impl Arrangement {
         None
     }
 
+    #[expect(clippy::too_many_lines)]
     fn on_event_no_modifiers(
         &self,
         state: &mut State,
@@ -539,15 +578,51 @@ impl Arrangement {
                                 cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
                             );
                             if let Some(clip) = clip {
-                                let start_pos =
+                                let offset =
                                     (clip.get_global_start().in_interleaved_samples(&self.meter)
                                         as f32
                                         - state.position.x)
                                         / state.scale.x.exp2()
                                         - cursor.x;
+                                let pixel_len = (clip.get_global_end() - clip.get_global_start())
+                                    .in_interleaved_samples(&self.meter)
+                                    as f32
+                                    / state.scale.x.exp2();
+                                let start_pixel =
+                                    (clip.get_global_start().in_interleaved_samples(&self.meter)
+                                        as f32
+                                        - state.position.x)
+                                        / state.scale.x.exp2();
+                                let end_pixel =
+                                    (clip.get_global_end().in_interleaved_samples(&self.meter)
+                                        as f32
+                                        - state.position.x)
+                                        / state.scale.x.exp2();
 
-                                state.action = Action::DraggingClip(clip, index, start_pos);
-                                state.interaction = Interaction::Grabbing;
+                                match (cursor.x - start_pixel < 10.0, end_pixel - cursor.x < 10.0) {
+                                    (true, true) => {
+                                        state.action =
+                                            if cursor.x - start_pixel < end_pixel - cursor.x {
+                                                Action::ClipTrimmingStart(clip, offset)
+                                            } else {
+                                                Action::ClipTrimmingEnd(clip, offset + pixel_len)
+                                            };
+                                        state.interaction = Interaction::ResizingHorizontally;
+                                    }
+                                    (true, false) => {
+                                        state.action = Action::ClipTrimmingStart(clip, offset);
+                                        state.interaction = Interaction::ResizingHorizontally;
+                                    }
+                                    (false, true) => {
+                                        state.action =
+                                            Action::ClipTrimmingEnd(clip, offset + pixel_len);
+                                        state.interaction = Interaction::ResizingHorizontally;
+                                    }
+                                    (false, false) => {
+                                        state.action = Action::DraggingClip(clip, index, offset);
+                                        state.interaction = Interaction::Grabbing;
+                                    }
+                                }
 
                                 return Some(Status::Captured);
                             }
@@ -610,7 +685,7 @@ impl Arrangement {
                             );
                             if let Some(clip) = clip {
                                 let clip = Arc::new((*clip).clone());
-                                let start_pos =
+                                let offset =
                                     (clip.get_global_start().in_interleaved_samples(&self.meter)
                                         as f32
                                         - state.position.x)
@@ -619,7 +694,7 @@ impl Arrangement {
 
                                 self.tracks.read().unwrap()[index].try_push(&clip);
 
-                                state.action = Action::DraggingClip(clip, index, start_pos);
+                                state.action = Action::DraggingClip(clip, index, offset);
                                 state.interaction = Interaction::Grabbing;
 
                                 return Some(Status::Captured);
@@ -683,13 +758,13 @@ impl Arrangement {
                             cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
                         );
                         if let Some(clip) = clip {
-                            let start_pos =
+                            let offset =
                                 (clip.get_global_start().in_interleaved_samples(&self.meter)
                                     as f32
                                     - state.position.x)
                                     / state.scale.x.exp2()
                                     - cursor.x;
-                            state.action = Action::DraggingClip(clip, index, start_pos);
+                            state.action = Action::DraggingClip(clip, index, offset);
                             state.interaction = Interaction::Grabbing;
                             return Some(Status::Captured);
                         }

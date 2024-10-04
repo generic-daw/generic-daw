@@ -71,7 +71,7 @@ impl TrackClip {
 
     pub(in crate::generic_back) fn get_global_midi(&self) -> Vec<Arc<MidiNote>> {
         match self {
-            Self::Audio(_) => Vec::new(),
+            Self::Audio(_) => unreachable!(),
             Self::Midi(midi) => midi.get_global_midi(),
         }
     }
