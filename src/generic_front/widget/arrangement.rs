@@ -394,7 +394,8 @@ impl Arrangement {
         }
         if self.tracks.read().unwrap()[index as usize]
             .get_clip_at_global_time(
-                cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32
+                &self.meter,
+                cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
             )
             .is_some()
         {
@@ -462,6 +463,7 @@ impl Arrangement {
                             if index < self.tracks.read().unwrap().len() {
                                 let clip = self.tracks.read().unwrap()[index]
                                     .get_clip_at_global_time(
+                                        &self.meter,
                                         cursor.x.mul_add(state.scale.x.exp2(), state.position.x)
                                             as u32,
                                     );
@@ -533,6 +535,7 @@ impl Arrangement {
                         let index = ((cursor.y - 16.0) / state.scale.y) as usize;
                         if index < self.tracks.read().unwrap().len() {
                             let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
+                                &self.meter,
                                 cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
                             );
                             if let Some(clip) = clip {
@@ -556,6 +559,7 @@ impl Arrangement {
                             if index < self.tracks.read().unwrap().len() {
                                 let clip = self.tracks.read().unwrap()[index]
                                     .get_clip_at_global_time(
+                                        &self.meter,
                                         cursor.x.mul_add(state.scale.x.exp2(), state.position.x)
                                             as u32,
                                     );
@@ -601,6 +605,7 @@ impl Arrangement {
                         let index = ((cursor.y - 16.0) / state.scale.y) as usize;
                         if index < self.tracks.read().unwrap().len() {
                             let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
+                                &self.meter,
                                 cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
                             );
                             if let Some(clip) = clip {
@@ -674,6 +679,7 @@ impl Arrangement {
                     let index = ((cursor.y - 16.0) / state.scale.y) as usize;
                     if index < self.tracks.read().unwrap().len() {
                         let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
+                            &self.meter,
                             cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
                         );
                         if let Some(clip) = clip {

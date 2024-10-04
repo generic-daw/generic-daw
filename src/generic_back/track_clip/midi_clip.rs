@@ -4,7 +4,7 @@ pub use midi_note::MidiNote;
 mod midi_pattern;
 pub use midi_pattern::MidiPattern;
 
-use crate::generic_back::{Arrangement, DirtyEvent, Position, TrackClip};
+use crate::generic_back::{DirtyEvent, Meter, Position, TrackClip};
 use std::{
     cmp::Ordering,
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
@@ -19,7 +19,7 @@ pub struct MidiClip {
     global_end: RwLock<Position>,
     /// the start of the clip relative to the start of the pattern
     pattern_start: RwLock<Position>,
-    pub arrangement: Arc<Arrangement>,
+    pub meter: Arc<Meter>,
 }
 
 impl Clone for MidiClip {
@@ -29,20 +29,20 @@ impl Clone for MidiClip {
             global_start: RwLock::new(*self.global_start.read().unwrap()),
             global_end: RwLock::new(*self.global_end.read().unwrap()),
             pattern_start: RwLock::new(*self.pattern_start.read().unwrap()),
-            arrangement: self.arrangement.clone(),
+            meter: self.meter.clone(),
         }
     }
 }
 
 impl MidiClip {
-    pub fn create(pattern: Arc<MidiPattern>, arrangement: Arc<Arrangement>) -> Arc<TrackClip> {
+    pub fn create(pattern: Arc<MidiPattern>, meter: Arc<Meter>) -> Arc<TrackClip> {
         let len = pattern.len();
         Arc::new(TrackClip::Midi(Self {
             pattern,
             global_start: RwLock::default(),
-            global_end: RwLock::new(Position::from_interleaved_samples(len, &arrangement.meter)),
+            global_end: RwLock::new(Position::from_interleaved_samples(len, &meter)),
             pattern_start: RwLock::default(),
-            arrangement,
+            meter,
         }))
     }
 
@@ -100,12 +100,12 @@ impl MidiClip {
             .global_start
             .read()
             .unwrap()
-            .in_interleaved_samples(&self.arrangement.meter);
+            .in_interleaved_samples(&self.meter);
         let global_end = self
             .global_end
             .read()
             .unwrap()
-            .in_interleaved_samples(&self.arrangement.meter);
+            .in_interleaved_samples(&self.meter);
         self.pattern
             .notes
             .iter()

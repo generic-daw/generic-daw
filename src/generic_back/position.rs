@@ -2,7 +2,7 @@ use crate::generic_back::{seconds_to_interleaved_samples, Meter};
 use std::{
     cmp::Ordering,
     ops::{Add, AddAssign, Sub, SubAssign},
-    sync::atomic::Ordering::SeqCst,
+    sync::{atomic::Ordering::SeqCst, Arc},
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -21,7 +21,7 @@ impl Position {
         }
     }
 
-    pub fn from_interleaved_samples(samples: u32, meter: &Meter) -> Self {
+    pub fn from_interleaved_samples(samples: u32, meter: &Arc<Meter>) -> Self {
         let global_beat = f64::from(samples)
             / (f64::from(meter.sample_rate.load(SeqCst) * 2)
                 / (f64::from(meter.bpm.load(SeqCst)) / 60.0));
@@ -34,7 +34,7 @@ impl Position {
         }
     }
 
-    pub fn in_interleaved_samples(self, meter: &Meter) -> u32 {
+    pub fn in_interleaved_samples(self, meter: &Arc<Meter>) -> u32 {
         let global_beat = f64::from(self.quarter_note) + f64::from(self.sub_quarter_note) / 256.0;
 
         seconds_to_interleaved_samples(

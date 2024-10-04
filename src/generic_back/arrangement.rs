@@ -9,7 +9,7 @@ use std::{
 pub struct Arrangement {
     pub tracks: RwLock<Vec<Track>>,
     /// information relating to the playback of the arrangement
-    pub meter: Meter,
+    pub meter: Arc<Meter>,
 }
 
 impl Arrangement {

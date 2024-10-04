@@ -26,13 +26,9 @@ impl AudioClip {
         // samples in the lod per pixel
         let lod_samples_per_pixel = lod_sample_size as f32 / pixel_size;
 
-        let global_start = self
-            .get_global_start()
-            .in_interleaved_samples(&self.arrangement.meter) as f32;
+        let global_start = self.get_global_start().in_interleaved_samples(&self.meter) as f32;
 
-        let clip_start = self
-            .get_clip_start()
-            .in_interleaved_samples(&self.arrangement.meter);
+        let clip_start = self.get_clip_start().in_interleaved_samples(&self.meter);
 
         // the first sample in the lod that is visible in the clip
         let first_index = (max_by(0.0, state.position.x - global_start, |a, b| {
@@ -50,10 +46,7 @@ impl AudioClip {
 
         // the last sample in the lod that is visible in the clip
         let last_index = min(
-            (self
-                .get_global_end()
-                .in_interleaved_samples(&self.arrangement.meter)
-                - clip_start)
+            (self.get_global_end().in_interleaved_samples(&self.meter) - clip_start)
                 / lod_sample_size,
             first_index + index_offset + (bounds.width / lod_samples_per_pixel) as u32,
         );

@@ -5,7 +5,7 @@ mod plugin_state;
 pub use plugin_state::BUFFER_SIZE;
 
 use crate::{
-    generic_back::{pan, Arrangement, Position, Track, TrackClip},
+    generic_back::{pan, Position, Track, TrackClip},
     helpers::AtomicF32,
 };
 use generic_clap_host::{host::HostThreadMessage, main_thread::MainThreadMessage};
@@ -26,21 +26,18 @@ pub struct MidiTrack {
     pub pan: AtomicF32,
     /// holds all the state needed for a generator plugin to function properly
     pub plugin_state: RwLock<PluginState>,
-    pub arrangement: Arc<Arrangement>,
 }
 
 impl MidiTrack {
     pub fn create(
         plugin_sender: Sender<MainThreadMessage>,
         host_receiver: Arc<Mutex<Receiver<HostThreadMessage>>>,
-        arrangement: Arc<Arrangement>,
     ) -> Track {
         Track::Midi(Self {
             clips: Arc::new(RwLock::default()),
             volume: AtomicF32::new(1.0),
             pan: AtomicF32::new(0.0),
             plugin_state: PluginState::create(plugin_sender, host_receiver),
-            arrangement,
         })
     }
 

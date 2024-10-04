@@ -1,7 +1,7 @@
 mod interleaved_audio;
 pub use interleaved_audio::InterleavedAudio;
 
-use crate::generic_back::{Arrangement, Position, TrackClip};
+use crate::generic_back::{Meter, Position, TrackClip};
 use std::{
     cmp::Ordering,
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
@@ -16,7 +16,7 @@ pub struct AudioClip {
     global_end: RwLock<Position>,
     /// the start of the clip relative to the start of the sample
     clip_start: RwLock<Position>,
-    pub arrangement: Arc<Arrangement>,
+    pub meter: Arc<Meter>,
 }
 
 impl Clone for AudioClip {
@@ -26,24 +26,21 @@ impl Clone for AudioClip {
             global_start: RwLock::new(*self.global_start.read().unwrap()),
             global_end: RwLock::new(*self.global_end.read().unwrap()),
             clip_start: RwLock::new(*self.clip_start.read().unwrap()),
-            arrangement: self.arrangement.clone(),
+            meter: self.meter.clone(),
         }
     }
 }
 
 impl AudioClip {
-    pub fn create(audio: Arc<InterleavedAudio>, arrangement: Arc<Arrangement>) -> Arc<TrackClip> {
+    pub fn create(audio: Arc<InterleavedAudio>, meter: Arc<Meter>) -> Arc<TrackClip> {
         let samples = u32::try_from(audio.samples.len()).unwrap();
 
         Arc::new(TrackClip::Audio(Self {
             audio,
             global_start: RwLock::default(),
-            global_end: RwLock::new(Position::from_interleaved_samples(
-                samples,
-                &arrangement.meter,
-            )),
+            global_end: RwLock::new(Position::from_interleaved_samples(samples, &meter)),
             clip_start: RwLock::default(),
-            arrangement,
+            meter,
         }))
     }
 
@@ -52,9 +49,9 @@ impl AudioClip {
             .global_start
             .read()
             .unwrap()
-            .in_interleaved_samples(&self.arrangement.meter);
+            .in_interleaved_samples(&self.meter);
 
-        if !&self.arrangement.meter.playing.load(SeqCst) || global_time < start {
+        if !&self.meter.playing.load(SeqCst) || global_time < start {
             return 0.0;
         }
 
@@ -63,7 +60,7 @@ impl AudioClip {
                 .clip_start
                 .read()
                 .unwrap()
-                .in_interleaved_samples(&self.arrangement.meter);
+                .in_interleaved_samples(&self.meter);
 
         *self
             .audio

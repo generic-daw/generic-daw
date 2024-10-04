@@ -1,4 +1,5 @@
 mod timeline_position;
+use cpal::Stream;
 use iced_fonts::{bootstrap, BOOTSTRAP_FONT};
 use strum::VariantArray;
 pub(in crate::generic_front) use timeline_position::TimelinePosition;
@@ -32,6 +33,7 @@ use std::sync::{atomic::Ordering::SeqCst, Arc};
 pub struct Daw {
     arrangement: Arc<Arrangement>,
     track_panel: TrackPanel,
+    _stream: Stream,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -51,11 +53,12 @@ pub enum Message {
 impl Default for Daw {
     fn default() -> Self {
         let arrangement = Arrangement::create();
-        build_output_stream(arrangement.clone());
+        let stream = build_output_stream(arrangement.clone());
 
         Self {
             arrangement: arrangement.clone(),
             track_panel: TrackPanel::new(arrangement),
+            _stream: stream,
         }
     }
 }
@@ -73,8 +76,11 @@ impl Daw {
                         for path in paths {
                             let audio_file = InterleavedAudio::create(path, &arrangement);
                             if let Ok(audio_file) = audio_file {
-                                let track = AudioTrack::create(arrangement.clone());
-                                track.try_push(&AudioClip::create(audio_file, arrangement.clone()));
+                                let track = AudioTrack::create(arrangement.meter.clone());
+                                track.try_push(&AudioClip::create(
+                                    audio_file,
+                                    arrangement.meter.clone(),
+                                ));
                                 arrangement.tracks.write().unwrap().push(track);
                             }
                         }
@@ -89,8 +95,7 @@ impl Daw {
                 self.arrangement.meter.global_time.store(0, SeqCst);
             }
             Message::New => {
-                *self.arrangement.tracks.write().unwrap() = Vec::new();
-                self.arrangement.meter.reset();
+                *self = Self::default();
             }
             Message::Export => {
                 if let Some(path) = FileDialog::new()
