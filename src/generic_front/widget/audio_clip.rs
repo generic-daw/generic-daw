@@ -38,7 +38,7 @@ impl AudioClip {
 
         // the last sample in the lod that is visible in the clip
         let last_index = min(
-            self.get_global_end().in_interleaved_samples(&self.meter) / lod_sample_size,
+            u32::try_from(self.audio.samples.len()).unwrap() / lod_sample_size,
             first_index + (bounds.width / lod_samples_per_pixel) as u32,
         );
 

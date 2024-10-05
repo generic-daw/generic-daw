@@ -1,7 +1,7 @@
 mod interleaved_audio;
 pub use interleaved_audio::InterleavedAudio;
 
-use crate::generic_back::{Meter, Position, TrackClip, POSITION_MIN};
+use crate::generic_back::{Meter, Position, TrackClip, POSITION_MIN_STEP};
 use std::{
     cmp::Ordering,
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
@@ -89,7 +89,7 @@ impl AudioClip {
     pub fn trim_start_to(&self, global_start: Position) {
         let global_start = self
             .clamp(global_start)
-            .min(*self.global_end.read().unwrap() - POSITION_MIN);
+            .min(*self.global_end.read().unwrap() - POSITION_MIN_STEP);
         let cmp = self.global_start.read().unwrap().cmp(&global_start);
         match cmp {
             Ordering::Less => {
@@ -103,15 +103,13 @@ impl AudioClip {
             }
         }
         *self.global_start.write().unwrap() = global_start;
-        assert!(*self.global_start.read().unwrap() <= *self.global_end.read().unwrap());
     }
 
     pub fn trim_end_to(&self, global_end: Position) {
         let global_end = self
             .clamp(global_end)
-            .max(*self.global_start.read().unwrap() + POSITION_MIN);
+            .max(*self.global_start.read().unwrap() + POSITION_MIN_STEP);
         *self.global_end.write().unwrap() = global_end;
-        assert!(*self.global_start.read().unwrap() <= *self.global_end.read().unwrap());
     }
 
     pub fn move_to(&self, global_start: Position) {
@@ -132,11 +130,10 @@ impl AudioClip {
 
     fn clamp(&self, position: Position) -> Position {
         position.clamp(
-            if *self.global_start.read().unwrap() > *self.clip_start.read().unwrap() {
-                *self.global_start.read().unwrap() - *self.clip_start.read().unwrap()
-            } else {
-                Position::default()
-            },
+            self.global_start
+                .read()
+                .unwrap()
+                .saturating_sub(*self.clip_start.read().unwrap()),
             *self.global_start.read().unwrap()
                 + Position::from_interleaved_samples(
                     u32::try_from(self.audio.samples.len()).unwrap(),

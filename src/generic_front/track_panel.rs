@@ -17,7 +17,7 @@ pub enum TrackPanelMessage {
 }
 
 impl TrackPanel {
-    pub const fn new(arrangement: Arc<Arrangement>) -> Self {
+    pub fn new(arrangement: Arc<Arrangement>) -> Self {
         Self { arrangement }
     }
 

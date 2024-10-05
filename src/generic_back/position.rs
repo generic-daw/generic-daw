@@ -10,16 +10,21 @@ pub struct Position {
     /// the position in quarter notes, rounded down
     pub quarter_note: u16,
     /// the position relative to `quarter_note`, in 256ths of a quarter note
-    pub sub_quarter_note: u16,
+    pub sub_quarter_note: u8,
 }
 
-pub const POSITION_MIN: Position = Position {
+pub const POSITION_MIN_STEP: Position = Position {
     quarter_note: 0,
     sub_quarter_note: 1,
 };
 
+pub const POSITION_MAX: Position = Position {
+    quarter_note: 65535,
+    sub_quarter_note: 255,
+};
+
 impl Position {
-    pub const fn new(quarter_note: u16, sub_quarter_note: u16) -> Self {
+    pub fn new(quarter_note: u16, sub_quarter_note: u8) -> Self {
         Self {
             quarter_note,
             sub_quarter_note,
@@ -31,7 +36,7 @@ impl Position {
             / (f64::from(meter.sample_rate.load(SeqCst) * 2)
                 / (f64::from(meter.bpm.load(SeqCst)) / 60.0));
         let quarter_note = global_beat as u16;
-        let sub_quarter_note = ((global_beat - f64::from(quarter_note)) * 256.0) as u16;
+        let sub_quarter_note = ((global_beat - f64::from(quarter_note)) * 256.0) as u8;
 
         Self {
             quarter_note,
@@ -49,11 +54,20 @@ impl Position {
     }
 
     pub fn snap(mut self, scale: f32) -> Self {
-        self.sub_quarter_note -= self.sub_quarter_note % (1 << (scale as u16 - 3));
+        self.sub_quarter_note -=
+            self.sub_quarter_note % (1u8.checked_shl(scale as u32 - 3).unwrap_or(0));
         if scale > 11f32 {
             self.quarter_note -= self.quarter_note % 4;
         }
         self
+    }
+
+    pub fn saturating_sub(self, other: Self) -> Self {
+        if self <= other {
+            Self::default()
+        } else {
+            self - other
+        }
     }
 }
 
@@ -76,19 +90,20 @@ impl Add for Position {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        let new_sub_quarter_note = self.sub_quarter_note + rhs.sub_quarter_note;
+        assert!(POSITION_MAX - self >= rhs);
+
         Self {
-            quarter_note: self.quarter_note + rhs.quarter_note + new_sub_quarter_note / 256,
-            sub_quarter_note: new_sub_quarter_note % 256,
+            quarter_note: self.quarter_note
+                + rhs.quarter_note
+                + u16::from(self.sub_quarter_note > u8::MAX - rhs.sub_quarter_note),
+            sub_quarter_note: self.sub_quarter_note.wrapping_add(rhs.sub_quarter_note),
         }
     }
 }
 
 impl AddAssign for Position {
     fn add_assign(&mut self, rhs: Self) {
-        let new = *self + rhs;
-        self.quarter_note = new.quarter_note;
-        self.sub_quarter_note = new.sub_quarter_note;
+        *self = *self + rhs;
     }
 }
 
@@ -98,24 +113,17 @@ impl Sub for Position {
     fn sub(self, rhs: Self) -> Self::Output {
         assert!(self >= rhs);
 
-        if self.sub_quarter_note < rhs.sub_quarter_note {
-            Self {
-                quarter_note: self.quarter_note - rhs.quarter_note - 1,
-                sub_quarter_note: 256 + self.sub_quarter_note - rhs.sub_quarter_note,
-            }
-        } else {
-            Self {
-                quarter_note: self.quarter_note - rhs.quarter_note,
-                sub_quarter_note: self.sub_quarter_note - rhs.sub_quarter_note,
-            }
+        Self {
+            quarter_note: self.quarter_note
+                - rhs.quarter_note
+                - u16::from(self.sub_quarter_note < rhs.sub_quarter_note),
+            sub_quarter_note: self.sub_quarter_note.wrapping_sub(rhs.sub_quarter_note),
         }
     }
 }
 
 impl SubAssign for Position {
     fn sub_assign(&mut self, rhs: Self) {
-        let new = *self - rhs;
-        self.quarter_note = new.quarter_note;
-        self.sub_quarter_note = new.sub_quarter_note;
+        *self = *self - rhs;
     }
 }

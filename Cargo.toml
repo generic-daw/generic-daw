@@ -48,6 +48,7 @@ cast_sign_loss = "allow"
 module_name_repetitions = "allow"
 
 nursery = { level = "warn", priority = -1 }
+missing-const-for-fn = "allow"
 
 # Restriction, MachineApplicable
 allow_attributes = "warn"
