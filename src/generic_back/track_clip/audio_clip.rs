@@ -132,7 +132,11 @@ impl AudioClip {
 
     fn clamp(&self, position: Position) -> Position {
         position.clamp(
-            *self.global_start.read().unwrap() - *self.clip_start.read().unwrap(),
+            if *self.global_start.read().unwrap() > *self.clip_start.read().unwrap() {
+                *self.global_start.read().unwrap() - *self.clip_start.read().unwrap()
+            } else {
+                Position::default()
+            },
             *self.global_start.read().unwrap()
                 + Position::from_interleaved_samples(
                     u32::try_from(self.audio.samples.len()).unwrap(),
