@@ -1,7 +1,7 @@
 mod interleaved_audio;
 pub use interleaved_audio::InterleavedAudio;
 
-use crate::generic_back::{Meter, Position, TrackClip, POSITION_MIN_STEP};
+use crate::generic_back::{Meter, Position, TrackClip};
 use std::{
     cmp::Ordering,
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
@@ -89,7 +89,7 @@ impl AudioClip {
     pub fn trim_start_to(&self, global_start: Position) {
         let global_start = self
             .clamp(global_start)
-            .min(*self.global_end.read().unwrap() - POSITION_MIN_STEP);
+            .min(*self.global_end.read().unwrap() - Position::MIN_STEP);
         let cmp = self.global_start.read().unwrap().cmp(&global_start);
         match cmp {
             Ordering::Less => {
@@ -108,7 +108,7 @@ impl AudioClip {
     pub fn trim_end_to(&self, global_end: Position) {
         let global_end = self
             .clamp(global_end)
-            .max(*self.global_start.read().unwrap() + POSITION_MIN_STEP);
+            .max(*self.global_start.read().unwrap() + Position::MIN_STEP);
         *self.global_end.write().unwrap() = global_end;
     }
 

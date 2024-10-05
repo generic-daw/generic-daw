@@ -5,7 +5,7 @@ mod meter;
 pub use meter::{Denominator, Meter, Numerator};
 
 mod position;
-pub use position::{Position, POSITION_MIN_STEP};
+pub use position::Position;
 
 mod track;
 pub(in crate::generic_back) use track::{AtomicDirtyEvent, DirtyEvent};

@@ -13,17 +13,17 @@ pub struct Position {
     pub sub_quarter_note: u8,
 }
 
-pub const POSITION_MIN_STEP: Position = Position {
-    quarter_note: 0,
-    sub_quarter_note: 1,
-};
-
-pub const POSITION_MAX: Position = Position {
-    quarter_note: 65535,
-    sub_quarter_note: 255,
-};
-
 impl Position {
+    pub const MAX: Self = Self {
+        quarter_note: u16::MAX,
+        sub_quarter_note: u8::MAX,
+    };
+
+    pub const MIN_STEP: Self = Self {
+        quarter_note: 0,
+        sub_quarter_note: 1,
+    };
+
     pub fn new(quarter_note: u16, sub_quarter_note: u8) -> Self {
         Self {
             quarter_note,
@@ -90,7 +90,7 @@ impl Add for Position {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        assert!(POSITION_MAX - self >= rhs);
+        assert!(Self::MAX - self >= rhs);
 
         Self {
             quarter_note: self.quarter_note
