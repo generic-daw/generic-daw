@@ -120,7 +120,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
             return Status::Ignored;
         };
 
-        if let Some(status) = self.on_event_modifiers_irrelevant(state, &event, cursor) {
+        if let Some(status) = self.on_event_any_modifiers(state, &event, cursor) {
             return status;
         }
 
@@ -415,7 +415,7 @@ impl Arrangement {
             })
     }
 
-    fn on_event_modifiers_irrelevant(
+    fn on_event_any_modifiers(
         &self,
         state: &mut State,
         event: &Event,
@@ -529,7 +529,6 @@ impl Arrangement {
         None
     }
 
-    #[expect(clippy::too_many_lines)]
     fn on_event_no_modifiers(
         &self,
         state: &mut State,
@@ -561,71 +560,8 @@ impl Arrangement {
                 }
                 mouse::Event::ButtonPressed(button) => match button {
                     mouse::Button::Left => {
-                        if cursor.y < 16.0 {
-                            let time = cursor.x.mul_add(state.scale.x.exp2(), state.position.x);
-
-                            self.meter.global_time.store(time as u32, SeqCst);
-
-                            state.action = Action::DraggingPlayhead;
-                            state.interaction = Interaction::ResizingHorizontally;
-
-                            return Some(Status::Captured);
-                        }
-                        let index = ((cursor.y - 16.0) / state.scale.y) as usize;
-                        if index < self.tracks.read().unwrap().len() {
-                            let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
-                                &self.meter,
-                                cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
-                            );
-                            if let Some(clip) = clip {
-                                let offset =
-                                    (clip.get_global_start().in_interleaved_samples(&self.meter)
-                                        as f32
-                                        - state.position.x)
-                                        / state.scale.x.exp2()
-                                        - cursor.x;
-                                let pixel_len = (clip.get_global_end() - clip.get_global_start())
-                                    .in_interleaved_samples(&self.meter)
-                                    as f32
-                                    / state.scale.x.exp2();
-                                let start_pixel =
-                                    (clip.get_global_start().in_interleaved_samples(&self.meter)
-                                        as f32
-                                        - state.position.x)
-                                        / state.scale.x.exp2();
-                                let end_pixel =
-                                    (clip.get_global_end().in_interleaved_samples(&self.meter)
-                                        as f32
-                                        - state.position.x)
-                                        / state.scale.x.exp2();
-
-                                match (cursor.x - start_pixel < 10.0, end_pixel - cursor.x < 10.0) {
-                                    (true, true) => {
-                                        state.action =
-                                            if cursor.x - start_pixel < end_pixel - cursor.x {
-                                                Action::ClipTrimmingStart(clip, offset)
-                                            } else {
-                                                Action::ClipTrimmingEnd(clip, offset + pixel_len)
-                                            };
-                                        state.interaction = Interaction::ResizingHorizontally;
-                                    }
-                                    (true, false) => {
-                                        state.action = Action::ClipTrimmingStart(clip, offset);
-                                        state.interaction = Interaction::ResizingHorizontally;
-                                    }
-                                    (false, true) => {
-                                        state.action =
-                                            Action::ClipTrimmingEnd(clip, offset + pixel_len);
-                                        state.interaction = Interaction::ResizingHorizontally;
-                                    }
-                                    (false, false) => {
-                                        state.action = Action::DraggingClip(clip, index, offset);
-                                        state.interaction = Interaction::Grabbing;
-                                    }
-                                }
-
-                                return Some(Status::Captured);
-                            }
+                        if let Some(status) = self.lmb_none_or_alt(state, cursor) {
+                            return Some(status);
                         }
                     }
                     mouse::Button::Right => {
@@ -744,33 +680,70 @@ impl Arrangement {
                     return Some(Status::Captured);
                 }
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                    if cursor.y < 16.0 {
-                        let time = cursor.x.mul_add(state.scale.x.exp2(), state.position.x);
-                        self.meter.global_time.store(time as u32, SeqCst);
-                        state.action = Action::DraggingPlayhead;
-                        state.interaction = Interaction::ResizingHorizontally;
-                        return Some(Status::Captured);
-                    }
-                    let index = ((cursor.y - 16.0) / state.scale.y) as usize;
-                    if index < self.tracks.read().unwrap().len() {
-                        let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
-                            &self.meter,
-                            cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
-                        );
-                        if let Some(clip) = clip {
-                            let offset =
-                                (clip.get_global_start().in_interleaved_samples(&self.meter)
-                                    as f32
-                                    - state.position.x)
-                                    / state.scale.x.exp2()
-                                    - cursor.x;
-                            state.action = Action::DraggingClip(clip, index, offset);
-                            state.interaction = Interaction::Grabbing;
-                            return Some(Status::Captured);
-                        }
+                    if let Some(status) = self.lmb_none_or_alt(state, cursor) {
+                        return Some(status);
                     }
                 }
                 _ => {}
+            }
+        }
+        None
+    }
+
+    fn lmb_none_or_alt(&self, state: &mut State, cursor: Point) -> Option<Status> {
+        if cursor.y < 16.0 {
+            let time = cursor.x.mul_add(state.scale.x.exp2(), state.position.x);
+            self.meter.global_time.store(time as u32, SeqCst);
+            state.action = Action::DraggingPlayhead;
+            state.interaction = Interaction::ResizingHorizontally;
+            return Some(Status::Captured);
+        }
+        let index = ((cursor.y - 16.0) / state.scale.y) as usize;
+        if index < self.tracks.read().unwrap().len() {
+            let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
+                &self.meter,
+                cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
+            );
+            if let Some(clip) = clip {
+                let offset = (clip.get_global_start().in_interleaved_samples(&self.meter) as f32
+                    - state.position.x)
+                    / state.scale.x.exp2()
+                    - cursor.x;
+                let pixel_len = (clip.get_global_end() - clip.get_global_start())
+                    .in_interleaved_samples(&self.meter) as f32
+                    / state.scale.x.exp2();
+                let start_pixel = (clip.get_global_start().in_interleaved_samples(&self.meter)
+                    as f32
+                    - state.position.x)
+                    / state.scale.x.exp2();
+                let end_pixel = (clip.get_global_end().in_interleaved_samples(&self.meter) as f32
+                    - state.position.x)
+                    / state.scale.x.exp2();
+
+                match (cursor.x - start_pixel < 10.0, end_pixel - cursor.x < 10.0) {
+                    (true, true) => {
+                        state.action = if cursor.x - start_pixel < end_pixel - cursor.x {
+                            Action::ClipTrimmingStart(clip, offset)
+                        } else {
+                            Action::ClipTrimmingEnd(clip, offset + pixel_len)
+                        };
+                        state.interaction = Interaction::ResizingHorizontally;
+                    }
+                    (true, false) => {
+                        state.action = Action::ClipTrimmingStart(clip, offset);
+                        state.interaction = Interaction::ResizingHorizontally;
+                    }
+                    (false, true) => {
+                        state.action = Action::ClipTrimmingEnd(clip, offset + pixel_len);
+                        state.interaction = Interaction::ResizingHorizontally;
+                    }
+                    (false, false) => {
+                        state.action = Action::DraggingClip(clip, index, offset);
+                        state.interaction = Interaction::Grabbing;
+                    }
+                }
+
+                return Some(Status::Captured);
             }
         }
         None
