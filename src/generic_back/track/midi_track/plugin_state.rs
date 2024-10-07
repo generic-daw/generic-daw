@@ -52,14 +52,14 @@ impl PluginState {
             started_notes: Vec::new(),
             last_global_time: 0,
             running_buffer: [0.0; BUFFER_SIZE],
-            last_buffer_index: 15,
+            last_buffer_index: BUFFER_SIZE - 1,
         })
     }
 
     pub fn refresh_buffer(&mut self, global_time: u32) {
         let buffer = self.get_input_events(global_time);
-        let input_audio = [vec![0.0; 8], vec![0.0; 8]];
-        let input_ports = AudioPorts::with_capacity(2, 1);
+        let input_audio = [vec![0.0; BUFFER_SIZE], vec![0.0; BUFFER_SIZE]];
+        let input_ports = AudioPorts::with_capacity(0, 0);
         let output_ports = AudioPorts::with_capacity(2, 1);
 
         self.plugin_sender
@@ -73,7 +73,8 @@ impl PluginState {
 
         let message = self.host_receiver.lock().unwrap().recv().unwrap();
         if let HostThreadMessage::AudioProcessed(buffers, _) = message {
-            (0..16).step_by(2).for_each(|i| {
+            (0..BUFFER_SIZE).for_each(|i| {
+                let i = i * 2;
                 self.running_buffer[i] = buffers[0][i];
                 self.running_buffer[i + 1] = buffers[1][i];
             });
@@ -119,7 +120,10 @@ impl PluginState {
     fn events_refresh(&mut self, buffer: &mut EventBuffer, global_time: u32, steady_time: u32) {
         self.global_midi_cache
             .iter()
-            .filter(|note| note.local_start >= global_time && note.local_start < global_time + 16)
+            .filter(|note| {
+                note.local_start >= global_time
+                    && note.local_start < global_time + u32::try_from(BUFFER_SIZE).unwrap() * 2
+            })
             .for_each(|note| {
                 // notes that start during the running buffer
                 buffer.push(&NoteOnEvent::new(
@@ -135,7 +139,10 @@ impl PluginState {
         self.started_notes
             .iter()
             .enumerate()
-            .filter(|(_, note)| note.local_end >= global_time && note.local_end < global_time + 16)
+            .filter(|(_, note)| {
+                note.local_end >= global_time
+                    && note.local_end < global_time + u32::try_from(BUFFER_SIZE).unwrap() * 2
+            })
             .for_each(|(index, note)| {
                 // notes that end before the running buffer ends
                 buffer.push(&NoteOffEvent::new(
