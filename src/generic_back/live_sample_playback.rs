@@ -1,4 +1,3 @@
-use crate::generic_back::InterleavedAudio;
 use std::sync::{
     atomic::{AtomicUsize, Ordering::SeqCst},
     Arc,
@@ -6,12 +5,12 @@ use std::sync::{
 
 #[derive(Debug)]
 pub struct PlayingBack {
-    sample: Arc<InterleavedAudio>,
+    sample: Arc<Vec<f32>>,
     current_sample: AtomicUsize,
 }
 
 impl PlayingBack {
-    pub fn new(sample: Arc<InterleavedAudio>) -> Self {
+    pub fn new(sample: Arc<Vec<f32>>) -> Self {
         Self {
             sample,
             current_sample: AtomicUsize::default(),
@@ -19,11 +18,10 @@ impl PlayingBack {
     }
 
     pub fn get(&self) -> f32 {
-        let current_sample = self.current_sample.fetch_add(1, SeqCst);
-        if current_sample >= self.sample.samples.len() {
-            0.0
-        } else {
-            self.sample.samples[current_sample]
-        }
+        self.sample[self.current_sample.fetch_add(1, SeqCst)]
+    }
+
+    pub fn over(&self) -> bool {
+        self.current_sample.load(SeqCst) >= self.sample.len()
     }
 }

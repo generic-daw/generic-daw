@@ -20,6 +20,11 @@ impl Arrangement {
     }
 
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {
+        self.live_sample_playback
+            .write()
+            .unwrap()
+            .retain(|sample| !sample.over());
+
         self.tracks
             .read()
             .unwrap()
@@ -46,6 +51,7 @@ impl Arrangement {
     }
 
     pub fn export(&self, path: &Path) {
+        self.live_sample_playback.write().unwrap().clear();
         self.meter.playing.store(true, SeqCst);
         self.meter.exporting.store(true, SeqCst);
 
