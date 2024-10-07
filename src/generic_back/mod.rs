@@ -14,6 +14,9 @@ pub use track::{AudioTrack, MidiTrack, Track};
 mod track_clip;
 pub use track_clip::{AudioClip, InterleavedAudio, MidiNote, TrackClip};
 
+mod live_sample_playback;
+pub use live_sample_playback::PlayingBack;
+
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Stream, StreamConfig,
@@ -39,7 +42,8 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
                 no_denormals(|| {
                     for sample in data.iter_mut() {
                         *sample = arrangement
-                            .get_at_global_time(arrangement.meter.global_time.load(SeqCst));
+                            .get_at_global_time(arrangement.meter.global_time.load(SeqCst))
+                            .clamp(-1.0, 1.0);
 
                         if arrangement.meter.playing.load(SeqCst)
                             && !arrangement.meter.exporting.load(SeqCst)

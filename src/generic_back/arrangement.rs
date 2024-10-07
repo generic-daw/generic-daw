@@ -1,4 +1,4 @@
-use crate::generic_back::{Meter, Position, Track};
+use crate::generic_back::{Meter, PlayingBack, Position, Track};
 use hound::WavWriter;
 use std::{
     path::Path,
@@ -10,6 +10,8 @@ pub struct Arrangement {
     pub tracks: RwLock<Vec<Track>>,
     /// information relating to the playback of the arrangement
     pub meter: Arc<Meter>,
+    /// samples that are being played back live, that are not part of the arrangement
+    pub live_sample_playback: RwLock<Vec<PlayingBack>>,
 }
 
 impl Arrangement {
@@ -24,7 +26,13 @@ impl Arrangement {
             .iter()
             .map(|track| track.get_at_global_time(global_time))
             .sum::<f32>()
-            .clamp(-1.0, 1.0)
+            + self
+                .live_sample_playback
+                .read()
+                .unwrap()
+                .iter()
+                .map(PlayingBack::get)
+                .sum::<f32>()
     }
 
     pub fn len(&self) -> Position {
