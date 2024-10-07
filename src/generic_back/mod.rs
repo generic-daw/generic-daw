@@ -14,9 +14,6 @@ pub use track::{AudioTrack, MidiTrack, Track};
 mod track_clip;
 pub use track_clip::{AudioClip, InterleavedAudio, MidiNote, TrackClip};
 
-mod live_sample_playback;
-pub use live_sample_playback::PlayingBack;
-
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Stream, StreamConfig,

@@ -1,6 +1,7 @@
-use crate::generic_back::{Meter, PlayingBack, Position, Track};
+use crate::generic_back::{Meter, Position, Track};
 use hound::WavWriter;
 use std::{
+    collections::VecDeque,
     path::Path,
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
 };
@@ -11,7 +12,7 @@ pub struct Arrangement {
     /// information relating to the playback of the arrangement
     pub meter: Arc<Meter>,
     /// samples that are being played back live, that are not part of the arrangement
-    pub live_sample_playback: RwLock<Vec<PlayingBack>>,
+    pub live_sample_playback: RwLock<Vec<VecDeque<f32>>>,
 }
 
 impl Arrangement {
@@ -23,7 +24,7 @@ impl Arrangement {
         self.live_sample_playback
             .write()
             .unwrap()
-            .retain(|sample| !sample.over());
+            .retain(|sample| !sample.is_empty());
 
         self.tracks
             .read()
@@ -33,10 +34,10 @@ impl Arrangement {
             .sum::<f32>()
             + self
                 .live_sample_playback
-                .read()
+                .write()
                 .unwrap()
-                .iter()
-                .map(PlayingBack::get)
+                .iter_mut()
+                .filter_map(VecDeque::pop_front)
                 .sum::<f32>()
     }
 
