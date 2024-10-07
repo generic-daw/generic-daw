@@ -54,28 +54,32 @@ impl MidiClip {
         *self.global_end.read().unwrap()
     }
 
-    pub fn trim_start_to(&self, pattern_start: Position) {
-        let cmp = self.pattern_start.read().unwrap().cmp(&pattern_start);
+    pub fn trim_start_to(&self, global_start: Position) {
+        let global_start = self
+            .clamp(global_start)
+            .min(*self.global_end.read().unwrap() - Position::MIN_STEP);
+        let cmp = self.global_start.read().unwrap().cmp(&global_start);
         match cmp {
             Ordering::Less => {
-                *self.global_start.write().unwrap() +=
-                    pattern_start - *self.pattern_start.read().unwrap();
+                *self.pattern_start.write().unwrap() +=
+                    global_start - *self.global_start.read().unwrap();
             }
             Ordering::Equal => {}
             Ordering::Greater => {
-                *self.global_start.write().unwrap() -=
-                    *self.pattern_start.read().unwrap() - pattern_start;
+                *self.pattern_start.write().unwrap() -=
+                    *self.global_start.read().unwrap() - global_start;
             }
         }
-        *self.pattern_start.write().unwrap() = pattern_start;
+        *self.global_start.write().unwrap() = global_start;
         self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
-        assert!(*self.global_start.read().unwrap() <= *self.global_end.read().unwrap());
     }
 
     pub fn trim_end_to(&self, global_end: Position) {
+        let global_end = self
+            .clamp(global_end)
+            .max(*self.global_start.read().unwrap() + Position::MIN_STEP);
         *self.global_end.write().unwrap() = global_end;
         self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
-        assert!(*self.global_start.read().unwrap() <= *self.global_end.read().unwrap());
     }
 
     pub fn move_to(&self, global_start: Position) {
@@ -93,6 +97,17 @@ impl MidiClip {
         }
         *self.global_start.write().unwrap() = global_start;
         self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
+    }
+
+    fn clamp(&self, position: Position) -> Position {
+        position.clamp(
+            self.global_start
+                .read()
+                .unwrap()
+                .saturating_sub(*self.pattern_start.read().unwrap()),
+            *self.global_start.read().unwrap()
+                + Position::from_interleaved_samples(self.pattern.len(), &self.meter),
+        )
     }
 
     pub(in crate::generic_back) fn get_global_midi(&self) -> Vec<Arc<MidiNote>> {
