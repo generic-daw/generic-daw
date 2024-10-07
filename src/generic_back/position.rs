@@ -90,7 +90,7 @@ impl Add for Position {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        assert!(Self::MAX - self >= rhs);
+        debug_assert!(Self::MAX - self >= rhs);
 
         Self {
             quarter_note: self.quarter_note
@@ -111,7 +111,7 @@ impl Sub for Position {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        assert!(self >= rhs);
+        debug_assert!(self >= rhs);
 
         Self {
             quarter_note: self.quarter_note
