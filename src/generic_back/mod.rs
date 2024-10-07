@@ -41,17 +41,17 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
             move |data, _| {
                 no_denormals(|| {
                     for sample in data.iter_mut() {
-                        *sample = arrangement
-                            .get_at_global_time(
-                                if arrangement.meter.playing.load(SeqCst)
-                                    && !arrangement.meter.exporting.load(SeqCst)
-                                {
+                        *sample = if arrangement.meter.exporting.load(SeqCst) {
+                            0.0
+                        } else {
+                            arrangement
+                                .get_at_global_time(if arrangement.meter.playing.load(SeqCst) {
                                     arrangement.meter.global_time.fetch_add(1, SeqCst)
                                 } else {
                                     arrangement.meter.global_time.load(SeqCst)
-                                },
-                            )
-                            .clamp(-1.0, 1.0);
+                                })
+                                .clamp(-1.0, 1.0)
+                        };
                     }
                 });
             },
