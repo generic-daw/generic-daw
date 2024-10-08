@@ -25,7 +25,6 @@ iced_aw = { version = "0.11.0", default-features = false, features = [
 iced_fonts = { version = "0.1.1", features = ["bootstrap"] }
 iced_wgpu = { version = "0.13.5", features = ["geometry"] }
 itertools = "0.13.0"
-no_denormals = "0.1.2"
 rfd = "0.15.0"
 rubato = { version = "0.16.0", default-features = false }
 strum = { version = "0.26.3", features = ["derive"] }
