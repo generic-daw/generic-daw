@@ -603,7 +603,7 @@ impl Arrangement {
                         ScrollDelta::Lines { x: _, y } => -y * 0.5,
                     };
 
-                    let x = (x + state.scale.x).clamp(3.0, 12.999_999);
+                    let x = (x + state.scale.x).clamp(3.0, 13.999_999);
 
                     state.scale.x = x;
                     state.waveform_cache.borrow_mut().meshes = None;
