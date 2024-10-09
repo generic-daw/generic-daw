@@ -55,10 +55,35 @@ impl Position {
 
     pub fn snap(mut self, scale: f32) -> Self {
         if scale < 11.0 {
-            self.sub_quarter_note -= self.sub_quarter_note % (1u8 << (scale as u8 - 3));
+            let shift = 1u8 << (scale as u8 - 3);
+            let lower = self.sub_quarter_note - self.sub_quarter_note % shift;
+            let upper = lower.checked_add(shift);
+
+            if self.sub_quarter_note - lower < upper.unwrap_or(255) - self.sub_quarter_note {
+                self.sub_quarter_note = lower;
+            } else if let Some(upper) = upper {
+                self.sub_quarter_note = upper;
+            } else {
+                self.sub_quarter_note = 0;
+                self.quarter_note += 1;
+            }
+        } else if scale < 12.0 {
+            if self.sub_quarter_note >= 128 {
+                self.quarter_note += 1;
+            }
+            self.sub_quarter_note = 0;
         } else {
             self.sub_quarter_note = 0;
-            self.quarter_note -= self.quarter_note % (1u16 << (scale as u16 - 11));
+
+            let shift = 1u16 << (scale as u16 - 11);
+            let lower = self.quarter_note - self.quarter_note % shift;
+            let upper = lower + shift;
+
+            if self.quarter_note - lower < upper - self.quarter_note {
+                self.quarter_note = lower;
+            } else {
+                self.quarter_note = upper;
+            }
         }
         self
     }
