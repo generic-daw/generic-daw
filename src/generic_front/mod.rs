@@ -1,6 +1,7 @@
 mod timeline_position;
 use cpal::Stream;
 use iced_fonts::{bootstrap, BOOTSTRAP_FONT};
+use include_data::include_f32s;
 use strum::VariantArray;
 pub(in crate::generic_front) use timeline_position::TimelinePosition;
 
@@ -14,14 +15,14 @@ mod widget;
 pub(in crate::generic_front) use widget::ArrangementState;
 
 use crate::generic_back::{
-    build_output_stream, Arrangement, AudioClip, AudioTrack, Denominator, InterleavedAudio,
-    Numerator,
+    build_output_stream, resample, Arrangement, AudioClip, AudioTrack, Denominator,
+    InterleavedAudio, Numerator,
 };
 use iced::{
     border::Radius,
     event::{self, Status},
     keyboard,
-    widget::{button, column, container, pick_list, row, Text},
+    widget::{button, column, container, pick_list, row, toggler, Text},
     window::frames,
     Alignment::Center,
     Element, Event, Subscription, Theme,
@@ -29,6 +30,9 @@ use iced::{
 use iced_aw::number_input;
 use rfd::FileDialog;
 use std::sync::{atomic::Ordering::SeqCst, Arc};
+
+static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
+static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 
 pub struct Daw {
     arrangement: Arc<Arrangement>,
@@ -47,6 +51,7 @@ pub enum Message {
     BpmChanged(u16),
     NumeratorChanged(Numerator),
     DenominatorChanged(Denominator),
+    ToggleMetronome,
     Tick,
 }
 
@@ -54,6 +59,21 @@ impl Default for Daw {
     fn default() -> Self {
         let arrangement = Arrangement::create();
         let stream = build_output_stream(arrangement.clone());
+
+        *arrangement.on_bar_click.write().unwrap() = resample(
+            44100,
+            arrangement.meter.sample_rate.load(SeqCst),
+            ON_BAR_CLICK.into(),
+        )
+        .unwrap()
+        .into();
+        *arrangement.off_bar_click.write().unwrap() = resample(
+            44100,
+            arrangement.meter.sample_rate.load(SeqCst),
+            OFF_BAR_CLICK.into(),
+        )
+        .unwrap()
+        .into();
 
         Self {
             arrangement: arrangement.clone(),
@@ -91,6 +111,11 @@ impl Daw {
                 self.arrangement.meter.playing.fetch_not(SeqCst);
             }
             Message::Stop => {
+                self.arrangement
+                    .live_sample_playback
+                    .write()
+                    .unwrap()
+                    .clear();
                 self.arrangement.meter.playing.store(false, SeqCst);
                 self.arrangement.meter.global_time.store(0, SeqCst);
             }
@@ -98,12 +123,15 @@ impl Daw {
                 *self = Self::default();
             }
             Message::Export => {
-                if let Some(path) = FileDialog::new()
-                    .add_filter("Wave File", &["wav"])
-                    .save_file()
-                {
-                    self.arrangement.export(&path);
-                }
+                let arrangement = self.arrangement.clone();
+                std::thread::spawn(move || {
+                    if let Some(path) = FileDialog::new()
+                        .add_filter("Wave File", &["wav"])
+                        .save_file()
+                    {
+                        arrangement.export(&path);
+                    }
+                });
             }
             Message::BpmChanged(bpm) => {
                 self.arrangement.meter.bpm.store(bpm, SeqCst);
@@ -121,6 +149,9 @@ impl Daw {
                     .store(new_denominator, SeqCst);
             }
             Message::Tick => {}
+            Message::ToggleMetronome => {
+                self.arrangement.metronome.fetch_not(SeqCst);
+            }
         }
     }
 
@@ -168,7 +199,10 @@ impl Daw {
                 30..=600,
                 Message::BpmChanged
             )
-            .width(50)
+            .width(50),
+            toggler(self.arrangement.metronome.load(SeqCst))
+                .label("Metronome")
+                .on_toggle(|_| Message::ToggleMetronome),
         ]
         .spacing(20)
         .align_y(Center);

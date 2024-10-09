@@ -692,8 +692,16 @@ impl Arrangement {
 
     fn lmb_none_or_alt(&self, state: &mut State, cursor: Point) -> Option<Status> {
         if cursor.y < 16.0 {
-            let time = cursor.x.mul_add(state.scale.x.exp2(), state.position.x);
-            self.meter.global_time.store(time as u32, SeqCst);
+            let mut time = Position::from_interleaved_samples(
+                cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
+                &self.meter,
+            );
+            if !state.modifiers.alt() {
+                time = time.snap(state.scale.x);
+            }
+            self.meter
+                .global_time
+                .store(time.in_interleaved_samples(&self.meter), SeqCst);
             state.action = Action::DraggingPlayhead;
             state.interaction = Interaction::ResizingHorizontally;
             return Some(Status::Captured);

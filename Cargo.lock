@@ -165,9 +165,9 @@ dependencies = [
 
 [[package]]
 name = "ashpd"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfe7e0dd0ac5a401dc116ed9f9119cf9decc625600474cb41f0fc0a0050abc9a"
+checksum = "4d43c03d9e36dd40cab48435be0b09646da362c278223ca535493877b2c1dee9"
 dependencies = [
  "async-fs",
  "async-net",
@@ -1427,6 +1427,7 @@ dependencies = [
  "iced_aw",
  "iced_fonts",
  "iced_wgpu",
+ "include_data",
  "itertools",
  "rfd",
  "rubato",
@@ -1866,6 +1867,15 @@ checksum = "634d9b1461af396cad843f47fdba5597a4f9e6ddd4bfb6ff5d85028c25cb12f6"
 dependencies = [
  "unicode-bidi",
  "unicode-normalization",
+]
+
+[[package]]
+name = "include_data"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14c03e3e4eee5ae0d03b6da534082064d0d2168008fc784f8bc39def00676817"
+dependencies = [
+ "bytemuck",
 ]
 
 [[package]]

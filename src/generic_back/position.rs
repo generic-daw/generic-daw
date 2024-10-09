@@ -54,10 +54,11 @@ impl Position {
     }
 
     pub fn snap(mut self, scale: f32) -> Self {
-        self.sub_quarter_note -=
-            self.sub_quarter_note % (1u8.checked_shl(scale as u32 - 3).unwrap_or(0));
-        if scale > 11f32 {
-            self.quarter_note -= self.quarter_note % 4;
+        if scale < 11.0 {
+            self.sub_quarter_note -= self.sub_quarter_note % (1u8 << (scale as u8 - 3));
+        } else {
+            self.sub_quarter_note = 0;
+            self.quarter_note -= self.quarter_note % (1u16 << (scale as u16 - 11));
         }
         self
     }

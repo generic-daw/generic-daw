@@ -106,56 +106,7 @@ impl InterleavedAudio {
 
         let stream_sample_rate = arrangement.meter.sample_rate.load(SeqCst);
 
-        if file_sample_rate == stream_sample_rate {
-            return Ok(interleaved_samples);
-        }
-
-        let resample_ratio = f64::from(stream_sample_rate) / f64::from(file_sample_rate);
-
-        let frames = interleaved_samples.len() / 2;
-        let mut resampler = SincFixedIn::<f32>::new(
-            resample_ratio,
-            1.0,
-            SincInterpolationParameters {
-                sinc_len: 256,
-                f_cutoff: 0.95,
-                interpolation: SincInterpolationType::Nearest,
-                oversampling_factor: usize::try_from(
-                    file_sample_rate / gcd(stream_sample_rate, file_sample_rate),
-                )
-                .unwrap(),
-                window: WindowFunction::Blackman,
-            },
-            frames,
-            2,
-        )?;
-
-        let mut left = Vec::with_capacity(frames);
-        let mut right = Vec::with_capacity(frames);
-        interleaved_samples
-            .iter()
-            .enumerate()
-            .for_each(|(i, &sample)| {
-                if i % 2 == 0 {
-                    left.push(sample);
-                } else {
-                    right.push(sample);
-                }
-            });
-
-        let deinterleaved_samples = resampler.process(&[left, right], None)?;
-
-        let frames = deinterleaved_samples[0].len();
-        interleaved_samples.clear();
-        interleaved_samples.reserve_exact(frames * 2);
-        let left = &deinterleaved_samples[0];
-        let right = &deinterleaved_samples[1];
-        for i in 0..frames {
-            interleaved_samples.push(left[i]);
-            interleaved_samples.push(right[i]);
-        }
-
-        Ok(interleaved_samples)
+        resample(file_sample_rate, stream_sample_rate, interleaved_samples)
     }
 
     fn create_lod(audio: &Arc<Self>) {
@@ -192,4 +143,61 @@ impl InterleavedAudio {
             });
         });
     }
+}
+
+pub fn resample(
+    file_sample_rate: u32,
+    stream_sample_rate: u32,
+    mut interleaved_samples: Vec<f32>,
+) -> Result<Vec<f32>> {
+    if file_sample_rate == stream_sample_rate {
+        return Ok(interleaved_samples);
+    }
+
+    let resample_ratio = f64::from(stream_sample_rate) / f64::from(file_sample_rate);
+
+    let frames = interleaved_samples.len() / 2;
+    let mut resampler = SincFixedIn::<f32>::new(
+        resample_ratio,
+        1.0,
+        SincInterpolationParameters {
+            sinc_len: 256,
+            f_cutoff: 0.95,
+            interpolation: SincInterpolationType::Nearest,
+            oversampling_factor: usize::try_from(
+                file_sample_rate / gcd(stream_sample_rate, file_sample_rate),
+            )
+            .unwrap(),
+            window: WindowFunction::Blackman,
+        },
+        frames,
+        2,
+    )?;
+
+    let mut left = Vec::with_capacity(frames);
+    let mut right = Vec::with_capacity(frames);
+    interleaved_samples
+        .iter()
+        .enumerate()
+        .for_each(|(i, &sample)| {
+            if i % 2 == 0 {
+                left.push(sample);
+            } else {
+                right.push(sample);
+            }
+        });
+
+    let deinterleaved_samples = resampler.process(&[left, right], None)?;
+
+    let frames = deinterleaved_samples[0].len();
+    interleaved_samples.clear();
+    interleaved_samples.reserve_exact(frames * 2);
+    let left = &deinterleaved_samples[0];
+    let right = &deinterleaved_samples[1];
+    for i in 0..frames {
+        interleaved_samples.push(left[i]);
+        interleaved_samples.push(right[i]);
+    }
+
+    Ok(interleaved_samples)
 }

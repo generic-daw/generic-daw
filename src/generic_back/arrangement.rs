@@ -3,7 +3,10 @@ use hound::WavWriter;
 use std::{
     collections::VecDeque,
     path::Path,
-    sync::{atomic::Ordering::SeqCst, Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering::SeqCst},
+        Arc, RwLock,
+    },
 };
 
 #[derive(Debug, Default)]
@@ -13,6 +16,10 @@ pub struct Arrangement {
     pub meter: Arc<Meter>,
     /// samples that are being played back live, that are not part of the arrangement
     pub live_sample_playback: RwLock<Vec<VecDeque<f32>>>,
+    pub on_bar_click: RwLock<VecDeque<f32>>,
+    pub off_bar_click: RwLock<VecDeque<f32>>,
+    pub last_pos: RwLock<Position>,
+    pub metronome: AtomicBool,
 }
 
 impl Arrangement {
@@ -25,6 +32,22 @@ impl Arrangement {
             .write()
             .unwrap()
             .retain(|sample| !sample.is_empty());
+
+        if self.metronome.load(SeqCst) && self.meter.playing.load(SeqCst) && global_time % 2 == 0 {
+            let pos = Position::from_interleaved_samples(global_time, &self.meter);
+            if pos != *self.last_pos.read().unwrap() {
+                if pos.sub_quarter_note == 0 {
+                    self.live_sample_playback.write().unwrap().push(
+                        if pos.quarter_note % self.meter.numerator.load(SeqCst) as u16 == 0 {
+                            self.on_bar_click.read().unwrap().clone()
+                        } else {
+                            self.off_bar_click.read().unwrap().clone()
+                        },
+                    );
+                }
+                *self.last_pos.write().unwrap() = pos;
+            }
+        }
 
         self.tracks
             .read()
