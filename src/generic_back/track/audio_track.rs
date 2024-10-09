@@ -26,7 +26,7 @@ impl AudioTrack {
     }
 
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {
-        if !self.meter.playing.load(SeqCst) {
+        if !self.meter.playing.load(SeqCst) && !self.meter.exporting.load(SeqCst) {
             return 0.0;
         }
 

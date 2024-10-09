@@ -4,7 +4,7 @@ pub use interleaved_audio::{resample, InterleavedAudio};
 use crate::generic_back::{Meter, Position, TrackClip};
 use std::{
     cmp::Ordering,
-    sync::{atomic::Ordering::SeqCst, Arc, RwLock},
+    sync::{Arc, RwLock},
 };
 
 #[derive(Debug)]
@@ -56,7 +56,7 @@ impl AudioClip {
             .unwrap()
             .in_interleaved_samples(&self.meter);
 
-        if !&self.meter.playing.load(SeqCst) || global_time < start || global_time > end {
+        if global_time < start || global_time > end {
             return 0.0;
         }
 

@@ -123,15 +123,12 @@ impl Daw {
                 *self = Self::default();
             }
             Message::Export => {
-                let arrangement = self.arrangement.clone();
-                std::thread::spawn(move || {
-                    if let Some(path) = FileDialog::new()
-                        .add_filter("Wave File", &["wav"])
-                        .save_file()
-                    {
-                        arrangement.export(&path);
-                    }
-                });
+                if let Some(path) = FileDialog::new()
+                    .add_filter("Wave File", &["wav"])
+                    .save_file()
+                {
+                    self.arrangement.export(&path);
+                }
             }
             Message::BpmChanged(bpm) => {
                 self.arrangement.meter.bpm.store(bpm, SeqCst);

@@ -28,16 +28,7 @@ impl Arrangement {
     }
 
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {
-        self.live_sample_playback
-            .write()
-            .unwrap()
-            .retain(|sample| !sample.is_empty());
-
-        if self.metronome.load(SeqCst)
-            && self.meter.playing.load(SeqCst)
-            && !self.meter.exporting.load(SeqCst)
-            && global_time % 2 == 0
-        {
+        if self.meter.playing.load(SeqCst) && self.metronome.load(SeqCst) && global_time % 2 == 0 {
             let pos = Position::from_interleaved_samples(global_time, &self.meter);
             if pos != *self.last_pos.read().unwrap() {
                 if pos.sub_quarter_note == 0 {
@@ -53,19 +44,30 @@ impl Arrangement {
             }
         }
 
-        self.tracks
+        let mut sample = self
+            .tracks
             .read()
             .unwrap()
             .iter()
             .map(|track| track.get_at_global_time(global_time))
-            .sum::<f32>()
-            + self
+            .sum::<f32>();
+
+        if !self.meter.exporting.load(SeqCst) {
+            sample += self
                 .live_sample_playback
                 .write()
                 .unwrap()
                 .iter_mut()
                 .filter_map(VecDeque::pop_front)
-                .sum::<f32>()
+                .sum::<f32>();
+
+            self.live_sample_playback
+                .write()
+                .unwrap()
+                .retain(|sample| !sample.is_empty());
+        }
+
+        sample
     }
 
     pub fn len(&self) -> Position {
@@ -79,8 +81,7 @@ impl Arrangement {
     }
 
     pub fn export(&self, path: &Path) {
-        self.live_sample_playback.write().unwrap().clear();
-        self.meter.playing.store(true, SeqCst);
+        self.meter.playing.store(false, SeqCst);
         self.meter.exporting.store(true, SeqCst);
 
         let mut writer = WavWriter::create(
@@ -98,7 +99,7 @@ impl Arrangement {
             writer.write_sample(self.get_at_global_time(i)).unwrap();
         });
 
-        self.meter.playing.store(false, SeqCst);
         self.meter.exporting.store(false, SeqCst);
+        self.live_sample_playback.write().unwrap().clear();
     }
 }
