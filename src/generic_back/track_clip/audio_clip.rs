@@ -1,11 +1,11 @@
-mod interleaved_audio;
-pub use interleaved_audio::{resample, InterleavedAudio};
-
 use crate::generic_back::{Meter, Position, TrackClip};
 use std::{
     cmp::Ordering,
     sync::{Arc, RwLock},
 };
+
+mod interleaved_audio;
+pub use interleaved_audio::{resample, InterleavedAudio};
 
 #[derive(Debug)]
 pub struct AudioClip {

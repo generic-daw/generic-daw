@@ -1,9 +1,3 @@
-mod dirty_event;
-pub use dirty_event::{AtomicDirtyEvent, DirtyEvent};
-
-mod plugin_state;
-pub use plugin_state::BUFFER_SIZE;
-
 use crate::{
     generic_back::{pan, Meter, Position, Track, TrackClip},
     helpers::AtomicF32,
@@ -15,6 +9,12 @@ use std::sync::{
     mpsc::{Receiver, Sender},
     Arc, Mutex, RwLock,
 };
+
+mod dirty_event;
+pub use dirty_event::{AtomicDirtyEvent, DirtyEvent};
+
+mod plugin_state;
+pub use plugin_state::BUFFER_SIZE;
 
 #[derive(Debug)]
 pub struct MidiTrack {

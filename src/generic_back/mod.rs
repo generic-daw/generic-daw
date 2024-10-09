@@ -1,3 +1,12 @@
+use cpal::{
+    traits::{DeviceTrait, HostTrait, StreamTrait},
+    Stream, StreamConfig,
+};
+use std::{
+    f32::consts::PI,
+    sync::{atomic::Ordering::SeqCst, Arc},
+};
+
 mod arrangement;
 pub use arrangement::Arrangement;
 
@@ -13,15 +22,6 @@ pub use track::{AudioTrack, MidiTrack, Track};
 
 mod track_clip;
 pub use track_clip::{resample, AudioClip, InterleavedAudio, MidiNote, TrackClip};
-
-use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
-    Stream, StreamConfig,
-};
-use std::{
-    f32::consts::PI,
-    sync::{atomic::Ordering::SeqCst, Arc},
-};
 
 pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
     let device = cpal::default_host().default_output_device().unwrap();

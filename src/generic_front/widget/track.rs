@@ -1,10 +1,9 @@
-use std::sync::Arc;
-
 use crate::{
     generic_back::{Meter, Track, TrackClip},
     generic_front::ArrangementState,
 };
 use iced::{advanced::graphics::Mesh, Point, Rectangle, Renderer, Size, Theme};
+use std::sync::Arc;
 
 impl Track {
     pub fn draw(

@@ -1,23 +1,8 @@
-mod timeline_position;
-use cpal::Stream;
-use iced_fonts::{bootstrap, BOOTSTRAP_FONT};
-use include_data::include_f32s;
-use strum::VariantArray;
-pub(in crate::generic_front) use timeline_position::TimelinePosition;
-
-mod timeline_scale;
-pub(in crate::generic_front) use timeline_scale::TimelineScale;
-
-mod track_panel;
-pub(in crate::generic_front) use track_panel::{TrackPanel, TrackPanelMessage};
-
-mod widget;
-pub(in crate::generic_front) use widget::ArrangementState;
-
 use crate::generic_back::{
     build_output_stream, resample, Arrangement, AudioClip, AudioTrack, Denominator,
     InterleavedAudio, Numerator,
 };
+use cpal::Stream;
 use iced::{
     border::Radius,
     event::{self, Status},
@@ -28,8 +13,23 @@ use iced::{
     Element, Event, Subscription, Theme,
 };
 use iced_aw::number_input;
+use iced_fonts::{bootstrap, BOOTSTRAP_FONT};
+use include_data::include_f32s;
 use rfd::FileDialog;
 use std::sync::{atomic::Ordering::SeqCst, Arc};
+use strum::VariantArray;
+
+mod timeline_position;
+pub(in crate::generic_front) use timeline_position::TimelinePosition;
+
+mod timeline_scale;
+pub(in crate::generic_front) use timeline_scale::TimelineScale;
+
+mod track_panel;
+pub(in crate::generic_front) use track_panel::{TrackPanel, TrackPanelMessage};
+
+mod widget;
+pub(in crate::generic_front) use widget::ArrangementState;
 
 static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
 static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");

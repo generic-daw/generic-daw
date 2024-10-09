@@ -1,14 +1,14 @@
-mod midi_note;
-pub use midi_note::MidiNote;
-
-mod midi_pattern;
-pub use midi_pattern::MidiPattern;
-
 use crate::generic_back::{DirtyEvent, Meter, Position, TrackClip};
 use std::{
     cmp::Ordering,
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
 };
+
+mod midi_note;
+pub use midi_note::MidiNote;
+
+mod midi_pattern;
+pub use midi_pattern::MidiPattern;
 
 #[derive(Debug)]
 pub struct MidiClip {
