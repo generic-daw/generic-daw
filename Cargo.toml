@@ -50,7 +50,6 @@ module_name_repetitions = "allow"
 nursery = { level = "warn", priority = -1 }
 missing-const-for-fn = "allow"
 
-# Restriction, MachineApplicable
 allow_attributes = "warn"
 as_underscore = "warn"
 assertions_on_result_states = "warn"
@@ -59,6 +58,8 @@ get_unwrap = "warn"
 lossy_float_literal = "warn"
 needless_raw_strings = "warn"
 non_ascii_literal = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
 semicolon_inside_block = "warn"
 separated_literal_suffix = "warn"
 str_to_string = "warn"
