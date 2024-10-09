@@ -53,7 +53,7 @@ impl Position {
         )
     }
 
-    pub fn snap(mut self, scale: f32) -> Self {
+    pub fn snap(mut self, scale: f32, meter: &Arc<Meter>) -> Self {
         if scale < 11.0 {
             let shift = 1u8 << (scale as u8 - 3);
             let lower = self.sub_quarter_note - self.sub_quarter_note % shift;
@@ -75,7 +75,7 @@ impl Position {
         } else {
             self.sub_quarter_note = 0;
 
-            let shift = 1u16 << (scale as u16 - 11);
+            let shift = meter.numerator.load(SeqCst) as u16;
             let lower = self.quarter_note - self.quarter_note % shift;
             let upper = lower + shift;
 

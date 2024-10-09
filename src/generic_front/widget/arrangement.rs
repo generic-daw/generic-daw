@@ -1,5 +1,5 @@
 use crate::{
-    generic_back::{Arrangement, Position, TrackClip},
+    generic_back::{Arrangement, Numerator, Position, TrackClip},
     generic_front::{Message, TimelinePosition, TimelineScale},
 };
 use iced::{
@@ -43,6 +43,8 @@ pub struct State {
     pub interaction: Interaction,
     /// saves the number of tracks in the arrangement from the last draw
     tracks: Cell<usize>,
+    /// saves the numerator from the last draw
+    numerator: Cell<Numerator>,
     /// caches the meshes of the waveforms
     waveform_cache: RefCell<Cache>,
     /// caches the geometry of the grid
@@ -60,6 +62,7 @@ impl Default for State {
             scale: TimelineScale::default(),
             interaction: Interaction::default(),
             tracks: Cell::default(),
+            numerator: Cell::default(),
             waveform_cache: RefCell::new(Cache {
                 meshes: None,
                 images: None,
@@ -182,6 +185,12 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
             state.grid_cache.clear();
             state.waveform_cache.borrow_mut().meshes = None;
             state.tracks.set(self.tracks.read().unwrap().len());
+        }
+
+        if self.meter.numerator.load(SeqCst) != state.numerator.get() {
+            state.grid_cache.clear();
+            state.waveform_cache.borrow_mut().meshes = None;
+            state.numerator.set(self.meter.numerator.load(SeqCst));
         }
 
         renderer.with_layer(bounds, |renderer| {
@@ -433,7 +442,7 @@ impl Arrangement {
                             cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32;
                         if !state.modifiers.alt() {
                             time = Position::from_interleaved_samples(time, &self.meter)
-                                .snap(state.scale.x)
+                                .snap(state.scale.x, &self.meter)
                                 .in_interleaved_samples(&self.meter);
                         }
 
@@ -447,7 +456,7 @@ impl Arrangement {
                         let mut new_position =
                             Position::from_interleaved_samples(time as u32, &self.meter);
                         if !state.modifiers.alt() {
-                            new_position = new_position.snap(state.scale.x);
+                            new_position = new_position.snap(state.scale.x, &self.meter);
                         }
                         if new_position != clip.get_global_start() {
                             clip.move_to(new_position);
@@ -493,7 +502,7 @@ impl Arrangement {
                         let mut new_position =
                             Position::from_interleaved_samples(time as u32, &self.meter);
                         if !state.modifiers.alt() {
-                            new_position = new_position.snap(state.scale.x);
+                            new_position = new_position.snap(state.scale.x, &self.meter);
                         }
                         if new_position != clip.get_global_start() {
                             clip.trim_start_to(new_position);
@@ -507,7 +516,7 @@ impl Arrangement {
                         let mut new_position =
                             Position::from_interleaved_samples(time as u32, &self.meter);
                         if !state.modifiers.alt() {
-                            new_position = new_position.snap(state.scale.x);
+                            new_position = new_position.snap(state.scale.x, &self.meter);
                         }
 
                         if new_position != clip.get_global_start() {
@@ -603,7 +612,7 @@ impl Arrangement {
                         ScrollDelta::Lines { x: _, y } => -y * 0.5,
                     };
 
-                    let x = (x + state.scale.x).clamp(3.0, 13.999_999);
+                    let x = (x + state.scale.x).clamp(3.0, 12.999_999);
 
                     state.scale.x = x;
                     state.waveform_cache.borrow_mut().meshes = None;
@@ -697,7 +706,7 @@ impl Arrangement {
                 &self.meter,
             );
             if !state.modifiers.alt() {
-                time = time.snap(state.scale.x);
+                time = time.snap(state.scale.x, &self.meter);
             }
             self.meter
                 .global_time

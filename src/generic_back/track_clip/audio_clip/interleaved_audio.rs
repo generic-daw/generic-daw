@@ -27,7 +27,7 @@ pub struct InterleavedAudio {
     /// these are used to play the sample back
     pub samples: Vec<f32>,
     /// these are used to draw the sample in various quality levels
-    pub lods: RwLock<[Vec<(f32, f32)>; 11]>,
+    pub lods: RwLock<[Vec<(f32, f32)>; 10]>,
     /// the file name associated with the sample
     pub name: PathBuf,
 }
@@ -51,7 +51,6 @@ impl InterleavedAudio {
                 vec![(0.0, 0.0); length.div_ceil(1 << 10)],
                 vec![(0.0, 0.0); length.div_ceil(1 << 11)],
                 vec![(0.0, 0.0); length.div_ceil(1 << 12)],
-                vec![(0.0, 0.0); length.div_ceil(1 << 13)],
             ]),
             name: path,
         });
