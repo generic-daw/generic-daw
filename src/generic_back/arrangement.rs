@@ -33,7 +33,11 @@ impl Arrangement {
             .unwrap()
             .retain(|sample| !sample.is_empty());
 
-        if self.metronome.load(SeqCst) && self.meter.playing.load(SeqCst) && global_time % 2 == 0 {
+        if self.metronome.load(SeqCst)
+            && self.meter.playing.load(SeqCst)
+            && !self.meter.exporting.load(SeqCst)
+            && global_time % 2 == 0
+        {
             let pos = Position::from_interleaved_samples(global_time, &self.meter);
             if pos != *self.last_pos.read().unwrap() {
                 if pos.sub_quarter_note == 0 {
