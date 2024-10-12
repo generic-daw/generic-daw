@@ -1,12 +1,14 @@
 use crate::generic_back::{AtomicDirtyEvent, DirtyEvent, MidiNote};
-use clack_host::{
-    events::{
-        event_types::{NoteOffEvent, NoteOnEvent},
-        Match, Pckn,
+use generic_clap_host::{
+    clack_host::{
+        events::{
+            event_types::{NoteOffEvent, NoteOnEvent},
+            Match, Pckn,
+        },
+        prelude::{AudioPorts, EventBuffer},
     },
-    prelude::{AudioPorts, EventBuffer},
+    HostThreadMessage, MainThreadMessage,
 };
-use generic_clap_host::{host::HostThreadMessage, main_thread::MainThreadMessage};
 use std::sync::{
     atomic::Ordering::SeqCst,
     mpsc::{Receiver, Sender},

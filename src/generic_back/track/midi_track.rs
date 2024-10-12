@@ -2,7 +2,7 @@ use crate::{
     generic_back::{pan, Meter, Position, Track, TrackClip},
     helpers::AtomicF32,
 };
-use generic_clap_host::{host::HostThreadMessage, main_thread::MainThreadMessage};
+use generic_clap_host::{HostThreadMessage, MainThreadMessage};
 use plugin_state::PluginState;
 use std::sync::{
     atomic::Ordering::SeqCst,
