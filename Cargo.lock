@@ -1404,7 +1404,7 @@ dependencies = [
 [[package]]
 name = "generic-clap-host"
 version = "0.1.0"
-source = "git+https://github.com/generic-daw/generic-clap-host#9340c9b5cb04a0679727ce91ea08e1bff7dad01f"
+source = "git+https://github.com/generic-daw/generic-clap-host#7999c92033dfc61c0c4ade94b924490d487d15f2"
 dependencies = [
  "clack-extensions",
  "clack-host",
