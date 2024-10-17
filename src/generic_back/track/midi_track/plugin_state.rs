@@ -60,7 +60,7 @@ impl PluginState {
 
     pub fn refresh_buffer(&mut self, global_time: u32) {
         let buffer = self.get_input_events(global_time);
-        let input_audio = [vec![0.0; BUFFER_SIZE], vec![0.0; BUFFER_SIZE]];
+        let input_audio = vec![vec![0.0; BUFFER_SIZE], vec![0.0; BUFFER_SIZE]];
         let input_ports = AudioPorts::with_capacity(0, 0);
         let output_ports = AudioPorts::with_capacity(2, 1);
 
