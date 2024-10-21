@@ -9,7 +9,12 @@ anyhow = "1.0.90"
 atomic_enum = { version = "0.3.0", default-features = false }
 cpal = "0.15.3"
 generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host", features = [
+    "audio-ports",
     "gui",
+    "note-ports",
+    "params",
+    "state",
+    "timer",
 ] }
 hound = "3.5.1"
 iced = { version = "0.13.1", default-features = false, features = [
@@ -60,7 +65,7 @@ needless_raw_strings = "warn"
 non_ascii_literal = "warn"
 print_stdout = "warn"
 print_stderr = "warn"
-pub_with_shorthand = "warn"
+pub_without_shorthand = "warn"
 semicolon_inside_block = "warn"
 separated_literal_suffix = "warn"
 str_to_string = "warn"
