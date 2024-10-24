@@ -7,22 +7,16 @@ use generic_clap_host::{
         },
         prelude::{AudioPorts, EventBuffer},
     },
-    HostThreadMessage, MainThreadMessage,
+    ClapPlugin,
 };
-use std::sync::{
-    atomic::Ordering::SeqCst,
-    mpsc::{Receiver, Sender},
-    Arc, Mutex, RwLock,
-};
+use std::sync::{atomic::Ordering::SeqCst, Arc, Mutex};
 
 pub const BUFFER_SIZE: usize = 256;
 
 #[derive(Debug)]
 pub struct PluginState {
     /// send messages to the plugin
-    pub plugin_sender: Sender<MainThreadMessage>,
-    /// receive messages from the plugin
-    pub host_receiver: Arc<Mutex<Receiver<HostThreadMessage>>>,
+    pub plugin: ClapPlugin,
     /// the combined midi of all clips in the track
     pub global_midi_cache: Vec<Arc<MidiNote>>,
     /// how the midi was modified since the last buffer refresh
@@ -42,13 +36,9 @@ pub struct PluginState {
 }
 
 impl PluginState {
-    pub fn create(
-        plugin_sender: Sender<MainThreadMessage>,
-        host_receiver: Arc<Mutex<Receiver<HostThreadMessage>>>,
-    ) -> RwLock<Self> {
-        RwLock::new(Self {
-            plugin_sender,
-            host_receiver,
+    pub fn create(plugin: ClapPlugin) -> Mutex<Self> {
+        Mutex::new(Self {
+            plugin,
             global_midi_cache: Vec::new(),
             dirty: Arc::new(AtomicDirtyEvent::new(DirtyEvent::None)),
             started_notes: Vec::new(),
@@ -64,57 +54,43 @@ impl PluginState {
         let input_ports = AudioPorts::with_capacity(0, 0);
         let output_ports = AudioPorts::with_capacity(2, 1);
 
-        self.plugin_sender
-            .send(MainThreadMessage::ProcessAudio(
-                input_audio,
-                input_ports,
-                output_ports,
-                buffer,
-            ))
-            .unwrap();
+        let (buffers, _) =
+            self.plugin
+                .process_audio(input_audio, input_ports, output_ports, buffer);
+        (0..BUFFER_SIZE).for_each(|i| {
+            let i = i * 2;
+            self.running_buffer[i] = buffers[0][i];
+            self.running_buffer[i + 1] = buffers[1][i];
+        });
 
-        let message = self.host_receiver.lock().unwrap().recv().unwrap();
-        if let HostThreadMessage::AudioProcessed(buffers, _) = message {
-            (0..BUFFER_SIZE).for_each(|i| {
-                let i = i * 2;
-                self.running_buffer[i] = buffers[0][i];
-                self.running_buffer[i + 1] = buffers[1][i];
-            });
-
-            self.dirty.store(DirtyEvent::None, SeqCst);
-        };
+        self.dirty.store(DirtyEvent::None, SeqCst);
     }
 
     fn get_input_events(&mut self, global_time: u32) -> EventBuffer {
         let mut buffer = EventBuffer::new();
 
-        self.plugin_sender
-            .send(MainThreadMessage::GetCounter)
-            .unwrap();
+        let steady_time = self.plugin.get_counter();
 
-        let message = self.host_receiver.lock().unwrap().recv().unwrap();
-        if let HostThreadMessage::Counter(steady_time) = message {
-            let steady_time = u32::try_from(steady_time).unwrap();
-            match self.dirty.load(SeqCst) {
-                DirtyEvent::None => {
-                    if global_time != self.last_global_time + 1 {
-                        self.jump_events_refresh(&mut buffer, global_time, steady_time);
-                    }
-                }
-                DirtyEvent::NoteAdded => {
-                    self.note_add_events_refresh(&mut buffer, global_time, steady_time);
-                }
-                DirtyEvent::NoteRemoved => {
-                    self.note_remove_events_refresh(&mut buffer, steady_time);
-                }
-                DirtyEvent::NoteReplaced => {
-                    self.note_remove_events_refresh(&mut buffer, steady_time);
-                    self.note_add_events_refresh(&mut buffer, global_time, steady_time);
+        let steady_time = u32::try_from(steady_time).unwrap();
+        match self.dirty.load(SeqCst) {
+            DirtyEvent::None => {
+                if global_time != self.last_global_time + 1 {
+                    self.jump_events_refresh(&mut buffer, global_time, steady_time);
                 }
             }
-
-            self.events_refresh(&mut buffer, global_time, steady_time);
+            DirtyEvent::NoteAdded => {
+                self.note_add_events_refresh(&mut buffer, global_time, steady_time);
+            }
+            DirtyEvent::NoteRemoved => {
+                self.note_remove_events_refresh(&mut buffer, steady_time);
+            }
+            DirtyEvent::NoteReplaced => {
+                self.note_remove_events_refresh(&mut buffer, steady_time);
+                self.note_add_events_refresh(&mut buffer, global_time, steady_time);
+            }
         }
+
+        self.events_refresh(&mut buffer, global_time, steady_time);
 
         buffer
     }

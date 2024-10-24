@@ -11,7 +11,7 @@ impl MidiPattern {
     pub fn new(track: &MidiTrack) -> Self {
         Self {
             notes: Vec::new(),
-            dirty: track.plugin_state.read().unwrap().dirty.clone(),
+            dirty: track.plugin_state.lock().unwrap().dirty.clone(),
         }
     }
 
