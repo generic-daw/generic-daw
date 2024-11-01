@@ -5,7 +5,7 @@ edition = "2021"
 license = "GPL-3.0-only"
 
 [dependencies]
-anyhow = "1.0.91"
+anyhow = "1.0.92"
 atomic_enum = { version = "0.3.0", default-features = false }
 cpal = "0.15.3"
 generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host", features = [
