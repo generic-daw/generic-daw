@@ -616,7 +616,7 @@ impl Arrangement {
 
                     let cursor_content_x = cursor.x.mul_add(state.scale.x.exp2(), state.position.x);
 
-                    state.position.x = cursor_content_x - cursor.x * x.exp2();
+                    state.position.x = cursor.x.mul_add(-x.exp2(), cursor_content_x);
                     state.scale.x = x;
                     state.waveform_cache.borrow_mut().meshes = None;
                     state.grid_cache.clear();
