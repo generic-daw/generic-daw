@@ -35,7 +35,6 @@ mod track_panel;
 pub(in crate::generic_front) use track_panel::{TrackPanel, TrackPanelMessage};
 
 mod widget;
-pub(in crate::generic_front) use widget::ArrangementState;
 
 static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
 static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");

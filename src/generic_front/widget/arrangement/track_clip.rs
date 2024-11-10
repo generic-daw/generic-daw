@@ -1,4 +1,5 @@
-use crate::{generic_back::TrackClip, generic_front::ArrangementState};
+use super::State;
+use crate::generic_back::TrackClip;
 use iced::{
     advanced::{graphics::Mesh, renderer::Quad, text::Renderer as _, Renderer as _, Text},
     alignment::{Horizontal, Vertical},
@@ -92,7 +93,7 @@ impl TrackClip {
         theme: &Theme,
         bounds: Rectangle,
         arrangement_bounds: Rectangle,
-        state: &ArrangementState,
+        state: &State,
     ) -> Option<Mesh> {
         match self {
             Self::Audio(audio) => audio.meshes(theme, bounds, arrangement_bounds, state),

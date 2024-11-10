@@ -1,7 +1,5 @@
-use crate::{
-    generic_back::{Meter, Track, TrackClip},
-    generic_front::ArrangementState,
-};
+use super::State;
+use crate::generic_back::{Meter, Track, TrackClip};
 use iced::{advanced::graphics::Mesh, Point, Rectangle, Renderer, Size, Theme};
 use std::sync::Arc;
 
@@ -12,7 +10,7 @@ impl Track {
         theme: &Theme,
         bounds: Rectangle,
         arrangement_bounds: Rectangle,
-        state: &ArrangementState,
+        state: &State,
     ) {
         let meter = match self {
             Self::Audio(track) => &track.meter,
@@ -46,7 +44,7 @@ impl Track {
         theme: &Theme,
         bounds: Rectangle,
         arrangement_bounds: Rectangle,
-        state: &ArrangementState,
+        state: &State,
     ) -> Vec<Mesh> {
         let meter = match self {
             Self::Audio(track) => &track.meter,

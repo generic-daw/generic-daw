@@ -1,4 +1,5 @@
-use crate::{generic_back::AudioClip, generic_front::ArrangementState};
+use super::State;
+use crate::generic_back::AudioClip;
 use iced::{
     advanced::graphics::{
         color,
@@ -15,7 +16,7 @@ impl AudioClip {
         theme: &Theme,
         bounds: Rectangle,
         arrangement_bounds: Rectangle,
-        state: &ArrangementState,
+        state: &State,
     ) -> Option<Mesh> {
         // samples of the original audio per sample of lod
         let lod_sample_size = state.scale.x.floor().exp2() as u32;
