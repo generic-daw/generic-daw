@@ -81,17 +81,17 @@ where
         let state = tree.state.downcast_ref::<State>();
         let max_limits = limits.max();
 
-        let left_limits = Size::new(
-            DRAG_SIZE.mul_add(-0.5, max_limits.width) * state.split_at,
-            max_limits.height,
+        let left_width = DRAG_SIZE.mul_add(-0.5, max_limits.width) * state.split_at;
+        let left_limits = Limits::new(
+            Size::new(left_width, 0.0),
+            Size::new(left_width, max_limits.height),
         );
-        let left_limits = Limits::new(left_limits, left_limits);
 
-        let right_limits = Size::new(
-            DRAG_SIZE.mul_add(-0.5, max_limits.width) * (1.0 - state.split_at),
-            max_limits.height,
+        let right_width = DRAG_SIZE.mul_add(-0.5, max_limits.width) * (1.0 - state.split_at);
+        let right_limits = Limits::new(
+            Size::new(right_width, 0.0),
+            Size::new(right_width, max_limits.height),
         );
-        let right_limits = Limits::new(right_limits, right_limits);
 
         let mut moved = 0.0;
         let children = self
