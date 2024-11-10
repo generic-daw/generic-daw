@@ -145,8 +145,10 @@ where
                     }
                 }
                 iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left) => {
-                    state.dragging = false;
-                    return Status::Captured;
+                    if state.dragging {
+                        state.dragging = false;
+                        return Status::Captured;
+                    }
                 }
                 _ => {}
             }

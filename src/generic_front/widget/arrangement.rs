@@ -57,6 +57,8 @@ pub struct State {
     modifiers: Modifiers,
     /// the current action
     action: Action,
+    /// the last window size
+    last_layout_bounds: RefCell<Option<Rectangle>>,
 }
 
 impl Default for State {
@@ -75,6 +77,7 @@ impl Default for State {
             grid_cache: CanvasCache::default(),
             modifiers: Modifiers::default(),
             action: Action::default(),
+            last_layout_bounds: RefCell::default(),
         }
     }
 }
@@ -111,11 +114,6 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
 
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
             state.modifiers = modifiers;
-            return Status::Ignored;
-        }
-
-        if let Event::Window(window::Event::Resized { .. }) = event {
-            state.waveform_cache.borrow_mut().meshes = None;
             return Status::Ignored;
         }
 
@@ -196,6 +194,15 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
             state.waveform_cache.borrow_mut().meshes = None;
             state.numerator.set(self.meter.numerator.load(SeqCst));
         }
+
+        if let Some(last_layout_bounds) = *state.last_layout_bounds.borrow() {
+            if last_layout_bounds != layout.bounds() {
+                state.waveform_cache.borrow_mut().meshes = None;
+            }
+        } else {
+            state.waveform_cache.borrow_mut().meshes = None;
+        }
+        *state.last_layout_bounds.borrow_mut() = Some(layout.bounds());
 
         renderer.with_layer(bounds, |renderer| {
             renderer.draw_geometry(state.grid_cache.draw(renderer, bounds.size(), |frame| {
