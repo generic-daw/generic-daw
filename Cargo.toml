@@ -8,6 +8,7 @@ license = "GPL-3.0-only"
 anyhow = "1.0.93"
 atomic_enum = { version = "0.3.0", default-features = false }
 cpal = "0.15.3"
+etcetera = "0.8.0"
 generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host", features = [
     "audio-ports",
     "gui",
@@ -35,7 +36,6 @@ rfd = "0.15.0"
 rubato = { version = "0.16.1", default-features = false }
 strum = { version = "0.26.3", features = ["derive"] }
 symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
-etcetera = "0.8.0"
 
 [lints.rust]
 let-underscore = "warn"
