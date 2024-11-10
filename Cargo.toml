@@ -26,6 +26,7 @@ iced = { version = "0.13.1", default-features = false, features = [
 iced_aw = { version = "0.11.0", default-features = false, features = [
     "number_input",
 ] }
+iced-file-tree = { git = "https://github.com/edwloef/iced-file-tree" }
 iced_fonts = { version = "0.1.1", features = ["bootstrap"] }
 iced_wgpu = { version = "0.13.5", features = ["geometry"] }
 include_data = "1.0.1"
@@ -34,6 +35,7 @@ rfd = "0.15.0"
 rubato = { version = "0.16.1", default-features = false }
 strum = { version = "0.26.3", features = ["derive"] }
 symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
+etcetera = "0.8.0"
 
 [lints.rust]
 let-underscore = "warn"

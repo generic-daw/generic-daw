@@ -3,21 +3,27 @@ use crate::generic_back::{
     InterleavedAudio, Numerator,
 };
 use cpal::Stream;
+use etcetera::{choose_base_strategy, BaseStrategy};
 use iced::{
     border::Radius,
     event::{self, Status},
     keyboard,
-    widget::{button, column, container, pick_list, row, toggler, Text},
+    widget::{button, column, container, pick_list, row, toggler, Scrollable, Text},
     window::frames,
     Alignment::Center,
     Element, Event, Subscription, Theme,
 };
 use iced_aw::number_input;
+use iced_file_tree::FileTree;
 use iced_fonts::{bootstrap, BOOTSTRAP_FONT};
 use include_data::include_f32s;
 use rfd::FileDialog;
-use std::sync::{atomic::Ordering::SeqCst, Arc};
+use std::{
+    path::PathBuf,
+    sync::{atomic::Ordering::SeqCst, Arc},
+};
 use strum::VariantArray;
+use widget::VSplit;
 
 mod timeline_position;
 pub(in crate::generic_front) use timeline_position::TimelinePosition;
@@ -40,10 +46,11 @@ pub struct Daw {
     _stream: Stream,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Message {
     TrackPanel(TrackPanelMessage),
-    LoadSample,
+    LoadSample(PathBuf),
+    LoadSamples,
     TogglePlay,
     Stop,
     New,
@@ -89,7 +96,18 @@ impl Daw {
             Message::TrackPanel(msg) => {
                 self.track_panel.update(&msg);
             }
-            Message::LoadSample => {
+            Message::LoadSample(path) => {
+                let arrangement = self.arrangement.clone();
+                std::thread::spawn(move || {
+                    let audio_file = InterleavedAudio::create(path, &arrangement);
+                    if let Ok(audio_file) = audio_file {
+                        let track = AudioTrack::create(arrangement.meter.clone());
+                        track.try_push(&AudioClip::create(audio_file, arrangement.meter.clone()));
+                        arrangement.tracks.write().unwrap().push(track);
+                    }
+                });
+            }
+            Message::LoadSamples => {
                 let arrangement = self.arrangement.clone();
                 std::thread::spawn(move || {
                     if let Some(paths) = FileDialog::new().pick_files() {
@@ -155,7 +173,7 @@ impl Daw {
     pub fn view(&self) -> Element<'_, Message> {
         let controls = row![
             row![
-                button("Load Sample").on_press(Message::LoadSample),
+                button("Load Samples").on_press(Message::LoadSamples),
                 button("Export").on_press(Message::Export),
                 button("New").on_press(Message::New),
             ],
@@ -206,17 +224,26 @@ impl Daw {
 
         let content = column![
             controls,
-            row![
-                self.track_panel.view().map(Message::TrackPanel),
-                container(Element::new(self.arrangement.clone())).style(|_| container::Style {
-                    border: iced::Border {
-                        color: Theme::default().extended_palette().secondary.weak.color,
-                        width: 1.0,
-                        radius: Radius::new(0.0),
-                    },
-                    ..container::Style::default()
-                })
-            ]
+            VSplit::new(
+                Scrollable::new(
+                    FileTree::new(PathBuf::from(choose_base_strategy().unwrap().home_dir()))
+                        .unwrap()
+                        .on_double_click(Message::LoadSample)
+                )
+                .into(),
+                row![
+                    self.track_panel.view().map(Message::TrackPanel),
+                    container(Element::new(self.arrangement.clone())).style(|_| container::Style {
+                        border: iced::Border {
+                            color: Theme::default().extended_palette().secondary.weak.color,
+                            width: 1.0,
+                            radius: Radius::new(0.0),
+                        },
+                        ..container::Style::default()
+                    })
+                ]
+                .into()
+            )
         ]
         .padding(20)
         .spacing(20);

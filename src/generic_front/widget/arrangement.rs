@@ -1,3 +1,7 @@
+mod audio_clip;
+mod track;
+mod track_clip;
+
 use crate::{
     generic_back::{Arrangement, Numerator, Position, TrackClip},
     generic_front::{Message, TimelinePosition, TimelineScale},
