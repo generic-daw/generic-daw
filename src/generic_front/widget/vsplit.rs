@@ -19,19 +19,10 @@ struct State {
     offset: f32,
 }
 
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            split_at: 0.5,
-            dragging: false,
-            offset: 0.0,
-        }
-    }
-}
-
 #[expect(missing_debug_implementations)]
 pub struct VSplit<'a, Message, Theme, Renderer> {
     children: [Element<'a, Message, Theme, Renderer>; 3],
+    starting_split_at: f32,
 }
 
 impl<'a, Message, Theme, Renderer> VSplit<'a, Message, Theme, Renderer>
@@ -46,6 +37,20 @@ where
     ) -> Self {
         Self {
             children: [left, Rule::vertical(DRAG_SIZE).into(), right],
+            starting_split_at: 0.5,
+        }
+    }
+
+    pub fn split(mut self, split_at: f32) -> Self {
+        self.starting_split_at = split_at;
+        self
+    }
+
+    fn new_state(&self) -> State {
+        State {
+            split_at: self.starting_split_at,
+            dragging: false,
+            offset: 0.0,
         }
     }
 }
@@ -53,6 +58,7 @@ where
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for VSplit<'_, Message, Theme, Renderer>
 where
+    Theme: Catalog,
     Renderer: iced::advanced::Renderer,
 {
     fn children(&self) -> Vec<Tree> {
@@ -68,7 +74,7 @@ where
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::default())
+        tree::State::new(self.new_state())
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
@@ -229,7 +235,7 @@ impl<'a, Message, Theme, Renderer> From<VSplit<'a, Message, Theme, Renderer>>
     for Element<'a, Message, Theme, Renderer>
 where
     Message: Clone + 'a,
-    Theme: 'a,
+    Theme: Catalog + 'a,
     Renderer: iced::advanced::Renderer + 'a,
 {
     fn from(vsplit: VSplit<'a, Message, Theme, Renderer>) -> Self {

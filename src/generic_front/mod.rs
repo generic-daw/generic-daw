@@ -244,6 +244,7 @@ impl Daw {
                 ]
                 .into()
             )
+            .split(0.25)
         ]
         .padding(20)
         .spacing(20);
