@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Formatter};
+
 use iced::{
     advanced::{
         layout::{Limits, Node},
@@ -11,7 +13,7 @@ use iced::{
     Element, Length, Rectangle, Size, Vector,
 };
 
-static DRAG_SIZE: f32 = 10.0;
+const DRAG_SIZE: f32 = 10.0;
 
 struct State {
     split_at: f32,
@@ -19,10 +21,15 @@ struct State {
     offset: f32,
 }
 
-#[expect(missing_debug_implementations)]
 pub struct VSplit<'a, Message, Theme, Renderer> {
     children: [Element<'a, Message, Theme, Renderer>; 3],
     starting_split_at: f32,
+}
+
+impl<Message, Theme, Renderer> Debug for VSplit<'_, Message, Theme, Renderer> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VSplit").finish_non_exhaustive()
+    }
 }
 
 impl<'a, Message, Theme, Renderer> VSplit<'a, Message, Theme, Renderer>
