@@ -1,5 +1,3 @@
-use std::fmt::{Debug, Formatter};
-
 use iced::{
     advanced::{
         layout::{Limits, Node},
@@ -12,6 +10,7 @@ use iced::{
     widget::{rule::Catalog, Rule},
     Element, Length, Rectangle, Size, Vector,
 };
+use std::fmt::{Debug, Formatter};
 
 const DRAG_SIZE: f32 = 10.0;
 

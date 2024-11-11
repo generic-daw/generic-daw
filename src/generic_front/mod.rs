@@ -23,7 +23,6 @@ use std::{
     sync::{atomic::Ordering::SeqCst, Arc},
 };
 use strum::VariantArray;
-use widget::{Arrangement, VSplit};
 
 mod timeline_position;
 pub(in crate::generic_front) use timeline_position::TimelinePosition;
@@ -35,6 +34,7 @@ mod track_panel;
 pub(in crate::generic_front) use track_panel::{TrackPanel, TrackPanelMessage};
 
 mod widget;
+use widget::{Arrangement, VSplit};
 
 static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
 static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
