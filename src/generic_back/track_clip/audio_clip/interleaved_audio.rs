@@ -1,9 +1,6 @@
 use crate::{generic_back::Arrangement, helpers::gcd};
 use anyhow::{anyhow, Result};
-use itertools::{
-    Itertools,
-    MinMaxResult::{MinMax, NoElements, OneElement},
-};
+use itertools::{Itertools, MinMaxResult};
 use rubato::{
     Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
@@ -112,9 +109,9 @@ impl InterleavedAudio {
     fn create_lod(audio: &Arc<Self>) {
         audio.samples.chunks(8).enumerate().for_each(|(i, chunk)| {
             let (min, max) = match chunk.iter().minmax_by(|a, b| a.partial_cmp(b).unwrap()) {
-                MinMax(min, max) => (min, max),
-                OneElement(x) => (x, x),
-                NoElements => unreachable!(),
+                MinMaxResult::MinMax(min, max) => (min, max),
+                MinMaxResult::OneElement(x) => (x, x),
+                MinMaxResult::NoElements => unreachable!(),
             };
             audio.lods.write().unwrap()[0][i] =
                 ((*min).mul_add(0.5, 0.5), (*max).mul_add(0.5, 0.5));
