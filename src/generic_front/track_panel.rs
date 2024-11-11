@@ -1,4 +1,4 @@
-use crate::generic_back::Arrangement;
+use crate::generic_back::ArrangementInner;
 use iced::{
     widget::{column, container, row, slider, text},
     Alignment::Center,
@@ -7,7 +7,7 @@ use iced::{
 use std::sync::Arc;
 
 pub struct TrackPanel {
-    arrangement: Arc<Arrangement>,
+    arrangement: Arc<ArrangementInner>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -17,7 +17,7 @@ pub enum TrackPanelMessage {
 }
 
 impl TrackPanel {
-    pub fn new(arrangement: Arc<Arrangement>) -> Self {
+    pub fn new(arrangement: Arc<ArrangementInner>) -> Self {
         Self { arrangement }
     }
 

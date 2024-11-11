@@ -1,5 +1,5 @@
 use crate::generic_back::{
-    build_output_stream, resample, Arrangement, AudioClip, AudioTrack, Denominator,
+    build_output_stream, resample, ArrangementInner, AudioClip, AudioTrack, Denominator,
     InterleavedAudio, Numerator,
 };
 use cpal::Stream;
@@ -23,7 +23,7 @@ use std::{
     sync::{atomic::Ordering::SeqCst, Arc},
 };
 use strum::VariantArray;
-use widget::VSplit;
+use widget::{Arrangement, VSplit};
 
 mod timeline_position;
 pub(in crate::generic_front) use timeline_position::TimelinePosition;
@@ -40,7 +40,7 @@ static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
 static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 
 pub struct Daw {
-    arrangement: Arc<Arrangement>,
+    arrangement: Arc<ArrangementInner>,
     track_panel: TrackPanel,
     _stream: Stream,
 }
@@ -63,7 +63,7 @@ pub enum Message {
 
 impl Default for Daw {
     fn default() -> Self {
-        let arrangement = Arrangement::create();
+        let arrangement = ArrangementInner::create();
         let stream = build_output_stream(arrangement.clone());
 
         *arrangement.on_bar_click.write().unwrap() = resample(
@@ -232,13 +232,15 @@ impl Daw {
                 .into(),
                 row![
                     self.track_panel.view().map(Message::TrackPanel),
-                    container(Element::new(self.arrangement.clone())).style(|_| container::Style {
-                        border: iced::Border {
-                            color: Theme::default().extended_palette().secondary.weak.color,
-                            width: 1.0,
-                            radius: Radius::new(0.0),
-                        },
-                        ..container::Style::default()
+                    container(Arrangement::new(self.arrangement.clone())).style(|_| {
+                        container::Style {
+                            border: iced::Border {
+                                color: Theme::default().extended_palette().secondary.weak.color,
+                                width: 1.0,
+                                radius: Radius::new(0.0),
+                            },
+                            ..container::Style::default()
+                        }
                     })
                 ]
                 .into()

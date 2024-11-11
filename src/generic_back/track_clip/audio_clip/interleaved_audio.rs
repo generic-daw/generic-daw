@@ -1,4 +1,4 @@
-use crate::{generic_back::Arrangement, helpers::gcd};
+use crate::{generic_back::ArrangementInner, helpers::gcd};
 use anyhow::{anyhow, Result};
 use itertools::{Itertools, MinMaxResult};
 use rubato::{
@@ -30,7 +30,7 @@ pub struct InterleavedAudio {
 }
 
 impl InterleavedAudio {
-    pub fn create(path: PathBuf, arrangement: &Arc<Arrangement>) -> Result<Arc<Self>> {
+    pub fn create(path: PathBuf, arrangement: &Arc<ArrangementInner>) -> Result<Arc<Self>> {
         let mut samples = Self::read_audio_file(&path, arrangement)?;
         samples.shrink_to_fit();
 
@@ -56,7 +56,7 @@ impl InterleavedAudio {
         Ok(audio)
     }
 
-    fn read_audio_file(path: &PathBuf, arrangement: &Arc<Arrangement>) -> Result<Vec<f32>> {
+    fn read_audio_file(path: &PathBuf, arrangement: &Arc<ArrangementInner>) -> Result<Vec<f32>> {
         let mut format = symphonia::default::get_probe()
             .format(
                 &Hint::default(),

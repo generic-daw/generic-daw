@@ -3,8 +3,8 @@ mod track;
 mod track_clip;
 
 use crate::{
-    generic_back::{Arrangement, Numerator, Position, TrackClip},
-    generic_front::{Message, TimelinePosition, TimelineScale},
+    generic_back::{ArrangementInner, Numerator, Position, TrackClip},
+    generic_front::{TimelinePosition, TimelineScale},
 };
 use iced::{
     advanced::{
@@ -18,7 +18,7 @@ use iced::{
     keyboard::{self, Modifiers},
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::canvas::{Cache as CanvasCache, Frame, Group, Path, Stroke, Text},
-    window, Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme,
+    window, Element, Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme,
 };
 use iced_wgpu::{geometry::Cache, graphics::cache::Cached, Geometry};
 use std::{
@@ -82,7 +82,12 @@ impl Default for State {
     }
 }
 
-impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
+#[derive(Debug)]
+pub struct Arrangement {
+    arrangement: Arc<ArrangementInner>,
+}
+
+impl<Message> Widget<Message, Theme, Renderer> for Arrangement {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
     }
@@ -183,16 +188,20 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
         let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
 
-        if self.tracks.read().unwrap().len() != state.tracks.get() {
+        if self.arrangement.tracks.read().unwrap().len() != state.tracks.get() {
             state.grid_cache.clear();
             state.waveform_cache.borrow_mut().meshes = None;
-            state.tracks.set(self.tracks.read().unwrap().len());
+            state
+                .tracks
+                .set(self.arrangement.tracks.read().unwrap().len());
         }
 
-        if self.meter.numerator.load(SeqCst) != state.numerator.get() {
+        if self.arrangement.meter.numerator.load(SeqCst) != state.numerator.get() {
             state.grid_cache.clear();
             state.waveform_cache.borrow_mut().meshes = None;
-            state.numerator.set(self.meter.numerator.load(SeqCst));
+            state
+                .numerator
+                .set(self.arrangement.meter.numerator.load(SeqCst));
         }
 
         if let Some(last_layout_bounds) = *state.last_layout_bounds.borrow() {
@@ -217,7 +226,8 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
             bounds.y += 16.0;
             bounds.height -= 16.0;
 
-            self.tracks
+            self.arrangement
+                .tracks
                 .read()
                 .unwrap()
                 .iter()
@@ -238,6 +248,7 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
             let is_empty = state.waveform_cache.borrow().meshes.is_none();
             if is_empty {
                 let meshes = self
+                    .arrangement
                     .tracks
                     .read()
                     .unwrap()
@@ -279,11 +290,16 @@ impl Widget<Message, Theme, Renderer> for Arc<Arrangement> {
 }
 
 impl Arrangement {
+    pub fn new(arrangement: Arc<ArrangementInner>) -> Self {
+        Self { arrangement }
+    }
+
     fn grid(&self, frame: &mut Frame, theme: &Theme, state: &State) {
         let bounds = frame.size();
-        let numerator = self.meter.numerator.load(SeqCst);
+        let numerator = self.arrangement.meter.numerator.load(SeqCst);
 
-        let mut beat = Position::from_interleaved_samples(state.position.x as u32, &self.meter);
+        let mut beat =
+            Position::from_interleaved_samples(state.position.x as u32, &self.arrangement.meter);
         if beat.sub_quarter_note != 0 {
             beat.sub_quarter_note = 0;
             beat.quarter_note += 1;
@@ -292,7 +308,7 @@ impl Arrangement {
         let mut end_beat = beat
             + Position::from_interleaved_samples(
                 (bounds.width * state.scale.x.exp2()) as u32,
-                &self.meter,
+                &self.arrangement.meter,
             );
         end_beat.sub_quarter_note = 0;
 
@@ -321,7 +337,8 @@ impl Arrangement {
                 theme.extended_palette().secondary.weak.color
             };
 
-            let x = (beat.in_interleaved_samples(&self.meter) as f32 - state.position.x)
+            let x = (beat.in_interleaved_samples(&self.arrangement.meter) as f32
+                - state.position.x)
                 / state.scale.x.exp2();
 
             let path = Path::new(|path| {
@@ -359,7 +376,8 @@ impl Arrangement {
         let mut track_line = (-state.position.y)
             .rem_euclid(1.0)
             .mul_add(state.scale.y, 16.0);
-        let last_track_line = (self.tracks.read().unwrap().len() as f32 - state.position.y)
+        let last_track_line = (self.arrangement.tracks.read().unwrap().len() as f32
+            - state.position.y)
             .mul_add(state.scale.y, 16.0);
 
         while track_line as u32 <= last_track_line as u32 {
@@ -383,7 +401,7 @@ impl Arrangement {
         let mut frame = Frame::new(renderer, bounds.size());
 
         let path = Path::new(|path| {
-            let x = (self.meter.global_time.load(SeqCst) as f32 - state.position.x)
+            let x = (self.arrangement.meter.global_time.load(SeqCst) as f32 - state.position.x)
                 / state.scale.x.exp2();
             path.line_to(Point::new(x, 0.0));
             path.line_to(Point::new(x, bounds.height));
@@ -411,20 +429,25 @@ impl Arrangement {
             return Interaction::ResizingHorizontally;
         }
         let index = (cursor.y - 16.0) / state.scale.y;
-        if index >= self.tracks.read().unwrap().len() as f32 {
+        if index >= self.arrangement.tracks.read().unwrap().len() as f32 {
             return Interaction::default();
         }
-        self.tracks.read().unwrap()[index as usize]
+        self.arrangement.tracks.read().unwrap()[index as usize]
             .get_clip_at_global_time(
-                &self.meter,
+                &self.arrangement.meter,
                 cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
             )
             .map_or_else(Interaction::default, |clip| {
-                let start_pixel = (clip.get_global_start().in_interleaved_samples(&self.meter)
+                let start_pixel = (clip
+                    .get_global_start()
+                    .in_interleaved_samples(&self.arrangement.meter)
                     as f32
                     - state.position.x)
                     / state.scale.x.exp2();
-                let end_pixel = (clip.get_global_end().in_interleaved_samples(&self.meter) as f32
+                let end_pixel = (clip
+                    .get_global_end()
+                    .in_interleaved_samples(&self.arrangement.meter)
+                    as f32
                     - state.position.x)
                     / state.scale.x.exp2();
 
@@ -435,6 +458,7 @@ impl Arrangement {
             })
     }
 
+    #[expect(clippy::too_many_lines)]
     fn on_event_any_modifiers(
         &self,
         state: &mut State,
@@ -452,22 +476,26 @@ impl Arrangement {
                         let mut time =
                             cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32;
                         if !state.modifiers.alt() {
-                            time = Position::from_interleaved_samples(time, &self.meter)
-                                .snap(state.scale.x, &self.meter)
-                                .in_interleaved_samples(&self.meter);
+                            time =
+                                Position::from_interleaved_samples(time, &self.arrangement.meter)
+                                    .snap(state.scale.x, &self.arrangement.meter)
+                                    .in_interleaved_samples(&self.arrangement.meter);
                         }
 
-                        self.meter.global_time.store(time, SeqCst);
+                        self.arrangement.meter.global_time.store(time, SeqCst);
 
                         return Some(Status::Captured);
                     }
                     Action::DraggingClip(clip, index, offset) => {
                         let time =
                             (cursor.x + offset).mul_add(state.scale.x.exp2(), state.position.x);
-                        let mut new_position =
-                            Position::from_interleaved_samples(time as u32, &self.meter);
+                        let mut new_position = Position::from_interleaved_samples(
+                            time as u32,
+                            &self.arrangement.meter,
+                        );
                         if !state.modifiers.alt() {
-                            new_position = new_position.snap(state.scale.x, &self.meter);
+                            new_position =
+                                new_position.snap(state.scale.x, &self.arrangement.meter);
                         }
                         if new_position != clip.get_global_start() {
                             clip.move_to(new_position);
@@ -475,10 +503,10 @@ impl Arrangement {
                         }
                         let new_index = ((cursor.y - 16.0) / state.scale.y) as usize;
                         if index != &new_index
-                            && new_index < self.tracks.read().unwrap().len()
-                            && self.tracks.read().unwrap()[new_index].try_push(clip)
+                            && new_index < self.arrangement.tracks.read().unwrap().len()
+                            && self.arrangement.tracks.read().unwrap()[new_index].try_push(clip)
                         {
-                            self.tracks.read().unwrap()[*index].remove_clip(clip);
+                            self.arrangement.tracks.read().unwrap()[*index].remove_clip(clip);
 
                             state.waveform_cache.borrow_mut().meshes = None;
                             state.action = Action::DraggingClip(clip.clone(), new_index, *offset);
@@ -488,15 +516,16 @@ impl Arrangement {
                     Action::DeletingClips => {
                         if cursor.y > 16.0 {
                             let index = ((cursor.y - 16.0) / state.scale.y) as usize;
-                            if index < self.tracks.read().unwrap().len() {
-                                let clip = self.tracks.read().unwrap()[index]
+                            if index < self.arrangement.tracks.read().unwrap().len() {
+                                let clip = self.arrangement.tracks.read().unwrap()[index]
                                     .get_clip_at_global_time(
-                                        &self.meter,
+                                        &self.arrangement.meter,
                                         cursor.x.mul_add(state.scale.x.exp2(), state.position.x)
                                             as u32,
                                     );
                                 if let Some(clip) = clip {
-                                    self.tracks.read().unwrap()[index].remove_clip(&clip);
+                                    self.arrangement.tracks.read().unwrap()[index]
+                                        .remove_clip(&clip);
 
                                     state.waveform_cache.borrow_mut().meshes = None;
                                     state.interaction = Interaction::default();
@@ -510,10 +539,13 @@ impl Arrangement {
                         let time =
                             (cursor.x + offset).mul_add(state.scale.x.exp2(), state.position.x);
 
-                        let mut new_position =
-                            Position::from_interleaved_samples(time as u32, &self.meter);
+                        let mut new_position = Position::from_interleaved_samples(
+                            time as u32,
+                            &self.arrangement.meter,
+                        );
                         if !state.modifiers.alt() {
-                            new_position = new_position.snap(state.scale.x, &self.meter);
+                            new_position =
+                                new_position.snap(state.scale.x, &self.arrangement.meter);
                         }
                         if new_position != clip.get_global_start() {
                             clip.trim_start_to(new_position);
@@ -524,10 +556,13 @@ impl Arrangement {
                     Action::ClipTrimmingEnd(clip, offset) => {
                         let time =
                             (cursor.x + offset).mul_add(state.scale.x.exp2(), state.position.x);
-                        let mut new_position =
-                            Position::from_interleaved_samples(time as u32, &self.meter);
+                        let mut new_position = Position::from_interleaved_samples(
+                            time as u32,
+                            &self.arrangement.meter,
+                        );
                         if !state.modifiers.alt() {
-                            new_position = new_position.snap(state.scale.x, &self.meter);
+                            new_position =
+                                new_position.snap(state.scale.x, &self.arrangement.meter);
                         }
 
                         if new_position != clip.get_global_start() {
@@ -563,12 +598,21 @@ impl Arrangement {
                         ScrollDelta::Lines { x, y } => (x * 100.0, y * 200.0),
                     };
 
-                    let x = x
-                        .mul_add(-state.scale.x.exp2(), state.position.x)
-                        .clamp(0.0, self.len().in_interleaved_samples(&self.meter) as f32);
+                    let x = x.mul_add(-state.scale.x.exp2(), state.position.x).clamp(
+                        0.0,
+                        self.arrangement
+                            .len()
+                            .in_interleaved_samples(&self.arrangement.meter)
+                            as f32,
+                    );
                     let y = (y / state.scale.y).mul_add(-0.5, state.position.y).clamp(
                         0.0,
-                        self.tracks.read().unwrap().len().saturating_sub(1) as f32,
+                        self.arrangement
+                            .tracks
+                            .read()
+                            .unwrap()
+                            .len()
+                            .saturating_sub(1) as f32,
                     );
 
                     state.position.x = x;
@@ -587,15 +631,16 @@ impl Arrangement {
                     mouse::Button::Right => {
                         if cursor.y > 16.0 {
                             let index = ((cursor.y - 16.0) / state.scale.y) as usize;
-                            if index < self.tracks.read().unwrap().len() {
-                                let clip = self.tracks.read().unwrap()[index]
+                            if index < self.arrangement.tracks.read().unwrap().len() {
+                                let clip = self.arrangement.tracks.read().unwrap()[index]
                                     .get_clip_at_global_time(
-                                        &self.meter,
+                                        &self.arrangement.meter,
                                         cursor.x.mul_add(state.scale.x.exp2(), state.position.x)
                                             as u32,
                                     );
                                 if let Some(clip) = clip {
-                                    self.tracks.read().unwrap()[index].remove_clip(&clip);
+                                    self.arrangement.tracks.read().unwrap()[index]
+                                        .remove_clip(&clip);
 
                                     state.waveform_cache.borrow_mut().meshes = None;
                                     state.action = Action::DeletingClips;
@@ -637,21 +682,23 @@ impl Arrangement {
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
                     if cursor.y > 16.0 {
                         let index = ((cursor.y - 16.0) / state.scale.y) as usize;
-                        if index < self.tracks.read().unwrap().len() {
-                            let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
-                                &self.meter,
-                                cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
-                            );
+                        if index < self.arrangement.tracks.read().unwrap().len() {
+                            let clip = self.arrangement.tracks.read().unwrap()[index]
+                                .get_clip_at_global_time(
+                                    &self.arrangement.meter,
+                                    cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
+                                );
                             if let Some(clip) = clip {
                                 let clip = Arc::new((*clip).clone());
-                                let offset =
-                                    (clip.get_global_start().in_interleaved_samples(&self.meter)
-                                        as f32
-                                        - state.position.x)
-                                        / state.scale.x.exp2()
-                                        - cursor.x;
+                                let offset = (clip
+                                    .get_global_start()
+                                    .in_interleaved_samples(&self.arrangement.meter)
+                                    as f32
+                                    - state.position.x)
+                                    / state.scale.x.exp2()
+                                    - cursor.x;
 
-                                self.tracks.read().unwrap()[index].try_push(&clip);
+                                self.arrangement.tracks.read().unwrap()[index].try_push(&clip);
 
                                 state.action = Action::DraggingClip(clip, index, offset);
                                 state.interaction = Interaction::Grabbing;
@@ -674,9 +721,12 @@ impl Arrangement {
                 ScrollDelta::Lines { x: _, y } => y * 200.0,
             };
 
-            let x = x
-                .mul_add(-state.scale.x.exp2(), state.position.x)
-                .clamp(0.0, self.len().in_interleaved_samples(&self.meter) as f32);
+            let x = x.mul_add(-state.scale.x.exp2(), state.position.x).clamp(
+                0.0,
+                self.arrangement
+                    .len()
+                    .in_interleaved_samples(&self.arrangement.meter) as f32,
+            );
 
             state.position.x = x;
             state.waveform_cache.borrow_mut().meshes = None;
@@ -717,37 +767,47 @@ impl Arrangement {
         if cursor.y < 16.0 {
             let mut time = Position::from_interleaved_samples(
                 cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
-                &self.meter,
+                &self.arrangement.meter,
             );
             if !state.modifiers.alt() {
-                time = time.snap(state.scale.x, &self.meter);
+                time = time.snap(state.scale.x, &self.arrangement.meter);
             }
-            self.meter
+            self.arrangement
+                .meter
                 .global_time
-                .store(time.in_interleaved_samples(&self.meter), SeqCst);
+                .store(time.in_interleaved_samples(&self.arrangement.meter), SeqCst);
             state.action = Action::DraggingPlayhead;
             state.interaction = Interaction::ResizingHorizontally;
             return Some(Status::Captured);
         }
         let index = ((cursor.y - 16.0) / state.scale.y) as usize;
-        if index < self.tracks.read().unwrap().len() {
-            let clip = self.tracks.read().unwrap()[index].get_clip_at_global_time(
-                &self.meter,
+        if index < self.arrangement.tracks.read().unwrap().len() {
+            let clip = self.arrangement.tracks.read().unwrap()[index].get_clip_at_global_time(
+                &self.arrangement.meter,
                 cursor.x.mul_add(state.scale.x.exp2(), state.position.x) as u32,
             );
             if let Some(clip) = clip {
-                let offset = (clip.get_global_start().in_interleaved_samples(&self.meter) as f32
+                let offset = (clip
+                    .get_global_start()
+                    .in_interleaved_samples(&self.arrangement.meter)
+                    as f32
                     - state.position.x)
                     / state.scale.x.exp2()
                     - cursor.x;
                 let pixel_len = (clip.get_global_end() - clip.get_global_start())
-                    .in_interleaved_samples(&self.meter) as f32
+                    .in_interleaved_samples(&self.arrangement.meter)
+                    as f32
                     / state.scale.x.exp2();
-                let start_pixel = (clip.get_global_start().in_interleaved_samples(&self.meter)
+                let start_pixel = (clip
+                    .get_global_start()
+                    .in_interleaved_samples(&self.arrangement.meter)
                     as f32
                     - state.position.x)
                     / state.scale.x.exp2();
-                let end_pixel = (clip.get_global_end().in_interleaved_samples(&self.meter) as f32
+                let end_pixel = (clip
+                    .get_global_end()
+                    .in_interleaved_samples(&self.arrangement.meter)
+                    as f32
                     - state.position.x)
                     / state.scale.x.exp2();
 
@@ -778,5 +838,11 @@ impl Arrangement {
             }
         }
         None
+    }
+}
+
+impl<'a, Message> From<Arrangement> for Element<'a, Message, Theme, Renderer> {
+    fn from(arrangement_front: Arrangement) -> Self {
+        Self::new(arrangement_front)
     }
 }

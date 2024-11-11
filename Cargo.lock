@@ -1735,7 +1735,7 @@ dependencies = [
 [[package]]
 name = "iced-file-tree"
 version = "0.1.0"
-source = "git+https://github.com/edwloef/iced-file-tree#ebef43ee2e90669483955c68eede0d806abdb4b5"
+source = "git+https://github.com/edwloef/iced-file-tree#597a99199948c488844ab515864ecb4635d11f57"
 dependencies = [
  "iced",
 ]
