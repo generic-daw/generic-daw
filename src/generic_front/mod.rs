@@ -11,13 +11,13 @@ use iced::{
     widget::{button, column, container, pick_list, row, toggler, Scrollable, Text},
     window::frames,
     Alignment::Center,
-    Element, Event, Subscription, Theme,
+    Element, Event, Subscription, Task, Theme,
 };
 use iced_aw::number_input;
 use iced_file_tree::FileTree;
 use iced_fonts::{bootstrap, BOOTSTRAP_FONT};
 use include_data::include_f32s;
-use rfd::FileDialog;
+use rfd::{AsyncFileDialog, FileHandle};
 use std::{
     path::PathBuf,
     sync::{atomic::Ordering::SeqCst, Arc},
@@ -49,11 +49,13 @@ pub struct Daw {
 pub enum Message {
     TrackPanel(TrackPanelMessage),
     LoadSample(PathBuf),
-    LoadSamples,
+    LoadSamplesButton,
+    LoadSamples(Vec<FileHandle>),
     TogglePlay,
     Stop,
     New,
-    Export,
+    ExportButton,
+    Export(FileHandle),
     BpmChanged(u16),
     NumeratorChanged(Numerator),
     DenominatorChanged(Denominator),
@@ -90,7 +92,7 @@ impl Default for Daw {
 }
 
 impl Daw {
-    pub fn update(&mut self, message: Message) {
+    pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::TrackPanel(msg) => {
                 self.track_panel.update(&msg);
@@ -106,24 +108,18 @@ impl Daw {
                     }
                 });
             }
-            Message::LoadSamples => {
-                let arrangement = self.arrangement.clone();
-                std::thread::spawn(move || {
-                    if let Some(paths) = FileDialog::new().pick_files() {
-                        for path in paths {
-                            let audio_file = InterleavedAudio::create(path, &arrangement);
-                            if let Ok(audio_file) = audio_file {
-                                let track = AudioTrack::create(arrangement.meter.clone());
-                                track.try_push(&AudioClip::create(
-                                    audio_file,
-                                    arrangement.meter.clone(),
-                                ));
-                                arrangement.tracks.write().unwrap().push(track);
-                            }
-                        }
-                    }
+            Message::LoadSamplesButton => {
+                return Task::perform(AsyncFileDialog::new().pick_files(), |paths| {
+                    paths.map_or(Message::Tick, Message::LoadSamples)
                 });
             }
+            Message::LoadSamples(paths) => paths
+                .iter()
+                .map(FileHandle::path)
+                .map(PathBuf::from)
+                .for_each(|path| {
+                    drop(self.update(Message::LoadSample(path)));
+                }),
             Message::TogglePlay => {
                 self.arrangement.meter.playing.fetch_not(SeqCst);
             }
@@ -139,13 +135,16 @@ impl Daw {
             Message::New => {
                 *self = Self::default();
             }
-            Message::Export => {
-                if let Some(path) = FileDialog::new()
-                    .add_filter("Wave File", &["wav"])
-                    .save_file()
-                {
-                    self.arrangement.export(&path);
-                }
+            Message::ExportButton => {
+                return Task::perform(
+                    AsyncFileDialog::new()
+                        .add_filter("Wave File", &["wav"])
+                        .save_file(),
+                    |path| path.map_or(Message::Tick, Message::Export),
+                );
+            }
+            Message::Export(path) => {
+                self.arrangement.export(path.path());
             }
             Message::BpmChanged(bpm) => {
                 self.arrangement.meter.bpm.store(bpm, SeqCst);
@@ -167,13 +166,15 @@ impl Daw {
                 self.arrangement.metronome.fetch_not(SeqCst);
             }
         }
+
+        Task::none()
     }
 
     pub fn view(&self) -> Element<'_, Message> {
         let controls = row![
             row![
-                button("Load Samples").on_press(Message::LoadSamples),
-                button("Export").on_press(Message::Export),
+                button("Load Samples").on_press(Message::LoadSamplesButton),
+                button("Export").on_press(Message::ExportButton),
                 button("New").on_press(Message::New),
             ],
             row![
@@ -269,7 +270,7 @@ impl Daw {
                             (true, false, false) => match key {
                                 keyboard::Key::Character(c) => match c.to_string().as_str() {
                                     "n" => Some(Message::New),
-                                    "e" => Some(Message::Export),
+                                    "e" => Some(Message::ExportButton),
                                     _ => None,
                                 },
                                 _ => None,
