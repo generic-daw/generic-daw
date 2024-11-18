@@ -841,7 +841,7 @@ impl Arrangement {
     }
 }
 
-impl<'a, Message> From<Arrangement> for Element<'a, Message, Theme, Renderer> {
+impl<Message> From<Arrangement> for Element<'_, Message, Theme, Renderer> {
     fn from(arrangement_front: Arrangement) -> Self {
         Self::new(arrangement_front)
     }
