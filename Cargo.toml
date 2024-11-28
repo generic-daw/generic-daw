@@ -27,7 +27,7 @@ iced = { version = "0.13.1", default-features = false, features = [
 iced_aw = { version = "0.11.0", default-features = false, features = [
     "number_input",
 ] }
-iced-file-tree = { git = "https://github.com/edwloef/iced-file-tree" }
+iced_file_tree = "0.1.1"
 iced_fonts = { version = "0.1.1", features = ["bootstrap"] }
 iced_wgpu = { version = "0.13.5", features = ["geometry"] }
 include_data = "1.0.1"
@@ -46,6 +46,9 @@ rust-2024-compatibility = "warn"
 unused_crate_dependencies = "warn"
 unused_qualifications = "warn"
 
+# https://github.com/rust-lang/rust/issues/133167
+if-let-rescope = "allow"
+
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 cast_possible_truncation = "allow"
@@ -63,8 +66,10 @@ dbg_macro = "warn"
 deref_by_slicing = "warn"
 get_unwrap = "warn"
 lossy_float_literal = "warn"
+manual_is_power_of_two = "warn"
 needless_raw_strings = "warn"
 non_ascii_literal = "warn"
+non_zero_suggestions = "warn"
 print_stdout = "warn"
 print_stderr = "warn"
 pub_without_shorthand = "warn"
@@ -73,6 +78,7 @@ separated_literal_suffix = "warn"
 str_to_string = "warn"
 string_lit_chars_any = "warn"
 try_err = "warn"
+unused_trait_names = "warn"
 
 [profile.release]
 lto = true

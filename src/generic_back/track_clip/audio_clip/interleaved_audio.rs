@@ -1,8 +1,8 @@
 use crate::{generic_back::ArrangementInner, helpers::gcd};
 use anyhow::{anyhow, Result};
-use itertools::{Itertools, MinMaxResult};
+use itertools::{Itertools as _, MinMaxResult};
 use rubato::{
-    Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
+    Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
 use std::{
     cmp::{max_by, min_by},

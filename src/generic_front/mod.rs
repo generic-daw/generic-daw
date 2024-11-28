@@ -3,7 +3,7 @@ use crate::generic_back::{
     InterleavedAudio, Numerator,
 };
 use cpal::Stream;
-use etcetera::{choose_base_strategy, BaseStrategy};
+use etcetera::{choose_base_strategy, BaseStrategy as _};
 use iced::{
     border::Radius,
     event::{self, Status},
@@ -22,7 +22,7 @@ use std::{
     path::PathBuf,
     sync::{atomic::Ordering::SeqCst, Arc},
 };
-use strum::VariantArray;
+use strum::VariantArray as _;
 
 mod timeline_position;
 pub(in crate::generic_front) use timeline_position::TimelinePosition;

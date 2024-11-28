@@ -1,5 +1,5 @@
 use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
+    traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
     Stream, StreamConfig,
 };
 use std::{

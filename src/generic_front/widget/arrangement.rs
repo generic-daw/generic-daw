@@ -20,7 +20,7 @@ use iced::{
     widget::canvas::{Cache as CanvasCache, Frame, Group, Path, Stroke, Text},
     window, Element, Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme,
 };
-use iced_wgpu::{geometry::Cache, graphics::cache::Cached, Geometry};
+use iced_wgpu::{geometry::Cache, graphics::cache::Cached as _, Geometry};
 use std::{
     cell::{Cell, RefCell},
     sync::{atomic::Ordering::SeqCst, Arc},
