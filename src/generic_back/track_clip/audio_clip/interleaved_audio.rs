@@ -1,4 +1,4 @@
-use crate::{generic_back::ArrangementInner, helpers::gcd};
+use crate::{generic_back::Meter, helpers::gcd};
 use anyhow::{anyhow, Result};
 use itertools::{Itertools as _, MinMaxResult};
 use rubato::{
@@ -30,8 +30,8 @@ pub struct InterleavedAudio {
 }
 
 impl InterleavedAudio {
-    pub fn create(path: PathBuf, arrangement: &Arc<ArrangementInner>) -> Result<Arc<Self>> {
-        let mut samples = Self::read_audio_file(&path, arrangement)?;
+    pub fn create(path: PathBuf, meter: &Meter) -> Result<Arc<Self>> {
+        let mut samples = Self::read_audio_file(&path, meter)?;
         samples.shrink_to_fit();
 
         let length = samples.len();
@@ -56,7 +56,7 @@ impl InterleavedAudio {
         Ok(audio)
     }
 
-    fn read_audio_file(path: &PathBuf, arrangement: &Arc<ArrangementInner>) -> Result<Vec<f32>> {
+    fn read_audio_file(path: &PathBuf, meter: &Meter) -> Result<Vec<f32>> {
         let mut format = symphonia::default::get_probe()
             .format(
                 &Hint::default(),
@@ -101,12 +101,12 @@ impl InterleavedAudio {
             }
         }
 
-        let stream_sample_rate = arrangement.meter.sample_rate.load(SeqCst);
+        let stream_sample_rate = meter.sample_rate.load(SeqCst);
 
         resample(file_sample_rate, stream_sample_rate, interleaved_samples)
     }
 
-    fn create_lod(audio: &Arc<Self>) {
+    fn create_lod(audio: &Self) {
         audio.samples.chunks(8).enumerate().for_each(|(i, chunk)| {
             let (min, max) = match chunk.iter().minmax_by(|a, b| a.partial_cmp(b).unwrap()) {
                 MinMaxResult::MinMax(min, max) => (min, max),

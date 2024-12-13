@@ -18,7 +18,7 @@ pub use position::Position;
 
 mod track;
 pub(in crate::generic_back) use track::{AtomicDirtyEvent, DirtyEvent};
-pub use track::{AudioTrack, MidiTrack, Track};
+pub use track::{AudioTrack, MidiTrack, TrackInner};
 
 mod track_clip;
 pub use track_clip::{resample, AudioClip, InterleavedAudio, MidiNote, TrackClip};
@@ -58,7 +58,7 @@ pub fn build_output_stream(arrangement: Arc<ArrangementInner>) -> Stream {
     stream
 }
 
-pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Arc<Meter>) -> u32 {
+pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Meter) -> u32 {
     (seconds * f64::from(meter.sample_rate.load(SeqCst) * 2)) as u32
 }
 

@@ -14,7 +14,7 @@ use iced::{
     Element, Event, Subscription, Task, Theme,
 };
 use iced_aw::number_input;
-use iced_file_tree::FileTree;
+use iced_file_tree::file_tree;
 use iced_fonts::{bootstrap, BOOTSTRAP_FONT};
 use include_data::include_f32s;
 use rfd::{AsyncFileDialog, FileHandle};
@@ -100,7 +100,7 @@ impl Daw {
             Message::LoadSample(path) => {
                 let arrangement = self.arrangement.clone();
                 std::thread::spawn(move || {
-                    let audio_file = InterleavedAudio::create(path, &arrangement);
+                    let audio_file = InterleavedAudio::create(path, &arrangement.meter);
                     if let Ok(audio_file) = audio_file {
                         let track = AudioTrack::create(arrangement.meter.clone());
                         track.try_push(&AudioClip::create(audio_file, arrangement.meter.clone()));
@@ -226,7 +226,7 @@ impl Daw {
             controls,
             VSplit::new(
                 Scrollable::new(
-                    FileTree::new(PathBuf::from(choose_base_strategy().unwrap().home_dir()))
+                    file_tree(PathBuf::from(choose_base_strategy().unwrap().home_dir()))
                         .unwrap()
                         .on_double_click(Message::LoadSample)
                 )

@@ -5,7 +5,7 @@ edition = "2021"
 license = "GPL-3.0-only"
 
 [dependencies]
-anyhow = "1.0.93"
+anyhow = "1.0.94"
 atomic_enum = { version = "0.3.0", default-features = false }
 cpal = "0.15.3"
 etcetera = "0.8.0"
@@ -55,6 +55,7 @@ cast_possible_truncation = "allow"
 cast_precision_loss = "allow"
 cast_sign_loss = "allow"
 module_name_repetitions = "allow"
+verbose_bit_mask = "allow"
 
 nursery = { level = "warn", priority = -1 }
 missing-const-for-fn = "allow"
@@ -79,6 +80,9 @@ str_to_string = "warn"
 string_lit_chars_any = "warn"
 try_err = "warn"
 unused_trait_names = "warn"
+
+[profile.dev]
+opt-level = 1
 
 [profile.release]
 lto = true
