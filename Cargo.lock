@@ -1767,9 +1767,9 @@ dependencies = [
 
 [[package]]
 name = "iced_file_tree"
-version = "0.1.1"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd0417b0419ad3f75f2538e9fb8a3631b3c84cc4b9409fbc2f0065b0520cd85b"
+checksum = "64f0d511de3f3212b02de3f2dcc4406a3ab9ce0dfd88535fe36a7b6aefe8fd40"
 dependencies = [
  "iced",
 ]
