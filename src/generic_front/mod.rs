@@ -8,7 +8,7 @@ use iced::{
     border::Radius,
     event::{self, Status},
     keyboard,
-    widget::{button, column, container, pick_list, row, toggler, Scrollable, Text},
+    widget::{button, column, container, pick_list, row, scrollable, toggler, Text},
     window::frames,
     Alignment::Center,
     Element, Event, Subscription, Task, Theme,
@@ -225,12 +225,11 @@ impl Daw {
         let content = column![
             controls,
             VSplit::new(
-                Scrollable::new(
+                scrollable(
                     file_tree(PathBuf::from(choose_base_strategy().unwrap().home_dir()))
                         .unwrap()
                         .on_double_click(Message::LoadSample)
-                )
-                .into(),
+                ),
                 row![
                     self.track_panel.view().map(Message::TrackPanel),
                     container(Arrangement::new(self.arrangement.clone())).style(|_| {
@@ -244,7 +243,6 @@ impl Daw {
                         }
                     })
                 ]
-                .into()
             )
             .split(0.25)
         ]

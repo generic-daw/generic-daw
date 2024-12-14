@@ -38,11 +38,11 @@ where
     Renderer: iced::advanced::Renderer + 'a,
 {
     pub fn new(
-        left: Element<'a, Message, Theme, Renderer>,
-        right: Element<'a, Message, Theme, Renderer>,
+        left: impl Into<Element<'a, Message, Theme, Renderer>>,
+        right: impl Into<Element<'a, Message, Theme, Renderer>>,
     ) -> Self {
         Self {
-            children: [left, Rule::vertical(DRAG_SIZE).into(), right],
+            children: [left.into(), Rule::vertical(DRAG_SIZE).into(), right.into()],
             starting_split_at: 0.5,
         }
     }
@@ -68,7 +68,7 @@ where
     Renderer: iced::advanced::Renderer,
 {
     fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(|e| Tree::new(e)).collect()
+        self.children.iter().map(Tree::new).collect()
     }
 
     fn size(&self) -> Size<Length> {
@@ -87,34 +87,31 @@ where
         let state = tree.state.downcast_ref::<State>();
         let max_limits = limits.max();
 
-        let left_width = DRAG_SIZE.mul_add(-0.5, max_limits.width) * state.split_at;
+        let left_width = max_limits.width.mul_add(state.split_at, -(DRAG_SIZE * 0.5));
         let left_limits = Limits::new(
-            Size::new(left_width, 0.0),
+            Size::new(0.0, 0.0),
             Size::new(left_width, max_limits.height),
         );
 
-        let right_width = DRAG_SIZE.mul_add(-0.5, max_limits.width) * (1.0 - state.split_at);
+        let right_width = max_limits.width - left_width - DRAG_SIZE;
         let right_limits = Limits::new(
-            Size::new(right_width, 0.0),
+            Size::new(0.0, 0.0),
             Size::new(right_width, max_limits.height),
         );
 
-        let mut moved = 0.0;
-        let children = self
-            .children
-            .iter()
-            .zip(&mut tree.children)
-            .zip([&left_limits, limits, &right_limits])
-            .map(|((child, tree), limits)| {
-                let layout = child
-                    .as_widget()
-                    .layout(tree, renderer, limits)
-                    .translate(Vector::new(moved, 0.0));
-                moved += layout.bounds().width;
-
-                layout
-            })
-            .collect();
+        let children = vec![
+            self.children[0]
+                .as_widget()
+                .layout(&mut tree.children[0], renderer, &left_limits),
+            self.children[1]
+                .as_widget()
+                .layout(&mut tree.children[1], renderer, limits)
+                .translate(Vector::new(left_width, 0.0)),
+            self.children[2]
+                .as_widget()
+                .layout(&mut tree.children[2], renderer, &right_limits)
+                .translate(Vector::new(left_width + DRAG_SIZE, 0.0)),
+        ];
 
         Node::with_children(max_limits, children)
     }
@@ -144,23 +141,19 @@ where
                         return Status::Captured;
                     }
                 }
-                iced::mouse::Event::CursorMoved { .. } => {
-                    if state.dragging {
-                        if let Some(position) = cursor.position() {
-                            state.split_at = DRAG_SIZE
-                                .mul_add(-0.5, position.x - bounds.position().x - state.offset)
-                                / (bounds.width - DRAG_SIZE);
-                        } else {
-                            state.dragging = false;
-                        }
-                        return Status::Captured;
-                    }
-                }
-                iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left) => {
-                    if state.dragging {
+                iced::mouse::Event::CursorMoved { .. } if state.dragging => {
+                    if let Some(position) = cursor.position() {
+                        state.split_at = DRAG_SIZE
+                            .mul_add(-0.5, position.x - bounds.position().x - state.offset)
+                            / (bounds.width - DRAG_SIZE);
+                    } else {
                         state.dragging = false;
-                        return Status::Captured;
                     }
+                    return Status::Captured;
+                }
+                iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left) if state.dragging => {
+                    state.dragging = false;
+                    return Status::Captured;
                 }
                 _ => {}
             }
