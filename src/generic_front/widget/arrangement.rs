@@ -94,9 +94,9 @@ impl<Message> Debug for Arrangement<'_, Message> {
     }
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message>
+impl<'a, Message> Widget<Message, Theme, Renderer> for Arrangement<'a, Message>
 where
-    Message: 'static,
+    Message: 'a,
 {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
@@ -378,9 +378,9 @@ where
     }
 }
 
-impl<Message> Arrangement<'_, Message>
+impl<'a, Message> Arrangement<'a, Message>
 where
-    Message: 'static,
+    Message: 'a,
 {
     pub fn new(inner: Arc<ArrangementInner>) -> Self {
         Self {
@@ -945,7 +945,7 @@ where
 
 impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message, Theme, Renderer>
 where
-    Message: 'static,
+    Message: 'a,
 {
     fn from(arrangement_front: Arrangement<'a, Message>) -> Self {
         Self::new(arrangement_front)
