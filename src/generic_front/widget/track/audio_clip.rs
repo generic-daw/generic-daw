@@ -15,7 +15,7 @@ impl AudioClip {
         &self,
         theme: &Theme,
         bounds: Rectangle,
-        arrangement_bounds: Rectangle,
+        viewport: Rectangle,
         position: &TimelinePosition,
         scale: &TimelineScale,
     ) -> Option<Mesh> {
@@ -50,7 +50,7 @@ impl AudioClip {
         }
 
         // how many pixels of the top of the clip are clipped off by the top of the arrangement
-        let hidden = max_by(0.0, arrangement_bounds.y - bounds.y, |a, b| {
+        let hidden = max_by(0.0, viewport.y - bounds.y + 18.0, |a, b| {
             a.partial_cmp(b).unwrap()
         });
 
@@ -60,7 +60,7 @@ impl AudioClip {
         // the part of the audio clip that is visible
         let clip_bounds = Rectangle::new(
             Point::new(0.0, hidden),
-            bounds.intersection(&arrangement_bounds).unwrap().size(),
+            bounds.intersection(&viewport).unwrap().size(),
         );
 
         // vertices of the waveform

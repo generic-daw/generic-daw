@@ -23,11 +23,11 @@ impl TrackClip {
         };
 
         // height of the clip, excluding the text, clipped off by the top of the arrangement
-        let clip_height = max_by(0.0, 18.0, |a, b| a.partial_cmp(b).unwrap());
+        let clip_height = max_by(0.0, 18.0 - bounds.height, |a, b| a.partial_cmp(b).unwrap());
 
         // the opaque background of the text
         let text_background = Quad {
-            bounds: Rectangle::new(Point::new(0.0, 0.0), Size::new(bounds.width, clip_height)),
+            bounds: Rectangle::new(Point::new(0.0, -clip_height), Size::new(bounds.width, 18.0)),
             ..Quad::default()
         };
 
@@ -60,7 +60,7 @@ impl TrackClip {
 
                 renderer.fill_text(
                     text,
-                    Point::new(3.0, 2.0),
+                    Point::new(3.0, 2.0 - clip_height),
                     theme.extended_palette().secondary.base.text,
                     Rectangle::INFINITE,
                 );
@@ -72,12 +72,12 @@ impl TrackClip {
         &self,
         theme: &Theme,
         bounds: Rectangle,
-        arrangement_bounds: Rectangle,
+        viewport: Rectangle,
         position: &TimelinePosition,
         scale: &TimelineScale,
     ) -> Option<Mesh> {
         match self {
-            Self::Audio(audio) => audio.meshes(theme, bounds, arrangement_bounds, position, scale),
+            Self::Audio(audio) => audio.meshes(theme, bounds, viewport, position, scale),
             Self::Midi(_) => None,
         }
     }

@@ -141,7 +141,7 @@ where
             .tracks
             .borrow()
             .iter()
-            .map(|track| Element::<'_, Message, Theme, Renderer>::new(track.clone()))
+            .map(|track| Element::new(track.clone()))
             .collect();
 
         let mut y = state
@@ -149,6 +149,7 @@ where
             .y
             .get()
             .mul_add(-state.scale.y.get(), SEEKER_HEIGHT);
+
         self.diff(tree);
 
         Node::with_children(
@@ -288,7 +289,7 @@ where
         style: &Style,
         layout: Layout<'_>,
         cursor: Cursor,
-        viewport: &Rectangle,
+        _viewport: &Rectangle,
     ) {
         let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
@@ -331,7 +332,7 @@ where
                     .for_each(|((child, tree), layout)| {
                         child
                             .as_widget()
-                            .draw(tree, renderer, theme, style, layout, cursor, viewport);
+                            .draw(tree, renderer, theme, style, layout, cursor, &bounds);
                     });
             });
 

@@ -47,9 +47,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Track {
         _style: &Style,
         layout: Layout<'_>,
         _cursor: Cursor,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
     ) {
-        let bounds = layout.bounds();
+        let Some(bounds) = viewport.intersection(&layout.bounds()) else {
+            return;
+        };
+
+        // TODO fix this iced renderer bug
+        if bounds.height < 1.0 {
+            return;
+        }
 
         let meter = match &*self.inner {
             TrackInner::Audio(track) => &track.meter,
@@ -100,7 +107,7 @@ impl Track {
         &self,
         theme: &Theme,
         bounds: Rectangle,
-        arrangement_bounds: Rectangle,
+        viewport: Rectangle,
         position: &TimelinePosition,
         scale: &TimelineScale,
     ) -> Vec<Mesh> {
@@ -131,7 +138,7 @@ impl Track {
                 );
                 let clip_bounds = bounds.intersection(&clip_bounds);
                 clip_bounds.and_then(|clip_bounds| {
-                    clip.meshes(theme, clip_bounds, arrangement_bounds, position, scale)
+                    clip.meshes(theme, clip_bounds, viewport, position, scale)
                 })
             })
             .collect()
