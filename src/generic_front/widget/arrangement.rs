@@ -403,7 +403,7 @@ where
     pub fn new(inner: Arc<ArrangementInner>) -> Self {
         Self {
             inner,
-            ..Default::default()
+            ..Self::default()
         }
     }
 
@@ -468,7 +468,7 @@ where
                         position: Point::new(x + 2.0, 2.0),
                         color: theme.extended_palette().secondary.base.text,
                         size: Pixels(12.0),
-                        ..Default::default()
+                        ..Text::default()
                     };
                     frame.fill_text(bar);
                 }
@@ -478,7 +478,7 @@ where
                     position: Point::new(x + 2.0, 2.0),
                     color: theme.extended_palette().secondary.base.text,
                     size: Pixels(12.0),
-                    ..Default::default()
+                    ..Text::default()
                 };
                 frame.fill_text(bar);
             }

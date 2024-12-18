@@ -150,6 +150,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<Message> {
         };
 
         // TODO fix this iced bug
+        // https://github.com/iced-rs/iced/issues/2700
         if bounds.height < 1.0 {
             return;
         }
