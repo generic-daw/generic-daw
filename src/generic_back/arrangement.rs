@@ -10,7 +10,7 @@ use std::{
 };
 
 #[derive(Debug, Default)]
-pub struct ArrangementInner {
+pub struct Arrangement {
     pub tracks: RwLock<Vec<Arc<TrackInner>>>,
     /// information relating to the playback of the arrangement
     pub meter: Arc<Meter>,
@@ -22,7 +22,7 @@ pub struct ArrangementInner {
     pub metronome: AtomicBool,
 }
 
-impl ArrangementInner {
+impl Arrangement {
     pub fn create() -> Arc<Self> {
         Arc::new(Self::default())
     }

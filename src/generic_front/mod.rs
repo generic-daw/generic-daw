@@ -1,6 +1,6 @@
 use crate::generic_back::{
-    build_output_stream, resample, ArrangementInner, AudioClip, AudioTrack, Denominator,
-    InterleavedAudio, Numerator,
+    build_output_stream, resample, Arrangement as ArrangementInner, AudioClip, AudioTrack,
+    Denominator, InterleavedAudio, Numerator,
 };
 use cpal::Stream;
 use etcetera::{choose_base_strategy, BaseStrategy as _};
@@ -45,8 +45,10 @@ pub struct Daw {
     _stream: Stream,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum Message {
+    #[default]
+    Tick,
     TrackPanel(TrackPanelMessage),
     LoadSample(PathBuf),
     LoadSamplesButton,
@@ -60,7 +62,6 @@ pub enum Message {
     NumeratorChanged(Numerator),
     DenominatorChanged(Denominator),
     ToggleMetronome,
-    Tick,
 }
 
 impl Default for Daw {
@@ -94,6 +95,7 @@ impl Default for Daw {
 impl Daw {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::Tick => {}
             Message::TrackPanel(msg) => {
                 self.track_panel.update(&msg);
             }
@@ -161,7 +163,6 @@ impl Daw {
                     .denominator
                     .store(new_denominator, SeqCst);
             }
-            Message::Tick => {}
             Message::ToggleMetronome => {
                 self.arrangement.metronome.fetch_not(SeqCst);
             }

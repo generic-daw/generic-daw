@@ -1,6 +1,6 @@
 use super::Track;
 use crate::{
-    generic_back::{ArrangementInner, Numerator, Position, TrackClip},
+    generic_back::{Arrangement as ArrangementInner, Numerator, Position, TrackClip},
     generic_front::{TimelinePosition, TimelineScale},
 };
 use iced::{
@@ -15,7 +15,7 @@ use iced::{
     keyboard::{self, Modifiers},
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::canvas::{Cache as CanvasCache, Frame, Group, Path, Stroke, Text},
-    window, Element, Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
 use iced_wgpu::{geometry::Cache, graphics::cache::Cached as _, Geometry};
 use std::{
@@ -38,15 +38,13 @@ enum Action {
     ClipTrimmingEnd(Arc<TrackClip>, f32),
 }
 
-pub struct State {
+struct State<Message> {
     /// information about the position of the timeline viewport
-    pub position: Rc<TimelinePosition>,
+    position: Rc<TimelinePosition>,
     /// information about the scale of the timeline viewport
-    pub scale: Rc<TimelineScale>,
-    /// saves what cursor to show
-    pub interaction: Interaction,
+    scale: Rc<TimelineScale>,
     /// list of all the track widgets
-    tracks: RefCell<Vec<Track>>,
+    tracks: RefCell<Vec<Track<Message>>>,
     /// saves the numerator from the last draw
     numerator: Cell<Numerator>,
     /// caches the meshes of the waveforms
@@ -61,12 +59,11 @@ pub struct State {
     last_layout_bounds: RefCell<Option<Rectangle>>,
 }
 
-impl Default for State {
+impl<Message> Default for State<Message> {
     fn default() -> Self {
         Self {
-            position: Rc::new(TimelinePosition::default()),
-            scale: Rc::new(TimelineScale::default()),
-            interaction: Interaction::default(),
+            position: Rc::default(),
+            scale: Rc::default(),
             tracks: RefCell::default(),
             numerator: Cell::default(),
             waveform_cache: RefCell::new(Cache {
@@ -82,10 +79,11 @@ impl Default for State {
     }
 }
 
+#[derive(Default)]
 pub struct Arrangement<'a, Message> {
     inner: Arc<ArrangementInner>,
-    /// column widget of all the track widgets
-    tracks: RefCell<Vec<Element<'a, Message, Theme, iced_wgpu::Renderer>>>,
+    /// list of all the track widgets
+    tracks: RefCell<Vec<Element<'a, Message, Theme, Renderer>>>,
 }
 
 impl<Message> Debug for Arrangement<'_, Message> {
@@ -94,16 +92,16 @@ impl<Message> Debug for Arrangement<'_, Message> {
     }
 }
 
-impl<'a, Message> Widget<Message, Theme, Renderer> for Arrangement<'a, Message>
+impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message>
 where
-    Message: 'a,
+    Message: Clone + Default + 'static,
 {
     fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<State>()
+        tree::Tag::of::<State<Message>>()
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::default())
+        tree::State::new(State::<Message>::default())
     }
 
     fn size(&self) -> Size<Length> {
@@ -123,7 +121,7 @@ where
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        let state = tree.state.downcast_ref::<State>();
+        let state = tree.state.downcast_ref::<State<Message>>();
 
         self.inner.tracks.read().unwrap().iter().for_each(|track| {
             let contains = state.tracks.borrow().iter().any(|w| w.is(track));
@@ -152,13 +150,24 @@ where
 
         self.diff(tree);
 
+        let state = tree.state.downcast_ref::<State<Message>>();
+
         Node::with_children(
             limits.max(),
             self.tracks
                 .borrow()
                 .iter()
                 .zip(&mut tree.children)
-                .map(|(widget, tree)| widget.as_widget().layout(tree, renderer, limits))
+                .map(|(widget, tree)| {
+                    widget.as_widget().layout(
+                        tree,
+                        renderer,
+                        &Limits::new(
+                            limits.min(),
+                            Size::new(limits.max().width, state.scale.y.get()),
+                        ),
+                    )
+                })
                 .map(|node| {
                     let node = node.translate(Vector::new(0.0, y));
                     y += node.bounds().height;
@@ -203,7 +212,7 @@ where
             return Status::Captured;
         };
 
-        let state = tree.state.downcast_mut::<State>();
+        let state = tree.state.downcast_mut::<State<Message>>();
 
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
             state.modifiers = modifiers;
@@ -214,7 +223,6 @@ where
 
         let Some(pos) = cursor.position_in(bounds) else {
             state.action = Action::None;
-            state.interaction = Interaction::default();
             return Status::Ignored;
         };
 
@@ -261,8 +269,25 @@ where
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> Interaction {
-        let interaction = self
-            .tracks
+        let state = tree.state.downcast_ref::<State<Message>>();
+
+        match state.action {
+            Action::ClipTrimmingStart(..) | Action::ClipTrimmingEnd(..) => {
+                return Interaction::ResizingHorizontally;
+            }
+            Action::DraggingClip(..) => return Interaction::Grabbing,
+            Action::DraggingPlayhead => return Interaction::ResizingHorizontally,
+            _ => {}
+        }
+
+        if cursor
+            .position_in(layout.bounds())
+            .is_some_and(|cursor| cursor.y < SEEKER_HEIGHT)
+        {
+            return Interaction::ResizingHorizontally;
+        }
+
+        self.tracks
             .borrow()
             .iter()
             .zip(&tree.children)
@@ -273,12 +298,7 @@ where
                     .mouse_interaction(tree, layout, cursor, viewport, renderer)
             })
             .max()
-            .unwrap_or_default();
-        if interaction != Interaction::default() {
-            return interaction;
-        }
-
-        tree.state.downcast_ref::<State>().interaction
+            .unwrap_or_default()
     }
 
     fn draw(
@@ -291,7 +311,7 @@ where
         cursor: Cursor,
         _viewport: &Rectangle,
     ) {
-        let state = tree.state.downcast_ref::<State>();
+        let state = tree.state.downcast_ref::<State<Message>>();
         let bounds = layout.bounds();
 
         if self.inner.meter.numerator.load(SeqCst) != state.numerator.get() {
@@ -322,19 +342,16 @@ where
             bounds.y += SEEKER_HEIGHT;
             bounds.height -= SEEKER_HEIGHT;
 
-            renderer.with_layer(bounds, |renderer| {
-                self.tracks
-                    .borrow()
-                    .iter()
-                    .zip(&tree.children)
-                    .zip(layout.children())
-                    .filter(|(_, layout)| layout.bounds().intersects(&bounds))
-                    .for_each(|((child, tree), layout)| {
-                        child
-                            .as_widget()
-                            .draw(tree, renderer, theme, style, layout, cursor, &bounds);
-                    });
-            });
+            self.tracks
+                .borrow()
+                .iter()
+                .zip(&tree.children)
+                .zip(layout.children())
+                .for_each(|((child, tree), layout)| {
+                    child
+                        .as_widget()
+                        .draw(tree, renderer, theme, style, layout, cursor, &bounds);
+                });
 
             let is_empty = state.waveform_cache.borrow().meshes.is_none();
             if is_empty {
@@ -381,16 +398,16 @@ where
 
 impl<'a, Message> Arrangement<'a, Message>
 where
-    Message: 'a,
+    Message: Default + 'a,
 {
     pub fn new(inner: Arc<ArrangementInner>) -> Self {
         Self {
             inner,
-            tracks: RefCell::new(vec![]),
+            ..Default::default()
         }
     }
 
-    fn grid(&self, frame: &mut Frame, theme: &Theme, state: &State) {
+    fn grid(&self, frame: &mut Frame, theme: &Theme, state: &State<Message>) {
         let bounds = frame.size();
         let numerator = self.inner.meter.numerator.load(SeqCst);
 
@@ -493,7 +510,13 @@ where
         }
     }
 
-    fn playhead(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme, state: &State) {
+    fn playhead(
+        &self,
+        renderer: &mut Renderer,
+        bounds: Rectangle,
+        theme: &Theme,
+        state: &State<Message>,
+    ) {
         let mut frame = Frame::new(renderer, bounds.size());
 
         let path = Path::new(|path| {
@@ -515,57 +538,14 @@ where
         renderer.draw_geometry(frame.into_geometry());
     }
 
-    fn interaction(&self, cursor: Point, state: &State) -> Interaction {
-        match state.action {
-            Action::None => {}
-            _ => return state.interaction,
-        }
-
-        if cursor.y < SEEKER_HEIGHT {
-            return Interaction::ResizingHorizontally;
-        }
-        let index = (cursor.y - SEEKER_HEIGHT) / state.scale.y.get();
-        if index >= state.tracks.borrow().len() as f32 {
-            return Interaction::default();
-        }
-        state.tracks.borrow()[index as usize]
-            .get_clip_at_global_time(
-                &self.inner.meter,
-                cursor
-                    .x
-                    .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-                    as u32,
-            )
-            .map_or_else(Interaction::default, |clip| {
-                let start_pixel = (clip
-                    .get_global_start()
-                    .in_interleaved_samples(&self.inner.meter)
-                    as f32
-                    - state.position.x.get())
-                    / state.scale.x.get().exp2();
-                let end_pixel = (clip
-                    .get_global_end()
-                    .in_interleaved_samples(&self.inner.meter)
-                    as f32
-                    - state.position.x.get())
-                    / state.scale.x.get().exp2();
-
-                match (cursor.x - start_pixel < 10.0, end_pixel - cursor.x < 10.0) {
-                    (false, false) => Interaction::Grab,
-                    _ => Interaction::ResizingHorizontally,
-                }
-            })
-    }
-
-    #[expect(clippy::too_many_lines)]
     fn on_event_any_modifiers(
         &self,
-        state: &mut State,
+        state: &mut State<Message>,
         event: &Event,
         cursor: Point,
     ) -> Option<Status> {
-        match event {
-            Event::Mouse(event) => match event {
+        if let Event::Mouse(event) = event {
+            match event {
                 mouse::Event::ButtonReleased(mouse::Button::Left) => {
                     state.action = Action::None;
                     return Some(Status::Captured);
@@ -626,7 +606,6 @@ where
                                     self.inner.tracks.read().unwrap()[index].remove_clip(&clip);
 
                                     state.waveform_cache.borrow_mut().meshes = None;
-                                    state.interaction = Interaction::default();
 
                                     return Some(Status::Captured);
                                 }
@@ -668,19 +647,14 @@ where
                     Action::None => {}
                 },
                 _ => {}
-            },
-            Event::Window(window::Event::RedrawRequested(_)) => {
-                state.interaction = self.interaction(cursor, state);
-                return Some(Status::Ignored);
             }
-            _ => {}
         }
         None
     }
 
     fn on_event_no_modifiers(
         &self,
-        state: &mut State,
+        state: &mut State<Message>,
         event: &Event,
         cursor: Point,
     ) -> Option<Status> {
@@ -734,7 +708,6 @@ where
 
                                     state.waveform_cache.borrow_mut().meshes = None;
                                     state.action = Action::DeletingClips;
-                                    state.interaction = Interaction::default();
 
                                     return Some(Status::Captured);
                                 }
@@ -749,7 +722,12 @@ where
         None
     }
 
-    fn on_event_command(&self, state: &mut State, event: &Event, cursor: Point) -> Option<Status> {
+    fn on_event_command(
+        &self,
+        state: &mut State<Message>,
+        event: &Event,
+        cursor: Point,
+    ) -> Option<Status> {
         if let Event::Mouse(event) = event {
             match event {
                 mouse::Event::WheelScrolled { delta } => {
@@ -798,7 +776,6 @@ where
                                 self.inner.tracks.read().unwrap()[index].try_push(&clip);
 
                                 state.action = Action::DraggingClip(clip, index, offset);
-                                state.interaction = Interaction::Grabbing;
 
                                 return Some(Status::Captured);
                             }
@@ -811,7 +788,12 @@ where
         None
     }
 
-    fn on_event_shift(&self, state: &State, event: &Event, _cursor: Point) -> Option<Status> {
+    fn on_event_shift(
+        &self,
+        state: &State<Message>,
+        event: &Event,
+        _cursor: Point,
+    ) -> Option<Status> {
         if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = event {
             let x = match delta {
                 ScrollDelta::Pixels { x: _, y } => y * 4.0,
@@ -833,7 +815,12 @@ where
         None
     }
 
-    fn on_event_alt(&self, state: &mut State, event: &Event, cursor: Point) -> Option<Status> {
+    fn on_event_alt(
+        &self,
+        state: &mut State<Message>,
+        event: &Event,
+        cursor: Point,
+    ) -> Option<Status> {
         if let Event::Mouse(event) = event {
             match event {
                 mouse::Event::WheelScrolled { delta } => {
@@ -860,7 +847,7 @@ where
         None
     }
 
-    fn lmb_none_or_alt(&self, state: &mut State, cursor: Point) -> Option<Status> {
+    fn lmb_none_or_alt(&self, state: &mut State<Message>, cursor: Point) -> Option<Status> {
         if cursor.y < SEEKER_HEIGHT {
             let mut time = Position::from_interleaved_samples(
                 cursor
@@ -877,7 +864,6 @@ where
                 .global_time
                 .store(time.in_interleaved_samples(&self.inner.meter), SeqCst);
             state.action = Action::DraggingPlayhead;
-            state.interaction = Interaction::ResizingHorizontally;
             return Some(Status::Captured);
         }
         let index = ((cursor.y - SEEKER_HEIGHT) / state.scale.y.get()) as usize;
@@ -921,19 +907,15 @@ where
                         } else {
                             Action::ClipTrimmingEnd(clip, offset + pixel_len)
                         };
-                        state.interaction = Interaction::ResizingHorizontally;
                     }
                     (true, false) => {
                         state.action = Action::ClipTrimmingStart(clip, offset);
-                        state.interaction = Interaction::ResizingHorizontally;
                     }
                     (false, true) => {
                         state.action = Action::ClipTrimmingEnd(clip, offset + pixel_len);
-                        state.interaction = Interaction::ResizingHorizontally;
                     }
                     (false, false) => {
                         state.action = Action::DraggingClip(clip, index, offset);
-                        state.interaction = Interaction::Grabbing;
                     }
                 }
 
@@ -946,7 +928,7 @@ where
 
 impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message, Theme, Renderer>
 where
-    Message: 'a,
+    Message: Clone + Default + 'static,
 {
     fn from(arrangement_front: Arrangement<'a, Message>) -> Self {
         Self::new(arrangement_front)

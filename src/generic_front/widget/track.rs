@@ -1,8 +1,6 @@
-mod audio_clip;
-mod track_clip;
-
+use super::TrackClip;
 use crate::{
-    generic_back::{Meter, TrackClip, TrackInner},
+    generic_back::{Meter, TrackClip as TrackClipInner, TrackInner},
     generic_front::{TimelinePosition, TimelineScale},
 };
 use iced::{
@@ -10,83 +8,166 @@ use iced::{
         graphics::Mesh,
         layout::{Limits, Node},
         renderer::Style,
-        widget::Tree,
+        widget::{tree, Tree},
         Layout, Widget,
     },
-    mouse::Cursor,
-    Length, Point, Rectangle, Renderer, Size, Theme,
+    mouse::{Cursor, Interaction},
+    Element, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
-use std::{rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
+
+#[derive(Default)]
+struct State {
+    clips: RefCell<Vec<TrackClip>>,
+}
 
 #[derive(Clone)]
-pub struct Track {
+pub struct Track<Message> {
     inner: Arc<TrackInner>,
     /// information about the position of the timeline viewport
     position: Rc<TimelinePosition>,
     /// information about the scale of the timeline viewport
     scale: Rc<TimelineScale>,
+    /// list of all the clip widgets
+    clips: Rc<RefCell<Vec<Element<'static, Message, Theme, Renderer>>>>,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Track {
+impl<Message> Widget<Message, Theme, Renderer> for Track<Message> {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<State>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(State::default())
+    }
+
     fn size(&self) -> Size<Length> {
         Size {
             width: Length::Fill,
-            height: Length::Fixed(self.scale.y.get()),
+            height: Length::Shrink,
         }
     }
 
-    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
-        Node::new(Size::new(limits.max().width, self.scale.y.get()))
+    fn diff(&self, tree: &mut Tree) {
+        tree.diff_children(&self.clips.borrow());
     }
 
-    fn draw(
-        &self,
-        _tree: &Tree,
-        renderer: &mut Renderer,
-        theme: &Theme,
-        _style: &Style,
-        layout: Layout<'_>,
-        _cursor: Cursor,
-        viewport: &Rectangle,
-    ) {
-        let Some(bounds) = viewport.intersection(&layout.bounds()) else {
-            return;
-        };
+    fn children(&self) -> Vec<Tree> {
+        self.clips
+            .borrow()
+            .iter()
+            .map(|clip| Tree::new(clip))
+            .collect()
+    }
 
-        // TODO fix this iced renderer bug
-        if bounds.height < 1.0 {
-            return;
-        }
+    fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+        let state = tree.state.downcast_ref::<State>();
+
+        self.inner.clips().read().unwrap().iter().for_each(|clip| {
+            let contains = state.clips.borrow().iter().any(|w| w.is(clip));
+            if !contains {
+                state
+                    .clips
+                    .borrow_mut()
+                    .push(TrackClip::new(clip.clone(), self.scale.clone()));
+            }
+        });
+
+        *self.clips.borrow_mut() = state
+            .clips
+            .borrow()
+            .iter()
+            .map(|clip| Element::new(clip.clone()))
+            .collect();
+
+        self.diff(tree);
 
         let meter = match &*self.inner {
             TrackInner::Audio(track) => &track.meter,
             TrackInner::Midi(track) => &track.meter,
         };
 
-        self.inner.clips().read().unwrap().iter().for_each(|clip| {
-            let first_pixel = (clip.get_global_start().in_interleaved_samples(meter) as f32
-                - self.position.x.get())
-                / self.scale.x.get().exp2()
-                + bounds.x;
+        Node::with_children(
+            Size::new(limits.max().width, self.scale.y.get()),
+            self.clips
+                .borrow()
+                .iter()
+                .zip(&mut tree.children)
+                .map(|(widget, tree)| {
+                    widget.as_widget().layout(
+                        tree,
+                        renderer,
+                        &Limits::new(limits.min(), Size::new(f32::INFINITY, limits.max().height)),
+                    )
+                })
+                .zip(self.inner.clips().read().unwrap().iter())
+                .map(|(node, clip)| {
+                    node.translate(Vector::new(
+                        (clip.get_global_start().in_interleaved_samples(meter) as f32
+                            - self.position.x.get())
+                            / self.scale.x.get().exp2(),
+                        0.0,
+                    ))
+                })
+                .collect(),
+        )
+    }
 
-            let last_pixel = (clip.get_global_end().in_interleaved_samples(meter) as f32
-                - self.position.x.get())
-                / self.scale.x.get().exp2()
-                + bounds.x;
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        viewport: &Rectangle,
+        renderer: &Renderer,
+    ) -> Interaction {
+        self.clips
+            .borrow()
+            .iter()
+            .zip(&tree.children)
+            .zip(layout.children())
+            .map(|((child, tree), layout)| {
+                child
+                    .as_widget()
+                    .mouse_interaction(tree, layout, cursor, viewport, renderer)
+            })
+            .max()
+            .unwrap_or_default()
+    }
 
-            let clip_bounds = Rectangle::new(
-                Point::new(first_pixel, bounds.y),
-                Size::new(last_pixel - first_pixel, bounds.height),
-            );
-            let clip_bounds = bounds.intersection(&clip_bounds);
-            if let Some(clip_bounds) = clip_bounds {
-                clip.draw(renderer, theme, clip_bounds);
-            }
-        });
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        style: &Style,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        viewport: &Rectangle,
+    ) {
+        let Some(bounds) = viewport.intersection(&layout.bounds()) else {
+            return;
+        };
+
+        // TODO fix this iced bug
+        if bounds.height < 1.0 {
+            return;
+        }
+
+        self.clips
+            .borrow()
+            .iter()
+            .zip(&tree.children)
+            .zip(layout.children())
+            .for_each(|((child, tree), layout)| {
+                child
+                    .as_widget()
+                    .draw(tree, renderer, theme, style, layout, cursor, &bounds);
+            });
     }
 }
 
-impl Track {
+impl<Message> Track<Message> {
     pub fn new(
         inner: Arc<TrackInner>,
         position: Rc<TimelinePosition>,
@@ -96,6 +177,7 @@ impl Track {
             inner,
             position,
             scale,
+            clips: Rc::default(),
         }
     }
 
@@ -148,7 +230,7 @@ impl Track {
         &self,
         meter: &Arc<Meter>,
         global_time: u32,
-    ) -> Option<Arc<TrackClip>> {
+    ) -> Option<Arc<TrackClipInner>> {
         self.inner
             .clips()
             .read()
