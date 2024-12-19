@@ -3,7 +3,7 @@ use crate::generic_back::{
     Denominator, InterleavedAudio, Numerator,
 };
 use cpal::Stream;
-use etcetera::{choose_base_strategy, BaseStrategy as _};
+use home::home_dir;
 use iced::{
     border::Radius,
     event::{self, Status},
@@ -227,7 +227,7 @@ impl Daw {
             controls,
             VSplit::new(
                 scrollable(
-                    file_tree(PathBuf::from(choose_base_strategy().unwrap().home_dir()))
+                    file_tree(home_dir().unwrap())
                         .unwrap()
                         .on_double_click(Message::LoadSample)
                 ),

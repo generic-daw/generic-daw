@@ -8,7 +8,6 @@ license = "GPL-3.0-only"
 anyhow = "1.0.94"
 atomic_enum = { version = "0.3.0", default-features = false }
 cpal = "0.15.3"
-etcetera = "0.8.0"
 generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host", features = [
     "audio-ports",
     "gui",
@@ -17,6 +16,7 @@ generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host", 
     "state",
     "timer",
 ] }
+home = "0.5.11"
 hound = "3.5.1"
 iced = { version = "0.13.1", default-features = false, features = [
     "advanced",
