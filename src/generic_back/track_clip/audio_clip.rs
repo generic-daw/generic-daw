@@ -50,13 +50,8 @@ impl AudioClip {
             .read()
             .unwrap()
             .in_interleaved_samples(&self.meter);
-        let end = self
-            .global_end
-            .read()
-            .unwrap()
-            .in_interleaved_samples(&self.meter);
 
-        if global_time < start || global_time > end {
+        if global_time < start {
             return 0.0;
         }
 
