@@ -32,6 +32,7 @@ iced_fonts = { version = "0.1.1", features = ["bootstrap"] }
 iced_wgpu = { version = "0.13.5", features = ["geometry"] }
 include_data = "1.0.1"
 itertools = "0.13.0"
+portable-atomic = { version = "1.10.0", default-features = false, features = ["float"] }
 rfd = "0.15.1"
 rubato = { version = "0.16.1", default-features = false }
 strum = { version = "0.26.3", features = ["derive"] }

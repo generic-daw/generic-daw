@@ -1,9 +1,7 @@
-use crate::{
-    generic_back::{pan, Meter, Position, TrackClip, TrackInner},
-    helpers::AtomicF32,
-};
+use crate::generic_back::{pan, Meter, Position, TrackClip, TrackInner};
 use generic_clap_host::ClapPlugin;
 use plugin_state::PluginState;
+use portable_atomic::AtomicF32;
 use std::sync::{atomic::Ordering::SeqCst, Arc, Mutex, RwLock};
 
 mod dirty_event;

@@ -1,4 +1,4 @@
-use crate::{generic_back::Meter, helpers::gcd};
+use crate::generic_back::Meter;
 use anyhow::{anyhow, Result};
 use itertools::{Itertools as _, MinMaxResult};
 use rubato::{
@@ -197,4 +197,12 @@ pub fn resample(
     }
 
     Ok(interleaved_samples)
+}
+
+fn gcd(mut a: u32, mut b: u32) -> u32 {
+    while b != 0 {
+        a %= b;
+        (a, b) = (b, a);
+    }
+    a
 }

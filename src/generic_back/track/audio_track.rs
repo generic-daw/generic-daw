@@ -1,7 +1,5 @@
-use crate::{
-    generic_back::{pan, Meter, Position, TrackClip, TrackInner},
-    helpers::AtomicF32,
-};
+use crate::generic_back::{pan, Meter, Position, TrackClip, TrackInner};
+use portable_atomic::AtomicF32;
 use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
 #[derive(Debug)]
