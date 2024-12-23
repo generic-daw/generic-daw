@@ -8,12 +8,12 @@ mod midi_track;
 pub use midi_track::{AtomicDirtyEvent, DirtyEvent, MidiTrack};
 
 #[derive(Debug)]
-pub enum TrackInner {
+pub enum Track {
     Audio(AudioTrack),
     Midi(MidiTrack),
 }
 
-impl TrackInner {
+impl Track {
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {
         match self {
             Self::Audio(track) => track.get_at_global_time(global_time),

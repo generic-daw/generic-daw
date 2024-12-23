@@ -1,6 +1,6 @@
 use super::TrackClip;
 use crate::{
-    generic_back::{Meter, TrackClip as TrackClipInner, TrackInner},
+    generic_back::{Meter, Track as TrackInner, TrackClip as TrackClipInner},
     generic_front::{TimelinePosition, TimelineScale},
 };
 use iced::{

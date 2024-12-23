@@ -18,7 +18,7 @@ pub use position::Position;
 
 mod track;
 pub(in crate::generic_back) use track::{AtomicDirtyEvent, DirtyEvent};
-pub use track::{AudioTrack, MidiTrack, TrackInner};
+pub use track::{AudioTrack, MidiTrack, Track};
 
 mod track_clip;
 pub use track_clip::{resample, AudioClip, InterleavedAudio, MidiNote, TrackClip};

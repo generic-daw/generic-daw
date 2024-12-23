@@ -1,4 +1,4 @@
-use crate::generic_back::{Meter, Position, TrackInner};
+use crate::generic_back::{Meter, Position, Track};
 use hound::WavWriter;
 use std::{
     collections::VecDeque,
@@ -11,7 +11,7 @@ use std::{
 
 #[derive(Debug, Default)]
 pub struct Arrangement {
-    pub tracks: RwLock<Vec<Arc<TrackInner>>>,
+    pub tracks: RwLock<Vec<Arc<Track>>>,
     /// information relating to the playback of the arrangement
     pub meter: Arc<Meter>,
     /// samples that are being played back live, that are not part of the arrangement

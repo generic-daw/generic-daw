@@ -1,4 +1,4 @@
-use crate::generic_back::{pan, Meter, Position, TrackClip, TrackInner};
+use crate::generic_back::{pan, Meter, Position, Track, TrackClip};
 use generic_clap_host::ClapPlugin;
 use plugin_state::PluginState;
 use portable_atomic::AtomicF32;
@@ -24,8 +24,8 @@ pub struct MidiTrack {
 }
 
 impl MidiTrack {
-    pub fn create(plugin: ClapPlugin, meter: Arc<Meter>) -> Arc<TrackInner> {
-        Arc::new(TrackInner::Midi(Self {
+    pub fn create(plugin: ClapPlugin, meter: Arc<Meter>) -> Arc<Track> {
+        Arc::new(Track::Midi(Self {
             clips: Arc::new(RwLock::default()),
             volume: AtomicF32::new(1.0),
             pan: AtomicF32::new(0.0),
