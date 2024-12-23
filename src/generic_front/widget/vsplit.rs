@@ -143,9 +143,10 @@ where
                 }
                 iced::mouse::Event::CursorMoved { .. } if state.dragging => {
                     if let Some(position) = cursor.position() {
-                        state.split_at = DRAG_SIZE
+                        state.split_at = (DRAG_SIZE
                             .mul_add(-0.5, position.x - bounds.position().x - state.offset)
-                            / (bounds.width - DRAG_SIZE);
+                            / (bounds.width - DRAG_SIZE))
+                            .clamp(0.0, 1.0);
                     } else {
                         state.dragging = false;
                     }
