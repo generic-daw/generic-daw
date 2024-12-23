@@ -30,9 +30,6 @@ pub(in crate::generic_front) use timeline_position::TimelinePosition;
 mod timeline_scale;
 pub(in crate::generic_front) use timeline_scale::TimelineScale;
 
-mod track_panel;
-pub(in crate::generic_front) use track_panel::{TrackPanel, TrackPanelMessage};
-
 mod widget;
 use widget::{Arrangement, VSplit};
 
@@ -41,7 +38,6 @@ static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 
 pub struct Daw {
     arrangement: Arc<ArrangementInner>,
-    track_panel: TrackPanel,
     _stream: Stream,
 }
 
@@ -49,7 +45,6 @@ pub struct Daw {
 pub enum Message {
     #[default]
     Tick,
-    TrackPanel(TrackPanelMessage),
     LoadSample(PathBuf),
     LoadSamplesButton,
     LoadSamples(Vec<FileHandle>),
@@ -85,8 +80,7 @@ impl Default for Daw {
         .into();
 
         Self {
-            arrangement: arrangement.clone(),
-            track_panel: TrackPanel::new(arrangement),
+            arrangement,
             _stream: stream,
         }
     }
@@ -96,9 +90,6 @@ impl Daw {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Tick => {}
-            Message::TrackPanel(msg) => {
-                self.track_panel.update(&msg);
-            }
             Message::LoadSample(path) => {
                 let arrangement = self.arrangement.clone();
                 std::thread::spawn(move || {
@@ -232,7 +223,6 @@ impl Daw {
                         .on_double_click(Message::LoadSample)
                 ),
                 row![
-                    self.track_panel.view().map(Message::TrackPanel),
                     container(Arrangement::new(self.arrangement.clone())).style(|_| {
                         container::Style {
                             border: iced::Border {
