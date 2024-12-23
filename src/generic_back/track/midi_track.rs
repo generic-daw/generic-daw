@@ -1,9 +1,7 @@
-use crate::{
-    generic_back::{pan, Meter, Position, Track, TrackClip},
-    helpers::AtomicF32,
-};
+use crate::generic_back::{pan, Meter, Position, Track, TrackClip};
 use generic_clap_host::ClapPlugin;
 use plugin_state::PluginState;
+use portable_atomic::AtomicF32;
 use std::sync::{atomic::Ordering::SeqCst, Arc, Mutex, RwLock};
 
 mod dirty_event;
@@ -26,14 +24,14 @@ pub struct MidiTrack {
 }
 
 impl MidiTrack {
-    pub fn create(plugin: ClapPlugin, meter: Arc<Meter>) -> Track {
-        Track::Midi(Self {
+    pub fn create(plugin: ClapPlugin, meter: Arc<Meter>) -> Arc<Track> {
+        Arc::new(Track::Midi(Self {
             clips: Arc::new(RwLock::default()),
             volume: AtomicF32::new(1.0),
             pan: AtomicF32::new(0.0),
             plugin_state: PluginState::create(plugin),
             meter,
-        })
+        }))
     }
 
     fn refresh_global_midi(&self) {

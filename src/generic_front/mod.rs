@@ -1,20 +1,20 @@
 use crate::generic_back::{
-    build_output_stream, resample, ArrangementInner, AudioClip, AudioTrack, Denominator,
-    InterleavedAudio, Numerator,
+    build_output_stream, resample, Arrangement as ArrangementInner, AudioClip, AudioTrack,
+    Denominator, InterleavedAudio, Numerator,
 };
 use cpal::Stream;
-use etcetera::{choose_base_strategy, BaseStrategy as _};
+use home::home_dir;
 use iced::{
     border::Radius,
     event::{self, Status},
     keyboard,
-    widget::{button, column, container, pick_list, row, toggler, Scrollable, Text},
+    widget::{button, column, container, pick_list, row, scrollable, toggler, Text},
     window::frames,
     Alignment::Center,
     Element, Event, Subscription, Task, Theme,
 };
 use iced_aw::number_input;
-use iced_file_tree::FileTree;
+use iced_file_tree::file_tree;
 use iced_fonts::{bootstrap, BOOTSTRAP_FONT};
 use include_data::include_f32s;
 use rfd::{AsyncFileDialog, FileHandle};
@@ -30,9 +30,6 @@ pub(in crate::generic_front) use timeline_position::TimelinePosition;
 mod timeline_scale;
 pub(in crate::generic_front) use timeline_scale::TimelineScale;
 
-mod track_panel;
-pub(in crate::generic_front) use track_panel::{TrackPanel, TrackPanelMessage};
-
 mod widget;
 use widget::{Arrangement, VSplit};
 
@@ -41,13 +38,13 @@ static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 
 pub struct Daw {
     arrangement: Arc<ArrangementInner>,
-    track_panel: TrackPanel,
     _stream: Stream,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum Message {
-    TrackPanel(TrackPanelMessage),
+    #[default]
+    Tick,
     LoadSample(PathBuf),
     LoadSamplesButton,
     LoadSamples(Vec<FileHandle>),
@@ -60,7 +57,6 @@ pub enum Message {
     NumeratorChanged(Numerator),
     DenominatorChanged(Denominator),
     ToggleMetronome,
-    Tick,
 }
 
 impl Default for Daw {
@@ -84,8 +80,7 @@ impl Default for Daw {
         .into();
 
         Self {
-            arrangement: arrangement.clone(),
-            track_panel: TrackPanel::new(arrangement),
+            arrangement,
             _stream: stream,
         }
     }
@@ -94,13 +89,11 @@ impl Default for Daw {
 impl Daw {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::TrackPanel(msg) => {
-                self.track_panel.update(&msg);
-            }
+            Message::Tick => {}
             Message::LoadSample(path) => {
                 let arrangement = self.arrangement.clone();
                 std::thread::spawn(move || {
-                    let audio_file = InterleavedAudio::create(path, &arrangement);
+                    let audio_file = InterleavedAudio::create(path, &arrangement.meter);
                     if let Ok(audio_file) = audio_file {
                         let track = AudioTrack::create(arrangement.meter.clone());
                         track.try_push(&AudioClip::create(audio_file, arrangement.meter.clone()));
@@ -161,7 +154,6 @@ impl Daw {
                     .denominator
                     .store(new_denominator, SeqCst);
             }
-            Message::Tick => {}
             Message::ToggleMetronome => {
                 self.arrangement.metronome.fetch_not(SeqCst);
             }
@@ -225,14 +217,12 @@ impl Daw {
         let content = column![
             controls,
             VSplit::new(
-                Scrollable::new(
-                    FileTree::new(PathBuf::from(choose_base_strategy().unwrap().home_dir()))
+                scrollable(
+                    file_tree(home_dir().unwrap())
                         .unwrap()
                         .on_double_click(Message::LoadSample)
-                )
-                .into(),
+                ),
                 row![
-                    self.track_panel.view().map(Message::TrackPanel),
                     container(Arrangement::new(self.arrangement.clone())).style(|_| {
                         container::Style {
                             border: iced::Border {
@@ -244,7 +234,6 @@ impl Daw {
                         }
                     })
                 ]
-                .into()
             )
             .split(0.25)
         ]

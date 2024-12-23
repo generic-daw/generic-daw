@@ -1,4 +1,4 @@
-use super::State;
+use super::{TimelinePosition, TimelineScale};
 use crate::generic_back::AudioClip;
 use iced::{
     advanced::graphics::{
@@ -15,14 +15,15 @@ impl AudioClip {
         &self,
         theme: &Theme,
         bounds: Rectangle,
-        arrangement_bounds: Rectangle,
-        state: &State,
+        viewport: Rectangle,
+        position: &TimelinePosition,
+        scale: &TimelineScale,
     ) -> Option<Mesh> {
         // samples of the original audio per sample of lod
-        let lod_sample_size = state.scale.x.floor().exp2() as u32;
+        let lod_sample_size = scale.x.get().floor().exp2() as u32;
 
         // samples of the original audio per pixel
-        let pixel_size = state.scale.x.exp2();
+        let pixel_size = scale.x.get().exp2();
 
         // samples in the lod per pixel
         let lod_samples_per_pixel = lod_sample_size as f32 / pixel_size;
@@ -32,7 +33,7 @@ impl AudioClip {
         let clip_start = self.get_clip_start().in_interleaved_samples(&self.meter) as f32;
 
         // the first sample in the lod that is visible in the clip
-        let first_index = ((max_by(0.0, state.position.x - global_start, |a, b| {
+        let first_index = ((max_by(0.0, position.x.get() - global_start, |a, b| {
             a.partial_cmp(b).unwrap()
         }) + clip_start) as u32)
             / lod_sample_size;
@@ -49,7 +50,7 @@ impl AudioClip {
         }
 
         // how many pixels of the top of the clip are clipped off by the top of the arrangement
-        let hidden = max_by(0.0, arrangement_bounds.y - bounds.y, |a, b| {
+        let hidden = max_by(0.0, viewport.y - bounds.y + 18.0, |a, b| {
             a.partial_cmp(b).unwrap()
         });
 
@@ -59,14 +60,14 @@ impl AudioClip {
         // the part of the audio clip that is visible
         let clip_bounds = Rectangle::new(
             Point::new(0.0, hidden),
-            bounds.intersection(&arrangement_bounds).unwrap().size(),
+            bounds.intersection(&viewport).unwrap().size(),
         );
 
         // vertices of the waveform
         let mut vertices =
             Vec::with_capacity(2 * usize::try_from(last_index - first_index).unwrap());
         let color = color::pack(theme.extended_palette().secondary.base.text);
-        let lod = state.scale.x as usize - 3;
+        let lod = scale.x.get() as usize - 3;
         (first_index..last_index).enumerate().for_each(|(x, i)| {
             let (min, max) = *self.audio.lods.read().unwrap()[lod]
                 .get(usize::try_from(i).unwrap())

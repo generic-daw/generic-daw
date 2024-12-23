@@ -5,10 +5,9 @@ edition = "2021"
 license = "GPL-3.0-only"
 
 [dependencies]
-anyhow = "1.0.93"
+anyhow = "1.0.95"
 atomic_enum = { version = "0.3.0", default-features = false }
 cpal = "0.15.3"
-etcetera = "0.8.0"
 generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host", features = [
     "audio-ports",
     "gui",
@@ -17,6 +16,7 @@ generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host", 
     "state",
     "timer",
 ] }
+home = "0.5.11"
 hound = "3.5.1"
 iced = { version = "0.13.1", default-features = false, features = [
     "advanced",
@@ -27,11 +27,12 @@ iced = { version = "0.13.1", default-features = false, features = [
 iced_aw = { version = "0.11.0", default-features = false, features = [
     "number_input",
 ] }
-iced_file_tree = "0.1.1"
+iced_file_tree = "0.1.5"
 iced_fonts = { version = "0.1.1", features = ["bootstrap"] }
 iced_wgpu = { version = "0.13.5", features = ["geometry"] }
 include_data = "1.0.1"
 itertools = "0.13.0"
+portable-atomic = { version = "1.10.0", default-features = false, features = ["float"] }
 rfd = "0.15.1"
 rubato = { version = "0.16.1", default-features = false }
 strum = { version = "0.26.3", features = ["derive"] }
@@ -55,6 +56,7 @@ cast_possible_truncation = "allow"
 cast_precision_loss = "allow"
 cast_sign_loss = "allow"
 module_name_repetitions = "allow"
+verbose_bit_mask = "allow"
 
 nursery = { level = "warn", priority = -1 }
 missing-const-for-fn = "allow"
@@ -79,6 +81,9 @@ str_to_string = "warn"
 string_lit_chars_any = "warn"
 try_err = "warn"
 unused_trait_names = "warn"
+
+[profile.dev]
+opt-level = 1
 
 [profile.release]
 lto = true

@@ -1,7 +1,5 @@
-use crate::{
-    generic_back::{pan, Meter, Position, Track, TrackClip},
-    helpers::AtomicF32,
-};
+use crate::generic_back::{pan, Meter, Position, Track, TrackClip};
+use portable_atomic::AtomicF32;
 use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
 #[derive(Debug)]
@@ -16,13 +14,13 @@ pub struct AudioTrack {
 }
 
 impl AudioTrack {
-    pub fn create(meter: Arc<Meter>) -> Track {
-        Track::Audio(Self {
+    pub fn create(meter: Arc<Meter>) -> Arc<Track> {
+        Arc::new(Track::Audio(Self {
             clips: Arc::new(RwLock::default()),
             volume: AtomicF32::new(1.0),
             pan: AtomicF32::new(0.0),
             meter,
-        })
+        }))
     }
 
     pub fn get_at_global_time(&self, global_time: u32) -> f32 {

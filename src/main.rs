@@ -6,8 +6,6 @@ mod generic_back;
 mod generic_front;
 use generic_front::Daw;
 
-mod helpers;
-
 fn main() -> Result {
     application("GenericDAW", Daw::update, Daw::view)
         .font(REQUIRED_FONT_BYTES)
