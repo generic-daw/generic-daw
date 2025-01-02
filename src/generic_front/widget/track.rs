@@ -67,11 +67,7 @@ where
     }
 
     fn children(&self) -> Vec<Tree> {
-        self.clips
-            .borrow()
-            .iter()
-            .map(|clip| Tree::new(clip))
-            .collect()
+        self.clips.borrow().iter().map(Tree::new).collect()
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {

@@ -27,7 +27,7 @@ use std::{
 
 const SEEKER_HEIGHT: f32 = 16.0;
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 enum Action {
     #[default]
     None,
@@ -79,7 +79,6 @@ impl<Message> Default for State<Message> {
     }
 }
 
-#[derive(Default)]
 pub struct Arrangement<'a, Message> {
     inner: Arc<ArrangementInner>,
     /// list of all the track widgets
@@ -113,11 +112,7 @@ where
     }
 
     fn children(&self) -> Vec<Tree> {
-        self.tracks
-            .borrow()
-            .iter()
-            .map(|track| Tree::new(track))
-            .collect()
+        self.tracks.borrow().iter().map(Tree::new).collect()
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
