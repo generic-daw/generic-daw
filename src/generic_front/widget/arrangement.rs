@@ -38,13 +38,13 @@ enum Action {
     ClipTrimmingEnd(Arc<TrackClip>, f32),
 }
 
-struct State<Message> {
+struct State<'a, Message> {
     /// information about the position of the timeline viewport
     position: Rc<TimelinePosition>,
     /// information about the scale of the timeline viewport
     scale: Rc<TimelineScale>,
     /// list of all the track widgets
-    tracks: RefCell<Vec<Track<Message>>>,
+    tracks: RefCell<Vec<Track<'a, Message>>>,
     /// saves the numerator from the last draw
     numerator: Cell<Numerator>,
     /// caches the meshes of the waveforms
@@ -59,7 +59,7 @@ struct State<Message> {
     last_layout_bounds: RefCell<Option<Rectangle>>,
 }
 
-impl<Message> Default for State<Message> {
+impl<Message> Default for State<'_, Message> {
     fn default() -> Self {
         Self {
             position: Rc::default(),
@@ -96,7 +96,7 @@ where
     Message: Clone + 'static,
 {
     fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<State<Message>>()
+        tree::Tag::of::<State<'_, Message>>()
     }
 
     fn state(&self) -> tree::State {
@@ -116,7 +116,7 @@ where
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        let state = tree.state.downcast_ref::<State<Message>>();
+        let state = tree.state.downcast_ref::<State<'_, Message>>();
 
         self.inner.tracks.read().unwrap().iter().for_each(|track| {
             let contains = state.tracks.borrow().iter().any(|w| w.is(track));
@@ -145,7 +145,7 @@ where
 
         self.diff(tree);
 
-        let state = tree.state.downcast_ref::<State<Message>>();
+        let state = tree.state.downcast_ref::<State<'_, Message>>();
 
         Node::with_children(
             limits.max(),
@@ -207,7 +207,7 @@ where
             return Status::Captured;
         };
 
-        let state = tree.state.downcast_mut::<State<Message>>();
+        let state = tree.state.downcast_mut::<State<'_, Message>>();
 
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
             state.modifiers = modifiers;
@@ -264,7 +264,7 @@ where
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> Interaction {
-        let state = tree.state.downcast_ref::<State<Message>>();
+        let state = tree.state.downcast_ref::<State<'_, Message>>();
 
         match state.action {
             Action::ClipTrimmingStart(..) | Action::ClipTrimmingEnd(..) => {
@@ -306,7 +306,7 @@ where
         cursor: Cursor,
         _viewport: &Rectangle,
     ) {
-        let state = tree.state.downcast_ref::<State<Message>>();
+        let state = tree.state.downcast_ref::<State<'_, Message>>();
         let bounds = layout.bounds();
 
         if self.inner.meter.numerator.load(SeqCst) != state.numerator.get() {
@@ -402,7 +402,7 @@ where
         }
     }
 
-    fn grid(&self, frame: &mut Frame, theme: &Theme, state: &State<Message>) {
+    fn grid(&self, frame: &mut Frame, theme: &Theme, state: &State<'_, Message>) {
         let bounds = frame.size();
         let numerator = self.inner.meter.numerator.load(SeqCst);
 
@@ -510,7 +510,7 @@ where
         renderer: &mut Renderer,
         bounds: Rectangle,
         theme: &Theme,
-        state: &State<Message>,
+        state: &State<'_, Message>,
     ) {
         let mut frame = Frame::new(renderer, bounds.size());
 
@@ -535,7 +535,7 @@ where
 
     fn on_event_any_modifiers(
         &self,
-        state: &mut State<Message>,
+        state: &mut State<'_, Message>,
         event: &Event,
         cursor: Point,
     ) -> Option<Status> {
@@ -649,7 +649,7 @@ where
 
     fn on_event_no_modifiers(
         &self,
-        state: &mut State<Message>,
+        state: &mut State<'_, Message>,
         event: &Event,
         cursor: Point,
     ) -> Option<Status> {
@@ -719,7 +719,7 @@ where
 
     fn on_event_command(
         &self,
-        state: &mut State<Message>,
+        state: &mut State<'_, Message>,
         event: &Event,
         cursor: Point,
     ) -> Option<Status> {
@@ -785,7 +785,7 @@ where
 
     fn on_event_shift(
         &self,
-        state: &State<Message>,
+        state: &State<'_, Message>,
         event: &Event,
         _cursor: Point,
     ) -> Option<Status> {
@@ -812,7 +812,7 @@ where
 
     fn on_event_alt(
         &self,
-        state: &mut State<Message>,
+        state: &mut State<'_, Message>,
         event: &Event,
         cursor: Point,
     ) -> Option<Status> {
@@ -842,7 +842,7 @@ where
         None
     }
 
-    fn lmb_none_or_alt(&self, state: &mut State<Message>, cursor: Point) -> Option<Status> {
+    fn lmb_none_or_alt(&self, state: &mut State<'_, Message>, cursor: Point) -> Option<Status> {
         if cursor.y < SEEKER_HEIGHT {
             let mut time = Position::from_interleaved_samples(
                 cursor

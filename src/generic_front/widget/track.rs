@@ -27,26 +27,23 @@ struct State {
 }
 
 #[derive(Clone)]
-pub struct Track<Message> {
+pub struct Track<'a, Message> {
     inner: Arc<TrackInner>,
     /// information about the position of the timeline viewport
     position: Rc<TimelinePosition>,
     /// information about the scale of the timeline viewport
     scale: Rc<TimelineScale>,
     /// list of all the clip widgets
-    clips: Rc<RefCell<Vec<Element<'static, Message, Theme, Renderer>>>>,
+    clips: Rc<RefCell<Vec<Element<'a, Message, Theme, Renderer>>>>,
 }
 
-impl<Message> Debug for Track<Message> {
+impl<Message> Debug for Track<'_, Message> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("").field(&self.inner).finish_non_exhaustive()
     }
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Track<Message>
-where
-    Message: 'static,
-{
+impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
     }
@@ -178,7 +175,7 @@ where
     }
 }
 
-impl<Message> Track<Message> {
+impl<Message> Track<'_, Message> {
     pub fn new(
         inner: Arc<TrackInner>,
         position: Rc<TimelinePosition>,
@@ -260,11 +257,11 @@ impl<Message> Track<Message> {
     }
 }
 
-impl<Message> From<Track<Message>> for Element<'_, Message, Theme, Renderer>
+impl<'a, Message> From<Track<'a, Message>> for Element<'a, Message, Theme, Renderer>
 where
-    Message: 'static,
+    Message: 'a,
 {
-    fn from(track: Track<Message>) -> Self {
+    fn from(track: Track<'a, Message>) -> Self {
         Self::new(track)
     }
 }

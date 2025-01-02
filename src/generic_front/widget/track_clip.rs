@@ -187,10 +187,7 @@ impl TrackClipInner {
     }
 }
 
-impl<Message> From<TrackClip> for Element<'_, Message, Theme, Renderer>
-where
-    Message: 'static,
-{
+impl<Message> From<TrackClip> for Element<'_, Message, Theme, Renderer> {
     fn from(track: TrackClip) -> Self {
         Self::new(track)
     }
