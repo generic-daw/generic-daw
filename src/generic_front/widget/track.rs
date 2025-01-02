@@ -14,7 +14,12 @@ use iced::{
     mouse::{Cursor, Interaction},
     Element, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{
+    cell::RefCell,
+    fmt::{Debug, Formatter},
+    rc::Rc,
+    sync::Arc,
+};
 
 #[derive(Default)]
 struct State {
@@ -32,7 +37,16 @@ pub struct Track<Message> {
     clips: Rc<RefCell<Vec<Element<'static, Message, Theme, Renderer>>>>,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Track<Message> {
+impl<Message> Debug for Track<Message> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("").field(&self.inner).finish_non_exhaustive()
+    }
+}
+
+impl<Message> Widget<Message, Theme, Renderer> for Track<Message>
+where
+    Message: 'static,
+{
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
     }
@@ -77,7 +91,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<Message> {
             .clips
             .borrow()
             .iter()
-            .map(|clip| Element::new(clip.clone()))
+            .map(|clip| clip.clone().into())
             .collect();
 
         self.diff(tree);
@@ -247,5 +261,14 @@ impl<Message> Track<Message> {
                     None
                 }
             })
+    }
+}
+
+impl<Message> From<Track<Message>> for Element<'_, Message, Theme, Renderer>
+where
+    Message: 'static,
+{
+    fn from(track: Track<Message>) -> Self {
+        Self::new(track)
     }
 }

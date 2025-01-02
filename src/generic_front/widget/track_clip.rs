@@ -17,15 +17,26 @@ use iced::{
     alignment::{Horizontal, Vertical},
     mouse::Interaction,
     widget::text::{LineHeight, Shaping, Wrapping},
-    Font, Length, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Font, Length, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
-use std::{cmp::max_by, rc::Rc, sync::Arc};
+use std::{
+    cmp::max_by,
+    fmt::{Debug, Formatter},
+    rc::Rc,
+    sync::Arc,
+};
 
 #[derive(Clone)]
 pub struct TrackClip {
     inner: Arc<TrackClipInner>,
     /// information about the scale of the timeline viewport
     scale: Rc<TimelineScale>,
+}
+
+impl Debug for TrackClip {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("").field(&self.inner).finish_non_exhaustive()
+    }
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
@@ -173,5 +184,14 @@ impl TrackClipInner {
             Self::Audio(audio) => audio.meshes(theme, bounds, viewport, position, scale),
             Self::Midi(_) => None,
         }
+    }
+}
+
+impl<Message> From<TrackClip> for Element<'_, Message, Theme, Renderer>
+where
+    Message: 'static,
+{
+    fn from(track: TrackClip) -> Self {
+        Self::new(track)
     }
 }

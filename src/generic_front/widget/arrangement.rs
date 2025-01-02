@@ -94,7 +94,7 @@ impl<Message> Debug for Arrangement<'_, Message> {
 
 impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message>
 where
-    Message: Clone + Default + 'static,
+    Message: Clone + 'static,
 {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State<Message>>()
@@ -139,7 +139,7 @@ where
             .tracks
             .borrow()
             .iter()
-            .map(|track| Element::new(track.clone()))
+            .map(|track| track.clone().into())
             .collect();
 
         let mut y = state
@@ -398,12 +398,12 @@ where
 
 impl<'a, Message> Arrangement<'a, Message>
 where
-    Message: Default + 'a,
+    Message: 'a,
 {
     pub fn new(inner: Arc<ArrangementInner>) -> Self {
         Self {
             inner,
-            ..Self::default()
+            tracks: RefCell::default(),
         }
     }
 
@@ -928,7 +928,7 @@ where
 
 impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message, Theme, Renderer>
 where
-    Message: Clone + Default + 'static,
+    Message: Clone + 'static,
 {
     fn from(arrangement_front: Arrangement<'a, Message>) -> Self {
         Self::new(arrangement_front)
