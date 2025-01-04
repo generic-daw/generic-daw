@@ -8,7 +8,7 @@ use iced::{
         graphics::Mesh,
         layout::{Limits, Node},
         renderer::Style,
-        widget::{tree, Tree},
+        widget::Tree,
         Layout, Widget,
     },
     mouse::{Cursor, Interaction},
@@ -20,11 +20,6 @@ use std::{
     rc::Rc,
     sync::Arc,
 };
-
-#[derive(Default)]
-struct State {
-    clips: RefCell<Vec<TrackClip>>,
-}
 
 #[derive(Clone)]
 pub struct Track<'a, Message> {
@@ -44,14 +39,6 @@ impl<Message> Debug for Track<'_, Message> {
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
-    fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<State>()
-    }
-
-    fn state(&self) -> tree::State {
-        tree::State::new(State::default())
-    }
-
     fn size(&self) -> Size<Length> {
         Size {
             width: Length::Fill,
@@ -68,24 +55,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        let state = tree.state.downcast_ref::<State>();
-
-        self.inner.clips().read().unwrap().iter().for_each(|clip| {
-            let contains = state.clips.borrow().iter().any(|w| w.is(clip));
-            if !contains {
-                state
-                    .clips
-                    .borrow_mut()
-                    .push(TrackClip::new(clip.clone(), self.scale.clone()));
-            }
-        });
-
-        *self.clips.borrow_mut() = state
-            .clips
-            .borrow()
-            .iter()
-            .map(|clip| clip.clone().into())
-            .collect();
+        self.clips.borrow_mut().extend(
+            self.inner
+                .clips()
+                .read()
+                .unwrap()
+                .iter()
+                .map(|clip| TrackClip::new(clip.clone(), self.scale.clone()).into()),
+        );
 
         self.diff(tree);
 

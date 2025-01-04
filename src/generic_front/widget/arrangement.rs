@@ -118,34 +118,35 @@ where
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         let state = tree.state.downcast_ref::<State<'_, Message>>();
 
-        self.inner.tracks.read().unwrap().iter().for_each(|track| {
-            let contains = state.tracks.borrow().iter().any(|w| w.is(track));
-            if !contains {
-                state.tracks.borrow_mut().push(Track::new(
-                    track.clone(),
-                    state.position.clone(),
-                    state.scale.clone(),
-                ));
-                state.waveform_cache.borrow_mut().meshes = None;
-            }
-        });
+        if self.inner.tracks.read().unwrap().len() != state.tracks.borrow().len() {
+            state.waveform_cache.borrow_mut().meshes = None;
 
-        *self.tracks.borrow_mut() = state
-            .tracks
-            .borrow()
-            .iter()
-            .map(|track| track.clone().into())
-            .collect();
+            state.tracks.borrow_mut().clear();
+            state
+                .tracks
+                .borrow_mut()
+                .extend(self.inner.tracks.read().unwrap().iter().map(|track| {
+                    Track::new(track.clone(), state.position.clone(), state.scale.clone())
+                }));
+        }
+
+        self.tracks.borrow_mut().extend(
+            state
+                .tracks
+                .borrow()
+                .iter()
+                .map(|track| track.clone().into()),
+        );
+
+        self.diff(tree);
+
+        let state = tree.state.downcast_ref::<State<'_, Message>>();
 
         let mut y = state
             .position
             .y
             .get()
             .mul_add(-state.scale.y.get(), SEEKER_HEIGHT);
-
-        self.diff(tree);
-
-        let state = tree.state.downcast_ref::<State<'_, Message>>();
 
         Node::with_children(
             limits.max(),
