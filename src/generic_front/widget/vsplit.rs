@@ -7,8 +7,8 @@ use iced::{
     },
     event::Status,
     mouse::{Cursor, Interaction},
-    widget::{rule::Catalog, Rule},
-    Element, Length, Rectangle, Size, Vector,
+    widget::Rule,
+    Element, Length, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::fmt::{Debug, Formatter};
 
@@ -31,11 +31,9 @@ impl<Message, Theme, Renderer> Debug for VSplit<'_, Message, Theme, Renderer> {
     }
 }
 
-impl<'a, Message, Theme, Renderer> VSplit<'a, Message, Theme, Renderer>
+impl<'a, Message> VSplit<'a, Message, Theme, Renderer>
 where
     Message: 'a,
-    Theme: Catalog + 'a,
-    Renderer: iced::advanced::Renderer + 'a,
 {
     pub fn new(
         left: impl Into<Element<'a, Message, Theme, Renderer>>,
@@ -61,12 +59,7 @@ where
     }
 }
 
-impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
-    for VSplit<'_, Message, Theme, Renderer>
-where
-    Theme: Catalog,
-    Renderer: iced::advanced::Renderer,
-{
+impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message, Theme, Renderer> {
     fn children(&self) -> Vec<Tree> {
         self.children.iter().map(Tree::new).collect()
     }
@@ -231,12 +224,10 @@ where
     }
 }
 
-impl<'a, Message, Theme, Renderer> From<VSplit<'a, Message, Theme, Renderer>>
+impl<'a, Message> From<VSplit<'a, Message, Theme, Renderer>>
     for Element<'a, Message, Theme, Renderer>
 where
-    Message: Clone + 'a,
-    Theme: Catalog + 'a,
-    Renderer: iced::advanced::Renderer + 'a,
+    Message: 'a,
 {
     fn from(vsplit: VSplit<'a, Message, Theme, Renderer>) -> Self {
         Self::new(vsplit)
