@@ -1468,6 +1468,7 @@ name = "generic-daw"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-channel",
  "atomic_enum",
  "cpal",
  "generic-clap-host",

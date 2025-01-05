@@ -50,7 +50,7 @@ impl MidiTrack {
 
         if last_global_time != global_time {
             let dirty = self.plugin_state.lock().unwrap().dirty.load(SeqCst);
-            if global_time != last_global_time + 1 || dirty != DirtyEvent::None {
+            if global_time != last_global_time + 1 || !matches!(dirty, DirtyEvent::None) {
                 self.refresh_global_midi();
                 self.plugin_state.lock().unwrap().last_buffer_index = BUFFER_SIZE - 1;
             }

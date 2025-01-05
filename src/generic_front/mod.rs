@@ -9,7 +9,6 @@ use iced::{
     event::{self, Status},
     keyboard,
     widget::{button, column, container, pick_list, row, scrollable, toggler, Text},
-    window::frames,
     Alignment::Center,
     Element, Event, Subscription, Task, Theme,
 };
@@ -44,7 +43,7 @@ pub struct Daw {
 #[derive(Clone, Debug, Default)]
 pub enum Message {
     #[default]
-    Tick,
+    Ping,
     LoadSample(PathBuf),
     LoadSamplesButton,
     LoadSamples(Vec<FileHandle>),
@@ -89,8 +88,10 @@ impl Default for Daw {
 impl Daw {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Tick => {}
+            Message::Ping => {}
             Message::LoadSample(path) => {
+                let (tx, rx) = async_channel::bounded(1);
+
                 let arrangement = self.arrangement.clone();
                 std::thread::spawn(move || {
                     let audio_file = InterleavedAudio::create(path, &arrangement.meter);
@@ -99,11 +100,14 @@ impl Daw {
                         track.try_push(&AudioClip::create(audio_file, arrangement.meter.clone()));
                         arrangement.tracks.write().unwrap().push(track);
                     }
+                    tx.send_blocking(()).unwrap();
                 });
+
+                return Task::perform(async move { rx.recv().await }, |_| Message::Ping);
             }
             Message::LoadSamplesButton => {
                 return Task::perform(AsyncFileDialog::new().pick_files(), |paths| {
-                    paths.map_or(Message::Tick, Message::LoadSamples)
+                    paths.map_or(Message::Ping, Message::LoadSamples)
                 });
             }
             Message::LoadSamples(paths) => paths
@@ -133,7 +137,7 @@ impl Daw {
                     AsyncFileDialog::new()
                         .add_filter("Wave File", &["wav"])
                         .save_file(),
-                    |path| path.map_or(Message::Tick, Message::Export),
+                    |path| path.map_or(Message::Ping, Message::Export),
                 );
             }
             Message::Export(path) => {
@@ -223,16 +227,18 @@ impl Daw {
                         .on_double_click(Message::LoadSample)
                 ),
                 row![
-                    container(Arrangement::new(self.arrangement.clone())).style(|_| {
-                        container::Style {
-                            border: iced::Border {
-                                color: Theme::default().extended_palette().secondary.weak.color,
-                                width: 1.0,
-                                radius: Radius::new(0.0),
-                            },
-                            ..container::Style::default()
+                    container(Arrangement::new(self.arrangement.clone(), Message::Ping)).style(
+                        |_| {
+                            container::Style {
+                                border: iced::Border {
+                                    color: Theme::default().extended_palette().secondary.weak.color,
+                                    width: 1.0,
+                                    radius: Radius::new(0.0),
+                                },
+                                ..container::Style::default()
+                            }
                         }
-                    })
+                    )
                 ]
             )
             .split(0.25)
@@ -244,33 +250,30 @@ impl Daw {
     }
 
     pub fn subscription(_state: &Self) -> Subscription<Message> {
-        Subscription::batch([
-            frames().map(|_| Message::Tick),
-            event::listen_with(|e, s, _| match s {
-                Status::Ignored => match e {
-                    Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
-                        match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-                            (false, false, false) => match key {
-                                keyboard::Key::Named(keyboard::key::Named::Space) => {
-                                    Some(Message::TogglePlay)
-                                }
-                                _ => None,
-                            },
-                            (true, false, false) => match key {
-                                keyboard::Key::Character(c) => match c.to_string().as_str() {
-                                    "n" => Some(Message::New),
-                                    "e" => Some(Message::ExportButton),
-                                    _ => None,
-                                },
+        event::listen_with(|e, s, _| match s {
+            Status::Ignored => match e {
+                Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
+                    match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
+                        (false, false, false) => match key {
+                            keyboard::Key::Named(keyboard::key::Named::Space) => {
+                                Some(Message::TogglePlay)
+                            }
+                            _ => None,
+                        },
+                        (true, false, false) => match key {
+                            keyboard::Key::Character(c) => match c.to_string().as_str() {
+                                "n" => Some(Message::New),
+                                "e" => Some(Message::ExportButton),
                                 _ => None,
                             },
                             _ => None,
-                        }
+                        },
+                        _ => None,
                     }
-                    _ => None,
-                },
-                Status::Captured => None,
-            }),
-        ])
+                }
+                _ => None,
+            },
+            Status::Captured => None,
+        })
     }
 }

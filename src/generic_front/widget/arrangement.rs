@@ -48,7 +48,7 @@ struct State<'a, Message> {
     /// saves the numerator from the last draw
     numerator: Cell<Numerator>,
     /// caches the meshes of the waveforms
-    waveform_cache: RefCell<Cache>,
+    waveform_cache: RefCell<Option<Cache>>,
     /// caches the geometry of the grid
     grid_cache: CanvasCache,
     /// the current modifiers
@@ -56,7 +56,7 @@ struct State<'a, Message> {
     /// the current action
     action: Action,
     /// the last window size
-    last_layout_bounds: RefCell<Option<Rectangle>>,
+    last_bounds: Cell<Option<Rectangle>>,
 }
 
 impl<Message> Default for State<'_, Message> {
@@ -66,15 +66,11 @@ impl<Message> Default for State<'_, Message> {
             scale: Rc::default(),
             tracks: RefCell::default(),
             numerator: Cell::default(),
-            waveform_cache: RefCell::new(Cache {
-                meshes: None,
-                images: None,
-                text: None,
-            }),
+            waveform_cache: RefCell::default(),
             grid_cache: CanvasCache::default(),
             modifiers: Modifiers::default(),
             action: Action::default(),
-            last_layout_bounds: RefCell::default(),
+            last_bounds: Cell::default(),
         }
     }
 }
@@ -83,6 +79,8 @@ pub struct Arrangement<'a, Message> {
     inner: Arc<ArrangementInner>,
     /// list of all the track widgets
     tracks: RefCell<Vec<Element<'a, Message, Theme, Renderer>>>,
+    /// trigger a redraw
+    ping: Message,
 }
 
 impl<Message> Debug for Arrangement<'_, Message> {
@@ -118,25 +116,10 @@ where
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         let state = tree.state.downcast_ref::<State<'_, Message>>();
 
-        if self.inner.tracks.read().unwrap().len() != state.tracks.borrow().len() {
-            state.waveform_cache.borrow_mut().meshes = None;
-
-            state.tracks.borrow_mut().clear();
-            state
-                .tracks
-                .borrow_mut()
-                .extend(self.inner.tracks.read().unwrap().iter().map(|track| {
-                    Track::new(track.clone(), state.position.clone(), state.scale.clone())
-                }));
-        }
-
-        self.tracks.borrow_mut().extend(
-            state
-                .tracks
-                .borrow()
-                .iter()
-                .map(|track| track.clone().into()),
-        );
+        self.tracks.borrow_mut().clear();
+        self.tracks
+            .borrow_mut()
+            .extend(state.tracks.borrow().iter().cloned().map(Element::new));
 
         self.diff(tree);
 
@@ -210,6 +193,23 @@ where
 
         let state = tree.state.downcast_mut::<State<'_, Message>>();
 
+        if self.inner.tracks.read().unwrap().len() != state.tracks.borrow().len() {
+            state.tracks.borrow_mut().clear();
+            state
+                .tracks
+                .borrow_mut()
+                .extend(self.inner.tracks.read().unwrap().iter().map(|track| {
+                    Track::new(track.clone(), state.position.clone(), state.scale.clone())
+                }));
+
+            state.waveform_cache.borrow_mut().take();
+            shell.invalidate_layout();
+
+            shell.publish(self.ping.clone());
+        } else if self.inner.meter.playing.load(SeqCst) {
+            shell.publish(self.ping.clone());
+        }
+
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
             state.modifiers = modifiers;
             return Status::Ignored;
@@ -222,7 +222,7 @@ where
             return Status::Ignored;
         };
 
-        if let Some(status) = self.on_event_any_modifiers(state, &event, pos) {
+        if let Some(status) = self.on_event_any_modifiers(state, &event, pos, shell) {
             return status;
         }
 
@@ -232,7 +232,7 @@ where
             state.modifiers.alt(),
         ) {
             (false, false, false) => {
-                if let Some(status) = self.on_event_no_modifiers(state, &event, pos) {
+                if let Some(status) = self.on_event_no_modifiers(state, &event, pos, shell) {
                     return status;
                 }
             }
@@ -242,12 +242,12 @@ where
                 }
             }
             (false, true, false) => {
-                if let Some(status) = self.on_event_shift(state, &event, pos) {
+                if let Some(status) = self.on_event_shift(state, &event) {
                     return status;
                 }
             }
             (false, false, true) => {
-                if let Some(status) = self.on_event_alt(state, &event, pos) {
+                if let Some(status) = self.on_event_alt(state, &event, pos, shell) {
                     return status;
                 }
             }
@@ -311,19 +311,22 @@ where
         let bounds = layout.bounds();
 
         if self.inner.meter.numerator.load(SeqCst) != state.numerator.get() {
+            state.waveform_cache.borrow_mut().take();
             state.grid_cache.clear();
-            state.waveform_cache.borrow_mut().meshes = None;
+
             state.numerator.set(self.inner.meter.numerator.load(SeqCst));
         }
 
-        if let Some(last_layout_bounds) = *state.last_layout_bounds.borrow() {
-            if last_layout_bounds != layout.bounds() {
-                state.waveform_cache.borrow_mut().meshes = None;
-            }
-        } else {
-            state.waveform_cache.borrow_mut().meshes = None;
+        if state
+            .last_bounds
+            .get()
+            .is_none_or(|last_bounds| last_bounds != bounds)
+        {
+            state.waveform_cache.borrow_mut().take();
+            state.grid_cache.clear();
+
+            state.last_bounds.set(Some(layout.bounds()));
         }
-        *state.last_layout_bounds.borrow_mut() = Some(layout.bounds());
 
         renderer.with_layer(bounds, |renderer| {
             renderer.draw_geometry(state.grid_cache.draw(renderer, bounds.size(), |frame| {
@@ -349,8 +352,7 @@ where
                         .draw(tree, renderer, theme, style, layout, cursor, &bounds);
                 });
 
-            let is_empty = state.waveform_cache.borrow().meshes.is_none();
-            if is_empty {
+            if state.waveform_cache.borrow().is_none() {
                 let meshes = state
                     .tracks
                     .borrow()
@@ -373,16 +375,20 @@ where
                     })
                     .collect();
 
-                *state.waveform_cache.borrow_mut() = Geometry::Live {
-                    meshes,
-                    images: Vec::new(),
-                    text: Vec::new(),
-                }
-                .cache(Group::unique(), None);
+                *state.waveform_cache.borrow_mut() = Some(
+                    Geometry::Live {
+                        meshes,
+                        images: Vec::new(),
+                        text: Vec::new(),
+                    }
+                    .cache(Group::unique(), None),
+                );
             }
 
             renderer.with_layer(bounds, |renderer| {
-                renderer.draw_geometry(Geometry::load(&*state.waveform_cache.borrow()));
+                renderer.draw_geometry(Geometry::load(
+                    state.waveform_cache.borrow().as_ref().unwrap(),
+                ));
             });
         }
 
@@ -396,10 +402,11 @@ impl<'a, Message> Arrangement<'a, Message>
 where
     Message: 'a,
 {
-    pub fn new(inner: Arc<ArrangementInner>) -> Self {
+    pub fn new(inner: Arc<ArrangementInner>, ping: Message) -> Self {
         Self {
             inner,
             tracks: RefCell::default(),
+            ping,
         }
     }
 
@@ -481,29 +488,6 @@ where
 
             beat.quarter_note += 1;
         }
-
-        let mut track_line = (-state.position.y.get())
-            .rem_euclid(1.0)
-            .mul_add(state.scale.y.get(), SEEKER_HEIGHT);
-        let last_track_line = (self.inner.tracks.read().unwrap().len() as f32
-            - state.position.y.get())
-        .mul_add(state.scale.y.get(), SEEKER_HEIGHT);
-
-        while track_line as u32 <= last_track_line as u32 {
-            let path = Path::new(|path| {
-                path.line_to(Point::new(0.0, track_line));
-                path.line_to(Point::new(bounds.width, track_line));
-            });
-
-            frame.stroke(
-                &path,
-                Stroke::default()
-                    .with_color(theme.extended_palette().secondary.weak.color)
-                    .with_width(1.0),
-            );
-
-            track_line += state.scale.y.get();
-        }
     }
 
     fn playhead(
@@ -534,11 +518,13 @@ where
         renderer.draw_geometry(frame.into_geometry());
     }
 
+    #[expect(clippy::too_many_lines)]
     fn on_event_any_modifiers(
         &self,
         state: &mut State<'_, Message>,
         event: &Event,
         cursor: Point,
+        shell: &mut Shell<'_, Message>,
     ) -> Option<Status> {
         if let Event::Mouse(event) = event {
             match event {
@@ -558,7 +544,10 @@ where
                                 .in_interleaved_samples(&self.inner.meter);
                         }
 
-                        self.inner.meter.global_time.store(time, SeqCst);
+                        if time != self.inner.meter.global_time.load(SeqCst) {
+                            self.inner.meter.global_time.store(time, SeqCst);
+                            shell.invalidate_layout();
+                        }
 
                         return Some(Status::Captured);
                     }
@@ -567,14 +556,19 @@ where
                             .mul_add(state.scale.x.get().exp2(), state.position.x.get());
                         let mut new_position =
                             Position::from_interleaved_samples(time as u32, &self.inner.meter);
+
                         if !state.modifiers.alt() {
                             new_position =
                                 new_position.snap(state.scale.x.get(), &self.inner.meter);
                         }
+
                         if new_position != clip.get_global_start() {
                             clip.move_to(new_position);
-                            state.waveform_cache.borrow_mut().meshes = None;
+
+                            state.waveform_cache.borrow_mut().take();
+                            shell.invalidate_layout();
                         }
+
                         let new_index = ((cursor.y - SEEKER_HEIGHT) / state.scale.y.get()) as usize;
                         if index != &new_index
                             && new_index < self.inner.tracks.read().unwrap().len()
@@ -582,9 +576,12 @@ where
                         {
                             self.inner.tracks.read().unwrap()[*index].remove_clip(clip);
 
-                            state.waveform_cache.borrow_mut().meshes = None;
+                            state.waveform_cache.borrow_mut().take();
+                            shell.invalidate_layout();
+
                             state.action = Action::DraggingClip(clip.clone(), new_index, *offset);
                         }
+
                         return Some(Status::Captured);
                     }
                     Action::DeletingClips => {
@@ -598,10 +595,12 @@ where
                                         .mul_add(state.scale.x.get().exp2(), state.position.x.get())
                                         as u32,
                                 );
+
                                 if let Some(clip) = clip {
                                     self.inner.tracks.read().unwrap()[index].remove_clip(&clip);
 
-                                    state.waveform_cache.borrow_mut().meshes = None;
+                                    state.waveform_cache.borrow_mut().take();
+                                    shell.invalidate_layout();
 
                                     return Some(Status::Captured);
                                 }
@@ -614,14 +613,19 @@ where
 
                         let mut new_position =
                             Position::from_interleaved_samples(time as u32, &self.inner.meter);
+
                         if !state.modifiers.alt() {
                             new_position =
                                 new_position.snap(state.scale.x.get(), &self.inner.meter);
                         }
+
                         if new_position != clip.get_global_start() {
                             clip.trim_start_to(new_position);
-                            state.waveform_cache.borrow_mut().meshes = None;
+
+                            state.waveform_cache.borrow_mut().take();
+                            shell.invalidate_layout();
                         }
+
                         return Some(Status::Captured);
                     }
                     Action::ClipTrimmingEnd(clip, offset) => {
@@ -629,6 +633,7 @@ where
                             .mul_add(state.scale.x.get().exp2(), state.position.x.get());
                         let mut new_position =
                             Position::from_interleaved_samples(time as u32, &self.inner.meter);
+
                         if !state.modifiers.alt() {
                             new_position =
                                 new_position.snap(state.scale.x.get(), &self.inner.meter);
@@ -636,8 +641,11 @@ where
 
                         if new_position != clip.get_global_start() {
                             clip.trim_end_to(new_position);
-                            state.waveform_cache.borrow_mut().meshes = None;
+
+                            state.waveform_cache.borrow_mut().take();
+                            shell.invalidate_layout();
                         }
+
                         return Some(Status::Captured);
                     }
                     Action::None => {}
@@ -653,6 +661,7 @@ where
         state: &mut State<'_, Message>,
         event: &Event,
         cursor: Point,
+        shell: &mut Shell<'_, Message>,
     ) -> Option<Status> {
         if let Event::Mouse(event) = event {
             match event {
@@ -676,8 +685,14 @@ where
                         );
 
                     state.position.x.set(x);
-                    state.position.y.set(y);
-                    state.waveform_cache.borrow_mut().meshes = None;
+
+                    if (state.position.y.get() - y).abs() * state.scale.y.get() > 1.0 {
+                        shell.invalidate_layout();
+
+                        state.position.y.set(y);
+                    }
+
+                    state.waveform_cache.borrow_mut().take();
                     state.grid_cache.clear();
 
                     return Some(Status::Captured);
@@ -699,10 +714,13 @@ where
                                         .mul_add(state.scale.x.get().exp2(), state.position.x.get())
                                         as u32,
                                 );
+
                                 if let Some(clip) = clip {
                                     self.inner.tracks.read().unwrap()[index].remove_clip(&clip);
 
-                                    state.waveform_cache.borrow_mut().meshes = None;
+                                    state.waveform_cache.borrow_mut().take();
+                                    shell.invalidate_layout();
+
                                     state.action = Action::DeletingClips;
 
                                     return Some(Status::Captured);
@@ -743,7 +761,7 @@ where
                         .x
                         .set(cursor.x.mul_add(-x.exp2(), cursor_content_x).max(0.0));
                     state.scale.x.set(x);
-                    state.waveform_cache.borrow_mut().meshes = None;
+                    state.waveform_cache.borrow_mut().take();
                     state.grid_cache.clear();
 
                     return Some(Status::Captured);
@@ -759,6 +777,7 @@ where
                                     .mul_add(state.scale.x.get().exp2(), state.position.x.get())
                                     as u32,
                             );
+
                             if let Some(clip) = clip {
                                 let clip = Arc::new((*clip).clone());
                                 let offset = (clip
@@ -784,12 +803,7 @@ where
         None
     }
 
-    fn on_event_shift(
-        &self,
-        state: &State<'_, Message>,
-        event: &Event,
-        _cursor: Point,
-    ) -> Option<Status> {
+    fn on_event_shift(&self, state: &State<'_, Message>, event: &Event) -> Option<Status> {
         if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = event {
             let x = match delta {
                 ScrollDelta::Pixels { x: _, y } => y * 4.0,
@@ -804,8 +818,9 @@ where
                 );
 
             state.position.x.set(x);
-            state.waveform_cache.borrow_mut().meshes = None;
+            state.waveform_cache.borrow_mut().take();
             state.grid_cache.clear();
+
             return Some(Status::Captured);
         }
         None
@@ -816,6 +831,7 @@ where
         state: &mut State<'_, Message>,
         event: &Event,
         cursor: Point,
+        shell: &mut Shell<'_, Message>,
     ) -> Option<Status> {
         if let Event::Mouse(event) = event {
             match event {
@@ -827,9 +843,14 @@ where
 
                     let y = (y + state.scale.y.get()).clamp(36.0, 200.0);
 
-                    state.scale.y.set(y);
-                    state.waveform_cache.borrow_mut().meshes = None;
+                    if (state.scale.y.get() - y).abs() > 0.1 {
+                        shell.invalidate_layout();
+                        state.scale.y.set(y);
+                    }
+
+                    state.waveform_cache.borrow_mut().take();
                     state.grid_cache.clear();
+
                     return Some(Status::Captured);
                 }
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
@@ -852,16 +873,20 @@ where
                     as u32,
                 &self.inner.meter,
             );
+
             if !state.modifiers.alt() {
                 time = time.snap(state.scale.x.get(), &self.inner.meter);
             }
+
             self.inner
                 .meter
                 .global_time
                 .store(time.in_interleaved_samples(&self.inner.meter), SeqCst);
             state.action = Action::DraggingPlayhead;
+
             return Some(Status::Captured);
         }
+
         let index = ((cursor.y - SEEKER_HEIGHT) / state.scale.y.get()) as usize;
         if index < self.inner.tracks.read().unwrap().len() {
             let clip = state.tracks.borrow()[index].get_clip_at_global_time(
@@ -871,6 +896,7 @@ where
                     .mul_add(state.scale.x.get().exp2(), state.position.x.get())
                     as u32,
             );
+
             if let Some(clip) = clip {
                 let offset = (clip
                     .get_global_start()
@@ -879,10 +905,12 @@ where
                     - state.position.x.get())
                     / state.scale.x.get().exp2()
                     - cursor.x;
+
                 let pixel_len = (clip.get_global_end() - clip.get_global_start())
                     .in_interleaved_samples(&self.inner.meter)
                     as f32
                     / state.scale.x.get().exp2();
+
                 let start_pixel = (clip
                     .get_global_start()
                     .in_interleaved_samples(&self.inner.meter)

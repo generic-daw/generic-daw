@@ -6,6 +6,7 @@ license = "GPL-3.0-only"
 
 [dependencies]
 anyhow = "1.0.95"
+async-channel = "2.3.1"
 atomic_enum = { version = "0.3.0", default-features = false }
 cpal = "0.15.3"
 generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host", features = [
@@ -22,6 +23,7 @@ iced = { version = "0.13.1", default-features = false, features = [
     "advanced",
     "auto-detect-theme",
     "canvas",
+    "debug",
     "wgpu",
 ] }
 iced_aw = { version = "0.11.0", default-features = false, features = [
