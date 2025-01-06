@@ -116,13 +116,15 @@ impl Daw {
                     paths.map_or(Message::Ping, Message::LoadSamples)
                 });
             }
-            Message::LoadSamples(paths) => paths
-                .iter()
-                .map(FileHandle::path)
-                .map(PathBuf::from)
-                .for_each(|path| {
-                    drop(self.update(Message::LoadSample(path)));
-                }),
+            Message::LoadSamples(paths) => {
+                return Task::batch(
+                    paths
+                        .iter()
+                        .map(FileHandle::path)
+                        .map(PathBuf::from)
+                        .map(|path| self.update(Message::LoadSample(path))),
+                )
+            }
             Message::TogglePlay => {
                 self.arrangement.meter.playing.fetch_not(SeqCst);
             }
