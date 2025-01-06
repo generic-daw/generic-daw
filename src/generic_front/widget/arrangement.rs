@@ -57,6 +57,8 @@ struct State<'a, Message> {
     action: Action,
     /// the last window size
     last_bounds: Cell<Option<Rectangle>>,
+    /// the theme of the last draw
+    last_theme: RefCell<Option<Theme>>,
 }
 
 impl<Message> Default for State<'_, Message> {
@@ -71,6 +73,7 @@ impl<Message> Default for State<'_, Message> {
             modifiers: Modifiers::default(),
             action: Action::default(),
             last_bounds: Cell::default(),
+            last_theme: RefCell::default(),
         }
     }
 }
@@ -325,6 +328,18 @@ where
             state.grid_cache.clear();
 
             state.last_bounds.set(Some(layout.bounds()));
+        }
+
+        if state
+            .last_theme
+            .borrow()
+            .as_ref()
+            .is_none_or(|last_theme| last_theme != theme)
+        {
+            state.waveform_cache.borrow_mut().take();
+            state.grid_cache.clear();
+
+            state.last_theme.borrow_mut().replace(theme.clone());
         }
 
         renderer.with_layer(bounds, |renderer| {
