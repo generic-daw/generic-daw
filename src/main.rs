@@ -11,6 +11,7 @@ fn main() -> Result {
         .font(REQUIRED_FONT_BYTES)
         .font(BOOTSTRAP_FONT_BYTES)
         .subscription(Daw::subscription)
+        .theme(Daw::theme)
         .antialiasing(true)
         .run()
 }

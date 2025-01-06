@@ -8,7 +8,9 @@ use iced::{
     border::Radius,
     event::{self, Status},
     keyboard,
-    widget::{button, column, container, pick_list, row, scrollable, toggler, Text},
+    widget::{
+        button, column, container, horizontal_space, pick_list, row, scrollable, toggler, Text,
+    },
     Alignment::Center,
     Element, Event, Subscription, Task, Theme,
 };
@@ -37,6 +39,7 @@ static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 
 pub struct Daw {
     arrangement: Arc<ArrangementInner>,
+    theme: Theme,
     _stream: Stream,
 }
 
@@ -44,6 +47,7 @@ pub struct Daw {
 pub enum Message {
     #[default]
     Ping,
+    ThemeChanged(Theme),
     LoadSample(PathBuf),
     LoadSamplesButton,
     LoadSamples(Vec<FileHandle>),
@@ -80,6 +84,7 @@ impl Default for Daw {
 
         Self {
             arrangement,
+            theme: Theme::Dark,
             _stream: stream,
         }
     }
@@ -89,6 +94,7 @@ impl Daw {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Ping => {}
+            Message::ThemeChanged(theme) => self.theme = theme,
             Message::LoadSample(path) => {
                 let (tx, rx) = async_channel::bounded(1);
 
@@ -129,9 +135,7 @@ impl Daw {
                 self.arrangement.meter.playing.store(false, SeqCst);
                 self.arrangement.meter.global_time.store(0, SeqCst);
             }
-            Message::New => {
-                *self = Self::default();
-            }
+            Message::New => *self = Self::default(),
             Message::ExportButton => {
                 return Task::perform(
                     AsyncFileDialog::new()
@@ -140,24 +144,18 @@ impl Daw {
                     |path| path.map_or(Message::Ping, Message::Export),
                 );
             }
-            Message::Export(path) => {
-                self.arrangement.export(path.path());
-            }
-            Message::BpmChanged(bpm) => {
-                self.arrangement.meter.bpm.store(bpm, SeqCst);
-            }
-            Message::NumeratorChanged(new_numerator) => {
-                self.arrangement
-                    .meter
-                    .numerator
-                    .store(new_numerator, SeqCst);
-            }
-            Message::DenominatorChanged(new_denominator) => {
-                self.arrangement
-                    .meter
-                    .denominator
-                    .store(new_denominator, SeqCst);
-            }
+            Message::Export(path) => self.arrangement.export(path.path()),
+            Message::BpmChanged(bpm) => self.arrangement.meter.bpm.store(bpm, SeqCst),
+            Message::NumeratorChanged(new_numerator) => self
+                .arrangement
+                .meter
+                .numerator
+                .store(new_numerator, SeqCst),
+            Message::DenominatorChanged(new_denominator) => self
+                .arrangement
+                .meter
+                .denominator
+                .store(new_denominator, SeqCst),
             Message::ToggleMetronome => {
                 self.arrangement.metronome.fetch_not(SeqCst);
             }
@@ -214,6 +212,8 @@ impl Daw {
             toggler(self.arrangement.metronome.load(SeqCst))
                 .label("Metronome")
                 .on_toggle(|_| Message::ToggleMetronome),
+            horizontal_space(),
+            pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
         ]
         .spacing(20)
         .align_y(Center);
@@ -275,5 +275,9 @@ impl Daw {
             },
             Status::Captured => None,
         })
+    }
+
+    pub fn theme(&self) -> Theme {
+        self.theme.clone()
     }
 }
