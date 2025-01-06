@@ -7,6 +7,14 @@ mod generic_front;
 use generic_front::Daw;
 
 fn main() -> Result {
+    #[cfg(target_os = "linux")]
+    unsafe {
+        if std::env::var("WINIT_X11_SCALE_FACTOR").is_err() {
+            std::env::set_var("WINIT_X11_SCALE_FACTOR", "1.0");
+        }
+        std::env::remove_var("WAYLAND_DISPLAY");
+    }
+
     application("GenericDAW", Daw::update, Daw::view)
         .font(REQUIRED_FONT_BYTES)
         .font(BOOTSTRAP_FONT_BYTES)
