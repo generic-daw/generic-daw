@@ -140,6 +140,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message, Theme, Re
                             .mul_add(-0.5, position.x - bounds.position().x - state.offset)
                             / (bounds.width - DRAG_SIZE))
                             .clamp(0.0, 1.0);
+                        shell.invalidate_layout();
                     } else {
                         state.dragging = false;
                     }

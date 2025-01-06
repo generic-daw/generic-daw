@@ -63,40 +63,41 @@ impl AudioClip {
             bounds.intersection(&viewport).unwrap().size(),
         );
 
-        // vertices of the waveform
-        let mut vertices =
-            Vec::with_capacity(2 * usize::try_from(last_index - first_index).unwrap());
         let color = color::pack(theme.extended_palette().secondary.base.text);
         let lod = scale.x.get() as usize - 3;
-        (first_index..last_index).enumerate().for_each(|(x, i)| {
-            let (min, max) = *self.audio.lods.read().unwrap()[lod]
-                .get(usize::try_from(i).unwrap())
-                .unwrap_or(&(0.0, 0.0));
 
-            vertices.push(SolidVertex2D {
-                position: [
+        // vertices of the waveform
+        let vertices: Vec<_> = (first_index..last_index)
+            .enumerate()
+            .map(|(x, i)| {
+                (
                     x as f32 * lod_samples_per_pixel,
-                    min.mul_add(waveform_height, 18.0),
-                ],
-                color,
-            });
-            vertices.push(SolidVertex2D {
-                position: [
-                    x as f32 * lod_samples_per_pixel,
-                    max.mul_add(waveform_height, 18.0),
-                ],
-                color,
-            });
-        });
+                    *self.audio.lods[lod]
+                        .read()
+                        .unwrap()
+                        .get(usize::try_from(i).unwrap())
+                        .unwrap_or(&(0.0, 0.0)),
+                )
+            })
+            .flat_map(|(x, (min, max))| {
+                [
+                    SolidVertex2D {
+                        position: [x, min.mul_add(waveform_height, 18.0)],
+                        color,
+                    },
+                    SolidVertex2D {
+                        position: [x, max.mul_add(waveform_height, 18.0)],
+                        color,
+                    },
+                ]
+            })
+            .collect();
 
         // triangles of the waveform
-        let mut indices = Vec::with_capacity(3 * (vertices.len() - 2));
-        (0..vertices.len() - 2).for_each(|i| {
-            let i = u32::try_from(i).unwrap();
-            indices.push(i);
-            indices.push(i + 1);
-            indices.push(i + 2);
-        });
+        let indices = (0..vertices.len() - 2)
+            .flat_map(|i| [i, i + 1, i + 2])
+            .map(|i| u32::try_from(i).unwrap())
+            .collect();
 
         // height of the clip, excluding the text, clipped off by the top of the arrangement
         let clip_height = max_by(0.0, 18.0 - hidden, |a, b| a.partial_cmp(b).unwrap());

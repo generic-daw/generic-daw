@@ -203,7 +203,6 @@ where
                 }));
 
             state.waveform_cache.borrow_mut().take();
-            shell.invalidate_layout();
 
             shell.publish(self.ping.clone());
         } else if self.inner.meter.playing.load(SeqCst) {

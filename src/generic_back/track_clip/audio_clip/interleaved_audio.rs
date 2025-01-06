@@ -5,6 +5,7 @@ use rubato::{
     Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
 use std::{
+    array,
     cmp::{max_by, min_by},
     fs::File,
     path::PathBuf,
@@ -20,35 +21,26 @@ use symphonia::core::{
 };
 
 #[derive(Debug)]
+#[expect(clippy::type_complexity)]
 pub struct InterleavedAudio {
     /// these are used to play the sample back
-    pub samples: Vec<f32>,
+    pub samples: Box<[f32]>,
     /// these are used to draw the sample in various quality levels
-    pub lods: RwLock<[Vec<(f32, f32)>; 10]>,
+    pub lods: [RwLock<Box<[(f32, f32)]>>; 10],
     /// the file name associated with the sample
     pub name: PathBuf,
 }
 
 impl InterleavedAudio {
     pub fn create(path: PathBuf, meter: &Meter) -> Result<Arc<Self>> {
-        let mut samples = Self::read_audio_file(&path, meter)?;
-        samples.shrink_to_fit();
-
+        let samples = Self::read_audio_file(&path, meter)?;
         let length = samples.len();
+
         let audio = Arc::new(Self {
             samples,
-            lods: RwLock::new([
-                vec![(0.0, 0.0); length.div_ceil(1 << 3)],
-                vec![(0.0, 0.0); length.div_ceil(1 << 4)],
-                vec![(0.0, 0.0); length.div_ceil(1 << 5)],
-                vec![(0.0, 0.0); length.div_ceil(1 << 6)],
-                vec![(0.0, 0.0); length.div_ceil(1 << 7)],
-                vec![(0.0, 0.0); length.div_ceil(1 << 8)],
-                vec![(0.0, 0.0); length.div_ceil(1 << 9)],
-                vec![(0.0, 0.0); length.div_ceil(1 << 10)],
-                vec![(0.0, 0.0); length.div_ceil(1 << 11)],
-                vec![(0.0, 0.0); length.div_ceil(1 << 12)],
-            ]),
+            lods: array::from_fn(|i| {
+                RwLock::new(vec![(0.0, 0.0); length.div_ceil(1 << (i + 3))].into_boxed_slice())
+            }),
             name: path,
         });
 
@@ -56,7 +48,7 @@ impl InterleavedAudio {
         Ok(audio)
     }
 
-    fn read_audio_file(path: &PathBuf, meter: &Meter) -> Result<Vec<f32>> {
+    fn read_audio_file(path: &PathBuf, meter: &Meter) -> Result<Box<[f32]>> {
         let mut format = symphonia::default::get_probe()
             .format(
                 &Hint::default(),
@@ -94,7 +86,7 @@ impl InterleavedAudio {
                     }
                     if let Some(buf) = &mut sample_buffer {
                         buf.copy_interleaved_ref(audio_buf);
-                        interleaved_samples.extend(buf.samples().iter());
+                        interleaved_samples.extend(buf.samples());
                     }
                 }
                 Err(err) => return Err(anyhow!(err)),
@@ -104,6 +96,7 @@ impl InterleavedAudio {
         let stream_sample_rate = meter.sample_rate.load(SeqCst);
 
         resample(file_sample_rate, stream_sample_rate, interleaved_samples)
+            .map(Vec::into_boxed_slice)
     }
 
     fn create_lod(audio: &Self) {
@@ -113,30 +106,34 @@ impl InterleavedAudio {
                 MinMaxResult::OneElement(x) => (x, x),
                 MinMaxResult::NoElements => unreachable!(),
             };
-            audio.lods.write().unwrap()[0][i] =
+            audio.lods[0].write().unwrap()[i] =
                 ((*min).mul_add(0.5, 0.5), (*max).mul_add(0.5, 0.5));
         });
 
         (1..10).for_each(|i| {
-            let len = audio.lods.read().unwrap()[i].len();
+            let len = audio.lods[i].read().unwrap().len();
             (0..len).for_each(|j| {
                 let min = min_by(
-                    audio.lods.read().unwrap()[i - 1][2 * j].0,
-                    audio.lods.read().unwrap()[i - 1]
+                    audio.lods[i - 1].read().unwrap()[2 * j].0,
+                    audio.lods[i - 1]
+                        .read()
+                        .unwrap()
                         .get(2 * j + 1)
                         .unwrap_or(&(f32::MAX, f32::MAX))
                         .0,
                     |a, b| a.partial_cmp(b).unwrap(),
                 );
                 let max = max_by(
-                    audio.lods.read().unwrap()[i - 1][2 * j].1,
-                    audio.lods.read().unwrap()[i - 1]
+                    audio.lods[i - 1].read().unwrap()[2 * j].1,
+                    audio.lods[i - 1]
+                        .read()
+                        .unwrap()
                         .get(2 * j + 1)
                         .unwrap_or(&(f32::MAX, f32::MAX))
                         .1,
                     |a, b| a.partial_cmp(b).unwrap(),
                 );
-                audio.lods.write().unwrap()[i][j] = (min, max);
+                audio.lods[i].write().unwrap()[j] = (min, max);
             });
         });
     }
@@ -151,11 +148,8 @@ pub fn resample(
         return Ok(interleaved_samples);
     }
 
-    let resample_ratio = f64::from(stream_sample_rate) / f64::from(file_sample_rate);
-
-    let frames = interleaved_samples.len() / 2;
     let mut resampler = SincFixedIn::<f32>::new(
-        resample_ratio,
+        f64::from(stream_sample_rate) / f64::from(file_sample_rate),
         1.0,
         SincInterpolationParameters {
             sinc_len: 256,
@@ -167,34 +161,26 @@ pub fn resample(
             .unwrap(),
             window: WindowFunction::Blackman,
         },
-        frames,
+        interleaved_samples.len() / 2,
         2,
     )?;
 
-    let mut left = Vec::with_capacity(frames);
-    let mut right = Vec::with_capacity(frames);
-    interleaved_samples
+    let left: Box<_> = interleaved_samples.iter().step_by(2).copied().collect();
+    let right: Box<_> = interleaved_samples
         .iter()
-        .enumerate()
-        .for_each(|(i, &sample)| {
-            if i % 2 == 0 {
-                left.push(sample);
-            } else {
-                right.push(sample);
-            }
-        });
+        .skip(1)
+        .step_by(2)
+        .copied()
+        .collect();
 
     let deinterleaved_samples = resampler.process(&[left, right], None)?;
 
-    let frames = deinterleaved_samples[0].len();
     interleaved_samples.clear();
-    interleaved_samples.reserve_exact(frames * 2);
-    let left = &deinterleaved_samples[0];
-    let right = &deinterleaved_samples[1];
-    for i in 0..frames {
-        interleaved_samples.push(left[i]);
-        interleaved_samples.push(right[i]);
-    }
+    interleaved_samples.extend(
+        deinterleaved_samples[0]
+            .iter()
+            .interleave(&deinterleaved_samples[1]),
+    );
 
     Ok(interleaved_samples)
 }
