@@ -6,7 +6,6 @@ use clack_extensions::{
 };
 use clack_host::prelude::*;
 use std::{
-    fmt::Debug,
     io::Cursor,
     rc::Rc,
     sync::mpsc::{Receiver, Sender},
@@ -17,17 +16,12 @@ use winit::{
     raw_window_handle::RawWindowHandle,
 };
 
+#[derive(Clone, Copy)]
 pub struct GuiExt {
     plugin_gui: PluginGui,
     pub configuration: Option<GuiConfiguration<'static>>,
     is_open: bool,
     is_resizeable: bool,
-}
-
-impl Debug for GuiExt {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("GuiExt").finish_non_exhaustive()
-    }
 }
 
 impl GuiExt {
@@ -124,22 +118,17 @@ impl GuiExt {
         self.is_open = true;
     }
 
-    pub fn resize(
-        &self,
-        plugin: &mut PluginMainThreadHandle<'_>,
-        size: Size,
-        scale_factor: f64,
-    ) -> Size {
+    pub fn resize(&self, plugin: &mut PluginMainThreadHandle<'_>, size: Size) -> Size {
         let uses_logical_pixels = self.configuration.unwrap().api_type.uses_logical_size();
 
         let size = if uses_logical_pixels {
-            let size = size.to_logical(scale_factor);
+            let size = size.to_logical(1.0);
             GuiSize {
                 width: size.width,
                 height: size.height,
             }
         } else {
-            let size = size.to_physical(scale_factor);
+            let size = size.to_physical(1.0);
             GuiSize {
                 width: size.width,
                 height: size.height,
@@ -158,16 +147,15 @@ impl GuiExt {
         self.gui_size_to_winit_size(working_size)
     }
 
-    pub fn destroy(&mut self, plugin: &mut PluginMainThreadHandle<'_>) {
+    pub fn destroy(mut self, plugin: &mut PluginMainThreadHandle<'_>) {
         if self.is_open {
             self.plugin_gui.destroy(plugin);
             self.is_open = false;
         }
     }
 
-    #[expect(dead_code)]
     pub fn run(
-        mut self,
+        self,
         mut instance: PluginInstance<Host>,
         sender: &Sender<HostThreadMessage>,
         receiver: &Receiver<MainThreadMessage>,
@@ -191,7 +179,6 @@ impl GuiExt {
                         self.resize(
                             &mut instance.plugin_handle(),
                             self.gui_size_to_winit_size(new_size),
-                            1.0f64,
                         );
                     }
                     MainThreadMessage::RunOnMainThread => instance.call_on_main_thread_callback(),

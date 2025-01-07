@@ -1,11 +1,12 @@
 use crate::{
-    clap_host::{get_installed_plugins, run},
+    clap_host::{get_installed_plugins, open_gui, ClapPluginWrapper},
     generic_back::{
         build_output_stream, resample, Arrangement as ArrangementInner, AudioClip, AudioTrack,
         Denominator, InterleavedAudio, Numerator,
     },
 };
 use clack_host::process::PluginAudioConfiguration;
+use clap_host::{ClapHost, Message as ClapHostMessage};
 use cpal::Stream;
 use home::home_dir;
 use iced::{
@@ -15,7 +16,7 @@ use iced::{
     widget::{
         button, column, container, horizontal_space, pick_list, row, scrollable, toggler, Text,
     },
-    window::Settings,
+    window::{self, Settings},
     Alignment::Center,
     Element, Event, Subscription, Task, Theme,
 };
@@ -33,6 +34,7 @@ use timeline_position::TimelinePosition;
 use timeline_scale::TimelineScale;
 use widget::{Arrangement, VSplit};
 
+mod clap_host;
 mod timeline_position;
 mod timeline_scale;
 mod widget;
@@ -42,12 +44,14 @@ static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 
 pub struct Daw {
     arrangement: Arc<ArrangementInner>,
+    clap_host: ClapHost,
     theme: Theme,
     _stream: Stream,
 }
 
 #[derive(Clone, Debug, Default)]
 pub enum Message {
+    ClapHost(ClapHostMessage),
     #[default]
     Ping,
     Test,
@@ -88,6 +92,7 @@ impl Default for Daw {
 
         Self {
             arrangement,
+            clap_host: ClapHost::default(),
             theme: Theme::Dark,
             _stream: stream,
         }
@@ -99,20 +104,28 @@ impl Daw {
         match message {
             Message::Ping => {}
             Message::Test => {
-                let (id, fut) = iced::window::open(Settings::default());
-                let embed = iced::window::run_with_handle(id, |handle| {
-                    run(
-                        &get_installed_plugins()[0],
-                        PluginAudioConfiguration {
-                            max_frames_count: 128,
-                            min_frames_count: 128,
-                            sample_rate: 44100.0,
-                        },
-                        handle.as_raw(),
+                let (id, fut) = window::open(Settings::default());
+                let embed = window::run_with_handle(id, move |handle| {
+                    (
+                        id,
+                        ClapPluginWrapper::new(open_gui(
+                            &get_installed_plugins()[0],
+                            PluginAudioConfiguration {
+                                max_frames_count: 128,
+                                min_frames_count: 128,
+                                sample_rate: 44100.0,
+                            },
+                            handle.as_raw(),
+                        )),
                     )
-                })
-                .map(|_| Message::Ping);
-                return Task::batch([fut.map(|_| Message::Ping), embed]);
+                });
+                return Task::batch([
+                    fut.map(|_| Message::Ping),
+                    embed.map(ClapHostMessage::Opened).map(Message::ClapHost),
+                ]);
+            }
+            Message::ClapHost(message) => {
+                return self.clap_host.update(message).map(Message::ClapHost);
             }
             Message::ThemeChanged(theme) => self.theme = theme,
             Message::LoadSample(path) => {
@@ -272,32 +285,35 @@ impl Daw {
         content.into()
     }
 
-    pub fn subscription(_state: &Self) -> Subscription<Message> {
-        event::listen_with(|e, s, _| match s {
-            Status::Ignored => match e {
-                Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
-                    match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-                        (false, false, false) => match key {
-                            keyboard::Key::Named(keyboard::key::Named::Space) => {
-                                Some(Message::TogglePlay)
-                            }
-                            _ => None,
-                        },
-                        (true, false, false) => match key {
-                            keyboard::Key::Character(c) => match c.to_string().as_str() {
-                                "n" => Some(Message::New),
-                                "e" => Some(Message::ExportButton),
+    pub fn subscription() -> Subscription<Message> {
+        Subscription::batch([
+            ClapHost::subscription().map(Message::ClapHost),
+            event::listen_with(|e, s, _| match s {
+                Status::Ignored => match e {
+                    Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
+                        match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
+                            (false, false, false) => match key {
+                                keyboard::Key::Named(keyboard::key::Named::Space) => {
+                                    Some(Message::TogglePlay)
+                                }
+                                _ => None,
+                            },
+                            (true, false, false) => match key {
+                                keyboard::Key::Character(c) => match c.to_string().as_str() {
+                                    "n" => Some(Message::New),
+                                    "e" => Some(Message::ExportButton),
+                                    _ => None,
+                                },
                                 _ => None,
                             },
                             _ => None,
-                        },
-                        _ => None,
+                        }
                     }
-                }
-                _ => None,
-            },
-            Status::Captured => None,
-        })
+                    _ => None,
+                },
+                Status::Captured => None,
+            }),
+        ])
     }
 
     pub fn theme(&self) -> Theme {

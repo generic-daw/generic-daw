@@ -1,3 +1,5 @@
+#![expect(missing_debug_implementations)]
+
 use audio_processor::AudioProcessor;
 use clack_host::prelude::*;
 use gui::GuiExt;
@@ -5,93 +7,21 @@ use home::home_dir;
 use host::{Host, HostThreadMessage};
 use main_thread::{MainThread, MainThreadMessage};
 use shared::Shared;
-use std::{
-    cell::UnsafeCell,
-    marker::PhantomData,
-    path::PathBuf,
-    result::Result,
-    sync::mpsc::{Receiver, Sender},
-};
+use std::{path::PathBuf, result::Result};
 use walkdir::WalkDir;
 use winit::raw_window_handle::RawWindowHandle;
 
+pub use clap_plugin::ClapPlugin;
+pub use clap_plugin_wrapper::ClapPluginWrapper;
+
 mod audio_processor;
+mod clap_plugin;
+mod clap_plugin_wrapper;
 mod gui;
 mod host;
 mod main_thread;
 mod shared;
 mod timer;
-
-#[derive(Debug)]
-pub struct ClapPlugin {
-    _gui: GuiExt,
-    sender: Sender<MainThreadMessage>,
-    receiver: Receiver<HostThreadMessage>,
-    _no_sync: PhantomData<UnsafeCell<()>>,
-}
-
-impl ClapPlugin {
-    fn new(
-        gui: GuiExt,
-        sender: Sender<MainThreadMessage>,
-        receiver: Receiver<HostThreadMessage>,
-    ) -> Self {
-        Self {
-            _gui: gui,
-            sender,
-            receiver,
-            _no_sync: PhantomData,
-        }
-    }
-
-    pub fn process_audio(
-        &self,
-        input_audio: Vec<Vec<f32>>,
-        input_audio_ports: AudioPorts,
-        output_audio_ports: AudioPorts,
-        input_events: EventBuffer,
-    ) -> (Vec<Vec<f32>>, EventBuffer) {
-        self.sender
-            .send(MainThreadMessage::ProcessAudio(
-                input_audio,
-                input_audio_ports,
-                output_audio_ports,
-                input_events,
-            ))
-            .unwrap();
-
-        match self.receiver.recv() {
-            Ok(HostThreadMessage::AudioProcessed(output_audio, output_events)) => {
-                (output_audio, output_events)
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn get_counter(&self) -> u64 {
-        self.sender.send(MainThreadMessage::GetCounter).unwrap();
-
-        match self.receiver.recv() {
-            Ok(HostThreadMessage::Counter(counter)) => counter,
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn get_state(&self) -> Vec<u8> {
-        self.sender.send(MainThreadMessage::GetState).unwrap();
-
-        match self.receiver.recv() {
-            Ok(HostThreadMessage::State(state)) => state,
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn set_state(&self, state: Vec<u8>) {
-        self.sender
-            .send(MainThreadMessage::SetState(state))
-            .unwrap();
-    }
-}
 
 pub fn get_installed_plugins() -> Vec<PluginBundle> {
     standard_clap_paths()
@@ -156,7 +86,7 @@ fn standard_clap_paths() -> Vec<PathBuf> {
     paths
 }
 
-pub fn run(
+pub fn open_gui(
     bundle: &PluginBundle,
     config: PluginAudioConfiguration,
     window_handle: RawWindowHandle,
@@ -194,5 +124,5 @@ pub fn run(
         gui.open_embedded(&mut instance.plugin_handle(), window_handle);
     };
 
-    ClapPlugin::new(gui, sender_host, receiver_host)
+    ClapPlugin::new(instance, gui, sender_host, receiver_host)
 }

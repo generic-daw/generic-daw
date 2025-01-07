@@ -18,7 +18,7 @@ fn main() -> Result {
     application("GenericDAW", Daw::update, Daw::view)
         .font(REQUIRED_FONT_BYTES)
         .font(BOOTSTRAP_FONT_BYTES)
-        .subscription(Daw::subscription)
+        .subscription(|_| Daw::subscription())
         .theme(Daw::theme)
         .antialiasing(true)
         .run()

@@ -1,5 +1,5 @@
 use crate::{
-    clap_host::ClapPlugin,
+    clap_host::ClapPluginWrapper,
     generic_back::{AtomicDirtyEvent, DirtyEvent, MidiNote},
 };
 use clack_host::{
@@ -16,7 +16,9 @@ pub const BUFFER_SIZE: usize = 256;
 #[derive(Debug)]
 pub struct PluginState {
     /// send messages to the plugin
-    pub plugin: ClapPlugin,
+    ///
+    /// TODO: don't use the giga UB wrapper type here
+    pub plugin: ClapPluginWrapper,
     /// the combined midi of all clips in the track
     pub global_midi_cache: Vec<Arc<MidiNote>>,
     /// how the midi was modified since the last buffer refresh
@@ -36,7 +38,7 @@ pub struct PluginState {
 }
 
 impl PluginState {
-    pub fn create(plugin: ClapPlugin) -> Mutex<Self> {
+    pub fn create(plugin: ClapPluginWrapper) -> Mutex<Self> {
         Mutex::new(Self {
             plugin,
             global_midi_cache: Vec::new(),
@@ -56,6 +58,7 @@ impl PluginState {
 
         let (buffers, _) =
             self.plugin
+                .inner
                 .process_audio(input_audio, input_ports, output_ports, buffer);
         (0..BUFFER_SIZE).for_each(|i| {
             let i = i * 2;
@@ -69,7 +72,7 @@ impl PluginState {
     fn get_input_events(&mut self, global_time: u32) -> EventBuffer {
         let mut buffer = EventBuffer::new();
 
-        let steady_time = self.plugin.get_counter();
+        let steady_time = self.plugin.inner.get_counter();
 
         let steady_time = u32::try_from(steady_time).unwrap();
         match self.dirty.load(SeqCst) {
