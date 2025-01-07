@@ -7,12 +7,14 @@ use main_thread::{MainThread, MainThreadMessage};
 use shared::Shared;
 use std::{
     cell::UnsafeCell,
+    future::Future,
     marker::PhantomData,
     path::PathBuf,
     result::Result,
     sync::mpsc::{Receiver, Sender},
 };
 use walkdir::WalkDir;
+use winit::raw_window_handle::RawWindowHandle;
 
 mod audio_processor;
 mod gui;
@@ -151,51 +153,51 @@ fn standard_clap_paths() -> Vec<PathBuf> {
 }
 
 #[expect(dead_code)]
-pub fn run(bundle: PluginBundle, config: PluginAudioConfiguration) -> ClapPlugin {
+pub fn run(
+    bundle: &PluginBundle,
+    config: PluginAudioConfiguration,
+    window_handle: RawWindowHandle,
+) -> (ClapPlugin, impl Future + use<>) {
     let (sender_plugin, receiver_plugin) = std::sync::mpsc::channel();
     let (sender_host, receiver_host) = std::sync::mpsc::channel();
 
     let sender_plugin_clone = sender_plugin.clone();
 
-    std::thread::spawn(move || {
-        let factory = bundle.get_plugin_factory().unwrap();
-        let plugin_descriptor = factory.plugin_descriptors().next().unwrap();
-        let mut instance = PluginInstance::<Host>::new(
-            |()| Shared::new(sender_plugin_clone),
-            |shared| MainThread::new(shared),
-            &bundle,
-            plugin_descriptor.id().unwrap(),
-            &HostInfo::new("", "", "", "").unwrap(),
-        )
+    let factory = bundle.get_plugin_factory().unwrap();
+    let plugin_descriptor = factory.plugin_descriptors().next().unwrap();
+    let mut instance = PluginInstance::<Host>::new(
+        |()| Shared::new(sender_plugin_clone),
+        |shared| MainThread::new(shared),
+        bundle,
+        plugin_descriptor.id().unwrap(),
+        &HostInfo::new("", "", "", "").unwrap(),
+    )
+    .unwrap();
+
+    let audio_processor = instance
+        .activate(|_, _| {}, config)
+        .unwrap()
+        .start_processing()
         .unwrap();
 
-        let audio_processor = instance
-            .activate(|_, _| {}, config)
-            .unwrap()
-            .start_processing()
-            .unwrap();
+    let mut gui = instance
+        .access_handler(|h| h.gui)
+        .map(|gui| GuiExt::new(gui, &mut instance.plugin_handle()))
+        .unwrap();
 
-        let mut gui = instance
-            .access_handler(|h| h.gui)
-            .map(|gui| GuiExt::new(gui, &mut instance.plugin_handle()))
-            .unwrap();
+    if gui.needs_floating().unwrap() {
+        gui.open_floating(&mut instance.plugin_handle());
+    } else {
+        gui.open_embedded(&mut instance.plugin_handle(), window_handle);
+    };
 
-        if gui.needs_floating().unwrap() {
-            gui.run_gui_floating(
-                instance,
-                &sender_host,
-                &receiver_plugin,
-                &mut AudioProcessor::new(audio_processor),
-            );
-        } else {
-            gui.run_gui_embedded(
-                instance,
-                &sender_host,
-                &receiver_plugin,
-                &mut AudioProcessor::new(audio_processor),
-            );
-        }
-    });
-
-    ClapPlugin::new(sender_plugin, receiver_host)
+    (
+        ClapPlugin::new(sender_plugin, receiver_host),
+        gui.run(
+            instance,
+            sender_host,
+            receiver_plugin,
+            AudioProcessor::new(audio_processor),
+        ),
+    )
 }

@@ -2,6 +2,7 @@ use crate::generic_back::{
     build_output_stream, resample, Arrangement as ArrangementInner, AudioClip, AudioTrack,
     Denominator, InterleavedAudio, Numerator,
 };
+use async_std::channel;
 use cpal::Stream;
 use home::home_dir;
 use iced::{
@@ -94,7 +95,7 @@ impl Daw {
             Message::Ping => {}
             Message::ThemeChanged(theme) => self.theme = theme,
             Message::LoadSample(path) => {
-                let (tx, rx) = async_channel::bounded(1);
+                let (tx, rx) = channel::bounded(1);
 
                 let arrangement = self.arrangement.clone();
                 std::thread::spawn(move || {

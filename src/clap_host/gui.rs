@@ -1,4 +1,5 @@
 use super::{timer::Timers, AudioProcessor, Host, HostThreadMessage, MainThreadMessage};
+use async_std::task;
 use clack_extensions::{
     gui::{GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow},
     state::PluginState,
@@ -6,6 +7,7 @@ use clack_extensions::{
 };
 use clack_host::prelude::*;
 use std::{
+    future::Future,
     io::Cursor,
     rc::Rc,
     sync::mpsc::{Receiver, Sender},
@@ -13,9 +15,7 @@ use std::{
 };
 use winit::{
     dpi::{LogicalSize, PhysicalSize, Size},
-    event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::Window,
+    raw_window_handle::RawWindowHandle,
 };
 
 pub struct GuiExt {
@@ -82,65 +82,41 @@ impl GuiExt {
             .map(|GuiConfiguration { is_floating, .. }| is_floating)
     }
 
-    pub fn open_floating(&self, plugin: &mut PluginMainThreadHandle<'_>) {
-        let Some(configuration) = self.configuration else {
+    pub fn open_floating(&mut self, plugin: &mut PluginMainThreadHandle<'_>) {
+        let Some(configuration) = self.configuration.filter(|c| c.is_floating) else {
             panic!("Called open_floating on incompatible plugin")
         };
-        assert!(
-            configuration.is_floating,
-            "Called open_floating on incompatible plugin"
-        );
 
         self.plugin_gui.create(plugin, configuration).unwrap();
         self.plugin_gui.suggest_title(plugin, c"");
         self.plugin_gui.show(plugin).unwrap();
+
+        self.is_resizeable = self.plugin_gui.can_resize(plugin);
+        self.is_open = true;
     }
 
     pub fn open_embedded(
         &mut self,
         plugin: &mut PluginMainThreadHandle<'_>,
-        event_loop: &EventLoop<()>,
-    ) -> Window {
-        let Some(configuration) = self.configuration else {
+        window_handle: RawWindowHandle,
+    ) {
+        let Some(configuration) = self.configuration.filter(|c| !c.is_floating) else {
             panic!("Called open_embedded on incompatible plugin")
         };
-        assert!(
-            !configuration.is_floating,
-            "Called open_embedded on incompatible plugin"
-        );
 
         self.plugin_gui.create(plugin, configuration).unwrap();
-
-        let initial_size = self.plugin_gui.get_size(plugin).unwrap_or(GuiSize {
-            width: 640,
-            height: 480,
-        });
-
-        self.is_resizeable = self.plugin_gui.can_resize(plugin);
-
-        #[expect(deprecated)] // TODO: remove this
-        let window = event_loop
-            .create_window(
-                Window::default_attributes()
-                    .with_title("Clack CPAL plugin!")
-                    .with_inner_size(PhysicalSize {
-                        height: initial_size.height,
-                        width: initial_size.width,
-                    })
-                    .with_resizable(self.is_resizeable),
-            )
-            .unwrap();
-
         unsafe {
             self.plugin_gui
-                .set_parent(plugin, ClapWindow::from_window(&window).unwrap())
+                .set_parent(
+                    plugin,
+                    ClapWindow::from_window_handle(window_handle).unwrap(),
+                )
                 .unwrap();
         }
+        self.plugin_gui.show(plugin).unwrap();
 
-        let _ = self.plugin_gui.show(plugin);
+        self.is_resizeable = self.plugin_gui.can_resize(plugin);
         self.is_open = true;
-
-        window
     }
 
     pub fn resize(
@@ -184,129 +160,42 @@ impl GuiExt {
         }
     }
 
-    pub fn run_gui_embedded(
-        &mut self,
+    #[expect(clippy::future_not_send)]
+    pub fn run(
+        mut self,
         mut instance: PluginInstance<Host>,
-        sender: &Sender<HostThreadMessage>,
-        receiver: &Receiver<MainThreadMessage>,
-        audio_processor: &mut AudioProcessor,
-    ) {
-        let event_loop = EventLoop::new().unwrap();
-
-        let mut window = Some(self.open_embedded(&mut instance.plugin_handle(), &event_loop));
-
-        let uses_logical_pixels = self.configuration.unwrap().api_type.uses_logical_size();
-
+        sender: Sender<HostThreadMessage>,
+        receiver: Receiver<MainThreadMessage>,
+        mut audio_processor: AudioProcessor,
+    ) -> impl Future {
         let timers =
             instance.access_handler(|h| h.timer_support.map(|ext| (h.timers.clone(), ext)));
 
-        #[expect(deprecated)]
-        event_loop
-            .run(move |event, target| {
+        async move {
+            loop {
                 if let Some((timers, timer_ext)) = &timers {
                     timers.tick_timers(timer_ext, &mut instance.plugin_handle());
                 }
-
                 while let Ok(message) = receiver.try_recv() {
                     match message {
+                        MainThreadMessage::GuiClosed { .. } => {
+                            self.destroy(&mut instance.plugin_handle());
+                            return;
+                        }
                         MainThreadMessage::GuiRequestResized(new_size) => {
-                            let new_size: Size = if uses_logical_pixels {
-                                LogicalSize {
-                                    width: new_size.width,
-                                    height: new_size.height,
-                                }
-                                .into()
-                            } else {
-                                PhysicalSize {
-                                    width: new_size.width,
-                                    height: new_size.height,
-                                }
-                                .into()
-                            };
-
-                            let _ = window.as_mut().unwrap().request_inner_size(new_size);
-                        }
-                        _ => Self::do_event(&mut instance, sender, message, audio_processor),
-                    }
-                }
-
-                match event {
-                    Event::WindowEvent { event, .. } => match event {
-                        WindowEvent::CloseRequested => {
-                            self.plugin_gui.destroy(&mut instance.plugin_handle());
-                            window.take();
-                            return;
-                        }
-                        WindowEvent::Destroyed => {
-                            target.exit();
-                            return;
-                        }
-                        WindowEvent::Resized(size) => {
-                            let window = window.as_ref().unwrap();
-                            let scale_factor = window.scale_factor();
-
-                            let actual_size = self.resize(
+                            self.resize(
                                 &mut instance.plugin_handle(),
-                                Size::Physical(size),
-                                scale_factor,
+                                self.gui_size_to_winit_size(new_size),
+                                1.0f64,
                             );
-
-                            if actual_size != size.into() {
-                                let _ = window.request_inner_size(actual_size);
-                            }
                         }
-                        _ => {}
-                    },
-                    Event::LoopExiting => {
-                        self.plugin_gui.destroy(&mut instance.plugin_handle());
+                        _ => Self::do_event(&mut instance, &sender, message, &mut audio_processor),
                     }
-                    _ => {}
                 }
 
                 let sleep_duration = Self::get_sleep_duration(timers.as_ref());
-
-                target.set_control_flow(ControlFlow::WaitUntil(Instant::now() + sleep_duration));
-            })
-            .unwrap();
-
-        std::thread::sleep(Duration::from_millis(100));
-    }
-
-    pub fn run_gui_floating(
-        &mut self,
-        mut instance: PluginInstance<Host>,
-        sender: &Sender<HostThreadMessage>,
-        receiver: &Receiver<MainThreadMessage>,
-        audio_processor: &mut AudioProcessor,
-    ) {
-        self.open_floating(&mut instance.plugin_handle());
-        let timers =
-            instance.access_handler(|h| h.timer_support.map(|ext| (h.timers.clone(), ext)));
-
-        loop {
-            if let Some((timers, timer_ext)) = &timers {
-                timers.tick_timers(timer_ext, &mut instance.plugin_handle());
+                task::sleep(sleep_duration).await;
             }
-            while let Ok(message) = receiver.try_recv() {
-                match message {
-                    MainThreadMessage::GuiClosed { .. } => {
-                        self.destroy(&mut instance.plugin_handle());
-                        return;
-                    }
-                    MainThreadMessage::GuiRequestResized(new_size) => {
-                        self.resize(
-                            &mut instance.plugin_handle(),
-                            self.gui_size_to_winit_size(new_size),
-                            1.0f64,
-                        );
-                    }
-                    _ => Self::do_event(&mut instance, sender, message, audio_processor),
-                }
-            }
-
-            let sleep_duration = Self::get_sleep_duration(timers.as_ref());
-
-            std::thread::sleep(sleep_duration);
         }
     }
 
