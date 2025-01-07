@@ -1339,26 +1339,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "generic-clap-host"
-version = "0.1.0"
-source = "git+https://github.com/generic-daw/generic-clap-host#26fdd2318fce64a245e0800d7181de64812957b1"
-dependencies = [
- "clack-extensions",
- "clack-host",
- "etcetera",
- "walkdir",
- "winit",
-]
-
-[[package]]
 name = "generic-daw"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-channel",
  "atomic_enum",
+ "clack-extensions",
+ "clack-host",
  "cpal",
- "generic-clap-host",
+ "etcetera",
  "home",
  "hound",
  "iced",
@@ -1373,6 +1363,8 @@ dependencies = [
  "rubato",
  "strum",
  "symphonia",
+ "walkdir",
+ "winit",
 ]
 
 [[package]]

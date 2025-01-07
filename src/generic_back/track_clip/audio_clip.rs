@@ -4,8 +4,9 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-mod interleaved_audio;
 pub use interleaved_audio::{resample, InterleavedAudio};
+
+mod interleaved_audio;
 
 #[derive(Debug)]
 pub struct AudioClip {

@@ -4,11 +4,11 @@ use std::{
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
 };
 
-mod midi_note;
 pub use midi_note::MidiNote;
-
-mod midi_pattern;
 pub use midi_pattern::MidiPattern;
+
+mod midi_note;
+mod midi_pattern;
 
 #[derive(Debug)]
 pub struct MidiClip {

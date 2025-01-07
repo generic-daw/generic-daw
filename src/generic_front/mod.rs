@@ -24,15 +24,13 @@ use std::{
     sync::{atomic::Ordering::SeqCst, Arc},
 };
 use strum::VariantArray as _;
+use timeline_position::TimelinePosition;
+use timeline_scale::TimelineScale;
+use widget::{Arrangement, VSplit};
 
 mod timeline_position;
-pub(in crate::generic_front) use timeline_position::TimelinePosition;
-
 mod timeline_scale;
-pub(in crate::generic_front) use timeline_scale::TimelineScale;
-
 mod widget;
-use widget::{Arrangement, VSplit};
 
 static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
 static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");

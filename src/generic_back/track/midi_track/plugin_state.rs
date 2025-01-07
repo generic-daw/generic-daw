@@ -1,13 +1,13 @@
-use crate::generic_back::{AtomicDirtyEvent, DirtyEvent, MidiNote};
-use generic_clap_host::{
-    clack_host::{
-        events::{
-            event_types::{NoteOffEvent, NoteOnEvent},
-            Match, Pckn,
-        },
-        prelude::{AudioPorts, EventBuffer},
+use crate::{
+    clap_host::ClapPlugin,
+    generic_back::{AtomicDirtyEvent, DirtyEvent, MidiNote},
+};
+use clack_host::{
+    events::{
+        event_types::{NoteOffEvent, NoteOnEvent},
+        Match, Pckn,
     },
-    ClapPlugin,
+    prelude::{AudioPorts, EventBuffer},
 };
 use std::sync::{atomic::Ordering::SeqCst, Arc, Mutex};
 
