@@ -21,12 +21,12 @@ impl AudioProcessor {
 
     pub fn process(
         &mut self,
-        #[expect(clippy::ptr_arg)] input_audio_buffers: &mut Vec<Vec<f32>>,
+        input_audio_buffers: &mut [Vec<f32>],
         input_events_buffer: &EventBuffer,
         input_ports: &mut AudioPorts,
         output_ports: &mut AudioPorts,
     ) -> (Vec<Vec<f32>>, EventBuffer) {
-        let mut output_audio_buffers = input_audio_buffers.clone();
+        let mut output_audio_buffers = input_audio_buffers.to_owned();
 
         let input_audio = input_ports.with_input_buffers([AudioPortBuffer {
             latency: 0,

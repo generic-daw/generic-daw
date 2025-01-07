@@ -1,8 +1,11 @@
-use crate::generic_back::{
-    build_output_stream, resample, Arrangement as ArrangementInner, AudioClip, AudioTrack,
-    Denominator, InterleavedAudio, Numerator,
+use crate::{
+    clap_host::{get_installed_plugins, run},
+    generic_back::{
+        build_output_stream, resample, Arrangement as ArrangementInner, AudioClip, AudioTrack,
+        Denominator, InterleavedAudio, Numerator,
+    },
 };
-use async_std::channel;
+use clack_host::process::PluginAudioConfiguration;
 use cpal::Stream;
 use home::home_dir;
 use iced::{
@@ -12,6 +15,7 @@ use iced::{
     widget::{
         button, column, container, horizontal_space, pick_list, row, scrollable, toggler, Text,
     },
+    window::Settings,
     Alignment::Center,
     Element, Event, Subscription, Task, Theme,
 };
@@ -46,6 +50,7 @@ pub struct Daw {
 pub enum Message {
     #[default]
     Ping,
+    Test,
     ThemeChanged(Theme),
     LoadSample(PathBuf),
     LoadSamplesButton,
@@ -93,9 +98,25 @@ impl Daw {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Ping => {}
+            Message::Test => {
+                let (id, fut) = iced::window::open(Settings::default());
+                let embed = iced::window::run_with_handle(id, |handle| {
+                    run(
+                        &get_installed_plugins()[0],
+                        PluginAudioConfiguration {
+                            max_frames_count: 128,
+                            min_frames_count: 128,
+                            sample_rate: 44100.0,
+                        },
+                        handle.as_raw(),
+                    )
+                })
+                .map(|_| Message::Ping);
+                return Task::batch([fut.map(|_| Message::Ping), embed]);
+            }
             Message::ThemeChanged(theme) => self.theme = theme,
             Message::LoadSample(path) => {
-                let (tx, rx) = channel::bounded(1);
+                let (tx, rx) = async_channel::bounded(1);
 
                 let arrangement = self.arrangement.clone();
                 std::thread::spawn(move || {
@@ -214,6 +235,7 @@ impl Daw {
                 .label("Metronome")
                 .on_toggle(|_| Message::ToggleMetronome),
             horizontal_space(),
+            button("TEST").on_press(Message::Test),
             pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
         ]
         .spacing(20)

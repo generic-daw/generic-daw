@@ -7,7 +7,6 @@ use main_thread::{MainThread, MainThreadMessage};
 use shared::Shared;
 use std::{
     cell::UnsafeCell,
-    future::Future,
     marker::PhantomData,
     path::PathBuf,
     result::Result,
@@ -25,14 +24,20 @@ mod timer;
 
 #[derive(Debug)]
 pub struct ClapPlugin {
+    _gui: GuiExt,
     sender: Sender<MainThreadMessage>,
     receiver: Receiver<HostThreadMessage>,
     _no_sync: PhantomData<UnsafeCell<()>>,
 }
 
 impl ClapPlugin {
-    fn new(sender: Sender<MainThreadMessage>, receiver: Receiver<HostThreadMessage>) -> Self {
+    fn new(
+        gui: GuiExt,
+        sender: Sender<MainThreadMessage>,
+        receiver: Receiver<HostThreadMessage>,
+    ) -> Self {
         Self {
+            _gui: gui,
             sender,
             receiver,
             _no_sync: PhantomData,
@@ -88,7 +93,6 @@ impl ClapPlugin {
     }
 }
 
-#[expect(dead_code)]
 pub fn get_installed_plugins() -> Vec<PluginBundle> {
     standard_clap_paths()
         .iter()
@@ -152,21 +156,18 @@ fn standard_clap_paths() -> Vec<PathBuf> {
     paths
 }
 
-#[expect(dead_code)]
 pub fn run(
     bundle: &PluginBundle,
     config: PluginAudioConfiguration,
     window_handle: RawWindowHandle,
-) -> (ClapPlugin, impl Future + use<>) {
-    let (sender_plugin, receiver_plugin) = std::sync::mpsc::channel();
-    let (sender_host, receiver_host) = std::sync::mpsc::channel();
-
-    let sender_plugin_clone = sender_plugin.clone();
+) -> ClapPlugin {
+    let (sender_host, _receiver_plugin) = std::sync::mpsc::channel();
+    let (_sender_plugin, receiver_host) = std::sync::mpsc::channel();
 
     let factory = bundle.get_plugin_factory().unwrap();
     let plugin_descriptor = factory.plugin_descriptors().next().unwrap();
     let mut instance = PluginInstance::<Host>::new(
-        |()| Shared::new(sender_plugin_clone),
+        |()| Shared::new(sender_host.clone()),
         |shared| MainThread::new(shared),
         bundle,
         plugin_descriptor.id().unwrap(),
@@ -174,11 +175,13 @@ pub fn run(
     )
     .unwrap();
 
-    let audio_processor = instance
-        .activate(|_, _| {}, config)
-        .unwrap()
-        .start_processing()
-        .unwrap();
+    let _audio_processor = AudioProcessor::new(
+        instance
+            .activate(|_, _| {}, config)
+            .unwrap()
+            .start_processing()
+            .unwrap(),
+    );
 
     let mut gui = instance
         .access_handler(|h| h.gui)
@@ -191,13 +194,5 @@ pub fn run(
         gui.open_embedded(&mut instance.plugin_handle(), window_handle);
     };
 
-    (
-        ClapPlugin::new(sender_plugin, receiver_host),
-        gui.run(
-            instance,
-            sender_host,
-            receiver_plugin,
-            AudioProcessor::new(audio_processor),
-        ),
-    )
+    ClapPlugin::new(gui, sender_host, receiver_host)
 }
