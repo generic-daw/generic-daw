@@ -29,7 +29,14 @@ impl ClapHost {
                 }
             }
             Message::Closed(id) => {
-                self.windows.remove(&id).unwrap().destroy();
+                if let Some(plugin) = self.windows.remove(&id) {
+                    plugin.destroy();
+                } else {
+                    self.windows
+                        .drain()
+                        .for_each(|(_, plugin)| plugin.destroy());
+                    return iced::exit();
+                }
             }
         }
         Task::none()
