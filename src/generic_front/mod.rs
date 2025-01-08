@@ -54,6 +54,7 @@ pub enum Message {
     ClapHost(ClapHostMessage),
     #[default]
     Ping,
+    #[expect(dead_code)]
     Test,
     ThemeChanged(Theme),
     LoadSample(PathBuf),
@@ -108,15 +109,16 @@ impl Daw {
                     exit_on_close_request: false,
                     ..Settings::default()
                 });
+                let sample_rate = self.arrangement.meter.sample_rate.load(SeqCst).into();
                 let embed = window::run_with_handle(id, move |handle| {
                     (
                         id,
                         ClapPluginWrapper::new(open_gui(
                             &get_installed_plugins()[0],
                             PluginAudioConfiguration {
-                                max_frames_count: 128,
-                                min_frames_count: 128,
-                                sample_rate: 44100.0,
+                                max_frames_count: 256,
+                                min_frames_count: 256,
+                                sample_rate,
                             },
                             handle.as_raw(),
                         )),
@@ -251,7 +253,6 @@ impl Daw {
                 .label("Metronome")
                 .on_toggle(|_| Message::ToggleMetronome),
             horizontal_space(),
-            button("TEST").on_press(Message::Test),
             pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
         ]
         .spacing(20)
