@@ -1,26 +1,55 @@
 use crate::clap_host::ClapPlugin;
-use std::rc::Rc;
+use std::thread::ThreadId;
 
-/// SAFETY: ONLY USE THIS TO GET THE PLUGIN
-/// FROM `iced::window::run_with_handle` TO
-/// THE `clap_host` VIEW
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ClapPluginWrapper {
-    pub inner: Rc<ClapPlugin>,
+    inner: Option<ClapPlugin>,
+    id: ThreadId,
 }
 
 #[expect(clippy::non_send_fields_in_send_ty)]
 unsafe impl Send for ClapPluginWrapper {}
 unsafe impl Sync for ClapPluginWrapper {}
 
+impl Clone for ClapPluginWrapper {
+    fn clone(&self) -> Self {
+        unreachable!()
+    }
+}
+
+impl Drop for ClapPluginWrapper {
+    fn drop(&mut self) {
+        if self.inner.is_some() {
+            let id = std::thread::current().id();
+            assert_eq!(self.id, id);
+        }
+    }
+}
+
 impl ClapPluginWrapper {
     pub fn new(inner: ClapPlugin) -> Self {
+        let id = std::thread::current().id();
+
         Self {
-            inner: Rc::new(inner),
+            inner: Some(inner),
+            id,
         }
     }
 
-    pub fn into_inner(self) -> ClapPlugin {
-        Rc::into_inner(self.inner).unwrap()
+    pub fn inner(&self) -> &ClapPlugin {
+        let id = std::thread::current().id();
+        assert_eq!(self.id, id);
+
+        self.inner.as_ref().unwrap()
+    }
+
+    pub fn into_inner(mut self) -> ClapPlugin {
+        let id = std::thread::current().id();
+        assert_eq!(self.id, id);
+
+        let inner = self.inner.take().unwrap();
+        drop(self);
+
+        inner
     }
 }

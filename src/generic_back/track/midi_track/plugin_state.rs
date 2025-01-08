@@ -58,7 +58,7 @@ impl PluginState {
 
         let (buffers, _) =
             self.plugin
-                .inner
+                .inner()
                 .process_audio(input_audio, input_ports, output_ports, buffer);
         (0..BUFFER_SIZE).for_each(|i| {
             let i = i * 2;
@@ -72,7 +72,7 @@ impl PluginState {
     fn get_input_events(&mut self, global_time: u32) -> EventBuffer {
         let mut buffer = EventBuffer::new();
 
-        let steady_time = self.plugin.inner.get_counter();
+        let steady_time = self.plugin.inner().get_counter();
 
         let steady_time = u32::try_from(steady_time).unwrap();
         match self.dirty.load(SeqCst) {
