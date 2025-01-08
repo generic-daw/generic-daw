@@ -1,6 +1,6 @@
 use crate::clap_host::{ClapPlugin, ClapPluginWrapper};
 use iced::{
-    window::{close_events, resize_events, Id},
+    window::{self, close_events, close_requests, resize_events, Id},
     Size, Subscription, Task,
 };
 use std::collections::HashMap;
@@ -8,13 +8,15 @@ use std::collections::HashMap;
 #[derive(Clone, Debug)]
 pub enum Message {
     Opened((Id, ClapPluginWrapper)),
-    Closed(Id),
+    CloseRequested(Id),
+    Closed,
     Resized((Id, Size)),
 }
 
 #[derive(Default)]
 pub struct ClapHost {
     windows: HashMap<Id, ClapPlugin>,
+    closed: Option<Id>,
 }
 
 impl ClapHost {
@@ -28,10 +30,15 @@ impl ClapHost {
                     plugin.resize(size);
                 }
             }
-            Message::Closed(id) => {
-                if let Some(plugin) = self.windows.remove(&id) {
-                    plugin.destroy();
-                } else {
+            Message::CloseRequested(id) => {
+                // this only happens with plugin windows, since we
+                // set their `exit_on_close_request` setting to `false`
+                self.windows.remove(&id).unwrap().destroy();
+                self.closed.replace(id);
+                return window::close::<Id>(id).discard();
+            }
+            Message::Closed => {
+                if self.closed.take().is_none() {
                     self.windows
                         .drain()
                         .for_each(|(_, plugin)| plugin.destroy());
@@ -39,13 +46,15 @@ impl ClapHost {
                 }
             }
         }
+
         Task::none()
     }
 
     pub fn subscription() -> Subscription<Message> {
         Subscription::batch([
             resize_events().map(Message::Resized),
-            close_events().map(Message::Closed),
+            close_requests().map(Message::CloseRequested),
+            close_events().map(|_| Message::Closed),
         ])
     }
 }

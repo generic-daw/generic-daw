@@ -104,7 +104,10 @@ impl Daw {
         match message {
             Message::Ping => {}
             Message::Test => {
-                let (id, fut) = window::open(Settings::default());
+                let (id, fut) = window::open(Settings {
+                    exit_on_close_request: false,
+                    ..Settings::default()
+                });
                 let embed = window::run_with_handle(id, move |handle| {
                     (
                         id,
@@ -120,7 +123,7 @@ impl Daw {
                     )
                 });
                 return Task::batch([
-                    fut.map(|_| Message::Ping),
+                    fut.discard(),
                     embed.map(ClapHostMessage::Opened).map(Message::ClapHost),
                 ]);
             }
