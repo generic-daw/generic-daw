@@ -8,15 +8,18 @@ license = "GPL-3.0-only"
 anyhow = "1.0.95"
 async-channel = "2.3.1"
 atomic_enum = { version = "0.3.0", default-features = false }
-cpal = "0.15.3"
-generic-clap-host = { git = "https://github.com/generic-daw/generic-clap-host", features = [
+clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
     "audio-ports",
+    "clack-host",
     "gui",
     "note-ports",
     "params",
+    "raw-window-handle_06",
     "state",
     "timer",
 ] }
+clack-host = { git = "https://github.com/prokopyl/clack.git" }
+cpal = "0.15.3"
 home = "0.5.11"
 hound = "3.5.1"
 iced = { version = "0.13.1", default-features = false, features = [
@@ -39,6 +42,11 @@ rfd = "0.15.2"
 rubato = { version = "0.16.1", default-features = false }
 strum = { version = "0.26.3", features = ["derive"] }
 symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
+walkdir = "2.5.0"
+winit = "0.30.8"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+etcetera = "0.8.0"
 
 [lints.rust]
 let-underscore = "warn"

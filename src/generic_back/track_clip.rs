@@ -1,11 +1,11 @@
 use crate::generic_back::Position;
 use std::sync::Arc;
 
-mod audio_clip;
 pub use audio_clip::{resample, AudioClip, InterleavedAudio};
-
-mod midi_clip;
 pub use midi_clip::{MidiClip, MidiNote};
+
+mod audio_clip;
+mod midi_clip;
 
 #[derive(Clone, Debug)]
 pub enum TrackClip {

@@ -6,22 +6,19 @@ use std::{
     f32::consts::PI,
     sync::{atomic::Ordering::SeqCst, Arc},
 };
+use track::{AtomicDirtyEvent, DirtyEvent};
+
+pub use arrangement::Arrangement;
+pub use meter::{Denominator, Meter, Numerator};
+pub use position::Position;
+pub use track::{AudioTrack, MidiTrack, Track};
+pub use track_clip::{resample, AudioClip, InterleavedAudio, MidiNote, TrackClip};
 
 mod arrangement;
-pub use arrangement::Arrangement;
-
 mod meter;
-pub use meter::{Denominator, Meter, Numerator};
-
 mod position;
-pub use position::Position;
-
 mod track;
-pub(in crate::generic_back) use track::{AtomicDirtyEvent, DirtyEvent};
-pub use track::{AudioTrack, MidiTrack, Track};
-
 mod track_clip;
-pub use track_clip::{resample, AudioClip, InterleavedAudio, MidiNote, TrackClip};
 
 pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
     let device = cpal::default_host().default_output_device().unwrap();

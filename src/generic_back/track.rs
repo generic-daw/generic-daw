@@ -1,11 +1,11 @@
 use crate::generic_back::{Position, TrackClip};
 use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
-mod audio_track;
 pub use audio_track::AudioTrack;
-
-mod midi_track;
 pub use midi_track::{AtomicDirtyEvent, DirtyEvent, MidiTrack};
+
+mod audio_track;
+mod midi_track;
 
 #[derive(Debug)]
 pub enum Track {
