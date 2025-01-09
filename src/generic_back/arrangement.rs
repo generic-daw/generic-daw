@@ -1,9 +1,6 @@
-use crate::generic_back::{Meter, Position, Track};
+use crate::generic_back::{LiveSample, Meter, Position, Track};
 use hound::WavWriter;
-use itertools::repeat_n;
 use std::{
-    cmp::min,
-    collections::VecDeque,
     path::Path,
     sync::{
         atomic::{AtomicBool, Ordering::SeqCst},
@@ -17,9 +14,9 @@ pub struct Arrangement {
     /// information relating to the playback of the arrangement
     pub meter: Arc<Meter>,
     /// samples that are being played back live, that are not part of the arrangement
-    pub live_sample_playback: RwLock<Vec<VecDeque<f32>>>,
-    pub on_bar_click: OnceLock<Box<[f32]>>,
-    pub off_bar_click: OnceLock<Box<[f32]>>,
+    pub live_sample_playback: RwLock<Vec<LiveSample>>,
+    pub on_bar_click: OnceLock<Arc<[f32]>>,
+    pub off_bar_click: OnceLock<Arc<[f32]>>,
     pub metronome: AtomicBool,
 }
 
@@ -44,17 +41,14 @@ impl Arrangement {
                 buf_start_pos.sub_quarter_note = 0;
 
                 let diff = buf_start_pos.in_interleaved_samples(&self.meter) - buf_start_sample;
-                let click = repeat_n(0.0, diff.try_into().unwrap())
-                    .chain(
-                        if buf_start_pos.quarter_note % self.meter.numerator.load(SeqCst) as u16
-                            == 0
-                        {
-                            self.on_bar_click.get().unwrap().iter().copied()
-                        } else {
-                            self.off_bar_click.get().unwrap().iter().copied()
-                        },
-                    )
-                    .collect();
+                let click =
+                    if buf_start_pos.quarter_note % self.meter.numerator.load(SeqCst) as u16 == 0 {
+                        self.on_bar_click.get().unwrap().clone()
+                    } else {
+                        self.off_bar_click.get().unwrap().clone()
+                    };
+
+                let click = LiveSample::new(click, diff);
 
                 self.live_sample_playback.write().unwrap().push(click);
             }
@@ -66,25 +60,19 @@ impl Arrangement {
             .iter()
             .for_each(|track| track.fill_buf(buf_start_sample, buf));
 
-        let len = buf.len();
-
         if !self.meter.exporting.load(SeqCst) {
             self.live_sample_playback
                 .write()
                 .unwrap()
                 .iter_mut()
                 .for_each(|s| {
-                    buf.iter_mut()
-                        .zip(s.drain(0..min(len, s.len())))
-                        .for_each(|(buf, sample)| {
-                            *buf += sample;
-                        });
+                    s.fill_buf(buf);
                 });
 
             self.live_sample_playback
                 .write()
                 .unwrap()
-                .retain(|sample| !sample.is_empty());
+                .retain(|sample| !sample.over());
         }
     }
 

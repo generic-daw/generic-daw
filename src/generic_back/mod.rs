@@ -9,12 +9,14 @@ use std::{
 use track::{AtomicDirtyEvent, DirtyEvent};
 
 pub use arrangement::Arrangement;
+pub use live_sample::LiveSample;
 pub use meter::{Denominator, Meter, Numerator};
 pub use position::Position;
 pub use track::{AudioTrack, MidiTrack, Track};
 pub use track_clip::{resample, AudioClip, InterleavedAudio, MidiNote, TrackClip};
 
 mod arrangement;
+mod live_sample;
 mod meter;
 mod position;
 mod track;
