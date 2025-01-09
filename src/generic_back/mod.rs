@@ -32,18 +32,23 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
         .build_output_stream(
             config,
             move |data, _| {
-                for sample in data.iter_mut() {
-                    *sample = if arrangement.meter.exporting.load(SeqCst) {
-                        0.0
-                    } else {
-                        arrangement
-                            .get_at_global_time(if arrangement.meter.playing.load(SeqCst) {
-                                arrangement.meter.global_time.fetch_add(1, SeqCst)
-                            } else {
-                                arrangement.meter.global_time.load(SeqCst)
-                            })
-                            .clamp(-1.0, 1.0)
-                    };
+                let sample = if arrangement.meter.playing.load(SeqCst) {
+                    arrangement
+                        .meter
+                        .sample
+                        .fetch_add(data.len().try_into().unwrap(), SeqCst)
+                } else {
+                    arrangement.meter.sample.load(SeqCst)
+                };
+
+                for s in data.iter_mut() {
+                    *s = 0.0;
+                }
+
+                arrangement.fill_buf(sample, data);
+
+                for s in data {
+                    *s = s.clamp(-1.0, 1.0);
                 }
             },
             move |err| panic!("{}", err),
@@ -59,11 +64,8 @@ pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Meter) -> u32 {
     (seconds * f64::from(meter.sample_rate.load(SeqCst) * 2)) as u32
 }
 
-pub fn pan(angle: f32, global_time: u32) -> f32 {
+pub fn pan(angle: f32) -> (f32, f32) {
     let angle = angle.mul_add(0.5, 0.5) * PI * 0.5;
-    if global_time % 2 == 0 {
-        angle.cos()
-    } else {
-        angle.sin()
-    }
+
+    (angle.cos(), angle.sin())
 }

@@ -76,20 +76,24 @@ impl Default for Daw {
         let arrangement = ArrangementInner::create();
         let stream = build_output_stream(arrangement.clone());
 
-        *arrangement.on_bar_click.write().unwrap() = resample(
-            44100,
-            arrangement.meter.sample_rate.load(SeqCst),
-            ON_BAR_CLICK.into(),
-        )
-        .unwrap()
-        .into();
-        *arrangement.off_bar_click.write().unwrap() = resample(
-            44100,
-            arrangement.meter.sample_rate.load(SeqCst),
-            OFF_BAR_CLICK.into(),
-        )
-        .unwrap()
-        .into();
+        arrangement.on_bar_click.get_or_init(|| {
+            resample(
+                44100,
+                arrangement.meter.sample_rate.load(SeqCst),
+                ON_BAR_CLICK.into(),
+            )
+            .unwrap()
+            .into()
+        });
+        arrangement.off_bar_click.get_or_init(|| {
+            resample(
+                44100,
+                arrangement.meter.sample_rate.load(SeqCst),
+                OFF_BAR_CLICK.into(),
+            )
+            .unwrap()
+            .into()
+        });
 
         Self {
             arrangement,
@@ -167,13 +171,13 @@ impl Daw {
                 self.arrangement.meter.playing.fetch_not(SeqCst);
             }
             Message::Stop => {
+                self.arrangement.meter.playing.store(false, SeqCst);
+                self.arrangement.meter.sample.store(0, SeqCst);
                 self.arrangement
                     .live_sample_playback
                     .write()
                     .unwrap()
                     .clear();
-                self.arrangement.meter.playing.store(false, SeqCst);
-                self.arrangement.meter.global_time.store(0, SeqCst);
             }
             Message::New => *self = Self::default(),
             Message::ExportButton => {
@@ -266,20 +270,16 @@ impl Daw {
                         .unwrap()
                         .on_double_click(Message::LoadSample)
                 ),
-                row![
-                    container(Arrangement::new(self.arrangement.clone(), Message::Ping)).style(
-                        |_| {
-                            container::Style {
-                                border: iced::Border {
-                                    color: Theme::default().extended_palette().secondary.weak.color,
-                                    width: 1.0,
-                                    radius: Radius::new(0.0),
-                                },
-                                ..container::Style::default()
-                            }
-                        }
-                    )
-                ]
+                container(Arrangement::new(self.arrangement.clone(), Message::Ping)).style(|_| {
+                    container::Style {
+                        border: iced::Border {
+                            color: Theme::default().extended_palette().secondary.weak.color,
+                            width: 1.0,
+                            radius: Radius::new(0.0),
+                        },
+                        ..container::Style::default()
+                    }
+                })
             )
             .split(0.25)
         ]

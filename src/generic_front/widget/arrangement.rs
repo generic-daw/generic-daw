@@ -239,7 +239,7 @@ where
                 }
             }
             (true, false, false) => {
-                if let Some(status) = self.on_event_command(state, &event, pos) {
+                if let Some(status) = self.on_event_command(state, &event, pos, shell) {
                     return status;
                 }
             }
@@ -514,7 +514,7 @@ where
         let mut frame = Frame::new(renderer, bounds.size());
 
         let path = Path::new(|path| {
-            let x = (self.inner.meter.global_time.load(SeqCst) as f32 - state.position.x.get())
+            let x = (self.inner.meter.sample.load(SeqCst) as f32 - state.position.x.get())
                 / state.scale.x.get().exp2();
             path.line_to(Point::new(x, 0.0));
             path.line_to(Point::new(x, bounds.height));
@@ -558,8 +558,8 @@ where
                                 .in_interleaved_samples(&self.inner.meter);
                         }
 
-                        if time != self.inner.meter.global_time.load(SeqCst) {
-                            self.inner.meter.global_time.store(time, SeqCst);
+                        if time != self.inner.meter.sample.load(SeqCst) {
+                            self.inner.meter.sample.store(time, SeqCst);
                             shell.invalidate_layout();
                         }
 
@@ -708,6 +708,7 @@ where
 
                     state.waveform_cache.borrow_mut().take();
                     state.grid_cache.clear();
+                    shell.invalidate_layout();
 
                     return Some(Status::Captured);
                 }
@@ -755,6 +756,7 @@ where
         state: &mut State<'_, Message>,
         event: &Event,
         cursor: Point,
+        shell: &mut Shell<'_, Message>,
     ) -> Option<Status> {
         if let Event::Mouse(event) = event {
             match event {
@@ -777,6 +779,7 @@ where
                     state.scale.x.set(x);
                     state.waveform_cache.borrow_mut().take();
                     state.grid_cache.clear();
+                    shell.invalidate_layout();
 
                     return Some(Status::Captured);
                 }
@@ -894,7 +897,7 @@ where
 
             self.inner
                 .meter
-                .global_time
+                .sample
                 .store(time.in_interleaved_samples(&self.inner.meter), SeqCst);
             state.action = Action::DraggingPlayhead;
 

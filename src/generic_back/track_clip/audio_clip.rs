@@ -45,29 +45,42 @@ impl AudioClip {
         }))
     }
 
-    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
-        let start = self
+    pub fn fill_buf(&self, buf_start_sample: u32, buf: &mut [f32]) {
+        let clip_start_sample = self
             .global_start
             .read()
             .unwrap()
             .in_interleaved_samples(&self.meter);
 
-        if global_time < start {
-            return 0.0;
+        if buf_start_sample + u32::try_from(buf.len()).unwrap() < clip_start_sample {
+            return;
         }
 
-        let index = global_time - start
-            + self
-                .clip_start
-                .read()
-                .unwrap()
-                .in_interleaved_samples(&self.meter);
+        let diff = buf_start_sample.abs_diff(clip_start_sample);
 
-        *self
-            .audio
-            .samples
-            .get(usize::try_from(index).unwrap())
-            .unwrap_or(&0.0)
+        if buf_start_sample > clip_start_sample {
+            let start_index = diff
+                + self
+                    .clip_start
+                    .read()
+                    .unwrap()
+                    .in_interleaved_samples(&self.meter);
+
+            self.audio.samples[start_index.try_into().unwrap()..]
+                .iter()
+                .zip(buf.iter_mut())
+                .for_each(|(sample, buf)| {
+                    *buf += sample;
+                });
+        } else {
+            self.audio
+                .samples
+                .iter()
+                .zip(buf[diff.try_into().unwrap()..].iter_mut())
+                .for_each(|(sample, buf)| {
+                    *buf += sample;
+                });
+        }
     }
 
     pub fn get_global_start(&self) -> Position {

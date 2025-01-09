@@ -1,5 +1,4 @@
 use crate::generic_back::Position;
-use std::sync::Arc;
 
 pub use audio_clip::{resample, AudioClip, InterleavedAudio};
 pub use midi_clip::{MidiClip, MidiNote};
@@ -27,10 +26,10 @@ impl TrackClip {
         }
     }
 
-    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
+    pub fn fill_buf(&self, buf_start_sample: u32, buf: &mut [f32]) {
         match self {
-            Self::Audio(audio) => audio.get_at_global_time(global_time),
-            Self::Midi(_) => unreachable!(),
+            Self::Audio(audio) => audio.fill_buf(buf_start_sample, buf),
+            Self::Midi(_) => unimplemented!(),
         }
     }
 
@@ -66,13 +65,6 @@ impl TrackClip {
         match self {
             Self::Audio(audio) => audio.move_to(global_start),
             Self::Midi(midi) => midi.move_to(global_start),
-        }
-    }
-
-    pub(in crate::generic_back) fn get_global_midi(&self) -> Vec<Arc<MidiNote>> {
-        match self {
-            Self::Audio(_) => unreachable!(),
-            Self::Midi(midi) => midi.get_global_midi(),
         }
     }
 }

@@ -1,11 +1,13 @@
 use crate::generic_back::{Meter, Position, Track};
 use hound::WavWriter;
+use itertools::repeat_n;
 use std::{
+    cmp::min,
     collections::VecDeque,
     path::Path,
     sync::{
         atomic::{AtomicBool, Ordering::SeqCst},
-        Arc, RwLock,
+        Arc, OnceLock, RwLock,
     },
 };
 
@@ -16,9 +18,8 @@ pub struct Arrangement {
     pub meter: Arc<Meter>,
     /// samples that are being played back live, that are not part of the arrangement
     pub live_sample_playback: RwLock<Vec<VecDeque<f32>>>,
-    pub on_bar_click: RwLock<VecDeque<f32>>,
-    pub off_bar_click: RwLock<VecDeque<f32>>,
-    pub last_pos: RwLock<Position>,
+    pub on_bar_click: OnceLock<Box<[f32]>>,
+    pub off_bar_click: OnceLock<Box<[f32]>>,
     pub metronome: AtomicBool,
 }
 
@@ -27,47 +28,64 @@ impl Arrangement {
         Arc::new(Self::default())
     }
 
-    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
-        if self.meter.playing.load(SeqCst) && self.metronome.load(SeqCst) && global_time % 2 == 0 {
-            let pos = Position::from_interleaved_samples(global_time, &self.meter);
-            if pos != *self.last_pos.read().unwrap() {
-                if pos.sub_quarter_note == 0 {
-                    self.live_sample_playback.write().unwrap().push(
-                        if pos.quarter_note % self.meter.numerator.load(SeqCst) as u16 == 0 {
-                            self.on_bar_click.read().unwrap().clone()
+    pub fn fill_buf(&self, buf_start_sample: u32, buf: &mut [f32]) {
+        if self.meter.playing.load(SeqCst) && self.metronome.load(SeqCst) {
+            let mut buf_start_pos =
+                Position::from_interleaved_samples(buf_start_sample, &self.meter);
+            let buf_end_pos = Position::from_interleaved_samples(
+                buf_start_sample + u32::try_from(buf.len()).unwrap(),
+                &self.meter,
+            );
+
+            if buf_start_pos.quarter_note != buf_end_pos.quarter_note
+                || buf_start_pos.sub_quarter_note == 0
+            {
+                buf_start_pos.quarter_note = buf_end_pos.quarter_note;
+                buf_start_pos.sub_quarter_note = 0;
+
+                let diff = buf_start_pos.in_interleaved_samples(&self.meter) - buf_start_sample;
+                let click = repeat_n(0.0, diff.try_into().unwrap())
+                    .chain(
+                        if buf_start_pos.quarter_note % self.meter.numerator.load(SeqCst) as u16
+                            == 0
+                        {
+                            self.on_bar_click.get().unwrap().iter().copied()
                         } else {
-                            self.off_bar_click.read().unwrap().clone()
+                            self.off_bar_click.get().unwrap().iter().copied()
                         },
-                    );
-                }
-                *self.last_pos.write().unwrap() = pos;
+                    )
+                    .collect();
+
+                self.live_sample_playback.write().unwrap().push(click);
             }
         }
 
-        let mut sample = self
-            .tracks
+        self.tracks
             .read()
             .unwrap()
             .iter()
-            .map(|track| track.get_at_global_time(global_time))
-            .sum::<f32>();
+            .for_each(|track| track.fill_buf(buf_start_sample, buf));
+
+        let len = buf.len();
 
         if !self.meter.exporting.load(SeqCst) {
-            sample += self
-                .live_sample_playback
+            self.live_sample_playback
                 .write()
                 .unwrap()
                 .iter_mut()
-                .filter_map(VecDeque::pop_front)
-                .sum::<f32>();
+                .for_each(|s| {
+                    buf.iter_mut()
+                        .zip(s.drain(0..min(len, s.len())))
+                        .for_each(|(buf, sample)| {
+                            *buf += sample;
+                        });
+                });
 
             self.live_sample_playback
                 .write()
                 .unwrap()
                 .retain(|sample| !sample.is_empty());
         }
-
-        sample
     }
 
     pub fn len(&self) -> Position {
@@ -81,6 +99,8 @@ impl Arrangement {
     }
 
     pub fn export(&self, path: &Path) {
+        const CHUNK_SIZE: usize = 16;
+
         self.meter.playing.store(false, SeqCst);
         self.meter.exporting.store(true, SeqCst);
 
@@ -95,9 +115,18 @@ impl Arrangement {
         )
         .unwrap();
 
-        (0..self.len().in_interleaved_samples(&self.meter)).for_each(|i| {
-            writer.write_sample(self.get_at_global_time(i)).unwrap();
-        });
+        let mut buf = [0.0; CHUNK_SIZE];
+        (0..self.len().in_interleaved_samples(&self.meter))
+            .step_by(CHUNK_SIZE)
+            .for_each(|i| {
+                self.fill_buf(i, &mut buf);
+
+                for s in buf {
+                    writer.write_sample(s).unwrap();
+                }
+            });
+
+        writer.flush().unwrap();
 
         self.meter.exporting.store(false, SeqCst);
         self.live_sample_playback.write().unwrap().clear();

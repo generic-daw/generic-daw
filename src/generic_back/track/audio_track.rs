@@ -1,4 +1,4 @@
-use crate::generic_back::{pan, Meter, Position, Track, TrackClip};
+use crate::generic_back::{Meter, Position, Track, TrackClip};
 use portable_atomic::AtomicF32;
 use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
@@ -23,19 +23,16 @@ impl AudioTrack {
         }))
     }
 
-    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
+    pub fn fill_buf(&self, buf_start_sample: u32, buf: &mut [f32]) {
         if !self.meter.playing.load(SeqCst) && !self.meter.exporting.load(SeqCst) {
-            return 0.0;
+            return;
         }
 
         self.clips
             .read()
             .unwrap()
             .iter()
-            .map(|clip| clip.get_at_global_time(global_time))
-            .sum::<f32>()
-            * self.volume.load(SeqCst)
-            * pan(self.pan.load(SeqCst), global_time)
+            .for_each(|clip| clip.fill_buf(buf_start_sample, buf));
     }
 
     pub fn get_global_end(&self) -> Position {

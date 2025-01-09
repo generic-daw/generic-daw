@@ -109,33 +109,4 @@ impl MidiClip {
                 + Position::from_interleaved_samples(self.pattern.len(), &self.meter),
         )
     }
-
-    pub(in crate::generic_back) fn get_global_midi(&self) -> Vec<Arc<MidiNote>> {
-        let global_start = self
-            .global_start
-            .read()
-            .unwrap()
-            .in_interleaved_samples(&self.meter);
-        let global_end = self
-            .global_end
-            .read()
-            .unwrap()
-            .in_interleaved_samples(&self.meter);
-        self.pattern
-            .notes
-            .iter()
-            .map(|note| {
-                Arc::new(MidiNote {
-                    channel: note.channel,
-                    note: note.note,
-                    velocity: note.velocity,
-                    local_start: (note.local_start + global_start - global_end)
-                        .clamp(global_start, global_end),
-                    local_end: (note.local_end + global_start - global_end)
-                        .clamp(global_start, global_end),
-                })
-            })
-            .filter(|note| note.local_start != note.local_end)
-            .collect()
-    }
 }

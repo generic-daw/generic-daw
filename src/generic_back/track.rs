@@ -1,5 +1,5 @@
-use crate::generic_back::{Position, TrackClip};
-use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
+use crate::generic_back::{pan, Position, TrackClip};
+use std::sync::{atomic::Ordering::SeqCst, Arc, Mutex, RwLock};
 
 pub use audio_track::AudioTrack;
 pub use midi_track::{AtomicDirtyEvent, DirtyEvent, MidiTrack};
@@ -13,12 +13,33 @@ pub enum Track {
     Midi(MidiTrack),
 }
 
+static TRACK_BUF: Mutex<Vec<f32>> = Mutex::new(vec![]);
+
 impl Track {
-    pub fn get_at_global_time(&self, global_time: u32) -> f32 {
-        match self {
-            Self::Audio(track) => track.get_at_global_time(global_time),
-            Self::Midi(track) => track.get_at_global_time(global_time),
+    pub fn fill_buf(&self, buf_start_sample: u32, buf: &mut [f32]) {
+        let mut track_buf = TRACK_BUF.lock().unwrap();
+
+        for s in track_buf.iter_mut() {
+            *s = 0.0;
         }
+
+        track_buf.resize(buf.len(), 0.0);
+
+        match self {
+            Self::Audio(track) => track.fill_buf(buf_start_sample, &mut track_buf),
+            Self::Midi(_) => unimplemented!(),
+        }
+
+        let volume = self.get_volume();
+        let (lpan, rpan) = pan(self.get_pan());
+
+        track_buf
+            .iter()
+            .map(|s| s * volume)
+            .enumerate()
+            .map(|(i, s)| if i % 2 == 0 { s * lpan } else { s * rpan })
+            .zip(buf)
+            .for_each(|(sample, buf)| *buf += sample);
     }
 
     pub fn clips(&self) -> Arc<RwLock<Vec<Arc<TrackClip>>>> {

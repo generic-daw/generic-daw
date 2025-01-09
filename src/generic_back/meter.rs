@@ -68,7 +68,7 @@ pub struct Meter {
     /// this is a workaround to stop the output stream from starting playback while exporting
     pub exporting: AtomicBool,
     /// the current global time of the playhead, in samples
-    pub global_time: AtomicU32,
+    pub sample: AtomicU32,
 }
 
 impl Default for Meter {
@@ -80,7 +80,7 @@ impl Default for Meter {
             sample_rate: AtomicU32::default(),
             playing: AtomicBool::default(),
             exporting: AtomicBool::default(),
-            global_time: AtomicU32::default(),
+            sample: AtomicU32::default(),
         }
     }
 }
