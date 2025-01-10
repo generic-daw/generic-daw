@@ -1,7 +1,9 @@
-use portable_atomic::AtomicI32;
 use std::{
     iter::repeat_n,
-    sync::{atomic::Ordering::SeqCst, Arc},
+    sync::{
+        atomic::{AtomicI32, Ordering::SeqCst},
+        Arc,
+    },
 };
 
 #[derive(Debug)]
