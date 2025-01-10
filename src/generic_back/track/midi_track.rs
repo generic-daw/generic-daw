@@ -14,7 +14,7 @@ mod plugin_state;
 #[derive(Debug)]
 pub struct MidiTrack {
     /// these are all guaranteed to be `TrackClip::Midi`
-    pub clips: Arc<RwLock<Vec<Arc<TrackClip>>>>,
+    pub clips: RwLock<Vec<Arc<TrackClip>>>,
     /// between 0.0 and 1.0
     pub volume: AtomicF32,
     /// between -1.0 (left) and 1.0 (right)
@@ -27,7 +27,7 @@ pub struct MidiTrack {
 impl MidiTrack {
     pub fn create(plugin: ClapPluginWrapper, meter: Arc<Meter>) -> Arc<Track> {
         Arc::new(Track::Midi(Self {
-            clips: Arc::new(RwLock::default()),
+            clips: RwLock::default(),
             volume: AtomicF32::new(1.0),
             pan: AtomicF32::new(0.0),
             plugin_state: PluginState::create(plugin),

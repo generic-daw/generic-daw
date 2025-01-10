@@ -42,10 +42,10 @@ impl Track {
             .for_each(|(sample, buf)| *buf += sample);
     }
 
-    pub fn clips(&self) -> Arc<RwLock<Vec<Arc<TrackClip>>>> {
+    pub fn clips(&self) -> &RwLock<Vec<Arc<TrackClip>>> {
         match self {
-            Self::Audio(track) => track.clips.clone(),
-            Self::Midi(track) => track.clips.clone(),
+            Self::Audio(track) => &track.clips,
+            Self::Midi(track) => &track.clips,
         }
     }
 
