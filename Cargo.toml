@@ -65,8 +65,6 @@ pedantic = { level = "warn", priority = -1 }
 cast_possible_truncation = "allow"
 cast_precision_loss = "allow"
 cast_sign_loss = "allow"
-module_name_repetitions = "allow"
-verbose_bit_mask = "allow"
 
 nursery = { level = "warn", priority = -1 }
 missing-const-for-fn = "allow"

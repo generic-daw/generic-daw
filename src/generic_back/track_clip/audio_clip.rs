@@ -1,7 +1,6 @@
 use crate::generic_back::{Meter, Position, TrackClip};
 use std::{
     cmp::Ordering,
-    iter::repeat_n,
     sync::{Arc, RwLock},
 };
 
@@ -75,9 +74,17 @@ impl AudioClip {
                     *buf += sample;
                 });
         } else {
-            repeat_n(0.0, usize::try_from(diff).unwrap())
-                .chain(self.audio.samples.iter().copied())
-                .zip(buf)
+            let diff = diff.try_into().unwrap();
+
+            if diff >= buf.len() {
+                return;
+            }
+
+            self.audio
+                .samples
+                .iter()
+                .copied()
+                .zip(buf[diff..].iter_mut())
                 .for_each(|(sample, buf)| {
                     *buf += sample;
                 });
