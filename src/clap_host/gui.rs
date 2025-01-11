@@ -1,7 +1,6 @@
 use super::{timer::Timers, AudioProcessor, Host, HostThreadMessage, MainThreadMessage};
 use clack_extensions::{
     gui::{GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow},
-    state::PluginState,
     timer::PluginTimer,
 };
 use clack_host::prelude::*;
@@ -208,7 +207,7 @@ impl GuiExt {
                             .unwrap();
                     }
                     MainThreadMessage::GetState => {
-                        let state_ext: PluginState = instance
+                        let state_ext = instance
                             .access_handler_mut(|h| h.shared.state.get())
                             .unwrap()
                             .unwrap();
@@ -221,7 +220,7 @@ impl GuiExt {
                         sender.send(HostThreadMessage::State(state)).unwrap();
                     }
                     MainThreadMessage::SetState(state) => {
-                        let state_ext: PluginState = instance
+                        let state_ext = instance
                             .access_handler_mut(|h| h.shared.state.get())
                             .unwrap()
                             .unwrap();

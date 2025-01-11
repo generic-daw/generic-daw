@@ -15,7 +15,7 @@ impl MidiPattern {
         }
     }
 
-    pub fn len(&self) -> u32 {
+    pub fn len(&self) -> usize {
         self.notes
             .iter()
             .map(|note| note.local_end)

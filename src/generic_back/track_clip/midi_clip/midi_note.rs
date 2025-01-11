@@ -4,6 +4,6 @@ pub struct MidiNote {
     pub note: u16,
     /// between 0.0 and 1.0
     pub velocity: f64,
-    pub local_start: u32,
-    pub local_end: u32,
+    pub local_start: usize,
+    pub local_end: usize,
 }

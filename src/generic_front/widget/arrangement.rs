@@ -429,7 +429,7 @@ where
         let numerator = self.inner.meter.numerator.load(SeqCst);
 
         let mut beat =
-            Position::from_interleaved_samples(state.position.x.get() as u32, &self.inner.meter);
+            Position::from_interleaved_samples(state.position.x.get() as usize, &self.inner.meter);
         if beat.sub_quarter_note != 0 {
             beat.sub_quarter_note = 0;
             beat.quarter_note += 1;
@@ -437,7 +437,7 @@ where
 
         let mut end_beat = beat
             + Position::from_interleaved_samples(
-                (bounds.width * state.scale.x.get().exp2()) as u32,
+                (bounds.width * state.scale.x.get().exp2()) as usize,
                 &self.inner.meter,
             );
         end_beat.sub_quarter_note = 0;
@@ -467,8 +467,7 @@ where
                 theme.extended_palette().secondary.weak.color
             };
 
-            let x = (beat.in_interleaved_samples(&self.inner.meter) as f32
-                - state.position.x.get())
+            let x = (beat.in_interleaved_samples_f(&self.inner.meter) - state.position.x.get())
                 / state.scale.x.get().exp2();
 
             let path = Path::new(|path| {
@@ -551,7 +550,7 @@ where
                         let mut time = cursor
                             .x
                             .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-                            as u32;
+                            as usize;
                         if !state.modifiers.alt() {
                             time = Position::from_interleaved_samples(time, &self.inner.meter)
                                 .snap(state.scale.x.get(), &self.inner.meter)
@@ -567,9 +566,10 @@ where
                     }
                     Action::DraggingClip(clip, index, offset) => {
                         let time = (cursor.x + offset)
-                            .mul_add(state.scale.x.get().exp2(), state.position.x.get());
+                            .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                            as usize;
                         let mut new_position =
-                            Position::from_interleaved_samples(time as u32, &self.inner.meter);
+                            Position::from_interleaved_samples(time, &self.inner.meter);
 
                         if !state.modifiers.alt() {
                             new_position =
@@ -602,13 +602,13 @@ where
                         if cursor.y > SEEKER_HEIGHT {
                             let index = ((cursor.y - SEEKER_HEIGHT) / state.scale.y.get()) as usize;
                             if index < self.inner.tracks.read().unwrap().len() {
-                                let clip = state.tracks.borrow()[index].get_clip_at_global_time(
-                                    &self.inner.meter,
-                                    cursor
-                                        .x
-                                        .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-                                        as u32,
-                                );
+                                let time = cursor
+                                    .x
+                                    .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                                    as usize;
+
+                                let clip = state.tracks.borrow()[index]
+                                    .get_clip_at_global_time(&self.inner.meter, time);
 
                                 if let Some(clip) = clip {
                                     self.inner.tracks.read().unwrap()[index].remove_clip(&clip);
@@ -623,10 +623,11 @@ where
                     }
                     Action::ClipTrimmingStart(clip, offset) => {
                         let time = (cursor.x + offset)
-                            .mul_add(state.scale.x.get().exp2(), state.position.x.get());
+                            .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                            as usize;
 
                         let mut new_position =
-                            Position::from_interleaved_samples(time as u32, &self.inner.meter);
+                            Position::from_interleaved_samples(time, &self.inner.meter);
 
                         if !state.modifiers.alt() {
                             new_position =
@@ -644,9 +645,10 @@ where
                     }
                     Action::ClipTrimmingEnd(clip, offset) => {
                         let time = (cursor.x + offset)
-                            .mul_add(state.scale.x.get().exp2(), state.position.x.get());
+                            .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                            as usize;
                         let mut new_position =
-                            Position::from_interleaved_samples(time as u32, &self.inner.meter);
+                            Position::from_interleaved_samples(time, &self.inner.meter);
 
                         if !state.modifiers.alt() {
                             new_position =
@@ -689,7 +691,7 @@ where
                         .mul_add(-state.scale.x.get().exp2(), state.position.x.get())
                         .clamp(
                             0.0,
-                            self.inner.len().in_interleaved_samples(&self.inner.meter) as f32,
+                            self.inner.len().in_interleaved_samples_f(&self.inner.meter),
                         );
                     let y = (y / state.scale.y.get())
                         .mul_add(-0.5, state.position.y.get())
@@ -722,13 +724,13 @@ where
                         if cursor.y > SEEKER_HEIGHT {
                             let index = ((cursor.y - SEEKER_HEIGHT) / state.scale.y.get()) as usize;
                             if index < self.inner.tracks.read().unwrap().len() {
-                                let clip = state.tracks.borrow()[index].get_clip_at_global_time(
-                                    &self.inner.meter,
-                                    cursor
-                                        .x
-                                        .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-                                        as u32,
-                                );
+                                let time = cursor
+                                    .x
+                                    .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                                    as usize;
+
+                                let clip = state.tracks.borrow()[index]
+                                    .get_clip_at_global_time(&self.inner.meter, time);
 
                                 if let Some(clip) = clip {
                                     self.inner.tracks.read().unwrap()[index].remove_clip(&clip);
@@ -787,13 +789,13 @@ where
                     if cursor.y > SEEKER_HEIGHT {
                         let index = ((cursor.y - SEEKER_HEIGHT) / state.scale.y.get()) as usize;
                         if index < self.inner.tracks.read().unwrap().len() {
-                            let clip = state.tracks.borrow()[index].get_clip_at_global_time(
-                                &self.inner.meter,
-                                cursor
-                                    .x
-                                    .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-                                    as u32,
-                            );
+                            let time = cursor
+                                .x
+                                .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                                as usize;
+
+                            let clip = state.tracks.borrow()[index]
+                                .get_clip_at_global_time(&self.inner.meter, time);
 
                             if let Some(clip) = clip {
                                 let clip = Arc::new((*clip).clone());
@@ -831,7 +833,7 @@ where
                 .mul_add(-state.scale.x.get().exp2(), state.position.x.get())
                 .clamp(
                     0.0,
-                    self.inner.len().in_interleaved_samples(&self.inner.meter) as f32,
+                    self.inner.len().in_interleaved_samples_f(&self.inner.meter),
                 );
 
             state.position.x.set(x);
@@ -887,7 +889,7 @@ where
                 cursor
                     .x
                     .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-                    as u32,
+                    as usize,
                 &self.inner.meter,
             );
 
@@ -906,13 +908,13 @@ where
 
         let index = ((cursor.y - SEEKER_HEIGHT) / state.scale.y.get()) as usize;
         if index < self.inner.tracks.read().unwrap().len() {
-            let clip = state.tracks.borrow()[index].get_clip_at_global_time(
-                &self.inner.meter,
-                cursor
-                    .x
-                    .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-                    as u32,
-            );
+            let time = cursor
+                .x
+                .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                as usize;
+
+            let clip =
+                state.tracks.borrow()[index].get_clip_at_global_time(&self.inner.meter, time);
 
             if let Some(clip) = clip {
                 let offset = (clip

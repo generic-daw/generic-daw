@@ -34,7 +34,7 @@ impl Clone for AudioClip {
 
 impl AudioClip {
     pub fn create(audio: Arc<InterleavedAudio>, meter: Arc<Meter>) -> Arc<TrackClip> {
-        let samples = u32::try_from(audio.samples.len()).unwrap();
+        let samples = audio.samples.len();
 
         Arc::new(TrackClip::Audio(Self {
             audio,
@@ -45,7 +45,7 @@ impl AudioClip {
         }))
     }
 
-    pub fn fill_buf(&self, buf_start_sample: u32, buf: &mut [f32]) {
+    pub fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         let clip_start_sample = self
             .global_start
             .read()
@@ -61,7 +61,6 @@ impl AudioClip {
                     .read()
                     .unwrap()
                     .in_interleaved_samples(&self.meter);
-            let start_index = start_index.try_into().unwrap();
 
             if start_index >= self.audio.samples.len() {
                 return;
@@ -74,8 +73,6 @@ impl AudioClip {
                     *buf += sample;
                 });
         } else {
-            let diff = diff.try_into().unwrap();
-
             if diff >= buf.len() {
                 return;
             }
@@ -152,10 +149,7 @@ impl AudioClip {
                 .unwrap()
                 .saturating_sub(*self.clip_start.read().unwrap()),
             *self.global_start.read().unwrap()
-                + Position::from_interleaved_samples(
-                    u32::try_from(self.audio.samples.len()).unwrap(),
-                    &self.meter,
-                ),
+                + Position::from_interleaved_samples(self.audio.samples.len(), &self.meter),
         )
     }
 }

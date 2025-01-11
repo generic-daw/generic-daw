@@ -28,7 +28,7 @@ pub struct InterleavedAudio {
     /// these are used to draw the sample in various quality levels
     pub lods: [RwLock<Box<[(f32, f32)]>>; 10],
     /// the file name associated with the sample
-    pub name: PathBuf,
+    pub path: PathBuf,
 }
 
 impl InterleavedAudio {
@@ -41,7 +41,7 @@ impl InterleavedAudio {
             lods: array::from_fn(|i| {
                 RwLock::new(vec![(0.0, 0.0); length.div_ceil(1 << (i + 3))].into_boxed_slice())
             }),
-            name: path,
+            path,
         });
 
         Self::create_lod(&audio);
@@ -81,7 +81,7 @@ impl InterleavedAudio {
                 Ok(audio_buf) => {
                     if sample_buffer.is_none() {
                         let spec = *audio_buf.spec();
-                        let duration = u64::try_from(audio_buf.capacity()).unwrap();
+                        let duration = audio_buf.frames() as u64;
                         sample_buffer = Some(SampleBuffer::<f32>::new(duration, spec));
                     }
                     if let Some(buf) = &mut sample_buffer {
@@ -148,25 +148,30 @@ pub fn resample(
         return Ok(interleaved_samples);
     }
 
+    let resample_ratio = f64::from(stream_sample_rate) / f64::from(file_sample_rate);
+    let oversampling_factor =
+        (file_sample_rate / gcd(stream_sample_rate, file_sample_rate)) as usize;
+
     let mut resampler = SincFixedIn::<f32>::new(
-        f64::from(stream_sample_rate) / f64::from(file_sample_rate),
+        resample_ratio,
         1.0,
         SincInterpolationParameters {
             sinc_len: 256,
             f_cutoff: 0.95,
             interpolation: SincInterpolationType::Nearest,
-            oversampling_factor: usize::try_from(
-                file_sample_rate / gcd(stream_sample_rate, file_sample_rate),
-            )
-            .unwrap(),
+            oversampling_factor,
             window: WindowFunction::Blackman,
         },
         interleaved_samples.len() / 2,
         2,
     )?;
 
-    let left: Box<_> = interleaved_samples.iter().step_by(2).copied().collect();
-    let right: Box<_> = interleaved_samples
+    let left = interleaved_samples
+        .iter()
+        .step_by(2)
+        .copied()
+        .collect::<Box<_>>();
+    let right = interleaved_samples
         .iter()
         .skip(1)
         .step_by(2)

@@ -16,7 +16,7 @@ pub enum Track {
 static TRACK_BUF: Mutex<Vec<f32>> = Mutex::new(vec![]);
 
 impl Track {
-    pub fn fill_buf(&self, buf_start_sample: u32, buf: &mut [f32]) {
+    pub fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         let mut track_buf = TRACK_BUF.lock().unwrap();
 
         for s in track_buf.iter_mut() {

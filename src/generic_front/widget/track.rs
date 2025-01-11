@@ -61,7 +61,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                 .read()
                 .unwrap()
                 .iter()
-                .map(|clip| TrackClip::new(clip.clone(), self.scale.clone()).into()),
+                .map(|clip| TrackClip::new(clip.clone(), self.scale.clone()))
+                .map(Element::new),
         );
 
         self.diff(tree);
@@ -87,7 +88,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                 .zip(self.inner.clips().read().unwrap().iter())
                 .map(|(node, clip)| {
                     node.translate(Vector::new(
-                        (clip.get_global_start().in_interleaved_samples(meter) as f32
+                        (clip.get_global_start().in_interleaved_samples_f(meter)
                             - self.position.x.get())
                             / self.scale.x.get().exp2(),
                         0.0,
@@ -166,10 +167,6 @@ impl<Message> Track<'_, Message> {
         }
     }
 
-    pub fn is(&self, other: &Arc<TrackInner>) -> bool {
-        Arc::ptr_eq(&self.inner, other)
-    }
-
     pub fn meshes(
         &self,
         theme: &Theme,
@@ -189,12 +186,12 @@ impl<Message> Track<'_, Message> {
             .unwrap()
             .iter()
             .filter_map(|clip| {
-                let first_pixel = (clip.get_global_start().in_interleaved_samples(meter) as f32
+                let first_pixel = (clip.get_global_start().in_interleaved_samples_f(meter)
                     - position.x.get())
                     / scale.x.get().exp2()
                     + bounds.x;
 
-                let last_pixel = (clip.get_global_end().in_interleaved_samples(meter) as f32
+                let last_pixel = (clip.get_global_end().in_interleaved_samples_f(meter)
                     - position.x.get())
                     / scale.x.get().exp2()
                     + bounds.x;
@@ -214,7 +211,7 @@ impl<Message> Track<'_, Message> {
     pub fn get_clip_at_global_time(
         &self,
         meter: &Arc<Meter>,
-        global_time: u32,
+        global_time: usize,
     ) -> Option<Arc<TrackClipInner>> {
         self.inner
             .clips()
@@ -231,14 +228,5 @@ impl<Message> Track<'_, Message> {
                     None
                 }
             })
-    }
-}
-
-impl<'a, Message> From<Track<'a, Message>> for Element<'a, Message, Theme, Renderer>
-where
-    Message: 'a,
-{
-    fn from(track: Track<'a, Message>) -> Self {
-        Self::new(track)
     }
 }

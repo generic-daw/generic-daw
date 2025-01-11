@@ -35,10 +35,7 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
             config,
             move |data, _| {
                 let sample = if arrangement.meter.playing.load(SeqCst) {
-                    arrangement
-                        .meter
-                        .sample
-                        .fetch_add(data.len().try_into().unwrap(), SeqCst)
+                    arrangement.meter.sample.fetch_add(data.len(), SeqCst)
                 } else {
                     arrangement.meter.sample.load(SeqCst)
                 };
@@ -62,8 +59,8 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
     stream
 }
 
-pub fn seconds_to_interleaved_samples(seconds: f64, meter: &Meter) -> u32 {
-    (seconds * f64::from(meter.sample_rate.load(SeqCst) * 2)) as u32
+pub fn seconds_to_interleaved_samples(seconds: f32, meter: &Meter) -> f32 {
+    seconds * meter.sample_rate.load(SeqCst) as f32 * 2.0
 }
 
 pub fn pan(angle: f32) -> (f32, f32) {

@@ -113,16 +113,16 @@ impl Daw {
                     exit_on_close_request: false,
                     ..Settings::default()
                 });
-                let sample_rate = self.arrangement.meter.sample_rate.load(SeqCst).into();
+                let sample_rate = f64::from(self.arrangement.meter.sample_rate.load(SeqCst));
                 let embed = window::run_with_handle(id, move |handle| {
                     (
                         id,
                         ClapPluginWrapper::new(open_gui(
                             &get_installed_plugins()[0],
                             PluginAudioConfiguration {
+                                sample_rate,
                                 max_frames_count: 256,
                                 min_frames_count: 256,
-                                sample_rate,
                             },
                             handle.as_raw(),
                         )),

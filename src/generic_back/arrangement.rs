@@ -25,14 +25,12 @@ impl Arrangement {
         Arc::new(Self::default())
     }
 
-    pub fn fill_buf(&self, buf_start_sample: u32, buf: &mut [f32]) {
+    pub fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         if self.meter.playing.load(SeqCst) && self.metronome.load(SeqCst) {
             let mut buf_start_pos =
                 Position::from_interleaved_samples(buf_start_sample, &self.meter);
-            let buf_end_pos = Position::from_interleaved_samples(
-                buf_start_sample + u32::try_from(buf.len()).unwrap(),
-                &self.meter,
-            );
+            let buf_end_pos =
+                Position::from_interleaved_samples(buf_start_sample + buf.len(), &self.meter);
 
             if buf_start_pos.quarter_note != buf_end_pos.quarter_note
                 || buf_start_pos.sub_quarter_note == 0

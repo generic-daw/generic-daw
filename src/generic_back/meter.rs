@@ -1,7 +1,7 @@
 use atomic_enum::atomic_enum;
 use std::{
     fmt::Display,
-    sync::atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering::SeqCst},
+    sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicUsize, Ordering::SeqCst},
 };
 use strum::VariantArray;
 
@@ -68,7 +68,7 @@ pub struct Meter {
     /// this is a workaround to stop the output stream from starting playback while exporting
     pub exporting: AtomicBool,
     /// the current global time of the playhead, in samples
-    pub sample: AtomicU32,
+    pub sample: AtomicUsize,
 }
 
 impl Default for Meter {
@@ -80,7 +80,7 @@ impl Default for Meter {
             sample_rate: AtomicU32::default(),
             playing: AtomicBool::default(),
             exporting: AtomicBool::default(),
-            sample: AtomicU32::default(),
+            sample: AtomicUsize::default(),
         }
     }
 }

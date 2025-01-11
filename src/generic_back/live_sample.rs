@@ -1,47 +1,47 @@
 use std::sync::{
-    atomic::{AtomicI32, Ordering::SeqCst},
+    atomic::{AtomicIsize, Ordering::SeqCst},
     Arc,
 };
 
 #[derive(Debug)]
 pub struct LiveSample {
     audio: Arc<[f32]>,
-    idx: AtomicI32,
+    idx: AtomicIsize,
 }
 
 impl LiveSample {
-    pub fn new(audio: Arc<[f32]>, before: u32) -> Self {
+    pub fn new(audio: Arc<[f32]>, before: usize) -> Self {
         Self {
             audio,
-            idx: AtomicI32::new(-i32::try_from(before).unwrap()),
+            idx: AtomicIsize::new(-isize::try_from(before).unwrap()),
         }
     }
 
     pub fn fill_buf(&self, buf: &mut [f32]) {
-        let idx = self.idx.fetch_add(buf.len().try_into().unwrap(), SeqCst);
+        let idx = self
+            .idx
+            .fetch_add(isize::try_from(buf.len()).unwrap(), SeqCst);
+
+        let uidx = idx.unsigned_abs();
 
         if idx > 0 {
-            let idx = idx.try_into().unwrap();
-
-            if idx >= self.audio.len() {
+            if uidx >= self.audio.len() {
                 return;
             }
 
-            self.audio[idx..]
+            self.audio[uidx..]
                 .iter()
                 .zip(buf)
                 .for_each(|(s, buf)| *buf += s);
         } else {
-            let idx = (-idx).try_into().unwrap();
-
-            if idx >= buf.len() {
+            if uidx >= buf.len() {
                 return;
             }
 
             self.audio
                 .iter()
                 .copied()
-                .zip(buf[idx..].iter_mut())
+                .zip(buf[uidx..].iter_mut())
                 .for_each(|(s, buf)| {
                     *buf += s;
                 });

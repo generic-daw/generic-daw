@@ -17,7 +17,7 @@ use iced::{
     alignment::{Horizontal, Vertical},
     mouse::Interaction,
     widget::text::{LineHeight, Shaping, Wrapping},
-    Element, Font, Length, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Font, Length, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::{cmp::max_by, rc::Rc, sync::Arc};
 
@@ -154,10 +154,6 @@ impl TrackClip {
     pub fn new(inner: Arc<TrackClipInner>, scale: Rc<TimelineScale>) -> Self {
         Self { inner, scale }
     }
-
-    pub fn is(&self, other: &Arc<TrackClipInner>) -> bool {
-        Arc::ptr_eq(&self.inner, other)
-    }
 }
 
 impl TrackClipInner {
@@ -173,11 +169,5 @@ impl TrackClipInner {
             Self::Audio(audio) => audio.meshes(theme, bounds, viewport, position, scale),
             Self::Midi(_) => None,
         }
-    }
-}
-
-impl<Message> From<TrackClip> for Element<'_, Message, Theme, Renderer> {
-    fn from(track: TrackClip) -> Self {
-        Self::new(track)
     }
 }

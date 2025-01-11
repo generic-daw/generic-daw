@@ -17,7 +17,7 @@ impl TrackClip {
         match self {
             Self::Audio(audio) => audio
                 .audio
-                .name
+                .path
                 .file_name()
                 .unwrap()
                 .to_string_lossy()
@@ -26,7 +26,7 @@ impl TrackClip {
         }
     }
 
-    pub fn fill_buf(&self, buf_start_sample: u32, buf: &mut [f32]) {
+    pub fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         match self {
             Self::Audio(audio) => audio.fill_buf(buf_start_sample, buf),
             Self::Midi(_) => unimplemented!(),

@@ -20,7 +20,7 @@ impl AudioClip {
         scale: &TimelineScale,
     ) -> Option<Mesh> {
         // samples of the original audio per sample of lod
-        let lod_sample_size = scale.x.get().floor().exp2() as u32;
+        let lod_sample_size = scale.x.get().floor().exp2() as usize;
 
         // samples of the original audio per pixel
         let pixel_size = scale.x.get().exp2();
@@ -28,20 +28,22 @@ impl AudioClip {
         // samples in the lod per pixel
         let lod_samples_per_pixel = lod_sample_size as f32 / pixel_size;
 
-        let global_start = self.get_global_start().in_interleaved_samples(&self.meter) as f32;
+        let global_start = self
+            .get_global_start()
+            .in_interleaved_samples_f(&self.meter);
 
-        let clip_start = self.get_clip_start().in_interleaved_samples(&self.meter) as f32;
+        let clip_start = self.get_clip_start().in_interleaved_samples_f(&self.meter);
 
         // the first sample in the lod that is visible in the clip
         let first_index = ((max_by(0.0, position.x.get() - global_start, |a, b| {
             a.partial_cmp(b).unwrap()
-        }) + clip_start) as u32)
+        }) + clip_start) as usize)
             / lod_sample_size;
 
         // the last sample in the lod that is visible in the clip
         let last_index = min(
-            u32::try_from(self.audio.samples.len()).unwrap() / lod_sample_size,
-            first_index + (bounds.width / lod_samples_per_pixel) as u32,
+            self.audio.samples.len() / lod_sample_size,
+            first_index + (bounds.width / lod_samples_per_pixel) as usize,
         );
 
         // if there are less than 3 vertices, there's nothing to draw
@@ -67,7 +69,7 @@ impl AudioClip {
         let lod = scale.x.get() as usize - 3;
 
         // vertices of the waveform
-        let vertices: Vec<_> = (first_index..last_index)
+        let vertices = (first_index..last_index)
             .enumerate()
             .map(|(x, i)| {
                 (
@@ -75,7 +77,7 @@ impl AudioClip {
                     *self.audio.lods[lod]
                         .read()
                         .unwrap()
-                        .get(usize::try_from(i).unwrap())
+                        .get(i)
                         .unwrap_or(&(0.0, 0.0)),
                 )
             })
@@ -91,12 +93,11 @@ impl AudioClip {
                     },
                 ]
             })
-            .collect();
+            .collect::<Vec<_>>();
 
         // triangles of the waveform
-        let indices = (0..vertices.len() - 2)
+        let indices = (0..vertices.len() as u32 - 2)
             .flat_map(|i| [i, i + 1, i + 2])
-            .map(|i| u32::try_from(i).unwrap())
             .collect();
 
         // height of the clip, excluding the text, clipped off by the top of the arrangement
