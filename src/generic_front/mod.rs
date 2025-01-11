@@ -51,21 +51,21 @@ pub struct Daw {
 
 #[derive(Clone, Debug, Default)]
 pub enum Message {
-    ClapHost(ClapHostMessage),
     #[default]
     Ping,
+    ThemeChanged(Theme),
+    ClapHost(ClapHostMessage),
     #[expect(dead_code)]
     Test,
-    ThemeChanged(Theme),
-    LoadSample(PathBuf),
-    LoadedSample(Arc<InterleavedAudio>),
     LoadSamplesButton,
     LoadSamples(Vec<FileHandle>),
+    LoadSample(PathBuf),
+    LoadedSample(Arc<InterleavedAudio>),
+    ExportButton,
+    Export(FileHandle),
     TogglePlay,
     Stop,
     New,
-    ExportButton,
-    Export(FileHandle),
     BpmChanged(u16),
     NumeratorChanged(Numerator),
     DenominatorChanged(Denominator),
@@ -109,10 +109,11 @@ impl Daw {
     #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::Ping => {}
+            Message::ThemeChanged(theme) => self.theme = theme,
             Message::ClapHost(message) => {
                 return self.clap_host.update(message).map(Message::ClapHost);
             }
-            Message::Ping => {}
             Message::Test => {
                 let (id, fut) = window::open(Settings {
                     exit_on_close_request: false,
@@ -138,13 +139,26 @@ impl Daw {
                     embed.map(ClapHostMessage::Opened).map(Message::ClapHost),
                 ]);
             }
-            Message::ThemeChanged(theme) => self.theme = theme,
+            Message::LoadSamplesButton => {
+                return Task::future(AsyncFileDialog::new().pick_files())
+                    .and_then(Task::done)
+                    .map(Message::LoadSamples);
+            }
+            Message::LoadSamples(paths) => {
+                return Task::batch(
+                    paths
+                        .iter()
+                        .map(FileHandle::path)
+                        .map(PathBuf::from)
+                        .map(|path| self.update(Message::LoadSample(path))),
+                )
+            }
             Message::LoadSample(path) => {
                 let (tx, rx) = async_channel::bounded(1);
 
                 let arrangement = self.arrangement.clone();
                 std::thread::spawn(move || {
-                    let audio_file = InterleavedAudio::create(path, &arrangement.meter).ok();
+                    let audio_file = InterleavedAudio::create(path, &arrangement.meter);
                     tx.send_blocking(audio_file).unwrap();
                 });
 
@@ -161,20 +175,16 @@ impl Daw {
                 ));
                 self.arrangement.tracks.write().unwrap().push(track);
             }
-            Message::LoadSamplesButton => {
-                return Task::future(AsyncFileDialog::new().pick_files())
-                    .and_then(Task::done)
-                    .map(Message::LoadSamples);
-            }
-            Message::LoadSamples(paths) => {
-                return Task::batch(
-                    paths
-                        .iter()
-                        .map(FileHandle::path)
-                        .map(PathBuf::from)
-                        .map(|path| self.update(Message::LoadSample(path))),
+            Message::ExportButton => {
+                return Task::future(
+                    AsyncFileDialog::new()
+                        .add_filter("Wave File", &["wav"])
+                        .save_file(),
                 )
+                .and_then(Task::done)
+                .map(Message::Export);
             }
+            Message::Export(path) => self.arrangement.export(path.path()),
             Message::TogglePlay => {
                 self.arrangement.meter.playing.fetch_not(SeqCst);
             }
@@ -188,16 +198,6 @@ impl Daw {
                     .clear();
             }
             Message::New => *self = Self::default(),
-            Message::ExportButton => {
-                return Task::future(
-                    AsyncFileDialog::new()
-                        .add_filter("Wave File", &["wav"])
-                        .save_file(),
-                )
-                .and_then(Task::done)
-                .map(Message::Export);
-            }
-            Message::Export(path) => self.arrangement.export(path.path()),
             Message::BpmChanged(bpm) => self.arrangement.meter.bpm.store(bpm, SeqCst),
             Message::NumeratorChanged(new_numerator) => self
                 .arrangement
