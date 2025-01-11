@@ -58,6 +58,7 @@ pub enum Message {
     Test,
     ThemeChanged(Theme),
     LoadSample(PathBuf),
+    LoadedSample(Arc<InterleavedAudio>),
     LoadSamplesButton,
     LoadSamples(Vec<FileHandle>),
     TogglePlay,
@@ -105,8 +106,12 @@ impl Default for Daw {
 }
 
 impl Daw {
+    #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::ClapHost(message) => {
+                return self.clap_host.update(message).map(Message::ClapHost);
+            }
             Message::Ping => {}
             Message::Test => {
                 let (id, fut) = window::open(Settings {
@@ -133,30 +138,33 @@ impl Daw {
                     embed.map(ClapHostMessage::Opened).map(Message::ClapHost),
                 ]);
             }
-            Message::ClapHost(message) => {
-                return self.clap_host.update(message).map(Message::ClapHost);
-            }
             Message::ThemeChanged(theme) => self.theme = theme,
             Message::LoadSample(path) => {
                 let (tx, rx) = async_channel::bounded(1);
 
                 let arrangement = self.arrangement.clone();
                 std::thread::spawn(move || {
-                    let audio_file = InterleavedAudio::create(path, &arrangement.meter);
-                    if let Ok(audio_file) = audio_file {
-                        let track = AudioTrack::create(arrangement.meter.clone());
-                        track.try_push(&AudioClip::create(audio_file, arrangement.meter.clone()));
-                        arrangement.tracks.write().unwrap().push(track);
-                    }
-                    tx.send_blocking(()).unwrap();
+                    let audio_file = InterleavedAudio::create(path, &arrangement.meter).ok();
+                    tx.send_blocking(audio_file).unwrap();
                 });
 
-                return Task::perform(async move { rx.recv().await }, |_| Message::Ping);
+                return Task::future(async move { rx.recv().await })
+                    .and_then(Task::done)
+                    .and_then(Task::done)
+                    .map(Message::LoadedSample);
+            }
+            Message::LoadedSample(audio_file) => {
+                let track = AudioTrack::create(self.arrangement.meter.clone());
+                track.try_push(&AudioClip::create(
+                    audio_file,
+                    self.arrangement.meter.clone(),
+                ));
+                self.arrangement.tracks.write().unwrap().push(track);
             }
             Message::LoadSamplesButton => {
-                return Task::perform(AsyncFileDialog::new().pick_files(), |paths| {
-                    paths.map_or(Message::Ping, Message::LoadSamples)
-                });
+                return Task::future(AsyncFileDialog::new().pick_files())
+                    .and_then(Task::done)
+                    .map(Message::LoadSamples);
             }
             Message::LoadSamples(paths) => {
                 return Task::batch(
@@ -181,12 +189,13 @@ impl Daw {
             }
             Message::New => *self = Self::default(),
             Message::ExportButton => {
-                return Task::perform(
+                return Task::future(
                     AsyncFileDialog::new()
                         .add_filter("Wave File", &["wav"])
                         .save_file(),
-                    |path| path.map_or(Message::Ping, Message::Export),
-                );
+                )
+                .and_then(Task::done)
+                .map(Message::Export);
             }
             Message::Export(path) => self.arrangement.export(path.path()),
             Message::BpmChanged(bpm) => self.arrangement.meter.bpm.store(bpm, SeqCst),
