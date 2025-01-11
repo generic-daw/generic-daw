@@ -62,8 +62,6 @@ pub struct Arrangement<'a, Message> {
     inner: Arc<ArrangementInner>,
     /// list of all the track widgets
     tracks: RefCell<Vec<Element<'a, Message, Theme, Renderer>>>,
-    /// trigger a redraw
-    ping: Message,
 }
 
 impl<Message> Debug for Arrangement<'_, Message> {
@@ -187,9 +185,9 @@ where
 
             state.waveform_cache.borrow_mut().take();
 
-            shell.publish(self.ping.clone());
+            shell.publish(Message::default());
         } else if self.inner.meter.playing.load(SeqCst) {
-            shell.publish(self.ping.clone());
+            shell.publish(Message::default());
         }
 
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
@@ -386,11 +384,10 @@ impl<'a, Message> Arrangement<'a, Message>
 where
     Message: 'a,
 {
-    pub fn new(inner: Arc<ArrangementInner>, ping: Message) -> Self {
+    pub fn new(inner: Arc<ArrangementInner>) -> Self {
         Self {
             inner,
             tracks: RefCell::default(),
-            ping,
         }
     }
 

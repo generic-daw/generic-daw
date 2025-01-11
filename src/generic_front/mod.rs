@@ -272,7 +272,7 @@ impl Daw {
                         .unwrap()
                         .on_double_click(Message::LoadSample)
                 ),
-                Arrangement::new(self.arrangement.clone(), Message::Ping)
+                Arrangement::new(self.arrangement.clone())
             )
             .split(0.25)
         ]
