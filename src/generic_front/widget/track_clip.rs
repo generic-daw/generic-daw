@@ -1,9 +1,5 @@
-mod audio_clip;
-
-use crate::{
-    generic_back::TrackClip as TrackClipInner,
-    generic_front::{TimelinePosition, TimelineScale},
-};
+use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT};
+use crate::generic_back::TrackClip as TrackClipInner;
 use iced::{
     advanced::{
         graphics::Mesh,
@@ -17,15 +13,17 @@ use iced::{
     alignment::{Horizontal, Vertical},
     mouse::Interaction,
     widget::text::{LineHeight, Shaping, Wrapping},
-    Font, Length, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Length, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::{cmp::max_by, rc::Rc, sync::Arc};
+
+mod audio_clip;
 
 #[derive(Clone, Debug)]
 pub struct TrackClip {
     inner: Arc<TrackClipInner>,
     /// information about the scale of the timeline viewport
-    scale: Rc<TimelineScale>,
+    scale: Rc<ArrangementScale>,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
@@ -73,7 +71,7 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
         // the translucent background of the clip
         let clip_background = Quad {
             bounds: Rectangle::new(
-                Point::new(0.0, 0.0),
+                bounds.position(),
                 Size::new(
                     bounds.width,
                     max_by(0.0, bounds.height, |a, b| a.partial_cmp(b).unwrap()),
@@ -83,11 +81,16 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
         };
 
         // height of the clip, excluding the text, clipped off by the top of the arrangement
-        let clip_height = max_by(0.0, 18.0 - bounds.height, |a, b| a.partial_cmp(b).unwrap());
+        let clip_height = max_by(0.0, LINE_HEIGHT - bounds.height, |a, b| {
+            a.partial_cmp(b).unwrap()
+        });
 
         // the opaque background of the text
         let text_background = Quad {
-            bounds: Rectangle::new(Point::new(0.0, -clip_height), Size::new(bounds.width, 18.0)),
+            bounds: Rectangle::new(
+                bounds.position() + Vector::new(0.0, -clip_height),
+                Size::new(bounds.width, LINE_HEIGHT),
+            ),
             ..Quad::default()
         };
 
@@ -95,9 +98,9 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
         let text = Text {
             content: self.inner.get_name(),
             bounds: Size::new(f32::INFINITY, 0.0),
-            size: Pixels(12.0),
+            size: renderer.default_size(),
             line_height: LineHeight::default(),
-            font: Font::default(),
+            font: renderer.default_font(),
             horizontal_alignment: Horizontal::Left,
             vertical_alignment: Vertical::Top,
             shaping: Shaping::default(),
@@ -105,26 +108,24 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
         };
 
         renderer.with_layer(bounds, |renderer| {
-            renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
-                renderer.fill_quad(
-                    clip_background,
-                    theme
-                        .extended_palette()
-                        .primary
-                        .weak
-                        .color
-                        .scale_alpha(0.25),
-                );
+            renderer.fill_quad(
+                clip_background,
+                theme
+                    .extended_palette()
+                    .primary
+                    .weak
+                    .color
+                    .scale_alpha(0.25),
+            );
 
-                renderer.fill_quad(text_background, theme.extended_palette().primary.weak.color);
+            renderer.fill_quad(text_background, theme.extended_palette().primary.weak.color);
 
-                renderer.fill_text(
-                    text,
-                    Point::new(3.0, 2.0 - clip_height),
-                    theme.extended_palette().secondary.base.text,
-                    Rectangle::INFINITE,
-                );
-            });
+            renderer.fill_text(
+                text,
+                bounds.position() + Vector::new(3.0, clip_height - 1.0),
+                theme.extended_palette().secondary.base.text,
+                Rectangle::INFINITE,
+            );
         });
     }
 
@@ -151,7 +152,7 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
 }
 
 impl TrackClip {
-    pub fn new(inner: Arc<TrackClipInner>, scale: Rc<TimelineScale>) -> Self {
+    pub fn new(inner: Arc<TrackClipInner>, scale: Rc<ArrangementScale>) -> Self {
         Self { inner, scale }
     }
 }
@@ -162,8 +163,8 @@ impl TrackClipInner {
         theme: &Theme,
         bounds: Rectangle,
         viewport: Rectangle,
-        position: &TimelinePosition,
-        scale: &TimelineScale,
+        position: &ArrangementPosition,
+        scale: &ArrangementScale,
     ) -> Option<Mesh> {
         match self {
             Self::Audio(audio) => audio.meshes(theme, bounds, viewport, position, scale),

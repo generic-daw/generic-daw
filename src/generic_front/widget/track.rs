@@ -1,8 +1,5 @@
-use super::TrackClip;
-use crate::{
-    generic_back::{Meter, Track as TrackInner, TrackClip as TrackClipInner},
-    generic_front::{TimelinePosition, TimelineScale},
-};
+use super::{ArrangementPosition, ArrangementScale, TrackClip};
+use crate::generic_back::{Meter, Track as TrackInner, TrackClip as TrackClipInner};
 use iced::{
     advanced::{
         graphics::Mesh,
@@ -24,10 +21,10 @@ use std::{
 #[derive(Clone)]
 pub struct Track<'a, Message> {
     inner: Arc<TrackInner>,
-    /// information about the position of the timeline viewport
-    position: Rc<TimelinePosition>,
+    /// the position of the top left corner of the arrangement viewport
+    position: Rc<ArrangementPosition>,
     /// information about the scale of the timeline viewport
-    scale: Rc<TimelineScale>,
+    scale: Rc<ArrangementScale>,
     /// list of all the clip widgets
     clips: Rc<RefCell<Vec<Element<'a, Message, Theme, Renderer>>>>,
 }
@@ -156,8 +153,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 impl<Message> Track<'_, Message> {
     pub fn new(
         inner: Arc<TrackInner>,
-        position: Rc<TimelinePosition>,
-        scale: Rc<TimelineScale>,
+        position: Rc<ArrangementPosition>,
+        scale: Rc<ArrangementScale>,
     ) -> Self {
         Self {
             inner,
@@ -172,8 +169,8 @@ impl<Message> Track<'_, Message> {
         theme: &Theme,
         bounds: Rectangle,
         viewport: Rectangle,
-        position: &TimelinePosition,
-        scale: &TimelineScale,
+        position: &ArrangementPosition,
+        scale: &ArrangementScale,
     ) -> Vec<Mesh> {
         let meter = match &*self.inner {
             TrackInner::Audio(track) => &track.meter,

@@ -10,12 +10,9 @@ use clap_host::{ClapHost, Message as ClapHostMessage};
 use cpal::Stream;
 use home::home_dir;
 use iced::{
-    border::Radius,
     event::{self, Status},
     keyboard,
-    widget::{
-        button, column, container, horizontal_space, pick_list, row, scrollable, toggler, Text,
-    },
+    widget::{button, column, horizontal_space, pick_list, row, scrollable, toggler, Text},
     window::{self, Settings},
     Alignment::Center,
     Element, Event, Subscription, Task, Theme,
@@ -30,13 +27,9 @@ use std::{
     sync::{atomic::Ordering::SeqCst, Arc},
 };
 use strum::VariantArray as _;
-use timeline_position::TimelinePosition;
-use timeline_scale::TimelineScale;
 use widget::{Arrangement, VSplit};
 
 mod clap_host;
-mod timeline_position;
-mod timeline_scale;
 mod widget;
 
 static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
@@ -279,16 +272,7 @@ impl Daw {
                         .unwrap()
                         .on_double_click(Message::LoadSample)
                 ),
-                container(Arrangement::new(self.arrangement.clone(), Message::Ping)).style(|_| {
-                    container::Style {
-                        border: iced::Border {
-                            color: Theme::default().extended_palette().secondary.weak.color,
-                            width: 1.0,
-                            radius: Radius::new(0.0),
-                        },
-                        ..container::Style::default()
-                    }
-                })
+                Arrangement::new(self.arrangement.clone(), Message::Ping)
             )
             .split(0.25)
         ]

@@ -1,7 +1,8 @@
+use super::LINE_HEIGHT;
 use std::cell::Cell;
 
 #[derive(Debug)]
-pub struct TimelineScale {
+pub struct ArrangementScale {
     /// log2 of the horizontal scale
     ///
     /// 3.0 <= x < 13.0
@@ -12,11 +13,11 @@ pub struct TimelineScale {
     pub y: Cell<f32>,
 }
 
-impl Default for TimelineScale {
+impl Default for ArrangementScale {
     fn default() -> Self {
         Self {
             x: Cell::new(8.0),
-            y: Cell::new(100.0),
+            y: Cell::new(LINE_HEIGHT * 5.0),
         }
     }
 }

@@ -1365,9 +1365,11 @@ dependencies = [
  "iced_aw",
  "iced_file_tree",
  "iced_fonts",
+ "iced_graphics",
  "iced_wgpu",
  "include_data",
  "itertools 0.14.0",
+ "itoa",
  "portable-atomic",
  "rfd",
  "rubato",
@@ -1648,9 +1650,9 @@ dependencies = [
 
 [[package]]
 name = "iced_file_tree"
-version = "0.2.0"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f315e19c885f130606d5c3b5f93baf28d7b87d28ebc6619daa2c33d029e2240"
+checksum = "ab3112fe23f4fa24974508a7dfac174ee68333b0289e41e9762cd2c46d806fa4"
 dependencies = [
  "iced",
 ]

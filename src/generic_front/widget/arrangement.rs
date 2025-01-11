@@ -1,22 +1,22 @@
-use super::Track;
-use crate::{
-    generic_back::{Arrangement as ArrangementInner, Numerator, Position, TrackClip},
-    generic_front::{TimelinePosition, TimelineScale},
-};
+use super::{ArrangementPosition, ArrangementScale, Track, LINE_HEIGHT};
+use crate::generic_back::{Arrangement as ArrangementInner, Numerator, Position, TrackClip};
 use iced::{
     advanced::{
         graphics::geometry::Renderer as _,
         layout::{Layout, Limits, Node},
-        renderer::Style,
+        renderer::{Quad, Style},
+        text::{Renderer as _, Text},
         widget::{tree, Tree, Widget},
         Clipboard, Renderer as _, Shell,
     },
+    alignment::{Horizontal, Vertical},
     event::Status,
     keyboard::{self, Modifiers},
     mouse::{self, Cursor, Interaction, ScrollDelta},
-    widget::canvas::{Cache as CanvasCache, Frame, Group, Path, Stroke, Text},
-    Element, Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
+    widget::text::{LineHeight, Shaping, Wrapping},
+    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
+use iced_graphics::cache::Group;
 use iced_wgpu::{geometry::Cache, graphics::cache::Cached as _, Geometry};
 use std::{
     cell::{Cell, RefCell},
@@ -24,8 +24,6 @@ use std::{
     rc::Rc,
     sync::{atomic::Ordering::SeqCst, Arc},
 };
-
-const SEEKER_HEIGHT: f32 = 16.0;
 
 #[derive(Default)]
 enum Action {
@@ -39,18 +37,16 @@ enum Action {
 }
 
 struct State<'a, Message> {
-    /// information about the position of the timeline viewport
-    position: Rc<TimelinePosition>,
+    /// the position of the top left corner of the arrangement viewport
+    position: Rc<ArrangementPosition>,
     /// information about the scale of the timeline viewport
-    scale: Rc<TimelineScale>,
+    scale: Rc<ArrangementScale>,
     /// list of all the track widgets
     tracks: RefCell<Vec<Track<'a, Message>>>,
     /// saves the numerator from the last draw
     numerator: Cell<Numerator>,
     /// caches the meshes of the waveforms
     waveform_cache: RefCell<Option<Cache>>,
-    /// caches the geometry of the grid
-    grid_cache: CanvasCache,
     /// the current modifiers
     modifiers: Modifiers,
     /// the current action
@@ -69,7 +65,6 @@ impl<Message> Default for State<'_, Message> {
             tracks: RefCell::default(),
             numerator: Cell::default(),
             waveform_cache: RefCell::default(),
-            grid_cache: CanvasCache::default(),
             modifiers: Modifiers::default(),
             action: Action::default(),
             last_bounds: Cell::default(),
@@ -132,7 +127,7 @@ where
             .position
             .y
             .get()
-            .mul_add(-state.scale.y.get(), SEEKER_HEIGHT);
+            .mul_add(-state.scale.y.get(), LINE_HEIGHT);
 
         Node::with_children(
             limits.max(),
@@ -280,7 +275,7 @@ where
 
         if cursor
             .position_in(layout.bounds())
-            .is_some_and(|cursor| cursor.y < SEEKER_HEIGHT)
+            .is_some_and(|cursor| cursor.y < LINE_HEIGHT)
         {
             return Interaction::ResizingHorizontally;
         }
@@ -314,8 +309,6 @@ where
 
         if self.inner.meter.numerator.load(SeqCst) != state.numerator.get() {
             state.waveform_cache.borrow_mut().take();
-            state.grid_cache.clear();
-
             state.numerator.set(self.inner.meter.numerator.load(SeqCst));
         }
 
@@ -325,8 +318,6 @@ where
             .is_none_or(|last_bounds| last_bounds != bounds)
         {
             state.waveform_cache.borrow_mut().take();
-            state.grid_cache.clear();
-
             state.last_bounds.set(Some(layout.bounds()));
         }
 
@@ -337,23 +328,17 @@ where
             .is_none_or(|last_theme| last_theme != theme)
         {
             state.waveform_cache.borrow_mut().take();
-            state.grid_cache.clear();
-
             state.last_theme.borrow_mut().replace(theme.clone());
         }
 
         renderer.with_layer(bounds, |renderer| {
-            renderer.draw_geometry(state.grid_cache.draw(renderer, bounds.size(), |frame| {
-                frame.with_clip(bounds, |frame| {
-                    self.grid(frame, theme, state);
-                });
-            }));
+            self.grid(renderer, bounds, theme, state);
         });
 
         {
             let mut bounds = bounds;
-            bounds.y += SEEKER_HEIGHT;
-            bounds.height -= SEEKER_HEIGHT;
+            bounds.y += LINE_HEIGHT;
+            bounds.height -= LINE_HEIGHT;
 
             self.tracks
                 .borrow()
@@ -389,7 +374,7 @@ where
                     })
                     .collect();
 
-                *state.waveform_cache.borrow_mut() = Some(
+                state.waveform_cache.borrow_mut().replace(
                     Geometry::Live {
                         meshes,
                         images: Vec::new(),
@@ -398,13 +383,13 @@ where
                     .cache(Group::unique(), None),
                 );
             }
-
-            renderer.with_layer(bounds, |renderer| {
-                renderer.draw_geometry(Geometry::load(
-                    state.waveform_cache.borrow().as_ref().unwrap(),
-                ));
-            });
         }
+
+        renderer.with_layer(bounds, |renderer| {
+            renderer.draw_geometry(Geometry::load(
+                state.waveform_cache.borrow().as_ref().unwrap(),
+            ));
+        });
 
         renderer.with_layer(bounds, |renderer| {
             self.playhead(renderer, bounds, theme, state);
@@ -424,8 +409,13 @@ where
         }
     }
 
-    fn grid(&self, frame: &mut Frame, theme: &Theme, state: &State<'_, Message>) {
-        let bounds = frame.size();
+    fn grid(
+        &self,
+        renderer: &mut Renderer,
+        bounds: Rectangle,
+        theme: &Theme,
+        state: &State<'_, Message>,
+    ) {
         let numerator = self.inner.meter.numerator.load(SeqCst);
 
         let mut beat =
@@ -441,12 +431,6 @@ where
                 &self.inner.meter,
             );
         end_beat.sub_quarter_note = 0;
-
-        frame.fill_rectangle(
-            Point::new(0.0, 0.0),
-            Size::new(bounds.width, SEEKER_HEIGHT),
-            theme.extended_palette().primary.base.color,
-        );
 
         while beat <= end_beat {
             let bar = beat.quarter_note / numerator as u16;
@@ -470,34 +454,16 @@ where
             let x = (beat.in_interleaved_samples_f(&self.inner.meter) - state.position.x.get())
                 / state.scale.x.get().exp2();
 
-            let path = Path::new(|path| {
-                path.line_to(Point::new(x, SEEKER_HEIGHT));
-                path.line_to(Point::new(x, bounds.height));
-            });
-
-            frame.stroke(&path, Stroke::default().with_color(color));
-
-            if state.scale.x.get() > 11f32 {
-                if bar % 4 == 0 {
-                    let bar = Text {
-                        content: format!("{}", bar + 1),
-                        position: Point::new(x + 2.0, 2.0),
-                        color: theme.extended_palette().secondary.base.text,
-                        size: Pixels(12.0),
-                        ..Text::default()
-                    };
-                    frame.fill_text(bar);
-                }
-            } else if beat.quarter_note % numerator as u16 == 0 {
-                let bar = Text {
-                    content: format!("{}", bar + 1),
-                    position: Point::new(x + 2.0, 2.0),
-                    color: theme.extended_palette().secondary.base.text,
-                    size: Pixels(12.0),
-                    ..Text::default()
-                };
-                frame.fill_text(bar);
-            }
+            renderer.fill_quad(
+                Quad {
+                    bounds: Rectangle::new(
+                        bounds.position() + Vector::new(x, 0.0),
+                        Size::new(1.0, bounds.height),
+                    ),
+                    ..Quad::default()
+                },
+                color,
+            );
 
             beat.quarter_note += 1;
         }
@@ -510,25 +476,131 @@ where
         theme: &Theme,
         state: &State<'_, Message>,
     ) {
-        let mut frame = Frame::new(renderer, bounds.size());
+        renderer.fill_quad(
+            Quad {
+                bounds: Rectangle::new(bounds.position(), Size::new(bounds.width, LINE_HEIGHT)),
+                ..Quad::default()
+            },
+            theme.extended_palette().primary.base.color,
+        );
 
-        let path = Path::new(|path| {
-            let x = (self.inner.meter.sample.load(SeqCst) as f32 - state.position.x.get())
+        let x = (self.inner.meter.sample.load(SeqCst) as f32 - state.position.x.get())
+            / state.scale.x.get().exp2();
+
+        renderer.fill_quad(
+            Quad {
+                bounds: Rectangle::new(
+                    bounds.position() + Vector::new(x, 0.0),
+                    Size::new(2.0, bounds.height),
+                ),
+                ..Quad::default()
+            },
+            theme.extended_palette().primary.base.color,
+        );
+
+        let mut draw_text = |beat: Position, bar: u16| {
+            let x = (beat.in_interleaved_samples_f(&self.inner.meter) - state.position.x.get())
                 / state.scale.x.get().exp2();
-            path.line_to(Point::new(x, 0.0));
-            path.line_to(Point::new(x, bounds.height));
-        });
 
-        frame.with_clip(bounds, |frame| {
-            frame.stroke(
-                &path,
-                Stroke::default()
-                    .with_color(theme.extended_palette().primary.base.color)
-                    .with_width(2.0),
+            let bar = Text {
+                content: itoa::Buffer::new().format(bar + 1).to_owned(),
+                bounds: Size::new(f32::INFINITY, 0.0),
+                size: renderer.default_size(),
+                line_height: LineHeight::default(),
+                font: renderer.default_font(),
+                horizontal_alignment: Horizontal::Left,
+                vertical_alignment: Vertical::Top,
+                shaping: Shaping::default(),
+                wrapping: Wrapping::default(),
+            };
+
+            renderer.fill_text(
+                bar,
+                bounds.position() + Vector::new(x + 1.0, 0.0),
+                theme.extended_palette().secondary.base.text,
+                bounds,
             );
-        });
+        };
 
-        renderer.draw_geometry(frame.into_geometry());
+        let numerator = self.inner.meter.numerator.load(SeqCst);
+
+        let mut beat =
+            Position::from_interleaved_samples(state.position.x.get() as usize, &self.inner.meter);
+        beat = beat.saturating_sub(if state.scale.x.get() > 11.0 {
+            Position::new(4 * numerator as u16, 0)
+        } else {
+            Position::new(numerator as u16, 0)
+        });
+        beat.sub_quarter_note = 0;
+
+        let mut end_beat = beat
+            + Position::from_interleaved_samples(
+                (bounds.width * state.scale.x.get().exp2()) as usize,
+                &self.inner.meter,
+            );
+        end_beat.sub_quarter_note = 0;
+
+        while beat <= end_beat {
+            let bar = beat.quarter_note / numerator as u16;
+
+            if state.scale.x.get() > 11f32 {
+                if beat.quarter_note % numerator as u16 == 0 && bar % 4 == 0 {
+                    draw_text(beat, bar);
+                }
+            } else if beat.quarter_note % numerator as u16 == 0 {
+                draw_text(beat, bar);
+            }
+
+            beat.quarter_note += 1;
+        }
+
+        Self::border(renderer, bounds, theme);
+    }
+
+    fn border(renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
+        // I have no clue why we sometimes have to subtract one extra from the y coordinate
+        // but it works so I'm not gonna touch it
+
+        renderer.fill_quad(
+            Quad {
+                bounds: Rectangle::new(bounds.position(), Size::new(1.0, bounds.height)),
+                ..Quad::default()
+            },
+            theme.extended_palette().secondary.weak.color,
+        );
+
+        renderer.fill_quad(
+            Quad {
+                bounds: Rectangle::new(
+                    bounds.position() + Vector::new(0.0, -1.0),
+                    Size::new(bounds.width, 1.0),
+                ),
+                ..Quad::default()
+            },
+            theme.extended_palette().secondary.weak.color,
+        );
+
+        renderer.fill_quad(
+            Quad {
+                bounds: Rectangle::new(
+                    bounds.position() + Vector::new(bounds.width - 1.0, 0.0),
+                    Size::new(1.0, bounds.height),
+                ),
+                ..Quad::default()
+            },
+            theme.extended_palette().secondary.weak.color,
+        );
+
+        renderer.fill_quad(
+            Quad {
+                bounds: Rectangle::new(
+                    bounds.position() + Vector::new(0.0, bounds.height - 2.0),
+                    Size::new(bounds.width, 1.0),
+                ),
+                ..Quad::default()
+            },
+            theme.extended_palette().secondary.weak.color,
+        );
     }
 
     #[expect(clippy::too_many_lines)]
@@ -583,7 +655,7 @@ where
                             shell.invalidate_layout();
                         }
 
-                        let new_index = ((cursor.y - SEEKER_HEIGHT) / state.scale.y.get()) as usize;
+                        let new_index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
                         if index != &new_index
                             && new_index < self.inner.tracks.read().unwrap().len()
                             && self.inner.tracks.read().unwrap()[new_index].try_push(clip)
@@ -599,8 +671,8 @@ where
                         return Some(Status::Captured);
                     }
                     Action::DeletingClips => {
-                        if cursor.y > SEEKER_HEIGHT {
-                            let index = ((cursor.y - SEEKER_HEIGHT) / state.scale.y.get()) as usize;
+                        if cursor.y > LINE_HEIGHT {
+                            let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
                             if index < self.inner.tracks.read().unwrap().len() {
                                 let time = cursor
                                     .x
@@ -709,7 +781,6 @@ where
                     }
 
                     state.waveform_cache.borrow_mut().take();
-                    state.grid_cache.clear();
                     shell.invalidate_layout();
 
                     return Some(Status::Captured);
@@ -721,8 +792,8 @@ where
                         }
                     }
                     mouse::Button::Right => {
-                        if cursor.y > SEEKER_HEIGHT {
-                            let index = ((cursor.y - SEEKER_HEIGHT) / state.scale.y.get()) as usize;
+                        if cursor.y > LINE_HEIGHT {
+                            let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
                             if index < self.inner.tracks.read().unwrap().len() {
                                 let time = cursor
                                     .x
@@ -780,14 +851,13 @@ where
                         .set(cursor.x.mul_add(-x.exp2(), cursor_content_x).max(0.0));
                     state.scale.x.set(x);
                     state.waveform_cache.borrow_mut().take();
-                    state.grid_cache.clear();
                     shell.invalidate_layout();
 
                     return Some(Status::Captured);
                 }
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                    if cursor.y > SEEKER_HEIGHT {
-                        let index = ((cursor.y - SEEKER_HEIGHT) / state.scale.y.get()) as usize;
+                    if cursor.y > LINE_HEIGHT {
+                        let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
                         if index < self.inner.tracks.read().unwrap().len() {
                             let time = cursor
                                 .x
@@ -838,7 +908,6 @@ where
 
             state.position.x.set(x);
             state.waveform_cache.borrow_mut().take();
-            state.grid_cache.clear();
 
             return Some(Status::Captured);
         }
@@ -860,7 +929,7 @@ where
                         ScrollDelta::Lines { x: _, y } => y * 10.0,
                     };
 
-                    let y = (y + state.scale.y.get()).clamp(36.0, 200.0);
+                    let y = (y + state.scale.y.get()).clamp(2.0 * LINE_HEIGHT, 10.0 * LINE_HEIGHT);
 
                     if (state.scale.y.get() - y).abs() > 0.1 {
                         shell.invalidate_layout();
@@ -868,7 +937,6 @@ where
                     }
 
                     state.waveform_cache.borrow_mut().take();
-                    state.grid_cache.clear();
 
                     return Some(Status::Captured);
                 }
@@ -884,7 +952,7 @@ where
     }
 
     fn lmb_none_or_alt(&self, state: &mut State<'_, Message>, cursor: Point) -> Option<Status> {
-        if cursor.y < SEEKER_HEIGHT {
+        if cursor.y < LINE_HEIGHT {
             let mut time = Position::from_interleaved_samples(
                 cursor
                     .x
@@ -906,7 +974,7 @@ where
             return Some(Status::Captured);
         }
 
-        let index = ((cursor.y - SEEKER_HEIGHT) / state.scale.y.get()) as usize;
+        let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
         if index < self.inner.tracks.read().unwrap().len() {
             let time = cursor
                 .x

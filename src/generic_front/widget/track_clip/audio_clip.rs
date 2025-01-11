@@ -1,5 +1,5 @@
-use super::{TimelinePosition, TimelineScale};
-use crate::generic_back::AudioClip;
+use super::super::{ArrangementPosition, ArrangementScale};
+use crate::{generic_back::AudioClip, generic_front::widget::LINE_HEIGHT};
 use iced::{
     advanced::graphics::{
         color,
@@ -16,8 +16,8 @@ impl AudioClip {
         theme: &Theme,
         bounds: Rectangle,
         viewport: Rectangle,
-        position: &TimelinePosition,
-        scale: &TimelineScale,
+        position: &ArrangementPosition,
+        scale: &ArrangementScale,
     ) -> Option<Mesh> {
         // samples of the original audio per sample of lod
         let lod_sample_size = scale.x.get().floor().exp2() as usize;
@@ -52,12 +52,12 @@ impl AudioClip {
         }
 
         // how many pixels of the top of the clip are clipped off by the top of the arrangement
-        let hidden = max_by(0.0, viewport.y - bounds.y + 18.0, |a, b| {
+        let hidden = max_by(0.0, viewport.y - bounds.y + LINE_HEIGHT, |a, b| {
             a.partial_cmp(b).unwrap()
         });
 
         // height of the waveform: the height of the clip minus the height of the text
-        let waveform_height = bounds.height - 18.0;
+        let waveform_height = bounds.height - LINE_HEIGHT;
 
         // the part of the audio clip that is visible
         let clip_bounds = Rectangle::new(
@@ -84,11 +84,11 @@ impl AudioClip {
             .flat_map(|(x, (min, max))| {
                 [
                     SolidVertex2D {
-                        position: [x, min.mul_add(waveform_height, 18.0)],
+                        position: [x, min.mul_add(waveform_height, LINE_HEIGHT)],
                         color,
                     },
                     SolidVertex2D {
-                        position: [x, max.mul_add(waveform_height, 18.0)],
+                        position: [x, max.mul_add(waveform_height, LINE_HEIGHT)],
                         color,
                     },
                 ]
@@ -101,7 +101,7 @@ impl AudioClip {
             .collect();
 
         // height of the clip, excluding the text, clipped off by the top of the arrangement
-        let clip_height = max_by(0.0, 18.0 - hidden, |a, b| a.partial_cmp(b).unwrap());
+        let clip_height = max_by(0.0, LINE_HEIGHT - hidden, |a, b| a.partial_cmp(b).unwrap());
 
         let mut waveform_clip_bounds = clip_bounds;
         waveform_clip_bounds.y += clip_height;
