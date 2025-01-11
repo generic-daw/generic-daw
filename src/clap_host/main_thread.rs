@@ -46,7 +46,7 @@ impl<'a> MainThreadHandler<'a> for MainThread<'a> {
     fn initialized(&mut self, instance: InitializedPluginHandle<'a>) {
         self.gui = instance.get_extension();
         self.timer_support = instance.get_extension();
-        self.timers = Rc::new(Timers::default());
+        self.timers = Rc::default();
         self.plugin = Some(instance);
     }
 }

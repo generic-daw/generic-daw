@@ -36,6 +36,7 @@ enum Action {
     ClipTrimmingEnd(Arc<TrackClip>, f32),
 }
 
+#[derive(Default)]
 struct State<'a, Message> {
     /// the position of the top left corner of the arrangement viewport
     position: Rc<ArrangementPosition>,
@@ -57,22 +58,6 @@ struct State<'a, Message> {
     last_theme: RefCell<Option<Theme>>,
 }
 
-impl<Message> Default for State<'_, Message> {
-    fn default() -> Self {
-        Self {
-            position: Rc::default(),
-            scale: Rc::default(),
-            tracks: RefCell::default(),
-            numerator: Cell::default(),
-            waveform_cache: RefCell::default(),
-            modifiers: Modifiers::default(),
-            action: Action::default(),
-            last_bounds: Cell::default(),
-            last_theme: RefCell::default(),
-        }
-    }
-}
-
 pub struct Arrangement<'a, Message> {
     inner: Arc<ArrangementInner>,
     /// list of all the track widgets
@@ -89,7 +74,7 @@ impl<Message> Debug for Arrangement<'_, Message> {
 
 impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message>
 where
-    Message: Clone + 'static,
+    Message: Clone + Default + 'static,
 {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State<'_, Message>>()
@@ -1039,7 +1024,7 @@ where
 
 impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message, Theme, Renderer>
 where
-    Message: Clone + 'static,
+    Message: Clone + Default + 'static,
 {
     fn from(arrangement_front: Arrangement<'a, Message>) -> Self {
         Self::new(arrangement_front)
