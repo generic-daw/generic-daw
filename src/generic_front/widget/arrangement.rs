@@ -475,7 +475,7 @@ where
             Quad {
                 bounds: Rectangle::new(
                     bounds.position() + Vector::new(x, 0.0),
-                    Size::new(2.0, bounds.height),
+                    Size::new(1.5, bounds.height),
                 ),
                 ..Quad::default()
             },
