@@ -39,7 +39,10 @@ pub fn get_installed_plugins() -> Vec<PluginBundle> {
                         .is_some_and(|ext| ext == "clap")
                 })
         })
-        .filter_map(|path| unsafe { PluginBundle::load(path.path()) }.ok())
+        .filter_map(|path|
+            // SAFETY:
+            // loading an external library object file is inherently unsafe
+            unsafe { PluginBundle::load(path.path()) }.ok())
         .filter(|bundle| {
             bundle
                 .get_plugin_factory()

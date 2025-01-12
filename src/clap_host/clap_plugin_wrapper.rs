@@ -8,7 +8,12 @@ pub struct ClapPluginWrapper {
 }
 
 #[expect(clippy::non_send_fields_in_send_ty)]
+// SAFETY:
+// this is constructed and dropped on the main thread, and only goes to a different thread within iced's async runtime, where it is never dropped
 unsafe impl Send for ClapPluginWrapper {}
+
+// SAFETY:
+// this is only ever outside the main thread within iced's async runtime, inside which the `ClapPlugin` is never accessed
 unsafe impl Sync for ClapPluginWrapper {}
 
 impl Clone for ClapPluginWrapper {

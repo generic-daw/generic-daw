@@ -31,8 +31,6 @@ impl ClapHost {
                 }
             }
             Message::CloseRequested(id) => {
-                // this only happens with plugin windows, since we
-                // set their `exit_on_close_request` setting to `false`
                 self.windows.remove(&id).unwrap().destroy();
                 self.closed.replace(id);
                 return window::close::<Id>(id).discard();

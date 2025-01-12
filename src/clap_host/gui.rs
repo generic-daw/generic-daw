@@ -103,14 +103,13 @@ impl GuiExt {
         };
 
         self.plugin_gui.create(plugin, configuration).unwrap();
-        unsafe {
-            self.plugin_gui
-                .set_parent(
-                    plugin,
-                    ClapWindow::from_window_handle(window_handle).unwrap(),
-                )
-                .unwrap();
-        }
+
+        let window = ClapWindow::from_window_handle(window_handle).unwrap();
+
+        // SAFETY:
+        // We destroy the plugin ui just before the window is closed (see generic_front/clap_host.rs)
+        unsafe { self.plugin_gui.set_parent(plugin, window) }.unwrap();
+
         self.plugin_gui.show(plugin).unwrap();
 
         self.is_resizeable = self.plugin_gui.can_resize(plugin);

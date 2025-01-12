@@ -8,11 +8,16 @@ mod generic_front;
 
 fn main() -> Result {
     #[cfg(target_os = "linux")]
-    unsafe {
+    {
+        // SAFETY:
+        // the program is single-threaded at this point
+        unsafe { std::env::remove_var("WAYLAND_DISPLAY") }
+
         if std::env::var("WINIT_X11_SCALE_FACTOR").is_err() {
-            std::env::set_var("WINIT_X11_SCALE_FACTOR", "1.0");
+            // SAFETY:
+            // the program is single-threaded at this point
+            unsafe { std::env::set_var("WINIT_X11_SCALE_FACTOR", "1.0") }
         }
-        std::env::remove_var("WAYLAND_DISPLAY");
     }
 
     application("GenericDAW", Daw::update, Daw::view)

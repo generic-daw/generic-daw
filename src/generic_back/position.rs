@@ -1,3 +1,5 @@
+use atomig::Atom;
+
 use crate::generic_back::{seconds_to_interleaved_samples, Meter};
 use std::{
     cmp::Ordering,
@@ -5,29 +7,50 @@ use std::{
     sync::atomic::Ordering::SeqCst,
 };
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Position {
     /// the position in quarter notes, rounded down
     pub quarter_note: u16,
     /// the position relative to `quarter_note`, in 256ths of a quarter note
     pub sub_quarter_note: u8,
+    _padding: u8,
+}
+
+impl Atom for Position {
+    type Repr = u32;
+
+    fn pack(self) -> Self::Repr {
+        // SAFETY:
+        // any `Position` is a valid u32
+        unsafe { std::mem::transmute(self) }
+    }
+
+    fn unpack(src: Self::Repr) -> Self {
+        // SAFETY:
+        // any u32 is a valid `Position`
+        unsafe { std::mem::transmute(src) }
+    }
 }
 
 impl Position {
     pub const MAX: Self = Self {
         quarter_note: u16::MAX,
         sub_quarter_note: u8::MAX,
+        _padding: 0,
     };
 
     pub const MIN_STEP: Self = Self {
         quarter_note: 0,
         sub_quarter_note: 1,
+        _padding: 0,
     };
 
     pub fn new(quarter_note: u16, sub_quarter_note: u8) -> Self {
         Self {
             quarter_note,
             sub_quarter_note,
+            _padding: 0,
         }
     }
 
@@ -37,10 +60,7 @@ impl Position {
         let quarter_note = global_beat as u16;
         let sub_quarter_note = ((global_beat - f32::from(quarter_note)) * 256.0) as u8;
 
-        Self {
-            quarter_note,
-            sub_quarter_note,
-        }
+        Self::new(quarter_note, sub_quarter_note)
     }
 
     pub fn in_interleaved_samples_f(self, meter: &Meter) -> f32 {
@@ -129,12 +149,12 @@ impl Add for Position {
     fn add(self, rhs: Self) -> Self::Output {
         debug_assert!(Self::MAX - self >= rhs);
 
-        Self {
-            quarter_note: self.quarter_note
+        Self::new(
+            self.quarter_note
                 + rhs.quarter_note
                 + u16::from(self.sub_quarter_note > u8::MAX - rhs.sub_quarter_note),
-            sub_quarter_note: self.sub_quarter_note.wrapping_add(rhs.sub_quarter_note),
-        }
+            self.sub_quarter_note.wrapping_add(rhs.sub_quarter_note),
+        )
     }
 }
 
@@ -150,12 +170,12 @@ impl Sub for Position {
     fn sub(self, rhs: Self) -> Self::Output {
         debug_assert!(self >= rhs);
 
-        Self {
-            quarter_note: self.quarter_note
+        Self::new(
+            self.quarter_note
                 - rhs.quarter_note
                 - u16::from(self.sub_quarter_note < rhs.sub_quarter_note),
-            sub_quarter_note: self.sub_quarter_note.wrapping_sub(rhs.sub_quarter_note),
-        }
+            self.sub_quarter_note.wrapping_sub(rhs.sub_quarter_note),
+        )
     }
 }
 
