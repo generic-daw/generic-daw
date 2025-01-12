@@ -98,6 +98,14 @@ impl Position {
             self - other
         }
     }
+
+    pub fn abs_diff(self, other: Self) -> Self {
+        if self < other {
+            other - self
+        } else {
+            self - other
+        }
+    }
 }
 
 impl PartialOrd for Position {

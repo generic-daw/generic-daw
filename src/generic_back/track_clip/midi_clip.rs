@@ -1,8 +1,5 @@
 use crate::generic_back::{DirtyEvent, Meter, Position, TrackClip};
-use std::{
-    cmp::Ordering,
-    sync::{atomic::Ordering::SeqCst, Arc, RwLock},
-};
+use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
 pub use midi_note::MidiNote;
 pub use midi_pattern::MidiPattern;
@@ -64,17 +61,11 @@ impl MidiClip {
                 .saturating_sub(self.get_pattern_start()),
             self.get_global_end() - Position::MIN_STEP,
         );
-        let cmp = self.global_start.read().unwrap().cmp(&global_start);
-        match cmp {
-            Ordering::Less => {
-                *self.pattern_start.write().unwrap() +=
-                    global_start - *self.global_start.read().unwrap();
-            }
-            Ordering::Equal => {}
-            Ordering::Greater => {
-                *self.pattern_start.write().unwrap() -=
-                    *self.global_start.read().unwrap() - global_start;
-            }
+        let diff = self.get_global_start().abs_diff(global_start);
+        if self.get_global_start() < global_start {
+            *self.pattern_start.write().unwrap() += diff;
+        } else {
+            *self.pattern_start.write().unwrap() -= diff;
         }
         *self.global_start.write().unwrap() = global_start;
         self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
@@ -87,15 +78,11 @@ impl MidiClip {
     }
 
     pub fn move_to(&self, global_start: Position) {
-        let cmp = self.get_global_start().cmp(&global_start);
-        match cmp {
-            Ordering::Less => {
-                *self.global_end.write().unwrap() += global_start - self.get_global_start();
-            }
-            Ordering::Equal => {}
-            Ordering::Greater => {
-                *self.global_end.write().unwrap() -= self.get_global_start() - global_start;
-            }
+        let diff = self.get_global_start().abs_diff(global_start);
+        if self.get_global_start() < global_start {
+            *self.global_end.write().unwrap() += diff;
+        } else {
+            *self.global_end.write().unwrap() -= diff;
         }
         *self.global_start.write().unwrap() = global_start;
         self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);

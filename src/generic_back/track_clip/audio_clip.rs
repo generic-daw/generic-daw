@@ -1,8 +1,5 @@
 use crate::generic_back::{Meter, Position, TrackClip};
-use std::{
-    cmp::Ordering,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 pub use interleaved_audio::{resample, InterleavedAudio};
 
@@ -106,15 +103,11 @@ impl AudioClip {
                 .saturating_sub(self.get_clip_start()),
             self.get_global_end() - Position::MIN_STEP,
         );
-        let cmp = self.get_global_start().cmp(&global_start);
-        match cmp {
-            Ordering::Less => {
-                *self.clip_start.write().unwrap() += global_start - self.get_global_start();
-            }
-            Ordering::Equal => {}
-            Ordering::Greater => {
-                *self.clip_start.write().unwrap() -= self.get_global_start() - global_start;
-            }
+        let diff = self.get_global_start().abs_diff(global_start);
+        if self.get_global_start() < global_start {
+            *self.clip_start.write().unwrap() += diff;
+        } else {
+            *self.clip_start.write().unwrap() -= diff;
         }
         *self.global_start.write().unwrap() = global_start;
     }
@@ -125,15 +118,11 @@ impl AudioClip {
     }
 
     pub fn move_to(&self, global_start: Position) {
-        let cmp = self.get_global_start().cmp(&global_start);
-        match cmp {
-            Ordering::Less => {
-                *self.global_end.write().unwrap() += global_start - self.get_global_start();
-            }
-            Ordering::Equal => {}
-            Ordering::Greater => {
-                *self.global_end.write().unwrap() -= self.get_global_start() - global_start;
-            }
+        let diff = self.get_global_start().abs_diff(global_start);
+        if self.get_global_start() < global_start {
+            *self.global_end.write().unwrap() += diff;
+        } else {
+            *self.global_end.write().unwrap() -= diff;
         }
         *self.global_start.write().unwrap() = global_start;
     }
