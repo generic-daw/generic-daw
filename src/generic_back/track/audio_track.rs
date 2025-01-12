@@ -1,5 +1,5 @@
 use crate::generic_back::{Meter, Position, Track, TrackClip};
-use portable_atomic::AtomicF32;
+use atomig::Atomic;
 use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
 #[derive(Debug)]
@@ -7,9 +7,9 @@ pub struct AudioTrack {
     /// these are all guaranteed to be `TrackClip::Audio`
     pub clips: RwLock<Vec<Arc<TrackClip>>>,
     /// between 0.0 and 1.0
-    pub volume: AtomicF32,
+    pub volume: Atomic<f32>,
     /// between -1.0 (left) and 1.0 (right)
-    pub pan: AtomicF32,
+    pub pan: Atomic<f32>,
     pub meter: Arc<Meter>,
 }
 
@@ -17,8 +17,8 @@ impl AudioTrack {
     pub fn create(meter: Arc<Meter>) -> Arc<Track> {
         Arc::new(Track::Audio(Self {
             clips: RwLock::default(),
-            volume: AtomicF32::new(1.0),
-            pan: AtomicF32::new(0.0),
+            volume: Atomic::new(1.0),
+            pan: Atomic::new(0.0),
             meter,
         }))
     }

@@ -2,11 +2,11 @@ use crate::{
     clap_host::ClapPluginWrapper,
     generic_back::{Meter, Position, Track, TrackClip},
 };
+use atomig::Atomic;
 use plugin_state::PluginState;
-use portable_atomic::AtomicF32;
 use std::sync::{Arc, Mutex, RwLock};
 
-pub use dirty_event::{AtomicDirtyEvent, DirtyEvent};
+pub use dirty_event::DirtyEvent;
 
 mod dirty_event;
 mod plugin_state;
@@ -16,9 +16,9 @@ pub struct MidiTrack {
     /// these are all guaranteed to be `TrackClip::Midi`
     pub clips: RwLock<Vec<Arc<TrackClip>>>,
     /// between 0.0 and 1.0
-    pub volume: AtomicF32,
+    pub volume: Atomic<f32>,
     /// between -1.0 (left) and 1.0 (right)
-    pub pan: AtomicF32,
+    pub pan: Atomic<f32>,
     /// holds all the state needed for a generator plugin to function properly
     pub plugin_state: Mutex<PluginState>,
     pub meter: Arc<Meter>,
@@ -28,8 +28,8 @@ impl MidiTrack {
     pub fn create(plugin: ClapPluginWrapper, meter: Arc<Meter>) -> Arc<Track> {
         Arc::new(Track::Midi(Self {
             clips: RwLock::default(),
-            volume: AtomicF32::new(1.0),
-            pan: AtomicF32::new(0.0),
+            volume: Atomic::new(1.0),
+            pan: Atomic::new(0.0),
             plugin_state: PluginState::create(plugin),
             meter,
         }))

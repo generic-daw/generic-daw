@@ -1,12 +1,12 @@
-use atomic_enum::atomic_enum;
+use atomig::{Atom, Atomic};
 use std::{
     fmt::Display,
     sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicUsize, Ordering::SeqCst},
 };
 use strum::VariantArray;
 
-#[atomic_enum]
-#[derive(Default, Eq, PartialEq, VariantArray)]
+#[repr(u16)]
+#[derive(Atom, Clone, Copy, Debug, Default, Eq, PartialEq, VariantArray)]
 pub enum Numerator {
     _1 = 1,
     _2 = 2,
@@ -33,8 +33,8 @@ impl Display for Numerator {
     }
 }
 
-#[atomic_enum]
-#[derive(Default, Eq, PartialEq, VariantArray)]
+#[repr(u16)]
+#[derive(Atom, Clone, Copy, Debug, Default, Eq, PartialEq, VariantArray)]
 pub enum Denominator {
     _2 = 2,
     #[default]
@@ -54,9 +54,9 @@ pub struct Meter {
     /// BPM of the arrangement, between 30 and 600
     pub bpm: AtomicU16,
     /// numerator of the time signature
-    pub numerator: AtomicNumerator,
+    pub numerator: Atomic<Numerator>,
     /// denominator of the time signature
-    pub denominator: AtomicDenominator,
+    pub denominator: Atomic<Denominator>,
     /// sample rate of the output stream
     ///
     /// typical values: 32000, 44100, 48000, 88200, 96000, 176400, 192000
@@ -75,8 +75,8 @@ impl Default for Meter {
     fn default() -> Self {
         Self {
             bpm: AtomicU16::new(140),
-            numerator: AtomicNumerator::new(Numerator::default()),
-            denominator: AtomicDenominator::new(Denominator::default()),
+            numerator: Atomic::default(),
+            denominator: Atomic::default(),
             sample_rate: AtomicU32::default(),
             playing: AtomicBool::default(),
             exporting: AtomicBool::default(),

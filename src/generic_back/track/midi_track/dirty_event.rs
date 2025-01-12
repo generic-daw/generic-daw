@@ -1,7 +1,9 @@
-use atomic_enum::atomic_enum;
+use atomig::Atom;
 
-#[atomic_enum]
+#[repr(u8)]
+#[derive(Atom, Clone, Copy, Debug, Default)]
 pub enum DirtyEvent {
+    #[default]
     None,
     NoteAdded,
     NoteRemoved,

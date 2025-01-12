@@ -1,7 +1,8 @@
 use crate::{
     clap_host::ClapPluginWrapper,
-    generic_back::{AtomicDirtyEvent, DirtyEvent, MidiNote},
+    generic_back::{DirtyEvent, MidiNote},
 };
+use atomig::Atomic;
 use clack_host::{
     events::{
         event_types::{NoteOffEvent, NoteOnEvent},
@@ -22,7 +23,7 @@ pub struct PluginState {
     /// the combined midi of all clips in the track
     pub global_midi_cache: Vec<Arc<MidiNote>>,
     /// how the midi was modified since the last buffer refresh
-    pub dirty: Arc<AtomicDirtyEvent>,
+    pub dirty: Arc<Atomic<DirtyEvent>>,
     /// all currently playing notes
     pub started_notes: Vec<Arc<MidiNote>>,
     /// the last global time that was fetched.
@@ -42,7 +43,7 @@ impl PluginState {
         Mutex::new(Self {
             plugin,
             global_midi_cache: Vec::new(),
-            dirty: Arc::new(AtomicDirtyEvent::new(DirtyEvent::None)),
+            dirty: Arc::default(),
             started_notes: Vec::new(),
             last_global_time: 0,
             running_buffer: [0.0; BUFFER_SIZE],

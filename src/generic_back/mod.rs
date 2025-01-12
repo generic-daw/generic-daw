@@ -6,7 +6,7 @@ use std::{
     f32::consts::PI,
     sync::{atomic::Ordering::SeqCst, Arc},
 };
-use track::{AtomicDirtyEvent, DirtyEvent};
+use track::DirtyEvent;
 
 pub use arrangement::Arrangement;
 pub use live_sample::LiveSample;

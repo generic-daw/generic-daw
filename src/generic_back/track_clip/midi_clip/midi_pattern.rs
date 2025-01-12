@@ -1,10 +1,11 @@
-use crate::generic_back::{AtomicDirtyEvent, DirtyEvent, MidiNote, MidiTrack};
+use crate::generic_back::{DirtyEvent, MidiNote, MidiTrack};
+use atomig::Atomic;
 use std::sync::{atomic::Ordering::SeqCst, Arc};
 
 #[derive(Debug)]
 pub struct MidiPattern {
     pub notes: Vec<Arc<MidiNote>>,
-    pub(in crate::generic_back) dirty: Arc<AtomicDirtyEvent>,
+    pub(in crate::generic_back) dirty: Arc<Atomic<DirtyEvent>>,
 }
 
 impl MidiPattern {
