@@ -1,5 +1,5 @@
-use super::super::{ArrangementPosition, ArrangementScale};
-use crate::{generic_back::AudioClip, generic_front::widget::LINE_HEIGHT};
+use super::super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT};
+use crate::generic_back::AudioClip;
 use iced::{
     advanced::graphics::{
         color,
@@ -69,19 +69,12 @@ impl AudioClip {
         let lod = scale.x.get() as usize - 3;
 
         // vertices of the waveform
-        let vertices = (first_index..last_index)
+        let vertices = self.audio.lods[lod].read().unwrap()[first_index..last_index]
+            .iter()
             .enumerate()
-            .map(|(x, i)| {
-                (
-                    x as f32 * lod_samples_per_pixel,
-                    *self.audio.lods[lod]
-                        .read()
-                        .unwrap()
-                        .get(i)
-                        .unwrap_or(&(0.0, 0.0)),
-                )
-            })
             .flat_map(|(x, (min, max))| {
+                let x = x as f32 * lod_samples_per_pixel;
+
                 [
                     SolidVertex2D {
                         position: [x, min.mul_add(waveform_height, LINE_HEIGHT)],
@@ -100,7 +93,7 @@ impl AudioClip {
             .flat_map(|i| [i, i + 1, i + 2])
             .collect();
 
-        // height of the clip, excluding the text, clipped off by the top of the arrangement
+        // height of the clip, excluding the text
         let clip_height = max_by(0.0, LINE_HEIGHT - hidden, |a, b| a.partial_cmp(b).unwrap());
 
         let mut waveform_clip_bounds = clip_bounds;

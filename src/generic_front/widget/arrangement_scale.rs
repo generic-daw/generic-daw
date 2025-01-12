@@ -3,13 +3,13 @@ use std::cell::Cell;
 
 #[derive(Debug)]
 pub struct ArrangementScale {
-    /// log2 of the horizontal scale
+    /// log2 of the number of audio samples per pixel
     ///
     /// 3.0 <= x < 13.0
     pub x: Cell<f32>,
     /// height in pixels of each track in the timeline
     ///
-    /// 32.0 <= x <= 200.0
+    /// 42.0 <= x <= 210.0
     pub y: Cell<f32>,
 }
 

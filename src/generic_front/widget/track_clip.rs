@@ -80,6 +80,16 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
             ..Quad::default()
         };
 
+        renderer.fill_quad(
+            clip_background,
+            theme
+                .extended_palette()
+                .primary
+                .weak
+                .color
+                .scale_alpha(0.25),
+        );
+
         // height of the clip, excluding the text, clipped off by the top of the arrangement
         let clip_height = max_by(0.0, LINE_HEIGHT - bounds.height, |a, b| {
             a.partial_cmp(b).unwrap()
@@ -94,6 +104,8 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
             ..Quad::default()
         };
 
+        renderer.fill_quad(text_background, theme.extended_palette().primary.weak.color);
+
         // the text containing the name of the sample
         let text = Text {
             content: self.inner.get_name(),
@@ -107,26 +119,12 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
             wrapping: Wrapping::default(),
         };
 
-        renderer.with_layer(bounds, |renderer| {
-            renderer.fill_quad(
-                clip_background,
-                theme
-                    .extended_palette()
-                    .primary
-                    .weak
-                    .color
-                    .scale_alpha(0.25),
-            );
-
-            renderer.fill_quad(text_background, theme.extended_palette().primary.weak.color);
-
-            renderer.fill_text(
-                text,
-                bounds.position() + Vector::new(3.0, clip_height - 1.0),
-                theme.extended_palette().secondary.base.text,
-                Rectangle::INFINITE,
-            );
-        });
+        renderer.fill_text(
+            text,
+            bounds.position() + Vector::new(3.0, clip_height - 1.0),
+            theme.extended_palette().secondary.base.text,
+            bounds,
+        );
     }
 
     fn mouse_interaction(

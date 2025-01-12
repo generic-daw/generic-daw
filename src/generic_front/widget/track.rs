@@ -6,7 +6,7 @@ use iced::{
         layout::{Limits, Node},
         renderer::Style,
         widget::Tree,
-        Layout, Widget,
+        Layout, Renderer as _, Widget,
     },
     mouse::{Cursor, Interaction},
     Element, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -52,6 +52,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+        self.clips.borrow_mut().clear();
         self.clips.borrow_mut().extend(
             self.inner
                 .clips()
@@ -143,9 +144,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             .zip(&tree.children)
             .zip(layout.children())
             .for_each(|((child, tree), layout)| {
-                child
-                    .as_widget()
-                    .draw(tree, renderer, theme, style, layout, cursor, &bounds);
+                renderer.with_layer(bounds, |renderer| {
+                    child
+                        .as_widget()
+                        .draw(tree, renderer, theme, style, layout, cursor, &bounds);
+                });
             });
     }
 }

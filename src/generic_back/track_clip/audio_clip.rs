@@ -101,55 +101,40 @@ impl AudioClip {
     }
 
     pub fn trim_start_to(&self, global_start: Position) {
-        let global_start = self
-            .clamp(global_start)
-            .min(*self.global_end.read().unwrap() - Position::MIN_STEP);
-        let cmp = self.global_start.read().unwrap().cmp(&global_start);
+        let global_start = global_start.clamp(
+            self.get_global_start()
+                .saturating_sub(self.get_clip_start()),
+            self.get_global_end() - Position::MIN_STEP,
+        );
+        let cmp = self.get_global_start().cmp(&global_start);
         match cmp {
             Ordering::Less => {
-                *self.clip_start.write().unwrap() +=
-                    global_start - *self.global_start.read().unwrap();
+                *self.clip_start.write().unwrap() += global_start - self.get_global_start();
             }
             Ordering::Equal => {}
             Ordering::Greater => {
-                *self.clip_start.write().unwrap() -=
-                    *self.global_start.read().unwrap() - global_start;
+                *self.clip_start.write().unwrap() -= self.get_global_start() - global_start;
             }
         }
         *self.global_start.write().unwrap() = global_start;
     }
 
     pub fn trim_end_to(&self, global_end: Position) {
-        let global_end = self
-            .clamp(global_end)
-            .max(*self.global_start.read().unwrap() + Position::MIN_STEP);
+        let global_end = global_end.max(self.get_global_start() + Position::MIN_STEP);
         *self.global_end.write().unwrap() = global_end;
     }
 
     pub fn move_to(&self, global_start: Position) {
-        let cmp = self.global_start.read().unwrap().cmp(&global_start);
+        let cmp = self.get_global_start().cmp(&global_start);
         match cmp {
             Ordering::Less => {
-                *self.global_end.write().unwrap() +=
-                    global_start - *self.global_start.read().unwrap();
+                *self.global_end.write().unwrap() += global_start - self.get_global_start();
             }
             Ordering::Equal => {}
             Ordering::Greater => {
-                *self.global_end.write().unwrap() -=
-                    *self.global_start.read().unwrap() - global_start;
+                *self.global_end.write().unwrap() -= self.get_global_start() - global_start;
             }
         }
         *self.global_start.write().unwrap() = global_start;
-    }
-
-    fn clamp(&self, position: Position) -> Position {
-        position.clamp(
-            self.global_start
-                .read()
-                .unwrap()
-                .saturating_sub(*self.clip_start.read().unwrap()),
-            *self.global_start.read().unwrap()
-                + Position::from_interleaved_samples(self.audio.samples.len(), &self.meter),
-        )
     }
 }

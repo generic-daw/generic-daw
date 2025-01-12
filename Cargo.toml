@@ -31,7 +31,6 @@ iced_aw = { version = "0.11.0", default-features = false, features = [
 ] }
 iced_file_tree = "0.2.2"
 iced_fonts = { version = "0.1.1", features = ["bootstrap"] }
-iced_graphics = "0.13.0"
 iced_wgpu = { version = "0.13.5", features = ["geometry"] }
 include_data = "1.0.1"
 itertools = "0.14.0"

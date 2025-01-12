@@ -1,5 +1,5 @@
 use super::{ArrangementPosition, ArrangementScale, Track, LINE_HEIGHT};
-use crate::generic_back::{Arrangement as ArrangementInner, Numerator, Position, TrackClip};
+use crate::generic_back::{Arrangement as ArrangementInner, Position, TrackClip};
 use iced::{
     advanced::{
         graphics::geometry::Renderer as _,
@@ -16,8 +16,11 @@ use iced::{
     widget::text::{LineHeight, Shaping, Wrapping},
     Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
-use iced_graphics::cache::Group;
-use iced_wgpu::{geometry::Cache, graphics::cache::Cached as _, Geometry};
+use iced_wgpu::{
+    geometry::Cache,
+    graphics::cache::{Cached as _, Group},
+    Geometry,
+};
 use std::{
     cell::{Cell, RefCell},
     fmt::{Debug, Formatter},
@@ -38,14 +41,12 @@ enum Action {
 
 #[derive(Default)]
 struct State<'a, Message> {
-    /// the position of the top left corner of the arrangement viewport
     position: Rc<ArrangementPosition>,
-    /// information about the scale of the timeline viewport
     scale: Rc<ArrangementScale>,
     /// list of all the track widgets
     tracks: RefCell<Vec<Track<'a, Message>>>,
-    /// saves the numerator from the last draw
-    numerator: Cell<Numerator>,
+    /// saves the bpm from the last draw
+    bpm: Cell<u16>,
     /// caches the meshes of the waveforms
     waveform_cache: RefCell<Option<Cache>>,
     /// the current modifiers
@@ -290,9 +291,10 @@ where
         let state = tree.state.downcast_ref::<State<'_, Message>>();
         let bounds = layout.bounds();
 
-        if self.inner.meter.numerator.load(SeqCst) != state.numerator.get() {
+        let bpm = self.inner.meter.bpm.load(SeqCst);
+        if bpm != state.bpm.get() {
             state.waveform_cache.borrow_mut().take();
-            state.numerator.set(self.inner.meter.numerator.load(SeqCst));
+            state.bpm.set(bpm);
         }
 
         if state
