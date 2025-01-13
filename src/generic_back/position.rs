@@ -1,6 +1,5 @@
-use atomig::Atom;
-
 use crate::generic_back::{seconds_to_interleaved_samples, Meter};
+use atomig::Atom;
 use std::{
     cmp::Ordering,
     ops::{Add, AddAssign, Sub, SubAssign},
@@ -34,19 +33,11 @@ impl Atom for Position {
 }
 
 impl Position {
-    pub const MAX: Self = Self {
-        quarter_note: u16::MAX,
-        sub_quarter_note: u8::MAX,
-        _padding: 0,
-    };
+    pub const MAX: Self = Self::new(u16::MAX, u8::MAX);
 
-    pub const MIN_STEP: Self = Self {
-        quarter_note: 0,
-        sub_quarter_note: 1,
-        _padding: 0,
-    };
+    pub const MIN_STEP: Self = Self::new(0, 1);
 
-    pub fn new(quarter_note: u16, sub_quarter_note: u8) -> Self {
+    pub const fn new(quarter_note: u16, sub_quarter_note: u8) -> Self {
         Self {
             quarter_note,
             sub_quarter_note,
