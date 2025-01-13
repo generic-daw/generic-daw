@@ -99,7 +99,7 @@ impl AudioClip {
         let global_start = global_start.clamp(
             self.get_global_start()
                 .saturating_sub(self.get_clip_start()),
-            self.get_global_end() - Position::MIN_STEP,
+            self.get_global_end() - Position::SUB_QUARTER_NOTE,
         );
         let diff = self.get_global_start().abs_diff(global_start);
         if self.get_global_start() < global_start {
@@ -115,7 +115,7 @@ impl AudioClip {
     }
 
     pub fn trim_end_to(&self, global_end: Position) {
-        let global_end = global_end.max(self.get_global_start() + Position::MIN_STEP);
+        let global_end = global_end.max(self.get_global_start() + Position::SUB_QUARTER_NOTE);
         self.global_end.store(global_end, SeqCst);
     }
 

@@ -32,15 +32,15 @@ impl Arrangement {
             let buf_end_pos =
                 Position::from_interleaved_samples(buf_start_sample + buf.len(), &self.meter);
 
-            if buf_start_pos.quarter_note != buf_end_pos.quarter_note
-                || buf_start_pos.sub_quarter_note == 0
+            if buf_start_pos.quarter_note() != buf_end_pos.quarter_note()
+                || buf_start_pos.sub_quarter_note() == 0
             {
-                buf_start_pos.quarter_note = buf_end_pos.quarter_note;
-                buf_start_pos.sub_quarter_note = 0;
+                buf_start_pos = buf_end_pos.floor();
 
                 let diff = buf_start_pos.in_interleaved_samples(&self.meter) - buf_start_sample;
                 let click =
-                    if buf_start_pos.quarter_note % self.meter.numerator.load(SeqCst) as u16 == 0 {
+                    if buf_start_pos.quarter_note() % self.meter.numerator.load(SeqCst) as u32 == 0
+                    {
                         self.on_bar_click.get().unwrap().clone()
                     } else {
                         self.off_bar_click.get().unwrap().clone()

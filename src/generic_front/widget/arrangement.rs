@@ -403,33 +403,30 @@ where
         let numerator = self.inner.meter.numerator.load(SeqCst);
 
         let mut beat =
-            Position::from_interleaved_samples(state.position.x.get() as usize, &self.inner.meter);
-        if beat.sub_quarter_note != 0 {
-            beat.sub_quarter_note = 0;
-            beat.quarter_note += 1;
-        }
+            Position::from_interleaved_samples(state.position.x.get() as usize, &self.inner.meter)
+                .ceil();
 
-        let mut end_beat = beat
+        let end_beat = beat
             + Position::from_interleaved_samples(
                 (bounds.width * state.scale.x.get().exp2()) as usize,
                 &self.inner.meter,
-            );
-        end_beat.sub_quarter_note = 0;
+            )
+            .floor();
 
         while beat <= end_beat {
-            let bar = beat.quarter_note / numerator as u16;
+            let bar = beat.quarter_note() / numerator as u32;
             let color = if state.scale.x.get() > 11f32 {
-                if beat.quarter_note % numerator as u16 == 0 {
+                if beat.quarter_note() % numerator as u32 == 0 {
                     if bar % 4 == 0 {
                         theme.extended_palette().secondary.strong.color
                     } else {
                         theme.extended_palette().secondary.weak.color
                     }
                 } else {
-                    beat.quarter_note += 1;
+                    beat += Position::QUARTER_NOTE;
                     continue;
                 }
-            } else if beat.quarter_note % numerator as u16 == 0 {
+            } else if beat.quarter_note() % numerator as u32 == 0 {
                 theme.extended_palette().secondary.strong.color
             } else {
                 theme.extended_palette().secondary.weak.color
@@ -449,7 +446,7 @@ where
                 color,
             );
 
-            beat.quarter_note += 1;
+            beat += Position::QUARTER_NOTE;
         }
     }
 
@@ -482,7 +479,7 @@ where
             theme.extended_palette().primary.base.color,
         );
 
-        let mut draw_text = |beat: Position, bar: u16| {
+        let mut draw_text = |beat: Position, bar: u32| {
             let x = (beat.in_interleaved_samples_f(&self.inner.meter) - state.position.x.get())
                 / state.scale.x.get().exp2();
 
@@ -509,33 +506,33 @@ where
         let numerator = self.inner.meter.numerator.load(SeqCst);
 
         let mut beat =
-            Position::from_interleaved_samples(state.position.x.get() as usize, &self.inner.meter);
-        beat = beat.saturating_sub(if state.scale.x.get() > 11.0 {
-            Position::new(4 * numerator as u16, 0)
-        } else {
-            Position::new(numerator as u16, 0)
-        });
-        beat.sub_quarter_note = 0;
+            Position::from_interleaved_samples(state.position.x.get() as usize, &self.inner.meter)
+                .saturating_sub(if state.scale.x.get() > 11.0 {
+                    Position::new(4 * numerator as u32, 0)
+                } else {
+                    Position::new(numerator as u32, 0)
+                })
+                .floor();
 
-        let mut end_beat = beat
+        let end_beat = beat
             + Position::from_interleaved_samples(
                 (bounds.width * state.scale.x.get().exp2()) as usize,
                 &self.inner.meter,
-            );
-        end_beat.sub_quarter_note = 0;
+            )
+            .floor();
 
         while beat <= end_beat {
-            let bar = beat.quarter_note / numerator as u16;
+            let bar = beat.quarter_note() / numerator as u32;
 
             if state.scale.x.get() > 11f32 {
-                if beat.quarter_note % numerator as u16 == 0 && bar % 4 == 0 {
+                if beat.quarter_note() % numerator as u32 == 0 && bar % 4 == 0 {
                     draw_text(beat, bar);
                 }
-            } else if beat.quarter_note % numerator as u16 == 0 {
+            } else if beat.quarter_note() % numerator as u32 == 0 {
                 draw_text(beat, bar);
             }
 
-            beat.quarter_note += 1;
+            beat += Position::QUARTER_NOTE;
         }
 
         Self::border(renderer, bounds, theme);
