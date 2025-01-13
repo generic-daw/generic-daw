@@ -1,12 +1,12 @@
 use crate::generic_back::{seconds_to_interleaved_samples, Meter};
-use atomig::Atom;
+use atomig::{Atom, AtomInteger};
 use std::{
     fmt::Debug,
     ops::{Add, AddAssign, Sub, SubAssign},
     sync::atomic::Ordering::SeqCst,
 };
 
-#[derive(Atom, Clone, Copy, Default, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Atom, AtomInteger, Clone, Copy, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Position(u32);
 
 impl Debug for Position {

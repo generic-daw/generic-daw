@@ -103,13 +103,9 @@ impl AudioClip {
         );
         let diff = self.get_global_start().abs_diff(global_start);
         if self.get_global_start() < global_start {
-            self.clip_start
-                .fetch_update(SeqCst, SeqCst, |pattern_start| Some(pattern_start + diff))
-                .unwrap();
+            self.clip_start.fetch_add(diff, SeqCst);
         } else {
-            self.clip_start
-                .fetch_update(SeqCst, SeqCst, |pattern_start| Some(pattern_start - diff))
-                .unwrap();
+            self.clip_start.fetch_sub(diff, SeqCst);
         }
         self.global_start.store(global_start, SeqCst);
     }
@@ -122,13 +118,9 @@ impl AudioClip {
     pub fn move_to(&self, global_start: Position) {
         let diff = self.get_global_start().abs_diff(global_start);
         if self.get_global_start() < global_start {
-            self.global_end
-                .fetch_update(SeqCst, SeqCst, |global_end| Some(global_end + diff))
-                .unwrap();
+            self.global_end.fetch_add(diff, SeqCst);
         } else {
-            self.global_end
-                .fetch_update(SeqCst, SeqCst, |global_end| Some(global_end - diff))
-                .unwrap();
+            self.global_end.fetch_sub(diff, SeqCst);
         }
         self.global_start.store(global_start, SeqCst);
     }
