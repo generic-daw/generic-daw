@@ -4,7 +4,7 @@ use std::sync::{atomic::Ordering::SeqCst, Arc};
 
 #[derive(Debug)]
 pub struct MidiPattern {
-    pub notes: Vec<Arc<MidiNote>>,
+    pub notes: Vec<MidiNote>,
     pub(in crate::generic_back) dirty: Arc<Atomic<DirtyEvent>>,
 }
 
@@ -24,19 +24,19 @@ impl MidiPattern {
             .unwrap_or(0)
     }
 
-    pub fn push(&mut self, note: Arc<MidiNote>) {
+    pub fn push(&mut self, note: MidiNote) {
         self.notes.push(note);
         self.dirty.store(DirtyEvent::NoteAdded, SeqCst);
     }
 
     pub fn remove(&mut self, note: &MidiNote) {
-        let pos = self.notes.iter().position(|n| &**n == note).unwrap();
+        let pos = self.notes.iter().position(|n| n == note).unwrap();
         self.notes.remove(pos);
         self.dirty.store(DirtyEvent::NoteRemoved, SeqCst);
     }
 
-    pub fn replace(&mut self, note: &MidiNote, new_note: Arc<MidiNote>) {
-        let pos = self.notes.iter().position(|n| &**n == note).unwrap();
+    pub fn replace(&mut self, note: &MidiNote, new_note: MidiNote) {
+        let pos = self.notes.iter().position(|n| n == note).unwrap();
         self.notes[pos] = new_note;
         self.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
     }

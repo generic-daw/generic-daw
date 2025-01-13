@@ -21,11 +21,11 @@ pub struct PluginState {
     /// TODO: don't use the giga UB wrapper type here
     pub plugin: ClapPluginWrapper,
     /// the combined midi of all clips in the track
-    pub global_midi_cache: Vec<Arc<MidiNote>>,
+    pub global_midi_cache: Vec<MidiNote>,
     /// how the midi was modified since the last buffer refresh
     pub dirty: Arc<Atomic<DirtyEvent>>,
     /// all currently playing notes
-    pub started_notes: Vec<Arc<MidiNote>>,
+    pub started_notes: Vec<MidiNote>,
     /// the last global time that was fetched.
     ///
     /// use this to determine whether the playhead jumped
@@ -112,7 +112,7 @@ impl PluginState {
                     Pckn::new(0u8, note.channel, note.note, Match::All),
                     note.velocity,
                 ));
-                self.started_notes.push(note.clone());
+                self.started_notes.push(*note);
             });
 
         let mut indices = Vec::new();
@@ -166,7 +166,7 @@ impl PluginState {
                     Pckn::new(0u8, note.channel, note.note, Match::All),
                     note.velocity,
                 ));
-                self.started_notes.push(note.clone());
+                self.started_notes.push(*note);
             });
     }
 
@@ -190,7 +190,7 @@ impl PluginState {
                 Pckn::new(0u8, note.channel, note.note, Match::All),
                 note.velocity,
             ));
-            self.started_notes.push(note.clone());
+            self.started_notes.push(*note);
         }
     }
 
