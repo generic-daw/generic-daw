@@ -31,7 +31,7 @@ impl MidiPattern {
 
     pub fn remove(&mut self, note: &MidiNote) {
         let pos = self.notes.iter().position(|n| n == note).unwrap();
-        self.notes.remove(pos);
+        self.notes.swap_remove(pos);
         self.dirty.store(DirtyEvent::NoteRemoved, SeqCst);
     }
 

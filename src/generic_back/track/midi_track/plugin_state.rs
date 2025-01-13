@@ -99,31 +99,33 @@ impl PluginState {
     }
 
     fn events_refresh(&mut self, buffer: &mut EventBuffer, global_time: usize, steady_time: usize) {
-        self.global_midi_cache
-            .iter()
-            .filter(|note| {
-                note.local_start >= global_time && note.local_start < global_time + BUFFER_SIZE * 2
-            })
-            .for_each(|note| {
-                // notes that start during the running buffer
-                let time = note.local_start - global_time + steady_time;
-                buffer.push(&NoteOnEvent::new(
-                    time as u32,
-                    Pckn::new(0u8, note.channel, note.note, Match::All),
-                    note.velocity,
-                ));
-                self.started_notes.push(*note);
-            });
+        self.started_notes.extend(
+            self.global_midi_cache
+                .iter()
+                .filter(|note| {
+                    note.local_start >= global_time
+                        && note.local_start < global_time + BUFFER_SIZE * 2
+                })
+                .map(|note| {
+                    // notes that start during the running buffer
+                    let time = note.local_start - global_time + steady_time;
+                    buffer.push(&NoteOnEvent::new(
+                        time as u32,
+                        Pckn::new(0u8, note.channel, note.note, Match::All),
+                        note.velocity,
+                    ));
+                    *note
+                }),
+        );
 
-        let mut indices = Vec::new();
-
-        self.started_notes
+        let indices = self
+            .started_notes
             .iter()
             .enumerate()
             .filter(|(_, note)| {
                 note.local_end >= global_time && note.local_end < global_time + BUFFER_SIZE * 2
             })
-            .for_each(|(index, note)| {
+            .map(|(i, note)| {
                 // notes that end before the running buffer ends
                 let time = note.local_end - global_time + steady_time;
                 buffer.push(&NoteOffEvent::new(
@@ -131,11 +133,12 @@ impl PluginState {
                     Pckn::new(0u8, note.channel, note.note, Match::All),
                     note.velocity,
                 ));
-                indices.push(index);
-            });
+                i
+            })
+            .collect::<Box<_>>();
 
         indices.iter().rev().for_each(|i| {
-            self.started_notes.remove(*i);
+            self.started_notes.swap_remove(*i);
         });
     }
 
@@ -155,19 +158,20 @@ impl PluginState {
         });
 
         self.started_notes.clear();
-
-        self.global_midi_cache
-            .iter()
-            .filter(|note| note.local_start <= global_time && note.local_end > global_time)
-            .for_each(|note| {
-                // start all notes that would be currently playing
-                buffer.push(&NoteOnEvent::new(
-                    steady_time as u32,
-                    Pckn::new(0u8, note.channel, note.note, Match::All),
-                    note.velocity,
-                ));
-                self.started_notes.push(*note);
-            });
+        self.started_notes.extend(
+            self.global_midi_cache
+                .iter()
+                .filter(|note| note.local_start <= global_time && note.local_end > global_time)
+                .map(|note| {
+                    // start all notes that would be currently playing
+                    buffer.push(&NoteOnEvent::new(
+                        steady_time as u32,
+                        Pckn::new(0u8, note.channel, note.note, Match::All),
+                        note.velocity,
+                    ));
+                    *note
+                }),
+        );
     }
 
     fn note_add_events_refresh(
@@ -195,24 +199,24 @@ impl PluginState {
     }
 
     fn note_remove_events_refresh(&mut self, buffer: &mut EventBuffer, steady_time: usize) {
-        let mut indices = Vec::new();
-
-        self.started_notes
+        let indices = self
+            .started_notes
             .iter()
             .enumerate()
             .filter(|(_, note)| !self.global_midi_cache.contains(note))
-            .for_each(|(index, note)| {
+            .map(|(i, note)| {
                 // stop all started notes that are no longer in the pattern
                 buffer.push(&NoteOffEvent::new(
                     steady_time as u32,
                     Pckn::new(0u8, note.channel, note.note, Match::All),
                     note.velocity,
                 ));
-                indices.push(index);
-            });
+                i
+            })
+            .collect::<Box<_>>();
 
         indices.iter().rev().for_each(|i| {
-            self.started_notes.remove(*i);
+            self.started_notes.swap_remove(*i);
         });
     }
 }
