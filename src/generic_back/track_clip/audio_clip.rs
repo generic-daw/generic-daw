@@ -76,7 +76,6 @@ impl AudioClip {
             self.audio
                 .samples
                 .iter()
-                .copied()
                 .zip(buf[diff..].iter_mut())
                 .for_each(|(sample, buf)| {
                     *buf += sample;

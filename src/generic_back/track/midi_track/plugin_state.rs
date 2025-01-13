@@ -106,7 +106,7 @@ impl PluginState {
                     note.local_start >= global_time
                         && note.local_start < global_time + BUFFER_SIZE * 2
                 })
-                .map(|note| {
+                .map(|&note| {
                     // notes that start during the running buffer
                     let time = note.local_start - global_time + steady_time;
                     buffer.push(&NoteOnEvent::new(
@@ -114,7 +114,7 @@ impl PluginState {
                         Pckn::new(0u8, note.channel, note.note, Match::All),
                         note.velocity,
                     ));
-                    *note
+                    note
                 }),
         );
 
@@ -137,8 +137,8 @@ impl PluginState {
             })
             .collect::<Box<_>>();
 
-        indices.iter().rev().for_each(|i| {
-            self.started_notes.swap_remove(*i);
+        indices.iter().rev().for_each(|&i| {
+            self.started_notes.swap_remove(i);
         });
     }
 
@@ -162,14 +162,14 @@ impl PluginState {
             self.global_midi_cache
                 .iter()
                 .filter(|note| note.local_start <= global_time && note.local_end > global_time)
-                .map(|note| {
+                .map(|&note| {
                     // start all notes that would be currently playing
                     buffer.push(&NoteOnEvent::new(
                         steady_time as u32,
                         Pckn::new(0u8, note.channel, note.note, Match::All),
                         note.velocity,
                     ));
-                    *note
+                    note
                 }),
         );
     }
@@ -187,14 +187,14 @@ impl PluginState {
             .filter(|note| note.local_start <= global_time && note.local_end > global_time)
             .collect::<Box<_>>();
 
-        for note in new_notes {
+        for &note in new_notes {
             // start all new notes that would be currently playing
             buffer.push(&NoteOnEvent::new(
                 steady_time as u32,
                 Pckn::new(0u8, note.channel, note.note, Match::All),
                 note.velocity,
             ));
-            self.started_notes.push(*note);
+            self.started_notes.push(note);
         }
     }
 
@@ -215,8 +215,8 @@ impl PluginState {
             })
             .collect::<Box<_>>();
 
-        indices.iter().rev().for_each(|i| {
-            self.started_notes.swap_remove(*i);
+        indices.iter().rev().for_each(|&i| {
+            self.started_notes.swap_remove(i);
         });
     }
 }

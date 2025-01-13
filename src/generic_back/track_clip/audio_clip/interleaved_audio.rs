@@ -114,8 +114,7 @@ impl InterleavedAudio {
                 MinMaxResult::OneElement(x) => (x, x),
                 MinMaxResult::NoElements => unreachable!(),
             };
-            audio.lods[0].write().unwrap()[i] =
-                ((*min).mul_add(0.5, 0.5), (*max).mul_add(0.5, 0.5));
+            audio.lods[0].write().unwrap()[i] = (min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5));
         });
 
         (1..10).for_each(|i| {

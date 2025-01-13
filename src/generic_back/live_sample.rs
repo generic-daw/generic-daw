@@ -40,7 +40,6 @@ impl LiveSample {
 
             self.audio
                 .iter()
-                .copied()
                 .zip(buf[uidx..].iter_mut())
                 .for_each(|(s, buf)| {
                     *buf += s;
