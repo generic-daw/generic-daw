@@ -1,51 +1,13 @@
-[package]
-name = "generic-daw"
+[workspace]
+members = ["clap_host", "generic_daw_core", "generic_daw_gui"]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-only"
 
-[dependencies]
-anyhow = "1.0.95"
-async-channel = "2.3.1"
-atomig = { version = "0.4.2", features = ["derive"] }
-clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
-    "audio-ports",
-    "clack-host",
-    "gui",
-    "note-ports",
-    "params",
-    "raw-window-handle_06",
-    "state",
-    "timer",
-] }
-clack-host = { git = "https://github.com/prokopyl/clack.git" }
-cpal = "0.15.3"
-home = "0.5.11"
-hound = "3.5.1"
-iced = { version = "0.13.1", default-features = false, features = [
-    "advanced",
-    "wgpu",
-] }
-iced_aw = { version = "0.11.0", default-features = false, features = [
-    "number_input",
-] }
-iced_file_tree = "0.2.2"
-iced_fonts = { version = "0.1.1", features = ["bootstrap"] }
-iced_wgpu = { version = "0.13.5", features = ["geometry"] }
-include_data = "1.0.1"
-itertools = "0.14.0"
-itoa = "1.0.14"
-rfd = "0.15.2"
-rubato = { version = "0.16.1", default-features = false }
-strum = { version = "0.26.3", features = ["derive"] }
-symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
-walkdir = "2.5.0"
-winit = "0.30.8"
-
-[target.'cfg(target_os = "windows")'.dependencies]
-etcetera = "0.8.0"
-
-[lints.rust]
+[workspace.lints.rust]
 let-underscore = "warn"
 missing-copy-implementations = "warn"
 missing-debug-implementations = "warn"
@@ -57,11 +19,13 @@ unused_qualifications = "warn"
 # https://github.com/rust-lang/rust/issues/133167
 if-let-rescope = "allow"
 
-[lints.clippy]
+[workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 cast_possible_truncation = "allow"
 cast_precision_loss = "allow"
 cast_sign_loss = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
 
 nursery = { level = "warn", priority = -1 }
 missing-const-for-fn = "allow"

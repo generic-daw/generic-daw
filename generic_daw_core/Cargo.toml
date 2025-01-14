@@ -1,0 +1,20 @@
+[package]
+name = "generic_daw_core"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[lints]
+workspace = true
+
+[dependencies]
+clap_host = { path = "../clap_host" }
+
+atomig = { version = "0.4.2", features = ["derive"] }
+cpal = "0.15.3"
+include_data = "1.0.1"
+itertools = "0.14.0"
+hound = "3.5.1"
+rubato = { version = "0.16.1", default-features = false }
+strum = { version = "0.26.3", features = ["derive"] }
+symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }

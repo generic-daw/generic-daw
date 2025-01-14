@@ -1,0 +1,27 @@
+[package]
+name = "clap_host"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[lints]
+workspace = true
+
+[dependencies]
+clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
+    "audio-ports",
+    "clack-host",
+    "gui",
+    "note-ports",
+    "params",
+    "raw-window-handle_06",
+    "state",
+    "timer",
+] }
+clack-host = { git = "https://github.com/prokopyl/clack.git" }
+home = "0.5.11"
+walkdir = "2.5.0"
+winit = "0.30.8"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+etcetera = "0.8.0"

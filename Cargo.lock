@@ -111,12 +111,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anyhow"
-version = "1.0.95"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34ac096ce696dc2fcabef30516bb13c0a68a11d30131d3df6f04711467681b04"
-
-[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -600,6 +594,18 @@ name = "clap-sys"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61b04354981cd059bf376007c9361ded38b15de87972e634670799685b042197"
+
+[[package]]
+name = "clap_host"
+version = "0.1.0"
+dependencies = [
+ "clack-extensions",
+ "clack-host",
+ "etcetera",
+ "home",
+ "walkdir",
+ "winit",
+]
 
 [[package]]
 name = "clipboard-win"
@@ -1348,32 +1354,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "generic-daw"
+name = "generic_daw_core"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "async-channel",
  "atomig",
- "clack-extensions",
- "clack-host",
+ "clap_host",
  "cpal",
- "etcetera",
- "home",
  "hound",
+ "include_data",
+ "itertools 0.14.0",
+ "rubato",
+ "strum",
+ "symphonia",
+]
+
+[[package]]
+name = "generic_daw_gui"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "generic_daw_core",
+ "home",
  "iced",
  "iced_aw",
  "iced_file_tree",
  "iced_fonts",
  "iced_wgpu",
- "include_data",
- "itertools 0.14.0",
  "itoa",
  "rfd",
- "rubato",
  "strum",
- "symphonia",
- "walkdir",
- "winit",
 ]
 
 [[package]]
@@ -2171,9 +2180,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.22"
+version = "0.4.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
+checksum = "04cbf5b083de1c7e0222a7a51dbfdba1cbe1c6ab0b15e29fff3f6c077fd9cd9f"
 
 [[package]]
 name = "lru"
