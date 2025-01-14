@@ -9,6 +9,7 @@ workspace = true
 
 [dependencies]
 clap_host = { path = "../clap_host" }
+audio_graph = { path = "../audio_graph" }
 
 atomig = { version = "0.4.2", features = ["derive"] }
 cpal = "0.15.3"

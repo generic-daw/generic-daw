@@ -1,0 +1,12 @@
+[package]
+name = "audio_graph"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ahash = "0.8.11"
+atomig = "0.4.2"
+
+[lints]
+workspace = true

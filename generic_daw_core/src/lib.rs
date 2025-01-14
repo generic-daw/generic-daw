@@ -3,10 +3,7 @@ use cpal::{
     StreamConfig,
 };
 use include_data::include_f32s;
-use std::{
-    f32::consts::PI,
-    sync::{atomic::Ordering::SeqCst, Arc},
-};
+use std::sync::{atomic::Ordering::SeqCst, Arc};
 
 mod arrangement;
 mod denominator;
@@ -91,11 +88,4 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
 #[must_use]
 pub fn seconds_to_interleaved_samples(seconds: f32, meter: &Meter) -> f32 {
     seconds * meter.sample_rate.load(SeqCst) as f32 * 2.0
-}
-
-#[must_use]
-pub(crate) fn pan(angle: f32) -> (f32, f32) {
-    let angle = angle.mul_add(0.5, 0.5) * PI * 0.5;
-
-    (angle.cos(), angle.sin())
 }

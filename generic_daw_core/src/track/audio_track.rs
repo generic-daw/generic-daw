@@ -1,16 +1,31 @@
 use crate::{Meter, Position, Track, TrackClip};
 use atomig::Atomic;
+use audio_graph::AudioGraphNodeImpl;
 use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
 
 #[derive(Debug)]
 pub struct AudioTrack {
     /// these are all guaranteed to be `TrackClip::Audio`
     pub(crate) clips: RwLock<Vec<Arc<TrackClip>>>,
-    /// between 0.0 and 1.0
-    pub(crate) volume: Atomic<f32>,
-    /// between -1.0 (left) and 1.0 (right)
-    pub(crate) pan: Atomic<f32>,
+    /// 0 <= volume
+    pub volume: Atomic<f32>,
+    /// -1 <= pan <= 1
+    pub pan: Atomic<f32>,
     pub(crate) meter: Arc<Meter>,
+}
+
+impl AudioGraphNodeImpl for AudioTrack {
+    fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
+        if !self.meter.playing.load(SeqCst) && !self.meter.exporting.load(SeqCst) {
+            return;
+        }
+
+        self.clips
+            .read()
+            .unwrap()
+            .iter()
+            .for_each(|clip| clip.fill_buf(buf_start_sample, buf));
+    }
 }
 
 impl AudioTrack {
@@ -22,18 +37,6 @@ impl AudioTrack {
             pan: Atomic::new(0.0),
             meter,
         }))
-    }
-
-    pub fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
-        if !self.meter.playing.load(SeqCst) && !self.meter.exporting.load(SeqCst) {
-            return;
-        }
-
-        self.clips
-            .read()
-            .unwrap()
-            .iter()
-            .for_each(|clip| clip.fill_buf(buf_start_sample, buf));
     }
 
     #[must_use]

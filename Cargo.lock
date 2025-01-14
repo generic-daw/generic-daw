@@ -349,6 +349,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "audio_graph"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "atomig",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1358,6 +1366,7 @@ name = "generic_daw_core"
 version = "0.1.0"
 dependencies = [
  "atomig",
+ "audio_graph",
  "clap_host",
  "cpal",
  "hound",

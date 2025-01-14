@@ -120,7 +120,7 @@ impl Daw {
                         .map(FileHandle::path)
                         .map(PathBuf::from)
                         .map(|path| self.update(Message::LoadSample(path))),
-                )
+                );
             }
             Message::LoadSample(path) => {
                 let (tx, rx) = async_channel::bounded(1);

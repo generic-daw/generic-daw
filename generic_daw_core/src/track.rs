@@ -1,4 +1,5 @@
-use crate::{pan, Meter, Position, TrackClip};
+use crate::{Meter, Position, TrackClip};
+use audio_graph::{pan, AudioGraphNodeImpl};
 use audio_track::AudioTrack;
 use midi_track::MidiTrack;
 use std::sync::{atomic::Ordering::SeqCst, Arc, Mutex, RwLock};
@@ -14,8 +15,8 @@ pub enum Track {
 
 static TRACK_BUF: Mutex<Vec<f32>> = Mutex::new(vec![]);
 
-impl Track {
-    pub fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
+impl AudioGraphNodeImpl for Track {
+    fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         let mut track_buf = TRACK_BUF.lock().unwrap();
 
         for s in track_buf.iter_mut() {
@@ -40,7 +41,9 @@ impl Track {
             .zip(buf)
             .for_each(|(sample, buf)| *buf += sample);
     }
+}
 
+impl Track {
     #[must_use]
     pub fn clips(&self) -> &RwLock<Vec<Arc<TrackClip>>> {
         match self {

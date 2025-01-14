@@ -1,4 +1,5 @@
 use crate::{LiveSample, Meter, Position, Track};
+use audio_graph::{AudioGraph, AudioGraphNodeImpl as _};
 use hound::WavWriter;
 use std::{
     path::Path,
@@ -10,6 +11,8 @@ use std::{
 
 #[derive(Debug, Default)]
 pub struct Arrangement {
+    pub audio_graph: AudioGraph,
+    /// an in-order list of all the playlist tracks in the arrangement
     pub tracks: RwLock<Vec<Arc<Track>>>,
     /// information relating to the playback of the arrangement
     pub meter: Arc<Meter>,
@@ -66,7 +69,7 @@ impl Arrangement {
                 .unwrap()
                 .iter_mut()
                 .for_each(|s| {
-                    s.fill_buf(buf);
+                    s.fill_buf(buf_start_sample, buf);
                 });
 
             self.live_sample_playback

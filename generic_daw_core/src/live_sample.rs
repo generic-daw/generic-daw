@@ -1,3 +1,4 @@
+use audio_graph::AudioGraphNodeImpl;
 use std::sync::{
     atomic::{AtomicIsize, Ordering::SeqCst},
     Arc,
@@ -9,16 +10,8 @@ pub struct LiveSample {
     idx: AtomicIsize,
 }
 
-impl LiveSample {
-    #[must_use]
-    pub fn new(audio: Arc<[f32]>, before: usize) -> Self {
-        Self {
-            audio,
-            idx: AtomicIsize::new(-isize::try_from(before).unwrap()),
-        }
-    }
-
-    pub fn fill_buf(&self, buf: &mut [f32]) {
+impl AudioGraphNodeImpl for LiveSample {
+    fn fill_buf(&self, _: usize, buf: &mut [f32]) {
         let idx = self
             .idx
             .fetch_add(isize::try_from(buf.len()).unwrap(), SeqCst);
@@ -45,6 +38,16 @@ impl LiveSample {
                 .for_each(|(s, buf)| {
                     *buf += s;
                 });
+        }
+    }
+}
+
+impl LiveSample {
+    #[must_use]
+    pub fn new(audio: Arc<[f32]>, before: usize) -> Self {
+        Self {
+            audio,
+            idx: AtomicIsize::new(-isize::try_from(before).unwrap()),
         }
     }
 
