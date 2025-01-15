@@ -1,4 +1,5 @@
 use crate::Meter;
+use anyhow::Result;
 use itertools::{Itertools as _, MinMaxResult};
 use rubato::{
     Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
@@ -39,8 +40,7 @@ impl Debug for InterleavedAudio {
 }
 
 impl InterleavedAudio {
-    #[must_use]
-    pub fn create(path: PathBuf, meter: &Meter) -> Option<Arc<Self>> {
+    pub fn create(path: PathBuf, meter: &Meter) -> Result<Arc<Self>> {
         let samples = Self::read_audio_file(&path, meter)?;
         let length = samples.len();
 
@@ -53,7 +53,7 @@ impl InterleavedAudio {
         });
 
         Self::create_lod(&audio);
-        Some(audio)
+        Ok(audio)
     }
 
     #[must_use]
@@ -66,7 +66,7 @@ impl InterleavedAudio {
         self.len() == 0
     }
 
-    fn read_audio_file(path: &PathBuf, meter: &Meter) -> Option<Box<[f32]>> {
+    fn read_audio_file(path: &PathBuf, meter: &Meter) -> Result<Box<[f32]>> {
         let mut format = symphonia::default::get_probe()
             .format(
                 &Hint::default(),
@@ -76,8 +76,7 @@ impl InterleavedAudio {
                 ),
                 &FormatOptions::default(),
                 &MetadataOptions::default(),
-            )
-            .ok()?
+            )?
             .format;
 
         let track = format.default_track().unwrap();
@@ -88,8 +87,7 @@ impl InterleavedAudio {
             Vec::with_capacity(track.codec_params.n_frames.unwrap() as usize * 2);
 
         let mut decoder = symphonia::default::get_codecs()
-            .make(&track.codec_params, &DecoderOptions::default())
-            .ok()?;
+            .make(&track.codec_params, &DecoderOptions::default())?;
 
         let mut sample_buffer = None;
         while let Ok(packet) = format.next_packet() {
@@ -97,20 +95,19 @@ impl InterleavedAudio {
                 continue;
             }
 
-            match decoder.decode(&packet) {
-                Ok(audio_buf) => {
-                    if sample_buffer.is_none() {
-                        let spec = *audio_buf.spec();
-                        let duration = audio_buf.frames() as u64;
-                        sample_buffer = Some(SampleBuffer::<f32>::new(duration, spec));
-                    }
-                    if let Some(buf) = &mut sample_buffer {
-                        buf.copy_interleaved_ref(audio_buf);
-                        interleaved_samples.extend(buf.samples());
-                    }
-                }
-                Err(_) => return None,
-            }
+            let audio_buf = decoder.decode(&packet)?;
+
+            let buf = if let Some(buf) = &mut sample_buffer {
+                buf
+            } else {
+                let spec = *audio_buf.spec();
+                let duration = audio_buf.frames() as u64;
+                sample_buffer.replace(SampleBuffer::<f32>::new(duration, spec));
+                sample_buffer.as_mut().unwrap()
+            };
+
+            buf.copy_interleaved_ref(audio_buf);
+            interleaved_samples.extend(buf.samples());
         }
 
         let stream_sample_rate = meter.sample_rate.load(SeqCst);
@@ -158,14 +155,13 @@ impl InterleavedAudio {
     }
 }
 
-#[must_use]
 pub fn resample(
     file_sample_rate: u32,
     stream_sample_rate: u32,
     mut interleaved_samples: Vec<f32>,
-) -> Option<Vec<f32>> {
+) -> Result<Vec<f32>> {
     if file_sample_rate == stream_sample_rate {
-        return Some(interleaved_samples);
+        return Ok(interleaved_samples);
     }
 
     let resample_ratio = f64::from(stream_sample_rate) / f64::from(file_sample_rate);
@@ -184,8 +180,7 @@ pub fn resample(
         },
         interleaved_samples.len() / 2,
         2,
-    )
-    .ok()?;
+    )?;
 
     let left = interleaved_samples
         .iter()
@@ -199,7 +194,7 @@ pub fn resample(
         .copied()
         .collect();
 
-    let deinterleaved_samples = resampler.process(&[left, right], None).ok()?;
+    let deinterleaved_samples = resampler.process(&[left, right], None)?;
 
     interleaved_samples.clear();
     interleaved_samples.extend(
@@ -208,7 +203,7 @@ pub fn resample(
             .interleave(&deinterleaved_samples[1]),
     );
 
-    Some(interleaved_samples)
+    Ok(interleaved_samples)
 }
 
 fn gcd(mut a: u32, mut b: u32) -> u32 {

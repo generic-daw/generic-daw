@@ -7,6 +7,12 @@ use std::{
 #[derive(Clone, Debug)]
 pub struct AudioGraphNode(Arc<dyn AudioGraphNodeImpl>);
 
+impl AudioGraphNodeImpl for AudioGraphNode {
+    fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
+        self.0.fill_buf(buf_start_sample, buf);
+    }
+}
+
 impl Default for AudioGraphNode {
     fn default() -> Self {
         Self(Arc::new(MixerNode::default()))

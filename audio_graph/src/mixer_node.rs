@@ -1,9 +1,8 @@
 use crate::{pan, AudioGraphNodeImpl};
-use ahash::AHashSet;
 use atomig::Atomic;
 use std::sync::{
     atomic::{AtomicUsize, Ordering::SeqCst},
-    Arc, Mutex, RwLock,
+    Mutex,
 };
 
 #[derive(Debug)]
@@ -12,7 +11,6 @@ pub struct MixerNode {
     pub volume: Atomic<f32>,
     /// -1 <= pan <= 1
     pub pan: Atomic<f32>,
-    pub children: RwLock<AHashSet<Arc<dyn AudioGraphNodeImpl>>>,
     buf: Mutex<Vec<f32>>,
     last_sample: AtomicUsize,
 }
@@ -28,12 +26,6 @@ impl AudioGraphNodeImpl for MixerNode {
             }
 
             node_buf.resize(buf.len(), 0.0);
-
-            self.children
-                .read()
-                .unwrap()
-                .iter()
-                .for_each(|from| from.fill_buf(buf_start_sample, buf));
 
             let volume = self.volume.load(SeqCst);
             let (mut lpan, mut rpan) = pan(self.pan.load(SeqCst));
@@ -57,7 +49,6 @@ impl Default for MixerNode {
         Self {
             volume: Atomic::new(1.0),
             pan: Atomic::default(),
-            children: RwLock::default(),
             buf: Mutex::default(),
             last_sample: AtomicUsize::new(usize::MAX),
         }

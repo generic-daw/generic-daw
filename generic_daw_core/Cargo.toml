@@ -19,3 +19,4 @@ hound = "3.5.1"
 rubato = { version = "0.16.1", default-features = false }
 strum = { version = "0.26.3", features = ["derive"] }
 symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
+anyhow = "1.0.95"
