@@ -7,6 +7,7 @@ license.workspace = true
 [dependencies]
 ahash = "0.8.11"
 atomig = "0.4.2"
+downcast-rs = "2.0.1"
 
 [lints]
 workspace = true

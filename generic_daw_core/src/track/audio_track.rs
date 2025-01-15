@@ -30,7 +30,7 @@ impl AudioGraphNodeImpl for AudioTrack {
 
 impl AudioTrack {
     #[must_use]
-    pub fn create(meter: Arc<Meter>) -> Arc<Track> {
+    pub fn create(meter: Arc<Meter>) -> Arc<dyn AudioGraphNodeImpl> {
         Arc::new(Track::Audio(Self {
             clips: RwLock::default(),
             volume: Atomic::new(1.0),

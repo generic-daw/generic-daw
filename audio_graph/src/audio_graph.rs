@@ -5,12 +5,31 @@ use std::{cmp::Ordering, collections::hash_map::Entry, sync::Mutex};
 #[derive(Debug, Default)]
 pub struct AudioGraph(Mutex<AudioGraphInner>);
 
-#[derive(Debug, Default)]
+impl AudioGraph {
+    pub fn root(&self) -> AudioGraphNode {
+        self.0.lock().unwrap().root.clone()
+    }
+}
+
+#[derive(Debug)]
 struct AudioGraphInner {
     root: AudioGraphNode,
     g: AHashMap<AudioGraphNode, AHashSet<AudioGraphNode>>,
     l: Vec<AudioGraphNode>,
     dirty: bool,
+}
+
+impl Default for AudioGraphInner {
+    fn default() -> Self {
+        let root = AudioGraphNode::default();
+
+        Self {
+            root: root.clone(),
+            g: AHashMap::from_iter([(root.clone(), AHashSet::default())]),
+            l: vec![root],
+            dirty: false,
+        }
+    }
 }
 
 impl AudioGraphNodeImpl for AudioGraph {
@@ -50,7 +69,7 @@ impl AudioGraphNodeImpl for AudioGraph {
 impl AudioGraph {
     #[must_use]
     /// for now it's the caller's responsibility to make sure the graph stays acyclic
-    pub fn connect(&mut self, from: &AudioGraphNode, to: &AudioGraphNode) -> bool {
+    pub fn connect(&self, from: &AudioGraphNode, to: &AudioGraphNode) -> bool {
         let AudioGraphInner { g, dirty, root, .. } = &mut *self.0.lock().unwrap();
         debug_assert_ne!(to, root);
 
@@ -65,7 +84,7 @@ impl AudioGraph {
     }
 
     #[must_use]
-    pub fn disconnect(&mut self, from: &AudioGraphNode, to: &AudioGraphNode) -> bool {
+    pub fn disconnect(&self, from: &AudioGraphNode, to: &AudioGraphNode) -> bool {
         let AudioGraphInner { g, dirty, .. } = &mut *self.0.lock().unwrap();
 
         g.get_mut(from).is_some_and(|v| {
@@ -80,7 +99,7 @@ impl AudioGraph {
 
     #[expect(tail_expr_drop_order)]
     #[must_use]
-    pub fn add(&mut self, node: AudioGraphNode) -> bool {
+    pub fn add(&self, node: AudioGraphNode) -> bool {
         let mut inner = self.0.lock().unwrap();
 
         if let Entry::Vacant(vacant) = inner.g.entry(node.clone()) {
@@ -96,12 +115,9 @@ impl AudioGraph {
     }
 
     #[must_use]
-    pub fn remove(&mut self, node: &AudioGraphNode) -> bool {
+    pub fn remove(&self, node: &AudioGraphNode) -> bool {
         let mut inner = self.0.lock().unwrap();
-
-        if *node == inner.root {
-            return false;
-        }
+        debug_assert_ne!(&inner.root, node);
 
         if inner.g.remove(node).is_some() {
             inner.dirty = true;

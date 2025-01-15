@@ -57,11 +57,7 @@ impl Arrangement {
             }
         }
 
-        self.tracks
-            .read()
-            .unwrap()
-            .iter()
-            .for_each(|track| track.fill_buf(buf_start_sample, buf));
+        self.audio_graph.fill_buf(buf_start_sample, buf);
 
         if !self.meter.exporting.load(SeqCst) {
             self.live_sample_playback
