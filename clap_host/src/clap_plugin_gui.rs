@@ -15,7 +15,6 @@ impl Debug for ClapPluginGui {
 }
 
 impl ClapPluginGui {
-    #[must_use]
     pub(crate) fn new(instance: PluginInstance<Host>, gui: GuiExt) -> Self {
         Self { instance, gui }
     }

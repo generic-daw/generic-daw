@@ -102,7 +102,7 @@ impl InterleavedAudio {
             } else {
                 let spec = *audio_buf.spec();
                 let duration = audio_buf.frames() as u64;
-                sample_buffer.replace(SampleBuffer::<f32>::new(duration, spec));
+                sample_buffer.replace(SampleBuffer::new(duration, spec));
                 sample_buffer.as_mut().unwrap()
             };
 
@@ -168,7 +168,7 @@ pub fn resample(
     let oversampling_factor =
         (file_sample_rate / gcd(stream_sample_rate, file_sample_rate)) as usize;
 
-    let mut resampler = SincFixedIn::<f32>::new(
+    let mut resampler = SincFixedIn::new(
         resample_ratio,
         1.0,
         SincInterpolationParameters {

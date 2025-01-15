@@ -5,7 +5,7 @@ use clack_extensions::{
 };
 use clack_host::prelude::*;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct Host;
 
 #[derive(Debug)]

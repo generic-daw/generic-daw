@@ -54,7 +54,7 @@ impl ClapHost {
             Message::CloseRequested(id) => {
                 self.windows.remove(&id).unwrap().destroy();
                 self.closed.replace(id);
-                return window::close::<Id>(id).discard();
+                return window::close::<()>(id).discard();
             }
             Message::Closed => {
                 if self.closed.take().is_none() {

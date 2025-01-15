@@ -106,7 +106,7 @@ pub fn open_gui(
 
     let factory = bundle.get_plugin_factory().unwrap();
     let plugin_descriptor = factory.plugin_descriptors().next().unwrap();
-    let mut instance = PluginInstance::<Host>::new(
+    let mut instance = PluginInstance::new(
         |()| Shared::new(sender_host.clone()),
         |shared| MainThread::new(shared),
         bundle,
