@@ -70,7 +70,7 @@ impl AudioGraph {
     #[must_use]
     /// for now it's the caller's responsibility to make sure the graph stays acyclic
     pub fn connect(&self, from: &AudioGraphNode, to: &AudioGraphNode) -> bool {
-        let AudioGraphInner { g, dirty, root, .. } = &mut *self.0.lock().unwrap();
+        let AudioGraphInner { root, g, dirty, .. } = &mut *self.0.lock().unwrap();
         debug_assert_ne!(to, root);
 
         g.get_mut(from).is_some_and(|v| {
@@ -100,14 +100,13 @@ impl AudioGraph {
     #[expect(tail_expr_drop_order)]
     #[must_use]
     pub fn add(&self, node: AudioGraphNode) -> bool {
-        let mut inner = self.0.lock().unwrap();
+        let AudioGraphInner { g, l, dirty, .. } = &mut *self.0.lock().unwrap();
 
-        if let Entry::Vacant(vacant) = inner.g.entry(node.clone()) {
+        if let Entry::Vacant(vacant) = g.entry(node.clone()) {
             vacant.insert(AHashSet::default());
-            inner.l.push(node);
+            l.push(node);
 
-            inner.dirty = true;
-
+            *dirty = true;
             true
         } else {
             false
@@ -116,21 +115,20 @@ impl AudioGraph {
 
     #[must_use]
     pub fn remove(&self, node: &AudioGraphNode) -> bool {
-        let mut inner = self.0.lock().unwrap();
-        debug_assert_ne!(&inner.root, node);
+        let AudioGraphInner {
+            root, g, l, dirty, ..
+        } = &mut *self.0.lock().unwrap();
+        debug_assert_ne!(root, node);
 
-        if inner.g.remove(node).is_some() {
-            inner.dirty = true;
+        if g.remove(node).is_some() {
+            let idx = l.iter().position(|n| n == node).unwrap();
+            l.swap_remove(idx);
 
-            let idx = inner.l.iter().position(|n| n == node).unwrap();
-            inner.l.swap_remove(idx);
-
-            for e in inner.g.values_mut() {
+            for e in g.values_mut() {
                 e.remove(node);
             }
 
-            drop(inner);
-
+            *dirty = true;
             true
         } else {
             false
