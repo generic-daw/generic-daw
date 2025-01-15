@@ -1,3 +1,4 @@
+use audio_graph::AudioGraphNodeImpl as _;
 use cpal::{
     traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
     StreamConfig,

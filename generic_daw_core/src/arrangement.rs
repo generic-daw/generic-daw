@@ -1,5 +1,5 @@
 use crate::{LiveSample, Meter, Position, Track};
-use audio_graph::{AudioGraph, AudioGraphNodeImpl as _};
+use audio_graph::{AudioGraph, AudioGraphNodeImpl};
 use hound::WavWriter;
 use std::{
     path::Path,
@@ -24,13 +24,8 @@ pub struct Arrangement {
     pub(crate) off_bar_click: OnceLock<Arc<[f32]>>,
 }
 
-impl Arrangement {
-    #[must_use]
-    pub fn create() -> Arc<Self> {
-        Arc::new(Self::default())
-    }
-
-    pub fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
+impl AudioGraphNodeImpl for Arrangement {
+    fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         if self.meter.playing.load(SeqCst) && self.metronome.load(SeqCst) {
             let mut buf_start_pos =
                 Position::from_interleaved_samples(buf_start_sample, &self.meter);
@@ -73,6 +68,13 @@ impl Arrangement {
                 .unwrap()
                 .retain(|sample| !sample.over());
         }
+    }
+}
+
+impl Arrangement {
+    #[must_use]
+    pub fn create() -> Arc<Self> {
+        Arc::new(Self::default())
     }
 
     #[must_use]
