@@ -10,19 +10,13 @@ struct AudioGraphInner {
     root: AudioGraphNode,
     g: AHashMap<AudioGraphNode, AHashSet<AudioGraphNode>>,
     l: Vec<AudioGraphNode>,
-    b: Vec<f32>,
     dirty: bool,
 }
 
 impl AudioGraphNodeImpl for AudioGraph {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         let AudioGraphInner {
-            root,
-            g,
-            l,
-            b,
-            dirty,
-            ..
+            root, g, l, dirty, ..
         } = &mut *self.0.lock().unwrap();
 
         if *dirty {
@@ -40,17 +34,16 @@ impl AudioGraphNodeImpl for AudioGraph {
         }
 
         for node in l.iter().rev() {
-            b.clear();
-            b.resize(buf.len(), 0.0);
-
-            for node in &g[node] {
-                node.fill_buf(buf_start_sample, b);
+            for s in buf.iter_mut() {
+                *s = 0.0;
             }
 
-            node.fill_buf(buf_start_sample, b);
-        }
+            for node in &g[node] {
+                node.fill_buf(buf_start_sample, buf);
+            }
 
-        buf.iter_mut().zip(b).for_each(|(buf, b)| *buf = *b);
+            node.fill_buf(buf_start_sample, buf);
+        }
     }
 }
 
