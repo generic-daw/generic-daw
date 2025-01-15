@@ -66,10 +66,6 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
                     arrangement.meter.sample.load(SeqCst)
                 };
 
-                for s in data.iter_mut() {
-                    *s = 0.0;
-                }
-
                 arrangement.fill_buf(sample, data);
 
                 for s in data {
