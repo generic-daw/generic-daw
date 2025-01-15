@@ -21,7 +21,7 @@ clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
 home = "0.5.11"
 walkdir = "2.5.0"
-winit = "0.30.8"
+winit = { version = "0.30.8", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 etcetera = "0.8.0"
