@@ -85,28 +85,20 @@ impl AudioGraph {
 
     #[must_use]
     pub fn disconnect(&self, from: &AudioGraphNode, to: &AudioGraphNode) -> bool {
-        let AudioGraphInner { g, dirty, .. } = &mut *self.0.lock().unwrap();
+        let AudioGraphInner { g, .. } = &mut *self.0.lock().unwrap();
 
-        g.get_mut(from).is_some_and(|v| {
-            if v.remove(to) {
-                *dirty = true;
-                true
-            } else {
-                false
-            }
-        })
+        g.get_mut(from).is_some_and(|v| v.remove(to))
     }
 
     #[expect(tail_expr_drop_order)]
     #[must_use]
     pub fn add(&self, node: AudioGraphNode) -> bool {
-        let AudioGraphInner { g, l, dirty, .. } = &mut *self.0.lock().unwrap();
+        let AudioGraphInner { g, l, .. } = &mut *self.0.lock().unwrap();
 
         if let Entry::Vacant(vacant) = g.entry(node.clone()) {
             vacant.insert(AHashSet::default());
             l.push(node);
 
-            *dirty = true;
             true
         } else {
             false
@@ -115,20 +107,17 @@ impl AudioGraph {
 
     #[must_use]
     pub fn remove(&self, node: &AudioGraphNode) -> bool {
-        let AudioGraphInner {
-            root, g, l, dirty, ..
-        } = &mut *self.0.lock().unwrap();
+        let AudioGraphInner { root, g, l, .. } = &mut *self.0.lock().unwrap();
         debug_assert_ne!(root, node);
 
         if g.remove(node).is_some() {
             let idx = l.iter().position(|n| n == node).unwrap();
-            l.swap_remove(idx);
+            l.remove(idx);
 
             for e in g.values_mut() {
                 e.remove(node);
             }
 
-            *dirty = true;
             true
         } else {
             false
