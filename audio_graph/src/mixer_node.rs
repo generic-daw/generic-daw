@@ -15,6 +15,17 @@ pub struct MixerNode {
     last_sample: AtomicUsize,
 }
 
+impl Default for MixerNode {
+    fn default() -> Self {
+        Self {
+            volume: Atomic::new(1.0),
+            pan: Atomic::default(),
+            buf: Mutex::default(),
+            last_sample: AtomicUsize::new(usize::MAX),
+        }
+    }
+}
+
 impl AudioGraphNodeImpl for MixerNode {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         let mut node_buf = self.buf.lock().unwrap();
@@ -38,16 +49,5 @@ impl AudioGraphNodeImpl for MixerNode {
             .iter()
             .zip(buf)
             .for_each(|(sample, buf)| *buf += sample);
-    }
-}
-
-impl Default for MixerNode {
-    fn default() -> Self {
-        Self {
-            volume: Atomic::new(1.0),
-            pan: Atomic::default(),
-            buf: Mutex::default(),
-            last_sample: AtomicUsize::new(usize::MAX),
-        }
     }
 }

@@ -116,7 +116,7 @@ impl Arrangement {
                 }
             });
 
-        writer.flush().unwrap();
+        writer.finalize().unwrap();
 
         self.meter.exporting.store(false, SeqCst);
         self.live_sample_playback.write().unwrap().clear();

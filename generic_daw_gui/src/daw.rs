@@ -27,13 +27,6 @@ use std::{
 };
 use strum::VariantArray as _;
 
-pub struct Daw {
-    arrangement: Arc<ArrangementInner>,
-    clap_host: ClapHost,
-    theme: Theme,
-    _stream: Stream,
-}
-
 #[derive(Clone, Debug, Default)]
 pub enum Message {
     #[default]
@@ -55,6 +48,13 @@ pub enum Message {
     NumeratorChanged(Numerator),
     DenominatorChanged(Denominator),
     ToggleMetronome,
+}
+
+pub struct Daw {
+    arrangement: Arc<ArrangementInner>,
+    clap_host: ClapHost,
+    theme: Theme,
+    _stream: Stream,
 }
 
 impl Default for Daw {
