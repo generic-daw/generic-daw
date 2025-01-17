@@ -594,7 +594,7 @@ where
     ) -> Option<Status> {
         if let Event::Mouse(event) = event {
             match event {
-                mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                mouse::Event::ButtonReleased(_) => {
                     state.action = Action::None;
                     return Some(Status::Captured);
                 }
