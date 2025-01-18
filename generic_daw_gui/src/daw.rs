@@ -6,7 +6,7 @@ use generic_daw_core::{
     build_output_stream,
     clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, open_gui},
     Arrangement as ArrangementInner, AudioClip, AudioTrack, Denominator, InterleavedAudio,
-    Numerator, Stream, Track,
+    Numerator, Stream,
 };
 use home::home_dir;
 use iced::{
@@ -137,18 +137,20 @@ impl Daw {
                     .map(Message::LoadedSample);
             }
             Message::LoadedSample(audio_file) => {
-                let track = AudioTrack::create(self.arrangement.meter.clone());
-                let mut ok = self.arrangement.audio_graph.add(track.clone().into());
-                ok |= self
+                let (node, track) = AudioTrack::create(self.arrangement.meter.clone());
+
+                let mut ok = true;
+                ok &= self.arrangement.audio_graph.add(node.clone());
+                ok &= self
                     .arrangement
                     .audio_graph
-                    .connect(&self.arrangement.audio_graph.root(), &track.clone().into());
-                let track = track.downcast_arc::<Track>().unwrap();
-                ok |= track.try_push(&AudioClip::create(
+                    .connect(&self.arrangement.audio_graph.root(), &node);
+                ok &= track.try_push(&AudioClip::create(
                     audio_file,
                     self.arrangement.meter.clone(),
                 ));
                 debug_assert!(ok);
+
                 self.arrangement.tracks.write().unwrap().push(track);
             }
             Message::ExportButton => {

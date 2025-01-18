@@ -1,5 +1,6 @@
 use crate::{Meter, Position, Track, TrackClip};
 use atomig::Atomic;
+use audio_graph::{AudioGraphNode, AudioGraphNodeImpl};
 use clap_host::PluginAudioProcessor;
 use plugin_state::PluginState;
 use std::sync::{Arc, Mutex, RwLock};
@@ -22,14 +23,16 @@ pub struct MidiTrack {
 
 impl MidiTrack {
     #[must_use]
-    pub fn create(plugin: PluginAudioProcessor, meter: Arc<Meter>) -> Arc<Track> {
-        Arc::new(Track::Midi(Self {
+    pub fn create(plugin: PluginAudioProcessor, meter: Arc<Meter>) -> (AudioGraphNode, Arc<Track>) {
+        let v: Arc<dyn AudioGraphNodeImpl> = Arc::new(Track::Midi(Self {
             clips: RwLock::default(),
             volume: Atomic::new(1.0),
             pan: Atomic::new(0.0),
             plugin_state: PluginState::create(plugin),
             meter,
-        }))
+        }));
+
+        (v.clone().into(), v.downcast_arc::<Track>().unwrap())
     }
 
     #[must_use]

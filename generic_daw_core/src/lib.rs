@@ -16,6 +16,7 @@ mod track;
 mod track_clip;
 
 pub use arrangement::Arrangement;
+pub use audio_graph;
 pub use clap_host;
 pub use cpal::Stream;
 pub use denominator::Denominator;
