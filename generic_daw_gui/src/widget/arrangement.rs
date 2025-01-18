@@ -39,6 +39,9 @@ enum Action {
     ClipTrimmingEnd(Arc<TrackClip>, f32),
 }
 
+/// how many pixels to scroll per scroll wheel movement
+const SWM: f32 = 50.0;
+
 #[derive(Default)]
 struct State<'a, Message> {
     position: Rc<ArrangementPosition>,
@@ -212,30 +215,13 @@ where
             state.modifiers.shift(),
             state.modifiers.alt(),
         ) {
-            (false, false, false) => {
-                if let Some(status) = self.on_event_no_modifiers(state, &event, pos, shell) {
-                    return status;
-                }
-            }
-            (true, false, false) => {
-                if let Some(status) = self.on_event_command(state, &event, pos, shell) {
-                    return status;
-                }
-            }
-            (false, true, false) => {
-                if let Some(status) = self.on_event_shift(state, &event) {
-                    return status;
-                }
-            }
-            (false, false, true) => {
-                if let Some(status) = self.on_event_alt(state, &event, pos, shell) {
-                    return status;
-                }
-            }
-            _ => {}
+            (false, false, false) => self.on_event_no_modifiers(state, &event, pos, shell),
+            (true, false, false) => self.on_event_command(state, &event, pos, shell),
+            (false, true, false) => self.on_event_shift(state, &event),
+            (false, false, true) => self.on_event_alt(state, &event, pos, shell),
+            _ => None,
         }
-
-        Status::Ignored
+        .unwrap_or(Status::Ignored)
     }
 
     fn mouse_interaction(
@@ -621,25 +607,30 @@ where
                         let time = (cursor.x + offset)
                             .mul_add(state.scale.x.get().exp2(), state.position.x.get())
                             as usize;
-                        let mut new_position =
+
+                        let mut new_start =
                             Position::from_interleaved_samples(time, &self.inner.meter);
 
                         if !state.modifiers.alt() {
-                            new_position =
-                                new_position.snap(state.scale.x.get(), &self.inner.meter);
+                            new_start = new_start.snap(state.scale.x.get(), &self.inner.meter);
                         }
 
-                        if new_position != clip.get_global_start() {
-                            clip.move_to(new_position);
+                        if new_start != clip.get_global_start() {
+                            clip.move_to(new_start);
 
                             state.waveform_cache.borrow_mut().take();
                             shell.invalidate_layout();
                         }
 
                         let new_index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
-                        if index != &new_index
-                            && new_index < self.inner.tracks.read().unwrap().len()
-                            && self.inner.tracks.read().unwrap()[new_index].try_push(clip)
+                        if *index != new_index
+                            && self
+                                .inner
+                                .tracks
+                                .read()
+                                .unwrap()
+                                .get(new_index)?
+                                .try_push(clip)
                         {
                             self.inner.tracks.read().unwrap()[*index].remove_clip(clip);
 
@@ -652,43 +643,44 @@ where
                         return Some(Status::Captured);
                     }
                     Action::DeletingClips => {
-                        if cursor.y > LINE_HEIGHT {
-                            let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
-                            if index < self.inner.tracks.read().unwrap().len() {
-                                let time = cursor
-                                    .x
-                                    .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-                                    as usize;
-
-                                let clip = state.tracks.borrow()[index]
-                                    .get_clip_at_global_time(&self.inner.meter, time);
-
-                                if let Some(clip) = clip {
-                                    self.inner.tracks.read().unwrap()[index].remove_clip(&clip);
-
-                                    state.waveform_cache.borrow_mut().take();
-                                    shell.invalidate_layout();
-
-                                    return Some(Status::Captured);
-                                }
-                            }
+                        if cursor.y < LINE_HEIGHT {
+                            return None;
                         }
+
+                        let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
+
+                        let time = cursor
+                            .x
+                            .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                            as usize;
+
+                        let clip = state
+                            .tracks
+                            .borrow()
+                            .get(index)?
+                            .get_clip_at_global_time(&self.inner.meter, time)?;
+
+                        self.inner.tracks.read().unwrap()[index].remove_clip(&clip);
+
+                        state.waveform_cache.borrow_mut().take();
+                        shell.invalidate_layout();
+
+                        return Some(Status::Captured);
                     }
                     Action::ClipTrimmingStart(clip, offset) => {
                         let time = (cursor.x + offset)
                             .mul_add(state.scale.x.get().exp2(), state.position.x.get())
                             as usize;
 
-                        let mut new_position =
+                        let mut new_start =
                             Position::from_interleaved_samples(time, &self.inner.meter);
 
                         if !state.modifiers.alt() {
-                            new_position =
-                                new_position.snap(state.scale.x.get(), &self.inner.meter);
+                            new_start = new_start.snap(state.scale.x.get(), &self.inner.meter);
                         }
 
-                        if new_position != clip.get_global_start() {
-                            clip.trim_start_to(new_position);
+                        if new_start != clip.get_global_start() {
+                            clip.trim_start_to(new_start);
 
                             state.waveform_cache.borrow_mut().take();
                             shell.invalidate_layout();
@@ -700,16 +692,16 @@ where
                         let time = (cursor.x + offset)
                             .mul_add(state.scale.x.get().exp2(), state.position.x.get())
                             as usize;
-                        let mut new_position =
+
+                        let mut new_end =
                             Position::from_interleaved_samples(time, &self.inner.meter);
 
                         if !state.modifiers.alt() {
-                            new_position =
-                                new_position.snap(state.scale.x.get(), &self.inner.meter);
+                            new_end = new_end.snap(state.scale.x.get(), &self.inner.meter);
                         }
 
-                        if new_position != clip.get_global_start() {
-                            clip.trim_end_to(new_position);
+                        if new_end != clip.get_global_end() {
+                            clip.trim_end_to(new_end);
 
                             state.waveform_cache.borrow_mut().take();
                             shell.invalidate_layout();
@@ -737,7 +729,7 @@ where
                 mouse::Event::WheelScrolled { delta } => {
                     let (x, y) = match delta {
                         ScrollDelta::Pixels { x, y } => (x * 2.0, y * 4.0),
-                        ScrollDelta::Lines { x, y } => (x * 100.0, y * 200.0),
+                        ScrollDelta::Lines { x, y } => (x * 2.0 * SWM, y * 4.0 * SWM),
                     };
 
                     let x = x
@@ -768,34 +760,34 @@ where
                 }
                 mouse::Event::ButtonPressed(button) => match button {
                     mouse::Button::Left => {
-                        if let Some(status) = self.lmb_none_or_alt(state, cursor) {
-                            return Some(status);
-                        }
+                        return self.lmb_default(state, cursor);
                     }
                     mouse::Button::Right => {
-                        if cursor.y > LINE_HEIGHT {
-                            let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
-                            if index < self.inner.tracks.read().unwrap().len() {
-                                let time = cursor
-                                    .x
-                                    .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-                                    as usize;
-
-                                let clip = state.tracks.borrow()[index]
-                                    .get_clip_at_global_time(&self.inner.meter, time);
-
-                                if let Some(clip) = clip {
-                                    self.inner.tracks.read().unwrap()[index].remove_clip(&clip);
-
-                                    state.waveform_cache.borrow_mut().take();
-                                    shell.invalidate_layout();
-
-                                    state.action = Action::DeletingClips;
-
-                                    return Some(Status::Captured);
-                                }
-                            }
+                        if cursor.y < LINE_HEIGHT {
+                            return None;
                         }
+
+                        let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
+
+                        let time = cursor
+                            .x
+                            .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                            as usize;
+
+                        let clip = state
+                            .tracks
+                            .borrow()
+                            .get(index)?
+                            .get_clip_at_global_time(&self.inner.meter, time)?;
+
+                        self.inner.tracks.read().unwrap()[index].remove_clip(&clip);
+
+                        state.waveform_cache.borrow_mut().take();
+                        shell.invalidate_layout();
+
+                        state.action = Action::DeletingClips;
+
+                        return Some(Status::Captured);
                     }
                     _ => {}
                 },
@@ -817,7 +809,7 @@ where
                 mouse::Event::WheelScrolled { delta } => {
                     let x = match delta {
                         ScrollDelta::Pixels { x: _, y } => -y * 0.01,
-                        ScrollDelta::Lines { x: _, y } => -y * 0.5,
+                        ScrollDelta::Lines { x: _, y } => -y * 0.01 * SWM,
                     };
 
                     let x = (x + state.scale.x.get()).clamp(3.0, 12.999_999);
@@ -837,37 +829,39 @@ where
                     return Some(Status::Captured);
                 }
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                    if cursor.y > LINE_HEIGHT {
-                        let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
-                        if index < self.inner.tracks.read().unwrap().len() {
-                            let time = cursor
-                                .x
-                                .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-                                as usize;
-
-                            let clip = state.tracks.borrow()[index]
-                                .get_clip_at_global_time(&self.inner.meter, time);
-
-                            if let Some(clip) = clip {
-                                let clip = Arc::new((*clip).clone());
-                                let offset = (clip
-                                    .get_global_start()
-                                    .in_interleaved_samples(&self.inner.meter)
-                                    as f32
-                                    - state.position.x.get())
-                                    / state.scale.x.get().exp2()
-                                    - cursor.x;
-
-                                debug_assert!(
-                                    self.inner.tracks.read().unwrap()[index].try_push(&clip)
-                                );
-
-                                state.action = Action::DraggingClip(clip, index, offset);
-
-                                return Some(Status::Captured);
-                            }
-                        }
+                    if cursor.y < LINE_HEIGHT {
+                        return None;
                     }
+
+                    let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
+
+                    let time = cursor
+                        .x
+                        .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                        as usize;
+
+                    let clip = state
+                        .tracks
+                        .borrow()
+                        .get(index)?
+                        .get_clip_at_global_time(&self.inner.meter, time)?;
+
+                    let clip = Arc::new(clip.as_ref().clone());
+
+                    let offset = (clip
+                        .get_global_start()
+                        .in_interleaved_samples(&self.inner.meter)
+                        as f32
+                        - state.position.x.get())
+                        / state.scale.x.get().exp2()
+                        - cursor.x;
+
+                    let ok = self.inner.tracks.read().unwrap()[index].try_push(&clip);
+                    debug_assert!(ok);
+
+                    state.action = Action::DraggingClip(clip, index, offset);
+
+                    return Some(Status::Captured);
                 }
                 _ => {}
             }
@@ -879,7 +873,7 @@ where
         if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = event {
             let x = match delta {
                 ScrollDelta::Pixels { x: _, y } => y * 4.0,
-                ScrollDelta::Lines { x: _, y } => y * 200.0,
+                ScrollDelta::Lines { x: _, y } => y * 4.0 * SWM,
             };
 
             let x = x
@@ -909,7 +903,7 @@ where
                 mouse::Event::WheelScrolled { delta } => {
                     let y = match delta {
                         ScrollDelta::Pixels { x: _, y } => y * 0.1,
-                        ScrollDelta::Lines { x: _, y } => y * 10.0,
+                        ScrollDelta::Lines { x: _, y } => y * 0.1 * SWM,
                     };
 
                     let y = (y + state.scale.y.get()).clamp(2.0 * LINE_HEIGHT, 10.0 * LINE_HEIGHT);
@@ -924,9 +918,7 @@ where
                     return Some(Status::Captured);
                 }
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                    if let Some(status) = self.lmb_none_or_alt(state, cursor) {
-                        return Some(status);
-                    }
+                    return self.lmb_default(state, cursor);
                 }
                 _ => {}
             }
@@ -934,7 +926,7 @@ where
         None
     }
 
-    fn lmb_none_or_alt(&self, state: &mut State<'_, Message>, cursor: Point) -> Option<Status> {
+    fn lmb_default(&self, state: &mut State<'_, Message>, cursor: Point) -> Option<Status> {
         if cursor.y < LINE_HEIGHT {
             let mut time = Position::from_interleaved_samples(
                 cursor
@@ -958,63 +950,48 @@ where
         }
 
         let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
-        if index < self.inner.tracks.read().unwrap().len() {
-            let time = cursor
-                .x
-                .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-                as usize;
 
-            let clip =
-                state.tracks.borrow()[index].get_clip_at_global_time(&self.inner.meter, time);
+        let time = cursor
+            .x
+            .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+            as usize;
 
-            if let Some(clip) = clip {
-                let offset = (clip
-                    .get_global_start()
-                    .in_interleaved_samples(&self.inner.meter)
-                    as f32
-                    - state.position.x.get())
-                    / state.scale.x.get().exp2()
-                    - cursor.x;
+        let clip = state
+            .tracks
+            .borrow()
+            .get(index)?
+            .get_clip_at_global_time(&self.inner.meter, time)?;
 
-                let pixel_len = clip.len().in_interleaved_samples(&self.inner.meter) as f32
-                    / state.scale.x.get().exp2();
+        let offset = (clip
+            .get_global_start()
+            .in_interleaved_samples(&self.inner.meter) as f32
+            - state.position.x.get())
+            / state.scale.x.get().exp2()
+            - cursor.x;
+        let pixel_len = clip.len().in_interleaved_samples(&self.inner.meter) as f32
+            / state.scale.x.get().exp2();
 
-                let start_pixel = (clip
-                    .get_global_start()
-                    .in_interleaved_samples(&self.inner.meter)
-                    as f32
-                    - state.position.x.get())
-                    / state.scale.x.get().exp2();
-                let end_pixel = (clip
-                    .get_global_end()
-                    .in_interleaved_samples(&self.inner.meter)
-                    as f32
-                    - state.position.x.get())
-                    / state.scale.x.get().exp2();
+        let start_pixel = (clip
+            .get_global_start()
+            .in_interleaved_samples(&self.inner.meter) as f32
+            - state.position.x.get())
+            / state.scale.x.get().exp2();
+        let end_pixel = (clip
+            .get_global_end()
+            .in_interleaved_samples(&self.inner.meter) as f32
+            - state.position.x.get())
+            / state.scale.x.get().exp2();
 
-                match (cursor.x - start_pixel < 10.0, end_pixel - cursor.x < 10.0) {
-                    (true, true) => {
-                        state.action = if cursor.x - start_pixel < end_pixel - cursor.x {
-                            Action::ClipTrimmingStart(clip, offset)
-                        } else {
-                            Action::ClipTrimmingEnd(clip, offset + pixel_len)
-                        };
-                    }
-                    (true, false) => {
-                        state.action = Action::ClipTrimmingStart(clip, offset);
-                    }
-                    (false, true) => {
-                        state.action = Action::ClipTrimmingEnd(clip, offset + pixel_len);
-                    }
-                    (false, false) => {
-                        state.action = Action::DraggingClip(clip, index, offset);
-                    }
-                }
-
-                return Some(Status::Captured);
+        state.action = match (cursor.x - start_pixel < 10.0, end_pixel - cursor.x < 10.0) {
+            (true, true) if cursor.x - start_pixel < end_pixel - cursor.x => {
+                Action::ClipTrimmingStart(clip, offset)
             }
-        }
-        None
+            (_, true) => Action::ClipTrimmingEnd(clip, offset + pixel_len),
+            (true, false) => Action::ClipTrimmingStart(clip, offset),
+            (false, false) => Action::DraggingClip(clip, index, offset),
+        };
+
+        Some(Status::Captured)
     }
 }
 

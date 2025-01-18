@@ -125,9 +125,9 @@ impl Daw {
             Message::LoadSample(path) => {
                 let (tx, rx) = async_channel::bounded(1);
 
-                let arrangement = self.arrangement.clone();
+                let meter = self.arrangement.meter.clone();
                 std::thread::spawn(move || {
-                    let audio_file = InterleavedAudio::create(path, &arrangement.meter);
+                    let audio_file = InterleavedAudio::create(path, &meter);
                     tx.send_blocking(audio_file).unwrap();
                 });
 
@@ -138,16 +138,17 @@ impl Daw {
             }
             Message::LoadedSample(audio_file) => {
                 let track = AudioTrack::create(self.arrangement.meter.clone());
-                debug_assert!(self.arrangement.audio_graph.add(track.clone().into()));
-                debug_assert!(self
+                let mut ok = self.arrangement.audio_graph.add(track.clone().into());
+                ok |= self
                     .arrangement
                     .audio_graph
-                    .connect(&self.arrangement.audio_graph.root(), &track.clone().into()));
+                    .connect(&self.arrangement.audio_graph.root(), &track.clone().into());
                 let track = track.downcast_arc::<Track>().unwrap();
-                debug_assert!(track.try_push(&AudioClip::create(
+                ok |= track.try_push(&AudioClip::create(
                     audio_file,
                     self.arrangement.meter.clone(),
-                )));
+                ));
+                debug_assert!(ok);
                 self.arrangement.tracks.write().unwrap().push(track);
             }
             Message::ExportButton => {
