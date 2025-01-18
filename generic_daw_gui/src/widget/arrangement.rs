@@ -40,7 +40,7 @@ enum Action {
 }
 
 /// how many pixels to scroll per scroll wheel movement
-const SWM: f32 = 50.0;
+const SWM: f32 = 52.5;
 
 #[derive(Default)]
 struct State<'a, Message> {
@@ -188,6 +188,7 @@ where
                 }));
 
             state.waveform_cache.borrow_mut().take();
+            shell.invalidate_layout();
 
             shell.publish(Message::default());
         } else if self.inner.meter.playing.load(SeqCst) {
@@ -201,12 +202,12 @@ where
 
         let bounds = layout.bounds();
 
-        let Some(pos) = cursor.position_in(bounds) else {
+        let Some(cursor) = cursor.position_in(bounds) else {
             state.action = Action::None;
             return Status::Ignored;
         };
 
-        if let Some(status) = self.on_event_any_modifiers(state, &event, pos, shell) {
+        if let Some(status) = self.on_event_any_modifiers(state, &event, cursor, shell) {
             return status;
         }
 
@@ -215,10 +216,10 @@ where
             state.modifiers.shift(),
             state.modifiers.alt(),
         ) {
-            (false, false, false) => self.on_event_no_modifiers(state, &event, pos, shell),
-            (true, false, false) => self.on_event_command(state, &event, pos, shell),
-            (false, true, false) => self.on_event_shift(state, &event),
-            (false, false, true) => self.on_event_alt(state, &event, pos, shell),
+            (false, false, false) => self.on_event_no_modifiers(state, &event, cursor, shell),
+            (true, false, false) => self.on_event_command(state, &event, cursor, shell),
+            (false, true, false) => self.on_event_shift(state, &event, shell),
+            (false, false, true) => self.on_event_alt(state, &event, cursor, shell),
             _ => None,
         }
         .unwrap_or(Status::Ignored)
@@ -306,54 +307,45 @@ where
             self.grid(renderer, bounds, theme, state);
         });
 
-        {
-            let mut bounds = bounds;
-            bounds.y += LINE_HEIGHT;
-            bounds.height -= LINE_HEIGHT;
+        let mut inner_bounds = bounds;
+        inner_bounds.y += LINE_HEIGHT;
+        inner_bounds.height -= LINE_HEIGHT;
 
-            self.tracks
+        self.tracks
+            .borrow()
+            .iter()
+            .zip(&tree.children)
+            .zip(layout.children())
+            .for_each(|((child, tree), layout)| {
+                child
+                    .as_widget()
+                    .draw(tree, renderer, theme, style, layout, cursor, &inner_bounds);
+            });
+
+        if state.waveform_cache.borrow().is_none() {
+            let meshes = state
+                .tracks
                 .borrow()
                 .iter()
-                .zip(&tree.children)
                 .zip(layout.children())
-                .for_each(|((child, tree), layout)| {
-                    child
-                        .as_widget()
-                        .draw(tree, renderer, theme, style, layout, cursor, &bounds);
-                });
-
-            if state.waveform_cache.borrow().is_none() {
-                let meshes = state
-                    .tracks
-                    .borrow()
-                    .iter()
-                    .enumerate()
-                    .flat_map(|(i, track)| {
-                        let track_bounds = Rectangle::new(
-                            Point::new(
-                                bounds.x,
-                                ((i as f32) - state.position.y.get())
-                                    .mul_add(state.scale.y.get(), bounds.y),
-                            ),
-                            Size::new(bounds.width, state.scale.y.get()),
-                        );
-                        if track_bounds.intersects(&bounds) {
-                            track.meshes(theme, track_bounds, bounds, &state.position, &state.scale)
-                        } else {
-                            Vec::new()
-                        }
-                    })
-                    .collect();
-
-                state.waveform_cache.borrow_mut().replace(
-                    Geometry::Live {
-                        meshes,
-                        images: Vec::new(),
-                        text: Vec::new(),
+                .flat_map(|(track, layout)| {
+                    let bounds = layout.bounds();
+                    if bounds.intersects(&inner_bounds) {
+                        track.meshes(theme, bounds, inner_bounds, &state.position, &state.scale)
+                    } else {
+                        Vec::new()
                     }
-                    .cache(Group::unique(), None),
-                );
-            }
+                })
+                .collect();
+
+            state.waveform_cache.borrow_mut().replace(
+                Geometry::Live {
+                    meshes,
+                    images: Vec::new(),
+                    text: Vec::new(),
+                }
+                .cache(Group::unique(), None),
+            );
         }
 
         renderer.with_layer(bounds, |renderer| {
@@ -617,7 +609,6 @@ where
 
                         if new_start != clip.get_global_start() {
                             clip.move_to(new_start);
-
                             state.waveform_cache.borrow_mut().take();
                             shell.invalidate_layout();
                         }
@@ -633,11 +624,9 @@ where
                                 .try_push(clip)
                         {
                             self.inner.tracks.read().unwrap()[*index].remove_clip(clip);
-
+                            state.action = Action::DraggingClip(clip.clone(), new_index, *offset);
                             state.waveform_cache.borrow_mut().take();
                             shell.invalidate_layout();
-
-                            state.action = Action::DraggingClip(clip.clone(), new_index, *offset);
                         }
 
                         return Some(Status::Captured);
@@ -647,7 +636,8 @@ where
                             return None;
                         }
 
-                        let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
+                        let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()
+                            + state.position.x.get()) as usize;
 
                         let time = cursor
                             .x
@@ -661,7 +651,6 @@ where
                             .get_clip_at_global_time(&self.inner.meter, time)?;
 
                         self.inner.tracks.read().unwrap()[index].remove_clip(&clip);
-
                         state.waveform_cache.borrow_mut().take();
                         shell.invalidate_layout();
 
@@ -681,7 +670,6 @@ where
 
                         if new_start != clip.get_global_start() {
                             clip.trim_start_to(new_start);
-
                             state.waveform_cache.borrow_mut().take();
                             shell.invalidate_layout();
                         }
@@ -702,7 +690,6 @@ where
 
                         if new_end != clip.get_global_end() {
                             clip.trim_end_to(new_end);
-
                             state.waveform_cache.borrow_mut().take();
                             shell.invalidate_layout();
                         }
@@ -728,29 +715,27 @@ where
             match event {
                 mouse::Event::WheelScrolled { delta } => {
                     let (x, y) = match delta {
-                        ScrollDelta::Pixels { x, y } => (x * 2.0, y * 4.0),
-                        ScrollDelta::Lines { x, y } => (x * 2.0 * SWM, y * 4.0 * SWM),
+                        ScrollDelta::Pixels { x, y } => (-x * 2.0, y * 4.0),
+                        ScrollDelta::Lines { x, y } => (-x * 2.0 * SWM, y * 4.0 * SWM),
                     };
 
-                    let x = x
-                        .mul_add(-state.scale.x.get().exp2(), state.position.x.get())
+                    let x_pos = x
+                        .mul_add(state.scale.x.get().exp2(), state.position.x.get())
                         .clamp(
                             0.0,
                             self.inner.len().in_interleaved_samples_f(&self.inner.meter),
                         );
-                    let y = (y / state.scale.y.get())
+                    let y_pos = (y / state.scale.y.get())
                         .mul_add(-0.5, state.position.y.get())
                         .clamp(
                             0.0,
                             self.inner.tracks.read().unwrap().len().saturating_sub(1) as f32,
                         );
 
-                    state.position.x.set(x);
+                    state.position.x.set(x_pos);
 
-                    if (state.position.y.get() - y).abs() * state.scale.y.get() > 1.0 {
-                        shell.invalidate_layout();
-
-                        state.position.y.set(y);
+                    if (state.position.y.get() - y_pos).abs() * state.scale.y.get() > 1.0 {
+                        state.position.y.set(y_pos);
                     }
 
                     state.waveform_cache.borrow_mut().take();
@@ -767,7 +752,8 @@ where
                             return None;
                         }
 
-                        let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
+                        let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()
+                            + state.position.y.get()) as usize;
 
                         let time = cursor
                             .x
@@ -782,10 +768,9 @@ where
 
                         self.inner.tracks.read().unwrap()[index].remove_clip(&clip);
 
+                        state.action = Action::DeletingClips;
                         state.waveform_cache.borrow_mut().take();
                         shell.invalidate_layout();
-
-                        state.action = Action::DeletingClips;
 
                         return Some(Status::Captured);
                     }
@@ -808,21 +793,24 @@ where
             match event {
                 mouse::Event::WheelScrolled { delta } => {
                     let x = match delta {
-                        ScrollDelta::Pixels { x: _, y } => -y * 0.01,
-                        ScrollDelta::Lines { x: _, y } => -y * 0.01 * SWM,
+                        ScrollDelta::Pixels { y, .. } => -y * 0.01,
+                        ScrollDelta::Lines { y, .. } => -y * 0.01 * SWM,
                     };
 
-                    let x = (x + state.scale.x.get()).clamp(3.0, 12.999_999);
-
-                    let cursor_content_x = cursor
+                    let x_scale = (x + state.scale.x.get()).clamp(3.0, 12.999_999);
+                    let x_pos = cursor
                         .x
-                        .mul_add(state.scale.x.get().exp2(), state.position.x.get());
+                        .mul_add(
+                            state.scale.x.get().exp2() - x_scale.exp2(),
+                            state.position.x.get(),
+                        )
+                        .clamp(
+                            0.0,
+                            self.inner.len().in_interleaved_samples_f(&self.inner.meter),
+                        );
 
-                    state
-                        .position
-                        .x
-                        .set(cursor.x.mul_add(-x.exp2(), cursor_content_x).max(0.0));
-                    state.scale.x.set(x);
+                    state.position.x.set(x_pos);
+                    state.scale.x.set(x_scale);
                     state.waveform_cache.borrow_mut().take();
                     shell.invalidate_layout();
 
@@ -833,7 +821,8 @@ where
                         return None;
                     }
 
-                    let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
+                    let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()
+                        + state.position.x.get()) as usize;
 
                     let time = cursor
                         .x
@@ -869,22 +858,28 @@ where
         None
     }
 
-    fn on_event_shift(&self, state: &State<'_, Message>, event: &Event) -> Option<Status> {
+    fn on_event_shift(
+        &self,
+        state: &State<'_, Message>,
+        event: &Event,
+        shell: &mut Shell<'_, Message>,
+    ) -> Option<Status> {
         if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = event {
             let x = match delta {
-                ScrollDelta::Pixels { x: _, y } => y * 4.0,
-                ScrollDelta::Lines { x: _, y } => y * 4.0 * SWM,
+                ScrollDelta::Pixels { y, .. } => -y * 4.0,
+                ScrollDelta::Lines { y, .. } => -y * 4.0 * SWM,
             };
 
-            let x = x
-                .mul_add(-state.scale.x.get().exp2(), state.position.x.get())
+            let x_pos = x
+                .mul_add(state.scale.x.get().exp2(), state.position.x.get())
                 .clamp(
                     0.0,
                     self.inner.len().in_interleaved_samples_f(&self.inner.meter),
                 );
 
-            state.position.x.set(x);
+            state.position.x.set(x_pos);
             state.waveform_cache.borrow_mut().take();
+            shell.invalidate_layout();
 
             return Some(Status::Captured);
         }
@@ -902,18 +897,18 @@ where
             match event {
                 mouse::Event::WheelScrolled { delta } => {
                     let y = match delta {
-                        ScrollDelta::Pixels { x: _, y } => y * 0.1,
-                        ScrollDelta::Lines { x: _, y } => y * 0.1 * SWM,
+                        ScrollDelta::Pixels { y, .. } => y * 0.1,
+                        ScrollDelta::Lines { y, .. } => y * 0.1 * SWM,
                     };
 
-                    let y = (y + state.scale.y.get()).clamp(2.0 * LINE_HEIGHT, 10.0 * LINE_HEIGHT);
+                    let y_scale =
+                        (y + state.scale.y.get()).clamp(2.0 * LINE_HEIGHT, 10.0 * LINE_HEIGHT);
 
-                    if (state.scale.y.get() - y).abs() > 0.1 {
+                    if (state.scale.y.get() - y_scale).abs() > 0.1 {
+                        state.scale.y.set(y_scale);
+                        state.waveform_cache.borrow_mut().take();
                         shell.invalidate_layout();
-                        state.scale.y.set(y);
                     }
-
-                    state.waveform_cache.borrow_mut().take();
 
                     return Some(Status::Captured);
                 }
@@ -949,7 +944,8 @@ where
             return Some(Status::Captured);
         }
 
-        let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
+        let index =
+            ((cursor.y - LINE_HEIGHT) / state.scale.y.get() + state.position.y.get()) as usize;
 
         let time = cursor
             .x

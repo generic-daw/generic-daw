@@ -54,7 +54,7 @@ pub fn get_installed_plugins() -> Vec<PluginBundle> {
 }
 
 fn standard_clap_paths() -> Vec<PathBuf> {
-    let mut paths = vec![];
+    let mut paths = Vec::new();
 
     paths.push(home_dir().unwrap().join(".clap"));
 

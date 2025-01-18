@@ -189,14 +189,12 @@ impl<Message> Track<'_, Message> {
                     / scale.x.get().exp2()
                     + bounds.x;
 
-                let clip_bounds = Rectangle::new(
+                Rectangle::new(
                     Point::new(first_pixel, bounds.y),
                     Size::new(last_pixel - first_pixel, bounds.height),
-                );
-                let clip_bounds = bounds.intersection(&clip_bounds);
-                clip_bounds.and_then(|clip_bounds| {
-                    clip.meshes(theme, clip_bounds, viewport, position, scale)
-                })
+                )
+                .intersection(&bounds)
+                .and_then(|bounds| clip.meshes(theme, bounds, viewport, position, scale))
             })
             .collect()
     }

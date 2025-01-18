@@ -13,7 +13,7 @@ pub enum Track {
     Midi(MidiTrack),
 }
 
-static TRACK_BUF: Mutex<Vec<f32>> = Mutex::new(vec![]);
+static TRACK_BUF: Mutex<Vec<f32>> = Mutex::new(Vec::new());
 
 impl AudioGraphNodeImpl for Track {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
