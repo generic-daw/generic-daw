@@ -74,7 +74,7 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
                     *s = s.clamp(-1.0, 1.0);
                 }
             },
-            move |err| panic!("{}", err),
+            |err| panic!("{err}"),
             None,
         )
         .unwrap();

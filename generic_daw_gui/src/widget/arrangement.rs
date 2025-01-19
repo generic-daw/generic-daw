@@ -40,7 +40,7 @@ enum Action {
 }
 
 /// how many pixels to scroll per scroll wheel movement
-const SWM: f32 = 52.5;
+const SWM: f32 = LINE_HEIGHT * 2.5;
 
 #[derive(Default)]
 struct State<'a, Message> {

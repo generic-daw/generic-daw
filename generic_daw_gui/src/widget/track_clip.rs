@@ -4,14 +4,13 @@ use iced::{
     advanced::{
         graphics::Mesh,
         layout::{Limits, Node},
-        mouse,
         renderer::{Quad, Style},
         text::Renderer as _,
         widget::Tree,
         Layout, Renderer as _, Text, Widget,
     },
     alignment::{Horizontal, Vertical},
-    mouse::Interaction,
+    mouse::{Cursor, Interaction},
     widget::text::{LineHeight, Shaping, Wrapping},
     Length, Rectangle, Renderer, Size, Theme, Vector,
 };
@@ -52,7 +51,7 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
         theme: &Theme,
         _style: &Style,
         layout: Layout<'_>,
-        _cursor: mouse::Cursor,
+        _cursor: Cursor,
         viewport: &Rectangle,
     ) {
         let Some(bounds) = layout.bounds().intersection(viewport) else {
@@ -127,7 +126,7 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
         &self,
         _state: &Tree,
         layout: Layout<'_>,
-        cursor: mouse::Cursor,
+        cursor: Cursor,
         _viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> Interaction {

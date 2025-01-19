@@ -29,7 +29,7 @@ impl Timers {
             .timers
             .borrow_mut()
             .values_mut()
-            .filter_map(move |t| t.tick().then_some(t.id))
+            .filter_map(|t| t.tick().then_some(t.id))
             .collect();
 
         self.next_tick

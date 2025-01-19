@@ -1,6 +1,7 @@
 mod arrangement;
 mod arrangement_position;
 mod arrangement_scale;
+mod knob;
 mod mesh_ext;
 mod track;
 mod track_clip;
