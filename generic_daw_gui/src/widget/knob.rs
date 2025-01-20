@@ -1,16 +1,22 @@
 use super::LINE_HEIGHT;
 use iced::{
     advanced::{
+        graphics::geometry::Renderer as _,
         layout::{Limits, Node},
         renderer::Style,
         widget::{tree, Tree},
-        Clipboard, Layout, Shell, Widget,
+        Clipboard, Layout, Renderer as _, Shell, Widget,
     },
     event::Status,
     mouse::{self, Cursor},
-    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme,
+    widget::canvas::{path::Arc, Frame, Path},
+    Element, Event, Length, Point, Radians, Rectangle, Renderer, Size, Theme, Vector,
 };
-use std::{fmt::Debug, ops::RangeInclusive};
+use std::{
+    f32::consts::{FRAC_PI_2, FRAC_PI_4},
+    fmt::Debug,
+    ops::RangeInclusive,
+};
 
 const DIAMETER: f32 = LINE_HEIGHT * 2.0;
 const RADIUS: f32 = LINE_HEIGHT;
@@ -94,14 +100,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                 mouse::Event::CursorMoved {
                     position: Point { y, .. },
                 } => {
-                    if let Some(base) = state.dragging {
-                        let mut diff = y - base;
+                    if let Some(last) = state.dragging {
+                        let mut diff = last - y;
                         diff *= self.range.end() - self.range.start();
+                        diff /= 200.0;
                         state.current =
                             (state.current + diff).clamp(*self.range.start(), *self.range.end());
                         if let Some(f) = &self.f {
                             shell.publish(f(state.current));
                         }
+                        state.dragging = Some(y);
                         return Status::Captured;
                     }
                 }
@@ -114,14 +122,64 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
 
     fn draw(
         &self,
-        _tree: &Tree,
-        _renderer: &mut Renderer,
-        _theme: &Theme,
+        tree: &Tree,
+        renderer: &mut Renderer,
+        theme: &Theme,
         _style: &Style,
-        _layout: Layout<'_>,
+        layout: Layout<'_>,
         _cursor: Cursor,
         _viewport: &Rectangle,
     ) {
+        let bounds = layout.bounds();
+        let state = tree.state.downcast_ref::<State>();
+
+        let mut frame = Frame::new(renderer, bounds.size());
+
+        let inner_circle = Path::circle(frame.center(), RADIUS * 0.7);
+
+        let segment = Path::new(|builder| {
+            let start_angle = Radians((-FRAC_PI_4).mul_add(
+                5.0,
+                FRAC_PI_2 * 3.0 * (self.default - self.range.start())
+                    / (self.range.end() - self.range.start()),
+            ));
+            let end_angle = Radians((-FRAC_PI_4).mul_add(
+                5.0,
+                FRAC_PI_2 * 3.0 * (state.current - self.range.start())
+                    / (self.range.end() - self.range.start()),
+            ));
+
+            builder.arc(Arc {
+                center: frame.center(),
+                radius: RADIUS,
+                start_angle,
+                end_angle,
+            });
+
+            builder.line_to(frame.center());
+
+            builder.close();
+        });
+
+        frame.fill(&segment, theme.extended_palette().primary.weak.text);
+        frame.fill(&inner_circle, theme.extended_palette().primary.base.color);
+
+        renderer.with_translation(
+            Vector::new(bounds.position().x, bounds.position().y),
+            |renderer| {
+                renderer.draw_geometry(frame.into_geometry());
+            },
+        );
+    }
+}
+
+impl<Message> Knob<Message> {
+    pub fn new(range: RangeInclusive<f32>, default: f32) -> Self {
+        Self {
+            range,
+            default,
+            f: None,
+        }
     }
 }
 
