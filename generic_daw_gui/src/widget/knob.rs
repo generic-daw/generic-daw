@@ -8,8 +8,8 @@ use iced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
     },
     event::Status,
-    mouse::{self, Cursor},
-    widget::canvas::{path::Arc, Frame, Path},
+    mouse::{self, Cursor, Interaction},
+    widget::canvas::{path::Arc, Cache, Frame, Path},
     Element, Event, Length, Point, Radians, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::{
@@ -24,6 +24,8 @@ const RADIUS: f32 = LINE_HEIGHT;
 struct State {
     dragging: Option<f32>,
     current: f32,
+    hovering: bool,
+    cache: Cache,
 }
 
 impl State {
@@ -31,6 +33,8 @@ impl State {
         Self {
             dragging: None,
             current,
+            hovering: false,
+            cache: Cache::new(),
         }
     }
 }
@@ -104,14 +108,29 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                         let mut diff = last - y;
                         diff *= self.range.end() - self.range.start();
                         diff /= 200.0;
-                        state.current =
-                            (state.current + diff).clamp(*self.range.start(), *self.range.end());
+
                         if let Some(f) = &self.f {
                             shell.publish(f(state.current));
                         }
+
+                        state.cache.clear();
+                        state.current =
+                            (state.current + diff).clamp(*self.range.start(), *self.range.end());
                         state.dragging = Some(y);
-                        return Status::Captured;
+                    } else if cursor
+                        .position_in(layout.bounds())
+                        .is_some_and(|pos| pos.distance(Point::new(RADIUS, RADIUS)) < RADIUS)
+                    {
+                        if !state.hovering {
+                            state.cache.clear();
+                            state.hovering = true;
+                        }
+                    } else if state.hovering {
+                        state.cache.clear();
+                        state.hovering = false;
                     }
+
+                    return Status::Captured;
                 }
                 _ => {}
             }
@@ -133,43 +152,33 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
         let bounds = layout.bounds();
         let state = tree.state.downcast_ref::<State>();
 
-        let mut frame = Frame::new(renderer, bounds.size());
-
-        let inner_circle = Path::circle(frame.center(), RADIUS * 0.7);
-
-        let segment = Path::new(|builder| {
-            let start_angle = Radians((-FRAC_PI_4).mul_add(
-                5.0,
-                FRAC_PI_2 * 3.0 * (self.default - self.range.start())
-                    / (self.range.end() - self.range.start()),
-            ));
-            let end_angle = Radians((-FRAC_PI_4).mul_add(
-                5.0,
-                FRAC_PI_2 * 3.0 * (state.current - self.range.start())
-                    / (self.range.end() - self.range.start()),
-            ));
-
-            builder.arc(Arc {
-                center: frame.center(),
-                radius: RADIUS,
-                start_angle,
-                end_angle,
-            });
-
-            builder.line_to(frame.center());
-
-            builder.close();
-        });
-
-        frame.fill(&segment, theme.extended_palette().primary.weak.text);
-        frame.fill(&inner_circle, theme.extended_palette().primary.base.color);
-
         renderer.with_translation(
             Vector::new(bounds.position().x, bounds.position().y),
             |renderer| {
-                renderer.draw_geometry(frame.into_geometry());
+                renderer.draw_geometry(state.cache.draw(renderer, bounds.size(), |frame| {
+                    self.fill_canvas(state, frame, theme);
+                }));
             },
         );
+    }
+
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        _layout: Layout<'_>,
+        _cursor: Cursor,
+        _viewport: &Rectangle,
+        _renderer: &Renderer,
+    ) -> Interaction {
+        let state = tree.state.downcast_ref::<State>();
+
+        if state.dragging.is_some() {
+            Interaction::Grabbing
+        } else if state.hovering {
+            Interaction::Grab
+        } else {
+            Interaction::default()
+        }
     }
 }
 
@@ -180,6 +189,74 @@ impl<Message> Knob<Message> {
             default,
             f: None,
         }
+    }
+
+    fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
+        let center = frame.center();
+
+        let circle_at_angle = |angle: Radians, a_m: f32, r_m: f32| {
+            Path::circle(
+                Point::new(
+                    (RADIUS * a_m).mul_add(angle.0.cos(), center.x),
+                    (RADIUS * a_m).mul_add(angle.0.sin(), center.y),
+                ),
+                RADIUS * r_m,
+            )
+        };
+
+        let inner_circle = Path::circle(center, RADIUS * 0.8);
+
+        let base_angle = Radians(-FRAC_PI_4 * 5.0);
+
+        let start_angle = base_angle
+            + Radians(
+                FRAC_PI_2 * 3.0 * (self.default - self.range.start())
+                    / (self.range.end() - self.range.start()),
+            );
+
+        let end_angle = base_angle
+            + Radians(
+                FRAC_PI_2 * 3.0 * (state.current - self.range.start())
+                    / (self.range.end() - self.range.start()),
+            );
+
+        let segment = Path::new(|builder| {
+            builder.arc(Arc {
+                center,
+                radius: RADIUS,
+                start_angle,
+                end_angle,
+            });
+
+            builder.line_to(center);
+
+            builder.close();
+        });
+
+        frame.fill(&segment, theme.extended_palette().primary.weak.text);
+
+        let color = if state.hovering || state.dragging.is_some() {
+            theme.extended_palette().secondary.strong.color
+        } else {
+            theme.extended_palette().primary.base.color
+        };
+
+        frame.fill(&inner_circle, color);
+
+        frame.fill(
+            &circle_at_angle(start_angle, 0.9, 0.1),
+            theme.extended_palette().primary.weak.text,
+        );
+
+        frame.fill(
+            &circle_at_angle(end_angle, 0.9, 0.1),
+            theme.extended_palette().primary.weak.text,
+        );
+
+        frame.fill(
+            &circle_at_angle(end_angle, 0.4, 0.15),
+            theme.extended_palette().primary.weak.text,
+        );
     }
 }
 

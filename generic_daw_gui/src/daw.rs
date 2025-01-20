@@ -1,6 +1,6 @@
 use crate::{
     clap_host::{ClapHost, Message as ClapHostMessage, OpenedMessage},
-    widget::{Arrangement, Knob, VSplit},
+    widget::{Arrangement, VSplit},
 };
 use generic_daw_core::{
     build_output_stream,
@@ -200,7 +200,6 @@ impl Daw {
             row![
                 button("Load Samples").on_press(Message::LoadSamplesButton),
                 button("Export").on_press(Message::ExportButton),
-                Knob::new(-1.0..=1.0, 0.0),
                 button("New").on_press(Message::New),
             ],
             row![
