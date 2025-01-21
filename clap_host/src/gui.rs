@@ -5,6 +5,7 @@ use clack_extensions::{
 };
 use clack_host::prelude::*;
 use std::{
+    fmt::{Debug, Formatter},
     io::Cursor,
     rc::Rc,
     sync::mpsc::{Receiver, Sender},
@@ -21,6 +22,16 @@ pub struct GuiExt {
     pub configuration: Option<GuiConfiguration<'static>>,
     is_open: bool,
     is_resizeable: bool,
+}
+
+impl Debug for GuiExt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GuiExt")
+            .field("configuration", &self.configuration)
+            .field("is_open", &self.is_open)
+            .field("is_resizeable", &self.is_resizeable)
+            .finish_non_exhaustive()
+    }
 }
 
 impl GuiExt {

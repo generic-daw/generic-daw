@@ -1,6 +1,4 @@
-use generic_daw_core::clap_host::{
-    ClapPluginGui, ClapPluginGuiWrapper, HostAudioProcessor, PluginAudioProcessor,
-};
+use generic_daw_core::clap_host::ClapPluginGui;
 use iced::{
     window::{self, close_events, close_requests, resize_events, Id},
     Size, Subscription, Task,
@@ -10,22 +8,16 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+mod opened_message;
+
+pub use opened_message::OpenedMessage;
+
 #[derive(Clone, Debug)]
 pub enum Message {
     Opened(Arc<Mutex<OpenedMessage>>),
     CloseRequested(Id),
     Closed,
     Resized((Id, Size)),
-}
-
-#[derive(Debug)]
-pub struct OpenedMessage {
-    pub id: Id,
-    pub plugin: ClapPluginGuiWrapper,
-    #[expect(dead_code)]
-    pub host_audio_processor: HostAudioProcessor,
-    #[expect(dead_code)]
-    pub plugin_audio_processor: PluginAudioProcessor,
 }
 
 #[derive(Default)]
@@ -40,11 +32,11 @@ impl ClapHost {
             Message::Opened(arc) => {
                 let OpenedMessage {
                     id,
-                    plugin,
+                    gui,
                     host_audio_processor: _,
                     plugin_audio_processor: _,
                 } = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
-                self.windows.insert(id, plugin.into_inner());
+                self.windows.insert(id, gui.into_inner());
             }
             Message::Resized((id, size)) => {
                 if let Some(plugin) = self.windows.get_mut(&id) {

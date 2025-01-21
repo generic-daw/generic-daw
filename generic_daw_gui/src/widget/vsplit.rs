@@ -27,7 +27,9 @@ pub struct VSplit<'a, Message, Theme, Renderer> {
 
 impl<Message, Theme, Renderer> Debug for VSplit<'_, Message, Theme, Renderer> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("VSplit").finish_non_exhaustive()
+        f.debug_struct("VSplit")
+            .field("starting_split_at", &self.starting_split_at)
+            .finish_non_exhaustive()
     }
 }
 

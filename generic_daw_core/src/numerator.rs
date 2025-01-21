@@ -1,5 +1,5 @@
 use atomig::Atom;
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use strum::VariantArray;
 
 #[repr(u8)]
@@ -25,7 +25,7 @@ pub enum Numerator {
 }
 
 impl Display for Numerator {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", *self as u16)
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u16)
     }
 }

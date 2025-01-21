@@ -18,7 +18,7 @@ use std::{cmp::max_by, rc::Rc, sync::Arc};
 
 pub mod audio_clip;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TrackClip {
     inner: Arc<TrackClipInner>,
     /// information about the scale of the timeline viewport

@@ -87,7 +87,7 @@ impl Daw {
                 });
                 let sample_rate = f64::from(self.arrangement.meter.sample_rate.load(SeqCst));
                 let embed = window::run_with_handle(id, move |handle| {
-                    let (plugin, host_audio_processor, plugin_audio_processor) = open_gui(
+                    let (gui, host_audio_processor, plugin_audio_processor) = open_gui(
                         &get_installed_plugins()[0],
                         PluginAudioConfiguration {
                             sample_rate,
@@ -98,7 +98,7 @@ impl Daw {
                     );
                     Arc::new(Mutex::new(OpenedMessage {
                         id,
-                        plugin,
+                        gui,
                         host_audio_processor,
                         plugin_audio_processor,
                     }))

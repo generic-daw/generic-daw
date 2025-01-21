@@ -1,7 +1,7 @@
 use crate::{seconds_to_interleaved_samples, Meter};
 use atomig::{Atom, AtomInteger};
 use std::{
-    fmt::Debug,
+    fmt::{Debug, Formatter},
     ops::{Add, AddAssign, Sub, SubAssign},
     sync::atomic::Ordering::SeqCst,
 };
@@ -10,7 +10,7 @@ use std::{
 pub struct Position(u32);
 
 impl Debug for Position {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Position")
             .field("quarter_note", &self.quarter_note())
             .field("sub_quarter_note", &self.sub_quarter_note())

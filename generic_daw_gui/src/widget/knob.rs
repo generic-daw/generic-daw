@@ -14,7 +14,7 @@ use iced::{
 };
 use std::{
     f32::consts::{FRAC_PI_2, FRAC_PI_4},
-    fmt::Debug,
+    fmt::{Debug, Formatter},
     ops::RangeInclusive,
 };
 
@@ -46,7 +46,7 @@ pub struct Knob<Message> {
 }
 
 impl<Message> Debug for Knob<Message> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Knob")
             .field("range", &self.range)
             .field("default", &self.default)

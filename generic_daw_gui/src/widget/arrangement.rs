@@ -70,7 +70,7 @@ pub struct Arrangement<'a, Message> {
 
 impl<Message> Debug for Arrangement<'_, Message> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("").field(&self.inner).finish_non_exhaustive()
+        self.inner.fmt(f)
     }
 }
 

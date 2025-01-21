@@ -1,6 +1,6 @@
 use super::{gui::GuiExt, host::Host};
 use clack_host::prelude::*;
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use winit::dpi::Size;
 
 pub struct ClapPluginGui {
@@ -9,8 +9,10 @@ pub struct ClapPluginGui {
 }
 
 impl Debug for ClapPluginGui {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ClapPlugin").finish_non_exhaustive()
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClapPluginGui")
+            .field("gui", &self.gui)
+            .finish_non_exhaustive()
     }
 }
 

@@ -7,7 +7,7 @@ use rubato::{
 use std::{
     array,
     cmp::{max_by, min_by},
-    fmt::Debug,
+    fmt::{Debug, Formatter},
     fs::File,
     path::PathBuf,
     sync::{atomic::Ordering::SeqCst, Arc, RwLock},
@@ -32,7 +32,7 @@ pub struct InterleavedAudio {
 }
 
 impl Debug for InterleavedAudio {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InterleavedAudio")
             .field("path", &self.path)
             .finish_non_exhaustive()

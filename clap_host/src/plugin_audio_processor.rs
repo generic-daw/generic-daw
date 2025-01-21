@@ -2,7 +2,7 @@ use super::Host;
 use crate::{host::HostThreadMessage, main_thread::MainThreadMessage};
 use clack_host::{prelude::*, process::StartedPluginAudioProcessor};
 use std::{
-    fmt::Debug,
+    fmt::{Debug, Formatter},
     sync::{
         atomic::{
             AtomicU64,
@@ -20,9 +20,11 @@ pub struct PluginAudioProcessor {
 }
 
 impl Debug for PluginAudioProcessor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AudioProcessor")
             .field("steady_time", &self.steady_time.load(Relaxed))
+            .field("sender", &self.sender)
+            .field("receiver", &self.receiver)
             .finish_non_exhaustive()
     }
 }
