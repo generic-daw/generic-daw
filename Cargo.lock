@@ -1375,6 +1375,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "generic_daw"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "generic_daw_core",
+ "home",
+ "iced",
+ "iced_aw",
+ "iced_file_tree",
+ "iced_fonts",
+ "iced_wgpu",
+ "itoa",
+ "rfd",
+ "strum",
+]
+
+[[package]]
 name = "generic_daw_core"
 version = "0.1.0"
 dependencies = [
@@ -1389,23 +1406,6 @@ dependencies = [
  "rubato",
  "strum",
  "symphonia",
-]
-
-[[package]]
-name = "generic_daw_gui"
-version = "0.1.0"
-dependencies = [
- "async-channel",
- "generic_daw_core",
- "home",
- "iced",
- "iced_aw",
- "iced_file_tree",
- "iced_fonts",
- "iced_wgpu",
- "itoa",
- "rfd",
- "strum",
 ]
 
 [[package]]
