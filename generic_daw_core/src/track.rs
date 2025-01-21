@@ -2,7 +2,7 @@ use crate::{Meter, Position, TrackClip};
 use audio_graph::{pan, AudioGraphNodeImpl};
 use audio_track::AudioTrack;
 use midi_track::MidiTrack;
-use std::sync::{atomic::Ordering::SeqCst, Arc, Mutex, RwLock};
+use std::sync::{atomic::Ordering::SeqCst, Arc, Mutex, RwLockReadGuard};
 
 pub mod audio_track;
 pub mod midi_track;
@@ -44,11 +44,10 @@ impl AudioGraphNodeImpl for Track {
 }
 
 impl Track {
-    #[must_use]
-    pub fn clips(&self) -> &RwLock<Vec<Arc<TrackClip>>> {
+    pub fn clips(&self) -> RwLockReadGuard<'_, Vec<Arc<TrackClip>>> {
         match self {
-            Self::Audio(track) => &track.clips,
-            Self::Midi(track) => &track.clips,
+            Self::Audio(track) => track.clips(),
+            Self::Midi(track) => track.clips(),
         }
     }
 

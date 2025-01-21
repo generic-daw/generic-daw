@@ -104,9 +104,7 @@ where
         self.tracks.borrow_mut().clear();
         self.tracks.borrow_mut().extend(
             self.inner
-                .tracks
-                .read()
-                .unwrap()
+                .tracks()
                 .iter()
                 .map(|track| Track::new(track.clone(), state.position.clone(), state.scale.clone()))
                 .map(Element::new),
@@ -322,9 +320,7 @@ where
         if state.waveform_cache.borrow().is_none() {
             let meshes = self
                 .inner
-                .tracks
-                .read()
-                .unwrap()
+                .tracks()
                 .iter()
                 .zip(layout.children())
                 .flat_map(|(track, layout)| {
@@ -601,16 +597,9 @@ where
                         }
 
                         let new_index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
-                        if *index != new_index
-                            && self
-                                .inner
-                                .tracks
-                                .read()
-                                .unwrap()
-                                .get(new_index)?
-                                .try_push(clip)
+                        if *index != new_index && self.inner.tracks().get(new_index)?.try_push(clip)
                         {
-                            self.inner.tracks.read().unwrap()[*index].remove_clip(clip);
+                            self.inner.tracks()[*index].remove_clip(clip);
                             state.action = Action::DraggingClip(clip.clone(), new_index, *offset);
                             state.waveform_cache.borrow_mut().take();
                             shell.invalidate_layout();
@@ -633,13 +622,11 @@ where
 
                         let clip = self
                             .inner
-                            .tracks
-                            .read()
-                            .unwrap()
+                            .tracks()
                             .get(index)?
                             .get_clip_at_global_time(&self.inner.meter, time)?;
 
-                        self.inner.tracks.read().unwrap()[index].remove_clip(&clip);
+                        self.inner.tracks()[index].remove_clip(&clip);
                         state.waveform_cache.borrow_mut().take();
                         shell.invalidate_layout();
 
@@ -716,10 +703,7 @@ where
                         );
                     let y_pos = (y / state.scale.y.get())
                         .mul_add(-0.5, state.position.y.get())
-                        .clamp(
-                            0.0,
-                            self.inner.tracks.read().unwrap().len().saturating_sub(1) as f32,
-                        );
+                        .clamp(0.0, self.inner.tracks().len().saturating_sub(1) as f32);
 
                     state.position.x.set(x_pos);
 
@@ -751,13 +735,11 @@ where
 
                         let clip = self
                             .inner
-                            .tracks
-                            .read()
-                            .unwrap()
+                            .tracks()
                             .get(index)?
                             .get_clip_at_global_time(&self.inner.meter, time)?;
 
-                        self.inner.tracks.read().unwrap()[index].remove_clip(&clip);
+                        self.inner.tracks()[index].remove_clip(&clip);
 
                         state.action = Action::DeletingClips;
                         state.waveform_cache.borrow_mut().take();
@@ -822,9 +804,7 @@ where
 
                     let clip = self
                         .inner
-                        .tracks
-                        .read()
-                        .unwrap()
+                        .tracks()
                         .get(index)?
                         .get_clip_at_global_time(&self.inner.meter, time)?;
 
@@ -838,7 +818,7 @@ where
                         / state.scale.x.get().exp2()
                         - cursor.x;
 
-                    let ok = self.inner.tracks.read().unwrap()[index].try_push(&clip);
+                    let ok = self.inner.tracks()[index].try_push(&clip);
                     debug_assert!(ok);
 
                     state.action = Action::DraggingClip(clip, index, offset);
@@ -947,9 +927,7 @@ where
 
         let clip = self
             .inner
-            .tracks
-            .read()
-            .unwrap()
+            .tracks()
             .get(index)?
             .get_clip_at_global_time(&self.inner.meter, time)?;
 

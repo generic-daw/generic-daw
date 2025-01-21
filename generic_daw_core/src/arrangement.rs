@@ -5,7 +5,7 @@ use std::{
     path::Path,
     sync::{
         atomic::{AtomicBool, Ordering::SeqCst},
-        Arc, OnceLock, RwLock,
+        Arc, OnceLock, RwLock, RwLockReadGuard,
     },
 };
 
@@ -79,13 +79,15 @@ impl Arrangement {
 
     #[must_use]
     pub fn len(&self) -> Position {
-        self.tracks
-            .read()
-            .unwrap()
+        self.tracks()
             .iter()
             .map(|track| track.len())
             .max()
             .unwrap_or_else(Position::default)
+    }
+
+    pub fn tracks(&self) -> RwLockReadGuard<'_, Vec<Arc<Track>>> {
+        self.tracks.read().unwrap()
     }
 
     pub fn export(&self, path: &Path) {

@@ -48,8 +48,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         self.clips.borrow_mut().extend(
             self.inner
                 .clips()
-                .read()
-                .unwrap()
                 .iter()
                 .map(|clip| TrackClip::new(clip.clone(), self.scale.clone()))
                 .map(Element::new),
@@ -72,7 +70,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                         &Limits::new(limits.min(), Size::new(f32::INFINITY, limits.max().height)),
                     )
                 })
-                .zip(self.inner.clips().read().unwrap().iter())
+                .zip(self.inner.clips().iter())
                 .map(|(node, clip)| {
                     node.translate(Vector::new(
                         (clip.get_global_start().in_interleaved_samples_f(meter)
@@ -162,7 +160,7 @@ impl TrackExt for TrackInner {
         meter: &Arc<Meter>,
         global_time: usize,
     ) -> Option<Arc<TrackClipInner>> {
-        self.clips().read().unwrap().iter().rev().find_map(|clip| {
+        self.clips().iter().rev().find_map(|clip| {
             if clip.get_global_start().in_interleaved_samples(meter) <= global_time
                 && global_time <= clip.get_global_end().in_interleaved_samples(meter)
             {
@@ -183,8 +181,6 @@ impl TrackExt for TrackInner {
     ) -> Vec<Mesh> {
         let meter = self.meter();
         self.clips()
-            .read()
-            .unwrap()
             .iter()
             .filter_map(|clip| {
                 let first_pixel = (clip.get_global_start().in_interleaved_samples_f(meter)

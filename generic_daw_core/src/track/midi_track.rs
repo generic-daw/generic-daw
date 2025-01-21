@@ -3,7 +3,7 @@ use atomig::Atomic;
 use audio_graph::{AudioGraphNode, AudioGraphNodeImpl};
 use clap_host::PluginAudioProcessor;
 use plugin_state::PluginState;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
 
 pub mod dirty_event;
 pub mod plugin_state;
@@ -37,12 +37,14 @@ impl MidiTrack {
 
     #[must_use]
     pub fn len(&self) -> Position {
-        self.clips
-            .read()
-            .unwrap()
+        self.clips()
             .iter()
             .map(|clip| clip.get_global_end())
             .max()
             .unwrap_or_else(Position::default)
+    }
+
+    pub fn clips(&self) -> RwLockReadGuard<'_, Vec<Arc<TrackClip>>> {
+        self.clips.read().unwrap()
     }
 }

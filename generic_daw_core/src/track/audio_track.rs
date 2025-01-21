@@ -1,7 +1,7 @@
 use crate::{Meter, Position, Track, TrackClip};
 use atomig::Atomic;
 use audio_graph::{AudioGraphNode, AudioGraphNodeImpl};
-use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock};
+use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock, RwLockReadGuard};
 
 #[derive(Debug)]
 pub struct AudioTrack {
@@ -20,9 +20,7 @@ impl AudioGraphNodeImpl for AudioTrack {
             return;
         }
 
-        self.clips
-            .read()
-            .unwrap()
+        self.clips()
             .iter()
             .for_each(|clip| clip.fill_buf(buf_start_sample, buf));
     }
@@ -43,12 +41,14 @@ impl AudioTrack {
 
     #[must_use]
     pub fn len(&self) -> Position {
-        self.clips
-            .read()
-            .unwrap()
+        self.clips()
             .iter()
             .map(|clip| clip.get_global_end())
             .max()
             .unwrap_or_else(Position::default)
+    }
+
+    pub fn clips(&self) -> RwLockReadGuard<'_, Vec<Arc<TrackClip>>> {
+        self.clips.read().unwrap()
     }
 }
