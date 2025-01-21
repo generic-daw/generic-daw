@@ -1,7 +1,7 @@
 use super::{ArrangementPosition, ArrangementScale};
 use iced::{advanced::graphics::Mesh, Rectangle, Theme};
 
-pub trait MeshExt {
+pub trait TrackClipExt {
     fn meshes(
         &self,
         theme: &Theme,

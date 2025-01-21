@@ -1,4 +1,4 @@
-use super::{ArrangementPosition, ArrangementScale, Track, LINE_HEIGHT};
+use super::{track::TrackExt as _, ArrangementPosition, ArrangementScale, Track, LINE_HEIGHT};
 use generic_daw_core::{Arrangement as ArrangementInner, Position, TrackClip};
 use iced::{
     advanced::{
@@ -43,11 +43,9 @@ enum Action {
 const SWM: f32 = LINE_HEIGHT * 2.5;
 
 #[derive(Default)]
-struct State<'a, Message> {
+struct State {
     position: Rc<ArrangementPosition>,
     scale: Rc<ArrangementScale>,
-    /// list of all the track widgets
-    tracks: RefCell<Vec<Track<'a, Message>>>,
     /// saves the bpm from the last draw
     bpm: Cell<u16>,
     /// caches the meshes of the waveforms
@@ -79,11 +77,11 @@ where
     Message: Clone + Default + 'static,
 {
     fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<State<'_, Message>>()
+        tree::Tag::of::<State>()
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::<Message>::default())
+        tree::State::new(State::default())
     }
 
     fn size(&self) -> Size<Length> {
@@ -99,16 +97,28 @@ where
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        let state = tree.state.downcast_ref::<State<'_, Message>>();
+        let state = tree.state.downcast_ref::<State>();
+
+        let len = self.tracks.borrow().len();
 
         self.tracks.borrow_mut().clear();
-        self.tracks
-            .borrow_mut()
-            .extend(state.tracks.borrow().iter().cloned().map(Element::new));
+        self.tracks.borrow_mut().extend(
+            self.inner
+                .tracks
+                .read()
+                .unwrap()
+                .iter()
+                .map(|track| Track::new(track.clone(), state.position.clone(), state.scale.clone()))
+                .map(Element::new),
+        );
+
+        if self.tracks.borrow().len() != len {
+            state.waveform_cache.take();
+        }
 
         self.diff(tree);
 
-        let state = tree.state.downcast_ref::<State<'_, Message>>();
+        let state = tree.state.downcast_ref::<State>();
 
         let mut y = state
             .position
@@ -176,22 +186,9 @@ where
             return Status::Captured;
         };
 
-        let state = tree.state.downcast_mut::<State<'_, Message>>();
+        let state = tree.state.downcast_mut::<State>();
 
-        if self.inner.tracks.read().unwrap().len() != state.tracks.borrow().len() {
-            state.tracks.borrow_mut().clear();
-            state
-                .tracks
-                .borrow_mut()
-                .extend(self.inner.tracks.read().unwrap().iter().map(|track| {
-                    Track::new(track.clone(), state.position.clone(), state.scale.clone())
-                }));
-
-            state.waveform_cache.borrow_mut().take();
-            shell.invalidate_layout();
-
-            shell.publish(Message::default());
-        } else if self.inner.meter.playing.load(SeqCst) {
+        if self.inner.meter.playing.load(SeqCst) {
             shell.publish(Message::default());
         }
 
@@ -233,7 +230,7 @@ where
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> Interaction {
-        let state = tree.state.downcast_ref::<State<'_, Message>>();
+        let state = tree.state.downcast_ref::<State>();
 
         match state.action {
             Action::ClipTrimmingStart(..) | Action::ClipTrimmingEnd(..) => {
@@ -275,7 +272,7 @@ where
         cursor: Cursor,
         _viewport: &Rectangle,
     ) {
-        let state = tree.state.downcast_ref::<State<'_, Message>>();
+        let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
 
         let bpm = self.inner.meter.bpm.load(SeqCst);
@@ -323,9 +320,11 @@ where
             });
 
         if state.waveform_cache.borrow().is_none() {
-            let meshes = state
+            let meshes = self
+                .inner
                 .tracks
-                .borrow()
+                .read()
+                .unwrap()
                 .iter()
                 .zip(layout.children())
                 .flat_map(|(track, layout)| {
@@ -371,13 +370,7 @@ where
         }
     }
 
-    fn grid(
-        &self,
-        renderer: &mut Renderer,
-        bounds: Rectangle,
-        theme: &Theme,
-        state: &State<'_, Message>,
-    ) {
+    fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme, state: &State) {
         let numerator = self.inner.meter.numerator.load(SeqCst);
 
         let mut beat =
@@ -428,13 +421,7 @@ where
         }
     }
 
-    fn playhead(
-        &self,
-        renderer: &mut Renderer,
-        bounds: Rectangle,
-        theme: &Theme,
-        state: &State<'_, Message>,
-    ) {
+    fn playhead(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme, state: &State) {
         renderer.fill_quad(
             Quad {
                 bounds: Rectangle::new(bounds.position(), Size::new(bounds.width, LINE_HEIGHT)),
@@ -565,7 +552,7 @@ where
     #[expect(clippy::too_many_lines)]
     fn on_event_any_modifiers(
         &self,
-        state: &mut State<'_, Message>,
+        state: &mut State,
         event: &Event,
         cursor: Point,
         shell: &mut Shell<'_, Message>,
@@ -644,9 +631,11 @@ where
                             .mul_add(state.scale.x.get().exp2(), state.position.x.get())
                             as usize;
 
-                        let clip = state
+                        let clip = self
+                            .inner
                             .tracks
-                            .borrow()
+                            .read()
+                            .unwrap()
                             .get(index)?
                             .get_clip_at_global_time(&self.inner.meter, time)?;
 
@@ -706,7 +695,7 @@ where
 
     fn on_event_no_modifiers(
         &self,
-        state: &mut State<'_, Message>,
+        state: &mut State,
         event: &Event,
         cursor: Point,
         shell: &mut Shell<'_, Message>,
@@ -760,9 +749,11 @@ where
                             .mul_add(state.scale.x.get().exp2(), state.position.x.get())
                             as usize;
 
-                        let clip = state
+                        let clip = self
+                            .inner
                             .tracks
-                            .borrow()
+                            .read()
+                            .unwrap()
                             .get(index)?
                             .get_clip_at_global_time(&self.inner.meter, time)?;
 
@@ -784,7 +775,7 @@ where
 
     fn on_event_command(
         &self,
-        state: &mut State<'_, Message>,
+        state: &mut State,
         event: &Event,
         cursor: Point,
         shell: &mut Shell<'_, Message>,
@@ -829,9 +820,11 @@ where
                         .mul_add(state.scale.x.get().exp2(), state.position.x.get())
                         as usize;
 
-                    let clip = state
+                    let clip = self
+                        .inner
                         .tracks
-                        .borrow()
+                        .read()
+                        .unwrap()
                         .get(index)?
                         .get_clip_at_global_time(&self.inner.meter, time)?;
 
@@ -860,7 +853,7 @@ where
 
     fn on_event_shift(
         &self,
-        state: &State<'_, Message>,
+        state: &State,
         event: &Event,
         shell: &mut Shell<'_, Message>,
     ) -> Option<Status> {
@@ -888,7 +881,7 @@ where
 
     fn on_event_alt(
         &self,
-        state: &mut State<'_, Message>,
+        state: &mut State,
         event: &Event,
         cursor: Point,
         shell: &mut Shell<'_, Message>,
@@ -921,7 +914,7 @@ where
         None
     }
 
-    fn lmb_default(&self, state: &mut State<'_, Message>, cursor: Point) -> Option<Status> {
+    fn lmb_default(&self, state: &mut State, cursor: Point) -> Option<Status> {
         if cursor.y < LINE_HEIGHT {
             let mut time = Position::from_interleaved_samples(
                 cursor
@@ -952,9 +945,11 @@ where
             .mul_add(state.scale.x.get().exp2(), state.position.x.get())
             as usize;
 
-        let clip = state
+        let clip = self
+            .inner
             .tracks
-            .borrow()
+            .read()
+            .unwrap()
             .get(index)?
             .get_clip_at_global_time(&self.inner.meter, time)?;
 

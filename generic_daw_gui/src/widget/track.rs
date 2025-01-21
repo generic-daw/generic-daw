@@ -1,4 +1,4 @@
-use super::{ArrangementPosition, ArrangementScale, MeshExt as _, TrackClip};
+use super::{ArrangementPosition, ArrangementScale, TrackClip, TrackClipExt as _};
 use generic_daw_core::{Meter, Track as TrackInner, TrackClip as TrackClipInner};
 use iced::{
     advanced::{
@@ -13,7 +13,10 @@ use iced::{
 };
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
-#[derive(Clone)]
+mod track_ext;
+
+pub use track_ext::TrackExt;
+
 pub struct Track<'a, Message> {
     inner: Arc<TrackInner>,
     /// the position of the top left corner of the arrangement viewport
@@ -151,8 +154,26 @@ impl<Message> Track<'_, Message> {
             clips: Rc::default(),
         }
     }
+}
 
-    pub fn meshes(
+impl TrackExt for TrackInner {
+    fn get_clip_at_global_time(
+        &self,
+        meter: &Arc<Meter>,
+        global_time: usize,
+    ) -> Option<Arc<TrackClipInner>> {
+        self.clips().read().unwrap().iter().rev().find_map(|clip| {
+            if clip.get_global_start().in_interleaved_samples(meter) <= global_time
+                && global_time <= clip.get_global_end().in_interleaved_samples(meter)
+            {
+                Some(clip.clone())
+            } else {
+                None
+            }
+        })
+    }
+
+    fn meshes(
         &self,
         theme: &Theme,
         bounds: Rectangle,
@@ -160,10 +181,8 @@ impl<Message> Track<'_, Message> {
         position: &ArrangementPosition,
         scale: &ArrangementScale,
     ) -> Vec<Mesh> {
-        let meter = self.inner.meter();
-
-        self.inner
-            .clips()
+        let meter = self.meter();
+        self.clips()
             .read()
             .unwrap()
             .iter()
@@ -186,27 +205,5 @@ impl<Message> Track<'_, Message> {
                 .and_then(|bounds| clip.meshes(theme, bounds, viewport, position, scale))
             })
             .collect()
-    }
-
-    pub fn get_clip_at_global_time(
-        &self,
-        meter: &Arc<Meter>,
-        global_time: usize,
-    ) -> Option<Arc<TrackClipInner>> {
-        self.inner
-            .clips()
-            .read()
-            .unwrap()
-            .iter()
-            .rev()
-            .find_map(|clip| {
-                if clip.get_global_start().in_interleaved_samples(meter) <= global_time
-                    && global_time <= clip.get_global_end().in_interleaved_samples(meter)
-                {
-                    Some(clip.clone())
-                } else {
-                    None
-                }
-            })
     }
 }

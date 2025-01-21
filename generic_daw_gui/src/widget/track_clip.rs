@@ -1,4 +1,4 @@
-use super::{ArrangementPosition, ArrangementScale, MeshExt, LINE_HEIGHT};
+use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT};
 use generic_daw_core::TrackClip as TrackClipInner;
 use iced::{
     advanced::{
@@ -17,6 +17,9 @@ use iced::{
 use std::{cmp::max_by, rc::Rc, sync::Arc};
 
 pub mod audio_clip;
+pub mod track_clip_ext;
+
+pub use track_clip_ext::TrackClipExt;
 
 #[derive(Clone)]
 pub struct TrackClip {
@@ -150,7 +153,7 @@ impl TrackClip {
     }
 }
 
-impl MeshExt for TrackClipInner {
+impl TrackClipExt for TrackClipInner {
     fn meshes(
         &self,
         theme: &Theme,

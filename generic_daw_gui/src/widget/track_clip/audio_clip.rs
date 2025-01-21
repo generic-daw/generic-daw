@@ -1,4 +1,4 @@
-use super::{ArrangementPosition, ArrangementScale, MeshExt, LINE_HEIGHT};
+use super::{ArrangementPosition, ArrangementScale, TrackClipExt, LINE_HEIGHT};
 use generic_daw_core::AudioClip;
 use iced::{
     advanced::graphics::{
@@ -10,7 +10,7 @@ use iced::{
 };
 use std::cmp::{max_by, min};
 
-impl MeshExt for AudioClip {
+impl TrackClipExt for AudioClip {
     fn meshes(
         &self,
         theme: &Theme,
