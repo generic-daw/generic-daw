@@ -1,4 +1,5 @@
 use super::{track::TrackExt as _, ArrangementPosition, ArrangementScale, Track, LINE_HEIGHT};
+use crate::daw::Message;
 use generic_daw_core::{Arrangement as ArrangementInner, Position, TrackClip};
 use iced::{
     advanced::{
@@ -72,10 +73,7 @@ impl<Message> Debug for Arrangement<'_, Message> {
     }
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message>
-where
-    Message: Clone + Default + 'static,
-{
+impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
     }
@@ -106,7 +104,15 @@ where
             self.inner
                 .tracks()
                 .iter()
-                .map(|track| Track::new(track.clone(), state.position.clone(), state.scale.clone()))
+                .enumerate()
+                .map(|(idx, track)| {
+                    Track::new(
+                        track.clone(),
+                        state.position.clone(),
+                        state.scale.clone(),
+                        idx,
+                    )
+                })
                 .map(Element::new),
         );
 
@@ -187,7 +193,7 @@ where
         let state = tree.state.downcast_mut::<State>();
 
         if self.inner.meter.playing.load(SeqCst) {
-            shell.publish(Message::default());
+            shell.publish(Message::Ping);
         }
 
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
@@ -964,7 +970,7 @@ where
     }
 }
 
-impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message, Theme, Renderer>
+impl<'a> From<Arrangement<'a, Message>> for Element<'a, Message, Theme, Renderer>
 where
     Message: Clone + Default + 'static,
 {

@@ -41,6 +41,7 @@ impl State {
 
 pub struct Knob<Message> {
     range: RangeInclusive<f32>,
+    zero: f32,
     default: f32,
     f: Option<Box<dyn Fn(f32) -> Message>>,
 }
@@ -49,6 +50,7 @@ impl<Message> Debug for Knob<Message> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Knob")
             .field("range", &self.range)
+            .field("zero", &self.zero)
             .field("default", &self.default)
             .finish_non_exhaustive()
     }
@@ -117,6 +119,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                         state.current =
                             (state.current + diff).clamp(*self.range.start(), *self.range.end());
                         state.dragging = Some(y);
+
+                        return Status::Captured;
                     } else if cursor
                         .position_in(layout.bounds())
                         .is_some_and(|pos| pos.distance(Point::new(RADIUS, RADIUS)) < RADIUS)
@@ -129,8 +133,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                         state.cache.clear();
                         state.hovering = false;
                     }
-
-                    return Status::Captured;
                 }
                 _ => {}
             }
@@ -183,12 +185,18 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
 }
 
 impl<Message> Knob<Message> {
-    pub fn new(range: RangeInclusive<f32>, default: f32) -> Self {
+    pub fn new(range: RangeInclusive<f32>, zero: f32, default: f32) -> Self {
         Self {
             range,
+            zero,
             default,
             f: None,
         }
+    }
+
+    pub fn on_move(mut self, f: impl Fn(f32) -> Message + 'static) -> Self {
+        self.f = Some(Box::new(f));
+        self
     }
 
     fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
@@ -210,7 +218,7 @@ impl<Message> Knob<Message> {
 
         let start_angle = base_angle
             + Radians(
-                FRAC_PI_2 * 3.0 * (self.default - self.range.start())
+                FRAC_PI_2 * 3.0 * (self.zero - self.range.start())
                     / (self.range.end() - self.range.start()),
             );
 

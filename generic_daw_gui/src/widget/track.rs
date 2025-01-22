@@ -1,4 +1,5 @@
-use super::{ArrangementPosition, ArrangementScale, TrackClip, TrackClipExt as _};
+use super::{knob::Knob, ArrangementPosition, ArrangementScale, TrackClip, TrackClipExt as _};
+use crate::daw::Message;
 use generic_daw_core::{Meter, Track as TrackInner, TrackClip as TrackClipInner};
 use iced::{
     advanced::{
@@ -6,12 +7,14 @@ use iced::{
         layout::{Limits, Node},
         renderer::Style,
         widget::Tree,
-        Layout, Renderer as _, Widget,
+        Clipboard, Layout, Renderer as _, Shell, Widget,
     },
+    event::Status,
     mouse::{Cursor, Interaction},
+    widget::row,
     Element, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{iter::once, rc::Rc, sync::Arc};
 
 mod track_ext;
 
@@ -24,7 +27,9 @@ pub struct Track<'a, Message> {
     /// information about the scale of the timeline viewport
     scale: Rc<ArrangementScale>,
     /// list of all the clip widgets
-    clips: Rc<RefCell<Vec<Element<'a, Message, Theme, Renderer>>>>,
+    clips: Vec<Element<'a, Message, Theme, Renderer>>,
+    /// the track panel
+    panel: Element<'a, Message, Theme, Renderer>,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
@@ -35,34 +40,27 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         }
     }
 
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&self.clips.borrow());
-    }
-
     fn children(&self) -> Vec<Tree> {
-        self.clips.borrow().iter().map(Tree::new).collect()
+        self.clips
+            .iter()
+            .chain(once(&self.panel))
+            .map(Tree::new)
+            .collect()
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        self.clips.borrow_mut().clear();
-        self.clips.borrow_mut().extend(
-            self.inner
-                .clips()
-                .iter()
-                .map(|clip| TrackClip::new(clip.clone(), self.scale.clone()))
-                .map(Element::new),
-        );
-
-        self.diff(tree);
-
         let meter = self.inner.meter();
+
+        let panel_layout =
+            self.panel
+                .as_widget()
+                .layout(tree.children.last_mut().unwrap(), renderer, limits);
 
         Node::with_children(
             Size::new(limits.max().width, self.scale.y.get()),
             self.clips
-                .borrow()
                 .iter()
-                .zip(&mut tree.children)
+                .zip(&mut tree.children[1..])
                 .map(|(widget, tree)| {
                     widget.as_widget().layout(
                         tree,
@@ -79,6 +77,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                         0.0,
                     ))
                 })
+                .chain(once(panel_layout))
                 .collect(),
         )
     }
@@ -92,8 +91,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         renderer: &Renderer,
     ) -> Interaction {
         self.clips
-            .borrow()
             .iter()
+            .chain(once(&self.panel))
             .zip(&tree.children)
             .zip(layout.children())
             .map(|((child, tree), layout)| {
@@ -125,8 +124,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         }
 
         self.clips
-            .borrow()
             .iter()
+            .chain(once(&self.panel))
             .zip(&tree.children)
             .zip(layout.children())
             .for_each(|((child, tree), layout)| {
@@ -137,19 +136,61 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                 });
             });
     }
+
+    fn on_event(
+        &mut self,
+        tree: &mut Tree,
+        event: iced::Event,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        renderer: &Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        viewport: &Rectangle,
+    ) -> Status {
+        self.panel.as_widget_mut().on_event(
+            tree.children.last_mut().unwrap(),
+            event,
+            layout.children().last().unwrap(),
+            cursor,
+            renderer,
+            clipboard,
+            shell,
+            viewport,
+        )
+    }
 }
 
-impl<Message> Track<'_, Message> {
+impl Track<'_, Message> {
     pub fn new(
         inner: Arc<TrackInner>,
         position: Rc<ArrangementPosition>,
         scale: Rc<ArrangementScale>,
+        idx: usize,
     ) -> Self {
+        let panel = row([
+            Knob::new(0.0..=1.0, 0.0, 1.0)
+                .on_move(move |f| Message::TrackVolumeChanged(idx, f))
+                .into(),
+            Knob::new(-1.0..=1.0, 0.0, 0.0)
+                .on_move(move |f| Message::TrackPanChanged(idx, f))
+                .into(),
+        ])
+        .into();
+
+        let clips = inner
+            .clips()
+            .iter()
+            .map(|clip| TrackClip::new(clip.clone(), scale.clone()))
+            .map(Element::new)
+            .collect();
+
         Self {
             inner,
             position,
             scale,
-            clips: Rc::default(),
+            clips,
+            panel,
         }
     }
 }

@@ -33,7 +33,6 @@ pub enum Message {
     Ping,
     ThemeChanged(Theme),
     ClapHost(ClapHostMessage),
-    #[expect(dead_code)]
     Test,
     LoadSamplesButton,
     LoadSamples(Vec<FileHandle>),
@@ -48,6 +47,8 @@ pub enum Message {
     NumeratorChanged(Numerator),
     DenominatorChanged(Denominator),
     ToggleMetronome,
+    TrackVolumeChanged(usize, f32),
+    TrackPanChanged(usize, f32),
 }
 
 pub struct Daw {
@@ -189,6 +190,12 @@ impl Daw {
                 .store(new_denominator, SeqCst),
             Message::ToggleMetronome => {
                 self.arrangement.metronome.fetch_not(SeqCst);
+            }
+            Message::TrackVolumeChanged(idx, volume) => {
+                self.arrangement.tracks()[idx].set_volume(volume);
+            }
+            Message::TrackPanChanged(idx, pan) => {
+                self.arrangement.tracks()[idx].set_pan(pan);
             }
         }
 
