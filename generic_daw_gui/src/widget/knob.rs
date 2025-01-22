@@ -1,4 +1,4 @@
-use super::LINE_HEIGHT;
+use super::{arrangement::SWM, LINE_HEIGHT};
 use iced::{
     advanced::{
         graphics::geometry::Renderer as _,
@@ -9,7 +9,7 @@ use iced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
     },
     event::Status,
-    mouse::{self, Cursor, Interaction},
+    mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::canvas::{path::Arc, Cache, Frame, Path},
     Element, Event, Length, Point, Radians, Rectangle, Renderer, Size, Theme, Vector,
 };
@@ -119,9 +119,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                     position: Point { y, .. },
                 } => {
                     if let Some(last) = state.dragging {
-                        let mut diff = last - y;
-                        diff *= self.range.end() - self.range.start();
-                        diff /= 200.0;
+                        let diff = (last - y) * (self.range.end() - self.range.start()) / 200.0;
 
                         state.cache.clear();
                         state.current =
@@ -148,6 +146,28 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                         state.cache.clear();
                         state.hovering = false;
                     }
+                }
+                mouse::Event::WheelScrolled { delta }
+                    if state.dragging.is_none()
+                        && cursor.position_in(layout.bounds()).is_some_and(|pos| {
+                            pos.distance(Point::new(RADIUS, RADIUS)) < RADIUS
+                        }) =>
+                {
+                    let diff = match delta {
+                        ScrollDelta::Lines { y, .. } => y,
+                        ScrollDelta::Pixels { y, .. } => y / SWM,
+                    } / 20.0
+                        * (self.range.end() - self.range.start());
+
+                    state.cache.clear();
+                    state.current =
+                        (state.current + diff).clamp(*self.range.start(), *self.range.end());
+
+                    if let Some(f) = &self.f {
+                        shell.publish(f(state.current));
+                    }
+
+                    return Status::Captured;
                 }
                 _ => {}
             }

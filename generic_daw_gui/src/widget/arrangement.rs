@@ -45,8 +45,8 @@ enum Action {
     ClipTrimmingEnd(Arc<TrackClip>, f32),
 }
 
-/// how many pixels to scroll per scroll wheel movement
-const SWM: f32 = LINE_HEIGHT * 2.5;
+/// scroll wheel clicks -> trackpad scroll pixels
+pub const SWM: f32 = LINE_HEIGHT * 2.5;
 
 #[derive(Default)]
 struct State {
@@ -675,10 +675,11 @@ where
         if let Event::Mouse(event) = event {
             match event {
                 mouse::Event::WheelScrolled { delta } => {
-                    let (x, y) = match delta {
-                        ScrollDelta::Pixels { x, y } => (-x * 2.0, y * 4.0),
-                        ScrollDelta::Lines { x, y } => (-x * 2.0 * SWM, y * 4.0 * SWM),
+                    let (x, y) = match *delta {
+                        ScrollDelta::Pixels { x, y } => (-x, y),
+                        ScrollDelta::Lines { x, y } => (-x * SWM, y * SWM),
                     };
+                    let (x, y) = (x * 2.0, y * 4.0);
 
                     let x_pos = x
                         .mul_add(state.scale.x.get().exp2(), state.position.x.get())
@@ -751,9 +752,9 @@ where
             match event {
                 mouse::Event::WheelScrolled { delta } => {
                     let x = match delta {
-                        ScrollDelta::Pixels { y, .. } => -y * 0.01,
-                        ScrollDelta::Lines { y, .. } => -y * 0.01 * SWM,
-                    };
+                        ScrollDelta::Pixels { y, .. } => -y,
+                        ScrollDelta::Lines { y, .. } => -y * SWM,
+                    } * 0.01;
 
                     let x_scale = (x + state.scale.x.get()).clamp(3.0, 12.999_999);
                     let x_pos = cursor
@@ -824,9 +825,9 @@ where
     ) -> Option<Status> {
         if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = event {
             let x = match delta {
-                ScrollDelta::Pixels { y, .. } => -y * 4.0,
-                ScrollDelta::Lines { y, .. } => -y * 4.0 * SWM,
-            };
+                ScrollDelta::Pixels { y, .. } => -y,
+                ScrollDelta::Lines { y, .. } => -y * SWM,
+            } * 4.0;
 
             let x_pos = x
                 .mul_add(state.scale.x.get().exp2(), state.position.x.get())
@@ -854,10 +855,10 @@ where
         if let Event::Mouse(event) = event {
             match event {
                 mouse::Event::WheelScrolled { delta } => {
-                    let y = match delta {
-                        ScrollDelta::Pixels { y, .. } => y * 0.1,
-                        ScrollDelta::Lines { y, .. } => y * 0.1 * SWM,
-                    };
+                    let y = match *delta {
+                        ScrollDelta::Pixels { y, .. } => y,
+                        ScrollDelta::Lines { y, .. } => y * SWM,
+                    } * 0.1;
 
                     let y_scale =
                         (y + state.scale.y.get()).clamp(2.0 * LINE_HEIGHT, 10.0 * LINE_HEIGHT);
