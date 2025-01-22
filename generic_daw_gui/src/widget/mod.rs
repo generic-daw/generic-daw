@@ -9,6 +9,7 @@ mod vsplit;
 pub use arrangement::Arrangement;
 pub use arrangement_position::ArrangementPosition;
 pub use arrangement_scale::ArrangementScale;
+pub use knob::Knob;
 pub use track::Track;
 pub use track_clip::{TrackClip, TrackClipExt};
 pub use vsplit::VSplit;

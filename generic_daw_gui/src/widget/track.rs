@@ -1,4 +1,4 @@
-use super::{knob::Knob, ArrangementPosition, ArrangementScale, TrackClip, TrackClipExt as _};
+use super::{ArrangementPosition, ArrangementScale, Knob, TrackClip, TrackClipExt as _};
 use crate::daw::Message;
 use generic_daw_core::{Meter, Track as TrackInner, TrackClip as TrackClipInner};
 use iced::{
@@ -198,7 +198,7 @@ impl Track<'_, Message> {
 impl TrackExt for TrackInner {
     fn get_clip_at_global_time(
         &self,
-        meter: &Arc<Meter>,
+        meter: &Meter,
         global_time: usize,
     ) -> Option<Arc<TrackClipInner>> {
         self.clips().iter().rev().find_map(|clip| {
