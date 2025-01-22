@@ -3,6 +3,7 @@ use iced::{
     advanced::{
         graphics::geometry::Renderer as _,
         layout::{Limits, Node},
+        mouse::{click::Kind, Click},
         renderer::Style,
         widget::{tree, Tree},
         Clipboard, Layout, Renderer as _, Shell, Widget,
@@ -25,6 +26,7 @@ struct State {
     dragging: Option<f32>,
     current: f32,
     hovering: bool,
+    last_click: Option<Click>,
     cache: Cache,
 }
 
@@ -34,6 +36,7 @@ impl State {
             dragging: None,
             current,
             hovering: false,
+            last_click: None,
             cache: Cache::new(),
         }
     }
@@ -94,8 +97,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                             pos.distance(Point::new(RADIUS, RADIUS)) < RADIUS
                         }) =>
                 {
-                    state.dragging = cursor.position().map(|pos| pos.y);
-                    if state.dragging.is_some() {
+                    if let Some(pos) = cursor.position() {
+                        state.dragging = Some(pos.y);
+
+                        let new_click = Click::new(pos, mouse::Button::Left, state.last_click);
+                        if matches!(new_click.kind(), Kind::Double) {
+                            state.current = self.default;
+                            state.cache.clear();
+                        }
+                        state.last_click = Some(new_click);
+
                         return Status::Captured;
                     }
                 }
