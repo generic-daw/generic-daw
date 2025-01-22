@@ -1,4 +1,7 @@
-use super::{track::TrackExt as _, ArrangementPosition, ArrangementScale, Track, LINE_HEIGHT};
+use super::{
+    border, knob::DIAMETER, track::TrackExt as _, ArrangementPosition, ArrangementScale, Track,
+    LINE_HEIGHT,
+};
 use crate::daw::Message;
 use generic_daw_core::{Arrangement as ArrangementInner, Position, TrackClip};
 use iced::{
@@ -28,6 +31,8 @@ use std::{
     rc::Rc,
     sync::{atomic::Ordering::SeqCst, Arc},
 };
+
+pub const TRACK_PANEL_WIDTH: f32 = DIAMETER * 2.0 + 15.0;
 
 #[derive(Default)]
 enum Action {
@@ -203,10 +208,11 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
 
         let bounds = layout.bounds();
 
-        let Some(cursor) = cursor.position_in(bounds) else {
+        let Some(mut cursor) = cursor.position_in(bounds) else {
             state.action = Action::None;
             return Status::Ignored;
         };
+        cursor.x -= TRACK_PANEL_WIDTH;
 
         if let Some(status) = self.on_event_any_modifiers(state, &event, cursor, shell) {
             return status;
@@ -304,13 +310,19 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             state.last_theme.borrow_mut().replace(theme.clone());
         }
 
-        renderer.with_layer(bounds, |renderer| {
-            self.grid(renderer, bounds, theme, state);
-        });
+        let mut bounds_no_track_panel = bounds;
+        if !self.tracks.borrow().is_empty() {
+            bounds_no_track_panel.x += TRACK_PANEL_WIDTH;
+            bounds_no_track_panel.width -= TRACK_PANEL_WIDTH;
+        }
 
-        let mut inner_bounds = bounds;
-        inner_bounds.y += LINE_HEIGHT;
-        inner_bounds.height -= LINE_HEIGHT;
+        let mut bounds_no_seeker = bounds;
+        bounds_no_seeker.y += LINE_HEIGHT;
+        bounds_no_seeker.height -= LINE_HEIGHT;
+
+        renderer.with_layer(bounds_no_track_panel, |renderer| {
+            self.grid(renderer, bounds_no_track_panel, theme, state);
+        });
 
         self.tracks
             .borrow()
@@ -318,9 +330,15 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             .zip(&tree.children)
             .zip(layout.children())
             .for_each(|((child, tree), layout)| {
-                child
-                    .as_widget()
-                    .draw(tree, renderer, theme, style, layout, cursor, &inner_bounds);
+                let Some(bounds) = layout.bounds().intersection(&bounds_no_seeker) else {
+                    return;
+                };
+
+                renderer.with_layer(bounds, |renderer| {
+                    child
+                        .as_widget()
+                        .draw(tree, renderer, theme, style, layout, cursor, &bounds);
+                });
             });
 
         if state.waveform_cache.borrow().is_none() {
@@ -331,8 +349,14 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                 .zip(layout.children())
                 .flat_map(|(track, layout)| {
                     let bounds = layout.bounds();
-                    if bounds.intersects(&inner_bounds) {
-                        track.meshes(theme, bounds, inner_bounds, &state.position, &state.scale)
+                    if bounds.intersects(&bounds_no_seeker) {
+                        track.meshes(
+                            theme,
+                            bounds,
+                            bounds_no_seeker,
+                            &state.position,
+                            &state.scale,
+                        )
                     } else {
                         Vec::new()
                     }
@@ -349,14 +373,15 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             );
         }
 
-        renderer.with_layer(bounds, |renderer| {
+        renderer.with_layer(bounds_no_track_panel, |renderer| {
             renderer.draw_geometry(Geometry::load(
                 state.waveform_cache.borrow().as_ref().unwrap(),
             ));
         });
 
-        renderer.with_layer(bounds, |renderer| {
-            self.playhead(renderer, bounds, theme, state);
+        renderer.with_layer(bounds_no_track_panel, |renderer| {
+            self.playhead(renderer, bounds_no_track_panel, theme, state);
+            border(renderer, bounds_no_track_panel, theme);
         });
     }
 }
@@ -435,16 +460,18 @@ where
         let x = (self.inner.meter.sample.load(SeqCst) as f32 - state.position.x.get())
             / state.scale.x.get().exp2();
 
-        renderer.fill_quad(
-            Quad {
-                bounds: Rectangle::new(
-                    bounds.position() + Vector::new(x, 0.0),
-                    Size::new(1.5, bounds.height),
-                ),
-                ..Quad::default()
-            },
-            theme.extended_palette().primary.base.color,
-        );
+        if x >= 0.0 {
+            renderer.fill_quad(
+                Quad {
+                    bounds: Rectangle::new(
+                        bounds.position() + Vector::new(x, 0.0),
+                        Size::new(1.5, bounds.height),
+                    ),
+                    ..Quad::default()
+                },
+                theme.extended_palette().primary.base.color,
+            );
+        }
 
         let mut draw_text = |beat: Position, bar: u32| {
             let x = (beat.in_interleaved_samples_f(&self.inner.meter) - state.position.x.get())
@@ -501,54 +528,6 @@ where
 
             beat += Position::QUARTER_NOTE;
         }
-
-        Self::border(renderer, bounds, theme);
-    }
-
-    fn border(renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-        // I have no clue why we sometimes have to subtract one extra from the y coordinate
-        // but it works so I'm not gonna touch it
-
-        renderer.fill_quad(
-            Quad {
-                bounds: Rectangle::new(bounds.position(), Size::new(1.0, bounds.height)),
-                ..Quad::default()
-            },
-            theme.extended_palette().secondary.weak.color,
-        );
-
-        renderer.fill_quad(
-            Quad {
-                bounds: Rectangle::new(
-                    bounds.position() + Vector::new(0.0, -1.0),
-                    Size::new(bounds.width, 1.0),
-                ),
-                ..Quad::default()
-            },
-            theme.extended_palette().secondary.weak.color,
-        );
-
-        renderer.fill_quad(
-            Quad {
-                bounds: Rectangle::new(
-                    bounds.position() + Vector::new(bounds.width - 1.0, 0.0),
-                    Size::new(1.0, bounds.height),
-                ),
-                ..Quad::default()
-            },
-            theme.extended_palette().secondary.weak.color,
-        );
-
-        renderer.fill_quad(
-            Quad {
-                bounds: Rectangle::new(
-                    bounds.position() + Vector::new(0.0, bounds.height - 2.0),
-                    Size::new(bounds.width, 1.0),
-                ),
-                ..Quad::default()
-            },
-            theme.extended_palette().secondary.weak.color,
-        );
     }
 
     #[expect(clippy::too_many_lines)]

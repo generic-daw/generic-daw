@@ -1,4 +1,7 @@
-use super::{ArrangementPosition, ArrangementScale, Knob, TrackClip, TrackClipExt as _};
+use super::{
+    arrangement::TRACK_PANEL_WIDTH, border, ArrangementPosition, ArrangementScale, Knob, TrackClip,
+    TrackClipExt as _,
+};
 use crate::daw::Message;
 use generic_daw_core::{Meter, Track as TrackInner, TrackClip as TrackClipInner};
 use iced::{
@@ -11,7 +14,7 @@ use iced::{
     },
     event::Status,
     mouse::{Cursor, Interaction},
-    widget::row,
+    widget::{container, container::Style as ContainerStyle, row},
     Element, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::{iter::once, rc::Rc, sync::Arc};
@@ -71,9 +74,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                 .zip(self.inner.clips().iter())
                 .map(|(node, clip)| {
                     node.translate(Vector::new(
-                        (clip.get_global_start().in_interleaved_samples_f(meter)
-                            - self.position.x.get())
-                            / self.scale.x.get().exp2(),
+                        TRACK_PANEL_WIDTH
+                            + (clip.get_global_start().in_interleaved_samples_f(meter)
+                                - self.position.x.get())
+                                / self.scale.x.get().exp2(),
                         0.0,
                     ))
                 })
@@ -114,7 +118,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        let Some(bounds) = viewport.intersection(&layout.bounds()) else {
+        let Some(mut bounds) = viewport.intersection(&layout.bounds()) else {
             return;
         };
 
@@ -123,10 +127,24 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             return;
         }
 
+        border(renderer, bounds, theme);
+
+        self.panel.as_widget().draw(
+            tree.children.last().unwrap(),
+            renderer,
+            theme,
+            style,
+            layout.children().last().unwrap(),
+            cursor,
+            viewport,
+        );
+
+        bounds.width -= TRACK_PANEL_WIDTH;
+        bounds.x += TRACK_PANEL_WIDTH;
+
         self.clips
             .iter()
-            .chain(once(&self.panel))
-            .zip(&tree.children)
+            .zip(&tree.children[1..])
             .zip(layout.children())
             .for_each(|((child, tree), layout)| {
                 renderer.with_layer(bounds, |renderer| {
@@ -168,14 +186,31 @@ impl Track<'_, Message> {
         scale: Rc<ArrangementScale>,
         idx: usize,
     ) -> Self {
-        let panel = row([
-            Knob::new(0.0..=1.0, 0.0, 1.0)
-                .on_move(move |f| Message::TrackVolumeChanged(idx, f))
-                .into(),
-            Knob::new(-1.0..=1.0, 0.0, 0.0)
-                .on_move(move |f| Message::TrackPanChanged(idx, f))
-                .into(),
-        ])
+        let panel = container(
+            row([
+                Knob::new(0.0..=1.0, 0.0, 1.0)
+                    .on_move(move |f| Message::TrackVolumeChanged(idx, f))
+                    .into(),
+                Knob::new(-1.0..=1.0, 0.0, 0.0)
+                    .on_move(move |f| Message::TrackPanChanged(idx, f))
+                    .into(),
+            ])
+            .spacing(5.0),
+        )
+        .padding(5.0)
+        .height(Length::Fill)
+        .style(|theme| ContainerStyle {
+            background: Some(
+                theme
+                    .extended_palette()
+                    .secondary
+                    .weak
+                    .color
+                    .scale_alpha(0.25)
+                    .into(),
+            ),
+            ..ContainerStyle::default()
+        })
         .into();
 
         let clips = inner

@@ -19,7 +19,7 @@ use std::{
     ops::RangeInclusive,
 };
 
-const DIAMETER: f32 = LINE_HEIGHT * 2.0;
+pub const DIAMETER: f32 = LINE_HEIGHT * 2.0;
 const RADIUS: f32 = LINE_HEIGHT;
 
 struct State {
@@ -111,6 +111,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                     }
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
+                    state.cache.clear();
                     state.dragging = None;
                     return Status::Captured;
                 }
@@ -130,6 +131,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                         state.current =
                             (state.current + diff).clamp(*self.range.start(), *self.range.end());
                         state.dragging = Some(y);
+                        state.hovering = cursor
+                            .position_in(layout.bounds())
+                            .is_some_and(|pos| pos.distance(Point::new(RADIUS, RADIUS)) < RADIUS);
 
                         return Status::Captured;
                     } else if cursor
