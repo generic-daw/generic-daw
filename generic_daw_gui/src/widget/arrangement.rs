@@ -196,8 +196,15 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         };
 
         let state = tree.state.downcast_mut::<State>();
+        let bounds = layout.bounds();
 
-        if self.inner.meter.playing.load(SeqCst) {
+        if self.inner.meter.playing.load(SeqCst)
+            && state.position.x.get() < self.inner.meter.sample.load(SeqCst) as f32
+            && bounds
+                .width
+                .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                > self.inner.meter.sample.load(SeqCst) as f32
+        {
             shell.publish(Message::Ping);
         }
 
@@ -206,13 +213,13 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             return Status::Ignored;
         }
 
-        let bounds = layout.bounds();
-
         let Some(mut cursor) = cursor.position_in(bounds) else {
             state.action = Action::None;
             return Status::Ignored;
         };
-        cursor.x -= TRACK_PANEL_WIDTH;
+        if !self.tracks.borrow().is_empty() {
+            cursor.x -= TRACK_PANEL_WIDTH;
+        }
 
         if let Some(status) = self.on_event_any_modifiers(state, &event, cursor, shell) {
             return status;
