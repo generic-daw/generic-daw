@@ -123,10 +123,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                         diff *= self.range.end() - self.range.start();
                         diff /= 200.0;
 
-                        if let Some(f) = &self.f {
-                            shell.publish(f(state.current));
-                        }
-
                         state.cache.clear();
                         state.current =
                             (state.current + diff).clamp(*self.range.start(), *self.range.end());
@@ -134,6 +130,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                         state.hovering = cursor
                             .position_in(layout.bounds())
                             .is_some_and(|pos| pos.distance(Point::new(RADIUS, RADIUS)) < RADIUS);
+
+                        if let Some(f) = &self.f {
+                            shell.publish(f(state.current));
+                        }
 
                         return Status::Captured;
                     } else if cursor
