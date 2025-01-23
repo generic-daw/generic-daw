@@ -69,7 +69,7 @@ impl TrackClipExt for AudioClip {
         let lod = scale.x.get() as usize - 3;
 
         // vertices of the waveform
-        let vertices = self.audio.lods[lod].read().unwrap()[first_index..last_index]
+        let vertices = self.audio.lods[lod][first_index..last_index]
             .iter()
             .enumerate()
             .flat_map(|(x, (min, max))| {

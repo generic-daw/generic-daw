@@ -10,7 +10,7 @@ use std::{
     fmt::{Debug, Formatter},
     fs::File,
     path::PathBuf,
-    sync::{atomic::Ordering::SeqCst, Arc, RwLock},
+    sync::{atomic::Ordering::SeqCst, Arc},
 };
 use symphonia::core::{
     audio::SampleBuffer,
@@ -21,12 +21,11 @@ use symphonia::core::{
     probe::Hint,
 };
 
-#[expect(clippy::type_complexity)]
 pub struct InterleavedAudio {
     /// these are used to play the sample back
     pub(crate) samples: Box<[f32]>,
     /// these are used to draw the sample in various quality levels
-    pub lods: [RwLock<Box<[(f32, f32)]>>; 10],
+    pub lods: [Box<[(f32, f32)]>; 10],
     /// the file name associated with the sample
     pub(crate) path: PathBuf,
 }
@@ -44,16 +43,17 @@ impl InterleavedAudio {
         let samples = Self::read_audio_file(&path, meter)?;
         let length = samples.len();
 
-        let audio = Arc::new(Self {
+        let mut audio = Self {
             samples,
             lods: array::from_fn(|i| {
-                RwLock::new(vec![(0.0, 0.0); length.div_ceil(1 << (i + 3))].into_boxed_slice())
+                vec![(0.0, 0.0); length.div_ceil(1 << (i + 3))].into_boxed_slice()
             }),
             path,
-        });
+        };
 
-        Self::create_lod(&audio);
-        Ok(audio)
+        audio.create_lod();
+
+        Ok(Arc::new(audio))
     }
 
     #[must_use]
@@ -116,40 +116,36 @@ impl InterleavedAudio {
             .map(Vec::into_boxed_slice)
     }
 
-    fn create_lod(audio: &Self) {
-        audio.samples.chunks(8).enumerate().for_each(|(i, chunk)| {
+    fn create_lod(&mut self) {
+        self.samples.chunks(8).enumerate().for_each(|(i, chunk)| {
             let (min, max) = match chunk.iter().minmax_by(|a, b| a.partial_cmp(b).unwrap()) {
                 MinMaxResult::MinMax(min, max) => (min, max),
                 MinMaxResult::OneElement(x) => (x, x),
                 MinMaxResult::NoElements => unreachable!(),
             };
-            audio.lods[0].write().unwrap()[i] = (min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5));
+            self.lods[0][i] = (min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5));
         });
 
         (1..10).for_each(|i| {
-            let len = audio.lods[i].read().unwrap().len();
+            let len = self.lods[i].len();
             (0..len).for_each(|j| {
                 let min = min_by(
-                    audio.lods[i - 1].read().unwrap()[2 * j].0,
-                    audio.lods[i - 1]
-                        .read()
-                        .unwrap()
+                    self.lods[i - 1][2 * j].0,
+                    self.lods[i - 1]
                         .get(2 * j + 1)
                         .unwrap_or(&(f32::MAX, f32::MAX))
                         .0,
                     |a, b| a.partial_cmp(b).unwrap(),
                 );
                 let max = max_by(
-                    audio.lods[i - 1].read().unwrap()[2 * j].1,
-                    audio.lods[i - 1]
-                        .read()
-                        .unwrap()
+                    self.lods[i - 1][2 * j].1,
+                    self.lods[i - 1]
                         .get(2 * j + 1)
                         .unwrap_or(&(f32::MAX, f32::MAX))
                         .1,
                     |a, b| a.partial_cmp(b).unwrap(),
                 );
-                audio.lods[i].write().unwrap()[j] = (min, max);
+                self.lods[i][j] = (min, max);
             });
         });
     }
