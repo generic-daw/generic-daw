@@ -1,6 +1,5 @@
 use crate::Meter;
 use anyhow::Result;
-use itertools::{Itertools as _, MinMaxResult};
 use rubato::{
     Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
@@ -118,11 +117,11 @@ impl InterleavedAudio {
 
     fn create_lod(&mut self) {
         self.samples.chunks(8).enumerate().for_each(|(i, chunk)| {
-            let (min, max) = match chunk.iter().minmax_by(|a, b| a.partial_cmp(b).unwrap()) {
-                MinMaxResult::MinMax(min, max) => (min, max),
-                MinMaxResult::OneElement(x) => (x, x),
-                MinMaxResult::NoElements => unreachable!(),
-            };
+            let (min, max) = chunk
+                .iter()
+                .fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
+                    (min.min(c), max.max(c))
+                });
             self.lods[0][i] = (min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5));
         });
 
@@ -133,7 +132,7 @@ impl InterleavedAudio {
                     self.lods[i - 1][2 * j].0,
                     self.lods[i - 1]
                         .get(2 * j + 1)
-                        .unwrap_or(&(f32::MAX, f32::MAX))
+                        .unwrap_or(&(f32::INFINITY, f32::INFINITY))
                         .0,
                     |a, b| a.partial_cmp(b).unwrap(),
                 );
@@ -141,7 +140,7 @@ impl InterleavedAudio {
                     self.lods[i - 1][2 * j].1,
                     self.lods[i - 1]
                         .get(2 * j + 1)
-                        .unwrap_or(&(f32::MAX, f32::MAX))
+                        .unwrap_or(&(f32::INFINITY, f32::INFINITY))
                         .1,
                     |a, b| a.partial_cmp(b).unwrap(),
                 );
@@ -196,7 +195,8 @@ pub fn resample(
     interleaved_samples.extend(
         deinterleaved_samples[0]
             .iter()
-            .interleave(&deinterleaved_samples[1]),
+            .zip(&deinterleaved_samples[1])
+            .flat_map(<[&f32; 2]>::from),
     );
 
     Ok(interleaved_samples)
