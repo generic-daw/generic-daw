@@ -33,16 +33,14 @@ impl AudioGraphNodeImpl for MixerNode {
         // we can assume the buffer size doesn't vary for the same buf_start_sample
         if buf_start_sample != self.last_sample.swap(buf_start_sample, SeqCst) {
             let volume = self.volume.load(SeqCst);
-            let (mut lpan, mut rpan) = pan(self.pan.load(SeqCst));
-            lpan *= volume;
-            rpan *= volume;
+            let [lpan, rpan] = pan(self.pan.load(SeqCst)).map(|s| s * volume);
 
             buf.iter_mut()
                 .enumerate()
                 .for_each(|(i, s)| *s *= if i % 2 == 0 { lpan } else { rpan });
 
-            node_buf.clear();
-            node_buf.extend(buf.iter().copied());
+            node_buf.resize(buf.len(), 0.0);
+            node_buf.clone_from_slice(buf);
         }
 
         node_buf

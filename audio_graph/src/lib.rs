@@ -11,8 +11,8 @@ pub use audio_graph_node_impl::AudioGraphNodeImpl;
 pub use mixer_node::MixerNode;
 
 #[must_use]
-pub fn pan(angle: f32) -> (f32, f32) {
+pub fn pan(angle: f32) -> [f32; 2] {
     let angle = angle.mul_add(0.5, 0.5) * PI * 0.5;
 
-    (angle.cos(), angle.sin())
+    [angle.cos(), angle.sin()]
 }

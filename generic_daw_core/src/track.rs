@@ -31,13 +31,12 @@ impl AudioGraphNodeImpl for Track {
         }
 
         let volume = self.get_volume();
-        let (lpan, rpan) = pan(self.get_pan());
+        let [lpan, rpan] = pan(self.get_pan()).map(|s| s * volume);
 
         track_buf
             .iter()
-            .map(|s| s * volume)
             .enumerate()
-            .map(|(i, s)| if i % 2 == 0 { s * lpan } else { s * rpan })
+            .map(|(i, s)| s * if i % 2 == 0 { lpan } else { rpan })
             .zip(buf)
             .for_each(|(sample, buf)| *buf += sample);
     }
