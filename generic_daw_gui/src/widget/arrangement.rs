@@ -198,14 +198,16 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         let state = tree.state.downcast_mut::<State>();
         let bounds = layout.bounds();
 
-        if self.inner.meter.playing.load(SeqCst)
-            && state.position.x.get() < self.inner.meter.sample.load(SeqCst) as f32
-            && bounds
-                .width
-                .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-                > self.inner.meter.sample.load(SeqCst) as f32
-        {
-            shell.publish(Message::Ping);
+        if self.inner.meter.playing.load(SeqCst) {
+            let sample = self.inner.meter.sample.load(SeqCst) as f32;
+            if state.position.x.get() < sample
+                && bounds
+                    .width
+                    .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                    > sample
+            {
+                shell.publish(Message::Ping);
+            }
         }
 
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
