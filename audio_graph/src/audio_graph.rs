@@ -74,11 +74,10 @@ impl AudioGraphNodeImpl for AudioGraph {
             }
 
             node.fill_buf(buf_start_sample, buf);
-            c.get_mut(node).unwrap().extend(&*buf);
-        }
 
-        for cbuf in c.values_mut() {
+            let cbuf = c.get_mut(node).unwrap();
             cbuf.clear();
+            cbuf.extend(&*buf);
         }
     }
 }
