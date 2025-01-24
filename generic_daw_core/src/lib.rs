@@ -1,6 +1,6 @@
 use audio_graph::AudioGraphNodeImpl as _;
 use cpal::{
-    traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
+    traits::{DeviceTrait as _, HostTrait as _},
     StreamConfig,
 };
 use include_data::include_f32s;
@@ -18,7 +18,7 @@ mod track_clip;
 pub use arrangement::Arrangement;
 pub use audio_graph;
 pub use clap_host;
-pub use cpal::Stream;
+pub use cpal::{traits::StreamTrait, Stream};
 pub use denominator::Denominator;
 pub use live_sample::LiveSample;
 pub use meter::Meter;

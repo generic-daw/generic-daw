@@ -27,20 +27,19 @@ pub struct Arrangement {
 impl AudioGraphNodeImpl for Arrangement {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         if self.meter.playing.load(SeqCst) && self.metronome.load(SeqCst) {
-            let mut buf_start_pos =
-                Position::from_interleaved_samples(buf_start_sample, &self.meter);
-            let buf_end_pos =
+            let buf_start_pos = Position::from_interleaved_samples(buf_start_sample, &self.meter);
+            let mut buf_end_pos =
                 Position::from_interleaved_samples(buf_start_sample + buf.len(), &self.meter);
 
-            if buf_start_pos.quarter_note() != buf_end_pos.quarter_note()
+            if (buf_start_pos.quarter_note() != buf_end_pos.quarter_note()
+                && buf_end_pos.sub_quarter_note() != 0)
                 || buf_start_pos.sub_quarter_note() == 0
             {
-                buf_start_pos = buf_end_pos.floor();
+                buf_end_pos = buf_end_pos.floor();
 
-                let diff = buf_start_pos.in_interleaved_samples(&self.meter) - buf_start_sample;
+                let diff = (buf_end_pos - buf_start_pos).in_interleaved_samples(&self.meter);
                 let click =
-                    if buf_start_pos.quarter_note() % self.meter.numerator.load(SeqCst) as u32 == 0
-                    {
+                    if buf_end_pos.quarter_note() % self.meter.numerator.load(SeqCst) as u32 == 0 {
                         self.on_bar_click.get().unwrap().clone()
                     } else {
                         self.off_bar_click.get().unwrap().clone()
@@ -54,20 +53,18 @@ impl AudioGraphNodeImpl for Arrangement {
 
         self.audio_graph.fill_buf(buf_start_sample, buf);
 
-        if !self.meter.exporting.load(SeqCst) {
-            self.live_sample_playback
-                .write()
-                .unwrap()
-                .iter_mut()
-                .for_each(|s| {
-                    s.fill_buf(buf_start_sample, buf);
-                });
+        self.live_sample_playback
+            .write()
+            .unwrap()
+            .iter_mut()
+            .for_each(|s| {
+                s.fill_buf(buf_start_sample, buf);
+            });
 
-            self.live_sample_playback
-                .write()
-                .unwrap()
-                .retain(|sample| !sample.over());
-        }
+        self.live_sample_playback
+            .write()
+            .unwrap()
+            .retain(|sample| !sample.over());
     }
 }
 
@@ -91,10 +88,11 @@ impl Arrangement {
     }
 
     pub fn export(&self, path: &Path) {
-        const CHUNK_SIZE: usize = 16;
+        const CHUNK_SIZE: usize = 64;
 
-        self.meter.playing.store(false, SeqCst);
-        self.meter.exporting.store(true, SeqCst);
+        let live_sample_playback = std::mem::take(&mut *self.live_sample_playback.write().unwrap());
+        let playing = self.meter.playing.swap(true, SeqCst);
+        let metronome = self.metronome.swap(false, SeqCst);
 
         let mut writer = WavWriter::create(
             path,
@@ -120,7 +118,8 @@ impl Arrangement {
 
         writer.finalize().unwrap();
 
-        self.meter.exporting.store(false, SeqCst);
-        self.live_sample_playback.write().unwrap().clear();
+        *self.live_sample_playback.write().unwrap() = live_sample_playback;
+        self.meter.playing.store(playing, SeqCst);
+        self.metronome.store(metronome, SeqCst);
     }
 }

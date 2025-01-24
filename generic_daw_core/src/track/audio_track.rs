@@ -16,7 +16,7 @@ pub struct AudioTrack {
 
 impl AudioGraphNodeImpl for AudioTrack {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
-        if !self.meter.playing.load(SeqCst) && !self.meter.exporting.load(SeqCst) {
+        if !self.meter.playing.load(SeqCst) {
             return;
         }
 

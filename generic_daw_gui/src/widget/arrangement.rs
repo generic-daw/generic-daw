@@ -358,17 +358,14 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                 .zip(layout.children())
                 .flat_map(|(track, layout)| {
                     let bounds = layout.bounds();
-                    if bounds.intersects(&bounds_no_seeker) {
-                        track.meshes(
-                            theme,
-                            bounds,
-                            bounds_no_seeker,
-                            &state.position,
-                            &state.scale,
-                        )
-                    } else {
-                        Vec::new()
-                    }
+                    let Some(clip_bounds) = bounds
+                        .intersection(&bounds_no_track_panel)
+                        .and_then(|bounds| bounds.intersection(&bounds_no_seeker))
+                    else {
+                        return Vec::new();
+                    };
+
+                    track.meshes(theme, bounds, clip_bounds, &state.position, &state.scale)
                 })
                 .collect();
 

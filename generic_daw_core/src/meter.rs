@@ -16,10 +16,6 @@ pub struct Meter {
     pub sample_rate: AtomicU32,
     /// whether the arrangement is currently being played back
     pub playing: AtomicBool,
-    /// whether the arrangement is currently being exported
-    ///
-    /// this is a workaround to stop the output stream from starting playback while exporting
-    pub exporting: AtomicBool,
     /// the current global time of the playhead, in samples
     pub sample: AtomicUsize,
 }
@@ -32,7 +28,6 @@ impl Default for Meter {
             denominator: Atomic::default(),
             sample_rate: AtomicU32::default(),
             playing: AtomicBool::default(),
-            exporting: AtomicBool::default(),
             sample: AtomicUsize::default(),
         }
     }

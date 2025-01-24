@@ -6,7 +6,7 @@ use generic_daw_core::{
     build_output_stream,
     clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, open_gui},
     Arrangement as ArrangementInner, AudioClip, AudioTrack, Denominator, InterleavedAudio,
-    Numerator, Stream,
+    Numerator, Stream, StreamTrait as _,
 };
 use home::home_dir;
 use iced::{
@@ -55,7 +55,7 @@ pub struct Daw {
     arrangement: Arc<ArrangementInner>,
     clap_host: ClapHost,
     theme: Theme,
-    _stream: Stream,
+    stream: Stream,
 }
 
 impl Default for Daw {
@@ -67,7 +67,7 @@ impl Default for Daw {
             arrangement,
             clap_host: ClapHost::default(),
             theme: Theme::Dark,
-            _stream: stream,
+            stream,
         }
     }
 }
@@ -163,7 +163,11 @@ impl Daw {
                 .and_then(Task::done)
                 .map(Message::Export);
             }
-            Message::Export(path) => self.arrangement.export(path.path()),
+            Message::Export(path) => {
+                self.stream.pause().unwrap();
+                self.arrangement.export(path.path());
+                self.stream.play().unwrap();
+            }
             Message::TogglePlay => {
                 self.arrangement.meter.playing.fetch_not(SeqCst);
             }

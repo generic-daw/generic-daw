@@ -6,7 +6,7 @@ use iced::{
         mesh::{self, SolidVertex2D},
         Mesh,
     },
-    Point, Rectangle, Theme, Transformation,
+    Point, Rectangle, Size, Theme, Transformation,
 };
 use std::cmp::{max_by, min};
 
@@ -51,18 +51,16 @@ impl TrackClipExt for AudioClip {
             return None;
         }
 
-        // how many pixels of the top of the clip are clipped off by the top of the arrangement
-        let hidden = max_by(0.0, viewport.y - bounds.y + LINE_HEIGHT, |a, b| {
-            a.partial_cmp(b).unwrap()
-        });
+        // how many pixels of the top of the waveform are clipped off by the top of the arrangement
+        let hidden = viewport.y - bounds.y;
 
-        // height of the waveform: the height of the clip minus the height of the text
+        // height of the waveform
         let waveform_height = bounds.height - LINE_HEIGHT;
 
         // the part of the audio clip that is visible
         let clip_bounds = Rectangle::new(
-            Point::new(0.0, hidden),
-            bounds.intersection(&viewport).unwrap().size(),
+            Point::new(0.0, hidden + LINE_HEIGHT),
+            Size::new(viewport.width, waveform_height - hidden),
         );
 
         let color = color::pack(theme.extended_palette().secondary.base.text);
@@ -93,18 +91,11 @@ impl TrackClipExt for AudioClip {
             .flat_map(|i| [i, i + 1, i + 2])
             .collect();
 
-        // height of the clip, excluding the text
-        let clip_height = max_by(0.0, LINE_HEIGHT - hidden, |a, b| a.partial_cmp(b).unwrap());
-
-        let mut waveform_clip_bounds = clip_bounds;
-        waveform_clip_bounds.y += clip_height;
-        waveform_clip_bounds.height -= clip_height;
-
         // the waveform mesh with the clip bounds
         Some(Mesh::Solid {
             buffers: mesh::Indexed { vertices, indices },
-            transformation: Transformation::translate(bounds.x, bounds.y),
-            clip_bounds: waveform_clip_bounds,
+            transformation: Transformation::translate(viewport.x, bounds.y),
+            clip_bounds,
         })
     }
 }
