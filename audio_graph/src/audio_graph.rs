@@ -16,6 +16,7 @@ struct AudioGraphInner {
     root: AudioGraphNode,
     g: AHashMap<AudioGraphNode, AHashSet<AudioGraphNode>>,
     l: Vec<AudioGraphNode>,
+    c: AHashMap<AudioGraphNode, Vec<f32>>,
     dirty: bool,
 }
 
@@ -26,7 +27,8 @@ impl Default for AudioGraphInner {
         Self {
             root: root.clone(),
             g: AHashMap::from_iter([(root.clone(), AHashSet::default())]),
-            l: vec![root],
+            l: vec![root.clone()],
+            c: AHashMap::from_iter([(root, Vec::new())]),
             dirty: false,
         }
     }
@@ -35,7 +37,12 @@ impl Default for AudioGraphInner {
 impl AudioGraphNodeImpl for AudioGraph {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         let AudioGraphInner {
-            root, g, l, dirty, ..
+            root,
+            g,
+            l,
+            c,
+            dirty,
+            ..
         } = &mut *self.0.lock().unwrap();
 
         if *dirty {
@@ -58,10 +65,20 @@ impl AudioGraphNodeImpl for AudioGraph {
             }
 
             for node in &g[node] {
-                node.fill_buf(buf_start_sample, buf);
+                c[node]
+                    .iter()
+                    .zip(buf.iter_mut())
+                    .for_each(|(sample, buf)| {
+                        *buf += sample;
+                    });
             }
 
             node.fill_buf(buf_start_sample, buf);
+            c.get_mut(node).unwrap().extend(&*buf);
+        }
+
+        for cbuf in c.values_mut() {
+            cbuf.clear();
         }
     }
 }
@@ -93,11 +110,12 @@ impl AudioGraph {
     #[expect(tail_expr_drop_order)]
     #[must_use]
     pub fn add(&self, node: AudioGraphNode) -> bool {
-        let AudioGraphInner { g, l, .. } = &mut *self.0.lock().unwrap();
+        let AudioGraphInner { g, l, c, .. } = &mut *self.0.lock().unwrap();
 
         if let Entry::Vacant(vacant) = g.entry(node.clone()) {
             vacant.insert(AHashSet::default());
-            l.push(node);
+            l.push(node.clone());
+            c.insert(node, Vec::new());
 
             true
         } else {
@@ -107,12 +125,13 @@ impl AudioGraph {
 
     #[must_use]
     pub fn remove(&self, node: &AudioGraphNode) -> bool {
-        let AudioGraphInner { root, g, l, .. } = &mut *self.0.lock().unwrap();
+        let AudioGraphInner { root, g, l, c, .. } = &mut *self.0.lock().unwrap();
         debug_assert_ne!(root, node);
 
         if g.remove(node).is_some() {
             let idx = l.iter().position(|n| n == node).unwrap();
             l.remove(idx);
+            c.remove(node);
 
             for e in g.values_mut() {
                 e.remove(node);

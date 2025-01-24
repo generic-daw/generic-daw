@@ -2,7 +2,7 @@ use crate::{Meter, Position, TrackClip};
 use audio_graph::{pan, AudioGraphNodeImpl};
 use audio_track::AudioTrack;
 use midi_track::MidiTrack;
-use std::sync::{atomic::Ordering::SeqCst, Arc, Mutex, RwLockReadGuard};
+use std::sync::{atomic::Ordering::SeqCst, Arc, RwLockReadGuard};
 
 pub mod audio_track;
 pub mod midi_track;
@@ -13,32 +13,19 @@ pub enum Track {
     Midi(MidiTrack),
 }
 
-static TRACK_BUF: Mutex<Vec<f32>> = Mutex::new(Vec::new());
-
 impl AudioGraphNodeImpl for Track {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
-        let mut track_buf = TRACK_BUF.lock().unwrap();
-
-        for s in track_buf.iter_mut() {
-            *s = 0.0;
-        }
-
-        track_buf.resize(buf.len(), 0.0);
-
         match self {
-            Self::Audio(track) => track.fill_buf(buf_start_sample, &mut track_buf),
+            Self::Audio(track) => track.fill_buf(buf_start_sample, buf),
             Self::Midi(_) => unimplemented!(),
         }
 
         let volume = self.get_volume();
         let [lpan, rpan] = pan(self.get_pan()).map(|s| s * volume);
 
-        track_buf
-            .iter()
+        buf.iter_mut()
             .enumerate()
-            .map(|(i, s)| s * if i % 2 == 0 { lpan } else { rpan })
-            .zip(buf)
-            .for_each(|(sample, buf)| *buf += sample);
+            .for_each(|(i, s)| *s *= if i % 2 == 0 { lpan } else { rpan });
     }
 }
 
