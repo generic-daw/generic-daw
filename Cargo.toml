@@ -54,7 +54,7 @@ unused_trait_names = "warn"
 multiple_unsafe_ops_per_block = "deny"
 undocumented_unsafe_blocks = "deny"
 
-[profile.dev.package."*"]
+[profile.dev]
 opt-level = 1
 
 [profile.release]

@@ -187,14 +187,11 @@ impl Track<'_, Message> {
         idx: usize,
     ) -> Self {
         let panel = container(
-            row([
+            row![
                 Knob::new(0.0..=1.0, 0.0, 1.0)
-                    .on_move(move |f| Message::TrackVolumeChanged(idx, f))
-                    .into(),
-                Knob::new(-1.0..=1.0, 0.0, 0.0)
-                    .on_move(move |f| Message::TrackPanChanged(idx, f))
-                    .into(),
-            ])
+                    .on_move(move |f| Message::TrackVolumeChanged(idx, f)),
+                Knob::new(-1.0..=1.0, 0.0, 0.0).on_move(move |f| Message::TrackPanChanged(idx, f)),
+            ]
             .spacing(5.0),
         )
         .padding(5.0)
