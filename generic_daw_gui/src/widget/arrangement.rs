@@ -392,10 +392,7 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
     }
 }
 
-impl<'a, Message> Arrangement<'a, Message>
-where
-    Message: 'a,
-{
+impl<Message> Arrangement<'_, Message> {
     pub fn new(inner: Arc<ArrangementInner>) -> Self {
         Self {
             inner,
@@ -956,10 +953,7 @@ where
     }
 }
 
-impl<'a> From<Arrangement<'a, Message>> for Element<'a, Message, Theme, Renderer>
-where
-    Message: Clone + Default + 'static,
-{
+impl<'a> From<Arrangement<'a, Message>> for Element<'a, Message, Theme, Renderer> {
     fn from(arrangement_front: Arrangement<'a, Message>) -> Self {
         Self::new(arrangement_front)
     }
