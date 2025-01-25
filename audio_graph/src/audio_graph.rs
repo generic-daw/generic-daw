@@ -1,6 +1,6 @@
 use crate::{AudioGraphNode, AudioGraphNodeImpl};
 use ahash::{AHashMap, AHashSet};
-use std::{cmp::Ordering, collections::hash_map::Entry, sync::Mutex};
+use std::{cmp::Ordering, sync::Mutex};
 
 #[derive(Debug, Default)]
 pub struct AudioGraph(Mutex<AudioGraphInner>);
@@ -106,19 +106,18 @@ impl AudioGraph {
         g.get_mut(from).is_some_and(|v| v.remove(to))
     }
 
-    #[expect(tail_expr_drop_order)]
     #[must_use]
-    pub fn add(&self, node: AudioGraphNode) -> bool {
+    pub fn add(&self, node: &AudioGraphNode) -> bool {
         let AudioGraphInner { g, l, c, .. } = &mut *self.0.lock().unwrap();
 
-        if let Entry::Vacant(vacant) = g.entry(node.clone()) {
-            vacant.insert(AHashSet::default());
+        if g.contains_key(node) {
+            false
+        } else {
+            g.insert(node.clone(), AHashSet::default());
             l.push(node.clone());
-            c.insert(node, Vec::new());
+            c.insert(node.clone(), Vec::new());
 
             true
-        } else {
-            false
         }
     }
 

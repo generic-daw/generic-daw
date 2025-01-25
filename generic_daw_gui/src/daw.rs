@@ -141,7 +141,7 @@ impl Daw {
                 let (node, track) = AudioTrack::create(self.arrangement.meter.clone());
 
                 let mut ok = true;
-                ok &= self.arrangement.audio_graph.add(node.clone());
+                ok &= self.arrangement.audio_graph.add(&node);
                 ok &= self
                     .arrangement
                     .audio_graph
