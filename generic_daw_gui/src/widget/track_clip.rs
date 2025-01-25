@@ -70,10 +70,7 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
         let clip_background = Quad {
             bounds: Rectangle::new(
                 bounds.position(),
-                Size::new(
-                    bounds.width,
-                    max_by(0.0, bounds.height, |a, b| a.partial_cmp(b).unwrap()),
-                ),
+                Size::new(bounds.width, max_by(0.0, bounds.height, f32::total_cmp)),
             ),
             ..Quad::default()
         };
@@ -89,9 +86,7 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
         );
 
         // height of the clip, excluding the text, clipped off by the top of the arrangement
-        let clip_height = max_by(0.0, LINE_HEIGHT - bounds.height, |a, b| {
-            a.partial_cmp(b).unwrap()
-        });
+        let clip_height = max_by(0.0, LINE_HEIGHT - bounds.height, f32::total_cmp);
 
         // the opaque background of the text
         let text_background = Quad {

@@ -35,9 +35,8 @@ impl TrackClipExt for AudioClip {
         let clip_start = self.get_clip_start().in_interleaved_samples_f(&self.meter);
 
         // the first sample in the lod that is visible in the clip
-        let first_index = ((max_by(0.0, position.x.get() - global_start, |a, b| {
-            a.partial_cmp(b).unwrap()
-        }) + clip_start) as usize)
+        let first_index = ((max_by(0.0, position.x.get() - global_start, f32::total_cmp)
+            + clip_start) as usize)
             / lod_sample_size;
 
         // the last sample in the lod that is visible in the clip

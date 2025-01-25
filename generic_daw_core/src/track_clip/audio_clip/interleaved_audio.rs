@@ -134,7 +134,7 @@ impl InterleavedAudio {
                         .get(2 * j + 1)
                         .unwrap_or(&(f32::INFINITY, f32::INFINITY))
                         .0,
-                    |a, b| a.partial_cmp(b).unwrap(),
+                    f32::total_cmp,
                 );
                 let max = max_by(
                     self.lods[i - 1][2 * j].1,
@@ -142,7 +142,7 @@ impl InterleavedAudio {
                         .get(2 * j + 1)
                         .unwrap_or(&(f32::INFINITY, f32::INFINITY))
                         .1,
-                    |a, b| a.partial_cmp(b).unwrap(),
+                    f32::total_cmp,
                 );
                 self.lods[i][j] = (min, max);
             });
