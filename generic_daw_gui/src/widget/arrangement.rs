@@ -52,18 +52,20 @@ pub const SWM: f32 = LINE_HEIGHT * 2.5;
 struct State {
     position: Rc<ArrangementPosition>,
     scale: Rc<ArrangementScale>,
-    /// saves the bpm from the last draw
-    bpm: Cell<u16>,
     /// caches the meshes of the waveforms
     waveform_cache: RefCell<Option<Cache>>,
     /// the current modifiers
     modifiers: Modifiers,
     /// the current action
     action: Action,
-    /// the last window size
+    /// the window size from the last draw
     last_bounds: Cell<Option<Rectangle>>,
-    /// the theme of the last draw
+    /// the theme from the last draw
     last_theme: RefCell<Option<Theme>>,
+    /// the bpm from the last draw
+    last_bpm: Cell<u16>,
+    /// the number of tracks from the last draw
+    last_track_count: Cell<usize>,
 }
 
 pub struct Arrangement<'a, Message> {
@@ -102,8 +104,6 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         let state = tree.state.downcast_ref::<State>();
 
-        let len = self.tracks.borrow().len();
-
         self.tracks.borrow_mut().clear();
         self.tracks.borrow_mut().extend(
             self.inner
@@ -120,10 +120,6 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                 })
                 .map(Element::new),
         );
-
-        if self.tracks.borrow().len() != len {
-            state.waveform_cache.take();
-        }
 
         self.diff(tree);
 
@@ -295,9 +291,9 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         let bounds = layout.bounds();
 
         let bpm = self.inner.meter.bpm.load(SeqCst);
-        if bpm != state.bpm.get() {
-            state.waveform_cache.borrow_mut().take();
-            state.bpm.set(bpm);
+        if bpm != state.last_bpm.get() {
+            state.waveform_cache.take();
+            state.last_bpm.set(bpm);
         }
 
         if state
@@ -305,7 +301,7 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             .get()
             .is_none_or(|last_bounds| last_bounds != bounds)
         {
-            state.waveform_cache.borrow_mut().take();
+            state.waveform_cache.take();
             state.last_bounds.set(Some(layout.bounds()));
         }
 
@@ -315,8 +311,13 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             .as_ref()
             .is_none_or(|last_theme| last_theme != theme)
         {
-            state.waveform_cache.borrow_mut().take();
+            state.waveform_cache.take();
             state.last_theme.borrow_mut().replace(theme.clone());
+        }
+
+        if self.tracks.borrow().len() != state.last_track_count.get() {
+            state.waveform_cache.take();
+            state.last_track_count.set(self.tracks.borrow().len());
         }
 
         let mut bounds_no_track_panel = bounds;
@@ -580,7 +581,7 @@ impl<Message> Arrangement<'_, Message> {
 
                         if new_start != clip.get_global_start() {
                             clip.move_to(new_start);
-                            state.waveform_cache.borrow_mut().take();
+                            state.waveform_cache.take();
                             shell.invalidate_layout();
                         }
 
@@ -589,7 +590,7 @@ impl<Message> Arrangement<'_, Message> {
                         {
                             self.inner.tracks()[*index].remove_clip(clip);
                             state.action = Action::DraggingClip(clip.clone(), new_index, *offset);
-                            state.waveform_cache.borrow_mut().take();
+                            state.waveform_cache.take();
                             shell.invalidate_layout();
                         }
 
@@ -615,7 +616,7 @@ impl<Message> Arrangement<'_, Message> {
                             .get_clip_at_global_time(&self.inner.meter, time)?;
 
                         self.inner.tracks()[index].remove_clip(&clip);
-                        state.waveform_cache.borrow_mut().take();
+                        state.waveform_cache.take();
                         shell.invalidate_layout();
 
                         return Some(Status::Captured);
@@ -634,7 +635,7 @@ impl<Message> Arrangement<'_, Message> {
 
                         if new_start != clip.get_global_start() {
                             clip.trim_start_to(new_start);
-                            state.waveform_cache.borrow_mut().take();
+                            state.waveform_cache.take();
                             shell.invalidate_layout();
                         }
 
@@ -654,7 +655,7 @@ impl<Message> Arrangement<'_, Message> {
 
                         if new_end != clip.get_global_end() {
                             clip.trim_end_to(new_end);
-                            state.waveform_cache.borrow_mut().take();
+                            state.waveform_cache.take();
                             shell.invalidate_layout();
                         }
 
@@ -700,7 +701,7 @@ impl<Message> Arrangement<'_, Message> {
                         state.position.y.set(y_pos);
                     }
 
-                    state.waveform_cache.borrow_mut().take();
+                    state.waveform_cache.take();
                     shell.invalidate_layout();
 
                     return Some(Status::Captured);
@@ -731,7 +732,7 @@ impl<Message> Arrangement<'_, Message> {
                         self.inner.tracks()[index].remove_clip(&clip);
 
                         state.action = Action::DeletingClips;
-                        state.waveform_cache.borrow_mut().take();
+                        state.waveform_cache.take();
                         shell.invalidate_layout();
 
                         return Some(Status::Captured);
@@ -773,7 +774,7 @@ impl<Message> Arrangement<'_, Message> {
 
                     state.position.x.set(x_pos);
                     state.scale.x.set(x_scale);
-                    state.waveform_cache.borrow_mut().take();
+                    state.waveform_cache.take();
                     shell.invalidate_layout();
 
                     return Some(Status::Captured);
@@ -840,7 +841,7 @@ impl<Message> Arrangement<'_, Message> {
                 );
 
             state.position.x.set(x_pos);
-            state.waveform_cache.borrow_mut().take();
+            state.waveform_cache.take();
             shell.invalidate_layout();
 
             return Some(Status::Captured);
@@ -868,7 +869,7 @@ impl<Message> Arrangement<'_, Message> {
 
                     if (state.scale.y.get() - y_scale).abs() > 0.1 {
                         state.scale.y.set(y_scale);
-                        state.waveform_cache.borrow_mut().take();
+                        state.waveform_cache.take();
                         shell.invalidate_layout();
                     }
 
