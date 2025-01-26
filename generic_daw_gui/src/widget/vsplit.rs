@@ -20,12 +20,12 @@ struct State {
     offset: f32,
 }
 
-pub struct VSplit<'a, Message, Theme, Renderer> {
+pub struct VSplit<'a, Message> {
     children: [Element<'a, Message, Theme, Renderer>; 3],
     starting_split_at: f32,
 }
 
-impl<Message, Theme, Renderer> Debug for VSplit<'_, Message, Theme, Renderer> {
+impl<Message> Debug for VSplit<'_, Message> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VSplit")
             .field("starting_split_at", &self.starting_split_at)
@@ -33,13 +33,13 @@ impl<Message, Theme, Renderer> Debug for VSplit<'_, Message, Theme, Renderer> {
     }
 }
 
-impl<'a, Message> VSplit<'a, Message, Theme, Renderer>
+impl<'a, Message> VSplit<'a, Message>
 where
     Message: 'a,
 {
     pub fn new(
-        left: impl Into<Element<'a, Message, Theme, Renderer>>,
-        right: impl Into<Element<'a, Message, Theme, Renderer>>,
+        left: impl Into<Element<'a, Message>>,
+        right: impl Into<Element<'a, Message>>,
     ) -> Self {
         Self {
             children: [left.into(), Rule::vertical(DRAG_SIZE).into(), right.into()],
@@ -61,7 +61,7 @@ where
     }
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message, Theme, Renderer> {
+impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
     fn children(&self) -> Vec<Tree> {
         self.children.iter().map(Tree::new).collect()
     }
@@ -223,12 +223,11 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message, Theme, Re
     }
 }
 
-impl<'a, Message> From<VSplit<'a, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
+impl<'a, Message> From<VSplit<'a, Message>> for Element<'a, Message, Theme, Renderer>
 where
     Message: 'a,
 {
-    fn from(vsplit: VSplit<'a, Message, Theme, Renderer>) -> Self {
+    fn from(vsplit: VSplit<'a, Message>) -> Self {
         Self::new(vsplit)
     }
 }
