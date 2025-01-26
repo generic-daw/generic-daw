@@ -1,8 +1,7 @@
 use super::{
-    arrangement::TRACK_PANEL_WIDTH, border, ArrangementPosition, ArrangementScale, Knob, TrackClip,
+    arrangement::TRACK_PANEL_WIDTH, border, ArrangementPosition, ArrangementScale, TrackClip,
     TrackClipExt as _,
 };
-use crate::daw::Message;
 use generic_daw_core::{Meter, Track as TrackInner, TrackClip as TrackClipInner};
 use iced::{
     advanced::{
@@ -14,7 +13,6 @@ use iced::{
     },
     event::Status,
     mouse::{Cursor, Interaction},
-    widget::{container, container::Style as ContainerStyle, row},
     Element, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::{iter::once, rc::Rc, sync::Arc};
@@ -179,37 +177,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
     }
 }
 
-impl Track<'_, Message> {
+impl<'a, Message> Track<'a, Message> {
     pub fn new(
         inner: Arc<TrackInner>,
         position: Rc<ArrangementPosition>,
         scale: Rc<ArrangementScale>,
-        idx: usize,
+        panel: Element<'a, Message>,
     ) -> Self {
-        let panel = container(
-            row![
-                Knob::new(0.0..=1.0, 0.0, 1.0)
-                    .on_move(move |f| Message::TrackVolumeChanged(idx, f)),
-                Knob::new(-1.0..=1.0, 0.0, 0.0).on_move(move |f| Message::TrackPanChanged(idx, f)),
-            ]
-            .spacing(5.0),
-        )
-        .padding(5.0)
-        .height(Length::Fill)
-        .style(|theme| ContainerStyle {
-            background: Some(
-                theme
-                    .extended_palette()
-                    .secondary
-                    .weak
-                    .color
-                    .scale_alpha(0.25)
-                    .into(),
-            ),
-            ..ContainerStyle::default()
-        })
-        .into();
-
         let clips = inner
             .clips()
             .iter()

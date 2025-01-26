@@ -72,6 +72,8 @@ pub struct Arrangement<'a, Message> {
     inner: Arc<ArrangementInner>,
     /// list of all the track widgets
     tracks: RefCell<Vec<Element<'a, Message, Theme, Renderer>>>,
+    /// creates track widgets
+    track_panel: Box<dyn Fn(usize) -> Element<'a, Message>>,
 }
 
 impl<Message> Debug for Arrangement<'_, Message> {
@@ -80,7 +82,10 @@ impl<Message> Debug for Arrangement<'_, Message> {
     }
 }
 
-impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
+impl<'a, Message> Widget<Message, Theme, Renderer> for Arrangement<'a, Message>
+where
+    Message: Default + 'a,
+{
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
     }
@@ -115,7 +120,7 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                         track.clone(),
                         state.position.clone(),
                         state.scale.clone(),
-                        idx,
+                        (self.track_panel)(idx),
                     )
                 })
                 .map(Element::new),
@@ -202,7 +207,7 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                     .mul_add(state.scale.x.get().exp2(), state.position.x.get())
                     > sample
             {
-                shell.publish(Message::Ping);
+                shell.publish(Message::default());
             }
         }
 
@@ -393,11 +398,18 @@ impl Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
     }
 }
 
-impl<Message> Arrangement<'_, Message> {
-    pub fn new(inner: Arc<ArrangementInner>) -> Self {
+impl<'a, Message> Arrangement<'a, Message>
+where
+    Message: 'a,
+{
+    pub fn new(
+        inner: Arc<ArrangementInner>,
+        track_panel: impl Fn(usize) -> Element<'a, Message> + 'static,
+    ) -> Self {
         Self {
             inner,
             tracks: RefCell::default(),
+            track_panel: Box::new(track_panel),
         }
     }
 

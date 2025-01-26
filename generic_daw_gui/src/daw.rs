@@ -1,6 +1,6 @@
 use crate::{
     clap_host::{ClapHost, Message as ClapHostMessage, OpenedMessage},
-    widget::{Arrangement, VSplit},
+    widget::{Arrangement, Knob, VSplit},
 };
 use generic_daw_core::{
     build_output_stream,
@@ -12,10 +12,13 @@ use home::home_dir;
 use iced::{
     event::{self, Status},
     keyboard,
-    widget::{button, column, horizontal_space, pick_list, row, scrollable, toggler, Text},
+    widget::{
+        button, column, container, container::Style, horizontal_space, pick_list, row, scrollable,
+        toggler, Text,
+    },
     window::{self, Settings},
     Alignment::Center,
-    Element, Event, Subscription, Task, Theme,
+    Element, Event, Length, Subscription, Task, Theme,
 };
 use iced_aw::number_input;
 use iced_file_tree::file_tree;
@@ -268,7 +271,30 @@ impl Daw {
                         .unwrap()
                         .on_double_click(Message::LoadSample)
                 ),
-                Arrangement::new(self.arrangement.clone())
+                Arrangement::new(self.arrangement.clone(), |idx| container(
+                    row![
+                        Knob::new(0.0..=1.0, 0.0, 1.0)
+                            .on_move(move |f| Message::TrackVolumeChanged(idx, f)),
+                        Knob::new(-1.0..=1.0, 0.0, 0.0)
+                            .on_move(move |f| Message::TrackPanChanged(idx, f)),
+                    ]
+                    .spacing(5.0),
+                )
+                .padding(5.0)
+                .height(Length::Fill)
+                .style(|theme| Style {
+                    background: Some(
+                        theme
+                            .extended_palette()
+                            .secondary
+                            .weak
+                            .color
+                            .scale_alpha(0.25)
+                            .into(),
+                    ),
+                    ..Style::default()
+                })
+                .into())
             )
             .split(0.25)
         ]
