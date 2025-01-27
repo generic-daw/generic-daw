@@ -6,8 +6,7 @@ use crate::{
 use generic_daw_core::{
     build_output_stream,
     clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, open_gui},
-    Arrangement as ArrangementInner, Denominator, InterleavedAudio, Meter, Numerator, Stream,
-    StreamTrait as _,
+    Arrangement as ArrangementInner, Denominator, InterleavedAudio, Meter, Numerator,
 };
 use home::home_dir;
 use iced::{
@@ -55,7 +54,6 @@ pub struct Daw {
     clap_host: ClapHost,
     meter: Arc<Meter>,
     theme: Theme,
-    stream: Stream,
 }
 
 impl Default for Daw {
@@ -63,20 +61,18 @@ impl Default for Daw {
         let arrangement = ArrangementInner::create();
         let stream = build_output_stream(arrangement.clone());
         let meter = arrangement.meter.clone();
-        let arrangement = Arrangement::new(arrangement);
+        let arrangement = Arrangement::new(arrangement, stream);
 
         Self {
             arrangement,
             clap_host: ClapHost::default(),
             meter,
             theme: Theme::Dark,
-            stream,
         }
     }
 }
 
 impl Daw {
-    #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Animate => {}
@@ -154,13 +150,10 @@ impl Daw {
                 .map(Message::Export);
             }
             Message::Export(path) => {
-                self.stream.pause().unwrap();
-                let r = self
+                return self
                     .arrangement
                     .update(ArrangementMessage::Export(path))
                     .map(Message::Arrangement);
-                self.stream.play().unwrap();
-                return r;
             }
             Message::TogglePlay => {
                 self.meter.playing.fetch_not(SeqCst);

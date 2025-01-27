@@ -1,7 +1,10 @@
 use crate::widget::{
     Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob,
 };
-use generic_daw_core::{Arrangement as ArrangementInner, AudioClip, AudioTrack, InterleavedAudio};
+use generic_daw_core::{
+    Arrangement as ArrangementInner, AudioClip, AudioTrack, InterleavedAudio, Stream,
+    StreamTrait as _,
+};
 use iced::{
     widget::{container, container::Style, row},
     Element, Length, Task,
@@ -21,14 +24,16 @@ pub struct Arrangement {
     inner: Arc<ArrangementInner>,
     position: ArrangementPosition,
     scale: ArrangementScale,
+    stream: Stream,
 }
 
 impl Arrangement {
-    pub fn new(inner: Arc<ArrangementInner>) -> Self {
+    pub fn new(inner: Arc<ArrangementInner>, stream: Stream) -> Self {
         Self {
             inner,
             position: ArrangementPosition::default(),
             scale: ArrangementScale::default(),
+            stream,
         }
     }
 
@@ -55,7 +60,9 @@ impl Arrangement {
                 self.inner.tracks.write().unwrap().push(track);
             }
             Message::Export(path) => {
+                self.stream.pause().unwrap();
                 self.inner.export(path.path());
+                self.stream.play().unwrap();
             }
         }
 
