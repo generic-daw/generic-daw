@@ -1,6 +1,6 @@
 use crate::{
     clap_host::{ClapHost, Message as ClapHostMessage, OpenedMessage},
-    widget::{Arrangement, Knob, VSplit},
+    widget::{Arrangement, ArrangementPosition, ArrangementScale, Knob, VSplit},
 };
 use generic_daw_core::{
     build_output_stream,
@@ -33,7 +33,7 @@ use strum::VariantArray as _;
 #[derive(Clone, Debug, Default)]
 pub enum Message {
     #[default]
-    Ping,
+    Animate,
     ThemeChanged(Theme),
     ClapHost(ClapHostMessage),
     Test,
@@ -56,6 +56,8 @@ pub enum Message {
 
 pub struct Daw {
     arrangement: Arc<ArrangementInner>,
+    position: ArrangementPosition,
+    scale: ArrangementScale,
     clap_host: ClapHost,
     theme: Theme,
     stream: Stream,
@@ -68,6 +70,8 @@ impl Default for Daw {
 
         Self {
             arrangement,
+            position: ArrangementPosition::default(),
+            scale: ArrangementScale::default(),
             clap_host: ClapHost::default(),
             theme: Theme::Dark,
             stream,
@@ -79,7 +83,7 @@ impl Daw {
     #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Ping => {}
+            Message::Animate => {}
             Message::ThemeChanged(theme) => self.theme = theme,
             Message::ClapHost(message) => {
                 return self.clap_host.update(message).map(Message::ClapHost);
@@ -271,30 +275,32 @@ impl Daw {
                         .unwrap()
                         .on_double_click(Message::LoadSample)
                 ),
-                Arrangement::new(self.arrangement.clone(), |idx| container(
-                    row![
-                        Knob::new(0.0..=1.0, 0.0, 1.0)
-                            .on_move(move |f| Message::TrackVolumeChanged(idx, f)),
-                        Knob::new(-1.0..=1.0, 0.0, 0.0)
-                            .on_move(move |f| Message::TrackPanChanged(idx, f)),
-                    ]
-                    .spacing(5.0),
-                )
-                .padding(5.0)
-                .height(Length::Fill)
-                .style(|theme| Style {
-                    background: Some(
-                        theme
-                            .extended_palette()
-                            .secondary
-                            .weak
-                            .color
-                            .scale_alpha(0.25)
-                            .into(),
-                    ),
-                    ..Style::default()
+                Arrangement::new(&self.arrangement, &self.position, &self.scale, |idx| {
+                    container(
+                        row![
+                            Knob::new(0.0..=1.0, 0.0, 1.0)
+                                .on_move(move |f| Message::TrackVolumeChanged(idx, f)),
+                            Knob::new(-1.0..=1.0, 0.0, 0.0)
+                                .on_move(move |f| Message::TrackPanChanged(idx, f)),
+                        ]
+                        .spacing(5.0),
+                    )
+                    .padding(5.0)
+                    .height(Length::Fill)
+                    .style(|theme| Style {
+                        background: Some(
+                            theme
+                                .extended_palette()
+                                .secondary
+                                .weak
+                                .color
+                                .scale_alpha(0.25)
+                                .into(),
+                        ),
+                        ..Style::default()
+                    })
+                    .into()
                 })
-                .into())
             )
             .split(0.25)
         ]
@@ -304,8 +310,15 @@ impl Daw {
         content.into()
     }
 
-    pub fn subscription() -> Subscription<Message> {
+    pub fn subscription(&self) -> Subscription<Message> {
+        let animate = if self.arrangement.meter.playing.load(SeqCst) {
+            window::frames().map(|_| Message::Animate)
+        } else {
+            Subscription::none()
+        };
+
         Subscription::batch([
+            animate,
             ClapHost::subscription().map(Message::ClapHost),
             event::listen_with(|e, s, _| match s {
                 Status::Ignored => match e {

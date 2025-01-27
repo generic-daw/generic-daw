@@ -125,7 +125,7 @@ impl InterleavedAudio {
             self.lods[0][i] = (min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5));
         });
 
-        (1..10).for_each(|i| {
+        (1..self.lods.len()).for_each(|i| {
             let len = self.lods[i].len();
             (0..len).for_each(|j| {
                 let min = min_by(

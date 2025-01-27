@@ -14,7 +14,7 @@ use iced::{
     widget::text::{LineHeight, Shaping, Wrapping},
     Length, Rectangle, Renderer, Size, Theme, Vector,
 };
-use std::{cmp::max_by, rc::Rc, sync::Arc};
+use std::{cmp::max_by, sync::Arc};
 
 pub mod audio_clip;
 pub mod track_clip_ext;
@@ -22,13 +22,13 @@ pub mod track_clip_ext;
 pub use track_clip_ext::TrackClipExt;
 
 #[derive(Clone)]
-pub struct TrackClip {
+pub struct TrackClip<'a> {
     inner: Arc<TrackClipInner>,
-    /// information about the scale of the timeline viewport
-    scale: Rc<ArrangementScale>,
+    /// the scale of the timeline viewport
+    scale: &'a ArrangementScale,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
+impl<Message> Widget<Message, Theme, Renderer> for TrackClip<'_> {
     fn size(&self) -> Size<Length> {
         Size {
             width: Length::Shrink,
@@ -142,8 +142,8 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
     }
 }
 
-impl TrackClip {
-    pub fn new(inner: Arc<TrackClipInner>, scale: Rc<ArrangementScale>) -> Self {
+impl<'a> TrackClip<'a> {
+    pub fn new(inner: Arc<TrackClipInner>, scale: &'a ArrangementScale) -> Self {
         Self { inner, scale }
     }
 }

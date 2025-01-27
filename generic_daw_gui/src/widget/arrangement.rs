@@ -18,7 +18,7 @@ use iced::{
     keyboard::{self, Modifiers},
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::text::{LineHeight, Shaping, Wrapping},
-    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    window, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
 use iced_wgpu::{
     geometry::Cache,
@@ -26,9 +26,8 @@ use iced_wgpu::{
     Geometry,
 };
 use std::{
-    cell::{Cell, RefCell},
+    cell::RefCell,
     fmt::{Debug, Formatter},
-    rc::Rc,
     sync::{atomic::Ordering::SeqCst, Arc},
 };
 
@@ -50,8 +49,6 @@ pub const SWM: f32 = LINE_HEIGHT * 2.5;
 
 #[derive(Default)]
 struct State {
-    position: Rc<ArrangementPosition>,
-    scale: Rc<ArrangementScale>,
     /// caches the meshes of the waveforms
     waveform_cache: RefCell<Option<Cache>>,
     /// the current modifiers
@@ -59,21 +56,23 @@ struct State {
     /// the current action
     action: Action,
     /// the window size from the last draw
-    last_bounds: Cell<Option<Rectangle>>,
+    last_bounds: Option<Rectangle>,
+    /// the bpm from the last draw
+    last_bpm: u16,
+    /// the number of tracks from the last draw
+    last_track_count: usize,
     /// the theme from the last draw
     last_theme: RefCell<Option<Theme>>,
-    /// the bpm from the last draw
-    last_bpm: Cell<u16>,
-    /// the number of tracks from the last draw
-    last_track_count: Cell<usize>,
 }
 
 pub struct Arrangement<'a, Message> {
-    inner: Arc<ArrangementInner>,
+    inner: &'a ArrangementInner,
     /// list of all the track widgets
-    tracks: RefCell<Vec<Element<'a, Message, Theme, Renderer>>>,
-    /// creates track widgets
-    track_panel: Box<dyn Fn(usize) -> Element<'a, Message>>,
+    tracks: Box<[Element<'a, Message, Theme, Renderer>]>,
+    /// the position of the top left corner of the arrangement viewport
+    position: &'a ArrangementPosition,
+    /// the scale of the timeline viewport
+    scale: &'a ArrangementScale,
 }
 
 impl<Message> Debug for Arrangement<'_, Message> {
@@ -82,10 +81,7 @@ impl<Message> Debug for Arrangement<'_, Message> {
     }
 }
 
-impl<'a, Message> Widget<Message, Theme, Renderer> for Arrangement<'a, Message>
-where
-    Message: Default + 'a,
-{
+impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
     }
@@ -99,47 +95,25 @@ where
     }
 
     fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&self.tracks.borrow());
+        tree.diff_children(&self.tracks);
     }
 
     fn children(&self) -> Vec<Tree> {
-        self.tracks.borrow().iter().map(Tree::new).collect()
+        self.tracks.iter().map(Tree::new).collect()
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        let state = tree.state.downcast_ref::<State>();
-
-        self.tracks.borrow_mut().clear();
-        self.tracks.borrow_mut().extend(
-            self.inner
-                .tracks()
-                .iter()
-                .enumerate()
-                .map(|(idx, track)| {
-                    Track::new(
-                        track.clone(),
-                        state.position.clone(),
-                        state.scale.clone(),
-                        (self.track_panel)(idx),
-                    )
-                })
-                .map(Element::new),
-        );
-
         self.diff(tree);
 
-        let state = tree.state.downcast_ref::<State>();
-
-        let mut y = state
+        let mut y = self
             .position
             .y
             .get()
-            .mul_add(-state.scale.y.get(), LINE_HEIGHT);
+            .mul_add(-self.scale.y.get(), LINE_HEIGHT);
 
         Node::with_children(
             limits.max(),
             self.tracks
-                .borrow()
                 .iter()
                 .zip(&mut tree.children)
                 .map(|(widget, tree)| {
@@ -148,7 +122,7 @@ where
                         renderer,
                         &Limits::new(
                             limits.min(),
-                            Size::new(limits.max().width, state.scale.y.get()),
+                            Size::new(limits.max().width, self.scale.y.get()),
                         ),
                     )
                 })
@@ -174,7 +148,6 @@ where
     ) -> Status {
         if self
             .tracks
-            .borrow_mut()
             .iter_mut()
             .zip(&mut tree.children)
             .zip(layout.children())
@@ -199,16 +172,27 @@ where
         let state = tree.state.downcast_mut::<State>();
         let bounds = layout.bounds();
 
-        if self.inner.meter.playing.load(SeqCst) {
-            let sample = self.inner.meter.sample.load(SeqCst) as f32;
-            if state.position.x.get() < sample
-                && bounds
-                    .width
-                    .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-                    > sample
-            {
-                shell.publish(Message::default());
+        if let Event::Window(window::Event::RedrawRequested(..)) = event {
+            let bpm = self.inner.meter.bpm.load(SeqCst);
+            if bpm != state.last_bpm {
+                state.waveform_cache.take();
+                state.last_bpm = bpm;
             }
+
+            if state
+                .last_bounds
+                .is_none_or(|last_bounds| last_bounds != bounds)
+            {
+                state.waveform_cache.take();
+                state.last_bounds.replace(layout.bounds());
+            }
+
+            if self.tracks.len() != state.last_track_count {
+                state.waveform_cache.take();
+                state.last_track_count = self.tracks.len();
+            }
+
+            return Status::Ignored;
         }
 
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
@@ -220,7 +204,8 @@ where
             state.action = Action::None;
             return Status::Ignored;
         };
-        if !self.tracks.borrow().is_empty() {
+
+        if !self.tracks.is_empty() {
             cursor.x -= TRACK_PANEL_WIDTH;
         }
 
@@ -269,7 +254,6 @@ where
         }
 
         self.tracks
-            .borrow()
             .iter()
             .zip(&tree.children)
             .zip(layout.children())
@@ -295,21 +279,6 @@ where
         let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
 
-        let bpm = self.inner.meter.bpm.load(SeqCst);
-        if bpm != state.last_bpm.get() {
-            state.waveform_cache.take();
-            state.last_bpm.set(bpm);
-        }
-
-        if state
-            .last_bounds
-            .get()
-            .is_none_or(|last_bounds| last_bounds != bounds)
-        {
-            state.waveform_cache.take();
-            state.last_bounds.set(Some(layout.bounds()));
-        }
-
         if state
             .last_theme
             .borrow()
@@ -320,13 +289,8 @@ where
             state.last_theme.borrow_mut().replace(theme.clone());
         }
 
-        if self.tracks.borrow().len() != state.last_track_count.get() {
-            state.waveform_cache.take();
-            state.last_track_count.set(self.tracks.borrow().len());
-        }
-
         let mut bounds_no_track_panel = bounds;
-        if !self.tracks.borrow().is_empty() {
+        if !self.tracks.is_empty() {
             bounds_no_track_panel.x += TRACK_PANEL_WIDTH;
             bounds_no_track_panel.width -= TRACK_PANEL_WIDTH;
         }
@@ -335,12 +299,15 @@ where
         bounds_no_seeker.y += LINE_HEIGHT;
         bounds_no_seeker.height -= LINE_HEIGHT;
 
-        renderer.with_layer(bounds_no_track_panel, |renderer| {
-            self.grid(renderer, bounds_no_track_panel, theme, state);
+        let inner_bounds = bounds_no_track_panel
+            .intersection(&bounds_no_seeker)
+            .unwrap();
+
+        renderer.with_layer(inner_bounds, |renderer| {
+            self.grid(renderer, inner_bounds, theme);
         });
 
         self.tracks
-            .borrow()
             .iter()
             .zip(&tree.children)
             .zip(layout.children())
@@ -364,14 +331,11 @@ where
                 .zip(layout.children())
                 .flat_map(|(track, layout)| {
                     let bounds = layout.bounds();
-                    let Some(clip_bounds) = bounds
-                        .intersection(&bounds_no_track_panel)
-                        .and_then(|bounds| bounds.intersection(&bounds_no_seeker))
-                    else {
+                    let Some(clip_bounds) = bounds.intersection(&inner_bounds) else {
                         return Vec::new();
                     };
 
-                    track.meshes(theme, bounds, clip_bounds, &state.position, &state.scale)
+                    track.meshes(theme, bounds, clip_bounds, self.position, self.scale)
                 })
                 .collect();
 
@@ -385,14 +349,14 @@ where
             );
         }
 
-        renderer.with_layer(bounds_no_track_panel, |renderer| {
+        renderer.with_layer(inner_bounds, |renderer| {
             renderer.draw_geometry(Geometry::load(
                 state.waveform_cache.borrow().as_ref().unwrap(),
             ));
         });
 
         renderer.with_layer(bounds_no_track_panel, |renderer| {
-            self.playhead(renderer, bounds_no_track_panel, theme, state);
+            self.playhead(renderer, bounds_no_track_panel, theme);
             border(renderer, bounds_no_track_panel, theme);
         });
     }
@@ -403,33 +367,45 @@ where
     Message: 'a,
 {
     pub fn new(
-        inner: Arc<ArrangementInner>,
-        track_panel: impl Fn(usize) -> Element<'a, Message> + 'static,
+        inner: &'a ArrangementInner,
+        position: &'a ArrangementPosition,
+        scale: &'a ArrangementScale,
+        track_panel: impl Fn(usize) -> Element<'a, Message>,
     ) -> Self {
+        let tracks = inner
+            .tracks()
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(idx, track)| Track::new(track, position, scale, (track_panel)(idx)))
+            .map(Element::new)
+            .collect();
+
         Self {
             inner,
-            tracks: RefCell::default(),
-            track_panel: Box::new(track_panel),
+            tracks,
+            position,
+            scale,
         }
     }
 
-    fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme, state: &State) {
+    fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
         let numerator = self.inner.meter.numerator.load(SeqCst);
 
         let mut beat =
-            Position::from_interleaved_samples(state.position.x.get() as usize, &self.inner.meter)
+            Position::from_interleaved_samples(self.position.x.get() as usize, &self.inner.meter)
                 .ceil();
 
         let end_beat = beat
             + Position::from_interleaved_samples(
-                (bounds.width * state.scale.x.get().exp2()) as usize,
+                (bounds.width * self.scale.x.get().exp2()) as usize,
                 &self.inner.meter,
             )
             .floor();
 
         while beat <= end_beat {
             let bar = beat.quarter_note() / numerator as u32;
-            let color = if state.scale.x.get() > 11f32 {
+            let color = if self.scale.x.get() > 11f32 {
                 if beat.quarter_note() % numerator as u32 == 0 {
                     if bar % 4 == 0 {
                         theme.extended_palette().secondary.strong.color
@@ -446,8 +422,8 @@ where
                 theme.extended_palette().secondary.weak.color
             };
 
-            let x = (beat.in_interleaved_samples_f(&self.inner.meter) - state.position.x.get())
-                / state.scale.x.get().exp2();
+            let x = (beat.in_interleaved_samples_f(&self.inner.meter) - self.position.x.get())
+                / self.scale.x.get().exp2();
 
             renderer.fill_quad(
                 Quad {
@@ -464,7 +440,7 @@ where
         }
     }
 
-    fn playhead(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme, state: &State) {
+    fn playhead(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
         renderer.fill_quad(
             Quad {
                 bounds: Rectangle::new(bounds.position(), Size::new(bounds.width, LINE_HEIGHT)),
@@ -473,8 +449,8 @@ where
             theme.extended_palette().primary.base.color,
         );
 
-        let x = (self.inner.meter.sample.load(SeqCst) as f32 - state.position.x.get())
-            / state.scale.x.get().exp2();
+        let x = (self.inner.meter.sample.load(SeqCst) as f32 - self.position.x.get())
+            / self.scale.x.get().exp2();
 
         if x >= 0.0 {
             renderer.fill_quad(
@@ -490,8 +466,8 @@ where
         }
 
         let mut draw_text = |beat: Position, bar: u32| {
-            let x = (beat.in_interleaved_samples_f(&self.inner.meter) - state.position.x.get())
-                / state.scale.x.get().exp2();
+            let x = (beat.in_interleaved_samples_f(&self.inner.meter) - self.position.x.get())
+                / self.scale.x.get().exp2();
 
             let bar = Text {
                 content: itoa::Buffer::new().format(bar + 1).to_owned(),
@@ -516,8 +492,8 @@ where
         let numerator = self.inner.meter.numerator.load(SeqCst);
 
         let mut beat =
-            Position::from_interleaved_samples(state.position.x.get() as usize, &self.inner.meter)
-                .saturating_sub(if state.scale.x.get() > 11.0 {
+            Position::from_interleaved_samples(self.position.x.get() as usize, &self.inner.meter)
+                .saturating_sub(if self.scale.x.get() > 11.0 {
                     Position::new(4 * numerator as u32, 0)
                 } else {
                     Position::new(numerator as u32, 0)
@@ -526,7 +502,7 @@ where
 
         let end_beat = beat
             + Position::from_interleaved_samples(
-                (bounds.width * state.scale.x.get().exp2()) as usize,
+                (bounds.width * self.scale.x.get().exp2()) as usize,
                 &self.inner.meter,
             )
             .floor();
@@ -534,7 +510,7 @@ where
         while beat <= end_beat {
             let bar = beat.quarter_note() / numerator as u32;
 
-            if state.scale.x.get() > 11f32 {
+            if self.scale.x.get() > 11f32 {
                 if beat.quarter_note() % numerator as u32 == 0 && bar % 4 == 0 {
                     draw_text(beat, bar);
                 }
@@ -564,11 +540,11 @@ where
                     Action::DraggingPlayhead => {
                         let mut time = cursor
                             .x
-                            .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                            .mul_add(self.scale.x.get().exp2(), self.position.x.get())
                             as usize;
                         if !state.modifiers.alt() {
                             time = Position::from_interleaved_samples(time, &self.inner.meter)
-                                .snap(state.scale.x.get(), &self.inner.meter)
+                                .snap(self.scale.x.get(), &self.inner.meter)
                                 .in_interleaved_samples(&self.inner.meter);
                         }
 
@@ -581,14 +557,14 @@ where
                     }
                     Action::DraggingClip(clip, index, offset) => {
                         let time = (cursor.x + offset)
-                            .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                            .mul_add(self.scale.x.get().exp2(), self.position.x.get())
                             as usize;
 
                         let mut new_start =
                             Position::from_interleaved_samples(time, &self.inner.meter);
 
                         if !state.modifiers.alt() {
-                            new_start = new_start.snap(state.scale.x.get(), &self.inner.meter);
+                            new_start = new_start.snap(self.scale.x.get(), &self.inner.meter);
                         }
 
                         if new_start != clip.get_global_start() {
@@ -597,7 +573,7 @@ where
                             shell.invalidate_layout();
                         }
 
-                        let new_index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()) as usize;
+                        let new_index = ((cursor.y - LINE_HEIGHT) / self.scale.y.get()) as usize;
                         if *index != new_index && self.inner.tracks().get(new_index)?.try_push(clip)
                         {
                             self.inner.tracks()[*index].remove_clip(clip);
@@ -613,12 +589,12 @@ where
                             return None;
                         }
 
-                        let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()
-                            + state.position.x.get()) as usize;
+                        let index = ((cursor.y - LINE_HEIGHT) / self.scale.y.get()
+                            + self.position.x.get()) as usize;
 
                         let time = cursor
                             .x
-                            .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                            .mul_add(self.scale.x.get().exp2(), self.position.x.get())
                             as usize;
 
                         let clip = self
@@ -635,14 +611,14 @@ where
                     }
                     Action::ClipTrimmingStart(clip, offset) => {
                         let time = (cursor.x + offset)
-                            .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                            .mul_add(self.scale.x.get().exp2(), self.position.x.get())
                             as usize;
 
                         let mut new_start =
                             Position::from_interleaved_samples(time, &self.inner.meter);
 
                         if !state.modifiers.alt() {
-                            new_start = new_start.snap(state.scale.x.get(), &self.inner.meter);
+                            new_start = new_start.snap(self.scale.x.get(), &self.inner.meter);
                         }
 
                         if new_start != clip.get_global_start() {
@@ -655,14 +631,14 @@ where
                     }
                     Action::ClipTrimmingEnd(clip, offset) => {
                         let time = (cursor.x + offset)
-                            .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                            .mul_add(self.scale.x.get().exp2(), self.position.x.get())
                             as usize;
 
                         let mut new_end =
                             Position::from_interleaved_samples(time, &self.inner.meter);
 
                         if !state.modifiers.alt() {
-                            new_end = new_end.snap(state.scale.x.get(), &self.inner.meter);
+                            new_end = new_end.snap(self.scale.x.get(), &self.inner.meter);
                         }
 
                         if new_end != clip.get_global_end() {
@@ -698,19 +674,19 @@ where
                     let (x, y) = (x * 2.0, y * 4.0);
 
                     let x_pos = x
-                        .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                        .mul_add(self.scale.x.get().exp2(), self.position.x.get())
                         .clamp(
                             0.0,
                             self.inner.len().in_interleaved_samples_f(&self.inner.meter),
                         );
-                    let y_pos = (y / state.scale.y.get())
-                        .mul_add(-0.5, state.position.y.get())
+                    let y_pos = (y / self.scale.y.get())
+                        .mul_add(-0.5, self.position.y.get())
                         .clamp(0.0, self.inner.tracks().len().saturating_sub(1) as f32);
 
-                    state.position.x.set(x_pos);
+                    self.position.x.set(x_pos);
 
-                    if (state.position.y.get() - y_pos).abs() * state.scale.y.get() > 1.0 {
-                        state.position.y.set(y_pos);
+                    if (self.position.y.get() - y_pos).abs() * self.scale.y.get() > 1.0 {
+                        self.position.y.set(y_pos);
                     }
 
                     state.waveform_cache.take();
@@ -727,12 +703,12 @@ where
                             return None;
                         }
 
-                        let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()
-                            + state.position.y.get()) as usize;
+                        let index = ((cursor.y - LINE_HEIGHT) / self.scale.y.get()
+                            + self.position.y.get()) as usize;
 
                         let time = cursor
                             .x
-                            .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                            .mul_add(self.scale.x.get().exp2(), self.position.x.get())
                             as usize;
 
                         let clip = self
@@ -772,20 +748,20 @@ where
                         ScrollDelta::Lines { y, .. } => -y * SWM,
                     } * 0.01;
 
-                    let x_scale = (x + state.scale.x.get()).clamp(3.0, 12.999_999);
+                    let x_scale = (x + self.scale.x.get()).clamp(3.0, 12.999_999);
                     let x_pos = cursor
                         .x
                         .mul_add(
-                            state.scale.x.get().exp2() - x_scale.exp2(),
-                            state.position.x.get(),
+                            self.scale.x.get().exp2() - x_scale.exp2(),
+                            self.position.x.get(),
                         )
                         .clamp(
                             0.0,
                             self.inner.len().in_interleaved_samples_f(&self.inner.meter),
                         );
 
-                    state.position.x.set(x_pos);
-                    state.scale.x.set(x_scale);
+                    self.position.x.set(x_pos);
+                    self.scale.x.set(x_scale);
                     state.waveform_cache.take();
                     shell.invalidate_layout();
 
@@ -796,12 +772,12 @@ where
                         return None;
                     }
 
-                    let index = ((cursor.y - LINE_HEIGHT) / state.scale.y.get()
-                        + state.position.x.get()) as usize;
+                    let index = ((cursor.y - LINE_HEIGHT) / self.scale.y.get()
+                        + self.position.x.get()) as usize;
 
                     let time = cursor
                         .x
-                        .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                        .mul_add(self.scale.x.get().exp2(), self.position.x.get())
                         as usize;
 
                     let clip = self
@@ -816,8 +792,8 @@ where
                         .get_global_start()
                         .in_interleaved_samples(&self.inner.meter)
                         as f32
-                        - state.position.x.get())
-                        / state.scale.x.get().exp2()
+                        - self.position.x.get())
+                        / self.scale.x.get().exp2()
                         - cursor.x;
 
                     let ok = self.inner.tracks()[index].try_push(&clip);
@@ -846,13 +822,13 @@ where
             } * 4.0;
 
             let x_pos = x
-                .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                .mul_add(self.scale.x.get().exp2(), self.position.x.get())
                 .clamp(
                     0.0,
                     self.inner.len().in_interleaved_samples_f(&self.inner.meter),
                 );
 
-            state.position.x.set(x_pos);
+            self.position.x.set(x_pos);
             state.waveform_cache.take();
             shell.invalidate_layout();
 
@@ -877,10 +853,10 @@ where
                     } * 0.1;
 
                     let y_scale =
-                        (y + state.scale.y.get()).clamp(2.0 * LINE_HEIGHT, 10.0 * LINE_HEIGHT);
+                        (y + self.scale.y.get()).clamp(2.0 * LINE_HEIGHT, 10.0 * LINE_HEIGHT);
 
-                    if (state.scale.y.get() - y_scale).abs() > 0.1 {
-                        state.scale.y.set(y_scale);
+                    if (self.scale.y.get() - y_scale).abs() > 0.1 {
+                        self.scale.y.set(y_scale);
                         state.waveform_cache.take();
                         shell.invalidate_layout();
                     }
@@ -901,13 +877,13 @@ where
             let mut time = Position::from_interleaved_samples(
                 cursor
                     .x
-                    .mul_add(state.scale.x.get().exp2(), state.position.x.get())
+                    .mul_add(self.scale.x.get().exp2(), self.position.x.get())
                     as usize,
                 &self.inner.meter,
             );
 
             if !state.modifiers.alt() {
-                time = time.snap(state.scale.x.get(), &self.inner.meter);
+                time = time.snap(self.scale.x.get(), &self.inner.meter);
             }
 
             self.inner
@@ -920,12 +896,11 @@ where
         }
 
         let index =
-            ((cursor.y - LINE_HEIGHT) / state.scale.y.get() + state.position.y.get()) as usize;
+            ((cursor.y - LINE_HEIGHT) / self.scale.y.get() + self.position.y.get()) as usize;
 
         let time = cursor
             .x
-            .mul_add(state.scale.x.get().exp2(), state.position.x.get())
-            as usize;
+            .mul_add(self.scale.x.get().exp2(), self.position.x.get()) as usize;
 
         let clip = self
             .inner
@@ -936,22 +911,22 @@ where
         let offset = (clip
             .get_global_start()
             .in_interleaved_samples(&self.inner.meter) as f32
-            - state.position.x.get())
-            / state.scale.x.get().exp2()
+            - self.position.x.get())
+            / self.scale.x.get().exp2()
             - cursor.x;
-        let pixel_len = clip.len().in_interleaved_samples(&self.inner.meter) as f32
-            / state.scale.x.get().exp2();
+        let pixel_len =
+            clip.len().in_interleaved_samples(&self.inner.meter) as f32 / self.scale.x.get().exp2();
 
         let start_pixel = (clip
             .get_global_start()
             .in_interleaved_samples(&self.inner.meter) as f32
-            - state.position.x.get())
-            / state.scale.x.get().exp2();
+            - self.position.x.get())
+            / self.scale.x.get().exp2();
         let end_pixel = (clip
             .get_global_end()
             .in_interleaved_samples(&self.inner.meter) as f32
-            - state.position.x.get())
-            / state.scale.x.get().exp2();
+            - self.position.x.get())
+            / self.scale.x.get().exp2();
 
         state.action = match (cursor.x - start_pixel < 10.0, end_pixel - cursor.x < 10.0) {
             (true, true) if cursor.x - start_pixel < end_pixel - cursor.x => {

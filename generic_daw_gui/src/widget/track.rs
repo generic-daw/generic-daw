@@ -15,7 +15,7 @@ use iced::{
     mouse::{Cursor, Interaction},
     Element, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
-use std::{iter::once, rc::Rc, sync::Arc};
+use std::{iter::once, sync::Arc};
 
 mod track_ext;
 
@@ -23,14 +23,14 @@ pub use track_ext::TrackExt;
 
 pub struct Track<'a, Message> {
     inner: Arc<TrackInner>,
-    /// the position of the top left corner of the arrangement viewport
-    position: Rc<ArrangementPosition>,
-    /// information about the scale of the timeline viewport
-    scale: Rc<ArrangementScale>,
     /// list of all the clip widgets
-    clips: Vec<Element<'a, Message, Theme, Renderer>>,
+    clips: Box<[Element<'a, Message, Theme, Renderer>]>,
     /// the track panel
     panel: Element<'a, Message, Theme, Renderer>,
+    /// the position of the top left corner of the arrangement viewport
+    position: &'a ArrangementPosition,
+    /// the scale of the timeline viewport
+    scale: &'a ArrangementScale,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
@@ -180,23 +180,24 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 impl<'a, Message> Track<'a, Message> {
     pub fn new(
         inner: Arc<TrackInner>,
-        position: Rc<ArrangementPosition>,
-        scale: Rc<ArrangementScale>,
+        position: &'a ArrangementPosition,
+        scale: &'a ArrangementScale,
         panel: Element<'a, Message>,
     ) -> Self {
         let clips = inner
             .clips()
             .iter()
-            .map(|clip| TrackClip::new(clip.clone(), scale.clone()))
+            .cloned()
+            .map(|clip| TrackClip::new(clip, scale))
             .map(Element::new)
             .collect();
 
         Self {
             inner,
-            position,
-            scale,
             clips,
             panel,
+            position,
+            scale,
         }
     }
 }
