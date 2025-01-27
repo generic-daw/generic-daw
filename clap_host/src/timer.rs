@@ -7,7 +7,6 @@ use std::{
 };
 
 pub struct Timers {
-    #[expect(clippy::struct_field_names)]
     timers: RefCell<HashMap<TimerId, Timer>>,
     latest_id: Cell<u32>,
     next_tick: Cell<Option<Instant>>,

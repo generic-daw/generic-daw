@@ -1,7 +1,4 @@
-use super::{
-    arrangement::TRACK_PANEL_WIDTH, border, ArrangementPosition, ArrangementScale, TrackClip,
-    TrackClipExt as _,
-};
+use super::{border, ArrangementPosition, ArrangementScale, TrackClip, TrackClipExt as _};
 use generic_daw_core::{Meter, Track as TrackInner, TrackClip as TrackClipInner};
 use iced::{
     advanced::{
@@ -56,6 +53,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             self.panel
                 .as_widget()
                 .layout(tree.children.last_mut().unwrap(), renderer, limits);
+        let panel_width = panel_layout.size().width;
 
         Node::with_children(
             Size::new(limits.max().width, self.scale.y.get()),
@@ -72,7 +70,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                 .zip(self.inner.clips().iter())
                 .map(|(node, clip)| {
                     node.translate(Vector::new(
-                        TRACK_PANEL_WIDTH
+                        panel_width
                             + (clip.get_global_start().in_interleaved_samples_f(meter)
                                 - self.position.x.get())
                                 / self.scale.x.get().exp2(),
@@ -127,18 +125,22 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 
         border(renderer, bounds, theme);
 
+        let panel_tree = tree.children.last().unwrap();
+        let panel_layout = layout.children().next_back().unwrap();
+        let panel_width = panel_layout.bounds().size().width;
+
         self.panel.as_widget().draw(
-            tree.children.last().unwrap(),
+            panel_tree,
             renderer,
             theme,
             style,
-            layout.children().last().unwrap(),
+            panel_layout,
             cursor,
             viewport,
         );
 
-        bounds.width -= TRACK_PANEL_WIDTH;
-        bounds.x += TRACK_PANEL_WIDTH;
+        bounds.width -= panel_width;
+        bounds.x += panel_width;
 
         self.clips
             .iter()
@@ -167,7 +169,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         self.panel.as_widget_mut().on_event(
             tree.children.last_mut().unwrap(),
             event,
-            layout.children().last().unwrap(),
+            layout.children().next_back().unwrap(),
             cursor,
             renderer,
             clipboard,

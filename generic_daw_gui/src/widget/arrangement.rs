@@ -1,6 +1,5 @@
 use super::{
-    border, knob::DIAMETER, track::TrackExt as _, ArrangementPosition, ArrangementScale, Track,
-    LINE_HEIGHT,
+    border, track::TrackExt as _, ArrangementPosition, ArrangementScale, Track, LINE_HEIGHT,
 };
 use generic_daw_core::{Arrangement as ArrangementInner, Position, TrackClip};
 use iced::{
@@ -29,8 +28,6 @@ use std::{
     fmt::{Debug, Formatter},
     sync::{atomic::Ordering::SeqCst, Arc},
 };
-
-pub const TRACK_PANEL_WIDTH: f32 = DIAMETER * 2.0 + 15.0;
 
 #[derive(Default)]
 enum Action {
@@ -204,8 +201,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             return Status::Ignored;
         };
 
-        if !self.tracks.is_empty() {
-            cursor.x -= TRACK_PANEL_WIDTH;
+        if let Some(track) = layout.children().next() {
+            let panel_width = track.children().next_back().unwrap().bounds().width;
+            cursor.x -= panel_width;
         }
 
         if let Some(status) = self.on_event_any_modifiers(state, &event, cursor, shell) {
@@ -289,9 +287,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         }
 
         let mut bounds_no_track_panel = bounds;
-        if !self.tracks.is_empty() {
-            bounds_no_track_panel.x += TRACK_PANEL_WIDTH;
-            bounds_no_track_panel.width -= TRACK_PANEL_WIDTH;
+        if let Some(track) = layout.children().next() {
+            let panel_width = track.children().next_back().unwrap().bounds().width;
+            bounds_no_track_panel.x += panel_width;
+            bounds_no_track_panel.width -= panel_width;
         }
 
         let mut bounds_no_seeker = bounds;
