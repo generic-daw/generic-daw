@@ -39,7 +39,6 @@ pub enum Message {
     LoadSamples(Vec<FileHandle>),
     LoadSample(PathBuf),
     ExportButton,
-    Export(FileHandle),
     TogglePlay,
     Stop,
     New,
@@ -147,13 +146,8 @@ impl Daw {
                         .save_file(),
                 )
                 .and_then(Task::done)
-                .map(Message::Export);
-            }
-            Message::Export(path) => {
-                return self
-                    .arrangement
-                    .update(ArrangementMessage::Export(path))
-                    .map(Message::Arrangement);
+                .map(ArrangementMessage::Export)
+                .map(Message::Arrangement);
             }
             Message::TogglePlay => {
                 self.meter.playing.fetch_not(SeqCst);
