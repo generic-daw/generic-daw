@@ -93,7 +93,10 @@ impl TrackClipExt for AudioClip {
         // the waveform mesh with the clip bounds
         Some(Mesh::Solid {
             buffers: mesh::Indexed { vertices, indices },
-            transformation: Transformation::translate(viewport.x, bounds.y),
+            transformation: Transformation::translate(
+                viewport.x + global_start / pixel_size,
+                bounds.y,
+            ),
             clip_bounds,
         })
     }
