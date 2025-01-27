@@ -2,7 +2,6 @@ use super::{
     border, knob::DIAMETER, track::TrackExt as _, ArrangementPosition, ArrangementScale, Track,
     LINE_HEIGHT,
 };
-use crate::daw::Message;
 use generic_daw_core::{Arrangement as ArrangementInner, Position, TrackClip};
 use iced::{
     advanced::{
@@ -71,7 +70,7 @@ pub struct Arrangement<'a, Message> {
     tracks: Box<[Element<'a, Message, Theme, Renderer>]>,
     /// the position of the top left corner of the arrangement viewport
     position: &'a ArrangementPosition,
-    /// the scale of the timeline viewport
+    /// the scale of the arrangement viewport
     scale: &'a ArrangementScale,
 }
 
@@ -941,7 +940,10 @@ where
     }
 }
 
-impl<'a> From<Arrangement<'a, Message>> for Element<'a, Message, Theme, Renderer> {
+impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message, Theme, Renderer>
+where
+    Message: 'static,
+{
     fn from(arrangement_front: Arrangement<'a, Message>) -> Self {
         Self::new(arrangement_front)
     }

@@ -3,10 +3,7 @@ use audio_graph::{AudioGraph, AudioGraphNodeImpl};
 use hound::WavWriter;
 use std::{
     path::Path,
-    sync::{
-        atomic::{AtomicBool, Ordering::SeqCst},
-        Arc, OnceLock, RwLock, RwLockReadGuard,
-    },
+    sync::{atomic::Ordering::SeqCst, Arc, OnceLock, RwLock, RwLockReadGuard},
 };
 
 #[derive(Debug, Default)]
@@ -18,15 +15,13 @@ pub struct Arrangement {
     pub meter: Arc<Meter>,
     /// samples that are being played back live, that are not part of the arrangement
     pub live_sample_playback: RwLock<Vec<LiveSample>>,
-    /// whether the metronome is currently enabled
-    pub metronome: AtomicBool,
     pub(crate) on_bar_click: OnceLock<Arc<[f32]>>,
     pub(crate) off_bar_click: OnceLock<Arc<[f32]>>,
 }
 
 impl AudioGraphNodeImpl for Arrangement {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
-        if self.meter.playing.load(SeqCst) && self.metronome.load(SeqCst) {
+        if self.meter.playing.load(SeqCst) && self.meter.metronome.load(SeqCst) {
             let buf_start_pos = Position::from_interleaved_samples(buf_start_sample, &self.meter);
             let mut buf_end_pos =
                 Position::from_interleaved_samples(buf_start_sample + buf.len(), &self.meter);
@@ -92,7 +87,7 @@ impl Arrangement {
 
         let live_sample_playback = std::mem::take(&mut *self.live_sample_playback.write().unwrap());
         let playing = self.meter.playing.swap(true, SeqCst);
-        let metronome = self.metronome.swap(false, SeqCst);
+        let metronome = self.meter.metronome.swap(false, SeqCst);
 
         let mut writer = WavWriter::create(
             path,
@@ -120,6 +115,6 @@ impl Arrangement {
 
         *self.live_sample_playback.write().unwrap() = live_sample_playback;
         self.meter.playing.store(playing, SeqCst);
-        self.metronome.store(metronome, SeqCst);
+        self.meter.metronome.store(metronome, SeqCst);
     }
 }

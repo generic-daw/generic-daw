@@ -46,7 +46,7 @@ pub struct Knob<Message> {
     range: RangeInclusive<f32>,
     zero: f32,
     default: f32,
-    f: Option<Box<dyn Fn(f32) -> Message>>,
+    f: Box<dyn Fn(f32) -> Message>,
 }
 
 impl<Message> Debug for Knob<Message> {
@@ -129,9 +129,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                             .position_in(layout.bounds())
                             .is_some_and(|pos| pos.distance(Point::new(RADIUS, RADIUS)) < RADIUS);
 
-                        if let Some(f) = &self.f {
-                            shell.publish(f(state.current));
-                        }
+                        shell.publish((self.f)(state.current));
 
                         return Status::Captured;
                     } else if cursor
@@ -163,9 +161,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                     state.current =
                         (state.current + diff).clamp(*self.range.start(), *self.range.end());
 
-                    if let Some(f) = &self.f {
-                        shell.publish(f(state.current));
-                    }
+                    shell.publish((self.f)(state.current));
 
                     return Status::Captured;
                 }
@@ -220,18 +216,18 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
 }
 
 impl<Message> Knob<Message> {
-    pub fn new(range: RangeInclusive<f32>, zero: f32, default: f32) -> Self {
+    pub fn new(
+        range: RangeInclusive<f32>,
+        zero: f32,
+        default: f32,
+        f: impl Fn(f32) -> Message + 'static,
+    ) -> Self {
         Self {
             range,
             zero,
             default,
-            f: None,
+            f: Box::new(f),
         }
-    }
-
-    pub fn on_move(mut self, f: impl Fn(f32) -> Message + 'static) -> Self {
-        self.f = Some(Box::new(f));
-        self
     }
 
     fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {

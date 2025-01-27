@@ -7,7 +7,7 @@ pub struct ArrangementScale {
     ///
     /// 3.0 <= x < 13.0
     pub x: Cell<f32>,
-    /// height in pixels of each track in the timeline
+    /// height in pixels of each track in the arrangement
     ///
     /// 42.0 <= x <= 210.0
     pub y: Cell<f32>,

@@ -29,7 +29,7 @@ pub struct Track<'a, Message> {
     panel: Element<'a, Message, Theme, Renderer>,
     /// the position of the top left corner of the arrangement viewport
     position: &'a ArrangementPosition,
-    /// the scale of the timeline viewport
+    /// the scale of the arrangement viewport
     scale: &'a ArrangementScale,
 }
 

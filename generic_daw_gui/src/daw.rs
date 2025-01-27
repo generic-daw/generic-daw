@@ -1,24 +1,22 @@
 use crate::{
+    arrangement::{Arrangement, Message as ArrangementMessage},
     clap_host::{ClapHost, Message as ClapHostMessage, OpenedMessage},
-    widget::{Arrangement, ArrangementPosition, ArrangementScale, Knob, VSplit},
+    widget::VSplit,
 };
 use generic_daw_core::{
     build_output_stream,
     clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, open_gui},
-    Arrangement as ArrangementInner, AudioClip, AudioTrack, Denominator, InterleavedAudio,
-    Numerator, Stream, StreamTrait as _,
+    Arrangement as ArrangementInner, Denominator, InterleavedAudio, Meter, Numerator, Stream,
+    StreamTrait as _,
 };
 use home::home_dir;
 use iced::{
     event::{self, Status},
     keyboard,
-    widget::{
-        button, column, container, container::Style, horizontal_space, pick_list, row, scrollable,
-        toggler, Text,
-    },
+    widget::{button, column, horizontal_space, pick_list, row, scrollable, toggler, Text},
     window::{self, Settings},
     Alignment::Center,
-    Element, Event, Length, Subscription, Task, Theme,
+    Element, Event, Subscription, Task, Theme,
 };
 use iced_aw::number_input;
 use iced_file_tree::file_tree;
@@ -30,17 +28,17 @@ use std::{
 };
 use strum::VariantArray as _;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub enum Message {
-    #[default]
     Animate,
     ThemeChanged(Theme),
     ClapHost(ClapHostMessage),
+    Arrangement(ArrangementMessage),
+    #[expect(dead_code)]
     Test,
     LoadSamplesButton,
     LoadSamples(Vec<FileHandle>),
     LoadSample(PathBuf),
-    LoadedSample(Arc<InterleavedAudio>),
     ExportButton,
     Export(FileHandle),
     TogglePlay,
@@ -50,15 +48,12 @@ pub enum Message {
     NumeratorChanged(Numerator),
     DenominatorChanged(Denominator),
     ToggleMetronome,
-    TrackVolumeChanged(usize, f32),
-    TrackPanChanged(usize, f32),
 }
 
 pub struct Daw {
-    arrangement: Arc<ArrangementInner>,
-    position: ArrangementPosition,
-    scale: ArrangementScale,
+    arrangement: Arrangement,
     clap_host: ClapHost,
+    meter: Arc<Meter>,
     theme: Theme,
     stream: Stream,
 }
@@ -67,12 +62,13 @@ impl Default for Daw {
     fn default() -> Self {
         let arrangement = ArrangementInner::create();
         let stream = build_output_stream(arrangement.clone());
+        let meter = arrangement.meter.clone();
+        let arrangement = Arrangement::new(arrangement);
 
         Self {
             arrangement,
-            position: ArrangementPosition::default(),
-            scale: ArrangementScale::default(),
             clap_host: ClapHost::default(),
+            meter,
             theme: Theme::Dark,
             stream,
         }
@@ -88,12 +84,15 @@ impl Daw {
             Message::ClapHost(message) => {
                 return self.clap_host.update(message).map(Message::ClapHost);
             }
+            Message::Arrangement(message) => {
+                return self.arrangement.update(message).map(Message::Arrangement);
+            }
             Message::Test => {
                 let (id, fut) = window::open(Settings {
                     exit_on_close_request: false,
                     ..Settings::default()
                 });
-                let sample_rate = f64::from(self.arrangement.meter.sample_rate.load(SeqCst));
+                let sample_rate = f64::from(self.meter.sample_rate.load(SeqCst));
                 let embed = window::run_with_handle(id, move |handle| {
                     let (gui, host_audio_processor, plugin_audio_processor) = open_gui(
                         &get_installed_plugins()[0],
@@ -133,7 +132,7 @@ impl Daw {
             Message::LoadSample(path) => {
                 let (tx, rx) = async_channel::bounded(1);
 
-                let meter = self.arrangement.meter.clone();
+                let meter = self.meter.clone();
                 std::thread::spawn(move || {
                     let audio_file = InterleavedAudio::create(path, &meter);
                     tx.send_blocking(audio_file).unwrap();
@@ -142,24 +141,8 @@ impl Daw {
                 return Task::future(async move { rx.recv().await })
                     .and_then(Task::done)
                     .and_then(Task::done)
-                    .map(Message::LoadedSample);
-            }
-            Message::LoadedSample(audio_file) => {
-                let (node, track) = AudioTrack::create(self.arrangement.meter.clone());
-
-                let mut ok = true;
-                ok &= self.arrangement.audio_graph.add(&node);
-                ok &= self
-                    .arrangement
-                    .audio_graph
-                    .connect(&self.arrangement.audio_graph.root(), &node);
-                ok &= track.try_push(&AudioClip::create(
-                    audio_file,
-                    self.arrangement.meter.clone(),
-                ));
-                debug_assert!(ok);
-
-                self.arrangement.tracks.write().unwrap().push(track);
+                    .map(ArrangementMessage::LoadedSample)
+                    .map(Message::Arrangement);
             }
             Message::ExportButton => {
                 return Task::future(
@@ -172,41 +155,30 @@ impl Daw {
             }
             Message::Export(path) => {
                 self.stream.pause().unwrap();
-                self.arrangement.export(path.path());
+                let r = self
+                    .arrangement
+                    .update(ArrangementMessage::Export(path))
+                    .map(Message::Arrangement);
                 self.stream.play().unwrap();
+                return r;
             }
             Message::TogglePlay => {
-                self.arrangement.meter.playing.fetch_not(SeqCst);
+                self.meter.playing.fetch_not(SeqCst);
             }
             Message::Stop => {
-                self.arrangement.meter.playing.store(false, SeqCst);
-                self.arrangement.meter.sample.store(0, SeqCst);
-                self.arrangement
-                    .live_sample_playback
-                    .write()
-                    .unwrap()
-                    .clear();
+                self.meter.playing.store(false, SeqCst);
+                self.meter.sample.store(0, SeqCst);
             }
             Message::New => *self = Self::default(),
-            Message::BpmChanged(bpm) => self.arrangement.meter.bpm.store(bpm, SeqCst),
-            Message::NumeratorChanged(new_numerator) => self
-                .arrangement
-                .meter
-                .numerator
-                .store(new_numerator, SeqCst),
-            Message::DenominatorChanged(new_denominator) => self
-                .arrangement
-                .meter
-                .denominator
-                .store(new_denominator, SeqCst),
+            Message::BpmChanged(bpm) => self.meter.bpm.store(bpm, SeqCst),
+            Message::NumeratorChanged(new_numerator) => {
+                self.meter.numerator.store(new_numerator, SeqCst);
+            }
+            Message::DenominatorChanged(new_denominator) => {
+                self.meter.denominator.store(new_denominator, SeqCst);
+            }
             Message::ToggleMetronome => {
-                self.arrangement.metronome.fetch_not(SeqCst);
-            }
-            Message::TrackVolumeChanged(idx, volume) => {
-                self.arrangement.tracks()[idx].set_volume(volume);
-            }
-            Message::TrackPanChanged(idx, pan) => {
-                self.arrangement.tracks()[idx].set_pan(pan);
+                self.meter.metronome.fetch_not(SeqCst);
             }
         }
 
@@ -223,7 +195,7 @@ impl Daw {
             row![
                 button(
                     Text::new(bootstrap::icon_to_string(
-                        if self.arrangement.meter.playing.load(SeqCst) {
+                        if self.meter.playing.load(SeqCst) {
                             bootstrap::Bootstrap::PauseFill
                         } else {
                             bootstrap::Bootstrap::PlayFill
@@ -241,24 +213,19 @@ impl Daw {
             row![
                 pick_list(
                     Numerator::VARIANTS,
-                    Some(self.arrangement.meter.numerator.load(SeqCst)),
+                    Some(self.meter.numerator.load(SeqCst)),
                     Message::NumeratorChanged
                 )
                 .width(50),
                 pick_list(
                     Denominator::VARIANTS,
-                    Some(self.arrangement.meter.denominator.load(SeqCst)),
+                    Some(self.meter.denominator.load(SeqCst)),
                     Message::DenominatorChanged
                 )
                 .width(50),
             ],
-            number_input(
-                self.arrangement.meter.bpm.load(SeqCst),
-                30..=600,
-                Message::BpmChanged
-            )
-            .width(50),
-            toggler(self.arrangement.metronome.load(SeqCst))
+            number_input(self.meter.bpm.load(SeqCst), 30..=600, Message::BpmChanged).width(50),
+            toggler(self.meter.metronome.load(SeqCst))
                 .label("Metronome")
                 .on_toggle(|_| Message::ToggleMetronome),
             horizontal_space(),
@@ -273,34 +240,9 @@ impl Daw {
                 scrollable(
                     file_tree(home_dir().unwrap())
                         .unwrap()
-                        .on_double_click(Message::LoadSample)
+                        .on_double_click(Message::LoadSample),
                 ),
-                Arrangement::new(&self.arrangement, &self.position, &self.scale, |idx| {
-                    container(
-                        row![
-                            Knob::new(0.0..=1.0, 0.0, 1.0)
-                                .on_move(move |f| Message::TrackVolumeChanged(idx, f)),
-                            Knob::new(-1.0..=1.0, 0.0, 0.0)
-                                .on_move(move |f| Message::TrackPanChanged(idx, f)),
-                        ]
-                        .spacing(5.0),
-                    )
-                    .padding(5.0)
-                    .height(Length::Fill)
-                    .style(|theme| Style {
-                        background: Some(
-                            theme
-                                .extended_palette()
-                                .secondary
-                                .weak
-                                .color
-                                .scale_alpha(0.25)
-                                .into(),
-                        ),
-                        ..Style::default()
-                    })
-                    .into()
-                })
+                self.arrangement.view().map(Message::Arrangement)
             )
             .split(0.25)
         ]
@@ -311,7 +253,7 @@ impl Daw {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        let animate = if self.arrangement.meter.playing.load(SeqCst) {
+        let animate = if self.meter.playing.load(SeqCst) {
             window::frames().map(|_| Message::Animate)
         } else {
             Subscription::none()
