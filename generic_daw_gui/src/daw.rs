@@ -129,12 +129,12 @@ impl Daw {
 
                 let meter = self.meter.clone();
                 std::thread::spawn(move || {
-                    let audio_file = InterleavedAudio::create(path, &meter);
-                    tx.send_blocking(audio_file).unwrap();
+                    if let Ok(audio_file) = InterleavedAudio::create(path, &meter) {
+                        tx.send_blocking(audio_file).unwrap();
+                    }
                 });
 
                 return Task::future(async move { rx.recv().await })
-                    .and_then(Task::done)
                     .and_then(Task::done)
                     .map(ArrangementMessage::LoadedSample)
                     .map(Message::Arrangement);
