@@ -46,7 +46,7 @@ impl TrackClipExt for AudioClip {
         );
 
         // if there are less than 3 vertices, there's nothing to draw
-        if (last_index - first_index) < 2 {
+        if (last_index.saturating_sub(first_index)) < 3 {
             return None;
         }
 
@@ -59,7 +59,7 @@ impl TrackClipExt for AudioClip {
         // the part of the audio clip that is visible
         let clip_bounds = Rectangle::new(
             Point::new(0.0, hidden + LINE_HEIGHT),
-            Size::new(viewport.width, waveform_height - hidden),
+            Size::new(bounds.width, waveform_height - hidden),
         );
 
         let color = color::pack(theme.extended_palette().secondary.base.text);
@@ -93,10 +93,7 @@ impl TrackClipExt for AudioClip {
         // the waveform mesh with the clip bounds
         Some(Mesh::Solid {
             buffers: mesh::Indexed { vertices, indices },
-            transformation: Transformation::translate(
-                viewport.x + global_start / pixel_size,
-                bounds.y,
-            ),
+            transformation: Transformation::translate(bounds.x, bounds.y),
             clip_bounds,
         })
     }

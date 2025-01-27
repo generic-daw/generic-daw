@@ -328,10 +328,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                 .iter()
                 .zip(layout.children())
                 .flat_map(|(track, layout)| {
-                    let bounds = layout.bounds();
+                    let mut bounds = layout.bounds();
                     let Some(clip_bounds) = bounds.intersection(&inner_bounds) else {
                         return Vec::new();
                     };
+                    bounds.x = clip_bounds.x;
+                    bounds.width = clip_bounds.width;
 
                     track.meshes(theme, bounds, clip_bounds, self.position, self.scale)
                 })
