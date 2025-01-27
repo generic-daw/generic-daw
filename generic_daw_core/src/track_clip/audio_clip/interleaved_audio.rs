@@ -112,7 +112,6 @@ impl InterleavedAudio {
         let stream_sample_rate = meter.sample_rate.load(SeqCst);
 
         resample(file_sample_rate, stream_sample_rate, interleaved_samples)
-            .map(Vec::into_boxed_slice)
     }
 
     fn create_lod(&mut self) {
@@ -154,9 +153,9 @@ pub fn resample(
     file_sample_rate: u32,
     stream_sample_rate: u32,
     mut interleaved_samples: Vec<f32>,
-) -> Result<Vec<f32>> {
+) -> Result<Box<[f32]>> {
     if file_sample_rate == stream_sample_rate {
-        return Ok(interleaved_samples);
+        return Ok(interleaved_samples.into_boxed_slice());
     }
 
     let resample_ratio = f64::from(stream_sample_rate) / f64::from(file_sample_rate);
@@ -199,7 +198,7 @@ pub fn resample(
             .flat_map(<[&f32; 2]>::from),
     );
 
-    Ok(interleaved_samples)
+    Ok(interleaved_samples.into_boxed_slice())
 }
 
 fn gcd(mut a: u32, mut b: u32) -> u32 {
