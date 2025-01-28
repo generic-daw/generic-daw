@@ -81,9 +81,8 @@ impl Arrangement {
             }
             Message::UnselectClip() => self.grabbed_clip = None,
             Message::CloneClip(track, mut clip) => {
-                let ok = self.inner.tracks()[track].try_push(&Arc::new(
-                    self.inner.tracks()[track].clips()[clip].deref().clone(),
-                ));
+                let inner = self.inner.tracks()[track].clips()[clip].deref().clone();
+                let ok = self.inner.tracks()[track].try_push(&Arc::new(inner));
                 debug_assert!(ok);
                 clip = self.inner.tracks()[track].clips().len() - 1;
                 self.grabbed_clip.replace([track, clip]);
