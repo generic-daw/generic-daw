@@ -113,18 +113,17 @@ impl Arrangement {
             }
             Message::PositionScaleDelta(pos, scale) => {
                 self.position += pos;
-                self.position.x = self.position.x.clamp(
+                self.position = self.position.clamp(
                     0.0,
                     self.inner.len().in_interleaved_samples_f(&self.inner.meter),
+                    0.0,
+                    (self.inner.tracks().len().saturating_sub(1)) as f32,
                 );
-                self.position.y = self
-                    .position
-                    .y
-                    .clamp(0.0, (self.inner.tracks().len().saturating_sub(1)) as f32);
 
                 self.scale += scale;
-                self.scale.x = self.scale.x.clamp(3.0, 12.999_999);
-                self.scale.y = self.scale.y.clamp(2.0 * LINE_HEIGHT, 10.0 * LINE_HEIGHT);
+                self.scale =
+                    self.scale
+                        .clamp(3.0, 12.999_999, 2.0 * LINE_HEIGHT, 10.0 * LINE_HEIGHT);
             }
             Message::Export(path) => {
                 self.stream.pause().unwrap();
