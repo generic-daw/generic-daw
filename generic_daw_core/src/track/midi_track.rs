@@ -10,14 +10,14 @@ pub mod plugin_state;
 #[derive(Debug)]
 pub struct MidiTrack {
     /// these are all guaranteed to be `TrackClip::Midi`
-    pub(crate) clips: RwLock<Vec<Arc<TrackClip>>>,
+    pub(super) clips: RwLock<Vec<Arc<TrackClip>>>,
     /// 0 <= volume
-    pub volume: Atomic<f32>,
+    pub(super) volume: Atomic<f32>,
     /// -1 <= pan <= 1
-    pub pan: Atomic<f32>,
+    pub(super) pan: Atomic<f32>,
     /// holds all the state needed for a generator plugin to function properly
     pub(crate) plugin_state: Mutex<PluginState>,
-    pub(crate) meter: Arc<Meter>,
+    pub(super) meter: Arc<Meter>,
 }
 
 impl MidiTrack {

@@ -11,7 +11,7 @@ use iced::{
     event::Status,
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::canvas::{path::Arc, Cache, Frame, Path},
-    Element, Event, Length, Point, Radians, Rectangle, Renderer, Size, Theme, Vector,
+    window, Element, Event, Length, Point, Radians, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::{
     f32::consts::{FRAC_PI_2, FRAC_PI_4},
@@ -27,16 +27,18 @@ struct State {
     current: f32,
     hovering: bool,
     last_click: Option<Click>,
+    enabled: bool,
     cache: Cache,
 }
 
 impl State {
-    pub fn new(current: f32) -> Self {
+    pub fn new(current: f32, enabled: bool) -> Self {
         Self {
             dragging: None,
             current,
             hovering: false,
             last_click: None,
+            enabled,
             cache: Cache::new(),
         }
     }
@@ -46,6 +48,7 @@ pub struct Knob<Message> {
     range: RangeInclusive<f32>,
     zero: f32,
     default: f32,
+    enabled: bool,
     f: Box<dyn Fn(f32) -> Message>,
 }
 
@@ -69,7 +72,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::new(self.default))
+        tree::State::new(State::new(self.default, self.enabled))
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
@@ -89,8 +92,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
     ) -> Status {
         let state = tree.state.downcast_mut::<State>();
 
-        if let Event::Mouse(event) = event {
-            match event {
+        match event {
+            Event::Window(window::Event::RedrawRequested(..)) => {
+                if self.enabled != state.enabled {
+                    state.enabled = self.enabled;
+                    state.cache.clear();
+                    return Status::Ignored;
+                }
+            }
+            Event::Mouse(event) => match event {
                 mouse::Event::ButtonPressed(mouse::Button::Left)
                     if state.dragging.is_none()
                         && cursor.position_in(layout.bounds()).is_some_and(|pos| {
@@ -166,7 +176,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                     return Status::Captured;
                 }
                 _ => {}
-            }
+            },
+            _ => {}
         }
 
         Status::Ignored
@@ -226,8 +237,14 @@ impl<Message> Knob<Message> {
             range,
             zero,
             default,
+            enabled: true,
             f: Box::new(f),
         }
+    }
+
+    pub fn set_enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
     }
 
     fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
@@ -274,7 +291,7 @@ impl<Message> Knob<Message> {
 
         frame.fill(&segment, theme.extended_palette().primary.weak.text);
 
-        let color = if state.hovering || state.dragging.is_some() {
+        let color = if !self.enabled || state.hovering || state.dragging.is_some() {
             theme.extended_palette().secondary.strong.color
         } else {
             theme.extended_palette().primary.base.color

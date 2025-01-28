@@ -209,6 +209,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             cursor.x -= panel_width;
         }
 
+        if cursor.x < 0.0 {
+            shell.publish((self.unselect_clip)());
+            state.action = Action::None;
+            return Status::Ignored;
+        }
+
         if let Some(status) = self.on_event_any_modifiers(state, &event, cursor, shell) {
             return status;
         }
@@ -374,7 +380,7 @@ where
         inner: &'a ArrangementInner,
         position: ArrangementPosition,
         scale: ArrangementScale,
-        track_panel: impl Fn(usize) -> Element<'a, Message>,
+        track_panel: impl Fn(usize, bool) -> Element<'a, Message>,
         seek_to: fn(usize) -> Message,
         select_clip: fn(usize, usize) -> Message,
         unselect_clip: fn() -> Message,
@@ -390,7 +396,7 @@ where
             .iter()
             .cloned()
             .enumerate()
-            .map(|(idx, track)| Track::new(track, position, scale, (track_panel)(idx)))
+            .map(|(idx, track)| Track::new(track, position, scale, &track_panel, idx))
             .map(Element::new)
             .collect();
 

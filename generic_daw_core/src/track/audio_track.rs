@@ -1,22 +1,26 @@
 use crate::{Meter, Position, Track, TrackClip};
 use atomig::Atomic;
 use audio_graph::AudioGraphNodeImpl;
-use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock, RwLockReadGuard};
+use std::sync::{
+    atomic::{AtomicBool, Ordering::SeqCst},
+    Arc, RwLock, RwLockReadGuard,
+};
 
 #[derive(Debug)]
 pub struct AudioTrack {
     /// these are all guaranteed to be `TrackClip::Audio`
-    pub(crate) clips: RwLock<Vec<Arc<TrackClip>>>,
+    pub(super) clips: RwLock<Vec<Arc<TrackClip>>>,
     /// 0 <= volume
-    pub volume: Atomic<f32>,
+    pub(super) volume: Atomic<f32>,
     /// -1 <= pan <= 1
-    pub pan: Atomic<f32>,
-    pub(crate) meter: Arc<Meter>,
+    pub(super) pan: Atomic<f32>,
+    pub(super) meter: Arc<Meter>,
+    pub(super) enabled: AtomicBool,
 }
 
 impl AudioGraphNodeImpl for AudioTrack {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
-        if !self.meter.playing.load(SeqCst) {
+        if !self.meter.playing.load(SeqCst) || !self.enabled.load(SeqCst) {
             return;
         }
 
@@ -34,6 +38,7 @@ impl AudioTrack {
             volume: Atomic::new(1.0),
             pan: Atomic::new(0.0),
             meter,
+            enabled: AtomicBool::new(true),
         }))
     }
 

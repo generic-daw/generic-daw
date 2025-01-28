@@ -200,15 +200,18 @@ impl<'a, Message> Track<'a, Message> {
         inner: Arc<TrackInner>,
         position: ArrangementPosition,
         scale: ArrangementScale,
-        panel: Element<'a, Message>,
+        track_panel: impl Fn(usize, bool) -> Element<'a, Message>,
+        index: usize,
     ) -> Self {
-        let children = once(panel)
+        let enabled = inner.get_enabled();
+
+        let children = once(track_panel(index, enabled))
             .chain(
                 inner
                     .clips()
                     .iter()
                     .cloned()
-                    .map(|clip| TrackClip::new(clip, scale))
+                    .map(|clip| TrackClip::new(clip, scale, enabled))
                     .map(Element::new),
             )
             .collect();

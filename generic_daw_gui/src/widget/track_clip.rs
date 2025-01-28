@@ -26,6 +26,8 @@ pub struct TrackClip {
     inner: Arc<TrackClipInner>,
     /// the scale of the timeline viewport
     scale: ArrangementScale,
+    // whether the clip is in an enabled track
+    enabled: bool,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
@@ -66,6 +68,12 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
             return;
         }
 
+        let color = if self.enabled {
+            theme.extended_palette().primary.weak.color
+        } else {
+            theme.extended_palette().secondary.weak.color
+        };
+
         // the translucent background of the clip
         let clip_background = Quad {
             bounds: Rectangle::new(
@@ -75,15 +83,7 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
             ..Quad::default()
         };
 
-        renderer.fill_quad(
-            clip_background,
-            theme
-                .extended_palette()
-                .primary
-                .weak
-                .color
-                .scale_alpha(0.25),
-        );
+        renderer.fill_quad(clip_background, color.scale_alpha(0.25));
 
         // height of the clip, excluding the text, clipped off by the top of the arrangement
         let clip_height = max_by(0.0, LINE_HEIGHT - bounds.height, f32::total_cmp);
@@ -97,7 +97,7 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
             ..Quad::default()
         };
 
-        renderer.fill_quad(text_background, theme.extended_palette().primary.weak.color);
+        renderer.fill_quad(text_background, color);
 
         // the text containing the name of the sample
         let text = Text {
@@ -143,8 +143,12 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
 }
 
 impl TrackClip {
-    pub fn new(inner: Arc<TrackClipInner>, scale: ArrangementScale) -> Self {
-        Self { inner, scale }
+    pub fn new(inner: Arc<TrackClipInner>, scale: ArrangementScale, enabled: bool) -> Self {
+        Self {
+            inner,
+            scale,
+            enabled,
+        }
     }
 }
 

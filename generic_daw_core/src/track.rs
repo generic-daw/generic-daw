@@ -109,4 +109,26 @@ impl Track {
             Self::Midi(track) => track.pan.store(pan, SeqCst),
         }
     }
+
+    #[must_use]
+    pub fn get_enabled(&self) -> bool {
+        match self {
+            Self::Audio(track) => track.enabled.load(SeqCst),
+            Self::Midi(_) => unimplemented!(),
+        }
+    }
+
+    pub fn set_enabled(&self, enabled: bool) {
+        match self {
+            Self::Audio(track) => track.enabled.store(enabled, SeqCst),
+            Self::Midi(_) => unimplemented!(),
+        }
+    }
+
+    pub fn toggle_enabled(&self) {
+        match self {
+            Self::Audio(track) => track.enabled.fetch_not(SeqCst),
+            Self::Midi(_) => unimplemented!(),
+        };
+    }
 }

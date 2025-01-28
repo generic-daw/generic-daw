@@ -6,7 +6,10 @@ use generic_daw_core::{
     StreamTrait as _,
 };
 use iced::{
-    widget::{container, container::Style, row},
+    widget::{
+        column, container, container::Style as ContainerStyle, horizontal_space, mouse_area, radio,
+        row, vertical_space,
+    },
     Element, Length, Task,
 };
 use rfd::FileHandle;
@@ -20,6 +23,8 @@ pub enum Message {
     TrackVolumeChanged(usize, f32),
     TrackPanChanged(usize, f32),
     LoadedSample(Arc<InterleavedAudio>),
+    ToggleTrackEnabled(usize),
+    ToggleTrackSolo(usize),
     SeekTo(usize),
     SelectClip(usize, usize),
     UnselectClip(),
@@ -36,6 +41,7 @@ pub struct Arrangement {
     inner: Arc<ArrangementInner>,
     position: ArrangementPosition,
     scale: ArrangementScale,
+    soloed_track: Option<usize>,
     grabbed_clip: Option<[usize; 2]>,
     stream: Stream,
 }
@@ -46,6 +52,7 @@ impl Arrangement {
             inner,
             position: ArrangementPosition::default(),
             scale: ArrangementScale::default(),
+            soloed_track: None,
             grabbed_clip: None,
             stream,
         }
@@ -53,11 +60,11 @@ impl Arrangement {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::TrackVolumeChanged(idx, volume) => {
-                self.inner.tracks()[idx].set_volume(volume);
+            Message::TrackVolumeChanged(track, volume) => {
+                self.inner.tracks()[track].set_volume(volume);
             }
-            Message::TrackPanChanged(idx, pan) => {
-                self.inner.tracks()[idx].set_pan(pan);
+            Message::TrackPanChanged(track, pan) => {
+                self.inner.tracks()[track].set_pan(pan);
             }
             Message::LoadedSample(audio_file) => {
                 let track = AudioTrack::create(self.inner.meter.clone());
@@ -74,6 +81,26 @@ impl Arrangement {
                     .connect(&self.inner.audio_graph.root(), &node);
 
                 debug_assert!(ok);
+            }
+            Message::ToggleTrackEnabled(track) => {
+                self.inner.tracks()[track].toggle_enabled();
+                self.soloed_track = None;
+            }
+            Message::ToggleTrackSolo(track) => {
+                if self.soloed_track.is_some_and(|s| s == track) {
+                    self.soloed_track = None;
+                    self.inner
+                        .tracks()
+                        .iter()
+                        .for_each(|track| track.set_enabled(true));
+                } else {
+                    self.inner
+                        .tracks()
+                        .iter()
+                        .for_each(|track| track.set_enabled(false));
+                    self.inner.tracks()[track].set_enabled(true);
+                    self.soloed_track = Some(track);
+                }
             }
             Message::SeekTo(pos) => {
                 self.inner.meter.sample.store(pos, SeqCst);
@@ -141,21 +168,35 @@ impl Arrangement {
             &self.inner,
             self.position,
             self.scale,
-            |idx| {
+            |idx, enabled| {
                 container(
-                    row![
-                        Knob::new(0.0..=1.0, 0.0, 1.0, move |f| Message::TrackVolumeChanged(
-                            idx, f
-                        )),
-                        Knob::new(-1.0..=1.0, 0.0, 0.0, move |f| Message::TrackPanChanged(
-                            idx, f
-                        ))
+                    column![
+                        row![
+                            Knob::new(0.0..=1.0, 0.0, 1.0, move |f| Message::TrackVolumeChanged(
+                                idx, f
+                            ))
+                            .set_enabled(enabled),
+                            Knob::new(-1.0..=1.0, 0.0, 0.0, move |f| Message::TrackPanChanged(
+                                idx, f
+                            ))
+                            .set_enabled(enabled)
+                        ]
+                        .spacing(5.0),
+                        vertical_space(),
+                        row![
+                            horizontal_space(),
+                            mouse_area(radio("", enabled, Some(true), |_| {
+                                Message::ToggleTrackEnabled(idx)
+                            }))
+                            .on_right_press(Message::ToggleTrackSolo(idx)),
+                        ]
                     ]
+                    .width(Length::Shrink)
                     .spacing(5.0),
                 )
                 .padding(5.0)
                 .height(Length::Fill)
-                .style(|theme| Style {
+                .style(|theme| ContainerStyle {
                     background: Some(
                         theme
                             .extended_palette()
@@ -165,7 +206,7 @@ impl Arrangement {
                             .scale_alpha(0.25)
                             .into(),
                     ),
-                    ..Style::default()
+                    ..ContainerStyle::default()
                 })
                 .into()
             },
