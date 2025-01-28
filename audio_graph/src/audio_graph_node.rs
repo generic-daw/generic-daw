@@ -33,8 +33,11 @@ impl Hash for AudioGraphNode {
     }
 }
 
-impl From<Arc<dyn AudioGraphNodeImpl>> for AudioGraphNode {
-    fn from(value: Arc<dyn AudioGraphNodeImpl>) -> Self {
-        Self(value)
+impl<T> From<Arc<T>> for AudioGraphNode
+where
+    T: AudioGraphNodeImpl + 'static,
+{
+    fn from(value: Arc<T>) -> Self {
+        Self(value as Arc<dyn AudioGraphNodeImpl>)
     }
 }

@@ -60,18 +60,20 @@ impl Arrangement {
                 self.inner.tracks()[idx].set_pan(pan);
             }
             Message::LoadedSample(audio_file) => {
-                let (node, track) = AudioTrack::create(self.inner.meter.clone());
+                let track = AudioTrack::create(self.inner.meter.clone());
 
                 let mut ok = true;
+                ok &= track.try_push(&AudioClip::create(audio_file, self.inner.meter.clone()));
+                self.inner.tracks.write().unwrap().push(track.clone());
+
+                let node = track.into();
                 ok &= self.inner.audio_graph.add(&node);
                 ok &= self
                     .inner
                     .audio_graph
                     .connect(&self.inner.audio_graph.root(), &node);
-                ok &= track.try_push(&AudioClip::create(audio_file, self.inner.meter.clone()));
-                debug_assert!(ok);
 
-                self.inner.tracks.write().unwrap().push(track);
+                debug_assert!(ok);
             }
             Message::SeekTo(pos) => {
                 self.inner.meter.sample.store(pos, SeqCst);

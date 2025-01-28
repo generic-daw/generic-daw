@@ -1,6 +1,6 @@
 use crate::{Meter, Position, Track, TrackClip};
 use atomig::Atomic;
-use audio_graph::{AudioGraphNode, AudioGraphNodeImpl};
+use audio_graph::AudioGraphNodeImpl;
 use std::sync::{atomic::Ordering::SeqCst, Arc, RwLock, RwLockReadGuard};
 
 #[derive(Debug)]
@@ -28,15 +28,13 @@ impl AudioGraphNodeImpl for AudioTrack {
 
 impl AudioTrack {
     #[must_use]
-    pub fn create(meter: Arc<Meter>) -> (AudioGraphNode, Arc<Track>) {
-        let v: Arc<dyn AudioGraphNodeImpl> = Arc::new(Track::Audio(Self {
+    pub fn create(meter: Arc<Meter>) -> Arc<Track> {
+        Arc::new(Track::Audio(Self {
             clips: RwLock::default(),
             volume: Atomic::new(1.0),
             pan: Atomic::new(0.0),
             meter,
-        }));
-
-        (v.clone().into(), v.downcast_arc::<Track>().unwrap())
+        }))
     }
 
     #[must_use]
