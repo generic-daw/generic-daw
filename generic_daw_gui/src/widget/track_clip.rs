@@ -22,13 +22,13 @@ pub mod track_clip_ext;
 pub use track_clip_ext::TrackClipExt;
 
 #[derive(Clone)]
-pub struct TrackClip<'a> {
+pub struct TrackClip {
     inner: Arc<TrackClipInner>,
     /// the scale of the timeline viewport
-    scale: &'a ArrangementScale,
+    scale: ArrangementScale,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for TrackClip<'_> {
+impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
     fn size(&self) -> Size<Length> {
         Size {
             width: Length::Shrink,
@@ -42,7 +42,7 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip<'_> {
         Node::new(Size::new(
             (self.inner.get_global_end().in_interleaved_samples(meter)
                 - self.inner.get_global_start().in_interleaved_samples(meter)) as f32
-                / self.scale.x.get().exp2(),
+                / self.scale.x.exp2(),
             limits.max().height,
         ))
     }
@@ -142,8 +142,8 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip<'_> {
     }
 }
 
-impl<'a> TrackClip<'a> {
-    pub fn new(inner: Arc<TrackClipInner>, scale: &'a ArrangementScale) -> Self {
+impl TrackClip {
+    pub fn new(inner: Arc<TrackClipInner>, scale: ArrangementScale) -> Self {
         Self { inner, scale }
     }
 }
@@ -154,8 +154,8 @@ impl TrackClipExt for TrackClipInner {
         theme: &Theme,
         bounds: Rectangle,
         viewport: Rectangle,
-        position: &ArrangementPosition,
-        scale: &ArrangementScale,
+        position: ArrangementPosition,
+        scale: ArrangementScale,
     ) -> Option<Mesh> {
         match self {
             Self::Audio(audio) => audio.meshes(theme, bounds, viewport, position, scale),

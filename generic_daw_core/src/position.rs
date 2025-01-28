@@ -57,10 +57,15 @@ impl Position {
     }
 
     #[must_use]
-    pub fn from_interleaved_samples(samples: usize, meter: &Meter) -> Self {
-        let global_beat = samples as f32 * f32::from(meter.bpm.load(SeqCst))
+    pub fn from_interleaved_samples_f(samples: f32, meter: &Meter) -> Self {
+        let global_beat = samples * f32::from(meter.bpm.load(SeqCst))
             / ((meter.sample_rate.load(SeqCst) * 120) as f32);
         Self::new(global_beat as u32, (global_beat.fract() * 256.0) as u32)
+    }
+
+    #[must_use]
+    pub fn from_interleaved_samples(samples: usize, meter: &Meter) -> Self {
+        Self::from_interleaved_samples_f(samples as f32, meter)
     }
 
     #[must_use]

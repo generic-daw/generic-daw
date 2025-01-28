@@ -1,5 +1,5 @@
 use super::{border, ArrangementPosition, ArrangementScale, TrackClip, TrackClipExt as _};
-use generic_daw_core::{Meter, Track as TrackInner, TrackClip as TrackClipInner};
+use generic_daw_core::{Meter, Track as TrackInner};
 use iced::{
     advanced::{
         graphics::Mesh,
@@ -20,17 +20,19 @@ pub use track_ext::TrackExt;
 
 pub struct Track<'a, Message> {
     inner: Arc<TrackInner>,
-    /// list of all the clip widgets
-    clips: Box<[Element<'a, Message, Theme, Renderer>]>,
-    /// the track panel
-    panel: Element<'a, Message, Theme, Renderer>,
+    /// list of the track panel and all the clip widgets
+    children: Box<[Element<'a, Message, Theme, Renderer>]>,
     /// the position of the top left corner of the arrangement viewport
-    position: &'a ArrangementPosition,
+    position: ArrangementPosition,
     /// the scale of the arrangement viewport
-    scale: &'a ArrangementScale,
+    scale: ArrangementScale,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
+    fn diff(&self, tree: &mut Tree) {
+        tree.diff_children(&self.children);
+    }
+
     fn size(&self) -> Size<Length> {
         Size {
             width: Length::Fill,
@@ -39,45 +41,49 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
     }
 
     fn children(&self) -> Vec<Tree> {
-        self.clips
-            .iter()
-            .chain(once(&self.panel))
-            .map(Tree::new)
-            .collect()
+        self.children.iter().map(Tree::new).collect()
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+        self.diff(tree);
+
         let meter = self.inner.meter();
 
         let panel_layout =
-            self.panel
+            self.children[0]
                 .as_widget()
-                .layout(tree.children.last_mut().unwrap(), renderer, limits);
+                .layout(&mut tree.children[0], renderer, limits);
         let panel_width = panel_layout.size().width;
 
         Node::with_children(
-            Size::new(limits.max().width, self.scale.y.get()),
-            self.clips
-                .iter()
-                .zip(&mut tree.children[1..])
-                .map(|(widget, tree)| {
-                    widget.as_widget().layout(
-                        tree,
-                        renderer,
-                        &Limits::new(limits.min(), Size::new(f32::INFINITY, limits.max().height)),
-                    )
-                })
-                .zip(self.inner.clips().iter())
-                .map(|(node, clip)| {
-                    node.translate(Vector::new(
-                        panel_width
-                            + (clip.get_global_start().in_interleaved_samples_f(meter)
-                                - self.position.x.get())
-                                / self.scale.x.get().exp2(),
-                        0.0,
-                    ))
-                })
-                .chain(once(panel_layout))
+            Size::new(limits.max().width, self.scale.y),
+            once(panel_layout)
+                .chain(
+                    self.children
+                        .iter()
+                        .zip(&mut tree.children)
+                        .skip(1)
+                        .map(|(widget, tree)| {
+                            widget.as_widget().layout(
+                                tree,
+                                renderer,
+                                &Limits::new(
+                                    limits.min(),
+                                    Size::new(f32::INFINITY, limits.max().height),
+                                ),
+                            )
+                        })
+                        .zip(self.inner.clips().iter())
+                        .map(|(node, clip)| {
+                            node.translate(Vector::new(
+                                panel_width
+                                    + (clip.get_global_start().in_interleaved_samples_f(meter)
+                                        - self.position.x)
+                                        / self.scale.x.exp2(),
+                                0.0,
+                            ))
+                        }),
+                )
                 .collect(),
         )
     }
@@ -90,9 +96,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> Interaction {
-        self.clips
+        self.children
             .iter()
-            .chain(once(&self.panel))
             .zip(&tree.children)
             .zip(layout.children())
             .map(|((child, tree), layout)| {
@@ -114,7 +119,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        let Some(mut bounds) = viewport.intersection(&layout.bounds()) else {
+        let Some(bounds) = viewport.intersection(&layout.bounds()) else {
             return;
         };
 
@@ -125,27 +130,31 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 
         border(renderer, bounds, theme);
 
-        let panel_tree = tree.children.last().unwrap();
-        let panel_layout = layout.children().next_back().unwrap();
-        let panel_width = panel_layout.bounds().size().width;
+        let track_panel_layout = layout.children().next().unwrap();
+        let track_panel_width = track_panel_layout.bounds().width;
 
-        self.panel.as_widget().draw(
-            panel_tree,
+        self.children[0].as_widget().draw(
+            &tree.children[0],
             renderer,
             theme,
             style,
-            panel_layout,
+            track_panel_layout,
             cursor,
             viewport,
         );
 
-        bounds.width -= panel_width;
-        bounds.x += panel_width;
+        let mut viewport = *viewport;
+        viewport.x += track_panel_width;
+        viewport.width -= track_panel_width;
+        let Some(bounds) = viewport.intersection(&bounds) else {
+            return;
+        };
 
-        self.clips
+        self.children
             .iter()
-            .zip(&tree.children[1..])
+            .zip(&tree.children)
             .zip(layout.children())
+            .skip(1)
             .for_each(|((child, tree), layout)| {
                 renderer.with_layer(bounds, |renderer| {
                     child
@@ -166,38 +175,47 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) -> Status {
-        self.panel.as_widget_mut().on_event(
-            tree.children.last_mut().unwrap(),
-            event,
-            layout.children().next_back().unwrap(),
-            cursor,
-            renderer,
-            clipboard,
-            shell,
-            viewport,
-        )
+        self.children
+            .iter_mut()
+            .zip(&mut tree.children)
+            .zip(layout.children())
+            .map(|((child, state), layout)| {
+                child.as_widget_mut().on_event(
+                    state,
+                    event.clone(),
+                    layout,
+                    cursor,
+                    renderer,
+                    clipboard,
+                    shell,
+                    viewport,
+                )
+            })
+            .fold(Status::Ignored, Status::merge)
     }
 }
 
 impl<'a, Message> Track<'a, Message> {
     pub fn new(
         inner: Arc<TrackInner>,
-        position: &'a ArrangementPosition,
-        scale: &'a ArrangementScale,
+        position: ArrangementPosition,
+        scale: ArrangementScale,
         panel: Element<'a, Message>,
     ) -> Self {
-        let clips = inner
-            .clips()
-            .iter()
-            .cloned()
-            .map(|clip| TrackClip::new(clip, scale))
-            .map(Element::new)
+        let children = once(panel)
+            .chain(
+                inner
+                    .clips()
+                    .iter()
+                    .cloned()
+                    .map(|clip| TrackClip::new(clip, scale))
+                    .map(Element::new),
+            )
             .collect();
 
         Self {
             inner,
-            clips,
-            panel,
+            children,
             position,
             scale,
         }
@@ -205,16 +223,12 @@ impl<'a, Message> Track<'a, Message> {
 }
 
 impl TrackExt for TrackInner {
-    fn get_clip_at_global_time(
-        &self,
-        meter: &Meter,
-        global_time: usize,
-    ) -> Option<Arc<TrackClipInner>> {
-        self.clips().iter().rev().find_map(|clip| {
+    fn get_clip_at_global_time(&self, meter: &Meter, global_time: usize) -> Option<usize> {
+        self.clips().iter().enumerate().rev().find_map(|(i, clip)| {
             if clip.get_global_start().in_interleaved_samples(meter) <= global_time
                 && global_time <= clip.get_global_end().in_interleaved_samples(meter)
             {
-                Some(clip.clone())
+                Some(i)
             } else {
                 None
             }
@@ -226,21 +240,21 @@ impl TrackExt for TrackInner {
         theme: &Theme,
         bounds: Rectangle,
         viewport: Rectangle,
-        position: &ArrangementPosition,
-        scale: &ArrangementScale,
+        position: ArrangementPosition,
+        scale: ArrangementScale,
     ) -> Vec<Mesh> {
         let meter = self.meter();
         self.clips()
             .iter()
             .filter_map(|clip| {
                 let first_pixel = (clip.get_global_start().in_interleaved_samples_f(meter)
-                    - position.x.get())
-                    / scale.x.get().exp2()
+                    - position.x)
+                    / scale.x.exp2()
                     + bounds.x;
 
                 let last_pixel = (clip.get_global_end().in_interleaved_samples_f(meter)
-                    - position.x.get())
-                    / scale.x.get().exp2()
+                    - position.x)
+                    / scale.x.exp2()
                     + bounds.x;
 
                 Rectangle::new(

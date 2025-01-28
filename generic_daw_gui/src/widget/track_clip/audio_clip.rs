@@ -16,14 +16,14 @@ impl TrackClipExt for AudioClip {
         theme: &Theme,
         bounds: Rectangle,
         viewport: Rectangle,
-        position: &ArrangementPosition,
-        scale: &ArrangementScale,
+        position: ArrangementPosition,
+        scale: ArrangementScale,
     ) -> Option<Mesh> {
         // samples of the original audio per sample of lod
-        let lod_sample_size = scale.x.get().floor().exp2() as usize;
+        let lod_sample_size = scale.x.floor().exp2() as usize;
 
         // samples of the original audio per pixel
-        let pixel_size = scale.x.get().exp2();
+        let pixel_size = scale.x.exp2();
 
         // samples in the lod per pixel
         let lod_samples_per_pixel = lod_sample_size as f32 / pixel_size;
@@ -35,8 +35,8 @@ impl TrackClipExt for AudioClip {
         let clip_start = self.get_clip_start().in_interleaved_samples_f(&self.meter);
 
         // the first sample in the lod that is visible in the clip
-        let first_index = ((max_by(0.0, position.x.get() - global_start, f32::total_cmp)
-            + clip_start) as usize)
+        let first_index = ((max_by(0.0, position.x - global_start, f32::total_cmp) + clip_start)
+            as usize)
             / lod_sample_size;
 
         // the last sample in the lod that is visible in the clip
@@ -63,7 +63,7 @@ impl TrackClipExt for AudioClip {
         );
 
         let color = color::pack(theme.extended_palette().secondary.base.text);
-        let lod = scale.x.get() as usize - 3;
+        let lod = scale.x as usize - 3;
 
         // vertices of the waveform
         let vertices = self.audio.lods[lod][first_index..last_index]

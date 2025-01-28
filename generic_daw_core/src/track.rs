@@ -65,22 +65,10 @@ impl Track {
         }
     }
 
-    pub fn remove_clip(&self, clip: &Arc<TrackClip>) {
+    pub fn remove_index(&self, index: usize) -> Arc<TrackClip> {
         match self {
-            Self::Audio(track) => {
-                track
-                    .clips
-                    .write()
-                    .unwrap()
-                    .retain(|c| !Arc::ptr_eq(c, clip));
-            }
-            Self::Midi(track) => {
-                track
-                    .clips
-                    .write()
-                    .unwrap()
-                    .retain(|c| !Arc::ptr_eq(c, clip));
-            }
+            Self::Audio(track) => track.clips.write().unwrap().remove(index),
+            Self::Midi(track) => track.clips.write().unwrap().remove(index),
         }
     }
 

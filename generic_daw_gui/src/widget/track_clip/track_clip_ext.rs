@@ -7,7 +7,7 @@ pub trait TrackClipExt {
         theme: &Theme,
         bounds: Rectangle,
         viewport: Rectangle,
-        position: &ArrangementPosition,
-        scale: &ArrangementScale,
+        position: ArrangementPosition,
+        scale: ArrangementScale,
     ) -> Option<Mesh>;
 }
