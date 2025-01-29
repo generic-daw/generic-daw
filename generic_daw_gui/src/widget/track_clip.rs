@@ -14,7 +14,7 @@ use iced::{
     widget::text::{LineHeight, Shaping, Wrapping},
     Length, Rectangle, Renderer, Size, Theme, Vector,
 };
-use std::{cmp::max_by, sync::Arc};
+use std::{cmp::min_by, sync::Arc};
 
 pub mod audio_clip;
 pub mod track_clip_ext;
@@ -59,7 +59,7 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
         _cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        let Some(bounds) = layout.bounds().intersection(viewport) else {
+        let Some(mut bounds) = layout.bounds().intersection(viewport) else {
             return;
         };
 
@@ -76,27 +76,18 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
 
         // the translucent background of the clip
         let clip_background = Quad {
-            bounds: Rectangle::new(
-                bounds.position(),
-                Size::new(bounds.width, max_by(0.0, bounds.height, f32::total_cmp)),
-            ),
+            bounds,
             ..Quad::default()
         };
-
         renderer.fill_quad(clip_background, color.scale_alpha(0.25));
 
-        // height of the clip, excluding the text, clipped off by the top of the arrangement
-        let clip_height = max_by(0.0, LINE_HEIGHT - bounds.height, f32::total_cmp);
+        bounds.height = min_by(bounds.height, LINE_HEIGHT, f32::total_cmp);
 
         // the opaque background of the text
         let text_background = Quad {
-            bounds: Rectangle::new(
-                bounds.position() + Vector::new(0.0, -clip_height),
-                Size::new(bounds.width, LINE_HEIGHT),
-            ),
+            bounds,
             ..Quad::default()
         };
-
         renderer.fill_quad(text_background, color);
 
         // the text containing the name of the sample
@@ -111,10 +102,9 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
             shaping: Shaping::default(),
             wrapping: Wrapping::default(),
         };
-
         renderer.fill_text(
             text,
-            bounds.position() + Vector::new(3.0, clip_height - 1.0),
+            bounds.position() + Vector::new(4.0, -1.0),
             theme.extended_palette().secondary.base.text,
             bounds,
         );
