@@ -1,4 +1,5 @@
-use super::{ArrangementPosition, ArrangementScale, TrackClipExt, LINE_HEIGHT};
+use super::{ArrangementScale, TrackClipExt, LINE_HEIGHT};
+use crate::widget::ArrangementPosition;
 use generic_daw_core::AudioClip;
 use iced::{
     advanced::graphics::{
@@ -6,64 +7,54 @@ use iced::{
         mesh::{self, SolidVertex2D},
         Mesh,
     },
-    Point, Rectangle, Size, Theme, Transformation,
+    Rectangle, Size, Theme, Transformation,
 };
-use std::cmp::{max_by, min};
 
 impl TrackClipExt for AudioClip {
-    fn meshes(
+    fn mesh(
         &self,
         theme: &Theme,
-        bounds: Rectangle,
-        viewport: Rectangle,
+        mut size: Size,
         position: ArrangementPosition,
         scale: ArrangementScale,
-    ) -> Option<Mesh> {
+    ) -> Mesh {
+        size.height -= LINE_HEIGHT;
+        if size.height < 0.0 {
+            return Mesh::Solid {
+                buffers: mesh::Indexed {
+                    vertices: Vec::new(),
+                    indices: Vec::new(),
+                },
+                transformation: Transformation::IDENTITY,
+                clip_bounds: Rectangle::INFINITE,
+            };
+        }
+
         // samples of the original audio per sample of lod
-        let lod_sample_size = scale.x.floor().exp2() as usize;
+        let lod_sample_size = scale.x.floor().exp2();
 
         // samples of the original audio per pixel
         let pixel_size = scale.x.exp2();
 
         // samples in the lod per pixel
-        let lod_samples_per_pixel = lod_sample_size as f32 / pixel_size;
-
-        let global_start = self
-            .get_global_start()
-            .in_interleaved_samples_f(&self.meter);
-
-        let clip_start = self.get_clip_start().in_interleaved_samples_f(&self.meter);
-
-        // the first sample in the lod that is visible in the clip
-        let first_index = ((max_by(0.0, position.x - global_start, f32::total_cmp) + clip_start)
-            as usize)
-            / lod_sample_size;
-
-        // the last sample in the lod that is visible in the clip
-        let last_index = min(
-            self.audio.len() / lod_sample_size,
-            first_index + (bounds.width / lod_samples_per_pixel) as usize,
-        );
-
-        // if there are less than 3 vertices, there's nothing to draw
-        if (last_index.saturating_sub(first_index)) < 3 {
-            return None;
-        }
-
-        // how many pixels of the top of the waveform are clipped off by the top of the arrangement
-        let hidden = viewport.y - bounds.y;
-
-        // height of the waveform
-        let waveform_height = bounds.height - LINE_HEIGHT;
-
-        // the part of the audio clip that is visible
-        let clip_bounds = Rectangle::new(
-            Point::new(0.0, hidden + LINE_HEIGHT),
-            Size::new(bounds.width, waveform_height - hidden),
-        );
+        let lod_samples_per_pixel = lod_sample_size / pixel_size;
 
         let color = color::pack(theme.extended_palette().secondary.base.text);
         let lod = scale.x as usize - 3;
+
+        let diff = position.x
+            - self
+                .get_global_start()
+                .in_interleaved_samples_f(&self.meter);
+
+        let clip_start = self.get_clip_start().in_interleaved_samples_f(&self.meter);
+
+        let first_index = if diff > 0.0 {
+            (diff + clip_start) / lod_sample_size
+        } else {
+            clip_start
+        } as usize;
+        let last_index = first_index + (size.width / lod_samples_per_pixel) as usize;
 
         // vertices of the waveform
         let vertices = self.audio.lods[lod][first_index..last_index]
@@ -74,11 +65,11 @@ impl TrackClipExt for AudioClip {
 
                 [
                     SolidVertex2D {
-                        position: [x, min.mul_add(waveform_height, LINE_HEIGHT)],
+                        position: [x, min.mul_add(size.height, LINE_HEIGHT)],
                         color,
                     },
                     SolidVertex2D {
-                        position: [x, max.mul_add(waveform_height, LINE_HEIGHT)],
+                        position: [x, max.mul_add(size.height, LINE_HEIGHT)],
                         color,
                     },
                 ]
@@ -90,11 +81,11 @@ impl TrackClipExt for AudioClip {
             .flat_map(|i| [i, i + 1, i + 2])
             .collect();
 
-        // the waveform mesh with the clip bounds
-        Some(Mesh::Solid {
+        // the waveform mesh
+        Mesh::Solid {
             buffers: mesh::Indexed { vertices, indices },
-            transformation: Transformation::translate(bounds.x, bounds.y),
-            clip_bounds,
-        })
+            transformation: Transformation::IDENTITY,
+            clip_bounds: Rectangle::INFINITE,
+        }
     }
 }

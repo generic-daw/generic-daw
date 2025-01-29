@@ -16,7 +16,7 @@ pub use arrangement_position::ArrangementPosition;
 pub use arrangement_scale::ArrangementScale;
 pub use knob::Knob;
 pub use track::Track;
-pub use track_clip::{TrackClip, TrackClipExt};
+pub use track_clip::TrackClip;
 pub use vsplit::VSplit;
 
 pub const LINE_HEIGHT: f32 = 21.0;

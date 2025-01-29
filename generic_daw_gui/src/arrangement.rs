@@ -1,5 +1,5 @@
 use crate::widget::{
-    Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob, LINE_HEIGHT,
+    Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob,
 };
 use generic_daw_core::{
     Arrangement as ArrangementInner, AudioClip, AudioTrack, InterleavedAudio, Position, Stream,
@@ -58,6 +58,7 @@ impl Arrangement {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::TrackVolumeChanged(track, volume) => {
@@ -140,18 +141,23 @@ impl Arrangement {
                 self.inner.tracks()[track].remove_index(clip);
             }
             Message::PositionScaleDelta(pos, scale) => {
-                self.position += pos;
-                self.position = self.position.clamp(
-                    0.0,
-                    self.inner.len().in_interleaved_samples_f(&self.inner.meter),
-                    0.0,
-                    (self.inner.tracks().len().saturating_sub(1)) as f32,
-                );
+                let sd = scale != ArrangementScale::ZERO;
+                let mut pd = pos != ArrangementPosition::ZERO;
 
-                self.scale += scale;
-                self.scale =
-                    self.scale
-                        .clamp(3.0, 12.999_999, 2.0 * LINE_HEIGHT, 10.0 * LINE_HEIGHT);
+                if sd {
+                    let old_scale = self.scale;
+                    self.scale += scale;
+                    self.scale = self.scale.clamp();
+                    pd &= old_scale != self.scale;
+                }
+
+                if pd {
+                    self.position += pos;
+                    self.position = self.position.clamp(
+                        self.inner.len().in_interleaved_samples_f(&self.inner.meter),
+                        (self.inner.tracks().len().saturating_sub(1)) as f32,
+                    );
+                }
             }
             Message::Export(path) => {
                 self.stream.pause().unwrap();

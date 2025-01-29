@@ -4,7 +4,6 @@ use super::{
 use generic_daw_core::{Arrangement as ArrangementInner, Position};
 use iced::{
     advanced::{
-        graphics::geometry::Renderer as _,
         layout::{Layout, Limits, Node},
         renderer::{Quad, Style},
         text::{Renderer as _, Text},
@@ -16,15 +15,9 @@ use iced::{
     keyboard::{self, Modifiers},
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::text::{LineHeight, Shaping, Wrapping},
-    window, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
-};
-use iced_wgpu::{
-    geometry::Cache,
-    graphics::cache::{Cached as _, Group},
-    Geometry,
+    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::{
-    cell::RefCell,
     fmt::{Debug, Formatter},
     sync::atomic::Ordering::SeqCst,
 };
@@ -45,20 +38,10 @@ pub const SWM: f32 = LINE_HEIGHT * 2.5;
 
 #[derive(Default)]
 struct State {
-    /// caches the meshes of the waveforms
-    waveform_cache: RefCell<Option<Cache>>,
     /// the current modifiers
     modifiers: Modifiers,
     /// the current action
     action: Action,
-    /// the window size from the last draw
-    last_bounds: Option<Rectangle>,
-    /// the bpm from the last draw
-    last_bpm: u16,
-    /// the number of tracks from the last draw
-    last_track_count: usize,
-    /// the theme from the last draw
-    last_theme: RefCell<Option<Theme>>,
 }
 
 pub struct Arrangement<'a, Message> {
@@ -170,29 +153,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         let state = tree.state.downcast_mut::<State>();
         let bounds = layout.bounds();
 
-        if let Event::Window(window::Event::RedrawRequested(..)) = event {
-            let bpm = self.inner.meter.bpm.load(SeqCst);
-            if bpm != state.last_bpm {
-                state.waveform_cache.take();
-                state.last_bpm = bpm;
-            }
-
-            if state
-                .last_bounds
-                .is_none_or(|last_bounds| last_bounds != bounds)
-            {
-                state.waveform_cache.take();
-                state.last_bounds.replace(layout.bounds());
-            }
-
-            if self.tracks.len() != state.last_track_count {
-                state.waveform_cache.take();
-                state.last_track_count = self.tracks.len();
-            }
-
-            return Status::Ignored;
-        }
-
         if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
             state.modifiers = modifiers;
             return Status::Ignored;
@@ -282,18 +242,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         cursor: Cursor,
         _viewport: &Rectangle,
     ) {
-        let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
-
-        if state
-            .last_theme
-            .borrow()
-            .as_ref()
-            .is_none_or(|last_theme| last_theme != theme)
-        {
-            state.waveform_cache.take();
-            state.last_theme.borrow_mut().replace(theme.clone());
-        }
 
         let mut bounds_no_track_panel = bounds;
         if let Some(track) = layout.children().next() {
@@ -329,40 +278,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                         .draw(tree, renderer, theme, style, layout, cursor, &bounds);
                 });
             });
-
-        if state.waveform_cache.borrow().is_none() {
-            let meshes = self
-                .inner
-                .tracks()
-                .iter()
-                .zip(layout.children())
-                .flat_map(|(track, layout)| {
-                    let mut bounds = layout.bounds();
-                    let Some(clip_bounds) = bounds.intersection(&inner_bounds) else {
-                        return Vec::new();
-                    };
-                    bounds.x = clip_bounds.x;
-                    bounds.width = clip_bounds.width;
-
-                    track.meshes(theme, bounds, clip_bounds, self.position, self.scale)
-                })
-                .collect();
-
-            state.waveform_cache.borrow_mut().replace(
-                Geometry::Live {
-                    meshes,
-                    images: Vec::new(),
-                    text: Vec::new(),
-                }
-                .cache(Group::unique(), None),
-            );
-        }
-
-        renderer.with_layer(inner_bounds, |renderer| {
-            renderer.draw_geometry(Geometry::load(
-                state.waveform_cache.borrow().as_ref().unwrap(),
-            ));
-        });
 
         renderer.with_layer(bounds_no_track_panel, |renderer| {
             self.playhead(renderer, bounds_no_track_panel, theme);
@@ -581,8 +496,6 @@ where
                             return None;
                         }
 
-                        state.waveform_cache.take();
-
                         shell.publish((self.move_clip_to)(new_track, new_start));
                         Some(Status::Captured)
                     }
@@ -593,23 +506,17 @@ where
 
                         let (track, clip) = self.get_track_clip(cursor)?;
 
-                        state.waveform_cache.take();
-
                         shell.publish((self.delete_clip)(track, clip));
                         Some(Status::Captured)
                     }
                     Action::ClipTrimmingStart(offset) => {
                         let new_start = self.get_time(cursor, offset, state.modifiers);
 
-                        state.waveform_cache.take();
-
                         shell.publish((self.trim_clip_start)(new_start));
                         Some(Status::Captured)
                     }
                     Action::ClipTrimmingEnd(offset) => {
                         let new_end = self.get_time(cursor, offset, state.modifiers);
-
-                        state.waveform_cache.take();
 
                         shell.publish((self.trim_clip_end)(new_end));
                         Some(Status::Captured)
@@ -639,10 +546,9 @@ where
                     };
                     let (x, y) = (x * 2.0 * self.scale.x.exp2(), y * 2.0 / self.scale.y);
 
-                    state.waveform_cache.take();
                     shell.publish((self.position_scale_delta)(
                         ArrangementPosition::new(x, y),
-                        ArrangementScale::new(0.0, 0.0),
+                        ArrangementScale::ZERO,
                     ));
 
                     Some(Status::Captured)
@@ -657,7 +563,6 @@ where
                         let (track, clip) = self.get_track_clip(cursor)?;
 
                         state.action = Action::DeletingClips;
-                        state.waveform_cache.take();
 
                         shell.publish((self.delete_clip)(track, clip));
                         Some(Status::Captured)
@@ -687,7 +592,6 @@ where
                     } * 0.01;
                     let x_pos = cursor.x * (self.scale.x.exp2() - (self.scale.x + x).exp2());
 
-                    state.waveform_cache.take();
                     shell.publish((self.position_scale_delta)(
                         ArrangementPosition::new(x_pos, 0.0),
                         ArrangementScale::new(x, 0.0),
@@ -736,10 +640,9 @@ where
                 } * 4.0
                     * self.scale.x.exp2();
 
-                state.waveform_cache.take();
                 shell.publish((self.position_scale_delta)(
                     ArrangementPosition::new(x, 0.0),
-                    ArrangementScale::new(0.0, 0.0),
+                    ArrangementScale::ZERO,
                 ));
 
                 Some(Status::Captured)
@@ -766,9 +669,8 @@ where
                         ScrollDelta::Lines { y, .. } => y * SWM,
                     } * 0.1;
 
-                    state.waveform_cache.take();
                     shell.publish((self.position_scale_delta)(
-                        ArrangementPosition::new(0.0, 0.0),
+                        ArrangementPosition::ZERO,
                         ArrangementScale::new(0.0, y),
                     ));
 

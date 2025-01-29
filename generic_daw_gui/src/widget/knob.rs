@@ -14,6 +14,7 @@ use iced::{
     window, Element, Event, Length, Point, Radians, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::{
+    cell::RefCell,
     f32::consts::{FRAC_PI_2, FRAC_PI_4},
     fmt::{Debug, Formatter},
     ops::RangeInclusive,
@@ -27,18 +28,20 @@ struct State {
     current: f32,
     hovering: bool,
     last_click: Option<Click>,
-    enabled: bool,
+    last_enabled: bool,
+    last_theme: RefCell<Option<Theme>>,
     cache: Cache,
 }
 
 impl State {
-    pub fn new(current: f32, enabled: bool) -> Self {
+    pub fn new(current: f32, last_enabled: bool) -> Self {
         Self {
             dragging: None,
             current,
             hovering: false,
             last_click: None,
-            enabled,
+            last_enabled,
+            last_theme: RefCell::default(),
             cache: Cache::new(),
         }
     }
@@ -94,8 +97,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
 
         match event {
             Event::Window(window::Event::RedrawRequested(..)) => {
-                if self.enabled != state.enabled {
-                    state.enabled = self.enabled;
+                if self.enabled != state.last_enabled {
+                    state.last_enabled = self.enabled;
                     state.cache.clear();
                     return Status::Ignored;
                 }
@@ -196,6 +199,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
         let bounds = layout.bounds();
         let state = tree.state.downcast_ref::<State>();
 
+        if state
+            .last_theme
+            .borrow()
+            .as_ref()
+            .is_none_or(|last_theme| last_theme != theme)
+        {
+            state.cache.clear();
+            state.last_theme.borrow_mut().replace(theme.clone());
+        }
+
         renderer.with_translation(
             Vector::new(bounds.position().x, bounds.position().y),
             |renderer| {
@@ -289,7 +302,7 @@ impl<Message> Knob<Message> {
             builder.close();
         });
 
-        frame.fill(&segment, theme.extended_palette().primary.weak.text);
+        frame.fill(&segment, theme.extended_palette().secondary.base.text);
 
         let color = if !self.enabled || state.hovering || state.dragging.is_some() {
             theme.extended_palette().secondary.strong.color
@@ -301,17 +314,17 @@ impl<Message> Knob<Message> {
 
         frame.fill(
             &circle_at_angle(start_angle, 0.9, 0.1),
-            theme.extended_palette().primary.weak.text,
+            theme.extended_palette().secondary.base.text,
         );
 
         frame.fill(
             &circle_at_angle(end_angle, 0.9, 0.1),
-            theme.extended_palette().primary.weak.text,
+            theme.extended_palette().secondary.base.text,
         );
 
         frame.fill(
             &circle_at_angle(end_angle, 0.4, 0.15),
-            theme.extended_palette().primary.weak.text,
+            theme.extended_palette().secondary.base.text,
         );
     }
 }

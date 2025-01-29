@@ -1,7 +1,7 @@
 use super::LINE_HEIGHT;
 use std::ops::AddAssign;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ArrangementScale {
     /// log2 of the number of audio samples per pixel
     ///
@@ -14,13 +14,15 @@ pub struct ArrangementScale {
 }
 
 impl ArrangementScale {
-    pub fn new(x: f32, y: f32) -> Self {
+    pub const ZERO: Self = Self::new(0.0, 0.0);
+
+    pub const fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
 
-    pub fn clamp(mut self, min_x: f32, max_x: f32, min_y: f32, max_y: f32) -> Self {
-        self.x = self.x.clamp(min_x, max_x);
-        self.y = self.y.clamp(min_y, max_y);
+    pub fn clamp(mut self) -> Self {
+        self.x = self.x.clamp(3.0, 12.999_999);
+        self.y = self.y.clamp(2.0 * LINE_HEIGHT, 10.0 * LINE_HEIGHT);
         self
     }
 }

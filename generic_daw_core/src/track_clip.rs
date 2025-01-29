@@ -65,6 +65,14 @@ impl TrackClip {
         }
     }
 
+    #[must_use]
+    pub fn get_clip_start(&self) -> Position {
+        match self {
+            Self::Audio(audio) => audio.get_clip_start(),
+            Self::Midi(midi) => midi.get_clip_start(),
+        }
+    }
+
     pub fn trim_start_to(&self, clip_start: Position) {
         match self {
             Self::Audio(audio) => audio.trim_start_to(clip_start),

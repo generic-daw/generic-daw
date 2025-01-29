@@ -1,8 +1,7 @@
-use super::{border, ArrangementPosition, ArrangementScale, TrackClip, TrackClipExt as _};
+use super::{border, ArrangementPosition, ArrangementScale, TrackClip};
 use generic_daw_core::{Meter, Track as TrackInner};
 use iced::{
     advanced::{
-        graphics::Mesh,
         layout::{Limits, Node},
         renderer::Style,
         widget::Tree,
@@ -10,7 +9,7 @@ use iced::{
     },
     event::Status,
     mouse::{Cursor, Interaction},
-    Element, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Length, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::{iter::once, sync::Arc};
 
@@ -211,7 +210,7 @@ impl<'a, Message> Track<'a, Message> {
                     .clips()
                     .iter()
                     .cloned()
-                    .map(|clip| TrackClip::new(clip, scale, enabled))
+                    .map(|clip| TrackClip::new(clip, position, scale, enabled))
                     .map(Element::new),
             )
             .collect();
@@ -236,37 +235,5 @@ impl TrackExt for TrackInner {
                 None
             }
         })
-    }
-
-    fn meshes(
-        &self,
-        theme: &Theme,
-        bounds: Rectangle,
-        viewport: Rectangle,
-        position: ArrangementPosition,
-        scale: ArrangementScale,
-    ) -> Vec<Mesh> {
-        let meter = self.meter();
-        self.clips()
-            .iter()
-            .filter_map(|clip| {
-                let first_pixel = (clip.get_global_start().in_interleaved_samples_f(meter)
-                    - position.x)
-                    / scale.x.exp2()
-                    + bounds.x;
-
-                let last_pixel = (clip.get_global_end().in_interleaved_samples_f(meter)
-                    - position.x)
-                    / scale.x.exp2()
-                    + bounds.x;
-
-                Rectangle::new(
-                    Point::new(first_pixel, bounds.y),
-                    Size::new(last_pixel - first_pixel, bounds.height),
-                )
-                .intersection(&bounds)
-                .and_then(|bounds| clip.meshes(theme, bounds, viewport, position, scale))
-            })
-            .collect()
     }
 }

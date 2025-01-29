@@ -14,7 +14,7 @@ pub struct MidiClip {
     /// the end of the clip relative to the start of the arrangement
     global_end: Atomic<Position>,
     /// the start of the clip relative to the start of the pattern
-    pattern_start: Atomic<Position>,
+    clip_start: Atomic<Position>,
     pub meter: Arc<Meter>,
 }
 
@@ -24,7 +24,7 @@ impl Clone for MidiClip {
             pattern: self.pattern.clone(),
             global_start: Atomic::new(self.global_start.load(SeqCst)),
             global_end: Atomic::new(self.global_end.load(SeqCst)),
-            pattern_start: Atomic::new(self.pattern_start.load(SeqCst)),
+            clip_start: Atomic::new(self.clip_start.load(SeqCst)),
             meter: self.meter.clone(),
         }
     }
@@ -38,7 +38,7 @@ impl MidiClip {
             pattern,
             global_start: Atomic::default(),
             global_end: Atomic::new(Position::from_interleaved_samples(len, &meter)),
-            pattern_start: Atomic::default(),
+            clip_start: Atomic::default(),
             meter,
         }))
     }
@@ -54,23 +54,23 @@ impl MidiClip {
     }
 
     #[must_use]
-    pub fn get_pattern_start(&self) -> Position {
-        self.pattern_start.load(SeqCst)
+    pub fn get_clip_start(&self) -> Position {
+        self.clip_start.load(SeqCst)
     }
 
     pub fn trim_start_to(&self, global_start: Position) {
         let global_start = global_start.clamp(
             self.get_global_start()
-                .saturating_sub(self.get_pattern_start()),
+                .saturating_sub(self.get_clip_start()),
             self.get_global_end() - Position::SUB_QUARTER_NOTE,
         );
         let diff = self.get_global_start().abs_diff(global_start);
         if self.get_global_start() < global_start {
-            self.pattern_start
+            self.clip_start
                 .fetch_update(SeqCst, SeqCst, |pattern_start| Some(pattern_start + diff))
                 .unwrap();
         } else {
-            self.pattern_start
+            self.clip_start
                 .fetch_update(SeqCst, SeqCst, |pattern_start| Some(pattern_start - diff))
                 .unwrap();
         }
