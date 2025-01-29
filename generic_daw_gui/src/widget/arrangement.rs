@@ -255,9 +255,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         bounds_no_seeker.y += LINE_HEIGHT;
         bounds_no_seeker.height -= LINE_HEIGHT;
 
-        let inner_bounds = bounds_no_track_panel
-            .intersection(&bounds_no_seeker)
-            .unwrap();
+        let Some(inner_bounds) = bounds_no_track_panel.intersection(&bounds_no_seeker) else {
+            return;
+        };
 
         renderer.with_layer(inner_bounds, |renderer| {
             self.grid(renderer, inner_bounds, theme);
