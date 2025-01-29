@@ -9,6 +9,7 @@ use iced::{
     },
     Rectangle, Size, Theme, Transformation,
 };
+use std::cmp::max_by;
 
 impl TrackClipExt for AudioClip {
     fn mesh(
@@ -42,18 +43,18 @@ impl TrackClipExt for AudioClip {
         let color = color::pack(theme.extended_palette().secondary.base.text);
         let lod = scale.x as usize - 3;
 
-        let diff = position.x
-            - self
-                .get_global_start()
-                .in_interleaved_samples_f(&self.meter);
+        let diff = max_by(
+            0.0,
+            position.x
+                - self
+                    .get_global_start()
+                    .in_interleaved_samples_f(&self.meter),
+            f32::total_cmp,
+        );
 
         let clip_start = self.get_clip_start().in_interleaved_samples_f(&self.meter);
 
-        let first_index = if diff > 0.0 {
-            (diff + clip_start) / lod_sample_size
-        } else {
-            clip_start
-        } as usize;
+        let first_index = ((diff + clip_start) / lod_sample_size) as usize;
         let last_index = first_index + (size.width / lod_samples_per_pixel) as usize;
 
         // vertices of the waveform
