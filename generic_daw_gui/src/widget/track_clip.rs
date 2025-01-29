@@ -37,6 +37,8 @@ struct State {
     last_position: ArrangementPosition,
     /// the scale from the last draw
     last_scale: ArrangementScale,
+    /// the size from the last draw
+    last_size: Size,
 }
 
 #[derive(Clone)]
@@ -81,12 +83,12 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
         &mut self,
         tree: &mut Tree,
         event: Event,
-        _layout: Layout<'_>,
+        layout: Layout<'_>,
         _cursor: Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
         _shell: &mut Shell<'_, Message>,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
     ) -> Status {
         if let Event::Window(window::Event::RedrawRequested(..)) = event {
             let state = tree.state.downcast_mut::<State>();
@@ -99,6 +101,15 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
             if state.last_scale != self.scale {
                 state.last_scale = self.scale;
                 state.cache.take();
+            }
+
+            let Some(bounds) = layout.bounds().intersection(viewport) else {
+                return Status::Ignored;
+            };
+
+            if state.last_size != bounds.size() {
+                state.cache.take();
+                state.last_size = bounds.size();
             }
         }
 

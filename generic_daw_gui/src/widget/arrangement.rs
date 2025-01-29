@@ -491,7 +491,8 @@ where
                     Action::DraggingClip(offset) => {
                         let new_start = self.get_time(cursor, offset, state.modifiers);
 
-                        let new_track = ((cursor.y - LINE_HEIGHT) / self.scale.y) as usize;
+                        let new_track =
+                            ((cursor.y - LINE_HEIGHT) / self.scale.y + self.position.y) as usize;
                         if new_track >= self.tracks.len() {
                             return None;
                         }
@@ -731,7 +732,7 @@ where
     }
 
     fn get_track_clip(&self, cursor: Point) -> Option<(usize, usize)> {
-        let track = ((cursor.y - LINE_HEIGHT) / self.scale.y + self.position.x) as usize;
+        let track = ((cursor.y - LINE_HEIGHT) / self.scale.y + self.position.y) as usize;
         let time = cursor.x.mul_add(self.scale.x.exp2(), self.position.x) as usize;
         let clip = self
             .inner
