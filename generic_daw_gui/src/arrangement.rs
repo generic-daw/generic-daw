@@ -1,16 +1,13 @@
 use crate::widget::{
-    Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob,
+    Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob, PeakMeter,
 };
 use generic_daw_core::{
     Arrangement as ArrangementInner, AudioClip, AudioTrack, InterleavedAudio, Position, Stream,
     StreamTrait as _,
 };
 use iced::{
-    widget::{
-        column, container, container::Style as ContainerStyle, horizontal_space, mouse_area, radio,
-        row, vertical_space,
-    },
-    Element, Length, Task,
+    widget::{column, container, container::Style, mouse_area, radio, row},
+    Border, Element, Task,
 };
 use rfd::FileHandle;
 use std::{
@@ -20,6 +17,7 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub enum Message {
+    Animate(),
     TrackVolumeChanged(usize, f32),
     TrackPanChanged(usize, f32),
     LoadedSample(Arc<InterleavedAudio>),
@@ -61,6 +59,7 @@ impl Arrangement {
     #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::Animate() => {}
             Message::TrackVolumeChanged(track, volume) => {
                 self.inner.tracks()[track].set_volume(volume);
             }
@@ -175,34 +174,34 @@ impl Arrangement {
             self.position,
             self.scale,
             |idx, enabled| {
+                let (left, right) = self.inner.tracks()[idx].get_reset_max_abs_sample();
+
                 container(
-                    column![
-                        row![
-                            Knob::new(0.0..=1.0, 0.0, 1.0, move |f| Message::TrackVolumeChanged(
-                                idx, f
-                            ))
+                    row![
+                        PeakMeter::new(left, right, enabled, Message::Animate),
+                        column![
+                            Knob::new(0.0..=1.0, 0.0, 1.0, move |f| {
+                                Message::TrackVolumeChanged(idx, f)
+                            })
                             .set_enabled(enabled),
                             Knob::new(-1.0..=1.0, 0.0, 0.0, move |f| Message::TrackPanChanged(
                                 idx, f
                             ))
-                            .set_enabled(enabled)
+                            .set_enabled(enabled),
                         ]
                         .spacing(5.0),
-                        vertical_space(),
-                        row![
-                            horizontal_space(),
-                            mouse_area(radio("", enabled, Some(true), |_| {
+                        mouse_area(
+                            radio("", enabled, Some(true), |_| {
                                 Message::ToggleTrackEnabled(idx)
-                            }))
-                            .on_right_press(Message::ToggleTrackSolo(idx)),
-                        ]
+                            })
+                            .spacing(0.0)
+                        )
+                        .on_right_press(Message::ToggleTrackSolo(idx)),
                     ]
-                    .width(Length::Shrink)
                     .spacing(5.0),
                 )
                 .padding(5.0)
-                .height(Length::Fill)
-                .style(|theme| ContainerStyle {
+                .style(|theme| Style {
                     background: Some(
                         theme
                             .extended_palette()
@@ -212,7 +211,10 @@ impl Arrangement {
                             .scale_alpha(0.25)
                             .into(),
                     ),
-                    ..ContainerStyle::default()
+                    border: Border::default()
+                        .width(1.0)
+                        .color(theme.extended_palette().secondary.weak.color),
+                    ..Style::default()
                 })
                 .into()
             },

@@ -2,7 +2,10 @@ use crate::{Meter, Position, TrackClip};
 use audio_graph::{pan, AudioGraphNodeImpl};
 use audio_track::AudioTrack;
 use midi_track::MidiTrack;
-use std::sync::{atomic::Ordering::SeqCst, Arc, RwLockReadGuard};
+use std::{
+    cmp::max_by,
+    sync::{atomic::Ordering::SeqCst, Arc, RwLockReadGuard},
+};
 
 pub mod audio_track;
 pub mod midi_track;
@@ -26,6 +29,40 @@ impl AudioGraphNodeImpl for Track {
         buf.iter_mut()
             .enumerate()
             .for_each(|(i, s)| *s *= if i % 2 == 0 { lpan } else { rpan });
+
+        let max_abs_sample = match self {
+            Self::Audio(track) => &track.max_abs_sample,
+            Self::Midi(_) => unimplemented!(),
+        };
+
+        max_abs_sample.0.store(
+            max_by(
+                max_abs_sample.0.load(SeqCst),
+                buf.iter()
+                    .step_by(2)
+                    .copied()
+                    .map(f32::abs)
+                    .max_by(f32::total_cmp)
+                    .unwrap(),
+                f32::total_cmp,
+            ),
+            SeqCst,
+        );
+
+        max_abs_sample.1.store(
+            max_by(
+                max_abs_sample.1.load(SeqCst),
+                buf.iter()
+                    .skip(1)
+                    .step_by(2)
+                    .copied()
+                    .map(f32::abs)
+                    .max_by(f32::total_cmp)
+                    .unwrap(),
+                f32::total_cmp,
+            ),
+            SeqCst,
+        );
     }
 }
 
@@ -130,5 +167,15 @@ impl Track {
             Self::Audio(track) => track.enabled.fetch_not(SeqCst),
             Self::Midi(_) => unimplemented!(),
         };
+    }
+
+    pub fn get_reset_max_abs_sample(&self) -> (f32, f32) {
+        match self {
+            Self::Audio(track) => (
+                track.max_abs_sample.0.swap(0.0, SeqCst),
+                track.max_abs_sample.1.swap(0.0, SeqCst),
+            ),
+            Self::Midi(_) => unimplemented!(),
+        }
     }
 }

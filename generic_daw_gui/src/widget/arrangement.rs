@@ -1,6 +1,4 @@
-use super::{
-    border, track::TrackExt as _, ArrangementPosition, ArrangementScale, Track, LINE_HEIGHT,
-};
+use super::{track::TrackExt as _, ArrangementPosition, ArrangementScale, Track, LINE_HEIGHT};
 use generic_daw_core::{Arrangement as ArrangementInner, Position};
 use iced::{
     advanced::{
@@ -15,7 +13,8 @@ use iced::{
     keyboard::{self, Modifiers},
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::text::{LineHeight, Shaping, Wrapping},
-    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme,
+    Vector,
 };
 use std::{
     fmt::{Debug, Formatter},
@@ -279,8 +278,18 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
 
         renderer.with_layer(bounds_no_track_panel, |renderer| {
             self.playhead(renderer, bounds_no_track_panel, theme);
-            border(renderer, bounds_no_track_panel, theme);
         });
+
+        renderer.fill_quad(
+            Quad {
+                bounds: bounds_no_track_panel,
+                border: Border::default()
+                    .width(1.0)
+                    .color(theme.extended_palette().secondary.weak.color),
+                ..Quad::default()
+            },
+            Background::Color(Color::TRANSPARENT),
+        );
     }
 }
 

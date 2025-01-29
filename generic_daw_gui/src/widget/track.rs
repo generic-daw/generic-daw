@@ -1,4 +1,4 @@
-use super::{border, ArrangementPosition, ArrangementScale, TrackClip};
+use super::{ArrangementPosition, ArrangementScale, TrackClip};
 use generic_daw_core::{Meter, Track as TrackInner};
 use iced::{
     advanced::{
@@ -35,7 +35,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
     fn size(&self) -> Size<Length> {
         Size {
             width: Length::Fill,
-            height: Length::Shrink,
+            height: Length::Fixed(self.scale.y.floor()),
         }
     }
 
@@ -55,7 +55,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         let panel_width = panel_layout.size().width;
 
         Node::with_children(
-            Size::new(limits.max().width, self.scale.y),
+            limits.max(),
             once(panel_layout)
                 .chain(
                     self.children
@@ -127,25 +127,28 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             return;
         }
 
-        border(renderer, bounds, theme);
-
         let track_panel_layout = layout.children().next().unwrap();
-        let track_panel_width = track_panel_layout.bounds().width;
+        let Some(track_panel_bounds) = track_panel_layout.bounds().intersection(viewport) else {
+            return;
+        };
+        let track_panel_width = track_panel_bounds.width;
 
-        self.children[0].as_widget().draw(
-            &tree.children[0],
-            renderer,
-            theme,
-            style,
-            track_panel_layout,
-            cursor,
-            viewport,
-        );
+        renderer.with_layer(track_panel_bounds, |renderer| {
+            self.children[0].as_widget().draw(
+                &tree.children[0],
+                renderer,
+                theme,
+                style,
+                track_panel_layout,
+                cursor,
+                viewport,
+            );
+        });
 
         let mut viewport = *viewport;
         viewport.x += track_panel_width;
         viewport.width -= track_panel_width;
-        let Some(bounds) = viewport.intersection(&bounds) else {
+        let Some(bounds) = bounds.intersection(&viewport) else {
             return;
         };
 

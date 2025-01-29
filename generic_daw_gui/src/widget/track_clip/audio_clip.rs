@@ -7,7 +7,7 @@ use iced::{
         mesh::{self, SolidVertex2D},
         Mesh,
     },
-    Rectangle, Size, Theme, Transformation,
+    Point, Rectangle, Size, Theme, Transformation,
 };
 use std::cmp::max_by;
 
@@ -15,12 +15,13 @@ impl TrackClipExt for AudioClip {
     fn mesh(
         &self,
         theme: &Theme,
-        mut size: Size,
+        size: Size,
         position: ArrangementPosition,
         scale: ArrangementScale,
     ) -> Mesh {
-        size.height -= LINE_HEIGHT;
-        if size.height < 0.0 {
+        // the height of the waveform
+        let height = scale.y - LINE_HEIGHT;
+        if height < 0.0 {
             return Mesh::Solid {
                 buffers: mesh::Indexed {
                     vertices: Vec::new(),
@@ -66,11 +67,11 @@ impl TrackClipExt for AudioClip {
 
                 [
                     SolidVertex2D {
-                        position: [x, min.mul_add(size.height, LINE_HEIGHT)],
+                        position: [x, min.mul_add(height, LINE_HEIGHT)],
                         color,
                     },
                     SolidVertex2D {
-                        position: [x, max.mul_add(size.height, LINE_HEIGHT)],
+                        position: [x, max.mul_add(height, LINE_HEIGHT)],
                         color,
                     },
                 ]
@@ -86,7 +87,7 @@ impl TrackClipExt for AudioClip {
         Mesh::Solid {
             buffers: mesh::Indexed { vertices, indices },
             transformation: Transformation::IDENTITY,
-            clip_bounds: Rectangle::INFINITE,
+            clip_bounds: Rectangle::new(Point::new(0.0, scale.y - size.height + LINE_HEIGHT), size),
         }
     }
 }

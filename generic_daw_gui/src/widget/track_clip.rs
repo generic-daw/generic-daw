@@ -222,7 +222,7 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
         }
 
         // draw the mesh
-        renderer.with_translation(Vector::new(upper_bounds.x, layout.bounds().y), |renderer| {
+        renderer.with_translation(Vector::new(bounds.x, layout.bounds().y), |renderer| {
             renderer.draw_geometry(Geometry::load(state.cache.borrow().as_ref().unwrap()));
         });
     }

@@ -14,6 +14,7 @@ pub struct AudioTrack {
     pub(super) volume: Atomic<f32>,
     /// -1 <= pan <= 1
     pub(super) pan: Atomic<f32>,
+    pub(super) max_abs_sample: (Atomic<f32>, Atomic<f32>),
     pub(super) meter: Arc<Meter>,
     pub(super) enabled: AtomicBool,
 }
@@ -37,6 +38,7 @@ impl AudioTrack {
             clips: RwLock::default(),
             volume: Atomic::new(1.0),
             pan: Atomic::new(0.0),
+            max_abs_sample: (Atomic::new(0.0), Atomic::new(0.0)),
             meter,
             enabled: AtomicBool::new(true),
         }))
