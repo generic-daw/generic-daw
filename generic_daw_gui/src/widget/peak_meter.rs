@@ -17,8 +17,8 @@ const WIDTH: f32 = LINE_HEIGHT / 3.0 * 4.0 + 2.0;
 
 #[derive(Default)]
 struct State {
-    last_left: f32,
-    last_right: f32,
+    left: f32,
+    right: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -59,22 +59,26 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
     ) -> Status {
         if let Event::Window(window::Event::RedrawRequested(..)) = event {
             let state = tree.state.downcast_mut::<State>();
-            if self.left < state.last_left {
-                self.left = (state.last_left.mul_add(DECAY - 1.0, self.left)) / DECAY;
-            }
-            if self.right < state.last_right {
-                self.right = (state.last_right.mul_add(DECAY - 1.0, self.right)) / DECAY;
-            }
-            state.last_left = min_by(self.left, 1.0, f32::total_cmp);
-            state.last_right = min_by(self.right, 1.0, f32::total_cmp);
+
+            state.left = if self.left < state.left {
+                state.left.mul_add(DECAY - 1.0, self.left) / DECAY
+            } else {
+                min_by(self.left, 1.0, f32::total_cmp)
+            };
             self.left = 0.0;
+
+            state.right = if self.right < state.right {
+                state.right.mul_add(DECAY - 1.0, self.right) / DECAY
+            } else {
+                min_by(self.right, 1.0, f32::total_cmp)
+            };
             self.right = 0.0;
 
-            if min_by(state.last_left, state.last_right, f32::total_cmp) > 0.01 {
+            if min_by(state.left, state.right, f32::total_cmp) > 0.01 {
                 shell.publish((self.animate)());
             } else {
-                state.last_left = 0.0;
-                state.last_right = 0.0;
+                state.left = 0.0;
+                state.right = 0.0;
             }
         }
 
@@ -101,8 +105,8 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
             theme.extended_palette().secondary.strong.color
         };
 
-        let left_height = bounds.height * state.last_left;
-        let right_height = bounds.height * state.last_right;
+        let left_height = bounds.height * state.left;
+        let right_height = bounds.height * state.right;
 
         let left_bg = Quad {
             bounds: Rectangle::new(
