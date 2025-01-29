@@ -99,8 +99,8 @@ impl InterleavedAudio {
             let buf = if let Some(buf) = &mut sample_buffer {
                 buf
             } else {
+                let duration = audio_buf.capacity() as u64;
                 let spec = *audio_buf.spec();
-                let duration = audio_buf.frames() as u64;
                 sample_buffer.replace(SampleBuffer::new(duration, spec));
                 sample_buffer.as_mut().unwrap()
             };
