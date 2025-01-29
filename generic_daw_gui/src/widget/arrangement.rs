@@ -272,11 +272,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                     return;
                 };
 
-                renderer.with_layer(bounds, |renderer| {
-                    child
-                        .as_widget()
-                        .draw(tree, renderer, theme, style, layout, cursor, &bounds);
-                });
+                child
+                    .as_widget()
+                    .draw(tree, renderer, theme, style, layout, cursor, &bounds);
             });
 
         renderer.with_layer(bounds_no_track_panel, |renderer| {
