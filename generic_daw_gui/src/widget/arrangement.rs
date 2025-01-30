@@ -676,9 +676,10 @@ where
                         ScrollDelta::Pixels { y, .. } => y,
                         ScrollDelta::Lines { y, .. } => y * SWM,
                     } * 0.1;
+                    let y_pos = (cursor.y * y) / (self.scale.y * self.scale.y);
 
                     shell.publish((self.position_scale_delta)(
-                        ArrangementPosition::ZERO,
+                        ArrangementPosition::new(0.0, y_pos),
                         ArrangementScale::new(0.0, y),
                     ));
 
