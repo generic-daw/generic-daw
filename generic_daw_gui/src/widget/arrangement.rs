@@ -182,6 +182,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             return Status::Ignored;
         }
 
+        cursor.y -= LINE_HEIGHT;
+
         if let Some(status) = self.on_event_any_modifiers(state, &event, cursor, shell) {
             return status;
         }
@@ -506,8 +508,7 @@ where
                     Action::DraggingClip(offset) => {
                         let new_start = self.get_time(cursor, offset, state.modifiers);
 
-                        let new_track =
-                            ((cursor.y - LINE_HEIGHT) / self.scale.y + self.position.y) as usize;
+                        let new_track = (cursor.y / self.scale.y + self.position.y) as usize;
                         if new_track >= self.tracks.len() {
                             return None;
                         }
@@ -516,7 +517,7 @@ where
                         Some(Status::Captured)
                     }
                     Action::DeletingClips => {
-                        if state.deleted || cursor.y < LINE_HEIGHT {
+                        if state.deleted || cursor.y < 0.0 {
                             return None;
                         }
 
@@ -572,7 +573,7 @@ where
                 mouse::Event::ButtonPressed(button) => match button {
                     mouse::Button::Left => self.lmb_default(state, cursor, shell),
                     mouse::Button::Right => {
-                        if cursor.y < LINE_HEIGHT {
+                        if cursor.y < 0.0 {
                             return None;
                         }
 
@@ -617,7 +618,7 @@ where
                     Some(Status::Captured)
                 }
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                    if cursor.y < LINE_HEIGHT {
+                    if cursor.y < 0.0 {
                         return None;
                     }
 
@@ -710,7 +711,7 @@ where
         cursor: Point,
         shell: &mut Shell<'_, Message>,
     ) -> Option<Status> {
-        if cursor.y < LINE_HEIGHT {
+        if cursor.y < 0.0 {
             let time = self
                 .get_time(cursor, 0.0, state.modifiers)
                 .in_interleaved_samples(&self.inner.meter);
@@ -749,7 +750,7 @@ where
     }
 
     fn get_track_clip(&self, cursor: Point) -> Option<(usize, usize)> {
-        let track = ((cursor.y - LINE_HEIGHT) / self.scale.y + self.position.y) as usize;
+        let track = (cursor.y / self.scale.y + self.position.y) as usize;
         let time = cursor.x.mul_add(self.scale.x.exp2(), self.position.x) as usize;
         let clip = self
             .inner
