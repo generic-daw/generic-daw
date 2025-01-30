@@ -128,9 +128,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         }
 
         let track_panel_layout = layout.children().next().unwrap();
-        let Some(track_panel_bounds) = track_panel_layout.bounds().intersection(viewport) else {
+        let Some(mut track_panel_bounds) = track_panel_layout.bounds().intersection(viewport)
+        else {
             return;
         };
+        track_panel_bounds.height += 1.0;
         let track_panel_width = track_panel_bounds.width;
 
         renderer.with_layer(track_panel_bounds, |renderer| {

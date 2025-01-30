@@ -94,6 +94,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
         _viewport: &Rectangle,
     ) -> Status {
         let state = tree.state.downcast_mut::<State>();
+        let bounds = layout.bounds();
 
         match event {
             Event::Window(window::Event::RedrawRequested(..)) => {
@@ -106,22 +107,24 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
             Event::Mouse(event) => match event {
                 mouse::Event::ButtonPressed(mouse::Button::Left)
                     if state.dragging.is_none()
-                        && cursor.position_in(layout.bounds()).is_some_and(|pos| {
-                            pos.distance(Point::new(RADIUS, RADIUS)) < RADIUS
-                        }) =>
+                        && cursor
+                            .position()
+                            .is_some_and(|pos| pos.distance(bounds.center()) < RADIUS) =>
                 {
-                    if let Some(pos) = cursor.position() {
-                        state.dragging = Some(pos.y);
+                    let pos = cursor.position().unwrap();
 
-                        let new_click = Click::new(pos, mouse::Button::Left, state.last_click);
-                        if matches!(new_click.kind(), Kind::Double) {
-                            state.current = self.default;
-                            state.cache.clear();
-                        }
-                        state.last_click = Some(new_click);
+                    state.dragging = Some(pos.y);
 
-                        return Status::Captured;
+                    let new_click = Click::new(pos, mouse::Button::Left, state.last_click);
+                    if matches!(new_click.kind(), Kind::Double) {
+                        state.current = self.default;
+                        state.cache.clear();
+
+                        shell.publish((self.f)(state.current));
                     }
+                    state.last_click = Some(new_click);
+
+                    return Status::Captured;
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
                     state.cache.clear();
@@ -139,15 +142,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                             (state.current + diff).clamp(*self.range.start(), *self.range.end());
                         state.dragging = Some(y);
                         state.hovering = cursor
-                            .position_in(layout.bounds())
-                            .is_some_and(|pos| pos.distance(Point::new(RADIUS, RADIUS)) < RADIUS);
+                            .position()
+                            .is_some_and(|pos| pos.distance(bounds.center()) < RADIUS);
 
                         shell.publish((self.f)(state.current));
 
                         return Status::Captured;
                     } else if cursor
-                        .position_in(layout.bounds())
-                        .is_some_and(|pos| pos.distance(Point::new(RADIUS, RADIUS)) < RADIUS)
+                        .position()
+                        .is_some_and(|pos| pos.distance(bounds.center()) < RADIUS)
                     {
                         if !state.hovering {
                             state.cache.clear();
@@ -160,9 +163,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                 }
                 mouse::Event::WheelScrolled { delta }
                     if state.dragging.is_none()
-                        && cursor.position_in(layout.bounds()).is_some_and(|pos| {
-                            pos.distance(Point::new(RADIUS, RADIUS)) < RADIUS
-                        }) =>
+                        && cursor
+                            .position()
+                            .is_some_and(|pos| pos.distance(bounds.center()) < RADIUS) =>
                 {
                     let diff = match delta {
                         ScrollDelta::Lines { y, .. } => y,
