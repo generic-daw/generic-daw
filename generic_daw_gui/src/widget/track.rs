@@ -11,7 +11,10 @@ use iced::{
     mouse::{Cursor, Interaction},
     Element, Length, Rectangle, Renderer, Size, Theme, Vector,
 };
-use std::{iter::once, sync::Arc};
+use std::{
+    iter::once,
+    sync::{atomic::Ordering::SeqCst, Arc},
+};
 
 mod track_ext;
 
@@ -46,8 +49,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         self.diff(tree);
 
-        let meter = self.inner.meter();
-
         let panel_layout =
             self.children[0]
                 .as_widget()
@@ -72,11 +73,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                                 ),
                             )
                         })
-                        .zip(self.inner.clips().iter())
+                        .zip(self.inner.clips.read().unwrap().iter())
                         .map(|(node, clip)| {
                             node.translate(Vector::new(
                                 panel_width
-                                    + (clip.get_global_start().in_interleaved_samples_f(meter)
+                                    + (clip
+                                        .get_global_start()
+                                        .in_interleaved_samples_f(&self.inner.meter)
                                         - self.position.x)
                                         / self.scale.x.exp2(),
                                 0.0,
@@ -207,12 +210,14 @@ impl<'a, Message> Track<'a, Message> {
         track_panel: impl Fn(usize, bool) -> Element<'a, Message>,
         index: usize,
     ) -> Self {
-        let enabled = inner.get_enabled();
+        let enabled = inner.node.enabled.load(SeqCst);
 
         let children = once(track_panel(index, enabled))
             .chain(
                 inner
-                    .clips()
+                    .clips
+                    .read()
+                    .unwrap()
                     .iter()
                     .cloned()
                     .map(|clip| TrackClip::new(clip, position, scale, enabled))
@@ -231,14 +236,20 @@ impl<'a, Message> Track<'a, Message> {
 
 impl TrackExt for TrackInner {
     fn get_clip_at_global_time(&self, meter: &Meter, global_time: usize) -> Option<usize> {
-        self.clips().iter().enumerate().rev().find_map(|(i, clip)| {
-            if clip.get_global_start().in_interleaved_samples(meter) <= global_time
-                && global_time <= clip.get_global_end().in_interleaved_samples(meter)
-            {
-                Some(i)
-            } else {
-                None
-            }
-        })
+        self.clips
+            .read()
+            .unwrap()
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(i, clip)| {
+                if clip.get_global_start().in_interleaved_samples(meter) <= global_time
+                    && global_time <= clip.get_global_end().in_interleaved_samples(meter)
+                {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
     }
 }

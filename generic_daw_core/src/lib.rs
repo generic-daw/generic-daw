@@ -24,8 +24,8 @@ pub use live_sample::LiveSample;
 pub use meter::Meter;
 pub use numerator::Numerator;
 pub use position::Position;
-pub(crate) use track::midi_track::dirty_event::DirtyEvent;
-pub use track::{audio_track::AudioTrack, midi_track::MidiTrack, Track};
+pub(crate) use track::DirtyEvent;
+pub use track::Track;
 pub use track_clip::{
     audio_clip::{
         interleaved_audio::{resample, InterleavedAudio},

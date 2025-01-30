@@ -15,6 +15,7 @@ pub struct AudioClip {
     global_end: Atomic<Position>,
     /// the start of the clip relative to the start of the sample
     clip_start: Atomic<Position>,
+    /// information relating to the playback of the arrangement
     pub meter: Arc<Meter>,
 }
 

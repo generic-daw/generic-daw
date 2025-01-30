@@ -1,4 +1,4 @@
-use crate::{DirtyEvent, MidiNote, MidiTrack};
+use crate::{DirtyEvent, MidiNote, Track};
 use atomig::Atomic;
 use std::sync::{atomic::Ordering::SeqCst, Arc};
 
@@ -10,10 +10,10 @@ pub struct MidiPattern {
 
 impl MidiPattern {
     #[must_use]
-    pub fn new(track: &MidiTrack) -> Self {
+    pub fn new(track: &Track) -> Self {
         Self {
             notes: Vec::new(),
-            dirty: track.plugin_state.lock().unwrap().dirty.clone(),
+            dirty: track.dirty(),
         }
     }
 

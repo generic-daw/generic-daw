@@ -324,7 +324,9 @@ where
         position_scale_delta: fn(ArrangementPosition, ArrangementScale) -> Message,
     ) -> Self {
         let tracks = inner
-            .tracks()
+            .tracks
+            .read()
+            .unwrap()
             .iter()
             .cloned()
             .enumerate()
@@ -624,7 +626,10 @@ where
 
                     let (track, clip) = self.get_track_clip(cursor)?;
 
-                    let start_pixel = (self.inner.tracks()[track].clips()[clip]
+                    let start_pixel = (self.inner.tracks.read().unwrap()[track]
+                        .clips
+                        .read()
+                        .unwrap()[clip]
                         .get_global_start()
                         .in_interleaved_samples_f(&self.inner.meter)
                         - self.position.x)
@@ -724,12 +729,18 @@ where
 
         let (track, clip) = self.get_track_clip(cursor)?;
 
-        let start_pixel = (self.inner.tracks()[track].clips()[clip]
+        let start_pixel = (self.inner.tracks.read().unwrap()[track]
+            .clips
+            .read()
+            .unwrap()[clip]
             .get_global_start()
             .in_interleaved_samples_f(&self.inner.meter)
             - self.position.x)
             / self.scale.x.exp2();
-        let end_pixel = (self.inner.tracks()[track].clips()[clip]
+        let end_pixel = (self.inner.tracks.read().unwrap()[track]
+            .clips
+            .read()
+            .unwrap()[clip]
             .get_global_end()
             .in_interleaved_samples_f(&self.inner.meter)
             - self.position.x)
@@ -754,7 +765,9 @@ where
         let time = cursor.x.mul_add(self.scale.x.exp2(), self.position.x) as usize;
         let clip = self
             .inner
-            .tracks()
+            .tracks
+            .read()
+            .unwrap()
             .get(track)?
             .get_clip_at_global_time(&self.inner.meter, time)?;
 

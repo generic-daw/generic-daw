@@ -57,7 +57,7 @@ pub struct Daw {
 
 impl Default for Daw {
     fn default() -> Self {
-        let arrangement = ArrangementInner::create();
+        let arrangement = Arc::new(ArrangementInner::default());
         let stream = build_output_stream(arrangement.clone());
         let meter = arrangement.meter.clone();
         let arrangement = Arrangement::new(arrangement, stream);

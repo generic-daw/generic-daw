@@ -3,7 +3,7 @@ use audio_graph::{AudioGraph, AudioGraphNodeImpl};
 use hound::WavWriter;
 use std::{
     path::Path,
-    sync::{atomic::Ordering::SeqCst, Arc, OnceLock, RwLock, RwLockReadGuard},
+    sync::{atomic::Ordering::SeqCst, Arc, OnceLock, RwLock},
 };
 
 #[derive(Debug, Default)]
@@ -65,21 +65,14 @@ impl AudioGraphNodeImpl for Arrangement {
 
 impl Arrangement {
     #[must_use]
-    pub fn create() -> Arc<Self> {
-        Arc::new(Self::default())
-    }
-
-    #[must_use]
     pub fn len(&self) -> Position {
-        self.tracks()
+        self.tracks
+            .read()
+            .unwrap()
             .iter()
             .map(|track| track.len())
             .max()
             .unwrap_or_else(Position::default)
-    }
-
-    pub fn tracks(&self) -> RwLockReadGuard<'_, Vec<Arc<Track>>> {
-        self.tracks.read().unwrap()
     }
 
     pub fn export(&self, path: &Path) {

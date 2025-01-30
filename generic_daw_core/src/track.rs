@@ -1,181 +1,107 @@
 use crate::{Meter, Position, TrackClip};
-use audio_graph::{pan, AudioGraphNodeImpl};
-use audio_track::AudioTrack;
-use midi_track::MidiTrack;
-use std::{
-    cmp::max_by,
-    sync::{atomic::Ordering::SeqCst, Arc, RwLockReadGuard},
-};
+use atomig::Atomic;
+use audio_graph::{AudioGraphNodeImpl, MixerNode};
+use clap_host::PluginAudioProcessor;
+use plugin_state::PluginState;
+use std::sync::{atomic::Ordering::SeqCst, Arc, Mutex, RwLock};
 
-pub mod audio_track;
-pub mod midi_track;
+pub mod dirty_event;
+pub mod plugin_state;
+
+pub use dirty_event::DirtyEvent;
 
 #[derive(Debug)]
-pub enum Track {
-    Audio(AudioTrack),
-    Midi(MidiTrack),
+pub enum TrackInner {
+    Audio,
+    Midi(Mutex<PluginState>),
+}
+
+#[derive(Debug)]
+pub struct Track {
+    inner: TrackInner,
+    /// contains audio clips for audio tracks, and midi patterns for midi tracks
+    pub clips: RwLock<Vec<Arc<TrackClip>>>,
+    /// information relating to the playback of the arrangement
+    pub meter: Arc<Meter>,
+    /// volume and pan
+    pub node: MixerNode,
 }
 
 impl AudioGraphNodeImpl for Track {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
-        match self {
-            Self::Audio(track) => track.fill_buf(buf_start_sample, buf),
-            Self::Midi(_) => unimplemented!(),
+        if matches!(self.inner, TrackInner::Audio) && !self.meter.playing.load(SeqCst) {
+            return;
         }
 
-        let volume = self.get_volume();
-        let [lpan, rpan] = pan(self.get_pan()).map(|s| s * volume);
+        self.clips
+            .read()
+            .unwrap()
+            .iter()
+            .for_each(|clip| clip.fill_buf(buf_start_sample, buf));
 
-        buf.iter_mut()
-            .enumerate()
-            .for_each(|(i, s)| *s *= if i % 2 == 0 { lpan } else { rpan });
-
-        let (l, r) = match self {
-            Self::Audio(track) => &track.max_abs_sample,
-            Self::Midi(_) => unimplemented!(),
-        };
-
-        l.store(
-            max_by(
-                l.load(SeqCst),
-                buf.iter()
-                    .step_by(2)
-                    .copied()
-                    .map(f32::abs)
-                    .max_by(f32::total_cmp)
-                    .unwrap(),
-                f32::total_cmp,
-            ),
-            SeqCst,
-        );
-
-        r.store(
-            max_by(
-                r.load(SeqCst),
-                buf.iter()
-                    .skip(1)
-                    .step_by(2)
-                    .copied()
-                    .map(f32::abs)
-                    .max_by(f32::total_cmp)
-                    .unwrap(),
-                f32::total_cmp,
-            ),
-            SeqCst,
-        );
+        self.node.fill_buf(buf_start_sample, buf);
     }
 }
 
 impl Track {
-    pub fn clips(&self) -> RwLockReadGuard<'_, Vec<Arc<TrackClip>>> {
-        match self {
-            Self::Audio(track) => track.clips(),
-            Self::Midi(track) => track.clips(),
-        }
+    #[must_use]
+    pub fn audio(meter: Arc<Meter>) -> Arc<Self> {
+        Arc::new(Self::new(TrackInner::Audio, meter))
     }
 
     #[must_use]
-    pub fn meter(&self) -> &Meter {
-        match self {
-            Self::Audio(track) => &track.meter,
-            Self::Midi(track) => &track.meter,
-        }
+    pub fn midi(plugin: PluginAudioProcessor, meter: Arc<Meter>) -> Arc<Self> {
+        Arc::new(Self::new(
+            TrackInner::Midi(PluginState::create(plugin)),
+            meter,
+        ))
     }
 
-    #[must_use]
-    pub fn try_push(&self, clip: &Arc<TrackClip>) -> bool {
-        match self {
-            Self::Audio(track) => match **clip {
-                TrackClip::Audio(_) => {
-                    track.clips.write().unwrap().push(clip.clone());
-                    true
-                }
-                TrackClip::Midi(_) => false,
-            },
-            Self::Midi(track) => match **clip {
-                TrackClip::Midi(_) => {
-                    track.clips.write().unwrap().push(clip.clone());
-                    true
-                }
-                TrackClip::Audio(_) => false,
-            },
-        }
-    }
-
-    pub fn remove_index(&self, index: usize) -> Arc<TrackClip> {
-        match self {
-            Self::Audio(track) => track.clips.write().unwrap().remove(index),
-            Self::Midi(track) => track.clips.write().unwrap().remove(index),
+    fn new(inner: TrackInner, meter: Arc<Meter>) -> Self {
+        Self {
+            inner,
+            clips: RwLock::default(),
+            meter,
+            node: MixerNode::default(),
         }
     }
 
     #[must_use]
     pub fn len(&self) -> Position {
-        match self {
-            Self::Audio(track) => track.len(),
-            Self::Midi(track) => track.len(),
-        }
+        self.clips
+            .read()
+            .unwrap()
+            .iter()
+            .map(|track| track.len())
+            .max()
+            .unwrap_or_default()
     }
 
     #[must_use]
-    pub fn get_volume(&self) -> f32 {
-        match self {
-            Self::Audio(track) => track.volume.load(SeqCst),
-            Self::Midi(track) => track.volume.load(SeqCst),
+    pub fn try_push(&self, clip: &Arc<TrackClip>) -> bool {
+        match self.inner {
+            TrackInner::Audio => {
+                if !matches!(**clip, TrackClip::Audio(..)) {
+                    return false;
+                };
+            }
+            TrackInner::Midi(..) => {
+                if !matches!(**clip, TrackClip::Midi(..)) {
+                    return false;
+                };
+            }
         }
+
+        self.clips.write().unwrap().push(clip.clone());
+
+        true
     }
 
-    pub fn set_volume(&self, volume: f32) {
-        match self {
-            Self::Audio(track) => track.volume.store(volume, SeqCst),
-            Self::Midi(track) => track.volume.store(volume, SeqCst),
-        }
-    }
-
-    #[must_use]
-    pub fn get_pan(&self) -> f32 {
-        match self {
-            Self::Audio(track) => track.pan.load(SeqCst),
-            Self::Midi(track) => track.pan.load(SeqCst),
-        }
-    }
-
-    pub fn set_pan(&self, pan: f32) {
-        match self {
-            Self::Audio(track) => track.pan.store(pan, SeqCst),
-            Self::Midi(track) => track.pan.store(pan, SeqCst),
-        }
-    }
-
-    #[must_use]
-    pub fn get_enabled(&self) -> bool {
-        match self {
-            Self::Audio(track) => track.enabled.load(SeqCst),
-            Self::Midi(_) => unimplemented!(),
-        }
-    }
-
-    pub fn set_enabled(&self, enabled: bool) {
-        match self {
-            Self::Audio(track) => track.enabled.store(enabled, SeqCst),
-            Self::Midi(_) => unimplemented!(),
-        }
-    }
-
-    pub fn toggle_enabled(&self) {
-        match self {
-            Self::Audio(track) => track.enabled.fetch_not(SeqCst),
-            Self::Midi(_) => unimplemented!(),
+    pub(crate) fn dirty(&self) -> Arc<Atomic<DirtyEvent>> {
+        let TrackInner::Midi(plugin_state) = &self.inner else {
+            unreachable!()
         };
-    }
 
-    pub fn get_reset_max_abs_sample(&self) -> (f32, f32) {
-        match self {
-            Self::Audio(track) => (
-                track.max_abs_sample.0.swap(0.0, SeqCst),
-                track.max_abs_sample.1.swap(0.0, SeqCst),
-            ),
-            Self::Midi(_) => unimplemented!(),
-        }
+        plugin_state.lock().unwrap().dirty.clone()
     }
 }

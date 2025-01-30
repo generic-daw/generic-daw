@@ -2,8 +2,8 @@ use crate::widget::{
     Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob, PeakMeter,
 };
 use generic_daw_core::{
-    Arrangement as ArrangementInner, AudioClip, AudioTrack, InterleavedAudio, Position, Stream,
-    StreamTrait as _,
+    Arrangement as ArrangementInner, AudioClip, InterleavedAudio, Position, Stream,
+    StreamTrait as _, Track,
 };
 use iced::{
     widget::{column, container, container::Style, mouse_area, radio, row},
@@ -61,19 +61,29 @@ impl Arrangement {
         match message {
             Message::Animate() => {}
             Message::TrackVolumeChanged(track, volume) => {
-                self.inner.tracks()[track].set_volume(volume);
+                self.inner.tracks.read().unwrap()[track]
+                    .node
+                    .volume
+                    .store(volume, SeqCst);
             }
             Message::TrackPanChanged(track, pan) => {
-                self.inner.tracks()[track].set_pan(pan);
+                self.inner.tracks.read().unwrap()[track]
+                    .node
+                    .pan
+                    .store(pan, SeqCst);
             }
             Message::LoadedSample(audio_file) => {
-                let track = AudioTrack::create(self.inner.meter.clone());
+                let track = Track::audio(self.inner.meter.clone());
 
-                let mut ok = true;
-                ok &= track.try_push(&AudioClip::create(audio_file, self.inner.meter.clone()));
+                track
+                    .clips
+                    .write()
+                    .unwrap()
+                    .push(AudioClip::create(audio_file, self.inner.meter.clone()));
                 self.inner.tracks.write().unwrap().push(track.clone());
 
                 let node = track.into();
+                let mut ok = true;
                 ok &= self.inner.audio_graph.add(&node);
                 ok &= self
                     .inner
@@ -83,22 +93,32 @@ impl Arrangement {
                 debug_assert!(ok);
             }
             Message::ToggleTrackEnabled(track) => {
-                self.inner.tracks()[track].toggle_enabled();
+                self.inner.tracks.read().unwrap()[track]
+                    .node
+                    .enabled
+                    .fetch_not(SeqCst);
                 self.soloed_track = None;
             }
             Message::ToggleTrackSolo(track) => {
                 if self.soloed_track.is_some_and(|s| s == track) {
                     self.soloed_track = None;
                     self.inner
-                        .tracks()
+                        .tracks
+                        .read()
+                        .unwrap()
                         .iter()
-                        .for_each(|track| track.set_enabled(true));
+                        .for_each(|track| track.node.enabled.store(true, SeqCst));
                 } else {
                     self.inner
-                        .tracks()
+                        .tracks
+                        .read()
+                        .unwrap()
                         .iter()
-                        .for_each(|track| track.set_enabled(false));
-                    self.inner.tracks()[track].set_enabled(true);
+                        .for_each(|track| track.node.enabled.store(false, SeqCst));
+                    self.inner.tracks.read().unwrap()[track]
+                        .node
+                        .enabled
+                        .store(true, SeqCst);
                     self.soloed_track = Some(track);
                 }
             }
@@ -110,34 +130,76 @@ impl Arrangement {
             }
             Message::UnselectClip() => self.grabbed_clip = None,
             Message::CloneClip(track, mut clip) => {
-                let inner = self.inner.tracks()[track].clips()[clip].deref().clone();
-                let ok = self.inner.tracks()[track].try_push(&Arc::new(inner));
-                debug_assert!(ok);
-                clip = self.inner.tracks()[track].clips().len() - 1;
+                let inner = self.inner.tracks.read().unwrap()[track]
+                    .clips
+                    .read()
+                    .unwrap()[clip]
+                    .deref()
+                    .clone();
+                self.inner.tracks.read().unwrap()[track]
+                    .clips
+                    .write()
+                    .unwrap()
+                    .push(Arc::new(inner));
+                clip = self.inner.tracks.read().unwrap()[track]
+                    .clips
+                    .read()
+                    .unwrap()
+                    .len()
+                    - 1;
                 self.grabbed_clip.replace([track, clip]);
             }
             Message::MoveClipTo(new_track, pos) => {
                 let [track, clip] = self.grabbed_clip.as_mut().unwrap();
                 if *track != new_track
-                    && self.inner.tracks()[new_track]
-                        .try_push(&self.inner.tracks()[*track].clips()[*clip])
+                    && self.inner.tracks.read().unwrap()[new_track].try_push(
+                        &self.inner.tracks.read().unwrap()[*track]
+                            .clips
+                            .read()
+                            .unwrap()[*clip],
+                    )
                 {
-                    self.inner.tracks()[*track].remove_index(*clip);
+                    self.inner.tracks.read().unwrap()[*track]
+                        .clips
+                        .write()
+                        .unwrap()
+                        .remove(*clip);
                     *track = new_track;
-                    *clip = self.inner.tracks()[*track].clips().len() - 1;
+                    *clip = self.inner.tracks.read().unwrap()[*track]
+                        .clips
+                        .read()
+                        .unwrap()
+                        .len()
+                        - 1;
                 }
-                self.inner.tracks()[*track].clips()[*clip].move_to(pos);
+                self.inner.tracks.read().unwrap()[*track]
+                    .clips
+                    .read()
+                    .unwrap()[*clip]
+                    .move_to(pos);
             }
             Message::TrimClipStart(pos) => {
                 let [track, clip] = self.grabbed_clip.unwrap();
-                self.inner.tracks()[track].clips()[clip].trim_start_to(pos);
+                self.inner.tracks.read().unwrap()[track]
+                    .clips
+                    .read()
+                    .unwrap()[clip]
+                    .trim_start_to(pos);
             }
             Message::TrimClipEnd(pos) => {
                 let [track, clip] = self.grabbed_clip.unwrap();
-                self.inner.tracks()[track].clips()[clip].trim_end_to(pos);
+                self.inner.tracks.read().unwrap()[track]
+                    .clips
+                    .read()
+                    .unwrap()[clip]
+                    .trim_end_to(pos);
             }
             Message::DeleteClip(track, clip) => {
-                self.inner.tracks()[track].remove_index(clip);
+                self.inner.tracks.read().unwrap()[track]
+                    .clips
+                    .write()
+                    .unwrap()
+                    .remove(clip);
             }
             Message::PositionScaleDelta(pos, scale) => {
                 let sd = scale != ArrangementScale::ZERO;
@@ -154,7 +216,7 @@ impl Arrangement {
                     self.position += pos;
                     self.position = self.position.clamp(
                         self.inner.len().in_interleaved_samples_f(&self.inner.meter),
-                        (self.inner.tracks().len().saturating_sub(1)) as f32,
+                        (self.inner.tracks.read().unwrap().len().saturating_sub(1)) as f32,
                     );
                 }
             }
@@ -173,30 +235,37 @@ impl Arrangement {
             &self.inner,
             self.position,
             self.scale,
-            |idx, enabled| {
-                let (left, right) = self.inner.tracks()[idx].get_reset_max_abs_sample();
+            |track, enabled| {
+                let left = self.inner.tracks.read().unwrap()[track]
+                    .node
+                    .max_l
+                    .swap(0.0, SeqCst);
+                let right = self.inner.tracks.read().unwrap()[track]
+                    .node
+                    .max_r
+                    .swap(0.0, SeqCst);
 
                 container(
                     row![
                         PeakMeter::new(left, right, enabled, Message::Animate),
                         column![
                             Knob::new(0.0..=1.0, 0.0, 1.0, move |f| {
-                                Message::TrackVolumeChanged(idx, f)
+                                Message::TrackVolumeChanged(track, f)
                             })
                             .set_enabled(enabled),
                             Knob::new(-1.0..=1.0, 0.0, 0.0, move |f| Message::TrackPanChanged(
-                                idx, f
+                                track, f
                             ))
                             .set_enabled(enabled),
                         ]
                         .spacing(5.0),
                         mouse_area(
                             radio("", enabled, Some(true), |_| {
-                                Message::ToggleTrackEnabled(idx)
+                                Message::ToggleTrackEnabled(track)
                             })
                             .spacing(0.0)
                         )
-                        .on_right_press(Message::ToggleTrackSolo(idx)),
+                        .on_right_press(Message::ToggleTrackSolo(track)),
                     ]
                     .spacing(5.0),
                 )
