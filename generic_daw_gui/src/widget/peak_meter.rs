@@ -10,7 +10,7 @@ use iced::{
     mouse::Cursor,
     window, Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
 };
-use std::cmp::min_by;
+use std::cmp::{max_by, min_by};
 
 const DECAY: f32 = 64.0;
 const WIDTH: f32 = LINE_HEIGHT / 3.0 * 4.0 + 2.0;
@@ -50,7 +50,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
         &mut self,
         tree: &mut Tree,
         event: Event,
-        _layout: Layout<'_>,
+        layout: Layout<'_>,
         _cursor: Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
@@ -59,6 +59,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
     ) -> Status {
         if let Event::Window(window::Event::RedrawRequested(..)) = event {
             let state = tree.state.downcast_mut::<State>();
+            let bounds = layout.bounds();
 
             state.left = if self.left < state.left {
                 state.left.mul_add(DECAY - 1.0, self.left) / DECAY
@@ -74,7 +75,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
             };
             self.right = 0.0;
 
-            if min_by(state.left, state.right, f32::total_cmp) > 0.01 {
+            if max_by(state.left, state.right, f32::total_cmp) * bounds.height > 1.0 {
                 shell.publish((self.animate)());
             } else {
                 state.left = 0.0;
@@ -96,7 +97,6 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
         _viewport: &Rectangle,
     ) {
         let state = tree.state.downcast_ref::<State>();
-
         let bounds = layout.bounds();
 
         let color = if self.enabled {

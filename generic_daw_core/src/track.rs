@@ -30,14 +30,14 @@ impl AudioGraphNodeImpl for Track {
             .enumerate()
             .for_each(|(i, s)| *s *= if i % 2 == 0 { lpan } else { rpan });
 
-        let max_abs_sample = match self {
+        let (l, r) = match self {
             Self::Audio(track) => &track.max_abs_sample,
             Self::Midi(_) => unimplemented!(),
         };
 
-        max_abs_sample.0.store(
+        l.store(
             max_by(
-                max_abs_sample.0.load(SeqCst),
+                l.load(SeqCst),
                 buf.iter()
                     .step_by(2)
                     .copied()
@@ -49,9 +49,9 @@ impl AudioGraphNodeImpl for Track {
             SeqCst,
         );
 
-        max_abs_sample.1.store(
+        r.store(
             max_by(
-                max_abs_sample.1.load(SeqCst),
+                r.load(SeqCst),
                 buf.iter()
                     .skip(1)
                     .step_by(2)
