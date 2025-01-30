@@ -266,7 +266,7 @@ impl<Message> Knob<Message> {
     fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
         let center = frame.center();
 
-        let circle_at_angle = |angle: Radians, a_m: f32, r_m: f32| {
+        let circle = |angle: Radians, a_m: f32, r_m: f32| {
             Path::circle(
                 Point::new(
                     (RADIUS * a_m).mul_add(angle.0.cos(), center.x),
@@ -275,8 +275,6 @@ impl<Message> Knob<Message> {
                 RADIUS * r_m,
             )
         };
-
-        let inner_circle = Path::circle(center, RADIUS * 0.8);
 
         let base_angle = Radians(-FRAC_PI_4 * 5.0);
 
@@ -292,20 +290,16 @@ impl<Message> Knob<Message> {
                     / (self.range.end() - self.range.start()),
             );
 
-        let segment = Path::new(|builder| {
+        let arc = Path::new(|builder| {
             builder.arc(Arc {
                 center,
                 radius: RADIUS,
                 start_angle,
                 end_angle,
             });
-
             builder.line_to(center);
-
             builder.close();
         });
-
-        frame.fill(&segment, theme.extended_palette().secondary.base.text);
 
         let color = if !self.enabled || state.hovering || state.dragging.is_some() {
             theme.extended_palette().secondary.strong.color
@@ -313,20 +307,22 @@ impl<Message> Knob<Message> {
             theme.extended_palette().primary.base.color
         };
 
-        frame.fill(&inner_circle, color);
+        frame.fill(&arc, theme.extended_palette().secondary.base.text);
+
+        frame.fill(&Path::circle(center, RADIUS * 0.8), color);
 
         frame.fill(
-            &circle_at_angle(start_angle, 0.9, 0.1),
+            &circle(start_angle, 0.9, 0.1),
             theme.extended_palette().secondary.base.text,
         );
 
         frame.fill(
-            &circle_at_angle(end_angle, 0.9, 0.1),
+            &circle(end_angle, 0.9, 0.1),
             theme.extended_palette().secondary.base.text,
         );
 
         frame.fill(
-            &circle_at_angle(end_angle, 0.4, 0.15),
+            &circle(end_angle, 0.4, 0.15),
             theme.extended_palette().secondary.base.text,
         );
     }
