@@ -13,8 +13,8 @@ use iced::{
     keyboard::{self, Modifiers},
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::text::{LineHeight, Shaping, Wrapping},
-    Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme,
-    Vector,
+    window, Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Size,
+    Theme, Vector,
 };
 use std::{
     fmt::{Debug, Formatter},
@@ -41,6 +41,8 @@ struct State {
     modifiers: Modifiers,
     /// the current action
     action: Action,
+    /// we shouldn't send multiple deletion requests per frame
+    deleted: bool,
 }
 
 pub struct Arrangement<'a, Message> {
@@ -150,14 +152,20 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         };
 
         let state = tree.state.downcast_mut::<State>();
-        let bounds = layout.bounds();
 
-        if let Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
-            state.modifiers = modifiers;
-            return Status::Ignored;
+        match event {
+            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
+                state.modifiers = modifiers;
+                return Status::Ignored;
+            }
+            Event::Window(window::Event::RedrawRequested(..)) => {
+                state.deleted = false;
+                return Status::Ignored;
+            }
+            _ => {}
         }
 
-        let Some(mut cursor) = cursor.position_in(bounds) else {
+        let Some(mut cursor) = cursor.position_in(layout.bounds()) else {
             shell.publish((self.unselect_clip)());
             state.action = Action::None;
             return Status::Ignored;
@@ -508,7 +516,7 @@ where
                         Some(Status::Captured)
                     }
                     Action::DeletingClips => {
-                        if cursor.y < LINE_HEIGHT {
+                        if state.deleted || cursor.y < LINE_HEIGHT {
                             return None;
                         }
 
@@ -570,6 +578,7 @@ where
 
                         let (track, clip) = self.get_track_clip(cursor)?;
 
+                        state.deleted = true;
                         state.action = Action::DeletingClips;
 
                         shell.publish((self.delete_clip)(track, clip));
