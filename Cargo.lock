@@ -1683,9 +1683,9 @@ dependencies = [
 
 [[package]]
 name = "iced_file_tree"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "060d5a0346e099d825858c0f5d4313791a8b08827a35fe58020bd5278a395ae1"
+checksum = "4e6cb9032d2ebdf2d6cd9bc926bdf4f92afc5ca83cf077e692d77c1f03ea9381"
 dependencies = [
  "iced",
 ]
@@ -3999,13 +3999,13 @@ checksum = "0dd7358ecb8fc2f8d014bf86f6f638ce72ba252a2c3a2572f2a795f1d23efb41"
 
 [[package]]
 name = "toml_edit"
-version = "0.22.22"
+version = "0.22.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ae48d6208a266e853d946088ed816055e556cc6028c5e8e2b84d9fa5dd7c7f5"
+checksum = "02a8b472d1a3d7c18e2d61a489aee3453fd9031c33e4f55bd533f4a7adca1bee"
 dependencies = [
  "indexmap",
  "toml_datetime",
- "winnow",
+ "winnow 0.7.0",
 ]
 
 [[package]]
@@ -4927,9 +4927,18 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.6.25"
+version = "0.6.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad699df48212c6cc6eb4435f35500ac6fd3b9913324f938aea302022ce19d310"
+checksum = "1e90edd2ac1aa278a5c4599b1d89cf03074b610800f866d4026dc199d7929a28"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "winnow"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e49d2d35d3fad69b39b94139037ecfb4f359f08958b9c11e7315ce770462419"
 dependencies = [
  "memchr",
 ]
@@ -5093,7 +5102,7 @@ dependencies = [
  "tracing",
  "uds_windows",
  "windows-sys 0.59.0",
- "winnow",
+ "winnow 0.6.26",
  "xdg-home",
  "zbus_macros",
  "zbus_names",
@@ -5123,7 +5132,7 @@ checksum = "519629a3f80976d89c575895b05677cbc45eaf9f70d62a364d819ba646409cc8"
 dependencies = [
  "serde",
  "static_assertions",
- "winnow",
+ "winnow 0.6.26",
  "zvariant",
 ]
 
@@ -5208,7 +5217,7 @@ dependencies = [
  "serde",
  "static_assertions",
  "url",
- "winnow",
+ "winnow 0.6.26",
  "zvariant_derive",
  "zvariant_utils",
 ]
@@ -5237,5 +5246,5 @@ dependencies = [
  "serde",
  "static_assertions",
  "syn 2.0.96",
- "winnow",
+ "winnow 0.6.26",
 ]

@@ -20,7 +20,7 @@ iced = { version = "0.13.1", default-features = false, features = [
 iced_aw = { version = "0.11.0", default-features = false, features = [
     "number_input",
 ] }
-iced_file_tree = "0.2.3"
+iced_file_tree = "0.3.0"
 iced_fonts = { version = "0.1.1", features = ["bootstrap"] }
 iced_wgpu = { version = "0.13.5", features = ["geometry"] }
 itoa = "1.0.14"

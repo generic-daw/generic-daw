@@ -224,11 +224,7 @@ impl Daw {
         let content = column![
             controls,
             VSplit::new(
-                scrollable(
-                    file_tree(home_dir().unwrap())
-                        .unwrap()
-                        .on_double_click(Message::LoadSample),
-                ),
+                scrollable(file_tree(home_dir().unwrap()).on_double_click(Message::LoadSample),),
                 self.arrangement.view().map(Message::Arrangement)
             )
             .split(0.25)
