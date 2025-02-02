@@ -48,33 +48,35 @@ impl AudioGraphNodeImpl for MixerNode {
             .enumerate()
             .for_each(|(i, s)| *s *= if i % 2 == 0 { lpan } else { rpan });
 
-        self.max_l.store(
-            max_by(
-                self.max_l.load(Acquire),
-                buf.iter()
-                    .step_by(2)
-                    .copied()
-                    .map(f32::abs)
-                    .max_by(f32::total_cmp)
-                    .unwrap(),
-                f32::total_cmp,
-            ),
-            Release,
-        );
+        self.max_l
+            .fetch_update(Release, Acquire, |max_l| {
+                Some(max_by(
+                    max_l,
+                    buf.iter()
+                        .step_by(2)
+                        .copied()
+                        .map(f32::abs)
+                        .max_by(f32::total_cmp)
+                        .unwrap(),
+                    f32::total_cmp,
+                ))
+            })
+            .unwrap();
 
-        self.max_r.store(
-            max_by(
-                self.max_r.load(Acquire),
-                buf.iter()
-                    .skip(1)
-                    .step_by(2)
-                    .copied()
-                    .map(f32::abs)
-                    .max_by(f32::total_cmp)
-                    .unwrap(),
-                f32::total_cmp,
-            ),
-            Release,
-        );
+        self.max_r
+            .fetch_update(Release, Acquire, |max_r| {
+                Some(max_by(
+                    max_r,
+                    buf.iter()
+                        .skip(1)
+                        .step_by(2)
+                        .copied()
+                        .map(f32::abs)
+                        .max_by(f32::total_cmp)
+                        .unwrap(),
+                    f32::total_cmp,
+                ))
+            })
+            .unwrap();
     }
 }

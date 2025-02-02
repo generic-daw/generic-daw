@@ -70,13 +70,9 @@ impl MidiClip {
         );
         let diff = self.get_global_start().abs_diff(global_start);
         if self.get_global_start() < global_start {
-            self.clip_start
-                .fetch_update(AcqRel, AcqRel, |pattern_start| Some(pattern_start + diff))
-                .unwrap();
+            self.clip_start.fetch_add(diff, AcqRel);
         } else {
-            self.clip_start
-                .fetch_update(AcqRel, AcqRel, |pattern_start| Some(pattern_start - diff))
-                .unwrap();
+            self.clip_start.fetch_sub(diff, AcqRel);
         }
         self.global_start.store(global_start, Release);
         self.pattern.dirty.store(DirtyEvent::NoteReplaced, Release);
@@ -91,13 +87,9 @@ impl MidiClip {
     pub fn move_to(&self, global_start: Position) {
         let diff = self.get_global_start().abs_diff(global_start);
         if self.get_global_start() < global_start {
-            self.global_end
-                .fetch_update(AcqRel, AcqRel, |global_end| Some(global_end + diff))
-                .unwrap();
+            self.global_end.fetch_add(diff, AcqRel);
         } else {
-            self.global_end
-                .fetch_update(AcqRel, AcqRel, |global_end| Some(global_end - diff))
-                .unwrap();
+            self.global_end.fetch_sub(diff, AcqRel);
         }
         self.global_start.store(global_start, Release);
         self.pattern.dirty.store(DirtyEvent::NoteReplaced, Release);
