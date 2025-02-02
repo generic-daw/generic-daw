@@ -202,18 +202,14 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
         renderer: &Renderer,
     ) -> Interaction {
         let state = tree.state.downcast_ref::<State>();
-        if state.dragging
-            || cursor
-                .position_in(layout.children().nth(1).unwrap().bounds())
-                .is_some()
-        {
+        if state.dragging || cursor.is_over(layout.children().nth(1).unwrap().bounds()) {
             Interaction::ResizingHorizontally
         } else {
             self.children
                 .iter()
                 .zip(&tree.children)
                 .zip(layout.children())
-                .find(|(_, layout)| cursor.position_in(layout.bounds()).is_some())
+                .find(|(_, layout)| cursor.is_over(layout.bounds()))
                 .map_or_else(Interaction::default, |((child, tree), layout)| {
                     child
                         .as_widget()
