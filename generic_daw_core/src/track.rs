@@ -3,7 +3,7 @@ use atomig::Atomic;
 use audio_graph::{AudioGraphNodeImpl, MixerNode};
 use clap_host::PluginAudioProcessor;
 use plugin_state::PluginState;
-use std::sync::{atomic::Ordering::SeqCst, Arc, Mutex, RwLock};
+use std::sync::{atomic::Ordering::Acquire, Arc, Mutex, RwLock};
 
 pub mod dirty_event;
 pub mod plugin_state;
@@ -29,7 +29,7 @@ pub struct Track {
 
 impl AudioGraphNodeImpl for Track {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
-        if matches!(self.inner, TrackInner::Audio) && !self.meter.playing.load(SeqCst) {
+        if matches!(self.inner, TrackInner::Audio) && !self.meter.playing.load(Acquire) {
             return;
         }
 

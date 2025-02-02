@@ -3,7 +3,10 @@ use audio_graph::{AudioGraph, AudioGraphNodeImpl};
 use hound::WavWriter;
 use std::{
     path::Path,
-    sync::{atomic::Ordering::SeqCst, Arc, OnceLock, RwLock},
+    sync::{
+        atomic::Ordering::{AcqRel, Acquire, Release},
+        Arc, OnceLock, RwLock,
+    },
 };
 
 #[derive(Debug, Default)]
@@ -21,7 +24,7 @@ pub struct Arrangement {
 
 impl AudioGraphNodeImpl for Arrangement {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
-        if self.meter.playing.load(SeqCst) && self.meter.metronome.load(SeqCst) {
+        if self.meter.playing.load(Acquire) && self.meter.metronome.load(Acquire) {
             let buf_start_pos = Position::from_interleaved_samples(buf_start_sample, &self.meter);
             let mut buf_end_pos =
                 Position::from_interleaved_samples(buf_start_sample + buf.len(), &self.meter);
@@ -33,12 +36,14 @@ impl AudioGraphNodeImpl for Arrangement {
                 buf_end_pos = buf_end_pos.floor();
 
                 let diff = (buf_end_pos - buf_start_pos).in_interleaved_samples(&self.meter);
-                let click =
-                    if buf_end_pos.quarter_note() % self.meter.numerator.load(SeqCst) as u32 == 0 {
-                        self.on_bar_click.get().unwrap().clone()
-                    } else {
-                        self.off_bar_click.get().unwrap().clone()
-                    };
+                let click = if buf_end_pos.quarter_note()
+                    % self.meter.numerator.load(Acquire) as u32
+                    == 0
+                {
+                    self.on_bar_click.get().unwrap().clone()
+                } else {
+                    self.off_bar_click.get().unwrap().clone()
+                };
 
                 let click = LiveSample::new(click, diff);
 
@@ -79,14 +84,14 @@ impl Arrangement {
         const CHUNK_SIZE: usize = 64;
 
         let live_sample_playback = std::mem::take(&mut *self.live_sample_playback.write().unwrap());
-        let playing = self.meter.playing.swap(true, SeqCst);
-        let metronome = self.meter.metronome.swap(false, SeqCst);
+        let playing = self.meter.playing.swap(true, AcqRel);
+        let metronome = self.meter.metronome.swap(false, AcqRel);
 
         let mut writer = WavWriter::create(
             path,
             hound::WavSpec {
                 channels: 2,
-                sample_rate: self.meter.sample_rate.load(SeqCst),
+                sample_rate: self.meter.sample_rate.load(Acquire),
                 bits_per_sample: 32,
                 sample_format: hound::SampleFormat::Float,
             },
@@ -107,7 +112,7 @@ impl Arrangement {
         writer.finalize().unwrap();
 
         *self.live_sample_playback.write().unwrap() = live_sample_playback;
-        self.meter.playing.store(playing, SeqCst);
-        self.meter.metronome.store(metronome, SeqCst);
+        self.meter.playing.store(playing, Release);
+        self.meter.metronome.store(metronome, Release);
     }
 }

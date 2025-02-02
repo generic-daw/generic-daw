@@ -1,7 +1,10 @@
 use crate::{DirtyEvent, Meter, Position, TrackClip};
 use atomig::Atomic;
 use midi_pattern::MidiPattern;
-use std::sync::{atomic::Ordering::SeqCst, Arc};
+use std::sync::{
+    atomic::Ordering::{AcqRel, Acquire, Release},
+    Arc,
+};
 
 pub mod midi_note;
 pub mod midi_pattern;
@@ -23,9 +26,9 @@ impl Clone for MidiClip {
     fn clone(&self) -> Self {
         Self {
             pattern: self.pattern.clone(),
-            global_start: Atomic::new(self.global_start.load(SeqCst)),
-            global_end: Atomic::new(self.global_end.load(SeqCst)),
-            clip_start: Atomic::new(self.clip_start.load(SeqCst)),
+            global_start: Atomic::new(self.global_start.load(Acquire)),
+            global_end: Atomic::new(self.global_end.load(Acquire)),
+            clip_start: Atomic::new(self.clip_start.load(Acquire)),
             meter: self.meter.clone(),
         }
     }
@@ -46,17 +49,17 @@ impl MidiClip {
 
     #[must_use]
     pub fn get_global_start(&self) -> Position {
-        self.global_start.load(SeqCst)
+        self.global_start.load(Acquire)
     }
 
     #[must_use]
     pub fn get_global_end(&self) -> Position {
-        self.global_end.load(SeqCst)
+        self.global_end.load(Acquire)
     }
 
     #[must_use]
     pub fn get_clip_start(&self) -> Position {
-        self.clip_start.load(SeqCst)
+        self.clip_start.load(Acquire)
     }
 
     pub fn trim_start_to(&self, global_start: Position) {
@@ -68,35 +71,35 @@ impl MidiClip {
         let diff = self.get_global_start().abs_diff(global_start);
         if self.get_global_start() < global_start {
             self.clip_start
-                .fetch_update(SeqCst, SeqCst, |pattern_start| Some(pattern_start + diff))
+                .fetch_update(AcqRel, AcqRel, |pattern_start| Some(pattern_start + diff))
                 .unwrap();
         } else {
             self.clip_start
-                .fetch_update(SeqCst, SeqCst, |pattern_start| Some(pattern_start - diff))
+                .fetch_update(AcqRel, AcqRel, |pattern_start| Some(pattern_start - diff))
                 .unwrap();
         }
-        self.global_start.store(global_start, SeqCst);
-        self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
+        self.global_start.store(global_start, Release);
+        self.pattern.dirty.store(DirtyEvent::NoteReplaced, Release);
     }
 
     pub fn trim_end_to(&self, global_end: Position) {
         let global_end = global_end.max(self.get_global_start() + Position::SUB_QUARTER_NOTE);
-        self.global_end.store(global_end, SeqCst);
-        self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
+        self.global_end.store(global_end, Release);
+        self.pattern.dirty.store(DirtyEvent::NoteReplaced, Release);
     }
 
     pub fn move_to(&self, global_start: Position) {
         let diff = self.get_global_start().abs_diff(global_start);
         if self.get_global_start() < global_start {
             self.global_end
-                .fetch_update(SeqCst, SeqCst, |global_end| Some(global_end + diff))
+                .fetch_update(AcqRel, AcqRel, |global_end| Some(global_end + diff))
                 .unwrap();
         } else {
             self.global_end
-                .fetch_update(SeqCst, SeqCst, |global_end| Some(global_end - diff))
+                .fetch_update(AcqRel, AcqRel, |global_end| Some(global_end - diff))
                 .unwrap();
         }
-        self.global_start.store(global_start, SeqCst);
-        self.pattern.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
+        self.global_start.store(global_start, Release);
+        self.pattern.dirty.store(DirtyEvent::NoteReplaced, Release);
     }
 }

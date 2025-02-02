@@ -23,7 +23,10 @@ use iced_fonts::{bootstrap, BOOTSTRAP_FONT};
 use rfd::{AsyncFileDialog, FileHandle};
 use std::{
     path::PathBuf,
-    sync::{atomic::Ordering::SeqCst, Arc, Mutex},
+    sync::{
+        atomic::Ordering::{AcqRel, Acquire, Release},
+        Arc, Mutex,
+    },
 };
 use strum::VariantArray as _;
 
@@ -87,7 +90,7 @@ impl Daw {
                     exit_on_close_request: false,
                     ..Settings::default()
                 });
-                let sample_rate = f64::from(self.meter.sample_rate.load(SeqCst));
+                let sample_rate = f64::from(self.meter.sample_rate.load(Acquire));
                 let embed = window::run_with_handle(id, move |handle| {
                     let (gui, host_audio_processor, plugin_audio_processor) = open_gui(
                         &get_installed_plugins()[0],
@@ -150,22 +153,22 @@ impl Daw {
                 .map(Message::Arrangement);
             }
             Message::TogglePlay => {
-                self.meter.playing.fetch_not(SeqCst);
+                self.meter.playing.fetch_not(AcqRel);
             }
             Message::Stop => {
-                self.meter.playing.store(false, SeqCst);
-                self.meter.sample.store(0, SeqCst);
+                self.meter.playing.store(false, Release);
+                self.meter.sample.store(0, Release);
             }
             Message::New => *self = Self::default(),
-            Message::BpmChanged(bpm) => self.meter.bpm.store(bpm, SeqCst),
+            Message::BpmChanged(bpm) => self.meter.bpm.store(bpm, Release),
             Message::NumeratorChanged(new_numerator) => {
-                self.meter.numerator.store(new_numerator, SeqCst);
+                self.meter.numerator.store(new_numerator, Release);
             }
             Message::DenominatorChanged(new_denominator) => {
-                self.meter.denominator.store(new_denominator, SeqCst);
+                self.meter.denominator.store(new_denominator, Release);
             }
             Message::ToggleMetronome => {
-                self.meter.metronome.fetch_not(SeqCst);
+                self.meter.metronome.fetch_not(AcqRel);
             }
         }
 
@@ -182,7 +185,7 @@ impl Daw {
             row![
                 button(
                     Text::new(bootstrap::icon_to_string(
-                        if self.meter.playing.load(SeqCst) {
+                        if self.meter.playing.load(Acquire) {
                             bootstrap::Bootstrap::PauseFill
                         } else {
                             bootstrap::Bootstrap::PlayFill
@@ -200,19 +203,19 @@ impl Daw {
             row![
                 pick_list(
                     Numerator::VARIANTS,
-                    Some(self.meter.numerator.load(SeqCst)),
+                    Some(self.meter.numerator.load(Acquire)),
                     Message::NumeratorChanged
                 )
                 .width(50),
                 pick_list(
                     Denominator::VARIANTS,
-                    Some(self.meter.denominator.load(SeqCst)),
+                    Some(self.meter.denominator.load(Acquire)),
                     Message::DenominatorChanged
                 )
                 .width(50),
             ],
-            number_input(self.meter.bpm.load(SeqCst), 30..=600, Message::BpmChanged).width(50),
-            toggler(self.meter.metronome.load(SeqCst))
+            number_input(self.meter.bpm.load(Acquire), 30..=600, Message::BpmChanged).width(50),
+            toggler(self.meter.metronome.load(Acquire))
                 .label("Metronome")
                 .on_toggle(|_| Message::ToggleMetronome),
             horizontal_space(),
@@ -236,7 +239,7 @@ impl Daw {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        let animate = if self.meter.playing.load(SeqCst) {
+        let animate = if self.meter.playing.load(Acquire) {
             window::frames().map(|_| Message::Animate)
         } else {
             Subscription::none()

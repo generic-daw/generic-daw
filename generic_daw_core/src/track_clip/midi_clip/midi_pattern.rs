@@ -1,6 +1,6 @@
 use crate::{DirtyEvent, MidiNote, Track};
 use atomig::Atomic;
-use std::sync::{atomic::Ordering::SeqCst, Arc};
+use std::sync::{atomic::Ordering::Release, Arc};
 
 #[derive(Debug)]
 pub struct MidiPattern {
@@ -33,18 +33,18 @@ impl MidiPattern {
 
     pub fn push(&mut self, note: MidiNote) {
         self.notes.push(note);
-        self.dirty.store(DirtyEvent::NoteAdded, SeqCst);
+        self.dirty.store(DirtyEvent::NoteAdded, Release);
     }
 
     pub fn remove(&mut self, note: &MidiNote) {
         let pos = self.notes.iter().position(|n| n == note).unwrap();
         self.notes.swap_remove(pos);
-        self.dirty.store(DirtyEvent::NoteRemoved, SeqCst);
+        self.dirty.store(DirtyEvent::NoteRemoved, Release);
     }
 
     pub fn replace(&mut self, note: &MidiNote, new_note: MidiNote) {
         let pos = self.notes.iter().position(|n| n == note).unwrap();
         self.notes[pos] = new_note;
-        self.dirty.store(DirtyEvent::NoteReplaced, SeqCst);
+        self.dirty.store(DirtyEvent::NoteReplaced, Release);
     }
 }

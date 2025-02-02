@@ -12,7 +12,10 @@ use iced::{
 use rfd::FileHandle;
 use std::{
     ops::Deref as _,
-    sync::{atomic::Ordering::SeqCst, Arc},
+    sync::{
+        atomic::Ordering::{AcqRel, Release},
+        Arc,
+    },
 };
 
 #[derive(Clone, Debug)]
@@ -64,13 +67,13 @@ impl Arrangement {
                 self.inner.tracks.read().unwrap()[track]
                     .node
                     .volume
-                    .store(volume, SeqCst);
+                    .store(volume, Release);
             }
             Message::TrackPanChanged(track, pan) => {
                 self.inner.tracks.read().unwrap()[track]
                     .node
                     .pan
-                    .store(pan, SeqCst);
+                    .store(pan, Release);
             }
             Message::LoadedSample(audio_file) => {
                 let track = Track::audio(self.inner.meter.clone());
@@ -96,7 +99,7 @@ impl Arrangement {
                 self.inner.tracks.read().unwrap()[track]
                     .node
                     .enabled
-                    .fetch_not(SeqCst);
+                    .fetch_not(AcqRel);
                 self.soloed_track = None;
             }
             Message::ToggleTrackSolo(track) => {
@@ -107,23 +110,23 @@ impl Arrangement {
                         .read()
                         .unwrap()
                         .iter()
-                        .for_each(|track| track.node.enabled.store(true, SeqCst));
+                        .for_each(|track| track.node.enabled.store(true, Release));
                 } else {
                     self.inner
                         .tracks
                         .read()
                         .unwrap()
                         .iter()
-                        .for_each(|track| track.node.enabled.store(false, SeqCst));
+                        .for_each(|track| track.node.enabled.store(false, Release));
                     self.inner.tracks.read().unwrap()[track]
                         .node
                         .enabled
-                        .store(true, SeqCst);
+                        .store(true, Release);
                     self.soloed_track = Some(track);
                 }
             }
             Message::SeekTo(pos) => {
-                self.inner.meter.sample.store(pos, SeqCst);
+                self.inner.meter.sample.store(pos, Release);
             }
             Message::SelectClip(track, clip) => {
                 self.grabbed_clip = Some([track, clip]);
@@ -239,11 +242,11 @@ impl Arrangement {
                 let left = self.inner.tracks.read().unwrap()[track]
                     .node
                     .max_l
-                    .swap(0.0, SeqCst);
+                    .swap(0.0, AcqRel);
                 let right = self.inner.tracks.read().unwrap()[track]
                     .node
                     .max_r
-                    .swap(0.0, SeqCst);
+                    .swap(0.0, AcqRel);
 
                 container(
                     row![

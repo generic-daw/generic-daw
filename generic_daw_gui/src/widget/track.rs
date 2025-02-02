@@ -13,7 +13,7 @@ use iced::{
 };
 use std::{
     iter::once,
-    sync::{atomic::Ordering::SeqCst, Arc},
+    sync::{atomic::Ordering::Acquire, Arc},
 };
 
 mod track_ext;
@@ -210,7 +210,7 @@ impl<'a, Message> Track<'a, Message> {
         track_panel: impl Fn(usize, bool) -> Element<'a, Message>,
         index: usize,
     ) -> Self {
-        let enabled = inner.node.enabled.load(SeqCst);
+        let enabled = inner.node.enabled.load(Acquire);
 
         let children = once(track_panel(index, enabled))
             .chain(

@@ -6,7 +6,7 @@ use std::{
     sync::{
         atomic::{
             AtomicU64,
-            Ordering::{Relaxed, SeqCst},
+            Ordering::{AcqRel, Acquire, Relaxed},
         },
         mpsc::{Receiver, Sender},
     },
@@ -78,13 +78,13 @@ impl PluginAudioProcessor {
                 &mut output_audio,
                 &input_events,
                 &mut output_events,
-                Some(self.steady_time.load(SeqCst)),
+                Some(self.steady_time.load(Acquire)),
                 None,
             )
             .unwrap();
 
         self.steady_time
-            .fetch_add(u64::from(output_audio.frames_count().unwrap()), SeqCst);
+            .fetch_add(u64::from(output_audio.frames_count().unwrap()), AcqRel);
 
         (output_audio_buffers, output_events_buffer)
     }

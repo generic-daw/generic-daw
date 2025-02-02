@@ -18,7 +18,7 @@ use iced::{
 };
 use std::{
     fmt::{Debug, Formatter},
-    sync::atomic::Ordering::SeqCst,
+    sync::atomic::Ordering::Acquire,
 };
 
 #[derive(Clone, Copy, Default)]
@@ -352,7 +352,7 @@ where
     }
 
     fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-        let numerator = self.inner.meter.numerator.load(SeqCst);
+        let numerator = self.inner.meter.numerator.load(Acquire);
 
         let mut beat =
             Position::from_interleaved_samples(self.position.x as usize, &self.inner.meter).ceil();
@@ -411,7 +411,7 @@ where
         );
 
         let x =
-            (self.inner.meter.sample.load(SeqCst) as f32 - self.position.x) / self.scale.x.exp2();
+            (self.inner.meter.sample.load(Acquire) as f32 - self.position.x) / self.scale.x.exp2();
 
         if x >= 0.0 {
             renderer.fill_quad(
@@ -450,7 +450,7 @@ where
             );
         };
 
-        let numerator = self.inner.meter.numerator.load(SeqCst);
+        let numerator = self.inner.meter.numerator.load(Acquire);
 
         let mut beat =
             Position::from_interleaved_samples(self.position.x as usize, &self.inner.meter)

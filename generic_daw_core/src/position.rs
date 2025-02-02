@@ -3,7 +3,7 @@ use atomig::{Atom, AtomInteger};
 use std::{
     fmt::{Debug, Formatter},
     ops::{Add, AddAssign, Sub, SubAssign},
-    sync::atomic::Ordering::SeqCst,
+    sync::atomic::Ordering::Acquire,
 };
 
 #[derive(Atom, AtomInteger, Clone, Copy, Default, Eq, Ord, PartialEq, PartialOrd)]
@@ -58,8 +58,8 @@ impl Position {
 
     #[must_use]
     pub fn from_interleaved_samples_f(samples: f32, meter: &Meter) -> Self {
-        let global_beat = samples * f32::from(meter.bpm.load(SeqCst))
-            / ((meter.sample_rate.load(SeqCst) * 120) as f32);
+        let global_beat = samples * f32::from(meter.bpm.load(Acquire))
+            / ((meter.sample_rate.load(Acquire) * 120) as f32);
         Self::new(global_beat as u32, (global_beat.fract() * 256.0) as u32)
     }
 
@@ -71,7 +71,7 @@ impl Position {
     #[must_use]
     pub fn in_interleaved_samples_f(self, meter: &Meter) -> f32 {
         seconds_to_interleaved_samples(
-            self.0 as f32 / 256.0 * 60.0 / f32::from(meter.bpm.load(SeqCst)),
+            self.0 as f32 / 256.0 * 60.0 / f32::from(meter.bpm.load(Acquire)),
             meter,
         )
     }
@@ -86,7 +86,7 @@ impl Position {
         let modulo = if scale < 12.0 {
             1 << (scale as u8 - 3)
         } else {
-            (meter.numerator.load(SeqCst) as u32) << 8
+            (meter.numerator.load(Acquire) as u32) << 8
         };
 
         let diff = self.0 % modulo;

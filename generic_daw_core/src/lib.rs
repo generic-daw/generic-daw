@@ -4,7 +4,10 @@ use cpal::{
     StreamConfig,
 };
 use include_data::include_f32s;
-use std::sync::{atomic::Ordering::SeqCst, Arc};
+use std::sync::{
+    atomic::Ordering::{AcqRel, Acquire, Release},
+    Arc,
+};
 
 mod arrangement;
 mod denominator;
@@ -45,7 +48,7 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
     arrangement
         .meter
         .sample_rate
-        .store(config.sample_rate.0, SeqCst);
+        .store(config.sample_rate.0, Release);
 
     arrangement.on_bar_click.get_or_init(|| {
         resample(44100, config.sample_rate.0, ON_BAR_CLICK.into())
@@ -62,10 +65,10 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
         .build_output_stream(
             config,
             move |data, _| {
-                let sample = if arrangement.meter.playing.load(SeqCst) {
-                    arrangement.meter.sample.fetch_add(data.len(), SeqCst)
+                let sample = if arrangement.meter.playing.load(Acquire) {
+                    arrangement.meter.sample.fetch_add(data.len(), AcqRel)
                 } else {
-                    arrangement.meter.sample.load(SeqCst)
+                    arrangement.meter.sample.load(Acquire)
                 };
 
                 arrangement.fill_buf(sample, data);
@@ -85,5 +88,5 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
 
 #[must_use]
 pub fn seconds_to_interleaved_samples(seconds: f32, meter: &Meter) -> f32 {
-    seconds * meter.sample_rate.load(SeqCst) as f32 * 2.0
+    seconds * meter.sample_rate.load(Acquire) as f32 * 2.0
 }

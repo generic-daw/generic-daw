@@ -1,6 +1,9 @@
 use audio_graph::AudioGraphNodeImpl;
 use std::sync::{
-    atomic::{AtomicIsize, Ordering::SeqCst},
+    atomic::{
+        AtomicIsize,
+        Ordering::{AcqRel, Acquire},
+    },
     Arc,
 };
 
@@ -14,7 +17,7 @@ impl AudioGraphNodeImpl for LiveSample {
     fn fill_buf(&self, _: usize, buf: &mut [f32]) {
         let idx = self
             .idx
-            .fetch_add(isize::try_from(buf.len()).unwrap(), SeqCst);
+            .fetch_add(isize::try_from(buf.len()).unwrap(), AcqRel);
 
         let uidx = idx.unsigned_abs();
 
@@ -53,6 +56,6 @@ impl LiveSample {
 
     #[must_use]
     pub fn over(&self) -> bool {
-        self.idx.load(SeqCst) as usize > self.audio.len()
+        self.idx.load(Acquire) as usize > self.audio.len()
     }
 }

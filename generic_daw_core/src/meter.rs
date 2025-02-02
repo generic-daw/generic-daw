@@ -1,6 +1,6 @@
 use crate::{Denominator, Numerator};
 use atomig::Atomic;
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicUsize, Ordering::SeqCst};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicUsize, Ordering::Release};
 
 #[derive(Debug)]
 pub struct Meter {
@@ -38,8 +38,8 @@ impl Default for Meter {
 
 impl Meter {
     pub fn reset(&self) {
-        self.bpm.store(140, SeqCst);
-        self.numerator.store(Numerator::default(), SeqCst);
-        self.denominator.store(Denominator::default(), SeqCst);
+        self.bpm.store(140, Release);
+        self.numerator.store(Numerator::default(), Release);
+        self.denominator.store(Denominator::default(), Release);
     }
 }

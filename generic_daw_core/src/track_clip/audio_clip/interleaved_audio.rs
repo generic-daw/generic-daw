@@ -9,7 +9,7 @@ use std::{
     fmt::{Debug, Formatter},
     fs::File,
     path::PathBuf,
-    sync::{atomic::Ordering::SeqCst, Arc},
+    sync::{atomic::Ordering::Acquire, Arc},
 };
 use symphonia::core::{
     audio::SampleBuffer,
@@ -109,7 +109,7 @@ impl InterleavedAudio {
             interleaved_samples.extend(buf.samples());
         }
 
-        let stream_sample_rate = meter.sample_rate.load(SeqCst);
+        let stream_sample_rate = meter.sample_rate.load(Acquire);
 
         resample(file_sample_rate, stream_sample_rate, interleaved_samples)
     }

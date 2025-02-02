@@ -2,7 +2,10 @@ use crate::{pan, AudioGraphNodeImpl};
 use atomig::Atomic;
 use std::{
     cmp::max_by,
-    sync::atomic::{AtomicBool, Ordering::SeqCst},
+    sync::atomic::{
+        AtomicBool,
+        Ordering::{Acquire, Release},
+    },
 };
 
 #[derive(Debug)]
@@ -33,13 +36,13 @@ impl Default for MixerNode {
 
 impl AudioGraphNodeImpl for MixerNode {
     fn fill_buf(&self, _buf_start_sample: usize, buf: &mut [f32]) {
-        if !self.enabled.load(SeqCst) {
+        if !self.enabled.load(Acquire) {
             buf.iter_mut().for_each(|s| *s = 0.0);
             return;
         }
 
-        let volume = self.volume.load(SeqCst);
-        let [lpan, rpan] = pan(self.pan.load(SeqCst)).map(|s| s * volume);
+        let volume = self.volume.load(Acquire);
+        let [lpan, rpan] = pan(self.pan.load(Acquire)).map(|s| s * volume);
 
         buf.iter_mut()
             .enumerate()
@@ -47,7 +50,7 @@ impl AudioGraphNodeImpl for MixerNode {
 
         self.max_l.store(
             max_by(
-                self.max_l.load(SeqCst),
+                self.max_l.load(Acquire),
                 buf.iter()
                     .step_by(2)
                     .copied()
@@ -56,12 +59,12 @@ impl AudioGraphNodeImpl for MixerNode {
                     .unwrap(),
                 f32::total_cmp,
             ),
-            SeqCst,
+            Release,
         );
 
         self.max_r.store(
             max_by(
-                self.max_r.load(SeqCst),
+                self.max_r.load(Acquire),
                 buf.iter()
                     .skip(1)
                     .step_by(2)
@@ -71,7 +74,7 @@ impl AudioGraphNodeImpl for MixerNode {
                     .unwrap(),
                 f32::total_cmp,
             ),
-            SeqCst,
+            Release,
         );
     }
 }
