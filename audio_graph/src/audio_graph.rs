@@ -108,14 +108,14 @@ impl AudioGraph {
 
     #[must_use]
     pub fn add(&self, node: &AudioGraphNode) -> bool {
-        let AudioGraphInner { g, l, c, .. } = &mut *self.0.lock().unwrap();
+        let AudioGraphInner { root, g, l, c, .. } = &mut *self.0.lock().unwrap();
 
         if g.contains_key(node) {
             false
         } else {
             g.insert(node.clone(), AHashSet::default());
             l.push(node.clone());
-            c.insert(node.clone(), Vec::new());
+            c.insert(node.clone(), Vec::with_capacity(c[root].len()));
 
             true
         }
