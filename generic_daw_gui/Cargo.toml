@@ -10,11 +10,11 @@ workspace = true
 [dependencies]
 generic_daw_core = { path = "../generic_daw_core" }
 
-async-channel = "2.3.1"
 home = "0.5.11"
 iced = { version = "0.13.1", default-features = false, features = [
     "advanced",
     "canvas",
+    "tokio",
     "wgpu",
 ] }
 iced_aw = { version = "0.11.0", default-features = false, features = [
@@ -26,3 +26,4 @@ iced_wgpu = { version = "0.13.5", features = ["geometry"] }
 itoa = "1.0.14"
 rfd = "0.15.2"
 strum = { version = "0.26.3", features = ["derive"] }
+tokio = { version = "1.43.0", features = ["rt"] }
