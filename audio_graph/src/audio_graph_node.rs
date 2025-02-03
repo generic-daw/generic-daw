@@ -29,7 +29,7 @@ impl Eq for AudioGraphNode {}
 
 impl Hash for AudioGraphNode {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        Arc::as_ptr(&self.0).hash(state);
+        Arc::as_ptr(&self.0).addr().hash(state);
     }
 }
 

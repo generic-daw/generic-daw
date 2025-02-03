@@ -12,7 +12,7 @@ pub struct AudioCtx {
 
 impl AudioCtx {
     pub fn create(audio_graph: AudioGraphNode) -> (Self, Producer<AudioCtxMessage>) {
-        let (producer, consumer) = RingBuffer::new(8);
+        let (producer, consumer) = RingBuffer::new(16);
 
         (
             Self {
