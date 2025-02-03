@@ -1,18 +1,9 @@
-use crate::{AudioGraphNode, AudioGraphNodeImpl};
+use crate::{AudioGraphNode, AudioGraphNodeImpl as _};
 use ahash::{AHashMap, AHashSet};
-use std::{cmp::Ordering, sync::Mutex};
-
-#[derive(Debug, Default)]
-pub struct AudioGraph(Mutex<AudioGraphInner>);
-
-impl AudioGraph {
-    pub fn root(&self) -> AudioGraphNode {
-        self.0.lock().unwrap().root.clone()
-    }
-}
+use std::cmp::Ordering;
 
 #[derive(Debug)]
-struct AudioGraphInner {
+pub struct AudioGraph {
     root: AudioGraphNode,
     g: AHashMap<AudioGraphNode, AHashSet<AudioGraphNode>>,
     l: Vec<AudioGraphNode>,
@@ -20,10 +11,9 @@ struct AudioGraphInner {
     dirty: bool,
 }
 
-impl Default for AudioGraphInner {
-    fn default() -> Self {
-        let root = AudioGraphNode::default();
-
+impl AudioGraph {
+    #[must_use]
+    pub fn new(root: AudioGraphNode) -> Self {
         Self {
             root: root.clone(),
             g: AHashMap::from_iter([(root.clone(), AHashSet::default())]),
@@ -32,40 +22,29 @@ impl Default for AudioGraphInner {
             dirty: false,
         }
     }
-}
 
-impl AudioGraphNodeImpl for AudioGraph {
-    fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
-        let AudioGraphInner {
-            root,
-            g,
-            l,
-            c,
-            dirty,
-            ..
-        } = &mut *self.0.lock().unwrap();
+    pub fn fill_buf(&mut self, buf_start_sample: usize, buf: &mut [f32]) {
+        if self.dirty {
+            self.dirty = false;
 
-        if *dirty {
-            *dirty = false;
-
-            l.sort_unstable_by(|lhs, rhs| {
-                if g[lhs].contains(rhs) {
+            self.l.sort_unstable_by(|lhs, rhs| {
+                if self.g[lhs].contains(rhs) {
                     Ordering::Less
                 } else {
                     Ordering::Equal
                 }
             });
 
-            debug_assert_eq!(&l[0], root);
+            debug_assert_eq!(self.l[0], self.root);
         }
 
-        for node in l.iter().rev() {
+        for node in self.l.iter().rev() {
             for s in buf.iter_mut() {
                 *s = 0.0;
             }
 
-            for node in &g[node] {
-                c[node]
+            for node in &self.g[node] {
+                self.c[node]
                     .iter()
                     .zip(buf.iter_mut())
                     .for_each(|(sample, buf)| {
@@ -75,24 +54,20 @@ impl AudioGraphNodeImpl for AudioGraph {
 
             node.fill_buf(buf_start_sample, buf);
 
-            let cbuf = c.get_mut(node).unwrap();
+            let cbuf = self.c.get_mut(node).unwrap();
             cbuf.clear();
             cbuf.extend(&*buf);
         }
     }
-}
 
-impl AudioGraph {
     #[must_use]
-    pub fn connect(&self, from: &AudioGraphNode, to: &AudioGraphNode) -> bool {
-        let AudioGraphInner { g, dirty, .. } = &mut *self.0.lock().unwrap();
-
-        if g.contains_key(to)
-            && g.get(from).is_some_and(|g| !g.contains(to))
-            && !Self::check_cycle(g, &mut AHashSet::with_capacity(g.len()), to, from)
+    pub fn connect(&mut self, from: &AudioGraphNode, to: AudioGraphNode) -> bool {
+        if self.g.contains_key(&to)
+            && self.g.get(from).is_some_and(|g| !g.contains(&to))
+            && !self.check_cycle(&mut AHashSet::with_capacity(self.g.len()), &to, from)
         {
-            g.get_mut(from).unwrap().insert(to.clone());
-            *dirty = true;
+            self.g.get_mut(from).unwrap().insert(to);
+            self.dirty = true;
             true
         } else {
             false
@@ -100,38 +75,34 @@ impl AudioGraph {
     }
 
     #[must_use]
-    pub fn disconnect(&self, from: &AudioGraphNode, to: &AudioGraphNode) -> bool {
-        let AudioGraphInner { g, .. } = &mut *self.0.lock().unwrap();
-
-        g.get_mut(from).is_some_and(|v| v.remove(to))
+    pub fn disconnect(&mut self, from: &AudioGraphNode, to: &AudioGraphNode) -> bool {
+        self.g.get_mut(from).is_some_and(|v| v.remove(to))
     }
 
     #[must_use]
-    pub fn add(&self, node: &AudioGraphNode) -> bool {
-        let AudioGraphInner { root, g, l, c, .. } = &mut *self.0.lock().unwrap();
-
-        if g.contains_key(node) {
+    pub fn add(&mut self, node: AudioGraphNode) -> bool {
+        if self.g.contains_key(&node) {
             false
         } else {
-            g.insert(node.clone(), AHashSet::default());
-            l.push(node.clone());
-            c.insert(node.clone(), Vec::with_capacity(c[root].len()));
+            self.g.insert(node.clone(), AHashSet::default());
+            self.l.push(node.clone());
+            self.c
+                .insert(node, Vec::with_capacity(self.c[&self.root].len()));
 
             true
         }
     }
 
     #[must_use]
-    pub fn remove(&self, node: &AudioGraphNode) -> bool {
-        let AudioGraphInner { root, g, l, c, .. } = &mut *self.0.lock().unwrap();
-        debug_assert_ne!(root, node);
+    pub fn remove(&mut self, node: &AudioGraphNode) -> bool {
+        debug_assert_ne!(&self.root, node);
 
-        if g.remove(node).is_some() {
-            let idx = l.iter().position(|n| n == node).unwrap();
-            l.remove(idx);
-            c.remove(node);
+        if self.g.remove(node).is_some() {
+            let idx = self.l.iter().position(|n| n == node).unwrap();
+            self.l.remove(idx);
+            self.c.remove(node);
 
-            for e in g.values_mut() {
+            for e in self.g.values_mut() {
                 e.remove(node);
             }
 
@@ -142,7 +113,7 @@ impl AudioGraph {
     }
 
     fn check_cycle<'a>(
-        g: &'a AHashMap<AudioGraphNode, AHashSet<AudioGraphNode>>,
+        &'a self,
         visited: &mut AHashSet<&'a AudioGraphNode>,
         current: &AudioGraphNode,
         to: &AudioGraphNode,
@@ -151,14 +122,14 @@ impl AudioGraph {
             return true;
         }
 
-        for current in &g[current] {
+        for current in &self.g[current] {
             if visited.contains(current) {
                 continue;
             }
 
             visited.insert(current);
 
-            if Self::check_cycle(g, visited, current, to) {
+            if self.check_cycle(visited, current, to) {
                 return true;
             }
         }

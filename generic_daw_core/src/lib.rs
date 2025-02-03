@@ -1,15 +1,17 @@
-use audio_graph::AudioGraphNodeImpl as _;
+use audio_ctx::AudioCtx;
 use cpal::{
     traits::{DeviceTrait as _, HostTrait as _},
     StreamConfig,
 };
 use include_data::include_f32s;
+use rtrb::Producer;
 use std::sync::{
     atomic::Ordering::{AcqRel, Acquire, Release},
     Arc,
 };
 
 mod arrangement;
+mod audio_ctx;
 mod denominator;
 mod live_sample;
 mod meter;
@@ -19,6 +21,7 @@ mod track;
 mod track_clip;
 
 pub use arrangement::Arrangement;
+pub use audio_ctx::AudioCtxMessage;
 pub use audio_graph;
 pub use clap_host;
 pub use cpal::{traits::StreamTrait, Stream};
@@ -27,6 +30,7 @@ pub use live_sample::LiveSample;
 pub use meter::Meter;
 pub use numerator::Numerator;
 pub use position::Position;
+pub use rtrb;
 pub(crate) use track::DirtyEvent;
 pub use track::Track;
 pub use track_clip::{
@@ -41,7 +45,7 @@ pub use track_clip::{
 static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
 static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 
-pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
+pub fn build_output_stream(arrangement: Arc<Arrangement>) -> (Stream, Producer<AudioCtxMessage>) {
     let device = cpal::default_host().default_output_device().unwrap();
     let config: &StreamConfig = &device.default_output_config().unwrap().into();
 
@@ -61,17 +65,20 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
             .into()
     });
 
+    let meter = arrangement.meter.clone();
+    let (mut ctx, producer) = AudioCtx::new(arrangement.into());
+
     let stream = device
         .build_output_stream(
             config,
             move |data, _| {
-                let sample = if arrangement.meter.playing.load(Acquire) {
-                    arrangement.meter.sample.fetch_add(data.len(), AcqRel)
+                let sample = if meter.playing.load(Acquire) {
+                    meter.sample.fetch_add(data.len(), AcqRel)
                 } else {
-                    arrangement.meter.sample.load(Acquire)
+                    meter.sample.load(Acquire)
                 };
 
-                arrangement.fill_buf(sample, data);
+                ctx.fill_buf(sample, data);
 
                 for s in data {
                     *s = s.clamp(-1.0, 1.0);
@@ -83,7 +90,7 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> Stream {
         .unwrap();
     stream.play().unwrap();
 
-    stream
+    (stream, producer)
 }
 
 #[must_use]

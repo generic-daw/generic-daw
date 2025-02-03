@@ -4,7 +4,6 @@ use crate::{
     widget::VSplit,
 };
 use generic_daw_core::{
-    build_output_stream,
     clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, open_gui},
     Arrangement as ArrangementInner, Denominator, InterleavedAudio, Meter, Numerator,
 };
@@ -61,9 +60,8 @@ pub struct Daw {
 impl Default for Daw {
     fn default() -> Self {
         let arrangement = Arc::new(ArrangementInner::default());
-        let stream = build_output_stream(arrangement.clone());
         let meter = arrangement.meter.clone();
-        let arrangement = Arrangement::new(arrangement, stream);
+        let arrangement = Arrangement::new(arrangement);
 
         Self {
             arrangement,

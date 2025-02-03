@@ -2,8 +2,9 @@ use crate::widget::{
     Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob, PeakMeter,
 };
 use generic_daw_core::{
-    Arrangement as ArrangementInner, AudioClip, InterleavedAudio, Position, Stream,
-    StreamTrait as _, Track,
+    audio_graph::AudioGraphNode, build_output_stream, rtrb::Producer,
+    Arrangement as ArrangementInner, AudioClip, AudioCtxMessage, InterleavedAudio, Position,
+    Stream, StreamTrait as _, Track,
 };
 use iced::{
     widget::{column, container, container::Style, mouse_area, radio, row},
@@ -40,22 +41,27 @@ pub enum Message {
 
 pub struct Arrangement {
     inner: Arc<ArrangementInner>,
+    producer: Producer<AudioCtxMessage>,
+    stream: Stream,
+
     position: ArrangementPosition,
     scale: ArrangementScale,
     soloed_track: Option<usize>,
     grabbed_clip: Option<[usize; 2]>,
-    stream: Stream,
 }
 
 impl Arrangement {
-    pub fn new(inner: Arc<ArrangementInner>, stream: Stream) -> Self {
+    pub fn new(inner: Arc<ArrangementInner>) -> Self {
+        let (stream, producer) = build_output_stream(inner.clone());
+
         Self {
             inner,
+            producer,
+            stream,
             position: ArrangementPosition::default(),
             scale: ArrangementScale::default(),
             soloed_track: None,
             grabbed_clip: None,
-            stream,
         }
     }
 
@@ -85,15 +91,13 @@ impl Arrangement {
                     .push(AudioClip::create(audio_file, self.inner.meter.clone()));
                 self.inner.tracks.write().unwrap().push(track.clone());
 
-                let node = track.into();
-                let mut ok = true;
-                ok &= self.inner.audio_graph.add(&node);
-                ok &= self
-                    .inner
-                    .audio_graph
-                    .connect(&self.inner.audio_graph.root(), &node);
-
-                debug_assert!(ok);
+                let node: AudioGraphNode = track.into();
+                self.producer
+                    .push(AudioCtxMessage::Add(node.clone()))
+                    .unwrap();
+                self.producer
+                    .push(AudioCtxMessage::Connect(self.inner.clone().into(), node))
+                    .unwrap();
             }
             Message::ToggleTrackEnabled(track) => {
                 self.inner.tracks.read().unwrap()[track]
