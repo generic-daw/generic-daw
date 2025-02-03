@@ -84,19 +84,19 @@ impl AudioGraphNodeImpl for AudioGraph {
 
 impl AudioGraph {
     #[must_use]
-    /// for now it's the caller's responsibility to make sure the graph stays acyclic
     pub fn connect(&self, from: &AudioGraphNode, to: &AudioGraphNode) -> bool {
-        let AudioGraphInner { root, g, dirty, .. } = &mut *self.0.lock().unwrap();
-        debug_assert_ne!(to, root);
+        let AudioGraphInner { g, dirty, .. } = &mut *self.0.lock().unwrap();
 
-        g.get_mut(from).is_some_and(|v| {
-            if v.insert(to.clone()) {
-                *dirty = true;
-                true
-            } else {
-                false
-            }
-        })
+        if g.contains_key(to)
+            && g.get(from).is_some_and(|g| !g.contains(to))
+            && !Self::check_cycle(g, &mut AHashSet::with_capacity(g.len()), to, from)
+        {
+            g.get_mut(from).unwrap().insert(to.clone());
+            *dirty = true;
+            true
+        } else {
+            false
+        }
     }
 
     #[must_use]
@@ -139,5 +139,30 @@ impl AudioGraph {
         } else {
             false
         }
+    }
+
+    fn check_cycle<'a>(
+        g: &'a AHashMap<AudioGraphNode, AHashSet<AudioGraphNode>>,
+        visited: &mut AHashSet<&'a AudioGraphNode>,
+        current: &AudioGraphNode,
+        to: &AudioGraphNode,
+    ) -> bool {
+        if current == to {
+            return true;
+        }
+
+        for current in &g[current] {
+            if visited.contains(current) {
+                continue;
+            }
+
+            visited.insert(current);
+
+            if Self::check_cycle(g, visited, current, to) {
+                return true;
+            }
+        }
+
+        false
     }
 }
