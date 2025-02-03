@@ -3,10 +3,9 @@ use cpal::{
     traits::{DeviceTrait as _, HostTrait as _},
     StreamConfig,
 };
-use include_data::include_f32s;
 use rtrb::Producer;
 use std::sync::{
-    atomic::Ordering::{AcqRel, Acquire, Release},
+    atomic::Ordering::{AcqRel, Acquire},
     Arc,
 };
 
@@ -42,31 +41,14 @@ pub use track_clip::{
     TrackClip,
 };
 
-static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
-static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
-
-pub fn build_output_stream(arrangement: Arc<Arrangement>) -> (Stream, Producer<AudioCtxMessage>) {
+pub fn build_output_stream() -> (Stream, Producer<AudioCtxMessage>, Arc<Arrangement>) {
     let device = cpal::default_host().default_output_device().unwrap();
     let config: &StreamConfig = &device.default_output_config().unwrap().into();
 
-    arrangement
-        .meter
-        .sample_rate
-        .store(config.sample_rate.0, Release);
-
-    arrangement.on_bar_click.get_or_init(|| {
-        resample(44100, config.sample_rate.0, ON_BAR_CLICK.into())
-            .unwrap()
-            .into()
-    });
-    arrangement.off_bar_click.get_or_init(|| {
-        resample(44100, config.sample_rate.0, OFF_BAR_CLICK.into())
-            .unwrap()
-            .into()
-    });
-
+    let arrangement = Arc::new(Arrangement::new(config.sample_rate.0));
+    let node = arrangement.clone().into();
+    let (mut ctx, producer) = AudioCtx::create(node);
     let meter = arrangement.meter.clone();
-    let (mut ctx, producer) = AudioCtx::new(arrangement.into());
 
     let stream = device
         .build_output_stream(
@@ -90,7 +72,7 @@ pub fn build_output_stream(arrangement: Arc<Arrangement>) -> (Stream, Producer<A
         .unwrap();
     stream.play().unwrap();
 
-    (stream, producer)
+    (stream, producer, arrangement)
 }
 
 #[must_use]

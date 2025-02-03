@@ -78,7 +78,7 @@ fn standard_clap_paths() -> Vec<PathBuf> {
     {
         paths.push(home_dir().unwrap().join("Library/Audio/Plug-Ins/CLAP"));
 
-        paths.push(PathBuf::from("/Library/Audio/Plug-Ins/CLAP"));
+        paths.push("/Library/Audio/Plug-Ins/CLAP".into());
     }
 
     #[cfg(target_os = "linux")]

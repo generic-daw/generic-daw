@@ -3,7 +3,7 @@ use crate::widget::{
 };
 use generic_daw_core::{
     audio_graph::AudioGraphNode, build_output_stream, rtrb::Producer,
-    Arrangement as ArrangementInner, AudioClip, AudioCtxMessage, InterleavedAudio, Position,
+    Arrangement as ArrangementInner, AudioClip, AudioCtxMessage, InterleavedAudio, Meter, Position,
     Stream, StreamTrait as _, Track,
 };
 use iced::{
@@ -40,7 +40,7 @@ pub enum Message {
 }
 
 pub struct Arrangement {
-    inner: Arc<ArrangementInner>,
+    arrangement: Arc<ArrangementInner>,
     producer: Producer<AudioCtxMessage>,
     stream: Stream,
 
@@ -51,18 +51,21 @@ pub struct Arrangement {
 }
 
 impl Arrangement {
-    pub fn new(inner: Arc<ArrangementInner>) -> Self {
-        let (stream, producer) = build_output_stream(inner.clone());
+    pub fn create() -> (Arc<Meter>, Self) {
+        let (stream, producer, arrangement) = build_output_stream();
 
-        Self {
-            inner,
-            producer,
-            stream,
-            position: ArrangementPosition::default(),
-            scale: ArrangementScale::default(),
-            soloed_track: None,
-            grabbed_clip: None,
-        }
+        (
+            arrangement.meter.clone(),
+            Self {
+                arrangement,
+                producer,
+                stream,
+                position: ArrangementPosition::default(),
+                scale: ArrangementScale::default(),
+                soloed_track: None,
+                grabbed_clip: None,
+            },
+        )
     }
 
     #[expect(clippy::too_many_lines)]
@@ -70,37 +73,39 @@ impl Arrangement {
         match message {
             Message::Animate() => {}
             Message::TrackVolumeChanged(track, volume) => {
-                self.inner.tracks.read().unwrap()[track]
+                self.arrangement.tracks.read().unwrap()[track]
                     .node
                     .volume
                     .store(volume, Release);
             }
             Message::TrackPanChanged(track, pan) => {
-                self.inner.tracks.read().unwrap()[track]
+                self.arrangement.tracks.read().unwrap()[track]
                     .node
                     .pan
                     .store(pan, Release);
             }
             Message::LoadedSample(audio_file) => {
-                let track = Track::audio(self.inner.meter.clone());
+                let track = Track::audio(self.arrangement.meter.clone());
 
-                track
-                    .clips
-                    .write()
-                    .unwrap()
-                    .push(AudioClip::create(audio_file, self.inner.meter.clone()));
-                self.inner.tracks.write().unwrap().push(track.clone());
+                track.clips.write().unwrap().push(AudioClip::create(
+                    audio_file,
+                    self.arrangement.meter.clone(),
+                ));
+                self.arrangement.tracks.write().unwrap().push(track.clone());
 
                 let node: AudioGraphNode = track.into();
                 self.producer
                     .push(AudioCtxMessage::Add(node.clone()))
                     .unwrap();
                 self.producer
-                    .push(AudioCtxMessage::Connect(self.inner.clone().into(), node))
+                    .push(AudioCtxMessage::Connect(
+                        self.arrangement.clone().into(),
+                        node,
+                    ))
                     .unwrap();
             }
             Message::ToggleTrackEnabled(track) => {
-                self.inner.tracks.read().unwrap()[track]
+                self.arrangement.tracks.read().unwrap()[track]
                     .node
                     .enabled
                     .fetch_not(AcqRel);
@@ -109,20 +114,20 @@ impl Arrangement {
             Message::ToggleTrackSolo(track) => {
                 if self.soloed_track.is_some_and(|s| s == track) {
                     self.soloed_track = None;
-                    self.inner
+                    self.arrangement
                         .tracks
                         .read()
                         .unwrap()
                         .iter()
                         .for_each(|track| track.node.enabled.store(true, Release));
                 } else {
-                    self.inner
+                    self.arrangement
                         .tracks
                         .read()
                         .unwrap()
                         .iter()
                         .for_each(|track| track.node.enabled.store(false, Release));
-                    self.inner.tracks.read().unwrap()[track]
+                    self.arrangement.tracks.read().unwrap()[track]
                         .node
                         .enabled
                         .store(true, Release);
@@ -130,56 +135,56 @@ impl Arrangement {
                 }
             }
             Message::SeekTo(pos) => {
-                self.inner.meter.sample.store(pos, Release);
+                self.arrangement.meter.sample.store(pos, Release);
             }
             Message::SelectClip(track, clip) => {
                 self.grabbed_clip = Some([track, clip]);
             }
             Message::UnselectClip() => self.grabbed_clip = None,
-            Message::CloneClip(track, mut clip) => {
-                let inner = self.inner.tracks.read().unwrap()[track]
+            Message::CloneClip(track, mut clip_idx) => {
+                let clip = self.arrangement.tracks.read().unwrap()[track]
                     .clips
                     .read()
-                    .unwrap()[clip]
+                    .unwrap()[clip_idx]
                     .deref()
                     .clone();
-                self.inner.tracks.read().unwrap()[track]
+                self.arrangement.tracks.read().unwrap()[track]
                     .clips
                     .write()
                     .unwrap()
-                    .push(Arc::new(inner));
-                clip = self.inner.tracks.read().unwrap()[track]
+                    .push(Arc::new(clip));
+                clip_idx = self.arrangement.tracks.read().unwrap()[track]
                     .clips
                     .read()
                     .unwrap()
                     .len()
                     - 1;
-                self.grabbed_clip.replace([track, clip]);
+                self.grabbed_clip.replace([track, clip_idx]);
             }
             Message::MoveClipTo(new_track, pos) => {
                 let [track, clip] = self.grabbed_clip.as_mut().unwrap();
                 if *track != new_track
-                    && self.inner.tracks.read().unwrap()[new_track].try_push(
-                        &self.inner.tracks.read().unwrap()[*track]
+                    && self.arrangement.tracks.read().unwrap()[new_track].try_push(
+                        &self.arrangement.tracks.read().unwrap()[*track]
                             .clips
                             .read()
                             .unwrap()[*clip],
                     )
                 {
-                    self.inner.tracks.read().unwrap()[*track]
+                    self.arrangement.tracks.read().unwrap()[*track]
                         .clips
                         .write()
                         .unwrap()
                         .remove(*clip);
                     *track = new_track;
-                    *clip = self.inner.tracks.read().unwrap()[*track]
+                    *clip = self.arrangement.tracks.read().unwrap()[*track]
                         .clips
                         .read()
                         .unwrap()
                         .len()
                         - 1;
                 }
-                self.inner.tracks.read().unwrap()[*track]
+                self.arrangement.tracks.read().unwrap()[*track]
                     .clips
                     .read()
                     .unwrap()[*clip]
@@ -187,7 +192,7 @@ impl Arrangement {
             }
             Message::TrimClipStart(pos) => {
                 let [track, clip] = self.grabbed_clip.unwrap();
-                self.inner.tracks.read().unwrap()[track]
+                self.arrangement.tracks.read().unwrap()[track]
                     .clips
                     .read()
                     .unwrap()[clip]
@@ -195,14 +200,14 @@ impl Arrangement {
             }
             Message::TrimClipEnd(pos) => {
                 let [track, clip] = self.grabbed_clip.unwrap();
-                self.inner.tracks.read().unwrap()[track]
+                self.arrangement.tracks.read().unwrap()[track]
                     .clips
                     .read()
                     .unwrap()[clip]
                     .trim_end_to(pos);
             }
             Message::DeleteClip(track, clip) => {
-                self.inner.tracks.read().unwrap()[track]
+                self.arrangement.tracks.read().unwrap()[track]
                     .clips
                     .write()
                     .unwrap()
@@ -222,14 +227,22 @@ impl Arrangement {
                 if pd {
                     self.position += pos;
                     self.position = self.position.clamp(
-                        self.inner.len().in_interleaved_samples_f(&self.inner.meter),
-                        (self.inner.tracks.read().unwrap().len().saturating_sub(1)) as f32,
+                        self.arrangement
+                            .len()
+                            .in_interleaved_samples_f(&self.arrangement.meter),
+                        (self
+                            .arrangement
+                            .tracks
+                            .read()
+                            .unwrap()
+                            .len()
+                            .saturating_sub(1)) as f32,
                     );
                 }
             }
             Message::Export(path) => {
                 self.stream.pause().unwrap();
-                self.inner.export(path.path());
+                self.arrangement.export(path.path());
                 self.stream.play().unwrap();
             }
         }
@@ -239,15 +252,15 @@ impl Arrangement {
 
     pub fn view(&self) -> Element<'_, Message> {
         ArrangementWidget::new(
-            &self.inner,
+            &self.arrangement,
             self.position,
             self.scale,
             |track, enabled| {
-                let left = self.inner.tracks.read().unwrap()[track]
+                let left = self.arrangement.tracks.read().unwrap()[track]
                     .node
                     .max_l
                     .swap(0.0, AcqRel);
-                let right = self.inner.tracks.read().unwrap()[track]
+                let right = self.arrangement.tracks.read().unwrap()[track]
                     .node
                     .max_r
                     .swap(0.0, AcqRel);

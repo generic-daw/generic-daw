@@ -5,7 +5,7 @@ use crate::{
 };
 use generic_daw_core::{
     clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, open_gui},
-    Arrangement as ArrangementInner, Denominator, InterleavedAudio, Meter, Numerator,
+    Denominator, InterleavedAudio, Meter, Numerator,
 };
 use home::home_dir;
 use iced::{
@@ -59,9 +59,7 @@ pub struct Daw {
 
 impl Default for Daw {
     fn default() -> Self {
-        let arrangement = Arc::new(ArrangementInner::default());
-        let meter = arrangement.meter.clone();
-        let arrangement = Arrangement::new(arrangement);
+        let (meter, arrangement) = Arrangement::create();
 
         Self {
             arrangement,

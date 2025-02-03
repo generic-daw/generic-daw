@@ -1,13 +1,17 @@
-use crate::{LiveSample, Meter, Position, Track};
+use crate::{resample, LiveSample, Meter, Position, Track};
 use audio_graph::AudioGraphNodeImpl;
 use hound::WavWriter;
+use include_data::include_f32s;
 use std::{
     path::Path,
     sync::{
         atomic::Ordering::{AcqRel, Acquire, Release},
-        Arc, OnceLock, RwLock,
+        Arc, RwLock,
     },
 };
+
+static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
+static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 
 #[derive(Debug, Default)]
 pub struct Arrangement {
@@ -17,8 +21,8 @@ pub struct Arrangement {
     pub meter: Arc<Meter>,
     /// samples that are being played back live, that are not part of the arrangement
     pub live_sample_playback: RwLock<Vec<LiveSample>>,
-    pub(crate) on_bar_click: OnceLock<Arc<[f32]>>,
-    pub(crate) off_bar_click: OnceLock<Arc<[f32]>>,
+    pub(crate) on_bar_click: Arc<[f32]>,
+    pub(crate) off_bar_click: Arc<[f32]>,
 }
 
 impl AudioGraphNodeImpl for Arrangement {
@@ -39,9 +43,9 @@ impl AudioGraphNodeImpl for Arrangement {
                     % self.meter.numerator.load(Acquire) as u32
                     == 0
                 {
-                    self.on_bar_click.get().unwrap().clone()
+                    self.on_bar_click.clone()
                 } else {
-                    self.off_bar_click.get().unwrap().clone()
+                    self.off_bar_click.clone()
                 };
 
                 let click = LiveSample::new(click, diff);
@@ -66,6 +70,20 @@ impl AudioGraphNodeImpl for Arrangement {
 }
 
 impl Arrangement {
+    pub(crate) fn new(sample_rate: u32) -> Self {
+        Self {
+            tracks: RwLock::default(),
+            meter: Arc::new(Meter::new(sample_rate)),
+            live_sample_playback: RwLock::default(),
+            on_bar_click: resample(44100, sample_rate, ON_BAR_CLICK.into())
+                .unwrap()
+                .into(),
+            off_bar_click: resample(44100, sample_rate, OFF_BAR_CLICK.into())
+                .unwrap()
+                .into(),
+        }
+    }
+
     #[must_use]
     pub fn len(&self) -> Position {
         self.tracks
