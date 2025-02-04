@@ -1,4 +1,5 @@
 use crate::{resample, LiveSample, Meter, Position, Track};
+use arraydeque::{ArrayDeque, Wrapping};
 use audio_graph::AudioGraphNodeImpl;
 use hound::WavWriter;
 use include_data::include_f32s;
@@ -20,7 +21,9 @@ pub struct Arrangement {
     /// information relating to the playback of the arrangement
     pub meter: Arc<Meter>,
     /// samples that are being played back live, that are not part of the arrangement
-    pub live_sample_playback: RwLock<Vec<LiveSample>>,
+    ///
+    /// at most two should exist at once: the metronome and a potential user-controlled sample
+    pub live_sample_playback: RwLock<ArrayDeque<LiveSample, 2, Wrapping>>,
     pub(crate) on_bar_click: Arc<[f32]>,
     pub(crate) off_bar_click: Arc<[f32]>,
 }
@@ -50,22 +53,17 @@ impl AudioGraphNodeImpl for Arrangement {
 
                 let click = LiveSample::new(click, diff);
 
-                self.live_sample_playback.write().unwrap().push(click);
+                self.live_sample_playback.write().unwrap().push_back(click);
             }
         }
 
         self.live_sample_playback
-            .write()
+            .read()
             .unwrap()
-            .iter_mut()
+            .iter()
             .for_each(|s| {
                 s.fill_buf(buf_start_sample, buf);
             });
-
-        self.live_sample_playback
-            .write()
-            .unwrap()
-            .retain(|sample| !sample.over());
     }
 }
 
