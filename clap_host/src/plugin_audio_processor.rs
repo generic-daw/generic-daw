@@ -21,7 +21,7 @@ pub struct PluginAudioProcessor {
 
 impl Debug for PluginAudioProcessor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AudioProcessor")
+        f.debug_struct("PluginAudioProcessor")
             .field("steady_time", &self.steady_time.load(Relaxed))
             .field("sender", &self.sender)
             .field("receiver", &self.receiver)

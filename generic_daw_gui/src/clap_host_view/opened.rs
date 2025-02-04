@@ -11,7 +11,7 @@ pub struct Opened {
 
 impl Debug for Opened {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OpenedMessage")
+        f.debug_struct("Opened")
             .field("id", &self.id)
             .field("host_audio_processor", &self.host_audio_processor)
             .field("plugin_audio_processor", &self.plugin_audio_processor)

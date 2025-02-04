@@ -25,7 +25,7 @@ pub struct Arrangement {
 
 impl Debug for Arrangement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ArrangementWrapper")
+        f.debug_struct("Arrangement")
             .field("tracks", &self.tracks)
             .field("producer", &self.producer)
             .field("meter", &self.meter)
