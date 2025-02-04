@@ -1,22 +1,34 @@
-use crate::{AudioGraphNode, AudioGraphNodeImpl as _};
+use crate::{node_id::NodeId, AudioGraphNode};
 use ahash::{AHashMap, AHashSet};
 use std::cmp::Ordering;
 
 #[derive(Debug)]
 pub struct AudioGraph {
-    g: AHashMap<AudioGraphNode, AHashSet<AudioGraphNode>>,
-    l: Vec<AudioGraphNode>,
-    c: AHashMap<AudioGraphNode, Vec<f32>>,
+    g: AHashMap<NodeId, AudioGraphEntry>,
+    l: Vec<NodeId>,
     dirty: bool,
+}
+
+#[derive(Debug)]
+struct AudioGraphEntry {
+    pub node: AudioGraphNode,
+    pub connections: AHashSet<NodeId>,
+    pub cache: Vec<f32>,
 }
 
 impl AudioGraph {
     #[must_use]
-    pub fn new(root: AudioGraphNode) -> Self {
+    pub fn new(node: AudioGraphNode) -> Self {
+        let id = node.id();
+        let entry = AudioGraphEntry {
+            node,
+            connections: AHashSet::default(),
+            cache: Vec::new(),
+        };
+
         Self {
-            g: AHashMap::from_iter([(root.clone(), AHashSet::default())]),
-            l: vec![root.clone()],
-            c: AHashMap::from_iter([(root, Vec::new())]),
+            g: AHashMap::from_iter([(id, entry)]),
+            l: vec![id],
             dirty: false,
         }
     }
@@ -26,7 +38,7 @@ impl AudioGraph {
             self.dirty = false;
 
             self.l.sort_unstable_by(|lhs, rhs| {
-                if self.g[lhs].contains(rhs) {
+                if self.g[lhs].connections.contains(rhs) {
                     Ordering::Less
                 } else {
                     Ordering::Equal
@@ -39,8 +51,9 @@ impl AudioGraph {
                 *s = 0.0;
             }
 
-            for node in &self.g[node] {
-                self.c[node]
+            for node in &self.g[node].connections {
+                self.g[node]
+                    .cache
                     .iter()
                     .zip(buf.iter_mut())
                     .for_each(|(sample, buf)| {
@@ -48,21 +61,24 @@ impl AudioGraph {
                     });
             }
 
-            node.fill_buf(buf_start_sample, buf);
+            self.g[node].node.fill_buf(buf_start_sample, buf);
 
-            let cbuf = self.c.get_mut(node).unwrap();
+            let cbuf = &mut self.g.get_mut(node).unwrap().cache;
             cbuf.clear();
             cbuf.extend(&*buf);
         }
     }
 
     #[must_use]
-    pub fn connect(&mut self, from: &AudioGraphNode, to: AudioGraphNode) -> bool {
+    pub fn connect(&mut self, from: NodeId, to: NodeId) -> bool {
         if self.g.contains_key(&to)
-            && self.g.get(from).is_some_and(|g| !g.contains(&to))
-            && !self.check_cycle(&mut AHashSet::with_capacity(self.g.len()), &to, from)
+            && self
+                .g
+                .get(&from)
+                .is_some_and(|g| !g.connections.contains(&to))
+            && !self.check_cycle(&mut AHashSet::with_capacity(self.g.len()), to, from)
         {
-            self.g.get_mut(from).unwrap().insert(to);
+            self.g.get_mut(&from).unwrap().connections.insert(to);
             self.dirty = true;
             true
         } else {
@@ -71,35 +87,43 @@ impl AudioGraph {
     }
 
     #[must_use]
-    pub fn disconnect(&mut self, from: &AudioGraphNode, to: &AudioGraphNode) -> bool {
-        self.g.get_mut(from).is_some_and(|v| v.remove(to))
+    pub fn disconnect(&mut self, from: NodeId, to: NodeId) -> bool {
+        self.g
+            .get_mut(&from)
+            .is_some_and(|g| g.connections.remove(&to))
     }
 
     #[must_use]
     pub fn add(&mut self, node: AudioGraphNode) -> bool {
-        if self.g.contains_key(&node) {
+        let id = node.id();
+
+        if self.g.contains_key(&id) {
             false
         } else {
-            self.g.insert(node.clone(), AHashSet::default());
-            self.l.push(node.clone());
-            self.c
-                .insert(node, Vec::with_capacity(self.c[&self.l[0]].len()));
+            let entry = AudioGraphEntry {
+                node,
+                connections: AHashSet::default(),
+                cache: Vec::new(),
+            };
+
+            self.g.insert(id, entry);
+            self.l.push(id);
 
             true
         }
     }
 
     #[must_use]
-    pub fn remove(&mut self, node: &AudioGraphNode) -> bool {
-        debug_assert_ne!(&self.l[0], node);
+    pub fn remove(&mut self, node: NodeId) -> bool {
+        debug_assert_ne!(self.l[0], node);
 
-        if self.g.remove(node).is_some() {
-            let idx = self.l.iter().position(|n| n == node).unwrap();
-            self.l.remove(idx);
-            self.c.remove(node);
+        if self.g.remove(&node).is_some() {
+            self.g.remove(&node);
+            self.l
+                .remove(self.l.iter().position(|&n| n == node).unwrap());
 
-            for e in self.g.values_mut() {
-                e.remove(node);
+            for g in self.g.values_mut() {
+                g.connections.remove(&node);
             }
 
             true
@@ -108,24 +132,19 @@ impl AudioGraph {
         }
     }
 
-    fn check_cycle<'a>(
-        &'a self,
-        visited: &mut AHashSet<&'a AudioGraphNode>,
-        current: &AudioGraphNode,
-        to: &AudioGraphNode,
-    ) -> bool {
+    fn check_cycle(&self, visited: &mut AHashSet<NodeId>, current: NodeId, to: NodeId) -> bool {
         if current == to {
             return true;
         }
 
-        for current in &self.g[current] {
+        for current in &self.g[&current].connections {
             if visited.contains(current) {
                 continue;
             }
 
-            visited.insert(current);
+            visited.insert(*current);
 
-            if self.check_cycle(visited, current, to) {
+            if self.check_cycle(visited, *current, to) {
                 return true;
             }
         }

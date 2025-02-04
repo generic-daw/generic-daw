@@ -2,7 +2,7 @@ use crate::widget::{
     Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob, PeakMeter,
 };
 use generic_daw_core::{
-    audio_graph::AudioGraphNode, build_output_stream, rtrb::Producer,
+    audio_graph::AudioGraphNodeImpl as _, build_output_stream, rtrb::Producer,
     Arrangement as ArrangementInner, AudioClip, AudioCtxMessage, InterleavedAudio, Meter, Position,
     Stream, StreamTrait as _, Track,
 };
@@ -93,15 +93,12 @@ impl Arrangement {
                 ));
                 self.arrangement.tracks.write().unwrap().push(track.clone());
 
-                let node: AudioGraphNode = track.into();
+                let id = track.id();
                 self.producer
-                    .push(AudioCtxMessage::Add(node.clone()))
+                    .push(AudioCtxMessage::Add(track.into()))
                     .unwrap();
                 self.producer
-                    .push(AudioCtxMessage::Connect(
-                        self.arrangement.clone().into(),
-                        node,
-                    ))
+                    .push(AudioCtxMessage::Connect(self.arrangement.id(), id))
                     .unwrap();
             }
             Message::ToggleTrackEnabled(track) => {

@@ -1,6 +1,6 @@
 use crate::{resample, LiveSample, Meter, Position, Track};
 use arraydeque::{ArrayDeque, Wrapping};
-use audio_graph::AudioGraphNodeImpl;
+use audio_graph::{AudioGraphNodeImpl, NodeId};
 use hound::WavWriter;
 use include_data::include_f32s;
 use std::{
@@ -14,8 +14,9 @@ use std::{
 static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
 static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Arrangement {
+    id: NodeId,
     /// an in-order list of all the playlist tracks in the arrangement
     pub tracks: RwLock<Vec<Arc<Track>>>,
     /// information relating to the playback of the arrangement
@@ -65,11 +66,16 @@ impl AudioGraphNodeImpl for Arrangement {
                 s.fill_buf(buf_start_sample, buf);
             });
     }
+
+    fn id(&self) -> NodeId {
+        self.id
+    }
 }
 
 impl Arrangement {
     pub(crate) fn new(sample_rate: u32) -> Self {
         Self {
+            id: NodeId::unique(),
             tracks: RwLock::default(),
             meter: Arc::new(Meter::new(sample_rate)),
             live_sample_playback: RwLock::default(),

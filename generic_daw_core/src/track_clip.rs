@@ -1,6 +1,5 @@
 use crate::{Meter, Position};
 use audio_clip::AudioClip;
-use audio_graph::AudioGraphNodeImpl;
 use midi_clip::MidiClip;
 
 pub mod audio_clip;
@@ -12,16 +11,14 @@ pub enum TrackClip {
     Midi(MidiClip),
 }
 
-impl AudioGraphNodeImpl for TrackClip {
-    fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
+impl TrackClip {
+    pub fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         match self {
             Self::Audio(audio) => audio.fill_buf(buf_start_sample, buf),
             Self::Midi(_) => unimplemented!(),
         }
     }
-}
 
-impl TrackClip {
     #[must_use]
     pub fn get_name(&self) -> String {
         match self {

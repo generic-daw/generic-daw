@@ -1,4 +1,4 @@
-use crate::{pan, AudioGraphNodeImpl};
+use crate::{pan, AudioGraphNodeImpl, NodeId};
 use atomig::Atomic;
 use std::{
     cmp::max_by,
@@ -10,6 +10,7 @@ use std::{
 
 #[derive(Debug)]
 pub struct MixerNode {
+    id: NodeId,
     /// 0 <= volume
     pub volume: Atomic<f32>,
     /// -1 <= pan <= 1
@@ -25,6 +26,7 @@ pub struct MixerNode {
 impl Default for MixerNode {
     fn default() -> Self {
         Self {
+            id: NodeId::unique(),
             volume: Atomic::new(1.0),
             pan: Atomic::default(),
             enabled: AtomicBool::new(true),
@@ -76,5 +78,9 @@ impl AudioGraphNodeImpl for MixerNode {
                 Some(max_by(max_r, cur_r, f32::total_cmp))
             })
             .unwrap();
+    }
+
+    fn id(&self) -> NodeId {
+        self.id
     }
 }

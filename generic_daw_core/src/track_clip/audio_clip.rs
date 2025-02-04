@@ -1,6 +1,5 @@
 use crate::{Meter, Position, TrackClip};
 use atomig::Atomic;
-use audio_graph::AudioGraphNodeImpl;
 use interleaved_audio::InterleavedAudio;
 use std::sync::{
     atomic::Ordering::{AcqRel, Acquire, Release},
@@ -34,8 +33,21 @@ impl Clone for AudioClip {
     }
 }
 
-impl AudioGraphNodeImpl for AudioClip {
-    fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
+impl AudioClip {
+    #[must_use]
+    pub fn create(audio: Arc<InterleavedAudio>, meter: Arc<Meter>) -> Arc<TrackClip> {
+        let samples = audio.samples.len();
+
+        Arc::new(TrackClip::Audio(Self {
+            audio,
+            global_start: Atomic::default(),
+            global_end: Atomic::new(Position::from_interleaved_samples(samples, &meter)),
+            clip_start: Atomic::default(),
+            meter,
+        }))
+    }
+
+    pub fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         let clip_start_sample = self
             .global_start
             .load(Acquire)
@@ -73,21 +85,6 @@ impl AudioGraphNodeImpl for AudioClip {
                     *buf += sample;
                 });
         }
-    }
-}
-
-impl AudioClip {
-    #[must_use]
-    pub fn create(audio: Arc<InterleavedAudio>, meter: Arc<Meter>) -> Arc<TrackClip> {
-        let samples = audio.samples.len();
-
-        Arc::new(TrackClip::Audio(Self {
-            audio,
-            global_start: Atomic::default(),
-            global_end: Atomic::new(Position::from_interleaved_samples(samples, &meter)),
-            clip_start: Atomic::default(),
-            meter,
-        }))
     }
 
     #[must_use]

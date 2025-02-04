@@ -32,15 +32,15 @@ impl AudioCtx {
                     debug_assert!(ok);
                 }
                 AudioCtxMessage::Remove(node) => {
-                    let ok = self.audio_graph.remove(&node);
+                    let ok = self.audio_graph.remove(node);
                     debug_assert!(ok);
                 }
                 AudioCtxMessage::Connect(from, to) => {
-                    let ok = self.audio_graph.connect(&from, to);
+                    let ok = self.audio_graph.connect(from, to);
                     debug_assert!(ok);
                 }
                 AudioCtxMessage::Disconnect(from, to) => {
-                    let ok = self.audio_graph.disconnect(&from, &to);
+                    let ok = self.audio_graph.disconnect(from, to);
                     debug_assert!(ok);
                 }
             }

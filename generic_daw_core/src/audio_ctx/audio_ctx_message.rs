@@ -1,9 +1,9 @@
-use audio_graph::AudioGraphNode;
+use audio_graph::{AudioGraphNode, NodeId};
 
 #[derive(Debug)]
 pub enum AudioCtxMessage {
     Add(AudioGraphNode),
-    Remove(AudioGraphNode),
-    Connect(AudioGraphNode, AudioGraphNode),
-    Disconnect(AudioGraphNode, AudioGraphNode),
+    Remove(NodeId),
+    Connect(NodeId, NodeId),
+    Disconnect(NodeId, NodeId),
 }
