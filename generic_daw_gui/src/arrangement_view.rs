@@ -1,6 +1,7 @@
 use crate::widget::{
     Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob, PeakMeter,
 };
+use async_consumer::AsyncConsumer;
 use generic_daw_core::{
     audio_graph::MixerNode, build_output_stream, AudioClip, InterleavedAudio, Meter, Position,
     Track, UiMessage,
@@ -12,15 +13,13 @@ use iced::{
     Border, Element, Task,
 };
 use rfd::FileHandle;
-use std::{
-    sync::{
-        atomic::Ordering::{AcqRel, Release},
-        Arc, Mutex,
-    },
-    time::Duration,
+use std::sync::{
+    atomic::Ordering::{AcqRel, Release},
+    Arc, Mutex,
 };
 
 mod arrangement;
+mod async_consumer;
 
 pub use arrangement::Arrangement as ArrangementWrapper;
 
@@ -57,7 +56,8 @@ pub struct ArrangementView {
 
 impl ArrangementView {
     pub fn create() -> (Arc<Meter>, Self, Task<Message>) {
-        let (stream, producer, mut consumer, meter) = build_output_stream();
+        let (stream, producer, consumer, meter) = build_output_stream();
+        let mut consumer = AsyncConsumer(consumer);
 
         let arrangement = ArrangementWrapper::new(producer, stream, meter.clone());
 
@@ -72,11 +72,7 @@ impl ArrangementView {
 
         let task = Task::stream(channel(16, move |mut sender| async move {
             loop {
-                if let Ok(msg) = consumer.pop() {
-                    sender.send(msg).await.unwrap();
-                }
-
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                sender.send((&mut consumer).await).await.unwrap();
             }
         }))
         .map(Mutex::new)
