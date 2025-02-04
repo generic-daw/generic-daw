@@ -8,29 +8,29 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-mod opened_message;
+mod opened;
 
-pub use opened_message::OpenedMessage;
+pub use opened::Opened;
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    Opened(Arc<Mutex<OpenedMessage>>),
+    Opened(Arc<Mutex<Opened>>),
     CloseRequested(Id),
     Closed,
     Resized((Id, Size)),
 }
 
 #[derive(Default)]
-pub struct ClapHost {
+pub struct ClapHostView {
     windows: HashMap<Id, ClapPluginGui>,
     closed: Option<Id>,
 }
 
-impl ClapHost {
+impl ClapHostView {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Opened(arc) => {
-                let OpenedMessage {
+                let Opened {
                     id,
                     gui,
                     host_audio_processor: _,

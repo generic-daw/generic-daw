@@ -2,14 +2,14 @@ use generic_daw_core::clap_host::{ClapPluginGuiWrapper, HostAudioProcessor, Plug
 use iced::window::Id;
 use std::fmt::{Debug, Formatter};
 
-pub struct OpenedMessage {
+pub struct Opened {
     pub id: Id,
     pub gui: ClapPluginGuiWrapper,
     pub host_audio_processor: HostAudioProcessor,
     pub plugin_audio_processor: PluginAudioProcessor,
 }
 
-impl Debug for OpenedMessage {
+impl Debug for Opened {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OpenedMessage")
             .field("id", &self.id)

@@ -2,13 +2,9 @@ use crate::widget::{
     Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob, PeakMeter,
 };
 use generic_daw_core::{
-    audio_graph::{AudioGraph, AudioGraphNodeImpl as _, MixerNode},
-    build_output_stream,
-    cpal::{traits::StreamTrait as _, Stream},
-    rtrb::Producer,
-    AudioClip, AudioCtxMessage, InterleavedAudio, Meter, Position, Track, UiMessage,
+    audio_graph::MixerNode, build_output_stream, AudioClip, InterleavedAudio, Meter, Position,
+    Track, UiMessage,
 };
-use hound::WavWriter;
 use iced::{
     futures::SinkExt as _,
     stream::channel,
@@ -17,14 +13,16 @@ use iced::{
 };
 use rfd::FileHandle;
 use std::{
-    ops::Deref as _,
-    path::Path,
     sync::{
-        atomic::Ordering::{AcqRel, Acquire, Release},
+        atomic::Ordering::{AcqRel, Release},
         Arc, Mutex,
     },
     time::Duration,
 };
+
+mod arrangement;
+
+pub use arrangement::Arrangement as ArrangementWrapper;
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -47,11 +45,9 @@ pub enum Message {
     Export(FileHandle),
 }
 
-pub struct Arrangement {
-    tracks: Vec<Track>,
+pub struct ArrangementView {
+    arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
-    producer: Producer<AudioCtxMessage<FileHandle>>,
-    stream: Stream,
 
     position: ArrangementPosition,
     scale: ArrangementScale,
@@ -59,15 +55,15 @@ pub struct Arrangement {
     grabbed_clip: Option<[usize; 2]>,
 }
 
-impl Arrangement {
+impl ArrangementView {
     pub fn create() -> (Arc<Meter>, Self, Task<Message>) {
         let (stream, producer, mut consumer, meter) = build_output_stream();
 
+        let arrangement = ArrangementWrapper::new(producer, stream, meter.clone());
+
         let arrangement = Self {
-            tracks: Vec::new(),
+            arrangement,
             meter: meter.clone(),
-            producer,
-            stream,
             position: ArrangementPosition::default(),
             scale: ArrangementScale::default(),
             soloed_track: None,
@@ -98,47 +94,52 @@ impl Arrangement {
                 let message = Mutex::into_inner(Arc::into_inner(message).unwrap()).unwrap();
                 match message {
                     UiMessage::AudioGraph(path, audio_graph) => {
-                        self.export(path.path(), audio_graph);
+                        self.arrangement.export(path.path(), audio_graph);
                     }
                 }
             }
             Message::TrackVolumeChanged(track, volume) => {
-                self.tracks[track].node.volume.store(volume, Release);
+                self.arrangement.tracks()[track]
+                    .node
+                    .volume
+                    .store(volume, Release);
             }
             Message::TrackPanChanged(track, pan) => {
-                self.tracks[track].node.pan.store(pan, Release);
+                self.arrangement.tracks()[track]
+                    .node
+                    .pan
+                    .store(pan, Release);
             }
             Message::LoadedSample(audio_file) => {
                 let mut track = Track::audio(self.meter.clone(), Arc::new(MixerNode::default()));
-
                 track
                     .clips
                     .push(AudioClip::create(audio_file, self.meter.clone()));
-                self.tracks.push(track.clone());
-
-                let id = track.id();
-                self.producer
-                    .push(AudioCtxMessage::Insert(track.into()))
-                    .unwrap();
-                self.producer
-                    .push(AudioCtxMessage::ConnectToMaster(id))
-                    .unwrap();
+                self.arrangement.push(track);
             }
             Message::ToggleTrackEnabled(track) => {
-                self.tracks[track].node.enabled.fetch_not(AcqRel);
+                self.arrangement.tracks()[track]
+                    .node
+                    .enabled
+                    .fetch_not(AcqRel);
                 self.soloed_track = None;
             }
             Message::ToggleTrackSolo(track) => {
                 if self.soloed_track.is_some_and(|s| s == track) {
                     self.soloed_track = None;
-                    self.tracks
+                    self.arrangement
+                        .tracks()
                         .iter()
                         .for_each(|track| track.node.enabled.store(true, Release));
                 } else {
-                    self.tracks
+                    self.arrangement
+                        .tracks()
                         .iter()
                         .for_each(|track| track.node.enabled.store(false, Release));
-                    self.tracks[track].node.enabled.store(true, Release);
+                    self.arrangement.tracks()[track]
+                        .node
+                        .enabled
+                        .store(true, Release);
                     self.soloed_track = Some(track);
                 }
             }
@@ -149,49 +150,33 @@ impl Arrangement {
                 self.grabbed_clip = Some([track, clip]);
             }
             Message::UnselectClip() => self.grabbed_clip = None,
-            Message::CloneClip(track, mut clip_idx) => {
-                let clip = self.tracks[track].clips[clip_idx].deref().clone();
-                self.tracks[track].clips.push(Arc::new(clip));
-
-                self.producer
-                    .push(AudioCtxMessage::Insert(self.tracks[track].clone().into()))
-                    .unwrap();
-
-                clip_idx = self.tracks[track].clips.len() - 1;
-                self.grabbed_clip.replace([track, clip_idx]);
+            Message::CloneClip(track, mut clip) => {
+                self.arrangement.clone_clip(track, clip);
+                clip = self.arrangement.tracks()[track].clips.len() - 1;
+                self.grabbed_clip.replace([track, clip]);
             }
             Message::MoveClipTo(new_track, pos) => {
                 let [track, clip] = self.grabbed_clip.as_mut().unwrap();
-                let inner = self.tracks[*track].clips[*clip].clone();
 
-                if *track != new_track && self.tracks[new_track].try_push(&inner) {
-                    self.tracks[*track].clips.remove(*clip);
-
-                    self.producer
-                        .push(AudioCtxMessage::Insert(self.tracks[*track].clone().into()))
-                        .unwrap();
-                    self.producer
-                        .push(AudioCtxMessage::Insert(
-                            self.tracks[new_track].clone().into(),
-                        ))
-                        .unwrap();
-
+                if *track != new_track
+                    && self.arrangement.clip_switch_track(*track, *clip, new_track)
+                {
                     *track = new_track;
-                    *clip = self.tracks[*track].clips.len() - 1;
+                    *clip = self.arrangement.tracks()[*track].clips.len() - 1;
                 }
 
-                self.tracks[*track].clips[*clip].move_to(pos);
+                self.arrangement.tracks()[*track].clips[*clip].move_to(pos);
             }
             Message::TrimClipStart(pos) => {
                 let [track, clip] = self.grabbed_clip.unwrap();
-                self.tracks[track].clips[clip].trim_start_to(pos);
+                self.arrangement.tracks()[track].clips[clip].trim_start_to(pos);
             }
             Message::TrimClipEnd(pos) => {
                 let [track, clip] = self.grabbed_clip.unwrap();
-                self.tracks[track].clips[clip].trim_end_to(pos);
+                self.arrangement.tracks()[track].clips[clip].trim_end_to(pos);
             }
             Message::DeleteClip(track, clip) => {
-                self.tracks[track].clips.remove(clip);
+                self.arrangement.delete_clip(track, clip);
             }
             Message::PositionScaleDelta(pos, scale) => {
                 let sd = scale != ArrangementScale::ZERO;
@@ -207,20 +192,19 @@ impl Arrangement {
                 if pd {
                     self.position += pos;
                     self.position = self.position.clamp(
-                        self.tracks
+                        self.arrangement
+                            .tracks()
                             .iter()
                             .map(Track::len)
                             .max()
                             .unwrap_or_default()
                             .in_interleaved_samples_f(&self.meter),
-                        (self.tracks.len().saturating_sub(1)) as f32,
+                        (self.arrangement.tracks().len().saturating_sub(1)) as f32,
                     );
                 }
             }
             Message::Export(path) => {
-                self.producer
-                    .push(AudioCtxMessage::RequestAudioGraph(path))
-                    .unwrap();
+                self.arrangement.request_export(path);
             }
         }
 
@@ -229,13 +213,18 @@ impl Arrangement {
 
     pub fn view(&self) -> Element<'_, Message> {
         ArrangementWidget::new(
-            &self.tracks,
-            &self.meter,
+            &self.arrangement,
             self.position,
             self.scale,
             |track, enabled| {
-                let left = self.tracks[track].node.max_l.swap(0.0, AcqRel);
-                let right = self.tracks[track].node.max_r.swap(0.0, AcqRel);
+                let left = self.arrangement.tracks()[track]
+                    .node
+                    .max_l
+                    .swap(0.0, AcqRel);
+                let right = self.arrangement.tracks()[track]
+                    .node
+                    .max_r
+                    .swap(0.0, AcqRel);
 
                 container(
                     row![
@@ -290,49 +279,5 @@ impl Arrangement {
             Message::PositionScaleDelta,
         )
         .into()
-    }
-
-    fn export(&mut self, path: &Path, mut audio_graph: AudioGraph) {
-        const CHUNK_SIZE: usize = 64;
-
-        self.stream.pause().unwrap();
-
-        let playing = self.meter.playing.swap(true, AcqRel);
-        let metronome = self.meter.metronome.swap(false, AcqRel);
-
-        let mut writer = WavWriter::create(
-            path,
-            hound::WavSpec {
-                channels: 2,
-                sample_rate: self.meter.sample_rate.load(Acquire),
-                bits_per_sample: 32,
-                sample_format: hound::SampleFormat::Float,
-            },
-        )
-        .unwrap();
-
-        let mut buf = [0.0; CHUNK_SIZE];
-
-        let len = self.tracks.iter().map(Track::len).max().unwrap_or_default();
-        let len = len.in_interleaved_samples(&self.meter);
-
-        for i in (0..len).step_by(CHUNK_SIZE) {
-            audio_graph.fill_buf(i, &mut buf);
-
-            for s in buf {
-                writer.write_sample(s).unwrap();
-            }
-        }
-
-        writer.finalize().unwrap();
-
-        self.meter.playing.store(playing, Release);
-        self.meter.metronome.store(metronome, Release);
-
-        self.producer
-            .push(AudioCtxMessage::AudioGraph(audio_graph))
-            .unwrap();
-
-        self.stream.play().unwrap();
     }
 }

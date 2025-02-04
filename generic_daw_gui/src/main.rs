@@ -2,8 +2,8 @@ use daw::Daw;
 use iced::{application, Result};
 use iced_fonts::{BOOTSTRAP_FONT_BYTES, REQUIRED_FONT_BYTES};
 
-pub(crate) mod arrangement;
-pub(crate) mod clap_host;
+pub(crate) mod arrangement_view;
+pub(crate) mod clap_host_view;
 pub(crate) mod daw;
 pub(crate) mod widget;
 

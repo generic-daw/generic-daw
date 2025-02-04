@@ -1,6 +1,6 @@
 use crate::{
-    arrangement::{Arrangement, Message as ArrangementMessage},
-    clap_host::{ClapHost, Message as ClapHostMessage, OpenedMessage},
+    arrangement_view::{ArrangementView, Message as ArrangementMessage},
+    clap_host_view::{ClapHostView, Message as ClapHostMessage, Opened},
     widget::VSplit,
 };
 use generic_daw_core::{
@@ -51,19 +51,19 @@ pub enum Message {
 }
 
 pub struct Daw {
-    arrangement: Arrangement,
-    clap_host: ClapHost,
+    arrangement: ArrangementView,
+    clap_host: ClapHostView,
     meter: Arc<Meter>,
     theme: Theme,
 }
 
 impl Daw {
     pub fn create() -> (Self, Task<Message>) {
-        let (meter, arrangement, task) = Arrangement::create();
+        let (meter, arrangement, task) = ArrangementView::create();
 
         let daw = Self {
             arrangement,
-            clap_host: ClapHost::default(),
+            clap_host: ClapHostView::default(),
             meter,
             theme: Theme::Dark,
         };
@@ -97,7 +97,7 @@ impl Daw {
                         },
                         handle.as_raw(),
                     );
-                    Arc::new(Mutex::new(OpenedMessage {
+                    Arc::new(Mutex::new(Opened {
                         id,
                         gui,
                         host_audio_processor,
@@ -242,7 +242,7 @@ impl Daw {
 
         Subscription::batch([
             animate,
-            ClapHost::subscription().map(Message::ClapHost),
+            ClapHostView::subscription().map(Message::ClapHost),
             event::listen_with(|e, s, _| match s {
                 Status::Ignored => match e {
                     Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {

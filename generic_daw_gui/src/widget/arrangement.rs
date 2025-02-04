@@ -1,5 +1,6 @@
 use super::{track::TrackExt as _, ArrangementPosition, ArrangementScale, Track, LINE_HEIGHT};
-use generic_daw_core::{Meter, Position, Track as TrackInner};
+use crate::arrangement_view::ArrangementWrapper;
+use generic_daw_core::Position;
 use iced::{
     advanced::{
         layout::{Layout, Limits, Node},
@@ -46,8 +47,7 @@ struct State {
 }
 
 pub struct Arrangement<'a, Message> {
-    tracks: &'a [TrackInner],
-    meter: &'a Meter,
+    inner: &'a ArrangementWrapper,
     /// list of all the track widgets
     children: Box<[Element<'a, Message, Theme, Renderer>]>,
     /// the position of the top left corner of the arrangement viewport
@@ -67,7 +67,7 @@ pub struct Arrangement<'a, Message> {
 
 impl<Message> Debug for Arrangement<'_, Message> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.tracks.fmt(f)
+        self.inner.fmt(f)
     }
 }
 
@@ -307,8 +307,7 @@ where
 {
     #[expect(clippy::too_many_arguments)]
     pub fn new(
-        inner: &'a [TrackInner],
-        meter: &'a Meter,
+        inner: &'a ArrangementWrapper,
         position: ArrangementPosition,
         scale: ArrangementScale,
         track_panel: impl Fn(usize, bool) -> Element<'a, Message>,
@@ -323,6 +322,7 @@ where
         position_scale_delta: fn(ArrangementPosition, ArrangementScale) -> Message,
     ) -> Self {
         let tracks = inner
+            .tracks()
             .iter()
             .enumerate()
             .map(|(idx, track)| Track::new(track, position, scale, &track_panel, idx))
@@ -330,8 +330,7 @@ where
             .collect();
 
         Self {
-            tracks: inner,
-            meter,
+            inner,
             children: tracks,
             position,
             scale,
@@ -348,15 +347,15 @@ where
     }
 
     fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-        let numerator = self.meter.numerator.load(Acquire);
+        let numerator = self.inner.meter.numerator.load(Acquire);
 
         let mut beat =
-            Position::from_interleaved_samples(self.position.x as usize, self.meter).ceil();
+            Position::from_interleaved_samples(self.position.x as usize, &self.inner.meter).ceil();
 
         let end_beat = beat
             + Position::from_interleaved_samples(
                 (bounds.width * self.scale.x.exp2()) as usize,
-                self.meter,
+                &self.inner.meter,
             )
             .floor();
 
@@ -379,8 +378,8 @@ where
                 theme.extended_palette().secondary.weak.color
             };
 
-            let x =
-                (beat.in_interleaved_samples_f(self.meter) - self.position.x) / self.scale.x.exp2();
+            let x = (beat.in_interleaved_samples_f(&self.inner.meter) - self.position.x)
+                / self.scale.x.exp2();
 
             renderer.fill_quad(
                 Quad {
@@ -406,7 +405,8 @@ where
             theme.extended_palette().primary.base.color,
         );
 
-        let x = (self.meter.sample.load(Acquire) as f32 - self.position.x) / self.scale.x.exp2();
+        let x =
+            (self.inner.meter.sample.load(Acquire) as f32 - self.position.x) / self.scale.x.exp2();
 
         if x >= 0.0 {
             renderer.fill_quad(
@@ -422,8 +422,8 @@ where
         }
 
         let mut draw_text = |beat: Position, bar: u32| {
-            let x =
-                (beat.in_interleaved_samples_f(self.meter) - self.position.x) / self.scale.x.exp2();
+            let x = (beat.in_interleaved_samples_f(&self.inner.meter) - self.position.x)
+                / self.scale.x.exp2();
 
             let bar = Text {
                 content: itoa::Buffer::new().format(bar + 1).to_owned(),
@@ -445,20 +445,21 @@ where
             );
         };
 
-        let numerator = self.meter.numerator.load(Acquire);
+        let numerator = self.inner.meter.numerator.load(Acquire);
 
-        let mut beat = Position::from_interleaved_samples(self.position.x as usize, self.meter)
-            .saturating_sub(if self.scale.x > 11.0 {
-                Position::new(4 * numerator as u32, 0)
-            } else {
-                Position::new(numerator as u32, 0)
-            })
-            .floor();
+        let mut beat =
+            Position::from_interleaved_samples(self.position.x as usize, &self.inner.meter)
+                .saturating_sub(if self.scale.x > 11.0 {
+                    Position::new(4 * numerator as u32, 0)
+                } else {
+                    Position::new(numerator as u32, 0)
+                })
+                .floor();
 
         let end_beat = beat
             + Position::from_interleaved_samples(
                 (bounds.width * self.scale.x.exp2()) as usize,
-                self.meter,
+                &self.inner.meter,
             )
             .floor();
 
@@ -490,7 +491,7 @@ where
                     if cursor.y < 0.0 {
                         let time = self
                             .get_time(cursor, 0.0, state.modifiers)
-                            .in_interleaved_samples(self.meter);
+                            .in_interleaved_samples(&self.inner.meter);
 
                         state.action = Action::DraggingPlayhead;
 
@@ -500,14 +501,14 @@ where
 
                     let (track, clip) = self.get_track_clip(cursor)?;
 
-                    let start_pixel = (self.tracks[track].clips[clip]
+                    let start_pixel = (self.inner.tracks()[track].clips[clip]
                         .get_global_start()
-                        .in_interleaved_samples_f(self.meter)
+                        .in_interleaved_samples_f(&self.inner.meter)
                         - self.position.x)
                         / self.scale.x.exp2();
-                    let end_pixel = (self.tracks[track].clips[clip]
+                    let end_pixel = (self.inner.tracks()[track].clips[clip]
                         .get_global_end()
-                        .in_interleaved_samples_f(self.meter)
+                        .in_interleaved_samples_f(&self.inner.meter)
                         - self.position.x)
                         / self.scale.x.exp2();
                     let offset = start_pixel - cursor.x;
@@ -536,7 +537,7 @@ where
                     Action::DraggingPlayhead => {
                         let time = self
                             .get_time(cursor, 0.0, state.modifiers)
-                            .in_interleaved_samples(self.meter);
+                            .in_interleaved_samples(&self.inner.meter);
 
                         shell.publish((self.seek_to)(time));
                         Some(Status::Captured)
@@ -656,9 +657,9 @@ where
 
                     let (track, clip) = self.get_track_clip(cursor)?;
 
-                    let start_pixel = (self.tracks[track].clips[clip]
+                    let start_pixel = (self.inner.tracks()[track].clips[clip]
                         .get_global_start()
-                        .in_interleaved_samples_f(self.meter)
+                        .in_interleaved_samples_f(&self.inner.meter)
                         - self.position.x)
                         / self.scale.x.exp2();
                     let offset = start_pixel - cursor.x;
@@ -728,19 +729,20 @@ where
         let track = (cursor.y / self.scale.y + self.position.y) as usize;
         let time = cursor.x.mul_add(self.scale.x.exp2(), self.position.x) as usize;
         let clip = self
-            .tracks
+            .inner
+            .tracks()
             .get(track)?
-            .get_clip_at_global_time(self.meter, time)?;
+            .get_clip_at_global_time(&self.inner.meter, time)?;
 
         Some((track, clip))
     }
 
     fn get_time(&self, cursor: Point, offset: f32, modifiers: Modifiers) -> Position {
         let time = (cursor.x + offset).mul_add(self.scale.x.exp2(), self.position.x);
-        let mut time = Position::from_interleaved_samples_f(time, self.meter);
+        let mut time = Position::from_interleaved_samples_f(time, &self.inner.meter);
 
         if !modifiers.alt() {
-            time = time.snap(self.scale.x, self.meter);
+            time = time.snap(self.scale.x, &self.inner.meter);
         }
 
         time
