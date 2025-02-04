@@ -11,17 +11,14 @@ use iced::{
     mouse::{Cursor, Interaction},
     Element, Length, Rectangle, Renderer, Size, Theme, Vector,
 };
-use std::{
-    iter::once,
-    sync::{atomic::Ordering::Acquire, Arc},
-};
+use std::{iter::once, sync::atomic::Ordering::Acquire};
 
 mod track_ext;
 
 pub use track_ext::TrackExt;
 
 pub struct Track<'a, Message> {
-    inner: Arc<TrackInner>,
+    inner: &'a TrackInner,
     /// list of the track panel and all the clip widgets
     children: Box<[Element<'a, Message, Theme, Renderer>]>,
     /// the position of the top left corner of the arrangement viewport
@@ -73,7 +70,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                                 ),
                             )
                         })
-                        .zip(self.inner.clips.read().unwrap().iter())
+                        .zip(self.inner.clips.iter())
                         .map(|(node, clip)| {
                             node.translate(Vector::new(
                                 panel_width
@@ -204,7 +201,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 
 impl<'a, Message> Track<'a, Message> {
     pub fn new(
-        inner: Arc<TrackInner>,
+        inner: &'a TrackInner,
         position: ArrangementPosition,
         scale: ArrangementScale,
         track_panel: impl Fn(usize, bool) -> Element<'a, Message>,
@@ -216,8 +213,6 @@ impl<'a, Message> Track<'a, Message> {
             .chain(
                 inner
                     .clips
-                    .read()
-                    .unwrap()
                     .iter()
                     .cloned()
                     .map(|clip| TrackClip::new(clip, position, scale, enabled))
@@ -236,20 +231,14 @@ impl<'a, Message> Track<'a, Message> {
 
 impl TrackExt for TrackInner {
     fn get_clip_at_global_time(&self, meter: &Meter, global_time: usize) -> Option<usize> {
-        self.clips
-            .read()
-            .unwrap()
-            .iter()
-            .enumerate()
-            .rev()
-            .find_map(|(i, clip)| {
-                if clip.get_global_start().in_interleaved_samples(meter) <= global_time
-                    && global_time <= clip.get_global_end().in_interleaved_samples(meter)
-                {
-                    Some(i)
-                } else {
-                    None
-                }
-            })
+        self.clips.iter().enumerate().rev().find_map(|(i, clip)| {
+            if clip.get_global_start().in_interleaved_samples(meter) <= global_time
+                && global_time <= clip.get_global_end().in_interleaved_samples(meter)
+            {
+                Some(i)
+            } else {
+                None
+            }
+        })
     }
 }

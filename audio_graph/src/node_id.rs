@@ -10,3 +10,9 @@ impl NodeId {
         Self(ID.fetch_add(1, AcqRel))
     }
 }
+
+impl From<NodeId> for usize {
+    fn from(value: NodeId) -> Self {
+        value.0
+    }
+}

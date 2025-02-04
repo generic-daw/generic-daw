@@ -1,6 +1,7 @@
 use std::f32::consts::PI;
 
 mod audio_graph;
+mod audio_graph_entry;
 mod audio_graph_node;
 mod audio_graph_node_impl;
 mod mixer_node;

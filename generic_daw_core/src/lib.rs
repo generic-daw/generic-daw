@@ -1,29 +1,29 @@
 use audio_ctx::AudioCtx;
 use cpal::{
-    traits::{DeviceTrait as _, HostTrait as _},
-    StreamConfig,
+    traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
+    Stream, StreamConfig,
 };
-use rtrb::Producer;
+use master::Master;
+use rtrb::{Consumer, Producer};
 use std::sync::{
     atomic::Ordering::{AcqRel, Acquire},
     Arc,
 };
 
-mod arrangement;
 mod audio_ctx;
 mod denominator;
 mod live_sample;
+mod master;
 mod meter;
 mod numerator;
 mod position;
 mod track;
 mod track_clip;
 
-pub use arrangement::Arrangement;
-pub use audio_ctx::AudioCtxMessage;
+pub use audio_ctx::{AudioCtxMessage, UiMessage};
 pub use audio_graph;
 pub use clap_host;
-pub use cpal::{traits::StreamTrait, Stream};
+pub use cpal;
 pub use denominator::Denominator;
 pub use live_sample::LiveSample;
 pub use meter::Meter;
@@ -41,23 +41,28 @@ pub use track_clip::{
     TrackClip,
 };
 
-pub fn build_output_stream() -> (Stream, Producer<AudioCtxMessage>, Arc<Arrangement>) {
+#[expect(clippy::type_complexity)]
+pub fn build_output_stream<T: Send + 'static>() -> (
+    Stream,
+    Producer<AudioCtxMessage<T>>,
+    Consumer<UiMessage<T>>,
+    Arc<Meter>,
+) {
     let device = cpal::default_host().default_output_device().unwrap();
     let config: &StreamConfig = &device.default_output_config().unwrap().into();
 
-    let arrangement = Arc::new(Arrangement::new(config.sample_rate.0));
-    let node = arrangement.clone().into();
-    let (mut ctx, producer) = AudioCtx::create(node);
+    let arrangement = Master::new(config.sample_rate.0);
     let meter = arrangement.meter.clone();
+    let (mut ctx, producer, consumer) = AudioCtx::create(arrangement.into(), meter.clone());
 
     let stream = device
         .build_output_stream(
             config,
             move |data, _| {
-                let sample = if meter.playing.load(Acquire) {
-                    meter.sample.fetch_add(data.len(), AcqRel)
+                let sample = if ctx.meter.playing.load(Acquire) {
+                    ctx.meter.sample.fetch_add(data.len(), AcqRel)
                 } else {
-                    meter.sample.load(Acquire)
+                    ctx.meter.sample.load(Acquire)
                 };
 
                 ctx.fill_buf(sample, data);
@@ -72,7 +77,7 @@ pub fn build_output_stream() -> (Stream, Producer<AudioCtxMessage>, Arc<Arrangem
         .unwrap();
     stream.play().unwrap();
 
-    (stream, producer, arrangement)
+    (stream, producer, consumer, meter)
 }
 
 #[must_use]

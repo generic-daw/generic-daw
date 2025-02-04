@@ -1,8 +1,5 @@
 use std::sync::{
-    atomic::{
-        AtomicIsize,
-        Ordering::{AcqRel, Acquire},
-    },
+    atomic::{AtomicIsize, Ordering::AcqRel},
     Arc,
 };
 
@@ -19,11 +16,6 @@ impl LiveSample {
             audio,
             idx: AtomicIsize::new(-isize::try_from(before).unwrap()),
         }
-    }
-
-    #[must_use]
-    pub fn over(&self) -> bool {
-        self.idx.load(Acquire) as usize > self.audio.len()
     }
 
     pub fn fill_buf(&self, _: usize, buf: &mut [f32]) {

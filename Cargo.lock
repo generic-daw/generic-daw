@@ -1403,6 +1403,7 @@ version = "0.1.0"
 dependencies = [
  "generic_daw_core",
  "home",
+ "hound",
  "iced",
  "iced_aw",
  "iced_file_tree",
@@ -1424,7 +1425,6 @@ dependencies = [
  "audio_graph",
  "clap_host",
  "cpal",
- "hound",
  "include_data",
  "rtrb",
  "rubato",

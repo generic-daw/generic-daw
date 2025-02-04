@@ -11,6 +11,7 @@ workspace = true
 generic_daw_core = { path = "../generic_daw_core" }
 
 home = "0.5.11"
+hound = "3.5.1"
 iced = { version = "0.13.1", default-features = false, features = [
     "advanced",
     "canvas",

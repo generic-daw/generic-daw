@@ -27,5 +27,5 @@ fn main() -> Result {
         .subscription(Daw::subscription)
         .theme(Daw::theme)
         .antialiasing(true)
-        .run()
+        .run_with(Daw::create)
 }

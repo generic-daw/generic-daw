@@ -57,20 +57,20 @@ pub struct Daw {
     theme: Theme,
 }
 
-impl Default for Daw {
-    fn default() -> Self {
-        let (meter, arrangement) = Arrangement::create();
+impl Daw {
+    pub fn create() -> (Self, Task<Message>) {
+        let (meter, arrangement, task) = Arrangement::create();
 
-        Self {
+        let daw = Self {
             arrangement,
             clap_host: ClapHost::default(),
             meter,
             theme: Theme::Dark,
-        }
-    }
-}
+        };
 
-impl Daw {
+        (daw, task.map(Message::Arrangement))
+    }
+
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Animate => {}
@@ -150,7 +150,11 @@ impl Daw {
                 self.meter.playing.store(false, Release);
                 self.meter.sample.store(0, Release);
             }
-            Message::New => *self = Self::default(),
+            Message::New => {
+                let (s, task) = Self::create();
+                *self = s;
+                return task;
+            }
             Message::BpmChanged(bpm) => self.meter.bpm.store(bpm, Release),
             Message::NumeratorChanged(new_numerator) => {
                 self.meter.numerator.store(new_numerator, Release);

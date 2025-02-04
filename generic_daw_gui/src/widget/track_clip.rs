@@ -275,7 +275,7 @@ impl TrackClipExt for TrackClipInner {
     ) -> Mesh {
         match self {
             Self::Audio(audio) => audio.mesh(theme, size, position, scale),
-            Self::Midi(_) => unreachable!(),
+            Self::Midi(_) => unimplemented!(),
         }
     }
 }
