@@ -4,7 +4,6 @@ use std::cmp::Ordering;
 
 #[derive(Debug)]
 pub struct AudioGraph {
-    root: AudioGraphNode,
     g: AHashMap<AudioGraphNode, AHashSet<AudioGraphNode>>,
     l: Vec<AudioGraphNode>,
     c: AHashMap<AudioGraphNode, Vec<f32>>,
@@ -15,7 +14,6 @@ impl AudioGraph {
     #[must_use]
     pub fn new(root: AudioGraphNode) -> Self {
         Self {
-            root: root.clone(),
             g: AHashMap::from_iter([(root.clone(), AHashSet::default())]),
             l: vec![root.clone()],
             c: AHashMap::from_iter([(root, Vec::new())]),
@@ -34,8 +32,6 @@ impl AudioGraph {
                     Ordering::Equal
                 }
             });
-
-            debug_assert_eq!(self.l[0], self.root);
         }
 
         for node in self.l.iter().rev() {
@@ -87,7 +83,7 @@ impl AudioGraph {
             self.g.insert(node.clone(), AHashSet::default());
             self.l.push(node.clone());
             self.c
-                .insert(node, Vec::with_capacity(self.c[&self.root].len()));
+                .insert(node, Vec::with_capacity(self.c[&self.l[0]].len()));
 
             true
         }
@@ -95,7 +91,7 @@ impl AudioGraph {
 
     #[must_use]
     pub fn remove(&mut self, node: &AudioGraphNode) -> bool {
-        debug_assert_ne!(&self.root, node);
+        debug_assert_ne!(&self.l[0], node);
 
         if self.g.remove(node).is_some() {
             let idx = self.l.iter().position(|n| n == node).unwrap();
