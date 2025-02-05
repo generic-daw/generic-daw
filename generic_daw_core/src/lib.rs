@@ -79,8 +79,3 @@ pub fn build_output_stream<T: Send + 'static>() -> (
 
     (stream, producer, consumer, meter)
 }
-
-#[must_use]
-pub fn seconds_to_interleaved_samples(seconds: f32, meter: &Meter) -> f32 {
-    seconds * meter.sample_rate.load(Acquire) as f32 * 2.0
-}

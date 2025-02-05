@@ -1,4 +1,4 @@
-use crate::{seconds_to_interleaved_samples, Meter};
+use crate::Meter;
 use atomig::{Atom, AtomInteger};
 use std::{
     fmt::{Debug, Formatter},
@@ -57,28 +57,36 @@ impl Position {
     }
 
     #[must_use]
-    pub fn from_interleaved_samples_f(samples: f32, meter: &Meter) -> Self {
-        let global_beat = samples * f32::from(meter.bpm.load(Acquire))
-            / ((meter.sample_rate.load(Acquire) * 120) as f32);
-        Self::new(global_beat as u32, (global_beat.fract() * 256.0) as u32)
-    }
-
-    #[must_use]
     pub fn from_interleaved_samples(samples: usize, meter: &Meter) -> Self {
-        Self::from_interleaved_samples_f(samples as f32, meter)
+        let samples = samples as u64;
+        let bpm = u64::from(meter.bpm.load(Acquire));
+        let sample_rate = u64::from(meter.sample_rate.load(Acquire));
+
+        let global_beat = samples * (bpm * 32) / (sample_rate * 15);
+
+        Self(global_beat as u32)
     }
 
     #[must_use]
     pub fn in_interleaved_samples_f(self, meter: &Meter) -> f32 {
-        seconds_to_interleaved_samples(
-            self.0 as f32 / 256.0 * 60.0 / f32::from(meter.bpm.load(Acquire)),
-            meter,
-        )
+        let global_beat = f64::from(self.0);
+        let bpm = f64::from(meter.bpm.load(Acquire));
+        let sample_rate = f64::from(meter.sample_rate.load(Acquire));
+
+        let samples = global_beat * (sample_rate * 15.0) / (bpm * 32.0);
+
+        samples as f32
     }
 
     #[must_use]
     pub fn in_interleaved_samples(self, meter: &Meter) -> usize {
-        self.in_interleaved_samples_f(meter) as usize
+        let global_beat = u64::from(self.0);
+        let bpm = u64::from(meter.bpm.load(Acquire));
+        let sample_rate = u64::from(meter.sample_rate.load(Acquire));
+
+        let samples = global_beat * (sample_rate * 15) / (bpm * 32);
+
+        samples as usize
     }
 
     #[must_use]

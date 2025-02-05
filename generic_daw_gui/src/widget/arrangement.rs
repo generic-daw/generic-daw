@@ -739,7 +739,7 @@ where
 
     fn get_time(&self, cursor: Point, offset: f32, modifiers: Modifiers) -> Position {
         let time = (cursor.x + offset).mul_add(self.scale.x.exp2(), self.position.x);
-        let mut time = Position::from_interleaved_samples_f(time, &self.inner.meter);
+        let mut time = Position::from_interleaved_samples(time as usize, &self.inner.meter);
 
         if !modifiers.alt() {
             time = time.snap(self.scale.x, &self.inner.meter);
