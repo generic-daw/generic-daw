@@ -8,5 +8,5 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-ahash = "0.8.11"
 atomig = "0.4.2"
+gxhash = "3.4.1"

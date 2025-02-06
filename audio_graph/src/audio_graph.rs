@@ -1,10 +1,10 @@
 use crate::{audio_graph_entry::AudioGraphEntry, node_id::NodeId, AudioGraphNode};
-use ahash::{AHashMap, AHashSet};
+use gxhash::{HashMap, HashSet, HashSetExt as _};
 use std::cmp::Ordering;
 
 #[derive(Debug, Default)]
 pub struct AudioGraph {
-    graph: AHashMap<NodeId, AudioGraphEntry>,
+    graph: HashMap<NodeId, AudioGraphEntry>,
     dep_list: Vec<NodeId>,
     dirty: bool,
 }
@@ -15,12 +15,12 @@ impl AudioGraph {
         let id = node.id();
         let entry = AudioGraphEntry {
             node,
-            connections: AHashSet::default(),
+            connections: HashSet::default(),
             cache: Vec::new(),
         };
 
         Self {
-            graph: AHashMap::from_iter([(id, entry)]),
+            graph: HashMap::from_iter([(id, entry)]),
             dep_list: vec![id],
             dirty: false,
         }
@@ -70,7 +70,7 @@ impl AudioGraph {
                 .graph
                 .get(&from)
                 .is_some_and(|g| !g.connections.contains(&to))
-            && !self.check_cycle(&mut AHashSet::with_capacity(self.graph.len()), to, from)
+            && !self.check_cycle(&mut HashSet::with_capacity(self.graph.len()), to, from)
         {
             self.graph.get_mut(&from).unwrap().connections.insert(to);
             self.dirty = true;
@@ -91,7 +91,7 @@ impl AudioGraph {
 
         let entry = AudioGraphEntry {
             node,
-            connections: AHashSet::default(),
+            connections: HashSet::default(),
             cache: Vec::new(),
         };
 
@@ -123,7 +123,7 @@ impl AudioGraph {
         }
     }
 
-    fn check_cycle(&self, visited: &mut AHashSet<NodeId>, current: NodeId, to: NodeId) -> bool {
+    fn check_cycle(&self, visited: &mut HashSet<NodeId>, current: NodeId, to: NodeId) -> bool {
         if current == to {
             return true;
         }
