@@ -178,14 +178,14 @@ pub fn resample(
 
     let left = interleaved_samples
         .iter()
-        .step_by(2)
         .copied()
+        .step_by(2)
         .collect::<Box<_>>();
     let right = interleaved_samples
         .iter()
+        .copied()
         .skip(1)
         .step_by(2)
-        .copied()
         .collect();
 
     let deinterleaved_samples = resampler.process(&[left, right], None)?;

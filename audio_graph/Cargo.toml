@@ -9,4 +9,4 @@ workspace = true
 
 [dependencies]
 atomig = "0.4.2"
-gxhash = "3.4.1"
+bit-vec = "0.8.0"

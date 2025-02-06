@@ -42,24 +42,19 @@ impl<T> AudioCtx<T> {
                     self.audio_graph.insert(node);
                 }
                 AudioCtxMessage::Remove(node) => {
-                    let ok = self.audio_graph.remove(node);
-                    debug_assert!(ok);
+                    self.audio_graph.remove(node);
                 }
                 AudioCtxMessage::Connect(from, to) => {
-                    let ok = self.audio_graph.connect(from, to);
-                    debug_assert!(ok);
+                    self.audio_graph.connect(from, to);
                 }
                 AudioCtxMessage::ConnectToMaster(node) => {
-                    let ok = self.audio_graph.connect(self.audio_graph.root(), node);
-                    debug_assert!(ok);
+                    self.audio_graph.connect(self.audio_graph.root(), node);
                 }
                 AudioCtxMessage::Disconnect(from, to) => {
-                    let ok = self.audio_graph.disconnect(from, to);
-                    debug_assert!(ok);
+                    self.audio_graph.disconnect(from, to);
                 }
                 AudioCtxMessage::DisconnectFromMaster(node) => {
-                    let ok = self.audio_graph.disconnect(self.audio_graph.root(), node);
-                    debug_assert!(ok);
+                    self.audio_graph.disconnect(self.audio_graph.root(), node);
                 }
                 AudioCtxMessage::RequestAudioGraph(a) => {
                     let audio_graph = std::mem::take(&mut self.audio_graph);

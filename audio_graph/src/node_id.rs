@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicUsize, Ordering::AcqRel};
+use std::{
+    ops::Deref,
+    sync::atomic::{AtomicUsize, Ordering::AcqRel},
+};
 
 static ID: AtomicUsize = AtomicUsize::new(0);
 
@@ -11,8 +14,10 @@ impl NodeId {
     }
 }
 
-impl From<NodeId> for usize {
-    fn from(value: NodeId) -> Self {
-        value.0
+impl Deref for NodeId {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
