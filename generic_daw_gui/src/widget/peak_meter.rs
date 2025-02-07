@@ -1,4 +1,5 @@
 use super::LINE_HEIGHT;
+use color_ext::ColorExt as _;
 use iced::{
     advanced::{
         layout::{Limits, Node},
@@ -12,6 +13,8 @@ use iced::{
 };
 use std::cmp::{max_by, min_by};
 
+mod color_ext;
+
 const DECAY: f32 = 64.0;
 const WIDTH: f32 = LINE_HEIGHT / 3.0 * 4.0 + 2.0;
 
@@ -19,6 +22,8 @@ const WIDTH: f32 = LINE_HEIGHT / 3.0 * 4.0 + 2.0;
 struct State {
     left: f32,
     right: f32,
+    left_mix: f32,
+    right_mix: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -67,6 +72,11 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
                 state.left.mul_add(DECAY - 1.0, self.left) / DECAY
             };
             self.left = 0.0;
+            state.left_mix = if state.left > 1.0 {
+                1.0
+            } else {
+                max_by(0.0, state.left_mix - 0.1, f32::total_cmp)
+            };
 
             state.right = if self.right >= state.right {
                 self.right
@@ -74,6 +84,11 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
                 state.right.mul_add(DECAY - 1.0, self.right) / DECAY
             };
             self.right = 0.0;
+            state.right_mix = if state.right > 1.0 {
+                1.0
+            } else {
+                max_by(0.0, state.right_mix - 0.1, f32::total_cmp)
+            };
 
             if max_by(state.left, state.right, f32::total_cmp) * bounds.height > 1.0 {
                 shell.publish((self.animate)());
@@ -103,6 +118,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
             renderer,
             theme,
             state.left,
+            state.left_mix,
             Rectangle::new(
                 bounds.position(),
                 Size::new(bounds.width / 2.0 - 1.0, bounds.height),
@@ -113,6 +129,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
             renderer,
             theme,
             state.right,
+            state.right_mix,
             Rectangle::new(
                 bounds.position() + Vector::new(bounds.width / 2.0 + 1.0, 0.0),
                 Size::new(bounds.width / 2.0 - 1.0, bounds.height),
@@ -131,13 +148,21 @@ impl<Message> PeakMeter<Message> {
         }
     }
 
-    fn draw_bar(&self, renderer: &mut Renderer, theme: &Theme, s: f32, bounds: Rectangle) {
+    fn draw_bar(
+        &self,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        s: f32,
+        mix: f32,
+        bounds: Rectangle,
+    ) {
         let color = if self.enabled {
-            if s > 1.0 {
-                theme.extended_palette().danger.base.color
-            } else {
-                theme.extended_palette().primary.base.color
-            }
+            theme
+                .extended_palette()
+                .primary
+                .base
+                .color
+                .mix(theme.extended_palette().danger.base.color, mix)
         } else {
             theme.extended_palette().secondary.strong.color
         };
