@@ -2,7 +2,7 @@ use generic_daw_core::{
     audio_graph::{AudioGraph, AudioGraphNodeImpl as _},
     cpal::{traits::StreamTrait as _, Stream},
     rtrb::Producer,
-    AudioCtxMessage, Meter, Track as TrackInner,
+    AudioCtxMessage, Meter, Track,
 };
 use hound::WavWriter;
 use rfd::FileHandle;
@@ -17,7 +17,7 @@ use std::{
 };
 
 pub struct Arrangement {
-    tracks: Vec<TrackInner>,
+    tracks: Vec<Track>,
     producer: Producer<AudioCtxMessage<FileHandle>>,
     stream: Stream,
     pub meter: Arc<Meter>,
@@ -47,11 +47,11 @@ impl Arrangement {
         }
     }
 
-    pub fn tracks(&self) -> &[TrackInner] {
+    pub fn tracks(&self) -> &[Track] {
         &self.tracks
     }
 
-    pub fn push(&mut self, track: TrackInner) {
+    pub fn push(&mut self, track: Track) {
         self.tracks.push(track.clone());
 
         let id = track.id();
@@ -128,12 +128,7 @@ impl Arrangement {
 
         let mut buf = [0.0; CHUNK_SIZE];
 
-        let len = self
-            .tracks
-            .iter()
-            .map(TrackInner::len)
-            .max()
-            .unwrap_or_default();
+        let len = self.tracks.iter().map(Track::len).max().unwrap_or_default();
         let len = len.in_interleaved_samples(&self.meter);
 
         for i in (0..len).step_by(CHUNK_SIZE) {
