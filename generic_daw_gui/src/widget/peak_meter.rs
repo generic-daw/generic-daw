@@ -61,17 +61,17 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
             let state = tree.state.downcast_mut::<State>();
             let bounds = layout.bounds();
 
-            state.left = if self.left < state.left {
-                state.left.mul_add(DECAY - 1.0, self.left) / DECAY
+            state.left = if self.left >= state.left {
+                self.left
             } else {
-                min_by(self.left, 1.0, f32::total_cmp)
+                state.left.mul_add(DECAY - 1.0, self.left) / DECAY
             };
             self.left = 0.0;
 
-            state.right = if self.right < state.right {
-                state.right.mul_add(DECAY - 1.0, self.right) / DECAY
+            state.right = if self.right >= state.right {
+                self.right
             } else {
-                min_by(self.right, 1.0, f32::total_cmp)
+                state.right.mul_add(DECAY - 1.0, self.right) / DECAY
             };
             self.right = 0.0;
 
@@ -99,51 +99,25 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
         let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
 
-        let color = if self.enabled {
-            theme.extended_palette().primary.base.color
-        } else {
-            theme.extended_palette().secondary.strong.color
-        };
-
-        let left_height = bounds.height * state.left;
-        let right_height = bounds.height * state.right;
-
-        let left_bg = Quad {
-            bounds: Rectangle::new(
+        self.draw_bar(
+            renderer,
+            theme,
+            state.left,
+            Rectangle::new(
                 bounds.position(),
-                Size::new(bounds.width / 2.0 - 1.0, bounds.height - left_height),
+                Size::new(bounds.width / 2.0 - 1.0, bounds.height),
             ),
-            ..Quad::default()
-        };
-        renderer.fill_quad(left_bg, color.scale_alpha(0.5));
+        );
 
-        let right_bg = Quad {
-            bounds: Rectangle::new(
+        self.draw_bar(
+            renderer,
+            theme,
+            state.right,
+            Rectangle::new(
                 bounds.position() + Vector::new(bounds.width / 2.0 + 1.0, 0.0),
-                Size::new(bounds.width / 2.0 - 1.0, bounds.height - right_height),
+                Size::new(bounds.width / 2.0 - 1.0, bounds.height),
             ),
-            ..Quad::default()
-        };
-        renderer.fill_quad(right_bg, color.scale_alpha(0.5));
-
-        let left = Quad {
-            bounds: Rectangle::new(
-                bounds.position() + Vector::new(0.0, bounds.height - left_height),
-                Size::new(bounds.width / 2.0 - 1.0, left_height),
-            ),
-            ..Quad::default()
-        };
-        renderer.fill_quad(left, color);
-
-        let right = Quad {
-            bounds: Rectangle::new(
-                bounds.position()
-                    + Vector::new(bounds.width / 2.0 + 1.0, bounds.height - right_height),
-                Size::new(bounds.width / 2.0 - 1.0, right_height),
-            ),
-            ..Quad::default()
-        };
-        renderer.fill_quad(right, color);
+        );
     }
 }
 
@@ -155,6 +129,38 @@ impl<Message> PeakMeter<Message> {
             enabled,
             animate,
         }
+    }
+
+    fn draw_bar(&self, renderer: &mut Renderer, theme: &Theme, s: f32, bounds: Rectangle) {
+        let color = if self.enabled {
+            if s > 1.0 {
+                theme.extended_palette().danger.base.color
+            } else {
+                theme.extended_palette().primary.base.color
+            }
+        } else {
+            theme.extended_palette().secondary.strong.color
+        };
+
+        let height = bounds.height * min_by(1.0, s, f32::total_cmp);
+
+        let bg = Quad {
+            bounds: Rectangle::new(
+                bounds.position(),
+                Size::new(bounds.width, bounds.height - height),
+            ),
+            ..Quad::default()
+        };
+        renderer.fill_quad(bg, color.scale_alpha(0.5));
+
+        let fg = Quad {
+            bounds: Rectangle::new(
+                bounds.position() + Vector::new(0.0, bounds.height - height),
+                Size::new(bounds.width, height),
+            ),
+            ..Quad::default()
+        };
+        renderer.fill_quad(fg, color);
     }
 }
 
