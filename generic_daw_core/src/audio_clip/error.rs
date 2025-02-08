@@ -1,10 +1,34 @@
 use rubato::{ResampleError, ResamplerConstructionError};
+use std::{
+    error::Error,
+    fmt::{Display, Formatter},
+};
 use symphonia::core::errors::Error as SymphoniaError;
 
 #[derive(Debug)]
 pub enum RubatoError {
     ResamplerConstructionError(ResamplerConstructionError),
     ResampleError(ResampleError),
+}
+
+impl Display for RubatoError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ResamplerConstructionError(_) => {
+                write!(f, "encountered error while constructing resampler")
+            }
+            Self::ResampleError(_) => write!(f, "encountered error while resampling"),
+        }
+    }
+}
+
+impl Error for RubatoError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(match self {
+            Self::ResamplerConstructionError(err) => err,
+            Self::ResampleError(err) => err,
+        })
+    }
 }
 
 impl From<ResamplerConstructionError> for RubatoError {
@@ -23,6 +47,24 @@ impl From<ResampleError> for RubatoError {
 pub enum InterleavedAudioError {
     RubatoError(RubatoError),
     SymphoniaError(SymphoniaError),
+}
+
+impl Display for InterleavedAudioError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::RubatoError(_) => write!(f, "encountered error while resampling"),
+            Self::SymphoniaError(_) => write!(f, "encountered error while decoding"),
+        }
+    }
+}
+
+impl Error for InterleavedAudioError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(match self {
+            Self::RubatoError(err) => err,
+            Self::SymphoniaError(err) => err,
+        })
+    }
 }
 
 impl From<RubatoError> for InterleavedAudioError {

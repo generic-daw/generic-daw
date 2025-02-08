@@ -18,7 +18,7 @@ mod midi_clip;
 mod midi_track;
 mod position;
 
-pub use audio_clip::{resample, AudioClip, InterleavedAudio};
+pub use audio_clip::{resample, AudioClip, InterleavedAudio, InterleavedAudioError, RubatoError};
 pub use audio_graph;
 pub use audio_track::AudioTrack;
 pub use clap_host;

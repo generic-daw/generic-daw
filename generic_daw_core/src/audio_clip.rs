@@ -8,6 +8,7 @@ use std::sync::{
 mod error;
 mod interleaved_audio;
 
+pub use error::{InterleavedAudioError, RubatoError};
 pub use interleaved_audio::{resample, InterleavedAudio};
 
 #[derive(Debug)]
