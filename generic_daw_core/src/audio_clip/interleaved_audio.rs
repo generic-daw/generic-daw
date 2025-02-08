@@ -1,5 +1,5 @@
+use super::error::{InterleavedAudioError, RubatoError};
 use crate::Meter;
-use anyhow::Result;
 use rubato::{
     Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
@@ -38,7 +38,7 @@ impl Debug for InterleavedAudio {
 }
 
 impl InterleavedAudio {
-    pub fn create(path: PathBuf, meter: &Meter) -> Result<Arc<Self>> {
+    pub fn create(path: PathBuf, meter: &Meter) -> Result<Arc<Self>, InterleavedAudioError> {
         let samples = Self::read_audio_file(&path, meter)?;
         let length = samples.len();
 
@@ -65,7 +65,7 @@ impl InterleavedAudio {
         self.len() == 0
     }
 
-    fn read_audio_file(path: &PathBuf, meter: &Meter) -> Result<Box<[f32]>> {
+    fn read_audio_file(path: &PathBuf, meter: &Meter) -> Result<Box<[f32]>, InterleavedAudioError> {
         let mut format = symphonia::default::get_probe()
             .format(
                 &Hint::default(),
@@ -111,7 +111,11 @@ impl InterleavedAudio {
 
         let stream_sample_rate = meter.sample_rate.load(Acquire);
 
-        resample(file_sample_rate, stream_sample_rate, interleaved_samples)
+        Ok(resample(
+            file_sample_rate,
+            stream_sample_rate,
+            interleaved_samples,
+        )?)
     }
 
     fn create_lod(&mut self) {
@@ -153,7 +157,7 @@ pub fn resample(
     file_sample_rate: u32,
     stream_sample_rate: u32,
     mut interleaved_samples: Vec<f32>,
-) -> Result<Box<[f32]>> {
+) -> Result<Box<[f32]>, RubatoError> {
     if file_sample_rate == stream_sample_rate {
         return Ok(interleaved_samples.into_boxed_slice());
     }

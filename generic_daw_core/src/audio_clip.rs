@@ -5,6 +5,7 @@ use std::sync::{
     Arc,
 };
 
+mod error;
 mod interleaved_audio;
 
 pub use interleaved_audio::{resample, InterleavedAudio};
