@@ -209,7 +209,7 @@ impl Daw {
                 )
                 .width(50),
             ],
-            number_input(self.meter.bpm.load(Acquire), 30..=600, Message::BpmChanged).width(50),
+            number_input(&self.meter.bpm.load(Acquire), 30..=600, Message::BpmChanged).width(50),
             toggler(self.meter.metronome.load(Acquire))
                 .label("Metronome")
                 .on_toggle(|_| Message::ToggleMetronome),

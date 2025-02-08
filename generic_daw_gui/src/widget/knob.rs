@@ -212,14 +212,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
             state.last_theme.borrow_mut().replace(theme.clone());
         }
 
-        renderer.with_translation(
-            Vector::new(bounds.position().x, bounds.position().y),
-            |renderer| {
-                renderer.draw_geometry(state.cache.draw(renderer, bounds.size(), |frame| {
-                    self.fill_canvas(state, frame, theme);
-                }));
-            },
-        );
+        renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
+            renderer.draw_geometry(state.cache.draw(renderer, bounds.size(), |frame| {
+                self.fill_canvas(state, frame, theme);
+            }));
+        });
     }
 
     fn mouse_interaction(

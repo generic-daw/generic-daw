@@ -18,7 +18,7 @@ iced = { version = "0.13.1", default-features = false, features = [
     "tokio",
     "wgpu",
 ] }
-iced_aw = { version = "0.11.0", default-features = false, features = [
+iced_aw = { version = "0.12.0", default-features = false, features = [
     "number_input",
 ] }
 iced_file_tree = "0.3.0"
