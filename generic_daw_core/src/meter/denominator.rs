@@ -14,6 +14,6 @@ pub enum Denominator {
 
 impl Display for Denominator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u16)
+        write!(f, "{}", *self as u8)
     }
 }
