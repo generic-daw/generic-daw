@@ -3,6 +3,7 @@ use crate::{
     clap_host_view::{ClapHostView, Message as ClapHostMessage, Opened},
     widget::VSplit,
 };
+use fragile::Fragile;
 use generic_daw_core::{
     clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, open_gui},
     Denominator, InterleavedAudio, Meter, Numerator,
@@ -99,7 +100,7 @@ impl Daw {
                     );
                     Arc::new(Mutex::new(Opened {
                         id,
-                        gui,
+                        gui: Fragile::new(gui),
                         host_audio_processor,
                         plugin_audio_processor,
                     }))

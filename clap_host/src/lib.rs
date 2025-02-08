@@ -9,7 +9,6 @@ use walkdir::WalkDir;
 use winit::raw_window_handle::RawWindowHandle;
 
 mod clap_plugin_gui;
-mod clap_plugin_gui_wrapper;
 mod gui;
 mod host;
 mod host_audio_processor;
@@ -20,7 +19,6 @@ mod timer;
 
 pub use clack_host;
 pub use clap_plugin_gui::ClapPluginGui;
-pub use clap_plugin_gui_wrapper::ClapPluginGuiWrapper;
 pub use host_audio_processor::HostAudioProcessor;
 pub use plugin_audio_processor::PluginAudioProcessor;
 
@@ -96,11 +94,7 @@ pub fn open_gui(
     bundle: &PluginBundle,
     config: PluginAudioConfiguration,
     window_handle: RawWindowHandle,
-) -> (
-    ClapPluginGuiWrapper,
-    HostAudioProcessor,
-    PluginAudioProcessor,
-) {
+) -> (ClapPluginGui, HostAudioProcessor, PluginAudioProcessor) {
     let (sender_host, receiver_plugin) = std::sync::mpsc::channel();
     let (sender_plugin, receiver_host) = std::sync::mpsc::channel();
 
@@ -143,9 +137,5 @@ pub fn open_gui(
 
     let gui = ClapPluginGui::new(instance, gui);
 
-    (
-        ClapPluginGuiWrapper::new(gui),
-        host_audio_processor,
-        plugin_audio_processor,
-    )
+    (gui, host_audio_processor, plugin_audio_processor)
 }

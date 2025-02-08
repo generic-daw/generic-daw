@@ -1,10 +1,11 @@
-use generic_daw_core::clap_host::{ClapPluginGuiWrapper, HostAudioProcessor, PluginAudioProcessor};
+use fragile::Fragile;
+use generic_daw_core::clap_host::{ClapPluginGui, HostAudioProcessor, PluginAudioProcessor};
 use iced::window::Id;
 use std::fmt::{Debug, Formatter};
 
 pub struct Opened {
     pub id: Id,
-    pub gui: ClapPluginGuiWrapper,
+    pub gui: Fragile<ClapPluginGui>,
     pub host_audio_processor: HostAudioProcessor,
     pub plugin_audio_processor: PluginAudioProcessor,
 }

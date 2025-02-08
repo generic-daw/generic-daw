@@ -8,6 +8,7 @@ license = { workspace = true }
 workspace = true
 
 [dependencies]
+fragile = "2.0.0"
 generic_daw_core = { path = "../generic_daw_core" }
 
 home = "0.5.11"
