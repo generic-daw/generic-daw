@@ -1,13 +1,15 @@
-use crate::{DirtyEvent, Meter, Position, TrackClip};
+use crate::{DirtyEvent, Meter, Position};
 use atomig::Atomic;
-use midi_pattern::MidiPattern;
 use std::sync::{
     atomic::Ordering::{AcqRel, Acquire, Release},
     Arc,
 };
 
-pub mod midi_note;
-pub mod midi_pattern;
+mod midi_note;
+mod midi_pattern;
+
+pub use midi_note::MidiNote;
+pub use midi_pattern::MidiPattern;
 
 #[derive(Debug)]
 pub struct MidiClip {
@@ -36,15 +38,15 @@ impl Clone for MidiClip {
 
 impl MidiClip {
     #[must_use]
-    pub fn create(pattern: Arc<MidiPattern>, meter: Arc<Meter>) -> Arc<TrackClip> {
+    pub fn create(pattern: Arc<MidiPattern>, meter: Arc<Meter>) -> Arc<Self> {
         let len = pattern.len();
-        Arc::new(TrackClip::Midi(Self {
+        Arc::new(Self {
             pattern,
             global_start: Atomic::default(),
             global_end: Atomic::new(Position::from_interleaved_samples(len, &meter)),
             clip_start: Atomic::default(),
             meter,
-        }))
+        })
     }
 
     #[must_use]

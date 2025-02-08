@@ -1,7 +1,7 @@
 use audio_graph::{AudioGraph, AudioGraphNode, NodeId};
 
 #[derive(Debug)]
-pub enum AudioCtxMessage<T> {
+pub enum DawCtxMessage<T> {
     Insert(AudioGraphNode),
     Remove(NodeId),
     Connect(NodeId, NodeId),

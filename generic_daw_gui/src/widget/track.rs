@@ -1,5 +1,5 @@
-use super::{ArrangementPosition, ArrangementScale, TrackClip};
-use generic_daw_core::{Meter, Track as TrackInner};
+use super::{ArrangementPosition, ArrangementScale, AudioClip};
+use crate::arrangement_view::{TrackClipWrapper, TrackWrapper};
 use iced::{
     advanced::{
         layout::{Limits, Node},
@@ -13,12 +13,8 @@ use iced::{
 };
 use std::{iter::once, sync::atomic::Ordering::Acquire};
 
-mod track_ext;
-
-pub use track_ext::TrackExt;
-
 pub struct Track<'a, Message> {
-    inner: &'a TrackInner,
+    inner: &'a TrackWrapper,
     /// list of the track panel and all the clip widgets
     children: Box<[Element<'a, Message, Theme, Renderer>]>,
     /// the position of the top left corner of the arrangement viewport
@@ -70,13 +66,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                                 ),
                             )
                         })
-                        .zip(self.inner.clips.iter())
+                        .zip(self.inner.clips())
                         .map(|(node, clip)| {
                             node.translate(Vector::new(
                                 panel_width
                                     + (clip
                                         .get_global_start()
-                                        .in_interleaved_samples_f(&self.inner.meter)
+                                        .in_interleaved_samples_f(self.inner.meter())
                                         - self.position.x)
                                         / self.scale.x.exp2(),
                                 0.0,
@@ -199,25 +195,26 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
     }
 }
 
-impl<'a, Message> Track<'a, Message> {
+impl<'a, Message> Track<'a, Message>
+where
+    Message: 'a,
+{
     pub fn new(
-        inner: &'a TrackInner,
+        inner: &'a TrackWrapper,
         position: ArrangementPosition,
         scale: ArrangementScale,
         track_panel: impl Fn(usize, bool) -> Element<'a, Message>,
         index: usize,
     ) -> Self {
-        let enabled = inner.node.enabled.load(Acquire);
+        let enabled = inner.node().enabled.load(Acquire);
 
         let children = once(track_panel(index, enabled))
-            .chain(
-                inner
-                    .clips
-                    .iter()
-                    .cloned()
-                    .map(|clip| TrackClip::new(clip, position, scale, enabled))
-                    .map(Element::new),
-            )
+            .chain(inner.clips().map(|clip| match clip {
+                TrackClipWrapper::AudioClip(clip) => {
+                    AudioClip::new(clip, position, scale, enabled).into()
+                }
+                TrackClipWrapper::MidiClip(_) => unimplemented!(),
+            }))
             .collect();
 
         Self {
@@ -226,19 +223,5 @@ impl<'a, Message> Track<'a, Message> {
             position,
             scale,
         }
-    }
-}
-
-impl TrackExt for TrackInner {
-    fn get_clip_at_global_time(&self, meter: &Meter, global_time: usize) -> Option<usize> {
-        self.clips.iter().enumerate().rev().find_map(|(i, clip)| {
-            if clip.get_global_start().in_interleaved_samples(meter) <= global_time
-                && global_time <= clip.get_global_end().in_interleaved_samples(meter)
-            {
-                Some(i)
-            } else {
-                None
-            }
-        })
     }
 }

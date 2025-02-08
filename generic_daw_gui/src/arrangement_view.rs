@@ -2,8 +2,8 @@ use crate::widget::{
     Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob, PeakMeter,
 };
 use generic_daw_core::{
-    audio_graph::MixerNode, build_output_stream, AudioClip, InterleavedAudio, Meter, Position,
-    Track, UiMessage,
+    audio_graph::MixerNode, build_output_stream, AudioClip, AudioTrack, InterleavedAudio, Meter,
+    Position, UiMessage,
 };
 use iced::{
     futures::SinkExt as _,
@@ -21,8 +21,12 @@ use std::{
 };
 
 mod arrangement;
+mod track;
+mod track_clip;
 
 pub use arrangement::Arrangement as ArrangementWrapper;
+pub use track::Track as TrackWrapper;
+pub use track_clip::TrackClip as TrackClipWrapper;
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -100,18 +104,18 @@ impl ArrangementView {
             }
             Message::TrackVolumeChanged(track, volume) => {
                 self.arrangement.tracks()[track]
-                    .node
+                    .node()
                     .volume
                     .store(volume, Release);
             }
             Message::TrackPanChanged(track, pan) => {
                 self.arrangement.tracks()[track]
-                    .node
+                    .node()
                     .pan
                     .store(pan, Release);
             }
             Message::LoadedSample(audio_file) => {
-                let mut track = Track::audio(self.meter.clone(), Arc::new(MixerNode::default()));
+                let mut track = AudioTrack::new(self.meter.clone(), Arc::new(MixerNode::default()));
                 track
                     .clips
                     .push(AudioClip::create(audio_file, self.meter.clone()));
@@ -119,7 +123,7 @@ impl ArrangementView {
             }
             Message::ToggleTrackEnabled(track) => {
                 self.arrangement.tracks()[track]
-                    .node
+                    .node()
                     .enabled
                     .fetch_not(AcqRel);
                 self.soloed_track = None;
@@ -130,14 +134,14 @@ impl ArrangementView {
                     self.arrangement
                         .tracks()
                         .iter()
-                        .for_each(|track| track.node.enabled.store(true, Release));
+                        .for_each(|track| track.node().enabled.store(true, Release));
                 } else {
                     self.arrangement
                         .tracks()
                         .iter()
-                        .for_each(|track| track.node.enabled.store(false, Release));
+                        .for_each(|track| track.node().enabled.store(false, Release));
                     self.arrangement.tracks()[track]
-                        .node
+                        .node()
                         .enabled
                         .store(true, Release);
                     self.soloed_track = Some(track);
@@ -152,7 +156,7 @@ impl ArrangementView {
             Message::UnselectClip() => self.grabbed_clip = None,
             Message::CloneClip(track, mut clip) => {
                 self.arrangement.clone_clip(track, clip);
-                clip = self.arrangement.tracks()[track].clips.len() - 1;
+                clip = self.arrangement.tracks()[track].clips().len() - 1;
                 self.grabbed_clip.replace([track, clip]);
             }
             Message::MoveClipTo(new_track, pos) => {
@@ -162,18 +166,24 @@ impl ArrangementView {
                     && self.arrangement.clip_switch_track(*track, *clip, new_track)
                 {
                     *track = new_track;
-                    *clip = self.arrangement.tracks()[*track].clips.len() - 1;
+                    *clip = self.arrangement.tracks()[*track].clips().len() - 1;
                 }
 
-                self.arrangement.tracks()[*track].clips[*clip].move_to(pos);
+                self.arrangement.tracks()[*track]
+                    .get_clip(*clip)
+                    .move_to(pos);
             }
             Message::TrimClipStart(pos) => {
                 let [track, clip] = self.grabbed_clip.unwrap();
-                self.arrangement.tracks()[track].clips[clip].trim_start_to(pos);
+                self.arrangement.tracks()[track]
+                    .get_clip(clip)
+                    .trim_start_to(pos);
             }
             Message::TrimClipEnd(pos) => {
                 let [track, clip] = self.grabbed_clip.unwrap();
-                self.arrangement.tracks()[track].clips[clip].trim_end_to(pos);
+                self.arrangement.tracks()[track]
+                    .get_clip(clip)
+                    .trim_end_to(pos);
             }
             Message::DeleteClip(track, clip) => {
                 self.arrangement.delete_clip(track, clip);
@@ -195,7 +205,7 @@ impl ArrangementView {
                         self.arrangement
                             .tracks()
                             .iter()
-                            .map(Track::len)
+                            .map(TrackWrapper::len)
                             .max()
                             .unwrap_or_default()
                             .in_interleaved_samples_f(&self.meter),
@@ -218,11 +228,11 @@ impl ArrangementView {
             self.scale,
             |track, enabled| {
                 let left = self.arrangement.tracks()[track]
-                    .node
+                    .node()
                     .max_l
                     .swap(0.0, AcqRel);
                 let right = self.arrangement.tracks()[track]
-                    .node
+                    .node()
                     .max_r
                     .swap(0.0, AcqRel);
 

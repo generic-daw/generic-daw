@@ -1,12 +1,13 @@
-use crate::{Meter, Position, TrackClip};
+use crate::{Meter, Position};
 use atomig::Atomic;
-use interleaved_audio::InterleavedAudio;
 use std::sync::{
     atomic::Ordering::{AcqRel, Acquire, Release},
     Arc,
 };
 
-pub mod interleaved_audio;
+mod interleaved_audio;
+
+pub use interleaved_audio::{resample, InterleavedAudio};
 
 #[derive(Debug)]
 pub struct AudioClip {
@@ -35,16 +36,16 @@ impl Clone for AudioClip {
 
 impl AudioClip {
     #[must_use]
-    pub fn create(audio: Arc<InterleavedAudio>, meter: Arc<Meter>) -> Arc<TrackClip> {
+    pub fn create(audio: Arc<InterleavedAudio>, meter: Arc<Meter>) -> Arc<Self> {
         let samples = audio.samples.len();
 
-        Arc::new(TrackClip::Audio(Self {
+        Arc::new(Self {
             audio,
             global_start: Atomic::default(),
             global_end: Atomic::new(Position::from_interleaved_samples(samples, &meter)),
             clip_start: Atomic::default(),
             meter,
-        }))
+        })
     }
 
     pub fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {

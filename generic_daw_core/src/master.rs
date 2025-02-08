@@ -1,11 +1,14 @@
-use crate::{resample, LiveSample, Meter, Position};
+use crate::{resample, Meter, Position};
 use arraydeque::{ArrayDeque, Wrapping};
 use audio_graph::{AudioGraphNodeImpl, NodeId};
 use include_data::include_f32s;
+use live_sample::LiveSample;
 use std::{
     cell::RefCell,
     sync::{atomic::Ordering::Acquire, Arc},
 };
+
+mod live_sample;
 
 static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
 static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
@@ -13,10 +16,10 @@ static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 #[derive(Debug)]
 pub struct Master {
     id: NodeId,
-    pub meter: Arc<Meter>,
-    pub live_sample_playback: RefCell<ArrayDeque<LiveSample, 2, Wrapping>>,
-    pub on_bar_click: Arc<[f32]>,
-    pub off_bar_click: Arc<[f32]>,
+    meter: Arc<Meter>,
+    live_sample_playback: RefCell<ArrayDeque<LiveSample, 2, Wrapping>>,
+    on_bar_click: Arc<[f32]>,
+    off_bar_click: Arc<[f32]>,
 }
 
 impl AudioGraphNodeImpl for Master {
@@ -59,10 +62,12 @@ impl AudioGraphNodeImpl for Master {
 }
 
 impl Master {
-    pub(crate) fn new(sample_rate: u32) -> Self {
+    pub(crate) fn new(meter: Arc<Meter>) -> Self {
+        let sample_rate = meter.sample_rate.load(Acquire);
+
         Self {
             id: NodeId::unique(),
-            meter: Arc::new(Meter::new(sample_rate)),
+            meter,
             live_sample_playback: RefCell::default(),
             on_bar_click: resample(44100, sample_rate, ON_BAR_CLICK.into())
                 .unwrap()

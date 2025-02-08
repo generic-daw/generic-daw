@@ -1,4 +1,4 @@
-use super::{track::TrackExt as _, ArrangementPosition, ArrangementScale, Track, LINE_HEIGHT};
+use super::{ArrangementPosition, ArrangementScale, Track, LINE_HEIGHT};
 use crate::arrangement_view::ArrangementWrapper;
 use generic_daw_core::Position;
 use iced::{
@@ -321,7 +321,7 @@ where
         delete_clip: fn(usize, usize) -> Message,
         position_scale_delta: fn(ArrangementPosition, ArrangementScale) -> Message,
     ) -> Self {
-        let tracks = inner
+        let children = inner
             .tracks()
             .iter()
             .enumerate()
@@ -331,7 +331,7 @@ where
 
         Self {
             inner,
-            children: tracks,
+            children,
             position,
             scale,
             seek_to,
@@ -501,12 +501,14 @@ where
 
                     let (track, clip) = self.get_track_clip(cursor)?;
 
-                    let start_pixel = (self.inner.tracks()[track].clips[clip]
+                    let start_pixel = (self.inner.tracks()[track]
+                        .get_clip(clip)
                         .get_global_start()
                         .in_interleaved_samples_f(&self.inner.meter)
                         - self.position.x)
                         / self.scale.x.exp2();
-                    let end_pixel = (self.inner.tracks()[track].clips[clip]
+                    let end_pixel = (self.inner.tracks()[track]
+                        .get_clip(clip)
                         .get_global_end()
                         .in_interleaved_samples_f(&self.inner.meter)
                         - self.position.x)
@@ -657,7 +659,8 @@ where
 
                     let (track, clip) = self.get_track_clip(cursor)?;
 
-                    let start_pixel = (self.inner.tracks()[track].clips[clip]
+                    let start_pixel = (self.inner.tracks()[track]
+                        .get_clip(clip)
                         .get_global_start()
                         .in_interleaved_samples_f(&self.inner.meter)
                         - self.position.x)

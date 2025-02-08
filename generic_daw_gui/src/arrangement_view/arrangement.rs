@@ -1,14 +1,14 @@
+use super::track::Track;
 use generic_daw_core::{
-    audio_graph::{AudioGraph, AudioGraphNodeImpl as _},
+    audio_graph::AudioGraph,
     cpal::{traits::StreamTrait as _, Stream},
     rtrb::Producer,
-    AudioCtxMessage, Meter, Track,
+    DawCtxMessage, Meter,
 };
 use hound::WavWriter;
 use rfd::FileHandle;
 use std::{
     fmt::{Debug, Formatter},
-    ops::Deref as _,
     path::Path,
     sync::{
         atomic::Ordering::{AcqRel, Acquire, Release},
@@ -18,7 +18,7 @@ use std::{
 
 pub struct Arrangement {
     tracks: Vec<Track>,
-    producer: Producer<AudioCtxMessage<FileHandle>>,
+    producer: Producer<DawCtxMessage<FileHandle>>,
     stream: Stream,
     pub meter: Arc<Meter>,
 }
@@ -35,7 +35,7 @@ impl Debug for Arrangement {
 
 impl Arrangement {
     pub fn new(
-        producer: Producer<AudioCtxMessage<FileHandle>>,
+        producer: Producer<DawCtxMessage<FileHandle>>,
         stream: Stream,
         meter: Arc<Meter>,
     ) -> Self {
@@ -51,48 +51,46 @@ impl Arrangement {
         &self.tracks
     }
 
-    pub fn push(&mut self, track: Track) {
+    pub fn push(&mut self, track: impl Into<Track>) {
+        let track = track.into();
         self.tracks.push(track.clone());
 
         let id = track.id();
         self.producer
-            .push(AudioCtxMessage::Insert(track.into()))
+            .push(DawCtxMessage::Insert(track.into()))
             .unwrap();
         self.producer
-            .push(AudioCtxMessage::ConnectToMaster(id))
+            .push(DawCtxMessage::ConnectToMaster(id))
             .unwrap();
     }
 
     pub fn clone_clip(&mut self, track: usize, clip: usize) {
-        let clip = self.tracks[track].clips[clip].deref().clone();
-        self.tracks[track].clips.push(Arc::new(clip));
+        self.tracks[track].clone_clip(clip);
 
         self.producer
-            .push(AudioCtxMessage::Insert(self.tracks[track].clone().into()))
+            .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
             .unwrap();
     }
 
     pub fn delete_clip(&mut self, track: usize, clip: usize) {
-        self.tracks[track].clips.remove(clip);
+        self.tracks[track].delete_clip(clip);
 
         self.producer
-            .push(AudioCtxMessage::Insert(self.tracks[track].clone().into()))
+            .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
             .unwrap();
     }
 
     pub fn clip_switch_track(&mut self, track: usize, clip: usize, new_track: usize) -> bool {
-        let inner = self.tracks[track].clips[clip].clone();
+        let inner = self.tracks[track].get_clip(clip);
 
-        if self.tracks[new_track].try_push(&inner) {
-            self.tracks[track].clips.remove(clip);
+        if self.tracks[new_track].try_add_clip(inner) {
+            self.tracks[track].delete_clip(clip);
 
             self.producer
-                .push(AudioCtxMessage::Insert(self.tracks[track].clone().into()))
+                .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
                 .unwrap();
             self.producer
-                .push(AudioCtxMessage::Insert(
-                    self.tracks[new_track].clone().into(),
-                ))
+                .push(DawCtxMessage::Insert(self.tracks[new_track].clone().into()))
                 .unwrap();
 
             true
@@ -103,7 +101,7 @@ impl Arrangement {
 
     pub fn request_export(&mut self, path: FileHandle) {
         self.producer
-            .push(AudioCtxMessage::RequestAudioGraph(path))
+            .push(DawCtxMessage::RequestAudioGraph(path))
             .unwrap();
     }
 
@@ -145,7 +143,7 @@ impl Arrangement {
         self.meter.metronome.store(metronome, Release);
 
         self.producer
-            .push(AudioCtxMessage::AudioGraph(audio_graph))
+            .push(DawCtxMessage::AudioGraph(audio_graph))
             .unwrap();
 
         self.stream.play().unwrap();

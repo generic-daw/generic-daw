@@ -22,11 +22,11 @@ use symphonia::core::{
 
 pub struct InterleavedAudio {
     /// these are used to play the sample back
-    pub(crate) samples: Box<[f32]>,
+    pub samples: Box<[f32]>,
     /// these are used to draw the sample in various quality levels
     pub lods: [Box<[(f32, f32)]>; 10],
     /// the file name associated with the sample
-    pub(crate) path: PathBuf,
+    pub path: PathBuf,
 }
 
 impl Debug for InterleavedAudio {

@@ -1,6 +1,11 @@
-use crate::{Denominator, Numerator};
 use atomig::Atomic;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicUsize};
+
+mod denominator;
+mod numerator;
+
+pub use denominator::Denominator;
+pub use numerator::Numerator;
 
 #[derive(Debug)]
 pub struct Meter {

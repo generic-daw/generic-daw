@@ -1,8 +1,8 @@
 use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT};
-use generic_daw_core::TrackClip as TrackClipInner;
+use generic_daw_core::AudioClip as AudioClipInner;
 use iced::{
     advanced::{
-        graphics::{geometry::Renderer as _, Mesh},
+        graphics::{color, geometry::Renderer as _},
         layout::{Limits, Node},
         renderer::{Quad, Style},
         text::Renderer as _,
@@ -13,19 +13,23 @@ use iced::{
     event::Status,
     mouse::{Cursor, Interaction},
     widget::text::{LineHeight, Shaping, Wrapping},
-    window, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
+    window, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Transformation,
+    Vector,
 };
 use iced_wgpu::{
     geometry::Cache,
-    graphics::cache::{Cached as _, Group},
+    graphics::{
+        cache::{Cached as _, Group},
+        mesh::{Indexed, SolidVertex2D},
+        Mesh,
+    },
     Geometry,
 };
-use std::{cell::RefCell, cmp::min_by, sync::Arc};
-
-pub mod audio_clip;
-pub mod track_clip_ext;
-
-pub use track_clip_ext::TrackClipExt;
+use std::{
+    cell::RefCell,
+    cmp::{max_by, min_by},
+    sync::Arc,
+};
 
 #[derive(Default)]
 struct State {
@@ -41,18 +45,18 @@ struct State {
     last_size: Size,
 }
 
-#[derive(Clone)]
-pub struct TrackClip {
-    inner: Arc<TrackClipInner>,
+#[derive(Clone, Debug)]
+pub struct AudioClip {
+    inner: Arc<AudioClipInner>,
     /// the position of the top left corner of the arrangement viewport
     position: ArrangementPosition,
     /// the scale of the timeline viewport
     scale: ArrangementScale,
-    // whether the clip is in an enabled track
+    /// whether the clip is in an enabled track
     enabled: bool,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
+impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
     }
@@ -69,7 +73,7 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
-        let meter = self.inner.meter();
+        let meter = &self.inner.meter;
 
         Node::new(Size::new(
             (self.inner.get_global_end().in_interleaved_samples(meter)
@@ -154,7 +158,14 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
 
         // the text containing the name of the sample
         let text = Text {
-            content: self.inner.get_name(),
+            content: self
+                .inner
+                .audio
+                .path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned(),
             bounds: Size::new(f32::INFINITY, 0.0),
             size: renderer.default_size(),
             line_height: LineHeight::default(),
@@ -207,9 +218,7 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
 
         // fill the mesh cache if it's cleared
         if state.cache.borrow().is_none() {
-            let mesh = self
-                .inner
-                .mesh(theme, bounds.size(), self.position, self.scale);
+            let mesh = self.mesh(theme, bounds.size(), self.position, self.scale);
 
             state.cache.borrow_mut().replace(
                 Geometry::Live {
@@ -249,9 +258,9 @@ impl<Message> Widget<Message, Theme, Renderer> for TrackClip {
     }
 }
 
-impl TrackClip {
+impl AudioClip {
     pub fn new(
-        inner: Arc<TrackClipInner>,
+        inner: Arc<AudioClipInner>,
         position: ArrangementPosition,
         scale: ArrangementScale,
         enabled: bool,
@@ -263,9 +272,7 @@ impl TrackClip {
             enabled,
         }
     }
-}
 
-impl TrackClipExt for TrackClipInner {
     fn mesh(
         &self,
         theme: &Theme,
@@ -273,9 +280,80 @@ impl TrackClipExt for TrackClipInner {
         position: ArrangementPosition,
         scale: ArrangementScale,
     ) -> Mesh {
-        match self {
-            Self::Audio(audio) => audio.mesh(theme, size, position, scale),
-            Self::Midi(_) => unimplemented!(),
+        // the height of the waveform
+        let height = scale.y - LINE_HEIGHT;
+
+        debug_assert!(height >= 0.0);
+
+        // samples of the original audio per sample of lod
+        let lod_sample_size = scale.x.floor().exp2();
+
+        // samples of the original audio per pixel
+        let pixel_size = scale.x.exp2();
+
+        // samples in the lod per pixel
+        let lod_samples_per_pixel = lod_sample_size / pixel_size;
+
+        let color = color::pack(theme.extended_palette().secondary.base.text);
+        let lod = scale.x as usize - 3;
+
+        let diff = max_by(
+            0.0,
+            position.x
+                - self
+                    .inner
+                    .get_global_start()
+                    .in_interleaved_samples_f(&self.inner.meter),
+            f32::total_cmp,
+        );
+
+        let clip_start = self
+            .inner
+            .get_clip_start()
+            .in_interleaved_samples_f(&self.inner.meter);
+
+        let first_index = ((diff + clip_start) / lod_sample_size) as usize;
+        let last_index = first_index + (size.width / lod_samples_per_pixel) as usize;
+
+        // vertices of the waveform
+        let vertices = self.inner.audio.lods[lod][first_index..last_index]
+            .iter()
+            .enumerate()
+            .flat_map(|(x, (min, max))| {
+                let x = x as f32 * lod_samples_per_pixel;
+
+                [
+                    SolidVertex2D {
+                        position: [x, min.mul_add(height, LINE_HEIGHT)],
+                        color,
+                    },
+                    SolidVertex2D {
+                        position: [x, max.mul_add(height, LINE_HEIGHT)],
+                        color,
+                    },
+                ]
+            })
+            .collect::<Vec<_>>();
+
+        // triangles of the waveform
+        let indices = (0..vertices.len() as u32 - 2)
+            .flat_map(|i| [i, i + 1, i + 2])
+            .collect();
+
+        // the waveform mesh
+        Mesh::Solid {
+            buffers: Indexed { vertices, indices },
+            transformation: Transformation::IDENTITY,
+            clip_bounds: Rectangle::new(Point::new(0.0, scale.y - size.height + LINE_HEIGHT), size),
         }
+    }
+}
+
+impl<'a, Message> From<AudioClip> for Element<'a, Message, Theme, Renderer>
+where
+    Message: 'a,
+{
+    fn from(arrangement_front: AudioClip) -> Self {
+        Self::new(arrangement_front)
     }
 }

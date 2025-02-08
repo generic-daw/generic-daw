@@ -1,59 +1,48 @@
-use audio_ctx::AudioCtx;
 use cpal::{
     traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
     Stream, StreamConfig,
 };
-use master::Master;
+use daw_ctx::DawCtx;
 use rtrb::{Consumer, Producer};
 use std::sync::{
     atomic::Ordering::{AcqRel, Acquire},
     Arc,
 };
 
-mod audio_ctx;
-mod denominator;
-mod live_sample;
+mod audio_clip;
+mod audio_track;
+mod daw_ctx;
 mod master;
 mod meter;
-mod numerator;
+mod midi_clip;
+mod midi_track;
 mod position;
-mod track;
-mod track_clip;
 
-pub use audio_ctx::{AudioCtxMessage, UiMessage};
+pub use audio_clip::{resample, AudioClip, InterleavedAudio};
 pub use audio_graph;
+pub use audio_track::AudioTrack;
 pub use clap_host;
 pub use cpal;
-pub use denominator::Denominator;
-pub use live_sample::LiveSample;
-pub use meter::Meter;
-pub use numerator::Numerator;
+pub use daw_ctx::{DawCtxMessage, UiMessage};
+pub use meter::{Denominator, Meter, Numerator};
+pub use midi_clip::{MidiClip, MidiNote, MidiPattern};
+pub(crate) use midi_track::DirtyEvent;
+pub use midi_track::MidiTrack;
 pub use position::Position;
 pub use rtrb;
-pub(crate) use track::DirtyEvent;
-pub use track::Track;
-pub use track_clip::{
-    audio_clip::{
-        interleaved_audio::{resample, InterleavedAudio},
-        AudioClip,
-    },
-    midi_clip::{midi_note::MidiNote, midi_pattern::MidiPattern, MidiClip},
-    TrackClip,
-};
 
 #[expect(clippy::type_complexity)]
 pub fn build_output_stream<T: Send + 'static>() -> (
     Stream,
-    Producer<AudioCtxMessage<T>>,
+    Producer<DawCtxMessage<T>>,
     Consumer<UiMessage<T>>,
     Arc<Meter>,
 ) {
     let device = cpal::default_host().default_output_device().unwrap();
     let config: &StreamConfig = &device.default_output_config().unwrap().into();
 
-    let arrangement = Master::new(config.sample_rate.0);
-    let meter = arrangement.meter.clone();
-    let (mut ctx, producer, consumer) = AudioCtx::create(arrangement.into(), meter.clone());
+    let (mut ctx, producer, consumer) = DawCtx::create(config.sample_rate.0);
+    let meter = ctx.meter.clone();
 
     let stream = device
         .build_output_stream(
