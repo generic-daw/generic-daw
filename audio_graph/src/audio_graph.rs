@@ -1,7 +1,5 @@
-use crate::{
-    audio_graph_entry::AudioGraphEntry, bit_vec_ext::BitVecExt as _, AudioGraphNode, NodeId,
-};
-use bit_vec::BitVec;
+use crate::{audio_graph_entry::AudioGraphEntry, AudioGraphNode, NodeId};
+use bit_set::BitSet;
 use std::cmp::Ordering;
 
 #[derive(Debug, Default)]
@@ -9,7 +7,7 @@ pub struct AudioGraph {
     graph: Vec<Option<AudioGraphEntry>>,
     list: Vec<NodeId>,
     dirty: bool,
-    visited: BitVec,
+    visited: BitSet,
 }
 
 impl AudioGraph {
@@ -18,7 +16,7 @@ impl AudioGraph {
         let id = node.id();
         let entry = AudioGraphEntry {
             node,
-            connections: BitVec::from_elem(1, false),
+            connections: BitSet::with_capacity(1),
             cache: Vec::new(),
         };
 
@@ -26,7 +24,7 @@ impl AudioGraph {
             graph: vec![Some(entry)],
             list: vec![id],
             dirty: false,
-            visited: BitVec::from_elem(1, false),
+            visited: BitSet::with_capacity(1),
         }
     }
 
@@ -40,7 +38,12 @@ impl AudioGraph {
             self.dirty = false;
 
             self.list.sort_unstable_by(|&lhs, &rhs| {
-                if self.graph[*lhs].as_ref().unwrap().connections[*rhs] {
+                if self.graph[*lhs]
+                    .as_ref()
+                    .unwrap()
+                    .connections
+                    .contains(*rhs)
+                {
                     Ordering::Less
                 } else {
                     Ordering::Equal
@@ -57,7 +60,7 @@ impl AudioGraph {
 
             let entry = self.graph[*node].as_ref().unwrap();
 
-            for node in entry.connections.iter_ones() {
+            for node in &entry.connections {
                 self.graph[node]
                     .as_ref()
                     .unwrap()
@@ -79,14 +82,14 @@ impl AudioGraph {
 
     pub fn connect(&mut self, from: NodeId, to: NodeId) {
         if self.graph.get(*to).is_some_and(Option::is_some)
-            && self.graph.get(*from).is_some_and(Option::is_some)
+            && self
+                .graph
+                .get(*from)
+                .and_then(Option::as_ref)
+                .is_some_and(|e| !e.connections.contains(*to))
             && !Self::check_cycle(&self.graph, &mut self.visited, *to, *from)
         {
-            self.graph[*from]
-                .as_mut()
-                .unwrap()
-                .connections
-                .set(*to, true);
+            self.graph[*from].as_mut().unwrap().connections.insert(*to);
             self.dirty = true;
             self.visited.clear();
         }
@@ -94,7 +97,7 @@ impl AudioGraph {
 
     pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
         if let Some(Some(entry)) = self.graph.get_mut(*from) {
-            entry.connections.set(*to, false);
+            entry.connections.remove(*to);
         }
     }
 
@@ -104,19 +107,19 @@ impl AudioGraph {
         if let Some(Some(entry)) = self.graph.get_mut(*id) {
             entry.node = node;
             return;
+        } else if *id >= self.graph.len() {
+            let len = *id + 1;
+            self.graph.resize_with(len, || None);
+            self.graph
+                .iter_mut()
+                .flatten()
+                .for_each(|entry| entry.connections.reserve_len(len));
+            self.visited.reserve_len(len);
         }
-
-        let diff = *id + 1 - self.graph.len();
-        self.graph.resize_with(*id + 1, || None);
-        self.graph
-            .iter_mut()
-            .flatten()
-            .for_each(|entry| entry.connections.grow(diff, false));
-        self.visited.grow(diff, false);
 
         let entry = AudioGraphEntry {
             node,
-            connections: BitVec::from_elem(self.graph.len(), false),
+            connections: BitSet::with_capacity(self.graph.len()),
             cache: self.graph[0].as_ref().unwrap().cache.clone(),
         };
 
@@ -136,14 +139,14 @@ impl AudioGraph {
             self.list.remove(idx);
 
             for entry in self.graph.iter_mut().flatten() {
-                entry.connections.set(*node, false);
+                entry.connections.remove(*node);
             }
         }
     }
 
     fn check_cycle(
         graph: &[Option<AudioGraphEntry>],
-        visited: &mut BitVec,
+        visited: &mut BitSet,
         current: usize,
         to: usize,
     ) -> bool {
@@ -152,14 +155,9 @@ impl AudioGraph {
                 .as_ref()
                 .unwrap()
                 .connections
-                .iter_ones()
+                .iter()
                 .any(|current| {
-                    if visited[current] {
-                        false
-                    } else {
-                        visited.set(current, true);
-                        Self::check_cycle(graph, visited, current, to)
-                    }
+                    visited.insert(current) && Self::check_cycle(graph, visited, current, to)
                 })
     }
 }

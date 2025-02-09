@@ -368,7 +368,7 @@ name = "audio_graph"
 version = "0.1.0"
 dependencies = [
  "atomig",
- "bit-vec 0.8.0",
+ "bit-set 0.8.0",
 ]
 
 [[package]]
@@ -423,6 +423,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0700ddab506f33b20a03b13996eccd309a48e5ff77d0d95926aa0210fb4e95f1"
 dependencies = [
  "bit-vec 0.6.3",
+]
+
+[[package]]
+name = "bit-set"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08807e080ed7f9d5433fa9b275196cfc35414f66a0c79d864dc51a0d825231a3"
+dependencies = [
+ "bit-vec 0.8.0",
 ]
 
 [[package]]
@@ -2386,7 +2395,7 @@ version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50e3524642f53d9af419ab5e8dd29d3ba155708267667c2f3f06c88c9e130843"
 dependencies = [
- "bit-set",
+ "bit-set 0.5.3",
  "bitflags 2.8.0",
  "codespan-reporting",
  "hexf-parse",
@@ -4591,7 +4600,7 @@ dependencies = [
  "android_system_properties",
  "arrayvec",
  "ash",
- "bit-set",
+ "bit-set 0.5.3",
  "bitflags 2.8.0",
  "block",
  "cfg_aliases 0.1.1",

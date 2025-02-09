@@ -1,9 +1,9 @@
 use crate::AudioGraphNode;
-use bit_vec::BitVec;
+use bit_set::BitSet;
 
 #[derive(Debug)]
 pub struct AudioGraphEntry {
     pub node: AudioGraphNode,
-    pub connections: BitVec,
+    pub connections: BitSet,
     pub cache: Vec<f32>,
 }

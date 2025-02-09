@@ -9,4 +9,4 @@ workspace = true
 
 [dependencies]
 atomig = "0.4.2"
-bit-vec = "0.8.0"
+bit-set = "0.8.0"
