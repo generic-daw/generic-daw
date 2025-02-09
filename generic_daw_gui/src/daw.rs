@@ -39,7 +39,6 @@ pub enum Message {
     #[expect(dead_code)]
     Test,
     LoadSamplesButton,
-    LoadSamples(Vec<FileHandle>),
     LoadSample(PathBuf),
     ExportButton,
     TogglePlay,
@@ -87,7 +86,7 @@ impl Daw {
                     exit_on_close_request: false,
                     ..Settings::default()
                 });
-                let sample_rate = f64::from(self.meter.sample_rate.load(Acquire));
+                let sample_rate = f64::from(self.meter.sample_rate);
                 let embed = window::run_with_handle(id, move |handle| {
                     let (gui, host_audio_processor, plugin_audio_processor) = open_gui(
                         &get_installed_plugins()[0],
@@ -105,24 +104,23 @@ impl Daw {
                         plugin_audio_processor,
                     }))
                 });
-                return Task::batch([
-                    fut.discard(),
-                    embed.map(ClapHostMessage::Opened).map(Message::ClapHost),
-                ]);
+                return fut
+                    .discard()
+                    .chain(embed)
+                    .map(ClapHostMessage::Opened)
+                    .map(Message::ClapHost);
             }
             Message::LoadSamplesButton => {
-                return Task::future(AsyncFileDialog::new().pick_files())
-                    .and_then(Task::done)
-                    .map(Message::LoadSamples);
-            }
-            Message::LoadSamples(paths) => {
-                return Task::batch(
-                    paths
-                        .iter()
-                        .map(FileHandle::path)
-                        .map(PathBuf::from)
-                        .map(|path| self.update(Message::LoadSample(path))),
-                );
+                return Task::future(AsyncFileDialog::new().pick_files()).and_then(|paths| {
+                    Task::batch(
+                        paths
+                            .iter()
+                            .map(FileHandle::path)
+                            .map(PathBuf::from)
+                            .map(Message::LoadSample)
+                            .map(Task::done),
+                    )
+                });
             }
             Message::LoadSample(path) => {
                 let meter = self.meter.clone();

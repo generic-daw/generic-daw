@@ -11,7 +11,7 @@ use std::{
     fmt::{Debug, Formatter},
     path::Path,
     sync::{
-        atomic::Ordering::{AcqRel, Acquire, Release},
+        atomic::Ordering::{AcqRel, Release},
         Arc,
     },
 };
@@ -117,7 +117,7 @@ impl Arrangement {
             path,
             hound::WavSpec {
                 channels: 2,
-                sample_rate: self.meter.sample_rate.load(Acquire),
+                sample_rate: self.meter.sample_rate,
                 bits_per_sample: 32,
                 sample_format: hound::SampleFormat::Float,
             },

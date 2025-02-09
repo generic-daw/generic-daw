@@ -60,7 +60,7 @@ impl Position {
     pub fn from_interleaved_samples(samples: usize, meter: &Meter) -> Self {
         let samples = samples as u64;
         let bpm = u64::from(meter.bpm.load(Acquire));
-        let sample_rate = u64::from(meter.sample_rate.load(Acquire));
+        let sample_rate = u64::from(meter.sample_rate);
 
         let global_beat = samples * (bpm * 32) / (sample_rate * 15);
 
@@ -71,7 +71,7 @@ impl Position {
     pub fn in_interleaved_samples_f(self, meter: &Meter) -> f32 {
         let global_beat = f64::from(self.0);
         let bpm = f64::from(meter.bpm.load(Acquire));
-        let sample_rate = f64::from(meter.sample_rate.load(Acquire));
+        let sample_rate = f64::from(meter.sample_rate);
 
         let samples = global_beat * (sample_rate * 15.0) / (bpm * 32.0);
 
@@ -82,7 +82,7 @@ impl Position {
     pub fn in_interleaved_samples(self, meter: &Meter) -> usize {
         let global_beat = u64::from(self.0);
         let bpm = u64::from(meter.bpm.load(Acquire));
-        let sample_rate = u64::from(meter.sample_rate.load(Acquire));
+        let sample_rate = u64::from(meter.sample_rate);
 
         let samples = global_beat * (sample_rate * 15) / (bpm * 32);
 
