@@ -754,7 +754,7 @@ where
 
 impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message, Theme, Renderer>
 where
-    Message: 'static,
+    Message: 'a,
 {
     fn from(arrangement_front: Arrangement<'a, Message>) -> Self {
         Self::new(arrangement_front)
