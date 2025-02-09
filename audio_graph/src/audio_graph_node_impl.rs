@@ -1,5 +1,5 @@
 use crate::NodeId;
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, ops::Deref};
 
 pub trait AudioGraphNodeImpl: Debug + Send {
     /// `buf` contains the summed data from all dependencies in the graph
@@ -8,9 +8,10 @@ pub trait AudioGraphNodeImpl: Debug + Send {
     fn id(&self) -> NodeId;
 }
 
-impl<T> AudioGraphNodeImpl for Arc<T>
+impl<C, T> AudioGraphNodeImpl for C
 where
-    T: AudioGraphNodeImpl + Sync,
+    C: Debug + Send + Deref<Target = T>,
+    T: AudioGraphNodeImpl,
 {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         (**self).fill_buf(buf_start_sample, buf);
