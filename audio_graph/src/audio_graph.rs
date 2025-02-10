@@ -16,7 +16,7 @@ impl AudioGraph {
         let id = node.id();
         let entry = AudioGraphEntry {
             node,
-            connections: BitSet::with_capacity(1),
+            connections: BitSet::new(),
             cache: Vec::new(),
         };
 
@@ -24,7 +24,7 @@ impl AudioGraph {
             graph: vec![Some(entry)],
             list: vec![id],
             dirty: false,
-            visited: BitSet::with_capacity(1),
+            visited: BitSet::new(),
         }
     }
 
@@ -86,7 +86,7 @@ impl AudioGraph {
                 .graph
                 .get(*from)
                 .and_then(Option::as_ref)
-                .is_some_and(|e| !e.connections.contains(*to))
+                .is_some_and(|entry| !entry.connections.contains(*to))
             && !Self::check_cycle(&self.graph, &mut self.visited, *to, *from)
         {
             self.graph[*from].as_mut().unwrap().connections.insert(*to);
@@ -108,18 +108,12 @@ impl AudioGraph {
             entry.node = node;
             return;
         } else if *id >= self.graph.len() {
-            let len = *id + 1;
-            self.graph.resize_with(len, || None);
-            self.graph
-                .iter_mut()
-                .flatten()
-                .for_each(|entry| entry.connections.reserve_len(len));
-            self.visited.reserve_len(len);
+            self.graph.resize_with(*id + 1, || None);
         }
 
         let entry = AudioGraphEntry {
             node,
-            connections: BitSet::with_capacity(self.graph.len()),
+            connections: BitSet::new(),
             cache: self.graph[0].as_ref().unwrap().cache.clone(),
         };
 
