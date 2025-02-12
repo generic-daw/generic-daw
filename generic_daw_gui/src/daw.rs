@@ -12,14 +12,13 @@ use home::home_dir;
 use iced::{
     event::{self, Status},
     keyboard,
-    widget::{button, column, horizontal_space, pick_list, row, scrollable, toggler, Text},
+    widget::{button, column, horizontal_space, pick_list, row, scrollable, svg, toggler},
     window::{self, Settings},
     Alignment::Center,
-    Element, Event, Subscription, Task, Theme,
+    Element, Event, Length, Subscription, Task, Theme,
 };
 use iced_aw::number_input;
 use iced_file_tree::file_tree;
-use iced_fonts::{bootstrap, BOOTSTRAP_FONT};
 use rfd::{AsyncFileDialog, FileHandle};
 use std::{
     path::PathBuf,
@@ -170,6 +169,13 @@ impl Daw {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
+        let stop_handle = svg::Handle::from_path("assets/material-symbols--stop-rounded.svg");
+        let play_pause_handle = svg::Handle::from_path(if self.meter.playing.load(Acquire) {
+            "assets/material-symbols--pause-rounded.svg"
+        } else {
+            "assets/material-symbols--play-arrow-rounded.svg"
+        });
+
         let controls = row![
             row![
                 button("Load Samples").on_press(Message::LoadSamplesButton),
@@ -178,19 +184,21 @@ impl Daw {
             ],
             row![
                 button(
-                    Text::new(bootstrap::icon_to_string(
-                        if self.meter.playing.load(Acquire) {
-                            bootstrap::Bootstrap::PauseFill
-                        } else {
-                            bootstrap::Bootstrap::PlayFill
-                        }
-                    ))
-                    .font(BOOTSTRAP_FONT)
+                    svg(play_pause_handle)
+                        .style(|theme: &Theme, _| svg::Style {
+                            color: Some(theme.extended_palette().secondary.base.text)
+                        })
+                        .width(Length::Shrink)
+                        .height(Length::Fixed(21.0))
                 )
                 .on_press(Message::TogglePlay),
                 button(
-                    Text::new(bootstrap::icon_to_string(bootstrap::Bootstrap::StopFill))
-                        .font(BOOTSTRAP_FONT)
+                    svg(stop_handle)
+                        .style(|theme: &Theme, _| svg::Style {
+                            color: Some(theme.extended_palette().secondary.base.text)
+                        })
+                        .width(Length::Shrink)
+                        .height(Length::Fixed(21.0))
                 )
                 .on_press(Message::Stop),
             ],
