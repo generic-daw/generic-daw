@@ -5,7 +5,10 @@ use crate::{
 };
 use fragile::Fragile;
 use generic_daw_core::{
-    clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, open_gui},
+    clap_host::{
+        clack_host::process::PluginAudioConfiguration, get_installed_plugins, init_gui,
+        open_embedded, open_floating,
+    },
     Denominator, InterleavedAudio, Meter, Numerator,
 };
 use home::home_dir;
@@ -13,7 +16,7 @@ use iced::{
     event::{self, Status},
     keyboard,
     widget::{button, column, horizontal_space, pick_list, row, scrollable, svg, toggler},
-    window::{self, Settings},
+    window::{self, Id, Settings},
     Alignment::Center,
     Element, Event, Length, Subscription, Task, Theme,
 };
@@ -70,6 +73,7 @@ impl Daw {
         (daw, task.map(Message::Arrangement))
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Animate => {}
@@ -81,33 +85,51 @@ impl Daw {
                 return self.arrangement.update(message).map(Message::Arrangement);
             }
             Message::Test => {
-                let (id, fut) = window::open(Settings {
-                    exit_on_close_request: false,
-                    ..Settings::default()
-                });
                 let sample_rate = f64::from(self.meter.sample_rate);
-                let embed = window::run_with_handle(id, move |handle| {
-                    let (gui, host_audio_processor, plugin_audio_processor) = open_gui(
-                        &get_installed_plugins()[0],
-                        PluginAudioConfiguration {
-                            sample_rate,
-                            max_frames_count: 256,
-                            min_frames_count: 256,
-                        },
-                        handle.as_raw(),
-                    );
-                    Arc::new(Mutex::new(Opened {
-                        id,
-                        gui: Fragile::new(gui),
-                        host_audio_processor,
-                        plugin_audio_processor,
-                    }))
-                });
-                return fut
-                    .discard()
-                    .chain(embed)
-                    .map(ClapHostMessage::Opened)
-                    .map(Message::ClapHost);
+                let config = PluginAudioConfiguration {
+                    sample_rate,
+                    max_frames_count: 256,
+                    min_frames_count: 256,
+                };
+                let (gui, hap, pap, i) = init_gui(&get_installed_plugins()[0], config);
+
+                return if gui.needs_floating().unwrap() {
+                    let gui = open_floating(gui, i);
+                    let id = Id::unique();
+
+                    self.clap_host
+                        .update(ClapHostMessage::Opened(Arc::new(Mutex::new(Opened {
+                            id,
+                            gui: Fragile::new(gui),
+                            hap,
+                            pap,
+                        }))))
+                        .map(Message::ClapHost)
+                } else {
+                    let i = Fragile::new(i);
+
+                    let (id, spawn) = window::open(Settings {
+                        exit_on_close_request: false,
+                        ..Settings::default()
+                    });
+
+                    let embed = window::run_with_handle(id, move |handle| {
+                        let gui = open_embedded(gui, i.into_inner(), handle.as_raw());
+
+                        Arc::new(Mutex::new(Opened {
+                            id,
+                            gui: Fragile::new(gui),
+                            hap,
+                            pap,
+                        }))
+                    });
+
+                    spawn
+                        .discard()
+                        .chain(embed)
+                        .map(ClapHostMessage::Opened)
+                        .map(Message::ClapHost)
+                };
             }
             Message::LoadSamplesButton => {
                 return Task::future(AsyncFileDialog::new().pick_files()).and_then(|paths| {

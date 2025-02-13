@@ -163,7 +163,6 @@ impl GuiExt {
         }
     }
 
-    #[expect(dead_code)]
     pub fn run(
         self,
         mut instance: PluginInstance<Host>,

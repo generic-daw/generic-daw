@@ -1,15 +1,12 @@
 use super::Host;
 use crate::{host::HostThreadMessage, main_thread::MainThreadMessage};
 use clack_host::{prelude::*, process::StartedPluginAudioProcessor};
-use std::{
-    fmt::{Debug, Formatter},
-    sync::{
-        atomic::{
-            AtomicU64,
-            Ordering::{AcqRel, Acquire, Relaxed},
-        },
-        mpsc::{Receiver, Sender},
+use std::sync::{
+    atomic::{
+        AtomicU64,
+        Ordering::{AcqRel, Acquire},
     },
+    mpsc::{Receiver, Sender},
 };
 
 pub struct PluginAudioProcessor {
@@ -17,16 +14,6 @@ pub struct PluginAudioProcessor {
     pub steady_time: AtomicU64,
     pub sender: Sender<HostThreadMessage>,
     pub receiver: Receiver<MainThreadMessage>,
-}
-
-impl Debug for PluginAudioProcessor {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PluginAudioProcessor")
-            .field("steady_time", &self.steady_time.load(Relaxed))
-            .field("sender", &self.sender)
-            .field("receiver", &self.receiver)
-            .finish_non_exhaustive()
-    }
 }
 
 impl PluginAudioProcessor {

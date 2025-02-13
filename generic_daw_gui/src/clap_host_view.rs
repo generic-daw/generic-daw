@@ -33,8 +33,8 @@ impl ClapHostView {
                 let Opened {
                     id,
                     gui,
-                    host_audio_processor: _,
-                    plugin_audio_processor: _,
+                    hap: _,
+                    pap: _,
                 } = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
                 self.windows.insert(id, gui.into_inner());
             }

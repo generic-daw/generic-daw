@@ -1,3 +1,5 @@
+#![expect(missing_debug_implementations)]
+
 use clack_host::prelude::*;
 use gui::GuiExt;
 use home::home_dir;
@@ -90,11 +92,15 @@ fn standard_clap_paths() -> Vec<PathBuf> {
 }
 
 #[must_use]
-pub fn open_gui(
+pub fn init_gui(
     bundle: &PluginBundle,
     config: PluginAudioConfiguration,
-    window_handle: RawWindowHandle,
-) -> (ClapPluginGui, HostAudioProcessor, PluginAudioProcessor) {
+) -> (
+    GuiExt,
+    HostAudioProcessor,
+    PluginAudioProcessor,
+    PluginInstance<Host>,
+) {
     let (sender_host, receiver_plugin) = std::sync::mpsc::channel();
     let (sender_plugin, receiver_host) = std::sync::mpsc::channel();
 
@@ -108,6 +114,11 @@ pub fn open_gui(
         &HostInfo::new("", "", "", "").unwrap(),
     )
     .unwrap();
+
+    let gui = instance
+        .access_handler(|h: &MainThread<'_>| h.gui)
+        .map(|gui| GuiExt::new(gui, &mut instance.plugin_handle()))
+        .unwrap();
 
     let plugin_audio_processor = PluginAudioProcessor::new(
         instance
@@ -124,18 +135,23 @@ pub fn open_gui(
         receiver: receiver_host,
     };
 
-    let mut gui = instance
-        .access_handler(|h| h.gui)
-        .map(|gui| GuiExt::new(gui, &mut instance.plugin_handle()))
-        .unwrap();
+    (gui, host_audio_processor, plugin_audio_processor, instance)
+}
 
-    if gui.needs_floating().unwrap() {
-        gui.open_floating(&mut instance.plugin_handle());
-    } else {
-        gui.open_embedded(&mut instance.plugin_handle(), window_handle);
-    };
+#[must_use]
+pub fn open_embedded(
+    mut gui: GuiExt,
+    mut instance: PluginInstance<Host>,
+    window_handle: RawWindowHandle,
+) -> ClapPluginGui {
+    gui.open_embedded(&mut instance.plugin_handle(), window_handle);
 
-    let gui = ClapPluginGui::new(instance, gui);
+    ClapPluginGui::new(instance, gui)
+}
 
-    (gui, host_audio_processor, plugin_audio_processor)
+#[must_use]
+pub fn open_floating(mut gui: GuiExt, mut instance: PluginInstance<Host>) -> ClapPluginGui {
+    gui.open_floating(&mut instance.plugin_handle());
+
+    ClapPluginGui::new(instance, gui)
 }
