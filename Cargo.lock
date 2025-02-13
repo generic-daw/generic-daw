@@ -558,9 +558,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.13"
+version = "1.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7777341816418c02e033934a09f20dc0ccaf65a5201ef8a450ae0105a573fda"
+checksum = "0c3d1b2e905a3a7b00a6141adb0e4c0bb941d11caf55349d863942a1cc44e3c9"
 dependencies = [
  "jobserver",
  "libc",
@@ -1440,7 +1440,6 @@ dependencies = [
  "audio_graph",
  "clap_host",
  "cpal",
- "include_data",
  "rtrb",
  "rubato",
  "strum",
@@ -2047,15 +2046,6 @@ name = "imagesize"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "029d73f573d8e8d63e6d5020011d3255b28c3ba85d6cf870a07184ed23de9284"
-
-[[package]]
-name = "include_data"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14c03e3e4eee5ae0d03b6da534082064d0d2168008fc784f8bc39def00676817"
-dependencies = [
- "bytemuck",
-]
 
 [[package]]
 name = "indexmap"

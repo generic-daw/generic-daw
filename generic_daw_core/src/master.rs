@@ -1,13 +1,13 @@
-use crate::{resample, Meter, Position};
+use crate::{include_f32s, resample, Meter, Position};
 use arraydeque::{ArrayDeque, Wrapping};
 use audio_graph::{AudioGraphNodeImpl, NodeId};
-use include_data::include_f32s;
 use live_sample::LiveSample;
 use std::{
     cell::RefCell,
     sync::{atomic::Ordering::Acquire, Arc},
 };
 
+mod include_f32s;
 mod live_sample;
 
 static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
