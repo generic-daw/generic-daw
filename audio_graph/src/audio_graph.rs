@@ -54,7 +54,7 @@ impl AudioGraph {
         }
 
         for node in self.list.iter().copied().rev() {
-            for s in buf.iter_mut() {
+            for s in &mut *buf {
                 *s = 0.0;
             }
 
