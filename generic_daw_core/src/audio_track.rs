@@ -32,11 +32,11 @@ impl AudioGraphNodeImpl for AudioTrack {
 
 impl AudioTrack {
     #[must_use]
-    pub fn new(meter: Arc<Meter>, node: Arc<MixerNode>) -> Self {
+    pub fn new(meter: Arc<Meter>) -> Self {
         Self {
             clips: Vec::new(),
             meter,
-            node,
+            node: Arc::new(MixerNode::default()),
         }
     }
 

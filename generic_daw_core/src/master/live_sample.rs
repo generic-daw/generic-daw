@@ -1,5 +1,8 @@
 use std::sync::{
-    atomic::{AtomicIsize, Ordering::AcqRel},
+    atomic::{
+        AtomicIsize,
+        Ordering::{AcqRel, Acquire},
+    },
     Arc,
 };
 
@@ -14,14 +17,12 @@ impl LiveSample {
     pub fn new(audio: Arc<[f32]>, before: usize) -> Self {
         Self {
             audio,
-            idx: AtomicIsize::new(-isize::try_from(before).unwrap()),
+            idx: AtomicIsize::new(before as isize),
         }
     }
 
     pub fn fill_buf(&self, _: usize, buf: &mut [f32]) {
-        let idx = self
-            .idx
-            .fetch_add(isize::try_from(buf.len()).unwrap(), AcqRel);
+        let idx = self.idx.fetch_add(buf.len() as isize, AcqRel);
 
         let uidx = idx.unsigned_abs();
 
@@ -46,5 +47,12 @@ impl LiveSample {
                     *buf += s;
                 });
         }
+    }
+
+    pub fn over(&self) -> bool {
+        self.idx
+            .load(Acquire)
+            .try_into()
+            .is_ok_and(|idx: usize| idx < self.audio.len())
     }
 }

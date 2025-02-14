@@ -2,8 +2,7 @@ use crate::widget::{
     Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob, PeakMeter,
 };
 use generic_daw_core::{
-    audio_graph::MixerNode, build_output_stream, AudioClip, AudioTrack, InterleavedAudio, Meter,
-    Position, UiMessage,
+    build_output_stream, AudioClip, AudioTrack, InterleavedAudio, Meter, Position, UiMessage,
 };
 use iced::{
     futures::SinkExt as _,
@@ -115,7 +114,7 @@ impl ArrangementView {
                     .store(pan, Release);
             }
             Message::LoadedSample(audio_file) => {
-                let mut track = AudioTrack::new(self.meter.clone(), Arc::new(MixerNode::default()));
+                let mut track = AudioTrack::new(self.meter.clone());
                 track
                     .clips
                     .push(AudioClip::create(audio_file, self.meter.clone()));

@@ -1,6 +1,5 @@
 use crate::{include_f32s, resample, Meter, Position};
-use arraydeque::{ArrayDeque, Wrapping};
-use audio_graph::{AudioGraphNodeImpl, NodeId};
+use audio_graph::{AudioGraphNodeImpl, MixerNode, NodeId};
 use live_sample::LiveSample;
 use std::{
     cell::RefCell,
@@ -15,9 +14,12 @@ static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 
 #[derive(Debug)]
 pub struct Master {
-    id: NodeId,
-    meter: Arc<Meter>,
-    live_sample_playback: RefCell<ArrayDeque<LiveSample, 2, Wrapping>>,
+    /// information relating to the playback of the arrangement
+    pub meter: Arc<Meter>,
+    /// volume and pan
+    pub node: Arc<MixerNode>,
+
+    click: RefCell<Option<LiveSample>>,
     on_bar_click: Arc<[f32]>,
     off_bar_click: Arc<[f32]>,
 }
@@ -45,19 +47,25 @@ impl AudioGraphNodeImpl for Master {
                     self.off_bar_click.clone()
                 };
 
-                let click = LiveSample::new(click, diff);
-
-                self.live_sample_playback.borrow_mut().push_back(click);
+                self.click
+                    .borrow_mut()
+                    .replace(LiveSample::new(click, diff));
             }
         }
 
-        self.live_sample_playback.borrow().iter().for_each(|s| {
-            s.fill_buf(buf_start_sample, buf);
-        });
+        if let Some(click) = self.click.borrow().as_ref() {
+            click.fill_buf(buf_start_sample, buf);
+
+            if click.over() {
+                self.click.replace(None);
+            }
+        }
+
+        self.node.fill_buf(buf_start_sample, buf);
     }
 
     fn id(&self) -> NodeId {
-        self.id
+        self.node.id()
     }
 }
 
@@ -66,15 +74,15 @@ impl Master {
         let sample_rate = meter.sample_rate;
 
         Self {
-            id: NodeId::unique(),
-            meter,
-            live_sample_playback: RefCell::default(),
+            click: RefCell::default(),
             on_bar_click: resample(44100, sample_rate, ON_BAR_CLICK.into())
                 .unwrap()
                 .into(),
             off_bar_click: resample(44100, sample_rate, OFF_BAR_CLICK.into())
                 .unwrap()
                 .into(),
+            meter,
+            node: Arc::new(MixerNode::default()),
         }
     }
 }

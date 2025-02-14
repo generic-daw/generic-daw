@@ -23,6 +23,7 @@ pub use audio_track::AudioTrack;
 pub use clap_host;
 pub use cpal::{traits::StreamTrait, Stream};
 pub use daw_ctx::{DawCtxMessage, UiMessage};
+pub use master::Master;
 pub use meter::{Denominator, Meter, Numerator};
 pub use midi_clip::{MidiClip, MidiNote, MidiPattern};
 pub(crate) use midi_track::DirtyEvent;
