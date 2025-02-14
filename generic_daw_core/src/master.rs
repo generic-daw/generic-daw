@@ -53,11 +53,12 @@ impl AudioGraphNodeImpl for Master {
             }
         }
 
-        if let Some(click) = self.click.borrow().as_ref() {
-            click.fill_buf(buf_start_sample, buf);
+        let mut click = self.click.borrow_mut();
+        if let Some(c) = click.as_ref() {
+            c.fill_buf(buf_start_sample, buf);
 
-            if click.over() {
-                self.click.replace(None);
+            if c.over() {
+                click.take();
             }
         }
 

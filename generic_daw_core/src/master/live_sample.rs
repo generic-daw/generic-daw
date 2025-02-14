@@ -17,7 +17,7 @@ impl LiveSample {
     pub fn new(audio: Arc<[f32]>, before: usize) -> Self {
         Self {
             audio,
-            idx: AtomicIsize::new(before as isize),
+            idx: AtomicIsize::new(-(before as isize)),
         }
     }
 
@@ -27,10 +27,6 @@ impl LiveSample {
         let uidx = idx.unsigned_abs();
 
         if idx > 0 {
-            if uidx >= self.audio.len() {
-                return;
-            }
-
             self.audio[uidx..]
                 .iter()
                 .zip(buf)
@@ -53,6 +49,6 @@ impl LiveSample {
         self.idx
             .load(Acquire)
             .try_into()
-            .is_ok_and(|idx: usize| idx < self.audio.len())
+            .is_ok_and(|idx: usize| idx >= self.audio.len())
     }
 }
