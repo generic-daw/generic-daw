@@ -1,9 +1,8 @@
 use cpal::{
-    traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
-    Stream, StreamConfig,
+    traits::{DeviceTrait as _, HostTrait as _},
+    StreamConfig,
 };
 use daw_ctx::DawCtx;
-use rtrb::{Consumer, Producer};
 use std::sync::{
     atomic::Ordering::{AcqRel, Acquire},
     Arc,
@@ -22,14 +21,15 @@ pub use audio_clip::{resample, AudioClip, InterleavedAudio, InterleavedAudioErro
 pub use audio_graph;
 pub use audio_track::AudioTrack;
 pub use clap_host;
-pub use cpal;
+pub use cpal::{traits::StreamTrait, Stream};
 pub use daw_ctx::{DawCtxMessage, UiMessage};
 pub use meter::{Denominator, Meter, Numerator};
 pub use midi_clip::{MidiClip, MidiNote, MidiPattern};
 pub(crate) use midi_track::DirtyEvent;
 pub use midi_track::MidiTrack;
 pub use position::Position;
-pub use rtrb;
+pub use rtrb::{Consumer, Producer};
+pub use strum::VariantArray as VARIANTS;
 
 #[expect(clippy::type_complexity)]
 pub fn build_output_stream<T: Send + 'static>() -> (

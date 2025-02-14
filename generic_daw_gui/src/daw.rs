@@ -9,7 +9,7 @@ use generic_daw_core::{
         clack_host::process::PluginAudioConfiguration, get_installed_plugins, init_gui,
         open_embedded, open_floating,
     },
-    Denominator, InterleavedAudio, Meter, Numerator,
+    Denominator, InterleavedAudio, Meter, Numerator, VARIANTS as _,
 };
 use home::home_dir;
 use iced::{
@@ -30,7 +30,6 @@ use std::{
         Arc, Mutex,
     },
 };
-use strum::VariantArray as _;
 
 #[derive(Clone, Debug)]
 pub enum Message {

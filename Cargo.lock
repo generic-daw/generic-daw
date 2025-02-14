@@ -1427,7 +1427,6 @@ dependencies = [
  "iced_wgpu",
  "itoa",
  "rfd",
- "strum",
  "tokio",
 ]
 
