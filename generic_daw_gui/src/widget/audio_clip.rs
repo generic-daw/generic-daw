@@ -48,6 +48,8 @@ struct State {
 #[derive(Clone, Debug)]
 pub struct AudioClip {
     inner: Arc<AudioClipInner>,
+    /// the name of the sample
+    name: String,
     /// the position of the top left corner of the arrangement viewport
     position: ArrangementPosition,
     /// the scale of the timeline viewport
@@ -158,14 +160,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 
         // the text containing the name of the sample
         let text = Text {
-            content: self
-                .inner
-                .audio
-                .path
-                .file_name()
-                .unwrap()
-                .to_string_lossy()
-                .into_owned(),
+            content: self.name.clone(),
             bounds: Size::new(f32::INFINITY, 0.0),
             size: renderer.default_size(),
             line_height: LineHeight::default(),
@@ -265,8 +260,18 @@ impl AudioClip {
         scale: ArrangementScale,
         enabled: bool,
     ) -> Self {
+        let name = inner
+            .audio
+            .path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+
         Self {
             inner,
+            name,
             position,
             scale,
             enabled,

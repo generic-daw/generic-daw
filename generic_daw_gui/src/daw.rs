@@ -282,7 +282,7 @@ impl Daw {
                                 _ => None,
                             },
                             (true, false, false) => match key {
-                                keyboard::Key::Character(c) => match c.to_string().as_str() {
+                                keyboard::Key::Character(c) => match c.as_str() {
                                     "n" => Some(Message::New),
                                     "e" => Some(Message::ExportButton),
                                     _ => None,
