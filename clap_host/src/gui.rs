@@ -179,7 +179,7 @@ impl GuiExt {
 
             while let Ok(message) = receiver.try_recv() {
                 match message {
-                    MainThreadMessage::GuiClosed { .. } => {
+                    MainThreadMessage::GuiClosed => {
                         self.destroy(&mut instance.plugin_handle());
                         return;
                     }

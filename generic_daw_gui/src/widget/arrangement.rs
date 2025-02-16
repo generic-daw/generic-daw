@@ -150,7 +150,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             == Status::Captured
         {
             return Status::Captured;
-        };
+        }
 
         let state = tree.state.downcast_mut::<State>();
 
