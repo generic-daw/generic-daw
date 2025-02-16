@@ -58,7 +58,7 @@ impl AudioGraphNodeImpl for Master {
             c.fill_buf(buf_start_sample, buf);
 
             if c.over() {
-                click.take();
+                *click = None;
             }
         }
 

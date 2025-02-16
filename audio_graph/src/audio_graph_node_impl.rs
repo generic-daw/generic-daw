@@ -8,10 +8,9 @@ pub trait AudioGraphNodeImpl: Debug + Send {
     fn id(&self) -> NodeId;
 }
 
-impl<C, T> AudioGraphNodeImpl for C
+impl<T> AudioGraphNodeImpl for T
 where
-    C: Debug + Send + Deref<Target = T>,
-    T: AudioGraphNodeImpl,
+    T: Debug + Send + Deref<Target: AudioGraphNodeImpl + Sized>,
 {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         (**self).fill_buf(buf_start_sample, buf);

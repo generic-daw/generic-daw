@@ -101,12 +101,12 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 
             if state.last_position != self.position {
                 state.last_position = self.position;
-                state.cache.take();
+                *state.cache.borrow_mut() = None;
             }
 
             if state.last_scale != self.scale {
                 state.last_scale = self.scale;
-                state.cache.take();
+                *state.cache.borrow_mut() = None;
             }
 
             let Some(bounds) = layout.bounds().intersection(viewport) else {
@@ -114,7 +114,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
             };
 
             if state.last_size != bounds.size() {
-                state.cache.take();
+                *state.cache.borrow_mut() = None;
                 state.last_size = bounds.size();
             }
         }
@@ -207,7 +207,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
             .as_ref()
             .is_none_or(|last_theme| last_theme != theme)
         {
-            state.cache.take();
+            *state.cache.borrow_mut() = None;
             state.last_theme.borrow_mut().replace(theme.clone());
         }
 

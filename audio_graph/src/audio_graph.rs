@@ -1,10 +1,10 @@
-use crate::{audio_graph_entry::AudioGraphEntry, AudioGraphNode, NodeId};
+use crate::{audio_graph_entry::AudioGraphEntry, holey_vec::HoleyVec, AudioGraphNode, NodeId};
 use bit_set::BitSet;
 use std::cmp::Ordering;
 
 #[derive(Debug, Default)]
 pub struct AudioGraph {
-    graph: Vec<Option<AudioGraphEntry>>,
+    graph: HoleyVec<AudioGraphEntry>,
     list: Vec<NodeId>,
     dirty: bool,
     visited: BitSet,
@@ -21,7 +21,7 @@ impl AudioGraph {
         };
 
         Self {
-            graph: vec![Some(entry)],
+            graph: [Some(entry)].into(),
             list: vec![id],
             dirty: false,
             visited: BitSet::new(),
@@ -38,12 +38,7 @@ impl AudioGraph {
             self.dirty = false;
 
             self.list.sort_unstable_by(|&lhs, &rhs| {
-                if self.graph[*lhs]
-                    .as_ref()
-                    .unwrap()
-                    .connections
-                    .contains(*rhs)
-                {
+                if self.graph[*lhs].connections.contains(*rhs) {
                     Ordering::Less
                 } else {
                     Ordering::Equal
@@ -58,12 +53,8 @@ impl AudioGraph {
                 *s = 0.0;
             }
 
-            let entry = self.graph[*node].as_ref().unwrap();
-
-            for node in &entry.connections {
+            for node in &self.graph[*node].connections {
                 self.graph[node]
-                    .as_ref()
-                    .unwrap()
                     .cache
                     .iter()
                     .zip(&mut *buf)
@@ -72,25 +63,24 @@ impl AudioGraph {
                     });
             }
 
-            entry.node.fill_buf(buf_start_sample, buf);
+            self.graph[*node].node.fill_buf(buf_start_sample, buf);
 
-            let cbuf = &mut self.graph[*node].as_mut().unwrap().cache;
+            let cbuf = &mut self.graph.get_mut(*node).unwrap().cache;
             cbuf.clear();
             cbuf.extend(&*buf);
         }
     }
 
     pub fn connect(&mut self, from: NodeId, to: NodeId) {
-        if self.graph.get(*to).is_some_and(Option::is_some)
+        if self.graph.get(*to).is_some()
             && self
                 .graph
                 .get(*from)
-                .and_then(Option::as_ref)
                 .is_some_and(|entry| !entry.connections.contains(*to))
             && !Self::check_cycle(&self.graph, &mut self.visited, *to, *from)
         {
             self.visited.clear();
-            self.graph[*from].as_mut().unwrap().connections.insert(*to);
+            self.graph.get_mut(*from).unwrap().connections.insert(*to);
 
             if !self.dirty {
                 for id in self.list.iter().copied() {
@@ -106,7 +96,7 @@ impl AudioGraph {
     }
 
     pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
-        if let Some(Some(entry)) = self.graph.get_mut(*from) {
+        if let Some(entry) = self.graph.get_mut(*from) {
             entry.connections.remove(*to);
         }
     }
@@ -114,54 +104,43 @@ impl AudioGraph {
     pub fn insert(&mut self, node: AudioGraphNode) {
         let id = node.id();
 
-        if let Some(Some(entry)) = self.graph.get_mut(*id) {
+        if let Some(entry) = self.graph.get_mut(*id) {
             entry.node = node;
             return;
-        } else if *id >= self.graph.len() {
-            self.graph.resize_with(*id + 1, || None);
         }
 
         let entry = AudioGraphEntry {
             node,
             connections: BitSet::new(),
-            cache: self.graph[0].as_ref().unwrap().cache.clone(),
+            cache: self.graph[0].cache.clone(),
         };
 
-        self.graph[*id].replace(entry);
+        self.graph.insert(*id, entry);
         self.list.push(id);
     }
 
     pub fn remove(&mut self, node: NodeId) {
         debug_assert_ne!(self.list[0], node);
 
-        if self
-            .graph
-            .get_mut(*node)
-            .is_some_and(|g| g.take().is_some())
-        {
+        if self.graph.remove(*node).is_some() {
             let idx = self.list.iter().copied().position(|n| n == node).unwrap();
             self.list.remove(idx);
 
-            for entry in self.graph.iter_mut().flatten() {
+            for entry in self.graph.iter_mut() {
                 entry.connections.remove(*node);
             }
         }
     }
 
     fn check_cycle(
-        graph: &[Option<AudioGraphEntry>],
+        graph: &HoleyVec<AudioGraphEntry>,
         visited: &mut BitSet,
         current: usize,
         to: usize,
     ) -> bool {
         current == to
-            || graph[current]
-                .as_ref()
-                .unwrap()
-                .connections
-                .iter()
-                .any(|current| {
-                    visited.insert(current) && Self::check_cycle(graph, visited, current, to)
-                })
+            || graph[current].connections.iter().any(|current| {
+                visited.insert(current) && Self::check_cycle(graph, visited, current, to)
+            })
     }
 }

@@ -4,6 +4,7 @@ mod audio_graph;
 mod audio_graph_entry;
 mod audio_graph_node;
 mod audio_graph_node_impl;
+mod holey_vec;
 mod mixer_node;
 mod node_id;
 
