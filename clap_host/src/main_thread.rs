@@ -88,7 +88,7 @@ impl HostTimerImpl for MainThread<'_> {
     fn register_timer(&mut self, period_ms: u32) -> Result<TimerId, HostError> {
         Ok(self
             .timers
-            .register_new(Duration::from_millis(u64::from(period_ms))))
+            .register(Duration::from_millis(u64::from(period_ms))))
     }
 
     fn unregister_timer(&mut self, timer_id: TimerId) -> Result<(), HostError> {

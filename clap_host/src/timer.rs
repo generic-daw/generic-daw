@@ -2,121 +2,66 @@ use clack_extensions::timer::{PluginTimer, TimerId};
 use clack_host::prelude::*;
 use std::{
     cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     time::{Duration, Instant},
 };
 
 pub struct Timers {
-    timers: RefCell<HashMap<TimerId, Timer>>,
-    latest_id: Cell<u32>,
-    next_tick: Cell<Option<Instant>>,
+    durations: RefCell<HashMap<TimerId, Duration>>,
+    ticks: RefCell<BTreeSet<(Instant, TimerId)>>,
+    next_id: Cell<u32>,
 }
 
 impl Default for Timers {
     fn default() -> Self {
         Self {
-            timers: RefCell::new(HashMap::new()),
-            latest_id: Cell::new(0),
-            next_tick: Cell::new(None),
+            durations: RefCell::default(),
+            ticks: RefCell::default(),
+            next_id: Cell::new(0),
         }
     }
 }
 
 impl Timers {
-    fn tick_all(&self) -> Vec<TimerId> {
-        let timers = self
-            .timers
-            .borrow_mut()
-            .values_mut()
-            .filter_map(|t| t.tick().then_some(t.id))
-            .collect();
+    pub fn tick_timers(
+        &self,
+        timer_ext: &PluginTimer,
+        plugin: &mut PluginMainThreadHandle<'_>,
+    ) -> Option<Instant> {
+        let now = Instant::now();
 
-        self.next_tick
-            .set(self.timers.borrow().values().map(Timer::next_tick).min());
+        while self.ticks.borrow().first().is_some_and(|t| t.0 < now) {
+            let (_, id) = self.ticks.borrow_mut().pop_first().unwrap();
 
-        timers
+            timer_ext.on_timer(plugin, id);
+
+            let next_tick = now + self.durations.borrow()[&id];
+            self.ticks.borrow_mut().insert((next_tick, id));
+        }
+
+        self.ticks.borrow().first().map(|t| t.0)
     }
 
-    pub fn tick_timers(&self, timer_ext: &PluginTimer, plugin: &mut PluginMainThreadHandle<'_>) {
-        for triggered in self.tick_all() {
-            timer_ext.on_timer(plugin, triggered);
-        }
-    }
+    pub fn register(&self, interval: Duration) -> TimerId {
+        let now = Instant::now();
 
-    pub fn register_new(&self, interval: Duration) -> TimerId {
-        let latest_id = self.latest_id.get() + 1;
-        self.latest_id.set(latest_id);
-        let id = TimerId(latest_id);
+        let id = self.next_id.get();
+        self.next_id.set(id + 1);
+        let id = TimerId(id);
 
-        self.timers
-            .borrow_mut()
-            .insert(id, Timer::new(id, interval));
-
-        let next_tick = Instant::now() + interval;
-        match self.next_tick.get() {
-            None => self.next_tick.set(Some(next_tick)),
-            Some(smallest) if smallest > next_tick => self.next_tick.set(Some(next_tick)),
-            _ => {}
-        }
+        self.durations.borrow_mut().insert(id, interval);
+        self.ticks.borrow_mut().insert((now + interval, id));
 
         id
     }
 
     pub fn unregister(&self, id: TimerId) -> bool {
-        let mut timers = self.timers.borrow_mut();
-        if timers.remove(&id).is_some() {
-            self.next_tick.set(
-                timers
-                    .values()
-                    .map(|t| t.last_triggered_at.unwrap_or_else(Instant::now) + t.interval)
-                    .min(),
-            );
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn next_tick(&self) -> Option<Instant> {
-        self.next_tick.get()
-    }
-}
-
-struct Timer {
-    id: TimerId,
-    interval: Duration,
-    last_triggered_at: Option<Instant>,
-}
-
-impl Timer {
-    fn new(id: TimerId, interval: Duration) -> Self {
-        Self {
-            id,
-            interval,
-            last_triggered_at: None,
-        }
-    }
-
-    fn tick(&mut self) -> bool {
-        let now = Instant::now();
-        let triggered = if let Some(last_updated_at) = self.last_triggered_at {
-            if let Some(since) = now.checked_duration_since(last_updated_at) {
-                since >= self.interval
-            } else {
-                false
-            }
-        } else {
-            true
-        };
-
-        if triggered {
-            self.last_triggered_at = Some(now);
-        }
-
-        triggered
-    }
-
-    fn next_tick(&self) -> Instant {
-        self.last_triggered_at.unwrap_or_else(Instant::now) + self.interval
+        self.durations
+            .borrow_mut()
+            .remove(&id)
+            .inspect(|_| {
+                self.ticks.borrow_mut().retain(|&(_, tid)| tid != id);
+            })
+            .is_some()
     }
 }

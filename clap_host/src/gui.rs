@@ -1,13 +1,12 @@
-use super::{timer::Timers, Host, HostThreadMessage, MainThreadMessage};
-use clack_extensions::{
-    gui::{GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow},
-    timer::PluginTimer,
+use super::{Host, HostThreadMessage, MainThreadMessage};
+use clack_extensions::gui::{
+    GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow,
 };
 use clack_host::prelude::*;
 use std::{
+    cmp::min,
     fmt::{Debug, Formatter},
     io::Cursor,
-    rc::Rc,
     sync::mpsc::{Receiver, Sender},
     time::{Duration, Instant},
 };
@@ -173,9 +172,9 @@ impl GuiExt {
             instance.access_handler(|h| h.timer_support.map(|ext| (h.timers.clone(), ext)));
 
         loop {
-            if let Some((timers, timer_ext)) = &timers {
-                timers.tick_timers(timer_ext, &mut instance.plugin_handle());
-            }
+            let next_tick = timers.as_ref().and_then(|(timers, timer_ext)| {
+                timers.tick_timers(timer_ext, &mut instance.plugin_handle())
+            });
 
             while let Ok(message) = receiver.try_recv() {
                 match message {
@@ -218,16 +217,11 @@ impl GuiExt {
                 }
             }
 
-            let sleep_duration = Self::get_sleep_duration(timers.as_ref());
+            let sleep_duration = next_tick.map_or(Duration::from_millis(30), |next_tick| {
+                min(Duration::from_millis(30), next_tick - Instant::now())
+            });
+
             std::thread::sleep(sleep_duration);
         }
-    }
-
-    fn get_sleep_duration(timers: Option<&(Rc<Timers>, PluginTimer)>) -> Duration {
-        timers
-            .as_ref()
-            .and_then(|(timers, _)| Some(timers.next_tick()? - Instant::now()))
-            .unwrap_or(Duration::from_millis(30))
-            .min(Duration::from_millis(30))
     }
 }
