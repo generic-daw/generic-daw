@@ -59,6 +59,7 @@ pub struct ArrangementView {
 }
 
 impl ArrangementView {
+    #[expect(tail_expr_drop_order)]
     pub fn create() -> (Arc<Meter>, Self, Task<Message>) {
         let (stream, producer, mut consumer, meter) = build_output_stream();
 
@@ -75,7 +76,7 @@ impl ArrangementView {
 
         let task = Task::stream(channel(16, move |mut sender| async move {
             loop {
-                if let Ok(msg) = consumer.pop() {
+                while let Ok(msg) = consumer.pop() {
                     sender.send(msg).await.unwrap();
                 }
 

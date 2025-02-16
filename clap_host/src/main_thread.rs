@@ -10,13 +10,11 @@ use clack_extensions::{
 use clack_host::prelude::*;
 use std::{rc::Rc, time::Duration};
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum MainThreadMessage {
     RunOnMainThread,
     GuiClosed,
     GuiRequestResized(GuiSize),
-    GetState,
-    SetState(Vec<u8>),
 }
 
 pub struct MainThread<'a> {

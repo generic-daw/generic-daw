@@ -12,14 +12,20 @@ impl ClapPluginGui {
         Self { instance, gui }
     }
 
-    pub fn resize(&mut self, width: f32, height: f32) {
+    pub fn resize(&mut self, width: u32, height: u32) {
         self.gui.resize(
             &mut self.instance.plugin_handle(),
-            Size::Physical(winit::dpi::PhysicalSize::new(width as u32, height as u32)),
+            Size::Physical(winit::dpi::PhysicalSize::new(width, height)),
         );
     }
 
-    pub fn destroy(mut self) {
+    pub fn call_on_main_thread_callback(&mut self) {
+        self.instance.call_on_main_thread_callback();
+    }
+}
+
+impl Drop for ClapPluginGui {
+    fn drop(&mut self) {
         self.gui.destroy(&mut self.instance.plugin_handle());
     }
 }

@@ -3,8 +3,8 @@
 use clack_host::prelude::*;
 use gui::GuiExt;
 use home::home_dir;
-use host::{Host, HostThreadMessage};
-use main_thread::{MainThread, MainThreadMessage};
+use host::Host;
+use main_thread::MainThread;
 use shared::Shared;
 use std::{path::PathBuf, result::Result};
 use walkdir::WalkDir;
@@ -21,7 +21,9 @@ mod timer;
 
 pub use clack_host;
 pub use clap_plugin_gui::ClapPluginGui;
+pub use host::HostThreadMessage;
 pub use host_audio_processor::HostAudioProcessor;
+pub use main_thread::MainThreadMessage;
 pub use plugin_audio_processor::PluginAudioProcessor;
 
 #[must_use]

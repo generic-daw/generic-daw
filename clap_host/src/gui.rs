@@ -1,4 +1,4 @@
-use super::{Host, HostThreadMessage, MainThreadMessage};
+use super::{Host, MainThreadMessage};
 use clack_extensions::gui::{
     GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow,
 };
@@ -6,8 +6,7 @@ use clack_host::prelude::*;
 use std::{
     cmp::min,
     fmt::{Debug, Formatter},
-    io::Cursor,
-    sync::mpsc::{Receiver, Sender},
+    sync::mpsc::Receiver,
     time::{Duration, Instant},
 };
 use winit::{
@@ -162,12 +161,7 @@ impl GuiExt {
         }
     }
 
-    pub fn run(
-        self,
-        mut instance: PluginInstance<Host>,
-        sender: &Sender<HostThreadMessage>,
-        receiver: &Receiver<MainThreadMessage>,
-    ) {
+    pub fn run(self, mut instance: PluginInstance<Host>, receiver: &Receiver<MainThreadMessage>) {
         let timers =
             instance.access_handler(|h| h.timer_support.map(|ext| (h.timers.clone(), ext)));
 
@@ -189,31 +183,6 @@ impl GuiExt {
                         );
                     }
                     MainThreadMessage::RunOnMainThread => instance.call_on_main_thread_callback(),
-                    MainThreadMessage::GetState => {
-                        let state_ext = instance
-                            .access_handler_mut(|h| h.shared.state.get())
-                            .unwrap()
-                            .unwrap();
-
-                        let mut state = Vec::new();
-                        state_ext
-                            .save(&mut instance.plugin_handle(), &mut state)
-                            .unwrap();
-
-                        sender.send(HostThreadMessage::State(state)).unwrap();
-                    }
-                    MainThreadMessage::SetState(state) => {
-                        let state_ext = instance
-                            .access_handler_mut(|h| h.shared.state.get())
-                            .unwrap()
-                            .unwrap();
-
-                        let mut state = Cursor::new(state);
-
-                        state_ext
-                            .load(&mut instance.plugin_handle(), &mut state)
-                            .unwrap();
-                    }
                 }
             }
 
