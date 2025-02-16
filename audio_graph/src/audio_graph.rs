@@ -89,9 +89,19 @@ impl AudioGraph {
                 .is_some_and(|entry| !entry.connections.contains(*to))
             && !Self::check_cycle(&self.graph, &mut self.visited, *to, *from)
         {
-            self.graph[*from].as_mut().unwrap().connections.insert(*to);
-            self.dirty = true;
             self.visited.clear();
+            self.graph[*from].as_mut().unwrap().connections.insert(*to);
+
+            if !self.dirty {
+                for id in self.list.iter().copied() {
+                    if id == from {
+                        break;
+                    } else if id == to {
+                        self.dirty = true;
+                        break;
+                    }
+                }
+            }
         }
     }
 
