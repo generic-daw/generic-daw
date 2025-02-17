@@ -2,21 +2,17 @@ use crate::widget::{
     Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob, PeakMeter,
 };
 use generic_daw_core::{
-    build_output_stream, AudioClip, AudioTrack, InterleavedAudio, Meter, Position, UiMessage,
+    audio_graph::AudioGraph, build_output_stream, AudioClip, AudioTrack, InterleavedAudio, Meter,
+    Position,
 };
 use iced::{
-    futures::SinkExt as _,
-    stream::channel,
     widget::{column, container, container::Style, mouse_area, radio, row},
     Border, Element, Task,
 };
 use rfd::FileHandle;
-use std::{
-    sync::{
-        atomic::Ordering::{AcqRel, Release},
-        Arc, Mutex,
-    },
-    time::Duration,
+use std::sync::{
+    atomic::Ordering::{AcqRel, Release},
+    Arc, Mutex,
 };
 
 mod arrangement;
@@ -30,7 +26,7 @@ pub use track_clip::TrackClip as TrackClipWrapper;
 #[derive(Clone, Debug)]
 pub enum Message {
     Animate(),
-    Ui(Arc<Mutex<UiMessage<FileHandle>>>),
+    AudioGraph(Arc<Mutex<(AudioGraph, FileHandle)>>),
     TrackVolumeChanged(usize, f32),
     TrackPanChanged(usize, f32),
     LoadedSample(Arc<InterleavedAudio>),
@@ -59,9 +55,8 @@ pub struct ArrangementView {
 }
 
 impl ArrangementView {
-    #[expect(tail_expr_drop_order)]
-    pub fn create() -> (Arc<Meter>, Self, Task<Message>) {
-        let (stream, producer, mut consumer, meter) = build_output_stream();
+    pub fn create() -> (Arc<Meter>, Self) {
+        let (stream, producer, meter) = build_output_stream();
 
         let arrangement = ArrangementWrapper::new(producer, stream, meter.clone());
 
@@ -74,33 +69,17 @@ impl ArrangementView {
             grabbed_clip: None,
         };
 
-        let task = Task::stream(channel(16, move |mut sender| async move {
-            loop {
-                while let Ok(msg) = consumer.pop() {
-                    sender.send(msg).await.unwrap();
-                }
-
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-        }))
-        .map(Mutex::new)
-        .map(Arc::new)
-        .map(Message::Ui);
-
-        (meter, arrangement, task)
+        (meter, arrangement)
     }
 
     #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Animate() => {}
-            Message::Ui(message) => {
-                let message = Mutex::into_inner(Arc::into_inner(message).unwrap()).unwrap();
-                match message {
-                    UiMessage::AudioGraph(path, audio_graph) => {
-                        self.arrangement.export(path.path(), audio_graph);
-                    }
-                }
+            Message::AudioGraph(message) => {
+                let (audio_graph, path) =
+                    Mutex::into_inner(Arc::into_inner(message).unwrap()).unwrap();
+                self.arrangement.export(audio_graph, path.path());
             }
             Message::TrackVolumeChanged(track, volume) => {
                 self.arrangement.tracks()[track]
@@ -214,7 +193,13 @@ impl ArrangementView {
                 }
             }
             Message::Export(path) => {
-                self.arrangement.request_export(path);
+                let receiver = self.arrangement.request_export(path);
+
+                return Task::future(receiver)
+                    .and_then(Task::done)
+                    .map(Mutex::new)
+                    .map(Arc::new)
+                    .map(Message::AudioGraph);
             }
         }
 

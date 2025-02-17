@@ -4,36 +4,29 @@ use rtrb::{Consumer, Producer, RingBuffer};
 use std::sync::Arc;
 
 mod daw_ctx_message;
-mod ui_message;
 
 pub use daw_ctx_message::DawCtxMessage;
-pub use ui_message::UiMessage;
 
 pub struct DawCtx<T> {
     pub meter: Arc<Meter>,
     audio_graph: AudioGraph,
-    producer: Producer<UiMessage<T>>,
     consumer: Consumer<DawCtxMessage<T>>,
 }
 
 impl<T> DawCtx<T> {
-    pub(crate) fn create(
-        sample_rate: u32,
-    ) -> (Self, Producer<DawCtxMessage<T>>, Consumer<UiMessage<T>>) {
+    pub(crate) fn create(sample_rate: u32) -> (Self, Producer<DawCtxMessage<T>>) {
         let (ui_producer, consumer) = RingBuffer::new(16);
-        let (producer, ui_consumer) = RingBuffer::new(16);
 
         let meter = Arc::new(Meter::new(sample_rate));
         let master = Master::new(meter.clone());
 
         let audio_ctx = Self {
             audio_graph: AudioGraph::new(master.into()),
-            producer,
             consumer,
             meter,
         };
 
-        (audio_ctx, ui_producer, ui_consumer)
+        (audio_ctx, ui_producer)
     }
 
     #[expect(tail_expr_drop_order)]
@@ -58,11 +51,9 @@ impl<T> DawCtx<T> {
                 DawCtxMessage::DisconnectFromMaster(node) => {
                     self.audio_graph.disconnect(self.audio_graph.root(), node);
                 }
-                DawCtxMessage::RequestAudioGraph(a) => {
+                DawCtxMessage::RequestAudioGraph(sender, t) => {
                     let audio_graph = std::mem::take(&mut self.audio_graph);
-                    self.producer
-                        .push(UiMessage::AudioGraph(a, audio_graph))
-                        .unwrap();
+                    sender.send((audio_graph, t)).unwrap();
                 }
                 DawCtxMessage::AudioGraph(audio_graph) => {
                     self.audio_graph = audio_graph;

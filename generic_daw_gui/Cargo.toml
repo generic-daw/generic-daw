@@ -27,5 +27,6 @@ iced_file_tree = "0.3.0"
 iced_fonts = { version = "0.1.1", features = ["bootstrap"] }
 iced_wgpu = { version = "0.13.5", features = ["geometry"] }
 itoa = "1.0.14"
+oneshot = { version = "0.1.10", default-features = false, features = ["async"] }
 rfd = "0.15.2"
 tokio = { version = "1.43.0", features = ["rt"] }

@@ -1,4 +1,5 @@
 use audio_graph::{AudioGraph, AudioGraphNode, NodeId};
+use oneshot::Sender;
 
 #[derive(Debug)]
 pub enum DawCtxMessage<T> {
@@ -8,6 +9,6 @@ pub enum DawCtxMessage<T> {
     ConnectToMaster(NodeId),
     Disconnect(NodeId, NodeId),
     DisconnectFromMaster(NodeId),
-    RequestAudioGraph(T),
+    RequestAudioGraph(Sender<(AudioGraph, T)>, T),
     AudioGraph(AudioGraph),
 }

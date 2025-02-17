@@ -58,20 +58,20 @@ pub struct Daw {
     theme: Theme,
 }
 
-impl Daw {
-    pub fn create() -> (Self, Task<Message>) {
-        let (meter, arrangement, task) = ArrangementView::create();
+impl Default for Daw {
+    fn default() -> Self {
+        let (meter, arrangement) = ArrangementView::create();
 
-        let daw = Self {
+        Self {
             arrangement,
             clap_host: ClapHostView::default(),
             meter,
             theme: Theme::Dark,
-        };
-
-        (daw, task.map(Message::Arrangement))
+        }
     }
+}
 
+impl Daw {
     #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
@@ -170,9 +170,7 @@ impl Daw {
                 self.meter.sample.store(0, Release);
             }
             Message::New => {
-                let (s, task) = Self::create();
-                *self = s;
-                return task;
+                *self = Self::default();
             }
             Message::BpmChanged(bpm) => self.meter.bpm.store(bpm, Release),
             Message::NumeratorChanged(new_numerator) => {

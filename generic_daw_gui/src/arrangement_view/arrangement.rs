@@ -3,6 +3,7 @@ use generic_daw_core::{
     audio_graph::AudioGraph, DawCtxMessage, Meter, Producer, Stream, StreamTrait as _,
 };
 use hound::WavWriter;
+use oneshot::Receiver;
 use rfd::FileHandle;
 use std::{
     fmt::{Debug, Formatter},
@@ -96,13 +97,17 @@ impl Arrangement {
         }
     }
 
-    pub fn request_export(&mut self, path: FileHandle) {
+    pub fn request_export(&mut self, path: FileHandle) -> Receiver<(AudioGraph, FileHandle)> {
+        let (sender, reciever) = oneshot::channel();
+
         self.producer
-            .push(DawCtxMessage::RequestAudioGraph(path))
+            .push(DawCtxMessage::RequestAudioGraph(sender, path))
             .unwrap();
+
+        reciever
     }
 
-    pub fn export(&mut self, path: &Path, mut audio_graph: AudioGraph) {
+    pub fn export(&mut self, mut audio_graph: AudioGraph, path: &Path) {
         const CHUNK_SIZE: usize = 64;
 
         self.stream.pause().unwrap();

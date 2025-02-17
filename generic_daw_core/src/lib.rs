@@ -22,7 +22,7 @@ pub use audio_graph;
 pub use audio_track::AudioTrack;
 pub use clap_host;
 pub use cpal::{traits::StreamTrait, Stream};
-pub use daw_ctx::{DawCtxMessage, UiMessage};
+pub use daw_ctx::DawCtxMessage;
 pub use master::Master;
 pub use meter::{Denominator, Meter, Numerator};
 pub use midi_clip::{MidiClip, MidiNote, MidiPattern};
@@ -32,17 +32,12 @@ pub use position::Position;
 pub use rtrb::{Consumer, Producer};
 pub use strum::VariantArray as VARIANTS;
 
-#[expect(clippy::type_complexity)]
-pub fn build_output_stream<T: Send + 'static>() -> (
-    Stream,
-    Producer<DawCtxMessage<T>>,
-    Consumer<UiMessage<T>>,
-    Arc<Meter>,
-) {
+pub fn build_output_stream<T: Send + 'static>() -> (Stream, Producer<DawCtxMessage<T>>, Arc<Meter>)
+{
     let device = cpal::default_host().default_output_device().unwrap();
     let config: &StreamConfig = &device.default_output_config().unwrap().into();
 
-    let (mut ctx, producer, consumer) = DawCtx::create(config.sample_rate.0);
+    let (mut ctx, producer) = DawCtx::create(config.sample_rate.0);
     let meter = ctx.meter.clone();
 
     let stream = device
@@ -67,5 +62,5 @@ pub fn build_output_stream<T: Send + 'static>() -> (
         .unwrap();
     stream.play().unwrap();
 
-    (stream, producer, consumer, meter)
+    (stream, producer, meter)
 }
