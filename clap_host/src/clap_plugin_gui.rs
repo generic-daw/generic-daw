@@ -1,8 +1,9 @@
 use crate::{gui::GuiExt, host::Host, timer::Timers};
 use clack_extensions::timer::PluginTimer;
 use clack_host::prelude::*;
+use dpi::{PhysicalSize, Size};
+use raw_window_handle::RawWindowHandle;
 use std::{fmt::Debug, rc::Rc};
-use winit::{dpi::Size, raw_window_handle::RawWindowHandle};
 
 pub struct ClapPluginGui {
     pub(crate) instance: PluginInstance<Host>,
@@ -19,7 +20,7 @@ impl ClapPluginGui {
     pub fn resize(&mut self, width: u32, height: u32) {
         self.gui.resize(
             &mut self.instance.plugin_handle(),
-            Size::Physical(winit::dpi::PhysicalSize::new(width, height)),
+            Size::Physical(PhysicalSize::new(width, height)),
         );
     }
 

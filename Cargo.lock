@@ -649,10 +649,11 @@ dependencies = [
  "async-channel",
  "clack-extensions",
  "clack-host",
+ "dpi",
  "etcetera",
  "home",
+ "raw-window-handle",
  "walkdir",
- "winit",
 ]
 
 [[package]]

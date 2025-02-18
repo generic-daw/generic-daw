@@ -2,11 +2,9 @@ use clack_extensions::gui::{
     GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow,
 };
 use clack_host::prelude::*;
+use dpi::{LogicalSize, PhysicalSize, Size};
+use raw_window_handle::RawWindowHandle;
 use std::fmt::{Debug, Formatter};
-use winit::{
-    dpi::{LogicalSize, PhysicalSize, Size},
-    raw_window_handle::RawWindowHandle,
-};
 
 #[derive(Clone, Copy)]
 pub struct GuiExt {
