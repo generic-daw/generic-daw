@@ -1,3 +1,4 @@
+use fragile::Fragile;
 use generic_daw_core::clap_host::{ClapPluginGui, MainThreadMessage};
 use iced::{
     futures::SinkExt as _,
@@ -16,7 +17,8 @@ pub use opened::Opened;
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    Opened(Arc<Mutex<Opened>>),
+    Opened(Id, Arc<Mutex<Opened>>),
+    Shown(Id, Arc<Fragile<ClapPluginGui>>),
     CloseRequested(Id),
     Resized((Id, Size)),
     MainThread((Id, MainThreadMessage)),
@@ -30,13 +32,9 @@ pub struct ClapHostView {
 impl ClapHostView {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Opened(arc) => {
-                let Opened {
-                    id,
-                    gui,
-                    hap: _,
-                    pap,
-                } = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
+            Message::Opened(id, arc) => {
+                let Opened { gui, hap: _, pap } =
+                    Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
                 self.windows.insert(id, gui.into_inner());
 
                 #[expect(tail_expr_drop_order)]
@@ -45,6 +43,10 @@ impl ClapHostView {
                         sender.send(Message::MainThread((id, msg))).await.unwrap();
                     }
                 }));
+            }
+            Message::Shown(id, arc) => {
+                let gui = Arc::into_inner(arc).unwrap();
+                self.windows.insert(id, gui.into_inner());
             }
             Message::Resized((id, size)) => {
                 if let Some(plugin) = self.windows.get_mut(&id) {
@@ -56,10 +58,29 @@ impl ClapHostView {
                 return window::close::<()>(id).discard();
             }
             Message::MainThread((id, msg)) => match msg {
+                MainThreadMessage::RequestCallback => self
+                    .windows
+                    .get_mut(&id)
+                    .unwrap()
+                    .call_on_main_thread_callback(),
+                MainThreadMessage::GuiRequestHide => {
+                    self.windows.get_mut(&id).unwrap().destroy();
+                }
+                MainThreadMessage::GuiRequestShow => {
+                    let mut gui = self.windows.remove(&id).unwrap();
+                    gui.destroy();
+                    let mut gui = Fragile::new(gui);
+
+                    return window::run_with_handle(id, move |handle| {
+                        gui.get_mut().open_embedded(handle.as_raw());
+                        Message::Shown(id, Arc::new(gui))
+                    });
+                }
                 MainThreadMessage::GuiClosed => {
+                    self.windows.get_mut(&id).unwrap().destroy();
                     return window::close(id);
                 }
-                MainThreadMessage::GuiRequestResized(new_size) => {
+                MainThreadMessage::GuiRequestResize(new_size) => {
                     return window::resize(
                         id,
                         Size {
@@ -68,11 +89,6 @@ impl ClapHostView {
                         },
                     );
                 }
-                MainThreadMessage::RunOnMainThread => self
-                    .windows
-                    .get_mut(&id)
-                    .unwrap()
-                    .call_on_main_thread_callback(),
             },
         }
 

@@ -1,4 +1,4 @@
-use super::{shared::Shared, timer::Timers};
+use crate::timer::Timers;
 use clack_extensions::{
     audio_ports::{HostAudioPortsImpl, RescanType},
     gui::{GuiSize, PluginGui},
@@ -12,31 +12,20 @@ use std::{rc::Rc, time::Duration};
 
 #[derive(Clone, Copy, Debug)]
 pub enum MainThreadMessage {
-    RunOnMainThread,
+    RequestCallback,
+    GuiRequestHide,
+    GuiRequestShow,
     GuiClosed,
-    GuiRequestResized(GuiSize),
+    GuiRequestResize(GuiSize),
 }
 
+#[derive(Default)]
 pub struct MainThread<'a> {
-    pub shared: &'a Shared,
     plugin: Option<InitializedPluginHandle<'a>>,
     pub gui: Option<PluginGui>,
     pub timer_support: Option<PluginTimer>,
     pub timers: Rc<Timers>,
     pub dirty: bool,
-}
-
-impl<'a> MainThread<'a> {
-    pub fn new(shared: &'a Shared) -> Self {
-        Self {
-            shared,
-            plugin: None,
-            gui: None,
-            timer_support: None,
-            timers: Rc::default(),
-            dirty: false,
-        }
-    }
 }
 
 impl<'a> MainThreadHandler<'a> for MainThread<'a> {

@@ -1,5 +1,4 @@
-use super::Host;
-use crate::{host::HostThreadMessage, main_thread::MainThreadMessage};
+use crate::{host::HostThreadMessage, main_thread::MainThreadMessage, Host};
 use async_channel::{Receiver, Sender};
 use clack_host::{prelude::*, process::StartedPluginAudioProcessor};
 use std::sync::atomic::{

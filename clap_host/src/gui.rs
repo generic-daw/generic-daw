@@ -1,14 +1,8 @@
-use super::{Host, MainThreadMessage};
 use clack_extensions::gui::{
     GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow,
 };
 use clack_host::prelude::*;
-use std::{
-    cmp::min,
-    fmt::{Debug, Formatter},
-    sync::mpsc::Receiver,
-    time::{Duration, Instant},
-};
+use std::fmt::{Debug, Formatter};
 use winit::{
     dpi::{LogicalSize, PhysicalSize, Size},
     raw_window_handle::RawWindowHandle,
@@ -158,39 +152,6 @@ impl GuiExt {
         if self.is_open {
             self.plugin_gui.destroy(plugin);
             self.is_open = false;
-        }
-    }
-
-    pub fn run(self, mut instance: PluginInstance<Host>, receiver: &Receiver<MainThreadMessage>) {
-        let timers =
-            instance.access_handler(|h| h.timer_support.map(|ext| (h.timers.clone(), ext)));
-
-        loop {
-            let next_tick = timers.as_ref().and_then(|(timers, timer_ext)| {
-                timers.tick_timers(timer_ext, &mut instance.plugin_handle())
-            });
-
-            while let Ok(message) = receiver.try_recv() {
-                match message {
-                    MainThreadMessage::GuiClosed => {
-                        self.destroy(&mut instance.plugin_handle());
-                        return;
-                    }
-                    MainThreadMessage::GuiRequestResized(new_size) => {
-                        self.resize(
-                            &mut instance.plugin_handle(),
-                            self.gui_size_to_winit_size(new_size),
-                        );
-                    }
-                    MainThreadMessage::RunOnMainThread => instance.call_on_main_thread_callback(),
-                }
-            }
-
-            let sleep_duration = next_tick.map_or(Duration::from_millis(30), |next_tick| {
-                min(Duration::from_millis(30), next_tick - Instant::now())
-            });
-
-            std::thread::sleep(sleep_duration);
         }
     }
 }

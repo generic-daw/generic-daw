@@ -8,7 +8,6 @@ use main_thread::MainThread;
 use shared::Shared;
 use std::{path::PathBuf, result::Result};
 use walkdir::WalkDir;
-use winit::raw_window_handle::RawWindowHandle;
 
 mod clap_plugin_gui;
 mod gui;
@@ -97,12 +96,7 @@ fn standard_clap_paths() -> Vec<PathBuf> {
 pub fn init_gui(
     bundle: &PluginBundle,
     config: PluginAudioConfiguration,
-) -> (
-    GuiExt,
-    HostAudioProcessor,
-    PluginAudioProcessor,
-    PluginInstance<Host>,
-) {
+) -> (ClapPluginGui, HostAudioProcessor, PluginAudioProcessor) {
     let (sender_host, receiver_plugin) = async_channel::bounded(16);
     let (sender_plugin, receiver_host) = async_channel::bounded(16);
 
@@ -110,7 +104,7 @@ pub fn init_gui(
     let plugin_descriptor = factory.plugin_descriptors().next().unwrap();
     let mut instance = PluginInstance::new(
         |()| Shared::new(sender_host.clone()),
-        |shared| MainThread::new(shared),
+        |_| MainThread::default(),
         bundle,
         plugin_descriptor.id().unwrap(),
         &HostInfo::new("", "", "", "").unwrap(),
@@ -137,23 +131,7 @@ pub fn init_gui(
         receiver: receiver_host,
     };
 
-    (gui, host_audio_processor, plugin_audio_processor, instance)
-}
+    let gui = ClapPluginGui { instance, gui };
 
-#[must_use]
-pub fn open_embedded(
-    mut gui: GuiExt,
-    mut instance: PluginInstance<Host>,
-    window_handle: RawWindowHandle,
-) -> ClapPluginGui {
-    gui.open_embedded(&mut instance.plugin_handle(), window_handle);
-
-    ClapPluginGui::new(instance, gui)
-}
-
-#[must_use]
-pub fn open_floating(mut gui: GuiExt, mut instance: PluginInstance<Host>) -> ClapPluginGui {
-    gui.open_floating(&mut instance.plugin_handle());
-
-    ClapPluginGui::new(instance, gui)
+    (gui, host_audio_processor, plugin_audio_processor)
 }

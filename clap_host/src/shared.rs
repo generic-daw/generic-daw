@@ -1,4 +1,4 @@
-use super::MainThreadMessage;
+use crate::MainThreadMessage;
 use async_channel::Sender;
 use clack_extensions::{
     gui::{GuiSize, HostGuiImpl},
@@ -20,7 +20,7 @@ impl SharedHandler<'_> for Shared {
 
     fn request_callback(&self) {
         self.sender
-            .try_send(MainThreadMessage::RunOnMainThread)
+            .try_send(MainThreadMessage::RequestCallback)
             .unwrap();
     }
 
@@ -41,17 +41,15 @@ impl HostGuiImpl for Shared {
     fn request_resize(&self, new_size: GuiSize) -> Result<(), HostError> {
         Ok(self
             .sender
-            .try_send(MainThreadMessage::GuiRequestResized(new_size))?)
+            .try_send(MainThreadMessage::GuiRequestResize(new_size))?)
     }
 
     fn request_show(&self) -> Result<(), HostError> {
-        // we never hide the window, so showing it does nothing
-        Ok(())
+        Ok(self.sender.try_send(MainThreadMessage::GuiRequestShow)?)
     }
 
     fn request_hide(&self) -> Result<(), HostError> {
-        // we never hide the window
-        Ok(())
+        Ok(self.sender.try_send(MainThreadMessage::GuiRequestHide)?)
     }
 
     fn closed(&self, _was_destroyed: bool) {

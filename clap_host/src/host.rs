@@ -1,4 +1,4 @@
-use super::{MainThread, Shared};
+use crate::{MainThread, Shared};
 use clack_extensions::{
     audio_ports::HostAudioPorts, gui::HostGui, note_ports::HostNotePorts, params::HostParams,
     state::HostState, timer::HostTimer,

@@ -5,10 +5,7 @@ use crate::{
 };
 use fragile::Fragile;
 use generic_daw_core::{
-    clap_host::{
-        clack_host::process::PluginAudioConfiguration, get_installed_plugins, init_gui,
-        open_embedded, open_floating,
-    },
+    clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, init_gui},
     Denominator, InterleavedAudio, Meter, Numerator, VARIANTS as _,
 };
 use home::home_dir;
@@ -72,7 +69,6 @@ impl Default for Daw {
 }
 
 impl Daw {
-    #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Animate => {}
@@ -90,44 +86,32 @@ impl Daw {
                     max_frames_count: 256,
                     min_frames_count: 256,
                 };
-                let (gui, hap, pap, i) = init_gui(&get_installed_plugins()[0], config);
+                let (gui, hap, pap) = init_gui(&get_installed_plugins()[0], config);
+                let mut gui = Fragile::new(gui);
 
-                return if gui.needs_floating().unwrap() {
-                    let gui = open_floating(gui, i);
+                return if gui.get().needs_floating().unwrap() {
+                    gui.get_mut().open_floating();
                     let id = Id::unique();
 
                     self.clap_host
-                        .update(ClapHostMessage::Opened(Arc::new(Mutex::new(Opened {
+                        .update(ClapHostMessage::Opened(
                             id,
-                            gui: Fragile::new(gui),
-                            hap,
-                            pap,
-                        }))))
+                            Arc::new(Mutex::new(Opened { gui, hap, pap })),
+                        ))
                         .map(Message::ClapHost)
                 } else {
-                    let i = Fragile::new(i);
-
                     let (id, spawn) = window::open(Settings {
                         exit_on_close_request: false,
                         ..Settings::default()
                     });
 
                     let embed = window::run_with_handle(id, move |handle| {
-                        let gui = open_embedded(gui, i.into_inner(), handle.as_raw());
+                        gui.get_mut().open_embedded(handle.as_raw());
 
-                        Arc::new(Mutex::new(Opened {
-                            id,
-                            gui: Fragile::new(gui),
-                            hap,
-                            pap,
-                        }))
+                        ClapHostMessage::Opened(id, Arc::new(Mutex::new(Opened { gui, hap, pap })))
                     });
 
-                    spawn
-                        .discard()
-                        .chain(embed)
-                        .map(ClapHostMessage::Opened)
-                        .map(Message::ClapHost)
+                    spawn.discard().chain(embed).map(Message::ClapHost)
                 };
             }
             Message::LoadSamplesButton => {
