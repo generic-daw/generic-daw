@@ -59,9 +59,7 @@ impl GuiExt {
     }
 
     pub fn gui_size_to_winit_size(&self, size: GuiSize) -> Size {
-        let Some(GuiConfiguration { api_type, .. }) = self.configuration else {
-            panic!("Called gui_size_to_winit_size on incompatible plugin")
-        };
+        let api_type = self.configuration.unwrap().api_type;
 
         if api_type.uses_logical_size() {
             LogicalSize {
@@ -80,13 +78,11 @@ impl GuiExt {
 
     pub fn needs_floating(&self) -> Option<bool> {
         self.configuration
-            .map(|GuiConfiguration { is_floating, .. }| is_floating)
+            .map(|configuration| configuration.is_floating)
     }
 
     pub fn open_floating(&mut self, plugin: &mut PluginMainThreadHandle<'_>) {
-        let Some(configuration) = self.configuration.filter(|c| c.is_floating) else {
-            panic!("Called open_floating on incompatible plugin")
-        };
+        let configuration = self.configuration.filter(|c| c.is_floating).unwrap();
 
         self.plugin_gui.create(plugin, configuration).unwrap();
         self.plugin_gui.suggest_title(plugin, c"");
@@ -101,9 +97,7 @@ impl GuiExt {
         plugin: &mut PluginMainThreadHandle<'_>,
         window_handle: RawWindowHandle,
     ) {
-        let Some(configuration) = self.configuration.filter(|c| !c.is_floating) else {
-            panic!("Called open_embedded on incompatible plugin")
-        };
+        let configuration = self.configuration.filter(|c| !c.is_floating).unwrap();
 
         self.plugin_gui.create(plugin, configuration).unwrap();
 

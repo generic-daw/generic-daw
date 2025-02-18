@@ -55,13 +55,13 @@ impl Timers {
         id
     }
 
-    pub fn unregister(&self, id: TimerId) -> bool {
+    pub fn unregister(&self, id: TimerId) -> Result<(), HostError> {
         self.durations
             .borrow_mut()
             .remove(&id)
-            .inspect(|_| {
+            .map(|_| {
                 self.ticks.borrow_mut().retain(|&(_, tid)| tid != id);
             })
-            .is_some()
+            .ok_or(HostError::Message("Unknown timer ID"))
     }
 }

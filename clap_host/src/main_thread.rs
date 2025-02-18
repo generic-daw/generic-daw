@@ -25,7 +25,6 @@ pub struct MainThread<'a> {
     pub gui: Option<PluginGui>,
     pub timer_support: Option<PluginTimer>,
     pub timers: Rc<Timers>,
-    pub dirty: bool,
 }
 
 impl<'a> MainThreadHandler<'a> for MainThread<'a> {
@@ -42,9 +41,7 @@ impl HostAudioPortsImpl for MainThread<'_> {
         false
     }
 
-    fn rescan(&mut self, _flag: RescanType) {
-        // we don't support audio ports changing on the fly (yet)
-    }
+    fn rescan(&mut self, _flag: RescanType) {}
 }
 
 impl HostNotePortsImpl for MainThread<'_> {
@@ -52,23 +49,17 @@ impl HostNotePortsImpl for MainThread<'_> {
         NoteDialects::CLAP
     }
 
-    fn rescan(&mut self, _flags: NotePortRescanFlags) {
-        // We don't support note ports changing on the fly (yet)
-    }
+    fn rescan(&mut self, _flags: NotePortRescanFlags) {}
 }
 
 impl HostParamsImplMainThread for MainThread<'_> {
     fn clear(&mut self, _id: ClapId, _flags: ParamClearFlags) {}
 
-    fn rescan(&mut self, _flags: ParamRescanFlags) {
-        // We don't track param values (yet)
-    }
+    fn rescan(&mut self, _flags: ParamRescanFlags) {}
 }
 
 impl HostStateImpl for MainThread<'_> {
-    fn mark_dirty(&mut self) {
-        self.dirty = true;
-    }
+    fn mark_dirty(&mut self) {}
 }
 
 impl HostTimerImpl for MainThread<'_> {
@@ -79,10 +70,6 @@ impl HostTimerImpl for MainThread<'_> {
     }
 
     fn unregister_timer(&mut self, timer_id: TimerId) -> Result<(), HostError> {
-        if self.timers.unregister(timer_id) {
-            Ok(())
-        } else {
-            Err(HostError::Message("Unknown timer ID"))
-        }
+        self.timers.unregister(timer_id)
     }
 }

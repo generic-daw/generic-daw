@@ -3,20 +3,15 @@ use async_channel::Sender;
 use clack_extensions::{
     gui::{GuiSize, HostGuiImpl},
     params::HostParamsImplShared,
-    state::PluginState,
 };
 use clack_host::prelude::*;
-use std::sync::OnceLock;
 
 pub struct Shared {
     sender: Sender<MainThreadMessage>,
-    pub state: OnceLock<Option<PluginState>>,
 }
 
 impl SharedHandler<'_> for Shared {
-    fn request_process(&self) {
-        // we never pause
-    }
+    fn request_process(&self) {}
 
     fn request_callback(&self) {
         self.sender
@@ -24,19 +19,13 @@ impl SharedHandler<'_> for Shared {
             .unwrap();
     }
 
-    fn request_restart(&self) {
-        // we don't support restarting plugins (yet)
-    }
+    fn request_restart(&self) {}
 
-    fn initializing(&self, instance: InitializingPluginHandle<'_>) {
-        self.state.set(instance.get_extension()).ok().unwrap();
-    }
+    fn initializing(&self, _: InitializingPluginHandle<'_>) {}
 }
 
 impl HostGuiImpl for Shared {
-    fn resize_hints_changed(&self) {
-        // we don't support resize hints (yet)
-    }
+    fn resize_hints_changed(&self) {}
 
     fn request_resize(&self, new_size: GuiSize) -> Result<(), HostError> {
         Ok(self
@@ -58,16 +47,11 @@ impl HostGuiImpl for Shared {
 }
 
 impl HostParamsImplShared for Shared {
-    fn request_flush(&self) {
-        // Can never flush events when not processing: we're never not processing
-    }
+    fn request_flush(&self) {}
 }
 
 impl Shared {
     pub fn new(sender: Sender<MainThreadMessage>) -> Self {
-        Self {
-            sender,
-            state: OnceLock::new(),
-        }
+        Self { sender }
     }
 }
