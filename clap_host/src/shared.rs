@@ -1,11 +1,12 @@
 use super::MainThreadMessage;
+use async_channel::Sender;
 use clack_extensions::{
     gui::{GuiSize, HostGuiImpl},
     params::HostParamsImplShared,
     state::PluginState,
 };
 use clack_host::prelude::*;
-use std::sync::{mpsc::Sender, OnceLock};
+use std::sync::OnceLock;
 
 pub struct Shared {
     sender: Sender<MainThreadMessage>,
@@ -19,7 +20,7 @@ impl SharedHandler<'_> for Shared {
 
     fn request_callback(&self) {
         self.sender
-            .send(MainThreadMessage::RunOnMainThread)
+            .try_send(MainThreadMessage::RunOnMainThread)
             .unwrap();
     }
 
@@ -40,7 +41,7 @@ impl HostGuiImpl for Shared {
     fn request_resize(&self, new_size: GuiSize) -> Result<(), HostError> {
         Ok(self
             .sender
-            .send(MainThreadMessage::GuiRequestResized(new_size))?)
+            .try_send(MainThreadMessage::GuiRequestResized(new_size))?)
     }
 
     fn request_show(&self) -> Result<(), HostError> {
@@ -54,7 +55,7 @@ impl HostGuiImpl for Shared {
     }
 
     fn closed(&self, _was_destroyed: bool) {
-        self.sender.send(MainThreadMessage::GuiClosed).unwrap();
+        self.sender.try_send(MainThreadMessage::GuiClosed).unwrap();
     }
 }
 

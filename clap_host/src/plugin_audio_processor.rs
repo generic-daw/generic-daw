@@ -1,12 +1,10 @@
 use super::Host;
 use crate::{host::HostThreadMessage, main_thread::MainThreadMessage};
+use async_channel::{Receiver, Sender};
 use clack_host::{prelude::*, process::StartedPluginAudioProcessor};
-use std::sync::{
-    atomic::{
-        AtomicU64,
-        Ordering::{AcqRel, Acquire},
-    },
-    mpsc::{Receiver, Sender},
+use std::sync::atomic::{
+    AtomicU64,
+    Ordering::{AcqRel, Acquire},
 };
 
 pub struct PluginAudioProcessor {

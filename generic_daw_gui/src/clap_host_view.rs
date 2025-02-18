@@ -8,7 +8,6 @@ use iced::{
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::Duration,
 };
 
 mod opened;
@@ -40,12 +39,11 @@ impl ClapHostView {
                 } = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
                 self.windows.insert(id, gui.into_inner());
 
+                #[expect(tail_expr_drop_order)]
                 return Task::stream(channel(16, move |mut sender| async move {
-                    while let Ok(msg) = pap.receiver.try_recv() {
+                    while let Ok(msg) = pap.receiver.recv().await {
                         sender.send(Message::MainThread((id, msg))).await.unwrap();
                     }
-
-                    tokio::time::sleep(Duration::from_millis(100)).await;
                 }));
             }
             Message::Resized((id, size)) => {

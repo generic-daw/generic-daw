@@ -103,8 +103,8 @@ pub fn init_gui(
     PluginAudioProcessor,
     PluginInstance<Host>,
 ) {
-    let (sender_host, receiver_plugin) = std::sync::mpsc::channel();
-    let (sender_plugin, receiver_host) = std::sync::mpsc::channel();
+    let (sender_host, receiver_plugin) = async_channel::bounded(16);
+    let (sender_plugin, receiver_host) = async_channel::bounded(16);
 
     let factory = bundle.get_plugin_factory().unwrap();
     let plugin_descriptor = factory.plugin_descriptors().next().unwrap();
