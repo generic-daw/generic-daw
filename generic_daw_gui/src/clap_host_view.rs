@@ -1,15 +1,13 @@
 use fragile::Fragile;
-use generic_daw_core::clap_host::{ClapPluginGui, MainThreadMessage};
+use generic_daw_core::clap_host::{ClapPluginGui, MainThreadMessage, PluginId};
+use generic_daw_utils::HoleyVec;
 use iced::{
     futures::SinkExt as _,
     stream::channel,
-    window::{self, close_requests, resize_events, Id},
+    window::{self, close_requests, resize_events, Id, Settings},
     Size, Subscription, Task,
 };
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 mod opened;
 
@@ -21,21 +19,27 @@ pub enum Message {
     Shown(Id, Arc<Fragile<ClapPluginGui>>),
     CloseRequested(Id),
     Resized((Id, Size)),
-    MainThread((Id, MainThreadMessage)),
+    MainThread((PluginId, MainThreadMessage)),
 }
 
 #[derive(Default)]
 pub struct ClapHostView {
-    windows: HashMap<Id, ClapPluginGui>,
+    plugins: HoleyVec<ClapPluginGui>,
+    windows: HoleyVec<Id>,
 }
 
 impl ClapHostView {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Opened(id, arc) => {
+            Message::Opened(window_id, arc) => {
                 let Opened { gui, hap: _, pap } =
                     Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
-                self.windows.insert(id, gui.into_inner());
+
+                let gui = gui.into_inner();
+                let id = gui.plugin_id();
+
+                self.plugins.insert(id, gui);
+                self.windows.insert(id, window_id);
 
                 #[expect(tail_expr_drop_order)]
                 return Task::stream(channel(16, move |mut sender| async move {
@@ -44,45 +48,69 @@ impl ClapHostView {
                     }
                 }));
             }
-            Message::Shown(id, arc) => {
-                let gui = Arc::into_inner(arc).unwrap();
-                self.windows.insert(id, gui.into_inner());
+            Message::Shown(window_id, arc) => {
+                let gui = Arc::into_inner(arc).unwrap().into_inner();
+                let id = gui.plugin_id();
+
+                self.plugins.insert(id, gui);
+                self.windows.insert(id, window_id);
             }
-            Message::Resized((id, size)) => {
-                if let Some(plugin) = self.windows.get_mut(&id) {
-                    plugin.resize(size.width as u32, size.height as u32);
+            Message::Resized((window_id, size)) => {
+                if let Some(id) = self.windows.position(&window_id) {
+                    self.plugins
+                        .get_mut(id)
+                        .unwrap()
+                        .resize(size.width as u32, size.height as u32);
                 }
             }
-            Message::CloseRequested(id) => {
-                self.windows.remove(&id).unwrap();
-                return window::close::<()>(id).discard();
+            Message::CloseRequested(window_id) => {
+                let id = self.windows.position(&window_id).unwrap();
+                self.windows.remove(id).unwrap();
+
+                if let Some(gui) = self.plugins.get_mut(id) {
+                    gui.destroy();
+                }
+
+                return window::close::<()>(window_id).discard();
             }
             Message::MainThread((id, msg)) => match msg {
                 MainThreadMessage::RequestCallback => self
-                    .windows
-                    .get_mut(&id)
+                    .plugins
+                    .get_mut(id)
                     .unwrap()
                     .call_on_main_thread_callback(),
                 MainThreadMessage::GuiRequestHide => {
-                    self.windows.get_mut(&id).unwrap().destroy();
+                    let window_id = self.windows.remove(id).unwrap();
+                    return window::close(window_id);
                 }
                 MainThreadMessage::GuiRequestShow => {
-                    let mut gui = self.windows.remove(&id).unwrap();
-                    gui.destroy();
+                    let gui = self.plugins.remove(id).unwrap();
                     let mut gui = Fragile::new(gui);
 
-                    return window::run_with_handle(id, move |handle| {
-                        gui.get_mut().open_embedded(handle.as_raw());
-                        Message::Shown(id, Arc::new(gui))
+                    let (window_id, spawn) = window::open(Settings {
+                        exit_on_close_request: false,
+                        ..Settings::default()
                     });
+
+                    let embed = window::run_with_handle(window_id, move |handle| {
+                        gui.get_mut().destroy();
+                        gui.get_mut().open_embedded(handle.as_raw());
+                        Message::Shown(window_id, Arc::new(gui))
+                    });
+
+                    return spawn.discard().chain(embed);
                 }
                 MainThreadMessage::GuiClosed => {
-                    self.windows.get_mut(&id).unwrap().destroy();
-                    return window::close(id);
+                    self.plugins.remove(id).unwrap().destroy();
+
+                    return self
+                        .update(Message::MainThread((id, MainThreadMessage::GuiRequestHide)));
                 }
                 MainThreadMessage::GuiRequestResize(new_size) => {
+                    let window_id = self.windows[id];
+
                     return window::resize(
-                        id,
+                        window_id,
                         Size {
                             width: new_size.width as f32,
                             height: new_size.height as f32,

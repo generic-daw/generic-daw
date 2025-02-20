@@ -39,7 +39,7 @@ impl AudioGraph {
             self.dirty = false;
 
             self.list.sort_unstable_by(|&lhs, &rhs| {
-                if self.graph[*lhs].connections.contains(*rhs) {
+                if self.graph[lhs].connections.contains(*rhs) {
                     Ordering::Less
                 } else {
                     Ordering::Equal
@@ -54,7 +54,7 @@ impl AudioGraph {
                 *s = 0.0;
             }
 
-            for node in &self.graph[*node].connections {
+            for node in &self.graph[node].connections {
                 self.graph[node]
                     .cache
                     .iter()
@@ -64,24 +64,24 @@ impl AudioGraph {
                     });
             }
 
-            self.graph[*node].node.fill_buf(buf_start_sample, buf);
+            self.graph[node].node.fill_buf(buf_start_sample, buf);
 
-            let cbuf = &mut self.graph.get_mut(*node).unwrap().cache;
+            let cbuf = &mut self.graph.get_mut(node).unwrap().cache;
             cbuf.clear();
             cbuf.extend(&*buf);
         }
     }
 
     pub fn connect(&mut self, from: NodeId, to: NodeId) {
-        if self.graph.get(*to).is_some()
+        if self.graph.get(to).is_some()
             && self
                 .graph
-                .get(*from)
+                .get(from)
                 .is_some_and(|entry| !entry.connections.contains(*to))
             && !Self::check_cycle(&self.graph, &mut self.visited, *to, *from)
         {
             self.visited.clear();
-            self.graph.get_mut(*from).unwrap().connections.insert(*to);
+            self.graph.get_mut(from).unwrap().connections.insert(*to);
 
             if !self.dirty {
                 for id in self.list.iter().copied() {
@@ -97,7 +97,7 @@ impl AudioGraph {
     }
 
     pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
-        if let Some(entry) = self.graph.get_mut(*from) {
+        if let Some(entry) = self.graph.get_mut(from) {
             entry.connections.remove(*to);
         }
     }
@@ -105,7 +105,7 @@ impl AudioGraph {
     pub fn insert(&mut self, node: AudioGraphNode) {
         let id = node.id();
 
-        if let Some(entry) = self.graph.get_mut(*id) {
+        if let Some(entry) = self.graph.get_mut(id) {
             entry.node = node;
             return;
         }
@@ -116,14 +116,14 @@ impl AudioGraph {
             cache: self.graph[0].cache.clone(),
         };
 
-        self.graph.insert(*id, entry);
+        self.graph.insert(id, entry);
         self.list.push(id);
     }
 
     pub fn remove(&mut self, node: NodeId) {
         debug_assert_ne!(self.list[0], node);
 
-        if self.graph.remove(*node).is_some() {
+        if self.graph.remove(node).is_some() {
             let idx = self.list.iter().copied().position(|n| n == node).unwrap();
             self.list.remove(idx);
 

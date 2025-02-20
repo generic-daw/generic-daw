@@ -1416,6 +1416,7 @@ version = "0.1.0"
 dependencies = [
  "fragile",
  "generic_daw_core",
+ "generic_daw_utils",
  "home",
  "hound",
  "iced",

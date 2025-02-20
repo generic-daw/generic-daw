@@ -3,13 +3,14 @@ macro_rules! unique_id {
     ($mod_name:ident) => {
         mod $mod_name {
             use std::{
+                borrow::Borrow,
                 ops::Deref,
                 sync::atomic::{AtomicUsize, Ordering::AcqRel},
             };
 
             static ID: AtomicUsize = AtomicUsize::new(0);
 
-            #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+            #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
             pub struct Id(usize);
 
             impl Id {
@@ -23,6 +24,12 @@ macro_rules! unique_id {
 
                 fn deref(&self) -> &Self::Target {
                     &self.0
+                }
+            }
+
+            impl Borrow<usize> for Id {
+                fn borrow(&self) -> &usize {
+                    &**self
                 }
             }
         }
