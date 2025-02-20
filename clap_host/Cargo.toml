@@ -15,6 +15,7 @@ clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
     "audio-ports",
     "clack-host",
     "gui",
+    "log",
     "note-ports",
     "params",
     "raw-window-handle_06",
@@ -26,6 +27,7 @@ dpi = "0.1.1"
 home = "0.5.11"
 raw-window-handle = "0.6.2"
 walkdir = "2.5.0"
+tracing = { version = "0.1.41", default-features = false, features = ["std"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 etcetera = "0.8.0"

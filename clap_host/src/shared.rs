@@ -2,9 +2,11 @@ use crate::MainThreadMessage;
 use async_channel::Sender;
 use clack_extensions::{
     gui::{GuiSize, HostGuiImpl},
+    log::{HostLogImpl, LogSeverity},
     params::HostParamsImplShared,
 };
 use clack_host::prelude::*;
+use tracing::{debug, error, info, warn};
 
 pub struct Shared {
     sender: Sender<MainThreadMessage>,
@@ -43,6 +45,20 @@ impl HostGuiImpl for Shared {
 
     fn closed(&self, _was_destroyed: bool) {
         self.sender.try_send(MainThreadMessage::GuiClosed).unwrap();
+    }
+}
+
+impl HostLogImpl for Shared {
+    fn log(&self, severity: LogSeverity, message: &str) {
+        match severity {
+            LogSeverity::Info => info!(message),
+            LogSeverity::Debug => debug!(message),
+            LogSeverity::Warning => warn!(message),
+            LogSeverity::Error
+            | LogSeverity::Fatal
+            | LogSeverity::PluginMisbehaving
+            | LogSeverity::HostMisbehaving => error!(message),
+        }
     }
 }
 

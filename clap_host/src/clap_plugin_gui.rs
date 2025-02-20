@@ -3,7 +3,11 @@ use clack_extensions::timer::PluginTimer;
 use clack_host::prelude::*;
 use dpi::{PhysicalSize, Size};
 use raw_window_handle::RawWindowHandle;
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
+use std::{
+    cell::RefCell,
+    fmt::{Debug, Formatter},
+    rc::Rc,
+};
 
 pub struct ClapPluginGui {
     pub(crate) instance: PluginInstance<Host>,
@@ -12,7 +16,7 @@ pub struct ClapPluginGui {
 }
 
 impl Debug for ClapPluginGui {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ClapPluginGui").finish_non_exhaustive()
     }
 }
@@ -21,13 +25,6 @@ impl ClapPluginGui {
     #[must_use]
     pub fn plugin_id(&self) -> PluginId {
         self.id
-    }
-
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.gui.resize(
-            &mut self.instance.plugin_handle(),
-            Size::Physical(PhysicalSize::new(width, height)),
-        );
     }
 
     pub fn call_on_main_thread_callback(&mut self) {
@@ -39,10 +36,6 @@ impl ClapPluginGui {
         self.gui.needs_floating()
     }
 
-    pub fn destroy(&mut self) {
-        self.gui.destroy(&mut self.instance.plugin_handle());
-    }
-
     pub fn open_embedded(&mut self, window_handle: RawWindowHandle) {
         self.gui
             .open_embedded(&mut self.instance.plugin_handle(), window_handle);
@@ -50,6 +43,17 @@ impl ClapPluginGui {
 
     pub fn open_floating(&mut self) {
         self.gui.open_floating(&mut self.instance.plugin_handle());
+    }
+
+    pub fn destroy(&mut self) {
+        self.gui.destroy(&mut self.instance.plugin_handle());
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.gui.resize(
+            &mut self.instance.plugin_handle(),
+            Size::Physical(PhysicalSize::new(width, height)),
+        );
     }
 
     #[must_use]

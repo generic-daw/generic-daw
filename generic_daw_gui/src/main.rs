@@ -5,9 +5,12 @@ use iced_fonts::{BOOTSTRAP_FONT_BYTES, REQUIRED_FONT_BYTES};
 pub(crate) mod arrangement_view;
 pub(crate) mod clap_host_view;
 pub(crate) mod daw;
+mod trace;
 pub(crate) mod widget;
 
 fn main() -> Result {
+    trace::setup();
+
     #[cfg(target_os = "linux")]
     {
         // SAFETY:
