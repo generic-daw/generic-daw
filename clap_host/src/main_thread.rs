@@ -8,7 +8,7 @@ use clack_extensions::{
     timer::{HostTimerImpl, PluginTimer, TimerId},
 };
 use clack_host::prelude::*;
-use std::{rc::Rc, time::Duration};
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
 #[derive(Clone, Copy, Debug)]
 pub enum MainThreadMessage {
@@ -24,7 +24,7 @@ pub struct MainThread<'a> {
     plugin: Option<InitializedPluginHandle<'a>>,
     pub gui: Option<PluginGui>,
     pub timer_support: Option<PluginTimer>,
-    pub timers: Rc<Timers>,
+    pub timers: Rc<RefCell<Timers>>,
 }
 
 impl<'a> MainThreadHandler<'a> for MainThread<'a> {
@@ -66,10 +66,11 @@ impl HostTimerImpl for MainThread<'_> {
     fn register_timer(&mut self, period_ms: u32) -> Result<TimerId, HostError> {
         Ok(self
             .timers
+            .borrow_mut()
             .register(Duration::from_millis(u64::from(period_ms))))
     }
 
     fn unregister_timer(&mut self, timer_id: TimerId) -> Result<(), HostError> {
-        self.timers.unregister(timer_id)
+        self.timers.borrow_mut().unregister(timer_id)
     }
 }

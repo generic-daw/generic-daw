@@ -3,7 +3,7 @@ use clack_extensions::timer::PluginTimer;
 use clack_host::prelude::*;
 use dpi::{PhysicalSize, Size};
 use raw_window_handle::RawWindowHandle;
-use std::{fmt::Debug, rc::Rc};
+use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 pub struct ClapPluginGui {
     pub(crate) instance: PluginInstance<Host>,
@@ -53,7 +53,7 @@ impl ClapPluginGui {
     }
 
     #[must_use]
-    pub fn timers(&self) -> Option<(Rc<Timers>, PluginTimer)> {
+    pub fn timers(&self) -> Option<(Rc<RefCell<Timers>>, PluginTimer)> {
         self.instance
             .access_handler(|h| h.timer_support.map(|ext| (h.timers.clone(), ext)))
     }
