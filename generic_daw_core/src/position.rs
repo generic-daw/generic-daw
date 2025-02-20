@@ -27,7 +27,7 @@ impl Position {
         debug_assert!(sub_quarter_note < 256);
         debug_assert!(quarter_note <= u32::MAX >> 8);
 
-        Self(quarter_note << 8 | sub_quarter_note)
+        Self((quarter_note << 8) | sub_quarter_note)
     }
 
     #[must_use]
