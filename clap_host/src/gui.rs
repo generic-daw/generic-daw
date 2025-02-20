@@ -6,7 +6,6 @@ use dpi::{LogicalSize, PhysicalSize, Size};
 use raw_window_handle::RawWindowHandle;
 use std::fmt::{Debug, Formatter};
 
-#[derive(Clone, Copy)]
 pub struct GuiExt {
     plugin_gui: PluginGui,
     pub configuration: Option<GuiConfiguration<'static>>,
@@ -140,7 +139,7 @@ impl GuiExt {
         self.gui_size_to_winit_size(working_size)
     }
 
-    pub fn destroy(mut self, plugin: &mut PluginMainThreadHandle<'_>) {
+    pub fn destroy(&mut self, plugin: &mut PluginMainThreadHandle<'_>) {
         if self.is_open {
             self.plugin_gui.destroy(plugin);
             self.is_open = false;
