@@ -8,5 +8,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+generic_daw_utils = { path = "../generic_daw_utils" }
+
 atomig = "0.4.2"
 bit-set = "0.8.0"

@@ -1,5 +1,5 @@
 [workspace]
-members = ["audio_graph", "clap_host", "generic_daw_core", "generic_daw_gui"]
+members = ["audio_graph", "clap_host", "generic_daw_core", "generic_daw_gui", "generic_daw_utils"]
 resolver = "2"
 
 [workspace.package]
