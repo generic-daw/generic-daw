@@ -20,7 +20,7 @@ impl Timers {
     ) -> Option<Instant> {
         let now = Instant::now();
 
-        while self.ticks.first().is_some_and(|t| t.0 < now) {
+        while self.ticks.first().is_some_and(|t| t.0 <= now) {
             let (_, id) = self.ticks.pop_first().unwrap();
 
             timer_ext.on_timer(plugin, id);
@@ -33,12 +33,11 @@ impl Timers {
     }
 
     pub fn register(&mut self, interval: Duration) -> TimerId {
-        let now = Instant::now();
         let id = TimerId(self.next_id);
         self.next_id += 1;
 
         self.durations.insert(id, interval);
-        self.ticks.insert((now + interval, id));
+        self.ticks.insert((Instant::now(), id));
 
         id
     }

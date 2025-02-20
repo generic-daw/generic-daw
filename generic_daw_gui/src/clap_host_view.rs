@@ -7,7 +7,10 @@ use iced::{
     stream::channel,
     window::{self, Id, Settings, close_requests, resize_events},
 };
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 mod opened;
 
@@ -41,11 +44,14 @@ impl ClapHostView {
                 self.plugins.insert(id, gui);
                 self.windows.insert(id, window_id);
 
-                return Task::stream(channel(16, move |mut sender| async move {
-                    while let Ok(msg) = pap.receiver.recv().await {
-                        sender.send(Message::MainThread((id, msg))).await.unwrap();
-                    }
-                }));
+                return Task::batch([
+                    self.update(Message::MainThread((id, MainThreadMessage::TickTimers))),
+                    Task::stream(channel(16, async move |mut sender| {
+                        while let Ok(msg) = pap.receiver.recv().await {
+                            sender.send(Message::MainThread((id, msg))).await.unwrap();
+                        }
+                    })),
+                ]);
             }
             Message::Shown(window_id, arc) => {
                 let gui = Arc::into_inner(arc).unwrap().into_inner();
@@ -115,6 +121,17 @@ impl ClapHostView {
                             height: new_size.height as f32,
                         },
                     );
+                }
+                MainThreadMessage::TickTimers => {
+                    let (timers, timer_ext) = self.plugins[id].timers().unwrap();
+                    let mut instance = self.plugins.get_mut(id).unwrap().plugin_handle();
+
+                    let next_tick = timers.borrow_mut().tick_timers(&timer_ext, &mut instance);
+                    let sleep = next_tick.map_or(Duration::from_millis(30), |t| t - Instant::now());
+
+                    return Task::future(tokio::time::sleep(sleep))
+                        .map(|()| MainThreadMessage::TickTimers)
+                        .map(move |msg| Message::MainThread((id, msg)));
                 }
             },
         }

@@ -61,6 +61,11 @@ impl ClapPluginGui {
         self.instance
             .access_handler(|h| h.timer_support.map(|ext| (h.timers.clone(), ext)))
     }
+
+    #[must_use]
+    pub fn plugin_handle(&mut self) -> PluginMainThreadHandle<'_> {
+        self.instance.plugin_handle()
+    }
 }
 
 impl Drop for ClapPluginGui {

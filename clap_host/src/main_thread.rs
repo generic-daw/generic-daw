@@ -17,6 +17,7 @@ pub enum MainThreadMessage {
     GuiRequestShow,
     GuiClosed,
     GuiRequestResize(GuiSize),
+    TickTimers,
 }
 
 #[derive(Default)]
