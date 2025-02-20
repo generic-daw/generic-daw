@@ -16,7 +16,7 @@ pub enum HostThreadMessage {
 
 impl HostHandlers for Host {
     type Shared<'a> = Shared;
-    type MainThread<'a> = MainThread<'a>;
+    type MainThread<'a> = MainThread;
     type AudioProcessor<'a> = ();
 
     fn declare_extensions(builder: &mut HostExtensions<'_, Self>, _shared: &Self::Shared<'_>) {

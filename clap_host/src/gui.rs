@@ -8,7 +8,7 @@ use std::fmt::{Debug, Formatter};
 
 pub struct GuiExt {
     plugin_gui: PluginGui,
-    pub configuration: Option<GuiConfiguration<'static>>,
+    configuration: Option<GuiConfiguration<'static>>,
     is_open: bool,
     is_resizeable: bool,
 }

@@ -116,7 +116,7 @@ pub fn init(
     .unwrap();
 
     let gui = instance
-        .access_handler(|h: &MainThread<'_>| h.gui)
+        .access_handler(|h: &MainThread| h.gui)
         .map(|gui| GuiExt::new(gui, &mut instance.plugin_handle()))
         .unwrap();
 

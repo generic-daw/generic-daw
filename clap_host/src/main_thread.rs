@@ -21,23 +21,20 @@ pub enum MainThreadMessage {
 }
 
 #[derive(Default)]
-pub struct MainThread<'a> {
-    plugin: Option<InitializedPluginHandle<'a>>,
+pub struct MainThread {
     pub gui: Option<PluginGui>,
     pub timer_support: Option<PluginTimer>,
     pub timers: Rc<RefCell<Timers>>,
 }
 
-impl<'a> MainThreadHandler<'a> for MainThread<'a> {
-    fn initialized(&mut self, instance: InitializedPluginHandle<'a>) {
+impl MainThreadHandler<'_> for MainThread {
+    fn initialized(&mut self, instance: InitializedPluginHandle<'_>) {
         self.gui = instance.get_extension();
         self.timer_support = instance.get_extension();
-        self.timers = Rc::default();
-        self.plugin = Some(instance);
     }
 }
 
-impl HostAudioPortsImpl for MainThread<'_> {
+impl HostAudioPortsImpl for MainThread {
     fn is_rescan_flag_supported(&self, _flag: RescanType) -> bool {
         false
     }
@@ -45,7 +42,7 @@ impl HostAudioPortsImpl for MainThread<'_> {
     fn rescan(&mut self, _flag: RescanType) {}
 }
 
-impl HostNotePortsImpl for MainThread<'_> {
+impl HostNotePortsImpl for MainThread {
     fn supported_dialects(&self) -> NoteDialects {
         NoteDialects::CLAP
     }
@@ -53,17 +50,17 @@ impl HostNotePortsImpl for MainThread<'_> {
     fn rescan(&mut self, _flags: NotePortRescanFlags) {}
 }
 
-impl HostParamsImplMainThread for MainThread<'_> {
+impl HostParamsImplMainThread for MainThread {
     fn clear(&mut self, _id: ClapId, _flags: ParamClearFlags) {}
 
     fn rescan(&mut self, _flags: ParamRescanFlags) {}
 }
 
-impl HostStateImpl for MainThread<'_> {
+impl HostStateImpl for MainThread {
     fn mark_dirty(&mut self) {}
 }
 
-impl HostTimerImpl for MainThread<'_> {
+impl HostTimerImpl for MainThread {
     fn register_timer(&mut self, period_ms: u32) -> Result<TimerId, HostError> {
         Ok(self
             .timers
