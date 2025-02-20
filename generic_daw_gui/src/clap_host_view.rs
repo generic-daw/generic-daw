@@ -9,7 +9,7 @@ use iced::{
 };
 use std::{
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 mod opened;
@@ -126,8 +126,8 @@ impl ClapHostView {
                     let (timers, timer_ext) = self.plugins[id].timers().unwrap();
                     let mut instance = self.plugins.get_mut(id).unwrap().plugin_handle();
 
-                    let next_tick = timers.borrow_mut().tick_timers(&timer_ext, &mut instance);
-                    let sleep = next_tick.map_or(Duration::from_millis(30), |t| t - Instant::now());
+                    let sleep =
+                        timers.borrow_mut().tick_timers(&timer_ext, &mut instance) - Instant::now();
 
                     return Task::future(tokio::time::sleep(sleep))
                         .map(|()| MainThreadMessage::TickTimers)
