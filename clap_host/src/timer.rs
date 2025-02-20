@@ -34,10 +34,8 @@ impl Timers {
 
     pub fn register(&mut self, interval: Duration) -> TimerId {
         let now = Instant::now();
-
-        let id = self.next_id;
-        self.next_id = id + 1;
-        let id = TimerId(id);
+        let id = TimerId(self.next_id);
+        self.next_id += 1;
 
         self.durations.insert(id, interval);
         self.ticks.insert((now + interval, id));

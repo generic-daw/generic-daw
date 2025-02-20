@@ -97,7 +97,7 @@ fn standard_clap_paths() -> Vec<PathBuf> {
 }
 
 #[must_use]
-pub fn init_gui(
+pub fn init(
     bundle: &PluginBundle,
     config: PluginAudioConfiguration,
 ) -> (ClapPluginGui, HostAudioProcessor, PluginAudioProcessor) {

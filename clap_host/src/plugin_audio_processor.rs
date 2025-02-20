@@ -1,14 +1,10 @@
 use crate::{host::HostThreadMessage, main_thread::MainThreadMessage, Host};
 use async_channel::{Receiver, Sender};
 use clack_host::{prelude::*, process::StartedPluginAudioProcessor};
-use std::sync::atomic::{
-    AtomicU64,
-    Ordering::{AcqRel, Acquire},
-};
 
 pub struct PluginAudioProcessor {
     started_processor: Option<StartedPluginAudioProcessor<Host>>,
-    pub steady_time: AtomicU64,
+    steady_time: u64,
     pub sender: Sender<HostThreadMessage>,
     pub receiver: Receiver<MainThreadMessage>,
 }
@@ -21,7 +17,7 @@ impl PluginAudioProcessor {
     ) -> Self {
         Self {
             started_processor: Some(audio_processor),
-            steady_time: AtomicU64::new(0),
+            steady_time: 0,
             sender,
             receiver,
         }
@@ -62,13 +58,12 @@ impl PluginAudioProcessor {
                 &mut output_audio,
                 &input_events,
                 &mut output_events,
-                Some(self.steady_time.load(Acquire)),
+                Some(self.steady_time),
                 None,
             )
             .unwrap();
 
-        self.steady_time
-            .fetch_add(u64::from(output_audio.frames_count().unwrap()), AcqRel);
+        self.steady_time += u64::from(output_audio.frames_count().unwrap());
 
         (output_audio_buffers, output_events_buffer)
     }

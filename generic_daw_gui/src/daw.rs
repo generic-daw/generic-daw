@@ -5,7 +5,7 @@ use crate::{
 };
 use fragile::Fragile;
 use generic_daw_core::{
-    clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, init_gui},
+    clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, init},
     Denominator, InterleavedAudio, Meter, Numerator, VARIANTS as _,
 };
 use home::home_dir;
@@ -34,7 +34,6 @@ pub enum Message {
     ThemeChanged(Theme),
     ClapHost(ClapHostMessage),
     Arrangement(ArrangementMessage),
-    #[expect(dead_code)]
     Test,
     LoadSamplesButton,
     LoadSample(PathBuf),
@@ -86,7 +85,7 @@ impl Daw {
                     max_frames_count: 256,
                     min_frames_count: 256,
                 };
-                let (gui, hap, pap) = init_gui(&get_installed_plugins()[0], config);
+                let (gui, hap, pap) = init(&get_installed_plugins()[0], config);
                 let mut gui = Fragile::new(gui);
 
                 return if gui.get().needs_floating().unwrap() {
@@ -225,6 +224,7 @@ impl Daw {
                 .on_toggle(|_| Message::ToggleMetronome),
             horizontal_space(),
             pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
+            button("TEST").on_press(Message::Test),
         ]
         .spacing(20)
         .align_y(Center);
