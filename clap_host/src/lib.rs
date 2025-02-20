@@ -1,6 +1,7 @@
 #![expect(missing_debug_implementations)]
 
 use clack_host::prelude::*;
+use generic_daw_utils::unique_id;
 use gui::GuiExt;
 use home::home_dir;
 use host::Host;
@@ -24,6 +25,9 @@ pub use host::HostThreadMessage;
 pub use host_audio_processor::HostAudioProcessor;
 pub use main_thread::MainThreadMessage;
 pub use plugin_audio_processor::PluginAudioProcessor;
+pub use plugin_id::Id as PluginId;
+
+unique_id!(plugin_id);
 
 #[must_use]
 pub fn get_installed_plugins() -> Vec<PluginBundle> {
@@ -131,7 +135,11 @@ pub fn init_gui(
         receiver: receiver_host,
     };
 
-    let gui = ClapPluginGui { instance, gui };
+    let gui = ClapPluginGui {
+        id: PluginId::unique(),
+        instance,
+        gui,
+    };
 
     (gui, host_audio_processor, plugin_audio_processor)
 }

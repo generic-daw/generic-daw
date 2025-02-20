@@ -652,6 +652,7 @@ dependencies = [
  "clack-host",
  "dpi",
  "etcetera",
+ "generic_daw_utils",
  "home",
  "raw-window-handle",
  "walkdir",
