@@ -647,6 +647,7 @@ checksum = "61b04354981cd059bf376007c9361ded38b15de87972e634670799685b042197"
 name = "clap_host"
 version = "0.0.0"
 dependencies = [
+ "ahash",
  "async-channel",
  "clack-extensions",
  "clack-host",

@@ -10,7 +10,7 @@ pub struct GuiExt {
     plugin_gui: PluginGui,
     configuration: Option<GuiConfiguration<'static>>,
     is_open: bool,
-    is_resizeable: bool,
+    pub(crate) can_resize: bool,
 }
 
 impl Debug for GuiExt {
@@ -18,7 +18,7 @@ impl Debug for GuiExt {
         f.debug_struct("GuiExt")
             .field("configuration", &self.configuration)
             .field("is_open", &self.is_open)
-            .field("is_resizeable", &self.is_resizeable)
+            .field("is_resizeable", &self.can_resize)
             .finish_non_exhaustive()
     }
 }
@@ -29,7 +29,7 @@ impl GuiExt {
             plugin_gui,
             configuration: Self::negotiate_configuration(&plugin_gui, instance),
             is_open: false,
-            is_resizeable: false,
+            can_resize: false,
         }
     }
 
@@ -55,7 +55,7 @@ impl GuiExt {
         }
     }
 
-    pub fn gui_size_to_winit_size(&self, size: GuiSize) -> Size {
+    pub fn gui_size_to_dpi_size(&self, size: GuiSize) -> Size {
         let api_type = self.configuration.unwrap().api_type;
 
         if api_type.uses_logical_size() {
@@ -85,7 +85,7 @@ impl GuiExt {
         self.plugin_gui.suggest_title(plugin, c"");
         self.plugin_gui.show(plugin).unwrap();
 
-        self.is_resizeable = self.plugin_gui.can_resize(plugin);
+        self.can_resize = self.plugin_gui.can_resize(plugin);
         self.is_open = true;
     }
 
@@ -101,12 +101,12 @@ impl GuiExt {
         let window = ClapWindow::from_window_handle(window_handle).unwrap();
 
         // SAFETY:
-        // We destroy the plugin ui just before the window is closed (see generic_front/clap_host.rs)
+        // We destroy the plugin ui just before the window is closed
         unsafe { self.plugin_gui.set_parent(plugin, window) }.unwrap();
 
         self.plugin_gui.show(plugin).unwrap();
 
-        self.is_resizeable = self.plugin_gui.can_resize(plugin);
+        self.can_resize = self.plugin_gui.can_resize(plugin);
         self.is_open = true;
     }
 
@@ -127,16 +127,12 @@ impl GuiExt {
             }
         };
 
-        if !self.is_resizeable {
-            let forced_size = self.plugin_gui.get_size(plugin).unwrap_or(size);
+        if self.can_resize {
+            let size = self.plugin_gui.adjust_size(plugin, size).unwrap_or(size);
+            self.plugin_gui.set_size(plugin, size).unwrap();
+        };
 
-            return self.gui_size_to_winit_size(forced_size);
-        }
-
-        let working_size = self.plugin_gui.adjust_size(plugin, size).unwrap_or(size);
-        self.plugin_gui.set_size(plugin, working_size).unwrap();
-
-        self.gui_size_to_winit_size(working_size)
+        self.gui_size_to_dpi_size(self.plugin_gui.get_size(plugin).unwrap_or(size))
     }
 
     pub fn destroy(&mut self, plugin: &mut PluginMainThreadHandle<'_>) {

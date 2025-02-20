@@ -101,6 +101,7 @@ impl Daw {
                 } else {
                     let (id, spawn) = window::open(Settings {
                         exit_on_close_request: false,
+                        resizable: gui.get().can_resize(),
                         ..Settings::default()
                     });
 

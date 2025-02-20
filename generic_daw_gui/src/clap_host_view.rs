@@ -62,19 +62,23 @@ impl ClapHostView {
             }
             Message::Resized((window_id, size)) => {
                 if let Some(id) = self.windows.position(&window_id) {
-                    self.plugins
+                    let new_size = self
+                        .plugins
                         .get_mut(id)
                         .unwrap()
-                        .resize(size.width as u32, size.height as u32);
+                        .resize(size.width as u32, size.height as u32)
+                        .map(|x| x as f32)
+                        .into();
+
+                    if size != new_size {
+                        return window::resize(window_id, new_size);
+                    }
                 }
             }
             Message::CloseRequested(window_id) => {
                 let id = self.windows.position(&window_id).unwrap();
                 self.windows.remove(id).unwrap();
-
-                if let Some(gui) = self.plugins.get_mut(id) {
-                    gui.destroy();
-                }
+                self.plugins.get_mut(id).unwrap().destroy();
 
                 return window::close::<()>(window_id).discard();
             }
@@ -94,6 +98,7 @@ impl ClapHostView {
 
                     let (window_id, spawn) = window::open(Settings {
                         exit_on_close_request: false,
+                        resizable: gui.get().can_resize(),
                         ..Settings::default()
                     });
 

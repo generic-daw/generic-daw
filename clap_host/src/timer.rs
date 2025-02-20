@@ -1,13 +1,11 @@
+use ahash::AHashMap;
 use clack_extensions::timer::{PluginTimer, TimerId};
 use clack_host::prelude::*;
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 #[derive(Default)]
 pub struct Timers {
-    durations: HashMap<TimerId, (Duration, Instant)>,
+    durations: AHashMap<TimerId, (Duration, Instant)>,
     next_id: u32,
 }
 

@@ -49,11 +49,22 @@ impl ClapPluginGui {
         self.gui.destroy(&mut self.instance.plugin_handle());
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.gui.resize(
-            &mut self.instance.plugin_handle(),
-            Size::Physical(PhysicalSize::new(width, height)),
-        );
+    #[must_use]
+    pub fn can_resize(&self) -> bool {
+        self.gui.can_resize
+    }
+
+    #[must_use]
+    pub fn resize(&mut self, width: u32, height: u32) -> [u32; 2] {
+        let size = self
+            .gui
+            .resize(
+                &mut self.instance.plugin_handle(),
+                Size::Physical(PhysicalSize::new(width, height)),
+            )
+            .to_logical(1.0);
+
+        [size.width, size.height]
     }
 
     #[must_use]
