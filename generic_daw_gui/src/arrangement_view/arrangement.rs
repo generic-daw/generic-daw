@@ -1,6 +1,6 @@
 use super::track::Track;
 use generic_daw_core::{
-    audio_graph::AudioGraph, DawCtxMessage, Meter, Producer, Receiver, Stream, StreamTrait as _,
+    DawCtxMessage, Meter, Producer, Receiver, Stream, StreamTrait as _, audio_graph::AudioGraph,
 };
 use hound::WavWriter;
 use rfd::FileHandle;
@@ -8,8 +8,8 @@ use std::{
     fmt::{Debug, Formatter},
     path::Path,
     sync::{
-        atomic::Ordering::{AcqRel, Release},
         Arc,
+        atomic::Ordering::{AcqRel, Release},
     },
 };
 

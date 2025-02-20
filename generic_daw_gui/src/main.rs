@@ -1,5 +1,5 @@
 use daw::Daw;
-use iced::{application, Result};
+use iced::{Result, application};
 use iced_fonts::{BOOTSTRAP_FONT_BYTES, REQUIRED_FONT_BYTES};
 
 pub(crate) mod arrangement_view;

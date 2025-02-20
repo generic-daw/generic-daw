@@ -359,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "audio_graph"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "atomig",
  "bit-set 0.8.0",
@@ -645,7 +645,7 @@ checksum = "61b04354981cd059bf376007c9361ded38b15de87972e634670799685b042197"
 
 [[package]]
 name = "clap_host"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "async-channel",
  "clack-extensions",
@@ -1413,7 +1413,7 @@ dependencies = [
 
 [[package]]
 name = "generic_daw"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "fragile",
  "generic_daw_core",
@@ -1434,7 +1434,7 @@ dependencies = [
 
 [[package]]
 name = "generic_daw_core"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "atomig",
  "audio_graph",
@@ -1449,7 +1449,7 @@ dependencies = [
 
 [[package]]
 name = "generic_daw_utils"
-version = "0.1.0"
+version = "0.0.0"
 
 [[package]]
 name = "gethostname"

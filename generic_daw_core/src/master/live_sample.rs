@@ -1,9 +1,9 @@
 use std::sync::{
+    Arc,
     atomic::{
         AtomicIsize,
         Ordering::{AcqRel, Acquire},
     },
-    Arc,
 };
 
 #[derive(Debug)]

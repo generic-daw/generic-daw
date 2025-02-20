@@ -1,9 +1,9 @@
-use crate::{include_f32s, resample, Meter, Position};
+use crate::{Meter, Position, include_f32s, resample};
 use audio_graph::{AudioGraphNodeImpl, MixerNode, NodeId};
 use live_sample::LiveSample;
 use std::{
     cell::RefCell,
-    sync::{atomic::Ordering::Acquire, Arc},
+    sync::{Arc, atomic::Ordering::Acquire},
 };
 
 mod include_f32s;

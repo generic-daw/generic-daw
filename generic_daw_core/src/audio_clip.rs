@@ -1,15 +1,15 @@
 use crate::{Meter, Position};
 use atomig::Atomic;
 use std::sync::{
-    atomic::Ordering::{AcqRel, Acquire, Release},
     Arc,
+    atomic::Ordering::{AcqRel, Acquire, Release},
 };
 
 mod error;
 mod interleaved_audio;
 
 pub use error::{InterleavedAudioError, RubatoError};
-pub use interleaved_audio::{resample, InterleavedAudio};
+pub use interleaved_audio::{InterleavedAudio, resample};
 
 #[derive(Debug)]
 pub struct AudioClip {

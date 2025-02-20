@@ -1,4 +1,4 @@
-use crate::{gui::GuiExt, host::Host, timer::Timers, PluginId};
+use crate::{PluginId, gui::GuiExt, host::Host, timer::Timers};
 use clack_extensions::timer::PluginTimer;
 use clack_host::prelude::*;
 use dpi::{PhysicalSize, Size};

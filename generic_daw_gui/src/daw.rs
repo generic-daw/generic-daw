@@ -5,17 +5,17 @@ use crate::{
 };
 use fragile::Fragile;
 use generic_daw_core::{
-    clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, init},
     Denominator, InterleavedAudio, Meter, Numerator, VARIANTS as _,
+    clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, init},
 };
 use home::home_dir;
 use iced::{
+    Alignment::Center,
+    Element, Event, Length, Subscription, Task, Theme,
     event::{self, Status},
     keyboard,
     widget::{button, column, horizontal_space, pick_list, row, scrollable, svg, toggler},
     window::{self, Id, Settings},
-    Alignment::Center,
-    Element, Event, Length, Subscription, Task, Theme,
 };
 use iced_aw::number_input;
 use iced_file_tree::file_tree;
@@ -23,8 +23,8 @@ use rfd::{AsyncFileDialog, FileHandle};
 use std::{
     path::PathBuf,
     sync::{
-        atomic::Ordering::{AcqRel, Acquire, Release},
         Arc, Mutex,
+        atomic::Ordering::{AcqRel, Acquire, Release},
     },
 };
 

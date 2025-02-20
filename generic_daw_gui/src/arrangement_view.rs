@@ -2,17 +2,17 @@ use crate::widget::{
     Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob, PeakMeter,
 };
 use generic_daw_core::{
-    audio_graph::AudioGraph, build_output_stream, AudioClip, AudioTrack, InterleavedAudio, Meter,
-    Position,
+    AudioClip, AudioTrack, InterleavedAudio, Meter, Position, audio_graph::AudioGraph,
+    build_output_stream,
 };
 use iced::{
-    widget::{column, container, container::Style, mouse_area, radio, row},
     Border, Element, Task,
+    widget::{column, container, container::Style, mouse_area, radio, row},
 };
 use rfd::FileHandle;
 use std::sync::{
-    atomic::Ordering::{AcqRel, Release},
     Arc, Mutex,
+    atomic::Ordering::{AcqRel, Release},
 };
 
 mod arrangement;

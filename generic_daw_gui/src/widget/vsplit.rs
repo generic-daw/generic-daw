@@ -1,14 +1,14 @@
 use iced::{
+    Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
+        Clipboard, Layout, Shell, Widget,
         layout::{Limits, Node},
         renderer::Style,
-        widget::{tree, Tree},
-        Clipboard, Layout, Shell, Widget,
+        widget::{Tree, tree},
     },
     event::Status,
     mouse::{self, Cursor, Interaction},
     widget::Rule,
-    Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::fmt::{Debug, Formatter};
 

@@ -1,15 +1,15 @@
 use super::{ArrangementPosition, ArrangementScale, AudioClip};
 use crate::arrangement_view::{TrackClipWrapper, TrackWrapper};
 use iced::{
+    Element, Length, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
+        Clipboard, Layout, Renderer as _, Shell, Widget,
         layout::{Limits, Node},
         renderer::Style,
         widget::Tree,
-        Clipboard, Layout, Renderer as _, Shell, Widget,
     },
     event::Status,
     mouse::{Cursor, Interaction},
-    Element, Length, Rectangle, Renderer, Size, Theme, Vector,
 };
 use std::{iter::once, sync::atomic::Ordering::Acquire};
 

@@ -1,8 +1,8 @@
 use crate::{DirtyEvent, Meter, Position};
 use atomig::Atomic;
 use std::sync::{
-    atomic::Ordering::{AcqRel, Acquire, Release},
     Arc,
+    atomic::Ordering::{AcqRel, Acquire, Release},
 };
 
 mod midi_note;

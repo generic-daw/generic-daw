@@ -1,21 +1,22 @@
-use super::{ArrangementPosition, ArrangementScale, Track, LINE_HEIGHT};
+use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT, Track};
 use crate::arrangement_view::ArrangementWrapper;
 use generic_daw_core::Position;
 use iced::{
+    Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme,
+    Vector,
     advanced::{
+        Clipboard, Renderer as _, Shell,
         layout::{Layout, Limits, Node},
         renderer::{Quad, Style},
         text::{Renderer as _, Text},
-        widget::{tree, Tree, Widget},
-        Clipboard, Renderer as _, Shell,
+        widget::{Tree, Widget, tree},
     },
     alignment::{Horizontal, Vertical},
     event::Status,
     keyboard::{self, Modifiers},
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::text::{LineHeight, Shaping, Wrapping},
-    window, Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Size,
-    Theme, Vector,
+    window,
 };
 use std::{
     fmt::{Debug, Formatter},

@@ -1,4 +1,4 @@
-use crate::{pan, AudioGraphNodeImpl, NodeId};
+use crate::{AudioGraphNodeImpl, NodeId, pan};
 use atomig::Atomic;
 use std::{
     cmp::max_by,

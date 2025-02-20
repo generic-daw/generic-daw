@@ -1,6 +1,6 @@
 use crate::{AudioClip, Meter, Position};
 use audio_graph::{AudioGraphNodeImpl, MixerNode};
-use std::sync::{atomic::Ordering::Acquire, Arc};
+use std::sync::{Arc, atomic::Ordering::Acquire};
 
 #[derive(Clone, Debug)]
 pub struct AudioTrack {

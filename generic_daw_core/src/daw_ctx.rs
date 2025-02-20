@@ -1,4 +1,4 @@
-use crate::{master::Master, Meter};
+use crate::{Meter, master::Master};
 use audio_graph::AudioGraph;
 use rtrb::{Consumer, Producer, RingBuffer};
 use std::sync::Arc;
@@ -29,7 +29,6 @@ impl<T> DawCtx<T> {
         (audio_ctx, ui_producer)
     }
 
-    #[expect(tail_expr_drop_order)]
     pub fn fill_buf(&mut self, buf_start_sample: usize, buf: &mut [f32]) {
         while let Ok(msg) = self.consumer.pop() {
             match msg {

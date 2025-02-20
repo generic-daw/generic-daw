@@ -1,17 +1,18 @@
-use super::{arrangement::SWM, LINE_HEIGHT};
+use super::{LINE_HEIGHT, arrangement::SWM};
 use iced::{
+    Element, Event, Length, Point, Radians, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
+        Clipboard, Layout, Renderer as _, Shell, Widget,
         graphics::geometry::Renderer as _,
         layout::{Limits, Node},
-        mouse::{click::Kind, Click},
+        mouse::{Click, click::Kind},
         renderer::Style,
-        widget::{tree, Tree},
-        Clipboard, Layout, Renderer as _, Shell, Widget,
+        widget::{Tree, tree},
     },
     event::Status,
     mouse::{self, Cursor, Interaction, ScrollDelta},
-    widget::canvas::{path::Arc, Cache, Frame, Path},
-    window, Element, Event, Length, Point, Radians, Rectangle, Renderer, Size, Theme, Vector,
+    widget::canvas::{Cache, Frame, Path, path::Arc},
+    window,
 };
 use std::{
     cell::RefCell,

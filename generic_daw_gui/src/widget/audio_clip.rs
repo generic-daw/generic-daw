@@ -1,29 +1,29 @@
 use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT};
 use generic_daw_core::AudioClip as AudioClipInner;
 use iced::{
+    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Transformation, Vector,
     advanced::{
+        Clipboard, Layout, Renderer as _, Shell, Text, Widget,
         graphics::{color, geometry::Renderer as _},
         layout::{Limits, Node},
         renderer::{Quad, Style},
         text::Renderer as _,
-        widget::{tree, Tree},
-        Clipboard, Layout, Renderer as _, Shell, Text, Widget,
+        widget::{Tree, tree},
     },
     alignment::{Horizontal, Vertical},
     event::Status,
     mouse::{Cursor, Interaction},
     widget::text::{LineHeight, Shaping, Wrapping},
-    window, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Transformation,
-    Vector,
+    window,
 };
 use iced_wgpu::{
+    Geometry,
     geometry::Cache,
     graphics::{
+        Mesh,
         cache::{Cached as _, Group},
         mesh::{Indexed, SolidVertex2D},
-        Mesh,
     },
-    Geometry,
 };
 use std::{
     cell::RefCell,

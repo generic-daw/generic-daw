@@ -1,4 +1,4 @@
-use crate::{audio_graph_entry::AudioGraphEntry, AudioGraphNode, NodeId};
+use crate::{AudioGraphNode, NodeId, audio_graph_entry::AudioGraphEntry};
 use bit_set::BitSet;
 use generic_daw_utils::HoleyVec;
 use std::cmp::Ordering;

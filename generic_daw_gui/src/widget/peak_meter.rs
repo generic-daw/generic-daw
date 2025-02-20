@@ -1,15 +1,16 @@
 use super::LINE_HEIGHT;
 use color_ext::ColorExt as _;
 use iced::{
+    Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
+        Clipboard, Layout, Renderer as _, Shell, Widget,
         layout::{Limits, Node},
         renderer::{Quad, Style},
-        widget::{tree, Tree},
-        Clipboard, Layout, Renderer as _, Shell, Widget,
+        widget::{Tree, tree},
     },
     event::Status,
     mouse::Cursor,
-    window, Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
+    window,
 };
 use std::cmp::{max_by, min_by};
 

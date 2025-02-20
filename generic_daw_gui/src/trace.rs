@@ -1,4 +1,4 @@
-use tracing_subscriber::{fmt, layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 const DEFAULT_LOG_FILTER: &str = "none,clap_host=trace";
 

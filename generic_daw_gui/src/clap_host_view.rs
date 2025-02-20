@@ -2,10 +2,10 @@ use fragile::Fragile;
 use generic_daw_core::clap_host::{ClapPluginGui, MainThreadMessage, PluginId};
 use generic_daw_utils::HoleyVec;
 use iced::{
+    Size, Subscription, Task,
     futures::SinkExt as _,
     stream::channel,
-    window::{self, close_requests, resize_events, Id, Settings},
-    Size, Subscription, Task,
+    window::{self, Id, Settings, close_requests, resize_events},
 };
 use std::sync::{Arc, Mutex};
 
@@ -41,7 +41,6 @@ impl ClapHostView {
                 self.plugins.insert(id, gui);
                 self.windows.insert(id, window_id);
 
-                #[expect(tail_expr_drop_order)]
                 return Task::stream(channel(16, move |mut sender| async move {
                     while let Ok(msg) = pap.receiver.recv().await {
                         sender.send(Message::MainThread((id, msg))).await.unwrap();

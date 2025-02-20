@@ -1,4 +1,3 @@
-#[expect(edition_2024_expr_fragment_specifier)]
 #[macro_export]
 macro_rules! include_f32s {
     ($file:expr) => {{

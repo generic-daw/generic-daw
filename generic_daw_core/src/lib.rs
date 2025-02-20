@@ -1,11 +1,11 @@
 use cpal::{
-    traits::{DeviceTrait as _, HostTrait as _},
     StreamConfig,
+    traits::{DeviceTrait as _, HostTrait as _},
 };
 use daw_ctx::DawCtx;
 use std::sync::{
-    atomic::Ordering::{AcqRel, Acquire},
     Arc,
+    atomic::Ordering::{AcqRel, Acquire},
 };
 
 mod audio_clip;
@@ -17,11 +17,11 @@ mod midi_clip;
 mod midi_track;
 mod position;
 
-pub use audio_clip::{resample, AudioClip, InterleavedAudio, InterleavedAudioError, RubatoError};
+pub use audio_clip::{AudioClip, InterleavedAudio, InterleavedAudioError, RubatoError, resample};
 pub use audio_graph;
 pub use audio_track::AudioTrack;
 pub use clap_host;
-pub use cpal::{traits::StreamTrait, Stream};
+pub use cpal::{Stream, traits::StreamTrait};
 pub use daw_ctx::DawCtxMessage;
 pub use master::Master;
 pub use meter::{Denominator, Meter, Numerator};

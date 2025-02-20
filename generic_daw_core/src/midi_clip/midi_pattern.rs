@@ -1,6 +1,6 @@
 use crate::{DirtyEvent, MidiNote};
 use atomig::Atomic;
-use std::sync::{atomic::Ordering::Release, Arc};
+use std::sync::{Arc, atomic::Ordering::Release};
 
 #[derive(Debug)]
 pub struct MidiPattern {
