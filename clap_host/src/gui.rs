@@ -4,7 +4,6 @@ use clack_extensions::{
     timer::PluginTimer,
 };
 use clack_host::prelude::*;
-use dpi::{LogicalSize, PhysicalSize, Size};
 use raw_window_handle::RawWindowHandle;
 use std::{
     cell::RefCell,
@@ -16,7 +15,7 @@ pub struct GuiExt {
     instance: PluginInstance<Host>,
     plugin_gui: PluginGui,
     id: PluginId,
-    configuration: GuiConfiguration<'static>,
+    is_floating: bool,
     is_open: bool,
     can_resize: bool,
 }
@@ -24,9 +23,10 @@ pub struct GuiExt {
 impl Debug for GuiExt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GuiExt")
-            .field("configuration", &self.configuration)
+            .field("id", &self.id)
+            .field("is_floating", &self.is_floating)
             .field("is_open", &self.is_open)
-            .field("is_resizeable", &self.can_resize)
+            .field("can_resize", &self.can_resize)
             .finish_non_exhaustive()
     }
 }
@@ -61,7 +61,7 @@ impl GuiExt {
             instance,
             plugin_gui,
             id: PluginId::unique(),
-            configuration,
+            is_floating: configuration.is_floating,
             is_open: false,
             can_resize: false,
         }
@@ -76,7 +76,6 @@ impl GuiExt {
     pub fn get_size(&mut self) -> Option<[u32; 2]> {
         self.plugin_gui
             .get_size(&mut self.instance.plugin_handle())
-            .map(|size| self.gui_size_to_dpi_size(size).to_logical(1.0))
             .map(|size| [size.width, size.height])
     }
 
@@ -95,26 +94,8 @@ impl GuiExt {
     }
 
     #[must_use]
-    pub fn gui_size_to_dpi_size(&self, size: GuiSize) -> Size {
-        let api_type = self.configuration.api_type;
-
-        if api_type.uses_logical_size() {
-            LogicalSize {
-                width: size.width,
-                height: size.height,
-            }
-            .into()
-        } else {
-            PhysicalSize {
-                width: size.width,
-                height: size.height,
-            }
-            .into()
-        }
-    }
-    #[must_use]
-    pub fn needs_floating(&self) -> bool {
-        self.configuration.is_floating
+    pub fn is_floating(&self) -> bool {
+        self.is_floating
     }
 
     #[must_use]
@@ -123,13 +104,13 @@ impl GuiExt {
     }
 
     pub fn open_floating(&mut self) {
-        assert!(self.configuration.is_floating);
+        assert!(self.is_floating);
 
         self.finish_open();
     }
 
     pub fn open_embedded(&mut self, window_handle: RawWindowHandle) {
-        assert!(!self.configuration.is_floating);
+        assert!(!self.is_floating);
 
         let window = ClapWindow::from_window_handle(window_handle).unwrap();
 
@@ -154,23 +135,8 @@ impl GuiExt {
 
     #[must_use]
     pub fn resize(&mut self, width: u32, height: u32) -> [u32; 2] {
-        let uses_logical_pixels = self.configuration.api_type.uses_logical_size();
         let mut plugin = self.instance.plugin_handle();
-        let size = Size::Physical(PhysicalSize::new(width, height));
-
-        let size = if uses_logical_pixels {
-            let size = size.to_logical(1.0);
-            GuiSize {
-                width: size.width,
-                height: size.height,
-            }
-        } else {
-            let size = size.to_physical(1.0);
-            GuiSize {
-                width: size.width,
-                height: size.height,
-            }
-        };
+        let size = GuiSize { width, height };
 
         if self.can_resize {
             let size = self
@@ -181,7 +147,6 @@ impl GuiExt {
         };
 
         let size = self.plugin_gui.get_size(&mut plugin).unwrap_or(size);
-        let size = self.gui_size_to_dpi_size(size).to_logical(1.0);
         [size.width, size.height]
     }
 

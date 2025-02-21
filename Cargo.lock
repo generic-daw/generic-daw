@@ -650,7 +650,6 @@ dependencies = [
  "async-channel",
  "clack-extensions",
  "clack-host",
- "dpi",
  "etcetera",
  "generic_daw_utils",
  "home",

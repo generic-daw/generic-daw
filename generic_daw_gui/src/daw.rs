@@ -92,7 +92,7 @@ impl Daw {
                 let (gui, hap, pap) = init(&self.plugins[&name], &name, config);
                 let mut gui = Fragile::new(gui);
 
-                return if gui.get().needs_floating() {
+                return if gui.get().is_floating() {
                     gui.get_mut().open_floating();
                     let id = Id::unique();
 
