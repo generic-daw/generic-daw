@@ -16,7 +16,7 @@ pub struct GuiExt {
     instance: PluginInstance<Host>,
     plugin_gui: PluginGui,
     id: PluginId,
-    configuration: Option<GuiConfiguration<'static>>,
+    configuration: GuiConfiguration<'static>,
     is_open: bool,
     can_resize: bool,
 }
@@ -43,15 +43,19 @@ impl GuiExt {
         let mut plugin = instance.plugin_handle();
 
         let configuration = if plugin_gui.is_api_supported(&mut plugin, config) {
-            Some(config)
+            config
         } else {
             config.is_floating = true;
             if plugin_gui.is_api_supported(&mut plugin, config) {
-                Some(config)
+                config
             } else {
-                None
+                panic!()
             }
         };
+
+        let mut plugin = instance.plugin_handle();
+
+        plugin_gui.create(&mut plugin, configuration).unwrap();
 
         Self {
             instance,
@@ -92,7 +96,7 @@ impl GuiExt {
 
     #[must_use]
     pub fn gui_size_to_dpi_size(&self, size: GuiSize) -> Size {
-        let api_type = self.configuration.unwrap().api_type;
+        let api_type = self.configuration.api_type;
 
         if api_type.uses_logical_size() {
             LogicalSize {
@@ -109,9 +113,8 @@ impl GuiExt {
         }
     }
     #[must_use]
-    pub fn needs_floating(&self) -> Option<bool> {
-        self.configuration
-            .map(|configuration| configuration.is_floating)
+    pub fn needs_floating(&self) -> bool {
+        self.configuration.is_floating
     }
 
     #[must_use]
@@ -120,38 +123,38 @@ impl GuiExt {
     }
 
     pub fn open_floating(&mut self) {
-        let configuration = self.configuration.filter(|c| c.is_floating).unwrap();
-        let mut plugin = self.instance.plugin_handle();
+        assert!(self.configuration.is_floating);
 
-        self.plugin_gui.create(&mut plugin, configuration).unwrap();
-        self.plugin_gui.suggest_title(&mut plugin, c"");
-        self.plugin_gui.show(&mut plugin).unwrap();
-
-        self.can_resize = self.plugin_gui.can_resize(&mut plugin);
-        self.is_open = true;
+        self.finish_open();
     }
 
     pub fn open_embedded(&mut self, window_handle: RawWindowHandle) {
-        let configuration = self.configuration.filter(|c| !c.is_floating).unwrap();
-        let mut plugin = self.instance.plugin_handle();
-
-        self.plugin_gui.create(&mut plugin, configuration).unwrap();
+        assert!(!self.configuration.is_floating);
 
         let window = ClapWindow::from_window_handle(window_handle).unwrap();
 
         // SAFETY:
         // We destroy the plugin ui just before the window is closed
-        unsafe { self.plugin_gui.set_parent(&mut plugin, window) }.unwrap();
+        unsafe {
+            self.plugin_gui
+                .set_parent(&mut self.instance.plugin_handle(), window)
+        }
+        .unwrap();
+
+        self.finish_open();
+    }
+
+    fn finish_open(&mut self) {
+        let mut plugin = self.instance.plugin_handle();
 
         self.plugin_gui.show(&mut plugin).unwrap();
-
         self.can_resize = self.plugin_gui.can_resize(&mut plugin);
         self.is_open = true;
     }
 
     #[must_use]
     pub fn resize(&mut self, width: u32, height: u32) -> [u32; 2] {
-        let uses_logical_pixels = self.configuration.unwrap().api_type.uses_logical_size();
+        let uses_logical_pixels = self.configuration.api_type.uses_logical_size();
         let mut plugin = self.instance.plugin_handle();
         let size = Size::Physical(PhysicalSize::new(width, height));
 
