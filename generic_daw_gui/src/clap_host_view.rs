@@ -1,5 +1,7 @@
 use fragile::Fragile;
-use generic_daw_core::clap_host::{GuiExt, MainThreadMessage, PluginId};
+use generic_daw_core::clap_host::{
+    GuiExt, HostAudioProcessor, MainThreadMessage, PluginAudioProcessor, PluginId,
+};
 use generic_daw_utils::HoleyVec;
 use iced::{
     Size, Subscription, Task,
@@ -12,17 +14,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-mod opened;
-
-pub use opened::Opened;
-
 #[derive(Clone, Debug)]
 pub enum Message {
-    Opened(Id, Arc<Mutex<Opened>>),
+    MainThread(PluginId, MainThreadMessage),
+    Opened(Arc<Mutex<(Fragile<GuiExt>, HostAudioProcessor, PluginAudioProcessor)>>),
     Shown(Id, Arc<Fragile<GuiExt>>),
     CloseRequested(Id),
     Resized((Id, Size)),
-    MainThread((PluginId, MainThreadMessage)),
 }
 
 #[derive(Default)]
@@ -34,21 +32,29 @@ pub struct ClapHostView {
 impl ClapHostView {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Opened(window_id, arc) => {
-                let Opened { gui, hap: _, pap } =
-                    Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
-
-                let gui = gui.into_inner();
+            Message::MainThread(id, msg) => return self.main_thread_message(id, msg),
+            Message::Opened(arc) => {
+                let (gui, _, pap) = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
+                let mut gui = gui.into_inner();
                 let id = gui.plugin_id();
 
-                self.plugins.insert(*id, gui);
-                self.windows.insert(*id, window_id);
+                let open = if gui.is_floating() {
+                    gui.open_floating();
+                    self.plugins.insert(*id, gui);
+                    Task::none()
+                } else {
+                    self.plugins.insert(*id, gui);
+                    self.update(Message::MainThread(id, MainThreadMessage::GuiRequestShow))
+                };
 
                 return Task::batch([
-                    self.update(Message::MainThread((id, MainThreadMessage::TickTimers))),
+                    open.chain(Task::done(Message::MainThread(
+                        id,
+                        MainThreadMessage::TickTimers,
+                    ))),
                     Task::stream(channel(16, async move |mut sender| {
                         while let Ok(msg) = pap.receiver.recv().await {
-                            sender.send(Message::MainThread((id, msg))).await.unwrap();
+                            sender.send(Message::MainThread(id, msg)).await.unwrap();
                         }
                     })),
                 ]);
@@ -82,7 +88,6 @@ impl ClapHostView {
 
                 return window::close::<()>(window_id).discard();
             }
-            Message::MainThread((id, msg)) => return self.main_thread_message(id, msg),
         }
 
         Task::none()
@@ -107,23 +112,25 @@ impl ClapHostView {
                 return window::close(window_id);
             }
             MainThreadMessage::GuiRequestShow => {
-                let gui = self.plugins.remove(*id).unwrap();
-                let mut gui = Fragile::new(gui);
+                let mut gui = self.plugins.remove(*id).unwrap();
+                let resizable = gui.can_resize();
 
-                let size = gui.get_mut().get_size().map_or_else(
+                let size = gui.get_size().map_or_else(
                     || Size::new(1.0, 1.0),
                     |[width, height]| Size::new(width as f32, height as f32),
                 );
 
                 let (window_id, spawn) = window::open(Settings {
                     exit_on_close_request: false,
-                    resizable: gui.get().can_resize(),
+                    resizable,
                     size,
                     ..Settings::default()
                 });
 
+                gui.destroy();
+                let mut gui = Fragile::new(gui);
+
                 let embed = window::run_with_handle(window_id, move |handle| {
-                    gui.get_mut().destroy();
                     gui.get_mut().open_embedded(handle.as_raw());
                     Message::Shown(window_id, Arc::new(gui))
                 });
@@ -158,7 +165,7 @@ impl ClapHostView {
 
                     return Task::future(tokio::time::sleep(sleep))
                         .map(|()| MainThreadMessage::TickTimers)
-                        .map(move |msg| Message::MainThread((id, msg)));
+                        .map(move |msg| Message::MainThread(id, msg));
                 }
             }
         }

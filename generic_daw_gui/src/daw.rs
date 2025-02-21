@@ -1,6 +1,6 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage},
-    clap_host_view::{ClapHostView, Message as ClapHostMessage, Opened},
+    clap_host_view::{ClapHostView, Message as ClapHostMessage},
     widget::VSplit,
 };
 use fragile::Fragile;
@@ -11,11 +11,11 @@ use generic_daw_core::{
 use home::home_dir;
 use iced::{
     Alignment::Center,
-    Element, Event, Length, Size, Subscription, Task, Theme,
+    Element, Event, Length, Subscription, Task, Theme,
     event::{self, Status},
     keyboard,
     widget::{button, column, horizontal_space, pick_list, row, scrollable, svg, toggler},
-    window::{self, Id, Settings},
+    window,
 };
 use iced_aw::number_input;
 use iced_file_tree::file_tree;
@@ -83,46 +83,20 @@ impl Daw {
                 return self.arrangement.update(message).map(Message::Arrangement);
             }
             Message::LoadPlugin(name) => {
-                let sample_rate = f64::from(self.meter.sample_rate);
                 let config = PluginAudioConfiguration {
-                    sample_rate,
-                    max_frames_count: 256,
-                    min_frames_count: 256,
+                    sample_rate: f64::from(self.meter.sample_rate),
+                    max_frames_count: self.meter.buffer_size,
+                    min_frames_count: self.meter.buffer_size,
                 };
                 let (gui, hap, pap) = init(&self.plugins[&name], &name, config);
-                let mut gui = Fragile::new(gui);
+                let gui = Fragile::new(gui);
 
-                return if gui.get().is_floating() {
-                    gui.get_mut().open_floating();
-                    let id = Id::unique();
-
-                    self.clap_host
-                        .update(ClapHostMessage::Opened(
-                            id,
-                            Arc::new(Mutex::new(Opened { gui, hap, pap })),
-                        ))
-                        .map(Message::ClapHost)
-                } else {
-                    let size = gui.get_mut().get_size().map_or_else(
-                        || Size::new(1.0, 1.0),
-                        |[width, height]| Size::new(width as f32, height as f32),
-                    );
-
-                    let (id, spawn) = window::open(Settings {
-                        exit_on_close_request: false,
-                        resizable: gui.get().can_resize(),
-                        size,
-                        ..Settings::default()
-                    });
-
-                    let embed = window::run_with_handle(id, move |handle| {
-                        gui.get_mut().open_embedded(handle.as_raw());
-
-                        ClapHostMessage::Opened(id, Arc::new(Mutex::new(Opened { gui, hap, pap })))
-                    });
-
-                    spawn.discard().chain(embed).map(Message::ClapHost)
-                };
+                return self
+                    .clap_host
+                    .update(ClapHostMessage::Opened(Arc::new(Mutex::new((
+                        gui, hap, pap,
+                    )))))
+                    .map(Message::ClapHost);
             }
             Message::LoadSamplesButton => {
                 return Task::future(AsyncFileDialog::new().pick_files()).and_then(|paths| {

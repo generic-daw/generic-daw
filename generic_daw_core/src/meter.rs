@@ -13,6 +13,10 @@ pub struct Meter {
     ///
     /// typical values: 32000, 44100, 48000, 88200, 96000, 176400, 192000
     pub sample_rate: u32,
+    /// buffer size of the output stream
+    ///
+    /// typical values: 256, 512, 1024, 2048
+    pub buffer_size: u32,
     /// BPM of the arrangement, between 30 and 600
     pub bpm: AtomicU16,
     /// numerator of the time signature
@@ -28,9 +32,10 @@ pub struct Meter {
 }
 
 impl Meter {
-    pub(crate) fn new(sample_rate: u32) -> Self {
+    pub(crate) fn new(sample_rate: u32, buffer_size: u32) -> Self {
         Self {
             sample_rate,
+            buffer_size,
             bpm: AtomicU16::new(140),
             numerator: Atomic::default(),
             denominator: Atomic::default(),

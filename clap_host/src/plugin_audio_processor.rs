@@ -1,12 +1,20 @@
 use crate::{Host, host::HostThreadMessage, main_thread::MainThreadMessage};
 use async_channel::{Receiver, Sender};
 use clack_host::{prelude::*, process::StartedPluginAudioProcessor};
+use std::fmt::{Debug, Formatter};
 
 pub struct PluginAudioProcessor {
     started_processor: Option<StartedPluginAudioProcessor<Host>>,
     steady_time: u64,
     pub sender: Sender<HostThreadMessage>,
     pub receiver: Receiver<MainThreadMessage>,
+}
+
+impl Debug for PluginAudioProcessor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PluginAudioProcessor")
+            .finish_non_exhaustive()
+    }
 }
 
 impl PluginAudioProcessor {

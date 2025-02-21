@@ -1,5 +1,5 @@
 use cpal::{
-    StreamConfig,
+    BufferSize, SampleRate, StreamConfig,
     traits::{DeviceTrait as _, HostTrait as _},
 };
 use daw_ctx::DawCtx;
@@ -33,17 +33,22 @@ pub use position::Position;
 pub use rtrb::{Consumer, Producer};
 pub use strum::VariantArray as VARIANTS;
 
-pub fn build_output_stream<T: Send + 'static>() -> (Stream, Producer<DawCtxMessage<T>>, Arc<Meter>)
-{
-    let device = cpal::default_host().default_output_device().unwrap();
-    let config: &StreamConfig = &device.default_output_config().unwrap().into();
-
-    let (mut ctx, producer) = DawCtx::create(config.sample_rate.0);
+pub fn build_output_stream<T: Send + 'static>(
+    sample_rate: u32,
+    buffer_size: u32,
+) -> (Stream, Producer<DawCtxMessage<T>>, Arc<Meter>) {
+    let (mut ctx, producer) = DawCtx::create(sample_rate, buffer_size);
     let meter = ctx.meter.clone();
 
-    let stream = device
+    let stream = cpal::default_host()
+        .default_output_device()
+        .unwrap()
         .build_output_stream(
-            config,
+            &StreamConfig {
+                channels: 2,
+                sample_rate: SampleRate(sample_rate),
+                buffer_size: BufferSize::Fixed(buffer_size),
+            },
             move |data, _| {
                 let sample = if ctx.meter.playing.load(Acquire) {
                     ctx.meter.sample.fetch_add(data.len(), AcqRel)
