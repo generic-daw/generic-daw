@@ -2,8 +2,10 @@ use crate::widget::{
     Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob, PeakMeter,
 };
 use generic_daw_core::{
-    AudioClip, AudioTrack, InterleavedAudio, Meter, Position, audio_graph::AudioGraph,
+    AudioClip, AudioTrack, InterleavedAudio, Meter, MidiTrack, Position,
+    audio_graph::AudioGraph,
     build_output_stream,
+    clap_host::{HostAudioProcessor, PluginAudioProcessor},
 };
 use iced::{
     Border, Element, Task,
@@ -30,6 +32,7 @@ pub enum Message {
     TrackVolumeChanged(usize, f32),
     TrackPanChanged(usize, f32),
     LoadedSample(Arc<InterleavedAudio>),
+    LoadedPlugin(Arc<Mutex<(HostAudioProcessor, PluginAudioProcessor)>>),
     ToggleTrackEnabled(usize),
     ToggleTrackSolo(usize),
     SeekTo(usize),
@@ -98,6 +101,19 @@ impl ArrangementView {
                 track
                     .clips
                     .push(AudioClip::create(audio_file, self.meter.clone()));
+                self.arrangement.push(track);
+            }
+            Message::LoadedPlugin(arc) => {
+                let (host_audio_processor, plugin_audio_processor) =
+                    Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
+
+                let track = MidiTrack::new(
+                    self.meter.clone(),
+                    Arc::default(),
+                    host_audio_processor,
+                    plugin_audio_processor,
+                );
+
                 self.arrangement.push(track);
             }
             Message::ToggleTrackEnabled(track) => {

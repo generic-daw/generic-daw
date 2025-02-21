@@ -21,11 +21,11 @@ mod plugin_audio_processor;
 mod shared;
 mod timer;
 
+pub use async_channel::{Receiver, Sender};
 pub use clack_host;
 pub use gui::GuiExt;
-pub use host::HostThreadMessage;
 pub use host_audio_processor::HostAudioProcessor;
-pub use main_thread::MainThreadMessage;
+pub use main_thread::GuiMessage;
 pub use plugin_audio_processor::PluginAudioProcessor;
 pub use plugin_id::Id as PluginId;
 
@@ -111,9 +111,15 @@ pub fn init(
     path: &Path,
     name: &str,
     config: PluginAudioConfiguration,
-) -> (GuiExt, HostAudioProcessor, PluginAudioProcessor) {
-    let (sender_host, receiver_plugin) = async_channel::bounded(16);
-    let (sender_plugin, receiver_host) = async_channel::bounded(16);
+) -> (
+    GuiExt,
+    Receiver<GuiMessage>,
+    HostAudioProcessor,
+    PluginAudioProcessor,
+) {
+    let (gui_sender, gui_receiver) = async_channel::bounded(16);
+    let (plugin_sender, plugin_receiver) = async_channel::bounded(16);
+    let (audio_sender, audio_receiver) = async_channel::bounded(16);
 
     // SAFETY:
     // loading an external library object file is inherently unsafe
@@ -125,7 +131,7 @@ pub fn init(
         .find(|d| d.name().and_then(|n| n.to_str().ok()) == Some(name))
         .unwrap();
     let mut instance = PluginInstance::new(
-        |()| Shared::new(sender_host.clone()),
+        |()| Shared::new(gui_sender),
         |_| MainThread::default(),
         &bundle,
         plugin_descriptor.id().unwrap(),
@@ -139,19 +145,22 @@ pub fn init(
             .unwrap()
             .start_processing()
             .unwrap(),
-        sender_plugin,
-        receiver_plugin,
+        plugin_sender,
+        audio_receiver,
     );
-
-    let host_audio_processor = HostAudioProcessor {
-        sender: sender_host,
-        receiver: receiver_host,
-    };
 
     let gui = GuiExt::new(
         instance.access_handler(|h: &MainThread| h.gui).unwrap(),
         instance,
     );
 
-    (gui, host_audio_processor, plugin_audio_processor)
+    (
+        gui,
+        gui_receiver,
+        HostAudioProcessor {
+            sender: audio_sender,
+            receiver: plugin_receiver,
+        },
+        plugin_audio_processor,
+    )
 }

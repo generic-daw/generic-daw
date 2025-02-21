@@ -8,12 +8,6 @@ use clack_host::prelude::*;
 #[derive(Clone, Copy)]
 pub struct Host;
 
-#[derive(Debug)]
-pub enum HostThreadMessage {
-    ProcessAudio(Vec<Vec<f32>>, EventBuffer),
-    State(Vec<u8>),
-}
-
 impl HostHandlers for Host {
     type Shared<'a> = Shared;
     type MainThread<'a> = MainThread;

@@ -110,7 +110,7 @@ impl Track {
     pub fn id(&self) -> NodeId {
         match self {
             Self::AudioTrack(inner) => inner.id(),
-            Self::MidiTrack(_) => unimplemented!(),
+            Self::MidiTrack(inner) => inner.id(),
         }
     }
 }

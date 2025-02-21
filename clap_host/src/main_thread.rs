@@ -11,7 +11,7 @@ use clack_host::prelude::*;
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 #[derive(Clone, Copy, Debug)]
-pub enum MainThreadMessage {
+pub enum GuiMessage {
     RequestCallback,
     GuiRequestHide,
     GuiRequestShow,

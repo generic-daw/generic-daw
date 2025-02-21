@@ -1,4 +1,4 @@
-use crate::{Host, host::HostThreadMessage, main_thread::MainThreadMessage};
+use crate::Host;
 use async_channel::{Receiver, Sender};
 use clack_host::{prelude::*, process::StartedPluginAudioProcessor};
 use std::fmt::{Debug, Formatter};
@@ -6,8 +6,8 @@ use std::fmt::{Debug, Formatter};
 pub struct PluginAudioProcessor {
     started_processor: Option<StartedPluginAudioProcessor<Host>>,
     steady_time: u64,
-    pub sender: Sender<HostThreadMessage>,
-    pub receiver: Receiver<MainThreadMessage>,
+    pub sender: Sender<(Vec<Vec<f32>>, EventBuffer)>,
+    pub receiver: Receiver<(Vec<Vec<f32>>, EventBuffer)>,
 }
 
 impl Debug for PluginAudioProcessor {
@@ -20,8 +20,8 @@ impl Debug for PluginAudioProcessor {
 impl PluginAudioProcessor {
     pub(crate) fn new(
         audio_processor: StartedPluginAudioProcessor<Host>,
-        sender: Sender<HostThreadMessage>,
-        receiver: Receiver<MainThreadMessage>,
+        sender: Sender<(Vec<Vec<f32>>, EventBuffer)>,
+        receiver: Receiver<(Vec<Vec<f32>>, EventBuffer)>,
     ) -> Self {
         Self {
             started_processor: Some(audio_processor),

@@ -1,14 +1,8 @@
-use crate::{HostThreadMessage, MainThreadMessage};
 use async_channel::{Receiver, Sender};
-use std::fmt::{Debug, Formatter};
+use clack_host::prelude::*;
 
+#[derive(Debug)]
 pub struct HostAudioProcessor {
-    pub sender: Sender<MainThreadMessage>,
-    pub receiver: Receiver<HostThreadMessage>,
-}
-
-impl Debug for HostAudioProcessor {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("HostAudioProcessor").finish_non_exhaustive()
-    }
+    pub sender: Sender<(Vec<Vec<f32>>, EventBuffer)>,
+    pub receiver: Receiver<(Vec<Vec<f32>>, EventBuffer)>,
 }

@@ -1,7 +1,5 @@
 use fragile::Fragile;
-use generic_daw_core::clap_host::{
-    GuiExt, HostAudioProcessor, MainThreadMessage, PluginAudioProcessor, PluginId,
-};
+use generic_daw_core::clap_host::{GuiExt, GuiMessage, PluginId, Receiver};
 use generic_daw_utils::HoleyVec;
 use iced::{
     Size, Subscription, Task,
@@ -16,8 +14,8 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    MainThread(PluginId, MainThreadMessage),
-    Opened(Arc<Mutex<(Fragile<GuiExt>, HostAudioProcessor, PluginAudioProcessor)>>),
+    MainThread(PluginId, GuiMessage),
+    Opened(Arc<Mutex<(Fragile<GuiExt>, Receiver<GuiMessage>)>>),
     Shown(Id, Arc<Fragile<GuiExt>>),
     CloseRequested(Id),
     Resized((Id, Size)),
@@ -34,7 +32,7 @@ impl ClapHostView {
         match message {
             Message::MainThread(id, msg) => return self.main_thread_message(id, msg),
             Message::Opened(arc) => {
-                let (gui, _, pap) = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
+                let (gui, gui_receiver) = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
                 let mut gui = gui.into_inner();
                 let id = gui.plugin_id();
 
@@ -44,16 +42,13 @@ impl ClapHostView {
                     Task::none()
                 } else {
                     self.plugins.insert(*id, gui);
-                    self.update(Message::MainThread(id, MainThreadMessage::GuiRequestShow))
+                    self.update(Message::MainThread(id, GuiMessage::GuiRequestShow))
                 };
 
                 return Task::batch([
-                    open.chain(Task::done(Message::MainThread(
-                        id,
-                        MainThreadMessage::TickTimers,
-                    ))),
+                    open.chain(Task::done(Message::MainThread(id, GuiMessage::TickTimers))),
                     Task::stream(channel(16, async move |mut sender| {
-                        while let Ok(msg) = pap.receiver.recv().await {
+                        while let Ok(msg) = gui_receiver.recv().await {
                             sender.send(Message::MainThread(id, msg)).await.unwrap();
                         }
                     })),
@@ -100,18 +95,18 @@ impl ClapHostView {
         ])
     }
 
-    pub fn main_thread_message(&mut self, id: PluginId, msg: MainThreadMessage) -> Task<Message> {
+    pub fn main_thread_message(&mut self, id: PluginId, msg: GuiMessage) -> Task<Message> {
         match msg {
-            MainThreadMessage::RequestCallback => self
+            GuiMessage::RequestCallback => self
                 .plugins
                 .get_mut(*id)
                 .unwrap()
                 .call_on_main_thread_callback(),
-            MainThreadMessage::GuiRequestHide => {
+            GuiMessage::GuiRequestHide => {
                 let window_id = self.windows.remove(*id).unwrap();
                 return window::close(window_id);
             }
-            MainThreadMessage::GuiRequestShow => {
+            GuiMessage::GuiRequestShow => {
                 let mut gui = self.plugins.remove(*id).unwrap();
                 let resizable = gui.can_resize();
 
@@ -137,12 +132,12 @@ impl ClapHostView {
 
                 return spawn.discard().chain(embed);
             }
-            MainThreadMessage::GuiClosed => {
+            GuiMessage::GuiClosed => {
                 self.plugins.remove(*id).unwrap().destroy();
 
-                return self.main_thread_message(id, MainThreadMessage::GuiRequestHide);
+                return self.main_thread_message(id, GuiMessage::GuiRequestHide);
             }
-            MainThreadMessage::GuiRequestResize(new_size) => {
+            GuiMessage::GuiRequestResize(new_size) => {
                 let window_id = self.windows[*id];
 
                 return window::resize(
@@ -153,7 +148,7 @@ impl ClapHostView {
                     },
                 );
             }
-            MainThreadMessage::TickTimers => {
+            GuiMessage::TickTimers => {
                 if let Some((timers, timer_ext)) = self.plugins[*id].timers() {
                     let sleep = if self.windows.get(*id).is_some() {
                         let mut instance = self.plugins.get_mut(*id).unwrap().plugin_handle();
@@ -164,7 +159,7 @@ impl ClapHostView {
                     };
 
                     return Task::future(tokio::time::sleep(sleep))
-                        .map(|()| MainThreadMessage::TickTimers)
+                        .map(|()| GuiMessage::TickTimers)
                         .map(move |msg| Message::MainThread(id, msg));
                 }
             }
