@@ -104,7 +104,7 @@ impl Daw {
                         .map(Message::ClapHost)
                 } else {
                     let size = gui.get_mut().get_size().map_or_else(
-                        || Settings::default().size,
+                        || Size::new(1.0, 1.0),
                         |[width, height]| Size::new(width as f32, height as f32),
                     );
 
