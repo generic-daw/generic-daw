@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, ops::Index};
+use std::ops::Index;
 
 #[derive(Debug)]
 pub struct HoleyVec<T>(Vec<Option<T>>);
@@ -9,14 +9,11 @@ impl<T> Default for HoleyVec<T> {
     }
 }
 
-impl<T, I> Index<I> for HoleyVec<T>
-where
-    I: Borrow<usize>,
-{
+impl<T> Index<usize> for HoleyVec<T> {
     type Output = T;
 
-    fn index(&self, index: I) -> &Self::Output {
-        self.0[*index.borrow()].as_ref().unwrap()
+    fn index(&self, index: usize) -> &Self::Output {
+        self.0[index].as_ref().unwrap()
     }
 }
 
@@ -30,25 +27,15 @@ where
 }
 
 impl<T> HoleyVec<T> {
-    pub fn get<I>(&self, index: I) -> Option<&T>
-    where
-        I: Borrow<usize>,
-    {
-        self.0.get(*index.borrow()).and_then(Option::as_ref)
+    pub fn get(&self, index: usize) -> Option<&T> {
+        self.0.get(index).and_then(Option::as_ref)
     }
 
-    pub fn get_mut<I>(&mut self, index: I) -> Option<&mut T>
-    where
-        I: Borrow<usize>,
-    {
-        self.0.get_mut(*index.borrow()).and_then(Option::as_mut)
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        self.0.get_mut(index).and_then(Option::as_mut)
     }
 
-    pub fn insert<I>(&mut self, index: I, elem: T) -> Option<T>
-    where
-        I: Borrow<usize>,
-    {
-        let index = *index.borrow();
+    pub fn insert(&mut self, index: usize, elem: T) -> Option<T> {
         if index >= self.0.len() {
             self.0.resize_with(index + 1, || None);
         }
@@ -56,11 +43,8 @@ impl<T> HoleyVec<T> {
         self.0[index].replace(elem)
     }
 
-    pub fn remove<I>(&mut self, index: I) -> Option<T>
-    where
-        I: Borrow<usize>,
-    {
-        self.0.get_mut(*index.borrow()).and_then(Option::take)
+    pub fn remove(&mut self, index: usize) -> Option<T> {
+        self.0.get_mut(index).and_then(Option::take)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (usize, &T)> {

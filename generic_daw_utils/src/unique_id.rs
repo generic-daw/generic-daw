@@ -26,12 +26,6 @@ macro_rules! unique_id {
                     &self.0
                 }
             }
-
-            impl Borrow<usize> for Id {
-                fn borrow(&self) -> &usize {
-                    &**self
-                }
-            }
         }
     };
 }

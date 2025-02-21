@@ -41,8 +41,8 @@ impl ClapHostView {
                 let gui = gui.into_inner();
                 let id = gui.plugin_id();
 
-                self.plugins.insert(id, gui);
-                self.windows.insert(id, window_id);
+                self.plugins.insert(*id, gui);
+                self.windows.insert(*id, window_id);
 
                 return Task::batch([
                     self.update(Message::MainThread((id, MainThreadMessage::TickTimers))),
@@ -57,8 +57,8 @@ impl ClapHostView {
                 let gui = Arc::into_inner(arc).unwrap().into_inner();
                 let id = gui.plugin_id();
 
-                self.plugins.insert(id, gui);
-                self.windows.insert(id, window_id);
+                self.plugins.insert(*id, gui);
+                self.windows.insert(*id, window_id);
             }
             Message::Resized((window_id, size)) => {
                 if let Some(id) = self.windows.position(&window_id) {
@@ -99,15 +99,15 @@ impl ClapHostView {
         match msg {
             MainThreadMessage::RequestCallback => self
                 .plugins
-                .get_mut(id)
+                .get_mut(*id)
                 .unwrap()
                 .call_on_main_thread_callback(),
             MainThreadMessage::GuiRequestHide => {
-                let window_id = self.windows.remove(id).unwrap();
+                let window_id = self.windows.remove(*id).unwrap();
                 return window::close(window_id);
             }
             MainThreadMessage::GuiRequestShow => {
-                let gui = self.plugins.remove(id).unwrap();
+                let gui = self.plugins.remove(*id).unwrap();
                 let mut gui = Fragile::new(gui);
 
                 let size = gui.get_mut().get_size().map_or_else(
@@ -131,12 +131,12 @@ impl ClapHostView {
                 return spawn.discard().chain(embed);
             }
             MainThreadMessage::GuiClosed => {
-                self.plugins.remove(id).unwrap().destroy();
+                self.plugins.remove(*id).unwrap().destroy();
 
                 return self.main_thread_message(id, MainThreadMessage::GuiRequestHide);
             }
             MainThreadMessage::GuiRequestResize(new_size) => {
-                let window_id = self.windows[id];
+                let window_id = self.windows[*id];
 
                 return window::resize(
                     window_id,
@@ -147,9 +147,9 @@ impl ClapHostView {
                 );
             }
             MainThreadMessage::TickTimers => {
-                if let Some((timers, timer_ext)) = self.plugins[id].timers() {
-                    let sleep = if self.windows.get(id).is_some() {
-                        let mut instance = self.plugins.get_mut(id).unwrap().plugin_handle();
+                if let Some((timers, timer_ext)) = self.plugins[*id].timers() {
+                    let sleep = if self.windows.get(*id).is_some() {
+                        let mut instance = self.plugins.get_mut(*id).unwrap().plugin_handle();
 
                         timers.borrow_mut().tick_timers(&timer_ext, &mut instance) - Instant::now()
                     } else {
