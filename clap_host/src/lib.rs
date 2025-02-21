@@ -2,15 +2,17 @@
 
 use clack_host::prelude::*;
 use generic_daw_utils::unique_id;
-use gui::GuiExt;
 use home::home_dir;
 use host::Host;
 use main_thread::MainThread;
 use shared::Shared;
-use std::{path::PathBuf, result::Result};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    result::Result,
+};
 use walkdir::WalkDir;
 
-mod clap_plugin_gui;
 mod gui;
 mod host;
 mod host_audio_processor;
@@ -20,7 +22,7 @@ mod shared;
 mod timer;
 
 pub use clack_host;
-pub use clap_plugin_gui::ClapPluginGui;
+pub use gui::GuiExt;
 pub use host::HostThreadMessage;
 pub use host_audio_processor::HostAudioProcessor;
 pub use main_thread::MainThreadMessage;
@@ -30,7 +32,9 @@ pub use plugin_id::Id as PluginId;
 unique_id!(plugin_id);
 
 #[must_use]
-pub fn get_installed_plugins() -> Vec<PluginBundle> {
+pub fn get_installed_plugins() -> BTreeMap<String, PathBuf> {
+    let mut r = BTreeMap::new();
+
     standard_clap_paths()
         .iter()
         .flat_map(|path| {
@@ -49,13 +53,19 @@ pub fn get_installed_plugins() -> Vec<PluginBundle> {
         .filter_map(|path|
             // SAFETY:
             // loading an external library object file is inherently unsafe
-            unsafe { PluginBundle::load(path.path()) }.ok())
-        .filter(|bundle| {
-            bundle
-                .get_plugin_factory()
-                .is_some_and(|factory| factory.plugin_descriptors().next().is_some())
-        })
-        .collect()
+            Some((path.path().to_owned(), unsafe { PluginBundle::load(path.path()) }.ok()?)))
+        .for_each(|(path, bundle)| {
+            if let Some(factory) = bundle.get_plugin_factory() {
+                factory
+                    .plugin_descriptors()
+                    .filter_map(|d| d.name()?.to_str().ok())
+                    .for_each(|d| {
+                        r.insert(d.to_owned(), path.clone());
+                    });
+            }
+        });
+
+    r
 }
 
 fn standard_clap_paths() -> Vec<PathBuf> {
@@ -98,27 +108,30 @@ fn standard_clap_paths() -> Vec<PathBuf> {
 
 #[must_use]
 pub fn init(
-    bundle: &PluginBundle,
+    path: &Path,
+    name: &str,
     config: PluginAudioConfiguration,
-) -> (ClapPluginGui, HostAudioProcessor, PluginAudioProcessor) {
+) -> (GuiExt, HostAudioProcessor, PluginAudioProcessor) {
     let (sender_host, receiver_plugin) = async_channel::bounded(16);
     let (sender_plugin, receiver_host) = async_channel::bounded(16);
 
+    // SAFETY:
+    // loading an external library object file is inherently unsafe
+    let bundle = unsafe { PluginBundle::load(path) }.unwrap();
+
     let factory = bundle.get_plugin_factory().unwrap();
-    let plugin_descriptor = factory.plugin_descriptors().next().unwrap();
+    let plugin_descriptor = factory
+        .plugin_descriptors()
+        .find(|d| d.name().and_then(|n| n.to_str().ok()) == Some(name))
+        .unwrap();
     let mut instance = PluginInstance::new(
         |()| Shared::new(sender_host.clone()),
         |_| MainThread::default(),
-        bundle,
+        &bundle,
         plugin_descriptor.id().unwrap(),
         &HostInfo::new("", "", "", "").unwrap(),
     )
     .unwrap();
-
-    let gui = instance
-        .access_handler(|h: &MainThread| h.gui)
-        .map(|gui| GuiExt::new(gui, &mut instance.plugin_handle()))
-        .unwrap();
 
     let plugin_audio_processor = PluginAudioProcessor::new(
         instance
@@ -135,11 +148,10 @@ pub fn init(
         receiver: receiver_host,
     };
 
-    let gui = ClapPluginGui {
-        id: PluginId::unique(),
+    let gui = GuiExt::new(
+        instance.access_handler(|h: &MainThread| h.gui).unwrap(),
         instance,
-        gui,
-    };
+    );
 
     (gui, host_audio_processor, plugin_audio_processor)
 }

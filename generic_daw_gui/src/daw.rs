@@ -11,7 +11,7 @@ use generic_daw_core::{
 use home::home_dir;
 use iced::{
     Alignment::Center,
-    Element, Event, Length, Subscription, Task, Theme,
+    Element, Event, Length, Size, Subscription, Task, Theme,
     event::{self, Status},
     keyboard,
     widget::{button, column, horizontal_space, pick_list, row, scrollable, svg, toggler},
@@ -21,6 +21,7 @@ use iced_aw::number_input;
 use iced_file_tree::file_tree;
 use rfd::{AsyncFileDialog, FileHandle};
 use std::{
+    collections::BTreeMap,
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -34,7 +35,7 @@ pub enum Message {
     ThemeChanged(Theme),
     ClapHost(ClapHostMessage),
     Arrangement(ArrangementMessage),
-    Test,
+    LoadPlugin(String),
     LoadSamplesButton,
     LoadSample(PathBuf),
     ExportButton,
@@ -50,6 +51,7 @@ pub enum Message {
 pub struct Daw {
     arrangement: ArrangementView,
     clap_host: ClapHostView,
+    plugins: BTreeMap<String, PathBuf>,
     meter: Arc<Meter>,
     theme: Theme,
 }
@@ -57,10 +59,12 @@ pub struct Daw {
 impl Default for Daw {
     fn default() -> Self {
         let (meter, arrangement) = ArrangementView::create();
+        let plugins = get_installed_plugins();
 
         Self {
             arrangement,
             clap_host: ClapHostView::default(),
+            plugins,
             meter,
             theme: Theme::Dark,
         }
@@ -78,14 +82,14 @@ impl Daw {
             Message::Arrangement(message) => {
                 return self.arrangement.update(message).map(Message::Arrangement);
             }
-            Message::Test => {
+            Message::LoadPlugin(name) => {
                 let sample_rate = f64::from(self.meter.sample_rate);
                 let config = PluginAudioConfiguration {
                     sample_rate,
                     max_frames_count: 256,
                     min_frames_count: 256,
                 };
-                let (gui, hap, pap) = init(&get_installed_plugins()[0], config);
+                let (gui, hap, pap) = init(&self.plugins[&name], &name, config);
                 let mut gui = Fragile::new(gui);
 
                 return if gui.get().needs_floating().unwrap() {
@@ -99,9 +103,15 @@ impl Daw {
                         ))
                         .map(Message::ClapHost)
                 } else {
+                    let size = gui.get_mut().get_size().map_or_else(
+                        || Settings::default().size,
+                        |[width, height]| Size::new(width as f32, height as f32),
+                    );
+
                     let (id, spawn) = window::open(Settings {
                         exit_on_close_request: false,
                         resizable: gui.get().can_resize(),
+                        size,
                         ..Settings::default()
                     });
 
@@ -225,7 +235,14 @@ impl Daw {
                 .on_toggle(|_| Message::ToggleMetronome),
             horizontal_space(),
             pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
-            button("TEST").on_press(Message::Test),
+            pick_list(
+                self.plugins
+                    .keys()
+                    .map(String::as_str)
+                    .collect::<Box<[_]>>(),
+                Some("Load Plugin"),
+                |plugin| { Message::LoadPlugin(plugin.to_owned()) }
+            )
         ]
         .spacing(20)
         .align_y(Center);

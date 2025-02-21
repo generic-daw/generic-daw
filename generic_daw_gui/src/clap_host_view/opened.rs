@@ -1,11 +1,11 @@
 #![expect(dead_code)]
 
 use fragile::Fragile;
-use generic_daw_core::clap_host::{ClapPluginGui, HostAudioProcessor, PluginAudioProcessor};
+use generic_daw_core::clap_host::{GuiExt, HostAudioProcessor, PluginAudioProcessor};
 use std::fmt::{Debug, Formatter};
 
 pub struct Opened {
-    pub gui: Fragile<ClapPluginGui>,
+    pub gui: Fragile<GuiExt>,
     pub hap: HostAudioProcessor,
     pub pap: PluginAudioProcessor,
 }
