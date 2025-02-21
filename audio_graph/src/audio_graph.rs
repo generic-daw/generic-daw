@@ -127,7 +127,7 @@ impl AudioGraph {
             let idx = self.list.iter().copied().position(|n| n == node).unwrap();
             self.list.remove(idx);
 
-            for entry in self.graph.iter_mut() {
+            for entry in self.graph.values_mut() {
                 entry.connections.remove(*node);
             }
         }

@@ -1,12 +1,12 @@
-use ahash::AHashMap;
 use clack_extensions::timer::{PluginTimer, TimerId};
 use clack_host::prelude::*;
+use generic_daw_utils::HoleyVec;
 use std::time::{Duration, Instant};
 
 #[derive(Default)]
 pub struct Timers {
-    durations: AHashMap<TimerId, (Duration, Instant)>,
-    next_id: u32,
+    durations: HoleyVec<(Duration, Instant)>,
+    next_id: usize,
 }
 
 impl Timers {
@@ -18,9 +18,9 @@ impl Timers {
         let now = Instant::now();
         let mut next = now + Duration::from_millis(30);
 
-        for (&id, (interval, tick)) in &mut self.durations {
+        for (id, (interval, tick)) in self.durations.iter_mut() {
             if *tick <= now {
-                timer_ext.on_timer(plugin, id);
+                timer_ext.on_timer(plugin, TimerId(id as u32));
                 *tick += *interval;
             } else if *tick < next {
                 next = *tick;
@@ -31,17 +31,18 @@ impl Timers {
     }
 
     pub fn register(&mut self, interval: Duration) -> TimerId {
-        let id = TimerId(self.next_id);
-        self.next_id += 1;
+        let id = TimerId(self.next_id as u32);
 
-        self.durations.insert(id, (interval, Instant::now()));
+        self.durations
+            .insert(self.next_id, (interval, Instant::now()));
+        self.next_id += 1;
 
         id
     }
 
     pub fn unregister(&mut self, id: TimerId) -> Result<(), HostError> {
         self.durations
-            .remove(&id)
+            .remove(id.0 as usize)
             .map(|_| ())
             .ok_or(HostError::Message("Unknown timer ID"))
     }

@@ -63,7 +63,25 @@ impl<T> HoleyVec<T> {
         self.0.get_mut(*index.borrow()).and_then(Option::take)
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+    pub fn iter(&self) -> impl Iterator<Item = (usize, &T)> {
+        self.0
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| Some((i, t.as_ref()?)))
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (usize, &mut T)> {
+        self.0
+            .iter_mut()
+            .enumerate()
+            .filter_map(|(i, t)| Some((i, t.as_mut()?)))
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &T> {
+        self.0.iter().flatten()
+    }
+
+    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.0.iter_mut().flatten()
     }
 }
@@ -73,10 +91,6 @@ where
     T: Eq,
 {
     pub fn position(&self, item: &T) -> Option<usize> {
-        self.0
-            .iter()
-            .enumerate()
-            .filter_map(|(i, x)| Some((i, x.as_ref()?)))
-            .find_map(|(i, x)| (item == x).then_some(i))
+        self.iter().find_map(|(i, x)| (item == x).then_some(i))
     }
 }
