@@ -67,10 +67,13 @@ impl AudioProcessor {
 
     pub fn process(
         &mut self,
-        frames: usize,
+        buf: &mut [f32],
         input_events: &InputEvents<'_>,
         output_events: &mut OutputEvents<'_>,
     ) {
+        let channels = self.output_config.port_channel_counts[self.output_config.main_port_index];
+        let frames = buf.len() / channels;
+
         let input_audio = self
             .input_ports
             .with_input_buffers(self.input_channels.iter_mut().map(|c| {
@@ -108,5 +111,14 @@ impl AudioProcessor {
             .unwrap();
 
         self.steady_time += u64::from(output_audio.frames_count().unwrap());
+
+        self.output_channels[self.output_config.main_port_index]
+            .chunks_exact(self.config.max_frames_count as usize)
+            .enumerate()
+            .for_each(|(i, c)| {
+                c.iter()
+                    .zip(buf.iter_mut().skip(i).step_by(channels))
+                    .for_each(|(sample, buf)| *buf = *sample);
+            });
     }
 }

@@ -23,31 +23,10 @@ pub struct MidiTrack {
 
 impl AudioGraphNodeImpl for MidiTrack {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
-        let mut lock = self
-            .host_audio_processor
+        self.host_audio_processor
             .try_lock()
-            .expect("this is only locked from the audio thread");
-
-        lock.process(
-            buf.len() / 2,
-            &InputEvents::empty(),
-            &mut OutputEvents::void(),
-        );
-
-        let mut iter = lock.output_channels[lock.output_config.main_port_index]
-            .chunks_exact(lock.config.max_frames_count as usize);
-        iter.next()
-            .unwrap()
-            .iter()
-            .zip(buf.iter_mut().step_by(2))
-            .for_each(|(sample, buf)| *buf = *sample);
-        iter.next()
-            .unwrap()
-            .iter()
-            .zip(buf.iter_mut().skip(1).step_by(2))
-            .for_each(|(sample, buf)| *buf = *sample);
-
-        drop(lock);
+            .expect("this is only locked from the audio thread")
+            .process(buf, &InputEvents::empty(), &mut OutputEvents::void());
 
         self.node.fill_buf(buf_start_sample, buf);
     }

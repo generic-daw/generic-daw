@@ -112,7 +112,8 @@ fn standard_clap_paths() -> Vec<PathBuf> {
 pub fn init(
     path: &Path,
     name: &str,
-    config: PluginAudioConfiguration,
+    sample_rate: f64,
+    buffer_size: u32,
 ) -> (GuiExt, Receiver<GuiMessage>, AudioProcessor) {
     let (gui_sender, gui_receiver) = async_channel::unbounded();
 
@@ -136,6 +137,13 @@ pub fn init(
 
     let input_config = AudioPortsConfig::from_ports(&mut instance.plugin_handle(), true);
     let output_config = AudioPortsConfig::from_ports(&mut instance.plugin_handle(), false);
+
+    let channels = output_config.port_channel_counts[output_config.main_port_index] as u32;
+    let config = PluginAudioConfiguration {
+        sample_rate,
+        min_frames_count: 1,
+        max_frames_count: buffer_size / channels,
+    };
 
     let plugin_audio_processor = AudioProcessor::new(
         instance

@@ -4,10 +4,7 @@ use crate::{
     widget::VSplit,
 };
 use fragile::Fragile;
-use generic_daw_core::{
-    Denominator, InterleavedAudio, Meter, Numerator, VARIANTS as _,
-    clap_host::{clack_host::process::PluginAudioConfiguration, get_installed_plugins, init},
-};
+use generic_daw_core::{Denominator, InterleavedAudio, Meter, Numerator, VARIANTS as _, clap_host};
 use home::home_dir;
 use iced::{
     Alignment::Center,
@@ -59,7 +56,7 @@ pub struct Daw {
 impl Default for Daw {
     fn default() -> Self {
         let (meter, arrangement) = ArrangementView::create();
-        let plugins = get_installed_plugins();
+        let plugins = clap_host::get_installed_plugins();
 
         Self {
             arrangement,
@@ -83,13 +80,12 @@ impl Daw {
                 return self.arrangement.update(message).map(Message::Arrangement);
             }
             Message::LoadPlugin(name) => {
-                let config = PluginAudioConfiguration {
-                    sample_rate: f64::from(self.meter.sample_rate),
-                    max_frames_count: self.meter.buffer_size / 2,
-                    min_frames_count: self.meter.buffer_size / 2,
-                };
-                let (gui, gui_receiver, audio_processor) =
-                    init(&self.plugins[&name], &name, config);
+                let (gui, gui_receiver, audio_processor) = clap_host::init(
+                    &self.plugins[&name],
+                    &name,
+                    f64::from(self.meter.sample_rate),
+                    self.meter.buffer_size,
+                );
                 let gui = Fragile::new(gui);
 
                 return Task::batch([
