@@ -28,9 +28,24 @@ impl AudioGraphNodeImpl for MidiTrack {
             .try_lock()
             .expect("this is only locked from the audio thread");
 
-        lock.resize_buffers(buf.len() / 2);
-        lock.process(&InputEvents::empty(), &mut OutputEvents::void());
-        buf.clone_from_slice(&lock.output_channels[lock.output_config.main_port_index]);
+        lock.process(
+            buf.len() / 2,
+            &InputEvents::empty(),
+            &mut OutputEvents::void(),
+        );
+
+        let mut iter = lock.output_channels[lock.output_config.main_port_index]
+            .chunks_exact(lock.config.max_frames_count as usize);
+        iter.next()
+            .unwrap()
+            .iter()
+            .zip(buf.iter_mut().step_by(2))
+            .for_each(|(sample, buf)| *buf = *sample);
+        iter.next()
+            .unwrap()
+            .iter()
+            .zip(buf.iter_mut().skip(1).step_by(2))
+            .for_each(|(sample, buf)| *buf = *sample);
 
         drop(lock);
 

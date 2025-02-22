@@ -4,8 +4,9 @@ use std::fmt::{Debug, Formatter};
 
 pub struct AudioProcessor {
     started_processor: StartedPluginAudioProcessor<Host>,
-    config: PluginAudioConfiguration,
     steady_time: u64,
+
+    pub config: PluginAudioConfiguration,
 
     pub input_config: AudioPortsConfig,
     pub output_config: AudioPortsConfig,
@@ -39,41 +40,34 @@ impl AudioProcessor {
         let input_channels = input_config
             .port_channel_counts
             .iter()
-            .map(|c| Vec::with_capacity(config.max_frames_count as usize * c))
+            .map(|c| vec![0.0; config.max_frames_count as usize * c])
             .collect();
         let output_channels = output_config
             .port_channel_counts
             .iter()
-            .map(|c| Vec::with_capacity(config.max_frames_count as usize * c))
+            .map(|c| vec![0.0; config.max_frames_count as usize * c])
             .collect();
 
         Self {
             started_processor,
-            config,
             steady_time: 0,
+
+            config,
+
             input_config,
             output_config,
+
             input_ports,
             output_ports,
+
             input_channels,
             output_channels,
         }
     }
 
-    pub fn resize_buffers(&mut self, frames: usize) {
-        self.input_channels
-            .iter_mut()
-            .zip(self.input_config.port_channel_counts.iter())
-            .for_each(|(channel, count)| channel.resize(frames * count, 0.0));
-
-        self.output_channels
-            .iter_mut()
-            .zip(self.output_config.port_channel_counts.iter())
-            .for_each(|(channel, count)| channel.resize(frames * count, 0.0));
-    }
-
     pub fn process(
         &mut self,
+        frames: usize,
         input_events: &InputEvents<'_>,
         output_events: &mut OutputEvents<'_>,
     ) {
@@ -84,6 +78,7 @@ impl AudioProcessor {
                     latency: 0,
                     channels: AudioPortBufferType::f32_input_only(
                         c.chunks_exact_mut(self.config.max_frames_count as usize)
+                            .map(|b| &mut b[..frames])
                             .map(InputChannel::constant),
                     ),
                 }
@@ -91,11 +86,14 @@ impl AudioProcessor {
 
         let mut output_audio =
             self.output_ports
-                .with_output_buffers(self.output_channels.iter_mut().map(|c| AudioPortBuffer {
-                    latency: 0,
-                    channels: AudioPortBufferType::f32_output_only(
-                        c.chunks_exact_mut(self.config.max_frames_count as usize),
-                    ),
+                .with_output_buffers(self.output_channels.iter_mut().map(|c| {
+                    AudioPortBuffer {
+                        latency: 0,
+                        channels: AudioPortBufferType::f32_output_only(
+                            c.chunks_exact_mut(self.config.max_frames_count as usize)
+                                .map(|b| &mut b[..frames]),
+                        ),
+                    }
                 }));
 
         self.started_processor
