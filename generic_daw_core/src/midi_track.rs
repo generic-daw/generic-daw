@@ -1,9 +1,6 @@
 use crate::{Meter, MidiClip, Position};
 use audio_graph::{AudioGraphNodeImpl, MixerNode};
-use clap_host::{
-    HostAudioProcessor, PluginAudioProcessor,
-    clack_host::prelude::{AudioPorts, EventBuffer},
-};
+use clap_host::{HostAudioProcessor, PluginAudioProcessor, clack_host::prelude::EventBuffer};
 use std::sync::Arc;
 
 mod dirty_event;
@@ -23,21 +20,15 @@ pub struct MidiTrack {
 
 impl AudioGraphNodeImpl for MidiTrack {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
-        while let Ok((audio, _)) = self.host_audio_processor.receiver.try_recv() {
-            audio[0]
-                .iter()
-                .zip(&audio[1])
-                .flat_map(<[&f32; 2]>::from)
-                .zip(&mut *buf)
-                .for_each(|(sample, buf)| {
-                    *buf = *sample;
-                });
+        if let Ok((audio, _)) = self.host_audio_processor.receiver.try_recv() {
+            buf.copy_from_slice(&audio[self.host_audio_processor.output_config.main_port_index]);
         }
 
-        self.host_audio_processor
-            .sender
-            .send_blocking((vec![vec![]; 2], EventBuffer::new()))
-            .unwrap();
+        drop(
+            self.host_audio_processor
+                .sender
+                .try_send(([].into(), EventBuffer::new())),
+        );
 
         self.node.fill_buf(buf_start_sample, buf);
     }
@@ -56,18 +47,28 @@ impl MidiTrack {
         mut plugin_audio_processor: PluginAudioProcessor,
     ) -> Self {
         std::thread::spawn(move || {
-            while let Ok((mut in_audio, in_events)) =
-                plugin_audio_processor.receiver.recv_blocking()
-            {
-                let (out_audio, out_events) = plugin_audio_processor.process(
-                    &mut in_audio,
-                    &in_events,
-                    &mut AudioPorts::with_capacity(0, 0),
-                    &mut AudioPorts::with_capacity(2, 2),
-                );
+            while let Ok((in_audio, in_events)) = plugin_audio_processor.receiver.recv_blocking() {
+                assert!(in_audio.len() <= plugin_audio_processor.input_channels.len());
+
+                plugin_audio_processor
+                    .input_channels
+                    .iter_mut()
+                    .zip(&in_audio)
+                    .for_each(|(buf, audio)| {
+                        buf.copy_from_slice(audio);
+                    });
+
+                let mut output_events = EventBuffer::new();
+
+                plugin_audio_processor
+                    .process(&in_events.as_input(), &mut output_events.as_output());
+
                 plugin_audio_processor
                     .sender
-                    .send_blocking((out_audio, out_events))
+                    .send_blocking((
+                        plugin_audio_processor.output_channels.clone(),
+                        output_events,
+                    ))
                     .unwrap();
             }
         });

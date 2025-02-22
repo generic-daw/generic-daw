@@ -59,7 +59,7 @@ pub struct ArrangementView {
 
 impl ArrangementView {
     pub fn create() -> (Arc<Meter>, Self) {
-        let (stream, producer, meter) = build_output_stream(44100, 1024);
+        let (stream, producer, meter) = build_output_stream(44100, 512);
 
         let arrangement = ArrangementWrapper::new(producer, stream, meter.clone());
 

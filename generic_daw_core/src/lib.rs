@@ -47,7 +47,7 @@ pub fn build_output_stream<T: Send + 'static>(
             &StreamConfig {
                 channels: 2,
                 sample_rate: SampleRate(sample_rate),
-                buffer_size: BufferSize::Fixed(buffer_size),
+                buffer_size: BufferSize::Fixed(buffer_size * 2),
             },
             move |data, _| {
                 let sample = if ctx.meter.playing.load(Acquire) {

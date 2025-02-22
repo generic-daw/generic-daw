@@ -15,7 +15,7 @@ pub struct Meter {
     pub sample_rate: u32,
     /// buffer size of the output stream
     ///
-    /// typical values: 256, 512, 1024, 2048
+    /// typically a power of two
     pub buffer_size: u32,
     /// BPM of the arrangement, between 30 and 600
     pub bpm: AtomicU16,

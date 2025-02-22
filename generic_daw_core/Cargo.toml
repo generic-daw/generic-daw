@@ -13,7 +13,7 @@ clap_host = { path = "../clap_host" }
 
 atomig = { version = "0.4.2", features = ["derive"] }
 cpal = "0.15.3"
-oneshot = "0.1.10"
+oneshot = "0.1.11"
 rtrb = "0.3.2"
 rubato = { version = "0.16.1", default-features = false }
 strum = { version = "0.27.1", features = ["derive"] }

@@ -85,8 +85,8 @@ impl Daw {
             Message::LoadPlugin(name) => {
                 let config = PluginAudioConfiguration {
                     sample_rate: f64::from(self.meter.sample_rate),
-                    max_frames_count: self.meter.buffer_size,
-                    min_frames_count: self.meter.buffer_size,
+                    max_frames_count: self.meter.buffer_size / 2,
+                    min_frames_count: self.meter.buffer_size / 2,
                 };
                 let (gui, gui_receiver, host_audio_processor, plugin_audio_processor) =
                     init(&self.plugins[&name], &name, config);

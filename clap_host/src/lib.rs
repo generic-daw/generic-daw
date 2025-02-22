@@ -1,5 +1,6 @@
 #![expect(missing_debug_implementations)]
 
+use audio_ports_config::AudioPortsConfig;
 use clack_host::prelude::*;
 use generic_daw_utils::unique_id;
 use home::home_dir;
@@ -13,6 +14,7 @@ use std::{
 };
 use walkdir::WalkDir;
 
+mod audio_ports_config;
 mod gui;
 mod host;
 mod host_audio_processor;
@@ -30,6 +32,8 @@ pub use plugin_audio_processor::PluginAudioProcessor;
 pub use plugin_id::Id as PluginId;
 
 unique_id!(plugin_id);
+
+pub type AudioBuffer = Box<[Box<[f32]>]>;
 
 #[must_use]
 pub fn get_installed_plugins() -> BTreeMap<String, PathBuf> {
@@ -117,9 +121,9 @@ pub fn init(
     HostAudioProcessor,
     PluginAudioProcessor,
 ) {
-    let (gui_sender, gui_receiver) = async_channel::bounded(16);
-    let (plugin_sender, plugin_receiver) = async_channel::bounded(16);
-    let (audio_sender, audio_receiver) = async_channel::bounded(16);
+    let (gui_sender, gui_receiver) = async_channel::bounded(1);
+    let (plugin_sender, plugin_receiver) = async_channel::bounded(1);
+    let (audio_sender, audio_receiver) = async_channel::bounded(1);
 
     // SAFETY:
     // loading an external library object file is inherently unsafe
@@ -139,15 +143,28 @@ pub fn init(
     )
     .unwrap();
 
+    let input_config = AudioPortsConfig::from_ports(&mut instance.plugin_handle(), true);
+    let output_config = AudioPortsConfig::from_ports(&mut instance.plugin_handle(), false);
+
     let plugin_audio_processor = PluginAudioProcessor::new(
         instance
             .activate(|_, _| {}, config)
             .unwrap()
             .start_processing()
             .unwrap(),
+        config,
+        &input_config,
+        &output_config,
         plugin_sender,
         audio_receiver,
     );
+
+    let host_audio_processor = HostAudioProcessor {
+        sender: audio_sender,
+        receiver: plugin_receiver,
+        input_config,
+        output_config,
+    };
 
     let gui = GuiExt::new(
         instance.access_handler(|h: &MainThread| h.gui).unwrap(),
@@ -157,10 +174,7 @@ pub fn init(
     (
         gui,
         gui_receiver,
-        HostAudioProcessor {
-            sender: audio_sender,
-            receiver: plugin_receiver,
-        },
+        host_audio_processor,
         plugin_audio_processor,
     )
 }
