@@ -2,10 +2,8 @@ use crate::widget::{
     Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale, Knob, PeakMeter,
 };
 use generic_daw_core::{
-    AudioClip, AudioTrack, InterleavedAudio, Meter, MidiTrack, Position,
-    audio_graph::AudioGraph,
-    build_output_stream,
-    clap_host::{HostAudioProcessor, PluginAudioProcessor},
+    AudioClip, AudioTrack, InterleavedAudio, Meter, MidiTrack, Position, audio_graph::AudioGraph,
+    build_output_stream, clap_host::AudioProcessor,
 };
 use iced::{
     Border, Element, Task,
@@ -32,7 +30,7 @@ pub enum Message {
     TrackVolumeChanged(usize, f32),
     TrackPanChanged(usize, f32),
     LoadedSample(Arc<InterleavedAudio>),
-    LoadedPlugin(Arc<Mutex<(HostAudioProcessor, PluginAudioProcessor)>>),
+    LoadedPlugin(Arc<Mutex<AudioProcessor>>),
     ToggleTrackEnabled(usize),
     ToggleTrackSolo(usize),
     SeekTo(usize),
@@ -59,7 +57,7 @@ pub struct ArrangementView {
 
 impl ArrangementView {
     pub fn create() -> (Arc<Meter>, Self) {
-        let (stream, producer, meter) = build_output_stream(44100, 512);
+        let (stream, producer, meter) = build_output_stream(44100, 1024);
 
         let arrangement = ArrangementWrapper::new(producer, stream, meter.clone());
 
@@ -104,15 +102,9 @@ impl ArrangementView {
                 self.arrangement.push(track);
             }
             Message::LoadedPlugin(arc) => {
-                let (host_audio_processor, plugin_audio_processor) =
-                    Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
+                let audio_processor = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
 
-                let track = MidiTrack::new(
-                    self.meter.clone(),
-                    Arc::default(),
-                    host_audio_processor,
-                    plugin_audio_processor,
-                );
+                let track = MidiTrack::new(self.meter.clone(), audio_processor);
 
                 self.arrangement.push(track);
             }

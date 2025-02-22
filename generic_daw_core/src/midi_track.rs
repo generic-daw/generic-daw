@@ -1,7 +1,10 @@
 use crate::{Meter, MidiClip, Position};
 use audio_graph::{AudioGraphNodeImpl, MixerNode};
-use clap_host::{HostAudioProcessor, PluginAudioProcessor, clack_host::prelude::EventBuffer};
-use std::sync::Arc;
+use clap_host::{
+    AudioProcessor,
+    clack_host::prelude::{InputEvents, OutputEvents},
+};
+use std::sync::{Arc, Mutex};
 
 mod dirty_event;
 
@@ -9,7 +12,7 @@ pub use dirty_event::DirtyEvent;
 
 #[derive(Clone, Debug)]
 pub struct MidiTrack {
-    host_audio_processor: Arc<HostAudioProcessor>,
+    host_audio_processor: Arc<Mutex<AudioProcessor>>,
     /// contains clips of midi patterns
     pub clips: Vec<Arc<MidiClip>>,
     /// information relating to the playback of the arrangement
@@ -20,15 +23,16 @@ pub struct MidiTrack {
 
 impl AudioGraphNodeImpl for MidiTrack {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
-        if let Ok((audio, _)) = self.host_audio_processor.receiver.try_recv() {
-            buf.copy_from_slice(&audio[self.host_audio_processor.output_config.main_port_index]);
-        }
+        let mut lock = self
+            .host_audio_processor
+            .try_lock()
+            .expect("this is only locked from the audio thread");
 
-        drop(
-            self.host_audio_processor
-                .sender
-                .try_send(([].into(), EventBuffer::new())),
-        );
+        lock.resize_buffers(buf.len() / 2);
+        lock.process(&InputEvents::empty(), &mut OutputEvents::void());
+        buf.clone_from_slice(&lock.output_channels[lock.output_config.main_port_index]);
+
+        drop(lock);
 
         self.node.fill_buf(buf_start_sample, buf);
     }
@@ -40,44 +44,12 @@ impl AudioGraphNodeImpl for MidiTrack {
 
 impl MidiTrack {
     #[must_use]
-    pub fn new(
-        meter: Arc<Meter>,
-        node: Arc<MixerNode>,
-        host_audio_processor: HostAudioProcessor,
-        mut plugin_audio_processor: PluginAudioProcessor,
-    ) -> Self {
-        std::thread::spawn(move || {
-            while let Ok((in_audio, in_events)) = plugin_audio_processor.receiver.recv_blocking() {
-                assert!(in_audio.len() <= plugin_audio_processor.input_channels.len());
-
-                plugin_audio_processor
-                    .input_channels
-                    .iter_mut()
-                    .zip(&in_audio)
-                    .for_each(|(buf, audio)| {
-                        buf.copy_from_slice(audio);
-                    });
-
-                let mut output_events = EventBuffer::new();
-
-                plugin_audio_processor
-                    .process(&in_events.as_input(), &mut output_events.as_output());
-
-                plugin_audio_processor
-                    .sender
-                    .send_blocking((
-                        plugin_audio_processor.output_channels.clone(),
-                        output_events,
-                    ))
-                    .unwrap();
-            }
-        });
-
+    pub fn new(meter: Arc<Meter>, audio_processor: AudioProcessor) -> Self {
         Self {
-            host_audio_processor: Arc::new(host_audio_processor),
+            host_audio_processor: Arc::new(Mutex::new(audio_processor)),
             clips: Vec::new(),
             meter,
-            node,
+            node: Arc::default(),
         }
     }
 

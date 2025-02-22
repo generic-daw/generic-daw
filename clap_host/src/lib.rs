@@ -15,25 +15,23 @@ use std::{
 use walkdir::WalkDir;
 
 mod audio_ports_config;
+mod audio_processor;
 mod gui;
 mod host;
-mod host_audio_processor;
 mod main_thread;
-mod plugin_audio_processor;
 mod shared;
 mod timer;
 
 pub use async_channel::{Receiver, Sender};
+pub use audio_processor::AudioProcessor;
 pub use clack_host;
 pub use gui::GuiExt;
-pub use host_audio_processor::HostAudioProcessor;
 pub use main_thread::GuiMessage;
-pub use plugin_audio_processor::PluginAudioProcessor;
 pub use plugin_id::Id as PluginId;
 
 unique_id!(plugin_id);
 
-pub type AudioBuffer = Box<[Box<[f32]>]>;
+pub type AudioBuffer = Box<[Vec<f32>]>;
 
 #[must_use]
 pub fn get_installed_plugins() -> BTreeMap<String, PathBuf> {
@@ -115,15 +113,8 @@ pub fn init(
     path: &Path,
     name: &str,
     config: PluginAudioConfiguration,
-) -> (
-    GuiExt,
-    Receiver<GuiMessage>,
-    HostAudioProcessor,
-    PluginAudioProcessor,
-) {
-    let (gui_sender, gui_receiver) = async_channel::bounded(1);
-    let (plugin_sender, plugin_receiver) = async_channel::bounded(1);
-    let (audio_sender, audio_receiver) = async_channel::bounded(1);
+) -> (GuiExt, Receiver<GuiMessage>, AudioProcessor) {
+    let (gui_sender, gui_receiver) = async_channel::unbounded();
 
     // SAFETY:
     // loading an external library object file is inherently unsafe
@@ -146,35 +137,21 @@ pub fn init(
     let input_config = AudioPortsConfig::from_ports(&mut instance.plugin_handle(), true);
     let output_config = AudioPortsConfig::from_ports(&mut instance.plugin_handle(), false);
 
-    let plugin_audio_processor = PluginAudioProcessor::new(
+    let plugin_audio_processor = AudioProcessor::new(
         instance
             .activate(|_, _| {}, config)
             .unwrap()
             .start_processing()
             .unwrap(),
         config,
-        &input_config,
-        &output_config,
-        plugin_sender,
-        audio_receiver,
-    );
-
-    let host_audio_processor = HostAudioProcessor {
-        sender: audio_sender,
-        receiver: plugin_receiver,
         input_config,
         output_config,
-    };
+    );
 
     let gui = GuiExt::new(
         instance.access_handler(|h: &MainThread| h.gui).unwrap(),
         instance,
     );
 
-    (
-        gui,
-        gui_receiver,
-        host_audio_processor,
-        plugin_audio_processor,
-    )
+    (gui, gui_receiver, plugin_audio_processor)
 }

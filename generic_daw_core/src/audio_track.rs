@@ -36,7 +36,7 @@ impl AudioTrack {
         Self {
             clips: Vec::new(),
             meter,
-            node: Arc::new(MixerNode::default()),
+            node: Arc::default(),
         }
     }
 

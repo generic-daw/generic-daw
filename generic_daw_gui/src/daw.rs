@@ -88,13 +88,13 @@ impl Daw {
                     max_frames_count: self.meter.buffer_size / 2,
                     min_frames_count: self.meter.buffer_size / 2,
                 };
-                let (gui, gui_receiver, host_audio_processor, plugin_audio_processor) =
+                let (gui, gui_receiver, audio_processor) =
                     init(&self.plugins[&name], &name, config);
                 let gui = Fragile::new(gui);
 
                 return Task::batch([
                     Task::done(Message::Arrangement(ArrangementMessage::LoadedPlugin(
-                        Arc::new(Mutex::new((host_audio_processor, plugin_audio_processor))),
+                        Arc::new(Mutex::new(audio_processor)),
                     ))),
                     Task::done(Message::ClapHost(ClapHostMessage::Opened(Arc::new(
                         Mutex::new((gui, gui_receiver)),
