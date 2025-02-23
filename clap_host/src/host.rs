@@ -5,12 +5,11 @@ use clack_extensions::{
 };
 use clack_host::prelude::*;
 
-#[derive(Clone, Copy)]
 pub struct Host;
 
 impl HostHandlers for Host {
     type Shared<'a> = Shared;
-    type MainThread<'a> = MainThread;
+    type MainThread<'a> = MainThread<'a>;
     type AudioProcessor<'a> = ();
 
     fn declare_extensions(builder: &mut HostExtensions<'_, Self>, _shared: &Self::Shared<'_>) {

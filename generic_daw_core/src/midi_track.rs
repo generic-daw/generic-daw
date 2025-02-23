@@ -1,9 +1,6 @@
 use crate::{Meter, MidiClip, Position};
 use audio_graph::{AudioGraphNodeImpl, MixerNode};
-use clap_host::{
-    AudioProcessor,
-    clack_host::prelude::{InputEvents, OutputEvents},
-};
+use clap_host::{AudioProcessor, clack_host::prelude::*};
 use std::sync::{Arc, Mutex};
 
 mod dirty_event;

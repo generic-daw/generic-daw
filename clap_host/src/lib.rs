@@ -1,4 +1,5 @@
 #![expect(missing_debug_implementations)]
+#![expect(missing_copy_implementations)]
 
 use audio_ports_config::AudioPortsConfig;
 use clack_host::prelude::*;
@@ -16,6 +17,7 @@ use walkdir::WalkDir;
 
 mod audio_ports_config;
 mod audio_processor;
+mod buffers;
 mod gui;
 mod host;
 mod main_thread;
@@ -31,7 +33,7 @@ pub use plugin_id::Id as PluginId;
 
 unique_id!(plugin_id);
 
-pub type AudioBuffer = Box<[Vec<f32>]>;
+pub type AudioBuffer = Box<[Box<[f32]>]>;
 
 #[must_use]
 pub fn get_installed_plugins() -> BTreeMap<String, PathBuf> {
@@ -128,7 +130,7 @@ pub fn init(
         .unwrap();
     let mut instance = PluginInstance::new(
         |()| Shared::new(gui_sender),
-        |_| MainThread::default(),
+        |shared| MainThread::new(shared),
         &bundle,
         plugin_descriptor.id().unwrap(),
         &HostInfo::new("", "", "", "").unwrap(),
@@ -156,10 +158,7 @@ pub fn init(
         output_config,
     );
 
-    let gui = GuiExt::new(
-        instance.access_handler(|h: &MainThread| h.gui).unwrap(),
-        instance,
-    );
+    let gui = GuiExt::new(instance.access_handler(|h| h.gui).unwrap(), instance);
 
     (gui, gui_receiver, plugin_audio_processor)
 }

@@ -31,15 +31,11 @@ impl AudioPortsConfig {
 
         let port_channel_counts = port_channel_counts.into_boxed_slice();
 
-        let main_port_index = main_port_index.map_or_else(
-            || {
-                port_channel_counts
-                    .iter()
-                    .position(|&p| p == 2)
-                    .unwrap_or_default()
-            },
-            |i| i as usize,
-        );
+        let main_port_index = main_port_index
+            .map(|i| i as usize)
+            .or_else(|| port_channel_counts.iter().position(|&p| p == 2))
+            .or_else(|| port_channel_counts.iter().position(|&p| p == 1))
+            .unwrap_or_default();
 
         Self {
             port_channel_counts,

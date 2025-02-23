@@ -9,7 +9,7 @@ use clack_host::prelude::*;
 use tracing::{debug, error, info, warn};
 
 pub struct Shared {
-    sender: Sender<GuiMessage>,
+    pub sender: Sender<GuiMessage>,
 }
 
 impl SharedHandler<'_> for Shared {

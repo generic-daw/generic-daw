@@ -9,7 +9,7 @@ use iced::{
 };
 use std::{
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 #[derive(Clone, Debug)]
@@ -45,14 +45,13 @@ impl ClapHostView {
                     self.update(Message::MainThread(id, GuiMessage::GuiRequestShow))
                 };
 
-                return Task::batch([
-                    open.chain(Task::done(Message::MainThread(id, GuiMessage::TickTimers))),
-                    Task::stream(channel(16, async move |mut sender| {
-                        while let Ok(msg) = gui_receiver.recv().await {
-                            sender.send(Message::MainThread(id, msg)).await.unwrap();
-                        }
-                    })),
-                ]);
+                let stream = Task::stream(channel(16, async move |mut sender| {
+                    while let Ok(msg) = gui_receiver.recv().await {
+                        sender.send(Message::MainThread(id, msg)).await.unwrap();
+                    }
+                }));
+
+                return open.chain(stream);
             }
             Message::Shown(window_id, arc) => {
                 let gui = Arc::into_inner(arc).unwrap().into_inner();
@@ -130,7 +129,10 @@ impl ClapHostView {
                     Message::Shown(window_id, Arc::new(gui))
                 });
 
-                return spawn.discard().chain(embed);
+                return spawn
+                    .discard()
+                    .chain(embed)
+                    .chain(Task::done(Message::MainThread(id, GuiMessage::TickTimers)));
             }
             GuiMessage::GuiClosed => {
                 self.plugins.remove(*id).unwrap().destroy();
@@ -138,29 +140,28 @@ impl ClapHostView {
                 return self.main_thread_message(id, GuiMessage::GuiRequestHide);
             }
             GuiMessage::GuiRequestResize(new_size) => {
-                let window_id = self.windows[*id];
-
-                return window::resize(
-                    window_id,
-                    Size {
-                        width: new_size.width as f32,
-                        height: new_size.height as f32,
-                    },
-                );
+                if let Some(&window_id) = self.windows.get(*id) {
+                    return window::resize(
+                        window_id,
+                        Size {
+                            width: new_size.width as f32,
+                            height: new_size.height as f32,
+                        },
+                    );
+                }
             }
             GuiMessage::TickTimers => {
-                if let Some((timers, timer_ext)) = self.plugins[*id].timers() {
-                    let sleep = if self.windows.get(*id).is_some() {
+                if self.windows.get(*id).is_some() {
+                    if let Some((timers, timer_ext)) = self.plugins[*id].timers() {
                         let mut instance = self.plugins.get_mut(*id).unwrap().plugin_handle();
 
-                        timers.borrow_mut().tick_timers(&timer_ext, &mut instance) - Instant::now()
-                    } else {
-                        Duration::from_millis(30)
-                    };
+                        let sleep = timers.borrow_mut().tick_timers(&timer_ext, &mut instance)
+                            - Instant::now();
 
-                    return Task::future(tokio::time::sleep(sleep))
-                        .map(|()| GuiMessage::TickTimers)
-                        .map(move |msg| Message::MainThread(id, msg));
+                        return Task::future(tokio::time::sleep(sleep))
+                            .map(|()| GuiMessage::TickTimers)
+                            .map(move |msg| Message::MainThread(id, msg));
+                    }
                 }
             }
         }
