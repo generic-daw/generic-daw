@@ -10,5 +10,6 @@ pub enum DawCtxMessage<T> {
     Disconnect(NodeId, NodeId),
     DisconnectFromMaster(NodeId),
     RequestAudioGraph(Sender<(AudioGraph, T)>, T),
+    Reset,
     AudioGraph(AudioGraph),
 }

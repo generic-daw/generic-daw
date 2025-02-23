@@ -44,6 +44,10 @@ impl Arrangement {
         }
     }
 
+    pub fn stop(&mut self) {
+        self.producer.push(DawCtxMessage::Reset).unwrap();
+    }
+
     pub fn tracks(&self) -> &[Track] {
         &self.tracks
     }

@@ -138,10 +138,9 @@ impl Daw {
             Message::Stop => {
                 self.meter.playing.store(false, Release);
                 self.meter.sample.store(0, Release);
+                self.arrangement.stop();
             }
-            Message::New => {
-                *self = Self::default();
-            }
+            Message::New => *self = Self::default(),
             Message::BpmChanged(bpm) => self.meter.bpm.store(bpm, Release),
             Message::NumeratorChanged(new_numerator) => {
                 self.meter.numerator.store(new_numerator, Release);

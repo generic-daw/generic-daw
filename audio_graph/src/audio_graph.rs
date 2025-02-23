@@ -72,6 +72,12 @@ impl AudioGraph {
         }
     }
 
+    pub fn reset(&self) {
+        for entry in self.graph.values() {
+            entry.node.reset();
+        }
+    }
+
     pub fn connect(&mut self, from: NodeId, to: NodeId) {
         if self.graph.get(*to).is_some()
             && self

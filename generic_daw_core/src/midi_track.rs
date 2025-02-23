@@ -31,6 +31,13 @@ impl AudioGraphNodeImpl for MidiTrack {
     fn id(&self) -> audio_graph::NodeId {
         self.node.id()
     }
+
+    fn reset(&self) {
+        self.host_audio_processor
+            .try_lock()
+            .expect("this is only locked from the audio thread")
+            .reset();
+    }
 }
 
 impl MidiTrack {

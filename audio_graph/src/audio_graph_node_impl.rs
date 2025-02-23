@@ -6,6 +6,8 @@ pub trait AudioGraphNodeImpl: Debug + Send {
     fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]);
     /// get the `NodeId` of the node
     fn id(&self) -> NodeId;
+    /// reset the node to a pre-playback state
+    fn reset(&self) {}
 }
 
 impl<T> AudioGraphNodeImpl for T
@@ -18,5 +20,9 @@ where
 
     fn id(&self) -> NodeId {
         (**self).id()
+    }
+
+    fn reset(&self) {
+        (**self).reset();
     }
 }

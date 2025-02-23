@@ -58,4 +58,9 @@ impl AudioProcessor {
 
         self.buffers.write_out(buf);
     }
+
+    pub fn reset(&mut self) {
+        self.started_processor.reset();
+        self.steady_time = 0;
+    }
 }
