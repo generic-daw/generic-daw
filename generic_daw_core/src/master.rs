@@ -68,6 +68,10 @@ impl AudioGraphNodeImpl for Master {
     fn id(&self) -> NodeId {
         self.node.id()
     }
+
+    fn reset(&self) {
+        *self.click.borrow_mut() = None;
+    }
 }
 
 impl Master {

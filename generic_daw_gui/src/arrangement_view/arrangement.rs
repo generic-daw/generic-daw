@@ -118,6 +118,8 @@ impl Arrangement {
         let playing = self.meter.playing.swap(true, AcqRel);
         let metronome = self.meter.metronome.swap(false, AcqRel);
 
+        audio_graph.reset();
+
         let mut writer = WavWriter::create(
             path,
             hound::WavSpec {
