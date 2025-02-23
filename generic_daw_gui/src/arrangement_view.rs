@@ -116,7 +116,7 @@ impl ArrangementView {
                 self.soloed_track = None;
             }
             Message::ToggleTrackSolo(track) => {
-                if self.soloed_track.is_some_and(|s| s == track) {
+                if self.soloed_track == Some(track) {
                     self.soloed_track = None;
                     self.arrangement
                         .tracks()

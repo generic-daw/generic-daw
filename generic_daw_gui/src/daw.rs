@@ -4,7 +4,10 @@ use crate::{
     widget::VSplit,
 };
 use fragile::Fragile;
-use generic_daw_core::{Denominator, InterleavedAudio, Meter, Numerator, VARIANTS as _, clap_host};
+use generic_daw_core::{
+    Denominator, InterleavedAudio, Meter, Numerator, VARIANTS as _,
+    clap_host::{self, PluginDescriptor, clack_host::bundle::PluginBundle},
+};
 use home::home_dir;
 use iced::{
     Alignment::Center,
@@ -32,7 +35,7 @@ pub enum Message {
     ThemeChanged(Theme),
     ClapHost(ClapHostMessage),
     Arrangement(ArrangementMessage),
-    LoadPlugin(String),
+    LoadPlugin(PluginDescriptor),
     LoadSamplesButton,
     LoadSample(PathBuf),
     ExportButton,
@@ -48,7 +51,8 @@ pub enum Message {
 pub struct Daw {
     arrangement: ArrangementView,
     clap_host: ClapHostView,
-    plugins: BTreeMap<String, PathBuf>,
+    plugins: BTreeMap<PluginDescriptor, PluginBundle>,
+    load_plugin_text: PluginDescriptor,
     meter: Arc<Meter>,
     theme: Theme,
 }
@@ -62,6 +66,10 @@ impl Default for Daw {
             arrangement,
             clap_host: ClapHostView::default(),
             plugins,
+            load_plugin_text: PluginDescriptor {
+                name: "Load Plugin".to_owned(),
+                id: String::new(),
+            },
             meter,
             theme: Theme::Dark,
         }
@@ -209,12 +217,9 @@ impl Daw {
             horizontal_space(),
             pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
             pick_list(
-                self.plugins
-                    .keys()
-                    .map(String::as_str)
-                    .collect::<Box<[_]>>(),
-                Some("Load Plugin"),
-                |plugin| { Message::LoadPlugin(plugin.to_owned()) }
+                self.plugins.keys().collect::<Box<[_]>>(),
+                Some(&self.load_plugin_text),
+                |p| Message::LoadPlugin(p.to_owned())
             )
         ]
         .spacing(20)

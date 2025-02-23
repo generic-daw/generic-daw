@@ -8,11 +8,7 @@ use home::home_dir;
 use host::Host;
 use main_thread::MainThread;
 use shared::Shared;
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-    result::Result,
-};
+use std::{collections::BTreeMap, ffi::CString, path::PathBuf, result::Result};
 use walkdir::WalkDir;
 
 mod audio_ports_config;
@@ -21,6 +17,7 @@ mod buffers;
 mod gui;
 mod host;
 mod main_thread;
+mod plugin_descriptor;
 mod shared;
 mod timer;
 
@@ -29,6 +26,7 @@ pub use audio_processor::AudioProcessor;
 pub use clack_host;
 pub use gui::GuiExt;
 pub use main_thread::GuiMessage;
+pub use plugin_descriptor::PluginDescriptor;
 pub use plugin_id::Id as PluginId;
 
 unique_id!(plugin_id);
@@ -36,7 +34,7 @@ unique_id!(plugin_id);
 pub type AudioBuffer = Box<[Box<[f32]>]>;
 
 #[must_use]
-pub fn get_installed_plugins() -> BTreeMap<String, PathBuf> {
+pub fn get_installed_plugins() -> BTreeMap<PluginDescriptor, PluginBundle> {
     let mut r = BTreeMap::new();
 
     standard_clap_paths()
@@ -57,14 +55,14 @@ pub fn get_installed_plugins() -> BTreeMap<String, PathBuf> {
         .filter_map(|path|
             // SAFETY:
             // loading an external library object file is inherently unsafe
-            Some((path.path().to_owned(), unsafe { PluginBundle::load(path.path()) }.ok()?)))
-        .for_each(|(path, bundle)| {
+            unsafe { PluginBundle::load(path.path()) }.ok())
+        .for_each(|bundle| {
             if let Some(factory) = bundle.get_plugin_factory() {
                 factory
                     .plugin_descriptors()
-                    .filter_map(|d| d.name()?.to_str().ok())
+                    .filter_map(|d| d.try_into().ok())
                     .for_each(|d| {
-                        r.insert(d.to_owned(), path.clone());
+                        r.insert(d, bundle.clone());
                     });
             }
         });
@@ -112,27 +110,18 @@ fn standard_clap_paths() -> Vec<PathBuf> {
 
 #[must_use]
 pub fn init(
-    path: &Path,
-    name: &str,
+    bundle: &PluginBundle,
+    descriptor: &PluginDescriptor,
     sample_rate: f64,
     buffer_size: u32,
 ) -> (GuiExt, Receiver<GuiMessage>, AudioProcessor) {
     let (gui_sender, gui_receiver) = async_channel::unbounded();
 
-    // SAFETY:
-    // loading an external library object file is inherently unsafe
-    let bundle = unsafe { PluginBundle::load(path) }.unwrap();
-
-    let factory = bundle.get_plugin_factory().unwrap();
-    let plugin_descriptor = factory
-        .plugin_descriptors()
-        .find(|d| d.name().and_then(|n| n.to_str().ok()) == Some(name))
-        .unwrap();
     let mut instance = PluginInstance::new(
         |()| Shared::new(gui_sender),
         |shared| MainThread::new(shared),
-        &bundle,
-        plugin_descriptor.id().unwrap(),
+        bundle,
+        &CString::new(descriptor.id.clone()).unwrap(),
         &HostInfo::new("", "", "", "").unwrap(),
     )
     .unwrap();
