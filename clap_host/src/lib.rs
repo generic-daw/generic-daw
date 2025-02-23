@@ -113,7 +113,7 @@ pub fn init(
     bundle: &PluginBundle,
     descriptor: &PluginDescriptor,
     sample_rate: f64,
-    buffer_size: u32,
+    max_buffer_size: u32,
 ) -> (GuiExt, Receiver<GuiMessage>, AudioProcessor) {
     let (gui_sender, gui_receiver) = async_channel::unbounded();
 
@@ -129,11 +129,13 @@ pub fn init(
     let input_config = AudioPortsConfig::from_ports(&mut instance.plugin_handle(), true);
     let output_config = AudioPortsConfig::from_ports(&mut instance.plugin_handle(), false);
 
-    let channels = output_config.port_channel_counts[output_config.main_port_index] as u32;
+    let channels =
+        output_config.port_channel_counts[output_config.main_port_index].clamp(1, 2) as u32;
+    let max_frames_count = max_buffer_size / channels;
     let config = PluginAudioConfiguration {
         sample_rate,
         min_frames_count: 1,
-        max_frames_count: buffer_size / channels,
+        max_frames_count,
     };
 
     let plugin_audio_processor = AudioProcessor::new(

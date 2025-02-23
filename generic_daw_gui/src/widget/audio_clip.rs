@@ -114,8 +114,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
             };
 
             if state.last_size != bounds.size() {
-                *state.cache.borrow_mut() = None;
                 state.last_size = bounds.size();
+                *state.cache.borrow_mut() = None;
             }
         }
 
@@ -207,8 +207,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
             .as_ref()
             .is_none_or(|last_theme| last_theme != theme)
         {
-            *state.cache.borrow_mut() = None;
             state.last_theme.borrow_mut().replace(theme.clone());
+            *state.cache.borrow_mut() = None;
         }
 
         // fill the mesh cache if it's cleared
