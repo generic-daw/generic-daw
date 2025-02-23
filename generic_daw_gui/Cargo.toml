@@ -11,6 +11,7 @@ workspace = true
 generic_daw_core = { path = "../generic_daw_core" }
 generic_daw_utils = { path = "../generic_daw_utils" }
 
+bytemuck = "1.21.0"
 fragile = "2.0.0"
 home = "0.5.11"
 hound = "3.5.1"

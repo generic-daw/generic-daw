@@ -4,7 +4,7 @@ use iced::{
     Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Transformation, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Text, Widget,
-        graphics::{color, geometry::Renderer as _},
+        graphics::color,
         layout::{Limits, Node},
         renderer::{Quad, Style},
         text::Renderer as _,
@@ -24,12 +24,19 @@ use iced_wgpu::{
         cache::{Cached as _, Group},
         mesh::{Indexed, SolidVertex2D},
     },
+    primitive::Renderer as _,
 };
+use primitive::Primitive;
+use sample::Sample;
 use std::{
     cell::RefCell,
     cmp::{max_by, min_by},
     sync::Arc,
 };
+
+mod pipeline;
+mod primitive;
+mod sample;
 
 #[derive(Default)]
 struct State {
@@ -43,6 +50,8 @@ struct State {
     last_scale: ArrangementScale,
     /// the size from the last draw
     last_size: Size,
+    /// the waveform program
+    primitive: Primitive,
 }
 
 #[derive(Clone, Debug)]
@@ -117,6 +126,10 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
                 state.last_size = bounds.size();
                 *state.cache.borrow_mut() = None;
             }
+
+            // TODO: only do this on invalid cache
+            state.primitive.texture =
+                self.vertices(layout.bounds().size(), self.position, self.scale);
         }
 
         Status::Ignored
@@ -226,9 +239,11 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         }
 
         // draw the mesh
-        renderer.with_translation(Vector::new(bounds.x, layout.bounds().y), |renderer| {
-            renderer.draw_geometry(Geometry::load(state.cache.borrow().as_ref().unwrap()));
-        });
+        // renderer.with_translation(Vector::new(bounds.x, layout.bounds().y), |renderer| {
+        //     renderer.draw_geometry(Geometry::load(state.cache.borrow().as_ref().unwrap()));
+        // });
+
+        renderer.draw_primitive(bounds, state.primitive.clone());
     }
 
     fn mouse_interaction(
@@ -351,6 +366,37 @@ impl AudioClip {
             transformation: Transformation::IDENTITY,
             clip_bounds: Rectangle::new(Point::new(0.0, scale.y - size.height + LINE_HEIGHT), size),
         }
+    }
+
+    fn vertices(
+        &self,
+        size: Size,
+        position: ArrangementPosition,
+        scale: ArrangementScale,
+    ) -> Vec<Sample> {
+        let lod_sample_size = scale.x.floor().exp2();
+        let pixel_size = scale.x.exp2();
+        let lod_samples_per_pixel = lod_sample_size / pixel_size;
+        let lod = scale.x as usize - 3;
+        let diff = max_by(
+            0.0,
+            position.x
+                - self
+                    .inner
+                    .get_global_start()
+                    .in_interleaved_samples_f(&self.inner.meter),
+            f32::total_cmp,
+        );
+        let clip_start = self
+            .inner
+            .get_clip_start()
+            .in_interleaved_samples_f(&self.inner.meter);
+        let first_index = ((diff + clip_start) / lod_sample_size) as usize;
+        let last_index = first_index + (size.width / lod_samples_per_pixel) as usize;
+        self.inner.audio.lods[lod][first_index..last_index]
+            .iter()
+            .map(|&(min, max)| Sample(min, max))
+            .collect::<Vec<_>>()
     }
 }
 

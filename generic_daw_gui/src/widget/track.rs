@@ -156,7 +156,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             .zip(layout.children())
             .skip(1)
             .for_each(|((child, tree), layout)| {
-                renderer.with_layer(bounds, |renderer| {
+                renderer.with_layer(Rectangle::INFINITE, |renderer| {
                     child
                         .as_widget()
                         .draw(tree, renderer, theme, style, layout, cursor, &bounds);
