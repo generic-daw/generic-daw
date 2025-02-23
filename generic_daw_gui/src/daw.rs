@@ -52,7 +52,6 @@ pub struct Daw {
     arrangement: ArrangementView,
     clap_host: ClapHostView,
     plugins: BTreeMap<PluginDescriptor, PluginBundle>,
-    load_plugin_text: PluginDescriptor,
     meter: Arc<Meter>,
     theme: Theme,
 }
@@ -66,10 +65,6 @@ impl Default for Daw {
             arrangement,
             clap_host: ClapHostView::default(),
             plugins,
-            load_plugin_text: PluginDescriptor {
-                name: "Load Plugin".to_owned(),
-                id: String::new(),
-            },
             meter,
             theme: Theme::Dark,
         }
@@ -218,9 +213,14 @@ impl Daw {
             pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
             pick_list(
                 self.plugins.keys().collect::<Box<[_]>>(),
-                Some(&self.load_plugin_text),
+                Option::<&PluginDescriptor>::None,
                 |p| Message::LoadPlugin(p.to_owned())
             )
+            .placeholder("Load Plugin")
+            .style(|t, s| pick_list::Style {
+                placeholder_color: pick_list::default(t, s).text_color,
+                ..pick_list::default(t, s)
+            })
         ]
         .spacing(20)
         .align_y(Center);
