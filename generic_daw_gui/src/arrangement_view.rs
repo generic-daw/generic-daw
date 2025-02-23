@@ -25,7 +25,6 @@ pub use track_clip::TrackClip as TrackClipWrapper;
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    Animate(),
     AudioGraph(Arc<Mutex<(AudioGraph, FileHandle)>>),
     TrackVolumeChanged(usize, f32),
     TrackPanChanged(usize, f32),
@@ -80,7 +79,6 @@ impl ArrangementView {
     #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Animate() => {}
             Message::AudioGraph(message) => {
                 let (audio_graph, path) =
                     Mutex::into_inner(Arc::into_inner(message).unwrap()).unwrap();
@@ -224,18 +222,16 @@ impl ArrangementView {
             self.position,
             self.scale,
             |track, enabled| {
-                let left = self.arrangement.tracks()[track]
-                    .node()
-                    .max_l
-                    .swap(0.0, AcqRel);
-                let right = self.arrangement.tracks()[track]
-                    .node()
-                    .max_r
-                    .swap(0.0, AcqRel);
+                let left = self.arrangement.tracks()[track].node().clone();
+                let right = left.clone();
 
                 container(
                     row![
-                        PeakMeter::new(left, right, enabled, Message::Animate),
+                        PeakMeter::new(
+                            move || left.max_l.swap(0.0, AcqRel),
+                            move || right.max_r.swap(0.0, AcqRel),
+                            enabled
+                        ),
                         column![
                             Knob::new(0.0..=1.0, 0.0, 1.0, move |f| {
                                 Message::TrackVolumeChanged(track, f)

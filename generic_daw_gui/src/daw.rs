@@ -15,7 +15,6 @@ use iced::{
     event::{self, Status},
     keyboard,
     widget::{button, column, horizontal_space, pick_list, row, scrollable, svg, toggler},
-    window,
 };
 use iced_aw::number_input;
 use iced_file_tree::file_tree;
@@ -31,7 +30,6 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    Animate,
     ThemeChanged(Theme),
     ClapHost(ClapHostMessage),
     Arrangement(ArrangementMessage),
@@ -74,7 +72,6 @@ impl Default for Daw {
 impl Daw {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Animate => {}
             Message::ThemeChanged(theme) => self.theme = theme,
             Message::ClapHost(message) => {
                 return self.clap_host.update(message).map(Message::ClapHost);
@@ -238,15 +235,8 @@ impl Daw {
         content.into()
     }
 
-    pub fn subscription(&self) -> Subscription<Message> {
-        let animate = if self.meter.playing.load(Acquire) {
-            window::frames().map(|_| Message::Animate)
-        } else {
-            Subscription::none()
-        };
-
+    pub fn subscription() -> Subscription<Message> {
         Subscription::batch([
-            animate,
             ClapHostView::subscription().map(Message::ClapHost),
             event::listen_with(|e, s, _| match s {
                 Status::Ignored => match e {

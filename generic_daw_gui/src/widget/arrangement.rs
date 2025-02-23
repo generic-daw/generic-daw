@@ -154,6 +154,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         }
 
         let state = tree.state.downcast_mut::<State>();
+        let bounds = layout.bounds();
 
         match event {
             Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
@@ -162,12 +163,21 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             }
             Event::Window(window::Event::RedrawRequested(..)) => {
                 state.deleted = false;
+
+                if self.inner.meter.playing.load(Acquire)
+                    && self.position.x < self.inner.meter.sample.load(Acquire) as f32
+                    && bounds.width.mul_add(self.scale.x.exp2(), self.position.x)
+                        > self.inner.meter.sample.load(Acquire) as f32
+                {
+                    shell.request_redraw(window::RedrawRequest::NextFrame);
+                }
+
                 return Status::Ignored;
             }
             _ => {}
         }
 
-        let Some(mut cursor) = cursor.position_in(layout.bounds()) else {
+        let Some(mut cursor) = cursor.position_in(bounds) else {
             shell.publish((self.unselect_clip)());
             state.action = Action::None;
             return Status::Ignored;

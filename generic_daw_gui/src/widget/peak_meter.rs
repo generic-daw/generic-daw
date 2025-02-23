@@ -12,7 +12,10 @@ use iced::{
     mouse::Cursor,
     window,
 };
-use std::cmp::{max_by, min_by};
+use std::{
+    cmp::{max_by, min_by},
+    fmt::{Debug, Formatter},
+};
 
 mod color_ext;
 
@@ -27,15 +30,21 @@ struct State {
     right_mix: f32,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct PeakMeter<Message> {
-    left: f32,
-    right: f32,
+pub struct PeakMeter {
+    left: Box<dyn Fn() -> f32>,
+    right: Box<dyn Fn() -> f32>,
     enabled: bool,
-    animate: fn() -> Message,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
+impl Debug for PeakMeter {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PeakMeter")
+            .field("enabled", &self.enabled)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
     fn size(&self) -> Size<Length> {
         Size::new(Length::Fixed(WIDTH), Length::Fill)
     }
@@ -67,24 +76,25 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
             let state = tree.state.downcast_mut::<State>();
             let bounds = layout.bounds();
 
-            state.left = if self.left >= state.left {
-                self.left
+            let left = (self.left)();
+            let right = (self.right)();
+
+            state.left = if left >= state.left {
+                left
             } else {
-                state.left.mul_add(DECAY - 1.0, self.left) / DECAY
+                state.left.mul_add(DECAY - 1.0, left) / DECAY
             };
-            self.left = 0.0;
             state.left_mix = if state.left > 1.0 {
                 1.0
             } else {
                 max_by(0.0, state.left_mix - 0.1, f32::total_cmp)
             };
 
-            state.right = if self.right >= state.right {
-                self.right
+            state.right = if right >= state.right {
+                right
             } else {
-                state.right.mul_add(DECAY - 1.0, self.right) / DECAY
+                state.right.mul_add(DECAY - 1.0, right) / DECAY
             };
-            self.right = 0.0;
             state.right_mix = if state.right > 1.0 {
                 1.0
             } else {
@@ -92,7 +102,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
             };
 
             if max_by(state.left, state.right, f32::total_cmp) * bounds.height > 1.0 {
-                shell.publish((self.animate)());
+                shell.request_redraw(window::RedrawRequest::NextFrame);
             } else {
                 state.left = 0.0;
                 state.right = 0.0;
@@ -139,13 +149,16 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<Message> {
     }
 }
 
-impl<Message> PeakMeter<Message> {
-    pub fn new(left: f32, right: f32, enabled: bool, animate: fn() -> Message) -> Self {
+impl PeakMeter {
+    pub fn new(
+        left: impl Fn() -> f32 + 'static,
+        right: impl Fn() -> f32 + 'static,
+        enabled: bool,
+    ) -> Self {
         Self {
-            left,
-            right,
+            left: Box::new(left),
+            right: Box::new(right),
             enabled,
-            animate,
         }
     }
 
@@ -190,11 +203,8 @@ impl<Message> PeakMeter<Message> {
     }
 }
 
-impl<'a, Message> From<PeakMeter<Message>> for Element<'a, Message, Theme, Renderer>
-where
-    Message: 'a,
-{
-    fn from(knob: PeakMeter<Message>) -> Self {
+impl<Message> From<PeakMeter> for Element<'_, Message, Theme, Renderer> {
+    fn from(knob: PeakMeter) -> Self {
         Self::new(knob)
     }
 }

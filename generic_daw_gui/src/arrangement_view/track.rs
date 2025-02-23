@@ -93,7 +93,7 @@ impl Track {
         }
     }
 
-    pub fn node(&self) -> &MixerNode {
+    pub fn node(&self) -> &Arc<MixerNode> {
         match self {
             Self::AudioTrack(inner) => &inner.node,
             Self::MidiTrack(inner) => &inner.node,
