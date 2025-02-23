@@ -43,7 +43,7 @@ impl MidiClip {
         Arc::new(Self {
             pattern,
             global_start: Atomic::default(),
-            global_end: Atomic::new(Position::from_interleaved_samples(len, &meter)),
+            global_end: Atomic::new(len),
             clip_start: Atomic::default(),
             meter,
         })

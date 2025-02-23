@@ -1,4 +1,4 @@
-use crate::{DirtyEvent, MidiNote};
+use crate::{DirtyEvent, MidiNote, Position};
 use atomig::Atomic;
 use std::sync::{Arc, atomic::Ordering::Release};
 
@@ -18,17 +18,12 @@ impl MidiPattern {
     }
 
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub fn len(&self) -> Position {
         self.notes
             .iter()
             .map(|note| note.local_end)
             .max()
-            .unwrap_or(0)
-    }
-
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+            .unwrap_or_default()
     }
 
     pub fn push(&mut self, note: MidiNote) {

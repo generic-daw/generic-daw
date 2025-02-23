@@ -1,3 +1,5 @@
+use crate::Position;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MidiNote {
     pub channel: u8,
@@ -5,7 +7,7 @@ pub struct MidiNote {
     /// between 0.0 and 1.0
     pub velocity: f64,
     /// start time of the note, relative to the beginning of the `MidiPattern` it belongs to
-    pub local_start: usize,
+    pub local_start: Position,
     /// end time of the note, relative to the beginning of the `MidiPattern` it belongs to
-    pub local_end: usize,
+    pub local_end: Position,
 }
