@@ -2,9 +2,6 @@ use crate::{shared::Shared, timer::Timers};
 use clack_extensions::{
     audio_ports::{HostAudioPortsImpl, RescanType},
     gui::{GuiSize, PluginGui},
-    note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
-    params::{HostParamsImplMainThread, ParamClearFlags, ParamRescanFlags},
-    state::HostStateImpl,
     timer::{HostTimerImpl, PluginTimer, TimerId},
 };
 use clack_host::prelude::*;
@@ -51,24 +48,6 @@ impl HostAudioPortsImpl for MainThread<'_> {
     }
 
     fn rescan(&mut self, _flag: RescanType) {}
-}
-
-impl HostNotePortsImpl for MainThread<'_> {
-    fn supported_dialects(&self) -> NoteDialects {
-        NoteDialects::CLAP
-    }
-
-    fn rescan(&mut self, _flags: NotePortRescanFlags) {}
-}
-
-impl HostParamsImplMainThread for MainThread<'_> {
-    fn clear(&mut self, _id: ClapId, _flags: ParamClearFlags) {}
-
-    fn rescan(&mut self, _flags: ParamRescanFlags) {}
-}
-
-impl HostStateImpl for MainThread<'_> {
-    fn mark_dirty(&mut self) {}
 }
 
 impl HostTimerImpl for MainThread<'_> {
