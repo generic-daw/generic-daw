@@ -179,9 +179,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             .iter_mut()
             .zip(&mut tree.children)
             .zip(layout.children())
-            .map(|((child, state), layout)| {
+            .map(|((child, tree), layout)| {
                 child.as_widget_mut().on_event(
-                    state,
+                    tree,
                     event.clone(),
                     layout,
                     cursor,

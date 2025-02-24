@@ -3,7 +3,7 @@ use iced_wgpu::wgpu;
 
 #[derive(Clone, Debug, Default)]
 pub struct Primitive {
-    pub texture: Vec<Sample>,
+    pub texture: Box<[Sample]>,
 }
 
 impl iced::widget::shader::Primitive for Primitive {

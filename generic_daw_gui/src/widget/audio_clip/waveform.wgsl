@@ -1,15 +1,10 @@
-struct Sample {
-    @location(0) x: f32,
-    @location(1) y: f32,
-};
-
 struct VertexOutput {
     @builtin(position) p: vec4<f32>,
     @location(0) uv: vec2<f32>,
 }
 
 @vertex
-fn vs_main(point: Sample) -> VertexOutput {
+fn vs_main(@location(0) point: vec2<f32>) -> VertexOutput {
     var v: VertexOutput;
     v.p = vec4<f32>(point.x, point.y, 0.0, 1.0);
     v.uv = (vec2<f32>(point.x, point.y) + 1.0) / 2.0;
