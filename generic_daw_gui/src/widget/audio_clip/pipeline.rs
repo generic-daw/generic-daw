@@ -87,12 +87,12 @@ impl Pipeline {
         let vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("vertices"),
             contents: bytemuck::cast_slice(&[
-                Sample(0.0, 0.0),
-                Sample(0.0, 1.0),
+                Sample(-1.0, -1.0),
+                Sample(1.0, -1.0),
+                Sample(-1.0, 1.0),
+                Sample(-1.0, 1.0),
+                Sample(1.0, -1.0),
                 Sample(1.0, 1.0),
-                Sample(1.0, 1.0),
-                Sample(0.0, 0.0),
-                Sample(1.0, 0.0),
             ]),
             usage: wgpu::BufferUsages::VERTEX,
         });

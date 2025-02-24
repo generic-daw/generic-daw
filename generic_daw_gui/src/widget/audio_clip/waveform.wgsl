@@ -5,12 +5,14 @@ struct Sample {
 
 struct VertexOutput {
     @builtin(position) p: vec4<f32>,
+    @location(0) uv: vec2<f32>,
 }
 
 @vertex
 fn vs_main(point: Sample) -> VertexOutput {
     var v: VertexOutput;
-    v.p = vec4<f32>(point.x, point.y, 0.0, 0.0);
+    v.p = vec4<f32>(point.x, point.y, 0.0, 1.0);
+    v.uv = (vec2<f32>(point.x, point.y) + 1.0) / 2.0;
     return v;
 }
 
@@ -21,9 +23,9 @@ var s_sampler: sampler;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    var sample = textureSample(s_texture, s_sampler, in.p.x);
+    var sample = textureSample(s_texture, s_sampler, in.uv.x);
 
-    if (sample.r <= in.p.y && sample.g >= in.p.y) {
+    if sample.r <= in.uv.y && sample.g >= in.uv.y {
         return vec4<f32>(1.0, 1.0, 1.0, 1.0);
     } else {
         return vec4<f32>(0.0, 0.0, 0.0, 0.0);
