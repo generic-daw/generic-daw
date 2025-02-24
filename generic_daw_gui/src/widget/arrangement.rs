@@ -219,35 +219,34 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> Interaction {
-        let state = tree.state.downcast_ref::<State>();
-
-        match state.action {
+        match tree.state.downcast_ref::<State>().action {
             Action::ClipTrimmingStart(..) | Action::ClipTrimmingEnd(..) => {
-                return Interaction::ResizingHorizontally;
+                Interaction::ResizingHorizontally
             }
-            Action::DraggingClip(..) => return Interaction::Grabbing,
-            Action::DraggingPlayhead => return Interaction::ResizingHorizontally,
-            _ => {}
+            Action::DraggingClip(..) => Interaction::Grabbing,
+            Action::DraggingPlayhead => Interaction::ResizingHorizontally,
+            Action::DeletingClips => Interaction::NotAllowed,
+            Action::None => {
+                if cursor
+                    .position_in(layout.bounds())
+                    .is_some_and(|cursor| cursor.y < LINE_HEIGHT)
+                {
+                    Interaction::ResizingHorizontally
+                } else {
+                    self.children
+                        .iter()
+                        .zip(&tree.children)
+                        .zip(layout.children())
+                        .map(|((child, tree), layout)| {
+                            child
+                                .as_widget()
+                                .mouse_interaction(tree, layout, cursor, viewport, renderer)
+                        })
+                        .max()
+                        .unwrap_or_default()
+                }
+            }
         }
-
-        if cursor
-            .position_in(layout.bounds())
-            .is_some_and(|cursor| cursor.y < LINE_HEIGHT)
-        {
-            return Interaction::ResizingHorizontally;
-        }
-
-        self.children
-            .iter()
-            .zip(&tree.children)
-            .zip(layout.children())
-            .map(|((child, tree), layout)| {
-                child
-                    .as_widget()
-                    .mouse_interaction(tree, layout, cursor, viewport, renderer)
-            })
-            .max()
-            .unwrap_or_default()
     }
 
     fn draw(
@@ -573,6 +572,8 @@ where
 
                         let (track, clip) = self.get_track_clip(cursor)?;
 
+                        state.deleted = true;
+
                         shell.publish((self.delete_clip)(track, clip));
                         Some(Status::Captured)
                     }
@@ -621,14 +622,15 @@ where
                     Some(Status::Captured)
                 }
                 mouse::Event::ButtonPressed(mouse::Button::Right) => {
-                    if cursor.y < 0.0 {
+                    if state.deleted || cursor.y < 0.0 {
                         return None;
                     }
+
+                    state.action = Action::DeletingClips;
 
                     let (track, clip) = self.get_track_clip(cursor)?;
 
                     state.deleted = true;
-                    state.action = Action::DeletingClips;
 
                     shell.publish((self.delete_clip)(track, clip));
                     Some(Status::Captured)
