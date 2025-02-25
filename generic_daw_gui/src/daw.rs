@@ -1,7 +1,7 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage},
     clap_host_view::{ClapHostView, Message as ClapHostMessage},
-    widget::VSplit,
+    widget::{BpmInput, VSplit},
 };
 use fragile::Fragile;
 use generic_daw_core::{
@@ -16,7 +16,6 @@ use iced::{
     keyboard,
     widget::{button, column, horizontal_space, pick_list, row, scrollable, svg, toggler},
 };
-use iced_aw::number_input;
 use iced_file_tree::file_tree;
 use rfd::{AsyncFileDialog, FileHandle};
 use std::{
@@ -201,7 +200,7 @@ impl Daw {
                 )
                 .width(50),
             ],
-            number_input(&self.meter.bpm.load(Acquire), 30..=600, Message::BpmChanged).width(50),
+            BpmInput::new(self.meter.bpm.load(Acquire), 30..=600, Message::BpmChanged),
             toggler(self.meter.metronome.load(Acquire))
                 .label("Metronome")
                 .on_toggle(|_| Message::ToggleMetronome),

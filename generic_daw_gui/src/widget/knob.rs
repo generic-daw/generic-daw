@@ -113,7 +113,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                             .is_some_and(|pos| pos.distance(bounds.center()) < RADIUS) =>
                 {
                     let pos = cursor.position().unwrap();
-
                     state.dragging = Some(pos.y);
 
                     let new_click = Click::new(pos, mouse::Button::Left, state.last_click);
@@ -136,7 +135,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                     position: Point { y, .. },
                 } => {
                     if let Some(last) = state.dragging {
-                        let diff = (last - y) * (self.range.end() - self.range.start()) / 200.0;
+                        let diff = (last - y) * (self.range.end() - self.range.start()) * 0.005;
 
                         state.cache.clear();
                         state.current =
@@ -171,7 +170,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                     let diff = match delta {
                         ScrollDelta::Lines { y, .. } => y,
                         ScrollDelta::Pixels { y, .. } => y / SWM,
-                    } / 20.0
+                    } * 0.05
                         * (self.range.end() - self.range.start());
 
                     state.cache.clear();

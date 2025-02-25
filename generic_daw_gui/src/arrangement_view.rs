@@ -6,7 +6,7 @@ use generic_daw_core::{
     build_output_stream, clap_host::AudioProcessor,
 };
 use iced::{
-    Border, Element, Task,
+    Border, Element, Task, Theme,
     widget::{column, container, container::Style, mouse_area, radio, row},
 };
 use rfd::FileHandle;
@@ -254,7 +254,7 @@ impl ArrangementView {
                     .spacing(5.0),
                 )
                 .padding(5.0)
-                .style(|theme| Style {
+                .style(|theme: &Theme| Style {
                     background: Some(
                         theme
                             .extended_palette()

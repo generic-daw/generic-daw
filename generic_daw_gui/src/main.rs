@@ -1,6 +1,5 @@
 use daw::Daw;
 use iced::{Result, application};
-use iced_fonts::{BOOTSTRAP_FONT_BYTES, REQUIRED_FONT_BYTES};
 
 pub(crate) mod arrangement_view;
 pub(crate) mod clap_host_view;
@@ -25,8 +24,6 @@ fn main() -> Result {
     }
 
     application("GenericDAW", Daw::update, Daw::view)
-        .font(REQUIRED_FONT_BYTES)
-        .font(BOOTSTRAP_FONT_BYTES)
         .subscription(|_| Daw::subscription())
         .theme(Daw::theme)
         .antialiasing(true)
