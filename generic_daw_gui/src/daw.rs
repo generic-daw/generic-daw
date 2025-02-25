@@ -27,6 +27,10 @@ use std::{
     },
 };
 
+const PLAY: &[u8] = include_bytes!("../../assets/material-symbols--play-arrow-rounded.svg");
+const PAUSE: &[u8] = include_bytes!("../../assets/material-symbols--pause-rounded.svg");
+const STOP: &[u8] = include_bytes!("../../assets/material-symbols--stop-rounded.svg");
+
 #[derive(Clone, Debug)]
 pub enum Message {
     ThemeChanged(Theme),
@@ -153,75 +157,72 @@ impl Daw {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let stop_handle = svg::Handle::from_path("assets/material-symbols--stop-rounded.svg");
-        let play_pause_handle = svg::Handle::from_path(if self.meter.playing.load(Acquire) {
-            "assets/material-symbols--pause-rounded.svg"
-        } else {
-            "assets/material-symbols--play-arrow-rounded.svg"
-        });
-
-        let controls = row![
+        column![
             row![
-                button("Load Samples").on_press(Message::LoadSamplesButton),
-                button("Export").on_press(Message::ExportButton),
-                button("New").on_press(Message::New),
-            ],
-            row![
-                button(
-                    svg(play_pause_handle)
+                row![
+                    button("Load Samples").on_press(Message::LoadSamplesButton),
+                    button("Export").on_press(Message::ExportButton),
+                    button("New").on_press(Message::New),
+                ],
+                row![
+                    button(
+                        svg(svg::Handle::from_memory(
+                            if self.meter.playing.load(Acquire) {
+                                PAUSE
+                            } else {
+                                PLAY
+                            }
+                        ))
                         .style(|theme: &Theme, _| svg::Style {
                             color: Some(theme.extended_palette().secondary.base.text)
                         })
                         .width(Length::Shrink)
                         .height(Length::Fixed(21.0))
-                )
-                .on_press(Message::TogglePlay),
-                button(
-                    svg(stop_handle)
-                        .style(|theme: &Theme, _| svg::Style {
-                            color: Some(theme.extended_palette().secondary.base.text)
-                        })
-                        .width(Length::Shrink)
-                        .height(Length::Fixed(21.0))
-                )
-                .on_press(Message::Stop),
-            ],
-            row![
+                    )
+                    .on_press(Message::TogglePlay),
+                    button(
+                        svg(svg::Handle::from_memory(STOP))
+                            .style(|theme: &Theme, _| svg::Style {
+                                color: Some(theme.extended_palette().secondary.base.text)
+                            })
+                            .width(Length::Shrink)
+                            .height(Length::Fixed(21.0))
+                    )
+                    .on_press(Message::Stop),
+                ],
+                row![
+                    pick_list(
+                        Numerator::VARIANTS,
+                        Some(self.meter.numerator.load(Acquire)),
+                        Message::NumeratorChanged
+                    )
+                    .width(50),
+                    pick_list(
+                        Denominator::VARIANTS,
+                        Some(self.meter.denominator.load(Acquire)),
+                        Message::DenominatorChanged
+                    )
+                    .width(50),
+                ],
+                BpmInput::new(self.meter.bpm.load(Acquire), 30..=600, Message::BpmChanged),
+                toggler(self.meter.metronome.load(Acquire))
+                    .label("Metronome")
+                    .on_toggle(|_| Message::ToggleMetronome),
+                horizontal_space(),
+                pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
                 pick_list(
-                    Numerator::VARIANTS,
-                    Some(self.meter.numerator.load(Acquire)),
-                    Message::NumeratorChanged
+                    self.plugins.keys().collect::<Box<[_]>>(),
+                    None::<&PluginDescriptor>,
+                    |p| Message::LoadPlugin(p.to_owned())
                 )
-                .width(50),
-                pick_list(
-                    Denominator::VARIANTS,
-                    Some(self.meter.denominator.load(Acquire)),
-                    Message::DenominatorChanged
-                )
-                .width(50),
-            ],
-            BpmInput::new(self.meter.bpm.load(Acquire), 30..=600, Message::BpmChanged),
-            toggler(self.meter.metronome.load(Acquire))
-                .label("Metronome")
-                .on_toggle(|_| Message::ToggleMetronome),
-            horizontal_space(),
-            pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
-            pick_list(
-                self.plugins.keys().collect::<Box<[_]>>(),
-                Option::<&PluginDescriptor>::None,
-                |p| Message::LoadPlugin(p.to_owned())
-            )
-            .placeholder("Load Plugin")
-            .style(|t, s| pick_list::Style {
-                placeholder_color: pick_list::default(t, s).text_color,
-                ..pick_list::default(t, s)
-            })
-        ]
-        .spacing(20)
-        .align_y(Center);
-
-        let content = column![
-            controls,
+                .placeholder("Load Plugin")
+                .style(|t: &Theme, s| pick_list::Style {
+                    placeholder_color: t.extended_palette().background.weak.text,
+                    ..pick_list::default(t, s)
+                })
+            ]
+            .spacing(20)
+            .align_y(Center),
             VSplit::new(
                 scrollable(file_tree(home_dir().unwrap()).on_double_click(Message::LoadSample),),
                 self.arrangement.view().map(Message::Arrangement)
@@ -229,9 +230,8 @@ impl Daw {
             .split(0.25)
         ]
         .padding(20)
-        .spacing(20);
-
-        content.into()
+        .spacing(20)
+        .into()
     }
 
     pub fn subscription() -> Subscription<Message> {

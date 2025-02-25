@@ -98,7 +98,7 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<'_, Message> {
                     if state.dragging.is_none() && cursor.is_over(bounds) =>
                 {
                     let pos = cursor.position().unwrap();
-                    state.dragging = Some(pos.y);
+                    state.dragging = Some(pos.y.trunc());
                     return Status::Captured;
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
@@ -109,13 +109,13 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<'_, Message> {
                     position: Point { y, .. },
                 } => {
                     if let Some(last) = state.dragging {
-                        let diff = (y - last) * 0.1;
+                        let diff = ((y - last) * 0.1).trunc();
 
                         state.current = state
                             .current
                             .saturating_add_signed(-diff as i16)
                             .clamp(*self.range.start(), *self.range.end());
-                        state.dragging = Some(diff.fract().mul_add(10.0, last));
+                        state.dragging = Some(diff.mul_add(10.0, last));
 
                         shell.publish((self.f)(state.current));
 
@@ -163,11 +163,11 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<'_, Message> {
             bounds,
             border: Border::default()
                 .width(1.0)
-                .color(theme.extended_palette().secondary.base.text),
+                .color(theme.extended_palette().background.strong.color),
             ..Quad::default()
         };
 
-        renderer.fill_quad(background, theme.extended_palette().secondary.weak.color);
+        renderer.fill_quad(background, theme.extended_palette().background.weak.color);
 
         self.inner.as_widget().draw(
             &tree.children[0],
