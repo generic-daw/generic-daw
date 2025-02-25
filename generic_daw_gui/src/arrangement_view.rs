@@ -10,9 +10,12 @@ use iced::{
     widget::{column, container, container::Style, mouse_area, radio, row},
 };
 use rfd::FileHandle;
-use std::sync::{
-    Arc, Mutex,
-    atomic::Ordering::{AcqRel, Release},
+use std::{
+    path::PathBuf,
+    sync::{
+        Arc, Mutex,
+        atomic::Ordering::{AcqRel, Release},
+    },
 };
 
 mod arrangement;
@@ -28,6 +31,7 @@ pub enum Message {
     AudioGraph(Arc<Mutex<(AudioGraph, FileHandle)>>),
     TrackVolumeChanged(usize, f32),
     TrackPanChanged(usize, f32),
+    LoadSample(PathBuf),
     LoadedSample(Arc<InterleavedAudio>),
     LoadedPlugin(Arc<Mutex<AudioProcessor>>),
     ToggleTrackEnabled(usize),
@@ -95,6 +99,15 @@ impl ArrangementView {
                     .node()
                     .pan
                     .store(pan, Release);
+            }
+            Message::LoadSample(path) => {
+                let meter = self.meter.clone();
+                return Task::future(tokio::task::spawn_blocking(move || {
+                    InterleavedAudio::create(path, &meter)
+                }))
+                .and_then(Task::done)
+                .and_then(Task::done)
+                .map(Message::LoadedSample);
             }
             Message::LoadedSample(audio_file) => {
                 let mut track = AudioTrack::new(self.meter.clone());

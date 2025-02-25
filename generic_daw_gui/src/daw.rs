@@ -5,7 +5,7 @@ use crate::{
 };
 use fragile::Fragile;
 use generic_daw_core::{
-    Denominator, InterleavedAudio, Meter, Numerator, VARIANTS as _,
+    Denominator, Meter, Numerator, VARIANTS as _,
     clap_host::{self, PluginDescriptor, clack_host::bundle::PluginBundle},
 };
 use home::home_dir;
@@ -37,9 +37,8 @@ pub enum Message {
     ClapHost(ClapHostMessage),
     Arrangement(ArrangementMessage),
     LoadPlugin(PluginDescriptor),
-    LoadSamplesButton,
-    LoadSample(PathBuf),
-    ExportButton,
+    SamplesFileDialog,
+    ExportFileDialog,
     TogglePlay,
     Stop,
     New,
@@ -100,29 +99,20 @@ impl Daw {
                     )))),
                 ]);
             }
-            Message::LoadSamplesButton => {
+            Message::SamplesFileDialog => {
                 return Task::future(AsyncFileDialog::new().pick_files()).and_then(|paths| {
                     Task::batch(
                         paths
                             .iter()
                             .map(FileHandle::path)
                             .map(PathBuf::from)
-                            .map(Message::LoadSample)
+                            .map(ArrangementMessage::LoadSample)
+                            .map(Message::Arrangement)
                             .map(Task::done),
                     )
                 });
             }
-            Message::LoadSample(path) => {
-                let meter = self.meter.clone();
-                return Task::future(tokio::task::spawn_blocking(move || {
-                    InterleavedAudio::create(path, &meter)
-                }))
-                .and_then(Task::done)
-                .and_then(Task::done)
-                .map(ArrangementMessage::LoadedSample)
-                .map(Message::Arrangement);
-            }
-            Message::ExportButton => {
+            Message::ExportFileDialog => {
                 return Task::future(
                     AsyncFileDialog::new()
                         .add_filter("Wave File", &["wav"])
@@ -160,8 +150,8 @@ impl Daw {
         column![
             row![
                 row![
-                    button("Load Samples").on_press(Message::LoadSamplesButton),
-                    button("Export").on_press(Message::ExportButton),
+                    button("Load Samples").on_press(Message::SamplesFileDialog),
+                    button("Export").on_press(Message::ExportFileDialog),
                     button("New").on_press(Message::New),
                 ],
                 row![
@@ -224,7 +214,9 @@ impl Daw {
             .spacing(20)
             .align_y(Center),
             VSplit::new(
-                scrollable(file_tree(home_dir().unwrap()).on_double_click(Message::LoadSample),),
+                scrollable(file_tree(home_dir().unwrap()).on_double_click(|path| {
+                    Message::Arrangement(ArrangementMessage::LoadSample(path))
+                }),),
                 self.arrangement.view().map(Message::Arrangement)
             )
             .split(0.25)
@@ -250,7 +242,7 @@ impl Daw {
                             (true, false, false) => match key {
                                 keyboard::Key::Character(c) => match c.as_str() {
                                     "n" => Some(Message::New),
-                                    "e" => Some(Message::ExportButton),
+                                    "e" => Some(Message::ExportFileDialog),
                                     _ => None,
                                 },
                                 _ => None,
