@@ -25,18 +25,13 @@ impl NoteBuffers {
         let ports = plugin.get_extension::<PluginNotePorts>()?;
 
         let mut buffer = NotePortInfoBuffer::new();
-        let mut main_port_index = None;
 
-        for i in 0..ports.count(plugin, is_input).min(u32::from(u16::MAX)) {
-            let Some(info) = ports.get(plugin, i, is_input, &mut buffer) else {
-                continue;
-            };
-
-            if info.supported_dialects.intersects(NoteDialects::CLAP) {
-                main_port_index.get_or_insert(i as u16);
-            }
-        }
-
-        main_port_index
+        (0..ports.count(plugin, is_input).min(u32::from(u16::MAX))).find_map(|i| {
+            ports
+                .get(plugin, i, is_input, &mut buffer)?
+                .supported_dialects
+                .intersects(NoteDialects::CLAP)
+                .then_some(i as u16)
+        })
     }
 }
