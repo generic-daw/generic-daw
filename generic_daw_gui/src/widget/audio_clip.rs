@@ -329,6 +329,7 @@ impl AudioClip {
 
         let first_index = ((diff + clip_start) / lod_sample_size) as usize;
         let last_index = first_index + (size.width / lod_samples_per_pixel) as usize;
+        let last_index = last_index.min(self.inner.audio.lods[lod].len() - 1);
 
         // vertices of the waveform
         let vertices = self.inner.audio.lods[lod][first_index..last_index]
