@@ -8,10 +8,8 @@ pub struct AudioPortsConfig {
 }
 
 impl AudioPortsConfig {
-    pub fn from_ports(plugin: &mut PluginMainThreadHandle<'_>, is_input: bool) -> Self {
-        let Some(ports) = plugin.get_extension::<PluginAudioPorts>() else {
-            return Self::default();
-        };
+    pub fn from_ports(plugin: &mut PluginMainThreadHandle<'_>, is_input: bool) -> Option<Self> {
+        let ports = plugin.get_extension::<PluginAudioPorts>()?;
 
         let mut buffer = AudioPortInfoBuffer::new();
         let mut main_port_index = None;
@@ -37,10 +35,10 @@ impl AudioPortsConfig {
             .or_else(|| port_channel_counts.iter().position(|&p| p == 1))
             .unwrap_or_default();
 
-        Self {
+        Some(Self {
             port_channel_counts,
             main_port_index,
-        }
+        })
     }
 }
 

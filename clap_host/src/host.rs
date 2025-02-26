@@ -1,5 +1,8 @@
 use crate::{MainThread, Shared};
-use clack_extensions::{audio_ports::HostAudioPorts, gui::HostGui, log::HostLog, timer::HostTimer};
+use clack_extensions::{
+    audio_ports::HostAudioPorts, gui::HostGui, log::HostLog, note_ports::HostNotePorts,
+    timer::HostTimer,
+};
 use clack_host::prelude::*;
 
 pub struct Host;
@@ -13,6 +16,7 @@ impl HostHandlers for Host {
         builder.register::<HostAudioPorts>();
         builder.register::<HostGui>();
         builder.register::<HostLog>();
+        builder.register::<HostNotePorts>();
         builder.register::<HostTimer>();
     }
 }

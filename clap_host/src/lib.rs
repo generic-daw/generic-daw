@@ -1,6 +1,7 @@
 #![expect(missing_debug_implementations)]
 #![expect(missing_copy_implementations)]
 
+use audio_buffers::AudioBuffers;
 use audio_ports_config::AudioPortsConfig;
 use clack_host::prelude::*;
 use generic_daw_utils::unique_id;
@@ -11,12 +12,13 @@ use shared::Shared;
 use std::{collections::BTreeMap, ffi::CString, path::PathBuf, result::Result};
 use walkdir::WalkDir;
 
+mod audio_buffers;
 mod audio_ports_config;
 mod audio_processor;
-mod buffers;
 mod gui;
 mod host;
 mod main_thread;
+mod note_buffers;
 mod plugin_descriptor;
 mod shared;
 mod timer;
@@ -26,6 +28,7 @@ pub use audio_processor::AudioProcessor;
 pub use clack_host;
 pub use gui::GuiExt;
 pub use main_thread::GuiMessage;
+pub use note_buffers::NoteBuffers;
 pub use plugin_descriptor::PluginDescriptor;
 pub use plugin_id::Id as PluginId;
 
@@ -126,8 +129,10 @@ pub fn init(
     )
     .unwrap();
 
-    let input_config = AudioPortsConfig::from_ports(&mut instance.plugin_handle(), true);
-    let output_config = AudioPortsConfig::from_ports(&mut instance.plugin_handle(), false);
+    let input_config =
+        AudioPortsConfig::from_ports(&mut instance.plugin_handle(), true).unwrap_or_default();
+    let output_config =
+        AudioPortsConfig::from_ports(&mut instance.plugin_handle(), false).unwrap_or_default();
 
     let channels =
         output_config.port_channel_counts[output_config.main_port_index].clamp(1, 2) as u32;
@@ -138,15 +143,17 @@ pub fn init(
         max_frames_count,
     };
 
+    let audio_buffers = AudioBuffers::new(config, input_config, output_config);
+    let note_buffers = NoteBuffers::new(&mut instance.plugin_handle());
+
     let plugin_audio_processor = AudioProcessor::new(
         instance
             .activate(|_, _| {}, config)
             .unwrap()
             .start_processing()
             .unwrap(),
-        config,
-        input_config,
-        output_config,
+        audio_buffers,
+        note_buffers,
     );
 
     let gui = GuiExt::new(instance.access_handler(|h| h.gui).unwrap(), instance);

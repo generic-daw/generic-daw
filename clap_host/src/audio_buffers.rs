@@ -2,7 +2,7 @@ use crate::{AudioBuffer, audio_ports_config::AudioPortsConfig};
 use clack_host::{prelude::*, process::PluginAudioConfiguration};
 use std::fmt::{Debug, Formatter};
 
-pub struct Buffers {
+pub struct AudioBuffers {
     config: PluginAudioConfiguration,
 
     input_config: AudioPortsConfig,
@@ -15,7 +15,7 @@ pub struct Buffers {
     output_channels: AudioBuffer,
 }
 
-impl Debug for Buffers {
+impl Debug for AudioBuffers {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Buffers")
             .field("config", &self.config)
@@ -25,7 +25,7 @@ impl Debug for Buffers {
     }
 }
 
-impl Buffers {
+impl AudioBuffers {
     pub fn new(
         config: PluginAudioConfiguration,
         input_config: AudioPortsConfig,

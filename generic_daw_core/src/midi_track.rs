@@ -23,7 +23,7 @@ impl AudioGraphNodeImpl for MidiTrack {
 
         let steady_time = lock.steady_time();
         for clip in &self.clips {
-            clip.gather_events(&mut lock.input_events, buf.len(), steady_time);
+            clip.gather_events(&mut lock.note_buffers, buf.len(), steady_time);
         }
 
         lock.process(buf);

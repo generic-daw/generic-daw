@@ -1,10 +1,13 @@
 use crate::{Meter, Position, clip_position::ClipPosition};
-use clap_host::clack_host::{
-    events::{
-        Match,
-        event_types::{NoteOffEvent, NoteOnEvent},
+use clap_host::{
+    NoteBuffers,
+    clack_host::{
+        events::{
+            Match,
+            event_types::{NoteOffEvent, NoteOnEvent},
+        },
+        prelude::*,
     },
-    prelude::*,
 };
 use std::sync::{Arc, atomic::Ordering::Acquire};
 
@@ -35,7 +38,7 @@ impl MidiClip {
         })
     }
 
-    pub fn gather_events(&self, event_buffer: &mut EventBuffer, len: usize, steady_time: u64) {
+    pub fn gather_events(&self, note_buffers: &mut NoteBuffers, len: usize, steady_time: u64) {
         let global_start = self.position.get_global_start();
         let global_end = self.position.get_global_end();
         let clip_start = self.position.get_clip_start();
@@ -55,18 +58,28 @@ impl MidiClip {
 
                 let start = note.start.in_interleaved_samples(&self.meter);
                 if start >= start_sample && start < end_sample {
-                    event_buffer.push(&NoteOnEvent::new(
+                    note_buffers.input_events.push(&NoteOnEvent::new(
                         (steady_time + (start - start_sample) as u64) as u32,
-                        Pckn::new(0u16, note.channel, note.note, Match::All),
+                        Pckn::new(
+                            note_buffers.main_input_port,
+                            note.channel,
+                            note.note,
+                            Match::All,
+                        ),
                         note.velocity,
                     ));
                 }
 
                 let end = note.end.in_interleaved_samples(&self.meter);
                 if end >= start_sample && end < end_sample {
-                    event_buffer.push(&NoteOffEvent::new(
+                    note_buffers.input_events.push(&NoteOffEvent::new(
                         (steady_time + (end - start_sample) as u64) as u32,
-                        Pckn::new(0u16, note.channel, note.note, Match::All),
+                        Pckn::new(
+                            note_buffers.main_input_port,
+                            note.channel,
+                            note.note,
+                            Match::All,
+                        ),
                         note.velocity,
                     ));
                 }
