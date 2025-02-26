@@ -1,9 +1,5 @@
-use crate::{Meter, Position};
-use atomig::Atomic;
-use std::sync::{
-    Arc,
-    atomic::Ordering::{AcqRel, Acquire, Release},
-};
+use crate::{Meter, Position, clip_position::ClipPosition};
+use std::sync::Arc;
 
 mod error;
 mod interleaved_audio;
@@ -11,29 +7,13 @@ mod interleaved_audio;
 pub use error::{InterleavedAudioError, RubatoError};
 pub use interleaved_audio::{InterleavedAudio, resample};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AudioClip {
     pub audio: Arc<InterleavedAudio>,
-    /// the start of the clip relative to the start of the arrangement
-    global_start: Atomic<Position>,
-    /// the end of the clip relative to the start of the arrangement
-    global_end: Atomic<Position>,
-    /// the start of the clip relative to the start of the sample
-    clip_start: Atomic<Position>,
+    /// the position of the clip relative to the start of the arrangement
+    pub position: ClipPosition,
     /// information relating to the playback of the arrangement
     pub meter: Arc<Meter>,
-}
-
-impl Clone for AudioClip {
-    fn clone(&self) -> Self {
-        Self {
-            audio: self.audio.clone(),
-            global_start: Atomic::new(self.global_start.load(Acquire)),
-            global_end: Atomic::new(self.global_end.load(Acquire)),
-            clip_start: Atomic::new(self.clip_start.load(Acquire)),
-            meter: self.meter.clone(),
-        }
-    }
 }
 
 impl AudioClip {
@@ -43,17 +23,19 @@ impl AudioClip {
 
         Arc::new(Self {
             audio,
-            global_start: Atomic::default(),
-            global_end: Atomic::new(Position::from_interleaved_samples(samples, &meter)),
-            clip_start: Atomic::default(),
+            position: ClipPosition::new(
+                Position::ZERO,
+                Position::from_interleaved_samples(samples, &meter),
+                Position::ZERO,
+            ),
             meter,
         })
     }
 
     pub fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
         let clip_start_sample = self
-            .global_start
-            .load(Acquire)
+            .position
+            .get_global_start()
             .in_interleaved_samples(&self.meter);
 
         let diff = buf_start_sample.abs_diff(clip_start_sample);
@@ -61,8 +43,8 @@ impl AudioClip {
         if buf_start_sample > clip_start_sample {
             let start_index = diff
                 + self
-                    .clip_start
-                    .load(Acquire)
+                    .position
+                    .get_clip_start()
                     .in_interleaved_samples(&self.meter);
 
             if start_index >= self.audio.samples.len() {
@@ -88,50 +70,5 @@ impl AudioClip {
                     *buf += sample;
                 });
         }
-    }
-
-    #[must_use]
-    pub fn get_global_start(&self) -> Position {
-        self.global_start.load(Acquire)
-    }
-
-    #[must_use]
-    pub fn get_global_end(&self) -> Position {
-        self.global_end.load(Acquire)
-    }
-
-    #[must_use]
-    pub fn get_clip_start(&self) -> Position {
-        self.clip_start.load(Acquire)
-    }
-
-    pub fn trim_start_to(&self, global_start: Position) {
-        let global_start = global_start.clamp(
-            self.get_global_start()
-                .saturating_sub(self.get_clip_start()),
-            self.get_global_end() - Position::SUB_QUARTER_NOTE,
-        );
-        let diff = self.get_global_start().abs_diff(global_start);
-        if self.get_global_start() < global_start {
-            self.clip_start.fetch_add(diff, AcqRel);
-        } else {
-            self.clip_start.fetch_sub(diff, AcqRel);
-        }
-        self.global_start.store(global_start, Release);
-    }
-
-    pub fn trim_end_to(&self, global_end: Position) {
-        let global_end = global_end.max(self.get_global_start() + Position::SUB_QUARTER_NOTE);
-        self.global_end.store(global_end, Release);
-    }
-
-    pub fn move_to(&self, global_start: Position) {
-        let diff = self.get_global_start().abs_diff(global_start);
-        if self.get_global_start() < global_start {
-            self.global_end.fetch_add(diff, AcqRel);
-        } else {
-            self.global_end.fetch_sub(diff, AcqRel);
-        }
-        self.global_start.store(global_start, Release);
     }
 }

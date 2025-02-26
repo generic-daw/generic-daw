@@ -3,10 +3,6 @@ use audio_graph::{AudioGraphNodeImpl, MixerNode};
 use clap_host::{AudioProcessor, clack_host::prelude::*};
 use std::sync::{Arc, Mutex};
 
-mod dirty_event;
-
-pub use dirty_event::DirtyEvent;
-
 #[derive(Clone, Debug)]
 pub struct MidiTrack {
     host_audio_processor: Arc<Mutex<AudioProcessor>>,
@@ -55,7 +51,7 @@ impl MidiTrack {
     pub fn len(&self) -> Position {
         self.clips
             .iter()
-            .map(|clip| clip.get_global_end())
+            .map(|clip| clip.position.get_global_end())
             .max()
             .unwrap_or_default()
     }

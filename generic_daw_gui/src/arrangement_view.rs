@@ -211,7 +211,7 @@ impl ArrangementView {
                             .max()
                             .unwrap_or_default()
                             .in_interleaved_samples_f(&self.meter),
-                        (self.arrangement.tracks().len().saturating_sub(1)) as f32,
+                        self.arrangement.tracks().len().saturating_sub(1) as f32,
                     );
                 }
             }

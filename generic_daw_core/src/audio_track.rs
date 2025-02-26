@@ -44,7 +44,7 @@ impl AudioTrack {
     pub fn len(&self) -> Position {
         self.clips
             .iter()
-            .map(|clip| clip.get_global_end())
+            .map(|clip| clip.position.get_global_end())
             .max()
             .unwrap_or_default()
     }

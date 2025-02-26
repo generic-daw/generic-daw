@@ -19,6 +19,7 @@ impl Debug for Position {
 }
 
 impl Position {
+    pub const ZERO: Self = Self::new(0, 0);
     pub const QUARTER_NOTE: Self = Self::new(1, 0);
     pub const SUB_QUARTER_NOTE: Self = Self::new(0, 1);
 

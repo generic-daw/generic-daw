@@ -94,7 +94,7 @@ impl ClapHostView {
         ])
     }
 
-    pub fn main_thread_message(&mut self, id: PluginId, msg: GuiMessage) -> Task<Message> {
+    fn main_thread_message(&mut self, id: PluginId, msg: GuiMessage) -> Task<Message> {
         match msg {
             GuiMessage::RequestCallback => self
                 .plugins

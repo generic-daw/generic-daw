@@ -21,7 +21,7 @@ use std::{
     ops::RangeInclusive,
 };
 
-pub const DIAMETER: f32 = LINE_HEIGHT * 2.0;
+const DIAMETER: f32 = LINE_HEIGHT * 2.0;
 const RADIUS: f32 = LINE_HEIGHT;
 
 struct State {

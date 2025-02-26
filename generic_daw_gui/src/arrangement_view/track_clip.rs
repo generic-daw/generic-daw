@@ -10,43 +10,43 @@ pub enum TrackClip {
 impl TrackClip {
     pub fn get_global_start(&self) -> Position {
         match self {
-            Self::AudioClip(inner) => inner.get_global_start(),
-            Self::MidiClip(inner) => inner.get_global_start(),
+            Self::AudioClip(inner) => inner.position.get_global_start(),
+            Self::MidiClip(inner) => inner.position.get_global_start(),
         }
     }
 
     pub fn get_global_end(&self) -> Position {
         match self {
-            Self::AudioClip(inner) => inner.get_global_end(),
-            Self::MidiClip(inner) => inner.get_global_end(),
+            Self::AudioClip(inner) => inner.position.get_global_end(),
+            Self::MidiClip(inner) => inner.position.get_global_end(),
         }
     }
 
     pub fn get_clip_start(&self) -> Position {
         match self {
-            Self::AudioClip(inner) => inner.get_clip_start(),
-            Self::MidiClip(inner) => inner.get_clip_start(),
+            Self::AudioClip(inner) => inner.position.get_clip_start(),
+            Self::MidiClip(inner) => inner.position.get_clip_start(),
         }
     }
 
     pub fn trim_start_to(&self, global_start: Position) {
         match self {
-            Self::AudioClip(inner) => inner.trim_start_to(global_start),
-            Self::MidiClip(inner) => inner.trim_start_to(global_start),
+            Self::AudioClip(inner) => inner.position.trim_start_to(global_start),
+            Self::MidiClip(inner) => inner.position.trim_start_to(global_start),
         }
     }
 
     pub fn trim_end_to(&self, global_start: Position) {
         match self {
-            Self::AudioClip(inner) => inner.trim_end_to(global_start),
-            Self::MidiClip(inner) => inner.trim_end_to(global_start),
+            Self::AudioClip(inner) => inner.position.trim_end_to(global_start),
+            Self::MidiClip(inner) => inner.position.trim_end_to(global_start),
         }
     }
 
     pub fn move_to(&self, global_start: Position) {
         match self {
-            Self::AudioClip(inner) => inner.move_to(global_start),
-            Self::MidiClip(inner) => inner.move_to(global_start),
+            Self::AudioClip(inner) => inner.position.move_to(global_start),
+            Self::MidiClip(inner) => inner.position.move_to(global_start),
         }
     }
 }

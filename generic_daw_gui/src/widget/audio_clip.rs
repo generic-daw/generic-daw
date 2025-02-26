@@ -78,8 +78,16 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         let meter = &self.inner.meter;
 
         Node::new(Size::new(
-            (self.inner.get_global_end().in_interleaved_samples(meter)
-                - self.inner.get_global_start().in_interleaved_samples(meter)) as f32
+            (self
+                .inner
+                .position
+                .get_global_end()
+                .in_interleaved_samples(meter)
+                - self
+                    .inner
+                    .position
+                    .get_global_start()
+                    .in_interleaved_samples(meter)) as f32
                 / self.scale.x.exp2(),
             limits.max().height,
         ))
@@ -307,6 +315,7 @@ impl AudioClip {
             position.x
                 - self
                     .inner
+                    .position
                     .get_global_start()
                     .in_interleaved_samples_f(&self.inner.meter),
             f32::total_cmp,
@@ -314,6 +323,7 @@ impl AudioClip {
 
         let clip_start = self
             .inner
+            .position
             .get_clip_start()
             .in_interleaved_samples_f(&self.inner.meter);
 

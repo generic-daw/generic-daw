@@ -10,6 +10,7 @@ use std::sync::{
 
 mod audio_clip;
 mod audio_track;
+mod clip_position;
 mod daw_ctx;
 mod master;
 mod meter;
@@ -26,7 +27,6 @@ pub use daw_ctx::DawCtxMessage;
 pub use master::Master;
 pub use meter::{Denominator, Meter, Numerator};
 pub use midi_clip::{MidiClip, MidiNote, MidiPattern};
-pub(crate) use midi_track::DirtyEvent;
 pub use midi_track::MidiTrack;
 pub use oneshot::Receiver;
 pub use position::Position;
