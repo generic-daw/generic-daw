@@ -8,7 +8,7 @@ pub struct ClipPosition {
     global_start: Atomic<Position>,
     /// the end of the clip relative to the start of the arrangement
     global_end: Atomic<Position>,
-    /// the start of the clip relative to the start of the sample
+    /// the start of the clip relative to the start of the underlying type
     clip_start: Atomic<Position>,
 }
 

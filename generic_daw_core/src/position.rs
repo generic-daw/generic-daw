@@ -110,12 +110,12 @@ impl Position {
     }
 
     #[must_use]
-    pub fn saturating_sub(self, other: Self) -> Self {
+    pub const fn saturating_sub(self, other: Self) -> Self {
         Self(self.0.saturating_sub(other.0))
     }
 
     #[must_use]
-    pub fn abs_diff(self, other: Self) -> Self {
+    pub const fn abs_diff(self, other: Self) -> Self {
         Self(self.0.abs_diff(other.0))
     }
 }

@@ -16,10 +16,19 @@ pub struct MidiTrack {
 
 impl AudioGraphNodeImpl for MidiTrack {
     fn fill_buf(&self, buf: &mut [f32]) {
-        self.host_audio_processor
+        let mut lock = self
+            .host_audio_processor
             .try_lock()
-            .expect("this is only locked from the audio thread")
-            .process(buf);
+            .expect("this is only locked from the audio thread");
+
+        let steady_time = lock.steady_time();
+        for clip in &self.clips {
+            clip.gather_events(&mut lock.input_events, buf.len(), steady_time);
+        }
+
+        lock.process(buf);
+
+        drop(lock);
 
         self.node.fill_buf(buf);
     }

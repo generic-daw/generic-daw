@@ -10,7 +10,7 @@ impl MidiPattern {
     pub fn len(&self) -> Position {
         self.notes
             .iter()
-            .map(|note| note.local_end)
+            .map(|note| note.end)
             .max()
             .unwrap_or_default()
     }
