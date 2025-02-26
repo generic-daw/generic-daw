@@ -9,9 +9,8 @@ use iced::{
     Border, Element, Task, Theme,
     widget::{column, container, container::Style, mouse_area, radio, row},
 };
-use rfd::FileHandle;
 use std::{
-    path::PathBuf,
+    path::Path,
     sync::{
         Arc, Mutex,
         atomic::Ordering::{AcqRel, Release},
@@ -28,10 +27,10 @@ pub use track_clip::TrackClip as TrackClipWrapper;
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    AudioGraph(Arc<Mutex<(AudioGraph, FileHandle)>>),
+    AudioGraph(Arc<Mutex<(AudioGraph, Box<Path>)>>),
     TrackVolumeChanged(usize, f32),
     TrackPanChanged(usize, f32),
-    LoadSample(PathBuf),
+    LoadSample(Box<Path>),
     LoadedSample(Arc<InterleavedAudio>),
     LoadedPlugin(Arc<Mutex<AudioProcessor>>),
     ToggleTrackEnabled(usize),
@@ -45,7 +44,7 @@ pub enum Message {
     TrimClipEnd(Position),
     DeleteClip(usize, usize),
     PositionScaleDelta(ArrangementPosition, ArrangementScale),
-    Export(FileHandle),
+    Export(Box<Path>),
 }
 
 pub struct ArrangementView {
@@ -86,7 +85,7 @@ impl ArrangementView {
             Message::AudioGraph(message) => {
                 let (audio_graph, path) =
                     Mutex::into_inner(Arc::into_inner(message).unwrap()).unwrap();
-                self.arrangement.export(audio_graph, path.path());
+                self.arrangement.export(audio_graph, &path);
             }
             Message::TrackVolumeChanged(track, volume) => {
                 self.arrangement.tracks()[track]
@@ -103,7 +102,7 @@ impl ArrangementView {
             Message::LoadSample(path) => {
                 let meter = self.meter.clone();
                 return Task::future(tokio::task::spawn_blocking(move || {
-                    InterleavedAudio::create(path, &meter)
+                    InterleavedAudio::create(&path, &meter)
                 }))
                 .and_then(Task::done)
                 .and_then(Task::done)

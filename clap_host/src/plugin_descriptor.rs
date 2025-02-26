@@ -3,8 +3,8 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct PluginDescriptor {
-    pub name: String,
-    pub id: String,
+    pub name: Box<str>,
+    pub id: Box<str>,
 }
 
 impl Display for PluginDescriptor {
@@ -18,8 +18,8 @@ impl TryFrom<factory::PluginDescriptor<'_>> for PluginDescriptor {
 
     fn try_from(value: factory::PluginDescriptor<'_>) -> Result<Self, ()> {
         Ok(Self {
-            name: value.name().ok_or(())?.to_str().map_err(|_| ())?.to_owned(),
-            id: value.id().ok_or(())?.to_str().map_err(|_| ())?.to_owned(),
+            name: value.name().ok_or(())?.to_str().map_err(|_| ())?.into(),
+            id: value.id().ok_or(())?.to_str().map_err(|_| ())?.into(),
         })
     }
 }

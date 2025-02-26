@@ -20,7 +20,6 @@ use iced_file_tree::file_tree;
 use rfd::{AsyncFileDialog, FileHandle};
 use std::{
     collections::BTreeMap,
-    path::PathBuf,
     sync::{
         Arc, Mutex,
         atomic::Ordering::{AcqRel, Acquire, Release},
@@ -105,7 +104,7 @@ impl Daw {
                         paths
                             .iter()
                             .map(FileHandle::path)
-                            .map(PathBuf::from)
+                            .map(Box::from)
                             .map(ArrangementMessage::LoadSample)
                             .map(Message::Arrangement)
                             .map(Task::done),
@@ -119,6 +118,7 @@ impl Daw {
                         .save_file(),
                 )
                 .and_then(Task::done)
+                .map(|p| Box::from(p.path()))
                 .map(ArrangementMessage::Export)
                 .map(Message::Arrangement);
             }
@@ -215,7 +215,7 @@ impl Daw {
             .align_y(Center),
             VSplit::new(
                 scrollable(file_tree(home_dir().unwrap()).on_double_click(|path| {
-                    Message::Arrangement(ArrangementMessage::LoadSample(path))
+                    Message::Arrangement(ArrangementMessage::LoadSample(path.into()))
                 }),),
                 self.arrangement.view().map(Message::Arrangement)
             )

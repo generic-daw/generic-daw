@@ -8,7 +8,7 @@ use std::{
     cmp::{max_by, min_by},
     fmt::{Debug, Formatter},
     fs::File,
-    path::PathBuf,
+    path::Path,
     sync::Arc,
 };
 use symphonia::core::{
@@ -26,7 +26,7 @@ pub struct InterleavedAudio {
     /// these are used to draw the sample in various quality levels
     pub lods: [Box<[(f32, f32)]>; 10],
     /// the file name associated with the sample
-    pub path: PathBuf,
+    pub path: Box<Path>,
 }
 
 impl Debug for InterleavedAudio {
@@ -38,8 +38,8 @@ impl Debug for InterleavedAudio {
 }
 
 impl InterleavedAudio {
-    pub fn create(path: PathBuf, meter: &Meter) -> Result<Arc<Self>, InterleavedAudioError> {
-        let samples = Self::read_audio_file(&path, meter)?;
+    pub fn create(path: &Path, meter: &Meter) -> Result<Arc<Self>, InterleavedAudioError> {
+        let samples = Self::read_audio_file(path, meter)?;
         let length = samples.len();
 
         let mut audio = Self {
@@ -47,7 +47,7 @@ impl InterleavedAudio {
             lods: array::from_fn(|i| {
                 vec![(0.0, 0.0); length.div_ceil(1 << (i + 3))].into_boxed_slice()
             }),
-            path,
+            path: Box::from(path),
         };
 
         audio.create_lod();
@@ -65,7 +65,7 @@ impl InterleavedAudio {
         self.len() == 0
     }
 
-    fn read_audio_file(path: &PathBuf, meter: &Meter) -> Result<Box<[f32]>, InterleavedAudioError> {
+    fn read_audio_file(path: &Path, meter: &Meter) -> Result<Box<[f32]>, InterleavedAudioError> {
         let mut format = symphonia::default::get_probe()
             .format(
                 &Hint::default(),

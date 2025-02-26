@@ -121,7 +121,7 @@ pub fn init(
         |()| Shared::new(gui_sender),
         |shared| MainThread::new(shared),
         bundle,
-        &CString::new(descriptor.id.clone()).unwrap(),
+        &CString::new(&*descriptor.id).unwrap(),
         &HostInfo::new("", "", "", "").unwrap(),
     )
     .unwrap();

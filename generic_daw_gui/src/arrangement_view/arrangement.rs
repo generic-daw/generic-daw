@@ -3,7 +3,6 @@ use generic_daw_core::{
     DawCtxMessage, Meter, Producer, Receiver, Stream, StreamTrait as _, audio_graph::AudioGraph,
 };
 use hound::WavWriter;
-use rfd::FileHandle;
 use std::{
     fmt::{Debug, Formatter},
     path::Path,
@@ -15,7 +14,7 @@ use std::{
 
 pub struct Arrangement {
     tracks: Vec<Track>,
-    producer: Producer<DawCtxMessage<FileHandle>>,
+    producer: Producer<DawCtxMessage<Box<Path>>>,
     stream: Stream,
     pub meter: Arc<Meter>,
 }
@@ -32,7 +31,7 @@ impl Debug for Arrangement {
 
 impl Arrangement {
     pub fn new(
-        producer: Producer<DawCtxMessage<FileHandle>>,
+        producer: Producer<DawCtxMessage<Box<Path>>>,
         stream: Stream,
         meter: Arc<Meter>,
     ) -> Self {
@@ -100,7 +99,7 @@ impl Arrangement {
         }
     }
 
-    pub fn request_export(&mut self, path: FileHandle) -> Receiver<(AudioGraph, FileHandle)> {
+    pub fn request_export(&mut self, path: Box<Path>) -> Receiver<(AudioGraph, Box<Path>)> {
         let (sender, reciever) = oneshot::channel();
 
         self.producer
