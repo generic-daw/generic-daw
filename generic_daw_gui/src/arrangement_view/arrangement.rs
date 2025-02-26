@@ -10,7 +10,7 @@ use std::{
     path::Path,
     sync::{
         Arc,
-        atomic::Ordering::{AcqRel, Release},
+        atomic::Ordering::{AcqRel, Acquire, Release},
     },
 };
 
@@ -118,6 +118,7 @@ impl Arrangement {
 
         let playing = self.meter.playing.swap(true, AcqRel);
         let metronome = self.meter.metronome.swap(false, AcqRel);
+        let sample = self.meter.sample.load(Acquire);
 
         audio_graph.reset();
 
@@ -138,7 +139,9 @@ impl Arrangement {
         let len = len.in_interleaved_samples(&self.meter);
 
         for i in (0..len).step_by(CHUNK_SIZE) {
-            audio_graph.fill_buf(i, &mut buf);
+            self.meter.sample.store(i, Release);
+
+            audio_graph.fill_buf(&mut buf);
 
             for s in buf {
                 writer.write_sample(s).unwrap();
@@ -149,6 +152,7 @@ impl Arrangement {
 
         self.meter.playing.store(playing, Release);
         self.meter.metronome.store(metronome, Release);
+        self.meter.sample.store(sample, Release);
 
         self.producer
             .push(DawCtxMessage::AudioGraph(audio_graph))

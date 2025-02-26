@@ -34,7 +34,7 @@ impl AudioGraph {
         self.list[0]
     }
 
-    pub fn fill_buf(&mut self, buf_start_sample: usize, buf: &mut [f32]) {
+    pub fn fill_buf(&mut self, buf: &mut [f32]) {
         if self.dirty {
             self.dirty = false;
 
@@ -64,7 +64,7 @@ impl AudioGraph {
                     });
             }
 
-            self.graph[*node].node.fill_buf(buf_start_sample, buf);
+            self.graph[*node].node.fill_buf(buf);
 
             let cbuf = &mut self.graph.get_mut(*node).unwrap().cache;
             cbuf.clear();

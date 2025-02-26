@@ -50,13 +50,11 @@ pub fn build_output_stream<T: Send + 'static>(
                 buffer_size: BufferSize::Fixed(buffer_size),
             },
             move |data, _| {
-                let sample = if ctx.meter.playing.load(Acquire) {
-                    ctx.meter.sample.fetch_add(data.len(), AcqRel)
-                } else {
-                    ctx.meter.sample.load(Acquire)
-                };
+                if ctx.meter.playing.load(Acquire) {
+                    ctx.meter.sample.fetch_add(data.len(), AcqRel);
+                }
 
-                ctx.fill_buf(sample, data);
+                ctx.fill_buf(data);
 
                 for s in data {
                     *s = s.clamp(-1.0, 1.0);

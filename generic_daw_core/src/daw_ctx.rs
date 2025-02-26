@@ -29,7 +29,7 @@ impl<T> DawCtx<T> {
         (audio_ctx, ui_producer)
     }
 
-    pub fn fill_buf(&mut self, buf_start_sample: usize, buf: &mut [f32]) {
+    pub fn fill_buf(&mut self, buf: &mut [f32]) {
         while let Ok(msg) = self.consumer.pop() {
             match msg {
                 DawCtxMessage::Insert(node) => self.audio_graph.insert(node),
@@ -51,6 +51,6 @@ impl<T> DawCtx<T> {
             }
         }
 
-        self.audio_graph.fill_buf(buf_start_sample, buf);
+        self.audio_graph.fill_buf(buf);
     }
 }

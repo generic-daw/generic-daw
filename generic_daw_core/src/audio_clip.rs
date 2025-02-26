@@ -1,5 +1,5 @@
 use crate::{Meter, Position, clip_position::ClipPosition};
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering::Acquire};
 
 mod error;
 mod interleaved_audio;
@@ -32,15 +32,17 @@ impl AudioClip {
         })
     }
 
-    pub fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
+    pub fn fill_buf(&self, buf: &mut [f32]) {
+        let sample = self.meter.sample.load(Acquire);
+
         let clip_start_sample = self
             .position
             .get_global_start()
             .in_interleaved_samples(&self.meter);
 
-        let diff = buf_start_sample.abs_diff(clip_start_sample);
+        let diff = sample.abs_diff(clip_start_sample);
 
-        if buf_start_sample > clip_start_sample {
+        if sample > clip_start_sample {
             let start_index = diff
                 + self
                     .position

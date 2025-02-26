@@ -21,7 +21,7 @@ impl LiveSample {
         }
     }
 
-    pub fn fill_buf(&self, _: usize, buf: &mut [f32]) {
+    pub fn fill_buf(&self, buf: &mut [f32]) {
         let idx = self.idx.fetch_add(buf.len() as isize, AcqRel);
 
         let uidx = idx.unsigned_abs();

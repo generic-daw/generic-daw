@@ -13,16 +13,14 @@ pub struct AudioTrack {
 }
 
 impl AudioGraphNodeImpl for AudioTrack {
-    fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
+    fn fill_buf(&self, buf: &mut [f32]) {
         if !self.meter.playing.load(Acquire) {
             return;
         }
 
-        self.clips
-            .iter()
-            .for_each(|clip| clip.fill_buf(buf_start_sample, buf));
+        self.clips.iter().for_each(|clip| clip.fill_buf(buf));
 
-        self.node.fill_buf(buf_start_sample, buf);
+        self.node.fill_buf(buf);
     }
 
     fn id(&self) -> NodeId {

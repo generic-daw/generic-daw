@@ -37,7 +37,7 @@ impl Default for MixerNode {
 }
 
 impl AudioGraphNodeImpl for MixerNode {
-    fn fill_buf(&self, _buf_start_sample: usize, buf: &mut [f32]) {
+    fn fill_buf(&self, buf: &mut [f32]) {
         if !self.enabled.load(Acquire) {
             buf.iter_mut().for_each(|s| *s = 0.0);
             return;

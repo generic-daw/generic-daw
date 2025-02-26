@@ -25,11 +25,13 @@ pub struct Master {
 }
 
 impl AudioGraphNodeImpl for Master {
-    fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
+    fn fill_buf(&self, buf: &mut [f32]) {
         if self.meter.playing.load(Acquire) && self.meter.metronome.load(Acquire) {
-            let buf_start_pos = Position::from_interleaved_samples(buf_start_sample, &self.meter);
+            let sample = self.meter.sample.load(Acquire);
+
+            let buf_start_pos = Position::from_interleaved_samples(sample, &self.meter);
             let mut buf_end_pos =
-                Position::from_interleaved_samples(buf_start_sample + buf.len(), &self.meter);
+                Position::from_interleaved_samples(sample + buf.len(), &self.meter);
 
             if (buf_start_pos.quarter_note() != buf_end_pos.quarter_note()
                 && buf_end_pos.sub_quarter_note() != 0)
@@ -55,14 +57,14 @@ impl AudioGraphNodeImpl for Master {
 
         let mut click = self.click.borrow_mut();
         if let Some(c) = click.as_ref() {
-            c.fill_buf(buf_start_sample, buf);
+            c.fill_buf(buf);
 
             if c.over() {
                 *click = None;
             }
         }
 
-        self.node.fill_buf(buf_start_sample, buf);
+        self.node.fill_buf(buf);
     }
 
     fn id(&self) -> NodeId {

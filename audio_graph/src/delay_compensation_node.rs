@@ -12,7 +12,7 @@ impl AudioGraphNodeImpl for DelayCompensationNode {
         self.id
     }
 
-    fn fill_buf(&self, _buf_start_sample: usize, buf: &mut [f32]) {
+    fn fill_buf(&self, buf: &mut [f32]) {
         let mut sus = self.buf.borrow_mut();
 
         if sus.len() < buf.len() {

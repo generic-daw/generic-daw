@@ -15,13 +15,13 @@ pub struct MidiTrack {
 }
 
 impl AudioGraphNodeImpl for MidiTrack {
-    fn fill_buf(&self, buf_start_sample: usize, buf: &mut [f32]) {
+    fn fill_buf(&self, buf: &mut [f32]) {
         self.host_audio_processor
             .try_lock()
             .expect("this is only locked from the audio thread")
             .process(buf);
 
-        self.node.fill_buf(buf_start_sample, buf);
+        self.node.fill_buf(buf);
     }
 
     fn id(&self) -> NodeId {
