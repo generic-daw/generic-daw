@@ -1,6 +1,6 @@
 use crate::{Meter, MidiClip, Position};
-use audio_graph::{AudioGraphNodeImpl, MixerNode};
-use clap_host::{AudioProcessor, clack_host::prelude::*};
+use audio_graph::{AudioGraphNodeImpl, MixerNode, NodeId};
+use clap_host::AudioProcessor;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
@@ -19,12 +19,12 @@ impl AudioGraphNodeImpl for MidiTrack {
         self.host_audio_processor
             .try_lock()
             .expect("this is only locked from the audio thread")
-            .process(buf, &InputEvents::empty(), &mut OutputEvents::void());
+            .process(buf);
 
         self.node.fill_buf(buf_start_sample, buf);
     }
 
-    fn id(&self) -> audio_graph::NodeId {
+    fn id(&self) -> NodeId {
         self.node.id()
     }
 

@@ -1423,7 +1423,6 @@ dependencies = [
  "iced_file_tree",
  "iced_wgpu",
  "itoa",
- "oneshot",
  "rfd",
  "tokio",
  "tracing-subscriber",

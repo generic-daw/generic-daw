@@ -1,5 +1,5 @@
 use crate::{AudioClip, Meter, Position};
-use audio_graph::{AudioGraphNodeImpl, MixerNode};
+use audio_graph::{AudioGraphNodeImpl, MixerNode, NodeId};
 use std::sync::{Arc, atomic::Ordering::Acquire};
 
 #[derive(Clone, Debug)]
@@ -25,7 +25,7 @@ impl AudioGraphNodeImpl for AudioTrack {
         self.node.fill_buf(buf_start_sample, buf);
     }
 
-    fn id(&self) -> audio_graph::NodeId {
+    fn id(&self) -> NodeId {
         self.node.id()
     }
 }

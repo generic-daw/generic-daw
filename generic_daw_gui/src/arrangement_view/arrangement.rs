@@ -1,6 +1,8 @@
 use super::track::Track;
 use generic_daw_core::{
-    DawCtxMessage, Meter, Producer, Receiver, Stream, StreamTrait as _, audio_graph::AudioGraph,
+    DawCtxMessage, Meter, Producer, Stream, StreamTrait as _,
+    audio_graph::AudioGraph,
+    oneshot::{self, Receiver},
 };
 use hound::WavWriter;
 use std::{

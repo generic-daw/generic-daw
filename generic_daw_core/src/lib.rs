@@ -28,7 +28,7 @@ pub use master::Master;
 pub use meter::{Denominator, Meter, Numerator};
 pub use midi_clip::{MidiClip, MidiNote, MidiPattern};
 pub use midi_track::MidiTrack;
-pub use oneshot::Receiver;
+pub use oneshot;
 pub use position::Position;
 pub use rtrb::{Consumer, Producer};
 pub use strum::VariantArray as VARIANTS;
