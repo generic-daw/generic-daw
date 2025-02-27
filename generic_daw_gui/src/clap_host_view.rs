@@ -99,6 +99,7 @@ impl ClapHostView {
                 .unwrap()
                 .call_on_main_thread_callback(),
             GuiMessage::GuiRequestHide => {
+                self.plugins.get_mut(*id).unwrap().destroy();
                 let window_id = self.windows.remove(*id).unwrap();
                 return window::close(window_id);
             }
@@ -133,8 +134,8 @@ impl ClapHostView {
             }
             GuiMessage::GuiClosed => {
                 self.plugins.remove(*id).unwrap().destroy();
-
-                return self.main_thread_message(id, GuiMessage::GuiRequestHide);
+                let window_id = self.windows.remove(*id).unwrap();
+                return window::close(window_id);
             }
             GuiMessage::GuiRequestResize(new_size) => {
                 if let Some(&window_id) = self.windows.get(*id) {
