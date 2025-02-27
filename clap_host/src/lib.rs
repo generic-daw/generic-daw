@@ -5,7 +5,6 @@ use audio_buffers::AudioBuffers;
 use audio_ports_config::AudioPortsConfig;
 use clack_host::prelude::*;
 use generic_daw_utils::unique_id;
-use home::home_dir;
 use host::Host;
 use main_thread::MainThread;
 use shared::Shared;
@@ -76,7 +75,10 @@ pub fn get_installed_plugins() -> BTreeMap<PluginDescriptor, PluginBundle> {
 fn standard_clap_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
-    paths.push(home_dir().unwrap().join(".clap"));
+    paths.push(
+        #[expect(deprecated, reason = "rust#132515")]
+        std::env::home_dir().unwrap().join(".clap"),
+    );
 
     #[cfg(target_os = "windows")]
     {
@@ -96,7 +98,12 @@ fn standard_clap_paths() -> Vec<PathBuf> {
 
     #[cfg(target_os = "macos")]
     {
-        paths.push(home_dir().unwrap().join("Library/Audio/Plug-Ins/CLAP"));
+        paths.push(
+            #[expect(deprecated, reason = "rust#132515")]
+            std::env::home_dir()
+                .unwrap()
+                .join("Library/Audio/Plug-Ins/CLAP"),
+        );
 
         paths.push("/Library/Audio/Plug-Ins/CLAP".into());
     }

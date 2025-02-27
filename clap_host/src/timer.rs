@@ -14,20 +14,22 @@ impl Timers {
         &mut self,
         timer_ext: &PluginTimer,
         plugin: &mut PluginMainThreadHandle<'_>,
-    ) -> Instant {
+    ) -> Option<Duration> {
         let now = Instant::now();
-        let mut next = now + Duration::from_millis(30);
+        let mut sleep = None;
 
         for (id, (interval, tick)) in self.durations.iter_mut() {
             if *tick <= now {
                 timer_ext.on_timer(plugin, TimerId(id as u32));
                 *tick += *interval;
-            } else if *tick < next {
-                next = *tick;
+            }
+
+            if sleep.is_none_or(|next| next > *tick) {
+                sleep = Some(*tick);
             }
         }
 
-        next
+        sleep.map(|next| next - now)
     }
 
     pub fn register(&mut self, interval: Duration) -> TimerId {

@@ -8,7 +8,6 @@ use generic_daw_core::{
     Denominator, Meter, Numerator, VARIANTS as _,
     clap_host::{self, PluginDescriptor, clack_host::bundle::PluginBundle},
 };
-use home::home_dir;
 use iced::{
     Alignment::Center,
     Element, Event, Length, Subscription, Task, Theme,
@@ -214,9 +213,15 @@ impl Daw {
             .spacing(20)
             .align_y(Center),
             VSplit::new(
-                scrollable(file_tree(home_dir().unwrap()).on_double_click(|path| {
-                    Message::Arrangement(ArrangementMessage::LoadSample(path.into()))
-                }),),
+                scrollable(
+                    file_tree(
+                        #[expect(deprecated, reason = "rust#132515")]
+                        std::env::home_dir().unwrap()
+                    )
+                    .on_double_click(|path| {
+                        Message::Arrangement(ArrangementMessage::LoadSample(path.into()))
+                    }),
+                ),
                 self.arrangement.view().map(Message::Arrangement)
             )
             .split(0.25)

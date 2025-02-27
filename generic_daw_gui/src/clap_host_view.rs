@@ -7,10 +7,7 @@ use iced::{
     stream::channel,
     window::{self, Id, Settings, close_requests, resize_events},
 };
-use std::{
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -155,12 +152,13 @@ impl ClapHostView {
                     if let Some((timers, timer_ext)) = self.plugins[*id].timers() {
                         let mut instance = self.plugins.get_mut(*id).unwrap().plugin_handle();
 
-                        let sleep = timers.borrow_mut().tick_timers(&timer_ext, &mut instance)
-                            - Instant::now();
-
-                        return Task::future(tokio::time::sleep(sleep))
-                            .map(|()| GuiMessage::TickTimers)
-                            .map(move |msg| Message::MainThread(id, msg));
+                        if let Some(sleep) =
+                            timers.borrow_mut().tick_timers(&timer_ext, &mut instance)
+                        {
+                            return Task::future(tokio::time::sleep(sleep))
+                                .map(|()| GuiMessage::TickTimers)
+                                .map(move |msg| Message::MainThread(id, msg));
+                        }
                     }
                 }
             }

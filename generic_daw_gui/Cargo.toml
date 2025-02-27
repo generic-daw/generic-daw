@@ -12,7 +12,6 @@ generic_daw_core = { path = "../generic_daw_core" }
 generic_daw_utils = { path = "../generic_daw_utils" }
 
 fragile = "2.0.0"
-home = "0.5.11"
 hound = "3.5.1"
 iced = { version = "0.13.1", default-features = false, features = [
     "advanced",
