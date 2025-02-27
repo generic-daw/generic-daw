@@ -1,7 +1,6 @@
 use super::LINE_HEIGHT;
-use color_ext::ColorExt as _;
 use iced::{
-    Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
+    Color, Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
         layout::{Limits, Node},
@@ -15,19 +14,29 @@ use iced::{
 use std::{
     cmp::{max_by, min_by},
     fmt::{Debug, Formatter},
+    time::Instant,
 };
 
-mod color_ext;
-
-const DECAY: f32 = 64.0;
 const WIDTH: f32 = LINE_HEIGHT / 3.0 * 4.0 + 2.0;
 
-#[derive(Default)]
 struct State {
     left: f32,
     right: f32,
     left_mix: f32,
     right_mix: f32,
+    last_draw: Instant,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            left: f32::default(),
+            right: f32::default(),
+            left_mix: f32::default(),
+            right_mix: f32::default(),
+            last_draw: Instant::now(),
+        }
+    }
 }
 
 pub struct PeakMeter {
@@ -76,29 +85,37 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
             let state = tree.state.downcast_mut::<State>();
             let bounds = layout.bounds();
 
+            let now = Instant::now();
+            let diff = ((now - state.last_draw).as_millis() * 4) as f32;
+            state.last_draw = now;
+
             let left = (self.left)();
             let right = (self.right)();
 
             state.left = if left >= state.left {
                 left
             } else {
-                state.left.mul_add(DECAY - 1.0, left) / DECAY
+                state.left.mul_add(diff - 1.0, left) / diff
             };
-            state.left_mix = if state.left > 1.0 {
+            state.left_mix = if !self.enabled {
+                0.0
+            } else if state.left > 1.0 {
                 1.0
             } else {
-                max_by(0.0, state.left_mix - 0.1, f32::total_cmp)
+                max_by(0.0, state.left_mix - (diff / 512.0), f32::total_cmp)
             };
 
             state.right = if right >= state.right {
                 right
             } else {
-                state.right.mul_add(DECAY - 1.0, right) / DECAY
+                state.right.mul_add(diff - 1.0, right) / diff
             };
-            state.right_mix = if state.right > 1.0 {
+            state.right_mix = if !self.enabled {
+                0.0
+            } else if state.right > 1.0 {
                 1.0
             } else {
-                max_by(0.0, state.right_mix - 0.1, f32::total_cmp)
+                max_by(0.0, state.right_mix - (diff / 512.0), f32::total_cmp)
             };
 
             if max_by(state.left, state.right, f32::total_cmp) * bounds.height > 1.0 {
@@ -167,19 +184,20 @@ impl PeakMeter {
         renderer: &mut Renderer,
         theme: &Theme,
         s: f32,
-        mix: f32,
+        factor: f32,
         bounds: Rectangle,
     ) {
-        let color = if self.enabled {
-            theme
-                .extended_palette()
-                .primary
-                .base
-                .color
-                .mix(theme.extended_palette().danger.base.color, mix)
+        let base_color = if self.enabled {
+            theme.extended_palette().primary.base.color
         } else {
             theme.extended_palette().secondary.strong.color
         };
+
+        let mixed_color = mix(
+            base_color,
+            theme.extended_palette().danger.base.color,
+            factor,
+        );
 
         let height = bounds.height * min_by(1.0, s, f32::total_cmp);
 
@@ -190,7 +208,7 @@ impl PeakMeter {
             ),
             ..Quad::default()
         };
-        renderer.fill_quad(bg, color.scale_alpha(0.5));
+        renderer.fill_quad(bg, base_color.scale_alpha(0.5));
 
         let fg = Quad {
             bounds: Rectangle::new(
@@ -199,7 +217,7 @@ impl PeakMeter {
             ),
             ..Quad::default()
         };
-        renderer.fill_quad(fg, color);
+        renderer.fill_quad(fg, mixed_color);
     }
 }
 
@@ -207,4 +225,19 @@ impl<Message> From<PeakMeter> for Element<'_, Message, Theme, Renderer> {
     fn from(knob: PeakMeter) -> Self {
         Self::new(knob)
     }
+}
+
+fn mix(a: Color, b: Color, factor: f32) -> Color {
+    let b_amount = factor.clamp(0.0, 1.0);
+    let a_amount = 1.0 - b_amount;
+
+    let a_linear = a.into_linear().map(|c| c * a_amount);
+    let b_linear = b.into_linear().map(|c| c * b_amount);
+
+    Color::from_linear_rgba(
+        a_linear[0] + b_linear[0],
+        a_linear[1] + b_linear[1],
+        a_linear[2] + b_linear[2],
+        a_linear[3] + b_linear[3],
+    )
 }
