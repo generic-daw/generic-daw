@@ -38,7 +38,7 @@ impl MidiClip {
         })
     }
 
-    pub fn gather_events(&self, note_buffers: &mut NoteBuffers, len: usize, steady_time: u64) {
+    pub fn gather_events(&self, note_buffers: &mut NoteBuffers, len: usize, steady_time: u32) {
         let global_start = self.position.get_global_start();
         let global_end = self.position.get_global_end();
         let clip_start = self.position.get_clip_start();
@@ -59,7 +59,7 @@ impl MidiClip {
                 let start = note.start.in_interleaved_samples(&self.meter);
                 if start >= start_sample && start < end_sample {
                     note_buffers.input_events.push(&NoteOnEvent::new(
-                        (steady_time + (start - start_sample) as u64) as u32,
+                        steady_time + (start - start_sample) as u32,
                         Pckn::new(
                             note_buffers.main_input_port,
                             note.channel,
@@ -73,7 +73,7 @@ impl MidiClip {
                 let end = note.end.in_interleaved_samples(&self.meter);
                 if end >= start_sample && end < end_sample {
                     note_buffers.input_events.push(&NoteOffEvent::new(
-                        (steady_time + (end - start_sample) as u64) as u32,
+                        steady_time + (end - start_sample) as u32,
                         Pckn::new(
                             note_buffers.main_input_port,
                             note.channel,

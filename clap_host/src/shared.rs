@@ -20,7 +20,7 @@ impl SharedHandler<'_> for Shared {
 
     fn request_restart(&self) {}
 
-    fn initializing(&self, _: InitializingPluginHandle<'_>) {}
+    fn initializing(&self, _instance: InitializingPluginHandle<'_>) {}
 }
 
 impl HostGuiImpl for Shared {
