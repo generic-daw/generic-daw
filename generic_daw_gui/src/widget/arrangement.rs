@@ -43,8 +43,10 @@ struct State {
     modifiers: Modifiers,
     /// the current action
     action: Action,
-    /// we shouldn't send multiple deletion requests per frame
+    /// we should only send one deletion message per frame
     deleted: bool,
+    /// we should only send one unselect message when the mouse leaves the viewport
+    hovered: bool,
 }
 
 pub struct Arrangement<'a, Message> {
@@ -178,10 +180,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         }
 
         let Some(mut cursor) = cursor.position_in(bounds) else {
-            shell.publish((self.unselect_clip)());
+            if state.hovered {
+                shell.publish((self.unselect_clip)());
+            }
+
+            state.hovered = false;
             state.action = Action::None;
             return Status::Ignored;
         };
+
+        state.hovered = true;
 
         if let Some(track) = layout.children().next() {
             let panel_width = track.children().next().unwrap().bounds().width;
