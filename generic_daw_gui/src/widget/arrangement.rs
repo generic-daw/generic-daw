@@ -179,7 +179,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             _ => {}
         }
 
-        let Some(mut cursor) = cursor.position_in(bounds) else {
+        let Some(mut cursor) = cursor.position_in(bounds).and_then(|mut cursor| {
+            layout
+                .children()
+                .next()
+                .and_then(|track| track.children().next())
+                .is_none_or(|panel| {
+                    cursor.x -= panel.bounds().width;
+                    cursor.x >= 0.0
+                })
+                .then_some(cursor)
+        }) else {
             if state.hovered {
                 shell.publish((self.unselect_clip)());
             }
@@ -190,18 +200,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         };
 
         state.hovered = true;
-
-        if let Some(track) = layout.children().next() {
-            let panel_width = track.children().next().unwrap().bounds().width;
-            cursor.x -= panel_width;
-        }
-
-        if cursor.x < 0.0 {
-            shell.publish((self.unselect_clip)());
-            state.action = Action::None;
-            return Status::Ignored;
-        }
-
         cursor.y -= LINE_HEIGHT;
 
         match (
@@ -234,26 +232,32 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             Action::DraggingClip(..) => Interaction::Grabbing,
             Action::DraggingPlayhead => Interaction::ResizingHorizontally,
             Action::DeletingClips => Interaction::NotAllowed,
-            Action::None => {
-                if cursor
-                    .position_in(layout.bounds())
-                    .is_some_and(|cursor| cursor.y < LINE_HEIGHT)
-                {
-                    Interaction::ResizingHorizontally
-                } else {
-                    self.children
-                        .iter()
-                        .zip(&tree.children)
-                        .zip(layout.children())
-                        .map(|((child, tree), layout)| {
-                            child
-                                .as_widget()
-                                .mouse_interaction(tree, layout, cursor, viewport, renderer)
+            Action::None => self
+                .children
+                .iter()
+                .zip(&tree.children)
+                .zip(layout.children())
+                .map(|((child, tree), layout)| {
+                    child
+                        .as_widget()
+                        .mouse_interaction(tree, layout, cursor, viewport, renderer)
+                })
+                .max()
+                .filter(|&i| i != Interaction::default())
+                .or_else(|| {
+                    cursor
+                        .position_in(layout.bounds())
+                        .filter(|cursor| cursor.y <= LINE_HEIGHT)
+                        .filter(|cursor| {
+                            layout
+                                .children()
+                                .next()
+                                .and_then(|track| track.children().next())
+                                .is_none_or(|panel| cursor.x >= panel.bounds().width)
                         })
-                        .max()
-                        .unwrap_or_default()
-                }
-            }
+                        .map(|_| Interaction::ResizingHorizontally)
+                })
+                .unwrap_or_default(),
         }
     }
 
@@ -270,8 +274,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         let bounds = layout.bounds();
 
         let mut bounds_no_track_panel = bounds;
-        if let Some(track) = layout.children().next() {
-            let panel_width = track.children().next().unwrap().bounds().width;
+        if let Some(panel) = layout
+            .children()
+            .next()
+            .and_then(|track| track.children().next())
+        {
+            let panel_width = panel.bounds().width;
             bounds_no_track_panel.x += panel_width;
             bounds_no_track_panel.width -= panel_width;
         }
