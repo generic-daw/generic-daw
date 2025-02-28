@@ -69,7 +69,7 @@ impl MidiClip {
                             note_buffers.main_input_port,
                             note.channel,
                             note.key,
-                            *note.note_id as u32,
+                            *note.note_id,
                         ),
                         note.velocity,
                     ));
@@ -83,7 +83,7 @@ impl MidiClip {
                             note_buffers.main_input_port,
                             note.channel,
                             note.key,
-                            *note.note_id as u32,
+                            *note.note_id,
                         ),
                         note.velocity,
                     ));

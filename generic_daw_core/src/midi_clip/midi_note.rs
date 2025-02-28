@@ -3,7 +3,7 @@ use generic_daw_utils::unique_id;
 pub use note_id::Id as NoteId;
 use std::ops::Add;
 
-unique_id!(note_id);
+unique_id!(note_id, u32);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MidiNote {
