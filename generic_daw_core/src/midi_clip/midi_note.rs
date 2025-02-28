@@ -15,9 +15,9 @@ pub struct MidiNote {
     pub note_id: NoteId,
     /// in the `0.0..1.0` range
     pub velocity: f64,
-    /// start time of the note, relative to the beginning of the `MidiPattern` it belongs to
+    /// start time of the note, relative to the beginning of the pattern it belongs to
     pub start: Position,
-    /// end time of the note, relative to the beginning of the `MidiPattern` it belongs to
+    /// end time of the note, relative to the beginning of the pattern it belongs to
     pub end: Position,
 }
 

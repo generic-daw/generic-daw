@@ -3,10 +3,7 @@ use arc_swap::ArcSwap;
 use clap_host::{
     NoteBuffers,
     clack_host::{
-        events::{
-            Match,
-            event_types::{NoteOffEvent, NoteOnEvent},
-        },
+        events::event_types::{NoteOffEvent, NoteOnEvent},
         prelude::*,
     },
 };
@@ -86,7 +83,7 @@ impl MidiClip {
                             note_buffers.main_input_port,
                             note.channel,
                             note.key,
-                            Match::All,
+                            *note.note_id as u32,
                         ),
                         note.velocity,
                     ));
