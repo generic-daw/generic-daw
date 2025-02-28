@@ -1,11 +1,19 @@
 use crate::Position;
+use generic_daw_utils::unique_id;
+pub use note_id::Id as NoteId;
 use std::ops::Add;
+
+unique_id!(note_id);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MidiNote {
+    /// usually in the `0..15` range
     pub channel: u8,
-    pub note: u16,
-    /// between 0.0 and 1.0
+    /// `60` is Middle C, in the `0..=127` range
+    pub key: u8,
+    /// uniquely identify this note to the plugin, in the `0..i32::MAX` range
+    pub note_id: NoteId,
+    /// in the `0.0..1.0` range
     pub velocity: f64,
     /// start time of the note, relative to the beginning of the `MidiPattern` it belongs to
     pub start: Position,
@@ -22,6 +30,18 @@ impl MidiNote {
 
         self.start = self.start.max(min);
         self.end = self.end.min(max);
+
+        Some(self)
+    }
+
+    #[must_use]
+    pub fn saturating_sub(mut self, other: Position) -> Option<Self> {
+        if self.end < other {
+            return None;
+        }
+
+        self.start = self.start.saturating_sub(other);
+        self.end -= other;
 
         Some(self)
     }

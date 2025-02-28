@@ -10,7 +10,9 @@ workspace = true
 [dependencies]
 audio_graph = { path = "../audio_graph" }
 clap_host = { path = "../clap_host" }
+generic_daw_utils = { path = "../generic_daw_utils" }
 
+arc-swap = "1.7.1"
 atomig = { version = "0.4.2", features = ["derive"] }
 cpal = "0.15.3"
 oneshot = "0.1.11"

@@ -17,7 +17,7 @@ pub struct Meter {
     ///
     /// typically a power of two
     pub buffer_size: u32,
-    /// BPM of the arrangement, between 30 and 600
+    /// BPM of the arrangement, in the `30..=600` range
     pub bpm: AtomicU16,
     /// numerator of the time signature
     pub numerator: Atomic<Numerator>,

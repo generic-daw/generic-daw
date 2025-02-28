@@ -1,4 +1,5 @@
 use crate::{Meter, Position, clip_position::ClipPosition};
+use arc_swap::ArcSwap;
 use clap_host::{
     NoteBuffers,
     clack_host::{
@@ -12,14 +13,15 @@ use clap_host::{
 use std::sync::{Arc, atomic::Ordering::Acquire};
 
 mod midi_note;
-mod midi_pattern;
 
-pub use midi_note::MidiNote;
-pub use midi_pattern::MidiPattern;
+pub use midi_note::{MidiNote, NoteId};
 
 #[derive(Clone, Debug)]
 pub struct MidiClip {
-    pub pattern: Arc<MidiPattern>,
+    /// the pattern that the clip points to
+    ///
+    /// swap the internal boxed slice in order to modify the contents
+    pub pattern: Arc<ArcSwap<Box<[MidiNote]>>>,
     /// the position of the clip relative to the start of the arrangement
     pub position: ClipPosition,
     /// information relating to the playback of the arrangement
@@ -28,8 +30,13 @@ pub struct MidiClip {
 
 impl MidiClip {
     #[must_use]
-    pub fn create(pattern: Arc<MidiPattern>, meter: Arc<Meter>) -> Arc<Self> {
-        let len = pattern.len();
+    pub fn create(pattern: Arc<ArcSwap<Box<[MidiNote]>>>, meter: Arc<Meter>) -> Arc<Self> {
+        let len = pattern
+            .load()
+            .iter()
+            .map(|note| note.end)
+            .max()
+            .unwrap_or_default();
 
         Arc::new(Self {
             pattern,
@@ -47,11 +54,12 @@ impl MidiClip {
         let end_sample = start_sample + len;
 
         self.pattern
-            .notes()
+            .load()
             .iter()
             .filter_map(|&note| {
-                // TODO: handle clips whose patterns start before the arrangement start
-                (note + global_start.saturating_sub(clip_start)).clamp(global_start, global_end)
+                (note + global_start)
+                    .saturating_sub(clip_start)
+                    .and_then(|note| note.clamp(global_start, global_end))
             })
             .for_each(|note| {
                 // TODO: handle notes that we don't see coming
@@ -63,8 +71,8 @@ impl MidiClip {
                         Pckn::new(
                             note_buffers.main_input_port,
                             note.channel,
-                            note.note,
-                            Match::All,
+                            note.key,
+                            *note.note_id as u32,
                         ),
                         note.velocity,
                     ));
@@ -77,7 +85,7 @@ impl MidiClip {
                         Pckn::new(
                             note_buffers.main_input_port,
                             note.channel,
-                            note.note,
+                            note.key,
                             Match::All,
                         ),
                         note.velocity,
