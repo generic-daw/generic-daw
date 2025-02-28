@@ -40,7 +40,7 @@ pub fn get_installed_plugins() -> BTreeMap<PluginDescriptor, PluginBundle> {
     let mut r = BTreeMap::new();
 
     standard_clap_paths()
-        .iter()
+        .into_iter()
         .flat_map(|path| {
             WalkDir::new(path)
                 .follow_links(true)
@@ -75,44 +75,37 @@ pub fn get_installed_plugins() -> BTreeMap<PluginDescriptor, PluginBundle> {
 fn standard_clap_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
-    paths.push(
-        #[expect(deprecated, reason = "rust#132515")]
-        std::env::home_dir().unwrap().join(".clap"),
-    );
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(path) = std::env::var_os("HOME").map(PathBuf::from) {
+            paths.push(path.join(".clap"));
+        }
+
+        paths.push("/usr/lib/clap".into());
+    }
 
     #[cfg(target_os = "windows")]
     {
-        if let Some(val) = std::env::var_os("CommonProgramFiles") {
-            paths.push(PathBuf::from(val).join("CLAP"));
+        if let Some(path) = std::env::var_os("COMMONPROGRAMFILES").map(PathBuf::from) {
+            paths.push(path.join("CLAP"));
         }
 
-        use etcetera::BaseStrategy as _;
-
-        paths.push(
-            etcetera::choose_base_strategy()
-                .unwrap()
-                .config_dir()
-                .join("Programs\\Common\\CLAP"),
-        );
+        if let Some(path) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+            paths.push(path.join("Programs\\Common\\CLAP"));
+        }
     }
 
     #[cfg(target_os = "macos")]
     {
-        paths.push(
-            #[expect(deprecated, reason = "rust#132515")]
-            std::env::home_dir()
-                .unwrap()
-                .join("Library/Audio/Plug-Ins/CLAP"),
-        );
-
         paths.push("/Library/Audio/Plug-Ins/CLAP".into());
+
+        if let Some(path) = std::env::var_os("HOME").map(PathBuf::from) {
+            paths.push(path.join("/Library/Audio/Plug-Ins/CLAP"));
+        }
     }
 
-    #[cfg(target_os = "linux")]
-    paths.push("/usr/lib/clap".into());
-
-    if let Some(env_var) = std::env::var_os("CLAP_PATH") {
-        paths.extend(std::env::split_paths(&env_var));
+    if let Some(clap_path) = std::env::var_os("CLAP_PATH") {
+        paths.extend(std::env::split_paths(&clap_path));
     }
 
     paths
