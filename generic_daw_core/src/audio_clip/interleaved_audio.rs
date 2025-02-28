@@ -1,5 +1,4 @@
 use super::error::{InterleavedAudioError, RubatoError};
-use crate::Meter;
 use rubato::{
     Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
@@ -38,8 +37,8 @@ impl Debug for InterleavedAudio {
 }
 
 impl InterleavedAudio {
-    pub fn create(path: &Path, meter: &Meter) -> Result<Arc<Self>, InterleavedAudioError> {
-        let samples = Self::read_audio_file(path, meter)?;
+    pub fn create(path: &Path, sample_rate: u32) -> Result<Arc<Self>, InterleavedAudioError> {
+        let samples = Self::read_audio_file(path, sample_rate)?;
         let length = samples.len();
 
         let mut audio = Self {
@@ -65,7 +64,7 @@ impl InterleavedAudio {
         self.len() == 0
     }
 
-    fn read_audio_file(path: &Path, meter: &Meter) -> Result<Box<[f32]>, InterleavedAudioError> {
+    fn read_audio_file(path: &Path, sample_rate: u32) -> Result<Box<[f32]>, InterleavedAudioError> {
         let mut format = symphonia::default::get_probe()
             .format(
                 &Hint::default(),
@@ -111,7 +110,7 @@ impl InterleavedAudio {
 
         Ok(resample(
             file_sample_rate,
-            meter.sample_rate,
+            sample_rate,
             interleaved_samples,
         )?)
     }

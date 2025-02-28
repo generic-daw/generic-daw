@@ -48,6 +48,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                 .layout(&mut tree.children[0], renderer, limits);
         let panel_width = panel_layout.size().width;
 
+        let meter = self.inner.meter();
+        let bpm = meter.bpm.load(Acquire);
+        let sample_rate = meter.sample_rate;
+
         Node::with_children(
             limits.max(),
             once(panel_layout)
@@ -72,7 +76,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                                 panel_width
                                     + (clip
                                         .get_global_start()
-                                        .in_interleaved_samples_f(self.inner.meter())
+                                        .in_interleaved_samples_f(bpm, sample_rate)
                                         - self.position.x)
                                         / self.scale.x.exp2(),
                                 0.0,

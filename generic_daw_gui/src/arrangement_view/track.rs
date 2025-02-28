@@ -3,7 +3,10 @@ use generic_daw_core::{
     AudioTrack, Meter, MidiTrack, Position,
     audio_graph::{AudioGraphNode, AudioGraphNodeImpl as _, MixerNode, NodeId},
 };
-use std::{ops::Deref as _, sync::Arc};
+use std::{
+    ops::Deref as _,
+    sync::{Arc, atomic::Ordering::Acquire},
+};
 use track_switcher::TrackSwitcher;
 
 mod track_switcher;
@@ -67,10 +70,20 @@ impl Track {
         }
     }
 
-    pub fn get_clip_at_global_time(&self, meter: &Meter, global_time: usize) -> Option<usize> {
+    pub fn get_clip_at_global_time(&self, global_time: usize) -> Option<usize> {
+        let meter = self.meter();
+        let bpm = meter.bpm.load(Acquire);
+        let sample_rate = meter.sample_rate;
+
         self.clips().enumerate().rev().find_map(|(i, clip)| {
-            if clip.get_global_start().in_interleaved_samples(meter) <= global_time
-                && global_time <= clip.get_global_end().in_interleaved_samples(meter)
+            if clip
+                .get_global_start()
+                .in_interleaved_samples(bpm, sample_rate)
+                <= global_time
+                && global_time
+                    <= clip
+                        .get_global_end()
+                        .in_interleaved_samples(bpm, sample_rate)
             {
                 Some(i)
             } else {

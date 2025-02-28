@@ -13,7 +13,7 @@ use std::{
     path::Path,
     sync::{
         Arc, Mutex,
-        atomic::Ordering::{AcqRel, Release},
+        atomic::Ordering::{AcqRel, Acquire, Release},
     },
 };
 
@@ -102,7 +102,7 @@ impl ArrangementView {
             Message::LoadSample(path) => {
                 let meter = self.meter.clone();
                 return Task::future(tokio::task::spawn_blocking(move || {
-                    InterleavedAudio::create(&path, &meter)
+                    InterleavedAudio::create(&path, meter.sample_rate)
                 }))
                 .and_then(Task::done)
                 .and_then(Task::done)
@@ -209,7 +209,10 @@ impl ArrangementView {
                             .map(TrackWrapper::len)
                             .max()
                             .unwrap_or_default()
-                            .in_interleaved_samples_f(&self.meter),
+                            .in_interleaved_samples_f(
+                                self.meter.bpm.load(Acquire),
+                                self.meter.sample_rate,
+                            ),
                         self.arrangement.tracks().len().saturating_sub(1) as f32,
                     );
                 }

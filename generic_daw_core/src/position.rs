@@ -1,9 +1,8 @@
-use crate::Meter;
+use crate::Numerator;
 use atomig::{Atom, AtomInteger};
 use std::{
     fmt::{Debug, Formatter},
     ops::{Add, AddAssign, Sub, SubAssign},
-    sync::atomic::Ordering::Acquire,
 };
 
 #[derive(Atom, AtomInteger, Clone, Copy, Default, Eq, Ord, PartialEq, PartialOrd)]
@@ -58,10 +57,20 @@ impl Position {
     }
 
     #[must_use]
-    pub fn from_interleaved_samples(samples: usize, meter: &Meter) -> Self {
+    pub fn from_interleaved_samples_f(samples: f32, bpm: u16, sample_rate: u32) -> Self {
+        let bpm = f32::from(bpm);
+        let sample_rate = sample_rate as f32;
+
+        let global_beat = samples * (bpm * 32.0) / (sample_rate * 15.0);
+
+        Self(global_beat as u32)
+    }
+
+    #[must_use]
+    pub fn from_interleaved_samples(samples: usize, bpm: u16, sample_rate: u32) -> Self {
         let samples = samples as u64;
-        let bpm = u64::from(meter.bpm.load(Acquire));
-        let sample_rate = u64::from(meter.sample_rate);
+        let bpm = u64::from(bpm);
+        let sample_rate = u64::from(sample_rate);
 
         let global_beat = samples * (bpm * 32) / (sample_rate * 15);
 
@@ -69,10 +78,10 @@ impl Position {
     }
 
     #[must_use]
-    pub fn in_interleaved_samples_f(self, meter: &Meter) -> f32 {
+    pub fn in_interleaved_samples_f(self, bpm: u16, sample_rate: u32) -> f32 {
         let global_beat = f64::from(self.0);
-        let bpm = f64::from(meter.bpm.load(Acquire));
-        let sample_rate = f64::from(meter.sample_rate);
+        let bpm = f64::from(bpm);
+        let sample_rate = f64::from(sample_rate);
 
         let samples = global_beat * (sample_rate * 15.0) / (bpm * 32.0);
 
@@ -80,10 +89,10 @@ impl Position {
     }
 
     #[must_use]
-    pub fn in_interleaved_samples(self, meter: &Meter) -> usize {
+    pub fn in_interleaved_samples(self, bpm: u16, sample_rate: u32) -> usize {
         let global_beat = u64::from(self.0);
-        let bpm = u64::from(meter.bpm.load(Acquire));
-        let sample_rate = u64::from(meter.sample_rate);
+        let bpm = u64::from(bpm);
+        let sample_rate = u64::from(sample_rate);
 
         let samples = global_beat * (sample_rate * 15) / (bpm * 32);
 
@@ -91,11 +100,11 @@ impl Position {
     }
 
     #[must_use]
-    pub fn snap(mut self, scale: f32, meter: &Meter) -> Self {
+    pub fn snap(mut self, scale: f32, numerator: Numerator) -> Self {
         let modulo = if scale < 12.0 {
             1 << (scale as u8 - 3)
         } else {
-            (meter.numerator.load(Acquire) as u32) << 8
+            (numerator as u32) << 8
         };
 
         let diff = self.0 % modulo;

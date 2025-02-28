@@ -50,6 +50,8 @@ impl MidiClip {
         let start_sample = self.meter.sample.load(Acquire);
         let end_sample = start_sample + len;
 
+        let bpm = self.meter.bpm.load(Acquire);
+
         self.pattern
             .load()
             .iter()
@@ -61,7 +63,9 @@ impl MidiClip {
             .for_each(|note| {
                 // TODO: handle notes that we don't see coming
 
-                let start = note.start.in_interleaved_samples(&self.meter);
+                let start = note
+                    .start
+                    .in_interleaved_samples(bpm, self.meter.sample_rate);
                 if start >= start_sample && start < end_sample {
                     note_buffers.input_events.push(&NoteOnEvent::new(
                         steady_time + (start - start_sample) as u32,
@@ -75,7 +79,7 @@ impl MidiClip {
                     ));
                 }
 
-                let end = note.end.in_interleaved_samples(&self.meter);
+                let end = note.end.in_interleaved_samples(bpm, self.meter.sample_rate);
                 if end >= start_sample && end < end_sample {
                     note_buffers.input_events.push(&NoteOffEvent::new(
                         steady_time + (end - start_sample) as u32,

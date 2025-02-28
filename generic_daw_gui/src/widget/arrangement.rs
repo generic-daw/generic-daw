@@ -366,14 +366,20 @@ where
 
     fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
         let numerator = self.inner.meter.numerator.load(Acquire);
+        let bpm = self.inner.meter.bpm.load(Acquire);
 
-        let mut beat =
-            Position::from_interleaved_samples(self.position.x as usize, &self.inner.meter).ceil();
+        let mut beat = Position::from_interleaved_samples_f(
+            self.position.x,
+            bpm,
+            self.inner.meter.sample_rate,
+        )
+        .ceil();
 
         let end_beat = beat
-            + Position::from_interleaved_samples(
-                (bounds.width * self.scale.x.exp2()) as usize,
-                &self.inner.meter,
+            + Position::from_interleaved_samples_f(
+                bounds.width * self.scale.x.exp2(),
+                bpm,
+                self.inner.meter.sample_rate,
             )
             .floor();
 
@@ -396,7 +402,8 @@ where
                 theme.extended_palette().secondary.weak.color
             };
 
-            let x = (beat.in_interleaved_samples_f(&self.inner.meter) - self.position.x)
+            let x = (beat.in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
+                - self.position.x)
                 / self.scale.x.exp2();
 
             renderer.fill_quad(
@@ -415,6 +422,8 @@ where
     }
 
     fn playhead(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
+        let bpm = self.inner.meter.bpm.load(Acquire);
+
         renderer.fill_quad(
             Quad {
                 bounds: Rectangle::new(bounds.position(), Size::new(bounds.width, LINE_HEIGHT)),
@@ -440,7 +449,8 @@ where
         }
 
         let mut draw_text = |beat: Position, bar: u32| {
-            let x = (beat.in_interleaved_samples_f(&self.inner.meter) - self.position.x)
+            let x = (beat.in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
+                - self.position.x)
                 / self.scale.x.exp2();
 
             let bar = Text {
@@ -465,19 +475,23 @@ where
 
         let numerator = self.inner.meter.numerator.load(Acquire);
 
-        let mut beat =
-            Position::from_interleaved_samples(self.position.x as usize, &self.inner.meter)
-                .saturating_sub(if self.scale.x > 11.0 {
-                    Position::new(4 * numerator as u32, 0)
-                } else {
-                    Position::new(numerator as u32, 0)
-                })
-                .floor();
+        let mut beat = Position::from_interleaved_samples_f(
+            self.position.x,
+            bpm,
+            self.inner.meter.sample_rate,
+        )
+        .saturating_sub(if self.scale.x > 11.0 {
+            Position::new(4 * numerator as u32, 0)
+        } else {
+            Position::new(numerator as u32, 0)
+        })
+        .floor();
 
         let end_beat = beat
-            + Position::from_interleaved_samples(
-                (bounds.width * self.scale.x.exp2()) as usize,
-                &self.inner.meter,
+            + Position::from_interleaved_samples_f(
+                bounds.width * self.scale.x.exp2(),
+                bpm,
+                self.inner.meter.sample_rate,
             )
             .floor();
 
@@ -506,10 +520,12 @@ where
         if let Event::Mouse(event) = event {
             match event {
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                    let bpm = self.inner.meter.bpm.load(Acquire);
+
                     if cursor.y < 0.0 {
                         let time = self
                             .get_time(cursor, 0.0, state.modifiers)
-                            .in_interleaved_samples(&self.inner.meter);
+                            .in_interleaved_samples(bpm, self.inner.meter.sample_rate);
 
                         state.action = Action::DraggingPlayhead;
 
@@ -522,13 +538,13 @@ where
                     let start_pixel = (self.inner.tracks()[track]
                         .get_clip(clip)
                         .get_global_start()
-                        .in_interleaved_samples_f(&self.inner.meter)
+                        .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
                         - self.position.x)
                         / self.scale.x.exp2();
                     let end_pixel = (self.inner.tracks()[track]
                         .get_clip(clip)
                         .get_global_end()
-                        .in_interleaved_samples_f(&self.inner.meter)
+                        .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
                         - self.position.x)
                         / self.scale.x.exp2();
                     let offset = start_pixel - cursor.x;
@@ -557,7 +573,10 @@ where
                     Action::DraggingPlayhead => {
                         let time = self
                             .get_time(cursor, 0.0, state.modifiers)
-                            .in_interleaved_samples(&self.inner.meter);
+                            .in_interleaved_samples(
+                                self.inner.meter.bpm.load(Acquire),
+                                self.inner.meter.sample_rate,
+                            );
 
                         shell.publish((self.seek_to)(time));
                         Some(Status::Captured)
@@ -683,7 +702,10 @@ where
                     let start_pixel = (self.inner.tracks()[track]
                         .get_clip(clip)
                         .get_global_start()
-                        .in_interleaved_samples_f(&self.inner.meter)
+                        .in_interleaved_samples_f(
+                            self.inner.meter.bpm.load(Acquire),
+                            self.inner.meter.sample_rate,
+                        )
                         - self.position.x)
                         / self.scale.x.exp2();
                     let offset = start_pixel - cursor.x;
@@ -756,17 +778,21 @@ where
             .inner
             .tracks()
             .get(track)?
-            .get_clip_at_global_time(&self.inner.meter, time)?;
+            .get_clip_at_global_time(time)?;
 
         Some((track, clip))
     }
 
     fn get_time(&self, cursor: Point, offset: f32, modifiers: Modifiers) -> Position {
         let time = (cursor.x + offset).mul_add(self.scale.x.exp2(), self.position.x);
-        let mut time = Position::from_interleaved_samples(time as usize, &self.inner.meter);
+        let mut time = Position::from_interleaved_samples_f(
+            time,
+            self.inner.meter.bpm.load(Acquire),
+            self.inner.meter.sample_rate,
+        );
 
         if !modifiers.alt() {
-            time = time.snap(self.scale.x, &self.inner.meter);
+            time = time.snap(self.scale.x, self.inner.meter.numerator.load(Acquire));
         }
 
         time

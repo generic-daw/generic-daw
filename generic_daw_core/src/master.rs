@@ -28,10 +28,12 @@ impl AudioGraphNodeImpl for Master {
     fn fill_buf(&self, buf: &mut [f32]) {
         if self.meter.playing.load(Acquire) && self.meter.metronome.load(Acquire) {
             let sample = self.meter.sample.load(Acquire);
+            let bpm = self.meter.bpm.load(Acquire);
 
-            let buf_start_pos = Position::from_interleaved_samples(sample, &self.meter);
+            let buf_start_pos =
+                Position::from_interleaved_samples(sample, bpm, self.meter.sample_rate);
             let mut buf_end_pos =
-                Position::from_interleaved_samples(sample + buf.len(), &self.meter);
+                Position::from_interleaved_samples(sample + buf.len(), bpm, self.meter.sample_rate);
 
             if (buf_start_pos.quarter_note() != buf_end_pos.quarter_note()
                 && buf_end_pos.sub_quarter_note() != 0)
@@ -39,7 +41,8 @@ impl AudioGraphNodeImpl for Master {
             {
                 buf_end_pos = buf_end_pos.floor();
 
-                let diff = (buf_end_pos - buf_start_pos).in_interleaved_samples(&self.meter);
+                let diff = (buf_end_pos - buf_start_pos)
+                    .in_interleaved_samples(bpm, self.meter.sample_rate);
                 let click = if buf_end_pos.quarter_note()
                     % self.meter.numerator.load(Acquire) as u32
                     == 0

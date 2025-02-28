@@ -28,7 +28,7 @@ use iced_wgpu::{
 use std::{
     cell::RefCell,
     cmp::{max_by, min_by},
-    sync::Arc,
+    sync::{Arc, atomic::Ordering::Acquire},
 };
 
 #[derive(Default)]
@@ -75,19 +75,19 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
-        let meter = &self.inner.meter;
+        let bpm = self.inner.meter.bpm.load(Acquire);
 
         Node::new(Size::new(
             (self
                 .inner
                 .position
                 .get_global_end()
-                .in_interleaved_samples(meter)
+                .in_interleaved_samples(bpm, self.inner.meter.sample_rate)
                 - self
                     .inner
                     .position
                     .get_global_start()
-                    .in_interleaved_samples(meter)) as f32
+                    .in_interleaved_samples(bpm, self.inner.meter.sample_rate)) as f32
                 / self.scale.x.exp2(),
             limits.max().height,
         ))
@@ -310,6 +310,8 @@ impl AudioClip {
         let color = color::pack(theme.extended_palette().secondary.base.text);
         let lod = scale.x as usize - 3;
 
+        let bpm = self.inner.meter.bpm.load(Acquire);
+
         let diff = max_by(
             0.0,
             position.x
@@ -317,7 +319,7 @@ impl AudioClip {
                     .inner
                     .position
                     .get_global_start()
-                    .in_interleaved_samples_f(&self.inner.meter),
+                    .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate),
             f32::total_cmp,
         );
 
@@ -325,7 +327,7 @@ impl AudioClip {
             .inner
             .position
             .get_clip_start()
-            .in_interleaved_samples_f(&self.inner.meter);
+            .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate);
 
         let first_index = ((diff + clip_start) / lod_sample_size) as usize;
         let last_index = first_index + (size.width / lod_samples_per_pixel) as usize;
