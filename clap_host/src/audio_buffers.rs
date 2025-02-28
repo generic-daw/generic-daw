@@ -1,4 +1,4 @@
-use crate::{AudioBuffer, audio_ports_config::AudioPortsConfig};
+use crate::audio_ports_config::AudioPortsConfig;
 use clack_host::{prelude::*, process::PluginAudioConfiguration};
 use std::fmt::{Debug, Formatter};
 
@@ -11,8 +11,8 @@ pub struct AudioBuffers {
     input_ports: AudioPorts,
     output_ports: AudioPorts,
 
-    input_channels: AudioBuffer,
-    output_channels: AudioBuffer,
+    input_channels: Box<[Box<[f32]>]>,
+    output_channels: Box<[Box<[f32]>]>,
 }
 
 impl Debug for AudioBuffers {

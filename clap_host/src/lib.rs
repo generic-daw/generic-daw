@@ -33,8 +33,6 @@ pub use plugin_id::Id as PluginId;
 
 unique_id!(plugin_id);
 
-pub type AudioBuffer = Box<[Box<[f32]>]>;
-
 #[must_use]
 pub fn get_installed_plugins() -> BTreeMap<PluginDescriptor, PluginBundle> {
     let mut r = BTreeMap::new();
