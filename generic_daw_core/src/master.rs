@@ -77,7 +77,7 @@ impl AudioGraphNodeImpl for Master {
 }
 
 impl Master {
-    pub(crate) fn new(meter: Arc<Meter>) -> Self {
+    pub fn new(meter: Arc<Meter>) -> Self {
         let sample_rate = meter.sample_rate;
 
         Self {

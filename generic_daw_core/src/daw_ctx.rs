@@ -14,7 +14,7 @@ pub struct DawCtx<T> {
 }
 
 impl<T> DawCtx<T> {
-    pub(crate) fn create(sample_rate: u32, buffer_size: u32) -> (Self, Producer<DawCtxMessage<T>>) {
+    pub fn create(sample_rate: u32, buffer_size: u32) -> (Self, Producer<DawCtxMessage<T>>) {
         let (ui_producer, consumer) = RingBuffer::new(16);
 
         let meter = Arc::new(Meter::new(sample_rate, buffer_size));

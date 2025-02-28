@@ -20,7 +20,8 @@ impl Debug for AudioProcessor {
 }
 
 impl AudioProcessor {
-    pub(crate) fn new(
+    #[must_use]
+    pub fn new(
         started_processor: StartedPluginAudioProcessor<Host>,
         audio_buffers: AudioBuffers,
         note_buffers: NoteBuffers,

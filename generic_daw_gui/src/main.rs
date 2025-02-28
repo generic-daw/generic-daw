@@ -1,11 +1,11 @@
 use daw::Daw;
 use iced::{Result, application};
 
-pub(crate) mod arrangement_view;
-pub(crate) mod clap_host_view;
-pub(crate) mod daw;
+mod arrangement_view;
+mod clap_host_view;
+mod daw;
 mod trace;
-pub(crate) mod widget;
+mod widget;
 
 fn main() -> Result {
     trace::setup();
