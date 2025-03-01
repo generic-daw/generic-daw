@@ -5,7 +5,7 @@ use iced::{
     Size, Subscription, Task,
     futures::SinkExt as _,
     stream::channel,
-    window::{self, Id, Settings, close_requests, resize_events},
+    window::{self, Id, close_requests, resize_events},
 };
 use std::sync::{Arc, Mutex};
 
@@ -18,13 +18,21 @@ pub enum Message {
     Resized((Id, Size)),
 }
 
-#[derive(Default)]
 pub struct ClapHostView {
+    main_window_id: Id,
     plugins: HoleyVec<GuiExt>,
     windows: HoleyVec<Id>,
 }
 
 impl ClapHostView {
+    pub fn new(main_window_id: Id) -> Self {
+        Self {
+            main_window_id,
+            plugins: HoleyVec::default(),
+            windows: HoleyVec::default(),
+        }
+    }
+
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::MainThread(id, msg) => return self.main_thread_message(id, msg),
@@ -42,7 +50,7 @@ impl ClapHostView {
                     self.update(Message::MainThread(id, GuiMessage::GuiRequestShow))
                 };
 
-                let stream = Task::stream(channel(16, async move |mut sender| {
+                let stream = Task::stream(channel(0, async move |mut sender| {
                     while let Ok(msg) = gui_receiver.recv().await {
                         sender.send(Message::MainThread(id, msg)).await.unwrap();
                     }
@@ -73,6 +81,10 @@ impl ClapHostView {
                 }
             }
             Message::CloseRequested(window_id) => {
+                if window_id == self.main_window_id {
+                    return iced::exit();
+                }
+
                 let id = self.windows.position(&window_id).unwrap();
                 self.windows.remove(id).unwrap();
                 self.plugins.get_mut(id).unwrap().destroy();
@@ -112,11 +124,11 @@ impl ClapHostView {
                     |[width, height]| Size::new(width as f32, height as f32),
                 );
 
-                let (window_id, spawn) = window::open(Settings {
+                let (window_id, spawn) = window::open(window::Settings {
                     exit_on_close_request: false,
                     resizable,
                     size,
-                    ..Settings::default()
+                    ..window::Settings::default()
                 });
 
                 gui.destroy();
@@ -133,7 +145,7 @@ impl ClapHostView {
                     .chain(Task::done(Message::MainThread(id, GuiMessage::TickTimers)));
             }
             GuiMessage::GuiClosed => {
-                self.plugins.remove(*id).unwrap().destroy();
+                self.plugins.remove(*id).unwrap();
                 let window_id = self.windows.remove(*id).unwrap();
                 return window::close(window_id);
             }

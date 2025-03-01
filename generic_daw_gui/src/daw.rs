@@ -13,7 +13,10 @@ use iced::{
     Element, Event, Length, Subscription, Task, Theme,
     event::{self, Status},
     keyboard,
-    widget::{button, column, horizontal_space, pick_list, row, scrollable, svg, toggler},
+    widget::{
+        button, column, horizontal_space, pick_list, row, scrollable, svg, toggler, vertical_space,
+    },
+    window::{self, Id},
 };
 use iced_file_tree::file_tree;
 use rfd::{AsyncFileDialog, FileHandle};
@@ -39,7 +42,6 @@ pub enum Message {
     ExportFileDialog,
     TogglePlay,
     Stop,
-    New,
     BpmChanged(u16),
     NumeratorChanged(Numerator),
     DenominatorChanged(Denominator),
@@ -47,6 +49,7 @@ pub enum Message {
 }
 
 pub struct Daw {
+    main_window_id: Id,
     arrangement: ArrangementView,
     clap_host: ClapHostView,
     plugins: BTreeMap<PluginDescriptor, PluginBundle>,
@@ -54,22 +57,29 @@ pub struct Daw {
     theme: Theme,
 }
 
-impl Default for Daw {
-    fn default() -> Self {
+impl Daw {
+    pub fn new() -> (Self, Task<Message>) {
         let (meter, arrangement) = ArrangementView::create();
         let plugins = clap_host::get_installed_plugins();
 
-        Self {
-            arrangement,
-            clap_host: ClapHostView::default(),
-            plugins,
-            meter,
-            theme: Theme::Dark,
-        }
-    }
-}
+        let (main_window_id, open) = window::open(window::Settings {
+            exit_on_close_request: false,
+            ..window::Settings::default()
+        });
 
-impl Daw {
+        (
+            Self {
+                main_window_id,
+                arrangement,
+                clap_host: ClapHostView::new(main_window_id),
+                plugins,
+                meter,
+                theme: Theme::Dark,
+            },
+            open.discard(),
+        )
+    }
+
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ThemeChanged(theme) => self.theme = theme,
@@ -129,7 +139,6 @@ impl Daw {
                 self.meter.sample.store(0, Release);
                 self.arrangement.stop();
             }
-            Message::New => *self = Self::default(),
             Message::BpmChanged(bpm) => self.meter.bpm.store(bpm, Release),
             Message::NumeratorChanged(new_numerator) => {
                 self.meter.numerator.store(new_numerator, Release);
@@ -145,13 +154,16 @@ impl Daw {
         Task::none()
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self, window: Id) -> Element<'_, Message> {
+        if window != self.main_window_id {
+            return vertical_space().into();
+        }
+
         column![
             row![
                 row![
                     button("Load Samples").on_press(Message::SamplesFileDialog),
                     button("Export").on_press(Message::ExportFileDialog),
-                    button("New").on_press(Message::New),
                 ],
                 row![
                     button(
@@ -246,7 +258,6 @@ impl Daw {
                             },
                             (true, false, false) => match key {
                                 keyboard::Key::Character(c) => match c.as_str() {
-                                    "n" => Some(Message::New),
                                     "e" => Some(Message::ExportFileDialog),
                                     _ => None,
                                 },
@@ -262,7 +273,7 @@ impl Daw {
         ])
     }
 
-    pub fn theme(&self) -> Theme {
+    pub fn theme(&self, _window: Id) -> Theme {
         self.theme.clone()
     }
 }

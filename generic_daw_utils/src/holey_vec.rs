@@ -72,7 +72,7 @@ impl<T> HoleyVec<T> {
 
 impl<T> HoleyVec<T>
 where
-    T: Eq,
+    T: PartialEq,
 {
     pub fn position(&self, item: &T) -> Option<usize> {
         self.iter().find_map(|(i, x)| (item == x).then_some(i))

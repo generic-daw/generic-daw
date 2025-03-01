@@ -157,3 +157,9 @@ impl GuiExt {
         }
     }
 }
+
+impl Drop for GuiExt {
+    fn drop(&mut self) {
+        self.destroy();
+    }
+}

@@ -1,5 +1,5 @@
 use daw::Daw;
-use iced::{Result, application};
+use iced::{Result, daemon};
 
 mod arrangement_view;
 mod clap_host_view;
@@ -23,9 +23,9 @@ fn main() -> Result {
         }
     }
 
-    application("GenericDAW", Daw::update, Daw::view)
+    daemon("GenericDAW", Daw::update, Daw::view)
         .subscription(|_| Daw::subscription())
         .theme(Daw::theme)
         .antialiasing(true)
-        .run()
+        .run_with(Daw::new)
 }
