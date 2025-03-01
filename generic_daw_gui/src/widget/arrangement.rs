@@ -23,15 +23,24 @@ use std::{
     sync::atomic::Ordering::Acquire,
 };
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PartialEq)]
 enum Action {
     #[default]
     None,
-    DraggingPlayhead,
-    DraggingClip(f32),
+    DraggingPlayhead(Position),
+    DraggingClip(f32, Position),
+    ClipTrimmingStart(f32, Position),
+    ClipTrimmingEnd(f32, Position),
     DeletingClips,
-    ClipTrimmingStart(f32),
-    ClipTrimmingEnd(f32),
+}
+
+impl Action {
+    fn unselect(&self) -> bool {
+        matches!(
+            self,
+            Self::DraggingClip(..) | Self::ClipTrimmingStart(..) | Self::ClipTrimmingEnd(..)
+        )
+    }
 }
 
 /// scroll wheel clicks -> trackpad scroll pixels
@@ -190,7 +199,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                 })
                 .then_some(cursor)
         }) else {
-            if state.hovered {
+            if state.hovered && state.action.unselect() {
                 shell.publish((self.unselect_clip)());
             }
 
@@ -230,7 +239,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                 Interaction::ResizingHorizontally
             }
             Action::DraggingClip(..) => Interaction::Grabbing,
-            Action::DraggingPlayhead => Interaction::ResizingHorizontally,
+            Action::DraggingPlayhead(..) => Interaction::ResizingHorizontally,
             Action::DeletingClips => Interaction::NotAllowed,
             Action::None => self
                 .children
@@ -518,6 +527,7 @@ where
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     fn on_event_any_modifiers(
         &self,
         state: &mut State,
@@ -529,14 +539,11 @@ where
             match event {
                 mouse::Event::ButtonPressed(mouse::Button::Left) => {
                     let bpm = self.inner.meter.bpm.load(Acquire);
+                    let time = self.get_time(cursor, 0.0, state.modifiers);
 
                     if cursor.y < 0.0 {
-                        let time = self
-                            .get_time(cursor, 0.0, state.modifiers)
-                            .in_interleaved_samples(bpm, self.inner.meter.sample_rate);
-
-                        state.action = Action::DraggingPlayhead;
-
+                        state.action = Action::DraggingPlayhead(time);
+                        let time = time.in_interleaved_samples(bpm, self.inner.meter.sample_rate);
                         shell.publish((self.seek_to)(time));
                         return Some(Status::Captured);
                     }
@@ -560,44 +567,79 @@ where
                     state.action =
                         match (cursor.x - start_pixel < 10.0, end_pixel - cursor.x < 10.0) {
                             (true, true) if cursor.x - start_pixel < end_pixel - cursor.x => {
-                                Action::ClipTrimmingStart(offset)
+                                Action::ClipTrimmingStart(offset, time)
                             }
-                            (true, false) => Action::ClipTrimmingStart(offset),
-                            (_, true) => Action::ClipTrimmingEnd(offset + end_pixel - start_pixel),
-                            (false, false) => Action::DraggingClip(offset),
+                            (true, false) => Action::ClipTrimmingStart(offset, time),
+                            (_, true) => {
+                                Action::ClipTrimmingEnd(offset + end_pixel - start_pixel, time)
+                            }
+                            (false, false) => Action::DraggingClip(offset, time),
                         };
-
                     shell.publish((self.select_clip)(track, clip));
 
                     Some(Status::Captured)
                 }
                 mouse::Event::ButtonReleased(_) => {
+                    if state.action.unselect() {
+                        shell.publish((self.unselect_clip)());
+                    }
+
                     state.action = Action::None;
 
-                    shell.publish((self.unselect_clip)());
                     Some(Status::Captured)
                 }
                 mouse::Event::CursorMoved { .. } => match state.action {
-                    Action::DraggingPlayhead => {
-                        let time = self
-                            .get_time(cursor, 0.0, state.modifiers)
-                            .in_interleaved_samples(
-                                self.inner.meter.bpm.load(Acquire),
-                                self.inner.meter.sample_rate,
-                            );
-
-                        shell.publish((self.seek_to)(time));
-                        Some(Status::Captured)
-                    }
-                    Action::DraggingClip(offset) => {
-                        let new_start = self.get_time(cursor, offset, state.modifiers);
-
-                        let new_track = (cursor.y / self.scale.y + self.position.y) as usize;
-                        if new_track >= self.children.len() {
+                    Action::DraggingPlayhead(time) => {
+                        let new_time = self.get_time(cursor, 0.0, state.modifiers);
+                        if new_time == time {
                             return None;
                         }
 
+                        state.action = Action::DraggingPlayhead(new_time);
+
+                        let new_time = new_time.in_interleaved_samples(
+                            self.inner.meter.bpm.load(Acquire),
+                            self.inner.meter.sample_rate,
+                        );
+
+                        shell.publish((self.seek_to)(new_time));
+
+                        Some(Status::Captured)
+                    }
+                    Action::DraggingClip(offset, time) => {
+                        let new_start = self.get_time(cursor, offset, state.modifiers);
+                        if new_start == time {
+                            return None;
+                        }
+
+                        let new_track = (cursor.y / self.scale.y + self.position.y) as usize;
+                        let new_track = new_track.min(self.children.len().saturating_sub(1));
+
+                        state.action = Action::DraggingClip(offset, new_start);
                         shell.publish((self.move_clip_to)(new_track, new_start));
+
+                        Some(Status::Captured)
+                    }
+                    Action::ClipTrimmingStart(offset, time) => {
+                        let new_start = self.get_time(cursor, offset, state.modifiers);
+                        if new_start == time {
+                            return None;
+                        }
+
+                        state.action = Action::ClipTrimmingStart(offset, new_start);
+                        shell.publish((self.trim_clip_start)(new_start));
+
+                        Some(Status::Captured)
+                    }
+                    Action::ClipTrimmingEnd(offset, time) => {
+                        let new_end = self.get_time(cursor, offset, state.modifiers);
+                        if new_end == time {
+                            return None;
+                        }
+
+                        state.action = Action::ClipTrimmingEnd(offset, new_end);
+                        shell.publish((self.trim_clip_end)(new_end));
+
                         Some(Status::Captured)
                     }
                     Action::DeletingClips => {
@@ -606,22 +648,9 @@ where
                         }
 
                         let (track, clip) = self.get_track_clip(cursor)?;
-
                         state.deleted = true;
-
                         shell.publish((self.delete_clip)(track, clip));
-                        Some(Status::Captured)
-                    }
-                    Action::ClipTrimmingStart(offset) => {
-                        let new_start = self.get_time(cursor, offset, state.modifiers);
 
-                        shell.publish((self.trim_clip_start)(new_start));
-                        Some(Status::Captured)
-                    }
-                    Action::ClipTrimmingEnd(offset) => {
-                        let new_end = self.get_time(cursor, offset, state.modifiers);
-
-                        shell.publish((self.trim_clip_end)(new_end));
                         Some(Status::Captured)
                     }
                     Action::None => None,
@@ -707,18 +736,16 @@ where
 
                     let (track, clip) = self.get_track_clip(cursor)?;
 
-                    let start_pixel = (self.inner.tracks()[track]
-                        .get_clip(clip)
-                        .get_global_start()
-                        .in_interleaved_samples_f(
-                            self.inner.meter.bpm.load(Acquire),
-                            self.inner.meter.sample_rate,
-                        )
-                        - self.position.x)
+                    let time = self.inner.tracks()[track].get_clip(clip).get_global_start();
+
+                    let start_pixel = (time.in_interleaved_samples_f(
+                        self.inner.meter.bpm.load(Acquire),
+                        self.inner.meter.sample_rate,
+                    ) - self.position.x)
                         / self.scale.x.exp2();
                     let offset = start_pixel - cursor.x;
 
-                    state.action = Action::DraggingClip(offset);
+                    state.action = Action::DraggingClip(offset, time);
 
                     shell.publish((self.clone_clip)(track, clip));
                     Some(Status::Captured)
