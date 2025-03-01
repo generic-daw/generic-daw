@@ -60,8 +60,8 @@ struct State {
 
 pub struct Arrangement<'a, Message> {
     inner: &'a ArrangementWrapper,
-    /// list of all the track widgets
-    children: [Element<'a, Message, Theme, Renderer>; 2],
+    /// column of rows of [track panel, track]
+    children: Element<'a, Message, Theme, Renderer>,
     /// the position of the top left corner of the arrangement viewport
     position: ArrangementPosition,
     /// the scale of the arrangement viewport
@@ -98,33 +98,28 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
     }
 
     fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&self.children);
+        tree.diff_children(&[&self.children]);
     }
 
     fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(Tree::new).collect()
+        vec![Tree::new(&self.children)]
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         self.diff(tree);
 
-        let y_offset = self.position.y.mul_add(-self.scale.y, LINE_HEIGHT);
-
-        let track_panels = self.children[0]
-            .as_widget()
-            .layout(&mut tree.children[0], renderer, limits)
-            .translate(Vector::new(0.0, y_offset));
-
-        let tracks = self.children[1]
-            .as_widget()
-            .layout(
-                &mut tree.children[1],
-                renderer,
-                &limits.shrink(Size::new(track_panels.size().width, 0.0)),
-            )
-            .translate(Vector::new(track_panels.size().width, y_offset));
-
-        Node::with_children(limits.max(), vec![track_panels, tracks])
+        Node::with_children(
+            limits.max(),
+            vec![
+                self.children
+                    .as_widget()
+                    .layout(&mut tree.children[0], renderer, limits)
+                    .translate(Vector::new(
+                        0.0,
+                        self.position.y.mul_add(-self.scale.y, LINE_HEIGHT),
+                    )),
+            ],
+        )
     }
 
     fn on_event(
@@ -138,25 +133,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) -> Status {
-        if self
-            .children
-            .iter_mut()
-            .zip(&mut tree.children)
-            .zip(layout.children())
-            .filter_map(|((child, state), layout)| {
-                Some(child.as_widget_mut().on_event(
-                    state,
-                    event.clone(),
-                    layout,
-                    cursor,
-                    renderer,
-                    clipboard,
-                    shell,
-                    &layout.bounds().intersection(viewport)?,
-                ))
-            })
-            .fold(Status::Ignored, Status::merge)
-            == Status::Captured
+        if self.children.as_widget_mut().on_event(
+            &mut tree.children[0],
+            event.clone(),
+            layout.children().next().unwrap(),
+            cursor,
+            renderer,
+            clipboard,
+            shell,
+            viewport,
+        ) == Status::Captured
         {
             return Status::Captured;
         }
@@ -186,11 +172,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         }
 
         let Some(mut cursor) = cursor.position_in(bounds).and_then(|mut cursor| {
-            layout
-                .children()
-                .next()
-                .is_none_or(|layout| {
-                    cursor.x -= layout.bounds().width;
+            track_panel_bounds(&layout)
+                .is_none_or(|bounds| {
+                    cursor.x -= bounds.width;
                     cursor.x >= 0.0
                 })
                 .then_some(cursor)
@@ -238,28 +222,19 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             Action::DraggingPlayhead(..) => Interaction::ResizingHorizontally,
             Action::DeletingClips => Interaction::NotAllowed,
             Action::None => {
-                if layout.children().next_back().is_some_and(|layout| {
-                    cursor.position().is_some_and(|cursor| {
-                        cursor.x >= layout.bounds().x && cursor.y < layout.bounds().y
-                    })
+                if cursor.position().is_some_and(|cursor| {
+                    cursor.y - layout.bounds().y <= LINE_HEIGHT
+                        && track_bounds(&layout).is_none_or(|bounds| cursor.x >= bounds.x)
                 }) {
                     Interaction::ResizingHorizontally
                 } else {
-                    self.children
-                        .iter()
-                        .zip(&tree.children)
-                        .zip(layout.children())
-                        .filter_map(|((child, tree), layout)| {
-                            Some(child.as_widget().mouse_interaction(
-                                tree,
-                                layout,
-                                cursor,
-                                &layout.bounds().intersection(viewport)?,
-                                renderer,
-                            ))
-                        })
-                        .max()
-                        .unwrap_or_default()
+                    self.children.as_widget().mouse_interaction(
+                        &tree.children[0],
+                        layout.children().next().unwrap(),
+                        cursor,
+                        viewport,
+                        renderer,
+                    )
                 }
             }
         }
@@ -278,13 +253,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         let bounds = layout.bounds();
 
         let mut bounds_no_track_panel = bounds;
-        if let Some(panel) = layout
-            .children()
-            .next_back()
-            .and_then(|layout| layout.children().next())
-        {
-            bounds_no_track_panel.x = panel.bounds().x;
-            bounds_no_track_panel.width = panel.bounds().width;
+        if let Some(bounds) = track_bounds(&layout) {
+            bounds_no_track_panel.x = bounds.x;
+            bounds_no_track_panel.width = bounds.width;
         }
 
         let mut bounds_no_seeker = bounds;
@@ -308,7 +279,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                 return;
             };
 
-            self.children[0].as_widget().draw(
+            self.children.as_widget().draw(
                 &tree.children[0],
                 renderer,
                 theme,
@@ -318,24 +289,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                 &bounds,
             );
         });
-
-        'foo: {
-            let layout = children.next().unwrap();
-
-            let Some(bounds) = layout.bounds().intersection(&bounds_no_seeker) else {
-                break 'foo;
-            };
-
-            self.children[1].as_widget().draw(
-                &tree.children[1],
-                renderer,
-                theme,
-                style,
-                layout,
-                cursor,
-                &bounds,
-            );
-        }
 
         renderer.with_layer(bounds_no_track_panel, |renderer| {
             self.playhead(renderer, bounds_no_track_panel, theme);
@@ -363,8 +316,7 @@ where
         inner: &'a ArrangementWrapper,
         position: ArrangementPosition,
         scale: ArrangementScale,
-        track_panels: impl Into<Element<'a, Message>>,
-        tracks: impl Into<Element<'a, Message>>,
+        children: impl Into<Element<'a, Message>>,
         seek_to: fn(usize) -> Message,
         select_clip: fn(usize, usize) -> Message,
         unselect_clip: fn() -> Message,
@@ -377,7 +329,7 @@ where
     ) -> Self {
         Self {
             inner,
-            children: [track_panels.into(), tracks.into()],
+            children: children.into(),
             position,
             scale,
             seek_to,
@@ -853,4 +805,30 @@ where
     fn from(arrangement_front: Arrangement<'a, Message>) -> Self {
         Self::new(arrangement_front)
     }
+}
+
+fn track_panel_bounds(layout: &Layout<'_>) -> Option<Rectangle> {
+    Some(
+        layout
+            .children()
+            .next()?
+            .children()
+            .next()?
+            .children()
+            .next()?
+            .bounds(),
+    )
+}
+
+fn track_bounds(layout: &Layout<'_>) -> Option<Rectangle> {
+    Some(
+        layout
+            .children()
+            .next()?
+            .children()
+            .next()?
+            .children()
+            .next_back()?
+            .bounds(),
+    )
 }

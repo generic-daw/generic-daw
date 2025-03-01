@@ -51,13 +51,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             self.children
                 .iter()
                 .zip(&mut tree.children)
-                .map(|(widget, tree)| {
-                    widget.as_widget().layout(
-                        tree,
-                        renderer,
-                        &Limits::new(limits.min(), Size::new(f32::INFINITY, self.scale.y)),
-                    )
-                })
+                .map(|(widget, tree)| widget.as_widget().layout(tree, renderer, limits))
                 .collect(),
         )
     }
@@ -67,19 +61,19 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         tree: &Tree,
         layout: Layout<'_>,
         cursor: Cursor,
-        viewport: &Rectangle,
+        _viewport: &Rectangle,
         renderer: &Renderer,
     ) -> Interaction {
         self.children
             .iter()
             .zip(&tree.children)
             .zip(layout.children())
-            .filter_map(|((child, tree), layout)| {
+            .filter_map(|((child, tree), clip_layout)| {
                 Some(child.as_widget().mouse_interaction(
                     tree,
-                    layout,
+                    clip_layout,
                     cursor,
-                    &layout.bounds().intersection(viewport)?,
+                    &clip_layout.bounds().intersection(&layout.bounds())?,
                     renderer,
                 ))
             })

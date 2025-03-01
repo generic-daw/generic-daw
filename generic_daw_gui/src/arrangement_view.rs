@@ -243,73 +243,75 @@ impl ArrangementView {
                     .iter()
                     .enumerate()
                     .map(|(idx, track)| {
+                        let enabled = track.node().enabled.load(Acquire);
                         let left = track.node().clone();
                         let right = left.clone();
 
-                        let enabled = right.enabled.load(Acquire);
-
-                        container(
-                            row![
-                                PeakMeter::new(
-                                    move || left.max_l.swap(0.0, AcqRel),
-                                    move || right.max_r.swap(0.0, AcqRel),
-                                    enabled
-                                ),
-                                column![
-                                    Knob::new(0.0..=1.0, 0.0, 1.0, move |f| {
-                                        Message::TrackVolumeChanged(idx, f)
-                                    })
-                                    .set_enabled(enabled),
-                                    Knob::new(-1.0..=1.0, 0.0, 0.0, move |f| {
-                                        Message::TrackPanChanged(idx, f)
-                                    })
-                                    .set_enabled(enabled),
+                        row![
+                            container(
+                                row![
+                                    PeakMeter::new(
+                                        move || left.max_l.swap(0.0, AcqRel),
+                                        move || right.max_r.swap(0.0, AcqRel),
+                                        enabled
+                                    ),
+                                    column![
+                                        Knob::new(0.0..=1.0, 0.0, 1.0, move |f| {
+                                            Message::TrackVolumeChanged(idx, f)
+                                        })
+                                        .set_enabled(enabled),
+                                        Knob::new(-1.0..=1.0, 0.0, 0.0, move |f| {
+                                            Message::TrackPanChanged(idx, f)
+                                        })
+                                        .set_enabled(enabled),
+                                    ]
+                                    .spacing(5.0),
+                                    mouse_area(
+                                        radio("", enabled, Some(true), |_| {
+                                            Message::ToggleTrackEnabled(idx)
+                                        })
+                                        .spacing(0.0)
+                                    )
+                                    .on_right_press(Message::ToggleTrackSolo(idx)),
                                 ]
                                 .spacing(5.0),
-                                mouse_area(
-                                    radio("", enabled, Some(true), |_| {
-                                        Message::ToggleTrackEnabled(idx)
-                                    })
-                                    .spacing(0.0)
-                                )
-                                .on_right_press(Message::ToggleTrackSolo(idx)),
-                            ]
-                            .spacing(5.0),
-                        )
-                        .padding(5.0)
-                        .style(|theme: &Theme| Style {
-                            background: Some(
-                                theme
-                                    .extended_palette()
-                                    .secondary
-                                    .weak
-                                    .color
-                                    .scale_alpha(0.25)
-                                    .into(),
-                            ),
-                            border: Border::default()
-                                .width(1.0)
-                                .color(theme.extended_palette().secondary.weak.color),
-                            ..Style::default()
-                        })
-                        .height(Length::Fixed(self.scale.y))
-                        .into()
-                    }),
+                            )
+                            .padding(5.0)
+                            .style(|theme: &Theme| Style {
+                                background: Some(
+                                    theme
+                                        .extended_palette()
+                                        .secondary
+                                        .weak
+                                        .color
+                                        .scale_alpha(0.25)
+                                        .into(),
+                                ),
+                                border: Border::default()
+                                    .width(1.0)
+                                    .color(theme.extended_palette().secondary.weak.color),
+                                ..Style::default()
+                            })
+                            .height(Length::Fixed(self.scale.y)),
+                            TrackWidget::new(
+                                track.clips().map(|clip| match clip {
+                                    TrackClipWrapper::AudioClip(clip) => {
+                                        AudioClipWidget::new(
+                                            clip,
+                                            self.position,
+                                            self.scale,
+                                            enabled,
+                                        )
+                                        .into()
+                                    }
+                                    TrackClipWrapper::MidiClip(_) => unimplemented!(),
+                                }),
+                                self.scale,
+                            )
+                        ]
+                    })
+                    .map(Element::new),
             ),
-            column(self.arrangement.tracks().iter().map(|track| {
-                let enabled = track.node().enabled.load(Acquire);
-
-                TrackWidget::new(
-                    track.clips().map(|clip| match clip {
-                        TrackClipWrapper::AudioClip(clip) => {
-                            AudioClipWidget::new(clip, self.position, self.scale, enabled).into()
-                        }
-                        TrackClipWrapper::MidiClip(_) => unimplemented!(),
-                    }),
-                    self.scale,
-                )
-                .into()
-            })),
             Message::SeekTo,
             Message::SelectClip,
             Message::UnselectClip,
