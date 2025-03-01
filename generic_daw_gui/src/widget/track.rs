@@ -1,7 +1,6 @@
-use super::{ArrangementPosition, ArrangementScale, AudioClip};
-use crate::arrangement_view::{TrackClipWrapper, TrackWrapper};
+use super::ArrangementScale;
 use iced::{
-    Element, Length, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Length, Rectangle, Renderer, Size, Theme,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
         layout::{Limits, Node},
@@ -11,16 +10,21 @@ use iced::{
     event::Status,
     mouse::{Cursor, Interaction},
 };
-use std::{iter::once, sync::atomic::Ordering::Acquire};
+use std::fmt::{Debug, Formatter};
 
 pub struct Track<'a, Message> {
-    inner: &'a TrackWrapper,
     /// list of the track panel and all the clip widgets
     children: Box<[Element<'a, Message, Theme, Renderer>]>,
-    /// the position of the top left corner of the arrangement viewport
-    position: ArrangementPosition,
     /// the scale of the arrangement viewport
     scale: ArrangementScale,
+}
+
+impl<Message> Debug for Track<'_, Message> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Track")
+            .field("scale", &self.scale)
+            .finish_non_exhaustive()
+    }
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
@@ -31,7 +35,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
     fn size(&self) -> Size<Length> {
         Size {
             width: Length::Fill,
-            height: Length::Fixed(self.scale.y.floor()),
+            height: Length::Fixed(self.scale.y),
         }
     }
 
@@ -42,47 +46,18 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         self.diff(tree);
 
-        let panel_layout =
-            self.children[0]
-                .as_widget()
-                .layout(&mut tree.children[0], renderer, limits);
-        let panel_width = panel_layout.size().width;
-
-        let meter = self.inner.meter();
-        let bpm = meter.bpm.load(Acquire);
-        let sample_rate = meter.sample_rate;
-
         Node::with_children(
-            limits.max(),
-            once(panel_layout)
-                .chain(
-                    self.children
-                        .iter()
-                        .zip(&mut tree.children)
-                        .skip(1)
-                        .map(|(widget, tree)| {
-                            widget.as_widget().layout(
-                                tree,
-                                renderer,
-                                &Limits::new(
-                                    limits.min(),
-                                    Size::new(f32::INFINITY, limits.max().height),
-                                ),
-                            )
-                        })
-                        .zip(self.inner.clips())
-                        .map(|(node, clip)| {
-                            node.translate(Vector::new(
-                                panel_width
-                                    + (clip
-                                        .get_global_start()
-                                        .in_interleaved_samples_f(bpm, sample_rate)
-                                        - self.position.x)
-                                        / self.scale.x.exp2(),
-                                0.0,
-                            ))
-                        }),
-                )
+            Size::new(limits.max().width, self.scale.y),
+            self.children
+                .iter()
+                .zip(&mut tree.children)
+                .map(|(widget, tree)| {
+                    widget.as_widget().layout(
+                        tree,
+                        renderer,
+                        &Limits::new(limits.min(), Size::new(f32::INFINITY, self.scale.y)),
+                    )
+                })
                 .collect(),
         )
     }
@@ -99,10 +74,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             .iter()
             .zip(&tree.children)
             .zip(layout.children())
-            .map(|((child, tree), layout)| {
-                child
-                    .as_widget()
-                    .mouse_interaction(tree, layout, cursor, viewport, renderer)
+            .filter_map(|((child, tree), layout)| {
+                Some(child.as_widget().mouse_interaction(
+                    tree,
+                    layout,
+                    cursor,
+                    &layout.bounds().intersection(viewport)?,
+                    renderer,
+                ))
             })
             .max()
             .unwrap_or_default()
@@ -127,38 +106,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             return;
         }
 
-        let track_panel_layout = layout.children().next().unwrap();
-        let Some(mut track_panel_bounds) = track_panel_layout.bounds().intersection(viewport)
-        else {
-            return;
-        };
-        track_panel_bounds.height += 1.0;
-        let track_panel_width = track_panel_bounds.width;
-
-        renderer.with_layer(track_panel_bounds, |renderer| {
-            self.children[0].as_widget().draw(
-                &tree.children[0],
-                renderer,
-                theme,
-                style,
-                track_panel_layout,
-                cursor,
-                viewport,
-            );
-        });
-
-        let mut viewport = *viewport;
-        viewport.x += track_panel_width;
-        viewport.width -= track_panel_width;
-        let Some(bounds) = bounds.intersection(&viewport) else {
-            return;
-        };
-
         self.children
             .iter()
             .zip(&tree.children)
             .zip(layout.children())
-            .skip(1)
             .for_each(|((child, tree), layout)| {
                 renderer.with_layer(bounds, |renderer| {
                     child
@@ -183,8 +134,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             .iter_mut()
             .zip(&mut tree.children)
             .zip(layout.children())
-            .map(|((child, state), layout)| {
-                child.as_widget_mut().on_event(
+            .filter_map(|((child, state), layout)| {
+                Some(child.as_widget_mut().on_event(
                     state,
                     event.clone(),
                     layout,
@@ -192,8 +143,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                     renderer,
                     clipboard,
                     shell,
-                    viewport,
-                )
+                    &layout.bounds().intersection(viewport)?,
+                ))
             })
             .fold(Status::Ignored, Status::merge)
     }
@@ -204,28 +155,21 @@ where
     Message: 'a,
 {
     pub fn new(
-        inner: &'a TrackWrapper,
-        position: ArrangementPosition,
+        children: impl IntoIterator<Item = Element<'a, Message>>,
         scale: ArrangementScale,
-        track_panel: impl Fn(usize, bool) -> Element<'a, Message>,
-        index: usize,
     ) -> Self {
-        let enabled = inner.node().enabled.load(Acquire);
-
-        let children = once(track_panel(index, enabled))
-            .chain(inner.clips().map(|clip| match clip {
-                TrackClipWrapper::AudioClip(clip) => {
-                    AudioClip::new(clip, position, scale, enabled).into()
-                }
-                TrackClipWrapper::MidiClip(_) => unimplemented!(),
-            }))
-            .collect();
-
         Self {
-            inner,
-            children,
-            position,
+            children: children.into_iter().collect(),
             scale,
         }
+    }
+}
+
+impl<'a, Message> From<Track<'a, Message>> for Element<'a, Message>
+where
+    Message: 'a,
+{
+    fn from(value: Track<'a, Message>) -> Self {
+        Element::new(value)
     }
 }

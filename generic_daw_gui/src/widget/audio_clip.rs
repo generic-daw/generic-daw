@@ -41,8 +41,8 @@ struct State {
     last_position: ArrangementPosition,
     /// the scale from the last draw
     last_scale: ArrangementScale,
-    /// the size from the last draw
-    last_size: Size,
+    /// the bounds from the last draw
+    last_bounds: Rectangle,
 }
 
 #[derive(Clone, Debug)]
@@ -74,22 +74,26 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         }
     }
 
-    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
         let bpm = self.inner.meter.bpm.load(Acquire);
+        let global_start = self
+            .inner
+            .position
+            .get_global_start()
+            .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate);
+        let global_end = self
+            .inner
+            .position
+            .get_global_end()
+            .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate);
 
         Node::new(Size::new(
-            (self
-                .inner
-                .position
-                .get_global_end()
-                .in_interleaved_samples(bpm, self.inner.meter.sample_rate)
-                - self
-                    .inner
-                    .position
-                    .get_global_start()
-                    .in_interleaved_samples(bpm, self.inner.meter.sample_rate)) as f32
-                / self.scale.x.exp2(),
-            limits.max().height,
+            (global_end - global_start) / self.scale.x.exp2(),
+            self.scale.y,
+        ))
+        .translate(Vector::new(
+            (global_start - self.position.x) / self.scale.x.exp2(),
+            0.0,
         ))
     }
 
@@ -102,7 +106,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
         _shell: &mut Shell<'_, Message>,
-        viewport: &Rectangle,
+        _viewport: &Rectangle,
     ) -> Status {
         if let Event::Window(window::Event::RedrawRequested(..)) = event {
             let state = tree.state.downcast_mut::<State>();
@@ -117,12 +121,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
                 *state.cache.borrow_mut() = None;
             }
 
-            let Some(bounds) = layout.bounds().intersection(viewport) else {
-                return Status::Ignored;
-            };
-
-            if state.last_size != bounds.size() {
-                state.last_size = bounds.size();
+            if state.last_bounds != layout.bounds() {
+                state.last_bounds = layout.bounds();
                 *state.cache.borrow_mut() = None;
             }
         }
@@ -244,20 +244,24 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         _state: &Tree,
         layout: Layout<'_>,
         cursor: Cursor,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> Interaction {
         let bounds = layout.bounds();
 
-        if let Some(cursor) = cursor.position_in(bounds) {
-            if cursor.x < 10.0 || bounds.width - cursor.x < 10.0 {
-                return Interaction::ResizingHorizontally;
-            }
+        let Some(cursor) = cursor.position() else {
+            return Interaction::default();
+        };
 
-            return Interaction::Grab;
+        if !viewport.contains(cursor) {
+            return Interaction::default();
         }
 
-        Interaction::default()
+        if cursor.x < 10.0 || bounds.width - cursor.x < 10.0 {
+            Interaction::ResizingHorizontally
+        } else {
+            Interaction::Grab
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT, Track};
+use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT};
 use crate::arrangement_view::ArrangementWrapper;
 use generic_daw_core::Position;
 use iced::{
@@ -28,7 +28,7 @@ enum Action {
     #[default]
     None,
     DraggingPlayhead(Position),
-    DraggingClip(f32, Position),
+    DraggingClip(f32, usize, Position),
     ClipTrimmingStart(f32, Position),
     ClipTrimmingEnd(f32, Position),
     DeletingClips,
@@ -61,11 +61,12 @@ struct State {
 pub struct Arrangement<'a, Message> {
     inner: &'a ArrangementWrapper,
     /// list of all the track widgets
-    children: Box<[Element<'a, Message, Theme, Renderer>]>,
+    children: [Element<'a, Message, Theme, Renderer>; 2],
     /// the position of the top left corner of the arrangement viewport
     position: ArrangementPosition,
     /// the scale of the arrangement viewport
     scale: ArrangementScale,
+
     seek_to: fn(usize) -> Message,
     select_clip: fn(usize, usize) -> Message,
     unselect_clip: fn() -> Message,
@@ -107,27 +108,23 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         self.diff(tree);
 
-        let mut y = self.position.y.mul_add(-self.scale.y, LINE_HEIGHT);
+        let y_offset = self.position.y.mul_add(-self.scale.y, LINE_HEIGHT);
 
-        Node::with_children(
-            limits.max(),
-            self.children
-                .iter()
-                .zip(&mut tree.children)
-                .map(|(widget, tree)| {
-                    widget.as_widget().layout(
-                        tree,
-                        renderer,
-                        &Limits::new(limits.min(), Size::new(limits.max().width, self.scale.y)),
-                    )
-                })
-                .map(|node| {
-                    let node = node.translate(Vector::new(0.0, y));
-                    y += node.bounds().height;
-                    node
-                })
-                .collect(),
-        )
+        let track_panels = self.children[0]
+            .as_widget()
+            .layout(&mut tree.children[0], renderer, limits)
+            .translate(Vector::new(0.0, y_offset));
+
+        let tracks = self.children[1]
+            .as_widget()
+            .layout(
+                &mut tree.children[1],
+                renderer,
+                &limits.shrink(Size::new(track_panels.size().width, 0.0)),
+            )
+            .translate(Vector::new(track_panels.size().width, y_offset));
+
+        Node::with_children(limits.max(), vec![track_panels, tracks])
     }
 
     fn on_event(
@@ -146,8 +143,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             .iter_mut()
             .zip(&mut tree.children)
             .zip(layout.children())
-            .map(|((child, state), layout)| {
-                child.as_widget_mut().on_event(
+            .filter_map(|((child, state), layout)| {
+                Some(child.as_widget_mut().on_event(
                     state,
                     event.clone(),
                     layout,
@@ -155,8 +152,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                     renderer,
                     clipboard,
                     shell,
-                    viewport,
-                )
+                    &layout.bounds().intersection(viewport)?,
+                ))
             })
             .fold(Status::Ignored, Status::merge)
             == Status::Captured
@@ -192,9 +189,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             layout
                 .children()
                 .next()
-                .and_then(|track| track.children().next())
-                .is_none_or(|panel| {
-                    cursor.x -= panel.bounds().width;
+                .is_none_or(|layout| {
+                    cursor.x -= layout.bounds().width;
                     cursor.x >= 0.0
                 })
                 .then_some(cursor)
@@ -241,32 +237,31 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             Action::DraggingClip(..) => Interaction::Grabbing,
             Action::DraggingPlayhead(..) => Interaction::ResizingHorizontally,
             Action::DeletingClips => Interaction::NotAllowed,
-            Action::None => self
-                .children
-                .iter()
-                .zip(&tree.children)
-                .zip(layout.children())
-                .map(|((child, tree), layout)| {
-                    child
-                        .as_widget()
-                        .mouse_interaction(tree, layout, cursor, viewport, renderer)
-                })
-                .max()
-                .filter(|&i| i != Interaction::default())
-                .or_else(|| {
-                    cursor
-                        .position_in(layout.bounds())
-                        .filter(|cursor| cursor.y <= LINE_HEIGHT)
-                        .filter(|cursor| {
-                            layout
-                                .children()
-                                .next()
-                                .and_then(|track| track.children().next())
-                                .is_none_or(|panel| cursor.x >= panel.bounds().width)
+            Action::None => {
+                if layout.children().next_back().is_some_and(|layout| {
+                    cursor.position().is_some_and(|cursor| {
+                        cursor.x >= layout.bounds().x && cursor.y < layout.bounds().y
+                    })
+                }) {
+                    Interaction::ResizingHorizontally
+                } else {
+                    self.children
+                        .iter()
+                        .zip(&tree.children)
+                        .zip(layout.children())
+                        .filter_map(|((child, tree), layout)| {
+                            Some(child.as_widget().mouse_interaction(
+                                tree,
+                                layout,
+                                cursor,
+                                &layout.bounds().intersection(viewport)?,
+                                renderer,
+                            ))
                         })
-                        .map(|_| Interaction::ResizingHorizontally)
-                })
-                .unwrap_or_default(),
+                        .max()
+                        .unwrap_or_default()
+                }
+            }
         }
     }
 
@@ -285,12 +280,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         let mut bounds_no_track_panel = bounds;
         if let Some(panel) = layout
             .children()
-            .next()
-            .and_then(|track| track.children().next())
+            .next_back()
+            .and_then(|layout| layout.children().next())
         {
-            let panel_width = panel.bounds().width;
-            bounds_no_track_panel.x += panel_width;
-            bounds_no_track_panel.width -= panel_width;
+            bounds_no_track_panel.x = panel.bounds().x;
+            bounds_no_track_panel.width = panel.bounds().width;
         }
 
         let mut bounds_no_seeker = bounds;
@@ -305,19 +299,43 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             self.grid(renderer, inner_bounds, theme);
         });
 
-        self.children
-            .iter()
-            .zip(&tree.children)
-            .zip(layout.children())
-            .for_each(|((child, tree), layout)| {
-                let Some(bounds) = layout.bounds().intersection(&bounds_no_seeker) else {
-                    return;
-                };
+        let mut children = layout.children();
 
-                child
-                    .as_widget()
-                    .draw(tree, renderer, theme, style, layout, cursor, &bounds);
-            });
+        renderer.with_layer(bounds_no_seeker, |renderer| {
+            let layout = children.next().unwrap();
+
+            let Some(bounds) = layout.bounds().intersection(&bounds_no_seeker) else {
+                return;
+            };
+
+            self.children[0].as_widget().draw(
+                &tree.children[0],
+                renderer,
+                theme,
+                style,
+                layout,
+                cursor,
+                &bounds,
+            );
+        });
+
+        'foo: {
+            let layout = children.next().unwrap();
+
+            let Some(bounds) = layout.bounds().intersection(&bounds_no_seeker) else {
+                break 'foo;
+            };
+
+            self.children[1].as_widget().draw(
+                &tree.children[1],
+                renderer,
+                theme,
+                style,
+                layout,
+                cursor,
+                &bounds,
+            );
+        }
 
         renderer.with_layer(bounds_no_track_panel, |renderer| {
             self.playhead(renderer, bounds_no_track_panel, theme);
@@ -345,7 +363,8 @@ where
         inner: &'a ArrangementWrapper,
         position: ArrangementPosition,
         scale: ArrangementScale,
-        track_panel: impl Fn(usize, bool) -> Element<'a, Message>,
+        track_panels: impl Into<Element<'a, Message>>,
+        tracks: impl Into<Element<'a, Message>>,
         seek_to: fn(usize) -> Message,
         select_clip: fn(usize, usize) -> Message,
         unselect_clip: fn() -> Message,
@@ -356,17 +375,9 @@ where
         delete_clip: fn(usize, usize) -> Message,
         position_scale_delta: fn(ArrangementPosition, ArrangementScale) -> Message,
     ) -> Self {
-        let children = inner
-            .tracks()
-            .iter()
-            .enumerate()
-            .map(|(idx, track)| Track::new(track, position, scale, &track_panel, idx))
-            .map(Element::new)
-            .collect();
-
         Self {
             inner,
-            children,
+            children: [track_panels.into(), tracks.into()],
             position,
             scale,
             seek_to,
@@ -573,7 +584,7 @@ where
                             (_, true) => {
                                 Action::ClipTrimmingEnd(offset + end_pixel - start_pixel, time)
                             }
-                            (false, false) => Action::DraggingClip(offset, time),
+                            (false, false) => Action::DraggingClip(offset, track, time),
                         };
                     shell.publish((self.select_clip)(track, clip));
 
@@ -606,16 +617,17 @@ where
 
                         Some(Status::Captured)
                     }
-                    Action::DraggingClip(offset, time) => {
+                    Action::DraggingClip(offset, track, time) => {
+                        let new_track = (cursor.y / self.scale.y + self.position.y) as usize;
+                        let new_track = new_track.min(self.inner.tracks().len().saturating_sub(1));
+
                         let new_start = self.get_time(cursor, offset, state.modifiers);
-                        if new_start == time {
+
+                        if new_track == track && new_start == time {
                             return None;
                         }
 
-                        let new_track = (cursor.y / self.scale.y + self.position.y) as usize;
-                        let new_track = new_track.min(self.children.len().saturating_sub(1));
-
-                        state.action = Action::DraggingClip(offset, new_start);
+                        state.action = Action::DraggingClip(offset, new_track, new_start);
                         shell.publish((self.move_clip_to)(new_track, new_start));
 
                         Some(Status::Captured)
@@ -745,7 +757,7 @@ where
                         / self.scale.x.exp2();
                     let offset = start_pixel - cursor.x;
 
-                    state.action = Action::DraggingClip(offset, time);
+                    state.action = Action::DraggingClip(offset, track, time);
 
                     shell.publish((self.clone_clip)(track, clip));
                     Some(Status::Captured)
