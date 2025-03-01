@@ -20,7 +20,7 @@ iced = { version = "0.13.1", default-features = false, features = [
     "tokio",
     "wgpu",
 ] }
-iced_file_tree = "0.3.0"
+iced_file_tree = "0.3.1"
 iced_wgpu = { version = "0.13.5", features = ["geometry"] }
 itoa = "1.0.14"
 rfd = "0.15.2"

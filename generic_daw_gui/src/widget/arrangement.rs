@@ -441,8 +441,8 @@ where
                 font: renderer.default_font(),
                 horizontal_alignment: Horizontal::Left,
                 vertical_alignment: Vertical::Top,
-                shaping: Shaping::default(),
-                wrapping: Wrapping::default(),
+                shaping: Shaping::Basic,
+                wrapping: Wrapping::None,
             };
 
             renderer.fill_text(

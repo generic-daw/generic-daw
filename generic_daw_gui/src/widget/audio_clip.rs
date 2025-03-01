@@ -175,8 +175,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
             font: renderer.default_font(),
             horizontal_alignment: Horizontal::Left,
             vertical_alignment: Vertical::Top,
-            shaping: Shaping::default(),
-            wrapping: Wrapping::default(),
+            shaping: Shaping::Advanced,
+            wrapping: Wrapping::None,
         };
         renderer.fill_text(
             text,

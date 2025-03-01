@@ -8,7 +8,7 @@ use iced::{
         widget::{Tree, tree},
     },
     event::Status,
-    mouse::{self, Cursor, ScrollDelta},
+    mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::Text,
 };
 use std::{
@@ -178,6 +178,21 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<'_, Message> {
             cursor,
             viewport,
         );
+    }
+
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        _layout: Layout<'_>,
+        _cursor: Cursor,
+        _viewport: &Rectangle,
+        _renderer: &Renderer,
+    ) -> Interaction {
+        if tree.state.downcast_ref::<State>().dragging.is_some() {
+            Interaction::ResizingVertically
+        } else {
+            Interaction::default()
+        }
     }
 }
 
