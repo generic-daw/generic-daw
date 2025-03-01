@@ -249,13 +249,15 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
     ) -> Interaction {
         let bounds = layout.bounds();
 
-        let Some(cursor) = cursor.position() else {
+        let Some(mut cursor) = cursor.position() else {
             return Interaction::default();
         };
 
         if !viewport.contains(cursor) {
             return Interaction::default();
         }
+
+        cursor.x -= bounds.x;
 
         if cursor.x < 10.0 || bounds.width - cursor.x < 10.0 {
             Interaction::ResizingHorizontally
