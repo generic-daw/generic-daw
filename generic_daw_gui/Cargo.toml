@@ -16,7 +16,6 @@ hound = "3.5.1"
 iced = { version = "0.13.1", default-features = false, features = [
     "advanced",
     "canvas",
-    "debug",
     "svg",
     "tokio",
     "wgpu",
