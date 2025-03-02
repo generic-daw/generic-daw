@@ -44,8 +44,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        self.diff(tree);
-
         Node::with_children(
             Size::new(limits.max().width, self.scale.y),
             self.children

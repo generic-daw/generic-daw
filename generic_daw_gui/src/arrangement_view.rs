@@ -8,6 +8,7 @@ use generic_daw_core::{
 };
 use iced::{
     Border, Element, Length, Task, Theme,
+    mouse::Interaction,
     widget::{column, container, container::Style, mouse_area, radio, row},
 };
 use std::{
@@ -32,7 +33,7 @@ pub enum Message {
     TrackVolumeChanged(usize, f32),
     TrackPanChanged(usize, f32),
     LoadSample(Box<Path>),
-    LoadedSample(Arc<InterleavedAudio>),
+    LoadedSample(Option<Arc<InterleavedAudio>>),
     LoadedPlugin(Arc<Mutex<AudioProcessor>>),
     ToggleTrackEnabled(usize),
     ToggleTrackSolo(usize),
@@ -52,6 +53,8 @@ pub struct ArrangementView {
     arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
 
+    loading: usize,
+
     position: ArrangementPosition,
     scale: ArrangementScale,
     soloed_track: Option<usize>,
@@ -67,6 +70,9 @@ impl ArrangementView {
         let arrangement = Self {
             arrangement,
             meter: meter.clone(),
+
+            loading: 0,
+
             position: ArrangementPosition::default(),
             scale: ArrangementScale::default(),
             soloed_track: None,
@@ -101,20 +107,24 @@ impl ArrangementView {
                     .store(pan, Release);
             }
             Message::LoadSample(path) => {
+                self.loading += 1;
                 let meter = self.meter.clone();
                 return Task::future(tokio::task::spawn_blocking(move || {
                     InterleavedAudio::create(&path, meter.sample_rate)
                 }))
                 .and_then(Task::done)
-                .and_then(Task::done)
+                .map(Result::ok)
                 .map(Message::LoadedSample);
             }
             Message::LoadedSample(audio_file) => {
-                let mut track = AudioTrack::new(self.meter.clone());
-                track
-                    .clips
-                    .push(AudioClip::create(audio_file, self.meter.clone()));
-                self.arrangement.push(track);
+                self.loading -= 1;
+                if let Some(audio_file) = audio_file {
+                    let mut track = AudioTrack::new(self.meter.clone());
+                    track
+                        .clips
+                        .push(AudioClip::create(audio_file, self.meter.clone()));
+                    self.arrangement.push(track);
+                }
             }
             Message::LoadedPlugin(arc) => {
                 let audio_processor = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
@@ -233,7 +243,7 @@ impl ArrangementView {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        ArrangementWidget::new(
+        let arrangement = ArrangementWidget::new(
             &self.arrangement,
             self.position,
             self.scale,
@@ -322,6 +332,14 @@ impl ArrangementView {
             Message::DeleteClip,
             Message::PositionScaleDelta,
         )
-        .into()
+        .into();
+
+        if self.loading > 0 {
+            mouse_area(arrangement)
+                .interaction(Interaction::Working)
+                .into()
+        } else {
+            arrangement
+        }
     }
 }

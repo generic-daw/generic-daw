@@ -78,6 +78,10 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
         tree::State::new(self.new_state())
     }
 
+    fn diff(&self, tree: &mut Tree) {
+        tree.diff_children(&self.children);
+    }
+
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         let state = tree.state.downcast_ref::<State>();
         let max_limits = limits.max();

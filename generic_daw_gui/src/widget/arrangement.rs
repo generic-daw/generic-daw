@@ -106,8 +106,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        self.diff(tree);
-
         Node::with_children(
             limits.max(),
             vec![

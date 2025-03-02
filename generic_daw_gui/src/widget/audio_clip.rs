@@ -52,7 +52,7 @@ pub struct AudioClip {
     name: String,
     /// the position of the top left corner of the arrangement viewport
     position: ArrangementPosition,
-    /// the scale of the timeline viewport
+    /// the scale of the arrangement viewport
     scale: ArrangementScale,
     /// whether the clip is in an enabled track
     enabled: bool,
