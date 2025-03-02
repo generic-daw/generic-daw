@@ -1,4 +1,4 @@
-use crate::{shared::Shared, timer::Timers};
+use crate::{shared::Shared, timer_ext::TimerExt};
 use clack_extensions::{
     audio_ports::{HostAudioPortsImpl, RescanType},
     gui::{GuiSize, PluginGui},
@@ -22,7 +22,7 @@ pub struct MainThread<'a> {
     shared: &'a Shared,
     pub gui: Option<PluginGui>,
     pub timer_support: Option<PluginTimer>,
-    pub timers: Rc<RefCell<Timers>>,
+    pub timers: Rc<RefCell<TimerExt>>,
 }
 
 impl<'a> MainThread<'a> {

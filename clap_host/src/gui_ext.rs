@@ -1,4 +1,4 @@
-use crate::{PluginId, host::Host, timer::Timers};
+use crate::{PluginId, host::Host, timer_ext::TimerExt};
 use clack_extensions::{
     gui::{GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow},
     timer::PluginTimer,
@@ -88,7 +88,7 @@ impl GuiExt {
     }
 
     #[must_use]
-    pub fn timers(&self) -> Option<(Rc<RefCell<Timers>>, PluginTimer)> {
+    pub fn timers(&self) -> Option<(Rc<RefCell<TimerExt>>, PluginTimer)> {
         self.instance
             .access_handler(|h| h.timer_support.map(|ext| (h.timers.clone(), ext)))
     }
