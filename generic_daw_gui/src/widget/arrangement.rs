@@ -61,7 +61,7 @@ struct State {
 pub struct Arrangement<'a, Message> {
     inner: &'a ArrangementWrapper,
     /// column of rows of [track panel, track]
-    children: Element<'a, Message, Theme, Renderer>,
+    children: Element<'a, Message>,
     /// the position of the top left corner of the arrangement viewport
     position: ArrangementPosition,
     /// the scale of the arrangement viewport
@@ -797,7 +797,7 @@ where
     }
 }
 
-impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message, Theme, Renderer>
+impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message>
 where
     Message: 'a,
 {

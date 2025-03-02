@@ -220,7 +220,7 @@ impl PeakMeter {
     }
 }
 
-impl<Message> From<PeakMeter> for Element<'_, Message, Theme, Renderer> {
+impl<Message> From<PeakMeter> for Element<'_, Message> {
     fn from(knob: PeakMeter) -> Self {
         Self::new(knob)
     }

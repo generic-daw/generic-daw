@@ -373,7 +373,7 @@ impl AudioClip {
     }
 }
 
-impl<'a, Message> From<AudioClip> for Element<'a, Message, Theme, Renderer>
+impl<'a, Message> From<AudioClip> for Element<'a, Message>
 where
     Message: 'a,
 {

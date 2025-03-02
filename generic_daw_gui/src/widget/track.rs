@@ -14,7 +14,7 @@ use std::fmt::{Debug, Formatter};
 
 pub struct Track<'a, Message> {
     /// list of the track panel and all the clip widgets
-    children: Box<[Element<'a, Message, Theme, Renderer>]>,
+    children: Box<[Element<'a, Message>]>,
     /// the scale of the arrangement viewport
     scale: ArrangementScale,
 }

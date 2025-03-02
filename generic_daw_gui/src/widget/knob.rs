@@ -325,7 +325,7 @@ impl<Message> Knob<Message> {
     }
 }
 
-impl<'a, Message> From<Knob<Message>> for Element<'a, Message, Theme, Renderer>
+impl<'a, Message> From<Knob<Message>> for Element<'a, Message>
 where
     Message: 'a,
 {

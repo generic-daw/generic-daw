@@ -33,7 +33,7 @@ impl State {
 }
 
 pub struct BpmInput<'a, Message> {
-    inner: Element<'a, Message, Theme, Renderer>,
+    inner: Element<'a, Message>,
     range: RangeInclusive<u16>,
     current: u16,
     f: fn(u16) -> Message,
@@ -209,7 +209,7 @@ impl<Message> BpmInput<'_, Message> {
     }
 }
 
-impl<'a, Message> From<BpmInput<'a, Message>> for Element<'a, Message, Theme, Renderer>
+impl<'a, Message> From<BpmInput<'a, Message>> for Element<'a, Message>
 where
     Message: 'a,
 {

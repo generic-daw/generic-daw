@@ -20,7 +20,7 @@ struct State {
 }
 
 pub struct VSplit<'a, Message> {
-    children: [Element<'a, Message, Theme, Renderer>; 3],
+    children: [Element<'a, Message>; 3],
     split_at: f32,
     resize: fn(f32) -> Message,
 }
@@ -213,7 +213,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
     }
 }
 
-impl<'a, Message> From<VSplit<'a, Message>> for Element<'a, Message, Theme, Renderer>
+impl<'a, Message> From<VSplit<'a, Message>> for Element<'a, Message>
 where
     Message: 'a,
 {
