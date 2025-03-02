@@ -213,12 +213,13 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
                 .iter()
                 .zip(&tree.children)
                 .zip(layout.children())
-                .find(|(_, layout)| cursor.is_over(layout.bounds()))
-                .map_or_else(Interaction::default, |((child, tree), layout)| {
+                .map(|((child, tree), layout)| {
                     child
                         .as_widget()
                         .mouse_interaction(tree, layout, cursor, viewport, renderer)
                 })
+                .max()
+                .unwrap_or_default()
         }
     }
 }
