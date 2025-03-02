@@ -220,9 +220,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             Action::DraggingPlayhead(..) => Interaction::ResizingHorizontally,
             Action::DeletingClips => Interaction::NotAllowed,
             Action::None => {
-                if cursor.position().is_some_and(|cursor| {
-                    cursor.y - layout.bounds().y <= LINE_HEIGHT
-                        && track_bounds(&layout).is_none_or(|bounds| cursor.x >= bounds.x)
+                if cursor.position_in(layout.bounds()).is_some_and(|cursor| {
+                    cursor.y <= LINE_HEIGHT
+                        && track_bounds(&layout)
+                            .is_none_or(|bounds| cursor.x >= bounds.x - layout.position().x)
                 }) {
                     Interaction::ResizingHorizontally
                 } else {

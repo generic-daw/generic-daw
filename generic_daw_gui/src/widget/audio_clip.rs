@@ -234,7 +234,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         }
 
         // draw the mesh
-        renderer.with_translation(Vector::new(bounds.x, layout.bounds().y), |renderer| {
+        renderer.with_translation(Vector::new(bounds.x, layout.position().y), |renderer| {
             renderer.draw_geometry(Geometry::load(state.cache.borrow().as_ref().unwrap()));
         });
     }

@@ -81,11 +81,10 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
     ) -> Status {
-        if let Event::Window(window::Event::RedrawRequested(..)) = event {
+        if let Event::Window(window::Event::RedrawRequested(now)) = event {
             let state = tree.state.downcast_mut::<State>();
             let bounds = layout.bounds();
 
-            let now = Instant::now();
             let diff = ((now - state.last_draw).as_millis() * 4) as f32;
             state.last_draw = now;
 
