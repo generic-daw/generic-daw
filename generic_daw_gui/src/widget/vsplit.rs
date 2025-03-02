@@ -14,21 +14,21 @@ use std::fmt::{Debug, Formatter};
 
 const DRAG_SIZE: f32 = 10.0;
 
+#[derive(Default)]
 struct State {
-    split_at: f32,
-    dragging: bool,
-    offset: f32,
+    dragging: Option<f32>,
 }
 
 pub struct VSplit<'a, Message> {
     children: [Element<'a, Message, Theme, Renderer>; 3],
-    starting_split_at: f32,
+    split_at: f32,
+    resize: fn(f32) -> Message,
 }
 
 impl<Message> Debug for VSplit<'_, Message> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VSplit")
-            .field("starting_split_at", &self.starting_split_at)
+            .field("split_at", &self.split_at)
             .finish_non_exhaustive()
     }
 }
@@ -40,23 +40,13 @@ where
     pub fn new(
         left: impl Into<Element<'a, Message>>,
         right: impl Into<Element<'a, Message>>,
+        split_at: f32,
+        resize: fn(f32) -> Message,
     ) -> Self {
         Self {
             children: [left.into(), Rule::vertical(DRAG_SIZE).into(), right.into()],
-            starting_split_at: 0.5,
-        }
-    }
-
-    pub fn split(mut self, split_at: f32) -> Self {
-        self.starting_split_at = split_at;
-        self
-    }
-
-    fn new_state(&self) -> State {
-        State {
-            split_at: self.starting_split_at,
-            dragging: false,
-            offset: 0.0,
+            split_at,
+            resize,
         }
     }
 }
@@ -75,7 +65,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(self.new_state())
+        tree::State::new(State::default())
     }
 
     fn diff(&self, tree: &mut Tree) {
@@ -83,10 +73,9 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        let state = tree.state.downcast_ref::<State>();
         let max_limits = limits.max();
 
-        let left_width = max_limits.width.mul_add(state.split_at, -(DRAG_SIZE * 0.5));
+        let left_width = max_limits.width.mul_add(self.split_at, -(DRAG_SIZE * 0.5));
         let left_limits = Limits::new(
             Size::new(0.0, 0.0),
             Size::new(left_width, max_limits.height),
@@ -135,21 +124,21 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
                     if let Some(position) =
                         cursor.position_in(layout.children().nth(1).unwrap().bounds())
                     {
-                        state.offset = DRAG_SIZE.mul_add(-0.5, position.x);
-                        state.dragging = true;
+                        state.dragging = Some(DRAG_SIZE.mul_add(-0.5, position.x));
                         return Status::Captured;
                     }
                 }
-                mouse::Event::CursorMoved { position } if state.dragging => {
-                    state.split_at = (DRAG_SIZE
-                        .mul_add(-0.5, position.x - bounds.position().x - state.offset)
-                        / (bounds.width - DRAG_SIZE))
-                        .clamp(0.0, 1.0);
-                    shell.invalidate_layout();
-                    return Status::Captured;
+                mouse::Event::CursorMoved { position } => {
+                    if let Some(last) = state.dragging {
+                        let split_at = (DRAG_SIZE.mul_add(-0.5, position.x - bounds.x - last)
+                            / (bounds.width - DRAG_SIZE))
+                            .clamp(0.0, 1.0);
+                        shell.publish((self.resize)(split_at));
+                        return Status::Captured;
+                    }
                 }
-                mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging => {
-                    state.dragging = false;
+                mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
+                    state.dragging = None;
                     return Status::Captured;
                 }
                 _ => {}
@@ -206,7 +195,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
         renderer: &Renderer,
     ) -> Interaction {
         let state = tree.state.downcast_ref::<State>();
-        if state.dragging || cursor.is_over(layout.children().nth(1).unwrap().bounds()) {
+        if state.dragging.is_some() || cursor.is_over(layout.children().nth(1).unwrap().bounds()) {
             Interaction::ResizingHorizontally
         } else {
             self.children

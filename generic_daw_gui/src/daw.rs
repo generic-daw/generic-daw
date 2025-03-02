@@ -46,6 +46,7 @@ pub enum Message {
     NumeratorChanged(Numerator),
     DenominatorChanged(Denominator),
     ToggleMetronome,
+    SplitAt(f32),
 }
 
 pub struct Daw {
@@ -53,6 +54,7 @@ pub struct Daw {
     arrangement: ArrangementView,
     clap_host: ClapHostView,
     plugins: BTreeMap<PluginDescriptor, PluginBundle>,
+    split_at: f32,
     meter: Arc<Meter>,
     theme: Theme,
 }
@@ -73,6 +75,7 @@ impl Daw {
                 arrangement,
                 clap_host: ClapHostView::new(main_window_id),
                 plugins,
+                split_at: 0.25,
                 meter,
                 theme: Theme::Dark,
             },
@@ -149,6 +152,7 @@ impl Daw {
             Message::ToggleMetronome => {
                 self.meter.metronome.fetch_not(AcqRel);
             }
+            Message::SplitAt(split_at) => self.split_at = split_at,
         }
 
         Task::none()
@@ -234,9 +238,10 @@ impl Daw {
                         Message::Arrangement(ArrangementMessage::LoadSample(path.into()))
                     }),
                 ),
-                self.arrangement.view().map(Message::Arrangement)
+                self.arrangement.view().map(Message::Arrangement),
+                self.split_at,
+                Message::SplitAt
             )
-            .split(0.25)
         ]
         .padding(20)
         .spacing(20)
