@@ -116,19 +116,31 @@ impl InterleavedAudio {
     }
 
     fn create_lod(&mut self) {
+        let mut prev = None::<(f32, f32)>;
         self.samples.chunks(8).enumerate().for_each(|(i, chunk)| {
-            let (min, max) = chunk
+            let (mut min, mut max) = chunk
                 .iter()
                 .fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
                     (min.min(c), max.max(c))
                 });
+            if let Some(prev) = prev {
+                min = min.min(prev.1);
+                max = max.max(prev.0);
+            }
+            if max - min < 0.02 {
+                let mut avg = (min + max) * 0.5;
+                avg = avg.clamp(-0.99, 0.99);
+                (min, max) = (avg - 0.01, avg + 0.01);
+            }
+            prev = Some((min, max));
             self.lods[0][i] = (min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5));
         });
 
         (1..self.lods.len()).for_each(|i| {
+            prev = None;
             let len = self.lods[i].len();
             (0..len).for_each(|j| {
-                let min = min_by(
+                let mut min = min_by(
                     self.lods[i - 1][2 * j].0,
                     self.lods[i - 1]
                         .get(2 * j + 1)
@@ -136,7 +148,7 @@ impl InterleavedAudio {
                         .0,
                     f32::total_cmp,
                 );
-                let max = max_by(
+                let mut max = max_by(
                     self.lods[i - 1][2 * j].1,
                     self.lods[i - 1]
                         .get(2 * j + 1)
@@ -144,6 +156,11 @@ impl InterleavedAudio {
                         .1,
                     f32::total_cmp,
                 );
+                if let Some(prev) = prev {
+                    min = min.min(prev.1);
+                    max = max.max(prev.0);
+                }
+                prev = Some((min, max));
                 self.lods[i][j] = (min, max);
             });
         });

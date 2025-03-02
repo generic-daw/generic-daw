@@ -119,7 +119,7 @@ impl AudioGraph {
         let entry = AudioGraphEntry {
             node,
             connections: BitSet::new(),
-            cache: self.graph[0].cache.clone(),
+            cache: Vec::new(),
         };
 
         self.graph.insert(*id, entry);
