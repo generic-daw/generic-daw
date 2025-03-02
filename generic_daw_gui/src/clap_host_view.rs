@@ -1,5 +1,5 @@
 use fragile::Fragile;
-use generic_daw_core::clap_host::{GuiExt, GuiMessage, PluginId, Receiver};
+use generic_daw_core::clap_host::{GuiExt, MainThreadMessage, PluginId, Receiver};
 use generic_daw_utils::HoleyVec;
 use iced::{
     Size, Subscription, Task,
@@ -11,8 +11,8 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    MainThread(PluginId, GuiMessage),
-    Opened(Arc<Mutex<(Fragile<GuiExt>, Receiver<GuiMessage>)>>),
+    MainThread(PluginId, MainThreadMessage),
+    Opened(Arc<Mutex<(Fragile<GuiExt>, Receiver<MainThreadMessage>)>>),
     Shown(Id, Arc<Fragile<GuiExt>>),
     CloseRequested(Id),
     Resized((Id, Size)),
@@ -47,7 +47,7 @@ impl ClapHostView {
                     Task::none()
                 } else {
                     self.plugins.insert(*id, gui);
-                    self.update(Message::MainThread(id, GuiMessage::GuiRequestShow))
+                    self.update(Message::MainThread(id, MainThreadMessage::GuiRequestShow))
                 };
 
                 let stream = Task::stream(channel(0, async move |mut sender| {
@@ -103,19 +103,19 @@ impl ClapHostView {
         ])
     }
 
-    fn main_thread_message(&mut self, id: PluginId, msg: GuiMessage) -> Task<Message> {
+    fn main_thread_message(&mut self, id: PluginId, msg: MainThreadMessage) -> Task<Message> {
         match msg {
-            GuiMessage::RequestCallback => self
+            MainThreadMessage::RequestCallback => self
                 .plugins
                 .get_mut(*id)
                 .unwrap()
                 .call_on_main_thread_callback(),
-            GuiMessage::GuiRequestHide => {
+            MainThreadMessage::GuiRequestHide => {
                 self.plugins.get_mut(*id).unwrap().destroy();
                 let window_id = self.windows.remove(*id).unwrap();
                 return window::close(window_id);
             }
-            GuiMessage::GuiRequestShow => {
+            MainThreadMessage::GuiRequestShow => {
                 let mut gui = self.plugins.remove(*id).unwrap();
                 let resizable = gui.can_resize();
 
@@ -142,14 +142,17 @@ impl ClapHostView {
                 return spawn
                     .discard()
                     .chain(embed)
-                    .chain(Task::done(Message::MainThread(id, GuiMessage::TickTimers)));
+                    .chain(Task::done(Message::MainThread(
+                        id,
+                        MainThreadMessage::TickTimers,
+                    )));
             }
-            GuiMessage::GuiClosed => {
+            MainThreadMessage::GuiClosed => {
                 self.plugins.remove(*id).unwrap();
                 let window_id = self.windows.remove(*id).unwrap();
                 return window::close(window_id);
             }
-            GuiMessage::GuiRequestResize(new_size) => {
+            MainThreadMessage::GuiRequestResize(new_size) => {
                 if let Some(&window_id) = self.windows.get(*id) {
                     return window::resize(
                         window_id,
@@ -160,7 +163,7 @@ impl ClapHostView {
                     );
                 }
             }
-            GuiMessage::TickTimers => {
+            MainThreadMessage::TickTimers => {
                 if self.windows.get(*id).is_some() {
                     if let Some((timers, timer_ext)) = self.plugins[*id].timers() {
                         let mut instance = self.plugins.get_mut(*id).unwrap().plugin_handle();
@@ -169,7 +172,7 @@ impl ClapHostView {
                             timers.borrow_mut().tick_timers(&timer_ext, &mut instance)
                         {
                             return Task::future(tokio::time::sleep(sleep))
-                                .map(|()| GuiMessage::TickTimers)
+                                .map(|()| MainThreadMessage::TickTimers)
                                 .map(move |msg| Message::MainThread(id, msg));
                         }
                     }

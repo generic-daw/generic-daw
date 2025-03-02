@@ -1,4 +1,4 @@
-use crate::GuiMessage;
+use crate::MainThreadMessage;
 use async_channel::Sender;
 use clack_extensions::{
     gui::{GuiSize, HostGuiImpl},
@@ -8,14 +8,16 @@ use clack_host::prelude::*;
 use tracing::{debug, error, info, warn};
 
 pub struct Shared {
-    pub sender: Sender<GuiMessage>,
+    pub sender: Sender<MainThreadMessage>,
 }
 
 impl SharedHandler<'_> for Shared {
     fn request_process(&self) {}
 
     fn request_callback(&self) {
-        self.sender.try_send(GuiMessage::RequestCallback).unwrap();
+        self.sender
+            .try_send(MainThreadMessage::RequestCallback)
+            .unwrap();
     }
 
     fn request_restart(&self) {}
@@ -29,19 +31,19 @@ impl HostGuiImpl for Shared {
     fn request_resize(&self, new_size: GuiSize) -> Result<(), HostError> {
         Ok(self
             .sender
-            .try_send(GuiMessage::GuiRequestResize(new_size))?)
+            .try_send(MainThreadMessage::GuiRequestResize(new_size))?)
     }
 
     fn request_show(&self) -> Result<(), HostError> {
-        Ok(self.sender.try_send(GuiMessage::GuiRequestShow)?)
+        Ok(self.sender.try_send(MainThreadMessage::GuiRequestShow)?)
     }
 
     fn request_hide(&self) -> Result<(), HostError> {
-        Ok(self.sender.try_send(GuiMessage::GuiRequestHide)?)
+        Ok(self.sender.try_send(MainThreadMessage::GuiRequestHide)?)
     }
 
     fn closed(&self, _was_destroyed: bool) {
-        self.sender.try_send(GuiMessage::GuiClosed).unwrap();
+        self.sender.try_send(MainThreadMessage::GuiClosed).unwrap();
     }
 }
 
@@ -60,7 +62,7 @@ impl HostLogImpl for Shared {
 }
 
 impl Shared {
-    pub fn new(sender: Sender<GuiMessage>) -> Self {
+    pub fn new(sender: Sender<MainThreadMessage>) -> Self {
         Self { sender }
     }
 }

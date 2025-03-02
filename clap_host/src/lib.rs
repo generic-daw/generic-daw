@@ -26,7 +26,7 @@ pub use async_channel::{Receiver, Sender};
 pub use audio_processor::AudioProcessor;
 pub use clack_host;
 pub use gui_ext::GuiExt;
-pub use main_thread::GuiMessage;
+pub use main_thread::MainThreadMessage;
 pub use note_buffers::NoteBuffers;
 pub use plugin_descriptor::PluginDescriptor;
 pub use plugin_id::Id as PluginId;
@@ -115,7 +115,7 @@ pub fn init(
     descriptor: &PluginDescriptor,
     sample_rate: f64,
     max_buffer_size: u32,
-) -> (GuiExt, Receiver<GuiMessage>, AudioProcessor) {
+) -> (GuiExt, Receiver<MainThreadMessage>, AudioProcessor) {
     let (gui_sender, gui_receiver) = async_channel::unbounded();
 
     let mut instance = PluginInstance::new(

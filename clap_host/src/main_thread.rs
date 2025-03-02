@@ -9,7 +9,7 @@ use clack_host::prelude::*;
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 #[derive(Clone, Copy, Debug)]
-pub enum GuiMessage {
+pub enum MainThreadMessage {
     RequestCallback,
     GuiRequestHide,
     GuiRequestShow,
@@ -66,7 +66,10 @@ impl HostTimerImpl for MainThread<'_> {
             .borrow_mut()
             .register(Duration::from_millis(u64::from(period_ms))));
 
-        self.shared.sender.try_send(GuiMessage::TickTimers).unwrap();
+        self.shared
+            .sender
+            .try_send(MainThreadMessage::TickTimers)
+            .unwrap();
 
         id
     }
