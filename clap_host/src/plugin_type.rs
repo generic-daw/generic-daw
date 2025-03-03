@@ -1,8 +1,10 @@
 use clack_host::plugin::features::{ANALYZER, AUDIO_EFFECT, INSTRUMENT, NOTE_EFFECT};
 use std::ffi::CStr;
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub enum PluginType {
+    #[default]
+    Unspecified,
     Instrument,
     AudioEffect,
     NoteEffect,
@@ -12,17 +14,20 @@ pub enum PluginType {
 impl PluginType {
     #[must_use]
     pub fn audio_input(self) -> bool {
-        matches!(self, Self::AudioEffect | Self::Analyzer)
+        matches!(self, Self::Unspecified | Self::AudioEffect | Self::Analyzer)
     }
 
     #[must_use]
     pub fn audio_output(self) -> bool {
-        matches!(self, Self::Instrument | Self::AudioEffect)
+        matches!(
+            self,
+            Self::Unspecified | Self::Instrument | Self::AudioEffect
+        )
     }
 
     #[must_use]
     pub fn note_output(self) -> bool {
-        matches!(self, Self::NoteEffect)
+        matches!(self, Self::Unspecified | Self::NoteEffect)
     }
 }
 
