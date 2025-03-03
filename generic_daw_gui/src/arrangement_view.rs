@@ -260,14 +260,22 @@ impl ArrangementView {
                                 row![
                                     PeakMeter::new(move || node.get_l_r(), enabled),
                                     column![
-                                        Knob::new(0.0..=1.0, 0.0, 1.0, move |f| {
-                                            Message::TrackVolumeChanged(idx, f)
-                                        })
-                                        .set_enabled(enabled),
-                                        Knob::new(-1.0..=1.0, 0.0, 0.0, move |f| {
-                                            Message::TrackPanChanged(idx, f)
-                                        })
-                                        .set_enabled(enabled),
+                                        Knob::new(
+                                            0.0..=1.0,
+                                            0.0,
+                                            1.0,
+                                            track.node().volume.load(Acquire),
+                                            enabled,
+                                            move |f| { Message::TrackVolumeChanged(idx, f) }
+                                        ),
+                                        Knob::new(
+                                            -1.0..=1.0,
+                                            0.0,
+                                            0.0,
+                                            track.node().pan.load(Acquire),
+                                            enabled,
+                                            move |f| { Message::TrackPanChanged(idx, f) }
+                                        ),
                                     ]
                                     .spacing(5.0),
                                     mouse_area(

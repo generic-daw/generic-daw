@@ -21,7 +21,7 @@ iced = { version = "0.13.1", default-features = false, features = [
     "wgpu",
 ] }
 iced_wgpu = { version = "0.13.5", features = ["geometry"] }
-itoa = "1.0.14"
+itoa = "1.0.15"
 rfd = "0.15.2"
 tokio = { version = "1.43.0", features = ["rt"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
