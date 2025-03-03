@@ -32,22 +32,27 @@ pub struct FileTreeEntry<'a, Message> {
 }
 
 impl<'a, Message> FileTreeEntry<'a, Message> {
-    pub fn new(
-        path: &'a Path,
-        svg: Handle,
-        on_single_click: Option<fn(&'a Path) -> Message>,
-        on_double_click: Option<fn(&'a Path) -> Message>,
-    ) -> Self {
+    pub fn new(path: &'a Path, svg: Handle) -> Self {
         let name = path.file_name().unwrap().to_str().unwrap().to_owned();
 
         Self {
             path,
             name,
             svg,
-            on_single_click,
-            on_double_click,
+            on_single_click: None,
+            on_double_click: None,
             rotation: Rotation::default(),
         }
+    }
+
+    pub fn on_single_click(mut self, on_single_click: fn(&'a Path) -> Message) -> Self {
+        self.on_single_click = Some(on_single_click);
+        self
+    }
+
+    pub fn on_double_click(mut self, on_double_click: fn(&'a Path) -> Message) -> Self {
+        self.on_double_click = Some(on_double_click);
+        self
     }
 
     pub fn rotation(mut self, rotation: impl Into<Rotation>) -> Self {

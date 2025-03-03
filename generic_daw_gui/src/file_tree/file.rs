@@ -17,15 +17,19 @@ pub struct File {
 }
 
 impl File {
+    pub fn new(path: &Path) -> Self {
+        Self {
+            path: Box::from(path),
+        }
+    }
+
     pub fn view(&self) -> (Element<'_, DawMessage>, f32) {
         (
-            FileTreeEntry::new(
-                &self.path,
-                FILE.clone(),
-                None,
-                Some(|p| DawMessage::Arrangement(ArrangementMessage::LoadSample(Box::from(p)))),
-            )
-            .into(),
+            FileTreeEntry::new(&self.path, FILE.clone())
+                .on_double_click(|p| {
+                    DawMessage::Arrangement(ArrangementMessage::LoadSample(Box::from(p)))
+                })
+                .into(),
             LINE_HEIGHT,
         )
     }

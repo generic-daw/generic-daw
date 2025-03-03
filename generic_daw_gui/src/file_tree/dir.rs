@@ -4,7 +4,7 @@ use crate::{
     widget::{FileTreeEntry, FileTreeIndicator, LINE_HEIGHT},
 };
 use iced::{
-    Element, Length, Radians, Rotation,
+    Element, Radians, Rotation,
     widget::{column, row, svg},
 };
 use std::{f32::consts::FRAC_PI_2, path::Path, sync::LazyLock};
@@ -52,50 +52,32 @@ impl Dir {
 
     pub fn view(&self) -> (Element<'_, DawMessage>, f32) {
         let mut col = column!(
-            FileTreeEntry::new(
-                &self.path,
-                DIR.clone(),
-                Some(|p| DawMessage::FileTree(Box::from(p))),
-                None
-            )
-            .rotation(Rotation::Floating(Radians(if self.open {
-                FRAC_PI_2
-            } else {
-                0.0
-            })))
+            FileTreeEntry::new(&self.path, DIR.clone(),)
+                .on_single_click(|p| DawMessage::FileTree(Box::from(p)))
+                .rotation(Rotation::Floating(Radians(if self.open {
+                    FRAC_PI_2
+                } else {
+                    0.0
+                })))
         );
 
         let mut height = 0.0;
 
         if self.open {
-            let ch = column![
-                column(
-                    self.dirs
-                        .as_ref()
-                        .unwrap()
-                        .iter()
-                        .map(Self::view)
-                        .map(|(e, h)| {
-                            height += h;
-                            e
-                        })
-                ),
-                column(
-                    self.files
-                        .as_ref()
-                        .unwrap()
-                        .iter()
-                        .map(File::view)
-                        .map(|(e, h)| {
-                            height += h;
-                            e
-                        })
-                )
-            ];
+            let ch = column![column(
+                self.dirs
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(Self::view)
+                    .chain(self.files.as_ref().unwrap().iter().map(File::view))
+                    .map(|(e, h)| {
+                        height += h;
+                        e
+                    })
+            ),];
 
-            col = col.push(
-                row![FileTreeIndicator::new(LINE_HEIGHT, height, 2.0), ch].height(Length::Shrink),
-            );
+            col = col.push(row![FileTreeIndicator::new(LINE_HEIGHT, height, 2.0), ch]);
         }
 
         (col.into(), height + LINE_HEIGHT)
@@ -119,10 +101,7 @@ impl Dir {
         files.sort_unstable_by(|(_, aname), (_, bname)| aname.cmp(bname));
         files
             .iter()
-            .map(|(entry, _)| {
-                let path: Box<Path> = entry.path().into();
-                File { path }
-            })
+            .map(|(entry, _)| File::new(&entry.path()))
             .collect()
     }
 
@@ -143,10 +122,7 @@ impl Dir {
             .collect::<Box<_>>();
         dirs.sort_unstable_by(|(_, aname), (_, bname)| aname.cmp(bname));
         dirs.iter()
-            .map(|(entry, _)| {
-                let path = entry.path();
-                Self::new(&path)
-            })
+            .map(|(entry, _)| Self::new(&entry.path()))
             .collect()
     }
 }
