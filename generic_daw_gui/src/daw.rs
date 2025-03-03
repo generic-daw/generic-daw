@@ -6,7 +6,7 @@ use crate::{
 use fragile::Fragile;
 use generic_daw_core::{
     Denominator, Meter, Numerator, VARIANTS as _,
-    clap_host::{self, PluginDescriptor, clack_host::bundle::PluginBundle},
+    clap_host::{self, PluginDescriptor, PluginType, clack_host::bundle::PluginBundle},
 };
 use iced::{
     Alignment::Center,
@@ -216,7 +216,10 @@ impl Daw {
                 horizontal_space(),
                 pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
                 pick_list(
-                    self.plugins.keys().collect::<Box<[_]>>(),
+                    self.plugins
+                        .keys()
+                        .filter(|d| d.ty == PluginType::Instrument)
+                        .collect::<Box<[_]>>(),
                     None::<&PluginDescriptor>,
                     |p| Message::LoadPlugin(p.to_owned())
                 )

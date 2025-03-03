@@ -28,7 +28,7 @@ pub use clack_host;
 pub use gui_ext::GuiExt;
 pub use main_thread::MainThreadMessage;
 pub use note_buffers::NoteBuffers;
-pub use plugin_descriptor::PluginDescriptor;
+pub use plugin_descriptor::{PluginDescriptor, PluginType};
 pub use plugin_id::Id as PluginId;
 
 unique_id!(plugin_id);
