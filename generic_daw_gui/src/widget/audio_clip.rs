@@ -180,7 +180,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         };
         renderer.fill_text(
             text,
-            upper_bounds.position() + Vector::new(4.0, -1.0),
+            upper_bounds.position() + Vector::new(4.0, 1.0),
             theme.extended_palette().secondary.base.text,
             upper_bounds,
         );

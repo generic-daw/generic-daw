@@ -1,6 +1,8 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage},
     clap_host_view::{ClapHostView, Message as ClapHostMessage},
+    components::{styled_button, styled_pick_list},
+    file_tree::FileTree,
     widget::{BpmInput, VSplit},
 };
 use fragile::Fragile;
@@ -13,30 +15,41 @@ use iced::{
     Element, Event, Length, Subscription, Task, Theme,
     event::{self, Status},
     keyboard,
-    widget::{
-        button, column, horizontal_space, pick_list, row, scrollable, svg, toggler, vertical_space,
-    },
+    widget::{column, horizontal_space, row, scrollable, svg, toggler, vertical_space},
     window::{self, Id},
 };
-use iced_file_tree::file_tree;
 use rfd::{AsyncFileDialog, FileHandle};
 use std::{
     collections::BTreeMap,
+    path::Path,
     sync::{
-        Arc, Mutex,
+        Arc, LazyLock, Mutex,
         atomic::Ordering::{AcqRel, Acquire, Release},
     },
 };
 
-const PLAY: &[u8] = include_bytes!("../../assets/material-symbols--play-arrow-rounded.svg");
-const PAUSE: &[u8] = include_bytes!("../../assets/material-symbols--pause-rounded.svg");
-const STOP: &[u8] = include_bytes!("../../assets/material-symbols--stop-rounded.svg");
+static PLAY: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!(
+        "../../assets/material-symbols--play-arrow-rounded.svg"
+    ))
+});
+static PAUSE: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!(
+        "../../assets/material-symbols--pause-rounded.svg"
+    ))
+});
+static STOP: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!(
+        "../../assets/material-symbols--stop-rounded.svg"
+    ))
+});
 
 #[derive(Clone, Debug)]
 pub enum Message {
     ThemeChanged(Theme),
     ClapHost(ClapHostMessage),
     Arrangement(ArrangementMessage),
+    FileTree(Box<Path>),
     LoadPlugin(PluginDescriptor),
     SamplesFileDialog,
     ExportFileDialog,
@@ -53,6 +66,7 @@ pub struct Daw {
     main_window_id: Id,
     arrangement: ArrangementView,
     clap_host: ClapHostView,
+    file_tree: FileTree,
     plugins: BTreeMap<PluginDescriptor, PluginBundle>,
     split_at: f32,
     meter: Arc<Meter>,
@@ -74,6 +88,10 @@ impl Daw {
                 main_window_id,
                 arrangement,
                 clap_host: ClapHostView::new(main_window_id),
+                file_tree: FileTree::new(
+                    #[expect(deprecated, reason = "rust#132515")]
+                    &std::env::home_dir().unwrap(),
+                ),
                 plugins,
                 split_at: 0.25,
                 meter,
@@ -91,6 +109,9 @@ impl Daw {
             }
             Message::Arrangement(message) => {
                 return self.arrangement.update(message).map(Message::Arrangement);
+            }
+            Message::FileTree(path) => {
+                self.file_tree.update(&path);
             }
             Message::LoadPlugin(name) => {
                 let (gui, gui_receiver, audio_processor) = clap_host::init(
@@ -166,18 +187,16 @@ impl Daw {
         column![
             row![
                 row![
-                    button("Load Samples").on_press(Message::SamplesFileDialog),
-                    button("Export").on_press(Message::ExportFileDialog),
+                    styled_button("Load Samples").on_press(Message::SamplesFileDialog),
+                    styled_button("Export").on_press(Message::ExportFileDialog),
                 ],
                 row![
-                    button(
-                        svg(svg::Handle::from_memory(
-                            if self.meter.playing.load(Acquire) {
-                                PAUSE
-                            } else {
-                                PLAY
-                            }
-                        ))
+                    styled_button(
+                        svg(if self.meter.playing.load(Acquire) {
+                            PAUSE.clone()
+                        } else {
+                            PLAY.clone()
+                        })
                         .style(|theme: &Theme, _| svg::Style {
                             color: Some(theme.extended_palette().secondary.base.text)
                         })
@@ -185,8 +204,8 @@ impl Daw {
                         .height(Length::Fixed(21.0))
                     )
                     .on_press(Message::TogglePlay),
-                    button(
-                        svg(svg::Handle::from_memory(STOP))
+                    styled_button(
+                        svg(STOP.clone())
                             .style(|theme: &Theme, _| svg::Style {
                                 color: Some(theme.extended_palette().secondary.base.text)
                             })
@@ -196,13 +215,13 @@ impl Daw {
                     .on_press(Message::Stop),
                 ],
                 row![
-                    pick_list(
+                    styled_pick_list(
                         Numerator::VARIANTS,
                         Some(self.meter.numerator.load(Acquire)),
                         Message::NumeratorChanged
                     )
                     .width(50),
-                    pick_list(
+                    styled_pick_list(
                         Denominator::VARIANTS,
                         Some(self.meter.denominator.load(Acquire)),
                         Message::DenominatorChanged
@@ -214,8 +233,8 @@ impl Daw {
                     .label("Metronome")
                     .on_toggle(|_| Message::ToggleMetronome),
                 horizontal_space(),
-                pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
-                pick_list(
+                styled_pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
+                styled_pick_list(
                     self.plugins
                         .keys()
                         .filter(|d| d.ty == PluginType::Instrument)
@@ -224,23 +243,11 @@ impl Daw {
                     |p| Message::LoadPlugin(p.to_owned())
                 )
                 .placeholder("Load Plugin")
-                .style(|t: &Theme, s| pick_list::Style {
-                    placeholder_color: t.extended_palette().background.weak.text,
-                    ..pick_list::default(t, s)
-                })
             ]
             .spacing(20)
             .align_y(Center),
             VSplit::new(
-                scrollable(
-                    file_tree(
-                        #[expect(deprecated, reason = "rust#132515")]
-                        std::env::home_dir().unwrap()
-                    )
-                    .on_double_click(|path| {
-                        Message::Arrangement(ArrangementMessage::LoadSample(path.into()))
-                    }),
-                ),
+                scrollable(self.file_tree.view().0),
                 self.arrangement.view().map(Message::Arrangement),
                 self.split_at,
                 Message::SplitAt

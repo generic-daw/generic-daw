@@ -1,6 +1,6 @@
 use crate::{AudioClip, Meter, MixerNode, Position};
 use audio_graph::{AudioGraphNodeImpl, NodeId};
-use std::sync::{Arc, atomic::Ordering::Acquire};
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct AudioTrack {
@@ -14,12 +14,7 @@ pub struct AudioTrack {
 
 impl AudioGraphNodeImpl for AudioTrack {
     fn fill_buf(&self, buf: &mut [f32]) {
-        if !self.meter.playing.load(Acquire) {
-            return;
-        }
-
         self.clips.iter().for_each(|clip| clip.fill_buf(buf));
-
         self.node.fill_buf(buf);
     }
 

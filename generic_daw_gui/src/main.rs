@@ -3,7 +3,9 @@ use iced::{Result, daemon};
 
 mod arrangement_view;
 mod clap_host_view;
+mod components;
 mod daw;
+mod file_tree;
 mod trace;
 mod widget;
 
