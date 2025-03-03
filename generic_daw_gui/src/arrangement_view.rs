@@ -8,6 +8,7 @@ use generic_daw_core::{
 };
 use iced::{
     Border, Element, Length, Task, Theme,
+    futures::TryFutureExt as _,
     mouse::Interaction,
     widget::{column, container, container::Style, mouse_area, radio, row},
 };
@@ -229,9 +230,7 @@ impl ArrangementView {
                 }
             }
             Message::Export(path) => {
-                let receiver = self.arrangement.request_export(path);
-
-                return Task::future(receiver)
+                return Task::future(self.arrangement.request_export().map_ok(|ok| (ok, path)))
                     .and_then(Task::done)
                     .map(Mutex::new)
                     .map(Arc::new)

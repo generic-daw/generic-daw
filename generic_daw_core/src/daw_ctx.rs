@@ -7,14 +7,14 @@ mod daw_ctx_message;
 
 pub use daw_ctx_message::DawCtxMessage;
 
-pub struct DawCtx<T> {
+pub struct DawCtx {
     pub meter: Arc<Meter>,
     audio_graph: AudioGraph,
-    consumer: Consumer<DawCtxMessage<T>>,
+    consumer: Consumer<DawCtxMessage>,
 }
 
-impl<T> DawCtx<T> {
-    pub fn create(sample_rate: u32, buffer_size: u32) -> (Self, Producer<DawCtxMessage<T>>) {
+impl DawCtx {
+    pub fn create(sample_rate: u32, buffer_size: u32) -> (Self, Producer<DawCtxMessage>) {
         let (ui_producer, consumer) = RingBuffer::new(16);
 
         let meter = Arc::new(Meter::new(sample_rate, buffer_size));
@@ -42,9 +42,9 @@ impl<T> DawCtx<T> {
                 DawCtxMessage::DisconnectFromMaster(node) => {
                     self.audio_graph.disconnect(self.audio_graph.root(), node);
                 }
-                DawCtxMessage::RequestAudioGraph(sender, t) => {
+                DawCtxMessage::RequestAudioGraph(sender) => {
                     let audio_graph = std::mem::take(&mut self.audio_graph);
-                    sender.send((audio_graph, t)).unwrap();
+                    sender.send(audio_graph).unwrap();
                 }
                 DawCtxMessage::Reset => self.audio_graph.reset(),
                 DawCtxMessage::AudioGraph(audio_graph) => self.audio_graph = audio_graph,

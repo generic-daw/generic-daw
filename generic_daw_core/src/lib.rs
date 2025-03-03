@@ -37,10 +37,10 @@ pub use position::Position;
 pub use rtrb::{Consumer, Producer};
 pub use strum::VariantArray as VARIANTS;
 
-pub fn build_output_stream<T: Send + 'static>(
+pub fn build_output_stream(
     sample_rate: u32,
     buffer_size: u32,
-) -> (Stream, Producer<DawCtxMessage<T>>, Arc<Meter>) {
+) -> (Stream, Producer<DawCtxMessage>, Arc<Meter>) {
     let (mut ctx, producer) = DawCtx::create(sample_rate, buffer_size);
     let meter = ctx.meter.clone();
 

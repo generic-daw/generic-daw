@@ -16,7 +16,7 @@ use std::{
 
 pub struct Arrangement {
     tracks: Vec<Track>,
-    producer: Producer<DawCtxMessage<Box<Path>>>,
+    producer: Producer<DawCtxMessage>,
     stream: Stream,
     pub meter: Arc<Meter>,
 }
@@ -32,11 +32,7 @@ impl Debug for Arrangement {
 }
 
 impl Arrangement {
-    pub fn new(
-        producer: Producer<DawCtxMessage<Box<Path>>>,
-        stream: Stream,
-        meter: Arc<Meter>,
-    ) -> Self {
+    pub fn new(producer: Producer<DawCtxMessage>, stream: Stream, meter: Arc<Meter>) -> Self {
         Self {
             tracks: Vec::new(),
             producer,
@@ -101,11 +97,11 @@ impl Arrangement {
         }
     }
 
-    pub fn request_export(&mut self, path: Box<Path>) -> Receiver<(AudioGraph, Box<Path>)> {
+    pub fn request_export(&mut self) -> Receiver<AudioGraph> {
         let (sender, reciever) = oneshot::channel();
 
         self.producer
-            .push(DawCtxMessage::RequestAudioGraph(sender, path))
+            .push(DawCtxMessage::RequestAudioGraph(sender))
             .unwrap();
 
         reciever
