@@ -1,5 +1,5 @@
-use crate::{AudioClip, Meter, Position};
-use audio_graph::{AudioGraphNodeImpl, MixerNode, NodeId};
+use crate::{AudioClip, Meter, MixerNode, Position};
+use audio_graph::{AudioGraphNodeImpl, NodeId};
 use std::sync::{Arc, atomic::Ordering::Acquire};
 
 #[derive(Clone, Debug)]

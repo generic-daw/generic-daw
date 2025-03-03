@@ -40,8 +40,7 @@ impl Default for State {
 }
 
 pub struct PeakMeter {
-    left: Box<dyn Fn() -> f32>,
-    right: Box<dyn Fn() -> f32>,
+    update: Box<dyn Fn() -> [f32; 2]>,
     enabled: bool,
 }
 
@@ -88,8 +87,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
             let diff = ((now - state.last_draw).as_millis() * 4) as f32;
             state.last_draw = now;
 
-            let left = (self.left)();
-            let right = (self.right)();
+            let [left, right] = (self.update)();
 
             state.left = if left >= state.left {
                 left
@@ -166,14 +164,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 }
 
 impl PeakMeter {
-    pub fn new(
-        left: impl Fn() -> f32 + 'static,
-        right: impl Fn() -> f32 + 'static,
-        enabled: bool,
-    ) -> Self {
+    pub fn new(update: impl Fn() -> [f32; 2] + 'static, enabled: bool) -> Self {
         Self {
-            left: Box::new(left),
-            right: Box::new(right),
+            update: Box::new(update),
             enabled,
         }
     }

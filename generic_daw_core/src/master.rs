@@ -1,5 +1,5 @@
-use crate::{Meter, Position, include_f32s, resample};
-use audio_graph::{AudioGraphNodeImpl, MixerNode, NodeId};
+use crate::{Meter, MixerNode, Position, include_f32s, resample};
+use audio_graph::{AudioGraphNodeImpl, NodeId};
 use live_sample::LiveSample;
 use std::{
     cell::RefCell,

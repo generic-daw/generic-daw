@@ -253,18 +253,13 @@ impl ArrangementView {
                     .iter()
                     .enumerate()
                     .map(|(idx, track)| {
-                        let enabled = track.node().enabled.load(Acquire);
-                        let left = track.node().clone();
-                        let right = left.clone();
+                        let node = track.node().clone();
+                        let enabled = node.enabled.load(Acquire);
 
                         row![
                             container(
                                 row![
-                                    PeakMeter::new(
-                                        move || left.max_l.swap(0.0, AcqRel),
-                                        move || right.max_r.swap(0.0, AcqRel),
-                                        enabled
-                                    ),
+                                    PeakMeter::new(move || node.get_l_r(), enabled),
                                     column![
                                         Knob::new(0.0..=1.0, 0.0, 1.0, move |f| {
                                             Message::TrackVolumeChanged(idx, f)

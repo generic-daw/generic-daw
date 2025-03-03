@@ -1,5 +1,5 @@
-use crate::{Meter, MidiClip, Position};
-use audio_graph::{AudioGraphNodeImpl, MixerNode, NodeId};
+use crate::{Meter, MidiClip, MixerNode, Position};
+use audio_graph::{AudioGraphNodeImpl, NodeId};
 use clap_host::{
     AudioProcessor,
     clack_host::events::{Pckn, event_types::NoteChokeEvent},

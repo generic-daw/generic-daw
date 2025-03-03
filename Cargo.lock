@@ -367,7 +367,6 @@ dependencies = [
 name = "audio_graph"
 version = "0.0.0"
 dependencies = [
- "atomig",
  "bit-set 0.8.0",
  "generic_daw_utils",
 ]

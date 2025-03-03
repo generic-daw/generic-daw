@@ -1,7 +1,8 @@
-use crate::{AudioGraphNodeImpl, NodeId, pan};
 use atomig::Atomic;
+use audio_graph::{AudioGraphNodeImpl, NodeId};
 use std::{
     cmp::max_by,
+    f32::consts::{FRAC_PI_4, SQRT_2},
     sync::atomic::{
         AtomicBool,
         Ordering::{Acquire, Release},
@@ -18,9 +19,19 @@ pub struct MixerNode {
     /// whether the node is enabled
     pub enabled: AtomicBool,
     /// the maximum played back sample in the left channel
-    pub max_l: Atomic<f32>,
+    max_l: Atomic<f32>,
     /// the maximum played back sample in the right channel
-    pub max_r: Atomic<f32>,
+    max_r: Atomic<f32>,
+    /// whether `max_l` and `max_r` have been read from
+    read: AtomicBool,
+}
+
+impl MixerNode {
+    pub fn get_l_r(&self) -> [f32; 2] {
+        let arr = [self.max_l.load(Acquire), self.max_r.load(Acquire)];
+        self.read.store(true, Release);
+        arr
+    }
 }
 
 impl Default for MixerNode {
@@ -32,6 +43,7 @@ impl Default for MixerNode {
             enabled: AtomicBool::new(true),
             max_l: Atomic::default(),
             max_r: Atomic::default(),
+            read: AtomicBool::new(false),
         }
     }
 }
@@ -57,13 +69,6 @@ impl AudioGraphNodeImpl for MixerNode {
             .map(f32::abs)
             .max_by(f32::total_cmp)
             .unwrap();
-
-        self.max_l
-            .fetch_update(Release, Acquire, |max_l| {
-                Some(max_by(max_l, cur_l, f32::total_cmp))
-            })
-            .unwrap();
-
         let cur_r = buf
             .iter()
             .skip(1)
@@ -73,14 +78,30 @@ impl AudioGraphNodeImpl for MixerNode {
             .max_by(f32::total_cmp)
             .unwrap();
 
-        self.max_r
-            .fetch_update(Release, Acquire, |max_r| {
-                Some(max_by(max_r, cur_r, f32::total_cmp))
-            })
-            .unwrap();
+        if self.read.load(Acquire) {
+            self.max_l.store(cur_l, Release);
+            self.max_r.store(cur_r, Release);
+        } else {
+            self.max_l
+                .fetch_update(Release, Acquire, |max_l| {
+                    Some(max_by(max_l, cur_l, f32::total_cmp))
+                })
+                .unwrap();
+            self.max_r
+                .fetch_update(Release, Acquire, |max_r| {
+                    Some(max_by(max_r, cur_r, f32::total_cmp))
+                })
+                .unwrap();
+        }
     }
 
     fn id(&self) -> NodeId {
         self.id
     }
+}
+
+fn pan(angle: f32) -> [f32; 2] {
+    let angle = (angle + 1.0) * FRAC_PI_4;
+
+    [angle.cos(), angle.sin()].map(|s| s * SQRT_2)
 }

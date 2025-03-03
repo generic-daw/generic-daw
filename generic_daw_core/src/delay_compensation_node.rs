@@ -1,4 +1,4 @@
-use crate::{AudioGraphNodeImpl, NodeId};
+use audio_graph::{AudioGraphNodeImpl, NodeId};
 use std::cell::RefCell;
 
 #[derive(Debug)]

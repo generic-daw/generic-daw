@@ -1,7 +1,7 @@
 use super::track_clip::TrackClip;
 use generic_daw_core::{
-    AudioTrack, Meter, MidiTrack, Position,
-    audio_graph::{AudioGraphNode, AudioGraphNodeImpl as _, MixerNode, NodeId},
+    AudioTrack, Meter, MidiTrack, MixerNode, Position,
+    audio_graph::{AudioGraphNode, AudioGraphNodeImpl as _, NodeId},
 };
 use std::{
     ops::Deref as _,
