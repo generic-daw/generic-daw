@@ -1,37 +1,6 @@
-use clack_host::{
-    factory,
-    plugin::features::{ANALYZER, AUDIO_EFFECT, INSTRUMENT, NOTE_EFFECT},
-};
-use std::{
-    ffi::CStr,
-    fmt::{Display, Formatter},
-};
-
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum PluginType {
-    Instrument,
-    AudioEffect,
-    NoteEffect,
-    Analyzer,
-}
-
-impl<'a> TryFrom<&'a CStr> for PluginType {
-    type Error = ();
-
-    fn try_from(value: &'a CStr) -> Result<Self, Self::Error> {
-        if value == INSTRUMENT {
-            Ok(Self::Instrument)
-        } else if value == AUDIO_EFFECT {
-            Ok(Self::AudioEffect)
-        } else if value == NOTE_EFFECT {
-            Ok(Self::NoteEffect)
-        } else if value == ANALYZER {
-            Ok(Self::Analyzer)
-        } else {
-            Err(())
-        }
-    }
-}
+use crate::PluginType;
+use clack_host::factory;
+use std::fmt::{Display, Formatter};
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct PluginDescriptor {

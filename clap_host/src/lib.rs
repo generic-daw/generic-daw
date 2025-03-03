@@ -19,6 +19,7 @@ mod host;
 mod main_thread;
 mod note_buffers;
 mod plugin_descriptor;
+mod plugin_type;
 mod shared;
 mod timer_ext;
 
@@ -28,8 +29,9 @@ pub use clack_host;
 pub use gui_ext::GuiExt;
 pub use main_thread::MainThreadMessage;
 pub use note_buffers::NoteBuffers;
-pub use plugin_descriptor::{PluginDescriptor, PluginType};
+pub use plugin_descriptor::PluginDescriptor;
 pub use plugin_id::Id as PluginId;
+pub use plugin_type::PluginType;
 
 unique_id!(plugin_id);
 
@@ -150,6 +152,7 @@ pub fn init(
             .unwrap()
             .start_processing()
             .unwrap(),
+        descriptor.ty,
         audio_buffers,
         note_buffers,
     );

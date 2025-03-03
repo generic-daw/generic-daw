@@ -1,9 +1,10 @@
-use crate::{Host, audio_buffers::AudioBuffers, note_buffers::NoteBuffers};
+use crate::{Host, PluginType, audio_buffers::AudioBuffers, note_buffers::NoteBuffers};
 use clack_host::process::StartedPluginAudioProcessor;
 use std::fmt::{Debug, Formatter};
 
 pub struct AudioProcessor {
     started_processor: StartedPluginAudioProcessor<Host>,
+    ty: PluginType,
     steady_time: u64,
     audio_buffers: AudioBuffers,
     pub note_buffers: NoteBuffers,
@@ -23,11 +24,13 @@ impl AudioProcessor {
     #[must_use]
     pub fn new(
         started_processor: StartedPluginAudioProcessor<Host>,
+        ty: PluginType,
         audio_buffers: AudioBuffers,
         note_buffers: NoteBuffers,
     ) -> Self {
         Self {
             started_processor,
+            ty,
             steady_time: 0,
             audio_buffers,
             note_buffers,
@@ -35,9 +38,13 @@ impl AudioProcessor {
     }
 
     pub fn process(&mut self, buf: &mut [f32]) {
-        self.note_buffers.output_events.clear();
+        if self.ty.note_output() {
+            self.note_buffers.output_events.clear();
+        }
 
-        self.audio_buffers.read_in(buf);
+        if self.ty.audio_input() {
+            self.audio_buffers.read_in(buf);
+        }
 
         let (input_audio, mut output_audio) = self.audio_buffers.prepare(buf);
 
@@ -54,7 +61,9 @@ impl AudioProcessor {
 
         self.steady_time += u64::from(output_audio.frames_count().unwrap());
 
-        self.audio_buffers.write_out(buf);
+        if self.ty.audio_output() {
+            self.audio_buffers.write_out(buf);
+        }
 
         self.note_buffers.input_events.clear();
     }
