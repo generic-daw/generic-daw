@@ -1,4 +1,4 @@
-use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT};
+use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT, SWM};
 use generic_daw_core::{Meter, Position};
 use iced::{
     Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme,
@@ -40,9 +40,6 @@ impl Action {
         )
     }
 }
-
-/// scroll wheel clicks -> trackpad scroll pixels
-pub const SWM: f32 = LINE_HEIGHT * 2.5;
 
 #[derive(Default)]
 struct State {
@@ -317,7 +314,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
 
                     match (modifiers.control(), modifiers.shift(), modifiers.alt()) {
                         (false, false, false) => {
-                            (x, y) = (x * 2.0 * self.scale.x.exp2(), y * 2.0 / self.scale.y);
+                            x *= self.scale.x.exp2();
+                            y /= self.scale.y;
 
                             shell.publish((self.position_scale_delta)(
                                 ArrangementPosition::new(x, y),
@@ -326,14 +324,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                             shell.capture_event();
                         }
                         (true, false, false) => {
-                            y /= 128.0;
+                            x = y / 128.0;
 
-                            let x_pos = (cursor.x - track_panel_width)
-                                * (self.scale.x.exp2() - (self.scale.x + y).exp2());
+                            let mut x_pos = self.scale.x.exp2() - (self.scale.x + x).exp2();
+                            x_pos *= cursor.x - track_panel_width;
 
                             shell.publish((self.position_scale_delta)(
                                 ArrangementPosition::new(x_pos, 0.0),
-                                ArrangementScale::new(y, 0.0),
+                                ArrangementScale::new(x, 0.0),
                             ));
                             shell.capture_event();
                         }
@@ -349,8 +347,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                         (false, false, true) => {
                             y /= -8.0;
 
-                            let y_pos =
-                                ((cursor.y - LINE_HEIGHT) * y) / (self.scale.y * self.scale.y);
+                            let y_pos = ((cursor.y - LINE_HEIGHT) * y) / (self.scale.y.powi(2));
 
                             shell.publish((self.position_scale_delta)(
                                 ArrangementPosition::new(0.0, y_pos),

@@ -1,4 +1,4 @@
-use super::{LINE_HEIGHT, arrangement::SWM};
+use super::{LINE_HEIGHT, SWM};
 use iced::{
     Element, Event, Length, Point, Radians, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{

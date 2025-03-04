@@ -29,10 +29,7 @@ impl ArrangementScale {
 
 impl Default for ArrangementScale {
     fn default() -> Self {
-        Self {
-            x: 8.0,
-            y: LINE_HEIGHT * 5.0,
-        }
+        Self { x: 8.0, y: 120.0 }
     }
 }
 

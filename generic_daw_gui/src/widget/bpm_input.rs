@@ -1,4 +1,4 @@
-use super::arrangement::SWM;
+use super::SWM;
 use iced::{
     Border, Element, Event, Length, Padding, Point, Rectangle, Renderer, Size, Theme,
     advanced::{

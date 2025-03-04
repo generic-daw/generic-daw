@@ -23,3 +23,5 @@ pub use track::Track;
 pub use vsplit::VSplit;
 
 pub const LINE_HEIGHT: f32 = 21.0;
+
+pub const SWM: f32 = 60.0;
