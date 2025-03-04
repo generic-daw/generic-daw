@@ -2,7 +2,7 @@ use fragile::Fragile;
 use generic_daw_core::clap_host::{GuiExt, MainThreadMessage, PluginId, Receiver};
 use generic_daw_utils::HoleyVec;
 use iced::{
-    Size, Subscription, Task,
+    Function as _, Size, Subscription, Task,
     futures::SinkExt as _,
     stream::channel,
     window::{self, Id, close_requests, resize_events},
@@ -173,7 +173,7 @@ impl ClapHostView {
                         {
                             return Task::future(tokio::time::sleep(sleep))
                                 .map(|()| MainThreadMessage::TickTimers)
-                                .map(move |msg| Message::MainThread(id, msg));
+                                .map(Message::MainThread.with(id));
                         }
                     }
                 }

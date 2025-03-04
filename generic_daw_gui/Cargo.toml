@@ -23,6 +23,7 @@ iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", de
 iced_wgpu = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", features = [
     "geometry",
 ] }
+infer = "0.19.0"
 itoa = "1.0.15"
 rfd = "0.15.2"
 tokio = { version = "1.43.0", features = ["rt"] }

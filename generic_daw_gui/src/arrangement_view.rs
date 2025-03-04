@@ -7,7 +7,7 @@ use generic_daw_core::{
     build_output_stream, clap_host::AudioProcessor,
 };
 use iced::{
-    Border, Element, Length, Task, Theme,
+    Border, Element, Function as _, Length, Task, Theme,
     futures::TryFutureExt as _,
     mouse::Interaction,
     widget::{column, container, container::Style, mouse_area, radio, row},
@@ -264,7 +264,7 @@ impl ArrangementView {
                                             0.0,
                                             track.node().volume.load(Acquire),
                                             enabled,
-                                            move |f| Message::TrackVolumeChanged(idx, f)
+                                            Message::TrackVolumeChanged.with(idx)
                                         ))
                                         .on_double_click(Message::TrackVolumeChanged(idx, 1.0)),
                                         mouse_area(Knob::new(
@@ -272,7 +272,7 @@ impl ArrangementView {
                                             0.0,
                                             track.node().pan.load(Acquire),
                                             enabled,
-                                            move |f| Message::TrackPanChanged(idx, f)
+                                            Message::TrackVolumeChanged.with(idx)
                                         ))
                                         .on_double_click(Message::TrackPanChanged(idx, 0.0)),
                                     ]
