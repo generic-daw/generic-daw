@@ -28,7 +28,7 @@ const RADIUS: f32 = LINE_HEIGHT;
 struct State {
     dragging: Option<f32>,
     hovering: bool,
-    last_val: f32,
+    last_value: f32,
     last_enabled: bool,
     last_click: Option<Click>,
     last_theme: RefCell<Option<Theme>>,
@@ -37,20 +37,20 @@ struct State {
 
 pub struct Knob<Message> {
     range: RangeInclusive<f32>,
-    zero: f32,
+    value: f32,
     default: f32,
-    current: f32,
+    center: f32,
     enabled: bool,
-    f: Box<dyn Fn(f32) -> Message>,
+    on_change: Box<dyn Fn(f32) -> Message>,
 }
 
 impl<Message> Debug for Knob<Message> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Knob")
             .field("range", &self.range)
-            .field("zero", &self.zero)
+            .field("value", &self.value)
             .field("default", &self.default)
-            .field("current", &self.current)
+            .field("center", &self.center)
             .field("enabled", &self.enabled)
             .finish_non_exhaustive()
     }
@@ -94,8 +94,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                     state.cache.clear();
                 }
 
-                if self.current != state.last_val {
-                    state.last_val = self.current;
+                if self.value != state.last_value {
+                    state.last_value = self.value;
                     state.cache.clear();
                 }
 
@@ -113,13 +113,18 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
 
                     let new_click = Click::new(pos, mouse::Button::Left, state.last_click);
                     if matches!(new_click.kind(), Kind::Double) {
-                        shell.publish((self.f)(self.default));
+                        shell.publish((self.on_change)(self.default));
                     }
                     state.last_click = Some(new_click);
+
+                    return Status::Captured;
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
-                    state.cache.clear();
+                    if !state.hovering {
+                        state.cache.clear();
+                    }
                     state.dragging = None;
+
                     return Status::Captured;
                 }
                 mouse::Event::CursorMoved {
@@ -135,12 +140,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                     }
 
                     if let Some(last) = state.dragging {
+                        state.dragging = Some(y);
+
                         let diff = (last - y) * (self.range.end() - self.range.start()) * 0.005;
 
-                        state.dragging = Some(y);
-                        let new =
-                            (state.last_val + diff).clamp(*self.range.start(), *self.range.end());
-                        shell.publish((self.f)(new));
+                        shell.publish((self.on_change)(
+                            (state.last_value + diff).clamp(*self.range.start(), *self.range.end()),
+                        ));
 
                         return Status::Captured;
                     }
@@ -154,12 +160,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                     let diff = match delta {
                         ScrollDelta::Lines { y, .. } => y,
                         ScrollDelta::Pixels { y, .. } => y / SWM,
-                    } * 0.05
-                        * (self.range.end() - self.range.start());
+                    } * (self.range.end() - self.range.start())
+                        * 0.05;
 
-                    let new = (state.last_val + diff).clamp(*self.range.start(), *self.range.end());
-
-                    shell.publish((self.f)(new));
+                    shell.publish((self.on_change)(
+                        (state.last_value + diff).clamp(*self.range.start(), *self.range.end()),
+                    ));
 
                     return Status::Captured;
                 }
@@ -179,9 +185,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
         _style: &Style,
         layout: Layout<'_>,
         _cursor: Cursor,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
+
+        if !bounds.intersects(viewport) {
+            return;
+        }
+
         let state = tree.state.downcast_ref::<State>();
 
         if state
@@ -232,11 +243,11 @@ impl<Message> Knob<Message> {
     ) -> Self {
         Self {
             range,
-            zero,
+            center: zero,
             default,
-            current,
+            value: current,
             enabled,
-            f: Box::new(f),
+            on_change: Box::new(f),
         }
     }
 
@@ -257,13 +268,13 @@ impl<Message> Knob<Message> {
 
         let start_angle = base_angle
             + Radians(
-                FRAC_PI_2 * 3.0 * (self.zero - self.range.start())
+                FRAC_PI_2 * 3.0 * (self.center - self.range.start())
                     / (self.range.end() - self.range.start()),
             );
 
         let end_angle = base_angle
             + Radians(
-                FRAC_PI_2 * 3.0 * (self.current - self.range.start())
+                FRAC_PI_2 * 3.0 * (self.value - self.range.start())
                     / (self.range.end() - self.range.start()),
             );
 

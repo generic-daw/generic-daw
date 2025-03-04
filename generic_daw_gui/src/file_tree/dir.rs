@@ -52,7 +52,7 @@ impl Dir {
 
     pub fn view(&self) -> (Element<'_, DawMessage>, f32) {
         let mut col = column!(
-            FileTreeEntry::new(&self.path, DIR.clone(),)
+            FileTreeEntry::new(&self.path, DIR.clone())
                 .on_single_click(|p| DawMessage::FileTree(Box::from(p)))
                 .rotation(Rotation::Floating(Radians(if self.open {
                     FRAC_PI_2

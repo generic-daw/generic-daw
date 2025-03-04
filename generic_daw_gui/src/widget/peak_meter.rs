@@ -134,10 +134,15 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
         _style: &Style,
         layout: Layout<'_>,
         _cursor: Cursor,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
     ) {
-        let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
+
+        if !bounds.intersects(viewport) {
+            return;
+        }
+
+        let state = tree.state.downcast_ref::<State>();
 
         self.draw_bar(
             renderer,
