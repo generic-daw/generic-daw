@@ -260,7 +260,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                         }
                     }
                     Action::DraggingClip(offset, track, time) => {
-                        let new_track = self.get_track(cursor.y).min(layout.children().count() - 1);
+                        let new_track = self
+                            .get_track(cursor.y)
+                            .min(layout.children().next().unwrap().children().count() - 1);
 
                         let new_start =
                             self.get_time(cursor.x - track_panel_width, offset, *modifiers);
@@ -449,17 +451,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         renderer.with_layer(bounds_no_track_panel, |renderer| {
             self.playhead(renderer, bounds_no_track_panel, theme);
         });
-
-        renderer.fill_quad(
-            Quad {
-                bounds: bounds_no_track_panel,
-                border: Border::default()
-                    .width(1.0)
-                    .color(theme.extended_palette().secondary.weak.color),
-                ..Quad::default()
-            },
-            Background::Color(Color::TRANSPARENT),
-        );
     }
 }
 
@@ -635,6 +626,17 @@ where
 
             beat += Position::QUARTER_NOTE;
         }
+
+        renderer.fill_quad(
+            Quad {
+                bounds,
+                border: Border::default()
+                    .width(1.0)
+                    .color(theme.extended_palette().secondary.weak.color),
+                ..Quad::default()
+            },
+            Background::Color(Color::TRANSPARENT),
+        );
     }
 
     fn get_track(&self, y: f32) -> usize {
