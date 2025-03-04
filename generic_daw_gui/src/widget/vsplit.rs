@@ -15,7 +15,7 @@ const DRAG_SIZE: f32 = 10.0;
 
 #[derive(Default)]
 struct State {
-    dragging: Option<f32>,
+    dragging: bool,
     hovering: bool,
 }
 
@@ -75,7 +75,10 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         let max_limits = limits.max();
 
-        let left_width = max_limits.width.mul_add(self.split_at, -(DRAG_SIZE * 0.5));
+        let left_width = max_limits
+            .width
+            .mul_add(self.split_at, -(DRAG_SIZE * 0.5))
+            .floor();
         let left_limits = Limits::new(
             Size::new(0.0, 0.0),
             Size::new(left_width, max_limits.height),
@@ -138,10 +141,8 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
                     button: mouse::Button::Left,
                     ..
                 } => {
-                    if let Some(position) =
-                        cursor.position_in(layout.children().nth(1).unwrap().bounds())
-                    {
-                        state.dragging = Some(DRAG_SIZE.mul_add(-0.5, position.x));
+                    if cursor.is_over(layout.children().nth(1).unwrap().bounds()) {
+                        state.dragging = true;
                         shell.capture_event();
                     }
                 }
@@ -149,10 +150,8 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
                     position: Point { x, .. },
                     ..
                 } => {
-                    if let Some(last) = state.dragging {
-                        let split_at = (DRAG_SIZE.mul_add(-0.5, x - bounds.x - last)
-                            / (bounds.width - DRAG_SIZE))
-                            .clamp(0.0, 1.0);
+                    if state.dragging {
+                        let split_at = ((x - bounds.x) / bounds.width).clamp(0.0, 1.0);
                         shell.publish((self.resize)(split_at));
                         shell.capture_event();
                     } else if state.hovering
@@ -162,8 +161,8 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
                         shell.request_redraw();
                     }
                 }
-                mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
-                    state.dragging = None;
+                mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging => {
+                    state.dragging = false;
                     shell.capture_event();
                 }
                 _ => {}
@@ -202,7 +201,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
         renderer: &Renderer,
     ) -> Interaction {
         let state = tree.state.downcast_ref::<State>();
-        if state.dragging.is_some() || state.hovering {
+        if state.dragging || state.hovering {
             Interaction::ResizingColumn
         } else {
             self.children

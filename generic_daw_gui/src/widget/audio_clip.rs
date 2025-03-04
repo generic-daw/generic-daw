@@ -226,22 +226,24 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 
         // fill the mesh cache if it's cleared
         if state.cache.borrow().is_none() {
-            let mesh = self.mesh(theme, bounds.size(), self.position, self.scale);
-
-            state.cache.borrow_mut().replace(
-                Geometry::Live {
-                    meshes: vec![mesh],
-                    images: Vec::new(),
-                    text: Vec::new(),
-                }
-                .cache(Group::unique(), None),
-            );
+            if let Some(mesh) = self.mesh(theme, bounds.size(), self.position, self.scale) {
+                state.cache.borrow_mut().replace(
+                    Geometry::Live {
+                        meshes: vec![mesh],
+                        images: Vec::new(),
+                        text: Vec::new(),
+                    }
+                    .cache(Group::unique(), None),
+                );
+            }
         }
 
-        // draw the mesh
-        renderer.with_translation(Vector::new(bounds.x, layout.position().y), |renderer| {
-            renderer.draw_geometry(Geometry::load(state.cache.borrow().as_ref().unwrap()));
-        });
+        if let Some(cache) = state.cache.borrow().as_ref() {
+            // draw the mesh
+            renderer.with_translation(Vector::new(bounds.x, layout.position().y), |renderer| {
+                renderer.draw_geometry(Geometry::load(cache));
+            });
+        }
     }
 
     fn mouse_interaction(
@@ -305,7 +307,7 @@ impl AudioClip {
         size: Size,
         position: ArrangementPosition,
         scale: ArrangementScale,
-    ) -> Mesh {
+    ) -> Option<Mesh> {
         // the height of the waveform
         let height = scale.y - LINE_HEIGHT;
 
@@ -367,16 +369,16 @@ impl AudioClip {
             .collect::<Vec<_>>();
 
         // triangles of the waveform
-        let indices = (0..vertices.len() as u32 - 2)
+        let indices = (0..vertices.len().checked_sub(2)? as u32)
             .flat_map(|i| [i, i + 1, i + 2])
             .collect();
 
         // the waveform mesh
-        Mesh::Solid {
+        Some(Mesh::Solid {
             buffers: Indexed { vertices, indices },
             transformation: Transformation::IDENTITY,
             clip_bounds: Rectangle::new(Point::new(0.0, scale.y - size.height + LINE_HEIGHT), size),
-        }
+        })
     }
 }
 

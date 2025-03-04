@@ -52,6 +52,12 @@ impl AudioGraphNodeImpl for MixerNode {
     fn fill_buf(&self, buf: &mut [f32]) {
         if !self.enabled.load(Acquire) {
             buf.iter_mut().for_each(|s| *s = 0.0);
+
+            if self.read.load(Acquire) {
+                self.max_l.store(0.0, Release);
+                self.max_r.store(0.0, Release);
+            }
+
             return;
         }
 

@@ -173,7 +173,7 @@ impl Daw {
             Message::ToggleMetronome => {
                 self.meter.metronome.fetch_not(AcqRel);
             }
-            Message::SplitAt(split_at) => self.split_at = split_at,
+            Message::SplitAt(split_at) => self.split_at = split_at.min(0.5),
         }
 
         Task::none()
