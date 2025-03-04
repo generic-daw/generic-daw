@@ -11,7 +11,7 @@ use iced::{
         widget::{Tree, tree},
     },
     alignment::{Horizontal, Vertical},
-    mouse::{Cursor, Interaction},
+    mouse::{self, Cursor, Interaction},
     widget::text::{LineHeight, Shaping, Wrapping},
     window,
 };
@@ -32,15 +32,11 @@ use std::{
 
 #[derive(Default)]
 struct State {
-    /// the mesh cache
     cache: RefCell<Option<Cache>>,
-    /// the theme from the last draw
+    interaction: Interaction,
     last_theme: RefCell<Option<Theme>>,
-    /// the position from the last draw
     last_position: ArrangementPosition,
-    /// the scale from the last draw
     last_scale: ArrangementScale,
-    /// the bounds from the last draw
     last_bounds: Rectangle,
 }
 
@@ -101,29 +97,41 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         tree: &mut Tree,
         event: &Event,
         layout: Layout<'_>,
-        _cursor: Cursor,
+        cursor: Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        _shell: &mut Shell<'_, Message>,
-        _viewport: &Rectangle,
+        shell: &mut Shell<'_, Message>,
+        viewport: &Rectangle,
     ) {
-        if let Event::Window(window::Event::RedrawRequested(..)) = event {
-            let state = tree.state.downcast_mut::<State>();
+        let state = tree.state.downcast_mut::<State>();
+        let bounds = layout.bounds();
 
-            if state.last_position != self.position {
-                state.last_position = self.position;
-                *state.cache.borrow_mut() = None;
-            }
+        match event {
+            Event::Window(window::Event::RedrawRequested(..)) => {
+                if state.last_position != self.position {
+                    state.last_position = self.position;
+                    *state.cache.borrow_mut() = None;
+                }
 
-            if state.last_scale != self.scale {
-                state.last_scale = self.scale;
-                *state.cache.borrow_mut() = None;
-            }
+                if state.last_scale != self.scale {
+                    state.last_scale = self.scale;
+                    *state.cache.borrow_mut() = None;
+                }
 
-            if state.last_bounds != layout.bounds() {
-                state.last_bounds = layout.bounds();
-                *state.cache.borrow_mut() = None;
+                if state.last_bounds != bounds {
+                    state.last_bounds = bounds;
+                    *state.cache.borrow_mut() = None;
+                }
             }
+            Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+                let interaction = Self::mouse_interaction(bounds, cursor, viewport);
+
+                if interaction != state.interaction {
+                    state.interaction = interaction;
+                    shell.request_redraw();
+                }
+            }
+            _ => {}
         }
     }
 
@@ -228,29 +236,13 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 
     fn mouse_interaction(
         &self,
-        _state: &Tree,
+        _tree: &Tree,
         layout: Layout<'_>,
         cursor: Cursor,
         viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> Interaction {
-        let bounds = layout.bounds();
-
-        let Some(mut cursor) = cursor.position() else {
-            return Interaction::default();
-        };
-
-        if !viewport.contains(cursor) {
-            return Interaction::default();
-        }
-
-        cursor.x -= bounds.x;
-
-        if cursor.x < 10.0 || bounds.width - cursor.x < 10.0 {
-            Interaction::ResizingHorizontally
-        } else {
-            Interaction::Grab
-        }
+        Self::mouse_interaction(layout.bounds(), cursor, viewport)
     }
 }
 
@@ -276,6 +268,24 @@ impl AudioClip {
             position,
             scale,
             enabled,
+        }
+    }
+
+    fn mouse_interaction(bounds: Rectangle, cursor: Cursor, viewport: &Rectangle) -> Interaction {
+        let Some(mut cursor) = cursor.position() else {
+            return Interaction::default();
+        };
+
+        if !viewport.contains(cursor) {
+            return Interaction::default();
+        }
+
+        cursor.x -= bounds.x;
+
+        if cursor.x < 10.0 || bounds.width - cursor.x < 10.0 {
+            Interaction::ResizingHorizontally
+        } else {
+            Interaction::Grab
         }
     }
 

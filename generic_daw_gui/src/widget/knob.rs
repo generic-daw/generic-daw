@@ -114,6 +114,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
                     if !state.hovering {
                         state.cache.clear();
+                        shell.request_redraw();
                     }
                     state.dragging = None;
                     shell.capture_event();
@@ -129,6 +130,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                     {
                         state.hovering ^= true;
                         state.cache.clear();
+                        shell.request_redraw();
                     }
 
                     if let Some(last) = state.dragging {

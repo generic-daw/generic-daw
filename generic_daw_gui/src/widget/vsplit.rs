@@ -16,6 +16,7 @@ const DRAG_SIZE: f32 = 10.0;
 #[derive(Default)]
 struct State {
     dragging: Option<f32>,
+    hovering: bool,
 }
 
 pub struct VSplit<'a, Message> {
@@ -154,6 +155,11 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
                             .clamp(0.0, 1.0);
                         shell.publish((self.resize)(split_at));
                         shell.capture_event();
+                    } else if state.hovering
+                        != cursor.is_over(layout.children().nth(1).unwrap().bounds())
+                    {
+                        state.hovering ^= true;
+                        shell.request_redraw();
                     }
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
@@ -196,7 +202,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
         renderer: &Renderer,
     ) -> Interaction {
         let state = tree.state.downcast_ref::<State>();
-        if state.dragging.is_some() || cursor.is_over(layout.children().nth(1).unwrap().bounds()) {
+        if state.dragging.is_some() || state.hovering {
             Interaction::ResizingColumn
         } else {
             self.children

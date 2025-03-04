@@ -47,12 +47,9 @@ pub const SWM: f32 = LINE_HEIGHT * 2.5;
 
 #[derive(Default)]
 struct State {
-    /// the current action
     action: Action,
-    /// we should only send one deletion message per frame
     deleted: bool,
-    /// we should only send one unselect message when the mouse leaves the viewport
-    hovered: bool,
+    hovering_seeker: bool,
 }
 
 pub struct Arrangement<'a, Message> {
@@ -147,11 +144,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         if let Event::Window(window::Event::RedrawRequested(..)) = event {
             state.deleted = false;
 
-            if self.inner.meter.playing.load(Acquire)
-                && self.position.x < self.inner.meter.sample.load(Acquire) as f32
-                && bounds.width.mul_add(self.scale.x.exp2(), self.position.x)
-                    > self.inner.meter.sample.load(Acquire) as f32
-            {
+            if self.inner.meter.playing.load(Acquire) {
                 shell.request_redraw();
             }
 
@@ -170,16 +163,23 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                 })
                 .then_some(cursor)
         }) else {
-            if state.hovered && state.action.unselect() {
-                shell.publish((self.unselect_clip)());
+            if state.hovering_seeker {
+                state.hovering_seeker = false;
+                shell.request_redraw();
             }
 
-            state.hovered = false;
-            state.action = Action::None;
+            if state.action != Action::None {
+                state.action = Action::None;
+                shell.request_redraw();
+
+                if state.action.unselect() {
+                    shell.publish((self.unselect_clip)());
+                }
+            }
+
             return;
         };
 
-        state.hovered = true;
         cursor.y -= LINE_HEIGHT;
 
         if let Event::Mouse(event) = event {
@@ -329,6 +329,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                             shell.capture_event();
                         };
                     }
+                    Action::None if state.hovering_seeker != (cursor.y <= 0.0) => {
+                        state.hovering_seeker ^= true;
+                        shell.request_redraw();
+                    }
                     _ => {}
                 },
                 mouse::Event::WheelScrolled { delta, modifiers } => {
@@ -395,7 +399,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> Interaction {
-        match tree.state.downcast_ref::<State>().action {
+        let state = tree.state.downcast_ref::<State>();
+
+        match state.action {
             Action::ClipTrimmingStart(..) | Action::ClipTrimmingEnd(..) => {
                 Interaction::ResizingHorizontally
             }
@@ -403,11 +409,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             Action::DraggingPlayhead(..) => Interaction::ResizingHorizontally,
             Action::DeletingClips => Interaction::NoDrop,
             Action::None => {
-                if cursor.position_in(layout.bounds()).is_some_and(|cursor| {
-                    cursor.y <= LINE_HEIGHT
-                        && track_bounds(&layout)
-                            .is_none_or(|bounds| cursor.x >= bounds.x - layout.position().x)
-                }) {
+                if state.hovering_seeker {
                     Interaction::ResizingHorizontally
                 } else {
                     self.children.as_widget().mouse_interaction(
@@ -457,7 +459,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         renderer.with_layer(bounds_no_seeker, |renderer| {
             let layout = children.next().unwrap();
 
-            let Some(bounds) = layout.bounds().intersection(&bounds_no_seeker) else {
+            let Some(bounds) = bounds.intersection(&bounds_no_seeker) else {
                 return;
             };
 
