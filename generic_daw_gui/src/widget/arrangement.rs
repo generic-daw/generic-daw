@@ -231,7 +231,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
 
                                 shell.publish((self.delete_clip)(track, clip));
                                 shell.capture_event();
-                            };
+                            }
                         }
                     }
                     _ => {}
@@ -300,7 +300,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
 
                             shell.publish((self.delete_clip)(track, clip));
                             shell.capture_event();
-                        };
+                        }
                     }
                     Action::None if state.hovering_seeker != (cursor.y <= LINE_HEIGHT) => {
                         state.hovering_seeker ^= true;

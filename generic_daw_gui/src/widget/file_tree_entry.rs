@@ -79,7 +79,7 @@ impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_> {
 
         if !bounds.intersects(viewport) {
             return;
-        };
+        }
 
         let icon = Svg::new(self.svg.clone())
             .color(theme.extended_palette().primary.base.text)

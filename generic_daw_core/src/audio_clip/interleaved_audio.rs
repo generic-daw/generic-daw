@@ -128,8 +128,7 @@ impl InterleavedAudio {
                 max = max.max(prev.0);
             }
             if max - min < 0.02 {
-                let mut avg = (min + max) * 0.5;
-                avg = avg.clamp(-0.99, 0.99);
+                let avg = min.midpoint(max).clamp(-0.99, 0.99);
                 (min, max) = (avg - 0.01, avg + 0.01);
             }
             prev = Some((min, max));
