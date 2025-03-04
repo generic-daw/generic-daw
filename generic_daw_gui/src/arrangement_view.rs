@@ -243,7 +243,7 @@ impl ArrangementView {
 
     pub fn view(&self) -> Element<'_, Message> {
         let arrangement = ArrangementWidget::new(
-            &self.arrangement,
+            &self.arrangement.meter,
             self.position,
             self.scale,
             column(

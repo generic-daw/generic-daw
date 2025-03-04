@@ -1,6 +1,5 @@
 use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT};
-use crate::arrangement_view::ArrangementWrapper;
-use generic_daw_core::Position;
+use generic_daw_core::{Meter, Position};
 use iced::{
     Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme,
     Vector,
@@ -53,7 +52,7 @@ struct State {
 }
 
 pub struct Arrangement<'a, Message> {
-    inner: &'a ArrangementWrapper,
+    meter: &'a Meter,
     /// column of rows of [track panel, track]
     children: Element<'a, Message>,
     /// the position of the top left corner of the arrangement viewport
@@ -74,7 +73,11 @@ pub struct Arrangement<'a, Message> {
 
 impl<Message> Debug for Arrangement<'_, Message> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.inner.fmt(f)
+        f.debug_struct("Arrangement")
+            .field("meter", &self.meter)
+            .field("position", &self.position)
+            .field("scale", &self.scale)
+            .finish_non_exhaustive()
     }
 }
 
@@ -144,7 +147,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         if let Event::Window(window::Event::RedrawRequested(..)) = event {
             state.deleted = false;
 
-            if self.inner.meter.playing.load(Acquire) {
+            if self.meter.playing.load(Acquire) {
                 shell.request_redraw();
             }
 
@@ -155,14 +158,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             return;
         }
 
-        let Some(mut cursor) = cursor.position_in(bounds).and_then(|mut cursor| {
-            track_panel_bounds(&layout)
-                .is_none_or(|bounds| {
-                    cursor.x -= bounds.width;
-                    cursor.x >= 0.0
-                })
-                .then_some(cursor)
-        }) else {
+        let track_panel_width = track_panel_width(&layout).unwrap_or_default();
+        let Some(cursor) = cursor
+            .position_in(bounds)
+            .filter(|cursor| cursor.x >= track_panel_width)
+        else {
             if state.hovering_seeker {
                 state.hovering_seeker = false;
                 shell.request_redraw();
@@ -180,34 +180,26 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             return;
         };
 
-        cursor.y -= LINE_HEIGHT;
-
         if let Event::Mouse(event) = event {
             match event {
                 mouse::Event::ButtonPressed { button, modifiers } => match button {
                     mouse::Button::Left => {
-                        let bpm = self.inner.meter.bpm.load(Acquire);
-                        let time = self.get_time(cursor, 0.0, *modifiers);
+                        let bpm = self.meter.bpm.load(Acquire);
+                        let time = self.get_time(cursor.x - track_panel_width, 0.0, *modifiers);
 
-                        if cursor.y < 0.0 {
+                        if cursor.y < LINE_HEIGHT {
                             state.action = Action::DraggingPlayhead(time);
-                            let time =
-                                time.in_interleaved_samples(bpm, self.inner.meter.sample_rate);
-                            shell.publish((self.seek_to)(time));
+
+                            shell.publish((self.seek_to)(
+                                time.in_interleaved_samples(bpm, self.meter.sample_rate),
+                            ));
                             shell.capture_event();
-                        } else if let Some((track, clip)) = self.get_track_clip(cursor) {
-                            let start_pixel = (self.inner.tracks()[track]
-                                .get_clip(clip)
-                                .get_global_start()
-                                .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
-                                - self.position.x)
-                                / self.scale.x.exp2();
-                            let end_pixel = (self.inner.tracks()[track]
-                                .get_clip(clip)
-                                .get_global_end()
-                                .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
-                                - self.position.x)
-                                / self.scale.x.exp2();
+                        } else if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
+                            let clip_bounds = clip_bounds(&layout, track, clip).unwrap()
+                                - Vector::new(bounds.x, bounds.y);
+
+                            let start_pixel = clip_bounds.x;
+                            let end_pixel = clip_bounds.x + clip_bounds.width;
                             let offset = start_pixel - cursor.x;
 
                             state.action = match (
@@ -223,46 +215,26 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                                 }
                                 (false, false) => Action::DraggingClip(offset, track, time),
                             };
-                            shell.publish((self.select_clip)(track, clip));
-                            shell.capture_event();
-                        } else {
-                            match (modifiers.control(), modifiers.shift(), modifiers.alt()) {
-                                (true, false, false) if cursor.y >= 0.0 => {
-                                    if let Some((track, clip)) = self.get_track_clip(cursor) {
-                                        let time = self.inner.tracks()[track]
-                                            .get_clip(clip)
-                                            .get_global_start();
 
-                                        let start_pixel = (time.in_interleaved_samples_f(
-                                            self.inner.meter.bpm.load(Acquire),
-                                            self.inner.meter.sample_rate,
-                                        ) - self.position.x)
-                                            / self.scale.x.exp2();
-                                        let offset = start_pixel - cursor.x;
-
-                                        state.action = Action::DraggingClip(offset, track, time);
-
-                                        shell.publish((self.clone_clip)(track, clip));
-                                        shell.capture_event();
-                                    };
-                                }
-                                _ => {}
+                            if modifiers.control() {
+                                shell.publish((self.clone_clip)(track, clip));
+                            } else {
+                                shell.publish((self.select_clip)(track, clip));
                             }
+
+                            shell.capture_event();
                         }
                     }
                     mouse::Button::Right => {
-                        match (modifiers.control(), modifiers.shift(), modifiers.alt()) {
-                            (false, false, false) if !(state.deleted || cursor.y < 0.0) => {
-                                state.action = Action::DeletingClips;
+                        if !(state.deleted || cursor.y < LINE_HEIGHT) {
+                            state.action = Action::DeletingClips;
 
-                                if let Some((track, clip)) = self.get_track_clip(cursor) {
-                                    state.deleted = true;
+                            if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
+                                state.deleted = true;
 
-                                    shell.publish((self.delete_clip)(track, clip));
-                                    shell.capture_event();
-                                };
-                            }
-                            _ => {}
+                                shell.publish((self.delete_clip)(track, clip));
+                                shell.capture_event();
+                            };
                         }
                     }
                     _ => {}
@@ -277,13 +249,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                 }
                 mouse::Event::CursorMoved { modifiers, .. } => match state.action {
                     Action::DraggingPlayhead(time) => {
-                        let new_time = self.get_time(cursor, 0.0, *modifiers);
+                        let new_time = self.get_time(cursor.x - track_panel_width, 0.0, *modifiers);
                         if new_time != time {
                             state.action = Action::DraggingPlayhead(new_time);
 
                             let new_time = new_time.in_interleaved_samples(
-                                self.inner.meter.bpm.load(Acquire),
-                                self.inner.meter.sample_rate,
+                                self.meter.bpm.load(Acquire),
+                                self.meter.sample_rate,
                             );
 
                             shell.publish((self.seek_to)(new_time));
@@ -291,10 +263,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                         }
                     }
                     Action::DraggingClip(offset, track, time) => {
-                        let new_track = (cursor.y / self.scale.y + self.position.y) as usize;
-                        let new_track = new_track.min(self.inner.tracks().len().saturating_sub(1));
+                        let new_track = self.get_track(cursor.y).min(layout.children().count() - 1);
 
-                        let new_start = self.get_time(cursor, offset, *modifiers);
+                        let new_start =
+                            self.get_time(cursor.x - track_panel_width, offset, *modifiers);
 
                         if new_track != track || new_start != time {
                             state.action = Action::DraggingClip(offset, new_track, new_start);
@@ -304,7 +276,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                         }
                     }
                     Action::ClipTrimmingStart(offset, time) => {
-                        let new_start = self.get_time(cursor, offset, *modifiers);
+                        let new_start =
+                            self.get_time(cursor.x - track_panel_width, offset, *modifiers);
                         if new_start != time {
                             state.action = Action::ClipTrimmingStart(offset, new_start);
 
@@ -313,7 +286,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                         }
                     }
                     Action::ClipTrimmingEnd(offset, time) => {
-                        let new_end = self.get_time(cursor, offset, *modifiers);
+                        let new_end =
+                            self.get_time(cursor.x - track_panel_width, offset, *modifiers);
                         if new_end != time {
                             state.action = Action::ClipTrimmingEnd(offset, new_end);
 
@@ -321,15 +295,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                             shell.capture_event();
                         }
                     }
-                    Action::DeletingClips if !(state.deleted || cursor.y < 0.0) => {
-                        if let Some((track, clip)) = self.get_track_clip(cursor) {
+                    Action::DeletingClips if !(state.deleted || cursor.y < LINE_HEIGHT) => {
+                        if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
                             state.deleted = true;
 
                             shell.publish((self.delete_clip)(track, clip));
                             shell.capture_event();
                         };
                     }
-                    Action::None if state.hovering_seeker != (cursor.y <= 0.0) => {
+                    Action::None if state.hovering_seeker != (cursor.y <= LINE_HEIGHT) => {
                         state.hovering_seeker ^= true;
                         shell.request_redraw();
                     }
@@ -354,8 +328,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                         (true, false, false) => {
                             y /= 128.0;
 
-                            let x_pos =
-                                cursor.x * (self.scale.x.exp2() - (self.scale.x + y).exp2());
+                            let x_pos = (cursor.x - track_panel_width)
+                                * (self.scale.x.exp2() - (self.scale.x + y).exp2());
 
                             shell.publish((self.position_scale_delta)(
                                 ArrangementPosition::new(x_pos, 0.0),
@@ -373,9 +347,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                             shell.capture_event();
                         }
                         (false, false, true) => {
-                            y /= 8.0;
+                            y /= -8.0;
 
-                            let y_pos = (cursor.y * y) / (self.scale.y * self.scale.y);
+                            let y_pos =
+                                ((cursor.y - LINE_HEIGHT) * y) / (self.scale.y * self.scale.y);
 
                             shell.publish((self.position_scale_delta)(
                                 ArrangementPosition::new(0.0, y_pos),
@@ -497,7 +472,7 @@ where
 {
     #[expect(clippy::too_many_arguments)]
     pub fn new(
-        inner: &'a ArrangementWrapper,
+        meter: &'a Meter,
         position: ArrangementPosition,
         scale: ArrangementScale,
         children: impl Into<Element<'a, Message>>,
@@ -512,7 +487,7 @@ where
         position_scale_delta: fn(ArrangementPosition, ArrangementScale) -> Message,
     ) -> Self {
         Self {
-            inner,
+            meter,
             children: children.into(),
             position,
             scale,
@@ -529,21 +504,18 @@ where
     }
 
     fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-        let numerator = self.inner.meter.numerator.load(Acquire);
-        let bpm = self.inner.meter.bpm.load(Acquire);
+        let numerator = self.meter.numerator.load(Acquire);
+        let bpm = self.meter.bpm.load(Acquire);
 
-        let mut beat = Position::from_interleaved_samples_f(
-            self.position.x,
-            bpm,
-            self.inner.meter.sample_rate,
-        )
-        .ceil();
+        let mut beat =
+            Position::from_interleaved_samples_f(self.position.x, bpm, self.meter.sample_rate)
+                .ceil();
 
         let end_beat = beat
             + Position::from_interleaved_samples_f(
                 bounds.width * self.scale.x.exp2(),
                 bpm,
-                self.inner.meter.sample_rate,
+                self.meter.sample_rate,
             )
             .floor();
 
@@ -566,8 +538,7 @@ where
                 theme.extended_palette().secondary.weak.color
             };
 
-            let x = (beat.in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
-                - self.position.x)
+            let x = (beat.in_interleaved_samples_f(bpm, self.meter.sample_rate) - self.position.x)
                 / self.scale.x.exp2();
 
             renderer.fill_quad(
@@ -586,7 +557,7 @@ where
     }
 
     fn playhead(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-        let bpm = self.inner.meter.bpm.load(Acquire);
+        let bpm = self.meter.bpm.load(Acquire);
 
         renderer.fill_quad(
             Quad {
@@ -596,8 +567,7 @@ where
             theme.extended_palette().primary.base.color,
         );
 
-        let x =
-            (self.inner.meter.sample.load(Acquire) as f32 - self.position.x) / self.scale.x.exp2();
+        let x = (self.meter.sample.load(Acquire) as f32 - self.position.x) / self.scale.x.exp2();
 
         if x >= 0.0 {
             renderer.fill_quad(
@@ -613,8 +583,7 @@ where
         }
 
         let mut draw_text = |beat: Position, bar: u32| {
-            let x = (beat.in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
-                - self.position.x)
+            let x = (beat.in_interleaved_samples_f(bpm, self.meter.sample_rate) - self.position.x)
                 / self.scale.x.exp2();
 
             let bar = Text {
@@ -637,25 +606,22 @@ where
             );
         };
 
-        let numerator = self.inner.meter.numerator.load(Acquire);
+        let numerator = self.meter.numerator.load(Acquire);
 
-        let mut beat = Position::from_interleaved_samples_f(
-            self.position.x,
-            bpm,
-            self.inner.meter.sample_rate,
-        )
-        .saturating_sub(if self.scale.x > 11.0 {
-            Position::new(4 * numerator as u32, 0)
-        } else {
-            Position::new(numerator as u32, 0)
-        })
-        .floor();
+        let mut beat =
+            Position::from_interleaved_samples_f(self.position.x, bpm, self.meter.sample_rate)
+                .saturating_sub(if self.scale.x > 11.0 {
+                    Position::new(4 * numerator as u32, 0)
+                } else {
+                    Position::new(numerator as u32, 0)
+                })
+                .floor();
 
         let end_beat = beat
             + Position::from_interleaved_samples_f(
                 bounds.width * self.scale.x.exp2(),
                 bpm,
-                self.inner.meter.sample_rate,
+                self.meter.sample_rate,
             )
             .floor();
 
@@ -674,28 +640,29 @@ where
         }
     }
 
-    fn get_track_clip(&self, cursor: Point) -> Option<(usize, usize)> {
-        let track = (cursor.y / self.scale.y + self.position.y) as usize;
-        let time = cursor.x.mul_add(self.scale.x.exp2(), self.position.x) as usize;
-        let clip = self
-            .inner
-            .tracks()
-            .get(track)?
-            .get_clip_at_global_time(time)?;
+    fn get_track(&self, y: f32) -> usize {
+        ((y - LINE_HEIGHT) / self.scale.y + self.position.y) as usize
+    }
 
+    fn get_track_clip(&self, layout: &Layout<'_>, cursor: Point) -> Option<(usize, usize)> {
+        let track = self.get_track(cursor.y);
+        let offset = Vector::new(layout.position().x, layout.position().y);
+        let clip = track_layout(layout, track)?
+            .children()
+            .position(|l| (l.bounds() - offset).contains(cursor))?;
         Some((track, clip))
     }
 
-    fn get_time(&self, cursor: Point, offset: f32, modifiers: Modifiers) -> Position {
-        let time = (cursor.x + offset).mul_add(self.scale.x.exp2(), self.position.x);
+    fn get_time(&self, x: f32, offset: f32, modifiers: Modifiers) -> Position {
+        let time = (x + offset).mul_add(self.scale.x.exp2(), self.position.x);
         let mut time = Position::from_interleaved_samples_f(
             time,
-            self.inner.meter.bpm.load(Acquire),
-            self.inner.meter.sample_rate,
+            self.meter.bpm.load(Acquire),
+            self.meter.sample_rate,
         );
 
         if !modifiers.alt() {
-            time = time.snap(self.scale.x, self.inner.meter.numerator.load(Acquire));
+            time = time.snap(self.scale.x, self.meter.numerator.load(Acquire));
         }
 
         time
@@ -711,7 +678,7 @@ where
     }
 }
 
-fn track_panel_bounds(layout: &Layout<'_>) -> Option<Rectangle> {
+fn track_panel_width(layout: &Layout<'_>) -> Option<f32> {
     Some(
         layout
             .children()
@@ -720,19 +687,25 @@ fn track_panel_bounds(layout: &Layout<'_>) -> Option<Rectangle> {
             .next()?
             .children()
             .next()?
-            .bounds(),
+            .bounds()
+            .width,
     )
 }
 
+fn track_layout<'a>(layout: &Layout<'a>, track: usize) -> Option<Layout<'a>> {
+    layout
+        .children()
+        .next()?
+        .children()
+        .nth(track)?
+        .children()
+        .next_back()
+}
+
 fn track_bounds(layout: &Layout<'_>) -> Option<Rectangle> {
-    Some(
-        layout
-            .children()
-            .next()?
-            .children()
-            .next()?
-            .children()
-            .next_back()?
-            .bounds(),
-    )
+    Some(track_layout(layout, 0)?.bounds())
+}
+
+fn clip_bounds(layout: &Layout<'_>, track: usize, clip: usize) -> Option<Rectangle> {
+    Some(track_layout(layout, track)?.children().nth(clip)?.bounds())
 }
