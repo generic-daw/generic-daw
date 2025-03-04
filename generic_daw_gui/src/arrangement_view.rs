@@ -254,28 +254,27 @@ impl ArrangementView {
                     .map(|(idx, track)| {
                         let node = track.node().clone();
                         let enabled = node.enabled.load(Acquire);
-
                         row![
                             container(
                                 row![
                                     PeakMeter::new(move || node.get_l_r(), enabled),
                                     column![
-                                        Knob::new(
+                                        mouse_area(Knob::new(
                                             0.0..=1.0,
                                             0.0,
-                                            1.0,
                                             track.node().volume.load(Acquire),
                                             enabled,
-                                            move |f| { Message::TrackVolumeChanged(idx, f) }
-                                        ),
-                                        Knob::new(
+                                            move |f| Message::TrackVolumeChanged(idx, f)
+                                        ))
+                                        .on_double_click(Message::TrackVolumeChanged(idx, 1.0)),
+                                        mouse_area(Knob::new(
                                             -1.0..=1.0,
-                                            0.0,
                                             0.0,
                                             track.node().pan.load(Acquire),
                                             enabled,
-                                            move |f| { Message::TrackPanChanged(idx, f) }
-                                        ),
+                                            move |f| Message::TrackPanChanged(idx, f)
+                                        ))
+                                        .on_double_click(Message::TrackPanChanged(idx, 0.0)),
                                     ]
                                     .spacing(5.0),
                                     mouse_area(
@@ -338,7 +337,7 @@ impl ArrangementView {
 
         if self.loading > 0 {
             mouse_area(arrangement)
-                .interaction(Interaction::Working)
+                .interaction(Interaction::Progress)
                 .into()
         } else {
             arrangement

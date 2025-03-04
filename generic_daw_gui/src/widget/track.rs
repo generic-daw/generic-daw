@@ -1,13 +1,12 @@
 use super::ArrangementScale;
 use iced::{
-    Element, Length, Rectangle, Renderer, Size, Theme,
+    Element, Event, Length, Rectangle, Renderer, Size, Theme,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
         layout::{Limits, Node},
         renderer::Style,
         widget::Tree,
     },
-    event::Status,
     mouse::{Cursor, Interaction},
 };
 use std::fmt::{Debug, Formatter};
@@ -93,11 +92,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             return;
         };
 
-        // https://github.com/iced-rs/iced/issues/2700
-        if bounds.height < 1.0 {
-            return;
-        }
-
         self.children
             .iter()
             .zip(&tree.children)
@@ -111,34 +105,34 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             });
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: iced::Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
-    ) -> Status {
+    ) {
+        if shell.is_event_captured() {
+            return;
+        }
+
         self.children
             .iter_mut()
             .zip(&mut tree.children)
             .zip(layout.children())
-            .filter_map(|((child, state), layout)| {
-                Some(child.as_widget_mut().on_event(
-                    state,
-                    event.clone(),
-                    layout,
-                    cursor,
-                    renderer,
-                    clipboard,
-                    shell,
-                    &layout.bounds().intersection(viewport)?,
-                ))
-            })
-            .fold(Status::Ignored, Status::merge)
+            .for_each(|((child, state), layout)| {
+                let Some(viewport) = layout.bounds().intersection(viewport) else {
+                    return;
+                };
+
+                child.as_widget_mut().update(
+                    state, event, layout, cursor, renderer, clipboard, shell, &viewport,
+                );
+            });
     }
 }
 

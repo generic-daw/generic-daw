@@ -5,11 +5,9 @@ use iced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
         graphics::geometry::Renderer as _,
         layout::{Limits, Node},
-        mouse::{Click, click::Kind},
         renderer::Style,
         widget::{Tree, tree},
     },
-    event::Status,
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::canvas::{Cache, Frame, Path, path::Arc},
     window,
@@ -30,7 +28,6 @@ struct State {
     hovering: bool,
     last_value: f32,
     last_enabled: bool,
-    last_click: Option<Click>,
     last_theme: RefCell<Option<Theme>>,
     cache: Cache,
 }
@@ -38,7 +35,6 @@ struct State {
 pub struct Knob<Message> {
     range: RangeInclusive<f32>,
     value: f32,
-    default: f32,
     center: f32,
     enabled: bool,
     on_change: Box<dyn Fn(f32) -> Message>,
@@ -49,7 +45,6 @@ impl<Message> Debug for Knob<Message> {
         f.debug_struct("Knob")
             .field("range", &self.range)
             .field("value", &self.value)
-            .field("default", &self.default)
             .field("center", &self.center)
             .field("enabled", &self.enabled)
             .finish_non_exhaustive()
@@ -73,17 +68,21 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
         Node::new(Size::new(DIAMETER, DIAMETER))
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
-    ) -> Status {
+    ) {
+        if shell.is_event_captured() {
+            return;
+        }
+
         let state = tree.state.downcast_mut::<State>();
         let bounds = layout.bounds();
 
@@ -98,37 +97,30 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                     state.last_value = self.value;
                     state.cache.clear();
                 }
-
-                return Status::Ignored;
             }
             Event::Mouse(event) => match event {
-                mouse::Event::ButtonPressed(mouse::Button::Left)
-                    if state.dragging.is_none()
-                        && cursor
-                            .position()
-                            .is_some_and(|pos| pos.distance(bounds.center()) < RADIUS) =>
+                mouse::Event::ButtonPressed {
+                    button: mouse::Button::Left,
+                    ..
+                } if state.dragging.is_none()
+                    && cursor
+                        .position()
+                        .is_some_and(|pos| pos.distance(bounds.center()) < RADIUS) =>
                 {
                     let pos = cursor.position().unwrap();
                     state.dragging = Some(pos.y);
-
-                    let new_click = Click::new(pos, mouse::Button::Left, state.last_click);
-                    if matches!(new_click.kind(), Kind::Double) {
-                        shell.publish((self.on_change)(self.default));
-                    }
-                    state.last_click = Some(new_click);
-
-                    return Status::Captured;
+                    shell.capture_event();
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
                     if !state.hovering {
                         state.cache.clear();
                     }
                     state.dragging = None;
-
-                    return Status::Captured;
+                    shell.capture_event();
                 }
                 mouse::Event::CursorMoved {
                     position: Point { y, .. },
+                    ..
                 } => {
                     if state.hovering
                         != cursor
@@ -140,25 +132,24 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                     }
 
                     if let Some(last) = state.dragging {
-                        state.dragging = Some(y);
+                        state.dragging = Some(*y);
 
                         let diff = (last - y) * (self.range.end() - self.range.start()) * 0.005;
 
                         shell.publish((self.on_change)(
                             (state.last_value + diff).clamp(*self.range.start(), *self.range.end()),
                         ));
-
-                        return Status::Captured;
+                        shell.capture_event();
                     }
                 }
-                mouse::Event::WheelScrolled { delta }
+                mouse::Event::WheelScrolled { delta, .. }
                     if state.dragging.is_none()
                         && cursor
                             .position()
                             .is_some_and(|pos| pos.distance(bounds.center()) < RADIUS) =>
                 {
                     let diff = match delta {
-                        ScrollDelta::Lines { y, .. } => y,
+                        ScrollDelta::Lines { y, .. } => *y,
                         ScrollDelta::Pixels { y, .. } => y / SWM,
                     } * (self.range.end() - self.range.start())
                         * 0.05;
@@ -166,15 +157,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                     shell.publish((self.on_change)(
                         (state.last_value + diff).clamp(*self.range.start(), *self.range.end()),
                     ));
-
-                    return Status::Captured;
+                    shell.capture_event();
                 }
                 _ => {}
             },
             _ => {}
         }
-
-        Status::Ignored
     }
 
     fn draw(
@@ -236,7 +224,6 @@ impl<Message> Knob<Message> {
     pub fn new(
         range: RangeInclusive<f32>,
         zero: f32,
-        default: f32,
         current: f32,
         enabled: bool,
         f: impl Fn(f32) -> Message + 'static,
@@ -244,7 +231,6 @@ impl<Message> Knob<Message> {
         Self {
             range,
             center: zero,
-            default,
             value: current,
             enabled,
             on_change: Box::new(f),
@@ -295,23 +281,23 @@ impl<Message> Knob<Message> {
             theme.extended_palette().primary.base.color
         };
 
-        frame.fill(&arc, theme.extended_palette().secondary.base.text);
+        frame.fill(&arc, theme.extended_palette().primary.base.text);
 
         frame.fill(&Path::circle(center, RADIUS * 0.8), color);
 
         frame.fill(
             &circle(start_angle, 0.9, 0.1),
-            theme.extended_palette().secondary.base.text,
+            theme.extended_palette().primary.base.text,
         );
 
         frame.fill(
             &circle(end_angle, 0.9, 0.1),
-            theme.extended_palette().secondary.base.text,
+            theme.extended_palette().primary.base.text,
         );
 
         frame.fill(
             &circle(end_angle, 0.4, 0.15),
-            theme.extended_palette().secondary.base.text,
+            theme.extended_palette().primary.base.text,
         );
     }
 }

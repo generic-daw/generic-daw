@@ -198,7 +198,7 @@ impl Daw {
                             PLAY.clone()
                         })
                         .style(|theme: &Theme, _| svg::Style {
-                            color: Some(theme.extended_palette().secondary.base.text)
+                            color: Some(theme.extended_palette().primary.base.text)
                         })
                         .width(Length::Shrink)
                         .height(Length::Fixed(21.0))
@@ -207,7 +207,7 @@ impl Daw {
                     styled_button(
                         svg(STOP.clone())
                             .style(|theme: &Theme, _| svg::Style {
-                                color: Some(theme.extended_palette().secondary.base.text)
+                                color: Some(theme.extended_palette().primary.base.text)
                             })
                             .width(Length::Shrink)
                             .height(Length::Fixed(21.0))

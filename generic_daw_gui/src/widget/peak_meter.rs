@@ -7,7 +7,6 @@ use iced::{
         renderer::{Quad, Style},
         widget::{Tree, tree},
     },
-    event::Status,
     mouse::Cursor,
     window,
 };
@@ -69,18 +68,18 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
         Node::new(Size::new(WIDTH, limits.max().height))
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         _cursor: Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
-    ) -> Status {
-        if let Event::Window(window::Event::RedrawRequested(now)) = event {
+    ) {
+        if let &Event::Window(window::Event::RedrawRequested(now)) = event {
             let state = tree.state.downcast_mut::<State>();
             let bounds = layout.bounds();
 
@@ -116,14 +115,12 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
             };
 
             if max_by(state.left, state.right, f32::total_cmp) * bounds.height > 1.0 {
-                shell.request_redraw(window::RedrawRequest::NextFrame);
+                shell.request_redraw();
             } else {
                 state.left = 0.0;
                 state.right = 0.0;
             }
         }
-
-        Status::Ignored
     }
 
     fn draw(

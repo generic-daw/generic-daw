@@ -1,58 +1,32 @@
 use super::LINE_HEIGHT;
 use iced::{
-    Element, Event, Length, Rectangle, Renderer, Rotation, Size, Theme, Vector,
+    Element, Length, Rectangle, Renderer, Rotation, Size, Theme, Vector,
     advanced::{
-        Clipboard, Layout, Renderer as _, Shell, Text, Widget,
+        Layout, Renderer as _, Text, Widget,
         layout::{Limits, Node},
-        mouse::{self, Click, Cursor},
-        renderer::{Quad, Style},
+        mouse::Cursor,
+        renderer::Style,
         svg::{Handle, Renderer as _, Svg},
         text::{LineHeight, Renderer as _, Shaping, Wrapping},
-        widget::{Tree, tree},
+        widget::Tree,
     },
     alignment::{Horizontal, Vertical},
-    event::Status,
 };
-use std::path::Path;
-
-#[derive(Default)]
-struct State {
-    last_click: Option<Click>,
-    hovered: bool,
-}
 
 #[derive(Debug)]
-pub struct FileTreeEntry<'a, Message> {
-    path: &'a Path,
-    name: String,
+pub struct FileTreeEntry<'a> {
+    name: &'a str,
     svg: Handle,
-    on_single_click: Option<fn(&'a Path) -> Message>,
-    on_double_click: Option<fn(&'a Path) -> Message>,
     rotation: Rotation,
 }
 
-impl<'a, Message> FileTreeEntry<'a, Message> {
-    pub fn new(path: &'a Path, svg: Handle) -> Self {
-        let name = path.file_name().unwrap().to_str().unwrap().to_owned();
-
+impl<'a> FileTreeEntry<'a> {
+    pub fn new(name: &'a str, svg: Handle) -> Self {
         Self {
-            path,
             name,
             svg,
-            on_single_click: None,
-            on_double_click: None,
             rotation: Rotation::default(),
         }
-    }
-
-    pub fn on_single_click(mut self, on_single_click: fn(&'a Path) -> Message) -> Self {
-        self.on_single_click = Some(on_single_click);
-        self
-    }
-
-    pub fn on_double_click(mut self, on_double_click: fn(&'a Path) -> Message) -> Self {
-        self.on_double_click = Some(on_double_click);
-        self
     }
 
     pub fn rotation(mut self, rotation: impl Into<Rotation>) -> Self {
@@ -61,15 +35,7 @@ impl<'a, Message> FileTreeEntry<'a, Message> {
     }
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_, Message> {
-    fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<State>()
-    }
-
-    fn state(&self) -> tree::State {
-        tree::State::new(State::default())
-    }
-
+impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_> {
     fn size(&self) -> Size<Length> {
         Size::new(Length::Fill, Length::Shrink)
     }
@@ -80,7 +46,7 @@ impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_, Message> {
 
     fn draw(
         &self,
-        tree: &Tree,
+        _tree: &Tree,
         renderer: &mut Renderer,
         theme: &Theme,
         _style: &Style,
@@ -93,21 +59,6 @@ impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_, Message> {
         if !bounds.intersects(viewport) {
             return;
         };
-
-        let background = Quad {
-            bounds,
-            ..Quad::default()
-        };
-
-        let state = tree.state.downcast_ref::<State>();
-
-        let background_color = if state.hovered {
-            theme.extended_palette().primary.base.color
-        } else {
-            theme.extended_palette().primary.strong.color
-        };
-
-        renderer.fill_quad(background, background_color);
 
         let icon = Svg::new(self.svg.clone())
             .color(theme.extended_palette().primary.strong.text)
@@ -127,7 +78,7 @@ impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_, Message> {
         }
 
         let name = Text {
-            content: self.name.clone(),
+            content: self.name.to_owned(),
             bounds: Size::new(f32::INFINITY, 0.0),
             size: renderer.default_size(),
             line_height: LineHeight::default(),
@@ -145,54 +96,13 @@ impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_, Message> {
             bounds,
         );
     }
-
-    fn on_event(
-        &mut self,
-        tree: &mut Tree,
-        event: Event,
-        layout: Layout<'_>,
-        cursor: Cursor,
-        _renderer: &Renderer,
-        _clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, Message>,
-        _viewport: &Rectangle,
-    ) -> Status {
-        let state = tree.state.downcast_mut::<State>();
-
-        let Some(pos) = cursor.position_in(layout.bounds()) else {
-            state.hovered = false;
-            return Status::Ignored;
-        };
-
-        state.hovered = true;
-
-        if event == Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) {
-            if let Some(on_single_click) = self.on_single_click {
-                shell.publish(on_single_click(self.path));
-            }
-
-            if let Some(on_double_click) = self.on_double_click {
-                let new_click = Click::new(pos, mouse::Button::Left, state.last_click);
-
-                if matches!(new_click.kind(), mouse::click::Kind::Double) {
-                    shell.publish(on_double_click(self.path));
-                }
-
-                state.last_click = Some(new_click);
-            }
-
-            return Status::Captured;
-        }
-
-        Status::Ignored
-    }
 }
 
-impl<'a, Message> From<FileTreeEntry<'a, Message>> for Element<'a, Message>
+impl<'a, Message> From<FileTreeEntry<'a>> for Element<'a, Message>
 where
     Message: 'a,
 {
-    fn from(value: FileTreeEntry<'a, Message>) -> Self {
+    fn from(value: FileTreeEntry<'a>) -> Self {
         Element::new(value)
     }
 }

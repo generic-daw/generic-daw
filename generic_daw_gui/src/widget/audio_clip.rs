@@ -11,7 +11,6 @@ use iced::{
         widget::{Tree, tree},
     },
     alignment::{Horizontal, Vertical},
-    event::Status,
     mouse::{Cursor, Interaction},
     widget::text::{LineHeight, Shaping, Wrapping},
     window,
@@ -97,17 +96,17 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         ))
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         _cursor: Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
         _shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
-    ) -> Status {
+    ) {
         if let Event::Window(window::Event::RedrawRequested(..)) = event {
             let state = tree.state.downcast_mut::<State>();
 
@@ -126,8 +125,6 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
                 *state.cache.borrow_mut() = None;
             }
         }
-
-        Status::Ignored
     }
 
     fn draw(
@@ -143,11 +140,6 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         let Some(bounds) = layout.bounds().intersection(viewport) else {
             return;
         };
-
-        // https://github.com/iced-rs/iced/issues/2700
-        if bounds.height < 1.0 {
-            return;
-        }
 
         // the bounds of the text part of the clip
         let mut upper_bounds = bounds;
@@ -181,7 +173,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         renderer.fill_text(
             text,
             upper_bounds.position() + Vector::new(4.0, 1.0),
-            theme.extended_palette().secondary.base.text,
+            theme.extended_palette().primary.base.text,
             upper_bounds,
         );
 
@@ -193,11 +185,6 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         let mut lower_bounds = bounds;
         lower_bounds.height -= upper_bounds.height;
         lower_bounds.y += upper_bounds.height;
-
-        // https://github.com/iced-rs/iced/issues/2700
-        if lower_bounds.height < 1.0 {
-            return;
-        }
 
         // the translucent background of the clip
         let clip_background = Quad {
@@ -313,7 +300,7 @@ impl AudioClip {
         // samples in the lod per pixel
         let lod_samples_per_pixel = lod_sample_size / pixel_size;
 
-        let color = color::pack(theme.extended_palette().secondary.base.text);
+        let color = color::pack(theme.extended_palette().primary.base.text);
         let lod = scale.x as usize - 3;
 
         let bpm = self.inner.meter.bpm.load(Acquire);

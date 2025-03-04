@@ -1,12 +1,11 @@
 use iced::{
-    Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Shell, Widget,
         layout::{Limits, Node},
         renderer::Style,
         widget::{Tree, tree},
     },
-    event::Status,
     mouse::{self, Cursor, Interaction},
     widget::Rule,
 };
@@ -104,64 +103,66 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
         Node::with_children(max_limits, children)
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
-    ) -> Status {
+    ) {
+        self.children
+            .iter_mut()
+            .zip(&mut tree.children)
+            .zip(layout.children())
+            .for_each(|((child, tree), layout)| {
+                child.as_widget_mut().update(
+                    tree, event, layout, cursor, renderer, clipboard, shell, viewport,
+                );
+            });
+
+        if shell.is_event_captured() {
+            return;
+        }
+
         let state = tree.state.downcast_mut::<State>();
         let bounds = layout.bounds();
 
         if let Event::Mouse(event) = event {
             match event {
-                mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                mouse::Event::ButtonPressed {
+                    button: mouse::Button::Left,
+                    ..
+                } => {
                     if let Some(position) =
                         cursor.position_in(layout.children().nth(1).unwrap().bounds())
                     {
                         state.dragging = Some(DRAG_SIZE.mul_add(-0.5, position.x));
-                        return Status::Captured;
+                        shell.capture_event();
                     }
                 }
-                mouse::Event::CursorMoved { position } => {
+                mouse::Event::CursorMoved {
+                    position: Point { x, .. },
+                    ..
+                } => {
                     if let Some(last) = state.dragging {
-                        let split_at = (DRAG_SIZE.mul_add(-0.5, position.x - bounds.x - last)
+                        let split_at = (DRAG_SIZE.mul_add(-0.5, x - bounds.x - last)
                             / (bounds.width - DRAG_SIZE))
                             .clamp(0.0, 1.0);
                         shell.publish((self.resize)(split_at));
-                        return Status::Captured;
+                        shell.capture_event();
                     }
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
                     state.dragging = None;
-                    return Status::Captured;
+                    shell.capture_event();
                 }
                 _ => {}
             }
         }
-
-        self.children
-            .iter_mut()
-            .zip(&mut tree.children)
-            .zip(layout.children())
-            .map(|((child, tree), layout)| {
-                child.as_widget_mut().on_event(
-                    tree,
-                    event.clone(),
-                    layout,
-                    cursor,
-                    renderer,
-                    clipboard,
-                    shell,
-                    viewport,
-                )
-            })
-            .fold(Status::Ignored, Status::merge)
     }
 
     fn draw(
@@ -196,7 +197,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
     ) -> Interaction {
         let state = tree.state.downcast_ref::<State>();
         if state.dragging.is_some() || cursor.is_over(layout.children().nth(1).unwrap().bounds()) {
-            Interaction::ResizingHorizontally
+            Interaction::ResizingColumn
         } else {
             self.children
                 .iter()

@@ -12,8 +12,7 @@ use iced::{
         widget::{Tree, Widget, tree},
     },
     alignment::{Horizontal, Vertical},
-    event::Status,
-    keyboard::{self, Modifiers},
+    keyboard::Modifiers,
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::text::{LineHeight, Shaping, Wrapping},
     window,
@@ -48,8 +47,6 @@ pub const SWM: f32 = LINE_HEIGHT * 2.5;
 
 #[derive(Default)]
 struct State {
-    /// the current modifiers
-    modifiers: Modifiers,
     /// the current action
     action: Action,
     /// we should only send one deletion message per frame
@@ -120,53 +117,49 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         )
     }
 
-    fn on_event(
+    #[expect(clippy::too_many_lines)]
+    #[expect(clippy::cognitive_complexity)]
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
-    ) -> Status {
-        if self.children.as_widget_mut().on_event(
+    ) {
+        self.children.as_widget_mut().update(
             &mut tree.children[0],
-            event.clone(),
+            event,
             layout.children().next().unwrap(),
             cursor,
             renderer,
             clipboard,
             shell,
             viewport,
-        ) == Status::Captured
-        {
-            return Status::Captured;
-        }
+        );
 
         let state = tree.state.downcast_mut::<State>();
         let bounds = layout.bounds();
 
-        match event {
-            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
-                state.modifiers = modifiers;
-                return Status::Ignored;
-            }
-            Event::Window(window::Event::RedrawRequested(..)) => {
-                state.deleted = false;
+        if let Event::Window(window::Event::RedrawRequested(..)) = event {
+            state.deleted = false;
 
-                if self.inner.meter.playing.load(Acquire)
-                    && self.position.x < self.inner.meter.sample.load(Acquire) as f32
-                    && bounds.width.mul_add(self.scale.x.exp2(), self.position.x)
-                        > self.inner.meter.sample.load(Acquire) as f32
-                {
-                    shell.request_redraw(window::RedrawRequest::NextFrame);
-                }
-
-                return Status::Ignored;
+            if self.inner.meter.playing.load(Acquire)
+                && self.position.x < self.inner.meter.sample.load(Acquire) as f32
+                && bounds.width.mul_add(self.scale.x.exp2(), self.position.x)
+                    > self.inner.meter.sample.load(Acquire) as f32
+            {
+                shell.request_redraw();
             }
-            _ => {}
+
+            return;
+        }
+
+        if shell.is_event_captured() {
+            return;
         }
 
         let Some(mut cursor) = cursor.position_in(bounds).and_then(|mut cursor| {
@@ -183,25 +176,215 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
 
             state.hovered = false;
             state.action = Action::None;
-            return Status::Ignored;
+            return;
         };
 
         state.hovered = true;
         cursor.y -= LINE_HEIGHT;
 
-        match (
-            state.modifiers.command(),
-            state.modifiers.shift(),
-            state.modifiers.alt(),
-        ) {
-            (false, false, false) => self.on_event_no_modifiers(state, &event, cursor, shell),
-            (true, false, false) => self.on_event_command(state, &event, cursor, shell),
-            (false, true, false) => self.on_event_shift(&event, shell),
-            (false, false, true) => self.on_event_alt(&event, cursor, shell),
-            _ => None,
+        if let Event::Mouse(event) = event {
+            match event {
+                mouse::Event::ButtonPressed { button, modifiers } => match button {
+                    mouse::Button::Left => {
+                        let bpm = self.inner.meter.bpm.load(Acquire);
+                        let time = self.get_time(cursor, 0.0, *modifiers);
+
+                        if cursor.y < 0.0 {
+                            state.action = Action::DraggingPlayhead(time);
+                            let time =
+                                time.in_interleaved_samples(bpm, self.inner.meter.sample_rate);
+                            shell.publish((self.seek_to)(time));
+                            shell.capture_event();
+                        } else if let Some((track, clip)) = self.get_track_clip(cursor) {
+                            let start_pixel = (self.inner.tracks()[track]
+                                .get_clip(clip)
+                                .get_global_start()
+                                .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
+                                - self.position.x)
+                                / self.scale.x.exp2();
+                            let end_pixel = (self.inner.tracks()[track]
+                                .get_clip(clip)
+                                .get_global_end()
+                                .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
+                                - self.position.x)
+                                / self.scale.x.exp2();
+                            let offset = start_pixel - cursor.x;
+
+                            state.action = match (
+                                cursor.x - start_pixel < 10.0,
+                                end_pixel - cursor.x < 10.0,
+                            ) {
+                                (true, true) if cursor.x - start_pixel < end_pixel - cursor.x => {
+                                    Action::ClipTrimmingStart(offset, time)
+                                }
+                                (true, false) => Action::ClipTrimmingStart(offset, time),
+                                (_, true) => {
+                                    Action::ClipTrimmingEnd(offset + end_pixel - start_pixel, time)
+                                }
+                                (false, false) => Action::DraggingClip(offset, track, time),
+                            };
+                            shell.publish((self.select_clip)(track, clip));
+                            shell.capture_event();
+                        } else {
+                            match (modifiers.control(), modifiers.shift(), modifiers.alt()) {
+                                (true, false, false) if cursor.y >= 0.0 => {
+                                    if let Some((track, clip)) = self.get_track_clip(cursor) {
+                                        let time = self.inner.tracks()[track]
+                                            .get_clip(clip)
+                                            .get_global_start();
+
+                                        let start_pixel = (time.in_interleaved_samples_f(
+                                            self.inner.meter.bpm.load(Acquire),
+                                            self.inner.meter.sample_rate,
+                                        ) - self.position.x)
+                                            / self.scale.x.exp2();
+                                        let offset = start_pixel - cursor.x;
+
+                                        state.action = Action::DraggingClip(offset, track, time);
+
+                                        shell.publish((self.clone_clip)(track, clip));
+                                        shell.capture_event();
+                                    };
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    mouse::Button::Right => {
+                        match (modifiers.control(), modifiers.shift(), modifiers.alt()) {
+                            (false, false, false) if !(state.deleted || cursor.y < 0.0) => {
+                                state.action = Action::DeletingClips;
+
+                                if let Some((track, clip)) = self.get_track_clip(cursor) {
+                                    state.deleted = true;
+
+                                    shell.publish((self.delete_clip)(track, clip));
+                                    shell.capture_event();
+                                };
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                },
+                mouse::Event::ButtonReleased(_) if state.action != Action::None => {
+                    if state.action.unselect() {
+                        shell.publish((self.unselect_clip)());
+                    }
+
+                    state.action = Action::None;
+                    shell.capture_event();
+                }
+                mouse::Event::CursorMoved { modifiers, .. } => match state.action {
+                    Action::DraggingPlayhead(time) => {
+                        let new_time = self.get_time(cursor, 0.0, *modifiers);
+                        if new_time != time {
+                            state.action = Action::DraggingPlayhead(new_time);
+
+                            let new_time = new_time.in_interleaved_samples(
+                                self.inner.meter.bpm.load(Acquire),
+                                self.inner.meter.sample_rate,
+                            );
+
+                            shell.publish((self.seek_to)(new_time));
+                            shell.capture_event();
+                        }
+                    }
+                    Action::DraggingClip(offset, track, time) => {
+                        let new_track = (cursor.y / self.scale.y + self.position.y) as usize;
+                        let new_track = new_track.min(self.inner.tracks().len().saturating_sub(1));
+
+                        let new_start = self.get_time(cursor, offset, *modifiers);
+
+                        if new_track != track || new_start != time {
+                            state.action = Action::DraggingClip(offset, new_track, new_start);
+
+                            shell.publish((self.move_clip_to)(new_track, new_start));
+                            shell.capture_event();
+                        }
+                    }
+                    Action::ClipTrimmingStart(offset, time) => {
+                        let new_start = self.get_time(cursor, offset, *modifiers);
+                        if new_start != time {
+                            state.action = Action::ClipTrimmingStart(offset, new_start);
+
+                            shell.publish((self.trim_clip_start)(new_start));
+                            shell.capture_event();
+                        }
+                    }
+                    Action::ClipTrimmingEnd(offset, time) => {
+                        let new_end = self.get_time(cursor, offset, *modifiers);
+                        if new_end != time {
+                            state.action = Action::ClipTrimmingEnd(offset, new_end);
+
+                            shell.publish((self.trim_clip_end)(new_end));
+                            shell.capture_event();
+                        }
+                    }
+                    Action::DeletingClips if !(state.deleted || cursor.y < 0.0) => {
+                        if let Some((track, clip)) = self.get_track_clip(cursor) {
+                            state.deleted = true;
+
+                            shell.publish((self.delete_clip)(track, clip));
+                            shell.capture_event();
+                        };
+                    }
+                    _ => {}
+                },
+                mouse::Event::WheelScrolled { delta, modifiers } => {
+                    let (mut x, mut y) = match *delta {
+                        ScrollDelta::Pixels { x, y } => (-x, -y),
+                        ScrollDelta::Lines { x, y } => (-x * SWM, -y * SWM),
+                    };
+
+                    match (modifiers.control(), modifiers.shift(), modifiers.alt()) {
+                        (false, false, false) => {
+                            (x, y) = (x * 2.0 * self.scale.x.exp2(), y * 2.0 / self.scale.y);
+
+                            shell.publish((self.position_scale_delta)(
+                                ArrangementPosition::new(x, y),
+                                ArrangementScale::ZERO,
+                            ));
+                            shell.capture_event();
+                        }
+                        (true, false, false) => {
+                            y /= 128.0;
+
+                            let x_pos =
+                                cursor.x * (self.scale.x.exp2() - (self.scale.x + y).exp2());
+
+                            shell.publish((self.position_scale_delta)(
+                                ArrangementPosition::new(x_pos, 0.0),
+                                ArrangementScale::new(y, 0.0),
+                            ));
+                            shell.capture_event();
+                        }
+                        (false, true, false) => {
+                            y *= 4.0 * self.scale.x.exp2();
+
+                            shell.publish((self.position_scale_delta)(
+                                ArrangementPosition::new(y, 0.0),
+                                ArrangementScale::ZERO,
+                            ));
+                            shell.capture_event();
+                        }
+                        (false, false, true) => {
+                            y /= 8.0;
+
+                            let y_pos = (cursor.y * y) / (self.scale.y * self.scale.y);
+
+                            shell.publish((self.position_scale_delta)(
+                                ArrangementPosition::new(0.0, y_pos),
+                                ArrangementScale::new(0.0, y),
+                            ));
+                            shell.capture_event();
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
         }
-        .or_else(|| self.on_event_any_modifiers(state, &event, cursor, shell))
-        .unwrap_or(Status::Ignored)
     }
 
     fn mouse_interaction(
@@ -218,7 +401,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
             }
             Action::DraggingClip(..) => Interaction::Grabbing,
             Action::DraggingPlayhead(..) => Interaction::ResizingHorizontally,
-            Action::DeletingClips => Interaction::NotAllowed,
+            Action::DeletingClips => Interaction::NoDrop,
             Action::None => {
                 if cursor.position_in(layout.bounds()).is_some_and(|cursor| {
                     cursor.y <= LINE_HEIGHT
@@ -447,7 +630,7 @@ where
             renderer.fill_text(
                 bar,
                 bounds.position() + Vector::new(x + 1.0, 0.0),
-                theme.extended_palette().secondary.base.text,
+                theme.extended_palette().primary.base.text,
                 bounds,
             );
         };
@@ -486,286 +669,6 @@ where
             }
 
             beat += Position::QUARTER_NOTE;
-        }
-    }
-
-    #[expect(clippy::too_many_lines)]
-    fn on_event_any_modifiers(
-        &self,
-        state: &mut State,
-        event: &Event,
-        cursor: Point,
-        shell: &mut Shell<'_, Message>,
-    ) -> Option<Status> {
-        if let Event::Mouse(event) = event {
-            match event {
-                mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                    let bpm = self.inner.meter.bpm.load(Acquire);
-                    let time = self.get_time(cursor, 0.0, state.modifiers);
-
-                    if cursor.y < 0.0 {
-                        state.action = Action::DraggingPlayhead(time);
-                        let time = time.in_interleaved_samples(bpm, self.inner.meter.sample_rate);
-                        shell.publish((self.seek_to)(time));
-                        return Some(Status::Captured);
-                    }
-
-                    let (track, clip) = self.get_track_clip(cursor)?;
-
-                    let start_pixel = (self.inner.tracks()[track]
-                        .get_clip(clip)
-                        .get_global_start()
-                        .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
-                        - self.position.x)
-                        / self.scale.x.exp2();
-                    let end_pixel = (self.inner.tracks()[track]
-                        .get_clip(clip)
-                        .get_global_end()
-                        .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
-                        - self.position.x)
-                        / self.scale.x.exp2();
-                    let offset = start_pixel - cursor.x;
-
-                    state.action =
-                        match (cursor.x - start_pixel < 10.0, end_pixel - cursor.x < 10.0) {
-                            (true, true) if cursor.x - start_pixel < end_pixel - cursor.x => {
-                                Action::ClipTrimmingStart(offset, time)
-                            }
-                            (true, false) => Action::ClipTrimmingStart(offset, time),
-                            (_, true) => {
-                                Action::ClipTrimmingEnd(offset + end_pixel - start_pixel, time)
-                            }
-                            (false, false) => Action::DraggingClip(offset, track, time),
-                        };
-                    shell.publish((self.select_clip)(track, clip));
-
-                    Some(Status::Captured)
-                }
-                mouse::Event::ButtonReleased(_) => {
-                    if state.action.unselect() {
-                        shell.publish((self.unselect_clip)());
-                    }
-
-                    state.action = Action::None;
-
-                    Some(Status::Captured)
-                }
-                mouse::Event::CursorMoved { .. } => match state.action {
-                    Action::DraggingPlayhead(time) => {
-                        let new_time = self.get_time(cursor, 0.0, state.modifiers);
-                        if new_time == time {
-                            return None;
-                        }
-
-                        state.action = Action::DraggingPlayhead(new_time);
-
-                        let new_time = new_time.in_interleaved_samples(
-                            self.inner.meter.bpm.load(Acquire),
-                            self.inner.meter.sample_rate,
-                        );
-
-                        shell.publish((self.seek_to)(new_time));
-
-                        Some(Status::Captured)
-                    }
-                    Action::DraggingClip(offset, track, time) => {
-                        let new_track = (cursor.y / self.scale.y + self.position.y) as usize;
-                        let new_track = new_track.min(self.inner.tracks().len().saturating_sub(1));
-
-                        let new_start = self.get_time(cursor, offset, state.modifiers);
-
-                        if new_track == track && new_start == time {
-                            return None;
-                        }
-
-                        state.action = Action::DraggingClip(offset, new_track, new_start);
-                        shell.publish((self.move_clip_to)(new_track, new_start));
-
-                        Some(Status::Captured)
-                    }
-                    Action::ClipTrimmingStart(offset, time) => {
-                        let new_start = self.get_time(cursor, offset, state.modifiers);
-                        if new_start == time {
-                            return None;
-                        }
-
-                        state.action = Action::ClipTrimmingStart(offset, new_start);
-                        shell.publish((self.trim_clip_start)(new_start));
-
-                        Some(Status::Captured)
-                    }
-                    Action::ClipTrimmingEnd(offset, time) => {
-                        let new_end = self.get_time(cursor, offset, state.modifiers);
-                        if new_end == time {
-                            return None;
-                        }
-
-                        state.action = Action::ClipTrimmingEnd(offset, new_end);
-                        shell.publish((self.trim_clip_end)(new_end));
-
-                        Some(Status::Captured)
-                    }
-                    Action::DeletingClips => {
-                        if state.deleted || cursor.y < 0.0 {
-                            return None;
-                        }
-
-                        let (track, clip) = self.get_track_clip(cursor)?;
-                        state.deleted = true;
-                        shell.publish((self.delete_clip)(track, clip));
-
-                        Some(Status::Captured)
-                    }
-                    Action::None => None,
-                },
-                _ => None,
-            }
-        } else {
-            None
-        }
-    }
-
-    fn on_event_no_modifiers(
-        &self,
-        state: &mut State,
-        event: &Event,
-        cursor: Point,
-        shell: &mut Shell<'_, Message>,
-    ) -> Option<Status> {
-        if let Event::Mouse(event) = event {
-            match event {
-                mouse::Event::WheelScrolled { delta } => {
-                    let (x, y) = match *delta {
-                        ScrollDelta::Pixels { x, y } => (-x, -y),
-                        ScrollDelta::Lines { x, y } => (-x * SWM, -y * SWM),
-                    };
-                    let (x, y) = (x * 2.0 * self.scale.x.exp2(), y * 2.0 / self.scale.y);
-
-                    shell.publish((self.position_scale_delta)(
-                        ArrangementPosition::new(x, y),
-                        ArrangementScale::ZERO,
-                    ));
-
-                    Some(Status::Captured)
-                }
-                mouse::Event::ButtonPressed(mouse::Button::Right) => {
-                    if state.deleted || cursor.y < 0.0 {
-                        return None;
-                    }
-
-                    state.action = Action::DeletingClips;
-
-                    let (track, clip) = self.get_track_clip(cursor)?;
-
-                    state.deleted = true;
-
-                    shell.publish((self.delete_clip)(track, clip));
-                    Some(Status::Captured)
-                }
-                _ => None,
-            }
-        } else {
-            None
-        }
-    }
-
-    fn on_event_command(
-        &self,
-        state: &mut State,
-        event: &Event,
-        cursor: Point,
-        shell: &mut Shell<'_, Message>,
-    ) -> Option<Status> {
-        if let Event::Mouse(event) = event {
-            match event {
-                mouse::Event::WheelScrolled { delta } => {
-                    let x = match delta {
-                        ScrollDelta::Pixels { y, .. } => -y,
-                        ScrollDelta::Lines { y, .. } => -y * SWM,
-                    } * 0.01;
-                    let x_pos = cursor.x * (self.scale.x.exp2() - (self.scale.x + x).exp2());
-
-                    shell.publish((self.position_scale_delta)(
-                        ArrangementPosition::new(x_pos, 0.0),
-                        ArrangementScale::new(x, 0.0),
-                    ));
-
-                    Some(Status::Captured)
-                }
-                mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                    if cursor.y < 0.0 {
-                        return None;
-                    }
-
-                    let (track, clip) = self.get_track_clip(cursor)?;
-
-                    let time = self.inner.tracks()[track].get_clip(clip).get_global_start();
-
-                    let start_pixel = (time.in_interleaved_samples_f(
-                        self.inner.meter.bpm.load(Acquire),
-                        self.inner.meter.sample_rate,
-                    ) - self.position.x)
-                        / self.scale.x.exp2();
-                    let offset = start_pixel - cursor.x;
-
-                    state.action = Action::DraggingClip(offset, track, time);
-
-                    shell.publish((self.clone_clip)(track, clip));
-                    Some(Status::Captured)
-                }
-                _ => None,
-            }
-        } else {
-            None
-        }
-    }
-
-    fn on_event_shift(&self, event: &Event, shell: &mut Shell<'_, Message>) -> Option<Status> {
-        match event {
-            Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                let x = match delta {
-                    ScrollDelta::Pixels { y, .. } => -y,
-                    ScrollDelta::Lines { y, .. } => -y * SWM,
-                } * 4.0
-                    * self.scale.x.exp2();
-
-                shell.publish((self.position_scale_delta)(
-                    ArrangementPosition::new(x, 0.0),
-                    ArrangementScale::ZERO,
-                ));
-
-                Some(Status::Captured)
-            }
-            _ => None,
-        }
-    }
-
-    fn on_event_alt(
-        &self,
-        event: &Event,
-        cursor: Point,
-        shell: &mut Shell<'_, Message>,
-    ) -> Option<Status> {
-        if let Event::Mouse(event) = event {
-            match event {
-                mouse::Event::WheelScrolled { delta } => {
-                    let y = match *delta {
-                        ScrollDelta::Pixels { y, .. } => y,
-                        ScrollDelta::Lines { y, .. } => y * SWM,
-                    } * 0.1;
-                    let y_pos = (cursor.y * y) / (self.scale.y * self.scale.y);
-
-                    shell.publish((self.position_scale_delta)(
-                        ArrangementPosition::new(0.0, y_pos),
-                        ArrangementScale::new(0.0, y),
-                    ));
-
-                    Some(Status::Captured)
-                }
-                _ => None,
-            }
-        } else {
-            None
         }
     }
 

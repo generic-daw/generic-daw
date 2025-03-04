@@ -1,9 +1,13 @@
 use crate::{
     arrangement_view::Message as ArrangementMessage,
+    components::styled_button,
     daw::Message as DawMessage,
     widget::{FileTreeEntry, LINE_HEIGHT},
 };
-use iced::{Element, widget::svg};
+use iced::{
+    Element,
+    widget::{mouse_area, svg},
+};
 use std::{path::Path, sync::LazyLock};
 
 static FILE: LazyLock<svg::Handle> = LazyLock::new(|| {
@@ -13,23 +17,31 @@ static FILE: LazyLock<svg::Handle> = LazyLock::new(|| {
 });
 
 pub struct File {
-    pub path: Box<Path>,
+    path: Box<Path>,
+    name: Box<str>,
 }
 
 impl File {
     pub fn new(path: &Path) -> Self {
+        let name = path.file_name().unwrap().to_str().unwrap().into();
+
         Self {
-            path: Box::from(path),
+            path: path.into(),
+            name,
         }
     }
 
     pub fn view(&self) -> (Element<'_, DawMessage>, f32) {
         (
-            FileTreeEntry::new(&self.path, FILE.clone())
-                .on_double_click(|p| {
-                    DawMessage::Arrangement(ArrangementMessage::LoadSample(Box::from(p)))
-                })
-                .into(),
+            mouse_area(
+                styled_button(FileTreeEntry::new(&self.name, FILE.clone()))
+                    .on_press(DawMessage::FileTree(self.path.clone()))
+                    .padding(0),
+            )
+            .on_double_click(DawMessage::Arrangement(ArrangementMessage::LoadSample(
+                self.path.clone(),
+            )))
+            .into(),
             LINE_HEIGHT,
         )
     }

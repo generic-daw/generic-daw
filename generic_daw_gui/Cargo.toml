@@ -13,14 +13,18 @@ generic_daw_utils = { path = "../generic_daw_utils" }
 
 fragile = "2.0.0"
 hound = "3.5.1"
-iced = { version = "0.13.1", default-features = false, features = [
+iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", default-features = false, features = [
     "advanced",
     "canvas",
+    "debug",
     "svg",
     "tokio",
+    "unconditional-rendering",
     "wgpu",
 ] }
-iced_wgpu = { version = "0.13.5", features = ["geometry"] }
+iced_wgpu = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", features = [
+    "geometry",
+] }
 itoa = "1.0.15"
 rfd = "0.15.2"
 tokio = { version = "1.43.0", features = ["rt"] }

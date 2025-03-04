@@ -7,7 +7,6 @@ use iced::{
         renderer::{Quad, Style},
         widget::{Tree, tree},
     },
-    event::Status,
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::Text,
 };
@@ -78,35 +77,41 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<'_, Message> {
         )
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
-    ) -> Status {
+    ) {
+        if shell.is_event_captured() {
+            return;
+        }
+
         let state = tree.state.downcast_mut::<State>();
         let bounds = layout.bounds();
 
         if let Event::Mouse(event) = event {
             match event {
-                mouse::Event::ButtonPressed(mouse::Button::Left)
-                    if state.dragging.is_none() && cursor.is_over(bounds) =>
-                {
+                mouse::Event::ButtonPressed {
+                    button: mouse::Button::Left,
+                    ..
+                } if state.dragging.is_none() && cursor.is_over(bounds) => {
                     let pos = cursor.position().unwrap();
                     state.dragging = Some(pos.y.trunc());
-                    return Status::Captured;
+                    shell.capture_event();
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
                     state.dragging = None;
-                    return Status::Captured;
+                    shell.capture_event();
                 }
                 mouse::Event::CursorMoved {
                     position: Point { y, .. },
+                    ..
                 } => {
                     if let Some(last) = state.dragging {
                         let diff = ((y - last) * 0.1).trunc();
@@ -118,15 +123,14 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<'_, Message> {
                         state.dragging = Some(diff.mul_add(10.0, last));
 
                         shell.publish((self.f)(state.current));
-
-                        return Status::Captured;
+                        shell.capture_event();
                     }
                 }
-                mouse::Event::WheelScrolled { delta }
+                mouse::Event::WheelScrolled { delta, .. }
                     if state.dragging.is_none() && cursor.is_over(bounds) =>
                 {
                     let diff = match delta {
-                        ScrollDelta::Lines { y, .. } => y,
+                        ScrollDelta::Lines { y, .. } => *y,
                         ScrollDelta::Pixels { y, .. } => y / SWM,
                     } + state.scroll;
 
@@ -137,14 +141,11 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<'_, Message> {
                     state.scroll = diff.fract();
 
                     shell.publish((self.f)(state.current));
-
-                    return Status::Captured;
+                    shell.capture_event();
                 }
                 _ => {}
             }
         }
-
-        Status::Ignored
     }
 
     fn draw(
@@ -183,12 +184,13 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<'_, Message> {
     fn mouse_interaction(
         &self,
         tree: &Tree,
-        _layout: Layout<'_>,
-        _cursor: Cursor,
+        layout: Layout<'_>,
+        cursor: Cursor,
         _viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> Interaction {
-        if tree.state.downcast_ref::<State>().dragging.is_some() {
+        if cursor.is_over(layout.bounds()) || tree.state.downcast_ref::<State>().dragging.is_some()
+        {
             Interaction::ResizingVertically
         } else {
             Interaction::default()

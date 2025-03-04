@@ -1,11 +1,12 @@
 use super::file::File;
 use crate::{
+    components::styled_button,
     daw::Message as DawMessage,
     widget::{FileTreeEntry, FileTreeIndicator, LINE_HEIGHT},
 };
 use iced::{
     Element, Radians, Rotation,
-    widget::{column, row, svg},
+    widget::{column, mouse_area, row, svg},
 };
 use std::{f32::consts::FRAC_PI_2, path::Path, sync::LazyLock};
 
@@ -17,6 +18,7 @@ static DIR: LazyLock<svg::Handle> = LazyLock::new(|| {
 
 pub struct Dir {
     path: Box<Path>,
+    name: Box<str>,
     dirs: Option<Box<[Dir]>>,
     files: Option<Box<[File]>>,
     open: bool,
@@ -24,8 +26,11 @@ pub struct Dir {
 
 impl Dir {
     pub fn new(path: &Path) -> Self {
+        let name = path.file_name().unwrap().to_str().unwrap().into();
+
         Self {
             path: path.into(),
+            name,
             dirs: None,
             files: None,
             open: false,
@@ -51,15 +56,13 @@ impl Dir {
     }
 
     pub fn view(&self) -> (Element<'_, DawMessage>, f32) {
-        let mut col = column!(
-            FileTreeEntry::new(&self.path, DIR.clone())
-                .on_single_click(|p| DawMessage::FileTree(Box::from(p)))
-                .rotation(Rotation::Floating(Radians(if self.open {
-                    FRAC_PI_2
-                } else {
-                    0.0
-                })))
-        );
+        let mut col = column!(mouse_area(
+            styled_button(FileTreeEntry::new(&self.name, DIR.clone()).rotation(
+                Rotation::Floating(Radians(if self.open { FRAC_PI_2 } else { 0.0 }))
+            ))
+            .padding(0)
+            .on_press(DawMessage::FileTree(self.path.clone()))
+        ));
 
         let mut height = 0.0;
 
