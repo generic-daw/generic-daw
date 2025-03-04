@@ -1,3 +1,5 @@
+use iced::widget::text::Shaping;
+
 mod arrangement;
 mod arrangement_position;
 mod arrangement_scale;
@@ -25,3 +27,11 @@ pub use vsplit::VSplit;
 pub const LINE_HEIGHT: f32 = 21.0;
 
 pub const SWM: f32 = 60.0;
+
+fn shaping_of(text: &str) -> Shaping {
+    if text.is_ascii() {
+        Shaping::Basic
+    } else {
+        Shaping::Advanced
+    }
+}

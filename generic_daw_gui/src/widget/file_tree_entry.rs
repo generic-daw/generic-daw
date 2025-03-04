@@ -1,4 +1,4 @@
-use super::LINE_HEIGHT;
+use super::{LINE_HEIGHT, shaping_of};
 use iced::{
     Element, Length, Rectangle, Renderer, Rotation, Size, Theme, Vector,
     advanced::{
@@ -8,10 +8,22 @@ use iced::{
         renderer::Style,
         svg::{Handle, Renderer as _, Svg},
         text::{LineHeight, Renderer as _, Shaping, Wrapping},
-        widget::Tree,
+        widget::{Tree, tree},
     },
     alignment::{Horizontal, Vertical},
 };
+
+struct State {
+    shaping: Shaping,
+}
+
+impl State {
+    fn new(text: &str) -> Self {
+        Self {
+            shaping: shaping_of(text),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct FileTreeEntry<'a> {
@@ -36,6 +48,14 @@ impl<'a> FileTreeEntry<'a> {
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_> {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<State>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(State::new(self.name))
+    }
+
     fn size(&self) -> Size<Length> {
         Size::new(Length::Fill, Length::Shrink)
     }
@@ -46,7 +66,7 @@ impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_> {
 
     fn draw(
         &self,
-        _tree: &Tree,
+        tree: &Tree,
         renderer: &mut Renderer,
         theme: &Theme,
         _style: &Style,
@@ -54,6 +74,7 @@ impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_> {
         _cursor: Cursor,
         viewport: &Rectangle,
     ) {
+        let state = tree.state.downcast_ref::<State>();
         let bounds = layout.bounds();
 
         if !bounds.intersects(viewport) {
@@ -85,7 +106,7 @@ impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_> {
             font: renderer.default_font(),
             horizontal_alignment: Horizontal::Left,
             vertical_alignment: Vertical::Top,
-            shaping: Shaping::Advanced,
+            shaping: state.shaping,
             wrapping: Wrapping::None,
         };
 

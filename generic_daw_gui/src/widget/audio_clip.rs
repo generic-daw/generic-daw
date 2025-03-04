@@ -1,4 +1,4 @@
-use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT};
+use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT, shaping_of};
 use generic_daw_core::AudioClip as AudioClipInner;
 use iced::{
     Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Transformation, Vector,
@@ -33,6 +33,7 @@ use std::{
 #[derive(Default)]
 struct State {
     cache: RefCell<Option<Cache>>,
+    shaping: Shaping,
     interaction: Interaction,
     last_theme: RefCell<Option<Theme>>,
     last_position: ArrangementPosition,
@@ -40,11 +41,20 @@ struct State {
     last_bounds: Rectangle,
 }
 
+impl State {
+    fn new(text: &str) -> Self {
+        Self {
+            shaping: shaping_of(text),
+            ..Self::default()
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct AudioClip {
     inner: Arc<AudioClipInner>,
     /// the name of the sample
-    name: String,
+    name: Box<str>,
     /// the position of the top left corner of the arrangement viewport
     position: ArrangementPosition,
     /// the scale of the arrangement viewport
@@ -59,7 +69,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::default())
+        tree::State::new(State::new(&self.name))
     }
 
     fn size(&self) -> Size<Length> {
@@ -166,16 +176,18 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         };
         renderer.fill_quad(text_background, color);
 
+        let state = tree.state.downcast_ref::<State>();
+
         // the text containing the name of the sample
         let text = Text {
-            content: self.name.clone(),
+            content: String::from(&*self.name),
             bounds: Size::new(f32::INFINITY, 0.0),
             size: renderer.default_size(),
             line_height: LineHeight::default(),
             font: renderer.default_font(),
             horizontal_alignment: Horizontal::Left,
             vertical_alignment: Vertical::Top,
-            shaping: Shaping::Advanced,
+            shaping: state.shaping,
             wrapping: Wrapping::None,
         };
         renderer.fill_text(
@@ -200,8 +212,6 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
             ..Quad::default()
         };
         renderer.fill_quad(clip_background, color.scale_alpha(0.25));
-
-        let state = tree.state.downcast_ref::<State>();
 
         // clear the mesh cache if the theme has changed
         if state
@@ -260,7 +270,7 @@ impl AudioClip {
             .unwrap()
             .to_str()
             .unwrap()
-            .to_owned();
+            .into();
 
         Self {
             inner,
