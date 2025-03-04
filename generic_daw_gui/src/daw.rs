@@ -95,7 +95,7 @@ impl Daw {
                 plugins,
                 split_at: 0.25,
                 meter,
-                theme: Theme::Dark,
+                theme: Theme::CatppuccinFrappe,
             },
             open.discard(),
         )

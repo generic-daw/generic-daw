@@ -193,7 +193,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         renderer.fill_text(
             text,
             upper_bounds.position() + Vector::new(4.0, 0.0),
-            theme.extended_palette().primary.base.text,
+            theme.extended_palette().background.strong.text,
             upper_bounds,
         );
 
@@ -322,7 +322,7 @@ impl AudioClip {
         // samples in the lod per pixel
         let lod_samples_per_pixel = lod_sample_size / pixel_size;
 
-        let color = color::pack(theme.extended_palette().primary.base.text);
+        let color = color::pack(theme.extended_palette().background.strong.text);
         let lod = scale.x as usize - 3;
 
         let bpm = self.inner.meter.bpm.load(Acquire);

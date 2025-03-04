@@ -82,7 +82,7 @@ impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_> {
         };
 
         let icon = Svg::new(self.svg.clone())
-            .color(theme.extended_palette().primary.strong.text)
+            .color(theme.extended_palette().primary.base.text)
             .rotation(self.rotation.radians());
 
         if bounds.width < LINE_HEIGHT || bounds.height < LINE_HEIGHT {
@@ -113,7 +113,7 @@ impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_> {
         renderer.fill_text(
             name,
             bounds.position() + Vector::new(LINE_HEIGHT, 0.0),
-            theme.extended_palette().primary.strong.text,
+            theme.extended_palette().primary.base.text,
             bounds,
         );
     }

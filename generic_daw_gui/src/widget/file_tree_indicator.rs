@@ -69,7 +69,7 @@ impl<Message> Widget<Message, Theme, Renderer> for FileTreeIndicator {
             ..Default::default()
         };
 
-        renderer.fill_quad(line, theme.extended_palette().primary.strong.color);
+        renderer.fill_quad(line, theme.extended_palette().primary.weak.color);
     }
 }
 

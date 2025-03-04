@@ -24,7 +24,7 @@ const RADIUS: f32 = LINE_HEIGHT;
 
 #[derive(Default)]
 struct State {
-    dragging: Option<f32>,
+    dragging: Option<(f32, f32)>,
     hovering: bool,
     last_value: f32,
     last_enabled: bool,
@@ -108,7 +108,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                         .is_some_and(|pos| pos.distance(bounds.center()) < RADIUS) =>
                 {
                     let pos = cursor.position().unwrap();
-                    state.dragging = Some(pos.y);
+                    state.dragging = Some((self.value, pos.y));
                     shell.capture_event();
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
@@ -133,13 +133,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                         shell.request_redraw();
                     }
 
-                    if let Some(last) = state.dragging {
-                        state.dragging = Some(*y);
-
+                    if let Some((value, last)) = state.dragging {
                         let diff = (last - y) * (self.range.end() - self.range.start()) * 0.005;
 
                         shell.publish((self.on_change)(
-                            (state.last_value + diff).clamp(*self.range.start(), *self.range.end()),
+                            (value + diff).clamp(*self.range.start(), *self.range.end()),
                         ));
                         shell.capture_event();
                     }
@@ -157,7 +155,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                         * 0.05;
 
                     shell.publish((self.on_change)(
-                        (state.last_value + diff).clamp(*self.range.start(), *self.range.end()),
+                        (self.value + diff).clamp(*self.range.start(), *self.range.end()),
                     ));
                     shell.capture_event();
                 }
@@ -277,30 +275,22 @@ impl<Message> Knob<Message> {
             builder.close();
         });
 
-        let color = if !self.enabled || state.hovering || state.dragging.is_some() {
-            theme.extended_palette().secondary.strong.color
+        let main_color = if !self.enabled || state.hovering || state.dragging.is_some() {
+            theme.extended_palette().secondary.weak.color
         } else {
-            theme.extended_palette().primary.base.color
+            theme.extended_palette().primary.weak.color
         };
+        let contrast_color = theme.extended_palette().background.strong.text;
 
-        frame.fill(&arc, theme.extended_palette().primary.base.text);
+        frame.fill(&arc, contrast_color);
 
-        frame.fill(&Path::circle(center, RADIUS * 0.8), color);
+        frame.fill(&Path::circle(center, RADIUS * 0.8), main_color);
 
-        frame.fill(
-            &circle(start_angle, 0.9, 0.1),
-            theme.extended_palette().primary.base.text,
-        );
+        frame.fill(&circle(start_angle, 0.9, 0.1), contrast_color);
 
-        frame.fill(
-            &circle(end_angle, 0.9, 0.1),
-            theme.extended_palette().primary.base.text,
-        );
+        frame.fill(&circle(end_angle, 0.9, 0.1), contrast_color);
 
-        frame.fill(
-            &circle(end_angle, 0.4, 0.15),
-            theme.extended_palette().primary.base.text,
-        );
+        frame.fill(&circle(end_angle, 0.4, 0.15), contrast_color);
     }
 }
 

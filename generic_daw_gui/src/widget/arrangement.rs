@@ -512,18 +512,18 @@ where
             let color = if self.scale.x > 11f32 {
                 if beat.quarter_note() % numerator as u32 == 0 {
                     if bar % 4 == 0 {
-                        theme.extended_palette().secondary.strong.color
+                        theme.extended_palette().background.strong.color
                     } else {
-                        theme.extended_palette().secondary.weak.color
+                        theme.extended_palette().background.weak.color
                     }
                 } else {
                     beat += Position::QUARTER_NOTE;
                     continue;
                 }
             } else if beat.quarter_note() % numerator as u32 == 0 {
-                theme.extended_palette().secondary.strong.color
+                theme.extended_palette().background.strong.color
             } else {
-                theme.extended_palette().secondary.weak.color
+                theme.extended_palette().background.weak.color
             };
 
             let x = (beat.in_interleaved_samples_f(bpm, self.meter.sample_rate) - self.position.x)

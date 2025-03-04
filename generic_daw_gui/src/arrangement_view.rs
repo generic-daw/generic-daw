@@ -272,7 +272,7 @@ impl ArrangementView {
                                             0.0,
                                             track.node().pan.load(Acquire),
                                             enabled,
-                                            Message::TrackVolumeChanged.with(idx)
+                                            Message::TrackPanChanged.with(idx)
                                         ))
                                         .on_double_click(Message::TrackPanChanged(idx, 0.0)),
                                     ]
@@ -290,17 +290,11 @@ impl ArrangementView {
                             .padding(5.0)
                             .style(|theme: &Theme| Style {
                                 background: Some(
-                                    theme
-                                        .extended_palette()
-                                        .secondary
-                                        .weak
-                                        .color
-                                        .scale_alpha(0.25)
-                                        .into(),
+                                    theme.extended_palette().background.weak.color.into(),
                                 ),
                                 border: Border::default()
                                     .width(1.0)
-                                    .color(theme.extended_palette().secondary.weak.color),
+                                    .color(theme.extended_palette().background.strong.color),
                                 ..Style::default()
                             })
                             .height(Length::Fixed(self.scale.y)),

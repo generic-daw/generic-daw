@@ -182,15 +182,21 @@ impl PeakMeter {
         bounds: Rectangle,
     ) {
         let base_color = if self.enabled {
-            theme.extended_palette().primary.base.color
+            theme.extended_palette().primary.weak.color
         } else {
-            theme.extended_palette().secondary.strong.color
+            theme.extended_palette().secondary.weak.color
         };
 
-        let mixed_color = mix(
+        let foreground_color = mix(
             base_color,
-            theme.extended_palette().danger.base.color,
+            theme.extended_palette().danger.weak.color,
             factor,
+        );
+
+        let background_color = mix(
+            base_color,
+            theme.extended_palette().background.weak.color,
+            0.5,
         );
 
         let height = bounds.height * min_by(1.0, s, f32::total_cmp);
@@ -202,7 +208,7 @@ impl PeakMeter {
             ),
             ..Quad::default()
         };
-        renderer.fill_quad(bg, base_color.scale_alpha(0.5));
+        renderer.fill_quad(bg, background_color);
 
         let fg = Quad {
             bounds: Rectangle::new(
@@ -211,7 +217,7 @@ impl PeakMeter {
             ),
             ..Quad::default()
         };
-        renderer.fill_quad(fg, mixed_color);
+        renderer.fill_quad(fg, foreground_color);
     }
 }
 
