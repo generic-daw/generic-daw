@@ -39,6 +39,7 @@ struct State {
     last_position: ArrangementPosition,
     last_scale: ArrangementScale,
     last_bounds: Rectangle,
+    last_addr: usize,
 }
 
 impl State {
@@ -130,6 +131,12 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 
                 if state.last_bounds != bounds {
                     state.last_bounds = bounds;
+                    *state.cache.borrow_mut() = None;
+                }
+
+                let addr = Arc::as_ptr(&self.inner).addr();
+                if state.last_addr != addr {
+                    state.last_addr = addr;
                     *state.cache.borrow_mut() = None;
                 }
             }

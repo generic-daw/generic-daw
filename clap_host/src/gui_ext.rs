@@ -34,15 +34,14 @@ impl Debug for GuiExt {
 impl GuiExt {
     #[must_use]
     pub fn new(plugin_gui: PluginGui, mut instance: PluginInstance<Host>) -> Self {
-        let api_type = GuiApiType::default_for_current_platform().unwrap();
         let mut config = GuiConfiguration {
-            api_type,
+            api_type: GuiApiType::default_for_current_platform().unwrap(),
             is_floating: false,
         };
 
         let mut plugin = instance.plugin_handle();
 
-        let configuration = if plugin_gui.is_api_supported(&mut plugin, config) {
+        let config = if plugin_gui.is_api_supported(&mut plugin, config) {
             config
         } else {
             config.is_floating = true;
@@ -53,15 +52,11 @@ impl GuiExt {
             }
         };
 
-        let mut plugin = instance.plugin_handle();
-
-        plugin_gui.create(&mut plugin, configuration).unwrap();
-
         Self {
             instance,
             plugin_gui,
             id: PluginId::unique(),
-            is_floating: configuration.is_floating,
+            is_floating: config.is_floating,
             is_open: false,
             can_resize: false,
         }
@@ -106,23 +101,38 @@ impl GuiExt {
     pub fn open_floating(&mut self) {
         assert!(self.is_floating);
 
+        self.begin_open();
+
         self.finish_open();
     }
 
     pub fn open_embedded(&mut self, window_handle: RawWindowHandle) {
         assert!(!self.is_floating);
 
-        let window = ClapWindow::from_window_handle(window_handle).unwrap();
+        self.begin_open();
 
         // SAFETY:
         // We destroy the plugin ui just before the window is closed
         unsafe {
-            self.plugin_gui
-                .set_parent(&mut self.instance.plugin_handle(), window)
+            self.plugin_gui.set_parent(
+                &mut self.instance.plugin_handle(),
+                ClapWindow::from_window_handle(window_handle).unwrap(),
+            )
         }
         .unwrap();
 
         self.finish_open();
+    }
+
+    fn begin_open(&mut self) {
+        let config = GuiConfiguration {
+            api_type: GuiApiType::default_for_current_platform().unwrap(),
+            is_floating: self.is_floating(),
+        };
+
+        self.plugin_gui
+            .create(&mut self.instance.plugin_handle(), config)
+            .unwrap();
     }
 
     fn finish_open(&mut self) {

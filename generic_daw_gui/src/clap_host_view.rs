@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 pub enum Message {
     MainThread(PluginId, MainThreadMessage),
     Opened(Arc<Mutex<(Fragile<GuiExt>, Receiver<MainThreadMessage>)>>),
+    Close(PluginId),
     Shown(Id, Arc<Fragile<GuiExt>>),
     CloseRequested(Id),
     Resized((Id, Size)),
@@ -47,7 +48,7 @@ impl ClapHostView {
                     Task::none()
                 } else {
                     self.plugins.insert(*id, gui);
-                    self.update(Message::MainThread(id, MainThreadMessage::GuiRequestShow))
+                    Task::done(Message::MainThread(id, MainThreadMessage::GuiRequestShow))
                 };
 
                 let stream = Task::stream(channel(0, async move |mut sender| {
@@ -57,6 +58,11 @@ impl ClapHostView {
                 }));
 
                 return open.chain(stream);
+            }
+            Message::Close(id) => {
+                if self.windows.contains(*id) {
+                    return self.update(Message::MainThread(id, MainThreadMessage::GuiClosed));
+                }
             }
             Message::Shown(window_id, arc) => {
                 let gui = Arc::into_inner(arc).unwrap().into_inner();
@@ -86,10 +92,9 @@ impl ClapHostView {
                 }
 
                 let id = self.windows.position(&window_id).unwrap();
-                self.windows.remove(id).unwrap();
                 self.plugins.get_mut(id).unwrap().destroy();
-
-                return window::close::<()>(window_id).discard();
+                let window_id = self.windows.remove(id).unwrap();
+                return window::close(window_id);
             }
         }
 
@@ -111,23 +116,22 @@ impl ClapHostView {
                 .unwrap()
                 .call_on_main_thread_callback(),
             MainThreadMessage::GuiRequestHide => {
-                self.plugins.get_mut(*id).unwrap().destroy();
-                let window_id = self.windows.remove(*id).unwrap();
-                return window::close(window_id);
+                if let Some(&id) = self.windows.get(*id) {
+                    return self.update(Message::CloseRequested(id));
+                }
             }
             MainThreadMessage::GuiRequestShow => {
+                if self.windows.contains(*id) {
+                    return Task::none();
+                }
+
                 let mut gui = self.plugins.remove(*id).unwrap();
                 let resizable = gui.can_resize();
-
-                let size = gui.get_size().map_or_else(
-                    || Size::new(1.0, 1.0),
-                    |[width, height]| Size::new(width as f32, height as f32),
-                );
 
                 let (window_id, spawn) = window::open(window::Settings {
                     exit_on_close_request: false,
                     resizable,
-                    size,
+                    size: Size::new(1.0, 1.0),
                     ..window::Settings::default()
                 });
 
@@ -164,7 +168,7 @@ impl ClapHostView {
                 }
             }
             MainThreadMessage::TickTimers => {
-                if self.windows.get(*id).is_some() {
+                if self.windows.contains(*id) {
                     if let Some((timers, timer_ext)) = self.plugins[*id].timers() {
                         let mut instance = self.plugins.get_mut(*id).unwrap().plugin_handle();
 

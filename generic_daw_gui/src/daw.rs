@@ -1,9 +1,9 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage},
-    clap_host_view::{ClapHostView, Message as ClapHostMessage},
-    components::{styled_button, styled_pick_list, styled_scrollable},
+    clap_host_view::ClapHostView,
+    components::{styled_button, styled_pick_list, styled_scrollable, styled_svg},
     file_tree::FileTree,
-    widget::{BpmInput, VSplit},
+    widget::{BpmInput, LINE_HEIGHT, VSplit},
 };
 use fragile::Fragile;
 use generic_daw_core::{
@@ -12,7 +12,7 @@ use generic_daw_core::{
 };
 use iced::{
     Alignment::Center,
-    Element, Event, Length, Subscription, Task, Theme,
+    Element, Event, Subscription, Task, Theme,
     event::{self, Status},
     keyboard,
     widget::{column, horizontal_space, row, svg, toggler, vertical_space},
@@ -47,7 +47,6 @@ static STOP: LazyLock<svg::Handle> = LazyLock::new(|| {
 #[derive(Clone, Debug)]
 pub enum Message {
     ThemeChanged(Theme),
-    ClapHost(ClapHostMessage),
     Arrangement(ArrangementMessage),
     FileTree(Box<Path>),
     LoadPlugin(PluginDescriptor),
@@ -65,7 +64,6 @@ pub enum Message {
 pub struct Daw {
     main_window_id: Id,
     arrangement: ArrangementView,
-    clap_host: ClapHostView,
     file_tree: FileTree,
     plugins: BTreeMap<PluginDescriptor, PluginBundle>,
     split_at: f32,
@@ -75,19 +73,18 @@ pub struct Daw {
 
 impl Daw {
     pub fn new() -> (Self, Task<Message>) {
-        let (meter, arrangement) = ArrangementView::create();
-        let plugins = clap_host::get_installed_plugins();
-
         let (main_window_id, open) = window::open(window::Settings {
             exit_on_close_request: false,
             ..window::Settings::default()
         });
 
+        let (meter, arrangement) = ArrangementView::create(main_window_id);
+        let plugins = clap_host::get_installed_plugins();
+
         (
             Self {
                 main_window_id,
                 arrangement,
-                clap_host: ClapHostView::new(main_window_id),
                 file_tree: FileTree::new(
                     #[expect(deprecated, reason = "rust#132515")]
                     &std::env::home_dir().unwrap(),
@@ -104,9 +101,6 @@ impl Daw {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ThemeChanged(theme) => self.theme = theme,
-            Message::ClapHost(message) => {
-                return self.clap_host.update(message).map(Message::ClapHost);
-            }
             Message::Arrangement(message) => {
                 return self.arrangement.update(message).map(Message::Arrangement);
             }
@@ -122,14 +116,10 @@ impl Daw {
                 );
                 let gui = Fragile::new(gui);
 
-                return Task::batch([
-                    Task::done(Message::Arrangement(ArrangementMessage::LoadedPlugin(
-                        Arc::new(Mutex::new(audio_processor)),
-                    ))),
-                    Task::done(Message::ClapHost(ClapHostMessage::Opened(Arc::new(
-                        Mutex::new((gui, gui_receiver)),
-                    )))),
-                ]);
+                return Task::done(Message::Arrangement(ArrangementMessage::LoadedPlugin(
+                    Arc::new(Mutex::new(audio_processor)),
+                    Arc::new(Mutex::new((gui, gui_receiver))),
+                )));
             }
             Message::SamplesFileDialog => {
                 return Task::future(AsyncFileDialog::new().pick_files()).and_then(|paths| {
@@ -192,27 +182,16 @@ impl Daw {
                 ],
                 row![
                     styled_button(
-                        svg(if self.meter.playing.load(Acquire) {
+                        styled_svg(if self.meter.playing.load(Acquire) {
                             PAUSE.clone()
                         } else {
                             PLAY.clone()
                         })
-                        .style(|theme: &Theme, _| svg::Style {
-                            color: Some(theme.extended_palette().primary.base.text)
-                        })
-                        .width(Length::Shrink)
-                        .height(Length::Fixed(21.0))
+                        .height(LINE_HEIGHT)
                     )
                     .on_press(Message::TogglePlay),
-                    styled_button(
-                        svg(STOP.clone())
-                            .style(|theme: &Theme, _| svg::Style {
-                                color: Some(theme.extended_palette().primary.base.text)
-                            })
-                            .width(Length::Shrink)
-                            .height(Length::Fixed(21.0))
-                    )
-                    .on_press(Message::Stop),
+                    styled_button(styled_svg(STOP.clone()).height(LINE_HEIGHT))
+                        .on_press(Message::Stop),
                 ],
                 row![
                     styled_pick_list(
@@ -260,7 +239,9 @@ impl Daw {
 
     pub fn subscription() -> Subscription<Message> {
         Subscription::batch([
-            ClapHostView::subscription().map(Message::ClapHost),
+            ClapHostView::subscription()
+                .map(ArrangementMessage::ClapHost)
+                .map(Message::Arrangement),
             event::listen_with(|e, s, _| match s {
                 Status::Ignored => match e {
                     Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {

@@ -79,7 +79,7 @@ impl AudioGraph {
     }
 
     pub fn connect(&mut self, from: NodeId, to: NodeId) {
-        if self.graph.get(*to).is_some()
+        if self.graph.contains(*to)
             && self
                 .graph
                 .get(*from)

@@ -1,7 +1,7 @@
 use super::track::Track;
 use generic_daw_core::{
     DawCtxMessage, Meter, Producer, Stream, StreamTrait as _,
-    audio_graph::AudioGraph,
+    audio_graph::{AudioGraph, NodeId},
     oneshot::{self, Receiver},
 };
 use hound::WavWriter;
@@ -60,6 +60,12 @@ impl Arrangement {
         self.producer
             .push(DawCtxMessage::ConnectToMaster(id))
             .unwrap();
+    }
+
+    pub fn remove(&mut self, track: usize) -> NodeId {
+        let id = self.tracks.remove(track).id();
+        self.producer.push(DawCtxMessage::Remove(id)).unwrap();
+        id
     }
 
     pub fn clone_clip(&mut self, track: usize, clip: usize) {

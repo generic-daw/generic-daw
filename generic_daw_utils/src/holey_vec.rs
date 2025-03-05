@@ -47,6 +47,11 @@ impl<T> HoleyVec<T> {
         self.0.get_mut(index).and_then(Option::take)
     }
 
+    #[must_use]
+    pub fn contains(&self, index: usize) -> bool {
+        self.get(index).is_some()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (usize, &T)> {
         self.0
             .iter()

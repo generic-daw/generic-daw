@@ -1,21 +1,30 @@
-use crate::widget::{
-    Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale,
-    AudioClip as AudioClipWidget, Knob, PeakMeter, Track as TrackWidget,
+use crate::{
+    clap_host_view::{ClapHostView, Message as ClapHostMessage},
+    components::{round_danger_button, styled_container, styled_svg},
+    widget::{
+        Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale,
+        AudioClip as AudioClipWidget, Knob, LINE_HEIGHT, PeakMeter, Track as TrackWidget,
+    },
 };
+use fragile::Fragile;
 use generic_daw_core::{
-    AudioClip, AudioTrack, InterleavedAudio, Meter, MidiTrack, Position, audio_graph::AudioGraph,
-    build_output_stream, clap_host::AudioProcessor,
+    AudioClip, AudioTrack, InterleavedAudio, Meter, MidiTrack, Position,
+    audio_graph::{AudioGraph, AudioGraphNodeImpl as _},
+    build_output_stream,
+    clap_host::{AudioProcessor, GuiExt, MainThreadMessage, PluginId, Receiver},
 };
+use generic_daw_utils::HoleyVec;
 use iced::{
-    Border, Element, Function as _, Length, Task, Theme,
+    Alignment, Element, Function as _, Length, Task,
     futures::TryFutureExt as _,
     mouse::Interaction,
-    widget::{column, container, container::Style, mouse_area, radio, row},
+    widget::{button, column, mouse_area, radio, row, svg, vertical_space},
+    window::Id,
 };
 use std::{
     path::Path,
     sync::{
-        Arc, Mutex,
+        Arc, LazyLock, Mutex,
         atomic::Ordering::{AcqRel, Acquire, Release},
     },
 };
@@ -28,16 +37,33 @@ pub use arrangement::Arrangement as ArrangementWrapper;
 pub use track::Track as TrackWrapper;
 pub use track_clip::TrackClip as TrackClipWrapper;
 
+static X: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!(
+        "../../assets/material-symbols--cancel-rounded.svg"
+    ))
+});
+
+static REOPEN: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!(
+        "../../assets/material-symbols--reopen-window-rounded.svg"
+    ))
+});
+
 #[derive(Clone, Debug)]
 pub enum Message {
+    ClapHost(ClapHostMessage),
     AudioGraph(Arc<Mutex<(AudioGraph, Box<Path>)>>),
     TrackVolumeChanged(usize, f32),
     TrackPanChanged(usize, f32),
     LoadSample(Box<Path>),
     LoadedSample(Option<Arc<InterleavedAudio>>),
-    LoadedPlugin(Arc<Mutex<AudioProcessor>>),
+    LoadedPlugin(
+        Arc<Mutex<AudioProcessor>>,
+        Arc<Mutex<(Fragile<GuiExt>, Receiver<MainThreadMessage>)>>,
+    ),
     ToggleTrackEnabled(usize),
     ToggleTrackSolo(usize),
+    RemoveTrack(usize),
     SeekTo(usize),
     SelectClip(usize, usize),
     UnselectClip(),
@@ -51,6 +77,9 @@ pub enum Message {
 }
 
 pub struct ArrangementView {
+    clap_host: ClapHostView,
+    plugin_ids: HoleyVec<PluginId>,
+
     arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
 
@@ -63,12 +92,15 @@ pub struct ArrangementView {
 }
 
 impl ArrangementView {
-    pub fn create() -> (Arc<Meter>, Self) {
+    pub fn create(main_window_id: Id) -> (Arc<Meter>, Self) {
         let (stream, producer, meter) = build_output_stream(44100, 1024);
 
         let arrangement = ArrangementWrapper::new(producer, stream, meter.clone());
 
         let arrangement = Self {
+            clap_host: ClapHostView::new(main_window_id),
+            plugin_ids: HoleyVec::default(),
+
             arrangement,
             meter: meter.clone(),
 
@@ -90,6 +122,7 @@ impl ArrangementView {
     #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::ClapHost(msg) => return self.clap_host.update(msg).map(Message::ClapHost),
             Message::AudioGraph(message) => {
                 let (audio_graph, path) =
                     Mutex::into_inner(Arc::into_inner(message).unwrap()).unwrap();
@@ -127,12 +160,17 @@ impl ArrangementView {
                     self.arrangement.push(track);
                 }
             }
-            Message::LoadedPlugin(arc) => {
+            Message::LoadedPlugin(arc, clap_host) => {
+                let plugin_id = clap_host.lock().unwrap().0.get().plugin_id();
                 let audio_processor = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
-
                 let track = MidiTrack::new(self.meter.clone(), audio_processor);
-
+                self.plugin_ids.insert(*track.id(), plugin_id);
                 self.arrangement.push(track);
+
+                return self
+                    .clap_host
+                    .update(ClapHostMessage::Opened(clap_host))
+                    .map(Message::ClapHost);
             }
             Message::ToggleTrackEnabled(track) => {
                 self.arrangement.tracks()[track]
@@ -158,6 +196,15 @@ impl ArrangementView {
                         .enabled
                         .store(true, Release);
                     self.soloed_track = Some(track);
+                }
+            }
+            Message::RemoveTrack(track) => {
+                let id = self.arrangement.remove(track);
+                if let Some(id) = self.plugin_ids.remove(*id) {
+                    return self
+                        .clap_host
+                        .update(ClapHostMessage::Close(id))
+                        .map(Message::ClapHost);
                 }
             }
             Message::SeekTo(pos) => {
@@ -241,6 +288,7 @@ impl ArrangementView {
         Task::none()
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn view(&self) -> Element<'_, Message> {
         let arrangement = ArrangementWidget::new(
             &self.arrangement.meter,
@@ -254,8 +302,36 @@ impl ArrangementView {
                     .map(|(idx, track)| {
                         let node = track.node().clone();
                         let enabled = node.enabled.load(Acquire);
+
+                        let mut buttons = column![
+                            mouse_area(
+                                radio("", enabled, Some(true), |_| {
+                                    Message::ToggleTrackEnabled(idx)
+                                })
+                                .spacing(0.0)
+                            )
+                            .on_right_press(Message::ToggleTrackSolo(idx)),
+                            vertical_space(),
+                            round_danger_button(styled_svg(X.clone()).height(LINE_HEIGHT))
+                                .padding(0.0)
+                                .on_press(Message::RemoveTrack(idx)),
+                        ]
+                        .spacing(5.0)
+                        .align_x(Alignment::Center);
+
+                        if let Some(&id) = self.plugin_ids.get(*track.id()) {
+                            buttons = buttons.push(
+                                button(styled_svg(REOPEN.clone()).height(LINE_HEIGHT))
+                                    .padding(0.0)
+                                    .on_press(Message::ClapHost(ClapHostMessage::MainThread(
+                                        id,
+                                        MainThreadMessage::GuiRequestShow,
+                                    ))),
+                            );
+                        }
+
                         row![
-                            container(
+                            styled_container(
                                 row![
                                     PeakMeter::new(move || node.get_l_r(), enabled),
                                     column![
@@ -275,28 +351,14 @@ impl ArrangementView {
                                             Message::TrackPanChanged.with(idx)
                                         ))
                                         .on_double_click(Message::TrackPanChanged(idx, 0.0)),
+                                        vertical_space(),
                                     ]
                                     .spacing(5.0),
-                                    mouse_area(
-                                        radio("", enabled, Some(true), |_| {
-                                            Message::ToggleTrackEnabled(idx)
-                                        })
-                                        .spacing(0.0)
-                                    )
-                                    .on_right_press(Message::ToggleTrackSolo(idx)),
+                                    buttons,
                                 ]
                                 .spacing(5.0),
                             )
                             .padding(5.0)
-                            .style(|theme: &Theme| Style {
-                                background: Some(
-                                    theme.extended_palette().background.weak.color.into(),
-                                ),
-                                border: Border::default()
-                                    .width(1.0)
-                                    .color(theme.extended_palette().background.strong.color),
-                                ..Style::default()
-                            })
                             .height(Length::Fixed(self.scale.y)),
                             TrackWidget::new(
                                 track.clips().map(|clip| match clip {

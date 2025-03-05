@@ -1,7 +1,10 @@
+use core::f32;
 use iced::{
-    Element,
+    Border, Element, Length, Theme,
     border::Radius,
-    widget::{Button, PickList, Scrollable, button, pick_list, scrollable},
+    widget::{
+        Button, Container, PickList, Scrollable, Svg, button, container, pick_list, scrollable, svg,
+    },
 };
 use std::borrow::Borrow;
 
@@ -9,6 +12,16 @@ pub fn styled_button<'a, Message>(content: impl Into<Element<'a, Message>>) -> B
     button(content).style(|t, s| {
         let mut style = button::primary(t, s);
         style.border.radius = Radius::default();
+        style
+    })
+}
+
+pub fn round_danger_button<'a, Message>(
+    content: impl Into<Element<'a, Message>>,
+) -> Button<'a, Message> {
+    button(content).style(|t, s| {
+        let mut style = button::danger(t, s);
+        style.border.radius = Radius::new(f32::INFINITY);
         style
     })
 }
@@ -41,6 +54,28 @@ pub fn styled_scrollable<'a, Message>(
         style.vertical_rail.scroller.border.radius = Radius::default();
         style.horizontal_rail.border.radius = Radius::default();
         style.horizontal_rail.scroller.border.radius = Radius::default();
+        style
+    })
+}
+
+pub fn styled_svg<'a>(handle: impl Into<svg::Handle>) -> Svg<'a> {
+    svg(handle)
+        .style(|t: &Theme, _| svg::Style {
+            color: Some(t.extended_palette().primary.base.text),
+        })
+        .width(Length::Shrink)
+        .height(Length::Shrink)
+}
+
+pub fn styled_container<'a, Message>(
+    content: impl Into<Element<'a, Message>>,
+) -> Container<'a, Message> {
+    container(content).style(|t: &Theme| {
+        let mut style = container::transparent(t);
+        style.background = Some(t.extended_palette().background.weak.color.into());
+        style.border = Border::default()
+            .width(1.0)
+            .color(t.extended_palette().background.strong.color);
         style
     })
 }
