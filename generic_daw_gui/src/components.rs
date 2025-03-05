@@ -1,7 +1,7 @@
 use iced::{
     Element,
     border::Radius,
-    widget::{Button, PickList, button, pick_list},
+    widget::{Button, PickList, Scrollable, button, pick_list, scrollable},
 };
 use std::borrow::Borrow;
 
@@ -28,6 +28,19 @@ where
         let mut style = pick_list::default(t, s);
         style.border.radius = Radius::default();
         style.placeholder_color = t.extended_palette().background.weak.text;
+        style
+    })
+}
+
+pub fn styled_scrollable<'a, Message>(
+    content: impl Into<Element<'a, Message>>,
+) -> Scrollable<'a, Message> {
+    scrollable(content).style(|t, s| {
+        let mut style = scrollable::default(t, s);
+        style.vertical_rail.border.radius = Radius::default();
+        style.vertical_rail.scroller.border.radius = Radius::default();
+        style.horizontal_rail.border.radius = Radius::default();
+        style.horizontal_rail.scroller.border.radius = Radius::default();
         style
     })
 }
