@@ -2,7 +2,7 @@
   
 # Generic DAW
 
-[![Iced 0.13](https://img.shields.io/badge/0.13-blue?logo=iced&style=for-the-badge)](https://github.com/generic-daw/generic-daw)
+[![Iced 0.14](https://img.shields.io/badge/0.14-blue?logo=iced&style=for-the-badge)](https://github.com/generic-daw/generic-daw)
 [![Tokei](https://tokei.rs/b1/github/generic-daw/generic-daw?style=for-the-badge)](https://tokei.rs/b1/github/generic-daw/generic-daw)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://github.com/generic-daw/generic-daw/blob/master/LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/generic-daw/generic-daw/rust.yml?style=for-the-badge)](https://github.com/generic-daw/generic-daw/actions/workflows/rust.yml)
