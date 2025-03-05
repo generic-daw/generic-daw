@@ -25,7 +25,7 @@ fn main() -> Result {
 
     trace::setup();
 
-    daemon("GenericDAW", Daw::update, Daw::view)
+    daemon(Daw::title, Daw::update, Daw::view)
         .subscription(|_| Daw::subscription())
         .theme(Daw::theme)
         .antialiasing(true)

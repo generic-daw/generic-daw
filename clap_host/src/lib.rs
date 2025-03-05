@@ -157,7 +157,11 @@ pub fn init(
         note_buffers,
     );
 
-    let gui = GuiExt::new(instance.access_handler(|h| h.gui).unwrap(), instance);
+    let gui = GuiExt::new(
+        instance.access_handler(|h| h.gui).unwrap(),
+        instance,
+        descriptor.name.clone(),
+    );
 
     (gui, gui_receiver, plugin_audio_processor)
 }

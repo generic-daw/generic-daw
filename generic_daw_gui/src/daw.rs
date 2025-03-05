@@ -272,4 +272,14 @@ impl Daw {
     pub fn theme(&self, _window: Id) -> Theme {
         self.theme.clone()
     }
+
+    pub fn title(&self, window: Id) -> String {
+        if window == self.main_window_id {
+            String::from("Generic DAW")
+        } else {
+            self.arrangement
+                .title(window)
+                .unwrap_or_else(|| String::from("Generic DAW"))
+        }
+    }
 }

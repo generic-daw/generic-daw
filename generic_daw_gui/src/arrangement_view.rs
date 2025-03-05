@@ -399,4 +399,8 @@ impl ArrangementView {
             arrangement
         }
     }
+
+    pub fn title(&self, window: Id) -> Option<String> {
+        self.clap_host.title(window)
+    }
 }

@@ -186,4 +186,10 @@ impl ClapHostView {
 
         Task::none()
     }
+
+    pub fn title(&self, window: Id) -> Option<String> {
+        self.windows
+            .position(&window)
+            .map(|id| self.plugins[id].name().to_owned())
+    }
 }

@@ -14,6 +14,7 @@ use std::{
 pub struct GuiExt {
     instance: PluginInstance<Host>,
     plugin_gui: PluginGui,
+    name: Box<str>,
     id: PluginId,
     is_floating: bool,
     is_open: bool,
@@ -33,7 +34,7 @@ impl Debug for GuiExt {
 
 impl GuiExt {
     #[must_use]
-    pub fn new(plugin_gui: PluginGui, mut instance: PluginInstance<Host>) -> Self {
+    pub fn new(plugin_gui: PluginGui, mut instance: PluginInstance<Host>, name: Box<str>) -> Self {
         let mut config = GuiConfiguration {
             api_type: GuiApiType::default_for_current_platform().unwrap(),
             is_floating: false,
@@ -55,6 +56,7 @@ impl GuiExt {
         Self {
             instance,
             plugin_gui,
+            name,
             id: PluginId::unique(),
             is_floating: config.is_floating,
             is_open: false,
@@ -165,6 +167,11 @@ impl GuiExt {
             self.plugin_gui.destroy(&mut self.instance.plugin_handle());
             self.is_open = false;
         }
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 
