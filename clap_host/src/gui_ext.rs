@@ -42,16 +42,11 @@ impl GuiExt {
 
         let mut plugin = instance.plugin_handle();
 
-        let config = if plugin_gui.is_api_supported(&mut plugin, config) {
-            config
-        } else {
+        if !plugin_gui.is_api_supported(&mut plugin, config) {
             config.is_floating = true;
-            if plugin_gui.is_api_supported(&mut plugin, config) {
-                config
-            } else {
-                panic!()
-            }
-        };
+
+            assert!(plugin_gui.is_api_supported(&mut plugin, config));
+        }
 
         Self {
             instance,
@@ -156,7 +151,7 @@ impl GuiExt {
                 .adjust_size(&mut plugin, size)
                 .unwrap_or(size);
             self.plugin_gui.set_size(&mut plugin, size).unwrap();
-        };
+        }
 
         let size = self.plugin_gui.get_size(&mut plugin).unwrap_or(size);
         [size.width, size.height]
