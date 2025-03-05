@@ -10,8 +10,6 @@ mod trace;
 mod widget;
 
 fn main() -> Result {
-    trace::setup();
-
     #[cfg(target_os = "linux")]
     {
         // SAFETY:
@@ -24,6 +22,8 @@ fn main() -> Result {
             unsafe { std::env::set_var("WINIT_X11_SCALE_FACTOR", "1.0") }
         }
     }
+
+    trace::setup();
 
     daemon("GenericDAW", Daw::update, Daw::view)
         .subscription(|_| Daw::subscription())
