@@ -632,7 +632,7 @@ where
                 bounds,
                 border: Border::default()
                     .width(1.0)
-                    .color(theme.extended_palette().secondary.weak.color),
+                    .color(theme.extended_palette().background.strong.color),
                 ..Quad::default()
             },
             Background::Color(Color::TRANSPARENT),
