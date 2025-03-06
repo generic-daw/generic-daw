@@ -222,16 +222,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                             shell.capture_event();
                         }
                     }
-                    mouse::Button::Right => {
-                        if !(state.deleted || cursor.y < LINE_HEIGHT) {
-                            state.action = Action::DeletingClips;
+                    mouse::Button::Right if !(state.deleted || cursor.y < LINE_HEIGHT) => {
+                        state.action = Action::DeletingClips;
 
-                            if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
-                                state.deleted = true;
+                        if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
+                            state.deleted = true;
 
-                                shell.publish((self.delete_clip)(track, clip));
-                                shell.capture_event();
-                            }
+                            shell.publish((self.delete_clip)(track, clip));
+                            shell.capture_event();
                         }
                     }
                     _ => {}
@@ -431,8 +429,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
         let mut children = layout.children();
 
         renderer.with_layer(bounds_no_seeker, |renderer| {
-            let layout = children.next().unwrap();
-
             let Some(bounds) = bounds.intersection(&bounds_no_seeker) else {
                 return;
             };
@@ -442,7 +438,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                 renderer,
                 theme,
                 style,
-                layout,
+                children.next().unwrap(),
                 cursor,
                 &bounds,
             );
@@ -508,19 +504,19 @@ where
             .floor();
 
         while beat <= end_beat {
-            let bar = beat.quarter_note() / numerator as u32;
-            let color = if self.scale.x > 11f32 {
-                if beat.quarter_note() % numerator as u32 == 0 {
+            let bar = beat.beat() / numerator as u32;
+            let color = if self.scale.x >= 11.0 {
+                if beat.beat() % numerator as u32 == 0 {
                     if bar % 4 == 0 {
                         theme.extended_palette().background.strong.color
                     } else {
                         theme.extended_palette().background.weak.color
                     }
                 } else {
-                    beat += Position::QUARTER_NOTE;
+                    beat += Position::BEAT;
                     continue;
                 }
-            } else if beat.quarter_note() % numerator as u32 == 0 {
+            } else if beat.beat() % numerator as u32 == 0 {
                 theme.extended_palette().background.strong.color
             } else {
                 theme.extended_palette().background.weak.color
@@ -540,7 +536,7 @@ where
                 color,
             );
 
-            beat += Position::QUARTER_NOTE;
+            beat += Position::BEAT;
         }
     }
 
@@ -598,7 +594,7 @@ where
 
         let mut beat =
             Position::from_interleaved_samples_f(self.position.x, bpm, self.meter.sample_rate)
-                .saturating_sub(if self.scale.x > 11.0 {
+                .saturating_sub(if self.scale.x >= 11.0 {
                     Position::new(4 * numerator as u32, 0)
                 } else {
                     Position::new(numerator as u32, 0)
@@ -614,17 +610,17 @@ where
             .floor();
 
         while beat <= end_beat {
-            let bar = beat.quarter_note() / numerator as u32;
+            let bar = beat.beat() / numerator as u32;
 
-            if self.scale.x > 11f32 {
-                if beat.quarter_note() % numerator as u32 == 0 && bar % 4 == 0 {
+            if self.scale.x >= 11.0 {
+                if beat.beat() % numerator as u32 == 0 && bar % 4 == 0 {
                     draw_text(beat, bar);
                 }
-            } else if beat.quarter_note() % numerator as u32 == 0 {
+            } else if beat.beat() % numerator as u32 == 0 {
                 draw_text(beat, bar);
             }
 
-            beat += Position::QUARTER_NOTE;
+            beat += Position::BEAT;
         }
 
         renderer.fill_quad(

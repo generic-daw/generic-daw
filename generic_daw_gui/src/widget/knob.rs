@@ -102,14 +102,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                 mouse::Event::ButtonPressed {
                     button: mouse::Button::Left,
                     ..
-                } if state.dragging.is_none()
-                    && cursor
-                        .position()
-                        .is_some_and(|pos| pos.distance(bounds.center()) < RADIUS) =>
-                {
-                    let pos = cursor.position().unwrap();
-                    state.dragging = Some((self.value, pos.y));
-                    shell.capture_event();
+                } if state.dragging.is_none() => {
+                    if let Some(pos) = cursor.position() {
+                        if pos.distance(bounds.center()) < RADIUS {
+                            state.dragging = Some((self.value, pos.y));
+                            shell.capture_event();
+                        }
+                    }
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
                     if !state.hovering {

@@ -52,7 +52,7 @@ impl ClipPosition {
         let clip_start = self.get_clip_start();
         let clamped_global_start = new_global_start.clamp(
             global_start.saturating_sub(clip_start),
-            global_end - Position::SUB_QUARTER_NOTE,
+            global_end - Position::STEP,
         );
         let diff = global_start.abs_diff(clamped_global_start);
         if global_start < clamped_global_start {
@@ -65,7 +65,7 @@ impl ClipPosition {
 
     pub fn trim_end_to(&self, new_global_end: Position) {
         let global_start = self.get_global_start();
-        let clamped_global_end = new_global_end.max(global_start + Position::SUB_QUARTER_NOTE);
+        let clamped_global_end = new_global_end.max(global_start + Position::STEP);
         self.global_end.store(clamped_global_end, Release);
     }
 

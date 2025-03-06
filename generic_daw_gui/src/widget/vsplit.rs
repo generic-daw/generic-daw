@@ -140,11 +140,9 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
                 mouse::Event::ButtonPressed {
                     button: mouse::Button::Left,
                     ..
-                } => {
-                    if cursor.is_over(layout.children().nth(1).unwrap().bounds()) {
-                        state.dragging = true;
-                        shell.capture_event();
-                    }
+                } if cursor.is_over(layout.children().nth(1).unwrap().bounds()) => {
+                    state.dragging = true;
+                    shell.capture_event();
                 }
                 mouse::Event::CursorMoved {
                     position: Point { x, .. },

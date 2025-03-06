@@ -11,16 +11,16 @@ pub struct Position(u32);
 impl Debug for Position {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Position")
-            .field("quarter_note", &self.quarter_note())
-            .field("sub_quarter_note", &self.sub_quarter_note())
+            .field("beat", &self.beat())
+            .field("step", &self.step())
             .finish()
     }
 }
 
 impl Position {
     pub const ZERO: Self = Self::new(0, 0);
-    pub const QUARTER_NOTE: Self = Self::new(1, 0);
-    pub const SUB_QUARTER_NOTE: Self = Self::new(0, 1);
+    pub const BEAT: Self = Self::new(1, 0);
+    pub const STEP: Self = Self::new(0, 1);
 
     #[must_use]
     pub const fn new(quarter_note: u32, sub_quarter_note: u32) -> Self {
@@ -31,12 +31,12 @@ impl Position {
     }
 
     #[must_use]
-    pub const fn quarter_note(self) -> u32 {
+    pub const fn beat(self) -> u32 {
         self.0 >> 8
     }
 
     #[must_use]
-    pub const fn sub_quarter_note(self) -> u32 {
+    pub const fn step(self) -> u32 {
         self.0 & 0xff
     }
 
@@ -48,7 +48,7 @@ impl Position {
 
     #[must_use]
     pub const fn ceil(mut self) -> Self {
-        if self.sub_quarter_note() != 0 {
+        if self.step() != 0 {
             self.0 &= !0xff;
             self.0 += 1 << 8;
         }
@@ -61,9 +61,9 @@ impl Position {
         let bpm = f32::from(bpm);
         let sample_rate = sample_rate as f32;
 
-        let global_beat = samples * (bpm * 32.0) / (sample_rate * 15.0);
+        let beat = samples * (bpm * 32.0) / (sample_rate * 15.0);
 
-        Self(global_beat as u32)
+        Self(beat as u32)
     }
 
     #[must_use]
@@ -72,18 +72,18 @@ impl Position {
         let bpm = u64::from(bpm);
         let sample_rate = u64::from(sample_rate);
 
-        let global_beat = samples * (bpm * 32) / (sample_rate * 15);
+        let beat = samples * (bpm * 32) / (sample_rate * 15);
 
-        Self(global_beat as u32)
+        Self(beat as u32)
     }
 
     #[must_use]
     pub fn in_interleaved_samples_f(self, bpm: u16, sample_rate: u32) -> f32 {
-        let global_beat = f64::from(self.0);
+        let beat = f64::from(self.0);
         let bpm = f64::from(bpm);
         let sample_rate = f64::from(sample_rate);
 
-        let samples = global_beat * (sample_rate * 15.0) / (bpm * 32.0);
+        let samples = beat * (sample_rate * 15.0) / (bpm * 32.0);
 
         samples as f32
     }
