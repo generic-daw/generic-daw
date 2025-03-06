@@ -3,8 +3,6 @@ use generic_daw_core::clap_host::{GuiExt, MainThreadMessage, PluginId, Receiver}
 use generic_daw_utils::HoleyVec;
 use iced::{
     Function as _, Size, Subscription, Task,
-    futures::SinkExt as _,
-    stream::channel,
     window::{self, Id, close_requests, resize_events},
 };
 use std::sync::{Arc, Mutex};
@@ -51,11 +49,7 @@ impl ClapHostView {
                     Task::done(Message::MainThread(id, MainThreadMessage::GuiRequestShow))
                 };
 
-                let stream = Task::stream(channel(0, async move |mut sender| {
-                    while let Ok(msg) = gui_receiver.recv().await {
-                        sender.send(Message::MainThread(id, msg)).await.unwrap();
-                    }
-                }));
+                let stream = Task::stream(gui_receiver).map(Message::MainThread.with(id));
 
                 return open.chain(stream);
             }
