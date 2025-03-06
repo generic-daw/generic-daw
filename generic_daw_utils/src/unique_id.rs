@@ -32,6 +32,18 @@ macro_rules! unique_id {
                 }
             }
 
+            impl std::convert::AsRef<$ty> for Id {
+                fn as_ref(&self) -> &$ty {
+                    &self.0
+                }
+            }
+
+            impl std::borrow::Borrow<$ty> for Id {
+                fn borrow(&self) -> &$ty {
+                    &self.0
+                }
+            }
+
             impl std::ops::Deref for Id {
                 type Target = $ty;
 
