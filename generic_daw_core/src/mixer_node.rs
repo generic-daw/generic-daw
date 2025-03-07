@@ -1,17 +1,24 @@
+use arc_swap::ArcSwap;
 use atomig::Atomic;
 use audio_graph::{AudioGraphNodeImpl, NodeId};
+use clap_host::AudioProcessor;
 use std::{
     cmp::max_by,
     f32::consts::{FRAC_PI_4, SQRT_2},
-    sync::atomic::{
-        AtomicBool,
-        Ordering::{Acquire, Release},
+    sync::{
+        Mutex,
+        atomic::{
+            AtomicBool,
+            Ordering::{Acquire, Release},
+        },
     },
 };
 
 #[derive(Debug)]
 pub struct MixerNode {
     id: NodeId,
+    /// any effects that are to be applied to the input audio, before applying volume and pan
+    pub effects: ArcSwap<Vec<Mutex<AudioProcessor>>>,
     /// 0 <= volume
     pub volume: Atomic<f32>,
     /// -1 <= pan <= 1
@@ -37,6 +44,7 @@ impl MixerNode {
 impl Default for MixerNode {
     fn default() -> Self {
         Self {
+            effects: ArcSwap::default(),
             id: NodeId::unique(),
             volume: Atomic::new(1.0),
             pan: Atomic::default(),
@@ -67,6 +75,13 @@ impl AudioGraphNodeImpl for MixerNode {
         buf.iter_mut()
             .enumerate()
             .for_each(|(i, s)| *s *= if i % 2 == 0 { lpan } else { rpan });
+
+        for effect in &**self.effects.load() {
+            effect
+                .try_lock()
+                .expect("this is only locked from the audio thread")
+                .process(buf);
+        }
 
         let cur_l = buf
             .iter()

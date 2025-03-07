@@ -13,9 +13,11 @@ use fragile::Fragile;
 use generic_daw_core::{
     AudioClip, AudioTrack, InterleavedAudio, Meter, MidiTrack, Position,
     audio_graph::{AudioGraph, AudioGraphNodeImpl as _, NodeId},
-    clap_host::{AudioProcessor, GuiExt, MainThreadMessage, PluginId, Receiver},
+    clap_host::{
+        self, MainThreadMessage, PluginDescriptor, PluginId, clack_host::bundle::PluginBundle,
+    },
 };
-use generic_daw_utils::HoleyVec;
+use generic_daw_utils::{HoleyVec, NoDebug};
 use iced::{
     Alignment, Element, Function as _, Length, Task,
     futures::TryFutureExt as _,
@@ -70,10 +72,7 @@ pub enum Message {
     Mixer,
     LoadSample(Box<Path>),
     LoadedSample(Option<Arc<InterleavedAudio>>),
-    LoadedPlugin(
-        Arc<Mutex<AudioProcessor>>,
-        Arc<Mutex<(Fragile<GuiExt>, Receiver<MainThreadMessage>)>>,
-    ),
+    LoadedPlugin(PluginDescriptor, NoDebug<PluginBundle>),
     RemoveTrack(usize),
     SeekTo(usize),
     SelectClip(usize, usize),
@@ -219,8 +218,14 @@ impl ArrangementView {
                         .map(Message::ConnectSucceeded);
                 }
             }
-            Message::LoadedPlugin(arc, clap_host) => {
-                let audio_processor = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
+            Message::LoadedPlugin(name, NoDebug(plugin)) => {
+                let (gui, gui_receiver, audio_processor) = clap_host::init(
+                    &plugin,
+                    &name,
+                    f64::from(self.meter.sample_rate),
+                    self.meter.buffer_size,
+                );
+
                 let plugin_id = audio_processor.id();
                 let track = MidiTrack::new(self.meter.clone(), audio_processor);
                 self.plugin_ids.insert(*track.id(), plugin_id);
@@ -230,7 +235,10 @@ impl ArrangementView {
                         .and_then(Task::done)
                         .map(Message::ConnectSucceeded),
                     self.clap_host
-                        .update(ClapHostMessage::Opened(clap_host))
+                        .update(ClapHostMessage::Opened(Arc::new(Mutex::new((
+                            Fragile::new(gui),
+                            gui_receiver,
+                        )))))
                         .map(Message::ClapHost),
                 ]);
             }

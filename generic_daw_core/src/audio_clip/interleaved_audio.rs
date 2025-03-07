@@ -1,11 +1,11 @@
 use super::error::{InterleavedAudioError, RubatoError};
+use generic_daw_utils::NoDebug;
 use rubato::{
     Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
 use std::{
     array,
     cmp::{max_by, min_by},
-    fmt::{Debug, Formatter},
     fs::File,
     path::Path,
     sync::Arc,
@@ -19,21 +19,15 @@ use symphonia::core::{
     probe::Hint,
 };
 
+#[expect(clippy::type_complexity)]
+#[derive(Debug)]
 pub struct InterleavedAudio {
     /// these are used to play the sample back
-    pub samples: Box<[f32]>,
+    pub samples: NoDebug<Box<[f32]>>,
     /// these are used to draw the sample in various quality levels
-    pub lods: [Box<[(f32, f32)]>; 10],
+    pub lods: NoDebug<[Box<[(f32, f32)]>; 10]>,
     /// the file name associated with the sample
     pub path: Box<Path>,
-}
-
-impl Debug for InterleavedAudio {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("InterleavedAudio")
-            .field("path", &self.path)
-            .finish_non_exhaustive()
-    }
 }
 
 impl InterleavedAudio {
@@ -42,10 +36,11 @@ impl InterleavedAudio {
         let length = samples.len();
 
         let mut audio = Self {
-            samples,
+            samples: samples.into(),
             lods: array::from_fn(|i| {
                 vec![(0.0, 0.0); length.div_ceil(1 << (i + 3))].into_boxed_slice()
-            }),
+            })
+            .into(),
             path: Box::from(path),
         };
 

@@ -6,10 +6,9 @@ use generic_daw_core::{
     build_output_stream,
     oneshot::{self, Receiver},
 };
-use generic_daw_utils::HoleyVec;
+use generic_daw_utils::{HoleyVec, NoDebug};
 use hound::WavWriter;
 use std::{
-    fmt::{Debug, Formatter},
     path::Path,
     sync::{
         Arc,
@@ -17,24 +16,15 @@ use std::{
     },
 };
 
+#[derive(Debug)]
 pub struct Arrangement {
     tracks: Vec<Track>,
     channels: HoleyVec<(Arc<MixerNode>, BitSet)>,
     master_node_id: NodeId,
 
     producer: Producer<DawCtxMessage>,
-    stream: Stream,
+    stream: NoDebug<Stream>,
     meter: Arc<Meter>,
-}
-
-impl Debug for Arrangement {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Arrangement")
-            .field("tracks", &self.tracks)
-            .field("producer", &self.producer)
-            .field("meter", &self.meter)
-            .finish_non_exhaustive()
-    }
 }
 
 impl Arrangement {
@@ -52,7 +42,7 @@ impl Arrangement {
                 master_node_id,
 
                 producer,
-                stream,
+                stream: stream.into(),
                 meter: meter.clone(),
             },
             meter,

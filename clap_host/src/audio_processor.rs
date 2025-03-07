@@ -1,24 +1,15 @@
 use crate::{Host, PluginId, PluginType, audio_buffers::AudioBuffers, note_buffers::NoteBuffers};
 use clack_host::process::StartedPluginAudioProcessor;
-use std::fmt::{Debug, Formatter};
+use generic_daw_utils::NoDebug;
 
+#[derive(Debug)]
 pub struct AudioProcessor {
-    started_processor: StartedPluginAudioProcessor<Host>,
+    started_processor: NoDebug<StartedPluginAudioProcessor<Host>>,
     ty: PluginType,
     id: PluginId,
     steady_time: u64,
     audio_buffers: AudioBuffers,
     pub note_buffers: NoteBuffers,
-}
-
-impl Debug for AudioProcessor {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PluginAudioProcessor")
-            .field("steady_time", &self.steady_time)
-            .field("audio_buffers", &self.audio_buffers)
-            .field("note_buffers", &self.note_buffers)
-            .finish_non_exhaustive()
-    }
 }
 
 impl AudioProcessor {
@@ -31,7 +22,7 @@ impl AudioProcessor {
         note_buffers: NoteBuffers,
     ) -> Self {
         Self {
-            started_processor,
+            started_processor: started_processor.into(),
             ty,
             id,
             steady_time: 0,

@@ -4,32 +4,19 @@ use clack_extensions::{
     timer::PluginTimer,
 };
 use clack_host::prelude::*;
+use generic_daw_utils::NoDebug;
 use raw_window_handle::RawWindowHandle;
-use std::{
-    cell::RefCell,
-    fmt::{Debug, Formatter},
-    rc::Rc,
-};
+use std::{cell::RefCell, rc::Rc};
 
+#[derive(Debug)]
 pub struct GuiExt {
-    instance: PluginInstance<Host>,
-    plugin_gui: PluginGui,
+    instance: NoDebug<PluginInstance<Host>>,
+    plugin_gui: NoDebug<PluginGui>,
     name: Box<str>,
     id: PluginId,
     is_floating: bool,
     is_open: bool,
     can_resize: bool,
-}
-
-impl Debug for GuiExt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("GuiExt")
-            .field("id", &self.id)
-            .field("is_floating", &self.is_floating)
-            .field("is_open", &self.is_open)
-            .field("can_resize", &self.can_resize)
-            .finish_non_exhaustive()
-    }
 }
 
 impl GuiExt {
@@ -54,8 +41,8 @@ impl GuiExt {
         }
 
         Self {
-            instance,
-            plugin_gui,
+            instance: instance.into(),
+            plugin_gui: plugin_gui.into(),
             name,
             id,
             is_floating: config.is_floating,

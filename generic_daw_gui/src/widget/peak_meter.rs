@@ -1,4 +1,5 @@
 use super::LINE_HEIGHT;
+use generic_daw_utils::NoDebug;
 use iced::{
     Color, Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
@@ -12,7 +13,6 @@ use iced::{
 };
 use std::{
     cmp::{max_by, min_by},
-    fmt::{Debug, Formatter},
     time::Instant,
 };
 
@@ -38,20 +38,19 @@ impl Default for State {
     }
 }
 
-pub struct PeakMeter {
-    update: Box<dyn Fn() -> [f32; 2]>,
+#[derive(Debug)]
+pub struct PeakMeter<F>
+where
+    F: Fn() -> [f32; 2],
+{
+    update: NoDebug<F>,
     enabled: bool,
 }
 
-impl Debug for PeakMeter {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PeakMeter")
-            .field("enabled", &self.enabled)
-            .finish_non_exhaustive()
-    }
-}
-
-impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
+impl<F, Message> Widget<Message, Theme, Renderer> for PeakMeter<F>
+where
+    F: Fn() -> [f32; 2],
+{
     fn size(&self) -> Size<Length> {
         Size::new(Length::Fixed(WIDTH), Length::Fill)
     }
@@ -165,10 +164,13 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
     }
 }
 
-impl PeakMeter {
-    pub fn new(update: impl Fn() -> [f32; 2] + 'static, enabled: bool) -> Self {
+impl<F> PeakMeter<F>
+where
+    F: Fn() -> [f32; 2],
+{
+    pub fn new(update: F, enabled: bool) -> Self {
         Self {
-            update: Box::new(update),
+            update: update.into(),
             enabled,
         }
     }
@@ -221,8 +223,11 @@ impl PeakMeter {
     }
 }
 
-impl<Message> From<PeakMeter> for Element<'_, Message> {
-    fn from(knob: PeakMeter) -> Self {
+impl<F, Message> From<PeakMeter<F>> for Element<'_, Message>
+where
+    F: Fn() -> [f32; 2] + 'static,
+{
+    fn from(knob: PeakMeter<F>) -> Self {
         Self::new(knob)
     }
 }

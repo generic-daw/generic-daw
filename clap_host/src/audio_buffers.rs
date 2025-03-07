@@ -1,28 +1,19 @@
 use crate::audio_ports_config::AudioPortsConfig;
 use clack_host::{prelude::*, process::PluginAudioConfiguration};
-use std::fmt::{Debug, Formatter};
+use generic_daw_utils::NoDebug;
 
+#[derive(Debug)]
 pub struct AudioBuffers {
     config: PluginAudioConfiguration,
 
     input_config: AudioPortsConfig,
     output_config: AudioPortsConfig,
 
-    input_ports: AudioPorts,
-    output_ports: AudioPorts,
+    input_ports: NoDebug<AudioPorts>,
+    output_ports: NoDebug<AudioPorts>,
 
-    input_channels: Box<[Box<[f32]>]>,
-    output_channels: Box<[Box<[f32]>]>,
-}
-
-impl Debug for AudioBuffers {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Buffers")
-            .field("config", &self.config)
-            .field("input_config", &self.input_config)
-            .field("output_config", &self.output_config)
-            .finish_non_exhaustive()
-    }
+    input_channels: NoDebug<Box<[Box<[f32]>]>>,
+    output_channels: NoDebug<Box<[Box<[f32]>]>>,
 }
 
 impl AudioBuffers {
@@ -31,19 +22,21 @@ impl AudioBuffers {
         input_config: AudioPortsConfig,
         output_config: AudioPortsConfig,
     ) -> Self {
-        let input_ports = (&input_config).into();
-        let output_ports = (&output_config).into();
+        let input_ports = AudioPorts::from(&input_config).into();
+        let output_ports = AudioPorts::from(&output_config).into();
 
         let input_channels = input_config
             .port_channel_counts
             .iter()
             .map(|c| vec![0.0; config.max_frames_count as usize * c].into_boxed_slice())
-            .collect();
+            .collect::<Box<[_]>>()
+            .into();
         let output_channels = output_config
             .port_channel_counts
             .iter()
             .map(|c| vec![0.0; config.max_frames_count as usize * c].into_boxed_slice())
-            .collect();
+            .collect::<Box<[_]>>()
+            .into();
 
         Self {
             config,

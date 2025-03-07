@@ -27,5 +27,5 @@ iced_wgpu = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw
 infer = "0.19.0"
 itoa = "1.0.15"
 rfd = "0.15.2"
-tokio = { version = "1.43.0", features = ["rt", "time"] }
+tokio = { version = "1.44.0", features = ["rt", "time"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

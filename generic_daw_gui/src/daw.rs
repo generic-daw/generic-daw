@@ -5,11 +5,11 @@ use crate::{
     file_tree::FileTree,
     widget::{BpmInput, LINE_HEIGHT, VSplit},
 };
-use fragile::Fragile;
 use generic_daw_core::{
     Denominator, Meter, Numerator, VARIANTS as _,
     clap_host::{self, PluginDescriptor, PluginType, clack_host::bundle::PluginBundle},
 };
+use generic_daw_utils::NoDebug;
 use iced::{
     Alignment::Center,
     Element, Event, Subscription, Task, Theme,
@@ -23,7 +23,7 @@ use std::{
     collections::BTreeMap,
     path::Path,
     sync::{
-        Arc, LazyLock, Mutex,
+        Arc, LazyLock,
         atomic::Ordering::{AcqRel, Acquire, Release},
     },
 };
@@ -108,17 +108,11 @@ impl Daw {
                 self.file_tree.update(&path);
             }
             Message::LoadPlugin(name) => {
-                let (gui, gui_receiver, audio_processor) = clap_host::init(
-                    &self.plugins[&name],
-                    &name,
-                    f64::from(self.meter.sample_rate),
-                    self.meter.buffer_size,
-                );
-                let gui = Fragile::new(gui);
+                let bundle = self.plugins[&name].clone();
 
                 return Task::done(Message::Arrangement(ArrangementMessage::LoadedPlugin(
-                    Arc::new(Mutex::new(audio_processor)),
-                    Arc::new(Mutex::new((gui, gui_receiver))),
+                    name,
+                    NoDebug(bundle),
                 )));
             }
             Message::SamplesFileDialog => {
