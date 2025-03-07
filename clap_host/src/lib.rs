@@ -145,6 +145,7 @@ pub fn init(
 
     let audio_buffers = AudioBuffers::new(config, input_config, output_config);
     let note_buffers = NoteBuffers::new(&mut instance.plugin_handle());
+    let id = PluginId::unique();
 
     let plugin_audio_processor = AudioProcessor::new(
         instance
@@ -153,6 +154,7 @@ pub fn init(
             .start_processing()
             .unwrap(),
         descriptor.ty,
+        id,
         audio_buffers,
         note_buffers,
     );
@@ -161,6 +163,7 @@ pub fn init(
         instance.access_handler(|h| h.gui).unwrap(),
         instance,
         descriptor.name.clone(),
+        id,
     );
 
     (gui, gui_receiver, plugin_audio_processor)

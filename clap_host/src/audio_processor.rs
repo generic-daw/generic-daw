@@ -1,10 +1,11 @@
-use crate::{Host, PluginType, audio_buffers::AudioBuffers, note_buffers::NoteBuffers};
+use crate::{Host, PluginId, PluginType, audio_buffers::AudioBuffers, note_buffers::NoteBuffers};
 use clack_host::process::StartedPluginAudioProcessor;
 use std::fmt::{Debug, Formatter};
 
 pub struct AudioProcessor {
     started_processor: StartedPluginAudioProcessor<Host>,
     ty: PluginType,
+    id: PluginId,
     steady_time: u64,
     audio_buffers: AudioBuffers,
     pub note_buffers: NoteBuffers,
@@ -25,16 +26,23 @@ impl AudioProcessor {
     pub fn new(
         started_processor: StartedPluginAudioProcessor<Host>,
         ty: PluginType,
+        id: PluginId,
         audio_buffers: AudioBuffers,
         note_buffers: NoteBuffers,
     ) -> Self {
         Self {
             started_processor,
             ty,
+            id,
             steady_time: 0,
             audio_buffers,
             note_buffers,
         }
+    }
+
+    #[must_use]
+    pub fn id(&self) -> PluginId {
+        self.id
     }
 
     pub fn process(&mut self, buf: &mut [f32]) {

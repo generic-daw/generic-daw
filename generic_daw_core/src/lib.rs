@@ -40,8 +40,8 @@ pub use strum::VariantArray as VARIANTS;
 pub fn build_output_stream(
     sample_rate: u32,
     buffer_size: u32,
-) -> (Stream, Producer<DawCtxMessage>, Arc<Meter>) {
-    let (mut ctx, producer) = DawCtx::create(sample_rate, buffer_size);
+) -> (Stream, Arc<MixerNode>, Producer<DawCtxMessage>, Arc<Meter>) {
+    let (mut ctx, master_node, producer) = DawCtx::create(sample_rate, buffer_size);
     let meter = ctx.meter.clone();
 
     let stream = cpal::default_host()
@@ -70,5 +70,5 @@ pub fn build_output_stream(
         .unwrap();
     stream.play().unwrap();
 
-    (stream, producer, meter)
+    (stream, master_node, producer, meter)
 }

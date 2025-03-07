@@ -9,8 +9,7 @@ use crate::{
 use fragile::Fragile;
 use generic_daw_core::{
     AudioClip, AudioTrack, InterleavedAudio, Meter, MidiTrack, Position,
-    audio_graph::{AudioGraph, AudioGraphNodeImpl as _},
-    build_output_stream,
+    audio_graph::{AudioGraph, AudioGraphNodeImpl as _, NodeId},
     clap_host::{AudioProcessor, GuiExt, MainThreadMessage, PluginId, Receiver},
 };
 use generic_daw_utils::HoleyVec;
@@ -53,6 +52,7 @@ static REOPEN: LazyLock<svg::Handle> = LazyLock::new(|| {
 pub enum Message {
     ClapHost(ClapHostMessage),
     AudioGraph(Arc<Mutex<(AudioGraph, Box<Path>)>>),
+    Connected((NodeId, NodeId)),
     TrackVolumeChanged(usize, f32),
     TrackPanChanged(usize, f32),
     LoadSample(Box<Path>),
@@ -92,27 +92,26 @@ pub struct ArrangementView {
 }
 
 impl ArrangementView {
-    pub fn create(main_window_id: Id) -> (Arc<Meter>, Self) {
-        let (stream, producer, meter) = build_output_stream(44100, 1024);
+    pub fn create(main_window_id: Id) -> (Self, Arc<Meter>) {
+        let (arrangement, meter) = ArrangementWrapper::new();
 
-        let arrangement = ArrangementWrapper::new(producer, stream, meter.clone());
+        (
+            Self {
+                clap_host: ClapHostView::new(main_window_id),
+                plugin_ids: HoleyVec::default(),
 
-        let arrangement = Self {
-            clap_host: ClapHostView::new(main_window_id),
-            plugin_ids: HoleyVec::default(),
+                arrangement,
+                meter: meter.clone(),
 
-            arrangement,
-            meter: meter.clone(),
+                loading: 0,
 
-            loading: 0,
-
-            position: ArrangementPosition::default(),
-            scale: ArrangementScale::default(),
-            soloed_track: None,
-            grabbed_clip: None,
-        };
-
-        (meter, arrangement)
+                position: ArrangementPosition::default(),
+                scale: ArrangementScale::default(),
+                soloed_track: None,
+                grabbed_clip: None,
+            },
+            meter,
+        )
     }
 
     pub fn stop(&mut self) {
@@ -127,6 +126,9 @@ impl ArrangementView {
                 let (audio_graph, path) =
                     Mutex::into_inner(Arc::into_inner(message).unwrap()).unwrap();
                 self.arrangement.export(audio_graph, &path);
+            }
+            Message::Connected((from, to)) => {
+                self.arrangement.connect_succeeded(from, to);
             }
             Message::TrackVolumeChanged(track, volume) => {
                 self.arrangement.tracks()[track]
@@ -157,20 +159,25 @@ impl ArrangementView {
                     track
                         .clips
                         .push(AudioClip::create(audio_file, self.meter.clone()));
-                    self.arrangement.push(track);
+                    return Task::future(self.arrangement.push(track))
+                        .and_then(Task::done)
+                        .map(Message::Connected);
                 }
             }
             Message::LoadedPlugin(arc, clap_host) => {
-                let plugin_id = clap_host.lock().unwrap().0.get().plugin_id();
                 let audio_processor = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
+                let plugin_id = audio_processor.id();
                 let track = MidiTrack::new(self.meter.clone(), audio_processor);
                 self.plugin_ids.insert(*track.id(), plugin_id);
-                self.arrangement.push(track);
 
-                return self
-                    .clap_host
-                    .update(ClapHostMessage::Opened(clap_host))
-                    .map(Message::ClapHost);
+                return Task::batch([
+                    Task::future(self.arrangement.push(track))
+                        .and_then(Task::done)
+                        .map(Message::Connected),
+                    self.clap_host
+                        .update(ClapHostMessage::Opened(clap_host))
+                        .map(Message::ClapHost),
+                ]);
             }
             Message::ToggleTrackEnabled(track) => {
                 self.arrangement.tracks()[track]

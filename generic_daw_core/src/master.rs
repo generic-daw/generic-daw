@@ -15,9 +15,9 @@ static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 #[derive(Debug)]
 pub struct Master {
     /// information relating to the playback of the arrangement
-    pub meter: Arc<Meter>,
+    meter: Arc<Meter>,
     /// volume and pan
-    pub node: Arc<MixerNode>,
+    node: Arc<MixerNode>,
 
     click: RefCell<Option<LiveSample>>,
     on_bar_click: Arc<[f32]>,
@@ -76,7 +76,7 @@ impl AudioGraphNodeImpl for Master {
 }
 
 impl Master {
-    pub fn new(meter: Arc<Meter>) -> Self {
+    pub fn new(meter: Arc<Meter>, node: Arc<MixerNode>) -> Self {
         let sample_rate = meter.sample_rate;
 
         Self {
@@ -88,7 +88,7 @@ impl Master {
                 .unwrap()
                 .into(),
             meter,
-            node: Arc::new(MixerNode::default()),
+            node,
         }
     }
 }

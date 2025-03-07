@@ -11,6 +11,7 @@ workspace = true
 generic_daw_core = { path = "../generic_daw_core" }
 generic_daw_utils = { path = "../generic_daw_utils" }
 
+bit-set = "0.8.0"
 fragile = "2.0.0"
 hound = "3.5.1"
 iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", default-features = false, features = [

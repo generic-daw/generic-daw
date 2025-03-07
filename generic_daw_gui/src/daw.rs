@@ -78,7 +78,7 @@ impl Daw {
             ..window::Settings::default()
         });
 
-        let (meter, arrangement) = ArrangementView::create(main_window_id);
+        let (arrangement, meter) = ArrangementView::create(main_window_id);
         let plugins = clap_host::get_installed_plugins();
 
         (

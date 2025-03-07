@@ -34,7 +34,12 @@ impl Debug for GuiExt {
 
 impl GuiExt {
     #[must_use]
-    pub fn new(plugin_gui: PluginGui, mut instance: PluginInstance<Host>, name: Box<str>) -> Self {
+    pub fn new(
+        plugin_gui: PluginGui,
+        mut instance: PluginInstance<Host>,
+        name: Box<str>,
+        id: PluginId,
+    ) -> Self {
         let mut config = GuiConfiguration {
             api_type: GuiApiType::default_for_current_platform().unwrap(),
             is_floating: false,
@@ -52,7 +57,7 @@ impl GuiExt {
             instance,
             plugin_gui,
             name,
-            id: PluginId::unique(),
+            id,
             is_floating: config.is_floating,
             is_open: false,
             can_resize: false,

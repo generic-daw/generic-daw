@@ -29,11 +29,6 @@ impl AudioGraph {
         }
     }
 
-    #[must_use]
-    pub fn root(&self) -> NodeId {
-        self.list[0]
-    }
-
     pub fn fill_buf(&mut self, buf: &mut [f32]) {
         if self.dirty {
             self.dirty = false;
@@ -78,7 +73,10 @@ impl AudioGraph {
         }
     }
 
-    pub fn connect(&mut self, from: NodeId, to: NodeId) {
+    #[must_use]
+    pub fn connect(&mut self, from: NodeId, to: NodeId) -> bool {
+        self.visited.clear();
+
         if self.graph.contains(*to)
             && self
                 .graph
@@ -86,7 +84,6 @@ impl AudioGraph {
                 .is_some_and(|entry| !entry.connections.contains(*to))
             && !Self::check_cycle(&self.graph, &mut self.visited, *to, *from)
         {
-            self.visited.clear();
             self.graph.get_mut(*from).unwrap().connections.insert(*to);
 
             if !self.dirty {
@@ -99,6 +96,10 @@ impl AudioGraph {
                     }
                 }
             }
+
+            true
+        } else {
+            false
         }
     }
 

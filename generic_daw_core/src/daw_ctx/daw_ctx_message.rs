@@ -5,10 +5,8 @@ use oneshot::Sender;
 pub enum DawCtxMessage {
     Insert(AudioGraphNode),
     Remove(NodeId),
-    Connect(NodeId, NodeId),
-    ConnectToMaster(NodeId),
+    Connect(NodeId, NodeId, Sender<(NodeId, NodeId)>),
     Disconnect(NodeId, NodeId),
-    DisconnectFromMaster(NodeId),
     RequestAudioGraph(Sender<AudioGraph>),
     Reset,
     AudioGraph(AudioGraph),
