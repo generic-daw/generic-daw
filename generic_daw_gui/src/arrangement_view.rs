@@ -1,6 +1,9 @@
 use crate::{
     clap_host_view::{ClapHostView, Message as ClapHostMessage},
-    components::{round_danger_button, styled_container, styled_svg},
+    components::{
+        round_danger_button, styled_button, styled_container, styled_horizontal_scrollable,
+        styled_svg,
+    },
     widget::{
         Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale,
         AudioClip as AudioClipWidget, Knob, LINE_HEIGHT, PeakMeter, Track as TrackWidget,
@@ -17,7 +20,9 @@ use iced::{
     Alignment, Element, Function as _, Length, Task,
     futures::TryFutureExt as _,
     mouse::Interaction,
-    widget::{button, column, mouse_area, radio, row, svg, vertical_space},
+    widget::{
+        column, container, mouse_area, radio, row, svg, text, vertical_slider, vertical_space,
+    },
     window::Id,
 };
 use std::{
@@ -52,12 +57,17 @@ static REOPEN: LazyLock<svg::Handle> = LazyLock::new(|| {
 pub enum Message {
     ClapHost(ClapHostMessage),
     AudioGraph(Arc<Mutex<(AudioGraph, Box<Path>)>>),
-    Connected((NodeId, NodeId)),
+    ConnectSucceeded((NodeId, NodeId)),
+    RequestConnect((NodeId, NodeId)),
+    Disconnect((NodeId, NodeId)),
+    Select(NodeId),
     NodeVolumeChanged(NodeId, f32),
     NodePanChanged(NodeId, f32),
     ToggleTrackEnabled(NodeId),
     ToggleNodeEnabled(NodeId),
     ToggleTrackSolo(usize),
+    Arrangement,
+    Mixer,
     LoadSample(Box<Path>),
     LoadedSample(Option<Arc<InterleavedAudio>>),
     LoadedPlugin(
@@ -77,6 +87,11 @@ pub enum Message {
     Export(Box<Path>),
 }
 
+enum Tab {
+    Arrangement,
+    Mixer,
+}
+
 pub struct ArrangementView {
     clap_host: ClapHostView,
     plugin_ids: HoleyVec<PluginId>,
@@ -84,12 +99,15 @@ pub struct ArrangementView {
     arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
 
+    tab: Tab,
     loading: usize,
 
     position: ArrangementPosition,
     scale: ArrangementScale,
     soloed_track: Option<usize>,
     grabbed_clip: Option<[usize; 2]>,
+
+    selected_channel: Option<NodeId>,
 }
 
 impl ArrangementView {
@@ -104,12 +122,15 @@ impl ArrangementView {
                 arrangement,
                 meter: meter.clone(),
 
+                tab: Tab::Mixer,
                 loading: 0,
 
                 position: ArrangementPosition::default(),
                 scale: ArrangementScale::default(),
                 soloed_track: None,
                 grabbed_clip: None,
+
+                selected_channel: None,
             },
             meter,
         )
@@ -128,8 +149,19 @@ impl ArrangementView {
                     Mutex::into_inner(Arc::into_inner(message).unwrap()).unwrap();
                 self.arrangement.export(audio_graph, &path);
             }
-            Message::Connected((from, to)) => {
+            Message::RequestConnect((from, to)) => {
+                return Task::future(self.arrangement.request_connect(from, to))
+                    .and_then(Task::done)
+                    .map(Message::ConnectSucceeded);
+            }
+            Message::ConnectSucceeded((from, to)) => {
                 self.arrangement.connect_succeeded(from, to);
+            }
+            Message::Disconnect((from, to)) => {
+                self.arrangement.disconnect(from, to);
+            }
+            Message::Select(id) => {
+                self.selected_channel = Some(id);
             }
             Message::NodeVolumeChanged(id, volume) => {
                 self.arrangement.node(id).volume.store(volume, Release);
@@ -163,6 +195,8 @@ impl ArrangementView {
                     self.soloed_track = Some(track);
                 }
             }
+            Message::Arrangement => self.tab = Tab::Arrangement,
+            Message::Mixer => self.tab = Tab::Mixer,
             Message::LoadSample(path) => {
                 self.loading += 1;
                 let meter = self.meter.clone();
@@ -182,7 +216,7 @@ impl ArrangementView {
                         .push(AudioClip::create(audio_file, self.meter.clone()));
                     return Task::future(self.arrangement.push(track))
                         .and_then(Task::done)
-                        .map(Message::Connected);
+                        .map(Message::ConnectSucceeded);
                 }
             }
             Message::LoadedPlugin(arc, clap_host) => {
@@ -194,7 +228,7 @@ impl ArrangementView {
                 return Task::batch([
                     Task::future(self.arrangement.push(track))
                         .and_then(Task::done)
-                        .map(Message::Connected),
+                        .map(Message::ConnectSucceeded),
                     self.clap_host
                         .update(ClapHostMessage::Opened(clap_host))
                         .map(Message::ClapHost),
@@ -290,10 +324,33 @@ impl ArrangementView {
         Task::none()
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn view(&self) -> Element<'_, Message> {
-        let arrangement = ArrangementWidget::new(
-            &self.arrangement.meter,
+        let element = match self.tab {
+            Tab::Arrangement => self.arrangement(),
+            Tab::Mixer => self.mixer(),
+        };
+
+        let element = column![
+            row![
+                styled_button("arrangement").on_press(Message::Arrangement),
+                styled_button("mixer").on_press(Message::Mixer)
+            ],
+            element
+        ]
+        .into();
+
+        if self.loading > 0 {
+            mouse_area(element)
+                .interaction(Interaction::Progress)
+                .into()
+        } else {
+            element
+        }
+    }
+
+    fn arrangement(&self) -> Element<'_, Message> {
+        ArrangementWidget::new(
+            &self.meter,
             self.position,
             self.scale,
             column(
@@ -324,7 +381,7 @@ impl ArrangementView {
 
                         if let Some(&id) = self.plugin_ids.get(*track.id()) {
                             buttons = buttons.push(
-                                button(styled_svg(REOPEN.clone()).height(LINE_HEIGHT))
+                                styled_button(styled_svg(REOPEN.clone()).height(LINE_HEIGHT))
                                     .padding(0.0)
                                     .on_press(Message::ClapHost(ClapHostMessage::MainThread(
                                         id,
@@ -392,15 +449,84 @@ impl ArrangementView {
             Message::DeleteClip,
             Message::PositionScaleDelta,
         )
-        .into();
+        .into()
+    }
 
-        if self.loading > 0 {
-            mouse_area(arrangement)
-                .interaction(Interaction::Progress)
-                .into()
-        } else {
-            arrangement
-        }
+    fn mixer(&self) -> Element<'_, Message> {
+        let connections = self
+            .selected_channel
+            .as_ref()
+            .map(|c| &self.arrangement.channel(*c).1);
+
+        styled_horizontal_scrollable(
+            row(self.arrangement.channels().map(|(i, (node, _))| {
+                let node = node.clone();
+                let id = node.id();
+                let enabled = node.enabled.load(Acquire);
+                let volume = node.volume.load(Acquire);
+                let pan = node.pan.load(Acquire);
+
+                let mut container = container(
+                    column![
+                        styled_button(
+                            row![
+                                text(i),
+                                radio("", enabled, Some(true), |_| {
+                                    Message::ToggleNodeEnabled(id)
+                                })
+                                .spacing(0.0)
+                            ]
+                            .spacing(5.0)
+                        )
+                        .on_press(Message::Select(id)),
+                        mouse_area(Knob::new(
+                            -1.0..=1.0,
+                            0.0,
+                            pan,
+                            enabled,
+                            Message::NodePanChanged.with(id)
+                        ))
+                        .on_double_click(Message::NodePanChanged(id, 0.0)),
+                        row![
+                            PeakMeter::new(move || node.get_l_r(), enabled),
+                            vertical_slider(0.0..=1.0, volume, Message::NodeVolumeChanged.with(id))
+                                .step(0.001)
+                        ]
+                        .spacing(5.0),
+                        connections.map_or_else(
+                            || styled_button("-"),
+                            |connections| {
+                                if Some(id) == self.selected_channel {
+                                    styled_button("-")
+                                } else if connections.contains(i) {
+                                    styled_button("^").on_press(Message::Disconnect((
+                                        id,
+                                        self.selected_channel.unwrap(),
+                                    )))
+                                } else {
+                                    styled_button("v").on_press(Message::RequestConnect((
+                                        id,
+                                        self.selected_channel.unwrap(),
+                                    )))
+                                }
+                            },
+                        ),
+                    ]
+                    .spacing(5.0)
+                    .align_x(Alignment::Center),
+                )
+                .padding(5.0);
+
+                if Some(id) == self.selected_channel {
+                    container = container.style(container::dark);
+                }
+
+                container.into()
+            }))
+            .spacing(5.0),
+        )
+        .width(Length::Fill)
+        .into()
     }
 
     pub fn title(&self, window: Id) -> Option<String> {

@@ -3,7 +3,9 @@ use iced::{
     Border, Element, Length, Theme,
     border::Radius,
     widget::{
-        Button, Container, PickList, Scrollable, Svg, button, container, pick_list, scrollable, svg,
+        Button, Container, PickList, Scrollable, Svg, button, container, pick_list, scrollable,
+        scrollable::{Direction, Scrollbar},
+        svg,
     },
 };
 use std::borrow::Borrow;
@@ -45,7 +47,7 @@ where
     })
 }
 
-pub fn styled_scrollable<'a, Message>(
+pub fn styled_vertical_scrollable<'a, Message>(
     content: impl Into<Element<'a, Message>>,
 ) -> Scrollable<'a, Message> {
     scrollable(content).style(|t, s| {
@@ -56,6 +58,21 @@ pub fn styled_scrollable<'a, Message>(
         style.horizontal_rail.scroller.border.radius = Radius::default();
         style
     })
+}
+
+pub fn styled_horizontal_scrollable<'a, Message>(
+    content: impl Into<Element<'a, Message>>,
+) -> Scrollable<'a, Message> {
+    Scrollable::with_direction(content, Direction::Horizontal(Scrollbar::default())).style(
+        |t, s| {
+            let mut style = scrollable::default(t, s);
+            style.vertical_rail.border.radius = Radius::default();
+            style.vertical_rail.scroller.border.radius = Radius::default();
+            style.horizontal_rail.border.radius = Radius::default();
+            style.horizontal_rail.scroller.border.radius = Radius::default();
+            style
+        },
+    )
 }
 
 pub fn styled_svg<'a>(handle: impl Into<svg::Handle>) -> Svg<'a> {

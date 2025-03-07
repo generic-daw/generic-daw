@@ -24,7 +24,7 @@ pub struct Arrangement {
 
     producer: Producer<DawCtxMessage>,
     stream: Stream,
-    pub meter: Arc<Meter>,
+    meter: Arc<Meter>,
 }
 
 impl Debug for Arrangement {
@@ -68,7 +68,15 @@ impl Arrangement {
     }
 
     pub fn node(&self, id: NodeId) -> &MixerNode {
-        &self.channels[*id].0
+        &self.channel(id).0
+    }
+
+    pub fn channels(&self) -> impl Iterator<Item = (usize, &(Arc<MixerNode>, BitSet))> {
+        self.channels.iter()
+    }
+
+    pub fn channel(&self, id: NodeId) -> &(Arc<MixerNode>, BitSet) {
+        &self.channels[*id]
     }
 
     #[must_use]
@@ -103,15 +111,14 @@ impl Arrangement {
     }
 
     pub fn connect_succeeded(&mut self, from: NodeId, to: NodeId) {
-        self.channels.get_mut(*from).unwrap().1.insert(*to);
+        self.channels.get_mut(*to).unwrap().1.insert(*from);
     }
 
-    #[expect(dead_code)]
     pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
         self.producer
             .push(DawCtxMessage::Disconnect(from, to))
             .unwrap();
-        self.channels.get_mut(*from).unwrap().1.remove(*to);
+        self.channels.get_mut(*to).unwrap().1.remove(*from);
     }
 
     pub fn clone_clip(&mut self, track: usize, clip: usize) {

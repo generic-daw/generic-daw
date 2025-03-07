@@ -1,7 +1,7 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage},
     clap_host_view::ClapHostView,
-    components::{styled_button, styled_pick_list, styled_scrollable, styled_svg},
+    components::{styled_button, styled_pick_list, styled_svg, styled_vertical_scrollable},
     file_tree::FileTree,
     widget::{BpmInput, LINE_HEIGHT, VSplit},
 };
@@ -226,7 +226,7 @@ impl Daw {
             .spacing(20)
             .align_y(Center),
             VSplit::new(
-                styled_scrollable(self.file_tree.view().0),
+                styled_vertical_scrollable(self.file_tree.view().0),
                 self.arrangement.view().map(Message::Arrangement),
                 self.split_at,
                 Message::SplitAt
