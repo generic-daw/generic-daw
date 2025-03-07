@@ -53,16 +53,17 @@ pub enum Message {
     ClapHost(ClapHostMessage),
     AudioGraph(Arc<Mutex<(AudioGraph, Box<Path>)>>),
     Connected((NodeId, NodeId)),
-    TrackVolumeChanged(usize, f32),
-    TrackPanChanged(usize, f32),
+    NodeVolumeChanged(NodeId, f32),
+    NodePanChanged(NodeId, f32),
+    ToggleTrackEnabled(NodeId),
+    ToggleNodeEnabled(NodeId),
+    ToggleTrackSolo(usize),
     LoadSample(Box<Path>),
     LoadedSample(Option<Arc<InterleavedAudio>>),
     LoadedPlugin(
         Arc<Mutex<AudioProcessor>>,
         Arc<Mutex<(Fragile<GuiExt>, Receiver<MainThreadMessage>)>>,
     ),
-    ToggleTrackEnabled(usize),
-    ToggleTrackSolo(usize),
     RemoveTrack(usize),
     SeekTo(usize),
     SelectClip(usize, usize),
@@ -130,17 +131,37 @@ impl ArrangementView {
             Message::Connected((from, to)) => {
                 self.arrangement.connect_succeeded(from, to);
             }
-            Message::TrackVolumeChanged(track, volume) => {
-                self.arrangement.tracks()[track]
-                    .node()
-                    .volume
-                    .store(volume, Release);
+            Message::NodeVolumeChanged(id, volume) => {
+                self.arrangement.node(id).volume.store(volume, Release);
             }
-            Message::TrackPanChanged(track, pan) => {
-                self.arrangement.tracks()[track]
-                    .node()
-                    .pan
-                    .store(pan, Release);
+            Message::NodePanChanged(id, pan) => {
+                self.arrangement.node(id).pan.store(pan, Release);
+            }
+            Message::ToggleTrackEnabled(id) => {
+                self.soloed_track = None;
+                return self.update(Message::ToggleNodeEnabled(id));
+            }
+            Message::ToggleNodeEnabled(id) => {
+                self.arrangement.node(id).enabled.fetch_not(AcqRel);
+            }
+            Message::ToggleTrackSolo(track) => {
+                if self.soloed_track == Some(track) {
+                    self.soloed_track = None;
+                    self.arrangement
+                        .tracks()
+                        .iter()
+                        .for_each(|track| track.node().enabled.store(true, Release));
+                } else {
+                    self.arrangement
+                        .tracks()
+                        .iter()
+                        .for_each(|track| track.node().enabled.store(false, Release));
+                    self.arrangement.tracks()[track]
+                        .node()
+                        .enabled
+                        .store(true, Release);
+                    self.soloed_track = Some(track);
+                }
             }
             Message::LoadSample(path) => {
                 self.loading += 1;
@@ -178,32 +199,6 @@ impl ArrangementView {
                         .update(ClapHostMessage::Opened(clap_host))
                         .map(Message::ClapHost),
                 ]);
-            }
-            Message::ToggleTrackEnabled(track) => {
-                self.arrangement.tracks()[track]
-                    .node()
-                    .enabled
-                    .fetch_not(AcqRel);
-                self.soloed_track = None;
-            }
-            Message::ToggleTrackSolo(track) => {
-                if self.soloed_track == Some(track) {
-                    self.soloed_track = None;
-                    self.arrangement
-                        .tracks()
-                        .iter()
-                        .for_each(|track| track.node().enabled.store(true, Release));
-                } else {
-                    self.arrangement
-                        .tracks()
-                        .iter()
-                        .for_each(|track| track.node().enabled.store(false, Release));
-                    self.arrangement.tracks()[track]
-                        .node()
-                        .enabled
-                        .store(true, Release);
-                    self.soloed_track = Some(track);
-                }
             }
             Message::RemoveTrack(track) => {
                 let id = self.arrangement.remove(track);
@@ -307,13 +302,14 @@ impl ArrangementView {
                     .iter()
                     .enumerate()
                     .map(|(idx, track)| {
+                        let id = track.id();
                         let node = track.node().clone();
                         let enabled = node.enabled.load(Acquire);
 
                         let mut buttons = column![
                             mouse_area(
                                 radio("", enabled, Some(true), |_| {
-                                    Message::ToggleTrackEnabled(idx)
+                                    Message::ToggleTrackEnabled(id)
                                 })
                                 .spacing(0.0)
                             )
@@ -347,17 +343,17 @@ impl ArrangementView {
                                             0.0,
                                             track.node().volume.load(Acquire),
                                             enabled,
-                                            Message::TrackVolumeChanged.with(idx)
+                                            Message::NodeVolumeChanged.with(id)
                                         ))
-                                        .on_double_click(Message::TrackVolumeChanged(idx, 1.0)),
+                                        .on_double_click(Message::NodeVolumeChanged(id, 1.0)),
                                         mouse_area(Knob::new(
                                             -1.0..=1.0,
                                             0.0,
                                             track.node().pan.load(Acquire),
                                             enabled,
-                                            Message::TrackPanChanged.with(idx)
+                                            Message::NodePanChanged.with(id)
                                         ))
-                                        .on_double_click(Message::TrackPanChanged(idx, 0.0)),
+                                        .on_double_click(Message::NodePanChanged(id, 0.0)),
                                         vertical_space(),
                                     ]
                                     .spacing(5.0),

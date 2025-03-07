@@ -67,6 +67,10 @@ impl Arrangement {
         &self.tracks
     }
 
+    pub fn node(&self, id: NodeId) -> &MixerNode {
+        &self.channels[*id].0
+    }
+
     #[must_use]
     pub fn push(&mut self, track: impl Into<Track>) -> Receiver<(NodeId, NodeId)> {
         let track = track.into();
@@ -84,6 +88,7 @@ impl Arrangement {
 
     pub fn remove(&mut self, track: usize) -> NodeId {
         let id = self.tracks.remove(track).id();
+        self.channels.remove(*id);
         self.producer.push(DawCtxMessage::Remove(id)).unwrap();
         id
     }
