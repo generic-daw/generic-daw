@@ -1,21 +1,26 @@
 use super::track_clip::TrackClip;
 use generic_daw_core::{
-    AudioTrack, Meter, MidiTrack, MixerNode, Position,
+    AudioClip, AudioTrack, Meter, MidiClip, MidiTrack, MixerNode, Position,
     audio_graph::{AudioGraphNode, AudioGraphNodeImpl as _, NodeId},
 };
+use generic_daw_utils::EnumDispatcher;
 use std::{
+    iter::Map,
     ops::Deref as _,
+    slice::Iter,
     sync::{Arc, atomic::Ordering::Acquire},
 };
-use track_switcher::TrackSwitcher;
-
-mod track_switcher;
 
 #[derive(Clone, Debug)]
 pub enum Track {
     AudioTrack(AudioTrack),
     MidiTrack(MidiTrack),
 }
+
+type TrackDispatcher<'a> = EnumDispatcher<
+    Map<Iter<'a, Arc<AudioClip>>, fn(&Arc<AudioClip>) -> TrackClip>,
+    Map<Iter<'a, Arc<MidiClip>>, fn(&Arc<MidiClip>) -> TrackClip>,
+>;
 
 impl Track {
     pub fn try_add_clip(&mut self, clip: TrackClip) -> bool {
@@ -99,10 +104,14 @@ impl Track {
         }
     }
 
-    pub fn clips(&self) -> TrackSwitcher<'_> {
+    pub fn clips(&self) -> TrackDispatcher<'_> {
         match self {
-            Self::AudioTrack(inner) => TrackSwitcher::AudioTrack(inner.clips.iter()),
-            Self::MidiTrack(inner) => TrackSwitcher::MidiTrack(inner.clips.iter()),
+            Self::AudioTrack(inner) => {
+                EnumDispatcher::A(inner.clips.iter().map(|clip| clip.clone().into()))
+            }
+            Self::MidiTrack(inner) => {
+                EnumDispatcher::B(inner.clips.iter().map(|clip| clip.clone().into()))
+            }
         }
     }
 

@@ -1,7 +1,8 @@
 use crate::{
     clap_host_view::{ClapHostView, Message as ClapHostMessage},
     components::{
-        round_danger_button, styled_container, styled_scrollable_with_direction, styled_svg,
+        round_danger_button, styled_button, styled_container, styled_scrollable_with_direction,
+        styled_svg,
     },
     stylefns::{radio_secondary, slider_secondary},
     widget::{
@@ -9,15 +10,16 @@ use crate::{
         AudioClip as AudioClipWidget, Knob, LINE_HEIGHT, PeakMeter, Track as TrackWidget,
     },
 };
+use arrangement::NodeType;
 use fragile::Fragile;
 use generic_daw_core::{
-    AudioClip, AudioTrack, InterleavedAudio, Meter, MidiTrack, Position,
+    AudioClip, AudioTrack, InterleavedAudio, Meter, MidiTrack, MixerNode, Position,
     audio_graph::{AudioGraph, AudioGraphNodeImpl as _, NodeId},
     clap_host::{
         self, MainThreadMessage, PluginDescriptor, PluginId, clack_host::bundle::PluginBundle,
     },
 };
-use generic_daw_utils::{HoleyVec, NoDebug};
+use generic_daw_utils::{EnumDispatcher, HoleyVec, NoDebug};
 use iced::{
     Alignment, Element, Function as _, Length, Subscription, Task, Theme, border,
     futures::TryFutureExt as _,
@@ -25,11 +27,12 @@ use iced::{
     widget::{
         button, column, mouse_area, radio, row,
         scrollable::{Direction, Scrollbar},
-        slider, svg, text, vertical_slider, vertical_space,
+        slider, svg, text, vertical_rule, vertical_slider, vertical_space,
     },
     window::Id,
 };
 use std::{
+    iter::once,
     path::Path,
     sync::{
         Arc, LazyLock, Mutex,
@@ -61,19 +64,20 @@ static REOPEN: LazyLock<svg::Handle> = LazyLock::new(|| {
 pub enum Message {
     ClapHost(ClapHostMessage),
     AudioGraph(Arc<Mutex<(AudioGraph, Box<Path>)>>),
-    ConnectSucceeded((NodeId, NodeId)),
     RequestConnect((NodeId, NodeId)),
+    ConnectSucceeded((NodeId, NodeId)),
     Disconnect((NodeId, NodeId)),
-    Select(NodeId),
+    SelectChannel(NodeId),
+    AddChannel,
     NodeVolumeChanged(NodeId, f32),
     NodePanChanged(NodeId, f32),
-    ToggleTrackEnabled(NodeId),
-    ToggleNodeEnabled(NodeId),
-    ToggleTrackSolo(usize),
+    NodeToggleEnabled(NodeId),
+    TrackToggleEnabled(NodeId),
+    TrackToggleSolo(usize),
+    RemoveTrack(usize),
     LoadSample(Box<Path>),
     LoadedSample(Option<Arc<InterleavedAudio>>),
     LoadedPlugin(PluginDescriptor, NoDebug<PluginBundle>),
-    RemoveTrack(usize),
     SeekTo(usize),
     SelectClip(usize, usize),
     UnselectClip(),
@@ -160,23 +164,28 @@ impl ArrangementView {
             Message::Disconnect((from, to)) => {
                 self.arrangement.disconnect(from, to);
             }
-            Message::Select(id) => {
+            Message::SelectChannel(id) => {
                 self.selected_channel = Some(id);
             }
+            Message::AddChannel => {
+                return Task::future(self.arrangement.add_channel())
+                    .and_then(Task::done)
+                    .map(Message::ConnectSucceeded);
+            }
             Message::NodeVolumeChanged(id, volume) => {
-                self.arrangement.node(id).volume.store(volume, Release);
+                self.arrangement.node(id).0.volume.store(volume, Release);
             }
             Message::NodePanChanged(id, pan) => {
-                self.arrangement.node(id).pan.store(pan, Release);
+                self.arrangement.node(id).0.pan.store(pan, Release);
             }
-            Message::ToggleTrackEnabled(id) => {
+            Message::NodeToggleEnabled(id) => {
+                self.arrangement.node(id).0.enabled.fetch_not(AcqRel);
+            }
+            Message::TrackToggleEnabled(id) => {
                 self.soloed_track = None;
-                return self.update(Message::ToggleNodeEnabled(id));
+                return self.update(Message::NodeToggleEnabled(id));
             }
-            Message::ToggleNodeEnabled(id) => {
-                self.arrangement.node(id).enabled.fetch_not(AcqRel);
-            }
-            Message::ToggleTrackSolo(track) => {
+            Message::TrackToggleSolo(track) => {
                 if self.soloed_track == Some(track) {
                     self.soloed_track = None;
                     self.arrangement
@@ -193,6 +202,15 @@ impl ArrangementView {
                         .enabled
                         .store(true, Release);
                     self.soloed_track = Some(track);
+                }
+            }
+            Message::RemoveTrack(track) => {
+                let id = self.arrangement.remove(track);
+                if let Some(id) = self.plugin_ids.remove(*id) {
+                    return self
+                        .clap_host
+                        .update(ClapHostMessage::Close(id))
+                        .map(Message::ClapHost);
                 }
             }
             Message::LoadSample(path) => {
@@ -212,7 +230,7 @@ impl ArrangementView {
                     track
                         .clips
                         .push(AudioClip::create(audio_file, self.meter.clone()));
-                    return Task::future(self.arrangement.push(track))
+                    return Task::future(self.arrangement.add_track(track))
                         .and_then(Task::done)
                         .map(Message::ConnectSucceeded);
                 }
@@ -230,7 +248,7 @@ impl ArrangementView {
                 self.plugin_ids.insert(*track.id(), plugin_id);
 
                 return Task::batch([
-                    Task::future(self.arrangement.push(track))
+                    Task::future(self.arrangement.add_track(track))
                         .and_then(Task::done)
                         .map(Message::ConnectSucceeded),
                     self.clap_host
@@ -240,15 +258,6 @@ impl ArrangementView {
                         )))))
                         .map(Message::ClapHost),
                 ]);
-            }
-            Message::RemoveTrack(track) => {
-                let id = self.arrangement.remove(track);
-                if let Some(id) = self.plugin_ids.remove(*id) {
-                    return self
-                        .clap_host
-                        .update(ClapHostMessage::Close(id))
-                        .map(Message::ClapHost);
-                }
             }
             Message::SeekTo(pos) => {
                 self.meter.sample.store(pos, Release);
@@ -365,7 +374,7 @@ impl ArrangementView {
                         let mut buttons = column![
                             mouse_area(
                                 radio("", enabled, Some(true), |_| {
-                                    Message::ToggleTrackEnabled(id)
+                                    Message::TrackToggleEnabled(id)
                                 })
                                 .style(if enabled {
                                     radio::default
@@ -374,7 +383,7 @@ impl ArrangementView {
                                 })
                                 .spacing(0.0)
                             )
-                            .on_right_press(Message::ToggleTrackSolo(idx)),
+                            .on_right_press(Message::TrackToggleSolo(idx)),
                             vertical_space(),
                             round_danger_button(styled_svg(X.clone()).height(LINE_HEIGHT))
                                 .padding(0.0)
@@ -466,103 +475,153 @@ impl ArrangementView {
         let connections = self
             .selected_channel
             .as_ref()
-            .map(|c| &self.arrangement.channel(*c).1);
+            .map(|c| &self.arrangement.node(*c).1);
+
+        let channel = |name: String, node: Arc<MixerNode>, ty: NodeType| {
+            let id = node.id();
+            let enabled = node.enabled.load(Acquire);
+            let volume = node.volume.load(Acquire);
+
+            button(
+                column![
+                    row![
+                        text(name).style(|t: &Theme| text::Style {
+                            color: Some(t.extended_palette().background.weak.text)
+                        }),
+                        radio("", enabled, Some(true), |_| {
+                            Message::NodeToggleEnabled(id)
+                        })
+                        .style(if enabled {
+                            radio::default
+                        } else {
+                            radio_secondary
+                        })
+                        .spacing(0.0)
+                    ]
+                    .spacing(5.0),
+                    mouse_area(Knob::new(
+                        -1.0..=1.0,
+                        0.0,
+                        node.pan.load(Acquire),
+                        enabled,
+                        Message::NodePanChanged.with(id)
+                    ))
+                    .on_double_click(Message::NodePanChanged(id, 0.0)),
+                    row![
+                        PeakMeter::new(move || node.get_l_r(), enabled),
+                        vertical_slider(0.0..=1.0, volume, Message::NodeVolumeChanged.with(id))
+                            .step(0.001)
+                            .style(if enabled {
+                                slider::default
+                            } else {
+                                slider_secondary
+                            })
+                    ]
+                    .spacing(5.0),
+                    connections.map_or_else(
+                        || button("").style(|_, _| button::Style::default()),
+                        |connections| {
+                            if ty == NodeType::Track || Some(id) == self.selected_channel {
+                                button("").style(|_, _| button::Style::default())
+                            } else if connections.contains(*id) {
+                                button("^")
+                                    .style(if enabled {
+                                        button::primary
+                                    } else {
+                                        button::secondary
+                                    })
+                                    .on_press(Message::Disconnect((
+                                        id,
+                                        self.selected_channel.unwrap(),
+                                    )))
+                            } else {
+                                button("v")
+                                    .style(if enabled {
+                                        button::primary
+                                    } else {
+                                        button::secondary
+                                    })
+                                    .on_press(Message::RequestConnect((
+                                        id,
+                                        self.selected_channel.unwrap(),
+                                    )))
+                            }
+                        },
+                    ),
+                ]
+                .spacing(5.0)
+                .align_x(Alignment::Center),
+            )
+            .padding(5.0)
+            .on_press(Message::SelectChannel(id))
+            .style(move |t, _| button::Style {
+                background: Some(
+                    if Some(id) == self.selected_channel {
+                        t.extended_palette().background.weak.color
+                    } else {
+                        t.extended_palette().background.weakest.color
+                    }
+                    .into(),
+                ),
+                border: border::width(1.0).color(t.extended_palette().background.strong.color),
+                ..button::Style::default()
+            })
+        };
 
         styled_scrollable_with_direction(
-            row(self.arrangement.channels().map(|(i, (node, _))| {
-                let node = node.clone();
-                let id = node.id();
-                let enabled = node.enabled.load(Acquire);
-                let volume = node.volume.load(Acquire);
-                let pan = node.pan.load(Acquire);
-
-                let channel = button(
-                    column![
-                        row![
-                            text(i).style(|t: &Theme| text::Style {
-                                color: Some(t.extended_palette().background.weak.text)
-                            }),
-                            radio("", enabled, Some(true), |_| {
-                                Message::ToggleNodeEnabled(id)
-                            })
-                            .style(if enabled {
-                                radio::default
-                            } else {
-                                radio_secondary
-                            })
-                            .spacing(0.0)
-                        ]
-                        .spacing(5.0),
-                        mouse_area(Knob::new(
-                            -1.0..=1.0,
-                            0.0,
-                            pan,
-                            enabled,
-                            Message::NodePanChanged.with(id)
-                        ))
-                        .on_double_click(Message::NodePanChanged(id, 0.0)),
-                        row![
-                            PeakMeter::new(move || node.get_l_r(), enabled),
-                            vertical_slider(0.0..=1.0, volume, Message::NodeVolumeChanged.with(id))
-                                .step(0.001)
-                                .style(if enabled {
-                                    slider::default
-                                } else {
-                                    slider_secondary
-                                })
-                        ]
-                        .spacing(5.0),
-                        connections.map_or_else(
-                            || button("").style(|_, _| button::Style::default()),
-                            |connections| {
-                                if Some(id) == self.selected_channel {
-                                    button("").style(|_, _| button::Style::default())
-                                } else if connections.contains(i) {
-                                    button("^")
-                                        .style(if enabled {
-                                            button::primary
-                                        } else {
-                                            button::secondary
-                                        })
-                                        .on_press(Message::Disconnect((
-                                            id,
-                                            self.selected_channel.unwrap(),
-                                        )))
-                                } else {
-                                    button("v")
-                                        .style(if enabled {
-                                            button::primary
-                                        } else {
-                                            button::secondary
-                                        })
-                                        .on_press(Message::RequestConnect((
-                                            id,
-                                            self.selected_channel.unwrap(),
-                                        )))
-                                }
-                            },
-                        ),
-                    ]
-                    .spacing(5.0)
-                    .align_x(Alignment::Center),
+            row(once(
+                channel(
+                    "M".to_owned(),
+                    self.arrangement.master().0.clone(),
+                    NodeType::Mixer,
                 )
-                .padding(5.0)
-                .on_press(Message::Select(id))
-                .style(move |t, _| button::Style {
-                    background: Some(
-                        if Some(id) == self.selected_channel {
-                            t.extended_palette().background.weak.color
-                        } else {
-                            t.extended_palette().background.weakest.color
-                        }
-                        .into(),
-                    ),
-                    border: border::width(1.0).color(t.extended_palette().background.strong.color),
-                    ..button::Style::default()
-                });
+                .into(),
+            )
+            .chain(once(vertical_rule(1).into()))
+            .chain({
+                let mut iter = self
+                    .arrangement
+                    .tracks()
+                    .iter()
+                    .enumerate()
+                    .map(|(i, track)| {
+                        let mut name = "T ".to_owned();
+                        name.push_str(itoa::Buffer::new().format(i + 1));
 
-                channel.into()
-            }))
+                        channel(name, track.node().clone(), NodeType::Track).into()
+                    })
+                    .peekable();
+
+                if iter.peek().is_some() {
+                    EnumDispatcher::A(iter.chain(once(vertical_rule(1).into())))
+                } else {
+                    EnumDispatcher::B(iter)
+                }
+            })
+            .chain({
+                let mut iter = self
+                    .arrangement
+                    .channels()
+                    .enumerate()
+                    .map(|(i, node)| {
+                        let mut name = "C ".to_owned();
+                        name.push_str(itoa::Buffer::new().format(i + 1));
+
+                        channel(name, node.clone(), NodeType::Mixer).into()
+                    })
+                    .peekable();
+
+                if iter.peek().is_some() {
+                    EnumDispatcher::A(iter.chain(once(vertical_rule(1).into())))
+                } else {
+                    EnumDispatcher::B(iter)
+                }
+            })
+            .chain(once(
+                styled_button(row!["+"].height(Length::Fill).align_y(Alignment::Center))
+                    .on_press(Message::AddChannel)
+                    .into(),
+            )))
             .spacing(5.0),
             Direction::Horizontal(Scrollbar::default()),
         )

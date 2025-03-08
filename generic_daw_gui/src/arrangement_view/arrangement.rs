@@ -16,10 +16,16 @@ use std::{
     },
 };
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NodeType {
+    Track,
+    Mixer,
+}
+
 #[derive(Debug)]
 pub struct Arrangement {
     tracks: Vec<Track>,
-    channels: HoleyVec<(Arc<MixerNode>, BitSet)>,
+    nodes: HoleyVec<(Arc<MixerNode>, BitSet, NodeType)>,
     master_node_id: NodeId,
 
     producer: Producer<DawCtxMessage>,
@@ -33,12 +39,15 @@ impl Arrangement {
 
         let master_node_id = master_node.id();
         let mut channels = HoleyVec::default();
-        channels.insert(*master_node_id, (master_node, BitSet::default()));
+        channels.insert(
+            *master_node_id,
+            (master_node, BitSet::default(), NodeType::Mixer),
+        );
 
         (
             Self {
                 tracks: Vec::new(),
-                channels,
+                nodes: channels,
                 master_node_id,
 
                 producer,
@@ -53,31 +62,46 @@ impl Arrangement {
         self.producer.push(DawCtxMessage::Reset).unwrap();
     }
 
+    pub fn master(&self) -> &(Arc<MixerNode>, BitSet, NodeType) {
+        self.node(self.master_node_id)
+    }
+
     pub fn tracks(&self) -> &[Track] {
         &self.tracks
     }
 
-    pub fn node(&self, id: NodeId) -> &MixerNode {
-        &self.channel(id).0
+    pub fn channels(&self) -> impl Iterator<Item = &Arc<MixerNode>> {
+        self.nodes
+            .values()
+            .filter_map(|(node, _, ty)| (*ty == NodeType::Mixer).then_some(node))
+            .skip(1)
     }
 
-    pub fn channels(&self) -> impl Iterator<Item = (usize, &(Arc<MixerNode>, BitSet))> {
-        self.channels.iter()
+    pub fn node(&self, id: NodeId) -> &(Arc<MixerNode>, BitSet, NodeType) {
+        &self.nodes[*id]
     }
 
-    pub fn channel(&self, id: NodeId) -> &(Arc<MixerNode>, BitSet) {
-        &self.channels[*id]
+    pub fn add_channel(&mut self) -> Receiver<(NodeId, NodeId)> {
+        let node = Arc::new(MixerNode::default());
+        let id = node.id();
+
+        self.nodes
+            .insert(*id, (node.clone(), BitSet::default(), NodeType::Mixer));
+        self.producer
+            .push(DawCtxMessage::Insert(node.into()))
+            .unwrap();
+        self.request_connect(self.master_node_id, id)
     }
 
-    #[must_use]
-    pub fn push(&mut self, track: impl Into<Track>) -> Receiver<(NodeId, NodeId)> {
+    pub fn add_track(&mut self, track: impl Into<Track>) -> Receiver<(NodeId, NodeId)> {
         let track = track.into();
         let id = track.id();
-        let node = track.node().clone();
 
         self.tracks.push(track.clone());
-        self.channels.insert(*id, (node, BitSet::default()));
-
+        self.nodes.insert(
+            *id,
+            (track.node().clone(), BitSet::default(), NodeType::Track),
+        );
         self.producer
             .push(DawCtxMessage::Insert(track.into()))
             .unwrap();
@@ -86,7 +110,7 @@ impl Arrangement {
 
     pub fn remove(&mut self, track: usize) -> NodeId {
         let id = self.tracks.remove(track).id();
-        self.channels.remove(*id);
+        self.nodes.remove(*id);
         self.producer.push(DawCtxMessage::Remove(id)).unwrap();
         id
     }
@@ -101,14 +125,14 @@ impl Arrangement {
     }
 
     pub fn connect_succeeded(&mut self, from: NodeId, to: NodeId) {
-        self.channels.get_mut(*to).unwrap().1.insert(*from);
+        self.nodes.get_mut(*to).unwrap().1.insert(*from);
     }
 
     pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
         self.producer
             .push(DawCtxMessage::Disconnect(from, to))
             .unwrap();
-        self.channels.get_mut(*to).unwrap().1.remove(*from);
+        self.nodes.get_mut(*to).unwrap().1.remove(*from);
     }
 
     pub fn clone_clip(&mut self, track: usize, clip: usize) {
