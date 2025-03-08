@@ -1,6 +1,6 @@
 use super::{LINE_HEIGHT, SWM};
 use iced::{
-    Border, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Text, Widget,
         layout::{Limits, Node},
@@ -9,6 +9,7 @@ use iced::{
         widget::{Tree, tree},
     },
     alignment::{Horizontal, Vertical},
+    border,
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::text::{LineHeight, Shaping, Wrapping},
 };
@@ -149,9 +150,7 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<Message> {
 
         let background = Quad {
             bounds,
-            border: Border::default()
-                .width(1.0)
-                .color(theme.extended_palette().background.strong.color),
+            border: border::width(1.0).color(theme.extended_palette().background.strong.color),
             ..Quad::default()
         };
 

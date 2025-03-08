@@ -6,6 +6,7 @@ mod clap_host_view;
 mod components;
 mod daw;
 mod file_tree;
+mod stylefns;
 mod trace;
 mod widget;
 

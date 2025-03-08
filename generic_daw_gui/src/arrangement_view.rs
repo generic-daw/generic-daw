@@ -1,9 +1,9 @@
 use crate::{
     clap_host_view::{ClapHostView, Message as ClapHostMessage},
     components::{
-        round_danger_button, styled_button, styled_container, styled_horizontal_scrollable,
-        styled_svg,
+        round_danger_button, styled_container, styled_scrollable_with_direction, styled_svg,
     },
+    stylefns::{radio_secondary, slider_secondary},
     widget::{
         Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale,
         AudioClip as AudioClipWidget, Knob, LINE_HEIGHT, PeakMeter, Track as TrackWidget,
@@ -19,10 +19,14 @@ use generic_daw_core::{
 };
 use generic_daw_utils::{HoleyVec, NoDebug};
 use iced::{
-    Alignment, Border, Element, Function as _, Length, Subscription, Task, Theme,
+    Alignment, Element, Function as _, Length, Subscription, Task, Theme, border,
     futures::TryFutureExt as _,
     mouse::Interaction,
-    widget::{button, column, mouse_area, radio, row, svg, text, vertical_slider, vertical_space},
+    widget::{
+        button, column, mouse_area, radio, row,
+        scrollable::{Direction, Scrollbar},
+        slider, svg, text, vertical_slider, vertical_space,
+    },
     window::Id,
 };
 use std::{
@@ -342,6 +346,7 @@ impl ArrangementView {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     fn arrangement(&self) -> Element<'_, Message> {
         ArrangementWidget::new(
             &self.meter,
@@ -362,6 +367,11 @@ impl ArrangementView {
                                 radio("", enabled, Some(true), |_| {
                                     Message::ToggleTrackEnabled(id)
                                 })
+                                .style(if enabled {
+                                    radio::default
+                                } else {
+                                    radio_secondary
+                                })
                                 .spacing(0.0)
                             )
                             .on_right_press(Message::ToggleTrackSolo(idx)),
@@ -375,7 +385,12 @@ impl ArrangementView {
 
                         if let Some(&id) = self.plugin_ids.get(*track.id()) {
                             buttons = buttons.push(
-                                styled_button(styled_svg(REOPEN.clone()).height(LINE_HEIGHT))
+                                button(styled_svg(REOPEN.clone()).height(LINE_HEIGHT))
+                                    .style(if enabled {
+                                        button::primary
+                                    } else {
+                                        button::secondary
+                                    })
                                     .padding(0.0)
                                     .on_press(Message::ClapHost(ClapHostMessage::MainThread(
                                         id,
@@ -446,13 +461,14 @@ impl ArrangementView {
         .into()
     }
 
+    #[expect(clippy::too_many_lines)]
     fn mixer(&self) -> Element<'_, Message> {
         let connections = self
             .selected_channel
             .as_ref()
             .map(|c| &self.arrangement.channel(*c).1);
 
-        styled_horizontal_scrollable(
+        styled_scrollable_with_direction(
             row(self.arrangement.channels().map(|(i, (node, _))| {
                 let node = node.clone();
                 let id = node.id();
@@ -469,6 +485,11 @@ impl ArrangementView {
                             radio("", enabled, Some(true), |_| {
                                 Message::ToggleNodeEnabled(id)
                             })
+                            .style(if enabled {
+                                radio::default
+                            } else {
+                                radio_secondary
+                            })
                             .spacing(0.0)
                         ]
                         .spacing(5.0),
@@ -484,6 +505,11 @@ impl ArrangementView {
                             PeakMeter::new(move || node.get_l_r(), enabled),
                             vertical_slider(0.0..=1.0, volume, Message::NodeVolumeChanged.with(id))
                                 .step(0.001)
+                                .style(if enabled {
+                                    slider::default
+                                } else {
+                                    slider_secondary
+                                })
                         ]
                         .spacing(5.0),
                         connections.map_or_else(
@@ -492,15 +518,27 @@ impl ArrangementView {
                                 if Some(id) == self.selected_channel {
                                     button("").style(|_, _| button::Style::default())
                                 } else if connections.contains(i) {
-                                    styled_button("^").on_press(Message::Disconnect((
-                                        id,
-                                        self.selected_channel.unwrap(),
-                                    )))
+                                    button("^")
+                                        .style(if enabled {
+                                            button::primary
+                                        } else {
+                                            button::secondary
+                                        })
+                                        .on_press(Message::Disconnect((
+                                            id,
+                                            self.selected_channel.unwrap(),
+                                        )))
                                 } else {
-                                    styled_button("v").on_press(Message::RequestConnect((
-                                        id,
-                                        self.selected_channel.unwrap(),
-                                    )))
+                                    button("v")
+                                        .style(if enabled {
+                                            button::primary
+                                        } else {
+                                            button::secondary
+                                        })
+                                        .on_press(Message::RequestConnect((
+                                            id,
+                                            self.selected_channel.unwrap(),
+                                        )))
                                 }
                             },
                         ),
@@ -519,15 +557,14 @@ impl ArrangementView {
                         }
                         .into(),
                     ),
-                    border: Border::default()
-                        .width(2.0)
-                        .color(t.extended_palette().background.strongest.color),
+                    border: border::width(1.0).color(t.extended_palette().background.strong.color),
                     ..button::Style::default()
                 });
 
                 channel.into()
             }))
             .spacing(5.0),
+            Direction::Horizontal(Scrollbar::default()),
         )
         .width(Length::Fill)
         .into()

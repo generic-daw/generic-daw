@@ -1,8 +1,7 @@
 use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT, SWM};
 use generic_daw_core::{Meter, Position};
 use iced::{
-    Background, Border, Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme,
-    Vector,
+    Background, Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Renderer as _, Shell,
         layout::{Layout, Limits, Node},
@@ -11,6 +10,7 @@ use iced::{
         widget::{Tree, Widget, tree},
     },
     alignment::{Horizontal, Vertical},
+    border,
     keyboard::Modifiers,
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::text::{LineHeight, Shaping, Wrapping},
@@ -626,9 +626,7 @@ where
         renderer.fill_quad(
             Quad {
                 bounds,
-                border: Border::default()
-                    .width(1.0)
-                    .color(theme.extended_palette().background.strong.color),
+                border: border::width(1.0).color(theme.extended_palette().background.strong.color),
                 ..Quad::default()
             },
             Background::Color(Color::TRANSPARENT),

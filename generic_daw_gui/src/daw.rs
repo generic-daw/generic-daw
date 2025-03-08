@@ -1,6 +1,6 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
-    components::{styled_button, styled_pick_list, styled_svg, styled_vertical_scrollable},
+    components::{styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg},
     file_tree::FileTree,
     widget::{BpmInput, LINE_HEIGHT, VSplit},
 };
@@ -14,7 +14,11 @@ use iced::{
     Element, Event, Subscription, Task, Theme,
     event::{self, Status},
     keyboard,
-    widget::{column, horizontal_space, row, svg, toggler, vertical_space},
+    widget::{
+        column, horizontal_space, row,
+        scrollable::{Direction, Scrollbar},
+        svg, toggler, vertical_space,
+    },
     window::{self, Id},
 };
 use rfd::{AsyncFileDialog, FileHandle};
@@ -225,7 +229,10 @@ impl Daw {
             .spacing(20)
             .align_y(Center),
             VSplit::new(
-                styled_vertical_scrollable(self.file_tree.view().0),
+                styled_scrollable_with_direction(
+                    self.file_tree.view().0,
+                    Direction::Vertical(Scrollbar::default()),
+                ),
                 self.arrangement.view().map(Message::Arrangement),
                 self.split_at,
                 Message::SplitAt
