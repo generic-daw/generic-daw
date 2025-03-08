@@ -46,7 +46,7 @@ impl ClapHostView {
                     Task::none()
                 } else {
                     self.plugins.insert(*id, gui);
-                    Task::done(Message::MainThread(id, MainThreadMessage::GuiRequestShow))
+                    self.update(Message::MainThread(id, MainThreadMessage::GuiRequestShow))
                 };
 
                 let stream = Task::stream(gui_receiver).map(Message::MainThread.with(id));
@@ -64,6 +64,8 @@ impl ClapHostView {
 
                 self.plugins.insert(*id, gui);
                 self.windows.insert(*id, window_id);
+
+                return self.update(Message::MainThread(id, MainThreadMessage::TickTimers));
             }
             Message::Resized((window_id, size)) => {
                 if let Some(id) = self.windows.position(&window_id) {
@@ -93,13 +95,6 @@ impl ClapHostView {
         }
 
         Task::none()
-    }
-
-    pub fn subscription() -> Subscription<Message> {
-        Subscription::batch([
-            resize_events().map(Message::Resized),
-            close_requests().map(Message::CloseRequested),
-        ])
     }
 
     fn main_thread_message(&mut self, id: PluginId, msg: MainThreadMessage) -> Task<Message> {
@@ -137,13 +132,7 @@ impl ClapHostView {
                     Message::Shown(window_id, Arc::new(gui))
                 });
 
-                return spawn
-                    .discard()
-                    .chain(embed)
-                    .chain(Task::done(Message::MainThread(
-                        id,
-                        MainThreadMessage::TickTimers,
-                    )));
+                return spawn.discard().chain(embed);
             }
             MainThreadMessage::GuiClosed => {
                 self.plugins.remove(*id).unwrap();
@@ -185,5 +174,12 @@ impl ClapHostView {
         self.windows
             .position(&window)
             .map(|id| self.plugins[id].name().to_owned())
+    }
+
+    pub fn subscription() -> Subscription<Message> {
+        Subscription::batch([
+            resize_events().map(Message::Resized),
+            close_requests().map(Message::CloseRequested),
+        ])
     }
 }

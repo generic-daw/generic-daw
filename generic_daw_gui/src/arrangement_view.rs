@@ -19,7 +19,7 @@ use generic_daw_core::{
 };
 use generic_daw_utils::{HoleyVec, NoDebug};
 use iced::{
-    Alignment, Element, Function as _, Length, Task,
+    Alignment, Element, Function as _, Length, Subscription, Task,
     futures::TryFutureExt as _,
     mouse::Interaction,
     widget::{
@@ -121,7 +121,7 @@ impl ArrangementView {
                 arrangement,
                 meter: meter.clone(),
 
-                tab: Tab::Mixer,
+                tab: Tab::Arrangement,
                 loading: 0,
 
                 position: ArrangementPosition::default(),
@@ -539,5 +539,9 @@ impl ArrangementView {
 
     pub fn title(&self, window: Id) -> Option<String> {
         self.clap_host.title(window)
+    }
+
+    pub fn subscription() -> Subscription<Message> {
+        ClapHostView::subscription().map(Message::ClapHost)
     }
 }

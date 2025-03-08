@@ -1,6 +1,5 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage},
-    clap_host_view::ClapHostView,
     components::{styled_button, styled_pick_list, styled_svg, styled_vertical_scrollable},
     file_tree::FileTree,
     widget::{BpmInput, LINE_HEIGHT, VSplit},
@@ -110,10 +109,10 @@ impl Daw {
             Message::LoadPlugin(name) => {
                 let bundle = self.plugins[&name].clone();
 
-                return Task::done(Message::Arrangement(ArrangementMessage::LoadedPlugin(
-                    name,
-                    NoDebug(bundle),
-                )));
+                return self
+                    .arrangement
+                    .update(ArrangementMessage::LoadedPlugin(name, NoDebug(bundle)))
+                    .map(Message::Arrangement);
             }
             Message::SamplesFileDialog => {
                 return Task::future(AsyncFileDialog::new().pick_files()).and_then(|paths| {
@@ -231,11 +230,23 @@ impl Daw {
         .into()
     }
 
+    pub fn theme(&self, _window: Id) -> Theme {
+        self.theme.clone()
+    }
+
+    pub fn title(&self, window: Id) -> String {
+        if window == self.main_window_id {
+            String::from("Generic DAW")
+        } else {
+            self.arrangement
+                .title(window)
+                .unwrap_or_else(|| String::from("Generic DAW"))
+        }
+    }
+
     pub fn subscription() -> Subscription<Message> {
         Subscription::batch([
-            ClapHostView::subscription()
-                .map(ArrangementMessage::ClapHost)
-                .map(Message::Arrangement),
+            ArrangementView::subscription().map(Message::Arrangement),
             event::listen_with(|e, s, _| match s {
                 Status::Ignored => match e {
                     Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
@@ -261,19 +272,5 @@ impl Daw {
                 Status::Captured => None,
             }),
         ])
-    }
-
-    pub fn theme(&self, _window: Id) -> Theme {
-        self.theme.clone()
-    }
-
-    pub fn title(&self, window: Id) -> String {
-        if window == self.main_window_id {
-            String::from("Generic DAW")
-        } else {
-            self.arrangement
-                .title(window)
-                .unwrap_or_else(|| String::from("Generic DAW"))
-        }
     }
 }
