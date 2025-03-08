@@ -1,14 +1,16 @@
-use super::SWM;
+use super::{LINE_HEIGHT, SWM};
 use iced::{
-    Border, Element, Event, Length, Padding, Point, Rectangle, Renderer, Size, Theme,
+    Border, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
-        Clipboard, Layout, Renderer as _, Shell, Widget,
-        layout::{self, Limits, Node},
+        Clipboard, Layout, Renderer as _, Shell, Text, Widget,
+        layout::{Limits, Node},
         renderer::{Quad, Style},
+        text::Renderer as _,
         widget::{Tree, tree},
     },
+    alignment::{Horizontal, Vertical},
     mouse::{self, Cursor, Interaction, ScrollDelta},
-    widget::Text,
+    widget::text::{LineHeight, Shaping, Wrapping},
 };
 use std::{
     fmt::{Debug, Formatter},
@@ -31,14 +33,13 @@ impl State {
     }
 }
 
-pub struct BpmInput<'a, Message> {
-    inner: Element<'a, Message>,
+pub struct BpmInput<Message> {
     range: RangeInclusive<u16>,
     current: u16,
     f: fn(u16) -> Message,
 }
 
-impl<Message> Debug for BpmInput<'_, Message> {
+impl<Message> Debug for BpmInput<Message> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BpmInput")
             .field("current", &self.current)
@@ -46,13 +47,9 @@ impl<Message> Debug for BpmInput<'_, Message> {
     }
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for BpmInput<'_, Message> {
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.inner)]
-    }
-
+impl<Message> Widget<Message, Theme, Renderer> for BpmInput<Message> {
     fn size(&self) -> Size<Length> {
-        Size::new(Length::Shrink, Length::Shrink)
+        Size::new(Length::Fixed(39.0), Length::Fixed(LINE_HEIGHT + 10.0))
     }
 
     fn tag(&self) -> tree::Tag {
@@ -63,18 +60,8 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<'_, Message> {
         tree::State::new(State::new(self.current))
     }
 
-    fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        layout::padded(
-            limits,
-            Length::Shrink,
-            Length::Shrink,
-            Padding::new(5.0),
-            |limits| {
-                self.inner
-                    .as_widget()
-                    .layout(&mut tree.children[0], renderer, limits)
-            },
-        )
+    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
+        Node::new(Size::new(39.0, LINE_HEIGHT + 10.0))
     }
 
     fn update(
@@ -150,13 +137,13 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<'_, Message> {
 
     fn draw(
         &self,
-        tree: &Tree,
+        _tree: &Tree,
         renderer: &mut Renderer,
         theme: &Theme,
-        style: &Style,
+        _style: &Style,
         layout: Layout<'_>,
-        cursor: Cursor,
-        viewport: &Rectangle,
+        _cursor: Cursor,
+        _viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
 
@@ -170,14 +157,23 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<'_, Message> {
 
         renderer.fill_quad(background, theme.extended_palette().background.weak.color);
 
-        self.inner.as_widget().draw(
-            &tree.children[0],
-            renderer,
-            theme,
-            style,
-            layout.children().next().unwrap(),
-            cursor,
-            viewport,
+        let text = Text {
+            content: itoa::Buffer::new().format(self.current).to_owned(),
+            bounds: Size::new(f32::INFINITY, 0.0),
+            size: renderer.default_size(),
+            line_height: LineHeight::default(),
+            font: renderer.default_font(),
+            horizontal_alignment: Horizontal::Left,
+            vertical_alignment: Vertical::Top,
+            shaping: Shaping::Basic,
+            wrapping: Wrapping::None,
+        };
+
+        renderer.fill_text(
+            text,
+            bounds.position() + Vector::new(5.0, 5.0),
+            theme.extended_palette().background.weak.text,
+            bounds,
         );
     }
 
@@ -198,24 +194,17 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<'_, Message> {
     }
 }
 
-impl<Message> BpmInput<'_, Message> {
+impl<Message> BpmInput<Message> {
     pub fn new(current: u16, range: RangeInclusive<u16>, f: fn(u16) -> Message) -> Self {
-        let inner = Text::new(current).width(29.0).into();
-
-        Self {
-            inner,
-            range,
-            current,
-            f,
-        }
+        Self { range, current, f }
     }
 }
 
-impl<'a, Message> From<BpmInput<'a, Message>> for Element<'a, Message>
+impl<'a, Message> From<BpmInput<Message>> for Element<'a, Message>
 where
     Message: 'a,
 {
-    fn from(knob: BpmInput<'a, Message>) -> Self {
+    fn from(knob: BpmInput<Message>) -> Self {
         Self::new(knob)
     }
 }
