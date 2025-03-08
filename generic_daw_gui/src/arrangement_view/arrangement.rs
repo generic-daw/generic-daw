@@ -18,6 +18,7 @@ use std::{
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NodeType {
+    Master,
     Track,
     Mixer,
 }
@@ -41,7 +42,7 @@ impl Arrangement {
         let mut channels = HoleyVec::default();
         channels.insert(
             *master_node_id,
-            (master_node, BitSet::default(), NodeType::Mixer),
+            (master_node, BitSet::default(), NodeType::Master),
         );
 
         (
@@ -74,7 +75,6 @@ impl Arrangement {
         self.nodes
             .values()
             .filter_map(|(node, _, ty)| (*ty == NodeType::Mixer).then_some(node))
-            .skip(1)
     }
 
     pub fn node(&self, id: NodeId) -> &(Arc<MixerNode>, BitSet, NodeType) {

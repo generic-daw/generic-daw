@@ -472,12 +472,13 @@ impl ArrangementView {
 
     #[expect(clippy::too_many_lines)]
     fn mixer(&self) -> Element<'_, Message> {
-        let connections = self
-            .selected_channel
-            .as_ref()
-            .map(|c| &self.arrangement.node(*c).1);
-
-        let channel = |name: String, node: Arc<MixerNode>, ty: NodeType| {
+        fn channel<'a>(
+            selected_channel: Option<NodeId>,
+            name: String,
+            node: Arc<MixerNode>,
+            toggle: impl Fn(bool, NodeId) -> Element<'a, Message>,
+            connect: impl Fn(bool, NodeId) -> Element<'a, Message>,
+        ) -> Element<'a, Message> {
             let id = node.id();
             let enabled = node.enabled.load(Acquire);
             let volume = node.volume.load(Acquire);
@@ -488,15 +489,7 @@ impl ArrangementView {
                         text(name).style(|t: &Theme| text::Style {
                             color: Some(t.extended_palette().background.weak.text)
                         }),
-                        radio("", enabled, Some(true), |_| {
-                            Message::NodeToggleEnabled(id)
-                        })
-                        .style(if enabled {
-                            radio::default
-                        } else {
-                            radio_secondary
-                        })
-                        .spacing(0.0)
+                        toggle(enabled, id)
                     ]
                     .spacing(5.0),
                     mouse_area(Knob::new(
@@ -518,36 +511,7 @@ impl ArrangementView {
                             })
                     ]
                     .spacing(5.0),
-                    connections.map_or_else(
-                        || button("").style(|_, _| button::Style::default()),
-                        |connections| {
-                            if ty == NodeType::Track || Some(id) == self.selected_channel {
-                                button("").style(|_, _| button::Style::default())
-                            } else if connections.contains(*id) {
-                                button("^")
-                                    .style(if enabled {
-                                        button::primary
-                                    } else {
-                                        button::secondary
-                                    })
-                                    .on_press(Message::Disconnect((
-                                        id,
-                                        self.selected_channel.unwrap(),
-                                    )))
-                            } else {
-                                button("v")
-                                    .style(if enabled {
-                                        button::primary
-                                    } else {
-                                        button::secondary
-                                    })
-                                    .on_press(Message::RequestConnect((
-                                        id,
-                                        self.selected_channel.unwrap(),
-                                    )))
-                            }
-                        },
-                    ),
+                    connect(enabled, id)
                 ]
                 .spacing(5.0)
                 .align_x(Alignment::Center),
@@ -556,7 +520,7 @@ impl ArrangementView {
             .on_press(Message::SelectChannel(id))
             .style(move |t, _| button::Style {
                 background: Some(
-                    if Some(id) == self.selected_channel {
+                    if Some(id) == selected_channel {
                         t.extended_palette().background.weak.color
                     } else {
                         t.extended_palette().background.weakest.color
@@ -566,17 +530,32 @@ impl ArrangementView {
                 border: border::width(1.0).color(t.extended_palette().background.strong.color),
                 ..button::Style::default()
             })
-        };
+            .into()
+        }
+
+        let selected_channel = self.selected_channel;
+        let connections = self
+            .selected_channel
+            .as_ref()
+            .map(|c| self.arrangement.node(*c));
 
         styled_scrollable_with_direction(
-            row(once(
-                channel(
-                    "M".to_owned(),
-                    self.arrangement.master().0.clone(),
-                    NodeType::Mixer,
-                )
-                .into(),
-            )
+            row(once(channel(
+                selected_channel,
+                "M".to_owned(),
+                self.arrangement.master().0.clone(),
+                |enabled, id| {
+                    radio("", enabled, Some(true), |_| Message::NodeToggleEnabled(id))
+                        .style(if enabled {
+                            radio::default
+                        } else {
+                            radio_secondary
+                        })
+                        .spacing(0.0)
+                        .into()
+                },
+                |_, _| button("").style(|_, _| button::Style::default()).into(),
+            ))
             .chain(once(vertical_rule(1).into()))
             .chain({
                 let mut iter = self
@@ -588,7 +567,27 @@ impl ArrangementView {
                         let mut name = "T ".to_owned();
                         name.push_str(itoa::Buffer::new().format(i + 1));
 
-                        channel(name, track.node().clone(), NodeType::Track).into()
+                        channel(
+                            selected_channel,
+                            name,
+                            track.node().clone(),
+                            |enabled, id| {
+                                mouse_area(
+                                    radio("", enabled, Some(true), |_| {
+                                        Message::TrackToggleEnabled(id)
+                                    })
+                                    .style(if enabled {
+                                        radio::default
+                                    } else {
+                                        radio_secondary
+                                    })
+                                    .spacing(0.0),
+                                )
+                                .on_right_press(Message::TrackToggleSolo(i))
+                                .into()
+                            },
+                            |_, _| button("").style(|_, _| button::Style::default()).into(),
+                        )
                     })
                     .peekable();
 
@@ -607,7 +606,57 @@ impl ArrangementView {
                         let mut name = "C ".to_owned();
                         name.push_str(itoa::Buffer::new().format(i + 1));
 
-                        channel(name, node.clone(), NodeType::Mixer).into()
+                        channel(
+                            selected_channel,
+                            name,
+                            node.clone(),
+                            |enabled, id| {
+                                radio("", enabled, Some(true), |_| Message::NodeToggleEnabled(id))
+                                    .style(if enabled {
+                                        radio::default
+                                    } else {
+                                        radio_secondary
+                                    })
+                                    .spacing(0.0)
+                                    .into()
+                            },
+                            |enabled, id| {
+                                connections
+                                    .map_or_else(
+                                        || button("").style(|_, _| button::Style::default()),
+                                        |(_, connections, ty)| {
+                                            if *ty == NodeType::Master
+                                                || Some(id) == self.selected_channel
+                                            {
+                                                button("").style(|_, _| button::Style::default())
+                                            } else if connections.contains(*id) {
+                                                button("^")
+                                                    .style(if enabled {
+                                                        button::primary
+                                                    } else {
+                                                        button::secondary
+                                                    })
+                                                    .on_press(Message::Disconnect((
+                                                        id,
+                                                        self.selected_channel.unwrap(),
+                                                    )))
+                                            } else {
+                                                button("v")
+                                                    .style(if enabled {
+                                                        button::primary
+                                                    } else {
+                                                        button::secondary
+                                                    })
+                                                    .on_press(Message::RequestConnect((
+                                                        id,
+                                                        self.selected_channel.unwrap(),
+                                                    )))
+                                            }
+                                        },
+                                    )
+                                    .into()
+                            },
+                        )
                     })
                     .peekable();
 
