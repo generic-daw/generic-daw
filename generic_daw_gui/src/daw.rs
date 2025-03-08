@@ -1,5 +1,5 @@
 use crate::{
-    arrangement_view::{ArrangementView, Message as ArrangementMessage},
+    arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
     components::{styled_button, styled_pick_list, styled_svg, styled_vertical_scrollable},
     file_tree::FileTree,
     widget::{BpmInput, LINE_HEIGHT, VSplit},
@@ -57,6 +57,7 @@ pub enum Message {
     NumeratorChanged(Numerator),
     DenominatorChanged(Denominator),
     ToggleMetronome,
+    Tab(Tab),
     SplitAt(f32),
 }
 
@@ -156,6 +157,7 @@ impl Daw {
             Message::ToggleMetronome => {
                 self.meter.metronome.fetch_not(AcqRel);
             }
+            Message::Tab(tab) => self.arrangement.change_tab(tab),
             Message::SplitAt(split_at) => self.split_at = split_at.min(0.5),
         }
 
@@ -204,6 +206,10 @@ impl Daw {
                 toggler(self.meter.metronome.load(Acquire))
                     .label("Metronome")
                     .on_toggle(|_| Message::ToggleMetronome),
+                row![
+                    styled_button("Arrangement").on_press(Message::Tab(Tab::Arrangement)),
+                    styled_button("Mixer").on_press(Message::Tab(Tab::Mixer))
+                ],
                 horizontal_space(),
                 styled_pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
                 styled_pick_list(

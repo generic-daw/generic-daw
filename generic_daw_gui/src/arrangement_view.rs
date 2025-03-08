@@ -19,12 +19,10 @@ use generic_daw_core::{
 };
 use generic_daw_utils::{HoleyVec, NoDebug};
 use iced::{
-    Alignment, Element, Function as _, Length, Subscription, Task,
+    Alignment, Border, Element, Function as _, Length, Subscription, Task, Theme,
     futures::TryFutureExt as _,
     mouse::Interaction,
-    widget::{
-        column, container, mouse_area, radio, row, svg, text, vertical_slider, vertical_space,
-    },
+    widget::{button, column, mouse_area, radio, row, svg, text, vertical_slider, vertical_space},
     window::Id,
 };
 use std::{
@@ -68,8 +66,6 @@ pub enum Message {
     ToggleTrackEnabled(NodeId),
     ToggleNodeEnabled(NodeId),
     ToggleTrackSolo(usize),
-    Arrangement,
-    Mixer,
     LoadSample(Box<Path>),
     LoadedSample(Option<Arc<InterleavedAudio>>),
     LoadedPlugin(PluginDescriptor, NoDebug<PluginBundle>),
@@ -86,7 +82,8 @@ pub enum Message {
     Export(Box<Path>),
 }
 
-enum Tab {
+#[derive(Clone, Copy, Debug)]
+pub enum Tab {
     Arrangement,
     Mixer,
 }
@@ -194,8 +191,6 @@ impl ArrangementView {
                     self.soloed_track = Some(track);
                 }
             }
-            Message::Arrangement => self.tab = Tab::Arrangement,
-            Message::Mixer => self.tab = Tab::Mixer,
             Message::LoadSample(path) => {
                 self.loading += 1;
                 let meter = self.meter.clone();
@@ -338,15 +333,6 @@ impl ArrangementView {
             Tab::Mixer => self.mixer(),
         };
 
-        let element = column![
-            row![
-                styled_button("arrangement").on_press(Message::Arrangement),
-                styled_button("mixer").on_press(Message::Mixer)
-            ],
-            element
-        ]
-        .into();
-
         if self.loading > 0 {
             mouse_area(element)
                 .interaction(Interaction::Progress)
@@ -474,19 +460,18 @@ impl ArrangementView {
                 let volume = node.volume.load(Acquire);
                 let pan = node.pan.load(Acquire);
 
-                let mut container = container(
+                let channel = button(
                     column![
-                        styled_button(
-                            row![
-                                text(i),
-                                radio("", enabled, Some(true), |_| {
-                                    Message::ToggleNodeEnabled(id)
-                                })
-                                .spacing(0.0)
-                            ]
-                            .spacing(5.0)
-                        )
-                        .on_press(Message::Select(id)),
+                        row![
+                            text(i).style(|t: &Theme| text::Style {
+                                color: Some(t.extended_palette().background.weak.text)
+                            }),
+                            radio("", enabled, Some(true), |_| {
+                                Message::ToggleNodeEnabled(id)
+                            })
+                            .spacing(0.0)
+                        ]
+                        .spacing(5.0),
                         mouse_area(Knob::new(
                             -1.0..=1.0,
                             0.0,
@@ -502,10 +487,10 @@ impl ArrangementView {
                         ]
                         .spacing(5.0),
                         connections.map_or_else(
-                            || styled_button("-"),
+                            || button("").style(|_, _| button::Style::default()),
                             |connections| {
                                 if Some(id) == self.selected_channel {
-                                    styled_button("-")
+                                    button("").style(|_, _| button::Style::default())
                                 } else if connections.contains(i) {
                                     styled_button("^").on_press(Message::Disconnect((
                                         id,
@@ -523,13 +508,24 @@ impl ArrangementView {
                     .spacing(5.0)
                     .align_x(Alignment::Center),
                 )
-                .padding(5.0);
+                .padding(5.0)
+                .on_press(Message::Select(id))
+                .style(move |t, _| button::Style {
+                    background: Some(
+                        if Some(id) == self.selected_channel {
+                            t.extended_palette().background.weak.color
+                        } else {
+                            t.extended_palette().background.weakest.color
+                        }
+                        .into(),
+                    ),
+                    border: Border::default()
+                        .width(2.0)
+                        .color(t.extended_palette().background.strongest.color),
+                    ..button::Style::default()
+                });
 
-                if Some(id) == self.selected_channel {
-                    container = container.style(container::dark);
-                }
-
-                container.into()
+                channel.into()
             }))
             .spacing(5.0),
         )
@@ -543,5 +539,9 @@ impl ArrangementView {
 
     pub fn subscription() -> Subscription<Message> {
         ClapHostView::subscription().map(Message::ClapHost)
+    }
+
+    pub fn change_tab(&mut self, tab: Tab) {
+        self.tab = tab;
     }
 }
