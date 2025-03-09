@@ -1,12 +1,11 @@
-use crate::{PluginId, host::Host, timer_ext::TimerExt};
-use clack_extensions::{
-    gui::{GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow},
-    timer::PluginTimer,
+use crate::{PluginId, host::Host};
+use clack_extensions::gui::{
+    GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow,
 };
 use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
 use raw_window_handle::RawWindowHandle;
-use std::{cell::RefCell, rc::Rc};
+use std::time::Duration;
 
 #[derive(Debug)]
 pub struct GuiExt {
@@ -56,25 +55,18 @@ impl GuiExt {
         self.id
     }
 
-    #[must_use]
-    pub fn get_size(&mut self) -> Option<[u32; 2]> {
-        self.plugin_gui
-            .get_size(&mut self.instance.plugin_handle())
-            .map(|size| [size.width, size.height])
-    }
-
     pub fn call_on_main_thread_callback(&mut self) {
         self.instance.call_on_main_thread_callback();
     }
 
-    pub fn plugin_handle(&mut self) -> PluginMainThreadHandle<'_> {
-        self.instance.plugin_handle()
-    }
-
     #[must_use]
-    pub fn timers(&self) -> Option<(Rc<RefCell<TimerExt>>, PluginTimer)> {
-        self.instance
-            .access_handler(|h| h.timer_support.map(|ext| (h.timers.clone(), ext)))
+    pub fn tick_timers(&mut self) -> Option<Duration> {
+        let (timers, timer_ext) = self
+            .instance
+            .access_handler(|mt| mt.timer_support.map(|ext| (mt.timers.clone(), ext)))?;
+        timers
+            .borrow_mut()
+            .tick_timers(&timer_ext, &mut self.instance.plugin_handle())
     }
 
     #[must_use]

@@ -152,16 +152,10 @@ impl ClapHostView {
             }
             MainThreadMessage::TickTimers => {
                 if self.windows.contains(*id) {
-                    if let Some((timers, timer_ext)) = self.plugins[*id].timers() {
-                        let mut instance = self.plugins.get_mut(*id).unwrap().plugin_handle();
-
-                        if let Some(sleep) =
-                            timers.borrow_mut().tick_timers(&timer_ext, &mut instance)
-                        {
-                            return Task::future(tokio::time::sleep(sleep))
-                                .map(|()| MainThreadMessage::TickTimers)
-                                .map(Message::MainThread.with(id));
-                        }
+                    if let Some(sleep) = self.plugins.get_mut(*id).unwrap().tick_timers() {
+                        return Task::future(tokio::time::sleep(sleep))
+                            .map(|()| MainThreadMessage::TickTimers)
+                            .map(Message::MainThread.with(id));
                     }
                 }
             }

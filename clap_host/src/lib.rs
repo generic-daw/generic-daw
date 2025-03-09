@@ -160,7 +160,7 @@ pub fn init(
     );
 
     let gui = GuiExt::new(
-        instance.access_handler(|h| h.gui).unwrap(),
+        instance.access_handler(|mt| mt.gui).unwrap(),
         instance,
         descriptor.name.clone(),
         id,
