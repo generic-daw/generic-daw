@@ -1,9 +1,9 @@
-use core::f32;
+use crate::stylefns::button_with_enabled;
 use iced::{
     Element, Length, Theme,
-    border::{self, Radius},
+    border::Radius,
     widget::{
-        Button, Container, PickList, Scrollable, Svg, button, container, pick_list,
+        Button, PickList, Scrollable, Svg, button, pick_list,
         scrollable::{self, Direction},
         svg,
     },
@@ -11,21 +11,7 @@ use iced::{
 use std::borrow::Borrow;
 
 pub fn styled_button<'a, Message>(content: impl Into<Element<'a, Message>>) -> Button<'a, Message> {
-    button(content).style(|t, s| {
-        let mut style = button::primary(t, s);
-        style.border.radius = Radius::default();
-        style
-    })
-}
-
-pub fn round_danger_button<'a, Message>(
-    content: impl Into<Element<'a, Message>>,
-) -> Button<'a, Message> {
-    button(content).style(|t, s| {
-        let mut style = button::danger(t, s);
-        style.border.radius = Radius::new(f32::INFINITY);
-        style
-    })
+    button(content).style(|t, s| button_with_enabled(t, s, true))
 }
 
 pub fn styled_pick_list<'a, T, L, V, Message>(
@@ -68,15 +54,4 @@ pub fn styled_svg<'a>(handle: impl Into<svg::Handle>) -> Svg<'a> {
         })
         .width(Length::Shrink)
         .height(Length::Shrink)
-}
-
-pub fn styled_container<'a, Message>(
-    content: impl Into<Element<'a, Message>>,
-) -> Container<'a, Message> {
-    container(content).style(|t: &Theme| {
-        let mut style = container::transparent(t);
-        style.background = Some(t.extended_palette().background.weak.color.into());
-        style.border = border::width(1.0).color(t.extended_palette().background.strong.color);
-        style
-    })
 }
