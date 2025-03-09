@@ -2,9 +2,11 @@ use crate::NodeId;
 use std::{fmt::Debug, ops::Deref};
 
 pub trait AudioGraphNodeImpl: Debug + Send {
-    /// `buf` contains the summed data from all dependencies in the graph
+    /// process audio data into `buf`
+    ///
+    /// `buf` contains the summed data from all dependencies in the graph.
     fn fill_buf(&self, buf: &mut [f32]);
-    /// get the `NodeId` of the node
+    /// get the unique `NodeId` of the node
     fn id(&self) -> NodeId;
     /// reset the node to a pre-playback state
     fn reset(&self) {}

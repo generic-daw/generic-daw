@@ -21,16 +21,19 @@ impl DawCtx {
         let (ui_producer, consumer) = RingBuffer::new(16);
 
         let meter = Arc::new(Meter::new(sample_rate, buffer_size));
-        let master_node = Arc::<MixerNode>::default();
-        let master = Master::new(meter.clone(), master_node.clone());
+        let node = Arc::<MixerNode>::default();
+        let master = Master::new(meter.clone(), node.clone());
+
+        let mut audio_graph = AudioGraph::default();
+        audio_graph.insert(master.into());
 
         let audio_ctx = Self {
-            audio_graph: AudioGraph::new(master.into()),
-            consumer,
             meter,
+            audio_graph,
+            consumer,
         };
 
-        (audio_ctx, master_node, ui_producer)
+        (audio_ctx, node, ui_producer)
     }
 
     pub fn fill_buf(&mut self, buf: &mut [f32]) {
