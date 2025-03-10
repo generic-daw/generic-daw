@@ -75,8 +75,11 @@ impl GuiExt {
     }
 
     #[must_use]
-    pub fn can_resize(&self) -> bool {
-        self.can_resize.unwrap()
+    pub fn can_resize(&mut self) -> bool {
+        *self.can_resize.get_or_insert_with(|| {
+            self.plugin_gui
+                .can_resize(&mut self.instance.plugin_handle())
+        })
     }
 
     #[must_use]
@@ -114,23 +117,21 @@ impl GuiExt {
 
     fn begin_open(&mut self) {
         self.destroy();
-
-        let config = GuiConfiguration {
-            api_type: GuiApiType::default_for_current_platform().unwrap(),
-            is_floating: self.is_floating,
-        };
-
         self.plugin_gui
-            .create(&mut self.instance.plugin_handle(), config)
+            .create(
+                &mut self.instance.plugin_handle(),
+                GuiConfiguration {
+                    api_type: GuiApiType::default_for_current_platform().unwrap(),
+                    is_floating: self.is_floating,
+                },
+            )
             .unwrap();
     }
 
     fn finish_open(&mut self) {
-        let mut plugin = self.instance.plugin_handle();
-
-        self.plugin_gui.show(&mut plugin).unwrap();
-        self.can_resize
-            .get_or_insert_with(|| self.plugin_gui.can_resize(&mut plugin));
+        self.plugin_gui
+            .show(&mut self.instance.plugin_handle())
+            .unwrap();
         self.is_open = true;
     }
 

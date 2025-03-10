@@ -207,7 +207,10 @@ impl ArrangementView {
                 if let Some(id) = self.plugin_ids.remove(*id) {
                     return self
                         .clap_host
-                        .update(ClapHostMessage::Close(id))
+                        .update(ClapHostMessage::MainThread(
+                            id,
+                            MainThreadMessage::GuiRequestHide,
+                        ))
                         .map(Message::ClapHost);
                 }
             }

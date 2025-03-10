@@ -11,7 +11,6 @@ use std::sync::{Arc, Mutex};
 pub enum Message {
     MainThread(PluginId, MainThreadMessage),
     Opened(Arc<Mutex<(Fragile<GuiExt>, Receiver<MainThreadMessage>)>>),
-    Close(PluginId),
     Shown(Id, Arc<Fragile<GuiExt>>),
     CloseRequested(Id),
     Resized((Id, Size)),
@@ -52,11 +51,6 @@ impl ClapHostView {
                 let stream = Task::stream(gui_receiver).map(Message::MainThread.with(id));
 
                 return open.chain(stream);
-            }
-            Message::Close(id) => {
-                if self.windows.contains(*id) {
-                    return self.update(Message::MainThread(id, MainThreadMessage::GuiClosed));
-                }
             }
             Message::Shown(window_id, arc) => {
                 let mut gui = Arc::into_inner(arc).unwrap().into_inner();
