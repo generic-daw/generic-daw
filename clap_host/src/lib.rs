@@ -97,7 +97,7 @@ fn standard_clap_paths() -> Vec<PathBuf> {
         paths.push("/Library/Audio/Plug-Ins/CLAP".into());
 
         if let Some(path) = std::env::var_os("HOME").map(PathBuf::from) {
-            paths.push(path.join("/Library/Audio/Plug-Ins/CLAP"));
+            paths.push(path.join("Library/Audio/Plug-Ins/CLAP"));
         }
     }
 

@@ -818,18 +818,18 @@ dependencies = [
 
 [[package]]
 name = "cosmic-text"
-version = "0.12.1"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59fd57d82eb4bfe7ffa9b1cec0c05e2fd378155b47f255a67983cb4afe0e80c2"
+checksum = "529a7d4dccf42dd5e93dc3d2e66c7c9121b9779ac8886d2582d0df48fdfcc407"
 dependencies = [
  "bitflags 2.9.0",
  "fontdb 0.16.2",
  "log",
  "rangemap",
- "rayon",
  "rustc-hash 1.1.0",
  "rustybuzz",
  "self_cell",
+ "smol_str",
  "swash",
  "sys-locale",
  "ttf-parser 0.21.1",
@@ -872,25 +872,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crossbeam-deque"
-version = "0.8.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9dd111b7b7f7d55b72c0a6ae361660ee5853c9af73f70c3c2ef6858b950e2e51"
-dependencies = [
- "crossbeam-epoch",
- "crossbeam-utils",
-]
-
-[[package]]
-name = "crossbeam-epoch"
-version = "0.9.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b82ac4a3c2ca9c3460964f020e1402edd5753411d7737aa39c3714ad1b5420e"
-dependencies = [
- "crossbeam-utils",
-]
-
-[[package]]
 name = "crossbeam-utils"
 version = "0.8.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -905,7 +886,7 @@ checksum = "43da5946c66ffcc7745f48db692ffbb10a83bfe0afd96235c5c2a4fb23994929"
 [[package]]
 name = "cryoglyph"
 version = "0.1.0"
-source = "git+https://github.com/iced-rs/cryoglyph.git?rev=a886f2427e612b23788a4e36658ff8cd55ba6695#a886f2427e612b23788a4e36658ff8cd55ba6695"
+source = "git+https://github.com/iced-rs/cryoglyph.git?rev=be2defe4a13fd7c97c6f4c81e8e085463eb578dc#be2defe4a13fd7c97c6f4c81e8e085463eb578dc"
 dependencies = [
  "cosmic-text",
  "etagere",
@@ -1190,9 +1171,9 @@ checksum = "a0d2fde1f7b3d48b8395d5f2de76c18a528bd6a9cdde438df747bfcba3e05d6f"
 
 [[package]]
 name = "font-types"
-version = "0.7.3"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3971f9a5ca983419cdc386941ba3b9e1feba01a0ab888adf78739feb2798492"
+checksum = "d868ec188a98bb014c606072edd47e52e7ab7297db943b0b28503121e1d037bd"
 dependencies = [
  "bytemuck",
 ]
@@ -1630,7 +1611,7 @@ checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
 [[package]]
 name = "iced"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#5e49de0d5fa0bcc90406f38fd0f2ecc7d43b0c26"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#eb9eed08538471937f2ab031834ca610c03f925f"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1643,7 +1624,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#5e49de0d5fa0bcc90406f38fd0f2ecc7d43b0c26"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#eb9eed08538471937f2ab031834ca610c03f925f"
 dependencies = [
  "bitflags 2.9.0",
  "bytes",
@@ -1661,7 +1642,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#5e49de0d5fa0bcc90406f38fd0f2ecc7d43b0c26"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#eb9eed08538471937f2ab031834ca610c03f925f"
 dependencies = [
  "futures",
  "iced_core",
@@ -1675,7 +1656,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#5e49de0d5fa0bcc90406f38fd0f2ecc7d43b0c26"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#eb9eed08538471937f2ab031834ca610c03f925f"
 dependencies = [
  "bitflags 2.9.0",
  "bytemuck",
@@ -1694,7 +1675,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#5e49de0d5fa0bcc90406f38fd0f2ecc7d43b0c26"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#eb9eed08538471937f2ab031834ca610c03f925f"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -1706,7 +1687,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#5e49de0d5fa0bcc90406f38fd0f2ecc7d43b0c26"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#eb9eed08538471937f2ab031834ca610c03f925f"
 dependencies = [
  "bytes",
  "iced_core",
@@ -1719,7 +1700,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#5e49de0d5fa0bcc90406f38fd0f2ecc7d43b0c26"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#eb9eed08538471937f2ab031834ca610c03f925f"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -1735,7 +1716,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#5e49de0d5fa0bcc90406f38fd0f2ecc7d43b0c26"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#eb9eed08538471937f2ab031834ca610c03f925f"
 dependencies = [
  "bitflags 2.9.0",
  "bytemuck",
@@ -1755,7 +1736,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#5e49de0d5fa0bcc90406f38fd0f2ecc7d43b0c26"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#eb9eed08538471937f2ab031834ca610c03f925f"
 dependencies = [
  "iced_renderer",
  "iced_runtime",
@@ -1769,7 +1750,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#5e49de0d5fa0bcc90406f38fd0f2ecc7d43b0c26"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#eb9eed08538471937f2ab031834ca610c03f925f"
 dependencies = [
  "iced_futures",
  "iced_graphics",
@@ -1931,9 +1912,9 @@ checksum = "029d73f573d8e8d63e6d5020011d3255b28c3ba85d6cf870a07184ed23de9284"
 
 [[package]]
 name = "indexmap"
-version = "2.7.1"
+version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c9c992b02b5b4c94ea26e32fe5bccb7aa7d9f390ab5c1221ff895bc7ea8b652"
+checksum = "3954d50fe15b02142bf25d3b8bdadb634ec3948f103d04ffe3031bc8fe9d7058"
 dependencies = [
  "equivalent",
  "hashbrown",
@@ -3069,30 +3050,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 
 [[package]]
-name = "rayon"
-version = "1.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b418a60154510ca1a002a752ca9714984e21e4241e804d32555251faf8b78ffa"
-dependencies = [
- "either",
- "rayon-core",
-]
-
-[[package]]
-name = "rayon-core"
-version = "1.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1465873a3dfdaa8ae7cb14b4383657caab0b3e8a0aa9ae8e04b044854c8dfce2"
-dependencies = [
- "crossbeam-deque",
- "crossbeam-utils",
-]
-
-[[package]]
 name = "read-fonts"
-version = "0.22.7"
+version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69aacb76b5c29acfb7f90155d39759a29496aebb49395830e928a9703d2eec2f"
+checksum = "f6f9e8a4f503e5c8750e4cd3b32a4e090035c46374b305a15c70bad833dca05f"
 dependencies = [
  "bytemuck",
  "font-types",
@@ -3447,9 +3408,9 @@ dependencies = [
 
 [[package]]
 name = "skrifa"
-version = "0.22.3"
+version = "0.26.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e1c44ad1f6c5bdd4eefed8326711b7dbda9ea45dfd36068c427d332aa382cbe"
+checksum = "8cc1aa86c26dbb1b63875a7180aa0819709b33348eb5b1491e4321fae388179d"
 dependencies = [
  "bytemuck",
  "read-fonts",
@@ -3654,9 +3615,9 @@ dependencies = [
 
 [[package]]
 name = "swash"
-version = "0.1.19"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbd59f3f359ddd2c95af4758c18270eddd9c730dde98598023cdabff472c2ca2"
+checksum = "13d5bbc2aa266907ed8ee977c9c9e16363cc2b001266104e13397b57f1d15f71"
 dependencies = [
  "skrifa",
  "yazi",
@@ -5165,9 +5126,9 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "yazi"
-version = "0.1.6"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c94451ac9513335b5e23d7a8a2b61a7102398b8cca5160829d313e84c9d98be1"
+checksum = "e01738255b5a16e78bbb83e7fbba0a1e7dd506905cfc53f4622d89015a03fbb5"
 
 [[package]]
 name = "yoke"
@@ -5258,9 +5219,9 @@ dependencies = [
 
 [[package]]
 name = "zeno"
-version = "0.2.3"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd15f8e0dbb966fd9245e7498c7e9e5055d9e5c8b676b95bd67091cd11a1e697"
+checksum = "cc0de2315dc13d00e5df3cd6b8d2124a6eaec6a2d4b6a1c5f37b7efad17fcc17"
 
 [[package]]
 name = "zerocopy"
