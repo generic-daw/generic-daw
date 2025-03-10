@@ -79,6 +79,13 @@ impl GuiExt {
         self.can_resize.unwrap()
     }
 
+    #[must_use]
+    pub fn get_size(&mut self) -> Option<[u32; 2]> {
+        self.plugin_gui
+            .get_size(&mut self.instance.plugin_handle())
+            .map(|size| [size.width, size.height])
+    }
+
     pub fn open_floating(&mut self) {
         assert!(self.is_floating);
 
@@ -128,20 +135,20 @@ impl GuiExt {
     }
 
     #[must_use]
-    pub fn resize(&mut self, width: u32, height: u32) -> [u32; 2] {
+    pub fn resize(&mut self, width: u32, height: u32) -> Option<[u32; 2]> {
+        if !self.can_resize.unwrap() {
+            return None;
+        }
+
         let mut plugin = self.instance.plugin_handle();
         let size = GuiSize { width, height };
 
-        if self.can_resize.unwrap() {
-            let size = self
-                .plugin_gui
-                .adjust_size(&mut plugin, size)
-                .unwrap_or(size);
-            self.plugin_gui.set_size(&mut plugin, size).unwrap();
-        }
-
-        let size = self.plugin_gui.get_size(&mut plugin).unwrap_or(size);
-        [size.width, size.height]
+        let size = self
+            .plugin_gui
+            .adjust_size(&mut plugin, size)
+            .unwrap_or(size);
+        self.plugin_gui.set_size(&mut plugin, size).unwrap();
+        self.get_size()
     }
 
     pub fn destroy(&mut self) {

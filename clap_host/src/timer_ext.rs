@@ -21,7 +21,7 @@ impl TimerExt {
         for (id, (interval, tick)) in self.timers.iter_mut() {
             if *tick <= now {
                 timer_ext.on_timer(plugin, TimerId(id as u32));
-                *tick += *interval;
+                *tick = now + *interval;
             }
 
             if sleep.is_none_or(|next| next > *tick) {

@@ -59,29 +59,33 @@ impl ClapHostView {
                 }
             }
             Message::Shown(window_id, arc) => {
-                let gui = Arc::into_inner(arc).unwrap().into_inner();
+                let mut gui = Arc::into_inner(arc).unwrap().into_inner();
                 let id = gui.plugin_id();
 
-                let resizable = gui.can_resize();
+                let resize = gui.get_size().map_or_else(Task::none, |size| {
+                    window::resize(window_id, size.map(|x| x as f32).into())
+                });
+                let resizable = window::set_resizable(window_id, gui.can_resize());
 
                 self.plugins.insert(*id, gui);
                 self.windows.insert(*id, window_id);
 
-                return window::set_resizable(window_id, resizable)
+                return resize
+                    .chain(resizable)
                     .chain(self.update(Message::MainThread(id, MainThreadMessage::TickTimers)));
             }
             Message::Resized((window_id, size)) => {
                 if let Some(id) = self.windows.position(&window_id) {
-                    let new_size = self
+                    if let Some(new_size) = self
                         .plugins
                         .get_mut(id)
                         .unwrap()
                         .resize(size.width as u32, size.height as u32)
-                        .map(|x| x as f32)
-                        .into();
-
-                    if size != new_size {
-                        return window::resize(window_id, new_size);
+                    {
+                        let new_size = new_size.map(|x| x as f32).into();
+                        if size != new_size {
+                            return window::resize(window_id, new_size);
+                        }
                     }
                 }
             }
