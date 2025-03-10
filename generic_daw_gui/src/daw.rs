@@ -8,7 +8,6 @@ use generic_daw_core::{
     Denominator, Meter, Numerator, VARIANTS as _,
     clap_host::{self, PluginDescriptor, PluginType, clack_host::bundle::PluginBundle},
 };
-use generic_daw_utils::NoDebug;
 use iced::{
     Alignment::Center,
     Element, Event, Subscription, Task, Theme,
@@ -47,12 +46,14 @@ static STOP: LazyLock<svg::Handle> = LazyLock::new(|| {
     ))
 });
 
+pub static PLUGINS: LazyLock<BTreeMap<PluginDescriptor, PluginBundle>> =
+    LazyLock::new(clap_host::get_installed_plugins);
+
 #[derive(Clone, Debug)]
 pub enum Message {
     ThemeChanged(Theme),
     Arrangement(ArrangementMessage),
     FileTree(Box<Path>),
-    LoadPlugin(PluginDescriptor),
     SamplesFileDialog,
     ExportFileDialog,
     TogglePlay,
@@ -69,7 +70,6 @@ pub struct Daw {
     main_window_id: Id,
     arrangement: ArrangementView,
     file_tree: FileTree,
-    plugins: BTreeMap<PluginDescriptor, PluginBundle>,
     split_at: f32,
     meter: Arc<Meter>,
     theme: Theme,
@@ -83,7 +83,6 @@ impl Daw {
         });
 
         let (arrangement, meter) = ArrangementView::create(main_window_id);
-        let plugins = clap_host::get_installed_plugins();
 
         (
             Self {
@@ -93,7 +92,6 @@ impl Daw {
                     #[expect(deprecated, reason = "rust#132515")]
                     &std::env::home_dir().unwrap(),
                 ),
-                plugins,
                 split_at: 0.25,
                 meter,
                 theme: Theme::CatppuccinFrappe,
@@ -110,14 +108,6 @@ impl Daw {
             }
             Message::FileTree(path) => {
                 self.file_tree.update(&path);
-            }
-            Message::LoadPlugin(name) => {
-                let bundle = self.plugins[&name].clone();
-
-                return self
-                    .arrangement
-                    .update(ArrangementMessage::LoadedPlugin(name, NoDebug(bundle)))
-                    .map(Message::Arrangement);
             }
             Message::SamplesFileDialog => {
                 return Task::future(AsyncFileDialog::new().pick_files()).and_then(|paths| {
@@ -217,12 +207,14 @@ impl Daw {
                 horizontal_space(),
                 styled_pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
                 styled_pick_list(
-                    self.plugins
+                    PLUGINS
                         .keys()
                         .filter(|d| d.ty == PluginType::Instrument)
                         .collect::<Box<[_]>>(),
                     None::<&PluginDescriptor>,
-                    |p| Message::LoadPlugin(p.to_owned())
+                    |p| Message::Arrangement(ArrangementMessage::LoadInstrumentPlugin(
+                        p.to_owned()
+                    ))
                 )
                 .placeholder("Load Plugin")
             ]

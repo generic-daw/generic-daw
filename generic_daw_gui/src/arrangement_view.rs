@@ -1,6 +1,7 @@
 use crate::{
     clap_host_view::{ClapHostView, Message as ClapHostMessage},
     components::{styled_button, styled_scrollable_with_direction, styled_svg},
+    daw::PLUGINS,
     stylefns::{button_with_enabled, radio_with_enabled, slider_with_enabled},
     widget::{
         Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale,
@@ -12,11 +13,9 @@ use fragile::Fragile;
 use generic_daw_core::{
     AudioClip, AudioTrack, InterleavedAudio, Meter, MidiTrack, MixerNode, Position,
     audio_graph::{AudioGraph, AudioGraphNodeImpl as _, NodeId},
-    clap_host::{
-        self, MainThreadMessage, PluginDescriptor, PluginId, clack_host::bundle::PluginBundle,
-    },
+    clap_host::{self, MainThreadMessage, PluginDescriptor, PluginId},
 };
-use generic_daw_utils::{EnumDispatcher, HoleyVec, NoDebug};
+use generic_daw_utils::{EnumDispatcher, HoleyVec};
 use iced::{
     Alignment, Element, Function as _, Length, Subscription, Task,
     border::{self, Radius},
@@ -75,7 +74,7 @@ pub enum Message {
     RemoveTrack(usize),
     LoadSample(Box<Path>),
     LoadedSample(Option<Arc<InterleavedAudio>>),
-    LoadedPlugin(PluginDescriptor, NoDebug<PluginBundle>),
+    LoadInstrumentPlugin(PluginDescriptor),
     SeekTo(usize),
     SelectClip(usize, usize),
     UnselectClip(),
@@ -236,9 +235,9 @@ impl ArrangementView {
                         .map(Message::ConnectSucceeded);
                 }
             }
-            Message::LoadedPlugin(name, NoDebug(plugin)) => {
+            Message::LoadInstrumentPlugin(name) => {
                 let (gui, gui_receiver, audio_processor) = clap_host::init(
-                    &plugin,
+                    &PLUGINS[&name],
                     &name,
                     f64::from(self.meter.sample_rate),
                     self.meter.buffer_size,

@@ -44,7 +44,15 @@ impl<T> HoleyVec<T> {
     }
 
     pub fn remove(&mut self, index: usize) -> Option<T> {
-        self.0.get_mut(index).and_then(Option::take)
+        let out = self.0.get_mut(index).and_then(Option::take)?;
+
+        if let Some(shrink) = self.0.iter().rev().position(Option::is_some) {
+            self.0.truncate(self.0.len() - shrink);
+        } else {
+            self.0.clear();
+        }
+
+        Some(out)
     }
 
     #[must_use]
