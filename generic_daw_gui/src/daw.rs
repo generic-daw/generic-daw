@@ -216,7 +216,7 @@ impl Daw {
                         p.to_owned()
                     ))
                 )
-                .placeholder("Load Plugin")
+                .placeholder("Add Instrument")
             ]
             .spacing(20)
             .align_y(Center),

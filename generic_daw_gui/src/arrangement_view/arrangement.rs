@@ -81,7 +81,7 @@ impl Arrangement {
         &self.nodes[*id]
     }
 
-    pub fn add_channel(&mut self) -> Receiver<(NodeId, NodeId)> {
+    pub fn add_channel(&mut self) -> (NodeId, Receiver<(NodeId, NodeId)>) {
         let node = Arc::new(MixerNode::default());
         let id = node.id();
 
@@ -90,7 +90,7 @@ impl Arrangement {
         self.producer
             .push(DawCtxMessage::Insert(node.into()))
             .unwrap();
-        self.request_connect(self.master_node_id, id)
+        (id, self.request_connect(self.master_node_id, id))
     }
 
     pub fn add_track(&mut self, track: impl Into<Track>) -> Receiver<(NodeId, NodeId)> {

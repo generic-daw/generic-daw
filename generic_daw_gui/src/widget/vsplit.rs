@@ -3,8 +3,9 @@ use iced::{
     advanced::{
         Clipboard, Layout, Shell, Widget,
         layout::{Limits, Node},
+        overlay,
         renderer::Style,
-        widget::{Tree, tree},
+        widget::{Operation, Tree, tree},
     },
     mouse::{self, Cursor, Interaction},
     widget::Rule,
@@ -214,6 +215,36 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
                 .max()
                 .unwrap_or_default()
         }
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        translation: Vector,
+    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+        overlay::from_children(&mut self.children, tree, layout, renderer, translation)
+    }
+
+    fn operate(
+        &self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        operation.container(None, layout.bounds(), &mut |operation| {
+            self.children
+                .iter()
+                .zip(&mut tree.children)
+                .zip(layout.children())
+                .for_each(|((child, state), layout)| {
+                    child
+                        .as_widget()
+                        .operate(state, layout, renderer, operation);
+                });
+        });
     }
 }
 
