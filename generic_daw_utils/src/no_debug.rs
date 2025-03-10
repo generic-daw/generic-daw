@@ -12,6 +12,9 @@ impl<T> Debug for NoDebug<T> {
     }
 }
 
+impl<T> Copy for NoDebug<T> where T: Copy {}
+
+#[expect(clippy::expl_impl_clone_on_copy)]
 impl<T> Clone for NoDebug<T>
 where
     T: Clone,
