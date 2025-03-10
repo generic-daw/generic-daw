@@ -149,7 +149,7 @@ impl GuiExt {
             .adjust_size(&mut plugin, size)
             .unwrap_or(size);
         self.plugin_gui.set_size(&mut plugin, size).unwrap();
-        self.get_size()
+        Some([size.width, size.height])
     }
 
     pub fn destroy(&mut self) {
