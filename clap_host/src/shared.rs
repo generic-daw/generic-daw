@@ -7,6 +7,7 @@ use clack_extensions::{
 use clack_host::prelude::*;
 use tracing::{debug, error, info, warn};
 
+#[derive(Debug)]
 pub struct Shared {
     pub sender: Sender<MainThreadMessage>,
 }

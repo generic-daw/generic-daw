@@ -9,8 +9,8 @@ use std::time::Duration;
 
 #[derive(Debug)]
 pub struct GuiExt {
+    ext: NoDebug<PluginGui>,
     instance: NoDebug<PluginInstance<Host>>,
-    plugin_gui: NoDebug<PluginGui>,
     name: Box<str>,
     id: PluginId,
     is_floating: bool,
@@ -21,7 +21,7 @@ pub struct GuiExt {
 impl GuiExt {
     #[must_use]
     pub fn new(
-        plugin_gui: PluginGui,
+        ext: PluginGui,
         mut instance: PluginInstance<Host>,
         name: Box<str>,
         id: PluginId,
@@ -31,17 +31,17 @@ impl GuiExt {
             is_floating: false,
         };
 
-        let mut plugin = instance.plugin_handle();
+        let plugin = &mut instance.plugin_handle();
 
-        if !plugin_gui.is_api_supported(&mut plugin, config) {
+        if !ext.is_api_supported(plugin, config) {
             config.is_floating = true;
 
-            assert!(plugin_gui.is_api_supported(&mut plugin, config));
+            assert!(ext.is_api_supported(plugin, config));
         }
 
         Self {
+            ext: ext.into(),
             instance: instance.into(),
-            plugin_gui: plugin_gui.into(),
             name,
             id,
             is_floating: config.is_floating,
@@ -61,12 +61,10 @@ impl GuiExt {
 
     #[must_use]
     pub fn tick_timers(&mut self) -> Option<Duration> {
-        let (timers, timer_ext) = self
-            .instance
-            .access_handler(|mt| mt.timer_support.map(|ext| (mt.timers.clone(), ext)))?;
+        let timers = self.instance.access_handler(|mt| mt.timers.clone())?;
         timers
             .borrow_mut()
-            .tick_timers(&timer_ext, &mut self.instance.plugin_handle())
+            .tick_timers(&mut self.instance.plugin_handle())
     }
 
     #[must_use]
@@ -76,15 +74,14 @@ impl GuiExt {
 
     #[must_use]
     pub fn can_resize(&mut self) -> bool {
-        *self.can_resize.get_or_insert_with(|| {
-            self.plugin_gui
-                .can_resize(&mut self.instance.plugin_handle())
-        })
+        *self
+            .can_resize
+            .get_or_insert_with(|| self.ext.can_resize(&mut self.instance.plugin_handle()))
     }
 
     #[must_use]
     pub fn get_size(&mut self) -> Option<[u32; 2]> {
-        self.plugin_gui
+        self.ext
             .get_size(&mut self.instance.plugin_handle())
             .map(|size| [size.width, size.height])
     }
@@ -92,18 +89,18 @@ impl GuiExt {
     pub fn open_floating(&mut self) {
         assert!(self.is_floating);
 
-        self.open(|_| ());
+        self.open(|_, _| ());
     }
 
     pub fn open_embedded(&mut self, window_handle: RawWindowHandle) {
         assert!(!self.is_floating);
 
-        self.open(move |s| {
+        self.open(move |ext, plugin| {
             // SAFETY:
             // We destroy the plugin ui just before the window is closed
             unsafe {
-                s.plugin_gui.set_parent(
-                    &mut s.instance.plugin_handle(),
+                ext.set_parent(
+                    plugin,
                     ClapWindow::from_window_handle(window_handle).unwrap(),
                 )
             }
@@ -111,23 +108,20 @@ impl GuiExt {
         });
     }
 
-    fn open(&mut self, f: impl Fn(&mut Self)) {
+    fn open(&mut self, f: impl Fn(&PluginGui, &mut PluginMainThreadHandle<'_>)) {
         self.destroy();
-        self.plugin_gui
-            .create(
-                &mut self.instance.plugin_handle(),
-                GuiConfiguration {
-                    api_type: GuiApiType::default_for_current_platform().unwrap(),
-                    is_floating: self.is_floating,
-                },
-            )
-            .unwrap();
 
-        f(self);
+        let plugin = &mut self.instance.plugin_handle();
 
-        self.plugin_gui
-            .show(&mut self.instance.plugin_handle())
-            .unwrap();
+        let config = GuiConfiguration {
+            api_type: GuiApiType::default_for_current_platform().unwrap(),
+            is_floating: self.is_floating,
+        };
+        self.ext.create(plugin, config).unwrap();
+
+        f(&self.ext, plugin);
+
+        self.ext.show(plugin).unwrap();
         self.is_open = true;
     }
 
@@ -140,17 +134,14 @@ impl GuiExt {
         let mut plugin = self.instance.plugin_handle();
         let size = GuiSize { width, height };
 
-        let size = self
-            .plugin_gui
-            .adjust_size(&mut plugin, size)
-            .unwrap_or(size);
-        self.plugin_gui.set_size(&mut plugin, size).unwrap();
+        let size = self.ext.adjust_size(&mut plugin, size).unwrap_or(size);
+        self.ext.set_size(&mut plugin, size).unwrap();
         Some([size.width, size.height])
     }
 
     pub fn destroy(&mut self) {
         if self.is_open {
-            self.plugin_gui.destroy(&mut self.instance.plugin_handle());
+            self.ext.destroy(&mut self.instance.plugin_handle());
             self.is_open = false;
         }
     }

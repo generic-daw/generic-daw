@@ -3,9 +3,10 @@ use clack_extensions::{
     audio_ports::{HostAudioPortsImpl, RescanType},
     gui::{GuiSize, PluginGui},
     note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
-    timer::{HostTimerImpl, PluginTimer, TimerId},
+    timer::{HostTimerImpl, TimerId},
 };
 use clack_host::prelude::*;
+use generic_daw_utils::NoDebug;
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 #[derive(Clone, Copy, Debug)]
@@ -18,11 +19,11 @@ pub enum MainThreadMessage {
     TickTimers,
 }
 
+#[derive(Debug)]
 pub struct MainThread<'a> {
     shared: &'a Shared,
-    pub gui: Option<PluginGui>,
-    pub timer_support: Option<PluginTimer>,
-    pub timers: Rc<RefCell<TimerExt>>,
+    pub gui: Option<NoDebug<PluginGui>>,
+    pub timers: Option<Rc<RefCell<TimerExt>>>,
 }
 
 impl<'a> MainThread<'a> {
@@ -30,16 +31,19 @@ impl<'a> MainThread<'a> {
         Self {
             shared,
             gui: None,
-            timer_support: None,
-            timers: Rc::default(),
+            timers: None,
         }
     }
 }
 
 impl<'a> MainThreadHandler<'a> for MainThread<'a> {
     fn initialized(&mut self, instance: InitializedPluginHandle<'_>) {
-        self.gui = instance.get_extension();
-        self.timer_support = instance.get_extension();
+        self.gui = instance.get_extension().map(NoDebug);
+        self.timers = instance
+            .get_extension()
+            .map(TimerExt::new)
+            .map(RefCell::new)
+            .map(Rc::new);
     }
 }
 
@@ -63,6 +67,8 @@ impl HostTimerImpl for MainThread<'_> {
     fn register_timer(&mut self, period_ms: u32) -> Result<TimerId, HostError> {
         let id = Ok(self
             .timers
+            .as_ref()
+            .unwrap()
             .borrow_mut()
             .register(Duration::from_millis(u64::from(period_ms))));
 
@@ -75,6 +81,10 @@ impl HostTimerImpl for MainThread<'_> {
     }
 
     fn unregister_timer(&mut self, timer_id: TimerId) -> Result<(), HostError> {
-        self.timers.borrow_mut().unregister(timer_id)
+        self.timers
+            .as_ref()
+            .unwrap()
+            .borrow_mut()
+            .unregister(timer_id)
     }
 }

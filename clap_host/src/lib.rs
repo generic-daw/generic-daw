@@ -1,6 +1,3 @@
-#![expect(missing_debug_implementations)]
-#![expect(missing_copy_implementations)]
-
 use audio_buffers::AudioBuffers;
 use audio_ports_config::AudioPortsConfig;
 use clack_host::prelude::*;
@@ -160,7 +157,7 @@ pub fn init(
     );
 
     let gui = GuiExt::new(
-        instance.access_handler(|mt| mt.gui).unwrap(),
+        instance.access_handler(|mt| mt.gui.as_ref()).unwrap().0,
         instance,
         descriptor.name.clone(),
         id,
