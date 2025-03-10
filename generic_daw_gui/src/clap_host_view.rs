@@ -62,10 +62,13 @@ impl ClapHostView {
                 let gui = Arc::into_inner(arc).unwrap().into_inner();
                 let id = gui.plugin_id();
 
+                let resizable = gui.can_resize();
+
                 self.plugins.insert(*id, gui);
                 self.windows.insert(*id, window_id);
 
-                return self.update(Message::MainThread(id, MainThreadMessage::TickTimers));
+                return window::set_resizable(window_id, resizable)
+                    .chain(self.update(Message::MainThread(id, MainThreadMessage::TickTimers)));
             }
             Message::Resized((window_id, size)) => {
                 if let Some(id) = self.windows.position(&window_id) {
@@ -114,18 +117,13 @@ impl ClapHostView {
                     return Task::none();
                 }
 
-                let mut gui = self.plugins.remove(*id).unwrap();
-                let resizable = gui.can_resize();
+                let mut gui = Fragile::new(self.plugins.remove(*id).unwrap());
 
                 let (window_id, spawn) = window::open(window::Settings {
                     exit_on_close_request: false,
-                    resizable,
                     size: Size::new(1.0, 1.0),
                     ..window::Settings::default()
                 });
-
-                gui.destroy();
-                let mut gui = Fragile::new(gui);
 
                 let embed = window::run_with_handle(window_id, move |handle| {
                     gui.get_mut().open_embedded(handle.as_raw());
