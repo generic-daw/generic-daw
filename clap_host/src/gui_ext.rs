@@ -92,30 +92,26 @@ impl GuiExt {
     pub fn open_floating(&mut self) {
         assert!(self.is_floating);
 
-        self.begin_open();
-
-        self.finish_open();
+        self.open(|_| ());
     }
 
     pub fn open_embedded(&mut self, window_handle: RawWindowHandle) {
         assert!(!self.is_floating);
 
-        self.begin_open();
-
-        // SAFETY:
-        // We destroy the plugin ui just before the window is closed
-        unsafe {
-            self.plugin_gui.set_parent(
-                &mut self.instance.plugin_handle(),
-                ClapWindow::from_window_handle(window_handle).unwrap(),
-            )
-        }
-        .unwrap();
-
-        self.finish_open();
+        self.open(move |s| {
+            // SAFETY:
+            // We destroy the plugin ui just before the window is closed
+            unsafe {
+                s.plugin_gui.set_parent(
+                    &mut s.instance.plugin_handle(),
+                    ClapWindow::from_window_handle(window_handle).unwrap(),
+                )
+            }
+            .unwrap();
+        });
     }
 
-    fn begin_open(&mut self) {
+    fn open(&mut self, f: impl Fn(&mut Self)) {
         self.destroy();
         self.plugin_gui
             .create(
@@ -126,9 +122,9 @@ impl GuiExt {
                 },
             )
             .unwrap();
-    }
 
-    fn finish_open(&mut self) {
+        f(self);
+
         self.plugin_gui
             .show(&mut self.instance.plugin_handle())
             .unwrap();
