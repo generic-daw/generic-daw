@@ -2,6 +2,7 @@ use crate::{
     clap_host_view::{ClapHostView, Message as ClapHostMessage},
     components::{styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg},
     daw::PLUGINS,
+    icons::{CANCEL, CHEVRON_RIGHT, REOPEN},
     stylefns::{button_with_enabled, radio_with_enabled, slider_with_enabled},
     widget::{
         Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale,
@@ -18,22 +19,23 @@ use generic_daw_core::{
 };
 use generic_daw_utils::{EnumDispatcher, HoleyVec};
 use iced::{
-    Alignment, Element, Function as _, Length, Subscription, Task,
+    Alignment, Element, Function as _, Length, Radians, Rotation, Subscription, Task,
     border::{self, Radius},
     futures::TryFutureExt as _,
     mouse::Interaction,
     widget::{
         button, column, container, horizontal_rule, horizontal_space, mouse_area, radio, row,
         scrollable::{Direction, Scrollbar},
-        svg, text, vertical_rule, vertical_slider, vertical_space,
+        text, vertical_rule, vertical_slider, vertical_space,
     },
     window::Id,
 };
 use std::{
+    f32::consts::FRAC_PI_2,
     iter::once,
     path::Path,
     sync::{
-        Arc, LazyLock, Mutex,
+        Arc, Mutex,
         atomic::Ordering::{AcqRel, Acquire, Release},
     },
 };
@@ -45,18 +47,6 @@ mod track_clip;
 pub use arrangement::Arrangement as ArrangementWrapper;
 pub use track::Track as TrackWrapper;
 pub use track_clip::TrackClip as TrackClipWrapper;
-
-static X: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--cancel-rounded.svg"
-    ))
-});
-
-static REOPEN: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--reopen-window-rounded.svg"
-    ))
-});
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -440,7 +430,7 @@ impl ArrangementView {
                                 .spacing(0.0)
                             )
                             .on_right_press(Message::TrackToggleSolo(idx)),
-                            button(styled_svg(X.clone()).height(TEXT_HEIGHT))
+                            button(styled_svg(CANCEL.clone()).height(TEXT_HEIGHT))
                                 .style(|t, s| {
                                     let mut style = button::danger(t, s);
                                     style.border.radius = Radius::new(f32::INFINITY);
@@ -615,13 +605,17 @@ impl ArrangementView {
                     } else {
                         let connected = connections.contains(*id);
 
-                        button(if connected { "^" } else { "v" })
-                            .style(move |t, s| button_with_enabled(t, s, enabled))
-                            .on_press(if connected {
-                                Message::Disconnect((id, selected_channel))
-                            } else {
-                                Message::RequestConnect((id, selected_channel))
-                            })
+                        button(
+                            styled_svg(CHEVRON_RIGHT.clone())
+                                .rotation(Rotation::Floating(Radians(-FRAC_PI_2))),
+                        )
+                        .style(move |t, s| button_with_enabled(t, s, enabled && connected))
+                        .padding(0.0)
+                        .on_press(if connected {
+                            Message::Disconnect((id, selected_channel))
+                        } else {
+                            Message::RequestConnect((id, selected_channel))
+                        })
                     }
                 },
             )
@@ -668,7 +662,7 @@ impl ArrangementView {
                                 .into()
                             },
                             |_, _| {
-                                button(styled_svg(X.clone()).height(TEXT_HEIGHT))
+                                button(styled_svg(CANCEL.clone()).height(TEXT_HEIGHT))
                                     .style(|t, s| {
                                         let mut style = button::danger(t, s);
                                         style.border.radius = Radius::new(f32::INFINITY);
@@ -709,7 +703,7 @@ impl ArrangementView {
                                     .into()
                             },
                             |_, id| {
-                                button(styled_svg(X.clone()).height(TEXT_HEIGHT))
+                                button(styled_svg(CANCEL.clone()).height(TEXT_HEIGHT))
                                     .style(|t, s| {
                                         let mut style = button::danger(t, s);
                                         style.border.radius = Radius::new(f32::INFINITY);

@@ -2,25 +2,14 @@ use crate::{
     arrangement_view::Message as ArrangementMessage,
     components::styled_button,
     daw::Message as DawMessage,
+    icons::{AUDIO_FILE, GENERIC_FILE},
     widget::{FileTreeEntry, LINE_HEIGHT},
 };
 use iced::{
     Element,
     widget::{mouse_area, svg},
 };
-use std::{path::Path, sync::LazyLock};
-
-static FILE: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../../assets/material-symbols--draft-outline-rounded.svg"
-    ))
-});
-
-static AUDIO: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../../assets/material-symbols--audio-file-outline-rounded.svg"
-    ))
-});
+use std::path::Path;
 
 pub struct File {
     path: Box<Path>,
@@ -32,9 +21,9 @@ impl File {
     pub fn new(path: &Path) -> Self {
         let name = path.file_name().unwrap().to_str().unwrap().into();
         let icon = if is_audio(path) {
-            AUDIO.clone()
+            AUDIO_FILE.clone()
         } else {
-            FILE.clone()
+            GENERIC_FILE.clone()
         };
 
         Self {

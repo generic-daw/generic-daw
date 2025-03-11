@@ -2,19 +2,14 @@ use super::file::File;
 use crate::{
     components::styled_button,
     daw::Message as DawMessage,
+    icons::CHEVRON_RIGHT,
     widget::{FileTreeEntry, FileTreeIndicator, LINE_HEIGHT},
 };
 use iced::{
     Element, Radians, Rotation,
-    widget::{column, mouse_area, row, svg},
+    widget::{column, mouse_area, row},
 };
-use std::{f32::consts::FRAC_PI_2, path::Path, sync::LazyLock};
-
-static DIR: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../../assets/material-symbols--chevron-right-rounded.svg"
-    ))
-});
+use std::{f32::consts::FRAC_PI_2, path::Path};
 
 pub struct Dir {
     path: Box<Path>,
@@ -57,9 +52,11 @@ impl Dir {
 
     pub fn view(&self) -> (Element<'_, DawMessage>, f32) {
         let mut col = column!(mouse_area(
-            styled_button(FileTreeEntry::new(&self.name, DIR.clone()).rotation(
-                Rotation::Floating(Radians(if self.open { FRAC_PI_2 } else { 0.0 }))
-            ))
+            styled_button(
+                FileTreeEntry::new(&self.name, CHEVRON_RIGHT.clone()).rotation(Rotation::Floating(
+                    Radians(if self.open { FRAC_PI_2 } else { 0.0 })
+                ))
+            )
             .padding(0)
             .on_press(DawMessage::FileTree(self.path.clone()))
         ));

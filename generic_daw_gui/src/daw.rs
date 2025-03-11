@@ -2,6 +2,7 @@ use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
     components::{styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg},
     file_tree::FileTree,
+    icons::{PAUSE, PLAY, STOP},
     widget::{BpmInput, LINE_HEIGHT, VSplit},
 };
 use generic_daw_core::{
@@ -16,7 +17,7 @@ use iced::{
     widget::{
         column, horizontal_space, row,
         scrollable::{Direction, Scrollbar},
-        svg, toggler, vertical_space,
+        toggler, vertical_space,
     },
     window::{self, Id},
 };
@@ -29,22 +30,6 @@ use std::{
         atomic::Ordering::{AcqRel, Acquire, Release},
     },
 };
-
-static PLAY: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--play-arrow-rounded.svg"
-    ))
-});
-static PAUSE: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--pause-rounded.svg"
-    ))
-});
-static STOP: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--stop-rounded.svg"
-    ))
-});
 
 pub static PLUGINS: LazyLock<BTreeMap<PluginDescriptor, PluginBundle>> =
     LazyLock::new(clap_host::get_installed_plugins);
