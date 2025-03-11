@@ -6,7 +6,7 @@ use crate::{
     widget::{
         Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale,
         AudioClip as AudioClipWidget, Knob, LINE_HEIGHT, PeakMeter, TEXT_HEIGHT,
-        Track as TrackWidget,
+        Track as TrackWidget, VSplit,
     },
 };
 use arrangement::NodeType;
@@ -88,6 +88,7 @@ pub enum Message {
     DeleteClip(usize, usize),
     PositionScaleDelta(ArrangementPosition, ArrangementScale),
     Export(Box<Path>),
+    SplitAt(f32),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -113,6 +114,7 @@ pub struct ArrangementView {
     grabbed_clip: Option<[usize; 2]>,
 
     selected_channel: Option<NodeId>,
+    split_at: f32,
 }
 
 impl ArrangementView {
@@ -137,6 +139,7 @@ impl ArrangementView {
                 grabbed_clip: None,
 
                 selected_channel: None,
+                split_at: 0.75,
             },
             meter,
         )
@@ -391,6 +394,7 @@ impl ArrangementView {
                     .map(Arc::new)
                     .map(Message::AudioGraph);
             }
+            Message::SplitAt(split_at) => self.split_at = split_at,
         }
 
         Task::none()
@@ -623,166 +627,160 @@ impl ArrangementView {
             )
         };
 
-        row![
-            styled_scrollable_with_direction(
-                row(once(channel(
-                    self.selected_channel,
-                    "M".to_owned(),
-                    self.arrangement.master().0.clone(),
-                    |enabled, id| {
-                        radio("", enabled, Some(true), |_| Message::NodeToggleEnabled(id))
-                            .style(move |t, s| radio_with_enabled(t, s, enabled))
-                            .spacing(0.0)
-                            .into()
-                    },
-                    |_, _| vertical_space().height(TEXT_HEIGHT).into(),
-                    |enabled, id| connect(enabled, id).into(),
-                ))
-                .chain(once(vertical_rule(1).into()))
-                .chain({
-                    let mut iter = self
-                        .arrangement
-                        .tracks()
-                        .iter()
-                        .enumerate()
-                        .map(|(i, track)| {
-                            let mut name = "T ".to_owned();
-                            name.push_str(itoa::Buffer::new().format(i + 1));
+        let mixer_panel = styled_scrollable_with_direction(
+            row(once(channel(
+                self.selected_channel,
+                "M".to_owned(),
+                self.arrangement.master().0.clone(),
+                |enabled, id| {
+                    radio("", enabled, Some(true), |_| Message::NodeToggleEnabled(id))
+                        .style(move |t, s| radio_with_enabled(t, s, enabled))
+                        .spacing(0.0)
+                        .into()
+                },
+                |_, _| vertical_space().height(TEXT_HEIGHT).into(),
+                |enabled, id| connect(enabled, id).into(),
+            ))
+            .chain(once(vertical_rule(1).into()))
+            .chain({
+                let mut iter = self
+                    .arrangement
+                    .tracks()
+                    .iter()
+                    .enumerate()
+                    .map(|(i, track)| {
+                        let mut name = "T ".to_owned();
+                        name.push_str(itoa::Buffer::new().format(i + 1));
 
-                            channel(
-                                self.selected_channel,
-                                name,
-                                track.node().clone(),
-                                |enabled, id| {
-                                    mouse_area(
-                                        radio("", enabled, Some(true), |_| {
-                                            Message::TrackToggleEnabled(id)
-                                        })
-                                        .style(move |t, s| radio_with_enabled(t, s, enabled))
-                                        .spacing(0.0),
-                                    )
-                                    .on_right_press(Message::TrackToggleSolo(i))
-                                    .into()
-                                },
-                                |_, _| {
-                                    button(styled_svg(X.clone()).height(TEXT_HEIGHT))
-                                        .style(|t, s| {
-                                            let mut style = button::danger(t, s);
-                                            style.border.radius = Radius::new(f32::INFINITY);
-                                            style
-                                        })
-                                        .padding(0.0)
-                                        .on_press(Message::RemoveTrack(i))
-                                        .into()
-                                },
-                                |_, _| button("").style(|_, _| button::Style::default()).into(),
-                            )
-                        })
-                        .peekable();
-
-                    if iter.peek().is_some() {
-                        EnumDispatcher::A(iter.chain(once(vertical_rule(1).into())))
-                    } else {
-                        EnumDispatcher::B(iter)
-                    }
-                })
-                .chain({
-                    let mut iter = self
-                        .arrangement
-                        .channels()
-                        .enumerate()
-                        .map(|(i, node)| {
-                            let mut name = "C ".to_owned();
-                            name.push_str(itoa::Buffer::new().format(i + 1));
-
-                            channel(
-                                self.selected_channel,
-                                name,
-                                node.clone(),
-                                |enabled, id| {
+                        channel(
+                            self.selected_channel,
+                            name,
+                            track.node().clone(),
+                            |enabled, id| {
+                                mouse_area(
                                     radio("", enabled, Some(true), |_| {
-                                        Message::NodeToggleEnabled(id)
+                                        Message::TrackToggleEnabled(id)
                                     })
+                                    .style(move |t, s| radio_with_enabled(t, s, enabled))
+                                    .spacing(0.0),
+                                )
+                                .on_right_press(Message::TrackToggleSolo(i))
+                                .into()
+                            },
+                            |_, _| {
+                                button(styled_svg(X.clone()).height(TEXT_HEIGHT))
+                                    .style(|t, s| {
+                                        let mut style = button::danger(t, s);
+                                        style.border.radius = Radius::new(f32::INFINITY);
+                                        style
+                                    })
+                                    .padding(0.0)
+                                    .on_press(Message::RemoveTrack(i))
+                                    .into()
+                            },
+                            |_, _| button("").style(|_, _| button::Style::default()).into(),
+                        )
+                    })
+                    .peekable();
+
+                if iter.peek().is_some() {
+                    EnumDispatcher::A(iter.chain(once(vertical_rule(1).into())))
+                } else {
+                    EnumDispatcher::B(iter)
+                }
+            })
+            .chain({
+                let mut iter = self
+                    .arrangement
+                    .channels()
+                    .enumerate()
+                    .map(|(i, node)| {
+                        let mut name = "C ".to_owned();
+                        name.push_str(itoa::Buffer::new().format(i + 1));
+
+                        channel(
+                            self.selected_channel,
+                            name,
+                            node.clone(),
+                            |enabled, id| {
+                                radio("", enabled, Some(true), |_| Message::NodeToggleEnabled(id))
                                     .style(move |t, s| radio_with_enabled(t, s, enabled))
                                     .spacing(0.0)
                                     .into()
-                                },
-                                |_, id| {
-                                    button(styled_svg(X.clone()).height(TEXT_HEIGHT))
-                                        .style(|t, s| {
-                                            let mut style = button::danger(t, s);
-                                            style.border.radius = Radius::new(f32::INFINITY);
-                                            style
-                                        })
-                                        .padding(0.0)
-                                        .on_press(Message::RemoveChannel(id))
-                                        .into()
-                                },
-                                |enabled, id| connect(enabled, id).into(),
-                            )
-                        })
-                        .peekable();
-
-                    if iter.peek().is_some() {
-                        EnumDispatcher::A(iter.chain(once(vertical_rule(1).into())))
-                    } else {
-                        EnumDispatcher::B(iter)
-                    }
-                })
-                .chain(once(
-                    styled_button(row!["+"].height(Length::Fill).align_y(Alignment::Center))
-                        .on_press(Message::AddChannel)
-                        .into(),
-                )))
-                .spacing(5.0),
-                Direction::Horizontal(Scrollbar::default()),
-            )
-            .width(Length::Fill),
-            self.selected_channel.map_or_else(
-                || Element::new(vertical_space().width(0)),
-                |id| {
-                    row![
-                        vertical_rule(11),
-                        column![
-                            styled_pick_list(
-                                PLUGINS
-                                    .keys()
-                                    .filter(|d| d.ty == PluginType::AudioEffect)
-                                    .collect::<Box<[_]>>(),
-                                None::<&PluginDescriptor>,
-                                |p| Message::LoadAudioEffectPlugin(p.to_owned()),
-                            )
-                            .width(Length::Fill)
-                            .placeholder("Add Effect"),
-                            if self.audio_effects_by_channel[*id].is_empty() {
-                                Element::new(horizontal_space())
-                            } else {
-                                horizontal_rule(11.0).into()
                             },
-                            styled_scrollable_with_direction(
-                                column({
-                                    self.audio_effects_by_channel[*id].iter().map(|(id, name)| {
-                                        styled_button(text(name))
-                                            .width(Length::Fill)
-                                            .on_press(Message::ClapHost(
-                                                ClapHostMessage::MainThread(
-                                                    *id,
-                                                    MainThreadMessage::GuiRequestShow,
-                                                ),
-                                            ))
-                                            .into()
+                            |_, id| {
+                                button(styled_svg(X.clone()).height(TEXT_HEIGHT))
+                                    .style(|t, s| {
+                                        let mut style = button::danger(t, s);
+                                        style.border.radius = Radius::new(f32::INFINITY);
+                                        style
                                     })
-                                }),
-                                Direction::Vertical(Scrollbar::default())
-                            )
-                        ]
-                        .width(Length::Fixed(300.0))
-                    ]
-                    .into()
-                },
-            ),
-        ]
-        .into()
+                                    .padding(0.0)
+                                    .on_press(Message::RemoveChannel(id))
+                                    .into()
+                            },
+                            |enabled, id| connect(enabled, id).into(),
+                        )
+                    })
+                    .peekable();
+
+                if iter.peek().is_some() {
+                    EnumDispatcher::A(iter.chain(once(vertical_rule(1).into())))
+                } else {
+                    EnumDispatcher::B(iter)
+                }
+            })
+            .chain(once(
+                styled_button(row!["+"].height(Length::Fill).align_y(Alignment::Center))
+                    .on_press(Message::AddChannel)
+                    .into(),
+            )))
+            .spacing(5.0),
+            Direction::Horizontal(Scrollbar::default()),
+        )
+        .width(Length::Fill);
+
+        if let Some(id) = self.selected_channel {
+            VSplit::new(
+                mixer_panel,
+                column![
+                    styled_pick_list(
+                        PLUGINS
+                            .keys()
+                            .filter(|d| d.ty == PluginType::AudioEffect)
+                            .collect::<Box<[_]>>(),
+                        None::<&PluginDescriptor>,
+                        |p| Message::LoadAudioEffectPlugin(p.to_owned()),
+                    )
+                    .width(Length::Fill)
+                    .placeholder("Add Effect"),
+                    if self.audio_effects_by_channel[*id].is_empty() {
+                        Element::new(horizontal_space())
+                    } else {
+                        horizontal_rule(11.0).into()
+                    },
+                    styled_scrollable_with_direction(
+                        column({
+                            self.audio_effects_by_channel[*id].iter().map(|(id, name)| {
+                                styled_button(text(name))
+                                    .width(Length::Fill)
+                                    .on_press(Message::ClapHost(ClapHostMessage::MainThread(
+                                        *id,
+                                        MainThreadMessage::GuiRequestShow,
+                                    )))
+                                    .into()
+                            })
+                        }),
+                        Direction::Vertical(Scrollbar::default())
+                    )
+                ],
+                self.split_at,
+                Message::SplitAt,
+            )
+            .into()
+        } else {
+            mixer_panel.into()
+        }
     }
 
     pub fn title(&self, window: Id) -> Option<String> {
