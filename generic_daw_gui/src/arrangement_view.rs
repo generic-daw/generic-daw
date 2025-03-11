@@ -24,7 +24,7 @@ use iced::{
     futures::TryFutureExt as _,
     mouse::Interaction,
     widget::{
-        button, column, container, horizontal_rule, horizontal_space, mouse_area, radio, row,
+        button, column, container, horizontal_rule, mouse_area, radio, row,
         scrollable::{Direction, Scrollbar},
         text, vertical_rule, vertical_slider, vertical_space,
     },
@@ -160,7 +160,11 @@ impl ArrangementView {
                 self.arrangement.disconnect(from, to);
             }
             Message::SelectChannel(id) => {
-                self.selected_channel = Some(id);
+                self.selected_channel = if self.selected_channel == Some(id) {
+                    None
+                } else {
+                    Some(id)
+                };
             }
             Message::AddChannel => {
                 let (id, fut) = self.arrangement.add_channel();
@@ -596,12 +600,18 @@ impl ArrangementView {
 
         let connect = |enabled: bool, id: NodeId| {
             selected_channel.map_or_else(
-                || button("").style(|_, _| button::Style::default()),
+                || {
+                    button("")
+                        .height(24.0)
+                        .style(|_, _| button::Style::default())
+                },
                 |(_, connections, ty)| {
                     let selected_channel = self.selected_channel.unwrap();
 
                     if *ty == NodeType::Master || id == selected_channel {
-                        button("").style(|_, _| button::Style::default())
+                        button("")
+                            .height(24.0)
+                            .style(|_, _| button::Style::default())
                     } else {
                         let connected = connections.contains(*id);
 
@@ -734,40 +744,43 @@ impl ArrangementView {
         )
         .width(Length::Fill);
 
+        let plugin_picker = styled_pick_list(
+            PLUGINS
+                .keys()
+                .filter(|d| d.ty == PluginType::AudioEffect)
+                .collect::<Box<[_]>>(),
+            None::<&PluginDescriptor>,
+            |p| Message::LoadAudioEffectPlugin(p.to_owned()),
+        )
+        .width(Length::Fill)
+        .placeholder("Add Effect");
+
         if let Some(id) = self.selected_channel {
             VSplit::new(
                 mixer_panel,
-                column![
-                    styled_pick_list(
-                        PLUGINS
-                            .keys()
-                            .filter(|d| d.ty == PluginType::AudioEffect)
-                            .collect::<Box<[_]>>(),
-                        None::<&PluginDescriptor>,
-                        |p| Message::LoadAudioEffectPlugin(p.to_owned()),
-                    )
-                    .width(Length::Fill)
-                    .placeholder("Add Effect"),
-                    if self.audio_effects_by_channel[*id].is_empty() {
-                        Element::new(horizontal_space())
-                    } else {
-                        horizontal_rule(11.0).into()
-                    },
-                    styled_scrollable_with_direction(
-                        column({
-                            self.audio_effects_by_channel[*id].iter().map(|(id, name)| {
-                                styled_button(text(name))
-                                    .width(Length::Fill)
-                                    .on_press(Message::ClapHost(ClapHostMessage::MainThread(
-                                        *id,
-                                        MainThreadMessage::GuiRequestShow,
-                                    )))
-                                    .into()
-                            })
-                        }),
-                        Direction::Vertical(Scrollbar::default())
-                    )
-                ],
+                if self.audio_effects_by_channel[*id].is_empty() {
+                    Element::new(plugin_picker)
+                } else {
+                    column![
+                        plugin_picker,
+                        horizontal_rule(11.0),
+                        styled_scrollable_with_direction(
+                            column({
+                                self.audio_effects_by_channel[*id].iter().map(|(id, name)| {
+                                    styled_button(text(name))
+                                        .width(Length::Fill)
+                                        .on_press(Message::ClapHost(ClapHostMessage::MainThread(
+                                            *id,
+                                            MainThreadMessage::GuiRequestShow,
+                                        )))
+                                        .into()
+                                })
+                            }),
+                            Direction::Vertical(Scrollbar::default())
+                        )
+                    ]
+                    .into()
+                },
                 self.split_at,
                 Message::SplitAt,
             )
