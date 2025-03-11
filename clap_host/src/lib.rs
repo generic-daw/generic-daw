@@ -159,7 +159,7 @@ pub fn init(
     let gui = GuiExt::new(
         instance.access_handler(|mt| mt.gui).unwrap().0,
         instance,
-        descriptor.name.clone(),
+        descriptor.clone(),
         id,
     );
 

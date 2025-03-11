@@ -1,4 +1,4 @@
-use crate::{PluginId, host::Host};
+use crate::{PluginDescriptor, PluginId, host::Host};
 use clack_extensions::gui::{
     GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow,
 };
@@ -6,12 +6,13 @@ use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
 use raw_window_handle::RawWindowHandle;
 use std::time::Duration;
+use tracing::error;
 
 #[derive(Debug)]
 pub struct GuiExt {
     ext: NoDebug<PluginGui>,
     instance: NoDebug<PluginInstance<Host>>,
-    name: Box<str>,
+    descriptor: PluginDescriptor,
     id: PluginId,
     is_floating: bool,
     is_open: bool,
@@ -23,7 +24,7 @@ impl GuiExt {
     pub fn new(
         ext: PluginGui,
         mut instance: PluginInstance<Host>,
-        name: Box<str>,
+        descriptor: PluginDescriptor,
         id: PluginId,
     ) -> Self {
         let mut config = GuiConfiguration {
@@ -42,7 +43,7 @@ impl GuiExt {
         Self {
             ext: ext.into(),
             instance: instance.into(),
-            name,
+            descriptor,
             id,
             is_floating: config.is_floating,
             is_open: false,
@@ -61,7 +62,7 @@ impl GuiExt {
 
     #[must_use]
     pub fn tick_timers(&mut self) -> Option<Duration> {
-        let timers = self.instance.access_handler(|mt| mt.timers.clone())?;
+        let timers = self.instance.access_handler(|mt| mt.timers.clone());
         timers
             .borrow_mut()
             .tick_timers(&mut self.instance.plugin_handle())
@@ -121,7 +122,12 @@ impl GuiExt {
 
         f(&self.ext, plugin);
 
-        self.ext.show(plugin).unwrap();
+        // I have no clue why this works, but
+        // if I unwrap here, DCC doesn't load
+        if let Err(err) = self.ext.show(plugin) {
+            error!("{} ({}): {err}", self.descriptor.name, self.descriptor.id);
+        }
+
         self.is_open = true;
     }
 
@@ -148,7 +154,7 @@ impl GuiExt {
 
     #[must_use]
     pub fn name(&self) -> &str {
-        &self.name
+        &self.descriptor.name
     }
 }
 

@@ -118,8 +118,9 @@ impl ClapHostView {
                 let mut gui = Fragile::new(self.plugins.remove(*id).unwrap());
 
                 let (window_id, spawn) = window::open(window::Settings {
-                    exit_on_close_request: false,
                     size: Size::new(1.0, 1.0),
+                    resizable: false,
+                    exit_on_close_request: false,
                     ..window::Settings::default()
                 });
 

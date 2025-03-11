@@ -3,29 +3,21 @@ use clack_host::prelude::*;
 use generic_daw_utils::{HoleyVec, NoDebug};
 use std::time::{Duration, Instant};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TimerExt {
-    ext: NoDebug<PluginTimer>,
+    ext: Option<NoDebug<PluginTimer>>,
     timers: HoleyVec<(Duration, Instant)>,
     next_id: usize,
 }
 
 impl TimerExt {
-    pub fn new(ext: PluginTimer) -> Self {
-        Self {
-            ext: ext.into(),
-            timers: HoleyVec::default(),
-            next_id: 0,
-        }
-    }
-
     pub fn tick_timers(&mut self, plugin: &mut PluginMainThreadHandle<'_>) -> Option<Duration> {
         let now = Instant::now();
         let mut sleep = None;
 
         for (id, (interval, tick)) in self.timers.iter_mut() {
             if *tick <= now {
-                self.ext.on_timer(plugin, TimerId(id as u32));
+                self.ext?.on_timer(plugin, TimerId(id as u32));
                 *tick = now + *interval;
             }
 
@@ -35,6 +27,10 @@ impl TimerExt {
         }
 
         sleep.map(|next| next - now)
+    }
+
+    pub fn set_ext(&mut self, ext: Option<PluginTimer>) {
+        self.ext = ext.map(NoDebug);
     }
 
     pub fn register(&mut self, interval: Duration) -> TimerId {

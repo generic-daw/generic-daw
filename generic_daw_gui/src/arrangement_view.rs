@@ -436,7 +436,6 @@ impl ArrangementView {
                                 .spacing(0.0)
                             )
                             .on_right_press(Message::TrackToggleSolo(idx)),
-                            vertical_space(),
                             button(styled_svg(X.clone()).height(TEXT_HEIGHT))
                                 .style(|t, s| {
                                     let mut style = button::danger(t, s);
@@ -450,15 +449,17 @@ impl ArrangementView {
                         .align_x(Alignment::Center);
 
                         if let Some(&id) = self.instrument_by_track.get(*track.id()) {
-                            buttons = buttons.push(
+                            buttons = buttons.extend([
+                                vertical_space().into(),
                                 button(styled_svg(REOPEN.clone()).height(LINE_HEIGHT))
                                     .style(move |t, s| button_with_enabled(t, s, enabled))
                                     .padding(0.0)
                                     .on_press(Message::ClapHost(ClapHostMessage::MainThread(
                                         id,
                                         MainThreadMessage::GuiRequestShow,
-                                    ))),
-                            );
+                                    )))
+                                    .into(),
+                            ]);
                         }
 
                         row![

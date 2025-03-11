@@ -23,7 +23,7 @@ pub enum MainThreadMessage {
 pub struct MainThread<'a> {
     shared: &'a Shared,
     pub gui: Option<NoDebug<PluginGui>>,
-    pub timers: Option<Rc<RefCell<TimerExt>>>,
+    pub timers: Rc<RefCell<TimerExt>>,
 }
 
 impl<'a> MainThread<'a> {
@@ -31,7 +31,7 @@ impl<'a> MainThread<'a> {
         Self {
             shared,
             gui: None,
-            timers: None,
+            timers: Rc::default(),
         }
     }
 }
@@ -39,11 +39,7 @@ impl<'a> MainThread<'a> {
 impl<'a> MainThreadHandler<'a> for MainThread<'a> {
     fn initialized(&mut self, instance: InitializedPluginHandle<'_>) {
         self.gui = instance.get_extension().map(NoDebug);
-        self.timers = instance
-            .get_extension()
-            .map(TimerExt::new)
-            .map(RefCell::new)
-            .map(Rc::new);
+        self.timers.borrow_mut().set_ext(instance.get_extension());
     }
 }
 
@@ -67,8 +63,6 @@ impl HostTimerImpl for MainThread<'_> {
     fn register_timer(&mut self, period_ms: u32) -> Result<TimerId, HostError> {
         let id = Ok(self
             .timers
-            .as_ref()
-            .unwrap()
             .borrow_mut()
             .register(Duration::from_millis(u64::from(period_ms))));
 
@@ -81,10 +75,6 @@ impl HostTimerImpl for MainThread<'_> {
     }
 
     fn unregister_timer(&mut self, timer_id: TimerId) -> Result<(), HostError> {
-        self.timers
-            .as_ref()
-            .unwrap()
-            .borrow_mut()
-            .unregister(timer_id)
+        self.timers.borrow_mut().unregister(timer_id)
     }
 }
