@@ -24,7 +24,8 @@ pub use peak_meter::PeakMeter;
 pub use track::Track;
 pub use vsplit::VSplit;
 
-pub const LINE_HEIGHT: f32 = 21.0;
+pub const LINE_HEIGHT: f32 = TEXT_HEIGHT * 1.3;
+pub const TEXT_HEIGHT: f32 = 16.0;
 
 pub const SWM: f32 = 60.0;
 

@@ -5,7 +5,8 @@ use crate::{
     stylefns::{button_with_enabled, radio_with_enabled, slider_with_enabled},
     widget::{
         Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale,
-        AudioClip as AudioClipWidget, Knob, LINE_HEIGHT, PeakMeter, Track as TrackWidget,
+        AudioClip as AudioClipWidget, Knob, LINE_HEIGHT, PeakMeter, TEXT_HEIGHT,
+        Track as TrackWidget,
     },
 };
 use arrangement::NodeType;
@@ -22,8 +23,7 @@ use iced::{
     futures::TryFutureExt as _,
     mouse::Interaction,
     widget::{
-        button, column, container, horizontal_rule, horizontal_space, mouse_area, radio,
-        responsive, row,
+        button, column, container, horizontal_rule, horizontal_space, mouse_area, radio, row,
         scrollable::{Direction, Scrollbar},
         svg, text, vertical_rule, vertical_slider, vertical_space,
     },
@@ -67,6 +67,7 @@ pub enum Message {
     Disconnect((NodeId, NodeId)),
     SelectChannel(NodeId),
     AddChannel,
+    RemoveChannel(NodeId),
     NodeVolumeChanged(NodeId, f32),
     NodePanChanged(NodeId, f32),
     NodeToggleEnabled(NodeId),
@@ -175,6 +176,9 @@ impl ArrangementView {
                     .and_then(Task::done)
                     .map(Message::ConnectSucceeded);
             }
+            Message::RemoveChannel(id) => {
+                self.arrangement.remove_channel(id);
+            }
             Message::NodeVolumeChanged(id, volume) => {
                 self.arrangement.node(id).0.volume.store(volume, Release);
             }
@@ -208,7 +212,7 @@ impl ArrangementView {
                 }
             }
             Message::RemoveTrack(track) => {
-                let id = self.arrangement.remove(track);
+                let id = self.arrangement.remove_track(track);
                 return Task::batch({
                     let iter = self
                         .audio_effects_by_channel
@@ -433,7 +437,7 @@ impl ArrangementView {
                             )
                             .on_right_press(Message::TrackToggleSolo(idx)),
                             vertical_space(),
-                            button(styled_svg(X.clone()).height(LINE_HEIGHT))
+                            button(styled_svg(X.clone()).height(TEXT_HEIGHT))
                                 .style(|t, s| {
                                     let mut style = button::danger(t, s);
                                     style.border.radius = Radius::new(f32::INFINITY);
@@ -532,6 +536,7 @@ impl ArrangementView {
             name: String,
             node: Arc<MixerNode>,
             toggle: impl Fn(bool, NodeId) -> Element<'a, Message>,
+            remove: impl Fn(bool, NodeId) -> Element<'a, Message>,
             connect: impl Fn(bool, NodeId) -> Element<'a, Message>,
         ) -> Element<'a, Message> {
             let id = node.id();
@@ -540,20 +545,29 @@ impl ArrangementView {
 
             button(
                 column![
-                    row![text(name), toggle(enabled, id)].spacing(5.0),
-                    mouse_area(Knob::new(
-                        -1.0..=1.0,
-                        0.0,
-                        node.pan.load(Acquire),
-                        enabled,
-                        Message::NodePanChanged.with(id)
-                    ))
-                    .on_double_click(Message::NodePanChanged(id, 0.0)),
                     row![
-                        PeakMeter::new(move || node.get_l_r(), enabled),
-                        vertical_slider(0.0..=1.0, volume, Message::NodeVolumeChanged.with(id))
-                            .step(0.001)
-                            .style(move |t, s| slider_with_enabled(t, s, enabled))
+                        column![
+                            text(name),
+                            mouse_area(Knob::new(
+                                -1.0..=1.0,
+                                0.0,
+                                node.pan.load(Acquire),
+                                enabled,
+                                Message::NodePanChanged.with(id)
+                            )),
+                            PeakMeter::new(move || node.get_l_r(), enabled)
+                        ]
+                        .spacing(5.0)
+                        .align_x(Alignment::Center),
+                        column![
+                            toggle(enabled, id),
+                            remove(enabled, id),
+                            vertical_slider(0.0..=1.0, volume, Message::NodeVolumeChanged.with(id))
+                                .step(0.001)
+                                .style(move |t, s| slider_with_enabled(t, s, enabled))
+                        ]
+                        .spacing(5.0)
+                        .align_x(Alignment::Center)
                     ]
                     .spacing(5.0),
                     connect(enabled, id)
@@ -620,6 +634,7 @@ impl ArrangementView {
                             .spacing(0.0)
                             .into()
                     },
+                    |_, _| vertical_space().height(TEXT_HEIGHT).into(),
                     |enabled, id| connect(enabled, id).into(),
                 ))
                 .chain(once(vertical_rule(1).into()))
@@ -647,6 +662,17 @@ impl ArrangementView {
                                     )
                                     .on_right_press(Message::TrackToggleSolo(i))
                                     .into()
+                                },
+                                |_, _| {
+                                    button(styled_svg(X.clone()).height(TEXT_HEIGHT))
+                                        .style(|t, s| {
+                                            let mut style = button::danger(t, s);
+                                            style.border.radius = Radius::new(f32::INFINITY);
+                                            style
+                                        })
+                                        .padding(0.0)
+                                        .on_press(Message::RemoveTrack(i))
+                                        .into()
                                 },
                                 |_, _| button("").style(|_, _| button::Style::default()).into(),
                             )
@@ -680,6 +706,17 @@ impl ArrangementView {
                                     .spacing(0.0)
                                     .into()
                                 },
+                                |_, id| {
+                                    button(styled_svg(X.clone()).height(TEXT_HEIGHT))
+                                        .style(|t, s| {
+                                            let mut style = button::danger(t, s);
+                                            style.border.radius = Radius::new(f32::INFINITY);
+                                            style
+                                        })
+                                        .padding(0.0)
+                                        .on_press(Message::RemoveChannel(id))
+                                        .into()
+                                },
                                 |enabled, id| connect(enabled, id).into(),
                             )
                         })
@@ -700,11 +737,11 @@ impl ArrangementView {
                 Direction::Horizontal(Scrollbar::default()),
             )
             .width(Length::Fill),
-            horizontal_space(),
             self.selected_channel.map_or_else(
-                || Element::new(vertical_space()),
+                || Element::new(vertical_space().width(0)),
                 |id| {
-                    responsive(move |size| {
+                    row![
+                        vertical_rule(11),
                         column![
                             styled_pick_list(
                                 PLUGINS
@@ -738,9 +775,8 @@ impl ArrangementView {
                                 Direction::Vertical(Scrollbar::default())
                             )
                         ]
-                        .width(Length::Fixed(size.width.min(300.0)))
-                        .into()
-                    })
+                        .width(Length::Fixed(300.0))
+                    ]
                     .into()
                 },
             ),

@@ -93,6 +93,11 @@ impl Arrangement {
         (id, self.request_connect(self.master_node_id, id))
     }
 
+    pub fn remove_channel(&mut self, id: NodeId) {
+        self.nodes.remove(*id);
+        self.producer.push(DawCtxMessage::Remove(id)).unwrap();
+    }
+
     pub fn add_track(&mut self, track: impl Into<Track>) -> Receiver<(NodeId, NodeId)> {
         let track = track.into();
         let id = track.id();
@@ -108,10 +113,9 @@ impl Arrangement {
         self.request_connect(self.master_node_id, id)
     }
 
-    pub fn remove(&mut self, track: usize) -> NodeId {
+    pub fn remove_track(&mut self, track: usize) -> NodeId {
         let id = self.tracks.remove(track).id();
-        self.nodes.remove(*id);
-        self.producer.push(DawCtxMessage::Remove(id)).unwrap();
+        self.remove_channel(id);
         id
     }
 
