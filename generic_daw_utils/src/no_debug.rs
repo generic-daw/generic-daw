@@ -4,23 +4,12 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+#[derive(Clone, Copy)]
 pub struct NoDebug<T>(pub T);
 
 impl<T> Debug for NoDebug<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NoDebug").finish_non_exhaustive()
-    }
-}
-
-impl<T> Copy for NoDebug<T> where T: Copy {}
-
-#[expect(clippy::expl_impl_clone_on_copy)]
-impl<T> Clone for NoDebug<T>
-where
-    T: Clone,
-{
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
     }
 }
 

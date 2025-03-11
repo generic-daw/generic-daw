@@ -1,6 +1,6 @@
 use std::iter::FusedIterator;
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum EnumDispatcher<A, B> {
     A(A),
     B(B),
