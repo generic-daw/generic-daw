@@ -1,4 +1,5 @@
 use super::{LINE_HEIGHT, SWM};
+use generic_daw_utils::NoDebug;
 use iced::{
     Element, Event, Length, Point, Radians, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
@@ -15,7 +16,7 @@ use iced::{
 use std::{
     cell::RefCell,
     f32::consts::{FRAC_PI_2, FRAC_PI_4},
-    fmt::{Debug, Formatter},
+    fmt::Debug,
     ops::RangeInclusive,
 };
 
@@ -32,26 +33,22 @@ struct State {
     cache: Cache,
 }
 
-pub struct Knob<Message> {
+#[derive(Debug)]
+pub struct Knob<Message, F>
+where
+    F: Fn(f32) -> Message,
+{
     range: RangeInclusive<f32>,
     value: f32,
     center: f32,
     enabled: bool,
-    on_change: Box<dyn Fn(f32) -> Message>,
+    on_change: NoDebug<F>,
 }
 
-impl<Message> Debug for Knob<Message> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Knob")
-            .field("range", &self.range)
-            .field("value", &self.value)
-            .field("center", &self.center)
-            .field("enabled", &self.enabled)
-            .finish_non_exhaustive()
-    }
-}
-
-impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
+impl<Message, F> Widget<Message, Theme, Renderer> for Knob<Message, F>
+where
+    F: Fn(f32) -> Message,
+{
     fn size(&self) -> Size<Length> {
         Size::new(Length::Fixed(DIAMETER), Length::Fixed(DIAMETER))
     }
@@ -219,20 +216,23 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
     }
 }
 
-impl<Message> Knob<Message> {
+impl<Message, F> Knob<Message, F>
+where
+    F: Fn(f32) -> Message,
+{
     pub fn new(
         range: RangeInclusive<f32>,
         zero: f32,
         current: f32,
         enabled: bool,
-        f: impl Fn(f32) -> Message + 'static,
+        on_change: F,
     ) -> Self {
         Self {
             range,
             center: zero,
             value: current,
             enabled,
-            on_change: Box::new(f),
+            on_change: on_change.into(),
         }
     }
 
@@ -293,11 +293,12 @@ impl<Message> Knob<Message> {
     }
 }
 
-impl<'a, Message> From<Knob<Message>> for Element<'a, Message>
+impl<'a, Message, F> From<Knob<Message, F>> for Element<'a, Message>
 where
     Message: 'a,
+    F: Fn(f32) -> Message + 'a,
 {
-    fn from(knob: Knob<Message>) -> Self {
+    fn from(knob: Knob<Message, F>) -> Self {
         Self::new(knob)
     }
 }

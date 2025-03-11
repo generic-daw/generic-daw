@@ -22,5 +22,5 @@ clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
 ] }
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
 raw-window-handle = "0.6.2"
-walkdir = "2.5.0"
 tracing = { version = "0.1.41", default-features = false, features = ["std"] }
+walkdir = "2.5.0"
