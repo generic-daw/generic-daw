@@ -9,11 +9,11 @@ use iced::{
         text::{Renderer as _, Text},
         widget::{Tree, Widget, tree},
     },
-    alignment::{Horizontal, Vertical},
+    alignment::Vertical,
     border,
     keyboard::Modifiers,
     mouse::{self, Cursor, Interaction, ScrollDelta},
-    widget::text::{LineHeight, Shaping, Wrapping},
+    widget::text::{Alignment, LineHeight, Shaping, Wrapping},
     window,
 };
 use std::{
@@ -576,8 +576,8 @@ where
                 size: renderer.default_size(),
                 line_height: LineHeight::default(),
                 font: renderer.default_font(),
-                horizontal_alignment: Horizontal::Left,
-                vertical_alignment: Vertical::Top,
+                align_x: Alignment::Left,
+                align_y: Vertical::Top,
                 shaping: Shaping::Basic,
                 wrapping: Wrapping::None,
             };

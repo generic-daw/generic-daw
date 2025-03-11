@@ -10,7 +10,8 @@ use iced::{
         text::{LineHeight, Renderer as _, Shaping, Wrapping},
         widget::{Tree, tree},
     },
-    alignment::{Horizontal, Vertical},
+    alignment::Vertical,
+    widget::text::Alignment,
 };
 
 struct State {
@@ -104,8 +105,8 @@ impl<Message> Widget<Message, Theme, Renderer> for FileTreeEntry<'_> {
             size: renderer.default_size(),
             line_height: LineHeight::default(),
             font: renderer.default_font(),
-            horizontal_alignment: Horizontal::Left,
-            vertical_alignment: Vertical::Top,
+            align_x: Alignment::Left,
+            align_y: Vertical::Top,
             shaping: state.shaping,
             wrapping: Wrapping::None,
         };

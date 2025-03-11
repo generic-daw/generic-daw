@@ -8,10 +8,10 @@ use iced::{
         text::Renderer as _,
         widget::{Tree, tree},
     },
-    alignment::{Horizontal, Vertical},
+    alignment::Vertical,
     border,
     mouse::{self, Cursor, Interaction, ScrollDelta},
-    widget::text::{LineHeight, Shaping, Wrapping},
+    widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
 use std::{
     fmt::{Debug, Formatter},
@@ -162,8 +162,8 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<Message> {
             size: renderer.default_size(),
             line_height: LineHeight::default(),
             font: renderer.default_font(),
-            horizontal_alignment: Horizontal::Left,
-            vertical_alignment: Vertical::Top,
+            align_x: Alignment::Left,
+            align_y: Vertical::Top,
             shaping: Shaping::Basic,
             wrapping: Wrapping::None,
         };

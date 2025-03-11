@@ -10,9 +10,9 @@ use iced::{
         text::Renderer as _,
         widget::{Tree, tree},
     },
-    alignment::{Horizontal, Vertical},
+    alignment::Vertical,
     mouse::{self, Cursor, Interaction},
-    widget::text::{LineHeight, Shaping, Wrapping},
+    widget::text::{Alignment, LineHeight, Shaping, Wrapping},
     window,
 };
 use iced_wgpu::{
@@ -192,8 +192,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
             size: renderer.default_size(),
             line_height: LineHeight::default(),
             font: renderer.default_font(),
-            horizontal_alignment: Horizontal::Left,
-            vertical_alignment: Vertical::Top,
+            align_x: Alignment::Left,
+            align_y: Vertical::Top,
             shaping: state.shaping,
             wrapping: Wrapping::None,
         };
