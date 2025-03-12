@@ -53,6 +53,7 @@ pub fn build_output_stream(
         .supported_output_configs()
         .unwrap()
         .filter(|config| config.channels() == 2)
+        .filter(|config| config.max_sample_rate().0 >= 40000)
         .min_by(|l, r| compare_device_orderings(l, r, sample_rate, buffer_size))
         .unwrap();
 
