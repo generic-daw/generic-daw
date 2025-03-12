@@ -1,5 +1,5 @@
 use cpal::{
-    BufferSize, SampleRate, StreamConfig, SupportedBufferSize,
+    BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
     traits::{DeviceTrait as _, HostTrait as _},
 };
 use daw_ctx::DawCtx;
@@ -55,31 +55,7 @@ pub fn build_output_stream(
         .filter(|config| config.channels() == 2)
         .collect();
 
-    configs.sort_unstable_by(|l, r| match (*l.buffer_size(), *r.buffer_size()) {
-        (SupportedBufferSize::Unknown, SupportedBufferSize::Unknown) => Ordering::Equal,
-        (SupportedBufferSize::Range { .. }, SupportedBufferSize::Unknown) => Ordering::Less,
-        (SupportedBufferSize::Unknown, SupportedBufferSize::Range { .. }) => Ordering::Greater,
-        (SupportedBufferSize::Range { min, max }, _) if (min..=max).contains(&buffer_size) => {
-            Ordering::Less
-        }
-        (_, SupportedBufferSize::Range { min, max }) if (min..=max).contains(&buffer_size) => {
-            Ordering::Greater
-        }
-        (
-            SupportedBufferSize::Range {
-                min: lmin,
-                max: lmax,
-            },
-            SupportedBufferSize::Range {
-                min: rmin,
-                max: rmax,
-            },
-        ) => {
-            let ldiff = lmin.abs_diff(sample_rate).min(lmax.abs_diff(sample_rate));
-            let rdiff = rmin.abs_diff(sample_rate).min(rmax.abs_diff(sample_rate));
-            ldiff.cmp(&rdiff)
-        }
-    });
+    configs.sort_unstable_by(|l, r| compare_device_orderings(l, r, sample_rate));
 
     let supported_config = configs
         .into_iter()
@@ -127,4 +103,30 @@ pub fn build_output_stream(
     stream.play().unwrap();
 
     (stream, master_node, producer, meter)
+}
+
+fn compare_device_orderings(
+    l: &SupportedStreamConfigRange,
+    r: &SupportedStreamConfigRange,
+    sample_rate: u32,
+) -> Ordering {
+    match (*l.buffer_size(), *r.buffer_size()) {
+        (SupportedBufferSize::Unknown, SupportedBufferSize::Unknown) => Ordering::Equal,
+        (SupportedBufferSize::Range { .. }, SupportedBufferSize::Unknown) => Ordering::Less,
+        (SupportedBufferSize::Unknown, SupportedBufferSize::Range { .. }) => Ordering::Greater,
+        (
+            SupportedBufferSize::Range {
+                min: lmin,
+                max: lmax,
+            },
+            SupportedBufferSize::Range {
+                min: rmin,
+                max: rmax,
+            },
+        ) => {
+            let ldiff = sample_rate.clamp(lmin, lmax).abs_diff(sample_rate);
+            let rdiff = sample_rate.clamp(rmin, rmax).abs_diff(sample_rate);
+            ldiff.cmp(&rdiff)
+        }
+    }
 }
