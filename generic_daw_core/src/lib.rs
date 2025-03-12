@@ -49,28 +49,17 @@ pub fn build_output_stream(
 
     let device = cpal::default_host().default_output_device().unwrap();
 
-    let mut configs: Box<[_]> = device
+    let supported_config = device
         .supported_output_configs()
         .unwrap()
         .filter(|config| config.channels() == 2)
-        .collect();
-
-    configs.sort_unstable_by(|l, r| compare_device_orderings(l, r, sample_rate));
-
-    let supported_config = configs
-        .into_iter()
-        .min_by_key(|config| {
-            let min = config.min_sample_rate().0;
-            let max = config.max_sample_rate().0;
-            sample_rate.clamp(min, max).abs_diff(sample_rate)
-        })
+        .min_by(|l, r| compare_device_orderings(l, r, sample_rate, buffer_size))
         .unwrap();
 
-    let sample_rate = SampleRate({
-        let min = supported_config.min_sample_rate().0;
-        let max = supported_config.max_sample_rate().0;
-        sample_rate.clamp(min, max)
-    });
+    let sample_rate = SampleRate(sample_rate.clamp(
+        supported_config.min_sample_rate().0,
+        supported_config.max_sample_rate().0,
+    ));
 
     let buffer_size = match *supported_config.buffer_size() {
         SupportedBufferSize::Unknown => BufferSize::Default,
@@ -109,7 +98,19 @@ fn compare_device_orderings(
     l: &SupportedStreamConfigRange,
     r: &SupportedStreamConfigRange,
     sample_rate: u32,
+    buffer_size: u32,
 ) -> Ordering {
+    let l_sample_rate = sample_rate
+        .clamp(l.min_sample_rate().0, l.max_sample_rate().0)
+        .abs_diff(sample_rate);
+    let r_sample_rate = sample_rate
+        .clamp(l.min_sample_rate().0, l.max_sample_rate().0)
+        .abs_diff(sample_rate);
+
+    if l_sample_rate != r_sample_rate {
+        return l_sample_rate.cmp(&r_sample_rate);
+    }
+
     match (*l.buffer_size(), *r.buffer_size()) {
         (SupportedBufferSize::Unknown, SupportedBufferSize::Unknown) => Ordering::Equal,
         (SupportedBufferSize::Range { .. }, SupportedBufferSize::Unknown) => Ordering::Less,
@@ -124,8 +125,8 @@ fn compare_device_orderings(
                 max: rmax,
             },
         ) => {
-            let ldiff = sample_rate.clamp(lmin, lmax).abs_diff(sample_rate);
-            let rdiff = sample_rate.clamp(rmin, rmax).abs_diff(sample_rate);
+            let ldiff = buffer_size.clamp(lmin, lmax).abs_diff(buffer_size);
+            let rdiff = buffer_size.clamp(rmin, rmax).abs_diff(buffer_size);
             ldiff.cmp(&rdiff)
         }
     }
