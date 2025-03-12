@@ -1,10 +1,14 @@
 use cpal::{
-    traits::{DeviceTrait as _, HostTrait as _}, BufferSize, SampleRate, StreamConfig, SupportedBufferSize
+    BufferSize, SampleRate, StreamConfig, SupportedBufferSize,
+    traits::{DeviceTrait as _, HostTrait as _},
 };
 use daw_ctx::DawCtx;
-use std::sync::{
-    Arc,
-    atomic::Ordering::{AcqRel, Acquire},
+use std::{
+    cmp::Ordering,
+    sync::{
+        Arc,
+        atomic::Ordering::{AcqRel, Acquire},
+    },
 };
 
 mod audio_clip;
@@ -51,58 +55,63 @@ pub fn build_output_stream(
         .supported_output_configs()
         .expect("Error querying supported configs");
 
-    let configs: Vec<_> = supported_configs
+    let mut configs: Box<[_]> = supported_configs
         .filter(|config| config.channels() == 2)
         .collect();
 
-    let best_supported_config = configs.iter().find_map(|r| {
-        let min = r.min_sample_rate().0;
-        let max = r.max_sample_rate().0;
-
-        if sample_rate >= min && sample_rate <= max {
-            Some(r.with_sample_rate(SampleRate(sample_rate)))
-        } else {
-            None
+    configs.sort_unstable_by(|l, r| match (*l.buffer_size(), *r.buffer_size()) {
+        (SupportedBufferSize::Unknown, SupportedBufferSize::Unknown) => Ordering::Equal,
+        (SupportedBufferSize::Range { .. }, SupportedBufferSize::Unknown) => Ordering::Less,
+        (SupportedBufferSize::Unknown, SupportedBufferSize::Range { .. }) => Ordering::Greater,
+        (SupportedBufferSize::Range { min, max }, _) if (min..=max).contains(&buffer_size) => {
+            Ordering::Less
+        }
+        (_, SupportedBufferSize::Range { min, max }) if (min..=max).contains(&buffer_size) => {
+            Ordering::Greater
+        }
+        (
+            SupportedBufferSize::Range {
+                min: lmin,
+                max: lmax,
+            },
+            SupportedBufferSize::Range {
+                min: rmin,
+                max: rmax,
+            },
+        ) => {
+            let ldiff = lmin.abs_diff(sample_rate).min(lmax.abs_diff(sample_rate));
+            let rdiff = rmin.abs_diff(sample_rate).min(rmax.abs_diff(sample_rate));
+            ldiff.cmp(&rdiff)
         }
     });
 
-    let supported_config = best_supported_config.unwrap_or_else(|| {
-        let closest_config = configs
-            .iter()
-            .min_by_key(|r| {
-                let mid_rate = (r.min_sample_rate().0 + sample_rate) / 2;
-                if mid_rate > sample_rate {
-                    mid_rate - sample_rate
-                } else {
-                    sample_rate - mid_rate
-                }
-            })
-            .expect("No supported config found");
+    let supported_config = configs
+        .into_iter()
+        .min_by_key(|config| {
+            let min = config.min_sample_rate().0;
+            let max = config.max_sample_rate().0;
+            sample_rate.clamp(min, max).abs_diff(sample_rate)
+        })
+        .expect("No supported config found");
 
-        let actual_rate =
-            if closest_config.min_sample_rate().0 == closest_config.max_sample_rate().0 {
-                closest_config.min_sample_rate().0
-            } else {
-                (closest_config.min_sample_rate().0 + closest_config.max_sample_rate().0) / 2
-            };
-
-        closest_config.with_sample_rate(SampleRate(actual_rate))
+    let sample_rate = SampleRate({
+        let min = supported_config.min_sample_rate().0;
+        let max = supported_config.max_sample_rate().0;
+        sample_rate.clamp(min, max)
     });
 
     let buffer_size = match *supported_config.buffer_size() {
         SupportedBufferSize::Unknown => BufferSize::Default,
-        SupportedBufferSize::Range { min, max } => BufferSize::Fixed(sample_rate.clamp(min, max)),
-    };
-
-    let config = StreamConfig {
-        channels: supported_config.channels(),
-        sample_rate: supported_config.sample_rate(),
-        buffer_size,
+        SupportedBufferSize::Range { min, max } => BufferSize::Fixed(buffer_size.clamp(min, max)),
     };
 
     let stream = device
         .build_output_stream(
-            &config,
+            &StreamConfig {
+                channels: 2,
+                sample_rate,
+                buffer_size,
+            },
             move |data, _| {
                 if ctx.meter.playing.load(Acquire) {
                     ctx.meter.sample.fetch_add(data.len(), AcqRel);
