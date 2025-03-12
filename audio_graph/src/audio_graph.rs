@@ -1,43 +1,50 @@
 use crate::{AudioGraphNode, NodeId, audio_graph_entry::AudioGraphEntry};
 use bit_set::BitSet;
 use generic_daw_utils::HoleyVec;
-use std::cmp::Ordering;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct AudioGraph {
     /// a `NodeId` -> `AudioGraphEntry` map
     graph: HoleyVec<AudioGraphEntry>,
-    /// all nodes in the graph in topologically sorted order,
-    /// every node comes before all of its dependencies
+    /// the `NodeId` of the root node
+    root: NodeId,
+    /// all nodes in the graph in reverse topological order,
+    /// every node comes after all of its dependencies
     list: Vec<NodeId>,
-    /// whether `list` needs to be re-sorted before audio processing happens
-    dirty: bool,
-    /// cache to make cycle checking not allocate on average
-    visited: BitSet,
+    /// cache for cycle checking
+    cache: Vec<NodeId>,
+    /// cache for cycle checking
+    to_visit: BitSet,
+    /// cache for cycle checking
+    seen: BitSet,
 }
 
 impl AudioGraph {
+    /// create a new audio graph with the given root node
+    #[must_use]
+    pub fn new(node: AudioGraphNode) -> Self {
+        let root = node.id();
+
+        Self {
+            graph: vec![Some(AudioGraphEntry {
+                node,
+                connections: BitSet::default(),
+                cache: Vec::new(),
+            })]
+            .into(),
+            root,
+            list: vec![root],
+            cache: vec![],
+            seen: BitSet::default(),
+            to_visit: BitSet::default(),
+        }
+    }
+
     /// process audio data into `buf`
     ///
     /// `buf` is assumed to be "uninitialized"
     pub fn fill_buf(&mut self, buf: &mut [f32]) {
-        if self.dirty {
-            self.dirty = false;
-
-            // we need to re-sort our list
-            // if there exists a connection `a -> b`, then we treat `a < b`
-            // otherwise, we treat `a == b`
-            self.list.sort_unstable_by(|&lhs, &rhs| {
-                if self.graph[*lhs].connections.contains(*rhs) {
-                    Ordering::Less
-                } else {
-                    Ordering::Equal
-                }
-            });
-        }
-
-        // iterate in reverse to process every node's dependencies before itself
-        for node in self.list.iter().copied().rev() {
+        for node in self.list.iter().copied() {
             let mut deps = self.graph[*node].connections.iter();
 
             if let Some(dep) = deps.next() {
@@ -70,6 +77,8 @@ impl AudioGraph {
             cache.clear();
             cache.extend_from_slice(&*buf);
         }
+
+        // since `root` is last in `list`, its output is already in `buf`
     }
 
     /// reset every node in the graph to a pre-playback state
@@ -91,32 +100,20 @@ impl AudioGraph {
     ///  - connecting `from` to `to` would produce a cycle
     #[must_use]
     pub fn connect(&mut self, from: NodeId, to: NodeId) -> bool {
+        debug_assert!(self.root != to);
+
         if !self.graph.contains_key(*to) || !self.graph.contains_key(*from) {
             return false;
         }
 
-        if self.graph[*from].connections.contains(*to) {
+        if !self.graph.get_mut(*from).unwrap().connections.insert(*to) {
             return true;
         }
 
-        self.visited.clear();
-        if Self::check_cycle(&self.graph, &mut self.visited, *to, *from) {
-            // if there exists a path from `to` to `from`, connecting `from` to `to` would lead to a cycle
+        if self.has_cycle() {
+            self.graph.get_mut(*from).unwrap().connections.remove(*to);
+
             return false;
-        }
-
-        self.graph.get_mut(*from).unwrap().connections.insert(*to);
-
-        if !self.dirty {
-            for id in self.list.iter().copied() {
-                if id == from {
-                    break;
-                } else if id == to {
-                    // if `to` comes before `from` in our list, it is no longer sorted
-                    self.dirty = true;
-                    break;
-                }
-            }
         }
 
         true
@@ -153,8 +150,9 @@ impl AudioGraph {
         };
 
         self.graph.insert(*id, entry);
-        // adding a node with no dependencies to the end preserves sorted order
-        self.list.push(id);
+        // adding a node with no dependencies to any position preserves sorted order
+        // don't just append it, `root` needs to stay at the end
+        self.list.insert(self.list.len() - 1, id);
     }
 
     /// attempt to remove `node` from the graph
@@ -162,6 +160,8 @@ impl AudioGraph {
     /// if the graph contains `node` it is removed along with all adjacent edges,
     /// otherwise this does nothing
     pub fn remove(&mut self, node: NodeId) {
+        debug_assert!(self.root != node);
+
         if self.graph.remove(*node).is_some() {
             let idx = self.list.iter().copied().position(|n| n == node).unwrap();
             // shift-removing a node preserves sorted order
@@ -173,18 +173,71 @@ impl AudioGraph {
         }
     }
 
-    /// returns whether there exists a path from `current` to `to`
+    /// returns whether there is a cycle in the graph
     ///
-    /// this is just a DFS
-    fn check_cycle(
+    /// if there is no cycle, it re-sorts `list`
+    fn has_cycle(&mut self) -> bool {
+        // save all nodes in `to_visit`
+        self.to_visit.clear();
+        self.to_visit.extend(self.list.iter().map(|&x| *x));
+        self.seen.clear();
+        self.cache.clear();
+
+        // process one subtree at a time until there are no more nodes left in `to_visit` or a cycle was found
+        while let Some(node) = self.to_visit.iter().next() {
+            if Self::visit(
+                &self.graph,
+                &mut self.cache,
+                &mut self.seen,
+                &mut self.to_visit,
+                node,
+            ) {
+                return true;
+            }
+        }
+
+        // `cache` now contains all nodes in reverse topological order
+        std::mem::swap(&mut self.list, &mut self.cache);
+
+        // shift `root` to the end so we process it last
+        let idx = self
+            .list
+            .iter()
+            .copied()
+            .position(|id| id == self.root)
+            .unwrap();
+        self.list[idx..].rotate_left(1);
+
+        false
+    }
+
+    /// pushes the nodes in `to_visit` that are in `current`'s directly unvisited subtree into `list` in reverse topological order
+    ///
+    /// returns whether there is a cycle in `current`'s directly unvisited subtree
+    fn visit(
         graph: &HoleyVec<AudioGraphEntry>,
-        visited: &mut BitSet,
+        list: &mut Vec<NodeId>,
+        seen: &mut BitSet,
+        to_visit: &mut BitSet,
         current: usize,
-        to: usize,
     ) -> bool {
-        current == to
-            || graph[current].connections.iter().any(|current| {
-                visited.insert(current) && Self::check_cycle(graph, visited, current, to)
-            })
+        if !to_visit.contains(current) {
+            return false;
+        }
+
+        if !seen.insert(current) {
+            return true;
+        }
+
+        for current in &graph[current].connections {
+            if Self::visit(graph, list, seen, to_visit, current) {
+                return true;
+            }
+        }
+
+        to_visit.remove(current);
+        list.push(NodeId(current));
+
+        false
     }
 }

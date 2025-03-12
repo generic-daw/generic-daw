@@ -23,9 +23,7 @@ impl DawCtx {
         let meter = Arc::new(Meter::new(sample_rate, buffer_size));
         let node = Arc::<MixerNode>::default();
         let master = Master::new(meter.clone(), node.clone());
-
-        let mut audio_graph = AudioGraph::default();
-        audio_graph.insert(master.into());
+        let audio_graph = AudioGraph::new(master.into());
 
         let audio_ctx = Self {
             meter,
@@ -48,7 +46,8 @@ impl DawCtx {
                 }
                 DawCtxMessage::Disconnect(from, to) => self.audio_graph.disconnect(from, to),
                 DawCtxMessage::RequestAudioGraph(sender) => {
-                    let audio_graph = std::mem::take(&mut self.audio_graph);
+                    let mut audio_graph = AudioGraph::new(MixerNode::default().into());
+                    std::mem::swap(&mut self.audio_graph, &mut audio_graph);
                     sender.send(audio_graph).unwrap();
                 }
                 DawCtxMessage::Reset => self.audio_graph.reset(),

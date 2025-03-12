@@ -24,7 +24,7 @@ macro_rules! unique_id {
             static ID: atomic::$ty = atomic::$ty::new(0);
 
             #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-            pub struct Id($ty);
+            pub struct Id(pub $ty);
 
             impl Id {
                 pub fn unique() -> Self {
