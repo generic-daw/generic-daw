@@ -16,21 +16,13 @@ pub enum Message {
     Resized((Id, Size)),
 }
 
+#[derive(Default)]
 pub struct ClapHostView {
-    main_window_id: Id,
     plugins: HoleyVec<GuiExt>,
     windows: HoleyVec<Id>,
 }
 
 impl ClapHostView {
-    pub fn new(main_window_id: Id) -> Self {
-        Self {
-            main_window_id,
-            plugins: HoleyVec::default(),
-            windows: HoleyVec::default(),
-        }
-    }
-
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::MainThread(id, msg) => return self.main_thread_message(id, msg),
@@ -84,11 +76,10 @@ impl ClapHostView {
                 }
             }
             Message::CloseRequested(window_id) => {
-                if window_id == self.main_window_id {
+                let Some(id) = self.windows.position(&window_id) else {
                     return iced::exit();
-                }
+                };
 
-                let id = self.windows.position(&window_id).unwrap();
                 self.plugins.get_mut(id).unwrap().destroy();
                 let window_id = self.windows.remove(id).unwrap();
                 return window::close(window_id);
@@ -111,7 +102,7 @@ impl ClapHostView {
                 }
             }
             MainThreadMessage::GuiRequestShow => {
-                if self.windows.contains(*id) {
+                if self.windows.contains_key(*id) {
                     return Task::none();
                 }
 
@@ -148,7 +139,7 @@ impl ClapHostView {
                 }
             }
             MainThreadMessage::TickTimers => {
-                if self.windows.contains(*id) {
+                if self.windows.contains_key(*id) {
                     if let Some(sleep) = self.plugins.get_mut(*id).unwrap().tick_timers() {
                         return Task::future(tokio::time::sleep(sleep))
                             .map(|()| MainThreadMessage::TickTimers)
@@ -165,6 +156,10 @@ impl ClapHostView {
         self.windows
             .position(&window)
             .map(|id| self.plugins[id].name().to_owned())
+    }
+
+    pub fn is_plugin_window(&self, window: Id) -> bool {
+        self.windows.contains_value(&window)
     }
 
     pub fn subscription() -> Subscription<Message> {

@@ -28,7 +28,6 @@ use iced::{
         scrollable::{Direction, Scrollbar},
         svg, text, vertical_rule, vertical_slider, vertical_space,
     },
-    window::Id,
 };
 use std::{
     f32::consts::FRAC_PI_2,
@@ -88,7 +87,7 @@ pub enum Tab {
 }
 
 pub struct ArrangementView {
-    clap_host: ClapHostView,
+    pub clap_host: ClapHostView,
     instrument_by_track: HoleyVec<PluginId>,
     audio_effects_by_channel: HoleyVec<Vec<(PluginId, String)>>,
 
@@ -108,12 +107,12 @@ pub struct ArrangementView {
 }
 
 impl ArrangementView {
-    pub fn create(main_window_id: Id) -> (Self, Arc<Meter>) {
-        let (arrangement, meter) = ArrangementWrapper::new();
+    pub fn create() -> (Self, Arc<Meter>) {
+        let (arrangement, meter) = ArrangementWrapper::create();
 
         (
             Self {
-                clap_host: ClapHostView::new(main_window_id),
+                clap_host: ClapHostView::default(),
                 instrument_by_track: HoleyVec::default(),
                 audio_effects_by_channel: vec![Some(vec![])].into(),
 
@@ -801,10 +800,6 @@ impl ArrangementView {
         } else {
             mixer_panel.into()
         }
-    }
-
-    pub fn title(&self, window: Id) -> Option<String> {
-        self.clap_host.title(window)
     }
 
     pub fn subscription() -> Subscription<Message> {

@@ -56,8 +56,8 @@ impl<T> HoleyVec<T> {
     }
 
     #[must_use]
-    pub fn contains(&self, index: usize) -> bool {
-        self.get(index).is_some()
+    pub fn contains_key(&self, key: usize) -> bool {
+        self.get(key).is_some()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (usize, &T)> {
@@ -87,7 +87,13 @@ impl<T> HoleyVec<T>
 where
     T: PartialEq,
 {
+    #[must_use]
     pub fn position(&self, item: &T) -> Option<usize> {
         self.iter().find_map(|(i, x)| (item == x).then_some(i))
+    }
+
+    #[must_use]
+    pub fn contains_value(&self, value: &T) -> bool {
+        self.values().any(|v| v == value)
     }
 }

@@ -52,7 +52,6 @@ pub enum Message {
 }
 
 pub struct Daw {
-    main_window_id: Id,
     arrangement: ArrangementView,
     file_tree: FileTree,
     split_at: f32,
@@ -61,17 +60,16 @@ pub struct Daw {
 }
 
 impl Daw {
-    pub fn new() -> (Self, Task<Message>) {
-        let (main_window_id, open) = window::open(window::Settings {
+    pub fn create() -> (Self, Task<Message>) {
+        let (_, open) = window::open(window::Settings {
             exit_on_close_request: false,
             ..window::Settings::default()
         });
 
-        let (arrangement, meter) = ArrangementView::create(main_window_id);
+        let (arrangement, meter) = ArrangementView::create();
 
         (
             Self {
-                main_window_id,
                 arrangement,
                 file_tree: FileTree::new(
                     #[expect(deprecated, reason = "rust#132515")]
@@ -144,7 +142,7 @@ impl Daw {
     }
 
     pub fn view(&self, window: Id) -> Element<'_, Message> {
-        if window != self.main_window_id {
+        if self.arrangement.clap_host.is_plugin_window(window) {
             return vertical_space().into();
         }
 
@@ -225,13 +223,10 @@ impl Daw {
     }
 
     pub fn title(&self, window: Id) -> String {
-        if window == self.main_window_id {
-            String::from("Generic DAW")
-        } else {
-            self.arrangement
-                .title(window)
-                .unwrap_or_else(|| String::from("Generic DAW"))
-        }
+        self.arrangement
+            .clap_host
+            .title(window)
+            .unwrap_or_else(|| String::from("Generic DAW"))
     }
 
     pub fn subscription() -> Subscription<Message> {

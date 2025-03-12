@@ -31,5 +31,5 @@ fn main() -> Result {
         .subscription(|_| Daw::subscription())
         .theme(Daw::theme)
         .antialiasing(true)
-        .run_with(Daw::new)
+        .run_with(Daw::create)
 }

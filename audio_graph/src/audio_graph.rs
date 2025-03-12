@@ -91,7 +91,7 @@ impl AudioGraph {
     ///  - connecting `from` to `to` would produce a cycle
     #[must_use]
     pub fn connect(&mut self, from: NodeId, to: NodeId) -> bool {
-        if !self.graph.contains(*to) || !self.graph.contains(*from) {
+        if !self.graph.contains_key(*to) || !self.graph.contains_key(*from) {
             return false;
         }
 
