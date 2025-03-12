@@ -186,9 +186,7 @@ impl ArrangementView {
                 self.arrangement.node(id).0.enabled.fetch_not(AcqRel);
             }
             Message::EffectMixChannged(id, i, mix) => {
-                self.arrangement.node(id).0.effects.load()[i]
-                    .1
-                    .store(mix, Release);
+                self.arrangement.node(id).0.set_effect_mix(i, mix);
             }
             Message::TrackToggleEnabled(id) => {
                 self.soloed_track = None;
@@ -776,24 +774,21 @@ impl ArrangementView {
                 if self.audio_effects_by_channel[*id].is_empty() {
                     Element::new(plugin_picker)
                 } else {
-                    let effects = self.arrangement.node(id).0.effects.load();
+                    let node = self.arrangement.node(id).0.clone();
 
                     column![
                         plugin_picker,
                         horizontal_rule(11.0),
                         styled_scrollable_with_direction(
                             column({
-                                self.audio_effects_by_channel[*id]
-                                    .iter()
-                                    .zip(effects.iter())
-                                    .enumerate()
-                                    .map(|(i, ((plugin_id, name), (_, mix)))| {
+                                self.audio_effects_by_channel[*id].iter().enumerate().map(
+                                    |(i, (plugin_id, name))| {
                                         row![
                                             mouse_area(
                                                 Knob::new(
                                                     0.0..=1.0,
                                                     0.0,
-                                                    mix.load(Acquire),
+                                                    node.get_effect_mix(i),
                                                     true,
                                                     move |mix| {
                                                         Message::EffectMixChannged(id, i, mix)
@@ -813,7 +808,8 @@ impl ArrangementView {
                                         ]
                                         .spacing(5.0)
                                         .into()
-                                    })
+                                    },
+                                )
                             }),
                             Direction::Vertical(Scrollbar::default())
                         )

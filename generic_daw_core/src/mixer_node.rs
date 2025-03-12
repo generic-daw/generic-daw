@@ -9,7 +9,7 @@ use std::{
         Arc, Mutex,
         atomic::{
             AtomicBool,
-            Ordering::{Acquire, Release},
+            Ordering::{AcqRel, Acquire, Release},
         },
     },
 };
@@ -18,10 +18,10 @@ use std::{
 pub struct MixerNode {
     id: NodeId,
     /// any effects that are to be applied to the input audio, before applying volume and pan
-    pub effects: ArcSwap<Vec<(Mutex<AudioProcessor>, Atomic<f32>)>>,
-    /// 0 <= volume
+    effects: ArcSwap<Vec<(Mutex<AudioProcessor>, Atomic<f32>)>>,
+    /// in the `0.0..` range
     pub volume: Atomic<f32>,
-    /// -1 <= pan <= 1
+    /// in the `-1.0..1.0` range
     pub pan: Atomic<f32>,
     /// whether the node is enabled
     pub enabled: AtomicBool,
@@ -29,21 +29,25 @@ pub struct MixerNode {
     max_l: Atomic<f32>,
     /// the maximum played back sample in the right channel
     max_r: Atomic<f32>,
-    /// whether `max_l` and `max_r` have been read from
-    read: AtomicBool,
 }
 
 impl MixerNode {
     pub fn get_l_r(&self) -> [f32; 2] {
-        let arr = [self.max_l.load(Acquire), self.max_r.load(Acquire)];
-        self.read.store(true, Release);
-        arr
+        [self.max_l.swap(0.0, AcqRel), self.max_r.swap(0.0, AcqRel)]
     }
 
     pub fn add_effect(&self, effect: AudioProcessor) {
         let mut effects = Arc::into_inner(self.effects.swap(Arc::new(vec![]))).unwrap();
         effects.push((Mutex::new(effect), Atomic::new(1.0)));
         self.effects.store(Arc::new(effects));
+    }
+
+    pub fn get_effect_mix(&self, index: usize) -> f32 {
+        self.effects.load()[index].1.load(Acquire)
+    }
+
+    pub fn set_effect_mix(&self, index: usize, mix: f32) {
+        self.effects.load()[index].1.store(mix, Release);
     }
 }
 
@@ -57,7 +61,6 @@ impl Default for MixerNode {
             enabled: AtomicBool::new(true),
             max_l: Atomic::default(),
             max_r: Atomic::default(),
-            read: AtomicBool::new(false),
         }
     }
 }
@@ -66,11 +69,6 @@ impl AudioGraphNodeImpl for MixerNode {
     fn fill_buf(&self, buf: &mut [f32]) {
         if !self.enabled.load(Acquire) {
             buf.iter_mut().for_each(|s| *s = 0.0);
-
-            if self.read.load(Acquire) {
-                self.max_l.store(0.0, Release);
-                self.max_r.store(0.0, Release);
-            }
 
             return;
         }
@@ -105,21 +103,16 @@ impl AudioGraphNodeImpl for MixerNode {
             .max_by(f32::total_cmp)
             .unwrap();
 
-        if self.read.load(Acquire) {
-            self.max_l.store(cur_l, Release);
-            self.max_r.store(cur_r, Release);
-        } else {
-            self.max_l
-                .fetch_update(Release, Acquire, |max_l| {
-                    Some(max_by(max_l, cur_l, f32::total_cmp))
-                })
-                .unwrap();
-            self.max_r
-                .fetch_update(Release, Acquire, |max_r| {
-                    Some(max_by(max_r, cur_r, f32::total_cmp))
-                })
-                .unwrap();
-        }
+        self.max_l
+            .fetch_update(Release, Acquire, |max_l| {
+                Some(max_by(max_l, cur_l, f32::total_cmp))
+            })
+            .unwrap();
+        self.max_r
+            .fetch_update(Release, Acquire, |max_r| {
+                Some(max_by(max_r, cur_r, f32::total_cmp))
+            })
+            .unwrap();
     }
 
     fn id(&self) -> NodeId {
