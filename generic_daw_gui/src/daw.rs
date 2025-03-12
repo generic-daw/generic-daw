@@ -63,6 +63,7 @@ impl Daw {
     pub fn create() -> (Self, Task<Message>) {
         let (_, open) = window::open(window::Settings {
             exit_on_close_request: false,
+            maximized: true,
             ..window::Settings::default()
         });
 
