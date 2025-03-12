@@ -36,7 +36,7 @@ impl AudioProcessor {
         self.id
     }
 
-    pub fn process(&mut self, buf: &mut [f32]) {
+    pub fn process(&mut self, buf: &mut [f32], mix_level: f32) {
         if self.ty.note_output() {
             self.note_buffers.output_events.clear();
         }
@@ -61,7 +61,7 @@ impl AudioProcessor {
         self.steady_time += u64::from(output_audio.frames_count().unwrap());
 
         if self.ty.audio_output() {
-            self.audio_buffers.write_out(buf);
+            self.audio_buffers.write_out(buf, mix_level);
         }
 
         self.note_buffers.input_events.clear();

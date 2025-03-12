@@ -59,6 +59,7 @@ pub enum Message {
     RemoveChannel(NodeId),
     NodeVolumeChanged(NodeId, f32),
     NodePanChanged(NodeId, f32),
+    EffectMixChannged(NodeId, usize, f32),
     NodeToggleEnabled(NodeId),
     TrackToggleEnabled(NodeId),
     TrackToggleSolo(usize),
@@ -184,6 +185,11 @@ impl ArrangementView {
             Message::NodeToggleEnabled(id) => {
                 self.arrangement.node(id).0.enabled.fetch_not(AcqRel);
             }
+            Message::EffectMixChannged(id, i, mix) => {
+                self.arrangement.node(id).0.effects.load()[i]
+                    .1
+                    .store(mix, Release);
+            }
             Message::TrackToggleEnabled(id) => {
                 self.soloed_track = None;
                 return self.update(Message::NodeToggleEnabled(id));
@@ -293,10 +299,7 @@ impl ArrangementView {
                 );
 
                 let id = audio_processor.id();
-
-                let mut effects = Arc::into_inner(node.effects.swap(Arc::new(vec![]))).unwrap();
-                effects.push(Mutex::new(audio_processor));
-                node.effects.store(Arc::new(effects));
+                node.add_effect(audio_processor);
 
                 self.audio_effects_by_channel
                     .get_mut(*selected)
@@ -773,20 +776,39 @@ impl ArrangementView {
                 if self.audio_effects_by_channel[*id].is_empty() {
                     Element::new(plugin_picker)
                 } else {
+                    let effects = self.arrangement.node(id).0.effects.load();
+
                     column![
                         plugin_picker,
                         horizontal_rule(11.0),
                         styled_scrollable_with_direction(
                             column({
-                                self.audio_effects_by_channel[*id].iter().map(|(id, name)| {
-                                    styled_button(text(name))
-                                        .width(Length::Fill)
-                                        .on_press(Message::ClapHost(ClapHostMessage::MainThread(
-                                            *id,
-                                            MainThreadMessage::GuiRequestShow,
-                                        )))
+                                self.audio_effects_by_channel[*id]
+                                    .iter()
+                                    .zip(effects.iter())
+                                    .enumerate()
+                                    .map(|(i, ((plugin_id, name), (_, mix)))| {
+                                        row![
+                                            Knob::new(
+                                                0.0..=1.0,
+                                                0.0,
+                                                mix.load(Acquire),
+                                                true,
+                                                move |mix| {
+                                                    Message::EffectMixChannged(id, i, mix)
+                                                }
+                                            )
+                                            .radius(TEXT_HEIGHT),
+                                            styled_button(text(name)).width(Length::Fill).on_press(
+                                                Message::ClapHost(ClapHostMessage::MainThread(
+                                                    *plugin_id,
+                                                    MainThreadMessage::GuiRequestShow,
+                                                ),)
+                                            )
+                                        ]
+                                        .spacing(5.0)
                                         .into()
-                                })
+                                    })
                             }),
                             Direction::Vertical(Scrollbar::default())
                         )

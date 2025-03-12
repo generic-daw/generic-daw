@@ -114,7 +114,7 @@ impl AudioBuffers {
         )
     }
 
-    pub fn write_out(&self, buf: &mut [f32]) {
+    pub fn write_out(&self, buf: &mut [f32], mix_level: f32) {
         if self
             .output_config
             .port_channel_counts
@@ -127,7 +127,10 @@ impl AudioBuffers {
                 .iter()
                 .flat_map(|x| [x, x])
                 .zip(&mut *buf)
-                .for_each(|(sample, buf)| *buf = *sample);
+                .for_each(|(sample, buf)| {
+                    *buf *= 1.0 - mix_level;
+                    *buf += sample * mix_level;
+                });
         } else {
             let (l, r) = self.output_channels[self.output_config.main_port_index]
                 .split_at(self.config.max_frames_count as usize);
@@ -136,7 +139,10 @@ impl AudioBuffers {
                 .zip(r)
                 .flat_map(<[&f32; 2]>::from)
                 .zip(&mut *buf)
-                .for_each(|(sample, buf)| *buf = *sample);
+                .for_each(|(sample, buf)| {
+                    *buf *= 1.0 - mix_level;
+                    *buf += sample * mix_level;
+                });
         }
     }
 }

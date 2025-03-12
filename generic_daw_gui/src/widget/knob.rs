@@ -20,9 +20,6 @@ use std::{
     ops::RangeInclusive,
 };
 
-const DIAMETER: f32 = LINE_HEIGHT * 2.0;
-const RADIUS: f32 = LINE_HEIGHT;
-
 #[derive(Default)]
 struct State {
     dragging: Option<(f32, f32)>,
@@ -43,6 +40,7 @@ where
     center: f32,
     enabled: bool,
     on_change: NoDebug<F>,
+    radius: f32,
 }
 
 impl<Message, F> Widget<Message, Theme, Renderer> for Knob<Message, F>
@@ -50,7 +48,10 @@ where
     F: Fn(f32) -> Message,
 {
     fn size(&self) -> Size<Length> {
-        Size::new(Length::Fixed(DIAMETER), Length::Fixed(DIAMETER))
+        Size::new(
+            Length::Fixed(2.0 * self.radius),
+            Length::Fixed(2.0 * self.radius),
+        )
     }
 
     fn tag(&self) -> tree::Tag {
@@ -62,7 +63,7 @@ where
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-        Node::new(Size::new(DIAMETER, DIAMETER))
+        Node::new(Size::new(2.0 * self.radius, 2.0 * self.radius))
     }
 
     fn update(
@@ -101,7 +102,7 @@ where
                     ..
                 } if state.dragging.is_none() => {
                     if let Some(pos) = cursor.position() {
-                        if pos.distance(bounds.center()) < RADIUS {
+                        if pos.distance(bounds.center()) < self.radius {
                             state.dragging = Some((self.value, pos.y));
                             shell.capture_event();
                         }
@@ -122,7 +123,7 @@ where
                     if state.hovering
                         != cursor
                             .position()
-                            .is_some_and(|pos| pos.distance(bounds.center()) < RADIUS)
+                            .is_some_and(|pos| pos.distance(bounds.center()) < self.radius)
                     {
                         state.hovering ^= true;
                         state.cache.clear();
@@ -142,7 +143,7 @@ where
                     if state.dragging.is_none()
                         && cursor
                             .position()
-                            .is_some_and(|pos| pos.distance(bounds.center()) < RADIUS) =>
+                            .is_some_and(|pos| pos.distance(bounds.center()) < self.radius) =>
                 {
                     let diff = match delta {
                         ScrollDelta::Lines { y, .. } => *y,
@@ -233,7 +234,13 @@ where
             value: current,
             enabled,
             on_change: on_change.into(),
+            radius: LINE_HEIGHT,
         }
+    }
+
+    pub fn radius(mut self, radius: f32) -> Self {
+        self.radius = radius;
+        self
     }
 
     fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
@@ -242,10 +249,10 @@ where
         let circle = |angle: Radians, a_m: f32, r_m: f32| {
             Path::circle(
                 Point::new(
-                    (RADIUS * a_m).mul_add(angle.0.cos(), center.x),
-                    (RADIUS * a_m).mul_add(angle.0.sin(), center.y),
+                    (a_m).mul_add(angle.0.cos(), center.x),
+                    (a_m).mul_add(angle.0.sin(), center.y),
                 ),
-                RADIUS * r_m,
+                r_m,
             )
         };
 
@@ -266,7 +273,7 @@ where
         let arc = Path::new(|builder| {
             builder.arc(Arc {
                 center,
-                radius: RADIUS,
+                radius: self.radius,
                 start_angle,
                 end_angle,
             });
@@ -283,13 +290,16 @@ where
 
         frame.fill(&arc, contrast_color);
 
-        frame.fill(&Path::circle(center, RADIUS * 0.8), main_color);
+        frame.fill(&Path::circle(center, self.radius - 4.0), main_color);
 
-        frame.fill(&circle(start_angle, 0.9, 0.1), contrast_color);
+        frame.fill(&circle(start_angle, self.radius - 2.0, 2.0), contrast_color);
 
-        frame.fill(&circle(end_angle, 0.9, 0.1), contrast_color);
+        frame.fill(&circle(end_angle, self.radius - 2.0, 2.0), contrast_color);
 
-        frame.fill(&circle(end_angle, 0.4, 0.15), contrast_color);
+        frame.fill(
+            &circle(end_angle, self.radius / 2.0 - 2.0, 3.0),
+            contrast_color,
+        );
     }
 }
 

@@ -6,7 +6,7 @@ use std::{
     cmp::max_by,
     f32::consts::{FRAC_PI_4, SQRT_2},
     sync::{
-        Mutex,
+        Arc, Mutex,
         atomic::{
             AtomicBool,
             Ordering::{Acquire, Release},
@@ -18,7 +18,7 @@ use std::{
 pub struct MixerNode {
     id: NodeId,
     /// any effects that are to be applied to the input audio, before applying volume and pan
-    pub effects: ArcSwap<Vec<Mutex<AudioProcessor>>>,
+    pub effects: ArcSwap<Vec<(Mutex<AudioProcessor>, Atomic<f32>)>>,
     /// 0 <= volume
     pub volume: Atomic<f32>,
     /// -1 <= pan <= 1
@@ -38,6 +38,12 @@ impl MixerNode {
         let arr = [self.max_l.load(Acquire), self.max_r.load(Acquire)];
         self.read.store(true, Release);
         arr
+    }
+
+    pub fn add_effect(&self, effect: AudioProcessor) {
+        let mut effects = Arc::into_inner(self.effects.swap(Arc::new(vec![]))).unwrap();
+        effects.push((Mutex::new(effect), Atomic::new(1.0)));
+        self.effects.store(Arc::new(effects));
     }
 }
 
@@ -76,11 +82,11 @@ impl AudioGraphNodeImpl for MixerNode {
             .enumerate()
             .for_each(|(i, s)| *s *= if i % 2 == 0 { lpan } else { rpan });
 
-        for effect in &**self.effects.load() {
+        for (effect, mix) in &**self.effects.load() {
             effect
                 .try_lock()
                 .expect("this is only locked from the audio thread")
-                .process(buf);
+                .process(buf, mix.load(Acquire));
         }
 
         let cur_l = buf
