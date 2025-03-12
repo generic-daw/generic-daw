@@ -789,16 +789,21 @@ impl ArrangementView {
                                     .enumerate()
                                     .map(|(i, ((plugin_id, name), (_, mix)))| {
                                         row![
-                                            Knob::new(
-                                                0.0..=1.0,
-                                                0.0,
-                                                mix.load(Acquire),
-                                                true,
-                                                move |mix| {
-                                                    Message::EffectMixChannged(id, i, mix)
-                                                }
+                                            mouse_area(
+                                                Knob::new(
+                                                    0.0..=1.0,
+                                                    0.0,
+                                                    mix.load(Acquire),
+                                                    true,
+                                                    move |mix| {
+                                                        Message::EffectMixChannged(id, i, mix)
+                                                    }
+                                                )
+                                                .radius(TEXT_HEIGHT)
                                             )
-                                            .radius(TEXT_HEIGHT),
+                                            .on_double_click(Message::EffectMixChannged(
+                                                id, i, 1.0
+                                            )),
                                             styled_button(text(name)).width(Length::Fill).on_press(
                                                 Message::ClapHost(ClapHostMessage::MainThread(
                                                     *plugin_id,
