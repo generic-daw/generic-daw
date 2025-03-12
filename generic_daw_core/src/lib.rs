@@ -47,15 +47,11 @@ pub fn build_output_stream(
     let (mut ctx, master_node, producer) = DawCtx::create(sample_rate, buffer_size);
     let meter = ctx.meter.clone();
 
-    let device = cpal::default_host()
-        .default_output_device()
-        .expect("No output device available");
+    let device = cpal::default_host().default_output_device().unwrap();
 
-    let supported_configs = device
+    let mut configs: Box<[_]> = device
         .supported_output_configs()
-        .expect("Error querying supported configs");
-
-    let mut configs: Box<[_]> = supported_configs
+        .unwrap()
         .filter(|config| config.channels() == 2)
         .collect();
 
@@ -92,7 +88,7 @@ pub fn build_output_stream(
             let max = config.max_sample_rate().0;
             sample_rate.clamp(min, max).abs_diff(sample_rate)
         })
-        .expect("No supported config found");
+        .unwrap();
 
     let sample_rate = SampleRate({
         let min = supported_config.min_sample_rate().0;
@@ -126,9 +122,7 @@ pub fn build_output_stream(
             |err| panic!("{err}"),
             None,
         )
-        .expect("Failed to build output stream");
-
-    stream.play().expect("Failed to play stream");
+        .unwrap();
 
     stream.play().unwrap();
 
