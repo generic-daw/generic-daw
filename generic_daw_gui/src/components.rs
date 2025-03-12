@@ -1,6 +1,6 @@
-use crate::stylefns::button_with_enabled;
+use crate::stylefns::{button_with_enabled, svg_with_enabled};
 use iced::{
-    Element, Length, Theme,
+    Element, Length,
     border::Radius,
     widget::{
         Button, PickList, Scrollable, Svg, button, pick_list,
@@ -49,9 +49,7 @@ pub fn styled_scrollable_with_direction<'a, Message>(
 
 pub fn styled_svg<'a>(handle: impl Into<svg::Handle>) -> Svg<'a> {
     svg(handle)
-        .style(|t: &Theme, _| svg::Style {
-            color: Some(t.extended_palette().primary.base.text),
-        })
+        .style(|t, s| svg_with_enabled(t, s, true))
         .width(Length::Shrink)
         .height(Length::Shrink)
 }

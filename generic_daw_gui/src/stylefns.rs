@@ -1,7 +1,7 @@
 use iced::{
     Color, Theme,
     border::Radius,
-    widget::{button, radio, slider},
+    widget::{button, radio, slider, svg},
 };
 
 pub fn button_with_enabled(theme: &Theme, status: button::Status, enabled: bool) -> button::Style {
@@ -61,4 +61,25 @@ pub fn slider_with_enabled(theme: &Theme, status: slider::Status, enabled: bool)
     style.handle.background = color.into();
 
     style
+}
+
+pub fn svg_with_enabled(theme: &Theme, status: svg::Status, enabled: bool) -> svg::Style {
+    let color = match status {
+        svg::Status::Idle => {
+            if enabled {
+                theme.extended_palette().primary.base.text
+            } else {
+                theme.extended_palette().secondary.base.text
+            }
+        }
+        svg::Status::Hovered => {
+            if enabled {
+                theme.extended_palette().primary.strong.text
+            } else {
+                theme.extended_palette().secondary.strong.text
+            }
+        }
+    };
+
+    svg::Style { color: Some(color) }
 }

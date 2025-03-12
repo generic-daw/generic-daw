@@ -3,7 +3,7 @@ use crate::{
     components::{styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg},
     daw::PLUGINS,
     icons::{CANCEL, CHEVRON_RIGHT, REOPEN},
-    stylefns::{button_with_enabled, radio_with_enabled, slider_with_enabled},
+    stylefns::{button_with_enabled, radio_with_enabled, slider_with_enabled, svg_with_enabled},
     widget::{
         Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale,
         AudioClip as AudioClipWidget, Knob, LINE_HEIGHT, PeakMeter, TEXT_HEIGHT,
@@ -26,7 +26,7 @@ use iced::{
     widget::{
         button, column, container, horizontal_rule, mouse_area, radio, row,
         scrollable::{Direction, Scrollbar},
-        text, vertical_rule, vertical_slider, vertical_space,
+        svg, text, vertical_rule, vertical_slider, vertical_space,
     },
     window::Id,
 };
@@ -434,14 +434,19 @@ impl ArrangementView {
                                 .spacing(0.0)
                             )
                             .on_right_press(Message::TrackToggleSolo(idx)),
-                            button(styled_svg(CANCEL.clone()).height(TEXT_HEIGHT))
-                                .style(|t, s| {
-                                    let mut style = button::danger(t, s);
-                                    style.border.radius = Radius::new(f32::INFINITY);
-                                    style
-                                })
-                                .padding(0.0)
-                                .on_press(Message::RemoveTrack(idx)),
+                            button(
+                                svg(CANCEL.clone())
+                                    .style(move |t, s| svg_with_enabled(t, s, enabled))
+                                    .width(Length::Shrink)
+                                    .height(TEXT_HEIGHT)
+                            )
+                            .style(|t, s| {
+                                let mut style = button::danger(t, s);
+                                style.border.radius = Radius::new(f32::INFINITY);
+                                style
+                            })
+                            .padding(0.0)
+                            .on_press(Message::RemoveTrack(idx)),
                         ]
                         .spacing(5.0)
                         .align_x(Alignment::Center);
@@ -449,14 +454,19 @@ impl ArrangementView {
                         if let Some(&id) = self.instrument_by_track.get(*track.id()) {
                             buttons = buttons.extend([
                                 vertical_space().into(),
-                                button(styled_svg(REOPEN.clone()).height(LINE_HEIGHT))
-                                    .style(move |t, s| button_with_enabled(t, s, enabled))
-                                    .padding(0.0)
-                                    .on_press(Message::ClapHost(ClapHostMessage::MainThread(
-                                        id,
-                                        MainThreadMessage::GuiRequestShow,
-                                    )))
-                                    .into(),
+                                button(
+                                    svg(REOPEN.clone())
+                                        .style(move |t, s| svg_with_enabled(t, s, enabled))
+                                        .width(Length::Shrink)
+                                        .height(LINE_HEIGHT),
+                                )
+                                .style(move |t, s| button_with_enabled(t, s, enabled))
+                                .padding(0.0)
+                                .on_press(Message::ClapHost(ClapHostMessage::MainThread(
+                                    id,
+                                    MainThreadMessage::GuiRequestShow,
+                                )))
+                                .into(),
                             ]);
                         }
 
@@ -616,7 +626,10 @@ impl ArrangementView {
                         let connected = connections.contains(*id);
 
                         button(
-                            styled_svg(CHEVRON_RIGHT.clone())
+                            svg(CHEVRON_RIGHT.clone())
+                                .style(move |t, s| svg_with_enabled(t, s, enabled))
+                                .width(Length::Shrink)
+                                .height(Length::Shrink)
                                 .rotation(Rotation::Floating(Radians(-FRAC_PI_2))),
                         )
                         .style(move |t, s| button_with_enabled(t, s, enabled && connected))
