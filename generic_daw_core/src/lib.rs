@@ -1,6 +1,5 @@
 use cpal::{
-    BufferSize, SampleRate, StreamConfig,
-    traits::{DeviceTrait as _, HostTrait as _},
+    traits::{DeviceTrait as _, HostTrait as _}, BufferSize, SampleRate, StreamConfig, SupportedBufferSize
 };
 use daw_ctx::DawCtx;
 use std::sync::{
@@ -90,10 +89,15 @@ pub fn build_output_stream(
         closest_config.with_sample_rate(SampleRate(actual_rate))
     });
 
+    let buffer_size = match *supported_config.buffer_size() {
+        SupportedBufferSize::Unknown => BufferSize::Default,
+        SupportedBufferSize::Range { min, max } => BufferSize::Fixed(sample_rate.clamp(min, max)),
+    };
+
     let config = StreamConfig {
         channels: supported_config.channels(),
         sample_rate: supported_config.sample_rate(),
-        buffer_size: BufferSize::Fixed(supported_config.channels().min(buffer_size.try_into().unwrap()).into()),
+        buffer_size,
     };
 
     let stream = device
