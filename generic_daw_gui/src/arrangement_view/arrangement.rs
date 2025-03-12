@@ -36,7 +36,7 @@ pub struct Arrangement {
 
 impl Arrangement {
     pub fn create() -> (Self, Arc<Meter>) {
-        let (stream, master_node, producer, meter) = build_output_stream(48000, 1024);
+        let (stream, master_node, producer, meter) = build_output_stream(44100, 1024);
         let master_node_id = master_node.id();
         let mut channels = HoleyVec::default();
         channels.insert(

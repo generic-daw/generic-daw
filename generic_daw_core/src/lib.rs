@@ -52,24 +52,48 @@ pub fn build_output_stream(
         .supported_output_configs()
         .expect("Error querying supported configs");
 
-    let supported_config = supported_configs
+    let configs: Vec<_> = supported_configs
         .filter(|config| config.channels() == 2)
-        .find_map(|range| {
-            let min_sample_rate = range.min_sample_rate().0;
-            let max_sample_rate = range.max_sample_rate().0;
+        .collect();
 
-            if sample_rate >= min_sample_rate && sample_rate <= max_sample_rate {
-                Some(range.with_sample_rate(SampleRate(sample_rate)))
+    let best_supported_config = configs.iter().find_map(|r| {
+        let min = r.min_sample_rate().0;
+        let max = r.max_sample_rate().0;
+
+        if sample_rate >= min && sample_rate <= max {
+            Some(r.with_sample_rate(SampleRate(sample_rate)))
+        } else {
+            None
+        }
+    });
+
+    let supported_config = best_supported_config.unwrap_or_else(|| {
+        let closest_config = configs
+            .iter()
+            .min_by_key(|r| {
+                let mid_rate = (r.min_sample_rate().0 + sample_rate) / 2;
+                if mid_rate > sample_rate {
+                    mid_rate - sample_rate
+                } else {
+                    sample_rate - mid_rate
+                }
+            })
+            .expect("No supported config found");
+
+        let actual_rate =
+            if closest_config.min_sample_rate().0 == closest_config.max_sample_rate().0 {
+                closest_config.min_sample_rate().0
             } else {
-                None
-            }
-        })
-        .expect("No supported config found");
+                (closest_config.min_sample_rate().0 + closest_config.max_sample_rate().0) / 2
+            };
+
+        closest_config.with_sample_rate(SampleRate(actual_rate))
+    });
 
     let config = StreamConfig {
         channels: supported_config.channels(),
         sample_rate: supported_config.sample_rate(),
-        buffer_size: BufferSize::Default,
+        buffer_size: BufferSize::Fixed(supported_config.channels().min(buffer_size.try_into().unwrap()).into()),
     };
 
     let stream = device
