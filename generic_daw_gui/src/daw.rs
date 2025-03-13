@@ -3,7 +3,7 @@ use crate::{
     components::{styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg},
     file_tree::FileTree,
     icons::{PAUSE, PLAY, STOP},
-    widget::{BpmInput, LINE_HEIGHT, VSplit},
+    widget::{BpmInput, LINE_HEIGHT, Redrawer, VSplit},
 };
 use generic_daw_core::{
     Denominator, Meter, Numerator, VARIANTS as _,
@@ -147,7 +147,10 @@ impl Daw {
             return vertical_space().into();
         }
 
+        let playing = self.meter.playing.load(Acquire);
+
         column![
+            Redrawer(playing),
             row![
                 row![
                     styled_button("Load Samples").on_press(Message::SamplesFileDialog),
@@ -155,12 +158,8 @@ impl Daw {
                 ],
                 row![
                     styled_button(
-                        styled_svg(if self.meter.playing.load(Acquire) {
-                            PAUSE.clone()
-                        } else {
-                            PLAY.clone()
-                        })
-                        .height(LINE_HEIGHT)
+                        styled_svg(if playing { PAUSE.clone() } else { PLAY.clone() })
+                            .height(LINE_HEIGHT)
                     )
                     .on_press(Message::TogglePlay),
                     styled_button(styled_svg(STOP.clone()).height(LINE_HEIGHT))

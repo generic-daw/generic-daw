@@ -203,7 +203,7 @@ impl<'a, Message> From<BpmInput<Message>> for Element<'a, Message>
 where
     Message: 'a,
 {
-    fn from(knob: BpmInput<Message>) -> Self {
-        Self::new(knob)
+    fn from(value: BpmInput<Message>) -> Self {
+        Self::new(value)
     }
 }

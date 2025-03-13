@@ -138,22 +138,22 @@ impl Track {
 }
 
 impl From<AudioTrack> for Track {
-    fn from(val: AudioTrack) -> Self {
-        Self::AudioTrack(val)
+    fn from(value: AudioTrack) -> Self {
+        Self::AudioTrack(value)
     }
 }
 
 impl From<MidiTrack> for Track {
-    fn from(val: MidiTrack) -> Self {
-        Self::MidiTrack(val)
+    fn from(value: MidiTrack) -> Self {
+        Self::MidiTrack(value)
     }
 }
 
 impl TryFrom<Track> for AudioTrack {
     type Error = ();
 
-    fn try_from(val: Track) -> Result<Self, ()> {
-        let Track::AudioTrack(inner) = val else {
+    fn try_from(value: Track) -> Result<Self, ()> {
+        let Track::AudioTrack(inner) = value else {
             return Err(());
         };
 
@@ -164,8 +164,8 @@ impl TryFrom<Track> for AudioTrack {
 impl TryFrom<Track> for MidiTrack {
     type Error = ();
 
-    fn try_from(val: Track) -> Result<Self, ()> {
-        let Track::MidiTrack(inner) = val else {
+    fn try_from(value: Track) -> Result<Self, ()> {
+        let Track::MidiTrack(inner) = value else {
             return Err(());
         };
 
@@ -174,8 +174,8 @@ impl TryFrom<Track> for MidiTrack {
 }
 
 impl From<Track> for AudioGraphNode {
-    fn from(val: Track) -> Self {
-        match val {
+    fn from(value: Track) -> Self {
+        match value {
             Track::AudioTrack(inner) => inner.into(),
             Track::MidiTrack(inner) => inner.into(),
         }

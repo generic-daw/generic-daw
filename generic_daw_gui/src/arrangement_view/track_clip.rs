@@ -52,22 +52,22 @@ impl TrackClip {
 }
 
 impl From<Arc<AudioClip>> for TrackClip {
-    fn from(val: Arc<AudioClip>) -> Self {
-        Self::AudioClip(val)
+    fn from(value: Arc<AudioClip>) -> Self {
+        Self::AudioClip(value)
     }
 }
 
 impl From<Arc<MidiClip>> for TrackClip {
-    fn from(val: Arc<MidiClip>) -> Self {
-        Self::MidiClip(val)
+    fn from(value: Arc<MidiClip>) -> Self {
+        Self::MidiClip(value)
     }
 }
 
 impl TryFrom<TrackClip> for Arc<AudioClip> {
     type Error = ();
 
-    fn try_from(val: TrackClip) -> Result<Self, ()> {
-        let TrackClip::AudioClip(inner) = val else {
+    fn try_from(value: TrackClip) -> Result<Self, ()> {
+        let TrackClip::AudioClip(inner) = value else {
             return Err(());
         };
 
@@ -78,8 +78,8 @@ impl TryFrom<TrackClip> for Arc<AudioClip> {
 impl TryFrom<TrackClip> for Arc<MidiClip> {
     type Error = ();
 
-    fn try_from(val: TrackClip) -> Result<Self, ()> {
-        let TrackClip::MidiClip(inner) = val else {
+    fn try_from(value: TrackClip) -> Result<Self, ()> {
+        let TrackClip::MidiClip(inner) = value else {
             return Err(());
         };
 

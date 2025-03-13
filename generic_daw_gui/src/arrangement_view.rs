@@ -6,8 +6,7 @@ use crate::{
     stylefns::{button_with_enabled, radio_with_enabled, slider_with_enabled, svg_with_enabled},
     widget::{
         Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale,
-        AudioClip as AudioClipWidget, Knob, LINE_HEIGHT, PeakMeter, TEXT_HEIGHT,
-        Track as TrackWidget, VSplit,
+        AudioClip as AudioClipWidget, Knob, PeakMeter, TEXT_HEIGHT, Track as TrackWidget, VSplit,
     },
 };
 use arrangement::NodeType;
@@ -458,7 +457,7 @@ impl ArrangementView {
                                     svg(REOPEN.clone())
                                         .style(move |t, s| svg_with_enabled(t, s, enabled))
                                         .width(Length::Shrink)
-                                        .height(LINE_HEIGHT),
+                                        .height(TEXT_HEIGHT),
                                 )
                                 .style(move |t, s| button_with_enabled(t, s, enabled))
                                 .padding(0.0)

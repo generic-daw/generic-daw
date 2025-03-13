@@ -252,7 +252,7 @@ impl<'a, Message> From<VSplit<'a, Message>> for Element<'a, Message>
 where
     Message: 'a,
 {
-    fn from(vsplit: VSplit<'a, Message>) -> Self {
-        Self::new(vsplit)
+    fn from(value: VSplit<'a, Message>) -> Self {
+        Self::new(value)
     }
 }

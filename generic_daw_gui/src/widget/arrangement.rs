@@ -143,11 +143,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
 
         if let Event::Window(window::Event::RedrawRequested(..)) = event {
             state.deleted = false;
-
-            if self.meter.playing.load(Acquire) {
-                shell.request_redraw();
-            }
-
             return;
         }
 
@@ -666,8 +661,8 @@ impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message>
 where
     Message: 'a,
 {
-    fn from(arrangement_front: Arrangement<'a, Message>) -> Self {
-        Self::new(arrangement_front)
+    fn from(value: Arrangement<'a, Message>) -> Self {
+        Self::new(value)
     }
 }
 

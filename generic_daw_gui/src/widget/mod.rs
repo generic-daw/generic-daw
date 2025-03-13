@@ -9,6 +9,7 @@ mod file_tree_entry;
 mod file_tree_indicator;
 mod knob;
 mod peak_meter;
+mod redrawer;
 mod track;
 mod vsplit;
 
@@ -21,6 +22,7 @@ pub use file_tree_entry::FileTreeEntry;
 pub use file_tree_indicator::FileTreeIndicator;
 pub use knob::Knob;
 pub use peak_meter::PeakMeter;
+pub use redrawer::Redrawer;
 pub use track::Track;
 pub use vsplit::VSplit;
 

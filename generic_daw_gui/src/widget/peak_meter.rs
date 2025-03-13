@@ -227,8 +227,8 @@ impl<F, Message> From<PeakMeter<F>> for Element<'_, Message>
 where
     F: Fn() -> [f32; 2] + 'static,
 {
-    fn from(knob: PeakMeter<F>) -> Self {
-        Self::new(knob)
+    fn from(value: PeakMeter<F>) -> Self {
+        Self::new(value)
     }
 }
 

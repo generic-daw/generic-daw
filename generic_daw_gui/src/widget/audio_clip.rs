@@ -393,7 +393,7 @@ impl<'a, Message> From<AudioClip> for Element<'a, Message>
 where
     Message: 'a,
 {
-    fn from(arrangement_front: AudioClip) -> Self {
-        Self::new(arrangement_front)
+    fn from(value: AudioClip) -> Self {
+        Self::new(value)
     }
 }

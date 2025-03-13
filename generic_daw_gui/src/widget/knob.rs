@@ -308,7 +308,7 @@ where
     Message: 'a,
     F: Fn(f32) -> Message + 'a,
 {
-    fn from(knob: Knob<Message, F>) -> Self {
-        Self::new(knob)
+    fn from(value: Knob<Message, F>) -> Self {
+        Self::new(value)
     }
 }
