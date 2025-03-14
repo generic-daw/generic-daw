@@ -9,7 +9,12 @@ use iced::{
     Element,
     widget::{mouse_area, svg},
 };
-use std::path::Path;
+use std::{
+    cell::RefCell,
+    fs,
+    io::{self, Read as _},
+    path::Path,
+};
 
 pub struct File {
     path: Box<Path>,
@@ -20,7 +25,7 @@ pub struct File {
 impl File {
     pub fn new(path: &Path) -> Self {
         let name = path.file_name().unwrap().to_str().unwrap().into();
-        let icon = if is_audio(path) {
+        let icon = if is_audio(path).unwrap_or_default() {
             AUDIO_FILE.clone()
         } else {
             GENERIC_FILE.clone()
@@ -49,9 +54,13 @@ impl File {
     }
 }
 
-fn is_audio(path: &Path) -> bool {
-    infer::get_from_path(path)
-        .ok()
-        .flatten()
-        .is_some_and(|x| x.matcher_type() == infer::MatcherType::Audio)
+pub fn is_audio(path: &Path) -> io::Result<bool> {
+    thread_local! { static BUF: RefCell<Vec<u8>> = RefCell::new(Vec::with_capacity(8192)) };
+    let file = fs::File::open(path)?;
+    let limit = file.metadata()?.len().min(8192);
+    BUF.with_borrow_mut(|buf| {
+        buf.clear();
+        file.take(limit).read_to_end(buf)?;
+        Ok(infer::get(buf).is_some_and(|x| x.matcher_type() == infer::MatcherType::Audio))
+    })
 }
