@@ -24,7 +24,7 @@ pub use knob::Knob;
 pub use peak_meter::PeakMeter;
 pub use redrawer::Redrawer;
 pub use track::Track;
-pub use vsplit::VSplit;
+pub use vsplit::{Strategy, VSplit};
 
 pub const LINE_HEIGHT: f32 = TEXT_HEIGHT * 1.3;
 pub const TEXT_HEIGHT: f32 = 16.0;

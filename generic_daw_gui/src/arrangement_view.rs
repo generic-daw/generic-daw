@@ -6,7 +6,8 @@ use crate::{
     stylefns::{button_with_enabled, radio_with_enabled, slider_with_enabled, svg_with_enabled},
     widget::{
         Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale,
-        AudioClip as AudioClipWidget, Knob, PeakMeter, TEXT_HEIGHT, Track as TrackWidget, VSplit,
+        AudioClip as AudioClipWidget, Knob, PeakMeter, Strategy, TEXT_HEIGHT, Track as TrackWidget,
+        VSplit,
     },
 };
 use arrangement::NodeType;
@@ -128,7 +129,7 @@ impl ArrangementView {
                 grabbed_clip: None,
 
                 selected_channel: None,
-                split_at: 0.75,
+                split_at: 200.0,
             },
             meter,
         )
@@ -387,7 +388,7 @@ impl ArrangementView {
                     .map(Arc::new)
                     .map(Message::AudioGraph);
             }
-            Message::SplitAt(split_at) => self.split_at = split_at,
+            Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 300.0),
         }
 
         Task::none()
@@ -815,9 +816,10 @@ impl ArrangementView {
                     ]
                     .into()
                 },
-                self.split_at,
-                Message::SplitAt,
             )
+            .strategy(Strategy::Right)
+            .split_at(self.split_at)
+            .on_resize(Message::SplitAt)
             .into()
         } else {
             mixer_panel.into()

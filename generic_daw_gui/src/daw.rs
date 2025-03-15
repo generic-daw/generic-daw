@@ -3,7 +3,7 @@ use crate::{
     components::{styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg},
     file_tree::FileTree,
     icons::{PAUSE, PLAY, STOP},
-    widget::{BpmInput, LINE_HEIGHT, Redrawer, VSplit},
+    widget::{BpmInput, LINE_HEIGHT, Redrawer, Strategy, VSplit},
 };
 use generic_daw_core::{
     Denominator, Meter, Numerator, VARIANTS as _,
@@ -76,7 +76,7 @@ impl Daw {
                     #[expect(deprecated, reason = "rust#132515")]
                     &std::env::home_dir().unwrap(),
                 ),
-                split_at: 0.25,
+                split_at: 300.0,
                 meter,
                 theme: Theme::CatppuccinFrappe,
             },
@@ -136,7 +136,7 @@ impl Daw {
                 self.meter.metronome.fetch_not(AcqRel);
             }
             Message::Tab(tab) => self.arrangement.change_tab(tab),
-            Message::SplitAt(split_at) => self.split_at = split_at.min(0.5),
+            Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
         }
 
         Task::none()
@@ -209,9 +209,10 @@ impl Daw {
                     Direction::Vertical(Scrollbar::default()),
                 ),
                 self.arrangement.view().map(Message::Arrangement),
-                self.split_at,
-                Message::SplitAt
             )
+            .strategy(Strategy::Left)
+            .split_at(self.split_at)
+            .on_resize(Message::SplitAt)
         ]
         .padding(20)
         .spacing(20)

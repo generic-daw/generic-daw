@@ -1,5 +1,5 @@
 use iced::{
-    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Shell, Widget,
         layout::{Limits, Node},
@@ -8,11 +8,17 @@ use iced::{
         widget::{Operation, Tree, tree},
     },
     mouse::{self, Cursor, Interaction},
-    widget::Rule,
+    widget::{Rule, rule},
 };
 use std::fmt::{Debug, Formatter};
 
-const DRAG_SIZE: f32 = 10.0;
+#[derive(Clone, Copy, Debug, Default)]
+pub enum Strategy {
+    #[default]
+    Relative,
+    Left,
+    Right,
+}
 
 #[derive(Default)]
 struct State {
@@ -23,13 +29,17 @@ struct State {
 pub struct VSplit<'a, Message> {
     children: [Element<'a, Message>; 3],
     split_at: f32,
-    resize: fn(f32) -> Message,
+    strategy: Strategy,
+    rule_width: f32,
+    on_resize: Option<fn(f32) -> Message>,
 }
 
 impl<Message> Debug for VSplit<'_, Message> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VSplit")
             .field("split_at", &self.split_at)
+            .field("strategy", &self.strategy)
+            .field("rule_width", &self.rule_width)
             .finish_non_exhaustive()
     }
 }
@@ -41,14 +51,40 @@ where
     pub fn new(
         left: impl Into<Element<'a, Message>>,
         right: impl Into<Element<'a, Message>>,
-        split_at: f32,
-        resize: fn(f32) -> Message,
     ) -> Self {
         Self {
-            children: [left.into(), Rule::vertical(DRAG_SIZE).into(), right.into()],
-            split_at,
-            resize,
+            children: [left.into(), Rule::vertical(11.0).into(), right.into()],
+            split_at: 0.5,
+            strategy: Strategy::default(),
+            rule_width: 11.0,
+            on_resize: None,
         }
+    }
+
+    pub fn split_at(mut self, split_at: f32) -> Self {
+        self.split_at = split_at;
+        self
+    }
+
+    pub fn strategy(mut self, strategy: Strategy) -> Self {
+        self.strategy = strategy;
+        self
+    }
+
+    pub fn rule_width(mut self, rule_width: impl Into<Pixels>) -> Self {
+        self.rule_width = rule_width.into().0;
+        self.children[1] = Rule::vertical(self.rule_width).into();
+        self
+    }
+
+    pub fn on_resize(mut self, on_resize: fn(f32) -> Message) -> Self {
+        self.on_resize = Some(on_resize);
+        self
+    }
+
+    pub fn style(mut self, style: impl Fn(&Theme) -> rule::Style + 'a) -> Self {
+        self.children[1] = Rule::vertical(self.rule_width).style(style).into();
+        self
     }
 }
 
@@ -76,16 +112,22 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         let max_limits = limits.max();
 
-        let left_width = max_limits
-            .width
-            .mul_add(self.split_at, -(DRAG_SIZE * 0.5))
-            .floor();
+        let left_width = match self.strategy {
+            Strategy::Relative => max_limits
+                .width
+                .mul_add(self.split_at, -self.rule_width / 2.0)
+                .floor(),
+            Strategy::Left => self.split_at,
+            Strategy::Right => max_limits.width - self.split_at - self.rule_width,
+        }
+        .clamp(0.0, max_limits.width);
+
         let left_limits = Limits::new(
             Size::new(0.0, 0.0),
             Size::new(left_width, max_limits.height),
         );
 
-        let right_width = max_limits.width - left_width - DRAG_SIZE;
+        let right_width = max_limits.width - left_width - self.rule_width;
         let right_limits = Limits::new(
             Size::new(0.0, 0.0),
             Size::new(right_width, max_limits.height),
@@ -102,7 +144,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
             self.children[2]
                 .as_widget()
                 .layout(&mut tree.children[2], renderer, &right_limits)
-                .translate(Vector::new(left_width + DRAG_SIZE, 0.0)),
+                .translate(Vector::new(left_width + self.rule_width, 0.0)),
         ];
 
         Node::with_children(max_limits, children)
@@ -150,9 +192,17 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
                     ..
                 } => {
                     if state.dragging {
-                        let split_at = ((x - bounds.x) / bounds.width).clamp(0.0, 1.0);
-                        shell.publish((self.resize)(split_at));
-                        shell.capture_event();
+                        if let Some(on_resize) = self.on_resize {
+                            let relative_pos =
+                                (x - bounds.x - self.rule_width / 2.0).clamp(0.0, bounds.width);
+                            let split_at = match self.strategy {
+                                Strategy::Relative => relative_pos / bounds.width,
+                                Strategy::Left => relative_pos,
+                                Strategy::Right => bounds.width - relative_pos,
+                            };
+                            shell.publish((on_resize)(split_at));
+                            shell.capture_event();
+                        }
                     } else if state.hovering
                         != cursor.is_over(layout.children().nth(1).unwrap().bounds())
                     {
