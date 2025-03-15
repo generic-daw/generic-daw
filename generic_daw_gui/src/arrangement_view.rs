@@ -259,7 +259,7 @@ impl ArrangementView {
                         .iter()
                         .filter(|track| {
                             track.clips().all(|clip| {
-                                clip.get_global_start() > end || clip.get_global_end() < start
+                                clip.get_global_start() >= end || clip.get_global_end() <= start
                             })
                         })
                         .position(|track| matches!(track, TrackWrapper::AudioTrack(..)))
