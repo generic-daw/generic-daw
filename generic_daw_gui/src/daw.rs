@@ -2,7 +2,7 @@ use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
     components::{styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg},
     file_tree::FileTree,
-    icons::{PAUSE, PLAY, STOP},
+    icons::{PAUSE, PLAY, RECORD, STOP},
     widget::{BpmInput, LINE_HEIGHT, Redrawer, Strategy, VSplit},
 };
 use generic_daw_core::{
@@ -13,10 +13,11 @@ use hound::WavWriter;
 use iced::{
     Alignment::Center,
     Element, Event, Subscription, Task, Theme,
+    border::Radius,
     event::{self, Status},
     keyboard,
     widget::{
-        column, horizontal_space, row,
+        button, column, horizontal_space, row,
         scrollable::{Direction, Scrollbar},
         toggler, vertical_space,
     },
@@ -93,7 +94,6 @@ impl Daw {
         )
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ThemeChanged(theme) => self.theme = theme,
@@ -151,9 +151,7 @@ impl Daw {
             Message::Tab(tab) => self.arrangement.change_tab(tab),
             Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
             Message::ToggleRecord => {
-                if self.recording.is_some() {
-                    return self.update(Message::StopRecord);
-                }
+                let fut = self.update(Message::Stop);
 
                 let mut file_name = "recording-".to_owned();
 
@@ -184,13 +182,13 @@ impl Daw {
                 self.recording = Some((stream, writer, path));
                 self.meter.playing.store(true, Release);
 
-                return Task::stream(receiver).map(Message::RecordingChunk);
+                return fut.chain(Task::stream(receiver).map(Message::RecordingChunk));
             }
             Message::RecordingChunk(samples) => {
-                if let Some((_, writer, _)) = self.recording.as_mut() {
-                    for sample in samples {
-                        writer.write_sample(sample).unwrap();
-                    }
+                let (_, writer, _) = self.recording.as_mut().unwrap();
+
+                for sample in samples {
+                    writer.write_sample(sample).unwrap();
                 }
             }
             Message::StopRecord => {
@@ -248,11 +246,18 @@ impl Daw {
                 toggler(self.meter.metronome.load(Acquire))
                     .label("Metronome")
                     .on_toggle(|_| Message::ToggleMetronome),
+                button(styled_svg(RECORD.clone()))
+                    .style(|t, s| {
+                        let mut style = button::danger(t, s);
+                        style.border.radius = Radius::new(f32::INFINITY);
+                        style
+                    })
+                    .padding(3.0)
+                    .on_press(Message::ToggleRecord),
                 row![
                     styled_button("Arrangement").on_press(Message::Tab(Tab::Arrangement)),
                     styled_button("Mixer").on_press(Message::Tab(Tab::Mixer))
                 ],
-                styled_button("Record").on_press(Message::ToggleRecord),
                 horizontal_space(),
                 styled_pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
                 styled_pick_list(
