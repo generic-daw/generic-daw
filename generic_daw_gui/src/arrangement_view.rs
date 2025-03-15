@@ -245,17 +245,21 @@ impl ArrangementView {
                 .map(Result::ok)
                 .map(move |audio_file| Message::LoadedSample(audio_file, position));
             }
-            Message::LoadedSample(audio_file, position) => {
+            Message::LoadedSample(audio_file, start) => {
                 self.loading -= 1;
+
                 if let Some(audio_file) = audio_file {
+                    let clip = AudioClip::create(audio_file, self.meter.clone());
+                    clip.position.move_to(start);
+                    let end = clip.position.get_global_end();
+
                     let (track, fut) = self
                         .arrangement
                         .tracks()
                         .iter()
                         .filter(|track| {
                             track.clips().all(|clip| {
-                                clip.get_global_start() > position
-                                    || clip.get_global_end() < position
+                                clip.get_global_start() > end || clip.get_global_end() < start
                             })
                         })
                         .position(|track| matches!(track, TrackWrapper::AudioTrack(..)))
@@ -272,9 +276,6 @@ impl ArrangementView {
                             },
                             |x| (x, Task::none()),
                         );
-
-                    let clip = AudioClip::create(audio_file, self.meter.clone());
-                    clip.position.move_to(position);
 
                     self.arrangement.add_clip(track, clip);
 
