@@ -1,3 +1,4 @@
+use async_channel::Receiver;
 use audio_buffers::AudioBuffers;
 use audio_ports_config::AudioPortsConfig;
 use clack_host::prelude::*;
@@ -20,7 +21,6 @@ mod plugin_type;
 mod shared;
 mod timer_ext;
 
-pub use async_channel::{Receiver, Sender};
 pub use audio_processor::AudioProcessor;
 pub use clack_host;
 pub use gui_ext::GuiExt;

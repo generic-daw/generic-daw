@@ -1,5 +1,6 @@
+use async_channel::Receiver;
 use fragile::Fragile;
-use generic_daw_core::clap_host::{GuiExt, MainThreadMessage, PluginId, Receiver};
+use generic_daw_core::clap_host::{GuiExt, MainThreadMessage, PluginId};
 use generic_daw_utils::HoleyVec;
 use iced::{
     Function as _, Size, Subscription, Task,

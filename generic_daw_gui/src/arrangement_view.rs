@@ -248,14 +248,31 @@ impl ArrangementView {
             Message::LoadedSample(audio_file) => {
                 self.loading -= 1;
                 if let Some(audio_file) = audio_file {
-                    let mut track = AudioTrack::new(self.meter.clone());
-                    self.audio_effects_by_channel.insert(*track.id(), vec![]);
-                    track
-                        .clips
-                        .push(AudioClip::create(audio_file, self.meter.clone()));
-                    return Task::future(self.arrangement.add_track(track))
-                        .and_then(Task::done)
-                        .map(Message::ConnectSucceeded);
+                    let (track, fut) = self
+                        .arrangement
+                        .tracks()
+                        .iter()
+                        .position(
+                            |track| matches!(track, TrackWrapper::AudioTrack(track) if track.clips.is_empty()),
+                        )
+                        .map_or_else(
+                            || {
+                                let track = AudioTrack::new(self.meter.clone());
+                                self.audio_effects_by_channel.insert(*track.id(), vec![]);
+                                (
+                                    self.arrangement.tracks().len(),
+                                    Task::future(self.arrangement.add_track(track))
+                                        .and_then(Task::done)
+                                        .map(Message::ConnectSucceeded),
+                                )
+                            },
+                            |x| (x, Task::none()),
+                        );
+
+                    self.arrangement
+                        .add_clip(track, AudioClip::create(audio_file, self.meter.clone()));
+
+                    return fut;
                 }
             }
             Message::LoadInstrumentPlugin(name) => {

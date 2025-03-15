@@ -1,13 +1,14 @@
-use super::track::Track;
+use super::{TrackClipWrapper, track::Track};
 use bit_set::BitSet;
 use generic_daw_core::{
-    DawCtxMessage, Meter, MixerNode, Producer, Stream, StreamTrait as _,
+    DawCtxMessage, Meter, MixerNode, Stream, StreamTrait as _,
     audio_graph::{AudioGraph, AudioGraphNodeImpl as _, NodeId},
     build_output_stream,
-    oneshot::{self, Receiver},
 };
 use generic_daw_utils::{HoleyVec, NoDebug};
 use hound::WavWriter;
+use oneshot::Receiver;
+use rtrb::Producer;
 use std::{
     path::Path,
     sync::{
@@ -136,6 +137,13 @@ impl Arrangement {
             .push(DawCtxMessage::Disconnect(from, to))
             .unwrap();
         self.nodes.get_mut(*to).unwrap().1.remove(*from);
+    }
+
+    pub fn add_clip(&mut self, track: usize, clip: impl Into<TrackClipWrapper>) {
+        match &mut self.tracks[track] {
+            Track::AudioTrack(track) => track.clips.push(clip.into().try_into().unwrap()),
+            Track::MidiTrack(track) => track.clips.push(clip.into().try_into().unwrap()),
+        }
     }
 
     pub fn clone_clip(&mut self, track: usize, clip: usize) {

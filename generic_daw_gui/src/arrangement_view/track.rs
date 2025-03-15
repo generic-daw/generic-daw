@@ -149,30 +149,6 @@ impl From<MidiTrack> for Track {
     }
 }
 
-impl TryFrom<Track> for AudioTrack {
-    type Error = ();
-
-    fn try_from(value: Track) -> Result<Self, ()> {
-        let Track::AudioTrack(inner) = value else {
-            return Err(());
-        };
-
-        Ok(inner)
-    }
-}
-
-impl TryFrom<Track> for MidiTrack {
-    type Error = ();
-
-    fn try_from(value: Track) -> Result<Self, ()> {
-        let Track::MidiTrack(inner) = value else {
-            return Err(());
-        };
-
-        Ok(inner)
-    }
-}
-
 impl From<Track> for AudioGraphNode {
     fn from(value: Track) -> Self {
         match value {

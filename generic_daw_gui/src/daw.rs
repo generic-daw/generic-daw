@@ -6,9 +6,10 @@ use crate::{
     widget::{BpmInput, LINE_HEIGHT, Redrawer, Strategy, VSplit},
 };
 use generic_daw_core::{
-    Denominator, Meter, Numerator, VARIANTS as _,
+    Denominator, Meter, Numerator, Stream, VARIANTS as _, build_input_stream,
     clap_host::{self, PluginDescriptor, PluginType, clack_host::bundle::PluginBundle},
 };
+use hound::WavWriter;
 use iced::{
     Alignment::Center,
     Element, Event, Subscription, Task, Theme,
@@ -24,11 +25,15 @@ use iced::{
 use rfd::{AsyncFileDialog, FileHandle};
 use std::{
     collections::BTreeMap,
+    fs,
+    hash::{DefaultHasher, Hash as _, Hasher as _},
+    io::BufWriter,
     path::Path,
     sync::{
         Arc, LazyLock,
         atomic::Ordering::{AcqRel, Acquire, Release},
     },
+    time::Instant,
 };
 
 pub static PLUGINS: LazyLock<BTreeMap<PluginDescriptor, PluginBundle>> =
@@ -49,6 +54,9 @@ pub enum Message {
     ToggleMetronome,
     Tab(Tab),
     SplitAt(f32),
+    ToggleRecord,
+    RecordingChunk(Box<[f32]>),
+    StopRecord,
 }
 
 pub struct Daw {
@@ -57,6 +65,7 @@ pub struct Daw {
     split_at: f32,
     meter: Arc<Meter>,
     theme: Theme,
+    recording: Option<(Stream, WavWriter<BufWriter<fs::File>>, Box<Path>)>,
 }
 
 impl Daw {
@@ -69,21 +78,22 @@ impl Daw {
 
         let (arrangement, meter) = ArrangementView::create();
 
+        _ = fs::create_dir(dirs::data_dir().unwrap().join("Generic Daw"));
+
         (
             Self {
                 arrangement,
-                file_tree: FileTree::new(
-                    #[expect(deprecated, reason = "rust#132515")]
-                    &std::env::home_dir().unwrap(),
-                ),
+                file_tree: FileTree::new(&dirs::home_dir().unwrap()),
                 split_at: 300.0,
                 meter,
                 theme: Theme::CatppuccinFrappe,
+                recording: None,
             },
             open.discard(),
         )
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ThemeChanged(theme) => self.theme = theme,
@@ -118,12 +128,15 @@ impl Daw {
                 .map(Message::Arrangement);
             }
             Message::TogglePlay => {
-                self.meter.playing.fetch_not(AcqRel);
+                if self.meter.playing.fetch_not(AcqRel) {
+                    return self.update(Message::StopRecord);
+                }
             }
             Message::Stop => {
                 self.meter.playing.store(false, Release);
                 self.meter.sample.store(0, Release);
                 self.arrangement.stop();
+                return self.update(Message::StopRecord);
             }
             Message::BpmChanged(bpm) => self.meter.bpm.store(bpm, Release),
             Message::NumeratorChanged(new_numerator) => {
@@ -137,6 +150,58 @@ impl Daw {
             }
             Message::Tab(tab) => self.arrangement.change_tab(tab),
             Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
+            Message::ToggleRecord => {
+                if self.recording.is_some() {
+                    return self.update(Message::StopRecord);
+                }
+
+                let mut file_name = "recording-".to_owned();
+
+                let mut hasher = DefaultHasher::new();
+                Instant::now().hash(&mut hasher);
+                file_name.push_str(itoa::Buffer::new().format(hasher.finish()));
+
+                file_name.push_str(".wav");
+
+                let path = dirs::data_dir()
+                    .unwrap()
+                    .join("Generic Daw")
+                    .join(file_name)
+                    .into();
+
+                let (stream, receiver) = build_input_stream(self.meter.sample_rate);
+                let writer = WavWriter::create(
+                    &path,
+                    hound::WavSpec {
+                        channels: 2,
+                        sample_rate: self.meter.sample_rate,
+                        bits_per_sample: 32,
+                        sample_format: hound::SampleFormat::Float,
+                    },
+                )
+                .unwrap();
+
+                self.recording = Some((stream, writer, path));
+                self.meter.playing.store(true, Release);
+
+                return Task::stream(receiver).map(Message::RecordingChunk);
+            }
+            Message::RecordingChunk(samples) => {
+                if let Some((_, writer, _)) = self.recording.as_mut() {
+                    for sample in samples {
+                        writer.write_sample(sample).unwrap();
+                    }
+                }
+            }
+            Message::StopRecord => {
+                if let Some((_, writer, path)) = self.recording.take() {
+                    writer.finalize().unwrap();
+                    return self
+                        .arrangement
+                        .update(ArrangementMessage::LoadSample(path))
+                        .map(Message::Arrangement);
+                }
+            }
         }
 
         Task::none()
@@ -187,6 +252,7 @@ impl Daw {
                     styled_button("Arrangement").on_press(Message::Tab(Tab::Arrangement)),
                     styled_button("Mixer").on_press(Message::Tab(Tab::Mixer))
                 ],
+                styled_button("Record").on_press(Message::ToggleRecord),
                 horizontal_space(),
                 styled_pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
                 styled_pick_list(

@@ -1,8 +1,10 @@
+use async_channel::Receiver;
 use cpal::{
     BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
     traits::{DeviceTrait as _, HostTrait as _},
 };
 use daw_ctx::DawCtx;
+use rtrb::Producer;
 use std::{
     cmp::Ordering,
     sync::{
@@ -35,10 +37,40 @@ pub use meter::{Denominator, Meter, Numerator};
 pub use midi_clip::{MidiClip, MidiNote, NoteId};
 pub use midi_track::MidiTrack;
 pub use mixer_node::MixerNode;
-pub use oneshot;
 pub use position::Position;
-pub use rtrb::{Consumer, Producer};
 pub use strum::VariantArray as VARIANTS;
+
+pub fn build_input_stream(sample_rate: u32) -> (Stream, Receiver<Box<[f32]>>) {
+    let (sender, receiver) = async_channel::unbounded();
+
+    let device = cpal::default_host().default_input_device().unwrap();
+
+    let supported_config = device
+        .supported_input_configs()
+        .unwrap()
+        .filter(|config| config.channels() == 2)
+        .filter(|config| config.max_sample_rate().0 >= 40000)
+        .min_by(|l, r| compare_by_sample_rate(l, r, sample_rate))
+        .unwrap();
+
+    let sample_rate = SampleRate(sample_rate.clamp(
+        supported_config.min_sample_rate().0,
+        supported_config.max_sample_rate().0,
+    ));
+
+    let stream = device
+        .build_input_stream(
+            &supported_config.with_sample_rate(sample_rate).config(),
+            move |data, _| sender.try_send(Box::from(data)).unwrap(),
+            |err| panic!("{err}"),
+            None,
+        )
+        .unwrap();
+
+    stream.play().unwrap();
+
+    (stream, receiver)
+}
 
 pub fn build_output_stream(
     sample_rate: u32,
@@ -54,7 +86,10 @@ pub fn build_output_stream(
         .unwrap()
         .filter(|config| config.channels() == 2)
         .filter(|config| config.max_sample_rate().0 >= 40000)
-        .min_by(|l, r| compare_device_orderings(l, r, sample_rate, buffer_size))
+        .min_by(|l, r| {
+            compare_by_sample_rate(l, r, sample_rate)
+                .then_with(|| compare_by_buffer_size(l, r, buffer_size))
+        })
         .unwrap();
 
     let sample_rate = SampleRate(sample_rate.clamp(
@@ -95,23 +130,26 @@ pub fn build_output_stream(
     (stream, master_node, producer, meter)
 }
 
-fn compare_device_orderings(
+fn compare_by_sample_rate(
     l: &SupportedStreamConfigRange,
     r: &SupportedStreamConfigRange,
     sample_rate: u32,
+) -> Ordering {
+    let ldiff = sample_rate
+        .clamp(l.min_sample_rate().0, l.max_sample_rate().0)
+        .abs_diff(sample_rate);
+    let rdiff = sample_rate
+        .clamp(r.min_sample_rate().0, r.max_sample_rate().0)
+        .abs_diff(sample_rate);
+
+    ldiff.cmp(&rdiff)
+}
+
+fn compare_by_buffer_size(
+    l: &SupportedStreamConfigRange,
+    r: &SupportedStreamConfigRange,
     buffer_size: u32,
 ) -> Ordering {
-    let l_sample_rate = sample_rate
-        .clamp(l.min_sample_rate().0, l.max_sample_rate().0)
-        .abs_diff(sample_rate);
-    let r_sample_rate = sample_rate
-        .clamp(l.min_sample_rate().0, l.max_sample_rate().0)
-        .abs_diff(sample_rate);
-
-    if l_sample_rate != r_sample_rate {
-        return l_sample_rate.cmp(&r_sample_rate);
-    }
-
     match (*l.buffer_size(), *r.buffer_size()) {
         (SupportedBufferSize::Unknown, SupportedBufferSize::Unknown) => Ordering::Equal,
         (SupportedBufferSize::Range { .. }, SupportedBufferSize::Unknown) => Ordering::Less,
