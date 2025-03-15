@@ -150,13 +150,13 @@ impl Daw {
         let playing = self.meter.playing.load(Acquire);
 
         column![
-            Redrawer(playing),
             row![
                 row![
                     styled_button("Load Samples").on_press(Message::SamplesFileDialog),
                     styled_button("Export").on_press(Message::ExportFileDialog),
                 ],
                 row![
+                    Redrawer(playing),
                     styled_button(
                         styled_svg(if playing { PAUSE.clone() } else { PLAY.clone() })
                             .height(LINE_HEIGHT)
