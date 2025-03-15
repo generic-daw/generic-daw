@@ -170,6 +170,15 @@ impl Daw {
                     .into();
 
                 let (stream, receiver) = build_input_stream(self.meter.sample_rate);
+
+                self.meter.playing.store(true, Release);
+
+                let position = Position::from_interleaved_samples(
+                    self.meter.sample.load(Acquire),
+                    self.meter.bpm.load(Acquire),
+                    self.meter.sample_rate,
+                );
+
                 let writer = WavWriter::create(
                     &path,
                     hound::WavSpec {
@@ -181,14 +190,7 @@ impl Daw {
                 )
                 .unwrap();
 
-                let position = Position::from_interleaved_samples(
-                    self.meter.sample.load(Acquire),
-                    self.meter.bpm.load(Acquire),
-                    self.meter.sample_rate,
-                );
-
                 self.recording = Some((stream, writer, path, position));
-                self.meter.playing.store(true, Release);
 
                 return fut.chain(Task::stream(receiver).map(Message::RecordingChunk));
             }
