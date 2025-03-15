@@ -6,7 +6,7 @@ use crate::{
     widget::{BpmInput, LINE_HEIGHT, Redrawer, Strategy, VSplit},
 };
 use generic_daw_core::{
-    Denominator, Meter, Numerator, Stream, VARIANTS as _, build_input_stream,
+    Denominator, Meter, Numerator, Position, Stream, VARIANTS as _, build_input_stream,
     clap_host::{self, PluginDescriptor, PluginType, clack_host::bundle::PluginBundle},
 };
 use hound::WavWriter;
@@ -60,13 +60,14 @@ pub enum Message {
     StopRecord,
 }
 
+#[expect(clippy::type_complexity)]
 pub struct Daw {
     arrangement: ArrangementView,
     file_tree: FileTree,
     split_at: f32,
     meter: Arc<Meter>,
     theme: Theme,
-    recording: Option<(Stream, WavWriter<BufWriter<fs::File>>, Box<Path>)>,
+    recording: Option<(Stream, WavWriter<BufWriter<fs::File>>, Box<Path>, Position)>,
 }
 
 impl Daw {
@@ -94,6 +95,7 @@ impl Daw {
         )
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ThemeChanged(theme) => self.theme = theme,
@@ -110,7 +112,7 @@ impl Daw {
                             .iter()
                             .map(FileHandle::path)
                             .map(Box::from)
-                            .map(ArrangementMessage::LoadSample)
+                            .map(|path| ArrangementMessage::LoadSample(path, Position::default()))
                             .map(Message::Arrangement)
                             .map(Task::done),
                     )
@@ -151,7 +153,7 @@ impl Daw {
             Message::Tab(tab) => self.arrangement.change_tab(tab),
             Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
             Message::ToggleRecord => {
-                let fut = self.update(Message::Stop);
+                let fut = self.update(Message::StopRecord);
 
                 let mut file_name = "recording-".to_owned();
 
@@ -179,24 +181,30 @@ impl Daw {
                 )
                 .unwrap();
 
-                self.recording = Some((stream, writer, path));
+                let position = Position::from_interleaved_samples(
+                    self.meter.sample.load(Acquire),
+                    self.meter.bpm.load(Acquire),
+                    self.meter.sample_rate,
+                );
+
+                self.recording = Some((stream, writer, path, position));
                 self.meter.playing.store(true, Release);
 
                 return fut.chain(Task::stream(receiver).map(Message::RecordingChunk));
             }
             Message::RecordingChunk(samples) => {
-                let (_, writer, _) = self.recording.as_mut().unwrap();
-
-                for sample in samples {
-                    writer.write_sample(sample).unwrap();
+                if let Some((_, writer, _, _)) = self.recording.as_mut() {
+                    for sample in samples {
+                        writer.write_sample(sample).unwrap();
+                    }
                 }
             }
             Message::StopRecord => {
-                if let Some((_, writer, path)) = self.recording.take() {
+                if let Some((_, writer, path, position)) = self.recording.take() {
                     writer.finalize().unwrap();
                     return self
                         .arrangement
-                        .update(ArrangementMessage::LoadSample(path))
+                        .update(ArrangementMessage::LoadSample(path, position))
                         .map(Message::Arrangement);
                 }
             }

@@ -5,6 +5,7 @@ use crate::{
     icons::{AUDIO_FILE, GENERIC_FILE},
     widget::{FileTreeEntry, LINE_HEIGHT},
 };
+use generic_daw_core::Position;
 use iced::{
     Element,
     widget::{mouse_area, svg},
@@ -47,6 +48,7 @@ impl File {
             )
             .on_double_click(DawMessage::Arrangement(ArrangementMessage::LoadSample(
                 self.path.clone(),
+                Position::default(),
             )))
             .into(),
             LINE_HEIGHT,

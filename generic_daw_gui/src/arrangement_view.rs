@@ -64,8 +64,8 @@ pub enum Message {
     TrackToggleEnabled(NodeId),
     TrackToggleSolo(usize),
     RemoveTrack(usize),
-    LoadSample(Box<Path>),
-    LoadedSample(Option<Arc<InterleavedAudio>>),
+    LoadSample(Box<Path>, Position),
+    LoadedSample(Option<Arc<InterleavedAudio>>, Position),
     LoadInstrumentPlugin(PluginDescriptor),
     LoadAudioEffectPlugin(PluginDescriptor),
     SeekTo(usize),
@@ -235,7 +235,7 @@ impl ArrangementView {
                     .map(Task::done)
                 });
             }
-            Message::LoadSample(path) => {
+            Message::LoadSample(path, position) => {
                 self.loading += 1;
                 let meter = self.meter.clone();
                 return Task::future(tokio::task::spawn_blocking(move || {
@@ -243,18 +243,22 @@ impl ArrangementView {
                 }))
                 .and_then(Task::done)
                 .map(Result::ok)
-                .map(Message::LoadedSample);
+                .map(move |audio_file| Message::LoadedSample(audio_file, position));
             }
-            Message::LoadedSample(audio_file) => {
+            Message::LoadedSample(audio_file, position) => {
                 self.loading -= 1;
                 if let Some(audio_file) = audio_file {
                     let (track, fut) = self
                         .arrangement
                         .tracks()
                         .iter()
-                        .position(
-                            |track| matches!(track, TrackWrapper::AudioTrack(track) if track.clips.is_empty()),
-                        )
+                        .filter(|track| {
+                            track.clips().all(|clip| {
+                                clip.get_global_start() > position
+                                    || clip.get_global_end() < position
+                            })
+                        })
+                        .position(|track| matches!(track, TrackWrapper::AudioTrack(..)))
                         .map_or_else(
                             || {
                                 let track = AudioTrack::new(self.meter.clone());
@@ -269,8 +273,10 @@ impl ArrangementView {
                             |x| (x, Task::none()),
                         );
 
-                    self.arrangement
-                        .add_clip(track, AudioClip::create(audio_file, self.meter.clone()));
+                    let clip = AudioClip::create(audio_file, self.meter.clone());
+                    clip.position.move_to(position);
+
+                    self.arrangement.add_clip(track, clip);
 
                     return fut;
                 }
@@ -534,7 +540,7 @@ impl ArrangementView {
                                         )
                                         .into()
                                     }
-                                    TrackClipWrapper::MidiClip(_) => unimplemented!(),
+                                    TrackClipWrapper::MidiClip(..) => unimplemented!(),
                                 }),
                                 self.scale,
                             )

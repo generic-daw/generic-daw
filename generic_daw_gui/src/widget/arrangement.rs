@@ -229,7 +229,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                     }
                     _ => {}
                 },
-                mouse::Event::ButtonReleased(_) if state.action != Action::None => {
+                mouse::Event::ButtonReleased(..) if state.action != Action::None => {
                     if state.action.unselect() {
                         shell.publish((self.unselect_clip)());
                     }
