@@ -144,6 +144,10 @@ impl Arrangement {
             Track::AudioTrack(track) => track.clips.push(clip.into().try_into().unwrap()),
             Track::MidiTrack(track) => track.clips.push(clip.into().try_into().unwrap()),
         }
+
+        self.producer
+            .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
+            .unwrap();
     }
 
     pub fn clone_clip(&mut self, track: usize, clip: usize) {
