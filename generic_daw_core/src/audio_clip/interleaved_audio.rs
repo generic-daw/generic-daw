@@ -99,8 +99,14 @@ impl InterleavedAudio {
                 sample_buffer.as_mut().unwrap()
             };
 
-            buf.copy_interleaved_ref(audio_buf);
-            interleaved_samples.extend(buf.samples());
+            buf.copy_planar_ref(audio_buf.clone());
+
+            if audio_buf.spec().channels.count() == 1 {
+                interleaved_samples.extend(buf.samples().iter().flat_map(|s| [s, s]));
+            } else {
+                let (l, r) = buf.samples().split_at(audio_buf.frames());
+                interleaved_samples.extend(l.iter().zip(r).flat_map(<[&f32; 2]>::from));
+            }
         }
 
         Ok(resample(

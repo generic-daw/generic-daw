@@ -40,7 +40,7 @@ pub use mixer_node::MixerNode;
 pub use position::Position;
 pub use strum::VariantArray as VARIANTS;
 
-pub fn build_input_stream(sample_rate: u32) -> (Stream, Receiver<Box<[f32]>>) {
+pub fn build_input_stream(sample_rate: u32) -> (u16, Stream, Receiver<Box<[f32]>>) {
     let (sender, receiver) = async_channel::unbounded();
 
     let device = cpal::default_host().default_input_device().unwrap();
@@ -48,7 +48,6 @@ pub fn build_input_stream(sample_rate: u32) -> (Stream, Receiver<Box<[f32]>>) {
     let supported_config = device
         .supported_input_configs()
         .unwrap()
-        .filter(|config| config.channels() == 2)
         .filter(|config| config.max_sample_rate().0 >= 40000)
         .min_by(|l, r| compare_by_sample_rate(l, r, sample_rate))
         .unwrap();
@@ -69,7 +68,7 @@ pub fn build_input_stream(sample_rate: u32) -> (Stream, Receiver<Box<[f32]>>) {
 
     stream.play().unwrap();
 
-    (stream, receiver)
+    (supported_config.channels(), stream, receiver)
 }
 
 pub fn build_output_stream(

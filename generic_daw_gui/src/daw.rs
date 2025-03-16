@@ -169,7 +169,7 @@ impl Daw {
                     .join(file_name)
                     .into();
 
-                let (stream, receiver) = build_input_stream(self.meter.sample_rate);
+                let (channels, stream, receiver) = build_input_stream(self.meter.sample_rate);
 
                 self.meter.playing.store(true, Release);
 
@@ -182,7 +182,7 @@ impl Daw {
                 let writer = WavWriter::create(
                     &path,
                     hound::WavSpec {
-                        channels: 2,
+                        channels,
                         sample_rate: self.meter.sample_rate,
                         bits_per_sample: 32,
                         sample_format: hound::SampleFormat::Float,
