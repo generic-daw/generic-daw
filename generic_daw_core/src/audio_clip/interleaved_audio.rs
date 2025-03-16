@@ -170,7 +170,7 @@ impl InterleavedAudio {
 pub fn resample(
     file_sample_rate: u32,
     stream_sample_rate: u32,
-    mut interleaved_samples: Vec<f32>,
+    interleaved_samples: Vec<f32>,
 ) -> Result<Box<[f32]>, RubatoError> {
     if file_sample_rate == stream_sample_rate {
         return Ok(interleaved_samples.into_boxed_slice());
@@ -198,16 +198,18 @@ pub fn resample(
         .iter()
         .copied()
         .step_by(2)
-        .collect::<Box<_>>();
-    let right = interleaved_samples
-        .iter()
-        .copied()
-        .skip(1)
-        .step_by(2)
-        .collect();
+        .collect::<Vec<_>>();
 
-    let deinterleaved_samples = resampler.process(&[left, right], None)?;
+    let mut right = interleaved_samples;
+    let mut keep = true;
+    right.retain(|_| {
+        keep ^= true;
+        keep
+    });
 
+    let deinterleaved_samples = resampler.process(&[&left, &right], None)?;
+
+    let mut interleaved_samples = right;
     interleaved_samples.clear();
     interleaved_samples.extend(
         deinterleaved_samples[0]
