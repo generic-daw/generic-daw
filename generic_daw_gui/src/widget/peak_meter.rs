@@ -1,39 +1,41 @@
 use super::LINE_HEIGHT;
 use generic_daw_utils::NoDebug;
 use iced::{
-    Color, Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
+    Animation, Color, Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
         layout::{Limits, Node},
         renderer::{Quad, Style},
         widget::{Tree, tree},
     },
+    animation::Easing,
     mouse::Cursor,
     window,
 };
 use std::{
-    cmp::{max_by, min_by},
-    time::Instant,
+    cmp::min_by,
+    time::{Duration, Instant},
 };
 
 const WIDTH: f32 = LINE_HEIGHT / 3.0 * 4.0 + 2.0;
 
+#[derive(Debug)]
 struct State {
-    left: f32,
-    right: f32,
-    left_mix: f32,
-    right_mix: f32,
-    last_draw: Instant,
+    left: Animation<f32>,
+    right: Animation<f32>,
+    left_mix: Animation<f32>,
+    right_mix: Animation<f32>,
+    now: Instant,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
-            left: f32::default(),
-            right: f32::default(),
-            left_mix: f32::default(),
-            right_mix: f32::default(),
-            last_draw: Instant::now(),
+            left: Animation::new(0.0),
+            right: Animation::new(0.0),
+            left_mix: Animation::new(0.0),
+            right_mix: Animation::new(0.0),
+            now: Instant::now(),
         }
     }
 }
@@ -71,7 +73,7 @@ where
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        _layout: Layout<'_>,
         _cursor: Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
@@ -80,44 +82,43 @@ where
     ) {
         if let &Event::Window(window::Event::RedrawRequested(now)) = event {
             let state = tree.state.downcast_mut::<State>();
-            let bounds = layout.bounds();
-
-            let diff = ((now - state.last_draw).as_millis() * 4) as f32;
-            state.last_draw = now;
+            state.now = now;
 
             let [left, right] = (self.update)();
 
-            state.left = if left >= state.left {
-                left
-            } else {
-                state.left.mul_add(diff - 1.0, left) / diff
-            };
-            state.left_mix = if !self.enabled {
-                0.0
-            } else if state.left > 1.0 {
-                1.0
-            } else {
-                max_by(0.0, state.left_mix - (diff / 512.0), f32::total_cmp)
-            };
+            if left >= state.left.interpolate_with(|v| v, now) {
+                state.left = Animation::new(left)
+                    .duration(Duration::from_secs_f32(left.exp2()))
+                    .easing(Easing::EaseOutExpo)
+                    .go(0.0);
+            }
 
-            state.right = if right >= state.right {
-                right
-            } else {
-                state.right.mul_add(diff - 1.0, right) / diff
-            };
-            state.right_mix = if !self.enabled {
-                0.0
-            } else if state.right > 1.0 {
-                1.0
-            } else {
-                max_by(0.0, state.right_mix - (diff / 512.0), f32::total_cmp)
-            };
+            if right >= state.right.interpolate_with(|v| v, now) {
+                state.right = Animation::new(right)
+                    .duration(Duration::from_secs_f32(right.exp2()))
+                    .easing(Easing::EaseOutExpo)
+                    .go(0.0);
+            }
 
-            if max_by(state.left, state.right, f32::total_cmp) * bounds.height > 1.0 {
+            if self.enabled {
+                if state.left.interpolate_with(|v| v, now) > 1.0 {
+                    state.left_mix = Animation::new(1.0).very_quick().go(0.0);
+                }
+
+                if state.right.interpolate_with(|v| v, now) > 1.0 {
+                    state.right_mix = Animation::new(1.0).very_quick().go(0.0);
+                }
+            } else {
+                state.left_mix = Animation::new(0.0);
+                state.right_mix = Animation::new(0.0);
+            }
+
+            if state.left.is_animating(now)
+                || state.right.is_animating(now)
+                || state.left_mix.is_animating(now)
+                || state.right_mix.is_animating(now)
+            {
                 shell.request_redraw();
-            } else {
-                state.left = 0.0;
-                state.right = 0.0;
             }
         }
     }
@@ -143,8 +144,8 @@ where
         self.draw_bar(
             renderer,
             theme,
-            state.left,
-            state.left_mix,
+            state.left.interpolate_with(|v| v, state.now),
+            state.left_mix.interpolate_with(|v| v, state.now),
             Rectangle::new(
                 bounds.position(),
                 Size::new(bounds.width / 2.0 - 1.0, bounds.height),
@@ -154,8 +155,8 @@ where
         self.draw_bar(
             renderer,
             theme,
-            state.right,
-            state.right_mix,
+            state.right.interpolate_with(|v| v, state.now),
+            state.right_mix.interpolate_with(|v| v, state.now),
             Rectangle::new(
                 bounds.position() + Vector::new(bounds.width / 2.0 + 1.0, 0.0),
                 Size::new(bounds.width / 2.0 - 1.0, bounds.height),
