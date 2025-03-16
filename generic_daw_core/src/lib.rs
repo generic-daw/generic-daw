@@ -25,7 +25,10 @@ mod midi_track;
 mod mixer_node;
 mod position;
 
-pub use audio_clip::{AudioClip, InterleavedAudio, InterleavedAudioError, RubatoError, resample};
+pub use audio_clip::{
+    AudioClip, InterleavedAudio, InterleavedAudioError, RubatoError, resample_interleaved,
+    resample_planar,
+};
 pub use audio_graph;
 pub use audio_track::AudioTrack;
 pub use clap_host;

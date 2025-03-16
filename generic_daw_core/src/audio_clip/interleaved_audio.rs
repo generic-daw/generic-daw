@@ -74,10 +74,11 @@ impl InterleavedAudio {
 
         let track = format.default_track().unwrap();
         let track_id = track.id;
+        let n_frames = track.codec_params.n_frames.unwrap() as usize;
         let file_sample_rate = track.codec_params.sample_rate.unwrap();
 
-        let mut interleaved_samples =
-            Vec::with_capacity(track.codec_params.n_frames.unwrap() as usize * 2);
+        let mut left = Vec::with_capacity(n_frames);
+        let mut right = Vec::with_capacity(n_frames);
 
         let mut decoder = symphonia::default::get_codecs()
             .make(&track.codec_params, &DecoderOptions::default())?;
@@ -102,18 +103,17 @@ impl InterleavedAudio {
             buf.copy_planar_ref(audio_buf.clone());
 
             if audio_buf.spec().channels.count() == 1 {
-                interleaved_samples.extend(buf.samples().iter().flat_map(|s| [s, s]));
+                left.extend(buf.samples());
+                right.extend(buf.samples());
             } else {
-                let (l, r) = buf.samples().split_at(audio_buf.frames());
-                interleaved_samples.extend(l.iter().zip(r).flat_map(<[&f32; 2]>::from));
+                let l = &buf.samples()[..audio_buf.frames()];
+                let r = &buf.samples()[audio_buf.frames()..][..audio_buf.frames()];
+                left.extend(l);
+                right.extend(r);
             }
         }
 
-        Ok(resample(
-            file_sample_rate,
-            sample_rate,
-            interleaved_samples,
-        )?)
+        Ok(resample_planar(file_sample_rate, sample_rate, left, right)?)
     }
 
     fn create_lod(&mut self) {
@@ -167,13 +167,43 @@ impl InterleavedAudio {
     }
 }
 
-pub fn resample(
+pub fn resample_interleaved(
     file_sample_rate: u32,
     stream_sample_rate: u32,
     interleaved_samples: Vec<f32>,
 ) -> Result<Box<[f32]>, RubatoError> {
     if file_sample_rate == stream_sample_rate {
         return Ok(interleaved_samples.into_boxed_slice());
+    }
+
+    let left = interleaved_samples
+        .iter()
+        .copied()
+        .step_by(2)
+        .collect::<Vec<_>>();
+
+    let mut right = interleaved_samples;
+    let mut keep = true;
+    right.retain(|_| {
+        keep ^= true;
+        keep
+    });
+
+    resample_planar(file_sample_rate, stream_sample_rate, left, right)
+}
+
+pub fn resample_planar(
+    file_sample_rate: u32,
+    stream_sample_rate: u32,
+    left: Vec<f32>,
+    right: Vec<f32>,
+) -> Result<Box<[f32]>, RubatoError> {
+    if file_sample_rate == stream_sample_rate {
+        return Ok(left
+            .into_iter()
+            .zip(right)
+            .flat_map(<[f32; 2]>::from)
+            .collect());
     }
 
     let resample_ratio = f64::from(stream_sample_rate) / f64::from(file_sample_rate);
@@ -190,33 +220,17 @@ pub fn resample(
             oversampling_factor,
             window: WindowFunction::Blackman,
         },
-        interleaved_samples.len() / 2,
+        left.len(),
         2,
     )?;
 
-    let left = interleaved_samples
-        .iter()
-        .copied()
-        .step_by(2)
-        .collect::<Vec<_>>();
+    let mut planar_samples = resampler.process(&[&left, &right], None)?.into_iter();
+    let l = planar_samples.next().unwrap();
+    let r = planar_samples.next().unwrap();
 
-    let mut right = interleaved_samples;
-    let mut keep = true;
-    right.retain(|_| {
-        keep ^= true;
-        keep
-    });
-
-    let deinterleaved_samples = resampler.process(&[&left, &right], None)?;
-
-    let mut interleaved_samples = right;
+    let mut interleaved_samples = left;
     interleaved_samples.clear();
-    interleaved_samples.extend(
-        deinterleaved_samples[0]
-            .iter()
-            .zip(&deinterleaved_samples[1])
-            .flat_map(<[&f32; 2]>::from),
-    );
+    interleaved_samples.extend(l.into_iter().zip(r).flat_map(<[f32; 2]>::from));
 
     Ok(interleaved_samples.into_boxed_slice())
 }

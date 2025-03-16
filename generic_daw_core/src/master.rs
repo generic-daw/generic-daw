@@ -1,4 +1,4 @@
-use crate::{Meter, MixerNode, Position, include_f32s, resample};
+use crate::{Meter, MixerNode, Position, include_f32s, resample_interleaved};
 use audio_graph::{AudioGraphNodeImpl, NodeId};
 use live_sample::LiveSample;
 use std::{
@@ -81,10 +81,10 @@ impl Master {
 
         Self {
             click: RefCell::default(),
-            on_bar_click: resample(44100, sample_rate, ON_BAR_CLICK.into())
+            on_bar_click: resample_interleaved(44100, sample_rate, ON_BAR_CLICK.into())
                 .unwrap()
                 .into(),
-            off_bar_click: resample(44100, sample_rate, OFF_BAR_CLICK.into())
+            off_bar_click: resample_interleaved(44100, sample_rate, OFF_BAR_CLICK.into())
                 .unwrap()
                 .into(),
             meter,
