@@ -1,14 +1,14 @@
 use crate::{
     arrangement_view::Message as ArrangementMessage,
-    components::styled_button,
+    components::{styled_button, styled_svg},
     daw::Message as DawMessage,
     icons::{AUDIO_FILE, GENERIC_FILE},
-    widget::{FileTreeEntry, LINE_HEIGHT},
+    widget::{Clipped, LINE_HEIGHT},
 };
 use generic_daw_core::Position;
 use iced::{
-    Element,
-    widget::{mouse_area, svg},
+    Element, Length,
+    widget::{container, mouse_area, row, svg, text, text::Wrapping},
 };
 use std::{
     cell::RefCell,
@@ -42,9 +42,13 @@ impl File {
     pub fn view(&self) -> (Element<'_, DawMessage>, f32) {
         (
             mouse_area(
-                styled_button(FileTreeEntry::new(&self.name, self.icon.clone()))
-                    .on_press(DawMessage::FileTree(self.path.clone()))
-                    .padding(0),
+                styled_button(row![
+                    Clipped::new(styled_svg(self.icon.clone()).height(LINE_HEIGHT)),
+                    container(text(self.name.as_ref()).wrapping(Wrapping::None)).clip(true)
+                ])
+                .width(Length::Fill)
+                .padding(0)
+                .on_press(DawMessage::FileTree(self.path.clone())),
             )
             .on_double_click(DawMessage::Arrangement(ArrangementMessage::LoadSample(
                 self.path.clone(),

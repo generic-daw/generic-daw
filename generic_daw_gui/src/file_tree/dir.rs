@@ -1,13 +1,15 @@
 use super::file::File;
 use crate::{
-    components::styled_button,
+    components::{styled_button, styled_svg},
     daw::Message as DawMessage,
     icons::CHEVRON_RIGHT,
-    widget::{FileTreeEntry, FileTreeIndicator, LINE_HEIGHT},
+    widget::{Clipped, LINE_HEIGHT},
 };
 use iced::{
-    Element, Radians,
-    widget::{column, mouse_area, row},
+    Element, Length, Radians,
+    alignment::Horizontal,
+    padding,
+    widget::{column, container, mouse_area, row, rule, text, text::Wrapping, vertical_rule},
 };
 use std::{f32::consts::FRAC_PI_2, path::Path};
 
@@ -52,10 +54,15 @@ impl Dir {
 
     pub fn view(&self) -> (Element<'_, DawMessage>, f32) {
         let mut col = column!(mouse_area(
-            styled_button(
-                FileTreeEntry::new(&self.name, CHEVRON_RIGHT.clone())
-                    .rotation(Radians(if self.open { FRAC_PI_2 } else { 0.0 }))
-            )
+            styled_button(row![
+                Clipped::new(
+                    styled_svg(CHEVRON_RIGHT.clone())
+                        .rotation(Radians(if self.open { FRAC_PI_2 } else { 0.0 }))
+                        .height(LINE_HEIGHT)
+                ),
+                container(text(self.name.as_ref()).wrapping(Wrapping::None)).clip(true)
+            ])
+            .width(Length::Fill)
             .padding(0)
             .on_press(DawMessage::FileTree(self.path.clone()))
         ));
@@ -76,7 +83,17 @@ impl Dir {
                     })
             ),];
 
-            col = col.push(row![FileTreeIndicator::new(LINE_HEIGHT, height, 2.0), ch]);
+            col = col.push(row![
+                column![vertical_rule(1.0).style(|t| rule::Style {
+                    width: 3,
+                    ..rule::default(t)
+                })]
+                .padding(padding::top(LINE_HEIGHT / 2.0 - 1.5).bottom(LINE_HEIGHT / 2.0 - 1.5))
+                .align_x(Horizontal::Center)
+                .width(LINE_HEIGHT)
+                .height(height),
+                ch
+            ]);
         }
 
         (col.into(), height + LINE_HEIGHT)

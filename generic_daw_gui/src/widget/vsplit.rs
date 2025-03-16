@@ -268,13 +268,13 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
         }
     }
 
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut Tree,
+    fn overlay<'a>(
+        &'a mut self,
+        tree: &'a mut Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+    ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
         overlay::from_children(&mut self.children, tree, layout, renderer, translation)
     }
 
