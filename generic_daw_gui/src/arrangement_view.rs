@@ -866,6 +866,14 @@ impl ArrangementView {
                                                         .rotation(Radians(FRAC_PI_2))
                                                         .width(Length::Shrink)
                                                         .height(LINE_HEIGHT + 10.0)
+                                                        .style(|t: &Theme, _| svg::Style {
+                                                            color: Some(
+                                                                t.extended_palette()
+                                                                    .background
+                                                                    .weak
+                                                                    .text
+                                                            )
+                                                        })
                                                 )
                                                 .style(|t: &Theme| container::Style {
                                                     background: Some(
