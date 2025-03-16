@@ -225,14 +225,14 @@ pub fn resample_planar(
     )?;
 
     let mut planar_samples = resampler.process(&[&left, &right], None)?.into_iter();
-    let l = planar_samples.next().unwrap();
-    let r = planar_samples.next().unwrap();
+    let left = planar_samples.next().unwrap();
+    let right = planar_samples.next().unwrap();
 
-    let mut interleaved_samples = left;
-    interleaved_samples.clear();
-    interleaved_samples.extend(l.into_iter().zip(r).flat_map(<[f32; 2]>::from));
-
-    Ok(interleaved_samples.into_boxed_slice())
+    Ok(left
+        .into_iter()
+        .zip(right)
+        .flat_map(<[f32; 2]>::from)
+        .collect())
 }
 
 fn gcd(mut a: u32, mut b: u32) -> u32 {
