@@ -25,6 +25,12 @@ pub static GENERIC_FILE: LazyLock<svg::Handle> = LazyLock::new(|| {
     ))
 });
 
+pub static HANDLE: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!(
+        "../../assets/material-symbols--drag-handle-rounded.svg"
+    ))
+});
+
 pub static RECORD: LazyLock<svg::Handle> = LazyLock::new(|| {
     svg::Handle::from_memory(include_bytes!(
         "../../assets/material-symbols--fiber-manual-record.svg"

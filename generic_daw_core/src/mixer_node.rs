@@ -37,9 +37,19 @@ impl MixerNode {
     }
 
     pub fn add_effect(&self, effect: AudioProcessor) {
-        let mut effects = Arc::into_inner(self.effects.swap(Arc::new(vec![]))).unwrap();
-        effects.push((Mutex::new(effect), Atomic::new(1.0)));
-        self.effects.store(Arc::new(effects));
+        self.with_effects_list(move |effects| effects.push((Mutex::new(effect), Atomic::new(1.0))));
+    }
+
+    pub fn swap(&self, a: usize, b: usize) {
+        self.with_effects_list(move |effects| effects.swap(a, b));
+    }
+
+    pub fn shift_move(&self, from: usize, to: usize) {
+        if from > to {
+            self.with_effects_list(|effects| effects[to..=from].rotate_right(1));
+        } else {
+            self.with_effects_list(|effects| effects[from..=to].rotate_left(1));
+        }
     }
 
     pub fn get_effect_mix(&self, index: usize) -> f32 {
@@ -48,6 +58,15 @@ impl MixerNode {
 
     pub fn set_effect_mix(&self, index: usize, mix: f32) {
         self.effects.load()[index].1.store(mix, Release);
+    }
+
+    fn with_effects_list(&self, f: impl FnOnce(&mut Vec<(Mutex<AudioProcessor>, Atomic<f32>)>)) {
+        let arc = self.effects.swap(Arc::new(vec![]));
+        while Arc::strong_count(&arc) != 1 {}
+
+        let mut inner = Arc::into_inner(arc).unwrap();
+        f(&mut inner);
+        self.effects.store(Arc::new(inner));
     }
 }
 

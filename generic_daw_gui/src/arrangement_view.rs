@@ -2,15 +2,16 @@ use crate::{
     clap_host_view::{ClapHostView, Message as ClapHostMessage},
     components::{styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg},
     daw::PLUGINS,
-    icons::{CANCEL, CHEVRON_RIGHT, REOPEN},
+    icons::{CANCEL, CHEVRON_RIGHT, HANDLE, REOPEN},
     stylefns::{button_with_enabled, radio_with_enabled, slider_with_enabled, svg_with_enabled},
     widget::{
         Arrangement as ArrangementWidget, ArrangementPosition, ArrangementScale,
-        AudioClip as AudioClipWidget, Knob, PeakMeter, Strategy, TEXT_HEIGHT, Track as TrackWidget,
-        VSplit,
+        AudioClip as AudioClipWidget, Knob, LINE_HEIGHT, PeakMeter, Strategy, TEXT_HEIGHT,
+        Track as TrackWidget, VSplit,
     },
 };
 use arrangement::NodeType;
+use dragking::{DragEvent, DropPosition};
 use fragile::Fragile;
 use generic_daw_core::{
     AudioClip, AudioTrack, InterleavedAudio, Meter, MidiTrack, MixerNode, Position,
@@ -19,14 +20,16 @@ use generic_daw_core::{
 };
 use generic_daw_utils::{EnumDispatcher, HoleyVec};
 use iced::{
-    Alignment, Element, Function as _, Length, Radians, Rotation, Subscription, Task,
+    Alignment, Element, Function as _, Length, Radians, Subscription, Task, Theme,
     border::{self, Radius},
     futures::TryFutureExt as _,
     mouse::Interaction,
     widget::{
         button, column, container, horizontal_rule, mouse_area, radio, row,
         scrollable::{Direction, Scrollbar},
-        svg, text, vertical_rule, vertical_slider, vertical_space,
+        svg, text,
+        text::Wrapping,
+        vertical_rule, vertical_slider, vertical_space,
     },
 };
 use std::{
@@ -59,7 +62,6 @@ pub enum Message {
     RemoveChannel(NodeId),
     NodeVolumeChanged(NodeId, f32),
     NodePanChanged(NodeId, f32),
-    EffectMixChannged(NodeId, usize, f32),
     NodeToggleEnabled(NodeId),
     TrackToggleEnabled(NodeId),
     TrackToggleSolo(usize),
@@ -68,6 +70,8 @@ pub enum Message {
     LoadedSample(Option<Arc<InterleavedAudio>>, Position),
     LoadInstrumentPlugin(PluginDescriptor),
     LoadAudioEffectPlugin(PluginDescriptor),
+    AudioEffectMixChannged(NodeId, usize, f32),
+    AudioEffectsReordered(DragEvent),
     SeekTo(usize),
     SelectClip(usize, usize),
     UnselectClip(),
@@ -129,7 +133,7 @@ impl ArrangementView {
                 grabbed_clip: None,
 
                 selected_channel: None,
-                split_at: 200.0,
+                split_at: 300.0,
             },
             meter,
         )
@@ -184,9 +188,6 @@ impl ArrangementView {
             }
             Message::NodeToggleEnabled(id) => {
                 self.arrangement.node(id).0.enabled.fetch_not(AcqRel);
-            }
-            Message::EffectMixChannged(id, i, mix) => {
-                self.arrangement.node(id).0.set_effect_mix(i, mix);
             }
             Message::TrackToggleEnabled(id) => {
                 self.soloed_track = None;
@@ -336,6 +337,31 @@ impl ArrangementView {
                     )))))
                     .map(Message::ClapHost);
             }
+            Message::AudioEffectMixChannged(id, i, mix) => {
+                self.arrangement.node(id).0.set_effect_mix(i, mix);
+            }
+            Message::AudioEffectsReordered(event) => {
+                if let DragEvent::Dropped {
+                    index,
+                    target_index,
+                    drop_position,
+                } = event
+                {
+                    let selected = self.selected_channel.unwrap();
+                    let node = self.arrangement.node(selected).0.clone();
+                    match drop_position {
+                        DropPosition::Before | DropPosition::After
+                            if target_index != index && target_index != index + 1 =>
+                        {
+                            node.shift_move(index, target_index);
+                        }
+                        DropPosition::Swap if target_index != index => {
+                            node.swap(index, target_index);
+                        }
+                        _ => {}
+                    }
+                }
+            }
             Message::SeekTo(pos) => {
                 self.meter.sample.store(pos, Release);
             }
@@ -412,7 +438,7 @@ impl ArrangementView {
                     .map(Arc::new)
                     .map(Message::AudioGraph);
             }
-            Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 300.0),
+            Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
         }
 
         Task::none()
@@ -654,7 +680,7 @@ impl ArrangementView {
                                 .style(move |t, s| svg_with_enabled(t, s, enabled))
                                 .width(Length::Shrink)
                                 .height(Length::Shrink)
-                                .rotation(Rotation::Floating(Radians(-FRAC_PI_2))),
+                                .rotation(Radians(-FRAC_PI_2)),
                         )
                         .style(move |t, s| button_with_enabled(t, s, enabled && connected))
                         .padding(0.0)
@@ -804,7 +830,7 @@ impl ArrangementView {
                         plugin_picker,
                         horizontal_rule(11.0),
                         styled_scrollable_with_direction(
-                            column({
+                            dragking::column({
                                 self.audio_effects_by_channel[*id].iter().enumerate().map(
                                     |(i, (plugin_id, name))| {
                                         row![
@@ -815,26 +841,58 @@ impl ArrangementView {
                                                     node.get_effect_mix(i),
                                                     true,
                                                     move |mix| {
-                                                        Message::EffectMixChannged(id, i, mix)
+                                                        Message::AudioEffectMixChannged(id, i, mix)
                                                     }
                                                 )
                                                 .radius(TEXT_HEIGHT)
                                             )
-                                            .on_double_click(Message::EffectMixChannged(
+                                            .on_double_click(Message::AudioEffectMixChannged(
                                                 id, i, 1.0
                                             )),
-                                            styled_button(text(name)).width(Length::Fill).on_press(
+                                            styled_button(
+                                                container(text(name).wrapping(Wrapping::None))
+                                                    .clip(true)
+                                            )
+                                            .width(Length::Fill)
+                                            .on_press(
                                                 Message::ClapHost(ClapHostMessage::MainThread(
                                                     *plugin_id,
                                                     MainThreadMessage::GuiRequestShow,
                                                 ),)
+                                            ),
+                                            mouse_area(
+                                                container(
+                                                    svg(HANDLE.clone())
+                                                        .rotation(Radians(FRAC_PI_2))
+                                                        .width(Length::Shrink)
+                                                        .height(LINE_HEIGHT + 10.0)
+                                                )
+                                                .style(|t: &Theme| container::Style {
+                                                    background: Some(
+                                                        t.extended_palette()
+                                                            .background
+                                                            .weak
+                                                            .color
+                                                            .into()
+                                                    ),
+                                                    border: border::width(1.0).color(
+                                                        t.extended_palette()
+                                                            .background
+                                                            .strong
+                                                            .color
+                                                    ),
+                                                    ..container::Style::default()
+                                                })
                                             )
+                                            .interaction(Interaction::Grab),
                                         ]
                                         .spacing(5.0)
                                         .into()
                                     },
                                 )
-                            }),
+                            })
+                            .spacing(5.0)
+                            .on_drag(Message::AudioEffectsReordered),
                             Direction::Vertical(Scrollbar::default())
                         )
                     ]

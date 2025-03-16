@@ -6,7 +6,7 @@ use crate::{
     widget::{FileTreeEntry, FileTreeIndicator, LINE_HEIGHT},
 };
 use iced::{
-    Element, Radians, Rotation,
+    Element, Radians,
     widget::{column, mouse_area, row},
 };
 use std::{f32::consts::FRAC_PI_2, path::Path};
@@ -53,9 +53,8 @@ impl Dir {
     pub fn view(&self) -> (Element<'_, DawMessage>, f32) {
         let mut col = column!(mouse_area(
             styled_button(
-                FileTreeEntry::new(&self.name, CHEVRON_RIGHT.clone()).rotation(Rotation::Floating(
-                    Radians(if self.open { FRAC_PI_2 } else { 0.0 })
-                ))
+                FileTreeEntry::new(&self.name, CHEVRON_RIGHT.clone())
+                    .rotation(Radians(if self.open { FRAC_PI_2 } else { 0.0 }))
             )
             .padding(0)
             .on_press(DawMessage::FileTree(self.path.clone()))

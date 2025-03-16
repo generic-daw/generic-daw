@@ -120,7 +120,8 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
             Strategy::Left => self.split_at,
             Strategy::Right => max_limits.width - self.split_at - self.rule_width,
         }
-        .clamp(0.0, max_limits.width);
+        .min(max_limits.width)
+        .max(0.0);
 
         let left_limits = Limits::new(
             Size::new(0.0, 0.0),
@@ -198,7 +199,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
                             let split_at = match self.strategy {
                                 Strategy::Relative => relative_pos / bounds.width,
                                 Strategy::Left => relative_pos,
-                                Strategy::Right => bounds.width - relative_pos,
+                                Strategy::Right => bounds.width - relative_pos - self.rule_width,
                             };
                             shell.publish((on_resize)(split_at));
                             shell.capture_event();
