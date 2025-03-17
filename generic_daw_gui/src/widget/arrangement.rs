@@ -59,7 +59,7 @@ pub struct Arrangement<'a, Message> {
 
     seek_to: fn(usize) -> Message,
     select_clip: fn(usize, usize) -> Message,
-    unselect_clip: fn() -> Message,
+    unselect_clip: Message,
     clone_clip: fn(usize, usize) -> Message,
     move_clip_to: fn(usize, Position) -> Message,
     trim_clip_start: fn(Position) -> Message,
@@ -78,7 +78,10 @@ impl<Message> Debug for Arrangement<'_, Message> {
     }
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
+impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message>
+where
+    Message: Clone,
+{
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
     }
@@ -165,7 +168,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                 shell.request_redraw();
 
                 if state.action.unselect() {
-                    shell.publish((self.unselect_clip)());
+                    shell.publish(self.unselect_clip.clone());
                 }
             }
 
@@ -231,7 +234,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
                 },
                 mouse::Event::ButtonReleased(..) if state.action != Action::None => {
                     if state.action.unselect() {
-                        shell.publish((self.unselect_clip)());
+                        shell.publish(self.unselect_clip.clone());
                     }
 
                     state.action = Action::None;
@@ -447,7 +450,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message> {
 
 impl<'a, Message> Arrangement<'a, Message>
 where
-    Message: 'a,
+    Message: Clone + 'a,
 {
     #[expect(clippy::too_many_arguments)]
     pub fn new(
@@ -457,7 +460,7 @@ where
         children: impl Into<Element<'a, Message>>,
         seek_to: fn(usize) -> Message,
         select_clip: fn(usize, usize) -> Message,
-        unselect_clip: fn() -> Message,
+        unselect_clip: Message,
         clone_clip: fn(usize, usize) -> Message,
         move_clip_to: fn(usize, Position) -> Message,
         trim_clip_start: fn(Position) -> Message,
@@ -659,7 +662,7 @@ where
 
 impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message>
 where
-    Message: 'a,
+    Message: Clone + 'a,
 {
     fn from(value: Arrangement<'a, Message>) -> Self {
         Self::new(value)

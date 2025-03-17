@@ -14,7 +14,6 @@ use iced::{
     window,
 };
 use std::{
-    cell::RefCell,
     f32::consts::{FRAC_PI_2, FRAC_PI_4},
     fmt::Debug,
     ops::RangeInclusive,
@@ -26,7 +25,6 @@ struct State {
     hovering: bool,
     last_value: f32,
     last_enabled: bool,
-    last_theme: RefCell<Option<Theme>>,
     cache: Cache,
 }
 
@@ -179,16 +177,6 @@ where
         }
 
         let state = tree.state.downcast_ref::<State>();
-
-        if state
-            .last_theme
-            .borrow()
-            .as_ref()
-            .is_none_or(|last_theme| last_theme != theme)
-        {
-            state.cache.clear();
-            state.last_theme.borrow_mut().replace(theme.clone());
-        }
 
         renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
             renderer.draw_geometry(state.cache.draw(renderer, bounds.size(), |frame| {

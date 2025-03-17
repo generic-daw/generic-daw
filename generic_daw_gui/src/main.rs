@@ -1,8 +1,8 @@
 use daw::Daw;
-use iced::{Result, daemon};
+use iced::{Result, Theme, daemon};
 
 mod arrangement_view;
-mod clap_host_view;
+mod clap_host;
 mod components;
 mod daw;
 mod file_tree;
@@ -29,7 +29,7 @@ fn main() -> Result {
 
     daemon(Daw::title, Daw::update, Daw::view)
         .subscription(|_| Daw::subscription())
-        .theme(Daw::theme)
+        .theme(|_, _| Theme::CatppuccinFrappe)
         .antialiasing(true)
         .run_with(Daw::create)
 }

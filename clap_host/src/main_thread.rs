@@ -12,10 +12,10 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 #[derive(Clone, Copy, Debug)]
 pub enum MainThreadMessage {
     RequestCallback,
-    GuiRequestHide,
     GuiRequestShow,
-    GuiClosed,
     GuiRequestResize(GuiSize),
+    GuiRequestHide,
+    GuiClosed,
     TickTimers,
 }
 

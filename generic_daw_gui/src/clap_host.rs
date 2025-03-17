@@ -12,18 +12,18 @@ use std::sync::{Arc, Mutex};
 pub enum Message {
     MainThread(PluginId, MainThreadMessage),
     Opened(Arc<Mutex<(Fragile<GuiExt>, Receiver<MainThreadMessage>)>>),
-    Shown(Id, Arc<Fragile<GuiExt>>),
-    CloseRequested(Id),
-    Resized((Id, Size)),
+    GuiRequestShow(Id, Arc<Fragile<GuiExt>>),
+    GuiRequestResize((Id, Size)),
+    GuiRequestHide(Id),
 }
 
 #[derive(Default)]
-pub struct ClapHostView {
+pub struct ClapHost {
     plugins: HoleyVec<GuiExt>,
     windows: HoleyVec<Id>,
 }
 
-impl ClapHostView {
+impl ClapHost {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::MainThread(id, msg) => return self.main_thread_message(id, msg),
@@ -45,7 +45,7 @@ impl ClapHostView {
 
                 return open.chain(stream);
             }
-            Message::Shown(window_id, arc) => {
+            Message::GuiRequestShow(window_id, arc) => {
                 let mut gui = Arc::into_inner(arc).unwrap().into_inner();
                 let id = gui.plugin_id();
 
@@ -61,7 +61,7 @@ impl ClapHostView {
                     .chain(resizable)
                     .chain(self.update(Message::MainThread(id, MainThreadMessage::TickTimers)));
             }
-            Message::Resized((window_id, size)) => {
+            Message::GuiRequestResize((window_id, size)) => {
                 if let Some(id) = self.windows.position(&window_id) {
                     if let Some(new_size) = self
                         .plugins
@@ -76,7 +76,7 @@ impl ClapHostView {
                     }
                 }
             }
-            Message::CloseRequested(window_id) => {
+            Message::GuiRequestHide(window_id) => {
                 let Some(id) = self.windows.position(&window_id) else {
                     return iced::exit();
                 };
@@ -97,11 +97,6 @@ impl ClapHostView {
                 .get_mut(id.get())
                 .unwrap()
                 .call_on_main_thread_callback(),
-            MainThreadMessage::GuiRequestHide => {
-                if let Some(&id) = self.windows.get(id.get()) {
-                    return self.update(Message::CloseRequested(id));
-                }
-            }
             MainThreadMessage::GuiRequestShow => {
                 if self.windows.contains_key(id.get()) {
                     return Task::none();
@@ -118,17 +113,10 @@ impl ClapHostView {
 
                 let embed = window::run_with_handle(window_id, move |handle| {
                     gui.get_mut().open_embedded(handle.as_raw());
-                    Message::Shown(window_id, Arc::new(gui))
+                    Message::GuiRequestShow(window_id, Arc::new(gui))
                 });
 
                 return spawn.discard().chain(embed);
-            }
-            MainThreadMessage::GuiClosed => {
-                self.plugins.remove(id.get()).unwrap();
-
-                if let Some(window_id) = self.windows.remove(id.get()) {
-                    return window::close(window_id);
-                }
             }
             MainThreadMessage::GuiRequestResize(new_size) => {
                 if let Some(&window_id) = self.windows.get(id.get()) {
@@ -139,6 +127,18 @@ impl ClapHostView {
                             height: new_size.height as f32,
                         },
                     );
+                }
+            }
+            MainThreadMessage::GuiRequestHide => {
+                if let Some(&id) = self.windows.get(id.get()) {
+                    return self.update(Message::GuiRequestHide(id));
+                }
+            }
+            MainThreadMessage::GuiClosed => {
+                self.plugins.remove(id.get()).unwrap();
+
+                if let Some(window_id) = self.windows.remove(id.get()) {
+                    return window::close(window_id);
                 }
             }
             MainThreadMessage::TickTimers => {
@@ -167,8 +167,8 @@ impl ClapHostView {
 
     pub fn subscription() -> Subscription<Message> {
         Subscription::batch([
-            resize_events().map(Message::Resized),
-            close_requests().map(Message::CloseRequested),
+            resize_events().map(Message::GuiRequestResize),
+            close_requests().map(Message::GuiRequestHide),
         ])
     }
 }

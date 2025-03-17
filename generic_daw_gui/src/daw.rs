@@ -12,7 +12,7 @@ use generic_daw_core::{
 use hound::{SampleFormat, WavSpec, WavWriter};
 use iced::{
     Alignment::Center,
-    Element, Event, Subscription, Task, Theme,
+    Element, Event, Subscription, Task,
     border::Radius,
     event::{self, Status},
     keyboard,
@@ -42,22 +42,25 @@ pub static PLUGINS: LazyLock<BTreeMap<PluginDescriptor, PluginBundle>> =
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    ThemeChanged(Theme),
     Arrangement(ArrangementMessage),
     FileTree(Box<Path>),
+
     SamplesFileDialog,
     ExportFileDialog,
-    TogglePlay,
+
     Stop,
-    BpmChanged(u16),
-    NumeratorChanged(Numerator),
-    DenominatorChanged(Denominator),
+    TogglePlay,
     ToggleMetronome,
-    Tab(Tab),
-    SplitAt(f32),
+    ChangedBpm(u16),
+    ChangedNumerator(Numerator),
+    ChangedDenominator(Denominator),
+    ChangedTab(Tab),
+
     ToggleRecord,
     RecordingChunk(Box<[f32]>),
     StopRecord,
+
+    SplitAt(f32),
 }
 
 #[expect(clippy::type_complexity)]
@@ -66,7 +69,6 @@ pub struct Daw {
     file_tree: FileTree,
     split_at: f32,
     meter: Arc<Meter>,
-    theme: Theme,
     recording: Option<(Stream, WavWriter<BufWriter<fs::File>>, Box<Path>, Position)>,
 }
 
@@ -88,7 +90,6 @@ impl Daw {
                 file_tree: FileTree::new(&dirs::home_dir().unwrap()),
                 split_at: 300.0,
                 meter,
-                theme: Theme::CatppuccinFrappe,
                 recording: None,
             },
             open.discard(),
@@ -98,13 +99,11 @@ impl Daw {
     #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::ThemeChanged(theme) => self.theme = theme,
             Message::Arrangement(message) => {
                 return self.arrangement.update(message).map(Message::Arrangement);
             }
-            Message::FileTree(path) => {
-                self.file_tree.update(&path);
-            }
+            Message::FileTree(path) => self.file_tree.update(&path),
+            Message::ChangedTab(tab) => self.arrangement.change_tab(tab),
             Message::SamplesFileDialog => {
                 return Task::future(AsyncFileDialog::new().pick_files()).and_then(|paths| {
                     Task::batch(
@@ -112,7 +111,7 @@ impl Daw {
                             .iter()
                             .map(FileHandle::path)
                             .map(Box::from)
-                            .map(|path| ArrangementMessage::LoadSample(path, Position::default()))
+                            .map(|path| ArrangementMessage::SampleLoad(path, Position::default()))
                             .map(Message::Arrangement)
                             .map(Task::done),
                     )
@@ -126,13 +125,8 @@ impl Daw {
                 )
                 .and_then(Task::done)
                 .map(|p| p.path().into())
-                .map(ArrangementMessage::Export)
+                .map(ArrangementMessage::ExportRequest)
                 .map(Message::Arrangement);
-            }
-            Message::TogglePlay => {
-                if self.meter.playing.fetch_not(AcqRel) {
-                    return self.update(Message::StopRecord);
-                }
             }
             Message::Stop => {
                 self.meter.playing.store(false, Release);
@@ -140,18 +134,21 @@ impl Daw {
                 self.arrangement.stop();
                 return self.update(Message::StopRecord);
             }
-            Message::BpmChanged(bpm) => self.meter.bpm.store(bpm, Release),
-            Message::NumeratorChanged(new_numerator) => {
-                self.meter.numerator.store(new_numerator, Release);
-            }
-            Message::DenominatorChanged(new_denominator) => {
-                self.meter.denominator.store(new_denominator, Release);
+            Message::TogglePlay => {
+                if self.meter.playing.fetch_not(AcqRel) {
+                    return self.update(Message::StopRecord);
+                }
             }
             Message::ToggleMetronome => {
                 self.meter.metronome.fetch_not(AcqRel);
             }
-            Message::Tab(tab) => self.arrangement.change_tab(tab),
-            Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
+            Message::ChangedBpm(bpm) => self.meter.bpm.store(bpm, Release),
+            Message::ChangedNumerator(new_numerator) => {
+                self.meter.numerator.store(new_numerator, Release);
+            }
+            Message::ChangedDenominator(new_denominator) => {
+                self.meter.denominator.store(new_denominator, Release);
+            }
             Message::ToggleRecord => {
                 if self.recording.is_some() {
                     return self.update(Message::StopRecord);
@@ -209,10 +206,11 @@ impl Daw {
                     writer.finalize().unwrap();
                     return self
                         .arrangement
-                        .update(ArrangementMessage::LoadSample(path, position))
+                        .update(ArrangementMessage::SampleLoad(path, position))
                         .map(Message::Arrangement);
                 }
             }
+            Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
         }
 
         Task::none()
@@ -245,17 +243,17 @@ impl Daw {
                     styled_pick_list(
                         Numerator::VARIANTS,
                         Some(self.meter.numerator.load(Acquire)),
-                        Message::NumeratorChanged
+                        Message::ChangedNumerator
                     )
                     .width(50),
                     styled_pick_list(
                         Denominator::VARIANTS,
                         Some(self.meter.denominator.load(Acquire)),
-                        Message::DenominatorChanged
+                        Message::ChangedDenominator
                     )
                     .width(50),
                 ],
-                BpmInput::new(self.meter.bpm.load(Acquire), 30..=600, Message::BpmChanged),
+                BpmInput::new(self.meter.bpm.load(Acquire), 30..=600, Message::ChangedBpm),
                 toggler(self.meter.metronome.load(Acquire))
                     .label("Metronome")
                     .on_toggle(|_| Message::ToggleMetronome),
@@ -268,20 +266,17 @@ impl Daw {
                     .padding(3.0)
                     .on_press(Message::ToggleRecord),
                 row![
-                    styled_button("Arrangement").on_press(Message::Tab(Tab::Arrangement)),
-                    styled_button("Mixer").on_press(Message::Tab(Tab::Mixer))
+                    styled_button("Arrangement").on_press(Message::ChangedTab(Tab::Arrangement)),
+                    styled_button("Mixer").on_press(Message::ChangedTab(Tab::Mixer))
                 ],
                 horizontal_space(),
-                styled_pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged),
                 styled_pick_list(
                     PLUGINS
                         .keys()
                         .filter(|d| d.ty == PluginType::Instrument)
                         .collect::<Box<[_]>>(),
                     None::<&PluginDescriptor>,
-                    |p| Message::Arrangement(ArrangementMessage::LoadInstrumentPlugin(
-                        p.to_owned()
-                    ))
+                    |p| Message::Arrangement(ArrangementMessage::InstrumentLoad(p.to_owned()))
                 )
                 .placeholder("Add Instrument")
             ]
@@ -301,10 +296,6 @@ impl Daw {
         .padding(20)
         .spacing(20)
         .into()
-    }
-
-    pub fn theme(&self, _window: Id) -> Theme {
-        self.theme.clone()
     }
 
     pub fn title(&self, window: Id) -> String {

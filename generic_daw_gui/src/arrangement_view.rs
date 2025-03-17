@@ -1,5 +1,5 @@
 use crate::{
-    clap_host_view::{ClapHostView, Message as ClapHostMessage},
+    clap_host::{ClapHost, Message as ClapHostMessage},
     components::{styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg},
     daw::PLUGINS,
     icons::{CANCEL, CHEVRON_RIGHT, HANDLE, REOPEN},
@@ -54,37 +54,47 @@ pub use track_clip::TrackClip as TrackClipWrapper;
 #[derive(Clone, Debug)]
 pub enum Message {
     ClapHost(ClapHostMessage),
-    AudioGraph(Arc<Mutex<(AudioGraph, Box<Path>)>>),
-    RequestConnect((NodeId, NodeId)),
+
+    ConnectRequest((NodeId, NodeId)),
     ConnectSucceeded((NodeId, NodeId)),
     Disconnect((NodeId, NodeId)),
-    SelectChannel(NodeId),
-    AddChannel,
-    RemoveChannel(NodeId),
-    NodeVolumeChanged(NodeId, f32),
-    NodePanChanged(NodeId, f32),
-    NodeToggleEnabled(NodeId),
-    TrackToggleEnabled(NodeId),
-    TrackToggleSolo(usize),
-    RemoveTrack(usize),
-    LoadSample(Box<Path>, Position),
-    LoadedSample(Option<Arc<InterleavedAudio>>, Position),
-    LoadInstrumentPlugin(PluginDescriptor),
-    LoadAudioEffectPlugin(PluginDescriptor),
-    AudioEffectMixChannged(usize, f32),
+    ExportRequest(Box<Path>),
+    Export(Arc<Mutex<(AudioGraph, Box<Path>)>>),
+
+    ChannelAdd,
+    ChannelRemove(NodeId),
+    ChannelSelect(NodeId),
+    ChannelVolumeChanged(NodeId, f32),
+    ChannelPanChanged(NodeId, f32),
+    ChannelToggleEnabled(NodeId),
+
+    AudioEffectLoad(PluginDescriptor),
+    AudioEffectRemove(usize),
+    AudioEffectMixChanged(usize, f32),
     AudioEffectToggleEnabled(usize),
     AudioEffectsReordered(DragEvent),
-    RemoveAudioEffect(usize),
+
+    SampleLoad(Box<Path>, Position),
+    SampleLoaded(Option<Arc<InterleavedAudio>>, Position),
+
+    InstrumentLoad(PluginDescriptor),
+
+    TrackRemove(usize),
+    TrackToggleEnabled(NodeId),
+    TrackToggleSolo(usize),
+
+    ClipSelect(usize, usize),
+    ClipUnselect,
+    ClipClone(usize, usize),
+    ClipMove(usize, Position),
+    ClipTrimStart(Position),
+    ClipTrimEnd(Position),
+    ClipDelete(usize, usize),
+
     SeekTo(usize),
-    SelectClip(usize, usize),
-    UnselectClip(),
-    CloneClip(usize, usize),
-    MoveClipTo(usize, Position),
-    TrimClipStart(Position),
-    TrimClipEnd(Position),
-    DeleteClip(usize, usize),
+
     PositionScaleDelta(ArrangementPosition, ArrangementScale),
-    Export(Box<Path>),
+
     SplitAt(f32),
 }
 
@@ -95,7 +105,8 @@ pub enum Tab {
 }
 
 pub struct ArrangementView {
-    pub clap_host: ClapHostView,
+    pub clap_host: ClapHost,
+
     instrument_by_track: HoleyVec<PluginId>,
     audio_effects_by_channel: HoleyVec<Vec<(PluginId, Box<str>)>>,
 
@@ -120,7 +131,7 @@ impl ArrangementView {
 
         (
             Self {
-                clap_host: ClapHostView::default(),
+                clap_host: ClapHost::default(),
                 instrument_by_track: HoleyVec::default(),
                 audio_effects_by_channel: HoleyVec::default(),
 
@@ -150,12 +161,7 @@ impl ArrangementView {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ClapHost(msg) => return self.clap_host.update(msg).map(Message::ClapHost),
-            Message::AudioGraph(message) => {
-                let (audio_graph, path) =
-                    Mutex::into_inner(Arc::into_inner(message).unwrap()).unwrap();
-                self.arrangement.export(audio_graph, &path);
-            }
-            Message::RequestConnect((from, to)) => {
+            Message::ConnectRequest((from, to)) => {
                 return Task::future(self.arrangement.request_connect(from, to))
                     .and_then(Task::done)
                     .map(Message::ConnectSucceeded);
@@ -166,22 +172,24 @@ impl ArrangementView {
             Message::Disconnect((from, to)) => {
                 self.arrangement.disconnect(from, to);
             }
-            Message::SelectChannel(id) => {
-                self.selected_channel = if self.selected_channel == Some(id) {
-                    None
-                } else {
-                    self.audio_effects_by_channel
-                        .entry(id.get())
-                        .get_or_insert_default();
-                    Some(id)
-                };
+            Message::ExportRequest(path) => {
+                return Task::future(self.arrangement.request_export().map_ok(|ok| (ok, path)))
+                    .and_then(Task::done)
+                    .map(Mutex::new)
+                    .map(Arc::new)
+                    .map(Message::Export);
             }
-            Message::AddChannel => {
+            Message::Export(message) => {
+                let (audio_graph, path) =
+                    Mutex::into_inner(Arc::into_inner(message).unwrap()).unwrap();
+                self.arrangement.export(audio_graph, &path);
+            }
+            Message::ChannelAdd => {
                 return Task::future(self.arrangement.add_channel())
                     .and_then(Task::done)
                     .map(Message::ConnectSucceeded);
             }
-            Message::RemoveChannel(id) => {
+            Message::ChannelRemove(id) => {
                 self.arrangement.remove_channel(id);
 
                 if self.selected_channel == Some(id) {
@@ -203,53 +211,105 @@ impl ArrangementView {
                         }),
                 );
             }
-            Message::NodeVolumeChanged(id, volume) => {
-                self.arrangement.node(id).0.volume.store(volume, Release);
-            }
-            Message::NodePanChanged(id, pan) => {
-                self.arrangement.node(id).0.pan.store(pan, Release);
-            }
-            Message::NodeToggleEnabled(id) => {
-                self.arrangement.node(id).0.enabled.fetch_not(AcqRel);
-            }
-            Message::TrackToggleEnabled(id) => {
-                self.soloed_track = None;
-                return self.update(Message::NodeToggleEnabled(id));
-            }
-            Message::TrackToggleSolo(track) => {
-                if self.soloed_track == Some(track) {
-                    self.soloed_track = None;
-                    self.arrangement
-                        .tracks()
-                        .iter()
-                        .for_each(|track| track.node().enabled.store(true, Release));
+            Message::ChannelSelect(id) => {
+                self.selected_channel = if self.selected_channel == Some(id) {
+                    None
                 } else {
-                    self.arrangement
-                        .tracks()
-                        .iter()
-                        .for_each(|track| track.node().enabled.store(false, Release));
-                    self.arrangement.tracks()[track]
-                        .node()
-                        .enabled
-                        .store(true, Release);
-                    self.soloed_track = Some(track);
-                }
-            }
-            Message::RemoveTrack(track) => {
-                let id = self.arrangement.remove_track(track);
-                let fut = self.update(Message::RemoveChannel(id));
-
-                return if let Some(id) = self.instrument_by_track.remove(id.get()) {
-                    self.update(Message::ClapHost(ClapHostMessage::MainThread(
-                        id,
-                        MainThreadMessage::GuiClosed,
-                    )))
-                    .chain(fut)
-                } else {
-                    fut
+                    self.audio_effects_by_channel
+                        .entry(id.get())
+                        .get_or_insert_default();
+                    Some(id)
                 };
             }
-            Message::LoadSample(path, position) => {
+            Message::ChannelVolumeChanged(id, volume) => {
+                self.arrangement.node(id).0.volume.store(volume, Release);
+            }
+            Message::ChannelPanChanged(id, pan) => {
+                self.arrangement.node(id).0.pan.store(pan, Release);
+            }
+            Message::ChannelToggleEnabled(id) => {
+                self.arrangement.node(id).0.enabled.fetch_not(AcqRel);
+            }
+            Message::AudioEffectLoad(name) => {
+                let Some(selected) = self.selected_channel else {
+                    return Task::none();
+                };
+                let node = self.arrangement.node(selected).0.clone();
+
+                let (gui, gui_receiver, audio_processor) = clap_host::init(
+                    &PLUGINS[&name],
+                    name,
+                    f64::from(self.meter.sample_rate),
+                    self.meter.buffer_size,
+                );
+
+                let id = audio_processor.id();
+                node.add_effect(audio_processor);
+
+                self.audio_effects_by_channel
+                    .get_mut(selected.get())
+                    .unwrap()
+                    .push((id, gui.name().into()));
+
+                return self
+                    .clap_host
+                    .update(ClapHostMessage::Opened(Arc::new(Mutex::new((
+                        Fragile::new(gui),
+                        gui_receiver,
+                    )))))
+                    .map(Message::ClapHost);
+            }
+            Message::AudioEffectMixChanged(i, mix) => {
+                let selected = self.selected_channel.unwrap();
+                self.arrangement.node(selected).0.set_effect_mix(i, mix);
+            }
+            Message::AudioEffectToggleEnabled(i) => {
+                let selected = self.selected_channel.unwrap();
+                self.arrangement.node(selected).0.toggle_effect_enabled(i);
+            }
+            Message::AudioEffectsReordered(event) => {
+                if let DragEvent::Dropped {
+                    index,
+                    mut target_index,
+                    drop_position,
+                } = event
+                {
+                    if drop_position == DropPosition::After {
+                        target_index -= 1;
+                    }
+
+                    if index != target_index {
+                        let selected = self.selected_channel.unwrap();
+
+                        self.arrangement
+                            .node(selected)
+                            .0
+                            .shift_move(index, target_index);
+                        self.audio_effects_by_channel
+                            .get_mut(selected.get())
+                            .unwrap()
+                            .shift_move(index, target_index);
+                    }
+                }
+            }
+            Message::AudioEffectRemove(i) => {
+                let selected = self.selected_channel.unwrap();
+                self.arrangement.node(selected).0.remove_effect(i);
+                let id = self
+                    .audio_effects_by_channel
+                    .get_mut(selected.get())
+                    .unwrap()
+                    .remove(i)
+                    .0;
+                return self
+                    .clap_host
+                    .update(ClapHostMessage::MainThread(
+                        id,
+                        MainThreadMessage::GuiClosed,
+                    ))
+                    .map(Message::ClapHost);
+            }
+            Message::SampleLoad(path, position) => {
                 self.loading += 1;
                 let meter = self.meter.clone();
                 return Task::future(tokio::task::spawn_blocking(move || {
@@ -257,9 +317,9 @@ impl ArrangementView {
                 }))
                 .and_then(Task::done)
                 .map(Result::ok)
-                .map(move |audio_file| Message::LoadedSample(audio_file, position));
+                .map(move |audio_file| Message::SampleLoaded(audio_file, position));
             }
-            Message::LoadedSample(audio_file, start) => {
+            Message::SampleLoaded(audio_file, start) => {
                 self.loading -= 1;
 
                 if let Some(audio_file) = audio_file {
@@ -295,7 +355,7 @@ impl ArrangementView {
                     return fut;
                 }
             }
-            Message::LoadInstrumentPlugin(name) => {
+            Message::InstrumentLoad(name) => {
                 let (gui, gui_receiver, audio_processor) = clap_host::init(
                     &PLUGINS[&name],
                     name,
@@ -319,98 +379,53 @@ impl ArrangementView {
                         .map(Message::ClapHost),
                 ]);
             }
-            Message::LoadAudioEffectPlugin(name) => {
-                let Some(selected) = self.selected_channel else {
-                    return Task::none();
-                };
-                let node = self.arrangement.node(selected).0.clone();
+            Message::TrackRemove(track) => {
+                let id = self.arrangement.remove_track(track);
+                let fut = self.update(Message::ChannelRemove(id));
 
-                let (gui, gui_receiver, audio_processor) = clap_host::init(
-                    &PLUGINS[&name],
-                    name,
-                    f64::from(self.meter.sample_rate),
-                    self.meter.buffer_size,
-                );
-
-                let id = audio_processor.id();
-                node.add_effect(audio_processor);
-
-                self.audio_effects_by_channel
-                    .get_mut(selected.get())
-                    .unwrap()
-                    .push((id, gui.name().into()));
-
-                return self
-                    .clap_host
-                    .update(ClapHostMessage::Opened(Arc::new(Mutex::new((
-                        Fragile::new(gui),
-                        gui_receiver,
-                    )))))
-                    .map(Message::ClapHost);
-            }
-            Message::AudioEffectMixChannged(i, mix) => {
-                let selected = self.selected_channel.unwrap();
-                self.arrangement.node(selected).0.set_effect_mix(i, mix);
-            }
-            Message::AudioEffectToggleEnabled(i) => {
-                let selected = self.selected_channel.unwrap();
-                self.arrangement.node(selected).0.toggle_effect_enabled(i);
-            }
-            Message::AudioEffectsReordered(event) => {
-                if let DragEvent::Dropped {
-                    index,
-                    mut target_index,
-                    drop_position,
-                } = event
-                {
-                    if drop_position == DropPosition::After {
-                        target_index -= 1;
-                    }
-
-                    if index != target_index {
-                        let selected = self.selected_channel.unwrap();
-
-                        self.arrangement
-                            .node(selected)
-                            .0
-                            .shift_move(index, target_index);
-                        self.audio_effects_by_channel
-                            .get_mut(selected.get())
-                            .unwrap()
-                            .shift_move(index, target_index);
-                    }
-                }
-            }
-            Message::RemoveAudioEffect(i) => {
-                let selected = self.selected_channel.unwrap();
-                self.arrangement.node(selected).0.remove_effect(i);
-                let id = self
-                    .audio_effects_by_channel
-                    .get_mut(selected.get())
-                    .unwrap()
-                    .remove(i)
-                    .0;
-                return self
-                    .clap_host
-                    .update(ClapHostMessage::MainThread(
+                return if let Some(id) = self.instrument_by_track.remove(id.get()) {
+                    self.update(Message::ClapHost(ClapHostMessage::MainThread(
                         id,
                         MainThreadMessage::GuiClosed,
-                    ))
-                    .map(Message::ClapHost);
+                    )))
+                    .chain(fut)
+                } else {
+                    fut
+                };
             }
-            Message::SeekTo(pos) => {
-                self.meter.sample.store(pos, Release);
+            Message::TrackToggleEnabled(id) => {
+                self.soloed_track = None;
+                return self.update(Message::ChannelToggleEnabled(id));
             }
-            Message::SelectClip(track, clip) => {
+            Message::TrackToggleSolo(track) => {
+                if self.soloed_track == Some(track) {
+                    self.soloed_track = None;
+                    self.arrangement
+                        .tracks()
+                        .iter()
+                        .for_each(|track| track.node().enabled.store(true, Release));
+                } else {
+                    self.arrangement
+                        .tracks()
+                        .iter()
+                        .for_each(|track| track.node().enabled.store(false, Release));
+                    self.arrangement.tracks()[track]
+                        .node()
+                        .enabled
+                        .store(true, Release);
+                    self.soloed_track = Some(track);
+                }
+            }
+            Message::ClipSelect(track, clip) => {
                 self.grabbed_clip = Some([track, clip]);
             }
-            Message::UnselectClip() => self.grabbed_clip = None,
-            Message::CloneClip(track, mut clip) => {
+            Message::ClipUnselect => self.grabbed_clip = None,
+            Message::ClipClone(track, mut clip) => {
                 self.arrangement.clone_clip(track, clip);
                 clip = self.arrangement.tracks()[track].clips().len() - 1;
                 self.grabbed_clip.replace([track, clip]);
             }
-            Message::MoveClipTo(new_track, pos) => {
+            Message::ClipMove(new_track, pos) => {
                 let [track, clip] = self.grabbed_clip.as_mut().unwrap();
 
                 if *track != new_track
@@ -424,20 +439,23 @@ impl ArrangementView {
                     .get_clip(*clip)
                     .move_to(pos);
             }
-            Message::TrimClipStart(pos) => {
+            Message::ClipTrimStart(pos) => {
                 let [track, clip] = self.grabbed_clip.unwrap();
                 self.arrangement.tracks()[track]
                     .get_clip(clip)
                     .trim_start_to(pos);
             }
-            Message::TrimClipEnd(pos) => {
+            Message::ClipTrimEnd(pos) => {
                 let [track, clip] = self.grabbed_clip.unwrap();
                 self.arrangement.tracks()[track]
                     .get_clip(clip)
                     .trim_end_to(pos);
             }
-            Message::DeleteClip(track, clip) => {
+            Message::ClipDelete(track, clip) => {
                 self.arrangement.delete_clip(track, clip);
+            }
+            Message::SeekTo(pos) => {
+                self.meter.sample.store(pos, Release);
             }
             Message::PositionScaleDelta(pos, scale) => {
                 let sd = scale != ArrangementScale::ZERO;
@@ -466,13 +484,6 @@ impl ArrangementView {
                         self.arrangement.tracks().len().saturating_sub(1) as f32,
                     );
                 }
-            }
-            Message::Export(path) => {
-                return Task::future(self.arrangement.request_export().map_ok(|ok| (ok, path)))
-                    .and_then(Task::done)
-                    .map(Mutex::new)
-                    .map(Arc::new)
-                    .map(Message::AudioGraph);
             }
             Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
         }
@@ -528,7 +539,7 @@ impl ArrangementView {
                                     style
                                 })
                                 .padding(0.0)
-                                .on_press(Message::RemoveTrack(idx)),
+                                .on_press(Message::TrackRemove(idx)),
                         ]
                         .spacing(5.0);
 
@@ -561,17 +572,17 @@ impl ArrangementView {
                                             0.0,
                                             track.node().volume.load(Acquire),
                                             enabled,
-                                            Message::NodeVolumeChanged.with(id)
+                                            Message::ChannelVolumeChanged.with(id)
                                         ))
-                                        .on_double_click(Message::NodeVolumeChanged(id, 1.0)),
+                                        .on_double_click(Message::ChannelVolumeChanged(id, 1.0)),
                                         mouse_area(Knob::new(
                                             -1.0..=1.0,
                                             0.0,
                                             track.node().pan.load(Acquire),
                                             enabled,
-                                            Message::NodePanChanged.with(id)
+                                            Message::ChannelPanChanged.with(id)
                                         ))
-                                        .on_double_click(Message::NodePanChanged(id, 0.0)),
+                                        .on_double_click(Message::ChannelPanChanged(id, 0.0)),
                                         vertical_space(),
                                     ]
                                     .spacing(5.0),
@@ -607,13 +618,13 @@ impl ArrangementView {
                     .map(Element::new),
             ),
             Message::SeekTo,
-            Message::SelectClip,
-            Message::UnselectClip,
-            Message::CloneClip,
-            Message::MoveClipTo,
-            Message::TrimClipStart,
-            Message::TrimClipEnd,
-            Message::DeleteClip,
+            Message::ClipSelect,
+            Message::ClipUnselect,
+            Message::ClipClone,
+            Message::ClipMove,
+            Message::ClipTrimStart,
+            Message::ClipTrimEnd,
+            Message::ClipDelete,
             Message::PositionScaleDelta,
         )
         .into()
@@ -643,7 +654,7 @@ impl ArrangementView {
                                 0.0,
                                 node.pan.load(Acquire),
                                 enabled,
-                                Message::NodePanChanged.with(id)
+                                Message::ChannelPanChanged.with(id)
                             )),
                             PeakMeter::new(move || node.get_l_r(), enabled)
                         ]
@@ -652,9 +663,13 @@ impl ArrangementView {
                         column![
                             toggle(enabled, id),
                             remove(enabled, id),
-                            vertical_slider(0.0..=1.0, volume, Message::NodeVolumeChanged.with(id))
-                                .step(f32::EPSILON)
-                                .style(move |t, s| slider_with_enabled(t, s, enabled))
+                            vertical_slider(
+                                0.0..=1.0,
+                                volume,
+                                Message::ChannelVolumeChanged.with(id)
+                            )
+                            .step(f32::EPSILON)
+                            .style(move |t, s| slider_with_enabled(t, s, enabled))
                         ]
                         .spacing(5.0)
                         .align_x(Alignment::Center)
@@ -666,7 +681,7 @@ impl ArrangementView {
                 .align_x(Alignment::Center),
             )
             .padding(5.0)
-            .on_press(Message::SelectChannel(id))
+            .on_press(Message::ChannelSelect(id))
             .style(move |t, _| {
                 let pair = if Some(id) == selected_channel {
                     t.extended_palette().background.weak
@@ -718,7 +733,7 @@ impl ArrangementView {
                         .on_press(if connected {
                             Message::Disconnect((id, selected_channel))
                         } else {
-                            Message::RequestConnect((id, selected_channel))
+                            Message::ConnectRequest((id, selected_channel))
                         })
                     }
                 },
@@ -731,11 +746,13 @@ impl ArrangementView {
                 "M".to_owned(),
                 self.arrangement.master().0.clone(),
                 |enabled, id| {
-                    radio("", enabled, Some(true), |_| Message::NodeToggleEnabled(id))
-                        .text_line_height(1.0)
-                        .style(move |t, s| radio_with_enabled(t, s, enabled))
-                        .spacing(0.0)
-                        .into()
+                    radio("", enabled, Some(true), |_| {
+                        Message::ChannelToggleEnabled(id)
+                    })
+                    .text_line_height(1.0)
+                    .style(move |t, s| radio_with_enabled(t, s, enabled))
+                    .spacing(0.0)
+                    .into()
                 },
                 |_, _| vertical_space().height(TEXT_HEIGHT).into(),
                 |enabled, id| connect(enabled, id).into(),
@@ -775,7 +792,7 @@ impl ArrangementView {
                                         style
                                     })
                                     .padding(0.0)
-                                    .on_press(Message::RemoveTrack(i))
+                                    .on_press(Message::TrackRemove(i))
                                     .into()
                             },
                             |_, _| button("").style(|_, _| button::Style::default()).into(),
@@ -803,11 +820,13 @@ impl ArrangementView {
                             name,
                             node.clone(),
                             |enabled, id| {
-                                radio("", enabled, Some(true), |_| Message::NodeToggleEnabled(id))
-                                    .text_line_height(1.0)
-                                    .style(move |t, s| radio_with_enabled(t, s, enabled))
-                                    .spacing(0.0)
-                                    .into()
+                                radio("", enabled, Some(true), |_| {
+                                    Message::ChannelToggleEnabled(id)
+                                })
+                                .text_line_height(1.0)
+                                .style(move |t, s| radio_with_enabled(t, s, enabled))
+                                .spacing(0.0)
+                                .into()
                             },
                             |_, id| {
                                 button(styled_svg(CANCEL.clone()).height(TEXT_HEIGHT))
@@ -817,7 +836,7 @@ impl ArrangementView {
                                         style
                                     })
                                     .padding(0.0)
-                                    .on_press(Message::RemoveChannel(id))
+                                    .on_press(Message::ChannelRemove(id))
                                     .into()
                             },
                             |enabled, id| connect(enabled, id).into(),
@@ -833,7 +852,7 @@ impl ArrangementView {
             })
             .chain(once(
                 styled_button(row!["+"].height(Length::Fill).align_y(Alignment::Center))
-                    .on_press(Message::AddChannel)
+                    .on_press(Message::ChannelAdd)
                     .into(),
             )))
             .spacing(5.0),
@@ -847,7 +866,7 @@ impl ArrangementView {
                 .filter(|d| d.ty == PluginType::AudioEffect)
                 .collect::<Box<[_]>>(),
             None::<&PluginDescriptor>,
-            |p| Message::LoadAudioEffectPlugin(p.to_owned()),
+            |p| Message::AudioEffectLoad(p.to_owned()),
         )
         .width(Length::Fill)
         .placeholder("Add Effect");
@@ -879,12 +898,12 @@ impl ArrangementView {
                                                     node.get_effect_mix(i),
                                                     enabled,
                                                     move |mix| {
-                                                        Message::AudioEffectMixChannged(i, mix)
+                                                        Message::AudioEffectMixChanged(i, mix)
                                                     }
                                                 )
                                                 .radius(TEXT_HEIGHT)
                                             )
-                                            .on_double_click(Message::AudioEffectMixChannged(
+                                            .on_double_click(Message::AudioEffectMixChanged(
                                                 i, 1.0
                                             )),
                                             button(
@@ -918,7 +937,7 @@ impl ArrangementView {
                                                     style
                                                 })
                                                 .padding(0.0)
-                                                .on_press(Message::RemoveAudioEffect(i)),
+                                                .on_press(Message::AudioEffectRemove(i)),
                                             ],
                                             mouse_area(
                                                 container(
@@ -977,7 +996,7 @@ impl ArrangementView {
     }
 
     pub fn subscription() -> Subscription<Message> {
-        ClapHostView::subscription().map(Message::ClapHost)
+        ClapHost::subscription().map(Message::ClapHost)
     }
 
     pub fn change_tab(&mut self, tab: Tab) {
