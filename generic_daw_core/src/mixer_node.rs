@@ -56,10 +56,6 @@ impl MixerNode {
         });
     }
 
-    pub fn swap(&self, a: usize, b: usize) {
-        self.with_effects_list(move |effects| effects.swap(a, b));
-    }
-
     pub fn shift_move(&self, from: usize, to: usize) {
         self.with_effects_list(|effects| effects.shift_move(from, to));
     }

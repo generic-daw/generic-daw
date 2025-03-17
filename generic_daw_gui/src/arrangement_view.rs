@@ -360,32 +360,25 @@ impl ArrangementView {
             Message::AudioEffectsReordered(event) => {
                 if let DragEvent::Dropped {
                     index,
-                    target_index,
+                    mut target_index,
                     drop_position,
                 } = event
                 {
-                    let selected = self.selected_channel.unwrap();
-                    match drop_position {
-                        DropPosition::Before | DropPosition::After
-                            if target_index != index && target_index != index + 1 =>
-                        {
-                            self.arrangement
-                                .node(selected)
-                                .0
-                                .shift_move(index, target_index);
-                            self.audio_effects_by_channel
-                                .get_mut(*selected)
-                                .unwrap()
-                                .shift_move(index, target_index);
-                        }
-                        DropPosition::Swap if target_index != index => {
-                            self.arrangement.node(selected).0.swap(index, target_index);
-                            self.audio_effects_by_channel
-                                .get_mut(*selected)
-                                .unwrap()
-                                .swap(index, target_index);
-                        }
-                        _ => {}
+                    if drop_position == DropPosition::After {
+                        target_index -= 1;
+                    }
+
+                    if index != target_index {
+                        let selected = self.selected_channel.unwrap();
+
+                        self.arrangement
+                            .node(selected)
+                            .0
+                            .shift_move(index, target_index);
+                        self.audio_effects_by_channel
+                            .get_mut(*selected)
+                            .unwrap()
+                            .shift_move(index, target_index);
                     }
                 }
             }
