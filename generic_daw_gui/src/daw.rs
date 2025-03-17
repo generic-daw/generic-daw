@@ -9,7 +9,7 @@ use generic_daw_core::{
     Denominator, Meter, Numerator, Position, Stream, VARIANTS as _, build_input_stream,
     clap_host::{self, PluginDescriptor, PluginType, clack_host::bundle::PluginBundle},
 };
-use hound::WavWriter;
+use hound::{SampleFormat, WavSpec, WavWriter};
 use iced::{
     Alignment::Center,
     Element, Event, Subscription, Task, Theme,
@@ -153,7 +153,9 @@ impl Daw {
             Message::Tab(tab) => self.arrangement.change_tab(tab),
             Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
             Message::ToggleRecord => {
-                let fut = self.update(Message::StopRecord);
+                if self.recording.is_some() {
+                    return self.update(Message::StopRecord);
+                }
 
                 let mut file_name = "recording-".to_owned();
 
@@ -169,9 +171,8 @@ impl Daw {
                     .join(file_name)
                     .into();
 
-                let (channels, stream, receiver) = build_input_stream(self.meter.sample_rate);
-
-                self.meter.playing.store(true, Release);
+                let (channels, sample_rate, stream, receiver) =
+                    build_input_stream(self.meter.sample_rate);
 
                 let position = Position::from_interleaved_samples(
                     self.meter.sample.load(Acquire),
@@ -179,20 +180,22 @@ impl Daw {
                     self.meter.sample_rate,
                 );
 
+                self.meter.playing.store(true, Release);
+
                 let writer = WavWriter::create(
                     &path,
-                    hound::WavSpec {
+                    WavSpec {
                         channels,
-                        sample_rate: self.meter.sample_rate,
+                        sample_rate,
                         bits_per_sample: 32,
-                        sample_format: hound::SampleFormat::Float,
+                        sample_format: SampleFormat::Float,
                     },
                 )
                 .unwrap();
 
                 self.recording = Some((stream, writer, path, position));
 
-                return fut.chain(Task::stream(receiver).map(Message::RecordingChunk));
+                return Task::stream(receiver).map(Message::RecordingChunk);
             }
             Message::RecordingChunk(samples) => {
                 if let Some((_, writer, _, _)) = self.recording.as_mut() {

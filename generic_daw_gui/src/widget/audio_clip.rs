@@ -355,6 +355,11 @@ impl AudioClip {
         let last_index = first_index + (size.width / lod_samples_per_pixel) as usize;
         let last_index = last_index.min(self.inner.audio.lods[lod].len() - 1);
 
+        // this would result in an empty mesh (and a crash)
+        if last_index - first_index < 2 {
+            return None;
+        }
+
         // vertices of the waveform
         let vertices = self.inner.audio.lods[lod][first_index..last_index]
             .iter()
@@ -376,7 +381,7 @@ impl AudioClip {
             .collect::<Vec<_>>();
 
         // triangles of the waveform
-        let indices = (0..vertices.len().checked_sub(2)? as u32)
+        let indices = (0..vertices.len() as u32 - 2)
             .flat_map(|i| [i, i + 1, i + 2])
             .collect();
 
