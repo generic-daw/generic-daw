@@ -251,20 +251,24 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
         renderer: &Renderer,
     ) -> Interaction {
         let state = tree.state.downcast_ref::<State>();
-        if state.dragging || state.hovering {
+
+        let interaction = self
+            .children
+            .iter()
+            .zip(&tree.children)
+            .zip(layout.children())
+            .map(|((child, tree), layout)| {
+                child
+                    .as_widget()
+                    .mouse_interaction(tree, layout, cursor, viewport, renderer)
+            })
+            .max()
+            .unwrap_or_default();
+
+        if interaction == Interaction::default() && (state.dragging || state.hovering) {
             Interaction::ResizingColumn
         } else {
-            self.children
-                .iter()
-                .zip(&tree.children)
-                .zip(layout.children())
-                .map(|((child, tree), layout)| {
-                    child
-                        .as_widget()
-                        .mouse_interaction(tree, layout, cursor, viewport, renderer)
-                })
-                .max()
-                .unwrap_or_default()
+            interaction
         }
     }
 
