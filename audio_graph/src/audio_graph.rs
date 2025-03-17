@@ -39,7 +39,7 @@ impl AudioGraph {
             graph,
             root,
             list: vec![root],
-            cache: vec![],
+            cache: Vec::new(),
             seen: BitSet::default(),
             to_visit: BitSet::default(),
         }

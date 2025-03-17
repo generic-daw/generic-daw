@@ -116,16 +116,13 @@ pub struct ArrangementView {
 
 impl ArrangementView {
     pub fn create() -> (Self, Arc<Meter>) {
-        let (arrangement, meter, master_node_id) = ArrangementWrapper::create();
-
-        let mut audio_effects_by_channel = HoleyVec::default();
-        audio_effects_by_channel.insert(master_node_id.get(), vec![]);
+        let (arrangement, meter) = ArrangementWrapper::create();
 
         (
             Self {
                 clap_host: ClapHostView::default(),
                 instrument_by_track: HoleyVec::default(),
-                audio_effects_by_channel,
+                audio_effects_by_channel: HoleyVec::default(),
 
                 arrangement,
                 meter: meter.clone(),
@@ -173,13 +170,14 @@ impl ArrangementView {
                 self.selected_channel = if self.selected_channel == Some(id) {
                     None
                 } else {
+                    self.audio_effects_by_channel
+                        .entry(id.get())
+                        .get_or_insert_default();
                     Some(id)
                 };
             }
             Message::AddChannel => {
-                let (id, fut) = self.arrangement.add_channel();
-                self.audio_effects_by_channel.insert(id.get(), vec![]);
-                return Task::future(fut)
+                return Task::future(self.arrangement.add_channel())
                     .and_then(Task::done)
                     .map(Message::ConnectSucceeded);
             }
@@ -282,8 +280,6 @@ impl ArrangementView {
                         .map_or_else(
                             || {
                                 let track = AudioTrack::new(self.meter.clone());
-                                self.audio_effects_by_channel
-                                    .insert(track.id().get(), vec![]);
                                 (
                                     self.arrangement.tracks().len(),
                                     Task::future(self.arrangement.add_track(track))
@@ -310,8 +306,6 @@ impl ArrangementView {
                 let plugin_id = audio_processor.id();
                 let track = MidiTrack::new(self.meter.clone(), audio_processor);
                 self.instrument_by_track.insert(track.id().get(), plugin_id);
-                self.audio_effects_by_channel
-                    .insert(track.id().get(), vec![]);
 
                 return Task::batch([
                     Task::future(self.arrangement.add_track(track))
@@ -538,7 +532,7 @@ impl ArrangementView {
                         ]
                         .spacing(5.0);
 
-                        if let Some(&id) = self.instrument_by_track.get(track.id().get()) {
+                        if let Some(&id) = self.instrument_by_track.get(id.get()) {
                             buttons = buttons.extend([
                                 vertical_space().into(),
                                 button(

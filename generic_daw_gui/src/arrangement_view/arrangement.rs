@@ -36,7 +36,7 @@ pub struct Arrangement {
 }
 
 impl Arrangement {
-    pub fn create() -> (Self, Arc<Meter>, NodeId) {
+    pub fn create() -> (Self, Arc<Meter>) {
         let (stream, master_node, producer, meter) = build_output_stream(44100, 1024);
         let master_node_id = master_node.id();
         let mut channels = HoleyVec::default();
@@ -56,7 +56,6 @@ impl Arrangement {
                 meter: meter.clone(),
             },
             meter,
-            master_node_id,
         )
     }
 
@@ -82,7 +81,7 @@ impl Arrangement {
         &self.nodes[id.get()]
     }
 
-    pub fn add_channel(&mut self) -> (NodeId, Receiver<(NodeId, NodeId)>) {
+    pub fn add_channel(&mut self) -> Receiver<(NodeId, NodeId)> {
         let node = Arc::new(MixerNode::default());
         let id = node.id();
 
@@ -91,7 +90,7 @@ impl Arrangement {
         self.producer
             .push(DawCtxMessage::Insert(node.into()))
             .unwrap();
-        (id, self.request_connect(self.master_node_id, id))
+        self.request_connect(self.master_node_id, id)
     }
 
     pub fn remove_channel(&mut self, id: NodeId) {

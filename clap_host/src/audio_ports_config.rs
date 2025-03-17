@@ -13,7 +13,7 @@ impl AudioPortsConfig {
 
         let mut buffer = AudioPortInfoBuffer::new();
         let mut main_port_index = None;
-        let mut port_channel_counts = vec![];
+        let mut port_channel_counts = Vec::new();
 
         for i in 0..ports.count(plugin, is_input) {
             let Some(info) = ports.get(plugin, i, is_input, &mut buffer) else {

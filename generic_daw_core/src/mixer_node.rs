@@ -83,7 +83,7 @@ impl MixerNode {
     }
 
     fn with_effects_list(&self, f: impl FnOnce(&mut Vec<EffectEntry>)) {
-        let arc = self.effects.swap(Arc::new(vec![]));
+        let arc = self.effects.swap(Arc::new(Vec::new()));
         while Arc::strong_count(&arc) != 1 {}
 
         let mut inner = Arc::into_inner(arc).unwrap();

@@ -47,6 +47,15 @@ impl<T> HoleyVec<T> {
     }
 
     #[must_use]
+    pub fn entry(&mut self, index: usize) -> &mut Option<T> {
+        if index >= self.0.len() {
+            self.0.resize_with(index + 1, || None);
+        }
+
+        &mut self.0[index]
+    }
+
+    #[must_use]
     pub fn contains_key(&self, key: usize) -> bool {
         self.get(key).is_some()
     }
