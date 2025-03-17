@@ -125,7 +125,7 @@ impl Daw {
                         .save_file(),
                 )
                 .and_then(Task::done)
-                .map(|p| Box::from(p.path()))
+                .map(|p| p.path().into())
                 .map(ArrangementMessage::Export)
                 .map(Message::Arrangement);
             }

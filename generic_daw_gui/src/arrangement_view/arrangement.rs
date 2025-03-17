@@ -36,12 +36,12 @@ pub struct Arrangement {
 }
 
 impl Arrangement {
-    pub fn create() -> (Self, Arc<Meter>) {
+    pub fn create() -> (Self, Arc<Meter>, NodeId) {
         let (stream, master_node, producer, meter) = build_output_stream(44100, 1024);
         let master_node_id = master_node.id();
         let mut channels = HoleyVec::default();
         channels.insert(
-            *master_node_id,
+            master_node_id.get(),
             (master_node, BitSet::default(), NodeType::Master),
         );
 
@@ -56,6 +56,7 @@ impl Arrangement {
                 meter: meter.clone(),
             },
             meter,
+            master_node_id,
         )
     }
 
@@ -78,7 +79,7 @@ impl Arrangement {
     }
 
     pub fn node(&self, id: NodeId) -> &(Arc<MixerNode>, BitSet, NodeType) {
-        &self.nodes[*id]
+        &self.nodes[id.get()]
     }
 
     pub fn add_channel(&mut self) -> (NodeId, Receiver<(NodeId, NodeId)>) {
@@ -86,7 +87,7 @@ impl Arrangement {
         let id = node.id();
 
         self.nodes
-            .insert(*id, (node.clone(), BitSet::default(), NodeType::Mixer));
+            .insert(id.get(), (node.clone(), BitSet::default(), NodeType::Mixer));
         self.producer
             .push(DawCtxMessage::Insert(node.into()))
             .unwrap();
@@ -94,7 +95,7 @@ impl Arrangement {
     }
 
     pub fn remove_channel(&mut self, id: NodeId) {
-        self.nodes.remove(*id);
+        self.nodes.remove(id.get());
         self.producer.push(DawCtxMessage::Remove(id)).unwrap();
     }
 
@@ -104,7 +105,7 @@ impl Arrangement {
 
         self.tracks.push(track.clone());
         self.nodes.insert(
-            *id,
+            id.get(),
             (track.node().clone(), BitSet::default(), NodeType::Track),
         );
         self.producer
@@ -127,14 +128,14 @@ impl Arrangement {
     }
 
     pub fn connect_succeeded(&mut self, from: NodeId, to: NodeId) {
-        self.nodes.get_mut(*to).unwrap().1.insert(*from);
+        self.nodes.get_mut(to.get()).unwrap().1.insert(from.get());
     }
 
     pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
         self.producer
             .push(DawCtxMessage::Disconnect(from, to))
             .unwrap();
-        self.nodes.get_mut(*to).unwrap().1.remove(*from);
+        self.nodes.get_mut(to.get()).unwrap().1.remove(from.get());
     }
 
     pub fn add_clip(&mut self, track: usize, clip: impl Into<TrackClipWrapper>) {

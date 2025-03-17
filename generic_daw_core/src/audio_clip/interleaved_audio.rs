@@ -41,7 +41,7 @@ impl InterleavedAudio {
                 vec![(0.0, 0.0); length.div_ceil(1 << (i + 3))].into_boxed_slice()
             })
             .into(),
-            path: Box::from(path),
+            path: path.into(),
         };
 
         audio.create_lod();

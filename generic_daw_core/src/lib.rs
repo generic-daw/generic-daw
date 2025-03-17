@@ -63,7 +63,7 @@ pub fn build_input_stream(sample_rate: u32) -> (u16, u32, Stream, Receiver<Box<[
     let stream = device
         .build_input_stream(
             &supported_config.with_sample_rate(sample_rate).config(),
-            move |data, _| sender.try_send(Box::from(data)).unwrap(),
+            move |data, _| sender.try_send(data.into()).unwrap(),
             |err| panic!("{err}"),
             None,
         )

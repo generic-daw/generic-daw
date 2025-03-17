@@ -44,7 +44,7 @@ impl File {
             mouse_area(
                 styled_button(row![
                     Clipped::new(styled_svg(self.icon.clone()).height(LINE_HEIGHT)),
-                    container(text(self.name.as_ref()).wrapping(Wrapping::None)).clip(true)
+                    container(text(&*self.name).wrapping(Wrapping::None)).clip(true)
                 ])
                 .width(Length::Fill)
                 .padding(0)

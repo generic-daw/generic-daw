@@ -17,15 +17,6 @@ impl<T> Index<usize> for HoleyVec<T> {
     }
 }
 
-impl<T, C> From<C> for HoleyVec<T>
-where
-    C: Into<Vec<Option<T>>>,
-{
-    fn from(value: C) -> Self {
-        Self(value.into())
-    }
-}
-
 impl<T> HoleyVec<T> {
     pub fn get(&self, index: usize) -> Option<&T> {
         self.0.get(index).and_then(Option::as_ref)

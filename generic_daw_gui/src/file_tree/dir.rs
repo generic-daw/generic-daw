@@ -60,7 +60,7 @@ impl Dir {
                         .rotation(Radians(if self.open { FRAC_PI_2 } else { 0.0 }))
                         .height(LINE_HEIGHT)
                 ),
-                container(text(self.name.as_ref()).wrapping(Wrapping::None)).clip(true)
+                container(text(&*self.name).wrapping(Wrapping::None)).clip(true)
             ])
             .width(Length::Fill)
             .padding(0)

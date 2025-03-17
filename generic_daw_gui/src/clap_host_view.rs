@@ -34,10 +34,10 @@ impl ClapHostView {
 
                 let open = if gui.is_floating() {
                     gui.open_floating();
-                    self.plugins.insert(*id, gui);
+                    self.plugins.insert(id.get(), gui);
                     Task::none()
                 } else {
-                    self.plugins.insert(*id, gui);
+                    self.plugins.insert(id.get(), gui);
                     self.update(Message::MainThread(id, MainThreadMessage::GuiRequestShow))
                 };
 
@@ -54,8 +54,8 @@ impl ClapHostView {
                 });
                 let resizable = window::set_resizable(window_id, gui.can_resize());
 
-                self.plugins.insert(*id, gui);
-                self.windows.insert(*id, window_id);
+                self.plugins.insert(id.get(), gui);
+                self.windows.insert(id.get(), window_id);
 
                 return resize
                     .chain(resizable)
@@ -94,20 +94,20 @@ impl ClapHostView {
         match msg {
             MainThreadMessage::RequestCallback => self
                 .plugins
-                .get_mut(*id)
+                .get_mut(id.get())
                 .unwrap()
                 .call_on_main_thread_callback(),
             MainThreadMessage::GuiRequestHide => {
-                if let Some(&id) = self.windows.get(*id) {
+                if let Some(&id) = self.windows.get(id.get()) {
                     return self.update(Message::CloseRequested(id));
                 }
             }
             MainThreadMessage::GuiRequestShow => {
-                if self.windows.contains_key(*id) {
+                if self.windows.contains_key(id.get()) {
                     return Task::none();
                 }
 
-                let mut gui = Fragile::new(self.plugins.remove(*id).unwrap());
+                let mut gui = Fragile::new(self.plugins.remove(id.get()).unwrap());
 
                 let (window_id, spawn) = window::open(window::Settings {
                     size: Size::new(1.0, 1.0),
@@ -124,14 +124,14 @@ impl ClapHostView {
                 return spawn.discard().chain(embed);
             }
             MainThreadMessage::GuiClosed => {
-                self.plugins.remove(*id).unwrap();
+                self.plugins.remove(id.get()).unwrap();
 
-                if let Some(window_id) = self.windows.remove(*id) {
+                if let Some(window_id) = self.windows.remove(id.get()) {
                     return window::close(window_id);
                 }
             }
             MainThreadMessage::GuiRequestResize(new_size) => {
-                if let Some(&window_id) = self.windows.get(*id) {
+                if let Some(&window_id) = self.windows.get(id.get()) {
                     return window::resize(
                         window_id,
                         Size {
@@ -142,8 +142,8 @@ impl ClapHostView {
                 }
             }
             MainThreadMessage::TickTimers => {
-                if self.windows.contains_key(*id) {
-                    if let Some(sleep) = self.plugins.get_mut(*id).unwrap().tick_timers() {
+                if self.windows.contains_key(id.get()) {
+                    if let Some(sleep) = self.plugins.get_mut(id.get()).unwrap().tick_timers() {
                         return Task::future(tokio::time::sleep(sleep))
                             .map(|()| MainThreadMessage::TickTimers)
                             .map(Message::MainThread.with(id));

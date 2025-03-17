@@ -97,7 +97,7 @@ pub enum Tab {
 pub struct ArrangementView {
     pub clap_host: ClapHostView,
     instrument_by_track: HoleyVec<PluginId>,
-    audio_effects_by_channel: HoleyVec<Vec<(PluginId, String)>>,
+    audio_effects_by_channel: HoleyVec<Vec<(PluginId, Box<str>)>>,
 
     arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
@@ -116,13 +116,16 @@ pub struct ArrangementView {
 
 impl ArrangementView {
     pub fn create() -> (Self, Arc<Meter>) {
-        let (arrangement, meter) = ArrangementWrapper::create();
+        let (arrangement, meter, master_node_id) = ArrangementWrapper::create();
+
+        let mut audio_effects_by_channel = HoleyVec::default();
+        audio_effects_by_channel.insert(master_node_id.get(), vec![]);
 
         (
             Self {
                 clap_host: ClapHostView::default(),
                 instrument_by_track: HoleyVec::default(),
-                audio_effects_by_channel: vec![Some(vec![])].into(),
+                audio_effects_by_channel,
 
                 arrangement,
                 meter: meter.clone(),
@@ -175,7 +178,7 @@ impl ArrangementView {
             }
             Message::AddChannel => {
                 let (id, fut) = self.arrangement.add_channel();
-                self.audio_effects_by_channel.insert(*id, vec![]);
+                self.audio_effects_by_channel.insert(id.get(), vec![]);
                 return Task::future(fut)
                     .and_then(Task::done)
                     .map(Message::ConnectSucceeded);
@@ -189,7 +192,7 @@ impl ArrangementView {
 
                 return Task::batch(
                     self.audio_effects_by_channel
-                        .remove(*id)
+                        .remove(id.get())
                         .unwrap()
                         .into_iter()
                         .map(|(id, _)| {
@@ -238,7 +241,7 @@ impl ArrangementView {
                 let id = self.arrangement.remove_track(track);
                 let fut = self.update(Message::RemoveChannel(id));
 
-                return if let Some(id) = self.instrument_by_track.remove(*id) {
+                return if let Some(id) = self.instrument_by_track.remove(id.get()) {
                     self.update(Message::ClapHost(ClapHostMessage::MainThread(
                         id,
                         MainThreadMessage::GuiClosed,
@@ -279,7 +282,8 @@ impl ArrangementView {
                         .map_or_else(
                             || {
                                 let track = AudioTrack::new(self.meter.clone());
-                                self.audio_effects_by_channel.insert(*track.id(), vec![]);
+                                self.audio_effects_by_channel
+                                    .insert(track.id().get(), vec![]);
                                 (
                                     self.arrangement.tracks().len(),
                                     Task::future(self.arrangement.add_track(track))
@@ -305,8 +309,9 @@ impl ArrangementView {
 
                 let plugin_id = audio_processor.id();
                 let track = MidiTrack::new(self.meter.clone(), audio_processor);
-                self.instrument_by_track.insert(*track.id(), plugin_id);
-                self.audio_effects_by_channel.insert(*track.id(), vec![]);
+                self.instrument_by_track.insert(track.id().get(), plugin_id);
+                self.audio_effects_by_channel
+                    .insert(track.id().get(), vec![]);
 
                 return Task::batch([
                     Task::future(self.arrangement.add_track(track))
@@ -337,9 +342,9 @@ impl ArrangementView {
                 node.add_effect(audio_processor);
 
                 self.audio_effects_by_channel
-                    .get_mut(*selected)
+                    .get_mut(selected.get())
                     .unwrap()
-                    .push((id, gui.name().to_owned()));
+                    .push((id, gui.name().into()));
 
                 return self
                     .clap_host
@@ -376,7 +381,7 @@ impl ArrangementView {
                             .0
                             .shift_move(index, target_index);
                         self.audio_effects_by_channel
-                            .get_mut(*selected)
+                            .get_mut(selected.get())
                             .unwrap()
                             .shift_move(index, target_index);
                     }
@@ -387,7 +392,7 @@ impl ArrangementView {
                 self.arrangement.node(selected).0.remove_effect(i);
                 let id = self
                     .audio_effects_by_channel
-                    .get_mut(*selected)
+                    .get_mut(selected.get())
                     .unwrap()
                     .remove(i)
                     .0;
@@ -533,7 +538,7 @@ impl ArrangementView {
                         ]
                         .spacing(5.0);
 
-                        if let Some(&id) = self.instrument_by_track.get(*track.id()) {
+                        if let Some(&id) = self.instrument_by_track.get(track.id().get()) {
                             buttons = buttons.extend([
                                 vertical_space().into(),
                                 button(
@@ -705,7 +710,7 @@ impl ArrangementView {
                             .height(24.0)
                             .style(|_, _| button::Style::default())
                     } else {
-                        let connected = connections.contains(*id);
+                        let connected = connections.contains(id.get());
 
                         button(
                             svg(CHEVRON_RIGHT.clone())
@@ -856,7 +861,7 @@ impl ArrangementView {
         if let Some(selected) = self.selected_channel {
             VSplit::new(
                 mixer_panel,
-                if self.audio_effects_by_channel[*selected].is_empty() {
+                if self.audio_effects_by_channel[selected.get()].is_empty() {
                     Element::new(plugin_picker)
                 } else {
                     let node = self.arrangement.node(selected).0.clone();
@@ -866,7 +871,7 @@ impl ArrangementView {
                         horizontal_rule(11.0),
                         styled_scrollable_with_direction(
                             dragking::column({
-                                self.audio_effects_by_channel[*selected]
+                                self.audio_effects_by_channel[selected.get()]
                                     .iter()
                                     .enumerate()
                                     .map(|(i, (plugin_id, name))| {
@@ -889,7 +894,7 @@ impl ArrangementView {
                                                 i, 1.0
                                             )),
                                             button(
-                                                container(text(name).wrapping(Wrapping::None))
+                                                container(text(&**name).wrapping(Wrapping::None))
                                                     .clip(true)
                                             )
                                             .style(move |t, s| button_with_enabled(t, s, enabled))
