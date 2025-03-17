@@ -111,7 +111,7 @@ fn standard_clap_paths() -> Vec<PathBuf> {
 #[must_use]
 pub fn init(
     bundle: &PluginBundle,
-    descriptor: &PluginDescriptor,
+    descriptor: PluginDescriptor,
     sample_rate: f64,
     max_buffer_size: u32,
 ) -> (GuiExt, Receiver<MainThreadMessage>, AudioProcessor) {
@@ -159,7 +159,7 @@ pub fn init(
     let gui = GuiExt::new(
         instance.access_handler(|mt| mt.gui).unwrap().0,
         instance,
-        descriptor.clone(),
+        descriptor,
         id,
     );
 

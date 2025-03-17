@@ -2,6 +2,8 @@ use arc_swap::ArcSwap;
 use atomig::Atomic;
 use audio_graph::{AudioGraphNodeImpl, NodeId};
 use clap_host::AudioProcessor;
+use effect_entry::EffectEntry;
+use generic_daw_utils::ShiftMoveExt as _;
 use std::{
     cmp::max_by,
     f32::consts::{FRAC_PI_4, SQRT_2},
@@ -14,11 +16,13 @@ use std::{
     },
 };
 
+mod effect_entry;
+
 #[derive(Debug)]
 pub struct MixerNode {
     id: NodeId,
     /// any effects that are to be applied to the input audio, before applying volume and pan
-    effects: ArcSwap<Vec<(Mutex<AudioProcessor>, Atomic<f32>)>>,
+    effects: ArcSwap<Vec<EffectEntry>>,
     /// in the `0.0..` range
     pub volume: Atomic<f32>,
     /// in the `-1.0..1.0` range
@@ -37,7 +41,19 @@ impl MixerNode {
     }
 
     pub fn add_effect(&self, effect: AudioProcessor) {
-        self.with_effects_list(move |effects| effects.push((Mutex::new(effect), Atomic::new(1.0))));
+        self.with_effects_list(move |effects| {
+            effects.push(EffectEntry {
+                effect: Mutex::new(effect),
+                mix: Atomic::new(1.0),
+                enabled: AtomicBool::new(true),
+            });
+        });
+    }
+
+    pub fn remove_effect(&self, index: usize) {
+        self.with_effects_list(move |effects| {
+            effects.remove(index);
+        });
     }
 
     pub fn swap(&self, a: usize, b: usize) {
@@ -45,22 +61,32 @@ impl MixerNode {
     }
 
     pub fn shift_move(&self, from: usize, to: usize) {
-        if from > to {
-            self.with_effects_list(|effects| effects[to..=from].rotate_right(1));
-        } else {
-            self.with_effects_list(|effects| effects[from..=to].rotate_left(1));
-        }
+        self.with_effects_list(|effects| effects.shift_move(from, to));
     }
 
+    #[must_use]
     pub fn get_effect_mix(&self, index: usize) -> f32 {
-        self.effects.load()[index].1.load(Acquire)
+        self.effects.load()[index].mix.load(Acquire)
     }
 
     pub fn set_effect_mix(&self, index: usize, mix: f32) {
-        self.effects.load()[index].1.store(mix, Release);
+        self.effects.load()[index].mix.store(mix, Release);
     }
 
-    fn with_effects_list(&self, f: impl FnOnce(&mut Vec<(Mutex<AudioProcessor>, Atomic<f32>)>)) {
+    #[must_use]
+    pub fn get_effect_enabled(&self, index: usize) -> bool {
+        self.effects.load()[index].enabled.load(Acquire)
+    }
+
+    pub fn set_effect_enabled(&self, index: usize, enabled: bool) {
+        self.effects.load()[index].enabled.store(enabled, Release);
+    }
+
+    pub fn toggle_effect_enabled(&self, index: usize) -> bool {
+        self.effects.load()[index].enabled.fetch_not(AcqRel)
+    }
+
+    fn with_effects_list(&self, f: impl FnOnce(&mut Vec<EffectEntry>)) {
         let arc = self.effects.swap(Arc::new(vec![]));
         while Arc::strong_count(&arc) != 1 {}
 
@@ -99,12 +125,17 @@ impl AudioGraphNodeImpl for MixerNode {
             .enumerate()
             .for_each(|(i, s)| *s *= if i % 2 == 0 { lpan } else { rpan });
 
-        for (effect, mix) in &**self.effects.load() {
-            effect
-                .try_lock()
-                .expect("this is only locked from the audio thread")
-                .process(buf, mix.load(Acquire));
-        }
+        self.effects
+            .load()
+            .iter()
+            .filter(|entry| entry.enabled.load(Acquire))
+            .for_each(|entry| {
+                entry
+                    .effect
+                    .try_lock()
+                    .expect("this is only locked from the audio thread")
+                    .process(buf, entry.mix.load(Acquire));
+            });
 
         let cur_l = buf
             .iter()

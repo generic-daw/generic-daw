@@ -114,9 +114,7 @@ impl Arrangement {
     }
 
     pub fn remove_track(&mut self, track: usize) -> NodeId {
-        let id = self.tracks.remove(track).id();
-        self.remove_channel(id);
-        id
+        self.tracks.remove(track).id()
     }
 
     pub fn request_connect(&mut self, from: NodeId, to: NodeId) -> Receiver<(NodeId, NodeId)> {

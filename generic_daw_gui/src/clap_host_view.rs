@@ -125,8 +125,10 @@ impl ClapHostView {
             }
             MainThreadMessage::GuiClosed => {
                 self.plugins.remove(*id).unwrap();
-                let window_id = self.windows.remove(*id).unwrap();
-                return window::close(window_id);
+
+                if let Some(window_id) = self.windows.remove(*id) {
+                    return window::close(window_id);
+                }
             }
             MainThreadMessage::GuiRequestResize(new_size) => {
                 if let Some(&window_id) = self.windows.get(*id) {
