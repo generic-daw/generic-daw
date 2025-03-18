@@ -91,7 +91,7 @@ pub enum Message {
     ClipTrimEnd(Position),
     ClipDelete(usize, usize),
 
-    SeekTo(usize),
+    SeekTo(Position),
 
     PositionScaleDelta(ArrangementPosition, ArrangementScale),
 
@@ -455,7 +455,13 @@ impl ArrangementView {
                 self.arrangement.delete_clip(track, clip);
             }
             Message::SeekTo(pos) => {
-                self.meter.sample.store(pos, Release);
+                self.meter.sample.store(
+                    pos.in_interleaved_samples(
+                        self.meter.bpm.load(Acquire),
+                        self.meter.sample_rate,
+                    ),
+                    Release,
+                );
             }
             Message::PositionScaleDelta(pos, scale) => {
                 let sd = scale != ArrangementScale::ZERO;

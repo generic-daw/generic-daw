@@ -57,7 +57,7 @@ pub struct Arrangement<'a, Message> {
     /// the scale of the arrangement viewport
     scale: ArrangementScale,
 
-    seek_to: fn(usize) -> Message,
+    seek_to: fn(Position) -> Message,
     select_clip: fn(usize, usize) -> Message,
     unselect_clip: Message,
     clone_clip: fn(usize, usize) -> Message,
@@ -179,15 +179,12 @@ where
             match event {
                 mouse::Event::ButtonPressed { button, modifiers } => match button {
                     mouse::Button::Left => {
-                        let bpm = self.meter.bpm.load(Acquire);
                         let time = self.get_time(cursor.x - track_panel_width, 0.0, *modifiers);
 
                         if cursor.y < LINE_HEIGHT {
                             state.action = Action::DraggingPlayhead(time);
 
-                            shell.publish((self.seek_to)(
-                                time.in_interleaved_samples(bpm, self.meter.sample_rate),
-                            ));
+                            shell.publish((self.seek_to)(time));
                             shell.capture_event();
                         } else if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
                             let clip_bounds = clip_bounds(&layout, track, clip).unwrap()
@@ -245,11 +242,6 @@ where
                         let new_time = self.get_time(cursor.x - track_panel_width, 0.0, *modifiers);
                         if new_time != time {
                             state.action = Action::DraggingPlayhead(new_time);
-
-                            let new_time = new_time.in_interleaved_samples(
-                                self.meter.bpm.load(Acquire),
-                                self.meter.sample_rate,
-                            );
 
                             shell.publish((self.seek_to)(new_time));
                             shell.capture_event();
@@ -458,7 +450,7 @@ where
         position: ArrangementPosition,
         scale: ArrangementScale,
         children: impl Into<Element<'a, Message>>,
-        seek_to: fn(usize) -> Message,
+        seek_to: fn(Position) -> Message,
         select_clip: fn(usize, usize) -> Message,
         unselect_clip: Message,
         clone_clip: fn(usize, usize) -> Message,
