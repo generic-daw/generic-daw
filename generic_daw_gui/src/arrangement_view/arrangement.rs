@@ -113,8 +113,14 @@ impl Arrangement {
         self.request_connect(self.master_node_id, id)
     }
 
-    pub fn remove_track(&mut self, track: usize) -> NodeId {
-        self.tracks.remove(track).id()
+    pub fn remove_track(&mut self, id: NodeId) {
+        let idx = self
+            .tracks
+            .iter()
+            .position(|track| track.id() == id)
+            .unwrap();
+
+        self.tracks.remove(idx);
     }
 
     pub fn request_connect(&mut self, from: NodeId, to: NodeId) -> Receiver<(NodeId, NodeId)> {

@@ -79,9 +79,9 @@ pub enum Message {
 
     InstrumentLoad(PluginDescriptor),
 
-    TrackRemove(usize),
+    TrackRemove(NodeId),
     TrackToggleEnabled(NodeId),
-    TrackToggleSolo(usize),
+    TrackToggleSolo(NodeId),
 
     ClipSelect(usize, usize),
     ClipUnselect,
@@ -118,7 +118,7 @@ pub struct ArrangementView {
 
     position: ArrangementPosition,
     scale: ArrangementScale,
-    soloed_track: Option<usize>,
+    soloed_track: Option<NodeId>,
     grabbed_clip: Option<[usize; 2]>,
 
     selected_channel: Option<NodeId>,
@@ -379,8 +379,8 @@ impl ArrangementView {
                         .map(Message::ClapHost),
                 ]);
             }
-            Message::TrackRemove(track) => {
-                let id = self.arrangement.remove_track(track);
+            Message::TrackRemove(id) => {
+                self.arrangement.remove_track(id);
                 let fut = self.update(Message::ChannelRemove(id));
 
                 return if let Some(id) = self.instrument_by_track.remove(id.get()) {
@@ -397,8 +397,8 @@ impl ArrangementView {
                 self.soloed_track = None;
                 return self.update(Message::ChannelToggleEnabled(id));
             }
-            Message::TrackToggleSolo(track) => {
-                if self.soloed_track == Some(track) {
+            Message::TrackToggleSolo(id) => {
+                if self.soloed_track == Some(id) {
                     self.soloed_track = None;
                     self.arrangement
                         .tracks()
@@ -409,11 +409,8 @@ impl ArrangementView {
                         .tracks()
                         .iter()
                         .for_each(|track| track.node().enabled.store(false, Release));
-                    self.arrangement.tracks()[track]
-                        .node()
-                        .enabled
-                        .store(true, Release);
-                    self.soloed_track = Some(track);
+                    self.arrangement.node(id).0.enabled.store(true, Release);
+                    self.soloed_track = Some(id);
                 }
             }
             Message::ClipSelect(track, clip) => {
@@ -522,8 +519,7 @@ impl ArrangementView {
                 self.arrangement
                     .tracks()
                     .iter()
-                    .enumerate()
-                    .map(|(idx, track)| {
+                    .map(|track| {
                         let id = track.id();
                         let node = track.node().clone();
                         let enabled = node.enabled.load(Acquire);
@@ -537,7 +533,7 @@ impl ArrangementView {
                                 .style(move |t, s| radio_with_enabled(t, s, enabled))
                                 .spacing(0.0)
                             )
-                            .on_right_press(Message::TrackToggleSolo(idx)),
+                            .on_right_press(Message::TrackToggleSolo(id)),
                             button(styled_svg(CANCEL.clone()).height(TEXT_HEIGHT))
                                 .style(|t, s| {
                                     let mut style = button::danger(t, s);
@@ -545,7 +541,7 @@ impl ArrangementView {
                                     style
                                 })
                                 .padding(0.0)
-                                .on_press(Message::TrackRemove(idx)),
+                                .on_press(Message::TrackRemove(id)),
                         ]
                         .spacing(5.0);
 
@@ -787,10 +783,10 @@ impl ArrangementView {
                                     .style(move |t, s| radio_with_enabled(t, s, enabled))
                                     .spacing(0.0),
                                 )
-                                .on_right_press(Message::TrackToggleSolo(i))
+                                .on_right_press(Message::TrackToggleSolo(id))
                                 .into()
                             },
-                            |_, _| {
+                            |_, id| {
                                 button(styled_svg(CANCEL.clone()).height(TEXT_HEIGHT))
                                     .style(|t, s| {
                                         let mut style = button::danger(t, s);
@@ -798,7 +794,7 @@ impl ArrangementView {
                                         style
                                     })
                                     .padding(0.0)
-                                    .on_press(Message::TrackRemove(i))
+                                    .on_press(Message::TrackRemove(id))
                                     .into()
                             },
                             |_, _| button("").style(|_, _| button::Style::default()).into(),

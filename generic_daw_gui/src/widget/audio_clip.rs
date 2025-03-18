@@ -136,6 +136,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
                 state.last_addr = addr;
                 *state.cache.borrow_mut() = None;
             }
+
             return;
         }
 
