@@ -37,7 +37,7 @@ struct State {
     interaction: Interaction,
     last_position: ArrangementPosition,
     last_scale: ArrangementScale,
-    last_bounds: Rectangle,
+    last_viewport: Rectangle,
     last_addr: usize,
 }
 
@@ -114,40 +114,44 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         viewport: &Rectangle,
     ) {
         let state = tree.state.downcast_mut::<State>();
+
+        if let Event::Window(window::Event::RedrawRequested(..)) = event {
+            if state.last_position != self.position {
+                state.last_position = self.position;
+                *state.cache.borrow_mut() = None;
+            }
+
+            if state.last_scale != self.scale {
+                state.last_scale = self.scale;
+                *state.cache.borrow_mut() = None;
+            }
+
+            if state.last_viewport != *viewport {
+                state.last_viewport = *viewport;
+                *state.cache.borrow_mut() = None;
+            }
+
+            let addr = Arc::as_ptr(&self.inner).addr();
+            if state.last_addr != addr {
+                state.last_addr = addr;
+                *state.cache.borrow_mut() = None;
+            }
+            return;
+        }
+
+        if shell.is_event_captured() {
+            return;
+        }
+
         let bounds = layout.bounds();
 
-        match event {
-            Event::Window(window::Event::RedrawRequested(..)) => {
-                if state.last_position != self.position {
-                    state.last_position = self.position;
-                    *state.cache.borrow_mut() = None;
-                }
+        if let Event::Mouse(mouse::Event::CursorMoved { .. }) = event {
+            let interaction = Self::mouse_interaction(bounds, cursor, viewport);
 
-                if state.last_scale != self.scale {
-                    state.last_scale = self.scale;
-                    *state.cache.borrow_mut() = None;
-                }
-
-                if state.last_bounds != bounds {
-                    state.last_bounds = bounds;
-                    *state.cache.borrow_mut() = None;
-                }
-
-                let addr = Arc::as_ptr(&self.inner).addr();
-                if state.last_addr != addr {
-                    state.last_addr = addr;
-                    *state.cache.borrow_mut() = None;
-                }
+            if interaction != state.interaction {
+                state.interaction = interaction;
+                shell.request_redraw();
             }
-            Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                let interaction = Self::mouse_interaction(bounds, cursor, viewport);
-
-                if interaction != state.interaction {
-                    state.interaction = interaction;
-                    shell.request_redraw();
-                }
-            }
-            _ => {}
         }
     }
 

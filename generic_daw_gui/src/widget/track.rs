@@ -116,21 +116,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        if shell.is_event_captured() {
+        let Some(bounds) = viewport.intersection(&layout.bounds()) else {
             return;
-        }
+        };
 
         self.children
             .iter_mut()
             .zip(&mut tree.children)
             .zip(layout.children())
             .for_each(|((child, state), layout)| {
-                let Some(viewport) = layout.bounds().intersection(viewport) else {
-                    return;
-                };
-
                 child.as_widget_mut().update(
-                    state, event, layout, cursor, renderer, clipboard, shell, &viewport,
+                    state, event, layout, cursor, renderer, clipboard, shell, &bounds,
                 );
             });
     }

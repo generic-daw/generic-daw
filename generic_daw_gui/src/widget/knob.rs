@@ -75,26 +75,30 @@ where
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {
+        let state = tree.state.downcast_mut::<State>();
+
+        if let Event::Window(window::Event::RedrawRequested(..)) = event {
+            if self.enabled != state.last_enabled {
+                state.last_enabled = self.enabled;
+                state.cache.clear();
+            }
+
+            if self.value != state.last_value {
+                state.last_value = self.value;
+                state.cache.clear();
+            }
+
+            return;
+        }
+
         if shell.is_event_captured() {
             return;
         }
 
-        let state = tree.state.downcast_mut::<State>();
         let bounds = layout.bounds();
 
-        match event {
-            Event::Window(window::Event::RedrawRequested(..)) => {
-                if self.enabled != state.last_enabled {
-                    state.last_enabled = self.enabled;
-                    state.cache.clear();
-                }
-
-                if self.value != state.last_value {
-                    state.last_value = self.value;
-                    state.cache.clear();
-                }
-            }
-            Event::Mouse(event) => match event {
+        if let Event::Mouse(event) = event {
+            match event {
                 mouse::Event::ButtonPressed {
                     button: mouse::Button::Left,
                     ..
@@ -155,8 +159,7 @@ where
                     shell.capture_event();
                 }
                 _ => {}
-            },
-            _ => {}
+            }
         }
     }
 
