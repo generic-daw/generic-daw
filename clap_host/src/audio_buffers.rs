@@ -1,6 +1,7 @@
 use crate::audio_ports_config::AudioPortsConfig;
 use clack_host::{prelude::*, process::PluginAudioConfiguration};
 use generic_daw_utils::NoDebug;
+use std::num::NonZero;
 
 #[derive(Debug)]
 pub struct AudioBuffers {
@@ -14,6 +15,8 @@ pub struct AudioBuffers {
 
     input_channels: NoDebug<Box<[Box<[f32]>]>>,
     output_channels: NoDebug<Box<[Box<[f32]>]>>,
+
+    latency_comp: Option<Box<[f32]>>,
 }
 
 impl AudioBuffers {
@@ -21,6 +24,7 @@ impl AudioBuffers {
         config: PluginAudioConfiguration,
         input_config: AudioPortsConfig,
         output_config: AudioPortsConfig,
+        latency: Option<NonZero<u32>>,
     ) -> Self {
         let input_ports = AudioPorts::from(&input_config).into();
         let output_ports = AudioPorts::from(&output_config).into();
@@ -38,6 +42,8 @@ impl AudioBuffers {
             .collect::<Box<[_]>>()
             .into();
 
+        let latency_comp = latency.map(|l| vec![0.0; l.get() as usize].into_boxed_slice());
+
         Self {
             config,
 
@@ -49,6 +55,8 @@ impl AudioBuffers {
 
             input_channels,
             output_channels,
+
+            latency_comp,
         }
     }
 
@@ -114,7 +122,23 @@ impl AudioBuffers {
         )
     }
 
-    pub fn write_out(&self, buf: &mut [f32], mix_level: f32) {
+    pub fn write_out(&mut self, buf: &mut [f32], mix_level: f32) {
+        if let Some(latency) = self.latency_comp.as_mut() {
+            if latency.len() < buf.len() {
+                buf.rotate_right(latency.len());
+
+                for (i, s) in buf.iter_mut().zip(&mut *latency) {
+                    (*i, *s) = (*s, *i);
+                }
+            } else {
+                for (i, s) in buf.iter_mut().zip(&mut *latency) {
+                    (*i, *s) = (*s, *i);
+                }
+
+                latency.rotate_right(buf.len());
+            }
+        }
+
         if self
             .output_config
             .port_channel_counts

@@ -6,7 +6,7 @@ use generic_daw_utils::unique_id;
 use host::Host;
 use main_thread::MainThread;
 use shared::Shared;
-use std::{collections::BTreeMap, ffi::CString, path::PathBuf, result::Result};
+use std::{collections::BTreeMap, ffi::CString, num::NonZero, path::PathBuf, result::Result};
 use walkdir::WalkDir;
 
 mod audio_buffers;
@@ -140,7 +140,12 @@ pub fn init(
         max_frames_count,
     };
 
-    let audio_buffers = AudioBuffers::new(config, input_config, output_config);
+    let latency = instance
+        .access_handler(|mt: &MainThread<'_>| mt.latency)
+        .map(|ext| ext.get(&mut instance.plugin_handle()))
+        .and_then(NonZero::new);
+
+    let audio_buffers = AudioBuffers::new(config, input_config, output_config, latency);
     let note_buffers = NoteBuffers::new(&mut instance.plugin_handle());
     let id = PluginId::unique();
 

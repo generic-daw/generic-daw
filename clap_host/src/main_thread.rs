@@ -2,6 +2,7 @@ use crate::{shared::Shared, timer_ext::TimerExt};
 use clack_extensions::{
     audio_ports::{HostAudioPortsImpl, RescanType},
     gui::{GuiSize, PluginGui},
+    latency::{HostLatencyImpl, PluginLatency},
     note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
     timer::{HostTimerImpl, TimerId},
 };
@@ -23,6 +24,7 @@ pub enum MainThreadMessage {
 pub struct MainThread<'a> {
     shared: &'a Shared,
     pub gui: Option<NoDebug<PluginGui>>,
+    pub latency: Option<NoDebug<PluginLatency>>,
     pub timers: Rc<RefCell<TimerExt>>,
 }
 
@@ -32,6 +34,7 @@ impl<'a> MainThread<'a> {
             shared,
             gui: None,
             timers: Rc::default(),
+            latency: None,
         }
     }
 }
@@ -39,6 +42,7 @@ impl<'a> MainThread<'a> {
 impl<'a> MainThreadHandler<'a> for MainThread<'a> {
     fn initialized(&mut self, instance: InitializedPluginHandle<'_>) {
         self.gui = instance.get_extension().map(NoDebug);
+        self.latency = instance.get_extension().map(NoDebug);
         self.timers.borrow_mut().set_ext(instance.get_extension());
     }
 }
@@ -49,6 +53,10 @@ impl HostAudioPortsImpl for MainThread<'_> {
     }
 
     fn rescan(&mut self, _flag: RescanType) {}
+}
+
+impl HostLatencyImpl for MainThread<'_> {
+    fn changed(&mut self) {}
 }
 
 impl HostNotePortsImpl for MainThread<'_> {
