@@ -6,9 +6,7 @@ use crate::{
     widget::{Clipped, LINE_HEIGHT},
 };
 use iced::{
-    Element, Length, Radians,
-    alignment::Horizontal,
-    padding,
+    Alignment, Element, Length, Radians, padding,
     widget::{column, container, mouse_area, row, rule, text, text::Wrapping, vertical_rule},
 };
 use std::{f32::consts::FRAC_PI_2, path::Path};
@@ -89,7 +87,7 @@ impl Dir {
                     ..rule::default(t)
                 })]
                 .padding(padding::top(LINE_HEIGHT / 2.0 - 1.5).bottom(LINE_HEIGHT / 2.0 - 1.5))
-                .align_x(Horizontal::Center)
+                .align_x(Alignment::Center)
                 .width(LINE_HEIGHT)
                 .height(height),
                 ch

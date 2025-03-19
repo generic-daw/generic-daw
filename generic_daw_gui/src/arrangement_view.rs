@@ -21,7 +21,6 @@ use generic_daw_core::{
 use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _};
 use iced::{
     Alignment, Element, Function as _, Length, Radians, Subscription, Task, Theme,
-    alignment::Vertical,
     border::{self, Radius},
     futures::TryFutureExt as _,
     mouse::Interaction,
@@ -975,7 +974,7 @@ impl ArrangementView {
                                             )
                                             .interaction(Interaction::Grab),
                                         ]
-                                        .align_y(Vertical::Center)
+                                        .align_y(Alignment::Center)
                                         .spacing(5.0)
                                         .into()
                                     })
@@ -984,6 +983,7 @@ impl ArrangementView {
                             .on_drag(Message::AudioEffectsReordered),
                             Direction::Vertical(Scrollbar::default())
                         )
+                        .height(Length::Fill)
                     ]
                     .into()
                 },
