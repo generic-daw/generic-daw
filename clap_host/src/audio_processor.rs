@@ -1,15 +1,23 @@
 use crate::{Host, PluginId, PluginType, audio_buffers::AudioBuffers, note_buffers::NoteBuffers};
+use async_channel::Receiver;
 use clack_host::process::StartedPluginAudioProcessor;
 use generic_daw_utils::NoDebug;
 
+#[derive(Clone, Copy, Debug)]
+pub enum AudioThreadMessage {
+    RequestRestart,
+    LatencyChanged(u32),
+}
+
 #[derive(Debug)]
 pub struct AudioProcessor {
-    started_processor: NoDebug<StartedPluginAudioProcessor<Host>>,
+    started_processor: Option<NoDebug<StartedPluginAudioProcessor<Host>>>,
     ty: PluginType,
     id: PluginId,
     steady_time: u64,
     audio_buffers: AudioBuffers,
     pub note_buffers: NoteBuffers,
+    receiver: Receiver<AudioThreadMessage>,
 }
 
 impl AudioProcessor {
@@ -20,14 +28,16 @@ impl AudioProcessor {
         id: PluginId,
         audio_buffers: AudioBuffers,
         note_buffers: NoteBuffers,
+        receiver: Receiver<AudioThreadMessage>,
     ) -> Self {
         Self {
-            started_processor: started_processor.into(),
+            started_processor: Some(started_processor.into()),
             ty,
             id,
             steady_time: 0,
             audio_buffers,
             note_buffers,
+            receiver,
         }
     }
 
@@ -37,6 +47,27 @@ impl AudioProcessor {
     }
 
     pub fn process(&mut self, buf: &mut [f32], mix_level: f32) {
+        while let Ok(msg) = self.receiver.try_recv() {
+            match msg {
+                AudioThreadMessage::RequestRestart => {
+                    let mut stopped_processor =
+                        self.started_processor.take().unwrap().0.stop_processing();
+
+                    let started_processor = loop {
+                        match stopped_processor.start_processing() {
+                            Ok(started_processor) => break started_processor,
+                            Err(err) => stopped_processor = err.into_stopped_processor(),
+                        }
+                    };
+
+                    self.started_processor = Some(started_processor.into());
+                }
+                AudioThreadMessage::LatencyChanged(latency) => {
+                    self.audio_buffers.latency_changed(latency);
+                }
+            }
+        }
+
         if self.ty.note_output() {
             self.note_buffers.output_events.clear();
         }
@@ -48,6 +79,8 @@ impl AudioProcessor {
         let (input_audio, mut output_audio) = self.audio_buffers.prepare(buf);
 
         self.started_processor
+            .as_mut()
+            .unwrap()
             .process(
                 &input_audio,
                 &mut output_audio,
@@ -68,7 +101,7 @@ impl AudioProcessor {
     }
 
     pub fn reset(&mut self) {
-        self.started_processor.reset();
+        self.started_processor.as_mut().unwrap().reset();
         self.steady_time = 0;
     }
 

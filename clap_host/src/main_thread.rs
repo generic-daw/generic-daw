@@ -18,6 +18,7 @@ pub enum MainThreadMessage {
     GuiRequestHide,
     GuiClosed,
     TickTimers,
+    LatencyChanged,
 }
 
 #[derive(Debug)]
@@ -56,7 +57,12 @@ impl HostAudioPortsImpl for MainThread<'_> {
 }
 
 impl HostLatencyImpl for MainThread<'_> {
-    fn changed(&mut self) {}
+    fn changed(&mut self) {
+        self.shared
+            .main_sender
+            .try_send(MainThreadMessage::LatencyChanged)
+            .unwrap();
+    }
 }
 
 impl HostNotePortsImpl for MainThread<'_> {
@@ -75,7 +81,7 @@ impl HostTimerImpl for MainThread<'_> {
             .register(Duration::from_millis(u64::from(period_ms))));
 
         self.shared
-            .sender
+            .main_sender
             .try_send(MainThreadMessage::TickTimers)
             .unwrap();
 

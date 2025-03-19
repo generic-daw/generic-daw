@@ -28,7 +28,7 @@ impl ClapHost {
         match message {
             Message::MainThread(id, msg) => return self.main_thread_message(id, msg),
             Message::Opened(arc) => {
-                let (gui, gui_receiver) = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
+                let (gui, receiver) = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
                 let mut gui = gui.into_inner();
                 let id = gui.plugin_id();
 
@@ -41,7 +41,7 @@ impl ClapHost {
                     self.update(Message::MainThread(id, MainThreadMessage::GuiRequestShow))
                 };
 
-                let stream = Task::stream(gui_receiver).map(Message::MainThread.with(id));
+                let stream = Task::stream(receiver).map(Message::MainThread.with(id));
 
                 return open.chain(stream);
             }
@@ -149,6 +149,9 @@ impl ClapHost {
                             .map(Message::MainThread.with(id));
                     }
                 }
+            }
+            MainThreadMessage::LatencyChanged => {
+                self.plugins.get_mut(id.get()).unwrap().latency_changed();
             }
         }
 

@@ -6,7 +6,7 @@ use generic_daw_utils::unique_id;
 use host::Host;
 use main_thread::MainThread;
 use shared::Shared;
-use std::{collections::BTreeMap, ffi::CString, num::NonZero, path::PathBuf, result::Result};
+use std::{collections::BTreeMap, ffi::CString, path::PathBuf, result::Result};
 use walkdir::WalkDir;
 
 mod audio_buffers;
@@ -115,10 +115,11 @@ pub fn init(
     sample_rate: f64,
     max_buffer_size: u32,
 ) -> (GuiExt, Receiver<MainThreadMessage>, AudioProcessor) {
-    let (gui_sender, gui_receiver) = async_channel::unbounded();
+    let (main_sender, main_receiver) = async_channel::unbounded();
+    let (audio_sender, audio_receiver) = async_channel::unbounded();
 
     let mut instance = PluginInstance::new(
-        |()| Shared::new(gui_sender),
+        |()| Shared::new(main_sender, audio_sender),
         |shared| MainThread::new(shared),
         bundle,
         &CString::new(&*descriptor.id).unwrap(),
@@ -143,7 +144,7 @@ pub fn init(
     let latency = instance
         .access_handler(|mt: &MainThread<'_>| mt.latency)
         .map(|ext| ext.get(&mut instance.plugin_handle()))
-        .and_then(NonZero::new);
+        .unwrap_or_default();
 
     let audio_buffers = AudioBuffers::new(config, input_config, output_config, latency);
     let note_buffers = NoteBuffers::new(&mut instance.plugin_handle());
@@ -159,6 +160,7 @@ pub fn init(
         id,
         audio_buffers,
         note_buffers,
+        audio_receiver,
     );
 
     let gui = GuiExt::new(
@@ -168,5 +170,5 @@ pub fn init(
         id,
     );
 
-    (gui, gui_receiver, plugin_audio_processor)
+    (gui, main_receiver, plugin_audio_processor)
 }

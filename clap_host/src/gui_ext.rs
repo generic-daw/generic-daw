@@ -1,4 +1,4 @@
-use crate::{PluginDescriptor, PluginId, host::Host};
+use crate::{PluginDescriptor, PluginId, audio_processor::AudioThreadMessage, host::Host};
 use clack_extensions::gui::{
     GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow,
 };
@@ -155,6 +155,20 @@ impl GuiExt {
     #[must_use]
     pub fn name(&self) -> &str {
         &self.descriptor.name
+    }
+
+    pub fn latency_changed(&mut self) {
+        let latency = self
+            .instance
+            .access_handler(|mt| mt.latency)
+            .map(|ext| ext.get(&mut self.instance.plugin_handle()))
+            .unwrap_or_default();
+
+        self.instance.access_shared_handler(|sh| {
+            sh.audio_sender
+                .try_send(AudioThreadMessage::LatencyChanged(latency))
+                .unwrap();
+        });
     }
 }
 

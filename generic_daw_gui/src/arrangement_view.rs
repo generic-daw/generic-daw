@@ -235,7 +235,7 @@ impl ArrangementView {
                 };
                 let node = self.arrangement.node(selected).0.clone();
 
-                let (gui, gui_receiver, audio_processor) = clap_host::init(
+                let (gui, receiver, audio_processor) = clap_host::init(
                     &PLUGINS[&name],
                     name,
                     f64::from(self.meter.sample_rate),
@@ -254,7 +254,7 @@ impl ArrangementView {
                     .clap_host
                     .update(ClapHostMessage::Opened(Arc::new(Mutex::new((
                         Fragile::new(gui),
-                        gui_receiver,
+                        receiver,
                     )))))
                     .map(Message::ClapHost);
             }
@@ -355,7 +355,7 @@ impl ArrangementView {
                 }
             }
             Message::InstrumentLoad(name) => {
-                let (gui, gui_receiver, audio_processor) = clap_host::init(
+                let (gui, receiver, audio_processor) = clap_host::init(
                     &PLUGINS[&name],
                     name,
                     f64::from(self.meter.sample_rate),
@@ -373,7 +373,7 @@ impl ArrangementView {
                     self.clap_host
                         .update(ClapHostMessage::Opened(Arc::new(Mutex::new((
                             Fragile::new(gui),
-                            gui_receiver,
+                            receiver,
                         )))))
                         .map(Message::ClapHost),
                 ]);

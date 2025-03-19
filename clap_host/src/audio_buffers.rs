@@ -1,7 +1,6 @@
 use crate::audio_ports_config::AudioPortsConfig;
 use clack_host::{prelude::*, process::PluginAudioConfiguration};
 use generic_daw_utils::NoDebug;
-use std::num::NonZero;
 
 #[derive(Debug)]
 pub struct AudioBuffers {
@@ -16,7 +15,7 @@ pub struct AudioBuffers {
     input_channels: NoDebug<Box<[Box<[f32]>]>>,
     output_channels: NoDebug<Box<[Box<[f32]>]>>,
 
-    latency_comp: Option<Box<[f32]>>,
+    latency_comp: Vec<f32>,
 }
 
 impl AudioBuffers {
@@ -24,7 +23,7 @@ impl AudioBuffers {
         config: PluginAudioConfiguration,
         input_config: AudioPortsConfig,
         output_config: AudioPortsConfig,
-        latency: Option<NonZero<u32>>,
+        latency: u32,
     ) -> Self {
         let input_ports = AudioPorts::from(&input_config).into();
         let output_ports = AudioPorts::from(&output_config).into();
@@ -42,7 +41,7 @@ impl AudioBuffers {
             .collect::<Box<[_]>>()
             .into();
 
-        let latency_comp = latency.map(|l| vec![0.0; l.get() as usize].into_boxed_slice());
+        let latency_comp = vec![0.0; latency as usize];
 
         Self {
             config,
@@ -123,20 +122,19 @@ impl AudioBuffers {
     }
 
     pub fn write_out(&mut self, buf: &mut [f32], mix_level: f32) {
-        if let Some(latency) = self.latency_comp.as_mut() {
-            if latency.len() < buf.len() {
-                buf.rotate_right(latency.len());
+        if self.latency_comp.is_empty() {
+        } else if self.latency_comp.len() < buf.len() {
+            buf.rotate_right(self.latency_comp.len());
 
-                for (i, s) in buf.iter_mut().zip(&mut *latency) {
-                    (*i, *s) = (*s, *i);
-                }
-            } else {
-                for (i, s) in buf.iter_mut().zip(&mut *latency) {
-                    (*i, *s) = (*s, *i);
-                }
-
-                latency.rotate_right(buf.len());
+            for (i, s) in buf.iter_mut().zip(&mut *self.latency_comp) {
+                (*i, *s) = (*s, *i);
             }
+        } else {
+            for (i, s) in buf.iter_mut().zip(&mut *self.latency_comp) {
+                (*i, *s) = (*s, *i);
+            }
+
+            self.latency_comp.rotate_right(buf.len());
         }
 
         if self
@@ -168,5 +166,9 @@ impl AudioBuffers {
                     *buf += sample * mix_level;
                 });
         }
+    }
+
+    pub fn latency_changed(&mut self, latency: u32) {
+        self.latency_comp.resize(latency as usize, 0.0);
     }
 }

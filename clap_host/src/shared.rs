@@ -1,4 +1,4 @@
-use crate::MainThreadMessage;
+use crate::{MainThreadMessage, audio_processor::AudioThreadMessage};
 use async_channel::Sender;
 use clack_extensions::{
     gui::{GuiSize, HostGuiImpl},
@@ -9,21 +9,24 @@ use tracing::{debug, error, info, warn};
 
 #[derive(Debug)]
 pub struct Shared {
-    pub sender: Sender<MainThreadMessage>,
+    pub main_sender: Sender<MainThreadMessage>,
+    pub audio_sender: Sender<AudioThreadMessage>,
 }
 
 impl SharedHandler<'_> for Shared {
     fn request_process(&self) {}
 
     fn request_callback(&self) {
-        self.sender
+        self.main_sender
             .try_send(MainThreadMessage::RequestCallback)
             .unwrap();
     }
 
-    fn request_restart(&self) {}
-
-    fn initializing(&self, _instance: InitializingPluginHandle<'_>) {}
+    fn request_restart(&self) {
+        self.audio_sender
+            .try_send(AudioThreadMessage::RequestRestart)
+            .unwrap();
+    }
 }
 
 impl HostGuiImpl for Shared {
@@ -31,20 +34,26 @@ impl HostGuiImpl for Shared {
 
     fn request_resize(&self, new_size: GuiSize) -> Result<(), HostError> {
         Ok(self
-            .sender
+            .main_sender
             .try_send(MainThreadMessage::GuiRequestResize(new_size))?)
     }
 
     fn request_show(&self) -> Result<(), HostError> {
-        Ok(self.sender.try_send(MainThreadMessage::GuiRequestShow)?)
+        Ok(self
+            .main_sender
+            .try_send(MainThreadMessage::GuiRequestShow)?)
     }
 
     fn request_hide(&self) -> Result<(), HostError> {
-        Ok(self.sender.try_send(MainThreadMessage::GuiRequestHide)?)
+        Ok(self
+            .main_sender
+            .try_send(MainThreadMessage::GuiRequestHide)?)
     }
 
     fn closed(&self, _was_destroyed: bool) {
-        self.sender.try_send(MainThreadMessage::GuiClosed).unwrap();
+        self.main_sender
+            .try_send(MainThreadMessage::GuiClosed)
+            .unwrap();
     }
 }
 
@@ -63,7 +72,13 @@ impl HostLogImpl for Shared {
 }
 
 impl Shared {
-    pub fn new(sender: Sender<MainThreadMessage>) -> Self {
-        Self { sender }
+    pub fn new(
+        main_sender: Sender<MainThreadMessage>,
+        audio_sender: Sender<AudioThreadMessage>,
+    ) -> Self {
+        Self {
+            main_sender,
+            audio_sender,
+        }
     }
 }
