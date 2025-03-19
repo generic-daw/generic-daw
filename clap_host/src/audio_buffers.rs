@@ -41,7 +41,7 @@ impl AudioBuffers {
             .collect::<Box<[_]>>()
             .into();
 
-        let latency_comp = vec![0.0; latency as usize];
+        let latency_comp = vec![0.0; latency as usize * 2];
 
         Self {
             config,
@@ -68,10 +68,10 @@ impl AudioBuffers {
             == &0
         {
         } else if self.input_config.port_channel_counts[self.input_config.main_port_index] == 1 {
-            buf.iter()
-                .flat_map(|x| [x, x])
+            buf.chunks_exact(2)
+                .map(|c| c.iter().sum())
                 .zip(&mut *self.input_channels[self.input_config.main_port_index])
-                .for_each(|(buf, sample)| *sample = *buf);
+                .for_each(|(buf, sample)| *sample = buf);
         } else {
             let (l, r) = self.input_channels[self.input_config.main_port_index]
                 .split_at_mut(self.config.max_frames_count as usize);
@@ -169,6 +169,6 @@ impl AudioBuffers {
     }
 
     pub fn latency_changed(&mut self, latency: u32) {
-        self.latency_comp.resize(latency as usize, 0.0);
+        self.latency_comp.resize(latency as usize * 2, 0.0);
     }
 }
