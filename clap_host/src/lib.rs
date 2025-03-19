@@ -7,6 +7,7 @@ use host::Host;
 use main_thread::MainThread;
 use shared::Shared;
 use std::{collections::BTreeMap, ffi::CString, path::PathBuf, result::Result};
+use tracing::info;
 use walkdir::WalkDir;
 
 mod audio_buffers;
@@ -119,7 +120,7 @@ pub fn init(
     let (audio_sender, audio_receiver) = async_channel::unbounded();
 
     let mut instance = PluginInstance::new(
-        |()| Shared::new(main_sender, audio_sender),
+        |()| Shared::new(descriptor.clone(), main_sender, audio_sender),
         |shared| MainThread::new(shared),
         bundle,
         &CString::new(&*descriptor.id).unwrap(),
@@ -146,6 +147,11 @@ pub fn init(
         .map(|ext| ext.get(&mut instance.plugin_handle()))
         .unwrap_or_default();
 
+    info!(
+        "{} ({}): setting latency to {latency} frames",
+        descriptor.name, descriptor.id
+    );
+
     let audio_buffers = AudioBuffers::new(config, input_config, output_config, latency);
     let note_buffers = NoteBuffers::new(&mut instance.plugin_handle());
     let id = PluginId::unique();
@@ -156,7 +162,7 @@ pub fn init(
             .unwrap()
             .start_processing()
             .unwrap(),
-        descriptor.ty,
+        descriptor.clone(),
         id,
         audio_buffers,
         note_buffers,

@@ -1,4 +1,4 @@
-use crate::{MainThreadMessage, audio_processor::AudioThreadMessage};
+use crate::{MainThreadMessage, PluginDescriptor, audio_processor::AudioThreadMessage};
 use async_channel::Sender;
 use clack_extensions::{
     gui::{GuiSize, HostGuiImpl},
@@ -9,6 +9,7 @@ use tracing::{debug, error, info, warn};
 
 #[derive(Debug)]
 pub struct Shared {
+    pub descriptor: PluginDescriptor,
     pub main_sender: Sender<MainThreadMessage>,
     pub audio_sender: Sender<AudioThreadMessage>,
 }
@@ -60,23 +61,45 @@ impl HostGuiImpl for Shared {
 impl HostLogImpl for Shared {
     fn log(&self, severity: LogSeverity, message: &str) {
         match severity {
-            LogSeverity::Info => info!(message),
-            LogSeverity::Debug => debug!(message),
-            LogSeverity::Warning => warn!(message),
+            LogSeverity::Info => {
+                info!(
+                    "{} ({}): {message}",
+                    self.descriptor.name, self.descriptor.id
+                );
+            }
+            LogSeverity::Debug => {
+                debug!(
+                    "{} ({}): {message}",
+                    self.descriptor.name, self.descriptor.id
+                );
+            }
+            LogSeverity::Warning => {
+                warn!(
+                    "{} ({}): {message}",
+                    self.descriptor.name, self.descriptor.id
+                );
+            }
             LogSeverity::Error
             | LogSeverity::Fatal
             | LogSeverity::PluginMisbehaving
-            | LogSeverity::HostMisbehaving => error!(message),
+            | LogSeverity::HostMisbehaving => {
+                error!(
+                    "{} ({}): {message}",
+                    self.descriptor.name, self.descriptor.id
+                );
+            }
         }
     }
 }
 
 impl Shared {
     pub fn new(
+        descriptor: PluginDescriptor,
         main_sender: Sender<MainThreadMessage>,
         audio_sender: Sender<AudioThreadMessage>,
     ) -> Self {
         Self {
+            descriptor,
             main_sender,
             audio_sender,
         }

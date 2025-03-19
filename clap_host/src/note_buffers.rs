@@ -13,8 +13,8 @@ pub struct NoteBuffers {
 impl NoteBuffers {
     pub fn new(plugin: &mut PluginMainThreadHandle<'_>) -> Self {
         Self {
-            input_events: EventBuffer::with_capacity(255),
-            output_events: EventBuffer::with_capacity(255),
+            input_events: EventBuffer::new(),
+            output_events: EventBuffer::new(),
 
             main_input_port: Self::from_ports(plugin, true).unwrap_or_default(),
             main_output_port: Self::from_ports(plugin, false).unwrap_or_default(),

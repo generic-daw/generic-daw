@@ -6,7 +6,7 @@ use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
 use raw_window_handle::RawWindowHandle;
 use std::time::Duration;
-use tracing::error;
+use tracing::warn;
 
 #[derive(Debug)]
 pub struct GuiExt {
@@ -122,10 +122,9 @@ impl GuiExt {
 
         f(&self.ext, plugin);
 
-        // I have no clue why this works, but
-        // if I unwrap here, DCC doesn't load
+        // I have no clue why this works, but if I unwrap here, nih-plug plugins don't load
         if let Err(err) = self.ext.show(plugin) {
-            error!("{} ({}): {err}", self.descriptor.name, self.descriptor.id);
+            warn!("{} ({}): {err}", self.descriptor.name, self.descriptor.id);
         }
 
         self.is_open = true;

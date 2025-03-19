@@ -9,6 +9,7 @@ use clack_extensions::{
 use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
 use std::{cell::RefCell, rc::Rc, time::Duration};
+use tracing::info;
 
 #[derive(Clone, Copy, Debug)]
 pub enum MainThreadMessage {
@@ -75,20 +76,30 @@ impl HostNotePortsImpl for MainThread<'_> {
 
 impl HostTimerImpl for MainThread<'_> {
     fn register_timer(&mut self, period_ms: u32) -> Result<TimerId, HostError> {
-        let id = Ok(self
+        let timer_id = self
             .timers
             .borrow_mut()
-            .register(Duration::from_millis(u64::from(period_ms))));
+            .register(Duration::from_millis(u64::from(period_ms)));
+
+        info!(
+            "{} ({}): registered {period_ms}ms timer with id {timer_id}",
+            self.shared.descriptor.name, self.shared.descriptor.id
+        );
 
         self.shared
             .main_sender
             .try_send(MainThreadMessage::TickTimers)
             .unwrap();
 
-        id
+        Ok(timer_id)
     }
 
     fn unregister_timer(&mut self, timer_id: TimerId) -> Result<(), HostError> {
+        info!(
+            "{} ({}): unregistered timer with id {timer_id}",
+            self.shared.descriptor.name, self.shared.descriptor.id
+        );
+
         self.timers.borrow_mut().unregister(timer_id)
     }
 }

@@ -1,7 +1,10 @@
-use crate::{Host, PluginId, PluginType, audio_buffers::AudioBuffers, note_buffers::NoteBuffers};
+use crate::{
+    Host, PluginDescriptor, PluginId, audio_buffers::AudioBuffers, note_buffers::NoteBuffers,
+};
 use async_channel::Receiver;
 use clack_host::process::StartedPluginAudioProcessor;
 use generic_daw_utils::NoDebug;
+use tracing::info;
 
 #[derive(Clone, Copy, Debug)]
 pub enum AudioThreadMessage {
@@ -12,7 +15,7 @@ pub enum AudioThreadMessage {
 #[derive(Debug)]
 pub struct AudioProcessor {
     started_processor: Option<NoDebug<StartedPluginAudioProcessor<Host>>>,
-    ty: PluginType,
+    descriptor: PluginDescriptor,
     id: PluginId,
     steady_time: u64,
     audio_buffers: AudioBuffers,
@@ -24,7 +27,7 @@ impl AudioProcessor {
     #[must_use]
     pub fn new(
         started_processor: StartedPluginAudioProcessor<Host>,
-        ty: PluginType,
+        descriptor: PluginDescriptor,
         id: PluginId,
         audio_buffers: AudioBuffers,
         note_buffers: NoteBuffers,
@@ -32,7 +35,7 @@ impl AudioProcessor {
     ) -> Self {
         Self {
             started_processor: Some(started_processor.into()),
-            ty,
+            descriptor,
             id,
             steady_time: 0,
             audio_buffers,
@@ -50,6 +53,11 @@ impl AudioProcessor {
         while let Ok(msg) = self.receiver.try_recv() {
             match msg {
                 AudioThreadMessage::RequestRestart => {
+                    info!(
+                        "{} ({}): restarting audio processor",
+                        self.descriptor.name, self.descriptor.id
+                    );
+
                     let mut stopped_processor =
                         self.started_processor.take().unwrap().0.stop_processing();
 
@@ -63,16 +71,21 @@ impl AudioProcessor {
                     self.started_processor = Some(started_processor.into());
                 }
                 AudioThreadMessage::LatencyChanged(latency) => {
+                    info!(
+                        "{} ({}): setting latency to {latency} frames",
+                        self.descriptor.name, self.descriptor.id
+                    );
+
                     self.audio_buffers.latency_changed(latency);
                 }
             }
         }
 
-        if self.ty.note_output() {
+        if self.descriptor.ty.note_output() {
             self.note_buffers.output_events.clear();
         }
 
-        if self.ty.audio_input() {
+        if self.descriptor.ty.audio_input() {
             self.audio_buffers.read_in(buf);
         }
 
@@ -93,7 +106,7 @@ impl AudioProcessor {
 
         self.steady_time += u64::from(output_audio.frames_count().unwrap());
 
-        if self.ty.audio_output() {
+        if self.descriptor.ty.audio_output() {
             self.audio_buffers.write_out(buf, mix_level);
         }
 

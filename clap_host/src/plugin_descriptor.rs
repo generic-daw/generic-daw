@@ -1,11 +1,14 @@
 use crate::PluginType;
 use clack_host::factory;
-use std::fmt::{Display, Formatter};
+use std::{
+    fmt::{Display, Formatter},
+    sync::Arc,
+};
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct PluginDescriptor {
-    pub name: Box<str>,
-    pub id: Box<str>,
+    pub name: Arc<str>,
+    pub id: Arc<str>,
     pub ty: PluginType,
 }
 
