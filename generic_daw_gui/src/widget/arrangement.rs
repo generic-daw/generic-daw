@@ -17,6 +17,7 @@ use iced::{
     window,
 };
 use std::{
+    f32,
     fmt::{Debug, Formatter},
     sync::atomic::Ordering::Acquire,
 };
@@ -108,7 +109,11 @@ where
             vec![
                 self.children
                     .as_widget()
-                    .layout(&mut tree.children[0], renderer, limits)
+                    .layout(
+                        &mut tree.children[0],
+                        renderer,
+                        &Limits::new(limits.min(), Size::new(limits.max().width, f32::INFINITY)),
+                    )
                     .translate(Vector::new(
                         0.0,
                         self.position.y.mul_add(-self.scale.y, LINE_HEIGHT),

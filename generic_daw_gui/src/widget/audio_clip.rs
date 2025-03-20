@@ -354,7 +354,7 @@ impl AudioClip {
         }
 
         // vertices of the waveform
-        let vertices = self.inner.audio.lods[lod][first_index..last_index]
+        let vertices = self.inner.audio.lods[lod][first_index..=last_index]
             .iter()
             .map(|(min, max)| (min * height, max * height))
             .map(|(min, max)| {

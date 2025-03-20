@@ -195,20 +195,16 @@ impl ArrangementView {
                     self.selected_channel = None;
                 }
 
-                return Task::batch(
-                    self.audio_effects_by_channel
-                        .remove(id.get())
-                        .unwrap()
-                        .into_iter()
-                        .map(|(id, _)| {
-                            self.clap_host
-                                .update(ClapHostMessage::MainThread(
-                                    id,
-                                    MainThreadMessage::GuiClosed,
-                                ))
-                                .map(Message::ClapHost)
-                        }),
-                );
+                if let Some(effects) = self.audio_effects_by_channel.remove(id.get()) {
+                    return Task::batch(effects.into_iter().map(|(id, _)| {
+                        self.clap_host
+                            .update(ClapHostMessage::MainThread(
+                                id,
+                                MainThreadMessage::GuiClosed,
+                            ))
+                            .map(Message::ClapHost)
+                    }));
+                }
             }
             Message::ChannelSelect(id) => {
                 self.selected_channel = if self.selected_channel == Some(id) {
