@@ -356,17 +356,26 @@ impl AudioClip {
         // vertices of the waveform
         let vertices = self.inner.audio.lods[lod][first_index..last_index]
             .iter()
+            .map(|(min, max)| (min * height, max * height))
+            .map(|(min, max)| {
+                if max - min < 1.0 {
+                    let avg = min.midpoint(max).clamp(0.5, height - 0.5);
+                    (avg - 0.5, avg + 0.5)
+                } else {
+                    (min, max)
+                }
+            })
             .enumerate()
             .flat_map(|(x, (min, max))| {
                 let x = x as f32 * lod_samples_per_pixel;
 
                 [
                     SolidVertex2D {
-                        position: [x, min.mul_add(height, LINE_HEIGHT)],
+                        position: [x, min + LINE_HEIGHT],
                         color,
                     },
                     SolidVertex2D {
-                        position: [x, max.mul_add(height, LINE_HEIGHT)],
+                        position: [x, max + LINE_HEIGHT],
                         color,
                     },
                 ]

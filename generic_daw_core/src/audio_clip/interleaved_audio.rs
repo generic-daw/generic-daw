@@ -3,13 +3,7 @@ use generic_daw_utils::NoDebug;
 use rubato::{
     Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
-use std::{
-    array,
-    cmp::{max_by, min_by},
-    fs::File,
-    path::Path,
-    sync::Arc,
-};
+use std::{fs::File, path::Path, sync::Arc};
 use symphonia::core::{
     audio::SampleBuffer,
     codecs::DecoderOptions,
@@ -25,7 +19,7 @@ pub struct InterleavedAudio {
     /// these are used to play the sample back
     pub samples: NoDebug<Box<[f32]>>,
     /// these are used to draw the sample in various quality levels
-    pub lods: NoDebug<[Box<[(f32, f32)]>; 10]>,
+    pub lods: NoDebug<Box<[Box<[(f32, f32)]>]>>,
     /// the file name associated with the sample
     pub path: Box<Path>,
 }
@@ -33,18 +27,13 @@ pub struct InterleavedAudio {
 impl InterleavedAudio {
     pub fn create(path: &Path, sample_rate: u32) -> Result<Arc<Self>, InterleavedAudioError> {
         let samples = Self::read_audio_file(path, sample_rate)?;
-        let length = samples.len();
+        let lods = Self::create_lod(&samples);
 
-        let mut audio = Self {
+        let audio = Self {
             samples: samples.into(),
-            lods: array::from_fn(|i| {
-                vec![(0.0, 0.0); length.div_ceil(1 << (i + 3))].into_boxed_slice()
-            })
-            .into(),
+            lods: lods.into(),
             path: path.into(),
         };
-
-        audio.create_lod();
 
         Ok(Arc::new(audio))
     }
@@ -116,54 +105,43 @@ impl InterleavedAudio {
         Ok(resample_planar(file_sample_rate, sample_rate, left, right)?)
     }
 
-    fn create_lod(&mut self) {
+    #[expect(clippy::type_complexity)]
+    fn create_lod(samples: &[f32]) -> Box<[Box<[(f32, f32)]>]> {
+        let mut lods = Vec::with_capacity(10);
+
         let mut prev = None::<(f32, f32)>;
-        self.samples.chunks(8).enumerate().for_each(|(i, chunk)| {
-            let (mut min, mut max) = chunk
-                .iter()
-                .fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
-                    (min.min(c), max.max(c))
-                });
-            if let Some(prev) = prev {
-                min = min.min(prev.1);
-                max = max.max(prev.0);
-            }
-            if max - min < 0.02 {
-                let avg = min.midpoint(max).clamp(-0.99, 0.99);
-                (min, max) = (avg - 0.01, avg + 0.01);
-            }
-            prev = Some((min, max));
-            self.lods[0][i] = (min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5));
+        lods.push(
+            samples
+                .chunks(8)
+                .map(|chunk| {
+                    let (min, max) = chunk.iter().fold(
+                        prev.unwrap_or((f32::INFINITY, f32::NEG_INFINITY)),
+                        |(min, max), &c| (min.min(c), max.max(c)),
+                    );
+                    prev = Some((max, min));
+                    (min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5))
+                })
+                .collect::<Box<_>>(),
+        );
+
+        (0..10).for_each(|i| {
+            prev = None;
+            lods.push(
+                lods[i]
+                    .chunks(2)
+                    .map(|chunk| {
+                        let (min, max) = chunk.iter().fold(
+                            prev.unwrap_or((f32::INFINITY, f32::NEG_INFINITY)),
+                            |(min, max), &c| (min.min(c.0), max.max(c.1)),
+                        );
+                        prev = Some((max, min));
+                        (min, max)
+                    })
+                    .collect(),
+            );
         });
 
-        (1..self.lods.len()).for_each(|i| {
-            prev = None;
-            let len = self.lods[i].len();
-            (0..len).for_each(|j| {
-                let mut min = min_by(
-                    self.lods[i - 1][2 * j].0,
-                    self.lods[i - 1]
-                        .get(2 * j + 1)
-                        .unwrap_or(&(f32::INFINITY, f32::INFINITY))
-                        .0,
-                    f32::total_cmp,
-                );
-                let mut max = max_by(
-                    self.lods[i - 1][2 * j].1,
-                    self.lods[i - 1]
-                        .get(2 * j + 1)
-                        .unwrap_or(&(f32::INFINITY, f32::INFINITY))
-                        .1,
-                    f32::total_cmp,
-                );
-                if let Some(prev) = prev {
-                    min = min.min(prev.1);
-                    max = max.max(prev.0);
-                }
-                prev = Some((min, max));
-                self.lods[i][j] = (min, max);
-            });
-        });
+        lods.into_boxed_slice()
     }
 }
 
