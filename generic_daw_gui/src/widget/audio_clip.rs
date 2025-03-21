@@ -147,7 +147,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         let bounds = layout.bounds();
 
         if let Event::Mouse(mouse::Event::CursorMoved { .. }) = event {
-            let interaction = Self::mouse_interaction(bounds, cursor, viewport);
+            let interaction = Self::interaction(bounds, cursor, viewport);
 
             if interaction != state.interaction {
                 state.interaction = interaction;
@@ -248,13 +248,13 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 
     fn mouse_interaction(
         &self,
-        _tree: &Tree,
-        layout: Layout<'_>,
-        cursor: Cursor,
-        viewport: &Rectangle,
+        tree: &Tree,
+        _layout: Layout<'_>,
+        _cursor: Cursor,
+        _viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> Interaction {
-        Self::mouse_interaction(layout.bounds(), cursor, viewport)
+        tree.state.downcast_ref::<State>().interaction
     }
 }
 
@@ -283,7 +283,7 @@ impl AudioClip {
         }
     }
 
-    fn mouse_interaction(bounds: Rectangle, cursor: Cursor, viewport: &Rectangle) -> Interaction {
+    fn interaction(bounds: Rectangle, cursor: Cursor, viewport: &Rectangle) -> Interaction {
         let Some(mut cursor) = cursor.position() else {
             return Interaction::default();
         };

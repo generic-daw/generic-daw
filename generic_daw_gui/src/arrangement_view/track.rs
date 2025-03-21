@@ -81,19 +81,15 @@ impl Track {
         let sample_rate = meter.sample_rate;
 
         self.clips().enumerate().rev().find_map(|(i, clip)| {
-            if clip
+            (clip
                 .get_global_start()
                 .in_interleaved_samples(bpm, sample_rate)
                 <= global_time
                 && global_time
                     <= clip
                         .get_global_end()
-                        .in_interleaved_samples(bpm, sample_rate)
-            {
-                Some(i)
-            } else {
-                None
-            }
+                        .in_interleaved_samples(bpm, sample_rate))
+            .then_some(i)
         })
     }
 
