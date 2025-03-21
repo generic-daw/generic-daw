@@ -29,7 +29,7 @@ pub const TEXT_HEIGHT: f32 = 16.0;
 
 pub const SWM: f32 = 60.0;
 
-fn shaping_of(text: &str) -> Shaping {
+pub fn shaping_of(text: &str) -> Shaping {
     if text.is_ascii() {
         Shaping::Basic
     } else {

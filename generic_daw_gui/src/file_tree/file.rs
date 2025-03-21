@@ -3,12 +3,15 @@ use crate::{
     components::{styled_button, styled_svg},
     daw::Message as DawMessage,
     icons::{AUDIO_FILE, GENERIC_FILE},
-    widget::{Clipped, LINE_HEIGHT},
+    widget::{Clipped, LINE_HEIGHT, shaping_of},
 };
 use generic_daw_core::Position;
 use iced::{
     Element, Length,
-    widget::{container, mouse_area, row, svg, text, text::Wrapping},
+    widget::{
+        container, mouse_area, row, svg, text,
+        text::{Shaping, Wrapping},
+    },
 };
 use std::{
     cell::RefCell,
@@ -20,12 +23,15 @@ use std::{
 pub struct File {
     path: Box<Path>,
     name: Box<str>,
+    shaping: Shaping,
     icon: svg::Handle,
 }
 
 impl File {
     pub fn new(path: &Path) -> Self {
-        let name = path.file_name().unwrap().to_str().unwrap().into();
+        let name = path.file_name().unwrap().to_str().unwrap();
+        let shaping = shaping_of(name);
+
         let icon = if is_audio(path).unwrap_or_default() {
             AUDIO_FILE.clone()
         } else {
@@ -34,7 +40,8 @@ impl File {
 
         Self {
             path: path.into(),
-            name,
+            name: name.into(),
+            shaping,
             icon,
         }
     }
@@ -44,7 +51,12 @@ impl File {
             mouse_area(
                 styled_button(row![
                     Clipped::new(styled_svg(self.icon.clone()).height(LINE_HEIGHT)),
-                    container(text(&*self.name).wrapping(Wrapping::None)).clip(true)
+                    container(
+                        text(&*self.name)
+                            .shaping(self.shaping)
+                            .wrapping(Wrapping::None)
+                    )
+                    .clip(true)
                 ])
                 .width(Length::Fill)
                 .padding(0)

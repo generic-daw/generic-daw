@@ -3,17 +3,22 @@ use crate::{
     components::{styled_button, styled_svg},
     daw::Message as DawMessage,
     icons::CHEVRON_RIGHT,
-    widget::{Clipped, LINE_HEIGHT},
+    widget::{Clipped, LINE_HEIGHT, shaping_of},
 };
 use iced::{
     Alignment, Element, Length, Radians, padding,
-    widget::{column, container, mouse_area, row, rule, text, text::Wrapping, vertical_rule},
+    widget::{
+        column, container, mouse_area, row, rule, text,
+        text::{Shaping, Wrapping},
+        vertical_rule,
+    },
 };
 use std::{f32::consts::FRAC_PI_2, path::Path};
 
 pub struct Dir {
     path: Box<Path>,
     name: Box<str>,
+    shaping: Shaping,
     dirs: Option<Box<[Dir]>>,
     files: Option<Box<[File]>>,
     open: bool,
@@ -21,11 +26,13 @@ pub struct Dir {
 
 impl Dir {
     pub fn new(path: &Path) -> Self {
-        let name = path.file_name().unwrap().to_str().unwrap().into();
+        let name = path.file_name().unwrap().to_str().unwrap();
+        let shaping = shaping_of(name);
 
         Self {
             path: path.into(),
-            name,
+            name: name.into(),
+            shaping,
             dirs: None,
             files: None,
             open: false,
@@ -58,7 +65,12 @@ impl Dir {
                         .rotation(Radians(if self.open { FRAC_PI_2 } else { 0.0 }))
                         .height(LINE_HEIGHT)
                 ),
-                container(text(&*self.name).wrapping(Wrapping::None)).clip(true)
+                container(
+                    text(&*self.name)
+                        .shaping(self.shaping)
+                        .wrapping(Wrapping::None)
+                )
+                .clip(true)
             ])
             .width(Length::Fill)
             .padding(0)
