@@ -226,7 +226,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 
         // fill the mesh cache if it's cleared
         if state.cache.borrow().is_none() {
-            if let Some(mesh) = self.mesh(theme, bounds.size(), self.position, self.scale) {
+            if let Some(mesh) = self.mesh(theme, bounds.size()) {
                 state.cache.borrow_mut().replace(
                     Geometry::Live {
                         meshes: vec![mesh],
@@ -301,35 +301,29 @@ impl AudioClip {
         }
     }
 
-    fn mesh(
-        &self,
-        theme: &Theme,
-        size: Size,
-        position: ArrangementPosition,
-        scale: ArrangementScale,
-    ) -> Option<Mesh> {
+    fn mesh(&self, theme: &Theme, size: Size) -> Option<Mesh> {
         // the height of the waveform
-        let height = scale.y - LINE_HEIGHT;
+        let height = self.scale.y - LINE_HEIGHT;
 
         debug_assert!(height >= 0.0);
 
         // samples of the original audio per sample of lod
-        let lod_sample_size = scale.x.floor().exp2();
+        let lod_sample_size = self.scale.x.floor().exp2();
 
         // samples of the original audio per pixel
-        let pixel_size = scale.x.exp2();
+        let pixel_size = self.scale.x.exp2();
 
         // samples in the lod per pixel
         let lod_samples_per_pixel = lod_sample_size / pixel_size;
 
         let color = color::pack(theme.extended_palette().background.strong.text);
-        let lod = scale.x as usize - 3;
+        let lod = self.scale.x as usize - 3;
 
         let bpm = self.inner.meter.bpm.load(Acquire);
 
         let diff = max_by(
             0.0,
-            position.x
+            self.position.x
                 - self
                     .inner
                     .position
@@ -391,7 +385,10 @@ impl AudioClip {
         Some(Mesh::Solid {
             buffers: Indexed { vertices, indices },
             transformation: Transformation::IDENTITY,
-            clip_bounds: Rectangle::new(Point::new(0.0, scale.y - size.height + LINE_HEIGHT), size),
+            clip_bounds: Rectangle::new(
+                Point::new(0.0, self.scale.y - size.height + LINE_HEIGHT),
+                size,
+            ),
         })
     }
 }
