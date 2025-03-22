@@ -58,21 +58,21 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
         tree: &Tree,
         layout: Layout<'_>,
         cursor: Cursor,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
         renderer: &Renderer,
     ) -> Interaction {
+        let Some(bounds) = viewport.intersection(&layout.bounds()) else {
+            return Interaction::default();
+        };
+
         self.children
             .iter()
             .zip(&tree.children)
             .zip(layout.children())
-            .filter_map(|((child, tree), clip_layout)| {
-                Some(child.as_widget().mouse_interaction(
-                    tree,
-                    clip_layout,
-                    cursor,
-                    &clip_layout.bounds().intersection(&layout.bounds())?,
-                    renderer,
-                ))
+            .map(|((child, tree), clip_layout)| {
+                child
+                    .as_widget()
+                    .mouse_interaction(tree, clip_layout, cursor, &bounds, renderer)
             })
             .max()
             .unwrap_or_default()

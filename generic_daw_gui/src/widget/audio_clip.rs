@@ -37,6 +37,7 @@ struct State {
     interaction: Interaction,
     last_position: ArrangementPosition,
     last_scale: ArrangementScale,
+    last_bounds: Rectangle,
     last_viewport: Rectangle,
     last_addr: usize,
 }
@@ -91,13 +92,14 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
             .position
             .get_global_end()
             .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate);
+        let pixel_size = self.scale.x.exp2();
 
         Node::new(Size::new(
-            (global_end - global_start) / self.scale.x.exp2(),
+            (global_end - global_start) / pixel_size,
             self.scale.y,
         ))
         .translate(Vector::new(
-            (global_start - self.position.x) / self.scale.x.exp2(),
+            (global_start - self.position.x) / pixel_size,
             0.0,
         ))
     }
@@ -114,6 +116,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         viewport: &Rectangle,
     ) {
         let state = tree.state.downcast_mut::<State>();
+        let bounds = layout.bounds();
 
         if let Event::Window(window::Event::RedrawRequested(..)) = event {
             if state.last_position != self.position {
@@ -123,6 +126,11 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 
             if state.last_scale != self.scale {
                 state.last_scale = self.scale;
+                *state.cache.borrow_mut() = None;
+            }
+
+            if state.last_bounds != bounds {
+                state.last_bounds = bounds;
                 *state.cache.borrow_mut() = None;
             }
 
@@ -143,8 +151,6 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         if shell.is_event_captured() {
             return;
         }
-
-        let bounds = layout.bounds();
 
         if let Event::Mouse(mouse::Event::CursorMoved { .. }) = event {
             let interaction = Self::interaction(bounds, cursor, viewport);
@@ -288,7 +294,10 @@ impl AudioClip {
             return Interaction::default();
         };
 
-        if !viewport.contains(cursor) {
+        if !bounds
+            .intersection(viewport)
+            .is_some_and(|bounds| bounds.contains(cursor))
+        {
             return Interaction::default();
         }
 
@@ -321,22 +330,21 @@ impl AudioClip {
 
         let bpm = self.inner.meter.bpm.load(Acquire);
 
-        let diff = max_by(
-            0.0,
-            self.position.x
-                - self
-                    .inner
-                    .position
-                    .get_global_start()
-                    .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate),
-            f32::total_cmp,
-        );
+        let global_start = self
+            .inner
+            .position
+            .get_global_start()
+            .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate);
+
+        let diff = max_by(0.0, self.position.x - global_start, f32::total_cmp);
 
         let clip_start = self
             .inner
             .position
             .get_clip_start()
             .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate);
+
+        let offset = (clip_start / lod_sample_size).fract();
 
         let first_index = ((diff + clip_start) / lod_sample_size) as usize;
         let last_index = first_index + (size.width / lod_samples_per_pixel) as usize;
@@ -361,7 +369,7 @@ impl AudioClip {
             })
             .enumerate()
             .flat_map(|(x, (min, max))| {
-                let x = x as f32 * lod_samples_per_pixel;
+                let x = (x as f32 - offset) * lod_samples_per_pixel;
 
                 [
                     SolidVertex2D {
