@@ -7,6 +7,7 @@ use generic_daw_utils::ShiftMoveExt as _;
 use std::{
     cmp::max_by,
     f32::consts::{FRAC_PI_4, SQRT_2},
+    ops::Deref as _,
     sync::{
         Arc, Mutex,
         atomic::{
@@ -22,7 +23,7 @@ mod effect_entry;
 pub struct MixerNode {
     id: NodeId,
     /// any effects that are to be applied to the input audio, before applying volume and pan
-    effects: ArcSwap<Vec<EffectEntry>>,
+    effects: ArcSwap<Vec<Arc<EffectEntry>>>,
     /// in the `0.0..` range
     pub volume: Atomic<f32>,
     /// in the `-1.0..1.0` range
@@ -42,11 +43,11 @@ impl MixerNode {
 
     pub fn add_effect(&self, effect: AudioProcessor) {
         self.with_effects_list(move |effects| {
-            effects.push(EffectEntry {
+            effects.push(Arc::new(EffectEntry {
                 effect: Mutex::new(effect),
                 mix: Atomic::new(1.0),
                 enabled: AtomicBool::new(true),
-            });
+            }));
         });
     }
 
@@ -82,11 +83,8 @@ impl MixerNode {
         self.effects.load()[index].enabled.fetch_not(AcqRel)
     }
 
-    fn with_effects_list(&self, f: impl FnOnce(&mut Vec<EffectEntry>)) {
-        let arc = self.effects.swap(Arc::new(Vec::new()));
-        while Arc::strong_count(&arc) != 1 {}
-
-        let mut inner = Arc::into_inner(arc).unwrap();
+    fn with_effects_list(&self, f: impl FnOnce(&mut Vec<Arc<EffectEntry>>)) {
+        let mut inner = self.effects.load().deref().deref().clone();
         f(&mut inner);
         self.effects.store(Arc::new(inner));
     }
