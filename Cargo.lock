@@ -1274,6 +1274,7 @@ dependencies = [
  "clap_host",
  "cpal",
  "generic_daw_utils",
+ "itoa",
  "oneshot",
  "rtrb",
  "rubato",

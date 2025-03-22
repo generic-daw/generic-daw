@@ -16,6 +16,7 @@ arc-swap = "1.7.1"
 async-channel = "2.3.1"
 atomig = { version = "0.4.2", features = ["derive"] }
 cpal = "0.15.3"
+itoa = "1.0.15"
 oneshot = "0.1.11"
 rtrb = "0.3.2"
 rubato = { version = "0.16.1", default-features = false }

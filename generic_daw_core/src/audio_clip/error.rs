@@ -14,10 +14,8 @@ pub enum RubatoError {
 impl Display for RubatoError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ResamplerConstructionError(..) => {
-                write!(f, "encountered error while constructing resampler")
-            }
-            Self::ResampleError(..) => write!(f, "encountered error while resampling"),
+            Self::ResamplerConstructionError(err) => err.fmt(f),
+            Self::ResampleError(err) => err.fmt(f),
         }
     }
 }
@@ -52,8 +50,8 @@ pub enum InterleavedAudioError {
 impl Display for InterleavedAudioError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::RubatoError(..) => write!(f, "encountered error while resampling"),
-            Self::SymphoniaError(..) => write!(f, "encountered error while decoding"),
+            Self::RubatoError(err) => err.fmt(f),
+            Self::SymphoniaError(err) => err.fmt(f),
         }
     }
 }
