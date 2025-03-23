@@ -20,7 +20,7 @@ pub struct MidiClip {
     /// the pattern that the clip points to
     ///
     /// swap the internal boxed slice in order to modify the contents
-    pub pattern: Arc<ArcSwap<Box<[MidiNote]>>>,
+    pub pattern: Arc<ArcSwap<Vec<MidiNote>>>,
     /// the position of the clip relative to the start of the arrangement
     pub position: ClipPosition,
     /// information relating to the playback of the arrangement
@@ -29,7 +29,7 @@ pub struct MidiClip {
 
 impl MidiClip {
     #[must_use]
-    pub fn create(pattern: Arc<ArcSwap<Box<[MidiNote]>>>, meter: Arc<Meter>) -> Arc<Self> {
+    pub fn create(pattern: Arc<ArcSwap<Vec<MidiNote>>>, meter: Arc<Meter>) -> Arc<Self> {
         let len = pattern
             .load()
             .iter()

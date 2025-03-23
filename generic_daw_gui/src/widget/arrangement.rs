@@ -1,4 +1,4 @@
-use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT, SWM};
+use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT, SWM, grid};
 use generic_daw_core::{Meter, Position};
 use iced::{
     Background, Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -418,7 +418,14 @@ where
         };
 
         renderer.with_layer(inner_bounds, |renderer| {
-            self.grid(renderer, inner_bounds, theme);
+            grid(
+                renderer,
+                inner_bounds,
+                theme,
+                self.meter,
+                self.position,
+                self.scale,
+            );
         });
 
         let mut children = layout.children();
@@ -482,59 +489,6 @@ where
         }
     }
 
-    fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-        let numerator = self.meter.numerator.load(Acquire);
-        let bpm = self.meter.bpm.load(Acquire);
-
-        let mut beat =
-            Position::from_interleaved_samples_f(self.position.x, bpm, self.meter.sample_rate)
-                .ceil();
-
-        let end_beat = beat
-            + Position::from_interleaved_samples_f(
-                bounds.width * self.scale.x.exp2(),
-                bpm,
-                self.meter.sample_rate,
-            )
-            .floor();
-
-        while beat <= end_beat {
-            let bar = beat.beat() / numerator as u32;
-            let color = if self.scale.x >= 11.0 {
-                if beat.beat() % numerator as u32 == 0 {
-                    if bar % 4 == 0 {
-                        theme.extended_palette().background.strong.color
-                    } else {
-                        theme.extended_palette().background.weak.color
-                    }
-                } else {
-                    beat += Position::BEAT;
-                    continue;
-                }
-            } else if beat.beat() % numerator as u32 == 0 {
-                theme.extended_palette().background.strong.color
-            } else {
-                theme.extended_palette().background.weak.color
-            };
-
-            let x = (beat.in_interleaved_samples_f(bpm, self.meter.sample_rate) - self.position.x)
-                / self.scale.x.exp2();
-
-            renderer.fill_quad(
-                Quad {
-                    bounds: Rectangle::new(
-                        bounds.position() + Vector::new(x, 0.0),
-                        Size::new(1.0, bounds.height),
-                    ),
-                    ..Quad::default()
-                },
-                color,
-            );
-
-            beat += Position::BEAT;
-        }
-    }
-
     fn playhead(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
         let bpm = self.meter.bpm.load(Acquire);
 
@@ -546,24 +500,24 @@ where
             theme.extended_palette().primary.base.color,
         );
 
-        let x = (self.meter.sample.load(Acquire) as f32 - self.position.x) / self.scale.x.exp2();
+        let sample_size = self.scale.x.exp2();
 
-        if x >= 0.0 {
-            renderer.fill_quad(
-                Quad {
-                    bounds: Rectangle::new(
-                        bounds.position() + Vector::new(x, 0.0),
-                        Size::new(1.5, bounds.height),
-                    ),
-                    ..Quad::default()
-                },
-                theme.extended_palette().primary.base.color,
-            );
-        }
+        let x = (self.meter.sample.load(Acquire) as f32 - self.position.x) / sample_size;
+
+        renderer.fill_quad(
+            Quad {
+                bounds: Rectangle::new(
+                    bounds.position() + Vector::new(x, 0.0),
+                    Size::new(1.5, bounds.height),
+                ),
+                ..Quad::default()
+            },
+            theme.extended_palette().primary.base.color,
+        );
 
         let mut draw_text = |beat: Position, bar: u32| {
             let x = (beat.in_interleaved_samples_f(bpm, self.meter.sample_rate) - self.position.x)
-                / self.scale.x.exp2();
+                / sample_size;
 
             let bar = Text {
                 content: itoa::Buffer::new().format(bar + 1).to_owned(),
@@ -589,16 +543,11 @@ where
 
         let mut beat =
             Position::from_interleaved_samples_f(self.position.x, bpm, self.meter.sample_rate)
-                .saturating_sub(if self.scale.x >= 11.0 {
-                    Position::new(4 * numerator as u32, 0)
-                } else {
-                    Position::new(numerator as u32, 0)
-                })
-                .floor();
+                .ceil();
 
         let end_beat = beat
             + Position::from_interleaved_samples_f(
-                bounds.width * self.scale.x.exp2(),
+                bounds.width * sample_size,
                 bpm,
                 self.meter.sample_rate,
             )
