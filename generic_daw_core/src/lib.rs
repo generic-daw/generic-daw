@@ -110,11 +110,11 @@ pub fn build_output_stream(
                 buffer_size,
             },
             move |data, _| {
+                ctx.fill_buf(data);
+
                 if ctx.meter.playing.load(Acquire) {
                     ctx.meter.sample.fetch_add(data.len(), AcqRel);
                 }
-
-                ctx.fill_buf(data);
 
                 for s in data {
                     *s = s.clamp(-1.0, 1.0);

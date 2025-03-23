@@ -68,7 +68,7 @@ impl HostLatencyImpl for MainThread<'_> {
 
 impl HostNotePortsImpl for MainThread<'_> {
     fn supported_dialects(&self) -> NoteDialects {
-        NoteDialects::CLAP
+        NoteDialects::CLAP | NoteDialects::MIDI
     }
 
     fn rescan(&mut self, _flags: NotePortRescanFlags) {}

@@ -109,7 +109,7 @@ where
                     button: mouse::Button::Left,
                     ..
                 } => {
-                    if let Some(cursor) = cursor.position() {
+                    if let Some(cursor) = cursor.position_in(bounds) {
                         let state = tree.state.downcast_mut::<State>();
 
                         let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);

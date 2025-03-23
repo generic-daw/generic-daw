@@ -1,5 +1,11 @@
-use clack_extensions::note_ports::{NoteDialects, NotePortInfoBuffer, PluginNotePorts};
-use clack_host::prelude::*;
+use clack_extensions::note_ports::{NoteDialect, NotePortInfoBuffer, PluginNotePorts};
+use clack_host::{
+    events::{
+        Match,
+        event_types::{MidiEvent, NoteOffEvent, NoteOnEvent},
+    },
+    prelude::*,
+};
 
 #[derive(Debug, Default)]
 pub struct NoteBuffers {
@@ -7,31 +13,78 @@ pub struct NoteBuffers {
     pub output_events: EventBuffer,
 
     pub main_input_port: u16,
+    pub input_prefers_midi: bool,
+
     pub main_output_port: u16,
+    pub output_prefers_midi: bool,
 }
 
 impl NoteBuffers {
-    pub fn new(plugin: &mut PluginMainThreadHandle<'_>) -> Self {
+    pub(crate) fn new(plugin: &mut PluginMainThreadHandle<'_>) -> Self {
+        let (main_input_port, input_prefers_midi) =
+            Self::from_ports(plugin, true).unwrap_or_default();
+        let (main_output_port, output_prefers_midi) =
+            Self::from_ports(plugin, false).unwrap_or_default();
+
         Self {
             input_events: EventBuffer::new(),
             output_events: EventBuffer::new(),
 
-            main_input_port: Self::from_ports(plugin, true).unwrap_or_default(),
-            main_output_port: Self::from_ports(plugin, false).unwrap_or_default(),
+            main_input_port,
+            input_prefers_midi,
+
+            main_output_port,
+            output_prefers_midi,
         }
     }
 
-    fn from_ports(plugin: &mut PluginMainThreadHandle<'_>, is_input: bool) -> Option<u16> {
+    fn from_ports(plugin: &mut PluginMainThreadHandle<'_>, is_input: bool) -> Option<(u16, bool)> {
         let ports = plugin.get_extension::<PluginNotePorts>()?;
 
         let mut buffer = NotePortInfoBuffer::new();
 
         (0..ports.count(plugin, is_input).min(u32::from(u16::MAX))).find_map(|i| {
-            ports
-                .get(plugin, i, is_input, &mut buffer)?
-                .supported_dialects
-                .intersects(NoteDialects::CLAP)
-                .then_some(i as u16)
+            let port = ports.get(plugin, i, is_input, &mut buffer)?;
+
+            (port.supported_dialects.supports(NoteDialect::Midi)
+                || port.supported_dialects.supports(NoteDialect::Clap))
+            .then_some((
+                i as u16,
+                port.preferred_dialect
+                    .is_some_and(|d| d == NoteDialect::Midi),
+            ))
         })
+    }
+
+    pub fn note_on_event(&mut self, time: u32, channel: u8, key: u8, velocity: f64) {
+        if self.input_prefers_midi {
+            self.input_events.push(&MidiEvent::new(
+                time,
+                self.main_input_port,
+                [0x90 | channel, key, (velocity * 127.0) as u8],
+            ));
+        } else {
+            self.input_events.push(&NoteOnEvent::new(
+                time,
+                Pckn::new(self.main_input_port, channel, key, Match::All),
+                velocity,
+            ));
+        }
+    }
+
+    pub fn note_off_event(&mut self, time: u32, channel: u8, key: u8, velocity: f64) {
+        if self.input_prefers_midi {
+            self.input_events.push(&MidiEvent::new(
+                time,
+                self.main_input_port,
+                [0x80 | channel, key, (velocity * 127.0) as u8],
+            ));
+        } else {
+            self.input_events.push(&NoteOffEvent::new(
+                time,
+                Pckn::new(self.main_input_port, channel, key, Match::All),
+                velocity,
+            ));
+        }
     }
 }

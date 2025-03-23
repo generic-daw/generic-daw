@@ -1,12 +1,6 @@
 use crate::{Meter, Position, clip_position::ClipPosition};
 use arc_swap::ArcSwap;
-use clap_host::{
-    NoteBuffers,
-    clack_host::{
-        events::event_types::{NoteOffEvent, NoteOnEvent},
-        prelude::*,
-    },
-};
+use clap_host::NoteBuffers;
 use std::sync::{Arc, atomic::Ordering::Acquire};
 
 mod midi_key;
@@ -69,30 +63,22 @@ impl MidiClip {
                     .start
                     .in_interleaved_samples(bpm, self.meter.sample_rate);
                 if start >= start_sample && start < end_sample {
-                    note_buffers.input_events.push(&NoteOnEvent::new(
+                    note_buffers.note_on_event(
                         steady_time + (start - start_sample) as u32,
-                        Pckn::new(
-                            note_buffers.main_input_port,
-                            note.channel,
-                            note.key,
-                            note.note_id.get(),
-                        ),
+                        note.channel,
+                        note.key.0,
                         note.velocity,
-                    ));
+                    );
                 }
 
                 let end = note.end.in_interleaved_samples(bpm, self.meter.sample_rate);
                 if end >= start_sample && end < end_sample {
-                    note_buffers.input_events.push(&NoteOffEvent::new(
+                    note_buffers.note_off_event(
                         steady_time + (end - start_sample) as u32,
-                        Pckn::new(
-                            note_buffers.main_input_port,
-                            note.channel,
-                            note.key,
-                            note.note_id.get(),
-                        ),
+                        note.channel,
+                        note.key.0,
                         note.velocity,
-                    ));
+                    );
                 }
             });
     }

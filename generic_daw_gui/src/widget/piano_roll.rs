@@ -161,8 +161,8 @@ where
                                 shell.publish((self.select_note)(i));
                             }
                         } else {
-                            let key = 119.0 - cursor.y / self.scale.y - self.position.y;
-                            let key = MidiKey(key as i8);
+                            let key = 128.0 - cursor.y / self.scale.y - self.position.y;
+                            let key = MidiKey(key as u8);
 
                             state.action = Action::NoteTrimmingEnd(0.0, time);
 
@@ -193,8 +193,8 @@ where
                 }
                 mouse::Event::CursorMoved { modifiers, .. } => match state.action {
                     Action::DraggingNote(offset, key, time) => {
-                        let new_key = 119.0 - cursor.y / self.scale.y - self.position.y;
-                        let new_key = MidiKey(new_key as i8);
+                        let new_key = 128.0 - cursor.y / self.scale.y - self.position.y;
+                        let new_key = MidiKey(new_key as u8);
 
                         let new_start = get_time(
                             cursor.x + offset,
@@ -377,7 +377,7 @@ impl<Message> PianoRoll<'_, Message> {
         Rectangle::new(
             Point::new(
                 start,
-                (127.0 - f32::from(u16::from(note.key)) - self.position.y) * self.scale.y,
+                (127.0 - f32::from(note.key.0) - self.position.y) * self.scale.y,
             ),
             Size::new(end - start, self.scale.y),
         )
@@ -418,16 +418,16 @@ impl<Message> PianoRoll<'_, Message> {
     fn draw_piano(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
         renderer.start_transformation(Transformation::translate(bounds.x, bounds.y));
 
-        let base = self.position.y as usize;
+        let base = self.position.y as u8;
         let offset = self.position.y.fract() * self.scale.y;
 
-        let rows = (bounds.height / self.scale.y) as usize + 1;
+        let rows = (bounds.height / self.scale.y) as u8 + 1;
 
         for i in 0..=rows {
-            let key = MidiKey(118 - base as i8 - i as i8);
+            let key = MidiKey(127 - base - i);
 
             let note_bounds = Rectangle::new(
-                Point::new(0.0, (i as f32).mul_add(self.scale.y, -offset)),
+                Point::new(0.0, f32::from(i).mul_add(self.scale.y, -offset)),
                 Size::new(PIANO_WIDTH, self.scale.y),
             );
 

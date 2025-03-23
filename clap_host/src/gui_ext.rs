@@ -21,7 +21,7 @@ pub struct GuiExt {
 
 impl GuiExt {
     #[must_use]
-    pub fn new(
+    pub(crate) fn new(
         ext: PluginGui,
         mut instance: PluginInstance<Host>,
         descriptor: PluginDescriptor,

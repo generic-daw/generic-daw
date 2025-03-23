@@ -1,20 +1,19 @@
-use clap_host::clack_host::events::Match;
 use std::fmt::{Display, Formatter};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Key {
-    A = 0,
-    ASharp = 1,
-    B = 2,
-    C = 3,
-    CSharp = 4,
-    D = 5,
-    DSharp = 6,
-    E = 7,
-    F = 8,
-    FSharp = 9,
-    G = 10,
-    GSharp = 11,
+    C = 0,
+    CSharp = 1,
+    D = 2,
+    DSharp = 3,
+    E = 4,
+    F = 5,
+    FSharp = 6,
+    G = 7,
+    GSharp = 8,
+    A = 9,
+    ASharp = 10,
+    B = 11,
 }
 
 impl Key {
@@ -27,23 +26,23 @@ impl Key {
     }
 }
 
-impl TryFrom<i8> for Key {
+impl TryFrom<u8> for Key {
     type Error = ();
 
-    fn try_from(value: i8) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(Self::A),
-            1 => Ok(Self::ASharp),
-            2 => Ok(Self::B),
-            3 => Ok(Self::C),
-            4 => Ok(Self::CSharp),
-            5 => Ok(Self::D),
-            6 => Ok(Self::DSharp),
-            7 => Ok(Self::E),
-            8 => Ok(Self::F),
-            9 => Ok(Self::FSharp),
-            10 => Ok(Self::G),
-            11 => Ok(Self::GSharp),
+            0 => Ok(Self::C),
+            1 => Ok(Self::CSharp),
+            2 => Ok(Self::D),
+            3 => Ok(Self::DSharp),
+            4 => Ok(Self::E),
+            5 => Ok(Self::F),
+            6 => Ok(Self::FSharp),
+            7 => Ok(Self::G),
+            8 => Ok(Self::GSharp),
+            9 => Ok(Self::A),
+            10 => Ok(Self::ASharp),
+            11 => Ok(Self::B),
             _ => Err(()),
         }
     }
@@ -52,9 +51,6 @@ impl TryFrom<i8> for Key {
 impl Display for Key {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::A => "A",
-            Self::ASharp => "A#",
-            Self::B => "B",
             Self::C => "C",
             Self::CSharp => "C#",
             Self::D => "D",
@@ -64,51 +60,42 @@ impl Display for Key {
             Self::FSharp => "F#",
             Self::G => "G",
             Self::GSharp => "G#",
+            Self::A => "A",
+            Self::ASharp => "A#",
+            Self::B => "B",
         })
     }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct MidiKey(pub i8);
+pub struct MidiKey(pub u8);
 
 impl MidiKey {
     #[must_use]
     pub const fn with_key(mut self, key: Key) -> Self {
         self.0 -= self.0 % 12;
-        self.0 += key as i8;
+        self.0 += key as u8;
         self
     }
 
     #[must_use]
     pub const fn with_octave(mut self, octave: i8) -> Self {
         self.0 %= 12;
-        self.0 += 12 * octave;
+        self.0 += 12 * (octave + 1) as u8;
         self
     }
 
     #[must_use]
     pub fn is_black(self) -> bool {
-        Key::try_from(self.0.rem_euclid(12)).unwrap().is_black()
-    }
-}
-
-impl From<MidiKey> for u16 {
-    fn from(value: MidiKey) -> Self {
-        (value.0 + 9) as Self
-    }
-}
-
-impl From<MidiKey> for Match<u16> {
-    fn from(value: MidiKey) -> Self {
-        Self::Specific(value.into())
+        Key::try_from(self.0 % 12).unwrap().is_black()
     }
 }
 
 impl Display for MidiKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Key::try_from(self.0.rem_euclid(12))
+        Key::try_from(self.0 % 12)
             .unwrap()
             .fmt(f)
-            .and_then(|()| f.write_str(itoa::Buffer::new().format(self.0.div_euclid(12))))
+            .and_then(|()| f.write_str(itoa::Buffer::new().format(self.0 as i8 / 12 - 1)))
     }
 }
