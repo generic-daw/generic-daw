@@ -176,7 +176,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
             return;
         };
 
-        // the bounds of the text part of the clip
+        // the bounds of the clip header
         let mut upper_bounds = bounds;
         upper_bounds.height = min_by(upper_bounds.height, LINE_HEIGHT, f32::total_cmp);
 
@@ -186,7 +186,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
             theme.extended_palette().secondary.weak.color
         };
 
-        // the opaque background of the text
+        // the opaque background of the clip header
         let text_background = Quad {
             bounds: upper_bounds,
             ..Quad::default()
@@ -218,7 +218,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
             return;
         }
 
-        // the bounds of the waveform part of the clip
+        // the bounds of the clip body
         let mut lower_bounds = bounds;
         lower_bounds.height -= upper_bounds.height;
         lower_bounds.y += upper_bounds.height;

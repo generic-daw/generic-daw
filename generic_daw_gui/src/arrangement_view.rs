@@ -6,7 +6,8 @@ use crate::{
     stylefns::{button_with_enabled, radio_with_enabled, slider_with_enabled, svg_with_enabled},
     widget::{
         Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob, LINE_HEIGHT,
-        PeakMeter, PianoRoll, Strategy, TEXT_HEIGHT, Track as TrackWidget, VSplit,
+        MidiClip as MidiClipWidget, PeakMeter, PianoRoll, Strategy, TEXT_HEIGHT,
+        Track as TrackWidget, VSplit,
     },
 };
 use arrangement::NodeType;
@@ -25,7 +26,7 @@ use iced::{
     futures::TryFutureExt as _,
     mouse::Interaction,
     widget::{
-        button, column, container, horizontal_rule, mouse_area, radio, row,
+        button, column, container, horizontal_rule, mouse_area, radio, responsive, row,
         scrollable::{Direction, Scrollbar},
         svg, text,
         text::Wrapping,
@@ -33,6 +34,7 @@ use iced::{
     },
 };
 use std::{
+    cell::Cell,
     f32::{self, consts::FRAC_PI_2},
     iter::once,
     ops::Deref as _,
@@ -91,6 +93,9 @@ pub enum Message {
     ClipTrimEnd(Position),
     ClipDelete(usize, usize),
 
+    AddMidiClip(NodeId, Position),
+    OpenMidiClip(Arc<MidiClip>),
+
     NoteGrab(usize),
     NoteDrop,
     NoteAdd(MidiKey, Position),
@@ -108,7 +113,6 @@ pub enum Message {
     SplitAt(f32),
 }
 
-#[expect(dead_code)]
 #[derive(Clone, Debug)]
 pub enum Tab {
     Arrangement,
@@ -133,7 +137,7 @@ pub struct ArrangementView {
     grabbed_clip: Option<[usize; 2]>,
     soloed_track: Option<NodeId>,
 
-    piano_roll_position: Vec2,
+    piano_roll_position: Cell<Vec2>,
     piano_roll_scale: Vec2,
     grabbed_note: Option<usize>,
 
@@ -162,8 +166,8 @@ impl ArrangementView {
                 grabbed_clip: None,
                 soloed_track: None,
 
-                piano_roll_position: Vec2::new(0.0, 64.0),
-                piano_roll_scale: Vec2::new(7.0, LINE_HEIGHT),
+                piano_roll_position: Cell::new(Vec2::new(0.0, 40.0)),
+                piano_roll_scale: Vec2::new(9.0, LINE_HEIGHT),
                 grabbed_note: None,
 
                 selected_channel: None,
@@ -465,6 +469,20 @@ impl ArrangementView {
             Message::ClipDelete(track, clip) => {
                 self.arrangement.delete_clip(track, clip);
             }
+            Message::OpenMidiClip(clip) => self.tab = Tab::PianoRoll(clip),
+            Message::AddMidiClip(track, pos) => {
+                let clip = MidiClip::create(Arc::default(), self.meter.clone());
+                clip.position
+                    .trim_end_to(Position::BEAT * self.meter.numerator.load(Acquire) as u32);
+                clip.position.move_to(pos);
+                let track = self
+                    .arrangement
+                    .tracks()
+                    .iter()
+                    .position(|t| t.id() == track)
+                    .unwrap();
+                self.arrangement.add_clip(track, clip);
+            }
             Message::NoteGrab(note) => self.grabbed_note = Some(note),
             Message::NoteDrop => self.grabbed_note = None,
             Message::NoteAdd(key, pos) => {
@@ -481,6 +499,7 @@ impl ArrangementView {
                     start: pos,
                     end: pos + Position::BEAT,
                 });
+                self.grabbed_note = Some(notes.len() - 1);
                 selected_clip.pattern.store(Arc::new(notes));
             }
             Message::NoteClone(note) => {
@@ -590,13 +609,15 @@ impl ArrangementView {
                     self.piano_roll_scale.y = self
                         .piano_roll_scale
                         .y
-                        .clamp(LINE_HEIGHT, 5.0 * LINE_HEIGHT);
+                        .clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
                     pd &= old_scale != self.piano_roll_scale;
                 }
 
                 if pd {
-                    self.piano_roll_position += pos;
-                    self.piano_roll_position.x = self.piano_roll_position.x.clamp(
+                    let mut piano_roll_position = self.piano_roll_position.get();
+
+                    piano_roll_position += pos;
+                    piano_roll_position.x = piano_roll_position.x.clamp(
                         0.0,
                         selected_clip
                             .pattern
@@ -610,7 +631,9 @@ impl ArrangementView {
                                 self.meter.sample_rate,
                             ),
                     );
-                    self.piano_roll_position.y = self.piano_roll_position.y.clamp(0.0, 127.0);
+                    piano_roll_position.y = piano_roll_position.y.clamp(0.0, 127.0);
+
+                    self.piano_roll_position.set(piano_roll_position);
                 }
             }
             Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
@@ -623,23 +646,7 @@ impl ArrangementView {
         let element = match &self.tab {
             Tab::Arrangement => self.arrangement(),
             Tab::Mixer => self.mixer(),
-            Tab::PianoRoll(selected_clip) => PianoRoll {
-                notes: selected_clip.pattern.load().deref().clone(),
-                meter: &self.meter,
-                position: self.piano_roll_position,
-                scale: self.piano_roll_scale,
-                deleted: false,
-                select_note: Message::NoteGrab,
-                unselect_note: Message::NoteDrop,
-                add_note: Message::NoteAdd,
-                clone_note: Message::NoteClone,
-                move_note_to: Message::NoteMove,
-                trim_note_start: Message::NoteTrimStart,
-                trim_note_end: Message::NoteTrimEnd,
-                delete_note: Message::NoteDelete,
-                position_scale_delta: Message::PianoRollPositionScaleDelta,
-            }
-            .into(),
+            Tab::PianoRoll(selected_clip) => self.piano_roll(selected_clip),
         };
 
         if self.loading > 0 {
@@ -743,6 +750,7 @@ impl ArrangementView {
                             .padding(5.0)
                             .height(Length::Fixed(self.arrangement_scale.y)),
                             TrackWidget::new(
+                                &self.meter,
                                 track.clips().map(|clip| match clip {
                                     TrackClipWrapper::AudioClip(clip) => {
                                         AudioClipWidget::new(
@@ -753,9 +761,19 @@ impl ArrangementView {
                                         )
                                         .into()
                                     }
-                                    TrackClipWrapper::MidiClip(..) => unimplemented!(),
+                                    TrackClipWrapper::MidiClip(clip) => MidiClipWidget::new(
+                                        clip.clone(),
+                                        self.arrangement_position,
+                                        self.arrangement_scale,
+                                        enabled,
+                                        Message::OpenMidiClip(clip)
+                                    )
+                                    .into(),
                                 }),
+                                self.arrangement_position,
                                 self.arrangement_scale,
+                                matches!(track, TrackWrapper::MidiTrack(..))
+                                    .then_some(Message::AddMidiClip.with(id))
                             )
                         ]
                     })
@@ -1138,6 +1156,34 @@ impl ArrangementView {
         } else {
             mixer_panel.into()
         }
+    }
+
+    fn piano_roll<'a>(&'a self, selected_clip: &'a Arc<MidiClip>) -> Element<'a, Message> {
+        responsive(move |size| {
+            let mut piano_roll_position = self.piano_roll_position.get();
+            let height = size.height / self.piano_roll_scale.y;
+            piano_roll_position.y = piano_roll_position.y.min(127.0 - height);
+            self.piano_roll_position.set(piano_roll_position);
+
+            PianoRoll {
+                notes: selected_clip.pattern.load().deref().clone(),
+                meter: &self.meter,
+                position: piano_roll_position,
+                scale: self.piano_roll_scale,
+                deleted: false,
+                select_note: Message::NoteGrab,
+                unselect_note: Message::NoteDrop,
+                add_note: Message::NoteAdd,
+                clone_note: Message::NoteClone,
+                move_note_to: Message::NoteMove,
+                trim_note_start: Message::NoteTrimStart,
+                trim_note_end: Message::NoteTrimEnd,
+                delete_note: Message::NoteDelete,
+                position_scale_delta: Message::PianoRollPositionScaleDelta,
+            }
+            .into()
+        })
+        .into()
     }
 
     pub fn subscription() -> Subscription<Message> {

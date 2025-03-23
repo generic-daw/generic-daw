@@ -2,7 +2,7 @@ use crate::Numerator;
 use atomig::{Atom, AtomInteger};
 use std::{
     fmt::{Debug, Formatter},
-    ops::{Add, AddAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Mul, Sub, SubAssign},
 };
 
 #[derive(Atom, AtomInteger, Clone, Copy, Default, Eq, Ord, PartialEq, PartialOrd)]
@@ -154,5 +154,14 @@ impl Sub for Position {
 impl SubAssign for Position {
     fn sub_assign(&mut self, rhs: Self) {
         self.0 -= rhs.0;
+    }
+}
+
+impl Mul<u32> for Position {
+    type Output = Self;
+
+    fn mul(mut self, rhs: u32) -> Self::Output {
+        self.0 *= rhs;
+        self
     }
 }

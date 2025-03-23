@@ -1,24 +1,37 @@
+use super::get_time;
+use generic_daw_core::{Meter, Position};
 use generic_daw_utils::Vec2;
 use iced::{
     Element, Event, Length, Rectangle, Renderer, Size, Theme,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
         layout::{Limits, Node},
+        mouse::{Click, click::Kind},
         renderer::Style,
-        widget::Tree,
+        widget::{Tree, tree},
     },
-    mouse::{Cursor, Interaction},
+    mouse::{self, Cursor, Interaction},
 };
 use std::fmt::{Debug, Formatter};
 
-pub struct Track<'a, Message> {
-    /// list of the track panel and all the clip widgets
-    children: Box<[Element<'a, Message>]>,
-    /// the scale of the arrangement viewport
-    scale: Vec2,
+#[derive(Default)]
+struct State {
+    last_click: Option<Click>,
 }
 
-impl<Message> Debug for Track<'_, Message> {
+pub struct Track<'a, Message, F> {
+    meter: &'a Meter,
+    /// list of the track panel and all the clip widgets
+    children: Box<[Element<'a, Message>]>,
+    /// the position of the top left corner of the arrangement viewport
+    position: Vec2,
+    /// the scale of the arrangement viewport
+    scale: Vec2,
+    /// message to emit on double click
+    on_double_click: Option<F>,
+}
+
+impl<Message, F> Debug for Track<'_, Message, F> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Track")
             .field("scale", &self.scale)
@@ -26,7 +39,18 @@ impl<Message> Debug for Track<'_, Message> {
     }
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
+impl<Message, F> Widget<Message, Theme, Renderer> for Track<'_, Message, F>
+where
+    F: Fn(Position) -> Message,
+{
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<State>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(State::default())
+    }
+
     fn diff(&self, tree: &mut Tree) {
         tree.diff_children(&self.children);
     }
@@ -129,26 +153,65 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                     state, event, layout, cursor, renderer, clipboard, shell, &bounds,
                 );
             });
-    }
-}
 
-impl<'a, Message> Track<'a, Message>
-where
-    Message: 'a,
-{
-    pub fn new(children: impl IntoIterator<Item = Element<'a, Message>>, scale: Vec2) -> Self {
-        Self {
-            children: children.into_iter().collect(),
-            scale,
+        if shell.is_event_captured() {
+            return;
+        }
+
+        let Some(cursor) = cursor.position_in(layout.bounds()) else {
+            return;
+        };
+
+        if let Event::Mouse(mouse::Event::ButtonPressed {
+            button: mouse::Button::Left,
+            modifiers,
+        }) = event
+        {
+            if let Some(on_double_click) = self.on_double_click.as_ref() {
+                let state = tree.state.downcast_mut::<State>();
+
+                let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
+                state.last_click = Some(new_click);
+
+                if new_click.kind() == Kind::Double {
+                    let time =
+                        get_time(cursor.x, *modifiers, self.meter, self.position, self.scale);
+
+                    shell.publish(on_double_click(time));
+                    shell.capture_event();
+                }
+            }
         }
     }
 }
 
-impl<'a, Message> From<Track<'a, Message>> for Element<'a, Message>
+impl<'a, Message, F> Track<'a, Message, F>
 where
     Message: 'a,
 {
-    fn from(value: Track<'a, Message>) -> Self {
+    pub fn new(
+        meter: &'a Meter,
+        children: impl IntoIterator<Item = Element<'a, Message>>,
+        position: Vec2,
+        scale: Vec2,
+        on_double_click: Option<F>,
+    ) -> Self {
+        Self {
+            meter,
+            children: children.into_iter().collect(),
+            position,
+            scale,
+            on_double_click,
+        }
+    }
+}
+
+impl<'a, Message, F> From<Track<'a, Message, F>> for Element<'a, Message>
+where
+    Message: 'a,
+    F: Fn(Position) -> Message + 'a,
+{
+    fn from(value: Track<'a, Message, F>) -> Self {
         Element::new(value)
     }
 }
