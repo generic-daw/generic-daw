@@ -20,6 +20,7 @@ hound = "3.5.1"
 iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", default-features = false, features = [
     "advanced",
     "canvas",
+    "debug",
     "svg",
     "tokio",
     "wgpu",

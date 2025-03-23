@@ -46,6 +46,26 @@ impl MidiNote {
 
         Some(self)
     }
+
+    pub fn trim_start_to(&mut self, new_global_start: Position) {
+        self.start = new_global_start.min(self.end - Position::STEP);
+    }
+
+    pub fn trim_end_to(&mut self, new_global_end: Position) {
+        self.end = new_global_end.max(self.start + Position::STEP);
+    }
+
+    pub fn move_to(&mut self, new_global_start: Position) {
+        let diff = self.start.abs_diff(new_global_start);
+
+        if self.start < new_global_start {
+            self.end += diff;
+        } else {
+            self.end -= diff;
+        }
+
+        self.start = new_global_start;
+    }
 }
 
 impl Add<Position> for MidiNote {

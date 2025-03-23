@@ -1,4 +1,4 @@
-use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT, SWM, grid};
+use super::{LINE_HEIGHT, Vec2, get_time, grid, wheel_scrolled};
 use generic_daw_core::{Meter, Position};
 use iced::{
     Background, Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -11,8 +11,8 @@ use iced::{
     },
     alignment::Vertical,
     border,
-    keyboard::Modifiers,
-    mouse::{self, Cursor, Interaction, ScrollDelta},
+    mouse::{self, Cursor, Interaction},
+    padding,
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
     window,
 };
@@ -22,6 +22,7 @@ use std::{
     sync::atomic::Ordering::Acquire,
 };
 
+#[non_exhaustive]
 #[derive(Clone, Copy, Default, PartialEq)]
 enum Action {
     #[default]
@@ -45,7 +46,6 @@ impl Action {
 #[derive(Default)]
 struct State {
     action: Action,
-    deleted: bool,
     hovering_seeker: bool,
 }
 
@@ -54,9 +54,11 @@ pub struct Arrangement<'a, Message> {
     /// column of rows of [track panel, track]
     children: Element<'a, Message>,
     /// the position of the top left corner of the arrangement viewport
-    position: ArrangementPosition,
+    position: Vec2,
     /// the scale of the arrangement viewport
-    scale: ArrangementScale,
+    scale: Vec2,
+    /// whether we've sent a clip delete message since the last redraw request
+    deleted: bool,
 
     seek_to: fn(Position) -> Message,
     select_clip: fn(usize, usize) -> Message,
@@ -66,7 +68,7 @@ pub struct Arrangement<'a, Message> {
     trim_clip_start: fn(Position) -> Message,
     trim_clip_end: fn(Position) -> Message,
     delete_clip: fn(usize, usize) -> Message,
-    position_scale_delta: fn(ArrangementPosition, ArrangementScale) -> Message,
+    position_scale_delta: fn(Vec2, Vec2) -> Message,
 }
 
 impl<Message> Debug for Arrangement<'_, Message> {
@@ -123,7 +125,6 @@ where
     }
 
     #[expect(clippy::too_many_lines)]
-    #[expect(clippy::cognitive_complexity)]
     fn update(
         &mut self,
         tree: &mut Tree,
@@ -146,11 +147,8 @@ where
             viewport,
         );
 
-        let state = tree.state.downcast_mut::<State>();
-        let bounds = layout.bounds();
-
         if let Event::Window(window::Event::RedrawRequested(..)) = event {
-            state.deleted = false;
+            self.deleted = false;
             return;
         }
 
@@ -158,8 +156,11 @@ where
             return;
         }
 
+        let state = tree.state.downcast_mut::<State>();
+        let bounds = layout.bounds();
+
         let track_panel_width = track_panel_width(&layout).unwrap_or_default();
-        let Some(cursor) = cursor
+        let Some(mut cursor) = cursor
             .position_in(bounds)
             .filter(|cursor| cursor.x >= track_panel_width)
         else {
@@ -184,7 +185,13 @@ where
             match event {
                 mouse::Event::ButtonPressed { button, modifiers } => match button {
                     mouse::Button::Left => {
-                        let time = self.get_time(cursor.x - track_panel_width, 0.0, *modifiers);
+                        let time = get_time(
+                            cursor.x - track_panel_width,
+                            *modifiers,
+                            self.meter,
+                            self.position,
+                            self.scale,
+                        );
 
                         if cursor.y < LINE_HEIGHT {
                             state.action = Action::DraggingPlayhead(time);
@@ -222,11 +229,11 @@ where
                             shell.capture_event();
                         }
                     }
-                    mouse::Button::Right if !(state.deleted || cursor.y < LINE_HEIGHT) => {
+                    mouse::Button::Right if !(self.deleted || cursor.y < LINE_HEIGHT) => {
                         state.action = Action::DeletingClips;
 
                         if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
-                            state.deleted = true;
+                            self.deleted = true;
 
                             shell.publish((self.delete_clip)(track, clip));
                             shell.capture_event();
@@ -244,7 +251,13 @@ where
                 }
                 mouse::Event::CursorMoved { modifiers, .. } => match state.action {
                     Action::DraggingPlayhead(time) => {
-                        let new_time = self.get_time(cursor.x - track_panel_width, 0.0, *modifiers);
+                        let new_time = get_time(
+                            cursor.x - track_panel_width,
+                            *modifiers,
+                            self.meter,
+                            self.position,
+                            self.scale,
+                        );
                         if new_time != time {
                             state.action = Action::DraggingPlayhead(new_time);
 
@@ -257,8 +270,13 @@ where
                             .get_track(cursor.y)
                             .min(layout.children().next().unwrap().children().count() - 1);
 
-                        let new_start =
-                            self.get_time(cursor.x - track_panel_width, offset, *modifiers);
+                        let new_start = get_time(
+                            cursor.x - track_panel_width + offset,
+                            *modifiers,
+                            self.meter,
+                            self.position,
+                            self.scale,
+                        );
 
                         if new_track != track || new_start != time {
                             state.action = Action::DraggingClip(offset, new_track, new_start);
@@ -268,8 +286,13 @@ where
                         }
                     }
                     Action::ClipTrimmingStart(offset, time) => {
-                        let new_start =
-                            self.get_time(cursor.x - track_panel_width, offset, *modifiers);
+                        let new_start = get_time(
+                            cursor.x - track_panel_width + offset,
+                            *modifiers,
+                            self.meter,
+                            self.position,
+                            self.scale,
+                        );
                         if new_start != time {
                             state.action = Action::ClipTrimmingStart(offset, new_start);
 
@@ -278,8 +301,13 @@ where
                         }
                     }
                     Action::ClipTrimmingEnd(offset, time) => {
-                        let new_end =
-                            self.get_time(cursor.x - track_panel_width, offset, *modifiers);
+                        let new_end = get_time(
+                            cursor.x - track_panel_width + offset,
+                            *modifiers,
+                            self.meter,
+                            self.position,
+                            self.scale,
+                        );
                         if new_end != time {
                             state.action = Action::ClipTrimmingEnd(offset, new_end);
 
@@ -287,9 +315,9 @@ where
                             shell.capture_event();
                         }
                     }
-                    Action::DeletingClips if !(state.deleted || cursor.y < LINE_HEIGHT) => {
+                    Action::DeletingClips if !self.deleted && cursor.y >= LINE_HEIGHT => {
                         if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
-                            state.deleted = true;
+                            self.deleted = true;
 
                             shell.publish((self.delete_clip)(track, clip));
                             shell.capture_event();
@@ -302,56 +330,16 @@ where
                     _ => {}
                 },
                 mouse::Event::WheelScrolled { delta, modifiers } => {
-                    let (mut x, mut y) = match *delta {
-                        ScrollDelta::Pixels { x, y } => (-x, -y),
-                        ScrollDelta::Lines { x, y } => (-x * SWM, -y * SWM),
-                    };
+                    cursor.x -= track_panel_width;
 
-                    match (modifiers.control(), modifiers.shift(), modifiers.alt()) {
-                        (false, false, false) => {
-                            x *= self.scale.x.exp2();
-                            y /= self.scale.y;
-
-                            shell.publish((self.position_scale_delta)(
-                                ArrangementPosition::new(x, y),
-                                ArrangementScale::ZERO,
-                            ));
-                            shell.capture_event();
-                        }
-                        (true, false, false) => {
-                            x = y / 128.0;
-
-                            let mut x_pos = self.scale.x.exp2() - (self.scale.x + x).exp2();
-                            x_pos *= cursor.x - track_panel_width;
-
-                            shell.publish((self.position_scale_delta)(
-                                ArrangementPosition::new(x_pos, 0.0),
-                                ArrangementScale::new(x, 0.0),
-                            ));
-                            shell.capture_event();
-                        }
-                        (false, true, false) => {
-                            y *= 4.0 * self.scale.x.exp2();
-
-                            shell.publish((self.position_scale_delta)(
-                                ArrangementPosition::new(y, 0.0),
-                                ArrangementScale::ZERO,
-                            ));
-                            shell.capture_event();
-                        }
-                        (false, false, true) => {
-                            y /= -8.0;
-
-                            let y_pos = ((cursor.y - LINE_HEIGHT) * y) / (self.scale.y.powi(2));
-
-                            shell.publish((self.position_scale_delta)(
-                                ArrangementPosition::new(0.0, y_pos),
-                                ArrangementScale::new(0.0, y),
-                            ));
-                            shell.capture_event();
-                        }
-                        _ => {}
-                    }
+                    wheel_scrolled(
+                        delta,
+                        *modifiers,
+                        cursor,
+                        self.scale,
+                        shell,
+                        self.position_scale_delta,
+                    );
                 }
                 _ => {}
             }
@@ -403,15 +391,11 @@ where
     ) {
         let bounds = layout.bounds();
 
-        let mut bounds_no_track_panel = bounds;
-        if let Some(bounds) = track_bounds(&layout) {
-            bounds_no_track_panel.x = bounds.x;
-            bounds_no_track_panel.width = bounds.width;
-        }
+        let bounds_no_track_panel = bounds.shrink(padding::left(
+            track_panel_width(&layout).unwrap_or_default(),
+        ));
 
-        let mut bounds_no_seeker = bounds;
-        bounds_no_seeker.y += LINE_HEIGHT;
-        bounds_no_seeker.height -= LINE_HEIGHT;
+        let bounds_no_seeker = bounds.shrink(padding::top(LINE_HEIGHT));
 
         let Some(inner_bounds) = bounds_no_track_panel.intersection(&bounds_no_seeker) else {
             return;
@@ -428,8 +412,6 @@ where
             );
         });
 
-        let mut children = layout.children();
-
         renderer.with_layer(bounds_no_seeker, |renderer| {
             let Some(bounds) = bounds.intersection(&bounds_no_seeker) else {
                 return;
@@ -440,7 +422,7 @@ where
                 renderer,
                 theme,
                 style,
-                children.next().unwrap(),
+                layout.children().next().unwrap(),
                 cursor,
                 &bounds,
             );
@@ -459,8 +441,8 @@ where
     #[expect(clippy::too_many_arguments)]
     pub fn new(
         meter: &'a Meter,
-        position: ArrangementPosition,
-        scale: ArrangementScale,
+        position: Vec2,
+        scale: Vec2,
         children: impl Into<Element<'a, Message>>,
         seek_to: fn(Position) -> Message,
         select_clip: fn(usize, usize) -> Message,
@@ -470,13 +452,14 @@ where
         trim_clip_start: fn(Position) -> Message,
         trim_clip_end: fn(Position) -> Message,
         delete_clip: fn(usize, usize) -> Message,
-        position_scale_delta: fn(ArrangementPosition, ArrangementScale) -> Message,
+        position_scale_delta: fn(Vec2, Vec2) -> Message,
     ) -> Self {
         Self {
             meter,
             children: children.into(),
             position,
             scale,
+            deleted: false,
             seek_to,
             select_clip,
             unselect_clip,
@@ -533,7 +516,7 @@ where
 
             renderer.fill_text(
                 bar,
-                bounds.position() + Vector::new(x + 1.0, 0.0),
+                bounds.position() + Vector::new(x + 3.0, 0.0),
                 theme.extended_palette().primary.base.text,
                 bounds,
             );
@@ -589,21 +572,6 @@ where
             .position(|l| (l.bounds() - offset).contains(cursor))?;
         Some((track, clip))
     }
-
-    fn get_time(&self, x: f32, offset: f32, modifiers: Modifiers) -> Position {
-        let time = (x + offset).mul_add(self.scale.x.exp2(), self.position.x);
-        let mut time = Position::from_interleaved_samples_f(
-            time,
-            self.meter.bpm.load(Acquire),
-            self.meter.sample_rate,
-        );
-
-        if !modifiers.alt() {
-            time = time.snap(self.scale.x, self.meter.numerator.load(Acquire));
-        }
-
-        time
-    }
 }
 
 impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message>
@@ -637,10 +605,6 @@ fn track_layout<'a>(layout: &Layout<'a>, track: usize) -> Option<Layout<'a>> {
         .nth(track)?
         .children()
         .next_back()
-}
-
-fn track_bounds(layout: &Layout<'_>) -> Option<Rectangle> {
-    Some(track_layout(layout, 0)?.bounds())
 }
 
 fn clip_bounds(layout: &Layout<'_>, track: usize, clip: usize) -> Option<Rectangle> {

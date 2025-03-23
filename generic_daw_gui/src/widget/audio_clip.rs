@@ -1,4 +1,4 @@
-use super::{ArrangementPosition, ArrangementScale, LINE_HEIGHT, shaping_of};
+use super::{LINE_HEIGHT, Vec2, shaping_of};
 use generic_daw_core::AudioClip as AudioClipInner;
 use iced::{
     Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Transformation, Vector,
@@ -35,8 +35,8 @@ struct State {
     cache: RefCell<Option<Cache>>,
     shaping: Shaping,
     interaction: Interaction,
-    last_position: ArrangementPosition,
-    last_scale: ArrangementScale,
+    last_position: Vec2,
+    last_scale: Vec2,
     last_bounds: Rectangle,
     last_viewport: Rectangle,
     last_addr: usize,
@@ -57,9 +57,9 @@ pub struct AudioClip {
     /// the name of the sample
     name: Box<str>,
     /// the position of the top left corner of the arrangement viewport
-    position: ArrangementPosition,
+    position: Vec2,
     /// the scale of the arrangement viewport
-    scale: ArrangementScale,
+    scale: Vec2,
     /// whether the clip is in an enabled track
     enabled: bool,
 }
@@ -209,7 +209,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         };
         renderer.fill_text(
             text,
-            upper_bounds.position() + Vector::new(4.0, 0.0),
+            upper_bounds.position() + Vector::new(3.0, 0.0),
             theme.extended_palette().background.strong.text,
             upper_bounds,
         );
@@ -265,12 +265,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 }
 
 impl AudioClip {
-    pub fn new(
-        inner: Arc<AudioClipInner>,
-        position: ArrangementPosition,
-        scale: ArrangementScale,
-        enabled: bool,
-    ) -> Self {
+    pub fn new(inner: Arc<AudioClipInner>, position: Vec2, scale: Vec2, enabled: bool) -> Self {
         let name = inner
             .audio
             .path

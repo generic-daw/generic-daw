@@ -17,6 +17,16 @@ pub enum Key {
     GSharp = 11,
 }
 
+impl Key {
+    #[must_use]
+    pub const fn is_black(self) -> bool {
+        matches!(
+            self,
+            Self::ASharp | Self::CSharp | Self::DSharp | Self::FSharp | Self::GSharp
+        )
+    }
+}
+
 impl TryFrom<i8> for Key {
     type Error = ();
 
@@ -58,8 +68,8 @@ impl Display for Key {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MidiKey(i8);
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct MidiKey(pub i8);
 
 impl MidiKey {
     #[must_use]
@@ -75,19 +85,30 @@ impl MidiKey {
         self.0 += 12 * octave;
         self
     }
+
+    #[must_use]
+    pub fn is_black(self) -> bool {
+        Key::try_from(self.0.rem_euclid(12)).unwrap().is_black()
+    }
+}
+
+impl From<MidiKey> for u16 {
+    fn from(value: MidiKey) -> Self {
+        (value.0 + 9) as Self
+    }
 }
 
 impl From<MidiKey> for Match<u16> {
     fn from(value: MidiKey) -> Self {
-        Self::Specific((value.0 + 9) as u16)
+        Self::Specific(value.into())
     }
 }
 
 impl Display for MidiKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Key::try_from(self.0 % 12)
+        Key::try_from(self.0.rem_euclid(12))
             .unwrap()
             .fmt(f)
-            .and_then(|()| f.write_str(itoa::Buffer::new().format(self.0 / 12)))
+            .and_then(|()| f.write_str(itoa::Buffer::new().format(self.0.div_euclid(12))))
     }
 }

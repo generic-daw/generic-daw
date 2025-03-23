@@ -1,14 +1,15 @@
 use generic_daw_core::{Meter, Position};
+use generic_daw_utils::Vec2;
 use iced::{
     Point, Rectangle, Renderer, Size, Theme, Transformation,
-    advanced::{Renderer as _, renderer::Quad},
+    advanced::{Renderer as _, Shell, renderer::Quad},
+    keyboard::Modifiers,
+    mouse::ScrollDelta,
     widget::text::Shaping,
 };
 use std::sync::atomic::Ordering::Acquire;
 
 mod arrangement;
-mod arrangement_position;
-mod arrangement_scale;
 mod audio_clip;
 mod bpm_input;
 mod clipped;
@@ -20,13 +21,12 @@ mod track;
 mod vsplit;
 
 pub use arrangement::Arrangement;
-pub use arrangement_position::ArrangementPosition;
-pub use arrangement_scale::ArrangementScale;
 pub use audio_clip::AudioClip;
 pub use bpm_input::BpmInput;
 pub use clipped::Clipped;
 pub use knob::Knob;
 pub use peak_meter::PeakMeter;
+pub use piano_roll::PianoRoll;
 pub use redrawer::Redrawer;
 pub use track::Track;
 pub use vsplit::{Strategy, VSplit};
@@ -49,13 +49,10 @@ fn grid(
     bounds: Rectangle,
     theme: &Theme,
     meter: &Meter,
-    position: ArrangementPosition,
-    scale: ArrangementScale,
+    position: Vec2,
+    scale: Vec2,
 ) {
-    renderer.start_transformation(Transformation::translate(
-        bounds.position().x,
-        bounds.position().y,
-    ));
+    renderer.start_transformation(Transformation::translate(bounds.x, bounds.y));
 
     let numerator = meter.numerator.load(Acquire);
     let bpm = meter.bpm.load(Acquire);
@@ -101,7 +98,7 @@ fn grid(
 
     let offset = position.y.fract() * scale.y;
 
-    let rows = (bounds.height / scale.y) as usize;
+    let rows = (bounds.height / scale.y) as usize + 1;
 
     for i in 0..=rows {
         renderer.fill_quad(
@@ -117,4 +114,70 @@ fn grid(
     }
 
     renderer.end_transformation();
+}
+
+fn wheel_scrolled<Message>(
+    delta: &ScrollDelta,
+    modifiers: Modifiers,
+    cursor: Point,
+    scale: Vec2,
+    shell: &mut Shell<'_, Message>,
+    position_scale_delta: fn(Vec2, Vec2) -> Message,
+) {
+    let (mut x, mut y) = match *delta {
+        ScrollDelta::Pixels { x, y } => (-x, -y),
+        ScrollDelta::Lines { x, y } => (-x * SWM, -y * SWM),
+    };
+
+    match (modifiers.control(), modifiers.shift(), modifiers.alt()) {
+        (false, false, false) => {
+            x *= scale.x.exp2();
+            y /= scale.y;
+
+            shell.publish((position_scale_delta)(Vec2::new(x, y), Vec2::ZERO));
+            shell.capture_event();
+        }
+        (true, false, false) => {
+            x = y / 128.0;
+
+            let mut x_pos = scale.x.exp2() - (scale.x + x).exp2();
+            x_pos *= cursor.x;
+
+            shell.publish((position_scale_delta)(
+                Vec2::new(x_pos, 0.0),
+                Vec2::new(x, 0.0),
+            ));
+            shell.capture_event();
+        }
+        (false, true, false) => {
+            y *= 4.0 * scale.x.exp2();
+
+            shell.publish((position_scale_delta)(Vec2::new(y, 0.0), Vec2::ZERO));
+            shell.capture_event();
+        }
+        (false, false, true) => {
+            y /= -8.0;
+
+            let y_pos = ((cursor.y - LINE_HEIGHT) * y) / (scale.y.powi(2));
+
+            shell.publish((position_scale_delta)(
+                Vec2::new(0.0, y_pos),
+                Vec2::new(0.0, y),
+            ));
+            shell.capture_event();
+        }
+        _ => {}
+    }
+}
+
+fn get_time(x: f32, modifiers: Modifiers, meter: &Meter, position: Vec2, scale: Vec2) -> Position {
+    let time = x.mul_add(scale.x.exp2(), position.x);
+    let mut time =
+        Position::from_interleaved_samples_f(time, meter.bpm.load(Acquire), meter.sample_rate);
+
+    if !modifiers.alt() {
+        time = time.snap(scale.x, meter.numerator.load(Acquire));
+    }
+
+    time
 }

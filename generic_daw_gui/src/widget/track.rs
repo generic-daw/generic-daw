@@ -1,4 +1,4 @@
-use super::ArrangementScale;
+use generic_daw_utils::Vec2;
 use iced::{
     Element, Event, Length, Rectangle, Renderer, Size, Theme,
     advanced::{
@@ -15,7 +15,7 @@ pub struct Track<'a, Message> {
     /// list of the track panel and all the clip widgets
     children: Box<[Element<'a, Message>]>,
     /// the scale of the arrangement viewport
-    scale: ArrangementScale,
+    scale: Vec2,
 }
 
 impl<Message> Debug for Track<'_, Message> {
@@ -136,10 +136,7 @@ impl<'a, Message> Track<'a, Message>
 where
     Message: 'a,
 {
-    pub fn new(
-        children: impl IntoIterator<Item = Element<'a, Message>>,
-        scale: ArrangementScale,
-    ) -> Self {
+    pub fn new(children: impl IntoIterator<Item = Element<'a, Message>>, scale: Vec2) -> Self {
         Self {
             children: children.into_iter().collect(),
             scale,
