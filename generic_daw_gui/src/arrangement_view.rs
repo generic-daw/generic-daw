@@ -6,7 +6,7 @@ use crate::{
     stylefns::{button_with_enabled, radio_with_enabled, slider_with_enabled, svg_with_enabled},
     widget::{
         Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob, LINE_HEIGHT,
-        MidiClip as MidiClipWidget, PeakMeter, PianoRoll, Strategy, TEXT_HEIGHT,
+        MidiClip as MidiClipWidget, PeakMeter, PianoRoll, Seeker, Strategy, TEXT_HEIGHT,
         Track as TrackWidget, VSplit,
     },
 };
@@ -659,7 +659,7 @@ impl ArrangementView {
 
     #[expect(clippy::too_many_lines)]
     fn arrangement(&self) -> Element<'_, Message> {
-        ArrangementWidget::new(
+        Seeker::new(
             &self.meter,
             self.arrangement_position,
             self.arrangement_scale,
@@ -712,81 +712,95 @@ impl ArrangementView {
                             ]);
                         }
 
-                        row![
-                            container(
-                                row![
-                                    PeakMeter::new(move || node.get_l_r(), enabled),
-                                    column![
-                                        mouse_area(Knob::new(
-                                            0.0..=1.0,
-                                            0.0,
-                                            track.node().volume.load(Acquire),
-                                            enabled,
-                                            Message::ChannelVolumeChanged.with(id)
-                                        ))
-                                        .on_double_click(Message::ChannelVolumeChanged(id, 1.0)),
-                                        mouse_area(Knob::new(
-                                            -1.0..=1.0,
-                                            0.0,
-                                            track.node().pan.load(Acquire),
-                                            enabled,
-                                            Message::ChannelPanChanged.with(id)
-                                        ))
-                                        .on_double_click(Message::ChannelPanChanged(id, 0.0)),
-                                        vertical_space(),
-                                    ]
-                                    .spacing(5.0),
-                                    buttons,
+                        container(
+                            row![
+                                PeakMeter::new(move || node.get_l_r(), enabled),
+                                column![
+                                    mouse_area(Knob::new(
+                                        0.0..=1.0,
+                                        0.0,
+                                        track.node().volume.load(Acquire),
+                                        enabled,
+                                        Message::ChannelVolumeChanged.with(id)
+                                    ))
+                                    .on_double_click(Message::ChannelVolumeChanged(id, 1.0)),
+                                    mouse_area(Knob::new(
+                                        -1.0..=1.0,
+                                        0.0,
+                                        track.node().pan.load(Acquire),
+                                        enabled,
+                                        Message::ChannelPanChanged.with(id)
+                                    ))
+                                    .on_double_click(Message::ChannelPanChanged(id, 0.0)),
                                 ]
+                                .height(Length::Fill)
                                 .spacing(5.0),
-                            )
-                            .style(|t| container::transparent(t)
+                                buttons,
+                            ]
+                            .spacing(5.0),
+                        )
+                        .style(|t| {
+                            container::transparent(t)
                                 .background(t.extended_palette().background.weak.color)
                                 .border(
                                     border::width(1.0)
-                                        .color(t.extended_palette().background.strong.color)
-                                ))
-                            .padding(5.0)
-                            .height(Length::Fixed(self.arrangement_scale.y)),
+                                        .color(t.extended_palette().background.strong.color),
+                                )
+                        })
+                        .padding(5.0)
+                        .height(Length::Fixed(self.arrangement_scale.y))
+                    })
+                    .map(Element::new),
+            ),
+            ArrangementWidget::new(
+                &self.meter,
+                self.arrangement_position,
+                self.arrangement_scale,
+                column(
+                    self.arrangement
+                        .tracks()
+                        .iter()
+                        .map(|track| {
+                            let id = track.id();
+                            let enabled = track.node().enabled.load(Acquire);
+
                             TrackWidget::new(
                                 &self.meter,
                                 track.clips().map(|clip| match clip {
-                                    TrackClipWrapper::AudioClip(clip) => {
-                                        AudioClipWidget::new(
-                                            clip,
-                                            self.arrangement_position,
-                                            self.arrangement_scale,
-                                            enabled,
-                                        )
-                                        .into()
-                                    }
+                                    TrackClipWrapper::AudioClip(clip) => AudioClipWidget::new(
+                                        clip,
+                                        self.arrangement_position,
+                                        self.arrangement_scale,
+                                        enabled,
+                                    )
+                                    .into(),
                                     TrackClipWrapper::MidiClip(clip) => MidiClipWidget::new(
                                         clip.clone(),
                                         self.arrangement_position,
                                         self.arrangement_scale,
                                         enabled,
-                                        Message::OpenMidiClip(clip)
+                                        Message::OpenMidiClip(clip),
                                     )
                                     .into(),
                                 }),
                                 self.arrangement_position,
                                 self.arrangement_scale,
                                 matches!(track, TrackWrapper::MidiTrack(..))
-                                    .then_some(Message::AddMidiClip.with(id))
+                                    .then_some(Message::AddMidiClip.with(id)),
                             )
-                        ]
-                    })
-                    .map(Element::new),
+                        })
+                        .map(Element::new),
+                ),
+                Message::ClipGrab,
+                Message::ClipDrop,
+                Message::ClipClone,
+                Message::ClipMove,
+                Message::ClipTrimStart,
+                Message::ClipTrimEnd,
+                Message::ClipDelete,
+                Message::ArrangementPositionScaleDelta,
             ),
             Message::SeekTo,
-            Message::ClipGrab,
-            Message::ClipDrop,
-            Message::ClipClone,
-            Message::ClipMove,
-            Message::ClipTrimStart,
-            Message::ClipTrimEnd,
-            Message::ClipDelete,
-            Message::ArrangementPositionScaleDelta,
         )
         .into()
     }

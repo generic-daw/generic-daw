@@ -18,6 +18,7 @@ mod midi_clip;
 mod peak_meter;
 mod piano_roll;
 mod redrawer;
+mod seeker;
 mod track;
 mod vsplit;
 
@@ -30,6 +31,7 @@ pub use midi_clip::MidiClip;
 pub use peak_meter::PeakMeter;
 pub use piano_roll::PianoRoll;
 pub use redrawer::Redrawer;
+pub use seeker::Seeker;
 pub use track::Track;
 pub use vsplit::{Strategy, VSplit};
 
