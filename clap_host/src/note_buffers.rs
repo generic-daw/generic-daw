@@ -2,7 +2,7 @@ use clack_extensions::note_ports::{NoteDialect, NotePortInfoBuffer, PluginNotePo
 use clack_host::{
     events::{
         Match,
-        event_types::{MidiEvent, NoteOffEvent, NoteOnEvent},
+        event_types::{MidiEvent, NoteChokeEvent, NoteOffEvent, NoteOnEvent},
     },
     prelude::*,
 };
@@ -85,6 +85,19 @@ impl NoteBuffers {
                 Pckn::new(self.main_input_port, channel, key, Match::All),
                 velocity,
             ));
+        }
+    }
+
+    pub fn all_notes_off(&mut self, time: u32, channel: u8) {
+        if self.input_prefers_midi {
+            self.input_events.push(&MidiEvent::new(
+                time,
+                self.main_input_port,
+                [0xb0 | channel, 0x7b, 0x00],
+            ));
+        } else {
+            self.input_events
+                .push(&NoteChokeEvent::new(time, Pckn::match_all()));
         }
     }
 }

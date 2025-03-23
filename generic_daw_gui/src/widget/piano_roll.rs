@@ -164,7 +164,7 @@ where
                             let key = 128.0 - cursor.y / self.scale.y - self.position.y;
                             let key = MidiKey(key as u8);
 
-                            state.action = Action::NoteTrimmingEnd(0.0, time);
+                            state.action = Action::DraggingNote(0.0, key, time);
 
                             shell.publish((self.add_note)(key, time));
                         }

@@ -15,7 +15,7 @@ use dragking::{DragEvent, DropPosition};
 use fragile::Fragile;
 use generic_daw_core::{
     AudioClip, AudioTrack, InterleavedAudio, Meter, MidiClip, MidiKey, MidiNote, MidiTrack,
-    MixerNode, NoteId, Position,
+    MixerNode, Position,
     audio_graph::{AudioGraph, AudioGraphNodeImpl as _, NodeId},
     clap_host::{self, MainThreadMessage, PluginDescriptor, PluginId, PluginType},
 };
@@ -494,7 +494,6 @@ impl ArrangementView {
                 notes.push(MidiNote {
                     channel: 0,
                     key,
-                    note_id: NoteId::unique(),
                     velocity: 1.0,
                     start: pos,
                     end: pos + Position::BEAT,

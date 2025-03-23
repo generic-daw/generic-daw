@@ -1,12 +1,6 @@
 use crate::{Meter, MidiClip, MixerNode, Position};
 use audio_graph::{AudioGraphNodeImpl, NodeId};
-use clap_host::{
-    AudioProcessor,
-    clack_host::{
-        events::event_types::{NoteChokeEvent, NoteOffEvent},
-        prelude::*,
-    },
-};
+use clap_host::AudioProcessor;
 use std::sync::{Arc, Mutex, atomic::Ordering::Acquire};
 
 #[derive(Clone, Debug)]
@@ -27,15 +21,10 @@ impl AudioGraphNodeImpl for MidiTrack {
             .try_lock()
             .expect("this is only locked from the audio thread");
 
-        let steady_time = lock.steady_time() as u32;
         if self.meter.playing.load(Acquire) {
             for clip in &self.clips {
-                clip.gather_events(&mut lock.note_buffers, buf.len(), steady_time);
+                clip.gather_events(&mut lock.note_buffers, buf.len());
             }
-        } else {
-            lock.note_buffers
-                .input_events
-                .push(NoteOffEvent::new(steady_time, Pckn::match_all(), 1.0).as_unknown());
         }
 
         lock.process(buf, 1.0);
@@ -57,10 +46,7 @@ impl AudioGraphNodeImpl for MidiTrack {
 
         lock.reset();
 
-        let steady_time = lock.steady_time() as u32;
-        lock.note_buffers
-            .input_events
-            .push(&NoteChokeEvent::new(steady_time, Pckn::match_all()));
+        lock.note_buffers.all_notes_off(0, 0);
     }
 }
 

@@ -1,10 +1,6 @@
 use super::MidiKey;
 use crate::Position;
-use generic_daw_utils::unique_id;
-pub use note_id::Id as NoteId;
 use std::ops::Add;
-
-unique_id!(note_id, u32);
 
 #[derive(Clone, Copy, Debug)]
 pub struct MidiNote {
@@ -12,8 +8,6 @@ pub struct MidiNote {
     pub channel: u8,
     /// key of the note
     pub key: MidiKey,
-    /// uniquely identify this note to the plugin, in the `0..i32::MAX` range
-    pub note_id: NoteId,
     /// in the `0.0..1.0` range
     pub velocity: f64,
     /// start time of the note, relative to the beginning of the pattern it belongs to

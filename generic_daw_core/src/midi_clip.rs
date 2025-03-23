@@ -7,7 +7,7 @@ mod midi_key;
 mod midi_note;
 
 pub use midi_key::{Key, MidiKey};
-pub use midi_note::{MidiNote, NoteId};
+pub use midi_note::MidiNote;
 
 #[derive(Clone, Debug)]
 pub struct MidiClip {
@@ -38,7 +38,7 @@ impl MidiClip {
         })
     }
 
-    pub fn gather_events(&self, note_buffers: &mut NoteBuffers, len: usize, steady_time: u32) {
+    pub fn gather_events(&self, note_buffers: &mut NoteBuffers, len: usize) {
         let global_start = self.position.get_global_start();
         let global_end = self.position.get_global_end();
         let clip_start = self.position.get_clip_start();
@@ -57,14 +57,14 @@ impl MidiClip {
                     .and_then(|note| note.clamp(global_start, global_end))
             })
             .for_each(|note| {
-                // TODO: handle notes that we don't see coming
+                // TODO: handle starting and stopping notes in the middle of their duration
 
                 let start = note
                     .start
                     .in_interleaved_samples(bpm, self.meter.sample_rate);
                 if start >= start_sample && start < end_sample {
                     note_buffers.note_on_event(
-                        steady_time + (start - start_sample) as u32,
+                        (start - start_sample) as u32 / 2,
                         note.channel,
                         note.key.0,
                         note.velocity,
@@ -74,7 +74,7 @@ impl MidiClip {
                 let end = note.end.in_interleaved_samples(bpm, self.meter.sample_rate);
                 if end >= start_sample && end < end_sample {
                     note_buffers.note_off_event(
-                        steady_time + (end - start_sample) as u32,
+                        (end - start_sample) as u32 / 2,
                         note.channel,
                         note.key.0,
                         note.velocity,

@@ -104,7 +104,7 @@ impl AudioProcessor {
             )
             .unwrap();
 
-        self.steady_time += u64::from(output_audio.frames_count().unwrap());
+        self.steady_time += u64::from(input_audio.min_available_frames_with(&output_audio));
 
         if self.descriptor.ty.audio_output() {
             self.audio_buffers.write_out(buf, mix_level);
@@ -116,10 +116,5 @@ impl AudioProcessor {
     pub fn reset(&mut self) {
         self.started_processor.as_mut().unwrap().reset();
         self.steady_time = 0;
-    }
-
-    #[must_use]
-    pub fn steady_time(&self) -> u64 {
-        self.steady_time
     }
 }
