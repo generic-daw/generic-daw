@@ -35,7 +35,7 @@ pub use cpal::{Stream, traits::StreamTrait};
 pub use daw_ctx::DawCtxMessage;
 pub use master::Master;
 pub use meter::{Denominator, Meter, Numerator};
-pub use midi_clip::{MidiClip, MidiNote, NoteId};
+pub use midi_clip::{Key, MidiClip, MidiKey, MidiNote, NoteId};
 pub use midi_track::MidiTrack;
 pub use mixer_node::MixerNode;
 pub use position::Position;

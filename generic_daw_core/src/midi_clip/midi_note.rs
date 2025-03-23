@@ -1,3 +1,4 @@
+use super::MidiKey;
 use crate::Position;
 use generic_daw_utils::unique_id;
 pub use note_id::Id as NoteId;
@@ -5,12 +6,12 @@ use std::ops::Add;
 
 unique_id!(note_id, u32);
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 pub struct MidiNote {
     /// usually in the `0..15` range
     pub channel: u8,
-    /// `60` is Middle C, in the `0..=127` range
-    pub key: u8,
+    /// key of the note
+    pub key: MidiKey,
     /// uniquely identify this note to the plugin, in the `0..i32::MAX` range
     pub note_id: NoteId,
     /// in the `0.0..1.0` range

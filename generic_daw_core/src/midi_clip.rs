@@ -9,8 +9,10 @@ use clap_host::{
 };
 use std::sync::{Arc, atomic::Ordering::Acquire};
 
+mod midi_key;
 mod midi_note;
 
+pub use midi_key::{Key, MidiKey};
 pub use midi_note::{MidiNote, NoteId};
 
 #[derive(Clone, Debug)]
