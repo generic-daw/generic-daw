@@ -140,6 +140,7 @@ pub struct ArrangementView {
     piano_roll_position: Cell<Vec2>,
     piano_roll_scale: Vec2,
     grabbed_note: Option<usize>,
+    last_note_len: Position,
 
     selected_channel: Option<NodeId>,
     split_at: f32,
@@ -169,6 +170,7 @@ impl ArrangementView {
                 piano_roll_position: Cell::new(Vec2::new(0.0, 40.0)),
                 piano_roll_scale: Vec2::new(9.0, LINE_HEIGHT),
                 grabbed_note: None,
+                last_note_len: Position::BEAT,
 
                 selected_channel: None,
                 split_at: 300.0,
@@ -484,7 +486,15 @@ impl ArrangementView {
                 self.arrangement.add_clip(track, clip);
             }
             Message::NoteGrab(note) => self.grabbed_note = Some(note),
-            Message::NoteDrop => self.grabbed_note = None,
+            Message::NoteDrop => {
+                let Tab::PianoRoll(selected_clip) = &self.tab else {
+                    return Task::none();
+                };
+
+                let note = selected_clip.pattern.load()[self.grabbed_note.unwrap()];
+                self.last_note_len = note.end - note.start;
+                self.grabbed_note = None;
+            }
             Message::NoteAdd(key, pos) => {
                 let Tab::PianoRoll(selected_clip) = &self.tab else {
                     return Task::none();
@@ -496,7 +506,7 @@ impl ArrangementView {
                     key,
                     velocity: 1.0,
                     start: pos,
-                    end: pos + Position::BEAT,
+                    end: pos + self.last_note_len,
                 });
                 self.grabbed_note = Some(notes.len() - 1);
                 selected_clip.pattern.store(Arc::new(notes));
