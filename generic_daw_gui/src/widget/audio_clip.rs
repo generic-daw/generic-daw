@@ -12,6 +12,7 @@ use iced::{
     },
     alignment::Vertical,
     mouse::{self, Cursor, Interaction},
+    padding,
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
     window,
 };
@@ -219,9 +220,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         }
 
         // the bounds of the clip body
-        let mut lower_bounds = bounds;
-        lower_bounds.height -= upper_bounds.height;
-        lower_bounds.y += upper_bounds.height;
+        let lower_bounds = bounds.shrink(padding::top(upper_bounds.height));
 
         // the translucent background of the clip
         let clip_background = Quad {
@@ -232,7 +231,9 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 
         // fill the mesh cache if it's cleared
         if state.cache.borrow().is_none() {
-            if let Some(mesh) = self.mesh(theme, bounds.size()) {
+            let top_left = Point::new(bounds.x, layout.position().y);
+
+            if let Some(mesh) = self.mesh(theme, top_left, bounds.size()) {
                 state.cache.borrow_mut().replace(
                     Geometry::Live {
                         meshes: vec![mesh],
@@ -246,9 +247,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 
         if let Some(cache) = state.cache.borrow().as_ref() {
             // draw the mesh
-            renderer.with_translation(Vector::new(bounds.x, layout.position().y), |renderer| {
-                renderer.draw_geometry(Geometry::load(cache));
-            });
+            renderer.draw_geometry(Geometry::load(cache));
         }
     }
 
@@ -305,7 +304,7 @@ impl AudioClip {
         }
     }
 
-    fn mesh(&self, theme: &Theme, size: Size) -> Option<Mesh> {
+    fn mesh(&self, theme: &Theme, position: Point, size: Size) -> Option<Mesh> {
         // the height of the waveform
         let height = self.scale.y - LINE_HEIGHT;
 
@@ -345,7 +344,7 @@ impl AudioClip {
         let last_index = first_index + (size.width / lod_samples_per_pixel) as usize;
         let last_index = last_index.min(self.inner.audio.lods[lod].len() - 1);
 
-        // this would result in an empty mesh (and a crash)
+        // there is nothing to draw
         if last_index - first_index < 2 {
             return None;
         }
@@ -387,7 +386,7 @@ impl AudioClip {
         // the waveform mesh
         Some(Mesh::Solid {
             buffers: Indexed { vertices, indices },
-            transformation: Transformation::IDENTITY,
+            transformation: Transformation::translate(position.x, position.y),
             clip_bounds: Rectangle::new(
                 Point::new(0.0, self.scale.y - size.height + LINE_HEIGHT),
                 size,

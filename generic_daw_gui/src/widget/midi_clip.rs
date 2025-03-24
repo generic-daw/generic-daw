@@ -1,7 +1,7 @@
 use super::{LINE_HEIGHT, Vec2};
 use generic_daw_core::MidiClip as MidiClipInner;
 use iced::{
-    Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
         layout::{Limits, Node},
@@ -10,6 +10,7 @@ use iced::{
         widget::{Tree, tree},
     },
     mouse::{self, Cursor, Interaction},
+    padding,
 };
 use std::{
     cmp::min_by,
@@ -162,9 +163,7 @@ where
         }
 
         // the bounds of the clip body
-        let mut lower_bounds = bounds;
-        lower_bounds.height -= upper_bounds.height;
-        lower_bounds.y += upper_bounds.height;
+        let lower_bounds = bounds.shrink(padding::top(upper_bounds.height));
 
         // the translucent background of the clip
         let clip_background = Quad {
@@ -172,6 +171,68 @@ where
             ..Quad::default()
         };
         renderer.fill_quad(clip_background, color.scale_alpha(0.25));
+
+        let mut min = 255;
+        let mut max = 0;
+
+        let pattern = self.inner.pattern.load();
+
+        for note in &**pattern {
+            min = note.key.0.min(min);
+            max = note.key.0.max(max);
+        }
+
+        // there is nothing to draw
+        if min > max {
+            return;
+        }
+
+        // how tall each note is, giving each note equal space
+        // adding one space above the top note and below the bottom note
+        let note_height = (self.scale.y - LINE_HEIGHT) / f32::from(max - min + 3);
+
+        let clip_start = self.inner.position.get_clip_start();
+        let pixel_size = self.scale.x.exp2();
+        let bpm = self.inner.meter.bpm.load(Acquire);
+
+        let position = Vector::new(bounds.x, layout.position().y);
+        let clip_bounds = Rectangle::new(
+            Point::new(0.0, self.scale.y - bounds.height + LINE_HEIGHT),
+            bounds.size(),
+        );
+
+        for note in &**pattern {
+            let start_pixel = (note
+                .start
+                .saturating_sub(clip_start)
+                .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
+                - self.position.x)
+                / pixel_size;
+            let end_pixel = (note
+                .end
+                .saturating_sub(clip_start)
+                .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
+                - self.position.x)
+                / pixel_size;
+
+            let top_pixel = f32::from(max - note.key.0 + 1).mul_add(note_height, LINE_HEIGHT);
+
+            let note_bounds = Rectangle::new(
+                Point::new(start_pixel, top_pixel),
+                Size::new(end_pixel - start_pixel, note_height),
+            );
+
+            let Some(note_bounds) = note_bounds.intersection(&clip_bounds) else {
+                continue;
+            };
+
+            let note = Quad {
+                bounds: note_bounds + position,
+                ..Quad::default()
+            };
+
+            renderer.fill_quad(note, theme.extended_palette().background.strong.text);
+        }
     }
 
     fn mouse_interaction(
