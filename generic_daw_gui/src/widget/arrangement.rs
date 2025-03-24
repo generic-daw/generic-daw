@@ -399,7 +399,7 @@ where
     }
 
     fn get_track(&self, y: f32) -> usize {
-        (y / self.scale.y + self.position.y) as usize
+        (y / self.scale.y) as usize
     }
 
     fn get_track_clip(&self, layout: &Layout<'_>, cursor: Point) -> Option<(usize, usize)> {

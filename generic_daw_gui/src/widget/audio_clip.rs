@@ -231,9 +231,9 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 
         // fill the mesh cache if it's cleared
         if state.cache.borrow().is_none() {
-            let top_left = Point::new(bounds.x, layout.position().y);
+            let position = Point::new(bounds.x, layout.position().y);
 
-            if let Some(mesh) = self.mesh(theme, top_left, bounds.size()) {
+            if let Some(mesh) = self.mesh(theme, position, lower_bounds) {
                 state.cache.borrow_mut().replace(
                     Geometry::Live {
                         meshes: vec![mesh],
@@ -304,7 +304,7 @@ impl AudioClip {
         }
     }
 
-    fn mesh(&self, theme: &Theme, position: Point, size: Size) -> Option<Mesh> {
+    fn mesh(&self, theme: &Theme, position: Point, bounds: Rectangle) -> Option<Mesh> {
         // the height of the waveform
         let height = self.scale.y - LINE_HEIGHT;
 
@@ -341,7 +341,7 @@ impl AudioClip {
         let offset = (clip_start / lod_sample_size).fract();
 
         let first_index = ((diff + clip_start) / lod_sample_size) as usize;
-        let last_index = first_index + (size.width / lod_samples_per_pixel) as usize;
+        let last_index = first_index + (bounds.width / lod_samples_per_pixel) as usize;
         let last_index = last_index.min(self.inner.audio.lods[lod].len() - 1);
 
         // there is nothing to draw
@@ -388,8 +388,8 @@ impl AudioClip {
             buffers: Indexed { vertices, indices },
             transformation: Transformation::translate(position.x, position.y),
             clip_bounds: Rectangle::new(
-                Point::new(0.0, self.scale.y - size.height + LINE_HEIGHT),
-                size,
+                Point::new(0.0, (bounds.y - position.y).max(0.0)),
+                bounds.size(),
             ),
         })
     }

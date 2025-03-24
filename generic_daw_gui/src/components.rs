@@ -3,12 +3,16 @@ use iced::{
     Element, Length,
     border::Radius,
     widget::{
-        Button, PickList, Scrollable, Svg, button, pick_list,
+        Button, PickList, Scrollable, Space, Svg, button, pick_list,
         scrollable::{self, Direction},
         svg,
     },
 };
 use std::borrow::Borrow;
+
+pub fn empty_widget() -> Space {
+    Space::new(Length::Shrink, Length::Shrink)
+}
 
 pub fn styled_button<'a, Message>(content: impl Into<Element<'a, Message>>) -> Button<'a, Message> {
     button(content).style(|t, s| button_with_enabled(t, s, true))

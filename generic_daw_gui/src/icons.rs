@@ -7,15 +7,15 @@ pub static AUDIO_FILE: LazyLock<svg::Handle> = LazyLock::new(|| {
     ))
 });
 
-pub static CANCEL: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--cancel-rounded.svg"
-    ))
-});
-
 pub static CHEVRON_RIGHT: LazyLock<svg::Handle> = LazyLock::new(|| {
     svg::Handle::from_memory(include_bytes!(
         "../../assets/material-symbols--chevron-right-rounded.svg"
+    ))
+});
+
+pub static CLOSE: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!(
+        "../../assets/material-symbols--close-rounded.svg"
     ))
 });
 

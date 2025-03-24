@@ -1,6 +1,8 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
-    components::{styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg},
+    components::{
+        empty_widget, styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg,
+    },
     file_tree::FileTree,
     icons::{PAUSE, PLAY, RECORD, STOP},
     widget::{BpmInput, LINE_HEIGHT, Redrawer, Strategy, VSplit},
@@ -19,7 +21,7 @@ use iced::{
     widget::{
         button, column, horizontal_space, row,
         scrollable::{Direction, Scrollbar},
-        toggler, vertical_space,
+        toggler,
     },
     window::{self, Id},
 };
@@ -218,7 +220,7 @@ impl Daw {
 
     pub fn view(&self, window: Id) -> Element<'_, Message> {
         if self.arrangement.clap_host.is_plugin_window(window) {
-            return vertical_space().into();
+            return empty_widget().into();
         }
 
         let playing = self.meter.playing.load(Acquire);

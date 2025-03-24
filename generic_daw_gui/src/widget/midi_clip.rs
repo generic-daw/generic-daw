@@ -195,10 +195,10 @@ where
         let pixel_size = self.scale.x.exp2();
         let bpm = self.inner.meter.bpm.load(Acquire);
 
-        let position = Vector::new(bounds.x, layout.position().y);
+        let position = Vector::new(lower_bounds.x, layout.position().y);
         let clip_bounds = Rectangle::new(
-            Point::new(0.0, self.scale.y - bounds.height + LINE_HEIGHT),
-            bounds.size(),
+            Point::new(0.0, lower_bounds.y - position.y),
+            lower_bounds.size(),
         );
 
         for note in &**pattern {

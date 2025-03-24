@@ -1,9 +1,11 @@
 use crate::{
     clap_host::{ClapHost, Message as ClapHostMessage},
-    components::{styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg},
+    components::{
+        empty_widget, styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg,
+    },
     daw::PLUGINS,
-    icons::{CANCEL, CHEVRON_RIGHT, HANDLE, REOPEN},
-    stylefns::{button_with_enabled, radio_with_enabled, slider_with_enabled, svg_with_enabled},
+    icons::{CHEVRON_RIGHT, CLOSE, HANDLE, REOPEN},
+    stylefns::{button_with_enabled, slider_with_enabled, svg_with_enabled},
     widget::{
         Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob, LINE_HEIGHT,
         MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll, Seeker, Strategy, TEXT_HEIGHT,
@@ -26,7 +28,7 @@ use iced::{
     futures::TryFutureExt as _,
     mouse::Interaction,
     widget::{
-        button, column, container, horizontal_rule, mouse_area, radio, responsive, row,
+        button, column, container, horizontal_rule, mouse_area, responsive, row,
         scrollable::{Direction, Scrollbar},
         svg, text,
         text::Wrapping,
@@ -684,15 +686,17 @@ impl ArrangementView {
 
                         let mut buttons = column![
                             mouse_area(
-                                radio("", enabled, Some(true), |_| {
-                                    Message::TrackToggleEnabled(id)
-                                })
-                                .text_line_height(1.0)
-                                .style(move |t, s| radio_with_enabled(t, s, enabled))
-                                .spacing(0.0)
+                                button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
+                                    .on_press(Message::TrackToggleEnabled(id))
+                                    .style(move |t, s| {
+                                        let mut style = button_with_enabled(t, s, enabled);
+                                        style.border.radius = Radius::new(f32::INFINITY);
+                                        style
+                                    })
+                                    .padding(0.0)
                             )
                             .on_right_press(Message::TrackToggleSolo(id)),
-                            button(styled_svg(CANCEL.clone()).height(TEXT_HEIGHT))
+                            button(styled_svg(CLOSE.clone()).height(TEXT_HEIGHT))
                                 .style(|t, s| {
                                     let mut style = button::danger(t, s);
                                     style.border.radius = Radius::new(f32::INFINITY);
@@ -892,16 +896,16 @@ impl ArrangementView {
         let connect = |enabled: bool, id: NodeId| {
             selected_channel.map_or_else(
                 || {
-                    button("")
-                        .height(24.0)
+                    button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
+                        .padding(0.0)
                         .style(|_, _| button::Style::default())
                 },
                 |(_, connections, ty)| {
                     let selected_channel = self.selected_channel.unwrap();
 
                     if *ty == NodeType::Master || id == selected_channel {
-                        button("")
-                            .height(24.0)
+                        button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
+                            .padding(0.0)
                             .style(|_, _| button::Style::default())
                     } else {
                         let connected = connections.contains(id.get());
@@ -931,15 +935,17 @@ impl ArrangementView {
                 "M".to_owned(),
                 self.arrangement.master().0.clone(),
                 |enabled, id| {
-                    radio("", enabled, Some(true), |_| {
-                        Message::ChannelToggleEnabled(id)
-                    })
-                    .text_line_height(1.0)
-                    .style(move |t, s| radio_with_enabled(t, s, enabled))
-                    .spacing(0.0)
-                    .into()
+                    button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
+                        .on_press(Message::ChannelToggleEnabled(id))
+                        .style(move |t, s| {
+                            let mut style = button_with_enabled(t, s, enabled);
+                            style.border.radius = Radius::new(f32::INFINITY);
+                            style
+                        })
+                        .padding(0.0)
+                        .into()
                 },
-                |_, _| vertical_space().height(TEXT_HEIGHT).into(),
+                |_, _| empty_widget().height(TEXT_HEIGHT).into(),
                 |enabled, id| connect(enabled, id).into(),
             ))
             .chain(once(vertical_rule(1).into()))
@@ -959,18 +965,20 @@ impl ArrangementView {
                             track.node().clone(),
                             |enabled, id| {
                                 mouse_area(
-                                    radio("", enabled, Some(true), |_| {
-                                        Message::TrackToggleEnabled(id)
-                                    })
-                                    .text_line_height(1.0)
-                                    .style(move |t, s| radio_with_enabled(t, s, enabled))
-                                    .spacing(0.0),
+                                    button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
+                                        .on_press(Message::TrackToggleEnabled(id))
+                                        .style(move |t, s| {
+                                            let mut style = button_with_enabled(t, s, enabled);
+                                            style.border.radius = Radius::new(f32::INFINITY);
+                                            style
+                                        })
+                                        .padding(0.0),
                                 )
                                 .on_right_press(Message::TrackToggleSolo(id))
                                 .into()
                             },
                             |_, id| {
-                                button(styled_svg(CANCEL.clone()).height(TEXT_HEIGHT))
+                                button(styled_svg(CLOSE.clone()).height(TEXT_HEIGHT))
                                     .style(|t, s| {
                                         let mut style = button::danger(t, s);
                                         style.border.radius = Radius::new(f32::INFINITY);
@@ -980,7 +988,12 @@ impl ArrangementView {
                                     .on_press(Message::TrackRemove(id))
                                     .into()
                             },
-                            |_, _| button("").style(|_, _| button::Style::default()).into(),
+                            |_, _| {
+                                button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
+                                    .style(|_, _| button::Style::default())
+                                    .padding(0.0)
+                                    .into()
+                            },
                         )
                     })
                     .peekable();
@@ -1005,16 +1018,18 @@ impl ArrangementView {
                             name,
                             node.clone(),
                             |enabled, id| {
-                                radio("", enabled, Some(true), |_| {
-                                    Message::ChannelToggleEnabled(id)
-                                })
-                                .text_line_height(1.0)
-                                .style(move |t, s| radio_with_enabled(t, s, enabled))
-                                .spacing(0.0)
-                                .into()
+                                button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
+                                    .on_press(Message::ChannelToggleEnabled(id))
+                                    .style(move |t, s| {
+                                        let mut style = button_with_enabled(t, s, enabled);
+                                        style.border.radius = Radius::new(f32::INFINITY);
+                                        style
+                                    })
+                                    .padding(0.0)
+                                    .into()
                             },
                             |_, id| {
-                                button(styled_svg(CANCEL.clone()).height(TEXT_HEIGHT))
+                                button(styled_svg(CLOSE.clone()).height(TEXT_HEIGHT))
                                     .style(|t, s| {
                                         let mut style = button::danger(t, s);
                                         style.border.radius = Radius::new(f32::INFINITY);
@@ -1104,16 +1119,22 @@ impl ArrangementView {
                                                 ),)
                                             ),
                                             column![
-                                                radio("", enabled, Some(true), |_| {
-                                                    Message::AudioEffectToggleEnabled(i)
-                                                })
-                                                .text_line_height(1.0)
-                                                .style(move |t, s| radio_with_enabled(
-                                                    t, s, enabled
-                                                ))
-                                                .spacing(0.0),
                                                 button(
-                                                    styled_svg(CANCEL.clone()).height(TEXT_HEIGHT)
+                                                    empty_widget()
+                                                        .width(TEXT_HEIGHT)
+                                                        .height(TEXT_HEIGHT)
+                                                )
+                                                .on_press(Message::AudioEffectToggleEnabled(i))
+                                                .style(move |t, s| {
+                                                    let mut style =
+                                                        button_with_enabled(t, s, enabled);
+                                                    style.border.radius =
+                                                        Radius::new(f32::INFINITY);
+                                                    style
+                                                })
+                                                .padding(0.0),
+                                                button(
+                                                    styled_svg(CLOSE.clone()).height(TEXT_HEIGHT)
                                                 )
                                                 .style(|t, s| {
                                                     let mut style = button::danger(t, s);

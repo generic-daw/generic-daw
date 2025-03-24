@@ -1,7 +1,7 @@
 use iced::{
-    Color, Theme,
+    Theme,
     border::Radius,
-    widget::{button, radio, slider, svg},
+    widget::{button, slider, svg},
 };
 
 pub fn button_with_enabled(theme: &Theme, status: button::Status, enabled: bool) -> button::Style {
@@ -11,33 +11,6 @@ pub fn button_with_enabled(theme: &Theme, status: button::Status, enabled: bool)
         button::secondary(theme, status)
     };
     style.border.radius = Radius::default();
-    style
-}
-
-pub fn radio_with_enabled(theme: &Theme, status: radio::Status, enabled: bool) -> radio::Style {
-    let (strong, weak) = if enabled {
-        (
-            theme.extended_palette().primary.strong.color,
-            match status {
-                radio::Status::Active { .. } => Color::TRANSPARENT,
-                radio::Status::Hovered { .. } => theme.extended_palette().primary.weak.color,
-            },
-        )
-    } else {
-        (
-            theme.extended_palette().secondary.strong.color,
-            match status {
-                radio::Status::Active { .. } => Color::TRANSPARENT,
-                radio::Status::Hovered { .. } => theme.extended_palette().secondary.weak.color,
-            },
-        )
-    };
-
-    let mut style = radio::default(theme, status);
-    style.border_color = strong;
-    style.dot_color = strong;
-    style.background = weak.into();
-
     style
 }
 
