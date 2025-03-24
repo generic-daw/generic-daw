@@ -1,4 +1,4 @@
-use super::{Vec2, get_time, grid, wheel_scrolled};
+use super::{Vec2, get_time};
 use generic_daw_core::{Meter, Position};
 use iced::{
     Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -59,7 +59,6 @@ pub struct Arrangement<'a, Message> {
     trim_clip_start: fn(Position) -> Message,
     trim_clip_end: fn(Position) -> Message,
     delete_clip: fn(usize, usize) -> Message,
-    position_scale_delta: fn(Vec2, Vec2) -> Message,
 }
 
 impl<Message> Debug for Arrangement<'_, Message> {
@@ -282,16 +281,6 @@ where
                     }
                     _ => {}
                 },
-                mouse::Event::WheelScrolled { delta, modifiers } => {
-                    wheel_scrolled(
-                        delta,
-                        *modifiers,
-                        cursor,
-                        self.scale,
-                        shell,
-                        self.position_scale_delta,
-                    );
-                }
                 _ => {}
             }
         }
@@ -338,17 +327,6 @@ where
         };
 
         renderer.with_layer(bounds, |renderer| {
-            grid(
-                renderer,
-                bounds,
-                theme,
-                self.meter,
-                self.position,
-                self.scale,
-            );
-        });
-
-        renderer.with_layer(bounds, |renderer| {
             self.children.as_widget().draw(
                 &tree.children[0],
                 renderer,
@@ -379,7 +357,6 @@ where
         trim_clip_start: fn(Position) -> Message,
         trim_clip_end: fn(Position) -> Message,
         delete_clip: fn(usize, usize) -> Message,
-        position_scale_delta: fn(Vec2, Vec2) -> Message,
     ) -> Self {
         Self {
             meter,
@@ -394,7 +371,6 @@ where
             trim_clip_start,
             trim_clip_end,
             delete_clip,
-            position_scale_delta,
         }
     }
 

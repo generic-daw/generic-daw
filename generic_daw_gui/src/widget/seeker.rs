@@ -1,8 +1,9 @@
-use super::{LINE_HEIGHT, get_time};
+use super::{LINE_HEIGHT, SWM, get_time};
 use generic_daw_core::{Meter, Position};
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
-    Background, Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Background, Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme,
+    Transformation, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Text, Widget,
         layout::{Limits, Node},
@@ -12,7 +13,7 @@ use iced::{
     },
     alignment::Vertical,
     border,
-    mouse::{self, Cursor, Interaction},
+    mouse::{self, Cursor, Interaction, ScrollDelta},
     padding,
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
@@ -33,6 +34,7 @@ pub struct Seeker<'a, Message> {
     left: NoDebug<Element<'a, Message>>,
     right: NoDebug<Element<'a, Message>>,
     seek_to: fn(Position) -> Message,
+    position_scale_delta: fn(Vec2, Vec2) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
@@ -100,6 +102,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
         _viewport: &Rectangle,
     ) {
         let bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
+        let right_panel_bounds = Self::right_panel_bounds(layout);
 
         [&mut self.left, &mut self.right]
             .iter_mut()
@@ -119,51 +122,36 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
             return;
         }
 
-        let Some(cursor) = cursor.position() else {
+        let Some(mut cursor) = cursor.position_in(right_panel_bounds) else {
             return;
         };
+        cursor.y -= LINE_HEIGHT;
 
         let state = tree.state.downcast_mut::<State>();
-
-        let seeker_bounds = Self::seeker_bounds(layout);
 
         if let Event::Mouse(event) = event {
             match event {
                 mouse::Event::CursorMoved { modifiers, .. } => {
                     if let Some(last_time) = state.seeking {
-                        let time = get_time(
-                            cursor.x - seeker_bounds.x + self.offset,
-                            *modifiers,
-                            self.meter,
-                            self.position,
-                            self.scale,
-                        );
+                        let time =
+                            get_time(cursor.x, *modifiers, self.meter, self.position, self.scale);
 
                         if last_time != time {
                             state.seeking = Some(time);
                             shell.publish((self.seek_to)(time));
                             shell.capture_event();
                         }
-                    } else {
-                        let hovering = seeker_bounds.contains(cursor);
-
-                        if hovering != state.hovering {
-                            state.hovering = hovering;
-                            shell.request_redraw();
-                        }
+                    } else if (cursor.y < 0.0) != state.hovering {
+                        state.hovering ^= true;
+                        shell.request_redraw();
                     }
                 }
                 mouse::Event::ButtonPressed {
                     button: mouse::Button::Left,
                     modifiers,
-                } if seeker_bounds.contains(cursor) => {
-                    let time = get_time(
-                        cursor.x - seeker_bounds.x + self.offset,
-                        *modifiers,
-                        self.meter,
-                        self.position,
-                        self.scale,
-                    );
+                } if cursor.y < 0.0 => {
+                    let time =
+                        get_time(cursor.x, *modifiers, self.meter, self.position, self.scale);
                     state.seeking = Some(time);
                     shell.publish((self.seek_to)(time));
                     shell.capture_event();
@@ -171,6 +159,55 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                 mouse::Event::ButtonReleased(mouse::Button::Left) => {
                     state.seeking = None;
                     shell.request_redraw();
+                }
+                mouse::Event::WheelScrolled { delta, modifiers } => {
+                    let (mut x, mut y) = match *delta {
+                        ScrollDelta::Pixels { x, y } => (-x, -y),
+                        ScrollDelta::Lines { x, y } => (-x * SWM, -y * SWM),
+                    };
+
+                    match (modifiers.control(), modifiers.shift(), modifiers.alt()) {
+                        (false, false, false) => {
+                            x *= self.scale.x.exp2();
+                            y /= self.scale.y;
+
+                            shell.publish((self.position_scale_delta)(Vec2::new(x, y), Vec2::ZERO));
+                            shell.capture_event();
+                        }
+                        (true, false, false) => {
+                            x = y / 128.0;
+
+                            let x_pos =
+                                cursor.x * (self.scale.x.exp2() - (self.scale.x + x).exp2());
+
+                            shell.publish((self.position_scale_delta)(
+                                Vec2::new(x_pos, 0.0),
+                                Vec2::new(x, 0.0),
+                            ));
+                            shell.capture_event();
+                        }
+                        (false, true, false) => {
+                            y *= 4.0 * self.scale.x.exp2();
+
+                            shell.publish((self.position_scale_delta)(
+                                Vec2::new(y, 0.0),
+                                Vec2::ZERO,
+                            ));
+                            shell.capture_event();
+                        }
+                        (false, false, true) => {
+                            y /= -8.0;
+
+                            let y_pos = (cursor.y * y) / (self.scale.y * (self.scale.y + y));
+
+                            shell.publish((self.position_scale_delta)(
+                                Vec2::new(0.0, y_pos),
+                                Vec2::new(0.0, y),
+                            ));
+                            shell.capture_event();
+                        }
+                        _ => {}
+                    }
                 }
                 _ => {}
             }
@@ -188,6 +225,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
         _viewport: &Rectangle,
     ) {
         let bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
+        let right_panel_bounds = Self::right_panel_bounds(layout);
+        let right_child_bounds = right_panel_bounds.shrink(padding::top(LINE_HEIGHT));
+
+        renderer.with_layer(right_child_bounds, |renderer| {
+            self.grid(renderer, right_child_bounds, theme);
+        });
 
         [&self.left, &self.right]
             .iter()
@@ -206,7 +249,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
             });
 
         let seeker_bounds = Self::seeker_bounds(layout);
-        let right_panel_bounds = Self::right_panel_bounds(layout);
         let bpm = self.meter.bpm.load(Acquire);
 
         renderer.start_layer(right_panel_bounds);
@@ -341,6 +383,7 @@ impl<'a, Message> Seeker<'a, Message> {
         left: impl Into<Element<'a, Message>>,
         right: impl Into<Element<'a, Message>>,
         seek_to: fn(Position) -> Message,
+        position_scale_delta: fn(Vec2, Vec2) -> Message,
     ) -> Self {
         Self {
             meter,
@@ -350,6 +393,7 @@ impl<'a, Message> Seeker<'a, Message> {
             left: left.into().into(),
             right: right.into().into(),
             seek_to,
+            position_scale_delta,
         }
     }
 
@@ -376,6 +420,78 @@ impl<'a, Message> Seeker<'a, Message> {
             Point::new(right_child_bounds.x, bounds.y),
             Size::new(right_child_bounds.width, bounds.height),
         )
+    }
+
+    fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
+        renderer.start_transformation(Transformation::translate(bounds.x, bounds.y));
+
+        let numerator = self.meter.numerator.load(Acquire);
+        let bpm = self.meter.bpm.load(Acquire);
+        let sample_size = self.scale.x.exp2();
+
+        let mut beat =
+            Position::from_interleaved_samples_f(self.position.x, bpm, self.meter.sample_rate)
+                .ceil();
+
+        let end_beat = beat
+            + Position::from_interleaved_samples_f(
+                bounds.width * sample_size,
+                bpm,
+                self.meter.sample_rate,
+            )
+            .floor();
+
+        while beat <= end_beat {
+            let bar = beat.beat() / numerator as u32;
+            let color = if self.scale.x >= 11.0 {
+                if beat.beat() % numerator as u32 == 0 {
+                    if bar % 4 == 0 {
+                        theme.extended_palette().background.strong.color
+                    } else {
+                        theme.extended_palette().background.weak.color
+                    }
+                } else {
+                    beat += Position::BEAT;
+                    continue;
+                }
+            } else if beat.beat() % numerator as u32 == 0 {
+                theme.extended_palette().background.strong.color
+            } else {
+                theme.extended_palette().background.weak.color
+            };
+
+            let x = (beat.in_interleaved_samples_f(bpm, self.meter.sample_rate) - self.position.x)
+                / sample_size;
+
+            renderer.fill_quad(
+                Quad {
+                    bounds: Rectangle::new(Point::new(x, 0.0), Size::new(1.0, bounds.height)),
+                    ..Quad::default()
+                },
+                color,
+            );
+
+            beat += Position::BEAT;
+        }
+
+        let offset = self.position.y.fract() * self.scale.y;
+
+        let rows = (bounds.height / self.scale.y) as usize + 1;
+
+        for i in 0..=rows {
+            renderer.fill_quad(
+                Quad {
+                    bounds: Rectangle::new(
+                        Point::new(0.0, (i as f32).mul_add(self.scale.y, -offset) - 0.5),
+                        Size::new(bounds.width, 1.0),
+                    ),
+                    ..Quad::default()
+                },
+                theme.extended_palette().background.strong.color,
+            );
+        }
+
+        renderer.end_transformation();
     }
 }
 

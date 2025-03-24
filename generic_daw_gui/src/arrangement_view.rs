@@ -642,7 +642,7 @@ impl ArrangementView {
                                 self.meter.sample_rate,
                             ),
                     );
-                    piano_roll_position.y = piano_roll_position.y.clamp(0.0, 128.0);
+                    piano_roll_position.y = piano_roll_position.y.max(0.0);
 
                     self.piano_roll_position.set(piano_roll_position);
                 }
@@ -812,9 +812,9 @@ impl ArrangementView {
                 Message::ClipTrimStart,
                 Message::ClipTrimEnd,
                 Message::ClipDelete,
-                Message::ArrangementPositionScaleDelta,
             ),
             Message::SeekTo,
+            Message::ArrangementPositionScaleDelta,
         )
         .into()
     }
@@ -1229,9 +1229,9 @@ impl ArrangementView {
                     Message::NoteTrimStart,
                     Message::NoteTrimEnd,
                     Message::NoteDelete,
-                    Message::PianoRollPositionScaleDelta,
                 ),
                 Message::SeekTo,
+                Message::PianoRollPositionScaleDelta,
             )
             .with_offset(
                 selected_clip

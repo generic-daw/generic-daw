@@ -1,4 +1,4 @@
-use super::{get_time, grid, wheel_scrolled};
+use super::get_time;
 use generic_daw_core::{Meter, MidiKey, MidiNote, Position};
 use generic_daw_utils::Vec2;
 use iced::{
@@ -61,7 +61,6 @@ pub struct PianoRoll<'a, Message> {
     trim_note_start: fn(Position) -> Message,
     trim_note_end: fn(Position) -> Message,
     delete_note: fn(usize) -> Message,
-    position_scale_delta: fn(Vec2, Vec2) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message>
@@ -256,16 +255,6 @@ where
                     }
                     _ => {}
                 },
-                mouse::Event::WheelScrolled { delta, modifiers } => {
-                    wheel_scrolled(
-                        delta,
-                        *modifiers,
-                        cursor,
-                        self.scale,
-                        shell,
-                        self.position_scale_delta,
-                    );
-                }
                 _ => {}
             }
         }
@@ -284,17 +273,6 @@ where
         let Some(bounds) = layout.bounds().intersection(viewport) else {
             return;
         };
-
-        renderer.with_layer(bounds, |renderer| {
-            grid(
-                renderer,
-                bounds,
-                theme,
-                self.meter,
-                self.position,
-                self.scale,
-            );
-        });
 
         for note in self.notes.iter() {
             self.draw_note(note, renderer, theme, bounds);
@@ -328,7 +306,6 @@ impl<'a, Message> PianoRoll<'a, Message> {
         trim_note_start: fn(Position) -> Message,
         trim_note_end: fn(Position) -> Message,
         delete_note: fn(usize) -> Message,
-        position_scale_delta: fn(Vec2, Vec2) -> Message,
     ) -> Self {
         Self {
             notes,
@@ -344,7 +321,6 @@ impl<'a, Message> PianoRoll<'a, Message> {
             trim_note_start,
             trim_note_end,
             delete_note,
-            position_scale_delta,
         }
     }
 
