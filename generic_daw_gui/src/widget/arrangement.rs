@@ -99,11 +99,11 @@ where
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
         Node::with_children(
             limits.max(),
-            vec![self.children.as_widget().layout(
-                &mut tree.children[0],
-                renderer,
-                &Limits::new(limits.min(), Size::new(limits.max().width, f32::INFINITY)),
-            )],
+            vec![
+                self.children
+                    .as_widget()
+                    .layout(&mut tree.children[0], renderer, limits),
+            ],
         )
     }
 

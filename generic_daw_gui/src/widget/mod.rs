@@ -16,6 +16,7 @@ mod clipped;
 mod knob;
 mod midi_clip;
 mod peak_meter;
+mod piano;
 mod piano_roll;
 mod redrawer;
 mod seeker;
@@ -29,6 +30,7 @@ pub use clipped::Clipped;
 pub use knob::Knob;
 pub use midi_clip::MidiClip;
 pub use peak_meter::PeakMeter;
+pub use piano::Piano;
 pub use piano_roll::PianoRoll;
 pub use redrawer::Redrawer;
 pub use seeker::Seeker;
@@ -175,7 +177,7 @@ fn wheel_scrolled<Message>(
 }
 
 fn get_time(x: f32, modifiers: Modifiers, meter: &Meter, position: Vec2, scale: Vec2) -> Position {
-    let time = x.mul_add(scale.x.exp2(), position.x);
+    let time = x.mul_add(scale.x.exp2(), position.x).max(0.0);
     let mut time =
         Position::from_interleaved_samples_f(time, meter.bpm.load(Acquire), meter.sample_rate);
 

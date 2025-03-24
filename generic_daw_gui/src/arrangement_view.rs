@@ -6,7 +6,7 @@ use crate::{
     stylefns::{button_with_enabled, radio_with_enabled, slider_with_enabled, svg_with_enabled},
     widget::{
         Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob, LINE_HEIGHT,
-        MidiClip as MidiClipWidget, PeakMeter, PianoRoll, Seeker, Strategy, TEXT_HEIGHT,
+        MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll, Seeker, Strategy, TEXT_HEIGHT,
         Track as TrackWidget, VSplit,
     },
 };
@@ -630,7 +630,7 @@ impl ArrangementView {
                                 self.meter.sample_rate,
                             ),
                     );
-                    piano_roll_position.y = piano_roll_position.y.clamp(0.0, 127.0);
+                    piano_roll_position.y = piano_roll_position.y.clamp(0.0, 128.0);
 
                     self.piano_roll_position.set(piano_roll_position);
                 }
@@ -1174,26 +1174,44 @@ impl ArrangementView {
     fn piano_roll<'a>(&'a self, selected_clip: &'a Arc<MidiClip>) -> Element<'a, Message> {
         responsive(move |size| {
             let mut piano_roll_position = self.piano_roll_position.get();
-            let height = size.height / self.piano_roll_scale.y;
-            piano_roll_position.y = piano_roll_position.y.min(127.0 - height);
+            let height = (size.height - LINE_HEIGHT) / self.piano_roll_scale.y;
+            piano_roll_position.y = piano_roll_position.y.min(128.0 - height);
             self.piano_roll_position.set(piano_roll_position);
 
-            PianoRoll {
-                notes: selected_clip.pattern.load().deref().clone(),
-                meter: &self.meter,
-                position: piano_roll_position,
-                scale: self.piano_roll_scale,
-                deleted: false,
-                select_note: Message::NoteGrab,
-                unselect_note: Message::NoteDrop,
-                add_note: Message::NoteAdd,
-                clone_note: Message::NoteClone,
-                move_note_to: Message::NoteMove,
-                trim_note_start: Message::NoteTrimStart,
-                trim_note_end: Message::NoteTrimEnd,
-                delete_note: Message::NoteDelete,
-                position_scale_delta: Message::PianoRollPositionScaleDelta,
-            }
+            let bpm = self.meter.bpm.load(Acquire);
+
+            Seeker::new(
+                &self.meter,
+                piano_roll_position,
+                self.piano_roll_scale,
+                Piano::new(piano_roll_position, self.piano_roll_scale),
+                PianoRoll::new(
+                    selected_clip.pattern.load().deref().clone(),
+                    &self.meter,
+                    piano_roll_position,
+                    self.piano_roll_scale,
+                    Message::NoteGrab,
+                    Message::NoteDrop,
+                    Message::NoteAdd,
+                    Message::NoteClone,
+                    Message::NoteMove,
+                    Message::NoteTrimStart,
+                    Message::NoteTrimEnd,
+                    Message::NoteDelete,
+                    Message::PianoRollPositionScaleDelta,
+                ),
+                Message::SeekTo,
+            )
+            .with_offset(
+                selected_clip
+                    .position
+                    .get_global_start()
+                    .in_interleaved_samples_f(bpm, self.meter.sample_rate)
+                    - selected_clip
+                        .position
+                        .get_clip_start()
+                        .in_interleaved_samples_f(bpm, self.meter.sample_rate),
+            )
             .into()
         })
         .into()

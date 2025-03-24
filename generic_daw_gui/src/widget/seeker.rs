@@ -29,6 +29,7 @@ pub struct Seeker<'a, Message> {
     meter: &'a Meter,
     position: Vec2,
     scale: Vec2,
+    offset: f32,
     left: NoDebug<Element<'a, Message>>,
     right: NoDebug<Element<'a, Message>>,
     seek_to: fn(Position) -> Message,
@@ -131,7 +132,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                 mouse::Event::CursorMoved { modifiers, .. } => {
                     if let Some(last_time) = state.seeking {
                         let time = get_time(
-                            cursor.x - seeker_bounds.x,
+                            cursor.x - seeker_bounds.x + self.offset,
                             *modifiers,
                             self.meter,
                             self.position,
@@ -157,7 +158,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                     modifiers,
                 } if seeker_bounds.contains(cursor) => {
                     let time = get_time(
-                        cursor.x - seeker_bounds.x,
+                        cursor.x - seeker_bounds.x + self.offset,
                         *modifiers,
                         self.meter,
                         self.position,
@@ -220,7 +221,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
         let sample_size = self.scale.x.exp2();
 
-        let x = (self.meter.sample.load(Acquire) as f32 - self.position.x) / sample_size;
+        let x =
+            (self.meter.sample.load(Acquire) as f32 - self.position.x) / sample_size - self.offset;
 
         renderer.fill_quad(
             Quad {
@@ -344,10 +346,16 @@ impl<'a, Message> Seeker<'a, Message> {
             meter,
             position,
             scale,
+            offset: 0.0,
             left: left.into().into(),
             right: right.into().into(),
             seek_to,
         }
+    }
+
+    pub fn with_offset(mut self, offset: f32) -> Self {
+        self.offset = offset / self.scale.x.exp2();
+        self
     }
 
     fn seeker_bounds(layout: Layout<'_>) -> Rectangle {

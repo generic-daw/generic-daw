@@ -2,8 +2,7 @@ use super::{get_time, grid, wheel_scrolled};
 use generic_daw_core::{Meter, MidiKey, MidiNote, Position};
 use generic_daw_utils::Vec2;
 use iced::{
-    Background, Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme,
-    Transformation, Vector,
+    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Text, Widget,
         layout::{Limits, Node},
@@ -14,13 +13,10 @@ use iced::{
     alignment::Vertical,
     border,
     mouse::{self, Cursor, Interaction},
-    padding,
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
     window,
 };
 use std::sync::{Arc, atomic::Ordering::Acquire};
-
-const PIANO_WIDTH: f32 = 50.0;
 
 #[non_exhaustive]
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -50,22 +46,22 @@ struct State {
 
 #[derive(Debug)]
 pub struct PianoRoll<'a, Message> {
-    pub notes: Arc<Vec<MidiNote>>,
-    pub meter: &'a Meter,
-    pub position: Vec2,
-    pub scale: Vec2,
-    /// whether we've sent a clip delete message since the last redraw request
-    pub deleted: bool,
+    notes: Arc<Vec<MidiNote>>,
+    meter: &'a Meter,
+    position: Vec2,
+    scale: Vec2,
+    // whether we've sent a clip delete message since the last redraw request
+    deleted: bool,
 
-    pub select_note: fn(usize) -> Message,
-    pub unselect_note: Message,
-    pub add_note: fn(MidiKey, Position) -> Message,
-    pub clone_note: fn(usize) -> Message,
-    pub move_note_to: fn(MidiKey, Position) -> Message,
-    pub trim_note_start: fn(Position) -> Message,
-    pub trim_note_end: fn(Position) -> Message,
-    pub delete_note: fn(usize) -> Message,
-    pub position_scale_delta: fn(Vec2, Vec2) -> Message,
+    select_note: fn(usize) -> Message,
+    unselect_note: Message,
+    add_note: fn(MidiKey, Position) -> Message,
+    clone_note: fn(usize) -> Message,
+    move_note_to: fn(MidiKey, Position) -> Message,
+    trim_note_start: fn(Position) -> Message,
+    trim_note_end: fn(Position) -> Message,
+    delete_note: fn(usize) -> Message,
+    position_scale_delta: fn(Vec2, Vec2) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message>
@@ -81,11 +77,11 @@ where
     }
 
     fn size(&self) -> Size<Length> {
-        Size::new(Length::Fill, Length::Fill)
+        Size::new(Length::Fill, Length::Fixed(128.0 * self.scale.y))
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
-        Node::new(limits.max())
+        Node::new(Size::new(limits.max().width, 128.0 * self.scale.y))
     }
 
     #[expect(clippy::too_many_lines)]
@@ -98,7 +94,7 @@ where
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
     ) {
         if let Event::Window(window::Event::RedrawRequested(..)) = event {
             self.deleted = false;
@@ -109,10 +105,13 @@ where
             return;
         }
 
-        let state = tree.state.downcast_mut::<State>();
-        let bounds = layout.bounds();
+        let Some(bounds) = layout.bounds().intersection(viewport) else {
+            return;
+        };
 
-        let Some(cursor) = cursor.position_in(bounds.shrink(padding::left(PIANO_WIDTH))) else {
+        let state = tree.state.downcast_mut::<State>();
+
+        let Some(cursor) = cursor.position_in(bounds) else {
             if state.action != Action::None {
                 state.action = Action::None;
                 shell.request_redraw();
@@ -161,8 +160,7 @@ where
                                 shell.publish((self.select_note)(i));
                             }
                         } else {
-                            let key = 128.0 - cursor.y / self.scale.y - self.position.y;
-                            let key = MidiKey(key as u8);
+                            let key = self.get_key(cursor);
 
                             state.action = Action::DraggingNote(0.0, key, time);
 
@@ -193,8 +191,7 @@ where
                 }
                 mouse::Event::CursorMoved { modifiers, .. } => match state.action {
                     Action::DraggingNote(offset, key, time) => {
-                        let new_key = 128.0 - cursor.y / self.scale.y - self.position.y;
-                        let new_key = MidiKey(new_key as u8);
+                        let new_key = self.get_key(cursor);
 
                         let new_start = get_time(
                             cursor.x + offset,
@@ -288,12 +285,10 @@ where
             return;
         };
 
-        let inner_bounds = bounds.shrink(padding::left(PIANO_WIDTH));
-
-        renderer.with_layer(inner_bounds, |renderer| {
+        renderer.with_layer(bounds, |renderer| {
             grid(
                 renderer,
-                inner_bounds,
+                bounds,
                 theme,
                 self.meter,
                 self.position,
@@ -302,19 +297,8 @@ where
         });
 
         for note in self.notes.iter() {
-            renderer.with_layer(inner_bounds, |renderer| {
-                renderer.with_translation(
-                    Vector::new(inner_bounds.x, inner_bounds.y),
-                    |renderer| {
-                        self.draw_note(note, renderer, theme);
-                    },
-                );
-            });
+            self.draw_note(note, renderer, theme, bounds);
         }
-
-        renderer.with_layer(bounds, |renderer| {
-            self.draw_piano(renderer, bounds, theme);
-        });
     }
 
     fn mouse_interaction(
@@ -329,7 +313,46 @@ where
     }
 }
 
-impl<Message> PianoRoll<'_, Message> {
+impl<'a, Message> PianoRoll<'a, Message> {
+    #[expect(clippy::too_many_arguments)]
+    pub fn new(
+        notes: Arc<Vec<MidiNote>>,
+        meter: &'a Meter,
+        position: Vec2,
+        scale: Vec2,
+        select_note: fn(usize) -> Message,
+        unselect_note: Message,
+        add_note: fn(MidiKey, Position) -> Message,
+        clone_note: fn(usize) -> Message,
+        move_note_to: fn(MidiKey, Position) -> Message,
+        trim_note_start: fn(Position) -> Message,
+        trim_note_end: fn(Position) -> Message,
+        delete_note: fn(usize) -> Message,
+        position_scale_delta: fn(Vec2, Vec2) -> Message,
+    ) -> Self {
+        Self {
+            notes,
+            meter,
+            position,
+            scale,
+            deleted: false,
+            select_note,
+            unselect_note,
+            add_note,
+            clone_note,
+            move_note_to,
+            trim_note_start,
+            trim_note_end,
+            delete_note,
+            position_scale_delta,
+        }
+    }
+
+    fn get_key(&self, cursor: Point) -> MidiKey {
+        let new_key = 128.0 - cursor.y / self.scale.y - self.position.y;
+        MidiKey(new_key as u8)
+    }
+
     fn interaction(&self, cursor: Point) -> Interaction {
         for note in self.notes.iter() {
             let note_bounds = self.note_bounds(note);
@@ -383,8 +406,21 @@ impl<Message> PianoRoll<'_, Message> {
         )
     }
 
-    fn draw_note(&self, note: &MidiNote, renderer: &mut Renderer, theme: &Theme) {
-        let note_bounds = self.note_bounds(note);
+    fn draw_note(
+        &self,
+        note: &MidiNote,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        bounds: Rectangle,
+    ) {
+        let note_bounds =
+            self.note_bounds(note) + Vector::new(bounds.position().x, bounds.position().y);
+
+        let Some(note_bounds) = note_bounds.intersection(&bounds) else {
+            return;
+        };
+
+        renderer.start_layer(note_bounds);
 
         renderer.fill_quad(
             Quad {
@@ -413,70 +449,8 @@ impl<Message> PianoRoll<'_, Message> {
             theme.extended_palette().primary.weak.text,
             note_bounds,
         );
-    }
 
-    fn draw_piano(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-        renderer.start_transformation(Transformation::translate(bounds.x, bounds.y));
-
-        let base = self.position.y as u8;
-        let offset = self.position.y.fract() * self.scale.y;
-
-        let rows = (bounds.height / self.scale.y) as u8 + 1;
-
-        for i in 0..=rows {
-            let key = MidiKey(127 - base - i);
-
-            let note_bounds = Rectangle::new(
-                Point::new(0.0, f32::from(i).mul_add(self.scale.y, -offset)),
-                Size::new(PIANO_WIDTH, self.scale.y),
-            );
-
-            renderer.fill_quad(
-                Quad {
-                    bounds: note_bounds,
-                    ..Quad::default()
-                },
-                if key.is_black() {
-                    Background::Color(Color::BLACK)
-                } else {
-                    Background::Color(Color::WHITE)
-                },
-            );
-
-            let note_name = Text {
-                content: key.to_string(),
-                bounds: Size::new(f32::INFINITY, 0.0),
-                size: renderer.default_size(),
-                line_height: LineHeight::default(),
-                font: renderer.default_font(),
-                align_x: Alignment::Left,
-                align_y: Vertical::Top,
-                shaping: Shaping::Basic,
-                wrapping: Wrapping::None,
-            };
-
-            renderer.fill_text(
-                note_name,
-                note_bounds.position() + Vector::new(3.0, 0.0),
-                if key.is_black() {
-                    Color::WHITE
-                } else {
-                    Color::BLACK
-                },
-                note_bounds,
-            );
-        }
-
-        renderer.end_transformation();
-
-        renderer.fill_quad(
-            Quad {
-                bounds,
-                border: border::width(1.0).color(theme.extended_palette().background.strong.color),
-                ..Quad::default()
-            },
-            Background::Color(Color::TRANSPARENT),
-        );
+        renderer.end_layer();
     }
 }
 
