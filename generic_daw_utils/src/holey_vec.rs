@@ -74,6 +74,13 @@ impl<T> HoleyVec<T> {
             .filter_map(|(i, t)| Some((i, t.as_mut()?)))
     }
 
+    pub fn keys(&self) -> impl Iterator<Item = usize> {
+        self.0
+            .iter()
+            .enumerate()
+            .filter_map(|(i, item)| item.as_ref().map(|_| i))
+    }
+
     pub fn values(&self) -> impl Iterator<Item = &T> {
         self.0.iter().flatten()
     }

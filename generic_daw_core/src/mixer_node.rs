@@ -162,6 +162,30 @@ impl AudioGraphNodeImpl for MixerNode {
     fn id(&self) -> NodeId {
         self.id
     }
+
+    fn reset(&self) {
+        self.effects.load().iter().for_each(|entry| {
+            entry
+                .effect
+                .try_lock()
+                .expect("this is only locked from the audio thread")
+                .reset();
+        });
+    }
+
+    fn delay(&self) -> usize {
+        self.effects
+            .load()
+            .iter()
+            .map(|entry| {
+                entry
+                    .effect
+                    .try_lock()
+                    .expect("this is only locked from the audio thread")
+                    .delay()
+            })
+            .sum()
+    }
 }
 
 fn pan(angle: f32) -> [f32; 2] {

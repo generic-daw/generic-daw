@@ -223,8 +223,14 @@ impl Arrangement {
 
         let mut buf = [0.0; CHUNK_SIZE];
 
-        let len = self.tracks.iter().map(Track::len).max().unwrap_or_default();
-        let len = len.in_interleaved_samples(self.meter.bpm.load(Acquire), self.meter.sample_rate);
+        let len = self
+            .tracks
+            .iter()
+            .map(Track::len)
+            .max()
+            .unwrap_or_default()
+            .in_interleaved_samples(self.meter.bpm.load(Acquire), self.meter.sample_rate)
+            + audio_graph.delay();
 
         for i in (0..len).step_by(CHUNK_SIZE) {
             self.meter.sample.store(i, Release);

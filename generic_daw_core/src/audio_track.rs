@@ -24,6 +24,14 @@ impl AudioGraphNodeImpl for AudioTrack {
     fn id(&self) -> NodeId {
         self.node.id()
     }
+
+    fn reset(&self) {
+        self.node.reset();
+    }
+
+    fn delay(&self) -> usize {
+        self.node.delay()
+    }
 }
 
 impl AudioTrack {

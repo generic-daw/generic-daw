@@ -109,4 +109,9 @@ impl AudioProcessor {
         self.started_processor.as_mut().unwrap().reset();
         self.steady_time = 0;
     }
+
+    #[must_use]
+    pub fn delay(&self) -> usize {
+        self.audio_buffers.delay()
+    }
 }

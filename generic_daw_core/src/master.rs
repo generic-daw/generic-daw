@@ -72,6 +72,11 @@ impl AudioGraphNodeImpl for Master {
 
     fn reset(&self) {
         *self.click.borrow_mut() = None;
+        self.node.reset();
+    }
+
+    fn delay(&self) -> usize {
+        self.node.delay()
     }
 }
 

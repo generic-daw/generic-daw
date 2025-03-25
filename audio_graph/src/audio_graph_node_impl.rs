@@ -9,7 +9,9 @@ pub trait AudioGraphNodeImpl: Debug + Send {
     /// get the unique `NodeId` of the node
     fn id(&self) -> NodeId;
     /// reset the node to a pre-playback state
-    fn reset(&self) {}
+    fn reset(&self);
+    /// the delay this node introduces
+    fn delay(&self) -> usize;
 }
 
 impl<T> AudioGraphNodeImpl for T
@@ -26,5 +28,9 @@ where
 
     fn reset(&self) {
         (**self).reset();
+    }
+
+    fn delay(&self) -> usize {
+        (**self).delay()
     }
 }

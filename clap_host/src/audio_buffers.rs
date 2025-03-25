@@ -1,6 +1,6 @@
 use crate::audio_ports_config::AudioPortsConfig;
 use clack_host::prelude::*;
-use generic_daw_utils::NoDebug;
+use generic_daw_utils::{NoDebug, RotateConcat as _};
 
 #[derive(Debug)]
 pub struct AudioBuffers {
@@ -122,20 +122,7 @@ impl AudioBuffers {
     }
 
     pub fn write_out(&mut self, buf: &mut [f32], mix_level: f32) {
-        if self.latency_comp.is_empty() {
-        } else if self.latency_comp.len() < buf.len() {
-            buf.rotate_right(self.latency_comp.len());
-
-            for (i, s) in buf.iter_mut().zip(&mut *self.latency_comp) {
-                (*i, *s) = (*s, *i);
-            }
-        } else {
-            for (i, s) in buf.iter_mut().zip(&mut *self.latency_comp) {
-                (*i, *s) = (*s, *i);
-            }
-
-            self.latency_comp.rotate_right(buf.len());
-        }
+        self.latency_comp.rotate_right_concat(buf);
 
         if self
             .output_config
@@ -170,5 +157,9 @@ impl AudioBuffers {
 
     pub fn latency_changed(&mut self, latency: u32) {
         self.latency_comp.resize(latency as usize * 2, 0.0);
+    }
+
+    pub fn delay(&self) -> usize {
+        self.latency_comp.len()
     }
 }

@@ -48,6 +48,14 @@ impl AudioGraphNodeImpl for MidiTrack {
 
         lock.note_buffers.all_notes_off(0, 0);
     }
+
+    fn delay(&self) -> usize {
+        self.host_audio_processor
+            .try_lock()
+            .expect("this is only locked from the audio thread")
+            .delay()
+            + self.node.delay()
+    }
 }
 
 impl MidiTrack {
