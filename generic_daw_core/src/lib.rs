@@ -4,6 +4,7 @@ use cpal::{
     traits::{DeviceTrait as _, HostTrait as _},
 };
 use daw_ctx::DawCtx;
+use log::info;
 use rtrb::Producer;
 use std::{
     cmp::Ordering,
@@ -58,6 +59,8 @@ pub fn build_input_stream(sample_rate: u32) -> (u16, u32, Stream, Receiver<Box<[
         supported_config.max_sample_rate().0,
     ));
 
+    info!("starting input stream with sample rate {sample_rate:?}",);
+
     let stream = device
         .build_input_stream(
             &supported_config.with_sample_rate(sample_rate).config(),
@@ -101,6 +104,10 @@ pub fn build_output_stream(
         SupportedBufferSize::Unknown => BufferSize::Default,
         SupportedBufferSize::Range { min, max } => BufferSize::Fixed(buffer_size.clamp(min, max)),
     };
+
+    info!(
+        "starting output stream with sample rate {sample_rate:?} and buffer size {buffer_size:?}",
+    );
 
     let stream = device
         .build_output_stream(

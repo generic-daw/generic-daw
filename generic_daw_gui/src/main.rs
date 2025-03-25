@@ -8,7 +8,6 @@ mod daw;
 mod file_tree;
 mod icons;
 mod stylefns;
-mod trace;
 mod widget;
 
 fn main() -> Result {
@@ -25,7 +24,7 @@ fn main() -> Result {
         }
     }
 
-    trace::setup();
+    env_logger::init();
 
     daemon(Daw::title, Daw::update, Daw::view)
         .subscription(|_| Daw::subscription())

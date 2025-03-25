@@ -1,5 +1,6 @@
 use crate::{Meter, MixerNode, master::Master};
 use audio_graph::AudioGraph;
+use log::trace;
 use rtrb::{Consumer, Producer, RingBuffer};
 use std::sync::Arc;
 
@@ -36,6 +37,8 @@ impl DawCtx {
 
     pub fn fill_buf(&mut self, buf: &mut [f32]) {
         while let Ok(msg) = self.consumer.pop() {
+            trace!("{msg:?}");
+
             match msg {
                 DawCtxMessage::Insert(node) => self.audio_graph.insert(node),
                 DawCtxMessage::Remove(node) => self.audio_graph.remove(node),

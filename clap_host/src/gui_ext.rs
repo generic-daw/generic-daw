@@ -4,9 +4,9 @@ use clack_extensions::gui::{
 };
 use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
+use log::warn;
 use raw_window_handle::RawWindowHandle;
 use std::time::Duration;
-use tracing::warn;
 
 #[derive(Debug)]
 pub struct GuiExt {
@@ -88,13 +88,13 @@ impl GuiExt {
     }
 
     pub fn open_floating(&mut self) {
-        assert!(self.is_floating);
+        debug_assert!(self.is_floating);
 
         self.open(|_, _| ());
     }
 
     pub fn open_embedded(&mut self, window_handle: RawWindowHandle) {
-        assert!(!self.is_floating);
+        debug_assert!(!self.is_floating);
 
         self.open(move |ext, plugin| {
             // SAFETY:

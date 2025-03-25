@@ -5,7 +5,7 @@ use clack_extensions::{
     log::{HostLogImpl, LogSeverity},
 };
 use clack_host::prelude::*;
-use tracing::{debug, error, info, warn};
+use log::{debug, error, info, warn};
 
 #[derive(Debug)]
 pub struct Shared {
@@ -61,14 +61,14 @@ impl HostGuiImpl for Shared {
 impl HostLogImpl for Shared {
     fn log(&self, severity: LogSeverity, message: &str) {
         match severity {
-            LogSeverity::Info => {
-                info!(
+            LogSeverity::Debug => {
+                debug!(
                     "{} ({}): {message}",
                     self.descriptor.name, self.descriptor.id
                 );
             }
-            LogSeverity::Debug => {
-                debug!(
+            LogSeverity::Info => {
+                info!(
                     "{} ({}): {message}",
                     self.descriptor.name, self.descriptor.id
                 );
@@ -81,8 +81,8 @@ impl HostLogImpl for Shared {
             }
             LogSeverity::Error
             | LogSeverity::Fatal
-            | LogSeverity::PluginMisbehaving
-            | LogSeverity::HostMisbehaving => {
+            | LogSeverity::HostMisbehaving
+            | LogSeverity::PluginMisbehaving => {
                 error!(
                     "{} ({}): {message}",
                     self.descriptor.name, self.descriptor.id

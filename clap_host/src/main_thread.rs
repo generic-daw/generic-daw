@@ -8,8 +8,8 @@ use clack_extensions::{
 };
 use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
+use log::info;
 use std::{cell::RefCell, rc::Rc, time::Duration};
-use tracing::info;
 
 #[derive(Clone, Copy, Debug)]
 pub enum MainThreadMessage {

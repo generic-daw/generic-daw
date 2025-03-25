@@ -22,6 +22,6 @@ clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
     "timer",
 ] }
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
+log = "0.4.27"
 raw-window-handle = "0.6.2"
-tracing = { version = "0.1.41", default-features = false, features = ["std"] }
 walkdir = "2.5.0"

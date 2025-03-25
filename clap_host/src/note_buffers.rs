@@ -96,8 +96,10 @@ impl NoteBuffers {
                 [0xb0 | channel, 0x7b, 0x00],
             ));
         } else {
-            self.input_events
-                .push(&NoteChokeEvent::new(time, Pckn::match_all()));
+            self.input_events.push(&NoteChokeEvent::new(
+                time,
+                Pckn::new(self.main_input_port, channel, Match::All, Match::All),
+            ));
         }
     }
 }

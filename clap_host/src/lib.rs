@@ -7,7 +7,6 @@ use host::Host;
 use main_thread::MainThread;
 use shared::Shared;
 use std::{collections::BTreeMap, ffi::CString, path::PathBuf, result::Result};
-use tracing::info;
 use walkdir::WalkDir;
 
 mod audio_buffers;
@@ -146,11 +145,6 @@ pub fn init(
         .access_handler(|mt: &MainThread<'_>| mt.latency)
         .map(|ext| ext.get(&mut instance.plugin_handle()))
         .unwrap_or_default();
-
-    info!(
-        "{} ({}): setting latency to {latency} frames",
-        descriptor.name, descriptor.id
-    );
 
     let audio_buffers = AudioBuffers::new(config, input_config, output_config, latency);
     let note_buffers = NoteBuffers::new(&mut instance.plugin_handle());

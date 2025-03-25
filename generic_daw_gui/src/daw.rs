@@ -25,6 +25,7 @@ use iced::{
     },
     window::{self, Id},
 };
+use log::trace;
 use rfd::{AsyncFileDialog, FileHandle};
 use std::{
     collections::BTreeMap,
@@ -100,6 +101,8 @@ impl Daw {
 
     #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        trace!("{message:?}");
+
         match message {
             Message::Arrangement(message) => {
                 return self.arrangement.update(message).map(Message::Arrangement);

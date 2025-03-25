@@ -15,7 +15,8 @@ async-channel = "2.3.1"
 bit-set = "0.8.0"
 dirs = "6.0.0"
 dragking = { git = "https://github.com/edwloef/dragking.git", branch = "generic-daw" }
-fragile = "2.0.0"
+env_logger = "0.11.7"
+fragile = "2.0.1"
 hound = "3.5.1"
 iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", default-features = false, features = [
     "advanced",
@@ -30,6 +31,7 @@ iced_wgpu = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw
 ] }
 infer = { version = "0.19.0", default-features = false }
 itoa = "1.0.15"
+log = "0.4.27"
 oneshot = "0.1.11"
 rfd = { version = "0.15.3", default-features = false, features = [
     "tokio",
@@ -37,4 +39,3 @@ rfd = { version = "0.15.3", default-features = false, features = [
 ] }
 rtrb = "0.3.2"
 tokio = { version = "1.44.1", features = ["rt", "time"] }
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

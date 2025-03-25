@@ -4,7 +4,7 @@ use crate::{
 use async_channel::Receiver;
 use clack_host::process::StartedPluginAudioProcessor;
 use generic_daw_utils::NoDebug;
-use tracing::info;
+use log::trace;
 
 #[derive(Clone, Copy, Debug)]
 pub enum AudioThreadMessage {
@@ -51,13 +51,10 @@ impl AudioProcessor {
 
     pub fn process(&mut self, buf: &mut [f32], mix_level: f32) {
         while let Ok(msg) = self.receiver.try_recv() {
+            trace!("{} ({}): {msg:?}", self.descriptor.name, self.descriptor.id);
+
             match msg {
                 AudioThreadMessage::RequestRestart => {
-                    info!(
-                        "{} ({}): restarting audio processor",
-                        self.descriptor.name, self.descriptor.id
-                    );
-
                     let mut stopped_processor =
                         self.started_processor.take().unwrap().0.stop_processing();
 
@@ -71,11 +68,6 @@ impl AudioProcessor {
                     self.started_processor = Some(started_processor.into());
                 }
                 AudioThreadMessage::LatencyChanged(latency) => {
-                    info!(
-                        "{} ({}): setting latency to {latency} frames",
-                        self.descriptor.name, self.descriptor.id
-                    );
-
                     self.audio_buffers.latency_changed(latency);
                 }
             }
