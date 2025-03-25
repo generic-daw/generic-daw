@@ -1,4 +1,5 @@
 mod enum_dispatcher;
+pub mod growable_thread_pool;
 mod holey_vec;
 mod no_debug;
 mod rotate_concat;

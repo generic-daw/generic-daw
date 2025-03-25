@@ -19,7 +19,7 @@ impl DawCtx {
         sample_rate: u32,
         buffer_size: u32,
     ) -> (Self, Arc<MixerNode>, Producer<DawCtxMessage>) {
-        let (ui_producer, consumer) = RingBuffer::new(16);
+        let (ui_producer, consumer) = RingBuffer::new(100);
 
         let meter = Arc::new(Meter::new(sample_rate, buffer_size));
         let node = Arc::<MixerNode>::default();

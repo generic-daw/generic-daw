@@ -298,7 +298,6 @@ version = "0.0.0"
 dependencies = [
  "bit-set",
  "generic_daw_utils",
- "tokio",
 ]
 
 [[package]]

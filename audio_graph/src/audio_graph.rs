@@ -1,14 +1,7 @@
 use crate::{AudioGraphNode, NodeId, audio_graph_entry::AudioGraphEntry};
 use bit_set::BitSet;
-use generic_daw_utils::{HoleyVec, RotateConcat as _};
-use std::sync::{Arc, LazyLock};
-use tokio::{
-    runtime::Runtime,
-    sync::{Barrier, RwLock},
-    task::{JoinSet, block_in_place},
-};
-
-static EXECUTOR: LazyLock<Runtime> = LazyLock::new(|| Runtime::new().unwrap());
+use generic_daw_utils::{HoleyVec, RotateConcat as _, growable_thread_pool};
+use std::sync::{Arc, Barrier, RwLock};
 
 #[derive(Debug)]
 pub struct AudioGraph {
@@ -54,22 +47,18 @@ impl AudioGraph {
     pub fn fill_buf(&mut self, buf: &mut [f32]) {
         let graph = Arc::new(std::mem::take(&mut self.graph));
 
-        EXECUTOR.block_on(async {
-            let mut join_set = JoinSet::new();
-            let barrier = Arc::new(Barrier::new(graph.keys().count()));
+        let barrier = Arc::new(Barrier::new(graph.keys().count()));
+        let buf_len = buf.len();
 
-            for node in graph.keys() {
-                join_set.spawn(Self::worker(
-                    graph.clone(),
-                    node,
-                    buf.len(),
-                    barrier.clone(),
-                ));
-            }
+        for node in graph.keys().filter(|&k| k != self.root) {
+            let graph = graph.clone();
+            let barrier = barrier.clone();
+            growable_thread_pool::spawn(move || Self::worker(graph, node, buf_len, barrier));
+        }
 
-            join_set.join_all().await;
-        });
+        Self::worker(graph.clone(), self.root, buf_len, barrier);
 
+        while Arc::strong_count(&graph) != 1 {}
         // there are no weak references, so the strong count is still 1
         self.graph = Arc::into_inner(graph).unwrap();
 
@@ -81,16 +70,17 @@ impl AudioGraph {
         );
     }
 
-    async fn worker(
+    #[expect(clippy::needless_pass_by_value)]
+    fn worker(
         graph: Arc<HoleyVec<RwLock<AudioGraphEntry>>>,
         node: usize,
         buf_len: usize,
         barrier: Arc<Barrier>,
     ) {
-        let entry = &mut *graph[node].write().await;
+        let entry = &mut *graph[node].write().unwrap();
 
         // wait until all nodes have taken their write lock
-        barrier.wait().await;
+        barrier.wait();
 
         entry.buf.clear();
         entry.buf.resize(buf_len, 0.0);
@@ -98,42 +88,40 @@ impl AudioGraph {
 
         let mut max_delay = 0;
         for dep in entry.connections.keys() {
-            // wait until the dependency's future has finished processing
+            // wait until the dependency has finished processing
             // we know this because it drops its write lock, and we can read
             //
             // this can't deadlock, because we know that none of this node's
             // dependencies depend on it directly or indirectly
-            max_delay = graph[dep].read().await.delay.max(max_delay);
+            max_delay = graph[dep].read().unwrap().delay.max(max_delay);
         }
 
-        block_in_place(|| {
-            for (dep, cache) in entry.connections.iter_mut() {
-                // copy the dependency's cache into our own cache
-                let dep = graph[dep].try_read().unwrap();
-                entry.cache.extend_from_slice(&dep.cache);
-                cache.resize(max_delay - dep.delay, 0.0);
-                drop(dep);
+        for (dep, cache) in entry.connections.iter_mut() {
+            // copy the dependency's cache into our own cache
+            let dep = graph[dep].try_read().unwrap();
+            entry.cache.extend_from_slice(&dep.cache);
+            cache.resize(max_delay - dep.delay, 0.0);
+            drop(dep);
 
-                // apply the delay needed to make all dependencies be time-aligned
-                cache.rotate_right_concat(&mut entry.cache);
+            // apply the delay needed to make all dependencies be time-aligned
+            cache.rotate_right_concat(&mut entry.cache);
 
-                // copy the delayed audio into `buf`
-                entry
-                    .cache
-                    .drain(..)
-                    .zip(&mut *entry.buf)
-                    .for_each(|(sample, buf)| *buf += sample);
-            }
+            // copy the delayed audio into `buf`
+            entry
+                .cache
+                .drain(..)
+                .zip(&mut *entry.buf)
+                .for_each(|(sample, buf)| *buf += sample);
+        }
 
-            // `buf` now contains exactly the output of all of `node`'s time-aligned dependencies
-            entry.node.fill_buf(&mut entry.buf);
+        // `buf` now contains exactly the output of all of `node`'s time-aligned dependencies
+        entry.node.fill_buf(&mut entry.buf);
 
-            // cache `node`'s output for other nodes that depend on it
-            entry.cache.extend_from_slice(&entry.buf);
+        // cache `node`'s output for other nodes that depend on it
+        entry.cache.extend_from_slice(&entry.buf);
 
-            // this node's delay + the largest dependency's delay
-            entry.delay = entry.node.delay() + max_delay;
-        });
+        // this node's delay + the largest dependency's delay
+        entry.delay = entry.node.delay() + max_delay;
     }
 
     /// reset every node in the graph to a pre-playback state
