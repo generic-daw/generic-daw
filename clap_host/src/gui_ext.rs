@@ -1,6 +1,7 @@
 use crate::{PluginDescriptor, PluginId, audio_processor::AudioThreadMessage, host::Host};
-use clack_extensions::gui::{
-    GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow,
+use clack_extensions::{
+    gui::{GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow},
+    render::RenderMode,
 };
 use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
@@ -168,6 +169,21 @@ impl GuiExt {
                 .try_send(AudioThreadMessage::LatencyChanged(latency))
                 .unwrap();
         });
+    }
+
+    pub fn set_realtime(&mut self, realtime: bool) {
+        if let Some(render) = self.instance.access_handler(|mt| mt.render) {
+            render
+                .set(
+                    &mut self.instance.plugin_handle(),
+                    if realtime {
+                        RenderMode::Realtime
+                    } else {
+                        RenderMode::Offline
+                    },
+                )
+                .unwrap();
+        }
     }
 }
 

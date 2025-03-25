@@ -4,6 +4,7 @@ use clack_extensions::{
     gui::{GuiSize, PluginGui},
     latency::{HostLatencyImpl, PluginLatency},
     note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
+    render::PluginRender,
     timer::{HostTimerImpl, TimerId},
 };
 use clack_host::prelude::*;
@@ -27,6 +28,7 @@ pub struct MainThread<'a> {
     shared: &'a Shared,
     pub gui: Option<NoDebug<PluginGui>>,
     pub latency: Option<NoDebug<PluginLatency>>,
+    pub render: Option<NoDebug<PluginRender>>,
     pub timers: Rc<RefCell<TimerExt>>,
 }
 
@@ -36,6 +38,7 @@ impl<'a> MainThread<'a> {
             shared,
             gui: None,
             timers: Rc::default(),
+            render: None,
             latency: None,
         }
     }
@@ -45,6 +48,7 @@ impl<'a> MainThreadHandler<'a> for MainThread<'a> {
     fn initialized(&mut self, instance: InitializedPluginHandle<'_>) {
         self.gui = instance.get_extension().map(NoDebug);
         self.latency = instance.get_extension().map(NoDebug);
+        self.render = instance.get_extension().map(NoDebug);
         self.timers.borrow_mut().set_ext(instance.get_extension());
     }
 }

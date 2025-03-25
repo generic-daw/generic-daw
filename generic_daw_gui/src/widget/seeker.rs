@@ -131,6 +131,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                 shell.request_redraw();
             }
 
+            if state.seeking.is_some() {
+                state.seeking = None;
+                shell.request_redraw();
+            }
+
             return;
         };
         cursor.y -= LINE_HEIGHT;

@@ -210,7 +210,9 @@ impl ArrangementView {
             Message::Export(message) => {
                 let (audio_graph, path) =
                     Mutex::into_inner(Arc::into_inner(message).unwrap()).unwrap();
+                self.clap_host.set_realtime(false);
                 self.arrangement.export(audio_graph, &path);
+                self.clap_host.set_realtime(true);
             }
             Message::ChannelAdd => {
                 return Task::future(self.arrangement.add_channel())

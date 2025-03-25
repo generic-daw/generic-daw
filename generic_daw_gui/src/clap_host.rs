@@ -168,6 +168,12 @@ impl ClapHost {
         self.windows.contains_value(&window)
     }
 
+    pub fn set_realtime(&mut self, realtime: bool) {
+        for plugin in self.plugins.values_mut() {
+            plugin.set_realtime(realtime);
+        }
+    }
+
     pub fn subscription() -> Subscription<Message> {
         Subscription::batch([
             resize_events().map(Message::GuiRequestResize),
