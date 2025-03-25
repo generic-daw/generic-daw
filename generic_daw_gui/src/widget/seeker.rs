@@ -90,6 +90,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
         )
     }
 
+    #[expect(clippy::too_many_lines)]
     fn update(
         &mut self,
         tree: &mut Tree,
@@ -122,12 +123,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
             return;
         }
 
+        let state = tree.state.downcast_mut::<State>();
+
         let Some(mut cursor) = cursor.position_in(right_panel_bounds) else {
+            if state.hovering {
+                state.hovering = false;
+                shell.request_redraw();
+            }
+
             return;
         };
         cursor.y -= LINE_HEIGHT;
-
-        let state = tree.state.downcast_mut::<State>();
 
         if let Event::Mouse(event) = event {
             match event {

@@ -92,10 +92,12 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<Message> {
                     let pos = cursor.position().unwrap();
                     state.dragging = Some(pos.y.trunc());
                     shell.capture_event();
+                    shell.request_redraw();
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
                     state.dragging = None;
                     shell.capture_event();
+                    shell.request_redraw();
                 }
                 mouse::Event::CursorMoved {
                     position: Point { y, .. },
