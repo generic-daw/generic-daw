@@ -1,10 +1,7 @@
 use crate::{Meter, MixerNode, Position, include_f32s, resample_interleaved};
 use audio_graph::{AudioGraphNodeImpl, NodeId};
 use live_sample::LiveSample;
-use std::{
-    cell::RefCell,
-    sync::{Arc, atomic::Ordering::Acquire},
-};
+use std::sync::{Arc, Mutex, atomic::Ordering::Acquire};
 
 mod include_f32s;
 mod live_sample;
@@ -19,7 +16,7 @@ pub struct Master {
     /// volume and pan
     node: Arc<MixerNode>,
 
-    click: RefCell<Option<LiveSample>>,
+    click: Mutex<Option<LiveSample>>,
     on_bar_click: Arc<[f32]>,
     off_bar_click: Arc<[f32]>,
 }
@@ -49,17 +46,22 @@ impl AudioGraphNodeImpl for Master {
                 };
 
                 self.click
-                    .borrow_mut()
+                    .try_lock()
+                    .expect("this is only locked from the audio thread")
                     .replace(LiveSample::new(click, diff));
             }
         }
 
-        let mut click = self.click.borrow_mut();
+        let mut click = self
+            .click
+            .try_lock()
+            .expect("this is only locked from the audio thread");
         if let Some(c) = click.as_ref() {
             c.fill_buf(buf);
 
             if c.over() {
                 *click = None;
+                drop(click);
             }
         }
 
@@ -71,7 +73,10 @@ impl AudioGraphNodeImpl for Master {
     }
 
     fn reset(&self) {
-        *self.click.borrow_mut() = None;
+        *self
+            .click
+            .try_lock()
+            .expect("this is only locked from the audio thread") = None;
         self.node.reset();
     }
 
@@ -85,7 +90,7 @@ impl Master {
         let sample_rate = meter.sample_rate;
 
         Self {
-            click: RefCell::default(),
+            click: Mutex::default(),
             on_bar_click: resample_interleaved(44100, sample_rate, ON_BAR_CLICK.into())
                 .unwrap()
                 .into(),

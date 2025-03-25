@@ -11,3 +11,4 @@ workspace = true
 generic_daw_utils = { path = "../generic_daw_utils" }
 
 bit-set = "0.8.0"
+tokio = { version = "1.44.1", features = ["rt-multi-thread", "sync"] }

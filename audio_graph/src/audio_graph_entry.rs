@@ -8,6 +8,8 @@ pub struct AudioGraphEntry {
     pub node: AudioGraphNode,
     /// what other nodes this entry's node depends on
     pub connections: HoleyVec<Vec<f32>>,
+    /// this entry's summing buffer
+    pub buf: Vec<f32>,
     /// this entry's node's cached output audio
     pub cache: Vec<f32>,
     /// this node's critical delay
