@@ -1,6 +1,6 @@
 use super::get_time;
 use generic_daw_core::{Meter, Position};
-use generic_daw_utils::Vec2;
+use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
     Element, Event, Length, Rectangle, Renderer, Size, Theme,
     advanced::{
@@ -12,37 +12,26 @@ use iced::{
     },
     mouse::{self, Cursor, Interaction},
 };
-use std::fmt::{Debug, Formatter};
 
 #[derive(Default)]
 struct State {
     last_click: Option<Click>,
 }
 
-pub struct Track<'a, Message, F> {
+#[derive(Debug)]
+pub struct Track<'a, Message> {
     meter: &'a Meter,
     /// list of the track panel and all the clip widgets
-    children: Box<[Element<'a, Message>]>,
+    children: NoDebug<Box<[Element<'a, Message>]>>,
     /// the position of the top left corner of the arrangement viewport
     position: Vec2,
     /// the scale of the arrangement viewport
     scale: Vec2,
     /// message to emit on double click
-    on_double_click: Option<F>,
+    on_double_click: Option<NoDebug<Box<dyn Fn(Position) -> Message>>>,
 }
 
-impl<Message, F> Debug for Track<'_, Message, F> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Track")
-            .field("scale", &self.scale)
-            .finish_non_exhaustive()
-    }
-}
-
-impl<Message, F> Widget<Message, Theme, Renderer> for Track<'_, Message, F>
-where
-    F: Fn(Position) -> Message,
-{
+impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
     }
@@ -167,7 +156,7 @@ where
             modifiers,
         }) = event
         {
-            if let Some(on_double_click) = self.on_double_click.as_ref() {
+            if let Some(on_double_click) = &self.on_double_click {
                 let state = tree.state.downcast_mut::<State>();
 
                 let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
@@ -185,7 +174,7 @@ where
     }
 }
 
-impl<'a, Message, F> Track<'a, Message, F>
+impl<'a, Message> Track<'a, Message>
 where
     Message: 'a,
 {
@@ -194,24 +183,25 @@ where
         children: impl IntoIterator<Item = Element<'a, Message>>,
         position: Vec2,
         scale: Vec2,
-        on_double_click: Option<F>,
+        on_double_click: Option<impl Fn(Position) -> Message + 'static>,
     ) -> Self {
         Self {
             meter,
-            children: children.into_iter().collect(),
+            children: children.into_iter().collect::<Box<_>>().into(),
             position,
             scale,
-            on_double_click,
+            on_double_click: on_double_click
+                .map(|v| Box::new(v) as Box<dyn Fn(Position) -> Message + 'static>)
+                .map(NoDebug),
         }
     }
 }
 
-impl<'a, Message, F> From<Track<'a, Message, F>> for Element<'a, Message>
+impl<'a, Message> From<Track<'a, Message>> for Element<'a, Message>
 where
     Message: 'a,
-    F: Fn(Position) -> Message + 'a,
 {
-    fn from(value: Track<'a, Message, F>) -> Self {
+    fn from(value: Track<'a, Message>) -> Self {
         Element::new(value)
     }
 }

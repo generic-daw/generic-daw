@@ -13,39 +13,20 @@ use iced::{
     mouse::{self, Cursor, Interaction, ScrollDelta},
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
-use std::{
-    fmt::{Debug, Formatter},
-    ops::RangeInclusive,
-};
+use std::ops::RangeInclusive;
 
+#[derive(Default)]
 struct State {
-    dragging: Option<f32>,
+    dragging: Option<(u16, f32)>,
+    hovering: bool,
     scroll: f32,
-    current: u16,
 }
 
-impl State {
-    pub fn new(current: u16) -> Self {
-        Self {
-            dragging: None,
-            scroll: 0.0,
-            current,
-        }
-    }
-}
-
+#[derive(Debug)]
 pub struct BpmInput<Message> {
     range: RangeInclusive<u16>,
-    current: u16,
+    value: u16,
     f: fn(u16) -> Message,
-}
-
-impl<Message> Debug for BpmInput<Message> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BpmInput")
-            .field("current", &self.current)
-            .finish_non_exhaustive()
-    }
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for BpmInput<Message> {
@@ -58,7 +39,7 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<Message> {
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::new(self.current))
+        tree::State::new(State::default())
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
@@ -81,56 +62,59 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<Message> {
         }
 
         let state = tree.state.downcast_mut::<State>();
-        let bounds = layout.bounds();
 
         if let Event::Mouse(event) = event {
             match event {
                 mouse::Event::ButtonPressed {
                     button: mouse::Button::Left,
                     ..
-                } if state.dragging.is_none() && cursor.is_over(bounds) => {
+                } if state.dragging.is_none() && state.hovering => {
                     let pos = cursor.position().unwrap();
-                    state.dragging = Some(pos.y.trunc());
+                    state.dragging = Some((self.value, pos.y));
                     shell.capture_event();
-                    shell.request_redraw();
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
+                    if !state.hovering {
+                        shell.request_redraw();
+                    }
+
                     state.dragging = None;
                     shell.capture_event();
-                    shell.request_redraw();
                 }
                 mouse::Event::CursorMoved {
                     position: Point { y, .. },
                     ..
                 } => {
-                    if let Some(last) = state.dragging {
-                        let diff = ((y - last) * 0.1).trunc();
+                    if let Some((value, pos)) = state.dragging {
+                        let diff = ((pos - y) * 0.1).trunc();
 
-                        state.current = state
-                            .current
-                            .saturating_add_signed(-diff as i16)
-                            .clamp(*self.range.start(), *self.range.end());
-                        state.dragging = Some(diff.mul_add(10.0, last));
-
-                        shell.publish((self.f)(state.current));
+                        shell.publish((self.f)(
+                            value
+                                .saturating_add_signed(diff as i16)
+                                .clamp(*self.range.start(), *self.range.end()),
+                        ));
                         shell.capture_event();
+                    }
+
+                    if cursor.is_over(layout.bounds()) != state.hovering {
+                        state.hovering ^= true;
+                        shell.request_redraw();
                     }
                 }
                 mouse::Event::WheelScrolled { delta, .. }
-                    if state.dragging.is_none() && cursor.is_over(bounds) =>
+                    if state.dragging.is_none() && state.hovering =>
                 {
                     let diff = match delta {
                         ScrollDelta::Lines { y, .. } => *y,
                         ScrollDelta::Pixels { y, .. } => y / SWM,
                     } + state.scroll;
-
-                    state.current = state
-                        .current
-                        .saturating_add_signed(diff as i16)
-                        .clamp(*self.range.start(), *self.range.end());
                     state.scroll = diff.fract();
 
-                    shell.publish((self.f)(state.current));
+                    shell.publish((self.f)(
+                        self.value
+                            .saturating_add_signed(diff as i16)
+                            .clamp(*self.range.start(), *self.range.end()),
+                    ));
                     shell.capture_event();
                 }
                 _ => {}
@@ -159,7 +143,7 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<Message> {
         renderer.fill_quad(background, theme.extended_palette().background.weak.color);
 
         let text = Text {
-            content: itoa::Buffer::new().format(self.current).to_owned(),
+            content: itoa::Buffer::new().format(self.value).to_owned(),
             bounds: Size::new(f32::INFINITY, 0.0),
             size: renderer.default_size(),
             line_height: LineHeight::default(),
@@ -196,8 +180,8 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<Message> {
 }
 
 impl<Message> BpmInput<Message> {
-    pub fn new(current: u16, range: RangeInclusive<u16>, f: fn(u16) -> Message) -> Self {
-        Self { range, current, f }
+    pub fn new(range: RangeInclusive<u16>, value: u16, f: fn(u16) -> Message) -> Self {
+        Self { range, value, f }
     }
 }
 

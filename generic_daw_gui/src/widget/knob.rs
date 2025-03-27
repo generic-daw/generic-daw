@@ -29,22 +29,16 @@ struct State {
 }
 
 #[derive(Debug)]
-pub struct Knob<Message, F>
-where
-    F: Fn(f32) -> Message,
-{
+pub struct Knob<Message> {
     range: RangeInclusive<f32>,
     value: f32,
     center: f32,
     enabled: bool,
-    on_change: NoDebug<F>,
+    f: NoDebug<Box<dyn Fn(f32) -> Message>>,
     radius: f32,
 }
 
-impl<Message, F> Widget<Message, Theme, Renderer> for Knob<Message, F>
-where
-    F: Fn(f32) -> Message,
-{
+impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
     fn size(&self) -> Size<Length> {
         Size::new(
             Length::Fixed(2.0 * self.radius),
@@ -95,26 +89,22 @@ where
             return;
         }
 
-        let bounds = layout.bounds();
-
         if let Event::Mouse(event) = event {
             match event {
                 mouse::Event::ButtonPressed {
                     button: mouse::Button::Left,
                     ..
-                } if state.dragging.is_none() => {
-                    if let Some(pos) = cursor.position() {
-                        if pos.distance(bounds.center()) < self.radius {
-                            state.dragging = Some((self.value, pos.y));
-                            shell.capture_event();
-                        }
-                    }
+                } if state.dragging.is_none() && state.hovering => {
+                    let pos = cursor.position().unwrap();
+                    state.dragging = Some((self.value, pos.y));
+                    shell.capture_event();
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
                     if !state.hovering {
                         state.cache.clear();
                         shell.request_redraw();
                     }
+
                     state.dragging = None;
                     shell.capture_event();
                 }
@@ -122,30 +112,23 @@ where
                     position: Point { y, .. },
                     ..
                 } => {
-                    if state.hovering
-                        != cursor
-                            .position()
-                            .is_some_and(|pos| pos.distance(bounds.center()) < self.radius)
-                    {
-                        state.hovering ^= true;
-                        state.cache.clear();
-                        shell.request_redraw();
-                    }
+                    if let Some((value, pos)) = state.dragging {
+                        let diff = (pos - y) * (self.range.end() - self.range.start()) * 0.005;
 
-                    if let Some((value, last)) = state.dragging {
-                        let diff = (last - y) * (self.range.end() - self.range.start()) * 0.005;
-
-                        shell.publish((self.on_change)(
+                        shell.publish((self.f)(
                             (value + diff).clamp(*self.range.start(), *self.range.end()),
                         ));
                         shell.capture_event();
                     }
+
+                    if cursor.is_over(layout.bounds()) != state.hovering {
+                        state.hovering ^= true;
+                        state.cache.clear();
+                        shell.request_redraw();
+                    }
                 }
                 mouse::Event::WheelScrolled { delta, .. }
-                    if state.dragging.is_none()
-                        && cursor
-                            .position()
-                            .is_some_and(|pos| pos.distance(bounds.center()) < self.radius) =>
+                    if state.dragging.is_none() && state.hovering =>
                 {
                     let diff = match delta {
                         ScrollDelta::Lines { y, .. } => *y,
@@ -153,7 +136,7 @@ where
                     } * (self.range.end() - self.range.start())
                         * 0.05;
 
-                    shell.publish((self.on_change)(
+                    shell.publish((self.f)(
                         (self.value + diff).clamp(*self.range.start(), *self.range.end()),
                     ));
                     shell.capture_event();
@@ -208,23 +191,20 @@ where
     }
 }
 
-impl<Message, F> Knob<Message, F>
-where
-    F: Fn(f32) -> Message,
-{
+impl<Message> Knob<Message> {
     pub fn new(
         range: RangeInclusive<f32>,
-        zero: f32,
-        current: f32,
+        value: f32,
+        center: f32,
         enabled: bool,
-        on_change: F,
+        f: impl Fn(f32) -> Message + 'static,
     ) -> Self {
         Self {
             range,
-            center: zero,
-            value: current,
+            value,
+            center,
             enabled,
-            on_change: on_change.into(),
+            f: NoDebug(Box::from(f)),
             radius: LINE_HEIGHT,
         }
     }
@@ -294,12 +274,11 @@ where
     }
 }
 
-impl<'a, Message, F> From<Knob<Message, F>> for Element<'a, Message>
+impl<'a, Message> From<Knob<Message>> for Element<'a, Message>
 where
     Message: 'a,
-    F: Fn(f32) -> Message + 'a,
 {
-    fn from(value: Knob<Message, F>) -> Self {
+    fn from(value: Knob<Message>) -> Self {
         Self::new(value)
     }
 }

@@ -83,7 +83,6 @@ where
         Node::new(Size::new(limits.max().width, 128.0 * self.scale.y))
     }
 
-    #[expect(clippy::too_many_lines)]
     fn update(
         &mut self,
         tree: &mut Tree,
@@ -292,7 +291,6 @@ where
 }
 
 impl<'a, Message> PianoRoll<'a, Message> {
-    #[expect(clippy::too_many_arguments)]
     pub fn new(
         notes: Arc<Vec<MidiNote>>,
         meter: &'a Meter,

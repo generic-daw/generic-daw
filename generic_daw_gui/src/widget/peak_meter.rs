@@ -1,5 +1,4 @@
 use super::LINE_HEIGHT;
-use generic_daw_utils::NoDebug;
 use iced::{
     Animation, Color, Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
@@ -40,19 +39,13 @@ impl Default for State {
     }
 }
 
-#[derive(Debug)]
-pub struct PeakMeter<F>
-where
-    F: Fn() -> [f32; 2],
-{
-    update: NoDebug<F>,
+#[derive(Clone, Copy, Debug)]
+pub struct PeakMeter {
+    values: [f32; 2],
     enabled: bool,
 }
 
-impl<F, Message> Widget<Message, Theme, Renderer> for PeakMeter<F>
-where
-    F: Fn() -> [f32; 2],
-{
+impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
     fn size(&self) -> Size<Length> {
         Size::new(Length::Fixed(WIDTH), Length::Fill)
     }
@@ -84,7 +77,7 @@ where
             let state = tree.state.downcast_mut::<State>();
             state.now = now;
 
-            let [left, right] = (self.update)();
+            let [left, right] = self.values;
 
             if left >= state.left.interpolate_with(|v| v, now) {
                 state.left = Animation::new(left)
@@ -165,15 +158,9 @@ where
     }
 }
 
-impl<F> PeakMeter<F>
-where
-    F: Fn() -> [f32; 2],
-{
-    pub fn new(update: F, enabled: bool) -> Self {
-        Self {
-            update: update.into(),
-            enabled,
-        }
+impl PeakMeter {
+    pub fn new(values: [f32; 2], enabled: bool) -> Self {
+        Self { values, enabled }
     }
 
     fn draw_bar(
@@ -224,11 +211,8 @@ where
     }
 }
 
-impl<F, Message> From<PeakMeter<F>> for Element<'_, Message>
-where
-    F: Fn() -> [f32; 2] + 'static,
-{
-    fn from(value: PeakMeter<F>) -> Self {
+impl<Message> From<PeakMeter> for Element<'_, Message> {
+    fn from(value: PeakMeter) -> Self {
         Self::new(value)
     }
 }

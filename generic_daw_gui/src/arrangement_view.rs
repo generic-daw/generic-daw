@@ -185,7 +185,6 @@ impl ArrangementView {
         self.arrangement.stop();
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ClapHost(msg) => return self.clap_host.update(msg).map(Message::ClapHost),
@@ -671,7 +670,6 @@ impl ArrangementView {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
     fn arrangement(&self) -> Element<'_, Message> {
         Seeker::new(
             &self.meter,
@@ -730,20 +728,20 @@ impl ArrangementView {
 
                         container(
                             row![
-                                PeakMeter::new(move || node.get_l_r(), enabled),
+                                PeakMeter::new(node.get_l_r(), enabled),
                                 column![
                                     mouse_area(Knob::new(
                                         0.0..=1.0,
-                                        0.0,
                                         track.node().volume.load(Acquire),
+                                        0.0,
                                         enabled,
                                         Message::ChannelVolumeChanged.with(id)
                                     ))
                                     .on_double_click(Message::ChannelVolumeChanged(id, 1.0)),
                                     mouse_area(Knob::new(
                                         -1.0..=1.0,
-                                        0.0,
                                         track.node().pan.load(Acquire),
+                                        0.0,
                                         enabled,
                                         Message::ChannelPanChanged.with(id)
                                     ))
@@ -821,12 +819,11 @@ impl ArrangementView {
         .into()
     }
 
-    #[expect(clippy::too_many_lines)]
     fn mixer(&self) -> Element<'_, Message> {
         fn channel<'a>(
             selected_channel: Option<NodeId>,
             name: String,
-            node: Arc<MixerNode>,
+            node: &MixerNode,
             toggle: impl Fn(bool, NodeId) -> Element<'a, Message>,
             remove: impl Fn(bool, NodeId) -> Element<'a, Message>,
             connect: impl Fn(bool, NodeId) -> Element<'a, Message>,
@@ -842,12 +839,12 @@ impl ArrangementView {
                             text(name),
                             mouse_area(Knob::new(
                                 -1.0..=1.0,
-                                0.0,
                                 node.pan.load(Acquire),
+                                0.0,
                                 enabled,
                                 Message::ChannelPanChanged.with(id)
                             )),
-                            PeakMeter::new(move || node.get_l_r(), enabled)
+                            PeakMeter::new(node.get_l_r(), enabled)
                         ]
                         .spacing(5.0)
                         .align_x(Alignment::Center),
@@ -935,7 +932,7 @@ impl ArrangementView {
             row(once(channel(
                 self.selected_channel,
                 "M".to_owned(),
-                self.arrangement.master().0.clone(),
+                &self.arrangement.master().0,
                 |enabled, id| {
                     button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
                         .on_press(Message::ChannelToggleEnabled(id))
@@ -964,7 +961,7 @@ impl ArrangementView {
                         channel(
                             self.selected_channel,
                             name,
-                            track.node().clone(),
+                            track.node(),
                             |enabled, id| {
                                 mouse_area(
                                     button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
@@ -1018,7 +1015,7 @@ impl ArrangementView {
                         channel(
                             self.selected_channel,
                             name,
-                            node.clone(),
+                            node,
                             |enabled, id| {
                                 button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
                                     .on_press(Message::ChannelToggleEnabled(id))
@@ -1096,8 +1093,8 @@ impl ArrangementView {
                                             mouse_area(
                                                 Knob::new(
                                                     0.0..=1.0,
-                                                    0.0,
                                                     node.get_effect_mix(i),
+                                                    0.0,
                                                     enabled,
                                                     move |mix| {
                                                         Message::AudioEffectMixChanged(i, mix)
@@ -1194,10 +1191,10 @@ impl ArrangementView {
                     ]
                     .into()
                 },
+                Message::SplitAt,
             )
             .strategy(Strategy::Right)
             .split_at(self.split_at)
-            .on_resize(Message::SplitAt)
             .into()
         } else {
             mixer_panel.into()

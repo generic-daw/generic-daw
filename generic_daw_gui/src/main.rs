@@ -27,7 +27,7 @@ fn main() -> Result {
     env_logger::init();
 
     daemon(Daw::title, Daw::update, Daw::view)
-        .subscription(|_| Daw::subscription())
+        .subscription(Daw::subscription)
         .theme(|_, _| Theme::CatppuccinFrappe)
         .antialiasing(true)
         .run_with(Daw::create)

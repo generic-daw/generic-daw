@@ -13,7 +13,6 @@ use symphonia::core::{
     probe::Hint,
 };
 
-#[expect(clippy::type_complexity)]
 #[derive(Debug)]
 pub struct InterleavedAudio {
     /// these are used to play the sample back
@@ -105,7 +104,6 @@ impl InterleavedAudio {
         Ok(resample_planar(file_sample_rate, sample_rate, left, right)?)
     }
 
-    #[expect(clippy::type_complexity)]
     fn create_lod(samples: &[f32]) -> Box<[Box<[(f32, f32)]>]> {
         let mut lods = Vec::with_capacity(10);
 

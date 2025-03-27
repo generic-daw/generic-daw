@@ -1,5 +1,6 @@
 use super::{Vec2, get_time};
 use generic_daw_core::{Meter, Position};
+use generic_daw_utils::NoDebug;
 use iced::{
     Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
@@ -10,10 +11,6 @@ use iced::{
     },
     mouse::{self, Cursor, Interaction},
     window,
-};
-use std::{
-    f32,
-    fmt::{Debug, Formatter},
 };
 
 #[non_exhaustive]
@@ -41,6 +38,7 @@ struct State {
     action: Action,
 }
 
+#[derive(Debug)]
 pub struct Arrangement<'a, Message> {
     meter: &'a Meter,
     /// the position of the top left corner of the arrangement viewport
@@ -48,7 +46,7 @@ pub struct Arrangement<'a, Message> {
     /// the scale of the arrangement viewport
     scale: Vec2,
     /// column of rows of [track panel, track]
-    children: Element<'a, Message>,
+    children: NoDebug<Element<'a, Message>>,
     /// whether we've sent a clip delete message since the last redraw request
     deleted: bool,
 
@@ -59,16 +57,6 @@ pub struct Arrangement<'a, Message> {
     trim_clip_start: fn(Position) -> Message,
     trim_clip_end: fn(Position) -> Message,
     delete_clip: fn(usize, usize) -> Message,
-}
-
-impl<Message> Debug for Arrangement<'_, Message> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Arrangement")
-            .field("meter", &self.meter)
-            .field("position", &self.position)
-            .field("scale", &self.scale)
-            .finish_non_exhaustive()
-    }
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message>
@@ -88,11 +76,11 @@ where
     }
 
     fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&[&self.children]);
+        tree.diff_children(&[&*self.children]);
     }
 
     fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.children)]
+        vec![Tree::new(&*self.children)]
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
@@ -106,7 +94,6 @@ where
         )
     }
 
-    #[expect(clippy::too_many_lines)]
     fn update(
         &mut self,
         tree: &mut Tree,
@@ -344,7 +331,6 @@ impl<'a, Message> Arrangement<'a, Message>
 where
     Message: Clone + 'a,
 {
-    #[expect(clippy::too_many_arguments)]
     pub fn new(
         meter: &'a Meter,
         position: Vec2,
@@ -360,7 +346,7 @@ where
     ) -> Self {
         Self {
             meter,
-            children: children.into(),
+            children: children.into().into(),
             position,
             scale,
             deleted: false,

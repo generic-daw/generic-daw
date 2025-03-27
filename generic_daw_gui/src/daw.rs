@@ -5,7 +5,7 @@ use crate::{
     },
     file_tree::FileTree,
     icons::{PAUSE, PLAY, RECORD, STOP},
-    widget::{BpmInput, LINE_HEIGHT, Redrawer, Strategy, VSplit},
+    widget::{BpmInput, LINE_HEIGHT, Strategy, VSplit},
 };
 use generic_daw_core::{
     Denominator, Meter, Numerator, Position, Stream, VARIANTS as _, build_input_stream,
@@ -23,13 +23,13 @@ use iced::{
         scrollable::{Direction, Scrollbar},
         toggler,
     },
-    window::{self, Id},
+    window::{self, Id, frames},
 };
 use log::trace;
 use rfd::{AsyncFileDialog, FileHandle};
 use std::{
     collections::BTreeMap,
-    fs,
+    fs::{self, File},
     hash::{DefaultHasher, Hash as _, Hasher as _},
     io::BufWriter,
     path::Path,
@@ -45,6 +45,8 @@ pub static PLUGINS: LazyLock<BTreeMap<PluginDescriptor, PluginBundle>> =
 
 #[derive(Clone, Debug)]
 pub enum Message {
+    Redraw,
+
     Arrangement(ArrangementMessage),
     FileTree(Box<Path>),
 
@@ -66,13 +68,12 @@ pub enum Message {
     SplitAt(f32),
 }
 
-#[expect(clippy::type_complexity)]
 pub struct Daw {
     arrangement: ArrangementView,
     file_tree: FileTree,
     split_at: f32,
     meter: Arc<Meter>,
-    recording: Option<(Stream, WavWriter<BufWriter<fs::File>>, Box<Path>, Position)>,
+    recording: Option<(Stream, WavWriter<BufWriter<File>>, Box<Path>, Position)>,
 }
 
 impl Daw {
@@ -99,11 +100,11 @@ impl Daw {
         )
     }
 
-    #[expect(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         trace!("{message:?}");
 
         match message {
+            Message::Redraw => {}
             Message::Arrangement(message) => {
                 return self.arrangement.update(message).map(Message::Arrangement);
             }
@@ -235,7 +236,6 @@ impl Daw {
                     styled_button("Export").on_press(Message::ExportFileDialog),
                 ],
                 row![
-                    Redrawer(playing),
                     styled_button(
                         styled_svg(if playing { PAUSE.clone() } else { PLAY.clone() })
                             .height(LINE_HEIGHT)
@@ -258,7 +258,7 @@ impl Daw {
                     )
                     .width(50),
                 ],
-                BpmInput::new(self.meter.bpm.load(Acquire), 30..=600, Message::ChangedBpm),
+                BpmInput::new(30..=600, self.meter.bpm.load(Acquire), Message::ChangedBpm),
                 toggler(self.meter.metronome.load(Acquire))
                     .label("Metronome")
                     .on_toggle(|_| Message::ToggleMetronome),
@@ -293,10 +293,10 @@ impl Daw {
                     Direction::Vertical(Scrollbar::default()),
                 ),
                 self.arrangement.view().map(Message::Arrangement),
+                Message::SplitAt
             )
             .strategy(Strategy::Left)
             .split_at(self.split_at)
-            .on_resize(Message::SplitAt)
         ]
         .padding(20)
         .spacing(20)
@@ -310,9 +310,16 @@ impl Daw {
             .unwrap_or_else(|| String::from("Generic DAW"))
     }
 
-    pub fn subscription() -> Subscription<Message> {
+    pub fn subscription(&self) -> Subscription<Message> {
+        let redraw = if self.meter.playing.load(Acquire) {
+            frames().map(|_| Message::Redraw)
+        } else {
+            Subscription::none()
+        };
+
         Subscription::batch([
             ArrangementView::subscription().map(Message::Arrangement),
+            redraw,
             event::listen_with(|e, s, _| match s {
                 Status::Ignored => match e {
                     Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {

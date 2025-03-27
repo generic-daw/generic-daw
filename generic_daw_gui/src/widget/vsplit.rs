@@ -1,3 +1,4 @@
+use generic_daw_utils::NoDebug;
 use iced::{
     Element, Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
@@ -10,7 +11,6 @@ use iced::{
     mouse::{self, Cursor, Interaction},
     widget::{Rule, rule},
 };
-use std::fmt::{Debug, Formatter};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub enum Strategy {
@@ -26,22 +26,13 @@ struct State {
     hovering: bool,
 }
 
+#[derive(Debug)]
 pub struct VSplit<'a, Message> {
-    children: [Element<'a, Message>; 3],
+    children: NoDebug<[Element<'a, Message>; 3]>,
     split_at: f32,
     strategy: Strategy,
     rule_width: f32,
-    on_resize: Option<fn(f32) -> Message>,
-}
-
-impl<Message> Debug for VSplit<'_, Message> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("VSplit")
-            .field("split_at", &self.split_at)
-            .field("strategy", &self.strategy)
-            .field("rule_width", &self.rule_width)
-            .finish_non_exhaustive()
-    }
+    on_resize: fn(f32) -> Message,
 }
 
 impl<'a, Message> VSplit<'a, Message>
@@ -51,13 +42,14 @@ where
     pub fn new(
         left: impl Into<Element<'a, Message>>,
         right: impl Into<Element<'a, Message>>,
+        on_resize: fn(f32) -> Message,
     ) -> Self {
         Self {
-            children: [left.into(), Rule::vertical(11.0).into(), right.into()],
+            children: [left.into(), Rule::vertical(11.0).into(), right.into()].into(),
             split_at: 0.5,
             strategy: Strategy::default(),
             rule_width: 11.0,
-            on_resize: None,
+            on_resize,
         }
     }
 
@@ -74,11 +66,6 @@ where
     pub fn rule_width(mut self, rule_width: impl Into<Pixels>) -> Self {
         self.rule_width = rule_width.into().0;
         self.children[1] = Rule::vertical(self.rule_width).into();
-        self
-    }
-
-    pub fn on_resize(mut self, on_resize: fn(f32) -> Message) -> Self {
-        self.on_resize = Some(on_resize);
         self
     }
 
@@ -106,7 +93,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
     }
 
     fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&self.children);
+        tree.diff_children(&*self.children);
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
@@ -193,17 +180,15 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
                     ..
                 } => {
                     if state.dragging {
-                        if let Some(on_resize) = self.on_resize {
-                            let relative_pos =
-                                (x - bounds.x - self.rule_width / 2.0).clamp(0.0, bounds.width);
-                            let split_at = match self.strategy {
-                                Strategy::Relative => relative_pos / bounds.width,
-                                Strategy::Left => relative_pos,
-                                Strategy::Right => bounds.width - relative_pos - self.rule_width,
-                            };
-                            shell.publish((on_resize)(split_at));
-                            shell.capture_event();
-                        }
+                        let relative_pos =
+                            (x - bounds.x - self.rule_width / 2.0).clamp(0.0, bounds.width);
+                        let split_at = match self.strategy {
+                            Strategy::Relative => relative_pos / bounds.width,
+                            Strategy::Left => relative_pos,
+                            Strategy::Right => bounds.width - relative_pos - self.rule_width,
+                        };
+                        shell.publish((self.on_resize)(split_at));
+                        shell.capture_event();
                     } else if state.hovering
                         != cursor.is_over(layout.children().nth(1).unwrap().bounds())
                     {
@@ -279,7 +264,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
         renderer: &Renderer,
         translation: Vector,
     ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
-        overlay::from_children(&mut self.children, tree, layout, renderer, translation)
+        overlay::from_children(&mut *self.children, tree, layout, renderer, translation)
     }
 
     fn operate(

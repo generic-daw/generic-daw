@@ -90,7 +90,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
         )
     }
 
-    #[expect(clippy::too_many_lines)]
     fn update(
         &mut self,
         tree: &mut Tree,
@@ -160,7 +159,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                 mouse::Event::ButtonPressed {
                     button: mouse::Button::Left,
                     modifiers,
-                } if cursor.y < 0.0 => {
+                } if state.hovering => {
                     let time =
                         get_time(cursor.x, *modifiers, self.meter, self.position, self.scale);
                     state.seeking = Some(time);
