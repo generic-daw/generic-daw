@@ -62,7 +62,7 @@ impl Dir {
             styled_button(row![
                 Clipped::new(
                     styled_svg(CHEVRON_RIGHT.clone())
-                        .rotation(Radians(if self.open { FRAC_PI_2 } else { 0.0 }))
+                        .rotation(Radians(f32::from(u8::from(self.open)) * FRAC_PI_2))
                         .height(LINE_HEIGHT)
                 ),
                 container(

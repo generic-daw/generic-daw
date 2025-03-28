@@ -4,7 +4,8 @@ use crate::{
         empty_widget, styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg,
     },
     file_tree::FileTree,
-    icons::{PAUSE, PLAY, RECORD, STOP},
+    icons::{CIRCLE_LINE, CIRCLE_LINE_OUTLINE, PAUSE, PLAY, RECORD, STOP},
+    stylefns::button_with_base,
     widget::{BpmInput, LINE_HEIGHT, Strategy, VSplit},
 };
 use generic_daw_core::{
@@ -14,14 +15,13 @@ use generic_daw_core::{
 use hound::{SampleFormat, WavSpec, WavWriter};
 use iced::{
     Alignment::Center,
-    Element, Event, Subscription, Task,
+    Element, Event, Radians, Subscription, Task,
     border::Radius,
     event::{self, Status},
     keyboard,
     widget::{
         button, column, horizontal_space, row,
         scrollable::{Direction, Scrollbar},
-        toggler,
     },
     window::{self, Id, frames},
 };
@@ -29,6 +29,7 @@ use log::trace;
 use rfd::{AsyncFileDialog, FileHandle};
 use std::{
     collections::BTreeMap,
+    f32::consts::PI,
     fs::{self, File},
     hash::{DefaultHasher, Hash as _, Hasher as _},
     io::BufWriter,
@@ -227,7 +228,8 @@ impl Daw {
             return empty_widget().into();
         }
 
-        let playing = self.meter.playing.load(Acquire);
+        let bpm = self.meter.bpm.load(Acquire);
+        let metronome = self.meter.metronome.load(Acquire);
 
         column![
             row![
@@ -237,8 +239,12 @@ impl Daw {
                 ],
                 row![
                     styled_button(
-                        styled_svg(if playing { PAUSE.clone() } else { PLAY.clone() })
-                            .height(LINE_HEIGHT)
+                        styled_svg(if self.meter.playing.load(Acquire) {
+                            PAUSE.clone()
+                        } else {
+                            PLAY.clone()
+                        })
+                        .height(LINE_HEIGHT)
                     )
                     .on_press(Message::TogglePlay),
                     styled_button(styled_svg(STOP.clone()).height(LINE_HEIGHT))
@@ -258,17 +264,41 @@ impl Daw {
                     )
                     .width(50),
                 ],
-                BpmInput::new(30..=600, self.meter.bpm.load(Acquire), Message::ChangedBpm),
-                toggler(self.meter.metronome.load(Acquire))
-                    .label("Metronome")
-                    .on_toggle(|_| Message::ToggleMetronome),
-                button(styled_svg(RECORD.clone()))
+                BpmInput::new(30..=600, bpm, Message::ChangedBpm),
+                button(
+                    styled_svg(if metronome {
+                        CIRCLE_LINE.clone()
+                    } else {
+                        CIRCLE_LINE_OUTLINE.clone()
+                    })
+                    .rotation(Radians(
+                        Position::from_interleaved_samples(
+                            self.meter.sample.load(Acquire),
+                            bpm,
+                            self.meter.sample_rate
+                        )
+                        .beat() as f32
+                            * PI
+                    ))
+                    .height(LINE_HEIGHT)
+                )
+                .style(move |t, s| button_with_base(
+                    t,
+                    s,
+                    if metronome {
+                        button::primary
+                    } else {
+                        button::secondary
+                    }
+                ))
+                .on_press(Message::ToggleMetronome),
+                button(styled_svg(RECORD.clone()).height(LINE_HEIGHT))
                     .style(|t, s| {
                         let mut style = button::danger(t, s);
                         style.border.radius = Radius::new(f32::INFINITY);
                         style
                     })
-                    .padding(3.0)
+                    .padding(5.0)
                     .on_press(Message::ToggleRecord),
                 row![
                     styled_button("Arrangement").on_press(Message::ChangedTab(Tab::Arrangement)),
