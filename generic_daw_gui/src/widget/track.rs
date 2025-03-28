@@ -190,9 +190,7 @@ where
             children: children.into_iter().collect::<Box<_>>().into(),
             position,
             scale,
-            on_double_click: on_double_click
-                .map(|v| Box::new(v) as Box<dyn Fn(Position) -> Message + 'static>)
-                .map(NoDebug),
+            on_double_click: on_double_click.map(|v| Box::new(v) as Box<_>).map(NoDebug),
         }
     }
 }
