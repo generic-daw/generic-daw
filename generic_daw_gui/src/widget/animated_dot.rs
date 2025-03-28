@@ -62,12 +62,12 @@ impl<Message> Widget<Message, Theme, Renderer> for AnimatedDot {
         _cursor: Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        _shell: &mut Shell<'_, Message>,
+        shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {
-        if let Event::Window(window::Event::RedrawRequested(now)) = event {
+        if let &Event::Window(window::Event::RedrawRequested(now)) = event {
             let state = tree.state.downcast_mut::<State>();
-            state.now = *now;
+            state.now = now;
 
             if self.enabled != state.last_enabled {
                 state.animation =
@@ -75,6 +75,10 @@ impl<Message> Widget<Message, Theme, Renderer> for AnimatedDot {
                         .very_quick()
                         .go(f32::from(u8::from(self.enabled)));
                 state.last_enabled = self.enabled;
+            }
+
+            if state.animation.is_animating(now) {
+                shell.request_redraw();
             }
         }
     }
