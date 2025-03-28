@@ -4,12 +4,12 @@ use iced::{
     widget::{button, slider, svg},
 };
 
-pub fn button_with_enabled(theme: &Theme, status: button::Status, enabled: bool) -> button::Style {
-    let mut style = if enabled {
-        button::primary(theme, status)
-    } else {
-        button::secondary(theme, status)
-    };
+pub fn button_with_base(
+    theme: &Theme,
+    status: button::Status,
+    f: fn(&Theme, button::Status) -> button::Style,
+) -> button::Style {
+    let mut style = f(theme, status);
     style.border.radius = Radius::default();
     style
 }

@@ -1,11 +1,11 @@
-use crate::stylefns::{button_with_enabled, svg_with_enabled};
+use crate::stylefns::{button_with_base, svg_with_enabled};
 use iced::{
-    Element, Length,
+    Alignment, Element, Length,
     border::Radius,
     widget::{
-        Button, PickList, Scrollable, Space, Svg, button, pick_list,
+        Button, PickList, Scrollable, Space, Svg, button, container, pick_list,
         scrollable::{self, Direction},
-        svg,
+        svg, text,
     },
 };
 use std::borrow::Borrow;
@@ -14,8 +14,20 @@ pub fn empty_widget() -> Space {
     Space::new(Length::Shrink, Length::Shrink)
 }
 
+pub fn char_button<'a, Message>(t: char) -> Button<'a, Message>
+where
+    Message: Clone + 'a,
+{
+    button(
+        container(text(t).size(13.0).line_height(1.0))
+            .width(13.0)
+            .align_x(Alignment::Center),
+    )
+    .padding(0.0)
+}
+
 pub fn styled_button<'a, Message>(content: impl Into<Element<'a, Message>>) -> Button<'a, Message> {
-    button(content).style(|t, s| button_with_enabled(t, s, true))
+    button(content).style(|t, s| button_with_base(t, s, button::primary))
 }
 
 pub fn styled_pick_list<'a, T, L, V, Message>(

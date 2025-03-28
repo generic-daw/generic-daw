@@ -13,12 +13,6 @@ pub static CHEVRON_RIGHT: LazyLock<svg::Handle> = LazyLock::new(|| {
     ))
 });
 
-pub static CLOSE: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--close-rounded.svg"
-    ))
-});
-
 pub static GENERIC_FILE: LazyLock<svg::Handle> = LazyLock::new(|| {
     svg::Handle::from_memory(include_bytes!(
         "../../assets/material-symbols--draft-outline-rounded.svg"
@@ -46,12 +40,6 @@ pub static PAUSE: LazyLock<svg::Handle> = LazyLock::new(|| {
 pub static PLAY: LazyLock<svg::Handle> = LazyLock::new(|| {
     svg::Handle::from_memory(include_bytes!(
         "../../assets/material-symbols--play-arrow-rounded.svg"
-    ))
-});
-
-pub static REOPEN: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--reopen-window-rounded.svg"
     ))
 });
 

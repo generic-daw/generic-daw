@@ -1,11 +1,12 @@
 use crate::{
     clap_host::{ClapHost, Message as ClapHostMessage},
     components::{
-        empty_widget, styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg,
+        char_button, empty_widget, styled_button, styled_pick_list,
+        styled_scrollable_with_direction,
     },
     daw::PLUGINS,
-    icons::{CHEVRON_RIGHT, CLOSE, HANDLE, REOPEN},
-    stylefns::{button_with_enabled, slider_with_enabled, svg_with_enabled},
+    icons::{CHEVRON_RIGHT, HANDLE},
+    stylefns::{button_with_base, slider_with_enabled, svg_with_enabled},
     widget::{
         Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob, LINE_HEIGHT,
         MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll, Seeker, Strategy, TEXT_HEIGHT,
@@ -23,8 +24,7 @@ use generic_daw_core::{
 };
 use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2};
 use iced::{
-    Alignment, Element, Function as _, Length, Radians, Subscription, Task, Theme,
-    border::{self, Radius},
+    Alignment, Element, Function as _, Length, Radians, Subscription, Task, Theme, border,
     futures::TryFutureExt as _,
     mouse::Interaction,
     widget::{
@@ -684,48 +684,6 @@ impl ArrangementView {
                         let node = track.node().clone();
                         let enabled = node.enabled.load(Acquire);
 
-                        let mut buttons = column![
-                            mouse_area(
-                                button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
-                                    .on_press(Message::TrackToggleEnabled(id))
-                                    .style(move |t, s| {
-                                        let mut style = button_with_enabled(t, s, enabled);
-                                        style.border.radius = Radius::new(f32::INFINITY);
-                                        style
-                                    })
-                                    .padding(0.0)
-                            )
-                            .on_right_press(Message::TrackToggleSolo(id)),
-                            button(styled_svg(CLOSE.clone()).height(TEXT_HEIGHT))
-                                .style(|t, s| {
-                                    let mut style = button::danger(t, s);
-                                    style.border.radius = Radius::new(f32::INFINITY);
-                                    style
-                                })
-                                .padding(0.0)
-                                .on_press(Message::TrackRemove(id)),
-                        ]
-                        .spacing(5.0);
-
-                        if let Some(&id) = self.instrument_by_track.get(id.get()) {
-                            buttons = buttons.extend([
-                                vertical_space().into(),
-                                button(
-                                    svg(REOPEN.clone())
-                                        .style(move |t, s| svg_with_enabled(t, s, enabled))
-                                        .width(Length::Shrink)
-                                        .height(TEXT_HEIGHT),
-                                )
-                                .style(move |t, s| button_with_enabled(t, s, enabled))
-                                .padding(0.0)
-                                .on_press(Message::ClapHost(ClapHostMessage::MainThread(
-                                    id,
-                                    MainThreadMessage::GuiRequestShow,
-                                )))
-                                .into(),
-                            ]);
-                        }
-
                         container(
                             row![
                                 PeakMeter::new(node.get_l_r(), enabled),
@@ -749,7 +707,80 @@ impl ArrangementView {
                                 ]
                                 .height(Length::Fill)
                                 .spacing(5.0),
-                                buttons,
+                                column![
+                                    char_button('M')
+                                        .on_press(Message::TrackToggleEnabled(id))
+                                        .style(move |t, s| {
+                                            button_with_base(
+                                                t,
+                                                s,
+                                                if enabled {
+                                                    button::primary
+                                                } else {
+                                                    button::secondary
+                                                },
+                                            )
+                                        }),
+                                    char_button('S')
+                                        .on_press(Message::TrackToggleSolo(id))
+                                        .style(move |t, s| {
+                                            button_with_base(
+                                                t,
+                                                s,
+                                                if self.soloed_track == Some(id) {
+                                                    button::warning
+                                                } else if enabled {
+                                                    button::primary
+                                                } else {
+                                                    button::secondary
+                                                },
+                                            )
+                                        }),
+                                    char_button('X').on_press(Message::TrackRemove(id)).style(
+                                        move |t, s| {
+                                            button_with_base(
+                                                t,
+                                                s,
+                                                if enabled {
+                                                    button::danger
+                                                } else {
+                                                    button::secondary
+                                                },
+                                            )
+                                        }
+                                    )
+                                ]
+                                .spacing(5.0)
+                                .extend(
+                                    self.instrument_by_track
+                                        .get(id.get())
+                                        .map(move |&id| {
+                                            [
+                                                vertical_space().into(),
+                                                char_button('P')
+                                                    .on_press(Message::ClapHost(
+                                                        ClapHostMessage::MainThread(
+                                                            id,
+                                                            MainThreadMessage::GuiRequestShow,
+                                                        ),
+                                                    ))
+                                                    .style(move |t, s| {
+                                                        button_with_base(
+                                                            t,
+                                                            s,
+                                                            if enabled {
+                                                                button::primary
+                                                            } else {
+                                                                button::secondary
+                                                            },
+                                                        )
+                                                    })
+                                                    .into(),
+                                            ]
+                                        })
+                                        .into_iter()
+                                        .flatten(),
+                                ),
                             ]
                             .spacing(5.0),
                         )
@@ -824,8 +855,7 @@ impl ArrangementView {
             selected_channel: Option<NodeId>,
             name: String,
             node: &MixerNode,
-            toggle: impl Fn(bool, NodeId) -> Element<'a, Message>,
-            remove: impl Fn(bool, NodeId) -> Element<'a, Message>,
+            buttons: impl Fn(bool, NodeId) -> Element<'a, Message>,
             connect: impl Fn(bool, NodeId) -> Element<'a, Message>,
         ) -> Element<'a, Message> {
             let id = node.id();
@@ -849,8 +879,7 @@ impl ArrangementView {
                         .spacing(5.0)
                         .align_x(Alignment::Center),
                         column![
-                            toggle(enabled, id),
-                            remove(enabled, id),
+                            buttons(enabled, id),
                             vertical_slider(
                                 0.0..=1.0,
                                 volume,
@@ -894,18 +923,12 @@ impl ArrangementView {
 
         let connect = |enabled: bool, id: NodeId| {
             selected_channel.map_or_else(
-                || {
-                    button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
-                        .padding(0.0)
-                        .style(|_, _| button::Style::default())
-                },
+                || Element::new(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT)),
                 |(_, connections, ty)| {
                     let selected_channel = self.selected_channel.unwrap();
 
                     if *ty == NodeType::Master || id == selected_channel {
-                        button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
-                            .padding(0.0)
-                            .style(|_, _| button::Style::default())
+                        empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT).into()
                     } else {
                         let connected = connections.contains(id.get());
 
@@ -916,13 +939,24 @@ impl ArrangementView {
                                 .height(Length::Shrink)
                                 .rotation(Radians(-FRAC_PI_2)),
                         )
-                        .style(move |t, s| button_with_enabled(t, s, enabled && connected))
+                        .style(move |t, s| {
+                            button_with_base(
+                                t,
+                                s,
+                                if enabled && connected {
+                                    button::primary
+                                } else {
+                                    button::secondary
+                                },
+                            )
+                        })
                         .padding(0.0)
                         .on_press(if connected {
                             Message::Disconnect((id, selected_channel))
                         } else {
                             Message::ConnectRequest((id, selected_channel))
                         })
+                        .into()
                     }
                 },
             )
@@ -934,18 +968,27 @@ impl ArrangementView {
                 "M".to_owned(),
                 &self.arrangement.master().0,
                 |enabled, id| {
-                    button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
-                        .on_press(Message::ChannelToggleEnabled(id))
-                        .style(move |t, s| {
-                            let mut style = button_with_enabled(t, s, enabled);
-                            style.border.radius = Radius::new(f32::INFINITY);
-                            style
-                        })
-                        .padding(0.0)
-                        .into()
+                    column![
+                        char_button('M')
+                            .on_press(Message::ChannelToggleEnabled(id))
+                            .style(move |t, s| {
+                                button_with_base(
+                                    t,
+                                    s,
+                                    if enabled {
+                                        button::primary
+                                    } else {
+                                        button::secondary
+                                    },
+                                )
+                            }),
+                        empty_widget().width(13.0).height(13.0),
+                        empty_widget().width(13.0).height(13.0)
+                    ]
+                    .spacing(5.0)
+                    .into()
                 },
-                |_, _| empty_widget().height(TEXT_HEIGHT).into(),
-                |enabled, id| connect(enabled, id).into(),
+                connect,
             ))
             .chain(once(vertical_rule(1).into()))
             .chain({
@@ -963,36 +1006,53 @@ impl ArrangementView {
                             name,
                             track.node(),
                             |enabled, id| {
-                                mouse_area(
-                                    button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
+                                column![
+                                    char_button('M')
                                         .on_press(Message::TrackToggleEnabled(id))
                                         .style(move |t, s| {
-                                            let mut style = button_with_enabled(t, s, enabled);
-                                            style.border.radius = Radius::new(f32::INFINITY);
-                                            style
-                                        })
-                                        .padding(0.0),
-                                )
-                                .on_right_press(Message::TrackToggleSolo(id))
+                                            button_with_base(
+                                                t,
+                                                s,
+                                                if enabled {
+                                                    button::primary
+                                                } else {
+                                                    button::secondary
+                                                },
+                                            )
+                                        }),
+                                    char_button('S')
+                                        .on_press(Message::TrackToggleSolo(id))
+                                        .style(move |t, s| {
+                                            button_with_base(
+                                                t,
+                                                s,
+                                                if self.soloed_track == Some(id) {
+                                                    button::warning
+                                                } else if enabled {
+                                                    button::primary
+                                                } else {
+                                                    button::secondary
+                                                },
+                                            )
+                                        }),
+                                    char_button('X').on_press(Message::TrackRemove(id)).style(
+                                        move |t, s| {
+                                            button_with_base(
+                                                t,
+                                                s,
+                                                if enabled {
+                                                    button::danger
+                                                } else {
+                                                    button::secondary
+                                                },
+                                            )
+                                        }
+                                    )
+                                ]
+                                .spacing(5.0)
                                 .into()
                             },
-                            |_, id| {
-                                button(styled_svg(CLOSE.clone()).height(TEXT_HEIGHT))
-                                    .style(|t, s| {
-                                        let mut style = button::danger(t, s);
-                                        style.border.radius = Radius::new(f32::INFINITY);
-                                        style
-                                    })
-                                    .padding(0.0)
-                                    .on_press(Message::TrackRemove(id))
-                                    .into()
-                            },
-                            |_, _| {
-                                button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
-                                    .style(|_, _| button::Style::default())
-                                    .padding(0.0)
-                                    .into()
-                            },
+                            |_, _| empty_widget().width(TEXT_HEIGHT).height(LINE_HEIGHT).into(),
                         )
                     })
                     .peekable();
@@ -1017,28 +1077,39 @@ impl ArrangementView {
                             name,
                             node,
                             |enabled, id| {
-                                button(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT))
-                                    .on_press(Message::ChannelToggleEnabled(id))
-                                    .style(move |t, s| {
-                                        let mut style = button_with_enabled(t, s, enabled);
-                                        style.border.radius = Radius::new(f32::INFINITY);
-                                        style
-                                    })
-                                    .padding(0.0)
-                                    .into()
+                                column![
+                                    char_button('M')
+                                        .on_press(Message::ChannelToggleEnabled(id))
+                                        .style(move |t, s| {
+                                            button_with_base(
+                                                t,
+                                                s,
+                                                if enabled {
+                                                    button::primary
+                                                } else {
+                                                    button::secondary
+                                                },
+                                            )
+                                        }),
+                                    empty_widget().width(13.0).height(13.0),
+                                    char_button('X').on_press(Message::ChannelRemove(id)).style(
+                                        move |t, s| {
+                                            button_with_base(
+                                                t,
+                                                s,
+                                                if enabled {
+                                                    button::danger
+                                                } else {
+                                                    button::secondary
+                                                },
+                                            )
+                                        }
+                                    )
+                                ]
+                                .spacing(5.0)
+                                .into()
                             },
-                            |_, id| {
-                                button(styled_svg(CLOSE.clone()).height(TEXT_HEIGHT))
-                                    .style(|t, s| {
-                                        let mut style = button::danger(t, s);
-                                        style.border.radius = Radius::new(f32::INFINITY);
-                                        style
-                                    })
-                                    .padding(0.0)
-                                    .on_press(Message::ChannelRemove(id))
-                                    .into()
-                            },
-                            |enabled, id| connect(enabled, id).into(),
+                            connect,
                         )
                     })
                     .peekable();
@@ -1109,41 +1180,51 @@ impl ArrangementView {
                                                 container(text(&**name).wrapping(Wrapping::None))
                                                     .clip(true)
                                             )
-                                            .style(move |t, s| button_with_enabled(t, s, enabled))
+                                            .style(move |t, s| button_with_base(
+                                                t,
+                                                s,
+                                                if enabled {
+                                                    button::primary
+                                                } else {
+                                                    button::secondary
+                                                }
+                                            ))
                                             .width(Length::Fill)
                                             .on_press(
                                                 Message::ClapHost(ClapHostMessage::MainThread(
                                                     *plugin_id,
                                                     MainThreadMessage::GuiRequestShow,
-                                                ),)
+                                                ))
                                             ),
                                             column![
-                                                button(
-                                                    empty_widget()
-                                                        .width(TEXT_HEIGHT)
-                                                        .height(TEXT_HEIGHT)
-                                                )
-                                                .on_press(Message::AudioEffectToggleEnabled(i))
-                                                .style(move |t, s| {
-                                                    let mut style =
-                                                        button_with_enabled(t, s, enabled);
-                                                    style.border.radius =
-                                                        Radius::new(f32::INFINITY);
-                                                    style
-                                                })
-                                                .padding(0.0),
-                                                button(
-                                                    styled_svg(CLOSE.clone()).height(TEXT_HEIGHT)
-                                                )
-                                                .style(|t, s| {
-                                                    let mut style = button::danger(t, s);
-                                                    style.border.radius =
-                                                        Radius::new(f32::INFINITY);
-                                                    style
-                                                })
-                                                .padding(0.0)
-                                                .on_press(Message::AudioEffectRemove(i)),
-                                            ],
+                                                char_button('M',)
+                                                    .on_press(Message::AudioEffectToggleEnabled(i))
+                                                    .style(move |t, s| {
+                                                        button_with_base(
+                                                            t,
+                                                            s,
+                                                            if enabled {
+                                                                button::primary
+                                                            } else {
+                                                                button::secondary
+                                                            },
+                                                        )
+                                                    }),
+                                                char_button('X')
+                                                    .on_press(Message::AudioEffectRemove(i))
+                                                    .style(move |t, s| {
+                                                        button_with_base(
+                                                            t,
+                                                            s,
+                                                            if enabled {
+                                                                button::danger
+                                                            } else {
+                                                                button::secondary
+                                                            },
+                                                        )
+                                                    }),
+                                            ]
+                                            .spacing(5.0),
                                             mouse_area(
                                                 container(
                                                     svg(HANDLE.clone())
@@ -1178,7 +1259,6 @@ impl ArrangementView {
                                             )
                                             .interaction(Interaction::Grab),
                                         ]
-                                        .align_y(Alignment::Center)
                                         .spacing(5.0)
                                         .into()
                                     })

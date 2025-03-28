@@ -59,7 +59,7 @@ pub fn build_input_stream(sample_rate: u32) -> (u16, u32, Stream, Receiver<Box<[
         supported_config.max_sample_rate().0,
     ));
 
-    info!("starting input stream with sample rate {sample_rate:?}",);
+    info!("starting input stream with sample rate {sample_rate:?}");
 
     let stream = device
         .build_input_stream(
