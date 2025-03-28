@@ -22,7 +22,7 @@ mod shared;
 mod timer_ext;
 
 pub use audio_processor::AudioProcessor;
-pub use clack_host;
+pub use clack_host::bundle::PluginBundle;
 pub use gui_ext::GuiExt;
 pub use main_thread::MainThreadMessage;
 pub use note_buffers::NoteBuffers;

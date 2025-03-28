@@ -10,7 +10,7 @@ use crate::{
 };
 use generic_daw_core::{
     Denominator, Meter, Numerator, Position, Stream, VARIANTS as _, build_input_stream,
-    clap_host::{self, PluginDescriptor, PluginType, clack_host::bundle::PluginBundle},
+    clap_host::{self, PluginBundle, PluginDescriptor, PluginType},
 };
 use hound::{SampleFormat, WavSpec, WavWriter};
 use iced::{
