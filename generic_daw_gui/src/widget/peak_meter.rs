@@ -13,6 +13,7 @@ use iced::{
 };
 use std::{
     cmp::min_by,
+    convert::identity,
     time::{Duration, Instant},
 };
 
@@ -137,8 +138,8 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
         self.draw_bar(
             renderer,
             theme,
-            state.left.interpolate_with(|v| v, state.now),
-            state.left_mix.interpolate_with(|v| v, state.now),
+            state.left.interpolate_with(identity, state.now),
+            state.left_mix.interpolate_with(identity, state.now),
             Rectangle::new(
                 bounds.position(),
                 Size::new(bounds.width / 2.0 - 1.0, bounds.height),
@@ -148,8 +149,8 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
         self.draw_bar(
             renderer,
             theme,
-            state.right.interpolate_with(|v| v, state.now),
-            state.right_mix.interpolate_with(|v| v, state.now),
+            state.right.interpolate_with(identity, state.now),
+            state.right_mix.interpolate_with(identity, state.now),
             Rectangle::new(
                 bounds.position() + Vector::new(bounds.width / 2.0 + 1.0, 0.0),
                 Size::new(bounds.width / 2.0 - 1.0, bounds.height),

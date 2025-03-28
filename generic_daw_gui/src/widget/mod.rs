@@ -3,6 +3,7 @@ use generic_daw_utils::Vec2;
 use iced::{keyboard::Modifiers, widget::text::Shaping};
 use std::sync::atomic::Ordering::Acquire;
 
+mod animated_dot;
 mod arrangement;
 mod audio_clip;
 mod bpm_input;
@@ -16,6 +17,7 @@ mod seeker;
 mod track;
 mod vsplit;
 
+pub use animated_dot::AnimatedDot;
 pub use arrangement::Arrangement;
 pub use audio_clip::AudioClip;
 pub use bpm_input::BpmInput;

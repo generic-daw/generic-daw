@@ -4,9 +4,9 @@ use crate::{
         empty_widget, styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg,
     },
     file_tree::FileTree,
-    icons::{CIRCLE_LINE, CIRCLE_LINE_OUTLINE, PAUSE, PLAY, RECORD, STOP},
+    icons::{PAUSE, PLAY, STOP},
     stylefns::button_with_base,
-    widget::{BpmInput, LINE_HEIGHT, Strategy, VSplit},
+    widget::{AnimatedDot, BpmInput, LINE_HEIGHT, Strategy, VSplit},
 };
 use generic_daw_core::{
     Denominator, Meter, Numerator, Position, Stream, VARIANTS as _, build_input_stream,
@@ -15,7 +15,7 @@ use generic_daw_core::{
 use hound::{SampleFormat, WavSpec, WavWriter};
 use iced::{
     Alignment::Center,
-    Element, Event, Radians, Subscription, Task,
+    Element, Event, Subscription, Task,
     border::Radius,
     event::{self, Status},
     keyboard,
@@ -29,7 +29,6 @@ use log::trace;
 use rfd::{AsyncFileDialog, FileHandle};
 use std::{
     collections::BTreeMap,
-    f32::consts::PI,
     fs::{self, File},
     hash::{DefaultHasher, Hash as _, Hasher as _},
     io::BufWriter,
@@ -229,7 +228,14 @@ impl Daw {
         }
 
         let bpm = self.meter.bpm.load(Acquire);
-        let metronome = self.meter.metronome.load(Acquire);
+        let fill = Position::from_interleaved_samples(
+            self.meter.sample.load(Acquire),
+            bpm,
+            self.meter.sample_rate,
+        )
+        .beat()
+            % 2
+            == 0;
 
         column![
             row![
@@ -266,39 +272,30 @@ impl Daw {
                 ],
                 BpmInput::new(30..=600, bpm, Message::ChangedBpm),
                 button(
-                    styled_svg(if metronome {
-                        CIRCLE_LINE.clone()
-                    } else {
-                        CIRCLE_LINE_OUTLINE.clone()
-                    })
-                    .rotation(Radians(
-                        Position::from_interleaved_samples(
-                            self.meter.sample.load(Acquire),
-                            bpm,
-                            self.meter.sample_rate
-                        )
-                        .beat() as f32
-                            * PI
-                    ))
-                    .height(LINE_HEIGHT)
+                    row![
+                        AnimatedDot::new(fill).radius(8.0),
+                        AnimatedDot::new(!fill).radius(8.0)
+                    ]
+                    .spacing(5.0)
                 )
+                .padding(8.0)
                 .style(move |t, s| button_with_base(
                     t,
                     s,
-                    if metronome {
+                    if self.meter.metronome.load(Acquire) {
                         button::primary
                     } else {
                         button::secondary
                     }
                 ))
                 .on_press(Message::ToggleMetronome),
-                button(styled_svg(RECORD.clone()).height(LINE_HEIGHT))
+                button(AnimatedDot::new(self.recording.is_some()).radius(8.0),)
                     .style(|t, s| {
                         let mut style = button::danger(t, s);
                         style.border.radius = Radius::new(f32::INFINITY);
                         style
                     })
-                    .padding(5.0)
+                    .padding(8.0)
                     .on_press(Message::ToggleRecord),
                 row![
                     styled_button("Arrangement").on_press(Message::ChangedTab(Tab::Arrangement)),
