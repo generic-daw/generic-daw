@@ -14,7 +14,7 @@ generic_daw_utils = { path = "../generic_daw_utils" }
 
 arc-swap = "1.7.1"
 async-channel = "2.3.1"
-atomig = { version = "0.4.2", features = ["derive"] }
+atomig = { git = "https://github.com/edwloef/atomig", branch = "update-syn-2", features = ["derive"] }
 cpal = "0.15.3"
 hound = "3.5.1"
 itoa = "1.0.15"

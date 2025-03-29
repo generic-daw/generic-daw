@@ -11,19 +11,6 @@ mod stylefns;
 mod widget;
 
 fn main() -> Result {
-    #[cfg(target_os = "linux")]
-    {
-        // SAFETY:
-        // the program is single-threaded at this point
-        unsafe { std::env::remove_var("WAYLAND_DISPLAY") }
-
-        if std::env::var("WINIT_X11_SCALE_FACTOR").is_err() {
-            // SAFETY:
-            // the program is single-threaded at this point
-            unsafe { std::env::set_var("WINIT_X11_SCALE_FACTOR", "1.0") }
-        }
-    }
-
     env_logger::init();
 
     daemon(Daw::title, Daw::update, Daw::view)

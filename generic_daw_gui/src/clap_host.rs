@@ -144,8 +144,8 @@ impl ClapHost {
             MainThreadMessage::TickTimers => {
                 if self.windows.contains_key(id.get()) {
                     if let Some(sleep) = self.plugins.get_mut(id.get()).unwrap().tick_timers() {
-                        return Task::future(tokio::time::sleep(sleep))
-                            .map(|()| MainThreadMessage::TickTimers)
+                        return Task::future(async_io::Timer::after(sleep))
+                            .map(|_| MainThreadMessage::TickTimers)
                             .map(Message::MainThread.with(id));
                     }
                 }

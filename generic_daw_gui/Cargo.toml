@@ -11,6 +11,7 @@ workspace = true
 generic_daw_core = { path = "../generic_daw_core" }
 generic_daw_utils = { path = "../generic_daw_utils" }
 
+async-io = "2.4.0"
 async-channel = "2.3.1"
 bit-set = "0.8.0"
 dirs = "6.0.0"
@@ -21,9 +22,10 @@ iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", de
     "advanced",
     "canvas",
     "lazy",
+    "smol",
     "svg",
-    "tokio",
     "wgpu",
+    "x11",
 ] }
 iced_wgpu = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", features = [
     "geometry",
@@ -32,9 +34,5 @@ infer = { version = "0.19.0", default-features = false }
 itoa = "1.0.15"
 log = "0.4.27"
 oneshot = "0.1.11"
-rfd = { version = "0.15.3", default-features = false, features = [
-    "tokio",
-    "xdg-portal",
-] }
+rfd = "0.15.3"
 rtrb = "0.3.2"
-tokio = { version = "1.44.1", features = ["rt", "time"] }

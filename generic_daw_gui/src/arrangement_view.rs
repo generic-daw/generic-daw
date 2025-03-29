@@ -338,12 +338,18 @@ impl ArrangementView {
             Message::SampleLoadFromFile(path) => {
                 self.loading += 1;
                 let meter = self.meter.clone();
-                return Task::future(tokio::task::spawn_blocking(move || {
-                    InterleavedAudio::create(&path, meter.sample_rate)
-                }))
-                .and_then(Task::done)
-                .map(Result::ok)
-                .map(Message::SampleLoadedFromFile);
+                let (sender, receiver) = oneshot::channel();
+
+                std::thread::spawn(move || {
+                    sender
+                        .send(InterleavedAudio::create(&path, meter.sample_rate))
+                        .unwrap();
+                });
+
+                return Task::future(receiver)
+                    .and_then(Task::done)
+                    .map(Result::ok)
+                    .map(Message::SampleLoadedFromFile);
             }
             Message::SampleLoadedFromFile(audio) => {
                 self.loading -= 1;
