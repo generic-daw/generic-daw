@@ -6,7 +6,7 @@ use crate::{
     file_tree::FileTree,
     icons::{PAUSE, PLAY, STOP},
     stylefns::button_with_base,
-    widget::{AnimatedDot, BpmInput, LINE_HEIGHT, Strategy, VSplit},
+    widget::{AnimatedDot, BpmInput, LINE_HEIGHT, VSplit, vsplit::Strategy},
 };
 use generic_daw_core::{
     Denominator, Meter, Numerator, Position, VARIANTS as _,

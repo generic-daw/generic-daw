@@ -13,6 +13,17 @@ use iced::{
     window,
 };
 
+#[derive(Clone, Copy, Debug)]
+pub enum Action {
+    Grab(usize, usize),
+    Drop,
+    Clone(usize, usize),
+    Drag(usize, Position),
+    TrimStart(Position),
+    TrimEnd(Position),
+    Delete(usize, usize),
+}
+
 #[derive(Clone, Copy, Default, PartialEq)]
 enum State {
     #[default]
@@ -44,13 +55,7 @@ pub struct Arrangement<'a, Message> {
     /// whether we've sent a clip delete message since the last redraw request
     deleted: bool,
 
-    select_clip: fn(usize, usize) -> Message,
-    unselect_clip: Message,
-    clone_clip: fn(usize, usize) -> Message,
-    move_clip_to: fn(usize, Position) -> Message,
-    trim_clip_start: fn(Position) -> Message,
-    trim_clip_end: fn(Position) -> Message,
-    delete_clip: fn(usize, usize) -> Message,
+    action: fn(Action) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message>
@@ -128,7 +133,7 @@ where
                 shell.request_redraw();
 
                 if state.unselect() {
-                    shell.publish(self.unselect_clip.clone());
+                    shell.publish((self.action)(Action::Drop));
                 }
             }
 
@@ -169,12 +174,11 @@ where
                                 (false, false) => State::DraggingClip(offset, track, time),
                             };
 
-                            if modifiers.control() {
-                                shell.publish((self.clone_clip)(track, clip));
+                            shell.publish((self.action)(if modifiers.control() {
+                                Action::Clone(track, clip)
                             } else {
-                                shell.publish((self.select_clip)(track, clip));
-                            }
-
+                                Action::Grab(track, clip)
+                            }));
                             shell.capture_event();
                             shell.request_redraw();
                         }
@@ -186,7 +190,7 @@ where
                         if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
                             self.deleted = true;
 
-                            shell.publish((self.delete_clip)(track, clip));
+                            shell.publish((self.action)(Action::Delete(track, clip)));
                             shell.capture_event();
                         }
                     }
@@ -194,7 +198,7 @@ where
                 },
                 mouse::Event::ButtonReleased(..) if *state != State::None => {
                     if state.unselect() {
-                        shell.publish(self.unselect_clip.clone());
+                        shell.publish((self.action)(Action::Drop));
                     }
 
                     *state = State::None;
@@ -218,7 +222,7 @@ where
                         if new_track != track || new_start != time {
                             *state = State::DraggingClip(offset, new_track, new_start);
 
-                            shell.publish((self.move_clip_to)(new_track, new_start));
+                            shell.publish((self.action)(Action::Drag(new_track, new_start)));
                             shell.capture_event();
                         }
                     }
@@ -233,7 +237,7 @@ where
                         if new_start != time {
                             *state = State::ClipTrimmingStart(offset, new_start);
 
-                            shell.publish((self.trim_clip_start)(new_start));
+                            shell.publish((self.action)(Action::TrimStart(new_start)));
                             shell.capture_event();
                         }
                     }
@@ -248,7 +252,7 @@ where
                         if new_end != time {
                             *state = State::ClipTrimmingEnd(offset, new_end);
 
-                            shell.publish((self.trim_clip_end)(new_end));
+                            shell.publish((self.action)(Action::TrimEnd(new_end)));
                             shell.capture_event();
                         }
                     }
@@ -257,7 +261,7 @@ where
                             if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
                                 self.deleted = true;
 
-                                shell.publish((self.delete_clip)(track, clip));
+                                shell.publish((self.action)(Action::Delete(track, clip)));
                                 shell.capture_event();
                             }
                         }
@@ -330,13 +334,7 @@ where
         position: Vec2,
         scale: Vec2,
         children: impl Into<Element<'a, Message>>,
-        select_clip: fn(usize, usize) -> Message,
-        unselect_clip: Message,
-        clone_clip: fn(usize, usize) -> Message,
-        move_clip_to: fn(usize, Position) -> Message,
-        trim_clip_start: fn(Position) -> Message,
-        trim_clip_end: fn(Position) -> Message,
-        delete_clip: fn(usize, usize) -> Message,
+        action: fn(Action) -> Message,
     ) -> Self {
         Self {
             meter,
@@ -344,13 +342,7 @@ where
             position,
             scale,
             deleted: false,
-            select_clip,
-            unselect_clip,
-            clone_clip,
-            move_clip_to,
-            trim_clip_start,
-            trim_clip_end,
-            delete_clip,
+            action,
         }
     }
 

@@ -18,6 +18,18 @@ use iced::{
 };
 use std::sync::{Arc, atomic::Ordering::Acquire};
 
+#[derive(Clone, Copy, Debug)]
+pub enum Action {
+    Grab(usize),
+    Drop,
+    Add(MidiKey, Position),
+    Clone(usize),
+    Drag(MidiKey, Position),
+    TrimStart(Position),
+    TrimEnd(Position),
+    Delete(usize),
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum State {
     None(Interaction),
@@ -55,14 +67,7 @@ pub struct PianoRoll<'a, Message> {
     // whether we've sent a clip delete message since the last redraw request
     deleted: bool,
 
-    select_note: fn(usize) -> Message,
-    unselect_note: Message,
-    add_note: fn(MidiKey, Position) -> Message,
-    clone_note: fn(usize) -> Message,
-    move_note_to: fn(MidiKey, Position) -> Message,
-    trim_note_start: fn(Position) -> Message,
-    trim_note_end: fn(Position) -> Message,
-    delete_note: fn(usize) -> Message,
+    action: fn(Action) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message>
@@ -117,7 +122,7 @@ where
                 shell.request_redraw();
 
                 if state.unselect() {
-                    shell.publish(self.unselect_note.clone());
+                    shell.publish((self.action)(Action::Drop));
                 }
             }
 
@@ -154,17 +159,17 @@ where
                                 (false, false) => State::DraggingNote(offset, note.key, time),
                             };
 
-                            if modifiers.control() {
-                                shell.publish((self.clone_note)(i));
+                            shell.publish((self.action)(if modifiers.control() {
+                                Action::Clone(i)
                             } else {
-                                shell.publish((self.select_note)(i));
-                            }
+                                Action::Grab(i)
+                            }));
                         } else {
                             let key = self.get_key(cursor);
 
                             *state = State::DraggingNote(0.0, key, time);
 
-                            shell.publish((self.add_note)(key, time));
+                            shell.publish((self.action)(Action::Add(key, time)));
                         }
 
                         shell.capture_event();
@@ -175,7 +180,7 @@ where
                         if let Some(note) = self.get_note(cursor) {
                             self.deleted = true;
 
-                            shell.publish((self.delete_note)(note));
+                            shell.publish((self.action)(Action::Delete(note)));
                             shell.capture_event();
                         }
                     }
@@ -183,7 +188,7 @@ where
                 },
                 mouse::Event::ButtonReleased(..) if !state.is_none() => {
                     if state.unselect() {
-                        shell.publish(self.unselect_note.clone());
+                        shell.publish((self.action)(Action::Drop));
                     }
 
                     *state = State::None(self.interaction(cursor));
@@ -204,7 +209,7 @@ where
                         if new_key != key || new_start != time {
                             *state = State::DraggingNote(offset, new_key, new_start);
 
-                            shell.publish((self.move_note_to)(new_key, new_start));
+                            shell.publish((self.action)(Action::Drag(new_key, new_start)));
                             shell.capture_event();
                         }
                     }
@@ -219,7 +224,7 @@ where
                         if new_start != time {
                             *state = State::NoteTrimmingStart(offset, new_start);
 
-                            shell.publish((self.trim_note_start)(new_start));
+                            shell.publish((self.action)(Action::TrimStart(new_start)));
                             shell.capture_event();
                         }
                     }
@@ -234,7 +239,7 @@ where
                         if new_end != time {
                             *state = State::NoteTrimmingEnd(offset, new_end);
 
-                            shell.publish((self.trim_note_end)(new_end));
+                            shell.publish((self.action)(Action::TrimEnd(new_end)));
                             shell.capture_event();
                         }
                     }
@@ -243,7 +248,7 @@ where
                             if let Some(note) = self.get_note(cursor) {
                                 self.deleted = true;
 
-                                shell.publish((self.delete_note)(note));
+                                shell.publish((self.action)(Action::Delete(note)));
                                 shell.capture_event();
                             }
                         }
@@ -306,14 +311,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
         meter: &'a Meter,
         position: Vec2,
         scale: Vec2,
-        select_note: fn(usize) -> Message,
-        unselect_note: Message,
-        add_note: fn(MidiKey, Position) -> Message,
-        clone_note: fn(usize) -> Message,
-        move_note_to: fn(MidiKey, Position) -> Message,
-        trim_note_start: fn(Position) -> Message,
-        trim_note_end: fn(Position) -> Message,
-        delete_note: fn(usize) -> Message,
+        action: fn(Action) -> Message,
     ) -> Self {
         Self {
             notes,
@@ -321,14 +319,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
             position,
             scale,
             deleted: false,
-            select_note,
-            unselect_note,
-            add_note,
-            clone_note,
-            move_note_to,
-            trim_note_start,
-            trim_note_end,
-            delete_note,
+            action,
         }
     }
 

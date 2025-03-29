@@ -4,7 +4,7 @@ use iced::{keyboard::Modifiers, widget::text::Shaping};
 use std::sync::atomic::Ordering::Acquire;
 
 mod animated_dot;
-mod arrangement;
+pub mod arrangement;
 mod audio_clip;
 mod bpm_input;
 mod clipped;
@@ -12,11 +12,11 @@ mod knob;
 mod midi_clip;
 mod peak_meter;
 mod piano;
-mod piano_roll;
+pub mod piano_roll;
 mod recording;
 mod seeker;
 mod track;
-mod vsplit;
+pub mod vsplit;
 mod waveform;
 
 pub use animated_dot::AnimatedDot;
@@ -32,7 +32,7 @@ pub use piano_roll::PianoRoll;
 pub use recording::Recording;
 pub use seeker::Seeker;
 pub use track::Track;
-pub use vsplit::{Strategy, VSplit};
+pub use vsplit::VSplit;
 
 pub const LINE_HEIGHT: f32 = TEXT_HEIGHT * 1.3;
 pub const TEXT_HEIGHT: f32 = 16.0;

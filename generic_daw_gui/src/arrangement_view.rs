@@ -10,15 +10,17 @@ use crate::{
     widget::{
         AnimatedDot, Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob,
         LINE_HEIGHT, MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll,
-        Recording as RecordingWidget, Seeker, Strategy, TEXT_HEIGHT, Track as TrackWidget, VSplit,
+        Recording as RecordingWidget, Seeker, TEXT_HEIGHT, Track as TrackWidget, VSplit,
+        arrangement::Action as ArrangementAction, piano_roll::Action as PianoRollAction,
+        vsplit::Strategy,
     },
 };
 use arrangement::NodeType;
 use dragking::{DragEvent, DropPosition};
 use fragile::Fragile;
 use generic_daw_core::{
-    AudioClip, AudioTrack, InterleavedAudio, Meter, MidiClip, MidiKey, MidiNote, MidiTrack,
-    MixerNode, Position, Recording,
+    AudioClip, AudioTrack, InterleavedAudio, Meter, MidiClip, MidiNote, MidiTrack, MixerNode,
+    Position, Recording,
     audio_graph::{AudioGraphNodeImpl as _, NodeId},
     clap_host::{self, MainThreadMessage, PluginDescriptor, PluginId, PluginType},
 };
@@ -81,31 +83,14 @@ pub enum Message {
     SampleLoadFromFile(Box<Path>),
     SampleLoadedFromFile(Option<Arc<InterleavedAudio>>),
 
+    AddMidiClip(NodeId, Position),
+    OpenMidiClip(Arc<MidiClip>),
+
     InstrumentLoad(PluginDescriptor),
 
     TrackRemove(NodeId),
     TrackToggleEnabled(NodeId),
     TrackToggleSolo(NodeId),
-
-    ClipGrab(usize, usize),
-    ClipDrop,
-    ClipClone(usize, usize),
-    ClipMove(usize, Position),
-    ClipTrimStart(Position),
-    ClipTrimEnd(Position),
-    ClipDelete(usize, usize),
-
-    AddMidiClip(NodeId, Position),
-    OpenMidiClip(Arc<MidiClip>),
-
-    NoteGrab(usize),
-    NoteDrop,
-    NoteAdd(MidiKey, Position),
-    NoteClone(usize),
-    NoteMove(MidiKey, Position),
-    NoteTrimStart(Position),
-    NoteTrimEnd(Position),
-    NoteDelete(usize),
 
     SeekTo(Position),
 
@@ -113,7 +98,10 @@ pub enum Message {
     RecordingChunk(Box<[f32]>),
     StopRecord,
 
+    ArrangementAction(ArrangementAction),
     ArrangementPositionScaleDelta(Vec2, Vec2),
+
+    PianoRollAction(PianoRollAction),
     PianoRollPositionScaleDelta(Vec2, Vec2),
 
     SplitAt(f32),
@@ -382,6 +370,15 @@ impl ArrangementView {
                     return fut;
                 }
             }
+            Message::OpenMidiClip(clip) => self.tab = Tab::PianoRoll(clip),
+            Message::AddMidiClip(track, pos) => {
+                let clip = MidiClip::create(Arc::default(), self.meter.clone());
+                clip.position
+                    .trim_end_to(Position::BEAT * self.meter.numerator.load(Acquire) as u32);
+                clip.position.move_to(pos);
+                let track = self.arrangement.track_of(track).unwrap();
+                self.arrangement.add_clip(track, clip);
+            }
             Message::InstrumentLoad(name) => {
                 let (gui, receiver, audio_processor) = clap_host::init(
                     &PLUGINS[&name],
@@ -445,124 +442,6 @@ impl ArrangementView {
                     self.soloed_track = Some(id);
                 }
             }
-            Message::ClipGrab(track, clip) => self.grabbed_clip = Some([track, clip]),
-            Message::ClipDrop => self.grabbed_clip = None,
-            Message::ClipClone(track, mut clip) => {
-                self.arrangement.clone_clip(track, clip);
-                clip = self.arrangement.tracks()[track].clips().len() - 1;
-                self.grabbed_clip.replace([track, clip]);
-            }
-            Message::ClipMove(new_track, pos) => {
-                let [track, clip] = self.grabbed_clip.as_mut().unwrap();
-
-                if *track != new_track
-                    && self.arrangement.clip_switch_track(*track, *clip, new_track)
-                {
-                    *track = new_track;
-                    *clip = self.arrangement.tracks()[*track].clips().len() - 1;
-                }
-
-                self.arrangement.tracks()[*track]
-                    .get_clip(*clip)
-                    .move_to(pos);
-            }
-            Message::ClipTrimStart(pos) => {
-                let [track, clip] = self.grabbed_clip.unwrap();
-                self.arrangement.tracks()[track]
-                    .get_clip(clip)
-                    .trim_start_to(pos);
-            }
-            Message::ClipTrimEnd(pos) => {
-                let [track, clip] = self.grabbed_clip.unwrap();
-                self.arrangement.tracks()[track]
-                    .get_clip(clip)
-                    .trim_end_to(pos);
-            }
-            Message::ClipDelete(track, clip) => {
-                self.arrangement.delete_clip(track, clip);
-            }
-            Message::OpenMidiClip(clip) => self.tab = Tab::PianoRoll(clip),
-            Message::AddMidiClip(track, pos) => {
-                let clip = MidiClip::create(Arc::default(), self.meter.clone());
-                clip.position
-                    .trim_end_to(Position::BEAT * self.meter.numerator.load(Acquire) as u32);
-                clip.position.move_to(pos);
-                let track = self.arrangement.track_of(track).unwrap();
-                self.arrangement.add_clip(track, clip);
-            }
-            Message::NoteGrab(note) => self.grabbed_note = Some(note),
-            Message::NoteDrop => {
-                let Tab::PianoRoll(selected_clip) = &self.tab else {
-                    return Task::none();
-                };
-
-                let note = selected_clip.pattern.load()[self.grabbed_note.unwrap()];
-                self.last_note_len = note.end - note.start;
-                self.grabbed_note = None;
-            }
-            Message::NoteAdd(key, pos) => {
-                let Tab::PianoRoll(selected_clip) = &self.tab else {
-                    return Task::none();
-                };
-
-                let mut notes = selected_clip.pattern.load().deref().deref().clone();
-                notes.push(MidiNote {
-                    channel: 0,
-                    key,
-                    velocity: 1.0,
-                    start: pos,
-                    end: pos + self.last_note_len,
-                });
-                self.grabbed_note = Some(notes.len() - 1);
-                selected_clip.pattern.store(Arc::new(notes));
-            }
-            Message::NoteClone(note) => {
-                let Tab::PianoRoll(selected_clip) = &self.tab else {
-                    return Task::none();
-                };
-
-                let mut notes = selected_clip.pattern.load().deref().deref().clone();
-                notes.push(notes[note]);
-                self.grabbed_note = Some(notes.len() - 1);
-                selected_clip.pattern.store(Arc::new(notes));
-            }
-            Message::NoteMove(key, pos) => {
-                let Tab::PianoRoll(selected_clip) = &self.tab else {
-                    return Task::none();
-                };
-
-                let mut notes = selected_clip.pattern.load().deref().deref().clone();
-                notes[self.grabbed_note.unwrap()].move_to(pos);
-                notes[self.grabbed_note.unwrap()].key = key;
-                selected_clip.pattern.store(Arc::new(notes));
-            }
-            Message::NoteTrimStart(pos) => {
-                let Tab::PianoRoll(selected_clip) = &self.tab else {
-                    return Task::none();
-                };
-
-                let mut notes = selected_clip.pattern.load().deref().deref().clone();
-                notes[self.grabbed_note.unwrap()].trim_start_to(pos);
-                selected_clip.pattern.store(Arc::new(notes));
-            }
-            Message::NoteTrimEnd(pos) => {
-                let Tab::PianoRoll(selected_clip) = &self.tab else {
-                    return Task::none();
-                };
-
-                let mut notes = selected_clip.pattern.load().deref().deref().clone();
-                notes[self.grabbed_note.unwrap()].trim_end_to(pos);
-                selected_clip.pattern.store(Arc::new(notes));
-            }
-            Message::NoteDelete(note) => {
-                let Tab::PianoRoll(selected_clip) = &self.tab else {
-                    return Task::none();
-                };
-
-                let mut notes = selected_clip.pattern.load().deref().deref().clone();
-                notes.remove(note);
-                selected_clip.pattern.store(Arc::new(notes));
-            }
             Message::SeekTo(pos) => {
                 self.meter.sample.store(
                     pos.in_interleaved_samples(
@@ -618,6 +497,7 @@ impl ArrangementView {
                     self.arrangement.add_clip(track, clip);
                 }
             }
+            Message::ArrangementAction(action) => self.handle_arrangement_action(action),
             Message::ArrangementPositionScaleDelta(pos, scale) => {
                 let sd = scale != Vec2::ZERO;
                 let mut pd = pos != Vec2::ZERO;
@@ -661,6 +541,7 @@ impl ArrangementView {
                     );
                 }
             }
+            Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
             Message::PianoRollPositionScaleDelta(pos, scale) => {
                 let Tab::PianoRoll(selected_clip) = &self.tab else {
                     return Task::none();
@@ -707,6 +588,101 @@ impl ArrangementView {
         }
 
         Task::none()
+    }
+
+    fn handle_arrangement_action(&mut self, action: ArrangementAction) {
+        match action {
+            ArrangementAction::Grab(track, clip) => self.grabbed_clip = Some([track, clip]),
+            ArrangementAction::Drop => self.grabbed_clip = None,
+            ArrangementAction::Clone(track, mut clip) => {
+                self.arrangement.clone_clip(track, clip);
+                clip = self.arrangement.tracks()[track].clips().len() - 1;
+                self.grabbed_clip.replace([track, clip]);
+            }
+            ArrangementAction::Drag(new_track, pos) => {
+                let [track, clip] = self.grabbed_clip.as_mut().unwrap();
+
+                if *track != new_track
+                    && self.arrangement.clip_switch_track(*track, *clip, new_track)
+                {
+                    *track = new_track;
+                    *clip = self.arrangement.tracks()[*track].clips().len() - 1;
+                }
+
+                self.arrangement.tracks()[*track]
+                    .get_clip(*clip)
+                    .move_to(pos);
+            }
+            ArrangementAction::TrimStart(pos) => {
+                let [track, clip] = self.grabbed_clip.unwrap();
+                self.arrangement.tracks()[track]
+                    .get_clip(clip)
+                    .trim_start_to(pos);
+            }
+            ArrangementAction::TrimEnd(pos) => {
+                let [track, clip] = self.grabbed_clip.unwrap();
+                self.arrangement.tracks()[track]
+                    .get_clip(clip)
+                    .trim_end_to(pos);
+            }
+            ArrangementAction::Delete(track, clip) => {
+                self.arrangement.delete_clip(track, clip);
+            }
+        }
+    }
+
+    fn handle_piano_roll_action(&mut self, action: PianoRollAction) {
+        let Tab::PianoRoll(selected_clip) = &self.tab else {
+            return;
+        };
+
+        match action {
+            PianoRollAction::Grab(note) => self.grabbed_note = Some(note),
+            PianoRollAction::Drop => {
+                let note = selected_clip.pattern.load()[self.grabbed_note.unwrap()];
+                self.last_note_len = note.end - note.start;
+                self.grabbed_note = None;
+            }
+            PianoRollAction::Add(key, pos) => {
+                let mut notes = selected_clip.pattern.load().deref().deref().clone();
+                notes.push(MidiNote {
+                    channel: 0,
+                    key,
+                    velocity: 1.0,
+                    start: pos,
+                    end: pos + self.last_note_len,
+                });
+                self.grabbed_note = Some(notes.len() - 1);
+                selected_clip.pattern.store(Arc::new(notes));
+            }
+            PianoRollAction::Clone(note) => {
+                let mut notes = selected_clip.pattern.load().deref().deref().clone();
+                notes.push(notes[note]);
+                self.grabbed_note = Some(notes.len() - 1);
+                selected_clip.pattern.store(Arc::new(notes));
+            }
+            PianoRollAction::Drag(key, pos) => {
+                let mut notes = selected_clip.pattern.load().deref().deref().clone();
+                notes[self.grabbed_note.unwrap()].move_to(pos);
+                notes[self.grabbed_note.unwrap()].key = key;
+                selected_clip.pattern.store(Arc::new(notes));
+            }
+            PianoRollAction::TrimStart(pos) => {
+                let mut notes = selected_clip.pattern.load().deref().deref().clone();
+                notes[self.grabbed_note.unwrap()].trim_start_to(pos);
+                selected_clip.pattern.store(Arc::new(notes));
+            }
+            PianoRollAction::TrimEnd(pos) => {
+                let mut notes = selected_clip.pattern.load().deref().deref().clone();
+                notes[self.grabbed_note.unwrap()].trim_end_to(pos);
+                selected_clip.pattern.store(Arc::new(notes));
+            }
+            PianoRollAction::Delete(note) => {
+                let mut notes = selected_clip.pattern.load().deref().deref().clone();
+                notes.remove(note);
+                selected_clip.pattern.store(Arc::new(notes));
+            }
+        }
     }
 
     pub fn view(&self) -> Element<'_, Message> {
@@ -921,13 +897,7 @@ impl ArrangementView {
                         })
                         .map(Element::new),
                 ),
-                Message::ClipGrab,
-                Message::ClipDrop,
-                Message::ClipClone,
-                Message::ClipMove,
-                Message::ClipTrimStart,
-                Message::ClipTrimEnd,
-                Message::ClipDelete,
+                Message::ArrangementAction,
             ),
             Message::SeekTo,
             Message::ArrangementPositionScaleDelta,
@@ -1385,14 +1355,7 @@ impl ArrangementView {
                     &self.meter,
                     piano_roll_position,
                     self.piano_roll_scale,
-                    Message::NoteGrab,
-                    Message::NoteDrop,
-                    Message::NoteAdd,
-                    Message::NoteClone,
-                    Message::NoteMove,
-                    Message::NoteTrimStart,
-                    Message::NoteTrimEnd,
-                    Message::NoteDelete,
+                    Message::PianoRollAction,
                 ),
                 Message::SeekTo,
                 Message::PianoRollPositionScaleDelta,
