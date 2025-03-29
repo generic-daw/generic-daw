@@ -13,9 +13,8 @@ use iced::{
     window,
 };
 
-#[non_exhaustive]
 #[derive(Clone, Copy, Default, PartialEq)]
-enum Action {
+enum State {
     #[default]
     None,
     DraggingClip(f32, usize, Position),
@@ -24,18 +23,13 @@ enum Action {
     DeletingClips,
 }
 
-impl Action {
+impl State {
     fn unselect(&self) -> bool {
         matches!(
             self,
             Self::DraggingClip(..) | Self::ClipTrimmingStart(..) | Self::ClipTrimmingEnd(..)
         )
     }
-}
-
-#[derive(Default)]
-struct State {
-    action: Action,
 }
 
 #[derive(Debug)]
@@ -129,11 +123,11 @@ where
         let bounds = layout.bounds();
 
         let Some(cursor) = cursor.position_in(bounds) else {
-            if state.action != Action::None {
-                state.action = Action::None;
+            if *state != State::None {
+                *state = State::None;
                 shell.request_redraw();
 
-                if state.action.unselect() {
+                if state.unselect() {
                     shell.publish(self.unselect_clip.clone());
                 }
             }
@@ -161,18 +155,18 @@ where
                             let end_pixel = clip_bounds.x + clip_bounds.width;
                             let offset = start_pixel - cursor.x;
 
-                            state.action = match (
+                            *state = match (
                                 cursor.x - start_pixel < 10.0,
                                 end_pixel - cursor.x < 10.0,
                             ) {
                                 (true, true) if cursor.x - start_pixel < end_pixel - cursor.x => {
-                                    Action::ClipTrimmingStart(offset, time)
+                                    State::ClipTrimmingStart(offset, time)
                                 }
-                                (true, false) => Action::ClipTrimmingStart(offset, time),
+                                (true, false) => State::ClipTrimmingStart(offset, time),
                                 (_, true) => {
-                                    Action::ClipTrimmingEnd(offset + end_pixel - start_pixel, time)
+                                    State::ClipTrimmingEnd(offset + end_pixel - start_pixel, time)
                                 }
-                                (false, false) => Action::DraggingClip(offset, track, time),
+                                (false, false) => State::DraggingClip(offset, track, time),
                             };
 
                             if modifiers.control() {
@@ -186,7 +180,7 @@ where
                         }
                     }
                     mouse::Button::Right if !self.deleted => {
-                        state.action = Action::DeletingClips;
+                        *state = State::DeletingClips;
                         shell.request_redraw();
 
                         if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
@@ -198,17 +192,17 @@ where
                     }
                     _ => {}
                 },
-                mouse::Event::ButtonReleased(..) if state.action != Action::None => {
-                    if state.action.unselect() {
+                mouse::Event::ButtonReleased(..) if *state != State::None => {
+                    if state.unselect() {
                         shell.publish(self.unselect_clip.clone());
                     }
 
-                    state.action = Action::None;
+                    *state = State::None;
                     shell.capture_event();
                     shell.request_redraw();
                 }
-                mouse::Event::CursorMoved { modifiers, .. } => match state.action {
-                    Action::DraggingClip(offset, track, time) => {
+                mouse::Event::CursorMoved { modifiers, .. } => match *state {
+                    State::DraggingClip(offset, track, time) => {
                         let new_track = self
                             .get_track(cursor.y)
                             .min(layout.children().next().unwrap().children().count() - 1);
@@ -222,13 +216,13 @@ where
                         );
 
                         if new_track != track || new_start != time {
-                            state.action = Action::DraggingClip(offset, new_track, new_start);
+                            *state = State::DraggingClip(offset, new_track, new_start);
 
                             shell.publish((self.move_clip_to)(new_track, new_start));
                             shell.capture_event();
                         }
                     }
-                    Action::ClipTrimmingStart(offset, time) => {
+                    State::ClipTrimmingStart(offset, time) => {
                         let new_start = get_time(
                             cursor.x + offset,
                             *modifiers,
@@ -237,13 +231,13 @@ where
                             self.scale,
                         );
                         if new_start != time {
-                            state.action = Action::ClipTrimmingStart(offset, new_start);
+                            *state = State::ClipTrimmingStart(offset, new_start);
 
                             shell.publish((self.trim_clip_start)(new_start));
                             shell.capture_event();
                         }
                     }
-                    Action::ClipTrimmingEnd(offset, time) => {
+                    State::ClipTrimmingEnd(offset, time) => {
                         let new_end = get_time(
                             cursor.x + offset,
                             *modifiers,
@@ -252,21 +246,23 @@ where
                             self.scale,
                         );
                         if new_end != time {
-                            state.action = Action::ClipTrimmingEnd(offset, new_end);
+                            *state = State::ClipTrimmingEnd(offset, new_end);
 
                             shell.publish((self.trim_clip_end)(new_end));
                             shell.capture_event();
                         }
                     }
-                    Action::DeletingClips if !self.deleted => {
-                        if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
-                            self.deleted = true;
+                    State::DeletingClips => {
+                        if !self.deleted {
+                            if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
+                                self.deleted = true;
 
-                            shell.publish((self.delete_clip)(track, clip));
-                            shell.capture_event();
+                                shell.publish((self.delete_clip)(track, clip));
+                                shell.capture_event();
+                            }
                         }
                     }
-                    _ => {}
+                    State::None => {}
                 },
                 _ => {}
             }
@@ -281,15 +277,13 @@ where
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> Interaction {
-        let state = tree.state.downcast_ref::<State>();
-
-        match state.action {
-            Action::ClipTrimmingStart(..) | Action::ClipTrimmingEnd(..) => {
+        match tree.state.downcast_ref::<State>() {
+            State::ClipTrimmingStart(..) | State::ClipTrimmingEnd(..) => {
                 Interaction::ResizingHorizontally
             }
-            Action::DraggingClip(..) => Interaction::Grabbing,
-            Action::DeletingClips => Interaction::NoDrop,
-            Action::None => self.children.as_widget().mouse_interaction(
+            State::DraggingClip(..) => Interaction::Grabbing,
+            State::DeletingClips => Interaction::NoDrop,
+            State::None => self.children.as_widget().mouse_interaction(
                 &tree.children[0],
                 layout.children().next().unwrap(),
                 cursor,

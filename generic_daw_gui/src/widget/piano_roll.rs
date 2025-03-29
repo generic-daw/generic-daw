@@ -18,30 +18,32 @@ use iced::{
 };
 use std::sync::{Arc, atomic::Ordering::Acquire};
 
-#[non_exhaustive]
-#[derive(Clone, Copy, Default, PartialEq)]
-enum Action {
-    #[default]
-    None,
+#[derive(Clone, Copy, PartialEq)]
+enum State {
+    None(Interaction),
     DraggingNote(f32, MidiKey, Position),
     NoteTrimmingStart(f32, Position),
     NoteTrimmingEnd(f32, Position),
     DeletingNotes,
 }
 
-impl Action {
+impl Default for State {
+    fn default() -> Self {
+        Self::None(Interaction::default())
+    }
+}
+
+impl State {
+    fn is_none(&self) -> bool {
+        matches!(self, Self::None(..))
+    }
+
     fn unselect(&self) -> bool {
         matches!(
             self,
             Self::DraggingNote(..) | Self::NoteTrimmingStart(..) | Self::NoteTrimmingEnd(..)
         )
     }
-}
-
-#[derive(Default)]
-struct State {
-    action: Action,
-    interaction: Interaction,
 }
 
 #[derive(Debug)]
@@ -110,11 +112,11 @@ where
         let state = tree.state.downcast_mut::<State>();
 
         let Some(cursor) = cursor.position_in(bounds) else {
-            if state.action != Action::None {
-                state.action = Action::None;
+            if !state.is_none() {
+                *state = State::default();
                 shell.request_redraw();
 
-                if state.action.unselect() {
+                if state.unselect() {
                     shell.publish(self.unselect_note.clone());
                 }
             }
@@ -138,18 +140,18 @@ where
                             let end_pixel = note_bounds.x + note_bounds.width;
                             let offset = start_pixel - cursor.x;
 
-                            state.action = match (
+                            *state = match (
                                 cursor.x - start_pixel < 10.0,
                                 end_pixel - cursor.x < 10.0,
                             ) {
                                 (true, true) if cursor.x - start_pixel < end_pixel - cursor.x => {
-                                    Action::NoteTrimmingStart(offset, time)
+                                    State::NoteTrimmingStart(offset, time)
                                 }
-                                (true, false) => Action::NoteTrimmingStart(offset, time),
+                                (true, false) => State::NoteTrimmingStart(offset, time),
                                 (_, true) => {
-                                    Action::NoteTrimmingEnd(offset + end_pixel - start_pixel, time)
+                                    State::NoteTrimmingEnd(offset + end_pixel - start_pixel, time)
                                 }
-                                (false, false) => Action::DraggingNote(offset, note.key, time),
+                                (false, false) => State::DraggingNote(offset, note.key, time),
                             };
 
                             if modifiers.control() {
@@ -160,7 +162,7 @@ where
                         } else {
                             let key = self.get_key(cursor);
 
-                            state.action = Action::DraggingNote(0.0, key, time);
+                            *state = State::DraggingNote(0.0, key, time);
 
                             shell.publish((self.add_note)(key, time));
                         }
@@ -168,7 +170,7 @@ where
                         shell.capture_event();
                     }
                     mouse::Button::Right if !self.deleted => {
-                        state.action = Action::DeletingNotes;
+                        *state = State::DeletingNotes;
 
                         if let Some(note) = self.get_note(cursor) {
                             self.deleted = true;
@@ -179,16 +181,16 @@ where
                     }
                     _ => {}
                 },
-                mouse::Event::ButtonReleased(..) if state.action != Action::None => {
-                    if state.action.unselect() {
+                mouse::Event::ButtonReleased(..) if !state.is_none() => {
+                    if state.unselect() {
                         shell.publish(self.unselect_note.clone());
                     }
 
-                    state.action = Action::None;
+                    *state = State::None(self.interaction(cursor));
                     shell.capture_event();
                 }
-                mouse::Event::CursorMoved { modifiers, .. } => match state.action {
-                    Action::DraggingNote(offset, key, time) => {
+                mouse::Event::CursorMoved { modifiers, .. } => match *state {
+                    State::DraggingNote(offset, key, time) => {
                         let new_key = self.get_key(cursor);
 
                         let new_start = get_time(
@@ -200,13 +202,13 @@ where
                         );
 
                         if new_key != key || new_start != time {
-                            state.action = Action::DraggingNote(offset, new_key, new_start);
+                            *state = State::DraggingNote(offset, new_key, new_start);
 
                             shell.publish((self.move_note_to)(new_key, new_start));
                             shell.capture_event();
                         }
                     }
-                    Action::NoteTrimmingStart(offset, time) => {
+                    State::NoteTrimmingStart(offset, time) => {
                         let new_start = get_time(
                             cursor.x + offset,
                             *modifiers,
@@ -215,13 +217,13 @@ where
                             self.scale,
                         );
                         if new_start != time {
-                            state.action = Action::NoteTrimmingStart(offset, new_start);
+                            *state = State::NoteTrimmingStart(offset, new_start);
 
                             shell.publish((self.trim_note_start)(new_start));
                             shell.capture_event();
                         }
                     }
-                    Action::NoteTrimmingEnd(offset, time) => {
+                    State::NoteTrimmingEnd(offset, time) => {
                         let new_end = get_time(
                             cursor.x + offset,
                             *modifiers,
@@ -230,29 +232,30 @@ where
                             self.scale,
                         );
                         if new_end != time {
-                            state.action = Action::NoteTrimmingEnd(offset, new_end);
+                            *state = State::NoteTrimmingEnd(offset, new_end);
 
                             shell.publish((self.trim_note_end)(new_end));
                             shell.capture_event();
                         }
                     }
-                    Action::DeletingNotes if !self.deleted => {
-                        if let Some(note) = self.get_note(cursor) {
-                            self.deleted = true;
+                    State::DeletingNotes => {
+                        if !self.deleted {
+                            if let Some(note) = self.get_note(cursor) {
+                                self.deleted = true;
 
-                            shell.publish((self.delete_note)(note));
-                            shell.capture_event();
+                                shell.publish((self.delete_note)(note));
+                                shell.capture_event();
+                            }
                         }
                     }
-                    Action::None => {
+                    State::None(old_interaction) => {
                         let interaction = self.interaction(cursor);
 
-                        if interaction != state.interaction {
-                            state.interaction = interaction;
+                        if interaction != old_interaction {
+                            *state = State::None(old_interaction);
                             shell.request_redraw();
                         }
                     }
-                    _ => {}
                 },
                 _ => {}
             }
@@ -286,7 +289,14 @@ where
         _viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> Interaction {
-        tree.state.downcast_ref::<State>().interaction
+        match tree.state.downcast_ref::<State>() {
+            State::NoteTrimmingStart(..) | State::NoteTrimmingEnd(..) => {
+                Interaction::ResizingHorizontally
+            }
+            State::DraggingNote(..) => Interaction::Grabbing,
+            State::DeletingNotes => Interaction::NoDrop,
+            State::None(interaction) => *interaction,
+        }
     }
 }
 
