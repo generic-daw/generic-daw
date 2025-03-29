@@ -18,13 +18,16 @@ mod audio_clip;
 mod audio_track;
 mod clip_position;
 mod daw_ctx;
+mod export;
 mod master;
 mod meter;
 mod midi_clip;
 mod midi_track;
 mod mixer_node;
 mod position;
+mod recording;
 
+pub(crate) use audio_clip::resampler;
 pub use audio_clip::{
     AudioClip, InterleavedAudio, InterleavedAudioError, RubatoError, resample_interleaved,
     resample_planar,
@@ -34,15 +37,20 @@ pub use audio_track::AudioTrack;
 pub use clap_host;
 pub use cpal::{Stream, traits::StreamTrait};
 pub use daw_ctx::DawCtxMessage;
+pub use export::export;
 pub use master::Master;
 pub use meter::{Denominator, Meter, Numerator};
 pub use midi_clip::{Key, MidiClip, MidiKey, MidiNote};
 pub use midi_track::MidiTrack;
 pub use mixer_node::MixerNode;
 pub use position::Position;
+pub use recording::Recording;
 pub use strum::VariantArray as VARIANTS;
 
-pub fn build_input_stream(sample_rate: u32) -> (u16, u32, Stream, Receiver<Box<[f32]>>) {
+pub fn build_input_stream(
+    sample_rate: u32,
+    buffer_size: u32,
+) -> (u16, u32, Stream, Receiver<Box<[f32]>>) {
     let (sender, receiver) = async_channel::unbounded();
 
     let device = cpal::default_host().default_input_device().unwrap();
@@ -51,7 +59,10 @@ pub fn build_input_stream(sample_rate: u32) -> (u16, u32, Stream, Receiver<Box<[
         .supported_input_configs()
         .unwrap()
         .filter(|config| config.max_sample_rate().0 >= 40000)
-        .min_by(|l, r| compare_by_sample_rate(l, r, sample_rate))
+        .min_by(|l, r| {
+            compare_by_sample_rate(l, r, sample_rate)
+                .then_with(|| compare_by_buffer_size(l, r, buffer_size))
+        })
         .unwrap();
 
     let sample_rate = SampleRate(sample_rate.clamp(
@@ -59,11 +70,22 @@ pub fn build_input_stream(sample_rate: u32) -> (u16, u32, Stream, Receiver<Box<[
         supported_config.max_sample_rate().0,
     ));
 
-    info!("starting input stream with sample rate {sample_rate:?}");
+    let buffer_size = match *supported_config.buffer_size() {
+        SupportedBufferSize::Unknown => BufferSize::Default,
+        SupportedBufferSize::Range { min, max } => BufferSize::Fixed(buffer_size.clamp(min, max)),
+    };
+
+    info!(
+        "starting output stream with sample rate {sample_rate:?} and buffer size {buffer_size:?}",
+    );
 
     let stream = device
         .build_input_stream(
-            &supported_config.with_sample_rate(sample_rate).config(),
+            &StreamConfig {
+                channels: supported_config.channels(),
+                sample_rate,
+                buffer_size,
+            },
             move |data, _| sender.try_send(data.into()).unwrap(),
             |err| panic!("{err}"),
             None,
@@ -112,7 +134,7 @@ pub fn build_output_stream(
     let stream = device
         .build_output_stream(
             &StreamConfig {
-                channels: 2,
+                channels: supported_config.channels(),
                 sample_rate,
                 buffer_size,
             },

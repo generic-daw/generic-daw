@@ -1,7 +1,8 @@
 use super::error::{InterleavedAudioError, RubatoError};
 use generic_daw_utils::NoDebug;
 use rubato::{
-    Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
+    Resampler as _, ResamplerConstructionError, SincFixedIn, SincInterpolationParameters,
+    SincInterpolationType, WindowFunction,
 };
 use std::{fs::File, path::Path, sync::Arc};
 use symphonia::core::{
@@ -16,7 +17,7 @@ use symphonia::core::{
 #[derive(Debug)]
 pub struct InterleavedAudio {
     /// these are used to play the sample back
-    pub samples: NoDebug<Box<[f32]>>,
+    pub(crate) samples: NoDebug<Box<[f32]>>,
     /// these are used to draw the sample in various quality levels
     pub lods: NoDebug<Box<[Box<[(f32, f32)]>]>>,
     /// the file name associated with the sample
@@ -107,33 +108,30 @@ impl InterleavedAudio {
     fn create_lod(samples: &[f32]) -> Box<[Box<[(f32, f32)]>]> {
         let mut lods = Vec::with_capacity(10);
 
-        let mut prev = None::<(f32, f32)>;
         lods.push(
             samples
                 .chunks(8)
                 .map(|chunk| {
-                    let (min, max) = chunk.iter().fold(
-                        prev.unwrap_or((f32::INFINITY, f32::NEG_INFINITY)),
-                        |(min, max), &c| (min.min(c), max.max(c)),
-                    );
-                    prev = Some((max, min));
+                    let (min, max) = chunk
+                        .iter()
+                        .fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
+                            (min.min(c), max.max(c))
+                        });
                     (min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5))
                 })
                 .collect::<Box<_>>(),
         );
 
         (0..10).for_each(|i| {
-            prev = None;
             lods.push(
                 lods[i]
                     .chunks(2)
                     .map(|chunk| {
-                        let (min, max) = chunk.iter().fold(
-                            prev.unwrap_or((f32::INFINITY, f32::NEG_INFINITY)),
-                            |(min, max), &c| (min.min(c.0), max.max(c.1)),
-                        );
-                        prev = Some((max, min));
-                        (min, max)
+                        chunk
+                            .iter()
+                            .fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
+                                (min.min(c.0), max.max(c.1))
+                            })
                     })
                     .collect(),
             );
@@ -174,31 +172,14 @@ pub fn resample_planar(
     left: Vec<f32>,
     right: Vec<f32>,
 ) -> Result<Box<[f32]>, RubatoError> {
-    if file_sample_rate == stream_sample_rate {
+    let Some(resampler) = resampler(file_sample_rate, stream_sample_rate, left.len() as u32) else {
         return Ok(left
             .into_iter()
             .zip(right)
             .flat_map(<[f32; 2]>::from)
             .collect());
-    }
-
-    let resample_ratio = f64::from(stream_sample_rate) / f64::from(file_sample_rate);
-    let oversampling_factor =
-        (file_sample_rate / gcd(stream_sample_rate, file_sample_rate)) as usize;
-
-    let mut resampler = SincFixedIn::new(
-        resample_ratio,
-        1.0,
-        SincInterpolationParameters {
-            sinc_len: 256,
-            f_cutoff: 0.95,
-            interpolation: SincInterpolationType::Nearest,
-            oversampling_factor,
-            window: WindowFunction::Blackman,
-        },
-        left.len(),
-        2,
-    )?;
+    };
+    let mut resampler = resampler?;
 
     let mut planar_samples = resampler.process(&[&left, &right], None)?.into_iter();
     let left = planar_samples.next().unwrap();
@@ -209,6 +190,34 @@ pub fn resample_planar(
         .zip(right)
         .flat_map(<[f32; 2]>::from)
         .collect())
+}
+
+pub fn resampler(
+    file_sample_rate: u32,
+    stream_sample_rate: u32,
+    chunk_size: u32,
+) -> Option<Result<SincFixedIn<f32>, ResamplerConstructionError>> {
+    if file_sample_rate == stream_sample_rate {
+        return None;
+    }
+
+    let resample_ratio = f64::from(stream_sample_rate) / f64::from(file_sample_rate);
+    let oversampling_factor =
+        (file_sample_rate / gcd(stream_sample_rate, file_sample_rate)) as usize;
+
+    Some(SincFixedIn::new(
+        resample_ratio,
+        1.0,
+        SincInterpolationParameters {
+            sinc_len: 256,
+            f_cutoff: 0.95,
+            interpolation: SincInterpolationType::Nearest,
+            oversampling_factor,
+            window: WindowFunction::Blackman,
+        },
+        chunk_size as usize,
+        2,
+    ))
 }
 
 fn gcd(mut a: u32, mut b: u32) -> u32 {

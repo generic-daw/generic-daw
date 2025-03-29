@@ -5,7 +5,6 @@ use crate::{
     icons::{AUDIO_FILE, GENERIC_FILE},
     widget::{Clipped, LINE_HEIGHT, shaping_of},
 };
-use generic_daw_core::Position;
 use iced::{
     Element, Length,
     widget::{
@@ -62,10 +61,9 @@ impl File {
                 .padding(0)
                 .on_press(DawMessage::FileTree(self.path.clone())),
             )
-            .on_double_click(DawMessage::Arrangement(ArrangementMessage::SampleLoad(
-                self.path.clone(),
-                Position::default(),
-            )))
+            .on_double_click(DawMessage::Arrangement(
+                ArrangementMessage::SampleLoadFromFile(self.path.clone()),
+            ))
             .into(),
             LINE_HEIGHT,
         )

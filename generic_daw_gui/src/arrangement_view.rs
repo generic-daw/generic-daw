@@ -8,9 +8,9 @@ use crate::{
     icons::{CHEVRON_RIGHT, HANDLE},
     stylefns::{button_with_base, slider_with_enabled, svg_with_enabled},
     widget::{
-        Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob, LINE_HEIGHT,
-        MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll, Seeker, Strategy, TEXT_HEIGHT,
-        Track as TrackWidget, VSplit,
+        AnimatedDot, Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob,
+        LINE_HEIGHT, MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll,
+        Recording as RecordingWidget, Seeker, Strategy, TEXT_HEIGHT, Track as TrackWidget, VSplit,
     },
 };
 use arrangement::NodeType;
@@ -18,14 +18,13 @@ use dragking::{DragEvent, DropPosition};
 use fragile::Fragile;
 use generic_daw_core::{
     AudioClip, AudioTrack, InterleavedAudio, Meter, MidiClip, MidiKey, MidiNote, MidiTrack,
-    MixerNode, Position,
-    audio_graph::{AudioGraph, AudioGraphNodeImpl as _, NodeId},
+    MixerNode, Position, Recording,
+    audio_graph::{AudioGraphNodeImpl as _, NodeId},
     clap_host::{self, MainThreadMessage, PluginDescriptor, PluginId, PluginType},
 };
 use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2};
 use iced::{
     Alignment, Element, Function as _, Length, Radians, Subscription, Task, Theme, border,
-    futures::TryFutureExt as _,
     mouse::Interaction,
     widget::{
         button, column, container, horizontal_rule, mouse_area, responsive, row,
@@ -38,6 +37,7 @@ use iced::{
 use std::{
     cell::Cell,
     f32::{self, consts::FRAC_PI_2},
+    hash::{DefaultHasher, Hash as _, Hasher as _},
     iter::once,
     ops::Deref as _,
     path::Path,
@@ -45,6 +45,7 @@ use std::{
         Arc, Mutex,
         atomic::Ordering::{AcqRel, Acquire, Release},
     },
+    time::Instant,
 };
 
 mod arrangement;
@@ -62,8 +63,7 @@ pub enum Message {
     ConnectRequest((NodeId, NodeId)),
     ConnectSucceeded((NodeId, NodeId)),
     Disconnect((NodeId, NodeId)),
-    ExportRequest(Box<Path>),
-    Export(Arc<Mutex<(AudioGraph, Box<Path>)>>),
+    Export(Box<Path>),
 
     ChannelAdd,
     ChannelRemove(NodeId),
@@ -78,8 +78,8 @@ pub enum Message {
     AudioEffectToggleEnabled(usize),
     AudioEffectsReordered(DragEvent),
 
-    SampleLoad(Box<Path>, Position),
-    SampleLoaded(Option<Arc<InterleavedAudio>>, Position),
+    SampleLoadFromFile(Box<Path>),
+    SampleLoadedFromFile(Option<Arc<InterleavedAudio>>),
 
     InstrumentLoad(PluginDescriptor),
 
@@ -109,6 +109,10 @@ pub enum Message {
 
     SeekTo(Position),
 
+    ToggleRecord(NodeId),
+    RecordingChunk(Box<[f32]>),
+    StopRecord,
+
     ArrangementPositionScaleDelta(Vec2, Vec2),
     PianoRollPositionScaleDelta(Vec2, Vec2),
 
@@ -130,6 +134,9 @@ pub struct ArrangementView {
 
     arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
+
+    recording: Option<Recording>,
+    recording_track: Option<NodeId>,
 
     tab: Tab,
     loading: usize,
@@ -160,6 +167,9 @@ impl ArrangementView {
 
                 arrangement,
                 meter: meter.clone(),
+
+                recording: None,
+                recording_track: None,
 
                 tab: Tab::Arrangement,
                 loading: 0,
@@ -199,18 +209,9 @@ impl ArrangementView {
             Message::Disconnect((from, to)) => {
                 self.arrangement.disconnect(from, to);
             }
-            Message::ExportRequest(path) => {
-                return Task::future(self.arrangement.request_export().map_ok(|ok| (ok, path)))
-                    .and_then(Task::done)
-                    .map(Mutex::new)
-                    .map(Arc::new)
-                    .map(Message::Export);
-            }
-            Message::Export(message) => {
-                let (audio_graph, path) =
-                    Mutex::into_inner(Arc::into_inner(message).unwrap()).unwrap();
+            Message::Export(path) => {
                 self.clap_host.set_realtime(false);
-                self.arrangement.export(audio_graph, &path);
+                self.arrangement.export(&path);
                 self.clap_host.set_realtime(true);
             }
             Message::ChannelAdd => {
@@ -334,7 +335,7 @@ impl ArrangementView {
                     ))
                     .map(Message::ClapHost);
             }
-            Message::SampleLoad(path, position) => {
+            Message::SampleLoadFromFile(path) => {
                 self.loading += 1;
                 let meter = self.meter.clone();
                 return Task::future(tokio::task::spawn_blocking(move || {
@@ -342,25 +343,20 @@ impl ArrangementView {
                 }))
                 .and_then(Task::done)
                 .map(Result::ok)
-                .map(move |audio_file| Message::SampleLoaded(audio_file, position));
+                .map(Message::SampleLoadedFromFile);
             }
-            Message::SampleLoaded(audio_file, start) => {
+            Message::SampleLoadedFromFile(audio) => {
                 self.loading -= 1;
 
-                if let Some(audio_file) = audio_file {
-                    let clip = AudioClip::create(audio_file, self.meter.clone());
-                    clip.position.move_to(start);
+                if let Some(audio) = audio {
+                    let clip = AudioClip::create(audio, self.meter.clone());
                     let end = clip.position.get_global_end();
 
                     let (track, fut) = self
                         .arrangement
                         .tracks()
                         .iter()
-                        .filter(|track| {
-                            track.clips().all(|clip| {
-                                clip.get_global_start() >= end || clip.get_global_end() <= start
-                            })
-                        })
+                        .filter(|track| track.clips().all(|clip| clip.get_global_start() >= end))
                         .position(|track| matches!(track, TrackWrapper::AudioTrack(..)))
                         .map_or_else(
                             || {
@@ -415,6 +411,11 @@ impl ArrangementView {
                     )))
                     .chain(fut)
                 } else {
+                    if self.recording_track == Some(id) {
+                        self.recording = None;
+                        self.recording_track = None;
+                    }
+
                     fut
                 };
             }
@@ -480,12 +481,7 @@ impl ArrangementView {
                 clip.position
                     .trim_end_to(Position::BEAT * self.meter.numerator.load(Acquire) as u32);
                 clip.position.move_to(pos);
-                let track = self
-                    .arrangement
-                    .tracks()
-                    .iter()
-                    .position(|t| t.id() == track)
-                    .unwrap();
+                let track = self.arrangement.track_of(track).unwrap();
                 self.arrangement.add_clip(track, clip);
             }
             Message::NoteGrab(note) => self.grabbed_note = Some(note),
@@ -570,6 +566,52 @@ impl ArrangementView {
                     Release,
                 );
             }
+            Message::ToggleRecord(id) => {
+                if self.recording.is_some() {
+                    return self.update(Message::StopRecord);
+                }
+
+                let mut file_name = "recording-".to_owned();
+
+                let mut hasher = DefaultHasher::new();
+                Instant::now().hash(&mut hasher);
+                file_name.push_str(itoa::Buffer::new().format(hasher.finish()));
+
+                file_name.push_str(".wav");
+
+                let path = dirs::data_dir()
+                    .unwrap()
+                    .join("Generic Daw")
+                    .join(file_name)
+                    .into();
+
+                let (recording, receiver) = Recording::create(path, &self.meter);
+                self.recording = Some(recording);
+                self.recording_track = Some(id);
+
+                self.meter.playing.store(true, Release);
+
+                return Task::stream(receiver).map(Message::RecordingChunk);
+            }
+            Message::RecordingChunk(samples) => {
+                if let Some(recording) = self.recording.as_mut() {
+                    recording.write(&samples);
+                }
+            }
+            Message::StopRecord => {
+                if let Some(recording) = self.recording.take() {
+                    let pos = recording.position;
+                    let audio = recording.try_into().unwrap();
+                    let track = self
+                        .arrangement
+                        .track_of(self.recording_track.take().unwrap())
+                        .unwrap();
+
+                    let clip = AudioClip::create(audio, self.meter.clone());
+                    clip.position.move_to(pos);
+                    self.arrangement.add_clip(track, clip);
+                }
+            }
             Message::ArrangementPositionScaleDelta(pos, scale) => {
                 let sd = scale != Vec2::ZERO;
                 let mut pd = pos != Vec2::ZERO;
@@ -594,11 +636,18 @@ impl ArrangementView {
                             .iter()
                             .map(TrackWrapper::len)
                             .max()
-                            .unwrap_or_default()
-                            .in_interleaved_samples_f(
-                                self.meter.bpm.load(Acquire),
-                                self.meter.sample_rate,
-                            ),
+                            .map(|m| {
+                                m.in_interleaved_samples(
+                                    self.meter.bpm.load(Acquire),
+                                    self.meter.sample_rate,
+                                )
+                            })
+                            .max(
+                                self.recording
+                                    .as_ref()
+                                    .map(|_| self.meter.sample.load(Acquire)),
+                            )
+                            .unwrap_or_default() as f32,
                     );
                     self.arrangement_position.y = self.arrangement_position.y.clamp(
                         0.0,
@@ -748,39 +797,51 @@ impl ArrangementView {
                                                 },
                                             )
                                         }
+                                    ),
+                                    vertical_space(),
+                                    self.instrument_by_track.get(id.get()).map_or_else(
+                                        || button(
+                                            AnimatedDot::new(self.recording_track == Some(id))
+                                                .radius(5.0)
+                                        )
+                                        .padding(1.5)
+                                        .on_press(Message::ToggleRecord(id))
+                                        .style(
+                                            move |t, s| {
+                                                button_with_base(
+                                                    t,
+                                                    s,
+                                                    if self.recording_track == Some(id) {
+                                                        button::danger
+                                                    } else if enabled {
+                                                        button::primary
+                                                    } else {
+                                                        button::secondary
+                                                    },
+                                                )
+                                            }
+                                        ),
+                                        move |&id| char_button('P')
+                                            .on_press(Message::ClapHost(
+                                                ClapHostMessage::MainThread(
+                                                    id,
+                                                    MainThreadMessage::GuiRequestShow,
+                                                ),
+                                            ))
+                                            .style(move |t, s| {
+                                                button_with_base(
+                                                    t,
+                                                    s,
+                                                    if enabled {
+                                                        button::primary
+                                                    } else {
+                                                        button::secondary
+                                                    },
+                                                )
+                                            })
                                     )
                                 ]
                                 .spacing(5.0)
-                                .extend(
-                                    self.instrument_by_track
-                                        .get(id.get())
-                                        .map(move |&id| {
-                                            [
-                                                vertical_space().into(),
-                                                char_button('P')
-                                                    .on_press(Message::ClapHost(
-                                                        ClapHostMessage::MainThread(
-                                                            id,
-                                                            MainThreadMessage::GuiRequestShow,
-                                                        ),
-                                                    ))
-                                                    .style(move |t, s| {
-                                                        button_with_base(
-                                                            t,
-                                                            s,
-                                                            if enabled {
-                                                                button::primary
-                                                            } else {
-                                                                button::secondary
-                                                            },
-                                                        )
-                                                    })
-                                                    .into(),
-                                            ]
-                                        })
-                                        .into_iter()
-                                        .flatten(),
-                                ),
                             ]
                             .spacing(5.0),
                         )
@@ -809,25 +870,43 @@ impl ArrangementView {
                             let id = track.id();
                             let enabled = track.node().enabled.load(Acquire);
 
+                            let clips_iter = track.clips().map(|clip| match clip {
+                                TrackClipWrapper::AudioClip(clip) => AudioClipWidget::new(
+                                    clip,
+                                    self.arrangement_position,
+                                    self.arrangement_scale,
+                                    enabled,
+                                )
+                                .into(),
+                                TrackClipWrapper::MidiClip(clip) => MidiClipWidget::new(
+                                    clip.clone(),
+                                    self.arrangement_position,
+                                    self.arrangement_scale,
+                                    enabled,
+                                    Message::OpenMidiClip(clip),
+                                )
+                                .into(),
+                            });
+
+                            let clips_iter = if self.recording_track == Some(id) {
+                                EnumDispatcher::A(
+                                    clips_iter.chain(once(
+                                        RecordingWidget::new(
+                                            self.recording.as_ref().unwrap(),
+                                            &self.meter,
+                                            self.arrangement_position,
+                                            self.arrangement_scale,
+                                        )
+                                        .into(),
+                                    )),
+                                )
+                            } else {
+                                EnumDispatcher::B(clips_iter)
+                            };
+
                             TrackWidget::new(
                                 &self.meter,
-                                track.clips().map(|clip| match clip {
-                                    TrackClipWrapper::AudioClip(clip) => AudioClipWidget::new(
-                                        clip,
-                                        self.arrangement_position,
-                                        self.arrangement_scale,
-                                        enabled,
-                                    )
-                                    .into(),
-                                    TrackClipWrapper::MidiClip(clip) => MidiClipWidget::new(
-                                        clip.clone(),
-                                        self.arrangement_position,
-                                        self.arrangement_scale,
-                                        enabled,
-                                        Message::OpenMidiClip(clip),
-                                    )
-                                    .into(),
-                                }),
+                                clips_iter,
                                 self.arrangement_position,
                                 self.arrangement_scale,
                                 matches!(track, TrackWrapper::MidiTrack(..))

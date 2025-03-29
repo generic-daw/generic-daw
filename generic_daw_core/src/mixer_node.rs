@@ -2,7 +2,6 @@ use arc_swap::ArcSwap;
 use atomig::Atomic;
 use audio_graph::{AudioGraphNodeImpl, NodeId};
 use clap_host::AudioProcessor;
-use effect_entry::EffectEntry;
 use generic_daw_utils::ShiftMoveExt as _;
 use std::{
     cmp::max_by,
@@ -17,7 +16,12 @@ use std::{
     },
 };
 
-mod effect_entry;
+#[derive(Debug)]
+struct EffectEntry {
+    effect: Mutex<AudioProcessor>,
+    mix: Atomic<f32>,
+    enabled: AtomicBool,
+}
 
 #[derive(Debug)]
 pub struct MixerNode {

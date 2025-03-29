@@ -1,4 +1,3 @@
-use super::LINE_HEIGHT;
 use iced::{
     Animation, Border, Color, Element, Event, Length, Rectangle, Renderer, Size, Theme,
     advanced::{
@@ -73,7 +72,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AnimatedDot {
                 state.animation =
                     Animation::new(state.animation.interpolate_with(identity, state.now))
                         .very_quick()
-                        .go(f32::from(u8::from(self.enabled)));
+                        .go_from(f32::from(u8::from(self.enabled)), now);
                 state.last_enabled = self.enabled;
             }
 
@@ -134,7 +133,7 @@ impl AnimatedDot {
     pub fn new(enabled: bool) -> Self {
         Self {
             enabled,
-            radius: LINE_HEIGHT,
+            radius: 8.0,
         }
     }
 

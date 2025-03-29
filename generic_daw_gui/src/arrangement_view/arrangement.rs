@@ -2,20 +2,13 @@ use super::{TrackClipWrapper, track::Track};
 use bit_set::BitSet;
 use generic_daw_core::{
     DawCtxMessage, Meter, MixerNode, Stream, StreamTrait as _,
-    audio_graph::{AudioGraph, AudioGraphNodeImpl as _, NodeId},
-    build_output_stream,
+    audio_graph::{AudioGraphNodeImpl as _, NodeId},
+    build_output_stream, export,
 };
 use generic_daw_utils::{HoleyVec, NoDebug};
-use hound::WavWriter;
 use oneshot::Receiver;
 use rtrb::Producer;
-use std::{
-    path::Path,
-    sync::{
-        Arc,
-        atomic::Ordering::{AcqRel, Acquire, Release},
-    },
-};
+use std::{path::Path, sync::Arc};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NodeType {
@@ -69,6 +62,10 @@ impl Arrangement {
 
     pub fn tracks(&self) -> &[Track] {
         &self.tracks
+    }
+
+    pub fn track_of(&self, id: NodeId) -> Option<usize> {
+        self.tracks.iter().position(|t| t.id() == id)
     }
 
     pub fn channels(&self) -> impl Iterator<Item = &Arc<MixerNode>> {
@@ -189,64 +186,27 @@ impl Arrangement {
         }
     }
 
-    pub fn request_export(&mut self) -> Receiver<AudioGraph> {
+    pub fn export(&mut self, path: &Path) {
         let (sender, receiver) = oneshot::channel();
 
         self.producer
             .push(DawCtxMessage::RequestAudioGraph(sender))
             .unwrap();
 
-        receiver
-    }
-
-    pub fn export(&mut self, mut audio_graph: AudioGraph, path: &Path) {
-        const CHUNK_SIZE: usize = 64;
+        let mut audio_graph = receiver.recv().unwrap();
 
         self.stream.pause().unwrap();
 
-        let playing = self.meter.playing.swap(true, AcqRel);
-        let metronome = self.meter.metronome.swap(false, AcqRel);
-        let sample = self.meter.sample.load(Acquire);
-
-        audio_graph.reset();
-
-        let mut writer = WavWriter::create(
+        export(
+            &mut audio_graph,
             path,
-            hound::WavSpec {
-                channels: 2,
-                sample_rate: self.meter.sample_rate,
-                bits_per_sample: 32,
-                sample_format: hound::SampleFormat::Float,
-            },
-        )
-        .unwrap();
-
-        let mut buf = [0.0; CHUNK_SIZE];
-
-        let len = self
-            .tracks
-            .iter()
-            .map(Track::len)
-            .max()
-            .unwrap_or_default()
-            .in_interleaved_samples(self.meter.bpm.load(Acquire), self.meter.sample_rate)
-            + audio_graph.delay();
-
-        for i in (0..len).step_by(CHUNK_SIZE) {
-            self.meter.sample.store(i, Release);
-
-            audio_graph.fill_buf(&mut buf);
-
-            for s in buf {
-                writer.write_sample(s).unwrap();
-            }
-        }
-
-        writer.finalize().unwrap();
-
-        self.meter.playing.store(playing, Release);
-        self.meter.metronome.store(metronome, Release);
-        self.meter.sample.store(sample, Release);
+            &self.meter,
+            self.tracks()
+                .iter()
+                .map(Track::len)
+                .max()
+                .unwrap_or_default(),
+        );
 
         self.producer
             .push(DawCtxMessage::AudioGraph(audio_graph))

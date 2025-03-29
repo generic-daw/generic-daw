@@ -1,11 +1,9 @@
 use atomig::Atomic;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicUsize};
 
-mod denominator;
-mod numerator;
+mod time_signature;
 
-pub use denominator::Denominator;
-pub use numerator::Numerator;
+pub use time_signature::{Denominator, Numerator};
 
 #[derive(Debug)]
 pub struct Meter {

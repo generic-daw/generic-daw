@@ -1,10 +1,10 @@
-use super::{LINE_HEIGHT, Vec2, shaping_of};
+use super::{LINE_HEIGHT, Vec2, shaping_of, waveform};
 use generic_daw_core::AudioClip as AudioClipInner;
 use iced::{
-    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Transformation, Vector,
+    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Text, Widget,
-        graphics::{color, geometry::Renderer as _},
+        graphics::geometry::Renderer as _,
         layout::{Limits, Node},
         renderer::{Quad, Style},
         text::Renderer as _,
@@ -19,15 +19,11 @@ use iced::{
 use iced_wgpu::{
     Geometry,
     geometry::Cache,
-    graphics::{
-        Mesh,
-        cache::{Cached as _, Group},
-        mesh::{Indexed, SolidVertex2D},
-    },
+    graphics::cache::{Cached as _, Group},
 };
 use std::{
     cell::RefCell,
-    cmp::{max_by, min_by},
+    cmp::min_by,
     sync::{Arc, atomic::Ordering::Acquire},
 };
 
@@ -231,9 +227,17 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 
         // fill the mesh cache if it's cleared
         if state.cache.borrow().is_none() {
-            let position = Point::new(bounds.x, layout.position().y);
-
-            if let Some(mesh) = self.mesh(theme, position, lower_bounds) {
+            if let Some(mesh) = waveform::mesh(
+                &self.inner.meter,
+                self.inner.position.get_global_start(),
+                self.inner.position.get_clip_start(),
+                &self.inner.audio.lods,
+                self.position,
+                self.scale,
+                theme,
+                Point::new(bounds.x, layout.position().y),
+                bounds,
+            ) {
                 state.cache.borrow_mut().replace(
                     Geometry::Live {
                         meshes: vec![mesh],
@@ -302,96 +306,6 @@ impl AudioClip {
         } else {
             Interaction::Grab
         }
-    }
-
-    fn mesh(&self, theme: &Theme, position: Point, bounds: Rectangle) -> Option<Mesh> {
-        // the height of the waveform
-        let height = self.scale.y - LINE_HEIGHT;
-
-        debug_assert!(height >= 0.0);
-
-        // samples of the original audio per sample of lod
-        let lod_sample_size = self.scale.x.floor().exp2();
-
-        // samples of the original audio per pixel
-        let pixel_size = self.scale.x.exp2();
-
-        // samples in the lod per pixel
-        let lod_samples_per_pixel = lod_sample_size / pixel_size;
-
-        let color = color::pack(theme.extended_palette().background.strong.text);
-        let lod = self.scale.x as usize - 3;
-
-        let bpm = self.inner.meter.bpm.load(Acquire);
-
-        let global_start = self
-            .inner
-            .position
-            .get_global_start()
-            .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate);
-
-        let diff = max_by(0.0, self.position.x - global_start, f32::total_cmp);
-
-        let clip_start = self
-            .inner
-            .position
-            .get_clip_start()
-            .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate);
-
-        let offset = (clip_start / lod_sample_size).fract();
-
-        let first_index = ((diff + clip_start) / lod_sample_size) as usize;
-        let last_index = first_index + (bounds.width / lod_samples_per_pixel) as usize;
-        let last_index = last_index.min(self.inner.audio.lods[lod].len() - 1);
-
-        // there is nothing to draw
-        if last_index - first_index < 2 {
-            return None;
-        }
-
-        // vertices of the waveform
-        let vertices = self.inner.audio.lods[lod][first_index..=last_index]
-            .iter()
-            .map(|(min, max)| (min * height, max * height))
-            .map(|(min, max)| {
-                if max - min < 1.0 {
-                    let avg = min.midpoint(max).clamp(0.5, height - 0.5);
-                    (avg - 0.5, avg + 0.5)
-                } else {
-                    (min, max)
-                }
-            })
-            .enumerate()
-            .flat_map(|(x, (min, max))| {
-                let x = (x as f32 - offset) * lod_samples_per_pixel;
-
-                [
-                    SolidVertex2D {
-                        position: [x, min + LINE_HEIGHT],
-                        color,
-                    },
-                    SolidVertex2D {
-                        position: [x, max + LINE_HEIGHT],
-                        color,
-                    },
-                ]
-            })
-            .collect::<Vec<_>>();
-
-        // triangles of the waveform
-        let indices = (0..vertices.len() as u32 - 2)
-            .flat_map(|i| [i, i + 1, i + 2])
-            .collect();
-
-        // the waveform mesh
-        Some(Mesh::Solid {
-            buffers: Indexed { vertices, indices },
-            transformation: Transformation::translate(position.x, position.y),
-            clip_bounds: Rectangle::new(
-                Point::new(0.0, (bounds.y - position.y).max(0.0)),
-                bounds.size(),
-            ),
-        })
     }
 }
 

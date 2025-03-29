@@ -1,12 +1,20 @@
 use crate::{Meter, MixerNode, master::Master};
-use audio_graph::AudioGraph;
+use audio_graph::{AudioGraph, AudioGraphNode, NodeId};
 use log::trace;
+use oneshot::Sender;
 use rtrb::{Consumer, Producer, RingBuffer};
 use std::sync::Arc;
 
-mod daw_ctx_message;
-
-pub use daw_ctx_message::DawCtxMessage;
+#[derive(Debug)]
+pub enum DawCtxMessage {
+    Insert(AudioGraphNode),
+    Remove(NodeId),
+    Connect(NodeId, NodeId, Sender<(NodeId, NodeId)>),
+    Disconnect(NodeId, NodeId),
+    RequestAudioGraph(Sender<AudioGraph>),
+    Reset,
+    AudioGraph(AudioGraph),
+}
 
 pub struct DawCtx {
     pub meter: Arc<Meter>,

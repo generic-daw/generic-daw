@@ -9,14 +9,12 @@ use crate::{
     widget::{AnimatedDot, BpmInput, LINE_HEIGHT, Strategy, VSplit},
 };
 use generic_daw_core::{
-    Denominator, Meter, Numerator, Position, Stream, VARIANTS as _, build_input_stream,
+    Denominator, Meter, Numerator, Position, VARIANTS as _,
     clap_host::{self, PluginBundle, PluginDescriptor, PluginType},
 };
-use hound::{SampleFormat, WavSpec, WavWriter};
 use iced::{
     Alignment::Center,
     Element, Event, Subscription, Task,
-    border::Radius,
     event::{self, Status},
     keyboard,
     widget::{
@@ -29,15 +27,12 @@ use log::trace;
 use rfd::{AsyncFileDialog, FileHandle};
 use std::{
     collections::BTreeMap,
-    fs::{self, File},
-    hash::{DefaultHasher, Hash as _, Hasher as _},
-    io::BufWriter,
+    fs,
     path::Path,
     sync::{
         Arc, LazyLock,
         atomic::Ordering::{AcqRel, Acquire, Release},
     },
-    time::Instant,
 };
 
 pub static PLUGINS: LazyLock<BTreeMap<PluginDescriptor, PluginBundle>> =
@@ -61,10 +56,6 @@ pub enum Message {
     ChangedDenominator(Denominator),
     ChangedTab(Tab),
 
-    ToggleRecord,
-    RecordingChunk(Box<[f32]>),
-    StopRecord,
-
     SplitAt(f32),
 }
 
@@ -73,7 +64,6 @@ pub struct Daw {
     file_tree: FileTree,
     split_at: f32,
     meter: Arc<Meter>,
-    recording: Option<(Stream, WavWriter<BufWriter<File>>, Box<Path>, Position)>,
 }
 
 impl Daw {
@@ -94,7 +84,6 @@ impl Daw {
                 file_tree: FileTree::new(&dirs::home_dir().unwrap()),
                 split_at: 300.0,
                 meter,
-                recording: None,
             },
             open.discard(),
         )
@@ -117,7 +106,7 @@ impl Daw {
                             .iter()
                             .map(FileHandle::path)
                             .map(Box::from)
-                            .map(|path| ArrangementMessage::SampleLoad(path, Position::default()))
+                            .map(ArrangementMessage::SampleLoadFromFile)
                             .map(Message::Arrangement)
                             .map(Task::done),
                     )
@@ -131,18 +120,24 @@ impl Daw {
                 )
                 .and_then(Task::done)
                 .map(|p| p.path().into())
-                .map(ArrangementMessage::ExportRequest)
+                .map(ArrangementMessage::Export)
                 .map(Message::Arrangement);
             }
             Message::Stop => {
                 self.meter.playing.store(false, Release);
                 self.meter.sample.store(0, Release);
                 self.arrangement.stop();
-                return self.update(Message::StopRecord);
+                return self
+                    .arrangement
+                    .update(ArrangementMessage::StopRecord)
+                    .map(Message::Arrangement);
             }
             Message::TogglePlay => {
                 if self.meter.playing.fetch_not(AcqRel) {
-                    return self.update(Message::StopRecord);
+                    return self
+                        .arrangement
+                        .update(ArrangementMessage::StopRecord)
+                        .map(Message::Arrangement);
                 }
             }
             Message::ToggleMetronome => {
@@ -154,67 +149,6 @@ impl Daw {
             }
             Message::ChangedDenominator(new_denominator) => {
                 self.meter.denominator.store(new_denominator, Release);
-            }
-            Message::ToggleRecord => {
-                if self.recording.is_some() {
-                    return self.update(Message::StopRecord);
-                }
-
-                let mut file_name = "recording-".to_owned();
-
-                let mut hasher = DefaultHasher::new();
-                Instant::now().hash(&mut hasher);
-                file_name.push_str(itoa::Buffer::new().format(hasher.finish()));
-
-                file_name.push_str(".wav");
-
-                let path = dirs::data_dir()
-                    .unwrap()
-                    .join("Generic Daw")
-                    .join(file_name)
-                    .into();
-
-                let (channels, sample_rate, stream, receiver) =
-                    build_input_stream(self.meter.sample_rate);
-
-                let position = Position::from_interleaved_samples(
-                    self.meter.sample.load(Acquire),
-                    self.meter.bpm.load(Acquire),
-                    self.meter.sample_rate,
-                );
-
-                self.meter.playing.store(true, Release);
-
-                let writer = WavWriter::create(
-                    &path,
-                    WavSpec {
-                        channels,
-                        sample_rate,
-                        bits_per_sample: 32,
-                        sample_format: SampleFormat::Float,
-                    },
-                )
-                .unwrap();
-
-                self.recording = Some((stream, writer, path, position));
-
-                return Task::stream(receiver).map(Message::RecordingChunk);
-            }
-            Message::RecordingChunk(samples) => {
-                if let Some((_, writer, _, _)) = self.recording.as_mut() {
-                    for sample in samples {
-                        writer.write_sample(sample).unwrap();
-                    }
-                }
-            }
-            Message::StopRecord => {
-                if let Some((_, writer, path, position)) = self.recording.take() {
-                    writer.finalize().unwrap();
-                    return self
-                        .arrangement
-                        .update(ArrangementMessage::SampleLoad(path, position))
-                        .map(Message::Arrangement);
-                }
             }
             Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
         }
@@ -271,32 +205,18 @@ impl Daw {
                     .width(50),
                 ],
                 BpmInput::new(30..=600, bpm, Message::ChangedBpm),
-                button(
-                    row![
-                        AnimatedDot::new(fill).radius(8.0),
-                        AnimatedDot::new(!fill).radius(8.0)
-                    ]
-                    .spacing(5.0)
-                )
-                .padding(8.0)
-                .style(move |t, s| button_with_base(
-                    t,
-                    s,
-                    if self.meter.metronome.load(Acquire) {
-                        button::primary
-                    } else {
-                        button::secondary
-                    }
-                ))
-                .on_press(Message::ToggleMetronome),
-                button(AnimatedDot::new(self.recording.is_some()).radius(8.0),)
-                    .style(|t, s| {
-                        let mut style = button::danger(t, s);
-                        style.border.radius = Radius::new(f32::INFINITY);
-                        style
-                    })
+                button(row![AnimatedDot::new(fill), AnimatedDot::new(!fill)].spacing(5.0))
                     .padding(8.0)
-                    .on_press(Message::ToggleRecord),
+                    .style(move |t, s| button_with_base(
+                        t,
+                        s,
+                        if self.meter.metronome.load(Acquire) {
+                            button::primary
+                        } else {
+                            button::secondary
+                        }
+                    ))
+                    .on_press(Message::ToggleMetronome),
                 row![
                     styled_button("Arrangement").on_press(Message::ChangedTab(Tab::Arrangement)),
                     styled_button("Mixer").on_press(Message::ChangedTab(Tab::Mixer))
