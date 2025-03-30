@@ -45,7 +45,6 @@ pub use midi_track::MidiTrack;
 pub use mixer_node::MixerNode;
 pub use position::Position;
 pub use recording::Recording;
-pub use strum::VariantArray as VARIANTS;
 
 pub fn build_input_stream(
     sample_rate: u32,

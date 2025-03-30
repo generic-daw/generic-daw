@@ -14,7 +14,9 @@ generic_daw_utils = { path = "../generic_daw_utils" }
 
 arc-swap = "1.7.1"
 async-channel = "2.3.1"
-atomig = { git = "https://github.com/edwloef/atomig", branch = "update-syn-2", features = ["derive"] }
+atomig = { git = "https://github.com/edwloef/atomig", branch = "update-syn-2", features = [
+    "derive",
+] }
 cpal = "0.15.3"
 hound = "3.5.1"
 itoa = "1.0.15"
@@ -22,5 +24,4 @@ log = "0.4.27"
 oneshot = "0.1.11"
 rtrb = "0.3.2"
 rubato = { version = "0.16.1", default-features = false }
-strum = { version = "0.27.1", features = ["derive"] }
 symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }

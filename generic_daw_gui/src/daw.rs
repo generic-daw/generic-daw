@@ -9,7 +9,7 @@ use crate::{
     widget::{AnimatedDot, BpmInput, LINE_HEIGHT, VSplit, vsplit::Strategy},
 };
 use generic_daw_core::{
-    Denominator, Meter, Numerator, Position, VARIANTS as _,
+    Denominator, Meter, Numerator, Position,
     clap_host::{self, PluginBundle, PluginDescriptor, PluginType},
 };
 use iced::{

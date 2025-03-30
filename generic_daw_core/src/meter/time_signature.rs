@@ -1,9 +1,8 @@
 use atomig::Atom;
 use std::fmt::{Display, Formatter};
-use strum::VariantArray;
 
 #[repr(u8)]
-#[derive(Atom, Clone, Copy, Debug, Default, Eq, PartialEq, VariantArray)]
+#[derive(Atom, Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Numerator {
     _1 = 1,
     _2 = 2,
@@ -24,6 +23,27 @@ pub enum Numerator {
     _16 = 16,
 }
 
+impl Numerator {
+    pub const VARIANTS: [Self; 16] = [
+        Self::_1,
+        Self::_2,
+        Self::_3,
+        Self::_4,
+        Self::_5,
+        Self::_6,
+        Self::_7,
+        Self::_8,
+        Self::_9,
+        Self::_10,
+        Self::_11,
+        Self::_12,
+        Self::_13,
+        Self::_14,
+        Self::_15,
+        Self::_16,
+    ];
+}
+
 impl Display for Numerator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(itoa::Buffer::new().format(*self as u8))
@@ -31,13 +51,17 @@ impl Display for Numerator {
 }
 
 #[repr(u8)]
-#[derive(Atom, Clone, Copy, Debug, Default, Eq, PartialEq, VariantArray)]
+#[derive(Atom, Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Denominator {
     _2 = 2,
     #[default]
     _4 = 4,
     _8 = 8,
     _16 = 16,
+}
+
+impl Denominator {
+    pub const VARIANTS: [Self; 4] = [Self::_2, Self::_4, Self::_8, Self::_16];
 }
 
 impl Display for Denominator {
