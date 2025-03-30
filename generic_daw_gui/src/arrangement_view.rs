@@ -329,14 +329,11 @@ impl ArrangementView {
                 let (sender, receiver) = oneshot::channel();
 
                 std::thread::spawn(move || {
-                    sender
-                        .send(InterleavedAudio::create(&path, meter.sample_rate))
-                        .unwrap();
+                    _ = sender.send(InterleavedAudio::create(&path, meter.sample_rate));
                 });
 
                 return Task::future(receiver)
-                    .and_then(Task::done)
-                    .map(Result::ok)
+                    .map(|r| r.ok().and_then(Result::ok))
                     .map(Message::SampleLoadedFromFile);
             }
             Message::SampleLoadedFromFile(audio) => {
