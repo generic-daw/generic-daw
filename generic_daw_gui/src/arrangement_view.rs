@@ -1,11 +1,10 @@
 use crate::{
     clap_host::{ClapHost, Message as ClapHostMessage},
     components::{
-        char_button, empty_widget, styled_button, styled_pick_list,
-        styled_scrollable_with_direction,
+        char_button, empty_widget, styled_pick_list, styled_scrollable_with_direction, styled_svg,
     },
     daw::PLUGINS,
-    icons::{CHEVRON_RIGHT, HANDLE},
+    icons::{ADD, CHEVRON_RIGHT, HANDLE},
     stylefns::{button_with_base, slider_with_enabled, svg_with_enabled},
     widget::{
         AnimatedDot, Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob,
@@ -28,6 +27,7 @@ use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2};
 use iced::{
     Alignment, Element, Function as _, Length, Radians, Subscription, Task, Theme, border,
     mouse::Interaction,
+    padding,
     widget::{
         button, column, container, horizontal_rule, mouse_area, responsive, row,
         scrollable::{Direction, Scrollbar},
@@ -88,6 +88,7 @@ pub enum Message {
 
     InstrumentLoad(PluginDescriptor),
 
+    AudioTrackAdd,
     TrackRemove(NodeId),
     TrackToggleEnabled(NodeId),
     TrackToggleSolo(NodeId),
@@ -352,12 +353,14 @@ impl ArrangementView {
                         .position(|track| matches!(track, TrackWrapper::AudioTrack(..)))
                         .map_or_else(
                             || {
-                                let track = AudioTrack::new(self.meter.clone());
                                 (
                                     self.arrangement.tracks().len(),
-                                    Task::future(self.arrangement.add_track(track))
-                                        .and_then(Task::done)
-                                        .map(Message::ConnectSucceeded),
+                                    Task::future(
+                                        self.arrangement
+                                            .add_track(AudioTrack::new(self.meter.clone())),
+                                    )
+                                    .and_then(Task::done)
+                                    .map(Message::ConnectSucceeded),
                                 )
                             },
                             |x| (x, Task::none()),
@@ -400,6 +403,14 @@ impl ArrangementView {
                         )))))
                         .map(Message::ClapHost),
                 ]);
+            }
+            Message::AudioTrackAdd => {
+                return Task::future(
+                    self.arrangement
+                        .add_track(AudioTrack::new(self.meter.clone())),
+                )
+                .and_then(Task::done)
+                .map(Message::ConnectSucceeded);
             }
             Message::TrackRemove(id) => {
                 self.arrangement.remove_track(id);
@@ -487,6 +498,8 @@ impl ArrangementView {
             }
             Message::StopRecord => {
                 if let Some(recording) = self.recording.take() {
+                    self.meter.playing.store(false, Release);
+
                     let pos = recording.position;
                     let audio = recording.try_into().unwrap();
                     let track = self.recording_track.take().unwrap();
@@ -848,8 +861,23 @@ impl ArrangementView {
                         .padding(5.0)
                         .height(Length::Fixed(self.arrangement_scale.y))
                     })
-                    .map(Element::new),
-            ),
+                    .map(Element::new)
+                    .chain(once(
+                        container(
+                            button(styled_svg(ADD.clone()))
+                                .style(|t, s| {
+                                    let mut style = button_with_base(t, s, button::primary);
+                                    style.border.radius = f32::INFINITY.into();
+                                    style
+                                })
+                                .padding(5.0)
+                                .on_press(Message::AudioTrackAdd),
+                        )
+                        .padding(padding::right(5.0).top(5.0))
+                        .into(),
+                    )),
+            )
+            .align_x(Alignment::Center),
             ArrangementWidget::new(
                 &self.meter,
                 self.arrangement_position,
@@ -1186,10 +1214,17 @@ impl ArrangementView {
                 }
             })
             .chain(once(
-                styled_button(row!["+"].height(Length::Fill).align_y(Alignment::Center))
+                button(styled_svg(ADD.clone()))
+                    .style(|t, s| {
+                        let mut style = button_with_base(t, s, button::primary);
+                        style.border.radius = f32::INFINITY.into();
+                        style
+                    })
+                    .padding(5.0)
                     .on_press(Message::ChannelAdd)
                     .into(),
             )))
+            .align_y(Alignment::Center)
             .spacing(5.0),
             Direction::Horizontal(Scrollbar::default()),
         )

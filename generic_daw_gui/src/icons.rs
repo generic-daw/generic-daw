@@ -1,6 +1,11 @@
 use iced::widget::svg;
 use std::sync::LazyLock;
 
+pub static ADD: LazyLock<svg::Handle> = LazyLock::new(|| {
+    svg::Handle::from_memory(include_bytes!(
+        "../../assets/material-symbols--add-2-rounded.svg"
+    ))
+});
 pub static AUDIO_FILE: LazyLock<svg::Handle> = LazyLock::new(|| {
     svg::Handle::from_memory(include_bytes!(
         "../../assets/material-symbols--audio-file-outline-rounded.svg"
