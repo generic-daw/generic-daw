@@ -360,17 +360,11 @@ impl<'a, Message> PianoRoll<'a, Message> {
         let sample_size = self.scale.x.exp2();
         let bpm = self.meter.bpm.load(Acquire);
 
-        let start = (note
-            .start
-            .in_interleaved_samples_f(bpm, self.meter.sample_rate)
-            - self.position.x)
-            / sample_size;
+        let start =
+            (note.start.in_samples_f(bpm, self.meter.sample_rate) - self.position.x) / sample_size;
 
-        let end = (note
-            .end
-            .in_interleaved_samples_f(bpm, self.meter.sample_rate)
-            - self.position.x)
-            / sample_size;
+        let end =
+            (note.end.in_samples_f(bpm, self.meter.sample_rate) - self.position.x) / sample_size;
 
         Rectangle::new(
             Point::new(

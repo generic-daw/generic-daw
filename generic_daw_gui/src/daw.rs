@@ -162,14 +162,11 @@ impl Daw {
         }
 
         let bpm = self.meter.bpm.load(Acquire);
-        let fill = Position::from_interleaved_samples(
-            self.meter.sample.load(Acquire),
-            bpm,
-            self.meter.sample_rate,
-        )
-        .beat()
-            % 2
-            == 0;
+        let fill =
+            Position::from_samples(self.meter.sample.load(Acquire), bpm, self.meter.sample_rate)
+                .beat()
+                % 2
+                == 0;
 
         column![
             row![

@@ -22,6 +22,7 @@ pub struct Recording {
     writer: NoDebug<WavWriter<BufWriter<File>>>,
     pub position: Position,
     channels: usize,
+    sample_rate: u32,
     buffer_size: usize,
 
     resampler: Option<NoDebug<SincFixedIn<f32>>>,
@@ -36,7 +37,7 @@ impl Recording {
         let (channels, sample_rate, stream, receiver) =
             build_input_stream(meter.sample_rate, meter.buffer_size);
 
-        let start_pos = Position::from_interleaved_samples(
+        let start_pos = Position::from_samples(
             meter.sample.load(Acquire),
             meter.bpm.load(Acquire),
             meter.sample_rate,
@@ -66,6 +67,7 @@ impl Recording {
                 writer,
                 position: start_pos,
                 channels: channels as usize,
+                sample_rate,
                 buffer_size: meter.buffer_size as usize,
 
                 resampler,
@@ -153,6 +155,39 @@ impl Recording {
                     })
             }));
         });
+    }
+
+    pub fn split_off(&mut self, mut path: Box<Path>) -> Arc<InterleavedAudio> {
+        let mut writer = WavWriter::create(
+            &path,
+            WavSpec {
+                channels: self.channels as u16,
+                sample_rate: self.sample_rate,
+                bits_per_sample: 32,
+                sample_format: SampleFormat::Float,
+            },
+        )
+        .unwrap();
+        std::mem::swap(&mut self.writer.0, &mut writer);
+        writer.finalize().unwrap();
+
+        let mut samples = Vec::new();
+        std::mem::swap(&mut self.samples.0, &mut samples);
+
+        let mut lods = vec![Vec::new(); 10].into_boxed_slice();
+        std::mem::swap(&mut self.lods.0, &mut lods);
+
+        std::mem::swap(&mut self.path, &mut path);
+
+        Arc::new(InterleavedAudio {
+            samples: samples.into_boxed_slice().into(),
+            lods: lods
+                .into_iter()
+                .map(Vec::into_boxed_slice)
+                .collect::<Box<_>>()
+                .into(),
+            path,
+        })
     }
 
     #[must_use]

@@ -288,8 +288,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
         );
 
         let mut draw_text = |beat: Position, bar: u32| {
-            let x = (beat.in_interleaved_samples_f(bpm, self.meter.sample_rate) - self.position.x)
-                / sample_size;
+            let x =
+                (beat.in_samples_f(bpm, self.meter.sample_rate) - self.position.x) / sample_size;
 
             let bar = Text {
                 content: itoa::Buffer::new().format(bar + 1).to_owned(),
@@ -314,11 +314,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
         let numerator = self.meter.numerator.load(Acquire);
 
         let mut beat =
-            Position::from_interleaved_samples_f(self.position.x, bpm, self.meter.sample_rate)
-                .ceil();
+            Position::from_samples_f(self.position.x, bpm, self.meter.sample_rate).ceil();
 
         let end_beat = beat
-            + Position::from_interleaved_samples_f(
+            + Position::from_samples_f(
                 seeker_bounds.width * sample_size,
                 bpm,
                 self.meter.sample_rate,
@@ -440,16 +439,11 @@ impl<'a, Message> Seeker<'a, Message> {
         let sample_size = self.scale.x.exp2();
 
         let mut beat =
-            Position::from_interleaved_samples_f(self.position.x, bpm, self.meter.sample_rate)
-                .ceil();
+            Position::from_samples_f(self.position.x, bpm, self.meter.sample_rate).ceil();
 
         let end_beat = beat
-            + Position::from_interleaved_samples_f(
-                bounds.width * sample_size,
-                bpm,
-                self.meter.sample_rate,
-            )
-            .floor();
+            + Position::from_samples_f(bounds.width * sample_size, bpm, self.meter.sample_rate)
+                .floor();
 
         while beat <= end_beat {
             let bar = beat.beat() / numerator as u32;
@@ -470,8 +464,8 @@ impl<'a, Message> Seeker<'a, Message> {
                 theme.extended_palette().background.weak.color
             };
 
-            let x = (beat.in_interleaved_samples_f(bpm, self.meter.sample_rate) - self.position.x)
-                / sample_size;
+            let x =
+                (beat.in_samples_f(bpm, self.meter.sample_rate) - self.position.x) / sample_size;
 
             renderer.fill_quad(
                 Quad {

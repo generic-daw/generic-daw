@@ -60,12 +60,12 @@ where
             .inner
             .position
             .get_global_start()
-            .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate);
+            .in_samples_f(bpm, self.inner.meter.sample_rate);
         let global_end = self
             .inner
             .position
             .get_global_end()
-            .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate);
+            .in_samples_f(bpm, self.inner.meter.sample_rate);
         let pixel_size = self.scale.x.exp2();
 
         Node::new(Size::new(
@@ -205,13 +205,13 @@ where
             let start_pixel = (note
                 .start
                 .saturating_sub(clip_start)
-                .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
+                .in_samples_f(bpm, self.inner.meter.sample_rate)
                 - self.position.x)
                 / pixel_size;
             let end_pixel = (note
                 .end
                 .saturating_sub(clip_start)
-                .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate)
+                .in_samples_f(bpm, self.inner.meter.sample_rate)
                 - self.position.x)
                 / pixel_size;
 

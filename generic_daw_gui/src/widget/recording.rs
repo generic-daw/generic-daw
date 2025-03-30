@@ -42,7 +42,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
         let global_start = self
             .inner
             .position
-            .in_interleaved_samples_f(bpm, self.meter.sample_rate);
+            .in_samples_f(bpm, self.meter.sample_rate);
         let len = self.inner.len() as f32;
         let pixel_size = self.scale.x.exp2();
 

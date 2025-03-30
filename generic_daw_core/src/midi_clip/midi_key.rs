@@ -1,6 +1,6 @@
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub enum Key {
     C = 0,
     CSharp = 1,
@@ -48,6 +48,12 @@ impl TryFrom<u8> for Key {
     }
 }
 
+impl Debug for Key {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        <Self as Display>::fmt(self, f)
+    }
+}
+
 impl Display for Key {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
@@ -67,7 +73,7 @@ impl Display for Key {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub struct MidiKey(pub u8);
 
 impl MidiKey {
@@ -91,11 +97,15 @@ impl MidiKey {
     }
 }
 
+impl Debug for MidiKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        <Self as Display>::fmt(self, f)
+    }
+}
+
 impl Display for MidiKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Key::try_from(self.0 % 12)
-            .unwrap()
-            .fmt(f)
+        <Key as Display>::fmt(&Key::try_from(self.0 % 12).unwrap(), f)
             .and_then(|()| f.write_str(itoa::Buffer::new().format(self.0 as i8 / 12 - 1)))
     }
 }

@@ -29,7 +29,7 @@ pub fn export(audio_graph: &mut AudioGraph, path: &Path, meter: &Meter, end: Pos
 
     let delay = audio_graph.delay();
     let skip = delay % buffer_size;
-    let end = end.in_interleaved_samples(meter.bpm.load(Acquire), meter.sample_rate) + delay;
+    let end = end.in_samples(meter.bpm.load(Acquire), meter.sample_rate) + delay;
 
     for i in (0..delay - skip).step_by(buffer_size) {
         meter.sample.store(i, Release);

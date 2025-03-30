@@ -83,12 +83,12 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
             .inner
             .position
             .get_global_start()
-            .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate);
+            .in_samples_f(bpm, self.inner.meter.sample_rate);
         let global_end = self
             .inner
             .position
             .get_global_end()
-            .in_interleaved_samples_f(bpm, self.inner.meter.sample_rate);
+            .in_samples_f(bpm, self.inner.meter.sample_rate);
         let pixel_size = self.scale.x.exp2();
 
         Node::new(Size::new(

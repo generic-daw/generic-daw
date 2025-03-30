@@ -25,11 +25,7 @@ impl AudioClip {
             audio,
             position: ClipPosition::new(
                 Position::ZERO,
-                Position::from_interleaved_samples(
-                    samples,
-                    meter.bpm.load(Acquire),
-                    meter.sample_rate,
-                ),
+                Position::from_samples(samples, meter.bpm.load(Acquire), meter.sample_rate),
                 Position::ZERO,
             ),
             meter,
@@ -43,7 +39,7 @@ impl AudioClip {
         let clip_start_sample = self
             .position
             .get_global_start()
-            .in_interleaved_samples(bpm, self.meter.sample_rate);
+            .in_samples(bpm, self.meter.sample_rate);
 
         let diff = sample.abs_diff(clip_start_sample);
 
@@ -52,7 +48,7 @@ impl AudioClip {
                 + self
                     .position
                     .get_clip_start()
-                    .in_interleaved_samples(bpm, self.meter.sample_rate);
+                    .in_samples(bpm, self.meter.sample_rate);
 
             if start_index >= self.audio.samples.len() {
                 return;

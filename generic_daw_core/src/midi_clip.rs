@@ -59,9 +59,7 @@ impl MidiClip {
             .for_each(|note| {
                 // TODO: handle starting and stopping notes in the middle of their duration
 
-                let start = note
-                    .start
-                    .in_interleaved_samples(bpm, self.meter.sample_rate);
+                let start = note.start.in_samples(bpm, self.meter.sample_rate);
                 if start >= start_sample && start < end_sample {
                     note_buffers.note_on_event(
                         (start - start_sample) as u32 / 2,
@@ -71,7 +69,7 @@ impl MidiClip {
                     );
                 }
 
-                let end = note.end.in_interleaved_samples(bpm, self.meter.sample_rate);
+                let end = note.end.in_samples(bpm, self.meter.sample_rate);
                 if end >= start_sample && end < end_sample {
                     note_buffers.note_off_event(
                         (end - start_sample) as u32 / 2,

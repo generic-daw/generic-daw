@@ -30,18 +30,16 @@ impl AudioGraphNodeImpl for Master {
             let sample = self.meter.sample.load(Acquire);
             let bpm = self.meter.bpm.load(Acquire);
 
-            let buf_start_pos =
-                Position::from_interleaved_samples(sample, bpm, self.meter.sample_rate);
+            let buf_start_pos = Position::from_samples(sample, bpm, self.meter.sample_rate);
             let mut buf_end_pos =
-                Position::from_interleaved_samples(sample + buf.len(), bpm, self.meter.sample_rate);
+                Position::from_samples(sample + buf.len(), bpm, self.meter.sample_rate);
 
             if (buf_start_pos.beat() != buf_end_pos.beat() && buf_end_pos.step() != 0)
                 || buf_start_pos.step() == 0
             {
                 buf_end_pos = buf_end_pos.floor();
 
-                let diff = (buf_end_pos - buf_start_pos)
-                    .in_interleaved_samples(bpm, self.meter.sample_rate);
+                let diff = (buf_end_pos - buf_start_pos).in_samples(bpm, self.meter.sample_rate);
                 let click = if buf_end_pos.beat() % self.meter.numerator.load(Acquire) as u32 == 0 {
                     self.on_bar_click.clone()
                 } else {

@@ -57,7 +57,7 @@ impl Position {
     }
 
     #[must_use]
-    pub fn from_interleaved_samples_f(samples: f32, bpm: u16, sample_rate: u32) -> Self {
+    pub fn from_samples_f(samples: f32, bpm: u16, sample_rate: u32) -> Self {
         let bpm = f32::from(bpm);
         let sample_rate = sample_rate as f32;
 
@@ -67,7 +67,7 @@ impl Position {
     }
 
     #[must_use]
-    pub fn from_interleaved_samples(samples: usize, bpm: u16, sample_rate: u32) -> Self {
+    pub fn from_samples(samples: usize, bpm: u16, sample_rate: u32) -> Self {
         let samples = samples as u64;
         let bpm = u64::from(bpm);
         let sample_rate = u64::from(sample_rate);
@@ -78,7 +78,7 @@ impl Position {
     }
 
     #[must_use]
-    pub fn in_interleaved_samples_f(self, bpm: u16, sample_rate: u32) -> f32 {
+    pub fn in_samples_f(self, bpm: u16, sample_rate: u32) -> f32 {
         let beat = f64::from(self.0);
         let bpm = f64::from(bpm);
         let sample_rate = f64::from(sample_rate);
@@ -89,7 +89,7 @@ impl Position {
     }
 
     #[must_use]
-    pub fn in_interleaved_samples(self, bpm: u16, sample_rate: u32) -> usize {
+    pub fn in_samples(self, bpm: u16, sample_rate: u32) -> usize {
         let global_beat = u64::from(self.0);
         let bpm = u64::from(bpm);
         let sample_rate = u64::from(sample_rate);

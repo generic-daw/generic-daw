@@ -41,11 +41,11 @@ where
 
     let bpm = meter.bpm.load(Acquire);
 
-    let global_start = global_start.in_interleaved_samples_f(bpm, meter.sample_rate);
+    let global_start = global_start.in_samples_f(bpm, meter.sample_rate);
 
     let diff = max_by(0.0, position.x - global_start, f32::total_cmp);
 
-    let clip_start = clip_start.in_interleaved_samples_f(bpm, meter.sample_rate);
+    let clip_start = clip_start.in_samples_f(bpm, meter.sample_rate);
 
     let offset = (clip_start / lod_sample_size).fract();
 

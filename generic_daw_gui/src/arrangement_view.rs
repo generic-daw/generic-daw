@@ -95,6 +95,7 @@ pub enum Message {
     SeekTo(Position),
 
     ToggleRecord(NodeId),
+    RecordingSplit(NodeId),
     RecordingChunk(Box<[f32]>),
     StopRecord,
 
@@ -441,39 +442,43 @@ impl ArrangementView {
             }
             Message::SeekTo(pos) => {
                 self.meter.sample.store(
-                    pos.in_interleaved_samples(
-                        self.meter.bpm.load(Acquire),
-                        self.meter.sample_rate,
-                    ),
+                    pos.in_samples(self.meter.bpm.load(Acquire), self.meter.sample_rate),
                     Release,
                 );
             }
             Message::ToggleRecord(id) => {
-                if self.recording.is_some() {
+                if self.recording_track == Some(id) {
                     return self.update(Message::StopRecord);
+                } else if self.recording.is_some() {
+                    return self.update(Message::RecordingSplit(id));
                 }
 
-                let mut file_name = "recording-".to_owned();
-
-                let mut hasher = DefaultHasher::new();
-                Instant::now().hash(&mut hasher);
-                file_name.push_str(itoa::Buffer::new().format(hasher.finish()));
-
-                file_name.push_str(".wav");
-
-                let path = dirs::data_dir()
-                    .unwrap()
-                    .join("Generic Daw")
-                    .join(file_name)
-                    .into();
-
-                let (recording, receiver) = Recording::create(path, &self.meter);
+                let (recording, receiver) =
+                    Recording::create(Self::make_recording_path(), &self.meter);
                 self.recording = Some(recording);
                 self.recording_track = Some(id);
 
                 self.meter.playing.store(true, Release);
 
                 return Task::stream(receiver).map(Message::RecordingChunk);
+            }
+            Message::RecordingSplit(id) => {
+                if let Some(recording) = self.recording.as_mut() {
+                    let mut pos = Position::from_samples(
+                        self.meter.sample.load(Acquire),
+                        self.meter.bpm.load(Acquire),
+                        self.meter.sample_rate,
+                    );
+                    (pos, recording.position) = (recording.position, pos);
+
+                    let audio = recording.split_off(Self::make_recording_path());
+                    let track = self.recording_track.replace(id).unwrap();
+                    let track = self.arrangement.track_of(track).unwrap();
+
+                    let clip = AudioClip::create(audio, self.meter.clone());
+                    clip.position.move_to(pos);
+                    self.arrangement.add_clip(track, clip);
+                }
             }
             Message::RecordingChunk(samples) => {
                 if let Some(recording) = self.recording.as_mut() {
@@ -484,10 +489,8 @@ impl ArrangementView {
                 if let Some(recording) = self.recording.take() {
                     let pos = recording.position;
                     let audio = recording.try_into().unwrap();
-                    let track = self
-                        .arrangement
-                        .track_of(self.recording_track.take().unwrap())
-                        .unwrap();
+                    let track = self.recording_track.take().unwrap();
+                    let track = self.arrangement.track_of(track).unwrap();
 
                     let clip = AudioClip::create(audio, self.meter.clone());
                     clip.position.move_to(pos);
@@ -520,10 +523,7 @@ impl ArrangementView {
                             .map(TrackWrapper::len)
                             .max()
                             .map(|m| {
-                                m.in_interleaved_samples(
-                                    self.meter.bpm.load(Acquire),
-                                    self.meter.sample_rate,
-                                )
+                                m.in_samples(self.meter.bpm.load(Acquire), self.meter.sample_rate)
                             })
                             .max(
                                 self.recording
@@ -571,10 +571,7 @@ impl ArrangementView {
                             .map(|note| note.end)
                             .max()
                             .unwrap_or_default()
-                            .in_interleaved_samples_f(
-                                self.meter.bpm.load(Acquire),
-                                self.meter.sample_rate,
-                            ),
+                            .in_samples_f(self.meter.bpm.load(Acquire), self.meter.sample_rate),
                     );
                     piano_roll_position.y = piano_roll_position.y.max(0.0);
 
@@ -585,6 +582,22 @@ impl ArrangementView {
         }
 
         Task::none()
+    }
+
+    fn make_recording_path() -> Box<Path> {
+        let mut file_name = "recording-".to_owned();
+
+        let mut hasher = DefaultHasher::new();
+        Instant::now().hash(&mut hasher);
+        file_name.push_str(itoa::Buffer::new().format(hasher.finish()));
+
+        file_name.push_str(".wav");
+
+        dirs::data_dir()
+            .unwrap()
+            .join("Generic Daw")
+            .join(file_name)
+            .into()
     }
 
     fn handle_arrangement_action(&mut self, action: ArrangementAction) {
@@ -1361,11 +1374,11 @@ impl ArrangementView {
                 selected_clip
                     .position
                     .get_global_start()
-                    .in_interleaved_samples_f(bpm, self.meter.sample_rate)
+                    .in_samples_f(bpm, self.meter.sample_rate)
                     - selected_clip
                         .position
                         .get_clip_start()
-                        .in_interleaved_samples_f(bpm, self.meter.sample_rate),
+                        .in_samples_f(bpm, self.meter.sample_rate),
             )
             .into()
         })
