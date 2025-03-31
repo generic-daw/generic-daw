@@ -2,7 +2,7 @@ use super::error::{InterleavedAudioError, RubatoError};
 use generic_daw_utils::NoDebug;
 use rubato::{
     Resampler as _, ResamplerConstructionError, SincFixedIn, SincInterpolationParameters,
-    SincInterpolationType, WindowFunction,
+    SincInterpolationType, WindowFunction, calculate_cutoff,
 };
 use std::{fs::File, path::Path, sync::Arc};
 use symphonia::core::{
@@ -197,33 +197,17 @@ pub fn resampler(
     stream_sample_rate: u32,
     chunk_size: u32,
 ) -> Option<Result<SincFixedIn<f32>, ResamplerConstructionError>> {
-    if file_sample_rate == stream_sample_rate {
-        return None;
-    }
-
-    let resample_ratio = f64::from(stream_sample_rate) / f64::from(file_sample_rate);
-    let oversampling_factor =
-        (file_sample_rate / gcd(stream_sample_rate, file_sample_rate)) as usize;
-
-    Some(SincFixedIn::new(
-        resample_ratio,
+    (file_sample_rate != stream_sample_rate).then_some(SincFixedIn::new(
+        f64::from(stream_sample_rate) / f64::from(file_sample_rate),
         1.0,
         SincInterpolationParameters {
             sinc_len: 256,
-            f_cutoff: 0.95,
-            interpolation: SincInterpolationType::Nearest,
-            oversampling_factor,
-            window: WindowFunction::Blackman,
+            f_cutoff: calculate_cutoff(256, WindowFunction::BlackmanHarris2),
+            interpolation: SincInterpolationType::Cubic,
+            oversampling_factor: 256,
+            window: WindowFunction::BlackmanHarris2,
         },
         chunk_size as usize,
         2,
     ))
-}
-
-fn gcd(mut a: u32, mut b: u32) -> u32 {
-    while b != 0 {
-        a %= b;
-        (a, b) = (b, a);
-    }
-    a
 }
