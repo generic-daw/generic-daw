@@ -5,7 +5,7 @@ mod error;
 mod interleaved_audio;
 
 pub use error::{InterleavedAudioError, RubatoError};
-pub use interleaved_audio::{InterleavedAudio, resample_interleaved, resample_planar, resampler};
+pub use interleaved_audio::{InterleavedAudio, resample_interleaved, resampler};
 
 #[derive(Clone, Debug)]
 pub struct AudioClip {

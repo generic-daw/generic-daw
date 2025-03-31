@@ -166,7 +166,7 @@ pub fn resample_interleaved(
     resample_planar(file_sample_rate, stream_sample_rate, left, right)
 }
 
-pub fn resample_planar(
+fn resample_planar(
     file_sample_rate: u32,
     stream_sample_rate: u32,
     left: Vec<f32>,
@@ -179,9 +179,8 @@ pub fn resample_planar(
             .flat_map(<[f32; 2]>::from)
             .collect());
     };
-    let mut resampler = resampler?;
 
-    let mut planar_samples = resampler.process(&[&left, &right], None)?.into_iter();
+    let mut planar_samples = resampler?.process(&[&left, &right], None)?.into_iter();
     let left = planar_samples.next().unwrap();
     let right = planar_samples.next().unwrap();
 

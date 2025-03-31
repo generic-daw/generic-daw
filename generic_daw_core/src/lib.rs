@@ -27,11 +27,8 @@ mod mixer_node;
 mod position;
 mod recording;
 
-pub(crate) use audio_clip::resampler;
-pub use audio_clip::{
-    AudioClip, InterleavedAudio, InterleavedAudioError, RubatoError, resample_interleaved,
-    resample_planar,
-};
+pub use audio_clip::{AudioClip, InterleavedAudio, InterleavedAudioError, RubatoError};
+pub(crate) use audio_clip::{resample_interleaved, resampler};
 pub use audio_graph;
 pub use audio_track::AudioTrack;
 pub use clap_host;
