@@ -143,12 +143,6 @@ where
             .connections
             .insert(to, Vec::new());
 
-        if from < to {
-            // the old sorted order is still sorted with the new connection
-            // since `to` and all of its dependencies come before `from`
-            return true;
-        }
-
         if self.has_cycle() {
             self.graph.get_mut(from).unwrap().connections.remove(to);
 
@@ -232,7 +226,7 @@ where
             }
         }
 
-        // `cache` now contains all nodes in reverse topological order
+        // `swap_list` now contains all nodes in reverse topological order
         std::mem::swap(&mut self.list, &mut self.swap_list);
 
         false
