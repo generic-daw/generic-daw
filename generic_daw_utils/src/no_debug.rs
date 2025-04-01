@@ -1,4 +1,5 @@
 use std::{
+    any::type_name,
     borrow::{Borrow, BorrowMut},
     fmt::{Debug, Formatter},
     ops::{Deref, DerefMut},
@@ -15,7 +16,7 @@ impl<T> NoDebug<T> {
 
 impl<T> Debug for NoDebug<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NoDebug").finish_non_exhaustive()
+        f.write_str(type_name::<Self>())
     }
 }
 
