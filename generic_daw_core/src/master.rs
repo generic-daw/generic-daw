@@ -1,5 +1,6 @@
 use crate::{Meter, MixerNode, Position, include_f32s, resample_interleaved};
 use audio_graph::{AudioGraphNodeImpl, NodeId};
+use clap_host::Event;
 use live_sample::LiveSample;
 use std::{
     cell::RefCell,
@@ -24,15 +25,15 @@ pub struct Master {
     off_bar_click: Arc<[f32]>,
 }
 
-impl AudioGraphNodeImpl for Master {
-    fn fill_buf(&self, buf: &mut [f32]) {
+impl AudioGraphNodeImpl<f32, Event> for Master {
+    fn process(&self, audio: &mut [f32], events: &mut Vec<Event>) {
         if self.meter.playing.load(Acquire) && self.meter.metronome.load(Acquire) {
             let sample = self.meter.sample.load(Acquire);
             let bpm = self.meter.bpm.load(Acquire);
 
             let buf_start_pos = Position::from_samples(sample, bpm, self.meter.sample_rate);
             let mut buf_end_pos =
-                Position::from_samples(sample + buf.len(), bpm, self.meter.sample_rate);
+                Position::from_samples(sample + audio.len(), bpm, self.meter.sample_rate);
 
             if (buf_start_pos.beat() != buf_end_pos.beat() && buf_end_pos.step() != 0)
                 || buf_start_pos.step() == 0
@@ -54,14 +55,14 @@ impl AudioGraphNodeImpl for Master {
 
         let mut click = self.click.borrow_mut();
         if let Some(c) = click.as_ref() {
-            c.fill_buf(buf);
+            c.process(audio, events);
 
             if c.over() {
                 *click = None;
             }
         }
 
-        self.node.fill_buf(buf);
+        self.node.process(audio, events);
     }
 
     fn id(&self) -> NodeId {

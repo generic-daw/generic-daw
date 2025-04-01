@@ -28,7 +28,7 @@ pub struct Track<'a, Message> {
     /// the scale of the arrangement viewport
     scale: Vec2,
     /// message to emit on double click
-    on_double_click: Option<NoDebug<Box<dyn Fn(Position) -> Message>>>,
+    on_double_click: NoDebug<Box<dyn Fn(Position) -> Message>>,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
@@ -156,19 +156,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             modifiers,
         }) = event
         {
-            if let Some(on_double_click) = &self.on_double_click {
-                let state = tree.state.downcast_mut::<State>();
+            let state = tree.state.downcast_mut::<State>();
 
-                let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
-                state.last_click = Some(new_click);
+            let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
+            state.last_click = Some(new_click);
 
-                if new_click.kind() == Kind::Double {
-                    let time =
-                        get_time(cursor.x, *modifiers, self.meter, self.position, self.scale);
+            if new_click.kind() == Kind::Double {
+                let time = get_time(cursor.x, *modifiers, self.meter, self.position, self.scale);
 
-                    shell.publish(on_double_click(time));
-                    shell.capture_event();
-                }
+                shell.publish((self.on_double_click)(time));
+                shell.capture_event();
             }
         }
     }
@@ -183,14 +180,14 @@ where
         children: impl IntoIterator<Item = Element<'a, Message>>,
         position: Vec2,
         scale: Vec2,
-        on_double_click: Option<impl Fn(Position) -> Message + 'static>,
+        on_double_click: impl Fn(Position) -> Message + 'static,
     ) -> Self {
         Self {
             meter,
             children: children.into_iter().collect::<Box<_>>().into(),
             position,
             scale,
-            on_double_click: on_double_click.map(|v| Box::new(v) as Box<_>).map(NoDebug),
+            on_double_click: NoDebug(Box::new(on_double_click)),
         }
     }
 }

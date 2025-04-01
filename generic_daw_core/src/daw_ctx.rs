@@ -1,5 +1,5 @@
-use crate::{Meter, MixerNode, master::Master};
-use audio_graph::{AudioGraph, AudioGraphNode, NodeId};
+use crate::{AudioGraph, AudioGraphNode, Meter, MixerNode, master::Master};
+use audio_graph::NodeId;
 use log::trace;
 use oneshot::Sender;
 use rtrb::{Consumer, Producer, RingBuffer};
@@ -43,7 +43,7 @@ impl DawCtx {
         (audio_ctx, node, ui_producer)
     }
 
-    pub fn fill_buf(&mut self, buf: &mut [f32]) {
+    pub fn process(&mut self, buf: &mut [f32]) {
         while let Ok(msg) = self.consumer.pop() {
             trace!("{msg:?}");
 
@@ -57,7 +57,7 @@ impl DawCtx {
                 }
                 DawCtxMessage::Disconnect(from, to) => self.audio_graph.disconnect(from, to),
                 DawCtxMessage::RequestAudioGraph(sender) => {
-                    let mut audio_graph = AudioGraph::new(MixerNode::default().into());
+                    let mut audio_graph = AudioGraph::new(Arc::new(MixerNode::default()).into());
                     std::mem::swap(&mut self.audio_graph, &mut audio_graph);
                     sender.send(audio_graph).unwrap();
                 }
@@ -66,6 +66,6 @@ impl DawCtx {
             }
         }
 
-        self.audio_graph.fill_buf(buf);
+        self.audio_graph.process(buf);
     }
 }

@@ -10,7 +10,7 @@ use crate::{
 };
 use generic_daw_core::{
     Denominator, Meter, Numerator, Position,
-    clap_host::{self, PluginBundle, PluginDescriptor, PluginType},
+    clap_host::{self, PluginBundle, PluginDescriptor},
 };
 use iced::{
     Alignment::Center,
@@ -219,15 +219,6 @@ impl Daw {
                     styled_button("Mixer").on_press(Message::ChangedTab(Tab::Mixer))
                 ],
                 horizontal_space(),
-                styled_pick_list(
-                    PLUGINS
-                        .keys()
-                        .filter(|d| d.ty == PluginType::Instrument)
-                        .collect::<Box<[_]>>(),
-                    None::<&PluginDescriptor>,
-                    |p| Message::Arrangement(ArrangementMessage::InstrumentLoad(p.to_owned()))
-                )
-                .placeholder("Add Instrument")
             ]
             .spacing(20)
             .align_y(Center),

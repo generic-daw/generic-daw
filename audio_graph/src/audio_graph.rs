@@ -1,15 +1,14 @@
-use crate::{AudioGraphNode, NodeId, audio_graph_entry::AudioGraphEntry};
+use crate::{AudioGraphNodeImpl, NodeId, audio_graph_entry::AudioGraphEntry};
 use bit_set::BitSet;
 use generic_daw_utils::{HoleyVec, RotateConcat as _};
+use std::ops::AddAssign;
 
 #[derive(Debug)]
-pub struct AudioGraph {
+pub struct AudioGraph<N, S, E> {
     /// a `NodeId` -> `AudioGraphEntry` map
-    graph: HoleyVec<AudioGraphEntry>,
+    graph: HoleyVec<AudioGraphEntry<N, S, E>>,
     /// the `NodeId` of the root node
     root: usize,
-    /// a cache for delay compensation
-    cache: Vec<f32>,
     /// all nodes in the graph in reverse topological order,
     /// every node comes after all of its dependencies
     list: Vec<usize>,
@@ -21,27 +20,23 @@ pub struct AudioGraph {
     seen: BitSet,
 }
 
-impl AudioGraph {
+impl<N, S, E> AudioGraph<N, S, E>
+where
+    N: AudioGraphNodeImpl<S, E>,
+    S: AddAssign + Copy + Default,
+    E: Copy,
+{
     /// create a new audio graph with the given root node
     #[must_use]
-    pub fn new(node: AudioGraphNode) -> Self {
+    pub fn new(node: N) -> Self {
         let root = node.id().get();
 
         let mut graph = HoleyVec::default();
-        graph.insert(
-            root,
-            AudioGraphEntry {
-                node,
-                connections: HoleyVec::default(),
-                cache: Vec::new(),
-                delay: 0,
-            },
-        );
+        graph.insert(root, AudioGraphEntry::new(node));
 
         Self {
             graph,
             root,
-            cache: Vec::new(),
             list: vec![root],
             swap_list: Vec::new(),
             seen: BitSet::default(),
@@ -52,15 +47,14 @@ impl AudioGraph {
     /// process audio data into `buf`
     ///
     /// `buf` is assumed to be "uninitialized"
-    pub fn fill_buf(&mut self, buf: &mut [f32]) {
+    pub fn process(&mut self, buf: &mut [S]) {
         for node in self.list.iter().copied() {
             for s in &mut *buf {
-                *s = 0.0;
+                *s = S::default();
             }
 
             let mut entry = self.graph.remove(node).unwrap();
 
-            // the largest dependency's delay
             let max_delay = entry
                 .connections
                 .keys()
@@ -68,29 +62,27 @@ impl AudioGraph {
                 .max()
                 .unwrap_or_default();
 
-            for (dep, cache) in entry.connections.iter_mut() {
-                let entry = &self.graph[dep];
+            entry.audio.clear();
+            entry.audio.resize(buf.len(), S::default());
+            entry.events.clear();
 
-                // copy the dependency's cache into our own cache
-                self.cache.extend_from_slice(&entry.cache);
+            for (dep, delay) in entry.connections.iter_mut() {
+                let dep_entry = &self.graph[dep];
 
-                // apply the delay needed to make all dependencies be time-aligned
-                cache.resize(max_delay - entry.delay, 0.0);
-                cache.rotate_right_concat(&mut self.cache);
+                // apply the needed delay to the audio
+                buf.copy_from_slice(&dep_entry.audio);
+                delay.resize(max_delay - dep_entry.delay, S::default());
+                delay.rotate_right_concat(buf);
 
-                // copy the delayed audio into `buf`
-                self.cache
-                    .drain(..)
-                    .zip(&mut *buf)
+                buf.iter()
+                    .copied()
+                    .zip(&mut entry.audio)
                     .for_each(|(sample, buf)| *buf += sample);
+
+                entry.events.extend(dep_entry.events.iter().copied());
             }
 
-            // `buf` now contains exactly the output of all of `node`'s time-aligned dependencies
-            entry.node.fill_buf(buf);
-
-            // cache `node`'s output for other nodes that depend on it
-            entry.cache.clear();
-            entry.cache.extend_from_slice(&*buf);
+            entry.node.process(&mut entry.audio, &mut entry.events);
 
             // this node's delay + the largest dependency's delay
             entry.delay = entry.node.delay() + max_delay;
@@ -98,7 +90,7 @@ impl AudioGraph {
             self.graph.insert(node, entry);
         }
 
-        // since `root` is last in `list`, its output is already in `buf`
+        buf.copy_from_slice(&self.graph[self.root].audio);
     }
 
     /// reset every node in the graph to a pre-playback state
@@ -182,7 +174,7 @@ impl AudioGraph {
     ///
     /// if the graph already contains `node` it is replaced, preserving all of its connections,
     /// otherwise it starts out with no connections
-    pub fn insert(&mut self, node: AudioGraphNode) {
+    pub fn insert(&mut self, node: N) {
         let id = node.id().get();
 
         if let Some(entry) = self.graph.get_mut(id) {
@@ -190,12 +182,7 @@ impl AudioGraph {
             return;
         }
 
-        let entry = AudioGraphEntry {
-            node,
-            connections: HoleyVec::default(),
-            cache: Vec::new(),
-            delay: 0,
-        };
+        let entry = AudioGraphEntry::new(node);
 
         self.graph.insert(id, entry);
         // adding a node with no dependencies to any position preserves sorted order
@@ -265,7 +252,7 @@ impl AudioGraph {
     ///
     /// returns whether there is a cycle in `current`'s directly unvisited subtree
     fn visit(
-        graph: &HoleyVec<AudioGraphEntry>,
+        graph: &HoleyVec<AudioGraphEntry<N, S, E>>,
         list: &mut Vec<usize>,
         seen: &mut BitSet,
         to_visit: &mut BitSet,

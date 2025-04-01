@@ -1,4 +1,5 @@
 use async_channel::Receiver;
+use clap_host::Event;
 use cpal::{
     BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
     traits::{DeviceTrait as _, HostTrait as _},
@@ -15,33 +16,37 @@ use std::{
 };
 
 mod audio_clip;
-mod audio_track;
+mod audio_graph_node;
+mod clip;
 mod clip_position;
 mod daw_ctx;
 mod export;
 mod master;
 mod meter;
 mod midi_clip;
-mod midi_track;
 mod mixer_node;
 mod position;
 mod recording;
+mod track;
 
 pub use audio_clip::{AudioClip, InterleavedAudio, InterleavedAudioError, RubatoError};
 pub(crate) use audio_clip::{resample_interleaved, resampler};
 pub use audio_graph;
-pub use audio_track::AudioTrack;
+pub use audio_graph_node::AudioGraphNode;
 pub use clap_host;
+pub use clip::Clip;
 pub use cpal::{Stream, traits::StreamTrait};
 pub use daw_ctx::DawCtxMessage;
 pub use export::export;
 pub use master::Master;
 pub use meter::{Denominator, Meter, Numerator};
 pub use midi_clip::{Key, MidiClip, MidiKey, MidiNote};
-pub use midi_track::MidiTrack;
 pub use mixer_node::MixerNode;
 pub use position::Position;
 pub use recording::Recording;
+pub use track::Track;
+
+pub type AudioGraph = audio_graph::AudioGraph<AudioGraphNode, f32, Event>;
 
 pub fn build_input_stream(
     sample_rate: u32,
@@ -135,7 +140,7 @@ pub fn build_output_stream(
                 buffer_size,
             },
             move |data, _| {
-                ctx.fill_buf(data);
+                ctx.process(data);
 
                 if ctx.meter.playing.load(Acquire) {
                     ctx.meter.sample.fetch_add(data.len(), AcqRel);

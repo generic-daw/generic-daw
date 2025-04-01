@@ -257,7 +257,7 @@ where
                         let interaction = self.interaction(cursor);
 
                         if interaction != old_interaction {
-                            *state = State::None(old_interaction);
+                            *state = State::None(interaction);
                             shell.request_redraw();
                         }
                     }

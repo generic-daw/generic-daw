@@ -4,6 +4,7 @@ use std::sync::{Arc, atomic::Ordering::Acquire};
 mod error;
 mod interleaved_audio;
 
+use clap_host::Event;
 pub use error::{InterleavedAudioError, RubatoError};
 pub use interleaved_audio::{InterleavedAudio, resample_interleaved, resampler};
 
@@ -32,7 +33,7 @@ impl AudioClip {
         })
     }
 
-    pub fn fill_buf(&self, buf: &mut [f32]) {
+    pub fn process(&self, audio: &mut [f32], _: &mut Vec<Event>) {
         let sample = self.meter.sample.load(Acquire);
         let bpm = self.meter.bpm.load(Acquire);
 
@@ -56,19 +57,19 @@ impl AudioClip {
 
             self.audio.samples[start_index..]
                 .iter()
-                .zip(buf)
+                .zip(audio)
                 .for_each(|(sample, buf)| {
                     *buf += sample;
                 });
         } else {
-            if diff >= buf.len() {
+            if diff >= audio.len() {
                 return;
             }
 
             self.audio
                 .samples
                 .iter()
-                .zip(buf[diff..].iter_mut())
+                .zip(audio[diff..].iter_mut())
                 .for_each(|(sample, buf)| {
                     *buf += sample;
                 });

@@ -1,4 +1,3 @@
-use crate::PluginType;
 use clack_host::factory;
 use std::{
     fmt::{Display, Formatter},
@@ -9,7 +8,6 @@ use std::{
 pub struct PluginDescriptor {
     pub name: Arc<str>,
     pub id: Arc<str>,
-    pub ty: PluginType,
 }
 
 impl Display for PluginDescriptor {
@@ -25,10 +23,6 @@ impl TryFrom<factory::PluginDescriptor<'_>> for PluginDescriptor {
         Ok(Self {
             name: value.name().ok_or(())?.to_str().map_err(|_| ())?.into(),
             id: value.id().ok_or(())?.to_str().map_err(|_| ())?.into(),
-            ty: value
-                .features()
-                .find_map(|f| f.try_into().ok())
-                .unwrap_or_default(),
         })
     }
 }

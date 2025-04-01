@@ -353,9 +353,13 @@ where
     fn get_track_clip(&self, layout: &Layout<'_>, cursor: Point) -> Option<(usize, usize)> {
         let track = self.get_track(cursor.y);
         let offset = Vector::new(layout.position().x, layout.position().y);
-        let clip = track_layout(layout, track)?
-            .children()
-            .position(|l| (l.bounds() - offset).contains(cursor))?;
+        let track_layout = track_layout(layout, track)?;
+        let clip = track_layout.children().count()
+            - track_layout
+                .children()
+                .rev()
+                .position(|l| (l.bounds() - offset).contains(cursor))?
+            - 1;
         Some((track, clip))
     }
 }

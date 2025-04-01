@@ -1,5 +1,4 @@
-use crate::{Meter, Position};
-use audio_graph::AudioGraph;
+use crate::{AudioGraph, Meter, Position};
 use hound::WavWriter;
 use std::{
     path::Path,
@@ -34,20 +33,20 @@ pub fn export(audio_graph: &mut AudioGraph, path: &Path, meter: &Meter, end: Pos
     for i in (0..delay - skip).step_by(buffer_size) {
         meter.sample.store(i, Release);
 
-        audio_graph.fill_buf(&mut buf);
+        audio_graph.process(&mut buf);
     }
 
     if skip != 0 {
         meter.sample.store(delay - skip, Release);
 
-        audio_graph.fill_buf(&mut buf[..skip]);
+        audio_graph.process(&mut buf[..skip]);
     }
 
     let skip = (end - delay) % buffer_size;
     for i in (delay..end - skip).step_by(buffer_size) {
         meter.sample.store(i, Release);
 
-        audio_graph.fill_buf(&mut buf);
+        audio_graph.process(&mut buf);
 
         for &s in &buf {
             writer.write_sample(s).unwrap();
@@ -57,7 +56,7 @@ pub fn export(audio_graph: &mut AudioGraph, path: &Path, meter: &Meter, end: Pos
     if skip != 0 {
         meter.sample.store(delay - skip, Release);
 
-        audio_graph.fill_buf(&mut buf[..skip]);
+        audio_graph.process(&mut buf[..skip]);
 
         for &s in &buf[..skip] {
             writer.write_sample(s).unwrap();

@@ -1,5 +1,6 @@
 use crate::{
-    Host, PluginDescriptor, PluginId, audio_buffers::AudioBuffers, note_buffers::NoteBuffers,
+    Event, Host, PluginDescriptor, PluginId, audio_buffers::AudioBuffers,
+    event_buffers::NoteBuffers,
 };
 use async_channel::Receiver;
 use clack_host::process::StartedPluginAudioProcessor;
@@ -19,7 +20,7 @@ pub struct AudioProcessor {
     id: PluginId,
     steady_time: u64,
     audio_buffers: AudioBuffers,
-    pub note_buffers: NoteBuffers,
+    event_buffers: NoteBuffers,
     receiver: Receiver<AudioThreadMessage>,
 }
 
@@ -39,7 +40,7 @@ impl AudioProcessor {
             id,
             steady_time: 0,
             audio_buffers,
-            note_buffers,
+            event_buffers: note_buffers,
             receiver,
         }
     }
@@ -49,7 +50,7 @@ impl AudioProcessor {
         self.id
     }
 
-    pub fn process(&mut self, buf: &mut [f32], mix_level: f32) {
+    pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32) {
         while let Ok(msg) = self.receiver.try_recv() {
             trace!("{} ({}): {msg:?}", self.descriptor.name, self.descriptor.id);
 
@@ -73,15 +74,10 @@ impl AudioProcessor {
             }
         }
 
-        if self.descriptor.ty.note_output() {
-            self.note_buffers.output_events.clear();
-        }
+        self.audio_buffers.read_in(audio);
+        self.event_buffers.read_in(events);
 
-        if self.descriptor.ty.audio_input() {
-            self.audio_buffers.read_in(buf);
-        }
-
-        let (input_audio, mut output_audio) = self.audio_buffers.prepare(buf);
+        let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len() / 2);
 
         self.started_processor
             .as_mut()
@@ -89,8 +85,8 @@ impl AudioProcessor {
             .process(
                 &input_audio,
                 &mut output_audio,
-                &self.note_buffers.input_events.as_input(),
-                &mut self.note_buffers.output_events.as_output(),
+                &self.event_buffers.input_events.as_input(),
+                &mut self.event_buffers.output_events.as_output(),
                 Some(self.steady_time),
                 None,
             )
@@ -98,14 +94,12 @@ impl AudioProcessor {
 
         self.steady_time += u64::from(input_audio.min_available_frames_with(&output_audio));
 
-        if self.descriptor.ty.audio_output() {
-            self.audio_buffers.write_out(buf, mix_level);
-        }
-
-        self.note_buffers.input_events.clear();
+        self.audio_buffers.write_out(audio, mix_level);
+        self.event_buffers.write_out(events);
     }
 
     pub fn reset(&mut self) {
+        self.event_buffers.reset();
         self.started_processor.as_mut().unwrap().reset();
         self.steady_time = 0;
     }

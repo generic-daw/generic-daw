@@ -1,24 +1,26 @@
-use crate::{AudioClip, Meter, MixerNode, Position};
+use crate::{Meter, MixerNode, Position, clip::Clip};
 use audio_graph::{AudioGraphNodeImpl, NodeId};
+use clap_host::Event;
 use std::sync::{Arc, atomic::Ordering::Acquire};
 
 #[derive(Clone, Debug)]
-pub struct AudioTrack {
-    /// contains clips of audio samples
-    pub clips: Vec<Arc<AudioClip>>,
+pub struct Track {
+    pub clips: Vec<Clip>,
     /// information relating to the playback of the arrangement
     pub meter: Arc<Meter>,
-    /// volume and pan
+    /// volume, pan and plugins
     pub node: Arc<MixerNode>,
 }
 
-impl AudioGraphNodeImpl for AudioTrack {
-    fn fill_buf(&self, buf: &mut [f32]) {
+impl AudioGraphNodeImpl<f32, Event> for Track {
+    fn process(&self, audio: &mut [f32], events: &mut Vec<Event>) {
         if self.meter.playing.load(Acquire) {
-            self.clips.iter().for_each(|clip| clip.fill_buf(buf));
+            for clip in &self.clips {
+                clip.process(audio, events);
+            }
         }
 
-        self.node.fill_buf(buf);
+        self.node.process(audio, events);
     }
 
     fn id(&self) -> NodeId {
@@ -34,7 +36,7 @@ impl AudioGraphNodeImpl for AudioTrack {
     }
 }
 
-impl AudioTrack {
+impl Track {
     #[must_use]
     pub fn new(meter: Arc<Meter>) -> Self {
         Self {
@@ -48,7 +50,7 @@ impl AudioTrack {
     pub fn len(&self) -> Position {
         self.clips
             .iter()
-            .map(|clip| clip.position.get_global_end())
+            .map(|clip| clip.position().get_global_end())
             .max()
             .unwrap_or_default()
     }

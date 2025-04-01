@@ -1,3 +1,4 @@
+use clap_host::Event;
 use std::sync::{
     Arc,
     atomic::{
@@ -21,24 +22,24 @@ impl LiveSample {
         }
     }
 
-    pub fn fill_buf(&self, buf: &mut [f32]) {
-        let idx = self.idx.fetch_add(buf.len() as isize, AcqRel);
+    pub fn process(&self, audio: &mut [f32], _: &mut Vec<Event>) {
+        let idx = self.idx.fetch_add(audio.len() as isize, AcqRel);
 
         let uidx = idx.unsigned_abs();
 
         if idx > 0 {
             self.audio[uidx..]
                 .iter()
-                .zip(buf)
+                .zip(audio)
                 .for_each(|(s, buf)| *buf += s);
         } else {
-            if uidx >= buf.len() {
+            if uidx >= audio.len() {
                 return;
             }
 
             self.audio
                 .iter()
-                .zip(buf[uidx..].iter_mut())
+                .zip(audio[uidx..].iter_mut())
                 .for_each(|(s, buf)| {
                     *buf += s;
                 });

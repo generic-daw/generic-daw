@@ -1,7 +1,6 @@
-use super::{TrackClipWrapper, track::Track};
 use bit_set::BitSet;
 use generic_daw_core::{
-    DawCtxMessage, Meter, MixerNode, Stream, StreamTrait as _,
+    Clip, DawCtxMessage, Meter, MixerNode, Stream, StreamTrait as _, Track,
     audio_graph::{AudioGraphNodeImpl as _, NodeId},
     build_output_stream, export,
 };
@@ -84,44 +83,43 @@ impl Arrangement {
 
         self.nodes
             .insert(id.get(), (node.clone(), BitSet::default(), NodeType::Mixer));
+
         self.producer
             .push(DawCtxMessage::Insert(node.into()))
             .unwrap();
+
         self.request_connect(self.master_node_id, id)
     }
 
     pub fn remove_channel(&mut self, id: NodeId) {
         self.nodes.remove(id.get());
+
         self.producer.push(DawCtxMessage::Remove(id)).unwrap();
     }
 
-    pub fn add_track(&mut self, track: impl Into<Track>) -> Receiver<(NodeId, NodeId)> {
-        let track = track.into();
+    pub fn add_track(&mut self, track: Track) -> Receiver<(NodeId, NodeId)> {
         let id = track.id();
 
         self.tracks.push(track.clone());
         self.nodes.insert(
             id.get(),
-            (track.node().clone(), BitSet::default(), NodeType::Track),
+            (track.node.clone(), BitSet::default(), NodeType::Track),
         );
+
         self.producer
             .push(DawCtxMessage::Insert(track.into()))
             .unwrap();
+
         self.request_connect(self.master_node_id, id)
     }
 
-    pub fn remove_track(&mut self, id: NodeId) {
-        let idx = self
-            .tracks
-            .iter()
-            .position(|track| track.id() == id)
-            .unwrap();
-
+    pub fn remove_track(&mut self, idx: usize) {
         self.tracks.remove(idx);
     }
 
     pub fn request_connect(&mut self, from: NodeId, to: NodeId) -> Receiver<(NodeId, NodeId)> {
         let (sender, receiver) = oneshot::channel();
+
         self.producer
             .push(DawCtxMessage::Connect(from, to, sender))
             .unwrap();
@@ -134,17 +132,15 @@ impl Arrangement {
     }
 
     pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
+        self.nodes.get_mut(to.get()).unwrap().1.remove(from.get());
+
         self.producer
             .push(DawCtxMessage::Disconnect(from, to))
             .unwrap();
-        self.nodes.get_mut(to.get()).unwrap().1.remove(from.get());
     }
 
-    pub fn add_clip(&mut self, track: usize, clip: impl Into<TrackClipWrapper>) {
-        match &mut self.tracks[track] {
-            Track::AudioTrack(track) => track.clips.push(clip.into().try_into().unwrap()),
-            Track::MidiTrack(track) => track.clips.push(clip.into().try_into().unwrap()),
-        }
+    pub fn add_clip(&mut self, track: usize, clip: impl Into<Clip>) {
+        self.tracks[track].clips.push(clip.into());
 
         self.producer
             .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
@@ -152,7 +148,8 @@ impl Arrangement {
     }
 
     pub fn clone_clip(&mut self, track: usize, clip: usize) {
-        self.tracks[track].clone_clip(clip);
+        let clip = self.tracks[track].clips[clip].clone();
+        self.tracks[track].clips.push(clip);
 
         self.producer
             .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
@@ -160,30 +157,23 @@ impl Arrangement {
     }
 
     pub fn delete_clip(&mut self, track: usize, clip: usize) {
-        self.tracks[track].delete_clip(clip);
+        self.tracks[track].clips.remove(clip);
 
         self.producer
             .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
             .unwrap();
     }
 
-    pub fn clip_switch_track(&mut self, track: usize, clip: usize, new_track: usize) -> bool {
-        let inner = self.tracks[track].get_clip(clip);
+    pub fn clip_switch_track(&mut self, track: usize, clip: usize, new_track: usize) {
+        let clip = self.tracks[track].clips.remove(clip);
+        self.tracks[new_track].clips.push(clip);
 
-        if self.tracks[new_track].try_add_clip(inner) {
-            self.tracks[track].delete_clip(clip);
-
-            self.producer
-                .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
-                .unwrap();
-            self.producer
-                .push(DawCtxMessage::Insert(self.tracks[new_track].clone().into()))
-                .unwrap();
-
-            true
-        } else {
-            false
-        }
+        self.producer
+            .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
+            .unwrap();
+        self.producer
+            .push(DawCtxMessage::Insert(self.tracks[new_track].clone().into()))
+            .unwrap();
     }
 
     pub fn export(&mut self, path: &Path) {

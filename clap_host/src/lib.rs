@@ -2,6 +2,7 @@ use async_channel::Receiver;
 use audio_buffers::AudioBuffers;
 use audio_ports_config::AudioPortsConfig;
 use clack_host::prelude::*;
+use event_buffers::NoteBuffers;
 use generic_daw_utils::unique_id;
 use host::Host;
 use main_thread::MainThread;
@@ -12,23 +13,22 @@ use walkdir::WalkDir;
 mod audio_buffers;
 mod audio_ports_config;
 mod audio_processor;
+mod event;
+mod event_buffers;
 mod gui_ext;
 mod host;
 mod main_thread;
-mod note_buffers;
 mod plugin_descriptor;
-mod plugin_type;
 mod shared;
 mod timer_ext;
 
 pub use audio_processor::AudioProcessor;
 pub use clack_host::bundle::PluginBundle;
+pub use event::Event;
 pub use gui_ext::GuiExt;
 pub use main_thread::MainThreadMessage;
-pub use note_buffers::NoteBuffers;
 pub use plugin_descriptor::PluginDescriptor;
 pub use plugin_id::Id as PluginId;
-pub use plugin_type::PluginType;
 
 unique_id!(plugin_id);
 
