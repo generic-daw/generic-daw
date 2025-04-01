@@ -1,8 +1,8 @@
-pub trait RotateConcat<T> {
+pub trait RotateConcatExt<T> {
     fn rotate_right_concat(&mut self, other: &mut [T]);
 }
 
-impl<T> RotateConcat<T> for [T] {
+impl<T> RotateConcatExt<T> for [T] {
     fn rotate_right_concat(&mut self, other: &mut [T]) {
         if self.is_empty() {
         } else if self.len() < other.len() {

@@ -1,6 +1,6 @@
 use crate::audio_ports_config::AudioPortsConfig;
 use clack_host::prelude::*;
-use generic_daw_utils::{NoDebug, RotateConcat as _};
+use generic_daw_utils::{NoDebug, RotateConcatExt as _};
 
 #[derive(Debug)]
 pub struct AudioBuffers {

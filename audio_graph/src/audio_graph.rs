@@ -1,6 +1,6 @@
 use crate::{AudioGraphNodeImpl, NodeId, audio_graph_entry::AudioGraphEntry};
 use bit_set::BitSet;
-use generic_daw_utils::{HoleyVec, RotateConcat as _};
+use generic_daw_utils::{HoleyVec, RotateConcatExt as _};
 use std::ops::AddAssign;
 
 #[derive(Debug)]
