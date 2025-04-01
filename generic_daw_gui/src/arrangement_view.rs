@@ -587,8 +587,8 @@ impl ArrangementView {
                 let [track, clip] = self.grabbed_clip.as_mut().unwrap();
 
                 if *track != new_track {
-                    *track = new_track;
                     self.arrangement.clip_switch_track(*track, *clip, new_track);
+                    *track = new_track;
                     *clip = self.arrangement.tracks()[*track].clips.len() - 1;
                 }
 
