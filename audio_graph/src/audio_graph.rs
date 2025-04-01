@@ -186,8 +186,7 @@ where
 
         self.graph.insert(id, entry);
         // adding a node with no dependencies to any position preserves sorted order
-        // don't just append it, `root` needs to stay at the end
-        self.list.insert(self.list.len() - 1, id);
+        self.list.push(id);
     }
 
     /// attempt to remove `node` from the graph
@@ -235,15 +234,6 @@ where
 
         // `cache` now contains all nodes in reverse topological order
         std::mem::swap(&mut self.list, &mut self.swap_list);
-
-        // shift `root` to the end so we process it last
-        let idx = self
-            .list
-            .iter()
-            .copied()
-            .position(|id| id == self.root)
-            .unwrap();
-        self.list[idx..].rotate_left(1);
 
         false
     }
