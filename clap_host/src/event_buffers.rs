@@ -3,7 +3,7 @@ use clack_extensions::note_ports::{NoteDialect, NotePortInfoBuffer, PluginNotePo
 use clack_host::prelude::*;
 
 #[derive(Debug, Default)]
-pub struct NoteBuffers {
+pub struct EventBuffers {
     pub input_events: EventBuffer,
     pub output_events: EventBuffer,
 
@@ -11,7 +11,7 @@ pub struct NoteBuffers {
     pub input_prefers_midi: bool,
 }
 
-impl NoteBuffers {
+impl EventBuffers {
     pub fn new(plugin: &mut PluginMainThreadHandle<'_>) -> Self {
         let (main_input_port, input_prefers_midi) =
             Self::from_ports(plugin, true).unwrap_or_default();

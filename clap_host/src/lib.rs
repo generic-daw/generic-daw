@@ -2,7 +2,7 @@ use async_channel::Receiver;
 use audio_buffers::AudioBuffers;
 use audio_ports_config::AudioPortsConfig;
 use clack_host::prelude::*;
-use event_buffers::NoteBuffers;
+use event_buffers::EventBuffers;
 use generic_daw_utils::unique_id;
 use host::Host;
 use main_thread::MainThread;
@@ -147,7 +147,7 @@ pub fn init(
         .unwrap_or_default();
 
     let audio_buffers = AudioBuffers::new(config, input_config, output_config, latency);
-    let note_buffers = NoteBuffers::new(&mut instance.plugin_handle());
+    let note_buffers = EventBuffers::new(&mut instance.plugin_handle());
     let id = PluginId::unique();
 
     let plugin_audio_processor = AudioProcessor::new(

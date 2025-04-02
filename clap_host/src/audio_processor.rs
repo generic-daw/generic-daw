@@ -1,6 +1,6 @@
 use crate::{
     Event, Host, PluginDescriptor, PluginId, audio_buffers::AudioBuffers,
-    event_buffers::NoteBuffers,
+    event_buffers::EventBuffers,
 };
 use async_channel::Receiver;
 use clack_host::process::StartedPluginAudioProcessor;
@@ -20,7 +20,7 @@ pub struct AudioProcessor {
     id: PluginId,
     steady_time: u64,
     audio_buffers: AudioBuffers,
-    event_buffers: NoteBuffers,
+    event_buffers: EventBuffers,
     receiver: Receiver<AudioThreadMessage>,
 }
 
@@ -31,7 +31,7 @@ impl AudioProcessor {
         descriptor: PluginDescriptor,
         id: PluginId,
         audio_buffers: AudioBuffers,
-        note_buffers: NoteBuffers,
+        event_buffers: EventBuffers,
         receiver: Receiver<AudioThreadMessage>,
     ) -> Self {
         Self {
@@ -40,7 +40,7 @@ impl AudioProcessor {
             id,
             steady_time: 0,
             audio_buffers,
-            event_buffers: note_buffers,
+            event_buffers,
             receiver,
         }
     }
