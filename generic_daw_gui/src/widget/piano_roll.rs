@@ -193,6 +193,7 @@ where
 
                     *state = State::None(self.interaction(cursor));
                     shell.capture_event();
+                    shell.request_redraw();
                 }
                 mouse::Event::CursorMoved { modifiers, .. } => match *state {
                     State::DraggingNote(offset, key, time) => {
