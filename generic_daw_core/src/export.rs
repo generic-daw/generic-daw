@@ -1,14 +1,14 @@
-use crate::{AudioGraph, Meter, Position};
+use crate::{AudioGraph, METER, Position};
 use hound::WavWriter;
-use std::{
-    path::Path,
-    sync::atomic::Ordering::{AcqRel, Acquire, Release},
-};
+use std::{path::Path, sync::Arc};
 
-pub fn export(audio_graph: &mut AudioGraph, path: &Path, meter: &Meter, end: Position) {
-    let playing = meter.playing.swap(true, AcqRel);
-    let metronome = meter.metronome.swap(false, AcqRel);
-    let sample = meter.sample.load(Acquire);
+pub fn export(audio_graph: &mut AudioGraph, path: &Path, end: Position) {
+    let old_meter = METER.load().clone();
+
+    let mut meter = *old_meter;
+    meter.playing = true;
+    meter.metronome = true;
+    let mut meter = Arc::new(meter);
 
     audio_graph.reset();
 
@@ -28,24 +28,24 @@ pub fn export(audio_graph: &mut AudioGraph, path: &Path, meter: &Meter, end: Pos
 
     let delay = audio_graph.delay();
     let skip = delay % buffer_size;
-    let end = end.in_samples(meter.bpm.load(Acquire), meter.sample_rate) + delay;
+    let end = end.in_samples(meter.bpm, meter.sample_rate) + delay;
 
     for i in (0..delay - skip).step_by(buffer_size) {
-        meter.sample.store(i, Release);
-
+        Arc::get_mut(&mut meter).unwrap().sample = i;
+        meter = METER.swap(meter);
         audio_graph.process(&mut buf);
     }
 
     if skip != 0 {
-        meter.sample.store(delay - skip, Release);
-
+        Arc::get_mut(&mut meter).unwrap().sample = delay - skip;
+        meter = METER.swap(meter);
         audio_graph.process(&mut buf[..skip]);
     }
 
     let skip = (end - delay) % buffer_size;
     for i in (delay..end - skip).step_by(buffer_size) {
-        meter.sample.store(i, Release);
-
+        Arc::get_mut(&mut meter).unwrap().sample = i;
+        meter = METER.swap(meter);
         audio_graph.process(&mut buf);
 
         for &s in &buf {
@@ -54,8 +54,8 @@ pub fn export(audio_graph: &mut AudioGraph, path: &Path, meter: &Meter, end: Pos
     }
 
     if skip != 0 {
-        meter.sample.store(delay - skip, Release);
-
+        Arc::get_mut(&mut meter).unwrap().sample = delay - skip;
+        METER.store(meter);
         audio_graph.process(&mut buf[..skip]);
 
         for &s in &buf[..skip] {
@@ -65,7 +65,5 @@ pub fn export(audio_graph: &mut AudioGraph, path: &Path, meter: &Meter, end: Pos
 
     writer.finalize().unwrap();
 
-    meter.playing.store(playing, Release);
-    meter.metronome.store(metronome, Release);
-    meter.sample.store(sample, Release);
+    METER.store(old_meter);
 }

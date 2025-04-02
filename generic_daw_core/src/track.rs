@@ -1,12 +1,10 @@
-use crate::{Meter, MixerNode, Position, clip::Clip, event::Event};
+use crate::{MixerNode, Position, clip::Clip, event::Event};
 use audio_graph::{NodeId, NodeImpl};
 use std::sync::Arc;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Track {
     pub clips: Vec<Clip>,
-    /// information relating to the playback of the arrangement
-    pub meter: Arc<Meter>,
     /// volume, pan and plugins
     pub node: Arc<MixerNode>,
 }
@@ -34,15 +32,6 @@ impl NodeImpl<Event> for Track {
 }
 
 impl Track {
-    #[must_use]
-    pub fn new(meter: Arc<Meter>) -> Self {
-        Self {
-            clips: Vec::new(),
-            meter,
-            node: Arc::default(),
-        }
-    }
-
     #[must_use]
     pub fn len(&self) -> Position {
         self.clips

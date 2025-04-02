@@ -1,5 +1,5 @@
-use crate::{Meter, Position, clip_position::ClipPosition, event::Event};
-use std::sync::{Arc, atomic::Ordering::Acquire};
+use crate::{METER, Position, clip_position::ClipPosition, event::Event};
+use std::sync::Arc;
 
 mod error;
 mod interleaved_audio;
@@ -12,47 +12,44 @@ pub struct AudioClip {
     pub audio: Arc<InterleavedAudio>,
     /// the position of the clip relative to the start of the arrangement
     pub position: ClipPosition,
-    /// information relating to the playback of the arrangement
-    pub meter: Arc<Meter>,
 }
 
 impl AudioClip {
     #[must_use]
-    pub fn create(audio: Arc<InterleavedAudio>, meter: Arc<Meter>) -> Arc<Self> {
+    pub fn create(audio: Arc<InterleavedAudio>) -> Arc<Self> {
+        let meter = METER.load();
         let samples = audio.samples.len();
 
         Arc::new(Self {
             audio,
             position: ClipPosition::new(
                 Position::ZERO,
-                Position::from_samples(samples, meter.bpm.load(Acquire), meter.sample_rate),
+                Position::from_samples(samples, meter.bpm, meter.sample_rate),
                 Position::ZERO,
             ),
-            meter,
         })
     }
 
     pub fn process(&self, audio: &mut [f32], _: &mut Vec<Event>) {
-        if !self.meter.playing.load(Acquire) {
+        let meter = METER.load();
+
+        if !meter.playing {
             return;
         }
-
-        let sample = self.meter.sample.load(Acquire);
-        let bpm = self.meter.bpm.load(Acquire);
 
         let clip_start_sample = self
             .position
             .get_global_start()
-            .in_samples(bpm, self.meter.sample_rate);
+            .in_samples(meter.bpm, meter.sample_rate);
 
-        let diff = sample.abs_diff(clip_start_sample);
+        let diff = meter.sample.abs_diff(clip_start_sample);
 
-        if sample > clip_start_sample {
+        if meter.sample > clip_start_sample {
             let start_index = diff
                 + self
                     .position
                     .get_clip_start()
-                    .in_samples(bpm, self.meter.sample_rate);
+                    .in_samples(meter.bpm, meter.sample_rate);
 
             if start_index >= self.audio.samples.len() {
                 return;

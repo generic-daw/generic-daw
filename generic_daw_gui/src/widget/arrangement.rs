@@ -45,7 +45,7 @@ impl State {
 
 #[derive(Debug)]
 pub struct Arrangement<'a, Message> {
-    meter: &'a Meter,
+    meter: Meter,
     /// the position of the top left corner of the arrangement viewport
     position: Vec2,
     /// the scale of the arrangement viewport
@@ -330,7 +330,7 @@ where
     Message: Clone + 'a,
 {
     pub fn new(
-        meter: &'a Meter,
+        meter: Meter,
         position: Vec2,
         scale: Vec2,
         children: impl Into<Element<'a, Message>>,

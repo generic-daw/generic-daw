@@ -1,7 +1,6 @@
 use generic_daw_core::{Meter, Position};
 use generic_daw_utils::Vec2;
 use iced::{keyboard::Modifiers, widget::text::Shaping};
-use std::sync::atomic::Ordering::Acquire;
 
 mod animated_dot;
 pub mod arrangement;
@@ -47,12 +46,12 @@ pub fn shaping_of(text: &str) -> Shaping {
     }
 }
 
-fn get_time(x: f32, modifiers: Modifiers, meter: &Meter, position: Vec2, scale: Vec2) -> Position {
+fn get_time(x: f32, modifiers: Modifiers, meter: Meter, position: Vec2, scale: Vec2) -> Position {
     let time = x.mul_add(scale.x.exp2(), position.x).max(0.0);
-    let mut time = Position::from_samples_f(time, meter.bpm.load(Acquire), meter.sample_rate);
+    let mut time = Position::from_samples_f(time, meter.bpm, meter.sample_rate);
 
     if !modifiers.alt() {
-        time = time.snap(scale.x, meter.numerator.load(Acquire));
+        time = time.snap(scale.x, meter.numerator);
     }
 
     time

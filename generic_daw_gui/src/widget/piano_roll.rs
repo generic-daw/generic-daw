@@ -16,7 +16,7 @@ use iced::{
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
     window,
 };
-use std::sync::{Arc, atomic::Ordering::Acquire};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
@@ -59,9 +59,9 @@ impl State {
 }
 
 #[derive(Debug)]
-pub struct PianoRoll<'a, Message> {
+pub struct PianoRoll<Message> {
     notes: Arc<Vec<MidiNote>>,
-    meter: &'a Meter,
+    meter: Meter,
     position: Vec2,
     scale: Vec2,
     // whether we've sent a clip delete message since the last redraw request
@@ -70,7 +70,7 @@ pub struct PianoRoll<'a, Message> {
     action: fn(Action) -> Message,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message>
+impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<Message>
 where
     Message: Clone,
 {
@@ -306,10 +306,10 @@ where
     }
 }
 
-impl<'a, Message> PianoRoll<'a, Message> {
+impl<Message> PianoRoll<Message> {
     pub fn new(
         notes: Arc<Vec<MidiNote>>,
-        meter: &'a Meter,
+        meter: Meter,
         position: Vec2,
         scale: Vec2,
         action: fn(Action) -> Message,
@@ -359,7 +359,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 
     fn note_bounds(&self, note: &MidiNote) -> Rectangle {
         let sample_size = self.scale.x.exp2();
-        let bpm = self.meter.bpm.load(Acquire);
+        let bpm = self.meter.bpm;
 
         let start =
             (note.start.in_samples_f(bpm, self.meter.sample_rate) - self.position.x) / sample_size;
@@ -424,11 +424,11 @@ impl<'a, Message> PianoRoll<'a, Message> {
     }
 }
 
-impl<'a, Message> From<PianoRoll<'a, Message>> for Element<'a, Message>
+impl<'a, Message> From<PianoRoll<Message>> for Element<'a, Message>
 where
     Message: Clone + 'a,
 {
-    fn from(value: PianoRoll<'a, Message>) -> Self {
+    fn from(value: PianoRoll<Message>) -> Self {
         Self::new(value)
     }
 }

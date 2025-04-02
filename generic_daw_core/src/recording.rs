@@ -3,12 +3,7 @@ use async_channel::Receiver;
 use generic_daw_utils::NoDebug;
 use hound::{SampleFormat, WavSpec, WavWriter};
 use rubato::{Resampler as _, SincFixedIn};
-use std::{
-    fs::File,
-    io::BufWriter,
-    path::Path,
-    sync::{Arc, atomic::Ordering::Acquire},
-};
+use std::{fs::File, io::BufWriter, path::Path, sync::Arc};
 
 #[derive(Debug)]
 pub struct Recording {
@@ -33,15 +28,12 @@ pub struct Recording {
 }
 
 impl Recording {
+    #[must_use]
     pub fn create(path: Box<Path>, meter: &Meter) -> (Self, Receiver<Box<[f32]>>) {
         let (channels, sample_rate, stream, receiver) =
             build_input_stream(meter.sample_rate, meter.buffer_size);
 
-        let start_pos = Position::from_samples(
-            meter.sample.load(Acquire),
-            meter.bpm.load(Acquire),
-            meter.sample_rate,
-        );
+        let start_pos = Position::from_samples(meter.sample, meter.bpm, meter.sample_rate);
 
         let writer = WavWriter::create(
             &path,

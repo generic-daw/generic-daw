@@ -1,4 +1,5 @@
-use async_channel::Receiver;
+use arc_swap::ArcSwap;
+use async_channel::{Receiver, Sender};
 use cpal::{
     BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
     traits::{DeviceTrait as _, HostTrait as _},
@@ -6,13 +7,9 @@ use cpal::{
 use daw_ctx::DawCtx;
 use event::Event;
 use log::info;
-use rtrb::Producer;
 use std::{
     cmp::Ordering,
-    sync::{
-        Arc,
-        atomic::Ordering::{AcqRel, Acquire},
-    },
+    sync::{Arc, LazyLock},
 };
 
 mod audio_clip;
@@ -40,7 +37,7 @@ pub use cpal::{Stream, traits::StreamTrait};
 pub use daw_ctx::DawCtxMessage;
 pub use export::export;
 pub use master::Master;
-pub use meter::{Denominator, Meter, Numerator};
+pub use meter::{Denominator, Meter, MeterDiff, Numerator};
 pub use midi_clip::{Key, MidiClip, MidiKey, MidiNote};
 pub use mixer_node::MixerNode;
 pub use position::Position;
@@ -48,6 +45,8 @@ pub use recording::Recording;
 pub use track::Track;
 
 pub type AudioGraph = audio_graph::AudioGraph<AudioGraphNode, Event>;
+
+pub static METER: LazyLock<ArcSwap<Meter>> = LazyLock::new(ArcSwap::default);
 
 pub fn build_input_stream(
     sample_rate: u32,
@@ -100,11 +99,14 @@ pub fn build_input_stream(
 }
 
 pub fn build_output_stream(
-    sample_rate: u32,
-    buffer_size: u32,
-) -> (Stream, Arc<MixerNode>, Producer<DawCtxMessage>, Arc<Meter>) {
-    let (mut ctx, master_node, producer) = DawCtx::create(sample_rate, buffer_size);
-    let meter = ctx.meter.clone();
+    meter: Meter,
+) -> (
+    Stream,
+    Arc<MixerNode>,
+    Sender<DawCtxMessage>,
+    Receiver<MeterDiff>,
+) {
+    let (mut ctx, master_node, producer, consumer) = DawCtx::create(meter);
 
     let device = cpal::default_host().default_output_device().unwrap();
 
@@ -114,19 +116,21 @@ pub fn build_output_stream(
         .filter(|config| config.channels() == 2)
         .filter(|config| config.max_sample_rate().0 >= 40000)
         .min_by(|l, r| {
-            compare_by_sample_rate(l, r, sample_rate)
-                .then_with(|| compare_by_buffer_size(l, r, buffer_size))
+            compare_by_sample_rate(l, r, meter.sample_rate)
+                .then_with(|| compare_by_buffer_size(l, r, meter.buffer_size))
         })
         .unwrap();
 
-    let sample_rate = SampleRate(sample_rate.clamp(
+    let sample_rate = SampleRate(meter.sample_rate.clamp(
         supported_config.min_sample_rate().0,
         supported_config.max_sample_rate().0,
     ));
 
     let buffer_size = match *supported_config.buffer_size() {
         SupportedBufferSize::Unknown => BufferSize::Default,
-        SupportedBufferSize::Range { min, max } => BufferSize::Fixed(buffer_size.clamp(min, max)),
+        SupportedBufferSize::Range { min, max } => {
+            BufferSize::Fixed(meter.buffer_size.clamp(min, max))
+        }
     };
 
     info!(
@@ -143,10 +147,6 @@ pub fn build_output_stream(
             move |data, _| {
                 ctx.process(data);
 
-                if ctx.meter.playing.load(Acquire) {
-                    ctx.meter.sample.fetch_add(data.len(), AcqRel);
-                }
-
                 for s in data {
                     *s = s.clamp(-1.0, 1.0);
                 }
@@ -158,7 +158,7 @@ pub fn build_output_stream(
 
     stream.play().unwrap();
 
-    (stream, master_node, producer, meter)
+    (stream, master_node, producer, consumer)
 }
 
 fn compare_by_sample_rate(

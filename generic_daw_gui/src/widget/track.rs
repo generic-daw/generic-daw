@@ -20,7 +20,7 @@ struct State {
 
 #[derive(Debug)]
 pub struct Track<'a, Message> {
-    meter: &'a Meter,
+    meter: Meter,
     /// list of the track panel and all the clip widgets
     children: NoDebug<Box<[Element<'a, Message>]>>,
     /// the position of the top left corner of the arrangement viewport
@@ -176,7 +176,7 @@ where
     Message: 'a,
 {
     pub fn new(
-        meter: &'a Meter,
+        meter: Meter,
         children: impl IntoIterator<Item = Element<'a, Message>>,
         position: Vec2,
         scale: Vec2,

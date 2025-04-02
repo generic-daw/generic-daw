@@ -1,12 +1,11 @@
 use bit_set::BitSet;
 use generic_daw_core::{
-    Clip, DawCtxMessage, Meter, MixerNode, Stream, StreamTrait as _, Track,
+    Clip, DawCtxMessage, Meter, MeterDiff, MixerNode, Stream, StreamTrait as _, Track,
     audio_graph::{NodeId, NodeImpl as _},
     build_output_stream, export,
 };
 use generic_daw_utils::{HoleyVec, NoDebug};
 use oneshot::Receiver;
-use rtrb::Producer;
 use std::{path::Path, sync::Arc};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -18,18 +17,26 @@ pub enum NodeType {
 
 #[derive(Debug)]
 pub struct Arrangement {
+    meter: Meter,
+
     tracks: Vec<Track>,
     nodes: HoleyVec<(Arc<MixerNode>, BitSet, NodeType)>,
     master_node_id: NodeId,
 
-    producer: Producer<DawCtxMessage>,
+    producer: smol::channel::Sender<DawCtxMessage>,
     stream: NoDebug<Stream>,
-    meter: Arc<Meter>,
 }
 
 impl Arrangement {
-    pub fn create() -> (Self, Arc<Meter>) {
-        let (stream, master_node, producer, meter) = build_output_stream(44100, 1024);
+    pub fn create() -> (Self, smol::channel::Receiver<MeterDiff>) {
+        let meter = Meter {
+            sample_rate: 44100,
+            buffer_size: 1024,
+            bpm: 140,
+            ..Meter::default()
+        };
+
+        let (stream, master_node, producer, receiver) = build_output_stream(meter);
         let master_node_id = master_node.id();
         let mut channels = HoleyVec::default();
         channels.insert(
@@ -39,20 +46,38 @@ impl Arrangement {
 
         (
             Self {
+                meter,
+
                 tracks: Vec::new(),
                 nodes: channels,
                 master_node_id,
 
                 producer,
                 stream: stream.into(),
-                meter: meter.clone(),
             },
-            meter,
+            receiver,
         )
     }
 
-    pub fn stop(&mut self) {
-        self.producer.push(DawCtxMessage::Reset).unwrap();
+    pub fn meter(&self) -> Meter {
+        self.meter
+    }
+
+    pub fn modify_meter(&mut self, f: impl FnOnce(&mut Meter)) {
+        let mut meter = self.meter;
+        f(&mut meter);
+        self.producer
+            .try_send(DawCtxMessage::MeterDiff(self.meter.diff(meter)))
+            .unwrap();
+        self.meter = meter;
+    }
+
+    pub fn apply_meter_diff(&mut self, diff: MeterDiff) {
+        self.meter = self.meter.resolve(diff);
+    }
+
+    pub fn stop(&self) {
+        self.producer.try_send(DawCtxMessage::Reset).unwrap();
     }
 
     pub fn master(&self) -> &(Arc<MixerNode>, BitSet, NodeType) {
@@ -85,7 +110,7 @@ impl Arrangement {
             .insert(id.get(), (node.clone(), BitSet::default(), NodeType::Mixer));
 
         self.producer
-            .push(DawCtxMessage::Insert(node.into()))
+            .try_send(DawCtxMessage::Insert(node.into()))
             .unwrap();
 
         self.request_connect(self.master_node_id, id)
@@ -94,7 +119,7 @@ impl Arrangement {
     pub fn remove_channel(&mut self, id: NodeId) {
         self.nodes.remove(id.get());
 
-        self.producer.push(DawCtxMessage::Remove(id)).unwrap();
+        self.producer.try_send(DawCtxMessage::Remove(id)).unwrap();
     }
 
     pub fn add_track(&mut self, track: Track) -> Receiver<(NodeId, NodeId)> {
@@ -107,7 +132,7 @@ impl Arrangement {
         );
 
         self.producer
-            .push(DawCtxMessage::Insert(track.into()))
+            .try_send(DawCtxMessage::Insert(track.into()))
             .unwrap();
 
         self.request_connect(self.master_node_id, id)
@@ -117,11 +142,11 @@ impl Arrangement {
         self.tracks.remove(idx);
     }
 
-    pub fn request_connect(&mut self, from: NodeId, to: NodeId) -> Receiver<(NodeId, NodeId)> {
+    pub fn request_connect(&self, from: NodeId, to: NodeId) -> Receiver<(NodeId, NodeId)> {
         let (sender, receiver) = oneshot::channel();
 
         self.producer
-            .push(DawCtxMessage::Connect(from, to, sender))
+            .try_send(DawCtxMessage::Connect(from, to, sender))
             .unwrap();
 
         receiver
@@ -135,7 +160,7 @@ impl Arrangement {
         self.nodes.get_mut(to.get()).unwrap().1.remove(from.get());
 
         self.producer
-            .push(DawCtxMessage::Disconnect(from, to))
+            .try_send(DawCtxMessage::Disconnect(from, to))
             .unwrap();
     }
 
@@ -143,7 +168,7 @@ impl Arrangement {
         self.tracks[track].clips.push(clip.into());
 
         self.producer
-            .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
+            .try_send(DawCtxMessage::Insert(self.tracks[track].clone().into()))
             .unwrap();
     }
 
@@ -152,7 +177,7 @@ impl Arrangement {
         self.tracks[track].clips.push(clip);
 
         self.producer
-            .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
+            .try_send(DawCtxMessage::Insert(self.tracks[track].clone().into()))
             .unwrap();
     }
 
@@ -160,7 +185,7 @@ impl Arrangement {
         self.tracks[track].clips.remove(clip);
 
         self.producer
-            .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
+            .try_send(DawCtxMessage::Insert(self.tracks[track].clone().into()))
             .unwrap();
     }
 
@@ -169,18 +194,18 @@ impl Arrangement {
         self.tracks[new_track].clips.push(clip);
 
         self.producer
-            .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
+            .try_send(DawCtxMessage::Insert(self.tracks[track].clone().into()))
             .unwrap();
         self.producer
-            .push(DawCtxMessage::Insert(self.tracks[new_track].clone().into()))
+            .try_send(DawCtxMessage::Insert(self.tracks[new_track].clone().into()))
             .unwrap();
     }
 
-    pub fn export(&mut self, path: &Path) {
+    pub fn export(&self, path: &Path) {
         let (sender, receiver) = oneshot::channel();
 
         self.producer
-            .push(DawCtxMessage::RequestAudioGraph(sender))
+            .try_send(DawCtxMessage::RequestAudioGraph(sender))
             .unwrap();
 
         let mut audio_graph = receiver.recv().unwrap();
@@ -190,7 +215,6 @@ impl Arrangement {
         export(
             &mut audio_graph,
             path,
-            &self.meter,
             self.tracks()
                 .iter()
                 .map(Track::len)
@@ -199,7 +223,7 @@ impl Arrangement {
         );
 
         self.producer
-            .push(DawCtxMessage::AudioGraph(audio_graph))
+            .try_send(DawCtxMessage::AudioGraph(audio_graph))
             .unwrap();
 
         self.stream.play().unwrap();

@@ -14,12 +14,12 @@ use crate::{
         vsplit::Strategy,
     },
 };
-use arrangement::NodeType;
+use arrangement::{Arrangement, NodeType};
 use dragking::{DragEvent, DropPosition};
 use fragile::Fragile;
 use generic_daw_core::{
-    AudioClip, Clip, InterleavedAudio, Meter, MidiClip, MidiNote, MixerNode, Position, Recording,
-    Track,
+    AudioClip, Clip, InterleavedAudio, MeterDiff, MidiClip, MidiNote, MixerNode, Position,
+    Recording, Track,
     audio_graph::{NodeId, NodeImpl as _},
     clap_host::{self, MainThreadMessage, PluginDescriptor, PluginId},
 };
@@ -53,11 +53,10 @@ use std::{
 
 mod arrangement;
 
-pub use arrangement::Arrangement as ArrangementWrapper;
-
 #[derive(Clone, Debug)]
 pub enum Message {
     ClapHost(ClapHostMessage),
+    MeterDiff(MeterDiff),
 
     ConnectRequest((NodeId, NodeId)),
     ConnectSucceeded((NodeId, NodeId)),
@@ -114,11 +113,9 @@ pub enum Tab {
 
 pub struct ArrangementView {
     pub clap_host: ClapHost,
+    pub arrangement: Arrangement,
 
     plugins_by_channel: HoleyVec<Vec<(PluginId, Box<str>)>>,
-
-    arrangement: ArrangementWrapper,
-    meter: Arc<Meter>,
 
     recording: Option<Recording>,
     recording_track: Option<NodeId>,
@@ -141,16 +138,16 @@ pub struct ArrangementView {
 }
 
 impl ArrangementView {
-    pub fn create() -> (Self, Arc<Meter>) {
-        let (arrangement, meter) = ArrangementWrapper::create();
+    pub fn create() -> (Self, Task<Message>) {
+        let (arrangement, receiver) = Arrangement::create();
 
         (
             Self {
                 clap_host: ClapHost::default(),
-                plugins_by_channel: HoleyVec::default(),
 
                 arrangement,
-                meter: meter.clone(),
+
+                plugins_by_channel: HoleyVec::default(),
 
                 recording: None,
                 recording_track: None,
@@ -171,17 +168,18 @@ impl ArrangementView {
                 selected_channel: None,
                 split_at: 300.0,
             },
-            meter,
+            Task::stream(receiver).map(Message::MeterDiff),
         )
     }
 
-    pub fn stop(&mut self) {
+    pub fn stop(&self) {
         self.arrangement.stop();
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ClapHost(msg) => return self.clap_host.update(msg).map(Message::ClapHost),
+            Message::MeterDiff(diff) => self.arrangement.apply_meter_diff(diff),
             Message::ConnectRequest((from, to)) => {
                 return Task::future(self.arrangement.request_connect(from, to))
                     .and_then(Task::done)
@@ -249,8 +247,8 @@ impl ArrangementView {
                 let (gui, receiver, audio_processor) = clap_host::init(
                     &PLUGINS[&name],
                     name,
-                    f64::from(self.meter.sample_rate),
-                    self.meter.buffer_size,
+                    f64::from(self.arrangement.meter().sample_rate),
+                    self.arrangement.meter().buffer_size,
                 );
 
                 let id = audio_processor.id();
@@ -321,7 +319,7 @@ impl ArrangementView {
             }
             Message::SampleLoadFromFile(path) => {
                 self.loading += 1;
-                let sample_rate = self.meter.sample_rate;
+                let sample_rate = self.arrangement.meter().sample_rate;
 
                 return Task::future(unblock(move || {
                     InterleavedAudio::create(&path, sample_rate)
@@ -333,7 +331,7 @@ impl ArrangementView {
                 self.loading -= 1;
 
                 if let Some(audio) = audio {
-                    let clip = AudioClip::create(audio, self.meter.clone());
+                    let clip = AudioClip::create(audio);
                     let end = clip.position.get_global_end();
 
                     let (track, fut) = self
@@ -350,11 +348,9 @@ impl ArrangementView {
                             || {
                                 (
                                     self.arrangement.tracks().len(),
-                                    Task::future(
-                                        self.arrangement.add_track(Track::new(self.meter.clone())),
-                                    )
-                                    .and_then(Task::done)
-                                    .map(Message::ConnectSucceeded),
+                                    Task::future(self.arrangement.add_track(Track::default()))
+                                        .and_then(Task::done)
+                                        .map(Message::ConnectSucceeded),
                                 )
                             },
                             |x| (x, Task::none()),
@@ -367,15 +363,15 @@ impl ArrangementView {
             }
             Message::OpenMidiClip(clip) => self.tab = Tab::PianoRoll(clip),
             Message::AddMidiClip(track, pos) => {
-                let clip = MidiClip::create(Arc::default(), self.meter.clone());
+                let clip = MidiClip::create(Arc::default());
                 clip.position
-                    .trim_end_to(Position::BEAT * self.meter.numerator.load(Acquire) as u32);
+                    .trim_end_to(Position::BEAT * self.arrangement.meter().numerator as u32);
                 clip.position.move_to(pos);
                 let track = self.arrangement.track_of(track).unwrap();
                 self.arrangement.add_clip(track, clip);
             }
             Message::TrackAdd => {
-                return Task::future(self.arrangement.add_track(Track::new(self.meter.clone())))
+                return Task::future(self.arrangement.add_track(Track::default()))
                     .and_then(Task::done)
                     .map(Message::ConnectSucceeded);
             }
@@ -411,10 +407,9 @@ impl ArrangementView {
                 }
             }
             Message::SeekTo(pos) => {
-                self.meter.sample.store(
-                    pos.in_samples(self.meter.bpm.load(Acquire), self.meter.sample_rate),
-                    Release,
-                );
+                self.arrangement.modify_meter(|meter| {
+                    meter.sample = pos.in_samples(meter.bpm, meter.sample_rate);
+                });
             }
             Message::ToggleRecord(id) => {
                 if self.recording_track == Some(id) {
@@ -424,20 +419,20 @@ impl ArrangementView {
                 }
 
                 let (recording, receiver) =
-                    Recording::create(Self::make_recording_path(), &self.meter);
+                    Recording::create(Self::make_recording_path(), &self.arrangement.meter());
                 self.recording = Some(recording);
                 self.recording_track = Some(id);
 
-                self.meter.playing.store(true, Release);
+                self.arrangement.modify_meter(|meter| meter.playing = true);
 
                 return Task::stream(receiver).map(Message::RecordingChunk);
             }
             Message::RecordingSplit(id) => {
                 if let Some(recording) = self.recording.as_mut() {
                     let mut pos = Position::from_samples(
-                        self.meter.sample.load(Acquire),
-                        self.meter.bpm.load(Acquire),
-                        self.meter.sample_rate,
+                        self.arrangement.meter().sample,
+                        self.arrangement.meter().bpm,
+                        self.arrangement.meter().sample_rate,
                     );
                     (pos, recording.position) = (recording.position, pos);
 
@@ -445,7 +440,7 @@ impl ArrangementView {
                     let track = self.recording_track.replace(id).unwrap();
                     let track = self.arrangement.track_of(track).unwrap();
 
-                    let clip = AudioClip::create(audio, self.meter.clone());
+                    let clip = AudioClip::create(audio);
                     clip.position.move_to(pos);
                     self.arrangement.add_clip(track, clip);
                 }
@@ -457,14 +452,14 @@ impl ArrangementView {
             }
             Message::StopRecord => {
                 if let Some(recording) = self.recording.take() {
-                    self.meter.playing.store(false, Release);
+                    self.arrangement.modify_meter(|meter| meter.playing = false);
 
                     let pos = recording.position;
                     let audio = recording.try_into().unwrap();
                     let track = self.recording_track.take().unwrap();
                     let track = self.arrangement.track_of(track).unwrap();
 
-                    let clip = AudioClip::create(audio, self.meter.clone());
+                    let clip = AudioClip::create(audio);
                     clip.position.move_to(pos);
                     self.arrangement.add_clip(track, clip);
                 }
@@ -486,6 +481,8 @@ impl ArrangementView {
                 }
 
                 if pd {
+                    let meter = self.arrangement.meter();
+
                     self.arrangement_position += pos;
                     self.arrangement_position.x = self.arrangement_position.x.clamp(
                         0.0,
@@ -494,14 +491,8 @@ impl ArrangementView {
                             .iter()
                             .map(Track::len)
                             .max()
-                            .map(|m| {
-                                m.in_samples(self.meter.bpm.load(Acquire), self.meter.sample_rate)
-                            })
-                            .max(
-                                self.recording
-                                    .as_ref()
-                                    .map(|_| self.meter.sample.load(Acquire)),
-                            )
+                            .map(|m| m.in_samples(meter.bpm, meter.sample_rate))
+                            .max(self.recording.as_ref().map(|_| meter.sample))
                             .unwrap_or_default() as f32,
                     );
                     self.arrangement_position.y = self.arrangement_position.y.clamp(
@@ -543,7 +534,10 @@ impl ArrangementView {
                             .map(|note| note.end)
                             .max()
                             .unwrap_or_default()
-                            .in_samples_f(self.meter.bpm.load(Acquire), self.meter.sample_rate),
+                            .in_samples_f(
+                                self.arrangement.meter().bpm,
+                                self.arrangement.meter().sample_rate,
+                            ),
                     );
                     piano_roll_position.y = piano_roll_position.y.max(0.0);
 
@@ -684,7 +678,7 @@ impl ArrangementView {
 
     fn arrangement(&self) -> Element<'_, Message> {
         Seeker::new(
-            &self.meter,
+            self.arrangement.meter(),
             self.arrangement_position,
             self.arrangement_scale,
             column(
@@ -815,7 +809,7 @@ impl ArrangementView {
             )
             .align_x(Alignment::Center),
             ArrangementWidget::new(
-                &self.meter,
+                self.arrangement.meter(),
                 self.arrangement_position,
                 self.arrangement_scale,
                 column(
@@ -829,6 +823,7 @@ impl ArrangementView {
                             let clips_iter = track.clips.iter().cloned().map(|clip| match clip {
                                 Clip::Audio(clip) => AudioClipWidget::new(
                                     clip,
+                                    self.arrangement.meter(),
                                     self.arrangement_position,
                                     self.arrangement_scale,
                                     enabled,
@@ -836,6 +831,7 @@ impl ArrangementView {
                                 .into(),
                                 Clip::Midi(clip) => MidiClipWidget::new(
                                     clip.clone(),
+                                    self.arrangement.meter(),
                                     self.arrangement_position,
                                     self.arrangement_scale,
                                     enabled,
@@ -849,7 +845,7 @@ impl ArrangementView {
                                     clips_iter.chain(once(
                                         RecordingWidget::new(
                                             self.recording.as_ref().unwrap(),
-                                            &self.meter,
+                                            self.arrangement.meter(),
                                             self.arrangement_position,
                                             self.arrangement_scale,
                                         )
@@ -861,7 +857,7 @@ impl ArrangementView {
                             };
 
                             TrackWidget::new(
-                                &self.meter,
+                                self.arrangement.meter(),
                                 clips_iter,
                                 self.arrangement_position,
                                 self.arrangement_scale,
@@ -1320,16 +1316,16 @@ impl ArrangementView {
             piano_roll_position.y = piano_roll_position.y.min(128.0 - height);
             self.piano_roll_position.set(piano_roll_position);
 
-            let bpm = self.meter.bpm.load(Acquire);
+            let bpm = self.arrangement.meter().bpm;
 
             Seeker::new(
-                &self.meter,
+                self.arrangement.meter(),
                 piano_roll_position,
                 self.piano_roll_scale,
                 Piano::new(piano_roll_position, self.piano_roll_scale),
                 PianoRoll::new(
                     selected_clip.pattern.load().deref().clone(),
-                    &self.meter,
+                    self.arrangement.meter(),
                     piano_roll_position,
                     self.piano_roll_scale,
                     Message::PianoRollAction,
@@ -1341,11 +1337,11 @@ impl ArrangementView {
                 selected_clip
                     .position
                     .get_global_start()
-                    .in_samples_f(bpm, self.meter.sample_rate)
+                    .in_samples_f(bpm, self.arrangement.meter().sample_rate)
                     - selected_clip
                         .position
                         .get_clip_start()
-                        .in_samples_f(bpm, self.meter.sample_rate),
+                        .in_samples_f(bpm, self.arrangement.meter().sample_rate),
             )
             .into()
         })

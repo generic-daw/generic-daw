@@ -9,7 +9,7 @@ use crate::{
     widget::{AnimatedDot, BpmInput, LINE_HEIGHT, VSplit, vsplit::Strategy},
 };
 use generic_daw_core::{
-    Denominator, Meter, Numerator, Position,
+    Denominator, Numerator, Position,
     clap_host::{self, PluginBundle, PluginDescriptor},
 };
 use iced::{
@@ -21,27 +21,17 @@ use iced::{
         button, column, horizontal_space, row,
         scrollable::{Direction, Scrollbar},
     },
-    window::{self, Id, frames},
+    window::{self, Id},
 };
 use log::trace;
 use rfd::{AsyncFileDialog, FileHandle};
-use std::{
-    collections::BTreeMap,
-    fs,
-    path::Path,
-    sync::{
-        Arc, LazyLock,
-        atomic::Ordering::{AcqRel, Acquire, Release},
-    },
-};
+use std::{collections::BTreeMap, fs, path::Path, sync::LazyLock};
 
 pub static PLUGINS: LazyLock<BTreeMap<PluginDescriptor, PluginBundle>> =
     LazyLock::new(clap_host::get_installed_plugins);
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    Redraw,
-
     Arrangement(ArrangementMessage),
     FileTree(Box<Path>),
 
@@ -63,7 +53,6 @@ pub struct Daw {
     arrangement: ArrangementView,
     file_tree: FileTree,
     split_at: f32,
-    meter: Arc<Meter>,
 }
 
 impl Daw {
@@ -74,7 +63,7 @@ impl Daw {
             ..window::Settings::default()
         });
 
-        let (arrangement, meter) = ArrangementView::create();
+        let (arrangement, task) = ArrangementView::create();
 
         _ = fs::create_dir(dirs::data_dir().unwrap().join("Generic Daw"));
 
@@ -83,9 +72,8 @@ impl Daw {
                 arrangement,
                 file_tree: FileTree::new(&dirs::home_dir().unwrap()),
                 split_at: 300.0,
-                meter,
             },
-            open.discard(),
+            open.discard().chain(task.map(Message::Arrangement)),
         )
     }
 
@@ -93,7 +81,6 @@ impl Daw {
         trace!("{message:?}");
 
         match message {
-            Message::Redraw => {}
             Message::Arrangement(message) => {
                 return self.arrangement.update(message).map(Message::Arrangement);
             }
@@ -124,8 +111,10 @@ impl Daw {
                 .map(Message::Arrangement);
             }
             Message::Stop => {
-                self.meter.playing.store(false, Release);
-                self.meter.sample.store(0, Release);
+                self.arrangement.arrangement.modify_meter(|meter| {
+                    meter.playing = false;
+                    meter.sample = 0;
+                });
                 self.arrangement.stop();
                 return self
                     .arrangement
@@ -133,7 +122,11 @@ impl Daw {
                     .map(Message::Arrangement);
             }
             Message::TogglePlay => {
-                if self.meter.playing.fetch_not(AcqRel) {
+                self.arrangement
+                    .arrangement
+                    .modify_meter(|meter| meter.playing ^= true);
+
+                if !self.arrangement.arrangement.meter().playing {
                     return self
                         .arrangement
                         .update(ArrangementMessage::StopRecord)
@@ -141,15 +134,22 @@ impl Daw {
                 }
             }
             Message::ToggleMetronome => {
-                self.meter.metronome.fetch_not(AcqRel);
+                self.arrangement
+                    .arrangement
+                    .modify_meter(|meter| meter.metronome ^= true);
             }
-            Message::ChangedBpm(bpm) => self.meter.bpm.store(bpm, Release),
-            Message::ChangedNumerator(new_numerator) => {
-                self.meter.numerator.store(new_numerator, Release);
-            }
-            Message::ChangedDenominator(new_denominator) => {
-                self.meter.denominator.store(new_denominator, Release);
-            }
+            Message::ChangedBpm(bpm) => self
+                .arrangement
+                .arrangement
+                .modify_meter(|meter| meter.bpm = bpm),
+            Message::ChangedNumerator(numerator) => self
+                .arrangement
+                .arrangement
+                .modify_meter(|meter| meter.numerator = numerator),
+            Message::ChangedDenominator(denominator) => self
+                .arrangement
+                .arrangement
+                .modify_meter(|meter| meter.denominator = denominator),
             Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
         }
 
@@ -161,12 +161,14 @@ impl Daw {
             return empty_widget().into();
         }
 
-        let bpm = self.meter.bpm.load(Acquire);
-        let fill =
-            Position::from_samples(self.meter.sample.load(Acquire), bpm, self.meter.sample_rate)
-                .beat()
-                % 2
-                == 0;
+        let fill = Position::from_samples(
+            self.arrangement.arrangement.meter().sample,
+            self.arrangement.arrangement.meter().bpm,
+            self.arrangement.arrangement.meter().sample_rate,
+        )
+        .beat()
+            % 2
+            == 0;
 
         column![
             row![
@@ -176,7 +178,7 @@ impl Daw {
                 ],
                 row![
                     styled_button(
-                        styled_svg(if self.meter.playing.load(Acquire) {
+                        styled_svg(if self.arrangement.arrangement.meter().playing {
                             PAUSE.clone()
                         } else {
                             PLAY.clone()
@@ -190,24 +192,28 @@ impl Daw {
                 row![
                     styled_pick_list(
                         Numerator::VARIANTS,
-                        Some(self.meter.numerator.load(Acquire)),
+                        Some(self.arrangement.arrangement.meter().numerator),
                         Message::ChangedNumerator
                     )
                     .width(50),
                     styled_pick_list(
                         Denominator::VARIANTS,
-                        Some(self.meter.denominator.load(Acquire)),
+                        Some(self.arrangement.arrangement.meter().denominator),
                         Message::ChangedDenominator
                     )
                     .width(50),
                 ],
-                BpmInput::new(30..=600, bpm, Message::ChangedBpm),
+                BpmInput::new(
+                    30..=600,
+                    self.arrangement.arrangement.meter().bpm,
+                    Message::ChangedBpm
+                ),
                 button(row![AnimatedDot::new(fill), AnimatedDot::new(!fill)].spacing(5.0))
                     .padding(8.0)
                     .style(move |t, s| button_with_base(
                         t,
                         s,
-                        if self.meter.metronome.load(Acquire) {
+                        if self.arrangement.arrangement.meter().metronome {
                             button::primary
                         } else {
                             button::secondary
@@ -245,16 +251,9 @@ impl Daw {
             .unwrap_or_else(|| String::from("Generic DAW"))
     }
 
-    pub fn subscription(&self) -> Subscription<Message> {
-        let redraw = if self.meter.playing.load(Acquire) {
-            frames().map(|_| Message::Redraw)
-        } else {
-            Subscription::none()
-        };
-
+    pub fn subscription() -> Subscription<Message> {
         Subscription::batch([
             ArrangementView::subscription().map(Message::Arrangement),
-            redraw,
             event::listen_with(|e, s, _| match s {
                 Status::Ignored => match e {
                     Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {

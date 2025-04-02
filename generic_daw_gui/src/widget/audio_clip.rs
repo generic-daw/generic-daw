@@ -1,5 +1,5 @@
 use super::{LINE_HEIGHT, Vec2, shaping_of, waveform};
-use generic_daw_core::AudioClip as AudioClipInner;
+use generic_daw_core::{AudioClip as AudioClipInner, Meter};
 use iced::{
     Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
@@ -21,11 +21,7 @@ use iced_wgpu::{
     geometry::Cache,
     graphics::cache::{Cached as _, Group},
 };
-use std::{
-    cell::RefCell,
-    cmp::min_by,
-    sync::{Arc, atomic::Ordering::Acquire},
-};
+use std::{cell::RefCell, cmp::min_by, sync::Arc};
 
 #[derive(Default)]
 struct State {
@@ -51,6 +47,7 @@ impl State {
 #[derive(Clone, Debug)]
 pub struct AudioClip {
     inner: Arc<AudioClipInner>,
+    meter: Meter,
     /// the name of the sample
     name: Box<str>,
     /// the position of the top left corner of the arrangement viewport
@@ -78,17 +75,16 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-        let bpm = self.inner.meter.bpm.load(Acquire);
         let global_start = self
             .inner
             .position
             .get_global_start()
-            .in_samples_f(bpm, self.inner.meter.sample_rate);
+            .in_samples_f(self.meter.bpm, self.meter.sample_rate);
         let global_end = self
             .inner
             .position
             .get_global_end()
-            .in_samples_f(bpm, self.inner.meter.sample_rate);
+            .in_samples_f(self.meter.bpm, self.meter.sample_rate);
         let pixel_size = self.scale.x.exp2();
 
         Node::new(Size::new(
@@ -228,7 +224,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
         // fill the mesh cache if it's cleared
         if state.cache.borrow().is_none() {
             if let Some(mesh) = waveform::mesh(
-                &self.inner.meter,
+                self.meter,
                 self.inner.position.get_global_start(),
                 self.inner.position.get_clip_start(),
                 &self.inner.audio.lods,
@@ -268,7 +264,13 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
 }
 
 impl AudioClip {
-    pub fn new(inner: Arc<AudioClipInner>, position: Vec2, scale: Vec2, enabled: bool) -> Self {
+    pub fn new(
+        inner: Arc<AudioClipInner>,
+        meter: Meter,
+        position: Vec2,
+        scale: Vec2,
+        enabled: bool,
+    ) -> Self {
         let name = inner
             .audio
             .path
@@ -280,6 +282,7 @@ impl AudioClip {
 
         Self {
             inner,
+            meter,
             name,
             position,
             scale,

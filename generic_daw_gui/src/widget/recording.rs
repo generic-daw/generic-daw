@@ -15,12 +15,12 @@ use iced::{
     padding,
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
-use std::{cmp::min_by, sync::atomic::Ordering::Acquire};
+use std::cmp::min_by;
 
 #[derive(Clone, Debug)]
 pub struct Recording<'a> {
     inner: &'a RecordingInner,
-    meter: &'a Meter,
+    meter: Meter,
     /// the name of the sample
     name: Box<str>,
     /// the position of the top left corner of the arrangement viewport
@@ -38,7 +38,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-        let bpm = self.meter.bpm.load(Acquire);
+        let bpm = self.meter.bpm;
         let global_start = self
             .inner
             .position
@@ -132,7 +132,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
 }
 
 impl<'a> Recording<'a> {
-    pub fn new(inner: &'a RecordingInner, meter: &'a Meter, position: Vec2, scale: Vec2) -> Self {
+    pub fn new(inner: &'a RecordingInner, meter: Meter, position: Vec2, scale: Vec2) -> Self {
         let name = inner.path.file_name().unwrap().to_str().unwrap().into();
 
         Self {

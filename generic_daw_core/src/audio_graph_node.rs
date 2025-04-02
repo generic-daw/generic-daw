@@ -1,5 +1,5 @@
 use crate::{Master, MixerNode, Track, event::Event};
-use audio_graph::NodeImpl;
+use audio_graph::{NodeId, NodeImpl};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -18,7 +18,7 @@ impl NodeImpl<Event> for AudioGraphNode {
         }
     }
 
-    fn id(&self) -> audio_graph::NodeId {
+    fn id(&self) -> NodeId {
         match self {
             Self::Master(node) => node.id(),
             Self::MixerNode(node) => node.id(),

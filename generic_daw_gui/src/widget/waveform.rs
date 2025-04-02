@@ -6,10 +6,10 @@ use iced_wgpu::graphics::{
     Mesh,
     mesh::{Indexed, SolidVertex2D},
 };
-use std::{cmp::max_by, sync::atomic::Ordering::Acquire};
+use std::cmp::max_by;
 
 pub fn mesh<T>(
-    meter: &Meter,
+    meter: Meter,
     global_start: Position,
     clip_start: Position,
     lods: &[T],
@@ -39,7 +39,7 @@ where
     let color = color::pack(theme.extended_palette().background.strong.text);
     let lod = scale.x as usize - 3;
 
-    let bpm = meter.bpm.load(Acquire);
+    let bpm = meter.bpm;
 
     let global_start = global_start.in_samples_f(bpm, meter.sample_rate);
 

@@ -1,9 +1,9 @@
-use crate::{Meter, Position, clip_position::ClipPosition, event::Event};
+use crate::{METER, Position, clip_position::ClipPosition, event::Event};
 use arc_swap::ArcSwap;
 use std::{
     cmp::Ordering,
     iter::repeat_n,
-    sync::{Arc, Mutex, atomic::Ordering::Acquire},
+    sync::{Arc, Mutex},
 };
 
 mod midi_key;
@@ -20,14 +20,12 @@ pub struct MidiClip {
     pub pattern: Arc<ArcSwap<Vec<MidiNote>>>,
     /// the position of the clip relative to the start of the arrangement
     pub position: ClipPosition,
-    /// information relating to the playback of the arrangement
-    pub meter: Arc<Meter>,
     notes: Arc<Mutex<[[u8; 16]; 127]>>,
 }
 
 impl MidiClip {
     #[must_use]
-    pub fn create(pattern: Arc<ArcSwap<Vec<MidiNote>>>, meter: Arc<Meter>) -> Arc<Self> {
+    pub fn create(pattern: Arc<ArcSwap<Vec<MidiNote>>>) -> Arc<Self> {
         let len = pattern
             .load()
             .iter()
@@ -38,26 +36,24 @@ impl MidiClip {
         Arc::new(Self {
             pattern,
             position: ClipPosition::new(Position::ZERO, len, Position::ZERO),
-            meter,
             notes: Arc::new(Mutex::new([[0; 16]; 127])),
         })
     }
 
     pub fn process(&self, audio: &[f32], events: &mut Vec<Event>) {
+        let meter = METER.load();
+
         let global_start = self.position.get_global_start();
         let global_end = self.position.get_global_end();
         let clip_start = self.position.get_clip_start();
 
-        let playing = self.meter.playing.load(Acquire);
-        let bpm = self.meter.bpm.load(Acquire);
-
-        let start_sample = self.meter.sample.load(Acquire);
+        let start_sample = meter.sample;
         let end_sample = start_sample + audio.len();
 
         // how many notes should currently be playing
         let mut notes = [[0u8; 16]; 127];
 
-        if playing {
+        if meter.playing {
             self.pattern
                 .load()
                 .iter()
@@ -67,8 +63,8 @@ impl MidiClip {
                         .and_then(|note| note.clamp(global_start, global_end))
                 })
                 .for_each(|note| {
-                    let start = note.start.in_samples(bpm, self.meter.sample_rate);
-                    let end = note.end.in_samples(bpm, self.meter.sample_rate);
+                    let start = note.start.in_samples(meter.bpm, meter.sample_rate);
+                    let end = note.end.in_samples(meter.bpm, meter.sample_rate);
 
                     if start < start_sample && end >= start_sample {
                         notes[note.key.0 as usize][note.channel as usize] += 1;
@@ -113,7 +109,7 @@ impl MidiClip {
             events.extend(repeat_n(event, before.abs_diff(after) as usize));
         }
 
-        if playing {
+        if meter.playing {
             self.pattern
                 .load()
                 .iter()
@@ -123,8 +119,8 @@ impl MidiClip {
                         .and_then(|note| note.clamp(global_start, global_end))
                 })
                 .for_each(|note| {
-                    let start = note.start.in_samples(bpm, self.meter.sample_rate);
-                    let end = note.end.in_samples(bpm, self.meter.sample_rate);
+                    let start = note.start.in_samples(meter.bpm, meter.sample_rate);
+                    let end = note.end.in_samples(meter.bpm, meter.sample_rate);
 
                     if start >= start_sample && start < end_sample {
                         events.push(Event::On {

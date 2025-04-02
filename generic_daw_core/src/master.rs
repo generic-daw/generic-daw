@@ -1,10 +1,7 @@
-use crate::{Meter, MixerNode, Position, event::Event, include_f32s, resample_interleaved};
+use crate::{METER, MixerNode, Position, event::Event, include_f32s, resample_interleaved};
 use audio_graph::{NodeId, NodeImpl};
 use live_sample::LiveSample;
-use std::{
-    cell::RefCell,
-    sync::{Arc, atomic::Ordering::Acquire},
-};
+use std::{cell::RefCell, sync::Arc};
 
 mod include_f32s;
 mod live_sample;
@@ -14,8 +11,6 @@ static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 
 #[derive(Debug)]
 pub struct Master {
-    /// information relating to the playback of the arrangement
-    meter: Arc<Meter>,
     /// volume and pan
     node: Arc<MixerNode>,
 
@@ -26,21 +21,20 @@ pub struct Master {
 
 impl NodeImpl<Event> for Master {
     fn process(&self, audio: &mut [f32], events: &mut Vec<Event>) {
-        if self.meter.playing.load(Acquire) && self.meter.metronome.load(Acquire) {
-            let sample = self.meter.sample.load(Acquire);
-            let bpm = self.meter.bpm.load(Acquire);
+        let meter = METER.load();
 
-            let buf_start_pos = Position::from_samples(sample, bpm, self.meter.sample_rate);
+        if meter.playing && meter.metronome {
+            let buf_start_pos = Position::from_samples(meter.sample, meter.bpm, meter.sample_rate);
             let mut buf_end_pos =
-                Position::from_samples(sample + audio.len(), bpm, self.meter.sample_rate);
+                Position::from_samples(meter.sample + audio.len(), meter.bpm, meter.sample_rate);
 
             if (buf_start_pos.beat() != buf_end_pos.beat() && buf_end_pos.step() != 0)
                 || buf_start_pos.step() == 0
             {
                 buf_end_pos = buf_end_pos.floor();
 
-                let diff = (buf_end_pos - buf_start_pos).in_samples(bpm, self.meter.sample_rate);
-                let click = if buf_end_pos.beat() % self.meter.numerator.load(Acquire) as u32 == 0 {
+                let diff = (buf_end_pos - buf_start_pos).in_samples(meter.bpm, meter.sample_rate);
+                let click = if buf_end_pos.beat() % meter.numerator as u32 == 0 {
                     self.on_bar_click.clone()
                 } else {
                     self.off_bar_click.clone()
@@ -79,8 +73,8 @@ impl NodeImpl<Event> for Master {
 }
 
 impl Master {
-    pub fn new(meter: Arc<Meter>, node: Arc<MixerNode>) -> Self {
-        let sample_rate = meter.sample_rate;
+    pub fn new(node: Arc<MixerNode>) -> Self {
+        let sample_rate = METER.load().sample_rate;
 
         Self {
             click: RefCell::default(),
@@ -90,7 +84,6 @@ impl Master {
             off_bar_click: resample_interleaved(44100, sample_rate, OFF_BAR_CLICK.into())
                 .unwrap()
                 .into(),
-            meter,
             node,
         }
     }
