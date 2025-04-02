@@ -1,17 +1,16 @@
 use crate::{AudioGraph, AudioGraphNode, Master, Meter, MixerNode};
+use async_channel::{Receiver, Sender};
 use audio_graph::NodeId;
 use log::trace;
-use oneshot::Sender;
-use rtrb::{Consumer, Producer, RingBuffer};
 use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum DawCtxMessage {
     Insert(AudioGraphNode),
     Remove(NodeId),
-    Connect(NodeId, NodeId, Sender<(NodeId, NodeId)>),
+    Connect(NodeId, NodeId, oneshot::Sender<(NodeId, NodeId)>),
     Disconnect(NodeId, NodeId),
-    RequestAudioGraph(Sender<AudioGraph>),
+    RequestAudioGraph(oneshot::Sender<AudioGraph>),
     Reset,
     AudioGraph(AudioGraph),
 }
@@ -19,15 +18,15 @@ pub enum DawCtxMessage {
 pub struct DawCtx {
     pub meter: Arc<Meter>,
     audio_graph: AudioGraph,
-    consumer: Consumer<DawCtxMessage>,
+    receiver: Receiver<DawCtxMessage>,
 }
 
 impl DawCtx {
     pub fn create(
         sample_rate: u32,
         buffer_size: u32,
-    ) -> (Self, Arc<MixerNode>, Producer<DawCtxMessage>) {
-        let (ui_producer, consumer) = RingBuffer::new(16);
+    ) -> (Self, Arc<MixerNode>, Sender<DawCtxMessage>) {
+        let (ui_producer, consumer) = async_channel::unbounded();
 
         let meter = Arc::new(Meter::new(sample_rate, buffer_size));
         let node = Arc::<MixerNode>::default();
@@ -37,14 +36,14 @@ impl DawCtx {
         let audio_ctx = Self {
             meter,
             audio_graph,
-            consumer,
+            receiver: consumer,
         };
 
         (audio_ctx, node, ui_producer)
     }
 
     pub fn process(&mut self, buf: &mut [f32]) {
-        while let Ok(msg) = self.consumer.pop() {
+        while let Ok(msg) = self.receiver.try_recv() {
             trace!("{msg:?}");
 
             match msg {

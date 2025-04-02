@@ -175,7 +175,7 @@ impl ArrangementView {
         )
     }
 
-    pub fn stop(&mut self) {
+    pub fn stop(&self) {
         self.arrangement.stop();
     }
 

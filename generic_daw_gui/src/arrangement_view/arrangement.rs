@@ -6,7 +6,7 @@ use generic_daw_core::{
 };
 use generic_daw_utils::{HoleyVec, NoDebug};
 use oneshot::Receiver;
-use rtrb::Producer;
+use smol::channel::Sender;
 use std::{path::Path, sync::Arc};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -22,14 +22,14 @@ pub struct Arrangement {
     nodes: HoleyVec<(Arc<MixerNode>, BitSet, NodeType)>,
     master_node_id: NodeId,
 
-    producer: Producer<DawCtxMessage>,
+    sender: Sender<DawCtxMessage>,
     stream: NoDebug<Stream>,
     meter: Arc<Meter>,
 }
 
 impl Arrangement {
     pub fn create() -> (Self, Arc<Meter>) {
-        let (stream, master_node, producer, meter) = build_output_stream(44100, 1024);
+        let (stream, master_node, sender, meter) = build_output_stream(44100, 1024);
         let master_node_id = master_node.id();
         let mut channels = HoleyVec::default();
         channels.insert(
@@ -43,7 +43,7 @@ impl Arrangement {
                 nodes: channels,
                 master_node_id,
 
-                producer,
+                sender,
                 stream: stream.into(),
                 meter: meter.clone(),
             },
@@ -51,8 +51,8 @@ impl Arrangement {
         )
     }
 
-    pub fn stop(&mut self) {
-        self.producer.push(DawCtxMessage::Reset).unwrap();
+    pub fn stop(&self) {
+        self.sender.try_send(DawCtxMessage::Reset).unwrap();
     }
 
     pub fn master(&self) -> &(Arc<MixerNode>, BitSet, NodeType) {
@@ -84,8 +84,8 @@ impl Arrangement {
         self.nodes
             .insert(id.get(), (node.clone(), BitSet::default(), NodeType::Mixer));
 
-        self.producer
-            .push(DawCtxMessage::Insert(node.into()))
+        self.sender
+            .try_send(DawCtxMessage::Insert(node.into()))
             .unwrap();
 
         self.request_connect(self.master_node_id, id)
@@ -94,7 +94,7 @@ impl Arrangement {
     pub fn remove_channel(&mut self, id: NodeId) {
         self.nodes.remove(id.get());
 
-        self.producer.push(DawCtxMessage::Remove(id)).unwrap();
+        self.sender.try_send(DawCtxMessage::Remove(id)).unwrap();
     }
 
     pub fn add_track(&mut self, track: Track) -> Receiver<(NodeId, NodeId)> {
@@ -106,8 +106,8 @@ impl Arrangement {
             (track.node.clone(), BitSet::default(), NodeType::Track),
         );
 
-        self.producer
-            .push(DawCtxMessage::Insert(track.into()))
+        self.sender
+            .try_send(DawCtxMessage::Insert(track.into()))
             .unwrap();
 
         self.request_connect(self.master_node_id, id)
@@ -117,11 +117,11 @@ impl Arrangement {
         self.tracks.remove(idx);
     }
 
-    pub fn request_connect(&mut self, from: NodeId, to: NodeId) -> Receiver<(NodeId, NodeId)> {
+    pub fn request_connect(&self, from: NodeId, to: NodeId) -> Receiver<(NodeId, NodeId)> {
         let (sender, receiver) = oneshot::channel();
 
-        self.producer
-            .push(DawCtxMessage::Connect(from, to, sender))
+        self.sender
+            .try_send(DawCtxMessage::Connect(from, to, sender))
             .unwrap();
 
         receiver
@@ -134,16 +134,16 @@ impl Arrangement {
     pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
         self.nodes.get_mut(to.get()).unwrap().1.remove(from.get());
 
-        self.producer
-            .push(DawCtxMessage::Disconnect(from, to))
+        self.sender
+            .try_send(DawCtxMessage::Disconnect(from, to))
             .unwrap();
     }
 
     pub fn add_clip(&mut self, track: usize, clip: impl Into<Clip>) {
         self.tracks[track].clips.push(clip.into());
 
-        self.producer
-            .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
+        self.sender
+            .try_send(DawCtxMessage::Insert(self.tracks[track].clone().into()))
             .unwrap();
     }
 
@@ -151,16 +151,16 @@ impl Arrangement {
         let clip = self.tracks[track].clips[clip].clone();
         self.tracks[track].clips.push(clip);
 
-        self.producer
-            .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
+        self.sender
+            .try_send(DawCtxMessage::Insert(self.tracks[track].clone().into()))
             .unwrap();
     }
 
     pub fn delete_clip(&mut self, track: usize, clip: usize) {
         self.tracks[track].clips.remove(clip);
 
-        self.producer
-            .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
+        self.sender
+            .try_send(DawCtxMessage::Insert(self.tracks[track].clone().into()))
             .unwrap();
     }
 
@@ -168,19 +168,19 @@ impl Arrangement {
         let clip = self.tracks[track].clips.remove(clip);
         self.tracks[new_track].clips.push(clip);
 
-        self.producer
-            .push(DawCtxMessage::Insert(self.tracks[track].clone().into()))
+        self.sender
+            .try_send(DawCtxMessage::Insert(self.tracks[track].clone().into()))
             .unwrap();
-        self.producer
-            .push(DawCtxMessage::Insert(self.tracks[new_track].clone().into()))
+        self.sender
+            .try_send(DawCtxMessage::Insert(self.tracks[new_track].clone().into()))
             .unwrap();
     }
 
-    pub fn export(&mut self, path: &Path) {
+    pub fn export(&self, path: &Path) {
         let (sender, receiver) = oneshot::channel();
 
-        self.producer
-            .push(DawCtxMessage::RequestAudioGraph(sender))
+        self.sender
+            .try_send(DawCtxMessage::RequestAudioGraph(sender))
             .unwrap();
 
         let mut audio_graph = receiver.recv().unwrap();
@@ -198,8 +198,8 @@ impl Arrangement {
                 .unwrap_or_default(),
         );
 
-        self.producer
-            .push(DawCtxMessage::AudioGraph(audio_graph))
+        self.sender
+            .try_send(DawCtxMessage::AudioGraph(audio_graph))
             .unwrap();
 
         self.stream.play().unwrap();

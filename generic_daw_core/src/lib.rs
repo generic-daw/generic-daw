@@ -1,4 +1,4 @@
-use async_channel::Receiver;
+use async_channel::{Receiver, Sender};
 use cpal::{
     BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
     traits::{DeviceTrait as _, HostTrait as _},
@@ -6,7 +6,6 @@ use cpal::{
 use daw_ctx::DawCtx;
 use event::Event;
 use log::info;
-use rtrb::Producer;
 use std::{
     cmp::Ordering,
     sync::{
@@ -102,7 +101,7 @@ pub fn build_input_stream(
 pub fn build_output_stream(
     sample_rate: u32,
     buffer_size: u32,
-) -> (Stream, Arc<MixerNode>, Producer<DawCtxMessage>, Arc<Meter>) {
+) -> (Stream, Arc<MixerNode>, Sender<DawCtxMessage>, Arc<Meter>) {
     let (mut ctx, master_node, producer) = DawCtx::create(sample_rate, buffer_size);
     let meter = ctx.meter.clone();
 
