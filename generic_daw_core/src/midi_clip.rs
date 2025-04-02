@@ -1,7 +1,11 @@
 use crate::{Meter, Position, clip_position::ClipPosition};
 use arc_swap::ArcSwap;
 use clap_host::Event;
-use std::sync::{Arc, atomic::Ordering::Acquire};
+use std::{
+    cmp::Ordering,
+    iter::repeat_n,
+    sync::{Arc, Mutex, atomic::Ordering::Acquire},
+};
 
 mod midi_key;
 mod midi_note;
@@ -19,6 +23,7 @@ pub struct MidiClip {
     pub position: ClipPosition,
     /// information relating to the playback of the arrangement
     pub meter: Arc<Meter>,
+    notes: Arc<Mutex<[[u8; 16]; 127]>>,
 }
 
 impl MidiClip {
@@ -35,6 +40,7 @@ impl MidiClip {
             pattern,
             position: ClipPosition::new(Position::ZERO, len, Position::ZERO),
             meter,
+            notes: Arc::new(Mutex::new([[0; 16]; 127])),
         })
     }
 
@@ -43,41 +49,110 @@ impl MidiClip {
         let global_end = self.position.get_global_end();
         let clip_start = self.position.get_clip_start();
 
+        let playing = self.meter.playing.load(Acquire);
+        let bpm = self.meter.bpm.load(Acquire);
+
         let start_sample = self.meter.sample.load(Acquire);
         let end_sample = start_sample + audio.len();
 
-        let bpm = self.meter.bpm.load(Acquire);
+        // how many notes should currently be playing
+        let mut notes = [[0u8; 16]; 127];
 
-        self.pattern
-            .load()
+        if playing {
+            self.pattern
+                .load()
+                .iter()
+                .filter_map(|&note| {
+                    (note + global_start)
+                        .saturating_sub(clip_start)
+                        .and_then(|note| note.clamp(global_start, global_end))
+                })
+                .for_each(|note| {
+                    let start = note.start.in_samples(bpm, self.meter.sample_rate);
+                    let end = note.end.in_samples(bpm, self.meter.sample_rate);
+
+                    if start < start_sample && end >= start_sample {
+                        notes[note.key.0 as usize][note.channel as usize] += 1;
+                    }
+                });
+        }
+
+        // how many notes are currently playing
+        let mut lock = self
+            .notes
+            .try_lock()
+            .expect("this is only locked from the audio thread");
+
+        for (key, (channel, (before, after))) in lock
             .iter()
-            .filter_map(|&note| {
-                (note + global_start)
-                    .saturating_sub(clip_start)
-                    .and_then(|note| note.clamp(global_start, global_end))
-            })
-            .for_each(|note| {
-                // TODO: handle starting and stopping notes in the middle of their duration
+            .copied()
+            .zip(notes)
+            .enumerate()
+            .flat_map(|(a, (b, c))| b.into_iter().zip(c).enumerate().map(move |x| (a, x)))
+        {
+            // start or stop any difference in the number of playing notes
+            //
+            // this happens when toggling playback in the middle of a note,
+            // or when adding a note that stretches over the playhead
 
-                let start = note.start.in_samples(bpm, self.meter.sample_rate);
-                if start >= start_sample && start < end_sample {
-                    events.push(Event::On {
-                        time: (start - start_sample) as u32 / 2,
-                        channel: note.channel,
-                        key: note.key.0,
-                        velocity: note.velocity,
-                    });
-                }
+            let event = match before.cmp(&after) {
+                Ordering::Equal => continue,
+                Ordering::Less => Event::On {
+                    time: 0,
+                    channel: channel as u8,
+                    key: key as u8,
+                    velocity: 1.0,
+                },
+                Ordering::Greater => Event::Off {
+                    time: 0,
+                    channel: channel as u8,
+                    key: key as u8,
+                    velocity: 1.0,
+                },
+            };
 
-                let end = note.end.in_samples(bpm, self.meter.sample_rate);
-                if end >= start_sample && end < end_sample {
-                    events.push(Event::Off {
-                        time: (end - start_sample) as u32 / 2,
-                        channel: note.channel,
-                        key: note.key.0,
-                        velocity: note.velocity,
-                    });
-                }
-            });
+            events.extend(repeat_n(event, before.abs_diff(after) as usize));
+        }
+
+        if playing {
+            self.pattern
+                .load()
+                .iter()
+                .filter_map(|&note| {
+                    (note + global_start)
+                        .saturating_sub(clip_start)
+                        .and_then(|note| note.clamp(global_start, global_end))
+                })
+                .for_each(|note| {
+                    let start = note.start.in_samples(bpm, self.meter.sample_rate);
+                    let end = note.end.in_samples(bpm, self.meter.sample_rate);
+
+                    if start >= start_sample && start < end_sample {
+                        events.push(Event::On {
+                            time: (start - start_sample) as u32 / 2,
+                            channel: note.channel,
+                            key: note.key.0,
+                            velocity: note.velocity,
+                        });
+
+                        // this note will be playing in the next callback
+                        notes[note.key.0 as usize][note.channel as usize] += 1;
+                    }
+
+                    if end >= start_sample && end < end_sample {
+                        events.push(Event::Off {
+                            time: (end - start_sample) as u32 / 2,
+                            channel: note.channel,
+                            key: note.key.0,
+                            velocity: note.velocity,
+                        });
+
+                        // this note won't be playing in the next callback
+                        notes[note.key.0 as usize][note.channel as usize] -= 1;
+                    }
+                });
+        }
+
+        *lock = notes;
     }
 }

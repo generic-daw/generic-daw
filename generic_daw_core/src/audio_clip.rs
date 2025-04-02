@@ -34,6 +34,10 @@ impl AudioClip {
     }
 
     pub fn process(&self, audio: &mut [f32], _: &mut Vec<Event>) {
+        if !self.meter.playing.load(Acquire) {
+            return;
+        }
+
         let sample = self.meter.sample.load(Acquire);
         let bpm = self.meter.bpm.load(Acquire);
 

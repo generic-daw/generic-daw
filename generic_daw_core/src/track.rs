@@ -1,7 +1,7 @@
 use crate::{Meter, MixerNode, Position, clip::Clip};
 use audio_graph::{AudioGraphNodeImpl, NodeId};
 use clap_host::Event;
-use std::sync::{Arc, atomic::Ordering::Acquire};
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct Track {
@@ -14,10 +14,8 @@ pub struct Track {
 
 impl AudioGraphNodeImpl<f32, Event> for Track {
     fn process(&self, audio: &mut [f32], events: &mut Vec<Event>) {
-        if self.meter.playing.load(Acquire) {
-            for clip in &self.clips {
-                clip.process(audio, events);
-            }
+        for clip in &self.clips {
+            clip.process(audio, events);
         }
 
         self.node.process(audio, events);
