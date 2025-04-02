@@ -1,4 +1,3 @@
-use async_channel::Receiver;
 use fragile::Fragile;
 use generic_daw_core::clap_host::{GuiExt, MainThreadMessage, PluginId};
 use generic_daw_utils::HoleyVec;
@@ -6,6 +5,7 @@ use iced::{
     Function as _, Size, Subscription, Task,
     window::{self, Id, close_requests, resize_events},
 };
+use smol::{Timer, channel::Receiver};
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
@@ -144,7 +144,7 @@ impl ClapHost {
             MainThreadMessage::TickTimers => {
                 if self.windows.contains_key(id.get()) {
                     if let Some(sleep) = self.plugins.get_mut(id.get()).unwrap().tick_timers() {
-                        return Task::future(async_io::Timer::after(sleep))
+                        return Task::future(Timer::after(sleep))
                             .map(|_| MainThreadMessage::TickTimers)
                             .map(Message::MainThread.with(id));
                     }

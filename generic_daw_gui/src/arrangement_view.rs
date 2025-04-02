@@ -36,6 +36,7 @@ use iced::{
         vertical_rule, vertical_slider, vertical_space,
     },
 };
+use smol::unblock;
 use std::{
     cell::Cell,
     f32::{self, consts::FRAC_PI_2},
@@ -320,16 +321,13 @@ impl ArrangementView {
             }
             Message::SampleLoadFromFile(path) => {
                 self.loading += 1;
-                let meter = self.meter.clone();
-                let (sender, receiver) = oneshot::channel();
+                let sample_rate = self.meter.sample_rate;
 
-                std::thread::spawn(move || {
-                    _ = sender.send(InterleavedAudio::create(&path, meter.sample_rate));
-                });
-
-                return Task::future(receiver)
-                    .map(|r| r.ok().and_then(Result::ok))
-                    .map(Message::SampleLoadedFromFile);
+                return Task::future(unblock(move || {
+                    InterleavedAudio::create(&path, sample_rate)
+                }))
+                .map(Result::ok)
+                .map(Message::SampleLoadedFromFile);
             }
             Message::SampleLoadedFromFile(audio) => {
                 self.loading -= 1;
