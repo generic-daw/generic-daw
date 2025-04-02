@@ -48,7 +48,7 @@ where
     ///
     /// `buf` is assumed to be "uninitialized"
     pub fn process(&mut self, buf: &mut [S]) {
-        for node in self.list.iter().copied() {
+        for &node in &self.list {
             for s in &mut *buf {
                 *s = S::default();
             }
@@ -75,9 +75,8 @@ where
                 delay.rotate_right_concat(buf);
 
                 buf.iter()
-                    .copied()
                     .zip(&mut entry.audio)
-                    .for_each(|(sample, buf)| *buf += sample);
+                    .for_each(|(&sample, buf)| *buf += sample);
 
                 entry.events.extend(dep_entry.events.iter().copied());
             }
@@ -120,8 +119,6 @@ where
     pub fn connect(&mut self, from: NodeId, to: NodeId) -> bool {
         let from = from.get();
         let to = to.get();
-
-        debug_assert!(self.root != to);
 
         if !self.graph.contains_key(to) || !self.graph.contains_key(from) {
             return false;
@@ -176,9 +173,7 @@ where
             return;
         }
 
-        let entry = AudioGraphEntry::new(node);
-
-        self.graph.insert(id, entry);
+        self.graph.insert(id, AudioGraphEntry::new(node));
         // adding a node with no dependencies to any position preserves sorted order
         self.list.push(id);
     }
@@ -193,7 +188,7 @@ where
         debug_assert!(self.root != node);
 
         if self.graph.remove(node).is_some() {
-            let idx = self.list.iter().copied().position(|n| n == node).unwrap();
+            let idx = self.list.iter().position(|&n| n == node).unwrap();
             // shift-removing a node preserves sorted order
             self.list.remove(idx);
 
