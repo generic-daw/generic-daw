@@ -1,7 +1,7 @@
 use bit_set::BitSet;
 use generic_daw_core::{
     Clip, DawCtxMessage, Meter, MixerNode, Stream, StreamTrait as _, Track,
-    audio_graph::{AudioGraphNodeImpl as _, NodeId},
+    audio_graph::{NodeId, NodeImpl as _},
     build_output_stream, export,
 };
 use generic_daw_utils::{HoleyVec, NoDebug};

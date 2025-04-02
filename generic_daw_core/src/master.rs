@@ -1,6 +1,5 @@
-use crate::{Meter, MixerNode, Position, include_f32s, resample_interleaved};
-use audio_graph::{AudioGraphNodeImpl, NodeId};
-use clap_host::Event;
+use crate::{Meter, MixerNode, Position, event::Event, include_f32s, resample_interleaved};
+use audio_graph::{NodeId, NodeImpl};
 use live_sample::LiveSample;
 use std::{
     cell::RefCell,
@@ -25,7 +24,7 @@ pub struct Master {
     off_bar_click: Arc<[f32]>,
 }
 
-impl AudioGraphNodeImpl<f32, Event> for Master {
+impl NodeImpl<Event> for Master {
     fn process(&self, audio: &mut [f32], events: &mut Vec<Event>) {
         if self.meter.playing.load(Acquire) && self.meter.metronome.load(Acquire) {
             let sample = self.meter.sample.load(Acquire);

@@ -1,6 +1,5 @@
-use crate::{Meter, MixerNode, Position, clip::Clip};
-use audio_graph::{AudioGraphNodeImpl, NodeId};
-use clap_host::Event;
+use crate::{Meter, MixerNode, Position, clip::Clip, event::Event};
+use audio_graph::{NodeId, NodeImpl};
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -12,7 +11,7 @@ pub struct Track {
     pub node: Arc<MixerNode>,
 }
 
-impl AudioGraphNodeImpl<f32, Event> for Track {
+impl NodeImpl<Event> for Track {
     fn process(&self, audio: &mut [f32], events: &mut Vec<Event>) {
         for clip in &self.clips {
             clip.process(audio, events);

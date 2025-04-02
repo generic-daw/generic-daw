@@ -1,5 +1,4 @@
-use crate::{AudioClip, MidiClip, clip_position::ClipPosition};
-use clap_host::Event;
+use crate::{AudioClip, MidiClip, clip_position::ClipPosition, event::Event};
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]

@@ -1,12 +1,11 @@
-use crate::{AudioGraphNodeImpl, NodeId, audio_graph_entry::AudioGraphEntry};
+use crate::{EventImpl, NodeId, NodeImpl, entry::Entry};
 use bit_set::BitSet;
 use generic_daw_utils::{HoleyVec, RotateConcatExt as _};
-use std::ops::AddAssign;
 
 #[derive(Debug)]
-pub struct AudioGraph<N, S, E> {
-    /// a `NodeId` -> `AudioGraphEntry` map
-    graph: HoleyVec<AudioGraphEntry<N, S, E>>,
+pub struct AudioGraph<Node, Event> {
+    /// a `NodeId` -> `Entry` map
+    graph: HoleyVec<Entry<Node, Event>>,
     /// the `NodeId` of the root node
     root: usize,
     /// all nodes in the graph in reverse topological order,
@@ -20,19 +19,18 @@ pub struct AudioGraph<N, S, E> {
     seen: BitSet,
 }
 
-impl<N, S, E> AudioGraph<N, S, E>
+impl<Node, Event> AudioGraph<Node, Event>
 where
-    N: AudioGraphNodeImpl<S, E>,
-    S: AddAssign + Copy + Default,
-    E: Copy,
+    Node: NodeImpl<Event>,
+    Event: EventImpl,
 {
     /// create a new audio graph with the given root node
     #[must_use]
-    pub fn new(node: N) -> Self {
+    pub fn new(node: Node) -> Self {
         let root = node.id().get();
 
         let mut graph = HoleyVec::default();
-        graph.insert(root, AudioGraphEntry::new(node));
+        graph.insert(root, Entry::new(node));
 
         Self {
             graph,
@@ -47,10 +45,10 @@ where
     /// process audio data into `buf`
     ///
     /// `buf` is assumed to be "uninitialized"
-    pub fn process(&mut self, buf: &mut [S]) {
+    pub fn process(&mut self, buf: &mut [f32]) {
         for &node in &self.list {
             for s in &mut *buf {
-                *s = S::default();
+                *s = 0.0;
             }
 
             let mut entry = self.graph.remove(node).unwrap();
@@ -63,22 +61,39 @@ where
                 .unwrap_or_default();
 
             entry.audio.clear();
-            entry.audio.resize(buf.len(), S::default());
+            entry.audio.resize(buf.len(), 0.0);
             entry.events.clear();
 
-            for (dep, delay) in entry.connections.iter_mut() {
+            for (dep, (audio, events)) in entry.connections.iter_mut() {
                 let dep_entry = &self.graph[dep];
+                let dep_delay = max_delay - dep_entry.delay;
 
-                // apply the needed delay to the audio
+                // apply delay to audio
                 buf.copy_from_slice(&dep_entry.audio);
-                delay.resize(max_delay - dep_entry.delay, S::default());
-                delay.rotate_right_concat(buf);
+                audio.resize(dep_delay, 0.0);
+                audio.rotate_right_concat(buf);
 
                 buf.iter()
                     .zip(&mut entry.audio)
                     .for_each(|(&sample, buf)| *buf += sample);
 
-                entry.events.extend(dep_entry.events.iter().copied());
+                // apply delay to events
+                events.extend(
+                    dep_entry
+                        .events
+                        .iter()
+                        .map(|e| e.with_time(e.time() + dep_delay)),
+                );
+
+                events.retain_mut(|e| {
+                    if let Some(time) = e.time().checked_sub(buf.len()) {
+                        *e = e.with_time(time);
+                        true
+                    } else {
+                        entry.events.push(*e);
+                        false
+                    }
+                });
             }
 
             entry.node.process(&mut entry.audio, &mut entry.events);
@@ -138,7 +153,7 @@ where
             .get_mut(from)
             .unwrap()
             .connections
-            .insert(to, Vec::new());
+            .insert(to, (Vec::new(), Vec::new()));
 
         if self.has_cycle() {
             self.graph.get_mut(from).unwrap().connections.remove(to);
@@ -165,7 +180,7 @@ where
     ///
     /// if the graph already contains `node` it is replaced, preserving all of its connections,
     /// otherwise it starts out with no connections
-    pub fn insert(&mut self, node: N) {
+    pub fn insert(&mut self, node: Node) {
         let id = node.id().get();
 
         if let Some(entry) = self.graph.get_mut(id) {
@@ -173,7 +188,7 @@ where
             return;
         }
 
-        self.graph.insert(id, AudioGraphEntry::new(node));
+        self.graph.insert(id, Entry::new(node));
         // adding a node with no dependencies to any position preserves sorted order
         self.list.push(id);
     }
@@ -231,7 +246,7 @@ where
     ///
     /// returns whether there is a cycle in `current`'s directly unvisited subtree
     fn visit(
-        graph: &HoleyVec<AudioGraphEntry<N, S, E>>,
+        graph: &HoleyVec<Entry<Node, Event>>,
         list: &mut Vec<usize>,
         seen: &mut BitSet,
         to_visit: &mut BitSet,

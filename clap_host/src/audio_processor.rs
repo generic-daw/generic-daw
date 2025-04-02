@@ -1,5 +1,5 @@
 use crate::{
-    Event, Host, PluginDescriptor, PluginId, audio_buffers::AudioBuffers,
+    EventImpl, Host, PluginDescriptor, PluginId, audio_buffers::AudioBuffers,
     event_buffers::EventBuffers,
 };
 use async_channel::Receiver;
@@ -50,7 +50,10 @@ impl AudioProcessor {
         self.id
     }
 
-    pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32) {
+    pub fn process<Event>(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32)
+    where
+        Event: EventImpl,
+    {
         while let Ok(msg) = self.receiver.try_recv() {
             trace!("{} ({}): {msg:?}", self.descriptor.name, self.descriptor.id);
 

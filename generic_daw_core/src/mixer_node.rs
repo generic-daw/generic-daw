@@ -1,7 +1,8 @@
+use crate::event::Event;
 use arc_swap::ArcSwap;
 use atomig::Atomic;
-use audio_graph::{AudioGraphNodeImpl, NodeId};
-use clap_host::{AudioProcessor, Event};
+use audio_graph::{NodeId, NodeImpl};
+use clap_host::AudioProcessor;
 use generic_daw_utils::ShiftMoveExt as _;
 use std::{
     cmp::max_by,
@@ -40,7 +41,7 @@ pub struct MixerNode {
     max_r: Atomic<f32>,
 }
 
-impl AudioGraphNodeImpl<f32, Event> for MixerNode {
+impl NodeImpl<Event> for MixerNode {
     fn process(&self, audio: &mut [f32], events: &mut Vec<Event>) {
         if !self.enabled.load(Acquire) {
             audio.iter_mut().for_each(|s| *s = 0.0);

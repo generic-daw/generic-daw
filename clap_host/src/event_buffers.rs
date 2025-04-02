@@ -1,6 +1,12 @@
-use crate::Event;
+use crate::EventImpl;
 use clack_extensions::note_ports::{NoteDialect, NotePortInfoBuffer, PluginNotePorts};
-use clack_host::prelude::*;
+use clack_host::{
+    events::{
+        Match,
+        event_types::{MidiEvent, NoteChokeEvent},
+    },
+    prelude::*,
+};
 
 #[derive(Debug, Default)]
 pub struct EventBuffers {
@@ -43,43 +49,48 @@ impl EventBuffers {
         })
     }
 
-    pub fn read_in(&mut self, events: &mut Vec<Event>) {
+    pub fn read_in<Event>(&mut self, events: &mut Vec<Event>)
+    where
+        Event: EventImpl,
+    {
         self.input_events.clear();
+
         if self.input_prefers_midi {
-            for e in events {
-                e.push_as_midi(self.main_input_port, &mut self.input_events);
+            for e in events.drain(..) {
+                self.input_events.push(&e.to_midi(self.main_input_port));
             }
         } else {
-            for e in events {
-                e.push_as_clap(self.main_input_port, &mut self.input_events);
+            for e in events.drain(..) {
+                self.input_events.push(&e.to_clap(self.main_input_port));
             }
         }
+
         self.input_events.sort();
     }
 
-    pub fn write_out(&mut self, events: &mut Vec<Event>) {
-        self.output_events.sort();
+    pub fn write_out<Event>(&mut self, events: &mut Vec<Event>)
+    where
+        Event: EventImpl,
+    {
+        events.clear();
         events.extend(
             self.output_events
                 .iter()
-                .filter_map(|e| Event::try_from(e).ok()),
+                .filter_map(Event::try_from_unknown),
         );
+
         self.output_events.clear();
     }
 
     pub fn reset(&mut self) {
         if self.input_prefers_midi {
-            Event::AllOff {
-                time: 0,
-                channel: 0,
-            }
-            .push_as_midi(self.main_input_port, &mut self.input_events);
+            self.input_events
+                .push(&MidiEvent::new(0, self.main_input_port, [0xb0, 0x7b, 0x00]));
         } else {
-            Event::AllOff {
-                time: 0,
-                channel: 0,
-            }
-            .push_as_clap(self.main_input_port, &mut self.input_events);
+            self.input_events.push(&NoteChokeEvent::new(
+                0,
+                Pckn::new(self.main_input_port, 0u8, Match::All, Match::All),
+            ));
         }
     }
 }

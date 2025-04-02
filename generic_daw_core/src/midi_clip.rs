@@ -1,6 +1,5 @@
-use crate::{Meter, Position, clip_position::ClipPosition};
+use crate::{Meter, Position, clip_position::ClipPosition, event::Event};
 use arc_swap::ArcSwap;
-use clap_host::Event;
 use std::{
     cmp::Ordering,
     iter::repeat_n,

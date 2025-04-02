@@ -1,10 +1,10 @@
 use async_channel::Receiver;
-use clap_host::Event;
 use cpal::{
     BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
     traits::{DeviceTrait as _, HostTrait as _},
 };
 use daw_ctx::DawCtx;
+use event::Event;
 use log::info;
 use rtrb::Producer;
 use std::{
@@ -20,6 +20,7 @@ mod audio_graph_node;
 mod clip;
 mod clip_position;
 mod daw_ctx;
+mod event;
 mod export;
 mod master;
 mod meter;
@@ -46,7 +47,7 @@ pub use position::Position;
 pub use recording::Recording;
 pub use track::Track;
 
-pub type AudioGraph = audio_graph::AudioGraph<AudioGraphNode, f32, Event>;
+pub type AudioGraph = audio_graph::AudioGraph<AudioGraphNode, Event>;
 
 pub fn build_input_stream(
     sample_rate: u32,

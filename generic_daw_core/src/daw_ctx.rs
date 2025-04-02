@@ -1,4 +1,4 @@
-use crate::{AudioGraph, AudioGraphNode, Meter, MixerNode, master::Master};
+use crate::{AudioGraph, AudioGraphNode, Master, Meter, MixerNode};
 use audio_graph::NodeId;
 use log::trace;
 use oneshot::Sender;

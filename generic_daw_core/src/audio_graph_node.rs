@@ -1,6 +1,5 @@
-use crate::{Master, MixerNode, Track};
-use audio_graph::AudioGraphNodeImpl;
-use clap_host::Event;
+use crate::{Master, MixerNode, Track, event::Event};
+use audio_graph::NodeImpl;
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -10,7 +9,7 @@ pub enum AudioGraphNode {
     Track(Track),
 }
 
-impl AudioGraphNodeImpl<f32, Event> for AudioGraphNode {
+impl NodeImpl<Event> for AudioGraphNode {
     fn process(&self, audio: &mut [f32], events: &mut Vec<Event>) {
         match self {
             Self::Master(node) => node.process(audio, events),

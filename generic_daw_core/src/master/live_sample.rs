@@ -1,4 +1,4 @@
-use clap_host::Event;
+use crate::event::Event;
 use std::sync::{
     Arc,
     atomic::{

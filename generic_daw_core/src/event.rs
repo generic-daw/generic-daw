@@ -1,9 +1,6 @@
-use clack_host::{
-    events::{
-        Event as _, Match, Pckn,
-        event_types::{MidiEvent, NoteChokeEvent, NoteOffEvent, NoteOnEvent},
-    },
-    prelude::*,
+use clap_host::events::{
+    ClapEvent, Event as _, Match, MidiEvent, NoteChokeEvent, NoteOffEvent, NoteOnEvent, Pckn,
+    UnknownEvent,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -26,72 +23,91 @@ pub enum Event {
     },
 }
 
-impl Event {
-    pub(crate) fn push_as_clap(self, port_index: u16, event_buffer: &mut EventBuffer) {
+impl audio_graph::EventImpl for Event {
+    fn time(self) -> usize {
         match self {
-            Self::On {
-                time,
-                channel,
-                key,
-                velocity,
-            } => event_buffer.push(&NoteOnEvent::new(
-                time,
-                Pckn::new(port_index, channel, key, Match::All),
-                velocity,
-            )),
-            Self::Off {
-                time,
-                channel,
-                key,
-                velocity,
-            } => event_buffer.push(&NoteOffEvent::new(
-                time,
-                Pckn::new(port_index, channel, key, Match::All),
-                velocity,
-            )),
-            Self::AllOff { time, channel } => event_buffer.push(&NoteChokeEvent::new(
-                time,
-                Pckn::new(port_index, channel, Match::All, Match::All),
-            )),
-        };
-    }
-
-    pub(crate) fn push_as_midi(self, port_index: u16, event_buffer: &mut EventBuffer) {
-        match self {
-            Self::On {
-                time,
-                channel,
-                key,
-                velocity,
-            } => {
-                event_buffer.push(&MidiEvent::new(
-                    time,
-                    port_index,
-                    [0x90 | channel, key, (velocity * 127.0) as u8],
-                ));
-            }
-            Self::Off {
-                time,
-                channel,
-                key,
-                velocity,
-            } => {
-                event_buffer.push(&MidiEvent::new(
-                    time,
-                    port_index,
-                    [0x80 | channel, key, (velocity * 127.0) as u8],
-                ));
-            }
-            Self::AllOff { time, channel } => {
-                event_buffer.push(&MidiEvent::new(
-                    time,
-                    port_index,
-                    [0xb0 | channel, 0x7b, 0x00],
-                ));
+            Self::On { time, .. } | Self::Off { time, .. } | Self::AllOff { time, .. } => {
+                time as usize * 2
             }
         }
     }
 
+    fn with_time(mut self, to: usize) -> Self {
+        match &mut self {
+            Self::On { time, .. } | Self::Off { time, .. } | Self::AllOff { time, .. } => {
+                *time = (to / 2) as u32;
+            }
+        }
+        self
+    }
+}
+
+impl clap_host::EventImpl for Event {
+    fn to_clap(self, port_index: u16) -> ClapEvent {
+        match self {
+            Self::On {
+                time,
+                channel,
+                key,
+                velocity,
+            } => ClapEvent::NoteOnEvent(NoteOnEvent::new(
+                time,
+                Pckn::new(port_index, channel, key, Match::All),
+                velocity,
+            )),
+            Self::Off {
+                time,
+                channel,
+                key,
+                velocity,
+            } => ClapEvent::NoteOffEvent(NoteOffEvent::new(
+                time,
+                Pckn::new(port_index, channel, key, Match::All),
+                velocity,
+            )),
+            Self::AllOff { time, channel } => ClapEvent::NoteChokeEvent(NoteChokeEvent::new(
+                time,
+                Pckn::new(port_index, channel, Match::All, Match::All),
+            )),
+        }
+    }
+
+    fn to_midi(self, port_index: u16) -> MidiEvent {
+        match self {
+            Self::On {
+                time,
+                channel,
+                key,
+                velocity,
+            } => MidiEvent::new(
+                time,
+                port_index,
+                [0x90 | channel, key, (velocity * 127.0) as u8],
+            ),
+            Self::Off {
+                time,
+                channel,
+                key,
+                velocity,
+            } => MidiEvent::new(
+                time,
+                port_index,
+                [0x80 | channel, key, (velocity * 127.0) as u8],
+            ),
+            Self::AllOff { time, channel } => {
+                MidiEvent::new(time, port_index, [0xb0 | channel, 0x7b, 0x00])
+            }
+        }
+    }
+
+    fn try_from_unknown(value: &UnknownEvent) -> Option<Self> {
+        value
+            .as_event::<MidiEvent>()
+            .map_or_else(|| Self::from_clap(value), Self::from_midi)
+    }
+}
+
+impl Event {
     fn from_midi(event: &MidiEvent) -> Option<Self> {
         let time = event.time();
         let data = event.data();
@@ -141,16 +157,5 @@ impl Event {
         } else {
             None
         }
-    }
-}
-
-impl TryFrom<&UnknownEvent> for Event {
-    type Error = ();
-
-    fn try_from(value: &UnknownEvent) -> Result<Self, Self::Error> {
-        value
-            .as_event::<MidiEvent>()
-            .map_or_else(|| Self::from_clap(value), Self::from_midi)
-            .ok_or(())
     }
 }

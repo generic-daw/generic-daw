@@ -1,9 +1,9 @@
 use crate::NodeId;
 use std::{fmt::Debug, ops::Deref};
 
-pub trait AudioGraphNodeImpl<S, E>: Debug + Send {
+pub trait NodeImpl<Event>: Debug + Send {
     /// process audio data into `audio` and event data into `events`
-    fn process(&self, audio: &mut [S], events: &mut Vec<E>);
+    fn process(&self, audio: &mut [f32], events: &mut Vec<Event>);
     /// get the unique `NodeId` of the node
     fn id(&self) -> NodeId;
     /// reset the node to a pre-playback state
@@ -12,11 +12,11 @@ pub trait AudioGraphNodeImpl<S, E>: Debug + Send {
     fn delay(&self) -> usize;
 }
 
-impl<T, S, E> AudioGraphNodeImpl<S, E> for T
+impl<T, Event> NodeImpl<Event> for T
 where
-    T: Debug + Send + Deref<Target: AudioGraphNodeImpl<S, E> + Sized>,
+    T: Debug + Send + Deref<Target: NodeImpl<Event> + Sized>,
 {
-    fn process(&self, audio: &mut [S], events: &mut Vec<E>) {
+    fn process(&self, audio: &mut [f32], events: &mut Vec<Event>) {
         (**self).process(audio, events);
     }
 

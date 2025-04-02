@@ -1,5 +1,4 @@
-use crate::{Meter, Position, clip_position::ClipPosition};
-use clap_host::Event;
+use crate::{Meter, Position, clip_position::ClipPosition, event::Event};
 use std::sync::{Arc, atomic::Ordering::Acquire};
 
 mod error;

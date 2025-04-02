@@ -20,7 +20,7 @@ use fragile::Fragile;
 use generic_daw_core::{
     AudioClip, Clip, InterleavedAudio, Meter, MidiClip, MidiNote, MixerNode, Position, Recording,
     Track,
-    audio_graph::{AudioGraphNodeImpl as _, NodeId},
+    audio_graph::{NodeId, NodeImpl as _},
     clap_host::{self, MainThreadMessage, PluginDescriptor, PluginId},
 };
 use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2};
