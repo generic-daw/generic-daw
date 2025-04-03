@@ -214,7 +214,8 @@ impl Daw {
                     ))
                     .on_press(Message::ToggleMetronome),
                 row![
-                    styled_button("Arrangement").on_press(Message::ChangedTab(Tab::Arrangement)),
+                    styled_button("Arrangement")
+                        .on_press(Message::ChangedTab(Tab::Arrangement { grabbed_clip: None })),
                     styled_button("Mixer").on_press(Message::ChangedTab(Tab::Mixer))
                 ],
                 horizontal_space(),

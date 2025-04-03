@@ -107,36 +107,37 @@ pub enum Message {
 
 #[derive(Clone, Debug)]
 pub enum Tab {
-    Arrangement,
+    Arrangement {
+        grabbed_clip: Option<[usize; 2]>,
+    },
     Mixer,
-    PianoRoll(Arc<MidiClip>),
+    PianoRoll {
+        clip: Arc<MidiClip>,
+        grabbed_note: Option<usize>,
+    },
 }
 
 pub struct ArrangementView {
     pub clap_host: ClapHost,
 
-    plugins_by_channel: HoleyVec<Vec<(PluginId, PluginDescriptor)>>,
-
     arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
-
-    recording: Option<Recording>,
-    recording_track: Option<NodeId>,
+    plugins_by_channel: HoleyVec<Vec<(PluginId, PluginDescriptor)>>,
 
     tab: Tab,
-    loading: usize,
+
+    recording: Option<(Recording, NodeId)>,
 
     arrangement_position: Vec2,
     arrangement_scale: Vec2,
-    grabbed_clip: Option<[usize; 2]>,
     soloed_track: Option<NodeId>,
+    loading: usize,
 
     piano_roll_position: Cell<Vec2>,
     piano_roll_scale: Vec2,
-    grabbed_note: Option<usize>,
     last_note_len: Position,
-
     selected_channel: Option<NodeId>,
+
     split_at: f32,
 }
 
@@ -147,28 +148,25 @@ impl ArrangementView {
         (
             Self {
                 clap_host: ClapHost::default(),
-                plugins_by_channel: HoleyVec::default(),
 
                 arrangement,
                 meter: meter.clone(),
+                plugins_by_channel: HoleyVec::default(),
+
+                tab: Tab::Arrangement { grabbed_clip: None },
 
                 recording: None,
-                recording_track: None,
-
-                tab: Tab::Arrangement,
-                loading: 0,
 
                 arrangement_position: Vec2::default(),
                 arrangement_scale: Vec2::new(9.0, 120.0),
-                grabbed_clip: None,
                 soloed_track: None,
+                loading: 0,
 
                 piano_roll_position: Cell::new(Vec2::new(0.0, 40.0)),
                 piano_roll_scale: Vec2::new(9.0, LINE_HEIGHT),
-                grabbed_note: None,
                 last_note_len: Position::BEAT,
-
                 selected_channel: None,
+
                 split_at: 300.0,
             },
             meter,
@@ -242,8 +240,9 @@ impl ArrangementView {
             }
             Message::PluginLoad(descriptor) => {
                 let Some(selected) = self.selected_channel else {
-                    return Task::none();
+                    panic!()
                 };
+
                 let (gui, receiver, audio_processor) = clap_host::init(
                     &PLUGINS[&descriptor],
                     descriptor.clone(),
@@ -365,7 +364,12 @@ impl ArrangementView {
                     return fut;
                 }
             }
-            Message::OpenMidiClip(clip) => self.tab = Tab::PianoRoll(clip),
+            Message::OpenMidiClip(clip) => {
+                self.tab = Tab::PianoRoll {
+                    clip,
+                    grabbed_note: None,
+                }
+            }
             Message::AddMidiClip(track, pos) => {
                 let clip = MidiClip::create(Arc::default(), self.meter.clone());
                 clip.position
@@ -383,9 +387,8 @@ impl ArrangementView {
                 let track = self.arrangement.track_of(id).unwrap();
                 self.arrangement.remove_track(track);
 
-                if self.recording_track == Some(id) {
+                if self.recording.as_ref().is_some_and(|&(_, i)| i == id) {
                     self.recording = None;
-                    self.recording_track = None;
                 }
 
                 return self.update(Message::ChannelRemove(id));
@@ -417,51 +420,52 @@ impl ArrangementView {
                 );
             }
             Message::ToggleRecord(id) => {
-                if self.recording_track == Some(id) {
-                    return self.update(Message::StopRecord);
-                } else if self.recording.is_some() {
-                    return self.update(Message::RecordingSplit(id));
+                if let Some((_, i)) = &self.recording {
+                    return if *i == id {
+                        self.update(Message::StopRecord)
+                    } else {
+                        self.update(Message::RecordingSplit(id))
+                    };
                 }
 
                 let (recording, receiver) =
                     Recording::create(Self::make_recording_path(), &self.meter);
-                self.recording = Some(recording);
-                self.recording_track = Some(id);
+                self.recording = Some((recording, id));
 
                 self.meter.playing.store(true, Release);
 
                 return Task::stream(receiver).map(Message::RecordingChunk);
             }
             Message::RecordingSplit(id) => {
-                if let Some(recording) = self.recording.as_mut() {
+                if let Some((mut recording, track)) = self.recording.take() {
                     let mut pos = Position::from_samples(
                         self.meter.sample.load(Acquire),
                         self.meter.bpm.load(Acquire),
                         self.meter.sample_rate,
                     );
-                    (pos, recording.position) = (recording.position, pos);
 
+                    (pos, recording.position) = (recording.position, pos);
                     let audio = recording.split_off(Self::make_recording_path());
-                    let track = self.recording_track.replace(id).unwrap();
                     let track = self.arrangement.track_of(track).unwrap();
 
                     let clip = AudioClip::create(audio, self.meter.clone());
                     clip.position.move_to(pos);
                     self.arrangement.add_clip(track, clip);
+
+                    self.recording = Some((recording, id));
                 }
             }
             Message::RecordingChunk(samples) => {
-                if let Some(recording) = self.recording.as_mut() {
+                if let Some((recording, _)) = self.recording.as_mut() {
                     recording.write(&samples);
                 }
             }
             Message::StopRecord => {
-                if let Some(recording) = self.recording.take() {
+                if let Some((recording, track)) = self.recording.take() {
                     self.meter.playing.store(false, Release);
 
                     let pos = recording.position;
                     let audio = recording.try_into().unwrap();
-                    let track = self.recording_track.take().unwrap();
                     let track = self.arrangement.track_of(track).unwrap();
 
                     let clip = AudioClip::create(audio, self.meter.clone());
@@ -513,8 +517,8 @@ impl ArrangementView {
             }
             Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
             Message::PianoRollPositionScaleDelta(pos, scale) => {
-                let Tab::PianoRoll(selected_clip) = &self.tab else {
-                    return Task::none();
+                let Tab::PianoRoll { clip, .. } = &self.tab else {
+                    panic!()
                 };
 
                 let sd = scale != Vec2::ZERO;
@@ -537,8 +541,7 @@ impl ArrangementView {
                     piano_roll_position += pos;
                     piano_roll_position.x = piano_roll_position.x.clamp(
                         0.0,
-                        selected_clip
-                            .pattern
+                        clip.pattern
                             .load()
                             .iter()
                             .map(|note| note.end)
@@ -574,16 +577,20 @@ impl ArrangementView {
     }
 
     fn handle_arrangement_action(&mut self, action: ArrangementAction) {
+        let Tab::Arrangement { grabbed_clip } = &mut self.tab else {
+            panic!()
+        };
+
         match action {
-            ArrangementAction::Grab(track, clip) => self.grabbed_clip = Some([track, clip]),
-            ArrangementAction::Drop => self.grabbed_clip = None,
+            ArrangementAction::Grab(track, clip) => *grabbed_clip = Some([track, clip]),
+            ArrangementAction::Drop => *grabbed_clip = None,
             ArrangementAction::Clone(track, mut clip) => {
                 self.arrangement.clone_clip(track, clip);
                 clip = self.arrangement.tracks()[track].clips.len() - 1;
-                self.grabbed_clip.replace([track, clip]);
+                *grabbed_clip = Some([track, clip]);
             }
             ArrangementAction::Drag(new_track, pos) => {
-                let [track, clip] = self.grabbed_clip.as_mut().unwrap();
+                let [track, clip] = grabbed_clip.as_mut().unwrap();
 
                 if *track != new_track {
                     self.arrangement.clip_switch_track(*track, *clip, new_track);
@@ -596,13 +603,13 @@ impl ArrangementView {
                     .move_to(pos);
             }
             ArrangementAction::TrimStart(pos) => {
-                let [track, clip] = self.grabbed_clip.unwrap();
+                let [track, clip] = grabbed_clip.unwrap();
                 self.arrangement.tracks()[track].clips[clip]
                     .position()
                     .trim_start_to(pos);
             }
             ArrangementAction::TrimEnd(pos) => {
-                let [track, clip] = self.grabbed_clip.unwrap();
+                let [track, clip] = grabbed_clip.unwrap();
                 self.arrangement.tracks()[track].clips[clip]
                     .position()
                     .trim_end_to(pos);
@@ -614,19 +621,19 @@ impl ArrangementView {
     }
 
     fn handle_piano_roll_action(&mut self, action: PianoRollAction) {
-        let Tab::PianoRoll(selected_clip) = &self.tab else {
-            return;
+        let Tab::PianoRoll { clip, grabbed_note } = &mut self.tab else {
+            panic!()
         };
 
         match action {
-            PianoRollAction::Grab(note) => self.grabbed_note = Some(note),
+            PianoRollAction::Grab(note) => *grabbed_note = Some(note),
             PianoRollAction::Drop => {
-                let note = selected_clip.pattern.load()[self.grabbed_note.unwrap()];
+                let note = clip.pattern.load()[grabbed_note.unwrap()];
                 self.last_note_len = note.end - note.start;
-                self.grabbed_note = None;
+                *grabbed_note = None;
             }
             PianoRollAction::Add(key, pos) => {
-                let mut notes = selected_clip.pattern.load().deref().deref().clone();
+                let mut notes = clip.pattern.load().deref().deref().clone();
                 notes.push(MidiNote {
                     channel: 0,
                     key,
@@ -634,44 +641,44 @@ impl ArrangementView {
                     start: pos,
                     end: pos + self.last_note_len,
                 });
-                self.grabbed_note = Some(notes.len() - 1);
-                selected_clip.pattern.store(Arc::new(notes));
+                *grabbed_note = Some(notes.len() - 1);
+                clip.pattern.store(Arc::new(notes));
             }
             PianoRollAction::Clone(note) => {
-                let mut notes = selected_clip.pattern.load().deref().deref().clone();
+                let mut notes = clip.pattern.load().deref().deref().clone();
                 notes.push(notes[note]);
-                self.grabbed_note = Some(notes.len() - 1);
-                selected_clip.pattern.store(Arc::new(notes));
+                *grabbed_note = Some(notes.len() - 1);
+                clip.pattern.store(Arc::new(notes));
             }
             PianoRollAction::Drag(key, pos) => {
-                let mut notes = selected_clip.pattern.load().deref().deref().clone();
-                notes[self.grabbed_note.unwrap()].move_to(pos);
-                notes[self.grabbed_note.unwrap()].key = key;
-                selected_clip.pattern.store(Arc::new(notes));
+                let mut notes = clip.pattern.load().deref().deref().clone();
+                notes[grabbed_note.unwrap()].move_to(pos);
+                notes[grabbed_note.unwrap()].key = key;
+                clip.pattern.store(Arc::new(notes));
             }
             PianoRollAction::TrimStart(pos) => {
-                let mut notes = selected_clip.pattern.load().deref().deref().clone();
-                notes[self.grabbed_note.unwrap()].trim_start_to(pos);
-                selected_clip.pattern.store(Arc::new(notes));
+                let mut notes = clip.pattern.load().deref().deref().clone();
+                notes[grabbed_note.unwrap()].trim_start_to(pos);
+                clip.pattern.store(Arc::new(notes));
             }
             PianoRollAction::TrimEnd(pos) => {
-                let mut notes = selected_clip.pattern.load().deref().deref().clone();
-                notes[self.grabbed_note.unwrap()].trim_end_to(pos);
-                selected_clip.pattern.store(Arc::new(notes));
+                let mut notes = clip.pattern.load().deref().deref().clone();
+                notes[grabbed_note.unwrap()].trim_end_to(pos);
+                clip.pattern.store(Arc::new(notes));
             }
             PianoRollAction::Delete(note) => {
-                let mut notes = selected_clip.pattern.load().deref().deref().clone();
+                let mut notes = clip.pattern.load().deref().deref().clone();
                 notes.remove(note);
-                selected_clip.pattern.store(Arc::new(notes));
+                clip.pattern.store(Arc::new(notes));
             }
         }
     }
 
     pub fn view(&self) -> Element<'_, Message> {
         let element = match &self.tab {
-            Tab::Arrangement => self.arrangement(),
+            Tab::Arrangement { .. } => self.arrangement(),
             Tab::Mixer => self.mixer(),
-            Tab::PianoRoll(selected_clip) => self.piano_roll(selected_clip),
+            Tab::PianoRoll { clip, .. } => self.piano_roll(clip),
         };
 
         if self.loading > 0 {
@@ -764,8 +771,10 @@ impl ArrangementView {
                                     ),
                                     vertical_space(),
                                     button(
-                                        AnimatedDot::new(self.recording_track == Some(id))
-                                            .radius(5.0)
+                                        AnimatedDot::new(
+                                            self.recording.as_ref().is_some_and(|&(_, i)| i == id)
+                                        )
+                                        .radius(5.0)
                                     )
                                     .padding(1.5)
                                     .on_press(Message::ToggleRecord(id))
@@ -773,7 +782,11 @@ impl ArrangementView {
                                         button_with_base(
                                             t,
                                             s,
-                                            if self.recording_track == Some(id) {
+                                            if self
+                                                .recording
+                                                .as_ref()
+                                                .is_some_and(|&(_, i)| i == id)
+                                            {
                                                 button::danger
                                             } else if enabled {
                                                 button::primary
@@ -845,21 +858,22 @@ impl ArrangementView {
                                 .into(),
                             });
 
-                            let clips_iter = if self.recording_track == Some(id) {
-                                EnumDispatcher::A(
-                                    clips_iter.chain(once(
-                                        RecordingWidget::new(
-                                            self.recording.as_ref().unwrap(),
-                                            &self.meter,
-                                            self.arrangement_position,
-                                            self.arrangement_scale,
-                                        )
-                                        .into(),
-                                    )),
-                                )
-                            } else {
-                                EnumDispatcher::B(clips_iter)
-                            };
+                            let clips_iter =
+                                if self.recording.as_ref().is_some_and(|&(_, i)| i == id) {
+                                    EnumDispatcher::A(
+                                        clips_iter.chain(once(
+                                            RecordingWidget::new(
+                                                &self.recording.as_ref().unwrap().0,
+                                                &self.meter,
+                                                self.arrangement_position,
+                                                self.arrangement_scale,
+                                            )
+                                            .into(),
+                                        )),
+                                    )
+                                } else {
+                                    EnumDispatcher::B(clips_iter)
+                                };
 
                             TrackWidget::new(
                                 &self.meter,
@@ -1317,7 +1331,7 @@ impl ArrangementView {
         }
     }
 
-    fn piano_roll<'a>(&'a self, selected_clip: &'a Arc<MidiClip>) -> Element<'a, Message> {
+    fn piano_roll<'a>(&'a self, clip: &'a Arc<MidiClip>) -> Element<'a, Message> {
         responsive(move |size| {
             let mut piano_roll_position = self.piano_roll_position.get();
             let height = (size.height - LINE_HEIGHT) / self.piano_roll_scale.y;
@@ -1332,7 +1346,7 @@ impl ArrangementView {
                 self.piano_roll_scale,
                 Piano::new(piano_roll_position, self.piano_roll_scale),
                 PianoRoll::new(
-                    selected_clip.pattern.load().deref().clone(),
+                    clip.pattern.load().deref().clone(),
                     &self.meter,
                     piano_roll_position,
                     self.piano_roll_scale,
@@ -1342,11 +1356,10 @@ impl ArrangementView {
                 Message::PianoRollPositionScaleDelta,
             )
             .with_offset(
-                selected_clip
-                    .position
+                clip.position
                     .get_global_start()
                     .in_samples_f(bpm, self.meter.sample_rate)
-                    - selected_clip
+                    - clip
                         .position
                         .get_clip_start()
                         .in_samples_f(bpm, self.meter.sample_rate),
