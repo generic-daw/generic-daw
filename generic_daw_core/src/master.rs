@@ -1,12 +1,12 @@
-use crate::{Meter, MixerNode, Position, event::Event, include_f32s, resample_interleaved};
+use crate::{Meter, MixerNode, Position, event::Event, resample_interleaved};
 use audio_graph::{NodeId, NodeImpl};
+use generic_daw_utils::include_f32s;
 use live_sample::LiveSample;
 use std::{
     cell::RefCell,
     sync::{Arc, atomic::Ordering::Acquire},
 };
 
-mod include_f32s;
 mod live_sample;
 
 static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");

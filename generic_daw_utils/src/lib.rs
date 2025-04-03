@@ -1,5 +1,6 @@
 mod enum_dispatcher;
 mod holey_vec;
+mod include_f32s;
 mod no_debug;
 mod rotate_concat_ext;
 mod shift_move_ext;
