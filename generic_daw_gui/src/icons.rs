@@ -1,49 +1,17 @@
-use iced::widget::svg;
-use std::sync::LazyLock;
+macro_rules! icon {
+    ($name:ident = $file:expr) => {
+        pub static $name: ::std::sync::LazyLock<::iced::widget::svg::Handle> =
+            ::std::sync::LazyLock::new(|| {
+                ::iced::widget::svg::Handle::from_memory(include_bytes!($file))
+            });
+    };
+}
 
-pub static ADD: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--add-2-rounded.svg"
-    ))
-});
-pub static AUDIO_FILE: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--audio-file-outline-rounded.svg"
-    ))
-});
-
-pub static CHEVRON_RIGHT: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--chevron-right-rounded.svg"
-    ))
-});
-
-pub static GENERIC_FILE: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--draft-outline-rounded.svg"
-    ))
-});
-
-pub static HANDLE: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--drag-handle-rounded.svg"
-    ))
-});
-
-pub static PAUSE: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--pause-rounded.svg"
-    ))
-});
-
-pub static PLAY: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--play-arrow-rounded.svg"
-    ))
-});
-
-pub static STOP: LazyLock<svg::Handle> = LazyLock::new(|| {
-    svg::Handle::from_memory(include_bytes!(
-        "../../assets/material-symbols--stop-rounded.svg"
-    ))
-});
+icon!(ADD = "../../assets/material-symbols--add-2-rounded.svg");
+icon!(AUDIO_FILE = "../../assets/material-symbols--audio-file-outline-rounded.svg");
+icon!(CHEVRON_RIGHT = "../../assets/material-symbols--chevron-right-rounded.svg");
+icon!(GENERIC_FILE = "../../assets/material-symbols--draft-outline-rounded.svg");
+icon!(HANDLE = "../../assets/material-symbols--drag-handle-rounded.svg");
+icon!(PAUSE = "../../assets/material-symbols--pause-rounded.svg");
+icon!(PLAY = "../../assets/material-symbols--play-arrow-rounded.svg");
+icon!(STOP = "../../assets/material-symbols--stop-rounded.svg");
