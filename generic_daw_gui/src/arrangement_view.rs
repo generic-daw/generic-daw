@@ -78,7 +78,7 @@ pub enum Message {
     AudioEffectToggleEnabled(usize),
     AudioEffectsReordered(DragEvent),
 
-    SampleLoadFromFile(Box<Path>),
+    SampleLoadFromFile(Arc<Path>),
     SampleLoadedFromFile(Option<Arc<InterleavedAudio>>),
 
     AddMidiClip(NodeId, Position),
@@ -115,7 +115,7 @@ pub enum Tab {
 pub struct ArrangementView {
     pub clap_host: ClapHost,
 
-    plugins_by_channel: HoleyVec<Vec<(PluginId, Box<str>)>>,
+    plugins_by_channel: HoleyVec<Vec<(PluginId, Arc<str>)>>,
 
     arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
@@ -244,8 +244,6 @@ impl ArrangementView {
                 let Some(selected) = self.selected_channel else {
                     return Task::none();
                 };
-                let node = self.arrangement.node(selected).0.clone();
-
                 let (gui, receiver, audio_processor) = clap_host::init(
                     &PLUGINS[&name],
                     name,
@@ -254,12 +252,14 @@ impl ArrangementView {
                 );
 
                 let id = audio_processor.id();
-                node.add_plugin(audio_processor);
-
+                self.arrangement
+                    .node(selected)
+                    .0
+                    .add_plugin(audio_processor);
                 self.plugins_by_channel
                     .get_mut(selected.get())
                     .unwrap()
-                    .push((id, gui.name().into()));
+                    .push((id, gui.name().clone()));
 
                 return self
                     .clap_host
@@ -827,7 +827,7 @@ impl ArrangementView {
                             let id = track.id();
                             let enabled = track.node.enabled.load(Acquire);
 
-                            let clips_iter = track.clips.iter().cloned().map(|clip| match clip {
+                            let clips_iter = track.clips.iter().map(|clip| match clip {
                                 Clip::Audio(clip) => AudioClipWidget::new(
                                     clip,
                                     self.arrangement_position,
@@ -836,11 +836,11 @@ impl ArrangementView {
                                 )
                                 .into(),
                                 Clip::Midi(clip) => MidiClipWidget::new(
-                                    clip.clone(),
+                                    clip,
                                     self.arrangement_position,
                                     self.arrangement_scale,
                                     enabled,
-                                    Message::OpenMidiClip(clip),
+                                    Message::OpenMidiClip(clip.clone()),
                                 )
                                 .into(),
                             });
@@ -1180,7 +1180,7 @@ impl ArrangementView {
                 if self.plugins_by_channel[selected.get()].is_empty() {
                     Element::new(plugin_picker)
                 } else {
-                    let node = self.arrangement.node(selected).0.clone();
+                    let node = &self.arrangement.node(selected).0;
 
                     column![
                         plugin_picker,

@@ -26,10 +26,3 @@ impl TryFrom<factory::PluginDescriptor<'_>> for PluginDescriptor {
         })
     }
 }
-
-impl PartialEq<PluginDescriptor> for factory::PluginDescriptor<'_> {
-    fn eq(&self, other: &PluginDescriptor) -> bool {
-        self.name().and_then(|name| name.to_str().ok()) == Some(&other.name)
-            && self.id().and_then(|id| id.to_str().ok()) == Some(&other.id)
-    }
-}

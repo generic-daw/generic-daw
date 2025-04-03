@@ -21,11 +21,7 @@ use iced_wgpu::{
     geometry::Cache,
     graphics::cache::{Cached as _, Group},
 };
-use std::{
-    cell::RefCell,
-    cmp::min_by,
-    sync::{Arc, atomic::Ordering::Acquire},
-};
+use std::{cell::RefCell, cmp::min_by, sync::atomic::Ordering::Acquire};
 
 #[derive(Default)]
 struct State {
@@ -49,8 +45,8 @@ impl State {
 }
 
 #[derive(Clone, Debug)]
-pub struct AudioClip {
-    inner: Arc<AudioClipInner>,
+pub struct AudioClip<'a> {
+    inner: &'a AudioClipInner,
     /// the name of the sample
     name: Box<str>,
     /// the position of the top left corner of the arrangement viewport
@@ -61,7 +57,7 @@ pub struct AudioClip {
     enabled: bool,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
+impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
     }
@@ -136,7 +132,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
                 *state.cache.borrow_mut() = None;
             }
 
-            let addr = Arc::as_ptr(&self.inner).addr();
+            let addr = std::ptr::from_ref(self.inner).addr();
             if state.last_addr != addr {
                 state.last_addr = addr;
                 *state.cache.borrow_mut() = None;
@@ -267,8 +263,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip {
     }
 }
 
-impl AudioClip {
-    pub fn new(inner: Arc<AudioClipInner>, position: Vec2, scale: Vec2, enabled: bool) -> Self {
+impl<'a> AudioClip<'a> {
+    pub fn new(inner: &'a AudioClipInner, position: Vec2, scale: Vec2, enabled: bool) -> Self {
         let name = inner
             .audio
             .path
@@ -309,11 +305,11 @@ impl AudioClip {
     }
 }
 
-impl<'a, Message> From<AudioClip> for Element<'a, Message>
+impl<'a, Message> From<AudioClip<'a>> for Element<'a, Message>
 where
     Message: 'a,
 {
-    fn from(value: AudioClip) -> Self {
+    fn from(value: AudioClip<'a>) -> Self {
         Self::new(value)
     }
 }

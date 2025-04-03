@@ -6,7 +6,10 @@ use iced::{
     window::{self, Id, close_requests, resize_events},
 };
 use smol::{Timer, channel::Receiver};
-use std::sync::{Arc, Mutex};
+use std::{
+    ops::Deref as _,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -161,7 +164,7 @@ impl ClapHost {
     pub fn title(&self, window: Id) -> Option<String> {
         self.windows
             .position(&window)
-            .map(|id| self.plugins[id].name().to_owned())
+            .map(|id| self.plugins[id].name().deref().to_owned())
     }
 
     pub fn is_plugin_window(&self, window: Id) -> bool {

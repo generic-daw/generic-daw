@@ -27,7 +27,6 @@ use log::trace;
 use rfd::{AsyncFileDialog, FileHandle};
 use std::{
     collections::BTreeMap,
-    fs,
     path::Path,
     sync::{
         Arc, LazyLock,
@@ -43,7 +42,7 @@ pub enum Message {
     Redraw,
 
     Arrangement(ArrangementMessage),
-    FileTree(Box<Path>),
+    FileTree(Arc<Path>),
 
     SamplesFileDialog,
     ExportFileDialog,
@@ -76,12 +75,12 @@ impl Daw {
 
         let (arrangement, meter) = ArrangementView::create();
 
-        _ = fs::create_dir(dirs::data_dir().unwrap().join("Generic Daw"));
+        _ = std::fs::create_dir(dirs::data_dir().unwrap().join("Generic Daw"));
 
         (
             Self {
                 arrangement,
-                file_tree: FileTree::new(&dirs::home_dir().unwrap()),
+                file_tree: FileTree::new(dirs::home_dir().unwrap().as_path()),
                 split_at: 300.0,
                 meter,
             },
@@ -105,7 +104,7 @@ impl Daw {
                         paths
                             .iter()
                             .map(FileHandle::path)
-                            .map(Box::from)
+                            .map(Arc::from)
                             .map(ArrangementMessage::SampleLoadFromFile)
                             .map(Message::Arrangement)
                             .map(Task::done),

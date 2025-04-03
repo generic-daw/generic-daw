@@ -17,11 +17,12 @@ use std::{
     fs,
     io::{self, Read as _},
     path::Path,
+    sync::Arc,
 };
 
 pub struct File {
-    path: Box<Path>,
-    name: Box<str>,
+    path: Arc<Path>,
+    name: Arc<str>,
     shaping: Shaping,
     icon: svg::Handle,
 }

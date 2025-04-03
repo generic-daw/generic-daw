@@ -13,11 +13,11 @@ use iced::{
         vertical_rule,
     },
 };
-use std::{f32::consts::FRAC_PI_2, path::Path};
+use std::{f32::consts::FRAC_PI_2, path::Path, sync::Arc};
 
 pub struct Dir {
-    path: Box<Path>,
-    name: Box<str>,
+    path: Arc<Path>,
+    name: Arc<str>,
     shaping: Shaping,
     dirs: Option<Box<[Dir]>>,
     files: Option<Box<[File]>>,
@@ -127,7 +127,7 @@ impl Dir {
         files.sort_unstable_by(|(_, aname), (_, bname)| aname.cmp(bname));
         files
             .iter()
-            .map(|(entry, _)| File::new(&entry.path()))
+            .map(|(entry, _)| File::new(Box::leak(entry.path().into_boxed_path())))
             .collect()
     }
 
@@ -148,7 +148,7 @@ impl Dir {
             .collect::<Box<_>>();
         dirs.sort_unstable_by(|(_, aname), (_, bname)| aname.cmp(bname));
         dirs.iter()
-            .map(|(entry, _)| Self::new(&entry.path()))
+            .map(|(entry, _)| Self::new(Box::leak(entry.path().into_boxed_path())))
             .collect()
     }
 }

@@ -12,10 +12,7 @@ use iced::{
     mouse::{self, Cursor, Interaction},
     padding,
 };
-use std::{
-    cmp::min_by,
-    sync::{Arc, atomic::Ordering::Acquire},
-};
+use std::{cmp::min_by, sync::atomic::Ordering::Acquire};
 
 #[derive(Default)]
 struct State {
@@ -24,8 +21,8 @@ struct State {
 }
 
 #[derive(Clone, Debug)]
-pub struct MidiClip<Message> {
-    inner: Arc<MidiClipInner>,
+pub struct MidiClip<'a, Message> {
+    inner: &'a MidiClipInner,
     /// the position of the top left corner of the arrangement viewport
     position: Vec2,
     /// the scale of the arrangement viewport
@@ -35,7 +32,7 @@ pub struct MidiClip<Message> {
     on_double_click: Message,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for MidiClip<Message>
+impl<Message> Widget<Message, Theme, Renderer> for MidiClip<'_, Message>
 where
     Message: Clone,
 {
@@ -247,9 +244,9 @@ where
     }
 }
 
-impl<Message> MidiClip<Message> {
+impl<'a, Message> MidiClip<'a, Message> {
     pub fn new(
-        inner: Arc<MidiClipInner>,
+        inner: &'a MidiClipInner,
         position: Vec2,
         scale: Vec2,
         enabled: bool,
@@ -286,11 +283,11 @@ impl<Message> MidiClip<Message> {
     }
 }
 
-impl<'a, Message> From<MidiClip<Message>> for Element<'a, Message>
+impl<'a, Message> From<MidiClip<'a, Message>> for Element<'a, Message>
 where
     Message: Clone + 'a,
 {
-    fn from(value: MidiClip<Message>) -> Self {
+    fn from(value: MidiClip<'a, Message>) -> Self {
         Self::new(value)
     }
 }

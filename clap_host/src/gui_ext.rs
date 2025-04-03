@@ -7,7 +7,7 @@ use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
 use log::warn;
 use raw_window_handle::RawWindowHandle;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 #[derive(Debug)]
 pub struct GuiExt {
@@ -153,7 +153,7 @@ impl GuiExt {
     }
 
     #[must_use]
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &Arc<str> {
         &self.descriptor.name
     }
 
