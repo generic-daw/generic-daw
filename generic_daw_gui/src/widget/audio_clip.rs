@@ -232,7 +232,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
                 self.scale,
                 theme,
                 Point::new(bounds.x, layout.position().y),
-                bounds,
+                lower_bounds,
             ) {
                 state.cache.borrow_mut().replace(
                     Geometry::Live {

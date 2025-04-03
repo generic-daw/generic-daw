@@ -123,7 +123,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
             self.scale,
             theme,
             Point::new(bounds.x, layout.position().y),
-            bounds,
+            lower_bounds,
         ) {
             // draw the mesh
             renderer.draw_mesh(waveform);
