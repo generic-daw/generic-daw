@@ -55,7 +55,7 @@ impl AudioProcessor {
         Event: EventImpl,
     {
         while let Ok(msg) = self.receiver.try_recv() {
-            trace!("{} ({}): {msg:?}", self.descriptor.name, self.descriptor.id);
+            trace!("{}: {msg:?}", self.descriptor);
 
             match msg {
                 AudioThreadMessage::RequestRestart => {

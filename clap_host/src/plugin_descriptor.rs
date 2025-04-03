@@ -1,5 +1,6 @@
 use clack_host::factory;
 use std::{
+    ffi::CStr,
     fmt::{Display, Formatter},
     sync::Arc,
 };
@@ -7,7 +8,7 @@ use std::{
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct PluginDescriptor {
     pub name: Arc<str>,
-    pub id: Arc<str>,
+    pub id: Arc<CStr>,
 }
 
 impl Display for PluginDescriptor {
@@ -22,7 +23,7 @@ impl TryFrom<factory::PluginDescriptor<'_>> for PluginDescriptor {
     fn try_from(value: factory::PluginDescriptor<'_>) -> Result<Self, ()> {
         Ok(Self {
             name: value.name().ok_or(())?.to_str().map_err(|_| ())?.into(),
-            id: value.id().ok_or(())?.to_str().map_err(|_| ())?.into(),
+            id: value.id().ok_or(())?.into(),
         })
     }
 }

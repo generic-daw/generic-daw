@@ -7,7 +7,7 @@ use generic_daw_utils::unique_id;
 use host::Host;
 use main_thread::MainThread;
 use shared::Shared;
-use std::{collections::BTreeMap, ffi::CString, path::PathBuf, result::Result};
+use std::{collections::BTreeMap, path::PathBuf, result::Result};
 use walkdir::WalkDir;
 
 mod audio_buffers;
@@ -123,7 +123,7 @@ pub fn init(
         |()| Shared::new(descriptor.clone(), main_sender, audio_sender),
         |shared| MainThread::new(shared),
         bundle,
-        &CString::new(&*descriptor.id).unwrap(),
+        &descriptor.id,
         &HostInfo::new("", "", "", "").unwrap(),
     )
     .unwrap();

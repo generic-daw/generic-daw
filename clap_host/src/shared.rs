@@ -62,31 +62,19 @@ impl HostLogImpl for Shared {
     fn log(&self, severity: LogSeverity, message: &str) {
         match severity {
             LogSeverity::Debug => {
-                debug!(
-                    "{} ({}): {message}",
-                    self.descriptor.name, self.descriptor.id
-                );
+                debug!("{}: {message}", self.descriptor);
             }
             LogSeverity::Info => {
-                info!(
-                    "{} ({}): {message}",
-                    self.descriptor.name, self.descriptor.id
-                );
+                info!("{}: {message}", self.descriptor);
             }
             LogSeverity::Warning => {
-                warn!(
-                    "{} ({}): {message}",
-                    self.descriptor.name, self.descriptor.id
-                );
+                warn!("{}: {message}", self.descriptor);
             }
             LogSeverity::Error
             | LogSeverity::Fatal
             | LogSeverity::HostMisbehaving
             | LogSeverity::PluginMisbehaving => {
-                error!(
-                    "{} ({}): {message}",
-                    self.descriptor.name, self.descriptor.id
-                );
+                error!("{}: {message}", self.descriptor);
             }
         }
     }

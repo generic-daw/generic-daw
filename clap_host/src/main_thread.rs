@@ -86,8 +86,8 @@ impl HostTimerImpl for MainThread<'_> {
             .register(Duration::from_millis(u64::from(period_ms)));
 
         info!(
-            "{} ({}): registered {period_ms}ms timer with id {timer_id}",
-            self.shared.descriptor.name, self.shared.descriptor.id
+            "{}: registered {period_ms}ms timer with id {timer_id}",
+            self.shared.descriptor
         );
 
         self.shared
@@ -100,8 +100,8 @@ impl HostTimerImpl for MainThread<'_> {
 
     fn unregister_timer(&mut self, timer_id: TimerId) -> Result<(), HostError> {
         info!(
-            "{} ({}): unregistered timer with id {timer_id}",
-            self.shared.descriptor.name, self.shared.descriptor.id
+            "{}: unregistered timer with id {timer_id}",
+            self.shared.descriptor
         );
 
         self.timers.borrow_mut().unregister(timer_id)

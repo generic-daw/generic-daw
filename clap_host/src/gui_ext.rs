@@ -123,7 +123,7 @@ impl GuiExt {
 
         // I have no clue why this works, but if I unwrap here, nih-plug plugins don't load
         if let Err(err) = self.ext.show(plugin) {
-            warn!("{} ({}): {err}", self.descriptor.name, self.descriptor.id);
+            warn!("{}: {err}", self.descriptor);
         }
 
         self.is_open = true;
