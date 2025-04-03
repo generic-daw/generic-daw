@@ -7,7 +7,7 @@ use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
 use log::warn;
 use raw_window_handle::RawWindowHandle;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 #[derive(Debug)]
 pub struct GuiExt {
@@ -16,8 +16,8 @@ pub struct GuiExt {
     descriptor: PluginDescriptor,
     id: PluginId,
     is_floating: bool,
-    is_open: bool,
     can_resize: Option<bool>,
+    is_open: bool,
 }
 
 impl GuiExt {
@@ -47,26 +47,19 @@ impl GuiExt {
             descriptor,
             id,
             is_floating: config.is_floating,
-            is_open: false,
             can_resize: None,
+            is_open: false,
         }
+    }
+
+    #[must_use]
+    pub fn descriptor(&self) -> &PluginDescriptor {
+        &self.descriptor
     }
 
     #[must_use]
     pub fn plugin_id(&self) -> PluginId {
         self.id
-    }
-
-    pub fn call_on_main_thread_callback(&mut self) {
-        self.instance.call_on_main_thread_callback();
-    }
-
-    #[must_use]
-    pub fn tick_timers(&mut self) -> Option<Duration> {
-        let timers = self.instance.access_handler(|mt| mt.timers.clone());
-        timers
-            .borrow_mut()
-            .tick_timers(&mut self.instance.plugin_handle())
     }
 
     #[must_use]
@@ -81,11 +74,16 @@ impl GuiExt {
             .get_or_insert_with(|| self.ext.can_resize(&mut self.instance.plugin_handle()))
     }
 
+    pub fn call_on_main_thread_callback(&mut self) {
+        self.instance.call_on_main_thread_callback();
+    }
+
     #[must_use]
-    pub fn get_size(&mut self) -> Option<[u32; 2]> {
-        self.ext
-            .get_size(&mut self.instance.plugin_handle())
-            .map(|size| [size.width, size.height])
+    pub fn tick_timers(&mut self) -> Option<Duration> {
+        let timers = self.instance.access_handler(|mt| mt.timers.clone());
+        timers
+            .borrow_mut()
+            .tick_timers(&mut self.instance.plugin_handle())
     }
 
     pub fn open_floating(&mut self) {
@@ -132,6 +130,13 @@ impl GuiExt {
     }
 
     #[must_use]
+    pub fn get_size(&mut self) -> Option<[u32; 2]> {
+        self.ext
+            .get_size(&mut self.instance.plugin_handle())
+            .map(|size| [size.width, size.height])
+    }
+
+    #[must_use]
     pub fn resize(&mut self, width: u32, height: u32) -> Option<[u32; 2]> {
         if !self.can_resize.unwrap() {
             return None;
@@ -150,11 +155,6 @@ impl GuiExt {
             self.ext.destroy(&mut self.instance.plugin_handle());
             self.is_open = false;
         }
-    }
-
-    #[must_use]
-    pub fn name(&self) -> &Arc<str> {
-        &self.descriptor.name
     }
 
     pub fn latency_changed(&mut self) {

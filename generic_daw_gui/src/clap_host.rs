@@ -164,7 +164,7 @@ impl ClapHost {
     pub fn title(&self, window: Id) -> Option<String> {
         self.windows
             .position(&window)
-            .map(|id| self.plugins[id].name().deref().to_owned())
+            .map(|id| self.plugins[id].descriptor().name.deref().to_owned())
     }
 
     pub fn is_plugin_window(&self, window: Id) -> bool {

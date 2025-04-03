@@ -115,7 +115,7 @@ pub enum Tab {
 pub struct ArrangementView {
     pub clap_host: ClapHost,
 
-    plugins_by_channel: HoleyVec<Vec<(PluginId, Arc<str>)>>,
+    plugins_by_channel: HoleyVec<Vec<(PluginId, PluginDescriptor)>>,
 
     arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
@@ -240,13 +240,13 @@ impl ArrangementView {
             Message::ChannelToggleEnabled(id) => {
                 self.arrangement.node(id).0.enabled.fetch_not(AcqRel);
             }
-            Message::PluginLoad(name) => {
+            Message::PluginLoad(descriptor) => {
                 let Some(selected) = self.selected_channel else {
                     return Task::none();
                 };
                 let (gui, receiver, audio_processor) = clap_host::init(
-                    &PLUGINS[&name],
-                    name,
+                    &PLUGINS[&descriptor],
+                    descriptor.clone(),
                     f64::from(self.meter.sample_rate),
                     self.meter.buffer_size,
                 );
@@ -259,7 +259,7 @@ impl ArrangementView {
                 self.plugins_by_channel
                     .get_mut(selected.get())
                     .unwrap()
-                    .push((id, gui.name().clone()));
+                    .push((id, descriptor));
 
                 return self
                     .clap_host
@@ -1190,7 +1190,7 @@ impl ArrangementView {
                                 self.plugins_by_channel[selected.get()]
                                     .iter()
                                     .enumerate()
-                                    .map(|(i, (plugin_id, name))| {
+                                    .map(|(i, (plugin_id, descriptor))| {
                                         let enabled = node.get_plugin_enabled(i);
 
                                         row![
@@ -1210,8 +1210,11 @@ impl ArrangementView {
                                                 i, 1.0
                                             )),
                                             button(
-                                                container(text(&**name).wrapping(Wrapping::None))
-                                                    .clip(true)
+                                                container(
+                                                    text(&*descriptor.name)
+                                                        .wrapping(Wrapping::None)
+                                                )
+                                                .clip(true)
                                             )
                                             .style(move |t, s| button_with_base(
                                                 t,
