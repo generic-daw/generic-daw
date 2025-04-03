@@ -477,7 +477,8 @@ impl ArrangementView {
                 if sd {
                     let old_scale = self.arrangement_scale;
                     self.arrangement_scale += scale;
-                    self.arrangement_scale.x = self.arrangement_scale.x.clamp(3.0, 12.999_999);
+                    self.arrangement_scale.x =
+                        self.arrangement_scale.x.clamp(3.0, 13f32.next_down());
                     self.arrangement_scale.y = self
                         .arrangement_scale
                         .y
@@ -522,7 +523,7 @@ impl ArrangementView {
                 if sd {
                     let old_scale = self.piano_roll_scale;
                     self.piano_roll_scale += scale;
-                    self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(3.0, 12.999_999);
+                    self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(3.0, 13f32.next_down());
                     self.piano_roll_scale.y = self
                         .piano_roll_scale
                         .y
