@@ -72,7 +72,6 @@ impl EventBuffers {
     where
         Event: EventImpl,
     {
-        events.clear();
         events.extend(
             self.output_events
                 .iter()
