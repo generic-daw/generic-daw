@@ -1,9 +1,9 @@
 #[macro_export]
 macro_rules! unique_id {
     ($mod_name:ident) => {
-        unique_id!($mod_name, usize);
+        unique_id!($mod_name: usize);
     };
-    ($mod_name:ident,$ty:ident) => {
+    ($mod_name:ident: $ty:ident) => {
         mod $mod_name {
             mod atomic {
                 #![allow(non_camel_case_types)]
