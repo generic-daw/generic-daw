@@ -3,7 +3,7 @@ use crate::{
     components::{
         char_button, empty_widget, styled_pick_list, styled_scrollable_with_direction, styled_svg,
     },
-    daw::PLUGINS,
+    daw::{PLUGIN_BUNDLES, PLUGIN_DESCRIPTORS},
     icons::{ADD, CHEVRON_RIGHT, HANDLE},
     stylefns::{button_with_base, slider_with_enabled, svg_with_enabled},
     widget::{
@@ -244,7 +244,7 @@ impl ArrangementView {
                 };
 
                 let (gui, receiver, audio_processor) = clap_host::init(
-                    &PLUGINS[&descriptor],
+                    &PLUGIN_BUNDLES[&descriptor],
                     descriptor.clone(),
                     f64::from(self.meter.sample_rate),
                     self.meter.buffer_size,
@@ -1180,13 +1180,12 @@ impl ArrangementView {
         )
         .width(Length::Fill);
 
-        let plugin_picker = styled_pick_list(
-            PLUGINS.keys().collect::<Box<[_]>>(),
-            None::<&PluginDescriptor>,
-            |p| Message::PluginLoad(p.to_owned()),
-        )
-        .width(Length::Fill)
-        .placeholder("Add Plugin");
+        let plugin_picker =
+            styled_pick_list(&**PLUGIN_DESCRIPTORS, None::<PluginDescriptor>, |p| {
+                Message::PluginLoad(p)
+            })
+            .width(Length::Fill)
+            .placeholder("Add Plugin");
 
         if let Some(selected) = self.selected_channel {
             VSplit::new(

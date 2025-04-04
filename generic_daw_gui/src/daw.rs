@@ -34,8 +34,11 @@ use std::{
     },
 };
 
-pub static PLUGINS: LazyLock<BTreeMap<PluginDescriptor, PluginBundle>> =
+pub static PLUGIN_BUNDLES: LazyLock<BTreeMap<PluginDescriptor, PluginBundle>> =
     LazyLock::new(clap_host::get_installed_plugins);
+
+pub static PLUGIN_DESCRIPTORS: LazyLock<Box<[PluginDescriptor]>> =
+    LazyLock::new(|| PLUGIN_BUNDLES.keys().cloned().collect());
 
 #[derive(Clone, Debug)]
 pub enum Message {
