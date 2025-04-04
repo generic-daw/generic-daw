@@ -6,6 +6,7 @@ use iced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
         graphics::geometry::Renderer as _,
         layout::{Limits, Node},
+        mouse::{Click, click::Kind},
         renderer::Style,
         widget::{Tree, tree},
     },
@@ -26,6 +27,7 @@ struct State {
     last_value: f32,
     last_enabled: bool,
     cache: Cache,
+    last_click: Option<Click>,
 }
 
 #[derive(Debug)]
@@ -33,6 +35,7 @@ pub struct Knob<Message> {
     range: RangeInclusive<f32>,
     value: f32,
     center: f32,
+    reset: f32,
     enabled: bool,
     f: NoDebug<Box<dyn Fn(f32) -> Message>>,
     radius: f32,
@@ -97,16 +100,25 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
                 } if state.dragging.is_none() && state.hovering => {
                     let pos = cursor.position().unwrap();
                     state.dragging = Some((self.value, pos.y));
+
+                    let new_click = Click::new(pos, mouse::Button::Left, state.last_click);
+                    state.last_click = Some(new_click);
+
+                    if new_click.kind() == Kind::Double {
+                        shell.publish((self.f)(self.reset));
+                    }
+
                     shell.capture_event();
+                    shell.request_redraw();
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
                     if !state.hovering {
                         state.cache.clear();
-                        shell.request_redraw();
                     }
 
                     state.dragging = None;
                     shell.capture_event();
+                    shell.request_redraw();
                 }
                 mouse::Event::CursorMoved {
                     position: Point { y, .. },
@@ -196,6 +208,7 @@ impl<Message> Knob<Message> {
         range: RangeInclusive<f32>,
         value: f32,
         center: f32,
+        reset: f32,
         enabled: bool,
         f: impl Fn(f32) -> Message + 'static,
     ) -> Self {
@@ -203,6 +216,7 @@ impl<Message> Knob<Message> {
             range,
             value,
             center,
+            reset,
             enabled,
             f: NoDebug(Box::from(f)),
             radius: LINE_HEIGHT,

@@ -708,22 +708,22 @@ impl ArrangementView {
                             row![
                                 PeakMeter::new(node.get_l_r(), enabled),
                                 column![
-                                    mouse_area(Knob::new(
+                                    Knob::new(
                                         0.0..=1.0,
                                         track.node.volume.load(Acquire),
                                         0.0,
+                                        1.0,
                                         enabled,
                                         Message::ChannelVolumeChanged.with(id)
-                                    ))
-                                    .on_double_click(Message::ChannelVolumeChanged(id, 1.0)),
-                                    mouse_area(Knob::new(
+                                    ),
+                                    Knob::new(
                                         -1.0..=1.0,
                                         track.node.pan.load(Acquire),
                                         0.0,
+                                        0.0,
                                         enabled,
                                         Message::ChannelPanChanged.with(id)
-                                    ))
-                                    .on_double_click(Message::ChannelPanChanged(id, 0.0)),
+                                    ),
                                 ]
                                 .height(Length::Fill)
                                 .spacing(5.0),
@@ -910,13 +910,14 @@ impl ArrangementView {
                     row![
                         column![
                             text(name),
-                            mouse_area(Knob::new(
+                            Knob::new(
                                 -1.0..=1.0,
                                 node.pan.load(Acquire),
                                 0.0,
+                                0.0,
                                 enabled,
                                 Message::ChannelPanChanged.with(id)
-                            )),
+                            ),
                             PeakMeter::new(node.get_l_r(), enabled)
                         ]
                         .spacing(5.0)
@@ -1207,21 +1208,15 @@ impl ArrangementView {
                                         let enabled = node.get_plugin_enabled(i);
 
                                         row![
-                                            mouse_area(
-                                                Knob::new(
-                                                    0.0..=1.0,
-                                                    node.get_plugin_mix(i),
-                                                    0.0,
-                                                    enabled,
-                                                    move |mix| {
-                                                        Message::AudioEffectMixChanged(i, mix)
-                                                    }
-                                                )
-                                                .radius(TEXT_HEIGHT)
+                                            Knob::new(
+                                                0.0..=1.0,
+                                                node.get_plugin_mix(i),
+                                                0.0,
+                                                1.0,
+                                                enabled,
+                                                Message::AudioEffectMixChanged.with(i)
                                             )
-                                            .on_double_click(Message::AudioEffectMixChanged(
-                                                i, 1.0
-                                            )),
+                                            .radius(TEXT_HEIGHT),
                                             button(
                                                 container(
                                                     text(&*descriptor.name)
