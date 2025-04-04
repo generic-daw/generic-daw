@@ -7,7 +7,7 @@ use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
 use log::warn;
 use raw_window_handle::RawWindowHandle;
-use std::time::Duration;
+use std::{io::Cursor, time::Duration};
 
 #[derive(Debug)]
 pub struct GuiExt {
@@ -80,8 +80,8 @@ impl GuiExt {
 
     #[must_use]
     pub fn tick_timers(&mut self) -> Option<Duration> {
-        let timers = self.instance.access_handler(|mt| mt.timers.clone());
-        timers
+        self.instance
+            .access_handler(|mt| mt.timers.clone())
             .borrow_mut()
             .tick_timers(&mut self.instance.plugin_handle())
     }
@@ -161,8 +161,8 @@ impl GuiExt {
         let latency = self
             .instance
             .access_handler(|mt| mt.latency)
-            .map(|ext| ext.get(&mut self.instance.plugin_handle()))
-            .unwrap_or_default();
+            .unwrap()
+            .get(&mut self.instance.plugin_handle());
 
         self.instance.access_shared_handler(|sh| {
             sh.audio_sender
@@ -172,18 +172,38 @@ impl GuiExt {
     }
 
     pub fn set_realtime(&mut self, realtime: bool) {
-        if let Some(render) = self.instance.access_handler(|mt| mt.render) {
-            render
-                .set(
-                    &mut self.instance.plugin_handle(),
-                    if realtime {
-                        RenderMode::Realtime
-                    } else {
-                        RenderMode::Offline
-                    },
-                )
-                .unwrap();
-        }
+        self.instance
+            .access_handler(|mt| mt.render)
+            .unwrap()
+            .set(
+                &mut self.instance.plugin_handle(),
+                if realtime {
+                    RenderMode::Realtime
+                } else {
+                    RenderMode::Offline
+                },
+            )
+            .unwrap();
+    }
+
+    pub fn get_state(&mut self) -> Option<Vec<u8>> {
+        self.instance
+            .access_handler(|mt| mt.state)
+            .and_then(|state| {
+                let mut buf = Vec::new();
+                state
+                    .save(&mut self.instance.plugin_handle(), &mut buf)
+                    .map(|()| buf)
+                    .ok()
+            })
+    }
+
+    pub fn set_state(&mut self, buf: &[u8]) {
+        self.instance
+            .access_handler(|mt| mt.state)
+            .unwrap()
+            .load(&mut self.instance.plugin_handle(), &mut Cursor::new(buf))
+            .unwrap();
     }
 }
 

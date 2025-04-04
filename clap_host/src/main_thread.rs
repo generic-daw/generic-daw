@@ -5,6 +5,7 @@ use clack_extensions::{
     latency::{HostLatencyImpl, PluginLatency},
     note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
     render::PluginRender,
+    state::{HostStateImpl, PluginState},
     timer::{HostTimerImpl, TimerId},
 };
 use clack_host::prelude::*;
@@ -29,6 +30,7 @@ pub struct MainThread<'a> {
     pub gui: Option<NoDebug<PluginGui>>,
     pub latency: Option<NoDebug<PluginLatency>>,
     pub render: Option<NoDebug<PluginRender>>,
+    pub state: Option<NoDebug<PluginState>>,
     pub timers: Rc<RefCell<TimerExt>>,
 }
 
@@ -39,6 +41,7 @@ impl<'a> MainThread<'a> {
             gui: None,
             timers: Rc::default(),
             render: None,
+            state: None,
             latency: None,
         }
     }
@@ -49,6 +52,7 @@ impl<'a> MainThreadHandler<'a> for MainThread<'a> {
         self.gui = instance.get_extension().map(NoDebug);
         self.latency = instance.get_extension().map(NoDebug);
         self.render = instance.get_extension().map(NoDebug);
+        self.state = instance.get_extension().map(NoDebug);
         self.timers.borrow_mut().set_ext(instance.get_extension());
     }
 }
@@ -76,6 +80,10 @@ impl HostNotePortsImpl for MainThread<'_> {
     }
 
     fn rescan(&mut self, _flags: NotePortRescanFlags) {}
+}
+
+impl HostStateImpl for MainThread<'_> {
+    fn mark_dirty(&mut self) {}
 }
 
 impl HostTimerImpl for MainThread<'_> {

@@ -20,6 +20,7 @@ clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
     "note-ports",
     "raw-window-handle_06",
     "render",
+    "state",
     "timer",
 ] }
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
