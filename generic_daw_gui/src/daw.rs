@@ -9,7 +9,7 @@ use crate::{
     widget::{AnimatedDot, BpmInput, LINE_HEIGHT, VSplit, vsplit::Strategy},
 };
 use generic_daw_core::{
-    Denominator, Meter, Numerator, Position,
+    Meter, Numerator, Position,
     clap_host::{self, PluginBundle, PluginDescriptor},
 };
 use iced::{
@@ -55,7 +55,6 @@ pub enum Message {
     ToggleMetronome,
     ChangedBpm(u16),
     ChangedNumerator(Numerator),
-    ChangedDenominator(Denominator),
     ChangedTab(Tab),
 
     SplitAt(f32),
@@ -149,9 +148,6 @@ impl Daw {
             Message::ChangedNumerator(new_numerator) => {
                 self.meter.numerator.store(new_numerator, Release);
             }
-            Message::ChangedDenominator(new_denominator) => {
-                self.meter.denominator.store(new_denominator, Release);
-            }
             Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
         }
 
@@ -194,12 +190,6 @@ impl Daw {
                         Numerator::VARIANTS,
                         Some(self.meter.numerator.load(Acquire)),
                         Message::ChangedNumerator
-                    )
-                    .width(50),
-                    styled_pick_list(
-                        Denominator::VARIANTS,
-                        Some(self.meter.denominator.load(Acquire)),
-                        Message::ChangedDenominator
                     )
                     .width(50),
                 ],

@@ -4,6 +4,7 @@ members = [
     "clap_host",
     "generic_daw_core",
     "generic_daw_gui",
+    "generic_daw_project",
     "generic_daw_utils",
 ]
 resolver = "3"

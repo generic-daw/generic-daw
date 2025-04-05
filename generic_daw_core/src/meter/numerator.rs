@@ -49,23 +49,3 @@ impl Display for Numerator {
         f.write_str(itoa::Buffer::new().format(*self as u8))
     }
 }
-
-#[repr(u8)]
-#[derive(Atom, Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum Denominator {
-    _2 = 2,
-    #[default]
-    _4 = 4,
-    _8 = 8,
-    _16 = 16,
-}
-
-impl Denominator {
-    pub const VARIANTS: [Self; 4] = [Self::_2, Self::_4, Self::_8, Self::_16];
-}
-
-impl Display for Denominator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(itoa::Buffer::new().format(*self as u8))
-    }
-}

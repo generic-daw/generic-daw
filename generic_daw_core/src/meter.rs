@@ -1,9 +1,9 @@
 use atomig::Atomic;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicUsize};
 
-mod time_signature;
+mod numerator;
 
-pub use time_signature::{Denominator, Numerator};
+pub use numerator::Numerator;
 
 #[derive(Debug)]
 pub struct Meter {
@@ -19,8 +19,6 @@ pub struct Meter {
     pub bpm: AtomicU16,
     /// numerator of the time signature
     pub numerator: Atomic<Numerator>,
-    /// denominator of the time signature
-    pub denominator: Atomic<Denominator>,
     /// whether the arrangement is currently being played back
     pub playing: AtomicBool,
     /// whether the metronome is currently enabled
@@ -36,7 +34,6 @@ impl Meter {
             buffer_size,
             bpm: AtomicU16::new(140),
             numerator: Atomic::default(),
-            denominator: Atomic::default(),
             playing: AtomicBool::default(),
             metronome: AtomicBool::default(),
             sample: AtomicUsize::default(),
