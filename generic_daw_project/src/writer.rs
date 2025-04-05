@@ -103,6 +103,6 @@ impl Writer {
     pub fn finalize(self) -> Vec<u8> {
         let mut pbf = Vec::new();
         self.0.encode(&mut pbf).unwrap();
-        compress(&pbf, Format::Raw, CompressionLevel::BestSize).unwrap()
+        compress(&pbf, Format::Zlib, CompressionLevel::BestSize).unwrap()
     }
 }
