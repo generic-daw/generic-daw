@@ -48,6 +48,7 @@ pub enum Message {
     FileTree(Arc<Path>),
 
     SamplesFileDialog,
+    SaveFileDialog,
     ExportFileDialog,
 
     Stop,
@@ -113,6 +114,17 @@ impl Daw {
                     )
                 });
             }
+            Message::SaveFileDialog => {
+                return Task::future(
+                    AsyncFileDialog::new()
+                        .add_filter("Generic Daw project file", &["pbf"])
+                        .save_file(),
+                )
+                .and_then(Task::done)
+                .map(|p| p.path().into())
+                .map(ArrangementMessage::Save)
+                .map(Message::Arrangement);
+            }
             Message::ExportFileDialog => {
                 return Task::future(
                     AsyncFileDialog::new()
@@ -170,6 +182,7 @@ impl Daw {
             row![
                 row![
                     styled_button("Load Samples").on_press(Message::SamplesFileDialog),
+                    styled_button("Save").on_press(Message::SaveFileDialog),
                     styled_button("Export").on_press(Message::ExportFileDialog),
                 ],
                 row![

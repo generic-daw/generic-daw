@@ -48,7 +48,7 @@ message Project {
                 uint32 index = 1;
             }
 
-            MidiIndex pattern = 1;
+            MidiIndex midi = 1;
             ClipPosition position = 2;
         }
 
@@ -78,7 +78,7 @@ message Project {
 
     Meter meter = 1;
     repeated Audio audios = 2;
-    repeated Midi patterns = 3;
+    repeated Midi midis = 3;
     repeated Track tracks = 4;
     repeated Channel channels = 5;
 }

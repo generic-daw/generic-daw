@@ -49,12 +49,12 @@ impl Writer<MidiIndex> {
         &mut self,
         notes: impl IntoIterator<Item = proto::project::midi::Note>,
     ) -> MidiIndex {
-        self.inner.patterns.push(proto::project::Midi {
+        self.inner.midis.push(proto::project::Midi {
             notes: notes.into_iter().collect(),
         });
 
         MidiIndex {
-            index: self.inner.patterns.len() as u32 - 1,
+            index: self.inner.midis.len() as u32 - 1,
         }
     }
 
@@ -107,10 +107,20 @@ impl Writer<ChannelIndex> {
         });
 
         ChannelIndex {
-            index: self.inner.tracks.len() as u32 - 1,
+            index: self.inner.channels.len() as u32 - 1,
         }
     }
 
+    #[must_use]
+    pub fn next(self) -> Writer<()> {
+        Writer {
+            inner: self.inner,
+            _state: PhantomData,
+        }
+    }
+}
+
+impl Writer<()> {
     pub fn connect_track_to_channel(&mut self, from: TrackIndex, to: ChannelIndex) {
         self.inner.tracks[from.index as usize]
             .channel
@@ -127,9 +137,9 @@ impl Writer<ChannelIndex> {
     }
 
     #[must_use]
-    pub fn finalize(self) -> Option<Vec<u8>> {
+    pub fn finalize(self) -> Vec<u8> {
         let mut pbf = Vec::new();
-        self.inner.encode(&mut pbf).ok()?;
-        compress(&pbf, Format::Zlib, CompressionLevel::BestSize).ok()
+        self.inner.encode(&mut pbf).unwrap();
+        compress(&pbf, Format::Raw, CompressionLevel::BestSize).unwrap()
     }
 }

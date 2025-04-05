@@ -127,6 +127,11 @@ impl Position {
     pub const fn abs_diff(self, other: Self) -> Self {
         Self(self.0.abs_diff(other.0))
     }
+
+    #[must_use]
+    pub const fn u32(self) -> u32 {
+        self.0
+    }
 }
 
 impl Add for Position {

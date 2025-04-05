@@ -14,6 +14,7 @@ use crate::{
         vsplit::Strategy,
     },
 };
+use arc_swap::ArcSwap;
 use arrangement::NodeType;
 use dragking::{DragEvent, DropPosition};
 use fragile::Fragile;
@@ -23,6 +24,7 @@ use generic_daw_core::{
     audio_graph::{NodeId, NodeImpl as _},
     clap_host::{self, MainThreadMessage, PluginDescriptor, PluginId},
 };
+use generic_daw_project::{proto, writer::Writer};
 use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2};
 use iced::{
     Alignment, Element, Function as _, Length, Radians, Subscription, Task, Theme, border,
@@ -41,7 +43,9 @@ use std::{
     cell::Cell,
     collections::{HashMap, HashSet},
     f32::{self, consts::FRAC_PI_2},
+    fs::File,
     hash::{DefaultHasher, Hash as _, Hasher as _},
+    io::Write as _,
     iter::once,
     ops::Deref as _,
     path::Path,
@@ -110,6 +114,8 @@ pub enum Message {
     PianoRollPositionScaleDelta(Vec2, Vec2),
 
     SplitAt(f32),
+
+    Save(Box<Path>),
 }
 
 #[derive(Clone, Debug)]
@@ -131,6 +137,7 @@ pub struct ArrangementView {
     meter: Arc<Meter>,
     loading_samples: HashSet<Arc<Path>>,
     loaded_samples: HashMap<Arc<Path>, LoadStatus>,
+    patterns: Vec<Weak<ArcSwap<Vec<MidiNote>>>>,
     plugins_by_channel: HoleyVec<Vec<(PluginId, PluginDescriptor)>>,
 
     tab: Tab,
@@ -161,6 +168,7 @@ impl ArrangementView {
                 meter: meter.clone(),
                 loading_samples: HashSet::default(),
                 loaded_samples: HashMap::default(),
+                patterns: Vec::new(),
                 plugins_by_channel: HoleyVec::default(),
 
                 tab: Tab::Arrangement { grabbed_clip: None },
@@ -409,7 +417,9 @@ impl ArrangementView {
                 }
             }
             Message::AddMidiClip(track, pos) => {
-                let clip = MidiClip::create(Arc::default(), self.meter.clone());
+                let pattern = Arc::default();
+                self.patterns.push(Arc::downgrade(&pattern));
+                let clip = MidiClip::create(pattern, self.meter.clone());
                 clip.position
                     .trim_end_to(Position::BEAT * self.meter.numerator.load(Acquire) as u32);
                 clip.position.move_to(pos);
@@ -594,6 +604,9 @@ impl ArrangementView {
                 }
             }
             Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
+            Message::Save(path) => {
+                self.save(&path);
+            }
         }
 
         Task::none()
@@ -711,6 +724,132 @@ impl ArrangementView {
                 clip.pattern.store(Arc::new(notes));
             }
         }
+    }
+
+    pub fn save(&mut self, path: &Path) {
+        let mut writer = Writer::new(
+            u32::from(self.meter.bpm.load(Acquire)),
+            self.meter.numerator.load(Acquire) as u32,
+        );
+
+        let mut audios = HashMap::new();
+        for entry in &self.loaded_samples {
+            let path = match entry.1 {
+                LoadStatus::Loaded(audio) => {
+                    let Some(audio) = audio.upgrade() else {
+                        continue;
+                    };
+                    audio.path.clone()
+                }
+                LoadStatus::Loading(..) => continue,
+            };
+
+            audios.insert(path.clone(), writer.push_audio(path));
+        }
+
+        let mut writer = writer.next();
+
+        let mut midis = HashMap::new();
+        for entry in &self.patterns {
+            let Some(pattern) = entry.upgrade() else {
+                continue;
+            };
+
+            midis.insert(
+                Arc::as_ptr(&pattern).addr(),
+                writer.push_midi(
+                    pattern
+                        .load()
+                        .iter()
+                        .map(|note| proto::project::midi::Note {
+                            key: u32::from(note.key.0),
+                            velocity: note.velocity as f32,
+                            start: note.start.u32(),
+                            end: note.end.u32(),
+                        }),
+                ),
+            );
+        }
+
+        let mut writer = writer.next();
+
+        let mut tracks = HashMap::new();
+        for track in self.arrangement.tracks() {
+            tracks.insert(
+                track.id().get(),
+                writer.push_track(
+                    track.clips.iter().map(|clip| match clip {
+                        Clip::Audio(audio) => proto::project::track::AudioClip {
+                            audio: Some(audios[&audio.audio.path]),
+                            position: Some(proto::project::track::ClipPosition {
+                                global_start: audio.position.get_global_start().u32(),
+                                global_end: audio.position.get_global_end().u32(),
+                                clip_start: audio.position.get_clip_start().u32(),
+                            }),
+                        }
+                        .into(),
+                        Clip::Midi(midi) => proto::project::track::MidiClip {
+                            midi: Some(midis[&Arc::as_ptr(midi).addr()]),
+                            position: Some(proto::project::track::ClipPosition {
+                                global_start: midi.position.get_global_start().u32(),
+                                global_end: midi.position.get_global_end().u32(),
+                                clip_start: midi.position.get_clip_start().u32(),
+                            }),
+                        }
+                        .into(),
+                    }),
+                    self.plugins_by_channel
+                        .get(track.id().get())
+                        .into_iter()
+                        .flatten()
+                        .map(|(id, descriptor)| proto::project::channel::Plugin {
+                            id: descriptor.id.deref().to_bytes().to_owned(),
+                            state: self.clap_host.get_state(*id),
+                        }),
+                ),
+            );
+        }
+
+        let mut writer = writer.next();
+
+        let mut channels = HashMap::new();
+        for channel in once(&self.arrangement.master().0).chain(self.arrangement.channels()) {
+            channels.insert(
+                channel.id().get(),
+                writer.push_channel(
+                    self.plugins_by_channel
+                        .get(channel.id().get())
+                        .into_iter()
+                        .flatten()
+                        .map(|(id, descriptor)| proto::project::channel::Plugin {
+                            id: descriptor.id.deref().to_bytes().to_owned(),
+                            state: self.clap_host.get_state(*id),
+                        }),
+                ),
+            );
+        }
+
+        let mut writer = writer.next();
+
+        for track in self.arrangement.tracks() {
+            for connection in &self.arrangement.node(track.id()).1 {
+                writer.connect_track_to_channel(tracks[&track.id().get()], channels[&connection]);
+            }
+        }
+
+        for channel in self.arrangement.channels() {
+            for connection in &self.arrangement.node(channel.id()).1 {
+                writer.connect_channel_to_channel(
+                    channels[&channel.id().get()],
+                    channels[&connection],
+                );
+            }
+        }
+
+        File::create(path)
+            .unwrap()
+            .write_all(&writer.finalize())
+            .unwrap();
     }
 
     pub fn view(&self) -> Element<'_, Message> {

@@ -177,6 +177,10 @@ impl ClapHost {
         }
     }
 
+    pub fn get_state(&mut self, id: PluginId) -> Option<Vec<u8>> {
+        self.plugins.get_mut(id.get()).unwrap().get_state()
+    }
+
     pub fn subscription() -> Subscription<Message> {
         Subscription::batch([
             resize_events().map(Message::GuiRequestResize),
