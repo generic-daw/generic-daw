@@ -16,10 +16,17 @@ An early-in-development, open source, cross-platform digital audio workstation (
 ### Requirements
 
 - Rust & Cargo: this project is developed using the latest stable [Rust toolchain](https://rustup.rs/)
-- Dependencies: if you're compiling on Linux, you will need to install the alsa development headers:
-  - Debian-based distributions: `sudo apt install libasound2-dev`
+- a Protocol Buffers compiler:
+  - Windows: `winget install protobuf`
+  - MacOS: `brew install protobuf`
+  - Linux:
+    - Debian: `sudo apt install protobuf-compiler`
+    - Fedora: `sudo dnf install protobuf-compiler`
+    - Arch `sudo pacman -S protobuf`
+- on Linux you'll also need to install the alsa development headers:
+  - Debian: `sudo apt install libasound2-dev`
   - Fedora: `sudo dnf install alsa-lib-devel`
-  - Arch Linux: `sudo pacman -S alsa-lib`
+  - Arch: `sudo pacman -S alsa-lib`
 
 ### Build from Source
 
