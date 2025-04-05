@@ -39,7 +39,7 @@ use iced::{
 use smol::unblock;
 use std::{
     cell::Cell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     f32::{self, consts::FRAC_PI_2},
     hash::{DefaultHasher, Hash as _, Hasher as _},
     iter::once,
@@ -86,7 +86,7 @@ pub enum Message {
     AudioEffectsReordered(DragEvent),
 
     SampleLoadFromFile(Arc<Path>),
-    SampleLoadedFromFile(Option<Arc<InterleavedAudio>>),
+    SampleLoadedFromFile(Arc<Path>, Option<Arc<InterleavedAudio>>),
 
     AddMidiClip(NodeId, Position),
     OpenMidiClip(Arc<MidiClip>),
@@ -129,6 +129,7 @@ pub struct ArrangementView {
 
     arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
+    loading_samples: HashSet<Arc<Path>>,
     loaded_samples: HashMap<Arc<Path>, LoadStatus>,
     plugins_by_channel: HoleyVec<Vec<(PluginId, PluginDescriptor)>>,
 
@@ -139,7 +140,6 @@ pub struct ArrangementView {
     arrangement_position: Vec2,
     arrangement_scale: Vec2,
     soloed_track: Option<NodeId>,
-    loading: usize,
 
     piano_roll_position: Cell<Vec2>,
     piano_roll_scale: Vec2,
@@ -159,6 +159,7 @@ impl ArrangementView {
 
                 arrangement,
                 meter: meter.clone(),
+                loading_samples: HashSet::default(),
                 loaded_samples: HashMap::default(),
                 plugins_by_channel: HoleyVec::default(),
 
@@ -169,7 +170,6 @@ impl ArrangementView {
                 arrangement_position: Vec2::default(),
                 arrangement_scale: Vec2::new(9.0, 120.0),
                 soloed_track: None,
-                loading: 0,
 
                 piano_roll_position: Cell::new(Vec2::new(0.0, 40.0)),
                 piano_roll_scale: Vec2::new(9.0, LINE_HEIGHT),
@@ -190,9 +190,9 @@ impl ArrangementView {
         match message {
             Message::ClapHost(msg) => return self.clap_host.update(msg).map(Message::ClapHost),
             Message::ConnectRequest((from, to)) => {
-                return Task::future(self.arrangement.request_connect(from, to))
-                    .and_then(Task::done)
-                    .map(Message::ConnectSucceeded);
+                return Task::perform(self.arrangement.request_connect(from, to), |con| {
+                    Message::ConnectSucceeded(con.unwrap())
+                });
             }
             Message::ConnectSucceeded((from, to)) => {
                 self.arrangement.connect_succeeded(from, to);
@@ -206,9 +206,9 @@ impl ArrangementView {
                 self.clap_host.set_realtime(true);
             }
             Message::ChannelAdd => {
-                return Task::future(self.arrangement.add_channel())
-                    .and_then(Task::done)
-                    .map(Message::ConnectSucceeded);
+                return Task::perform(self.arrangement.add_channel(), |con| {
+                    Message::ConnectSucceeded(con.unwrap())
+                });
             }
             Message::ChannelRemove(id) => {
                 self.arrangement.remove_channel(id);
@@ -337,9 +337,8 @@ impl ArrangementView {
                         }
                         LoadStatus::Loaded(audio) => {
                             if let Some(audio) = audio.upgrade() {
-                                self.loading += 1;
-
-                                return self.update(Message::SampleLoadedFromFile(Some(audio)));
+                                return self
+                                    .update(Message::SampleLoadedFromFile(path, Some(audio)));
                             }
                         }
                     }
@@ -347,15 +346,19 @@ impl ArrangementView {
 
                 self.loaded_samples
                     .insert(path.clone(), LoadStatus::Loading(1));
-                self.loading += 1;
+                self.loading_samples.insert(path.clone());
                 let sample_rate = self.meter.sample_rate;
 
-                return Task::future(unblock(move || InterleavedAudio::create(path, sample_rate)))
-                    .map(Result::ok)
-                    .map(Message::SampleLoadedFromFile);
+                return Task::perform(
+                    {
+                        let path = path.clone();
+                        unblock(move || InterleavedAudio::create(path, sample_rate))
+                    },
+                    move |audio| Message::SampleLoadedFromFile(path, audio.ok()),
+                );
             }
-            Message::SampleLoadedFromFile(audio) => {
-                self.loading -= 1;
+            Message::SampleLoadedFromFile(path, audio) => {
+                self.loading_samples.remove(&path);
 
                 if let Some(audio) = audio {
                     let count = match self.loaded_samples[&audio.path] {
@@ -374,29 +377,24 @@ impl ArrangementView {
                     let end = clip.position.get_global_end();
 
                     let mut futs = Vec::new();
+                    let mut track = 0;
 
                     for _ in 0..count {
-                        let track = self
-                            .arrangement
-                            .tracks()
-                            .iter()
-                            .position(|track| {
-                                track
-                                    .clips
-                                    .iter()
-                                    .all(|clip| clip.position().get_global_start() >= end)
-                            })
-                            .unwrap_or_else(|| {
-                                futs.push(
-                                    Task::future(
-                                        self.arrangement.add_track(Track::new(self.meter.clone())),
-                                    )
-                                    .and_then(Task::done)
-                                    .map(Message::ConnectSucceeded),
-                                );
+                        while self.arrangement.tracks().get(track).is_some_and(|track| {
+                            track
+                                .clips
+                                .iter()
+                                .any(|clip| clip.position().get_global_start() < end)
+                        }) {
+                            track += 1;
+                        }
 
-                                self.arrangement.tracks().len() - 1
-                            });
+                        if track == self.arrangement.tracks().len() {
+                            futs.push(Task::perform(
+                                self.arrangement.add_track(Track::new(self.meter.clone())),
+                                |con| Message::ConnectSucceeded(con.unwrap()),
+                            ));
+                        }
 
                         self.arrangement.add_clip(track, clip.clone());
                     }
@@ -419,9 +417,10 @@ impl ArrangementView {
                 self.arrangement.add_clip(track, clip);
             }
             Message::TrackAdd => {
-                return Task::future(self.arrangement.add_track(Track::new(self.meter.clone())))
-                    .and_then(Task::done)
-                    .map(Message::ConnectSucceeded);
+                return Task::perform(
+                    self.arrangement.add_track(Track::new(self.meter.clone())),
+                    |con| Message::ConnectSucceeded(con.unwrap()),
+                );
             }
             Message::TrackRemove(id) => {
                 let track = self.arrangement.track_of(id).unwrap();
@@ -721,12 +720,12 @@ impl ArrangementView {
             Tab::PianoRoll { clip, .. } => self.piano_roll(clip),
         };
 
-        if self.loading > 0 {
+        if self.loading_samples.is_empty() {
+            element
+        } else {
             mouse_area(element)
                 .interaction(Interaction::Progress)
                 .into()
-        } else {
-            element
         }
     }
 
