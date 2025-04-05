@@ -747,8 +747,6 @@ impl ArrangementView {
             audios.insert(path.clone(), writer.push_audio(path));
         }
 
-        let mut writer = writer.next();
-
         let mut midis = HashMap::new();
         for entry in &self.patterns {
             let Some(pattern) = entry.upgrade() else {
@@ -770,8 +768,6 @@ impl ArrangementView {
                 ),
             );
         }
-
-        let mut writer = writer.next();
 
         let mut tracks = HashMap::new();
         for track in self.arrangement.tracks() {
@@ -810,8 +806,6 @@ impl ArrangementView {
             );
         }
 
-        let mut writer = writer.next();
-
         let mut channels = HashMap::new();
         for channel in once(&self.arrangement.master().0).chain(self.arrangement.channels()) {
             channels.insert(
@@ -828,8 +822,6 @@ impl ArrangementView {
                 ),
             );
         }
-
-        let mut writer = writer.next();
 
         for track in self.arrangement.tracks() {
             for connection in &self.arrangement.node(track.id()).1 {

@@ -29,8 +29,3 @@ pub mod proto {
 }
 
 pub mod writer;
-
-pub use proto::project::{
-    channel::ChannelIndex,
-    track::{TrackIndex, audio_clip::AudioIndex, midi_clip::MidiIndex},
-};
