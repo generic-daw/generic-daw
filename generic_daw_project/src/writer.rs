@@ -111,6 +111,16 @@ impl Writer<ChannelIndex> {
         }
     }
 
+    #[must_use]
+    pub fn next(self) -> Writer<()> {
+        Writer {
+            inner: self.inner,
+            _state: PhantomData,
+        }
+    }
+}
+
+impl Writer<()> {
     pub fn connect_track_to_channel(&mut self, from: TrackIndex, to: ChannelIndex) {
         self.inner.tracks[from.index as usize]
             .channel

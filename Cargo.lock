@@ -1385,12 +1385,14 @@ dependencies = [
 name = "generic_daw"
 version = "0.0.0"
 dependencies = [
+ "arc-swap",
  "bit-set",
  "dirs",
  "dragking",
  "env_logger",
  "fragile",
  "generic_daw_core",
+ "generic_daw_project",
  "generic_daw_utils",
  "iced",
  "iced_wgpu",
