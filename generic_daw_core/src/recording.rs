@@ -17,7 +17,7 @@ pub struct Recording {
     /// these are used to draw the sample in various quality levels
     pub lods: NoDebug<Box<[Vec<(f32, f32)>]>>,
     /// the file name associated with the sample
-    pub path: Box<Path>,
+    pub path: Arc<Path>,
 
     writer: NoDebug<WavWriter<BufWriter<File>>>,
     pub position: Position,
@@ -33,7 +33,7 @@ pub struct Recording {
 }
 
 impl Recording {
-    pub fn create(path: Box<Path>, meter: &Meter) -> (Self, Receiver<Box<[f32]>>) {
+    pub fn create(path: Arc<Path>, meter: &Meter) -> (Self, Receiver<Box<[f32]>>) {
         let (channels, sample_rate, stream, receiver) =
             build_input_stream(meter.sample_rate, meter.buffer_size);
 
@@ -157,7 +157,7 @@ impl Recording {
         });
     }
 
-    pub fn split_off(&mut self, mut path: Box<Path>) -> Arc<InterleavedAudio> {
+    pub fn split_off(&mut self, mut path: Arc<Path>) -> Arc<InterleavedAudio> {
         let mut writer = WavWriter::create(
             &path,
             WavSpec {

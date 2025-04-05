@@ -21,18 +21,18 @@ pub struct InterleavedAudio {
     /// these are used to draw the sample in various quality levels
     pub lods: NoDebug<Box<[Box<[(f32, f32)]>]>>,
     /// the file name associated with the sample
-    pub path: Box<Path>,
+    pub path: Arc<Path>,
 }
 
 impl InterleavedAudio {
-    pub fn create(path: &Path, sample_rate: u32) -> Result<Arc<Self>, InterleavedAudioError> {
-        let samples = Self::read_audio_file(path, sample_rate)?;
+    pub fn create(path: Arc<Path>, sample_rate: u32) -> Result<Arc<Self>, InterleavedAudioError> {
+        let samples = Self::read_audio_file(&path, sample_rate)?;
         let lods = Self::create_lod(&samples);
 
         let audio = Self {
             samples: samples.into(),
             lods: lods.into(),
-            path: path.into(),
+            path,
         };
 
         Ok(Arc::new(audio))

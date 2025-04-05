@@ -39,13 +39,14 @@ use iced::{
 use smol::unblock;
 use std::{
     cell::Cell,
+    collections::HashMap,
     f32::{self, consts::FRAC_PI_2},
     hash::{DefaultHasher, Hash as _, Hasher as _},
     iter::once,
     ops::Deref as _,
     path::Path,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, Weak,
         atomic::Ordering::{AcqRel, Acquire, Release},
     },
     time::Instant,
@@ -54,6 +55,12 @@ use std::{
 mod arrangement;
 
 pub use arrangement::Arrangement as ArrangementWrapper;
+
+#[derive(Clone, Debug)]
+enum LoadStatus {
+    Loading(usize),
+    Loaded(Weak<InterleavedAudio>),
+}
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -122,6 +129,7 @@ pub struct ArrangementView {
 
     arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
+    loaded_samples: HashMap<Arc<Path>, LoadStatus>,
     plugins_by_channel: HoleyVec<Vec<(PluginId, PluginDescriptor)>>,
 
     tab: Tab,
@@ -151,6 +159,7 @@ impl ArrangementView {
 
                 arrangement,
                 meter: meter.clone(),
+                loaded_samples: HashMap::default(),
                 plugins_by_channel: HoleyVec::default(),
 
                 tab: Tab::Arrangement { grabbed_clip: None },
@@ -319,49 +328,80 @@ impl ArrangementView {
                     .map(Message::ClapHost);
             }
             Message::SampleLoadFromFile(path) => {
+                if let Some(entry) = self.loaded_samples.get_mut(&path) {
+                    match entry {
+                        LoadStatus::Loading(count) => {
+                            *count += 1;
+
+                            return Task::none();
+                        }
+                        LoadStatus::Loaded(audio) => {
+                            if let Some(audio) = audio.upgrade() {
+                                self.loading += 1;
+
+                                return self.update(Message::SampleLoadedFromFile(Some(audio)));
+                            }
+                        }
+                    }
+                }
+
+                self.loaded_samples
+                    .insert(path.clone(), LoadStatus::Loading(1));
                 self.loading += 1;
                 let sample_rate = self.meter.sample_rate;
 
-                return Task::future(unblock(move || {
-                    InterleavedAudio::create(&path, sample_rate)
-                }))
-                .map(Result::ok)
-                .map(Message::SampleLoadedFromFile);
+                return Task::future(unblock(move || InterleavedAudio::create(path, sample_rate)))
+                    .map(Result::ok)
+                    .map(Message::SampleLoadedFromFile);
             }
             Message::SampleLoadedFromFile(audio) => {
                 self.loading -= 1;
 
                 if let Some(audio) = audio {
+                    let count = match self.loaded_samples[&audio.path] {
+                        LoadStatus::Loading(count) => {
+                            self.loaded_samples.insert(
+                                audio.path.clone(),
+                                LoadStatus::Loaded(Arc::downgrade(&audio)),
+                            );
+
+                            count
+                        }
+                        LoadStatus::Loaded(..) => 1,
+                    };
+
                     let clip = AudioClip::create(audio, self.meter.clone());
                     let end = clip.position.get_global_end();
 
-                    let (track, fut) = self
-                        .arrangement
-                        .tracks()
-                        .iter()
-                        .position(|track| {
-                            track
-                                .clips
-                                .iter()
-                                .all(|clip| clip.position().get_global_start() >= end)
-                        })
-                        .map_or_else(
-                            || {
-                                (
-                                    self.arrangement.tracks().len(),
+                    let mut futs = Vec::new();
+
+                    for _ in 0..count {
+                        let track = self
+                            .arrangement
+                            .tracks()
+                            .iter()
+                            .position(|track| {
+                                track
+                                    .clips
+                                    .iter()
+                                    .all(|clip| clip.position().get_global_start() >= end)
+                            })
+                            .unwrap_or_else(|| {
+                                futs.push(
                                     Task::future(
                                         self.arrangement.add_track(Track::new(self.meter.clone())),
                                     )
                                     .and_then(Task::done)
                                     .map(Message::ConnectSucceeded),
-                                )
-                            },
-                            |x| (x, Task::none()),
-                        );
+                                );
 
-                    self.arrangement.add_clip(track, clip);
+                                self.arrangement.tracks().len() - 1
+                            });
 
-                    return fut;
+                        self.arrangement.add_clip(track, clip.clone());
+                    }
+
+                    return Task::batch(futs);
                 }
             }
             Message::OpenMidiClip(clip) => {
@@ -560,7 +600,7 @@ impl ArrangementView {
         Task::none()
     }
 
-    fn make_recording_path() -> Box<Path> {
+    fn make_recording_path() -> Arc<Path> {
         let mut file_name = "recording-".to_owned();
 
         let mut hasher = DefaultHasher::new();
