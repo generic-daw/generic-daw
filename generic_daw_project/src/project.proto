@@ -8,10 +8,10 @@ message Project {
     }
 
     message Audio {
-        bytes path = 1;
+        repeated string components = 1;
     }
 
-    message Pattern {
+    message Midi {
         message Note {
             uint32 key = 1;
             float velocity = 2;
@@ -23,6 +23,10 @@ message Project {
     }
 
     message Track {
+        message TrackIndex {
+            uint32 index = 1;
+        }
+
         message Clip {
             oneof clip {
                 AudioClip audio = 1;
@@ -31,12 +35,20 @@ message Project {
         }
 
         message AudioClip {
-            uint32 audio = 1;
+            message AudioIndex {
+                uint32 index = 1;
+            }
+
+            AudioIndex audio = 1;
             ClipPosition position = 2;
         }
 
         message MidiClip {
-            uint32 pattern = 1;
+            message MidiIndex {
+                uint32 index = 1;
+            }
+
+            MidiIndex pattern = 1;
             ClipPosition position = 2;
         }
 
@@ -51,18 +63,22 @@ message Project {
     }
 
     message Channel {
+        message ChannelIndex {
+            uint32 index = 1;
+        }
+
         message Plugin {
             bytes id = 1;
             optional bytes state = 2;
         }
 
-        repeated uint32 connections = 1;
+        repeated ChannelIndex connections = 1;
         repeated Plugin plugins = 2;
     }
 
     Meter meter = 1;
     repeated Audio audios = 2;
-    repeated Pattern patterns = 3;
+    repeated Midi patterns = 3;
     repeated Track tracks = 4;
     repeated Channel channels = 5;
 }
