@@ -788,7 +788,7 @@ impl ArrangementView {
                         }
                         .into(),
                         Clip::Midi(midi) => proto::project::track::MidiClip {
-                            midi: Some(midis[&Arc::as_ptr(midi).addr()]),
+                            midi: Some(midis[&Arc::as_ptr(&midi.pattern).addr()]),
                             position: Some(proto::project::track::ClipPosition {
                                 global_start: midi.position.get_global_start().into(),
                                 global_end: midi.position.get_global_end().into(),
