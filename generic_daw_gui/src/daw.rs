@@ -112,7 +112,7 @@ impl Daw {
             Message::OpenFileDialog => {
                 return Task::future(
                     AsyncFileDialog::new()
-                        .add_filter("Generic Daw project file", &["pbf"])
+                        .add_filter("Generic Daw project file", &["gdp"])
                         .pick_file(),
                 )
                 .and_then(Task::done)
@@ -129,11 +129,11 @@ impl Daw {
             Message::SaveAsFileDialog => {
                 return Task::future(
                     AsyncFileDialog::new()
-                        .add_filter("Generic Daw project file", &["pbf"])
+                        .add_filter("Generic Daw project file", &["gdp"])
                         .save_file(),
                 )
                 .and_then(Task::done)
-                .map(|p| p.path().into())
+                .map(|p| p.path().with_extension("gdp").into())
                 .map(Message::SaveAsFile);
             }
             Message::ExportFileDialog => {

@@ -885,9 +885,9 @@ impl ArrangementView {
 
         info!("loading project {path:?}");
 
-        let mut pbf = Vec::new();
-        File::open(path).ok()?.read_to_end(&mut pbf).ok()?;
-        let reader = Reader::new(&pbf)?;
+        let mut gdp = Vec::new();
+        File::open(path).ok()?.read_to_end(&mut gdp).ok()?;
+        let reader = Reader::new(&gdp)?;
 
         let (mut arrangement, meter) = ArrangementWrapper::create();
         let mut futs = Vec::new();

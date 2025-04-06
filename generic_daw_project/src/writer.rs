@@ -112,8 +112,10 @@ impl Writer {
 
     #[must_use]
     pub fn finalize(self) -> Vec<u8> {
-        let mut pbf = Vec::new();
-        self.0.encode(&mut pbf).unwrap();
-        compress(&pbf, Format::Zlib, CompressionLevel::BestSize).unwrap()
+        let mut gdp = Vec::new();
+        self.0.encode(&mut gdp).unwrap();
+        let mut gdp = compress(&gdp, Format::Raw, CompressionLevel::BestSize).unwrap();
+        gdp.splice(0..0, *b"gdp");
+        gdp
     }
 }

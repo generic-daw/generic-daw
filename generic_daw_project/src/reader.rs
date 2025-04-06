@@ -8,9 +8,9 @@ pub struct Reader(proto::Project);
 
 impl Reader {
     #[must_use]
-    pub fn new(pbf: &[u8]) -> Option<Self> {
-        let pbf = decompress(pbf, Format::Zlib).ok()?.0;
-        proto::Project::decode(&mut Cursor::new(pbf)).map(Self).ok()
+    pub fn new(gdp: &[u8]) -> Option<Self> {
+        let gdp = decompress(gdp.strip_prefix(b"gdp")?, Format::Raw).ok()?.0;
+        proto::Project::decode(&mut Cursor::new(gdp)).map(Self).ok()
     }
 
     pub fn iter_audios(
@@ -21,12 +21,9 @@ impl Reader {
             &proto::project::Audio,
         ),
     > {
-        self.0.audios.iter().zip(0..).map(|(audio, index)| {
-            (
-                proto::project::track::audio_clip::AudioIndex { index },
-                audio,
-            )
-        })
+        (0..)
+            .map(|index| proto::project::track::audio_clip::AudioIndex { index })
+            .zip(&self.0.audios)
     }
 
     pub fn iter_midis(
@@ -37,11 +34,9 @@ impl Reader {
             &proto::project::Midi,
         ),
     > {
-        self.0
-            .midis
-            .iter()
-            .zip(0..)
-            .map(|(midi, index)| (proto::project::track::midi_clip::MidiIndex { index }, midi))
+        (0..)
+            .map(|index| proto::project::track::midi_clip::MidiIndex { index })
+            .zip(&self.0.midis)
     }
 
     pub fn iter_tracks(
@@ -53,13 +48,10 @@ impl Reader {
             Option<&proto::project::Channel>,
         ),
     > {
-        self.0.tracks.iter().zip(0..).map(|(track, index)| {
-            (
-                proto::project::track::TrackIndex { index },
-                &*track.clips,
-                track.channel.as_ref(),
-            )
-        })
+        (0..)
+            .map(|index| proto::project::track::TrackIndex { index })
+            .zip(&self.0.tracks)
+            .map(|(index, track)| (index, &*track.clips, track.channel.as_ref()))
     }
 
     pub fn iter_channels(
@@ -70,11 +62,9 @@ impl Reader {
             &proto::project::Channel,
         ),
     > {
-        self.0
-            .channels
-            .iter()
-            .zip(0..)
-            .map(|(channel, index)| (proto::project::channel::ChannelIndex { index }, channel))
+        (0..)
+            .map(|index| proto::project::channel::ChannelIndex { index })
+            .zip(&self.0.channels)
     }
 
     pub fn iter_connections_track_channel(
@@ -85,16 +75,18 @@ impl Reader {
             proto::project::channel::ChannelIndex,
         ),
     > {
-        self.0.tracks.iter().zip(0..).flat_map(|(track, index)| {
-            let index = proto::project::track::TrackIndex { index };
-            track
-                .channel
-                .as_ref()
-                .map(|channel| &channel.connections)
-                .into_iter()
-                .flatten()
-                .map(move |&channel| (index, channel))
-        })
+        (0..)
+            .map(|index| proto::project::track::TrackIndex { index })
+            .zip(&self.0.tracks)
+            .flat_map(|(index, track)| {
+                track
+                    .channel
+                    .as_ref()
+                    .map(|channel| &channel.connections)
+                    .into_iter()
+                    .flatten()
+                    .map(move |&channel| (index, channel))
+            })
     }
 
     pub fn iter_connections_channel_channel(
@@ -105,12 +97,10 @@ impl Reader {
             proto::project::channel::ChannelIndex,
         ),
     > {
-        self.0
-            .channels
-            .iter()
-            .zip(0..)
-            .flat_map(|(channel, index)| {
-                let index = proto::project::channel::ChannelIndex { index };
+        (0..)
+            .map(|index| proto::project::channel::ChannelIndex { index })
+            .zip(&self.0.channels)
+            .flat_map(|(index, channel)| {
                 channel
                     .connections
                     .iter()
