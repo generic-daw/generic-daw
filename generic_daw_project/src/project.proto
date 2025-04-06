@@ -8,7 +8,11 @@ message Project {
     }
 
     message Audio {
-        repeated string components = 1;
+        message Path {
+            repeated string components = 1;
+        }
+
+        repeated Path paths = 1;
     }
 
     message Midi {

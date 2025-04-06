@@ -47,8 +47,8 @@ pub enum Message {
     SaveAsFileDialog,
     ExportFileDialog,
 
-    OpenFile(Box<Path>),
-    SaveAsFile(Box<Path>),
+    OpenFile(Arc<Path>),
+    SaveAsFile(Arc<Path>),
 
     Stop,
     TogglePlay,
@@ -62,9 +62,9 @@ pub enum Message {
 
 pub struct Daw {
     arrangement: ArrangementView,
-    open_project: Option<Box<Path>>,
+    open_project: Option<Arc<Path>>,
     file_tree: FileTree,
-    _sample_dirs: Vec<Box<Path>>,
+    sample_dirs: Vec<Box<Path>>,
     split_at: f32,
     meter: Arc<Meter>,
 }
@@ -91,7 +91,7 @@ impl Daw {
                 arrangement,
                 open_project: None,
                 file_tree: (&sample_dirs).into(),
-                _sample_dirs: sample_dirs,
+                sample_dirs,
                 split_at: 300.0,
                 meter,
             },
@@ -120,11 +120,11 @@ impl Daw {
                 .map(Message::OpenFile);
             }
             Message::SaveFile => {
-                if let Some(path) = self.open_project.as_ref() {
-                    self.arrangement.save(path);
-                } else {
-                    return self.update(Message::SaveAsFileDialog);
-                }
+                return self.update(
+                    self.open_project
+                        .clone()
+                        .map_or(Message::SaveAsFileDialog, Message::SaveAsFile),
+                );
             }
             Message::SaveAsFileDialog => {
                 return Task::future(
@@ -148,7 +148,9 @@ impl Daw {
                 .map(Message::Arrangement);
             }
             Message::OpenFile(path) => {
-                if let Some((arrangement, meter, futs)) = ArrangementView::load(&path) {
+                if let Some((arrangement, meter, futs)) =
+                    ArrangementView::load(&path, &self.sample_dirs)
+                {
                     self.arrangement = arrangement;
                     self.meter = meter;
                     self.open_project = Some(path);
@@ -156,7 +158,7 @@ impl Daw {
                 }
             }
             Message::SaveAsFile(path) => {
-                self.arrangement.save(&path);
+                self.arrangement.save(&path, &self.sample_dirs);
                 self.open_project = Some(path);
             }
             Message::Stop => {

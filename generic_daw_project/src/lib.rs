@@ -1,7 +1,10 @@
 pub mod proto {
     #![expect(clippy::derive_partial_eq_without_eq)]
 
-    use std::{ffi::CStr, path::PathBuf};
+    use std::{
+        ffi::CStr,
+        path::{Path, PathBuf},
+    };
 
     include!(concat!(env!("OUT_DIR"), "/project.rs"));
 
@@ -22,9 +25,10 @@ pub mod proto {
     index_impl_eq_hash!(project::channel::ChannelIndex);
 
     impl project::Audio {
-        #[must_use]
-        pub fn path(&self) -> PathBuf {
-            self.components.iter().collect()
+        pub fn iter_paths(&self) -> impl Iterator<Item: AsRef<Path>> {
+            self.paths
+                .iter()
+                .map(|path| path.components.iter().collect::<PathBuf>())
         }
     }
 

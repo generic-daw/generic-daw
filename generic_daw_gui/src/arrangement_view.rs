@@ -719,7 +719,7 @@ impl ArrangementView {
         }
     }
 
-    pub fn save(&mut self, path: &Path) {
+    pub fn save(&mut self, path: &Path, sample_dirs: &[Box<Path>]) {
         let mut writer = Writer::new(
             u32::from(self.meter.bpm.load(Acquire)),
             self.meter.numerator.load(Acquire) as u32,
@@ -736,8 +736,15 @@ impl ArrangementView {
                 }
                 LoadStatus::Loading(..) => continue,
             };
-
-            audios.insert(path.clone(), writer.push_audio(path));
+            audios.insert(
+                path.clone(),
+                writer.push_audio(
+                    sample_dirs
+                        .iter()
+                        .filter_map(|dir| path.strip_prefix(dir).ok())
+                        .chain(once(&*path)),
+                ),
+            );
         }
 
         let mut midis = HashMap::new();
@@ -841,7 +848,10 @@ impl ArrangementView {
             .unwrap();
     }
 
-    pub fn load(path: &Path) -> Option<(Self, Arc<Meter>, Task<Message>)> {
+    pub fn load(
+        path: &Path,
+        sample_dirs: &[Box<Path>],
+    ) -> Option<(Self, Arc<Meter>, Task<Message>)> {
         #[must_use]
         fn load_channel(
             node: &MixerNode,
@@ -898,15 +908,27 @@ impl ArrangementView {
                 let sender = sender.clone();
                 let sample_rate = meter.sample_rate;
                 s.spawn(move || {
-                    let audio = InterleavedAudio::create(path.path().into(), sample_rate);
-                    sender.send((idx, audio)).unwrap();
+                    for path in path.iter_paths() {
+                        let path = path.as_ref();
+
+                        for path in sample_dirs
+                            .iter()
+                            .map(|dir| dir.join(path).into())
+                            .chain(once(path.into()))
+                        {
+                            if let Some(audio) = InterleavedAudio::create(path, sample_rate) {
+                                sender.send((idx, audio)).unwrap();
+                                return;
+                            }
+                        }
+                    }
                 });
             }
         });
 
         let mut audios = HashMap::new();
         while let Ok((idx, audio)) = receiver.try_recv() {
-            audios.insert(idx, audio?);
+            audios.insert(idx, audio);
         }
 
         let mut midis = HashMap::new();
