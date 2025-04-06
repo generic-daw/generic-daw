@@ -49,18 +49,14 @@ impl Reader {
         Item = (
             proto::project::track::TrackIndex,
             &[proto::project::track::Clip],
-            &[proto::project::channel::Plugin],
-            f32,
-            f32,
+            Option<&proto::project::Channel>,
         ),
     > {
         self.0.tracks.iter().zip(0..).map(|(track, index)| {
             (
                 proto::project::track::TrackIndex { index },
                 &*track.clips,
-                &*track.channel.as_ref().unwrap().plugins,
-                track.channel.as_ref().unwrap().volume,
-                track.channel.as_ref().unwrap().pan,
+                track.channel.as_ref(),
             )
         })
     }
@@ -70,19 +66,14 @@ impl Reader {
     ) -> impl Iterator<
         Item = (
             proto::project::channel::ChannelIndex,
-            &[proto::project::channel::Plugin],
-            f32,
-            f32,
+            &proto::project::Channel,
         ),
     > {
-        self.0.channels.iter().zip(0..).map(|(channel, index)| {
-            (
-                proto::project::channel::ChannelIndex { index },
-                &*channel.plugins,
-                channel.volume,
-                channel.pan,
-            )
-        })
+        self.0
+            .channels
+            .iter()
+            .zip(0..)
+            .map(|(channel, index)| (proto::project::channel::ChannelIndex { index }, channel))
     }
 
     pub fn iter_connections_track_channel(
@@ -98,9 +89,9 @@ impl Reader {
             track
                 .channel
                 .as_ref()
-                .unwrap()
-                .connections
-                .iter()
+                .map(|channel| &channel.connections)
+                .into_iter()
+                .flatten()
                 .map(move |&channel| (index, channel))
         })
     }

@@ -1,4 +1,5 @@
 use generic_daw_utils::NoDebug;
+use log::info;
 use rubato::{
     Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType,
     WindowFunction, calculate_cutoff,
@@ -26,8 +27,12 @@ pub struct InterleavedAudio {
 impl InterleavedAudio {
     #[must_use]
     pub fn create(path: Arc<Path>, sample_rate: u32) -> Option<Arc<Self>> {
+        info!("loading sample {path:?}");
+
         let samples = Self::read_audio_file(&path, sample_rate)?;
         let lods = Self::create_lod(&samples);
+
+        info!("loaded sample {path:?}");
 
         let audio = Self {
             samples: samples.into(),

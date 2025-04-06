@@ -852,14 +852,18 @@ impl ArrangementView {
     }
 
     pub fn load(path: &Path) -> Option<(Self, Arc<Meter>, Task<Message>)> {
-        fn load_plugins(
-            plugins: &[proto::project::channel::Plugin],
+        #[must_use]
+        fn load_channel(
             node: &MixerNode,
+            channel: &proto::project::Channel,
             meter: &Meter,
             plugins_by_channel: &mut HoleyVec<Vec<(PluginId, PluginDescriptor)>>,
             futs: &mut Vec<Task<Message>>,
         ) -> Option<()> {
-            for plugin in plugins {
+            node.volume.store(channel.volume, Release);
+            node.pan.store(channel.pan, Release);
+
+            for plugin in &channel.plugins {
                 let id = plugin.id();
                 let descriptor = PLUGIN_DESCRIPTORS.iter().find(|d| &*d.id == id)?;
 
@@ -889,6 +893,8 @@ impl ArrangementView {
             Some(())
         }
 
+        info!("loading project {path:?}");
+
         let mut pbf = Vec::new();
         File::open(path).ok()?.read_to_end(&mut pbf).ok()?;
         let reader = Reader::new(&pbf)?;
@@ -903,7 +909,6 @@ impl ArrangementView {
                 let sender = sender.clone();
                 let sample_rate = meter.sample_rate;
                 s.spawn(move || {
-                    info!("loading {:?}", path.path());
                     let Some(audio) = InterleavedAudio::create(path.path().into(), sample_rate)
                     else {
                         err.store(true, Release);
@@ -916,12 +921,11 @@ impl ArrangementView {
         if err.load(Acquire) {
             return None;
         }
+
         let mut audios = HoleyVec::default();
         while let Ok((idx, audio)) = receiver.try_recv() {
             audios.insert(idx.index as usize, audio);
         }
-
-        info!("loaded project samples");
 
         let mut midis = HoleyVec::default();
         for (idx, notes) in reader.iter_midis() {
@@ -942,23 +946,18 @@ impl ArrangementView {
             );
         }
 
-        info!("loaded project patterns");
-
         let mut plugins_by_channel = HoleyVec::default();
 
         let mut tracks = HoleyVec::default();
-        for (idx, clips, plugins, volume, pan) in reader.iter_tracks() {
+        for (idx, clips, channel) in reader.iter_tracks() {
             let mut track = Track::new(meter.clone());
-            track.node.volume.store(volume, Release);
-            track.node.pan.store(pan, Release);
-
-            load_plugins(
-                plugins,
+            load_channel(
                 &track.node,
+                channel?,
                 &meter,
                 &mut plugins_by_channel,
                 &mut futs,
-            );
+            )?;
 
             for clip in clips {
                 let clip = match clip.clip? {
@@ -993,30 +992,22 @@ impl ArrangementView {
             arrangement.push_track(track);
         }
 
-        info!("loaded project tracks");
-
         let mut channels = HoleyVec::default();
         let mut iter_channels = reader.iter_channels();
 
         let node = &arrangement.master().0;
-        let (idx, plugins, volume, pan) = iter_channels.next()?;
-        node.volume.store(volume, Release);
-        node.pan.store(pan, Release);
+        let (idx, channel) = iter_channels.next()?;
+        load_channel(node, channel, &meter, &mut plugins_by_channel, &mut futs)?;
         channels.insert(idx.index as usize, node.id());
-        load_plugins(plugins, node, &meter, &mut plugins_by_channel, &mut futs);
 
-        for (idx, plugins, volume, pan) in iter_channels {
+        for (idx, channel) in iter_channels {
             let node = Arc::new(MixerNode::default());
 
-            node.volume.store(volume, Release);
-            node.pan.store(pan, Release);
-            channels.insert(idx.index as usize, node.id());
-            load_plugins(plugins, &node, &meter, &mut plugins_by_channel, &mut futs);
+            load_channel(&node, channel, &meter, &mut plugins_by_channel, &mut futs)?;
 
+            channels.insert(idx.index as usize, node.id());
             arrangement.push_channel(node);
         }
-
-        info!("loaded project channels");
 
         for (from, to) in reader.iter_connections_track_channel() {
             futs.push(Task::perform(
@@ -1038,7 +1029,7 @@ impl ArrangementView {
             ));
         }
 
-        info!("loaded project connections");
+        info!("loaded project {path:?}");
 
         Some((
             Self {
