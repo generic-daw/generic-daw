@@ -1,9 +1,7 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
-    components::{
-        empty_widget, styled_button, styled_pick_list, styled_scrollable_with_direction, styled_svg,
-    },
-    file_tree::FileTree,
+    components::{empty_widget, styled_button, styled_pick_list, styled_svg},
+    file_tree::{FileTree, FileTreeAction},
     icons::{PAUSE, PLAY, STOP},
     stylefns::button_with_base,
     widget::{AnimatedDot, BpmInput, LINE_HEIGHT, VSplit, vsplit::Strategy},
@@ -17,14 +15,11 @@ use iced::{
     Element, Event, Subscription, Task,
     event::{self, Status},
     keyboard,
-    widget::{
-        button, column, horizontal_space, row,
-        scrollable::{Direction, Scrollbar},
-    },
+    widget::{button, column, horizontal_space, row},
     window::{self, Id, frames},
 };
 use log::trace;
-use rfd::{AsyncFileDialog, FileHandle};
+use rfd::AsyncFileDialog;
 use std::{
     collections::BTreeMap,
     path::Path,
@@ -45,14 +40,15 @@ pub enum Message {
     Redraw,
 
     Arrangement(ArrangementMessage),
-    FileTree(Arc<Path>),
+    FileTree(FileTreeAction),
 
-    SamplesFileDialog,
-    SaveFileDialog,
     OpenFileDialog,
+    SaveFile,
+    SaveAsFileDialog,
     ExportFileDialog,
 
     OpenFile(Box<Path>),
+    SaveAsFile(Box<Path>),
 
     Stop,
     TogglePlay,
@@ -66,7 +62,9 @@ pub enum Message {
 
 pub struct Daw {
     arrangement: ArrangementView,
+    open_project: Option<Box<Path>>,
     file_tree: FileTree,
+    _sample_dirs: Vec<Box<Path>>,
     split_at: f32,
     meter: Arc<Meter>,
 }
@@ -81,12 +79,19 @@ impl Daw {
 
         let (arrangement, meter) = ArrangementView::create();
 
-        _ = std::fs::create_dir(dirs::data_dir().unwrap().join("Generic Daw"));
+        let home_dir = dirs::home_dir().unwrap().into();
+        let data_dir = dirs::data_dir().unwrap().join("Generic Daw").into();
+
+        _ = std::fs::create_dir(&data_dir);
+
+        let sample_dirs = vec![home_dir, data_dir];
 
         (
             Self {
                 arrangement,
-                file_tree: FileTree::new(dirs::home_dir().unwrap().as_path()),
+                open_project: None,
+                file_tree: (&sample_dirs).into(),
+                _sample_dirs: sample_dirs,
                 split_at: 300.0,
                 meter,
             },
@@ -102,32 +107,8 @@ impl Daw {
             Message::Arrangement(message) => {
                 return self.arrangement.update(message).map(Message::Arrangement);
             }
-            Message::FileTree(path) => self.file_tree.update(&path),
+            Message::FileTree(action) => return self.handle_file_tree_action(action),
             Message::ChangedTab(tab) => self.arrangement.change_tab(tab),
-            Message::SamplesFileDialog => {
-                return Task::future(AsyncFileDialog::new().pick_files()).and_then(|paths| {
-                    Task::batch(
-                        paths
-                            .iter()
-                            .map(FileHandle::path)
-                            .map(Arc::from)
-                            .map(ArrangementMessage::SampleLoadFromFile)
-                            .map(Message::Arrangement)
-                            .map(Task::done),
-                    )
-                });
-            }
-            Message::SaveFileDialog => {
-                return Task::future(
-                    AsyncFileDialog::new()
-                        .add_filter("Generic Daw project file", &["pbf"])
-                        .save_file(),
-                )
-                .and_then(Task::done)
-                .map(|p| p.path().into())
-                .map(ArrangementMessage::Save)
-                .map(Message::Arrangement);
-            }
             Message::OpenFileDialog => {
                 return Task::future(
                     AsyncFileDialog::new()
@@ -137,6 +118,23 @@ impl Daw {
                 .and_then(Task::done)
                 .map(|p| p.path().into())
                 .map(Message::OpenFile);
+            }
+            Message::SaveFile => {
+                if let Some(path) = self.open_project.as_ref() {
+                    self.arrangement.save(path);
+                } else {
+                    return self.update(Message::SaveAsFileDialog);
+                }
+            }
+            Message::SaveAsFileDialog => {
+                return Task::future(
+                    AsyncFileDialog::new()
+                        .add_filter("Generic Daw project file", &["pbf"])
+                        .save_file(),
+                )
+                .and_then(Task::done)
+                .map(|p| p.path().into())
+                .map(Message::SaveAsFile);
             }
             Message::ExportFileDialog => {
                 return Task::future(
@@ -153,8 +151,13 @@ impl Daw {
                 if let Some((arrangement, meter, futs)) = ArrangementView::load(&path) {
                     self.arrangement = arrangement;
                     self.meter = meter;
+                    self.open_project = Some(path);
                     return futs.map(Message::Arrangement);
                 }
+            }
+            Message::SaveAsFile(path) => {
+                self.arrangement.save(&path);
+                self.open_project = Some(path);
             }
             Message::Stop => {
                 self.meter.playing.store(false, Release);
@@ -186,6 +189,23 @@ impl Daw {
         Task::none()
     }
 
+    pub fn handle_file_tree_action(&mut self, action: FileTreeAction) -> Task<Message> {
+        match action {
+            FileTreeAction::None => {}
+            FileTreeAction::File(path) => {
+                return self
+                    .arrangement
+                    .update(ArrangementMessage::SampleLoadFromFile(path))
+                    .map(Message::Arrangement);
+            }
+            FileTreeAction::Dir(path) => {
+                self.file_tree.update(&path);
+            }
+        }
+
+        Task::none()
+    }
+
     pub fn view(&self, window: Id) -> Element<'_, Message> {
         if self.arrangement.clap_host.is_plugin_window(window) {
             return empty_widget().into();
@@ -200,12 +220,15 @@ impl Daw {
 
         column![
             row![
-                row![
-                    styled_button("Load Samples").on_press(Message::SamplesFileDialog),
-                    styled_button("Save").on_press(Message::SaveFileDialog),
-                    styled_button("Open").on_press(Message::OpenFileDialog),
-                    styled_button("Export").on_press(Message::ExportFileDialog),
-                ],
+                styled_pick_list(["Open", "Save", "Save As", "Export"], Some("File"), |s| {
+                    match s {
+                        "Open" => Message::OpenFileDialog,
+                        "Save" => Message::SaveFile,
+                        "Save As" => Message::SaveAsFileDialog,
+                        "Export" => Message::ExportFileDialog,
+                        _ => unreachable!(),
+                    }
+                }),
                 row![
                     styled_button(
                         styled_svg(if self.meter.playing.load(Acquire) {
@@ -250,10 +273,7 @@ impl Daw {
             .spacing(20)
             .align_y(Center),
             VSplit::new(
-                styled_scrollable_with_direction(
-                    self.file_tree.view().0,
-                    Direction::Vertical(Scrollbar::default()),
-                ),
+                self.file_tree.view().map(Message::FileTree),
                 self.arrangement.view().map(Message::Arrangement),
                 Message::SplitAt
             )
@@ -295,6 +315,15 @@ impl Daw {
                             (true, false, false) => match key {
                                 keyboard::Key::Character(c) => match c.as_str() {
                                     "e" => Some(Message::ExportFileDialog),
+                                    "s" => Some(Message::SaveFile),
+                                    "o" => Some(Message::OpenFileDialog),
+                                    _ => None,
+                                },
+                                _ => None,
+                            },
+                            (true, true, false) => match key {
+                                keyboard::Key::Character(c) => match c.as_str() {
+                                    "s" => Some(Message::SaveAsFileDialog),
                                     _ => None,
                                 },
                                 _ => None,

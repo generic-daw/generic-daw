@@ -1,7 +1,6 @@
-use super::file::File;
+use super::{FileTreeAction, file::File};
 use crate::{
     components::{styled_button, styled_svg},
-    daw::Message as DawMessage,
     icons::CHEVRON_RIGHT,
     widget::{Clipped, LINE_HEIGHT, shaping_of},
 };
@@ -57,7 +56,7 @@ impl Dir {
         }
     }
 
-    pub fn view(&self) -> (Element<'_, DawMessage>, f32) {
+    pub fn view(&self) -> (Element<'_, FileTreeAction>, f32) {
         let mut col = column!(mouse_area(
             styled_button(row![
                 Clipped::new(
@@ -74,7 +73,7 @@ impl Dir {
             ])
             .width(Length::Fill)
             .padding(0)
-            .on_press(DawMessage::FileTree(self.path.clone()))
+            .on_press(FileTreeAction::Dir(self.path.clone()))
         ));
 
         let mut height = 0.0;

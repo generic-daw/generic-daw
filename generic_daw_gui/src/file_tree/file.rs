@@ -1,7 +1,6 @@
+use super::FileTreeAction;
 use crate::{
-    arrangement_view::Message as ArrangementMessage,
     components::{styled_button, styled_svg},
-    daw::Message as DawMessage,
     icons::{AUDIO_FILE, GENERIC_FILE},
     widget::{Clipped, LINE_HEIGHT, shaping_of},
 };
@@ -46,7 +45,7 @@ impl File {
         }
     }
 
-    pub fn view(&self) -> (Element<'_, DawMessage>, f32) {
+    pub fn view(&self) -> (Element<'_, FileTreeAction>, f32) {
         (
             mouse_area(
                 styled_button(row![
@@ -60,11 +59,9 @@ impl File {
                 ])
                 .width(Length::Fill)
                 .padding(0)
-                .on_press(DawMessage::FileTree(self.path.clone())),
+                .on_press(FileTreeAction::None),
             )
-            .on_double_click(DawMessage::Arrangement(
-                ArrangementMessage::SampleLoadFromFile(self.path.clone()),
-            ))
+            .on_double_click(FileTreeAction::File(self.path.clone()))
             .into(),
             LINE_HEIGHT,
         )

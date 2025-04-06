@@ -115,8 +115,6 @@ pub enum Message {
     PianoRollPositionScaleDelta(Vec2, Vec2),
 
     SplitAt(f32),
-
-    Save(Box<Path>),
 }
 
 #[derive(Clone, Debug)]
@@ -604,9 +602,6 @@ impl ArrangementView {
                 }
             }
             Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
-            Message::Save(path) => {
-                self.save(&path);
-            }
         }
 
         Task::none()
