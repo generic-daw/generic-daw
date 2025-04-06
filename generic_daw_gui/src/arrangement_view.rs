@@ -859,12 +859,16 @@ impl ArrangementView {
                 let id = plugin.id();
                 let descriptor = PLUGIN_DESCRIPTORS.iter().find(|d| &*d.id == id)?;
 
-                let (gui, receiver, audio_processor) = clap_host::init(
+                let (mut gui, receiver, audio_processor) = clap_host::init(
                     PLUGIN_BUNDLES.get(descriptor)?,
                     descriptor.clone(),
                     f64::from(meter.sample_rate),
                     meter.buffer_size,
                 );
+
+                if let Some(state) = &plugin.state {
+                    gui.set_state(state);
+                }
 
                 plugins_by_channel
                     .entry(node.id().get())
