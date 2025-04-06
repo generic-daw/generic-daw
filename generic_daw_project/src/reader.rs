@@ -50,6 +50,8 @@ impl Reader {
             proto::project::track::TrackIndex,
             &[proto::project::track::Clip],
             &[proto::project::channel::Plugin],
+            f32,
+            f32,
         ),
     > {
         self.0.tracks.iter().zip(0..).map(|(track, index)| {
@@ -57,6 +59,8 @@ impl Reader {
                 proto::project::track::TrackIndex { index },
                 &*track.clips,
                 &*track.channel.as_ref().unwrap().plugins,
+                track.channel.as_ref().unwrap().volume,
+                track.channel.as_ref().unwrap().pan,
             )
         })
     }
@@ -67,12 +71,16 @@ impl Reader {
         Item = (
             proto::project::channel::ChannelIndex,
             &[proto::project::channel::Plugin],
+            f32,
+            f32,
         ),
     > {
         self.0.channels.iter().zip(0..).map(|(channel, index)| {
             (
                 proto::project::channel::ChannelIndex { index },
                 &*channel.plugins,
+                channel.volume,
+                channel.pan,
             )
         })
     }

@@ -49,12 +49,16 @@ impl Writer {
         &mut self,
         clips: impl IntoIterator<Item = proto::project::track::Clip>,
         plugins: impl IntoIterator<Item = proto::project::channel::Plugin>,
+        volume: f32,
+        pan: f32,
     ) -> proto::project::track::TrackIndex {
         self.0.tracks.push(proto::project::Track {
             clips: clips.into_iter().collect(),
             channel: Some(proto::project::Channel {
                 connections: Vec::new(),
                 plugins: plugins.into_iter().collect(),
+                volume,
+                pan,
             }),
         });
 
@@ -67,10 +71,14 @@ impl Writer {
     pub fn push_channel(
         &mut self,
         plugins: impl IntoIterator<Item = proto::project::channel::Plugin>,
+        volume: f32,
+        pan: f32,
     ) -> proto::project::channel::ChannelIndex {
         self.0.channels.push(proto::project::Channel {
             connections: Vec::new(),
             plugins: plugins.into_iter().collect(),
+            volume,
+            pan,
         });
 
         proto::project::channel::ChannelIndex {
