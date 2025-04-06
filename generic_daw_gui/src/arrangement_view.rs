@@ -19,12 +19,12 @@ use arrangement::NodeType;
 use dragking::{DragEvent, DropPosition};
 use fragile::Fragile;
 use generic_daw_core::{
-    AudioClip, Clip, InterleavedAudio, Meter, MidiClip, MidiNote, MixerNode, Position, Recording,
-    Track,
+    AudioClip, Clip, InterleavedAudio, Meter, MidiClip, MidiKey, MidiNote, MixerNode, Position,
+    Recording, Track,
     audio_graph::{NodeId, NodeImpl as _},
     clap_host::{self, MainThreadMessage, PluginDescriptor, PluginId},
 };
-use generic_daw_project::{proto, writer::Writer};
+use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2};
 use iced::{
     Alignment, Element, Function as _, Length, Radians, Subscription, Task, Theme, border,
@@ -38,6 +38,7 @@ use iced::{
         vertical_rule, vertical_slider, vertical_space,
     },
 };
+use log::info;
 use smol::unblock;
 use std::{
     cell::Cell,
@@ -45,13 +46,17 @@ use std::{
     f32::{self, consts::FRAC_PI_2},
     fs::File,
     hash::{DefaultHasher, Hash as _, Hasher as _},
-    io::Write as _,
+    io::{Read as _, Write as _},
     iter::once,
     ops::Deref as _,
     path::Path,
     sync::{
         Arc, Mutex, Weak,
-        atomic::Ordering::{AcqRel, Acquire, Release},
+        atomic::{
+            AtomicBool,
+            Ordering::{AcqRel, Acquire, Release},
+        },
+        mpsc,
     },
     time::Instant,
 };
@@ -83,11 +88,10 @@ pub enum Message {
     ChannelToggleEnabled(NodeId),
 
     PluginLoad(PluginDescriptor),
-
-    AudioEffectRemove(usize),
-    AudioEffectMixChanged(usize, f32),
-    AudioEffectToggleEnabled(usize),
-    AudioEffectsReordered(DragEvent),
+    PluginRemove(usize),
+    PluginMixChanged(usize, f32),
+    PluginToggleEnabled(usize),
+    PluginsReordered(DragEvent),
 
     SampleLoadFromFile(Arc<Path>),
     SampleLoadedFromFile(Arc<Path>, Option<Arc<InterleavedAudio>>),
@@ -135,9 +139,9 @@ pub struct ArrangementView {
 
     arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
-    loading_samples: HashSet<Arc<Path>>,
-    loaded_samples: HashMap<Arc<Path>, LoadStatus>,
-    patterns: Vec<Weak<ArcSwap<Vec<MidiNote>>>>,
+    loading: HashSet<Arc<Path>>,
+    audios: HashMap<Arc<Path>, LoadStatus>,
+    midis: Vec<Weak<ArcSwap<Vec<MidiNote>>>>,
     plugins_by_channel: HoleyVec<Vec<(PluginId, PluginDescriptor)>>,
 
     tab: Tab,
@@ -166,9 +170,9 @@ impl ArrangementView {
 
                 arrangement,
                 meter: meter.clone(),
-                loading_samples: HashSet::default(),
-                loaded_samples: HashMap::default(),
-                patterns: Vec::new(),
+                loading: HashSet::default(),
+                audios: HashMap::default(),
+                midis: Vec::new(),
                 plugins_by_channel: HoleyVec::default(),
 
                 tab: Tab::Arrangement { grabbed_clip: None },
@@ -285,15 +289,15 @@ impl ArrangementView {
                     )))))
                     .map(Message::ClapHost);
             }
-            Message::AudioEffectMixChanged(i, mix) => {
+            Message::PluginMixChanged(i, mix) => {
                 let selected = self.selected_channel.unwrap();
                 self.arrangement.node(selected).0.set_plugin_mix(i, mix);
             }
-            Message::AudioEffectToggleEnabled(i) => {
+            Message::PluginToggleEnabled(i) => {
                 let selected = self.selected_channel.unwrap();
                 self.arrangement.node(selected).0.toggle_plugin_enabled(i);
             }
-            Message::AudioEffectsReordered(event) => {
+            Message::PluginsReordered(event) => {
                 if let DragEvent::Dropped {
                     index,
                     mut target_index,
@@ -318,7 +322,7 @@ impl ArrangementView {
                     }
                 }
             }
-            Message::AudioEffectRemove(i) => {
+            Message::PluginRemove(i) => {
                 let selected = self.selected_channel.unwrap();
                 self.arrangement.node(selected).0.remove_plugin(i);
                 let id = self
@@ -336,7 +340,7 @@ impl ArrangementView {
                     .map(Message::ClapHost);
             }
             Message::SampleLoadFromFile(path) => {
-                if let Some(entry) = self.loaded_samples.get_mut(&path) {
+                if let Some(entry) = self.audios.get_mut(&path) {
                     match entry {
                         LoadStatus::Loading(count) => {
                             *count += 1;
@@ -352,9 +356,8 @@ impl ArrangementView {
                     }
                 }
 
-                self.loaded_samples
-                    .insert(path.clone(), LoadStatus::Loading(1));
-                self.loading_samples.insert(path.clone());
+                self.audios.insert(path.clone(), LoadStatus::Loading(1));
+                self.loading.insert(path.clone());
                 let sample_rate = self.meter.sample_rate;
 
                 return Task::perform(
@@ -362,16 +365,16 @@ impl ArrangementView {
                         let path = path.clone();
                         unblock(move || InterleavedAudio::create(path, sample_rate))
                     },
-                    move |audio| Message::SampleLoadedFromFile(path, audio.ok()),
+                    Message::SampleLoadedFromFile.with(path),
                 );
             }
             Message::SampleLoadedFromFile(path, audio) => {
-                self.loading_samples.remove(&path);
+                self.loading.remove(&path);
 
                 if let Some(audio) = audio {
-                    let count = match self.loaded_samples[&audio.path] {
+                    let count = match self.audios[&audio.path] {
                         LoadStatus::Loading(count) => {
-                            self.loaded_samples.insert(
+                            self.audios.insert(
                                 audio.path.clone(),
                                 LoadStatus::Loaded(Arc::downgrade(&audio)),
                             );
@@ -418,7 +421,7 @@ impl ArrangementView {
             }
             Message::AddMidiClip(track, pos) => {
                 let pattern = Arc::default();
-                self.patterns.push(Arc::downgrade(&pattern));
+                self.midis.push(Arc::downgrade(&pattern));
                 let clip = MidiClip::create(pattern, self.meter.clone());
                 clip.position
                     .trim_end_to(Position::BEAT * self.meter.numerator.load(Acquire) as u32);
@@ -733,7 +736,7 @@ impl ArrangementView {
         );
 
         let mut audios = HashMap::new();
-        for entry in &self.loaded_samples {
+        for entry in &self.audios {
             let path = match entry.1 {
                 LoadStatus::Loaded(audio) => {
                     let Some(audio) = audio.upgrade() else {
@@ -748,7 +751,7 @@ impl ArrangementView {
         }
 
         let mut midis = HashMap::new();
-        for entry in &self.patterns {
+        for entry in &self.midis {
             let Some(pattern) = entry.upgrade() else {
                 continue;
             };
@@ -761,9 +764,9 @@ impl ArrangementView {
                         .iter()
                         .map(|note| proto::project::midi::Note {
                             key: u32::from(note.key.0),
-                            velocity: note.velocity as f32,
-                            start: note.start.u32(),
-                            end: note.end.u32(),
+                            velocity: note.velocity,
+                            start: note.start.into(),
+                            end: note.end.into(),
                         }),
                 ),
             );
@@ -778,18 +781,18 @@ impl ArrangementView {
                         Clip::Audio(audio) => proto::project::track::AudioClip {
                             audio: Some(audios[&audio.audio.path]),
                             position: Some(proto::project::track::ClipPosition {
-                                global_start: audio.position.get_global_start().u32(),
-                                global_end: audio.position.get_global_end().u32(),
-                                clip_start: audio.position.get_clip_start().u32(),
+                                global_start: audio.position.get_global_start().into(),
+                                global_end: audio.position.get_global_end().into(),
+                                clip_start: audio.position.get_clip_start().into(),
                             }),
                         }
                         .into(),
                         Clip::Midi(midi) => proto::project::track::MidiClip {
                             midi: Some(midis[&Arc::as_ptr(midi).addr()]),
                             position: Some(proto::project::track::ClipPosition {
-                                global_start: midi.position.get_global_start().u32(),
-                                global_end: midi.position.get_global_end().u32(),
-                                clip_start: midi.position.get_clip_start().u32(),
+                                global_start: midi.position.get_global_start().into(),
+                                global_end: midi.position.get_global_end().into(),
+                                clip_start: midi.position.get_clip_start().into(),
                             }),
                         }
                         .into(),
@@ -844,6 +847,224 @@ impl ArrangementView {
             .unwrap();
     }
 
+    pub fn load(path: &Path) -> Option<(Self, Arc<Meter>, Task<Message>)> {
+        fn load_plugins(
+            plugins: &[proto::project::channel::Plugin],
+            node: &MixerNode,
+            meter: &Meter,
+            plugins_by_channel: &mut HoleyVec<Vec<(PluginId, PluginDescriptor)>>,
+            futs: &mut Vec<Task<Message>>,
+        ) -> Option<()> {
+            for plugin in plugins {
+                let id = plugin.id();
+                let descriptor = PLUGIN_DESCRIPTORS.iter().find(|d| &*d.id == id)?;
+
+                let (gui, receiver, audio_processor) = clap_host::init(
+                    PLUGIN_BUNDLES.get(descriptor)?,
+                    descriptor.clone(),
+                    f64::from(meter.sample_rate),
+                    meter.buffer_size,
+                );
+
+                plugins_by_channel
+                    .entry(node.id().get())
+                    .get_or_insert_default()
+                    .push((audio_processor.id(), descriptor.clone()));
+
+                node.add_plugin(audio_processor);
+
+                futs.push(Task::done(Message::ClapHost(ClapHostMessage::Opened(
+                    Arc::new(Mutex::new((Fragile::new(gui), receiver))),
+                ))));
+            }
+
+            Some(())
+        }
+
+        let mut pbf = Vec::new();
+        File::open(path).ok()?.read_to_end(&mut pbf).ok()?;
+        let reader = Reader::new(&pbf)?;
+
+        let (mut arrangement, meter) = ArrangementWrapper::create();
+        let mut futs = Vec::new();
+
+        let err = &AtomicBool::new(false);
+        let (sender, receiver) = mpsc::channel();
+        std::thread::scope(|s| {
+            for (idx, path) in reader.iter_audios() {
+                let sender = sender.clone();
+                let sample_rate = meter.sample_rate;
+                s.spawn(move || {
+                    info!("loading {:?}", path.path());
+                    let Some(audio) = InterleavedAudio::create(path.path().into(), sample_rate)
+                    else {
+                        err.store(true, Release);
+                        return;
+                    };
+                    sender.send((idx, audio)).unwrap();
+                });
+            }
+        });
+        if err.load(Acquire) {
+            return None;
+        }
+        let mut audios = HoleyVec::default();
+        while let Ok((idx, audio)) = receiver.try_recv() {
+            audios.insert(idx.index as usize, audio);
+        }
+
+        info!("loaded project samples");
+
+        let mut midis = HoleyVec::default();
+        for (idx, notes) in reader.iter_midis() {
+            let pattern = notes
+                .notes
+                .iter()
+                .map(|note| MidiNote {
+                    channel: 0,
+                    key: MidiKey(note.key as u8),
+                    velocity: note.velocity,
+                    start: note.start.into(),
+                    end: note.end.into(),
+                })
+                .collect();
+            midis.insert(
+                idx.index as usize,
+                Arc::new(ArcSwap::new(Arc::new(pattern))),
+            );
+        }
+
+        info!("loaded project patterns");
+
+        let mut plugins_by_channel = HoleyVec::default();
+
+        let mut tracks = HoleyVec::default();
+        for (idx, clips, plugins) in reader.iter_tracks() {
+            let mut track = Track::new(meter.clone());
+
+            load_plugins(
+                plugins,
+                &track.node,
+                &meter,
+                &mut plugins_by_channel,
+                &mut futs,
+            );
+
+            for clip in clips {
+                let clip = match clip.clip? {
+                    proto::project::track::clip::Clip::Audio(audio) => {
+                        let clip = AudioClip::create(
+                            audios.get(audio.audio?.index as usize)?.clone(),
+                            meter.clone(),
+                        );
+                        clip.position.move_to(audio.position?.global_start.into());
+                        clip.position.trim_end_to(audio.position?.global_end.into());
+                        clip.position
+                            .trim_start_to(audio.position?.clip_start.into());
+                        Clip::Audio(clip)
+                    }
+                    proto::project::track::clip::Clip::Midi(midi) => {
+                        let clip = MidiClip::create(
+                            midis.get(midi.midi?.index as usize)?.clone(),
+                            meter.clone(),
+                        );
+                        clip.position.move_to(midi.position?.global_start.into());
+                        clip.position.trim_end_to(midi.position?.global_end.into());
+                        clip.position
+                            .trim_start_to(midi.position?.clip_start.into());
+                        Clip::Midi(clip)
+                    }
+                };
+
+                track.clips.push(clip);
+            }
+
+            tracks.insert(idx.index as usize, track.id());
+            arrangement.push_track(track);
+        }
+
+        info!("loaded project tracks");
+
+        let mut channels = HoleyVec::default();
+        let mut iter_channels = reader.iter_channels();
+
+        let node = &arrangement.master().0;
+        let (idx, plugins) = iter_channels.next()?;
+        channels.insert(idx.index as usize, node.id());
+        load_plugins(plugins, node, &meter, &mut plugins_by_channel, &mut futs);
+
+        for (idx, plugins) in iter_channels {
+            let node = Arc::new(MixerNode::default());
+
+            channels.insert(idx.index as usize, node.id());
+            load_plugins(plugins, &node, &meter, &mut plugins_by_channel, &mut futs);
+
+            arrangement.push_channel(node);
+        }
+
+        info!("loaded project channels");
+
+        for (from, to) in reader.iter_connections_track_channel() {
+            futs.push(Task::perform(
+                arrangement.request_connect(
+                    *channels.get(to.index as usize)?,
+                    *tracks.get(from.index as usize)?,
+                ),
+                |con| Message::ConnectSucceeded(con.unwrap()),
+            ));
+        }
+
+        for (from, to) in reader.iter_connections_channel_channel() {
+            futs.push(Task::perform(
+                arrangement.request_connect(
+                    *channels.get(from.index as usize)?,
+                    *channels.get(to.index as usize)?,
+                ),
+                |con| Message::ConnectSucceeded(con.unwrap()),
+            ));
+        }
+
+        info!("loaded project connections");
+
+        Some((
+            Self {
+                clap_host: ClapHost::default(),
+
+                arrangement,
+                meter: meter.clone(),
+                loading: HashSet::default(),
+                audios: audios
+                    .values()
+                    .map(|audio| {
+                        (
+                            audio.path.clone(),
+                            LoadStatus::Loaded(Arc::downgrade(audio)),
+                        )
+                    })
+                    .collect(),
+                midis: midis.values().map(Arc::downgrade).collect(),
+                plugins_by_channel,
+
+                tab: Tab::Arrangement { grabbed_clip: None },
+
+                recording: None,
+
+                arrangement_position: Vec2::default(),
+                arrangement_scale: Vec2::new(9.0, 120.0),
+                soloed_track: None,
+
+                piano_roll_position: Cell::new(Vec2::new(0.0, 40.0)),
+                piano_roll_scale: Vec2::new(9.0, LINE_HEIGHT),
+                last_note_len: Position::BEAT,
+                selected_channel: None,
+
+                split_at: 300.0,
+            },
+            meter,
+            Task::batch(futs),
+        ))
+    }
+
     pub fn view(&self) -> Element<'_, Message> {
         let element = match &self.tab {
             Tab::Arrangement { .. } => self.arrangement(),
@@ -851,7 +1072,7 @@ impl ArrangementView {
             Tab::PianoRoll { clip, .. } => self.piano_roll(clip),
         };
 
-        if self.loading_samples.is_empty() {
+        if self.loading.is_empty() {
             element
         } else {
             mouse_area(element)
@@ -1384,7 +1605,7 @@ impl ArrangementView {
                                                 0.0,
                                                 1.0,
                                                 enabled,
-                                                Message::AudioEffectMixChanged.with(i)
+                                                Message::PluginMixChanged.with(i)
                                             )
                                             .radius(TEXT_HEIGHT),
                                             button(
@@ -1412,7 +1633,7 @@ impl ArrangementView {
                                             ),
                                             column![
                                                 char_button('M',)
-                                                    .on_press(Message::AudioEffectToggleEnabled(i))
+                                                    .on_press(Message::PluginToggleEnabled(i))
                                                     .style(move |t, s| {
                                                         button_with_base(
                                                             t,
@@ -1425,7 +1646,7 @@ impl ArrangementView {
                                                         )
                                                     }),
                                                 char_button('X')
-                                                    .on_press(Message::AudioEffectRemove(i))
+                                                    .on_press(Message::PluginRemove(i))
                                                     .style(move |t, s| {
                                                         button_with_base(
                                                             t,
@@ -1478,7 +1699,7 @@ impl ArrangementView {
                                     })
                             })
                             .spacing(5.0)
-                            .on_drag(Message::AudioEffectsReordered),
+                            .on_drag(Message::PluginsReordered),
                             Direction::Vertical(Scrollbar::default())
                         )
                         .height(Length::Fill)

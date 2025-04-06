@@ -1,8 +1,7 @@
-use super::error::{InterleavedAudioError, RubatoError};
 use generic_daw_utils::NoDebug;
 use rubato::{
-    Resampler as _, ResamplerConstructionError, SincFixedIn, SincInterpolationParameters,
-    SincInterpolationType, WindowFunction, calculate_cutoff,
+    Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType,
+    WindowFunction, calculate_cutoff,
 };
 use std::{fs::File, path::Path, sync::Arc};
 use symphonia::core::{
@@ -25,7 +24,8 @@ pub struct InterleavedAudio {
 }
 
 impl InterleavedAudio {
-    pub fn create(path: Arc<Path>, sample_rate: u32) -> Result<Arc<Self>, InterleavedAudioError> {
+    #[must_use]
+    pub fn create(path: Arc<Path>, sample_rate: u32) -> Option<Arc<Self>> {
         let samples = Self::read_audio_file(&path, sample_rate)?;
         let lods = Self::create_lod(&samples);
 
@@ -35,7 +35,7 @@ impl InterleavedAudio {
             path,
         };
 
-        Ok(Arc::new(audio))
+        Some(Arc::new(audio))
     }
 
     #[must_use]
@@ -48,29 +48,31 @@ impl InterleavedAudio {
         self.len() == 0
     }
 
-    fn read_audio_file(path: &Path, sample_rate: u32) -> Result<Box<[f32]>, InterleavedAudioError> {
+    fn read_audio_file(path: &Path, sample_rate: u32) -> Option<Box<[f32]>> {
         let mut format = symphonia::default::get_probe()
             .format(
                 &Hint::default(),
                 MediaSourceStream::new(
-                    Box::new(File::open(path).unwrap()),
+                    Box::new(File::open(path).ok()?),
                     MediaSourceStreamOptions::default(),
                 ),
                 &FormatOptions::default(),
                 &MetadataOptions::default(),
-            )?
+            )
+            .ok()?
             .format;
 
-        let track = format.default_track().unwrap();
+        let track = format.default_track()?;
         let track_id = track.id;
-        let n_frames = track.codec_params.n_frames.unwrap() as usize;
-        let file_sample_rate = track.codec_params.sample_rate.unwrap();
+        let n_frames = track.codec_params.n_frames? as usize;
+        let file_sample_rate = track.codec_params.sample_rate?;
 
         let mut left = Vec::with_capacity(n_frames);
         let mut right = Vec::with_capacity(n_frames);
 
         let mut decoder = symphonia::default::get_codecs()
-            .make(&track.codec_params, &DecoderOptions::default())?;
+            .make(&track.codec_params, &DecoderOptions::default())
+            .ok()?;
 
         let mut sample_buffer = None;
         while let Ok(packet) = format.next_packet() {
@@ -78,16 +80,13 @@ impl InterleavedAudio {
                 continue;
             }
 
-            let audio_buf = decoder.decode(&packet)?;
+            let audio_buf = decoder.decode(&packet).ok()?;
 
-            let buf = if let Some(buf) = &mut sample_buffer {
-                buf
-            } else {
+            let buf = sample_buffer.get_or_insert_with(|| {
                 let duration = audio_buf.capacity() as u64;
                 let spec = *audio_buf.spec();
-                sample_buffer.replace(SampleBuffer::new(duration, spec));
-                sample_buffer.as_mut().unwrap()
-            };
+                SampleBuffer::new(duration, spec)
+            });
 
             buf.copy_planar_ref(audio_buf.clone());
 
@@ -102,7 +101,7 @@ impl InterleavedAudio {
             }
         }
 
-        Ok(resample_planar(file_sample_rate, sample_rate, left, right)?)
+        resample_planar(file_sample_rate, sample_rate, left, right)
     }
 
     fn create_lod(samples: &[f32]) -> Box<[Box<[(f32, f32)]>]> {
@@ -145,9 +144,9 @@ pub fn resample_interleaved(
     file_sample_rate: u32,
     stream_sample_rate: u32,
     interleaved_samples: Vec<f32>,
-) -> Result<Box<[f32]>, RubatoError> {
+) -> Option<Box<[f32]>> {
     if file_sample_rate == stream_sample_rate {
-        return Ok(interleaved_samples.into_boxed_slice());
+        return Some(interleaved_samples.into_boxed_slice());
     }
 
     let left = interleaved_samples
@@ -171,42 +170,48 @@ fn resample_planar(
     stream_sample_rate: u32,
     left: Vec<f32>,
     right: Vec<f32>,
-) -> Result<Box<[f32]>, RubatoError> {
+) -> Option<Box<[f32]>> {
     let Some(resampler) = resampler(file_sample_rate, stream_sample_rate, left.len() as u32) else {
-        return Ok(left
-            .into_iter()
-            .zip(right)
-            .flat_map(<[f32; 2]>::from)
-            .collect());
+        return Some(
+            left.into_iter()
+                .zip(right)
+                .flat_map(<[f32; 2]>::from)
+                .collect(),
+        );
     };
 
-    let mut planar_samples = resampler?.process(&[&left, &right], None)?.into_iter();
+    let mut planar_samples = resampler?.process(&[&left, &right], None).ok()?.into_iter();
     let left = planar_samples.next().unwrap();
     let right = planar_samples.next().unwrap();
 
-    Ok(left
-        .into_iter()
-        .zip(right)
-        .flat_map(<[f32; 2]>::from)
-        .collect())
+    Some(
+        left.into_iter()
+            .zip(right)
+            .flat_map(<[f32; 2]>::from)
+            .collect(),
+    )
 }
 
+#[expect(clippy::option_option)]
 pub fn resampler(
     file_sample_rate: u32,
     stream_sample_rate: u32,
     chunk_size: u32,
-) -> Option<Result<SincFixedIn<f32>, ResamplerConstructionError>> {
-    (file_sample_rate != stream_sample_rate).then_some(SincFixedIn::new(
-        f64::from(stream_sample_rate) / f64::from(file_sample_rate),
-        1.0,
-        SincInterpolationParameters {
-            sinc_len: 256,
-            f_cutoff: calculate_cutoff(256, WindowFunction::BlackmanHarris2),
-            interpolation: SincInterpolationType::Cubic,
-            oversampling_factor: 256,
-            window: WindowFunction::BlackmanHarris2,
-        },
-        chunk_size as usize,
-        2,
-    ))
+) -> Option<Option<SincFixedIn<f32>>> {
+    (file_sample_rate != stream_sample_rate).then_some(
+        SincFixedIn::new(
+            f64::from(stream_sample_rate) / f64::from(file_sample_rate),
+            1.0,
+            SincInterpolationParameters {
+                sinc_len: 256,
+                f_cutoff: calculate_cutoff(256, WindowFunction::BlackmanHarris2),
+                interpolation: SincInterpolationType::Cubic,
+                oversampling_factor: 256,
+                window: WindowFunction::BlackmanHarris2,
+            },
+            chunk_size as usize,
+            2,
+        )
+        .ok(),
+    )
 }

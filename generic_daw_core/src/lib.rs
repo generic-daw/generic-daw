@@ -29,7 +29,7 @@ mod position;
 mod recording;
 mod track;
 
-pub use audio_clip::{AudioClip, InterleavedAudio, InterleavedAudioError, RubatoError};
+pub use audio_clip::{AudioClip, InterleavedAudio};
 pub(crate) use audio_clip::{resample_interleaved, resampler};
 pub use audio_graph;
 pub use audio_graph_node::AudioGraphNode;

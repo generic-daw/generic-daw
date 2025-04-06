@@ -86,13 +86,14 @@ impl Reader {
         ),
     > {
         self.0.tracks.iter().zip(0..).flat_map(|(track, index)| {
+            let index = proto::project::track::TrackIndex { index };
             track
                 .channel
                 .as_ref()
                 .unwrap()
                 .connections
                 .iter()
-                .map(move |&channel| (proto::project::track::TrackIndex { index }, channel))
+                .map(move |&channel| (index, channel))
         })
     }
 
@@ -109,10 +110,11 @@ impl Reader {
             .iter()
             .zip(0..)
             .flat_map(|(channel, index)| {
+                let index = proto::project::channel::ChannelIndex { index };
                 channel
                     .connections
                     .iter()
-                    .map(move |&channel| (proto::project::channel::ChannelIndex { index }, channel))
+                    .map(move |&channel| (index, channel))
             })
     }
 }

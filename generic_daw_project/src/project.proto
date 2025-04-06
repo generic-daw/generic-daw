@@ -14,7 +14,7 @@ message Project {
     message Midi {
         message Note {
             uint32 key = 1;
-            float velocity = 2;
+            double velocity = 2;
             uint32 start = 3;
             uint32 end = 4;
         }

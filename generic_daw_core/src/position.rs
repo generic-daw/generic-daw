@@ -127,11 +127,6 @@ impl Position {
     pub const fn abs_diff(self, other: Self) -> Self {
         Self(self.0.abs_diff(other.0))
     }
-
-    #[must_use]
-    pub const fn u32(self) -> u32 {
-        self.0
-    }
 }
 
 impl Add for Position {
@@ -168,5 +163,17 @@ impl Mul<u32> for Position {
     fn mul(mut self, rhs: u32) -> Self::Output {
         self.0 *= rhs;
         self
+    }
+}
+
+impl From<u32> for Position {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Position> for u32 {
+    fn from(value: Position) -> Self {
+        value.0
     }
 }

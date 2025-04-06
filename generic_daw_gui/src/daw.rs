@@ -49,7 +49,10 @@ pub enum Message {
 
     SamplesFileDialog,
     SaveFileDialog,
+    OpenFileDialog,
     ExportFileDialog,
+
+    OpenFile(Box<Path>),
 
     Stop,
     TogglePlay,
@@ -125,6 +128,16 @@ impl Daw {
                 .map(ArrangementMessage::Save)
                 .map(Message::Arrangement);
             }
+            Message::OpenFileDialog => {
+                return Task::future(
+                    AsyncFileDialog::new()
+                        .add_filter("Generic Daw project file", &["pbf"])
+                        .pick_file(),
+                )
+                .and_then(Task::done)
+                .map(|p| p.path().into())
+                .map(Message::OpenFile);
+            }
             Message::ExportFileDialog => {
                 return Task::future(
                     AsyncFileDialog::new()
@@ -135,6 +148,13 @@ impl Daw {
                 .map(|p| p.path().into())
                 .map(ArrangementMessage::Export)
                 .map(Message::Arrangement);
+            }
+            Message::OpenFile(path) => {
+                if let Some((arrangement, meter, futs)) = ArrangementView::load(&path) {
+                    self.arrangement = arrangement;
+                    self.meter = meter;
+                    return futs.map(Message::Arrangement);
+                }
             }
             Message::Stop => {
                 self.meter.playing.store(false, Release);
@@ -183,6 +203,7 @@ impl Daw {
                 row![
                     styled_button("Load Samples").on_press(Message::SamplesFileDialog),
                     styled_button("Save").on_press(Message::SaveFileDialog),
+                    styled_button("Open").on_press(Message::OpenFileDialog),
                     styled_button("Export").on_press(Message::ExportFileDialog),
                 ],
                 row![

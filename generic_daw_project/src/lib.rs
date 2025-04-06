@@ -1,13 +1,20 @@
 pub mod proto {
     #![expect(clippy::derive_partial_eq_without_eq)]
 
-    use std::path::PathBuf;
+    use std::{ffi::CStr, path::PathBuf};
     include!(concat!(env!("OUT_DIR"), "/project.rs"));
 
     impl project::Audio {
         #[must_use]
         pub fn path(&self) -> PathBuf {
             self.components.iter().collect()
+        }
+    }
+
+    impl project::channel::Plugin {
+        #[must_use]
+        pub fn id(&self) -> &CStr {
+            CStr::from_bytes_with_nul(&self.id).unwrap()
         }
     }
 

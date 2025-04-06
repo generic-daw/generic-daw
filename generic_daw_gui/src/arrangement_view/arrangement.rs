@@ -77,17 +77,22 @@ impl Arrangement {
         &self.nodes[id.get()]
     }
 
-    pub fn add_channel(&mut self) -> Receiver<(NodeId, NodeId)> {
-        let node = Arc::new(MixerNode::default());
-        let id = node.id();
-
-        self.nodes
-            .insert(id.get(), (node.clone(), BitSet::default(), NodeType::Mixer));
+    pub fn push_channel(&mut self, node: Arc<MixerNode>) {
+        self.nodes.insert(
+            node.id().get(),
+            (node.clone(), BitSet::default(), NodeType::Mixer),
+        );
 
         self.sender
             .try_send(DawCtxMessage::Insert(node.into()))
             .unwrap();
+    }
 
+    #[must_use]
+    pub fn add_channel(&mut self) -> Receiver<(NodeId, NodeId)> {
+        let node = Arc::new(MixerNode::default());
+        let id = node.id();
+        self.push_channel(node);
         self.request_connect(self.master_node_id, id)
     }
 
@@ -97,19 +102,22 @@ impl Arrangement {
         self.sender.try_send(DawCtxMessage::Remove(id)).unwrap();
     }
 
-    pub fn add_track(&mut self, track: Track) -> Receiver<(NodeId, NodeId)> {
-        let id = track.id();
-
+    pub fn push_track(&mut self, track: Track) {
         self.tracks.push(track.clone());
         self.nodes.insert(
-            id.get(),
+            track.id().get(),
             (track.node.clone(), BitSet::default(), NodeType::Track),
         );
 
         self.sender
             .try_send(DawCtxMessage::Insert(track.into()))
             .unwrap();
+    }
 
+    #[must_use]
+    pub fn add_track(&mut self, track: Track) -> Receiver<(NodeId, NodeId)> {
+        let id = track.id();
+        self.push_track(track);
         self.request_connect(self.master_node_id, id)
     }
 
@@ -117,6 +125,7 @@ impl Arrangement {
         self.tracks.remove(idx);
     }
 
+    #[must_use]
     pub fn request_connect(&self, from: NodeId, to: NodeId) -> Receiver<(NodeId, NodeId)> {
         let (sender, receiver) = oneshot::channel();
 

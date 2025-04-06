@@ -1,10 +1,8 @@
 use crate::{Meter, Position, clip_position::ClipPosition, event::Event};
 use std::sync::{Arc, atomic::Ordering::Acquire};
 
-mod error;
 mod interleaved_audio;
 
-pub use error::{InterleavedAudioError, RubatoError};
 pub use interleaved_audio::{InterleavedAudio, resample_interleaved, resampler};
 
 #[derive(Clone, Debug)]
