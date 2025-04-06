@@ -115,7 +115,8 @@ impl Arrangement {
     }
 
     #[must_use]
-    pub fn add_track(&mut self, track: Track) -> Receiver<(NodeId, NodeId)> {
+    pub fn add_track(&mut self) -> Receiver<(NodeId, NodeId)> {
+        let track = Track::new(self.meter.clone());
         let id = track.id();
         self.push_track(track);
         self.request_connect(self.master_node_id, id)

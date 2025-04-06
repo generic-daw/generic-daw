@@ -396,10 +396,9 @@ impl ArrangementView {
                         }
 
                         if track == self.arrangement.tracks().len() {
-                            futs.push(Task::perform(
-                                self.arrangement.add_track(Track::new(self.meter.clone())),
-                                |con| Message::ConnectSucceeded(con.unwrap()),
-                            ));
+                            futs.push(Task::perform(self.arrangement.add_track(), |con| {
+                                Message::ConnectSucceeded(con.unwrap())
+                            }));
                         }
 
                         self.arrangement.add_clip(track, clip.clone());
@@ -425,10 +424,9 @@ impl ArrangementView {
                 self.arrangement.add_clip(track, clip);
             }
             Message::TrackAdd => {
-                return Task::perform(
-                    self.arrangement.add_track(Track::new(self.meter.clone())),
-                    |con| Message::ConnectSucceeded(con.unwrap()),
-                );
+                return Task::perform(self.arrangement.add_track(), |con| {
+                    Message::ConnectSucceeded(con.unwrap())
+                });
             }
             Message::TrackRemove(id) => {
                 let track = self.arrangement.track_of(id).unwrap();
