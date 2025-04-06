@@ -802,7 +802,7 @@ impl ArrangementView {
                         .into_iter()
                         .flatten()
                         .map(|(id, descriptor)| proto::project::channel::Plugin {
-                            id: descriptor.id.deref().to_bytes().to_owned(),
+                            id: descriptor.id.to_bytes_with_nul().to_owned(),
                             state: self.clap_host.get_state(*id),
                         }),
                 ),
@@ -819,7 +819,7 @@ impl ArrangementView {
                         .into_iter()
                         .flatten()
                         .map(|(id, descriptor)| proto::project::channel::Plugin {
-                            id: descriptor.id.deref().to_bytes().to_owned(),
+                            id: descriptor.id.to_bytes_with_nul().to_owned(),
                             state: self.clap_host.get_state(*id),
                         }),
                 ),
