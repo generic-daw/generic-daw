@@ -7,6 +7,7 @@ use yazi::{Format, decompress};
 pub struct Reader(proto::Project);
 
 impl Reader {
+    #[must_use]
     pub fn new(pbf: &[u8]) -> Option<Self> {
         let pbf = decompress(pbf, Format::Zlib).ok()?.0;
         proto::Project::decode(&mut Cursor::new(pbf)).map(Self).ok()

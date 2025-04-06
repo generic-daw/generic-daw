@@ -15,6 +15,7 @@ impl Writer {
         })
     }
 
+    #[must_use]
     pub fn push_audio(
         &mut self,
         path: impl AsRef<Path>,
@@ -32,6 +33,7 @@ impl Writer {
         }
     }
 
+    #[must_use]
     pub fn push_midi(
         &mut self,
         notes: impl IntoIterator<Item = proto::project::midi::Note>,
@@ -45,6 +47,7 @@ impl Writer {
         }
     }
 
+    #[must_use]
     pub fn push_track(
         &mut self,
         clips: impl IntoIterator<Item = proto::project::track::Clip>,

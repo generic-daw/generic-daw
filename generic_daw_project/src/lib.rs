@@ -2,7 +2,24 @@ pub mod proto {
     #![expect(clippy::derive_partial_eq_without_eq)]
 
     use std::{ffi::CStr, path::PathBuf};
+
     include!(concat!(env!("OUT_DIR"), "/project.rs"));
+
+    macro_rules! index_impl_eq_hash {
+        ($ty:path) => {
+            impl ::std::cmp::Eq for $ty {}
+            impl ::std::hash::Hash for $ty {
+                fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+                    self.index.hash(state);
+                }
+            }
+        };
+    }
+
+    index_impl_eq_hash!(project::track::audio_clip::AudioIndex);
+    index_impl_eq_hash!(project::track::midi_clip::MidiIndex);
+    index_impl_eq_hash!(project::track::TrackIndex);
+    index_impl_eq_hash!(project::channel::ChannelIndex);
 
     impl project::Audio {
         #[must_use]

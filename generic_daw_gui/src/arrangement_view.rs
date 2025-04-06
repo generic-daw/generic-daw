@@ -52,10 +52,7 @@ use std::{
     path::Path,
     sync::{
         Arc, Mutex, Weak,
-        atomic::{
-            AtomicBool,
-            Ordering::{AcqRel, Acquire, Release},
-        },
+        atomic::Ordering::{AcqRel, Acquire, Release},
         mpsc,
     },
     time::Instant,
@@ -902,32 +899,24 @@ impl ArrangementView {
         let (mut arrangement, meter) = ArrangementWrapper::create();
         let mut futs = Vec::new();
 
-        let err = &AtomicBool::new(false);
         let (sender, receiver) = mpsc::channel();
         std::thread::scope(|s| {
             for (idx, path) in reader.iter_audios() {
                 let sender = sender.clone();
                 let sample_rate = meter.sample_rate;
                 s.spawn(move || {
-                    let Some(audio) = InterleavedAudio::create(path.path().into(), sample_rate)
-                    else {
-                        err.store(true, Release);
-                        return;
-                    };
+                    let audio = InterleavedAudio::create(path.path().into(), sample_rate);
                     sender.send((idx, audio)).unwrap();
                 });
             }
         });
-        if err.load(Acquire) {
-            return None;
-        }
 
-        let mut audios = HoleyVec::default();
+        let mut audios = HashMap::new();
         while let Ok((idx, audio)) = receiver.try_recv() {
-            audios.insert(idx.index as usize, audio);
+            audios.insert(idx, audio?);
         }
 
-        let mut midis = HoleyVec::default();
+        let mut midis = HashMap::new();
         for (idx, notes) in reader.iter_midis() {
             let pattern = notes
                 .notes
@@ -940,15 +929,12 @@ impl ArrangementView {
                     end: note.end.into(),
                 })
                 .collect();
-            midis.insert(
-                idx.index as usize,
-                Arc::new(ArcSwap::new(Arc::new(pattern))),
-            );
+            midis.insert(idx, Arc::new(ArcSwap::new(Arc::new(pattern))));
         }
 
         let mut plugins_by_channel = HoleyVec::default();
 
-        let mut tracks = HoleyVec::default();
+        let mut tracks = HashMap::new();
         for (idx, clips, channel) in reader.iter_tracks() {
             let mut track = Track::new(meter.clone());
             load_channel(
@@ -962,10 +948,8 @@ impl ArrangementView {
             for clip in clips {
                 let clip = match clip.clip? {
                     proto::project::track::clip::Clip::Audio(audio) => {
-                        let clip = AudioClip::create(
-                            audios.get(audio.audio?.index as usize)?.clone(),
-                            meter.clone(),
-                        );
+                        let clip =
+                            AudioClip::create(audios.get(&audio.audio?)?.clone(), meter.clone());
                         clip.position.move_to(audio.position?.global_start.into());
                         clip.position.trim_end_to(audio.position?.global_end.into());
                         clip.position
@@ -973,10 +957,7 @@ impl ArrangementView {
                         Clip::Audio(clip)
                     }
                     proto::project::track::clip::Clip::Midi(midi) => {
-                        let clip = MidiClip::create(
-                            midis.get(midi.midi?.index as usize)?.clone(),
-                            meter.clone(),
-                        );
+                        let clip = MidiClip::create(midis.get(&midi.midi?)?.clone(), meter.clone());
                         clip.position.move_to(midi.position?.global_start.into());
                         clip.position.trim_end_to(midi.position?.global_end.into());
                         clip.position
@@ -988,43 +969,37 @@ impl ArrangementView {
                 track.clips.push(clip);
             }
 
-            tracks.insert(idx.index as usize, track.id());
+            tracks.insert(idx, track.id());
             arrangement.push_track(track);
         }
 
-        let mut channels = HoleyVec::default();
+        let mut channels = HashMap::new();
         let mut iter_channels = reader.iter_channels();
 
         let node = &arrangement.master().0;
         let (idx, channel) = iter_channels.next()?;
         load_channel(node, channel, &meter, &mut plugins_by_channel, &mut futs)?;
-        channels.insert(idx.index as usize, node.id());
+        channels.insert(idx, node.id());
 
         for (idx, channel) in iter_channels {
             let node = Arc::new(MixerNode::default());
 
             load_channel(&node, channel, &meter, &mut plugins_by_channel, &mut futs)?;
 
-            channels.insert(idx.index as usize, node.id());
+            channels.insert(idx, node.id());
             arrangement.push_channel(node);
         }
 
         for (from, to) in reader.iter_connections_track_channel() {
             futs.push(Task::perform(
-                arrangement.request_connect(
-                    *channels.get(to.index as usize)?,
-                    *tracks.get(from.index as usize)?,
-                ),
+                arrangement.request_connect(*channels.get(&to)?, *tracks.get(&from)?),
                 |con| Message::ConnectSucceeded(con.unwrap()),
             ));
         }
 
         for (from, to) in reader.iter_connections_channel_channel() {
             futs.push(Task::perform(
-                arrangement.request_connect(
-                    *channels.get(from.index as usize)?,
-                    *channels.get(to.index as usize)?,
-                ),
+                arrangement.request_connect(*channels.get(&from)?, *channels.get(&to)?),
                 |con| Message::ConnectSucceeded(con.unwrap()),
             ));
         }
