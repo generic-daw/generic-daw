@@ -57,9 +57,10 @@ impl Position {
     }
 
     #[must_use]
-    pub fn from_samples_f(samples: f32, bpm: u16, sample_rate: u32) -> Self {
-        let bpm = f32::from(bpm);
-        let sample_rate = sample_rate as f32;
+    pub const fn from_samples_f(samples: f32, bpm: u16, sample_rate: u32) -> Self {
+        let samples = samples as f64;
+        let bpm = bpm as f64;
+        let sample_rate = sample_rate as f64;
 
         let beat = samples * (bpm * 32.0) / (sample_rate * 15.0);
 
@@ -67,10 +68,10 @@ impl Position {
     }
 
     #[must_use]
-    pub fn from_samples(samples: usize, bpm: u16, sample_rate: u32) -> Self {
+    pub const fn from_samples(samples: usize, bpm: u16, sample_rate: u32) -> Self {
         let samples = samples as u64;
-        let bpm = u64::from(bpm);
-        let sample_rate = u64::from(sample_rate);
+        let bpm = bpm as u64;
+        let sample_rate = sample_rate as u64;
 
         let beat = samples * (bpm * 32) / (sample_rate * 15);
 
@@ -78,10 +79,10 @@ impl Position {
     }
 
     #[must_use]
-    pub fn in_samples_f(self, bpm: u16, sample_rate: u32) -> f32 {
-        let beat = f64::from(self.0);
-        let bpm = f64::from(bpm);
-        let sample_rate = f64::from(sample_rate);
+    pub const fn in_samples_f(self, bpm: u16, sample_rate: u32) -> f32 {
+        let beat = self.0 as f64;
+        let bpm = bpm as f64;
+        let sample_rate = sample_rate as f64;
 
         let samples = beat * (sample_rate * 15.0) / (bpm * 32.0);
 
@@ -89,10 +90,10 @@ impl Position {
     }
 
     #[must_use]
-    pub fn in_samples(self, bpm: u16, sample_rate: u32) -> usize {
-        let global_beat = u64::from(self.0);
-        let bpm = u64::from(bpm);
-        let sample_rate = u64::from(sample_rate);
+    pub const fn in_samples(self, bpm: u16, sample_rate: u32) -> usize {
+        let global_beat = self.0 as u64;
+        let bpm = bpm as u64;
+        let sample_rate = sample_rate as u64;
 
         let samples = global_beat * (sample_rate * 15) / (bpm * 32);
 
@@ -100,7 +101,7 @@ impl Position {
     }
 
     #[must_use]
-    pub fn snap(mut self, scale: f32, numerator: Numerator) -> Self {
+    pub const fn snap(mut self, scale: f32, numerator: Numerator) -> Self {
         let modulo = if scale < 12.0 {
             1 << (scale as u8 - 3)
         } else {
