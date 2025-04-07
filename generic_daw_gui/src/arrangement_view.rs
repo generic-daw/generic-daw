@@ -1576,102 +1576,98 @@ impl ArrangementView {
         .width(Length::Fill);
 
         if let Some(selected) = self.selected_channel {
+            let node = &self.arrangement.node(selected).0;
             VSplit::new(
                 mixer_panel,
-                if self.plugins_by_channel[selected.get()].is_empty() {
-                    Element::new(plugin_picker)
-                } else {
-                    let node = &self.arrangement.node(selected).0;
+                column![
+                    plugin_picker,
+                    horizontal_rule(11.0),
+                    styled_scrollable_with_direction(
+                        dragking::column({
+                            self.plugins_by_channel[selected.get()]
+                                .iter()
+                                .enumerate()
+                                .map(|(i, (plugin_id, descriptor))| {
+                                    let enabled = node.get_plugin_enabled(i);
 
-                    column![
-                        plugin_picker,
-                        horizontal_rule(11.0),
-                        styled_scrollable_with_direction(
-                            dragking::column({
-                                self.plugins_by_channel[selected.get()]
-                                    .iter()
-                                    .enumerate()
-                                    .map(|(i, (plugin_id, descriptor))| {
-                                        let enabled = node.get_plugin_enabled(i);
-
-                                        row![
-                                            Knob::new(
-                                                0.0..=1.0,
-                                                node.get_plugin_mix(i),
-                                                0.0,
-                                                1.0,
-                                                enabled,
-                                                Message::PluginMixChanged.with(i)
+                                    row![
+                                        Knob::new(
+                                            0.0..=1.0,
+                                            node.get_plugin_mix(i),
+                                            0.0,
+                                            1.0,
+                                            enabled,
+                                            Message::PluginMixChanged.with(i)
+                                        )
+                                        .radius(TEXT_HEIGHT),
+                                        button(
+                                            container(
+                                                text(&*descriptor.name).wrapping(Wrapping::None)
                                             )
-                                            .radius(TEXT_HEIGHT),
-                                            button(
-                                                container(
-                                                    text(&*descriptor.name)
-                                                        .wrapping(Wrapping::None)
-                                                )
-                                                .clip(true)
-                                            )
-                                            .style(move |t, s| button_with_base(
-                                                t,
-                                                s,
-                                                if enabled {
-                                                    button::primary
-                                                } else {
-                                                    button::secondary
-                                                }
+                                            .clip(true)
+                                        )
+                                        .style(move |t, s| button_with_base(
+                                            t,
+                                            s,
+                                            if enabled {
+                                                button::primary
+                                            } else {
+                                                button::secondary
+                                            }
+                                        ))
+                                        .width(Length::Fill)
+                                        .on_press(
+                                            Message::ClapHost(ClapHostMessage::MainThread(
+                                                *plugin_id,
+                                                MainThreadMessage::GuiRequestShow,
                                             ))
-                                            .width(Length::Fill)
-                                            .on_press(
-                                                Message::ClapHost(ClapHostMessage::MainThread(
-                                                    *plugin_id,
-                                                    MainThreadMessage::GuiRequestShow,
-                                                ))
-                                            ),
-                                            column![
-                                                char_button('M',)
-                                                    .on_press(Message::PluginToggleEnabled(i))
-                                                    .style(move |t, s| {
-                                                        button_with_base(
-                                                            t,
-                                                            s,
-                                                            if enabled {
-                                                                button::primary
-                                                            } else {
-                                                                button::secondary
-                                                            },
+                                        ),
+                                        column![
+                                            char_button('M',)
+                                                .on_press(Message::PluginToggleEnabled(i))
+                                                .style(move |t, s| {
+                                                    button_with_base(
+                                                        t,
+                                                        s,
+                                                        if enabled {
+                                                            button::primary
+                                                        } else {
+                                                            button::secondary
+                                                        },
+                                                    )
+                                                }),
+                                            char_button('X')
+                                                .on_press(Message::PluginRemove(i))
+                                                .style(move |t, s| {
+                                                    button_with_base(
+                                                        t,
+                                                        s,
+                                                        if enabled {
+                                                            button::danger
+                                                        } else {
+                                                            button::secondary
+                                                        },
+                                                    )
+                                                }),
+                                        ]
+                                        .spacing(5.0),
+                                        mouse_area(
+                                            container(
+                                                svg(HANDLE.clone())
+                                                    .rotation(Radians(FRAC_PI_2))
+                                                    .width(Length::Shrink)
+                                                    .height(LINE_HEIGHT + 10.0)
+                                                    .style(|t: &Theme, _| svg::Style {
+                                                        color: Some(
+                                                            t.extended_palette()
+                                                                .background
+                                                                .weak
+                                                                .text
                                                         )
-                                                    }),
-                                                char_button('X')
-                                                    .on_press(Message::PluginRemove(i))
-                                                    .style(move |t, s| {
-                                                        button_with_base(
-                                                            t,
-                                                            s,
-                                                            if enabled {
-                                                                button::danger
-                                                            } else {
-                                                                button::secondary
-                                                            },
-                                                        )
-                                                    }),
-                                            ]
-                                            .spacing(5.0),
-                                            mouse_area(
-                                                container(
-                                                    svg(HANDLE.clone())
-                                                        .rotation(Radians(FRAC_PI_2))
-                                                        .width(Length::Shrink)
-                                                        .height(LINE_HEIGHT + 10.0)
-                                                        .style(|t: &Theme, _| svg::Style {
-                                                            color: Some(
-                                                                t.extended_palette()
-                                                                    .background
-                                                                    .weak
-                                                                    .text
-                                                            )
-                                                        })
-                                                )
-                                                .style(|t: &Theme| container::Style {
+                                                    })
+                                            )
+                                            .style(
+                                                |t: &Theme| container::Style {
                                                     background: Some(
                                                         t.extended_palette()
                                                             .background
@@ -1686,22 +1682,21 @@ impl ArrangementView {
                                                             .color
                                                     ),
                                                     ..container::Style::default()
-                                                })
+                                                }
                                             )
-                                            .interaction(Interaction::Grab),
-                                        ]
-                                        .spacing(5.0)
-                                        .into()
-                                    })
-                            })
-                            .spacing(5.0)
-                            .on_drag(Message::PluginsReordered),
-                            Direction::Vertical(Scrollbar::default())
-                        )
-                        .height(Length::Fill)
-                    ]
-                    .into()
-                },
+                                        )
+                                        .interaction(Interaction::Grab),
+                                    ]
+                                    .spacing(5.0)
+                                    .into()
+                                })
+                        })
+                        .spacing(5.0)
+                        .on_drag(Message::PluginsReordered),
+                        Direction::Vertical(Scrollbar::default())
+                    )
+                    .height(Length::Fill)
+                ],
                 Message::SplitAt,
             )
             .strategy(Strategy::Right)
