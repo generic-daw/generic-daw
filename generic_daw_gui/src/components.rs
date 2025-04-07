@@ -3,9 +3,10 @@ use iced::{
     Alignment, Element, Length,
     border::Radius,
     widget::{
-        Button, PickList, Scrollable, Space, Svg, button, container, pick_list,
+        Button, ComboBox, PickList, Scrollable, Space, Svg, button, combo_box, container,
+        pick_list,
         scrollable::{self, Direction},
-        svg, text,
+        svg, text, text_input,
     },
 };
 use std::borrow::Borrow;
@@ -28,6 +29,22 @@ where
 
 pub fn styled_button<'a, Message>(content: impl Into<Element<'a, Message>>) -> Button<'a, Message> {
     button(content).style(|t, s| button_with_base(t, s, button::primary))
+}
+
+pub fn styled_combo_box<'a, T, Message>(
+    state: &'a combo_box::State<T>,
+    placeholder: &str,
+    selection: Option<&T>,
+    on_selected: impl Fn(T) -> Message + 'static,
+) -> ComboBox<'a, T, Message>
+where
+    T: std::fmt::Display + Clone,
+{
+    combo_box(state, placeholder, selection, on_selected).input_style(|t, s| {
+        let mut style = text_input::default(t, s);
+        style.border.radius = Radius::default();
+        style
+    })
 }
 
 pub fn styled_pick_list<'a, T, L, V, Message>(

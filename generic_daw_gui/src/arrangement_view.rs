@@ -1,9 +1,8 @@
 use crate::{
     clap_host::{ClapHost, Message as ClapHostMessage},
     components::{
-        char_button, empty_widget, styled_pick_list, styled_scrollable_with_direction, styled_svg,
+        char_button, empty_widget, styled_combo_box, styled_scrollable_with_direction, styled_svg,
     },
-    daw::{PLUGIN_BUNDLES, PLUGIN_DESCRIPTORS},
     icons::{ADD, CHEVRON_RIGHT, HANDLE},
     stylefns::{button_with_base, slider_with_enabled, svg_with_enabled},
     widget::{
@@ -22,7 +21,9 @@ use generic_daw_core::{
     AudioClip, Clip, InterleavedAudio, Meter, MidiClip, MidiKey, MidiNote, MixerNode, Position,
     Recording, Track,
     audio_graph::{NodeId, NodeImpl as _},
-    clap_host::{self, MainThreadMessage, PluginDescriptor, PluginId},
+    clap_host::{
+        self, MainThreadMessage, PluginBundle, PluginDescriptor, PluginId, get_installed_plugins,
+    },
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2};
@@ -31,7 +32,7 @@ use iced::{
     mouse::Interaction,
     padding,
     widget::{
-        button, column, container, horizontal_rule, mouse_area, responsive, row,
+        button, column, combo_box, container, horizontal_rule, mouse_area, responsive, row,
         scrollable::{Direction, Scrollbar},
         svg, text,
         text::Wrapping,
@@ -131,6 +132,8 @@ pub enum Tab {
 
 pub struct ArrangementView {
     pub clap_host: ClapHost,
+    plugin_bundles: BTreeMap<PluginDescriptor, PluginBundle>,
+    plugin_descriptors: combo_box::State<PluginDescriptor>,
 
     arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
@@ -159,9 +162,14 @@ impl ArrangementView {
     pub fn create() -> (Self, Arc<Meter>) {
         let (arrangement, meter) = ArrangementWrapper::create();
 
+        let plugin_bundles = get_installed_plugins();
+        let plugin_descriptors = combo_box::State::new(plugin_bundles.keys().cloned().collect());
+
         (
             Self {
                 clap_host: ClapHost::default(),
+                plugin_bundles,
+                plugin_descriptors,
 
                 arrangement,
                 meter: meter.clone(),
@@ -260,7 +268,7 @@ impl ArrangementView {
                 };
 
                 let (gui, receiver, audio_processor) = clap_host::init(
-                    &PLUGIN_BUNDLES[&descriptor],
+                    &self.plugin_bundles[&descriptor],
                     descriptor.clone(),
                     f64::from(self.meter.sample_rate),
                     self.meter.buffer_size,
@@ -852,47 +860,6 @@ impl ArrangementView {
         path: &Path,
         sample_dirs: &[Box<Path>],
     ) -> Option<(Self, Arc<Meter>, Task<Message>)> {
-        #[must_use]
-        fn load_channel(
-            node: &MixerNode,
-            channel: &proto::project::Channel,
-            meter: &Meter,
-            plugins_by_channel: &mut HoleyVec<Vec<(PluginId, PluginDescriptor)>>,
-            futs: &mut Vec<Task<Message>>,
-        ) -> Option<()> {
-            node.volume.store(channel.volume, Release);
-            node.pan.store(channel.pan, Release);
-
-            for plugin in &channel.plugins {
-                let id = plugin.id();
-                let descriptor = PLUGIN_DESCRIPTORS.iter().find(|d| &*d.id == id)?;
-
-                let (mut gui, receiver, audio_processor) = clap_host::init(
-                    PLUGIN_BUNDLES.get(descriptor)?,
-                    descriptor.clone(),
-                    f64::from(meter.sample_rate),
-                    meter.buffer_size,
-                );
-
-                if let Some(state) = &plugin.state {
-                    gui.set_state(state);
-                }
-
-                plugins_by_channel
-                    .entry(node.id().get())
-                    .get_or_insert_default()
-                    .push((audio_processor.id(), descriptor.clone()));
-
-                node.add_plugin(audio_processor);
-
-                futs.push(Task::done(Message::ClapHost(ClapHostMessage::Opened(
-                    Arc::new(Mutex::new((Fragile::new(gui), receiver))),
-                ))));
-            }
-
-            Some(())
-        }
-
         info!("loading project {path:?}");
 
         let mut gdp = Vec::new();
@@ -900,7 +867,6 @@ impl ArrangementView {
         let reader = Reader::new(&gdp)?;
 
         let (mut arrangement, meter) = ArrangementWrapper::create();
-        let mut futs = Vec::new();
 
         let (sender, receiver) = mpsc::channel();
         std::thread::scope(|s| {
@@ -947,18 +913,50 @@ impl ArrangementView {
             midis.insert(idx, Arc::new(ArcSwap::new(Arc::new(pattern))));
         }
 
-        let mut plugins_by_channel = HoleyVec::default();
+        let plugin_bundles = get_installed_plugins();
+        let plugin_descriptors = plugin_bundles.keys().cloned().collect::<Vec<_>>();
+        let mut plugins_by_channel: HoleyVec<Vec<(PluginId, PluginDescriptor)>> =
+            HoleyVec::default();
+        let mut futs = Vec::new();
+
+        let mut load_channel = |node: &MixerNode, channel: &proto::project::Channel| {
+            node.volume.store(channel.volume, Release);
+            node.pan.store(channel.pan, Release);
+
+            for plugin in &channel.plugins {
+                let id = plugin.id();
+                let descriptor = plugin_descriptors.iter().find(|d| &*d.id == id)?;
+
+                let (mut gui, receiver, audio_processor) = clap_host::init(
+                    plugin_bundles.get(descriptor)?,
+                    descriptor.clone(),
+                    f64::from(meter.sample_rate),
+                    meter.buffer_size,
+                );
+
+                if let Some(state) = &plugin.state {
+                    gui.set_state(state);
+                }
+
+                plugins_by_channel
+                    .entry(node.id().get())
+                    .get_or_insert_default()
+                    .push((audio_processor.id(), descriptor.clone()));
+
+                node.add_plugin(audio_processor);
+
+                futs.push(Task::done(Message::ClapHost(ClapHostMessage::Opened(
+                    Arc::new(Mutex::new((Fragile::new(gui), receiver))),
+                ))));
+            }
+
+            Some(())
+        };
 
         let mut tracks = HashMap::new();
         for (idx, clips, channel) in reader.iter_tracks() {
             let mut track = Track::new(meter.clone());
-            load_channel(
-                &track.node,
-                channel?,
-                &meter,
-                &mut plugins_by_channel,
-                &mut futs,
-            )?;
+            load_channel(&track.node, channel?)?;
 
             for clip in clips {
                 let clip = match clip.clip? {
@@ -993,13 +991,13 @@ impl ArrangementView {
 
         let node = &arrangement.master().0;
         let (idx, channel) = iter_channels.next()?;
-        load_channel(node, channel, &meter, &mut plugins_by_channel, &mut futs)?;
+        load_channel(node, channel)?;
         channels.insert(idx, node.id());
 
         for (idx, channel) in iter_channels {
             let node = Arc::new(MixerNode::default());
 
-            load_channel(&node, channel, &meter, &mut plugins_by_channel, &mut futs)?;
+            load_channel(&node, channel)?;
 
             channels.insert(idx, node.id());
             arrangement.push_channel(node);
@@ -1024,6 +1022,8 @@ impl ArrangementView {
         Some((
             Self {
                 clap_host: ClapHost::default(),
+                plugin_bundles,
+                plugin_descriptors: combo_box::State::new(plugin_descriptors),
 
                 arrangement,
                 meter: meter.clone(),
@@ -1567,13 +1567,13 @@ impl ArrangementView {
         )
         .width(Length::Fill);
 
-        let plugin_picker = styled_pick_list(
-            &**PLUGIN_DESCRIPTORS,
-            None::<PluginDescriptor>,
+        let plugin_picker = styled_combo_box(
+            &self.plugin_descriptors,
+            "Add Plugin",
+            None,
             Message::PluginLoad,
         )
-        .width(Length::Fill)
-        .placeholder("Add Plugin");
+        .width(Length::Fill);
 
         if let Some(selected) = self.selected_channel {
             VSplit::new(

@@ -6,10 +6,7 @@ use crate::{
     stylefns::button_with_base,
     widget::{AnimatedDot, BpmInput, LINE_HEIGHT, VSplit, vsplit::Strategy},
 };
-use generic_daw_core::{
-    Meter, Numerator, Position,
-    clap_host::{self, PluginBundle, PluginDescriptor},
-};
+use generic_daw_core::{Meter, Numerator, Position};
 use iced::{
     Alignment::Center,
     Element, Event, Subscription, Task,
@@ -21,19 +18,12 @@ use iced::{
 use log::trace;
 use rfd::AsyncFileDialog;
 use std::{
-    collections::BTreeMap,
     path::Path,
     sync::{
-        Arc, LazyLock,
+        Arc,
         atomic::Ordering::{AcqRel, Acquire, Release},
     },
 };
-
-pub static PLUGIN_BUNDLES: LazyLock<BTreeMap<PluginDescriptor, PluginBundle>> =
-    LazyLock::new(clap_host::get_installed_plugins);
-
-pub static PLUGIN_DESCRIPTORS: LazyLock<Box<[PluginDescriptor]>> =
-    LazyLock::new(|| PLUGIN_BUNDLES.keys().cloned().collect());
 
 #[derive(Clone, Debug)]
 pub enum Message {
