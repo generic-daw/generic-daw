@@ -67,10 +67,10 @@ impl Arrangement {
         self.tracks.iter().position(|t| t.id() == id)
     }
 
-    pub fn channels(&self) -> impl Iterator<Item = &Arc<MixerNode>> {
+    pub fn channels(&self) -> impl Iterator<Item = &MixerNode> {
         self.nodes
             .values()
-            .filter_map(|(node, _, ty)| (*ty == NodeType::Mixer).then_some(node))
+            .filter_map(|(node, _, ty)| (*ty == NodeType::Mixer).then_some(&**node))
     }
 
     pub fn node(&self, id: NodeId) -> &(Arc<MixerNode>, BitSet, NodeType) {

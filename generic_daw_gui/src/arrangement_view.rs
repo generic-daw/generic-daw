@@ -809,7 +809,7 @@ impl ArrangementView {
         }
 
         let mut channels = HashMap::new();
-        for channel in once(&self.arrangement.master().0).chain(self.arrangement.channels()) {
+        for channel in once(&*self.arrangement.master().0).chain(self.arrangement.channels()) {
             channels.insert(
                 channel.id().get(),
                 writer.push_channel(
@@ -1567,12 +1567,13 @@ impl ArrangementView {
         )
         .width(Length::Fill);
 
-        let plugin_picker =
-            styled_pick_list(&**PLUGIN_DESCRIPTORS, None::<PluginDescriptor>, |p| {
-                Message::PluginLoad(p)
-            })
-            .width(Length::Fill)
-            .placeholder("Add Plugin");
+        let plugin_picker = styled_pick_list(
+            &**PLUGIN_DESCRIPTORS,
+            None::<PluginDescriptor>,
+            Message::PluginLoad,
+        )
+        .width(Length::Fill)
+        .placeholder("Add Plugin");
 
         if let Some(selected) = self.selected_channel {
             VSplit::new(
@@ -1711,7 +1712,7 @@ impl ArrangementView {
         }
     }
 
-    fn piano_roll<'a>(&'a self, clip: &'a Arc<MidiClip>) -> Element<'a, Message> {
+    fn piano_roll<'a>(&'a self, clip: &'a MidiClip) -> Element<'a, Message> {
         responsive(move |size| {
             let mut piano_roll_position = self.piano_roll_position.get();
             let height = (size.height - LINE_HEIGHT) / self.piano_roll_scale.y;
