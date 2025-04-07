@@ -209,12 +209,8 @@ impl ArrangementView {
                     Message::ConnectSucceeded(con.unwrap())
                 });
             }
-            Message::ConnectSucceeded((from, to)) => {
-                self.arrangement.connect_succeeded(from, to);
-            }
-            Message::Disconnect((from, to)) => {
-                self.arrangement.disconnect(from, to);
-            }
+            Message::ConnectSucceeded((from, to)) => self.arrangement.connect_succeeded(from, to),
+            Message::Disconnect((from, to)) => self.arrangement.disconnect(from, to),
             Message::Export(path) => {
                 self.clap_host.set_realtime(false);
                 self.arrangement.export(&path);
@@ -667,9 +663,7 @@ impl ArrangementView {
                     .position()
                     .trim_end_to(pos);
             }
-            ArrangementAction::Delete(track, clip) => {
-                self.arrangement.delete_clip(track, clip);
-            }
+            ArrangementAction::Delete(track, clip) => self.arrangement.delete_clip(track, clip),
         }
     }
 
@@ -868,6 +862,9 @@ impl ArrangementView {
 
         let (mut arrangement, meter) = ArrangementWrapper::create();
 
+        let mut audios = HashMap::new();
+        let mut midis = HashMap::new();
+
         let (sender, receiver) = mpsc::channel();
         std::thread::scope(|s| {
             for (idx, path) in reader.iter_audios() {
@@ -890,27 +887,25 @@ impl ArrangementView {
                     }
                 });
             }
+
+            for (idx, notes) in reader.iter_midis() {
+                let pattern = notes
+                    .notes
+                    .iter()
+                    .map(|note| MidiNote {
+                        channel: 0,
+                        key: MidiKey(note.key as u8),
+                        velocity: note.velocity,
+                        start: note.start.into(),
+                        end: note.end.into(),
+                    })
+                    .collect();
+                midis.insert(idx, Arc::new(ArcSwap::new(Arc::new(pattern))));
+            }
         });
 
-        let mut audios = HashMap::new();
         while let Ok((idx, audio)) = receiver.try_recv() {
             audios.insert(idx, audio);
-        }
-
-        let mut midis = HashMap::new();
-        for (idx, notes) in reader.iter_midis() {
-            let pattern = notes
-                .notes
-                .iter()
-                .map(|note| MidiNote {
-                    channel: 0,
-                    key: MidiKey(note.key as u8),
-                    velocity: note.velocity,
-                    start: note.start.into(),
-                    end: note.end.into(),
-                })
-                .collect();
-            midis.insert(idx, Arc::new(ArcSwap::new(Arc::new(pattern))));
         }
 
         let plugin_bundles = get_installed_plugins();

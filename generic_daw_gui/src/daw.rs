@@ -190,9 +190,7 @@ impl Daw {
                     .update(ArrangementMessage::SampleLoadFromFile(path))
                     .map(Message::Arrangement);
             }
-            FileTreeAction::Dir(path) => {
-                self.file_tree.update(&path);
-            }
+            FileTreeAction::Dir(path) => self.file_tree.update(&path),
         }
 
         Task::none()
