@@ -42,7 +42,7 @@ use log::info;
 use smol::unblock;
 use std::{
     cell::Cell,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     f32::{self, consts::FRAC_PI_2},
     fs::File,
     hash::{DefaultHasher, Hash as _, Hasher as _},
@@ -134,8 +134,8 @@ pub struct ArrangementView {
 
     arrangement: ArrangementWrapper,
     meter: Arc<Meter>,
-    loading: HashSet<Arc<Path>>,
-    audios: HashMap<Arc<Path>, LoadStatus>,
+    loading: BTreeSet<Arc<Path>>,
+    audios: BTreeMap<Arc<Path>, LoadStatus>,
     midis: Vec<Weak<ArcSwap<Vec<MidiNote>>>>,
     plugins_by_channel: HoleyVec<Vec<(PluginId, PluginDescriptor)>>,
 
@@ -165,8 +165,8 @@ impl ArrangementView {
 
                 arrangement,
                 meter: meter.clone(),
-                loading: HashSet::default(),
-                audios: HashMap::default(),
+                loading: BTreeSet::new(),
+                audios: BTreeMap::new(),
                 midis: Vec::new(),
                 plugins_by_channel: HoleyVec::default(),
 
@@ -1027,7 +1027,7 @@ impl ArrangementView {
 
                 arrangement,
                 meter: meter.clone(),
-                loading: HashSet::default(),
+                loading: BTreeSet::new(),
                 audios: audios
                     .values()
                     .map(|audio| {
