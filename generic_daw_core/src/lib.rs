@@ -1,4 +1,5 @@
 use async_channel::{Receiver, Sender};
+use audio_graph_node::AudioGraphNode;
 use cpal::{
     BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
     traits::{DeviceTrait as _, HostTrait as _},
@@ -26,7 +27,6 @@ mod track;
 pub use audio_clip::{AudioClip, InterleavedAudio};
 pub(crate) use audio_clip::{resample_interleaved, resampler};
 pub use audio_graph;
-pub use audio_graph_node::AudioGraphNode;
 pub use clap_host;
 pub use clip::Clip;
 pub use cpal::{Stream, traits::StreamTrait};
@@ -40,7 +40,7 @@ pub use position::Position;
 pub use recording::Recording;
 pub use track::Track;
 
-pub type AudioGraph = audio_graph::AudioGraph<AudioGraphNode, Event>;
+type AudioGraph = audio_graph::AudioGraph<AudioGraphNode, Event>;
 
 pub fn build_input_stream(
     sample_rate: u32,
