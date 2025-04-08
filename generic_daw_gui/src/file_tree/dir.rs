@@ -48,6 +48,10 @@ impl Dir {
         }
     }
 
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
     pub fn update(&mut self, path: &Path, action: &Action) -> Task<Message> {
         if *path == *self.path {
             match action {
@@ -73,7 +77,7 @@ impl Dir {
         } else if let LoadStatus::Loaded { dirs, .. } = &mut self.children {
             return dirs
                 .iter_mut()
-                .find(|dir| dir.path.ends_with(path))
+                .find(|dir| path.starts_with(dir.path()))
                 .unwrap()
                 .update(path, action);
         }

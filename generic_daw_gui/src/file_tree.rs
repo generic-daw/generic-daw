@@ -38,7 +38,11 @@ impl FileTree {
     }
 
     pub fn update(&mut self, path: &Path, action: &Action) -> Task<Message> {
-        Task::batch(self.0.iter_mut().map(|dir| dir.update(path, action)))
+        self.0
+            .iter_mut()
+            .find(|dir| path.starts_with(dir.path()))
+            .unwrap()
+            .update(path, action)
     }
 }
 
