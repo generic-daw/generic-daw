@@ -1,7 +1,7 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
     components::{empty_widget, styled_button, styled_pick_list, styled_svg},
-    file_tree::{FileTree, FileTreeAction},
+    file_tree::{FileTree, Message as FileTreeMessage},
     icons::{PAUSE, PLAY, STOP},
     stylefns::button_with_base,
     widget::{AnimatedDot, BpmInput, LINE_HEIGHT, VSplit, vsplit::Strategy},
@@ -30,7 +30,7 @@ pub enum Message {
     Redraw,
 
     Arrangement(ArrangementMessage),
-    FileTree(FileTreeAction),
+    FileTree(FileTreeMessage),
 
     OpenFileDialog,
     SaveFile,
@@ -181,16 +181,18 @@ impl Daw {
         Task::none()
     }
 
-    pub fn handle_file_tree_action(&mut self, action: FileTreeAction) -> Task<Message> {
+    pub fn handle_file_tree_action(&mut self, action: FileTreeMessage) -> Task<Message> {
         match action {
-            FileTreeAction::None => {}
-            FileTreeAction::File(path) => {
+            FileTreeMessage::None => {}
+            FileTreeMessage::File(path) => {
                 return self
                     .arrangement
                     .update(ArrangementMessage::SampleLoadFromFile(path))
                     .map(Message::Arrangement);
             }
-            FileTreeAction::Dir(path) => self.file_tree.update(&path),
+            FileTreeMessage::Action(path, action) => {
+                return self.file_tree.update(&path, &action).map(Message::FileTree);
+            }
         }
 
         Task::none()

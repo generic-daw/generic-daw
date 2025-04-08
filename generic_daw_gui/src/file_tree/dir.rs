@@ -1,26 +1,37 @@
-use super::{FileTreeAction, file::File};
+use super::{Action, Message, file::File};
 use crate::{
     components::{styled_button, styled_svg},
     icons::CHEVRON_RIGHT,
     widget::{Clipped, LINE_HEIGHT, shaping_of},
 };
 use iced::{
-    Alignment, Element, Length, Radians, padding,
+    Alignment, Element, Length, Radians, Task, padding,
     widget::{
-        column, container, mouse_area, row, rule, text,
+        column, container, row, rule, text,
         text::{Shaping, Wrapping},
         vertical_rule,
     },
 };
+use smol::stream::StreamExt as _;
 use std::{f32::consts::FRAC_PI_2, path::Path, sync::Arc};
 
+#[derive(Clone, Debug)]
 pub struct Dir {
     path: Arc<Path>,
     name: Arc<str>,
     shaping: Shaping,
-    dirs: Option<Box<[Dir]>>,
-    files: Option<Box<[File]>>,
+    children: LoadStatus,
     open: bool,
+}
+
+#[derive(Clone, Debug)]
+enum LoadStatus {
+    Unloaded,
+    Loading,
+    Loaded {
+        dirs: Box<[Dir]>,
+        files: Box<[File]>,
+    },
 }
 
 impl Dir {
@@ -32,32 +43,42 @@ impl Dir {
             path: path.into(),
             name: name.into(),
             shaping,
-            dirs: None,
-            files: None,
+            children: LoadStatus::Unloaded,
             open: false,
         }
     }
 
-    pub fn update(&mut self, path: &Path) {
-        if &*self.path == path {
-            self.open ^= true;
-
-            if self.open {
-                if self.dirs.is_none() {
-                    self.dirs = Some(self.init_dirs());
+    pub fn update(&mut self, path: &Path, action: &Action) -> Task<Message> {
+        if *path == *self.path {
+            match action {
+                Action::DirOpened(dirs, files) => {
+                    self.children = LoadStatus::Loaded {
+                        dirs: dirs.clone(),
+                        files: files.clone(),
+                    }
                 }
+                Action::DirToggleOpen => {
+                    self.open ^= true;
 
-                if self.files.is_none() {
-                    self.files = Some(self.init_files());
+                    if matches!(self.children, LoadStatus::Unloaded) {
+                        self.children = LoadStatus::Loading;
+                        let path = self.path.clone();
+
+                        return Task::perform(Self::load(self.path.clone()), |(dirs, files)| {
+                            Message::Action(path, Action::DirOpened(dirs, files))
+                        });
+                    }
                 }
             }
-        } else if let Some(dirs) = self.dirs.as_mut() {
-            dirs.iter_mut().for_each(|dir| dir.update(path));
+        } else if let LoadStatus::Loaded { dirs, .. } = &mut self.children {
+            return Task::batch(dirs.iter_mut().map(|dir| dir.update(path, action)));
         }
+
+        Task::none()
     }
 
-    pub fn view(&self) -> (Element<'_, FileTreeAction>, f32) {
-        let mut col = column!(mouse_area(
+    pub fn view(&self) -> (Element<'_, Message>, f32) {
+        let mut col = column!(
             styled_button(row![
                 Clipped::new(
                     styled_svg(CHEVRON_RIGHT.clone())
@@ -73,81 +94,79 @@ impl Dir {
             ])
             .width(Length::Fill)
             .padding(0)
-            .on_press(FileTreeAction::Dir(self.path.clone()))
-        ));
+            .on_press(Message::Action(self.path.clone(), Action::DirToggleOpen))
+        );
 
         let mut height = 0.0;
 
         if self.open {
-            let ch = column![column(
-                self.dirs
-                    .as_ref()
-                    .unwrap()
-                    .iter()
-                    .map(Self::view)
-                    .chain(self.files.as_ref().unwrap().iter().map(File::view))
-                    .map(|(e, h)| {
-                        height += h;
-                        e
-                    })
-            ),];
+            if let LoadStatus::Loaded { dirs, files } = &self.children {
+                let ch = column![column(
+                    dirs.iter()
+                        .map(Self::view)
+                        .chain(files.iter().map(File::view))
+                        .map(|(e, h)| {
+                            height += h;
+                            e
+                        })
+                ),];
 
-            col = col.push(row![
-                column![vertical_rule(1.0).style(|t| rule::Style {
-                    width: 3,
-                    ..rule::default(t)
-                })]
-                .padding(padding::top(LINE_HEIGHT / 2.0 - 1.5).bottom(LINE_HEIGHT / 2.0 - 1.5))
-                .align_x(Alignment::Center)
-                .width(LINE_HEIGHT)
-                .height(height),
-                ch
-            ]);
+                col = col.push(row![
+                    column![vertical_rule(1.0).style(|t| rule::Style {
+                        width: 3,
+                        ..rule::default(t)
+                    })]
+                    .padding(padding::top(LINE_HEIGHT / 2.0 - 1.5).bottom(LINE_HEIGHT / 2.0 - 1.5))
+                    .align_x(Alignment::Center)
+                    .width(LINE_HEIGHT)
+                    .height(height),
+                    ch
+                ]);
+            }
         }
 
         (col.into(), height + LINE_HEIGHT)
     }
 
-    fn init_files(&self) -> Box<[File]> {
-        let Ok(files) = std::fs::read_dir(&self.path) else {
-            return [].into();
+    async fn load(path: Arc<Path>) -> (Box<[Self]>, Box<[File]>) {
+        let Ok(mut entry) = smol::fs::read_dir(path).await else {
+            return ([].into(), [].into());
         };
 
-        let mut files = files
-            .filter_map(Result::ok)
-            .filter(|file| file.file_type().is_ok_and(|t| t.is_file()))
-            .map(|file| {
-                let mut name = file.file_name();
-                name.make_ascii_lowercase();
+        let mut files = Vec::new();
+        let mut dirs = Vec::new();
 
-                (file, name)
-            })
-            .collect::<Box<_>>();
+        while let Some(entry) = entry.next().await {
+            let Ok(entry) = entry else {
+                continue;
+            };
+
+            let Ok(ty) = entry.file_type().await else {
+                continue;
+            };
+
+            let mut name = entry.file_name();
+            name.make_ascii_lowercase();
+
+            if ty.is_file() {
+                files.push((entry, name));
+            } else if ty.is_dir() {
+                dirs.push((entry, name));
+            }
+        }
+
         files.sort_unstable_by(|(_, aname), (_, bname)| aname.cmp(bname));
-        files
-            .iter()
-            .map(|(entry, _)| File::new(Box::leak(entry.path().into_boxed_path())))
-            .collect()
-    }
-
-    fn init_dirs(&self) -> Box<[Self]> {
-        let Ok(dirs) = std::fs::read_dir(&self.path) else {
-            return [].into();
-        };
-
-        let mut dirs = dirs
-            .filter_map(Result::ok)
-            .filter(|file| file.file_type().is_ok_and(|t| t.is_dir()))
-            .map(|file| {
-                let mut name = file.file_name();
-                name.make_ascii_lowercase();
-
-                (file, name)
-            })
-            .collect::<Box<_>>();
         dirs.sort_unstable_by(|(_, aname), (_, bname)| aname.cmp(bname));
-        dirs.iter()
-            .map(|(entry, _)| Self::new(Box::leak(entry.path().into_boxed_path())))
-            .collect()
+
+        let files = files
+            .into_iter()
+            .map(|(entry, _)| File::new(&entry.path()))
+            .collect();
+        let dirs = dirs
+            .into_iter()
+            .map(|(entry, _)| Self::new(&entry.path()))
+            .collect();
+
+        (dirs, files)
     }
 }

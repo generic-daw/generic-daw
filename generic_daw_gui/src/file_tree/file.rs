@@ -1,4 +1,4 @@
-use super::FileTreeAction;
+use super::Message;
 use crate::{
     components::{styled_button, styled_svg},
     icons::{AUDIO_FILE, GENERIC_FILE},
@@ -19,6 +19,7 @@ use std::{
     sync::Arc,
 };
 
+#[derive(Clone, Debug)]
 pub struct File {
     path: Arc<Path>,
     name: Arc<str>,
@@ -45,7 +46,7 @@ impl File {
         }
     }
 
-    pub fn view(&self) -> (Element<'_, FileTreeAction>, f32) {
+    pub fn view(&self) -> (Element<'_, Message>, f32) {
         (
             mouse_area(
                 styled_button(row![
@@ -59,9 +60,9 @@ impl File {
                 ])
                 .width(Length::Fill)
                 .padding(0)
-                .on_press(FileTreeAction::None),
+                .on_press(Message::None),
             )
-            .on_double_click(FileTreeAction::File(self.path.clone()))
+            .on_double_click(Message::File(self.path.clone()))
             .into(),
             LINE_HEIGHT,
         )

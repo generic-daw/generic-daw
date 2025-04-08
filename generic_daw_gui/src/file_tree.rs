@@ -1,7 +1,8 @@
 use crate::components::styled_scrollable_with_direction;
 use dir::Dir;
+use file::File;
 use iced::{
-    Element,
+    Element, Task,
     widget::{
         column,
         scrollable::{Direction, Scrollbar},
@@ -13,16 +14,22 @@ mod dir;
 mod file;
 
 #[derive(Clone, Debug)]
-pub enum FileTreeAction {
+pub enum Message {
     None,
-    Dir(Arc<Path>),
+    Action(Arc<Path>, Action),
     File(Arc<Path>),
+}
+
+#[derive(Clone, Debug)]
+pub enum Action {
+    DirToggleOpen,
+    DirOpened(Box<[Dir]>, Box<[File]>),
 }
 
 pub struct FileTree(Box<[Dir]>);
 
 impl FileTree {
-    pub fn view(&self) -> Element<'_, FileTreeAction> {
+    pub fn view(&self) -> Element<'_, Message> {
         styled_scrollable_with_direction(
             column(self.0.iter().map(|dir| dir.view().0)),
             Direction::Vertical(Scrollbar::default()),
@@ -30,10 +37,8 @@ impl FileTree {
         .into()
     }
 
-    pub fn update(&mut self, path: &Path) {
-        for dir in &mut self.0 {
-            dir.update(path);
-        }
+    pub fn update(&mut self, path: &Path, action: &Action) -> Task<Message> {
+        Task::batch(self.0.iter_mut().map(|dir| dir.update(path, action)))
     }
 }
 
