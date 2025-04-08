@@ -45,42 +45,22 @@ type AudioGraph = audio_graph::AudioGraph<AudioGraphNode, Event>;
 pub fn build_input_stream(
     sample_rate: u32,
     buffer_size: u32,
-) -> (u16, u32, Stream, Receiver<Box<[f32]>>) {
+) -> (Stream, StreamConfig, Receiver<Box<[f32]>>) {
     let (sender, receiver) = async_channel::unbounded();
 
     let device = cpal::default_host().default_input_device().unwrap();
 
-    let supported_config = device
-        .supported_input_configs()
-        .unwrap()
-        .filter(|config| config.max_sample_rate().0 >= 40000)
-        .min_by(|l, r| {
-            compare_by_sample_rate(l, r, sample_rate)
-                .then_with(|| compare_by_buffer_size(l, r, buffer_size))
-        })
-        .unwrap();
-
-    let sample_rate = SampleRate(sample_rate.clamp(
-        supported_config.min_sample_rate().0,
-        supported_config.max_sample_rate().0,
-    ));
-
-    let buffer_size = match *supported_config.buffer_size() {
-        SupportedBufferSize::Unknown => BufferSize::Default,
-        SupportedBufferSize::Range { min, max } => BufferSize::Fixed(buffer_size.clamp(min, max)),
-    };
-
-    info!(
-        "starting output stream with sample rate {sample_rate:?} and buffer size {buffer_size:?}",
+    let config = choose_config(
+        device.supported_input_configs().unwrap(),
+        sample_rate,
+        buffer_size,
     );
+
+    info!("starting output stream with config {config:?}",);
 
     let stream = device
         .build_input_stream(
-            &StreamConfig {
-                channels: supported_config.channels(),
-                sample_rate,
-                buffer_size,
-            },
+            &config,
             move |data, _| sender.try_send(data.into()).unwrap(),
             |err| panic!("{err}"),
             None,
@@ -89,50 +69,28 @@ pub fn build_input_stream(
 
     stream.play().unwrap();
 
-    (supported_config.channels(), sample_rate.0, stream, receiver)
+    (stream, config, receiver)
 }
 
 pub fn build_output_stream(
     sample_rate: u32,
     buffer_size: u32,
 ) -> (Stream, Arc<MixerNode>, Sender<DawCtxMessage>, Arc<Meter>) {
-    let (mut ctx, master_node, producer) = DawCtx::create(sample_rate, buffer_size);
-    let meter = ctx.meter.clone();
+    let (mut ctx, meter, node, sender) = DawCtx::create(sample_rate, buffer_size);
 
     let device = cpal::default_host().default_output_device().unwrap();
 
-    let supported_config = device
-        .supported_output_configs()
-        .unwrap()
-        .filter(|config| config.channels() == 2)
-        .filter(|config| config.max_sample_rate().0 >= 40000)
-        .min_by(|l, r| {
-            compare_by_sample_rate(l, r, sample_rate)
-                .then_with(|| compare_by_buffer_size(l, r, buffer_size))
-        })
-        .unwrap();
-
-    let sample_rate = SampleRate(sample_rate.clamp(
-        supported_config.min_sample_rate().0,
-        supported_config.max_sample_rate().0,
-    ));
-
-    let buffer_size = match *supported_config.buffer_size() {
-        SupportedBufferSize::Unknown => BufferSize::Default,
-        SupportedBufferSize::Range { min, max } => BufferSize::Fixed(buffer_size.clamp(min, max)),
-    };
-
-    info!(
-        "starting output stream with sample rate {sample_rate:?} and buffer size {buffer_size:?}",
+    let config = choose_config(
+        device.supported_output_configs().unwrap(),
+        sample_rate,
+        buffer_size,
     );
+
+    info!("starting output stream with config {config:?}");
 
     let stream = device
         .build_output_stream(
-            &StreamConfig {
-                channels: supported_config.channels(),
-                sample_rate,
-                buffer_size,
-            },
+            &config,
             move |buf, _| ctx.process(buf),
             |err| panic!("{err}"),
             None,
@@ -141,7 +99,37 @@ pub fn build_output_stream(
 
     stream.play().unwrap();
 
-    (stream, master_node, producer, meter)
+    (stream, node, sender, meter)
+}
+
+fn choose_config(
+    configs: impl IntoIterator<Item = SupportedStreamConfigRange>,
+    sample_rate: u32,
+    buffer_size: u32,
+) -> StreamConfig {
+    let config = configs
+        .into_iter()
+        .filter(|config| config.channels() == 2)
+        .filter(|config| config.max_sample_rate().0 >= 40000)
+        .min_by(|l, r| {
+            compare_by_sample_rate(l, r, sample_rate)
+                .then_with(|| compare_by_buffer_size(l, r, buffer_size))
+        })
+        .unwrap();
+
+    let sample_rate =
+        SampleRate(sample_rate.clamp(config.min_sample_rate().0, config.max_sample_rate().0));
+
+    let buffer_size = match *config.buffer_size() {
+        SupportedBufferSize::Unknown => BufferSize::Default,
+        SupportedBufferSize::Range { min, max } => BufferSize::Fixed(buffer_size.clamp(min, max)),
+    };
+
+    StreamConfig {
+        channels: 2,
+        sample_rate,
+        buffer_size,
+    }
 }
 
 fn compare_by_sample_rate(

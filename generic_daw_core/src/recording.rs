@@ -34,8 +34,7 @@ pub struct Recording {
 
 impl Recording {
     pub fn create(path: Arc<Path>, meter: &Meter) -> (Self, Receiver<Box<[f32]>>) {
-        let (channels, sample_rate, stream, receiver) =
-            build_input_stream(meter.sample_rate, meter.buffer_size);
+        let (stream, config, receiver) = build_input_stream(meter.sample_rate, meter.buffer_size);
 
         let start_pos = Position::from_samples(
             meter.sample.load(Acquire),
@@ -46,8 +45,8 @@ impl Recording {
         let writer = WavWriter::create(
             &path,
             WavSpec {
-                channels,
-                sample_rate,
+                channels: config.channels,
+                sample_rate: config.sample_rate.0,
                 bits_per_sample: 32,
                 sample_format: SampleFormat::Float,
             },
@@ -55,8 +54,8 @@ impl Recording {
         .unwrap()
         .into();
 
-        let resampler =
-            resampler(meter.sample_rate, sample_rate, meter.buffer_size).map(|x| x.unwrap().into());
+        let resampler = resampler(meter.sample_rate, config.sample_rate.0, meter.buffer_size)
+            .map(|x| x.unwrap().into());
 
         (
             Self {
@@ -66,8 +65,8 @@ impl Recording {
 
                 writer,
                 position: start_pos,
-                channels: channels as usize,
-                sample_rate,
+                channels: config.channels as usize,
+                sample_rate: config.sample_rate.0,
                 buffer_size: meter.buffer_size as usize,
 
                 resampler,

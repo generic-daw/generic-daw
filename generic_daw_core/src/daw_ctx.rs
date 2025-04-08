@@ -19,7 +19,7 @@ pub enum DawCtxMessage {
 }
 
 pub struct DawCtx {
-    pub meter: Arc<Meter>,
+    meter: Arc<Meter>,
     audio_graph: AudioGraph,
     receiver: Receiver<DawCtxMessage>,
 }
@@ -28,8 +28,8 @@ impl DawCtx {
     pub fn create(
         sample_rate: u32,
         buffer_size: u32,
-    ) -> (Self, Arc<MixerNode>, Sender<DawCtxMessage>) {
-        let (ui_producer, consumer) = async_channel::unbounded();
+    ) -> (Self, Arc<Meter>, Arc<MixerNode>, Sender<DawCtxMessage>) {
+        let (sender, receiver) = async_channel::unbounded();
 
         let meter = Arc::new(Meter::new(sample_rate, buffer_size));
         let node = Arc::<MixerNode>::default();
@@ -37,12 +37,12 @@ impl DawCtx {
         let audio_graph = AudioGraph::new(master.into());
 
         let audio_ctx = Self {
-            meter,
+            meter: meter.clone(),
             audio_graph,
-            receiver: consumer,
+            receiver,
         };
 
-        (audio_ctx, node, ui_producer)
+        (audio_ctx, meter, node, sender)
     }
 
     pub fn process(&mut self, buf: &mut [f32]) {
