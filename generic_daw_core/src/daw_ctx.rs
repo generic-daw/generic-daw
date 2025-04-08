@@ -2,7 +2,10 @@ use crate::{AudioGraph, AudioGraphNode, Master, Meter, MixerNode};
 use async_channel::{Receiver, Sender};
 use audio_graph::NodeId;
 use log::trace;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::Ordering::{AcqRel, Acquire},
+};
 
 #[derive(Debug)]
 pub enum DawCtxMessage {
@@ -66,5 +69,13 @@ impl DawCtx {
         }
 
         self.audio_graph.process(buf);
+
+        for s in &mut *buf {
+            *s = s.clamp(-1.0, 1.0);
+        }
+
+        if self.meter.playing.load(Acquire) {
+            self.meter.sample.fetch_add(buf.len(), AcqRel);
+        }
     }
 }

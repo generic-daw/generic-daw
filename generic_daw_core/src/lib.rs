@@ -6,13 +6,7 @@ use cpal::{
 use daw_ctx::DawCtx;
 use event::Event;
 use log::info;
-use std::{
-    cmp::Ordering,
-    sync::{
-        Arc,
-        atomic::Ordering::{AcqRel, Acquire},
-    },
-};
+use std::{cmp::Ordering, sync::Arc};
 
 mod audio_clip;
 mod audio_graph_node;
@@ -139,17 +133,7 @@ pub fn build_output_stream(
                 sample_rate,
                 buffer_size,
             },
-            move |data, _| {
-                ctx.process(data);
-
-                if ctx.meter.playing.load(Acquire) {
-                    ctx.meter.sample.fetch_add(data.len(), AcqRel);
-                }
-
-                for s in data {
-                    *s = s.clamp(-1.0, 1.0);
-                }
-            },
+            move |buf, _| ctx.process(buf),
             |err| panic!("{err}"),
             None,
         )
