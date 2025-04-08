@@ -71,7 +71,11 @@ impl Dir {
                 }
             }
         } else if let LoadStatus::Loaded { dirs, .. } = &mut self.children {
-            return Task::batch(dirs.iter_mut().map(|dir| dir.update(path, action)));
+            return dirs
+                .iter_mut()
+                .find(|dir| dir.path.ends_with(path))
+                .unwrap()
+                .update(path, action);
         }
 
         Task::none()
