@@ -736,8 +736,8 @@ impl ArrangementView {
                 writer.push_audio(
                     sample_dirs
                         .iter()
-                        .filter_map(|dir| path.strip_prefix(dir).ok())
-                        .chain(once(&*path)),
+                        .find_map(|dir| path.strip_prefix(dir).ok())
+                        .unwrap_or(&path),
                 ),
             );
         }
@@ -861,20 +861,15 @@ impl ArrangementView {
                 let sender = sender.clone();
                 let sample_rate = meter.sample_rate;
                 s.spawn(move || {
-                    for path in path.iter_paths() {
-                        let path = path.as_ref();
+                    let path = path.path();
 
-                        for path in sample_dirs
-                            .iter()
-                            .map(|dir| dir.join(path).into())
-                            .chain(once(path.into()))
-                        {
-                            if let Some(audio) = InterleavedAudio::create(path, sample_rate) {
-                                sender.send((idx, audio)).unwrap();
-                                return;
-                            }
-                        }
-                    }
+                    let audio = sample_dirs
+                        .iter()
+                        .map(|dir| dir.join(&path).into())
+                        .chain(once(path.as_ref().into()))
+                        .find_map(|path| InterleavedAudio::create(path, sample_rate));
+
+                    sender.send((idx, audio)).unwrap();
                 });
             }
 
@@ -895,7 +890,7 @@ impl ArrangementView {
         });
 
         while let Ok((idx, audio)) = receiver.try_recv() {
-            audios.insert(idx, audio);
+            audios.insert(idx, audio?);
         }
 
         let plugin_bundles = get_installed_plugins();

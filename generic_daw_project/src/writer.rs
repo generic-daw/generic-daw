@@ -18,18 +18,13 @@ impl Writer {
     #[must_use]
     pub fn push_audio(
         &mut self,
-        paths: impl IntoIterator<Item: AsRef<Path>>,
+        path: impl AsRef<Path>,
     ) -> proto::project::track::audio_clip::AudioIndex {
         self.0.audios.push(proto::project::Audio {
-            paths: paths
-                .into_iter()
-                .map(|path| proto::project::audio::Path {
-                    components: path
-                        .as_ref()
-                        .components()
-                        .map(|component| component.as_os_str().to_string_lossy().to_string())
-                        .collect(),
-                })
+            path: path
+                .as_ref()
+                .components()
+                .map(|component| component.as_os_str().to_string_lossy().to_string())
                 .collect(),
         });
 

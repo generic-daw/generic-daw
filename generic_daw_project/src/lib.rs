@@ -25,10 +25,9 @@ pub mod proto {
     index_impl_eq_hash!(project::channel::ChannelIndex);
 
     impl project::Audio {
-        pub fn iter_paths(&self) -> impl Iterator<Item: AsRef<Path>> {
-            self.paths
-                .iter()
-                .map(|path| path.components.iter().collect::<PathBuf>())
+        #[must_use]
+        pub fn path(&self) -> impl AsRef<Path> {
+            self.path.iter().collect::<PathBuf>()
         }
     }
 
