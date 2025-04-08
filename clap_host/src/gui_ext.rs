@@ -2,12 +2,13 @@ use crate::{PluginDescriptor, PluginId, audio_processor::AudioThreadMessage, hos
 use clack_extensions::{
     gui::{GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow},
     render::RenderMode,
+    timer::TimerId,
 };
 use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
 use log::warn;
 use raw_window_handle::RawWindowHandle;
-use std::{io::Cursor, time::Duration};
+use std::io::Cursor;
 
 #[derive(Debug)]
 pub struct GuiExt {
@@ -78,12 +79,10 @@ impl GuiExt {
         self.instance.call_on_main_thread_callback();
     }
 
-    #[must_use]
-    pub fn tick_timers(&mut self) -> Option<Duration> {
-        self.instance
-            .access_handler(|mt| mt.timers.clone())
-            .borrow_mut()
-            .tick_timers(&mut self.instance.plugin_handle())
+    pub fn tick_timer(&mut self, id: u32) {
+        if let Some(ext) = self.instance.access_handler(|mt| mt.timers) {
+            ext.on_timer(&mut self.instance.plugin_handle(), TimerId(id));
+        }
     }
 
     pub fn open_floating(&mut self) {

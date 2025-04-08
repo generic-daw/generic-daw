@@ -1,4 +1,4 @@
-use crate::{shared::Shared, timer_ext::TimerExt};
+use crate::shared::Shared;
 use clack_extensions::{
     audio_ports::{HostAudioPortsImpl, RescanType},
     gui::{GuiSize, PluginGui},
@@ -6,12 +6,11 @@ use clack_extensions::{
     note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
     render::PluginRender,
     state::{HostStateImpl, PluginState},
-    timer::{HostTimerImpl, TimerId},
+    timer::{HostTimerImpl, PluginTimer, TimerId},
 };
 use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
-use log::info;
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::time::Duration;
 
 #[derive(Clone, Copy, Debug)]
 pub enum MainThreadMessage {
@@ -20,7 +19,8 @@ pub enum MainThreadMessage {
     GuiRequestResize(GuiSize),
     GuiRequestHide,
     GuiClosed,
-    TickTimers,
+    RegisterTimer(u32, Duration),
+    UnregisterTimer(u32),
     LatencyChanged,
 }
 
@@ -31,7 +31,8 @@ pub struct MainThread<'a> {
     pub latency: Option<NoDebug<PluginLatency>>,
     pub render: Option<NoDebug<PluginRender>>,
     pub state: Option<NoDebug<PluginState>>,
-    pub timers: Rc<RefCell<TimerExt>>,
+    pub timers: Option<NoDebug<PluginTimer>>,
+    next_timer_id: u32,
 }
 
 impl<'a> MainThread<'a> {
@@ -39,10 +40,11 @@ impl<'a> MainThread<'a> {
         Self {
             shared,
             gui: None,
-            timers: Rc::default(),
+            timers: None,
             render: None,
             state: None,
             latency: None,
+            next_timer_id: 0,
         }
     }
 }
@@ -53,7 +55,7 @@ impl<'a> MainThreadHandler<'a> for MainThread<'a> {
         self.latency = instance.get_extension().map(NoDebug);
         self.render = instance.get_extension().map(NoDebug);
         self.state = instance.get_extension().map(NoDebug);
-        self.timers.borrow_mut().set_ext(instance.get_extension());
+        self.timers = instance.get_extension().map(NoDebug);
     }
 }
 
@@ -88,30 +90,26 @@ impl HostStateImpl for MainThread<'_> {
 
 impl HostTimerImpl for MainThread<'_> {
     fn register_timer(&mut self, period_ms: u32) -> Result<TimerId, HostError> {
-        let timer_id = self
-            .timers
-            .borrow_mut()
-            .register(Duration::from_millis(u64::from(period_ms)));
-
-        info!(
-            "{}: registered {period_ms}ms timer with id {timer_id}",
-            self.shared.descriptor
-        );
+        let timer_id = TimerId(self.next_timer_id);
+        self.next_timer_id += 1;
 
         self.shared
             .main_sender
-            .try_send(MainThreadMessage::TickTimers)
+            .try_send(MainThreadMessage::RegisterTimer(
+                timer_id.0,
+                Duration::from_millis(u64::from(period_ms)),
+            ))
             .unwrap();
 
         Ok(timer_id)
     }
 
     fn unregister_timer(&mut self, timer_id: TimerId) -> Result<(), HostError> {
-        info!(
-            "{}: unregistered timer with id {timer_id}",
-            self.shared.descriptor
-        );
+        self.shared
+            .main_sender
+            .try_send(MainThreadMessage::UnregisterTimer(timer_id.0))
+            .unwrap();
 
-        self.timers.borrow_mut().unregister(timer_id)
+        Ok(())
     }
 }

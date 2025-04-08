@@ -21,7 +21,6 @@ mod host;
 mod main_thread;
 mod plugin_descriptor;
 mod shared;
-mod timer_ext;
 
 pub use audio_processor::AudioProcessor;
 pub use clack_host::bundle::PluginBundle;

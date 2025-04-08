@@ -292,7 +292,7 @@ impl Daw {
         };
 
         Subscription::batch([
-            ArrangementView::subscription().map(Message::Arrangement),
+            self.arrangement.subscription().map(Message::Arrangement),
             redraw,
             event::listen_with(|e, s, _| match s {
                 Status::Ignored => match e {

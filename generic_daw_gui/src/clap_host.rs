@@ -3,17 +3,20 @@ use generic_daw_core::clap_host::{GuiExt, MainThreadMessage, PluginId};
 use generic_daw_utils::HoleyVec;
 use iced::{
     Function as _, Size, Subscription, Task,
+    time::every,
     window::{self, Id, close_requests, resize_events},
 };
-use smol::{Timer, channel::Receiver};
+use smol::channel::Receiver;
 use std::{
     ops::Deref as _,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 #[derive(Clone, Debug)]
 pub enum Message {
     MainThread(PluginId, MainThreadMessage),
+    TickTimer(usize, usize),
     Opened(Arc<Mutex<(Fragile<GuiExt>, Receiver<MainThreadMessage>)>>),
     GuiRequestShow(Id, Arc<Fragile<GuiExt>>),
     GuiRequestResize((Id, Size)),
@@ -23,6 +26,7 @@ pub enum Message {
 #[derive(Default)]
 pub struct ClapHost {
     plugins: HoleyVec<GuiExt>,
+    timers: HoleyVec<HoleyVec<Duration>>,
     windows: HoleyVec<Id>,
 }
 
@@ -30,6 +34,12 @@ impl ClapHost {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::MainThread(id, msg) => return self.main_thread_message(id, msg),
+            Message::TickTimer(id, timer_id) => {
+                self.plugins
+                    .get_mut(id)
+                    .unwrap()
+                    .tick_timer(timer_id as u32);
+            }
             Message::Opened(arc) => {
                 let (gui, receiver) = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
                 let mut gui = gui.into_inner();
@@ -60,9 +70,7 @@ impl ClapHost {
                 self.plugins.insert(id.get(), gui);
                 self.windows.insert(id.get(), window_id);
 
-                return resize
-                    .chain(resizable)
-                    .chain(self.update(Message::MainThread(id, MainThreadMessage::TickTimers)));
+                return resize.chain(resizable);
             }
             Message::GuiRequestResize((window_id, size)) => {
                 if let Some(id) = self.windows.position(&window_id) {
@@ -144,14 +152,17 @@ impl ClapHost {
                     return window::close(window_id);
                 }
             }
-            MainThreadMessage::TickTimers => {
-                if self.windows.contains_key(id.get()) {
-                    if let Some(sleep) = self.plugins.get_mut(id.get()).unwrap().tick_timers() {
-                        return Task::perform(Timer::after(sleep), move |_| {
-                            Message::MainThread(id, MainThreadMessage::TickTimers)
-                        });
-                    }
-                }
+            MainThreadMessage::RegisterTimer(timer_id, duration) => {
+                self.timers
+                    .entry(id.get())
+                    .get_or_insert_default()
+                    .insert(timer_id as usize, duration);
+            }
+            MainThreadMessage::UnregisterTimer(timer_id) => {
+                self.timers
+                    .get_mut(id.get())
+                    .unwrap()
+                    .remove(timer_id as usize);
             }
             MainThreadMessage::LatencyChanged => {
                 self.plugins.get_mut(id.get()).unwrap().latency_changed();
@@ -181,10 +192,26 @@ impl ClapHost {
         self.plugins.get_mut(id.get()).unwrap().get_state()
     }
 
-    pub fn subscription() -> Subscription<Message> {
-        Subscription::batch([
-            resize_events().map(Message::GuiRequestResize),
-            close_requests().map(Message::GuiRequestHide),
-        ])
+    pub fn subscription(&self) -> Subscription<Message> {
+        Subscription::batch(
+            self.windows
+                .keys()
+                .flat_map(|id| {
+                    self.timers
+                        .get(id)
+                        .into_iter()
+                        .flat_map(HoleyVec::iter)
+                        .map(move |(k, &v)| {
+                            every(v)
+                                .with(k)
+                                .with(id)
+                                .map(|(id, (k, _))| Message::TickTimer(id, k))
+                        })
+                })
+                .chain([
+                    resize_events().map(Message::GuiRequestResize),
+                    close_requests().map(Message::GuiRequestHide),
+                ]),
+        )
     }
 }

@@ -1735,8 +1735,8 @@ impl ArrangementView {
         .into()
     }
 
-    pub fn subscription() -> Subscription<Message> {
-        ClapHost::subscription().map(Message::ClapHost)
+    pub fn subscription(&self) -> Subscription<Message> {
+        self.clap_host.subscription().map(Message::ClapHost)
     }
 
     pub fn change_tab(&mut self, tab: Tab) {
