@@ -71,7 +71,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AnimatedDot {
             if self.enabled != state.last_enabled {
                 state
                     .animation
-                    .go_from_mut(f32::from(u8::from(self.enabled)), now);
+                    .go_at_mut(f32::from(u8::from(self.enabled)), now);
                 state.last_enabled = self.enabled;
             }
 

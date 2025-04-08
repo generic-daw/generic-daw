@@ -84,23 +84,23 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
                 state.left = Animation::new(left)
                     .duration(Duration::from_secs_f32(left.exp2()))
                     .easing(Easing::EaseOutExpo)
-                    .go_from(0.0, now);
+                    .go_at(0.0, now);
             }
 
             if right >= state.right.interpolate_with(identity, now) {
                 state.right = Animation::new(right)
                     .duration(Duration::from_secs_f32(right.exp2()))
                     .easing(Easing::EaseOutExpo)
-                    .go_from(0.0, now);
+                    .go_at(0.0, now);
             }
 
             if self.enabled {
                 if state.left.interpolate_with(identity, now) > 1.0 {
-                    state.left_mix = Animation::new(1.0).very_quick().go_from(0.0, now);
+                    state.left_mix = Animation::new(1.0).very_quick().go_at(0.0, now);
                 }
 
                 if state.right.interpolate_with(identity, now) > 1.0 {
-                    state.right_mix = Animation::new(1.0).very_quick().go_from(0.0, now);
+                    state.right_mix = Animation::new(1.0).very_quick().go_at(0.0, now);
                 }
             } else {
                 state.left_mix = Animation::new(0.0);

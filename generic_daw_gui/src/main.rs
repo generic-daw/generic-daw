@@ -13,9 +13,10 @@ mod widget;
 fn main() -> Result {
     env_logger::init();
 
-    daemon(Daw::title, Daw::update, Daw::view)
+    daemon(Daw::create, Daw::update, Daw::view)
+        .title(Daw::title)
         .subscription(Daw::subscription)
         .theme(|_, _| Theme::CatppuccinFrappe)
         .antialiasing(true)
-        .run_with(Daw::create)
+        .run()
 }

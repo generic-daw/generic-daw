@@ -15,7 +15,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use arrangement::NodeType;
-use dragking::{DragEvent, DropPosition};
+use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
     AudioClip, Clip, InterleavedAudio, Meter, MidiClip, MidiKey, MidiNote, MixerNode, Position,
@@ -299,14 +299,9 @@ impl ArrangementView {
             Message::PluginsReordered(event) => {
                 if let DragEvent::Dropped {
                     index,
-                    mut target_index,
-                    drop_position,
+                    target_index,
                 } = event
                 {
-                    if drop_position == DropPosition::After {
-                        target_index -= 1;
-                    }
-
                     if index != target_index {
                         let selected = self.selected_channel.unwrap();
 
