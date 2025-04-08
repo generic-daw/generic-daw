@@ -228,7 +228,7 @@ impl ArrangementView {
                     self.selected_channel = None;
                 }
 
-                if let Some(effects) = self.plugins_by_channel.remove(id.get()) {
+                if let Some(effects) = self.plugins_by_channel.remove(*id) {
                     return Task::batch(effects.into_iter().map(|(id, _)| {
                         self.clap_host
                             .update(ClapHostMessage::MainThread(
@@ -243,9 +243,7 @@ impl ArrangementView {
                 self.selected_channel = if self.selected_channel == Some(id) {
                     None
                 } else {
-                    self.plugins_by_channel
-                        .entry(id.get())
-                        .get_or_insert_default();
+                    self.plugins_by_channel.entry(*id).get_or_insert_default();
                     Some(id)
                 };
             }
@@ -276,7 +274,7 @@ impl ArrangementView {
                     .0
                     .add_plugin(audio_processor);
                 self.plugins_by_channel
-                    .get_mut(selected.get())
+                    .get_mut(*selected)
                     .unwrap()
                     .push((id, descriptor));
 
@@ -310,7 +308,7 @@ impl ArrangementView {
                             .0
                             .shift_move(index, target_index);
                         self.plugins_by_channel
-                            .get_mut(selected.get())
+                            .get_mut(*selected)
                             .unwrap()
                             .shift_move(index, target_index);
                     }
@@ -321,7 +319,7 @@ impl ArrangementView {
                 self.arrangement.node(selected).0.remove_plugin(i);
                 let id = self
                     .plugins_by_channel
-                    .get_mut(selected.get())
+                    .get_mut(*selected)
                     .unwrap()
                     .remove(i)
                     .0;
@@ -769,7 +767,7 @@ impl ArrangementView {
         let mut tracks = HashMap::new();
         for track in self.arrangement.tracks() {
             tracks.insert(
-                track.id().get(),
+                track.id(),
                 writer.push_track(
                     track.clips.iter().map(|clip| match clip {
                         Clip::Audio(audio) => proto::project::track::AudioClip {
@@ -792,7 +790,7 @@ impl ArrangementView {
                         .into(),
                     }),
                     self.plugins_by_channel
-                        .get(track.id().get())
+                        .get(*track.id())
                         .into_iter()
                         .flatten()
                         .map(|(id, descriptor)| proto::project::channel::Plugin {
@@ -808,10 +806,10 @@ impl ArrangementView {
         let mut channels = HashMap::new();
         for channel in once(&*self.arrangement.master().0).chain(self.arrangement.channels()) {
             channels.insert(
-                channel.id().get(),
+                channel.id(),
                 writer.push_channel(
                     self.plugins_by_channel
-                        .get(channel.id().get())
+                        .get(*channel.id())
                         .into_iter()
                         .flatten()
                         .map(|(id, descriptor)| proto::project::channel::Plugin {
@@ -826,16 +824,13 @@ impl ArrangementView {
 
         for track in self.arrangement.tracks() {
             for connection in &self.arrangement.node(track.id()).1 {
-                writer.connect_track_to_channel(tracks[&track.id().get()], channels[&connection]);
+                writer.connect_track_to_channel(tracks[&track.id()], channels[&connection]);
             }
         }
 
         for channel in self.arrangement.channels() {
             for connection in &self.arrangement.node(channel.id()).1 {
-                writer.connect_channel_to_channel(
-                    channels[&channel.id().get()],
-                    channels[&connection],
-                );
+                writer.connect_channel_to_channel(channels[&channel.id()], channels[&connection]);
             }
         }
 
@@ -929,7 +924,7 @@ impl ArrangementView {
                 }
 
                 plugins_by_channel
-                    .entry(node.id().get())
+                    .entry(*node.id())
                     .get_or_insert_default()
                     .push((audio_processor.id(), descriptor.clone()));
 
@@ -1350,7 +1345,7 @@ impl ArrangementView {
                     if *ty == NodeType::Master || id == selected_channel {
                         empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT).into()
                     } else {
-                        let connected = connections.contains(id.get());
+                        let connected = connections.contains(*id);
 
                         button(
                             svg(CHEVRON_RIGHT.clone())
@@ -1574,10 +1569,8 @@ impl ArrangementView {
                     horizontal_rule(11.0),
                     styled_scrollable_with_direction(
                         dragking::column({
-                            self.plugins_by_channel[selected.get()]
-                                .iter()
-                                .enumerate()
-                                .map(|(i, (plugin_id, descriptor))| {
+                            self.plugins_by_channel[*selected].iter().enumerate().map(
+                                |(i, (plugin_id, descriptor))| {
                                     let enabled = node.get_plugin_enabled(i);
 
                                     row![
@@ -1679,7 +1672,8 @@ impl ArrangementView {
                                     ]
                                     .spacing(5.0)
                                     .into()
-                                })
+                                },
+                            )
                         })
                         .spacing(5.0)
                         .on_drag(Message::PluginsReordered),

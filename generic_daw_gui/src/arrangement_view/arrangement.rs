@@ -33,7 +33,7 @@ impl Arrangement {
         let master_node_id = master_node.id();
         let mut channels = HoleyVec::default();
         channels.insert(
-            master_node_id.get(),
+            *master_node_id,
             (master_node, BitSet::default(), NodeType::Master),
         );
 
@@ -74,12 +74,12 @@ impl Arrangement {
     }
 
     pub fn node(&self, id: NodeId) -> &(Arc<MixerNode>, BitSet, NodeType) {
-        &self.nodes[id.get()]
+        &self.nodes[*id]
     }
 
     pub fn push_channel(&mut self, node: Arc<MixerNode>) {
         self.nodes.insert(
-            node.id().get(),
+            *node.id(),
             (node.clone(), BitSet::default(), NodeType::Mixer),
         );
 
@@ -97,7 +97,7 @@ impl Arrangement {
     }
 
     pub fn remove_channel(&mut self, id: NodeId) {
-        self.nodes.remove(id.get());
+        self.nodes.remove(*id);
 
         self.sender.try_send(DawCtxMessage::Remove(id)).unwrap();
     }
@@ -105,7 +105,7 @@ impl Arrangement {
     pub fn push_track(&mut self, track: Track) {
         self.tracks.push(track.clone());
         self.nodes.insert(
-            track.id().get(),
+            *track.id(),
             (track.node.clone(), BitSet::default(), NodeType::Track),
         );
 
@@ -138,11 +138,11 @@ impl Arrangement {
     }
 
     pub fn connect_succeeded(&mut self, from: NodeId, to: NodeId) {
-        self.nodes.get_mut(to.get()).unwrap().1.insert(from.get());
+        self.nodes.get_mut(*to).unwrap().1.insert(*from);
     }
 
     pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
-        self.nodes.get_mut(to.get()).unwrap().1.remove(from.get());
+        self.nodes.get_mut(*to).unwrap().1.remove(*from);
 
         self.sender
             .try_send(DawCtxMessage::Disconnect(from, to))

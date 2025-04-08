@@ -7,7 +7,7 @@ pub struct AudioGraph<Node, Event> {
     /// a `NodeId` -> `Entry` map
     graph: HoleyVec<Entry<Node, Event>>,
     /// the `NodeId` of the root node
-    root: usize,
+    root: NodeId,
     /// all nodes in the graph in reverse topological order,
     /// every node comes after all of its dependencies
     list: Vec<usize>,
@@ -27,15 +27,15 @@ where
     /// create a new audio graph with the given root node
     #[must_use]
     pub fn new(node: Node) -> Self {
-        let root = node.id().get();
+        let root = node.id();
 
         let mut graph = HoleyVec::default();
-        graph.insert(root, Entry::new(node));
+        graph.insert(*root, Entry::new(node));
 
         Self {
             graph,
             root,
-            list: vec![root],
+            list: vec![*root],
             swap_list: Vec::new(),
             seen: BitSet::default(),
             to_visit: BitSet::default(),
@@ -104,7 +104,7 @@ where
             self.graph.insert(node, entry);
         }
 
-        buf.copy_from_slice(&self.graph[self.root].audio);
+        buf.copy_from_slice(&self.graph[*self.root].audio);
     }
 
     /// reset every node in the graph to a pre-playback state
@@ -117,7 +117,7 @@ where
     /// get the delay of the entire audio graph
     #[must_use]
     pub fn delay(&self) -> usize {
-        self.graph[self.root].delay
+        self.graph[*self.root].delay
     }
 
     /// attempt to connect `from` to `to`,
@@ -132,31 +132,28 @@ where
     ///  - connecting `from` to `to` would produce a cycle
     #[must_use]
     pub fn connect(&mut self, from: NodeId, to: NodeId) -> bool {
-        let from = from.get();
-        let to = to.get();
-
-        if !self.graph.contains_key(to) || !self.graph.contains_key(from) {
+        if !self.graph.contains_key(*to) || !self.graph.contains_key(*from) {
             return false;
         }
 
         if self
             .graph
-            .get_mut(from)
+            .get_mut(*from)
             .unwrap()
             .connections
-            .contains_key(to)
+            .contains_key(*to)
         {
             return true;
         }
 
         self.graph
-            .get_mut(from)
+            .get_mut(*from)
             .unwrap()
             .connections
-            .insert(to, (Vec::new(), Vec::new()));
+            .insert(*to, (Vec::new(), Vec::new()));
 
         if self.has_cycle() {
-            self.graph.get_mut(from).unwrap().connections.remove(to);
+            self.graph.get_mut(*from).unwrap().connections.remove(*to);
 
             return false;
         }
@@ -171,8 +168,8 @@ where
     ///  - the graph doesn't contain `to`
     ///  - `from` isn't connected to `to`
     pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
-        if let Some(entry) = self.graph.get_mut(from.get()) {
-            entry.connections.remove(to.get());
+        if let Some(entry) = self.graph.get_mut(*from) {
+            entry.connections.remove(*to);
         }
     }
 
@@ -181,16 +178,16 @@ where
     /// if the graph already contains `node` it is replaced, preserving all of its connections,
     /// otherwise it starts out with no connections
     pub fn insert(&mut self, node: Node) {
-        let id = node.id().get();
+        let id = node.id();
 
-        if let Some(entry) = self.graph.get_mut(id) {
+        if let Some(entry) = self.graph.get_mut(*id) {
             entry.node = node;
             return;
         }
 
-        self.graph.insert(id, Entry::new(node));
+        self.graph.insert(*id, Entry::new(node));
         // adding a node with no dependencies to any position preserves sorted order
-        self.list.push(id);
+        self.list.push(*id);
     }
 
     /// attempt to remove `node` from the graph
@@ -198,17 +195,15 @@ where
     /// if the graph contains `node` it is removed along with all adjacent edges,
     /// otherwise this does nothing
     pub fn remove(&mut self, node: NodeId) {
-        let node = node.get();
-
         debug_assert!(self.root != node);
 
-        if self.graph.remove(node).is_some() {
-            let idx = self.list.iter().position(|&n| n == node).unwrap();
+        if self.graph.remove(*node).is_some() {
+            let idx = self.list.iter().position(|&n| n == *node).unwrap();
             // shift-removing a node preserves sorted order
             self.list.remove(idx);
 
             for entry in self.graph.values_mut() {
-                entry.connections.remove(node);
+                entry.connections.remove(*node);
             }
         }
     }

@@ -47,10 +47,10 @@ impl ClapHost {
 
                 let open = if gui.is_floating() {
                     gui.open_floating();
-                    self.plugins.insert(id.get(), gui);
+                    self.plugins.insert(*id, gui);
                     Task::none()
                 } else {
-                    self.plugins.insert(id.get(), gui);
+                    self.plugins.insert(*id, gui);
                     self.update(Message::MainThread(id, MainThreadMessage::GuiRequestShow))
                 };
 
@@ -67,8 +67,8 @@ impl ClapHost {
                 });
                 let resizable = window::set_resizable(window_id, gui.can_resize());
 
-                self.plugins.insert(id.get(), gui);
-                self.windows.insert(id.get(), window_id);
+                self.plugins.insert(*id, gui);
+                self.windows.insert(*id, window_id);
 
                 return resize.chain(resizable);
             }
@@ -105,15 +105,15 @@ impl ClapHost {
         match msg {
             MainThreadMessage::RequestCallback => self
                 .plugins
-                .get_mut(id.get())
+                .get_mut(*id)
                 .unwrap()
                 .call_on_main_thread_callback(),
             MainThreadMessage::GuiRequestShow => {
-                if self.windows.contains_key(id.get()) {
+                if self.windows.contains_key(*id) {
                     return Task::none();
                 }
 
-                let mut gui = Fragile::new(self.plugins.remove(id.get()).unwrap());
+                let mut gui = Fragile::new(self.plugins.remove(*id).unwrap());
 
                 let (window_id, spawn) = window::open(window::Settings {
                     size: Size::new(1.0, 1.0),
@@ -130,7 +130,7 @@ impl ClapHost {
                 return spawn.discard().chain(embed);
             }
             MainThreadMessage::GuiRequestResize(new_size) => {
-                if let Some(&window_id) = self.windows.get(id.get()) {
+                if let Some(&window_id) = self.windows.get(*id) {
                     return window::resize(
                         window_id,
                         Size {
@@ -141,31 +141,28 @@ impl ClapHost {
                 }
             }
             MainThreadMessage::GuiRequestHide => {
-                if let Some(&id) = self.windows.get(id.get()) {
+                if let Some(&id) = self.windows.get(*id) {
                     return self.update(Message::GuiRequestHide(id));
                 }
             }
             MainThreadMessage::GuiClosed => {
-                self.plugins.remove(id.get()).unwrap();
+                self.plugins.remove(*id).unwrap();
 
-                if let Some(window_id) = self.windows.remove(id.get()) {
+                if let Some(window_id) = self.windows.remove(*id) {
                     return window::close(window_id);
                 }
             }
             MainThreadMessage::RegisterTimer(timer_id, duration) => {
                 self.timers
-                    .entry(id.get())
+                    .entry(*id)
                     .get_or_insert_default()
                     .insert(timer_id as usize, duration);
             }
             MainThreadMessage::UnregisterTimer(timer_id) => {
-                self.timers
-                    .get_mut(id.get())
-                    .unwrap()
-                    .remove(timer_id as usize);
+                self.timers.get_mut(*id).unwrap().remove(timer_id as usize);
             }
             MainThreadMessage::LatencyChanged => {
-                self.plugins.get_mut(id.get()).unwrap().latency_changed();
+                self.plugins.get_mut(*id).unwrap().latency_changed();
             }
         }
 
@@ -189,7 +186,7 @@ impl ClapHost {
     }
 
     pub fn get_state(&mut self, id: PluginId) -> Option<Vec<u8>> {
-        self.plugins.get_mut(id.get()).unwrap().get_state()
+        self.plugins.get_mut(*id).unwrap().get_state()
     }
 
     pub fn subscription(&self) -> Subscription<Message> {

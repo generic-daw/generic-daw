@@ -21,22 +21,36 @@ macro_rules! unique_id {
                 pub(super) type isize = std::sync::atomic::AtomicIsize;
             }
 
-            static ID: atomic::$ty = atomic::$ty::new(1);
+            static ID: atomic::$ty = atomic::$ty::new(0);
 
             #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-            pub struct Id(std::num::NonZero<$ty>);
+            pub struct Id($ty);
 
             impl Id {
                 pub fn unique() -> Self {
                     Self(
-                        ID.fetch_add(1, std::sync::atomic::Ordering::AcqRel)
-                            .try_into()
-                            .unwrap(),
+                        ID.fetch_add(1, ::std::sync::atomic::Ordering::AcqRel),
                     )
                 }
+            }
 
-                pub fn get(&self) -> $ty {
-                    self.0.get()
+            impl ::std::convert::AsRef<$ty> for Id {
+                fn as_ref(&self) -> &$ty {
+                    &self.0
+                }
+            }
+
+            impl ::std::borrow::Borrow<$ty> for Id {
+                fn borrow(&self) -> &$ty {
+                    &self.0
+                }
+            }
+
+            impl ::std::ops::Deref for Id {
+                type Target = $ty;
+
+                fn deref(&self) -> &Self::Target {
+                    &self.0
                 }
             }
         }
