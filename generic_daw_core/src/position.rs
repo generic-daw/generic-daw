@@ -102,11 +102,7 @@ impl Position {
 
     #[must_use]
     pub const fn snap(mut self, scale: f32, numerator: Numerator) -> Self {
-        let modulo = if scale < 12.0 {
-            1 << (scale as u8 - 3)
-        } else {
-            (numerator as u32) << 8
-        };
+        let modulo = Self::snap_step(scale, numerator).0;
 
         let diff = self.0 % modulo;
 
@@ -117,6 +113,15 @@ impl Position {
         }
 
         self
+    }
+
+    #[must_use]
+    pub const fn snap_step(scale: f32, numerator: Numerator) -> Self {
+        Self(if scale < 12.0 {
+            1 << (scale as u8 - 3)
+        } else {
+            (numerator as u32) << 8
+        })
     }
 
     #[must_use]

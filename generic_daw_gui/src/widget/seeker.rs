@@ -318,8 +318,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
         let numerator = self.meter.numerator.load(Acquire);
 
-        let mut beat =
-            Position::from_samples_f(self.position.x, bpm, self.meter.sample_rate).ceil();
+        let mut beat = Position::from_samples_f(self.position.x, bpm, self.meter.sample_rate)
+            .ceil()
+            .saturating_sub(Position::snap_step(self.scale.x, numerator));
 
         let end_beat = beat
             + Position::from_samples_f(
