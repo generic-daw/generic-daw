@@ -116,17 +116,21 @@ impl Dir {
                         })
                 ),];
 
-                col = col.push(row![
-                    column![vertical_rule(1.0).style(|t| rule::Style {
-                        width: 3,
-                        ..rule::default(t)
-                    })]
-                    .padding(padding::top(LINE_HEIGHT / 2.0 - 1.5).bottom(LINE_HEIGHT / 2.0 - 1.5))
-                    .align_x(Alignment::Center)
-                    .width(LINE_HEIGHT)
-                    .height(height),
-                    ch
-                ]);
+                if height != 0.0 {
+                    col = col.push(row![
+                        column![vertical_rule(1.0).style(|t| rule::Style {
+                            width: 3,
+                            ..rule::default(t)
+                        })]
+                        .padding(
+                            padding::top(LINE_HEIGHT / 2.0 - 1.5).bottom(LINE_HEIGHT / 2.0 - 1.5)
+                        )
+                        .align_x(Alignment::Center)
+                        .width(LINE_HEIGHT)
+                        .height(height),
+                        ch
+                    ]);
+                }
             }
         }
 
