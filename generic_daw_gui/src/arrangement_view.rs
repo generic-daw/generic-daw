@@ -1066,9 +1066,9 @@ impl ArrangementView {
                         let node = track.node.clone();
                         let enabled = node.enabled.load(Acquire);
 
-                        // TODO: replace with wrapping column if/when they become a thing
-                        let knobs: Element<'_, Message> =
-                            if self.arrangement_scale.y >= const { LINE_HEIGHT * 4.0 + 15.0 } {
+                        container(
+                            row![
+                                PeakMeter::new(node.get_l_r(), enabled),
                                 column![
                                     Knob::new(
                                         0.0..=1.0,
@@ -1088,34 +1088,7 @@ impl ArrangementView {
                                     ),
                                 ]
                                 .spacing(5.0)
-                                .into()
-                            } else {
-                                row![
-                                    Knob::new(
-                                        0.0..=1.0,
-                                        track.node.volume.load(Acquire),
-                                        0.0,
-                                        1.0,
-                                        enabled,
-                                        Message::ChannelVolumeChanged.with(id)
-                                    ),
-                                    Knob::new(
-                                        -1.0..=1.0,
-                                        track.node.pan.load(Acquire),
-                                        0.0,
-                                        0.0,
-                                        enabled,
-                                        Message::ChannelPanChanged.with(id)
-                                    ),
-                                ]
-                                .spacing(5.0)
-                                .into()
-                            };
-
-                        container(
-                            row![
-                                PeakMeter::new(node.get_l_r(), enabled),
-                                knobs,
+                                .wrap(),
                                 column![
                                     char_button('M')
                                         .on_press(Message::TrackToggleEnabled(id))
