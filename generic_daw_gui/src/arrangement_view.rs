@@ -525,10 +525,7 @@ impl ArrangementView {
                     self.arrangement_scale += scale;
                     self.arrangement_scale.x =
                         self.arrangement_scale.x.clamp(3.0, 13f32.next_down());
-                    self.arrangement_scale.y = self
-                        .arrangement_scale
-                        .y
-                        .clamp(2.0 * LINE_HEIGHT, 10.0 * LINE_HEIGHT);
+                    self.arrangement_scale.y = self.arrangement_scale.y.clamp(77.0, 200.0);
                     pd &= old_scale != self.arrangement_scale;
                 }
 
@@ -1069,9 +1066,9 @@ impl ArrangementView {
                         let node = track.node.clone();
                         let enabled = node.enabled.load(Acquire);
 
-                        container(
-                            row![
-                                PeakMeter::new(node.get_l_r(), enabled),
+                        // TODO: replace with wrapping column if/when they become a thing
+                        let knobs: Element<'_, Message> =
+                            if self.arrangement_scale.y >= const { LINE_HEIGHT * 4.0 + 15.0 } {
                                 column![
                                     Knob::new(
                                         0.0..=1.0,
@@ -1090,8 +1087,35 @@ impl ArrangementView {
                                         Message::ChannelPanChanged.with(id)
                                     ),
                                 ]
-                                .height(Length::Fill)
-                                .spacing(5.0),
+                                .spacing(5.0)
+                                .into()
+                            } else {
+                                row![
+                                    Knob::new(
+                                        0.0..=1.0,
+                                        track.node.volume.load(Acquire),
+                                        0.0,
+                                        1.0,
+                                        enabled,
+                                        Message::ChannelVolumeChanged.with(id)
+                                    ),
+                                    Knob::new(
+                                        -1.0..=1.0,
+                                        track.node.pan.load(Acquire),
+                                        0.0,
+                                        0.0,
+                                        enabled,
+                                        Message::ChannelPanChanged.with(id)
+                                    ),
+                                ]
+                                .spacing(5.0)
+                                .into()
+                            };
+
+                        container(
+                            row![
+                                PeakMeter::new(node.get_l_r(), enabled),
+                                knobs,
                                 column![
                                     char_button('M')
                                         .on_press(Message::TrackToggleEnabled(id))
@@ -1134,32 +1158,38 @@ impl ArrangementView {
                                             )
                                         }
                                     ),
-                                    vertical_space(),
-                                    button(
-                                        AnimatedDot::new(
-                                            self.recording.as_ref().is_some_and(|&(_, i)| i == id)
+                                    column![
+                                        vertical_space(),
+                                        button(
+                                            AnimatedDot::new(
+                                                self.recording
+                                                    .as_ref()
+                                                    .is_some_and(|&(_, i)| i == id)
+                                            )
+                                            .radius(5.0)
                                         )
-                                        .radius(5.0)
-                                    )
-                                    .padding(1.5)
-                                    .on_press(Message::ToggleRecord(id))
-                                    .style(move |t, s| {
-                                        button_with_base(
-                                            t,
-                                            s,
-                                            if self
-                                                .recording
-                                                .as_ref()
-                                                .is_some_and(|&(_, i)| i == id)
-                                            {
-                                                button::danger
-                                            } else if enabled {
-                                                button::primary
-                                            } else {
-                                                button::secondary
-                                            },
+                                        .padding(1.5)
+                                        .on_press(Message::ToggleRecord(id))
+                                        .style(
+                                            move |t, s| {
+                                                button_with_base(
+                                                    t,
+                                                    s,
+                                                    if self
+                                                        .recording
+                                                        .as_ref()
+                                                        .is_some_and(|&(_, i)| i == id)
+                                                    {
+                                                        button::danger
+                                                    } else if enabled {
+                                                        button::primary
+                                                    } else {
+                                                        button::secondary
+                                                    },
+                                                )
+                                            }
                                         )
-                                    })
+                                    ]
                                 ]
                                 .spacing(5.0)
                             ]
@@ -1174,7 +1204,7 @@ impl ArrangementView {
                                 )
                         })
                         .padding(5.0)
-                        .height(Length::Fixed(self.arrangement_scale.y))
+                        .height(self.arrangement_scale.y)
                     })
                     .map(Element::new)
                     .chain(once(
