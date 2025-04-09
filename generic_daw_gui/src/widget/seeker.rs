@@ -143,8 +143,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
             match event {
                 mouse::Event::CursorMoved { modifiers, .. } => {
                     if let Some(last_time) = state.seeking {
-                        let time =
-                            get_time(cursor.x, *modifiers, self.meter, self.position, self.scale);
+                        let time = get_time(
+                            cursor.x + self.offset,
+                            *modifiers,
+                            self.meter,
+                            self.position,
+                            self.scale,
+                        );
 
                         if last_time != time {
                             state.seeking = Some(time);

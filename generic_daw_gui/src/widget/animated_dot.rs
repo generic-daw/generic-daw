@@ -1,11 +1,12 @@
 use iced::{
-    Animation, Border, Color, Element, Event, Length, Rectangle, Renderer, Size, Theme,
+    Animation, Color, Element, Event, Length, Rectangle, Renderer, Size, Theme,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
         layout::{Limits, Node},
         renderer::{Quad, Style},
         widget::{Tree, tree},
     },
+    border,
     mouse::Cursor,
     window,
 };
@@ -92,9 +93,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AnimatedDot {
         _viewport: &Rectangle,
     ) {
         let mut bounds = layout.bounds();
-        let border = Border::default()
-            .rounded(f32::INFINITY)
-            .color(style.text_color);
+        let border = border::rounded(f32::INFINITY).color(style.text_color);
 
         let outline = Quad {
             bounds,
