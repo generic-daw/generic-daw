@@ -170,21 +170,17 @@ impl Recording {
         std::mem::swap(&mut self.writer.0, &mut writer);
         writer.finalize().unwrap();
 
-        let mut samples = Vec::new();
-        std::mem::swap(&mut self.samples.0, &mut samples);
+        let mut samples = Vec::new().into();
+        std::mem::swap(&mut self.samples, &mut samples);
 
-        let mut lods = vec![Vec::new(); 10].into_boxed_slice();
-        std::mem::swap(&mut self.lods.0, &mut lods);
+        let mut lods = vec![Vec::new(); 10].into_boxed_slice().into();
+        std::mem::swap(&mut self.lods, &mut lods);
 
         std::mem::swap(&mut self.path, &mut path);
 
         Arc::new(InterleavedAudio {
-            samples: samples.into_boxed_slice().into(),
-            lods: lods
-                .into_iter()
-                .map(Vec::into_boxed_slice)
-                .collect::<Box<_>>()
-                .into(),
+            samples: samples.map(Vec::into_boxed_slice),
+            lods: lods.map(|l| l.into_iter().map(Vec::into_boxed_slice).collect()),
             path,
         })
     }
@@ -216,7 +212,7 @@ impl TryFrom<Recording> for Arc<InterleavedAudio> {
 
         Ok(Self::new(InterleavedAudio {
             samples: samples.map(Vec::into_boxed_slice),
-            lods: lods.map(|l| l.into_iter().map(Vec::into_boxed_slice).collect::<Box<_>>()),
+            lods: lods.map(|l| l.into_iter().map(Vec::into_boxed_slice).collect()),
             path,
         }))
     }

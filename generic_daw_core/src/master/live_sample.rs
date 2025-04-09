@@ -1,4 +1,3 @@
-use crate::event::Event;
 use std::sync::{
     Arc,
     atomic::{
@@ -22,7 +21,7 @@ impl LiveSample {
         }
     }
 
-    pub fn process(&self, audio: &mut [f32], _: &mut Vec<Event>) {
+    pub fn process(&self, audio: &mut [f32]) {
         let idx = self.idx.fetch_add(audio.len() as isize, AcqRel);
 
         let uidx = idx.unsigned_abs();

@@ -54,7 +54,7 @@ impl NodeImpl<Event> for Master {
 
         let mut click = self.click.borrow_mut();
         if let Some(c) = click.as_ref() {
-            c.process(audio, events);
+            c.process(audio);
 
             if c.over() {
                 *click = None;

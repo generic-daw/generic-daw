@@ -10,7 +10,7 @@ pub enum Clip {
 impl Clip {
     pub fn process(&self, audio: &mut [f32], events: &mut Vec<Event>) {
         match self {
-            Self::Audio(clip) => clip.process(audio, events),
+            Self::Audio(clip) => clip.process(audio),
             Self::Midi(clip) => clip.process(audio, events),
         }
     }

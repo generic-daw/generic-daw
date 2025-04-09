@@ -1,4 +1,4 @@
-use crate::{Meter, Position, clip_position::ClipPosition, event::Event};
+use crate::{Meter, Position, clip_position::ClipPosition};
 use std::sync::{Arc, atomic::Ordering::Acquire};
 
 mod interleaved_audio;
@@ -30,7 +30,7 @@ impl AudioClip {
         })
     }
 
-    pub fn process(&self, audio: &mut [f32], _: &mut Vec<Event>) {
+    pub fn process(&self, audio: &mut [f32]) {
         if !self.meter.playing.load(Acquire) {
             return;
         }
