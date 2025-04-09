@@ -52,14 +52,11 @@ impl Dir {
         &self.path
     }
 
-    pub fn update(&mut self, path: &Path, action: &Action) -> Task<Message> {
+    pub fn update(&mut self, path: &Path, action: Action) -> Task<Message> {
         if *path == *self.path {
             match action {
                 Action::DirOpened(dirs, files) => {
-                    self.children = LoadStatus::Loaded {
-                        dirs: dirs.clone(),
-                        files: files.clone(),
-                    }
+                    self.children = LoadStatus::Loaded { dirs, files };
                 }
                 Action::DirToggleOpen => {
                     self.open ^= true;

@@ -37,7 +37,7 @@ impl FileTree {
         .into()
     }
 
-    pub fn update(&mut self, path: &Path, action: &Action) -> Task<Message> {
+    pub fn update(&mut self, path: &Path, action: Action) -> Task<Message> {
         self.0
             .iter_mut()
             .find(|dir| path.starts_with(dir.path()))
@@ -51,6 +51,11 @@ where
     I: IntoIterator<Item: AsRef<Path>>,
 {
     fn from(value: I) -> Self {
-        Self(value.into_iter().map(|t| Dir::new(t.as_ref())).collect())
+        Self(
+            value
+                .into_iter()
+                .map(|dir| Dir::new(dir.as_ref()))
+                .collect(),
+        )
     }
 }

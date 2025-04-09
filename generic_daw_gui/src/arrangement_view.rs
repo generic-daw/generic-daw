@@ -611,11 +611,10 @@ impl ArrangementView {
 
         file_name.push_str(".wav");
 
-        dirs::data_dir()
-            .unwrap()
-            .join("Generic Daw")
-            .join(file_name)
-            .into()
+        let data_dir = dirs::data_dir().unwrap().join("Generic Daw");
+        _ = std::fs::create_dir(&data_dir);
+
+        data_dir.join(file_name).into()
     }
 
     fn handle_arrangement_action(&mut self, action: ArrangementAction) {

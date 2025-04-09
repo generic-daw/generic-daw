@@ -52,9 +52,9 @@ pub enum Message {
 
 pub struct Daw {
     arrangement: ArrangementView,
-    open_project: Option<Arc<Path>>,
     file_tree: FileTree,
-    sample_dirs: Vec<Box<Path>>,
+    sample_dirs: Box<[Box<Path>]>,
+    open_project: Option<Arc<Path>>,
     split_at: f32,
     meter: Arc<Meter>,
 }
@@ -69,19 +69,14 @@ impl Daw {
 
         let (arrangement, meter) = ArrangementView::create();
 
-        let home_dir = dirs::home_dir().unwrap().into();
-        let data_dir = dirs::data_dir().unwrap().join("Generic Daw").into();
-
-        _ = std::fs::create_dir(&data_dir);
-
-        let sample_dirs = vec![home_dir, data_dir];
+        let sample_dirs = vec![dirs::home_dir().unwrap().into()].into_boxed_slice();
 
         (
             Self {
                 arrangement,
-                open_project: None,
-                file_tree: (&sample_dirs).into(),
+                file_tree: FileTree::from(&sample_dirs),
                 sample_dirs,
+                open_project: None,
                 split_at: 300.0,
                 meter,
             },
@@ -191,7 +186,7 @@ impl Daw {
                     .map(Message::Arrangement);
             }
             FileTreeMessage::Action(path, action) => {
-                return self.file_tree.update(&path, &action).map(Message::FileTree);
+                return self.file_tree.update(&path, action).map(Message::FileTree);
             }
         }
 
