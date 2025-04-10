@@ -31,7 +31,6 @@ iced_wgpu = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw
     "geometry",
 ] }
 infer = { version = "0.19.0", default-features = false }
-itoa = "1.0.15"
 log = "0.4.27"
 oneshot = "0.1.11"
 rfd = "0.15.3"

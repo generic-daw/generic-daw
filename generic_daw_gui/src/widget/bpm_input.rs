@@ -143,7 +143,7 @@ impl<Message> Widget<Message, Theme, Renderer> for BpmInput<Message> {
         renderer.fill_quad(background, theme.extended_palette().background.weak.color);
 
         let text = Text {
-            content: itoa::Buffer::new().format(self.value).to_owned(),
+            content: self.value.to_string(),
             bounds: Size::new(f32::INFINITY, 0.0),
             size: renderer.default_size(),
             line_height: LineHeight::default(),

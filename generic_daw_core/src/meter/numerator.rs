@@ -46,6 +46,6 @@ impl Numerator {
 
 impl Display for Numerator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(itoa::Buffer::new().format(*self as u8))
+        write!(f, "{}", *self as u8)
     }
 }

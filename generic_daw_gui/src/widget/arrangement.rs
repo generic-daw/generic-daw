@@ -6,8 +6,9 @@ use iced::{
     advanced::{
         Clipboard, Renderer as _, Shell,
         layout::{Layout, Limits, Node},
+        overlay,
         renderer::Style,
-        widget::{Tree, Widget, tree},
+        widget::{Operation, Tree, Widget, tree},
     },
     mouse::{self, Cursor, Interaction},
     window,
@@ -320,6 +321,38 @@ where
                 layout.children().next().unwrap(),
                 cursor,
                 &bounds,
+            );
+        });
+    }
+
+    fn overlay<'a>(
+        &'a mut self,
+        tree: &'a mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        translation: Vector,
+    ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
+        self.children.as_widget_mut().overlay(
+            &mut tree.children[0],
+            layout.children().next().unwrap(),
+            renderer,
+            translation,
+        )
+    }
+
+    fn operate(
+        &self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        operation.container(None, layout.bounds(), &mut |operation| {
+            self.children.as_widget().operate(
+                &mut tree.children[0],
+                layout.children().next().unwrap(),
+                renderer,
+                operation,
             );
         });
     }

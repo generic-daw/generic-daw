@@ -1397,7 +1397,6 @@ dependencies = [
  "iced",
  "iced_wgpu",
  "infer",
- "itoa",
  "log",
  "oneshot",
  "rfd",
@@ -1416,7 +1415,6 @@ dependencies = [
  "cpal",
  "generic_daw_utils",
  "hound",
- "itoa",
  "log",
  "oneshot",
  "rubato",
@@ -2001,12 +1999,6 @@ checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
 ]
-
-[[package]]
-name = "itoa"
-version = "1.0.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
 name = "jiff"

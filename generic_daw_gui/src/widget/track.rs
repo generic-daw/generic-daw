@@ -2,13 +2,14 @@ use super::get_time;
 use generic_daw_core::{Meter, Position};
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
-    Element, Event, Length, Rectangle, Renderer, Size, Theme,
+    Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
         layout::{Limits, Node},
         mouse::{Click, click::Kind},
+        overlay,
         renderer::Style,
-        widget::{Tree, tree},
+        widget::{Operation, Tree, tree},
     },
     mouse::{self, Cursor, Interaction},
 };
@@ -168,6 +169,36 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                 shell.capture_event();
             }
         }
+    }
+
+    fn overlay<'a>(
+        &'a mut self,
+        tree: &'a mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        translation: Vector,
+    ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
+        overlay::from_children(&mut self.children, tree, layout, renderer, translation)
+    }
+
+    fn operate(
+        &self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        operation.container(None, layout.bounds(), &mut |operation| {
+            self.children
+                .iter()
+                .zip(&mut tree.children)
+                .zip(layout.children())
+                .for_each(|((child, state), layout)| {
+                    child
+                        .as_widget()
+                        .operate(state, layout, renderer, operation);
+                });
+        });
     }
 }
 

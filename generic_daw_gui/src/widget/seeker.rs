@@ -7,9 +7,10 @@ use iced::{
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Text, Widget,
         layout::{Limits, Node},
+        overlay,
         renderer::{Quad, Style},
         text::Renderer as _,
-        widget::{Tree, tree},
+        widget::{Operation, Tree, tree},
     },
     alignment::Vertical,
     border,
@@ -31,8 +32,7 @@ pub struct Seeker<'a, Message> {
     position: Vec2,
     scale: Vec2,
     offset: f32,
-    left: NoDebug<Element<'a, Message>>,
-    right: NoDebug<Element<'a, Message>>,
+    children: NoDebug<[Element<'a, Message>; 2]>,
     seek_to: fn(Position) -> Message,
     position_scale_delta: fn(Vec2, Vec2) -> Message,
 }
@@ -51,22 +51,22 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
     }
 
     fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&[&*self.left, &*self.right]);
+        tree.diff_children(&*self.children);
     }
 
     fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&*self.left), Tree::new(&*self.right)]
+        self.children.iter().map(Tree::new).collect()
     }
 
     fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        let left = self.left.as_widget().layout(
+        let left = self.children[0].as_widget().layout(
             &mut tree.children[0],
             renderer,
             &Limits::new(limits.min(), Size::new(limits.max().width, f32::INFINITY)),
         );
         let left_width = left.size().width;
 
-        let right = self.right.as_widget().layout(
+        let right = self.children[1].as_widget().layout(
             &mut tree.children[1],
             renderer,
             &Limits::new(
@@ -104,7 +104,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
         let bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
         let right_panel_bounds = Self::right_panel_bounds(layout);
 
-        [&mut self.left, &mut self.right]
+        self.children
             .iter_mut()
             .zip(&mut tree.children)
             .zip(layout.children())
@@ -247,7 +247,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
             self.grid(renderer, right_child_bounds, theme);
         });
 
-        [&self.left, &self.right]
+        self.children
             .iter()
             .zip(&tree.children)
             .zip(layout.children())
@@ -297,7 +297,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                 (beat.in_samples_f(bpm, self.meter.sample_rate) - self.position.x) / sample_size;
 
             let bar = Text {
-                content: itoa::Buffer::new().format(bar + 1).to_owned(),
+                content: (bar + 1).to_string(),
                 bounds: Size::new(f32::INFINITY, 0.0),
                 size: renderer.default_size(),
                 line_height: LineHeight::default(),
@@ -371,7 +371,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
         } else {
             let bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
 
-            [&self.left, &self.right]
+            self.children
                 .iter()
                 .zip(&tree.children)
                 .zip(layout.children())
@@ -387,6 +387,36 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                 .max()
                 .unwrap_or_default()
         }
+    }
+
+    fn overlay<'a>(
+        &'a mut self,
+        tree: &'a mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        translation: Vector,
+    ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
+        overlay::from_children(&mut *self.children, tree, layout, renderer, translation)
+    }
+
+    fn operate(
+        &self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        operation.container(None, layout.bounds(), &mut |operation| {
+            self.children
+                .iter()
+                .zip(&mut tree.children)
+                .zip(layout.children())
+                .for_each(|((child, state), layout)| {
+                    child
+                        .as_widget()
+                        .operate(state, layout, renderer, operation);
+                });
+        });
     }
 }
 
@@ -405,8 +435,7 @@ impl<'a, Message> Seeker<'a, Message> {
             position,
             scale,
             offset: 0.0,
-            left: left.into().into(),
-            right: right.into().into(),
+            children: [left.into(), right.into()].into(),
             seek_to,
             position_scale_delta,
         }

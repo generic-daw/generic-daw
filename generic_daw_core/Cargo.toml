@@ -19,7 +19,6 @@ atomig = { git = "https://github.com/edwloef/atomig.git", branch = "update-syn-2
 ] }
 cpal = "0.15.3"
 hound = "3.5.1"
-itoa = "1.0.15"
 log = "0.4.27"
 oneshot = "0.1.11"
 rubato = { version = "0.16.2", default-features = false }

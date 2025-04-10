@@ -7,11 +7,17 @@ use iced::{
         graphics::geometry::Renderer as _,
         layout::{Limits, Node},
         mouse::{Click, click::Kind},
-        renderer::Style,
+        overlay,
+        renderer::{Quad, Style},
+        text,
         widget::{Tree, tree},
     },
+    border,
     mouse::{self, Cursor, Interaction, ScrollDelta},
-    widget::canvas::{Cache, Frame, Path, path::Arc},
+    widget::{
+        Text,
+        canvas::{Cache, Frame, Path, path::Arc},
+    },
     window,
 };
 use std::{
@@ -31,7 +37,7 @@ struct State {
 }
 
 #[derive(Debug)]
-pub struct Knob<Message> {
+pub struct Knob<'a, Message> {
     range: RangeInclusive<f32>,
     value: f32,
     center: f32,
@@ -39,9 +45,10 @@ pub struct Knob<Message> {
     enabled: bool,
     f: NoDebug<Box<dyn Fn(f32) -> Message>>,
     radius: f32,
+    tooltip: Option<NoDebug<Element<'a, Message>>>,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
+impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
     fn size(&self) -> Size<Length> {
         Size::new(
             Length::Fixed(2.0 * self.radius),
@@ -51,6 +58,21 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
 
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        if let Some(popup) = self.tooltip.as_ref() {
+            tree.diff_children(&[&**popup]);
+        } else {
+            tree.diff_children(&[] as &[Element<'_, Message>]);
+        }
+    }
+
+    fn children(&self) -> Vec<Tree> {
+        self.tooltip
+            .as_ref()
+            .map(|p| vec![Tree::new(&**p)])
+            .unwrap_or_default()
     }
 
     fn state(&self) -> tree::State {
@@ -201,9 +223,31 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<Message> {
             Interaction::default()
         }
     }
+
+    fn overlay<'a>(
+        &'a mut self,
+        tree: &'a mut Tree,
+        layout: Layout<'_>,
+        _renderer: &Renderer,
+        translation: Vector,
+    ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
+        let state = tree.state.downcast_ref::<State>();
+
+        if state.hovering || state.dragging.is_some() {
+            self.tooltip.as_ref().map(|popup| {
+                overlay::Element::new(Box::new(Overlay {
+                    tooltip: popup,
+                    tree: tree.children.iter_mut().next().unwrap(),
+                    bounds: layout.bounds() + translation,
+                }))
+            })
+        } else {
+            None
+        }
+    }
 }
 
-impl<Message> Knob<Message> {
+impl<'a, Message> Knob<'a, Message> {
     pub fn new(
         range: RangeInclusive<f32>,
         value: f32,
@@ -220,11 +264,17 @@ impl<Message> Knob<Message> {
             enabled,
             f: NoDebug(Box::from(f)),
             radius: LINE_HEIGHT,
+            tooltip: None,
         }
     }
 
     pub fn radius(mut self, radius: f32) -> Self {
         self.radius = radius;
+        self
+    }
+
+    pub fn tooltip(mut self, tooltip: impl text::IntoFragment<'a>) -> Self {
+        self.tooltip = Some(NoDebug(Text::new(tooltip).line_height(1.0).into()));
         self
     }
 
@@ -288,11 +338,69 @@ impl<Message> Knob<Message> {
     }
 }
 
-impl<'a, Message> From<Knob<Message>> for Element<'a, Message>
+impl<'a, Message> From<Knob<'a, Message>> for Element<'a, Message>
 where
     Message: 'a,
 {
-    fn from(value: Knob<Message>) -> Self {
+    fn from(value: Knob<'a, Message>) -> Self {
         Self::new(value)
+    }
+}
+
+struct Overlay<'a, 'b, Message> {
+    tooltip: &'b Element<'a, Message>,
+    tree: &'b mut Tree,
+    bounds: Rectangle,
+}
+
+impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Message> {
+    fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
+        let padding = 3.0;
+
+        let layout = self.tooltip.as_widget().layout(
+            self.tree,
+            renderer,
+            &Limits::new(Size::ZERO, bounds).shrink(Size::new(padding, padding)),
+        );
+        let bounds = layout.bounds();
+
+        Node::with_children(
+            bounds.expand(padding).size(),
+            vec![layout.translate(Vector::new(padding, padding))],
+        )
+        .translate(Vector::new(
+            self.bounds.x + (self.bounds.width - bounds.width) / 2.0 - padding,
+            self.bounds.y + self.bounds.height,
+        ))
+    }
+
+    fn draw(
+        &self,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        style: &Style,
+        layout: Layout<'_>,
+        cursor: Cursor,
+    ) {
+        renderer.fill_quad(
+            Quad {
+                bounds: layout.bounds(),
+                border: border::width(1.0)
+                    .rounded(2.0)
+                    .color(theme.extended_palette().background.strong.color),
+                ..Quad::default()
+            },
+            theme.extended_palette().background.weak.color,
+        );
+
+        self.tooltip.as_widget().draw(
+            self.tree,
+            renderer,
+            theme,
+            style,
+            layout.children().next().unwrap(),
+            cursor,
+            &Rectangle::with_size(Size::INFINITY),
+        );
     }
 }

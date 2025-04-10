@@ -24,6 +24,7 @@ use generic_daw_core::{
     clap_host::{
         self, MainThreadMessage, PluginBundle, PluginDescriptor, PluginId, get_installed_plugins,
     },
+    dB,
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2};
@@ -43,6 +44,7 @@ use log::info;
 use smol::unblock;
 use std::{
     cell::Cell,
+    cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap},
     f32::{self, consts::FRAC_PI_2},
     fs::File,
@@ -600,13 +602,10 @@ impl ArrangementView {
     }
 
     fn make_recording_path() -> Arc<Path> {
-        let mut file_name = "recording-".to_owned();
-
         let mut hasher = DefaultHasher::new();
         Instant::now().hash(&mut hasher);
-        file_name.push_str(itoa::Buffer::new().format(hasher.finish()));
 
-        file_name.push_str(".wav");
+        let file_name = "recording-".to_owned() + &hasher.finish().to_string() + ".wav";
 
         let data_dir = dirs::data_dir().unwrap().join("Generic Daw");
         _ = std::fs::create_dir(&data_dir);
@@ -1063,29 +1062,40 @@ impl ArrangementView {
                     .iter()
                     .map(|track| {
                         let id = track.id();
-                        let node = track.node.clone();
-                        let enabled = node.enabled.load(Acquire);
+                        let l_r = track.node.get_l_r();
+                        let enabled = track.node.enabled.load(Acquire);
+                        let volume = track.node.volume.load(Acquire);
+                        let pan = track.node.pan.load(Acquire);
 
                         container(
                             row![
-                                PeakMeter::new(node.get_l_r(), enabled),
+                                PeakMeter::new(l_r, enabled),
                                 column![
                                     Knob::new(
                                         0.0..=1.0,
-                                        track.node.volume.load(Acquire),
+                                        volume,
                                         0.0,
                                         1.0,
                                         enabled,
                                         Message::ChannelVolumeChanged.with(id)
-                                    ),
+                                    )
+                                    .tooltip(dB::from_amp(volume).to_string()),
                                     Knob::new(
                                         -1.0..=1.0,
-                                        track.node.pan.load(Acquire),
+                                        pan,
                                         0.0,
                                         0.0,
                                         enabled,
                                         Message::ChannelPanChanged.with(id)
-                                    ),
+                                    )
+                                    .tooltip({
+                                        let pan = (pan * 100.0) as i8;
+                                        match pan.cmp(&0) {
+                                            Ordering::Greater => pan.to_string() + "% right",
+                                            Ordering::Equal => "center".to_owned(),
+                                            Ordering::Less => (-pan).to_string() + "% left",
+                                        }
+                                    }),
                                 ]
                                 .spacing(5.0)
                                 .wrap(),
@@ -1270,8 +1280,10 @@ impl ArrangementView {
             connect: impl Fn(bool, NodeId) -> Element<'a, Message>,
         ) -> Element<'a, Message> {
             let id = node.id();
+            let l_r = node.get_l_r();
             let enabled = node.enabled.load(Acquire);
             let volume = node.volume.load(Acquire);
+            let pan = node.pan.load(Acquire);
 
             button(
                 column![
@@ -1280,13 +1292,21 @@ impl ArrangementView {
                             text(name),
                             Knob::new(
                                 -1.0..=1.0,
-                                node.pan.load(Acquire),
+                                pan,
                                 0.0,
                                 0.0,
                                 enabled,
                                 Message::ChannelPanChanged.with(id)
-                            ),
-                            PeakMeter::new(node.get_l_r(), enabled)
+                            )
+                            .tooltip({
+                                let pan = (pan * 100.0) as i8;
+                                match pan.cmp(&0) {
+                                    Ordering::Greater => pan.to_string() + "% right",
+                                    Ordering::Equal => "center".to_owned(),
+                                    Ordering::Less => (-pan).to_string() + "% left",
+                                }
+                            }),
+                            PeakMeter::new(l_r, enabled)
                         ]
                         .spacing(5.0)
                         .align_x(Alignment::Center),
@@ -1410,8 +1430,7 @@ impl ArrangementView {
                     .iter()
                     .enumerate()
                     .map(|(i, track)| {
-                        let mut name = "T ".to_owned();
-                        name.push_str(itoa::Buffer::new().format(i + 1));
+                        let name = "T ".to_owned() + &(i + 1).to_string();
 
                         channel(
                             self.selected_channel,
@@ -1481,8 +1500,7 @@ impl ArrangementView {
                     .channels()
                     .enumerate()
                     .map(|(i, node)| {
-                        let mut name = "C ".to_owned();
-                        name.push_str(itoa::Buffer::new().format(i + 1));
+                        let name = "C ".to_owned() + &(i + 1).to_string();
 
                         channel(
                             self.selected_channel,
@@ -1569,17 +1587,19 @@ impl ArrangementView {
                             self.plugins_by_channel[*selected].iter().enumerate().map(
                                 |(i, (plugin_id, descriptor))| {
                                     let enabled = node.get_plugin_enabled(i);
+                                    let mix = node.get_plugin_mix(i);
 
                                     row![
                                         Knob::new(
                                             0.0..=1.0,
-                                            node.get_plugin_mix(i),
+                                            mix,
                                             0.0,
                                             1.0,
                                             enabled,
                                             Message::PluginMixChanged.with(i)
                                         )
-                                        .radius(TEXT_HEIGHT),
+                                        .radius(TEXT_HEIGHT)
+                                        .tooltip(((mix * 100.0) as u8).to_string() + "%"),
                                         button(
                                             container(
                                                 text(&*descriptor.name).wrapping(Wrapping::None)
