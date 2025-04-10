@@ -595,7 +595,7 @@ impl ArrangementView {
                     self.piano_roll_position.set(piano_roll_position);
                 }
             }
-            Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
+            Message::SplitAt(split_at) => self.split_at = split_at.clamp(200.0, 400.0),
         }
 
         Task::none()

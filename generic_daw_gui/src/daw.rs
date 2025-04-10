@@ -170,7 +170,13 @@ impl Daw {
             Message::ChangedNumerator(new_numerator) => {
                 self.meter.numerator.store(new_numerator, Release);
             }
-            Message::SplitAt(split_at) => self.split_at = split_at.clamp(100.0, 500.0),
+            Message::SplitAt(split_at) => {
+                self.split_at = if split_at >= 20.0 {
+                    split_at.clamp(200.0, 400.0)
+                } else {
+                    0.0
+                };
+            }
         }
 
         Task::none()
