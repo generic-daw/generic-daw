@@ -10,19 +10,17 @@ use iced::{
     mouse::Cursor,
     window,
 };
-use std::{convert::identity, time::Instant};
+use std::time::Instant;
 
 struct State {
-    last_enabled: bool,
-    animation: Animation<f32>,
+    animation: Animation<bool>,
     now: Instant,
 }
 
 impl State {
     fn new(enabled: bool) -> Self {
         Self {
-            last_enabled: enabled,
-            animation: Animation::new(f32::from(u8::from(enabled))),
+            animation: Animation::new(enabled),
             now: Instant::now(),
         }
     }
@@ -69,11 +67,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AnimatedDot {
             let state = tree.state.downcast_mut::<State>();
             state.now = now;
 
-            if self.enabled != state.last_enabled {
-                state
-                    .animation
-                    .go_at_mut(f32::from(u8::from(self.enabled)), now);
-                state.last_enabled = self.enabled;
+            if self.enabled != state.animation.value() {
+                state.animation.go_at_mut(self.enabled, now);
             }
 
             if state.animation.is_animating(now) {
@@ -105,7 +100,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AnimatedDot {
 
         let state = tree.state.downcast_ref::<State>();
 
-        let factor = state.animation.interpolate_with(identity, state.now);
+        let factor = state.animation.interpolate(0.0, 1.0, state.now);
         if factor == 0.0 {
             return;
         }
