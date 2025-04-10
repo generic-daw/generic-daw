@@ -19,7 +19,7 @@ impl dB {
         if self.0 == f32::NEG_INFINITY {
             0.0
         } else {
-            10.0f32.powf(0.05 * self.0)
+            10f32.powf(0.05 * self.0)
         }
     }
 }

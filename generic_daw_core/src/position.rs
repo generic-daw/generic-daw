@@ -57,6 +57,17 @@ impl Position {
     }
 
     #[must_use]
+    pub const fn round(mut self) -> Self {
+        if self.0 & 0x80 != 0 {
+            self.0 += 1 << 8;
+        }
+
+        self.0 &= !0xff;
+
+        self
+    }
+
+    #[must_use]
     pub const fn from_samples_f(samples: f32, bpm: u16, sample_rate: u32) -> Self {
         let samples = samples as f64;
         let bpm = bpm as f64;
@@ -101,12 +112,26 @@ impl Position {
     }
 
     #[must_use]
-    pub const fn snap(mut self, scale: f32, numerator: Numerator) -> Self {
+    pub const fn floor_to_snap_step(mut self, scale: f32, numerator: Numerator) -> Self {
+        let snap_step = Self::snap_step(scale, numerator).0;
+        self.0 -= self.0 % snap_step;
+        self
+    }
+
+    #[must_use]
+    pub const fn ceil_to_snap_step(mut self, scale: f32, numerator: Numerator) -> Self {
+        let snap_step = Self::snap_step(scale, numerator).0;
+        self.0 += snap_step - (self.0 % snap_step);
+        self
+    }
+
+    #[must_use]
+    pub const fn round_to_snap_step(mut self, scale: f32, numerator: Numerator) -> Self {
         let modulo = Self::snap_step(scale, numerator).0;
 
         let diff = self.0 % modulo;
 
-        if diff >= modulo / 2 {
+        if diff > modulo / 2 {
             self.0 += modulo - diff;
         } else {
             self.0 -= diff;

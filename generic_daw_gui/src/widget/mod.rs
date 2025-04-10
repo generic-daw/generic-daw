@@ -52,7 +52,7 @@ fn get_time(x: f32, modifiers: Modifiers, meter: &Meter, position: Vec2, scale: 
     let mut time = Position::from_samples_f(time, meter.bpm.load(Acquire), meter.sample_rate);
 
     if !modifiers.alt() {
-        time = time.snap(scale.x, meter.numerator.load(Acquire));
+        time = time.round_to_snap_step(scale.x, meter.numerator.load(Acquire));
     }
 
     time

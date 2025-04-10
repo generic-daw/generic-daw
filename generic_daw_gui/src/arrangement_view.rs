@@ -185,11 +185,11 @@ impl ArrangementView {
                 recording: None,
 
                 arrangement_position: Vec2::default(),
-                arrangement_scale: Vec2::new(9.0, 120.0),
+                arrangement_scale: Vec2::new(9f32.next_down(), 120.0),
                 soloed_track: None,
 
                 piano_roll_position: Cell::new(Vec2::new(0.0, 40.0)),
-                piano_roll_scale: Vec2::new(9.0, LINE_HEIGHT),
+                piano_roll_scale: Vec2::new(9f32.next_down(), LINE_HEIGHT),
                 last_note_len: Position::BEAT,
                 selected_channel: None,
 

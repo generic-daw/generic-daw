@@ -318,17 +318,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
         let numerator = self.meter.numerator.load(Acquire);
 
-        let mut beat = Position::from_samples_f(self.position.x, bpm, self.meter.sample_rate)
-            .ceil()
-            .saturating_sub(Position::snap_step(self.scale.x, numerator));
-
+        let mut beat = Position::from_samples_f(self.position.x, bpm, self.meter.sample_rate);
         let end_beat = beat
             + Position::from_samples_f(
                 seeker_bounds.width * sample_size,
                 bpm,
                 self.meter.sample_rate,
-            )
-            .floor();
+            );
+        beat = beat.floor();
 
         while beat <= end_beat {
             let bar = beat.beat() / numerator as u32;
@@ -473,12 +470,38 @@ impl<'a, Message> Seeker<'a, Message> {
         let bpm = self.meter.bpm.load(Acquire);
         let sample_size = self.scale.x.exp2();
 
-        let mut beat =
-            Position::from_samples_f(self.position.x, bpm, self.meter.sample_rate).ceil();
-
+        let mut beat = Position::from_samples_f(self.position.x, bpm, self.meter.sample_rate);
         let end_beat = beat
-            + Position::from_samples_f(bounds.width * sample_size, bpm, self.meter.sample_rate)
-                .floor();
+            + Position::from_samples_f(bounds.width * sample_size, bpm, self.meter.sample_rate);
+
+        let mut background_beat = Position::new(beat.beat() & !0x0f, 0);
+        let background_step = Position::new(4 * numerator as u32, 0);
+        let background_width =
+            background_step.in_samples_f(bpm, self.meter.sample_rate) / sample_size;
+
+        while background_beat < end_beat {
+            if (background_beat.beat() / (4 * numerator as u32)) % 2 == 1 {
+                let x = (background_beat.in_samples_f(bpm, self.meter.sample_rate)
+                    - self.position.x)
+                    / sample_size;
+
+                renderer.fill_quad(
+                    Quad {
+                        bounds: Rectangle::new(
+                            Point::new(x, 0.0),
+                            Size::new(background_width, bounds.height),
+                        ),
+                        ..Quad::default()
+                    },
+                    theme.extended_palette().background.weakest.color,
+                );
+            }
+
+            background_beat += background_step;
+        }
+
+        beat = beat.ceil_to_snap_step(self.scale.x + 3.0, numerator);
+        let snap_step = Position::snap_step(self.scale.x + 3.0, numerator);
 
         while beat <= end_beat {
             let bar = beat.beat() / numerator as u32;
@@ -510,7 +533,7 @@ impl<'a, Message> Seeker<'a, Message> {
                 color,
             );
 
-            beat += Position::BEAT;
+            beat += snap_step;
         }
 
         let offset = self.position.y.fract() * self.scale.y;
