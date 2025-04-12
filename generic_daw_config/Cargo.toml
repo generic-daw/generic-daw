@@ -1,0 +1,9 @@
+[package]
+name = "generic_daw_config"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8.10"
+thiserror = "1.0.57"

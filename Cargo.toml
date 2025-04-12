@@ -1,7 +1,8 @@
 [workspace]
 members = [
     "audio_graph",
-    "clap_host",
+    "clap_host", 
+    "generic_daw_config",
     "generic_daw_core",
     "generic_daw_gui",
     "generic_daw_project",
