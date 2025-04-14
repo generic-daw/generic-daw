@@ -12,7 +12,6 @@ use iced::{
     },
 };
 use std::{
-    cell::RefCell,
     fs,
     io::{self, Read as _},
     path::Path,
@@ -70,12 +69,9 @@ impl File {
 }
 
 pub fn is_audio(path: &Path) -> io::Result<bool> {
-    thread_local! { static BUF: RefCell<Vec<u8>> = RefCell::new(Vec::with_capacity(36)) };
     let file = fs::File::open(path)?;
     let limit = file.metadata()?.len().min(36);
-    BUF.with_borrow_mut(|buf| {
-        buf.clear();
-        file.take(limit).read_to_end(buf)?;
-        Ok(infer::get(buf).is_some_and(|x| x.matcher_type() == infer::MatcherType::Audio))
-    })
+    let mut buf = Vec::with_capacity(36);
+    file.take(limit).read_to_end(&mut buf)?;
+    Ok(infer::get(&buf).is_some_and(|x| x.matcher_type() == infer::MatcherType::Audio))
 }
