@@ -18,13 +18,12 @@ use arrangement::NodeType;
 use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
-    AudioClip, Clip, InterleavedAudio, Meter, MidiClip, MidiKey, MidiNote, MixerNode, Position,
-    Recording, Track,
+    AudioClip, Clip, Decibels, InterleavedAudio, Meter, MidiClip, MidiKey, MidiNote, MixerNode,
+    Position, Recording, Track,
     audio_graph::{NodeId, NodeImpl as _},
     clap_host::{
         self, MainThreadMessage, PluginBundle, PluginDescriptor, PluginId, get_installed_plugins,
     },
-    dB,
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2};
@@ -1034,7 +1033,7 @@ impl ArrangementView {
                                         enabled,
                                         Message::ChannelVolumeChanged.with(id)
                                     )
-                                    .tooltip(dB::from_amp(volume).to_string()),
+                                    .tooltip(Decibels::from_amplitude(volume).to_string()),
                                     Knob::new(
                                         -1.0..=1.0,
                                         pan,
