@@ -812,7 +812,10 @@ impl ArrangementView {
                 let sender = sender.clone();
                 let sample_rate = meter.sample_rate;
                 s.spawn(move || {
-                    let audio = sample_dirs
+                    let mut audio = None::<Arc<InterleavedAudio>>;
+                    let mut hash = None;
+
+                    for path in sample_dirs
                         .iter()
                         .flat_map(WalkDir::new)
                         .flatten()
@@ -822,7 +825,18 @@ impl ArrangementView {
                                 .and_then(OsStr::to_str)
                                 .is_some_and(|name| name == path.name)
                         })
-                        .find_map(|path| InterleavedAudio::create(path.path().into(), sample_rate));
+                    {
+                        if let Some(sample) = audio.as_ref() {
+                            let hash = *hash.get_or_insert_with(|| hash_file(&sample.path));
+
+                            if hash != hash_file(path.path()) {
+                                audio = None;
+                                break;
+                            }
+                        } else {
+                            audio = InterleavedAudio::create(path.path().into(), sample_rate);
+                        }
+                    }
 
                     sender.send((idx, audio)).unwrap();
                 });
@@ -1705,4 +1719,20 @@ impl ArrangementView {
     pub fn change_tab(&mut self, tab: Tab) {
         self.tab = tab;
     }
+}
+
+fn hash_file(path: impl AsRef<Path>) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    let mut buf = [0; 4096];
+    let mut file = File::open(path).unwrap();
+    let mut read;
+
+    while {
+        read = file.read(&mut buf).unwrap();
+        read != 0
+    } {
+        buf[..read].hash(&mut hasher);
+    }
+
+    hasher.finish()
 }
