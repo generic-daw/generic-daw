@@ -1,10 +1,7 @@
 pub mod proto {
     #![expect(clippy::derive_partial_eq_without_eq)]
 
-    use std::{
-        ffi::CStr,
-        path::{Path, PathBuf},
-    };
+    use std::ffi::CStr;
 
     include!(concat!(env!("OUT_DIR"), "/project.rs"));
 
@@ -23,13 +20,6 @@ pub mod proto {
     index_impl_eq_hash!(project::track::midi_clip::MidiIndex);
     index_impl_eq_hash!(project::track::TrackIndex);
     index_impl_eq_hash!(project::channel::ChannelIndex);
-
-    impl project::Audio {
-        #[must_use]
-        pub fn path(&self) -> impl AsRef<Path> {
-            self.path.iter().collect::<PathBuf>()
-        }
-    }
 
     impl project::channel::Plugin {
         #[must_use]

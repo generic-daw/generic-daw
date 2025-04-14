@@ -45,6 +45,7 @@ use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap},
     f32::{self, consts::FRAC_PI_2},
+    ffi::OsStr,
     fs::File,
     hash::{DefaultHasher, Hash as _, Hasher as _},
     io::{Read as _, Write as _},
@@ -58,6 +59,7 @@ use std::{
     },
     time::Instant,
 };
+use walkdir::WalkDir;
 
 mod arrangement;
 
@@ -810,13 +812,17 @@ impl ArrangementView {
                 let sender = sender.clone();
                 let sample_rate = meter.sample_rate;
                 s.spawn(move || {
-                    let path = path.path();
-
                     let audio = sample_dirs
                         .iter()
-                        .map(|dir| dir.join(&path).into())
-                        .chain(once(path.as_ref().into()))
-                        .find_map(|path| InterleavedAudio::create(path, sample_rate));
+                        .flat_map(WalkDir::new)
+                        .flatten()
+                        .filter(|dir| {
+                            dir.path()
+                                .file_name()
+                                .and_then(OsStr::to_str)
+                                .is_some_and(|name| name == path.name)
+                        })
+                        .find_map(|path| InterleavedAudio::create(path.path().into(), sample_rate));
 
                     sender.send((idx, audio)).unwrap();
                 });

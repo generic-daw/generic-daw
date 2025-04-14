@@ -38,18 +38,14 @@ pub fn get_installed_plugins() -> BTreeMap<PluginDescriptor, PluginBundle> {
 
     standard_clap_paths()
         .into_iter()
-        .flat_map(|path| {
-            WalkDir::new(path)
-                .follow_links(true)
-                .into_iter()
-                .filter_map(Result::ok)
-                .filter(|dir_entry| dir_entry.file_type().is_file())
-                .filter(|dir_entry| {
-                    dir_entry
-                        .path()
-                        .extension()
-                        .is_some_and(|ext| ext == "clap")
-                })
+        .flat_map(WalkDir::new)
+        .filter_map(Result::ok)
+        .filter(|dir_entry| dir_entry.file_type().is_file())
+        .filter(|dir_entry| {
+            dir_entry
+                .path()
+                .extension()
+                .is_some_and(|ext| ext == "clap")
         })
         .filter_map(|path|
             // SAFETY:

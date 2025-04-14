@@ -21,11 +21,13 @@ impl Writer {
         path: impl AsRef<Path>,
     ) -> proto::project::track::audio_clip::AudioIndex {
         self.0.audios.push(proto::project::Audio {
-            path: path
+            name: path
                 .as_ref()
-                .components()
-                .map(|component| component.as_os_str().to_string_lossy().to_string())
-                .collect(),
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned(),
         });
 
         proto::project::track::audio_clip::AudioIndex {
