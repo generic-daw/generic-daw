@@ -47,16 +47,14 @@ impl State {
 #[derive(Debug)]
 pub struct Arrangement<'a, Message> {
     meter: &'a Meter,
-    /// the position of the top left corner of the arrangement viewport
-    position: Vec2,
-    /// the scale of the arrangement viewport
-    scale: Vec2,
-    /// column of rows of [track panel, track]
+    position: &'a Vec2,
+    scale: &'a Vec2,
     children: NoDebug<Element<'a, Message>>,
+
     /// whether we've sent a clip delete message since the last redraw request
     deleted: bool,
 
-    action: fn(Action) -> Message,
+    f: fn(Action) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Arrangement<'_, Message>
@@ -134,7 +132,7 @@ where
                 shell.request_redraw();
 
                 if state.unselect() {
-                    shell.publish((self.action)(Action::Drop));
+                    shell.publish((self.f)(Action::Drop));
                 }
             }
 
@@ -175,7 +173,7 @@ where
                                 (false, false) => State::DraggingClip(offset, track, time),
                             };
 
-                            shell.publish((self.action)(if modifiers.control() {
+                            shell.publish((self.f)(if modifiers.control() {
                                 Action::Clone(track, clip)
                             } else {
                                 Action::Grab(track, clip)
@@ -191,7 +189,7 @@ where
                         if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
                             self.deleted = true;
 
-                            shell.publish((self.action)(Action::Delete(track, clip)));
+                            shell.publish((self.f)(Action::Delete(track, clip)));
                             shell.capture_event();
                         }
                     }
@@ -199,7 +197,7 @@ where
                 },
                 mouse::Event::ButtonReleased(..) if *state != State::None => {
                     if state.unselect() {
-                        shell.publish((self.action)(Action::Drop));
+                        shell.publish((self.f)(Action::Drop));
                     }
 
                     *state = State::None;
@@ -223,7 +221,7 @@ where
                         if new_track != track || new_start != time {
                             *state = State::DraggingClip(offset, new_track, new_start);
 
-                            shell.publish((self.action)(Action::Drag(new_track, new_start)));
+                            shell.publish((self.f)(Action::Drag(new_track, new_start)));
                             shell.capture_event();
                         }
                     }
@@ -238,7 +236,7 @@ where
                         if new_start != time {
                             *state = State::ClipTrimmingStart(offset, new_start);
 
-                            shell.publish((self.action)(Action::TrimStart(new_start)));
+                            shell.publish((self.f)(Action::TrimStart(new_start)));
                             shell.capture_event();
                         }
                     }
@@ -253,7 +251,7 @@ where
                         if new_end != time {
                             *state = State::ClipTrimmingEnd(offset, new_end);
 
-                            shell.publish((self.action)(Action::TrimEnd(new_end)));
+                            shell.publish((self.f)(Action::TrimEnd(new_end)));
                             shell.capture_event();
                         }
                     }
@@ -262,7 +260,7 @@ where
                             if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
                                 self.deleted = true;
 
-                                shell.publish((self.action)(Action::Delete(track, clip)));
+                                shell.publish((self.f)(Action::Delete(track, clip)));
                                 shell.capture_event();
                             }
                         }
@@ -364,8 +362,8 @@ where
 {
     pub fn new(
         meter: &'a Meter,
-        position: Vec2,
-        scale: Vec2,
+        position: &'a Vec2,
+        scale: &'a Vec2,
         children: impl Into<Element<'a, Message>>,
         action: fn(Action) -> Message,
     ) -> Self {
@@ -375,7 +373,7 @@ where
             position,
             scale,
             deleted: false,
-            action,
+            f: action,
         }
     }
 

@@ -32,7 +32,7 @@ pub struct VSplit<'a, Message> {
     split_at: f32,
     strategy: Strategy,
     rule_width: f32,
-    on_resize: fn(f32) -> Message,
+    f: fn(f32) -> Message,
 }
 
 impl<'a, Message> VSplit<'a, Message>
@@ -49,7 +49,7 @@ where
             split_at: 0.5,
             strategy: Strategy::default(),
             rule_width: 11.0,
-            on_resize,
+            f: on_resize,
         }
     }
 
@@ -187,7 +187,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
                             Strategy::Left => relative_pos,
                             Strategy::Right => bounds.width - relative_pos - self.rule_width,
                         };
-                        shell.publish((self.on_resize)(split_at));
+                        shell.publish((self.f)(split_at));
                         shell.capture_event();
                     } else if state.hovering
                         != cursor.is_over(layout.children().nth(1).unwrap().bounds())

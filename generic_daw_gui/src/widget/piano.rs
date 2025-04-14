@@ -18,14 +18,12 @@ use iced::{
 const PIANO_WIDTH: f32 = 50.0;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Piano {
-    /// the position of the top left corner of the arrangement viewport
-    position: Vec2,
-    /// the scale of the arrangement viewport
-    scale: Vec2,
+pub struct Piano<'a> {
+    position: &'a Vec2,
+    scale: &'a Vec2,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Piano {
+impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
     fn size(&self) -> Size<Length> {
         Size::new(
             Length::Fixed(PIANO_WIDTH),
@@ -106,14 +104,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano {
     }
 }
 
-impl Piano {
-    pub fn new(position: Vec2, scale: Vec2) -> Self {
+impl<'a> Piano<'a> {
+    pub fn new(position: &'a Vec2, scale: &'a Vec2) -> Self {
         Self { position, scale }
     }
 }
 
-impl<Message> From<Piano> for Element<'_, Message> {
-    fn from(value: Piano) -> Self {
+impl<'a, Message> From<Piano<'a>> for Element<'a, Message> {
+    fn from(value: Piano<'a>) -> Self {
         Element::new(value)
     }
 }

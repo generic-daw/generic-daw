@@ -23,11 +23,8 @@ struct State {
 #[derive(Clone, Debug)]
 pub struct MidiClip<'a, Message> {
     inner: &'a MidiClipInner,
-    /// the position of the top left corner of the arrangement viewport
-    position: Vec2,
-    /// the scale of the arrangement viewport
-    scale: Vec2,
-    /// whether the clip is in an enabled track
+    position: &'a Vec2,
+    scale: &'a Vec2,
     enabled: bool,
     on_double_click: Message,
 }
@@ -247,8 +244,8 @@ where
 impl<'a, Message> MidiClip<'a, Message> {
     pub fn new(
         inner: &'a MidiClipInner,
-        position: Vec2,
-        scale: Vec2,
+        position: &'a Vec2,
+        scale: &'a Vec2,
         enabled: bool,
         on_double_click: Message,
     ) -> Self {

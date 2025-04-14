@@ -29,12 +29,12 @@ struct State {
 #[derive(Debug)]
 pub struct Seeker<'a, Message> {
     meter: &'a Meter,
-    position: Vec2,
-    scale: Vec2,
+    position: &'a Vec2,
+    scale: &'a Vec2,
     offset: f32,
     children: NoDebug<[Element<'a, Message>; 2]>,
     seek_to: fn(Position) -> Message,
-    position_scale_delta: fn(Vec2, Vec2) -> Message,
+    position_scale_delta: fn(Vec2, Vec2, Size) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
@@ -186,7 +186,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                             x *= self.scale.x.exp2();
                             y /= self.scale.y;
 
-                            shell.publish((self.position_scale_delta)(Vec2::new(x, y), Vec2::ZERO));
+                            shell.publish((self.position_scale_delta)(
+                                Vec2::new(x, y),
+                                Vec2::ZERO,
+                                layout.bounds().size(),
+                            ));
                             shell.capture_event();
                         }
                         (true, false, false) => {
@@ -198,6 +202,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                             shell.publish((self.position_scale_delta)(
                                 Vec2::new(x_pos, 0.0),
                                 Vec2::new(x, 0.0),
+                                layout.bounds().size(),
                             ));
                             shell.capture_event();
                         }
@@ -207,6 +212,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                             shell.publish((self.position_scale_delta)(
                                 Vec2::new(y, 0.0),
                                 Vec2::ZERO,
+                                layout.bounds().size(),
                             ));
                             shell.capture_event();
                         }
@@ -218,6 +224,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                             shell.publish((self.position_scale_delta)(
                                 Vec2::new(0.0, y_pos),
                                 Vec2::new(0.0, y),
+                                layout.bounds().size(),
                             ));
                             shell.capture_event();
                         }
@@ -420,12 +427,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 impl<'a, Message> Seeker<'a, Message> {
     pub fn new(
         meter: &'a Meter,
-        position: Vec2,
-        scale: Vec2,
+        position: &'a Vec2,
+        scale: &'a Vec2,
         left: impl Into<Element<'a, Message>>,
         right: impl Into<Element<'a, Message>>,
         seek_to: fn(Position) -> Message,
-        position_scale_delta: fn(Vec2, Vec2) -> Message,
+        position_scale_delta: fn(Vec2, Vec2, Size) -> Message,
     ) -> Self {
         Self {
             meter,

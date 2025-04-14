@@ -29,11 +29,11 @@ use generic_daw_core::{
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2};
 use iced::{
-    Alignment, Element, Function as _, Length, Radians, Subscription, Task, Theme, border,
+    Alignment, Element, Function as _, Length, Radians, Size, Subscription, Task, Theme, border,
     mouse::Interaction,
     padding,
     widget::{
-        button, column, combo_box, container, horizontal_rule, mouse_area, responsive, row,
+        button, column, combo_box, container, horizontal_rule, mouse_area, row,
         scrollable::{Direction, Scrollbar},
         svg, text,
         text::Wrapping,
@@ -43,7 +43,6 @@ use iced::{
 use log::info;
 use smol::unblock;
 use std::{
-    cell::Cell,
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap},
     f32::{self, consts::FRAC_PI_2},
@@ -115,7 +114,7 @@ pub enum Message {
     ArrangementPositionScaleDelta(Vec2, Vec2),
 
     PianoRollAction(PianoRollAction),
-    PianoRollPositionScaleDelta(Vec2, Vec2),
+    PianoRollPositionScaleDelta(Vec2, Vec2, Size),
 
     SplitAt(f32),
 }
@@ -152,7 +151,7 @@ pub struct ArrangementView {
     arrangement_scale: Vec2,
     soloed_track: Option<NodeId>,
 
-    piano_roll_position: Cell<Vec2>,
+    piano_roll_position: Vec2,
     piano_roll_scale: Vec2,
     last_note_len: Position,
     selected_channel: Option<NodeId>,
@@ -188,7 +187,7 @@ impl ArrangementView {
                 arrangement_scale: Vec2::new(9f32.next_down(), 120.0),
                 soloed_track: None,
 
-                piano_roll_position: Cell::new(Vec2::new(0.0, 40.0)),
+                piano_roll_position: Vec2::new(0.0, 40.0),
                 piano_roll_scale: Vec2::new(9f32.next_down(), LINE_HEIGHT),
                 last_note_len: Position::BEAT,
                 selected_channel: None,
@@ -435,7 +434,12 @@ impl ArrangementView {
                     self.recording = None;
                 }
 
-                return self.update(Message::ChannelRemove(id));
+                return self
+                    .update(Message::ArrangementPositionScaleDelta(
+                        Vec2::ZERO,
+                        Vec2::ZERO,
+                    ))
+                    .chain(self.update(Message::ChannelRemove(id)));
             }
             Message::TrackToggleEnabled(id) => {
                 self.soloed_track = None;
@@ -519,81 +523,32 @@ impl ArrangementView {
             }
             Message::ArrangementAction(action) => self.handle_arrangement_action(action),
             Message::ArrangementPositionScaleDelta(pos, scale) => {
-                let sd = scale != Vec2::ZERO;
-                let mut pd = pos != Vec2::ZERO;
+                self.arrangement_scale += scale;
+                self.arrangement_scale.x = self.arrangement_scale.x.clamp(3.0, 13f32.next_down());
+                self.arrangement_scale.y = self.arrangement_scale.y.clamp(77.0, 200.0);
 
-                if sd {
-                    let old_scale = self.arrangement_scale;
-                    self.arrangement_scale += scale;
-                    self.arrangement_scale.x =
-                        self.arrangement_scale.x.clamp(3.0, 13f32.next_down());
-                    self.arrangement_scale.y = self.arrangement_scale.y.clamp(77.0, 200.0);
-                    pd &= old_scale != self.arrangement_scale;
-                }
-
-                if pd {
-                    self.arrangement_position += pos;
-                    self.arrangement_position.x = self.arrangement_position.x.clamp(
-                        0.0,
-                        self.arrangement
-                            .tracks()
-                            .iter()
-                            .map(Track::len)
-                            .max()
-                            .map(|m| {
-                                m.in_samples(self.meter.bpm.load(Acquire), self.meter.sample_rate)
-                            })
-                            .max(
-                                self.recording
-                                    .as_ref()
-                                    .map(|_| self.meter.sample.load(Acquire)),
-                            )
-                            .unwrap_or_default() as f32,
-                    );
-                    self.arrangement_position.y = self.arrangement_position.y.clamp(
-                        0.0,
-                        self.arrangement.tracks().len().saturating_sub(1) as f32,
-                    );
-                }
+                self.arrangement_position += pos;
+                self.arrangement_position.x = self.arrangement_position.x.max(0.0);
+                self.arrangement_position.y = self.arrangement_position.y.clamp(
+                    0.0,
+                    self.arrangement.tracks().len().saturating_sub(1) as f32,
+                );
             }
             Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
-            Message::PianoRollPositionScaleDelta(pos, scale) => {
-                let Tab::PianoRoll { clip, .. } = &self.tab else {
-                    panic!()
-                };
+            Message::PianoRollPositionScaleDelta(pos, scale, size) => {
+                self.piano_roll_scale += scale;
+                self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(3.0, 13f32.next_down());
+                self.piano_roll_scale.y = self
+                    .piano_roll_scale
+                    .y
+                    .clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
 
-                let sd = scale != Vec2::ZERO;
-                let mut pd = pos != Vec2::ZERO;
-
-                if sd {
-                    let old_scale = self.piano_roll_scale;
-                    self.piano_roll_scale += scale;
-                    self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(3.0, 13f32.next_down());
-                    self.piano_roll_scale.y = self
-                        .piano_roll_scale
-                        .y
-                        .clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
-                    pd &= old_scale != self.piano_roll_scale;
-                }
-
-                if pd {
-                    let mut piano_roll_position = self.piano_roll_position.get();
-
-                    piano_roll_position += pos;
-                    piano_roll_position.x = piano_roll_position.x.clamp(
-                        0.0,
-                        clip.pattern
-                            .load()
-                            .iter()
-                            .map(|note| note.end)
-                            .max()
-                            .unwrap_or_default()
-                            .in_samples_f(self.meter.bpm.load(Acquire), self.meter.sample_rate),
-                    );
-                    piano_roll_position.y = piano_roll_position.y.max(0.0);
-
-                    self.piano_roll_position.set(piano_roll_position);
-                }
+                self.piano_roll_position += pos;
+                self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
+                self.piano_roll_position.y = self.piano_roll_position.y.clamp(
+                    0.0,
+                    128.0 - ((size.height - LINE_HEIGHT) / self.piano_roll_scale.y),
+                );
             }
             Message::SplitAt(split_at) => self.split_at = split_at.clamp(200.0, 400.0),
         }
@@ -1023,7 +978,7 @@ impl ArrangementView {
                 arrangement_scale: Vec2::new(9.0, 120.0),
                 soloed_track: None,
 
-                piano_roll_position: Cell::new(Vec2::new(0.0, 40.0)),
+                piano_roll_position: Vec2::new(0.0, 40.0),
                 piano_roll_scale: Vec2::new(9.0, LINE_HEIGHT),
                 last_note_len: Position::BEAT,
                 selected_channel: None,
@@ -1054,8 +1009,8 @@ impl ArrangementView {
     fn arrangement(&self) -> Element<'_, Message> {
         Seeker::new(
             &self.meter,
-            self.arrangement_position,
-            self.arrangement_scale,
+            &self.arrangement_position,
+            &self.arrangement_scale,
             column(
                 self.arrangement
                     .tracks()
@@ -1208,8 +1163,8 @@ impl ArrangementView {
             .align_x(Alignment::Center),
             ArrangementWidget::new(
                 &self.meter,
-                self.arrangement_position,
-                self.arrangement_scale,
+                &self.arrangement_position,
+                &self.arrangement_scale,
                 column(
                     self.arrangement
                         .tracks()
@@ -1221,15 +1176,15 @@ impl ArrangementView {
                             let clips_iter = track.clips.iter().map(|clip| match clip {
                                 Clip::Audio(clip) => AudioClipWidget::new(
                                     clip,
-                                    self.arrangement_position,
-                                    self.arrangement_scale,
+                                    &self.arrangement_position,
+                                    &self.arrangement_scale,
                                     enabled,
                                 )
                                 .into(),
                                 Clip::Midi(clip) => MidiClipWidget::new(
                                     clip,
-                                    self.arrangement_position,
-                                    self.arrangement_scale,
+                                    &self.arrangement_position,
+                                    &self.arrangement_scale,
                                     enabled,
                                     Message::OpenMidiClip(clip.clone()),
                                 )
@@ -1243,8 +1198,8 @@ impl ArrangementView {
                                             RecordingWidget::new(
                                                 &self.recording.as_ref().unwrap().0,
                                                 &self.meter,
-                                                self.arrangement_position,
-                                                self.arrangement_scale,
+                                                &self.arrangement_position,
+                                                &self.arrangement_scale,
                                             )
                                             .into(),
                                         )),
@@ -1255,9 +1210,9 @@ impl ArrangementView {
 
                             TrackWidget::new(
                                 &self.meter,
+                                &self.arrangement_position,
+                                &self.arrangement_scale,
                                 clips_iter,
-                                self.arrangement_position,
-                                self.arrangement_scale,
                                 Message::AddMidiClip.with(id),
                             )
                         })
@@ -1266,7 +1221,7 @@ impl ArrangementView {
                 Message::ArrangementAction,
             ),
             Message::SeekTo,
-            Message::ArrangementPositionScaleDelta,
+            |p, s, _| Message::ArrangementPositionScaleDelta(p, s),
         )
         .into()
     }
@@ -1709,40 +1664,32 @@ impl ArrangementView {
     }
 
     fn piano_roll<'a>(&'a self, clip: &'a MidiClip) -> Element<'a, Message> {
-        responsive(move |size| {
-            let mut piano_roll_position = self.piano_roll_position.get();
-            let height = (size.height - LINE_HEIGHT) / self.piano_roll_scale.y;
-            piano_roll_position.y = piano_roll_position.y.min(128.0 - height);
-            self.piano_roll_position.set(piano_roll_position);
+        let bpm = self.meter.bpm.load(Acquire);
 
-            let bpm = self.meter.bpm.load(Acquire);
-
-            Seeker::new(
+        Seeker::new(
+            &self.meter,
+            &self.piano_roll_position,
+            &self.piano_roll_scale,
+            Piano::new(&self.piano_roll_position, &self.piano_roll_scale),
+            PianoRoll::new(
+                clip.pattern.load().deref().clone(),
                 &self.meter,
-                piano_roll_position,
-                self.piano_roll_scale,
-                Piano::new(piano_roll_position, self.piano_roll_scale),
-                PianoRoll::new(
-                    clip.pattern.load().deref().clone(),
-                    &self.meter,
-                    piano_roll_position,
-                    self.piano_roll_scale,
-                    Message::PianoRollAction,
-                ),
-                Message::SeekTo,
-                Message::PianoRollPositionScaleDelta,
-            )
-            .with_offset(
-                clip.position
-                    .get_global_start()
-                    .in_samples_f(bpm, self.meter.sample_rate)
-                    - clip
-                        .position
-                        .get_clip_start()
-                        .in_samples_f(bpm, self.meter.sample_rate),
-            )
-            .into()
-        })
+                &self.piano_roll_position,
+                &self.piano_roll_scale,
+                Message::PianoRollAction,
+            ),
+            Message::SeekTo,
+            Message::PianoRollPositionScaleDelta,
+        )
+        .with_offset(
+            clip.position
+                .get_global_start()
+                .in_samples_f(bpm, self.meter.sample_rate)
+                - clip
+                    .position
+                    .get_clip_start()
+                    .in_samples_f(bpm, self.meter.sample_rate),
+        )
         .into()
     }
 

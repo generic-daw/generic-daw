@@ -62,12 +62,13 @@ impl State {
 pub struct PianoRoll<'a, Message> {
     notes: Arc<Vec<MidiNote>>,
     meter: &'a Meter,
-    position: Vec2,
-    scale: Vec2,
-    // whether we've sent a clip delete message since the last redraw request
+    position: &'a Vec2,
+    scale: &'a Vec2,
+
+    // whether we've sent a note delete message since the last redraw request
     deleted: bool,
 
-    action: fn(Action) -> Message,
+    f: fn(Action) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message>
@@ -122,7 +123,7 @@ where
                 shell.request_redraw();
 
                 if state.unselect() {
-                    shell.publish((self.action)(Action::Drop));
+                    shell.publish((self.f)(Action::Drop));
                 }
             }
 
@@ -159,7 +160,7 @@ where
                                 (false, false) => State::DraggingNote(offset, note.key, time),
                             };
 
-                            shell.publish((self.action)(if modifiers.control() {
+                            shell.publish((self.f)(if modifiers.control() {
                                 Action::Clone(i)
                             } else {
                                 Action::Grab(i)
@@ -169,7 +170,7 @@ where
 
                             *state = State::DraggingNote(0.0, key, time);
 
-                            shell.publish((self.action)(Action::Add(key, time)));
+                            shell.publish((self.f)(Action::Add(key, time)));
                         }
 
                         shell.capture_event();
@@ -180,7 +181,7 @@ where
                         if let Some(note) = self.get_note(cursor) {
                             self.deleted = true;
 
-                            shell.publish((self.action)(Action::Delete(note)));
+                            shell.publish((self.f)(Action::Delete(note)));
                             shell.capture_event();
                         }
                     }
@@ -188,7 +189,7 @@ where
                 },
                 mouse::Event::ButtonReleased(..) if !state.is_none() => {
                     if state.unselect() {
-                        shell.publish((self.action)(Action::Drop));
+                        shell.publish((self.f)(Action::Drop));
                     }
 
                     *state = State::None(self.interaction(cursor));
@@ -210,7 +211,7 @@ where
                         if new_key != key || new_start != time {
                             *state = State::DraggingNote(offset, new_key, new_start);
 
-                            shell.publish((self.action)(Action::Drag(new_key, new_start)));
+                            shell.publish((self.f)(Action::Drag(new_key, new_start)));
                             shell.capture_event();
                         }
                     }
@@ -225,7 +226,7 @@ where
                         if new_start != time {
                             *state = State::NoteTrimmingStart(offset, new_start);
 
-                            shell.publish((self.action)(Action::TrimStart(new_start)));
+                            shell.publish((self.f)(Action::TrimStart(new_start)));
                             shell.capture_event();
                         }
                     }
@@ -240,7 +241,7 @@ where
                         if new_end != time {
                             *state = State::NoteTrimmingEnd(offset, new_end);
 
-                            shell.publish((self.action)(Action::TrimEnd(new_end)));
+                            shell.publish((self.f)(Action::TrimEnd(new_end)));
                             shell.capture_event();
                         }
                     }
@@ -249,7 +250,7 @@ where
                             if let Some(note) = self.get_note(cursor) {
                                 self.deleted = true;
 
-                                shell.publish((self.action)(Action::Delete(note)));
+                                shell.publish((self.f)(Action::Delete(note)));
                                 shell.capture_event();
                             }
                         }
@@ -310,8 +311,8 @@ impl<'a, Message> PianoRoll<'a, Message> {
     pub fn new(
         notes: Arc<Vec<MidiNote>>,
         meter: &'a Meter,
-        position: Vec2,
-        scale: Vec2,
+        position: &'a Vec2,
+        scale: &'a Vec2,
         action: fn(Action) -> Message,
     ) -> Self {
         Self {
@@ -320,7 +321,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
             position,
             scale,
             deleted: false,
-            action,
+            f: action,
         }
     }
 

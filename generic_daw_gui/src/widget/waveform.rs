@@ -8,13 +8,14 @@ use iced_wgpu::graphics::{
 };
 use std::{cmp::max_by, sync::atomic::Ordering::Acquire};
 
+#[expect(clippy::trivially_copy_pass_by_ref)]
 pub fn mesh<T>(
     meter: &Meter,
     global_start: Position,
     clip_start: Position,
     lods: &[T],
-    position: Vec2,
-    scale: Vec2,
+    position: &Vec2,
+    scale: &Vec2,
     theme: &Theme,
     point: Point,
     bounds: Rectangle,

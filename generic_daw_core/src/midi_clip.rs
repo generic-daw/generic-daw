@@ -1,5 +1,6 @@
 use crate::{Meter, Position, clip_position::ClipPosition, event::Event};
 use arc_swap::ArcSwap;
+use generic_daw_utils::NoDebug;
 use std::{
     cmp::Ordering,
     iter::repeat_n,
@@ -22,7 +23,7 @@ pub struct MidiClip {
     pub position: ClipPosition,
     /// information relating to the playback of the arrangement
     pub meter: Arc<Meter>,
-    notes: Arc<Mutex<[[u8; 16]; 127]>>,
+    notes: NoDebug<Arc<Mutex<[[u8; 16]; 127]>>>,
 }
 
 impl MidiClip {
@@ -39,7 +40,7 @@ impl MidiClip {
             pattern,
             position: ClipPosition::new(Position::ZERO, len, Position::ZERO),
             meter,
-            notes: Arc::new(Mutex::new([[0; 16]; 127])),
+            notes: Arc::new(Mutex::new([[0; 16]; 127])).into(),
         })
     }
 

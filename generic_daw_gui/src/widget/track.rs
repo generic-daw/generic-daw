@@ -22,13 +22,9 @@ struct State {
 #[derive(Debug)]
 pub struct Track<'a, Message> {
     meter: &'a Meter,
-    /// list of the track panel and all the clip widgets
+    position: &'a Vec2,
+    scale: &'a Vec2,
     children: NoDebug<Box<[Element<'a, Message>]>>,
-    /// the position of the top left corner of the arrangement viewport
-    position: Vec2,
-    /// the scale of the arrangement viewport
-    scale: Vec2,
-    /// message to emit on double click
     on_double_click: NoDebug<Box<dyn Fn(Position) -> Message>>,
 }
 
@@ -208,16 +204,16 @@ where
 {
     pub fn new(
         meter: &'a Meter,
+        position: &'a Vec2,
+        scale: &'a Vec2,
         children: impl IntoIterator<Item = Element<'a, Message>>,
-        position: Vec2,
-        scale: Vec2,
         on_double_click: impl Fn(Position) -> Message + 'static,
     ) -> Self {
         Self {
             meter,
-            children: children.into_iter().collect::<Box<_>>().into(),
             position,
             scale,
+            children: children.into_iter().collect::<Box<_>>().into(),
             on_double_click: NoDebug(Box::new(on_double_click)),
         }
     }

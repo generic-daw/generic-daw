@@ -21,7 +21,6 @@ fragile = "2.0.1"
 iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", default-features = false, features = [
     "advanced",
     "canvas",
-    "lazy",
     "smol",
     "svg",
     "wgpu",

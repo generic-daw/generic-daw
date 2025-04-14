@@ -28,8 +28,6 @@ struct State {
     cache: RefCell<Option<Cache>>,
     shaping: Shaping,
     interaction: Interaction,
-    last_position: Vec2,
-    last_scale: Vec2,
     last_bounds: Rectangle,
     last_viewport: Rectangle,
     last_addr: usize,
@@ -48,11 +46,11 @@ impl State {
 pub struct AudioClip<'a> {
     inner: &'a AudioClipInner,
     /// the name of the sample
-    name: Box<str>,
+    name: &'a str,
     /// the position of the top left corner of the arrangement viewport
-    position: Vec2,
+    position: &'a Vec2,
     /// the scale of the arrangement viewport
-    scale: Vec2,
+    scale: &'a Vec2,
     /// whether the clip is in an enabled track
     enabled: bool,
 }
@@ -63,7 +61,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::new(&self.name))
+        tree::State::new(State::new(self.name))
     }
 
     fn size(&self) -> Size<Length> {
@@ -112,16 +110,6 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
         let bounds = layout.bounds();
 
         if let Event::Window(window::Event::RedrawRequested(..)) = event {
-            if state.last_position != self.position {
-                state.last_position = self.position;
-                *state.cache.borrow_mut() = None;
-            }
-
-            if state.last_scale != self.scale {
-                state.last_scale = self.scale;
-                *state.cache.borrow_mut() = None;
-            }
-
             if state.last_bounds != bounds {
                 state.last_bounds = bounds;
                 *state.cache.borrow_mut() = None;
@@ -190,7 +178,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
         // the text containing the name of the sample
         let text = Text {
-            content: String::from(&*self.name),
+            content: String::from(self.name),
             bounds: Size::new(f32::INFINITY, 0.0),
             size: renderer.default_size(),
             line_height: LineHeight::default(),
@@ -264,15 +252,13 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 }
 
 impl<'a> AudioClip<'a> {
-    pub fn new(inner: &'a AudioClipInner, position: Vec2, scale: Vec2, enabled: bool) -> Self {
-        let name = inner
-            .audio
-            .path
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .into();
+    pub fn new(
+        inner: &'a AudioClipInner,
+        position: &'a Vec2,
+        scale: &'a Vec2,
+        enabled: bool,
+    ) -> Self {
+        let name = inner.audio.path.file_name().unwrap().to_str().unwrap();
 
         Self {
             inner,
