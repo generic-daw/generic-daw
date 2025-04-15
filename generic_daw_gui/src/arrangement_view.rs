@@ -14,7 +14,7 @@ use crate::{
     },
 };
 use arc_swap::ArcSwap;
-use arrangement::NodeType;
+use arrangement::{Arrangement as ArrangementWrapper, NodeType};
 use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
@@ -62,8 +62,6 @@ use std::{
 use walkdir::WalkDir;
 
 mod arrangement;
-
-pub use arrangement::Arrangement as ArrangementWrapper;
 
 #[derive(Clone, Debug)]
 enum LoadStatus {
@@ -811,8 +809,10 @@ impl ArrangementView {
                         .iter()
                         .flat_map(WalkDir::new)
                         .flatten()
-                        .filter(|dir| {
-                            dir.path()
+                        .filter(|dir_entry| dir_entry.file_type().is_file())
+                        .filter(|dir_entry| {
+                            dir_entry
+                                .path()
                                 .file_name()
                                 .and_then(OsStr::to_str)
                                 .is_some_and(|name| name == audio.name)
