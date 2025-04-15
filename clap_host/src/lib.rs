@@ -7,7 +7,7 @@ use generic_daw_utils::unique_id;
 use host::Host;
 use main_thread::MainThread;
 use shared::Shared;
-use std::{collections::BTreeMap, path::PathBuf, result::Result};
+use std::{collections::BTreeMap, path::PathBuf};
 use walkdir::WalkDir;
 
 mod audio_buffers;
@@ -39,7 +39,7 @@ pub fn get_installed_plugins() -> BTreeMap<PluginDescriptor, PluginBundle> {
     standard_clap_paths()
         .into_iter()
         .flat_map(WalkDir::new)
-        .filter_map(Result::ok)
+        .flatten()
         .filter(|dir_entry| dir_entry.file_type().is_file())
         .filter(|dir_entry| {
             dir_entry
