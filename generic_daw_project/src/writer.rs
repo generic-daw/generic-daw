@@ -1,4 +1,5 @@
 use crate::proto;
+use generic_daw_utils::hash_file;
 use prost::Message as _;
 use std::path::Path;
 use yazi::{CompressionLevel, Format, compress};
@@ -28,6 +29,7 @@ impl Writer {
                 .to_str()
                 .unwrap()
                 .to_owned(),
+            hash: hash_file(path),
         });
 
         proto::project::track::audio_clip::AudioIndex {

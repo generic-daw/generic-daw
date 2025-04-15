@@ -143,7 +143,7 @@ impl Daw {
                 }
             }
             Message::SaveAsFile(path) => {
-                self.arrangement.save(&path, &self.sample_dirs);
+                self.arrangement.save(&path);
                 self.open_project = Some(path);
             }
             Message::Stop => {

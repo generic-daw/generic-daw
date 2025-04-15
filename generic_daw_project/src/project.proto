@@ -9,6 +9,7 @@ message Project {
 
     message Audio {
         string name = 1;
+        uint64 hash = 2;
     }
 
     message Midi {
