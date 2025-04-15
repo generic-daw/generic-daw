@@ -1420,7 +1420,6 @@ dependencies = [
 name = "generic_daw_project"
 version = "0.0.0"
 dependencies = [
- "generic_daw_utils",
  "prost",
  "prost-build",
  "yazi",

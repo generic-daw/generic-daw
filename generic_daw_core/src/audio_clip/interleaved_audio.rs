@@ -1,4 +1,4 @@
-use generic_daw_utils::NoDebug;
+use generic_daw_utils::{NoDebug, hash_file};
 use log::info;
 use rubato::{
     Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType,
@@ -20,8 +20,12 @@ pub struct InterleavedAudio {
     pub(crate) samples: NoDebug<Box<[f32]>>,
     /// these are used to draw the sample in various quality levels
     pub lods: NoDebug<Box<[Box<[(f32, f32)]>]>>,
-    /// the file name associated with the sample
+    /// the file path associated with the sample
     pub path: Arc<Path>,
+    /// the file name associated with the sample
+    pub name: Arc<str>,
+    /// the hash of the file associated with the sample
+    pub hash: u64,
 }
 
 impl InterleavedAudio {
@@ -29,18 +33,40 @@ impl InterleavedAudio {
     pub fn create(path: Arc<Path>, sample_rate: u32) -> Option<Arc<Self>> {
         info!("loading sample {path:?}");
 
+        let name = path.as_ref().file_name()?.to_str()?.into();
         let samples = Self::read_audio_file(&path, sample_rate)?;
         let lods = Self::create_lod(&samples);
+        let hash = hash_file(&path);
 
         info!("loaded sample {path:?}");
 
-        let audio = Self {
+        Some(Arc::new(Self {
             samples: samples.into(),
             lods: lods.into(),
             path,
-        };
+            name,
+            hash,
+        }))
+    }
 
-        Some(Arc::new(audio))
+    #[must_use]
+    pub fn create_with_hash(path: Arc<Path>, sample_rate: u32, hash: u64) -> Option<Arc<Self>> {
+        info!("loading sample {path:?}");
+
+        let name = path.as_ref().file_name()?.to_str()?.into();
+        let samples = Self::read_audio_file(&path, sample_rate)?;
+        let lods = Self::create_lod(&samples);
+        debug_assert_eq!(hash, hash_file(&path));
+
+        info!("loaded sample {path:?}");
+
+        Some(Arc::new(Self {
+            samples: samples.into(),
+            lods: lods.into(),
+            path,
+            name,
+            hash,
+        }))
     }
 
     #[must_use]
@@ -53,7 +79,7 @@ impl InterleavedAudio {
         self.len() == 0
     }
 
-    fn read_audio_file(path: &Path, sample_rate: u32) -> Option<Box<[f32]>> {
+    fn read_audio_file(path: impl AsRef<Path>, sample_rate: u32) -> Option<Box<[f32]>> {
         let mut format = symphonia::default::get_probe()
             .format(
                 &Hint::default(),

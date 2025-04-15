@@ -45,8 +45,6 @@ impl State {
 #[derive(Clone, Debug)]
 pub struct AudioClip<'a> {
     inner: &'a AudioClipInner,
-    /// the name of the sample
-    name: &'a str,
     /// the position of the top left corner of the arrangement viewport
     position: &'a Vec2,
     /// the scale of the arrangement viewport
@@ -61,7 +59,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::new(self.name))
+        tree::State::new(State::new(&self.inner.audio.name))
     }
 
     fn size(&self) -> Size<Length> {
@@ -178,7 +176,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
         // the text containing the name of the sample
         let text = Text {
-            content: String::from(self.name),
+            content: self.inner.audio.name.as_ref().into(),
             bounds: Size::new(f32::INFINITY, 0.0),
             size: renderer.default_size(),
             line_height: LineHeight::default(),
@@ -258,11 +256,8 @@ impl<'a> AudioClip<'a> {
         scale: &'a Vec2,
         enabled: bool,
     ) -> Self {
-        let name = inner.audio.path.file_name().unwrap().to_str().unwrap();
-
         Self {
             inner,
-            name,
             position,
             scale,
             enabled,

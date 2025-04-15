@@ -1,6 +1,6 @@
 use crate::{InterleavedAudio, Meter, Position, Stream, build_input_stream, resampler};
 use async_channel::Receiver;
-use generic_daw_utils::NoDebug;
+use generic_daw_utils::{NoDebug, hash_file};
 use hound::{SampleFormat, WavSpec, WavWriter};
 use rubato::{Resampler as _, SincFixedIn};
 use std::{
@@ -16,8 +16,10 @@ pub struct Recording {
     pub(crate) samples: NoDebug<Vec<f32>>,
     /// these are used to draw the sample in various quality levels
     pub lods: NoDebug<Box<[Vec<(f32, f32)>]>>,
-    /// the file name associated with the sample
+    /// the file path associated with the sample
     pub path: Arc<Path>,
+    /// the file name associated with the sample
+    pub name: Arc<str>,
 
     writer: NoDebug<WavWriter<BufWriter<File>>>,
     pub position: Position,
@@ -43,7 +45,7 @@ impl Recording {
         );
 
         let writer = WavWriter::create(
-            &path,
+            path.as_ref(),
             WavSpec {
                 channels: config.channels,
                 sample_rate: config.sample_rate.0,
@@ -54,6 +56,8 @@ impl Recording {
         .unwrap()
         .into();
 
+        let name = path.file_name().unwrap().to_str().unwrap().into();
+
         let resampler = resampler(meter.sample_rate, config.sample_rate.0, meter.buffer_size)
             .map(|x| x.unwrap().into());
 
@@ -62,6 +66,7 @@ impl Recording {
                 samples: Vec::new().into(),
                 lods: vec![Vec::new(); 10].into_boxed_slice().into(),
                 path,
+                name,
 
                 writer,
                 position: start_pos,
@@ -156,9 +161,9 @@ impl Recording {
         });
     }
 
-    pub fn split_off(&mut self, mut path: Arc<Path>) -> Arc<InterleavedAudio> {
+    pub fn split_off(&mut self, path: Arc<Path>) -> Arc<InterleavedAudio> {
         let mut writer = WavWriter::create(
-            &path,
+            path.as_ref(),
             WavSpec {
                 channels: self.channels as u16,
                 sample_rate: self.sample_rate,
@@ -176,12 +181,18 @@ impl Recording {
         let mut lods = vec![Vec::new(); 10].into_boxed_slice().into();
         std::mem::swap(&mut self.lods, &mut lods);
 
-        std::mem::swap(&mut self.path, &mut path);
+        let mut name = path.as_ref().file_name().unwrap().to_str().unwrap().into();
+        std::mem::swap(&mut self.name, &mut name);
+        self.path = path.as_ref().into();
+
+        let hash = hash_file(&path);
 
         Arc::new(InterleavedAudio {
             samples: samples.map(Vec::into_boxed_slice),
             lods: lods.map(|l| l.into_iter().map(Vec::into_boxed_slice).collect()),
             path,
+            name,
+            hash,
         })
     }
 
@@ -203,17 +214,21 @@ impl TryFrom<Recording> for Arc<InterleavedAudio> {
         let Recording {
             samples,
             lods,
+            name,
             path,
             writer,
             ..
         } = value;
 
         writer.0.finalize()?;
+        let hash = hash_file(&path);
 
         Ok(Self::new(InterleavedAudio {
             samples: samples.map(Vec::into_boxed_slice),
             lods: lods.map(|l| l.into_iter().map(Vec::into_boxed_slice).collect()),
             path,
+            name,
+            hash,
         }))
     }
 }

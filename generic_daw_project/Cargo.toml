@@ -8,8 +8,6 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-generic_daw_utils = { path = "../generic_daw_utils" }
-
 prost = "0.13.5"
 yazi = "0.2.1"
 

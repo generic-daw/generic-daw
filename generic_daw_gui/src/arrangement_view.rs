@@ -673,16 +673,19 @@ impl ArrangementView {
 
         let mut audios = HashMap::new();
         for entry in &self.audios {
-            let path = match entry.1 {
+            let audio = match entry.1 {
                 LoadStatus::Loaded(audio) => {
                     let Some(audio) = audio.upgrade() else {
                         continue;
                     };
-                    audio.path.clone()
+                    audio
                 }
                 LoadStatus::Loading(..) => continue,
             };
-            audios.insert(path.clone(), writer.push_audio(path));
+            audios.insert(
+                audio.path.clone(),
+                writer.push_audio(audio.name.clone(), audio.hash),
+            );
         }
 
         let mut midis = HashMap::new();
@@ -816,10 +819,12 @@ impl ArrangementView {
                         })
                     {
                         if audio.hash == hash_file(path.path()) {
-                            if let audio @ Some(_) =
-                                InterleavedAudio::create(path.path().into(), sample_rate)
-                            {
-                                sender.send((idx, audio)).unwrap();
+                            if let Some(audio) = InterleavedAudio::create_with_hash(
+                                path.path().into(),
+                                sample_rate,
+                                audio.hash,
+                            ) {
+                                sender.send((idx, Some(audio))).unwrap();
                                 return;
                             }
                         }

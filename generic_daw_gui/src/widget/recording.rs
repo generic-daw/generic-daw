@@ -21,7 +21,6 @@ use std::{cmp::min_by, sync::atomic::Ordering::Acquire};
 pub struct Recording<'a> {
     inner: &'a RecordingInner,
     meter: &'a Meter,
-    name: &'a str,
     position: &'a Vec2,
     scale: &'a Vec2,
 }
@@ -78,7 +77,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
 
         // the text containing the name of the sample
         let text = Text {
-            content: String::from(self.name),
+            content: self.inner.name.as_ref().into(),
             bounds: Size::new(f32::INFINITY, 0.0),
             size: renderer.default_size(),
             line_height: LineHeight::default(),
@@ -135,12 +134,9 @@ impl<'a> Recording<'a> {
         position: &'a Vec2,
         scale: &'a Vec2,
     ) -> Self {
-        let name = inner.path.file_name().unwrap().to_str().unwrap();
-
         Self {
             inner,
             meter,
-            name,
             position,
             scale,
         }

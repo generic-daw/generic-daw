@@ -1,7 +1,5 @@
 use crate::proto;
-use generic_daw_utils::hash_file;
 use prost::Message as _;
-use std::path::Path;
 use yazi::{CompressionLevel, Format, compress};
 
 #[derive(Debug)]
@@ -19,17 +17,12 @@ impl Writer {
     #[must_use]
     pub fn push_audio(
         &mut self,
-        path: impl AsRef<Path>,
+        name: impl AsRef<str>,
+        hash: u64,
     ) -> proto::project::track::audio_clip::AudioIndex {
         self.0.audios.push(proto::project::Audio {
-            name: path
-                .as_ref()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_owned(),
-            hash: hash_file(path),
+            name: name.as_ref().to_owned(),
+            hash,
         });
 
         proto::project::track::audio_clip::AudioIndex {
