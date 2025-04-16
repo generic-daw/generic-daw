@@ -893,7 +893,7 @@ impl ArrangementView {
 
         let mut tracks = HashMap::new();
         for (idx, clips, channel) in reader.iter_tracks() {
-            let mut track = Track::new(meter.clone());
+            let mut track = Track::default();
             load_channel(&track.node, channel?)?;
 
             for clip in clips {
