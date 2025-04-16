@@ -55,7 +55,7 @@ where
     let last_index = last_index.min(lods[lod].as_ref().len() - 1);
 
     // there is nothing to draw
-    if last_index - first_index < 2 {
+    if last_index < first_index || last_index - first_index < 2 {
         return None;
     }
 
