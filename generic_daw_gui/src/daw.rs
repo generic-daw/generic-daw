@@ -36,6 +36,7 @@ pub enum Message {
     Arrangement(ArrangementMessage),
     FileTree(FileTreeMessage),
 
+    NewFile,
     OpenFileDialog,
     SaveFile,
     SaveAsFileDialog,
@@ -98,6 +99,7 @@ impl Daw {
                 return self.arrangement.update(message).map(Message::Arrangement);
             }
             Message::FileTree(action) => return self.handle_file_tree_action(action),
+            Message::NewFile => (self.arrangement, self.meter) = ArrangementView::create(),
             Message::ChangedTab(tab) => self.arrangement.change_tab(tab),
             Message::OpenFileDialog => {
                 return Task::future(
@@ -223,15 +225,20 @@ impl Daw {
 
         column![
             row![
-                styled_pick_list(["Open", "Save", "Save As", "Export"], Some("File"), |s| {
-                    match s {
-                        "Open" => Message::OpenFileDialog,
-                        "Save" => Message::SaveFile,
-                        "Save As" => Message::SaveAsFileDialog,
-                        "Export" => Message::ExportFileDialog,
-                        _ => unreachable!(),
+                styled_pick_list(
+                    ["New", "Open", "Save", "Save As", "Export"],
+                    Some("File"),
+                    |s| {
+                        match s {
+                            "New" => Message::NewFile,
+                            "Open" => Message::OpenFileDialog,
+                            "Save" => Message::SaveFile,
+                            "Save As" => Message::SaveAsFileDialog,
+                            "Export" => Message::ExportFileDialog,
+                            _ => unreachable!(),
+                        }
                     }
-                }),
+                ),
                 row![
                     styled_button(
                         svg(if self.meter.playing.load(Acquire) {
@@ -346,8 +353,9 @@ impl Daw {
                             (true, false, false) => match key {
                                 keyboard::Key::Character(c) => match c.as_str() {
                                     "e" => Some(Message::ExportFileDialog),
-                                    "s" => Some(Message::SaveFile),
+                                    "n" => Some(Message::NewFile),
                                     "o" => Some(Message::OpenFileDialog),
+                                    "s" => Some(Message::SaveFile),
                                     _ => None,
                                 },
                                 _ => None,
