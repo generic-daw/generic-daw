@@ -1,13 +1,13 @@
 use super::{Action, Message, file::File};
 use crate::{
-    components::{styled_button, styled_svg},
+    components::styled_button,
     icons::CHEVRON_RIGHT,
     widget::{Clipped, LINE_HEIGHT, shaping_of},
 };
 use iced::{
     Alignment, Element, Length, Radians, Task, padding,
     widget::{
-        column, container, row, rule, text,
+        column, container, row, rule, svg, text,
         text::{Shaping, Wrapping},
         vertical_rule,
     },
@@ -86,8 +86,9 @@ impl Dir {
         let mut col = column!(
             styled_button(row![
                 Clipped::new(
-                    styled_svg(CHEVRON_RIGHT.clone())
+                    svg(CHEVRON_RIGHT.clone())
                         .rotation(Radians(f32::from(u8::from(self.open)) * FRAC_PI_2))
+                        .width(Length::Shrink)
                         .height(LINE_HEIGHT)
                 ),
                 container(

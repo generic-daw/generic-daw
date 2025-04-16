@@ -1,12 +1,12 @@
-use crate::stylefns::{button_with_base, svg_with_enabled};
+use crate::stylefns::button_with_base;
 use iced::{
     Alignment, Element, Length,
     border::Radius,
     widget::{
-        Button, ComboBox, PickList, Scrollable, Space, Svg, button, combo_box, container,
+        Button, ComboBox, PickList, Scrollable, Space, TextInput, button, combo_box, container,
         pick_list,
         scrollable::{self, Direction},
-        svg, text, text_input,
+        text, text_input,
     },
 };
 use std::borrow::Borrow;
@@ -80,9 +80,13 @@ pub fn styled_scrollable_with_direction<'a, Message>(
     })
 }
 
-pub fn styled_svg<'a>(handle: impl Into<svg::Handle>) -> Svg<'a> {
-    svg(handle)
-        .style(|t, s| svg_with_enabled(t, s, true))
-        .width(Length::Shrink)
-        .height(Length::Shrink)
+pub fn styled_text_input<'a, Message>(placeholder: &str, value: &str) -> TextInput<'a, Message>
+where
+    Message: Clone,
+{
+    text_input(placeholder, value).style(|t, s| {
+        let mut style = text_input::default(t, s);
+        style.border.radius = Radius::default();
+        style
+    })
 }

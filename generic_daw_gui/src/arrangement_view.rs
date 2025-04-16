@@ -1,16 +1,13 @@
 use crate::{
     clap_host::{ClapHost, Message as ClapHostMessage},
-    components::{
-        char_button, empty_widget, styled_combo_box, styled_scrollable_with_direction, styled_svg,
-    },
+    components::{char_button, empty_widget, styled_combo_box, styled_scrollable_with_direction},
     icons::{ADD, CHEVRON_RIGHT, HANDLE},
     stylefns::{button_with_base, slider_with_enabled, svg_with_enabled},
     widget::{
         AnimatedDot, Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob,
         LINE_HEIGHT, MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll,
         Recording as RecordingWidget, Seeker, TEXT_HEIGHT, Track as TrackWidget, VSplit,
-        arrangement::Action as ArrangementAction, piano_roll::Action as PianoRollAction,
-        vsplit::Strategy,
+        arrangement::Action as ArrangementAction, piano_roll::Action as PianoRollAction, vsplit,
     },
 };
 use arc_swap::ArcSwap;
@@ -1158,14 +1155,18 @@ impl ArrangementView {
                     .map(Element::new)
                     .chain(once(
                         container(
-                            button(styled_svg(ADD.clone()))
-                                .style(|t, s| {
-                                    let mut style = button_with_base(t, s, button::primary);
-                                    style.border.radius = f32::INFINITY.into();
-                                    style
-                                })
-                                .padding(5.0)
-                                .on_press(Message::TrackAdd),
+                            button(
+                                svg(ADD.clone())
+                                    .width(Length::Shrink)
+                                    .height(Length::Shrink),
+                            )
+                            .style(|t, s| {
+                                let mut style = button_with_base(t, s, button::primary);
+                                style.border.radius = f32::INFINITY.into();
+                                style
+                            })
+                            .padding(5.0)
+                            .on_press(Message::TrackAdd),
                         )
                         .padding(padding::right(5.0).top(5.0))
                         .into(),
@@ -1517,15 +1518,19 @@ impl ArrangementView {
                 }
             })
             .chain(once(
-                button(styled_svg(ADD.clone()))
-                    .style(|t, s| {
-                        let mut style = button_with_base(t, s, button::primary);
-                        style.border.radius = f32::INFINITY.into();
-                        style
-                    })
-                    .padding(5.0)
-                    .on_press(Message::ChannelAdd)
-                    .into(),
+                button(
+                    svg(ADD.clone())
+                        .width(Length::Shrink)
+                        .height(Length::Shrink),
+                )
+                .style(|t, s| {
+                    let mut style = button_with_base(t, s, button::primary);
+                    style.border.radius = f32::INFINITY.into();
+                    style
+                })
+                .padding(5.0)
+                .on_press(Message::ChannelAdd)
+                .into(),
             )))
             .align_y(Alignment::Center)
             .spacing(5.0),
@@ -1666,7 +1671,7 @@ impl ArrangementView {
                 ],
                 Message::SplitAt,
             )
-            .strategy(Strategy::Right)
+            .strategy(vsplit::Strategy::Right)
             .split_at(self.split_at)
             .into()
         } else {

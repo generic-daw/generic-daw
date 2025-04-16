@@ -1,6 +1,6 @@
 use super::Message;
 use crate::{
-    components::{styled_button, styled_svg},
+    components::styled_button,
     icons::{AUDIO_FILE, GENERIC_FILE},
     widget::{Clipped, LINE_HEIGHT, shaping_of},
 };
@@ -49,7 +49,11 @@ impl File {
         (
             mouse_area(
                 styled_button(row![
-                    Clipped::new(styled_svg(self.icon.clone()).height(LINE_HEIGHT)),
+                    Clipped::new(
+                        svg(self.icon.clone())
+                            .width(Length::Shrink)
+                            .height(LINE_HEIGHT)
+                    ),
                     container(
                         text(&*self.name)
                             .shaping(self.shaping)

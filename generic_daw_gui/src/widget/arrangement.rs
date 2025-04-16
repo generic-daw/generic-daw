@@ -6,12 +6,11 @@ use iced::{
     advanced::{
         Clipboard, Renderer as _, Shell,
         layout::{Layout, Limits, Node},
-        overlay,
         renderer::Style,
         widget::{Operation, Tree, Widget, tree},
     },
     mouse::{self, Cursor, Interaction},
-    window,
+    overlay, window,
 };
 
 #[derive(Clone, Copy, Debug)]

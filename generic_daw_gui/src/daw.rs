@@ -1,23 +1,27 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
-    components::{empty_widget, styled_button, styled_pick_list, styled_svg},
+    components::{empty_widget, styled_button, styled_pick_list, styled_text_input},
     file_tree::{FileTree, Message as FileTreeMessage},
-    icons::{PAUSE, PLAY, STOP},
+    icons::{PAUSE, PLAY, RANGE, STOP},
     stylefns::button_with_base,
-    widget::{AnimatedDot, BpmInput, LINE_HEIGHT, VSplit, vsplit::Strategy},
+    widget::{
+        AnimatedDot, DragHandle, LINE_HEIGHT, VSplit,
+        vsplit::{self},
+    },
 };
 use generic_daw_core::{Meter, Numerator, Position};
 use iced::{
     Alignment::Center,
-    Element, Event, Subscription, Task,
+    Element, Event, Length, Subscription, Task, Theme, border,
     event::{self, Status},
     keyboard,
-    widget::{button, column, horizontal_space, row},
+    widget::{button, column, container, horizontal_space, row, svg},
     window::{self, Id, frames},
 };
 use log::trace;
 use rfd::AsyncFileDialog;
 use std::{
+    f32::consts::FRAC_PI_2,
     path::Path,
     sync::{
         Arc,
@@ -44,6 +48,7 @@ pub enum Message {
     TogglePlay,
     ToggleMetronome,
     ChangedBpm(u16),
+    ChangedBpmText(String),
     ChangedNumerator(Numerator),
     ChangedTab(Tab),
 
@@ -167,6 +172,11 @@ impl Daw {
                 self.meter.metronome.fetch_not(AcqRel);
             }
             Message::ChangedBpm(bpm) => self.meter.bpm.store(bpm, Release),
+            Message::ChangedBpmText(bpm) => {
+                if let Ok(bpm) = bpm.parse() {
+                    return self.update(Message::ChangedBpm(bpm));
+                }
+            }
             Message::ChangedNumerator(new_numerator) => {
                 self.meter.numerator.store(new_numerator, Release);
             }
@@ -224,15 +234,16 @@ impl Daw {
                 }),
                 row![
                     styled_button(
-                        styled_svg(if self.meter.playing.load(Acquire) {
+                        svg(if self.meter.playing.load(Acquire) {
                             PAUSE.clone()
                         } else {
                             PLAY.clone()
                         })
+                        .width(Length::Shrink)
                         .height(LINE_HEIGHT)
                     )
                     .on_press(Message::TogglePlay),
-                    styled_button(styled_svg(STOP.clone()).height(LINE_HEIGHT))
+                    styled_button(svg(STOP.clone()).width(Length::Shrink).height(LINE_HEIGHT))
                         .on_press(Message::Stop),
                 ],
                 row![
@@ -243,7 +254,34 @@ impl Daw {
                     )
                     .width(50),
                 ],
-                BpmInput::new(30..=600, bpm, Message::ChangedBpm),
+                row![
+                    DragHandle::new(
+                        container(
+                            svg(RANGE.clone())
+                                .style(|t: &Theme, _| svg::Style {
+                                    color: Some(t.extended_palette().background.weak.text)
+                                })
+                                .width(Length::Shrink)
+                                .height(LINE_HEIGHT)
+                                .rotation(FRAC_PI_2)
+                        )
+                        .style(|t: &Theme| {
+                            container::transparent(t)
+                                .background(t.extended_palette().background.weak.color)
+                                .border(
+                                    border::width(1.0)
+                                        .color(t.extended_palette().background.strongest.color),
+                                )
+                        })
+                        .padding([5.0, 0.0]),
+                        bpm,
+                        140,
+                        Message::ChangedBpm
+                    ),
+                    styled_text_input("", &bpm.to_string())
+                        .width(42.0)
+                        .on_input(Message::ChangedBpmText)
+                ],
                 button(row![AnimatedDot::new(fill), AnimatedDot::new(!fill)].spacing(5.0))
                     .padding(8.0)
                     .style(move |t, s| button_with_base(
@@ -270,7 +308,7 @@ impl Daw {
                 self.arrangement.view().map(Message::Arrangement),
                 Message::SplitAt
             )
-            .strategy(Strategy::Left)
+            .strategy(vsplit::Strategy::Left)
             .split_at(self.split_at)
         ]
         .padding(20)

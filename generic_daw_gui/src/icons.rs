@@ -14,4 +14,5 @@ icon!(GENERIC_FILE = "../../assets/material-symbols--draft-outline-rounded.svg")
 icon!(HANDLE = "../../assets/material-symbols--drag-handle-rounded.svg");
 icon!(PAUSE = "../../assets/material-symbols--pause-rounded.svg");
 icon!(PLAY = "../../assets/material-symbols--play-arrow-rounded.svg");
+icon!(RANGE = "../../assets/material-symbols--arrow-range-rounded.svg");
 icon!(STOP = "../../assets/material-symbols--stop-rounded.svg");
