@@ -49,10 +49,7 @@ impl EventBuffers {
         })
     }
 
-    pub fn read_in<Event>(&mut self, events: &mut Vec<Event>)
-    where
-        Event: EventImpl,
-    {
+    pub fn read_in(&mut self, events: &mut Vec<impl EventImpl>) {
         self.input_events.clear();
 
         if self.input_prefers_midi {
@@ -68,14 +65,11 @@ impl EventBuffers {
         self.input_events.sort();
     }
 
-    pub fn write_out<Event>(&mut self, events: &mut Vec<Event>)
-    where
-        Event: EventImpl,
-    {
+    pub fn write_out(&mut self, events: &mut Vec<impl EventImpl>) {
         events.extend(
             self.output_events
                 .iter()
-                .filter_map(Event::try_from_unknown),
+                .filter_map(EventImpl::try_from_unknown),
         );
 
         self.output_events.clear();

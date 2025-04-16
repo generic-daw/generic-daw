@@ -50,10 +50,7 @@ impl AudioProcessor {
         self.id
     }
 
-    pub fn process<Event>(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32)
-    where
-        Event: EventImpl,
-    {
+    pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<impl EventImpl>, mix_level: f32) {
         while let Ok(msg) = self.receiver.try_recv() {
             trace!("{}: {msg:?}", self.descriptor);
 

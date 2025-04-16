@@ -1,10 +1,10 @@
-use generic_daw_utils::{NoDebug, hash_file};
+use generic_daw_utils::{NoDebug, hash_reader};
 use log::info;
 use rubato::{
     Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType,
     WindowFunction, calculate_cutoff,
 };
-use std::{fs::File, path::Path, sync::Arc};
+use std::{fs::File, hash::DefaultHasher, path::Path, sync::Arc};
 use symphonia::core::{
     audio::SampleBuffer,
     codecs::DecoderOptions,
@@ -36,7 +36,7 @@ impl InterleavedAudio {
         let name = path.as_ref().file_name()?.to_str()?.into();
         let samples = Self::read_audio_file(&path, sample_rate)?;
         let lods = Self::create_lod(&samples);
-        let hash = hash_file(&path);
+        let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
 
         info!("loaded sample {path:?}");
 
@@ -56,7 +56,10 @@ impl InterleavedAudio {
         let name = path.as_ref().file_name()?.to_str()?.into();
         let samples = Self::read_audio_file(&path, sample_rate)?;
         let lods = Self::create_lod(&samples);
-        debug_assert_eq!(hash, hash_file(&path));
+        debug_assert_eq!(
+            hash,
+            hash_reader::<DefaultHasher>(File::open(&path).unwrap())
+        );
 
         info!("loaded sample {path:?}");
 

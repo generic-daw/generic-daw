@@ -23,7 +23,7 @@ use generic_daw_core::{
     },
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
-use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2, hash_file};
+use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2, hash_reader};
 use iced::{
     Alignment, Element, Function as _, Length, Radians, Size, Subscription, Task, Theme, border,
     mouse::Interaction,
@@ -509,10 +509,9 @@ impl ArrangementView {
                     self.meter.playing.store(false, Release);
 
                     let pos = recording.position;
-                    let audio = recording.try_into().unwrap();
                     let track = self.arrangement.track_of(track).unwrap();
 
-                    let clip = AudioClip::create(audio, self.meter.clone());
+                    let clip = AudioClip::create(recording.finalize(), self.meter.clone());
                     clip.position.move_to(pos);
                     self.arrangement.add_clip(track, clip);
                 }
@@ -815,7 +814,9 @@ impl ArrangementView {
                                 .is_some_and(|name| name == audio.name)
                         })
                     {
-                        if audio.hash == hash_file(path.path()) {
+                        if audio.hash
+                            == hash_reader::<DefaultHasher>(File::open(path.path()).unwrap())
+                        {
                             if let Some(audio) = InterleavedAudio::create_with_hash(
                                 path.path().into(),
                                 sample_rate,

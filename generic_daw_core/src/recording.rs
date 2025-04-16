@@ -1,10 +1,11 @@
 use crate::{InterleavedAudio, Meter, Position, Stream, build_input_stream, resampler};
 use async_channel::Receiver;
-use generic_daw_utils::{NoDebug, hash_file};
+use generic_daw_utils::{NoDebug, hash_reader};
 use hound::{SampleFormat, WavSpec, WavWriter};
 use rubato::{Resampler as _, SincFixedIn};
 use std::{
     fs::File,
+    hash::DefaultHasher,
     io::BufWriter,
     path::Path,
     sync::{Arc, atomic::Ordering::Acquire},
@@ -185,7 +186,29 @@ impl Recording {
         std::mem::swap(&mut self.name, &mut name);
         self.path = path.as_ref().into();
 
-        let hash = hash_file(&path);
+        let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
+
+        Arc::new(InterleavedAudio {
+            samples: samples.map(Vec::into_boxed_slice),
+            lods: lods.map(|l| l.into_iter().map(Vec::into_boxed_slice).collect()),
+            path,
+            name,
+            hash,
+        })
+    }
+
+    pub fn finalize(self) -> Arc<InterleavedAudio> {
+        let Self {
+            samples,
+            lods,
+            name,
+            path,
+            writer,
+            ..
+        } = self;
+
+        writer.0.finalize().unwrap();
+        let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
 
         Arc::new(InterleavedAudio {
             samples: samples.map(Vec::into_boxed_slice),
@@ -204,31 +227,5 @@ impl Recording {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-}
-
-impl TryFrom<Recording> for Arc<InterleavedAudio> {
-    type Error = hound::Error;
-
-    fn try_from(value: Recording) -> Result<Self, Self::Error> {
-        let Recording {
-            samples,
-            lods,
-            name,
-            path,
-            writer,
-            ..
-        } = value;
-
-        writer.0.finalize()?;
-        let hash = hash_file(&path);
-
-        Ok(Self::new(InterleavedAudio {
-            samples: samples.map(Vec::into_boxed_slice),
-            lods: lods.map(|l| l.into_iter().map(Vec::into_boxed_slice).collect()),
-            path,
-            name,
-            hash,
-        }))
     }
 }
