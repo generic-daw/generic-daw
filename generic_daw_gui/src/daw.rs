@@ -173,7 +173,7 @@ impl Daw {
             Message::ToggleMetronome => {
                 self.meter.metronome.fetch_not(AcqRel);
             }
-            Message::ChangedBpm(bpm) => self.meter.bpm.store(bpm, Release),
+            Message::ChangedBpm(bpm) => self.meter.bpm.store(bpm.max(10), Release),
             Message::ChangedBpmText(bpm) => {
                 if let Ok(bpm) = bpm.parse() {
                     return self.update(Message::ChangedBpm(bpm));

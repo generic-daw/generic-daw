@@ -507,23 +507,18 @@ impl<'a, Message> Seeker<'a, Message> {
             background_beat += background_step;
         }
 
-        beat = beat.ceil_to_snap_step(self.scale.x + 3.0, numerator);
-        let snap_step = Position::snap_step(self.scale.x + 3.0, numerator);
+        let bpm_comp = (f32::from(bpm) / 32.0).log2();
+        beat = beat.ceil_to_snap_step(self.scale.x + bpm_comp, numerator);
+        let snap_step = Position::snap_step(self.scale.x + bpm_comp, numerator);
 
         while beat <= end_beat {
-            let bar = beat.beat() / numerator as u32;
-            let color = if self.scale.x >= 11.0 {
-                if beat.beat() % numerator as u32 == 0 {
-                    if bar % 4 == 0 {
-                        theme.extended_palette().background.strong.color
-                    } else {
-                        theme.extended_palette().background.weak.color
-                    }
+            let color = if snap_step >= Position::BEAT {
+                if beat.beat() % (snap_step.beat() * numerator as u32) == 0 {
+                    theme.extended_palette().background.strong.color
                 } else {
-                    beat += Position::BEAT;
-                    continue;
+                    theme.extended_palette().background.weak.color
                 }
-            } else if beat.beat() % numerator as u32 == 0 {
+            } else if beat.step() == 0 {
                 theme.extended_palette().background.strong.color
             } else {
                 theme.extended_palette().background.weak.color
