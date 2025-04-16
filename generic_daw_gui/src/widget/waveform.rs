@@ -1,7 +1,7 @@
 use crate::widget::LINE_HEIGHT;
 use generic_daw_core::{Meter, Position};
 use generic_daw_utils::Vec2;
-use iced::{Point, Rectangle, Theme, Transformation, advanced::graphics::color};
+use iced::{Point, Rectangle, Theme, Transformation, advanced::graphics::color, debug};
 use iced_wgpu::graphics::{
     Mesh,
     mesh::{Indexed, SolidVertex2D},
@@ -59,6 +59,8 @@ where
         return None;
     }
 
+    let debug = debug::time("Waveform Generation");
+
     let mut last = None::<(f32, f32)>;
     // vertices of the waveform
     let vertices = lods[lod].as_ref()[first_index..=last_index]
@@ -101,6 +103,8 @@ where
     let indices = (0..vertices.len() as u32 - 2)
         .flat_map(|i| [i, i + 1, i + 2])
         .collect();
+
+    debug.finish();
 
     // the waveform mesh
     Some(Mesh::Solid {
