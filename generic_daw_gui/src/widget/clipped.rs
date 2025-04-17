@@ -1,6 +1,6 @@
 use generic_daw_utils::NoDebug;
 use iced::{
-    Element, Fill, Length, Rectangle, Renderer, Size, Theme,
+    Element, Length, Rectangle, Renderer, Size, Theme,
     advanced::{
         Clipboard, Layout, Shell, Widget,
         layout::{Limits, Node},
@@ -18,8 +18,8 @@ impl<'a, Message> Clipped<'a, Message> {
     pub fn new(inner: impl Into<Element<'a, Message>>) -> Self {
         let inner = inner.into();
 
-        debug_assert!(inner.as_widget().size().width != Fill);
-        debug_assert!(inner.as_widget().size().height != Fill);
+        debug_assert!(!inner.as_widget().size().width.is_fill());
+        debug_assert!(!inner.as_widget().size().height.is_fill());
 
         Self(inner.into())
     }
