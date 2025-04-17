@@ -1,7 +1,7 @@
 use super::{LINE_HEIGHT, Vec2, shaping_of, waveform};
 use generic_daw_core::AudioClip as AudioClipInner;
 use iced::{
-    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Text, Widget,
         graphics::geometry::Renderer as _,
@@ -63,10 +63,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
     }
 
     fn size(&self) -> Size<Length> {
-        Size {
-            width: Length::Shrink,
-            height: Length::Fill,
-        }
+        Size::new(Shrink, Fill)
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {

@@ -5,7 +5,7 @@ use crate::{
     widget::{Clipped, LINE_HEIGHT, shaping_of},
 };
 use iced::{
-    Alignment, Element, Length, Radians, Task, padding,
+    Alignment, Element, Fill, Radians, Shrink, Task, padding,
     widget::{
         column, container, row, rule, svg, text,
         text::{Shaping, Wrapping},
@@ -88,7 +88,7 @@ impl Dir {
                 Clipped::new(
                     svg(CHEVRON_RIGHT.clone())
                         .rotation(Radians(f32::from(u8::from(self.open)) * FRAC_PI_2))
-                        .width(Length::Shrink)
+                        .width(Shrink)
                         .height(LINE_HEIGHT)
                 ),
                 container(
@@ -98,7 +98,7 @@ impl Dir {
                 )
                 .clip(true)
             ])
-            .width(Length::Fill)
+            .width(Fill)
             .padding(0)
             .on_press(Message::Action(self.path.clone(), Action::DirToggleOpen))
         );

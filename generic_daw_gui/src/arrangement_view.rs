@@ -25,7 +25,8 @@ use generic_daw_core::{
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2, hash_reader};
 use iced::{
-    Alignment, Element, Function as _, Length, Radians, Size, Subscription, Task, Theme, border,
+    Alignment, Element, Fill, Function as _, Radians, Shrink, Size, Subscription, Task, Theme,
+    border,
     mouse::Interaction,
     padding,
     widget::{
@@ -1156,18 +1157,14 @@ impl ArrangementView {
                     .map(Element::new)
                     .chain(once(
                         container(
-                            button(
-                                svg(ADD.clone())
-                                    .width(Length::Shrink)
-                                    .height(Length::Shrink),
-                            )
-                            .style(|t, s| {
-                                let mut style = button_with_base(t, s, button::primary);
-                                style.border.radius = f32::INFINITY.into();
-                                style
-                            })
-                            .padding(5.0)
-                            .on_press(Message::TrackAdd),
+                            button(svg(ADD.clone()).width(Shrink).height(Shrink))
+                                .style(|t, s| {
+                                    let mut style = button_with_base(t, s, button::primary);
+                                    style.border.radius = f32::INFINITY.into();
+                                    style
+                                })
+                                .padding(5.0)
+                                .on_press(Message::TrackAdd),
                         )
                         .padding(padding::right(5.0).top(5.0))
                         .into(),
@@ -1335,8 +1332,8 @@ impl ArrangementView {
                         button(
                             svg(CHEVRON_RIGHT.clone())
                                 .style(move |t, s| svg_with_enabled(t, s, enabled))
-                                .width(Length::Shrink)
-                                .height(Length::Shrink)
+                                .width(Shrink)
+                                .height(Shrink)
                                 .rotation(Radians(-FRAC_PI_2)),
                         )
                         .style(move |t, s| {
@@ -1519,25 +1516,21 @@ impl ArrangementView {
                 }
             })
             .chain(once(
-                button(
-                    svg(ADD.clone())
-                        .width(Length::Shrink)
-                        .height(Length::Shrink),
-                )
-                .style(|t, s| {
-                    let mut style = button_with_base(t, s, button::primary);
-                    style.border.radius = f32::INFINITY.into();
-                    style
-                })
-                .padding(5.0)
-                .on_press(Message::ChannelAdd)
-                .into(),
+                button(svg(ADD.clone()).width(Shrink).height(Shrink))
+                    .style(|t, s| {
+                        let mut style = button_with_base(t, s, button::primary);
+                        style.border.radius = f32::INFINITY.into();
+                        style
+                    })
+                    .padding(5.0)
+                    .on_press(Message::ChannelAdd)
+                    .into(),
             )))
             .align_y(Alignment::Center)
             .spacing(5.0),
             Direction::Horizontal(Scrollbar::default()),
         )
-        .width(Length::Fill);
+        .width(Fill);
 
         let plugin_picker = styled_combo_box(
             &self.plugin_descriptors,
@@ -1545,7 +1538,7 @@ impl ArrangementView {
             None,
             Message::PluginLoad,
         )
-        .width(Length::Fill);
+        .width(Fill);
 
         if let Some(selected) = self.selected_channel {
             let node = &self.arrangement.node(selected).0;
@@ -1587,7 +1580,7 @@ impl ArrangementView {
                                                 button::secondary
                                             }
                                         ))
-                                        .width(Length::Fill)
+                                        .width(Fill)
                                         .on_press(
                                             Message::ClapHost(ClapHostMessage::MainThread(
                                                 *plugin_id,
@@ -1627,7 +1620,7 @@ impl ArrangementView {
                                             container(
                                                 svg(HANDLE.clone())
                                                     .rotation(Radians(FRAC_PI_2))
-                                                    .width(Length::Shrink)
+                                                    .width(Shrink)
                                                     .height(LINE_HEIGHT + 10.0)
                                                     .style(|t: &Theme, _| svg::Style {
                                                         color: Some(
@@ -1668,7 +1661,7 @@ impl ArrangementView {
                         .on_drag(Message::PluginsReordered),
                         Direction::Vertical(Scrollbar::default())
                     )
-                    .height(Length::Fill)
+                    .height(Fill)
                 ],
                 Message::SplitAt,
             )

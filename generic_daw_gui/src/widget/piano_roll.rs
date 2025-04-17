@@ -2,7 +2,7 @@ use super::get_time;
 use generic_daw_core::{Meter, MidiKey, MidiNote, Position};
 use generic_daw_utils::Vec2;
 use iced::{
-    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Text, Widget,
         layout::{Limits, Node},
@@ -84,7 +84,7 @@ where
     }
 
     fn size(&self) -> Size<Length> {
-        Size::new(Length::Fill, Length::Fixed(128.0 * self.scale.y))
+        Size::new(Fill, Length::Fixed(128.0 * self.scale.y))
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {

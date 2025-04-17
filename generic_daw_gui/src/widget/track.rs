@@ -2,7 +2,7 @@ use super::get_time;
 use generic_daw_core::{Meter, Position};
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
-    Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
         layout::{Limits, Node},
@@ -42,10 +42,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
     }
 
     fn size(&self) -> Size<Length> {
-        Size {
-            width: Length::Fill,
-            height: Length::Fixed(self.scale.y),
-        }
+        Size::new(Fill, Length::Fixed(self.scale.y))
     }
 
     fn children(&self) -> Vec<Tree> {

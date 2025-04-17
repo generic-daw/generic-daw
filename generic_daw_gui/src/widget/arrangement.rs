@@ -2,7 +2,7 @@ use super::{Vec2, get_time};
 use generic_daw_core::{Meter, Position};
 use generic_daw_utils::NoDebug;
 use iced::{
-    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Renderer as _, Shell,
         layout::{Layout, Limits, Node},
@@ -69,7 +69,7 @@ where
     }
 
     fn size(&self) -> Size<Length> {
-        Size::new(Length::Fill, Length::Fill)
+        Size::new(Fill, Fill)
     }
 
     fn diff(&self, tree: &mut Tree) {

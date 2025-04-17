@@ -5,7 +5,7 @@ use crate::{
     widget::{Clipped, LINE_HEIGHT, shaping_of},
 };
 use iced::{
-    Element, Length,
+    Element, Fill, Shrink,
     widget::{
         container, mouse_area, row, svg, text,
         text::{Shaping, Wrapping},
@@ -49,11 +49,7 @@ impl File {
         (
             mouse_area(
                 styled_button(row![
-                    Clipped::new(
-                        svg(self.icon.clone())
-                            .width(Length::Shrink)
-                            .height(LINE_HEIGHT)
-                    ),
+                    Clipped::new(svg(self.icon.clone()).width(Shrink).height(LINE_HEIGHT)),
                     container(
                         text(&*self.name)
                             .shaping(self.shaping)
@@ -61,7 +57,7 @@ impl File {
                     )
                     .clip(true)
                 ])
-                .width(Length::Fill)
+                .width(Fill)
                 .padding(0)
                 .on_press(Message::None),
             )

@@ -1,7 +1,7 @@
 use super::{LINE_HEIGHT, Vec2, waveform};
 use generic_daw_core::{Meter, Position, Recording as RecordingInner};
 use iced::{
-    Element, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
     advanced::{
         Layout, Renderer as _, Text, Widget,
         graphics::mesh::Renderer as _,
@@ -27,10 +27,7 @@ pub struct Recording<'a> {
 
 impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
     fn size(&self) -> Size<Length> {
-        Size {
-            width: Length::Shrink,
-            height: Length::Fill,
-        }
+        Size::new(Shrink, Fill)
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {

@@ -1,6 +1,6 @@
 use super::LINE_HEIGHT;
 use iced::{
-    Animation, Color, Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector,
+    Animation, Color, Element, Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
         layout::{Limits, Node},
@@ -48,7 +48,7 @@ pub struct PeakMeter {
 
 impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
     fn size(&self) -> Size<Length> {
-        Size::new(Length::Fixed(WIDTH), Length::Fill)
+        Size::new(Length::Fixed(WIDTH), Fill)
     }
 
     fn tag(&self) -> tree::Tag {

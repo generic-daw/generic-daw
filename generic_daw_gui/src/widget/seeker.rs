@@ -2,7 +2,7 @@ use super::{LINE_HEIGHT, SWM, get_time};
 use generic_daw_core::{Meter, Position};
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
-    Background, Color, Element, Event, Length, Point, Rectangle, Renderer, Size, Theme,
+    Background, Color, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme,
     Transformation, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Text, Widget,
@@ -47,7 +47,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
     }
 
     fn size(&self) -> Size<Length> {
-        Size::new(Length::Fill, Length::Fill)
+        Size::new(Fill, Fill)
     }
 
     fn diff(&self, tree: &mut Tree) {

@@ -1,6 +1,6 @@
 use generic_daw_utils::NoDebug;
 use iced::{
-    Element, Event, Length, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Event, Fill, Length, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Shell, Widget,
         layout::{Limits, Node},
@@ -81,7 +81,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
     }
 
     fn size(&self) -> Size<Length> {
-        Size::new(Length::Fill, Length::Fill)
+        Size::new(Fill, Fill)
     }
 
     fn tag(&self) -> tree::Tag {

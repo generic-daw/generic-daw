@@ -12,7 +12,7 @@ use crate::{
 use generic_daw_core::{Meter, Numerator, Position};
 use iced::{
     Alignment::Center,
-    Element, Event, Length, Subscription, Task, Theme, border,
+    Element, Event, Shrink, Subscription, Task, Theme, border,
     event::{self, Status},
     keyboard,
     widget::{button, column, container, horizontal_space, row, svg},
@@ -246,11 +246,11 @@ impl Daw {
                         } else {
                             PLAY.clone()
                         })
-                        .width(Length::Shrink)
+                        .width(Shrink)
                         .height(LINE_HEIGHT)
                     )
                     .on_press(Message::TogglePlay),
-                    styled_button(svg(STOP.clone()).width(Length::Shrink).height(LINE_HEIGHT))
+                    styled_button(svg(STOP.clone()).width(Shrink).height(LINE_HEIGHT))
                         .on_press(Message::Stop),
                 ],
                 row![
@@ -268,7 +268,7 @@ impl Daw {
                                 .style(|t: &Theme, _| svg::Style {
                                     color: Some(t.extended_palette().background.weak.text)
                                 })
-                                .width(Length::Shrink)
+                                .width(Shrink)
                                 .height(LINE_HEIGHT)
                                 .rotation(FRAC_PI_2)
                         )

@@ -1,7 +1,7 @@
 use super::{LINE_HEIGHT, Vec2};
 use generic_daw_core::MidiClip as MidiClipInner;
 use iced::{
-    Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Widget,
         layout::{Limits, Node},
@@ -42,10 +42,7 @@ where
     }
 
     fn size(&self) -> Size<Length> {
-        Size {
-            width: Length::Shrink,
-            height: Length::Fill,
-        }
+        Size::new(Shrink, Fill)
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {

@@ -1,6 +1,6 @@
 use crate::stylefns::button_with_base;
 use iced::{
-    Alignment, Element, Length,
+    Alignment, Element, Shrink,
     border::Radius,
     widget::{
         Button, ComboBox, PickList, Scrollable, Space, TextInput, button, combo_box, container,
@@ -12,7 +12,7 @@ use iced::{
 use std::borrow::Borrow;
 
 pub fn empty_widget() -> Space {
-    Space::new(Length::Shrink, Length::Shrink)
+    Space::new(Shrink, Shrink)
 }
 
 pub fn char_button<'a, Message>(t: char) -> Button<'a, Message>
