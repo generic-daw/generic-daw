@@ -98,6 +98,8 @@ impl InterleavedAudio {
         let n_channels = track.codec_params.channels?.count();
         let n_frames = track.codec_params.n_frames? as usize;
         let file_sample_rate = track.codec_params.sample_rate?;
+        let delay = track.codec_params.delay.unwrap_or_default() as usize;
+        let padding = track.codec_params.padding.unwrap_or_default() as usize;
 
         let mut samples = Vec::with_capacity(n_frames * n_channels);
 
@@ -105,7 +107,7 @@ impl InterleavedAudio {
             .make(&track.codec_params, &DecoderOptions::default())
             .ok()?;
 
-        let mut sample_buffer = None;
+        let mut sample_buf = None;
         while let Ok(packet) = format.next_packet() {
             if packet.track_id() != track_id {
                 continue;
@@ -113,19 +115,22 @@ impl InterleavedAudio {
 
             let audio_buf = decoder.decode(&packet).ok()?;
 
-            let buf = sample_buffer.get_or_insert_with(|| {
-                let duration = audio_buf.capacity() as u64;
+            let sample_buf = sample_buf.get_or_insert_with(|| {
+                let capacity = audio_buf.capacity() as u64;
                 let spec = *audio_buf.spec();
-                SampleBuffer::new(duration, spec)
+                SampleBuffer::new(capacity, spec)
             });
 
-            buf.copy_interleaved_ref(audio_buf.clone());
-            samples.extend(buf.samples());
+            sample_buf.copy_interleaved_ref(audio_buf.clone());
+            samples.extend(sample_buf.samples());
         }
+
+        let samples = &samples[delay * n_channels..];
+        let samples = &samples[..samples.len() - padding * n_channels];
 
         let mut resampler =
             Resampler::new(file_sample_rate as usize, sample_rate as usize, n_channels)?;
-        resampler.process(&samples);
+        resampler.process(samples);
         Some(resampler.finish().into_boxed_slice())
     }
 
