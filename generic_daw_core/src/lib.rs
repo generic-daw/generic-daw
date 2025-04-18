@@ -23,10 +23,10 @@ mod midi_clip;
 mod mixer_node;
 mod position;
 mod recording;
+mod resampler;
 mod track;
 
 pub use audio_clip::{AudioClip, InterleavedAudio};
-pub(crate) use audio_clip::{resample_interleaved, resampler};
 pub use audio_graph;
 pub use clap_host;
 pub use clip::Clip;
@@ -40,6 +40,7 @@ pub use midi_clip::{Key, MidiClip, MidiKey, MidiNote};
 pub use mixer_node::MixerNode;
 pub use position::Position;
 pub use recording::Recording;
+pub(crate) use resampler::Resampler;
 pub use track::Track;
 
 type AudioGraph = audio_graph::AudioGraph<AudioGraphNode, Event>;

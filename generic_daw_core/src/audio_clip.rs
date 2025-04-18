@@ -3,7 +3,7 @@ use std::sync::{Arc, atomic::Ordering::Acquire};
 
 mod interleaved_audio;
 
-pub use interleaved_audio::{InterleavedAudio, resample_interleaved, resampler};
+pub use interleaved_audio::InterleavedAudio;
 
 #[derive(Clone, Debug)]
 pub struct AudioClip {

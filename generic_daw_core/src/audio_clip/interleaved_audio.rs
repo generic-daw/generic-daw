@@ -1,9 +1,6 @@
+use crate::Resampler;
 use generic_daw_utils::{NoDebug, hash_reader};
 use log::info;
-use rubato::{
-    Resampler as _, SincFixedIn, SincInterpolationParameters, SincInterpolationType,
-    WindowFunction, calculate_cutoff,
-};
 use std::{fs::File, hash::DefaultHasher, path::Path, sync::Arc};
 use symphonia::core::{
     audio::SampleBuffer,
@@ -98,11 +95,11 @@ impl InterleavedAudio {
 
         let track = format.default_track()?;
         let track_id = track.id;
+        let n_channels = track.codec_params.channels?.count();
         let n_frames = track.codec_params.n_frames? as usize;
         let file_sample_rate = track.codec_params.sample_rate?;
 
-        let mut left = Vec::with_capacity(n_frames);
-        let mut right = Vec::with_capacity(n_frames);
+        let mut samples = Vec::with_capacity(n_frames * n_channels);
 
         let mut decoder = symphonia::default::get_codecs()
             .make(&track.codec_params, &DecoderOptions::default())
@@ -122,20 +119,14 @@ impl InterleavedAudio {
                 SampleBuffer::new(duration, spec)
             });
 
-            buf.copy_planar_ref(audio_buf.clone());
-
-            if audio_buf.spec().channels.count() == 1 {
-                left.extend(buf.samples());
-                right.extend(buf.samples());
-            } else {
-                let l = &buf.samples()[..audio_buf.frames()];
-                let r = &buf.samples()[audio_buf.frames()..][..audio_buf.frames()];
-                left.extend(l);
-                right.extend(r);
-            }
+            buf.copy_interleaved_ref(audio_buf.clone());
+            samples.extend(buf.samples());
         }
 
-        resample_planar(file_sample_rate, sample_rate, left, right)
+        let mut resampler =
+            Resampler::new(file_sample_rate as usize, sample_rate as usize, n_channels)?;
+        resampler.process(&samples);
+        Some(resampler.finish().into_boxed_slice())
     }
 
     fn create_lod(samples: &[f32]) -> Box<[Box<[(f32, f32)]>]> {
@@ -172,80 +163,4 @@ impl InterleavedAudio {
 
         lods.into_boxed_slice()
     }
-}
-
-pub fn resample_interleaved(
-    file_sample_rate: u32,
-    stream_sample_rate: u32,
-    interleaved_samples: Vec<f32>,
-) -> Option<Box<[f32]>> {
-    if file_sample_rate == stream_sample_rate {
-        return Some(interleaved_samples.into_boxed_slice());
-    }
-
-    let left = interleaved_samples
-        .iter()
-        .copied()
-        .step_by(2)
-        .collect::<Vec<_>>();
-
-    let mut right = interleaved_samples;
-    let mut keep = true;
-    right.retain(|_| {
-        keep ^= true;
-        keep
-    });
-
-    resample_planar(file_sample_rate, stream_sample_rate, left, right)
-}
-
-fn resample_planar(
-    file_sample_rate: u32,
-    stream_sample_rate: u32,
-    left: Vec<f32>,
-    right: Vec<f32>,
-) -> Option<Box<[f32]>> {
-    let Some(resampler) = resampler(file_sample_rate, stream_sample_rate, left.len() as u32) else {
-        return Some(
-            left.into_iter()
-                .zip(right)
-                .flat_map(<[f32; 2]>::from)
-                .collect(),
-        );
-    };
-
-    let mut planar_samples = resampler?.process(&[&left, &right], None).ok()?.into_iter();
-    let left = planar_samples.next().unwrap();
-    let right = planar_samples.next().unwrap();
-
-    Some(
-        left.into_iter()
-            .zip(right)
-            .flat_map(<[f32; 2]>::from)
-            .collect(),
-    )
-}
-
-#[expect(clippy::option_option)]
-pub fn resampler(
-    file_sample_rate: u32,
-    stream_sample_rate: u32,
-    chunk_size: u32,
-) -> Option<Option<SincFixedIn<f32>>> {
-    (file_sample_rate != stream_sample_rate).then_some(
-        SincFixedIn::new(
-            f64::from(stream_sample_rate) / f64::from(file_sample_rate),
-            1.0,
-            SincInterpolationParameters {
-                sinc_len: 256,
-                f_cutoff: calculate_cutoff(256, WindowFunction::BlackmanHarris2),
-                interpolation: SincInterpolationType::Cubic,
-                oversampling_factor: 256,
-                window: WindowFunction::BlackmanHarris2,
-            },
-            chunk_size as usize,
-            2,
-        )
-        .ok(),
-    )
 }

@@ -1,4 +1,4 @@
-use crate::{Meter, MixerNode, Position, event::Event, resample_interleaved};
+use crate::{Meter, MixerNode, Position, Resampler, event::Event};
 use audio_graph::{NodeId, NodeImpl};
 use generic_daw_utils::include_f32s;
 use live_sample::LiveSample;
@@ -82,14 +82,16 @@ impl Master {
     pub fn new(meter: Arc<Meter>, node: Arc<MixerNode>) -> Self {
         let sample_rate = meter.sample_rate;
 
+        let mut on_bar_click = Resampler::new(44100, sample_rate as usize, 2).unwrap();
+        on_bar_click.process(ON_BAR_CLICK);
+
+        let mut off_bar_click = Resampler::new(44100, sample_rate as usize, 2).unwrap();
+        off_bar_click.process(OFF_BAR_CLICK);
+
         Self {
             click: RefCell::default(),
-            on_bar_click: resample_interleaved(44100, sample_rate, ON_BAR_CLICK.into())
-                .unwrap()
-                .into(),
-            off_bar_click: resample_interleaved(44100, sample_rate, OFF_BAR_CLICK.into())
-                .unwrap()
-                .into(),
+            on_bar_click: on_bar_click.finish().into(),
+            off_bar_click: off_bar_click.finish().into(),
             meter,
             node,
         }

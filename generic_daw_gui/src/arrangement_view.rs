@@ -490,7 +490,7 @@ impl ArrangementView {
                     );
 
                     (pos, recording.position) = (recording.position, pos);
-                    let audio = recording.split_off(Self::make_recording_path());
+                    let audio = recording.split_off(Self::make_recording_path(), &self.meter);
                     let track = self.arrangement.track_of(track).unwrap();
 
                     let clip = AudioClip::create(audio, self.meter.clone());

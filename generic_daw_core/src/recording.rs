@@ -1,142 +1,170 @@
-use crate::{InterleavedAudio, Meter, Position, Stream, build_input_stream, resampler};
+use crate::{InterleavedAudio, Meter, Position, Resampler, Stream, build_input_stream};
 use async_channel::Receiver;
+use cpal::StreamConfig;
 use generic_daw_utils::{NoDebug, hash_reader};
 use hound::{SampleFormat, WavSpec, WavWriter};
-use rubato::{Resampler as _, SincFixedIn};
 use std::{
     fs::File,
     hash::DefaultHasher,
-    io::BufWriter,
     path::Path,
     sync::{Arc, atomic::Ordering::Acquire},
 };
 
 #[derive(Debug)]
 pub struct Recording {
-    /// these are used to play the sample back
-    pub(crate) samples: NoDebug<Vec<f32>>,
     /// these are used to draw the sample in various quality levels
     pub lods: NoDebug<Box<[Vec<(f32, f32)>]>>,
     /// the file path associated with the sample
-    pub path: Arc<Path>,
+    path: Arc<Path>,
     /// the file name associated with the sample
     pub name: Arc<str>,
-
-    writer: NoDebug<WavWriter<BufWriter<File>>>,
     pub position: Position,
-    channels: usize,
-    sample_rate: u32,
-    buffer_size: usize,
 
-    resampler: Option<NoDebug<SincFixedIn<f32>>>,
-    resample_buffer_in: [Vec<f32>; 2],
-    resample_buffer_out: [Vec<f32>; 2],
+    resampler: Resampler,
 
     _stream: NoDebug<Stream>,
+    config: StreamConfig,
 }
 
 impl Recording {
     pub fn create(path: Arc<Path>, meter: &Meter) -> (Self, Receiver<Box<[f32]>>) {
         let (stream, config, receiver) = build_input_stream(meter.sample_rate, meter.buffer_size);
 
-        let start_pos = Position::from_samples(
+        let position = Position::from_samples(
             meter.sample.load(Acquire),
             meter.bpm.load(Acquire),
             meter.sample_rate,
         );
 
-        let writer = WavWriter::create(
-            path.as_ref(),
-            WavSpec {
-                channels: config.channels,
-                sample_rate: config.sample_rate.0,
-                bits_per_sample: 32,
-                sample_format: SampleFormat::Float,
-            },
-        )
-        .unwrap()
-        .into();
-
         let name = path.file_name().unwrap().to_str().unwrap().into();
 
-        let resampler = resampler(meter.sample_rate, config.sample_rate.0, meter.buffer_size)
-            .map(|x| x.unwrap().into());
+        let resampler = Resampler::new(
+            config.sample_rate.0 as usize,
+            meter.sample_rate as usize,
+            config.channels as usize,
+        )
+        .unwrap();
 
         (
             Self {
-                samples: Vec::new().into(),
                 lods: vec![Vec::new(); 10].into_boxed_slice().into(),
                 path,
                 name,
-
-                writer,
-                position: start_pos,
-                channels: config.channels as usize,
-                sample_rate: config.sample_rate.0,
-                buffer_size: meter.buffer_size as usize,
+                position,
 
                 resampler,
-                resample_buffer_in: [Vec::new(), Vec::new()],
-                resample_buffer_out: [Vec::new(), Vec::new()],
 
                 _stream: stream.into(),
+                config,
             },
             receiver,
         )
     }
 
     pub fn write(&mut self, samples: &[f32]) {
-        for &sample in samples {
-            self.writer.write_sample(sample).unwrap();
+        let start = self.resampler.samples().len();
+
+        self.resampler.process(samples);
+
+        Self::update_lods(self.resampler.samples(), &mut self.lods, start);
+    }
+
+    pub fn split_off(&mut self, path: Arc<Path>, meter: &Meter) -> Arc<InterleavedAudio> {
+        let mut name = path.as_ref().file_name().unwrap().to_str().unwrap().into();
+        std::mem::swap(&mut self.name, &mut name);
+        self.path = path.as_ref().into();
+
+        let start = self.resampler.samples().len();
+
+        let mut resampler = Resampler::new(
+            self.config.sample_rate.0 as usize,
+            meter.sample_rate as usize,
+            self.config.channels as usize,
+        )
+        .unwrap();
+        std::mem::swap(&mut self.resampler, &mut resampler);
+        let samples = resampler.finish();
+
+        let mut lods = vec![Vec::new(); 10].into_boxed_slice().into();
+        std::mem::swap(&mut self.lods, &mut lods);
+
+        Self::update_lods(&samples, &mut lods, start);
+
+        let mut writer = WavWriter::create(
+            path.as_ref(),
+            WavSpec {
+                channels: self.config.channels,
+                sample_rate: self.config.sample_rate.0,
+                bits_per_sample: 32,
+                sample_format: SampleFormat::Float,
+            },
+        )
+        .unwrap();
+
+        for &s in &samples {
+            writer.write_sample(s).unwrap();
         }
 
-        let mut start = self.samples.len() / 8;
+        writer.finalize().unwrap();
 
-        if let Some(resampler) = self.resampler.as_mut() {
-            let [in_l, in_r] = &mut self.resample_buffer_in;
-            let [out_l, out_r] = &mut self.resample_buffer_out;
+        let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
 
-            in_l.extend(samples.iter().step_by(self.channels));
-            in_r.extend(
-                samples
-                    .iter()
-                    .skip(usize::from(self.channels != 1))
-                    .step_by(self.channels),
-            );
+        Arc::new(InterleavedAudio {
+            samples: samples.into_boxed_slice().into(),
+            lods: lods.map(|l| l.into_iter().map(Vec::into_boxed_slice).collect()),
+            path,
+            name,
+            hash,
+        })
+    }
 
-            while in_l.len() >= self.buffer_size {
-                resampler
-                    .process_into_buffer(&[&in_l, &in_r], &mut [&mut *out_l, &mut *out_r], None)
-                    .unwrap();
+    #[must_use]
+    pub fn finalize(self) -> Arc<InterleavedAudio> {
+        let Self {
+            mut lods,
+            name,
+            path,
+            resampler,
+            ..
+        } = self;
 
-                self.samples
-                    .extend(out_l.iter().zip(&*out_r).flat_map(<[&f32; 2]>::from));
+        let start = resampler.samples().len();
+        let samples = resampler.finish();
+        Self::update_lods(&samples, &mut lods, start);
 
-                out_l.clear();
-                out_r.clear();
+        let mut writer = WavWriter::create(
+            path.as_ref(),
+            WavSpec {
+                channels: self.config.channels,
+                sample_rate: self.config.sample_rate.0,
+                bits_per_sample: 32,
+                sample_format: SampleFormat::Float,
+            },
+        )
+        .unwrap();
 
-                in_l.rotate_left(self.buffer_size);
-                in_l.truncate(in_l.len() - self.buffer_size);
-                in_r.rotate_left(self.buffer_size);
-                in_r.truncate(in_r.len() - self.buffer_size);
-            }
-        } else {
-            self.samples.extend(
-                samples
-                    .iter()
-                    .step_by(self.channels)
-                    .zip(
-                        samples
-                            .iter()
-                            .skip(usize::from(self.channels != 1))
-                            .step_by(self.channels),
-                    )
-                    .flat_map(<[&f32; 2]>::from),
-            );
+        for &s in &samples {
+            writer.write_sample(s).unwrap();
         }
 
-        self.lods[0].truncate(start);
-        self.lods[0].extend(self.samples[start * 8..].chunks(8).map(|chunk| {
+        writer.finalize().unwrap();
+
+        let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
+
+        Arc::new(InterleavedAudio {
+            samples: samples.into_boxed_slice().into(),
+            lods: lods.map(|l| l.into_iter().map(Vec::into_boxed_slice).collect()),
+            path,
+            name,
+            hash,
+        })
+    }
+
+    fn update_lods(samples: &[f32], lods: &mut [Vec<(f32, f32)>], mut start: usize) {
+        start /= 8;
+
+        lods[0].truncate(start);
+        lods[0].extend(samples[start * 8..].chunks(8).map(|chunk| {
             let (min, max) = chunk
                 .iter()
                 .fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
@@ -146,7 +174,7 @@ impl Recording {
         }));
 
         (0..9).for_each(|i| {
-            let [last, current] = self.lods.get_mut(i..=i + 1).unwrap() else {
+            let [last, current] = &mut lods[i..=i + 1] else {
                 unreachable!()
             };
 
@@ -162,66 +190,9 @@ impl Recording {
         });
     }
 
-    pub fn split_off(&mut self, path: Arc<Path>) -> Arc<InterleavedAudio> {
-        let mut writer = WavWriter::create(
-            path.as_ref(),
-            WavSpec {
-                channels: self.channels as u16,
-                sample_rate: self.sample_rate,
-                bits_per_sample: 32,
-                sample_format: SampleFormat::Float,
-            },
-        )
-        .unwrap();
-        std::mem::swap(&mut self.writer.0, &mut writer);
-        writer.finalize().unwrap();
-
-        let mut samples = Vec::new().into();
-        std::mem::swap(&mut self.samples, &mut samples);
-
-        let mut lods = vec![Vec::new(); 10].into_boxed_slice().into();
-        std::mem::swap(&mut self.lods, &mut lods);
-
-        let mut name = path.as_ref().file_name().unwrap().to_str().unwrap().into();
-        std::mem::swap(&mut self.name, &mut name);
-        self.path = path.as_ref().into();
-
-        let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
-
-        Arc::new(InterleavedAudio {
-            samples: samples.map(Vec::into_boxed_slice),
-            lods: lods.map(|l| l.into_iter().map(Vec::into_boxed_slice).collect()),
-            path,
-            name,
-            hash,
-        })
-    }
-
-    pub fn finalize(self) -> Arc<InterleavedAudio> {
-        let Self {
-            samples,
-            lods,
-            name,
-            path,
-            writer,
-            ..
-        } = self;
-
-        writer.0.finalize().unwrap();
-        let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
-
-        Arc::new(InterleavedAudio {
-            samples: samples.map(Vec::into_boxed_slice),
-            lods: lods.map(|l| l.into_iter().map(Vec::into_boxed_slice).collect()),
-            path,
-            name,
-            hash,
-        })
-    }
-
     #[must_use]
     pub fn len(&self) -> usize {
-        self.samples.len()
+        self.resampler.samples().len()
     }
 
     #[must_use]
