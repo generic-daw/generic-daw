@@ -66,6 +66,16 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
         Size::new(Shrink, Fill)
     }
 
+    fn diff(&self, tree: &mut Tree) {
+        let state = tree.state.downcast_mut::<State>();
+
+        let addr = std::ptr::from_ref(self.inner).addr();
+        if state.last_addr != addr {
+            state.last_addr = addr;
+            *state.cache.borrow_mut() = None;
+        }
+    }
+
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
         let bpm = self.inner.meter.bpm.load(Acquire);
         let global_start = self
@@ -112,12 +122,6 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
             if state.last_viewport != *viewport {
                 state.last_viewport = *viewport;
-                *state.cache.borrow_mut() = None;
-            }
-
-            let addr = std::ptr::from_ref(self.inner).addr();
-            if state.last_addr != addr {
-                state.last_addr = addr;
                 *state.cache.borrow_mut() = None;
             }
 

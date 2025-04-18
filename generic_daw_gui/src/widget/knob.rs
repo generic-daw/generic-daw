@@ -61,8 +61,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
     }
 
     fn diff(&self, tree: &mut Tree) {
-        if let Some(popup) = self.tooltip.as_ref() {
-            tree.diff_children(&[&**popup]);
+        if let Some(tooltip) = self.tooltip.as_ref() {
+            tree.diff_children(&[&**tooltip]);
         } else {
             tree.diff_children(&[] as &[Element<'_, Message>]);
         }
@@ -234,9 +234,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
         let state = tree.state.downcast_ref::<State>();
 
         if state.hovering || state.dragging.is_some() {
-            self.tooltip.as_ref().map(|popup| {
+            self.tooltip.as_ref().map(|tooltip| {
                 overlay::Element::new(Box::new(Overlay {
-                    tooltip: popup,
+                    tooltip,
                     tree: tree.children.iter_mut().next().unwrap(),
                     bounds: layout.bounds() + translation,
                 }))
