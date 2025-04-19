@@ -1,12 +1,12 @@
-use crate::stylefns::button_with_base;
+use crate::{icons::plus, stylefns::button_with_base, widget::LINE_HEIGHT};
 use iced::{
     Alignment, Element, Shrink,
     border::Radius,
     widget::{
-        Button, ComboBox, PickList, Scrollable, Space, TextInput, button, combo_box, container,
-        pick_list,
+        Button, ComboBox, PickList, Scrollable, Space, Text, TextInput, button, combo_box,
+        container, pick_list,
         scrollable::{self, Direction},
-        text, text_input,
+        text_input,
     },
 };
 use std::borrow::Borrow;
@@ -15,16 +15,33 @@ pub fn empty_widget() -> Space {
     Space::new(Shrink, Shrink)
 }
 
-pub fn char_button<'a, Message>(t: char) -> Button<'a, Message>
+pub fn icon_button<'a, Message>(t: Text<'a>) -> Button<'a, Message>
 where
     Message: Clone + 'a,
 {
     button(
-        container(text(t).size(13.0).line_height(1.0))
+        container(t.size(13.0).line_height(1.0))
             .width(13.0)
             .align_x(Alignment::Center),
     )
     .padding(0.0)
+}
+
+pub fn round_plus_button<'a, Message>() -> Button<'a, Message>
+where
+    Message: Clone + 'a,
+{
+    button(
+        container(plus().size(LINE_HEIGHT + 6.0))
+            .width(LINE_HEIGHT + 6.0)
+            .align_x(Alignment::Center),
+    )
+    .style(|t, s| {
+        let mut style = button_with_base(t, s, button::primary);
+        style.border.radius = f32::INFINITY.into();
+        style
+    })
+    .padding(5.0)
 }
 
 pub fn styled_button<'a, Message>(content: impl Into<Element<'a, Message>>) -> Button<'a, Message> {

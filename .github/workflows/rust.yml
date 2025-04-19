@@ -10,6 +10,7 @@ jobs:
           components: clippy
       - run: sudo apt install libasound2-dev
       - run: sudo apt install protobuf-compiler
+      - run: wget https://unpkg.com/lucide-static@latest/font/Lucide.ttf
       - run: cargo clippy -- -D warnings
   fmt:
     runs-on: ubuntu-latest

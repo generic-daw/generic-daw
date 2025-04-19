@@ -1,19 +1,19 @@
 use super::{Action, Message, file::File};
 use crate::{
     components::styled_button,
-    icons::CHEVRON_RIGHT,
-    widget::{Clipped, LINE_HEIGHT, shaping_of},
+    icons::{chevron_down, chevron_right},
+    widget::{LINE_HEIGHT, shaping_of},
 };
 use iced::{
-    Alignment, Element, Fill, Radians, Shrink, Task, padding,
+    Alignment, Element, Fill, Task, padding,
     widget::{
-        column, container, row, rule, svg, text,
+        column, container, row, rule, text,
         text::{Shaping, Wrapping},
         vertical_rule,
     },
 };
 use smol::stream::StreamExt as _;
-use std::{f32::consts::FRAC_PI_2, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 #[derive(Clone, Debug)]
 pub struct Dir {
@@ -85,12 +85,12 @@ impl Dir {
     pub fn view(&self) -> (Element<'_, Message>, f32) {
         let mut col = column!(
             styled_button(row![
-                Clipped::new(
-                    svg(CHEVRON_RIGHT.clone())
-                        .rotation(Radians(f32::from(u8::from(self.open)) * FRAC_PI_2))
-                        .width(Shrink)
-                        .height(LINE_HEIGHT)
-                ),
+                container(if self.open {
+                    chevron_down()
+                } else {
+                    chevron_right()
+                })
+                .clip(true),
                 container(
                     text(&*self.name)
                         .shaping(self.shaping)

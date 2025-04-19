@@ -2,26 +2,22 @@ use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
     components::{empty_widget, styled_button, styled_pick_list, styled_text_input},
     file_tree::{FileTree, Message as FileTreeMessage},
-    icons::{PAUSE, PLAY, RANGE, STOP},
+    icons::{move_vertical, pause, play, square},
     stylefns::button_with_base,
-    widget::{
-        AnimatedDot, DragHandle, LINE_HEIGHT, VSplit,
-        vsplit::{self},
-    },
+    widget::{AnimatedDot, DragHandle, LINE_HEIGHT, VSplit, vsplit},
 };
 use generic_daw_core::{Meter, Numerator, Position};
 use iced::{
     Alignment::Center,
-    Element, Event, Shrink, Subscription, Task, Theme, border,
+    Element, Event, Subscription, Task, Theme, border,
     event::{self, Status},
     keyboard,
-    widget::{button, column, container, horizontal_space, row, svg},
+    widget::{button, column, container, horizontal_space, row},
     window::{self, Id, frames},
 };
 use log::trace;
 use rfd::AsyncFileDialog;
 use std::{
-    f32::consts::FRAC_PI_2,
     path::Path,
     sync::{
         Arc,
@@ -241,16 +237,16 @@ impl Daw {
                 ),
                 row![
                     styled_button(
-                        svg(if self.meter.playing.load(Acquire) {
-                            PAUSE.clone()
+                        container(if self.meter.playing.load(Acquire) {
+                            pause()
                         } else {
-                            PLAY.clone()
+                            play()
                         })
-                        .width(Shrink)
-                        .height(LINE_HEIGHT)
+                        .width(LINE_HEIGHT)
+                        .align_x(Center)
                     )
                     .on_press(Message::TogglePlay),
-                    styled_button(svg(STOP.clone()).width(Shrink).height(LINE_HEIGHT))
+                    styled_button(container(square()).width(LINE_HEIGHT).align_x(Center))
                         .on_press(Message::Stop),
                 ],
                 row![
@@ -263,24 +259,16 @@ impl Daw {
                 ],
                 row![
                     DragHandle::new(
-                        container(
-                            svg(RANGE.clone())
-                                .style(|t: &Theme, _| svg::Style {
-                                    color: Some(t.extended_palette().background.weak.text)
-                                })
-                                .width(Shrink)
-                                .height(LINE_HEIGHT)
-                                .rotation(FRAC_PI_2)
-                        )
-                        .style(|t: &Theme| {
-                            container::transparent(t)
-                                .background(t.extended_palette().background.weak.color)
-                                .border(
-                                    border::width(1.0)
-                                        .color(t.extended_palette().background.strongest.color),
-                                )
-                        })
-                        .padding([5.0, 0.0]),
+                        container(move_vertical())
+                            .style(|t: &Theme| {
+                                container::transparent(t)
+                                    .background(t.extended_palette().background.weak.color)
+                                    .border(
+                                        border::width(1.0)
+                                            .color(t.extended_palette().background.strongest.color),
+                                    )
+                            })
+                            .padding([5.0, 0.0]),
                         bpm,
                         140,
                         Message::ChangedBpm

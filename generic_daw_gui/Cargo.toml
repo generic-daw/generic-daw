@@ -22,7 +22,6 @@ iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", de
     "advanced",
     "canvas",
     "smol",
-    "svg",
     "wgpu",
     "x11",
 ] }

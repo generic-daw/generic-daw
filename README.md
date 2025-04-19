@@ -1,5 +1,5 @@
 <div align="center">
-  
+
 # Generic DAW
 
 [![Iced 0.14](https://img.shields.io/badge/0.14-blue?logo=iced&style=for-the-badge)](https://github.com/generic-daw/generic-daw)
@@ -23,6 +23,8 @@ An early-in-development, open source, cross-platform digital audio workstation (
     - Debian: `sudo apt install protobuf-compiler`
     - Fedora: `sudo dnf install protobuf-compiler`
     - Arch `sudo pacman -S protobuf`
+- an up-to-date version of Lucide in the workspace root:
+  - https://unpkg.com/lucide-static@latest/font/Lucide.ttf
 - on Linux you'll also need to install the alsa development headers:
   - Debian: `sudo apt install libasound2-dev`
   - Fedora: `sudo dnf install alsa-lib-devel`
@@ -55,5 +57,5 @@ See the current development status and future plans in the dedicated [GitHub pro
 
 ## License
 
-Generic DAW is licensed under the [GPLv3 License](https://www.gnu.org/licenses/gpl-3.0).  
+Generic DAW is licensed under the [GPLv3 License](https://www.gnu.org/licenses/gpl-3.0).
 By contributing to Generic DAW, you agree that your contributions will be licensed under the GPLv3 as well.

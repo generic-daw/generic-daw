@@ -1,8 +1,11 @@
 use crate::{
     clap_host::{ClapHost, Message as ClapHostMessage},
-    components::{char_button, empty_widget, styled_combo_box, styled_scrollable_with_direction},
-    icons::{ADD, CHEVRON_RIGHT, HANDLE},
-    stylefns::{button_with_base, slider_with_enabled, svg_with_enabled},
+    components::{
+        empty_widget, icon_button, round_plus_button, styled_combo_box,
+        styled_scrollable_with_direction,
+    },
+    icons::{chevron_up, grip_vertical, x},
+    stylefns::{button_with_base, slider_with_enabled},
     widget::{
         AnimatedDot, Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob,
         LINE_HEIGHT, MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll,
@@ -25,14 +28,13 @@ use generic_daw_core::{
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2, hash_reader};
 use iced::{
-    Alignment, Element, Fill, Function as _, Radians, Shrink, Size, Subscription, Task, Theme,
-    border,
+    Alignment, Element, Fill, Function as _, Size, Subscription, Task, Theme, border,
     mouse::Interaction,
     padding,
     widget::{
         button, column, combo_box, container, horizontal_rule, mouse_area, row,
         scrollable::{Direction, Scrollbar},
-        svg, text,
+        text,
         text::Wrapping,
         vertical_rule, vertical_slider, vertical_space,
     },
@@ -42,7 +44,6 @@ use smol::unblock;
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap},
-    f32::{self, consts::FRAC_PI_2},
     ffi::OsStr,
     fs::File,
     hash::{DefaultHasher, Hash as _, Hasher as _},
@@ -181,7 +182,7 @@ impl ArrangementView {
                 recording: None,
 
                 arrangement_position: Vec2::default(),
-                arrangement_scale: Vec2::new(9f32.next_down(), 120.0),
+                arrangement_scale: Vec2::new(9f32.next_down(), const { LINE_HEIGHT * 4.0 + 15.0 }),
                 soloed_track: None,
 
                 piano_roll_position: Vec2::new(0.0, 40.0),
@@ -985,11 +986,11 @@ impl ArrangementView {
                 recording: None,
 
                 arrangement_position: Vec2::default(),
-                arrangement_scale: Vec2::new(9.0, 120.0),
+                arrangement_scale: Vec2::new(9f32.next_down(), const { LINE_HEIGHT * 4.0 + 15.0 }),
                 soloed_track: None,
 
                 piano_roll_position: Vec2::new(0.0, 40.0),
-                piano_roll_scale: Vec2::new(9.0, LINE_HEIGHT),
+                piano_roll_scale: Vec2::new(9f32.next_down(), LINE_HEIGHT),
                 last_note_len: Position::BEAT,
                 selected_channel: None,
 
@@ -1065,7 +1066,7 @@ impl ArrangementView {
                                 .spacing(5.0)
                                 .wrap(),
                                 column![
-                                    char_button('M')
+                                    icon_button(text('M'))
                                         .on_press(Message::TrackToggleEnabled(id))
                                         .style(move |t, s| {
                                             button_with_base(
@@ -1078,7 +1079,7 @@ impl ArrangementView {
                                                 },
                                             )
                                         }),
-                                    char_button('S')
+                                    icon_button(text('S'))
                                         .on_press(Message::TrackToggleSolo(id))
                                         .style(move |t, s| {
                                             button_with_base(
@@ -1093,7 +1094,7 @@ impl ArrangementView {
                                                 },
                                             )
                                         }),
-                                    char_button('X').on_press(Message::TrackRemove(id)).style(
+                                    icon_button(x()).on_press(Message::TrackRemove(id)).style(
                                         move |t, s| {
                                             button_with_base(
                                                 t,
@@ -1156,18 +1157,9 @@ impl ArrangementView {
                     })
                     .map(Element::new)
                     .chain(once(
-                        container(
-                            button(svg(ADD.clone()).width(Shrink).height(Shrink))
-                                .style(|t, s| {
-                                    let mut style = button_with_base(t, s, button::primary);
-                                    style.border.radius = f32::INFINITY.into();
-                                    style
-                                })
-                                .padding(5.0)
-                                .on_press(Message::TrackAdd),
-                        )
-                        .padding(padding::right(5.0).top(5.0))
-                        .into(),
+                        container(round_plus_button().on_press(Message::TrackAdd))
+                            .padding(padding::right(5.0).top(5.0))
+                            .into(),
                     )),
             )
             .align_x(Alignment::Center),
@@ -1320,40 +1312,34 @@ impl ArrangementView {
 
         let connect = |enabled: bool, id: NodeId| {
             selected_channel.map_or_else(
-                || Element::new(empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT)),
+                || Element::new(empty_widget().height(LINE_HEIGHT)),
                 |(_, connections, ty)| {
                     let selected_channel = self.selected_channel.unwrap();
 
                     if *ty == NodeType::Master || id == selected_channel {
-                        empty_widget().width(TEXT_HEIGHT).height(TEXT_HEIGHT).into()
+                        empty_widget().height(LINE_HEIGHT).into()
                     } else {
                         let connected = connections.contains(*id);
 
-                        button(
-                            svg(CHEVRON_RIGHT.clone())
-                                .style(move |t, s| svg_with_enabled(t, s, enabled))
-                                .width(Shrink)
-                                .height(Shrink)
-                                .rotation(Radians(-FRAC_PI_2)),
-                        )
-                        .style(move |t, s| {
-                            button_with_base(
-                                t,
-                                s,
-                                if enabled && connected {
-                                    button::primary
-                                } else {
-                                    button::secondary
-                                },
-                            )
-                        })
-                        .padding(0.0)
-                        .on_press(if connected {
-                            Message::Disconnect((id, selected_channel))
-                        } else {
-                            Message::ConnectRequest((id, selected_channel))
-                        })
-                        .into()
+                        button(chevron_up())
+                            .style(move |t, s| {
+                                button_with_base(
+                                    t,
+                                    s,
+                                    if enabled && connected {
+                                        button::primary
+                                    } else {
+                                        button::secondary
+                                    },
+                                )
+                            })
+                            .padding(0.0)
+                            .on_press(if connected {
+                                Message::Disconnect((id, selected_channel))
+                            } else {
+                                Message::ConnectRequest((id, selected_channel))
+                            })
+                            .into()
                     }
                 },
             )
@@ -1366,7 +1352,7 @@ impl ArrangementView {
                 &self.arrangement.master().0,
                 |enabled, id| {
                     column![
-                        char_button('M')
+                        icon_button(text('M'))
                             .on_press(Message::ChannelToggleEnabled(id))
                             .style(move |t, s| {
                                 button_with_base(
@@ -1379,8 +1365,8 @@ impl ArrangementView {
                                     },
                                 )
                             }),
-                        empty_widget().width(13.0).height(13.0),
-                        empty_widget().width(13.0).height(13.0)
+                        empty_widget().height(13.0),
+                        empty_widget().height(13.0)
                     ]
                     .spacing(5.0)
                     .into()
@@ -1403,7 +1389,7 @@ impl ArrangementView {
                             &track.node,
                             |enabled, id| {
                                 column![
-                                    char_button('M')
+                                    icon_button(text('M'))
                                         .on_press(Message::TrackToggleEnabled(id))
                                         .style(move |t, s| {
                                             button_with_base(
@@ -1416,7 +1402,7 @@ impl ArrangementView {
                                                 },
                                             )
                                         }),
-                                    char_button('S')
+                                    icon_button(text('S'))
                                         .on_press(Message::TrackToggleSolo(id))
                                         .style(move |t, s| {
                                             button_with_base(
@@ -1431,7 +1417,7 @@ impl ArrangementView {
                                                 },
                                             )
                                         }),
-                                    char_button('X').on_press(Message::TrackRemove(id)).style(
+                                    icon_button(x()).on_press(Message::TrackRemove(id)).style(
                                         move |t, s| {
                                             button_with_base(
                                                 t,
@@ -1448,7 +1434,7 @@ impl ArrangementView {
                                 .spacing(5.0)
                                 .into()
                             },
-                            |_, _| empty_widget().width(TEXT_HEIGHT).height(LINE_HEIGHT).into(),
+                            |_, _| empty_widget().height(LINE_HEIGHT).into(),
                         )
                     })
                     .peekable();
@@ -1473,7 +1459,7 @@ impl ArrangementView {
                             node,
                             |enabled, id| {
                                 column![
-                                    char_button('M')
+                                    icon_button(text('M'))
                                         .on_press(Message::ChannelToggleEnabled(id))
                                         .style(move |t, s| {
                                             button_with_base(
@@ -1486,8 +1472,8 @@ impl ArrangementView {
                                                 },
                                             )
                                         }),
-                                    empty_widget().width(13.0).height(13.0),
-                                    char_button('X').on_press(Message::ChannelRemove(id)).style(
+                                    empty_widget().height(13.0),
+                                    icon_button(x()).on_press(Message::ChannelRemove(id)).style(
                                         move |t, s| {
                                             button_with_base(
                                                 t,
@@ -1516,15 +1502,7 @@ impl ArrangementView {
                 }
             })
             .chain(once(
-                button(svg(ADD.clone()).width(Shrink).height(Shrink))
-                    .style(|t, s| {
-                        let mut style = button_with_base(t, s, button::primary);
-                        style.border.radius = f32::INFINITY.into();
-                        style
-                    })
-                    .padding(5.0)
-                    .on_press(Message::ChannelAdd)
-                    .into(),
+                round_plus_button().on_press(Message::ChannelAdd).into(),
             )))
             .align_y(Alignment::Center)
             .spacing(5.0),
@@ -1588,7 +1566,7 @@ impl ArrangementView {
                                             ))
                                         ),
                                         column![
-                                            char_button('M',)
+                                            icon_button(text('M'))
                                                 .on_press(Message::PluginToggleEnabled(i))
                                                 .style(move |t, s| {
                                                     button_with_base(
@@ -1601,7 +1579,7 @@ impl ArrangementView {
                                                         },
                                                     )
                                                 }),
-                                            char_button('X')
+                                            icon_button(x())
                                                 .on_press(Message::PluginRemove(i))
                                                 .style(move |t, s| {
                                                     button_with_base(
@@ -1618,35 +1596,28 @@ impl ArrangementView {
                                         .spacing(5.0),
                                         mouse_area(
                                             container(
-                                                svg(HANDLE.clone())
-                                                    .rotation(Radians(FRAC_PI_2))
-                                                    .width(Shrink)
-                                                    .height(LINE_HEIGHT + 10.0)
-                                                    .style(|t: &Theme, _| svg::Style {
-                                                        color: Some(
+                                                grip_vertical().line_height(
+                                                    (LINE_HEIGHT + 10.0) / LINE_HEIGHT
+                                                )
+                                            )
+                                            .style(
+                                                |t: &Theme| {
+                                                    container::Style {
+                                                        background: Some(
                                                             t.extended_palette()
                                                                 .background
                                                                 .weak
-                                                                .text
-                                                        )
-                                                    })
-                                            )
-                                            .style(
-                                                |t: &Theme| container::Style {
-                                                    background: Some(
-                                                        t.extended_palette()
-                                                            .background
-                                                            .weak
-                                                            .color
-                                                            .into()
-                                                    ),
-                                                    border: border::width(1.0).color(
-                                                        t.extended_palette()
-                                                            .background
-                                                            .strong
-                                                            .color
-                                                    ),
-                                                    ..container::Style::default()
+                                                                .color
+                                                                .into(),
+                                                        ),
+                                                        border: border::width(1.0).color(
+                                                            t.extended_palette()
+                                                                .background
+                                                                .strong
+                                                                .color,
+                                                        ),
+                                                        ..container::Style::default()
+                                                    }
                                                 }
                                             )
                                         )

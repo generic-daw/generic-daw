@@ -1,13 +1,13 @@
 use super::Message;
 use crate::{
     components::styled_button,
-    icons::{AUDIO_FILE, GENERIC_FILE},
-    widget::{Clipped, LINE_HEIGHT, shaping_of},
+    icons::{file, file_music},
+    widget::{LINE_HEIGHT, shaping_of},
 };
 use iced::{
-    Element, Fill, Shrink,
+    Element, Fill,
     widget::{
-        container, mouse_area, row, svg, text,
+        container, mouse_area, row, text,
         text::{Shaping, Wrapping},
     },
 };
@@ -23,7 +23,7 @@ pub struct File {
     path: Arc<Path>,
     name: Arc<str>,
     shaping: Shaping,
-    icon: svg::Handle,
+    is_audio: bool,
 }
 
 impl File {
@@ -31,17 +31,13 @@ impl File {
         let name = path.file_name().unwrap().to_str().unwrap();
         let shaping = shaping_of(name);
 
-        let icon = if is_audio(path).unwrap_or_default() {
-            AUDIO_FILE.clone()
-        } else {
-            GENERIC_FILE.clone()
-        };
+        let is_audio = is_audio(path).unwrap_or_default();
 
         Self {
             path: path.into(),
             name: name.into(),
             shaping,
-            icon,
+            is_audio,
         }
     }
 
@@ -49,7 +45,7 @@ impl File {
         (
             mouse_area(
                 styled_button(row![
-                    Clipped::new(svg(self.icon.clone()).width(Shrink).height(LINE_HEIGHT)),
+                    container(if self.is_audio { file_music() } else { file() }).clip(true),
                     container(
                         text(&*self.name)
                             .shaping(self.shaping)

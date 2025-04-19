@@ -1,5 +1,6 @@
 use daw::Daw;
 use iced::{Result, Theme, daemon};
+use icons::LUCIDE;
 
 mod arrangement_view;
 mod clap_host;
@@ -18,5 +19,6 @@ fn main() -> Result {
         .subscription(Daw::subscription)
         .theme(|_, _| Theme::CatppuccinFrappe)
         .antialiasing(true)
+        .font(LUCIDE)
         .run()
 }
