@@ -21,7 +21,7 @@ pub enum Strategy {
 
 #[derive(Default)]
 struct State {
-    dragging: Option<(u16, f32)>,
+    dragging: Option<(usize, f32)>,
     hovering: bool,
     scroll: f32,
     last_click: Option<Click>,
@@ -30,18 +30,18 @@ struct State {
 #[derive(Debug)]
 pub struct DragHandle<'a, Message> {
     children: NoDebug<Element<'a, Message>>,
-    value: u16,
-    reset: u16,
+    value: usize,
+    reset: usize,
     strategy: Strategy,
-    f: fn(u16) -> Message,
+    f: fn(usize) -> Message,
 }
 
 impl<'a, Message> DragHandle<'a, Message> {
     pub fn new(
         children: impl Into<Element<'a, Message>>,
-        value: u16,
-        reset: u16,
-        f: fn(u16) -> Message,
+        value: usize,
+        reset: usize,
+        f: fn(usize) -> Message,
     ) -> Self {
         Self {
             children: children.into().into(),
@@ -161,7 +161,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
                             * 0.1)
                             .trunc();
 
-                        shell.publish((self.f)(value.saturating_add_signed(diff as i16)));
+                        shell.publish((self.f)(value.saturating_add_signed(diff as isize)));
                         shell.capture_event();
                     }
 
@@ -179,7 +179,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
                     } + state.scroll;
                     state.scroll = diff.fract();
 
-                    shell.publish((self.f)(self.value.saturating_add_signed(diff as i16)));
+                    shell.publish((self.f)(self.value.saturating_add_signed(diff as isize)));
                     shell.capture_event();
                 }
                 _ => {}

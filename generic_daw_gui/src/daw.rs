@@ -6,10 +6,10 @@ use crate::{
     stylefns::button_with_base,
     widget::{AnimatedDot, DragHandle, LINE_HEIGHT, VSplit, vsplit},
 };
-use generic_daw_core::{Meter, Numerator, Position};
+use generic_daw_core::{Meter, Position};
 use iced::{
     Alignment::Center,
-    Element, Event, Subscription, Task, Theme, border,
+    Element, Event, Font, Subscription, Task, Theme, border,
     event::{self, Status},
     keyboard,
     widget::{button, column, container, horizontal_space, row},
@@ -46,7 +46,8 @@ pub enum Message {
     ToggleMetronome,
     ChangedBpm(u16),
     ChangedBpmText(String),
-    ChangedNumerator(Numerator),
+    ChangedNumerator(u8),
+    ChangedNumeratorText(String),
     ChangedTab(Tab),
 
     SplitAt(f32),
@@ -169,14 +170,19 @@ impl Daw {
             Message::ToggleMetronome => {
                 self.meter.metronome.fetch_not(AcqRel);
             }
-            Message::ChangedBpm(bpm) => self.meter.bpm.store(bpm.max(10), Release),
+            Message::ChangedBpm(bpm) => self.meter.bpm.store(bpm.clamp(10, 999), Release),
             Message::ChangedBpmText(bpm) => {
                 if let Ok(bpm) = bpm.parse() {
                     return self.update(Message::ChangedBpm(bpm));
                 }
             }
-            Message::ChangedNumerator(new_numerator) => {
-                self.meter.numerator.store(new_numerator, Release);
+            Message::ChangedNumerator(numerator) => {
+                self.meter.numerator.store(numerator.clamp(1, 99), Release);
+            }
+            Message::ChangedNumeratorText(numerator) => {
+                if let Ok(numerator) = numerator.parse() {
+                    return self.update(Message::ChangedNumerator(numerator));
+                }
             }
             Message::SplitAt(split_at) => {
                 self.split_at = if split_at >= 20.0 {
@@ -213,6 +219,7 @@ impl Daw {
         }
 
         let bpm = self.meter.bpm.load(Acquire);
+        let numerator = self.meter.numerator.load(Acquire);
         let fill =
             Position::from_samples(self.meter.sample.load(Acquire), bpm, self.meter.sample_rate)
                 .beat()
@@ -250,12 +257,25 @@ impl Daw {
                         .on_press(Message::Stop),
                 ],
                 row![
-                    styled_pick_list(
-                        Numerator::VARIANTS,
-                        Some(self.meter.numerator.load(Acquire)),
-                        Message::ChangedNumerator
-                    )
-                    .width(50),
+                    DragHandle::new(
+                        container(move_vertical())
+                            .style(|t: &Theme| {
+                                container::transparent(t)
+                                    .background(t.extended_palette().background.weak.color)
+                                    .border(
+                                        border::width(1.0)
+                                            .color(t.extended_palette().background.strongest.color),
+                                    )
+                            })
+                            .padding([5.0, 0.0]),
+                        numerator as usize,
+                        4,
+                        |x| Message::ChangedNumerator(x as u8)
+                    ),
+                    styled_text_input("", &numerator.to_string())
+                        .font(Font::MONOSPACE)
+                        .width(34.0)
+                        .on_input(Message::ChangedNumeratorText)
                 ],
                 row![
                     DragHandle::new(
@@ -269,12 +289,13 @@ impl Daw {
                                     )
                             })
                             .padding([5.0, 0.0]),
-                        bpm,
+                        bpm as usize,
                         140,
-                        Message::ChangedBpm
+                        |x| Message::ChangedBpm(x as u16)
                     ),
                     styled_text_input("", &bpm.to_string())
-                        .width(42.0)
+                        .font(Font::MONOSPACE)
+                        .width(44.0)
                         .on_input(Message::ChangedBpmText)
                 ],
                 button(row![AnimatedDot::new(fill), AnimatedDot::new(!fill)].spacing(5.0))

@@ -34,17 +34,18 @@ impl NodeImpl<Event> for Master {
             let mut buf_end_pos =
                 Position::from_samples(sample + audio.len(), bpm, self.meter.sample_rate);
 
-            if (buf_start_pos.beat() != buf_end_pos.beat() && buf_end_pos.step() != 0)
-                || buf_start_pos.step() == 0
+            if (buf_start_pos.beat() != buf_end_pos.beat() || buf_start_pos.step() == 0)
+                && buf_end_pos.step() != 0
             {
                 buf_end_pos = buf_end_pos.floor();
 
                 let diff = (buf_end_pos - buf_start_pos).in_samples(bpm, self.meter.sample_rate);
-                let click = if buf_end_pos.beat() % self.meter.numerator.load(Acquire) as u32 == 0 {
-                    self.on_bar_click.clone()
-                } else {
-                    self.off_bar_click.clone()
-                };
+                let click =
+                    if buf_end_pos.beat() % u32::from(self.meter.numerator.load(Acquire)) == 0 {
+                        self.on_bar_click.clone()
+                    } else {
+                        self.off_bar_click.clone()
+                    };
 
                 self.click
                     .borrow_mut()

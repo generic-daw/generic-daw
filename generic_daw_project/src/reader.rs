@@ -13,6 +13,11 @@ impl Reader {
         proto::Project::decode(&mut Cursor::new(gdp)).map(Self).ok()
     }
 
+    #[must_use]
+    pub fn meter(&self) -> proto::Meter {
+        self.0.meter
+    }
+
     pub fn iter_audios(&self) -> impl Iterator<Item = (proto::AudioIndex, &proto::Audio)> {
         (0..)
             .map(|index| proto::AudioIndex { index })

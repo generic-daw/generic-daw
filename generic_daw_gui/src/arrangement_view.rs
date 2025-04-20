@@ -182,11 +182,11 @@ impl ArrangementView {
                 recording: None,
 
                 arrangement_position: Vec2::default(),
-                arrangement_scale: Vec2::new(9f32.next_down(), const { LINE_HEIGHT * 4.0 + 15.0 }),
+                arrangement_scale: Vec2::new(9.0, const { LINE_HEIGHT * 4.0 + 15.0 }),
                 soloed_track: None,
 
                 piano_roll_position: Vec2::new(0.0, 40.0),
-                piano_roll_scale: Vec2::new(9f32.next_down(), LINE_HEIGHT),
+                piano_roll_scale: Vec2::new(9.0, LINE_HEIGHT),
                 last_note_len: Position::BEAT,
                 selected_channel: None,
 
@@ -414,7 +414,7 @@ impl ArrangementView {
                 self.midis.push(Arc::downgrade(&pattern));
                 let clip = MidiClip::create(pattern, self.meter.clone());
                 clip.position
-                    .trim_end_to(Position::BEAT * self.meter.numerator.load(Acquire) as u32);
+                    .trim_end_to(Position::BEAT * u32::from(self.meter.numerator.load(Acquire)));
                 clip.position.move_to(pos);
                 let track = self.arrangement.track_of(track).unwrap();
                 self.arrangement.add_clip(track, clip);
@@ -666,7 +666,7 @@ impl ArrangementView {
     pub fn save(&mut self, path: &Path) {
         let mut writer = Writer::new(
             u32::from(self.meter.bpm.load(Acquire)),
-            self.meter.numerator.load(Acquire) as u32,
+            u32::from(self.meter.numerator.load(Acquire)),
         );
 
         let mut audios = HashMap::new();
@@ -790,6 +790,11 @@ impl ArrangementView {
         let reader = Reader::new(&gdp)?;
 
         let (mut arrangement, meter) = ArrangementWrapper::create();
+
+        meter.bpm.store(reader.meter().bpm as u16, Release);
+        meter
+            .numerator
+            .store(reader.meter().numerator as u8, Release);
 
         let mut audios = HashMap::new();
         let mut midis = HashMap::new();
@@ -980,11 +985,11 @@ impl ArrangementView {
                 recording: None,
 
                 arrangement_position: Vec2::default(),
-                arrangement_scale: Vec2::new(9f32.next_down(), const { LINE_HEIGHT * 4.0 + 15.0 }),
+                arrangement_scale: Vec2::new(9.0, const { LINE_HEIGHT * 4.0 + 15.0 }),
                 soloed_track: None,
 
                 piano_roll_position: Vec2::new(0.0, 40.0),
-                piano_roll_scale: Vec2::new(9f32.next_down(), LINE_HEIGHT),
+                piano_roll_scale: Vec2::new(9.0, LINE_HEIGHT),
                 last_note_len: Position::BEAT,
                 selected_channel: None,
 

@@ -2,7 +2,7 @@ use super::{LINE_HEIGHT, SWM, get_time};
 use generic_daw_core::{Meter, Position};
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
-    Background, Color, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme,
+    Background, Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme,
     Transformation, Vector,
     advanced::{
         Clipboard, Layout, Renderer as _, Shell, Text, Widget,
@@ -308,7 +308,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                 bounds: Size::new(f32::INFINITY, 0.0),
                 size: renderer.default_size(),
                 line_height: LineHeight::default(),
-                font: renderer.default_font(),
+                font: Font::MONOSPACE,
                 align_x: Alignment::Left,
                 align_y: Vertical::Top,
                 shaping: Shaping::Basic,
@@ -335,13 +335,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
         beat = beat.floor();
 
         while beat <= end_beat {
-            let bar = beat.beat() / numerator as u32;
+            let bar = beat.beat() / u32::from(numerator);
 
             if self.scale.x >= 11.0 {
-                if beat.beat() % numerator as u32 == 0 && bar % 4 == 0 {
+                if beat.beat() % u32::from(numerator) == 0 && bar % 4 == 0 {
                     draw_text(beat, bar);
                 }
-            } else if beat.beat() % numerator as u32 == 0 {
+            } else if beat.beat() % u32::from(numerator) == 0 {
                 draw_text(beat, bar);
             }
 
@@ -482,12 +482,12 @@ impl<'a, Message> Seeker<'a, Message> {
             + Position::from_samples_f(bounds.width * sample_size, bpm, self.meter.sample_rate);
 
         let mut background_beat = Position::new(beat.beat() & !0x0f, 0);
-        let background_step = Position::new(4 * numerator as u32, 0);
+        let background_step = Position::new(4 * u32::from(numerator), 0);
         let background_width =
             background_step.in_samples_f(bpm, self.meter.sample_rate) / sample_size;
 
         while background_beat < end_beat {
-            if (background_beat.beat() / (4 * numerator as u32)) % 2 == 1 {
+            if (background_beat.beat() / (4 * u32::from(numerator))) % 2 == 1 {
                 let x = (background_beat.in_samples_f(bpm, self.meter.sample_rate)
                     - self.position.x)
                     / sample_size;
@@ -507,13 +507,12 @@ impl<'a, Message> Seeker<'a, Message> {
             background_beat += background_step;
         }
 
-        let bpm_comp = (f32::from(bpm) / 32.0).log2();
-        beat = beat.ceil_to_snap_step(self.scale.x + bpm_comp, numerator);
-        let snap_step = Position::snap_step(self.scale.x + bpm_comp, numerator);
+        beat = beat.ceil_to_snap_step(self.scale.x, numerator, bpm);
+        let snap_step = Position::snap_step(self.scale.x, numerator, bpm);
 
         while beat <= end_beat {
             let color = if snap_step >= Position::BEAT {
-                if beat.beat() % (snap_step.beat() * numerator as u32) == 0 {
+                if beat.beat() % (snap_step.beat() * u32::from(numerator)) == 0 {
                     theme.extended_palette().background.strong.color
                 } else {
                     theme.extended_palette().background.weak.color

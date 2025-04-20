@@ -53,11 +53,13 @@ fn get_time(
     position: &Vec2,
     scale: &Vec2,
 ) -> Position {
+    let bpm = meter.bpm.load(Acquire);
+
     let time = x.mul_add(scale.x.exp2(), position.x).max(0.0);
-    let mut time = Position::from_samples_f(time, meter.bpm.load(Acquire), meter.sample_rate);
+    let mut time = Position::from_samples_f(time, bpm, meter.sample_rate);
 
     if !modifiers.alt() {
-        time = time.round_to_snap_step(scale.x, meter.numerator.load(Acquire));
+        time = time.round_to_snap_step(scale.x, meter.numerator.load(Acquire), bpm);
     }
 
     time

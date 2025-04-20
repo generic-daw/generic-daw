@@ -35,7 +35,7 @@ pub use daw_ctx::DawCtxMessage;
 pub use decibels::Decibels;
 pub use export::export;
 pub use master::Master;
-pub use meter::{Meter, Numerator};
+pub use meter::Meter;
 pub use midi_clip::{Key, MidiClip, MidiKey, MidiNote};
 pub use mixer_node::MixerNode;
 pub use position::Position;

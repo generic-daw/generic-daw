@@ -1,4 +1,3 @@
-use crate::Numerator;
 use atomig::{Atom, AtomInteger};
 use std::{
     fmt::{Debug, Formatter},
@@ -112,22 +111,22 @@ impl Position {
     }
 
     #[must_use]
-    pub const fn floor_to_snap_step(mut self, scale: f32, numerator: Numerator) -> Self {
-        let snap_step = Self::snap_step(scale, numerator).0;
+    pub fn floor_to_snap_step(mut self, scale: f32, numerator: u8, bpm: u16) -> Self {
+        let snap_step = Self::snap_step(scale, numerator, bpm).0;
         self.0 -= self.0 % snap_step;
         self
     }
 
     #[must_use]
-    pub const fn ceil_to_snap_step(mut self, scale: f32, numerator: Numerator) -> Self {
-        let snap_step = Self::snap_step(scale, numerator).0;
+    pub fn ceil_to_snap_step(mut self, scale: f32, numerator: u8, bpm: u16) -> Self {
+        let snap_step = Self::snap_step(scale, numerator, bpm).0;
         self.0 += snap_step - (self.0 % snap_step);
         self
     }
 
     #[must_use]
-    pub const fn round_to_snap_step(mut self, scale: f32, numerator: Numerator) -> Self {
-        let modulo = Self::snap_step(scale, numerator).0;
+    pub fn round_to_snap_step(mut self, scale: f32, numerator: u8, bpm: u16) -> Self {
+        let modulo = Self::snap_step(scale, numerator, bpm).0;
 
         let diff = self.0 % modulo;
 
@@ -141,11 +140,13 @@ impl Position {
     }
 
     #[must_use]
-    pub const fn snap_step(scale: f32, numerator: Numerator) -> Self {
+    pub fn snap_step(mut scale: f32, numerator: u8, bpm: u16) -> Self {
+        scale += (f32::from(bpm) / 64.0).log2();
+
         Self(if scale < 12.0 {
             1 << (scale as u8 - 3)
         } else {
-            (numerator as u32) << 8
+            u32::from(numerator) << 8
         })
     }
 
