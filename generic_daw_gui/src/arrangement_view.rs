@@ -26,7 +26,7 @@ use generic_daw_core::{
     },
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
-use generic_daw_utils::{EnumDispatcher, HoleyVec, ShiftMoveExt as _, Vec2, hash_reader};
+use generic_daw_utils::{EnumDispatcher, HoleyVec, NoDebug, ShiftMoveExt as _, Vec2, hash_reader};
 use iced::{
     Alignment, Element, Fill, Function as _, Size, Subscription, Task, Theme, border,
     mouse::Interaction,
@@ -105,7 +105,7 @@ pub enum Message {
 
     ToggleRecord(NodeId),
     RecordingSplit(NodeId),
-    RecordingChunk(Box<[f32]>),
+    RecordingChunk(NoDebug<Box<[f32]>>),
     StopRecord,
 
     ArrangementAction(ArrangementAction),
@@ -480,7 +480,9 @@ impl ArrangementView {
 
                 self.meter.playing.store(true, Release);
 
-                return Task::stream(receiver).map(Message::RecordingChunk);
+                return Task::stream(receiver)
+                    .map(NoDebug)
+                    .map(Message::RecordingChunk);
             }
             Message::RecordingSplit(id) => {
                 if let Some((mut recording, track)) = self.recording.take() {
@@ -692,17 +694,12 @@ impl ArrangementView {
 
             midis.insert(
                 Arc::as_ptr(&pattern).addr(),
-                writer.push_midi(
-                    pattern
-                        .load()
-                        .iter()
-                        .map(|note| proto::project::midi::Note {
-                            key: u32::from(note.key.0),
-                            velocity: note.velocity,
-                            start: note.start.into(),
-                            end: note.end.into(),
-                        }),
-                ),
+                writer.push_midi(pattern.load().iter().map(|note| proto::Note {
+                    key: u32::from(note.key.0),
+                    velocity: note.velocity as f32,
+                    start: note.start.into(),
+                    end: note.end.into(),
+                })),
             );
         }
 
@@ -712,22 +709,22 @@ impl ArrangementView {
                 track.id(),
                 writer.push_track(
                     track.clips.iter().map(|clip| match clip {
-                        Clip::Audio(audio) => proto::project::track::AudioClip {
-                            audio: Some(audios[&audio.audio.path]),
-                            position: Some(proto::project::track::ClipPosition {
+                        Clip::Audio(audio) => proto::AudioClip {
+                            audio: audios[&audio.audio.path],
+                            position: proto::ClipPosition {
                                 global_start: audio.position.get_global_start().into(),
                                 global_end: audio.position.get_global_end().into(),
                                 clip_start: audio.position.get_clip_start().into(),
-                            }),
+                            },
                         }
                         .into(),
-                        Clip::Midi(midi) => proto::project::track::MidiClip {
-                            midi: Some(midis[&Arc::as_ptr(&midi.pattern).addr()]),
-                            position: Some(proto::project::track::ClipPosition {
+                        Clip::Midi(midi) => proto::MidiClip {
+                            midi: midis[&Arc::as_ptr(&midi.pattern).addr()],
+                            position: proto::ClipPosition {
                                 global_start: midi.position.get_global_start().into(),
                                 global_end: midi.position.get_global_end().into(),
                                 clip_start: midi.position.get_clip_start().into(),
-                            }),
+                            },
                         }
                         .into(),
                     }),
@@ -735,7 +732,7 @@ impl ArrangementView {
                         .get(*track.id())
                         .into_iter()
                         .flatten()
-                        .map(|(id, descriptor)| proto::project::channel::Plugin {
+                        .map(|(id, descriptor)| proto::Plugin {
                             id: descriptor.id.to_bytes_with_nul().to_owned(),
                             state: self.clap_host.get_state(*id),
                         }),
@@ -754,7 +751,7 @@ impl ArrangementView {
                         .get(*channel.id())
                         .into_iter()
                         .flatten()
-                        .map(|(id, descriptor)| proto::project::channel::Plugin {
+                        .map(|(id, descriptor)| proto::Plugin {
                             id: descriptor.id.to_bytes_with_nul().to_owned(),
                             state: self.clap_host.get_state(*id),
                         }),
@@ -841,7 +838,7 @@ impl ArrangementView {
                     .map(|note| MidiNote {
                         channel: 0,
                         key: MidiKey(note.key as u8),
-                        velocity: note.velocity,
+                        velocity: f64::from(note.velocity),
                         start: note.start.into(),
                         end: note.end.into(),
                     })
@@ -860,7 +857,7 @@ impl ArrangementView {
             HoleyVec::default();
         let mut futs = Vec::new();
 
-        let mut load_channel = |node: &MixerNode, channel: &proto::project::Channel| {
+        let mut load_channel = |node: &MixerNode, channel: &proto::Channel| {
             node.volume.store(channel.volume, Release);
             node.pan.store(channel.pan, Release);
 
@@ -897,30 +894,27 @@ impl ArrangementView {
         let mut tracks = HashMap::new();
         for (idx, clips, channel) in reader.iter_tracks() {
             let mut track = Track::default();
-            load_channel(&track.node, channel?)?;
+            load_channel(&track.node, channel)?;
 
             for clip in clips {
-                let clip = match clip.clip? {
-                    proto::project::track::clip::Clip::Audio(audio) => {
+                track.clips.push(match clip {
+                    proto::Clip::Audio(audio) => {
                         let clip =
-                            AudioClip::create(audios.get(&audio.audio?)?.clone(), meter.clone());
-                        clip.position.move_to(audio.position?.global_start.into());
-                        clip.position.trim_end_to(audio.position?.global_end.into());
+                            AudioClip::create(audios.get(&audio.audio)?.clone(), meter.clone());
+                        clip.position.move_to(audio.position.global_start.into());
+                        clip.position.trim_end_to(audio.position.global_end.into());
                         clip.position
-                            .trim_start_to(audio.position?.clip_start.into());
+                            .trim_start_to(audio.position.clip_start.into());
                         Clip::Audio(clip)
                     }
-                    proto::project::track::clip::Clip::Midi(midi) => {
-                        let clip = MidiClip::create(midis.get(&midi.midi?)?.clone(), meter.clone());
-                        clip.position.move_to(midi.position?.global_start.into());
-                        clip.position.trim_end_to(midi.position?.global_end.into());
-                        clip.position
-                            .trim_start_to(midi.position?.clip_start.into());
+                    proto::Clip::Midi(midi) => {
+                        let clip = MidiClip::create(midis.get(&midi.midi)?.clone(), meter.clone());
+                        clip.position.move_to(midi.position.global_start.into());
+                        clip.position.trim_end_to(midi.position.global_end.into());
+                        clip.position.trim_start_to(midi.position.clip_start.into());
                         Clip::Midi(clip)
                     }
-                };
-
-                track.clips.push(clip);
+                });
             }
 
             tracks.insert(idx, track.id());

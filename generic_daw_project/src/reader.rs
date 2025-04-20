@@ -13,29 +13,15 @@ impl Reader {
         proto::Project::decode(&mut Cursor::new(gdp)).map(Self).ok()
     }
 
-    pub fn iter_audios(
-        &self,
-    ) -> impl Iterator<
-        Item = (
-            proto::project::track::audio_clip::AudioIndex,
-            &proto::project::Audio,
-        ),
-    > {
+    pub fn iter_audios(&self) -> impl Iterator<Item = (proto::AudioIndex, &proto::Audio)> {
         (0..)
-            .map(|index| proto::project::track::audio_clip::AudioIndex { index })
+            .map(|index| proto::AudioIndex { index })
             .zip(&self.0.audios)
     }
 
-    pub fn iter_midis(
-        &self,
-    ) -> impl Iterator<
-        Item = (
-            proto::project::track::midi_clip::MidiIndex,
-            &proto::project::Midi,
-        ),
-    > {
+    pub fn iter_midis(&self) -> impl Iterator<Item = (proto::MidiIndex, &proto::Midi)> {
         (0..)
-            .map(|index| proto::project::track::midi_clip::MidiIndex { index })
+            .map(|index| proto::MidiIndex { index })
             .zip(&self.0.midis)
     }
 
@@ -43,62 +29,49 @@ impl Reader {
         &self,
     ) -> impl Iterator<
         Item = (
-            proto::project::track::TrackIndex,
-            &[proto::project::track::Clip],
-            Option<&proto::project::Channel>,
+            proto::TrackIndex,
+            impl Iterator<Item = proto::Clip>,
+            &proto::Channel,
         ),
     > {
         (0..)
-            .map(|index| proto::project::track::TrackIndex { index })
+            .map(|index| proto::TrackIndex { index })
             .zip(&self.0.tracks)
-            .map(|(index, track)| (index, &*track.clips, track.channel.as_ref()))
+            .map(|(index, track)| {
+                (
+                    index,
+                    track.clips.iter().filter_map(|clip| clip.clip),
+                    &track.channel,
+                )
+            })
     }
 
-    pub fn iter_channels(
-        &self,
-    ) -> impl Iterator<
-        Item = (
-            proto::project::channel::ChannelIndex,
-            &proto::project::Channel,
-        ),
-    > {
+    pub fn iter_channels(&self) -> impl Iterator<Item = (proto::ChannelIndex, &proto::Channel)> {
         (0..)
-            .map(|index| proto::project::channel::ChannelIndex { index })
+            .map(|index| proto::ChannelIndex { index })
             .zip(&self.0.channels)
     }
 
     pub fn iter_connections_track_channel(
         &self,
-    ) -> impl Iterator<
-        Item = (
-            proto::project::track::TrackIndex,
-            proto::project::channel::ChannelIndex,
-        ),
-    > {
+    ) -> impl Iterator<Item = (proto::TrackIndex, proto::ChannelIndex)> {
         (0..)
-            .map(|index| proto::project::track::TrackIndex { index })
+            .map(|index| proto::TrackIndex { index })
             .zip(&self.0.tracks)
             .flat_map(|(index, track)| {
                 track
                     .channel
-                    .as_ref()
-                    .map(|channel| &channel.connections)
-                    .into_iter()
-                    .flatten()
+                    .connections
+                    .iter()
                     .map(move |&channel| (index, channel))
             })
     }
 
     pub fn iter_connections_channel_channel(
         &self,
-    ) -> impl Iterator<
-        Item = (
-            proto::project::channel::ChannelIndex,
-            proto::project::channel::ChannelIndex,
-        ),
-    > {
+    ) -> impl Iterator<Item = (proto::ChannelIndex, proto::ChannelIndex)> {
         (0..)
-            .map(|index| proto::project::channel::ChannelIndex { index })
+            .map(|index| proto::ChannelIndex { index })
             .zip(&self.0.channels)
             .flat_map(|(index, channel)| {
                 channel

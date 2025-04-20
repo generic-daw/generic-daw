@@ -16,13 +16,6 @@ An early-in-development, open source, cross-platform digital audio workstation (
 ### Requirements
 
 - Rust & Cargo: this project is developed using the latest stable [Rust toolchain](https://rustup.rs/)
-- a Protocol Buffers compiler:
-  - Windows: `winget install protobuf`
-  - MacOS: `brew install protobuf`
-  - Linux:
-    - Debian: `sudo apt install protobuf-compiler`
-    - Fedora: `sudo dnf install protobuf-compiler`
-    - Arch `sudo pacman -S protobuf`
 - an up-to-date version of Lucide in the workspace root:
   - https://unpkg.com/lucide-static@latest/font/Lucide.ttf
 - on Linux you'll also need to install the alsa development headers:

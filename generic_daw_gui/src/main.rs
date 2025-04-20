@@ -12,6 +12,7 @@ mod stylefns;
 mod widget;
 
 fn main() -> Result {
+    #[cfg(feature = "debug")]
     env_logger::init();
 
     daemon(Daw::create, Daw::update, Daw::view)

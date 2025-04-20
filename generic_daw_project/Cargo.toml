@@ -10,6 +10,3 @@ workspace = true
 [dependencies]
 prost = "0.13.5"
 yazi = "0.2.1"
-
-[build-dependencies]
-prost-build = "0.13.5"
