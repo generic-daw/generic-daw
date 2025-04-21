@@ -2,7 +2,7 @@ use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
     components::{empty_widget, styled_button, styled_pick_list, styled_text_input},
     file_tree::{FileTree, Message as FileTreeMessage},
-    icons::{move_vertical, pause, play, square},
+    icons::{chart_no_axes_gantt, move_vertical, pause, play, sliders_vertical, square},
     stylefns::button_with_base,
     widget::{AnimatedDot, DragHandle, LINE_HEIGHT, VSplit, vsplit},
 };
@@ -310,12 +310,12 @@ impl Daw {
                         }
                     ))
                     .on_press(Message::ToggleMetronome),
-                row![
-                    styled_button("Arrangement")
-                        .on_press(Message::ChangedTab(Tab::Arrangement { grabbed_clip: None })),
-                    styled_button("Mixer").on_press(Message::ChangedTab(Tab::Mixer))
-                ],
                 horizontal_space(),
+                row![
+                    styled_button(chart_no_axes_gantt())
+                        .on_press(Message::ChangedTab(Tab::Arrangement { grabbed_clip: None })),
+                    styled_button(sliders_vertical()).on_press(Message::ChangedTab(Tab::Mixer))
+                ],
             ]
             .spacing(20)
             .align_y(Center),

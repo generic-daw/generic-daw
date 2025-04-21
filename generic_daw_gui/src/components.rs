@@ -45,7 +45,9 @@ where
 }
 
 pub fn styled_button<'a, Message>(content: impl Into<Element<'a, Message>>) -> Button<'a, Message> {
-    button(content).style(|t, s| button_with_base(t, s, button::primary))
+    button(content)
+        .style(|t, s| button_with_base(t, s, button::primary))
+        .padding([5.0, 7.0])
 }
 
 pub fn styled_combo_box<'a, T, Message>(
