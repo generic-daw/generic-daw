@@ -97,7 +97,7 @@ impl Daw {
             }
             Message::FileTree(action) => return self.handle_file_tree_action(action),
             Message::NewFile => (self.arrangement, self.meter) = ArrangementView::create(),
-            Message::ChangedTab(tab) => self.arrangement.change_tab(tab),
+            Message::ChangedTab(tab) => self.arrangement.tab = tab,
             Message::OpenFileDialog => {
                 return Task::future(
                     AsyncFileDialog::new()
@@ -312,9 +312,15 @@ impl Daw {
                     .on_press(Message::ToggleMetronome),
                 horizontal_space(),
                 row![
-                    styled_button(chart_no_axes_gantt())
-                        .on_press(Message::ChangedTab(Tab::Arrangement { grabbed_clip: None })),
-                    styled_button(sliders_vertical()).on_press(Message::ChangedTab(Tab::Mixer))
+                    styled_button(chart_no_axes_gantt()).on_press_maybe(
+                        (!matches!(self.arrangement.tab, Tab::Arrangement { .. })).then_some(
+                            Message::ChangedTab(Tab::Arrangement { grabbed_clip: None })
+                        )
+                    ),
+                    styled_button(sliders_vertical()).on_press_maybe(
+                        (!matches!(self.arrangement.tab, Tab::Mixer))
+                            .then_some(Message::ChangedTab(Tab::Mixer))
+                    )
                 ],
             ]
             .spacing(20)

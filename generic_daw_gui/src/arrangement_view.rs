@@ -141,7 +141,7 @@ pub struct ArrangementView {
     midis: Vec<Weak<ArcSwap<Vec<MidiNote>>>>,
     plugins_by_channel: HoleyVec<Vec<(PluginId, PluginDescriptor)>>,
 
-    tab: Tab,
+    pub tab: Tab,
 
     recording: Option<(Recording, NodeId)>,
 
@@ -1675,9 +1675,5 @@ impl ArrangementView {
 
     pub fn subscription(&self) -> Subscription<Message> {
         self.clap_host.subscription().map(Message::ClapHost)
-    }
-
-    pub fn change_tab(&mut self, tab: Tab) {
-        self.tab = tab;
     }
 }
