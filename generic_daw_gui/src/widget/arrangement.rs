@@ -142,15 +142,10 @@ where
             match event {
                 mouse::Event::ButtonPressed { button, modifiers } => match button {
                     mouse::Button::Left => {
-                        if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
-                            let time = get_time(
-                                cursor.x,
-                                *modifiers,
-                                self.meter,
-                                self.position,
-                                self.scale,
-                            );
+                        let time =
+                            get_time(cursor.x, *modifiers, self.meter, self.position, self.scale);
 
+                        if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
                             let clip_bounds = clip_bounds(&layout, track, clip).unwrap()
                                 - Vector::new(bounds.x, bounds.y);
 
@@ -178,7 +173,6 @@ where
                                 Action::Grab(track, clip)
                             }));
                             shell.capture_event();
-                            shell.request_redraw();
                         }
                     }
                     mouse::Button::Right if !self.deleted => {

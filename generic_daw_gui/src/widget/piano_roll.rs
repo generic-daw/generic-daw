@@ -177,6 +177,7 @@ where
                     }
                     mouse::Button::Right if !self.deleted => {
                         *state = State::DeletingNotes;
+                        shell.request_redraw();
 
                         if let Some(note) = self.get_note(cursor) {
                             self.deleted = true;
