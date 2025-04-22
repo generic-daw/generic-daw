@@ -16,8 +16,6 @@ An early-in-development, open source, cross-platform digital audio workstation (
 ### Requirements
 
 - Rust & Cargo: this project is developed using the latest stable [Rust toolchain](https://rustup.rs/)
-- an up-to-date version of Lucide in the workspace root:
-  - https://unpkg.com/lucide-static@latest/font/Lucide.ttf
 - on Linux you'll also need to install the alsa development headers:
   - Debian: `sudo apt install libasound2-dev`
   - Fedora: `sudo dnf install alsa-lib-devel`
@@ -25,24 +23,12 @@ An early-in-development, open source, cross-platform digital audio workstation (
 
 ### Build from Source
 
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/generic-daw/generic-daw.git
-   cd generic-daw
-   ```
-
-2. Build the project:
-
-   ```bash
-   cargo build --release
-   ```
-
-3. Run the application:
-
-   ```bash
-   cargo run --release
-   ```
+```bash
+git clone https://github.com/generic-daw/generic-daw.git
+cd generic-daw
+wget https://unpkg.com/lucide-static@latest/font/Lucide.ttf
+cargo build --release
+```
 
 ## Roadmap
 
