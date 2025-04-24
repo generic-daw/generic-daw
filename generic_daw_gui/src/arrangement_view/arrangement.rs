@@ -1,3 +1,4 @@
+use crate::config::Config;
 use bit_set::BitSet;
 use generic_daw_core::{
     Clip, DawCtxMessage, Meter, MixerNode, Stream, StreamTrait as _, Track,
@@ -28,8 +29,12 @@ pub struct Arrangement {
 }
 
 impl Arrangement {
-    pub fn create() -> (Self, Arc<Meter>) {
-        let (stream, master_node, sender, meter) = build_output_stream(44100, 1024);
+    pub fn create(config: &Config) -> (Self, Arc<Meter>) {
+        let (stream, master_node, sender, meter) = build_output_stream(
+            config.output_device.name.as_deref(),
+            config.output_device.sample_rate.unwrap_or(44100),
+            config.output_device.buffer_size.unwrap_or(1024),
+        );
         let master_node_id = master_node.id();
         let mut channels = HoleyVec::default();
         channels.insert(

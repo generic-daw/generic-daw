@@ -42,7 +42,8 @@ enum LoadStatus {
 }
 
 impl Dir {
-    pub fn new(path: &Path) -> Self {
+    pub fn new(path: impl AsRef<Path>) -> Self {
+        let path = path.as_ref();
         let name = path.file_name().unwrap().to_str().unwrap();
         let shaping = shaping_of(name);
 
@@ -122,7 +123,7 @@ impl Dir {
                             height += h;
                             e
                         })
-                ),];
+                )];
 
                 if height != 0.0 {
                     col = col.push(row![
@@ -177,11 +178,11 @@ impl Dir {
 
         let files = files
             .into_iter()
-            .map(|(entry, _)| File::new(&entry.path()))
+            .map(|(entry, _)| File::new(entry.path()))
             .collect();
         let dirs = dirs
             .into_iter()
-            .map(|(entry, _)| Self::new(&entry.path()))
+            .map(|(entry, _)| Self::new(entry.path()))
             .collect();
 
         (dirs, files)

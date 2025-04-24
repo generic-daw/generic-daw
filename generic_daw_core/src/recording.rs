@@ -27,8 +27,14 @@ pub struct Recording {
 }
 
 impl Recording {
-    pub fn create(path: Arc<Path>, meter: &Meter) -> (Self, Receiver<Box<[f32]>>) {
-        let (stream, config, receiver) = build_input_stream(meter.sample_rate, meter.buffer_size);
+    pub fn create(
+        path: Arc<Path>,
+        meter: &Meter,
+        device_name: Option<&str>,
+        sample_rate: u32,
+        buffer_size: u32,
+    ) -> (Self, Receiver<Box<[f32]>>) {
+        let (stream, config, receiver) = build_input_stream(device_name, sample_rate, buffer_size);
 
         let position = Position::from_samples(
             meter.sample.load(Acquire),

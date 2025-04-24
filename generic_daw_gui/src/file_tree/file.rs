@@ -27,7 +27,8 @@ pub struct File {
 }
 
 impl File {
-    pub fn new(path: &Path) -> Self {
+    pub fn new(path: impl AsRef<Path>) -> Self {
+        let path = path.as_ref();
         let name = path.file_name().unwrap().to_str().unwrap();
         let shaping = shaping_of(name);
 

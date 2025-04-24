@@ -4,6 +4,7 @@ use crate::{
         empty_widget, icon_button, round_plus_button, styled_combo_box,
         styled_scrollable_with_direction,
     },
+    config::Config,
     icons::{chevron_up, grip_vertical, x},
     stylefns::{button_with_base, slider_with_enabled},
     widget::{
@@ -21,14 +22,12 @@ use generic_daw_core::{
     AudioClip, Clip, Decibels, InterleavedAudio, Meter, MidiClip, MidiKey, MidiNote, MixerNode,
     Position, Recording, Track,
     audio_graph::{NodeId, NodeImpl as _},
-    clap_host::{
-        self, MainThreadMessage, PluginBundle, PluginDescriptor, PluginId, get_installed_plugins,
-    },
+    clap_host::{self, MainThreadMessage, PluginBundle, PluginDescriptor, PluginId},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use generic_daw_utils::{EnumDispatcher, HoleyVec, NoDebug, ShiftMoveExt as _, Vec2, hash_reader};
 use iced::{
-    Alignment, Element, Fill, Function as _, Size, Subscription, Task, Theme, border,
+    Alignment, Element, Fill, Function as _, Size, Subscription, Task, border,
     mouse::Interaction,
     padding,
     widget::{
@@ -131,7 +130,6 @@ pub enum Tab {
 
 pub struct ArrangementView {
     pub clap_host: ClapHost,
-    plugin_bundles: BTreeMap<PluginDescriptor, PluginBundle>,
     plugin_descriptors: combo_box::State<PluginDescriptor>,
 
     arrangement: ArrangementWrapper,
@@ -158,17 +156,16 @@ pub struct ArrangementView {
 }
 
 impl ArrangementView {
-    pub fn create() -> (Self, Arc<Meter>) {
-        let (arrangement, meter) = ArrangementWrapper::create();
-
-        let plugin_bundles = get_installed_plugins();
-        let plugin_descriptors = combo_box::State::new(plugin_bundles.keys().cloned().collect());
+    pub fn create(
+        config: &Config,
+        plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
+    ) -> (Self, Arc<Meter>) {
+        let (arrangement, meter) = ArrangementWrapper::create(config);
 
         (
             Self {
                 clap_host: ClapHost::default(),
-                plugin_bundles,
-                plugin_descriptors,
+                plugin_descriptors: combo_box::State::new(plugin_bundles.keys().cloned().collect()),
 
                 arrangement,
                 meter: meter.clone(),
@@ -182,11 +179,11 @@ impl ArrangementView {
                 recording: None,
 
                 arrangement_position: Vec2::default(),
-                arrangement_scale: Vec2::new(9.0, const { LINE_HEIGHT * 4.0 + 15.0 }),
+                arrangement_scale: Vec2::new(10.0, const { LINE_HEIGHT * 4.0 + 15.0 }),
                 soloed_track: None,
 
                 piano_roll_position: Vec2::new(0.0, 40.0),
-                piano_roll_scale: Vec2::new(9.0, LINE_HEIGHT),
+                piano_roll_scale: Vec2::new(8.0, LINE_HEIGHT),
                 last_note_len: Position::BEAT,
                 selected_channel: None,
 
@@ -200,7 +197,12 @@ impl ArrangementView {
         self.arrangement.stop();
     }
 
-    pub fn update(&mut self, message: Message) -> Task<Message> {
+    pub fn update(
+        &mut self,
+        message: Message,
+        config: &Config,
+        plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
+    ) -> Task<Message> {
         match message {
             Message::ClapHost(msg) => return self.clap_host.update(msg).map(Message::ClapHost),
             Message::ConnectRequest((from, to)) => {
@@ -261,7 +263,7 @@ impl ArrangementView {
                 };
 
                 let (gui, receiver, audio_processor) = clap_host::init(
-                    &self.plugin_bundles[&descriptor],
+                    &plugin_bundles[&descriptor],
                     descriptor.clone(),
                     f64::from(self.meter.sample_rate),
                     self.meter.buffer_size,
@@ -340,8 +342,11 @@ impl ArrangementView {
                         }
                         LoadStatus::Loaded(audio) => {
                             if let Some(audio) = audio.upgrade() {
-                                return self
-                                    .update(Message::SampleLoadedFromFile(path, Some(audio)));
+                                return self.update(
+                                    Message::SampleLoadedFromFile(path, Some(audio)),
+                                    config,
+                                    plugin_bundles,
+                                );
                             }
                         }
                     }
@@ -433,15 +438,16 @@ impl ArrangementView {
                 }
 
                 return self
-                    .update(Message::ArrangementPositionScaleDelta(
-                        Vec2::ZERO,
-                        Vec2::ZERO,
-                    ))
-                    .chain(self.update(Message::ChannelRemove(id)));
+                    .update(
+                        Message::ArrangementPositionScaleDelta(Vec2::ZERO, Vec2::ZERO),
+                        config,
+                        plugin_bundles,
+                    )
+                    .chain(self.update(Message::ChannelRemove(id), config, plugin_bundles));
             }
             Message::TrackToggleEnabled(id) => {
                 self.soloed_track = None;
-                return self.update(Message::ChannelToggleEnabled(id));
+                return self.update(Message::ChannelToggleEnabled(id), config, plugin_bundles);
             }
             Message::TrackToggleSolo(id) => {
                 if self.soloed_track == Some(id) {
@@ -468,14 +474,19 @@ impl ArrangementView {
             Message::ToggleRecord(id) => {
                 if let Some((_, i)) = &self.recording {
                     return if *i == id {
-                        self.update(Message::StopRecord)
+                        self.update(Message::StopRecord, config, plugin_bundles)
                     } else {
-                        self.update(Message::RecordingSplit(id))
+                        self.update(Message::RecordingSplit(id), config, plugin_bundles)
                     };
                 }
 
-                let (recording, receiver) =
-                    Recording::create(Self::make_recording_path(), &self.meter);
+                let (recording, receiver) = Recording::create(
+                    Self::make_recording_path(),
+                    &self.meter,
+                    config.input_device.name.as_deref(),
+                    config.input_device.sample_rate.unwrap_or(44100),
+                    config.input_device.buffer_size.unwrap_or(1024),
+                );
                 self.recording = Some((recording, id));
 
                 self.meter.playing.store(true, Release);
@@ -780,16 +791,18 @@ impl ArrangementView {
     }
 
     pub fn load(
+        &mut self,
         path: &Path,
-        sample_dirs: &[Box<Path>],
-    ) -> Option<(Self, Arc<Meter>, Task<Message>)> {
+        config: &Config,
+        plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
+    ) -> Option<(Arc<Meter>, Task<Message>)> {
         info!("loading project {path:?}");
 
         let mut gdp = Vec::new();
         File::open(path).ok()?.read_to_end(&mut gdp).ok()?;
         let reader = Reader::new(&gdp)?;
 
-        let (mut arrangement, meter) = ArrangementWrapper::create();
+        let (mut arrangement, meter) = ArrangementWrapper::create(config);
 
         meter.bpm.store(reader.meter().bpm as u16, Release);
         meter
@@ -805,7 +818,8 @@ impl ArrangementView {
                 let sender = sender.clone();
                 let sample_rate = meter.sample_rate;
                 s.spawn(move || {
-                    for path in sample_dirs
+                    let audio = config
+                        .sample_paths
                         .iter()
                         .flat_map(WalkDir::new)
                         .flatten()
@@ -817,22 +831,21 @@ impl ArrangementView {
                                 .and_then(OsStr::to_str)
                                 .is_some_and(|name| name == audio.name)
                         })
-                    {
-                        if audio.hash
-                            == hash_reader::<DefaultHasher>(File::open(path.path()).unwrap())
-                        {
-                            if let Some(audio) = InterleavedAudio::create_with_hash(
-                                path.path().into(),
+                        .filter(|dir_entry| {
+                            audio.hash
+                                == hash_reader::<DefaultHasher>(
+                                    File::open(dir_entry.path()).unwrap(),
+                                )
+                        })
+                        .find_map(|dir_entry| {
+                            InterleavedAudio::create_with_hash(
+                                dir_entry.path().into(),
                                 sample_rate,
                                 audio.hash,
-                            ) {
-                                sender.send((idx, Some(audio))).unwrap();
-                                return;
-                            }
-                        }
-                    }
+                            )
+                        });
 
-                    sender.send((idx, None)).unwrap();
+                    sender.send((idx, audio)).unwrap();
                 });
             }
 
@@ -848,6 +861,7 @@ impl ArrangementView {
                         end: note.end.into(),
                     })
                     .collect();
+
                 midis.insert(idx, Arc::new(ArcSwap::new(Arc::new(pattern))));
             }
         });
@@ -856,10 +870,8 @@ impl ArrangementView {
             audios.insert(idx, audio?);
         }
 
-        let plugin_bundles = get_installed_plugins();
         let plugin_descriptors = plugin_bundles.keys().cloned().collect::<Vec<_>>();
-        let mut plugins_by_channel: HoleyVec<Vec<(PluginId, PluginDescriptor)>> =
-            HoleyVec::default();
+        let mut plugins_by_channel = HoleyVec::<Vec<(PluginId, PluginDescriptor)>>::default();
         let mut futs = Vec::new();
 
         let mut load_channel = |node: &MixerNode, channel: &proto::Channel| {
@@ -959,45 +971,53 @@ impl ArrangementView {
 
         info!("loaded project {path:?}");
 
-        Some((
-            Self {
-                clap_host: ClapHost::default(),
-                plugin_bundles,
-                plugin_descriptors: combo_box::State::new(plugin_descriptors),
+        futs.extend(self.clear());
 
-                arrangement,
-                meter: meter.clone(),
-                loading: BTreeSet::new(),
-                audios: audios
-                    .values()
-                    .map(|audio| {
-                        (
-                            audio.path.clone(),
-                            LoadStatus::Loaded(Arc::downgrade(audio)),
-                        )
-                    })
-                    .collect(),
-                midis: midis.values().map(Arc::downgrade).collect(),
-                plugins_by_channel,
+        self.plugin_descriptors = combo_box::State::new(plugin_bundles.keys().cloned().collect());
+        self.arrangement = arrangement;
+        self.meter = meter.clone();
+        self.audios.extend(audios.values().map(|audio| {
+            (
+                audio.path.clone(),
+                LoadStatus::Loaded(Arc::downgrade(audio)),
+            )
+        }));
+        self.midis.extend(midis.values().map(Arc::downgrade));
 
-                tab: Tab::Arrangement { grabbed_clip: None },
+        Some((meter, Task::batch(futs)))
+    }
 
-                recording: None,
+    pub fn unload(
+        &mut self,
+        config: &Config,
+        plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
+    ) -> (Arc<Meter>, Task<Message>) {
+        let futs = Task::batch(self.clear());
 
-                arrangement_position: Vec2::default(),
-                arrangement_scale: Vec2::new(9.0, const { LINE_HEIGHT * 4.0 + 15.0 }),
-                soloed_track: None,
+        let (arrangement, meter) = ArrangementWrapper::create(config);
+        self.plugin_descriptors = combo_box::State::new(plugin_bundles.keys().cloned().collect());
+        self.arrangement = arrangement;
+        self.meter = meter.clone();
 
-                piano_roll_position: Vec2::new(0.0, 40.0),
-                piano_roll_scale: Vec2::new(9.0, LINE_HEIGHT),
-                last_note_len: Position::BEAT,
-                selected_channel: None,
+        (meter, futs)
+    }
 
-                split_at: 300.0,
-            },
-            meter,
-            Task::batch(futs),
-        ))
+    fn clear(&mut self) -> impl Iterator<Item = Task<Message>> {
+        self.loading.clear();
+        self.audios.clear();
+        self.midis.clear();
+        self.recording = None;
+        self.soloed_track = None;
+        self.selected_channel = None;
+
+        self.plugins_by_channel.drain(..).flatten().map(|(id, _)| {
+            self.clap_host
+                .update(ClapHostMessage::MainThread(
+                    id,
+                    MainThreadMessage::GuiClosed,
+                ))
+                .map(Message::ClapHost)
+        })
     }
 
     pub fn loading(&self) -> bool {
@@ -1140,7 +1160,7 @@ impl ArrangementView {
                             .spacing(5.0),
                         )
                         .style(|t| {
-                            container::transparent(t)
+                            container::Style::default()
                                 .background(t.extended_palette().background.weak.color)
                                 .border(
                                     border::width(1.0)
@@ -1596,24 +1616,18 @@ impl ArrangementView {
                                                 )
                                             )
                                             .style(
-                                                |t: &Theme| {
-                                                    container::Style {
-                                                        background: Some(
-                                                            t.extended_palette()
-                                                                .background
-                                                                .weak
-                                                                .color
-                                                                .into(),
-                                                        ),
-                                                        border: border::width(1.0).color(
+                                                |t| container::Style::default()
+                                                    .background(
+                                                        t.extended_palette().background.weak.color,
+                                                    )
+                                                    .border(
+                                                        border::width(1.0).color(
                                                             t.extended_palette()
                                                                 .background
                                                                 .strong
                                                                 .color,
                                                         ),
-                                                        ..container::Style::default()
-                                                    }
-                                                }
+                                                    )
                                             )
                                         )
                                         .interaction(Interaction::Grab),

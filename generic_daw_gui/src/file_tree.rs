@@ -25,9 +25,13 @@ pub enum Action {
     DirOpened(Box<[Dir]>, Box<[File]>),
 }
 
-pub struct FileTree(Box<[Dir]>);
+pub struct FileTree(Vec<Dir>);
 
 impl FileTree {
+    pub fn new(dirs: impl IntoIterator<Item: AsRef<Path>>) -> Self {
+        Self(dirs.into_iter().map(Dir::new).collect())
+    }
+
     pub fn view(&self) -> Element<'_, Message> {
         styled_scrollable_with_direction(
             column(self.0.iter().map(|dir| dir.view().0)),
@@ -41,19 +45,5 @@ impl FileTree {
             .iter_mut()
             .find_map(|dir| dir.update(id, action))
             .unwrap_or_else(Task::none)
-    }
-}
-
-impl<I> From<I> for FileTree
-where
-    I: IntoIterator<Item: AsRef<Path>>,
-{
-    fn from(value: I) -> Self {
-        Self(
-            value
-                .into_iter()
-                .map(|dir| Dir::new(dir.as_ref()))
-                .collect(),
-        )
     }
 }
