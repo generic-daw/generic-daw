@@ -9,7 +9,8 @@ use main_thread::MainThread;
 use shared::Shared;
 use std::{
     collections::{BTreeMap, HashSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
+    sync::Arc,
 };
 use walkdir::WalkDir;
 
@@ -36,11 +37,13 @@ pub use plugin_id::Id as PluginId;
 unique_id!(plugin_id);
 
 #[must_use]
-pub fn get_installed_plugins() -> BTreeMap<PluginDescriptor, PluginBundle> {
-    let mut paths = HashSet::new();
+pub fn get_installed_plugins(
+    paths: impl IntoIterator<Item: AsRef<Path>>,
+) -> BTreeMap<PluginDescriptor, PluginBundle> {
+    let mut seen = HashSet::new();
     let mut bundles = BTreeMap::new();
 
-    standard_clap_paths()
+    paths
         .into_iter()
         .flat_map(WalkDir::new)
         .flatten()
@@ -52,13 +55,13 @@ pub fn get_installed_plugins() -> BTreeMap<PluginDescriptor, PluginBundle> {
                 .is_some_and(|ext| ext == "clap")
         })
         .filter_map(|path| {
-            if paths.contains(path.path()) {
+            if seen.contains(path.path()) {
                 None
             } else {
                 // SAFETY:
                 // loading an external library object file is inherently unsafe
                 let bundle = unsafe { PluginBundle::load(path.path()).ok() };
-                paths.insert(path.into_path());
+                seen.insert(path.into_path());
                 bundle
             }
         })
@@ -76,40 +79,40 @@ pub fn get_installed_plugins() -> BTreeMap<PluginDescriptor, PluginBundle> {
     bundles
 }
 
-fn standard_clap_paths() -> Vec<PathBuf> {
+pub fn default_clap_paths() -> Vec<Arc<Path>> {
     let mut paths = Vec::new();
 
     #[cfg(target_os = "linux")]
     {
         if let Some(path) = std::env::var_os("HOME").map(PathBuf::from) {
-            paths.push(path.join(".clap"));
+            paths.push(path.join(".clap").into());
         }
 
-        paths.push("/usr/lib/clap".into());
+        paths.push(Path::new("/usr/lib/clap").into());
     }
 
     #[cfg(target_os = "windows")]
     {
         if let Some(path) = std::env::var_os("COMMONPROGRAMFILES").map(PathBuf::from) {
-            paths.push(path.join("CLAP"));
+            paths.push(path.join("CLAP").into());
         }
 
         if let Some(path) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
-            paths.push(path.join("Programs\\Common\\CLAP"));
+            paths.push(path.join("Programs\\Common\\CLAP").into());
         }
     }
 
     #[cfg(target_os = "macos")]
     {
-        paths.push("/Library/Audio/Plug-Ins/CLAP".into());
+        paths.push(Path::new("/Library/Audio/Plug-Ins/CLAP").into());
 
         if let Some(path) = std::env::var_os("HOME").map(PathBuf::from) {
-            paths.push(path.join("Library/Audio/Plug-Ins/CLAP"));
+            paths.push(path.join("Library/Audio/Plug-Ins/CLAP").into());
         }
     }
 
     if let Some(clap_path) = std::env::var_os("CLAP_PATH") {
-        paths.extend(std::env::split_paths(&clap_path));
+        paths.extend(std::env::split_paths(&clap_path).map(Arc::from));
     }
 
     paths

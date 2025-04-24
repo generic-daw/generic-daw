@@ -45,13 +45,40 @@ pub use track::Track;
 
 type AudioGraph = audio_graph::AudioGraph<AudioGraphNode, Event>;
 
+#[must_use]
+pub fn get_input_devices() -> Vec<String> {
+    cpal::default_host()
+        .input_devices()
+        .unwrap()
+        .map(|device| device.name().unwrap())
+        .collect()
+}
+
+#[must_use]
+pub fn get_output_devices() -> Vec<String> {
+    cpal::default_host()
+        .output_devices()
+        .unwrap()
+        .map(|device| device.name().unwrap())
+        .collect()
+}
+
 pub fn build_input_stream(
+    device_name: Option<&str>,
     sample_rate: u32,
     buffer_size: u32,
 ) -> (Stream, StreamConfig, Receiver<Box<[f32]>>) {
     let (sender, receiver) = async_channel::unbounded();
 
-    let device = cpal::default_host().default_input_device().unwrap();
+    let host = cpal::default_host();
+
+    let device = device_name
+        .and_then(|device_name| {
+            host.input_devices()
+                .unwrap()
+                .find(|device| device.name().is_ok_and(|name| name == device_name))
+        })
+        .unwrap_or_else(|| host.default_input_device().unwrap());
 
     let config = choose_config(
         device.supported_input_configs().unwrap(),
@@ -59,7 +86,7 @@ pub fn build_input_stream(
         buffer_size,
     );
 
-    info!("starting output stream with config {config:?}",);
+    info!("starting input stream with config {config:?}");
 
     let stream = device
         .build_input_stream(
@@ -76,18 +103,27 @@ pub fn build_input_stream(
 }
 
 pub fn build_output_stream(
+    device_name: Option<&str>,
     sample_rate: u32,
     buffer_size: u32,
 ) -> (Stream, Arc<MixerNode>, Sender<DawCtxMessage>, Arc<Meter>) {
-    let (mut ctx, meter, node, sender) = DawCtx::create(sample_rate, buffer_size);
+    let host = cpal::default_host();
 
-    let device = cpal::default_host().default_output_device().unwrap();
+    let device = device_name
+        .and_then(|device_name| {
+            host.output_devices()
+                .unwrap()
+                .find(|device| device.name().is_ok_and(|name| name == device_name))
+        })
+        .unwrap_or_else(|| host.default_output_device().unwrap());
 
     let config = choose_config(
         device.supported_output_configs().unwrap(),
         sample_rate,
         buffer_size,
     );
+
+    let (mut ctx, meter, node, sender) = DawCtx::create(config.sample_rate.0, buffer_size);
 
     info!("starting output stream with config {config:?}");
 
@@ -113,7 +149,6 @@ fn choose_config(
     let config = configs
         .into_iter()
         .filter(|config| config.channels() == 2)
-        .filter(|config| config.max_sample_rate().0 >= 40000)
         .min_by(|l, r| {
             compare_by_sample_rate(l, r, sample_rate)
                 .then_with(|| compare_by_buffer_size(l, r, buffer_size))

@@ -30,6 +30,7 @@ struct State {
     interaction: Interaction,
     last_bounds: Rectangle,
     last_viewport: Rectangle,
+    last_theme: RefCell<Option<Theme>>,
     last_addr: usize,
 }
 
@@ -207,6 +208,17 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
             ..Quad::default()
         };
         renderer.fill_quad(clip_background, color.scale_alpha(0.25));
+
+        // clear the mesh cache if the theme has changed
+        if state
+            .last_theme
+            .borrow()
+            .as_ref()
+            .is_none_or(|last_theme| *last_theme != *theme)
+        {
+            *state.last_theme.borrow_mut() = Some(theme.clone());
+            *state.cache.borrow_mut() = None;
+        }
 
         // fill the mesh cache if it's cleared
         if state.cache.borrow().is_none() {

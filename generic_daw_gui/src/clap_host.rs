@@ -147,6 +147,7 @@ impl ClapHost {
             }
             MainThreadMessage::GuiClosed => {
                 self.plugins.remove(*id).unwrap();
+                self.timers.remove(*id);
 
                 if let Some(window_id) = self.windows.remove(*id) {
                     return window::close(window_id);

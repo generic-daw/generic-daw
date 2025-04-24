@@ -1,11 +1,17 @@
-use crate::{icons::plus, stylefns::button_with_base, widget::LINE_HEIGHT};
+use crate::{
+    icons::{LUCIDE_FONT, move_vertical, plus},
+    stylefns::button_with_base,
+    widget::{DragHandle, LINE_HEIGHT},
+};
 use iced::{
-    Alignment, Element, Shrink,
-    border::Radius,
+    Alignment, Color, Element, Font, Shrink,
+    border::{self, Radius},
     widget::{
-        Button, ComboBox, PickList, Scrollable, Space, Text, TextInput, button, combo_box,
-        container, pick_list,
+        Button, ComboBox, PickList, Scrollable, Space, Text, TextInput, button, center, combo_box,
+        container, mouse_area, opaque, pick_list, row,
         scrollable::{self, Direction},
+        stack,
+        text::Shaping,
         text_input,
     },
 };
@@ -25,6 +31,59 @@ where
             .align_x(Alignment::Center),
     )
     .padding(0.0)
+}
+
+pub fn modal<'a, Message>(
+    base: impl Into<Element<'a, Message>>,
+    content: impl Into<Element<'a, Message>>,
+    exit: Message,
+) -> impl Into<Element<'a, Message>>
+where
+    Message: Clone + 'a,
+{
+    stack![
+        base.into(),
+        opaque(
+            mouse_area(center(opaque(content)).style(|_| {
+                container::Style::default().background(Color::BLACK.scale_alpha(0.75))
+            }))
+            .on_press(exit)
+        )
+    ]
+}
+
+pub fn number_input<'a, Message>(
+    current: usize,
+    default: usize,
+    max_digits: usize,
+    drag_update: fn(usize) -> Message,
+    text_update: fn(String) -> Message,
+) -> Element<'a, Message>
+where
+    Message: Clone + 'a,
+{
+    row![
+        DragHandle::new(
+            container(move_vertical())
+                .style(|t| {
+                    container::Style::default()
+                        .background(t.extended_palette().background.weak.color)
+                        .border(
+                            border::width(1.0)
+                                .color(t.extended_palette().background.strongest.color),
+                        )
+                })
+                .padding([5.0, 0.0]),
+            current,
+            default,
+            drag_update
+        ),
+        styled_text_input("", &current.to_string())
+            .font(Font::MONOSPACE)
+            .width((max_digits as f32).mul_add(10.0, 14.0))
+            .on_input(text_update)
+    ]
+    .into()
 }
 
 pub fn round_plus_button<'a, Message>() -> Button<'a, Message>
@@ -77,12 +136,29 @@ where
     V: Borrow<T> + 'a,
     Message: Clone,
 {
-    pick_list(options, selected, on_selected).style(|t, s| {
-        let mut style = pick_list::default(t, s);
-        style.border.radius = Radius::default();
-        style.placeholder_color = t.extended_palette().background.weak.text;
-        style
-    })
+    pick_list(options, selected, on_selected)
+        .handle(pick_list::Handle::Dynamic {
+            closed: pick_list::Icon {
+                font: LUCIDE_FONT,
+                code_point: const { char::from_u32(57459).unwrap() },
+                size: None,
+                line_height: 1.0.into(),
+                shaping: Shaping::Advanced,
+            },
+            open: pick_list::Icon {
+                font: LUCIDE_FONT,
+                code_point: const { char::from_u32(57457).unwrap() },
+                size: None,
+                line_height: 1.0.into(),
+                shaping: Shaping::Advanced,
+            },
+        })
+        .style(|t, s| {
+            let mut style = pick_list::default(t, s);
+            style.border.radius = Radius::default();
+            style.placeholder_color = t.extended_palette().background.weak.text;
+            style
+        })
 }
 
 pub fn styled_scrollable_with_direction<'a, Message>(

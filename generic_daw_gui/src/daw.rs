@@ -1,29 +1,39 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
-    components::{empty_widget, styled_button, styled_pick_list, styled_text_input},
+    components::{empty_widget, modal, number_input, styled_button, styled_pick_list},
+    config::Config,
+    config_view::{ConfigView, Message as ConfigViewMessage},
     file_tree::{FileTree, Message as FileTreeMessage},
-    icons::{chart_no_axes_gantt, move_vertical, pause, play, sliders_vertical, square},
+    icons::{chart_no_axes_gantt, pause, play, sliders_vertical, square},
+    state::State,
     stylefns::button_with_base,
-    widget::{AnimatedDot, DragHandle, LINE_HEIGHT, VSplit, vsplit},
+    widget::{AnimatedDot, LINE_HEIGHT, VSplit, vsplit},
 };
-use generic_daw_core::{Meter, Position};
+use generic_daw_core::{
+    Meter, Position,
+    clap_host::{PluginBundle, PluginDescriptor, get_installed_plugins},
+    get_input_devices, get_output_devices,
+};
 use iced::{
     Alignment::Center,
-    Element, Event, Fill, Font, Subscription, Task, Theme, border,
+    Element, Event, Fill, Subscription, Task, Theme,
     event::{self, Status},
     keyboard,
     mouse::Interaction,
+    time::every,
     widget::{button, column, container, horizontal_space, mouse_area, row, stack},
     window::{self, Id, frames},
 };
 use log::trace;
 use rfd::AsyncFileDialog;
 use std::{
+    collections::BTreeMap,
     path::Path,
     sync::{
         Arc,
         atomic::Ordering::{AcqRel, Acquire, Release},
     },
+    time::Duration,
 };
 
 #[derive(Clone, Debug)]
@@ -32,15 +42,20 @@ pub enum Message {
 
     Arrangement(ArrangementMessage),
     FileTree(FileTreeMessage),
+    ConfigView(ConfigViewMessage),
 
     NewFile,
     OpenFileDialog,
+    OpenLastFile,
     SaveFile,
     SaveAsFileDialog,
     ExportFileDialog,
 
     OpenFile(Arc<Path>),
     SaveAsFile(Arc<Path>),
+
+    OpenConfigView,
+    CloseConfigView,
 
     Stop,
     TogglePlay,
@@ -55,40 +70,73 @@ pub enum Message {
 }
 
 pub struct Daw {
+    config: Config,
+    plugin_bundles: BTreeMap<PluginDescriptor, PluginBundle>,
+    input_devices: Vec<String>,
+    output_devices: Vec<String>,
+
     arrangement: ArrangementView,
     file_tree: FileTree,
-    sample_dirs: Box<[Box<Path>]>,
-    open_project: Option<Arc<Path>>,
+    config_view: Option<ConfigView>,
+    state: State,
     split_at: f32,
     meter: Arc<Meter>,
 }
 
 impl Daw {
     pub fn create() -> (Self, Task<Message>) {
-        let (_, open) = window::open(window::Settings {
+        let mut open = window::open(window::Settings {
             exit_on_close_request: false,
             maximized: true,
             ..window::Settings::default()
-        });
+        })
+        .1
+        .discard();
 
-        let (arrangement, meter) = ArrangementView::create();
+        let config = Config::read().unwrap_or_default();
+        trace!("loaded config {config:?}");
 
-        let sample_dirs = [
-            dirs::home_dir().unwrap().into(),
-            dirs::data_dir().unwrap().join("Generic Daw").into(),
-        ]
-        .into();
+        let mut state = State::read().unwrap_or_default();
+        if !config.open_last_project {
+            state.last_project = None;
+        }
+        trace!("loaded state {state:?}");
+
+        let plugin_bundles = get_installed_plugins(&config.clap_paths);
+        let file_tree = FileTree::new(&config.sample_paths);
+
+        let mut input_devices = get_input_devices();
+        input_devices.sort_unstable();
+
+        let mut output_devices = get_output_devices();
+        output_devices.sort_unstable();
+
+        let (mut arrangement, mut meter) = ArrangementView::create(&config, &plugin_bundles);
+
+        if let Some((new_meter, futs)) = state
+            .last_project
+            .as_ref()
+            .and_then(|path| arrangement.load(path, &config, &plugin_bundles))
+        {
+            open = open.chain(futs.map(Message::Arrangement));
+            meter = new_meter;
+        }
 
         (
             Self {
+                config,
+                plugin_bundles,
+                input_devices,
+                output_devices,
+
                 arrangement,
-                file_tree: FileTree::from(&sample_dirs),
-                sample_dirs,
-                open_project: None,
+                file_tree,
+                config_view: None,
+                state,
                 split_at: 300.0,
                 meter,
             },
-            open.discard(),
+            open,
         )
     }
 
@@ -98,10 +146,26 @@ impl Daw {
         match message {
             Message::Redraw => {}
             Message::Arrangement(message) => {
-                return self.arrangement.update(message).map(Message::Arrangement);
+                return self
+                    .arrangement
+                    .update(message, &self.config, &self.plugin_bundles)
+                    .map(Message::Arrangement);
             }
             Message::FileTree(action) => return self.handle_file_tree_action(action),
-            Message::NewFile => (self.arrangement, self.meter) = ArrangementView::create(),
+            Message::ConfigView(message) => {
+                if let Some(config_view) = self.config_view.as_mut() {
+                    return config_view.update(message).map(Message::ConfigView);
+                }
+            }
+            Message::NewFile => {
+                self.reload_config();
+
+                let (meter, futs) = self.arrangement.unload(&self.config, &self.plugin_bundles);
+                self.meter = meter;
+                self.state.last_project = None;
+
+                return futs.map(Message::Arrangement);
+            }
             Message::ChangedTab(tab) => self.arrangement.tab = tab,
             Message::OpenFileDialog => {
                 return Task::future(
@@ -113,9 +177,15 @@ impl Daw {
                 .map(|p| p.path().into())
                 .map(Message::OpenFile);
             }
+            Message::OpenLastFile => {
+                if let Some(last_file) = State::read().unwrap_or_default().last_project {
+                    return self.update(Message::OpenFile(last_file));
+                }
+            }
             Message::SaveFile => {
                 return self.update(
-                    self.open_project
+                    self.state
+                        .last_project
                         .clone()
                         .map_or(Message::SaveAsFileDialog, Message::SaveAsFile),
                 );
@@ -142,33 +212,56 @@ impl Daw {
                 .map(Message::Arrangement);
             }
             Message::OpenFile(path) => {
-                if let Some((arrangement, meter, futs)) =
-                    ArrangementView::load(&path, &self.sample_dirs)
-                {
-                    self.arrangement = arrangement;
-                    self.meter = meter;
-                    self.open_project = Some(path);
-                    return futs.map(Message::Arrangement);
+                self.reload_config();
+
+                let (meter, futs) = self
+                    .arrangement
+                    .load(&path, &self.config, &self.plugin_bundles)
+                    .unwrap();
+
+                self.meter = meter;
+
+                if self.state.last_project.as_ref() != Some(&path) {
+                    self.state.last_project = Some(path);
+                    self.state.write();
                 }
+
+                return futs.map(Message::Arrangement);
             }
             Message::SaveAsFile(path) => {
                 self.arrangement.save(&path);
-                self.open_project = Some(path);
+
+                if self.state.last_project.as_ref() != Some(&path) {
+                    self.state.last_project = Some(path);
+                    self.state.write();
+                }
             }
+            Message::OpenConfigView => {
+                self.config_view = Some(ConfigView::default());
+            }
+            Message::CloseConfigView => self.config_view = None,
             Message::Stop => {
                 self.meter.playing.store(false, Release);
                 self.meter.sample.store(0, Release);
                 self.arrangement.stop();
                 return self
                     .arrangement
-                    .update(ArrangementMessage::StopRecord)
+                    .update(
+                        ArrangementMessage::StopRecord,
+                        &self.config,
+                        &self.plugin_bundles,
+                    )
                     .map(Message::Arrangement);
             }
             Message::TogglePlay => {
                 if self.meter.playing.fetch_not(AcqRel) {
                     return self
                         .arrangement
-                        .update(ArrangementMessage::StopRecord)
+                        .update(
+                            ArrangementMessage::StopRecord,
+                            &self.config,
+                            &self.plugin_bundles,
+                        )
                         .map(Message::Arrangement);
                 }
             }
@@ -201,16 +294,29 @@ impl Daw {
         Task::none()
     }
 
-    pub fn handle_file_tree_action(&mut self, action: FileTreeMessage) -> Task<Message> {
+    fn handle_file_tree_action(&mut self, action: FileTreeMessage) -> Task<Message> {
         match action {
             FileTreeMessage::File(path) => self
                 .arrangement
-                .update(ArrangementMessage::SampleLoadFromFile(path))
+                .update(
+                    ArrangementMessage::SampleLoadFromFile(path),
+                    &self.config,
+                    &self.plugin_bundles,
+                )
                 .map(Message::Arrangement),
             FileTreeMessage::Action(id, action) => {
                 self.file_tree.update(id, &action).map(Message::FileTree)
             }
         }
+    }
+
+    fn reload_config(&mut self) {
+        let config = Config::read().unwrap_or_default();
+
+        self.plugin_bundles = get_installed_plugins(&config.clap_paths);
+        self.file_tree = FileTree::new(&config.sample_paths);
+
+        self.config = config;
     }
 
     pub fn view(&self, window: Id) -> Element<'_, Message> {
@@ -229,15 +335,25 @@ impl Daw {
         let mut base = column![
             row![
                 styled_pick_list(
-                    ["New", "Open", "Save", "Save As", "Export"],
+                    [
+                        "New",
+                        "Open",
+                        "Open Last",
+                        "Save",
+                        "Save As",
+                        "Export",
+                        "Settings"
+                    ],
                     Some("File"),
                     |s| {
                         match s {
                             "New" => Message::NewFile,
                             "Open" => Message::OpenFileDialog,
+                            "Open Last" => Message::OpenLastFile,
                             "Save" => Message::SaveFile,
                             "Save As" => Message::SaveAsFileDialog,
                             "Export" => Message::ExportFileDialog,
+                            "Settings" => Message::OpenConfigView,
                             _ => unreachable!(),
                         }
                     }
@@ -256,48 +372,20 @@ impl Daw {
                     styled_button(container(square()).width(LINE_HEIGHT).align_x(Center))
                         .on_press(Message::Stop),
                 ],
-                row![
-                    DragHandle::new(
-                        container(move_vertical())
-                            .style(|t: &Theme| {
-                                container::transparent(t)
-                                    .background(t.extended_palette().background.weak.color)
-                                    .border(
-                                        border::width(1.0)
-                                            .color(t.extended_palette().background.strongest.color),
-                                    )
-                            })
-                            .padding([5.0, 0.0]),
-                        numerator as usize,
-                        4,
-                        |x| Message::ChangedNumerator(x as u8)
-                    ),
-                    styled_text_input("", &numerator.to_string())
-                        .font(Font::MONOSPACE)
-                        .width(34.0)
-                        .on_input(Message::ChangedNumeratorText)
-                ],
-                row![
-                    DragHandle::new(
-                        container(move_vertical())
-                            .style(|t: &Theme| {
-                                container::transparent(t)
-                                    .background(t.extended_palette().background.weak.color)
-                                    .border(
-                                        border::width(1.0)
-                                            .color(t.extended_palette().background.strongest.color),
-                                    )
-                            })
-                            .padding([5.0, 0.0]),
-                        bpm as usize,
-                        140,
-                        |x| Message::ChangedBpm(x as u16)
-                    ),
-                    styled_text_input("", &bpm.to_string())
-                        .font(Font::MONOSPACE)
-                        .width(44.0)
-                        .on_input(Message::ChangedBpmText)
-                ],
+                number_input(
+                    numerator as usize,
+                    4,
+                    2,
+                    |x| Message::ChangedNumerator(x as u8),
+                    Message::ChangedNumeratorText
+                ),
+                number_input(
+                    bpm as usize,
+                    140,
+                    3,
+                    |x| Message::ChangedBpm(x as u16),
+                    Message::ChangedBpmText
+                ),
                 button(row![AnimatedDot::new(fill), AnimatedDot::new(!fill)].spacing(5.0))
                     .padding(8.0)
                     .style(move |t, s| button_with_base(
@@ -346,7 +434,22 @@ impl Daw {
             .into();
         }
 
+        if let Some(config_view) = &self.config_view {
+            base = modal(
+                base,
+                config_view
+                    .view(&self.input_devices, &self.output_devices)
+                    .map(Message::ConfigView),
+                Message::CloseConfigView,
+            )
+            .into();
+        }
+
         base
+    }
+
+    pub fn theme(&self, _window: Id) -> Theme {
+        self.config.theme.into()
     }
 
     pub fn title(&self, window: Id) -> String {
@@ -363,9 +466,16 @@ impl Daw {
             Subscription::none()
         };
 
+        let autosave = if self.config.autosave.enabled && self.state.last_project.is_some() {
+            every(Duration::from_secs(self.config.autosave.interval)).map(|_| Message::SaveFile)
+        } else {
+            Subscription::none()
+        };
+
         Subscription::batch([
             self.arrangement.subscription().map(Message::Arrangement),
             redraw,
+            autosave,
             event::listen_with(|e, s, _| match s {
                 Status::Ignored => match e {
                     Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {

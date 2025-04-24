@@ -398,9 +398,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
         tree: &'a mut Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
+        viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
-        overlay::from_children(&mut *self.children, tree, layout, renderer, translation)
+        overlay::from_children(
+            &mut *self.children,
+            tree,
+            layout,
+            renderer,
+            viewport,
+            translation,
+        )
     }
 
     fn operate(
