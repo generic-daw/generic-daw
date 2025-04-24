@@ -15,7 +15,6 @@ mod file;
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    None,
     Action(DirId, Action),
     File(Arc<Path>),
 }

@@ -203,19 +203,14 @@ impl Daw {
 
     pub fn handle_file_tree_action(&mut self, action: FileTreeMessage) -> Task<Message> {
         match action {
-            FileTreeMessage::None => {}
-            FileTreeMessage::File(path) => {
-                return self
-                    .arrangement
-                    .update(ArrangementMessage::SampleLoadFromFile(path))
-                    .map(Message::Arrangement);
-            }
+            FileTreeMessage::File(path) => self
+                .arrangement
+                .update(ArrangementMessage::SampleLoadFromFile(path))
+                .map(Message::Arrangement),
             FileTreeMessage::Action(id, action) => {
-                return self.file_tree.update(id, &action).map(Message::FileTree);
+                self.file_tree.update(id, &action).map(Message::FileTree)
             }
         }
-
-        Task::none()
     }
 
     pub fn view(&self, window: Id) -> Element<'_, Message> {

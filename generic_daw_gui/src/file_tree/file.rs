@@ -7,7 +7,7 @@ use crate::{
 use iced::{
     Element, Fill,
     widget::{
-        container, mouse_area, row, text,
+        container, row, text,
         text::{Shaping, Wrapping},
     },
 };
@@ -43,21 +43,18 @@ impl File {
 
     pub fn view(&self) -> (Element<'_, Message>, f32) {
         (
-            mouse_area(
-                styled_button(row![
-                    container(if self.is_audio { file_music() } else { file() }).clip(true),
-                    container(
-                        text(&*self.name)
-                            .shaping(self.shaping)
-                            .wrapping(Wrapping::None)
-                    )
-                    .clip(true)
-                ])
-                .width(Fill)
-                .padding(0)
-                .on_press(Message::None),
-            )
-            .on_double_click(Message::File(self.path.clone()))
+            styled_button(row![
+                container(if self.is_audio { file_music() } else { file() }).clip(true),
+                container(
+                    text(&*self.name)
+                        .shaping(self.shaping)
+                        .wrapping(Wrapping::None)
+                )
+                .clip(true)
+            ])
+            .width(Fill)
+            .padding(0)
+            .on_press(Message::File(self.path.clone()))
             .into(),
             LINE_HEIGHT,
         )
