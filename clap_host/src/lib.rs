@@ -7,7 +7,10 @@ use generic_daw_utils::unique_id;
 use host::Host;
 use main_thread::MainThread;
 use shared::Shared;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::PathBuf,
+};
 use walkdir::WalkDir;
 
 mod audio_buffers;
@@ -34,7 +37,8 @@ unique_id!(plugin_id);
 
 #[must_use]
 pub fn get_installed_plugins() -> BTreeMap<PluginDescriptor, PluginBundle> {
-    let mut r = BTreeMap::new();
+    let mut paths = HashSet::new();
+    let mut bundles = BTreeMap::new();
 
     standard_clap_paths()
         .into_iter()
@@ -47,22 +51,29 @@ pub fn get_installed_plugins() -> BTreeMap<PluginDescriptor, PluginBundle> {
                 .extension()
                 .is_some_and(|ext| ext == "clap")
         })
-        .filter_map(|path|
-            // SAFETY:
-            // loading an external library object file is inherently unsafe
-            unsafe { PluginBundle::load(path.path()) }.ok())
+        .filter_map(|path| {
+            if paths.contains(path.path()) {
+                None
+            } else {
+                // SAFETY:
+                // loading an external library object file is inherently unsafe
+                let bundle = unsafe { PluginBundle::load(path.path()).ok() };
+                paths.insert(path.into_path());
+                bundle
+            }
+        })
         .for_each(|bundle| {
             if let Some(factory) = bundle.get_plugin_factory() {
                 factory
                     .plugin_descriptors()
                     .filter_map(|d| d.try_into().ok())
                     .for_each(|d| {
-                        r.insert(d, bundle.clone());
+                        bundles.insert(d, bundle.clone());
                     });
             }
         });
 
-    r
+    bundles
 }
 
 fn standard_clap_paths() -> Vec<PathBuf> {

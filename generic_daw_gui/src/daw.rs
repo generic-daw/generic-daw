@@ -72,7 +72,11 @@ impl Daw {
 
         let (arrangement, meter) = ArrangementView::create();
 
-        let sample_dirs = vec![dirs::home_dir().unwrap().into()].into_boxed_slice();
+        let sample_dirs = [
+            dirs::home_dir().unwrap().into(),
+            dirs::data_dir().unwrap().join("Generic Daw").into(),
+        ]
+        .into();
 
         (
             Self {
@@ -205,8 +209,8 @@ impl Daw {
                     .update(ArrangementMessage::SampleLoadFromFile(path))
                     .map(Message::Arrangement);
             }
-            FileTreeMessage::Action(path, action) => {
-                return self.file_tree.update(&path, action).map(Message::FileTree);
+            FileTreeMessage::Action(id, action) => {
+                return self.file_tree.update(id, &action).map(Message::FileTree);
             }
         }
 

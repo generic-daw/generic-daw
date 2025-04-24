@@ -102,8 +102,8 @@ impl GuiExt {
                     plugin,
                     ClapWindow::from_window_handle(window_handle).unwrap(),
                 )
+                .unwrap();
             }
-            .unwrap();
         });
     }
 

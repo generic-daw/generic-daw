@@ -1,5 +1,5 @@
 use crate::components::styled_scrollable_with_direction;
-use dir::Dir;
+use dir::{Dir, DirId};
 use file::File;
 use iced::{
     Element, Task,
@@ -16,7 +16,7 @@ mod file;
 #[derive(Clone, Debug)]
 pub enum Message {
     None,
-    Action(Arc<Path>, Action),
+    Action(DirId, Action),
     File(Arc<Path>),
 }
 
@@ -37,12 +37,11 @@ impl FileTree {
         .into()
     }
 
-    pub fn update(&mut self, path: &Path, action: Action) -> Task<Message> {
+    pub fn update(&mut self, id: DirId, action: &Action) -> Task<Message> {
         self.0
             .iter_mut()
-            .find(|dir| path.starts_with(dir.path()))
-            .unwrap()
-            .update(path, action)
+            .find_map(|dir| dir.update(id, action))
+            .unwrap_or_else(Task::none)
     }
 }
 

@@ -4,6 +4,7 @@ use crate::{
     icons::{chevron_down, chevron_right},
     widget::{LINE_HEIGHT, shaping_of},
 };
+use generic_daw_utils::unique_id;
 use iced::{
     Alignment, Element, Fill, Task, padding,
     widget::{
@@ -15,9 +16,13 @@ use iced::{
 use smol::stream::StreamExt as _;
 use std::{path::Path, sync::Arc};
 
+unique_id!(dir_entry);
+
+pub use dir_entry::Id as DirId;
+
 #[derive(Clone, Debug)]
 pub struct Dir {
-    path: Arc<Path>,
+    id: DirId,
     name: Arc<str>,
     shaping: Shaping,
     children: LoadStatus,
@@ -26,7 +31,9 @@ pub struct Dir {
 
 #[derive(Clone, Debug)]
 enum LoadStatus {
-    Unloaded,
+    Unloaded {
+        path: Arc<Path>,
+    },
     Loading,
     Loaded {
         dirs: Box<[Dir]>,
@@ -40,46 +47,46 @@ impl Dir {
         let shaping = shaping_of(name);
 
         Self {
-            path: path.into(),
+            id: DirId::unique(),
             name: name.into(),
             shaping,
-            children: LoadStatus::Unloaded,
+            children: LoadStatus::Unloaded { path: path.into() },
             open: false,
         }
     }
 
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    pub fn update(&mut self, path: &Path, action: Action) -> Task<Message> {
-        if *path == *self.path {
-            match action {
+    pub fn update(&mut self, id: DirId, action: &Action) -> Option<Task<Message>> {
+        if id == self.id {
+            Some(match action {
                 Action::DirOpened(dirs, files) => {
-                    self.children = LoadStatus::Loaded { dirs, files };
+                    self.children = LoadStatus::Loaded {
+                        dirs: dirs.clone(),
+                        files: files.clone(),
+                    };
+
+                    Task::none()
                 }
                 Action::DirToggleOpen => {
                     self.open ^= true;
 
-                    if matches!(self.children, LoadStatus::Unloaded) {
+                    if let LoadStatus::Unloaded { path } = &self.children {
+                        let path = path.clone();
+                        let id = self.id;
                         self.children = LoadStatus::Loading;
-                        let path = self.path.clone();
 
-                        return Task::perform(Self::load(self.path.clone()), |(dirs, files)| {
-                            Message::Action(path, Action::DirOpened(dirs, files))
-                        });
+                        Task::perform(Self::load(path), move |(dirs, files)| {
+                            Message::Action(id, Action::DirOpened(dirs, files))
+                        })
+                    } else {
+                        Task::none()
                     }
                 }
-            }
+            })
         } else if let LoadStatus::Loaded { dirs, .. } = &mut self.children {
-            return dirs
-                .iter_mut()
-                .find(|dir| path.starts_with(dir.path()))
-                .unwrap()
-                .update(path, action);
+            dirs.iter_mut().find_map(|dir| dir.update(id, action))
+        } else {
+            None
         }
-
-        Task::none()
     }
 
     pub fn view(&self) -> (Element<'_, Message>, f32) {
@@ -100,7 +107,7 @@ impl Dir {
             ])
             .width(Fill)
             .padding(0)
-            .on_press(Message::Action(self.path.clone(), Action::DirToggleOpen))
+            .on_press(Message::Action(self.id, Action::DirToggleOpen))
         );
 
         let mut height = 0.0;
@@ -138,7 +145,7 @@ impl Dir {
         (col.into(), height + LINE_HEIGHT)
     }
 
-    async fn load(path: Arc<Path>) -> (Box<[Self]>, Box<[File]>) {
+    async fn load(path: impl AsRef<Path>) -> (Box<[Self]>, Box<[File]>) {
         let Ok(mut entry) = smol::fs::read_dir(path).await else {
             return ([].into(), [].into());
         };
