@@ -64,7 +64,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
         if let Some(tooltip) = self.tooltip.as_ref() {
             tree.diff_children(&[&**tooltip]);
         } else {
-            tree.diff_children(&[] as &[Element<'_, Message>]);
+            tree.children.clear();
         }
     }
 
