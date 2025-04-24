@@ -9,10 +9,11 @@ use crate::{
 use generic_daw_core::{Meter, Position};
 use iced::{
     Alignment::Center,
-    Element, Event, Font, Subscription, Task, Theme, border,
+    Element, Event, Fill, Font, Subscription, Task, Theme, border,
     event::{self, Status},
     keyboard,
-    widget::{button, column, container, horizontal_space, row},
+    mouse::Interaction,
+    widget::{button, column, container, horizontal_space, mouse_area, row, stack},
     window::{self, Id, frames},
 };
 use log::trace;
@@ -230,7 +231,7 @@ impl Daw {
                 % 2
                 == 0;
 
-        column![
+        let mut base = column![
             row![
                 styled_pick_list(
                     ["New", "Open", "Save", "Save As", "Export"],
@@ -339,7 +340,18 @@ impl Daw {
         ]
         .padding(20)
         .spacing(20)
-        .into()
+        .into();
+
+        if self.arrangement.loading() {
+            base = stack![
+                base,
+                mouse_area(empty_widget().width(Fill).height(Fill))
+                    .interaction(Interaction::Progress)
+            ]
+            .into();
+        }
+
+        base
     }
 
     pub fn title(&self, window: Id) -> String {

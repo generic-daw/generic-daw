@@ -1000,19 +1000,15 @@ impl ArrangementView {
         ))
     }
 
+    pub fn loading(&self) -> bool {
+        !self.loading.is_empty()
+    }
+
     pub fn view(&self) -> Element<'_, Message> {
-        let element = match &self.tab {
+        match &self.tab {
             Tab::Arrangement { .. } => self.arrangement(),
             Tab::Mixer => self.mixer(),
             Tab::PianoRoll { clip, .. } => self.piano_roll(clip),
-        };
-
-        if self.loading.is_empty() {
-            element
-        } else {
-            mouse_area(element)
-                .interaction(Interaction::Progress)
-                .into()
         }
     }
 
