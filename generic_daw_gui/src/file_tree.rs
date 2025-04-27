@@ -46,4 +46,15 @@ impl FileTree {
             .find_map(|dir| dir.update(id, action))
             .unwrap_or_else(Task::none)
     }
+
+    pub fn diff(&mut self, dirs: impl IntoIterator<Item: AsRef<Path>>) {
+        let mut i = 0;
+        for dir in dirs {
+            match self.0.get(i) {
+                Some(entry) if entry.path() == dir.as_ref() => i += 1,
+                Some(..) => _ = self.0.remove(i),
+                None => self.0.push(Dir::new(dir)),
+            }
+        }
+    }
 }

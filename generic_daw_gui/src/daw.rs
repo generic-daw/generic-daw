@@ -313,8 +313,13 @@ impl Daw {
     fn reload_config(&mut self) {
         let config = Config::read().unwrap_or_default();
 
-        self.plugin_bundles = get_installed_plugins(&config.clap_paths);
-        self.file_tree = FileTree::new(&config.sample_paths);
+        if self.config.clap_paths != config.clap_paths {
+            self.plugin_bundles = get_installed_plugins(&config.clap_paths);
+        }
+
+        if self.config.sample_paths != config.sample_paths {
+            self.file_tree.diff(&config.sample_paths);
+        }
 
         self.config = config;
     }

@@ -24,6 +24,7 @@ pub use dir_entry::Id as DirId;
 pub struct Dir {
     id: DirId,
     name: Arc<str>,
+    path: Arc<Path>,
     shaping: Shaping,
     children: LoadStatus,
     open: bool,
@@ -31,9 +32,7 @@ pub struct Dir {
 
 #[derive(Clone, Debug)]
 enum LoadStatus {
-    Unloaded {
-        path: Arc<Path>,
-    },
+    Unloaded,
     Loading,
     Loaded {
         dirs: Box<[Dir]>,
@@ -50,8 +49,9 @@ impl Dir {
         Self {
             id: DirId::unique(),
             name: name.into(),
+            path: path.into(),
             shaping,
-            children: LoadStatus::Unloaded { path: path.into() },
+            children: LoadStatus::Unloaded,
             open: false,
         }
     }
@@ -70,8 +70,8 @@ impl Dir {
                 Action::DirToggleOpen => {
                     self.open ^= true;
 
-                    if let LoadStatus::Unloaded { path } = &self.children {
-                        let path = path.clone();
+                    if matches!(self.children, LoadStatus::Unloaded) {
+                        let path = self.path.clone();
                         let id = self.id;
                         self.children = LoadStatus::Loading;
 
@@ -186,5 +186,9 @@ impl Dir {
             .collect();
 
         (dirs, files)
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 }
