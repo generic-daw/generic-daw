@@ -15,8 +15,7 @@ use generic_daw_core::{
     get_input_devices, get_output_devices,
 };
 use iced::{
-    Alignment::Center,
-    Element, Event, Fill, Subscription, Task, Theme,
+    Alignment, Element, Event, Fill, Subscription, Task, Theme,
     event::{self, Status},
     keyboard,
     mouse::Interaction,
@@ -371,11 +370,15 @@ impl Daw {
                             play()
                         })
                         .width(LINE_HEIGHT)
-                        .align_x(Center)
+                        .align_x(Alignment::Center)
                     )
                     .on_press(Message::TogglePlay),
-                    styled_button(container(square()).width(LINE_HEIGHT).align_x(Center))
-                        .on_press(Message::Stop),
+                    styled_button(
+                        container(square())
+                            .width(LINE_HEIGHT)
+                            .align_x(Alignment::Center)
+                    )
+                    .on_press(Message::Stop),
                 ],
                 number_input(
                     numerator as usize,
@@ -417,7 +420,7 @@ impl Daw {
                 ],
             ]
             .spacing(20)
-            .align_y(Center),
+            .align_y(Alignment::Center),
             VSplit::new(
                 self.file_tree.view().map(Message::FileTree),
                 self.arrangement.view().map(Message::Arrangement),

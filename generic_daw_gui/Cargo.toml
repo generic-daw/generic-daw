@@ -37,5 +37,5 @@ oneshot = "0.1.11"
 rfd = "0.15.3"
 serde = { version = "1.0.219", features = ["derive", "rc"] }
 smol = "2.0.2"
-toml = "0.8.21"
+toml = "0.8.22"
 walkdir = "2.5.0"

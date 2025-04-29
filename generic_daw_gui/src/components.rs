@@ -44,9 +44,10 @@ where
     stack![
         base.into(),
         opaque(
-            mouse_area(center(opaque(content)).style(|_| {
-                container::Style::default().background(Color::BLACK.scale_alpha(0.75))
-            }))
+            mouse_area(
+                center(opaque(content))
+                    .style(|_| container::background(Color::BLACK.scale_alpha(0.75)))
+            )
             .on_press(exit)
         )
     ]
@@ -66,12 +67,9 @@ where
         DragHandle::new(
             container(move_vertical())
                 .style(|t| {
-                    container::Style::default()
-                        .background(t.extended_palette().background.weak.color)
-                        .border(
-                            border::width(1.0)
-                                .color(t.extended_palette().background.strongest.color),
-                        )
+                    container::background(t.extended_palette().background.weak.color).border(
+                        border::width(1.0).color(t.extended_palette().background.strongest.color),
+                    )
                 })
                 .padding([5.0, 0.0]),
             current,
@@ -86,7 +84,7 @@ where
     .into()
 }
 
-pub fn round_plus_button<'a, Message>() -> Button<'a, Message>
+pub fn circle_plus<'a, Message>() -> Button<'a, Message>
 where
     Message: Clone + 'a,
 {

@@ -7,9 +7,7 @@ use crate::{
     widget::LINE_HEIGHT,
 };
 use iced::{
-    Center, Element, Font,
-    Length::Shrink,
-    Task, Theme, border,
+    Center, Element, Font, Shrink, Task, Theme, border,
     widget::{button, column, container, horizontal_rule, horizontal_space, row, text, toggler},
 };
 use rfd::AsyncFileDialog;
@@ -186,9 +184,8 @@ impl ConfigView {
                     .padding(5)
                     .spacing(5)
                 )
-                .style(|t: &Theme| {
-                    container::Style::default()
-                        .background(t.extended_palette().background.weak.color)
+                .style(|t| {
+                    container::background(t.extended_palette().background.weak.color)
                         .border(
                             border::width(1.0).color(t.extended_palette().background.strong.color),
                         )
@@ -223,9 +220,8 @@ impl ConfigView {
                     .padding(5)
                     .spacing(5)
                 )
-                .style(|t: &Theme| {
-                    container::Style::default()
-                        .background(t.extended_palette().background.weak.color)
+                .style(|t| {
+                    container::background(t.extended_palette().background.weak.color)
                         .border(
                             border::width(1.0).color(t.extended_palette().background.strong.color),
                         )
@@ -342,13 +338,7 @@ impl ConfigView {
                     row![
                         container("Changes will only take effect after a project reload!")
                             .padding([5, 10])
-                            .style(|t: &Theme| {
-                                let mut style = container::Style::default()
-                                    .background(t.extended_palette().warning.base.color)
-                                    .color(t.extended_palette().warning.base.text);
-                                style.border.radius = f32::INFINITY.into();
-                                style
-                            }),
+                            .style(|t| container::warning(t).border(border::rounded(f32::INFINITY))),
                         horizontal_space(),
                         styled_button(save())
                             .padding(5)
@@ -366,8 +356,7 @@ impl ConfigView {
             .width(530),
         )
         .style(|t| {
-            container::Style::default()
-                .background(t.extended_palette().background.weakest.color)
+            container::background(t.extended_palette().background.weakest.color)
                 .border(border::width(1.0).color(t.extended_palette().background.strong.color))
         })
         .into()

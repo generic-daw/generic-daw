@@ -1,8 +1,7 @@
 use crate::{
     clap_host::{ClapHost, Message as ClapHostMessage},
     components::{
-        empty_widget, icon_button, round_plus_button, styled_combo_box,
-        styled_scrollable_with_direction,
+        circle_plus, empty_widget, icon_button, styled_combo_box, styled_scrollable_with_direction,
     },
     config::Config,
     icons::{chevron_up, grip_vertical, x},
@@ -1160,8 +1159,7 @@ impl ArrangementView {
                             .spacing(5.0),
                         )
                         .style(|t| {
-                            container::Style::default()
-                                .background(t.extended_palette().background.weak.color)
+                            container::background(t.extended_palette().background.weak.color)
                                 .border(
                                     border::width(1.0)
                                         .color(t.extended_palette().background.strong.color),
@@ -1172,7 +1170,7 @@ impl ArrangementView {
                     })
                     .map(Element::new)
                     .chain(once(
-                        container(round_plus_button().on_press(Message::TrackAdd))
+                        container(circle_plus().on_press(Message::TrackAdd))
                             .padding(padding::right(5.0).top(5.0))
                             .into(),
                     )),
@@ -1516,9 +1514,7 @@ impl ArrangementView {
                     EnumDispatcher::B(iter)
                 }
             })
-            .chain(once(
-                round_plus_button().on_press(Message::ChannelAdd).into(),
-            )))
+            .chain(once(circle_plus().on_press(Message::ChannelAdd).into())))
             .align_y(Alignment::Center)
             .spacing(5.0),
             Direction::Horizontal(Scrollbar::default()),
@@ -1616,18 +1612,12 @@ impl ArrangementView {
                                                 )
                                             )
                                             .style(
-                                                |t| container::Style::default()
-                                                    .background(
-                                                        t.extended_palette().background.weak.color,
-                                                    )
-                                                    .border(
-                                                        border::width(1.0).color(
-                                                            t.extended_palette()
-                                                                .background
-                                                                .strong
-                                                                .color,
-                                                        ),
-                                                    )
+                                                |t| container::background(
+                                                    t.extended_palette().background.weak.color,
+                                                )
+                                                .border(border::width(1.0).color(
+                                                    t.extended_palette().background.strong.color,
+                                                ))
                                             )
                                         )
                                         .interaction(Interaction::Grab),
