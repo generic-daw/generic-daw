@@ -68,7 +68,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AnimatedDot {
             state.now = now;
 
             if self.enabled != state.animation.value() {
-                state.animation.go_at_mut(self.enabled, now);
+                state.animation.go_mut(self.enabled, now);
             }
 
             if state.animation.is_animating(now) {

@@ -46,7 +46,7 @@ where
         opaque(
             mouse_area(
                 center(opaque(content))
-                    .style(|_| container::background(Color::BLACK.scale_alpha(0.75)))
+                    .style(|_| container::background(Color::BLACK.scale_alpha(0.8)))
             )
             .on_press(exit)
         )
