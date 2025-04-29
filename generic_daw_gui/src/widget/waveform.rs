@@ -9,20 +9,17 @@ use iced_wgpu::graphics::{
 use std::{cmp::max_by, sync::atomic::Ordering::Acquire};
 
 #[expect(clippy::trivially_copy_pass_by_ref)]
-pub fn mesh<T>(
+pub fn mesh(
     meter: &Meter,
     global_start: Position,
     clip_start: Position,
-    lods: &[T],
+    lods: &[impl AsRef<[(f32, f32)]>],
     position: &Vec2,
     scale: &Vec2,
     theme: &Theme,
     point: Point,
     bounds: Rectangle,
-) -> Option<Mesh>
-where
-    T: AsRef<[(f32, f32)]>,
-{
+) -> Option<Mesh> {
     // the height of the waveform
     let height = scale.y - LINE_HEIGHT;
 
