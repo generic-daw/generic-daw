@@ -64,26 +64,12 @@ impl NodeImpl<Event> for MixerNode {
         let volume = self.volume.load(Acquire);
         let [lpan, rpan] = pan(self.pan.load(Acquire)).map(|s| s * volume);
 
-        audio
-            .iter_mut()
-            .enumerate()
-            .for_each(|(i, s)| *s *= if i % 2 == 0 { lpan } else { rpan });
+        let (cur_l, cur_r) = audio.chunks_exact_mut(2).fold((0f32, 0f32), |(l, r), cur| {
+            cur[0] *= lpan;
+            cur[1] *= rpan;
 
-        let cur_l = audio
-            .iter()
-            .step_by(2)
-            .copied()
-            .map(f32::abs)
-            .max_by(f32::total_cmp)
-            .unwrap();
-        let cur_r = audio
-            .iter()
-            .skip(1)
-            .step_by(2)
-            .copied()
-            .map(f32::abs)
-            .max_by(f32::total_cmp)
-            .unwrap();
+            (cur[0].abs().max(l), cur[1].abs().max(r))
+        });
 
         _ = self
             .max_l
