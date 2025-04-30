@@ -85,12 +85,12 @@ impl NodeImpl<Event> for MixerNode {
             .max_by(f32::total_cmp)
             .unwrap();
 
-        self.max_l
-            .fetch_update(Release, Acquire, |max_l| Some(cur_l.max(max_l)))
-            .unwrap();
-        self.max_r
-            .fetch_update(Release, Acquire, |max_r| Some(cur_r.max(max_r)))
-            .unwrap();
+        _ = self
+            .max_l
+            .fetch_update(AcqRel, Acquire, |max_l| (cur_l > max_l).then_some(cur_l));
+        _ = self
+            .max_r
+            .fetch_update(AcqRel, Acquire, |max_r| (cur_r > max_r).then_some(cur_r));
     }
 
     fn id(&self) -> NodeId {
