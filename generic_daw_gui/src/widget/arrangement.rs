@@ -380,12 +380,9 @@ where
         let track = self.get_track(cursor.y);
         let offset = Vector::new(layout.position().x, layout.position().y);
         let track_layout = track_layout(layout, track)?;
-        let clip = track_layout.children().count()
-            - track_layout
-                .children()
-                .rev()
-                .position(|l| (l.bounds() - offset).contains(cursor))?
-            - 1;
+        let clip = track_layout
+            .children()
+            .rposition(|l| (l.bounds() - offset).contains(cursor))?;
         Some((track, clip))
     }
 }

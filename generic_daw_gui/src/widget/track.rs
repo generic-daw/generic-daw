@@ -81,7 +81,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
                     .as_widget()
                     .mouse_interaction(tree, clip_layout, cursor, &bounds, renderer)
             })
-            .max()
+            .rfind(|&i| i != Interaction::default())
             .unwrap_or_default()
     }
 

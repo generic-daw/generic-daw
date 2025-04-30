@@ -549,7 +549,7 @@ impl<'a, Message> Seeker<'a, Message> {
 
         let rows = (bounds.height / self.scale.y) as usize + 1;
 
-        for i in 0..=rows {
+        for i in 0..rows {
             renderer.fill_quad(
                 Quad {
                     bounds: Rectangle::new(

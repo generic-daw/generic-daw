@@ -83,36 +83,35 @@ impl MidiClip {
             .try_lock()
             .expect("this is only locked from the audio thread");
 
-        for (key, (channel, (before, after))) in lock
-            .iter()
+        lock.iter()
             .copied()
             .zip(notes)
             .enumerate()
-            .flat_map(|(a, (b, c))| b.into_iter().zip(c).enumerate().map(move |x| (a, x)))
-        {
-            // start or stop any difference in the number of playing notes
-            //
-            // this happens when toggling playback in the middle of a note,
-            // or when adding a note that stretches over the playhead
+            .flat_map(|(a, (b, c))| b.into_iter().zip(c).enumerate().map(move |b| (a, b)))
+            .for_each(|(key, (channel, (before, after)))| {
+                // start or stop any difference in the number of playing notes
+                //
+                // this happens when toggling playback in the middle of a note,
+                // or when adding a note that stretches over the playhead
 
-            let event = match before.cmp(&after) {
-                Ordering::Equal => continue,
-                Ordering::Less => Event::On {
-                    time: 0,
-                    channel: channel as u8,
-                    key: key as u8,
-                    velocity: 1.0,
-                },
-                Ordering::Greater => Event::Off {
-                    time: 0,
-                    channel: channel as u8,
-                    key: key as u8,
-                    velocity: 1.0,
-                },
-            };
+                let event = match before.cmp(&after) {
+                    Ordering::Equal => return,
+                    Ordering::Less => Event::On {
+                        time: 0,
+                        channel: channel as u8,
+                        key: key as u8,
+                        velocity: 1.0,
+                    },
+                    Ordering::Greater => Event::Off {
+                        time: 0,
+                        channel: channel as u8,
+                        key: key as u8,
+                        velocity: 1.0,
+                    },
+                };
 
-            events.extend(repeat_n(event, before.abs_diff(after) as usize));
-        }
+                events.extend(repeat_n(event, before.abs_diff(after) as usize));
+            });
 
         if playing {
             self.pattern

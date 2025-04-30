@@ -163,15 +163,11 @@ where
         };
         renderer.fill_quad(clip_background, color.scale_alpha(0.2));
 
-        let mut min = 255;
-        let mut max = 0;
-
         let pattern = self.inner.pattern.load();
 
-        for note in &**pattern {
-            min = note.key.0.min(min);
-            max = note.key.0.max(max);
-        }
+        let (min, max) = pattern.iter().fold((255, 0), |(min, max), note| {
+            (note.key.0.min(min), note.key.0.max(max))
+        });
 
         // there is nothing to draw
         if min > max {

@@ -332,31 +332,25 @@ impl<'a, Message> PianoRoll<'a, Message> {
     }
 
     fn interaction(&self, cursor: Point) -> Interaction {
-        for note in self.notes.iter() {
-            let note_bounds = self.note_bounds(note);
-
-            if note_bounds.contains(cursor) {
+        self.notes
+            .iter()
+            .map(|note| self.note_bounds(note))
+            .rfind(|note_bounds| note_bounds.contains(cursor))
+            .map_or_else(Interaction::default, |note_bounds| {
                 let x = cursor.x - note_bounds.x;
 
                 if x < 10.0 || note_bounds.width - x < 10.0 {
-                    return Interaction::ResizingHorizontally;
+                    Interaction::ResizingHorizontally
+                } else {
+                    Interaction::Grab
                 }
-
-                return Interaction::Grab;
-            }
-        }
-
-        Interaction::default()
+            })
     }
 
     fn get_note(&self, cursor: Point) -> Option<usize> {
-        for (i, note) in self.notes.iter().enumerate() {
-            if self.note_bounds(note).contains(cursor) {
-                return Some(i);
-            }
-        }
-
-        None
+        self.notes
+            .iter()
+            .rposition(|note| self.note_bounds(note).contains(cursor))
     }
 
     fn note_bounds(&self, note: &MidiNote) -> Rectangle {
