@@ -15,7 +15,7 @@ use iced::{
     padding,
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
-use std::{cmp::min_by, sync::atomic::Ordering::Acquire};
+use std::sync::atomic::Ordering::Acquire;
 
 #[derive(Clone, Debug)]
 pub struct Recording<'a> {
@@ -61,7 +61,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
 
         // the bounds of the clip header
         let mut upper_bounds = bounds;
-        upper_bounds.height = min_by(upper_bounds.height, LINE_HEIGHT, f32::total_cmp);
+        upper_bounds.height = upper_bounds.height.min(LINE_HEIGHT);
 
         let color = theme.extended_palette().danger.weak.color;
 

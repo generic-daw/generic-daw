@@ -12,7 +12,7 @@ use iced::{
     mouse::{self, Cursor, Interaction},
     padding,
 };
-use std::{cmp::min_by, sync::atomic::Ordering::Acquire};
+use std::sync::atomic::Ordering::Acquire;
 
 #[derive(Default)]
 struct State {
@@ -134,7 +134,7 @@ where
 
         // the bounds of the clip header
         let mut upper_bounds = bounds;
-        upper_bounds.height = min_by(upper_bounds.height, LINE_HEIGHT, f32::total_cmp);
+        upper_bounds.height = upper_bounds.height.min(LINE_HEIGHT);
 
         let color = if self.enabled {
             theme.extended_palette().primary.weak.color

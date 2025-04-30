@@ -5,7 +5,6 @@ use audio_graph::{NodeId, NodeImpl};
 use clap_host::AudioProcessor;
 use generic_daw_utils::ShiftMoveExt as _;
 use std::{
-    cmp::max_by,
     f32::consts::{FRAC_PI_4, SQRT_2},
     ops::Deref as _,
     sync::{
@@ -87,14 +86,10 @@ impl NodeImpl<Event> for MixerNode {
             .unwrap();
 
         self.max_l
-            .fetch_update(Release, Acquire, |max_l| {
-                Some(max_by(max_l, cur_l, f32::total_cmp))
-            })
+            .fetch_update(Release, Acquire, |max_l| Some(cur_l.max(max_l)))
             .unwrap();
         self.max_r
-            .fetch_update(Release, Acquire, |max_r| {
-                Some(max_by(max_r, cur_r, f32::total_cmp))
-            })
+            .fetch_update(Release, Acquire, |max_r| Some(cur_r.max(max_r)))
             .unwrap();
     }
 

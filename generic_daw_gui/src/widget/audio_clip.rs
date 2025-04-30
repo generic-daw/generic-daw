@@ -21,7 +21,7 @@ use iced_wgpu::{
     geometry::Cache,
     graphics::cache::{Cached as _, Group},
 };
-use std::{cell::RefCell, cmp::min_by, sync::atomic::Ordering::Acquire};
+use std::{cell::RefCell, sync::atomic::Ordering::Acquire};
 
 #[derive(Default)]
 struct State {
@@ -159,7 +159,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
         // the bounds of the clip header
         let mut upper_bounds = bounds;
-        upper_bounds.height = min_by(upper_bounds.height, LINE_HEIGHT, f32::total_cmp);
+        upper_bounds.height = upper_bounds.height.min(LINE_HEIGHT);
 
         let color = if self.enabled {
             theme.extended_palette().primary.weak.color

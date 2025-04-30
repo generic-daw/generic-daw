@@ -12,7 +12,6 @@ use iced::{
     window,
 };
 use std::{
-    cmp::min_by,
     convert::identity,
     time::{Duration, Instant},
 };
@@ -190,7 +189,7 @@ impl PeakMeter {
             0.5,
         );
 
-        let height = bounds.height * min_by(1.0, s, f32::total_cmp);
+        let height = bounds.height * s.min(1.0);
 
         let bg = Quad {
             bounds: Rectangle::new(

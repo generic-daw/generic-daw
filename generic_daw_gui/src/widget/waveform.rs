@@ -6,7 +6,7 @@ use iced_wgpu::graphics::{
     Mesh,
     mesh::{Indexed, SolidVertex2D},
 };
-use std::{cmp::max_by, sync::atomic::Ordering::Acquire};
+use std::sync::atomic::Ordering::Acquire;
 
 #[expect(clippy::trivially_copy_pass_by_ref)]
 pub fn mesh(
@@ -41,7 +41,7 @@ pub fn mesh(
 
     let global_start = global_start.in_samples_f(bpm, meter.sample_rate);
 
-    let diff = max_by(0.0, position.x - global_start, f32::total_cmp);
+    let diff = 0f32.max(position.x - global_start);
 
     let clip_start = clip_start.in_samples_f(bpm, meter.sample_rate);
 
