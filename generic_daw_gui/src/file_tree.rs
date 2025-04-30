@@ -25,35 +25,44 @@ pub enum Action {
     DirOpened(Box<[Dir]>, Box<[File]>),
 }
 
-pub struct FileTree(Vec<Dir>);
+pub struct FileTree {
+    dirs: Vec<Dir>,
+}
 
 impl FileTree {
     pub fn new(dirs: impl IntoIterator<Item: AsRef<Path>>) -> Self {
-        Self(dirs.into_iter().map(Dir::new).collect())
+        Self {
+            dirs: dirs.into_iter().map(Dir::new).collect(),
+        }
     }
 
     pub fn view(&self) -> Element<'_, Message> {
         styled_scrollable_with_direction(
-            column(self.0.iter().map(|dir| dir.view().0)),
+            column(self.dirs.iter().map(|dir| dir.view().0)),
             Direction::Vertical(Scrollbar::default()),
         )
         .into()
     }
 
     pub fn update(&mut self, id: DirId, action: &Action) -> Task<Message> {
-        self.0
+        self.dirs
             .iter_mut()
             .find_map(|dir| dir.update(id, action))
             .unwrap_or_else(Task::none)
     }
 
     pub fn diff(&mut self, dirs: impl IntoIterator<Item: AsRef<Path>>) {
-        let mut i = 0;
-        for dir in dirs {
-            match self.0.get(i) {
-                Some(entry) if entry.path() == dir.as_ref() => i += 1,
-                Some(..) => _ = self.0.remove(i),
-                None => self.0.push(Dir::new(dir)),
+        for (i, dir) in dirs.into_iter().enumerate() {
+            let j = self
+                .dirs
+                .iter()
+                .skip(i)
+                .position(|entry| entry.path() == dir.as_ref())
+                .map_or(self.dirs.len(), |j| j + i);
+            self.dirs.drain(i..j);
+
+            if i >= self.dirs.len() {
+                self.dirs.push(Dir::new(dir));
             }
         }
     }
