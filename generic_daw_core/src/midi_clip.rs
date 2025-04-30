@@ -23,7 +23,7 @@ pub struct MidiClip {
     pub position: ClipPosition,
     /// information relating to the playback of the arrangement
     pub meter: Arc<Meter>,
-    notes: NoDebug<Arc<Mutex<[[u8; 16]; 127]>>>,
+    notes: NoDebug<Arc<Mutex<[[u8; 16]; 128]>>>,
 }
 
 impl MidiClip {
@@ -40,7 +40,7 @@ impl MidiClip {
             pattern,
             position: ClipPosition::new(Position::ZERO, len, Position::ZERO),
             meter,
-            notes: Arc::new(Mutex::new([[0; 16]; 127])).into(),
+            notes: Arc::new(Mutex::new([[0; 16]; 128])).into(),
         })
     }
 
@@ -56,7 +56,7 @@ impl MidiClip {
         let end_sample = start_sample + audio.len();
 
         // how many notes should currently be playing
-        let mut notes = [[0u8; 16]; 127];
+        let mut notes = [[0u8; 16]; 128];
 
         if playing {
             self.pattern
