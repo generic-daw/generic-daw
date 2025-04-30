@@ -207,7 +207,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
             bounds: lower_bounds,
             ..Quad::default()
         };
-        renderer.fill_quad(clip_background, color.scale_alpha(0.25));
+        renderer.fill_quad(clip_background, color.scale_alpha(0.2));
 
         // clear the mesh cache if the theme has changed
         if state

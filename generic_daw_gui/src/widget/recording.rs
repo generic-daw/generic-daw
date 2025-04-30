@@ -103,7 +103,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
             bounds: lower_bounds,
             ..Quad::default()
         };
-        renderer.fill_quad(clip_background, color.scale_alpha(0.25));
+        renderer.fill_quad(clip_background, color.scale_alpha(0.2));
 
         // we don't need to cache here, since `RecordingInner` only exists as long
         // as we are recording

@@ -161,7 +161,7 @@ where
             bounds: lower_bounds,
             ..Quad::default()
         };
-        renderer.fill_quad(clip_background, color.scale_alpha(0.25));
+        renderer.fill_quad(clip_background, color.scale_alpha(0.2));
 
         let mut min = 255;
         let mut max = 0;

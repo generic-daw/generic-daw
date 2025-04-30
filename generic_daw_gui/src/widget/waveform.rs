@@ -73,7 +73,7 @@ pub fn mesh(
         .map(|(min, max)| (min * height, max * height))
         .map(|(min, max)| {
             if max - min < 1.0 {
-                let avg = min.midpoint(max).clamp(0.5, height - 0.5);
+                let avg = min.midpoint(max);
                 (avg - 0.5, avg + 0.5)
             } else {
                 (min, max)
