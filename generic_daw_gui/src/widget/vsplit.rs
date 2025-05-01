@@ -260,7 +260,7 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
     fn overlay<'a>(
         &'a mut self,
         tree: &'a mut Tree,
-        layout: Layout<'_>,
+        layout: Layout<'a>,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,

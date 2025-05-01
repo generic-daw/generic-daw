@@ -239,7 +239,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
     fn overlay<'a>(
         &'a mut self,
         tree: &'a mut Tree,
-        layout: Layout<'_>,
+        layout: Layout<'a>,
         _renderer: &Renderer,
         _viewport: &Rectangle,
         translation: Vector,

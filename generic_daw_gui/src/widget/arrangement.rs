@@ -319,7 +319,7 @@ where
     fn overlay<'a>(
         &'a mut self,
         tree: &'a mut Tree,
-        layout: Layout<'_>,
+        layout: Layout<'a>,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
