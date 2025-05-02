@@ -219,7 +219,6 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
             .iter()
             .zip(&tree.children)
             .zip(layout.children())
-            .filter(|(_, layout)| layout.bounds().intersects(viewport))
             .for_each(|((child, tree), layout)| {
                 child
                     .as_widget()
