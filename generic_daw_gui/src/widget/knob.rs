@@ -133,16 +133,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
                     }
 
                     shell.capture_event();
-                    shell.request_redraw();
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
                     if !state.hovering {
                         state.cache.clear();
+                        shell.request_redraw();
                     }
 
                     state.dragging = None;
                     shell.capture_event();
-                    shell.request_redraw();
                 }
                 mouse::Event::CursorMoved {
                     position: Point { y, .. },

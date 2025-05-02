@@ -24,9 +24,8 @@ pub enum Action {
     Delete(usize, usize),
 }
 
-#[derive(Clone, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 enum State {
-    #[default]
     None,
     DraggingClip(f32, usize, Position),
     ClipTrimmingStart(f32, Position),
@@ -35,11 +34,15 @@ enum State {
 }
 
 impl State {
-    fn unselect(&self) -> bool {
-        matches!(
+    fn unselect(&mut self) -> bool {
+        let unselect = matches!(
             self,
             Self::DraggingClip(..) | Self::ClipTrimmingStart(..) | Self::ClipTrimmingEnd(..)
-        )
+        );
+
+        *self = Self::None;
+
+        unselect
     }
 }
 
@@ -65,7 +68,7 @@ where
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::default())
+        tree::State::new(State::None)
     }
 
     fn size(&self) -> Size<Length> {
@@ -122,17 +125,15 @@ where
             return;
         }
 
+        let Some(bounds) = layout.bounds().intersection(viewport) else {
+            return;
+        };
+
         let state = tree.state.downcast_mut::<State>();
-        let bounds = layout.bounds();
 
         let Some(cursor) = cursor.position_in(bounds) else {
-            if *state != State::None {
-                *state = State::None;
-                shell.request_redraw();
-
-                if state.unselect() {
-                    shell.publish((self.f)(Action::Drop));
-                }
+            if state.unselect() {
+                shell.publish((self.f)(Action::Drop));
             }
 
             return;
@@ -177,7 +178,6 @@ where
                     }
                     mouse::Button::Right if !self.deleted => {
                         *state = State::DeletingClips;
-                        shell.request_redraw();
 
                         if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
                             self.deleted = true;
@@ -193,9 +193,7 @@ where
                         shell.publish((self.f)(Action::Drop));
                     }
 
-                    *state = State::None;
                     shell.capture_event();
-                    shell.request_redraw();
                 }
                 mouse::Event::CursorMoved { modifiers, .. } => match *state {
                     State::DraggingClip(offset, track, time) => {

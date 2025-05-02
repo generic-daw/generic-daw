@@ -1,6 +1,6 @@
 use generic_daw_utils::NoDebug;
 use iced::{
-    Element, Event, Fill, Length, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector,
+    Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
     advanced::{
         Clipboard, Layout, Shell, Widget,
         layout::{Limits, Node},
@@ -9,7 +9,7 @@ use iced::{
         widget::{Operation, Tree, tree},
     },
     mouse::{self, Cursor, Interaction},
-    widget::{Rule, rule},
+    widget::{mouse_area, rule, vertical_rule},
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -23,7 +23,6 @@ pub enum Strategy {
 #[derive(Default)]
 struct State {
     dragging: bool,
-    hovering: bool,
 }
 
 #[derive(Debug)]
@@ -37,7 +36,7 @@ pub struct VSplit<'a, Message> {
 
 impl<'a, Message> VSplit<'a, Message>
 where
-    Message: 'a,
+    Message: Clone + 'a,
 {
     pub fn new(
         left: impl Into<Element<'a, Message>>,
@@ -45,7 +44,14 @@ where
         on_resize: fn(f32) -> Message,
     ) -> Self {
         Self {
-            children: [left.into(), Rule::vertical(11.0).into(), right.into()].into(),
+            children: [
+                left.into(),
+                mouse_area(vertical_rule(11.0))
+                    .interaction(Interaction::ResizingColumn)
+                    .into(),
+                right.into(),
+            ]
+            .into(),
             split_at: 0.5,
             strategy: Strategy::default(),
             rule_width: 11.0,
@@ -63,14 +69,18 @@ where
         self
     }
 
-    pub fn rule_width(mut self, rule_width: impl Into<Pixels>) -> Self {
-        self.rule_width = rule_width.into().0;
-        self.children[1] = Rule::vertical(self.rule_width).into();
+    pub fn rule_width(mut self, rule_width: f32) -> Self {
+        self.rule_width = rule_width;
+        self.children[1] = mouse_area(vertical_rule(self.rule_width))
+            .interaction(Interaction::ResizingColumn)
+            .into();
         self
     }
 
     pub fn style(mut self, style: impl Fn(&Theme) -> rule::Style + 'a) -> Self {
-        self.children[1] = Rule::vertical(self.rule_width).style(style).into();
+        self.children[1] = mouse_area(vertical_rule(self.rule_width).style(style))
+            .interaction(Interaction::ResizingColumn)
+            .into();
         self
     }
 }
@@ -178,23 +188,16 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
                 mouse::Event::CursorMoved {
                     position: Point { x, .. },
                     ..
-                } => {
-                    if state.dragging {
-                        let relative_pos =
-                            (x - bounds.x - self.rule_width / 2.0).clamp(0.0, bounds.width);
-                        let split_at = match self.strategy {
-                            Strategy::Relative => relative_pos / bounds.width,
-                            Strategy::Left => relative_pos,
-                            Strategy::Right => bounds.width - relative_pos - self.rule_width,
-                        };
-                        shell.publish((self.f)(split_at));
-                        shell.capture_event();
-                    } else if state.hovering
-                        != cursor.is_over(layout.children().nth(1).unwrap().bounds())
-                    {
-                        state.hovering ^= true;
-                        shell.request_redraw();
-                    }
+                } if state.dragging => {
+                    let relative_pos =
+                        (x - bounds.x - self.rule_width / 2.0).clamp(0.0, bounds.width);
+                    let split_at = match self.strategy {
+                        Strategy::Relative => relative_pos / bounds.width,
+                        Strategy::Left => relative_pos,
+                        Strategy::Right => bounds.width - relative_pos - self.rule_width,
+                    };
+                    shell.publish((self.f)(split_at));
+                    shell.capture_event();
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging => {
                     state.dragging = false;
@@ -234,25 +237,20 @@ impl<Message> Widget<Message, Theme, Renderer> for VSplit<'_, Message> {
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> Interaction {
-        let state = tree.state.downcast_ref::<State>();
-
-        let interaction = self
-            .children
-            .iter()
-            .zip(&tree.children)
-            .zip(layout.children())
-            .map(|((child, tree), layout)| {
-                child
-                    .as_widget()
-                    .mouse_interaction(tree, layout, cursor, viewport, renderer)
-            })
-            .max()
-            .unwrap_or_default();
-
-        if interaction == Interaction::default() && (state.dragging || state.hovering) {
+        if tree.state.downcast_ref::<State>().dragging {
             Interaction::ResizingColumn
         } else {
-            interaction
+            self.children
+                .iter()
+                .zip(&tree.children)
+                .zip(layout.children())
+                .map(|((child, tree), layout)| {
+                    child
+                        .as_widget()
+                        .mouse_interaction(tree, layout, cursor, viewport, renderer)
+                })
+                .max()
+                .unwrap_or_default()
         }
     }
 

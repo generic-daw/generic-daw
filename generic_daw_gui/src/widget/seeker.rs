@@ -125,15 +125,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
         let state = tree.state.downcast_mut::<State>();
 
         let Some(mut cursor) = cursor.position_in(right_panel_bounds) else {
-            if state.hovering {
-                state.hovering = false;
-                shell.request_redraw();
-            }
-
-            if state.seeking.is_some() {
-                state.seeking = None;
-                shell.request_redraw();
-            }
+            state.hovering = false;
+            state.seeking = None;
 
             return;
         };
@@ -156,10 +149,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                             shell.publish((self.seek_to)(time));
                             shell.capture_event();
                         }
-                    } else if (cursor.y < 0.0) != state.hovering {
-                        state.hovering ^= true;
-                        shell.request_redraw();
                     }
+
+                    state.hovering ^= (cursor.y < 0.0) != state.hovering;
                 }
                 mouse::Event::ButtonPressed {
                     button: mouse::Button::Left,
@@ -171,10 +163,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                     shell.publish((self.seek_to)(time));
                     shell.capture_event();
                 }
-                mouse::Event::ButtonReleased(mouse::Button::Left) => {
-                    state.seeking = None;
-                    shell.request_redraw();
-                }
+                mouse::Event::ButtonReleased(mouse::Button::Left) => state.seeking = None,
                 mouse::Event::WheelScrolled { delta, modifiers } => {
                     let (mut x, mut y) = match *delta {
                         ScrollDelta::Pixels { x, y } => (-x, -y),

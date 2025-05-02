@@ -32,29 +32,23 @@ pub enum Action {
 
 #[derive(Clone, Copy, PartialEq)]
 enum State {
-    None(Interaction),
+    None,
     DraggingNote(f32, MidiKey, Position),
     NoteTrimmingStart(f32, Position),
     NoteTrimmingEnd(f32, Position),
     DeletingNotes,
 }
 
-impl Default for State {
-    fn default() -> Self {
-        Self::None(Interaction::default())
-    }
-}
-
 impl State {
-    fn is_none(&self) -> bool {
-        matches!(self, Self::None(..))
-    }
-
-    fn unselect(&self) -> bool {
-        matches!(
+    fn unselect(&mut self) -> bool {
+        let unselect = matches!(
             self,
             Self::DraggingNote(..) | Self::NoteTrimmingStart(..) | Self::NoteTrimmingEnd(..)
-        )
+        );
+
+        *self = Self::None;
+
+        unselect
     }
 }
 
@@ -80,7 +74,7 @@ where
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::default())
+        tree::State::new(State::None)
     }
 
     fn size(&self) -> Size<Length> {
@@ -118,13 +112,8 @@ where
         let state = tree.state.downcast_mut::<State>();
 
         let Some(cursor) = cursor.position_in(bounds) else {
-            if !state.is_none() {
-                *state = State::default();
-                shell.request_redraw();
-
-                if state.unselect() {
-                    shell.publish((self.f)(Action::Drop));
-                }
+            if state.unselect() {
+                shell.publish((self.f)(Action::Drop));
             }
 
             return;
@@ -177,7 +166,6 @@ where
                     }
                     mouse::Button::Right if !self.deleted => {
                         *state = State::DeletingNotes;
-                        shell.request_redraw();
 
                         if let Some(note) = self.get_note(cursor) {
                             self.deleted = true;
@@ -188,14 +176,12 @@ where
                     }
                     _ => {}
                 },
-                mouse::Event::ButtonReleased(..) if !state.is_none() => {
+                mouse::Event::ButtonReleased(..) if *state != State::None => {
                     if state.unselect() {
                         shell.publish((self.f)(Action::Drop));
                     }
 
-                    *state = State::None(self.interaction(cursor));
                     shell.capture_event();
-                    shell.request_redraw();
                 }
                 mouse::Event::CursorMoved { modifiers, .. } => match *state {
                     State::DraggingNote(offset, key, time) => {
@@ -256,14 +242,7 @@ where
                             }
                         }
                     }
-                    State::None(old_interaction) => {
-                        let interaction = self.interaction(cursor);
-
-                        if interaction != old_interaction {
-                            *state = State::None(interaction);
-                            shell.request_redraw();
-                        }
-                    }
+                    State::None => {}
                 },
                 _ => {}
             }
@@ -292,8 +271,8 @@ where
     fn mouse_interaction(
         &self,
         tree: &Tree,
-        _layout: Layout<'_>,
-        _cursor: Cursor,
+        layout: Layout<'_>,
+        cursor: Cursor,
         _viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> Interaction {
@@ -303,7 +282,25 @@ where
             }
             State::DraggingNote(..) => Interaction::Grabbing,
             State::DeletingNotes => Interaction::NoDrop,
-            State::None(interaction) => *interaction,
+            State::None => {
+                cursor
+                    .position_in(layout.bounds())
+                    .map_or_else(Interaction::default, |cursor| {
+                        self.notes
+                            .iter()
+                            .map(|note| self.note_bounds(note))
+                            .rfind(|note_bounds| note_bounds.contains(cursor))
+                            .map_or_else(Interaction::default, |note_bounds| {
+                                let x = cursor.x - note_bounds.x;
+
+                                if x < 10.0 || note_bounds.width - x < 10.0 {
+                                    Interaction::ResizingHorizontally
+                                } else {
+                                    Interaction::Grab
+                                }
+                            })
+                    })
+            }
         }
     }
 }
@@ -329,22 +326,6 @@ impl<'a, Message> PianoRoll<'a, Message> {
     fn get_key(&self, cursor: Point) -> MidiKey {
         let new_key = 128.0 - cursor.y / self.scale.y - self.position.y;
         MidiKey(new_key as u8)
-    }
-
-    fn interaction(&self, cursor: Point) -> Interaction {
-        self.notes
-            .iter()
-            .map(|note| self.note_bounds(note))
-            .rfind(|note_bounds| note_bounds.contains(cursor))
-            .map_or_else(Interaction::default, |note_bounds| {
-                let x = cursor.x - note_bounds.x;
-
-                if x < 10.0 || note_bounds.width - x < 10.0 {
-                    Interaction::ResizingHorizontally
-                } else {
-                    Interaction::Grab
-                }
-            })
     }
 
     fn get_note(&self, cursor: Point) -> Option<usize> {

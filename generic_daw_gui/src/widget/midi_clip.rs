@@ -16,7 +16,6 @@ use std::sync::atomic::Ordering::Acquire;
 
 #[derive(Default)]
 struct State {
-    interaction: Interaction,
     last_click: Option<Click>,
 }
 
@@ -78,42 +77,27 @@ where
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
-        viewport: &Rectangle,
+        _viewport: &Rectangle,
     ) {
         if shell.is_event_captured() {
             return;
         }
 
-        let state = tree.state.downcast_mut::<State>();
-        let bounds = layout.bounds();
+        if let Event::Mouse(mouse::Event::ButtonPressed {
+            button: mouse::Button::Left,
+            ..
+        }) = event
+        {
+            if let Some(cursor) = cursor.position_in(layout.bounds()) {
+                let state = tree.state.downcast_mut::<State>();
 
-        if let Event::Mouse(event) = event {
-            match event {
-                mouse::Event::CursorMoved { .. } => {
-                    let interaction = Self::interaction(bounds, cursor, viewport);
+                let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
+                state.last_click = Some(new_click);
 
-                    if interaction != state.interaction {
-                        state.interaction = interaction;
-                        shell.request_redraw();
-                    }
+                if new_click.kind() == Kind::Double {
+                    shell.publish(self.on_double_click.clone());
+                    shell.capture_event();
                 }
-                mouse::Event::ButtonPressed {
-                    button: mouse::Button::Left,
-                    ..
-                } => {
-                    if let Some(cursor) = cursor.position_in(bounds) {
-                        let state = tree.state.downcast_mut::<State>();
-
-                        let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
-                        state.last_click = Some(new_click);
-
-                        if new_click.kind() == Kind::Double {
-                            shell.publish(self.on_double_click.clone());
-                            shell.capture_event();
-                        }
-                    }
-                }
-                _ => {}
             }
         }
     }
@@ -224,13 +208,25 @@ where
 
     fn mouse_interaction(
         &self,
-        tree: &Tree,
-        _layout: Layout<'_>,
-        _cursor: Cursor,
-        _viewport: &Rectangle,
+        _tree: &Tree,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> Interaction {
-        tree.state.downcast_ref::<State>().interaction
+        let Some(bounds) = layout.bounds().intersection(viewport) else {
+            return Interaction::default();
+        };
+
+        let Some(cursor) = cursor.position_in(bounds) else {
+            return Interaction::default();
+        };
+
+        if cursor.x < 10.0 || bounds.width - cursor.x < 10.0 {
+            Interaction::ResizingHorizontally
+        } else {
+            Interaction::Grab
+        }
     }
 }
 
@@ -248,27 +244,6 @@ impl<'a, Message> MidiClip<'a, Message> {
             scale,
             enabled,
             on_double_click,
-        }
-    }
-
-    fn interaction(bounds: Rectangle, cursor: Cursor, viewport: &Rectangle) -> Interaction {
-        let Some(mut cursor) = cursor.position() else {
-            return Interaction::default();
-        };
-
-        if !bounds
-            .intersection(viewport)
-            .is_some_and(|bounds| bounds.contains(cursor))
-        {
-            return Interaction::default();
-        }
-
-        cursor.x -= bounds.x;
-
-        if cursor.x < 10.0 || bounds.width - cursor.x < 10.0 {
-            Interaction::ResizingHorizontally
-        } else {
-            Interaction::Grab
         }
     }
 }

@@ -141,10 +141,6 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
                     shell.capture_event();
                 }
                 mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
-                    if !state.hovering {
-                        shell.request_redraw();
-                    }
-
                     state.dragging = None;
                     shell.capture_event();
                 }
@@ -165,10 +161,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
                         shell.capture_event();
                     }
 
-                    if cursor.is_over(layout.bounds()) != state.hovering {
-                        state.hovering ^= true;
-                        shell.request_redraw();
-                    }
+                    state.hovering ^= cursor.is_over(layout.bounds()) != state.hovering;
                 }
                 mouse::Event::WheelScrolled { delta, .. }
                     if state.dragging.is_none() && state.hovering =>

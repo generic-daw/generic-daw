@@ -11,7 +11,7 @@ use iced::{
         widget::{Tree, tree},
     },
     alignment::Vertical,
-    mouse::{self, Cursor, Interaction},
+    mouse::{Cursor, Interaction},
     padding,
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
     window,
@@ -27,7 +27,6 @@ use std::{cell::RefCell, sync::atomic::Ordering::Acquire};
 struct State {
     cache: RefCell<Option<Cache>>,
     shaping: Shaping,
-    interaction: Interaction,
     last_bounds: Rectangle,
     last_viewport: Rectangle,
     last_theme: RefCell<Option<Theme>>,
@@ -106,16 +105,16 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
         tree: &mut Tree,
         event: &Event,
         layout: Layout<'_>,
-        cursor: Cursor,
+        _cursor: Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, Message>,
+        _shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        let state = tree.state.downcast_mut::<State>();
-        let bounds = layout.bounds();
-
         if let Event::Window(window::Event::RedrawRequested(..)) = event {
+            let state = tree.state.downcast_mut::<State>();
+            let bounds = layout.bounds();
+
             if state.last_bounds != bounds {
                 state.last_bounds = bounds;
                 *state.cache.borrow_mut() = None;
@@ -124,21 +123,6 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
             if state.last_viewport != *viewport {
                 state.last_viewport = *viewport;
                 *state.cache.borrow_mut() = None;
-            }
-
-            return;
-        }
-
-        if shell.is_event_captured() {
-            return;
-        }
-
-        if let Event::Mouse(mouse::Event::CursorMoved { .. }) = event {
-            let interaction = Self::interaction(bounds, cursor, viewport);
-
-            if interaction != state.interaction {
-                state.interaction = interaction;
-                shell.request_redraw();
             }
         }
     }
@@ -252,13 +236,25 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
     fn mouse_interaction(
         &self,
-        tree: &Tree,
-        _layout: Layout<'_>,
-        _cursor: Cursor,
-        _viewport: &Rectangle,
+        _tree: &Tree,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> Interaction {
-        tree.state.downcast_ref::<State>().interaction
+        let Some(bounds) = layout.bounds().intersection(viewport) else {
+            return Interaction::default();
+        };
+
+        let Some(cursor) = cursor.position_in(bounds) else {
+            return Interaction::default();
+        };
+
+        if cursor.x < 10.0 || bounds.width - cursor.x < 10.0 {
+            Interaction::ResizingHorizontally
+        } else {
+            Interaction::Grab
+        }
     }
 }
 
@@ -274,27 +270,6 @@ impl<'a> AudioClip<'a> {
             position,
             scale,
             enabled,
-        }
-    }
-
-    fn interaction(bounds: Rectangle, cursor: Cursor, viewport: &Rectangle) -> Interaction {
-        let Some(mut cursor) = cursor.position() else {
-            return Interaction::default();
-        };
-
-        if !bounds
-            .intersection(viewport)
-            .is_some_and(|bounds| bounds.contains(cursor))
-        {
-            return Interaction::default();
-        }
-
-        cursor.x -= bounds.x;
-
-        if cursor.x < 10.0 || bounds.width - cursor.x < 10.0 {
-            Interaction::ResizingHorizontally
-        } else {
-            Interaction::Grab
         }
     }
 }
