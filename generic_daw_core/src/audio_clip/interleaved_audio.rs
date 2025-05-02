@@ -28,14 +28,14 @@ pub struct InterleavedAudio {
 impl InterleavedAudio {
     #[must_use]
     pub fn create(path: Arc<Path>, sample_rate: u32) -> Option<Arc<Self>> {
-        info!("loading sample {path:?}");
+        info!("loading sample {}", path.display());
 
         let name = path.as_ref().file_name()?.to_str()?.into();
         let samples = Self::read_audio_file(&path, sample_rate)?;
         let lods = Self::create_lod(&samples);
         let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
 
-        info!("loaded sample {path:?}");
+        info!("loaded sample {}", path.display());
 
         Some(Arc::new(Self {
             samples: samples.into(),
@@ -48,7 +48,7 @@ impl InterleavedAudio {
 
     #[must_use]
     pub fn create_with_hash(path: Arc<Path>, sample_rate: u32, hash: u64) -> Option<Arc<Self>> {
-        info!("loading sample {path:?}");
+        info!("loading sample {}", path.display());
 
         let name = path.as_ref().file_name()?.to_str()?.into();
         let samples = Self::read_audio_file(&path, sample_rate)?;
@@ -58,7 +58,7 @@ impl InterleavedAudio {
             hash_reader::<DefaultHasher>(File::open(&path).unwrap())
         );
 
-        info!("loaded sample {path:?}");
+        info!("loaded sample {}", path.display());
 
         Some(Arc::new(Self {
             samples: samples.into(),

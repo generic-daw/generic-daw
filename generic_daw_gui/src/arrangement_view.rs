@@ -795,7 +795,7 @@ impl ArrangementView {
         config: &Config,
         plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
     ) -> Option<(Arc<Meter>, Task<Message>)> {
-        info!("loading project {path:?}");
+        info!("loading project {}", path.display());
 
         let mut gdp = Vec::new();
         File::open(path).ok()?.read_to_end(&mut gdp).ok()?;
@@ -968,7 +968,7 @@ impl ArrangementView {
             ));
         }
 
-        info!("loaded project {path:?}");
+        info!("loaded project {}", path.display());
 
         futs.extend(self.clear());
 
