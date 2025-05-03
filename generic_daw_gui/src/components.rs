@@ -163,14 +163,16 @@ pub fn styled_scrollable_with_direction<'a, Message>(
     content: impl Into<Element<'a, Message>>,
     direction: impl Into<Direction>,
 ) -> Scrollable<'a, Message> {
-    Scrollable::with_direction(content, direction).style(|t, s| {
-        let mut style = scrollable::default(t, s);
-        style.vertical_rail.border.radius = Radius::default();
-        style.vertical_rail.scroller.border.radius = Radius::default();
-        style.horizontal_rail.border.radius = Radius::default();
-        style.horizontal_rail.scroller.border.radius = Radius::default();
-        style
-    })
+    Scrollable::with_direction(content, direction)
+        .spacing(5.0)
+        .style(|t, s| {
+            let mut style = scrollable::default(t, s);
+            style.vertical_rail.border.radius = Radius::default();
+            style.vertical_rail.scroller.border.radius = Radius::default();
+            style.horizontal_rail.border.radius = Radius::default();
+            style.horizontal_rail.scroller.border.radius = Radius::default();
+            style
+        })
 }
 
 pub fn styled_text_input<'a, Message>(placeholder: &str, value: &str) -> TextInput<'a, Message>
