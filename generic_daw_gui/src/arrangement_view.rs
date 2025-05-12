@@ -532,19 +532,25 @@ impl ArrangementView {
             }
             Message::ArrangementAction(action) => self.handle_arrangement_action(action),
             Message::ArrangementPositionScaleDelta(pos, scale) => {
+                let old_scale = self.arrangement_scale;
+
                 self.arrangement_scale += scale;
                 self.arrangement_scale.x = self.arrangement_scale.x.clamp(3.0, 13f32.next_down());
                 self.arrangement_scale.y = self.arrangement_scale.y.clamp(77.0, 200.0);
 
-                self.arrangement_position += pos;
-                self.arrangement_position.x = self.arrangement_position.x.max(0.0);
-                self.arrangement_position.y = self.arrangement_position.y.clamp(
-                    0.0,
-                    self.arrangement.tracks().len().saturating_sub(1) as f32,
-                );
+                if scale == Vec2::ZERO || old_scale != self.arrangement_scale {
+                    self.arrangement_position += pos;
+                    self.arrangement_position.x = self.arrangement_position.x.max(0.0);
+                    self.arrangement_position.y = self.arrangement_position.y.clamp(
+                        0.0,
+                        self.arrangement.tracks().len().saturating_sub(1) as f32,
+                    );
+                }
             }
             Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
             Message::PianoRollPositionScaleDelta(pos, scale, size) => {
+                let old_scale = self.piano_roll_scale;
+
                 self.piano_roll_scale += scale;
                 self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(3.0, 13f32.next_down());
                 self.piano_roll_scale.y = self
@@ -552,12 +558,14 @@ impl ArrangementView {
                     .y
                     .clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
 
-                self.piano_roll_position += pos;
-                self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
-                self.piano_roll_position.y = self.piano_roll_position.y.clamp(
-                    0.0,
-                    128.0 - ((size.height - LINE_HEIGHT) / self.piano_roll_scale.y),
-                );
+                if scale == Vec2::ZERO || old_scale == self.piano_roll_scale {
+                    self.piano_roll_position += pos;
+                    self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
+                    self.piano_roll_position.y = self.piano_roll_position.y.clamp(
+                        0.0,
+                        128.0 - ((size.height - LINE_HEIGHT) / self.piano_roll_scale.y),
+                    );
+                }
             }
             Message::SplitAt(split_at) => self.split_at = split_at.clamp(200.0, 400.0),
         }
