@@ -424,10 +424,10 @@ impl Daw {
             VSplit::new(
                 self.file_tree.view().map(Message::FileTree),
                 self.arrangement.view().map(Message::Arrangement),
+                self.split_at,
                 Message::SplitAt
             )
             .strategy(vsplit::Strategy::Left)
-            .split_at(self.split_at)
         ]
         .padding(20)
         .spacing(20)

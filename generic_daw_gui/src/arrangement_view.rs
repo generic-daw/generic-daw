@@ -1641,10 +1641,10 @@ impl ArrangementView {
                     )
                     .height(Fill)
                 ],
+                self.split_at,
                 Message::SplitAt,
             )
             .strategy(vsplit::Strategy::Right)
-            .split_at(self.split_at)
             .into()
         } else {
             mixer_panel.into()

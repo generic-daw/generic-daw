@@ -41,7 +41,8 @@ where
     pub fn new(
         left: impl Into<Element<'a, Message>>,
         right: impl Into<Element<'a, Message>>,
-        on_resize: fn(f32) -> Message,
+        split_at: f32,
+        f: fn(f32) -> Message,
     ) -> Self {
         Self {
             children: [
@@ -52,16 +53,11 @@ where
                 right.into(),
             ]
             .into(),
-            split_at: 0.5,
+            split_at,
             strategy: Strategy::default(),
             rule_width: 11.0,
-            f: on_resize,
+            f,
         }
-    }
-
-    pub fn split_at(mut self, split_at: f32) -> Self {
-        self.split_at = split_at;
-        self
     }
 
     pub fn strategy(mut self, strategy: Strategy) -> Self {
