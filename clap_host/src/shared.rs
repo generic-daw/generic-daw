@@ -34,21 +34,27 @@ impl HostGuiImpl for Shared {
     fn resize_hints_changed(&self) {}
 
     fn request_resize(&self, new_size: GuiSize) -> Result<(), HostError> {
-        Ok(self
-            .main_sender
-            .try_send(MainThreadMessage::GuiRequestResize(new_size))?)
+        self.main_sender
+            .try_send(MainThreadMessage::GuiRequestResize(new_size))
+            .unwrap();
+
+        Ok(())
     }
 
     fn request_show(&self) -> Result<(), HostError> {
-        Ok(self
-            .main_sender
-            .try_send(MainThreadMessage::GuiRequestShow)?)
+        self.main_sender
+            .try_send(MainThreadMessage::GuiRequestShow)
+            .unwrap();
+
+        Ok(())
     }
 
     fn request_hide(&self) -> Result<(), HostError> {
-        Ok(self
-            .main_sender
-            .try_send(MainThreadMessage::GuiRequestHide)?)
+        self.main_sender
+            .try_send(MainThreadMessage::GuiRequestHide)
+            .unwrap();
+
+        Ok(())
     }
 
     fn closed(&self, _was_destroyed: bool) {

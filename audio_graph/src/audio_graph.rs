@@ -255,10 +255,12 @@ where
             return true;
         }
 
-        for current in graph[current].connections.keys() {
-            if Self::visit(graph, list, seen, to_visit, current) {
-                return true;
-            }
+        if graph[current]
+            .connections
+            .keys()
+            .any(|current| Self::visit(graph, list, seen, to_visit, current))
+        {
+            return true;
         }
 
         to_visit.remove(current);
