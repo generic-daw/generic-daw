@@ -114,7 +114,7 @@ impl Daw {
 
         if let Some((new_meter, futs)) = state
             .last_project
-            .as_ref()
+            .as_deref()
             .and_then(|path| arrangement.load(path, &config, &plugin_bundles))
         {
             open = open.chain(futs.map(Message::Arrangement));
@@ -220,7 +220,7 @@ impl Daw {
 
                 self.meter = meter;
 
-                if self.state.last_project.as_ref() != Some(&path) {
+                if self.state.last_project.as_deref() != Some(&path) {
                     self.state.last_project = Some(path);
                     self.state.write();
                 }
@@ -230,14 +230,12 @@ impl Daw {
             Message::SaveAsFile(path) => {
                 self.arrangement.save(&path);
 
-                if self.state.last_project.as_ref() != Some(&path) {
+                if self.state.last_project.as_deref() != Some(&path) {
                     self.state.last_project = Some(path);
                     self.state.write();
                 }
             }
-            Message::OpenConfigView => {
-                self.config_view = Some(ConfigView::default());
-            }
+            Message::OpenConfigView => self.config_view = Some(ConfigView::default()),
             Message::CloseConfigView => self.config_view = None,
             Message::Stop => {
                 self.meter.playing.store(false, Release);

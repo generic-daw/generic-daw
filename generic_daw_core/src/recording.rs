@@ -76,9 +76,9 @@ impl Recording {
     }
 
     pub fn split_off(&mut self, path: Arc<Path>, meter: &Meter) -> Arc<InterleavedAudio> {
-        let mut name = path.as_ref().file_name().unwrap().to_str().unwrap().into();
+        let mut name = path.file_name().unwrap().to_str().unwrap().into();
         std::mem::swap(&mut self.name, &mut name);
-        self.path = path.as_ref().into();
+        self.path = path.clone();
 
         let start = self.resampler.samples().len();
 
@@ -97,7 +97,7 @@ impl Recording {
         Self::update_lods(&samples, &mut lods, start);
 
         let mut writer = WavWriter::create(
-            path.as_ref(),
+            &path,
             WavSpec {
                 channels: self.config.channels,
                 sample_rate: self.config.sample_rate.0,
@@ -139,7 +139,7 @@ impl Recording {
         Self::update_lods(&samples, &mut lods, start);
 
         let mut writer = WavWriter::create(
-            path.as_ref(),
+            &path,
             WavSpec {
                 channels: self.config.channels,
                 sample_rate: self.config.sample_rate.0,

@@ -30,7 +30,7 @@ impl InterleavedAudio {
     pub fn create(path: Arc<Path>, sample_rate: u32) -> Option<Arc<Self>> {
         info!("loading sample {}", path.display());
 
-        let name = path.as_ref().file_name()?.to_str()?.into();
+        let name = path.file_name()?.to_str()?.into();
         let samples = Self::read_audio_file(&path, sample_rate)?;
         let lods = Self::create_lod(&samples);
         let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
@@ -50,7 +50,7 @@ impl InterleavedAudio {
     pub fn create_with_hash(path: Arc<Path>, sample_rate: u32, hash: u64) -> Option<Arc<Self>> {
         info!("loading sample {}", path.display());
 
-        let name = path.as_ref().file_name()?.to_str()?.into();
+        let name = path.file_name()?.to_str()?.into();
         let samples = Self::read_audio_file(&path, sample_rate)?;
         let lods = Self::create_lod(&samples);
         debug_assert_eq!(

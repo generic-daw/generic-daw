@@ -700,7 +700,7 @@ impl ArrangementView {
             };
             audios.insert(
                 audio.path.clone(),
-                writer.push_audio(audio.name.clone(), audio.hash),
+                writer.push_audio(&audio.name, audio.hash),
             );
         }
 
@@ -877,8 +877,7 @@ impl ArrangementView {
             audios.insert(idx, audio?);
         }
 
-        let plugin_descriptors = plugin_bundles.keys().cloned().collect::<Vec<_>>();
-        let mut plugins_by_channel = HoleyVec::<Vec<(PluginId, PluginDescriptor)>>::default();
+        let mut plugins_by_channel = HoleyVec::<Vec<_>>::default();
         let mut futs = Vec::new();
 
         let mut load_channel = |node: &MixerNode, channel: &proto::Channel| {
@@ -887,7 +886,7 @@ impl ArrangementView {
 
             for plugin in &channel.plugins {
                 let id = plugin.id();
-                let descriptor = plugin_descriptors.iter().find(|d| &*d.id == id)?;
+                let descriptor = plugin_bundles.keys().find(|d| *d.id == *id)?;
 
                 let (mut gui, receiver, audio_processor) = clap_host::init(
                     plugin_bundles.get(descriptor)?,
@@ -1326,10 +1325,7 @@ impl ArrangementView {
             .into()
         }
 
-        let selected_channel = self
-            .selected_channel
-            .as_ref()
-            .map(|c| self.arrangement.node(*c));
+        let selected_channel = self.selected_channel.map(|c| self.arrangement.node(c));
 
         let connect = |enabled: bool, id: NodeId| {
             selected_channel.map_or_else(

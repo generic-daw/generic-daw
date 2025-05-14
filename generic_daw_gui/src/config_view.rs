@@ -254,7 +254,7 @@ impl ConfigView {
                             .placeholder("Default")
                             .width(222),
                             styled_button(rotate_ccw()).padding(5).on_press_maybe(
-                                device.name.as_ref().map(|_| Message::ChangedName(None))
+                                device.name.as_deref().map(|_| Message::ChangedName(None))
                             )
                         ]
                         .align_y(Center),
@@ -271,7 +271,6 @@ impl ConfigView {
                             styled_button(rotate_ccw()).padding(5).on_press_maybe(
                                 device
                                     .sample_rate
-                                    .as_ref()
                                     .map(|_| Message::ChangedSampleRate(None))
                             )
                         ]
@@ -289,7 +288,6 @@ impl ConfigView {
                             styled_button(rotate_ccw()).padding(5).on_press_maybe(
                                 device
                                     .buffer_size
-                                    .as_ref()
                                     .map(|_| Message::ChangedBufferSize(None))
                             )
                         ]
