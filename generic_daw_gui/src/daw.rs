@@ -1,6 +1,6 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
-    components::{empty_widget, modal, number_input, styled_button, styled_pick_list},
+    components::{modal, number_input, space, styled_button, styled_pick_list},
     config::Config,
     config_view::{ConfigView, Message as ConfigViewMessage},
     file_tree::{FileTree, Message as FileTreeMessage},
@@ -323,7 +323,7 @@ impl Daw {
 
     pub fn view(&self, window: Id) -> Element<'_, Message> {
         if self.arrangement.clap_host.is_plugin_window(window) {
-            return empty_widget().into();
+            return space().into();
         }
 
         let bpm = self.meter.bpm.load(Acquire);
@@ -434,8 +434,7 @@ impl Daw {
         if self.arrangement.loading() {
             base = stack![
                 base,
-                mouse_area(empty_widget().width(Fill).height(Fill))
-                    .interaction(Interaction::Progress)
+                mouse_area(space().width(Fill).height(Fill)).interaction(Interaction::Progress)
             ]
             .into();
         }

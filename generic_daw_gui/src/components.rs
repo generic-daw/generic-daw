@@ -17,7 +17,7 @@ use iced::{
 };
 use std::borrow::Borrow;
 
-pub fn empty_widget() -> Space {
+pub fn space() -> Space {
     Space::new(Shrink, Shrink)
 }
 

@@ -1,7 +1,7 @@
 use crate::{
     clap_host::{ClapHost, Message as ClapHostMessage},
     components::{
-        circle_plus, empty_widget, icon_button, styled_combo_box, styled_scrollable_with_direction,
+        circle_plus, icon_button, space, styled_combo_box, styled_scrollable_with_direction,
     },
     config::Config,
     icons::{chevron_up, grip_vertical, x},
@@ -1329,12 +1329,12 @@ impl ArrangementView {
 
         let connect = |enabled: bool, id: NodeId| {
             selected_channel.map_or_else(
-                || Element::new(empty_widget().height(LINE_HEIGHT)),
+                || Element::new(space().height(LINE_HEIGHT)),
                 |(_, connections, ty)| {
                     let selected_channel = self.selected_channel.unwrap();
 
                     if *ty == NodeType::Master || id == selected_channel {
-                        empty_widget().height(LINE_HEIGHT).into()
+                        space().height(LINE_HEIGHT).into()
                     } else {
                         let connected = connections.contains(*id);
 
@@ -1382,8 +1382,8 @@ impl ArrangementView {
                                     },
                                 )
                             }),
-                        empty_widget().height(13.0),
-                        empty_widget().height(13.0)
+                        space().height(13.0),
+                        space().height(13.0)
                     ]
                     .spacing(5.0)
                     .into()
@@ -1451,7 +1451,7 @@ impl ArrangementView {
                                 .spacing(5.0)
                                 .into()
                             },
-                            |_, _| empty_widget().height(LINE_HEIGHT).into(),
+                            |_, _| space().height(LINE_HEIGHT).into(),
                         )
                     })
                     .peekable();
@@ -1489,7 +1489,7 @@ impl ArrangementView {
                                                 },
                                             )
                                         }),
-                                    empty_widget().height(13.0),
+                                    space().height(13.0),
                                     icon_button(x()).on_press(Message::ChannelRemove(id)).style(
                                         move |t, s| {
                                             button_with_base(
