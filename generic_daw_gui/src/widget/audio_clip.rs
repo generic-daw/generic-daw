@@ -206,6 +206,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
         // fill the mesh cache if it's cleared
         if state.cache.borrow().is_none() {
+            // TODO: let chain
             if let Some(mesh) = waveform::mesh(
                 &self.inner.meter,
                 self.inner.position.get_global_start(),

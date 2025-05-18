@@ -84,10 +84,9 @@ impl MidiClip {
             .expect("this is only locked from the audio thread");
 
         lock.iter()
-            .copied()
             .zip(notes)
             .enumerate()
-            .flat_map(|(a, (b, c))| b.into_iter().zip(c).enumerate().map(move |b| (a, b)))
+            .flat_map(|(a, (b, c))| b.iter().zip(c).enumerate().map(move |b| (a, b)))
             .for_each(|(key, (channel, (before, after)))| {
                 // start or stop any difference in the number of playing notes
                 //

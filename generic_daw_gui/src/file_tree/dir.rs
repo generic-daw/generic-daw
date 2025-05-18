@@ -84,7 +84,12 @@ impl Dir {
                 }
             })
         } else if let LoadStatus::Loaded { dirs, .. } = &mut self.children {
-            dirs.iter_mut().find_map(|dir| dir.update(id, action))
+            // TODO: let chain
+            if self.open {
+                dirs.iter_mut().find_map(|dir| dir.update(id, action))
+            } else {
+                None
+            }
         } else {
             None
         }

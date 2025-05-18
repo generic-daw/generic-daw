@@ -73,17 +73,15 @@ impl ClapHost {
                 return resize.chain(resizable);
             }
             Message::GuiRequestResize((window_id, size)) => {
-                if let Some(id) = self.windows.position(&window_id) {
-                    if let Some(new_size) = self
-                        .plugins
+                if let Some(new_size) = self.windows.position(&window_id).and_then(|id| {
+                    self.plugins
                         .get_mut(id)
                         .unwrap()
                         .resize(size.width as u32, size.height as u32)
-                    {
-                        let new_size = new_size.map(|x| x as f32).into();
-                        if size != new_size {
-                            return window::resize(window_id, new_size);
-                        }
+                }) {
+                    let new_size = new_size.map(|x| x as f32).into();
+                    if size != new_size {
+                        return window::resize(window_id, new_size);
                     }
                 }
             }

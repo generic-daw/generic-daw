@@ -234,6 +234,7 @@ where
                     }
                     State::DeletingNotes => {
                         if !self.deleted {
+                            // TODO: let chain
                             if let Some(note) = self.get_note(cursor) {
                                 self.deleted = true;
 
