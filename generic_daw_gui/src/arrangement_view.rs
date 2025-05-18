@@ -42,7 +42,6 @@ use smol::unblock;
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap},
-    ffi::OsStr,
     fs::File,
     hash::{DefaultHasher, Hash as _, Hasher as _},
     io::{Read as _, Write as _},
@@ -835,8 +834,7 @@ impl ArrangementView {
                             dir_entry
                                 .path()
                                 .file_name()
-                                .and_then(OsStr::to_str)
-                                .is_some_and(|name| name == audio.name)
+                                .is_some_and(|name| *name == *audio.name)
                         })
                         .filter(|dir_entry| {
                             audio.hash

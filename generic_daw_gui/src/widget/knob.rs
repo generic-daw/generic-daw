@@ -199,12 +199,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 
         let state = tree.state.downcast_ref::<State>();
 
-        if state
-            .last_theme
-            .borrow()
-            .as_ref()
-            .is_none_or(|last_theme| *last_theme != *theme)
-        {
+        if state.last_theme.borrow().as_ref() != Some(theme) {
             *state.last_theme.borrow_mut() = Some(theme.clone());
             state.cache.clear();
         }

@@ -194,12 +194,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
         renderer.fill_quad(clip_background, color.scale_alpha(0.2));
 
         // clear the mesh cache if the theme has changed
-        if state
-            .last_theme
-            .borrow()
-            .as_ref()
-            .is_none_or(|last_theme| *last_theme != *theme)
-        {
+        if state.last_theme.borrow().as_ref() != Some(theme) {
             *state.last_theme.borrow_mut() = Some(theme.clone());
             *state.cache.borrow_mut() = None;
         }

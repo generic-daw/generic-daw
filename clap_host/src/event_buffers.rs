@@ -41,11 +41,7 @@ impl EventBuffers {
 
             (port.supported_dialects.supports(NoteDialect::Midi)
                 || port.supported_dialects.supports(NoteDialect::Clap))
-            .then_some((
-                i as u16,
-                port.preferred_dialect
-                    .is_some_and(|d| d == NoteDialect::Midi),
-            ))
+            .then_some((i as u16, port.preferred_dialect == Some(NoteDialect::Midi)))
         })
     }
 
