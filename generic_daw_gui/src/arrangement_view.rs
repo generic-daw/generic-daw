@@ -9,8 +9,8 @@ use crate::{
     widget::{
         AnimatedDot, Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob,
         LINE_HEIGHT, MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll,
-        Recording as RecordingWidget, Seeker, TEXT_HEIGHT, Track as TrackWidget, VSplit,
-        arrangement::Action as ArrangementAction, piano_roll::Action as PianoRollAction, vsplit,
+        Recording as RecordingWidget, Seeker, TEXT_HEIGHT, Track as TrackWidget,
+        arrangement::Action as ArrangementAction, piano_roll::Action as PianoRollAction,
     },
 };
 use arc_swap::ArcSwap;
@@ -37,6 +37,7 @@ use iced::{
         vertical_rule, vertical_slider, vertical_space,
     },
 };
+use iced_split::{Split, Strategy};
 use log::info;
 use smol::unblock;
 use std::{
@@ -1533,7 +1534,7 @@ impl ArrangementView {
 
         if let Some(selected) = self.selected_channel {
             let node = &self.arrangement.node(selected).0;
-            VSplit::new(
+            Split::new(
                 mixer_panel,
                 column![
                     plugin_picker,
@@ -1638,7 +1639,7 @@ impl ArrangementView {
                 self.split_at,
                 Message::SplitAt,
             )
-            .strategy(vsplit::Strategy::Right)
+            .strategy(Strategy::End)
             .into()
         } else {
             mixer_panel.into()

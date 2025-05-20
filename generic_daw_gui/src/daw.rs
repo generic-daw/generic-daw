@@ -7,7 +7,7 @@ use crate::{
     icons::{chart_no_axes_gantt, pause, play, sliders_vertical, square},
     state::State,
     stylefns::button_with_base,
-    widget::{AnimatedDot, LINE_HEIGHT, VSplit, vsplit},
+    widget::{AnimatedDot, LINE_HEIGHT},
 };
 use generic_daw_core::{
     Meter, Position,
@@ -23,6 +23,7 @@ use iced::{
     widget::{button, column, container, horizontal_space, mouse_area, row, stack},
     window::{self, Id, frames},
 };
+use iced_split::{Split, Strategy};
 use log::trace;
 use rfd::AsyncFileDialog;
 use std::{
@@ -419,13 +420,13 @@ impl Daw {
             ]
             .spacing(20)
             .align_y(Alignment::Center),
-            VSplit::new(
+            Split::new(
                 self.file_tree.view().map(Message::FileTree),
                 self.arrangement.view().map(Message::Arrangement),
                 self.split_at,
                 Message::SplitAt
             )
-            .strategy(vsplit::Strategy::Left)
+            .strategy(Strategy::Start)
         ]
         .padding(20)
         .spacing(20)

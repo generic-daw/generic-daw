@@ -28,6 +28,7 @@ iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", de
     "wgpu",
     "x11",
 ] }
+iced_split = { git = "https://github.com/edwloef/iced_split.git", branch = "generic-daw" }
 iced_wgpu = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", features = [
     "geometry",
 ] }

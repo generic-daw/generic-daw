@@ -15,7 +15,6 @@ pub mod piano_roll;
 mod recording;
 mod seeker;
 mod track;
-pub mod vsplit;
 mod waveform;
 
 pub use animated_dot::AnimatedDot;
@@ -30,7 +29,6 @@ pub use piano_roll::PianoRoll;
 pub use recording::Recording;
 pub use seeker::Seeker;
 pub use track::Track;
-pub use vsplit::VSplit;
 
 pub const LINE_HEIGHT: f32 = TEXT_HEIGHT * 1.3;
 pub const TEXT_HEIGHT: f32 = 16.0;
