@@ -6,7 +6,7 @@ use crate::{
 };
 use generic_daw_utils::unique_id;
 use iced::{
-    Alignment, Element, Fill, Task, padding,
+    Element, Fill, Task,
     widget::{
         column, container, row, rule, text,
         text::{Shaping, Wrapping},
@@ -98,18 +98,14 @@ impl Dir {
     pub fn view(&self) -> (Element<'_, Message>, f32) {
         let mut col = column!(
             styled_button(row![
-                container(if self.open {
+                if self.open {
                     chevron_down()
                 } else {
                     chevron_right()
-                })
-                .clip(true),
-                container(
-                    text(&*self.name)
-                        .shaping(self.shaping)
-                        .wrapping(Wrapping::None)
-                )
-                .clip(true)
+                },
+                text(&*self.name)
+                    .shaping(self.shaping)
+                    .wrapping(Wrapping::None)
             ])
             .width(Fill)
             .padding(0)
@@ -120,27 +116,23 @@ impl Dir {
 
         if self.open {
             if let LoadStatus::Loaded { dirs, files } = &self.children {
-                let ch = column![column(
+                let ch = column(
                     dirs.iter()
                         .map(Self::view)
                         .chain(files.iter().map(File::view))
                         .map(|(e, h)| {
                             height += h;
                             e
-                        })
-                )];
+                        }),
+                );
 
                 if height != 0.0 {
                     col = col.push(row![
-                        column![vertical_rule(1.0).style(|t| rule::Style {
+                        container(vertical_rule(3.0).style(|t| rule::Style {
                             width: 3,
                             ..rule::default(t)
-                        })]
-                        .padding(
-                            padding::top(LINE_HEIGHT / 2.0 - 1.5).bottom(LINE_HEIGHT / 2.0 - 1.5)
-                        )
-                        .align_x(Alignment::Center)
-                        .width(LINE_HEIGHT)
+                        }))
+                        .padding(LINE_HEIGHT / 2.0 - 1.5)
                         .height(height),
                         ch
                     ]);

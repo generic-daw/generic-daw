@@ -4,7 +4,7 @@ use file::File;
 use iced::{
     Element, Task,
     widget::{
-        column,
+        column, container,
         scrollable::{Direction, Scrollbar},
     },
 };
@@ -38,7 +38,7 @@ impl FileTree {
 
     pub fn view(&self) -> Element<'_, Message> {
         styled_scrollable_with_direction(
-            column(self.dirs.iter().map(|dir| dir.view().0)),
+            container(column(self.dirs.iter().map(|dir| dir.view().0))).clip(true),
             Direction::Vertical(Scrollbar::default()),
         )
         .into()

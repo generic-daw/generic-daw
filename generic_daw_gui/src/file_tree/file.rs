@@ -7,7 +7,7 @@ use crate::{
 use iced::{
     Element, Fill,
     widget::{
-        container, row, text,
+        row, text,
         text::{Shaping, Wrapping},
     },
 };
@@ -45,13 +45,10 @@ impl File {
     pub fn view(&self) -> (Element<'_, Message>, f32) {
         (
             styled_button(row![
-                container(if self.is_audio { file_music() } else { file() }).clip(true),
-                container(
-                    text(&*self.name)
-                        .shaping(self.shaping)
-                        .wrapping(Wrapping::None)
-                )
-                .clip(true)
+                if self.is_audio { file_music() } else { file() },
+                text(&*self.name)
+                    .shaping(self.shaping)
+                    .wrapping(Wrapping::None)
             ])
             .width(Fill)
             .padding(0)
