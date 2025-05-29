@@ -1,6 +1,5 @@
 use super::{Action, Message, file::File};
 use crate::{
-    components::styled_button,
     icons::{chevron_down, chevron_right},
     widget::{LINE_HEIGHT, shaping_of},
 };
@@ -8,7 +7,7 @@ use generic_daw_utils::unique_id;
 use iced::{
     Element, Fill, Task,
     widget::{
-        column, container, row, rule, text,
+        button, column, container, row, rule, text,
         text::{Shaping, Wrapping},
         vertical_rule,
     },
@@ -97,7 +96,7 @@ impl Dir {
 
     pub fn view(&self) -> (Element<'_, Message>, f32) {
         let mut col = column!(
-            styled_button(row![
+            button(row![
                 if self.open {
                     chevron_down()
                 } else {
@@ -107,8 +106,9 @@ impl Dir {
                     .shaping(self.shaping)
                     .wrapping(Wrapping::None)
             ])
-            .width(Fill)
+            .style(button::text)
             .padding(0)
+            .width(Fill)
             .on_press(Message::Action(self.id, Action::DirToggleOpen))
         );
 

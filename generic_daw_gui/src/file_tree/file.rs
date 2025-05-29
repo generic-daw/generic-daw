@@ -1,13 +1,12 @@
 use super::Message;
 use crate::{
-    components::styled_button,
     icons::{file, file_music},
     widget::{LINE_HEIGHT, shaping_of},
 };
 use iced::{
     Element, Fill,
     widget::{
-        row, text,
+        button, row, text,
         text::{Shaping, Wrapping},
     },
 };
@@ -44,14 +43,15 @@ impl File {
 
     pub fn view(&self) -> (Element<'_, Message>, f32) {
         (
-            styled_button(row![
+            button(row![
                 if self.is_audio { file_music() } else { file() },
                 text(&*self.name)
                     .shaping(self.shaping)
                     .wrapping(Wrapping::None)
             ])
-            .width(Fill)
+            .style(button::text)
             .padding(0)
+            .width(Fill)
             .on_press(Message::File(self.path.clone()))
             .into(),
             LINE_HEIGHT,

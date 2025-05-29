@@ -2,7 +2,7 @@ use crate::components::styled_scrollable_with_direction;
 use dir::{Dir, DirId};
 use file::File;
 use iced::{
-    Element, Task,
+    Element, Fill, Task, border, padding,
     widget::{
         column, container,
         scrollable::{Direction, Scrollbar},
@@ -37,10 +37,16 @@ impl FileTree {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        styled_scrollable_with_direction(
+        container(styled_scrollable_with_direction(
             container(column(self.dirs.iter().map(|dir| dir.view().0))).clip(true),
             Direction::Vertical(Scrollbar::default()),
-        )
+        ))
+        .style(|t| {
+            container::background(t.extended_palette().background.weakest.color)
+                .border(border::width(1.0).color(t.extended_palette().background.strong.color))
+        })
+        .padding(padding::all(3).left(0))
+        .height(Fill)
         .into()
     }
 
