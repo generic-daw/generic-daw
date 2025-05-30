@@ -85,15 +85,14 @@ where
                         .map(|e| e.with_time(e.time() + dep_delay)),
                 );
 
-                events.retain_mut(|e| {
-                    if let Some(time) = e.time().checked_sub(buf.len()) {
-                        *e = e.with_time(time);
-                        true
-                    } else {
-                        entry.events.push(*e);
-                        false
-                    }
-                });
+                entry.events.extend(events.extract_if(.., |e| {
+                    e.time()
+                        .checked_sub(buf.len())
+                        .inspect(|&time| {
+                            *e = e.with_time(time);
+                        })
+                        .is_some()
+                }));
             }
 
             entry.node.process(&mut entry.audio, &mut entry.events);

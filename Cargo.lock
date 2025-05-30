@@ -1767,7 +1767,7 @@ dependencies = [
 [[package]]
 name = "iced_split"
 version = "0.1.0"
-source = "git+https://github.com/edwloef/iced_split.git?branch=generic-daw#c2fa8a11f11a749213d999de9365d510f64bfa1e"
+source = "git+https://github.com/edwloef/iced_split.git?branch=generic-daw#9cfa43b696093327722a17ba6c886a3223863532"
 dependencies = [
  "iced_widget",
 ]
