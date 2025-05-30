@@ -4,13 +4,12 @@ use crate::{
     widget::{DragHandle, LINE_HEIGHT},
 };
 use iced::{
-    Alignment, Color, Element, Font, Shrink,
+    Alignment, Element, Font, Shrink,
     border::{self, Radius},
     widget::{
-        Button, ComboBox, PickList, Scrollable, Space, Text, TextInput, button, center, combo_box,
-        container, mouse_area, opaque, pick_list, row,
+        Button, ComboBox, PickList, Scrollable, Space, Text, TextInput, button, combo_box,
+        container, pick_list, row,
         scrollable::{self, Direction},
-        stack,
         text::Shaping,
         text_input,
     },
@@ -31,26 +30,6 @@ where
             .align_x(Alignment::Center),
     )
     .padding(0.0)
-}
-
-pub fn modal<'a, Message>(
-    base: impl Into<Element<'a, Message>>,
-    content: impl Into<Element<'a, Message>>,
-    exit: Message,
-) -> impl Into<Element<'a, Message>>
-where
-    Message: Clone + 'a,
-{
-    stack![
-        base.into(),
-        opaque(
-            mouse_area(
-                center(opaque(content))
-                    .style(|_| container::background(Color::BLACK.scale_alpha(0.8)))
-            )
-            .on_press(exit)
-        )
-    ]
 }
 
 pub fn number_input<'a, Message>(

@@ -1,6 +1,6 @@
 use crate::{
     arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
-    components::{modal, number_input, space, styled_button, styled_pick_list},
+    components::{number_input, space, styled_button, styled_pick_list},
     config::Config,
     config_view::{ConfigView, Message as ConfigViewMessage},
     file_tree::{FileTree, Message as FileTreeMessage},
@@ -15,12 +15,12 @@ use generic_daw_core::{
     get_input_devices, get_output_devices,
 };
 use iced::{
-    Alignment, Element, Event, Fill, Subscription, Task, Theme,
+    Alignment, Color, Element, Event, Fill, Subscription, Task, Theme,
     event::{self, Status},
     keyboard,
     mouse::Interaction,
     time::every,
-    widget::{button, column, container, horizontal_space, mouse_area, row, stack},
+    widget::{button, center, column, container, horizontal_space, mouse_area, opaque, row, stack},
     window::{self, Id, frames},
 };
 use iced_split::{Split, Strategy};
@@ -335,123 +335,125 @@ impl Daw {
                 % 2
                 == 0;
 
-        let mut base = column![
-            row![
-                styled_pick_list(
-                    [
-                        "New",
-                        "Open",
-                        "Open Last",
-                        "Save",
-                        "Save As",
-                        "Export",
-                        "Settings"
-                    ],
-                    Some("File"),
-                    |s| {
-                        match s {
-                            "New" => Message::NewFile,
-                            "Open" => Message::OpenFileDialog,
-                            "Open Last" => Message::OpenLastFile,
-                            "Save" => Message::SaveFile,
-                            "Save As" => Message::SaveAsFileDialog,
-                            "Export" => Message::ExportFileDialog,
-                            "Settings" => Message::OpenConfigView,
-                            _ => unreachable!(),
-                        }
-                    }
-                ),
+        let mut base = stack![
+            column![
                 row![
-                    styled_button(
-                        container(if self.meter.playing.load(Acquire) {
-                            pause()
-                        } else {
-                            play()
-                        })
-                        .width(LINE_HEIGHT)
-                        .align_x(Alignment::Center)
-                    )
-                    .on_press(Message::TogglePlay),
-                    styled_button(
-                        container(square())
+                    styled_pick_list(
+                        [
+                            "New",
+                            "Open",
+                            "Open Last",
+                            "Save",
+                            "Save As",
+                            "Export",
+                            "Settings"
+                        ],
+                        Some("File"),
+                        |s| {
+                            match s {
+                                "New" => Message::NewFile,
+                                "Open" => Message::OpenFileDialog,
+                                "Open Last" => Message::OpenLastFile,
+                                "Save" => Message::SaveFile,
+                                "Save As" => Message::SaveAsFileDialog,
+                                "Export" => Message::ExportFileDialog,
+                                "Settings" => Message::OpenConfigView,
+                                _ => unreachable!(),
+                            }
+                        }
+                    ),
+                    row![
+                        styled_button(
+                            container(if self.meter.playing.load(Acquire) {
+                                pause()
+                            } else {
+                                play()
+                            })
                             .width(LINE_HEIGHT)
                             .align_x(Alignment::Center)
-                    )
-                    .on_press(Message::Stop),
-                ],
-                number_input(
-                    numerator as usize,
-                    4,
-                    2,
-                    |x| Message::ChangedNumerator(x as u8),
-                    Message::ChangedNumeratorText
-                ),
-                number_input(
-                    bpm as usize,
-                    140,
-                    3,
-                    |x| Message::ChangedBpm(x as u16),
-                    Message::ChangedBpmText
-                ),
-                button(row![AnimatedDot::new(fill), AnimatedDot::new(!fill)].spacing(5.0))
-                    .padding(8.0)
-                    .style(move |t, s| button_with_base(
-                        t,
-                        s,
-                        if self.meter.metronome.load(Acquire) {
-                            button::primary
-                        } else {
-                            button::secondary
-                        }
-                    ))
-                    .on_press(Message::ToggleMetronome),
-                horizontal_space(),
-                row![
-                    styled_button(chart_no_axes_gantt()).on_press_maybe(
-                        (!matches!(self.arrangement.tab, Tab::Arrangement { .. })).then_some(
-                            Message::ChangedTab(Tab::Arrangement { grabbed_clip: None })
                         )
+                        .on_press(Message::TogglePlay),
+                        styled_button(
+                            container(square())
+                                .width(LINE_HEIGHT)
+                                .align_x(Alignment::Center)
+                        )
+                        .on_press(Message::Stop),
+                    ],
+                    number_input(
+                        numerator as usize,
+                        4,
+                        2,
+                        |x| Message::ChangedNumerator(x as u8),
+                        Message::ChangedNumeratorText
                     ),
-                    styled_button(sliders_vertical()).on_press_maybe(
-                        (!matches!(self.arrangement.tab, Tab::Mixer))
-                            .then_some(Message::ChangedTab(Tab::Mixer))
-                    )
-                ],
+                    number_input(
+                        bpm as usize,
+                        140,
+                        3,
+                        |x| Message::ChangedBpm(x as u16),
+                        Message::ChangedBpmText
+                    ),
+                    button(row![AnimatedDot::new(fill), AnimatedDot::new(!fill)].spacing(5.0))
+                        .padding(8.0)
+                        .style(move |t, s| button_with_base(
+                            t,
+                            s,
+                            if self.meter.metronome.load(Acquire) {
+                                button::primary
+                            } else {
+                                button::secondary
+                            }
+                        ))
+                        .on_press(Message::ToggleMetronome),
+                    horizontal_space(),
+                    row![
+                        styled_button(chart_no_axes_gantt()).on_press_maybe(
+                            (!matches!(self.arrangement.tab, Tab::Arrangement { .. })).then_some(
+                                Message::ChangedTab(Tab::Arrangement { grabbed_clip: None })
+                            )
+                        ),
+                        styled_button(sliders_vertical()).on_press_maybe(
+                            (!matches!(self.arrangement.tab, Tab::Mixer))
+                                .then_some(Message::ChangedTab(Tab::Mixer))
+                        )
+                    ],
+                ]
+                .spacing(20)
+                .align_y(Alignment::Center),
+                Split::new(
+                    self.file_tree.view().map(Message::FileTree),
+                    self.arrangement.view().map(Message::Arrangement),
+                    self.split_at,
+                    Message::SplitAt
+                )
+                .strategy(Strategy::Start)
             ]
+            .padding(5)
             .spacing(20)
-            .align_y(Alignment::Center),
-            Split::new(
-                self.file_tree.view().map(Message::FileTree),
-                self.arrangement.view().map(Message::Arrangement),
-                self.split_at,
-                Message::SplitAt
-            )
-            .strategy(Strategy::Start)
-        ]
-        .padding(5)
-        .spacing(20)
-        .into();
+        ];
 
         if self.arrangement.loading() {
-            base = stack![
-                base,
-                mouse_area(space().width(Fill).height(Fill)).interaction(Interaction::Progress)
-            ]
-            .into();
+            base = base.push(
+                mouse_area(space().width(Fill).height(Fill)).interaction(Interaction::Progress),
+            );
         }
 
         if let Some(config_view) = &self.config_view {
-            base = modal(
-                base,
-                config_view
-                    .view(&self.input_devices, &self.output_devices)
-                    .map(Message::ConfigView),
-                Message::CloseConfigView,
-            )
-            .into();
+            base = base.push(opaque(
+                mouse_area(
+                    center(opaque(
+                        config_view
+                            .view(&self.input_devices, &self.output_devices)
+                            .map(Message::ConfigView),
+                    ))
+                    .style(|_| container::background(Color::BLACK.scale_alpha(0.8))),
+                )
+                .on_press(Message::CloseConfigView),
+            ));
         }
 
-        base
+        base.into()
     }
 
     pub fn theme(&self, _window: Id) -> Theme {
