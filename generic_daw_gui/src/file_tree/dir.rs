@@ -5,7 +5,7 @@ use crate::{
 };
 use generic_daw_utils::unique_id;
 use iced::{
-    Element, Fill, Task,
+    Element, Fill, Task, padding,
     widget::{
         button, column, container, row, rule, text,
         text::{Shaping, Wrapping},
@@ -96,18 +96,21 @@ impl Dir {
 
     pub fn view(&self) -> (Element<'_, Message>, f32) {
         let mut col = column!(
-            button(row![
-                if self.open {
-                    chevron_down()
-                } else {
-                    chevron_right()
-                },
-                text(&*self.name)
-                    .shaping(self.shaping)
-                    .wrapping(Wrapping::None)
-            ])
+            button(
+                row![
+                    if self.open {
+                        chevron_down()
+                    } else {
+                        chevron_right()
+                    },
+                    text(&*self.name)
+                        .shaping(self.shaping)
+                        .wrapping(Wrapping::None)
+                ]
+                .spacing(2)
+            )
             .style(button::text)
-            .padding(0)
+            .padding(1)
             .width(Fill)
             .on_press(Message::Action(self.id, Action::DirToggleOpen))
         );
@@ -128,11 +131,11 @@ impl Dir {
 
                 if height != 0.0 {
                     col = col.push(row![
-                        container(vertical_rule(3.0).style(|t| rule::Style {
-                            width: 3,
+                        container(vertical_rule(2).style(|t| rule::Style {
+                            width: 2,
                             ..rule::default(t)
                         }))
-                        .padding(LINE_HEIGHT / 2.0 - 1.5)
+                        .padding(padding::left(LINE_HEIGHT / 2.0).right(LINE_HEIGHT / 4.0))
                         .height(height),
                         ch
                     ]);
@@ -140,7 +143,7 @@ impl Dir {
             }
         }
 
-        (col.into(), height + LINE_HEIGHT)
+        (col.into(), height + LINE_HEIGHT + 2.0)
     }
 
     async fn load(path: impl AsRef<Path>) -> (Box<[Self]>, Box<[File]>) {

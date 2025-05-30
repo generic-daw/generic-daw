@@ -282,7 +282,7 @@ impl Daw {
             }
             Message::SplitAt(split_at) => {
                 self.split_at = if split_at >= 20.0 {
-                    split_at.clamp(200.0, 400.0)
+                    split_at.clamp(200.0, 1000.0)
                 } else {
                     0.0
                 };
@@ -428,7 +428,7 @@ impl Daw {
             )
             .strategy(Strategy::Start)
         ]
-        .padding(20)
+        .padding(5)
         .spacing(20)
         .into();
 
