@@ -1,5 +1,5 @@
 use super::{LINE_HEIGHT, Vec2, shaping_of, waveform};
-use generic_daw_core::AudioClip as AudioClipInner;
+use generic_daw_core::{self as core, Meter};
 use iced::{
     Element, Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
     advanced::{
@@ -21,7 +21,7 @@ use iced_wgpu::{
     geometry::Cache,
     graphics::cache::{Cached as _, Group},
 };
-use std::{cell::RefCell, sync::atomic::Ordering::Acquire};
+use std::cell::RefCell;
 
 #[derive(Default)]
 struct State {
@@ -44,7 +44,8 @@ impl State {
 
 #[derive(Clone, Debug)]
 pub struct AudioClip<'a> {
-    inner: &'a AudioClipInner,
+    inner: &'a core::AudioClip,
+    meter: &'a Meter,
     /// the position of the top left corner of the arrangement viewport
     position: &'a Vec2,
     /// the scale of the arrangement viewport
@@ -77,17 +78,16 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-        let bpm = self.inner.meter.bpm.load(Acquire);
         let global_start = self
             .inner
             .position
             .get_global_start()
-            .in_samples_f(bpm, self.inner.meter.sample_rate);
+            .in_samples_f(self.meter);
         let global_end = self
             .inner
             .position
             .get_global_end()
-            .in_samples_f(bpm, self.inner.meter.sample_rate);
+            .in_samples_f(self.meter);
         let pixel_size = self.scale.x.exp2();
 
         Node::new(Size::new(
@@ -203,7 +203,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
         if state.cache.borrow().is_none() {
             // TODO: let chain
             if let Some(mesh) = waveform::mesh(
-                &self.inner.meter,
+                self.meter,
                 self.inner.position.get_global_start(),
                 self.inner.position.get_clip_start(),
                 &self.inner.audio.lods,
@@ -256,13 +256,15 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
 impl<'a> AudioClip<'a> {
     pub fn new(
-        inner: &'a AudioClipInner,
+        inner: &'a core::AudioClip,
+        meter: &'a Meter,
         position: &'a Vec2,
         scale: &'a Vec2,
         enabled: bool,
     ) -> Self {
         Self {
             inner,
+            meter,
             position,
             scale,
             enabled,

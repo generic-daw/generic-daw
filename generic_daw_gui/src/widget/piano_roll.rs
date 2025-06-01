@@ -16,7 +16,7 @@ use iced::{
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
     window,
 };
-use std::sync::{Arc, atomic::Ordering::Acquire};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
@@ -337,13 +337,9 @@ impl<'a, Message> PianoRoll<'a, Message> {
 
     fn note_bounds(&self, note: &MidiNote) -> Rectangle {
         let sample_size = self.scale.x.exp2();
-        let bpm = self.meter.bpm.load(Acquire);
 
-        let start =
-            (note.start.in_samples_f(bpm, self.meter.sample_rate) - self.position.x) / sample_size;
-
-        let end =
-            (note.end.in_samples_f(bpm, self.meter.sample_rate) - self.position.x) / sample_size;
+        let start = (note.start.in_samples_f(self.meter) - self.position.x) / sample_size;
+        let end = (note.end.in_samples_f(self.meter) - self.position.x) / sample_size;
 
         Rectangle::new(
             Point::new(

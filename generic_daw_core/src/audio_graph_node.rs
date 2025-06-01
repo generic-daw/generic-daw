@@ -1,20 +1,31 @@
-use crate::{Master, MixerNode, Track, event::Event};
+use crate::{Action, Master, MixerNode, Track, daw_ctx::State, event::Event};
 use audio_graph::NodeImpl;
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum AudioGraphNode {
     Master(Master),
-    MixerNode(Arc<MixerNode>),
+    MixerNode(MixerNode),
     Track(Track),
 }
 
-impl NodeImpl<Event> for AudioGraphNode {
-    fn process(&self, audio: &mut [f32], events: &mut Vec<Event>) {
+impl NodeImpl for AudioGraphNode {
+    type Action = Action;
+    type Event = Event;
+    type State = State;
+
+    fn apply(&mut self, action: Self::Action) {
         match self {
-            Self::Master(node) => node.process(audio, events),
-            Self::MixerNode(node) => node.process(audio, events),
-            Self::Track(node) => node.process(audio, events),
+            Self::Master(node) => node.apply(action),
+            Self::MixerNode(node) => node.apply(action),
+            Self::Track(node) => node.apply(action),
+        }
+    }
+
+    fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
+        match self {
+            Self::Master(node) => node.process(state, audio, events),
+            Self::MixerNode(node) => node.process(state, audio, events),
+            Self::Track(node) => node.process(state, audio, events),
         }
     }
 
@@ -26,7 +37,7 @@ impl NodeImpl<Event> for AudioGraphNode {
         }
     }
 
-    fn reset(&self) {
+    fn reset(&mut self) {
         match self {
             Self::Master(node) => node.reset(),
             Self::MixerNode(node) => node.reset(),
@@ -49,8 +60,8 @@ impl From<Master> for AudioGraphNode {
     }
 }
 
-impl From<Arc<MixerNode>> for AudioGraphNode {
-    fn from(value: Arc<MixerNode>) -> Self {
+impl From<MixerNode> for AudioGraphNode {
+    fn from(value: MixerNode) -> Self {
         Self::MixerNode(value)
     }
 }

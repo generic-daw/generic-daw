@@ -1,11 +1,11 @@
-use crate::{EventImpl, NodeId, NodeImpl, entry::Entry};
+use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry};
 use bit_set::BitSet;
 use generic_daw_utils::{HoleyVec, RotateConcatExt as _};
 
 #[derive(Debug)]
-pub struct AudioGraph<Node, Event> {
+pub struct AudioGraph<Node: NodeImpl> {
     /// a `NodeId` -> `Entry` map
-    graph: HoleyVec<Entry<Node, Event>>,
+    graph: HoleyVec<Entry<Node>>,
     /// the `NodeId` of the root node
     root: NodeId,
     /// all nodes in the graph in reverse topological order,
@@ -19,11 +19,7 @@ pub struct AudioGraph<Node, Event> {
     seen: BitSet,
 }
 
-impl<Node, Event> AudioGraph<Node, Event>
-where
-    Node: NodeImpl<Event>,
-    Event: EventImpl,
-{
+impl<Node: NodeImpl> AudioGraph<Node> {
     /// create a new audio graph with the given root node
     #[must_use]
     pub fn new(node: Node) -> Self {
@@ -42,10 +38,19 @@ where
         }
     }
 
+    /// apply `action` to `node`
+    ///
+    /// this does nothing if the graph doesn't contain `node`
+    pub fn apply(&mut self, node: NodeId, action: Node::Action) {
+        if let Some(entry) = self.graph.get_mut(*node) {
+            entry.node.apply(action);
+        }
+    }
+
     /// process audio data into `buf`
     ///
     /// `buf` is assumed to be "uninitialized"
-    pub fn process(&mut self, buf: &mut [f32]) {
+    pub fn process(&mut self, state: &Node::State, buf: &mut [f32]) {
         for &node in &self.list {
             for s in &mut *buf {
                 *s = 0.0;
@@ -95,7 +100,9 @@ where
                 }));
             }
 
-            entry.node.process(&mut entry.audio, &mut entry.events);
+            entry
+                .node
+                .process(state, &mut entry.audio, &mut entry.events);
 
             // this node's delay + the largest dependency's delay
             entry.delay = entry.node.delay() + max_delay;
@@ -107,8 +114,8 @@ where
     }
 
     /// reset every node in the graph to a pre-playback state
-    pub fn reset(&self) {
-        for entry in self.graph.values() {
+    pub fn reset(&mut self) {
+        for entry in self.graph.values_mut() {
             entry.node.reset();
         }
     }
@@ -240,7 +247,7 @@ where
     ///
     /// returns whether there is a cycle in `current`'s directly unvisited subtree
     fn visit(
-        graph: &HoleyVec<Entry<Node, Event>>,
+        graph: &HoleyVec<Entry<Node>>,
         list: &mut Vec<usize>,
         seen: &mut BitSet,
         to_visit: &mut BitSet,

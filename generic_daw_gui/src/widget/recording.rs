@@ -15,7 +15,6 @@ use iced::{
     padding,
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
-use std::sync::atomic::Ordering::Acquire;
 
 #[derive(Clone, Debug)]
 pub struct Recording<'a> {
@@ -31,11 +30,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-        let bpm = self.meter.bpm.load(Acquire);
-        let global_start = self
-            .inner
-            .position
-            .in_samples_f(bpm, self.meter.sample_rate);
+        let global_start = self.inner.position.in_samples_f(self.meter);
         let len = self.inner.len() as f32;
         let pixel_size = self.scale.x.exp2();
 

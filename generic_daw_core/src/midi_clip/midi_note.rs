@@ -6,9 +6,9 @@ use std::ops::Add;
 pub struct MidiNote {
     /// usually in the `0..15` range
     pub channel: u8,
-    /// key of the note
+    /// in the `0..=127` range
     pub key: MidiKey,
-    /// in the `0.0..1.0` range
+    /// in the `0.0..=1.0` range
     pub velocity: f64,
     /// start time of the note, relative to the beginning of the pattern it belongs to
     pub start: Position,

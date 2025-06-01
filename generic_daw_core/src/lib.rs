@@ -1,13 +1,13 @@
 use async_channel::{Receiver, Sender};
+use audio_graph::NodeId;
 use audio_graph_node::AudioGraphNode;
 use cpal::{
     BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
     traits::{DeviceTrait as _, HostTrait as _},
 };
 use daw_ctx::DawCtx;
-use event::Event;
 use log::info;
-use std::{cmp::Ordering, sync::Arc};
+use std::cmp::Ordering;
 
 mod audio_clip;
 mod audio_graph_node;
@@ -30,8 +30,9 @@ pub use audio_clip::{AudioClip, InterleavedAudio};
 pub use audio_graph;
 pub use clap_host;
 pub use clip::Clip;
+pub use clip_position::ClipPosition;
 pub use cpal::{Stream, traits::StreamTrait};
-pub use daw_ctx::DawCtxMessage;
+pub use daw_ctx::{Action, Message, Update, Version};
 pub use decibels::Decibels;
 pub use export::export;
 pub use master::Master;
@@ -42,8 +43,6 @@ pub use position::Position;
 pub use recording::Recording;
 pub(crate) use resampler::Resampler;
 pub use track::Track;
-
-type AudioGraph = audio_graph::AudioGraph<AudioGraphNode, Event>;
 
 #[must_use]
 pub fn get_input_devices() -> Vec<String> {
@@ -106,7 +105,7 @@ pub fn build_output_stream(
     device_name: Option<&str>,
     sample_rate: u32,
     buffer_size: u32,
-) -> (Stream, Arc<MixerNode>, Sender<DawCtxMessage>, Arc<Meter>) {
+) -> (Stream, NodeId, Meter, Sender<Message>, Receiver<Update>) {
     let host = cpal::default_host();
 
     let device = device_name
@@ -123,7 +122,8 @@ pub fn build_output_stream(
         buffer_size,
     );
 
-    let (mut ctx, meter, node, sender) = DawCtx::create(config.sample_rate.0, buffer_size);
+    let (mut ctx, node, meter, sender, receiver) =
+        DawCtx::create(config.sample_rate.0, buffer_size);
 
     info!("starting output stream with config {config:?}");
 
@@ -138,7 +138,7 @@ pub fn build_output_stream(
 
     stream.play().unwrap();
 
-    (stream, node, sender, meter)
+    (stream, node, meter, sender, receiver)
 }
 
 fn choose_config(

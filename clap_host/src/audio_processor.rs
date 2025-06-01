@@ -46,6 +46,11 @@ impl AudioProcessor {
     }
 
     #[must_use]
+    pub fn descriptor(&self) -> &PluginDescriptor {
+        &self.descriptor
+    }
+
+    #[must_use]
     pub fn id(&self) -> PluginId {
         self.id
     }

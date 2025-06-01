@@ -18,7 +18,6 @@ use iced::{
     padding,
     widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
-use std::sync::atomic::Ordering::Acquire;
 
 #[derive(Default)]
 struct State {
@@ -260,7 +259,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
             });
 
         let seeker_bounds = Self::seeker_bounds(layout);
-        let bpm = self.meter.bpm.load(Acquire);
 
         renderer.start_layer(right_panel_bounds);
 
@@ -274,8 +272,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
         let sample_size = self.scale.x.exp2();
 
-        let x =
-            (self.meter.sample.load(Acquire) as f32 - self.position.x) / sample_size - self.offset;
+        let x = (self.meter.sample as f32 - self.position.x) / sample_size - self.offset;
 
         renderer.fill_quad(
             Quad {
@@ -289,8 +286,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
         );
 
         let mut draw_text = |beat: Position, bar: u32| {
-            let x =
-                (beat.in_samples_f(bpm, self.meter.sample_rate) - self.position.x) / sample_size;
+            let x = (beat.in_samples_f(self.meter) - self.position.x) / sample_size;
 
             let bar = Text {
                 content: (bar + 1).to_string(),
@@ -312,25 +308,19 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
             );
         };
 
-        let numerator = self.meter.numerator.load(Acquire);
-
-        let mut beat = Position::from_samples_f(self.position.x, bpm, self.meter.sample_rate);
-        let end_beat = beat
-            + Position::from_samples_f(
-                seeker_bounds.width * sample_size,
-                bpm,
-                self.meter.sample_rate,
-            );
+        let mut beat = Position::from_samples_f(self.position.x, self.meter);
+        let end_beat =
+            beat + Position::from_samples_f(seeker_bounds.width * sample_size, self.meter);
         beat = beat.floor();
 
         while beat <= end_beat {
-            let bar = beat.beat() / u32::from(numerator);
+            let bar = beat.beat() / u32::from(self.meter.numerator);
 
             if self.scale.x >= 11.0 {
-                if beat.beat() % u32::from(numerator) == 0 && bar % 4 == 0 {
+                if beat.beat() % u32::from(self.meter.numerator) == 0 && bar % 4 == 0 {
                     draw_text(beat, bar);
                 }
-            } else if beat.beat() % u32::from(numerator) == 0 {
+            } else if beat.beat() % u32::from(self.meter.numerator) == 0 {
                 draw_text(beat, bar);
             }
 
@@ -470,24 +460,18 @@ impl<'a, Message> Seeker<'a, Message> {
     fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
         renderer.start_transformation(Transformation::translate(bounds.x, bounds.y));
 
-        let numerator = self.meter.numerator.load(Acquire);
-        let bpm = self.meter.bpm.load(Acquire);
         let sample_size = self.scale.x.exp2();
 
-        let mut beat = Position::from_samples_f(self.position.x, bpm, self.meter.sample_rate);
-        let end_beat = beat
-            + Position::from_samples_f(bounds.width * sample_size, bpm, self.meter.sample_rate);
+        let mut beat = Position::from_samples_f(self.position.x, self.meter);
+        let end_beat = beat + Position::from_samples_f(bounds.width * sample_size, self.meter);
 
         let mut background_beat = Position::new(beat.beat() & !0x0f, 0);
-        let background_step = Position::new(4 * u32::from(numerator), 0);
-        let background_width =
-            background_step.in_samples_f(bpm, self.meter.sample_rate) / sample_size;
+        let background_step = Position::new(4 * u32::from(self.meter.numerator), 0);
+        let background_width = background_step.in_samples_f(self.meter) / sample_size;
 
         while background_beat < end_beat {
-            if (background_beat.beat() / (4 * u32::from(numerator))) % 2 == 1 {
-                let x = (background_beat.in_samples_f(bpm, self.meter.sample_rate)
-                    - self.position.x)
-                    / sample_size;
+            if (background_beat.beat() / (4 * u32::from(self.meter.numerator))) % 2 == 1 {
+                let x = (background_beat.in_samples_f(self.meter) - self.position.x) / sample_size;
 
                 renderer.fill_quad(
                     Quad {
@@ -504,12 +488,12 @@ impl<'a, Message> Seeker<'a, Message> {
             background_beat += background_step;
         }
 
-        beat = beat.ceil_to_snap_step(self.scale.x, numerator, bpm);
-        let snap_step = Position::snap_step(self.scale.x, numerator, bpm);
+        beat = beat.ceil_to_snap_step(self.scale.x, self.meter);
+        let snap_step = Position::snap_step(self.scale.x, self.meter);
 
         while beat <= end_beat {
             let color = if snap_step >= Position::BEAT {
-                if beat.beat() % (snap_step.beat() * u32::from(numerator)) == 0 {
+                if beat.beat() % (snap_step.beat() * u32::from(self.meter.numerator)) == 0 {
                     theme.extended_palette().background.strong.color
                 } else {
                     theme.extended_palette().background.weak.color
@@ -520,8 +504,7 @@ impl<'a, Message> Seeker<'a, Message> {
                 theme.extended_palette().background.weak.color
             };
 
-            let x =
-                (beat.in_samples_f(bpm, self.meter.sample_rate) - self.position.x) / sample_size;
+            let x = (beat.in_samples_f(self.meter) - self.position.x) / sample_size;
 
             renderer.fill_quad(
                 Quad {

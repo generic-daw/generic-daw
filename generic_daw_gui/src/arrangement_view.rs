@@ -18,13 +18,13 @@ use arrangement::{Arrangement as ArrangementWrapper, NodeType};
 use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
-    AudioClip, Clip, Decibels, InterleavedAudio, Meter, MidiClip, MidiKey, MidiNote, MixerNode,
-    Position, Recording, Track,
+    self as core, AudioClip, Clip, Decibels, InterleavedAudio, MidiClip, MidiKey, MidiNote,
+    MixerNode, Position, Recording, Update,
     audio_graph::{NodeId, NodeImpl as _},
-    clap_host::{self, MainThreadMessage, PluginBundle, PluginDescriptor, PluginId},
+    clap_host::{self, MainThreadMessage, PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
-use generic_daw_utils::{EnumDispatcher, HoleyVec, NoDebug, ShiftMoveExt as _, Vec2, hash_reader};
+use generic_daw_utils::{EnumDispatcher, NoDebug, Vec2, hash_reader};
 use iced::{
     Alignment, Element, Fill, Function as _, Size, Subscription, Task, border,
     mouse::Interaction,
@@ -39,6 +39,7 @@ use iced::{
 };
 use iced_split::{Split, Strategy};
 use log::info;
+use node::Node;
 use smol::unblock;
 use std::{
     cmp::Ordering,
@@ -49,16 +50,15 @@ use std::{
     iter::once,
     ops::Deref as _,
     path::Path,
-    sync::{
-        Arc, Mutex, Weak,
-        atomic::Ordering::{AcqRel, Acquire, Release},
-        mpsc,
-    },
+    sync::{Arc, Mutex, Weak, mpsc},
     time::Instant,
 };
 use walkdir::WalkDir;
 
 mod arrangement;
+mod node;
+mod plugin;
+mod track;
 
 #[derive(Clone, Debug)]
 enum LoadStatus {
@@ -69,6 +69,7 @@ enum LoadStatus {
 #[derive(Clone, Debug)]
 pub enum Message {
     ClapHost(ClapHostMessage),
+    Update(Update),
 
     ConnectRequest((NodeId, NodeId)),
     ConnectSucceeded((NodeId, NodeId)),
@@ -131,12 +132,10 @@ pub struct ArrangementView {
     pub clap_host: ClapHost,
     plugin_descriptors: combo_box::State<PluginDescriptor>,
 
-    arrangement: ArrangementWrapper,
-    meter: Arc<Meter>,
+    pub arrangement: ArrangementWrapper,
     loading: BTreeSet<Arc<Path>>,
     audios: BTreeMap<Arc<Path>, LoadStatus>,
     midis: Vec<Weak<ArcSwap<Vec<MidiNote>>>>,
-    plugins_by_channel: HoleyVec<Vec<(PluginId, PluginDescriptor)>>,
 
     pub tab: Tab,
 
@@ -155,23 +154,20 @@ pub struct ArrangementView {
 }
 
 impl ArrangementView {
-    pub fn create(
+    pub fn new(
         config: &Config,
         plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
-    ) -> (Self, Arc<Meter>) {
-        let (arrangement, meter) = ArrangementWrapper::create(config);
-
+    ) -> (Self, Task<Message>) {
+        let (arrangement, receiver) = ArrangementWrapper::create(config);
         (
             Self {
                 clap_host: ClapHost::default(),
                 plugin_descriptors: combo_box::State::new(plugin_bundles.keys().cloned().collect()),
 
                 arrangement,
-                meter: meter.clone(),
                 loading: BTreeSet::new(),
                 audios: BTreeMap::new(),
                 midis: Vec::new(),
-                plugins_by_channel: HoleyVec::default(),
 
                 tab: Tab::Arrangement { grabbed_clip: None },
 
@@ -188,11 +184,11 @@ impl ArrangementView {
 
                 split_at: 300.0,
             },
-            meter,
+            Task::stream(receiver).map(Message::Update),
         )
     }
 
-    pub fn stop(&self) {
+    pub fn stop(&mut self) {
         self.arrangement.stop();
     }
 
@@ -204,6 +200,7 @@ impl ArrangementView {
     ) -> Task<Message> {
         match message {
             Message::ClapHost(msg) => return self.clap_host.update(msg).map(Message::ClapHost),
+            Message::Update(msg) => self.arrangement.update(msg),
             Message::ConnectRequest((from, to)) => {
                 return Task::perform(self.arrangement.request_connect(from, to), |con| {
                     Message::ConnectSucceeded(con.unwrap())
@@ -222,61 +219,44 @@ impl ArrangementView {
                 });
             }
             Message::ChannelRemove(id) => {
-                self.arrangement.remove_channel(id);
+                let node = self.arrangement.remove_channel(id);
 
                 if self.selected_channel == Some(id) {
                     self.selected_channel = None;
                 }
 
-                if let Some(effects) = self.plugins_by_channel.remove(*id) {
-                    return Task::batch(effects.into_iter().map(|(id, _)| {
-                        self.clap_host
-                            .update(ClapHostMessage::MainThread(
-                                id,
-                                MainThreadMessage::GuiClosed,
-                            ))
-                            .map(Message::ClapHost)
-                    }));
-                }
+                return Task::batch(node.plugins.into_iter().map(|plugin| {
+                    self.clap_host
+                        .update(ClapHostMessage::MainThread(
+                            plugin.id,
+                            MainThreadMessage::GuiClosed,
+                        ))
+                        .map(Message::ClapHost)
+                }));
             }
             Message::ChannelSelect(id) => {
                 self.selected_channel = if self.selected_channel == Some(id) {
                     None
                 } else {
-                    self.plugins_by_channel.entry(*id).get_or_insert_default();
                     Some(id)
                 };
             }
             Message::ChannelVolumeChanged(id, volume) => {
-                self.arrangement.node(id).0.volume.store(volume, Release);
+                self.arrangement.node_volume_changed(id, volume);
             }
-            Message::ChannelPanChanged(id, pan) => {
-                self.arrangement.node(id).0.pan.store(pan, Release);
-            }
-            Message::ChannelToggleEnabled(id) => {
-                self.arrangement.node(id).0.enabled.fetch_not(AcqRel);
-            }
+            Message::ChannelPanChanged(id, pan) => self.arrangement.node_pan_changed(id, pan),
+            Message::ChannelToggleEnabled(id) => self.arrangement.node_toggle_enabled(id),
             Message::PluginLoad(descriptor) => {
-                let Some(selected) = self.selected_channel else {
-                    panic!()
-                };
+                let selected = self.selected_channel.unwrap();
 
                 let (gui, receiver, audio_processor) = clap_host::init(
                     &plugin_bundles[&descriptor],
-                    descriptor.clone(),
-                    f64::from(self.meter.sample_rate),
-                    self.meter.buffer_size,
+                    descriptor,
+                    f64::from(self.arrangement.meter().sample_rate),
+                    self.arrangement.meter().buffer_size,
                 );
 
-                let id = audio_processor.id();
-                self.arrangement
-                    .node(selected)
-                    .0
-                    .add_plugin(audio_processor);
-                self.plugins_by_channel
-                    .get_mut(*selected)
-                    .unwrap()
-                    .push((id, descriptor));
+                self.arrangement.plugin_load(selected, audio_processor);
 
                 return self
                     .clap_host
@@ -288,11 +268,11 @@ impl ArrangementView {
             }
             Message::PluginMixChanged(i, mix) => {
                 let selected = self.selected_channel.unwrap();
-                self.arrangement.node(selected).0.set_plugin_mix(i, mix);
+                self.arrangement.plugin_mix_changed(selected, i, mix);
             }
             Message::PluginToggleEnabled(i) => {
                 let selected = self.selected_channel.unwrap();
-                self.arrangement.node(selected).0.toggle_plugin_enabled(i);
+                self.arrangement.plugin_toggle_enabled(selected, i);
             }
             Message::PluginsReordered(event) => {
                 if let DragEvent::Dropped {
@@ -303,30 +283,17 @@ impl ArrangementView {
                     if index != target_index {
                         let selected = self.selected_channel.unwrap();
 
-                        self.arrangement
-                            .node(selected)
-                            .0
-                            .shift_move(index, target_index);
-                        self.plugins_by_channel
-                            .get_mut(*selected)
-                            .unwrap()
-                            .shift_move(index, target_index);
+                        self.arrangement.plugin_moved(selected, index, target_index);
                     }
                 }
             }
             Message::PluginRemove(i) => {
                 let selected = self.selected_channel.unwrap();
-                self.arrangement.node(selected).0.remove_plugin(i);
-                let id = self
-                    .plugins_by_channel
-                    .get_mut(*selected)
-                    .unwrap()
-                    .remove(i)
-                    .0;
+                let plugin = self.arrangement.plugin_remove(selected, i);
                 return self
                     .clap_host
                     .update(ClapHostMessage::MainThread(
-                        id,
+                        plugin.id,
                         MainThreadMessage::GuiClosed,
                     ))
                     .map(Message::ClapHost);
@@ -353,7 +320,7 @@ impl ArrangementView {
 
                 self.audios.insert(path.clone(), LoadStatus::Loading(1));
                 self.loading.insert(path.clone());
-                let sample_rate = self.meter.sample_rate;
+                let sample_rate = self.arrangement.meter().sample_rate;
 
                 return Task::perform(
                     {
@@ -379,7 +346,7 @@ impl ArrangementView {
                         LoadStatus::Loaded(..) => 1,
                     };
 
-                    let clip = AudioClip::create(audio, self.meter.clone());
+                    let clip = AudioClip::create(audio, self.arrangement.meter());
                     let end = clip.position.get_global_end();
 
                     let mut futs = Vec::new();
@@ -416,9 +383,9 @@ impl ArrangementView {
             Message::AddMidiClip(track, pos) => {
                 let pattern = Arc::default();
                 self.midis.push(Arc::downgrade(&pattern));
-                let clip = MidiClip::create(pattern, self.meter.clone());
+                let clip = MidiClip::create(pattern);
                 clip.position
-                    .trim_end_to(Position::BEAT * u32::from(self.meter.numerator.load(Acquire)));
+                    .trim_end_to(Position::BEAT * u32::from(self.arrangement.meter().numerator));
                 clip.position.move_to(pos);
                 let track = self.arrangement.track_of(track).unwrap();
                 self.arrangement.add_clip(track, clip);
@@ -451,44 +418,36 @@ impl ArrangementView {
             Message::TrackToggleSolo(id) => {
                 if self.soloed_track == Some(id) {
                     self.soloed_track = None;
-                    self.arrangement
-                        .tracks()
-                        .iter()
-                        .for_each(|track| track.node.enabled.store(true, Release));
+                    self.arrangement.enable_all_tracks();
                 } else {
-                    self.arrangement
-                        .tracks()
-                        .iter()
-                        .for_each(|track| track.node.enabled.store(false, Release));
-                    self.arrangement.node(id).0.enabled.store(true, Release);
                     self.soloed_track = Some(id);
+                    self.arrangement.solo_track(id);
                 }
             }
-            Message::SeekTo(pos) => {
-                self.meter.sample.store(
-                    pos.in_samples(self.meter.bpm.load(Acquire), self.meter.sample_rate),
-                    Release,
-                );
-            }
+            Message::SeekTo(pos) => self.arrangement.seek_to(pos),
             Message::ToggleRecord(id) => {
                 if let Some((_, i)) = &self.recording {
-                    return if *i == id {
-                        self.update(Message::StopRecord, config, plugin_bundles)
-                    } else {
-                        self.update(Message::RecordingSplit(id), config, plugin_bundles)
-                    };
+                    return self.update(
+                        if *i == id {
+                            Message::StopRecord
+                        } else {
+                            Message::RecordingSplit(id)
+                        },
+                        config,
+                        plugin_bundles,
+                    );
                 }
 
                 let (recording, receiver) = Recording::create(
                     Self::make_recording_path(),
-                    &self.meter,
+                    self.arrangement.meter(),
                     config.input_device.name.as_deref(),
                     config.input_device.sample_rate.unwrap_or(44100),
                     config.input_device.buffer_size.unwrap_or(1024),
                 );
                 self.recording = Some((recording, id));
 
-                self.meter.playing.store(true, Release);
+                self.arrangement.play();
 
                 return Task::stream(receiver)
                     .map(NoDebug)
@@ -497,16 +456,16 @@ impl ArrangementView {
             Message::RecordingSplit(id) => {
                 if let Some((mut recording, track)) = self.recording.take() {
                     let mut pos = Position::from_samples(
-                        self.meter.sample.load(Acquire),
-                        self.meter.bpm.load(Acquire),
-                        self.meter.sample_rate,
+                        self.arrangement.meter().sample,
+                        self.arrangement.meter(),
                     );
-
                     (pos, recording.position) = (recording.position, pos);
-                    let audio = recording.split_off(Self::make_recording_path(), &self.meter);
-                    let track = self.arrangement.track_of(track).unwrap();
 
-                    let clip = AudioClip::create(audio, self.meter.clone());
+                    let track = self.arrangement.track_of(track).unwrap();
+                    let clip = AudioClip::create(
+                        recording.split_off(Self::make_recording_path(), self.arrangement.meter()),
+                        self.arrangement.meter(),
+                    );
                     clip.position.move_to(pos);
                     self.arrangement.add_clip(track, clip);
 
@@ -520,12 +479,11 @@ impl ArrangementView {
             }
             Message::StopRecord => {
                 if let Some((recording, track)) = self.recording.take() {
-                    self.meter.playing.store(false, Release);
-
+                    self.arrangement.pause();
                     let pos = recording.position;
-                    let track = self.arrangement.track_of(track).unwrap();
 
-                    let clip = AudioClip::create(recording.finalize(), self.meter.clone());
+                    let track = self.arrangement.track_of(track).unwrap();
+                    let clip = AudioClip::create(recording.finalize(), self.arrangement.meter());
                     clip.position.move_to(pos);
                     self.arrangement.add_clip(track, clip);
                 }
@@ -623,7 +581,7 @@ impl ArrangementView {
                     .position()
                     .trim_end_to(pos);
             }
-            ArrangementAction::Delete(track, clip) => self.arrangement.delete_clip(track, clip),
+            ArrangementAction::Delete(track, clip) => self.arrangement.remove_clip(track, clip),
         }
     }
 
@@ -683,8 +641,8 @@ impl ArrangementView {
 
     pub fn save(&mut self, path: &Path) {
         let mut writer = Writer::new(
-            u32::from(self.meter.bpm.load(Acquire)),
-            u32::from(self.meter.numerator.load(Acquire)),
+            u32::from(self.arrangement.meter().bpm),
+            u32::from(self.arrangement.meter().numerator),
         );
 
         let mut audios = HashMap::new();
@@ -723,8 +681,9 @@ impl ArrangementView {
 
         let mut tracks = HashMap::new();
         for track in self.arrangement.tracks() {
+            let node = &self.arrangement.node(track.id).0;
             tracks.insert(
-                track.id(),
+                track.id,
                 writer.push_track(
                     track.clips.iter().map(|clip| match clip {
                         Clip::Audio(audio) => proto::AudioClip {
@@ -746,48 +705,50 @@ impl ArrangementView {
                         }
                         .into(),
                     }),
-                    self.plugins_by_channel
-                        .get(*track.id())
-                        .into_iter()
-                        .flatten()
-                        .map(|(id, descriptor)| proto::Plugin {
-                            id: descriptor.id.to_bytes_with_nul().to_owned(),
-                            state: self.clap_host.get_state(*id),
+                    self.arrangement
+                        .node(track.id)
+                        .0
+                        .plugins
+                        .iter()
+                        .map(|plugin| proto::Plugin {
+                            id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
+                            state: self.clap_host.get_state(plugin.id),
                         }),
-                    track.node.volume.load(Acquire),
-                    track.node.pan.load(Acquire),
+                    node.volume,
+                    node.pan,
                 ),
             );
         }
 
         let mut channels = HashMap::new();
-        for channel in once(&*self.arrangement.master().0).chain(self.arrangement.channels()) {
+        for channel in once(&self.arrangement.master().0).chain(self.arrangement.channels()) {
             channels.insert(
-                channel.id(),
+                channel.id,
                 writer.push_channel(
-                    self.plugins_by_channel
-                        .get(*channel.id())
-                        .into_iter()
-                        .flatten()
-                        .map(|(id, descriptor)| proto::Plugin {
-                            id: descriptor.id.to_bytes_with_nul().to_owned(),
-                            state: self.clap_host.get_state(*id),
+                    self.arrangement
+                        .node(channel.id)
+                        .0
+                        .plugins
+                        .iter()
+                        .map(|plugin| proto::Plugin {
+                            id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
+                            state: self.clap_host.get_state(plugin.id),
                         }),
-                    channel.volume.load(Acquire),
-                    channel.pan.load(Acquire),
+                    channel.volume,
+                    channel.pan,
                 ),
             );
         }
 
         for track in self.arrangement.tracks() {
-            for connection in &self.arrangement.node(track.id()).1 {
-                writer.connect_track_to_channel(tracks[&track.id()], channels[&connection]);
+            for connection in &self.arrangement.node(track.id).1 {
+                writer.connect_track_to_channel(tracks[&track.id], channels[&connection]);
             }
         }
 
         for channel in self.arrangement.channels() {
-            for connection in &self.arrangement.node(channel.id()).1 {
-                writer.connect_channel_to_channel(channels[&channel.id()], channels[&connection]);
+            for connection in &self.arrangement.node(channel.id).1 {
+                writer.connect_channel_to_channel(channels[&channel.id], channels[&connection]);
             }
         }
 
@@ -802,19 +763,20 @@ impl ArrangementView {
         path: &Path,
         config: &Config,
         plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
-    ) -> Option<(Arc<Meter>, Task<Message>)> {
+    ) -> Option<Task<Message>> {
         info!("loading project {}", path.display());
 
         let mut gdp = Vec::new();
         File::open(path).ok()?.read_to_end(&mut gdp).ok()?;
         let reader = Reader::new(&gdp)?;
 
-        let (mut arrangement, meter) = ArrangementWrapper::create(config);
+        let mut futs = Vec::new();
 
-        meter.bpm.store(reader.meter().bpm as u16, Release);
-        meter
-            .numerator
-            .store(reader.meter().numerator as u8, Release);
+        let (mut arrangement, receiver) = ArrangementWrapper::create(config);
+        futs.push(Task::stream(receiver).map(Message::Update));
+
+        arrangement.set_bpm(reader.meter().bpm as u16);
+        arrangement.set_numerator(reader.meter().numerator as u8);
 
         let mut audios = HashMap::new();
         let mut midis = HashMap::new();
@@ -823,7 +785,7 @@ impl ArrangementView {
         std::thread::scope(|s| {
             for (idx, audio) in reader.iter_audios() {
                 let sender = sender.clone();
-                let sample_rate = meter.sample_rate;
+                let sample_rate = arrangement.meter().sample_rate;
                 s.spawn(move || {
                     let audio = config
                         .sample_paths
@@ -876,38 +838,20 @@ impl ArrangementView {
             audios.insert(idx, audio?);
         }
 
-        let mut plugins_by_channel = HoleyVec::<Vec<_>>::default();
-        let mut futs = Vec::new();
-
-        let mut load_channel = |node: &MixerNode, channel: &proto::Channel| {
-            node.volume.store(channel.volume, Release);
-            node.pan.store(channel.pan, Release);
+        let mut load_channel = |node: &Node, channel: &proto::Channel| {
+            futs.push(Task::done(Message::ChannelVolumeChanged(
+                node.id,
+                channel.volume,
+            )));
+            futs.push(Task::done(Message::ChannelPanChanged(node.id, channel.pan)));
 
             for plugin in &channel.plugins {
-                let id = plugin.id();
-                let descriptor = plugin_bundles.keys().find(|d| *d.id == *id)?;
-
-                let (mut gui, receiver, audio_processor) = clap_host::init(
-                    plugin_bundles.get(descriptor)?,
-                    descriptor.clone(),
-                    f64::from(meter.sample_rate),
-                    meter.buffer_size,
-                );
-
-                if let Some(state) = &plugin.state {
-                    gui.set_state(state);
-                }
-
-                plugins_by_channel
-                    .entry(*node.id())
-                    .get_or_insert_default()
-                    .push((audio_processor.id(), descriptor.clone()));
-
-                node.add_plugin(audio_processor);
-
-                futs.push(Task::done(Message::ClapHost(ClapHostMessage::Opened(
-                    Arc::new(Mutex::new((Fragile::new(gui), receiver))),
-                ))));
+                futs.push(Task::done(Message::PluginLoad(
+                    plugin_bundles
+                        .keys()
+                        .find(|d| *d.id == *plugin.id())?
+                        .clone(),
+                )));
             }
 
             Some(())
@@ -915,14 +859,15 @@ impl ArrangementView {
 
         let mut tracks = HashMap::new();
         for (idx, clips, channel) in reader.iter_tracks() {
-            let mut track = Track::default();
-            load_channel(&track.node, channel)?;
+            let mut track = core::Track::default();
 
             for clip in clips {
                 track.clips.push(match clip {
                     proto::Clip::Audio(audio) => {
-                        let clip =
-                            AudioClip::create(audios.get(&audio.audio)?.clone(), meter.clone());
+                        let clip = AudioClip::create(
+                            audios.get(&audio.audio)?.clone(),
+                            arrangement.meter(),
+                        );
                         clip.position.move_to(audio.position.global_start.into());
                         clip.position.trim_end_to(audio.position.global_end.into());
                         clip.position
@@ -930,7 +875,7 @@ impl ArrangementView {
                         Clip::Audio(clip)
                     }
                     proto::Clip::Midi(midi) => {
-                        let clip = MidiClip::create(midis.get(&midi.midi)?.clone(), meter.clone());
+                        let clip = MidiClip::create(midis.get(&midi.midi)?.clone());
                         clip.position.move_to(midi.position.global_start.into());
                         clip.position.trim_end_to(midi.position.global_end.into());
                         clip.position.trim_start_to(midi.position.clip_start.into());
@@ -939,8 +884,10 @@ impl ArrangementView {
                 });
             }
 
-            tracks.insert(idx, track.id());
+            let id = track.id();
+            tracks.insert(idx, id);
             arrangement.push_track(track);
+            load_channel(&arrangement.node(id).0, channel)?;
         }
 
         let mut channels = HashMap::new();
@@ -949,15 +896,16 @@ impl ArrangementView {
         let node = &arrangement.master().0;
         let (idx, channel) = iter_channels.next()?;
         load_channel(node, channel)?;
-        channels.insert(idx, node.id());
+        channels.insert(idx, node.id);
 
         for (idx, channel) in iter_channels {
-            let node = Arc::new(MixerNode::default());
+            let mixer_node = MixerNode::default();
+            let node = Node::new(mixer_node.id());
 
             load_channel(&node, channel)?;
 
-            channels.insert(idx, node.id());
-            arrangement.push_channel(node);
+            channels.insert(idx, mixer_node.id());
+            arrangement.push_channel(mixer_node);
         }
 
         for (from, to) in reader.iter_connections_track_channel() {
@@ -980,7 +928,6 @@ impl ArrangementView {
 
         self.plugin_descriptors = combo_box::State::new(plugin_bundles.keys().cloned().collect());
         self.arrangement = arrangement;
-        self.meter = meter.clone();
         self.audios.extend(audios.values().map(|audio| {
             (
                 audio.path.clone(),
@@ -989,22 +936,24 @@ impl ArrangementView {
         }));
         self.midis.extend(midis.values().map(Arc::downgrade));
 
-        Some((meter, Task::batch(futs)))
+        Some(Task::batch(futs))
     }
 
     pub fn unload(
         &mut self,
         config: &Config,
         plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
-    ) -> (Arc<Meter>, Task<Message>) {
-        let futs = Task::batch(self.clear());
+    ) -> Task<Message> {
+        let (arrangement, receiver) = ArrangementWrapper::create(config);
 
-        let (arrangement, meter) = ArrangementWrapper::create(config);
+        let futs = Task::batch(
+            self.clear()
+                .chain(once(Task::stream(receiver).map(Message::Update))),
+        );
         self.plugin_descriptors = combo_box::State::new(plugin_bundles.keys().cloned().collect());
         self.arrangement = arrangement;
-        self.meter = meter.clone();
 
-        (meter, futs)
+        futs
     }
 
     fn clear(&mut self) -> impl Iterator<Item = Task<Message>> {
@@ -1014,8 +963,7 @@ impl ArrangementView {
         self.recording = None;
         self.soloed_track = None;
         self.selected_channel = None;
-
-        self.plugins_by_channel.drain(..).flatten().map(|(id, _)| {
+        self.arrangement.plugins().map(|id| {
             self.clap_host
                 .update(ClapHostMessage::MainThread(
                     id,
@@ -1030,16 +978,18 @@ impl ArrangementView {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        match &self.tab {
+        let view = match &self.tab {
             Tab::Arrangement { .. } => self.arrangement(),
             Tab::Mixer => self.mixer(),
             Tab::PianoRoll { clip, .. } => self.piano_roll(clip),
-        }
+        };
+        self.arrangement.clear_l_r();
+        view
     }
 
     fn arrangement(&self) -> Element<'_, Message> {
         Seeker::new(
-            &self.meter,
+            self.arrangement.meter(),
             &self.arrangement_position,
             &self.arrangement_scale,
             column(
@@ -1047,35 +997,31 @@ impl ArrangementView {
                     .tracks()
                     .iter()
                     .map(|track| {
-                        let id = track.id();
-                        let l_r = track.node.get_l_r();
-                        let enabled = track.node.enabled.load(Acquire);
-                        let volume = track.node.volume.load(Acquire);
-                        let pan = track.node.pan.load(Acquire);
+                        let node = &self.arrangement.node(track.id).0;
 
                         container(
                             row![
-                                PeakMeter::new(l_r, enabled),
+                                PeakMeter::new(node.l_r.get(), node.enabled),
                                 column![
                                     Knob::new(
                                         0.0..=1.0,
-                                        volume,
+                                        node.volume,
                                         0.0,
                                         1.0,
-                                        enabled,
-                                        Message::ChannelVolumeChanged.with(id)
+                                        node.enabled,
+                                        Message::ChannelVolumeChanged.with(track.id)
                                     )
-                                    .tooltip(Decibels::from_amplitude(volume).to_string()),
+                                    .tooltip(Decibels::from_amplitude(node.volume).to_string()),
                                     Knob::new(
                                         -1.0..=1.0,
-                                        pan,
+                                        node.pan,
                                         0.0,
                                         0.0,
-                                        enabled,
-                                        Message::ChannelPanChanged.with(id)
+                                        node.enabled,
+                                        Message::ChannelPanChanged.with(track.id)
                                     )
                                     .tooltip({
-                                        let pan = (pan * 100.0) as i8;
+                                        let pan = (node.pan * 100.0) as i8;
                                         match pan.cmp(&0) {
                                             Ordering::Greater => pan.to_string() + "% right",
                                             Ordering::Equal => "center".to_owned(),
@@ -1087,12 +1033,12 @@ impl ArrangementView {
                                 .wrap(),
                                 column![
                                     icon_button(text('M'))
-                                        .on_press(Message::TrackToggleEnabled(id))
+                                        .on_press(Message::TrackToggleEnabled(track.id))
                                         .style(move |t, s| {
                                             button_with_base(
                                                 t,
                                                 s,
-                                                if enabled {
+                                                if node.enabled {
                                                     button::primary
                                                 } else {
                                                     button::secondary
@@ -1100,45 +1046,45 @@ impl ArrangementView {
                                             )
                                         }),
                                     icon_button(text('S'))
-                                        .on_press(Message::TrackToggleSolo(id))
+                                        .on_press(Message::TrackToggleSolo(track.id))
                                         .style(move |t, s| {
                                             button_with_base(
                                                 t,
                                                 s,
-                                                if self.soloed_track == Some(id) {
+                                                if self.soloed_track == Some(track.id) {
                                                     button::warning
-                                                } else if enabled {
+                                                } else if node.enabled {
                                                     button::primary
                                                 } else {
                                                     button::secondary
                                                 },
                                             )
                                         }),
-                                    icon_button(x()).on_press(Message::TrackRemove(id)).style(
-                                        move |t, s| {
+                                    icon_button(x())
+                                        .on_press(Message::TrackRemove(track.id))
+                                        .style(move |t, s| {
                                             button_with_base(
                                                 t,
                                                 s,
-                                                if enabled {
+                                                if node.enabled {
                                                     button::danger
                                                 } else {
                                                     button::secondary
                                                 },
                                             )
-                                        }
-                                    ),
+                                        }),
                                     column![
                                         vertical_space(),
                                         button(
                                             AnimatedDot::new(
                                                 self.recording
                                                     .as_ref()
-                                                    .is_some_and(|&(_, i)| i == id)
+                                                    .is_some_and(|&(_, i)| i == track.id)
                                             )
                                             .radius(5.0)
                                         )
                                         .padding(1.5)
-                                        .on_press(Message::ToggleRecord(id))
+                                        .on_press(Message::ToggleRecord(track.id))
                                         .style(
                                             move |t, s| {
                                                 button_with_base(
@@ -1147,10 +1093,10 @@ impl ArrangementView {
                                                     if self
                                                         .recording
                                                         .as_ref()
-                                                        .is_some_and(|&(_, i)| i == id)
+                                                        .is_some_and(|&(_, i)| i == track.id)
                                                     {
                                                         button::danger
-                                                    } else if enabled {
+                                                    } else if node.enabled {
                                                         button::primary
                                                     } else {
                                                         button::secondary
@@ -1183,7 +1129,7 @@ impl ArrangementView {
             )
             .align_x(Alignment::Center),
             ArrangementWidget::new(
-                &self.meter,
+                self.arrangement.meter(),
                 &self.arrangement_position,
                 &self.arrangement_scale,
                 column(
@@ -1191,22 +1137,24 @@ impl ArrangementView {
                         .tracks()
                         .iter()
                         .map(|track| {
-                            let id = track.id();
-                            let enabled = track.node.enabled.load(Acquire);
+                            let id = track.id;
+                            let node = &self.arrangement.node(track.id).0;
 
                             let clips_iter = track.clips.iter().map(|clip| match clip {
                                 Clip::Audio(clip) => AudioClipWidget::new(
                                     clip,
+                                    self.arrangement.meter(),
                                     &self.arrangement_position,
                                     &self.arrangement_scale,
-                                    enabled,
+                                    node.enabled,
                                 )
                                 .into(),
                                 Clip::Midi(clip) => MidiClipWidget::new(
                                     clip,
+                                    self.arrangement.meter(),
                                     &self.arrangement_position,
                                     &self.arrangement_scale,
-                                    enabled,
+                                    node.enabled,
                                     Message::OpenMidiClip(clip.clone()),
                                 )
                                 .into(),
@@ -1218,7 +1166,7 @@ impl ArrangementView {
                                         clips_iter.chain(once(
                                             RecordingWidget::new(
                                                 &self.recording.as_ref().unwrap().0,
-                                                &self.meter,
+                                                self.arrangement.meter(),
                                                 &self.arrangement_position,
                                                 &self.arrangement_scale,
                                             )
@@ -1230,7 +1178,7 @@ impl ArrangementView {
                                 };
 
                             TrackWidget::new(
-                                &self.meter,
+                                self.arrangement.meter(),
                                 &self.arrangement_position,
                                 &self.arrangement_scale,
                                 clips_iter,
@@ -1251,16 +1199,10 @@ impl ArrangementView {
         fn channel<'a>(
             selected_channel: Option<NodeId>,
             name: String,
-            node: &MixerNode,
+            node: &'a Node,
             buttons: impl Fn(bool, NodeId) -> Element<'a, Message>,
             connect: impl Fn(bool, NodeId) -> Element<'a, Message>,
         ) -> Element<'a, Message> {
-            let id = node.id();
-            let l_r = node.get_l_r();
-            let enabled = node.enabled.load(Acquire);
-            let volume = node.volume.load(Acquire);
-            let pan = node.pan.load(Acquire);
-
             button(
                 column![
                     row![
@@ -1268,47 +1210,47 @@ impl ArrangementView {
                             text(name),
                             Knob::new(
                                 -1.0..=1.0,
-                                pan,
+                                node.pan,
                                 0.0,
                                 0.0,
-                                enabled,
-                                Message::ChannelPanChanged.with(id)
+                                node.enabled,
+                                Message::ChannelPanChanged.with(node.id)
                             )
                             .tooltip({
-                                let pan = (pan * 100.0) as i8;
+                                let pan = (node.pan * 100.0) as i8;
                                 match pan.cmp(&0) {
                                     Ordering::Greater => pan.to_string() + "% right",
                                     Ordering::Equal => "center".to_owned(),
                                     Ordering::Less => (-pan).to_string() + "% left",
                                 }
                             }),
-                            PeakMeter::new(l_r, enabled)
+                            PeakMeter::new(node.l_r.get(), node.enabled)
                         ]
                         .spacing(5.0)
                         .align_x(Alignment::Center),
                         column![
-                            buttons(enabled, id),
+                            buttons(node.enabled, node.id),
                             vertical_slider(
                                 0.0..=1.0,
-                                volume,
-                                Message::ChannelVolumeChanged.with(id)
+                                node.volume,
+                                Message::ChannelVolumeChanged.with(node.id)
                             )
                             .step(f32::EPSILON)
-                            .style(move |t, s| slider_with_enabled(t, s, enabled))
+                            .style(move |t, s| slider_with_enabled(t, s, node.enabled))
                         ]
                         .spacing(5.0)
                         .align_x(Alignment::Center)
                     ]
                     .spacing(5.0),
-                    connect(enabled, id)
+                    connect(node.enabled, node.id)
                 ]
                 .spacing(5.0)
                 .align_x(Alignment::Center),
             )
             .padding(5.0)
-            .on_press(Message::ChannelSelect(id))
+            .on_press(Message::ChannelSelect(node.id))
             .style(move |t, _| {
-                let pair = if Some(id) == selected_channel {
+                let pair = if Some(node.id) == selected_channel {
                     t.extended_palette().background.weak
                 } else {
                     t.extended_palette().background.weakest
@@ -1398,11 +1340,12 @@ impl ArrangementView {
                     .enumerate()
                     .map(|(i, track)| {
                         let name = "T ".to_owned() + &(i + 1).to_string();
+                        let node = &self.arrangement.node(track.id).0;
 
                         channel(
                             self.selected_channel,
                             name,
-                            &track.node,
+                            node,
                             |enabled, id| {
                                 column![
                                     icon_button(text('M'))
@@ -1541,94 +1484,90 @@ impl ArrangementView {
                     horizontal_rule(11.0),
                     styled_scrollable_with_direction(
                         dragking::column({
-                            self.plugins_by_channel[*selected].iter().enumerate().map(
-                                |(i, (plugin_id, descriptor))| {
-                                    let enabled = node.get_plugin_enabled(i);
-                                    let mix = node.get_plugin_mix(i);
-
-                                    row![
-                                        Knob::new(
-                                            0.0..=1.0,
-                                            mix,
-                                            0.0,
-                                            1.0,
-                                            enabled,
-                                            Message::PluginMixChanged.with(i)
+                            node.plugins.iter().enumerate().map(|(i, plugin)| {
+                                row![
+                                    Knob::new(
+                                        0.0..=1.0,
+                                        plugin.mix,
+                                        0.0,
+                                        1.0,
+                                        plugin.enabled,
+                                        Message::PluginMixChanged.with(i)
+                                    )
+                                    .radius(TEXT_HEIGHT)
+                                    .tooltip(((plugin.mix * 100.0) as u8).to_string() + "%"),
+                                    button(
+                                        container(
+                                            text(&*plugin.descriptor.name).wrapping(Wrapping::None)
                                         )
-                                        .radius(TEXT_HEIGHT)
-                                        .tooltip(((mix * 100.0) as u8).to_string() + "%"),
-                                        button(
-                                            container(
-                                                text(&*descriptor.name).wrapping(Wrapping::None)
-                                            )
-                                            .clip(true)
-                                        )
-                                        .style(move |t, s| button_with_base(
-                                            t,
-                                            s,
-                                            if enabled {
-                                                button::primary
-                                            } else {
-                                                button::secondary
-                                            }
+                                        .clip(true)
+                                    )
+                                    .style(move |t, s| button_with_base(
+                                        t,
+                                        s,
+                                        if plugin.enabled {
+                                            button::primary
+                                        } else {
+                                            button::secondary
+                                        }
+                                    ))
+                                    .width(Fill)
+                                    .on_press(
+                                        Message::ClapHost(ClapHostMessage::MainThread(
+                                            plugin.id,
+                                            MainThreadMessage::GuiRequestShow,
                                         ))
-                                        .width(Fill)
-                                        .on_press(
-                                            Message::ClapHost(ClapHostMessage::MainThread(
-                                                *plugin_id,
-                                                MainThreadMessage::GuiRequestShow,
-                                            ))
+                                    ),
+                                    column![
+                                        icon_button(text('M'))
+                                            .on_press(Message::PluginToggleEnabled(i))
+                                            .style(move |t, s| {
+                                                button_with_base(
+                                                    t,
+                                                    s,
+                                                    if plugin.enabled {
+                                                        button::primary
+                                                    } else {
+                                                        button::secondary
+                                                    },
+                                                )
+                                            }),
+                                        icon_button(x()).on_press(Message::PluginRemove(i)).style(
+                                            move |t, s| {
+                                                button_with_base(
+                                                    t,
+                                                    s,
+                                                    if plugin.enabled {
+                                                        button::danger
+                                                    } else {
+                                                        button::secondary
+                                                    },
+                                                )
+                                            }
                                         ),
-                                        column![
-                                            icon_button(text('M'))
-                                                .on_press(Message::PluginToggleEnabled(i))
-                                                .style(move |t, s| {
-                                                    button_with_base(
-                                                        t,
-                                                        s,
-                                                        if enabled {
-                                                            button::primary
-                                                        } else {
-                                                            button::secondary
-                                                        },
-                                                    )
-                                                }),
-                                            icon_button(x())
-                                                .on_press(Message::PluginRemove(i))
-                                                .style(move |t, s| {
-                                                    button_with_base(
-                                                        t,
-                                                        s,
-                                                        if enabled {
-                                                            button::danger
-                                                        } else {
-                                                            button::secondary
-                                                        },
-                                                    )
-                                                }),
-                                        ]
-                                        .spacing(5.0),
-                                        mouse_area(
-                                            container(
-                                                grip_vertical().line_height(
-                                                    (LINE_HEIGHT + 10.0) / LINE_HEIGHT
-                                                )
-                                            )
-                                            .style(
-                                                |t| container::background(
-                                                    t.extended_palette().background.weak.color,
-                                                )
-                                                .border(border::width(1.0).color(
-                                                    t.extended_palette().background.strong.color,
-                                                ))
-                                            )
-                                        )
-                                        .interaction(Interaction::Grab),
                                     ]
-                                    .spacing(5.0)
-                                    .into()
-                                },
-                            )
+                                    .spacing(5.0),
+                                    mouse_area(
+                                        container(
+                                            grip_vertical()
+                                                .line_height((LINE_HEIGHT + 10.0) / LINE_HEIGHT)
+                                        )
+                                        .style(|t| {
+                                            container::background(
+                                                t.extended_palette().background.weak.color,
+                                            )
+                                            .border(
+                                                border::width(1.0).color(
+                                                    t.extended_palette().background.strong.color,
+                                                ),
+                                            )
+                                        })
+                                    )
+                                    .interaction(Interaction::Grab),
+                                ]
+                                .spacing(5.0)
+                                .into()
+                            })
                         })
                         .spacing(5.0)
                         .on_drag(Message::PluginsReordered),
@@ -1647,16 +1586,14 @@ impl ArrangementView {
     }
 
     fn piano_roll<'a>(&'a self, clip: &'a MidiClip) -> Element<'a, Message> {
-        let bpm = self.meter.bpm.load(Acquire);
-
         Seeker::new(
-            &self.meter,
+            self.arrangement.meter(),
             &self.piano_roll_position,
             &self.piano_roll_scale,
             Piano::new(&self.piano_roll_position, &self.piano_roll_scale),
             PianoRoll::new(
                 clip.pattern.load().deref().clone(),
-                &self.meter,
+                self.arrangement.meter(),
                 &self.piano_roll_position,
                 &self.piano_roll_scale,
                 Message::PianoRollAction,
@@ -1667,11 +1604,11 @@ impl ArrangementView {
         .with_offset(
             clip.position
                 .get_global_start()
-                .in_samples_f(bpm, self.meter.sample_rate)
+                .in_samples_f(self.arrangement.meter())
                 - clip
                     .position
                     .get_clip_start()
-                    .in_samples_f(bpm, self.meter.sample_rate),
+                    .in_samples_f(self.arrangement.meter()),
         )
         .into()
     }

@@ -77,7 +77,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
             let state = tree.state.downcast_mut::<State>();
             state.now = now;
 
-            let [left, right] = self.values;
+            let [left, right] = std::mem::take(&mut self.values);
 
             if left >= state.left.interpolate_with(identity, now) {
                 state.left = Animation::new(left)

@@ -10,7 +10,7 @@ use crate::{
     widget::{AnimatedDot, LINE_HEIGHT},
 };
 use generic_daw_core::{
-    Meter, Position,
+    Position,
     clap_host::{PluginBundle, PluginDescriptor, get_installed_plugins},
     get_input_devices, get_output_devices,
 };
@@ -21,25 +21,15 @@ use iced::{
     mouse::Interaction,
     time::every,
     widget::{button, center, column, container, horizontal_space, mouse_area, opaque, row, stack},
-    window::{self, Id, frames},
+    window::{self, Id},
 };
 use iced_split::{Split, Strategy};
 use log::trace;
 use rfd::AsyncFileDialog;
-use std::{
-    collections::BTreeMap,
-    path::Path,
-    sync::{
-        Arc,
-        atomic::Ordering::{AcqRel, Acquire, Release},
-    },
-    time::Duration,
-};
+use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    Redraw,
-
     Arrangement(ArrangementMessage),
     FileTree(FileTreeMessage),
     ConfigView(ConfigViewMessage),
@@ -58,7 +48,7 @@ pub enum Message {
     CloseConfigView,
 
     Stop,
-    TogglePlay,
+    TogglePlayback,
     ToggleMetronome,
     ChangedBpm(u16),
     ChangedBpmText(String),
@@ -80,7 +70,6 @@ pub struct Daw {
     config_view: Option<ConfigView>,
     state: State,
     split_at: f32,
-    meter: Arc<Meter>,
 }
 
 impl Daw {
@@ -111,15 +100,15 @@ impl Daw {
         let mut output_devices = get_output_devices();
         output_devices.sort_unstable();
 
-        let (mut arrangement, mut meter) = ArrangementView::create(&config, &plugin_bundles);
+        let (mut arrangement, futs) = ArrangementView::new(&config, &plugin_bundles);
+        open = open.chain(futs.map(Message::Arrangement));
 
-        if let Some((new_meter, futs)) = state
+        if let Some(futs) = state
             .last_project
             .as_deref()
             .and_then(|path| arrangement.load(path, &config, &plugin_bundles))
         {
             open = open.chain(futs.map(Message::Arrangement));
-            meter = new_meter;
         }
 
         (
@@ -134,7 +123,6 @@ impl Daw {
                 config_view: None,
                 state,
                 split_at: 300.0,
-                meter,
             },
             open,
         )
@@ -144,7 +132,6 @@ impl Daw {
         trace!("{message:?}");
 
         match message {
-            Message::Redraw => {}
             Message::Arrangement(message) => {
                 return self
                     .arrangement
@@ -159,12 +146,11 @@ impl Daw {
             }
             Message::NewFile => {
                 self.reload_config();
-
-                let (meter, futs) = self.arrangement.unload(&self.config, &self.plugin_bundles);
-                self.meter = meter;
                 self.state.last_project = None;
-
-                return futs.map(Message::Arrangement);
+                return self
+                    .arrangement
+                    .unload(&self.config, &self.plugin_bundles)
+                    .map(Message::Arrangement);
             }
             Message::ChangedTab(tab) => self.arrangement.tab = tab,
             Message::OpenFileDialog => {
@@ -207,26 +193,21 @@ impl Daw {
                         .save_file(),
                 )
                 .and_then(Task::done)
-                .map(|p| p.path().into())
+                .map(|p| p.path().with_extension("wav").into())
                 .map(ArrangementMessage::Export)
                 .map(Message::Arrangement);
             }
             Message::OpenFile(path) => {
                 self.reload_config();
-
-                let (meter, futs) = self
-                    .arrangement
-                    .load(&path, &self.config, &self.plugin_bundles)
-                    .unwrap();
-
-                self.meter = meter;
-
                 if self.state.last_project.as_deref() != Some(&path) {
-                    self.state.last_project = Some(path);
+                    self.state.last_project = Some(path.clone());
                     self.state.write();
                 }
-
-                return futs.map(Message::Arrangement);
+                return self
+                    .arrangement
+                    .load(&path, &self.config, &self.plugin_bundles)
+                    .unwrap()
+                    .map(Message::Arrangement);
             }
             Message::SaveAsFile(path) => {
                 self.arrangement.save(&path);
@@ -239,8 +220,6 @@ impl Daw {
             Message::OpenConfigView => self.config_view = Some(ConfigView::default()),
             Message::CloseConfigView => self.config_view = None,
             Message::Stop => {
-                self.meter.playing.store(false, Release);
-                self.meter.sample.store(0, Release);
                 self.arrangement.stop();
                 return self
                     .arrangement
@@ -251,8 +230,9 @@ impl Daw {
                     )
                     .map(Message::Arrangement);
             }
-            Message::TogglePlay => {
-                if self.meter.playing.fetch_not(AcqRel) {
+            Message::TogglePlayback => {
+                self.arrangement.arrangement.toggle_playback();
+                if !self.arrangement.arrangement.meter().playing {
                     return self
                         .arrangement
                         .update(
@@ -263,17 +243,17 @@ impl Daw {
                         .map(Message::Arrangement);
                 }
             }
-            Message::ToggleMetronome => {
-                self.meter.metronome.fetch_not(AcqRel);
-            }
-            Message::ChangedBpm(bpm) => self.meter.bpm.store(bpm.clamp(10, 999), Release),
+            Message::ToggleMetronome => self.arrangement.arrangement.toggle_metronome(),
+            Message::ChangedBpm(bpm) => self.arrangement.arrangement.set_bpm(bpm.clamp(10, 999)),
             Message::ChangedBpmText(bpm) => {
                 if let Ok(bpm) = bpm.parse() {
                     return self.update(Message::ChangedBpm(bpm));
                 }
             }
             Message::ChangedNumerator(numerator) => {
-                self.meter.numerator.store(numerator.clamp(1, 99), Release);
+                self.arrangement
+                    .arrangement
+                    .set_numerator(numerator.clamp(1, 99));
             }
             Message::ChangedNumeratorText(numerator) => {
                 if let Ok(numerator) = numerator.parse() {
@@ -327,13 +307,13 @@ impl Daw {
             return space().into();
         }
 
-        let bpm = self.meter.bpm.load(Acquire);
-        let numerator = self.meter.numerator.load(Acquire);
-        let fill =
-            Position::from_samples(self.meter.sample.load(Acquire), bpm, self.meter.sample_rate)
-                .beat()
-                % 2
-                == 0;
+        let fill = Position::from_samples(
+            self.arrangement.arrangement.meter().sample,
+            self.arrangement.arrangement.meter(),
+        )
+        .beat()
+            % 2
+            == 0;
 
         let mut base = stack![
             column![
@@ -364,7 +344,7 @@ impl Daw {
                     ),
                     row![
                         styled_button(
-                            container(if self.meter.playing.load(Acquire) {
+                            container(if self.arrangement.arrangement.meter().playing {
                                 pause()
                             } else {
                                 play()
@@ -372,7 +352,7 @@ impl Daw {
                             .width(LINE_HEIGHT)
                             .align_x(Alignment::Center)
                         )
-                        .on_press(Message::TogglePlay),
+                        .on_press(Message::TogglePlayback),
                         styled_button(
                             container(square())
                                 .width(LINE_HEIGHT)
@@ -381,14 +361,14 @@ impl Daw {
                         .on_press(Message::Stop),
                     ],
                     number_input(
-                        numerator as usize,
+                        self.arrangement.arrangement.meter().numerator as usize,
                         4,
                         2,
                         |x| Message::ChangedNumerator(x as u8),
                         Message::ChangedNumeratorText
                     ),
                     number_input(
-                        bpm as usize,
+                        self.arrangement.arrangement.meter().bpm as usize,
                         140,
                         3,
                         |x| Message::ChangedBpm(x as u16),
@@ -399,7 +379,7 @@ impl Daw {
                         .style(move |t, s| button_with_base(
                             t,
                             s,
-                            if self.meter.metronome.load(Acquire) {
+                            if self.arrangement.arrangement.meter().metronome {
                                 button::primary
                             } else {
                                 button::secondary
@@ -468,12 +448,6 @@ impl Daw {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        let redraw = if self.meter.playing.load(Acquire) {
-            frames().map(|_| Message::Redraw)
-        } else {
-            Subscription::none()
-        };
-
         let autosave = if self.config.autosave.enabled && self.state.last_project.is_some() {
             every(Duration::from_secs(self.config.autosave.interval)).map(|_| Message::SaveFile)
         } else {
@@ -488,7 +462,6 @@ impl Daw {
 
         Subscription::batch([
             self.arrangement.subscription().map(Message::Arrangement),
-            redraw,
             autosave,
             keybinds,
         ])
@@ -502,7 +475,7 @@ fn keybinds() -> Subscription<Message> {
                 match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
                     (false, false, false) => match key {
                         keyboard::Key::Named(keyboard::key::Named::Space) => {
-                            Some(Message::TogglePlay)
+                            Some(Message::TogglePlayback)
                         }
                         _ => None,
                     },

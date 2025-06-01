@@ -32,6 +32,12 @@ macro_rules! unique_id {
                         ID.fetch_add(1, ::std::sync::atomic::Ordering::AcqRel),
                     )
                 }
+
+                pub fn last() -> Self {
+                    Self(
+                        ID.load(::std::sync::atomic::Ordering::Acquire),
+                    )
+                }
             }
 
             impl ::std::convert::AsRef<$ty> for Id {

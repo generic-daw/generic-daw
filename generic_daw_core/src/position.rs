@@ -1,3 +1,4 @@
+use crate::Meter;
 use atomig::{Atom, AtomInteger};
 use std::{
     fmt::{Debug, Formatter},
@@ -67,10 +68,10 @@ impl Position {
     }
 
     #[must_use]
-    pub const fn from_samples_f(samples: f32, bpm: u16, sample_rate: u32) -> Self {
+    pub const fn from_samples_f(samples: f32, meter: &Meter) -> Self {
         let samples = samples as f64;
-        let bpm = bpm as f64;
-        let sample_rate = sample_rate as f64;
+        let bpm = meter.bpm as f64;
+        let sample_rate = meter.sample_rate as f64;
 
         let beat = samples * (bpm * 32.0) / (sample_rate * 15.0);
 
@@ -78,10 +79,10 @@ impl Position {
     }
 
     #[must_use]
-    pub const fn from_samples(samples: usize, bpm: u16, sample_rate: u32) -> Self {
+    pub const fn from_samples(samples: usize, meter: &Meter) -> Self {
         let samples = samples as u64;
-        let bpm = bpm as u64;
-        let sample_rate = sample_rate as u64;
+        let bpm = meter.bpm as u64;
+        let sample_rate = meter.sample_rate as u64;
 
         let beat = samples * (bpm * 32) / (sample_rate * 15);
 
@@ -89,10 +90,10 @@ impl Position {
     }
 
     #[must_use]
-    pub const fn in_samples_f(self, bpm: u16, sample_rate: u32) -> f32 {
+    pub const fn in_samples_f(self, meter: &Meter) -> f32 {
         let beat = self.0 as f64;
-        let bpm = bpm as f64;
-        let sample_rate = sample_rate as f64;
+        let bpm = meter.bpm as f64;
+        let sample_rate = meter.sample_rate as f64;
 
         let samples = beat * (sample_rate * 15.0) / (bpm * 32.0);
 
@@ -100,10 +101,10 @@ impl Position {
     }
 
     #[must_use]
-    pub const fn in_samples(self, bpm: u16, sample_rate: u32) -> usize {
+    pub const fn in_samples(self, meter: &Meter) -> usize {
         let global_beat = self.0 as u64;
-        let bpm = bpm as u64;
-        let sample_rate = sample_rate as u64;
+        let bpm = meter.bpm as u64;
+        let sample_rate = meter.sample_rate as u64;
 
         let samples = global_beat * (sample_rate * 15) / (bpm * 32);
 
@@ -111,22 +112,22 @@ impl Position {
     }
 
     #[must_use]
-    pub fn floor_to_snap_step(mut self, scale: f32, numerator: u8, bpm: u16) -> Self {
-        let snap_step = Self::snap_step(scale, numerator, bpm).0;
+    pub fn floor_to_snap_step(mut self, scale: f32, meter: &Meter) -> Self {
+        let snap_step = Self::snap_step(scale, meter).0;
         self.0 -= self.0 % snap_step;
         self
     }
 
     #[must_use]
-    pub fn ceil_to_snap_step(mut self, scale: f32, numerator: u8, bpm: u16) -> Self {
-        let snap_step = Self::snap_step(scale, numerator, bpm).0;
+    pub fn ceil_to_snap_step(mut self, scale: f32, meter: &Meter) -> Self {
+        let snap_step = Self::snap_step(scale, meter).0;
         self.0 += snap_step - (self.0 % snap_step);
         self
     }
 
     #[must_use]
-    pub fn round_to_snap_step(mut self, scale: f32, numerator: u8, bpm: u16) -> Self {
-        let modulo = Self::snap_step(scale, numerator, bpm).0;
+    pub fn round_to_snap_step(mut self, scale: f32, meter: &Meter) -> Self {
+        let modulo = Self::snap_step(scale, meter).0;
 
         let diff = self.0 % modulo;
 
@@ -140,13 +141,13 @@ impl Position {
     }
 
     #[must_use]
-    pub fn snap_step(mut scale: f32, numerator: u8, bpm: u16) -> Self {
-        scale += (f32::from(bpm) / 64.0).log2();
+    pub fn snap_step(mut scale: f32, meter: &Meter) -> Self {
+        scale += (f32::from(meter.bpm) / 64.0).log2();
 
         Self(if scale < 12.0 {
             1 << (scale as u8 - 3)
         } else {
-            u32::from(numerator) << 8
+            u32::from(meter.numerator) << 8
         })
     }
 

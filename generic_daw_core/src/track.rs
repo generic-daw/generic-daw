@@ -1,28 +1,39 @@
-use crate::{MixerNode, Position, clip::Clip, event::Event};
+use crate::{Action, Clip, MixerNode, Position, daw_ctx::State, event::Event};
 use audio_graph::{NodeId, NodeImpl};
-use std::sync::Arc;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct Track {
     pub clips: Vec<Clip>,
     /// volume, pan and plugins
-    pub node: Arc<MixerNode>,
+    pub node: MixerNode,
 }
 
-impl NodeImpl<Event> for Track {
-    fn process(&self, audio: &mut [f32], events: &mut Vec<Event>) {
+impl NodeImpl for Track {
+    type Action = Action;
+    type Event = Event;
+    type State = State;
+
+    fn apply(&mut self, action: Self::Action) {
+        match action {
+            Self::Action::AddClip(clip) => self.clips.push(clip),
+            Self::Action::RemoveClip(index) => _ = self.clips.remove(index),
+            action => self.node.apply(action),
+        }
+    }
+
+    fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
         for clip in &self.clips {
-            clip.process(audio, events);
+            clip.process(&state.meter, audio, events);
         }
 
-        self.node.process(audio, events);
+        self.node.process(state, audio, events);
     }
 
     fn id(&self) -> NodeId {
         self.node.id()
     }
 
-    fn reset(&self) {
+    fn reset(&mut self) {
         self.node.reset();
     }
 

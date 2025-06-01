@@ -1,14 +1,22 @@
-use crate::{AudioGraph, Meter, Position};
+use crate::{AudioGraphNode, Meter, Position, daw_ctx::State};
+use audio_graph::AudioGraph;
 use hound::WavWriter;
-use std::{
-    path::Path,
-    sync::atomic::Ordering::{AcqRel, Acquire, Release},
-};
+use std::path::Path;
 
-pub fn export(audio_graph: &mut AudioGraph, path: &Path, meter: &Meter, end: Position) {
-    let playing = meter.playing.swap(true, AcqRel);
-    let metronome = meter.metronome.swap(false, AcqRel);
-    let sample = meter.sample.load(Acquire);
+pub fn export(
+    audio_graph: &mut AudioGraph<AudioGraphNode>,
+    path: &Path,
+    meter: Meter,
+    end: Position,
+) {
+    let mut state = State {
+        meter,
+        sender: async_channel::unbounded().0,
+        receiver: async_channel::unbounded().1,
+    };
+
+    state.meter.playing = true;
+    state.meter.metronome = false;
 
     audio_graph.reset();
 
@@ -28,25 +36,24 @@ pub fn export(audio_graph: &mut AudioGraph, path: &Path, meter: &Meter, end: Pos
 
     let delay = audio_graph.delay();
     let skip = delay % buffer_size;
-    let end = end.in_samples(meter.bpm.load(Acquire), meter.sample_rate) + delay;
+    let end = end.in_samples(&meter);
 
-    for i in (0..delay - skip).step_by(buffer_size) {
-        meter.sample.store(i, Release);
+    for i in (0..delay).step_by(buffer_size) {
+        state.meter.sample = i;
 
-        audio_graph.process(&mut buf);
+        audio_graph.process(&state, &mut buf);
     }
 
     if skip != 0 {
-        meter.sample.store(delay - skip, Release);
+        state.meter.sample = delay - skip;
 
-        audio_graph.process(&mut buf[..skip]);
+        audio_graph.process(&state, &mut buf[..skip]);
     }
 
-    let skip = (end - delay) % buffer_size;
-    for i in (delay..end - skip).step_by(buffer_size) {
-        meter.sample.store(i, Release);
+    for i in (delay..end + delay).step_by(buffer_size) {
+        state.meter.sample = i;
 
-        audio_graph.process(&mut buf);
+        audio_graph.process(&state, &mut buf);
 
         for &s in &buf {
             writer.write_sample(s).unwrap();
@@ -54,9 +61,9 @@ pub fn export(audio_graph: &mut AudioGraph, path: &Path, meter: &Meter, end: Pos
     }
 
     if skip != 0 {
-        meter.sample.store(delay - skip, Release);
+        state.meter.sample = end + delay - skip;
 
-        audio_graph.process(&mut buf[..skip]);
+        audio_graph.process(&state, &mut buf[..skip]);
 
         for &s in &buf[..skip] {
             writer.write_sample(s).unwrap();
@@ -64,8 +71,4 @@ pub fn export(audio_graph: &mut AudioGraph, path: &Path, meter: &Meter, end: Pos
     }
 
     writer.finalize().unwrap();
-
-    meter.playing.store(playing, Release);
-    meter.metronome.store(metronome, Release);
-    meter.sample.store(sample, Release);
 }

@@ -3,20 +3,12 @@ use async_channel::Receiver;
 use cpal::StreamConfig;
 use generic_daw_utils::{NoDebug, hash_reader};
 use hound::{SampleFormat, WavSpec, WavWriter};
-use std::{
-    fs::File,
-    hash::DefaultHasher,
-    path::Path,
-    sync::{Arc, atomic::Ordering::Acquire},
-};
+use std::{fs::File, hash::DefaultHasher, path::Path, sync::Arc};
 
 #[derive(Debug)]
 pub struct Recording {
-    /// these are used to draw the sample in various quality levels
     pub lods: NoDebug<Box<[Vec<(f32, f32)>]>>,
-    /// the file path associated with the sample
     path: Arc<Path>,
-    /// the file name associated with the sample
     pub name: Arc<str>,
     pub position: Position,
 
@@ -27,6 +19,7 @@ pub struct Recording {
 }
 
 impl Recording {
+    #[must_use]
     pub fn create(
         path: Arc<Path>,
         meter: &Meter,
@@ -36,12 +29,7 @@ impl Recording {
     ) -> (Self, Receiver<Box<[f32]>>) {
         let (stream, config, receiver) = build_input_stream(device_name, sample_rate, buffer_size);
 
-        let position = Position::from_samples(
-            meter.sample.load(Acquire),
-            meter.bpm.load(Acquire),
-            meter.sample_rate,
-        );
-
+        let position = Position::from_samples(meter.sample, meter);
         let name = path.file_name().unwrap().to_str().unwrap().into();
 
         let resampler = Resampler::new(

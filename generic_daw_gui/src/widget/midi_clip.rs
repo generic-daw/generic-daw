@@ -1,5 +1,5 @@
 use super::{LINE_HEIGHT, Vec2};
-use generic_daw_core::MidiClip as MidiClipInner;
+use generic_daw_core::{self as core, Meter};
 use iced::{
     Element, Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
     advanced::{
@@ -12,7 +12,6 @@ use iced::{
     mouse::{self, Cursor, Interaction},
     padding,
 };
-use std::sync::atomic::Ordering::Acquire;
 
 #[derive(Default)]
 struct State {
@@ -21,7 +20,8 @@ struct State {
 
 #[derive(Clone, Debug)]
 pub struct MidiClip<'a, Message> {
-    inner: &'a MidiClipInner,
+    inner: &'a core::MidiClip,
+    meter: &'a Meter,
     position: &'a Vec2,
     scale: &'a Vec2,
     enabled: bool,
@@ -45,17 +45,16 @@ where
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-        let bpm = self.inner.meter.bpm.load(Acquire);
         let global_start = self
             .inner
             .position
             .get_global_start()
-            .in_samples_f(bpm, self.inner.meter.sample_rate);
+            .in_samples_f(self.meter);
         let global_end = self
             .inner
             .position
             .get_global_end()
-            .in_samples_f(bpm, self.inner.meter.sample_rate);
+            .in_samples_f(self.meter);
         let pixel_size = self.scale.x.exp2();
 
         Node::new(Size::new(
@@ -165,7 +164,6 @@ where
 
         let clip_start = self.inner.position.get_clip_start();
         let pixel_size = self.scale.x.exp2();
-        let bpm = self.inner.meter.bpm.load(Acquire);
 
         let position = Vector::new(lower_bounds.x, layout.position().y);
         let clip_bounds = Rectangle::new(
@@ -177,13 +175,10 @@ where
             let start_pixel = (note
                 .start
                 .saturating_sub(clip_start)
-                .in_samples_f(bpm, self.inner.meter.sample_rate)
+                .in_samples_f(self.meter)
                 - self.position.x)
                 / pixel_size;
-            let end_pixel = (note
-                .end
-                .saturating_sub(clip_start)
-                .in_samples_f(bpm, self.inner.meter.sample_rate)
+            let end_pixel = (note.end.saturating_sub(clip_start).in_samples_f(self.meter)
                 - self.position.x)
                 / pixel_size;
 
@@ -233,7 +228,8 @@ where
 
 impl<'a, Message> MidiClip<'a, Message> {
     pub fn new(
-        inner: &'a MidiClipInner,
+        inner: &'a core::MidiClip,
+        meter: &'a Meter,
         position: &'a Vec2,
         scale: &'a Vec2,
         enabled: bool,
@@ -241,6 +237,7 @@ impl<'a, Message> MidiClip<'a, Message> {
     ) -> Self {
         Self {
             inner,
+            meter,
             position,
             scale,
             enabled,

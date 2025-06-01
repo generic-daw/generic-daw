@@ -8,7 +8,7 @@ pub struct ClipPosition {
     global_start: Atomic<Position>,
     /// the end of the clip relative to the start of the arrangement
     global_end: Atomic<Position>,
-    /// the start of the clip relative to the start of the underlying type
+    /// the start of the clip relative to the start of the clip
     clip_start: Atomic<Position>,
 }
 
@@ -23,6 +23,7 @@ impl Clone for ClipPosition {
 }
 
 impl ClipPosition {
+    #[must_use]
     pub fn new(global_start: Position, global_end: Position, clip_start: Position) -> Self {
         Self {
             global_start: Atomic::new(global_start),

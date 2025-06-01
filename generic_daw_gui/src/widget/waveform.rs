@@ -6,7 +6,6 @@ use iced_wgpu::graphics::{
     Mesh,
     mesh::{Indexed, SolidVertex2D},
 };
-use std::sync::atomic::Ordering::Acquire;
 
 #[expect(clippy::trivially_copy_pass_by_ref)]
 pub fn mesh(
@@ -37,15 +36,11 @@ pub fn mesh(
     let color = color::pack(theme.extended_palette().background.strong.text);
     let lod = scale.x as usize - 3;
 
-    let bpm = meter.bpm.load(Acquire);
-
-    let global_start = global_start.in_samples_f(bpm, meter.sample_rate);
+    let global_start = global_start.in_samples_f(meter);
+    let clip_start = clip_start.in_samples_f(meter);
+    let offset = (clip_start / lod_sample_size).fract();
 
     let diff = 0f32.max(position.x - global_start);
-
-    let clip_start = clip_start.in_samples_f(bpm, meter.sample_rate);
-
-    let offset = (clip_start / lod_sample_size).fract();
 
     let first_index = ((diff + clip_start) / lod_sample_size) as usize;
     let last_index = first_index + (bounds.width / lod_samples_per_pixel) as usize;

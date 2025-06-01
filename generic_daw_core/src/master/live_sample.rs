@@ -1,15 +1,9 @@
-use std::sync::{
-    Arc,
-    atomic::{
-        AtomicIsize,
-        Ordering::{AcqRel, Acquire},
-    },
-};
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct LiveSample {
     audio: Arc<[f32]>,
-    idx: AtomicIsize,
+    idx: isize,
 }
 
 impl LiveSample {
@@ -17,16 +11,15 @@ impl LiveSample {
     pub fn new(audio: Arc<[f32]>, before: usize) -> Self {
         Self {
             audio,
-            idx: AtomicIsize::new(-(before as isize)),
+            idx: -(before as isize),
         }
     }
 
-    pub fn process(&self, audio: &mut [f32]) {
-        let idx = self.idx.fetch_add(audio.len() as isize, AcqRel);
+    pub fn process(&mut self, audio: &mut [f32]) {
+        self.idx += audio.len() as isize;
+        let uidx = self.idx.unsigned_abs();
 
-        let uidx = idx.unsigned_abs();
-
-        if idx > 0 {
+        if self.idx > 0 {
             self.audio[uidx..]
                 .iter()
                 .zip(audio)
@@ -46,9 +39,6 @@ impl LiveSample {
     }
 
     pub fn over(&self) -> bool {
-        self.idx
-            .load(Acquire)
-            .try_into()
-            .is_ok_and(|idx: usize| idx >= self.audio.len())
+        self.idx >= self.audio.len() as isize
     }
 }

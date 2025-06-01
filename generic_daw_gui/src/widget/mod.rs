@@ -1,7 +1,6 @@
 use generic_daw_core::{Meter, Position};
 use generic_daw_utils::Vec2;
 use iced::{keyboard::Modifiers, widget::text::Shaping};
-use std::sync::atomic::Ordering::Acquire;
 
 mod animated_dot;
 pub mod arrangement;
@@ -51,13 +50,11 @@ fn get_time(
     position: &Vec2,
     scale: &Vec2,
 ) -> Position {
-    let bpm = meter.bpm.load(Acquire);
-
     let time = x.mul_add(scale.x.exp2(), position.x).max(0.0);
-    let mut time = Position::from_samples_f(time, bpm, meter.sample_rate);
+    let mut time = Position::from_samples_f(time, meter);
 
     if !modifiers.alt() {
-        time = time.round_to_snap_step(scale.x, meter.numerator.load(Acquire), bpm);
+        time = time.round_to_snap_step(scale.x, meter);
     }
 
     time
