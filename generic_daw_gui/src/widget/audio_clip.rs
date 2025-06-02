@@ -70,10 +70,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
     fn diff(&self, tree: &mut Tree) {
         let state = tree.state.downcast_mut::<State>();
 
-        let addr = std::ptr::from_ref(self.inner).addr();
-        if state.last_addr != addr {
-            state.last_addr = addr;
-            *state.cache.borrow_mut() = None;
+        if state.last_addr != std::ptr::from_ref(self.inner).addr() {
+            *state = State::new(&self.inner.audio.name);
         }
     }
 
