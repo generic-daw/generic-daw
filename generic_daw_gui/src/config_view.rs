@@ -1,5 +1,5 @@
 use crate::{
-    components::{number_input, styled_button, styled_pick_list},
+    components::{number_input, styled_button, styled_pick_list, styled_scrollable_with_direction},
     config::{Config, Device},
     icons::{mic, plus, rotate_ccw, save, volume_2, x},
     stylefns::button_with_base,
@@ -8,7 +8,11 @@ use crate::{
 };
 use iced::{
     Center, Element, Font, Shrink, Task, Theme, border,
-    widget::{button, column, container, horizontal_rule, horizontal_space, row, text, toggler},
+    widget::{
+        button, column, container, horizontal_rule, horizontal_space, row,
+        scrollable::{Direction, Scrollbar},
+        text, toggler,
+    },
 };
 use rfd::AsyncFileDialog;
 use std::{path::Path, sync::Arc};
@@ -148,13 +152,13 @@ impl ConfigView {
         input_devices: &'a [String],
         output_devices: &'a [String],
     ) -> Element<'a, Message> {
-        container(
+        container(styled_scrollable_with_direction(
             column![
                 text("Settings")
                     .size(LINE_HEIGHT)
                     .line_height(1.0)
                     .font(Font::MONOSPACE),
-                horizontal_rule(1),
+                horizontal_rule(10),
                 row![
                     "Sample Paths",
                     horizontal_space(),
@@ -185,12 +189,11 @@ impl ConfigView {
                     .spacing(5)
                 )
                 .style(|t| {
-                    container::background(t.extended_palette().background.weak.color)
-                        .border(
-                            border::width(1.0).color(t.extended_palette().background.strong.color),
-                        )
+                    container::background(t.extended_palette().background.weak.color).border(
+                        border::width(1.0).color(t.extended_palette().background.strong.color),
+                    )
                 }),
-                horizontal_rule(10),
+                horizontal_rule(1),
                 row![
                     "CLAP Plugin Paths",
                     horizontal_space(),
@@ -221,12 +224,11 @@ impl ConfigView {
                     .spacing(5)
                 )
                 .style(|t| {
-                    container::background(t.extended_palette().background.weak.color)
-                        .border(
-                            border::width(1.0).color(t.extended_palette().background.strong.color),
-                        )
+                    container::background(t.extended_palette().background.weak.color).border(
+                        border::width(1.0).color(t.extended_palette().background.strong.color),
+                    )
                 }),
-                horizontal_rule(10),
+                horizontal_rule(1),
                 row![
                     row![
                         styled_button(mic()).on_press_maybe(
@@ -269,9 +271,7 @@ impl ConfigView {
                             .placeholder("Default")
                             .width(222),
                             styled_button(rotate_ccw()).padding(5).on_press_maybe(
-                                device
-                                    .sample_rate
-                                    .map(|_| Message::ChangedSampleRate(None))
+                                device.sample_rate.map(|_| Message::ChangedSampleRate(None))
                             )
                         ]
                         .align_y(Center),
@@ -286,15 +286,13 @@ impl ConfigView {
                             .placeholder("Default")
                             .width(222),
                             styled_button(rotate_ccw()).padding(5).on_press_maybe(
-                                device
-                                    .buffer_size
-                                    .map(|_| Message::ChangedBufferSize(None))
+                                device.buffer_size.map(|_| Message::ChangedBufferSize(None))
                             )
                         ]
                         .align_y(Center)
                     ]
                 }),
-                horizontal_rule(10),
+                horizontal_rule(1),
                 row![
                     toggler(self.config.autosave.enabled)
                         .label("Autosave every ")
@@ -309,11 +307,10 @@ impl ConfigView {
                     " s"
                 ]
                 .align_y(Center),
-                horizontal_rule(10),
                 toggler(self.config.open_last_project)
                     .label("Open last project on startup")
                     .on_toggle(|_| Message::ToggledOpenLastProject),
-                horizontal_rule(10),
+                horizontal_rule(1),
                 row![
                     "Theme: ",
                     horizontal_space(),
@@ -330,13 +327,14 @@ impl ConfigView {
                 ]
                 .align_y(Center)
             ]
-            .push_maybe(self.dirty.then_some(horizontal_rule(10)))
+            .push_maybe(self.dirty.then_some(horizontal_rule(1)))
             .push_maybe(
                 self.dirty.then_some(
                     row![
                         container("Changes will only take effect after a project reload!")
                             .padding([5, 10])
-                            .style(|t| container::warning(t).border(border::rounded(f32::INFINITY))),
+                            .style(|t| container::warning(t)
+                                .border(border::rounded(f32::INFINITY))),
                         horizontal_space(),
                         styled_button(save())
                             .padding(5)
@@ -352,7 +350,8 @@ impl ConfigView {
             .spacing(10)
             .padding(10)
             .width(530),
-        )
+            Direction::Vertical(Scrollbar::default()),
+        ))
         .style(|t| {
             container::background(t.extended_palette().background.weakest.color)
                 .border(border::width(1.0).color(t.extended_palette().background.strong.color))

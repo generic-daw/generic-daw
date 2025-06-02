@@ -399,7 +399,7 @@ impl Daw {
                         )
                     ],
                 ]
-                .spacing(20)
+                .spacing(10)
                 .align_y(Alignment::Center),
                 Split::new(
                     self.file_tree.view().map(Message::FileTree),
@@ -409,8 +409,8 @@ impl Daw {
                 )
                 .strategy(Strategy::Start)
             ]
-            .padding(5)
-            .spacing(20)
+            .padding(10)
+            .spacing(10)
         ];
 
         if self.arrangement.loading() {
