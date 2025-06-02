@@ -34,9 +34,10 @@ struct State {
 }
 
 impl State {
-    fn new(text: &str) -> Self {
+    fn new(inner: &core::AudioClip) -> Self {
         Self {
-            shaping: shaping_of(text),
+            shaping: shaping_of(&inner.audio.name),
+            last_addr: std::ptr::from_ref(inner).addr(),
             ..Self::default()
         }
     }
@@ -60,7 +61,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::new(&self.inner.audio.name))
+        tree::State::new(State::new(self.inner))
     }
 
     fn size(&self) -> Size<Length> {
@@ -71,7 +72,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
         let state = tree.state.downcast_mut::<State>();
 
         if state.last_addr != std::ptr::from_ref(self.inner).addr() {
-            *state = State::new(&self.inner.audio.name);
+            *state = State::new(self.inner);
         }
     }
 
