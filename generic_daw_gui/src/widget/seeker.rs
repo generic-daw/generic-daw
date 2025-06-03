@@ -150,7 +150,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                         }
                     }
 
-                    state.hovering ^= (cursor.y < 0.0) != state.hovering;
+                    state.hovering = cursor.y < 0.0;
                 }
                 mouse::Event::ButtonPressed {
                     button: mouse::Button::Left,

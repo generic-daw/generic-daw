@@ -161,7 +161,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
                         shell.capture_event();
                     }
 
-                    state.hovering ^= cursor.is_over(layout.bounds()) != state.hovering;
+                    state.hovering = cursor.is_over(layout.bounds());
                 }
                 mouse::Event::WheelScrolled { delta, .. }
                     if state.dragging.is_none() && state.hovering =>
