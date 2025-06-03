@@ -115,7 +115,5 @@ impl Default for MixerNode {
 fn pan(pan: f32) -> [f32; 2] {
     let angle = (pan + 1.0) * FRAC_PI_4;
 
-    let (r, l) = angle.sin_cos();
-
-    [l * SQRT_2, r * SQRT_2]
+    [angle.cos() * SQRT_2, angle.sin() * SQRT_2]
 }

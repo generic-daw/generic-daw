@@ -20,12 +20,7 @@ use iced::{
     },
     window,
 };
-use std::{
-    cell::RefCell,
-    f32::consts::{FRAC_PI_2, FRAC_PI_4},
-    fmt::Debug,
-    ops::RangeInclusive,
-};
+use std::{cell::RefCell, fmt::Debug, ops::RangeInclusive};
 
 #[derive(Default)]
 struct State {
@@ -288,39 +283,33 @@ impl<'a, Message> Knob<'a, Message> {
     fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
         let center = frame.center();
 
-        let circle = |angle: Radians, a_m: f32, r_m: f32| {
+        let circle = |angle: Radians, offset: f32, radius: f32| {
             Path::circle(
-                Point::new(
-                    (a_m).mul_add(angle.0.cos(), center.x),
-                    (a_m).mul_add(angle.0.sin(), center.y),
-                ),
-                r_m,
+                center + Vector::new(angle.0.cos(), angle.0.sin()) * offset,
+                radius,
             )
         };
 
-        let base_angle = Radians(-FRAC_PI_4 * 5.0);
+        let value_angle = |value: f32| {
+            Radians(f32::to_radians(
+                270.0 * (value - self.range.start() - 0.5)
+                    / (self.range.end() - self.range.start())
+                    - 90.0,
+            ))
+        };
 
-        let start_angle = base_angle
-            + Radians(
-                FRAC_PI_2 * 3.0 * (self.center - self.range.start())
-                    / (self.range.end() - self.range.start()),
-            );
+        let center_angle = value_angle(self.center);
+        let value_angle = value_angle(self.value);
 
-        let end_angle = base_angle
-            + Radians(
-                FRAC_PI_2 * 3.0 * (self.value - self.range.start())
-                    / (self.range.end() - self.range.start()),
-            );
-
-        let arc = Path::new(|builder| {
-            builder.arc(Arc {
+        let arc = Path::new(|b| {
+            b.arc(Arc {
                 center,
                 radius: self.radius,
-                start_angle,
-                end_angle,
+                start_angle: center_angle,
+                end_angle: value_angle,
             });
-            builder.line_to(center);
-            builder.close();
+            b.line_to(center);
+            b.close();
         });
 
         let main_color = if !self.enabled || state.hovering || state.dragging.is_some() {
@@ -334,12 +323,15 @@ impl<'a, Message> Knob<'a, Message> {
 
         frame.fill(&Path::circle(center, self.radius - 4.0), main_color);
 
-        frame.fill(&circle(start_angle, self.radius - 2.0, 2.0), contrast_color);
+        frame.fill(
+            &circle(center_angle, self.radius - 2.0, 2.0),
+            contrast_color,
+        );
 
-        frame.fill(&circle(end_angle, self.radius - 2.0, 2.0), contrast_color);
+        frame.fill(&circle(value_angle, self.radius - 2.0, 2.0), contrast_color);
 
         frame.fill(
-            &circle(end_angle, self.radius / 2.0 - 2.0, 3.0),
+            &circle(value_angle, self.radius / 2.0 - 2.0, 3.0),
             contrast_color,
         );
     }
