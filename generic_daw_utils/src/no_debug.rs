@@ -7,12 +7,6 @@ use std::{
 #[derive(Clone, Copy)]
 pub struct NoDebug<T>(pub T);
 
-impl<T> NoDebug<T> {
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> NoDebug<U> {
-        NoDebug(f(self.0))
-    }
-}
-
 impl<T> Debug for NoDebug<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("...")

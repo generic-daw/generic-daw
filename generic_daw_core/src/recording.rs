@@ -105,7 +105,12 @@ impl Recording {
 
         Arc::new(InterleavedAudio {
             samples: samples.into_boxed_slice().into(),
-            lods: lods.map(|l| l.into_iter().map(Vec::into_boxed_slice).collect()),
+            lods: lods
+                .0
+                .into_iter()
+                .map(Vec::into_boxed_slice)
+                .collect::<Box<_>>()
+                .into(),
             path,
             name,
             hash,
@@ -147,7 +152,12 @@ impl Recording {
 
         Arc::new(InterleavedAudio {
             samples: samples.into_boxed_slice().into(),
-            lods: lods.map(|l| l.into_iter().map(Vec::into_boxed_slice).collect()),
+            lods: lods
+                .0
+                .into_iter()
+                .map(Vec::into_boxed_slice)
+                .collect::<Box<_>>()
+                .into(),
             path,
             name,
             hash,
