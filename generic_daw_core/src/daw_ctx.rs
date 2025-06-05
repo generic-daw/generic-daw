@@ -91,7 +91,11 @@ impl DawCtx {
             trace!("{msg:?}");
 
             match msg {
-                Message::Action(node, action) => self.audio_graph.apply(node, action),
+                Message::Action(node, action) => {
+                    if let Some(node) = self.audio_graph.node_mut(node) {
+                        node.apply(action);
+                    }
+                }
                 Message::Insert(node) => self.audio_graph.insert(node),
                 Message::Remove(node) => self.audio_graph.remove(node),
                 Message::Connect(from, to, sender) => {

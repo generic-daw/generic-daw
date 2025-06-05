@@ -9,17 +9,8 @@ pub enum AudioGraphNode {
 }
 
 impl NodeImpl for AudioGraphNode {
-    type Action = Action;
     type Event = Event;
     type State = State;
-
-    fn apply(&mut self, action: Self::Action) {
-        match self {
-            Self::Master(node) => node.apply(action),
-            Self::MixerNode(node) => node.apply(action),
-            Self::Track(node) => node.apply(action),
-        }
-    }
 
     fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
         match self {
@@ -50,6 +41,16 @@ impl NodeImpl for AudioGraphNode {
             Self::Master(node) => node.delay(),
             Self::MixerNode(node) => node.delay(),
             Self::Track(node) => node.delay(),
+        }
+    }
+}
+
+impl AudioGraphNode {
+    pub fn apply(&mut self, action: Action) {
+        match self {
+            Self::Master(node) => node.apply(action),
+            Self::MixerNode(node) => node.apply(action),
+            Self::Track(node) => node.apply(action),
         }
     }
 }

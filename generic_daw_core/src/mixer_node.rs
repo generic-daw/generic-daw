@@ -31,27 +31,8 @@ pub struct MixerNode {
 }
 
 impl NodeImpl for MixerNode {
-    type Action = Action;
     type Event = Event;
     type State = State;
-
-    fn apply(&mut self, action: Self::Action) {
-        match action {
-            Self::Action::NodeToggleEnabled => self.enabled ^= true,
-            Self::Action::NodeVolumeChanged(volume) => self.volume = volume,
-            Self::Action::NodePanChanged(pan) => self.pan = pan,
-            Self::Action::PluginLoad(processor) => {
-                self.plugins.push(Plugin::new(*processor));
-            }
-            Self::Action::PluginRemove(index) => {
-                self.plugins.remove(index);
-            }
-            Self::Action::PluginMoved(from, to) => self.plugins.shift_move(from, to),
-            Self::Action::PluginToggleEnabled(index) => self.plugins[index].enabled ^= true,
-            Self::Action::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
-            _ => panic!(),
-        }
-    }
 
     fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
         if !self.enabled {
@@ -97,6 +78,26 @@ impl NodeImpl for MixerNode {
             .iter()
             .map(|entry| entry.processor.delay())
             .sum()
+    }
+}
+
+impl MixerNode {
+    pub fn apply(&mut self, action: Action) {
+        match action {
+            Action::NodeToggleEnabled => self.enabled ^= true,
+            Action::NodeVolumeChanged(volume) => self.volume = volume,
+            Action::NodePanChanged(pan) => self.pan = pan,
+            Action::PluginLoad(processor) => {
+                self.plugins.push(Plugin::new(*processor));
+            }
+            Action::PluginRemove(index) => {
+                self.plugins.remove(index);
+            }
+            Action::PluginMoved(from, to) => self.plugins.shift_move(from, to),
+            Action::PluginToggleEnabled(index) => self.plugins[index].enabled ^= true,
+            Action::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
+            _ => panic!(),
+        }
     }
 }
 

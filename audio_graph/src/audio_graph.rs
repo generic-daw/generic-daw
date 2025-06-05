@@ -38,15 +38,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
         }
     }
 
-    /// apply `action` to `node`
-    ///
-    /// this does nothing if the graph doesn't contain `node`
-    pub fn apply(&mut self, node: NodeId, action: Node::Action) {
-        if let Some(entry) = self.graph.get_mut(*node) {
-            entry.node.apply(action);
-        }
-    }
-
     /// process audio data into `buf`
     ///
     /// `buf` is assumed to be "uninitialized"
@@ -111,6 +102,18 @@ impl<Node: NodeImpl> AudioGraph<Node> {
         }
 
         buf.copy_from_slice(&self.graph[*self.root].audio);
+    }
+
+    /// get an immutable reference to `node`, if it exists
+    #[must_use]
+    pub fn node(&self, node: NodeId) -> Option<&Node> {
+        self.graph.get(*node).map(|entry| &entry.node)
+    }
+
+    /// get a mutable reference to `node`, if it exists
+    #[must_use]
+    pub fn node_mut(&mut self, node: NodeId) -> Option<&mut Node> {
+        self.graph.get_mut(*node).map(|entry| &mut entry.node)
     }
 
     /// reset every node in the graph to a pre-playback state

@@ -19,13 +19,8 @@ pub struct Master {
 }
 
 impl NodeImpl for Master {
-    type Action = Action;
     type Event = Event;
     type State = State;
-
-    fn apply(&mut self, action: Self::Action) {
-        self.node.apply(action);
-    }
 
     fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
         if state.meter.playing && state.meter.metronome {
@@ -89,5 +84,9 @@ impl Master {
             off_bar_click: off_bar_click.finish().into(),
             node,
         }
+    }
+
+    pub fn apply(&mut self, action: Action) {
+        self.node.apply(action);
     }
 }

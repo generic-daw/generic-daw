@@ -9,17 +9,8 @@ pub struct Track {
 }
 
 impl NodeImpl for Track {
-    type Action = Action;
     type Event = Event;
     type State = State;
-
-    fn apply(&mut self, action: Self::Action) {
-        match action {
-            Self::Action::AddClip(clip) => self.clips.push(clip),
-            Self::Action::RemoveClip(index) => _ = self.clips.remove(index),
-            action => self.node.apply(action),
-        }
-    }
 
     fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
         for clip in &self.clips {
@@ -43,6 +34,14 @@ impl NodeImpl for Track {
 }
 
 impl Track {
+    pub fn apply(&mut self, action: Action) {
+        match action {
+            Action::AddClip(clip) => self.clips.push(clip),
+            Action::RemoveClip(index) => _ = self.clips.remove(index),
+            action => self.node.apply(action),
+        }
+    }
+
     #[must_use]
     pub fn len(&self) -> Position {
         self.clips
