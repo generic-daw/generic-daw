@@ -122,7 +122,7 @@ pub fn default_clap_paths() -> Vec<Arc<Path>> {
 pub fn init(
     bundle: &PluginBundle,
     descriptor: PluginDescriptor,
-    sample_rate: f64,
+    sample_rate: u32,
     max_buffer_size: u32,
 ) -> (GuiExt, Receiver<MainThreadMessage>, AudioProcessor) {
     let (main_sender, main_receiver) = async_channel::unbounded();
@@ -146,7 +146,7 @@ pub fn init(
         output_config.port_channel_counts[output_config.main_port_index].clamp(1, 2) as u32;
     let max_frames_count = max_buffer_size / channels;
     let config = PluginAudioConfiguration {
-        sample_rate,
+        sample_rate: f64::from(sample_rate),
         min_frames_count: 1,
         max_frames_count,
     };

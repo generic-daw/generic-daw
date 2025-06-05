@@ -1,6 +1,6 @@
-use crate::{AudioGraphNode, Clip, Master, Meter, MixerNode};
+use crate::{AudioGraphNode, Clip, Master, Mixer};
 use async_channel::{Receiver, Sender};
-use audio_graph::{AudioGraph, NodeId, NodeImpl as _};
+use audio_graph::{AudioGraph, NodeId};
 use clap_host::AudioProcessor;
 use generic_daw_utils::unique_id;
 use log::trace;
@@ -50,9 +50,20 @@ pub enum Update {
     Sample(Version, usize),
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct RtState {
+    pub sample_rate: u32,
+    pub buffer_size: u32,
+    pub bpm: u16,
+    pub numerator: u8,
+    pub playing: bool,
+    pub metronome: bool,
+    pub sample: usize,
+}
+
 #[derive(Debug)]
 pub struct State {
-    pub meter: Meter,
+    pub rtstate: RtState,
     pub sender: Sender<Update>,
     pub receiver: Receiver<Message>,
 }
@@ -66,24 +77,31 @@ impl DawCtx {
     pub fn create(
         sample_rate: u32,
         buffer_size: u32,
-    ) -> (Self, NodeId, Meter, Sender<Message>, Receiver<Update>) {
-        let (message_sender, message_receiver) = async_channel::unbounded();
-        let (update_sender, update_receiver) = async_channel::unbounded();
+    ) -> (Self, NodeId, RtState, Sender<Message>, Receiver<Update>) {
+        let (r_sender, receiver) = async_channel::unbounded();
+        let (sender, r_receiver) = async_channel::unbounded();
 
-        let meter = Meter::new(sample_rate, buffer_size);
         let state = State {
-            meter,
-            sender: update_sender,
-            receiver: message_receiver,
+            rtstate: RtState {
+                sample_rate,
+                buffer_size,
+                bpm: 140,
+                numerator: 4,
+                playing: false,
+                metronome: false,
+                sample: 0,
+            },
+            sender,
+            receiver,
         };
 
-        let node = MixerNode::default();
-        let id = node.id();
-        let audio_graph = AudioGraph::new(Master::new(meter.sample_rate, node).into());
+        let audio_graph = AudioGraph::new(Master::new(state.rtstate.sample_rate).into());
+        let id = audio_graph.root();
 
         let audio_ctx = Self { audio_graph, state };
+        let rtstate = audio_ctx.state.rtstate;
 
-        (audio_ctx, id, meter, message_sender, update_receiver)
+        (audio_ctx, id, rtstate, r_sender, r_receiver)
     }
 
     pub fn process(&mut self, buf: &mut [f32]) {
@@ -104,15 +122,15 @@ impl DawCtx {
                     }
                 }
                 Message::Disconnect(from, to) => self.audio_graph.disconnect(from, to),
-                Message::Bpm(bpm) => self.state.meter.bpm = bpm,
-                Message::Numerator(numerator) => self.state.meter.numerator = numerator,
-                Message::TogglePlayback => self.state.meter.playing ^= true,
-                Message::ToggleMetronome => self.state.meter.metronome ^= true,
+                Message::Bpm(bpm) => self.state.rtstate.bpm = bpm,
+                Message::Numerator(numerator) => self.state.rtstate.numerator = numerator,
+                Message::TogglePlayback => self.state.rtstate.playing ^= true,
+                Message::ToggleMetronome => self.state.rtstate.metronome ^= true,
                 Message::Reset => self.audio_graph.reset(),
-                Message::Sample(_, sample) => self.state.meter.sample = sample,
+                Message::Sample(_, sample) => self.state.rtstate.sample = sample,
                 Message::RequestAudioGraph(sender) => {
                     debug_assert!(self.state.receiver.is_empty());
-                    let mut audio_graph = AudioGraph::new(MixerNode::default().into());
+                    let mut audio_graph = AudioGraph::new(Mixer::default().into());
                     std::mem::swap(&mut self.audio_graph, &mut audio_graph);
                     sender.send(audio_graph).unwrap();
                 }
@@ -126,11 +144,11 @@ impl DawCtx {
             *s = s.clamp(-1.0, 1.0);
         }
 
-        if self.state.meter.playing {
-            self.state.meter.sample += buf.len();
+        if self.state.rtstate.playing {
+            self.state.rtstate.sample += buf.len();
             self.state
                 .sender
-                .try_send(Update::Sample(Version::last(), self.state.meter.sample))
+                .try_send(Update::Sample(Version::last(), self.state.rtstate.sample))
                 .unwrap();
         }
     }

@@ -9,7 +9,7 @@ impl Writer {
     #[must_use]
     pub fn new(bpm: u32, numerator: u32) -> Self {
         Self(proto::Project {
-            meter: proto::Meter { bpm, numerator },
+            rtstate: proto::RtState { bpm, numerator },
             ..proto::Project::default()
         })
     }

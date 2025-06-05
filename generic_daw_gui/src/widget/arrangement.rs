@@ -1,5 +1,5 @@
 use super::{Vec2, get_time};
-use generic_daw_core::{Meter, Position};
+use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::NoDebug;
 use iced::{
     Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -18,18 +18,18 @@ pub enum Action {
     Grab(usize, usize),
     Drop,
     Clone(usize, usize),
-    Drag(usize, Position),
-    TrimStart(Position),
-    TrimEnd(Position),
+    Drag(usize, MusicalTime),
+    TrimStart(MusicalTime),
+    TrimEnd(MusicalTime),
     Delete(usize, usize),
 }
 
 #[derive(Clone, Copy, PartialEq)]
 enum State {
     None,
-    DraggingClip(f32, usize, Position),
-    ClipTrimmingStart(f32, Position),
-    ClipTrimmingEnd(f32, Position),
+    DraggingClip(f32, usize, MusicalTime),
+    ClipTrimmingStart(f32, MusicalTime),
+    ClipTrimmingEnd(f32, MusicalTime),
     DeletingClips,
 }
 
@@ -48,7 +48,7 @@ impl State {
 
 #[derive(Debug)]
 pub struct Arrangement<'a, Message> {
-    meter: &'a Meter,
+    rtstate: &'a RtState,
     position: &'a Vec2,
     scale: &'a Vec2,
     children: NoDebug<Element<'a, Message>>,
@@ -143,8 +143,13 @@ where
             match event {
                 mouse::Event::ButtonPressed { button, modifiers } => match button {
                     mouse::Button::Left => {
-                        let time =
-                            get_time(cursor.x, *modifiers, self.meter, self.position, self.scale);
+                        let time = get_time(
+                            cursor.x,
+                            *modifiers,
+                            self.rtstate,
+                            self.position,
+                            self.scale,
+                        );
 
                         if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
                             let clip_bounds = clip_bounds(&layout, track, clip).unwrap()
@@ -204,7 +209,7 @@ where
                         let new_start = get_time(
                             cursor.x + offset,
                             *modifiers,
-                            self.meter,
+                            self.rtstate,
                             self.position,
                             self.scale,
                         );
@@ -220,7 +225,7 @@ where
                         let new_start = get_time(
                             cursor.x + offset,
                             *modifiers,
-                            self.meter,
+                            self.rtstate,
                             self.position,
                             self.scale,
                         );
@@ -235,7 +240,7 @@ where
                         let new_end = get_time(
                             cursor.x + offset,
                             *modifiers,
-                            self.meter,
+                            self.rtstate,
                             self.position,
                             self.scale,
                         );
@@ -354,14 +359,14 @@ where
     Message: Clone + 'a,
 {
     pub fn new(
-        meter: &'a Meter,
+        rtstate: &'a RtState,
         position: &'a Vec2,
         scale: &'a Vec2,
         children: impl Into<Element<'a, Message>>,
         action: fn(Action) -> Message,
     ) -> Self {
         Self {
-            meter,
+            rtstate,
             children: children.into().into(),
             position,
             scale,

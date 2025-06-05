@@ -1,5 +1,5 @@
 use super::get_time;
-use generic_daw_core::{Meter, Position};
+use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
     Element, Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
@@ -21,11 +21,11 @@ struct State {
 
 #[derive(Debug)]
 pub struct Track<'a, Message> {
-    meter: &'a Meter,
+    rtstate: &'a RtState,
     position: &'a Vec2,
     scale: &'a Vec2,
     children: NoDebug<Box<[Element<'a, Message>]>>,
-    on_double_click: NoDebug<Box<dyn Fn(Position) -> Message>>,
+    on_double_click: NoDebug<Box<dyn Fn(MusicalTime) -> Message>>,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
@@ -156,7 +156,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
             state.last_click = Some(new_click);
 
             if new_click.kind() == Kind::Double {
-                let time = get_time(cursor.x, *modifiers, self.meter, self.position, self.scale);
+                let time = get_time(
+                    cursor.x,
+                    *modifiers,
+                    self.rtstate,
+                    self.position,
+                    self.scale,
+                );
 
                 shell.publish((self.on_double_click)(time));
                 shell.capture_event();
@@ -208,14 +214,14 @@ where
     Message: 'a,
 {
     pub fn new(
-        meter: &'a Meter,
+        rtstate: &'a RtState,
         position: &'a Vec2,
         scale: &'a Vec2,
         children: impl IntoIterator<Item = Element<'a, Message>>,
-        on_double_click: impl Fn(Position) -> Message + 'static,
+        on_double_click: impl Fn(MusicalTime) -> Message + 'static,
     ) -> Self {
         Self {
-            meter,
+            rtstate,
             position,
             scale,
             children: children.into_iter().collect::<Box<_>>().into(),

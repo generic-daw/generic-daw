@@ -1,83 +1,80 @@
-use crate::Position;
+use crate::MusicalTime;
 use atomig::Atomic;
 use std::sync::atomic::Ordering::{AcqRel, Acquire, Release};
 
 #[derive(Debug)]
 pub struct ClipPosition {
     /// the start of the clip relative to the start of the arrangement
-    global_start: Atomic<Position>,
+    start: Atomic<MusicalTime>,
     /// the end of the clip relative to the start of the arrangement
-    global_end: Atomic<Position>,
-    /// the start of the clip relative to the start of the clip
-    clip_start: Atomic<Position>,
+    end: Atomic<MusicalTime>,
+    /// the start of the clip relative to the start of the underlying sample/pattern
+    offset: Atomic<MusicalTime>,
 }
 
 impl Clone for ClipPosition {
     fn clone(&self) -> Self {
         Self {
-            global_start: Atomic::new(self.global_start.load(Acquire)),
-            global_end: Atomic::new(self.global_end.load(Acquire)),
-            clip_start: Atomic::new(self.clip_start.load(Acquire)),
+            start: Atomic::new(self.start()),
+            end: Atomic::new(self.end()),
+            offset: Atomic::new(self.offset()),
         }
     }
 }
 
 impl ClipPosition {
     #[must_use]
-    pub fn new(global_start: Position, global_end: Position, clip_start: Position) -> Self {
+    pub fn with_len(len: MusicalTime) -> Self {
         Self {
-            global_start: Atomic::new(global_start),
-            global_end: Atomic::new(global_end),
-            clip_start: Atomic::new(clip_start),
+            start: Atomic::new(MusicalTime::ZERO),
+            end: Atomic::new(len),
+            offset: Atomic::new(MusicalTime::ZERO),
         }
     }
 
     #[must_use]
-    pub fn get_global_start(&self) -> Position {
-        self.global_start.load(Acquire)
+    pub fn start(&self) -> MusicalTime {
+        self.start.load(Acquire)
     }
 
     #[must_use]
-    pub fn get_global_end(&self) -> Position {
-        self.global_end.load(Acquire)
+    pub fn end(&self) -> MusicalTime {
+        self.end.load(Acquire)
     }
 
     #[must_use]
-    pub fn get_clip_start(&self) -> Position {
-        self.clip_start.load(Acquire)
+    pub fn offset(&self) -> MusicalTime {
+        self.offset.load(Acquire)
     }
 
-    pub fn trim_start_to(&self, new_global_start: Position) {
-        let global_start = self.get_global_start();
-        let global_end = self.get_global_end();
-        let clip_start = self.get_clip_start();
-        let clamped_global_start = new_global_start.clamp(
-            global_start.saturating_sub(clip_start),
-            global_end - Position::STEP,
-        );
-        let diff = global_start.abs_diff(clamped_global_start);
-        if global_start < clamped_global_start {
-            self.clip_start.fetch_add(diff, AcqRel);
+    pub fn trim_start_to(&self, mut new_start: MusicalTime) {
+        let start = self.start();
+        let end = self.end();
+        let offset = self.offset();
+        new_start = new_start.clamp(start.saturating_sub(offset), end - MusicalTime::TICK);
+        let diff = start.abs_diff(new_start);
+        if start < new_start {
+            self.offset.fetch_add(diff, AcqRel);
         } else {
-            self.clip_start.fetch_sub(diff, AcqRel);
+            self.offset.fetch_sub(diff, AcqRel);
         }
-        self.global_start.store(clamped_global_start, Release);
+        self.start.store(new_start, Release);
     }
 
-    pub fn trim_end_to(&self, new_global_end: Position) {
-        let global_start = self.get_global_start();
-        let clamped_global_end = new_global_end.max(global_start + Position::STEP);
-        self.global_end.store(clamped_global_end, Release);
+    pub fn trim_end_to(&self, mut new_end: MusicalTime) {
+        let start = self.start();
+        new_end = new_end.max(start + MusicalTime::TICK);
+        self.end.store(new_end, Release);
     }
 
-    pub fn move_to(&self, new_global_start: Position) {
-        let global_start = self.get_global_start();
-        let diff = global_start.abs_diff(new_global_start);
-        if global_start < new_global_start {
-            self.global_end.fetch_add(diff, AcqRel);
+    pub fn move_to(&self, new_start: MusicalTime) {
+        let start = self.start();
+        let diff = start.abs_diff(new_start);
+        if start < new_start {
+            self.end.fetch_add(diff, AcqRel);
         } else {
-            self.global_end.fetch_sub(diff, AcqRel);
+            self.end.fetch_sub(diff, AcqRel);
         }
-        self.global_start.store(new_global_start, Release);
+        self.start.store(new_start, Release);
     }
 }

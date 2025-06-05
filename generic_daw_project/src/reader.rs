@@ -14,8 +14,8 @@ impl Reader {
     }
 
     #[must_use]
-    pub fn meter(&self) -> proto::Meter {
-        self.0.meter
+    pub fn rtstate(&self) -> proto::RtState {
+        self.0.rtstate
     }
 
     pub fn iter_audios(&self) -> impl Iterator<Item = (proto::AudioIndex, &proto::Audio)> {

@@ -1,11 +1,10 @@
-use crate::{Action, Clip, MixerNode, Position, daw_ctx::State, event::Event};
+use crate::{Action, Clip, Mixer, MusicalTime, daw_ctx::State, event::Event};
 use audio_graph::{NodeId, NodeImpl};
 
 #[derive(Debug, Default)]
 pub struct Track {
     pub clips: Vec<Clip>,
-    /// volume, pan and plugins
-    pub node: MixerNode,
+    pub node: Mixer,
 }
 
 impl NodeImpl for Track {
@@ -14,7 +13,7 @@ impl NodeImpl for Track {
 
     fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
         for clip in &self.clips {
-            clip.process(&state.meter, audio, events);
+            clip.process(&state.rtstate, audio, events);
         }
 
         self.node.process(state, audio, events);
@@ -43,10 +42,10 @@ impl Track {
     }
 
     #[must_use]
-    pub fn len(&self) -> Position {
+    pub fn len(&self) -> MusicalTime {
         self.clips
             .iter()
-            .map(|clip| clip.position().get_global_end())
+            .map(|clip| clip.position().end())
             .max()
             .unwrap_or_default()
     }

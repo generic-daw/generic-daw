@@ -1,10 +1,10 @@
-use crate::{Action, Master, MixerNode, Track, daw_ctx::State, event::Event};
+use crate::{Action, Master, Mixer, Track, daw_ctx::State, event::Event};
 use audio_graph::NodeImpl;
 
 #[derive(Debug)]
 pub enum AudioGraphNode {
     Master(Master),
-    MixerNode(MixerNode),
+    Mixer(Mixer),
     Track(Track),
 }
 
@@ -15,7 +15,7 @@ impl NodeImpl for AudioGraphNode {
     fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
         match self {
             Self::Master(node) => node.process(state, audio, events),
-            Self::MixerNode(node) => node.process(state, audio, events),
+            Self::Mixer(node) => node.process(state, audio, events),
             Self::Track(node) => node.process(state, audio, events),
         }
     }
@@ -23,7 +23,7 @@ impl NodeImpl for AudioGraphNode {
     fn id(&self) -> audio_graph::NodeId {
         match self {
             Self::Master(node) => node.id(),
-            Self::MixerNode(node) => node.id(),
+            Self::Mixer(node) => node.id(),
             Self::Track(node) => node.id(),
         }
     }
@@ -31,7 +31,7 @@ impl NodeImpl for AudioGraphNode {
     fn reset(&mut self) {
         match self {
             Self::Master(node) => node.reset(),
-            Self::MixerNode(node) => node.reset(),
+            Self::Mixer(node) => node.reset(),
             Self::Track(node) => node.reset(),
         }
     }
@@ -39,7 +39,7 @@ impl NodeImpl for AudioGraphNode {
     fn delay(&self) -> usize {
         match self {
             Self::Master(node) => node.delay(),
-            Self::MixerNode(node) => node.delay(),
+            Self::Mixer(node) => node.delay(),
             Self::Track(node) => node.delay(),
         }
     }
@@ -49,7 +49,7 @@ impl AudioGraphNode {
     pub fn apply(&mut self, action: Action) {
         match self {
             Self::Master(node) => node.apply(action),
-            Self::MixerNode(node) => node.apply(action),
+            Self::Mixer(node) => node.apply(action),
             Self::Track(node) => node.apply(action),
         }
     }
@@ -61,9 +61,9 @@ impl From<Master> for AudioGraphNode {
     }
 }
 
-impl From<MixerNode> for AudioGraphNode {
-    fn from(value: MixerNode) -> Self {
-        Self::MixerNode(value)
+impl From<Mixer> for AudioGraphNode {
+    fn from(value: Mixer) -> Self {
+        Self::Mixer(value)
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{AudioClip, ClipPosition, Meter, MidiClip, event::Event};
+use crate::{AudioClip, ClipPosition, MidiClip, RtState, event::Event};
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -8,10 +8,10 @@ pub enum Clip {
 }
 
 impl Clip {
-    pub fn process(&self, meter: &Meter, audio: &mut [f32], events: &mut Vec<Event>) {
+    pub fn process(&self, rtstate: &RtState, audio: &mut [f32], events: &mut Vec<Event>) {
         match self {
-            Self::Audio(clip) => clip.process(meter, audio),
-            Self::Midi(clip) => clip.process(meter, audio, events),
+            Self::Audio(clip) => clip.process(rtstate, audio),
+            Self::Midi(clip) => clip.process(rtstate, audio, events),
         }
     }
 

@@ -1,5 +1,5 @@
 use super::get_time;
-use generic_daw_core::{Meter, MidiKey, MidiNote, Position};
+use generic_daw_core::{MidiKey, MidiNote, MusicalTime, RtState};
 use generic_daw_utils::Vec2;
 use iced::{
     Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -22,20 +22,20 @@ use std::sync::Arc;
 pub enum Action {
     Grab(usize),
     Drop,
-    Add(MidiKey, Position),
+    Add(MidiKey, MusicalTime),
     Clone(usize),
-    Drag(MidiKey, Position),
-    TrimStart(Position),
-    TrimEnd(Position),
+    Drag(MidiKey, MusicalTime),
+    TrimStart(MusicalTime),
+    TrimEnd(MusicalTime),
     Delete(usize),
 }
 
 #[derive(Clone, Copy, PartialEq)]
 enum State {
     None,
-    DraggingNote(f32, MidiKey, Position),
-    NoteTrimmingStart(f32, Position),
-    NoteTrimmingEnd(f32, Position),
+    DraggingNote(f32, MidiKey, MusicalTime),
+    NoteTrimmingStart(f32, MusicalTime),
+    NoteTrimmingEnd(f32, MusicalTime),
     DeletingNotes,
 }
 
@@ -55,7 +55,7 @@ impl State {
 #[derive(Debug)]
 pub struct PianoRoll<'a, Message> {
     notes: Arc<Vec<MidiNote>>,
-    meter: &'a Meter,
+    rtstate: &'a RtState,
     position: &'a Vec2,
     scale: &'a Vec2,
 
@@ -123,8 +123,13 @@ where
             match event {
                 mouse::Event::ButtonPressed { button, modifiers } => match button {
                     mouse::Button::Left => {
-                        let time =
-                            get_time(cursor.x, *modifiers, self.meter, self.position, self.scale);
+                        let time = get_time(
+                            cursor.x,
+                            *modifiers,
+                            self.rtstate,
+                            self.position,
+                            self.scale,
+                        );
 
                         if let Some(i) = self.get_note(cursor) {
                             let note = &self.notes[i];
@@ -190,7 +195,7 @@ where
                         let new_start = get_time(
                             cursor.x + offset,
                             *modifiers,
-                            self.meter,
+                            self.rtstate,
                             self.position,
                             self.scale,
                         );
@@ -206,7 +211,7 @@ where
                         let new_start = get_time(
                             cursor.x + offset,
                             *modifiers,
-                            self.meter,
+                            self.rtstate,
                             self.position,
                             self.scale,
                         );
@@ -221,7 +226,7 @@ where
                         let new_end = get_time(
                             cursor.x + offset,
                             *modifiers,
-                            self.meter,
+                            self.rtstate,
                             self.position,
                             self.scale,
                         );
@@ -309,14 +314,14 @@ where
 impl<'a, Message> PianoRoll<'a, Message> {
     pub fn new(
         notes: Arc<Vec<MidiNote>>,
-        meter: &'a Meter,
+        rtstate: &'a RtState,
         position: &'a Vec2,
         scale: &'a Vec2,
         action: fn(Action) -> Message,
     ) -> Self {
         Self {
             notes,
-            meter,
+            rtstate,
             position,
             scale,
             deleted: false,
@@ -338,8 +343,8 @@ impl<'a, Message> PianoRoll<'a, Message> {
     fn note_bounds(&self, note: &MidiNote) -> Rectangle {
         let sample_size = self.scale.x.exp2();
 
-        let start = (note.start.in_samples_f(self.meter) - self.position.x) / sample_size;
-        let end = (note.end.in_samples_f(self.meter) - self.position.x) / sample_size;
+        let start = (note.start.to_samples_f(self.rtstate) - self.position.x) / sample_size;
+        let end = (note.end.to_samples_f(self.rtstate) - self.position.x) / sample_size;
 
         Rectangle::new(
             Point::new(

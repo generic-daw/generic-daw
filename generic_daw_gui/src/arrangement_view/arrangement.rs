@@ -2,7 +2,7 @@ use super::{node::Node, plugin::Plugin, track::Track};
 use crate::config::Config;
 use bit_set::BitSet;
 use generic_daw_core::{
-    Action, Clip, Message, Meter, MixerNode, Position, Stream, StreamTrait as _,
+    Action, Clip, Message, Mixer, MusicalTime, RtState, Stream, StreamTrait as _,
     Track as CoreTrack, Update, Version,
     audio_graph::{NodeId, NodeImpl as _},
     build_output_stream,
@@ -16,13 +16,13 @@ use std::path::Path;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NodeType {
     Master,
-    Track,
     Mixer,
+    Track,
 }
 
 #[derive(Debug)]
 pub struct Arrangement {
-    meter: Meter,
+    rtstate: RtState,
 
     tracks: Vec<Track>,
     nodes: HoleyVec<(Node, BitSet, NodeType)>,
@@ -34,7 +34,7 @@ pub struct Arrangement {
 
 impl Arrangement {
     pub fn create(config: &Config) -> (Self, Receiver<Update>) {
-        let (stream, master_node_id, meter, sender, receiver) = build_output_stream(
+        let (stream, master_node_id, rtstate, sender, receiver) = build_output_stream(
             config.output_device.name.as_deref(),
             config.output_device.sample_rate.unwrap_or(44100),
             config.output_device.buffer_size.unwrap_or(1024),
@@ -51,7 +51,7 @@ impl Arrangement {
 
         (
             Self {
-                meter,
+                rtstate,
 
                 tracks: Vec::new(),
                 nodes: channels,
@@ -74,7 +74,7 @@ impl Arrangement {
             }
             Update::Sample(ver, sample) => {
                 if ver == Version::last() {
-                    self.meter.sample = sample;
+                    self.rtstate.sample = sample;
                 }
             }
         }
@@ -86,8 +86,8 @@ impl Arrangement {
         }
     }
 
-    pub fn meter(&self) -> &Meter {
-        &self.meter
+    pub fn rtstate(&self) -> &RtState {
+        &self.rtstate
     }
 
     fn action(&self, node: NodeId, action: Action) {
@@ -145,58 +145,58 @@ impl Arrangement {
         self.action(node, Action::PluginMixChanged(index, mix));
     }
 
-    pub fn seek_to(&mut self, position: Position) {
-        let sample = position.in_samples(&self.meter);
-        if self.meter.sample == sample {
+    pub fn seek_to(&mut self, position: MusicalTime) {
+        let sample = position.to_samples(&self.rtstate);
+        if self.rtstate.sample == sample {
             return;
         }
-        self.meter.sample = sample;
+        self.rtstate.sample = sample;
         self.sender
             .try_send(Message::Sample(Version::unique(), sample))
             .unwrap();
     }
 
     pub fn set_bpm(&mut self, bpm: u16) {
-        if self.meter.bpm == bpm {
+        if self.rtstate.bpm == bpm {
             return;
         }
-        self.meter.bpm = bpm;
+        self.rtstate.bpm = bpm;
         self.sender.try_send(Message::Bpm(bpm)).unwrap();
     }
 
     pub fn set_numerator(&mut self, numerator: u8) {
-        if self.meter.numerator == numerator {
+        if self.rtstate.numerator == numerator {
             return;
         }
-        self.meter.numerator = numerator;
+        self.rtstate.numerator = numerator;
         self.sender.try_send(Message::Numerator(numerator)).unwrap();
     }
 
     pub fn play(&mut self) {
-        if !self.meter.playing {
+        if !self.rtstate.playing {
             self.toggle_playback();
         }
     }
 
     pub fn pause(&mut self) {
-        if self.meter.playing {
+        if self.rtstate.playing {
             self.toggle_playback();
         }
     }
 
     pub fn toggle_playback(&mut self) {
-        self.meter.playing ^= true;
+        self.rtstate.playing ^= true;
         self.sender.try_send(Message::TogglePlayback).unwrap();
     }
 
     pub fn stop(&mut self) {
         self.pause();
-        self.seek_to(Position::ZERO);
+        self.seek_to(MusicalTime::ZERO);
         self.sender.try_send(Message::Reset).unwrap();
     }
 
     pub fn toggle_metronome(&mut self) {
-        self.meter.metronome ^= true;
+        self.rtstate.metronome ^= true;
         self.sender.try_send(Message::ToggleMetronome).unwrap();
     }
 
@@ -252,7 +252,7 @@ impl Arrangement {
         &self.nodes[*id]
     }
 
-    pub fn push_channel(&mut self, node: MixerNode) {
+    pub fn push_channel(&mut self, node: Mixer) {
         self.nodes.insert(
             *node.id(),
             (Node::new(node.id()), BitSet::default(), NodeType::Mixer),
@@ -262,7 +262,7 @@ impl Arrangement {
 
     #[must_use]
     pub fn add_channel(&mut self) -> oneshot::Receiver<(NodeId, NodeId)> {
-        let node = MixerNode::default();
+        let node = Mixer::default();
         let id = node.id();
         self.push_channel(node);
         self.request_connect(self.master_node_id, id)
@@ -374,7 +374,7 @@ impl Arrangement {
         export(
             &mut audio_graph,
             path,
-            self.meter,
+            self.rtstate,
             self.tracks()
                 .iter()
                 .map(Track::len)

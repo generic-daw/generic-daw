@@ -1,5 +1,5 @@
 use crate::widget::LINE_HEIGHT;
-use generic_daw_core::{Meter, Position};
+use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::Vec2;
 use iced::{Point, Rectangle, Theme, Transformation, advanced::graphics::color, debug};
 use iced_wgpu::graphics::{
@@ -9,9 +9,9 @@ use iced_wgpu::graphics::{
 
 #[expect(clippy::trivially_copy_pass_by_ref)]
 pub fn mesh(
-    meter: &Meter,
-    global_start: Position,
-    clip_start: Position,
+    rtstate: &RtState,
+    start: MusicalTime,
+    offset: MusicalTime,
     lods: &[impl AsRef<[(f32, f32)]>],
     position: &Vec2,
     scale: &Vec2,
@@ -36,13 +36,13 @@ pub fn mesh(
     let color = color::pack(theme.extended_palette().background.strong.text);
     let lod = scale.x as usize - 3;
 
-    let global_start = global_start.in_samples_f(meter);
-    let clip_start = clip_start.in_samples_f(meter);
-    let offset = (clip_start / lod_sample_size).fract();
+    let start = start.to_samples_f(rtstate);
+    let offset = offset.to_samples_f(rtstate);
+    let subpixel = (offset / lod_sample_size).fract();
 
-    let diff = 0f32.max(position.x - global_start);
+    let diff = 0f32.max(position.x - start);
 
-    let first_index = ((diff + clip_start) / lod_sample_size) as usize;
+    let first_index = ((diff + offset) / lod_sample_size) as usize;
     let last_index = first_index + (bounds.width / lod_samples_per_pixel) as usize;
     let last_index = last_index.min(lods[lod].as_ref().len() - 1);
 
@@ -63,9 +63,8 @@ pub fn mesh(
                 max = max.max(l_min);
             }
             last = Some((max, min));
-            (min, max)
+            (min * height, max * height)
         })
-        .map(|(min, max)| (min * height, max * height))
         .map(|(min, max)| {
             if max - min < 1.0 {
                 let avg = min.midpoint(max);
@@ -76,7 +75,7 @@ pub fn mesh(
         })
         .enumerate()
         .flat_map(|(x, (min, max))| {
-            let x = (x as f32 - offset) * lod_samples_per_pixel;
+            let x = (x as f32 - subpixel) * lod_samples_per_pixel;
 
             [
                 SolidVertex2D {

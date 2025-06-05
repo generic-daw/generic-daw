@@ -1,4 +1,4 @@
-use crate::{InterleavedAudio, Meter, Position, Resampler, Stream, build_input_stream};
+use crate::{MusicalTime, Resampler, RtState, Sample, Stream, build_input_stream};
 use async_channel::Receiver;
 use cpal::StreamConfig;
 use generic_daw_utils::{NoDebug, hash_reader};
@@ -10,7 +10,7 @@ pub struct Recording {
     pub lods: NoDebug<Box<[Vec<(f32, f32)>]>>,
     path: Arc<Path>,
     pub name: Arc<str>,
-    pub position: Position,
+    pub position: MusicalTime,
 
     resampler: Resampler,
 
@@ -22,19 +22,19 @@ impl Recording {
     #[must_use]
     pub fn create(
         path: Arc<Path>,
-        meter: &Meter,
+        rtstate: &RtState,
         device_name: Option<&str>,
         sample_rate: u32,
         buffer_size: u32,
     ) -> (Self, Receiver<Box<[f32]>>) {
         let (stream, config, receiver) = build_input_stream(device_name, sample_rate, buffer_size);
 
-        let position = Position::from_samples(meter.sample, meter);
+        let position = MusicalTime::from_samples(rtstate.sample, rtstate);
         let name = path.file_name().unwrap().to_str().unwrap().into();
 
         let resampler = Resampler::new(
             config.sample_rate.0 as usize,
-            meter.sample_rate as usize,
+            rtstate.sample_rate as usize,
             config.channels as usize,
         )
         .unwrap();
@@ -63,7 +63,7 @@ impl Recording {
         Self::update_lods(self.resampler.samples(), &mut self.lods, start);
     }
 
-    pub fn split_off(&mut self, path: Arc<Path>, meter: &Meter) -> Arc<InterleavedAudio> {
+    pub fn split_off(&mut self, path: Arc<Path>, rtstate: &RtState) -> Arc<Sample> {
         let mut name = path.file_name().unwrap().to_str().unwrap().into();
         std::mem::swap(&mut self.name, &mut name);
         self.path = path.clone();
@@ -72,7 +72,7 @@ impl Recording {
 
         let mut resampler = Resampler::new(
             self.config.sample_rate.0 as usize,
-            meter.sample_rate as usize,
+            rtstate.sample_rate as usize,
             self.config.channels as usize,
         )
         .unwrap();
@@ -103,8 +103,8 @@ impl Recording {
 
         let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
 
-        Arc::new(InterleavedAudio {
-            samples: samples.into_boxed_slice().into(),
+        Arc::new(Sample {
+            audio: samples.into_boxed_slice().into(),
             lods: lods
                 .0
                 .into_iter()
@@ -118,7 +118,7 @@ impl Recording {
     }
 
     #[must_use]
-    pub fn finalize(self) -> Arc<InterleavedAudio> {
+    pub fn finalize(self) -> Arc<Sample> {
         let Self {
             mut lods,
             name,
@@ -150,8 +150,8 @@ impl Recording {
 
         let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
 
-        Arc::new(InterleavedAudio {
-            samples: samples.into_boxed_slice().into(),
+        Arc::new(Sample {
+            audio: samples.into_boxed_slice().into(),
             lods: lods
                 .0
                 .into_iter()

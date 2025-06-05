@@ -1,5 +1,5 @@
 use super::{LINE_HEIGHT, Vec2};
-use generic_daw_core::{self as core, Meter};
+use generic_daw_core::{self as core, RtState};
 use iced::{
     Element, Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
     advanced::{
@@ -21,7 +21,7 @@ struct State {
 #[derive(Clone, Debug)]
 pub struct MidiClip<'a, Message> {
     inner: &'a core::MidiClip,
-    meter: &'a Meter,
+    rtstate: &'a RtState,
     position: &'a Vec2,
     scale: &'a Vec2,
     enabled: bool,
@@ -45,26 +45,12 @@ where
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-        let global_start = self
-            .inner
-            .position
-            .get_global_start()
-            .in_samples_f(self.meter);
-        let global_end = self
-            .inner
-            .position
-            .get_global_end()
-            .in_samples_f(self.meter);
+        let start = self.inner.position.start().to_samples_f(self.rtstate);
+        let end = self.inner.position.end().to_samples_f(self.rtstate);
         let pixel_size = self.scale.x.exp2();
 
-        Node::new(Size::new(
-            (global_end - global_start) / pixel_size,
-            self.scale.y,
-        ))
-        .translate(Vector::new(
-            (global_start - self.position.x) / pixel_size,
-            0.0,
-        ))
+        Node::new(Size::new((end - start) / pixel_size, self.scale.y))
+            .translate(Vector::new((start - self.position.x) / pixel_size, 0.0))
     }
 
     fn update(
@@ -162,7 +148,7 @@ where
         // adding one space above the top note and below the bottom note
         let note_height = (self.scale.y - LINE_HEIGHT) / f32::from(max - min + 3);
 
-        let clip_start = self.inner.position.get_clip_start();
+        let offset = self.inner.position.offset();
         let pixel_size = self.scale.x.exp2();
 
         let position = Vector::new(lower_bounds.x, layout.position().y);
@@ -172,13 +158,10 @@ where
         );
 
         for note in &**pattern {
-            let start_pixel = (note
-                .start
-                .saturating_sub(clip_start)
-                .in_samples_f(self.meter)
+            let start_pixel = (note.start.saturating_sub(offset).to_samples_f(self.rtstate)
                 - self.position.x)
                 / pixel_size;
-            let end_pixel = (note.end.saturating_sub(clip_start).in_samples_f(self.meter)
+            let end_pixel = (note.end.saturating_sub(offset).to_samples_f(self.rtstate)
                 - self.position.x)
                 / pixel_size;
 
@@ -229,7 +212,7 @@ where
 impl<'a, Message> MidiClip<'a, Message> {
     pub fn new(
         inner: &'a core::MidiClip,
-        meter: &'a Meter,
+        rtstate: &'a RtState,
         position: &'a Vec2,
         scale: &'a Vec2,
         enabled: bool,
@@ -237,7 +220,7 @@ impl<'a, Message> MidiClip<'a, Message> {
     ) -> Self {
         Self {
             inner,
-            meter,
+            rtstate,
             position,
             scale,
             enabled,

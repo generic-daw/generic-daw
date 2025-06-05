@@ -1,7 +1,6 @@
 use crate::NodeImpl;
 use generic_daw_utils::HoleyVec;
 
-/// an entry in an `AudioGraph`
 #[derive(Debug)]
 pub struct Entry<Node: NodeImpl> {
     /// the node of this entry

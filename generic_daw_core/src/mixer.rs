@@ -22,7 +22,7 @@ impl Plugin {
 }
 
 #[derive(Debug)]
-pub struct MixerNode {
+pub struct Mixer {
     id: NodeId,
     plugins: Vec<Plugin>,
     volume: f32,
@@ -30,7 +30,7 @@ pub struct MixerNode {
     enabled: bool,
 }
 
-impl NodeImpl for MixerNode {
+impl NodeImpl for Mixer {
     type Event = Event;
     type State = State;
 
@@ -81,7 +81,7 @@ impl NodeImpl for MixerNode {
     }
 }
 
-impl MixerNode {
+impl Mixer {
     pub fn apply(&mut self, action: Action) {
         match action {
             Action::NodeToggleEnabled => self.enabled ^= true,
@@ -101,7 +101,7 @@ impl MixerNode {
     }
 }
 
-impl Default for MixerNode {
+impl Default for Mixer {
     fn default() -> Self {
         Self {
             plugins: Vec::new(),

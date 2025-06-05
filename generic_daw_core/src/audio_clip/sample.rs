@@ -12,9 +12,9 @@ use symphonia::core::{
 };
 
 #[derive(Debug)]
-pub struct InterleavedAudio {
+pub struct Sample {
     /// these are used to play the sample back
-    pub(crate) samples: NoDebug<Box<[f32]>>,
+    pub(crate) audio: NoDebug<Box<[f32]>>,
     /// these are used to draw the sample in various quality levels
     pub lods: NoDebug<Box<[Box<[(f32, f32)]>]>>,
     /// the file path associated with the sample
@@ -25,7 +25,7 @@ pub struct InterleavedAudio {
     pub hash: u64,
 }
 
-impl InterleavedAudio {
+impl Sample {
     #[must_use]
     pub fn create(path: Arc<Path>, sample_rate: u32) -> Option<Arc<Self>> {
         info!("loading sample {}", path.display());
@@ -38,7 +38,7 @@ impl InterleavedAudio {
         info!("loaded sample {}", path.display());
 
         Some(Arc::new(Self {
-            samples: samples.into(),
+            audio: samples.into(),
             lods: lods.into(),
             path,
             name,
@@ -61,7 +61,7 @@ impl InterleavedAudio {
         info!("loaded sample {}", path.display());
 
         Some(Arc::new(Self {
-            samples: samples.into(),
+            audio: samples.into(),
             lods: lods.into(),
             path,
             name,
@@ -71,7 +71,7 @@ impl InterleavedAudio {
 
     #[must_use]
     pub fn len(&self) -> usize {
-        self.samples.len()
+        self.audio.len()
     }
 
     #[must_use]

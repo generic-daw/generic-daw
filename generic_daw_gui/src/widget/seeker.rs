@@ -1,5 +1,5 @@
 use super::{LINE_HEIGHT, SWM, get_time};
-use generic_daw_core::{Meter, Position};
+use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
     Background, Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme,
@@ -22,17 +22,17 @@ use iced::{
 #[derive(Default)]
 struct State {
     hovering: bool,
-    seeking: Option<Position>,
+    seeking: Option<MusicalTime>,
 }
 
 #[derive(Debug)]
 pub struct Seeker<'a, Message> {
-    meter: &'a Meter,
+    rtstate: &'a RtState,
     position: &'a Vec2,
     scale: &'a Vec2,
     offset: f32,
     children: NoDebug<[Element<'a, Message>; 2]>,
-    seek_to: fn(Position) -> Message,
+    seek_to: fn(MusicalTime) -> Message,
     position_scale_delta: fn(Vec2, Vec2, Size) -> Message,
 }
 
@@ -138,7 +138,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                         let time = get_time(
                             cursor.x + self.offset,
                             *modifiers,
-                            self.meter,
+                            self.rtstate,
                             self.position,
                             self.scale,
                         );
@@ -156,8 +156,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
                     button: mouse::Button::Left,
                     modifiers,
                 } if state.hovering => {
-                    let time =
-                        get_time(cursor.x, *modifiers, self.meter, self.position, self.scale);
+                    let time = get_time(
+                        cursor.x,
+                        *modifiers,
+                        self.rtstate,
+                        self.position,
+                        self.scale,
+                    );
                     state.seeking = Some(time);
                     shell.publish((self.seek_to)(time));
                     shell.capture_event();
@@ -272,7 +277,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
         let sample_size = self.scale.x.exp2();
 
-        let x = (self.meter.sample as f32 - self.position.x) / sample_size - self.offset;
+        let x = (self.rtstate.sample as f32 - self.position.x) / sample_size - self.offset;
 
         renderer.fill_quad(
             Quad {
@@ -285,8 +290,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
             theme.extended_palette().primary.base.color,
         );
 
-        let mut draw_text = |beat: Position, bar: u32| {
-            let x = (beat.in_samples_f(self.meter) - self.position.x) / sample_size;
+        let mut draw_text = |beat: MusicalTime, bar: u32| {
+            let x = (beat.to_samples_f(self.rtstate) - self.position.x) / sample_size;
 
             let bar = Text {
                 content: (bar + 1).to_string(),
@@ -308,23 +313,23 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
             );
         };
 
-        let mut beat = Position::from_samples_f(self.position.x, self.meter);
+        let mut beat = MusicalTime::from_samples_f(self.position.x, self.rtstate);
         let end_beat =
-            beat + Position::from_samples_f(seeker_bounds.width * sample_size, self.meter);
+            beat + MusicalTime::from_samples_f(seeker_bounds.width * sample_size, self.rtstate);
         beat = beat.floor();
 
         while beat <= end_beat {
-            let bar = beat.beat() / u32::from(self.meter.numerator);
+            let bar = beat.beat() / u32::from(self.rtstate.numerator);
 
             if self.scale.x >= 11.0 {
-                if beat.beat() % u32::from(self.meter.numerator) == 0 && bar % 4 == 0 {
+                if beat.beat() % u32::from(self.rtstate.numerator) == 0 && bar % 4 == 0 {
                     draw_text(beat, bar);
                 }
-            } else if beat.beat() % u32::from(self.meter.numerator) == 0 {
+            } else if beat.beat() % u32::from(self.rtstate.numerator) == 0 {
                 draw_text(beat, bar);
             }
 
-            beat += Position::BEAT;
+            beat += MusicalTime::BEAT;
         }
 
         renderer.fill_quad(
@@ -413,16 +418,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
 impl<'a, Message> Seeker<'a, Message> {
     pub fn new(
-        meter: &'a Meter,
+        rtstate: &'a RtState,
         position: &'a Vec2,
         scale: &'a Vec2,
         left: impl Into<Element<'a, Message>>,
         right: impl Into<Element<'a, Message>>,
-        seek_to: fn(Position) -> Message,
+        seek_to: fn(MusicalTime) -> Message,
         position_scale_delta: fn(Vec2, Vec2, Size) -> Message,
     ) -> Self {
         Self {
-            meter,
+            rtstate,
             position,
             scale,
             offset: 0.0,
@@ -462,16 +467,17 @@ impl<'a, Message> Seeker<'a, Message> {
 
         let sample_size = self.scale.x.exp2();
 
-        let mut beat = Position::from_samples_f(self.position.x, self.meter);
-        let end_beat = beat + Position::from_samples_f(bounds.width * sample_size, self.meter);
+        let mut beat = MusicalTime::from_samples_f(self.position.x, self.rtstate);
+        let end_beat = beat + MusicalTime::from_samples_f(bounds.width * sample_size, self.rtstate);
 
-        let mut background_beat = Position::new(beat.beat() & !0x0f, 0);
-        let background_step = Position::new(4 * u32::from(self.meter.numerator), 0);
-        let background_width = background_step.in_samples_f(self.meter) / sample_size;
+        let mut background_beat = MusicalTime::new(beat.beat() & !0x0f, 0);
+        let background_step = MusicalTime::new(4 * u32::from(self.rtstate.numerator), 0);
+        let background_width = background_step.to_samples_f(self.rtstate) / sample_size;
 
         while background_beat < end_beat {
-            if (background_beat.beat() / (4 * u32::from(self.meter.numerator))) % 2 == 1 {
-                let x = (background_beat.in_samples_f(self.meter) - self.position.x) / sample_size;
+            if (background_beat.beat() / (4 * u32::from(self.rtstate.numerator))) % 2 == 1 {
+                let x =
+                    (background_beat.to_samples_f(self.rtstate) - self.position.x) / sample_size;
 
                 renderer.fill_quad(
                     Quad {
@@ -488,23 +494,23 @@ impl<'a, Message> Seeker<'a, Message> {
             background_beat += background_step;
         }
 
-        beat = beat.ceil_to_snap_step(self.scale.x, self.meter);
-        let snap_step = Position::snap_step(self.scale.x, self.meter);
+        beat = beat.snap_ceil(self.scale.x, self.rtstate);
+        let snap_step = MusicalTime::snap_step(self.scale.x, self.rtstate);
 
         while beat <= end_beat {
-            let color = if snap_step >= Position::BEAT {
-                if beat.beat() % (snap_step.beat() * u32::from(self.meter.numerator)) == 0 {
+            let color = if snap_step >= MusicalTime::BEAT {
+                if beat.beat() % (snap_step.beat() * u32::from(self.rtstate.numerator)) == 0 {
                     theme.extended_palette().background.strong.color
                 } else {
                     theme.extended_palette().background.weak.color
                 }
-            } else if beat.step() == 0 {
+            } else if beat.tick() == 0 {
                 theme.extended_palette().background.strong.color
             } else {
                 theme.extended_palette().background.weak.color
             };
 
-            let x = (beat.in_samples_f(self.meter) - self.position.x) / sample_size;
+            let x = (beat.to_samples_f(self.rtstate) - self.position.x) / sample_size;
 
             renderer.fill_quad(
                 Quad {

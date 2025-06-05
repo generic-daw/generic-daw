@@ -1,4 +1,4 @@
-use generic_daw_core::{Clip, Position, audio_graph::NodeId};
+use generic_daw_core::{Clip, MusicalTime, audio_graph::NodeId};
 
 #[derive(Debug)]
 pub struct Track {
@@ -14,10 +14,10 @@ impl Track {
         }
     }
 
-    pub fn len(&self) -> Position {
+    pub fn len(&self) -> MusicalTime {
         self.clips
             .iter()
-            .map(|clip| clip.position().get_global_end())
+            .map(|clip| clip.position().end())
             .max()
             .unwrap_or_default()
     }

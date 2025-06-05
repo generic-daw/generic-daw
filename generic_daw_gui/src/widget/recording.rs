@@ -1,5 +1,5 @@
 use super::{LINE_HEIGHT, Vec2, waveform};
-use generic_daw_core::{Meter, Position, Recording as RecordingInner};
+use generic_daw_core::{MusicalTime, Recording as RecordingInner, RtState};
 use iced::{
     Element, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
     advanced::{
@@ -19,7 +19,7 @@ use iced::{
 #[derive(Clone, Debug)]
 pub struct Recording<'a> {
     inner: &'a RecordingInner,
-    meter: &'a Meter,
+    rtstate: &'a RtState,
     position: &'a Vec2,
     scale: &'a Vec2,
 }
@@ -30,14 +30,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-        let global_start = self.inner.position.in_samples_f(self.meter);
+        let start = self.inner.position.to_samples_f(self.rtstate);
         let len = self.inner.len() as f32;
         let pixel_size = self.scale.x.exp2();
 
-        Node::new(Size::new(len / pixel_size, self.scale.y)).translate(Vector::new(
-            (global_start - self.position.x) / pixel_size,
-            0.0,
-        ))
+        Node::new(Size::new(len / pixel_size, self.scale.y))
+            .translate(Vector::new((start - self.position.x) / pixel_size, 0.0))
     }
 
     fn draw(
@@ -103,9 +101,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
         // we don't need to cache here, since `RecordingInner` only exists as long
         // as we are recording
         if let Some(waveform) = waveform::mesh(
-            self.meter,
+            self.rtstate,
             self.inner.position,
-            Position::ZERO,
+            MusicalTime::ZERO,
             &self.inner.lods,
             self.position,
             self.scale,
@@ -122,13 +120,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
 impl<'a> Recording<'a> {
     pub fn new(
         inner: &'a RecordingInner,
-        meter: &'a Meter,
+        rtstate: &'a RtState,
         position: &'a Vec2,
         scale: &'a Vec2,
     ) -> Self {
         Self {
             inner,
-            meter,
+            rtstate,
             position,
             scale,
         }

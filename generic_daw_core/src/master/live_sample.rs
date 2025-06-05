@@ -8,18 +8,19 @@ pub struct LiveSample {
 
 impl LiveSample {
     #[must_use]
-    pub fn new(audio: Arc<[f32]>, before: usize) -> Self {
+    pub fn new(audio: Arc<[f32]>, offset: usize) -> Self {
         Self {
             audio,
-            idx: -(before as isize),
+            idx: -(offset as isize),
         }
     }
 
     pub fn process(&mut self, audio: &mut [f32]) {
+        let idx = self.idx;
+        let uidx = idx.unsigned_abs();
         self.idx += audio.len() as isize;
-        let uidx = self.idx.unsigned_abs();
 
-        if self.idx > 0 {
+        if idx > 0 {
             self.audio[uidx..]
                 .iter()
                 .zip(audio)

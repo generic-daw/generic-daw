@@ -1,5 +1,5 @@
 use super::{LINE_HEIGHT, Vec2, shaping_of, waveform};
-use generic_daw_core::{self as core, Meter};
+use generic_daw_core::{self as core, RtState};
 use iced::{
     Element, Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
     advanced::{
@@ -36,7 +36,7 @@ struct State {
 impl State {
     fn new(inner: &core::AudioClip) -> Self {
         Self {
-            shaping: shaping_of(&inner.audio.name),
+            shaping: shaping_of(&inner.sample.name),
             last_addr: std::ptr::from_ref(inner).addr(),
             ..Self::default()
         }
@@ -46,7 +46,7 @@ impl State {
 #[derive(Clone, Debug)]
 pub struct AudioClip<'a> {
     inner: &'a core::AudioClip,
-    meter: &'a Meter,
+    rtstate: &'a RtState,
     /// the position of the top left corner of the arrangement viewport
     position: &'a Vec2,
     /// the scale of the arrangement viewport
@@ -77,26 +77,12 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
     }
 
     fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-        let global_start = self
-            .inner
-            .position
-            .get_global_start()
-            .in_samples_f(self.meter);
-        let global_end = self
-            .inner
-            .position
-            .get_global_end()
-            .in_samples_f(self.meter);
+        let start = self.inner.position.start().to_samples_f(self.rtstate);
+        let end = self.inner.position.end().to_samples_f(self.rtstate);
         let pixel_size = self.scale.x.exp2();
 
-        Node::new(Size::new(
-            (global_end - global_start) / pixel_size,
-            self.scale.y,
-        ))
-        .translate(Vector::new(
-            (global_start - self.position.x) / pixel_size,
-            0.0,
-        ))
+        Node::new(Size::new((end - start) / pixel_size, self.scale.y))
+            .translate(Vector::new((start - self.position.x) / pixel_size, 0.0))
     }
 
     fn update(
@@ -161,7 +147,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
         // the text containing the name of the sample
         let text = Text {
-            content: self.inner.audio.name.as_ref().into(),
+            content: self.inner.sample.name.as_ref().into(),
             bounds: Size::new(f32::INFINITY, 0.0),
             size: renderer.default_size(),
             line_height: LineHeight::default(),
@@ -202,10 +188,10 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
         if state.cache.borrow().is_none() {
             // TODO: let chain
             if let Some(mesh) = waveform::mesh(
-                self.meter,
-                self.inner.position.get_global_start(),
-                self.inner.position.get_clip_start(),
-                &self.inner.audio.lods,
+                self.rtstate,
+                self.inner.position.start(),
+                self.inner.position.offset(),
+                &self.inner.sample.lods,
                 self.position,
                 self.scale,
                 theme,
@@ -256,14 +242,14 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 impl<'a> AudioClip<'a> {
     pub fn new(
         inner: &'a core::AudioClip,
-        meter: &'a Meter,
+        rtstate: &'a RtState,
         position: &'a Vec2,
         scale: &'a Vec2,
         enabled: bool,
     ) -> Self {
         Self {
             inner,
-            meter,
+            rtstate,
             position,
             scale,
             enabled,

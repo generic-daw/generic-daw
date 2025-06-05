@@ -1,4 +1,4 @@
-use generic_daw_core::{Meter, Position};
+use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::Vec2;
 use iced::{keyboard::Modifiers, widget::text::Shaping};
 
@@ -46,15 +46,15 @@ pub fn shaping_of(text: &str) -> Shaping {
 fn get_time(
     x: f32,
     modifiers: Modifiers,
-    meter: &Meter,
+    rtstate: &RtState,
     position: &Vec2,
     scale: &Vec2,
-) -> Position {
+) -> MusicalTime {
     let time = x.mul_add(scale.x.exp2(), position.x).max(0.0);
-    let mut time = Position::from_samples_f(time, meter);
+    let mut time = MusicalTime::from_samples_f(time, rtstate);
 
     if !modifiers.alt() {
-        time = time.round_to_snap_step(scale.x, meter);
+        time = time.snap_round(scale.x, rtstate);
     }
 
     time

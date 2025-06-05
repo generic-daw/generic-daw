@@ -1,33 +1,33 @@
-use crate::Meter;
+use crate::RtState;
 use atomig::{Atom, AtomInteger};
 use std::{
     fmt::{Debug, Formatter},
     ops::{Add, AddAssign, Mul, Sub, SubAssign},
 };
 
-#[derive(Atom, AtomInteger, Clone, Copy, Default, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Position(u32);
+#[derive(Atom, AtomInteger, Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct MusicalTime(u32);
 
-impl Debug for Position {
+impl Debug for MusicalTime {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Position")
+        f.debug_struct("MusicalTime")
             .field("beat", &self.beat())
-            .field("step", &self.step())
+            .field("tick", &self.tick())
             .finish()
     }
 }
 
-impl Position {
+impl MusicalTime {
     pub const ZERO: Self = Self::new(0, 0);
     pub const BEAT: Self = Self::new(1, 0);
-    pub const STEP: Self = Self::new(0, 1);
+    pub const TICK: Self = Self::new(0, 1);
 
     #[must_use]
-    pub const fn new(quarter_note: u32, sub_quarter_note: u32) -> Self {
-        debug_assert!(sub_quarter_note < 256);
-        debug_assert!(quarter_note <= u32::MAX >> 8);
+    pub const fn new(beat: u32, tick: u32) -> Self {
+        debug_assert!(tick < 256);
+        debug_assert!(beat <= u32::MAX >> 8);
 
-        Self((quarter_note << 8) | sub_quarter_note)
+        Self((beat << 8) | tick)
     }
 
     #[must_use]
@@ -36,7 +36,7 @@ impl Position {
     }
 
     #[must_use]
-    pub const fn step(self) -> u32 {
+    pub const fn tick(self) -> u32 {
         self.0 & 0xff
     }
 
@@ -48,7 +48,7 @@ impl Position {
 
     #[must_use]
     pub const fn ceil(mut self) -> Self {
-        if self.step() != 0 {
+        if self.tick() != 0 {
             self.0 &= !0xff;
             self.0 += 1 << 8;
         }
@@ -68,32 +68,32 @@ impl Position {
     }
 
     #[must_use]
-    pub const fn from_samples_f(samples: f32, meter: &Meter) -> Self {
+    pub const fn from_samples_f(samples: f32, rtstate: &RtState) -> Self {
         let samples = samples as f64;
-        let bpm = meter.bpm as f64;
-        let sample_rate = meter.sample_rate as f64;
+        let bpm = rtstate.bpm as f64;
+        let sample_rate = rtstate.sample_rate as f64;
 
-        let beat = samples * (bpm * 32.0) / (sample_rate * 15.0);
+        let time = samples * (bpm * 32.0) / (sample_rate * 15.0);
 
-        Self(beat as u32)
+        Self(time as u32)
     }
 
     #[must_use]
-    pub const fn from_samples(samples: usize, meter: &Meter) -> Self {
+    pub const fn from_samples(samples: usize, rtstate: &RtState) -> Self {
         let samples = samples as u64;
-        let bpm = meter.bpm as u64;
-        let sample_rate = meter.sample_rate as u64;
+        let bpm = rtstate.bpm as u64;
+        let sample_rate = rtstate.sample_rate as u64;
 
-        let beat = samples * (bpm * 32) / (sample_rate * 15);
+        let time = samples * (bpm * 32) / (sample_rate * 15);
 
-        Self(beat as u32)
+        Self(time as u32)
     }
 
     #[must_use]
-    pub const fn in_samples_f(self, meter: &Meter) -> f32 {
+    pub const fn to_samples_f(self, rtstate: &RtState) -> f32 {
         let beat = self.0 as f64;
-        let bpm = meter.bpm as f64;
-        let sample_rate = meter.sample_rate as f64;
+        let bpm = rtstate.bpm as f64;
+        let sample_rate = rtstate.sample_rate as f64;
 
         let samples = beat * (sample_rate * 15.0) / (bpm * 32.0);
 
@@ -101,33 +101,33 @@ impl Position {
     }
 
     #[must_use]
-    pub const fn in_samples(self, meter: &Meter) -> usize {
-        let global_beat = self.0 as u64;
-        let bpm = meter.bpm as u64;
-        let sample_rate = meter.sample_rate as u64;
+    pub const fn to_samples(self, rtstate: &RtState) -> usize {
+        let time = self.0 as u64;
+        let bpm = rtstate.bpm as u64;
+        let sample_rate = rtstate.sample_rate as u64;
 
-        let samples = global_beat * (sample_rate * 15) / (bpm * 32);
+        let samples = time * (sample_rate * 15) / (bpm * 32);
 
         samples as usize
     }
 
     #[must_use]
-    pub fn floor_to_snap_step(mut self, scale: f32, meter: &Meter) -> Self {
-        let snap_step = Self::snap_step(scale, meter).0;
+    pub fn snap_floor(mut self, scale: f32, rtstate: &RtState) -> Self {
+        let snap_step = Self::snap_step(scale, rtstate).0;
         self.0 -= self.0 % snap_step;
         self
     }
 
     #[must_use]
-    pub fn ceil_to_snap_step(mut self, scale: f32, meter: &Meter) -> Self {
-        let snap_step = Self::snap_step(scale, meter).0;
+    pub fn snap_ceil(mut self, scale: f32, rtstate: &RtState) -> Self {
+        let snap_step = Self::snap_step(scale, rtstate).0;
         self.0 += snap_step - (self.0 % snap_step);
         self
     }
 
     #[must_use]
-    pub fn round_to_snap_step(mut self, scale: f32, meter: &Meter) -> Self {
-        let modulo = Self::snap_step(scale, meter).0;
+    pub fn snap_round(mut self, scale: f32, rtstate: &RtState) -> Self {
+        let modulo = Self::snap_step(scale, rtstate).0;
 
         let diff = self.0 % modulo;
 
@@ -141,13 +141,13 @@ impl Position {
     }
 
     #[must_use]
-    pub fn snap_step(mut scale: f32, meter: &Meter) -> Self {
-        scale += (f32::from(meter.bpm) / 64.0).log2();
+    pub fn snap_step(mut scale: f32, rtstate: &RtState) -> Self {
+        scale += (f32::from(rtstate.bpm) / 64.0).log2();
 
         Self(if scale < 12.0 {
             1 << (scale as u8 - 3)
         } else {
-            u32::from(meter.numerator) << 8
+            u32::from(rtstate.numerator) << 8
         })
     }
 
@@ -162,7 +162,7 @@ impl Position {
     }
 }
 
-impl Add for Position {
+impl Add for MusicalTime {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -170,13 +170,13 @@ impl Add for Position {
     }
 }
 
-impl AddAssign for Position {
+impl AddAssign for MusicalTime {
     fn add_assign(&mut self, rhs: Self) {
         self.0 += rhs.0;
     }
 }
 
-impl Sub for Position {
+impl Sub for MusicalTime {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -184,13 +184,13 @@ impl Sub for Position {
     }
 }
 
-impl SubAssign for Position {
+impl SubAssign for MusicalTime {
     fn sub_assign(&mut self, rhs: Self) {
         self.0 -= rhs.0;
     }
 }
 
-impl Mul<u32> for Position {
+impl Mul<u32> for MusicalTime {
     type Output = Self;
 
     fn mul(mut self, rhs: u32) -> Self::Output {
@@ -199,14 +199,14 @@ impl Mul<u32> for Position {
     }
 }
 
-impl From<u32> for Position {
+impl From<u32> for MusicalTime {
     fn from(value: u32) -> Self {
         Self(value)
     }
 }
 
-impl From<Position> for u32 {
-    fn from(value: Position) -> Self {
+impl From<MusicalTime> for u32 {
+    fn from(value: MusicalTime) -> Self {
         value.0
     }
 }

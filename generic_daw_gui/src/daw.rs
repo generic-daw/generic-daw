@@ -10,7 +10,7 @@ use crate::{
     widget::{AnimatedDot, LINE_HEIGHT},
 };
 use generic_daw_core::{
-    Position,
+    MusicalTime,
     clap_host::{PluginBundle, PluginDescriptor, get_installed_plugins},
     get_input_devices, get_output_devices,
 };
@@ -65,7 +65,7 @@ pub struct Daw {
     input_devices: Vec<String>,
     output_devices: Vec<String>,
 
-    arrangement: ArrangementView,
+    arrangement_view: ArrangementView,
     file_tree: FileTree,
     config_view: Option<ConfigView>,
     state: State,
@@ -118,7 +118,7 @@ impl Daw {
                 input_devices,
                 output_devices,
 
-                arrangement,
+                arrangement_view: arrangement,
                 file_tree,
                 config_view: None,
                 state,
@@ -134,7 +134,7 @@ impl Daw {
         match message {
             Message::Arrangement(message) => {
                 return self
-                    .arrangement
+                    .arrangement_view
                     .update(message, &self.config, &self.plugin_bundles)
                     .map(Message::Arrangement);
             }
@@ -148,11 +148,11 @@ impl Daw {
                 self.reload_config();
                 self.state.last_project = None;
                 return self
-                    .arrangement
+                    .arrangement_view
                     .unload(&self.config, &self.plugin_bundles)
                     .map(Message::Arrangement);
             }
-            Message::ChangedTab(tab) => self.arrangement.tab = tab,
+            Message::ChangedTab(tab) => self.arrangement_view.tab = tab,
             Message::OpenFileDialog => {
                 return Task::future(
                     AsyncFileDialog::new()
@@ -204,13 +204,13 @@ impl Daw {
                     self.state.write();
                 }
                 return self
-                    .arrangement
+                    .arrangement_view
                     .load(&path, &self.config, &self.plugin_bundles)
                     .unwrap()
                     .map(Message::Arrangement);
             }
             Message::SaveAsFile(path) => {
-                self.arrangement.save(&path);
+                self.arrangement_view.save(&path);
 
                 if self.state.last_project.as_deref() != Some(&path) {
                     self.state.last_project = Some(path);
@@ -220,9 +220,9 @@ impl Daw {
             Message::OpenConfigView => self.config_view = Some(ConfigView::default()),
             Message::CloseConfigView => self.config_view = None,
             Message::Stop => {
-                self.arrangement.stop();
+                self.arrangement_view.stop();
                 return self
-                    .arrangement
+                    .arrangement_view
                     .update(
                         ArrangementMessage::StopRecord,
                         &self.config,
@@ -231,10 +231,10 @@ impl Daw {
                     .map(Message::Arrangement);
             }
             Message::TogglePlayback => {
-                self.arrangement.arrangement.toggle_playback();
-                if !self.arrangement.arrangement.meter().playing {
+                self.arrangement_view.arrangement.toggle_playback();
+                if !self.arrangement_view.arrangement.rtstate().playing {
                     return self
-                        .arrangement
+                        .arrangement_view
                         .update(
                             ArrangementMessage::StopRecord,
                             &self.config,
@@ -243,15 +243,18 @@ impl Daw {
                         .map(Message::Arrangement);
                 }
             }
-            Message::ToggleMetronome => self.arrangement.arrangement.toggle_metronome(),
-            Message::ChangedBpm(bpm) => self.arrangement.arrangement.set_bpm(bpm.clamp(10, 999)),
+            Message::ToggleMetronome => self.arrangement_view.arrangement.toggle_metronome(),
+            Message::ChangedBpm(bpm) => self
+                .arrangement_view
+                .arrangement
+                .set_bpm(bpm.clamp(10, 999)),
             Message::ChangedBpmText(bpm) => {
                 if let Ok(bpm) = bpm.parse() {
                     return self.update(Message::ChangedBpm(bpm));
                 }
             }
             Message::ChangedNumerator(numerator) => {
-                self.arrangement
+                self.arrangement_view
                     .arrangement
                     .set_numerator(numerator.clamp(1, 99));
             }
@@ -275,7 +278,7 @@ impl Daw {
     fn handle_file_tree_action(&mut self, action: FileTreeMessage) -> Task<Message> {
         match action {
             FileTreeMessage::File(path) => self
-                .arrangement
+                .arrangement_view
                 .update(
                     ArrangementMessage::SampleLoadFromFile(path),
                     &self.config,
@@ -303,13 +306,13 @@ impl Daw {
     }
 
     pub fn view(&self, window: Id) -> Element<'_, Message> {
-        if self.arrangement.clap_host.is_plugin_window(window) {
+        if self.arrangement_view.clap_host.is_plugin_window(window) {
             return space().into();
         }
 
-        let fill = Position::from_samples(
-            self.arrangement.arrangement.meter().sample,
-            self.arrangement.arrangement.meter(),
+        let fill = MusicalTime::from_samples(
+            self.arrangement_view.arrangement.rtstate().sample,
+            self.arrangement_view.arrangement.rtstate(),
         )
         .beat()
             % 2
@@ -344,7 +347,7 @@ impl Daw {
                     ),
                     row![
                         styled_button(
-                            container(if self.arrangement.arrangement.meter().playing {
+                            container(if self.arrangement_view.arrangement.rtstate().playing {
                                 pause()
                             } else {
                                 play()
@@ -361,14 +364,14 @@ impl Daw {
                         .on_press(Message::Stop),
                     ],
                     number_input(
-                        self.arrangement.arrangement.meter().numerator as usize,
+                        self.arrangement_view.arrangement.rtstate().numerator as usize,
                         4,
                         2,
                         |x| Message::ChangedNumerator(x as u8),
                         Message::ChangedNumeratorText
                     ),
                     number_input(
-                        self.arrangement.arrangement.meter().bpm as usize,
+                        self.arrangement_view.arrangement.rtstate().bpm as usize,
                         140,
                         3,
                         |x| Message::ChangedBpm(x as u16),
@@ -379,7 +382,7 @@ impl Daw {
                         .style(move |t, s| button_with_base(
                             t,
                             s,
-                            if self.arrangement.arrangement.meter().metronome {
+                            if self.arrangement_view.arrangement.rtstate().metronome {
                                 button::primary
                             } else {
                                 button::secondary
@@ -389,12 +392,13 @@ impl Daw {
                     horizontal_space(),
                     row![
                         styled_button(chart_no_axes_gantt()).on_press_maybe(
-                            (!matches!(self.arrangement.tab, Tab::Arrangement { .. })).then_some(
-                                Message::ChangedTab(Tab::Arrangement { grabbed_clip: None })
-                            )
+                            (!matches!(self.arrangement_view.tab, Tab::Arrangement { .. }))
+                                .then_some(Message::ChangedTab(Tab::Arrangement {
+                                    grabbed_clip: None
+                                }))
                         ),
                         styled_button(sliders_vertical()).on_press_maybe(
-                            (!matches!(self.arrangement.tab, Tab::Mixer))
+                            (!matches!(self.arrangement_view.tab, Tab::Mixer))
                                 .then_some(Message::ChangedTab(Tab::Mixer))
                         )
                     ],
@@ -403,7 +407,7 @@ impl Daw {
                 .align_y(Alignment::Center),
                 Split::new(
                     self.file_tree.view().map(Message::FileTree),
-                    self.arrangement.view().map(Message::Arrangement),
+                    self.arrangement_view.view().map(Message::Arrangement),
                     self.split_at,
                     Message::SplitAt
                 )
@@ -413,7 +417,7 @@ impl Daw {
             .spacing(10)
         ];
 
-        if self.arrangement.loading() {
+        if self.arrangement_view.loading() {
             base = base.push(
                 mouse_area(space().width(Fill).height(Fill)).interaction(Interaction::Progress),
             );
@@ -441,7 +445,7 @@ impl Daw {
     }
 
     pub fn title(&self, window: Id) -> String {
-        self.arrangement
+        self.arrangement_view
             .clap_host
             .title(window)
             .unwrap_or_else(|| String::from("Generic DAW"))
@@ -461,7 +465,9 @@ impl Daw {
         };
 
         Subscription::batch([
-            self.arrangement.subscription().map(Message::Arrangement),
+            self.arrangement_view
+                .subscription()
+                .map(Message::Arrangement),
             autosave,
             keybinds,
         ])

@@ -1,48 +1,43 @@
-use crate::{ClipPosition, Meter, Position};
+use crate::{ClipPosition, MusicalTime, RtState};
 use std::sync::Arc;
 
-mod interleaved_audio;
+mod sample;
 
-pub use interleaved_audio::InterleavedAudio;
+pub use sample::Sample;
 
 #[derive(Clone, Debug)]
 pub struct AudioClip {
-    pub audio: Arc<InterleavedAudio>,
-    /// the position of the clip relative to the start of the arrangement
+    pub sample: Arc<Sample>,
     pub position: ClipPosition,
 }
 
 impl AudioClip {
     #[must_use]
-    pub fn create(audio: Arc<InterleavedAudio>, meter: &Meter) -> Arc<Self> {
-        let samples = audio.samples.len();
+    pub fn create(sample: Arc<Sample>, rtstate: &RtState) -> Arc<Self> {
+        let len = sample.audio.len();
 
         Arc::new(Self {
-            audio,
-            position: ClipPosition::new(
-                Position::ZERO,
-                Position::from_samples(samples, meter),
-                Position::ZERO,
-            ),
+            sample,
+            position: ClipPosition::with_len(MusicalTime::from_samples(len, rtstate)),
         })
     }
 
-    pub fn process(&self, meter: &Meter, audio: &mut [f32]) {
-        if !meter.playing {
+    pub fn process(&self, rtstate: &RtState, audio: &mut [f32]) {
+        if !rtstate.playing {
             return;
         }
 
-        let clip_start_sample = self.position.get_global_start().in_samples(meter);
-        let diff = meter.sample.abs_diff(clip_start_sample);
+        let start = self.position.start().to_samples(rtstate);
+        let diff = rtstate.sample.abs_diff(start);
 
-        if meter.sample > clip_start_sample {
-            let start_index = diff + self.position.get_clip_start().in_samples(meter);
+        if rtstate.sample > start {
+            let start_index = diff + self.position.offset().to_samples(rtstate);
 
-            if start_index >= self.audio.samples.len() {
+            if start_index >= self.sample.audio.len() {
                 return;
             }
 
-            self.audio.samples[start_index..]
+            self.sample.audio[start_index..]
                 .iter()
                 .zip(audio)
                 .for_each(|(sample, buf)| {
@@ -53,8 +48,8 @@ impl AudioClip {
                 return;
             }
 
-            self.audio
-                .samples
+            self.sample
+                .audio
                 .iter()
                 .zip(audio[diff..].iter_mut())
                 .for_each(|(sample, buf)| {

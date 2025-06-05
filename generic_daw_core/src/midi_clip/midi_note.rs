@@ -1,5 +1,5 @@
 use super::MidiKey;
-use crate::Position;
+use crate::MusicalTime;
 use std::ops::Add;
 
 #[derive(Clone, Copy, Debug)]
@@ -11,14 +11,14 @@ pub struct MidiNote {
     /// in the `0.0..=1.0` range
     pub velocity: f64,
     /// start time of the note, relative to the beginning of the pattern it belongs to
-    pub start: Position,
+    pub start: MusicalTime,
     /// end time of the note, relative to the beginning of the pattern it belongs to
-    pub end: Position,
+    pub end: MusicalTime,
 }
 
 impl MidiNote {
     #[must_use]
-    pub fn clamp(mut self, min: Position, max: Position) -> Option<Self> {
+    pub fn clamp(mut self, min: MusicalTime, max: MusicalTime) -> Option<Self> {
         if self.start > max || self.end < min {
             return None;
         }
@@ -30,7 +30,7 @@ impl MidiNote {
     }
 
     #[must_use]
-    pub fn saturating_sub(mut self, other: Position) -> Option<Self> {
+    pub fn saturating_sub(mut self, other: MusicalTime) -> Option<Self> {
         if self.end < other {
             return None;
         }
@@ -41,31 +41,31 @@ impl MidiNote {
         Some(self)
     }
 
-    pub fn trim_start_to(&mut self, new_global_start: Position) {
-        self.start = new_global_start.min(self.end - Position::STEP);
+    pub fn trim_start_to(&mut self, new_start: MusicalTime) {
+        self.start = new_start.min(self.end - MusicalTime::TICK);
     }
 
-    pub fn trim_end_to(&mut self, new_global_end: Position) {
-        self.end = new_global_end.max(self.start + Position::STEP);
+    pub fn trim_end_to(&mut self, new_end: MusicalTime) {
+        self.end = new_end.max(self.start + MusicalTime::TICK);
     }
 
-    pub fn move_to(&mut self, new_global_start: Position) {
-        let diff = self.start.abs_diff(new_global_start);
+    pub fn move_to(&mut self, new_start: MusicalTime) {
+        let diff = self.start.abs_diff(new_start);
 
-        if self.start < new_global_start {
+        if self.start < new_start {
             self.end += diff;
         } else {
             self.end -= diff;
         }
 
-        self.start = new_global_start;
+        self.start = new_start;
     }
 }
 
-impl Add<Position> for MidiNote {
+impl Add<MusicalTime> for MidiNote {
     type Output = Self;
 
-    fn add(mut self, rhs: Position) -> Self::Output {
+    fn add(mut self, rhs: MusicalTime) -> Self::Output {
         self.start += rhs;
         self.end += rhs;
 

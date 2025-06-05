@@ -1,4 +1,4 @@
-use crate::{ClipPosition, Meter, Position, event::Event};
+use crate::{ClipPosition, RtState, event::Event};
 use arc_swap::ArcSwap;
 use generic_daw_utils::NoDebug;
 use std::{
@@ -32,34 +32,34 @@ impl MidiClip {
 
         Arc::new(Self {
             pattern,
-            position: ClipPosition::new(Position::ZERO, len, Position::ZERO),
+            position: ClipPosition::with_len(len),
             notes: Arc::new(Mutex::new([[0; 16]; 128])).into(),
         })
     }
 
-    pub fn process(&self, meter: &Meter, audio: &[f32], events: &mut Vec<Event>) {
-        let global_start = self.position.get_global_start();
-        let global_end = self.position.get_global_end();
-        let clip_start = self.position.get_clip_start();
+    pub fn process(&self, rtstate: &RtState, audio: &[f32], events: &mut Vec<Event>) {
+        let start = self.position.start();
+        let end = self.position.end();
+        let offset = self.position.offset();
 
-        let start_sample = meter.sample;
+        let start_sample = rtstate.sample;
         let end_sample = start_sample + audio.len();
 
         // how many notes should currently be playing
         let mut notes = [[0u8; 16]; 128];
 
-        if meter.playing {
+        if rtstate.playing {
             self.pattern
                 .load()
                 .iter()
                 .filter_map(|&note| {
-                    (note + global_start)
-                        .saturating_sub(clip_start)
-                        .and_then(|note| note.clamp(global_start, global_end))
+                    (note + start)
+                        .saturating_sub(offset)
+                        .and_then(|note| note.clamp(start, end))
                 })
                 .for_each(|note| {
-                    let start = note.start.in_samples(meter);
-                    let end = note.end.in_samples(meter);
+                    let start = note.start.to_samples(rtstate);
+                    let end = note.end.to_samples(rtstate);
 
                     if start < start_sample && end >= start_sample {
                         notes[note.key.0 as usize][note.channel as usize] += 1;
@@ -102,18 +102,18 @@ impl MidiClip {
                 events.extend(repeat_n(event, before.abs_diff(after) as usize));
             });
 
-        if meter.playing {
+        if rtstate.playing {
             self.pattern
                 .load()
                 .iter()
                 .filter_map(|&note| {
-                    (note + global_start)
-                        .saturating_sub(clip_start)
-                        .and_then(|note| note.clamp(global_start, global_end))
+                    (note + start)
+                        .saturating_sub(offset)
+                        .and_then(|note| note.clamp(start, end))
                 })
                 .for_each(|note| {
-                    let start = note.start.in_samples(meter);
-                    let end = note.end.in_samples(meter);
+                    let start = note.start.to_samples(rtstate);
+                    let end = note.end.to_samples(rtstate);
 
                     if start >= start_sample && start < end_sample {
                         events.push(Event::On {

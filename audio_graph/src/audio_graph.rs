@@ -101,7 +101,13 @@ impl<Node: NodeImpl> AudioGraph<Node> {
             self.graph.insert(node, entry);
         }
 
-        buf.copy_from_slice(&self.graph[*self.root].audio);
+        buf.copy_from_slice(&self.graph[*self.root()].audio);
+    }
+
+    /// get the `NodeId` of the root node
+    #[must_use]
+    pub fn root(&self) -> NodeId {
+        self.root
     }
 
     /// get an immutable reference to `node`, if it exists
@@ -126,7 +132,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
     /// get the delay of the entire audio graph
     #[must_use]
     pub fn delay(&self) -> usize {
-        self.graph[*self.root].delay
+        self.graph[*self.root()].delay
     }
 
     /// attempt to connect `from` to `to`,
@@ -204,7 +210,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
     /// if the graph contains `node` it is removed along with all adjacent edges,
     /// otherwise this does nothing
     pub fn remove(&mut self, node: NodeId) {
-        debug_assert!(self.root != node);
+        debug_assert!(node != self.root());
 
         if self.graph.remove(*node).is_some() {
             let idx = self.list.iter().position(|&n| n == *node).unwrap();

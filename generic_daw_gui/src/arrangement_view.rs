@@ -18,8 +18,8 @@ use arrangement::{Arrangement as ArrangementWrapper, NodeType};
 use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
-    self as core, AudioClip, Clip, Decibels, InterleavedAudio, MidiClip, MidiKey, MidiNote,
-    MixerNode, Position, Recording, Update,
+    self as core, AudioClip, Clip, Decibels, MidiClip, MidiKey, MidiNote, Mixer, MusicalTime,
+    Recording, Sample, Update,
     audio_graph::{NodeId, NodeImpl as _},
     clap_host::{self, MainThreadMessage, PluginBundle, PluginDescriptor},
 };
@@ -63,7 +63,7 @@ mod track;
 #[derive(Clone, Debug)]
 enum LoadStatus {
     Loading(usize),
-    Loaded(Weak<InterleavedAudio>),
+    Loaded(Weak<Sample>),
 }
 
 #[derive(Clone, Debug)]
@@ -90,9 +90,9 @@ pub enum Message {
     PluginsReordered(DragEvent),
 
     SampleLoadFromFile(Arc<Path>),
-    SampleLoadedFromFile(Arc<Path>, Option<Arc<InterleavedAudio>>),
+    SampleLoadedFromFile(Arc<Path>, Option<Arc<Sample>>),
 
-    AddMidiClip(NodeId, Position),
+    AddMidiClip(NodeId, MusicalTime),
     OpenMidiClip(Arc<MidiClip>),
 
     TrackAdd,
@@ -100,7 +100,7 @@ pub enum Message {
     TrackToggleEnabled(NodeId),
     TrackToggleSolo(NodeId),
 
-    SeekTo(Position),
+    SeekTo(MusicalTime),
 
     ToggleRecord(NodeId),
     RecordingSplit(NodeId),
@@ -147,7 +147,7 @@ pub struct ArrangementView {
 
     piano_roll_position: Vec2,
     piano_roll_scale: Vec2,
-    last_note_len: Position,
+    last_note_len: MusicalTime,
     selected_channel: Option<NodeId>,
 
     split_at: f32,
@@ -179,7 +179,7 @@ impl ArrangementView {
 
                 piano_roll_position: Vec2::new(0.0, 40.0),
                 piano_roll_scale: Vec2::new(8.0, LINE_HEIGHT),
-                last_note_len: Position::BEAT,
+                last_note_len: MusicalTime::BEAT,
                 selected_channel: None,
 
                 split_at: 300.0,
@@ -252,8 +252,8 @@ impl ArrangementView {
                 let (gui, receiver, audio_processor) = clap_host::init(
                     &plugin_bundles[&descriptor],
                     descriptor,
-                    f64::from(self.arrangement.meter().sample_rate),
-                    self.arrangement.meter().buffer_size,
+                    self.arrangement.rtstate().sample_rate,
+                    self.arrangement.rtstate().buffer_size,
                 );
 
                 self.arrangement.plugin_load(selected, audio_processor);
@@ -320,12 +320,12 @@ impl ArrangementView {
 
                 self.audios.insert(path.clone(), LoadStatus::Loading(1));
                 self.loading.insert(path.clone());
-                let sample_rate = self.arrangement.meter().sample_rate;
+                let sample_rate = self.arrangement.rtstate().sample_rate;
 
                 return Task::perform(
                     {
                         let path = path.clone();
-                        unblock(move || InterleavedAudio::create(path, sample_rate))
+                        unblock(move || Sample::create(path, sample_rate))
                     },
                     Message::SampleLoadedFromFile.with(path),
                 );
@@ -346,18 +346,15 @@ impl ArrangementView {
                         LoadStatus::Loaded(..) => 1,
                     };
 
-                    let clip = AudioClip::create(audio, self.arrangement.meter());
-                    let end = clip.position.get_global_end();
+                    let clip = AudioClip::create(audio, self.arrangement.rtstate());
+                    let end = clip.position.end();
 
                     let mut futs = Vec::new();
                     let mut track = 0;
 
                     for _ in 0..count {
                         while self.arrangement.tracks().get(track).is_some_and(|track| {
-                            track
-                                .clips
-                                .iter()
-                                .any(|clip| clip.position().get_global_start() < end)
+                            track.clips.iter().any(|clip| clip.position().start() < end)
                         }) {
                             track += 1;
                         }
@@ -384,8 +381,9 @@ impl ArrangementView {
                 let pattern = Arc::default();
                 self.midis.push(Arc::downgrade(&pattern));
                 let clip = MidiClip::create(pattern);
-                clip.position
-                    .trim_end_to(Position::BEAT * u32::from(self.arrangement.meter().numerator));
+                clip.position.trim_end_to(
+                    MusicalTime::BEAT * u32::from(self.arrangement.rtstate().numerator),
+                );
                 clip.position.move_to(pos);
                 let track = self.arrangement.track_of(track).unwrap();
                 self.arrangement.add_clip(track, clip);
@@ -440,7 +438,7 @@ impl ArrangementView {
 
                 let (recording, receiver) = Recording::create(
                     Self::make_recording_path(),
-                    self.arrangement.meter(),
+                    self.arrangement.rtstate(),
                     config.input_device.name.as_deref(),
                     config.input_device.sample_rate.unwrap_or(44100),
                     config.input_device.buffer_size.unwrap_or(1024),
@@ -455,16 +453,17 @@ impl ArrangementView {
             }
             Message::RecordingSplit(id) => {
                 if let Some((mut recording, track)) = self.recording.take() {
-                    let mut pos = Position::from_samples(
-                        self.arrangement.meter().sample,
-                        self.arrangement.meter(),
+                    let mut pos = MusicalTime::from_samples(
+                        self.arrangement.rtstate().sample,
+                        self.arrangement.rtstate(),
                     );
                     (pos, recording.position) = (recording.position, pos);
 
                     let track = self.arrangement.track_of(track).unwrap();
                     let clip = AudioClip::create(
-                        recording.split_off(Self::make_recording_path(), self.arrangement.meter()),
-                        self.arrangement.meter(),
+                        recording
+                            .split_off(Self::make_recording_path(), self.arrangement.rtstate()),
+                        self.arrangement.rtstate(),
                     );
                     clip.position.move_to(pos);
                     self.arrangement.add_clip(track, clip);
@@ -483,7 +482,7 @@ impl ArrangementView {
                     let pos = recording.position;
 
                     let track = self.arrangement.track_of(track).unwrap();
-                    let clip = AudioClip::create(recording.finalize(), self.arrangement.meter());
+                    let clip = AudioClip::create(recording.finalize(), self.arrangement.rtstate());
                     clip.position.move_to(pos);
                     self.arrangement.add_clip(track, clip);
                 }
@@ -641,8 +640,8 @@ impl ArrangementView {
 
     pub fn save(&mut self, path: &Path) {
         let mut writer = Writer::new(
-            u32::from(self.arrangement.meter().bpm),
-            u32::from(self.arrangement.meter().numerator),
+            u32::from(self.arrangement.rtstate().bpm),
+            u32::from(self.arrangement.rtstate().numerator),
         );
 
         let mut audios = HashMap::new();
@@ -687,20 +686,20 @@ impl ArrangementView {
                 writer.push_track(
                     track.clips.iter().map(|clip| match clip {
                         Clip::Audio(audio) => proto::AudioClip {
-                            audio: audios[&audio.audio.path],
+                            audio: audios[&audio.sample.path],
                             position: proto::ClipPosition {
-                                global_start: audio.position.get_global_start().into(),
-                                global_end: audio.position.get_global_end().into(),
-                                clip_start: audio.position.get_clip_start().into(),
+                                start: audio.position.start().into(),
+                                end: audio.position.end().into(),
+                                offset: audio.position.offset().into(),
                             },
                         }
                         .into(),
                         Clip::Midi(midi) => proto::MidiClip {
                             midi: midis[&Arc::as_ptr(&midi.pattern).addr()],
                             position: proto::ClipPosition {
-                                global_start: midi.position.get_global_start().into(),
-                                global_end: midi.position.get_global_end().into(),
-                                clip_start: midi.position.get_clip_start().into(),
+                                start: midi.position.start().into(),
+                                end: midi.position.end().into(),
+                                offset: midi.position.offset().into(),
                             },
                         }
                         .into(),
@@ -775,8 +774,8 @@ impl ArrangementView {
         let (mut arrangement, receiver) = ArrangementWrapper::create(config);
         futs.push(Task::stream(receiver).map(Message::Update));
 
-        arrangement.set_bpm(reader.meter().bpm as u16);
-        arrangement.set_numerator(reader.meter().numerator as u8);
+        arrangement.set_bpm(reader.rtstate().bpm as u16);
+        arrangement.set_numerator(reader.rtstate().numerator as u8);
 
         let mut audios = HashMap::new();
         let mut midis = HashMap::new();
@@ -785,7 +784,7 @@ impl ArrangementView {
         std::thread::scope(|s| {
             for (idx, audio) in reader.iter_audios() {
                 let sender = sender.clone();
-                let sample_rate = arrangement.meter().sample_rate;
+                let sample_rate = arrangement.rtstate().sample_rate;
                 s.spawn(move || {
                     let audio = config
                         .sample_paths
@@ -806,7 +805,7 @@ impl ArrangementView {
                                 )
                         })
                         .find_map(|dir_entry| {
-                            InterleavedAudio::create_with_hash(
+                            Sample::create_with_hash(
                                 dir_entry.path().into(),
                                 sample_rate,
                                 audio.hash,
@@ -866,19 +865,18 @@ impl ArrangementView {
                     proto::Clip::Audio(audio) => {
                         let clip = AudioClip::create(
                             audios.get(&audio.audio)?.clone(),
-                            arrangement.meter(),
+                            arrangement.rtstate(),
                         );
-                        clip.position.move_to(audio.position.global_start.into());
-                        clip.position.trim_end_to(audio.position.global_end.into());
-                        clip.position
-                            .trim_start_to(audio.position.clip_start.into());
+                        clip.position.move_to(audio.position.start.into());
+                        clip.position.trim_end_to(audio.position.end.into());
+                        clip.position.trim_start_to(audio.position.offset.into());
                         Clip::Audio(clip)
                     }
                     proto::Clip::Midi(midi) => {
                         let clip = MidiClip::create(midis.get(&midi.midi)?.clone());
-                        clip.position.move_to(midi.position.global_start.into());
-                        clip.position.trim_end_to(midi.position.global_end.into());
-                        clip.position.trim_start_to(midi.position.clip_start.into());
+                        clip.position.move_to(midi.position.start.into());
+                        clip.position.trim_end_to(midi.position.end.into());
+                        clip.position.trim_start_to(midi.position.offset.into());
                         Clip::Midi(clip)
                     }
                 });
@@ -899,7 +897,7 @@ impl ArrangementView {
         channels.insert(idx, node.id);
 
         for (idx, channel) in iter_channels {
-            let mixer_node = MixerNode::default();
+            let mixer_node = Mixer::default();
             let node = Node::new(mixer_node.id());
 
             load_channel(&node, channel)?;
@@ -989,7 +987,7 @@ impl ArrangementView {
 
     fn arrangement(&self) -> Element<'_, Message> {
         Seeker::new(
-            self.arrangement.meter(),
+            self.arrangement.rtstate(),
             &self.arrangement_position,
             &self.arrangement_scale,
             column(
@@ -1129,7 +1127,7 @@ impl ArrangementView {
             )
             .align_x(Alignment::Center),
             ArrangementWidget::new(
-                self.arrangement.meter(),
+                self.arrangement.rtstate(),
                 &self.arrangement_position,
                 &self.arrangement_scale,
                 column(
@@ -1143,7 +1141,7 @@ impl ArrangementView {
                             let clips_iter = track.clips.iter().map(|clip| match clip {
                                 Clip::Audio(clip) => AudioClipWidget::new(
                                     clip,
-                                    self.arrangement.meter(),
+                                    self.arrangement.rtstate(),
                                     &self.arrangement_position,
                                     &self.arrangement_scale,
                                     node.enabled,
@@ -1151,7 +1149,7 @@ impl ArrangementView {
                                 .into(),
                                 Clip::Midi(clip) => MidiClipWidget::new(
                                     clip,
-                                    self.arrangement.meter(),
+                                    self.arrangement.rtstate(),
                                     &self.arrangement_position,
                                     &self.arrangement_scale,
                                     node.enabled,
@@ -1166,7 +1164,7 @@ impl ArrangementView {
                                         clips_iter.chain(once(
                                             RecordingWidget::new(
                                                 &self.recording.as_ref().unwrap().0,
-                                                self.arrangement.meter(),
+                                                self.arrangement.rtstate(),
                                                 &self.arrangement_position,
                                                 &self.arrangement_scale,
                                             )
@@ -1178,7 +1176,7 @@ impl ArrangementView {
                                 };
 
                             TrackWidget::new(
-                                self.arrangement.meter(),
+                                self.arrangement.rtstate(),
                                 &self.arrangement_position,
                                 &self.arrangement_scale,
                                 clips_iter,
@@ -1587,13 +1585,13 @@ impl ArrangementView {
 
     fn piano_roll<'a>(&'a self, clip: &'a MidiClip) -> Element<'a, Message> {
         Seeker::new(
-            self.arrangement.meter(),
+            self.arrangement.rtstate(),
             &self.piano_roll_position,
             &self.piano_roll_scale,
             Piano::new(&self.piano_roll_position, &self.piano_roll_scale),
             PianoRoll::new(
                 clip.pattern.load().deref().clone(),
-                self.arrangement.meter(),
+                self.arrangement.rtstate(),
                 &self.piano_roll_position,
                 &self.piano_roll_scale,
                 Message::PianoRollAction,
@@ -1603,12 +1601,12 @@ impl ArrangementView {
         )
         .with_offset(
             clip.position
-                .get_global_start()
-                .in_samples_f(self.arrangement.meter())
+                .start()
+                .to_samples_f(self.arrangement.rtstate())
                 - clip
                     .position
-                    .get_clip_start()
-                    .in_samples_f(self.arrangement.meter()),
+                    .offset()
+                    .to_samples_f(self.arrangement.rtstate()),
         )
         .into()
     }

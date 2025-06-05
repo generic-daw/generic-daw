@@ -28,7 +28,7 @@ pub struct ChannelIndex {
 #[derive(Message)]
 pub struct Project {
     #[prost(message, required)]
-    pub meter: Meter,
+    pub rtstate: RtState,
     #[prost(message, repeated)]
     pub audios: Vec<Audio>,
     #[prost(message, repeated)]
@@ -40,7 +40,7 @@ pub struct Project {
 }
 
 #[derive(Clone, Copy, Message)]
-pub struct Meter {
+pub struct RtState {
     #[prost(uint32)]
     pub bpm: u32,
     #[prost(uint32)]
@@ -126,11 +126,11 @@ pub struct MidiClip {
 #[derive(Clone, Copy, Message)]
 pub struct ClipPosition {
     #[prost(uint32)]
-    pub global_start: u32,
+    pub start: u32,
     #[prost(uint32)]
-    pub global_end: u32,
+    pub end: u32,
     #[prost(uint32)]
-    pub clip_start: u32,
+    pub offset: u32,
 }
 
 #[derive(Message)]

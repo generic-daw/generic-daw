@@ -18,28 +18,26 @@ mod decibels;
 mod event;
 mod export;
 mod master;
-mod meter;
 mod midi_clip;
-mod mixer_node;
-mod position;
+mod mixer;
+mod musical_time;
 mod recording;
 mod resampler;
 mod track;
 
-pub use audio_clip::{AudioClip, InterleavedAudio};
+pub use audio_clip::{AudioClip, Sample};
 pub use audio_graph;
 pub use clap_host;
 pub use clip::Clip;
 pub use clip_position::ClipPosition;
 pub use cpal::{Stream, traits::StreamTrait};
-pub use daw_ctx::{Action, Message, Update, Version};
+pub use daw_ctx::{Action, Message, RtState, Update, Version};
 pub use decibels::Decibels;
 pub use export::export;
 pub use master::Master;
-pub use meter::Meter;
 pub use midi_clip::{Key, MidiClip, MidiKey, MidiNote};
-pub use mixer_node::MixerNode;
-pub use position::Position;
+pub use mixer::Mixer;
+pub use musical_time::MusicalTime;
 pub use recording::Recording;
 pub(crate) use resampler::Resampler;
 pub use track::Track;
@@ -105,7 +103,7 @@ pub fn build_output_stream(
     device_name: Option<&str>,
     sample_rate: u32,
     buffer_size: u32,
-) -> (Stream, NodeId, Meter, Sender<Message>, Receiver<Update>) {
+) -> (Stream, NodeId, RtState, Sender<Message>, Receiver<Update>) {
     let host = cpal::default_host();
 
     let device = device_name
@@ -122,7 +120,7 @@ pub fn build_output_stream(
         buffer_size,
     );
 
-    let (mut ctx, node, meter, sender, receiver) =
+    let (mut ctx, node, rtstate, sender, receiver) =
         DawCtx::create(config.sample_rate.0, buffer_size);
 
     info!("starting output stream with config {config:?}");
@@ -138,7 +136,7 @@ pub fn build_output_stream(
 
     stream.play().unwrap();
 
-    (stream, node, meter, sender, receiver)
+    (stream, node, rtstate, sender, receiver)
 }
 
 fn choose_config(
