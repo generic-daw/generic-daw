@@ -292,8 +292,8 @@ impl<'a, Message> Knob<'a, Message> {
 
         let value_angle = |value: f32| {
             Radians(f32::to_radians(
-                270.0 * (value - self.range.start() - 0.5)
-                    / (self.range.end() - self.range.start())
+                270.0 * (value - self.range.start()) / (self.range.end() - self.range.start())
+                    - 135.0
                     - 90.0,
             ))
         };
