@@ -36,7 +36,9 @@ impl NodeImpl for Mixer {
 
     fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
         if !self.enabled {
-            audio.iter_mut().for_each(|s| *s = 0.0);
+            for s in audio {
+                *s = 0.0;
+            }
             events.clear();
 
             return;
