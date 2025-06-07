@@ -16,10 +16,10 @@ An early-in-development, open source, cross-platform digital audio workstation (
 ### Requirements
 
 - Rust & Cargo: this project is developed using the latest stable [Rust toolchain](https://rustup.rs/)
-- on Linux you'll also need to install the alsa development headers:
-  - Debian: `sudo apt install libasound2-dev`
-  - Fedora: `sudo dnf install alsa-lib-devel`
-  - Arch: `sudo pacman -S alsa-lib`
+- on Linux you'll need to install the alsa and dbus development headers:
+  - Debian: `sudo apt install libasound2-dev libdbus-1-dev`
+  - Fedora: `sudo dnf install alsa-lib-devel dbus-devel`
+  - Arch: `sudo pacman -S alsa-lib dbus`
 
 ### Build from Source
 
