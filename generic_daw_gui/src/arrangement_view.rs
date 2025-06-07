@@ -188,10 +188,6 @@ impl ArrangementView {
         )
     }
 
-    pub fn stop(&mut self) {
-        self.arrangement.stop();
-    }
-
     pub fn update(
         &mut self,
         message: Message,

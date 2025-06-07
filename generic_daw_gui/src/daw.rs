@@ -211,7 +211,6 @@ impl Daw {
             }
             Message::SaveAsFile(path) => {
                 self.arrangement_view.save(&path);
-
                 if self.state.last_project.as_deref() != Some(&path) {
                     self.state.last_project = Some(path);
                     self.state.write();
@@ -220,7 +219,7 @@ impl Daw {
             Message::OpenConfigView => self.config_view = Some(ConfigView::default()),
             Message::CloseConfigView => self.config_view = None,
             Message::Stop => {
-                self.arrangement_view.stop();
+                self.arrangement_view.arrangement.stop();
                 return self
                     .arrangement_view
                     .update(
@@ -232,16 +231,14 @@ impl Daw {
             }
             Message::TogglePlayback => {
                 self.arrangement_view.arrangement.toggle_playback();
-                if !self.arrangement_view.arrangement.rtstate().playing {
-                    return self
-                        .arrangement_view
-                        .update(
-                            ArrangementMessage::StopRecord,
-                            &self.config,
-                            &self.plugin_bundles,
-                        )
-                        .map(Message::Arrangement);
-                }
+                return self
+                    .arrangement_view
+                    .update(
+                        ArrangementMessage::StopRecord,
+                        &self.config,
+                        &self.plugin_bundles,
+                    )
+                    .map(Message::Arrangement);
             }
             Message::ToggleMetronome => self.arrangement_view.arrangement.toggle_metronome(),
             Message::ChangedBpm(bpm) => self
