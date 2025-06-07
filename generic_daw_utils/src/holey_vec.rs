@@ -13,29 +13,27 @@ impl<T> Index<usize> for HoleyVec<T> {
     type Output = T;
 
     fn index(&self, index: usize) -> &Self::Output {
-        self.0[index].as_ref().unwrap()
+        self.get(index).unwrap()
     }
 }
 
 impl<T> HoleyVec<T> {
+    #[must_use]
     pub fn get(&self, index: usize) -> Option<&T> {
         self.0.get(index).and_then(Option::as_ref)
     }
 
+    #[must_use]
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         self.0.get_mut(index).and_then(Option::as_mut)
     }
 
     pub fn insert(&mut self, index: usize, elem: T) -> Option<T> {
-        if index >= self.0.len() {
-            self.0.resize_with(index + 1, || None);
-        }
-
-        self.0[index].replace(elem)
+        self.entry(index).replace(elem)
     }
 
     pub fn remove(&mut self, index: usize) -> Option<T> {
-        self.0.get_mut(index).and_then(Option::take)
+        self.entry(index).take()
     }
 
     #[must_use]
@@ -56,29 +54,26 @@ impl<T> HoleyVec<T> {
         self.0
             .iter()
             .enumerate()
-            .filter_map(|(i, t)| Some((i, t.as_ref()?)))
+            .filter_map(|(k, v)| Some((k, v.as_ref()?)))
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (usize, &mut T)> {
         self.0
             .iter_mut()
             .enumerate()
-            .filter_map(|(i, t)| Some((i, t.as_mut()?)))
+            .filter_map(|(k, v)| Some((k, v.as_mut()?)))
     }
 
     pub fn keys(&self) -> impl Iterator<Item = usize> {
-        self.0
-            .iter()
-            .enumerate()
-            .filter_map(|(i, item)| item.as_ref().map(|_| i))
+        self.iter().map(|(k, _)| k)
     }
 
     pub fn values(&self) -> impl Iterator<Item = &T> {
-        self.0.iter().flatten()
+        self.iter().map(|(_, v)| v)
     }
 
     pub fn values_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        self.0.iter_mut().flatten()
+        self.iter_mut().map(|(_, v)| v)
     }
 
     pub fn drain(&mut self, r: impl RangeBounds<usize>) -> impl Iterator<Item = T> {
@@ -91,12 +86,12 @@ where
     T: PartialEq,
 {
     #[must_use]
-    pub fn position(&self, item: &T) -> Option<usize> {
-        self.iter().find_map(|(i, x)| (item == x).then_some(i))
+    pub fn key_of(&self, value: &T) -> Option<usize> {
+        self.iter().find_map(|(k, v)| (value == v).then_some(k))
     }
 
     #[must_use]
     pub fn contains_value(&self, value: &T) -> bool {
-        self.values().any(|v| v == value)
+        self.key_of(value).is_some()
     }
 }

@@ -73,7 +73,7 @@ impl ClapHost {
                 return resize.chain(resizable);
             }
             Message::GuiRequestResize((window_id, size)) => {
-                if let Some(new_size) = self.windows.position(&window_id).and_then(|id| {
+                if let Some(new_size) = self.windows.key_of(&window_id).and_then(|id| {
                     self.plugins
                         .get_mut(id)
                         .unwrap()
@@ -86,7 +86,7 @@ impl ClapHost {
                 }
             }
             Message::GuiRequestHide(window_id) => {
-                let Some(id) = self.windows.position(&window_id) else {
+                let Some(id) = self.windows.key_of(&window_id) else {
                     return iced::exit();
                 };
 
@@ -170,7 +170,7 @@ impl ClapHost {
 
     pub fn title(&self, window: Id) -> Option<String> {
         self.windows
-            .position(&window)
+            .key_of(&window)
             .map(|id| self.plugins[id].descriptor().name.deref().to_owned())
     }
 
