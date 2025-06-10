@@ -85,7 +85,10 @@ impl Daw {
         let config = Config::read();
         trace!("loaded config {config:?}");
 
-        let state = State::read();
+        let mut state = State::read();
+        if !config.open_last_project {
+            state.last_project = None;
+        }
         trace!("loaded state {state:?}");
 
         let plugin_bundles = get_installed_plugins(&config.clap_paths);
@@ -103,7 +106,6 @@ impl Daw {
         if let Some(futs) = state
             .last_project
             .as_deref()
-            .filter(|_| config.open_last_project)
             .and_then(|path| arrangement.load(path, &config, &plugin_bundles))
         {
             open = open.chain(futs.map(Message::Arrangement));
@@ -162,8 +164,8 @@ impl Daw {
                 .map(Message::OpenFile);
             }
             Message::OpenLastFile => {
-                if let Some(last_file) = self.state.last_project.clone() {
-                    return self.update(Message::OpenFile(last_file));
+                if let Some(last_project) = State::read().last_project {
+                    return self.update(Message::OpenFile(last_project));
                 }
             }
             Message::SaveFile => {
