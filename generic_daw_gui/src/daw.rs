@@ -82,10 +82,10 @@ impl Daw {
         .1
         .discard();
 
-        let config = Config::read().unwrap_or_default();
+        let config = Config::read();
         trace!("loaded config {config:?}");
 
-        let mut state = State::read().unwrap_or_default();
+        let mut state = State::read();
         if !config.open_last_project {
             state.last_project = None;
         }
@@ -164,7 +164,7 @@ impl Daw {
                 .map(Message::OpenFile);
             }
             Message::OpenLastFile => {
-                if let Some(last_file) = State::read().unwrap_or_default().last_project {
+                if let Some(last_file) = self.state.last_project.clone() {
                     return self.update(Message::OpenFile(last_file));
                 }
             }
@@ -216,7 +216,9 @@ impl Daw {
                     self.state.write();
                 }
             }
-            Message::OpenConfigView => self.config_view = Some(ConfigView::default()),
+            Message::OpenConfigView => {
+                self.config_view = Some(ConfigView::new(self.config.clone()));
+            }
             Message::CloseConfigView => self.config_view = None,
             Message::Stop => {
                 self.arrangement_view.arrangement.stop();
@@ -289,7 +291,7 @@ impl Daw {
     }
 
     fn reload_config(&mut self) {
-        let config = Config::read().unwrap_or_default();
+        let config = Config::read();
 
         if self.config.clap_paths != config.clap_paths {
             self.plugin_bundles = get_installed_plugins(&config.clap_paths);

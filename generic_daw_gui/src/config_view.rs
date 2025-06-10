@@ -53,17 +53,15 @@ pub struct ConfigView {
     dirty: bool,
 }
 
-impl Default for ConfigView {
-    fn default() -> Self {
+impl ConfigView {
+    pub fn new(config: Config) -> Self {
         Self {
-            config: Config::read().unwrap_or_default(),
+            config,
             tab: Tab::Output,
             dirty: false,
         }
     }
-}
 
-impl ConfigView {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::AddSamplePathFileDialog => {
@@ -139,7 +137,7 @@ impl ConfigView {
                 self.dirty = false;
             }
             Message::ResetConfig => {
-                self.config = Config::read().unwrap_or_default();
+                self.config = Config::read();
                 self.dirty = false;
             }
         }

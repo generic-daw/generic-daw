@@ -3,6 +3,7 @@ use generic_daw_core::clap_host::default_clap_paths;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{read_to_string, write},
+    io,
     path::{Path, PathBuf},
     sync::{Arc, LazyLock},
 };
@@ -69,8 +70,19 @@ fn default_sample_paths() -> Vec<Arc<Path>> {
 
 impl Config {
     #[must_use]
-    pub fn read() -> Option<Self> {
-        toml::from_str(&read_to_string(&*CONFIG_PATH).ok()?).ok()
+    pub fn read() -> Self {
+        let config = read_to_string(&*CONFIG_PATH);
+
+        let read =
+            toml::from_str::<Self>(config.as_deref().unwrap_or_default()).unwrap_or_default();
+
+        if let Err(e) = config {
+            if e.kind() == io::ErrorKind::NotFound {
+                read.write();
+            }
+        }
+
+        read
     }
 
     pub fn write(&self) {

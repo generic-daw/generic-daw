@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{read_to_string, write},
+    io,
     path::{Path, PathBuf},
     sync::{Arc, LazyLock},
 };
@@ -16,8 +17,19 @@ pub struct State {
 
 impl State {
     #[must_use]
-    pub fn read() -> Option<Self> {
-        toml::from_str(&read_to_string(&*STATE_PATH).ok()?).ok()
+    pub fn read() -> Self {
+        let config = read_to_string(&*STATE_PATH);
+
+        let read =
+            toml::from_str::<Self>(config.as_deref().unwrap_or_default()).unwrap_or_default();
+
+        if let Err(e) = config {
+            if e.kind() == io::ErrorKind::NotFound {
+                read.write();
+            }
+        }
+
+        read
     }
 
     pub fn write(&self) {
