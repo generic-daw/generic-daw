@@ -5,14 +5,15 @@ use crate::{
 };
 use generic_daw_utils::unique_id;
 use iced::{
-    Element, Fill, Task, padding,
+    Element, Fill, Task,
+    futures::StreamExt as _,
+    padding,
     widget::{
         button, column, container, row, rule, text,
         text::{Shaping, Wrapping},
         vertical_rule,
     },
 };
-use smol::stream::StreamExt as _;
 use std::{path::Path, sync::Arc};
 
 unique_id!(dir_entry);
