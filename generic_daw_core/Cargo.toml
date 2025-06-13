@@ -15,7 +15,7 @@ generic_daw_utils = { path = "../generic_daw_utils" }
 arc-swap = "1.7.1"
 async-channel = "2.3.1"
 atomig = { version = "0.4.3", features = ["derive"] }
-cpal = { version = "0.16.0", features = ["audio_thread_priority"] }
+cpal = "0.16.0"
 hound = "3.5.1"
 log = "0.4.27"
 oneshot = "0.1.11"
