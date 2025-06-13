@@ -84,7 +84,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
                 entry.events.extend(events.extract_if(.., |e| {
                     e.time()
                         .checked_sub(buf.len())
-                        .inspect(|&time| {
+                        .map(|time| {
                             *e = e.with_time(time);
                         })
                         .is_some()

@@ -193,8 +193,8 @@ impl GuiExt {
                 let mut buf = Vec::new();
                 state
                     .save(&mut self.instance.plugin_handle(), &mut buf)
-                    .map(|()| buf)
-                    .ok()
+                    .is_ok()
+                    .then_some(buf)
             })
     }
 
