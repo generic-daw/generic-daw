@@ -8,7 +8,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - run: sudo apt-get install libasound2-dev libdbus-1-dev
+      - run: sudo apt-get install libasound2-dev
       - run: wget https://unpkg.com/lucide-static@latest/font/Lucide.ttf
       - run: cargo clippy -- -D warnings
   fmt:
