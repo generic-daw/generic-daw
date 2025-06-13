@@ -7,9 +7,6 @@ license.workspace = true
 [lints]
 workspace = true
 
-[features]
-debug = ["env_logger", "iced/debug"]
-
 [dependencies]
 generic_daw_core = { path = "../generic_daw_core" }
 generic_daw_project = { path = "../generic_daw_project" }

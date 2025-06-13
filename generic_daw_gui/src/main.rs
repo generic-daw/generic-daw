@@ -16,7 +16,7 @@ mod theme;
 mod widget;
 
 fn main() -> Result {
-    #[cfg(feature = "debug")]
+    #[cfg(feature = "env_logger")]
     env_logger::init();
 
     daemon(Daw::create, Daw::update, Daw::view)
