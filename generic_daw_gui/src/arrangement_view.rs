@@ -50,7 +50,7 @@ use std::{
     iter::once,
     ops::Deref as _,
     path::Path,
-    sync::{Arc, Mutex, Weak, mpsc},
+    sync::{Arc, Weak, mpsc},
     time::Instant,
 };
 use walkdir::WalkDir;
@@ -256,10 +256,10 @@ impl ArrangementView {
 
                 return self
                     .clap_host
-                    .update(ClapHostMessage::Opened(Arc::new(Mutex::new((
-                        Fragile::new(gui),
+                    .update(ClapHostMessage::Opened(
+                        Arc::new(Fragile::new(gui)),
                         receiver,
-                    )))))
+                    ))
                     .map(Message::ClapHost);
             }
             Message::PluginMixChanged(i, mix) => {

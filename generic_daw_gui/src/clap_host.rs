@@ -7,17 +7,13 @@ use iced::{
     window::{self, Id, close_requests, resize_events},
 };
 use smol::channel::Receiver;
-use std::{
-    ops::Deref as _,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{ops::Deref as _, sync::Arc, time::Duration};
 
 #[derive(Clone, Debug)]
 pub enum Message {
     MainThread(PluginId, MainThreadMessage),
     TickTimer(usize, usize),
-    Opened(Arc<Mutex<(Fragile<GuiExt>, Receiver<MainThreadMessage>)>>),
+    Opened(Arc<Fragile<GuiExt>>, Receiver<MainThreadMessage>),
     GuiRequestShow(Id, Arc<Fragile<GuiExt>>),
     GuiRequestResize((Id, Size)),
     GuiRequestHide(Id),
@@ -40,9 +36,8 @@ impl ClapHost {
                     .unwrap()
                     .tick_timer(timer_id as u32);
             }
-            Message::Opened(arc) => {
-                let (gui, receiver) = Mutex::into_inner(Arc::into_inner(arc).unwrap()).unwrap();
-                let mut gui = gui.into_inner();
+            Message::Opened(gui, receiver) => {
+                let mut gui = Arc::into_inner(gui).unwrap().into_inner();
                 let id = gui.plugin_id();
 
                 let open = if gui.is_floating() {
