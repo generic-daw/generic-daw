@@ -19,5 +19,5 @@ cpal = "0.16.0"
 hound = "3.5.1"
 log = "0.4.27"
 oneshot = "0.1.11"
-rubato = { version = "0.16.2", features = ["log"] }
+rubato = "0.16.2"
 symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
