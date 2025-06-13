@@ -14,7 +14,7 @@ pub enum Message {
     MainThread(PluginId, MainThreadMessage),
     TickTimer(usize, usize),
     Opened(Arc<Fragile<GuiExt>>, Receiver<MainThreadMessage>),
-    GuiRequestShow(Id, Arc<Fragile<GuiExt>>),
+    GuiRequestShow(Option<Id>, Arc<Fragile<GuiExt>>),
     GuiRequestResize((Id, Size)),
     GuiRequestHide(Id),
 }
@@ -37,28 +37,25 @@ impl ClapHost {
                     .tick_timer(timer_id as u32);
             }
             Message::Opened(gui, receiver) => {
-                let mut gui = Arc::into_inner(gui).unwrap().into_inner();
+                let gui = Arc::into_inner(gui).unwrap().into_inner();
                 let id = gui.plugin_id();
+                self.plugins.insert(*id, gui);
 
-                let open = if gui.is_floating() {
-                    gui.open_floating();
-                    self.plugins.insert(*id, gui);
-                    Task::none()
-                } else {
-                    self.plugins.insert(*id, gui);
-                    self.update(Message::MainThread(id, MainThreadMessage::GuiRequestShow))
-                };
-
+                let open = self.update(Message::MainThread(id, MainThreadMessage::GuiRequestShow));
                 let stream = Task::stream(receiver).map(Message::MainThread.with(id));
 
                 return open.chain(stream);
             }
             Message::GuiRequestShow(window_id, arc) => {
-                let gui = Arc::into_inner(arc).unwrap().into_inner();
+                let mut gui = Arc::into_inner(arc).unwrap().into_inner();
                 let id = gui.plugin_id();
 
+                gui.show();
                 self.plugins.insert(*id, gui);
-                self.windows.insert(*id, window_id);
+
+                if let Some(window_id) = window_id {
+                    self.windows.insert(*id, window_id);
+                }
             }
             Message::GuiRequestResize((window_id, size)) => {
                 if let Some([w, h]) = self.windows.key_of(&window_id).and_then(|id| {
@@ -101,25 +98,30 @@ impl ClapHost {
 
                 let mut gui = self.plugins.remove(*id).unwrap();
 
-                let resizable = gui.can_resize();
-                let size = gui.get_size().map_or(Size::new(1280.0, 720.0), |[w, h]| {
-                    Size::new(w as f32, h as f32)
-                });
+                gui.create();
+                return if gui.is_floating() {
+                    self.update(Message::GuiRequestShow(None, Arc::new(Fragile::new(gui))))
+                } else {
+                    let (window_id, spawn) = window::open(window::Settings {
+                        size: gui.get_size().map_or(Size::new(1280.0, 720.0), |[w, h]| {
+                            Size::new(w as f32, h as f32)
+                        }),
+                        resizable: gui.can_resize(),
+                        exit_on_close_request: false,
+                        ..window::Settings::default()
+                    });
 
-                let (window_id, spawn) = window::open(window::Settings {
-                    size,
-                    resizable,
-                    exit_on_close_request: false,
-                    ..window::Settings::default()
-                });
+                    let mut gui = Fragile::new(gui);
+                    let embed = window::run_with_handle(window_id, move |handle| {
+                        gui.get_mut().set_parent(handle.as_raw());
+                        gui
+                    });
 
-                let mut gui = Fragile::new(gui);
-                let embed = window::run_with_handle(window_id, move |handle| {
-                    gui.get_mut().open_embedded(handle.as_raw());
-                    Message::GuiRequestShow(window_id, Arc::new(gui))
-                });
-
-                return spawn.discard().chain(embed);
+                    spawn
+                        .discard()
+                        .chain(embed)
+                        .map(move |gui| Message::GuiRequestShow(Some(window_id), Arc::new(gui)))
+                };
             }
             MainThreadMessage::GuiRequestResize(new_size) => {
                 if let Some(&window_id) = self.windows.get(*id) {

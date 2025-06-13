@@ -86,43 +86,37 @@ impl GuiExt {
             .on_timer(&mut self.instance.plugin_handle(), TimerId(id));
     }
 
-    pub fn open_floating(&mut self) {
-        debug_assert!(self.is_floating);
-
-        self.open(|_, _| ());
-    }
-
-    pub fn open_embedded(&mut self, window_handle: RawWindowHandle) {
-        debug_assert!(!self.is_floating);
-
-        self.open(move |ext, plugin| {
-            // SAFETY:
-            // We destroy the plugin ui just before the window is closed
-            unsafe {
-                ext.set_parent(
-                    plugin,
-                    ClapWindow::from_window_handle(window_handle).unwrap(),
-                )
-                .unwrap();
-            }
-        });
-    }
-
-    fn open(&mut self, f: impl Fn(&PluginGui, &mut PluginMainThreadHandle<'_>)) {
+    pub fn create(&mut self) {
         self.destroy();
-
-        let plugin = &mut self.instance.plugin_handle();
 
         let config = GuiConfiguration {
             api_type: GuiApiType::default_for_current_platform().unwrap(),
             is_floating: self.is_floating,
         };
-        self.ext.create(plugin, config).unwrap();
 
-        f(&self.ext, plugin);
+        self.ext
+            .create(&mut self.instance.plugin_handle(), config)
+            .unwrap();
+    }
 
+    pub fn set_parent(&mut self, window_handle: RawWindowHandle) {
+        debug_assert!(!self.is_floating);
+
+        // SAFETY:
+        // We destroy the plugin ui just before the window is closed
+        unsafe {
+            self.ext
+                .set_parent(
+                    &mut self.instance.plugin_handle(),
+                    ClapWindow::from_window_handle(window_handle).unwrap(),
+                )
+                .unwrap();
+        }
+    }
+
+    pub fn show(&mut self) {
         // I have no clue why this works, but if I unwrap here, nih-plug plugins don't load
-        if let Err(err) = self.ext.show(plugin) {
+        if let Err(err) = self.ext.show(&mut self.instance.plugin_handle()) {
             warn!("{}: {err}", self.descriptor);
         }
 
