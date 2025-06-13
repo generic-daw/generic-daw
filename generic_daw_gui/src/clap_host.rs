@@ -54,18 +54,11 @@ impl ClapHost {
                 return open.chain(stream);
             }
             Message::GuiRequestShow(window_id, arc) => {
-                let mut gui = Arc::into_inner(arc).unwrap().into_inner();
+                let gui = Arc::into_inner(arc).unwrap().into_inner();
                 let id = gui.plugin_id();
-
-                let resize = gui.get_size().map_or_else(Task::none, |size| {
-                    window::resize(window_id, size.map(|x| x as f32).into())
-                });
-                let resizable = window::set_resizable(window_id, gui.can_resize());
 
                 self.plugins.insert(*id, gui);
                 self.windows.insert(*id, window_id);
-
-                return resize.chain(resizable);
             }
             Message::GuiRequestResize((window_id, size)) => {
                 if let Some(new_size) = self.windows.key_of(&window_id).and_then(|id| {
@@ -106,15 +99,21 @@ impl ClapHost {
                     return Task::none();
                 }
 
-                let mut gui = Fragile::new(self.plugins.remove(*id).unwrap());
+                let mut gui = self.plugins.remove(*id).unwrap();
+
+                let resizable = gui.can_resize();
+                let size = gui.get_size().map_or(Size::new(1280.0, 720.0), |[w, h]| {
+                    Size::new(w as f32, h as f32)
+                });
 
                 let (window_id, spawn) = window::open(window::Settings {
-                    size: Size::new(1.0, 1.0),
-                    resizable: false,
+                    size,
+                    resizable,
                     exit_on_close_request: false,
                     ..window::Settings::default()
                 });
 
+                let mut gui = Fragile::new(gui);
                 let embed = window::run_with_handle(window_id, move |handle| {
                     gui.get_mut().open_embedded(handle.as_raw());
                     Message::GuiRequestShow(window_id, Arc::new(gui))

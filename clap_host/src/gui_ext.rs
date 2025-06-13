@@ -80,9 +80,10 @@ impl GuiExt {
     }
 
     pub fn tick_timer(&mut self, id: u32) {
-        if let Some(ext) = self.instance.access_handler(|mt| mt.timers) {
-            ext.on_timer(&mut self.instance.plugin_handle(), TimerId(id));
-        }
+        self.instance
+            .access_handler(|mt| mt.timers)
+            .unwrap()
+            .on_timer(&mut self.instance.plugin_handle(), TimerId(id));
     }
 
     pub fn open_floating(&mut self) {
@@ -137,7 +138,7 @@ impl GuiExt {
 
     #[must_use]
     pub fn resize(&mut self, width: u32, height: u32) -> Option<[u32; 2]> {
-        if !self.can_resize.unwrap() {
+        if !self.can_resize() {
             return None;
         }
 
