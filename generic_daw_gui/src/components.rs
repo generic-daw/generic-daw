@@ -117,14 +117,14 @@ where
         .handle(pick_list::Handle::Dynamic {
             closed: pick_list::Icon {
                 font: LUCIDE_FONT,
-                code_point: const { char::from_u32(57459).unwrap() },
+                code_point: const { char::from_u32(57457).unwrap() },
                 size: None,
                 line_height: 1.0.into(),
                 shaping: Shaping::Advanced,
             },
             open: pick_list::Icon {
                 font: LUCIDE_FONT,
-                code_point: const { char::from_u32(57457).unwrap() },
+                code_point: const { char::from_u32(57460).unwrap() },
                 size: None,
                 line_height: 1.0.into(),
                 shaping: Shaping::Advanced,
