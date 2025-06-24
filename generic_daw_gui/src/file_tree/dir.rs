@@ -118,8 +118,8 @@ impl Dir {
 
         let mut height = 0.0;
 
-        if self.open {
-            if let LoadStatus::Loaded { dirs, files } = &self.children {
+        if let LoadStatus::Loaded { dirs, files } = &self.children {
+            if self.open {
                 let ch = column(
                     dirs.iter()
                         .map(Self::view)

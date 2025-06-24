@@ -23,10 +23,8 @@ impl State {
         let read =
             toml::from_str::<Self>(config.as_deref().unwrap_or_default()).unwrap_or_default();
 
-        if let Err(e) = config {
-            if e.kind() == io::ErrorKind::NotFound {
-                read.write();
-            }
+        if config.is_err_and(|e| e.kind() == io::ErrorKind::NotFound) {
+            read.write();
         }
 
         read
