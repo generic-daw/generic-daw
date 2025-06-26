@@ -252,13 +252,13 @@ where
                         }
                     }
                     State::DeletingClips => {
-                        if !self.deleted {
-                            if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
-                                self.deleted = true;
+                        if !self.deleted
+                            && let Some((track, clip)) = self.get_track_clip(&layout, cursor)
+                        {
+                            self.deleted = true;
 
-                                shell.publish((self.f)(Action::Delete(track, clip)));
-                                shell.capture_event();
-                            }
+                            shell.publish((self.f)(Action::Delete(track, clip)));
+                            shell.capture_event();
                         }
                     }
                     State::None => {}

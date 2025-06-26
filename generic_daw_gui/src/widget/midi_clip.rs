@@ -72,18 +72,16 @@ where
             button: mouse::Button::Left,
             ..
         }) = event
+            && let Some(cursor) = cursor.position_in(layout.bounds())
         {
-            // TODO: let chain
-            if let Some(cursor) = cursor.position_in(layout.bounds()) {
-                let state = tree.state.downcast_mut::<State>();
+            let state = tree.state.downcast_mut::<State>();
 
-                let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
-                state.last_click = Some(new_click);
+            let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
+            state.last_click = Some(new_click);
 
-                if new_click.kind() == Kind::Double {
-                    shell.publish(self.on_double_click.clone());
-                    shell.capture_event();
-                }
+            if new_click.kind() == Kind::Double {
+                shell.publish(self.on_double_click.clone());
+                shell.capture_event();
             }
         }
     }

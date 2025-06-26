@@ -66,11 +66,11 @@ impl Arrangement {
 
     pub fn update(&mut self, message: Update) {
         match message {
-            Update::LR(node, curr) => {
-                let mut last = self.node(node).0.l_r.get();
-                last[0] = last[0].max(curr[0]);
-                last[1] = last[1].max(curr[1]);
-                self.node(node).0.l_r.set(last);
+            Update::LR(node, [old_l, old_r]) => {
+                self.node(node)
+                    .0
+                    .l_r
+                    .update(|[new_l, new_r]| [old_l.max(new_l), old_r.max(new_r)]);
             }
             Update::Sample(ver, sample) => {
                 if ver == Version::last() {

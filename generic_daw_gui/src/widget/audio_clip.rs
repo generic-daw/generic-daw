@@ -185,9 +185,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
         }
 
         // fill the mesh cache if it's cleared
-        if state.cache.borrow().is_none() {
-            // TODO: let chain
-            if let Some(mesh) = waveform::mesh(
+        if state.cache.borrow().is_none()
+            && let Some(mesh) = waveform::mesh(
                 self.rtstate,
                 self.inner.position.start(),
                 self.inner.position.offset(),
@@ -197,16 +196,16 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
                 theme,
                 Point::new(bounds.x, layout.position().y),
                 lower_bounds,
-            ) {
-                state.cache.borrow_mut().replace(
-                    Geometry::Live {
-                        meshes: vec![mesh],
-                        images: Vec::new(),
-                        text: Vec::new(),
-                    }
-                    .cache(Group::unique(), None),
-                );
-            }
+            )
+        {
+            state.cache.borrow_mut().replace(
+                Geometry::Live {
+                    meshes: vec![mesh],
+                    images: Vec::new(),
+                    text: Vec::new(),
+                }
+                .cache(Group::unique(), None),
+            );
         }
 
         if let Some(cache) = state.cache.borrow().as_ref() {

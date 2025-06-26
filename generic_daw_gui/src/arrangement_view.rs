@@ -275,12 +275,11 @@ impl ArrangementView {
                     index,
                     target_index,
                 } = event
+                    && index != target_index
                 {
-                    if index != target_index {
-                        let selected = self.selected_channel.unwrap();
+                    let selected = self.selected_channel.unwrap();
 
-                        self.arrangement.plugin_moved(selected, index, target_index);
-                    }
+                    self.arrangement.plugin_moved(selected, index, target_index);
                 }
             }
             Message::PluginRemove(i) => {

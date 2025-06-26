@@ -83,13 +83,10 @@ impl Dir {
                     }
                 }
             })
-        } else if let LoadStatus::Loaded { dirs, .. } = &mut self.children {
-            // TODO: let chain
-            if self.open {
-                dirs.iter_mut().find_map(|dir| dir.update(id, action))
-            } else {
-                None
-            }
+        } else if self.open
+            && let LoadStatus::Loaded { dirs, .. } = &mut self.children
+        {
+            dirs.iter_mut().find_map(|dir| dir.update(id, action))
         } else {
             None
         }
@@ -118,29 +115,29 @@ impl Dir {
 
         let mut height = 0.0;
 
-        if let LoadStatus::Loaded { dirs, files } = &self.children {
-            if self.open {
-                let ch = column(
-                    dirs.iter()
-                        .map(Self::view)
-                        .chain(files.iter().map(File::view))
-                        .map(|(e, h)| {
-                            height += h;
-                            e
-                        }),
-                );
+        if self.open
+            && let LoadStatus::Loaded { dirs, files } = &self.children
+        {
+            let ch = column(
+                dirs.iter()
+                    .map(Self::view)
+                    .chain(files.iter().map(File::view))
+                    .map(|(e, h)| {
+                        height += h;
+                        e
+                    }),
+            );
 
-                if height != 0.0 {
-                    col = col.push(row![
-                        container(vertical_rule(2).style(|t| rule::Style {
-                            width: 2,
-                            ..rule::default(t)
-                        }))
-                        .padding(padding::left(LINE_HEIGHT / 2.0).right(LINE_HEIGHT / 4.0))
-                        .height(height),
-                        ch
-                    ]);
-                }
+            if height != 0.0 {
+                col = col.push(row![
+                    container(vertical_rule(2).style(|t| rule::Style {
+                        width: 2,
+                        ..rule::default(t)
+                    }))
+                    .padding(padding::left(LINE_HEIGHT / 2.0).right(LINE_HEIGHT / 4.0))
+                    .height(height),
+                    ch
+                ]);
             }
         }
 

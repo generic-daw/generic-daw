@@ -238,14 +238,13 @@ where
                         }
                     }
                     State::DeletingNotes => {
-                        if !self.deleted {
-                            // TODO: let chain
-                            if let Some(note) = self.get_note(cursor) {
-                                self.deleted = true;
+                        if !self.deleted
+                            && let Some(note) = self.get_note(cursor)
+                        {
+                            self.deleted = true;
 
-                                shell.publish((self.f)(Action::Delete(note)));
-                                shell.capture_event();
-                            }
+                            shell.publish((self.f)(Action::Delete(note)));
+                            shell.capture_event();
                         }
                     }
                     State::None => {}
