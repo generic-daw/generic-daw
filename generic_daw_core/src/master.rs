@@ -33,7 +33,10 @@ impl NodeImpl for Master {
                 buf_end = buf_end.floor();
                 let offset = (buf_end - buf_start).to_samples(&state.rtstate);
 
-                let click = if buf_end.beat() % u32::from(state.rtstate.numerator) == 0 {
+                let click = if buf_end
+                    .beat()
+                    .is_multiple_of(u32::from(state.rtstate.numerator))
+                {
                     self.on_bar_click.clone()
                 } else {
                     self.off_bar_click.clone()

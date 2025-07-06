@@ -314,8 +314,7 @@ impl Daw {
             self.arrangement_view.arrangement.rtstate(),
         )
         .beat()
-            % 2
-            == 0;
+        .is_multiple_of(2);
 
         let mut base = stack![
             column![

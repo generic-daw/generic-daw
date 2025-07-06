@@ -322,10 +322,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
             let bar = beat.beat() / u32::from(self.rtstate.numerator);
 
             if self.scale.x >= 11.0 {
-                if beat.beat() % u32::from(self.rtstate.numerator) == 0 && bar % 4 == 0 {
+                if beat
+                    .beat()
+                    .is_multiple_of(u32::from(self.rtstate.numerator))
+                    && bar.is_multiple_of(4)
+                {
                     draw_text(beat, bar);
                 }
-            } else if beat.beat() % u32::from(self.rtstate.numerator) == 0 {
+            } else if beat
+                .beat()
+                .is_multiple_of(u32::from(self.rtstate.numerator))
+            {
                 draw_text(beat, bar);
             }
 
@@ -475,7 +482,8 @@ impl<'a, Message> Seeker<'a, Message> {
         let background_width = background_step.to_samples_f(self.rtstate) / sample_size;
 
         while background_beat < end_beat {
-            if (background_beat.beat() / (4 * u32::from(self.rtstate.numerator))) % 2 == 1 {
+            if (background_beat.beat() / (4 * u32::from(self.rtstate.numerator))).is_multiple_of(2)
+            {
                 let x =
                     (background_beat.to_samples_f(self.rtstate) - self.position.x) / sample_size;
 
@@ -499,7 +507,10 @@ impl<'a, Message> Seeker<'a, Message> {
 
         while beat <= end_beat {
             let color = if snap_step >= MusicalTime::BEAT {
-                if beat.beat() % (snap_step.beat() * u32::from(self.rtstate.numerator)) == 0 {
+                if beat
+                    .beat()
+                    .is_multiple_of(snap_step.beat() * u32::from(self.rtstate.numerator))
+                {
                     theme.extended_palette().background.strong.color
                 } else {
                     theme.extended_palette().background.weak.color
