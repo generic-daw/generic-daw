@@ -373,7 +373,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
         renderer.fill_quad(
             Quad {
                 bounds: note_bounds,
-                border: border::width(1.0).color(theme.extended_palette().background.strong.color),
+                border: border::width(1).color(theme.extended_palette().background.strong.color),
                 ..Quad::default()
             },
             theme.extended_palette().primary.weak.color,

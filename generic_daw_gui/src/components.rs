@@ -25,11 +25,11 @@ where
     Message: Clone + 'a,
 {
     button(
-        container(t.size(13.0).line_height(1.0))
-            .width(13.0)
+        container(t.size(13).line_height(1.0))
+            .width(13)
             .align_x(Alignment::Center),
     )
-    .padding(0.0)
+    .padding(0)
 }
 
 pub fn number_input<'a, Message>(
@@ -47,10 +47,10 @@ where
             container(move_vertical())
                 .style(|t| {
                     container::background(t.extended_palette().background.weak.color).border(
-                        border::width(1.0).color(t.extended_palette().background.strongest.color),
+                        border::width(1).color(t.extended_palette().background.strongest.color),
                     )
                 })
-                .padding([5.0, 0.0]),
+                .padding([5, 0]),
             current,
             default,
             drag_update
@@ -77,13 +77,13 @@ where
         style.border.radius = f32::INFINITY.into();
         style
     })
-    .padding(5.0)
+    .padding(5)
 }
 
 pub fn styled_button<'a, Message>(content: impl Into<Element<'a, Message>>) -> Button<'a, Message> {
     button(content)
         .style(|t, s| button_with_base(t, s, button::primary))
-        .padding([5.0, 7.0])
+        .padding([5, 7])
 }
 
 pub fn styled_combo_box<'a, T, Message>(
@@ -143,7 +143,7 @@ pub fn styled_scrollable_with_direction<'a, Message>(
     direction: impl Into<Direction>,
 ) -> Scrollable<'a, Message> {
     Scrollable::with_direction(content, direction)
-        .spacing(5.0)
+        .spacing(5)
         .style(|t, s| {
             let mut style = scrollable::default(t, s);
             style.vertical_rail.border.radius = Radius::default();

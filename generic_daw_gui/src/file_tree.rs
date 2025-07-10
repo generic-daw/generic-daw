@@ -43,7 +43,7 @@ impl FileTree {
         ))
         .style(|t| {
             container::background(t.extended_palette().background.weakest.color)
-                .border(border::width(1.0).color(t.extended_palette().background.strong.color))
+                .border(border::width(1).color(t.extended_palette().background.strong.color))
         })
         .padding(padding::all(1).left(0))
         .height(Fill)

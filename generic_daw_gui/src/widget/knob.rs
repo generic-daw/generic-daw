@@ -384,8 +384,8 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
         renderer.fill_quad(
             Quad {
                 bounds: layout.bounds(),
-                border: border::width(1.0)
-                    .rounded(2.0)
+                border: border::width(1)
+                    .rounded(2)
                     .color(theme.extended_palette().background.strong.color),
                 ..Quad::default()
             },

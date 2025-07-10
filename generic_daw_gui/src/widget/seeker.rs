@@ -342,7 +342,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
         renderer.fill_quad(
             Quad {
                 bounds: right_panel_bounds,
-                border: border::width(1.0).color(theme.extended_palette().background.strong.color),
+                border: border::width(1).color(theme.extended_palette().background.strong.color),
                 ..Quad::default()
             },
             Background::Color(Color::TRANSPARENT),

@@ -1022,7 +1022,7 @@ impl ArrangementView {
                                         }
                                     }),
                                 ]
-                                .spacing(5.0)
+                                .spacing(5)
                                 .wrap(),
                                 column![
                                     icon_button(text('M'))
@@ -1099,24 +1099,24 @@ impl ArrangementView {
                                         )
                                     ]
                                 ]
-                                .spacing(5.0)
+                                .spacing(5)
                             ]
-                            .spacing(5.0),
+                            .spacing(5),
                         )
                         .style(|t| {
                             container::background(t.extended_palette().background.weak.color)
                                 .border(
-                                    border::width(1.0)
+                                    border::width(1)
                                         .color(t.extended_palette().background.strong.color),
                                 )
                         })
-                        .padding(5.0)
+                        .padding(5)
                         .height(self.arrangement_scale.y)
                     })
                     .map(Element::new)
                     .chain(once(
                         container(circle_plus().on_press(Message::TrackAdd))
-                            .padding(padding::right(5.0).top(5.0))
+                            .padding(padding::right(5).top(5))
                             .into(),
                     )),
             )
@@ -1219,7 +1219,7 @@ impl ArrangementView {
                             }),
                             PeakMeter::new(node.l_r.get(), node.enabled)
                         ]
-                        .spacing(5.0)
+                        .spacing(5)
                         .align_x(Alignment::Center),
                         column![
                             buttons(node.enabled, node.id),
@@ -1231,16 +1231,16 @@ impl ArrangementView {
                             .step(f32::EPSILON)
                             .style(move |t, s| slider_with_enabled(t, s, node.enabled))
                         ]
-                        .spacing(5.0)
+                        .spacing(5)
                         .align_x(Alignment::Center)
                     ]
-                    .spacing(5.0),
+                    .spacing(5),
                     connect(node.enabled, node.id)
                 ]
-                .spacing(5.0)
+                .spacing(5)
                 .align_x(Alignment::Center),
             )
-            .padding(5.0)
+            .padding(5)
             .on_press(Message::ChannelSelect(node.id))
             .style(move |t, _| {
                 let pair = if Some(node.id) == selected_channel {
@@ -1252,7 +1252,7 @@ impl ArrangementView {
                 button::Style {
                     background: Some(pair.color.into()),
                     text_color: pair.text,
-                    border: border::width(1.0).color(t.extended_palette().background.strong.color),
+                    border: border::width(1).color(t.extended_palette().background.strong.color),
                     ..button::Style::default()
                 }
             })
@@ -1284,7 +1284,7 @@ impl ArrangementView {
                                     },
                                 )
                             })
-                            .padding(0.0)
+                            .padding(0)
                             .on_press(if connected {
                                 Message::Disconnect((id, selected_channel))
                             } else {
@@ -1316,10 +1316,10 @@ impl ArrangementView {
                                     },
                                 )
                             }),
-                        space().height(13.0),
-                        space().height(13.0)
+                        space().height(13),
+                        space().height(13)
                     ]
-                    .spacing(5.0)
+                    .spacing(5)
                     .into()
                 },
                 connect,
@@ -1383,7 +1383,7 @@ impl ArrangementView {
                                         }
                                     )
                                 ]
-                                .spacing(5.0)
+                                .spacing(5)
                                 .into()
                             },
                             |_, _| space().height(LINE_HEIGHT).into(),
@@ -1424,7 +1424,7 @@ impl ArrangementView {
                                                 },
                                             )
                                         }),
-                                    space().height(13.0),
+                                    space().height(13),
                                     icon_button(x()).on_press(Message::ChannelRemove(id)).style(
                                         move |t, s| {
                                             button_with_base(
@@ -1439,7 +1439,7 @@ impl ArrangementView {
                                         }
                                     )
                                 ]
-                                .spacing(5.0)
+                                .spacing(5)
                                 .into()
                             },
                             connect,
@@ -1455,7 +1455,7 @@ impl ArrangementView {
             })
             .chain(once(circle_plus().on_press(Message::ChannelAdd).into())))
             .align_y(Alignment::Center)
-            .spacing(5.0),
+            .spacing(5),
             Direction::Horizontal(Scrollbar::default()),
         )
         .width(Fill);
@@ -1474,7 +1474,7 @@ impl ArrangementView {
                 mixer_panel,
                 column![
                     plugin_picker,
-                    horizontal_rule(11.0),
+                    container(horizontal_rule(1)).padding([0, 5]),
                     styled_scrollable_with_direction(
                         dragking::column({
                             node.plugins.iter().enumerate().map(|(i, plugin)| {
@@ -1539,7 +1539,7 @@ impl ArrangementView {
                                             }
                                         ),
                                     ]
-                                    .spacing(5.0),
+                                    .spacing(5),
                                     mouse_area(
                                         container(
                                             grip_vertical()
@@ -1550,7 +1550,7 @@ impl ArrangementView {
                                                 t.extended_palette().background.weak.color,
                                             )
                                             .border(
-                                                border::width(1.0).color(
+                                                border::width(1).color(
                                                     t.extended_palette().background.strong.color,
                                                 ),
                                             )
@@ -1558,11 +1558,11 @@ impl ArrangementView {
                                     )
                                     .interaction(Interaction::Grab),
                                 ]
-                                .spacing(5.0)
+                                .spacing(5)
                                 .into()
                             })
                         })
-                        .spacing(5.0)
+                        .spacing(5)
                         .on_drag(Message::PluginsReordered),
                         Direction::Vertical(Scrollbar::default())
                     )

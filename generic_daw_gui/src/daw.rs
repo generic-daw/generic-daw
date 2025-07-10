@@ -375,8 +375,8 @@ impl Daw {
                         |x| Message::ChangedBpm(x as u16),
                         Message::ChangedBpmText
                     ),
-                    button(row![AnimatedDot::new(fill), AnimatedDot::new(!fill)].spacing(5.0))
-                        .padding(8.0)
+                    button(row![AnimatedDot::new(fill), AnimatedDot::new(!fill)].spacing(5))
+                        .padding(8)
                         .style(move |t, s| button_with_base(
                             t,
                             s,

@@ -92,7 +92,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AnimatedDot {
 
         let outline = Quad {
             bounds,
-            border: border.width(2.0),
+            border: border.width(2),
             ..Quad::default()
         };
 

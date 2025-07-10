@@ -156,7 +156,7 @@ impl ConfigView {
                     .size(LINE_HEIGHT)
                     .line_height(1.0)
                     .font(Font::MONOSPACE),
-                horizontal_rule(10),
+                container(horizontal_rule(1)).padding([5, 0]),
                 row![
                     "Sample Paths",
                     horizontal_space(),
@@ -188,7 +188,7 @@ impl ConfigView {
                 )
                 .style(|t| {
                     container::background(t.extended_palette().background.weak.color).border(
-                        border::width(1.0).color(t.extended_palette().background.strong.color),
+                        border::width(1).color(t.extended_palette().background.strong.color),
                     )
                 }),
                 horizontal_rule(1),
@@ -223,7 +223,7 @@ impl ConfigView {
                 )
                 .style(|t| {
                     container::background(t.extended_palette().background.weak.color).border(
-                        border::width(1.0).color(t.extended_palette().background.strong.color),
+                        border::width(1).color(t.extended_palette().background.strong.color),
                     )
                 }),
                 horizontal_rule(1),
@@ -352,7 +352,7 @@ impl ConfigView {
         ))
         .style(|t| {
             container::background(t.extended_palette().background.weakest.color)
-                .border(border::width(1.0).color(t.extended_palette().background.strong.color))
+                .border(border::width(1).color(t.extended_palette().background.strong.color))
         })
         .into()
     }

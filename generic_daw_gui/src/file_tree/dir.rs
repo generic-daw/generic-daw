@@ -9,7 +9,7 @@ use iced::{
     futures::StreamExt as _,
     padding,
     widget::{
-        button, column, container, row, rule, text,
+        button, column, container, row, text,
         text::{Shaping, Wrapping},
         vertical_rule,
     },
@@ -130,12 +130,9 @@ impl Dir {
 
             if height != 0.0 {
                 col = col.push(row![
-                    container(vertical_rule(2).style(|t| rule::Style {
-                        width: 2,
-                        ..rule::default(t)
-                    }))
-                    .padding(padding::left(LINE_HEIGHT / 2.0).right(LINE_HEIGHT / 4.0))
-                    .height(height),
+                    container(vertical_rule(2))
+                        .padding(padding::left(LINE_HEIGHT / 2.0).right(LINE_HEIGHT / 4.0))
+                        .height(height),
                     ch
                 ]);
             }
