@@ -117,25 +117,24 @@ impl Dir {
 
         if self.open
             && let LoadStatus::Loaded { dirs, files } = &self.children
+            && dirs.len().max(files.len()) != 0
         {
-            let ch = column(
-                dirs.iter()
-                    .map(Self::view)
-                    .chain(files.iter().map(File::view))
-                    .map(|(e, h)| {
-                        height += h;
-                        e
-                    }),
-            );
-
-            if height != 0.0 {
-                col = col.push(row![
+            col = col.push(
+                row![
                     container(vertical_rule(2))
-                        .padding(padding::left(LINE_HEIGHT / 2.0).right(LINE_HEIGHT / 4.0))
-                        .height(height),
-                    ch
-                ]);
-            }
+                        .padding(padding::left(LINE_HEIGHT / 2.0).right(LINE_HEIGHT / 4.0)),
+                    column(
+                        dirs.iter()
+                            .map(Self::view)
+                            .chain(files.iter().map(File::view))
+                            .map(|(e, h)| {
+                                height += h;
+                                e
+                            })
+                    )
+                ]
+                .height(height),
+            );
         }
 
         (col.into(), height + LINE_HEIGHT + 2.0)
