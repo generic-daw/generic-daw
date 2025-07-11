@@ -24,7 +24,7 @@ impl Clip {
     }
 
     #[must_use]
-    pub fn duplicate(&self) -> Self {
+    pub fn deep_clone(&self) -> Self {
         match self {
             Self::Audio(audio) => Self::Audio(Arc::new((**audio).clone())),
             Self::Midi(midi) => Self::Midi(Arc::new((**midi).clone())),

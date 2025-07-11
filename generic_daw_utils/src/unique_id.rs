@@ -33,10 +33,8 @@ macro_rules! unique_id {
                     )
                 }
 
-                pub fn last() -> Self {
-                    Self(
-                        ID.load(::std::sync::atomic::Ordering::Acquire),
-                    )
+                pub fn is_last(self) -> bool {
+                    self.0 == ID.load(::std::sync::atomic::Ordering::Acquire)
                 }
             }
 

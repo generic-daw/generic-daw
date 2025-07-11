@@ -73,7 +73,7 @@ impl Arrangement {
                     .update(|[new_l, new_r]| [old_l.max(new_l), old_r.max(new_r)]);
             }
             Update::Sample(ver, sample) => {
-                if ver == Version::last() {
+                if ver.is_last() {
                     self.rtstate.sample = sample;
                 }
             }
@@ -327,7 +327,7 @@ impl Arrangement {
     }
 
     pub fn clone_clip(&mut self, track: usize, clip: usize) {
-        let clip = self.tracks[track].clips[clip].duplicate();
+        let clip = self.tracks[track].clips[clip].deep_clone();
         self.tracks[track].clips.push(clip.clone());
         self.sender
             .try_send(Message::Action(

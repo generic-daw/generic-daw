@@ -7,6 +7,7 @@ use cpal::{
 };
 use daw_ctx::DawCtx;
 use log::info;
+use master::Master;
 use std::cmp::Ordering;
 
 mod audio_clip;
@@ -34,7 +35,6 @@ pub use cpal::{Stream, traits::StreamTrait};
 pub use daw_ctx::{Action, Message, RtState, Update, Version};
 pub use decibels::Decibels;
 pub use export::export;
-pub use master::Master;
 pub use midi_clip::{Key, MidiClip, MidiKey, MidiNote};
 pub use mixer::Mixer;
 pub use musical_time::MusicalTime;

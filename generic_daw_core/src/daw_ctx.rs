@@ -71,6 +71,7 @@ pub struct State {
 pub struct DawCtx {
     audio_graph: AudioGraph<AudioGraphNode>,
     state: State,
+    version: Version,
 }
 
 impl DawCtx {
@@ -98,7 +99,11 @@ impl DawCtx {
         let audio_graph = AudioGraph::new(Master::new(state.rtstate.sample_rate).into());
         let id = audio_graph.root();
 
-        let audio_ctx = Self { audio_graph, state };
+        let audio_ctx = Self {
+            audio_graph,
+            state,
+            version: Version::unique(),
+        };
         let rtstate = audio_ctx.state.rtstate;
 
         (audio_ctx, id, rtstate, r_sender, r_receiver)
@@ -127,7 +132,10 @@ impl DawCtx {
                 Message::TogglePlayback => self.state.rtstate.playing ^= true,
                 Message::ToggleMetronome => self.state.rtstate.metronome ^= true,
                 Message::Reset => self.audio_graph.reset(),
-                Message::Sample(_, sample) => self.state.rtstate.sample = sample,
+                Message::Sample(version, sample) => {
+                    self.state.rtstate.sample = sample;
+                    self.version = version;
+                }
                 Message::RequestAudioGraph(sender) => {
                     debug_assert!(self.state.receiver.is_empty());
                     let mut audio_graph = AudioGraph::new(Mixer::default().into());
@@ -148,7 +156,7 @@ impl DawCtx {
             self.state.rtstate.sample += buf.len();
             self.state
                 .sender
-                .try_send(Update::Sample(Version::last(), self.state.rtstate.sample))
+                .try_send(Update::Sample(self.version, self.state.rtstate.sample))
                 .unwrap();
         }
     }

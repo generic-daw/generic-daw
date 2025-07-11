@@ -68,7 +68,7 @@ impl AudioBuffers {
             == &0
         {
         } else if self.input_config.port_channel_counts[self.input_config.main_port_index] == 1 {
-            buf.chunks(2)
+            buf.chunks_exact(2)
                 .map(|c| c.iter().sum())
                 .zip(&mut *self.input_buffers[self.input_config.main_port_index])
                 .for_each(|(buf, sample)| *sample = buf);

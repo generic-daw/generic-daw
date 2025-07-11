@@ -53,14 +53,16 @@ impl NodeImpl for Mixer {
 
         let [lpan, rpan] = pan(self.pan).map(|s| s * self.volume);
 
-        let l_r = (audio.as_chunks_mut().0).iter_mut().fold(
-            [0.0; 2],
-            |[old_l, old_r], [new_l, new_r]| {
-                *new_l *= lpan;
-                *new_r *= rpan;
-                [new_l.abs().max(old_l), new_r.abs().max(old_r)]
-            },
-        );
+        let l_r =
+            audio
+                .as_chunks_mut()
+                .0
+                .iter_mut()
+                .fold([0.0; 2], |[old_l, old_r], [new_l, new_r]| {
+                    *new_l *= lpan;
+                    *new_r *= rpan;
+                    [new_l.abs().max(old_l), new_r.abs().max(old_r)]
+                });
 
         if l_r != [0.0; 2] {
             _ = state.sender.try_send(Update::LR(self.id, l_r));
