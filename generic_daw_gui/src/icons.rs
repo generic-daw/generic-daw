@@ -2,15 +2,15 @@ pub static LUCIDE_BYTES: &[u8] = include_bytes!("../../Lucide.ttf");
 pub static LUCIDE_FONT: iced::Font = iced::Font::with_name("lucide");
 
 macro_rules! icon {
-    ($name:ident = $icon:literal) => {
-        pub fn $name<'a>() -> ::iced::widget::Text<'a> {
-            ::iced::widget::text(const { ::core::char::from_u32($icon).unwrap() })
-                .font(LUCIDE_FONT)
-                .shaping(::iced::widget::text::Shaping::Advanced)
-                .size(crate::widget::LINE_HEIGHT)
-                .line_height(1.0)
-        }
-    };
+	($name:ident = $icon:literal) => {
+		pub fn $name<'a>() -> ::iced::widget::Text<'a> {
+			::iced::widget::text(const { ::core::char::from_u32($icon).unwrap() })
+				.font(LUCIDE_FONT)
+				.shaping(::iced::widget::text::Shaping::Advanced)
+				.size(crate::widget::LINE_HEIGHT)
+				.line_height(1.0)
+		}
+	};
 }
 
 // https://unpkg.com/lucide-static@latest/font/info.json

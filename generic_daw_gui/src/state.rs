@@ -1,36 +1,36 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{read_to_string, write},
-    io,
-    path::{Path, PathBuf},
-    sync::{Arc, LazyLock},
+	fs::{read_to_string, write},
+	io,
+	path::{Path, PathBuf},
+	sync::{Arc, LazyLock},
 };
 
 pub static STATE_PATH: LazyLock<PathBuf> =
-    LazyLock::new(|| dirs::state_dir().unwrap().join("generic_daw.toml"));
+	LazyLock::new(|| dirs::state_dir().unwrap().join("generic_daw.toml"));
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct State {
-    pub last_project: Option<Arc<Path>>,
+	pub last_project: Option<Arc<Path>>,
 }
 
 impl State {
-    #[must_use]
-    pub fn read() -> Self {
-        let config = read_to_string(&*STATE_PATH);
+	#[must_use]
+	pub fn read() -> Self {
+		let config = read_to_string(&*STATE_PATH);
 
-        let read =
-            toml::from_str::<Self>(config.as_deref().unwrap_or_default()).unwrap_or_default();
+		let read =
+			toml::from_str::<Self>(config.as_deref().unwrap_or_default()).unwrap_or_default();
 
-        if config.is_err_and(|e| e.kind() == io::ErrorKind::NotFound) {
-            read.write();
-        }
+		if config.is_err_and(|e| e.kind() == io::ErrorKind::NotFound) {
+			read.write();
+		}
 
-        read
-    }
+		read
+	}
 
-    pub fn write(&self) {
-        write(&*STATE_PATH, toml::to_string(self).unwrap()).unwrap();
-    }
+	pub fn write(&self) {
+		write(&*STATE_PATH, toml::to_string(self).unwrap()).unwrap();
+	}
 }

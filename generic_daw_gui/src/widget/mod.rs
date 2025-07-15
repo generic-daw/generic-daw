@@ -35,27 +35,27 @@ pub const TEXT_HEIGHT: f32 = 16.0;
 pub const SWM: f32 = 60.0;
 
 pub fn shaping_of(text: &str) -> Shaping {
-    if text.is_ascii() {
-        Shaping::Basic
-    } else {
-        Shaping::Advanced
-    }
+	if text.is_ascii() {
+		Shaping::Basic
+	} else {
+		Shaping::Advanced
+	}
 }
 
 #[expect(clippy::trivially_copy_pass_by_ref)]
 fn get_time(
-    x: f32,
-    modifiers: Modifiers,
-    rtstate: &RtState,
-    position: &Vec2,
-    scale: &Vec2,
+	x: f32,
+	modifiers: Modifiers,
+	rtstate: &RtState,
+	position: &Vec2,
+	scale: &Vec2,
 ) -> MusicalTime {
-    let time = x.mul_add(scale.x.exp2(), position.x).max(0.0);
-    let mut time = MusicalTime::from_samples_f(time, rtstate);
+	let time = x.mul_add(scale.x.exp2(), position.x).max(0.0);
+	let mut time = MusicalTime::from_samples_f(time, rtstate);
 
-    if !modifiers.alt() {
-        time = time.snap_round(scale.x, rtstate);
-    }
+	if !modifiers.alt() {
+		time = time.snap_round(scale.x, rtstate);
+	}
 
-    time
+	time
 }

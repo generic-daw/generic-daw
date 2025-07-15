@@ -16,14 +16,14 @@ mod theme;
 mod widget;
 
 fn main() -> Result {
-    #[cfg(feature = "env_logger")]
-    env_logger::init();
+	#[cfg(feature = "env_logger")]
+	env_logger::init();
 
-    daemon(Daw::create, Daw::update, Daw::view)
-        .title(Daw::title)
-        .theme(Daw::theme)
-        .subscription(Daw::subscription)
-        .antialiasing(true)
-        .font(LUCIDE_BYTES)
-        .run()
+	daemon(Daw::create, Daw::update, Daw::view)
+		.title(Daw::title)
+		.theme(Daw::theme)
+		.subscription(Daw::subscription)
+		.antialiasing(true)
+		.font(LUCIDE_BYTES)
+		.run()
 }

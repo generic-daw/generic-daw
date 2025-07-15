@@ -3,50 +3,50 @@ use clack_host::prelude::*;
 
 #[derive(Debug, Default)]
 pub struct AudioPortsConfig {
-    pub port_channel_counts: Box<[usize]>,
-    pub main_port_index: usize,
+	pub port_channel_counts: Box<[usize]>,
+	pub main_port_index: usize,
 }
 
 impl AudioPortsConfig {
-    pub fn from_ports(plugin: &mut PluginMainThreadHandle<'_>, is_input: bool) -> Option<Self> {
-        let ports = plugin.get_extension::<PluginAudioPorts>()?;
+	pub fn from_ports(plugin: &mut PluginMainThreadHandle<'_>, is_input: bool) -> Option<Self> {
+		let ports = plugin.get_extension::<PluginAudioPorts>()?;
 
-        let mut buffer = AudioPortInfoBuffer::new();
-        let mut main_port_index = None;
-        let mut port_channel_counts = Vec::new();
+		let mut buffer = AudioPortInfoBuffer::new();
+		let mut main_port_index = None;
+		let mut port_channel_counts = Vec::new();
 
-        for i in 0..ports.count(plugin, is_input) {
-            let Some(info) = ports.get(plugin, i, is_input, &mut buffer) else {
-                continue;
-            };
+		for i in 0..ports.count(plugin, is_input) {
+			let Some(info) = ports.get(plugin, i, is_input, &mut buffer) else {
+				continue;
+			};
 
-            if info.flags.contains(AudioPortFlags::IS_MAIN) {
-                main_port_index.get_or_insert(i);
-            }
+			if info.flags.contains(AudioPortFlags::IS_MAIN) {
+				main_port_index.get_or_insert(i);
+			}
 
-            port_channel_counts.push(info.channel_count as usize);
-        }
+			port_channel_counts.push(info.channel_count as usize);
+		}
 
-        let port_channel_counts = port_channel_counts.into_boxed_slice();
+		let port_channel_counts = port_channel_counts.into_boxed_slice();
 
-        let main_port_index = main_port_index
-            .map(|i| i as usize)
-            .or_else(|| port_channel_counts.iter().position(|&p| p == 2))
-            .or_else(|| port_channel_counts.iter().position(|&p| p == 1))
-            .unwrap_or_default();
+		let main_port_index = main_port_index
+			.map(|i| i as usize)
+			.or_else(|| port_channel_counts.iter().position(|&p| p == 2))
+			.or_else(|| port_channel_counts.iter().position(|&p| p == 1))
+			.unwrap_or_default();
 
-        Some(Self {
-            port_channel_counts,
-            main_port_index,
-        })
-    }
+		Some(Self {
+			port_channel_counts,
+			main_port_index,
+		})
+	}
 }
 
 impl From<&AudioPortsConfig> for AudioPorts {
-    fn from(value: &AudioPortsConfig) -> Self {
-        Self::with_capacity(
-            value.port_channel_counts.iter().sum(),
-            value.port_channel_counts.len(),
-        )
-    }
+	fn from(value: &AudioPortsConfig) -> Self {
+		Self::with_capacity(
+			value.port_channel_counts.iter().sum(),
+			value.port_channel_counts.len(),
+		)
+	}
 }

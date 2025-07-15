@@ -3,50 +3,50 @@ use audio_graph::{NodeId, NodeImpl};
 
 #[derive(Debug, Default)]
 pub struct Track {
-    pub clips: Vec<Clip>,
-    pub node: Mixer,
+	pub clips: Vec<Clip>,
+	pub node: Mixer,
 }
 
 impl NodeImpl for Track {
-    type Event = Event;
-    type State = State;
+	type Event = Event;
+	type State = State;
 
-    fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
-        for clip in &self.clips {
-            clip.process(&state.rtstate, audio, events);
-        }
+	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
+		for clip in &self.clips {
+			clip.process(&state.rtstate, audio, events);
+		}
 
-        self.node.process(state, audio, events);
-    }
+		self.node.process(state, audio, events);
+	}
 
-    fn id(&self) -> NodeId {
-        self.node.id()
-    }
+	fn id(&self) -> NodeId {
+		self.node.id()
+	}
 
-    fn reset(&mut self) {
-        self.node.reset();
-    }
+	fn reset(&mut self) {
+		self.node.reset();
+	}
 
-    fn delay(&self) -> usize {
-        self.node.delay()
-    }
+	fn delay(&self) -> usize {
+		self.node.delay()
+	}
 }
 
 impl Track {
-    pub fn apply(&mut self, action: Action) {
-        match action {
-            Action::AddClip(clip) => self.clips.push(clip),
-            Action::RemoveClip(index) => _ = self.clips.remove(index),
-            action => self.node.apply(action),
-        }
-    }
+	pub fn apply(&mut self, action: Action) {
+		match action {
+			Action::AddClip(clip) => self.clips.push(clip),
+			Action::RemoveClip(index) => _ = self.clips.remove(index),
+			action => self.node.apply(action),
+		}
+	}
 
-    #[must_use]
-    pub fn len(&self) -> MusicalTime {
-        self.clips
-            .iter()
-            .map(|clip| clip.position().end())
-            .max()
-            .unwrap_or_default()
-    }
+	#[must_use]
+	pub fn len(&self) -> MusicalTime {
+		self.clips
+			.iter()
+			.map(|clip| clip.position().end())
+			.max()
+			.unwrap_or_default()
+	}
 }
