@@ -19,9 +19,28 @@ pub fn mesh(
 	point: Point,
 	bounds: Rectangle,
 ) -> Option<Mesh> {
+	debug::time_with("Waveform Mesh", || {
+		make_mesh(
+			rtstate, start, offset, lods, position, scale, theme, point, bounds,
+		)
+	})
+}
+
+#[expect(clippy::trivially_copy_pass_by_ref)]
+fn make_mesh(
+	rtstate: &RtState,
+	start: MusicalTime,
+	offset: MusicalTime,
+	lods: &[impl AsRef<[(f32, f32)]>],
+	position: &Vec2,
+	scale: &Vec2,
+	theme: &Theme,
+	point: Point,
+	bounds: Rectangle,
+) -> Option<Mesh> {
 	let height = scale.y - LINE_HEIGHT;
 
-	debug_assert!(height >= 0.0);
+	debug_assert!(height > 0.0);
 
 	let lod_sample_size = scale.x.floor().exp2();
 
@@ -45,8 +64,6 @@ pub fn mesh(
 	if last_index < first_index || last_index - first_index < 2 {
 		return None;
 	}
-
-	let debug = debug::time("Waveform Generation");
 
 	let mut last = None::<(f32, f32)>;
 	let vertices = lods[lod].as_ref()[first_index..=last_index]
@@ -87,8 +104,6 @@ pub fn mesh(
 	let indices = (0..vertices.len() as u32 - 2)
 		.flat_map(|i| [i, i + 1, i + 2])
 		.collect();
-
-	debug.finish();
 
 	Some(Mesh::Solid {
 		buffers: Indexed { vertices, indices },
