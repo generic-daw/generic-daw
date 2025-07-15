@@ -316,7 +316,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		let mut beat = MusicalTime::from_samples_f(self.position.x, self.rtstate);
 		let mut end_beat =
 			beat + MusicalTime::from_samples_f(seeker_bounds.width * sample_size, self.rtstate);
-		beat = beat.snap_floor(self.scale.x + 2.0, self.rtstate);
+		beat = beat.snap_floor(self.scale.x + 2.0, self.rtstate).floor();
 		end_beat = end_beat.snap_floor(self.scale.x + 2.0, self.rtstate);
 
 		let bar_inc = MusicalTime::snap_step(self.scale.x + 2.0, self.rtstate)
