@@ -474,9 +474,11 @@ impl<'a, Message> Seeker<'a, Message> {
 
 		let mut beat = MusicalTime::from_samples_f(self.position.x, self.rtstate);
 		let end_beat = beat + MusicalTime::from_samples_f(bounds.width * sample_size, self.rtstate);
+		beat = beat.snap_floor(self.scale.x + 1.0, self.rtstate);
 
-		let mut background_beat = MusicalTime::new(beat.beat() & !0x0f, 0);
 		let background_step = MusicalTime::new(4 * u32::from(self.rtstate.numerator), 0);
+		let mut background_beat =
+			MusicalTime::new(beat.beat() - (beat.beat() % background_step.beat()), 0);
 		let background_width = background_step.to_samples_f(self.rtstate) / sample_size;
 
 		while background_beat < end_beat {
@@ -499,7 +501,6 @@ impl<'a, Message> Seeker<'a, Message> {
 			background_beat += background_step;
 		}
 
-		beat = beat.snap_ceil(self.scale.x + 1.0, self.rtstate);
 		let snap_step = MusicalTime::snap_step(self.scale.x + 1.0, self.rtstate);
 
 		while beat <= end_beat {
