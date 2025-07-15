@@ -60,21 +60,20 @@ impl AudioBuffers {
     }
 
     pub fn read_in(&mut self, buf: &[f32]) {
-        if self
+        let input_buffer = &mut self.input_buffers[self.input_config.main_port_index];
+        let n_channels = *self
             .input_config
             .port_channel_counts
             .get(self.input_config.main_port_index)
-            .unwrap_or(&0)
-            == &0
-        {
-        } else if self.input_config.port_channel_counts[self.input_config.main_port_index] == 1 {
+            .unwrap_or(&0);
+
+        if n_channels == 1 {
             buf.chunks_exact(2)
                 .map(|c| c.iter().sum())
-                .zip(&mut *self.input_buffers[self.input_config.main_port_index])
+                .zip(input_buffer)
                 .for_each(|(buf, sample)| *sample = buf);
-        } else {
-            let (l, r) = self.input_buffers[self.input_config.main_port_index]
-                .split_at_mut(self.config.max_frames_count as usize);
+        } else if n_channels != 0 {
+            let (l, r) = input_buffer.split_at_mut(self.config.max_frames_count as usize);
 
             buf.iter()
                 .step_by(2)
@@ -90,6 +89,20 @@ impl AudioBuffers {
     }
 
     pub fn prepare(&mut self, frames: usize) -> (InputAudioBuffers<'_>, OutputAudioBuffers<'_>) {
+        let input_frames = self
+            .input_config
+            .port_channel_counts
+            .get(self.input_config.main_port_index)
+            .filter(|&&x| x != 0)
+            .map_or(frames, |n_channels| frames / n_channels);
+
+        let output_frames = self
+            .output_config
+            .port_channel_counts
+            .get(self.output_config.main_port_index)
+            .filter(|&&x| x != 0)
+            .map_or(frames, |n_channels| frames / n_channels);
+
         (
             self.input_ports
                 .with_input_buffers(self.input_buffers.iter_mut().map(|c| {
@@ -97,8 +110,8 @@ impl AudioBuffers {
                         latency: 0,
                         channels: AudioPortBufferType::f32_input_only(
                             c.chunks_exact_mut(self.config.max_frames_count as usize)
-                                .map(|b| &mut b[..frames])
-                                .map(InputChannel::constant),
+                                .map(|b| &mut b[..input_frames])
+                                .map(InputChannel::variable),
                         ),
                     }
                 })),
@@ -108,7 +121,7 @@ impl AudioBuffers {
                         latency: 0,
                         channels: AudioPortBufferType::f32_output_only(
                             c.chunks_exact_mut(self.config.max_frames_count as usize)
-                                .map(|b| &mut b[..frames]),
+                                .map(|b| &mut b[..output_frames]),
                         ),
                     }
                 })),
@@ -118,15 +131,15 @@ impl AudioBuffers {
     pub fn write_out(&mut self, buf: &mut [f32], mix_level: f32) {
         self.latency_comp.rotate_right_concat(buf);
 
-        if self
+        let output_buffer = &self.output_buffers[self.output_config.main_port_index];
+        let n_channels = *self
             .output_config
             .port_channel_counts
             .get(self.output_config.main_port_index)
-            .unwrap_or(&0)
-            == &0
-        {
-        } else if self.output_config.port_channel_counts[self.output_config.main_port_index] == 1 {
-            self.output_buffers[self.output_config.main_port_index]
+            .unwrap_or(&0);
+
+        if n_channels == 1 {
+            output_buffer
                 .iter()
                 .flat_map(|x| [x, x])
                 .zip(&mut *buf)
@@ -134,9 +147,8 @@ impl AudioBuffers {
                     *buf *= 1.0 - mix_level;
                     *buf += sample * mix_level;
                 });
-        } else {
-            let (l, r) = self.output_buffers[self.output_config.main_port_index]
-                .split_at(self.config.max_frames_count as usize);
+        } else if n_channels != 0 {
+            let (l, r) = output_buffer.split_at(self.config.max_frames_count as usize);
 
             l.iter()
                 .zip(r)

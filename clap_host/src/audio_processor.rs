@@ -82,7 +82,7 @@ impl AudioProcessor {
         self.audio_buffers.read_in(audio);
         self.event_buffers.read_in(events);
 
-        let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len() / 2);
+        let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len());
 
         self.started_processor
             .as_mut()

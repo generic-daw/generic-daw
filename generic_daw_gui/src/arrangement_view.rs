@@ -1474,7 +1474,7 @@ impl ArrangementView {
                 mixer_panel,
                 column![
                     plugin_picker,
-                    container(horizontal_rule(1)).padding([0, 5]),
+                    container(horizontal_rule(1)).padding([5, 0]),
                     styled_scrollable_with_direction(
                         dragking::column({
                             node.plugins.iter().enumerate().map(|(i, plugin)| {
