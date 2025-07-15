@@ -31,6 +31,11 @@ impl MusicalTime {
 	}
 
 	#[must_use]
+	pub const fn bar(self, rtstate: &RtState) -> u32 {
+		self.beat() / rtstate.numerator as u32
+	}
+
+	#[must_use]
 	pub const fn beat(self) -> u32 {
 		self.0 >> 8
 	}
@@ -142,12 +147,11 @@ impl MusicalTime {
 
 	#[must_use]
 	pub fn snap_step(mut scale: f32, rtstate: &RtState) -> Self {
-		scale += (f32::from(rtstate.bpm) / 64.0).log2();
-
-		Self(if scale < 12.0 {
-			1 << (scale as u8 - 3)
+		scale = scale + f32::from(rtstate.bpm).log2() - 12.0;
+		Self(if scale < 0.0 {
+			u32::from(rtstate.numerator) >> (-scale) as u8
 		} else {
-			u32::from(rtstate.numerator) << 8
+			u32::from(rtstate.numerator) << scale as u8
 		})
 	}
 

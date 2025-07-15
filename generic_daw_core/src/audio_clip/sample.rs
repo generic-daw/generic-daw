@@ -146,7 +146,7 @@ impl Sample {
 				.collect::<Box<_>>(),
 		);
 
-		(0..10).for_each(|i| {
+		(0..12).for_each(|i| {
 			lods.push(
 				lods[i]
 					.chunks(2)

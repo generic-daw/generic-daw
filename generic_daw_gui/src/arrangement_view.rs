@@ -486,7 +486,7 @@ impl ArrangementView {
 				let old_scale = self.arrangement_scale;
 
 				self.arrangement_scale += scale;
-				self.arrangement_scale.x = self.arrangement_scale.x.clamp(3.0, 13f32.next_down());
+				self.arrangement_scale.x = self.arrangement_scale.x.clamp(3.0, 15f32.next_down());
 				self.arrangement_scale.y = self.arrangement_scale.y.clamp(77.0, 200.0);
 
 				if scale == Vec2::ZERO || old_scale != self.arrangement_scale {
@@ -503,7 +503,7 @@ impl ArrangementView {
 				let old_scale = self.piano_roll_scale;
 
 				self.piano_roll_scale += scale;
-				self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(3.0, 13f32.next_down());
+				self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(3.0, 15f32.next_down());
 				self.piano_roll_scale.y = self
 					.piano_roll_scale
 					.y

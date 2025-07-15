@@ -133,7 +133,7 @@ impl Dir {
 							})
 					)
 				]
-				.height(height),
+				.height(height.ceil()),
 			);
 		}
 
