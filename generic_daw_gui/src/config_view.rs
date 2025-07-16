@@ -1,5 +1,7 @@
 use crate::{
-	components::{number_input, styled_button, styled_pick_list, styled_scrollable_with_direction},
+	components::{
+		number_input, space, styled_button, styled_pick_list, styled_scrollable_with_direction,
+	},
 	config::{Config, Device},
 	icons::{mic, plus, rotate_ccw, save, volume_2, x},
 	stylefns::button_with_base,
@@ -163,7 +165,7 @@ impl ConfigView {
 					styled_button(plus())
 						.padding(0)
 						.on_press(Message::AddSamplePathFileDialog),
-					horizontal_space().width(5)
+					space().width(5)
 				],
 				container(
 					column(
@@ -198,7 +200,7 @@ impl ConfigView {
 					styled_button(plus())
 						.padding(0)
 						.on_press(Message::AddClapPathFileDialog),
-					horizontal_space().width(5)
+					space().width(5)
 				],
 				container(
 					column(
