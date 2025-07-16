@@ -10,7 +10,7 @@ jobs:
           components: clippy
       - run: sudo apt-get install libasound2-dev
       - run: wget https://unpkg.com/lucide-static@latest/font/Lucide.ttf
-      - run: cargo clippy --locked -- -D warnings
+      - run: cargo clippy -- -D warnings
   fmt:
     runs-on: ubuntu-latest
     steps:

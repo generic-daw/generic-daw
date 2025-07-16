@@ -1,6 +1,7 @@
 use daw::Daw;
 use iced::{Result, daemon};
 use icons::LUCIDE_BYTES;
+use wayland_backend as _;
 
 mod arrangement_view;
 mod clap_host;
