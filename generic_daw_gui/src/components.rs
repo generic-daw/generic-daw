@@ -1,14 +1,13 @@
 use crate::{
 	icons::{LUCIDE_FONT, move_vertical, plus},
-	stylefns::button_with_base,
+	stylefns::button_with_radius,
 	widget::{DragHandle, LINE_HEIGHT},
 };
 use iced::{
-	Alignment, Element, Font, Shrink,
+	Alignment, Element, Font, Shrink, Theme,
 	border::{self, Radius},
 	widget::{
-		Button, ComboBox, PickList, Scrollable, Space, Text, TextInput, button, combo_box,
-		container, pick_list, row,
+		Button, PickList, Scrollable, Space, Text, button, container, pick_list, row,
 		scrollable::{self, Direction},
 		text::Shaping,
 		text_input,
@@ -20,7 +19,10 @@ pub fn space() -> Space {
 	Space::new(Shrink, Shrink)
 }
 
-pub fn icon_button<'a, Message>(t: Text<'a>) -> Button<'a, Message>
+pub fn icon_button<'a, Message>(
+	t: Text<'a>,
+	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
+) -> Button<'a, Message>
 where
 	Message: Clone + 'a,
 {
@@ -29,6 +31,7 @@ where
 			.width(13)
 			.align_x(Alignment::Center),
 	)
+	.style(button_with_radius(style, 0))
 	.padding(0)
 }
 
@@ -47,7 +50,9 @@ where
 			container(move_vertical())
 				.style(|t| {
 					container::background(t.extended_palette().background.weak.color).border(
-						border::width(1).color(t.extended_palette().background.strongest.color),
+						border::width(1)
+							.color(t.extended_palette().background.strongest.color)
+							.rounded(border::left(5)),
 					)
 				})
 				.padding([5, 0]),
@@ -55,7 +60,12 @@ where
 			default,
 			drag_update
 		),
-		styled_text_input("", &current.to_string())
+		text_input("", &current.to_string())
+			.style(|t, s| {
+				let mut style = text_input::default(t, s);
+				style.border.radius = border::right(5);
+				style
+			})
 			.font(Font::MONOSPACE)
 			.width((max_digits as f32).mul_add(10.0, 14.0))
 			.on_input(text_update)
@@ -73,36 +83,14 @@ where
 			.align_x(Alignment::Center),
 	)
 	.style(|t, s| {
-		let mut style = button_with_base(t, s, button::primary);
+		let mut style = button::primary(t, s);
 		style.border.radius = f32::INFINITY.into();
 		style
 	})
 	.padding(5)
 }
 
-pub fn styled_button<'a, Message>(content: impl Into<Element<'a, Message>>) -> Button<'a, Message> {
-	button(content)
-		.style(|t, s| button_with_base(t, s, button::primary))
-		.padding([5, 7])
-}
-
-pub fn styled_combo_box<'a, T, Message>(
-	state: &'a combo_box::State<T>,
-	placeholder: &str,
-	selection: Option<&T>,
-	on_selected: impl Fn(T) -> Message + 'static,
-) -> ComboBox<'a, T, Message>
-where
-	T: std::fmt::Display + Clone,
-{
-	combo_box(state, placeholder, selection, on_selected).input_style(|t, s| {
-		let mut style = text_input::default(t, s);
-		style.border.radius = Radius::default();
-		style
-	})
-}
-
-pub fn styled_pick_list<'a, T, L, V, Message>(
+pub fn pick_list_custom_handle<'a, T, L, V, Message>(
 	options: L,
 	selected: Option<V>,
 	on_selected: impl Fn(T) -> Message + 'a,
@@ -113,29 +101,22 @@ where
 	V: Borrow<T> + 'a,
 	Message: Clone,
 {
-	pick_list(options, selected, on_selected)
-		.handle(pick_list::Handle::Dynamic {
-			closed: pick_list::Icon {
-				font: LUCIDE_FONT,
-				code_point: const { char::from_u32(57457).unwrap() },
-				size: None,
-				line_height: 1.0.into(),
-				shaping: Shaping::Advanced,
-			},
-			open: pick_list::Icon {
-				font: LUCIDE_FONT,
-				code_point: const { char::from_u32(57460).unwrap() },
-				size: None,
-				line_height: 1.0.into(),
-				shaping: Shaping::Advanced,
-			},
-		})
-		.style(|t, s| {
-			let mut style = pick_list::default(t, s);
-			style.border.radius = Radius::default();
-			style.placeholder_color = t.extended_palette().background.weak.text;
-			style
-		})
+	pick_list(options, selected, on_selected).handle(pick_list::Handle::Dynamic {
+		closed: pick_list::Icon {
+			font: LUCIDE_FONT,
+			code_point: const { char::from_u32(57457).unwrap() },
+			size: None,
+			line_height: 1.0.into(),
+			shaping: Shaping::Advanced,
+		},
+		open: pick_list::Icon {
+			font: LUCIDE_FONT,
+			code_point: const { char::from_u32(57460).unwrap() },
+			size: None,
+			line_height: 1.0.into(),
+			shaping: Shaping::Advanced,
+		},
+	})
 }
 
 pub fn styled_scrollable_with_direction<'a, Message>(
@@ -152,15 +133,4 @@ pub fn styled_scrollable_with_direction<'a, Message>(
 			style.horizontal_rail.scroller.border.radius = Radius::default();
 			style
 		})
-}
-
-pub fn styled_text_input<'a, Message>(placeholder: &str, value: &str) -> TextInput<'a, Message>
-where
-	Message: Clone,
-{
-	text_input(placeholder, value).style(|t, s| {
-		let mut style = text_input::default(t, s);
-		style.border.radius = Radius::default();
-		style
-	})
 }

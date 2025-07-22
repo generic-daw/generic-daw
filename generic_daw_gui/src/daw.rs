@@ -1,12 +1,12 @@
 use crate::{
 	arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
-	components::{number_input, space, styled_button, styled_pick_list},
+	components::{number_input, pick_list_custom_handle, space},
 	config::Config,
 	config_view::{ConfigView, Message as ConfigViewMessage},
 	file_tree::{FileTree, Message as FileTreeMessage},
 	icons::{chart_no_axes_gantt, pause, play, sliders_vertical, square},
 	state::State,
-	stylefns::button_with_base,
+	stylefns::{button_with_radius, pick_list_with_radius},
 	widget::{AnimatedDot, LINE_HEIGHT},
 };
 use generic_daw_core::{
@@ -15,12 +15,15 @@ use generic_daw_core::{
 	get_input_devices, get_output_devices,
 };
 use iced::{
-	Alignment, Color, Element, Event, Fill, Subscription, Task, Theme,
+	Alignment, Color, Element, Event, Fill, Subscription, Task, Theme, border,
 	event::{self, Status},
 	keyboard,
 	mouse::Interaction,
 	time::every,
-	widget::{button, center, column, container, horizontal_space, mouse_area, opaque, row, stack},
+	widget::{
+		button, center, column, container, horizontal_space, mouse_area, opaque, pick_list, row,
+		stack,
+	},
 	window::{self, Id},
 };
 use iced_split::{Split, Strategy};
@@ -319,7 +322,7 @@ impl Daw {
 		let mut base = stack![
 			column![
 				row![
-					styled_pick_list(
+					pick_list_custom_handle(
 						[
 							"New",
 							"Open",
@@ -342,9 +345,10 @@ impl Daw {
 								_ => unreachable!(),
 							}
 						}
-					),
+					)
+					.style(pick_list_with_radius(pick_list::default, 5)),
 					row![
-						styled_button(
+						button(
 							container(if self.arrangement_view.arrangement.rtstate().playing {
 								pause()
 							} else {
@@ -353,12 +357,16 @@ impl Daw {
 							.width(LINE_HEIGHT)
 							.align_x(Alignment::Center)
 						)
+						.padding([5, 7])
+						.style(button_with_radius(button::primary, border::left(5)))
 						.on_press(Message::TogglePlayback),
-						styled_button(
+						button(
 							container(square())
 								.width(LINE_HEIGHT)
 								.align_x(Alignment::Center)
 						)
+						.padding([5, 7])
+						.style(button_with_radius(button::primary, border::right(5)))
 						.on_press(Message::Stop),
 					],
 					number_input(
@@ -377,28 +385,33 @@ impl Daw {
 					),
 					button(row![AnimatedDot::new(fill), AnimatedDot::new(!fill)].spacing(5))
 						.padding(8)
-						.style(move |t, s| button_with_base(
-							t,
-							s,
+						.style(button_with_radius(
 							if self.arrangement_view.arrangement.rtstate().metronome {
 								button::primary
 							} else {
 								button::secondary
-							}
+							},
+							5
 						))
 						.on_press(Message::ToggleMetronome),
 					horizontal_space(),
 					row![
-						styled_button(chart_no_axes_gantt()).on_press_maybe(
-							(!matches!(self.arrangement_view.tab, Tab::Arrangement { .. }))
-								.then_some(Message::ChangedTab(Tab::Arrangement {
-									grabbed_clip: None
-								}))
-						),
-						styled_button(sliders_vertical()).on_press_maybe(
-							(!matches!(self.arrangement_view.tab, Tab::Mixer))
-								.then_some(Message::ChangedTab(Tab::Mixer))
-						)
+						button(chart_no_axes_gantt())
+							.style(button_with_radius(button::primary, border::left(5)))
+							.padding([5, 7])
+							.on_press_maybe(
+								(!matches!(self.arrangement_view.tab, Tab::Arrangement { .. }))
+									.then_some(Message::ChangedTab(Tab::Arrangement {
+										grabbed_clip: None
+									}))
+							),
+						button(sliders_vertical())
+							.style(button_with_radius(button::primary, border::right(5)))
+							.padding([5, 7])
+							.on_press_maybe(
+								(!matches!(self.arrangement_view.tab, Tab::Mixer))
+									.then_some(Message::ChangedTab(Tab::Mixer))
+							)
 					],
 				]
 				.spacing(10)

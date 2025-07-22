@@ -1,17 +1,15 @@
 use crate::{
-	components::{
-		number_input, space, styled_button, styled_pick_list, styled_scrollable_with_direction,
-	},
+	components::{number_input, pick_list_custom_handle, space, styled_scrollable_with_direction},
 	config::{Config, Device},
 	icons::{mic, plus, rotate_ccw, save, volume_2, x},
-	stylefns::button_with_base,
+	stylefns::{button_with_radius, pick_list_with_radius},
 	theme,
 	widget::LINE_HEIGHT,
 };
 use iced::{
 	Center, Element, Font, Shrink, Task, Theme, border,
 	widget::{
-		button, column, container, horizontal_rule, horizontal_space, row,
+		button, column, container, horizontal_rule, horizontal_space, pick_list, row,
 		scrollable::{Direction, Scrollbar},
 		text, toggler,
 	},
@@ -162,7 +160,8 @@ impl ConfigView {
 				row![
 					"Sample Paths",
 					horizontal_space(),
-					styled_button(plus())
+					button(plus())
+						.style(button_with_radius(button::primary, 0))
 						.padding(0)
 						.on_press(Message::AddSamplePathFileDialog),
 					space().width(5)
@@ -178,7 +177,7 @@ impl ConfigView {
 									text(path.to_string_lossy()).font(Font::MONOSPACE),
 									horizontal_space(),
 									button(x())
-										.style(|t, s| button_with_base(t, s, button::danger))
+										.style(button_with_radius(button::danger, 0))
 										.padding(0)
 										.on_press(Message::RemoveSamplePath(idx))
 								]
@@ -197,7 +196,8 @@ impl ConfigView {
 				row![
 					"CLAP Plugin Paths",
 					horizontal_space(),
-					styled_button(plus())
+					button(plus())
+						.style(button_with_radius(button::primary, 0))
 						.padding(0)
 						.on_press(Message::AddClapPathFileDialog),
 					space().width(5)
@@ -213,7 +213,7 @@ impl ConfigView {
 									text(path.to_string_lossy()).font(Font::MONOSPACE),
 									horizontal_space(),
 									button(x())
-										.style(|t, s| button_with_base(t, s, button::danger))
+										.style(button_with_radius(button::danger, 0))
 										.padding(0)
 										.on_press(Message::RemoveClapPath(idx))
 								]
@@ -231,12 +231,17 @@ impl ConfigView {
 				horizontal_rule(1),
 				row![
 					row![
-						styled_button(mic()).on_press_maybe(
-							(self.tab != Tab::Input).then_some(Message::ChangedTab(Tab::Input))
-						),
-						styled_button(volume_2()).on_press_maybe(
-							(self.tab != Tab::Output).then_some(Message::ChangedTab(Tab::Output))
-						)
+						button(mic())
+							.style(button_with_radius(button::primary, 0))
+							.on_press_maybe(
+								(self.tab != Tab::Input).then_some(Message::ChangedTab(Tab::Input))
+							),
+						button(volume_2())
+							.style(button_with_radius(button::primary, 0))
+							.on_press_maybe(
+								(self.tab != Tab::Output)
+									.then_some(Message::ChangedTab(Tab::Output))
+							)
 					],
 					horizontal_space(),
 					match self.tab {
@@ -250,44 +255,56 @@ impl ConfigView {
 						row![
 							"Name: ",
 							horizontal_space(),
-							styled_pick_list(devices, device.name.as_ref(), |name| {
+							pick_list_custom_handle(devices, device.name.as_ref(), |name| {
 								Message::ChangedName(Some(name))
 							})
 							.placeholder("Default")
-							.width(222),
-							styled_button(rotate_ccw()).padding(5).on_press_maybe(
-								device.name.as_deref().map(|_| Message::ChangedName(None))
-							)
+							.width(222)
+							.style(pick_list_with_radius(pick_list::default, border::left(5))),
+							button(rotate_ccw())
+								.style(button_with_radius(button::primary, 0))
+								.padding(5)
+								.on_press_maybe(
+									device.name.as_deref().map(|_| Message::ChangedName(None))
+								)
 						]
 						.align_y(Center),
 						row![
 							"Sample Rate: ",
 							horizontal_space(),
-							styled_pick_list(
+							pick_list_custom_handle(
 								COMMON_SAMPLE_RATES,
 								device.sample_rate,
-								|sample_rate| Message::ChangedSampleRate(Some(sample_rate))
+								|sample_rate| { Message::ChangedSampleRate(Some(sample_rate)) }
 							)
 							.placeholder("Default")
-							.width(222),
-							styled_button(rotate_ccw()).padding(5).on_press_maybe(
-								device.sample_rate.map(|_| Message::ChangedSampleRate(None))
-							)
+							.width(222)
+							.style(pick_list_with_radius(pick_list::default, border::left(5))),
+							button(rotate_ccw())
+								.style(button_with_radius(button::primary, 0))
+								.padding(5)
+								.on_press_maybe(
+									device.sample_rate.map(|_| Message::ChangedSampleRate(None))
+								)
 						]
 						.align_y(Center),
 						row![
 							"Buffer Size: ",
 							horizontal_space(),
-							styled_pick_list(
+							pick_list_custom_handle(
 								COMMON_BUFFER_SIZES,
 								device.buffer_size,
-								|buffer_size| Message::ChangedBufferSize(Some(buffer_size))
+								|buffer_size| { Message::ChangedBufferSize(Some(buffer_size)) }
 							)
 							.placeholder("Default")
-							.width(222),
-							styled_button(rotate_ccw()).padding(5).on_press_maybe(
-								device.buffer_size.map(|_| Message::ChangedBufferSize(None))
-							)
+							.width(222)
+							.style(pick_list_with_radius(pick_list::default, border::left(5))),
+							button(rotate_ccw())
+								.style(button_with_radius(button::primary, 0))
+								.padding(5)
+								.on_press_maybe(
+									device.buffer_size.map(|_| Message::ChangedBufferSize(None))
+								)
 						]
 						.align_y(Center)
 					]
@@ -314,16 +331,20 @@ impl ConfigView {
 				row![
 					"Theme: ",
 					horizontal_space(),
-					styled_pick_list(
+					pick_list_custom_handle(
 						Theme::ALL,
 						Some::<Theme>(self.config.theme.into()),
 						Message::ChangedTheme
 					)
-					.width(222),
-					styled_button(rotate_ccw()).padding(5).on_press_maybe(
-						(self.config.theme != theme::Theme::CatppuccinFrappe)
-							.then_some(Message::ChangedTheme(Theme::CatppuccinFrappe))
-					)
+					.width(222)
+					.style(pick_list_with_radius(pick_list::default, border::left(5))),
+					button(rotate_ccw())
+						.style(button_with_radius(button::primary, 0))
+						.padding(5)
+						.on_press_maybe(
+							(self.config.theme != theme::Theme::CatppuccinFrappe)
+								.then_some(Message::ChangedTheme(Theme::CatppuccinFrappe))
+						)
 				]
 				.align_y(Center),
 				self.dirty.then_some(horizontal_rule(1)),
@@ -333,10 +354,12 @@ impl ConfigView {
 							.padding([5, 10])
 							.style(|t| container::warning(t).border(border::rounded(f32::INFINITY))),
 						horizontal_space(),
-						styled_button(save())
+						button(save())
+							.style(button_with_radius(button::primary, 0))
 							.padding(5)
 							.on_press(Message::WriteConfig),
-						styled_button(rotate_ccw())
+						button(rotate_ccw())
+							.style(button_with_radius(button::primary, 0))
 							.padding(5)
 							.on_press(Message::ResetConfig)
 					]

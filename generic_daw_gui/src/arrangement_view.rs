@@ -1,11 +1,9 @@
 use crate::{
 	clap_host::{ClapHost, Message as ClapHostMessage},
-	components::{
-		circle_plus, icon_button, space, styled_combo_box, styled_scrollable_with_direction,
-	},
+	components::{circle_plus, icon_button, space, styled_scrollable_with_direction},
 	config::Config,
 	icons::{chevron_up, grip_vertical, x},
-	stylefns::{button_with_base, slider_with_enabled},
+	stylefns,
 	widget::{
 		AnimatedDot, Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob,
 		LINE_HEIGHT, MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll,
@@ -32,7 +30,7 @@ use iced::{
 	widget::{
 		button, column, combo_box, container, horizontal_rule, mouse_area, row,
 		scrollable::{Direction, Scrollbar},
-		text,
+		slider, text,
 		text::Wrapping,
 		vertical_rule, vertical_slider, vertical_space,
 	},
@@ -1022,47 +1020,35 @@ impl ArrangementView {
 								.spacing(5)
 								.wrap(),
 								column![
-									icon_button(text('M'))
-										.on_press(Message::TrackToggleEnabled(track.id))
-										.style(move |t, s| {
-											button_with_base(
-												t,
-												s,
-												if node.enabled {
-													button::primary
-												} else {
-													button::secondary
-												},
-											)
-										}),
-									icon_button(text('S'))
-										.on_press(Message::TrackToggleSolo(track.id))
-										.style(move |t, s| {
-											button_with_base(
-												t,
-												s,
-												if self.soloed_track == Some(track.id) {
-													button::warning
-												} else if node.enabled {
-													button::primary
-												} else {
-													button::secondary
-												},
-											)
-										}),
-									icon_button(x())
-										.on_press(Message::TrackRemove(track.id))
-										.style(move |t, s| {
-											button_with_base(
-												t,
-												s,
-												if node.enabled {
-													button::danger
-												} else {
-													button::secondary
-												},
-											)
-										}),
+									icon_button(
+										text('M'),
+										if node.enabled {
+											button::primary
+										} else {
+											button::secondary
+										}
+									)
+									.on_press(Message::TrackToggleEnabled(track.id)),
+									icon_button(
+										text('S'),
+										if self.soloed_track == Some(track.id) {
+											button::warning
+										} else if node.enabled {
+											button::primary
+										} else {
+											button::secondary
+										}
+									)
+									.on_press(Message::TrackToggleSolo(track.id)),
+									icon_button(
+										x(),
+										if node.enabled {
+											button::danger
+										} else {
+											button::secondary
+										}
+									)
+									.on_press(Message::TrackRemove(track.id)),
 									column![
 										vertical_space(),
 										button(
@@ -1075,23 +1061,19 @@ impl ArrangementView {
 										)
 										.padding(1.5)
 										.on_press(Message::ToggleRecord(track.id))
-										.style(move |t, s| {
-											button_with_base(
-												t,
-												s,
-												if self
-													.recording
-													.as_ref()
-													.is_some_and(|&(_, i)| i == track.id)
-												{
-													button::danger
-												} else if node.enabled {
-													button::primary
-												} else {
-													button::secondary
-												},
-											)
-										})
+										.style(
+											if self
+												.recording
+												.as_ref()
+												.is_some_and(|&(_, i)| i == track.id)
+											{
+												button::danger
+											} else if node.enabled {
+												button::primary
+											} else {
+												button::secondary
+											}
+										)
 									]
 								]
 								.spacing(5)
@@ -1224,7 +1206,11 @@ impl ArrangementView {
 								Message::ChannelVolumeChanged.with(node.id)
 							)
 							.step(f32::EPSILON)
-							.style(move |t, s| slider_with_enabled(t, s, node.enabled))
+							.style(if node.enabled {
+								slider::default
+							} else {
+								stylefns::slider_secondary
+							})
 						]
 						.spacing(5)
 						.align_x(Alignment::Center)
@@ -1268,16 +1254,10 @@ impl ArrangementView {
 						let connected = connections.contains(*id);
 
 						button(chevron_up())
-							.style(move |t, s| {
-								button_with_base(
-									t,
-									s,
-									if enabled && connected {
-										button::primary
-									} else {
-										button::secondary
-									},
-								)
+							.style(if enabled && connected {
+								button::primary
+							} else {
+								button::secondary
 							})
 							.padding(0)
 							.on_press(if connected {
@@ -1298,19 +1278,15 @@ impl ArrangementView {
 				&self.arrangement.master().0,
 				|enabled, id| {
 					column![
-						icon_button(text('M'))
-							.on_press(Message::ChannelToggleEnabled(id))
-							.style(move |t, s| {
-								button_with_base(
-									t,
-									s,
-									if enabled {
-										button::primary
-									} else {
-										button::secondary
-									},
-								)
-							}),
+						icon_button(
+							text('M'),
+							if enabled {
+								button::primary
+							} else {
+								button::secondary
+							}
+						)
+						.on_press(Message::ChannelToggleEnabled(id)),
 						space().height(13),
 						space().height(13)
 					]
@@ -1336,47 +1312,35 @@ impl ArrangementView {
 							node,
 							|enabled, id| {
 								column![
-									icon_button(text('M'))
-										.on_press(Message::TrackToggleEnabled(id))
-										.style(move |t, s| {
-											button_with_base(
-												t,
-												s,
-												if enabled {
-													button::primary
-												} else {
-													button::secondary
-												},
-											)
-										}),
-									icon_button(text('S'))
-										.on_press(Message::TrackToggleSolo(id))
-										.style(move |t, s| {
-											button_with_base(
-												t,
-												s,
-												if self.soloed_track == Some(id) {
-													button::warning
-												} else if enabled {
-													button::primary
-												} else {
-													button::secondary
-												},
-											)
-										}),
-									icon_button(x()).on_press(Message::TrackRemove(id)).style(
-										move |t, s| {
-											button_with_base(
-												t,
-												s,
-												if enabled {
-													button::danger
-												} else {
-													button::secondary
-												},
-											)
+									icon_button(
+										text('M'),
+										if enabled {
+											button::primary
+										} else {
+											button::secondary
 										}
 									)
+									.on_press(Message::TrackToggleEnabled(id)),
+									icon_button(
+										text('S'),
+										if self.soloed_track == Some(id) {
+											button::warning
+										} else if enabled {
+											button::primary
+										} else {
+											button::secondary
+										}
+									)
+									.on_press(Message::TrackToggleSolo(id)),
+									icon_button(
+										x(),
+										if enabled {
+											button::danger
+										} else {
+											button::secondary
+										}
+									)
+									.on_press(Message::TrackRemove(id))
 								]
 								.spacing(5)
 								.into()
@@ -1406,33 +1370,25 @@ impl ArrangementView {
 							node,
 							|enabled, id| {
 								column![
-									icon_button(text('M'))
-										.on_press(Message::ChannelToggleEnabled(id))
-										.style(move |t, s| {
-											button_with_base(
-												t,
-												s,
-												if enabled {
-													button::primary
-												} else {
-													button::secondary
-												},
-											)
-										}),
-									space().height(13),
-									icon_button(x()).on_press(Message::ChannelRemove(id)).style(
-										move |t, s| {
-											button_with_base(
-												t,
-												s,
-												if enabled {
-													button::danger
-												} else {
-													button::secondary
-												},
-											)
+									icon_button(
+										text('M'),
+										if enabled {
+											button::primary
+										} else {
+											button::secondary
 										}
 									)
+									.on_press(Message::ChannelToggleEnabled(id)),
+									space().height(13),
+									icon_button(
+										x(),
+										if enabled {
+											button::danger
+										} else {
+											button::secondary
+										}
+									)
+									.on_press(Message::ChannelRemove(id)),
 								]
 								.spacing(5)
 								.into()
@@ -1455,106 +1411,99 @@ impl ArrangementView {
 		)
 		.width(Fill);
 
-		let plugin_picker = styled_combo_box(
-			&self.plugin_descriptors,
-			"Add Plugin",
-			None,
-			Message::PluginLoad,
-		)
-		.width(Fill);
-
 		if let Some(selected) = self.selected_channel {
-			let node = &self.arrangement.node(selected).0;
 			Split::new(
 				mixer_panel,
 				column![
-					plugin_picker,
+					combo_box(
+						&self.plugin_descriptors,
+						"Add Plugin",
+						None,
+						Message::PluginLoad,
+					)
+					.width(Fill),
 					container(horizontal_rule(1)).padding([5, 0]),
 					styled_scrollable_with_direction(
-						dragking::column({
-							node.plugins.iter().enumerate().map(|(i, plugin)| {
-								row![
-									Knob::new(
-										0.0..=1.0,
-										plugin.mix,
-										0.0,
-										1.0,
-										plugin.enabled,
-										Message::PluginMixChanged.with(i)
-									)
-									.radius(TEXT_HEIGHT)
-									.tooltip(((plugin.mix * 100.0) as u8).to_string() + "%"),
-									button(
-										container(
-											text(&*plugin.descriptor.name).wrapping(Wrapping::None)
+						dragking::column(
+							self.arrangement
+								.node(selected)
+								.0
+								.plugins
+								.iter()
+								.enumerate()
+								.map(|(i, plugin)| {
+									row![
+										Knob::new(
+											0.0..=1.0,
+											plugin.mix,
+											0.0,
+											1.0,
+											plugin.enabled,
+											Message::PluginMixChanged.with(i)
 										)
-										.clip(true)
-									)
-									.style(move |t, s| button_with_base(
-										t,
-										s,
-										if plugin.enabled {
+										.radius(TEXT_HEIGHT)
+										.tooltip(((plugin.mix * 100.0) as u8).to_string() + "%"),
+										button(
+											container(
+												text(&*plugin.descriptor.name)
+													.wrapping(Wrapping::None)
+											)
+											.clip(true)
+										)
+										.style(if plugin.enabled {
 											button::primary
 										} else {
 											button::secondary
-										}
-									))
-									.width(Fill)
-									.on_press(Message::ClapHost(
-										ClapHostMessage::MainThread(
-											plugin.id,
-											MainThreadMessage::GuiRequestShow,
-										)
-									)),
-									column![
-										icon_button(text('M'))
-											.on_press(Message::PluginToggleEnabled(i))
-											.style(move |t, s| {
-												button_with_base(
-													t,
-													s,
-													if plugin.enabled {
-														button::primary
-													} else {
-														button::secondary
-													},
-												)
-											}),
-										icon_button(x()).on_press(Message::PluginRemove(i)).style(
-											move |t, s| {
-												button_with_base(
-													t,
-													s,
-													if plugin.enabled {
-														button::danger
-													} else {
-														button::secondary
-													},
-												)
-											}
-										),
-									]
-									.spacing(5),
-									mouse_area(
-										container(
-											grip_vertical()
-												.line_height((LINE_HEIGHT + 10.0) / LINE_HEIGHT)
-										)
-										.style(|t| {
-											container::background(
-												t.extended_palette().background.weak.color,
-											)
-											.border(border::width(1).color(
-												t.extended_palette().background.strong.color,
-											))
 										})
-									)
-									.interaction(Interaction::Grab),
-								]
-								.spacing(5)
-								.into()
-							})
-						})
+										.width(Fill)
+										.on_press(Message::ClapHost(
+											ClapHostMessage::MainThread(
+												plugin.id,
+												MainThreadMessage::GuiRequestShow,
+											)
+										)),
+										column![
+											icon_button(
+												text('M'),
+												if plugin.enabled {
+													button::primary
+												} else {
+													button::secondary
+												}
+											)
+											.on_press(Message::PluginToggleEnabled(i)),
+											icon_button(
+												x(),
+												if plugin.enabled {
+													button::danger
+												} else {
+													button::secondary
+												}
+											)
+											.on_press(Message::PluginRemove(i)),
+										]
+										.spacing(5),
+										mouse_area(
+											container(
+												grip_vertical().line_height(
+													(LINE_HEIGHT + 10.0) / LINE_HEIGHT
+												)
+											)
+											.style(|t| {
+												container::background(
+													t.extended_palette().background.weak.color,
+												)
+												.border(border::width(1).color(
+													t.extended_palette().background.strong.color,
+												))
+											})
+										)
+										.interaction(Interaction::Grab),
+									]
+									.spacing(5)
+									.into()
+								})
+						)
 						.spacing(5)
 						.on_drag(Message::PluginsReordered),
 						Direction::Vertical(Scrollbar::default())
