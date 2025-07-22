@@ -14,7 +14,7 @@ use crate::{
 	},
 };
 use arc_swap::ArcSwap;
-use arrangement::{Arrangement as ArrangementWrapper, NodeType};
+use arrangement::Arrangement as ArrangementWrapper;
 use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
@@ -39,7 +39,7 @@ use iced::{
 };
 use iced_split::{Split, Strategy};
 use log::info;
-use node::Node;
+use node::{Node, NodeType};
 use smol::unblock;
 use std::{
 	cmp::Ordering,
@@ -892,12 +892,10 @@ impl ArrangementView {
 
 		for (idx, channel) in iter_channels {
 			let mixer_node = Mixer::default();
-			let node = Node::new(mixer_node.id());
-
-			load_channel(&node, channel)?;
-
-			channels.insert(idx, mixer_node.id());
+			let id = mixer_node.id();
+			channels.insert(idx, id);
 			arrangement.push_channel(mixer_node);
+			load_channel(&arrangement.node(id).0, channel)?;
 		}
 
 		for (from, to) in reader.iter_connections_track_channel() {
@@ -1261,10 +1259,10 @@ impl ArrangementView {
 		let connect = |enabled: bool, id: NodeId| {
 			selected_channel.map_or_else(
 				|| Element::new(space().height(LINE_HEIGHT)),
-				|(_, connections, ty)| {
+				|(node, connections)| {
 					let selected_channel = self.selected_channel.unwrap();
 
-					if *ty == NodeType::Master || id == selected_channel {
+					if node.ty == NodeType::Master || id == selected_channel {
 						space().height(LINE_HEIGHT).into()
 					} else {
 						let connected = connections.contains(*id);

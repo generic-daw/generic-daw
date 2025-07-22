@@ -1,4 +1,8 @@
-use super::{node::Node, plugin::Plugin, track::Track};
+use super::{
+	node::{Node, NodeType},
+	plugin::Plugin,
+	track::Track,
+};
 use crate::config::Config;
 use bit_set::BitSet;
 use generic_daw_core::{
@@ -13,19 +17,12 @@ use generic_daw_utils::{HoleyVec, NoDebug, ShiftMoveExt as _};
 use smol::channel::{Receiver, Sender};
 use std::path::Path;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum NodeType {
-	Master,
-	Mixer,
-	Track,
-}
-
 #[derive(Debug)]
 pub struct Arrangement {
 	rtstate: RtState,
 
 	tracks: Vec<Track>,
-	nodes: HoleyVec<(Node, BitSet, NodeType)>,
+	nodes: HoleyVec<(Node, BitSet)>,
 	master_node_id: NodeId,
 
 	sender: Sender<Message>,
@@ -43,9 +40,8 @@ impl Arrangement {
 		channels.insert(
 			*master_node_id,
 			(
-				Node::new(master_node_id),
+				Node::new(NodeType::Master, master_node_id),
 				BitSet::default(),
-				NodeType::Master,
 			),
 		);
 
@@ -81,7 +77,7 @@ impl Arrangement {
 	}
 
 	pub fn clear_l_r(&self) {
-		for (node, _, _) in self.nodes.values() {
+		for (node, _) in self.nodes.values() {
 			node.l_r.take();
 		}
 	}
@@ -200,7 +196,7 @@ impl Arrangement {
 		self.sender.try_send(Message::ToggleMetronome).unwrap();
 	}
 
-	pub fn master(&self) -> &(Node, BitSet, NodeType) {
+	pub fn master(&self) -> &(Node, BitSet) {
 		self.node(self.master_node_id)
 	}
 
@@ -239,23 +235,23 @@ impl Arrangement {
 	pub fn channels(&self) -> impl Iterator<Item = &Node> {
 		self.nodes
 			.values()
-			.filter_map(|(node, _, ty)| (*ty == NodeType::Mixer).then_some(node))
+			.filter_map(|(node, _)| (node.ty == NodeType::Mixer).then_some(node))
 	}
 
 	pub fn plugins(&self) -> impl Iterator<Item = PluginId> {
 		self.nodes
 			.values()
-			.flat_map(|(node, _, _)| node.plugins.iter().map(|plugin| plugin.id))
+			.flat_map(|(node, _)| node.plugins.iter().map(|plugin| plugin.id))
 	}
 
-	pub fn node(&self, id: NodeId) -> &(Node, BitSet, NodeType) {
+	pub fn node(&self, id: NodeId) -> &(Node, BitSet) {
 		&self.nodes[*id]
 	}
 
 	pub fn push_channel(&mut self, node: Mixer) {
 		self.nodes.insert(
 			*node.id(),
-			(Node::new(node.id()), BitSet::default(), NodeType::Mixer),
+			(Node::new(NodeType::Mixer, node.id()), BitSet::default()),
 		);
 		self.sender.try_send(Message::Insert(node.into())).unwrap();
 	}
@@ -280,7 +276,7 @@ impl Arrangement {
 		self.tracks.push(track2);
 		self.nodes.insert(
 			*track.id(),
-			(Node::new(track.id()), BitSet::default(), NodeType::Track),
+			(Node::new(NodeType::Track, track.id()), BitSet::default()),
 		);
 		self.sender.try_send(Message::Insert(track.into())).unwrap();
 	}

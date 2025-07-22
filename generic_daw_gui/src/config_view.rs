@@ -325,10 +325,8 @@ impl ConfigView {
 							.then_some(Message::ChangedTheme(Theme::CatppuccinFrappe))
 					)
 				]
-				.align_y(Center)
-			]
-			.push_maybe(self.dirty.then_some(horizontal_rule(1)))
-			.push_maybe(
+				.align_y(Center),
+				self.dirty.then_some(horizontal_rule(1)),
 				self.dirty.then_some(
 					row![
 						container("Changes will only take effect after a project reload!")
@@ -344,8 +342,8 @@ impl ConfigView {
 					]
 					.spacing(5)
 					.height(Shrink),
-				),
-			)
+				)
+			]
 			.spacing(10)
 			.padding(10)
 			.width(530),
