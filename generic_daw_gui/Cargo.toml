@@ -35,8 +35,8 @@ oneshot = "0.1.11"
 rfd = "0.15.4"
 serde = { version = "1.0.219", features = ["derive", "rc"] }
 smol = "2.0.2"
-toml = "0.9.2"
+toml = "0.9.3"
 walkdir = "2.5.0"
 
 # https://github.com/PolyMeilex/rfd/pull/255
-wayland-backend = { version = "0.3.10", features = ["dlopen"] }
+wayland-backend = { version = "0.3.11", features = ["dlopen"] }

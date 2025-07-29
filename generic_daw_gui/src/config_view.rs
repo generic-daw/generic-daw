@@ -161,7 +161,7 @@ impl ConfigView {
 					"Sample Paths",
 					horizontal_space(),
 					button(plus())
-						.style(button_with_radius(button::primary, 0))
+						.style(button_with_radius(button::primary, 5))
 						.padding(0)
 						.on_press(Message::AddSamplePathFileDialog),
 					space().width(5)
@@ -177,7 +177,7 @@ impl ConfigView {
 									text(path.to_string_lossy()).font(Font::MONOSPACE),
 									horizontal_space(),
 									button(x())
-										.style(button_with_radius(button::danger, 0))
+										.style(button_with_radius(button::danger, 5))
 										.padding(0)
 										.on_press(Message::RemoveSamplePath(idx))
 								]
@@ -197,7 +197,7 @@ impl ConfigView {
 					"CLAP Plugin Paths",
 					horizontal_space(),
 					button(plus())
-						.style(button_with_radius(button::primary, 0))
+						.style(button_with_radius(button::primary, 5))
 						.padding(0)
 						.on_press(Message::AddClapPathFileDialog),
 					space().width(5)
@@ -213,7 +213,7 @@ impl ConfigView {
 									text(path.to_string_lossy()).font(Font::MONOSPACE),
 									horizontal_space(),
 									button(x())
-										.style(button_with_radius(button::danger, 0))
+										.style(button_with_radius(button::danger, 5))
 										.padding(0)
 										.on_press(Message::RemoveClapPath(idx))
 								]
@@ -232,12 +232,14 @@ impl ConfigView {
 				row![
 					row![
 						button(mic())
-							.style(button_with_radius(button::primary, 0))
+							.style(button_with_radius(button::primary, border::left(5)))
+							.padding(5)
 							.on_press_maybe(
 								(self.tab != Tab::Input).then_some(Message::ChangedTab(Tab::Input))
 							),
 						button(volume_2())
-							.style(button_with_radius(button::primary, 0))
+							.style(button_with_radius(button::primary, border::right(5)))
+							.padding(5)
 							.on_press_maybe(
 								(self.tab != Tab::Output)
 									.then_some(Message::ChangedTab(Tab::Output))
@@ -260,9 +262,12 @@ impl ConfigView {
 							})
 							.placeholder("Default")
 							.width(222)
-							.style(pick_list_with_radius(pick_list::default, border::left(5))),
+							.style(pick_list_with_radius(
+								pick_list::default,
+								border::top_left(5)
+							)),
 							button(rotate_ccw())
-								.style(button_with_radius(button::primary, 0))
+								.style(button_with_radius(button::primary, border::top_right(5)))
 								.padding(5)
 								.on_press_maybe(
 									device.name.as_deref().map(|_| Message::ChangedName(None))
@@ -279,7 +284,7 @@ impl ConfigView {
 							)
 							.placeholder("Default")
 							.width(222)
-							.style(pick_list_with_radius(pick_list::default, border::left(5))),
+							.style(pick_list_with_radius(pick_list::default, 0)),
 							button(rotate_ccw())
 								.style(button_with_radius(button::primary, 0))
 								.padding(5)
@@ -298,9 +303,12 @@ impl ConfigView {
 							)
 							.placeholder("Default")
 							.width(222)
-							.style(pick_list_with_radius(pick_list::default, border::left(5))),
+							.style(pick_list_with_radius(
+								pick_list::default,
+								border::bottom_left(5)
+							)),
 							button(rotate_ccw())
-								.style(button_with_radius(button::primary, 0))
+								.style(button_with_radius(button::primary, border::bottom_right(5)))
 								.padding(5)
 								.on_press_maybe(
 									device.buffer_size.map(|_| Message::ChangedBufferSize(None))
@@ -339,7 +347,7 @@ impl ConfigView {
 					.width(222)
 					.style(pick_list_with_radius(pick_list::default, border::left(5))),
 					button(rotate_ccw())
-						.style(button_with_radius(button::primary, 0))
+						.style(button_with_radius(button::primary, border::right(5)))
 						.padding(5)
 						.on_press_maybe(
 							(self.config.theme != theme::Theme::CatppuccinFrappe)
@@ -355,15 +363,14 @@ impl ConfigView {
 							.style(|t| container::warning(t).border(border::rounded(f32::INFINITY))),
 						horizontal_space(),
 						button(save())
-							.style(button_with_radius(button::primary, 0))
+							.style(button_with_radius(button::primary, border::left(5)))
 							.padding(5)
 							.on_press(Message::WriteConfig),
 						button(rotate_ccw())
-							.style(button_with_radius(button::primary, 0))
+							.style(button_with_radius(button::primary, border::right(5)))
 							.padding(5)
 							.on_press(Message::ResetConfig)
 					]
-					.spacing(5)
 					.height(Shrink),
 				)
 			]

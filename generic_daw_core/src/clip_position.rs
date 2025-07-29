@@ -1,6 +1,6 @@
 use crate::MusicalTime;
 use atomig::Atomic;
-use std::sync::atomic::Ordering::{AcqRel, Acquire, Release};
+use std::sync::atomic::Ordering::Relaxed;
 
 #[derive(Debug)]
 pub struct ClipPosition {
@@ -31,17 +31,17 @@ impl ClipPosition {
 
 	#[must_use]
 	pub fn start(&self) -> MusicalTime {
-		self.start.load(Acquire)
+		self.start.load(Relaxed)
 	}
 
 	#[must_use]
 	pub fn end(&self) -> MusicalTime {
-		self.end.load(Acquire)
+		self.end.load(Relaxed)
 	}
 
 	#[must_use]
 	pub fn offset(&self) -> MusicalTime {
-		self.offset.load(Acquire)
+		self.offset.load(Relaxed)
 	}
 
 	pub fn trim_start_to(&self, mut new_start: MusicalTime) {
@@ -51,27 +51,27 @@ impl ClipPosition {
 		new_start = new_start.clamp(start.saturating_sub(offset), end - MusicalTime::TICK);
 		let diff = start.abs_diff(new_start);
 		if start < new_start {
-			self.offset.fetch_add(diff, AcqRel);
+			self.offset.fetch_add(diff, Relaxed);
 		} else {
-			self.offset.fetch_sub(diff, AcqRel);
+			self.offset.fetch_sub(diff, Relaxed);
 		}
-		self.start.store(new_start, Release);
+		self.start.store(new_start, Relaxed);
 	}
 
 	pub fn trim_end_to(&self, mut new_end: MusicalTime) {
 		let start = self.start();
 		new_end = new_end.max(start + MusicalTime::TICK);
-		self.end.store(new_end, Release);
+		self.end.store(new_end, Relaxed);
 	}
 
 	pub fn move_to(&self, new_start: MusicalTime) {
 		let start = self.start();
 		let diff = start.abs_diff(new_start);
 		if start < new_start {
-			self.end.fetch_add(diff, AcqRel);
+			self.end.fetch_add(diff, Relaxed);
 		} else {
-			self.end.fetch_sub(diff, AcqRel);
+			self.end.fetch_sub(diff, Relaxed);
 		}
-		self.start.store(new_start, Release);
+		self.start.store(new_start, Relaxed);
 	}
 }

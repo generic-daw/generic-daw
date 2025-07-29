@@ -29,12 +29,12 @@ macro_rules! unique_id {
             impl Id {
                 pub fn unique() -> Self {
                     Self(
-                        ID.fetch_add(1, ::std::sync::atomic::Ordering::AcqRel),
+                        ID.fetch_add(1, ::std::sync::atomic::Ordering::Relaxed),
                     )
                 }
 
                 pub fn is_last(self) -> bool {
-                    self.0 + 1 == ID.load(::std::sync::atomic::Ordering::Acquire)
+                    self.0 + 1 == ID.load(::std::sync::atomic::Ordering::Relaxed)
                 }
             }
 

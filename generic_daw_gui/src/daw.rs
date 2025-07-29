@@ -357,16 +357,16 @@ impl Daw {
 							.width(LINE_HEIGHT)
 							.align_x(Alignment::Center)
 						)
-						.padding([5, 7])
 						.style(button_with_radius(button::primary, border::left(5)))
+						.padding([5, 7])
 						.on_press(Message::TogglePlayback),
 						button(
 							container(square())
 								.width(LINE_HEIGHT)
 								.align_x(Alignment::Center)
 						)
-						.padding([5, 7])
 						.style(button_with_radius(button::primary, border::right(5)))
+						.padding([5, 7])
 						.on_press(Message::Stop),
 					],
 					number_input(
@@ -384,7 +384,6 @@ impl Daw {
 						Message::ChangedBpmText
 					),
 					button(row![AnimatedDot::new(fill), AnimatedDot::new(!fill)].spacing(5))
-						.padding(8)
 						.style(button_with_radius(
 							if self.arrangement_view.arrangement.rtstate().metronome {
 								button::primary
@@ -393,6 +392,7 @@ impl Daw {
 							},
 							5
 						))
+						.padding(8)
 						.on_press(Message::ToggleMetronome),
 					horizontal_space(),
 					row![
