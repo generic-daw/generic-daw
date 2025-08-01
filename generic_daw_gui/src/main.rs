@@ -1,6 +1,7 @@
 use daw::Daw;
 use iced::{Result, daemon};
 use icons::LUCIDE_BYTES;
+use log::LevelFilter;
 use wayland_backend as _;
 
 mod arrangement_view;
@@ -17,8 +18,11 @@ mod theme;
 mod widget;
 
 fn main() -> Result {
-	#[cfg(feature = "env_logger")]
-	env_logger::init();
+	env_logger::builder()
+		.filter_module("clap_host", LevelFilter::Warn)
+		.filter_module("generic_daw_gui", LevelFilter::Warn)
+		.parse_default_env()
+		.init();
 
 	daemon(Daw::create, Daw::update, Daw::view)
 		.title(Daw::title)

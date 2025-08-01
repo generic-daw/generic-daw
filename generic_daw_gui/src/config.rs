@@ -1,5 +1,6 @@
 use crate::theme::Theme;
 use generic_daw_core::clap_host::default_clap_paths;
+use log::warn;
 use serde::{Deserialize, Serialize};
 use std::{
 	fs::{read_to_string, write},
@@ -8,8 +9,14 @@ use std::{
 	sync::{Arc, LazyLock},
 };
 
-pub static CONFIG_PATH: LazyLock<PathBuf> =
-	LazyLock::new(|| dirs::config_dir().unwrap().join("generic_daw.toml"));
+pub static CONFIG_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+	dirs::config_dir()
+		.or_else(|| {
+			warn!("can't find the system's config dir!");
+			None
+		})
+		.map(|path| path.join("generic_daw.toml"))
+});
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
@@ -71,7 +78,11 @@ fn default_sample_paths() -> Vec<Arc<Path>> {
 impl Config {
 	#[must_use]
 	pub fn read() -> Self {
-		let config = read_to_string(&*CONFIG_PATH);
+		let Some(config_path) = &*CONFIG_PATH else {
+			return Self::default();
+		};
+
+		let config = read_to_string(config_path);
 
 		let read =
 			toml::from_str::<Self>(config.as_deref().unwrap_or_default()).unwrap_or_default();
@@ -84,6 +95,10 @@ impl Config {
 	}
 
 	pub fn write(&self) {
-		write(&*CONFIG_PATH, toml::to_string(self).unwrap()).unwrap();
+		let Some(config_path) = &*CONFIG_PATH else {
+			return;
+		};
+
+		write(config_path, toml::to_string(self).unwrap()).unwrap();
 	}
 }

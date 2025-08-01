@@ -16,7 +16,7 @@ arc-swap = "1.7.1"
 bit-set = "0.8.0"
 dirs = "6.0.0"
 dragking = { git = "https://github.com/edwloef/dragking.git", branch = "generic-daw" }
-env_logger = { version = "0.11.8", optional = true }
+env_logger = { version = "0.11.8", default-features = false }
 fragile = "2.0.1"
 iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", default-features = false, features = [
 	"advanced",
@@ -35,7 +35,7 @@ oneshot = "0.1.11"
 rfd = "0.15.4"
 serde = { version = "1.0.219", features = ["derive", "rc"] }
 smol = "2.0.2"
-toml = "0.9.3"
+toml = "0.9.4"
 walkdir = "2.5.0"
 
 # https://github.com/PolyMeilex/rfd/pull/255
