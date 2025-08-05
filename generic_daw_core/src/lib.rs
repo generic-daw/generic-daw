@@ -81,6 +81,7 @@ pub fn build_input_stream(
 		device.supported_input_configs().unwrap(),
 		sample_rate,
 		buffer_size,
+		None,
 	);
 
 	info!("starting input stream with config {config:?}");
@@ -88,7 +89,19 @@ pub fn build_input_stream(
 	let stream = device
 		.build_input_stream(
 			&config,
-			move |data, _| sender.try_send(data.into()).unwrap(),
+			move |data, _| {
+				let data = if config.channels <= 1 {
+					data.iter().flat_map(|&x| [x, x]).collect()
+				} else if config.channels == 2 {
+					data.into()
+				} else {
+					data.chunks(config.channels as usize)
+						.flat_map(|x| &x[..2])
+						.copied()
+						.collect()
+				};
+				sender.try_send(data).unwrap();
+			},
 			|err| panic!("{err}"),
 			None,
 		)
@@ -118,6 +131,7 @@ pub fn build_output_stream(
 		device.supported_output_configs().unwrap(),
 		sample_rate,
 		buffer_size,
+		Some(2),
 	);
 
 	let (mut ctx, node, rtstate, sender, receiver) =
@@ -143,10 +157,11 @@ fn choose_config(
 	configs: impl IntoIterator<Item = SupportedStreamConfigRange>,
 	sample_rate: u32,
 	buffer_size: u32,
+	channels: Option<u16>,
 ) -> StreamConfig {
 	let config = configs
 		.into_iter()
-		.filter(|config| config.channels() == 2)
+		.filter(|config| channels.is_none_or(|channels| config.channels() == channels))
 		.min_by(|l, r| {
 			compare_by_sample_rate(l, r, sample_rate)
 				.then_with(|| compare_by_buffer_size(l, r, buffer_size))
@@ -162,7 +177,7 @@ fn choose_config(
 	};
 
 	StreamConfig {
-		channels: 2,
+		channels: config.channels(),
 		sample_rate,
 		buffer_size,
 	}
