@@ -62,12 +62,11 @@ impl Arrangement {
 
 	pub fn update(&mut self, message: Update) {
 		match message {
-			Update::LR(node, [old_l, old_r]) => {
-				self.node(node)
-					.0
-					.l_r
-					.update(|[new_l, new_r]| [old_l.max(new_l), old_r.max(new_r)]);
-			}
+			Update::LR(node, [old_l, old_r]) => self
+				.node(node)
+				.0
+				.l_r
+				.update(|[new_l, new_r]| [old_l.max(new_l), old_r.max(new_r)]),
 			Update::Sample(ver, sample) => {
 				if ver.is_last() {
 					self.rtstate.sample = sample;

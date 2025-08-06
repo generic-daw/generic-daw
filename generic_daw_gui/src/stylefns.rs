@@ -1,6 +1,7 @@
 use iced::{
-	Theme,
+	Border, Theme,
 	border::Radius,
+	overlay::menu,
 	widget::{button, pick_list, slider},
 };
 
@@ -41,6 +42,18 @@ pub fn pick_list_with_radius(
 		let mut style = f(t, s);
 		style.border.radius = r;
 		style.placeholder_color = t.extended_palette().background.weak.text;
+		style
+	}
+}
+
+pub fn menu_with_border(
+	f: impl Fn(&Theme) -> menu::Style,
+	r: impl Into<Border>,
+) -> impl Fn(&Theme) -> menu::Style {
+	let r = r.into();
+	move |t| {
+		let mut style = f(t);
+		style.border = r;
 		style
 	}
 }

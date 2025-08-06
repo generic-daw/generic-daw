@@ -19,7 +19,6 @@ pub enum Theme {
 	TokyoNightStorm,
 	TokyoNightLight,
 	KanagawaWave,
-	KanagawaDragon,
 	KanagawaLotus,
 	Moonfly,
 	Nightfly,
@@ -46,7 +45,6 @@ impl From<Theme> for iced::Theme {
 			Theme::TokyoNightStorm => Self::TokyoNightStorm,
 			Theme::TokyoNightLight => Self::TokyoNightLight,
 			Theme::KanagawaWave => Self::KanagawaWave,
-			Theme::KanagawaDragon => Self::KanagawaDragon,
 			Theme::KanagawaLotus => Self::KanagawaLotus,
 			Theme::Moonfly => Self::Moonfly,
 			Theme::Nightfly => Self::Nightfly,
@@ -77,13 +75,12 @@ impl TryFrom<iced::Theme> for Theme {
 			iced::Theme::TokyoNightStorm => Ok(Self::TokyoNightStorm),
 			iced::Theme::TokyoNightLight => Ok(Self::TokyoNightLight),
 			iced::Theme::KanagawaWave => Ok(Self::KanagawaWave),
-			iced::Theme::KanagawaDragon => Ok(Self::KanagawaDragon),
 			iced::Theme::KanagawaLotus => Ok(Self::KanagawaLotus),
 			iced::Theme::Moonfly => Ok(Self::Moonfly),
 			iced::Theme::Nightfly => Ok(Self::Nightfly),
 			iced::Theme::Oxocarbon => Ok(Self::Oxocarbon),
 			iced::Theme::Ferra => Ok(Self::Ferra),
-			iced::Theme::Custom(..) => Err(()),
+			_ => Err(()),
 		}
 	}
 }

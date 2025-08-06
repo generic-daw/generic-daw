@@ -1,11 +1,14 @@
 use crate::{
 	icons::{LUCIDE_FONT, move_vertical, plus},
-	stylefns::button_with_radius,
+	stylefns::{button_with_radius, menu_with_border},
 	widget::{DragHandle, LINE_HEIGHT},
 };
 use iced::{
-	Alignment, Element, Font, Shrink, Theme,
+	Alignment, Element, Font,
+	Length::Fill,
+	Shrink, Theme,
 	border::{self, Radius},
+	overlay::menu,
 	widget::{
 		Button, PickList, Scrollable, Space, Text, button, container, pick_list, row,
 		scrollable::{self, Direction},
@@ -49,13 +52,14 @@ where
 		DragHandle::new(
 			container(move_vertical())
 				.style(|t| {
-					container::background(t.extended_palette().background.weak.color).border(
+					container::background(t.extended_palette().background.weakest.color).border(
 						border::width(1)
-							.color(t.extended_palette().background.strongest.color)
+							.color(t.extended_palette().background.strong.color)
 							.rounded(border::left(5)),
 					)
 				})
-				.padding([5, 0]),
+				.padding([5, 0])
+				.height(Fill),
 			current,
 			default,
 			drag_update
@@ -70,6 +74,7 @@ where
 			.width((max_digits as f32).mul_add(10.0, 14.0))
 			.on_input(text_update)
 	]
+	.height(Shrink)
 	.into()
 }
 
@@ -101,22 +106,24 @@ where
 	V: Borrow<T> + 'a,
 	Message: Clone,
 {
-	pick_list(options, selected, on_selected).handle(pick_list::Handle::Dynamic {
-		closed: pick_list::Icon {
-			font: LUCIDE_FONT,
-			code_point: const { char::from_u32(57457).unwrap() },
-			size: None,
-			line_height: 1.0.into(),
-			shaping: Shaping::Advanced,
-		},
-		open: pick_list::Icon {
-			font: LUCIDE_FONT,
-			code_point: const { char::from_u32(57460).unwrap() },
-			size: None,
-			line_height: 1.0.into(),
-			shaping: Shaping::Advanced,
-		},
-	})
+	pick_list(options, selected, on_selected)
+		.handle(pick_list::Handle::Dynamic {
+			closed: pick_list::Icon {
+				font: LUCIDE_FONT,
+				code_point: const { char::from_u32(57457).unwrap() },
+				size: None,
+				line_height: 1.0.into(),
+				shaping: Shaping::Advanced,
+			},
+			open: pick_list::Icon {
+				font: LUCIDE_FONT,
+				code_point: const { char::from_u32(57460).unwrap() },
+				size: None,
+				line_height: 1.0.into(),
+				shaping: Shaping::Advanced,
+			},
+		})
+		.menu_style(menu_with_border(menu::default, border::width(0)))
 }
 
 pub fn styled_scrollable_with_direction<'a, Message>(

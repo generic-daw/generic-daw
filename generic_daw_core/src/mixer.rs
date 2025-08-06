@@ -93,12 +93,8 @@ impl Mixer {
 			Action::NodeToggleEnabled => self.enabled ^= true,
 			Action::NodeVolumeChanged(volume) => self.volume = volume,
 			Action::NodePanChanged(pan) => self.pan = pan,
-			Action::PluginLoad(processor) => {
-				self.plugins.push(Plugin::new(*processor));
-			}
-			Action::PluginRemove(index) => {
-				self.plugins.remove(index);
-			}
+			Action::PluginLoad(processor) => self.plugins.push(Plugin::new(*processor)),
+			Action::PluginRemove(index) => _ = self.plugins.remove(index),
 			Action::PluginMoved(from, to) => self.plugins.shift_move(from, to),
 			Action::PluginToggleEnabled(index) => self.plugins[index].enabled ^= true,
 			Action::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,

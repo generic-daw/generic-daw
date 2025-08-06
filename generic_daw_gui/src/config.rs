@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{
 	fs::{read_to_string, write},
 	io,
+	num::NonZero,
 	path::{Path, PathBuf},
 	sync::{Arc, LazyLock},
 };
@@ -18,7 +19,7 @@ pub static CONFIG_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
 		.map(|path| path.join("generic_daw.toml"))
 });
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
 pub struct Config {
 	pub sample_paths: Vec<Arc<Path>>,
@@ -44,7 +45,7 @@ impl Default for Config {
 	}
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
 pub struct Device {
 	pub name: Option<String>,
@@ -52,18 +53,18 @@ pub struct Device {
 	pub buffer_size: Option<u32>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
 pub struct Autosave {
 	pub enabled: bool,
-	pub interval: u64,
+	pub interval: NonZero<u64>,
 }
 
 impl Default for Autosave {
 	fn default() -> Self {
 		Self {
 			enabled: false,
-			interval: 600,
+			interval: NonZero::new(600).unwrap(),
 		}
 	}
 }

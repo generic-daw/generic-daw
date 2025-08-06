@@ -15,7 +15,7 @@ use iced::{
 	},
 };
 use rfd::AsyncFileDialog;
-use std::{path::Path, sync::Arc};
+use std::{num::NonZero, path::Path, sync::Arc};
 
 static COMMON_SAMPLE_RATES: &[u32] = &[44_100, 48_000, 88_200, 96_000, 176_400, 192_000];
 static COMMON_BUFFER_SIZES: &[u32] = &[16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192];
@@ -39,7 +39,7 @@ pub enum Message {
 	ChangedSampleRate(Option<u32>),
 	ChangedBufferSize(Option<u32>),
 	ToggledAutosave,
-	ChangedAutosaveInterval(u64),
+	ChangedAutosaveInterval(NonZero<u64>),
 	ChangedAutosaveIntervalText(String),
 	ToggledOpenLastProject,
 	ChangedTheme(Theme),
@@ -48,17 +48,17 @@ pub enum Message {
 }
 
 pub struct ConfigView {
+	prev_config: Config,
 	config: Config,
 	tab: Tab,
-	dirty: bool,
 }
 
 impl ConfigView {
-	pub fn new(config: Config) -> Self {
+	pub fn new(prev_config: Config) -> Self {
 		Self {
-			config,
+			config: prev_config.clone(),
+			prev_config,
 			tab: Tab::Output,
-			dirty: false,
 		}
 	}
 
@@ -70,76 +70,40 @@ impl ConfigView {
 					.map(|p| p.path().into())
 					.map(Message::AddSamplePath);
 			}
-			Message::AddSamplePath(path) => {
-				self.config.sample_paths.push(path);
-				self.dirty = true;
-			}
-			Message::RemoveSamplePath(idx) => {
-				self.config.sample_paths.remove(idx);
-				self.dirty = true;
-			}
+			Message::AddSamplePath(path) => self.config.sample_paths.push(path),
+			Message::RemoveSamplePath(idx) => _ = self.config.sample_paths.remove(idx),
 			Message::AddClapPathFileDialog => {
 				return Task::future(AsyncFileDialog::new().pick_folder())
 					.and_then(Task::done)
 					.map(|p| p.path().into())
 					.map(Message::AddClapPath);
 			}
-			Message::AddClapPath(path) => {
-				self.config.clap_paths.push(path);
-				self.dirty = true;
-			}
-			Message::RemoveClapPath(idx) => {
-				self.config.clap_paths.remove(idx);
-				self.dirty = true;
-			}
+			Message::AddClapPath(path) => self.config.clap_paths.push(path),
+			Message::RemoveClapPath(idx) => _ = self.config.clap_paths.remove(idx),
 			Message::ChangedTab(tab) => self.tab = tab,
-			Message::ChangedName(name) => {
-				self.delegate_device_update(|device| {
-					device.name = name;
-				});
-				self.dirty = true;
-			}
-			Message::ChangedSampleRate(sample_rate) => {
-				self.delegate_device_update(|device| {
-					device.sample_rate = sample_rate;
-				});
-				self.dirty = true;
-			}
-			Message::ChangedBufferSize(buffer_size) => {
-				self.delegate_device_update(|device| {
-					device.buffer_size = buffer_size;
-				});
-				self.dirty = true;
-			}
-			Message::ToggledAutosave => {
-				self.config.autosave.enabled ^= true;
-				self.dirty = true;
-			}
-			Message::ChangedAutosaveInterval(interval) => {
-				self.config.autosave.interval = interval;
-				self.dirty = true;
-			}
+			Message::ChangedName(name) => self.with_device_mut(|device| {
+				device.name = name;
+			}),
+			Message::ChangedSampleRate(sample_rate) => self.with_device_mut(|device| {
+				device.sample_rate = sample_rate;
+			}),
+			Message::ChangedBufferSize(buffer_size) => self.with_device_mut(|device| {
+				device.buffer_size = buffer_size;
+			}),
+			Message::ToggledAutosave => self.config.autosave.enabled ^= true,
+			Message::ChangedAutosaveInterval(interval) => self.config.autosave.interval = interval,
 			Message::ChangedAutosaveIntervalText(text) => {
 				if let Ok(interval) = text.parse() {
 					return self.update(Message::ChangedAutosaveInterval(interval));
 				}
 			}
-			Message::ToggledOpenLastProject => {
-				self.config.open_last_project ^= true;
-				self.dirty = true;
-			}
-			Message::ChangedTheme(theme) => {
-				self.config.theme = theme.try_into().unwrap();
-				self.dirty = true;
-			}
+			Message::ToggledOpenLastProject => self.config.open_last_project ^= true,
+			Message::ChangedTheme(theme) => self.config.theme = theme.try_into().unwrap(),
 			Message::WriteConfig => {
 				self.config.write();
-				self.dirty = false;
+				self.prev_config = self.config.clone();
 			}
-			Message::ResetConfig => {
-				self.config = Config::read();
-				self.dirty = false;
-			}
+			Message::ResetConfig => self.config = self.prev_config.clone(),
 		}
 
 		Task::none()
@@ -189,7 +153,9 @@ impl ConfigView {
 				)
 				.style(|t| {
 					container::background(t.extended_palette().background.weak.color).border(
-						border::width(1).color(t.extended_palette().background.strong.color),
+						border::width(1)
+							.color(t.extended_palette().background.strong.color)
+							.rounded(5),
 					)
 				}),
 				horizontal_rule(1),
@@ -225,7 +191,9 @@ impl ConfigView {
 				)
 				.style(|t| {
 					container::background(t.extended_palette().background.weak.color).border(
-						border::width(1).color(t.extended_palette().background.strong.color),
+						border::width(1)
+							.color(t.extended_palette().background.strong.color)
+							.rounded(5),
 					)
 				}),
 				horizontal_rule(1),
@@ -252,7 +220,7 @@ impl ConfigView {
 					}
 				]
 				.align_y(Center),
-				self.delegate_device_view(input_devices, output_devices, |device, devices| {
+				self.with_device(input_devices, output_devices, |device, devices| {
 					column![
 						row![
 							"Name: ",
@@ -323,10 +291,12 @@ impl ConfigView {
 						.label("Autosave every ")
 						.on_toggle(|_| Message::ToggledAutosave),
 					number_input(
-						self.config.autosave.interval as usize,
+						self.config.autosave.interval.get() as usize,
 						600,
 						3,
-						|x| Message::ChangedAutosaveInterval(x as u64),
+						|x| Message::ChangedAutosaveInterval(
+							NonZero::new(x as u64).unwrap_or(NonZero::<u64>::MIN)
+						),
 						Message::ChangedAutosaveIntervalText
 					),
 					" s"
@@ -355,8 +325,8 @@ impl ConfigView {
 						)
 				]
 				.align_y(Center),
-				self.dirty.then_some(horizontal_rule(1)),
-				self.dirty.then_some(
+				(self.config != self.prev_config).then_some(horizontal_rule(1)),
+				(self.config != self.prev_config).then_some(
 					row![
 						container("Changes will only take effect after a project reload!")
 							.padding([5, 10])
@@ -386,14 +356,7 @@ impl ConfigView {
 		.into()
 	}
 
-	fn delegate_device_update<T>(&mut self, f: impl FnOnce(&mut Device) -> T) -> T {
-		match self.tab {
-			Tab::Input => f(&mut self.config.input_device),
-			Tab::Output => f(&mut self.config.output_device),
-		}
-	}
-
-	fn delegate_device_view<'a, T>(
+	fn with_device<'a, T>(
 		&'a self,
 		input_devices: &'a [String],
 		output_devices: &'a [String],
@@ -402,6 +365,13 @@ impl ConfigView {
 		match self.tab {
 			Tab::Input => f(&self.config.input_device, input_devices),
 			Tab::Output => f(&self.config.output_device, output_devices),
+		}
+	}
+
+	fn with_device_mut<T>(&mut self, f: impl FnOnce(&mut Device) -> T) -> T {
+		match self.tab {
+			Tab::Input => f(&mut self.config.input_device),
+			Tab::Output => f(&mut self.config.output_device),
 		}
 	}
 }

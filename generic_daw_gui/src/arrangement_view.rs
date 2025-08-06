@@ -3,7 +3,7 @@ use crate::{
 	components::{circle_plus, icon_button, space, styled_scrollable_with_direction},
 	config::Config,
 	icons::{chevron_up, grip_vertical, x},
-	stylefns,
+	stylefns::{self, menu_with_border},
 	widget::{
 		AnimatedDot, Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob,
 		LINE_HEIGHT, MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll,
@@ -26,6 +26,7 @@ use generic_daw_utils::{EnumDispatcher, NoDebug, Vec2, hash_reader};
 use iced::{
 	Alignment, Element, Fill, Function as _, Size, Subscription, Task, border,
 	mouse::Interaction,
+	overlay::menu,
 	padding,
 	widget::{
 		button, column, combo_box, container, horizontal_rule, mouse_area, row,
@@ -1421,6 +1422,7 @@ impl ArrangementView {
 						None,
 						Message::PluginLoad,
 					)
+					.menu_style(menu_with_border(menu::default, border::width(0)))
 					.width(Fill),
 					container(horizontal_rule(1)).padding([5, 0]),
 					styled_scrollable_with_direction(
