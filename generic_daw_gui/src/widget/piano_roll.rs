@@ -285,25 +285,24 @@ where
 			}
 			State::DraggingNote(..) => Interaction::Grabbing,
 			State::DeletingNotes => Interaction::NoDrop,
-			State::None => {
-				cursor
-					.position_in(layout.bounds())
-					.map_or_else(Interaction::default, |cursor| {
-						self.notes
-							.iter()
-							.map(|note| self.note_bounds(note))
-							.rfind(|note_bounds| note_bounds.contains(cursor))
-							.map_or_else(Interaction::default, |note_bounds| {
-								let x = cursor.x - note_bounds.x;
+			State::None => cursor
+				.position_in(layout.bounds())
+				.and_then(|cursor| {
+					self.notes
+						.iter()
+						.map(|note| self.note_bounds(note))
+						.rfind(|note_bounds| note_bounds.contains(cursor))
+						.map(|note_bounds| {
+							let x = cursor.x - note_bounds.x;
 
-								if x < 10.0 || note_bounds.width - x < 10.0 {
-									Interaction::ResizingHorizontally
-								} else {
-									Interaction::Grab
-								}
-							})
-					})
-			}
+							if x < 10.0 || note_bounds.width - x < 10.0 {
+								Interaction::ResizingHorizontally
+							} else {
+								Interaction::Grab
+							}
+						})
+				})
+				.unwrap_or_default(),
 		}
 	}
 }
