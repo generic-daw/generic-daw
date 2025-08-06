@@ -12,7 +12,7 @@ use std::{ops::Deref as _, sync::Arc, time::Duration};
 #[derive(Clone, Debug)]
 pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
-	TickTimer(usize, usize),
+	TickTimer(usize, u32),
 	Opened(Arc<Fragile<GuiExt>>, Receiver<MainThreadMessage>),
 	GuiRequestShow(Option<Id>, Arc<Fragile<GuiExt>>),
 	GuiRequestResize((Id, Size)),
@@ -30,11 +30,9 @@ impl ClapHost {
 	pub fn update(&mut self, message: Message) -> Task<Message> {
 		match message {
 			Message::MainThread(id, msg) => return self.main_thread_message(id, msg),
-			Message::TickTimer(id, timer_id) => self
-				.plugins
-				.get_mut(id)
-				.unwrap()
-				.tick_timer(timer_id as u32),
+			Message::TickTimer(id, timer_id) => {
+				self.plugins.get_mut(id).unwrap().tick_timer(timer_id);
+			}
 			Message::Opened(gui, receiver) => {
 				let gui = Arc::into_inner(gui).unwrap().into_inner();
 				let id = gui.plugin_id();
@@ -193,7 +191,7 @@ impl ClapHost {
 							every(v)
 								.with(k)
 								.with(id)
-								.map(|(id, (k, _))| Message::TickTimer(id, k))
+								.map(|(id, (k, _))| Message::TickTimer(id, k as u32))
 						})
 				})
 				.chain([
