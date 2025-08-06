@@ -6,6 +6,7 @@ mod no_debug;
 mod rotate_concat_ext;
 mod shift_move_ext;
 mod unique_id;
+mod variants;
 mod vec2;
 
 pub use enum_dispatcher::EnumDispatcher;

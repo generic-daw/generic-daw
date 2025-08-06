@@ -3,11 +3,11 @@ use crate::{
 	config::{Config, Device},
 	icons::{mic, plus, rotate_ccw, save, volume_2, x},
 	stylefns::{button_with_radius, pick_list_with_radius},
-	theme,
+	theme::Theme,
 	widget::LINE_HEIGHT,
 };
 use iced::{
-	Center, Element, Font, Shrink, Task, Theme, border,
+	Center, Element, Font, Shrink, Task, border,
 	widget::{
 		button, column, container, horizontal_rule, horizontal_space, pick_list, row,
 		scrollable::{Direction, Scrollbar},
@@ -98,7 +98,7 @@ impl ConfigView {
 				}
 			}
 			Message::ToggledOpenLastProject => self.config.open_last_project ^= true,
-			Message::ChangedTheme(theme) => self.config.theme = theme.try_into().unwrap(),
+			Message::ChangedTheme(theme) => self.config.theme = theme,
 			Message::WriteConfig => {
 				self.config.write();
 				self.prev_config = self.config.clone();
@@ -310,8 +310,8 @@ impl ConfigView {
 					"Theme: ",
 					horizontal_space(),
 					pick_list_custom_handle(
-						Theme::ALL,
-						Some::<Theme>(self.config.theme.into()),
+						Theme::VARIANTS,
+						Some(self.config.theme),
 						Message::ChangedTheme
 					)
 					.width(222)
@@ -320,7 +320,7 @@ impl ConfigView {
 						.style(button_with_radius(button::primary, border::right(5)))
 						.padding(5)
 						.on_press_maybe(
-							(self.config.theme != theme::Theme::CatppuccinFrappe)
+							(self.config.theme != Theme::CatppuccinFrappe)
 								.then_some(Message::ChangedTheme(Theme::CatppuccinFrappe))
 						)
 				]
