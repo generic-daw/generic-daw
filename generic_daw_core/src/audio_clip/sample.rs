@@ -1,4 +1,4 @@
-use crate::Resampler;
+use crate::{LOD_LEVELS, Resampler};
 use generic_daw_utils::{NoDebug, hash_reader};
 use log::info;
 use std::{fs::File, hash::DefaultHasher, path::Path, sync::Arc};
@@ -14,7 +14,7 @@ use symphonia::core::{
 #[derive(Debug)]
 pub struct Sample {
 	pub(crate) audio: NoDebug<Box<[f32]>>,
-	pub lods: NoDebug<Box<[Box<[(f32, f32)]>]>>,
+	pub lods: NoDebug<Box<[Box<[(f32, f32)]>; LOD_LEVELS]>>,
 	pub path: Arc<Path>,
 	pub name: Arc<str>,
 	pub hash: u64,
@@ -129,38 +129,34 @@ impl Sample {
 		Some(resampler.finish().into_boxed_slice())
 	}
 
-	fn create_lod(samples: &[f32]) -> Box<[Box<[(f32, f32)]>]> {
-		let mut lods = Vec::with_capacity(10);
+	fn create_lod(samples: &[f32]) -> Box<[Box<[(f32, f32)]>; LOD_LEVELS]> {
+		let mut lods = [const { Vec::new() }; LOD_LEVELS];
 
-		lods.push(
-			samples
-				.chunks(8)
+		lods[0] = samples
+			.chunks(8)
+			.map(|chunk| {
+				let (min, max) = chunk
+					.iter()
+					.fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
+						(min.min(c), max.max(c))
+					});
+				(min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5))
+			})
+			.collect();
+
+		(1..LOD_LEVELS).for_each(|i| {
+			lods[i] = lods[i - 1]
+				.chunks(2)
 				.map(|chunk| {
-					let (min, max) = chunk
+					chunk
 						.iter()
 						.fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
-							(min.min(c), max.max(c))
-						});
-					(min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5))
+							(min.min(c.0), max.max(c.1))
+						})
 				})
-				.collect::<Box<_>>(),
-		);
-
-		(0..12).for_each(|i| {
-			lods.push(
-				lods[i]
-					.chunks(2)
-					.map(|chunk| {
-						chunk
-							.iter()
-							.fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
-								(min.min(c.0), max.max(c.1))
-							})
-					})
-					.collect(),
-			);
+				.collect();
 		});
 
-		lods.into_boxed_slice()
+		Box::new(lods.map(|lod| lod.into_boxed_slice()))
 	}
 }

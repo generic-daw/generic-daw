@@ -1,4 +1,4 @@
-use crate::{MusicalTime, Resampler, RtState, Sample, Stream, build_input_stream};
+use crate::{LOD_LEVELS, MusicalTime, Resampler, RtState, Sample, Stream, build_input_stream};
 use async_channel::Receiver;
 use cpal::StreamConfig;
 use generic_daw_utils::{NoDebug, hash_reader};
@@ -7,7 +7,7 @@ use std::{fs::File, hash::DefaultHasher, path::Path, sync::Arc};
 
 #[derive(Debug)]
 pub struct Recording {
-	pub lods: NoDebug<Box<[Vec<(f32, f32)>]>>,
+	pub lods: NoDebug<Box<[Vec<(f32, f32)>; LOD_LEVELS]>>,
 	path: Arc<Path>,
 	pub name: Arc<str>,
 	pub position: MusicalTime,
@@ -35,13 +35,13 @@ impl Recording {
 		let resampler = Resampler::new(
 			config.sample_rate.0 as usize,
 			rtstate.sample_rate as usize,
-			config.channels as usize,
+			2,
 		)
 		.unwrap();
 
 		(
 			Self {
-				lods: vec![Vec::new(); 10].into_boxed_slice().into(),
+				lods: Box::new([const { Vec::new() }; LOD_LEVELS]).into(),
 				path,
 				name,
 				position,
@@ -73,13 +73,13 @@ impl Recording {
 		let mut resampler = Resampler::new(
 			self.config.sample_rate.0 as usize,
 			rtstate.sample_rate as usize,
-			self.config.channels as usize,
+			2,
 		)
 		.unwrap();
 		std::mem::swap(&mut self.resampler, &mut resampler);
 		let samples = resampler.finish();
 
-		let mut lods = vec![Vec::new(); 10].into_boxed_slice().into();
+		let mut lods = Box::new([const { Vec::new() }; LOD_LEVELS]).into();
 		std::mem::swap(&mut self.lods, &mut lods);
 
 		Self::update_lods(&samples, &mut lods, start);
@@ -87,7 +87,7 @@ impl Recording {
 		let mut writer = WavWriter::create(
 			&path,
 			WavSpec {
-				channels: self.config.channels,
+				channels: 2,
 				sample_rate: self.config.sample_rate.0,
 				bits_per_sample: 32,
 				sample_format: SampleFormat::Float,
@@ -105,12 +105,7 @@ impl Recording {
 
 		Arc::new(Sample {
 			audio: samples.into_boxed_slice().into(),
-			lods: lods
-				.0
-				.into_iter()
-				.map(Vec::into_boxed_slice)
-				.collect::<Box<_>>()
-				.into(),
+			lods: Box::new(lods.0.map(|x| x.into_boxed_slice())).into(),
 			path,
 			name,
 			hash,
@@ -134,7 +129,7 @@ impl Recording {
 		let mut writer = WavWriter::create(
 			&path,
 			WavSpec {
-				channels: self.config.channels,
+				channels: 2,
 				sample_rate: self.config.sample_rate.0,
 				bits_per_sample: 32,
 				sample_format: SampleFormat::Float,
@@ -152,19 +147,14 @@ impl Recording {
 
 		Arc::new(Sample {
 			audio: samples.into_boxed_slice().into(),
-			lods: lods
-				.0
-				.into_iter()
-				.map(Vec::into_boxed_slice)
-				.collect::<Box<_>>()
-				.into(),
+			lods: Box::new(lods.0.map(|x| x.into_boxed_slice())).into(),
 			path,
 			name,
 			hash,
 		})
 	}
 
-	fn update_lods(samples: &[f32], lods: &mut [Vec<(f32, f32)>], mut start: usize) {
+	fn update_lods(samples: &[f32], lods: &mut [Vec<(f32, f32)>; LOD_LEVELS], mut start: usize) {
 		start /= 8;
 
 		lods[0].truncate(start);
@@ -177,8 +167,8 @@ impl Recording {
 			(min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5))
 		}));
 
-		(0..9).for_each(|i| {
-			let [last, current] = &mut lods[i..=i + 1] else {
+		(1..LOD_LEVELS).for_each(|i| {
+			let [last, current] = &mut lods[i - 1..=i] else {
 				unreachable!()
 			};
 

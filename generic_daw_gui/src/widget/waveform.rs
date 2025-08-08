@@ -1,5 +1,5 @@
 use crate::widget::LINE_HEIGHT;
-use generic_daw_core::{MusicalTime, RtState};
+use generic_daw_core::{LOD_LEVELS, MusicalTime, RtState};
 use generic_daw_utils::Vec2;
 use iced::{Point, Rectangle, Theme, Transformation, advanced::graphics::color, debug};
 use iced_wgpu::graphics::{
@@ -12,7 +12,7 @@ pub fn mesh(
 	rtstate: &RtState,
 	start: MusicalTime,
 	offset: MusicalTime,
-	lods: &[impl AsRef<[(f32, f32)]>],
+	lods: &[impl AsRef<[(f32, f32)]>; LOD_LEVELS],
 	position: &Vec2,
 	scale: &Vec2,
 	theme: &Theme,
@@ -59,7 +59,7 @@ fn make_mesh(
 
 	let first_index = ((diff + offset) / lod_sample_size) as usize;
 	let last_index = first_index + (bounds.width / lod_samples_per_pixel) as usize;
-	let last_index = last_index.min(lods[lod].as_ref().len() - 1);
+	let last_index = last_index.min(lods[lod].as_ref().len().saturating_sub(1));
 
 	if last_index < first_index || last_index - first_index < 2 {
 		return None;

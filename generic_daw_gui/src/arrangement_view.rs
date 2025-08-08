@@ -23,6 +23,7 @@ use generic_daw_core::{
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use generic_daw_utils::{EnumDispatcher, NoDebug, Vec2, hash_reader};
+use humantime::format_rfc3339;
 use iced::{
 	Alignment, Element, Fill, Function as _, Size, Subscription, Task, border,
 	mouse::Interaction,
@@ -44,13 +45,13 @@ use std::{
 	cmp::Ordering,
 	collections::{BTreeMap, BTreeSet, HashMap},
 	fs::File,
-	hash::{DefaultHasher, Hash as _, Hasher as _},
+	hash::DefaultHasher,
 	io::{Read as _, Write as _},
 	iter::once,
 	ops::Deref as _,
 	path::Path,
 	sync::{Arc, Weak, mpsc},
-	time::Instant,
+	time::SystemTime,
 };
 use walkdir::WalkDir;
 
@@ -524,10 +525,8 @@ impl ArrangementView {
 	}
 
 	fn make_recording_path() -> Arc<Path> {
-		let mut hasher = DefaultHasher::new();
-		Instant::now().hash(&mut hasher);
-
-		let file_name = "recording-".to_owned() + &hasher.finish().to_string() + ".wav";
+		let file_name =
+			"recording-".to_owned() + &format_rfc3339(SystemTime::now()).to_string() + ".wav";
 
 		let data_dir = dirs::data_dir().unwrap().join("Generic Daw");
 		_ = std::fs::create_dir(&data_dir);

@@ -42,6 +42,8 @@ pub use recording::Recording;
 pub(crate) use resampler::Resampler;
 pub use track::Track;
 
+pub const LOD_LEVELS: usize = 13;
+
 #[must_use]
 pub fn get_input_devices() -> Vec<String> {
 	cpal::default_host()
@@ -81,26 +83,21 @@ pub fn build_input_stream(
 		device.supported_input_configs().unwrap(),
 		sample_rate,
 		buffer_size,
-		None,
 	);
 
 	info!("starting input stream with config {config:?}");
 
+	let mut stereo = vec![];
+
 	let stream = device
 		.build_input_stream(
 			&config,
-			move |data, _| {
-				let data = if config.channels <= 1 {
-					data.iter().flat_map(|&x| [x, x]).collect()
-				} else if config.channels == 2 {
-					data.into()
-				} else {
-					data.chunks(config.channels as usize)
-						.flat_map(|x| &x[..2])
-						.copied()
-						.collect()
-				};
-				sender.try_send(data).unwrap();
+			move |buf, _| {
+				let frames = buf.len() / config.channels as usize;
+				stereo.clear();
+				stereo.resize(frames * 2, 0.0);
+				from_other_to_stereo(&mut stereo, buf, frames);
+				sender.try_send(stereo.clone().into_boxed_slice()).unwrap();
 			},
 			|err| panic!("{err}"),
 			None,
@@ -131,7 +128,6 @@ pub fn build_output_stream(
 		device.supported_output_configs().unwrap(),
 		sample_rate,
 		buffer_size,
-		Some(2),
 	);
 
 	let (mut ctx, node, rtstate, sender, receiver) =
@@ -139,10 +135,18 @@ pub fn build_output_stream(
 
 	info!("starting output stream with config {config:?}");
 
+	let mut stereo = vec![];
+
 	let stream = device
 		.build_output_stream(
 			&config,
-			move |buf, _| ctx.process(buf),
+			move |buf, _| {
+				let frames = buf.len() / config.channels as usize;
+				stereo.clear();
+				stereo.resize(frames * 2, 0.0);
+				ctx.process(&mut stereo);
+				from_stereo_to_other(buf, &stereo, frames);
+			},
 			|err| panic!("{err}"),
 			None,
 		)
@@ -157,14 +161,13 @@ fn choose_config(
 	configs: impl IntoIterator<Item = SupportedStreamConfigRange>,
 	sample_rate: u32,
 	buffer_size: u32,
-	channels: Option<u16>,
 ) -> StreamConfig {
 	let config = configs
 		.into_iter()
-		.filter(|config| channels.is_none_or(|channels| config.channels() == channels))
 		.min_by(|l, r| {
 			compare_by_sample_rate(l, r, sample_rate)
 				.then_with(|| compare_by_buffer_size(l, r, buffer_size))
+				.then_with(|| r.channels().cmp(&l.channels()))
 		})
 		.unwrap();
 
@@ -221,5 +224,44 @@ fn compare_by_buffer_size(
 			let rdiff = buffer_size.clamp(rmin, rmax).abs_diff(buffer_size);
 			ldiff.cmp(&rdiff)
 		}
+	}
+}
+
+fn from_stereo_to_other(a: &mut [f32], b: &[f32], frames: usize) {
+	debug_assert!(a.len().is_multiple_of(frames));
+	debug_assert!(b.len().is_multiple_of(frames));
+	debug_assert!(b.len() / frames == 2);
+
+	if a.len() >= b.len() {
+		for (a, b) in a
+			.chunks_exact_mut(a.len() / frames)
+			.flat_map(|a| a.iter_mut().take(2))
+			.zip(b)
+		{
+			*a = *b;
+		}
+	} else {
+		for (a, b) in a.iter_mut().zip(b.as_chunks().0.iter().map(|[l, r]| l + r)) {
+			*a = b;
+		}
+	}
+}
+
+fn from_other_to_stereo(a: &mut [f32], b: &[f32], frames: usize) {
+	debug_assert!(a.len().is_multiple_of(frames));
+	debug_assert!(a.len() / frames == 2);
+	debug_assert!(b.len().is_multiple_of(frames));
+
+	if a.len() >= b.len() {
+		a.iter_mut()
+			.zip(b.iter().flat_map(|x| [x, x]))
+			.for_each(|(a, b)| *a = *b);
+	} else {
+		a.iter_mut()
+			.zip(
+				b.chunks_exact(b.len() / frames)
+					.flat_map(|b| b.iter().take(2)),
+			)
+			.for_each(|(a, b)| *a = *b);
 	}
 }
