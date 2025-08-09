@@ -3,7 +3,7 @@ use crate::{
 	components::{circle_plus, icon_button, space, styled_scrollable_with_direction},
 	config::Config,
 	icons::{chevron_up, grip_vertical, x},
-	stylefns::{self, menu_with_border},
+	stylefns::{self, button_with_radius, menu_with_border},
 	widget::{
 		AnimatedDot, Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob,
 		LINE_HEIGHT, MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll,
@@ -1451,11 +1451,14 @@ impl ArrangementView {
 											)
 											.clip(true)
 										)
-										.style(if plugin.enabled {
-											button::primary
-										} else {
-											button::secondary
-										})
+										.style(button_with_radius(
+											if plugin.enabled {
+												button::primary
+											} else {
+												button::secondary
+											},
+											border::left(5)
+										))
 										.width(Fill)
 										.on_press(Message::ClapHost(
 											ClapHostMessage::MainThread(
@@ -1494,9 +1497,16 @@ impl ArrangementView {
 												container::background(
 													t.extended_palette().background.weak.color,
 												)
-												.border(border::width(1).color(
-													t.extended_palette().background.strong.color,
-												))
+												.border(
+													border::width(1)
+														.rounded(border::right(5))
+														.color(
+															t.extended_palette()
+																.background
+																.strong
+																.color,
+														),
+												)
 											})
 										)
 										.interaction(Interaction::Grab),
