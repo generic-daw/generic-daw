@@ -19,7 +19,7 @@ pub static CONFIG_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
 		.map(|path| path.join("generic_daw.toml"))
 });
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default)]
 pub struct Config {
 	pub sample_paths: Vec<Arc<Path>>,
@@ -29,6 +29,7 @@ pub struct Config {
 	pub autosave: Autosave,
 	pub open_last_project: bool,
 	pub theme: Theme,
+	pub scale_factor: f64,
 }
 
 impl Default for Config {
@@ -41,6 +42,7 @@ impl Default for Config {
 			autosave: Autosave::default(),
 			open_last_project: false,
 			theme: Theme::default(),
+			scale_factor: 1.0,
 		}
 	}
 }

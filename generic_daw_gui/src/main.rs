@@ -27,6 +27,7 @@ fn main() -> Result {
 	daemon(Daw::create, Daw::update, Daw::view)
 		.title(Daw::title)
 		.theme(Daw::theme)
+		.scale_factor(Daw::scale_factor)
 		.subscription(Daw::subscription)
 		.antialiasing(true)
 		.font(LUCIDE_BYTES)

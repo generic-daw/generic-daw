@@ -11,7 +11,7 @@ use iced::{
 	widget::{
 		button, column, container, horizontal_rule, horizontal_space, pick_list, row,
 		scrollable::{Direction, Scrollbar},
-		text, toggler,
+		slider, text, toggler,
 	},
 };
 use rfd::AsyncFileDialog;
@@ -43,6 +43,7 @@ pub enum Message {
 	ChangedAutosaveIntervalText(String),
 	ToggledOpenLastProject,
 	ChangedTheme(Theme),
+	ChangedScaleFactor(f64),
 	WriteConfig,
 	ResetConfig,
 }
@@ -99,6 +100,7 @@ impl ConfigView {
 			}
 			Message::ToggledOpenLastProject => self.config.open_last_project ^= true,
 			Message::ChangedTheme(theme) => self.config.theme = theme,
+			Message::ChangedScaleFactor(scale_factor) => self.config.scale_factor = scale_factor,
 			Message::WriteConfig => {
 				self.config.write();
 				self.prev_config = self.config.clone();
@@ -322,6 +324,27 @@ impl ConfigView {
 						.on_press_maybe(
 							(self.config.theme != Theme::CatppuccinFrappe)
 								.then_some(Message::ChangedTheme(Theme::CatppuccinFrappe))
+						)
+				]
+				.align_y(Center),
+				row![
+					text("Scale factor: "),
+					text(format!("{:.1}", self.config.scale_factor)).font(Font::MONOSPACE),
+					horizontal_space(),
+					slider(
+						0.5..=2.0,
+						self.config.scale_factor,
+						Message::ChangedScaleFactor
+					)
+					.step(0.1)
+					.width(212),
+					space().width(5),
+					button(rotate_ccw())
+						.style(button_with_radius(button::primary, 5))
+						.padding(5)
+						.on_press_maybe(
+							(self.config.scale_factor != 1.0)
+								.then_some(Message::ChangedScaleFactor(1.0))
 						)
 				]
 				.align_y(Center),

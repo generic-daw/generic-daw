@@ -451,15 +451,19 @@ impl Daw {
 		base.into()
 	}
 
-	pub fn theme(&self, _window: Id) -> Theme {
-		self.config.theme.into()
-	}
-
 	pub fn title(&self, window: Id) -> String {
 		self.arrangement_view
 			.clap_host
 			.title(window)
 			.unwrap_or_else(|| String::from("Generic DAW"))
+	}
+
+	pub fn theme(&self, _window: Id) -> Theme {
+		self.config.theme.into()
+	}
+
+	pub fn scale_factor(&self, _: Id) -> f64 {
+		self.config.scale_factor
 	}
 
 	pub fn subscription(&self) -> Subscription<Message> {
