@@ -28,33 +28,30 @@ impl AudioClip {
 		}
 
 		let start = self.position.start().to_samples(rtstate);
-		let diff = rtstate.sample.abs_diff(start);
+		let end = self.position.end().to_samples(rtstate);
+		let offset = self.position.offset().to_samples(rtstate);
+		let len = end - start;
+
+		let uidx = rtstate.sample.abs_diff(start);
 
 		if rtstate.sample > start {
-			let start_index = diff + self.position.offset().to_samples(rtstate);
-
-			if start_index >= self.sample.audio.len() {
+			if uidx >= len {
 				return;
 			}
 
-			self.sample.audio[start_index..]
+			self.sample.audio[offset..][..len][uidx..]
 				.iter()
 				.zip(audio)
-				.for_each(|(sample, buf)| {
-					*buf += sample;
-				});
+				.for_each(|(sample, buf)| *buf += sample);
 		} else {
-			if diff >= audio.len() {
+			if uidx >= audio.len() {
 				return;
 			}
 
-			self.sample
-				.audio
+			self.sample.audio[offset..][..len]
 				.iter()
-				.zip(audio[diff..].iter_mut())
-				.for_each(|(sample, buf)| {
-					*buf += sample;
-				});
+				.zip(&mut audio[uidx..])
+				.for_each(|(sample, buf)| *buf += sample);
 		}
 	}
 }

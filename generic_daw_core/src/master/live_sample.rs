@@ -24,7 +24,7 @@ impl LiveSample {
 			self.audio[uidx..]
 				.iter()
 				.zip(audio)
-				.for_each(|(s, buf)| *buf += s);
+				.for_each(|(sample, buf)| *buf += sample);
 		} else {
 			if uidx >= audio.len() {
 				return;
@@ -32,10 +32,8 @@ impl LiveSample {
 
 			self.audio
 				.iter()
-				.zip(audio[uidx..].iter_mut())
-				.for_each(|(s, buf)| {
-					*buf += s;
-				});
+				.zip(&mut audio[uidx..])
+				.for_each(|(sample, buf)| *buf += sample);
 		}
 	}
 
