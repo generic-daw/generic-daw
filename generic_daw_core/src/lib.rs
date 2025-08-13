@@ -233,17 +233,14 @@ fn from_stereo_to_other(a: &mut [f32], b: &[f32], frames: usize) {
 	debug_assert!(b.len() / frames == 2);
 
 	if a.len() >= b.len() {
-		for (a, b) in a
-			.chunks_exact_mut(a.len() / frames)
+		a.chunks_exact_mut(a.len() / frames)
 			.flat_map(|a| a.iter_mut().take(2))
 			.zip(b)
-		{
-			*a = *b;
-		}
+			.for_each(|(a, b)| *a = *b);
 	} else {
-		for (a, b) in a.iter_mut().zip(b.as_chunks().0.iter().map(|[l, r]| l + r)) {
-			*a = b;
-		}
+		a.iter_mut()
+			.zip(b.as_chunks().0.iter().map(|[l, r]| l + r))
+			.for_each(|(a, b)| *a = b);
 	}
 }
 
@@ -252,16 +249,14 @@ fn from_other_to_stereo(a: &mut [f32], b: &[f32], frames: usize) {
 	debug_assert!(a.len() / frames == 2);
 	debug_assert!(b.len().is_multiple_of(frames));
 
-	if a.len() >= b.len() {
-		a.iter_mut()
-			.zip(b.iter().flat_map(|x| [x, x]))
-			.for_each(|(a, b)| *a = *b);
+	if a.len() < b.len() {
+		b.chunks_exact(b.len() / frames)
+			.flat_map(|b| b.iter().take(2))
+			.zip(a)
+			.for_each(|(b, a)| *a = *b);
 	} else {
 		a.iter_mut()
-			.zip(
-				b.chunks_exact(b.len() / frames)
-					.flat_map(|b| b.iter().take(2)),
-			)
+			.zip(b.iter().flat_map(|x| [x, x]))
 			.for_each(|(a, b)| *a = *b);
 	}
 }

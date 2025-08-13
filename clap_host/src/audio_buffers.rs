@@ -142,7 +142,7 @@ impl AudioBuffers {
 			output_buffer
 				.iter()
 				.flat_map(|x| [x, x])
-				.zip(&mut *buf)
+				.zip(buf)
 				.for_each(|(sample, buf)| {
 					*buf *= 1.0 - mix_level;
 					*buf += sample * mix_level;
@@ -153,7 +153,7 @@ impl AudioBuffers {
 			l.iter()
 				.zip(r)
 				.flat_map(<[&f32; 2]>::from)
-				.zip(&mut *buf)
+				.zip(buf)
 				.for_each(|(sample, buf)| {
 					*buf *= 1.0 - mix_level;
 					*buf += sample * mix_level;

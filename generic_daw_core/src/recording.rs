@@ -167,7 +167,7 @@ impl Recording {
 			(min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5))
 		}));
 
-		(1..LOD_LEVELS).for_each(|i| {
+		for i in 1..LOD_LEVELS {
 			let [last, current] = &mut lods[i - 1..=i] else {
 				unreachable!()
 			};
@@ -181,7 +181,7 @@ impl Recording {
 						(min.min(c.0), max.max(c.1))
 					})
 			}));
-		});
+		}
 	}
 
 	#[must_use]

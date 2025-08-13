@@ -144,7 +144,7 @@ impl Sample {
 			})
 			.collect();
 
-		(1..LOD_LEVELS).for_each(|i| {
+		for i in 1..LOD_LEVELS {
 			lods[i] = lods[i - 1]
 				.chunks(2)
 				.map(|chunk| {
@@ -155,7 +155,7 @@ impl Sample {
 						})
 				})
 				.collect();
-		});
+		}
 
 		Box::new(lods.map(|lod| lod.into_boxed_slice()))
 	}
