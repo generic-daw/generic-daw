@@ -80,12 +80,9 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 	}
 
 	fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-		let child_layout =
-			self.children
-				.as_widget()
-				.layout(&mut tree.children[0], renderer, limits);
-
-		Node::with_children(child_layout.size(), vec![child_layout])
+		self.children
+			.as_widget()
+			.layout(&mut tree.children[0], renderer, limits)
 	}
 
 	fn update(
@@ -102,7 +99,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		self.children.as_widget_mut().update(
 			&mut tree.children[0],
 			event,
-			layout.children().next().unwrap(),
+			layout,
 			cursor,
 			renderer,
 			clipboard,
@@ -194,7 +191,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 			renderer,
 			theme,
 			style,
-			layout.children().next().unwrap(),
+			layout,
 			cursor,
 			viewport,
 		);
@@ -216,7 +213,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		} else if cursor.is_over(layout.bounds()) {
 			let interaction = self.children.as_widget().mouse_interaction(
 				&tree.children[0],
-				layout.children().next().unwrap(),
+				layout,
 				cursor,
 				viewport,
 				renderer,
@@ -245,7 +242,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 	) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
 		self.children.as_widget_mut().overlay(
 			&mut tree.children[0],
-			layout.children().next().unwrap(),
+			layout,
 			renderer,
 			viewport,
 			translation,
@@ -260,12 +257,9 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		operation: &mut dyn Operation,
 	) {
 		operation.container(None, layout.bounds(), &mut |operation| {
-			self.children.as_widget().operate(
-				&mut tree.children[0],
-				layout.children().next().unwrap(),
-				renderer,
-				operation,
-			);
+			self.children
+				.as_widget()
+				.operate(&mut tree.children[0], layout, renderer, operation);
 		});
 	}
 }
