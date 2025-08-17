@@ -1,4 +1,4 @@
-use std::ops::{Index, RangeBounds};
+use std::ops::Index;
 
 #[derive(Debug)]
 pub struct HoleyVec<T>(Vec<Option<T>>);
@@ -74,10 +74,6 @@ impl<T> HoleyVec<T> {
 
 	pub fn values_mut(&mut self) -> impl Iterator<Item = &mut T> {
 		self.iter_mut().map(|(_, v)| v)
-	}
-
-	pub fn drain(&mut self, r: impl RangeBounds<usize>) -> impl Iterator<Item = T> {
-		self.0.drain(r).flatten()
 	}
 }
 
