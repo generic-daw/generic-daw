@@ -84,7 +84,7 @@ pub enum Message {
 	ChannelPanChanged(NodeId, f32),
 	ChannelToggleEnabled(NodeId),
 
-	PluginLoad(PluginDescriptor),
+	PluginLoad(PluginDescriptor, Option<Vec<u8>>),
 	PluginRemove(usize),
 	PluginMixChanged(usize, f32),
 	PluginToggleEnabled(usize),
@@ -243,15 +243,19 @@ impl ArrangementView {
 			}
 			Message::ChannelPanChanged(id, pan) => self.arrangement.node_pan_changed(id, pan),
 			Message::ChannelToggleEnabled(id) => self.arrangement.node_toggle_enabled(id),
-			Message::PluginLoad(descriptor) => {
+			Message::PluginLoad(descriptor, state) => {
 				let selected = self.selected_channel.unwrap();
 
-				let (gui, receiver, audio_processor) = clap_host::init(
+				let (mut gui, receiver, audio_processor) = clap_host::init(
 					&plugin_bundles[&descriptor],
 					descriptor,
 					self.arrangement.rtstate().sample_rate,
 					self.arrangement.rtstate().buffer_size,
 				);
+
+				if let Some(state) = state {
+					gui.set_state(&state);
+				}
 
 				self.arrangement.plugin_load(selected, audio_processor);
 
@@ -843,6 +847,7 @@ impl ArrangementView {
 						.keys()
 						.find(|d| *d.id == *plugin.id())?
 						.clone(),
+					plugin.state.clone(),
 				)));
 			}
 
@@ -1413,12 +1418,9 @@ impl ArrangementView {
 			Split::new(
 				mixer_panel,
 				column![
-					combo_box(
-						&self.plugin_descriptors,
-						"Add Plugin",
-						None,
-						Message::PluginLoad,
-					)
+					combo_box(&self.plugin_descriptors, "Add Plugin", None, |descriptor| {
+						Message::PluginLoad(descriptor, None)
+					})
 					.menu_style(menu_with_border(menu::default, border::width(0)))
 					.width(Fill),
 					container(horizontal_rule(1)).padding([5, 0]),
