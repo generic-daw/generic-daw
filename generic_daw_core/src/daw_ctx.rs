@@ -48,6 +48,7 @@ pub enum Action {
 pub enum Update {
 	LR(NodeId, [f32; 2]),
 	Sample(Version, usize),
+	Done,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -159,5 +160,7 @@ impl DawCtx {
 				.try_send(Update::Sample(self.version, self.state.rtstate.sample))
 				.unwrap();
 		}
+
+		self.state.sender.try_send(Update::Done).unwrap();
 	}
 }

@@ -68,7 +68,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 		viewport: &Rectangle,
 		renderer: &Renderer,
 	) -> Interaction {
-		let Some(bounds) = viewport.intersection(&layout.bounds()) else {
+		let Some(bounds) = layout.bounds().intersection(viewport) else {
 			return Interaction::default();
 		};
 
@@ -95,7 +95,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 		cursor: Cursor,
 		viewport: &Rectangle,
 	) {
-		let Some(bounds) = viewport.intersection(&layout.bounds()) else {
+		let Some(bounds) = layout.bounds().intersection(viewport) else {
 			return;
 		};
 
@@ -123,7 +123,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
-		let Some(bounds) = viewport.intersection(&layout.bounds()) else {
+		let Some(bounds) = layout.bounds().intersection(viewport) else {
 			return;
 		};
 

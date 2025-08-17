@@ -1,4 +1,5 @@
 use crate::{
+	arrangement_view::arrangement::Batch,
 	clap_host::{ClapHost, Message as ClapHostMessage},
 	components::{circle_plus, icon_button, space, styled_scrollable_with_direction},
 	config::Config,
@@ -17,7 +18,7 @@ use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
 	self as core, AudioClip, Clip, Decibels, MidiClip, MidiKey, MidiNote, Mixer, MusicalTime,
-	Recording, Sample, Update,
+	Recording, Sample,
 	audio_graph::{NodeId, NodeImpl as _},
 	clap_host::{self, MainThreadMessage, PluginBundle, PluginDescriptor},
 };
@@ -69,7 +70,7 @@ enum LoadStatus {
 #[derive(Clone, Debug)]
 pub enum Message {
 	ClapHost(ClapHostMessage),
-	Update(Update),
+	Update(Batch),
 
 	ConnectRequest((NodeId, NodeId)),
 	ConnectSucceeded((NodeId, NodeId)),
@@ -158,7 +159,7 @@ impl ArrangementView {
 		config: &Config,
 		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
 	) -> (Self, Task<Message>) {
-		let (arrangement, receiver) = ArrangementWrapper::create(config);
+		let (arrangement, task) = ArrangementWrapper::create(config);
 		(
 			Self {
 				clap_host: ClapHost::default(),
@@ -184,7 +185,7 @@ impl ArrangementView {
 
 				split_at: 300.0,
 			},
-			Task::stream(receiver).map(Message::Update),
+			task.map(Message::Update),
 		)
 	}
 
@@ -763,8 +764,8 @@ impl ArrangementView {
 
 		let mut futs = Vec::new();
 
-		let (mut arrangement, receiver) = ArrangementWrapper::create(config);
-		futs.push(Task::stream(receiver).map(Message::Update));
+		let (mut arrangement, task) = ArrangementWrapper::create(config);
+		futs.push(task.map(Message::Update));
 
 		arrangement.set_bpm(reader.rtstate().bpm as u16);
 		arrangement.set_numerator(reader.rtstate().numerator as u8);
@@ -932,12 +933,9 @@ impl ArrangementView {
 		config: &Config,
 		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
 	) -> Task<Message> {
-		let (arrangement, receiver) = ArrangementWrapper::create(config);
+		let (arrangement, task) = ArrangementWrapper::create(config);
 
-		let futs = Task::batch(
-			self.clear()
-				.chain(once(Task::stream(receiver).map(Message::Update))),
-		);
+		let futs = Task::batch(self.clear().chain(once(task.map(Message::Update))));
 		self.plugin_descriptors = combo_box::State::new(plugin_bundles.keys().cloned().collect());
 		self.arrangement = arrangement;
 

@@ -108,7 +108,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			.zip(&mut tree.children)
 			.zip(layout.children())
 			.for_each(|((child, tree), layout)| {
-				let Some(viewport) = bounds.intersection(&layout.bounds()) else {
+				let Some(viewport) = layout.bounds().intersection(&bounds) else {
 					return;
 				};
 
@@ -252,7 +252,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			.zip(&tree.children)
 			.zip(layout.children())
 			.for_each(|((child, tree), layout)| {
-				let Some(viewport) = bounds.intersection(&layout.bounds()) else {
+				let Some(viewport) = layout.bounds().intersection(&bounds) else {
 					return;
 				};
 
@@ -369,7 +369,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				.zip(&tree.children)
 				.zip(layout.children())
 				.filter_map(|((child, tree), layout)| {
-					let viewport = bounds.intersection(&layout.bounds())?;
+					let viewport = layout.bounds().intersection(&bounds)?;
 
 					Some(
 						child
