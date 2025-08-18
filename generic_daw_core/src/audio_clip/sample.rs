@@ -1,7 +1,7 @@
 use crate::{LOD_LEVELS, Resampler};
-use generic_daw_utils::{NoDebug, hash_reader};
+use generic_daw_utils::NoDebug;
 use log::info;
-use std::{fs::File, hash::DefaultHasher, path::Path, sync::Arc};
+use std::{fs::File, path::Path, sync::Arc};
 use symphonia::core::{
 	audio::SampleBuffer,
 	codecs::DecoderOptions,
@@ -17,7 +17,6 @@ pub struct Sample {
 	pub lods: NoDebug<Box<[Box<[(f32, f32)]>; LOD_LEVELS]>>,
 	pub path: Arc<Path>,
 	pub name: Arc<str>,
-	pub hash: u64,
 }
 
 impl Sample {
@@ -28,7 +27,6 @@ impl Sample {
 		let name = path.file_name()?.to_str()?.into();
 		let samples = Self::read_audio_file(&path, sample_rate)?;
 		let lods = Self::create_lod(&samples);
-		let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
 
 		info!("loaded sample {}", path.display());
 
@@ -37,30 +35,6 @@ impl Sample {
 			lods: lods.into(),
 			path,
 			name,
-			hash,
-		}))
-	}
-
-	#[must_use]
-	pub fn create_with_hash(path: Arc<Path>, sample_rate: u32, hash: u64) -> Option<Arc<Self>> {
-		info!("loading sample {}", path.display());
-
-		let name = path.file_name()?.to_str()?.into();
-		let samples = Self::read_audio_file(&path, sample_rate)?;
-		let lods = Self::create_lod(&samples);
-		debug_assert_eq!(
-			hash,
-			hash_reader::<DefaultHasher>(File::open(&path).unwrap())
-		);
-
-		info!("loaded sample {}", path.display());
-
-		Some(Arc::new(Self {
-			audio: samples.into(),
-			lods: lods.into(),
-			path,
-			name,
-			hash,
 		}))
 	}
 

@@ -1,9 +1,9 @@
 use crate::{LOD_LEVELS, MusicalTime, Resampler, RtState, Sample, Stream, build_input_stream};
 use async_channel::Receiver;
 use cpal::StreamConfig;
-use generic_daw_utils::{NoDebug, hash_reader};
+use generic_daw_utils::NoDebug;
 use hound::{SampleFormat, WavSpec, WavWriter};
-use std::{fs::File, hash::DefaultHasher, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 #[derive(Debug)]
 pub struct Recording {
@@ -101,14 +101,11 @@ impl Recording {
 
 		writer.finalize().unwrap();
 
-		let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
-
 		Arc::new(Sample {
 			audio: samples.into_boxed_slice().into(),
 			lods: Box::new(lods.0.map(|x| x.into_boxed_slice())).into(),
 			path,
 			name,
-			hash,
 		})
 	}
 
@@ -143,14 +140,11 @@ impl Recording {
 
 		writer.finalize().unwrap();
 
-		let hash = hash_reader::<DefaultHasher>(File::open(&path).unwrap());
-
 		Arc::new(Sample {
 			audio: samples.into_boxed_slice().into(),
 			lods: Box::new(lods.0.map(|x| x.into_boxed_slice())).into(),
 			path,
 			name,
-			hash,
 		})
 	}
 

@@ -23,7 +23,7 @@ use generic_daw_core::{
 	clap_host::{self, MainThreadMessage, PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
-use generic_daw_utils::{EnumDispatcher, NoDebug, Vec2, hash_reader};
+use generic_daw_utils::{EnumDispatcher, NoDebug, Vec2};
 use humantime::format_rfc3339;
 use iced::{
 	Alignment, Element, Fill, Function as _, Size, Subscription, Task, border,
@@ -46,8 +46,7 @@ use std::{
 	cmp::Ordering,
 	collections::{BTreeMap, BTreeSet, HashMap},
 	fs::File,
-	hash::DefaultHasher,
-	io::{Read as _, Write as _},
+	io::{Read, Write as _},
 	iter::once,
 	ops::Deref as _,
 	path::Path,
@@ -64,7 +63,7 @@ mod track;
 #[derive(Clone, Debug)]
 enum LoadStatus {
 	Loading(usize),
-	Loaded(Weak<Sample>),
+	Loaded(u32, Weak<Sample>),
 }
 
 #[derive(Clone, Debug)]
@@ -91,7 +90,7 @@ pub enum Message {
 	PluginsReordered(DragEvent),
 
 	SampleLoadFromFile(Arc<Path>),
-	SampleLoadedFromFile(Arc<Path>, Option<Arc<Sample>>),
+	SampleLoadedFromFile(Arc<Path>, Option<(u32, Arc<Sample>)>),
 
 	AddMidiClip(NodeId, MusicalTime),
 	OpenMidiClip(Arc<MidiClip>),
@@ -302,13 +301,13 @@ impl ArrangementView {
 					match entry {
 						LoadStatus::Loading(count) => {
 							*count += 1;
-
 							return Task::none();
 						}
-						LoadStatus::Loaded(audio) => {
+						LoadStatus::Loaded(crc, audio) => {
 							if let Some(audio) = audio.upgrade() {
+								let crc = *crc;
 								return self.update(
-									Message::SampleLoadedFromFile(path, Some(audio)),
+									Message::SampleLoadedFromFile(path, Some((crc, audio))),
 									config,
 									plugin_bundles,
 								);
@@ -324,7 +323,11 @@ impl ArrangementView {
 				return Task::perform(
 					{
 						let path = path.clone();
-						unblock(move || Sample::create(path, sample_rate))
+						unblock(move || {
+							let sample = Sample::create(path.clone(), sample_rate)?;
+							let crc = crc(File::open(path).ok()?);
+							Some((crc, sample))
+						})
 					},
 					Message::SampleLoadedFromFile.with(path),
 				);
@@ -332,12 +335,12 @@ impl ArrangementView {
 			Message::SampleLoadedFromFile(path, audio) => {
 				self.loading.remove(&path);
 
-				if let Some(audio) = audio {
+				if let Some((crc, audio)) = audio {
 					let count = match self.audios[&audio.path] {
 						LoadStatus::Loading(count) => {
 							self.audios.insert(
 								audio.path.clone(),
-								LoadStatus::Loaded(Arc::downgrade(&audio)),
+								LoadStatus::Loaded(crc, Arc::downgrade(&audio)),
 							);
 
 							count
@@ -436,7 +439,7 @@ impl ArrangementView {
 				}
 
 				let (recording, receiver) = Recording::create(
-					Self::make_recording_path(),
+					recording_path(),
 					self.arrangement.rtstate(),
 					config.input_device.name.as_deref(),
 					config.input_device.sample_rate.unwrap_or(44100),
@@ -458,12 +461,17 @@ impl ArrangementView {
 					);
 					(pos, recording.position) = (recording.position, pos);
 
-					let track = self.arrangement.track_of(track).unwrap();
-					let clip = AudioClip::create(
-						recording
-							.split_off(Self::make_recording_path(), self.arrangement.rtstate()),
-						self.arrangement.rtstate(),
+					let sample = recording.split_off(recording_path(), self.arrangement.rtstate());
+					self.audios.insert(
+						sample.path.clone(),
+						LoadStatus::Loaded(
+							crc(File::open(&sample.path).unwrap()),
+							Arc::downgrade(&sample),
+						),
 					);
+
+					let track = self.arrangement.track_of(track).unwrap();
+					let clip = AudioClip::create(sample, self.arrangement.rtstate());
 					clip.position.move_to(pos);
 					self.arrangement.add_clip(track, clip);
 
@@ -480,8 +488,17 @@ impl ArrangementView {
 					self.arrangement.pause();
 					let pos = recording.position;
 
+					let sample = recording.finalize();
+					self.audios.insert(
+						sample.path.clone(),
+						LoadStatus::Loaded(
+							crc(File::open(&sample.path).unwrap()),
+							Arc::downgrade(&sample),
+						),
+					);
+
 					let track = self.arrangement.track_of(track).unwrap();
-					let clip = AudioClip::create(recording.finalize(), self.arrangement.rtstate());
+					let clip = AudioClip::create(sample, self.arrangement.rtstate());
 					clip.position.move_to(pos);
 					self.arrangement.add_clip(track, clip);
 				}
@@ -527,16 +544,6 @@ impl ArrangementView {
 		}
 
 		Task::none()
-	}
-
-	fn make_recording_path() -> Arc<Path> {
-		let file_name =
-			"recording-".to_owned() + &format_rfc3339(SystemTime::now()).to_string() + ".wav";
-
-		let data_dir = dirs::data_dir().unwrap().join("Generic Daw");
-		_ = std::fs::create_dir(&data_dir);
-
-		data_dir.join(file_name).into()
 	}
 
 	fn handle_arrangement_action(&mut self, action: ArrangementAction) {
@@ -643,19 +650,16 @@ impl ArrangementView {
 
 		let mut audios = HashMap::new();
 		for entry in &self.audios {
-			let audio = match entry.1 {
-				LoadStatus::Loaded(audio) => {
+			let (crc, audio) = match entry.1 {
+				LoadStatus::Loaded(crc, audio) => {
 					let Some(audio) = audio.upgrade() else {
 						continue;
 					};
-					audio
+					(crc, audio)
 				}
 				LoadStatus::Loading(..) => continue,
 			};
-			audios.insert(
-				audio.path.clone(),
-				writer.push_audio(&audio.name, audio.hash),
-			);
+			audios.insert(audio.path.clone(), writer.push_audio(&audio.name, *crc));
 		}
 
 		let mut midis = HashMap::new();
@@ -796,18 +800,10 @@ impl ArrangementView {
 								.is_some_and(|name| *name == *audio.name)
 						})
 						.filter(|dir_entry| {
-							audio.hash
-								== hash_reader::<DefaultHasher>(
-									File::open(dir_entry.path()).unwrap(),
-								)
+							File::open(dir_entry.path()).is_ok_and(|file| crc(file) == audio.crc)
 						})
-						.find_map(|dir_entry| {
-							Sample::create_with_hash(
-								dir_entry.path().into(),
-								sample_rate,
-								audio.hash,
-							)
-						});
+						.find_map(|dir_entry| Sample::create(dir_entry.path().into(), sample_rate))
+						.map(|sample| (audio.crc, sample));
 
 					sender.send((idx, audio)).unwrap();
 				});
@@ -862,7 +858,7 @@ impl ArrangementView {
 				track.clips.push(match clip {
 					proto::Clip::Audio(audio) => {
 						let clip = AudioClip::create(
-							audios.get(&audio.audio)?.clone(),
+							audios.get(&(audio.audio))?.1.clone(),
 							arrangement.rtstate(),
 						);
 						clip.position.move_to(audio.position.start.into());
@@ -922,10 +918,10 @@ impl ArrangementView {
 
 		self.plugin_descriptors = combo_box::State::new(plugin_bundles.keys().cloned().collect());
 		self.arrangement = arrangement;
-		self.audios.extend(audios.values().map(|audio| {
+		self.audios.extend(audios.values().map(|(crc, audio)| {
 			(
 				audio.path.clone(),
-				LoadStatus::Loaded(Arc::downgrade(audio)),
+				LoadStatus::Loaded(*crc, Arc::downgrade(audio)),
 			)
 		}));
 		self.midis.extend(midis.values().map(Arc::downgrade));
@@ -1562,4 +1558,32 @@ impl ArrangementView {
 	pub fn subscription(&self) -> Subscription<Message> {
 		self.clap_host.subscription().map(Message::ClapHost)
 	}
+}
+
+fn recording_path() -> Arc<Path> {
+	let file_name =
+		"recording-".to_owned() + &format_rfc3339(SystemTime::now()).to_string() + ".wav";
+
+	let data_dir = dirs::data_dir().unwrap().join("Generic Daw");
+	_ = std::fs::create_dir(&data_dir);
+
+	data_dir.join(file_name).into()
+}
+
+fn crc(mut r: impl Read) -> u32 {
+	#[repr(align(8))]
+	struct Aligned([u8; 4096]);
+	let mut buf = Aligned([0; 4096]);
+
+	let mut crc = 0;
+	let mut len;
+
+	while {
+		len = r.read(&mut buf.0).unwrap();
+		len != 0
+	} {
+		crc = crc32c::crc32c_append(crc, &buf.0[..len]);
+	}
+
+	crc
 }

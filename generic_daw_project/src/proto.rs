@@ -51,8 +51,8 @@ pub struct RtState {
 pub struct Audio {
 	#[prost(string)]
 	pub name: String,
-	#[prost(uint64)]
-	pub hash: u64,
+	#[prost(uint32)]
+	pub crc: u32,
 }
 
 #[derive(Message)]

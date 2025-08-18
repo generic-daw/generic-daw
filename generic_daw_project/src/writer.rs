@@ -15,10 +15,10 @@ impl Writer {
 	}
 
 	#[must_use]
-	pub fn push_audio(&mut self, name: impl AsRef<str>, hash: u64) -> proto::AudioIndex {
+	pub fn push_audio(&mut self, name: impl AsRef<str>, crc: u32) -> proto::AudioIndex {
 		self.0.audios.push(proto::Audio {
 			name: name.as_ref().to_owned(),
-			hash,
+			crc,
 		});
 
 		proto::AudioIndex {

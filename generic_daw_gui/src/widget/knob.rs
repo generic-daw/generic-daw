@@ -398,7 +398,7 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
 			style,
 			layout.children().next().unwrap(),
 			cursor,
-			&Rectangle::with_size(Size::INFINITY),
+			&Rectangle::INFINITE,
 		);
 	}
 }
