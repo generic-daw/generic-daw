@@ -110,7 +110,12 @@ impl ClapHost {
 
 					let mut gui = Fragile::new(gui);
 					let embed = window::run_with_handle(window_id, move |handle| {
-						gui.get_mut().set_parent(handle.as_raw());
+						// SAFETY:
+						// The plugin gui is destroyed before the window is closed (see
+						// [`Message::GuiRequestHide`]).
+						unsafe {
+							gui.get_mut().set_parent(handle.as_raw());
+						}
 						gui
 					});
 

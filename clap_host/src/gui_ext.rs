@@ -99,11 +99,13 @@ impl GuiExt {
 			.unwrap();
 	}
 
-	pub fn set_parent(&mut self, window_handle: RawWindowHandle) {
+	/// # SAFETY
+	/// The underlying window must remain valid for the lifetime of this plugin instance's gui.
+	pub unsafe fn set_parent(&mut self, window_handle: RawWindowHandle) {
 		debug_assert!(!self.is_floating);
 
 		// SAFETY:
-		// We destroy the plugin ui just before the window is closed
+		// Ensured by the caller.
 		unsafe {
 			self.ext
 				.set_parent(
