@@ -858,7 +858,7 @@ impl ArrangementView {
 				track.clips.push(match clip {
 					proto::Clip::Audio(audio) => {
 						let clip = AudioClip::create(
-							audios.get(&(audio.audio))?.1.clone(),
+							audios.get(&audio.audio)?.1.clone(),
 							arrangement.rtstate(),
 						);
 						clip.position.move_to(audio.position.start.into());

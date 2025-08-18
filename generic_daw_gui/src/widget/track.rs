@@ -99,17 +99,29 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 			return;
 		};
 
+		renderer.start_layer(bounds);
+
 		self.children
 			.iter()
 			.zip(&tree.children)
 			.zip(layout.children())
-			.for_each(|((child, tree), layout)| {
-				renderer.with_layer(bounds, |renderer| {
-					child
-						.as_widget()
-						.draw(tree, renderer, theme, style, layout, cursor, &bounds);
-				});
+			.filter(|(_, layout)| layout.bounds().intersects(&bounds))
+			.fold(Vec::new(), |mut acc, ((child, tree), layout)| {
+				if acc.iter().any(|acc| layout.bounds().intersects(acc)) {
+					acc.clear();
+					renderer.end_layer();
+					renderer.start_layer(bounds);
+				}
+
+				child
+					.as_widget()
+					.draw(tree, renderer, theme, style, layout, cursor, &bounds);
+
+				acc.push(layout.bounds());
+				acc
 			});
+
+		renderer.end_layer();
 	}
 
 	fn update(
