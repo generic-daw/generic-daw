@@ -83,7 +83,7 @@ pub enum Message {
 	ChannelPanChanged(NodeId, f32),
 	ChannelToggleEnabled(NodeId),
 
-	PluginLoad(PluginDescriptor, Option<Vec<u8>>),
+	PluginLoad(PluginDescriptor, Option<Box<[u8]>>),
 	PluginRemove(usize),
 	PluginMixChanged(usize, f32),
 	PluginToggleEnabled(usize),
@@ -843,7 +843,7 @@ impl ArrangementView {
 						.keys()
 						.find(|d| *d.id == *plugin.id())?
 						.clone(),
-					plugin.state.clone(),
+					plugin.state.clone().map(|state| state.into_boxed_slice()),
 				)));
 			}
 
