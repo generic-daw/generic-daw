@@ -2,7 +2,7 @@ use crate::{
 	components::{number_input, pick_list_custom_handle, space, styled_scrollable_with_direction},
 	config::{Config, Device},
 	icons::{mic, plus, rotate_ccw, save, volume_2, x},
-	stylefns::{button_with_radius, pick_list_with_radius},
+	stylefns::{bordered_box_with_radius, button_with_radius, pick_list_with_radius},
 	theme::Theme,
 	widget::LINE_HEIGHT,
 };
@@ -153,13 +153,7 @@ impl ConfigView {
 					.padding(5)
 					.spacing(5)
 				)
-				.style(|t| {
-					container::background(t.extended_palette().background.weak.color).border(
-						border::width(1)
-							.color(t.extended_palette().background.strong.color)
-							.rounded(5),
-					)
-				}),
+				.style(bordered_box_with_radius(5)),
 				horizontal_rule(1),
 				row![
 					"CLAP Plugin Paths",
@@ -191,13 +185,7 @@ impl ConfigView {
 					.padding(5)
 					.spacing(5)
 				)
-				.style(|t| {
-					container::background(t.extended_palette().background.weak.color).border(
-						border::width(1)
-							.color(t.extended_palette().background.strong.color)
-							.rounded(5),
-					)
-				}),
+				.style(bordered_box_with_radius(5)),
 				horizontal_rule(1),
 				row![
 					row![

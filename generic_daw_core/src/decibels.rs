@@ -17,6 +17,16 @@ impl Decibels {
 
 impl Display for Decibels {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{:.2} dB", self.0)
+		let db = self.0.abs();
+
+		if db >= 0.05 {
+			if self.0.is_sign_positive() {
+				write!(f, "+")?;
+			} else {
+				write!(f, "-")?;
+			}
+		}
+
+		write!(f, "{db:.*}", usize::from(db < 9.95))
 	}
 }

@@ -4,7 +4,7 @@ use crate::{
 	components::{circle_plus, icon_button, space, styled_scrollable_with_direction},
 	config::Config,
 	icons::{chevron_up, grip_vertical, x},
-	stylefns::{self, button_with_radius, menu_with_border},
+	stylefns::{bordered_box_with_radius, button_with_radius, menu_with_border, slider_secondary},
 	widget::{
 		AnimatedDot, Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob,
 		LINE_HEIGHT, MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll,
@@ -26,7 +26,7 @@ use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use generic_daw_utils::{EnumDispatcher, NoDebug, Vec2};
 use humantime::format_rfc3339;
 use iced::{
-	Alignment, Element, Fill, Function as _, Size, Subscription, Task, border,
+	Alignment, Element, Fill, Function as _, Shrink, Size, Subscription, Task, border,
 	mouse::Interaction,
 	overlay::menu,
 	padding,
@@ -988,7 +988,11 @@ impl ArrangementView {
 
 						container(
 							row![
-								PeakMeter::new(node.l_r.get(), node.enabled),
+								row![
+									PeakMeter::new(node.l_r.get()[0], node.enabled),
+									PeakMeter::new(node.l_r.get()[1], node.enabled)
+								]
+								.spacing(2),
 								column![
 									Knob::new(
 										0.0..=1.0,
@@ -1007,14 +1011,7 @@ impl ArrangementView {
 										node.enabled,
 										Message::ChannelPanChanged.with(track.id)
 									)
-									.tooltip({
-										let pan = (node.pan * 100.0) as i8;
-										match pan.cmp(&0) {
-											Ordering::Greater => pan.to_string() + "% right",
-											Ordering::Equal => "center".to_owned(),
-											Ordering::Less => (-pan).to_string() + "% left",
-										}
-									}),
+									.tooltip(pan_to_string(node.pan)),
 								]
 								.spacing(5)
 								.wrap(),
@@ -1079,13 +1076,7 @@ impl ArrangementView {
 							]
 							.spacing(5),
 						)
-						.style(|t| {
-							container::background(t.extended_palette().background.weak.color)
-								.border(
-									border::width(1)
-										.color(t.extended_palette().background.strong.color),
-								)
-						})
+						.style(bordered_box_with_radius(0))
 						.padding(5)
 						.height(self.arrangement_scale.y)
 					})
@@ -1176,7 +1167,7 @@ impl ArrangementView {
 				column![
 					row![
 						column![
-							text(name),
+							text(name).size(13).line_height(1.0).width(Fill).center(),
 							Knob::new(
 								-1.0..=1.0,
 								node.pan,
@@ -1185,39 +1176,39 @@ impl ArrangementView {
 								node.enabled,
 								Message::ChannelPanChanged.with(node.id)
 							)
-							.tooltip({
-								let pan = (node.pan * 100.0) as i8;
-								match pan.cmp(&0) {
-									Ordering::Greater => pan.to_string() + "% right",
-									Ordering::Equal => "center".to_owned(),
-									Ordering::Less => (-pan).to_string() + "% left",
-								}
-							}),
-							PeakMeter::new(node.l_r.get(), node.enabled)
+							.tooltip(pan_to_string(node.pan)),
 						]
-						.spacing(5)
-						.align_x(Alignment::Center),
-						column![
-							buttons(node.enabled, node.id),
-							vertical_slider(
-								0.0..=1.0,
-								node.volume,
-								Message::ChannelVolumeChanged.with(node.id)
-							)
-							.step(f32::EPSILON)
-							.style(if node.enabled {
-								slider::default
-							} else {
-								stylefns::slider_secondary
-							})
-						]
-						.spacing(5)
-						.align_x(Alignment::Center)
+						.spacing(3)
+						.width(Shrink),
+						buttons(node.enabled, node.id)
 					]
-					.spacing(5),
+					.spacing(3),
+					container(
+						text(Decibels::from_amplitude(node.volume).to_string()).line_height(1.0)
+					)
+					.width(54)
+					.style(bordered_box_with_radius(0))
+					.align_x(Alignment::Center)
+					.padding(2),
+					row![
+						PeakMeter::new(node.l_r.get()[0], node.enabled).width(16.0),
+						vertical_slider(
+							0.0..=1.0,
+							node.volume,
+							Message::ChannelVolumeChanged.with(node.id)
+						)
+						.step(f32::EPSILON)
+						.style(if node.enabled {
+							slider::default
+						} else {
+							slider_secondary
+						}),
+						PeakMeter::new(node.l_r.get()[1], node.enabled).width(16.0),
+					]
+					.spacing(3),
 					connect(node.enabled, node.id)
 				]
-				.spacing(5)
+				.spacing(3)
 				.align_x(Alignment::Center),
 			)
 			.padding(5)
@@ -1302,7 +1293,7 @@ impl ArrangementView {
 					.iter()
 					.enumerate()
 					.map(|(i, track)| {
-						let name = "T ".to_owned() + &(i + 1).to_string();
+						let name = format!("T{}", i + 1);
 						let node = &self.arrangement.node(track.id).0;
 
 						channel(
@@ -1361,7 +1352,7 @@ impl ArrangementView {
 					.channels()
 					.enumerate()
 					.map(|(i, node)| {
-						let name = "C ".to_owned() + &(i + 1).to_string();
+						let name = format!("C{}", i + 1);
 
 						channel(
 							self.selected_channel,
@@ -1489,21 +1480,7 @@ impl ArrangementView {
 													(LINE_HEIGHT + 10.0) / LINE_HEIGHT
 												)
 											)
-											.style(|t| {
-												container::background(
-													t.extended_palette().background.weak.color,
-												)
-												.border(
-													border::width(1)
-														.rounded(border::right(5))
-														.color(
-															t.extended_palette()
-																.background
-																.strong
-																.color,
-														),
-												)
-											})
+											.style(bordered_box_with_radius(border::right(5)))
 										)
 										.interaction(Interaction::Grab),
 									]
@@ -1560,9 +1537,17 @@ impl ArrangementView {
 	}
 }
 
+fn pan_to_string(pan: f32) -> String {
+	let pan = (pan * 100.0) as i8;
+	match pan.cmp(&0) {
+		Ordering::Greater => format!("{}% right", pan.abs()),
+		Ordering::Equal => "center".to_owned(),
+		Ordering::Less => format!("{}% left", pan.abs()),
+	}
+}
+
 fn recording_path() -> Arc<Path> {
-	let file_name =
-		"recording-".to_owned() + &format_rfc3339(SystemTime::now()).to_string() + ".wav";
+	let file_name = format!("recording-{}.wav", format_rfc3339(SystemTime::now()));
 
 	let data_dir = dirs::data_dir().unwrap().join("Generic Daw");
 	_ = std::fs::create_dir(&data_dir);

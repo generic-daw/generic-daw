@@ -1,8 +1,8 @@
 use iced::{
 	Border, Theme,
-	border::Radius,
+	border::{self, Radius},
 	overlay::menu,
-	widget::{button, pick_list, slider},
+	widget::{button, container, pick_list, slider},
 };
 
 pub fn slider_secondary(theme: &Theme, status: slider::Status) -> slider::Style {
@@ -55,5 +55,16 @@ pub fn menu_with_border(
 		let mut style = f(t);
 		style.border = r;
 		style
+	}
+}
+
+pub fn bordered_box_with_radius(r: impl Into<Radius>) -> impl Fn(&Theme) -> container::Style {
+	let r = r.into();
+	move |t| {
+		container::background(t.extended_palette().background.weak.color).border(
+			border::width(1)
+				.color(t.extended_palette().background.strong.color)
+				.rounded(r),
+		)
 	}
 }
