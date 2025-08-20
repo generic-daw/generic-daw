@@ -983,8 +983,9 @@ impl ArrangementView {
 				self.arrangement
 					.tracks()
 					.iter()
-					.map(|track| {
-						let node = &self.arrangement.node(track.id).0;
+					.map(|track| track.id)
+					.map(|id| {
+						let node = &self.arrangement.node(id).0;
 
 						container(
 							row![
@@ -996,11 +997,11 @@ impl ArrangementView {
 								column![
 									Knob::new(
 										0.0..=1.0,
-										node.volume,
+										node.volume.cbrt(),
 										0.0,
 										1.0,
 										node.enabled,
-										Message::ChannelVolumeChanged.with(track.id)
+										move |v| Message::ChannelVolumeChanged(id, v.powi(3))
 									)
 									.tooltip(Decibels::from_amplitude(node.volume).to_string()),
 									Knob::new(
@@ -1009,7 +1010,7 @@ impl ArrangementView {
 										0.0,
 										0.0,
 										node.enabled,
-										Message::ChannelPanChanged.with(track.id)
+										Message::ChannelPanChanged.with(id)
 									)
 									.tooltip(pan_to_string(node.pan)),
 								]
@@ -1024,10 +1025,10 @@ impl ArrangementView {
 											button::secondary
 										}
 									)
-									.on_press(Message::TrackToggleEnabled(track.id)),
+									.on_press(Message::TrackToggleEnabled(id)),
 									icon_button(
 										text('S'),
-										if self.soloed_track == Some(track.id) {
+										if self.soloed_track == Some(id) {
 											button::warning
 										} else if node.enabled {
 											button::primary
@@ -1035,7 +1036,7 @@ impl ArrangementView {
 											button::secondary
 										}
 									)
-									.on_press(Message::TrackToggleSolo(track.id)),
+									.on_press(Message::TrackToggleSolo(id)),
 									icon_button(
 										x(),
 										if node.enabled {
@@ -1044,24 +1045,24 @@ impl ArrangementView {
 											button::secondary
 										}
 									)
-									.on_press(Message::TrackRemove(track.id)),
+									.on_press(Message::TrackRemove(id)),
 									column![
 										vertical_space(),
 										button(
 											AnimatedDot::new(
 												self.recording
 													.as_ref()
-													.is_some_and(|&(_, i)| i == track.id)
+													.is_some_and(|&(_, i)| i == id)
 											)
 											.radius(5.0)
 										)
 										.padding(1.5)
-										.on_press(Message::ToggleRecord(track.id))
+										.on_press(Message::ToggleRecord(id))
 										.style(
 											if self
 												.recording
 												.as_ref()
-												.is_some_and(|&(_, i)| i == track.id)
+												.is_some_and(|&(_, i)| i == id)
 											{
 												button::danger
 											} else if node.enabled {
@@ -1192,11 +1193,9 @@ impl ArrangementView {
 					.padding(2),
 					row![
 						PeakMeter::new(node.l_r.get()[0], node.enabled).width(16.0),
-						vertical_slider(
-							0.0..=1.0,
-							node.volume,
-							Message::ChannelVolumeChanged.with(node.id)
-						)
+						vertical_slider(0.0..=1.0, node.volume.cbrt(), |v| {
+							Message::ChannelVolumeChanged(node.id, v.powi(3))
+						})
 						.step(f32::EPSILON)
 						.style(if node.enabled {
 							slider::default
