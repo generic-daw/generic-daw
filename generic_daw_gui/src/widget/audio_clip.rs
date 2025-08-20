@@ -29,7 +29,6 @@ struct State {
 	shaping: Shaping,
 	last_bounds: Rectangle,
 	last_viewport: Rectangle,
-	last_theme: RefCell<Option<Theme>>,
 	last_addr: usize,
 }
 
@@ -99,12 +98,12 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
 			if state.last_bounds != bounds {
 				state.last_bounds = bounds;
-				*state.cache.borrow_mut() = None;
+				*state.cache.get_mut() = None;
 			}
 
 			if state.last_viewport != *viewport {
 				state.last_viewport = *viewport;
-				*state.cache.borrow_mut() = None;
+				*state.cache.get_mut() = None;
 			}
 		}
 	}
@@ -169,11 +168,6 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 			..Quad::default()
 		};
 		renderer.fill_quad(clip_background, color.scale_alpha(0.2));
-
-		if state.last_theme.borrow().as_ref() != Some(theme) {
-			*state.last_theme.borrow_mut() = Some(theme.clone());
-			*state.cache.borrow_mut() = None;
-		}
 
 		if state.cache.borrow().is_none()
 			&& let Some(mesh) = waveform::mesh(

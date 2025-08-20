@@ -26,7 +26,7 @@ use iced::{
 	},
 	window::{self, Id},
 };
-use iced_split::{Split, Strategy};
+use iced_split::{Strategy, vertical_split};
 use log::trace;
 use rfd::AsyncFileDialog;
 use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
@@ -416,7 +416,7 @@ impl Daw {
 				]
 				.spacing(10)
 				.align_y(Alignment::Center),
-				Split::new(
+				vertical_split(
 					self.file_tree.view().map(Message::FileTree),
 					self.arrangement_view.view().map(Message::Arrangement),
 					self.split_at,

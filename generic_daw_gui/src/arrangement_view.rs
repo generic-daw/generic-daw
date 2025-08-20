@@ -38,7 +38,7 @@ use iced::{
 		vertical_rule, vertical_slider, vertical_space,
 	},
 };
-use iced_split::{Split, Strategy};
+use iced_split::{Strategy, vertical_split};
 use log::info;
 use node::{Node, NodeType};
 use smol::unblock;
@@ -1401,7 +1401,7 @@ impl ArrangementView {
 		.width(Fill);
 
 		if let Some(selected) = self.selected_channel {
-			Split::new(
+			vertical_split(
 				mixer_panel,
 				column![
 					combo_box(&self.plugin_descriptors, "Add Plugin", None, |descriptor| {
