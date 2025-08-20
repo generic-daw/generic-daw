@@ -29,7 +29,7 @@ struct State {
 
 #[derive(Debug)]
 pub struct DragHandle<'a, Message> {
-	children: NoDebug<Element<'a, Message>>,
+	child: NoDebug<Element<'a, Message>>,
 	value: usize,
 	reset: usize,
 	strategy: Strategy,
@@ -38,13 +38,13 @@ pub struct DragHandle<'a, Message> {
 
 impl<'a, Message> DragHandle<'a, Message> {
 	pub fn new(
-		children: impl Into<Element<'a, Message>>,
+		child: impl Into<Element<'a, Message>>,
 		value: usize,
 		reset: usize,
 		f: fn(usize) -> Message,
 	) -> Self {
 		Self {
-			children: children.into().into(),
+			child: child.into().into(),
 			value,
 			reset,
 			strategy: Strategy::Vertical,
@@ -60,7 +60,11 @@ impl<'a, Message> DragHandle<'a, Message> {
 
 impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 	fn size(&self) -> Size<Length> {
-		self.children.as_widget().size()
+		self.child.as_widget().size()
+	}
+
+	fn size_hint(&self) -> Size<Length> {
+		self.child.as_widget().size_hint()
 	}
 
 	fn tag(&self) -> tree::Tag {
@@ -72,15 +76,15 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 	}
 
 	fn children(&self) -> Vec<Tree> {
-		vec![Tree::new(&*self.children)]
+		vec![Tree::new(&*self.child)]
 	}
 
 	fn diff(&self, tree: &mut Tree) {
-		tree.diff_children(&[&*self.children]);
+		tree.diff_children(&[&*self.child]);
 	}
 
 	fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-		self.children
+		self.child
 			.as_widget()
 			.layout(&mut tree.children[0], renderer, limits)
 	}
@@ -96,7 +100,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
-		self.children.as_widget_mut().update(
+		self.child.as_widget_mut().update(
 			&mut tree.children[0],
 			event,
 			layout,
@@ -186,7 +190,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		cursor: Cursor,
 		viewport: &Rectangle,
 	) {
-		self.children.as_widget().draw(
+		self.child.as_widget().draw(
 			&tree.children[0],
 			renderer,
 			theme,
@@ -211,7 +215,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 				Strategy::Vertical => Interaction::ResizingVertically,
 			}
 		} else if cursor.is_over(layout.bounds()) {
-			let interaction = self.children.as_widget().mouse_interaction(
+			let interaction = self.child.as_widget().mouse_interaction(
 				&tree.children[0],
 				layout,
 				cursor,
@@ -240,7 +244,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		viewport: &Rectangle,
 		translation: Vector,
 	) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
-		self.children.as_widget_mut().overlay(
+		self.child.as_widget_mut().overlay(
 			&mut tree.children[0],
 			layout,
 			renderer,
@@ -257,7 +261,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		operation: &mut dyn Operation,
 	) {
 		operation.container(None, layout.bounds(), &mut |operation| {
-			self.children
+			self.child
 				.as_widget()
 				.operate(&mut tree.children[0], layout, renderer, operation);
 		});
