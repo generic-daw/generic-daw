@@ -35,7 +35,7 @@ use iced::{
 		scrollable::{Direction, Scrollbar},
 		slider, text,
 		text::Wrapping,
-		vertical_rule, vertical_slider, vertical_space,
+		value, vertical_rule, vertical_slider, vertical_space,
 	},
 };
 use iced_split::{Strategy, vertical_split};
@@ -1003,7 +1003,7 @@ impl ArrangementView {
 										node.enabled,
 										move |v| Message::ChannelVolumeChanged(id, v.powi(3))
 									)
-									.tooltip(Decibels::from_amplitude(node.volume).to_string()),
+									.tooltip(Decibels::from_amplitude(node.volume)),
 									Knob::new(
 										-1.0..=1.0,
 										node.pan,
@@ -1184,13 +1184,11 @@ impl ArrangementView {
 						buttons(node.enabled, node.id)
 					]
 					.spacing(3),
-					container(
-						text(Decibels::from_amplitude(node.volume).to_string()).line_height(1.0)
-					)
-					.width(54)
-					.style(bordered_box_with_radius(0))
-					.align_x(Alignment::Center)
-					.padding(2),
+					container(value(Decibels::from_amplitude(node.volume)).line_height(1.0))
+						.width(54)
+						.style(bordered_box_with_radius(0))
+						.align_x(Alignment::Center)
+						.padding(2),
 					row![
 						PeakMeter::new(node.l_r.get()[0], node.enabled).width(16.0),
 						vertical_slider(0.0..=1.0, node.volume.cbrt(), |v| {

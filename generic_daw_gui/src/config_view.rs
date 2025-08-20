@@ -11,7 +11,7 @@ use iced::{
 	widget::{
 		button, column, container, horizontal_rule, horizontal_space, pick_list, row,
 		scrollable::{Direction, Scrollbar},
-		slider, text, toggler,
+		slider, text, toggler, value,
 	},
 };
 use rfd::AsyncFileDialog;
@@ -140,7 +140,7 @@ impl ConfigView {
 							.enumerate()
 							.map(|(idx, path)| {
 								row![
-									text(path.to_string_lossy()).font(Font::MONOSPACE),
+									value(path.display()).font(Font::MONOSPACE),
 									horizontal_space(),
 									button(x())
 										.style(button_with_radius(button::danger, 5))
@@ -172,7 +172,7 @@ impl ConfigView {
 							.enumerate()
 							.map(|(idx, path)| {
 								row![
-									text(path.to_string_lossy()).font(Font::MONOSPACE),
+									value(path.display()).font(Font::MONOSPACE),
 									horizontal_space(),
 									button(x())
 										.style(button_with_radius(button::danger, 5))

@@ -9,18 +9,21 @@ use iced::{
 		mouse::{Click, click::Kind},
 		overlay,
 		renderer::{Quad, Style},
-		text,
 		widget::{Tree, tree},
 	},
 	border,
 	mouse::{self, Cursor, Interaction, ScrollDelta},
 	widget::{
-		Text,
 		canvas::{Cache, Frame, Path, path::Arc},
+		value,
 	},
 	window,
 };
-use std::{cell::RefCell, fmt::Debug, ops::RangeInclusive};
+use std::{
+	cell::RefCell,
+	fmt::{Debug, Display},
+	ops::RangeInclusive,
+};
 
 #[derive(Default)]
 struct State {
@@ -249,7 +252,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 	}
 }
 
-impl<'a, Message> Knob<'a, Message> {
+impl<Message> Knob<'_, Message> {
 	pub fn new(
 		range: RangeInclusive<f32>,
 		value: f32,
@@ -275,8 +278,8 @@ impl<'a, Message> Knob<'a, Message> {
 		self
 	}
 
-	pub fn tooltip(mut self, tooltip: impl text::IntoFragment<'a>) -> Self {
-		self.tooltip = Some(NoDebug(Text::new(tooltip).line_height(1.0).into()));
+	pub fn tooltip(mut self, tooltip: impl Display) -> Self {
+		self.tooltip = Some(NoDebug(value(tooltip).line_height(1.0).into()));
 		self
 	}
 
