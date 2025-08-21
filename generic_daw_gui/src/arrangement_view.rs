@@ -38,6 +38,7 @@ use iced::{
 		value, vertical_rule, vertical_slider, vertical_space,
 	},
 };
+use iced_persistent::persistent;
 use iced_split::{Strategy, vertical_split};
 use log::info;
 use node::{Node, NodeType};
@@ -151,6 +152,8 @@ pub struct ArrangementView {
 	selected_channel: Option<NodeId>,
 
 	split_at: f32,
+
+	tree: iced_persistent::Tree,
 }
 
 impl ArrangementView {
@@ -183,6 +186,8 @@ impl ArrangementView {
 				selected_channel: None,
 
 				split_at: 300.0,
+
+				tree: iced_persistent::Tree::empty(),
 			},
 			task.map(Message::Update),
 		)
@@ -1258,145 +1263,148 @@ impl ArrangementView {
 			)
 		};
 
-		let mixer_panel = styled_scrollable_with_direction(
-			row(once(channel(
-				self.selected_channel,
-				"M".to_owned(),
-				&self.arrangement.master().0,
-				|enabled, id| {
-					column![
-						icon_button(
-							text('M'),
-							if enabled {
-								button::primary
-							} else {
-								button::secondary
-							}
-						)
-						.on_press(Message::ChannelToggleEnabled(id)),
-						space().height(13),
-						space().height(13)
-					]
-					.spacing(5)
-					.into()
-				},
-				connect,
-			))
-			.chain(once(vertical_rule(1).into()))
-			.chain({
-				let mut iter = self
-					.arrangement
-					.tracks()
-					.iter()
-					.enumerate()
-					.map(|(i, track)| {
-						let name = format!("T{}", i + 1);
-						let node = &self.arrangement.node(track.id).0;
+		let mixer_panel = persistent(
+			styled_scrollable_with_direction(
+				row(once(channel(
+					self.selected_channel,
+					"M".to_owned(),
+					&self.arrangement.master().0,
+					|enabled, id| {
+						column![
+							icon_button(
+								text('M'),
+								if enabled {
+									button::primary
+								} else {
+									button::secondary
+								}
+							)
+							.on_press(Message::ChannelToggleEnabled(id)),
+							space().height(13),
+							space().height(13)
+						]
+						.spacing(5)
+						.into()
+					},
+					connect,
+				))
+				.chain(once(vertical_rule(1).into()))
+				.chain({
+					let mut iter = self
+						.arrangement
+						.tracks()
+						.iter()
+						.enumerate()
+						.map(|(i, track)| {
+							let name = format!("T{}", i + 1);
+							let node = &self.arrangement.node(track.id).0;
 
-						channel(
-							self.selected_channel,
-							name,
-							node,
-							|enabled, id| {
-								column![
-									icon_button(
-										text('M'),
-										if enabled {
-											button::primary
-										} else {
-											button::secondary
-										}
-									)
-									.on_press(Message::TrackToggleEnabled(id)),
-									icon_button(
-										text('S'),
-										if self.soloed_track == Some(id) {
-											button::warning
-										} else if enabled {
-											button::primary
-										} else {
-											button::secondary
-										}
-									)
-									.on_press(Message::TrackToggleSolo(id)),
-									icon_button(
-										x(),
-										if enabled {
-											button::danger
-										} else {
-											button::secondary
-										}
-									)
-									.on_press(Message::TrackRemove(id))
-								]
-								.spacing(5)
-								.into()
-							},
-							|_, _| space().height(LINE_HEIGHT).into(),
-						)
-					})
-					.peekable();
+							channel(
+								self.selected_channel,
+								name,
+								node,
+								|enabled, id| {
+									column![
+										icon_button(
+											text('M'),
+											if enabled {
+												button::primary
+											} else {
+												button::secondary
+											}
+										)
+										.on_press(Message::TrackToggleEnabled(id)),
+										icon_button(
+											text('S'),
+											if self.soloed_track == Some(id) {
+												button::warning
+											} else if enabled {
+												button::primary
+											} else {
+												button::secondary
+											}
+										)
+										.on_press(Message::TrackToggleSolo(id)),
+										icon_button(
+											x(),
+											if enabled {
+												button::danger
+											} else {
+												button::secondary
+											}
+										)
+										.on_press(Message::TrackRemove(id))
+									]
+									.spacing(5)
+									.into()
+								},
+								|_, _| space().height(LINE_HEIGHT).into(),
+							)
+						})
+						.peekable();
 
-				if iter.peek().is_some() {
-					EnumDispatcher::A(iter.chain(once(vertical_rule(1).into())))
-				} else {
-					EnumDispatcher::B(iter)
-				}
-			})
-			.chain({
-				let mut iter = self
-					.arrangement
-					.channels()
-					.enumerate()
-					.map(|(i, node)| {
-						let name = format!("C{}", i + 1);
+					if iter.peek().is_some() {
+						EnumDispatcher::A(iter.chain(once(vertical_rule(1).into())))
+					} else {
+						EnumDispatcher::B(iter)
+					}
+				})
+				.chain({
+					let mut iter = self
+						.arrangement
+						.channels()
+						.enumerate()
+						.map(|(i, node)| {
+							let name = format!("C{}", i + 1);
 
-						channel(
-							self.selected_channel,
-							name,
-							node,
-							|enabled, id| {
-								column![
-									icon_button(
-										text('M'),
-										if enabled {
-											button::primary
-										} else {
-											button::secondary
-										}
-									)
-									.on_press(Message::ChannelToggleEnabled(id)),
-									space().height(13),
-									icon_button(
-										x(),
-										if enabled {
-											button::danger
-										} else {
-											button::secondary
-										}
-									)
-									.on_press(Message::ChannelRemove(id)),
-								]
-								.spacing(5)
-								.into()
-							},
-							connect,
-						)
-					})
-					.peekable();
+							channel(
+								self.selected_channel,
+								name,
+								node,
+								|enabled, id| {
+									column![
+										icon_button(
+											text('M'),
+											if enabled {
+												button::primary
+											} else {
+												button::secondary
+											}
+										)
+										.on_press(Message::ChannelToggleEnabled(id)),
+										space().height(13),
+										icon_button(
+											x(),
+											if enabled {
+												button::danger
+											} else {
+												button::secondary
+											}
+										)
+										.on_press(Message::ChannelRemove(id)),
+									]
+									.spacing(5)
+									.into()
+								},
+								connect,
+							)
+						})
+						.peekable();
 
-				if iter.peek().is_some() {
-					EnumDispatcher::A(iter.chain(once(vertical_rule(1).into())))
-				} else {
-					EnumDispatcher::B(iter)
-				}
-			})
-			.chain(once(circle_plus().on_press(Message::ChannelAdd).into())))
-			.align_y(Alignment::Center)
-			.spacing(5),
-			Direction::Horizontal(Scrollbar::default()),
-		)
-		.width(Fill);
+					if iter.peek().is_some() {
+						EnumDispatcher::A(iter.chain(once(vertical_rule(1).into())))
+					} else {
+						EnumDispatcher::B(iter)
+					}
+				})
+				.chain(once(circle_plus().on_press(Message::ChannelAdd).into())))
+				.align_y(Alignment::Center)
+				.spacing(5),
+				Direction::Horizontal(Scrollbar::default()),
+			)
+			.width(Fill),
+			&self.tree,
+		);
 
 		if let Some(selected) = self.selected_channel {
 			vertical_split(
