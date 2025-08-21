@@ -44,7 +44,7 @@ where
 		Size::new(Shrink, Fill)
 	}
 
-	fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
+	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
 		let start = self.inner.position.start().to_samples_f(self.rtstate);
 		let end = self.inner.position.end().to_samples_f(self.rtstate);
 		let pixel_size = self.scale.x.exp2();

@@ -79,7 +79,7 @@ where
 		Size::new(Fill, Length::Fixed(128.0 * self.scale.y))
 	}
 
-	fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
 		Node::new(Size::new(limits.max().width, 128.0 * self.scale.y))
 	}
 

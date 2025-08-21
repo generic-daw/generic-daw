@@ -48,7 +48,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AnimatedDot {
 		tree::State::new(State::new(self.enabled))
 	}
 
-	fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
+	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
 		Node::new(Size::new(2.0 * self.radius, 2.0 * self.radius))
 	}
 

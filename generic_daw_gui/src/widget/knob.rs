@@ -60,9 +60,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 		tree::Tag::of::<State>()
 	}
 
-	fn diff(&self, tree: &mut Tree) {
-		if let Some(tooltip) = self.tooltip.as_deref() {
-			tree.diff_children(&[tooltip]);
+	fn diff(&mut self, tree: &mut Tree) {
+		if let Some(tooltip) = self.tooltip.as_deref_mut() {
+			tree.diff_children(&mut [tooltip]);
 		} else {
 			tree.children.clear();
 		}
@@ -79,7 +79,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 		tree::State::new(State::default())
 	}
 
-	fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
+	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
 		Node::new(Size::new(2.0 * self.radius, 2.0 * self.radius))
 	}
 
@@ -239,7 +239,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 		let state = tree.state.downcast_ref::<State>();
 
 		if state.hovering || state.dragging.is_some() {
-			self.tooltip.as_deref().map(|tooltip| {
+			self.tooltip.as_deref_mut().map(|tooltip| {
 				overlay::Element::new(Box::new(Overlay {
 					tooltip,
 					tree: tree.children.iter_mut().next().unwrap(),
@@ -349,7 +349,7 @@ where
 }
 
 struct Overlay<'a, 'b, Message> {
-	tooltip: &'b Element<'a, Message>,
+	tooltip: &'b mut Element<'a, Message>,
 	tree: &'b mut Tree,
 	bounds: Rectangle,
 }
@@ -358,7 +358,7 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
 	fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
 		let padding = 3.0;
 
-		let layout = self.tooltip.as_widget().layout(
+		let layout = self.tooltip.as_widget_mut().layout(
 			self.tree,
 			renderer,
 			&Limits::new(Size::ZERO, bounds).shrink(Size::new(padding, padding)),

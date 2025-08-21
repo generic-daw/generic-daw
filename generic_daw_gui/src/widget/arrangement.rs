@@ -72,20 +72,20 @@ where
 		Size::new(Fill, Fill)
 	}
 
-	fn diff(&self, tree: &mut Tree) {
-		tree.diff_children(&[&*self.children]);
+	fn diff(&mut self, tree: &mut Tree) {
+		tree.diff_children(&mut [&mut *self.children]);
 	}
 
 	fn children(&self) -> Vec<Tree> {
 		vec![Tree::new(&*self.children)]
 	}
 
-	fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
 		Node::with_children(
 			limits.max(),
 			vec![
 				self.children
-					.as_widget()
+					.as_widget_mut()
 					.layout(&mut tree.children[0], renderer, limits),
 			],
 		)
@@ -334,14 +334,14 @@ where
 	}
 
 	fn operate(
-		&self,
+		&mut self,
 		tree: &mut Tree,
 		layout: Layout<'_>,
 		renderer: &Renderer,
 		operation: &mut dyn Operation,
 	) {
 		operation.container(None, layout.bounds(), &mut |operation| {
-			self.children.as_widget().operate(
+			self.children.as_widget_mut().operate(
 				&mut tree.children[0],
 				layout.children().next().unwrap(),
 				renderer,

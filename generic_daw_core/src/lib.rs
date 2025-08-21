@@ -18,6 +18,7 @@ mod daw_ctx;
 mod decibels;
 mod event;
 mod export;
+mod lod;
 mod master;
 mod midi_clip;
 mod mixer;
@@ -35,14 +36,13 @@ pub use cpal::{Stream, traits::StreamTrait};
 pub use daw_ctx::{Action, Message, RtState, Update, Version};
 pub use decibels::Decibels;
 pub use export::export;
+pub use lod::LOD_LEVELS;
 pub use midi_clip::{Key, MidiClip, MidiKey, MidiNote};
 pub use mixer::Mixer;
 pub use musical_time::MusicalTime;
 pub use recording::Recording;
 pub(crate) use resampler::Resampler;
 pub use track::Track;
-
-pub const LOD_LEVELS: usize = 13;
 
 #[must_use]
 pub fn get_input_devices() -> Vec<String> {

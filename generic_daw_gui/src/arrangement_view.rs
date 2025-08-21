@@ -1190,7 +1190,7 @@ impl ArrangementView {
 						.align_x(Alignment::Center)
 						.padding(2),
 					row![
-						PeakMeter::new(node.l_r.get()[0], node.enabled).width(16.0),
+						PeakMeter::new(node.l_r.get()[0].cbrt(), node.enabled).width(16.0),
 						vertical_slider(0.0..=1.0, node.volume.cbrt(), |v| {
 							Message::ChannelVolumeChanged(node.id, v.powi(3))
 						})
@@ -1200,7 +1200,7 @@ impl ArrangementView {
 						} else {
 							slider_secondary
 						}),
-						PeakMeter::new(node.l_r.get()[1], node.enabled).width(16.0),
+						PeakMeter::new(node.l_r.get()[1].cbrt(), node.enabled).width(16.0),
 					]
 					.spacing(3),
 					connect(node.enabled, node.id)

@@ -52,7 +52,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 		tree::State::new(State::default())
 	}
 
-	fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
 		Node::new(Size::new(self.width, limits.max().height))
 	}
 
@@ -60,7 +60,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 		&mut self,
 		tree: &mut Tree,
 		event: &Event,
-		_layout: Layout<'_>,
+		layout: Layout<'_>,
 		_cursor: Cursor,
 		_renderer: &Renderer,
 		_clipboard: &mut dyn Clipboard,
@@ -75,7 +75,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 
 			if peak > state.peak.interpolate_with(identity, now) {
 				state.peak = Animation::new(peak)
-					.duration(Duration::from_secs_f32(peak.exp2()))
+					.duration(Duration::from_secs_f32(
+						peak.exp2() * (layout.bounds().height.sqrt() / 10.0),
+					))
 					.easing(Easing::EaseOutExpo)
 					.go(0.0, now);
 			}

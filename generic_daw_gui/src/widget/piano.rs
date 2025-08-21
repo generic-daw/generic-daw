@@ -31,7 +31,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 		)
 	}
 
-	fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
+	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
 		Node::new(Size::new(PIANO_WIDTH, 128.0 * self.scale.y))
 	}
 

@@ -29,7 +29,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
 		Size::new(Shrink, Fill)
 	}
 
-	fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
+	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
 		let start = self.inner.position.to_samples_f(self.rtstate);
 		let len = self.inner.len() as f32;
 		let pixel_size = self.scale.x.exp2();

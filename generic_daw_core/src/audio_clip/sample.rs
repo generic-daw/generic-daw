@@ -1,4 +1,4 @@
-use crate::{LOD_LEVELS, Resampler};
+use crate::{LOD_LEVELS, Resampler, lod::create_lods};
 use generic_daw_utils::NoDebug;
 use log::info;
 use std::{fs::File, path::Path, sync::Arc};
@@ -26,7 +26,7 @@ impl Sample {
 
 		let name = path.file_name()?.to_str()?.into();
 		let samples = Self::read_audio_file(&path, sample_rate)?;
-		let lods = Self::create_lod(&samples);
+		let lods = create_lods(&samples);
 
 		info!("loaded sample {}", path.display());
 
@@ -101,36 +101,5 @@ impl Sample {
 			Resampler::new(file_sample_rate as usize, sample_rate as usize, n_channels)?;
 		resampler.process(samples);
 		Some(resampler.finish().into_boxed_slice())
-	}
-
-	fn create_lod(samples: &[f32]) -> Box<[Box<[(f32, f32)]>; LOD_LEVELS]> {
-		let mut lods = [const { Vec::new() }; LOD_LEVELS];
-
-		lods[0] = samples
-			.chunks(8)
-			.map(|chunk| {
-				let (min, max) = chunk
-					.iter()
-					.fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
-						(min.min(c), max.max(c))
-					});
-				(min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5))
-			})
-			.collect();
-
-		for i in 1..LOD_LEVELS {
-			lods[i] = lods[i - 1]
-				.chunks(2)
-				.map(|chunk| {
-					chunk
-						.iter()
-						.fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
-							(min.min(c.0), max.max(c.1))
-						})
-				})
-				.collect();
-		}
-
-		Box::new(lods.map(|lod| lod.into_boxed_slice()))
 	}
 }

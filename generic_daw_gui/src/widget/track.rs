@@ -37,8 +37,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 		tree::State::new(State::default())
 	}
 
-	fn diff(&self, tree: &mut Tree) {
-		tree.diff_children(&self.children);
+	fn diff(&mut self, tree: &mut Tree) {
+		tree.diff_children(&mut self.children);
 	}
 
 	fn size(&self) -> Size<Length> {
@@ -49,13 +49,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 		self.children.iter().map(Tree::new).collect()
 	}
 
-	fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
 		Node::with_children(
 			Size::new(limits.max().width, self.scale.y),
 			self.children
-				.iter()
+				.iter_mut()
 				.zip(&mut tree.children)
-				.map(|(widget, tree)| widget.as_widget().layout(tree, renderer, limits))
+				.map(|(widget, tree)| widget.as_widget_mut().layout(tree, renderer, limits))
 				.collect(),
 		)
 	}
@@ -201,7 +201,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 	}
 
 	fn operate(
-		&self,
+		&mut self,
 		tree: &mut Tree,
 		layout: Layout<'_>,
 		renderer: &Renderer,
@@ -209,12 +209,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 	) {
 		operation.container(None, layout.bounds(), &mut |operation| {
 			self.children
-				.iter()
+				.iter_mut()
 				.zip(&mut tree.children)
 				.zip(layout.children())
 				.for_each(|((child, state), layout)| {
 					child
-						.as_widget()
+						.as_widget_mut()
 						.operate(state, layout, renderer, operation);
 				});
 		});

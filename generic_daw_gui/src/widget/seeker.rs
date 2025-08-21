@@ -49,23 +49,23 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		Size::new(Fill, Fill)
 	}
 
-	fn diff(&self, tree: &mut Tree) {
-		tree.diff_children(&*self.children);
+	fn diff(&mut self, tree: &mut Tree) {
+		tree.diff_children(&mut *self.children);
 	}
 
 	fn children(&self) -> Vec<Tree> {
 		self.children.iter().map(Tree::new).collect()
 	}
 
-	fn layout(&self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-		let left = self.children[0].as_widget().layout(
+	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+		let left = self.children[0].as_widget_mut().layout(
 			&mut tree.children[0],
 			renderer,
 			&Limits::new(limits.min(), Size::new(limits.max().width, f32::INFINITY)),
 		);
 		let left_width = left.size().width;
 
-		let right = self.children[1].as_widget().layout(
+		let right = self.children[1].as_widget_mut().layout(
 			&mut tree.children[1],
 			renderer,
 			&Limits::new(
@@ -401,7 +401,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 	}
 
 	fn operate(
-		&self,
+		&mut self,
 		tree: &mut Tree,
 		layout: Layout<'_>,
 		renderer: &Renderer,
@@ -409,12 +409,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 	) {
 		operation.container(None, layout.bounds(), &mut |operation| {
 			self.children
-				.iter()
+				.iter_mut()
 				.zip(&mut tree.children)
 				.zip(layout.children())
 				.for_each(|((child, state), layout)| {
 					child
-						.as_widget()
+						.as_widget_mut()
 						.operate(state, layout, renderer, operation);
 				});
 		});
