@@ -125,8 +125,8 @@ where
 							cursor.x,
 							*modifiers,
 							self.rtstate,
-							self.position,
-							self.scale,
+							*self.position,
+							*self.scale,
 						);
 
 						if let Some(i) = self.get_note(cursor) {
@@ -194,8 +194,8 @@ where
 							cursor.x + offset,
 							*modifiers,
 							self.rtstate,
-							self.position,
-							self.scale,
+							*self.position,
+							*self.scale,
 						);
 
 						if new_key != key || new_start != time {
@@ -210,8 +210,8 @@ where
 							cursor.x + offset,
 							*modifiers,
 							self.rtstate,
-							self.position,
-							self.scale,
+							*self.position,
+							*self.scale,
 						);
 						if new_start != time {
 							*state = State::NoteTrimmingStart(offset, new_start);
@@ -225,8 +225,8 @@ where
 							cursor.x + offset,
 							*modifiers,
 							self.rtstate,
-							self.position,
-							self.scale,
+							*self.position,
+							*self.scale,
 						);
 						if new_end != time {
 							*state = State::NoteTrimmingEnd(offset, new_end);

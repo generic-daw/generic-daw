@@ -42,13 +42,12 @@ pub fn shaping_of(text: &str) -> Shaping {
 	}
 }
 
-#[expect(clippy::trivially_copy_pass_by_ref)]
 fn get_time(
 	x: f32,
 	modifiers: Modifiers,
 	rtstate: &RtState,
-	position: &Vec2,
-	scale: &Vec2,
+	position: Vec2,
+	scale: Vec2,
 ) -> MusicalTime {
 	let time = x.mul_add(scale.x.exp2(), position.x).max(0.0);
 	let mut time = MusicalTime::from_samples_f(time, rtstate);

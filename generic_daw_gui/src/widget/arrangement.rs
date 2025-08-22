@@ -144,8 +144,8 @@ where
 							cursor.x,
 							*modifiers,
 							self.rtstate,
-							self.position,
-							self.scale,
+							*self.position,
+							*self.scale,
 						);
 
 						if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
@@ -207,8 +207,8 @@ where
 							cursor.x + offset,
 							*modifiers,
 							self.rtstate,
-							self.position,
-							self.scale,
+							*self.position,
+							*self.scale,
 						);
 
 						if new_track != track || new_start != time {
@@ -223,8 +223,8 @@ where
 							cursor.x + offset,
 							*modifiers,
 							self.rtstate,
-							self.position,
-							self.scale,
+							*self.position,
+							*self.scale,
 						);
 						if new_start != time {
 							*state = State::ClipTrimmingStart(offset, new_start);
@@ -238,8 +238,8 @@ where
 							cursor.x + offset,
 							*modifiers,
 							self.rtstate,
-							self.position,
-							self.scale,
+							*self.position,
+							*self.scale,
 						);
 						if new_end != time {
 							*state = State::ClipTrimmingEnd(offset, new_end);

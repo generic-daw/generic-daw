@@ -172,8 +172,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 					cursor.x,
 					*modifiers,
 					self.rtstate,
-					self.position,
-					self.scale,
+					*self.position,
+					*self.scale,
 				);
 
 				shell.publish((self.on_double_click)(time));

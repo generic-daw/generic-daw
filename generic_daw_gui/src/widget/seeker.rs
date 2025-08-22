@@ -139,8 +139,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 							cursor.x + self.offset,
 							*modifiers,
 							self.rtstate,
-							self.position,
-							self.scale,
+							*self.position,
+							*self.scale,
 						);
 
 						if last_time != time {
@@ -160,8 +160,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 						cursor.x,
 						*modifiers,
 						self.rtstate,
-						self.position,
-						self.scale,
+						*self.position,
+						*self.scale,
 					);
 					state.seeking = Some(time);
 					shell.publish((self.seek_to)(time));

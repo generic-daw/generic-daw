@@ -7,14 +7,13 @@ use iced_wgpu::graphics::{
 	mesh::{Indexed, SolidVertex2D},
 };
 
-#[expect(clippy::trivially_copy_pass_by_ref)]
 pub fn mesh(
 	rtstate: &RtState,
 	start: MusicalTime,
 	offset: MusicalTime,
 	lods: &[impl AsRef<[(f32, f32)]>; LOD_LEVELS],
-	position: &Vec2,
-	scale: &Vec2,
+	position: Vec2,
+	scale: Vec2,
 	theme: &Theme,
 	point: Point,
 	bounds: Rectangle,
@@ -26,14 +25,13 @@ pub fn mesh(
 	})
 }
 
-#[expect(clippy::trivially_copy_pass_by_ref)]
 fn make_mesh(
 	rtstate: &RtState,
 	start: MusicalTime,
 	offset: MusicalTime,
 	lods: &[impl AsRef<[(f32, f32)]>],
-	position: &Vec2,
-	scale: &Vec2,
+	position: Vec2,
+	scale: Vec2,
 	theme: &Theme,
 	point: Point,
 	bounds: Rectangle,
