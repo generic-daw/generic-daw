@@ -28,6 +28,8 @@ use iced::{
 	mouse::Interaction,
 	overlay::menu,
 	padding,
+	task::Handle,
+	time::every,
 	widget::{
 		button, column, combo_box, container, horizontal_rule, mouse_area, row,
 		scrollable::{Direction, Scrollbar},
@@ -42,14 +44,14 @@ use node::{Node, NodeType};
 use smol::unblock;
 use std::{
 	cmp::Ordering,
-	collections::{BTreeMap, BTreeSet},
+	collections::BTreeMap,
 	fs::File,
 	io::Read,
 	iter::once,
 	ops::Deref as _,
 	path::Path,
 	sync::{Arc, Weak},
-	time::SystemTime,
+	time::{Duration, SystemTime},
 };
 
 mod arrangement;
@@ -60,7 +62,7 @@ mod track;
 
 #[derive(Clone, Debug)]
 enum LoadStatus {
-	Loading(usize),
+	Loading(usize, #[expect(dead_code)] Handle),
 	Loaded(u32, Weak<Sample>),
 }
 
@@ -68,6 +70,8 @@ enum LoadStatus {
 pub enum Message {
 	ClapHost(ClapHostMessage),
 	Batch(Batch),
+
+	Gc,
 
 	ConnectRequest((NodeId, NodeId)),
 	ConnectSucceeded((NodeId, NodeId)),
@@ -131,7 +135,6 @@ pub struct ArrangementView {
 	plugin_descriptors: combo_box::State<PluginDescriptor>,
 
 	pub arrangement: ArrangementWrapper,
-	loading: BTreeSet<Arc<Path>>,
 	audios: BTreeMap<Arc<Path>, LoadStatus>,
 	midis: Vec<Weak<ArcSwap<Vec<MidiNote>>>>,
 
@@ -165,7 +168,6 @@ impl ArrangementView {
 				plugin_descriptors: combo_box::State::new(plugin_bundles.keys().cloned().collect()),
 
 				arrangement,
-				loading: BTreeSet::new(),
 				audios: BTreeMap::new(),
 				midis: Vec::new(),
 
@@ -199,6 +201,16 @@ impl ArrangementView {
 		match message {
 			Message::ClapHost(msg) => return self.clap_host.update(msg).map(Message::ClapHost),
 			Message::Batch(msg) => self.arrangement.update(msg),
+			Message::Gc => {
+				self.audios.retain(|_, audio| {
+					if let LoadStatus::Loaded(_, audio) = audio {
+						audio.strong_count() > 0
+					} else {
+						true
+					}
+				});
+				self.midis.retain(|midi| midi.strong_count() > 0);
+			}
 			Message::ConnectRequest((from, to)) => {
 				return Task::perform(self.arrangement.request_connect(from, to), |con| {
 					Message::ConnectSucceeded(con.unwrap())
@@ -301,7 +313,7 @@ impl ArrangementView {
 			Message::SampleLoadFromFile(path) => {
 				if let Some(entry) = self.audios.get_mut(&path) {
 					match entry {
-						LoadStatus::Loading(count) => {
+						LoadStatus::Loading(count, _) => {
 							*count += 1;
 							return Task::none();
 						}
@@ -318,11 +330,9 @@ impl ArrangementView {
 					}
 				}
 
-				self.audios.insert(path.clone(), LoadStatus::Loading(1));
-				self.loading.insert(path.clone());
 				let sample_rate = self.arrangement.rtstate().sample_rate;
 
-				return Task::perform(
+				let (task, handle) = Task::perform(
 					{
 						let path = path.clone();
 						unblock(move || {
@@ -331,49 +341,57 @@ impl ArrangementView {
 							Some((crc, sample))
 						})
 					},
-					Message::SampleLoadedFromFile.with(path),
-				);
+					Message::SampleLoadedFromFile.with(path.clone()),
+				)
+				.abortable();
+				let handle = handle.abort_on_drop();
+
+				self.audios
+					.insert(path.clone(), LoadStatus::Loading(1, handle));
+
+				return task;
 			}
 			Message::SampleLoadedFromFile(path, audio) => {
-				self.loading.remove(&path);
+				let Some((crc, audio)) = audio else {
+					self.audios.remove(&path);
+					return Task::none();
+				};
 
-				if let Some((crc, audio)) = audio {
-					let count = match self.audios[&audio.path] {
-						LoadStatus::Loading(count) => {
-							self.audios.insert(
-								audio.path.clone(),
-								LoadStatus::Loaded(crc, Arc::downgrade(&audio)),
-							);
+				let count = match self.audios[&path] {
+					LoadStatus::Loading(count, _) => {
+						self.audios.insert(
+							path.clone(),
+							LoadStatus::Loaded(crc, Arc::downgrade(&audio)),
+						);
 
-							count
-						}
-						LoadStatus::Loaded(..) => 1,
-					};
+						count
+					}
+					LoadStatus::Loaded(..) => 1,
+				};
 
-					let clip = AudioClip::create(audio, self.arrangement.rtstate());
-					let end = clip.position.end();
+				let clip = AudioClip::create(audio, self.arrangement.rtstate());
+				let end = clip.position.end();
 
-					let mut futs = Vec::new();
-					let mut track = 0;
+				let mut futs = Vec::new();
+				let mut track = 0;
 
-					for _ in 0..count {
-						while self.arrangement.tracks().get(track).is_some_and(|track| {
-							track.clips.iter().any(|clip| clip.position().start() < end)
-						}) {
-							track += 1;
-						}
-
-						if track == self.arrangement.tracks().len() {
-							futs.push(Task::perform(self.arrangement.add_track(), |con| {
-								Message::ConnectSucceeded(con.unwrap())
-							}));
-						}
-
-						self.arrangement.add_clip(track, clip.clone());
+				for _ in 0..count {
+					while self.arrangement.tracks().get(track).is_some_and(|track| {
+						track.clips.iter().any(|clip| clip.position().start() < end)
+					}) {
+						track += 1;
 					}
 
-					return Task::batch(futs);
+					if track == self.arrangement.tracks().len() {
+						futs.push(Task::perform(self.arrangement.add_track(), |con| {
+							Message::ConnectSucceeded(con.unwrap())
+						}));
+					}
+
+					self.arrangement.add_clip(track, clip.clone());
 				}
+
+				return Task::batch(futs);
 			}
 			Message::OpenMidiClip(clip) => {
 				self.tab = Tab::PianoRoll {
@@ -645,7 +663,9 @@ impl ArrangementView {
 	}
 
 	pub fn loading(&self) -> bool {
-		!self.loading.is_empty()
+		self.audios
+			.values()
+			.any(|audio| matches!(audio, LoadStatus::Loading(..)))
 	}
 
 	pub fn view(&self) -> Element<'_, Message> {
@@ -1217,7 +1237,10 @@ impl ArrangementView {
 	}
 
 	pub fn subscription(&self) -> Subscription<Message> {
-		self.clap_host.subscription().map(Message::ClapHost)
+		Subscription::batch([
+			every(Duration::from_secs(60)).map(|_| Message::Gc),
+			self.clap_host.subscription().map(Message::ClapHost),
+		])
 	}
 }
 

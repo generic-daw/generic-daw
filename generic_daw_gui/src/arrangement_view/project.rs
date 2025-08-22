@@ -300,14 +300,12 @@ impl ArrangementView {
 
 		self.plugin_descriptors = combo_box::State::new(plugin_bundles.keys().cloned().collect());
 		self.arrangement = arrangement;
-		self.audios.clear();
 		self.audios.extend(audios.values().map(|(crc, audio)| {
 			(
 				audio.path.clone(),
 				LoadStatus::Loaded(*crc, Arc::downgrade(audio)),
 			)
 		}));
-		self.midis.clear();
 		self.midis.extend(midis.values().map(Arc::downgrade));
 
 		Some(Task::batch(futs))
@@ -318,22 +316,20 @@ impl ArrangementView {
 		config: &Config,
 		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
 	) -> Task<Message> {
-		let (arrangement, task) = ArrangementWrapper::create(config);
+		let mut futs = Vec::new();
 
-		let futs = Task::batch(self.clear().chain(once(task.map(Message::Batch))));
+		let (arrangement, task) = ArrangementWrapper::create(config);
+		futs.push(task.map(Message::Batch));
+
+		futs.extend(self.clear());
 
 		self.plugin_descriptors = combo_box::State::new(plugin_bundles.keys().cloned().collect());
 		self.arrangement = arrangement;
-		self.audios.clear();
-		self.midis.clear();
 
-		futs
+		Task::batch(futs)
 	}
 
 	fn clear(&mut self) -> impl Iterator<Item = Task<Message>> {
-		self.loading.clear();
-		self.audios.clear();
-		self.midis.clear();
 		self.recording = None;
 		self.soloed_track = None;
 		self.selected_channel = None;
