@@ -1,0 +1,51 @@
+use clack_extensions::params::{ParamInfo, ParamInfoBuffer, ParamInfoFlags, PluginParams};
+use clack_host::{
+	plugin::PluginMainThreadHandle,
+	utils::{ClapId, Cookie},
+};
+use std::{ops::RangeInclusive, sync::Arc};
+
+#[derive(Debug)]
+pub struct Param {
+	pub id: ClapId,
+	pub flags: ParamInfoFlags,
+	pub cookie: Cookie,
+	pub name: Arc<str>,
+	pub range: RangeInclusive<f64>,
+	pub reset: f64,
+	pub value: f64,
+}
+
+impl From<ParamInfo<'_>> for Param {
+	fn from(value: ParamInfo<'_>) -> Self {
+		Self {
+			id: value.id,
+			flags: value.flags,
+			cookie: value.cookie,
+			name: String::from_utf8_lossy(value.name).into(),
+			range: value.min_value..=value.max_value,
+			reset: value.default_value,
+			value: value.default_value,
+		}
+	}
+}
+
+impl Param {
+	pub fn all(plugin: &mut PluginMainThreadHandle<'_>, ext: PluginParams) -> Box<[Self]> {
+		let count = ext.count(plugin) as usize;
+		let buffer = &mut ParamInfoBuffer::new();
+
+		(0..)
+			.filter_map(|index| ext.get_info(plugin, index, buffer).map(Self::from))
+			.take(count)
+			.collect()
+	}
+
+	pub fn rescan_value(&mut self, plugin: &mut PluginMainThreadHandle<'_>, ext: PluginParams) {
+		let Some(value) = ext.get_value(plugin, self.id) else {
+			return;
+		};
+
+		self.value = value;
+	}
+}

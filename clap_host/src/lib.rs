@@ -23,9 +23,11 @@ pub mod events;
 mod gui_ext;
 mod host;
 mod main_thread;
+mod params;
 mod plugin_descriptor;
 mod shared;
 
+use crate::params::Param;
 pub use audio_processor::AudioProcessor;
 pub use clack_host::{
 	bundle::PluginBundle,
@@ -176,11 +178,15 @@ pub fn init(
 		audio_receiver,
 	);
 
+	let params = instance.access_handler(|mt| mt.params).unwrap().0;
+	let params = Param::all(&mut instance.plugin_handle(), params);
+
 	let gui = GuiExt::new(
 		instance.access_handler(|mt| mt.gui).unwrap().0,
 		instance,
 		descriptor,
 		id,
+		params,
 	);
 
 	(gui, main_receiver, plugin_audio_processor)

@@ -70,7 +70,7 @@ enum LoadStatus {
 #[derive(Clone, Debug)]
 pub enum Message {
 	ClapHost(ClapHostMessage),
-	Update(Batch),
+	Batch(Batch),
 
 	ConnectRequest((NodeId, NodeId)),
 	ConnectSucceeded((NodeId, NodeId)),
@@ -189,7 +189,7 @@ impl ArrangementView {
 
 				tree: iced_persistent::Tree::empty(),
 			},
-			task.map(Message::Update),
+			task.map(Message::Batch),
 		)
 	}
 
@@ -201,7 +201,7 @@ impl ArrangementView {
 	) -> Task<Message> {
 		match message {
 			Message::ClapHost(msg) => return self.clap_host.update(msg).map(Message::ClapHost),
-			Message::Update(msg) => self.arrangement.update(msg),
+			Message::Batch(msg) => self.arrangement.update(msg),
 			Message::ConnectRequest((from, to)) => {
 				return Task::perform(self.arrangement.request_connect(from, to), |con| {
 					Message::ConnectSucceeded(con.unwrap())
@@ -778,7 +778,7 @@ impl ArrangementView {
 		let mut futs = Vec::new();
 
 		let (mut arrangement, task) = ArrangementWrapper::create(config);
-		futs.push(task.map(Message::Update));
+		futs.push(task.map(Message::Batch));
 
 		arrangement.set_bpm(reader.rtstate().bpm as u16);
 		arrangement.set_numerator(reader.rtstate().numerator as u8);
@@ -941,7 +941,7 @@ impl ArrangementView {
 	) -> Task<Message> {
 		let (arrangement, task) = ArrangementWrapper::create(config);
 
-		let futs = Task::batch(self.clear().chain(once(task.map(Message::Update))));
+		let futs = Task::batch(self.clear().chain(once(task.map(Message::Batch))));
 		self.plugin_descriptors = combo_box::State::new(plugin_bundles.keys().cloned().collect());
 		self.arrangement = arrangement;
 

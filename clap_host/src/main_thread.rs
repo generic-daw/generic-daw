@@ -23,6 +23,7 @@ pub enum MainThreadMessage {
 	RegisterTimer(u32, Duration),
 	UnregisterTimer(u32),
 	LatencyChanged,
+	RescanValues,
 }
 
 #[derive(Debug)]
@@ -89,7 +90,14 @@ impl HostNotePortsImpl for MainThread<'_> {
 }
 
 impl HostParamsImplMainThread for MainThread<'_> {
-	fn rescan(&mut self, _flags: ParamRescanFlags) {}
+	fn rescan(&mut self, flags: ParamRescanFlags) {
+		if flags.contains(ParamRescanFlags::VALUES) {
+			self.shared
+				.main_sender
+				.try_send(MainThreadMessage::RescanValues)
+				.unwrap();
+		}
+	}
 
 	fn clear(&mut self, _param_id: ClapId, _flags: ParamClearFlags) {}
 }

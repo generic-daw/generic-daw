@@ -1,10 +1,13 @@
-use crate::{PluginDescriptor, PluginId, audio_processor::AudioThreadMessage, host::Host};
+use crate::{
+	PluginDescriptor, PluginId, audio_processor::AudioThreadMessage, host::Host, params::Param,
+};
 use clack_extensions::{
 	gui::{GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow},
+	params::ParamInfoFlags,
 	render::RenderMode,
 	timer::TimerId,
 };
-use clack_host::prelude::*;
+use clack_host::{events::Match, prelude::*};
 use generic_daw_utils::NoDebug;
 use log::warn;
 use raw_window_handle::RawWindowHandle;
@@ -16,6 +19,7 @@ pub struct GuiExt {
 	instance: NoDebug<PluginInstance<Host>>,
 	descriptor: PluginDescriptor,
 	id: PluginId,
+	params: Box<[Param]>,
 	is_floating: bool,
 	can_resize: Option<bool>,
 	is_open: bool,
@@ -28,6 +32,7 @@ impl GuiExt {
 		mut instance: PluginInstance<Host>,
 		descriptor: PluginDescriptor,
 		id: PluginId,
+		params: Box<[Param]>,
 	) -> Self {
 		let mut config = GuiConfiguration {
 			api_type: GuiApiType::default_for_current_platform().unwrap(),
@@ -47,6 +52,7 @@ impl GuiExt {
 			instance: instance.into(),
 			descriptor,
 			id,
+			params,
 			is_floating: config.is_floating,
 			can_resize: None,
 			is_open: false,
@@ -77,6 +83,30 @@ impl GuiExt {
 
 	pub fn call_on_main_thread_callback(&mut self) {
 		self.instance.call_on_main_thread_callback();
+	}
+
+	#[must_use]
+	pub fn params(&self) -> impl DoubleEndedIterator<Item = &Param> {
+		self.params
+			.iter()
+			.filter(|param| !param.flags.contains(ParamInfoFlags::IS_HIDDEN))
+	}
+
+	pub fn rescan_values(&mut self, id: impl Into<Match<ClapId>>) {
+		let ext = self.instance.access_handler(|mt| mt.params).unwrap().0;
+
+		match id.into() {
+			Match::Specific(id) => {
+				if let Some(param) = self.params.iter_mut().find(|param| param.id == id) {
+					param.rescan_value(&mut self.instance.plugin_handle(), ext);
+				}
+			}
+			Match::All => {
+				for param in &mut self.params {
+					param.rescan_value(&mut self.instance.plugin_handle(), ext);
+				}
+			}
+		}
 	}
 
 	pub fn tick_timer(&mut self, id: u32) {
@@ -138,11 +168,15 @@ impl GuiExt {
 			return None;
 		}
 
-		let mut plugin = self.instance.plugin_handle();
 		let size = GuiSize { width, height };
 
-		let size = self.ext.adjust_size(&mut plugin, size).unwrap_or(size);
-		self.ext.set_size(&mut plugin, size).unwrap();
+		let size = self
+			.ext
+			.adjust_size(&mut self.instance.plugin_handle(), size)
+			.unwrap_or(size);
+		self.ext
+			.set_size(&mut self.instance.plugin_handle(), size)
+			.unwrap();
 		Some([size.width, size.height])
 	}
 
