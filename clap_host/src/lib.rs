@@ -27,7 +27,10 @@ mod plugin_descriptor;
 mod shared;
 
 pub use audio_processor::AudioProcessor;
-pub use clack_host::bundle::PluginBundle;
+pub use clack_host::{
+	bundle::PluginBundle,
+	utils::{ClapId, Cookie},
+};
 pub use event_impl::EventImpl;
 pub use gui_ext::GuiExt;
 pub use main_thread::MainThreadMessage;

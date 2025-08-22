@@ -3,6 +3,7 @@ use async_channel::Sender;
 use clack_extensions::{
 	gui::{GuiSize, HostGuiImpl},
 	log::{HostLogImpl, LogSeverity},
+	params::HostParamsImplShared,
 };
 use clack_host::prelude::*;
 use log::{debug, error, info, warn};
@@ -76,6 +77,10 @@ impl HostLogImpl for Shared {
 			| LogSeverity::PluginMisbehaving => error!("{}: {message}", self.descriptor),
 		}
 	}
+}
+
+impl HostParamsImplShared for Shared {
+	fn request_flush(&self) {}
 }
 
 impl Shared {

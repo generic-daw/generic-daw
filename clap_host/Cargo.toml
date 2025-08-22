@@ -12,16 +12,17 @@ generic_daw_utils = { path = "../generic_daw_utils" }
 
 async-channel = "2.5.0"
 clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
-    "audio-ports",
-    "clack-host",
-    "gui",
-    "latency",
-    "log",
-    "note-ports",
-    "raw-window-handle_06",
-    "render",
-    "state",
-    "timer",
+	"audio-ports",
+	"clack-host",
+	"gui",
+	"latency",
+	"log",
+	"note-ports",
+	"params",
+	"raw-window-handle_06",
+	"render",
+	"state",
+	"timer",
 ] }
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
 log = "0.4.27"

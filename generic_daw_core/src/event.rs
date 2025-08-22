@@ -1,6 +1,9 @@
-use clap_host::events::{
-	ClapEvent, Event as _, Match, MidiEvent, NoteChokeEvent, NoteOffEvent, NoteOnEvent, Pckn,
-	UnknownEvent,
+use clap_host::{
+	ClapId, Cookie,
+	events::{
+		ClapEvent, Event as _, Match, MidiEvent, NoteChokeEvent, NoteOffEvent, NoteOnEvent,
+		ParamValueEvent, Pckn, UnknownEvent,
+	},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -21,20 +24,31 @@ pub enum Event {
 		time: u32,
 		channel: u8,
 	},
+	ParamValue {
+		time: u32,
+		param_id: ClapId,
+		channel: u8,
+		value: f64,
+		cookie: Cookie,
+	},
 }
 
 impl audio_graph::EventImpl for Event {
 	fn time(self) -> usize {
 		match self {
-			Self::On { time, .. } | Self::Off { time, .. } | Self::AllOff { time, .. } => {
-				time as usize * 2
-			}
+			Self::On { time, .. }
+			| Self::Off { time, .. }
+			| Self::AllOff { time, .. }
+			| Self::ParamValue { time, .. } => time as usize * 2,
 		}
 	}
 
 	fn with_time(mut self, to: usize) -> Self {
 		match &mut self {
-			Self::On { time, .. } | Self::Off { time, .. } | Self::AllOff { time, .. } => {
+			Self::On { time, .. }
+			| Self::Off { time, .. }
+			| Self::AllOff { time, .. }
+			| Self::ParamValue { time, .. } => {
 				*time = (to / 2) as u32;
 			}
 		}
@@ -69,6 +83,19 @@ impl clap_host::EventImpl for Event {
 				time,
 				Pckn::new(port_index, channel, Match::All, Match::All),
 			)),
+			Self::ParamValue {
+				time,
+				param_id,
+				channel,
+				value,
+				cookie,
+			} => ClapEvent::ParamValueEvent(ParamValueEvent::new(
+				time,
+				param_id,
+				Pckn::new(port_index, channel, Match::All, Match::All),
+				value,
+				cookie,
+			)),
 		}
 	}
 
@@ -97,6 +124,17 @@ impl clap_host::EventImpl for Event {
 			Self::AllOff { time, channel } => {
 				MidiEvent::new(time, port_index, [0xb0 | channel, 0x7b, 0x00])
 			}
+			Self::ParamValue {
+				time,
+				param_id,
+				channel,
+				value,
+				cookie: _,
+			} => MidiEvent::new(
+				time,
+				port_index,
+				[0xb0 | channel, param_id.get() as u8, (value * 127.0) as u8],
+			),
 		}
 	}
 
@@ -113,23 +151,30 @@ impl Event {
 		let data = event.data();
 		let kind = data[0] & 0xf0;
 		let channel = data[0] & 0x0f;
-		let key = data[1];
-		let velocity = f64::from(data[2]) / 127.0;
+		let bytes = data[1];
+		let value = f64::from(data[2]) / 127.0;
 
 		match kind {
 			0x90 => Some(Self::On {
 				time,
 				channel,
-				key,
-				velocity,
+				key: bytes,
+				velocity: value,
 			}),
 			0x80 => Some(Self::Off {
 				time,
 				channel,
-				key,
-				velocity,
+				key: bytes,
+				velocity: value,
 			}),
-			0xb0 => Some(Self::AllOff { time, channel }),
+			0xb0 if bytes == 0x7b => Some(Self::AllOff { time, channel }),
+			0xb0 if bytes < 0x78 => Some(Self::ParamValue {
+				time,
+				param_id: ClapId::from_raw(bytes.into())?,
+				channel,
+				value,
+				cookie: Cookie::empty(),
+			}),
 			_ => None,
 		}
 	}
@@ -153,6 +198,14 @@ impl Event {
 			Some(Self::AllOff {
 				time: event.time(),
 				channel: *event.channel().as_specific()? as u8,
+			})
+		} else if let Some(event) = value.as_event::<ParamValueEvent>() {
+			Some(Self::ParamValue {
+				time: event.time(),
+				param_id: event.param_id()?,
+				channel: *event.channel().as_specific()? as u8,
+				value: event.value(),
+				cookie: event.cookie(),
 			})
 		} else {
 			None

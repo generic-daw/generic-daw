@@ -4,6 +4,7 @@ use clack_extensions::{
 	gui::{GuiSize, PluginGui},
 	latency::{HostLatencyImpl, PluginLatency},
 	note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
+	params::{HostParamsImplMainThread, ParamClearFlags, ParamRescanFlags, PluginParams},
 	render::PluginRender,
 	state::{HostStateImpl, PluginState},
 	timer::{HostTimerImpl, PluginTimer, TimerId},
@@ -29,6 +30,7 @@ pub struct MainThread<'a> {
 	shared: &'a Shared,
 	pub gui: Option<NoDebug<PluginGui>>,
 	pub latency: Option<NoDebug<PluginLatency>>,
+	pub params: Option<NoDebug<PluginParams>>,
 	pub render: Option<NoDebug<PluginRender>>,
 	pub state: Option<NoDebug<PluginState>>,
 	pub timers: Option<NoDebug<PluginTimer>>,
@@ -41,6 +43,7 @@ impl<'a> MainThread<'a> {
 			shared,
 			gui: None,
 			timers: None,
+			params: None,
 			render: None,
 			state: None,
 			latency: None,
@@ -52,10 +55,11 @@ impl<'a> MainThread<'a> {
 impl<'a> MainThreadHandler<'a> for MainThread<'a> {
 	fn initialized(&mut self, instance: InitializedPluginHandle<'_>) {
 		self.gui = instance.get_extension().map(NoDebug);
-		self.latency = instance.get_extension().map(NoDebug);
+		self.timers = instance.get_extension().map(NoDebug);
+		self.params = instance.get_extension().map(NoDebug);
 		self.render = instance.get_extension().map(NoDebug);
 		self.state = instance.get_extension().map(NoDebug);
-		self.timers = instance.get_extension().map(NoDebug);
+		self.latency = instance.get_extension().map(NoDebug);
 	}
 }
 
@@ -82,6 +86,12 @@ impl HostNotePortsImpl for MainThread<'_> {
 	}
 
 	fn rescan(&mut self, _flags: NotePortRescanFlags) {}
+}
+
+impl HostParamsImplMainThread for MainThread<'_> {
+	fn rescan(&mut self, _flags: ParamRescanFlags) {}
+
+	fn clear(&mut self, _param_id: ClapId, _flags: ParamClearFlags) {}
 }
 
 impl HostStateImpl for MainThread<'_> {
