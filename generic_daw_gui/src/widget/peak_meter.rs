@@ -17,16 +17,20 @@ use std::{
 
 #[derive(Debug)]
 struct State {
-	peak: Animation<f32>,
-	mix: Animation<f32>,
+	line: Animation<f32>,
+	line_mix: Animation<f32>,
+	bar: Animation<f32>,
+	bar_mix: Animation<f32>,
 	now: Instant,
 }
 
 impl Default for State {
 	fn default() -> Self {
 		Self {
-			peak: Animation::new(0.0),
-			mix: Animation::new(0.0),
+			line: Animation::new(0.0),
+			line_mix: Animation::new(0.0),
+			bar: Animation::new(0.0),
+			bar_mix: Animation::new(0.0),
 			now: Instant::now(),
 		}
 	}
@@ -73,24 +77,42 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 
 			let peak = std::mem::take(&mut self.peak);
 
-			if peak > state.peak.interpolate_with(identity, now) {
-				state.peak = Animation::new(peak)
+			if peak > state.bar.interpolate_with(identity, now) {
+				state.bar = Animation::new(peak)
 					.duration(Duration::from_secs_f32(
-						peak.exp2() * (layout.bounds().height.sqrt() / 10.0),
+						peak.exp2() * layout.bounds().height.sqrt() / 10.0,
 					))
 					.easing(Easing::EaseOutExpo)
 					.go(0.0, now);
 			}
 
-			if self.enabled {
-				if state.peak.interpolate_with(identity, now) > 1.0 {
-					state.mix = Animation::new(1.0).very_quick().go(0.0, now);
-				}
-			} else {
-				state.mix = Animation::new(0.0);
+			if peak > state.line.interpolate_with(identity, now) {
+				state.line = Animation::new(peak)
+					.duration(Duration::from_secs_f32(
+						peak.exp2() * layout.bounds().height.sqrt(),
+					))
+					.delay(Duration::from_secs_f32(peak.exp2()))
+					.easing(Easing::EaseOutExpo)
+					.go(0.0, now);
 			}
 
-			if state.peak.is_animating(now) || state.mix.is_animating(now) {
+			if self.enabled {
+				if state.bar.interpolate_with(identity, now) > 1.0 {
+					state.bar_mix = Animation::new(1.0).very_quick().go(0.0, now);
+				}
+				if state.line.interpolate_with(identity, now) > 1.0 {
+					state.line_mix = Animation::new(1.0).very_quick().go(0.0, now);
+				}
+			} else {
+				state.bar_mix = Animation::new(0.0);
+				state.line_mix = Animation::new(0.0);
+			}
+
+			if state.bar.is_animating(now)
+				|| state.bar_mix.is_animating(now)
+				|| state.line.is_animating(now)
+				|| state.line_mix.is_animating(now)
+			{
 				shell.request_redraw();
 			}
 		}
@@ -114,43 +136,54 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 
 		let state = tree.state.downcast_ref::<State>();
 
-		let base_color = if self.enabled {
-			theme.extended_palette().primary.weak.color
+		let (weak, strong) = if self.enabled {
+			(
+				theme.extended_palette().primary.weak.color,
+				theme.extended_palette().primary.strong.color,
+			)
 		} else {
-			theme.extended_palette().secondary.weak.color
+			(
+				theme.extended_palette().secondary.weak.color,
+				theme.extended_palette().secondary.strong.color,
+			)
 		};
 
-		let foreground_color = mix(
-			base_color,
+		let background_color = mix(weak, theme.extended_palette().background.weak.color, 0.5);
+		let background = Quad {
+			bounds,
+			..Quad::default()
+		};
+		renderer.fill_quad(background, background_color);
+
+		let bar_color = mix(
+			weak,
 			theme.extended_palette().danger.weak.color,
-			state.mix.interpolate_with(identity, state.now),
+			state.bar_mix.interpolate_with(identity, state.now),
 		);
-
-		let background_color = mix(
-			base_color,
-			theme.extended_palette().background.weak.color,
-			0.5,
-		);
-
-		let height = bounds.height * state.peak.interpolate_with(identity, state.now).min(1.0);
-
-		let bg = Quad {
+		let bar_pos = bounds.height * state.bar.interpolate_with(identity, state.now).min(1.0);
+		let bar = Quad {
 			bounds: Rectangle::new(
-				bounds.position(),
-				Size::new(bounds.width, bounds.height - height),
+				bounds.position() + Vector::new(0.0, bounds.height - bar_pos),
+				Size::new(bounds.width, bar_pos),
 			),
 			..Quad::default()
 		};
-		renderer.fill_quad(bg, background_color);
+		renderer.fill_quad(bar, bar_color);
 
-		let fg = Quad {
+		let line_color = mix(
+			strong,
+			theme.extended_palette().danger.strong.color,
+			state.line_mix.interpolate_with(identity, state.now),
+		);
+		let line_pos = bounds.height * state.line.interpolate_with(identity, state.now).min(1.0);
+		let line = Quad {
 			bounds: Rectangle::new(
-				bounds.position() + Vector::new(0.0, bounds.height - height),
-				Size::new(bounds.width, height),
+				bounds.position() + Vector::new(0.0, bounds.height - line_pos.max(2.0)),
+				Size::new(bounds.width, 2.0),
 			),
 			..Quad::default()
 		};
-		renderer.fill_quad(fg, foreground_color);
+		renderer.fill_quad(line, line_color);
 	}
 }
 
