@@ -7,6 +7,7 @@ use iced::{
 		widget::{Tree, tree},
 	},
 	animation::Easing,
+	gradient::Linear,
 	mouse::Cursor,
 	window,
 };
@@ -136,19 +137,13 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 
 		let state = tree.state.downcast_ref::<State>();
 
-		let (weak, strong) = if self.enabled {
-			(
-				theme.extended_palette().primary.weak.color,
-				theme.extended_palette().primary.strong.color,
-			)
+		let base = if self.enabled {
+			theme.extended_palette().primary.weak.color
 		} else {
-			(
-				theme.extended_palette().secondary.weak.color,
-				theme.extended_palette().secondary.strong.color,
-			)
+			theme.extended_palette().secondary.strong.color
 		};
 
-		let background_color = mix(weak, theme.extended_palette().background.weak.color, 0.5);
+		let background_color = mix(base, theme.extended_palette().background.weak.color, 0.5);
 		let background = Quad {
 			bounds,
 			..Quad::default()
@@ -156,7 +151,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 		renderer.fill_quad(background, background_color);
 
 		let bar_color = mix(
-			weak,
+			base,
 			theme.extended_palette().danger.weak.color,
 			state.bar_mix.interpolate_with(identity, state.now),
 		);
@@ -171,19 +166,26 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 		renderer.fill_quad(bar, bar_color);
 
 		let line_color = mix(
-			strong,
-			theme.extended_palette().danger.strong.color,
+			base,
+			theme.extended_palette().danger.weak.color,
 			state.line_mix.interpolate_with(identity, state.now),
 		);
 		let line_pos = bounds.height * state.line.interpolate_with(identity, state.now).min(1.0);
+		let max_line_height = bounds.height.sqrt();
+		let line_height = max_line_height.min(line_pos);
 		let line = Quad {
 			bounds: Rectangle::new(
-				bounds.position() + Vector::new(0.0, bounds.height - line_pos.max(2.0)),
-				Size::new(bounds.width, 2.0),
+				bounds.position() + Vector::new(0.0, bounds.height - line_pos),
+				Size::new(bounds.width, line_height),
 			),
 			..Quad::default()
 		};
-		renderer.fill_quad(line, line_color);
+		renderer.fill_quad(
+			line,
+			Linear::new(0.0)
+				.add_stop(0.0, Color::TRANSPARENT)
+				.add_stop(1.0, line_color.scale_alpha(line_height / max_line_height)),
+		);
 	}
 }
 
