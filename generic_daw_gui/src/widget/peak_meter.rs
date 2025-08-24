@@ -90,10 +90,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 			if peak > state.line.interpolate_with(identity, now) {
 				state.line = Animation::new(peak)
 					.duration(Duration::from_secs_f32(
-						peak.exp2() * layout.bounds().height.sqrt(),
+						peak * layout.bounds().height.sqrt() / 3.0,
 					))
 					.delay(Duration::from_secs_f32(peak.exp2()))
-					.easing(Easing::EaseOutExpo)
 					.go(0.0, now);
 			}
 
@@ -183,8 +182,11 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 		renderer.fill_quad(
 			line,
 			Linear::new(0.0)
-				.add_stop(0.0, Color::TRANSPARENT)
-				.add_stop(1.0, line_color.scale_alpha(line_height / max_line_height)),
+				.add_stop(
+					0.0,
+					line_color.scale_alpha(1.0 - (line_height / max_line_height)),
+				)
+				.add_stop(1.0, line_color),
 		);
 	}
 }
