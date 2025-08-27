@@ -10,12 +10,8 @@ use iced::{
 		text::{Shaping, Wrapping},
 	},
 };
-use std::{
-	fs,
-	io::{self, Read as _},
-	path::Path,
-	sync::Arc,
-};
+use smol::io::AsyncReadExt as _;
+use std::{io, path::Path, sync::Arc};
 
 #[derive(Clone, Debug)]
 pub struct File {
@@ -26,12 +22,12 @@ pub struct File {
 }
 
 impl File {
-	pub fn new(path: impl AsRef<Path>) -> Self {
+	pub async fn new(path: impl AsRef<Path>) -> Self {
 		let path = path.as_ref();
 		let name = path.file_name().unwrap().to_str().unwrap();
 		let shaping = shaping_of(name);
 
-		let is_music = is_music(path).unwrap_or_default();
+		let is_music = is_music(path).await.unwrap_or_default();
 
 		Self {
 			path: path.into(),
@@ -62,10 +58,10 @@ impl File {
 	}
 }
 
-pub fn is_music(path: &Path) -> io::Result<bool> {
-	let mut file = fs::File::open(path)?;
-	let limit = file.metadata()?.len() as usize;
+pub async fn is_music(path: &Path) -> io::Result<bool> {
+	let mut file = smol::fs::File::open(path).await?;
+	let limit = file.metadata().await?.len() as usize;
 	let buf = &mut [0; 36][..limit.min(36)];
-	file.read_exact(buf)?;
+	file.read_exact(buf).await?;
 	Ok(infer::get(buf).is_some_and(|x| x.matcher_type() == infer::MatcherType::Audio))
 }

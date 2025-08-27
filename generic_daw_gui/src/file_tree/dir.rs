@@ -6,7 +6,7 @@ use crate::{
 use generic_daw_utils::unique_id;
 use iced::{
 	Element, Fill, Task,
-	futures::StreamExt as _,
+	futures::{StreamExt as _, TryStreamExt as _},
 	padding,
 	widget::{
 		button, column, container, row, text,
@@ -141,43 +141,45 @@ impl Dir {
 	}
 
 	async fn load(path: impl AsRef<Path>) -> (Box<[Self]>, Box<[File]>) {
-		let Ok(mut entry) = smol::fs::read_dir(path).await else {
+		let Ok(entry) = smol::fs::read_dir(path).await else {
 			return ([].into(), [].into());
 		};
 
-		let mut files = Vec::new();
-		let mut dirs = Vec::new();
+		let files = smol::lock::Mutex::new(Vec::new());
+		let dirs = smol::lock::Mutex::new(Vec::new());
 
-		while let Some(entry) = entry.next().await {
-			let Ok(entry) = entry else {
-				continue;
-			};
+		entry
+			.into_stream()
+			.for_each_concurrent(None, async |entry| {
+				let Ok(entry) = entry else {
+					return;
+				};
 
-			let Ok(ty) = entry.file_type().await else {
-				continue;
-			};
+				let Ok(ty) = entry.file_type().await else {
+					return;
+				};
 
-			let mut name = entry.file_name();
-			name.make_ascii_lowercase();
+				let mut name = entry.file_name();
+				name.make_ascii_lowercase();
 
-			if ty.is_file() {
-				files.push((entry, name));
-			} else if ty.is_dir() {
-				dirs.push((entry, name));
-			}
-		}
+				if ty.is_file() {
+					let file = File::new(entry.path()).await;
+					files.lock().await.push((file, name));
+				} else if ty.is_dir() {
+					let dir = Self::new(entry.path());
+					dirs.lock().await.push((dir, name));
+				}
+			})
+			.await;
+
+		let mut files = files.into_inner();
+		let mut dirs = dirs.into_inner();
 
 		files.sort_unstable_by(|(_, aname), (_, bname)| aname.cmp(bname));
 		dirs.sort_unstable_by(|(_, aname), (_, bname)| aname.cmp(bname));
 
-		let files = files
-			.into_iter()
-			.map(|(entry, _)| File::new(entry.path()))
-			.collect();
-		let dirs = dirs
-			.into_iter()
-			.map(|(entry, _)| Self::new(entry.path()))
-			.collect();
+		let files = files.into_iter().map(|(file, _)| file).collect();
+		let dirs = dirs.into_iter().map(|(dir, _)| dir).collect();
 
 		(dirs, files)
 	}
