@@ -63,9 +63,9 @@ impl File {
 }
 
 pub fn is_music(path: &Path) -> io::Result<bool> {
-	let file = fs::File::open(path)?;
-	let limit = file.metadata()?.len().min(36);
-	let mut buf = Vec::with_capacity(36);
-	file.take(limit).read_to_end(&mut buf)?;
-	Ok(infer::get(&buf).is_some_and(|x| x.matcher_type() == infer::MatcherType::Audio))
+	let mut file = fs::File::open(path)?;
+	let limit = file.metadata()?.len() as usize;
+	let buf = &mut [0; 36][..limit.min(36)];
+	file.read_exact(buf)?;
+	Ok(infer::get(buf).is_some_and(|x| x.matcher_type() == infer::MatcherType::Audio))
 }
