@@ -14,7 +14,7 @@ pub struct AudioClip {
 impl AudioClip {
 	#[must_use]
 	pub fn create(sample: Arc<Sample>, rtstate: &RtState) -> Arc<Self> {
-		let len = sample.audio.len();
+		let len = sample.samples.len();
 
 		Arc::new(Self {
 			sample,
@@ -39,7 +39,7 @@ impl AudioClip {
 				return;
 			}
 
-			self.sample.audio[offset..][..len][uidx..]
+			self.sample.samples[offset..][..len][uidx..]
 				.iter()
 				.zip(audio)
 				.for_each(|(sample, buf)| *buf += sample);
@@ -48,7 +48,7 @@ impl AudioClip {
 				return;
 			}
 
-			self.sample.audio[offset..][..len]
+			self.sample.samples[offset..][..len]
 				.iter()
 				.zip(&mut audio[uidx..])
 				.for_each(|(sample, buf)| *buf += sample);

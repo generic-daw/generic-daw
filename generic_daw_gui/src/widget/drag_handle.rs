@@ -79,8 +79,8 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		vec![Tree::new(&*self.child)]
 	}
 
-	fn diff(&mut self, tree: &mut Tree) {
-		tree.diff_children(&mut [&mut *self.child]);
+	fn diff(&self, tree: &mut Tree) {
+		tree.diff_children(&[&*self.child]);
 	}
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {

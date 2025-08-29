@@ -132,7 +132,7 @@ pub enum Tab {
 
 pub struct ArrangementView {
 	pub clap_host: ClapHost,
-	plugin_descriptors: combo_box::State<PluginDescriptor>,
+	plugins: combo_box::State<PluginDescriptor>,
 
 	pub arrangement: ArrangementWrapper,
 	audios: BTreeMap<Arc<Path>, LoadStatus>,
@@ -165,7 +165,7 @@ impl ArrangementView {
 		(
 			Self {
 				clap_host: ClapHost::default(),
-				plugin_descriptors: combo_box::State::new(plugin_bundles.keys().cloned().collect()),
+				plugins: combo_box::State::new(plugin_bundles.keys().cloned().collect()),
 
 				arrangement,
 				audios: BTreeMap::new(),
@@ -1109,7 +1109,7 @@ impl ArrangementView {
 			vertical_split(
 				mixer_panel,
 				column![
-					combo_box(&self.plugin_descriptors, "Add Plugin", None, |descriptor| {
+					combo_box(&self.plugins, "Add Plugin", None, |descriptor| {
 						Message::PluginLoad(descriptor, None)
 					})
 					.menu_style(menu_with_border(menu::default, border::width(0)))

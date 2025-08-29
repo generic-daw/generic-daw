@@ -16,17 +16,21 @@ pub struct Param {
 	pub value: f64,
 }
 
-impl From<ParamInfo<'_>> for Param {
-	fn from(value: ParamInfo<'_>) -> Self {
-		Self {
+impl TryFrom<ParamInfo<'_>> for Param {
+	type Error = ();
+
+	fn try_from(value: ParamInfo<'_>) -> Result<Self, Self::Error> {
+		Ok(Self {
 			id: value.id,
 			flags: value.flags,
 			cookie: value.cookie,
-			name: String::from_utf8_lossy(value.name).into(),
+			name: String::from_utf8(value.name.to_owned())
+				.map_err(|_| ())?
+				.into(),
 			range: value.min_value..=value.max_value,
 			reset: value.default_value,
 			value: value.default_value,
-		}
+		})
 	}
 }
 
@@ -36,8 +40,9 @@ impl Param {
 		let buffer = &mut ParamInfoBuffer::new();
 
 		(0..)
-			.filter_map(|index| ext.get_info(plugin, index, buffer).map(Self::from))
+			.filter_map(|index| ext.get_info(plugin, index, buffer).map(Self::try_from))
 			.take(count)
+			.flatten()
 			.collect()
 	}
 

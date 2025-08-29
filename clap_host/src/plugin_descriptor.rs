@@ -20,7 +20,7 @@ impl Display for PluginDescriptor {
 impl TryFrom<factory::PluginDescriptor<'_>> for PluginDescriptor {
 	type Error = ();
 
-	fn try_from(value: factory::PluginDescriptor<'_>) -> Result<Self, ()> {
+	fn try_from(value: factory::PluginDescriptor<'_>) -> Result<Self, Self::Error> {
 		Ok(Self {
 			name: value.name().ok_or(())?.to_str().map_err(|_| ())?.into(),
 			id: value.id().ok_or(())?.into(),

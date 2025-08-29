@@ -60,9 +60,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 		tree::Tag::of::<State>()
 	}
 
-	fn diff(&mut self, tree: &mut Tree) {
-		if let Some(tooltip) = self.tooltip.as_deref_mut() {
-			tree.diff_children(&mut [tooltip]);
+	fn diff(&self, tree: &mut Tree) {
+		if let Some(tooltip) = self.tooltip.as_deref() {
+			tree.diff_children(&[tooltip]);
 		} else {
 			tree.children.clear();
 		}

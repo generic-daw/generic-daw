@@ -313,7 +313,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		rtstate: &'a RtState,
 		position: &'a Vec2,
 		scale: &'a Vec2,
-		action: fn(Action) -> Message,
+		f: fn(Action) -> Message,
 	) -> Self {
 		Self {
 			notes,
@@ -321,7 +321,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 			position,
 			scale,
 			deleted: false,
-			f: action,
+			f,
 		}
 	}
 

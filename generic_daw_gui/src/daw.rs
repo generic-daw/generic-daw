@@ -103,13 +103,13 @@ impl Daw {
 		let mut output_devices = get_output_devices();
 		output_devices.sort_unstable();
 
-		let (mut arrangement, futs) = ArrangementView::new(&config, &plugin_bundles);
+		let (mut arrangement_view, futs) = ArrangementView::new(&config, &plugin_bundles);
 		open = open.chain(futs.map(Message::Arrangement));
 
 		if let Some(futs) = state
 			.last_project
 			.as_deref()
-			.and_then(|path| arrangement.load(path, &config, &plugin_bundles))
+			.and_then(|path| arrangement_view.load(path, &config, &plugin_bundles))
 		{
 			open = open.chain(futs.map(Message::Arrangement));
 		}
@@ -121,7 +121,7 @@ impl Daw {
 				input_devices,
 				output_devices,
 
-				arrangement_view: arrangement,
+				arrangement_view,
 				file_tree,
 				config_view: None,
 				state,

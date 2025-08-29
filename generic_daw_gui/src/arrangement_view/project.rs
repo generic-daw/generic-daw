@@ -298,7 +298,7 @@ impl ArrangementView {
 
 		futs.extend(self.clear());
 
-		self.plugin_descriptors = combo_box::State::new(plugin_bundles.keys().cloned().collect());
+		self.plugins = combo_box::State::new(plugin_bundles.keys().cloned().collect());
 		self.arrangement = arrangement;
 		self.audios.extend(audios.values().map(|(crc, audio)| {
 			(
@@ -323,7 +323,7 @@ impl ArrangementView {
 
 		futs.extend(self.clear());
 
-		self.plugin_descriptors = combo_box::State::new(plugin_bundles.keys().cloned().collect());
+		self.plugins = combo_box::State::new(plugin_bundles.keys().cloned().collect());
 		self.arrangement = arrangement;
 
 		Task::batch(futs)

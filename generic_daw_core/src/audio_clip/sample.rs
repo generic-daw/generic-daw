@@ -13,7 +13,7 @@ use symphonia::core::{
 
 #[derive(Debug)]
 pub struct Sample {
-	pub(crate) audio: NoDebug<Box<[f32]>>,
+	pub(crate) samples: NoDebug<Box<[f32]>>,
 	pub lods: NoDebug<Box<[Box<[(f32, f32)]>; LOD_LEVELS]>>,
 	pub path: Arc<Path>,
 	pub name: Arc<str>,
@@ -31,7 +31,7 @@ impl Sample {
 		info!("loaded sample {}", path.display());
 
 		Some(Arc::new(Self {
-			audio: samples.into(),
+			samples: samples.into(),
 			lods: lods.into(),
 			path,
 			name,
@@ -40,7 +40,7 @@ impl Sample {
 
 	#[must_use]
 	pub fn len(&self) -> usize {
-		self.audio.len()
+		self.samples.len()
 	}
 
 	#[must_use]

@@ -105,7 +105,7 @@ impl Recording {
 		writer.finalize().unwrap();
 
 		Arc::new(Sample {
-			audio: samples.into_boxed_slice().into(),
+			samples: samples.into_boxed_slice().into(),
 			lods: Box::new(lods.0.map(|x| x.into_boxed_slice())).into(),
 			path,
 			name,
@@ -144,7 +144,7 @@ impl Recording {
 		writer.finalize().unwrap();
 
 		Arc::new(Sample {
-			audio: samples.into_boxed_slice().into(),
+			samples: samples.into_boxed_slice().into(),
 			lods: Box::new(lods.0.map(|x| x.into_boxed_slice())).into(),
 			path,
 			name,

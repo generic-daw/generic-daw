@@ -64,7 +64,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		Size::new(Shrink, Fill)
 	}
 
-	fn diff(&mut self, tree: &mut Tree) {
+	fn diff(&self, tree: &mut Tree) {
 		let state = tree.state.downcast_mut::<State>();
 
 		if state.last_addr != std::ptr::from_ref(self.inner).addr() {

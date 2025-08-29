@@ -43,8 +43,8 @@ impl Arrangement {
 			config.output_device.sample_rate.unwrap_or(44100),
 			config.output_device.buffer_size.unwrap_or(1024),
 		);
-		let mut channels = HoleyVec::default();
-		channels.insert(
+		let mut nodes = HoleyVec::default();
+		nodes.insert(
 			*master_node_id,
 			(
 				Node::new(NodeType::Master, master_node_id),
@@ -53,7 +53,7 @@ impl Arrangement {
 		);
 
 		let task = Task::run(
-			stream::channel(100, async move |mut sender| {
+			stream::channel(1, async move |mut sender| {
 				let mut batch = Batch::default();
 
 				while let Ok(update) = receiver.recv().await {
@@ -75,7 +75,7 @@ impl Arrangement {
 				rtstate,
 
 				tracks: Vec::new(),
-				nodes: channels,
+				nodes,
 				master_node_id,
 
 				sender,
