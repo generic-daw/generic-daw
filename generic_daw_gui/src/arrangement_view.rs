@@ -24,7 +24,7 @@ use generic_daw_core::{
 use generic_daw_utils::{EnumDispatcher, NoDebug, Vec2};
 use humantime::format_rfc3339;
 use iced::{
-	Alignment, Element, Fill, Function as _, Shrink, Size, Subscription, Task, border,
+	Alignment, Element, Fill, Function as _, Size, Subscription, Task, border,
 	mouse::Interaction,
 	overlay::menu,
 	padding,
@@ -872,7 +872,7 @@ impl ArrangementView {
 				column![
 					row![
 						column![
-							text(name).size(13).line_height(1.0).width(Fill).center(),
+							text(name).size(13).line_height(1.0),
 							Knob::new(
 								-1.0..=1.0,
 								node.pan,
@@ -884,7 +884,7 @@ impl ArrangementView {
 							.tooltip(pan_to_string(node.pan)),
 						]
 						.spacing(3)
-						.width(Shrink),
+						.align_x(Alignment::Center),
 						buttons(node.enabled, node.id)
 					]
 					.spacing(3),

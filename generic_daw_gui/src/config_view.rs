@@ -7,7 +7,7 @@ use crate::{
 	widget::LINE_HEIGHT,
 };
 use iced::{
-	Center, Element, Font, Shrink, Task, border,
+	Center, Element, Font, Task, border,
 	widget::{
 		button, column, container, horizontal_rule, horizontal_space, pick_list, row,
 		scrollable::{Direction, Scrollbar},
@@ -337,23 +337,20 @@ impl ConfigView {
 				]
 				.align_y(Center),
 				(self.config != self.prev_config).then_some(horizontal_rule(1)),
-				(self.config != self.prev_config).then_some(
-					row![
-						container("Changes will only take effect after a project reload!")
-							.padding([5, 10])
-							.style(|t| container::warning(t).border(border::rounded(f32::INFINITY))),
-						horizontal_space(),
-						button(save())
-							.style(button_with_radius(button::primary, border::left(5)))
-							.padding(5)
-							.on_press(Message::WriteConfig),
-						button(rotate_ccw())
-							.style(button_with_radius(button::primary, border::right(5)))
-							.padding(5)
-							.on_press(Message::ResetConfig)
-					]
-					.height(Shrink),
-				)
+				(self.config != self.prev_config).then_some(row![
+					container("Changes will only take effect after a project reload!")
+						.padding([5, 10])
+						.style(|t| container::warning(t).border(border::rounded(f32::INFINITY))),
+					horizontal_space(),
+					button(save())
+						.style(button_with_radius(button::primary, border::left(5)))
+						.padding(5)
+						.on_press(Message::WriteConfig),
+					button(rotate_ccw())
+						.style(button_with_radius(button::primary, border::right(5)))
+						.padding(5)
+						.on_press(Message::ResetConfig)
+				],)
 			]
 			.spacing(10)
 			.padding(10)
