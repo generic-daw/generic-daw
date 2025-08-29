@@ -14,7 +14,7 @@ pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
 	TickTimer(usize, u32),
 	Opened(Arc<Fragile<GuiExt>>, Receiver<MainThreadMessage>),
-	GuiRequestShow(Option<Id>, Arc<Fragile<GuiExt>>),
+	GuiRequestShow(Arc<Fragile<GuiExt>>),
 	GuiRequestResize((Id, Size)),
 	GuiRequestHide(Id),
 }
@@ -43,16 +43,12 @@ impl ClapHost {
 
 				return open.chain(stream);
 			}
-			Message::GuiRequestShow(window_id, arc) => {
+			Message::GuiRequestShow(arc) => {
 				let mut gui = Arc::into_inner(arc).unwrap().into_inner();
 				let id = gui.plugin_id();
 
 				gui.show();
 				self.plugins.insert(*id, gui);
-
-				if let Some(window_id) = window_id {
-					self.windows.insert(*id, window_id);
-				}
 			}
 			Message::GuiRequestResize((window_id, size)) => {
 				if let Some([w, h]) = self.windows.key_of(&window_id).and_then(|id| {
@@ -97,7 +93,7 @@ impl ClapHost {
 
 				gui.create();
 				return if gui.is_floating() {
-					self.update(Message::GuiRequestShow(None, Arc::new(Fragile::new(gui))))
+					self.update(Message::GuiRequestShow(Arc::new(Fragile::new(gui))))
 				} else {
 					let (window_id, spawn) = window::open(window::Settings {
 						size: gui.get_size().map_or(Size::new(1280.0, 720.0), |[w, h]| {
@@ -107,6 +103,7 @@ impl ClapHost {
 						exit_on_close_request: false,
 						..window::Settings::default()
 					});
+					self.windows.insert(*id, window_id);
 
 					let mut gui = Fragile::new(gui);
 					let embed = window::run_with_handle(window_id, move |handle| {
@@ -122,7 +119,7 @@ impl ClapHost {
 					spawn
 						.discard()
 						.chain(embed)
-						.map(move |gui| Message::GuiRequestShow(Some(window_id), Arc::new(gui)))
+						.map(move |gui| Message::GuiRequestShow(Arc::new(gui)))
 				};
 			}
 			MainThreadMessage::GuiRequestResize(new_size) => {
@@ -169,7 +166,8 @@ impl ClapHost {
 	pub fn title(&self, window: Id) -> Option<String> {
 		self.windows
 			.key_of(&window)
-			.map(|id| self.plugins[id].descriptor().name.deref().to_owned())
+			.and_then(|id| self.plugins.get(id))
+			.map(|plugin| plugin.descriptor().name.deref().to_owned())
 	}
 
 	pub fn is_plugin_window(&self, window: Id) -> bool {
