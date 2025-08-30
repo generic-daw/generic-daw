@@ -1,7 +1,7 @@
 use crate::{MainThread, Shared};
 use clack_extensions::{
 	audio_ports::HostAudioPorts, gui::HostGui, latency::HostLatency, log::HostLog,
-	note_ports::HostNotePorts, state::HostState, timer::HostTimer,
+	note_ports::HostNotePorts, params::HostParams, state::HostState, timer::HostTimer,
 };
 use clack_host::prelude::*;
 
@@ -19,6 +19,7 @@ impl HostHandlers for Host {
 		builder.register::<HostLatency>();
 		builder.register::<HostLog>();
 		builder.register::<HostNotePorts>();
+		builder.register::<HostParams>();
 		builder.register::<HostState>();
 		builder.register::<HostTimer>();
 	}

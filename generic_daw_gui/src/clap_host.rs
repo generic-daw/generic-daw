@@ -4,7 +4,7 @@ use generic_daw_utils::HoleyVec;
 use iced::{
 	Function as _, Size, Subscription, Task,
 	time::every,
-	window::{self, Id, close_requests, resize_events},
+	window::{self, Id, close_events, close_requests, resize_events},
 };
 use smol::channel::Receiver;
 use std::{ops::Deref as _, sync::Arc, time::Duration};
@@ -17,6 +17,7 @@ pub enum Message {
 	GuiRequestShow(Arc<Fragile<GuiExt>>),
 	GuiRequestResize((Id, Size)),
 	GuiRequestHide(Id),
+	GuiHidden(Id),
 }
 
 #[derive(Default)]
@@ -69,8 +70,11 @@ impl ClapHost {
 				};
 
 				self.plugins.get_mut(id).unwrap().destroy();
-				let window_id = self.windows.remove(id).unwrap();
 				return window::close(window_id);
+			}
+			Message::GuiHidden(window_id) => {
+				let id = self.windows.key_of(&window_id).unwrap();
+				self.windows.remove(id).unwrap();
 			}
 		}
 
@@ -139,7 +143,7 @@ impl ClapHost {
 				self.plugins.remove(*id).unwrap();
 				self.timers.remove(*id);
 
-				if let Some(window_id) = self.windows.remove(*id) {
+				if let Some(&window_id) = self.windows.get(*id) {
 					return window::close(window_id);
 				}
 			}
@@ -203,6 +207,7 @@ impl ClapHost {
 				.chain([
 					resize_events().map(Message::GuiRequestResize),
 					close_requests().map(Message::GuiRequestHide),
+					close_events().map(Message::GuiHidden),
 				]),
 		)
 	}
