@@ -6,8 +6,8 @@ use super::{
 use crate::config::Config;
 use bit_set::BitSet;
 use generic_daw_core::{
-	Action, Clip, Message, Mixer, MusicalTime, RtState, Stream, StreamTrait as _,
-	Track as CoreTrack, Update, Version,
+	self as core, Action, Clip, Message, Mixer, MusicalTime, RtState, Stream, StreamTrait as _,
+	Update, Version,
 	audio_graph::{NodeId, NodeImpl as _},
 	build_output_stream,
 	clap_host::{AudioProcessor, PluginId},
@@ -292,7 +292,7 @@ impl Arrangement {
 		node
 	}
 
-	pub fn push_track(&mut self, track: CoreTrack) {
+	pub fn push_track(&mut self, track: core::Track) {
 		let mut track2 = Track::new(track.id());
 		track2.clips.clone_from(&track.clips);
 		self.tracks.push(track2);
@@ -305,7 +305,7 @@ impl Arrangement {
 
 	#[must_use]
 	pub fn add_track(&mut self) -> oneshot::Receiver<(NodeId, NodeId)> {
-		let track = CoreTrack::default();
+		let track = core::Track::default();
 		let id = track.id();
 		self.push_track(track);
 		self.request_connect(self.master_node_id, id)

@@ -6,7 +6,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use generic_daw_core::{
-	self as core, AudioClip, Clip, MidiClip, MidiKey, MidiNote, Mixer, Sample,
+	AudioClip, Clip, MidiClip, MidiKey, MidiNote, Mixer, Sample, Track,
 	audio_graph::NodeImpl as _,
 	clap_host::{MainThreadMessage, PluginBundle, PluginDescriptor},
 };
@@ -234,7 +234,7 @@ impl ArrangementView {
 
 		let mut tracks = HashMap::new();
 		for (idx, clips, channel) in reader.iter_tracks() {
-			let mut track = core::Track::default();
+			let mut track = Track::default();
 
 			for clip in clips {
 				track.clips.push(match clip {
