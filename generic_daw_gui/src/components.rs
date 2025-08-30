@@ -114,14 +114,14 @@ where
 				code_point: const { char::from_u32(57457).unwrap() },
 				size: None,
 				line_height: 1.0.into(),
-				shaping: Shaping::Advanced,
+				shaping: Shaping::Basic,
 			},
 			open: pick_list::Icon {
 				font: LUCIDE_FONT,
 				code_point: const { char::from_u32(57460).unwrap() },
 				size: None,
 				line_height: 1.0.into(),
-				shaping: Shaping::Advanced,
+				shaping: Shaping::Basic,
 			},
 		})
 		.menu_style(menu_with_border(menu::default, border::width(0)))
