@@ -45,7 +45,8 @@ pub enum Message {
 	ChangedTheme(Theme),
 	ChangedScaleFactor(f64),
 	WriteConfig,
-	ResetConfig,
+	ResetConfigToPrev,
+	ResetConfigToDefault,
 }
 
 pub struct ConfigView {
@@ -105,7 +106,8 @@ impl ConfigView {
 				self.config.write();
 				self.prev_config = self.config.clone();
 			}
-			Message::ResetConfig => self.config = self.prev_config.clone(),
+			Message::ResetConfigToPrev => self.config = self.prev_config.clone(),
+			Message::ResetConfigToDefault => self.config = Config::default(),
 		}
 
 		Task::none()
@@ -118,10 +120,20 @@ impl ConfigView {
 	) -> Element<'a, Message> {
 		container(styled_scrollable_with_direction(
 			column![
-				text("Settings")
-					.size(LINE_HEIGHT)
-					.line_height(1.0)
-					.font(Font::MONOSPACE),
+				row![
+					text("Settings")
+						.size(LINE_HEIGHT)
+						.line_height(1.0)
+						.font(Font::MONOSPACE),
+					horizontal_space(),
+					button(rotate_ccw())
+						.style(button_with_radius(button::primary, 5))
+						.padding(5)
+						.on_press_maybe(
+							(self.config != Config::default())
+								.then_some(Message::ResetConfigToDefault)
+						)
+				],
 				container(horizontal_rule(1)).padding([5, 0]),
 				row![
 					"Sample Paths",
@@ -316,7 +328,7 @@ impl ConfigView {
 				]
 				.align_y(Center),
 				row![
-					text("Scale factor: "),
+					"Scale factor: ",
 					text(format!("{:.1}", self.config.scale_factor)).font(Font::MONOSPACE),
 					horizontal_space(),
 					slider(
@@ -349,7 +361,7 @@ impl ConfigView {
 					button(rotate_ccw())
 						.style(button_with_radius(button::primary, border::right(5)))
 						.padding(5)
-						.on_press(Message::ResetConfig)
+						.on_press(Message::ResetConfigToPrev)
 				],)
 			]
 			.spacing(10)

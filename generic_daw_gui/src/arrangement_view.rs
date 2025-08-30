@@ -726,7 +726,7 @@ impl ArrangementView {
 								.wrap(),
 								column![
 									icon_button(
-										text('M'),
+										"M",
 										if node.enabled {
 											button::primary
 										} else {
@@ -735,7 +735,7 @@ impl ArrangementView {
 									)
 									.on_press(Message::TrackToggleEnabled(id)),
 									icon_button(
-										text('S'),
+										"M",
 										if self.soloed_track == Some(id) {
 											button::warning
 										} else if node.enabled {
@@ -975,7 +975,7 @@ impl ArrangementView {
 					|enabled, id| {
 						column![
 							icon_button(
-								text('M'),
+								"M",
 								if enabled {
 									button::primary
 								} else {
@@ -1009,7 +1009,7 @@ impl ArrangementView {
 								|enabled, id| {
 									column![
 										icon_button(
-											text('M'),
+											"M",
 											if enabled {
 												button::primary
 											} else {
@@ -1018,7 +1018,7 @@ impl ArrangementView {
 										)
 										.on_press(Message::TrackToggleEnabled(id)),
 										icon_button(
-											text('S'),
+											"M",
 											if self.soloed_track == Some(id) {
 												button::warning
 											} else if enabled {
@@ -1067,7 +1067,7 @@ impl ArrangementView {
 								|enabled, id| {
 									column![
 										icon_button(
-											text('M'),
+											"M",
 											if enabled {
 												button::primary
 											} else {
@@ -1136,7 +1136,7 @@ impl ArrangementView {
 											Message::PluginMixChanged.with(i)
 										)
 										.radius(TEXT_HEIGHT)
-										.tooltip(((plugin.mix * 100.0) as u8).to_string() + "%"),
+										.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
 										button(
 											container(
 												text(&*plugin.descriptor.name)
@@ -1161,7 +1161,7 @@ impl ArrangementView {
 										)),
 										column![
 											icon_button(
-												text('M'),
+												"M",
 												if plugin.enabled {
 													button::primary
 												} else {

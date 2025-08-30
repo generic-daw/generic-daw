@@ -24,14 +24,14 @@ pub fn space() -> Space {
 }
 
 pub fn icon_button<'a, Message>(
-	t: Text<'a>,
+	t: impl Into<Text<'a>>,
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
 ) -> Button<'a, Message>
 where
 	Message: Clone + 'a,
 {
 	button(
-		container(t.size(13).line_height(1.0))
+		container(t.into().size(13).line_height(1.0))
 			.width(13)
 			.align_x(Alignment::Center),
 	)
