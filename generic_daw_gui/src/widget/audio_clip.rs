@@ -1,4 +1,4 @@
-use super::{LINE_HEIGHT, Vec2, shaping_of, waveform};
+use super::{LINE_HEIGHT, Vec2, waveform};
 use generic_daw_core::{self as core, RtState};
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
@@ -26,7 +26,6 @@ use std::cell::RefCell;
 #[derive(Default)]
 struct State {
 	cache: RefCell<Option<Cache>>,
-	shaping: Shaping,
 	last_bounds: Rectangle,
 	last_viewport: Rectangle,
 	last_addr: usize,
@@ -35,7 +34,6 @@ struct State {
 impl State {
 	fn new(inner: &core::AudioClip) -> Self {
 		Self {
-			shaping: shaping_of(&inner.sample.name),
 			last_addr: std::ptr::from_ref(inner).addr(),
 			..Self::default()
 		}
@@ -147,7 +145,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 			font: renderer.default_font(),
 			align_x: Alignment::Left,
 			align_y: Vertical::Top,
-			shaping: state.shaping,
+			shaping: Shaping::Auto,
 			wrapping: Wrapping::None,
 		};
 		renderer.fill_text(

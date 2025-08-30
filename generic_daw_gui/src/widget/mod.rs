@@ -1,6 +1,6 @@
 use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::Vec2;
-use iced::{keyboard::Modifiers, widget::text::Shaping};
+use iced::keyboard::Modifiers;
 
 pub mod arrangement;
 pub mod audio_clip;
@@ -14,14 +14,6 @@ pub mod waveform;
 
 pub const LINE_HEIGHT: f32 = TEXT_HEIGHT * 1.3;
 pub const TEXT_HEIGHT: f32 = 16.0;
-
-pub fn shaping_of(text: &str) -> Shaping {
-	if text.is_ascii() {
-		Shaping::Basic
-	} else {
-		Shaping::Advanced
-	}
-}
 
 fn get_time(
 	x: f32,

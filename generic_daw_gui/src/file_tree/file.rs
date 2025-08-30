@@ -1,14 +1,11 @@
 use super::Message;
 use crate::{
 	icons::{file, file_music},
-	widget::{LINE_HEIGHT, shaping_of},
+	widget::LINE_HEIGHT,
 };
 use iced::{
 	Element, Fill,
-	widget::{
-		button, row, text,
-		text::{Shaping, Wrapping},
-	},
+	widget::{button, row, text, text::Wrapping},
 };
 use smol::io::AsyncReadExt as _;
 use std::{io, path::Path, sync::Arc};
@@ -17,7 +14,6 @@ use std::{io, path::Path, sync::Arc};
 pub struct File {
 	path: Arc<Path>,
 	name: Arc<str>,
-	shaping: Shaping,
 	is_music: bool,
 }
 
@@ -25,14 +21,12 @@ impl File {
 	pub async fn new(path: impl AsRef<Path>) -> Self {
 		let path = path.as_ref();
 		let name = path.file_name().unwrap().to_str().unwrap();
-		let shaping = shaping_of(name);
 
 		let is_music = is_music(path).await.unwrap_or_default();
 
 		Self {
 			path: path.into(),
 			name: name.into(),
-			shaping,
 			is_music,
 		}
 	}
@@ -42,9 +36,7 @@ impl File {
 			button(
 				row![
 					if self.is_music { file_music() } else { file() },
-					text(&*self.name)
-						.shaping(self.shaping)
-						.wrapping(Wrapping::None)
+					text(&*self.name).wrapping(Wrapping::None)
 				]
 				.spacing(2),
 			)

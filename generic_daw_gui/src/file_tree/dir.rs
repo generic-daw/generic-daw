@@ -1,18 +1,14 @@
 use super::{Action, Message, file::File};
 use crate::{
 	icons::{chevron_down, chevron_right},
-	widget::{LINE_HEIGHT, shaping_of},
+	widget::LINE_HEIGHT,
 };
 use generic_daw_utils::unique_id;
 use iced::{
 	Element, Fill, Task,
 	futures::{StreamExt as _, TryStreamExt as _},
 	padding,
-	widget::{
-		button, column, container, row, text,
-		text::{Shaping, Wrapping},
-		vertical_rule,
-	},
+	widget::{button, column, container, row, text, text::Wrapping, vertical_rule},
 };
 use std::{path::Path, sync::Arc};
 
@@ -25,7 +21,6 @@ pub struct Dir {
 	id: DirId,
 	name: Arc<str>,
 	path: Arc<Path>,
-	shaping: Shaping,
 	children: LoadStatus,
 	open: bool,
 }
@@ -44,13 +39,11 @@ impl Dir {
 	pub fn new(path: impl AsRef<Path>) -> Self {
 		let path = path.as_ref();
 		let name = path.file_name().unwrap().to_str().unwrap();
-		let shaping = shaping_of(name);
 
 		Self {
 			id: DirId::unique(),
 			name: name.into(),
 			path: path.into(),
-			shaping,
 			children: LoadStatus::Unloaded,
 			open: false,
 		}
@@ -101,9 +94,7 @@ impl Dir {
 					} else {
 						chevron_right()
 					},
-					text(&*self.name)
-						.shaping(self.shaping)
-						.wrapping(Wrapping::None)
+					text(&*self.name).wrapping(Wrapping::None)
 				]
 				.spacing(2)
 			)
