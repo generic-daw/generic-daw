@@ -1,23 +1,18 @@
-use super::{LINE_HEIGHT, SWM};
 use generic_daw_utils::NoDebug;
-use iced::{
-	Element, Event, Length, Point, Radians, Rectangle, Renderer, Size, Theme, Vector,
-	advanced::{
-		Clipboard, Layout, Renderer as _, Shell, Widget,
-		graphics::geometry::Renderer as _,
+use iced_widget::{
+	Renderer,
+	canvas::{Cache, Frame, Path, path::Arc},
+	core::{
+		Clipboard, Element, Event, Layout, Length, Point, Radians, Rectangle, Renderer as _, Shell,
+		Size, Theme, Vector, Widget, border,
 		layout::{Limits, Node},
-		mouse::{Click, click::Kind},
+		mouse::{self, Click, Cursor, Interaction, ScrollDelta, click::Kind},
 		overlay,
 		renderer::{Quad, Style},
-		widget::{Tree, tree},
+		widget::{Text, Tree, tree},
+		window,
 	},
-	border,
-	mouse::{self, Cursor, Interaction, ScrollDelta},
-	widget::{
-		canvas::{Cache, Frame, Path, path::Arc},
-		value,
-	},
-	window,
+	graphics::geometry::Renderer as _,
 };
 use std::{
 	cell::RefCell,
@@ -43,9 +38,109 @@ pub struct Knob<'a, Message> {
 	center: f32,
 	reset: f32,
 	enabled: bool,
-	f: NoDebug<Box<dyn Fn(f32) -> Message>>,
+	f: NoDebug<Box<dyn Fn(f32) -> Message + 'a>>,
 	radius: f32,
-	tooltip: Option<NoDebug<Element<'a, Message>>>,
+	tooltip: Option<NoDebug<Text<'a, Theme, Renderer>>>,
+}
+
+impl<'a, Message> Knob<'a, Message> {
+	#[must_use]
+	pub fn new(
+		range: RangeInclusive<f32>,
+		value: f32,
+		enabled: bool,
+		f: impl Fn(f32) -> Message + 'a,
+	) -> Self {
+		Self {
+			value: value.clamp(*range.start(), *range.end()),
+			center: *range.start(),
+			reset: *range.end(),
+			range,
+			enabled,
+			f: NoDebug(Box::from(f)),
+			radius: 20.0,
+			tooltip: None,
+		}
+	}
+
+	#[must_use]
+	pub fn center(mut self, center: f32) -> Self {
+		self.center = center;
+		self
+	}
+
+	#[must_use]
+	pub fn reset(mut self, reset: f32) -> Self {
+		self.reset = reset;
+		self
+	}
+
+	#[must_use]
+	pub fn radius(mut self, radius: f32) -> Self {
+		self.radius = radius;
+		self
+	}
+
+	#[must_use]
+	pub fn tooltip(mut self, tooltip: impl Display) -> Self {
+		self.tooltip = Some(NoDebug(Text::new(tooltip.to_string()).line_height(1.0)));
+		self
+	}
+
+	fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
+		let center = frame.center();
+
+		let circle = |angle: Radians, offset: f32, radius: f32| {
+			Path::circle(
+				center + Vector::new(angle.0.cos(), angle.0.sin()) * offset,
+				radius,
+			)
+		};
+
+		let value_angle = |value: f32| {
+			Radians(f32::to_radians(
+				270.0 * (value - self.range.start()) / (self.range.end() - self.range.start())
+					- 135.0 - 90.0,
+			))
+		};
+
+		let center_angle = value_angle(self.center);
+		let value_angle = value_angle(self.value);
+
+		let arc = Path::new(|b| {
+			b.arc(Arc {
+				center,
+				radius: self.radius,
+				start_angle: center_angle,
+				end_angle: value_angle,
+			});
+			b.line_to(center);
+			b.close();
+		});
+
+		let main_color = if !self.enabled || state.hovering || state.dragging.is_some() {
+			theme.extended_palette().secondary.weak.color
+		} else {
+			theme.extended_palette().primary.weak.color
+		};
+		let contrast_color = theme.extended_palette().background.strong.text;
+
+		frame.fill(&arc, contrast_color);
+
+		frame.fill(&Path::circle(center, self.radius - 4.0), main_color);
+
+		frame.fill(
+			&circle(center_angle, self.radius - 2.0, 2.0),
+			contrast_color,
+		);
+
+		frame.fill(&circle(value_angle, self.radius - 2.0, 2.0), contrast_color);
+
+		frame.fill(
+			&circle(value_angle, self.radius / 2.0 - 2.0, 3.0),
+			contrast_color,
+		);
+	}
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
@@ -62,7 +157,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 
 	fn diff(&self, tree: &mut Tree) {
 		if let Some(tooltip) = self.tooltip.as_deref() {
-			tree.diff_children(&[tooltip]);
+			tree.diff_children(&[tooltip as &dyn Widget<Message, Theme, Renderer>]);
 		} else {
 			tree.children.clear();
 		}
@@ -71,7 +166,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 	fn children(&self) -> Vec<Tree> {
 		self.tooltip
 			.as_deref()
-			.map(|p| vec![Tree::new(p)])
+			.map(|p| vec![Tree::new(p as &dyn Widget<Message, Theme, Renderer>)])
 			.unwrap_or_default()
 	}
 
@@ -165,7 +260,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 				{
 					let diff = match delta {
 						ScrollDelta::Lines { y, .. } => *y,
-						ScrollDelta::Pixels { y, .. } => y / SWM,
+						ScrollDelta::Pixels { y, .. } => y / 60.0,
 					} * (self.range.end() - self.range.start())
 						* 0.05;
 
@@ -251,95 +346,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 		}
 	}
 }
-
-impl<Message> Knob<'_, Message> {
-	pub fn new(
-		range: RangeInclusive<f32>,
-		value: f32,
-		center: f32,
-		reset: f32,
-		enabled: bool,
-		f: impl Fn(f32) -> Message + 'static,
-	) -> Self {
-		Self {
-			range,
-			value,
-			center,
-			reset,
-			enabled,
-			f: NoDebug(Box::from(f)),
-			radius: LINE_HEIGHT,
-			tooltip: None,
-		}
-	}
-
-	pub fn radius(mut self, radius: f32) -> Self {
-		self.radius = radius;
-		self
-	}
-
-	pub fn tooltip(mut self, tooltip: impl Display) -> Self {
-		self.tooltip = Some(NoDebug(value(tooltip).line_height(1.0).into()));
-		self
-	}
-
-	fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
-		let center = frame.center();
-
-		let circle = |angle: Radians, offset: f32, radius: f32| {
-			Path::circle(
-				center + Vector::new(angle.0.cos(), angle.0.sin()) * offset,
-				radius,
-			)
-		};
-
-		let value_angle = |value: f32| {
-			Radians(f32::to_radians(
-				270.0 * (value - self.range.start()) / (self.range.end() - self.range.start())
-					- 135.0 - 90.0,
-			))
-		};
-
-		let center_angle = value_angle(self.center);
-		let value_angle = value_angle(self.value);
-
-		let arc = Path::new(|b| {
-			b.arc(Arc {
-				center,
-				radius: self.radius,
-				start_angle: center_angle,
-				end_angle: value_angle,
-			});
-			b.line_to(center);
-			b.close();
-		});
-
-		let main_color = if !self.enabled || state.hovering || state.dragging.is_some() {
-			theme.extended_palette().secondary.weak.color
-		} else {
-			theme.extended_palette().primary.weak.color
-		};
-		let contrast_color = theme.extended_palette().background.strong.text;
-
-		frame.fill(&arc, contrast_color);
-
-		frame.fill(&Path::circle(center, self.radius - 4.0), main_color);
-
-		frame.fill(
-			&circle(center_angle, self.radius - 2.0, 2.0),
-			contrast_color,
-		);
-
-		frame.fill(&circle(value_angle, self.radius - 2.0, 2.0), contrast_color);
-
-		frame.fill(
-			&circle(value_angle, self.radius / 2.0 - 2.0, 3.0),
-			contrast_color,
-		);
-	}
-}
-
-impl<'a, Message> From<Knob<'a, Message>> for Element<'a, Message>
+impl<'a, Message> From<Knob<'a, Message>> for Element<'a, Message, Theme, Renderer>
 where
 	Message: 'a,
 {
@@ -348,17 +355,18 @@ where
 	}
 }
 
-struct Overlay<'a, 'b, Message> {
-	tooltip: &'b mut Element<'a, Message>,
+struct Overlay<'a, 'b> {
+	tooltip: &'b mut Text<'a, Theme, Renderer>,
 	tree: &'b mut Tree,
 	bounds: Rectangle,
 }
 
-impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Message> {
+impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 	fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
 		let padding = 3.0;
 
-		let layout = self.tooltip.as_widget_mut().layout(
+		let layout = Widget::<Message, Theme, Renderer>::layout(
+			self.tooltip,
 			self.tree,
 			renderer,
 			&Limits::new(Size::ZERO, bounds).shrink(Size::new(padding, padding)),
@@ -394,7 +402,8 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
 			theme.extended_palette().background.weak.color,
 		);
 
-		self.tooltip.as_widget().draw(
+		Widget::<Message, Theme, Renderer>::draw(
+			self.tooltip,
 			self.tree,
 			renderer,
 			theme,

@@ -7,13 +7,14 @@ use crate::{
 	icons::{chart_no_axes_gantt, pause, play, sliders_vertical, square},
 	state::State,
 	stylefns::{button_with_radius, pick_list_with_radius},
-	widget::{AnimatedDot, LINE_HEIGHT},
+	widget::LINE_HEIGHT,
 };
 use generic_daw_core::{
 	MusicalTime,
 	clap_host::{PluginBundle, PluginDescriptor, get_installed_plugins},
 	get_input_devices, get_output_devices,
 };
+use generic_daw_widget::dot::Dot;
 use iced::{
 	Alignment, Color, Element, Event, Fill, Subscription, Task, Theme, border,
 	event::{self, Status},
@@ -383,7 +384,7 @@ impl Daw {
 						|x| Message::ChangedBpm(x as u16),
 						Message::ChangedBpmText
 					),
-					button(row![AnimatedDot::new(fill), AnimatedDot::new(!fill)].spacing(5))
+					button(row![Dot::new(fill), Dot::new(!fill)].spacing(5))
 						.style(button_with_radius(
 							if self.arrangement_view.arrangement.rtstate().metronome {
 								button::primary

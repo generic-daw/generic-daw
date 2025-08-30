@@ -1,15 +1,16 @@
-use iced::{
-	Animation, Color, Element, Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
-	advanced::{
-		Clipboard, Layout, Renderer as _, Shell, Widget,
+use iced_widget::{
+	Renderer,
+	core::{
+		Animation, Clipboard, Color, Element, Event, Layout, Length, Rectangle, Renderer as _,
+		Shell, Size, Theme, Vector, Widget,
+		animation::Easing,
+		gradient::Linear,
 		layout::{Limits, Node},
+		mouse::Cursor,
 		renderer::{Quad, Style},
 		widget::{Tree, tree},
+		window,
 	},
-	animation::Easing,
-	gradient::Linear,
-	mouse::Cursor,
-	window,
 };
 use std::{
 	convert::identity,
@@ -44,9 +45,26 @@ pub struct PeakMeter {
 	width: f32,
 }
 
+impl PeakMeter {
+	#[must_use]
+	pub fn new(peak: f32, enabled: bool) -> Self {
+		Self {
+			peak,
+			enabled,
+			width: 14.0,
+		}
+	}
+
+	#[must_use]
+	pub fn width(mut self, width: f32) -> Self {
+		self.width = width;
+		self
+	}
+}
+
 impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 	fn size(&self) -> Size<Length> {
-		Size::new(Length::Fixed(self.width), Fill)
+		Size::new(Length::Fixed(self.width), Length::Fill)
 	}
 
 	fn tag(&self) -> tree::Tag {
@@ -191,22 +209,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 	}
 }
 
-impl PeakMeter {
-	pub fn new(peak: f32, enabled: bool) -> Self {
-		Self {
-			peak,
-			enabled,
-			width: 14.0,
-		}
-	}
-
-	pub fn width(mut self, width: f32) -> Self {
-		self.width = width;
-		self
-	}
-}
-
-impl<Message> From<PeakMeter> for Element<'_, Message> {
+impl<Message> From<PeakMeter> for Element<'_, Message, Theme, Renderer> {
 	fn from(value: PeakMeter) -> Self {
 		Self::new(value)
 	}

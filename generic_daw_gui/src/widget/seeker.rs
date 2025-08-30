@@ -1,4 +1,4 @@
-use super::{LINE_HEIGHT, SWM, get_time};
+use super::{LINE_HEIGHT, get_time};
 use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
@@ -171,7 +171,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				mouse::Event::WheelScrolled { delta, modifiers } => {
 					let (mut x, mut y) = match *delta {
 						ScrollDelta::Pixels { x, y } => (-x, -y),
-						ScrollDelta::Lines { x, y } => (-x * SWM, -y * SWM),
+						ScrollDelta::Lines { x, y } => (-x * 60.0, -y * 60.0),
 					};
 
 					match (modifiers.control(), modifiers.shift(), modifiers.alt()) {

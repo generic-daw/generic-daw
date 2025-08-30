@@ -8,9 +8,10 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-generic_daw_core = { path = "../generic_daw_core" }
-generic_daw_project = { path = "../generic_daw_project" }
-generic_daw_utils = { path = "../generic_daw_utils" }
+generic_daw_core = { workspace = true }
+generic_daw_project = { workspace = true }
+generic_daw_utils = { workspace = true }
+generic_daw_widget = { workspace = true }
 
 arc-swap = "1.7.1"
 bit-set = "0.8.0"

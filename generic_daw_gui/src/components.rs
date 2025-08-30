@@ -1,8 +1,9 @@
 use crate::{
 	icons::{LUCIDE_FONT, move_vertical, plus},
 	stylefns::{button_with_radius, menu_with_border},
-	widget::{DragHandle, LINE_HEIGHT},
+	widget::LINE_HEIGHT,
 };
+use generic_daw_widget::drag_handle::DragHandle;
 use iced::{
 	Alignment, Element, Font,
 	Length::Fill,

@@ -1,5 +1,5 @@
 [package]
-name = "audio_graph"
+name = "generic_daw_widget"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,4 +10,6 @@ workspace = true
 [dependencies]
 generic_daw_utils = { workspace = true }
 
-bit-set = "0.8.0"
+iced_widget = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", features = [
+	"canvas",
+] }

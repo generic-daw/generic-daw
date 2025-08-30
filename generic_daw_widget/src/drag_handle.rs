@@ -1,16 +1,15 @@
-use super::SWM;
 use generic_daw_utils::NoDebug;
-use iced::{
-	Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
-	advanced::{
-		Clipboard, Layout, Shell, Widget,
+use iced_widget::{
+	Renderer,
+	core::{
+		Clipboard, Element, Event, Layout, Length, Point, Rectangle, Shell, Size, Theme, Vector,
+		Widget,
 		layout::{Limits, Node},
-		mouse::{Click, click::Kind},
+		mouse::{self, Click, Cursor, Interaction, ScrollDelta, click::Kind},
 		overlay,
 		renderer::Style,
 		widget::{Operation, Tree, tree},
 	},
-	mouse::{self, Cursor, Interaction, ScrollDelta},
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -29,29 +28,31 @@ struct State {
 
 #[derive(Debug)]
 pub struct DragHandle<'a, Message> {
-	child: NoDebug<Element<'a, Message>>,
+	child: NoDebug<Element<'a, Message, Theme, Renderer>>,
 	value: usize,
 	reset: usize,
 	strategy: Strategy,
-	f: fn(usize) -> Message,
+	f: NoDebug<Box<dyn Fn(usize) -> Message + 'a>>,
 }
 
 impl<'a, Message> DragHandle<'a, Message> {
+	#[must_use]
 	pub fn new(
-		child: impl Into<Element<'a, Message>>,
+		child: impl Into<Element<'a, Message, Theme, Renderer>>,
 		value: usize,
 		reset: usize,
-		f: fn(usize) -> Message,
+		f: impl Fn(usize) -> Message + 'a,
 	) -> Self {
 		Self {
 			child: child.into().into(),
 			value,
 			reset,
 			strategy: Strategy::Vertical,
-			f,
+			f: NoDebug(Box::from(f)),
 		}
 	}
 
+	#[must_use]
 	pub fn strategy(mut self, strategy: Strategy) -> Self {
 		self.strategy = strategy;
 		self
@@ -168,7 +169,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 				{
 					let diff = match delta {
 						ScrollDelta::Lines { y, .. } => *y,
-						ScrollDelta::Pixels { y, .. } => y / SWM,
+						ScrollDelta::Pixels { y, .. } => y / 60.0,
 					} + state.scroll;
 					state.scroll = diff.fract();
 
@@ -268,7 +269,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 	}
 }
 
-impl<'a, Message> From<DragHandle<'a, Message>> for Element<'a, Message>
+impl<'a, Message> From<DragHandle<'a, Message>> for Element<'a, Message, Theme, Renderer>
 where
 	Message: 'a,
 {

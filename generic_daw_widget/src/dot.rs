@@ -1,14 +1,14 @@
-use iced::{
-	Animation, Color, Element, Event, Length, Rectangle, Renderer, Size, Theme,
-	advanced::{
-		Clipboard, Layout, Renderer as _, Shell, Widget,
+use iced_widget::{
+	Renderer,
+	core::{
+		Animation, Clipboard, Color, Element, Event, Layout, Length, Rectangle, Renderer as _,
+		Shell, Size, Theme, Widget, border,
 		layout::{Limits, Node},
+		mouse::Cursor,
 		renderer::{Quad, Style},
 		widget::{Tree, tree},
+		window,
 	},
-	border,
-	mouse::Cursor,
-	window,
 };
 use std::time::Instant;
 
@@ -27,12 +27,28 @@ impl State {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct AnimatedDot {
+pub struct Dot {
 	enabled: bool,
 	radius: f32,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for AnimatedDot {
+impl Dot {
+	#[must_use]
+	pub fn new(enabled: bool) -> Self {
+		Self {
+			enabled,
+			radius: 8.0,
+		}
+	}
+
+	#[must_use]
+	pub fn radius(mut self, radius: f32) -> Self {
+		self.radius = radius;
+		self
+	}
+}
+
+impl<Message> Widget<Message, Theme, Renderer> for Dot {
 	fn size(&self) -> Size<Length> {
 		Size::new(
 			Length::Fixed(2.0 * self.radius),
@@ -122,22 +138,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AnimatedDot {
 	}
 }
 
-impl AnimatedDot {
-	pub fn new(enabled: bool) -> Self {
-		Self {
-			enabled,
-			radius: 8.0,
-		}
-	}
-
-	pub fn radius(mut self, radius: f32) -> Self {
-		self.radius = radius;
-		self
-	}
-}
-
-impl<Message> From<AnimatedDot> for Element<'_, Message> {
-	fn from(value: AnimatedDot) -> Self {
+impl<Message> From<Dot> for Element<'_, Message, Theme, Renderer> {
+	fn from(value: Dot) -> Self {
 		Element::new(value)
 	}
 }

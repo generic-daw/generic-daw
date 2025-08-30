@@ -25,7 +25,7 @@ pub struct Track<'a, Message> {
 	position: &'a Vec2,
 	scale: &'a Vec2,
 	children: NoDebug<Box<[Element<'a, Message>]>>,
-	on_double_click: NoDebug<Box<dyn Fn(MusicalTime) -> Message>>,
+	on_double_click: NoDebug<Box<dyn Fn(MusicalTime) -> Message + 'a>>,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
@@ -230,7 +230,7 @@ where
 		position: &'a Vec2,
 		scale: &'a Vec2,
 		children: impl IntoIterator<Item = Element<'a, Message>>,
-		on_double_click: impl Fn(MusicalTime) -> Message + 'static,
+		on_double_click: impl Fn(MusicalTime) -> Message + 'a,
 	) -> Self {
 		Self {
 			rtstate,

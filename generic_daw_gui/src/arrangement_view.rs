@@ -6,10 +6,15 @@ use crate::{
 	icons::{chevron_up, grip_vertical, x},
 	stylefns::{bordered_box_with_radius, button_with_radius, menu_with_border, slider_secondary},
 	widget::{
-		AnimatedDot, Arrangement as ArrangementWidget, AudioClip as AudioClipWidget, Knob,
-		LINE_HEIGHT, MidiClip as MidiClipWidget, PeakMeter, Piano, PianoRoll,
-		Recording as RecordingWidget, Seeker, TEXT_HEIGHT, Track as TrackWidget,
-		arrangement::Action as ArrangementAction, piano_roll::Action as PianoRollAction,
+		LINE_HEIGHT, TEXT_HEIGHT,
+		arrangement::{Action as ArrangementAction, Arrangement as ArrangementWidget},
+		audio_clip::AudioClip as AudioClipWidget,
+		midi_clip::MidiClip as MidiClipWidget,
+		piano::Piano,
+		piano_roll::{Action as PianoRollAction, PianoRoll},
+		recording::Recording as RecordingWidget,
+		seeker::Seeker,
+		track::Track as TrackWidget,
 	},
 };
 use arc_swap::ArcSwap;
@@ -22,6 +27,7 @@ use generic_daw_core::{
 	clap_host::{self, MainThreadMessage, PluginBundle, PluginDescriptor},
 };
 use generic_daw_utils::{EnumDispatcher, NoDebug, Vec2};
+use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
 use humantime::format_rfc3339;
 use iced::{
 	Alignment, Element, Fill, Function as _, Size, Subscription, Task, border,
@@ -176,7 +182,7 @@ impl ArrangementView {
 				recording: None,
 
 				arrangement_position: Vec2::default(),
-				arrangement_scale: Vec2::new(10.0, const { LINE_HEIGHT * 4.0 + 15.0 }),
+				arrangement_scale: Vec2::new(10.0, 95.0),
 				soloed_track: None,
 
 				piano_roll_position: Vec2::new(0.0, 40.0),
@@ -702,8 +708,6 @@ impl ArrangementView {
 									Knob::new(
 										0.0..=1.0,
 										node.volume.cbrt(),
-										0.0,
-										1.0,
 										node.enabled,
 										move |v| Message::ChannelVolumeChanged(id, v.powi(3))
 									)
@@ -711,11 +715,11 @@ impl ArrangementView {
 									Knob::new(
 										-1.0..=1.0,
 										node.pan,
-										0.0,
-										0.0,
 										node.enabled,
 										Message::ChannelPanChanged.with(id)
 									)
+									.center(0.0)
+									.reset(0.0)
 									.tooltip(pan_to_string(node.pan)),
 								]
 								.spacing(5)
@@ -753,7 +757,7 @@ impl ArrangementView {
 									column![
 										vertical_space(),
 										button(
-											AnimatedDot::new(
+											Dot::new(
 												self.recording
 													.as_ref()
 													.is_some_and(|&(_, i)| i == id)
@@ -876,11 +880,11 @@ impl ArrangementView {
 							Knob::new(
 								-1.0..=1.0,
 								node.pan,
-								0.0,
-								0.0,
 								node.enabled,
 								Message::ChannelPanChanged.with(node.id)
 							)
+							.center(0.0)
+							.reset(0.0)
 							.tooltip(pan_to_string(node.pan)),
 						]
 						.spacing(3)
@@ -1128,8 +1132,6 @@ impl ArrangementView {
 										Knob::new(
 											0.0..=1.0,
 											plugin.mix,
-											0.0,
-											1.0,
 											plugin.enabled,
 											Message::PluginMixChanged.with(i)
 										)
