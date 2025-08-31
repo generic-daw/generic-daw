@@ -20,10 +20,10 @@ mod audio_processor;
 mod event_buffers;
 mod event_impl;
 pub mod events;
-mod plugin;
 mod host;
 mod main_thread;
 mod params;
+mod plugin;
 mod plugin_descriptor;
 mod shared;
 
@@ -34,8 +34,8 @@ pub use clack_host::{
 	utils::{ClapId, Cookie},
 };
 pub use event_impl::EventImpl;
-pub use plugin::GuiExt;
 pub use main_thread::MainThreadMessage;
+pub use plugin::Plugin;
 pub use plugin_descriptor::PluginDescriptor;
 pub use plugin_id::Id as PluginId;
 
@@ -64,7 +64,7 @@ pub fn get_installed_plugins(
 				None
 			} else {
 				// SAFETY:
-				// loading an external library object file is inherently unsafe
+				// Loading an external library object file is inherently unsafe.
 				let bundle = unsafe { PluginBundle::load(path.path()).ok() };
 				seen.insert(path.into_path());
 				bundle
@@ -87,7 +87,7 @@ pub fn get_installed_plugins(
 pub fn default_clap_paths() -> Vec<Arc<Path>> {
 	let mut paths = Vec::new();
 
-	#[cfg(target_os = "linux")]
+	#[cfg(unix)]
 	{
 		if let Some(path) = std::env::var_os("HOME").map(PathBuf::from) {
 			paths.push(path.join(".clap").into());
@@ -129,7 +129,7 @@ pub fn init(
 	descriptor: PluginDescriptor,
 	sample_rate: u32,
 	max_buffer_size: u32,
-) -> (GuiExt, Receiver<MainThreadMessage>, AudioProcessor) {
+) -> (Plugin, Receiver<MainThreadMessage>, AudioProcessor) {
 	let (main_sender, main_receiver) = async_channel::unbounded();
 	let (audio_sender, audio_receiver) = async_channel::unbounded();
 
@@ -151,7 +151,7 @@ pub fn init(
 		output_config.port_channel_counts[output_config.main_port_index].clamp(1, 2) as u32;
 	let max_frames_count = max_buffer_size / channels;
 	let config = PluginAudioConfiguration {
-		sample_rate: f64::from(sample_rate),
+		sample_rate: sample_rate.into(),
 		min_frames_count: 1,
 		max_frames_count,
 	};
@@ -181,13 +181,7 @@ pub fn init(
 	let params = instance.access_handler(|mt| mt.params).unwrap().0;
 	let params = Param::all(&mut instance.plugin_handle(), params);
 
-	let gui = GuiExt::new(
-		instance.access_handler(|mt| mt.gui).unwrap().0,
-		instance,
-		descriptor,
-		id,
-		params,
-	);
+	let gui = Plugin::new(instance, descriptor, id, params);
 
 	(gui, main_receiver, plugin_audio_processor)
 }

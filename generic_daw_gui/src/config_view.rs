@@ -1,5 +1,5 @@
 use crate::{
-	components::{number_input, pick_list_custom_handle, space, styled_scrollable_with_direction},
+	components::{number_input, pick_list_custom_handle, space, styled_scrollable},
 	config::{Config, Device},
 	icons::{mic, plus, rotate_ccw, save, volume_2, x},
 	stylefns::{bordered_box_with_radius, button_with_radius, pick_list_with_radius},
@@ -9,9 +9,8 @@ use crate::{
 use iced::{
 	Center, Element, Font, Task, border,
 	widget::{
-		button, column, container, horizontal_rule, horizontal_space, pick_list, row,
-		scrollable::{Direction, Scrollbar},
-		slider, text, toggler, value,
+		button, column, container, horizontal_rule, horizontal_space, pick_list, row, slider, text,
+		toggler, value,
 	},
 };
 use rfd::AsyncFileDialog;
@@ -43,7 +42,7 @@ pub enum Message {
 	ChangedAutosaveIntervalText(String),
 	ToggledOpenLastProject,
 	ChangedTheme(Theme),
-	ChangedScaleFactor(f64),
+	ChangedScaleFactor(f32),
 	WriteConfig,
 	ResetConfigToPrev,
 	ResetConfigToDefault,
@@ -118,7 +117,7 @@ impl ConfigView {
 		input_devices: &'a [String],
 		output_devices: &'a [String],
 	) -> Element<'a, Message> {
-		container(styled_scrollable_with_direction(
+		container(styled_scrollable(
 			column![
 				row![
 					text("Settings")
@@ -367,7 +366,6 @@ impl ConfigView {
 			.spacing(10)
 			.padding(10)
 			.width(530),
-			Direction::Vertical(Scrollbar::default()),
 		))
 		.style(|t| {
 			container::background(t.extended_palette().background.weakest.color)

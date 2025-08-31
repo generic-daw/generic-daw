@@ -36,7 +36,7 @@ impl EventBuffers {
 
 		let mut buffer = NotePortInfoBuffer::new();
 
-		(0..ports.count(plugin, is_input).min(u32::from(u16::MAX))).find_map(|i| {
+		(0..ports.count(plugin, is_input).min(u16::MAX.into())).find_map(|i| {
 			let port = ports.get(plugin, i, is_input, &mut buffer)?;
 
 			(port.supported_dialects.supports(NoteDialect::Midi)

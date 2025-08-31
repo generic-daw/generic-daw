@@ -27,6 +27,6 @@ impl Display for Decibels {
 			}
 		}
 
-		write!(f, "{db:.*}", usize::from(db < 9.95))
+		write!(f, "{db:.*}", (db < 9.95).into())
 	}
 }

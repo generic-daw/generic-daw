@@ -309,8 +309,10 @@ impl Daw {
 	}
 
 	pub fn view(&self, window: Id) -> Element<'_, Message> {
-		if self.arrangement_view.clap_host.is_plugin_window(window) {
-			return space().into();
+		if let Some(gui) = self.arrangement_view.clap_host.plugin_gui(window) {
+			return gui
+				.map(ArrangementMessage::ClapHost)
+				.map(Message::Arrangement);
 		}
 
 		let fill = MusicalTime::from_samples(
@@ -456,7 +458,7 @@ impl Daw {
 		self.arrangement_view
 			.clap_host
 			.title(window)
-			.unwrap_or_else(|| String::from("Generic DAW"))
+			.unwrap_or_else(|| "Generic DAW".to_owned())
 	}
 
 	pub fn theme(&self, _window: Id) -> Theme {
@@ -464,7 +466,7 @@ impl Daw {
 	}
 
 	pub fn scale_factor(&self, _: Id) -> f64 {
-		self.config.scale_factor
+		self.config.scale_factor.into()
 	}
 
 	pub fn subscription(&self) -> Subscription<Message> {

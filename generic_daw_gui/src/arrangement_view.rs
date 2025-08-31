@@ -1,7 +1,9 @@
 use crate::{
 	arrangement_view::arrangement::Batch,
 	clap_host::{ClapHost, Message as ClapHostMessage},
-	components::{circle_plus, icon_button, space, styled_scrollable_with_direction},
+	components::{
+		circle_plus, icon_button, space, styled_scrollable, styled_scrollable_with_direction,
+	},
 	config::Config,
 	icons::{chevron_up, grip_vertical, x},
 	stylefns::{bordered_box_with_radius, button_with_radius, menu_with_border, slider_secondary},
@@ -205,7 +207,9 @@ impl ArrangementView {
 		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
 	) -> Task<Message> {
 		match message {
-			Message::ClapHost(msg) => return self.clap_host.update(msg).map(Message::ClapHost),
+			Message::ClapHost(msg) => {
+				return self.clap_host.update(msg, config).map(Message::ClapHost);
+			}
 			Message::Batch(msg) => self.arrangement.update(msg),
 			Message::Gc => {
 				self.audios.retain(|_, audio| {
@@ -243,10 +247,10 @@ impl ArrangementView {
 
 				return Task::batch(node.plugins.into_iter().map(|plugin| {
 					self.clap_host
-						.update(ClapHostMessage::MainThread(
-							plugin.id,
-							MainThreadMessage::GuiClosed,
-						))
+						.update(
+							ClapHostMessage::MainThread(plugin.id, MainThreadMessage::GuiClosed),
+							config,
+						)
 						.map(Message::ClapHost)
 				}));
 			}
@@ -280,10 +284,10 @@ impl ArrangementView {
 
 				return self
 					.clap_host
-					.update(ClapHostMessage::Opened(
-						Arc::new(Fragile::new(gui)),
-						receiver,
-					))
+					.update(
+						ClapHostMessage::Opened(Arc::new(Fragile::new(gui)), receiver),
+						config,
+					)
 					.map(Message::ClapHost);
 			}
 			Message::PluginMixChanged(i, mix) => {
@@ -310,10 +314,10 @@ impl ArrangementView {
 				let plugin = self.arrangement.plugin_remove(selected, i);
 				return self
 					.clap_host
-					.update(ClapHostMessage::MainThread(
-						plugin.id,
-						MainThreadMessage::GuiClosed,
-					))
+					.update(
+						ClapHostMessage::MainThread(plugin.id, MainThreadMessage::GuiClosed),
+						config,
+					)
 					.map(Message::ClapHost);
 			}
 			Message::SampleLoadFromFile(path) => {
@@ -1119,7 +1123,7 @@ impl ArrangementView {
 					.menu_style(menu_with_border(menu::default, border::width(0)))
 					.width(Fill),
 					container(horizontal_rule(1)).padding([5, 0]),
-					styled_scrollable_with_direction(
+					styled_scrollable(
 						dragking::column(
 							self.arrangement
 								.node(selected)
@@ -1196,7 +1200,6 @@ impl ArrangementView {
 						)
 						.spacing(5)
 						.on_drag(Message::PluginsReordered),
-						Direction::Vertical(Scrollbar::default())
 					)
 					.height(Fill)
 				],

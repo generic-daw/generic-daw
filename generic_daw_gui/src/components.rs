@@ -127,6 +127,12 @@ where
 		.menu_style(menu_with_border(menu::default, border::width(0)))
 }
 
+pub fn styled_scrollable<'a, Message>(
+	content: impl Into<Element<'a, Message>>,
+) -> Scrollable<'a, Message> {
+	styled_scrollable_with_direction(content, Direction::default())
+}
+
 pub fn styled_scrollable_with_direction<'a, Message>(
 	content: impl Into<Element<'a, Message>>,
 	direction: impl Into<Direction>,

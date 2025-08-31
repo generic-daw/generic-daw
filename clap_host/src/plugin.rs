@@ -11,50 +11,78 @@ use clack_host::{events::Match, prelude::*};
 use generic_daw_utils::NoDebug;
 use log::warn;
 use raw_window_handle::RawWindowHandle;
-use std::io::Cursor;
+use std::{io::Cursor, panic};
 
 #[derive(Debug)]
-pub struct GuiExt {
-	ext: NoDebug<PluginGui>,
+enum GuiKind {
+	Floating {
+		ext: NoDebug<PluginGui>,
+	},
+	Embedded {
+		ext: NoDebug<PluginGui>,
+		can_resize: Option<bool>,
+		scale_factor: f32,
+	},
+	None,
+}
+
+impl GuiKind {
+	fn ext(&self) -> Option<PluginGui> {
+		match self {
+			Self::Floating { ext } | Self::Embedded { ext, .. } => Some(ext.0),
+			Self::None => None,
+		}
+	}
+}
+
+#[derive(Debug)]
+pub struct Plugin {
 	instance: NoDebug<PluginInstance<Host>>,
+	gui: GuiKind,
 	descriptor: PluginDescriptor,
 	id: PluginId,
-	params: Box<[Param]>,
-	is_floating: bool,
-	can_resize: Option<bool>,
+	params: NoDebug<Box<[Param]>>,
 	is_open: bool,
 }
 
-impl GuiExt {
+impl Plugin {
 	#[must_use]
 	pub(crate) fn new(
-		ext: PluginGui,
 		mut instance: PluginInstance<Host>,
 		descriptor: PluginDescriptor,
 		id: PluginId,
 		params: Box<[Param]>,
 	) -> Self {
-		let mut config = GuiConfiguration {
-			api_type: GuiApiType::default_for_current_platform().unwrap(),
-			is_floating: false,
-		};
+		let gui = instance
+			.access_handler(|mt| mt.gui)
+			.map_or(GuiKind::None, |ext| {
+				let mut config = GuiConfiguration {
+					api_type: const { GuiApiType::default_for_current_platform().unwrap() },
+					is_floating: false,
+				};
 
-		let plugin = &mut instance.plugin_handle();
-
-		if !ext.is_api_supported(plugin, config) {
-			config.is_floating = true;
-
-			assert!(ext.is_api_supported(plugin, config));
-		}
+				if ext.is_api_supported(&mut instance.plugin_handle(), config) {
+					GuiKind::Embedded {
+						ext,
+						can_resize: None,
+						scale_factor: 1.0,
+					}
+				} else {
+					config.is_floating = true;
+					if ext.is_api_supported(&mut instance.plugin_handle(), config) {
+						GuiKind::Floating { ext }
+					} else {
+						GuiKind::None
+					}
+				}
+			});
 
 		Self {
-			ext: ext.into(),
 			instance: instance.into(),
+			gui,
 			descriptor,
 			id,
-			params,
-			is_floating: config.is_floating,
-			can_resize: None,
+			params: params.into(),
 			is_open: false,
 		}
 	}
@@ -70,15 +98,38 @@ impl GuiExt {
 	}
 
 	#[must_use]
+	pub fn has_gui(&self) -> bool {
+		!matches!(self.gui, GuiKind::None)
+	}
+
+	#[must_use]
 	pub fn is_floating(&self) -> bool {
-		self.is_floating
+		matches!(self.gui, GuiKind::Floating { .. })
+	}
+
+	pub fn set_scale(&mut self, scale: f32) {
+		let GuiKind::Embedded {
+			ext, scale_factor, ..
+		} = &mut self.gui
+		else {
+			panic!("called \"set_scale\" on a non-embedded gui")
+		};
+
+		*scale_factor = scale;
+		ext.set_scale(&mut self.instance.plugin_handle(), scale.into())
+			.unwrap();
 	}
 
 	#[must_use]
 	pub fn can_resize(&mut self) -> bool {
-		*self
-			.can_resize
-			.get_or_insert_with(|| self.ext.can_resize(&mut self.instance.plugin_handle()))
+		let GuiKind::Embedded {
+			ext, can_resize, ..
+		} = &mut self.gui
+		else {
+			panic!("called \"can_resize\" on a non-embedded gui")
+		};
+
+		*can_resize.get_or_insert_with(|| ext.can_resize(&mut self.instance.plugin_handle()))
 	}
 
 	pub fn call_on_main_thread_callback(&mut self) {
@@ -102,7 +153,7 @@ impl GuiExt {
 				}
 			}
 			Match::All => {
-				for param in &mut self.params {
+				for param in &mut *self.params {
 					param.rescan_value(&mut self.instance.plugin_handle(), ext);
 				}
 			}
@@ -119,72 +170,121 @@ impl GuiExt {
 	pub fn create(&mut self) {
 		self.destroy();
 
-		let config = GuiConfiguration {
-			api_type: GuiApiType::default_for_current_platform().unwrap(),
-			is_floating: self.is_floating,
+		let Some(ext) = self.gui.ext() else {
+			return;
 		};
 
-		self.ext
-			.create(&mut self.instance.plugin_handle(), config)
+		let config = GuiConfiguration {
+			api_type: const { GuiApiType::default_for_current_platform().unwrap() },
+			is_floating: self.is_floating(),
+		};
+
+		ext.create(&mut self.instance.plugin_handle(), config)
 			.unwrap();
 	}
 
 	/// # SAFETY
 	/// The underlying window must remain valid for the lifetime of this plugin instance's gui.
 	pub unsafe fn set_parent(&mut self, window_handle: RawWindowHandle) {
-		debug_assert!(!self.is_floating);
+		let GuiKind::Embedded { ext, .. } = self.gui else {
+			panic!("called \"set_parent\" on a non-embedded gui");
+		};
 
 		// SAFETY:
 		// Ensured by the caller.
 		unsafe {
-			self.ext
-				.set_parent(
-					&mut self.instance.plugin_handle(),
-					ClapWindow::from_window_handle(window_handle).unwrap(),
-				)
-				.unwrap();
+			ext.set_parent(
+				&mut self.instance.plugin_handle(),
+				ClapWindow::from_window_handle(window_handle).unwrap(),
+			)
+			.unwrap();
 		}
 	}
 
 	pub fn show(&mut self) {
-		// I have no clue why this works, but if I unwrap here, nih-plug plugins don't load
-		if let Err(err) = self.ext.show(&mut self.instance.plugin_handle()) {
+		if !self.is_open
+			&& let Some(ext) = self.gui.ext()
+			&& let Err(err) = ext.show(&mut self.instance.plugin_handle())
+		{
+			// If I unwrap here, nih-plug plugins don't load. Why?
 			warn!("{}: {err}", self.descriptor);
 		}
 
 		self.is_open = true;
 	}
 
-	#[must_use]
-	pub fn get_size(&mut self) -> Option<[u32; 2]> {
-		self.ext
-			.get_size(&mut self.instance.plugin_handle())
-			.map(|size| [size.width, size.height])
+	pub fn destroy(&mut self) {
+		if self.is_open
+			&& let Some(ext) = self.gui.ext()
+		{
+			ext.destroy(&mut self.instance.plugin_handle());
+		}
+
+		self.is_open = false;
 	}
 
 	#[must_use]
-	pub fn resize(&mut self, width: u32, height: u32) -> Option<[u32; 2]> {
-		if !self.can_resize() {
+	pub fn get_size(&mut self) -> Option<[f32; 2]> {
+		let GuiKind::Embedded {
+			ext, scale_factor, ..
+		} = self.gui
+		else {
+			return None;
+		};
+
+		let GuiSize { width, height } = ext.get_size(&mut self.instance.plugin_handle())?;
+		let (mut width, mut height) = (width as f32, height as f32);
+
+		if !const { GuiApiType::default_for_current_platform().unwrap() }.uses_logical_size() {
+			width *= scale_factor;
+			height *= scale_factor;
+		}
+
+		#[expect(clippy::tuple_array_conversions)]
+		Some([width, height])
+	}
+
+	#[must_use]
+	pub fn resize(&mut self, mut width: f32, mut height: f32) -> Option<[f32; 2]> {
+		let GuiKind::Embedded {
+			ext,
+			scale_factor,
+			can_resize,
+		} = self.gui
+		else {
+			return None;
+		};
+
+		if !can_resize? {
 			return None;
 		}
 
-		let size = GuiSize { width, height };
-
-		let size = self
-			.ext
-			.adjust_size(&mut self.instance.plugin_handle(), size)
-			.unwrap_or(size);
-		self.ext
-			.set_size(&mut self.instance.plugin_handle(), size)
-			.unwrap();
-		Some([size.width, size.height])
-	}
-
-	pub fn destroy(&mut self) {
-		if self.is_open {
-			self.ext.destroy(&mut self.instance.plugin_handle());
-			self.is_open = false;
+		if !const { GuiApiType::default_for_current_platform().unwrap() }.uses_logical_size() {
+			width /= scale_factor;
+			height /= scale_factor;
 		}
+
+		let size = GuiSize {
+			width: width as u32,
+			height: height as u32,
+		};
+
+		let size = ext
+			.adjust_size(&mut self.instance.plugin_handle(), size)
+			.unwrap();
+		ext.set_size(&mut self.instance.plugin_handle(), size)
+			.unwrap();
+
+		let GuiSize { width, height } = size;
+		let (mut width, mut height) = (width as f32, height as f32);
+
+		if !const { GuiApiType::default_for_current_platform().unwrap() }.uses_logical_size() {
+			width *= scale_factor;
+			height *= scale_factor;
+		}
+
+		#[expect(clippy::tuple_array_conversions)]
+		Some([width, height])
 	}
 
 	pub fn latency_changed(&mut self) {
@@ -237,7 +337,7 @@ impl GuiExt {
 	}
 }
 
-impl Drop for GuiExt {
+impl Drop for Plugin {
 	fn drop(&mut self) {
 		self.destroy();
 	}

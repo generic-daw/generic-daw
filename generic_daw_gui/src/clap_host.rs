@@ -1,8 +1,9 @@
+use crate::{components::space, config::Config};
 use fragile::Fragile;
-use generic_daw_core::clap_host::{GuiExt, MainThreadMessage, PluginId, events::Match};
+use generic_daw_core::clap_host::{MainThreadMessage, Plugin, PluginId, events::Match};
 use generic_daw_utils::HoleyVec;
 use iced::{
-	Function as _, Size, Subscription, Task,
+	Element, Function as _, Size, Subscription, Task,
 	time::every,
 	window::{self, Id, close_events, close_requests, resize_events},
 };
@@ -13,67 +14,71 @@ use std::{ops::Deref as _, sync::Arc, time::Duration};
 pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
 	TickTimer(usize, u32),
-	Opened(Arc<Fragile<GuiExt>>, Receiver<MainThreadMessage>),
-	GuiRequestShow(Arc<Fragile<GuiExt>>),
-	GuiRequestResize((Id, Size)),
+	Opened(Arc<Fragile<Plugin>>, Receiver<MainThreadMessage>),
+	GuiRequestShow(Arc<Fragile<Plugin>>),
+	GuiRequestResize(Id, Size),
 	GuiRequestHide(Id),
 	GuiHidden(Id),
 }
 
 #[derive(Default)]
 pub struct ClapHost {
-	plugins: HoleyVec<GuiExt>,
+	plugins: HoleyVec<Plugin>,
 	timers: HoleyVec<HoleyVec<Duration>>,
 	windows: HoleyVec<Id>,
 }
 
 impl ClapHost {
-	pub fn update(&mut self, message: Message) -> Task<Message> {
+	pub fn update(&mut self, message: Message, config: &Config) -> Task<Message> {
 		match message {
-			Message::MainThread(id, msg) => return self.main_thread_message(id, msg),
+			Message::MainThread(id, msg) => return self.main_thread_message(id, msg, config),
 			Message::TickTimer(id, timer_id) => {
 				self.plugins.get_mut(id).unwrap().tick_timer(timer_id);
 			}
-			Message::Opened(gui, receiver) => {
-				let gui = Arc::into_inner(gui).unwrap().into_inner();
-				let id = gui.plugin_id();
-				self.plugins.insert(*id, gui);
+			Message::Opened(plugin, receiver) => {
+				let plugin = Arc::into_inner(plugin).unwrap().into_inner();
+				let id = plugin.plugin_id();
+				self.plugins.insert(*id, plugin);
 
-				let open = self.update(Message::MainThread(id, MainThreadMessage::GuiRequestShow));
+				let open = self.update(
+					Message::MainThread(id, MainThreadMessage::GuiRequestShow),
+					config,
+				);
 				let stream = Task::stream(receiver).map(Message::MainThread.with(id));
 
 				return open.chain(stream);
 			}
-			Message::GuiRequestShow(arc) => {
-				let mut gui = Arc::into_inner(arc).unwrap().into_inner();
-				let id = gui.plugin_id();
+			Message::GuiRequestShow(plugin) => {
+				let mut plugin = Arc::into_inner(plugin).unwrap().into_inner();
+				let id = plugin.plugin_id();
 
-				gui.show();
-				self.plugins.insert(*id, gui);
+				plugin.show();
+				self.plugins.insert(*id, plugin);
 			}
-			Message::GuiRequestResize((window_id, size)) => {
-				if let Some([w, h]) = self.windows.key_of(&window_id).and_then(|id| {
-					self.plugins
+			Message::GuiRequestResize(window, size) => {
+				if let Some(id) = self.windows.key_of(&window)
+					&& let Some([width, height]) = self
+						.plugins
 						.get_mut(id)
 						.unwrap()
-						.resize(size.width as u32, size.height as u32)
-				}) {
-					let new_size = Size::new(w as f32, h as f32);
+						.resize(size.width, size.height)
+				{
+					let new_size = Size::new(width, height);
 					if size != new_size {
-						return window::resize(window_id, new_size);
+						return window::resize(window, new_size);
 					}
 				}
 			}
-			Message::GuiRequestHide(window_id) => {
-				let Some(id) = self.windows.key_of(&window_id) else {
+			Message::GuiRequestHide(window) => {
+				let Some(plugin) = self.windows.key_of(&window) else {
 					return iced::exit();
 				};
 
-				self.plugins.get_mut(id).unwrap().destroy();
-				return window::close(window_id);
+				self.plugins.get_mut(plugin).unwrap().destroy();
+				return window::close(window);
 			}
-			Message::GuiHidden(window_id) => {
-				let id = self.windows.key_of(&window_id).unwrap();
+			Message::GuiHidden(window) => {
+				let id = self.windows.key_of(&window).unwrap();
 				self.windows.remove(id).unwrap();
 			}
 		}
@@ -81,7 +86,12 @@ impl ClapHost {
 		Task::none()
 	}
 
-	fn main_thread_message(&mut self, id: PluginId, msg: MainThreadMessage) -> Task<Message> {
+	fn main_thread_message(
+		&mut self,
+		id: PluginId,
+		msg: MainThreadMessage,
+		config: &Config,
+	) -> Task<Message> {
 		match msg {
 			MainThreadMessage::RequestCallback => self
 				.plugins
@@ -93,58 +103,81 @@ impl ClapHost {
 					return Task::none();
 				}
 
-				let mut gui = self.plugins.remove(*id).unwrap();
+				let mut plugin = self.plugins.remove(*id).unwrap();
+				plugin.create();
 
-				gui.create();
-				return if gui.is_floating() {
-					self.update(Message::GuiRequestShow(Arc::new(Fragile::new(gui))))
-				} else {
-					let (window_id, spawn) = window::open(window::Settings {
-						size: gui.get_size().map_or(Size::new(1280.0, 720.0), |[w, h]| {
-							Size::new(w as f32, h as f32)
-						}),
-						resizable: gui.can_resize(),
+				return if !plugin.has_gui() {
+					let (window, spawn) = window::open(window::Settings {
+						size: Size::new(480.0, 640.0),
+						resizable: true,
 						exit_on_close_request: false,
 						..window::Settings::default()
 					});
-					self.windows.insert(*id, window_id);
+					self.windows.insert(*id, window);
 
-					let mut gui = Fragile::new(gui);
-					let embed = window::run_with_handle(window_id, move |handle| {
+					spawn.discard().chain(self.update(
+						Message::GuiRequestShow(Arc::new(Fragile::new(plugin))),
+						config,
+					))
+				} else if plugin.is_floating() {
+					self.update(
+						Message::GuiRequestShow(Arc::new(Fragile::new(plugin))),
+						config,
+					)
+				} else {
+					plugin.set_scale(config.scale_factor);
+
+					let (window, spawn) = window::open(window::Settings {
+						size: plugin
+							.get_size()
+							.map_or(Size::new(480.0, 640.0), |[width, height]| {
+								Size::new(width, height)
+							}),
+						resizable: plugin.can_resize(),
+						exit_on_close_request: false,
+						..window::Settings::default()
+					});
+					self.windows.insert(*id, window);
+
+					let mut plugin = Fragile::new(plugin);
+					let embed = window::run_with_handle(window, move |handle| {
 						// SAFETY:
 						// The plugin gui is destroyed before the window is closed (see
 						// [`Message::GuiRequestHide`]).
 						unsafe {
-							gui.get_mut().set_parent(handle.as_raw());
+							plugin.get_mut().set_parent(handle.as_raw());
 						}
-						gui
+						plugin
 					});
 
 					spawn
 						.discard()
 						.chain(embed)
-						.map(move |gui| Message::GuiRequestShow(Arc::new(gui)))
+						.map(move |plugin| Message::GuiRequestShow(Arc::new(plugin)))
 				};
 			}
 			MainThreadMessage::GuiRequestResize(new_size) => {
-				if let Some(&window_id) = self.windows.get(*id) {
-					return window::resize(
-						window_id,
-						Size::new(new_size.width as f32, new_size.height as f32),
+				if let Some(&window) = self.windows.get(*id) {
+					return self.update(
+						Message::GuiRequestResize(
+							window,
+							Size::new(new_size.width as f32, new_size.height as f32),
+						),
+						config,
 					);
 				}
 			}
 			MainThreadMessage::GuiRequestHide => {
 				if let Some(&id) = self.windows.get(*id) {
-					return self.update(Message::GuiRequestHide(id));
+					return self.update(Message::GuiRequestHide(id), config);
 				}
 			}
 			MainThreadMessage::GuiClosed => {
 				self.plugins.remove(*id).unwrap();
 				self.timers.remove(*id);
 
-				if let Some(&window_id) = self.windows.get(*id) {
-					return window::close(window_id);
+				if let Some(&window) = self.windows.get(*id) {
+					return window::close(window);
 				}
 			}
 			MainThreadMessage::RegisterTimer(timer_id, duration) => {
@@ -167,15 +200,23 @@ impl ClapHost {
 		Task::none()
 	}
 
+	pub fn plugin_gui(&self, window: Id) -> Option<Element<'_, Message>> {
+		let Some(plugin) = &self.plugins.get(self.windows.key_of(&window)?) else {
+			return Some(space().into());
+		};
+
+		if plugin.has_gui() {
+			return Some(space().into());
+		}
+
+		Some("todo".into())
+	}
+
 	pub fn title(&self, window: Id) -> Option<String> {
 		self.windows
 			.key_of(&window)
 			.and_then(|id| self.plugins.get(id))
 			.map(|plugin| plugin.descriptor().name.deref().to_owned())
-	}
-
-	pub fn is_plugin_window(&self, window: Id) -> bool {
-		self.windows.contains_value(&window)
 	}
 
 	pub fn set_realtime(&mut self, realtime: bool) {
@@ -205,7 +246,7 @@ impl ClapHost {
 						})
 				})
 				.chain([
-					resize_events().map(Message::GuiRequestResize),
+					resize_events().map(|(id, size)| Message::GuiRequestResize(id, size)),
 					close_requests().map(Message::GuiRequestHide),
 					close_events().map(Message::GuiHidden),
 				]),

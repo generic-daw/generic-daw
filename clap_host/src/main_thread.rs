@@ -115,7 +115,7 @@ impl HostTimerImpl for MainThread<'_> {
 			.main_sender
 			.try_send(MainThreadMessage::RegisterTimer(
 				timer_id.0,
-				Duration::from_millis(u64::from(period_ms)),
+				Duration::from_millis(period_ms.into()),
 			))
 			.unwrap();
 

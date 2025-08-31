@@ -29,7 +29,7 @@ pub struct Config {
 	pub autosave: Autosave,
 	pub open_last_project: bool,
 	pub theme: Theme,
-	pub scale_factor: f64,
+	pub scale_factor: f32,
 }
 
 impl Default for Config {

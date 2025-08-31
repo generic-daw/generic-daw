@@ -26,8 +26,8 @@ use walkdir::WalkDir;
 impl ArrangementView {
 	pub fn save(&mut self, path: &Path) {
 		let mut writer = Writer::new(
-			u32::from(self.arrangement.rtstate().bpm),
-			u32::from(self.arrangement.rtstate().numerator),
+			self.arrangement.rtstate().bpm.into(),
+			self.arrangement.rtstate().numerator.into(),
 		);
 
 		let mut audios = HashMap::new();
@@ -53,7 +53,7 @@ impl ArrangementView {
 			midis.insert(
 				Arc::as_ptr(&pattern).addr(),
 				writer.push_midi(pattern.load().iter().map(|note| proto::Note {
-					key: u32::from(note.key.0),
+					key: note.key.0.into(),
 					velocity: note.velocity,
 					start: note.start.into(),
 					end: note.end.into(),
@@ -296,7 +296,7 @@ impl ArrangementView {
 
 		info!("loaded project {}", path.display());
 
-		futs.extend(self.clear());
+		futs.extend(self.clear(config));
 
 		self.plugins = combo_box::State::new(plugin_bundles.keys().cloned().collect());
 		self.arrangement = arrangement;
@@ -321,7 +321,7 @@ impl ArrangementView {
 		let (arrangement, task) = ArrangementWrapper::create(config);
 		futs.push(task.map(Message::Batch));
 
-		futs.extend(self.clear());
+		futs.extend(self.clear(config));
 
 		self.plugins = combo_box::State::new(plugin_bundles.keys().cloned().collect());
 		self.arrangement = arrangement;
@@ -329,16 +329,16 @@ impl ArrangementView {
 		Task::batch(futs)
 	}
 
-	fn clear(&mut self) -> impl Iterator<Item = Task<Message>> {
+	fn clear(&mut self, config: &Config) -> impl Iterator<Item = Task<Message>> {
 		self.recording = None;
 		self.soloed_track = None;
 		self.selected_channel = None;
 		self.arrangement.plugins().map(|id| {
 			self.clap_host
-				.update(ClapHostMessage::MainThread(
-					id,
-					MainThreadMessage::GuiClosed,
-				))
+				.update(
+					ClapHostMessage::MainThread(id, MainThreadMessage::GuiClosed),
+					config,
+				)
 				.map(Message::ClapHost)
 		})
 	}
