@@ -139,6 +139,10 @@ pub struct Plugin {
 	pub id: Vec<u8>,
 	#[prost(bytes = "vec", optional)]
 	pub state: Option<Vec<u8>>,
+	#[prost(float, default = 1.0)]
+	pub mix: f32,
+	#[prost(bool, default = true)]
+	pub enabled: bool,
 }
 
 impl Plugin {

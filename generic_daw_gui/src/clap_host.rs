@@ -14,8 +14,9 @@ use std::{ops::Deref as _, sync::Arc, time::Duration};
 pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
 	TickTimer(usize, u32),
-	Opened(Arc<Fragile<Plugin>>, Receiver<MainThreadMessage>),
-	GuiRequestShow(Arc<Fragile<Plugin>>),
+	Loaded(Arc<Fragile<Plugin>>, Receiver<MainThreadMessage>),
+	GuiShown(Arc<Fragile<Plugin>>),
+	GuiSetState(PluginId, Box<[u8]>),
 	GuiRequestResize(Id, Size),
 	GuiRequestHide(Id),
 	GuiHidden(Id),
@@ -35,25 +36,21 @@ impl ClapHost {
 			Message::TickTimer(id, timer_id) => {
 				self.plugins.get_mut(id).unwrap().tick_timer(timer_id);
 			}
-			Message::Opened(plugin, receiver) => {
+			Message::Loaded(plugin, receiver) => {
 				let plugin = Arc::into_inner(plugin).unwrap().into_inner();
 				let id = plugin.plugin_id();
 				self.plugins.insert(*id, plugin);
-
-				let open = self.update(
-					Message::MainThread(id, MainThreadMessage::GuiRequestShow),
-					config,
-				);
-				let stream = Task::stream(receiver).map(Message::MainThread.with(id));
-
-				return open.chain(stream);
+				return Task::stream(receiver).map(Message::MainThread.with(id));
 			}
-			Message::GuiRequestShow(plugin) => {
+			Message::GuiShown(plugin) => {
 				let mut plugin = Arc::into_inner(plugin).unwrap().into_inner();
 				let id = plugin.plugin_id();
 
 				plugin.show();
 				self.plugins.insert(*id, plugin);
+			}
+			Message::GuiSetState(plugin, state) => {
+				self.plugins.get_mut(*plugin).unwrap().set_state(&state);
 			}
 			Message::GuiRequestResize(window, size) => {
 				if let Some(id) = self.windows.key_of(&window)
@@ -115,15 +112,11 @@ impl ClapHost {
 					});
 					self.windows.insert(*id, window);
 
-					spawn.discard().chain(self.update(
-						Message::GuiRequestShow(Arc::new(Fragile::new(plugin))),
-						config,
-					))
-				} else if plugin.is_floating() {
-					self.update(
-						Message::GuiRequestShow(Arc::new(Fragile::new(plugin))),
-						config,
+					spawn.discard().chain(
+						self.update(Message::GuiShown(Arc::new(Fragile::new(plugin))), config),
 					)
+				} else if plugin.is_floating() {
+					self.update(Message::GuiShown(Arc::new(Fragile::new(plugin))), config)
 				} else {
 					plugin.set_scale(config.scale_factor);
 
@@ -153,7 +146,7 @@ impl ClapHost {
 					spawn
 						.discard()
 						.chain(embed)
-						.map(move |plugin| Message::GuiRequestShow(Arc::new(plugin)))
+						.map(move |plugin| Message::GuiShown(Arc::new(plugin)))
 				};
 			}
 			MainThreadMessage::GuiRequestResize(new_size) => {

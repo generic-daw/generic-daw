@@ -93,11 +93,12 @@ pub enum Message {
 	ChannelPanChanged(NodeId, f32),
 	ChannelToggleEnabled(NodeId),
 
-	PluginLoad(NodeId, PluginDescriptor, Option<Box<[u8]>>),
-	PluginRemove(usize),
-	PluginMixChanged(usize, f32),
-	PluginToggleEnabled(usize),
+	PluginLoad(NodeId, PluginDescriptor),
+	PluginLoadState(NodeId, usize, Box<[u8]>),
+	PluginMixChanged(NodeId, usize, f32),
+	PluginToggleEnabled(NodeId, usize),
 	PluginsReordered(DragEvent),
+	PluginRemove(usize),
 
 	SampleLoadFromFile(Arc<Path>),
 	SampleLoadedFromFile(Arc<Path>, Option<(u32, Arc<Sample>)>),
@@ -266,35 +267,36 @@ impl ArrangementView {
 			}
 			Message::ChannelPanChanged(id, pan) => self.arrangement.node_pan_changed(id, pan),
 			Message::ChannelToggleEnabled(id) => self.arrangement.node_toggle_enabled(id),
-			Message::PluginLoad(node, descriptor, state) => {
-				let (mut gui, receiver, audio_processor) = clap_host::init(
+			Message::PluginLoad(node, descriptor) => {
+				let (gui, receiver, audio_processor) = clap_host::init(
 					&plugin_bundles[&descriptor],
 					descriptor,
 					self.arrangement.rtstate().sample_rate,
 					self.arrangement.rtstate().buffer_size,
 				);
 
-				if let Some(state) = state {
-					gui.set_state(&state);
-				}
-
 				self.arrangement.plugin_load(node, audio_processor);
 
 				return self
 					.clap_host
 					.update(
-						ClapHostMessage::Opened(Arc::new(Fragile::new(gui)), receiver),
+						ClapHostMessage::Loaded(Arc::new(Fragile::new(gui)), receiver),
 						config,
 					)
 					.map(Message::ClapHost);
 			}
-			Message::PluginMixChanged(i, mix) => {
-				let selected = self.selected_channel.unwrap();
-				self.arrangement.plugin_mix_changed(selected, i, mix);
+			Message::PluginLoadState(node, i, state) => {
+				let id = self.arrangement.node(node).0.plugins[i].id;
+				return self
+					.clap_host
+					.update(ClapHostMessage::GuiSetState(id, state), config)
+					.map(Message::ClapHost);
 			}
-			Message::PluginToggleEnabled(i) => {
-				let selected = self.selected_channel.unwrap();
-				self.arrangement.plugin_toggle_enabled(selected, i);
+			Message::PluginMixChanged(node, i, mix) => {
+				self.arrangement.plugin_mix_changed(node, i, mix);
+			}
+			Message::PluginToggleEnabled(node, i) => {
+				self.arrangement.plugin_toggle_enabled(node, i);
 			}
 			Message::PluginsReordered(event) => {
 				if let DragEvent::Dropped {
@@ -1115,9 +1117,12 @@ impl ArrangementView {
 			vertical_split(
 				mixer_panel,
 				column![
-					combo_box(&self.plugins, "Add Plugin", None, move |descriptor| {
-						Message::PluginLoad(selected, descriptor, None)
-					})
+					combo_box(
+						&self.plugins,
+						"Add Plugin",
+						None,
+						Message::PluginLoad.with(selected)
+					)
 					.menu_style(menu_with_border(menu::default, border::width(0)))
 					.width(Fill),
 					container(horizontal_rule(1)).padding([5, 0]),
@@ -1135,7 +1140,9 @@ impl ArrangementView {
 											0.0..=1.0,
 											plugin.mix,
 											plugin.enabled,
-											Message::PluginMixChanged.with(i)
+											move |mix| {
+												Message::PluginMixChanged(selected, i, mix)
+											}
 										)
 										.radius(TEXT_HEIGHT)
 										.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
@@ -1170,7 +1177,7 @@ impl ArrangementView {
 													button::secondary
 												}
 											)
-											.on_press(Message::PluginToggleEnabled(i)),
+											.on_press(Message::PluginToggleEnabled(selected, i)),
 											icon_button(
 												x(),
 												if plugin.enabled {

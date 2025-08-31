@@ -95,6 +95,8 @@ impl ArrangementView {
 						.map(|plugin| proto::Plugin {
 							id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
 							state: self.clap_host.get_state(plugin.id),
+							mix: plugin.mix,
+							enabled: plugin.enabled,
 						}),
 					node.volume,
 					node.pan,
@@ -115,6 +117,8 @@ impl ArrangementView {
 						.map(|plugin| proto::Plugin {
 							id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
 							state: self.clap_host.get_state(plugin.id),
+							mix: plugin.mix,
+							enabled: plugin.enabled,
 						}),
 					channel.volume,
 					channel.pan,
@@ -212,26 +216,42 @@ impl ArrangementView {
 			audios.insert(idx, audio?);
 		}
 
-		let mut load_channel = |node: &Node, channel: &proto::Channel| {
-			futs.push(Task::done(Message::ChannelVolumeChanged(
-				node.id,
-				channel.volume,
-			)));
-			futs.push(Task::done(Message::ChannelPanChanged(node.id, channel.pan)));
+		let load_channel = |node: &Node, channel: &proto::Channel| {
+			let mut task = Task::done(Message::ChannelVolumeChanged(node.id, channel.volume))
+				.chain(Task::done(Message::ChannelPanChanged(node.id, channel.pan)));
 
-			for plugin in &channel.plugins {
-				futs.push(Task::done(Message::PluginLoad(
+			for (i, plugin) in channel.plugins.iter().enumerate() {
+				task = task.chain(Task::done(Message::PluginLoad(
 					node.id,
 					plugin_bundles
 						.keys()
 						.find(|d| *d.id == *plugin.id())?
 						.clone(),
-					plugin.state.clone().map(|state| state.into_boxed_slice()),
 				)));
+
+				if let Some(state) = plugin.state.clone() {
+					task = task.chain(Task::done(Message::PluginLoadState(
+						node.id,
+						i,
+						state.into(),
+					)));
+				}
+
+				if plugin.mix != 1.0 {
+					task = task.chain(Task::done(Message::PluginMixChanged(
+						node.id, i, plugin.mix,
+					)));
+				}
+
+				if !plugin.enabled {
+					task = task.chain(Task::done(Message::PluginToggleEnabled(node.id, i)));
+				}
 			}
 
-			Some(())
+			Some(task)
 		};
+
+		let mut task = Task::none();
 
 		let mut tracks = HashMap::new();
 		for (idx, clips, channel) in reader.iter_tracks() {
@@ -244,16 +264,16 @@ impl ArrangementView {
 							audios.get(&audio.audio)?.1.clone(),
 							arrangement.rtstate(),
 						);
+						clip.position.trim_start_to(audio.position.offset.into());
 						clip.position.move_to(audio.position.start.into());
 						clip.position.trim_end_to(audio.position.end.into());
-						clip.position.trim_start_to(audio.position.offset.into());
 						Clip::Audio(clip)
 					}
 					proto::Clip::Midi(midi) => {
 						let clip = MidiClip::create(midis.get(&midi.midi)?.clone());
+						clip.position.trim_start_to(midi.position.offset.into());
 						clip.position.move_to(midi.position.start.into());
 						clip.position.trim_end_to(midi.position.end.into());
-						clip.position.trim_start_to(midi.position.offset.into());
 						Clip::Midi(clip)
 					}
 				});
@@ -262,7 +282,7 @@ impl ArrangementView {
 			let id = track.id();
 			tracks.insert(idx, id);
 			arrangement.push_track(track);
-			load_channel(&arrangement.node(id).0, channel)?;
+			task = task.chain(load_channel(&arrangement.node(id).0, channel)?);
 		}
 
 		let mut channels = HashMap::new();
@@ -270,7 +290,7 @@ impl ArrangementView {
 
 		let node = &arrangement.master().0;
 		let (idx, channel) = iter_channels.next()?;
-		load_channel(node, channel)?;
+		task = task.chain(load_channel(node, channel)?);
 		channels.insert(idx, node.id);
 
 		for (idx, channel) in iter_channels {
@@ -278,22 +298,24 @@ impl ArrangementView {
 			let id = mixer_node.id();
 			channels.insert(idx, id);
 			arrangement.push_channel(mixer_node);
-			load_channel(&arrangement.node(id).0, channel)?;
+			task = task.chain(load_channel(&arrangement.node(id).0, channel)?);
 		}
 
-		for (from, to) in reader.iter_connections_track_channel() {
-			futs.push(Task::perform(
+		for (from, to) in reader.iter_track_channel_connections() {
+			task = task.chain(Task::perform(
 				arrangement.request_connect(*channels.get(&to)?, *tracks.get(&from)?),
 				|con| Message::ConnectSucceeded(con.unwrap()),
 			));
 		}
 
-		for (from, to) in reader.iter_connections_channel_channel() {
-			futs.push(Task::perform(
+		for (from, to) in reader.iter_channel_channel_connections() {
+			task = task.chain(Task::perform(
 				arrangement.request_connect(*channels.get(&from)?, *channels.get(&to)?),
 				|con| Message::ConnectSucceeded(con.unwrap()),
 			));
 		}
+
+		futs.push(task);
 
 		info!("loaded project {}", path.display());
 

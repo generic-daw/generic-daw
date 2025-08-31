@@ -302,30 +302,29 @@ impl Plugin {
 	}
 
 	pub fn set_realtime(&mut self, realtime: bool) {
-		self.instance
-			.access_handler(|mt| mt.render)
-			.unwrap()
-			.set(
-				&mut self.instance.plugin_handle(),
-				if realtime {
-					RenderMode::Realtime
-				} else {
-					RenderMode::Offline
-				},
-			)
-			.unwrap();
+		if let Some(render) = self.instance.access_handler(|mt| mt.render) {
+			render
+				.set(
+					&mut self.instance.plugin_handle(),
+					if realtime {
+						RenderMode::Realtime
+					} else {
+						RenderMode::Offline
+					},
+				)
+				.unwrap();
+		}
 	}
 
 	pub fn get_state(&mut self) -> Option<Vec<u8>> {
+		let mut buf = Vec::new();
+
 		self.instance
-			.access_handler(|mt| mt.state)
-			.and_then(|state| {
-				let mut buf = Vec::new();
-				state
-					.save(&mut self.instance.plugin_handle(), &mut buf)
-					.is_ok()
-					.then_some(buf)
-			})
+			.access_handler(|mt| mt.state)?
+			.save(&mut self.instance.plugin_handle(), &mut buf)
+			.ok()?;
+
+		Some(buf)
 	}
 
 	pub fn set_state(&mut self, buf: &[u8]) {
