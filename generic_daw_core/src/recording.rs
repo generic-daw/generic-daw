@@ -1,6 +1,6 @@
 use crate::{
-	LOD_LEVELS, MusicalTime, Resampler, RtState, Sample, Stream, build_input_stream,
-	lod::update_lods,
+	LOD_LEVELS, MusicalTime, RtState, Sample, Stream, build_input_stream, lod::update_lods,
+	resampler::Resampler,
 };
 use async_channel::Receiver;
 use cpal::StreamConfig;

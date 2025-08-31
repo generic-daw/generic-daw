@@ -26,7 +26,7 @@ pub struct AudioProcessor {
 
 impl AudioProcessor {
 	#[must_use]
-	pub(crate) fn new(
+	pub fn new(
 		started_processor: StartedPluginAudioProcessor<Host>,
 		descriptor: PluginDescriptor,
 		id: PluginId,

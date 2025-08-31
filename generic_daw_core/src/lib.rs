@@ -1,5 +1,4 @@
 use async_channel::{Receiver, Sender};
-use audio_graph::NodeId;
 use audio_graph_node::AudioGraphNode;
 use cpal::{
 	BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
@@ -28,7 +27,7 @@ mod resampler;
 mod track;
 
 pub use audio_clip::{AudioClip, Sample};
-pub use audio_graph;
+pub use audio_graph::{NodeId, NodeImpl};
 pub use clap_host;
 pub use clip::Clip;
 pub use clip_position::ClipPosition;
@@ -41,7 +40,6 @@ pub use midi_clip::{Key, MidiClip, MidiKey, MidiNote};
 pub use mixer::Mixer;
 pub use musical_time::MusicalTime;
 pub use recording::Recording;
-pub(crate) use resampler::Resampler;
 pub use track::Track;
 
 #[must_use]

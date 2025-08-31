@@ -84,6 +84,7 @@ pub fn get_installed_plugins(
 	bundles
 }
 
+#[must_use]
 pub fn default_clap_paths() -> Vec<Arc<Path>> {
 	let mut paths = Vec::new();
 

@@ -1,4 +1,4 @@
-use crate::{LOD_LEVELS, Resampler, lod::create_lods};
+use crate::{LOD_LEVELS, lod::create_lods, resampler::Resampler};
 use generic_daw_utils::NoDebug;
 use log::info;
 use std::{fs::File, path::Path, sync::Arc};
@@ -13,7 +13,7 @@ use symphonia::core::{
 
 #[derive(Debug)]
 pub struct Sample {
-	pub(crate) samples: NoDebug<Box<[f32]>>,
+	pub samples: NoDebug<Box<[f32]>>,
 	pub lods: NoDebug<Box<[Box<[(f32, f32)]>; LOD_LEVELS]>>,
 	pub path: Arc<Path>,
 	pub name: Arc<str>,
@@ -36,16 +36,6 @@ impl Sample {
 			path,
 			name,
 		}))
-	}
-
-	#[must_use]
-	pub fn len(&self) -> usize {
-		self.samples.len()
-	}
-
-	#[must_use]
-	pub fn is_empty(&self) -> bool {
-		self.len() == 0
 	}
 
 	fn read_audio_file(path: impl AsRef<Path>, sample_rate: u32) -> Option<Box<[f32]>> {

@@ -1,5 +1,5 @@
 use super::plugin::Plugin;
-use generic_daw_core::audio_graph::NodeId;
+use generic_daw_core::NodeId;
 use std::cell::Cell;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

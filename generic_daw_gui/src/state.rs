@@ -24,7 +24,6 @@ pub struct State {
 }
 
 impl State {
-	#[must_use]
 	pub fn read() -> Self {
 		let Some(state_path) = &*STATE_PATH else {
 			return Self::default();

@@ -1,4 +1,4 @@
-use crate::{Action, Mixer, MusicalTime, Resampler, daw_ctx::State, event::Event};
+use crate::{Action, Mixer, MusicalTime, daw_ctx::State, event::Event, resampler::Resampler};
 use audio_graph::{NodeId, NodeImpl};
 use generic_daw_utils::include_f32s;
 use live_sample::LiveSample;

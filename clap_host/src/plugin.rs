@@ -47,7 +47,7 @@ pub struct Plugin {
 
 impl Plugin {
 	#[must_use]
-	pub(crate) fn new(
+	pub fn new(
 		mut instance: PluginInstance<Host>,
 		descriptor: PluginDescriptor,
 		id: PluginId,
@@ -316,6 +316,7 @@ impl Plugin {
 		}
 	}
 
+	#[must_use]
 	pub fn get_state(&mut self) -> Option<Vec<u8>> {
 		let mut buf = Vec::new();
 

@@ -60,15 +60,5 @@ pub fn export(
 		}
 	}
 
-	if skip != 0 {
-		state.rtstate.sample = end + delay - skip;
-
-		audio_graph.process(&state, &mut buf[..skip]);
-
-		for &s in &buf[..skip] {
-			writer.write_sample(s).unwrap();
-		}
-	}
-
 	writer.finalize().unwrap();
 }

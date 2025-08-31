@@ -24,8 +24,7 @@ use arrangement::Arrangement as ArrangementWrapper;
 use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
-	AudioClip, Clip, Decibels, MidiClip, MidiNote, MusicalTime, Recording, Sample,
-	audio_graph::NodeId,
+	AudioClip, Clip, Decibels, MidiClip, MidiNote, MusicalTime, NodeId, Recording, Sample,
 	clap_host::{self, MainThreadMessage, PluginBundle, PluginDescriptor},
 };
 use generic_daw_utils::{EnumDispatcher, NoDebug, Vec2};

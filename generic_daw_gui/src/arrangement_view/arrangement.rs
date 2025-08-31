@@ -6,10 +6,8 @@ use super::{
 use crate::config::Config;
 use bit_set::BitSet;
 use generic_daw_core::{
-	self as core, Action, Clip, Message, Mixer, MusicalTime, RtState, Stream, StreamTrait as _,
-	Update, Version,
-	audio_graph::{NodeId, NodeImpl as _},
-	build_output_stream,
+	self as core, Action, Clip, Message, Mixer, MusicalTime, NodeId, NodeImpl as _, RtState,
+	Stream, StreamTrait as _, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, PluginId},
 	export,
 };
@@ -278,7 +276,6 @@ impl Arrangement {
 		self.sender.try_send(Message::Insert(node.into())).unwrap();
 	}
 
-	#[must_use]
 	pub fn add_channel(&mut self) -> oneshot::Receiver<(NodeId, NodeId)> {
 		let node = Mixer::default();
 		let id = node.id();
@@ -303,7 +300,6 @@ impl Arrangement {
 		self.sender.try_send(Message::Insert(track.into())).unwrap();
 	}
 
-	#[must_use]
 	pub fn add_track(&mut self) -> oneshot::Receiver<(NodeId, NodeId)> {
 		let track = core::Track::default();
 		let id = track.id();
@@ -315,7 +311,6 @@ impl Arrangement {
 		self.tracks.remove(idx);
 	}
 
-	#[must_use]
 	pub fn request_connect(&self, from: NodeId, to: NodeId) -> oneshot::Receiver<(NodeId, NodeId)> {
 		let (sender, receiver) = oneshot::channel();
 		self.sender

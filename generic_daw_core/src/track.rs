@@ -1,4 +1,4 @@
-use crate::{Action, Clip, Mixer, MusicalTime, daw_ctx::State, event::Event};
+use crate::{Action, Clip, Mixer, daw_ctx::State, event::Event};
 use audio_graph::{NodeId, NodeImpl};
 
 #[derive(Debug, Default)]
@@ -39,14 +39,5 @@ impl Track {
 			Action::RemoveClip(index) => _ = self.clips.remove(index),
 			action => self.node.apply(action),
 		}
-	}
-
-	#[must_use]
-	pub fn len(&self) -> MusicalTime {
-		self.clips
-			.iter()
-			.map(|clip| clip.position().end())
-			.max()
-			.unwrap_or_default()
 	}
 }

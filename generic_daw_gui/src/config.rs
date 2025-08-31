@@ -79,7 +79,6 @@ fn default_sample_paths() -> Vec<Arc<Path>> {
 }
 
 impl Config {
-	#[must_use]
 	pub fn read() -> Self {
 		let Some(config_path) = &*CONFIG_PATH else {
 			return Self::default();

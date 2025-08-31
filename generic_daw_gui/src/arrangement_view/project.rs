@@ -6,8 +6,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use generic_daw_core::{
-	AudioClip, Clip, MidiClip, MidiKey, MidiNote, Mixer, Sample, Track,
-	audio_graph::NodeImpl as _,
+	AudioClip, Clip, MidiClip, MidiKey, MidiNote, Mixer, NodeImpl as _, Sample, Track,
 	clap_host::{MainThreadMessage, PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
