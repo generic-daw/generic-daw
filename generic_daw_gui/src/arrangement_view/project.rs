@@ -54,7 +54,7 @@ impl ArrangementView {
 				Arc::as_ptr(&pattern).addr(),
 				writer.push_midi(pattern.load().iter().map(|note| proto::Note {
 					key: u32::from(note.key.0),
-					velocity: note.velocity as f32,
+					velocity: note.velocity,
 					start: note.start.into(),
 					end: note.end.into(),
 				})),
@@ -198,7 +198,7 @@ impl ArrangementView {
 					.map(|note| MidiNote {
 						channel: 0,
 						key: MidiKey(note.key as u8),
-						velocity: f64::from(note.velocity),
+						velocity: note.velocity,
 						start: note.start.into(),
 						end: note.end.into(),
 					})

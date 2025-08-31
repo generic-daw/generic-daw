@@ -12,13 +12,13 @@ pub enum Event {
 		time: u32,
 		channel: u8,
 		key: u8,
-		velocity: f64,
+		velocity: f32,
 	},
 	Off {
 		time: u32,
 		channel: u8,
 		key: u8,
-		velocity: f64,
+		velocity: f32,
 	},
 	AllOff {
 		time: u32,
@@ -28,7 +28,7 @@ pub enum Event {
 		time: u32,
 		param_id: ClapId,
 		channel: u8,
-		value: f64,
+		value: f32,
 		cookie: Cookie,
 	},
 }
@@ -67,7 +67,7 @@ impl clap_host::EventImpl for Event {
 			} => ClapEvent::NoteOnEvent(NoteOnEvent::new(
 				time,
 				Pckn::new(port_index, channel, key, Match::All),
-				velocity,
+				f64::from(velocity),
 			)),
 			Self::Off {
 				time,
@@ -77,7 +77,7 @@ impl clap_host::EventImpl for Event {
 			} => ClapEvent::NoteOffEvent(NoteOffEvent::new(
 				time,
 				Pckn::new(port_index, channel, key, Match::All),
-				velocity,
+				f64::from(velocity),
 			)),
 			Self::AllOff { time, channel } => ClapEvent::NoteChokeEvent(NoteChokeEvent::new(
 				time,
@@ -93,7 +93,7 @@ impl clap_host::EventImpl for Event {
 				time,
 				param_id,
 				Pckn::new(port_index, channel, Match::All, Match::All),
-				value,
+				f64::from(value),
 				cookie,
 			)),
 		}
@@ -152,7 +152,7 @@ impl Event {
 		let kind = data[0] & 0xf0;
 		let channel = data[0] & 0x0f;
 		let bytes = data[1];
-		let value = f64::from(data[2]) / 127.0;
+		let value = f32::from(data[2]) / 127.0;
 
 		match kind {
 			0x90 => Some(Self::On {
@@ -185,14 +185,14 @@ impl Event {
 				time: event.time(),
 				channel: *event.channel().as_specific()? as u8,
 				key: *event.key().as_specific()? as u8,
-				velocity: event.velocity(),
+				velocity: event.velocity() as f32,
 			})
 		} else if let Some(event) = value.as_event::<NoteOffEvent>() {
 			Some(Self::Off {
 				time: event.time(),
 				channel: *event.channel().as_specific()? as u8,
 				key: *event.key().as_specific()? as u8,
-				velocity: event.velocity(),
+				velocity: event.velocity() as f32,
 			})
 		} else if let Some(event) = value.as_event::<NoteChokeEvent>() {
 			Some(Self::AllOff {
@@ -204,7 +204,7 @@ impl Event {
 				time: event.time(),
 				param_id: event.param_id()?,
 				channel: *event.channel().as_specific()? as u8,
-				value: event.value(),
+				value: event.value() as f32,
 				cookie: event.cookie(),
 			})
 		} else {

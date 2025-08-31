@@ -11,9 +11,9 @@ pub struct Param {
 	pub flags: ParamInfoFlags,
 	pub cookie: Cookie,
 	pub name: Arc<str>,
-	pub range: RangeInclusive<f64>,
-	pub reset: f64,
-	pub value: f64,
+	pub range: RangeInclusive<f32>,
+	pub reset: f32,
+	pub value: f32,
 }
 
 impl TryFrom<ParamInfo<'_>> for Param {
@@ -27,9 +27,9 @@ impl TryFrom<ParamInfo<'_>> for Param {
 			name: String::from_utf8(value.name.to_owned())
 				.map_err(|_| ())?
 				.into(),
-			range: value.min_value..=value.max_value,
-			reset: value.default_value,
-			value: value.default_value,
+			range: value.min_value as f32..=value.max_value as f32,
+			reset: value.default_value as f32,
+			value: value.default_value as f32,
 		})
 	}
 }
@@ -51,6 +51,6 @@ impl Param {
 			return;
 		};
 
-		self.value = value;
+		self.value = value as f32;
 	}
 }

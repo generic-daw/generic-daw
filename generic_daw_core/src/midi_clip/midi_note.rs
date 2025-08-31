@@ -6,7 +6,7 @@ use std::ops::Add;
 pub struct MidiNote {
 	pub channel: u8,
 	pub key: MidiKey,
-	pub velocity: f64,
+	pub velocity: f32,
 	pub start: MusicalTime,
 	pub end: MusicalTime,
 }
