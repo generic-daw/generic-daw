@@ -7,7 +7,8 @@ use iced::{
 	time::every,
 	window::{self, Id, close_events, close_requests, resize_events},
 };
-use smol::channel::Receiver;
+use log::info;
+use smol::{Timer, channel::Receiver};
 use std::{ops::Deref as _, sync::Arc, time::Duration};
 
 #[derive(Clone, Debug)]
@@ -149,20 +150,17 @@ impl ClapHost {
 						.map(move |plugin| Message::GuiShown(Arc::new(plugin)))
 				};
 			}
-			MainThreadMessage::GuiRequestResize(new_size) => {
+			MainThreadMessage::GuiRequestResize([width, height]) => {
 				if let Some(&window) = self.windows.get(*id) {
 					return self.update(
-						Message::GuiRequestResize(
-							window,
-							Size::new(new_size.width as f32, new_size.height as f32),
-						),
+						Message::GuiRequestResize(window, Size::new(width, height)),
 						config,
 					);
 				}
 			}
 			MainThreadMessage::GuiRequestHide => {
-				if let Some(&id) = self.windows.get(*id) {
-					return self.update(Message::GuiRequestHide(id), config);
+				if let Some(&window) = self.windows.get(*id) {
+					return self.update(Message::GuiRequestHide(window), config);
 				}
 			}
 			MainThreadMessage::GuiClosed => {
@@ -183,7 +181,15 @@ impl ClapHost {
 				self.timers.get_mut(*id).unwrap().remove(timer_id as usize);
 			}
 			MainThreadMessage::LatencyChanged => {
-				self.plugins.get_mut(*id).unwrap().latency_changed();
+				if let Some(plugin) = self.plugins.get_mut(*id) {
+					plugin.latency_changed();
+				} else {
+					debug_assert!(self.windows.contains_key(*id));
+
+					let msg = Message::MainThread(id, msg);
+					info!("retrying {msg:?}");
+					return Task::perform(Timer::after(Duration::from_millis(100)), |_| msg);
+				}
 			}
 			MainThreadMessage::RescanValues => {
 				self.plugins.get_mut(*id).unwrap().rescan_values(Match::All);

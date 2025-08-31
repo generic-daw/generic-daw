@@ -93,8 +93,8 @@ pub enum Message {
 	ChannelPanChanged(NodeId, f32),
 	ChannelToggleEnabled(NodeId),
 
-	PluginLoad(NodeId, PluginDescriptor),
-	PluginLoadState(NodeId, usize, Box<[u8]>),
+	PluginLoad(NodeId, PluginDescriptor, bool),
+	PluginSetState(NodeId, usize, Box<[u8]>),
 	PluginMixChanged(NodeId, usize, f32),
 	PluginToggleEnabled(NodeId, usize),
 	PluginsReordered(DragEvent),
@@ -267,25 +267,35 @@ impl ArrangementView {
 			}
 			Message::ChannelPanChanged(id, pan) => self.arrangement.node_pan_changed(id, pan),
 			Message::ChannelToggleEnabled(id) => self.arrangement.node_toggle_enabled(id),
-			Message::PluginLoad(node, descriptor) => {
-				let (gui, receiver, audio_processor) = clap_host::init(
+			Message::PluginLoad(node, descriptor, show) => {
+				let (plugin, receiver, audio_processor) = clap_host::init(
 					&plugin_bundles[&descriptor],
 					descriptor,
 					self.arrangement.rtstate().sample_rate,
 					self.arrangement.rtstate().buffer_size,
 				);
+				let id = plugin.plugin_id();
 
 				self.arrangement.plugin_load(node, audio_processor);
 
-				return self
-					.clap_host
-					.update(
-						ClapHostMessage::Loaded(Arc::new(Fragile::new(gui)), receiver),
-						config,
-					)
-					.map(Message::ClapHost);
+				let mut fut = self.clap_host.update(
+					ClapHostMessage::Loaded(Arc::new(Fragile::new(plugin)), receiver),
+					config,
+				);
+
+				if show {
+					fut = Task::batch([
+						fut,
+						self.clap_host.update(
+							ClapHostMessage::MainThread(id, MainThreadMessage::GuiRequestShow),
+							config,
+						),
+					]);
+				}
+
+				return fut.map(Message::ClapHost);
 			}
-			Message::PluginLoadState(node, i, state) => {
+			Message::PluginSetState(node, i, state) => {
 				let id = self.arrangement.node(node).0.plugins[i].id;
 				return self
 					.clap_host
@@ -1117,12 +1127,9 @@ impl ArrangementView {
 			vertical_split(
 				mixer_panel,
 				column![
-					combo_box(
-						&self.plugins,
-						"Add Plugin",
-						None,
-						Message::PluginLoad.with(selected)
-					)
+					combo_box(&self.plugins, "Add Plugin", None, move |descriptor| {
+						Message::PluginLoad(selected, descriptor, true)
+					})
 					.menu_style(menu_with_border(menu::default, border::width(0)))
 					.width(Fill),
 					container(horizontal_rule(1)).padding([5, 0]),

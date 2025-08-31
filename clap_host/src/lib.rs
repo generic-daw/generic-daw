@@ -181,7 +181,7 @@ pub fn init(
 	let params = instance.access_handler(|mt| mt.params).unwrap().0;
 	let params = Param::all(&mut instance.plugin_handle(), params);
 
-	let gui = Plugin::new(instance, descriptor, id, params);
+	let plugin = Plugin::new(instance, descriptor, id, params);
 
-	(gui, main_receiver, plugin_audio_processor)
+	(plugin, main_receiver, plugin_audio_processor)
 }

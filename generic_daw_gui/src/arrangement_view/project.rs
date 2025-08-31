@@ -227,10 +227,11 @@ impl ArrangementView {
 						.keys()
 						.find(|d| *d.id == *plugin.id())?
 						.clone(),
+					false,
 				)));
 
 				if let Some(state) = plugin.state.clone() {
-					task = task.chain(Task::done(Message::PluginLoadState(
+					task = task.chain(Task::done(Message::PluginSetState(
 						node.id,
 						i,
 						state.into(),

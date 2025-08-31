@@ -1,7 +1,7 @@
 use crate::shared::Shared;
 use clack_extensions::{
 	audio_ports::{HostAudioPortsImpl, RescanType},
-	gui::{GuiSize, PluginGui},
+	gui::PluginGui,
 	latency::{HostLatencyImpl, PluginLatency},
 	note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
 	params::{HostParamsImplMainThread, ParamClearFlags, ParamRescanFlags, PluginParams},
@@ -17,7 +17,7 @@ use std::time::Duration;
 pub enum MainThreadMessage {
 	RequestCallback,
 	GuiRequestShow,
-	GuiRequestResize(GuiSize),
+	GuiRequestResize([f32; 2]),
 	GuiRequestHide,
 	GuiClosed,
 	RegisterTimer(u32, Duration),

@@ -36,7 +36,10 @@ impl HostGuiImpl for Shared {
 
 	fn request_resize(&self, new_size: GuiSize) -> Result<(), HostError> {
 		self.main_sender
-			.try_send(MainThreadMessage::GuiRequestResize(new_size))
+			.try_send(MainThreadMessage::GuiRequestResize([
+				new_size.width as f32,
+				new_size.height as f32,
+			]))
 			.unwrap();
 
 		Ok(())
