@@ -221,6 +221,7 @@ impl ArrangementView {
 
 			for plugin in &channel.plugins {
 				futs.push(Task::done(Message::PluginLoad(
+					node.id,
 					plugin_bundles
 						.keys()
 						.find(|d| *d.id == *plugin.id())?
