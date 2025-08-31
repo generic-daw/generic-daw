@@ -20,7 +20,7 @@ mod audio_processor;
 mod event_buffers;
 mod event_impl;
 pub mod events;
-mod gui_ext;
+mod plugin;
 mod host;
 mod main_thread;
 mod params;
@@ -34,7 +34,7 @@ pub use clack_host::{
 	utils::{ClapId, Cookie},
 };
 pub use event_impl::EventImpl;
-pub use gui_ext::GuiExt;
+pub use plugin::GuiExt;
 pub use main_thread::MainThreadMessage;
 pub use plugin_descriptor::PluginDescriptor;
 pub use plugin_id::Id as PluginId;
