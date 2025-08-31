@@ -276,7 +276,7 @@ where
 		tree: &Tree,
 		layout: Layout<'_>,
 		cursor: Cursor,
-		_viewport: &Rectangle,
+		viewport: &Rectangle,
 		_renderer: &Renderer,
 	) -> Interaction {
 		match tree.state.downcast_ref::<State>() {
@@ -285,8 +285,10 @@ where
 			}
 			State::DraggingNote(..) => Interaction::Grabbing,
 			State::DeletingNotes => Interaction::NoDrop,
-			State::None => cursor
-				.position_in(layout.bounds())
+			State::None => layout
+				.bounds()
+				.intersection(viewport)
+				.and_then(|bounds| cursor.position_in(bounds))
 				.and_then(|cursor| {
 					self.notes
 						.iter()

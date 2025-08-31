@@ -100,7 +100,13 @@ impl AudioProcessor {
 		self.steady_time += u64::from(input_audio.min_available_frames_with(&output_audio));
 
 		self.audio_buffers.write_out(audio, mix_level);
-		self.event_buffers.write_out(events);
+		self.event_buffers.write_out(
+			events,
+			self.started_processor
+				.as_ref()
+				.unwrap()
+				.access_shared_handler(|s| s),
+		);
 	}
 
 	pub fn reset(&mut self) {

@@ -17,7 +17,7 @@ pub use midi_note::MidiNote;
 pub struct MidiClip {
 	pub pattern: Arc<ArcSwap<Vec<MidiNote>>>,
 	pub position: ClipPosition,
-	notes: NoDebug<Arc<Mutex<[[u8; 16]; 128]>>>,
+	notes: NoDebug<Arc<Mutex<[u8; 128]>>>,
 }
 
 impl MidiClip {
@@ -33,7 +33,7 @@ impl MidiClip {
 		Arc::new(Self {
 			pattern,
 			position: ClipPosition::with_len(len),
-			notes: Arc::new(Mutex::new([[0; 16]; 128])).into(),
+			notes: Arc::new(Mutex::new([0; 128])).into(),
 		})
 	}
 
@@ -45,7 +45,7 @@ impl MidiClip {
 		let start_sample = rtstate.sample;
 		let end_sample = start_sample + audio.len();
 
-		let mut notes = [[0u8; 16]; 128];
+		let mut notes = [0; 128];
 
 		if rtstate.playing {
 			self.pattern
@@ -61,7 +61,7 @@ impl MidiClip {
 					let end = note.end.to_samples(rtstate);
 
 					if start < start_sample && end >= start_sample {
-						notes[note.key.0 as usize][note.channel as usize] += 1;
+						notes[note.key.0 as usize] += 1;
 					}
 				});
 		}
@@ -74,19 +74,16 @@ impl MidiClip {
 		lock.iter()
 			.zip(notes)
 			.enumerate()
-			.flat_map(|(a, (b, c))| b.iter().zip(c).enumerate().map(move |b| (a, b)))
-			.for_each(|(key, (channel, (before, after)))| {
+			.for_each(|(key, (before, after))| {
 				let event = match before.cmp(&after) {
 					Ordering::Equal => return,
 					Ordering::Less => Event::On {
 						time: 0,
-						channel: channel as u8,
 						key: key as u8,
 						velocity: 1.0,
 					},
 					Ordering::Greater => Event::Off {
 						time: 0,
-						channel: channel as u8,
 						key: key as u8,
 						velocity: 1.0,
 					},
@@ -111,21 +108,19 @@ impl MidiClip {
 					if start >= start_sample && start < end_sample {
 						events.push(Event::On {
 							time: (start - start_sample) as u32 / 2,
-							channel: note.channel,
 							key: note.key.0,
 							velocity: note.velocity,
 						});
-						notes[note.key.0 as usize][note.channel as usize] += 1;
+						notes[note.key.0 as usize] += 1;
 					}
 
 					if end >= start_sample && end < end_sample {
 						events.push(Event::Off {
 							time: (end - start_sample) as u32 / 2,
-							channel: note.channel,
 							key: note.key.0,
 							velocity: note.velocity,
 						});
-						notes[note.key.0 as usize][note.channel as usize] -= 1;
+						notes[note.key.0 as usize] -= 1;
 					}
 				});
 		}

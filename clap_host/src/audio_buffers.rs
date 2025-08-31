@@ -60,7 +60,13 @@ impl AudioBuffers {
 	}
 
 	pub fn read_in(&mut self, buf: &[f32]) {
-		let input_buffer = &mut self.input_buffers[self.input_config.main_port_index];
+		let Some(input_buffer) = self
+			.input_buffers
+			.get_mut(self.input_config.main_port_index)
+		else {
+			return;
+		};
+
 		let n_channels = *self
 			.input_config
 			.port_channel_counts
@@ -126,7 +132,11 @@ impl AudioBuffers {
 	pub fn write_out(&mut self, buf: &mut [f32], mix_level: f32) {
 		self.latency_comp.rotate_right_concat(buf);
 
-		let output_buffer = &self.output_buffers[self.output_config.main_port_index];
+		let Some(output_buffer) = self.output_buffers.get(self.output_config.main_port_index)
+		else {
+			return;
+		};
+
 		let n_channels = *self
 			.output_config
 			.port_channel_counts

@@ -4,7 +4,6 @@ use std::ops::Add;
 
 #[derive(Clone, Copy, Debug)]
 pub struct MidiNote {
-	pub channel: u8,
 	pub key: MidiKey,
 	pub velocity: f32,
 	pub start: MusicalTime,

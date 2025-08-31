@@ -10,24 +10,20 @@ use clap_host::{
 pub enum Event {
 	On {
 		time: u32,
-		channel: u8,
 		key: u8,
 		velocity: f32,
 	},
 	Off {
 		time: u32,
-		channel: u8,
 		key: u8,
 		velocity: f32,
 	},
 	AllOff {
 		time: u32,
-		channel: u8,
 	},
 	ParamValue {
 		time: u32,
 		param_id: ClapId,
-		channel: u8,
 		value: f32,
 		cookie: Cookie,
 	},
@@ -57,83 +53,67 @@ impl audio_graph::EventImpl for Event {
 }
 
 impl clap_host::EventImpl for Event {
-	fn to_clap(self, port_index: u16) -> ClapEvent {
-		match self {
+	fn to_clap(&self, port_index: u16) -> ClapEvent {
+		match *self {
 			Self::On {
 				time,
-				channel,
 				key,
 				velocity,
 			} => ClapEvent::NoteOnEvent(NoteOnEvent::new(
 				time,
-				Pckn::new(port_index, channel, key, Match::All),
+				Pckn::new(port_index, Match::All, key, Match::All),
 				velocity.into(),
 			)),
 			Self::Off {
 				time,
-				channel,
 				key,
 				velocity,
 			} => ClapEvent::NoteOffEvent(NoteOffEvent::new(
 				time,
-				Pckn::new(port_index, channel, key, Match::All),
+				Pckn::new(port_index, Match::All, key, Match::All),
 				velocity.into(),
 			)),
-			Self::AllOff { time, channel } => ClapEvent::NoteChokeEvent(NoteChokeEvent::new(
+			Self::AllOff { time } => ClapEvent::NoteChokeEvent(NoteChokeEvent::new(
 				time,
-				Pckn::new(port_index, channel, Match::All, Match::All),
+				Pckn::new(port_index, Match::All, Match::All, Match::All),
 			)),
 			Self::ParamValue {
 				time,
 				param_id,
-				channel,
 				value,
 				cookie,
 			} => ClapEvent::ParamValueEvent(ParamValueEvent::new(
 				time,
 				param_id,
-				Pckn::new(port_index, channel, Match::All, Match::All),
+				Pckn::new(port_index, Match::All, Match::All, Match::All),
 				value.into(),
 				cookie,
 			)),
 		}
 	}
 
-	fn to_midi(self, port_index: u16) -> MidiEvent {
-		match self {
+	fn to_midi(&self, port_index: u16) -> MidiEvent {
+		match *self {
 			Self::On {
 				time,
-				channel,
 				key,
 				velocity,
-			} => MidiEvent::new(
-				time,
-				port_index,
-				[0x90 | channel, key, (velocity * 127.0) as u8],
-			),
+			} => MidiEvent::new(time, port_index, [0x90, key, (velocity * 127.0) as u8]),
 			Self::Off {
 				time,
-				channel,
 				key,
 				velocity,
-			} => MidiEvent::new(
-				time,
-				port_index,
-				[0x80 | channel, key, (velocity * 127.0) as u8],
-			),
-			Self::AllOff { time, channel } => {
-				MidiEvent::new(time, port_index, [0xb0 | channel, 0x7b, 0x00])
-			}
+			} => MidiEvent::new(time, port_index, [0x80, key, (velocity * 127.0) as u8]),
+			Self::AllOff { time } => MidiEvent::new(time, port_index, [0xb0, 0x7b, 0x00]),
 			Self::ParamValue {
 				time,
 				param_id,
-				channel,
 				value,
-				cookie: _,
+				..
 			} => MidiEvent::new(
 				time,
 				port_index,
-				[0xb0 | channel, param_id.get() as u8, (value * 127.0) as u8],
+				[0xb0, param_id.get() as u8, (value * 127.0) as u8],
 			),
 		}
 	}
@@ -150,28 +130,24 @@ impl Event {
 		let time = event.time();
 		let data = event.data();
 		let kind = data[0] & 0xf0;
-		let channel = data[0] & 0x0f;
 		let bytes = data[1];
 		let value = f32::from(data[2]) / 127.0;
 
 		match kind {
 			0x90 => Some(Self::On {
 				time,
-				channel,
 				key: bytes,
 				velocity: value,
 			}),
 			0x80 => Some(Self::Off {
 				time,
-				channel,
 				key: bytes,
 				velocity: value,
 			}),
-			0xb0 if bytes == 0x7b => Some(Self::AllOff { time, channel }),
+			0xb0 if bytes == 0x7b => Some(Self::AllOff { time }),
 			0xb0 if bytes < 0x78 => Some(Self::ParamValue {
 				time,
 				param_id: ClapId::from_raw(bytes.into())?,
-				channel,
 				value,
 				cookie: Cookie::empty(),
 			}),
@@ -183,27 +159,21 @@ impl Event {
 		if let Some(event) = value.as_event::<NoteOnEvent>() {
 			Some(Self::On {
 				time: event.time(),
-				channel: *event.channel().as_specific()? as u8,
 				key: *event.key().as_specific()? as u8,
 				velocity: event.velocity() as f32,
 			})
 		} else if let Some(event) = value.as_event::<NoteOffEvent>() {
 			Some(Self::Off {
 				time: event.time(),
-				channel: *event.channel().as_specific()? as u8,
 				key: *event.key().as_specific()? as u8,
 				velocity: event.velocity() as f32,
 			})
 		} else if let Some(event) = value.as_event::<NoteChokeEvent>() {
-			Some(Self::AllOff {
-				time: event.time(),
-				channel: *event.channel().as_specific()? as u8,
-			})
+			Some(Self::AllOff { time: event.time() })
 		} else if let Some(event) = value.as_event::<ParamValueEvent>() {
 			Some(Self::ParamValue {
 				time: event.time(),
 				param_id: event.param_id()?,
-				channel: *event.channel().as_specific()? as u8,
 				value: event.value() as f32,
 				cookie: event.cookie(),
 			})

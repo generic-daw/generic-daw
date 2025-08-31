@@ -1,6 +1,6 @@
 use crate::{components::space, config::Config};
 use fragile::Fragile;
-use generic_daw_core::clap_host::{MainThreadMessage, Plugin, PluginId, events::Match};
+use generic_daw_core::clap_host::{MainThreadMessage, Plugin, PluginId};
 use generic_daw_utils::HoleyVec;
 use iced::{
 	Element, Function as _, Size, Subscription, Task,
@@ -55,11 +55,8 @@ impl ClapHost {
 			}
 			Message::GuiRequestResize(window, size) => {
 				if let Some(id) = self.windows.key_of(&window)
-					&& let Some([width, height]) = self
-						.plugins
-						.get_mut(id)
-						.unwrap()
-						.resize(size.width, size.height)
+					&& let Some(plugin) = self.plugins.get_mut(id)
+					&& let Some([width, height]) = plugin.resize(size.width, size.height)
 				{
 					let new_size = Size::new(width, height);
 					if size != new_size {
@@ -90,6 +87,12 @@ impl ClapHost {
 		msg: MainThreadMessage,
 		config: &Config,
 	) -> Task<Message> {
+		let retry = || {
+			let msg = Message::MainThread(id, msg);
+			info!("retrying {msg:?}");
+			Task::perform(Timer::after(Duration::from_millis(100)), |_| msg)
+		};
+
 		match msg {
 			MainThreadMessage::RequestCallback => self
 				.plugins
@@ -185,14 +188,22 @@ impl ClapHost {
 					plugin.latency_changed();
 				} else {
 					debug_assert!(self.windows.contains_key(*id));
-
-					let msg = Message::MainThread(id, msg);
-					info!("retrying {msg:?}");
-					return Task::perform(Timer::after(Duration::from_millis(100)), |_| msg);
+					return retry();
+				}
+			}
+			MainThreadMessage::ParamChanged(param_id, value) => {
+				if let Some(plugin) = self.plugins.get_mut(*id) {
+					plugin.update_param(param_id, value);
+				} else {
+					return retry();
 				}
 			}
 			MainThreadMessage::RescanValues => {
-				self.plugins.get_mut(*id).unwrap().rescan_values(Match::All);
+				if let Some(plugin) = self.plugins.get_mut(*id) {
+					plugin.rescan_values();
+				} else {
+					return retry();
+				}
 			}
 		}
 
@@ -232,6 +243,7 @@ impl ClapHost {
 		Subscription::batch(
 			self.windows
 				.keys()
+				.filter(|id| self.plugins.contains_key(*id))
 				.flat_map(|id| {
 					self.timers
 						.get(id)

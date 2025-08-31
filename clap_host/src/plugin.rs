@@ -7,7 +7,7 @@ use clack_extensions::{
 	render::RenderMode,
 	timer::TimerId,
 };
-use clack_host::{events::Match, prelude::*};
+use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
 use log::warn;
 use raw_window_handle::RawWindowHandle;
@@ -143,20 +143,19 @@ impl Plugin {
 			.filter(|param| !param.flags.contains(ParamInfoFlags::IS_HIDDEN))
 	}
 
-	pub fn rescan_values(&mut self, id: impl Into<Match<ClapId>>) {
+	pub fn update_param(&mut self, param_id: ClapId, value: f32) {
+		self.params
+			.iter_mut()
+			.find(|param| param.id == param_id)
+			.unwrap()
+			.value = value;
+	}
+
+	pub fn rescan_values(&mut self) {
 		let ext = self.instance.access_handler(|mt| mt.params).unwrap().0;
 
-		match id.into() {
-			Match::Specific(id) => {
-				if let Some(param) = self.params.iter_mut().find(|param| param.id == id) {
-					param.rescan_value(&mut self.instance.plugin_handle(), ext);
-				}
-			}
-			Match::All => {
-				for param in &mut *self.params {
-					param.rescan_value(&mut self.instance.plugin_handle(), ext);
-				}
-			}
+		for param in &mut *self.params {
+			param.rescan_value(&mut self.instance.plugin_handle(), ext);
 		}
 	}
 

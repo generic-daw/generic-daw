@@ -73,7 +73,7 @@ impl Display for Key {
 	}
 }
 
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, Hash, PartialEq)]
 pub struct MidiKey(pub u8);
 
 impl MidiKey {

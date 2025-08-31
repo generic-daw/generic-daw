@@ -1,4 +1,4 @@
-use crate::EventImpl;
+use crate::{EventImpl, MainThreadMessage, events::ClapEvent, shared::Shared};
 use clack_extensions::note_ports::{NoteDialect, NotePortInfoBuffer, PluginNotePorts};
 use clack_host::{
 	events::{
@@ -61,11 +61,21 @@ impl EventBuffers {
 		self.input_events.sort();
 	}
 
-	pub fn write_out(&mut self, events: &mut Vec<impl EventImpl>) {
+	pub fn write_out<Event: EventImpl>(&mut self, events: &mut Vec<Event>, shared: &Shared) {
 		events.extend(
 			self.output_events
 				.iter()
-				.filter_map(EventImpl::try_from_unknown),
+				.filter_map(Event::try_from_unknown)
+				.inspect(|event| {
+					if let ClapEvent::ParamValueEvent(event) = event.to_clap(self.main_input_port)
+						&& let Some(id) = event.param_id()
+					{
+						shared
+							.main_sender
+							.try_send(MainThreadMessage::ParamChanged(id, event.value() as f32))
+							.unwrap();
+					}
+				}),
 		);
 
 		self.output_events.clear();

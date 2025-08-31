@@ -1,8 +1,5 @@
 use clack_extensions::params::{ParamInfo, ParamInfoBuffer, ParamInfoFlags, PluginParams};
-use clack_host::{
-	plugin::PluginMainThreadHandle,
-	utils::{ClapId, Cookie},
-};
+use clack_host::{prelude::*, utils::Cookie};
 use std::{ops::RangeInclusive, sync::Arc};
 
 #[derive(Debug)]

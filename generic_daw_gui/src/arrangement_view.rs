@@ -642,7 +642,6 @@ impl ArrangementView {
 			PianoRollAction::Add(key, pos) => {
 				let mut notes = clip.pattern.load().deref().deref().clone();
 				notes.push(MidiNote {
-					channel: 0,
 					key,
 					velocity: 1.0,
 					start: pos,

@@ -23,6 +23,7 @@ pub enum MainThreadMessage {
 	RegisterTimer(u32, Duration),
 	UnregisterTimer(u32),
 	LatencyChanged,
+	ParamChanged(ClapId, f32),
 	RescanValues,
 }
 

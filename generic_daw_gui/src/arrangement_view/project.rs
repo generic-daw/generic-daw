@@ -199,7 +199,6 @@ impl ArrangementView {
 					.notes
 					.iter()
 					.map(|note| MidiNote {
-						channel: 0,
 						key: MidiKey(note.key as u8),
 						velocity: note.velocity,
 						start: note.start.into(),
