@@ -13,11 +13,21 @@ mod midi_note;
 pub use midi_key::{Key, MidiKey};
 pub use midi_note::MidiNote;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct MidiClip {
 	pub pattern: Arc<ArcSwap<Vec<MidiNote>>>,
 	pub position: ClipPosition,
-	notes: NoDebug<Arc<Mutex<[u8; 128]>>>,
+	notes: NoDebug<Mutex<[u8; 128]>>,
+}
+
+impl Clone for MidiClip {
+	fn clone(&self) -> Self {
+		Self {
+			pattern: self.pattern.clone(),
+			position: self.position.clone(),
+			notes: Mutex::new([0; 128]).into(),
+		}
+	}
 }
 
 impl MidiClip {
@@ -33,7 +43,7 @@ impl MidiClip {
 		Arc::new(Self {
 			pattern,
 			position: ClipPosition::with_len(len),
-			notes: Arc::new(Mutex::new([0; 128])).into(),
+			notes: Mutex::new([0; 128]).into(),
 		})
 	}
 
