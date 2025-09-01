@@ -1,8 +1,8 @@
 use clap_host::{
 	ClapId, Cookie,
 	events::{
-		ClapEvent, Event as _, Match, MidiEvent, NoteChokeEvent, NoteOffEvent, NoteOnEvent,
-		ParamValueEvent, Pckn, UnknownEvent,
+		ClapEvent, Event as _, Match, MidiEvent, NoteChokeEvent, NoteEndEvent, NoteOffEvent,
+		NoteOnEvent, ParamValueEvent, Pckn, UnknownEvent,
 	},
 };
 
@@ -18,8 +18,13 @@ pub enum Event {
 		key: u8,
 		velocity: f32,
 	},
-	AllOff {
+	Choke {
 		time: u32,
+		key: u8,
+	},
+	End {
+		time: u32,
+		key: u8,
 	},
 	ParamValue {
 		time: u32,
@@ -34,7 +39,8 @@ impl audio_graph::EventImpl for Event {
 		match self {
 			Self::On { time, .. }
 			| Self::Off { time, .. }
-			| Self::AllOff { time, .. }
+			| Self::Choke { time, .. }
+			| Self::End { time, .. }
 			| Self::ParamValue { time, .. } => time as usize * 2,
 		}
 	}
@@ -43,7 +49,8 @@ impl audio_graph::EventImpl for Event {
 		match &mut self {
 			Self::On { time, .. }
 			| Self::Off { time, .. }
-			| Self::AllOff { time, .. }
+			| Self::Choke { time, .. }
+			| Self::End { time, .. }
 			| Self::ParamValue { time, .. } => {
 				*time = (to / 2) as u32;
 			}
@@ -73,9 +80,13 @@ impl clap_host::EventImpl for Event {
 				Pckn::new(port_index, Match::All, key, Match::All),
 				velocity.into(),
 			)),
-			Self::AllOff { time } => ClapEvent::NoteChokeEvent(NoteChokeEvent::new(
+			Self::Choke { time, key } => ClapEvent::NoteChokeEvent(NoteChokeEvent::new(
 				time,
-				Pckn::new(port_index, Match::All, Match::All, Match::All),
+				Pckn::new(port_index, Match::All, key, Match::All),
+			)),
+			Self::End { time, key } => ClapEvent::NoteEndEvent(NoteEndEvent::new(
+				time,
+				Pckn::new(port_index, Match::All, key, Match::All),
 			)),
 			Self::ParamValue {
 				time,
@@ -104,7 +115,12 @@ impl clap_host::EventImpl for Event {
 				key,
 				velocity,
 			} => MidiEvent::new(time, port_index, [0x80, key, (velocity * 127.0) as u8]),
-			Self::AllOff { time } => MidiEvent::new(time, port_index, [0xb0, 0x7b, 0x00]),
+			Self::Choke { time, key } | Self::End { time, key } => Self::Off {
+				time,
+				key,
+				velocity: 1.0,
+			}
+			.to_midi(port_index),
 			Self::ParamValue {
 				time,
 				param_id,
@@ -144,7 +160,6 @@ impl Event {
 				key: bytes,
 				velocity: value,
 			}),
-			0xb0 if bytes == 0x7b => Some(Self::AllOff { time }),
 			0xb0 if bytes < 0x78 => Some(Self::ParamValue {
 				time,
 				param_id: ClapId::from_raw(bytes.into())?,
@@ -169,7 +184,15 @@ impl Event {
 				velocity: event.velocity() as f32,
 			})
 		} else if let Some(event) = value.as_event::<NoteChokeEvent>() {
-			Some(Self::AllOff { time: event.time() })
+			Some(Self::Choke {
+				time: event.time(),
+				key: *event.key().as_specific()? as u8,
+			})
+		} else if let Some(event) = value.as_event::<NoteEndEvent>() {
+			Some(Self::End {
+				time: event.time(),
+				key: *event.key().as_specific()? as u8,
+			})
 		} else if let Some(event) = value.as_event::<ParamValueEvent>() {
 			Some(Self::ParamValue {
 				time: event.time(),

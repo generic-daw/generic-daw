@@ -125,10 +125,9 @@ impl MidiClip {
 					}
 
 					if end >= start_sample && end < end_sample {
-						events.push(Event::Off {
+						events.push(Event::End {
 							time: (end - start_sample) as u32 / 2,
 							key: note.key.0,
-							velocity: note.velocity,
 						});
 						notes[note.key.0 as usize] -= 1;
 					}

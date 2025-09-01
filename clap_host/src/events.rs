@@ -6,6 +6,7 @@ pub enum ClapEvent {
 	NoteOnEvent(NoteOnEvent),
 	NoteOffEvent(NoteOffEvent),
 	NoteChokeEvent(NoteChokeEvent),
+	NoteEndEvent(NoteEndEvent),
 	ParamValueEvent(ParamValueEvent),
 }
 
@@ -15,6 +16,7 @@ impl AsRef<UnknownEvent> for ClapEvent {
 			Self::NoteOnEvent(inner) => inner.as_ref(),
 			Self::NoteOffEvent(inner) => inner.as_ref(),
 			Self::NoteChokeEvent(inner) => inner.as_ref(),
+			Self::NoteEndEvent(inner) => inner.as_ref(),
 			Self::ParamValueEvent(inner) => inner.as_ref(),
 		}
 	}
