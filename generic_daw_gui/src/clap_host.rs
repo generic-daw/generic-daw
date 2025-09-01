@@ -1,13 +1,18 @@
-use crate::{components::space, config::Config};
+use crate::{components::space, config::Config, widget::LINE_HEIGHT};
 use fragile::Fragile;
 use generic_daw_core::{
 	Event,
 	clap_host::{MainThreadMessage, Plugin, PluginId},
 };
 use generic_daw_utils::HoleyVec;
+use generic_daw_widget::knob::Knob;
 use iced::{
-	Element, Function as _, Size, Subscription, Task,
+	Alignment::Center,
+	Element, Font, Function as _,
+	Length::{Fill, Shrink},
+	Size, Subscription, Task,
 	time::every,
+	widget::{column, container, horizontal_rule, row, text, text::Wrapping},
 	window::{self, Id, close_events, close_requests, resize_events},
 };
 use log::info;
@@ -17,6 +22,7 @@ use std::{ops::Deref as _, sync::Arc, time::Duration};
 #[derive(Clone, Debug)]
 pub enum Message {
 	MainThread(PluginId, MainThreadMessage<Event>),
+	SendEvent(PluginId, Event),
 	TickTimer(usize, u32),
 	Loaded(
 		Arc<Fragile<Plugin<Event>>>,
@@ -40,6 +46,13 @@ impl ClapHost {
 	pub fn update(&mut self, message: Message, config: &Config) -> Task<Message> {
 		match message {
 			Message::MainThread(id, msg) => return self.main_thread_message(id, msg, config),
+			Message::SendEvent(id, event) => {
+				self.plugins.get_mut(*id).unwrap().send_event(event);
+				return self.update(
+					Message::MainThread(id, MainThreadMessage::LiveEvent(event)),
+					config,
+				);
+			}
 			Message::TickTimer(id, timer_id) => {
 				self.plugins.get_mut(id).unwrap().tick_timer(timer_id);
 			}
@@ -213,7 +226,50 @@ impl ClapHost {
 			return Some(space().into());
 		}
 
-		Some("todo".into())
+		Some(
+			column![
+				text(&*plugin.descriptor().name)
+					.size(LINE_HEIGHT)
+					.line_height(1.0)
+					.font(Font::MONOSPACE),
+				container(horizontal_rule(1)).padding([5, 0]),
+				row(plugin.params().map(|param| {
+					column![
+						container(
+							Knob::new(param.range.clone(), param.value, true, |value| {
+								Message::SendEvent(
+									plugin.plugin_id(),
+									Event::ParamValue {
+										time: 0,
+										param_id: param.id,
+										value,
+										cookie: param.cookie,
+									},
+								)
+							})
+							.maybe_tooltip(
+								(!param.value_text.is_empty()).then_some(&param.value_text)
+							)
+							.reset(param.reset)
+							.radius(25.0)
+						)
+						.padding([0, 10]),
+						text(&*param.name)
+							.wrapping(Wrapping::WordOrGlyph)
+							.align_x(Center)
+							.width(Fill)
+					]
+					.spacing(5)
+					.width(Shrink)
+					.into()
+				}))
+				.spacing(10)
+				.wrap()
+				.vertical_spacing(10)
+			]
+			.padding(10)
+			.into(),
+		)
 	}
 
 	pub fn title(&self, window: Id) -> Option<String> {

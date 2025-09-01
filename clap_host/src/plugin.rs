@@ -100,11 +100,12 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn update_param(&mut self, param_id: ClapId, value: f32) {
+		let ext = self.instance.access_handler(|mt| mt.params).unwrap().0;
 		self.params
 			.iter_mut()
 			.find(|param| param.id == param_id)
 			.unwrap()
-			.value = value;
+			.update_with_value(f64::from(value), &mut self.instance.plugin_handle(), ext);
 	}
 
 	pub fn rescan_values(&mut self) {
@@ -240,6 +241,14 @@ impl<Event: EventImpl> Plugin<Event> {
 
 		#[expect(clippy::tuple_array_conversions)]
 		Some([width, height])
+	}
+
+	pub fn send_event(&self, event: Event) {
+		self.instance
+			.access_shared_handler(|s| s)
+			.audio_sender
+			.try_send(AudioThreadMessage::Event(event))
+			.unwrap();
 	}
 
 	pub fn latency_changed(&mut self) {

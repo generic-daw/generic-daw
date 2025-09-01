@@ -87,6 +87,15 @@ impl<'a, Message> Knob<'a, Message> {
 		self
 	}
 
+	#[must_use]
+	pub fn maybe_tooltip(self, tooltip: Option<impl Display>) -> Self {
+		if let Some(tooltip) = tooltip {
+			self.tooltip(tooltip)
+		} else {
+			self
+		}
+	}
+
 	fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
 		let center = frame.center();
 
@@ -328,7 +337,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 		tree: &'a mut Tree,
 		layout: Layout<'a>,
 		_renderer: &Renderer,
-		_viewport: &Rectangle,
+		viewport: &Rectangle,
 		translation: Vector,
 	) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
 		let state = tree.state.downcast_ref::<State>();
@@ -339,6 +348,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					tooltip,
 					tree: tree.children.iter_mut().next().unwrap(),
 					bounds: layout.bounds() + translation,
+					viewport: *viewport,
 				}))
 			})
 		} else {
@@ -359,6 +369,7 @@ struct Overlay<'a, 'b> {
 	tooltip: &'b mut Text<'a, Theme, Renderer>,
 	tree: &'b mut Tree,
 	bounds: Rectangle,
+	viewport: Rectangle,
 }
 
 impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
@@ -373,14 +384,22 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 		);
 		let bounds = layout.bounds();
 
-		Node::with_children(
+		let mut layout = Node::with_children(
 			bounds.expand(padding).size(),
 			vec![layout.translate(Vector::new(padding, padding))],
 		)
+		.move_to(self.bounds.position())
 		.translate(Vector::new(
-			self.bounds.x + (self.bounds.width - bounds.width) / 2.0 - padding,
-			self.bounds.y + self.bounds.height,
-		))
+			(self.bounds.width - bounds.width) / 2.0 - padding,
+			self.bounds.height,
+		));
+
+		let clamp = self.viewport.x + padding - layout.bounds().x;
+		if clamp > 0.0 {
+			layout.translate_mut(Vector::new(clamp, 0.0));
+		}
+
+		layout
 	}
 
 	fn draw(

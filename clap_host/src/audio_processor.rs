@@ -8,9 +8,10 @@ use generic_daw_utils::NoDebug;
 use log::trace;
 
 #[derive(Clone, Copy, Debug)]
-pub enum AudioThreadMessage {
+pub enum AudioThreadMessage<Event: EventImpl> {
 	RequestRestart,
 	LatencyChanged(u32),
+	Event(Event),
 }
 
 #[derive(Debug)]
@@ -21,7 +22,7 @@ pub struct AudioProcessor<Event: EventImpl> {
 	steady_time: u64,
 	audio_buffers: AudioBuffers,
 	event_buffers: EventBuffers,
-	receiver: Receiver<AudioThreadMessage>,
+	receiver: Receiver<AudioThreadMessage<Event>>,
 }
 
 impl<Event: EventImpl> AudioProcessor<Event> {
@@ -32,7 +33,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		id: PluginId,
 		audio_buffers: AudioBuffers,
 		event_buffers: EventBuffers,
-		receiver: Receiver<AudioThreadMessage>,
+		receiver: Receiver<AudioThreadMessage<Event>>,
 	) -> Self {
 		Self {
 			started_processor: Some(started_processor.into()),
@@ -76,6 +77,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 				AudioThreadMessage::LatencyChanged(latency) => {
 					self.audio_buffers.latency_changed(latency);
 				}
+				AudioThreadMessage::Event(event) => events.push(event),
 			}
 		}
 

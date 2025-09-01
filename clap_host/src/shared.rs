@@ -12,7 +12,7 @@ use log::{debug, error, info, warn};
 pub struct Shared<Event: EventImpl> {
 	pub descriptor: PluginDescriptor,
 	pub main_sender: Sender<MainThreadMessage<Event>>,
-	pub audio_sender: Sender<AudioThreadMessage>,
+	pub audio_sender: Sender<AudioThreadMessage<Event>>,
 }
 
 impl<Event: EventImpl> SharedHandler<'_> for Shared<Event> {
@@ -90,7 +90,7 @@ impl<Event: EventImpl> Shared<Event> {
 	pub fn new(
 		descriptor: PluginDescriptor,
 		main_sender: Sender<MainThreadMessage<Event>>,
-		audio_sender: Sender<AudioThreadMessage>,
+		audio_sender: Sender<AudioThreadMessage<Event>>,
 	) -> Self {
 		Self {
 			descriptor,
