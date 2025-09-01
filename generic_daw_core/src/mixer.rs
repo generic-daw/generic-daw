@@ -6,13 +6,13 @@ use std::f32::consts::{FRAC_PI_4, SQRT_2};
 
 #[derive(Debug)]
 struct Plugin {
-	processor: AudioProcessor,
+	processor: AudioProcessor<Event>,
 	mix: f32,
 	enabled: bool,
 }
 
 impl Plugin {
-	pub fn new(processor: AudioProcessor) -> Self {
+	pub fn new(processor: AudioProcessor<Event>) -> Self {
 		Self {
 			processor,
 			mix: 1.0,

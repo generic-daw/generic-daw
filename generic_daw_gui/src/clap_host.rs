@@ -1,6 +1,9 @@
 use crate::{components::space, config::Config};
 use fragile::Fragile;
-use generic_daw_core::clap_host::{MainThreadMessage, Plugin, PluginId};
+use generic_daw_core::{
+	Event,
+	clap_host::{MainThreadMessage, Plugin, PluginId},
+};
 use generic_daw_utils::HoleyVec;
 use iced::{
 	Element, Function as _, Size, Subscription, Task,
@@ -13,10 +16,13 @@ use std::{ops::Deref as _, sync::Arc, time::Duration};
 
 #[derive(Clone, Debug)]
 pub enum Message {
-	MainThread(PluginId, MainThreadMessage),
+	MainThread(PluginId, MainThreadMessage<Event>),
 	TickTimer(usize, u32),
-	Loaded(Arc<Fragile<Plugin>>, Receiver<MainThreadMessage>),
-	GuiShown(Arc<Fragile<Plugin>>),
+	Loaded(
+		Arc<Fragile<Plugin<Event>>>,
+		Receiver<MainThreadMessage<Event>>,
+	),
+	GuiShown(Arc<Fragile<Plugin<Event>>>),
 	GuiSetState(PluginId, Box<[u8]>),
 	GuiRequestResize(Id, Size),
 	GuiRequestHide(Id),
@@ -25,7 +31,7 @@ pub enum Message {
 
 #[derive(Default)]
 pub struct ClapHost {
-	plugins: HoleyVec<Plugin>,
+	plugins: HoleyVec<Plugin<Event>>,
 	timers: HoleyVec<HoleyVec<Duration>>,
 	windows: HoleyVec<Id>,
 }
@@ -84,21 +90,17 @@ impl ClapHost {
 	fn main_thread_message(
 		&mut self,
 		id: PluginId,
-		msg: MainThreadMessage,
+		msg: MainThreadMessage<Event>,
 		config: &Config,
 	) -> Task<Message> {
-		let retry = || {
+		let Some(plugin) = self.plugins.get_mut(*id) else {
 			let msg = Message::MainThread(id, msg);
 			info!("retrying {msg:?}");
-			Task::perform(Timer::after(Duration::from_millis(100)), |_| msg)
+			return Task::perform(Timer::after(Duration::from_millis(100)), |_| msg);
 		};
 
 		match msg {
-			MainThreadMessage::RequestCallback => self
-				.plugins
-				.get_mut(*id)
-				.unwrap()
-				.call_on_main_thread_callback(),
+			MainThreadMessage::RequestCallback => plugin.call_on_main_thread_callback(),
 			MainThreadMessage::GuiRequestShow => {
 				if self.windows.contains_key(*id) {
 					return Task::none();
@@ -183,28 +185,20 @@ impl ClapHost {
 			MainThreadMessage::UnregisterTimer(timer_id) => {
 				self.timers.get_mut(*id).unwrap().remove(timer_id as usize);
 			}
-			MainThreadMessage::LatencyChanged => {
-				if let Some(plugin) = self.plugins.get_mut(*id) {
-					plugin.latency_changed();
-				} else {
-					debug_assert!(self.windows.contains_key(*id));
-					return retry();
-				}
-			}
-			MainThreadMessage::ParamChanged(param_id, value) => {
-				if let Some(plugin) = self.plugins.get_mut(*id) {
-					plugin.update_param(param_id, value);
-				} else {
-					return retry();
-				}
-			}
-			MainThreadMessage::RescanValues => {
-				if let Some(plugin) = self.plugins.get_mut(*id) {
-					plugin.rescan_values();
-				} else {
-					return retry();
-				}
-			}
+			MainThreadMessage::LatencyChanged => plugin.latency_changed(),
+			MainThreadMessage::RescanValues => plugin.rescan_values(),
+			MainThreadMessage::LiveEvent(msg) => return Self::live_event(plugin, msg),
+		}
+
+		Task::none()
+	}
+
+	fn live_event(plugin: &mut Plugin<Event>, msg: Event) -> Task<Message> {
+		if let Event::ParamValue {
+			param_id, value, ..
+		} = msg
+		{
+			plugin.update_param(param_id, value);
 		}
 
 		Task::none()

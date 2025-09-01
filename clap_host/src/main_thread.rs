@@ -1,4 +1,4 @@
-use crate::shared::Shared;
+use crate::{EventImpl, shared::Shared};
 use clack_extensions::{
 	audio_ports::{HostAudioPortsImpl, RescanType},
 	gui::PluginGui,
@@ -14,7 +14,7 @@ use generic_daw_utils::NoDebug;
 use std::time::Duration;
 
 #[derive(Clone, Copy, Debug)]
-pub enum MainThreadMessage {
+pub enum MainThreadMessage<Event: EventImpl> {
 	RequestCallback,
 	GuiRequestShow,
 	GuiRequestResize([f32; 2]),
@@ -23,13 +23,13 @@ pub enum MainThreadMessage {
 	RegisterTimer(u32, Duration),
 	UnregisterTimer(u32),
 	LatencyChanged,
-	ParamChanged(ClapId, f32),
 	RescanValues,
+	LiveEvent(Event),
 }
 
 #[derive(Debug)]
-pub struct MainThread<'a> {
-	shared: &'a Shared,
+pub struct MainThread<'a, Event: EventImpl> {
+	shared: &'a Shared<Event>,
 	pub gui: Option<NoDebug<PluginGui>>,
 	pub latency: Option<NoDebug<PluginLatency>>,
 	pub params: Option<NoDebug<PluginParams>>,
@@ -39,8 +39,8 @@ pub struct MainThread<'a> {
 	next_timer_id: u32,
 }
 
-impl<'a> MainThread<'a> {
-	pub fn new(shared: &'a Shared) -> Self {
+impl<'a, Event: EventImpl> MainThread<'a, Event> {
+	pub fn new(shared: &'a Shared<Event>) -> Self {
 		Self {
 			shared,
 			gui: None,
@@ -54,7 +54,7 @@ impl<'a> MainThread<'a> {
 	}
 }
 
-impl<'a> MainThreadHandler<'a> for MainThread<'a> {
+impl<'a, Event: EventImpl> MainThreadHandler<'a> for MainThread<'a, Event> {
 	fn initialized(&mut self, instance: InitializedPluginHandle<'_>) {
 		self.gui = instance.get_extension().map(NoDebug);
 		self.timers = instance.get_extension().map(NoDebug);
@@ -65,7 +65,7 @@ impl<'a> MainThreadHandler<'a> for MainThread<'a> {
 	}
 }
 
-impl HostAudioPortsImpl for MainThread<'_> {
+impl<Event: EventImpl> HostAudioPortsImpl for MainThread<'_, Event> {
 	fn is_rescan_flag_supported(&self, _flag: RescanType) -> bool {
 		false
 	}
@@ -73,7 +73,7 @@ impl HostAudioPortsImpl for MainThread<'_> {
 	fn rescan(&mut self, _flag: RescanType) {}
 }
 
-impl HostLatencyImpl for MainThread<'_> {
+impl<Event: EventImpl> HostLatencyImpl for MainThread<'_, Event> {
 	fn changed(&mut self) {
 		self.shared
 			.main_sender
@@ -82,7 +82,7 @@ impl HostLatencyImpl for MainThread<'_> {
 	}
 }
 
-impl HostNotePortsImpl for MainThread<'_> {
+impl<Event: EventImpl> HostNotePortsImpl for MainThread<'_, Event> {
 	fn supported_dialects(&self) -> NoteDialects {
 		NoteDialects::CLAP | NoteDialects::MIDI
 	}
@@ -90,7 +90,7 @@ impl HostNotePortsImpl for MainThread<'_> {
 	fn rescan(&mut self, _flags: NotePortRescanFlags) {}
 }
 
-impl HostParamsImplMainThread for MainThread<'_> {
+impl<Event: EventImpl> HostParamsImplMainThread for MainThread<'_, Event> {
 	fn rescan(&mut self, flags: ParamRescanFlags) {
 		if flags.contains(ParamRescanFlags::VALUES) {
 			self.shared
@@ -103,11 +103,11 @@ impl HostParamsImplMainThread for MainThread<'_> {
 	fn clear(&mut self, _param_id: ClapId, _flags: ParamClearFlags) {}
 }
 
-impl HostStateImpl for MainThread<'_> {
+impl<Event: EventImpl> HostStateImpl for MainThread<'_, Event> {
 	fn mark_dirty(&mut self) {}
 }
 
-impl HostTimerImpl for MainThread<'_> {
+impl<Event: EventImpl> HostTimerImpl for MainThread<'_, Event> {
 	fn register_timer(&mut self, period_ms: u32) -> Result<TimerId, HostError> {
 		let timer_id = TimerId(self.next_timer_id);
 		self.next_timer_id += 1;

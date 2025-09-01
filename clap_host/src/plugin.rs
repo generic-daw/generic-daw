@@ -1,8 +1,9 @@
 use crate::{
-	PluginDescriptor, PluginId, audio_processor::AudioThreadMessage, host::Host, params::Param,
+	EventImpl, PluginDescriptor, PluginId, audio_processor::AudioThreadMessage, gui::Gui,
+	host::Host, params::Param,
 };
 use clack_extensions::{
-	gui::{GuiApiType, GuiConfiguration, GuiSize, PluginGui, Window as ClapWindow},
+	gui::{GuiApiType, GuiConfiguration, GuiSize, Window as ClapWindow},
 	params::ParamInfoFlags,
 	render::RenderMode,
 	timer::TimerId,
@@ -14,69 +15,24 @@ use raw_window_handle::RawWindowHandle;
 use std::{io::Cursor, panic};
 
 #[derive(Debug)]
-enum GuiKind {
-	Floating {
-		ext: NoDebug<PluginGui>,
-	},
-	Embedded {
-		ext: NoDebug<PluginGui>,
-		can_resize: Option<bool>,
-		scale_factor: f32,
-	},
-	None,
-}
-
-impl GuiKind {
-	fn ext(&self) -> Option<PluginGui> {
-		match self {
-			Self::Floating { ext } | Self::Embedded { ext, .. } => Some(ext.0),
-			Self::None => None,
-		}
-	}
-}
-
-#[derive(Debug)]
-pub struct Plugin {
-	instance: NoDebug<PluginInstance<Host>>,
-	gui: GuiKind,
+pub struct Plugin<Event: EventImpl> {
+	instance: NoDebug<PluginInstance<Host<Event>>>,
+	gui: Gui,
 	descriptor: PluginDescriptor,
 	id: PluginId,
 	params: NoDebug<Box<[Param]>>,
 	is_open: bool,
 }
 
-impl Plugin {
+impl<Event: EventImpl> Plugin<Event> {
 	#[must_use]
 	pub fn new(
-		mut instance: PluginInstance<Host>,
+		instance: PluginInstance<Host<Event>>,
+		gui: Gui,
 		descriptor: PluginDescriptor,
 		id: PluginId,
 		params: Box<[Param]>,
 	) -> Self {
-		let gui = instance
-			.access_handler(|mt| mt.gui)
-			.map_or(GuiKind::None, |ext| {
-				let mut config = GuiConfiguration {
-					api_type: const { GuiApiType::default_for_current_platform().unwrap() },
-					is_floating: false,
-				};
-
-				if ext.is_api_supported(&mut instance.plugin_handle(), config) {
-					GuiKind::Embedded {
-						ext,
-						can_resize: None,
-						scale_factor: 1.0,
-					}
-				} else {
-					config.is_floating = true;
-					if ext.is_api_supported(&mut instance.plugin_handle(), config) {
-						GuiKind::Floating { ext }
-					} else {
-						GuiKind::None
-					}
-				}
-			});
-
 		Self {
 			instance: instance.into(),
 			gui,
@@ -99,16 +55,16 @@ impl Plugin {
 
 	#[must_use]
 	pub fn has_gui(&self) -> bool {
-		!matches!(self.gui, GuiKind::None)
+		!matches!(self.gui, Gui::None)
 	}
 
 	#[must_use]
 	pub fn is_floating(&self) -> bool {
-		matches!(self.gui, GuiKind::Floating { .. })
+		matches!(self.gui, Gui::Floating { .. })
 	}
 
 	pub fn set_scale(&mut self, scale: f32) {
-		let GuiKind::Embedded {
+		let Gui::Embedded {
 			ext, scale_factor, ..
 		} = &mut self.gui
 		else {
@@ -122,7 +78,7 @@ impl Plugin {
 
 	#[must_use]
 	pub fn can_resize(&mut self) -> bool {
-		let GuiKind::Embedded {
+		let Gui::Embedded {
 			ext, can_resize, ..
 		} = &mut self.gui
 		else {
@@ -185,7 +141,7 @@ impl Plugin {
 	/// # SAFETY
 	/// The underlying window must remain valid for the lifetime of this plugin instance's gui.
 	pub unsafe fn set_parent(&mut self, window_handle: RawWindowHandle) {
-		let GuiKind::Embedded { ext, .. } = self.gui else {
+		let Gui::Embedded { ext, .. } = self.gui else {
 			panic!("called \"set_parent\" on a non-embedded gui");
 		};
 
@@ -224,7 +180,7 @@ impl Plugin {
 
 	#[must_use]
 	pub fn get_size(&mut self) -> Option<[f32; 2]> {
-		let GuiKind::Embedded {
+		let Gui::Embedded {
 			ext, scale_factor, ..
 		} = self.gui
 		else {
@@ -245,7 +201,7 @@ impl Plugin {
 
 	#[must_use]
 	pub fn resize(&mut self, mut width: f32, mut height: f32) -> Option<[f32; 2]> {
-		let GuiKind::Embedded {
+		let Gui::Embedded {
 			ext,
 			scale_factor,
 			can_resize,
@@ -336,7 +292,7 @@ impl Plugin {
 	}
 }
 
-impl Drop for Plugin {
+impl<Event: EventImpl> Drop for Plugin<Event> {
 	fn drop(&mut self) {
 		self.destroy();
 	}

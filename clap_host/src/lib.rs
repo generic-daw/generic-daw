@@ -1,6 +1,5 @@
 use async_channel::Receiver;
 use audio_buffers::AudioBuffers;
-use audio_ports_config::AudioPortsConfig;
 use clack_host::prelude::*;
 use event_buffers::EventBuffers;
 use generic_daw_utils::unique_id;
@@ -20,6 +19,7 @@ mod audio_processor;
 mod event_buffers;
 mod event_impl;
 pub mod events;
+mod gui;
 mod host;
 mod main_thread;
 mod params;
@@ -27,7 +27,7 @@ mod plugin;
 mod plugin_descriptor;
 mod shared;
 
-use crate::params::Param;
+use crate::{gui::Gui, params::Param};
 pub use audio_processor::AudioProcessor;
 pub use clack_host::{
 	bundle::PluginBundle,
@@ -125,12 +125,16 @@ pub fn default_clap_paths() -> Vec<Arc<Path>> {
 }
 
 #[must_use]
-pub fn init(
+pub fn init<Event: EventImpl>(
 	bundle: &PluginBundle,
 	descriptor: PluginDescriptor,
 	sample_rate: u32,
 	max_buffer_size: u32,
-) -> (Plugin, Receiver<MainThreadMessage>, AudioProcessor) {
+) -> (
+	Plugin<Event>,
+	Receiver<MainThreadMessage<Event>>,
+	AudioProcessor<Event>,
+) {
 	let (main_sender, main_receiver) = async_channel::unbounded();
 	let (audio_sender, audio_receiver) = async_channel::unbounded();
 
@@ -143,27 +147,14 @@ pub fn init(
 	)
 	.unwrap();
 
-	let input_config =
-		AudioPortsConfig::from_ports(&mut instance.plugin_handle(), true).unwrap_or_default();
-	let output_config =
-		AudioPortsConfig::from_ports(&mut instance.plugin_handle(), false).unwrap_or_default();
-
-	let channels =
-		output_config.port_channel_counts[output_config.main_port_index].clamp(1, 2) as u32;
-	let max_frames_count = max_buffer_size / channels;
 	let config = PluginAudioConfiguration {
 		sample_rate: sample_rate.into(),
 		min_frames_count: 1,
-		max_frames_count,
+		max_frames_count: max_buffer_size / 2,
 	};
 
-	let latency = instance
-		.access_handler(|mt: &MainThread<'_>| mt.latency)
-		.map(|ext| ext.get(&mut instance.plugin_handle()))
-		.unwrap_or_default();
-
-	let audio_buffers = AudioBuffers::new(config, input_config, output_config, latency);
-	let note_buffers = EventBuffers::new(&mut instance.plugin_handle());
+	let audio_buffers = AudioBuffers::new(&mut instance.plugin_handle(), config);
+	let event_buffers = EventBuffers::new(&mut instance.plugin_handle());
 	let id = PluginId::unique();
 
 	let plugin_audio_processor = AudioProcessor::new(
@@ -175,14 +166,14 @@ pub fn init(
 		descriptor.clone(),
 		id,
 		audio_buffers,
-		note_buffers,
+		event_buffers,
 		audio_receiver,
 	);
 
-	let params = instance.access_handler(|mt| mt.params).unwrap().0;
-	let params = Param::all(&mut instance.plugin_handle(), params);
+	let params = Param::all(&mut instance.plugin_handle()).unwrap_or_default();
+	let gui = Gui::new(&mut instance.plugin_handle());
 
-	let plugin = Plugin::new(instance, descriptor, id, params);
+	let plugin = Plugin::new(instance, gui, descriptor, id, params);
 
 	(plugin, main_receiver, plugin_audio_processor)
 }

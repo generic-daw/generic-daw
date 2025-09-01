@@ -1,4 +1,4 @@
-use crate::{MainThreadMessage, PluginDescriptor, audio_processor::AudioThreadMessage};
+use crate::{EventImpl, MainThreadMessage, PluginDescriptor, audio_processor::AudioThreadMessage};
 use async_channel::Sender;
 use clack_extensions::{
 	gui::{GuiSize, HostGuiImpl},
@@ -9,13 +9,13 @@ use clack_host::prelude::*;
 use log::{debug, error, info, warn};
 
 #[derive(Debug)]
-pub struct Shared {
+pub struct Shared<Event: EventImpl> {
 	pub descriptor: PluginDescriptor,
-	pub main_sender: Sender<MainThreadMessage>,
+	pub main_sender: Sender<MainThreadMessage<Event>>,
 	pub audio_sender: Sender<AudioThreadMessage>,
 }
 
-impl SharedHandler<'_> for Shared {
+impl<Event: EventImpl> SharedHandler<'_> for Shared<Event> {
 	fn request_process(&self) {}
 
 	fn request_callback(&self) {
@@ -31,7 +31,7 @@ impl SharedHandler<'_> for Shared {
 	}
 }
 
-impl HostGuiImpl for Shared {
+impl<Event: EventImpl> HostGuiImpl for Shared<Event> {
 	fn resize_hints_changed(&self) {}
 
 	fn request_resize(&self, new_size: GuiSize) -> Result<(), HostError> {
@@ -68,7 +68,7 @@ impl HostGuiImpl for Shared {
 	}
 }
 
-impl HostLogImpl for Shared {
+impl<Event: EventImpl> HostLogImpl for Shared<Event> {
 	fn log(&self, severity: LogSeverity, message: &str) {
 		match severity {
 			LogSeverity::Debug => debug!("{}: {message}", self.descriptor),
@@ -82,14 +82,14 @@ impl HostLogImpl for Shared {
 	}
 }
 
-impl HostParamsImplShared for Shared {
+impl<Event: EventImpl> HostParamsImplShared for Shared<Event> {
 	fn request_flush(&self) {}
 }
 
-impl Shared {
+impl<Event: EventImpl> Shared<Event> {
 	pub fn new(
 		descriptor: PluginDescriptor,
-		main_sender: Sender<MainThreadMessage>,
+		main_sender: Sender<MainThreadMessage<Event>>,
 		audio_sender: Sender<AudioThreadMessage>,
 	) -> Self {
 		Self {

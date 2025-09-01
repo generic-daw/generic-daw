@@ -32,15 +32,19 @@ impl TryFrom<ParamInfo<'_>> for Param {
 }
 
 impl Param {
-	pub fn all(plugin: &mut PluginMainThreadHandle<'_>, ext: PluginParams) -> Box<[Self]> {
+	pub fn all(plugin: &mut PluginMainThreadHandle<'_>) -> Option<Box<[Self]>> {
+		let ext = plugin.get_extension::<PluginParams>()?;
+
 		let count = ext.count(plugin) as usize;
 		let buffer = &mut ParamInfoBuffer::new();
 
-		(0..)
-			.filter_map(|index| ext.get_info(plugin, index, buffer).map(Self::try_from))
-			.take(count)
-			.flatten()
-			.collect()
+		Some(
+			(0..)
+				.filter_map(|index| ext.get_info(plugin, index, buffer).map(Self::try_from))
+				.take(count)
+				.flatten()
+				.collect(),
+		)
 	}
 
 	pub fn rescan_value(&mut self, plugin: &mut PluginMainThreadHandle<'_>, ext: PluginParams) {

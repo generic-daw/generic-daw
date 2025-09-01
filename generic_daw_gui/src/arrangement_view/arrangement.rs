@@ -6,7 +6,7 @@ use super::{
 use crate::config::Config;
 use bit_set::BitSet;
 use generic_daw_core::{
-	self as core, Action, Clip, Message, Mixer, MusicalTime, NodeId, NodeImpl as _, RtState,
+	self as core, Action, Clip, Event, Message, Mixer, MusicalTime, NodeId, NodeImpl as _, RtState,
 	Stream, StreamTrait as _, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, PluginId},
 	export,
@@ -125,7 +125,7 @@ impl Arrangement {
 		self.action(node, Action::NodeToggleEnabled);
 	}
 
-	pub fn plugin_load(&mut self, node: NodeId, processor: AudioProcessor) {
+	pub fn plugin_load(&mut self, node: NodeId, processor: AudioProcessor<Event>) {
 		self.nodes
 			.get_mut(*node)
 			.unwrap()

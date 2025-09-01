@@ -14,8 +14,8 @@ pub enum AudioThreadMessage {
 }
 
 #[derive(Debug)]
-pub struct AudioProcessor {
-	started_processor: Option<NoDebug<StartedPluginAudioProcessor<Host>>>,
+pub struct AudioProcessor<Event: EventImpl> {
+	started_processor: Option<NoDebug<StartedPluginAudioProcessor<Host<Event>>>>,
 	descriptor: PluginDescriptor,
 	id: PluginId,
 	steady_time: u64,
@@ -24,10 +24,10 @@ pub struct AudioProcessor {
 	receiver: Receiver<AudioThreadMessage>,
 }
 
-impl AudioProcessor {
+impl<Event: EventImpl> AudioProcessor<Event> {
 	#[must_use]
 	pub fn new(
-		started_processor: StartedPluginAudioProcessor<Host>,
+		started_processor: StartedPluginAudioProcessor<Host<Event>>,
 		descriptor: PluginDescriptor,
 		id: PluginId,
 		audio_buffers: AudioBuffers,
@@ -55,7 +55,7 @@ impl AudioProcessor {
 		self.id
 	}
 
-	pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<impl EventImpl>, mix_level: f32) {
+	pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32) {
 		while let Ok(msg) = self.receiver.try_recv() {
 			trace!("{}: {msg:?}", self.descriptor);
 

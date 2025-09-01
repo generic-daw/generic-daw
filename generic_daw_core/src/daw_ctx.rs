@@ -1,4 +1,4 @@
-use crate::{AudioGraphNode, Clip, Master, Mixer};
+use crate::{AudioGraphNode, Clip, Event, Master, Mixer};
 use async_channel::{Receiver, Sender};
 use audio_graph::{AudioGraph, NodeId};
 use clap_host::AudioProcessor;
@@ -37,7 +37,7 @@ pub enum Action {
 	NodeToggleEnabled,
 	NodeVolumeChanged(f32),
 	NodePanChanged(f32),
-	PluginLoad(Box<AudioProcessor>),
+	PluginLoad(Box<AudioProcessor<Event>>),
 	PluginRemove(usize),
 	PluginMoved(usize, usize),
 	PluginToggleEnabled(usize),
