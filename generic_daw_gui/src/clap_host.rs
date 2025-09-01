@@ -2,7 +2,7 @@ use crate::{components::space, config::Config, widget::LINE_HEIGHT};
 use fragile::Fragile;
 use generic_daw_core::{
 	Event,
-	clap_host::{MainThreadMessage, Plugin, PluginId},
+	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, PluginId},
 };
 use generic_daw_utils::HoleyVec;
 use generic_daw_widget::knob::Knob;
@@ -247,11 +247,12 @@ impl ClapHost {
 									},
 								)
 							})
+							.reset(param.reset)
+							.radius(25.0)
+							.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
 							.maybe_tooltip(
 								(!param.value_text.is_empty()).then_some(&param.value_text)
 							)
-							.reset(param.reset)
-							.radius(25.0)
 						)
 						.padding([0, 10]),
 						text(&*param.name)

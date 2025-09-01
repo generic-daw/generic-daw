@@ -1,3 +1,4 @@
+use crate::mix;
 use generic_daw_utils::NoDebug;
 use iced_widget::{
 	Renderer,
@@ -40,6 +41,7 @@ pub struct Knob<'a, Message> {
 	enabled: bool,
 	f: NoDebug<Box<dyn Fn(f32) -> Message + 'a>>,
 	radius: f32,
+	stepped: bool,
 	tooltip: Option<NoDebug<Text<'a, Theme, Renderer>>>,
 }
 
@@ -59,6 +61,7 @@ impl<'a, Message> Knob<'a, Message> {
 			enabled,
 			f: NoDebug(Box::from(f)),
 			radius: 20.0,
+			stepped: false,
 			tooltip: None,
 		}
 	}
@@ -78,6 +81,12 @@ impl<'a, Message> Knob<'a, Message> {
 	#[must_use]
 	pub fn radius(mut self, radius: f32) -> Self {
 		self.radius = radius;
+		self
+	}
+
+	#[must_use]
+	pub fn stepped(mut self, stepped: bool) -> Self {
+		self.stepped = stepped;
 		self
 	}
 
@@ -106,15 +115,15 @@ impl<'a, Message> Knob<'a, Message> {
 			)
 		};
 
-		let value_angle = |value: f32| {
+		let angle_of = |value: f32| {
 			Radians(f32::to_radians(
 				270.0 * (value - self.range.start()) / (self.range.end() - self.range.start())
 					- 135.0 - 90.0,
 			))
 		};
 
-		let center_angle = value_angle(self.center);
-		let value_angle = value_angle(self.value);
+		let center_angle = angle_of(self.center);
+		let value_angle = angle_of(self.value);
 
 		let arc = Path::new(|b| {
 			b.arc(Arc {
@@ -136,17 +145,41 @@ impl<'a, Message> Knob<'a, Message> {
 
 		frame.fill(&arc, contrast_color);
 
-		frame.fill(&Path::circle(center, self.radius - 4.0), main_color);
+		let thickness = (self.radius * 0.1).clamp(1.5, 3.0);
+		let radius = thickness * 1.5;
 
 		frame.fill(
-			&circle(center_angle, self.radius - 2.0, 2.0),
+			&Path::circle(center, self.radius - thickness - thickness),
+			main_color,
+		);
+
+		frame.fill(
+			&circle(center_angle, self.radius - thickness, thickness),
 			contrast_color,
 		);
 
-		frame.fill(&circle(value_angle, self.radius - 2.0, 2.0), contrast_color);
+		frame.fill(
+			&circle(value_angle, self.radius - thickness, thickness),
+			contrast_color,
+		);
+
+		if self.stepped {
+			let mixed_color = mix(main_color, contrast_color, 0.25);
+
+			for step in *self.range.start() as i32..=*self.range.end() as i32 {
+				frame.fill(
+					&circle(
+						angle_of(step as f32),
+						self.radius.midpoint(radius),
+						radius / 2.0,
+					),
+					mixed_color,
+				);
+			}
+		}
 
 		frame.fill(
-			&circle(value_angle, self.radius / 2.0 - 2.0, 3.0),
+			&circle(value_angle, self.radius / 2.0, radius),
 			contrast_color,
 		);
 	}
@@ -251,10 +284,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 				} => {
 					if let Some((value, pos)) = state.dragging {
 						let diff = (pos - y) * (self.range.end() - self.range.start()) * 0.005;
-
-						shell.publish((self.f)(
-							(value + diff).clamp(*self.range.start(), *self.range.end()),
-						));
+						let mut new_value =
+							(value + diff).clamp(*self.range.start(), *self.range.end());
+						if self.stepped {
+							new_value = new_value.round();
+						}
+						if new_value != self.value {
+							shell.publish((self.f)(new_value));
+						}
 						shell.capture_event();
 					}
 

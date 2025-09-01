@@ -29,6 +29,7 @@ mod shared;
 
 use crate::{gui::Gui, params::Param};
 pub use audio_processor::AudioProcessor;
+pub use clack_extensions::params::ParamInfoFlags;
 pub use clack_host::{
 	bundle::PluginBundle,
 	utils::{ClapId, Cookie},

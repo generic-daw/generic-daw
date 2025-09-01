@@ -1,8 +1,9 @@
+use crate::mix;
 use iced_widget::{
 	Renderer,
 	core::{
-		Animation, Clipboard, Color, Element, Event, Layout, Length, Rectangle, Renderer as _,
-		Shell, Size, Theme, Vector, Widget,
+		Animation, Clipboard, Element, Event, Layout, Length, Rectangle, Renderer as _, Shell,
+		Size, Theme, Vector, Widget,
 		animation::Easing,
 		gradient::Linear,
 		layout::{Limits, Node},
@@ -213,19 +214,4 @@ impl<Message> From<PeakMeter> for Element<'_, Message, Theme, Renderer> {
 	fn from(value: PeakMeter) -> Self {
 		Self::new(value)
 	}
-}
-
-fn mix(a: Color, b: Color, factor: f32) -> Color {
-	let b_amount = factor.clamp(0.0, 1.0);
-	let a_amount = 1.0 - b_amount;
-
-	let a_linear = a.into_linear().map(|c| c * a_amount);
-	let b_linear = b.into_linear().map(|c| c * b_amount);
-
-	Color::from_linear_rgba(
-		a_linear[0] + b_linear[0],
-		a_linear[1] + b_linear[1],
-		a_linear[2] + b_linear[2],
-		a_linear[3] + b_linear[3],
-	)
 }
