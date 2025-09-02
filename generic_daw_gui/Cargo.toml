@@ -43,4 +43,5 @@ toml = "0.9.5"
 walkdir = "2.5.0"
 
 # https://github.com/PolyMeilex/rfd/pull/255
-wayland-backend = { version = "0.3.11", features = ["dlopen"] }
+[target.'cfg(unix)'.dependencies]
+wayland-sys = { version = "0.31.7", features = ["dlopen"] }

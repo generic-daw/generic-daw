@@ -2,7 +2,8 @@ use daw::Daw;
 use iced::{Result, daemon};
 use icons::LUCIDE_BYTES;
 use log::LevelFilter;
-use wayland_backend as _;
+#[cfg(unix)]
+use wayland_sys as _;
 
 mod arrangement_view;
 mod clap_host;
