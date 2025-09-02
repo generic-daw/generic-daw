@@ -465,8 +465,8 @@ impl Daw {
 		self.config.theme.into()
 	}
 
-	pub fn scale_factor(&self, _: Id) -> f64 {
-		self.config.scale_factor.into()
+	pub fn scale_factor(&self, _: Id) -> f32 {
+		self.config.scale_factor
 	}
 
 	pub fn subscription(&self) -> Subscription<Message> {

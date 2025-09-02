@@ -1,4 +1,4 @@
-use crate::{EventImpl, shared::Shared};
+use crate::{EventImpl, Size, shared::Shared};
 use clack_extensions::{
 	audio_ports::{HostAudioPortsImpl, RescanType},
 	gui::PluginGui,
@@ -17,7 +17,7 @@ use std::time::Duration;
 pub enum MainThreadMessage<Event: EventImpl> {
 	RequestCallback,
 	GuiRequestShow,
-	GuiRequestResize([f32; 2]),
+	GuiRequestResize(Size),
 	GuiRequestHide,
 	GuiClosed,
 	RegisterTimer(u32, Duration),

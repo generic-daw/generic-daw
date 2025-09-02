@@ -1,4 +1,6 @@
-use crate::{EventImpl, MainThreadMessage, PluginDescriptor, audio_processor::AudioThreadMessage};
+use crate::{
+	EventImpl, MainThreadMessage, PluginDescriptor, Size, audio_processor::AudioThreadMessage,
+};
 use async_channel::Sender;
 use clack_extensions::{
 	gui::{GuiSize, HostGuiImpl},
@@ -34,12 +36,12 @@ impl<Event: EventImpl> SharedHandler<'_> for Shared<Event> {
 impl<Event: EventImpl> HostGuiImpl for Shared<Event> {
 	fn resize_hints_changed(&self) {}
 
-	fn request_resize(&self, new_size: GuiSize) -> Result<(), HostError> {
+	fn request_resize(&self, GuiSize { width, height }: GuiSize) -> Result<(), HostError> {
 		self.main_sender
-			.try_send(MainThreadMessage::GuiRequestResize([
-				new_size.width as f32,
-				new_size.height as f32,
-			]))
+			.try_send(MainThreadMessage::GuiRequestResize(Size::Native {
+				width: width as f32,
+				height: height as f32,
+			}))
 			.unwrap();
 
 		Ok(())

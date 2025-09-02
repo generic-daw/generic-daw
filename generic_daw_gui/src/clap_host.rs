@@ -2,7 +2,7 @@ use crate::{components::space, config::Config, widget::LINE_HEIGHT};
 use fragile::Fragile;
 use generic_daw_core::{
 	Event,
-	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, PluginId},
+	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, PluginId, Size},
 };
 use generic_daw_utils::HoleyVec;
 use generic_daw_widget::knob::Knob;
@@ -10,10 +10,10 @@ use iced::{
 	Alignment::Center,
 	Element, Font, Function as _,
 	Length::{Fill, Shrink},
-	Size, Subscription, Task,
+	Subscription, Task,
 	time::every,
-	widget::{column, container, horizontal_rule, row, text, text::Wrapping},
-	window::{self, Id, close_events, close_requests, resize_events},
+	widget::{column, container, horizontal_rule, row, sensor, text, text::Wrapping},
+	window::{self, Id, Level, close_events, close_requests, resize_events},
 };
 use log::info;
 use smol::{Timer, channel::Receiver};
@@ -33,6 +33,7 @@ pub enum Message {
 	GuiRequestResize(Id, Size),
 	GuiRequestHide(Id),
 	GuiHidden(Id),
+	SetPluginSize(PluginId, Size),
 }
 
 #[derive(Default)]
@@ -75,12 +76,11 @@ impl ClapHost {
 			Message::GuiRequestResize(window, size) => {
 				if let Some(id) = self.windows.key_of(&window)
 					&& let Some(plugin) = self.plugins.get_mut(id)
-					&& let Some([width, height]) = plugin.resize(size.width, size.height)
+					&& let Some(new_size) = plugin.resize(size)
+					&& size.to_physical(config.scale_factor)
+						!= new_size.to_physical(config.scale_factor)
 				{
-					let new_size = Size::new(width, height);
-					if size != new_size {
-						return window::resize(window, new_size);
-					}
+					return window::resize(window, new_size.to_logical(config.scale_factor).into());
 				}
 			}
 			Message::GuiRequestHide(window) => {
@@ -94,6 +94,11 @@ impl ClapHost {
 			Message::GuiHidden(window) => {
 				let id = self.windows.key_of(&window).unwrap();
 				self.windows.remove(id).unwrap();
+			}
+			Message::SetPluginSize(id, size) => {
+				if let Some(&window) = self.windows.get(*id) {
+					return window::resize(window, size.to_logical(config.scale_factor).into());
+				}
 			}
 		}
 
@@ -124,9 +129,10 @@ impl ClapHost {
 
 				return if !plugin.has_gui() {
 					let (window, spawn) = window::open(window::Settings {
-						size: Size::new(480.0, 640.0),
-						resizable: true,
+						size: (400.0, 640.0).into(),
+						resizable: false,
 						exit_on_close_request: false,
+						level: Level::AlwaysOnTop,
 						..window::Settings::default()
 					});
 					self.windows.insert(*id, window);
@@ -140,13 +146,12 @@ impl ClapHost {
 					plugin.set_scale(config.scale_factor);
 
 					let (window, spawn) = window::open(window::Settings {
-						size: plugin
-							.get_size()
-							.map_or(Size::new(480.0, 640.0), |[width, height]| {
-								Size::new(width, height)
-							}),
+						size: plugin.get_size().map_or((480.0, 640.0).into(), |size| {
+							size.to_logical(config.scale_factor).into()
+						}),
 						resizable: plugin.can_resize(),
 						exit_on_close_request: false,
+						level: Level::AlwaysOnTop,
 						..window::Settings::default()
 					});
 					self.windows.insert(*id, window);
@@ -168,12 +173,9 @@ impl ClapHost {
 						.map(move |plugin| Message::GuiShown(Arc::new(plugin)))
 				};
 			}
-			MainThreadMessage::GuiRequestResize([width, height]) => {
+			MainThreadMessage::GuiRequestResize(size) => {
 				if let Some(&window) = self.windows.get(*id) {
-					return self.update(
-						Message::GuiRequestResize(window, Size::new(width, height)),
-						config,
-					);
+					return self.update(Message::GuiRequestResize(window, size), config);
 				}
 			}
 			MainThreadMessage::GuiRequestHide => {
@@ -206,10 +208,10 @@ impl ClapHost {
 		Task::none()
 	}
 
-	fn live_event(plugin: &mut Plugin<Event>, msg: Event) -> Task<Message> {
+	fn live_event(plugin: &mut Plugin<Event>, event: Event) -> Task<Message> {
 		if let Event::ParamValue {
 			param_id, value, ..
-		} = msg
+		} = event
 		{
 			plugin.update_param(param_id, value);
 		}
@@ -227,48 +229,60 @@ impl ClapHost {
 		}
 
 		Some(
-			column![
-				text(&*plugin.descriptor().name)
-					.size(LINE_HEIGHT)
-					.line_height(1.0)
-					.font(Font::MONOSPACE),
-				container(horizontal_rule(1)).padding([5, 0]),
-				row(plugin.params().map(|param| {
-					column![
-						container(
-							Knob::new(param.range.clone(), param.value, true, |value| {
-								Message::SendEvent(
-									plugin.plugin_id(),
-									Event::ParamValue {
-										time: 0,
-										param_id: param.id,
-										value,
-										cookie: param.cookie,
-									},
+			sensor(
+				column![
+					text(&*plugin.descriptor().name)
+						.size(LINE_HEIGHT)
+						.line_height(1.0)
+						.font(Font::MONOSPACE),
+					container(horizontal_rule(1)).padding([5, 0]),
+					row(plugin.params().map(|param| {
+						column![
+							container(
+								Knob::new(param.range.clone(), param.value, true, |value| {
+									Message::SendEvent(
+										plugin.plugin_id(),
+										Event::ParamValue {
+											time: 0,
+											param_id: param.id,
+											value,
+											cookie: param.cookie,
+										},
+									)
+								})
+								.reset(param.reset)
+								.radius(25.0)
+								.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
+								.maybe_tooltip(
+									(!param.value_text.is_empty()).then_some(&param.value_text)
 								)
-							})
-							.reset(param.reset)
-							.radius(25.0)
-							.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
-							.maybe_tooltip(
-								(!param.value_text.is_empty()).then_some(&param.value_text)
 							)
-						)
-						.padding([0, 10]),
-						text(&*param.name)
-							.wrapping(Wrapping::WordOrGlyph)
-							.align_x(Center)
-							.width(Fill)
-					]
-					.spacing(5)
-					.width(Shrink)
-					.into()
-				}))
-				.spacing(10)
-				.wrap()
-				.vertical_spacing(10)
-			]
-			.padding(10)
+							.padding([0, 10]),
+							text(&*param.name)
+								.wrapping(Wrapping::WordOrGlyph)
+								.align_x(Center)
+								.width(Fill)
+						]
+						.spacing(5)
+						.width(Shrink)
+						.into()
+					}))
+					.spacing(10)
+					.wrap()
+					.vertical_spacing(10)
+				]
+				.width(Shrink)
+				.padding(10),
+			)
+			.on_show(|size| {
+				Message::SetPluginSize(
+					plugin.plugin_id(),
+					Size::Logical {
+						width: size.width,
+						height: size.height,
+					},
+				)
+			})
 			.into(),
 		)
 	}
@@ -308,7 +322,15 @@ impl ClapHost {
 						})
 				})
 				.chain([
-					resize_events().map(|(id, size)| Message::GuiRequestResize(id, size)),
+					resize_events().map(|(id, size)| {
+						Message::GuiRequestResize(
+							id,
+							Size::Logical {
+								width: size.width,
+								height: size.height,
+							},
+						)
+					}),
 					close_requests().map(Message::GuiRequestHide),
 					close_events().map(Message::GuiHidden),
 				]),

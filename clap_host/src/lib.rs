@@ -1,5 +1,6 @@
 use async_channel::Receiver;
 use audio_buffers::AudioBuffers;
+use clack_extensions::gui::GuiApiType;
 use clack_host::prelude::*;
 use event_buffers::EventBuffers;
 use generic_daw_utils::unique_id;
@@ -26,6 +27,7 @@ mod params;
 mod plugin;
 mod plugin_descriptor;
 mod shared;
+mod size;
 
 use crate::{gui::Gui, params::Param};
 pub use audio_processor::AudioProcessor;
@@ -39,8 +41,11 @@ pub use main_thread::MainThreadMessage;
 pub use plugin::Plugin;
 pub use plugin_descriptor::PluginDescriptor;
 pub use plugin_id::Id as PluginId;
+pub use size::Size;
 
 unique_id!(plugin_id);
+
+const API_TYPE: GuiApiType<'_> = const { GuiApiType::default_for_current_platform().unwrap() };
 
 #[must_use]
 pub fn get_installed_plugins(

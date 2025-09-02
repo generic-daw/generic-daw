@@ -1,9 +1,9 @@
 use crate::{
-	EventImpl, PluginDescriptor, PluginId, audio_processor::AudioThreadMessage, gui::Gui,
-	host::Host, params::Param,
+	API_TYPE, EventImpl, PluginDescriptor, PluginId, audio_processor::AudioThreadMessage, gui::Gui,
+	host::Host, params::Param, size::Size,
 };
 use clack_extensions::{
-	gui::{GuiApiType, GuiConfiguration, GuiSize, Window as ClapWindow},
+	gui::{GuiConfiguration, GuiSize, Window as ClapWindow},
 	params::ParamInfoFlags,
 	render::RenderMode,
 	timer::TimerId,
@@ -131,7 +131,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		};
 
 		let config = GuiConfiguration {
-			api_type: const { GuiApiType::default_for_current_platform().unwrap() },
+			api_type: API_TYPE,
 			is_floating: self.is_floating(),
 		};
 
@@ -180,32 +180,21 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	#[must_use]
-	pub fn get_size(&mut self) -> Option<[f32; 2]> {
-		let Gui::Embedded {
-			ext, scale_factor, ..
-		} = self.gui
-		else {
+	pub fn get_size(&mut self) -> Option<Size> {
+		let Gui::Embedded { ext, .. } = self.gui else {
 			return None;
 		};
 
 		let GuiSize { width, height } = ext.get_size(&mut self.instance.plugin_handle())?;
-		let (mut width, mut height) = (width as f32, height as f32);
-
-		if !const { GuiApiType::default_for_current_platform().unwrap() }.uses_logical_size() {
-			width *= scale_factor;
-			height *= scale_factor;
-		}
-
-		#[expect(clippy::tuple_array_conversions)]
-		Some([width, height])
+		Some(Size::from_native((width as f32, height as f32)))
 	}
 
 	#[must_use]
-	pub fn resize(&mut self, mut width: f32, mut height: f32) -> Option<[f32; 2]> {
+	pub fn resize(&mut self, size: Size) -> Option<Size> {
 		let Gui::Embedded {
 			ext,
-			scale_factor,
 			can_resize,
+			scale_factor,
 		} = self.gui
 		else {
 			return None;
@@ -215,11 +204,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			return None;
 		}
 
-		if !const { GuiApiType::default_for_current_platform().unwrap() }.uses_logical_size() {
-			width /= scale_factor;
-			height /= scale_factor;
-		}
-
+		let (width, height) = size.to_native(scale_factor);
 		let size = GuiSize {
 			width: width as u32,
 			height: height as u32,
@@ -232,15 +217,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			.unwrap();
 
 		let GuiSize { width, height } = size;
-		let (mut width, mut height) = (width as f32, height as f32);
-
-		if !const { GuiApiType::default_for_current_platform().unwrap() }.uses_logical_size() {
-			width *= scale_factor;
-			height *= scale_factor;
-		}
-
-		#[expect(clippy::tuple_array_conversions)]
-		Some([width, height])
+		Some(Size::from_native((width as f32, height as f32)))
 	}
 
 	pub fn send_event(&self, event: Event) {
