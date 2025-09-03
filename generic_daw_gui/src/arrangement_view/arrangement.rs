@@ -14,7 +14,7 @@ use generic_daw_core::{
 use generic_daw_utils::{HoleyVec, NoDebug, ShiftMoveExt as _};
 use iced::{Task, futures::SinkExt as _, stream};
 use smol::channel::Sender;
-use std::{convert::identity, path::Path};
+use std::path::Path;
 
 #[derive(Debug)]
 pub struct Arrangement {
@@ -50,23 +50,20 @@ impl Arrangement {
 			),
 		);
 
-		let task = Task::run(
-			stream::channel(1, async move |mut sender| {
-				let mut batch = Batch::default();
+		let task = Task::stream(stream::channel(100, async move |mut sender| {
+			let mut batch = Batch::default();
 
-				while let Ok(update) = receiver.recv().await {
-					match update {
-						Update::LR(node, l_r) => batch.l_r.push((node, l_r)),
-						Update::Sample(ver, sample) if ver.is_last() => batch.sample = Some(sample),
-						Update::Done if batch != Batch::default() => {
-							sender.send(std::mem::take(&mut batch)).await.unwrap();
-						}
-						_ => {}
+			while let Ok(update) = receiver.recv().await {
+				match update {
+					Update::LR(node, l_r) => batch.l_r.push((node, l_r)),
+					Update::Sample(ver, sample) if ver.is_last() => batch.sample = Some(sample),
+					Update::Done if batch != Batch::default() => {
+						sender.send(std::mem::take(&mut batch)).await.unwrap();
 					}
+					_ => {}
 				}
-			}),
-			identity,
-		);
+			}
+		}));
 
 		(
 			Self {
