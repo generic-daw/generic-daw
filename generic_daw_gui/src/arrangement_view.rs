@@ -58,7 +58,7 @@ use std::{
 	ops::Deref as _,
 	path::Path,
 	sync::{Arc, Weak},
-	time::{Duration, SystemTime},
+	time::{Duration, Instant, SystemTime},
 };
 
 mod arrangement;
@@ -210,7 +210,7 @@ impl ArrangementView {
 			Message::ClapHost(msg) => {
 				return self.clap_host.update(msg, config).map(Message::ClapHost);
 			}
-			Message::Batch(msg) => self.arrangement.update(msg),
+			Message::Batch(msg) => self.arrangement.update(msg, Instant::now()),
 			Message::Gc => {
 				self.audios.retain(|_, audio| {
 					if let LoadStatus::Loaded(_, audio) = audio {
@@ -687,13 +687,11 @@ impl ArrangementView {
 	}
 
 	pub fn view(&self) -> Element<'_, Message> {
-		let view = match &self.tab {
+		match &self.tab {
 			Tab::Arrangement { .. } => self.arrangement(),
 			Tab::Mixer => self.mixer(),
 			Tab::PianoRoll { clip, .. } => self.piano_roll(clip),
-		};
-		self.arrangement.clear_l_r();
-		view
+		}
 	}
 
 	fn arrangement(&self) -> Element<'_, Message> {
@@ -712,8 +710,8 @@ impl ArrangementView {
 						container(
 							row![
 								row![
-									PeakMeter::new(node.l_r.get()[0], node.enabled),
-									PeakMeter::new(node.l_r.get()[1], node.enabled)
+									PeakMeter::new(&node.peak[0][0], node.enabled),
+									PeakMeter::new(&node.peak[0][1], node.enabled)
 								]
 								.spacing(2),
 								column![
@@ -910,7 +908,7 @@ impl ArrangementView {
 						.align_x(Alignment::Center)
 						.padding(2),
 					row![
-						PeakMeter::new(node.l_r.get()[0].cbrt(), node.enabled).width(16.0),
+						PeakMeter::new(&node.peak[1][0], node.enabled).width(16.0),
 						vertical_slider(0.0..=1.0, node.volume.cbrt(), |v| {
 							Message::ChannelVolumeChanged(node.id, v.powi(3))
 						})
@@ -920,7 +918,7 @@ impl ArrangementView {
 						} else {
 							slider_secondary
 						}),
-						PeakMeter::new(node.l_r.get()[1].cbrt(), node.enabled).width(16.0),
+						PeakMeter::new(&node.peak[1][1], node.enabled).width(16.0),
 					]
 					.spacing(3),
 					connect(node.enabled, node.id)

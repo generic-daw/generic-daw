@@ -1,3 +1,4 @@
+use crate::{gui::Gui, params::Param};
 use async_channel::Receiver;
 use audio_buffers::AudioBuffers;
 use clack_extensions::gui::GuiApiType;
@@ -29,7 +30,6 @@ mod plugin_descriptor;
 mod shared;
 mod size;
 
-use crate::{gui::Gui, params::Param};
 pub use audio_processor::AudioProcessor;
 pub use clack_extensions::params::ParamInfoFlags;
 pub use clack_host::{

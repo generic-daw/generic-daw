@@ -14,7 +14,7 @@ use generic_daw_core::{
 use generic_daw_utils::{HoleyVec, NoDebug, ShiftMoveExt as _};
 use iced::{Task, futures::SinkExt as _, stream};
 use smol::channel::Sender;
-use std::path::Path;
+use std::{path::Path, time::Instant};
 
 #[derive(Debug)]
 pub struct Arrangement {
@@ -80,22 +80,13 @@ impl Arrangement {
 		)
 	}
 
-	pub fn update(&mut self, batch: Batch) {
+	pub fn update(&mut self, batch: Batch, now: Instant) {
 		if let Some(sample) = batch.sample {
 			self.rtstate.sample = sample;
 		}
 
-		for (node, [old_l, old_r]) in batch.l_r {
-			self.node(node)
-				.0
-				.l_r
-				.update(|[new_l, new_r]| [old_l.max(new_l), old_r.max(new_r)]);
-		}
-	}
-
-	pub fn clear_l_r(&self) {
-		for (node, _) in self.nodes.values() {
-			node.l_r.take();
+		for (node, l_r) in batch.l_r {
+			self.nodes.get_mut(*node).unwrap().0.update(l_r, now);
 		}
 	}
 

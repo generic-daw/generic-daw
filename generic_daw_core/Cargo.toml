@@ -17,7 +17,7 @@ async-channel = "2.5.0"
 atomig = { version = "0.4.3", features = ["derive"] }
 cpal = "0.16.0"
 hound = "3.5.1"
-log = "0.4.27"
+log = "0.4.28"
 oneshot = "0.1.11"
 rubato = "0.16.2"
 symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }

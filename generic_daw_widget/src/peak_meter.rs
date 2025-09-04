@@ -9,48 +9,64 @@ use iced_widget::{
 		layout::{Limits, Node},
 		mouse::Cursor,
 		renderer::{Quad, Style},
-		widget::{Tree, tree},
+		widget::Tree,
 		window,
 	},
 };
 use std::{
+	cell::Cell,
 	convert::identity,
 	time::{Duration, Instant},
 };
 
 #[derive(Debug)]
-struct State {
+pub struct State {
 	line: Animation<f32>,
-	line_mix: Animation<f32>,
 	bar: Animation<f32>,
-	bar_mix: Animation<f32>,
-	now: Instant,
+	now: Cell<Instant>,
+	time: f32,
 }
 
-impl Default for State {
-	fn default() -> Self {
+impl State {
+	#[must_use]
+	pub fn new(time: f32) -> Self {
 		Self {
 			line: Animation::new(0.0),
-			line_mix: Animation::new(0.0),
 			bar: Animation::new(0.0),
-			bar_mix: Animation::new(0.0),
-			now: Instant::now(),
+			now: Cell::new(Instant::now()),
+			time,
+		}
+	}
+
+	pub fn update(&mut self, peak: f32, now: Instant) {
+		if peak > self.bar.interpolate_with(identity, now) {
+			self.bar = Animation::new(peak)
+				.duration(Duration::from_secs_f32(peak.exp2() * self.time))
+				.easing(Easing::EaseOutExpo)
+				.go(0.0, now);
+		}
+
+		if peak > self.line.interpolate_with(identity, now) {
+			self.line = Animation::new(peak)
+				.duration(Duration::from_secs_f32(peak * self.time * 3.0))
+				.delay(Duration::from_secs_f32(peak.exp2()))
+				.go(0.0, now);
 		}
 	}
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct PeakMeter {
-	peak: f32,
+#[derive(Debug)]
+pub struct PeakMeter<'a> {
+	state: &'a State,
 	enabled: bool,
 	width: f32,
 }
 
-impl PeakMeter {
+impl<'a> PeakMeter<'a> {
 	#[must_use]
-	pub fn new(peak: f32, enabled: bool) -> Self {
+	pub fn new(state: &'a State, enabled: bool) -> Self {
 		Self {
-			peak,
+			state,
 			enabled,
 			width: 14.0,
 		}
@@ -63,17 +79,9 @@ impl PeakMeter {
 	}
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
+impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 	fn size(&self) -> Size<Length> {
 		Size::new(Length::Fixed(self.width), Length::Fill)
-	}
-
-	fn tag(&self) -> tree::Tag {
-		tree::Tag::of::<State>()
-	}
-
-	fn state(&self) -> tree::State {
-		tree::State::new(State::default())
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
@@ -82,9 +90,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 
 	fn update(
 		&mut self,
-		tree: &mut Tree,
+		_tree: &mut Tree,
 		event: &Event,
-		layout: Layout<'_>,
+		_layout: Layout<'_>,
 		_cursor: Cursor,
 		_renderer: &Renderer,
 		_clipboard: &mut dyn Clipboard,
@@ -92,46 +100,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 		_viewport: &Rectangle,
 	) {
 		if let &Event::Window(window::Event::RedrawRequested(now)) = event {
-			let state = tree.state.downcast_mut::<State>();
-			state.now = now;
+			self.state.now.set(now);
 
-			let peak = std::mem::take(&mut self.peak);
-
-			if peak > state.bar.interpolate_with(identity, now) {
-				state.bar = Animation::new(peak)
-					.duration(Duration::from_secs_f32(
-						peak.exp2() * layout.bounds().height.sqrt() / 10.0,
-					))
-					.easing(Easing::EaseOutExpo)
-					.go(0.0, now);
-			}
-
-			if peak > state.line.interpolate_with(identity, now) {
-				state.line = Animation::new(peak)
-					.duration(Duration::from_secs_f32(
-						peak * layout.bounds().height.sqrt() / 3.0,
-					))
-					.delay(Duration::from_secs_f32(peak.exp2()))
-					.go(0.0, now);
-			}
-
-			if self.enabled {
-				if state.bar.interpolate_with(identity, now) > 1.0 {
-					state.bar_mix = Animation::new(1.0).very_quick().go(0.0, now);
-				}
-				if state.line.interpolate_with(identity, now) > 1.0 {
-					state.line_mix = Animation::new(1.0).very_quick().go(0.0, now);
-				}
-			} else {
-				state.bar_mix = Animation::new(0.0);
-				state.line_mix = Animation::new(0.0);
-			}
-
-			if state.bar.is_animating(now)
-				|| state.bar_mix.is_animating(now)
-				|| state.line.is_animating(now)
-				|| state.line_mix.is_animating(now)
-			{
+			if self.state.bar.is_animating(now) || self.state.line.is_animating(now) {
 				shell.request_redraw();
 			}
 		}
@@ -139,7 +110,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 
 	fn draw(
 		&self,
-		tree: &Tree,
+		_tree: &Tree,
 		renderer: &mut Renderer,
 		theme: &Theme,
 		_style: &Style,
@@ -152,8 +123,6 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 		if !bounds.intersects(viewport) {
 			return;
 		}
-
-		let state = tree.state.downcast_ref::<State>();
 
 		let base = if self.enabled {
 			theme.extended_palette().primary.weak.color
@@ -168,12 +137,21 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 		};
 		renderer.fill_quad(background, background_color);
 
+		let mix_amt = |val: f32| {
+			let amt = 0.05 / self.state.time;
+			(val + amt - 1.0).clamp(0.0, amt) * (1.0 / amt)
+		};
+
+		let bar = self
+			.state
+			.bar
+			.interpolate_with(identity, self.state.now.get());
 		let bar_color = mix(
 			base,
 			theme.extended_palette().danger.weak.color,
-			state.bar_mix.interpolate_with(identity, state.now),
+			mix_amt(bar),
 		);
-		let bar_pos = bounds.height * state.bar.interpolate_with(identity, state.now).min(1.0);
+		let bar_pos = bounds.height * bar.min(1.0);
 		let bar = Quad {
 			bounds: Rectangle::new(
 				bounds.position() + Vector::new(0.0, bounds.height - bar_pos),
@@ -183,12 +161,16 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 		};
 		renderer.fill_quad(bar, bar_color);
 
+		let line = self
+			.state
+			.line
+			.interpolate_with(identity, self.state.now.get());
 		let line_color = mix(
 			base,
 			theme.extended_palette().danger.weak.color,
-			state.line_mix.interpolate_with(identity, state.now),
+			mix_amt(line),
 		);
-		let line_pos = bounds.height * state.line.interpolate_with(identity, state.now).min(1.0);
+		let line_pos = bounds.height * line.min(1.0);
 		let max_line_height = bounds.height.sqrt();
 		let line_height = max_line_height.min(line_pos);
 		let line = Quad {
@@ -210,8 +192,8 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter {
 	}
 }
 
-impl<Message> From<PeakMeter> for Element<'_, Message, Theme, Renderer> {
-	fn from(value: PeakMeter) -> Self {
+impl<'a, Message> From<PeakMeter<'a>> for Element<'a, Message, Theme, Renderer> {
+	fn from(value: PeakMeter<'a>) -> Self {
 		Self::new(value)
 	}
 }
