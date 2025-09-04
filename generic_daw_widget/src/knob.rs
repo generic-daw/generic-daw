@@ -431,9 +431,14 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 			self.bounds.height,
 		));
 
-		let clamp = self.viewport.x + padding - layout.bounds().x;
-		if clamp > 0.0 {
-			layout.translate_mut(Vector::new(clamp, 0.0));
+		let clamp = self.viewport.x - layout.bounds().x;
+		if clamp + padding > 0.0 {
+			layout.translate_mut(Vector::new(clamp + padding, 0.0));
+		} else {
+			let clamp = clamp + self.viewport.width - layout.bounds().width;
+			if clamp - padding < 0.0 {
+				layout.translate_mut(Vector::new(clamp - padding, 0.0));
+			}
 		}
 
 		layout
