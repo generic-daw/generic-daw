@@ -53,17 +53,7 @@ impl NodeImpl for Mixer {
 
 		let [lpan, rpan] = pan(self.pan).map(|s| s * self.volume);
 
-		let l_r =
-			audio
-				.as_chunks_mut()
-				.0
-				.iter_mut()
-				.fold([0.0; 2], |[old_l, old_r], [new_l, new_r]| {
-					*new_l *= lpan;
-					*new_r *= rpan;
-					[new_l.abs().max(old_l), new_r.abs().max(old_r)]
-				});
-
+		let l_r = l_r(audio, lpan, rpan);
 		if l_r != [0.0; 2] {
 			_ = state.sender.try_send(Update::LR(self.id, l_r));
 		}
@@ -119,4 +109,39 @@ fn pan(pan: f32) -> [f32; 2] {
 	let angle = (pan + 1.0) * FRAC_PI_4;
 
 	[angle.cos() * SQRT_2, angle.sin() * SQRT_2]
+}
+
+fn l_r(audio: &mut [f32], lpan: f32, rpan: f32) -> [f32; 2] {
+	fn pan_abs<const N: usize>(chunk: &mut [f32; N], lpan: f32, rpan: f32) -> [f32; N] {
+		for (i, s) in chunk.iter_mut().enumerate() {
+			*s *= if i % 2 == 0 { lpan } else { rpan }
+		}
+		chunk.map(f32::abs)
+	}
+
+	fn array_max<const N: usize>(mut old: [f32; N], new: [f32; N]) -> [f32; N] {
+		for (old, new) in old.iter_mut().zip(new) {
+			if new > *old {
+				*old = new;
+			}
+		}
+		old
+	}
+
+	let (chunks, rest) = audio.as_chunks_mut::<4>();
+	chunks
+		.iter_mut()
+		.map(|chunk| pan_abs(chunk, lpan, rpan))
+		.fold([0.0; _], array_max)
+		.as_chunks()
+		.0
+		.iter()
+		.copied()
+		.chain(
+			rest.as_chunks_mut()
+				.0
+				.iter_mut()
+				.map(|chunk| pan_abs(chunk, lpan, rpan)),
+		)
+		.fold([0.0; _], array_max)
 }
