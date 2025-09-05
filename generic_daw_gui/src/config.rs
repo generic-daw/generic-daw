@@ -50,7 +50,7 @@ impl Default for Config {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
 pub struct Device {
-	pub name: Option<String>,
+	pub name: Option<Arc<str>>,
 	pub sample_rate: Option<u32>,
 	pub buffer_size: Option<u32>,
 }

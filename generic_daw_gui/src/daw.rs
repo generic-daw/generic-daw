@@ -12,7 +12,6 @@ use crate::{
 use generic_daw_core::{
 	MusicalTime,
 	clap_host::{PluginBundle, PluginDescriptor, get_installed_plugins},
-	get_input_devices, get_output_devices,
 };
 use generic_daw_widget::dot::Dot;
 use iced::{
@@ -65,14 +64,12 @@ pub enum Message {
 
 pub struct Daw {
 	config: Config,
+	state: State,
 	plugin_bundles: BTreeMap<PluginDescriptor, PluginBundle>,
-	input_devices: Vec<String>,
-	output_devices: Vec<String>,
 
 	arrangement_view: ArrangementView,
 	file_tree: FileTree,
 	config_view: Option<ConfigView>,
-	state: State,
 	split_at: f32,
 }
 
@@ -89,28 +86,20 @@ impl Daw {
 		let config = Config::read();
 		trace!("loaded config {config:?}");
 
-		let mut state = State::read();
-		if !config.open_last_project {
-			state.last_project = None;
-		}
+		let state = State::read();
 		trace!("loaded state {state:?}");
 
 		let plugin_bundles = get_installed_plugins(&config.clap_paths);
 		let file_tree = FileTree::new(&config.sample_paths);
 
-		let mut input_devices = get_input_devices();
-		input_devices.sort_unstable();
-
-		let mut output_devices = get_output_devices();
-		output_devices.sort_unstable();
-
 		let (mut arrangement_view, futs) = ArrangementView::new(&config, &plugin_bundles);
 		open = open.chain(futs.map(Message::Arrangement));
 
-		if let Some(futs) = state
-			.last_project
-			.as_deref()
-			.and_then(|path| arrangement_view.load(path, &config, &plugin_bundles))
+		if config.open_last_project
+			&& let Some(futs) = state
+				.last_project
+				.as_deref()
+				.and_then(|path| arrangement_view.load(path, &config, &plugin_bundles))
 		{
 			open = open.chain(futs.map(Message::Arrangement));
 		}
@@ -118,14 +107,12 @@ impl Daw {
 		(
 			Self {
 				config,
+				state,
 				plugin_bundles,
-				input_devices,
-				output_devices,
 
 				arrangement_view,
 				file_tree,
 				config_view: None,
-				state,
 				split_at: 300.0,
 			},
 			open,
@@ -144,9 +131,12 @@ impl Daw {
 			}
 			Message::FileTree(action) => return self.handle_file_tree_action(action),
 			Message::ConfigView(message) => {
-				if let Some(config_view) = self.config_view.as_mut() {
-					return config_view.update(message).map(Message::ConfigView);
-				}
+				return self
+					.config_view
+					.as_mut()
+					.unwrap()
+					.update(message)
+					.map(Message::ConfigView);
 			}
 			Message::NewFile => {
 				self.reload_config();
@@ -168,7 +158,7 @@ impl Daw {
 				.map(Message::OpenFile);
 			}
 			Message::OpenLastFile => {
-				if let Some(last_project) = State::read().last_project {
+				if let Some(last_project) = self.state.last_project.clone() {
 					return self.update(Message::OpenFile(last_project));
 				}
 			}
@@ -440,12 +430,8 @@ impl Daw {
 		if let Some(config_view) = &self.config_view {
 			base = base.push(opaque(
 				mouse_area(
-					center(opaque(
-						config_view
-							.view(&self.input_devices, &self.output_devices)
-							.map(Message::ConfigView),
-					))
-					.style(|_| container::background(Color::BLACK.scale_alpha(0.8))),
+					center(opaque(config_view.view().map(Message::ConfigView)))
+						.style(|_| container::background(Color::BLACK.scale_alpha(0.8))),
 				)
 				.on_press(Message::CloseConfigView),
 			));

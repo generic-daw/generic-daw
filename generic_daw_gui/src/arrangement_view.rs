@@ -730,7 +730,7 @@ impl ArrangementView {
 									)
 									.center(0.0)
 									.reset(0.0)
-									.tooltip(pan_to_string(node.pan)),
+									.tooltip(format_pan(node.pan)),
 								]
 								.spacing(5)
 								.wrap(),
@@ -895,7 +895,7 @@ impl ArrangementView {
 							)
 							.center(0.0)
 							.reset(0.0)
-							.tooltip(pan_to_string(node.pan)),
+							.tooltip(format_pan(node.pan)),
 						]
 						.spacing(3)
 						.align_x(Alignment::Center),
@@ -1257,7 +1257,7 @@ impl ArrangementView {
 	}
 }
 
-fn pan_to_string(pan: f32) -> String {
+fn format_pan(pan: f32) -> String {
 	let pan = (pan * 100.0) as i8;
 	match pan.cmp(&0) {
 		Ordering::Greater => format!("{}% right", pan.abs()),

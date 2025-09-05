@@ -7,7 +7,7 @@ use cpal::{
 use daw_ctx::DawCtx;
 use log::info;
 use master::Master;
-use std::cmp::Ordering;
+use std::{cmp::Ordering, sync::Arc};
 
 mod audio_clip;
 mod audio_graph_node;
@@ -44,20 +44,22 @@ pub use recording::Recording;
 pub use track::Track;
 
 #[must_use]
-pub fn get_input_devices() -> Vec<String> {
+pub fn get_input_devices() -> Vec<Arc<str>> {
 	cpal::default_host()
 		.input_devices()
 		.unwrap()
-		.map(|device| device.name().unwrap())
+		.filter_map(|device| device.name().ok())
+		.map(Arc::from)
 		.collect()
 }
 
 #[must_use]
-pub fn get_output_devices() -> Vec<String> {
+pub fn get_output_devices() -> Vec<Arc<str>> {
 	cpal::default_host()
 		.output_devices()
 		.unwrap()
-		.map(|device| device.name().unwrap())
+		.filter_map(|device| device.name().ok())
+		.map(Arc::from)
 		.collect()
 }
 

@@ -6,6 +6,7 @@ use crate::{
 	theme::Theme,
 	widget::LINE_HEIGHT,
 };
+use generic_daw_core::{get_input_devices, get_output_devices};
 use iced::{
 	Center, Element, Font, Task, border,
 	widget::{
@@ -34,7 +35,7 @@ pub enum Message {
 	AddClapPath(Arc<Path>),
 	RemoveClapPath(usize),
 	ChangedTab(Tab),
-	ChangedName(Option<String>),
+	ChangedName(Option<Arc<str>>),
 	ChangedSampleRate(Option<u32>),
 	ChangedBufferSize(Option<u32>),
 	ToggledAutosave,
@@ -52,14 +53,24 @@ pub struct ConfigView {
 	prev_config: Config,
 	config: Config,
 	tab: Tab,
+	input_devices: Vec<Arc<str>>,
+	output_devices: Vec<Arc<str>>,
 }
 
 impl ConfigView {
 	pub fn new(prev_config: Config) -> Self {
+		let mut input_devices = get_input_devices();
+		input_devices.sort_unstable();
+
+		let mut output_devices = get_output_devices();
+		output_devices.sort_unstable();
+
 		Self {
 			config: prev_config.clone(),
 			prev_config,
 			tab: Tab::Output,
+			input_devices,
+			output_devices,
 		}
 	}
 
@@ -112,11 +123,7 @@ impl ConfigView {
 		Task::none()
 	}
 
-	pub fn view<'a>(
-		&'a self,
-		input_devices: &'a [String],
-		output_devices: &'a [String],
-	) -> Element<'a, Message> {
+	pub fn view(&self) -> Element<'_, Message> {
 		container(styled_scrollable(
 			column![
 				row![
@@ -221,7 +228,7 @@ impl ConfigView {
 					}
 				]
 				.align_y(Center),
-				self.with_device(input_devices, output_devices, |device, devices| {
+				self.with_device(|device, devices| {
 					column![
 						row![
 							"Name: ",
@@ -374,15 +381,10 @@ impl ConfigView {
 		.into()
 	}
 
-	fn with_device<'a, T>(
-		&'a self,
-		input_devices: &'a [String],
-		output_devices: &'a [String],
-		f: impl FnOnce(&'a Device, &'a [String]) -> T,
-	) -> T {
+	fn with_device<'a, T>(&'a self, f: impl FnOnce(&'a Device, &'a [Arc<str>]) -> T) -> T {
 		match self.tab {
-			Tab::Input => f(&self.config.input_device, input_devices),
-			Tab::Output => f(&self.config.output_device, output_devices),
+			Tab::Input => f(&self.config.input_device, &self.input_devices),
+			Tab::Output => f(&self.config.output_device, &self.output_devices),
 		}
 	}
 

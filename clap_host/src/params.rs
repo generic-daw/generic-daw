@@ -11,7 +11,7 @@ pub struct Param {
 	pub range: RangeInclusive<f32>,
 	pub reset: f32,
 	pub value: f32,
-	pub value_text: String,
+	pub value_text: Arc<str>,
 }
 
 impl TryFrom<ParamInfo<'_>> for Param {
@@ -22,13 +22,11 @@ impl TryFrom<ParamInfo<'_>> for Param {
 			id: value.id,
 			flags: value.flags,
 			cookie: value.cookie,
-			name: String::from_utf8(value.name.to_owned())
-				.map_err(|_| ())?
-				.into(),
+			name: str::from_utf8(value.name).map_err(|_| ())?.into(),
 			range: value.min_value as f32..=value.max_value as f32,
 			reset: value.default_value as f32,
 			value: value.default_value as f32,
-			value_text: String::new(),
+			value_text: "".into(),
 		})
 	}
 }
@@ -73,11 +71,11 @@ impl Param {
 
 		self.value_text = if let Ok(value_text) =
 			ext.value_to_text(plugin, self.id, value, &mut buf)
-			&& let Ok(value_text) = String::from_utf8(value_text.to_owned())
+			&& let Ok(value_text) = str::from_utf8(value_text)
 		{
-			value_text
+			value_text.into()
 		} else {
-			String::new()
+			"".into()
 		};
 	}
 }
