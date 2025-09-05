@@ -4,7 +4,7 @@ use generic_daw_utils::NoDebug;
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
-		Clipboard, Renderer as _, Shell,
+		Clipboard, Shell,
 		layout::{Layout, Limits, Node},
 		renderer::Style,
 		widget::{Operation, Tree, Widget, tree},
@@ -303,17 +303,15 @@ where
 			return;
 		};
 
-		renderer.with_layer(bounds, |renderer| {
-			self.children.as_widget().draw(
-				&tree.children[0],
-				renderer,
-				theme,
-				style,
-				layout.children().next().unwrap(),
-				cursor,
-				&bounds,
-			);
-		});
+		self.children.as_widget().draw(
+			&tree.children[0],
+			renderer,
+			theme,
+			style,
+			layout.children().next().unwrap(),
+			cursor,
+			&bounds,
+		);
 	}
 
 	fn overlay<'a>(
@@ -379,8 +377,7 @@ where
 	fn get_track_clip(&self, layout: &Layout<'_>, cursor: Point) -> Option<(usize, usize)> {
 		let track = self.get_track(cursor.y);
 		let offset = Vector::new(layout.position().x, layout.position().y);
-		let track_layout = track_layout(layout, track)?;
-		let clip = track_layout
+		let clip = track_layout(layout, track)?
 			.children()
 			.rposition(|l| (l.bounds() - offset).contains(cursor))?;
 		Some((track, clip))

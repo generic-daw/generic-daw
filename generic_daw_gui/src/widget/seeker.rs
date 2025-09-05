@@ -3,7 +3,7 @@ use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
 	Background, Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme,
-	Transformation, Vector,
+	Vector,
 	advanced::{
 		Clipboard, Layout, Renderer as _, Shell, Text, Widget,
 		layout::{Limits, Node},
@@ -18,6 +18,7 @@ use iced::{
 	padding,
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
+use std::f32;
 
 #[derive(Default)]
 struct State {
@@ -101,7 +102,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		_viewport: &Rectangle,
 	) {
 		let bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
-		let right_panel_bounds = Self::right_panel_bounds(layout);
+		let right_half = Self::right_half(layout);
 
 		self.children
 			.iter_mut()
@@ -123,7 +124,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
 		let state = tree.state.downcast_mut::<State>();
 
-		let Some(mut cursor) = cursor.position_in(right_panel_bounds) else {
+		let Some(mut cursor) = cursor.position_in(right_half) else {
 			state.hovering = false;
 			state.seeking = None;
 
@@ -240,8 +241,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		_viewport: &Rectangle,
 	) {
 		let bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
-		let right_panel_bounds = Self::right_panel_bounds(layout);
-		let right_child_bounds = right_panel_bounds.shrink(padding::top(LINE_HEIGHT));
+		let right_half = Self::right_half(layout);
+		let right_child_bounds = right_half.shrink(padding::top(LINE_HEIGHT));
 
 		renderer.with_layer(right_child_bounds, |renderer| {
 			self.grid(renderer, right_child_bounds, theme);
@@ -263,90 +264,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				});
 			});
 
-		let seeker_bounds = Self::seeker_bounds(layout);
-
-		renderer.start_layer(right_panel_bounds);
-
-		renderer.fill_quad(
-			Quad {
-				bounds: seeker_bounds,
-				..Quad::default()
-			},
-			theme.extended_palette().primary.base.color,
-		);
-
-		let sample_size = self.scale.x.exp2();
-
-		let x = (self.rtstate.sample as f32 - self.position.x) / sample_size - self.offset;
-
-		renderer.fill_quad(
-			Quad {
-				bounds: Rectangle::new(
-					seeker_bounds.position() + Vector::new(x, 0.0),
-					Size::new(1.5, right_panel_bounds.height),
-				),
-				..Quad::default()
-			},
-			theme.extended_palette().primary.base.color,
-		);
-
-		let mut draw_text = |beat: MusicalTime, bar: u32| {
-			let x = (beat.to_samples_f(self.rtstate) - self.position.x) / sample_size;
-
-			let bar = Text {
-				content: (bar + 1).to_string(),
-				bounds: Size::new(f32::INFINITY, 0.0),
-				size: renderer.default_size(),
-				line_height: LineHeight::default(),
-				font: Font::MONOSPACE,
-				align_x: Alignment::Left,
-				align_y: Vertical::Top,
-				shaping: Shaping::Basic,
-				wrapping: Wrapping::None,
-			};
-
-			renderer.fill_text(
-				bar,
-				seeker_bounds.position() + Vector::new(x + 3.0, 0.0),
-				theme.extended_palette().primary.base.text,
-				seeker_bounds,
-			);
-		};
-
-		let mut beat = MusicalTime::from_samples_f(self.position.x, self.rtstate);
-		let mut end_beat =
-			beat + MusicalTime::from_samples_f(seeker_bounds.width * sample_size, self.rtstate);
-		beat = beat.snap_floor(self.scale.x + 2.0, self.rtstate).floor();
-		end_beat = end_beat.snap_floor(self.scale.x + 2.0, self.rtstate);
-
-		let bar_inc = MusicalTime::snap_step(self.scale.x + 2.0, self.rtstate)
-			.bar(self.rtstate)
-			.max(1);
-
-		while beat <= end_beat {
-			let bar = beat.bar(self.rtstate);
-
-			if beat
-				.beat()
-				.is_multiple_of(u32::from(self.rtstate.numerator))
-				&& bar.is_multiple_of(bar_inc)
-			{
-				draw_text(beat, bar);
-			}
-
-			beat += MusicalTime::BEAT;
-		}
-
-		renderer.fill_quad(
-			Quad {
-				bounds: right_panel_bounds,
-				border: border::width(1).color(theme.extended_palette().background.strong.color),
-				..Quad::default()
-			},
-			Background::Color(Color::TRANSPARENT),
-		);
-
-		renderer.end_layer();
+		renderer.with_layer(right_half, |renderer| {
+			self.seeker(renderer, Self::seeker_bounds(layout), theme);
+		});
 	}
 
 	fn mouse_interaction(
@@ -457,7 +377,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		)
 	}
 
-	fn right_panel_bounds(layout: Layout<'_>) -> Rectangle {
+	fn right_half(layout: Layout<'_>) -> Rectangle {
 		let bounds = layout.bounds();
 		let right_child_bounds = layout.children().next_back().unwrap().bounds();
 
@@ -468,8 +388,6 @@ impl<'a, Message> Seeker<'a, Message> {
 	}
 
 	fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-		renderer.start_transformation(Transformation::translate(bounds.x, bounds.y));
-
 		let sample_size = self.scale.x.exp2();
 
 		let mut beat = MusicalTime::from_samples_f(self.position.x, self.rtstate);
@@ -489,7 +407,7 @@ impl<'a, Message> Seeker<'a, Message> {
 				renderer.fill_quad(
 					Quad {
 						bounds: Rectangle::new(
-							Point::new(x, 0.0),
+							bounds.position() + Vector::new(x, 0.0),
 							Size::new(background_width, bounds.height),
 						),
 						..Quad::default()
@@ -523,7 +441,10 @@ impl<'a, Message> Seeker<'a, Message> {
 
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(Point::new(x, 0.0), Size::new(1.0, bounds.height)),
+					bounds: Rectangle::new(
+						bounds.position() + Vector::new(x, 0.0),
+						Size::new(1.0, bounds.height),
+					),
 					..Quad::default()
 				},
 				color,
@@ -534,13 +455,14 @@ impl<'a, Message> Seeker<'a, Message> {
 
 		let offset = self.position.y.fract() * self.scale.y;
 
-		let rows = (bounds.height / self.scale.y) as usize + 1;
+		let rows = (bounds.height / self.scale.y).ceil() as u8;
 
 		for i in 0..rows {
 			renderer.fill_quad(
 				Quad {
 					bounds: Rectangle::new(
-						Point::new(0.0, (i as f32).mul_add(self.scale.y, -offset) - 0.5),
+						bounds.position()
+							+ Vector::new(0.0, f32::from(i).mul_add(self.scale.y, -offset - 0.5)),
 						Size::new(bounds.width, 1.0),
 					),
 					..Quad::default()
@@ -549,7 +471,86 @@ impl<'a, Message> Seeker<'a, Message> {
 			);
 		}
 
-		renderer.end_transformation();
+		renderer.fill_quad(
+			Quad {
+				bounds,
+				border: border::width(1).color(theme.extended_palette().background.strong.color),
+				..Quad::default()
+			},
+			Background::Color(Color::TRANSPARENT),
+		);
+	}
+
+	fn seeker(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
+		renderer.fill_quad(
+			Quad {
+				bounds,
+				..Quad::default()
+			},
+			theme.extended_palette().primary.base.color,
+		);
+
+		let sample_size = self.scale.x.exp2();
+
+		let x = (self.rtstate.sample as f32 - self.position.x) / sample_size - self.offset;
+
+		renderer.fill_quad(
+			Quad {
+				bounds: Rectangle::new(
+					bounds.position() + Vector::new(x, 0.0),
+					Size::new(1.5, f32::MAX),
+				),
+				..Quad::default()
+			},
+			theme.extended_palette().primary.base.color,
+		);
+
+		let mut draw_text = |beat: MusicalTime, bar: u32| {
+			let x = (beat.to_samples_f(self.rtstate) - self.position.x) / sample_size;
+
+			let bar = Text {
+				content: (bar + 1).to_string(),
+				bounds: Size::new(f32::INFINITY, 0.0),
+				size: renderer.default_size(),
+				line_height: LineHeight::default(),
+				font: Font::MONOSPACE,
+				align_x: Alignment::Left,
+				align_y: Vertical::Top,
+				shaping: Shaping::Basic,
+				wrapping: Wrapping::None,
+			};
+
+			renderer.fill_text(
+				bar,
+				bounds.position() + Vector::new(x + 3.0, 0.0),
+				theme.extended_palette().primary.base.text,
+				bounds,
+			);
+		};
+
+		let mut beat = MusicalTime::from_samples_f(self.position.x, self.rtstate);
+		let mut end_beat =
+			beat + MusicalTime::from_samples_f(bounds.width * sample_size, self.rtstate);
+		beat = beat.snap_floor(self.scale.x + 2.0, self.rtstate).floor();
+		end_beat = end_beat.snap_floor(self.scale.x + 2.0, self.rtstate);
+
+		let bar_inc = MusicalTime::snap_step(self.scale.x + 2.0, self.rtstate)
+			.bar(self.rtstate)
+			.max(1);
+
+		while beat <= end_beat {
+			let bar = beat.bar(self.rtstate);
+
+			if beat
+				.beat()
+				.is_multiple_of(u32::from(self.rtstate.numerator))
+				&& bar.is_multiple_of(bar_inc)
+			{
+				draw_text(beat, bar);
+			}
+
+			beat += MusicalTime::BEAT;
+		}
 	}
 }
 

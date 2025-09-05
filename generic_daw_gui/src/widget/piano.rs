@@ -1,8 +1,7 @@
 use generic_daw_core::MidiKey;
 use generic_daw_utils::Vec2;
 use iced::{
-	Background, Color, Element, Length, Point, Rectangle, Renderer, Size, Theme, Transformation,
-	Vector,
+	Background, Color, Element, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
 		Layout, Renderer as _, Text, Widget,
 		layout::{Limits, Node},
@@ -49,18 +48,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 			return;
 		};
 
-		renderer.start_transformation(Transformation::translate(bounds.x, bounds.y));
-
 		let base = self.position.y as u8;
 		let offset = self.position.y.fract() * self.scale.y;
 
-		let rows = (bounds.height / self.scale.y) as u8 + 1;
+		let rows = ((offset + bounds.height) / self.scale.y).ceil() as u8;
 
 		for i in 0..rows {
 			let key = MidiKey(127 - base - i);
 
 			let note_bounds = Rectangle::new(
-				Point::new(0.0, f32::from(i).mul_add(self.scale.y, -offset)),
+				bounds.position() + Vector::new(0.0, f32::from(i).mul_add(self.scale.y, -offset)),
 				Size::new(PIANO_WIDTH, self.scale.y),
 			);
 
@@ -99,8 +96,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 				note_bounds,
 			);
 		}
-
-		renderer.end_transformation();
 	}
 }
 

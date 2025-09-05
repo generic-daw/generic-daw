@@ -131,7 +131,6 @@ where
 
 						if let Some(i) = self.get_note(cursor) {
 							let note = &self.notes[i];
-
 							let note_bounds = self.note_bounds(note);
 
 							let start_pixel = note_bounds.x;
@@ -267,7 +266,14 @@ where
 		};
 
 		for note in self.notes.iter() {
-			self.draw_note(note, renderer, theme, bounds);
+			let viewport = self.note_bounds(note) + Vector::new(bounds.x, bounds.y);
+			let Some(note_bounds) = viewport.intersection(&bounds) else {
+				continue;
+			};
+
+			renderer.with_layer(note_bounds, |renderer| {
+				Self::draw_note(note, renderer, theme, viewport.position(), note_bounds);
+			});
 		}
 	}
 
@@ -354,24 +360,15 @@ impl<'a, Message> PianoRoll<'a, Message> {
 	}
 
 	fn draw_note(
-		&self,
 		note: &MidiNote,
 		renderer: &mut Renderer,
 		theme: &Theme,
+		point: Point,
 		bounds: Rectangle,
 	) {
-		let note_bounds =
-			self.note_bounds(note) + Vector::new(bounds.position().x, bounds.position().y);
-
-		let Some(note_bounds) = note_bounds.intersection(&bounds) else {
-			return;
-		};
-
-		renderer.start_layer(note_bounds);
-
 		renderer.fill_quad(
 			Quad {
-				bounds: note_bounds,
+				bounds,
 				border: border::width(1).color(theme.extended_palette().background.strong.color),
 				..Quad::default()
 			},
@@ -392,12 +389,10 @@ impl<'a, Message> PianoRoll<'a, Message> {
 
 		renderer.fill_text(
 			note_name,
-			note_bounds.position() + Vector::new(3.0, 0.0),
+			point + Vector::new(3.0, 0.0),
 			theme.extended_palette().primary.weak.text,
-			note_bounds,
+			bounds,
 		);
-
-		renderer.end_layer();
 	}
 }
 
