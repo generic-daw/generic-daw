@@ -1,6 +1,4 @@
-use crate::{
-	EventImpl, MainThreadMessage, PluginDescriptor, Size, audio_processor::AudioThreadMessage,
-};
+use crate::{EventImpl, MainThreadMessage, PluginDescriptor, Size};
 use async_channel::Sender;
 use clack_extensions::{
 	gui::{GuiSize, HostGuiImpl},
@@ -13,22 +11,27 @@ use log::{debug, error, info, warn};
 #[derive(Debug)]
 pub struct Shared<Event: EventImpl> {
 	pub descriptor: PluginDescriptor,
-	pub main_sender: Sender<MainThreadMessage<Event>>,
-	pub audio_sender: Sender<AudioThreadMessage<Event>>,
+	pub sender: Sender<MainThreadMessage<Event>>,
+}
+
+impl<Event: EventImpl> Shared<Event> {
+	pub fn new(descriptor: PluginDescriptor, sender: Sender<MainThreadMessage<Event>>) -> Self {
+		Self { descriptor, sender }
+	}
 }
 
 impl<Event: EventImpl> SharedHandler<'_> for Shared<Event> {
 	fn request_process(&self) {}
 
 	fn request_callback(&self) {
-		self.main_sender
+		self.sender
 			.try_send(MainThreadMessage::RequestCallback)
 			.unwrap();
 	}
 
 	fn request_restart(&self) {
-		self.audio_sender
-			.try_send(AudioThreadMessage::RequestRestart)
+		self.sender
+			.try_send(MainThreadMessage::RequestRestart)
 			.unwrap();
 	}
 }
@@ -37,7 +40,7 @@ impl<Event: EventImpl> HostGuiImpl for Shared<Event> {
 	fn resize_hints_changed(&self) {}
 
 	fn request_resize(&self, GuiSize { width, height }: GuiSize) -> Result<(), HostError> {
-		self.main_sender
+		self.sender
 			.try_send(MainThreadMessage::GuiRequestResize(Size::Native {
 				width: width as f32,
 				height: height as f32,
@@ -48,7 +51,7 @@ impl<Event: EventImpl> HostGuiImpl for Shared<Event> {
 	}
 
 	fn request_show(&self) -> Result<(), HostError> {
-		self.main_sender
+		self.sender
 			.try_send(MainThreadMessage::GuiRequestShow)
 			.unwrap();
 
@@ -56,7 +59,7 @@ impl<Event: EventImpl> HostGuiImpl for Shared<Event> {
 	}
 
 	fn request_hide(&self) -> Result<(), HostError> {
-		self.main_sender
+		self.sender
 			.try_send(MainThreadMessage::GuiRequestHide)
 			.unwrap();
 
@@ -64,9 +67,7 @@ impl<Event: EventImpl> HostGuiImpl for Shared<Event> {
 	}
 
 	fn closed(&self, _was_destroyed: bool) {
-		self.main_sender
-			.try_send(MainThreadMessage::GuiClosed)
-			.unwrap();
+		self.sender.try_send(MainThreadMessage::GuiClosed).unwrap();
 	}
 }
 
@@ -86,18 +87,4 @@ impl<Event: EventImpl> HostLogImpl for Shared<Event> {
 
 impl<Event: EventImpl> HostParamsImplShared for Shared<Event> {
 	fn request_flush(&self) {}
-}
-
-impl<Event: EventImpl> Shared<Event> {
-	pub fn new(
-		descriptor: PluginDescriptor,
-		main_sender: Sender<MainThreadMessage<Event>>,
-		audio_sender: Sender<AudioThreadMessage<Event>>,
-	) -> Self {
-		Self {
-			descriptor,
-			main_sender,
-			audio_sender,
-		}
-	}
 }

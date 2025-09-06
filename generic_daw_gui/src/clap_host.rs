@@ -119,6 +119,7 @@ impl ClapHost {
 
 		match msg {
 			MainThreadMessage::RequestCallback => plugin.call_on_main_thread_callback(),
+			MainThreadMessage::RequestRestart => plugin.request_restart(),
 			MainThreadMessage::GuiRequestShow => {
 				if self.windows.contains_key(*id) {
 					return Task::none();

@@ -145,7 +145,7 @@ pub fn init<Event: EventImpl>(
 	let (audio_sender, audio_receiver) = async_channel::unbounded();
 
 	let mut instance = PluginInstance::new(
-		|()| Shared::new(descriptor.clone(), main_sender, audio_sender),
+		|()| Shared::new(descriptor.clone(), main_sender),
 		|shared| MainThread::new(shared),
 		bundle,
 		&descriptor.id,
@@ -165,7 +165,7 @@ pub fn init<Event: EventImpl>(
 
 	let plugin_audio_processor = AudioProcessor::new(
 		instance
-			.activate(|_, _| {}, config)
+			.activate(|_, _| (), config)
 			.unwrap()
 			.start_processing()
 			.unwrap(),
@@ -179,7 +179,7 @@ pub fn init<Event: EventImpl>(
 	let params = Param::all(&mut instance.plugin_handle()).unwrap_or_default();
 	let gui = Gui::new(&mut instance.plugin_handle());
 
-	let plugin = Plugin::new(instance, gui, descriptor, id, params);
+	let plugin = Plugin::new(instance, gui, descriptor, audio_sender, id, params);
 
 	(plugin, main_receiver, plugin_audio_processor)
 }

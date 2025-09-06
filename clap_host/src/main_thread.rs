@@ -16,6 +16,7 @@ use std::time::Duration;
 #[derive(Clone, Copy, Debug)]
 pub enum MainThreadMessage<Event: EventImpl> {
 	RequestCallback,
+	RequestRestart,
 	GuiRequestShow,
 	GuiRequestResize(Size),
 	GuiRequestHide,
@@ -76,7 +77,7 @@ impl<Event: EventImpl> HostAudioPortsImpl for MainThread<'_, Event> {
 impl<Event: EventImpl> HostLatencyImpl for MainThread<'_, Event> {
 	fn changed(&mut self) {
 		self.shared
-			.main_sender
+			.sender
 			.try_send(MainThreadMessage::LatencyChanged)
 			.unwrap();
 	}
@@ -94,7 +95,7 @@ impl<Event: EventImpl> HostParamsImplMainThread for MainThread<'_, Event> {
 	fn rescan(&mut self, flags: ParamRescanFlags) {
 		if flags.contains(ParamRescanFlags::VALUES) {
 			self.shared
-				.main_sender
+				.sender
 				.try_send(MainThreadMessage::RescanValues)
 				.unwrap();
 		}
@@ -113,7 +114,7 @@ impl<Event: EventImpl> HostTimerImpl for MainThread<'_, Event> {
 		self.next_timer_id += 1;
 
 		self.shared
-			.main_sender
+			.sender
 			.try_send(MainThreadMessage::RegisterTimer(
 				timer_id.0,
 				Duration::from_millis(period_ms.into()),
@@ -125,7 +126,7 @@ impl<Event: EventImpl> HostTimerImpl for MainThread<'_, Event> {
 
 	fn unregister_timer(&mut self, timer_id: TimerId) -> Result<(), HostError> {
 		self.shared
-			.main_sender
+			.sender
 			.try_send(MainThreadMessage::UnregisterTimer(timer_id.0))
 			.unwrap();
 

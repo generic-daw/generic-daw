@@ -69,7 +69,7 @@ impl EventBuffers {
 
 			if unknown.header().flags().contains(EventFlags::IS_LIVE) {
 				shared
-					.main_sender
+					.sender
 					.try_send(MainThreadMessage::LiveEvent(event))
 					.unwrap();
 			} else {

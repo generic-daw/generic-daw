@@ -2,6 +2,7 @@ use crate::{
 	API_TYPE, EventImpl, PluginDescriptor, PluginId, audio_processor::AudioThreadMessage, gui::Gui,
 	host::Host, params::Param, size::Size,
 };
+use async_channel::Sender;
 use clack_extensions::{
 	gui::{GuiConfiguration, GuiSize, Window as ClapWindow},
 	params::ParamInfoFlags,
@@ -20,6 +21,7 @@ pub struct Plugin<Event: EventImpl> {
 	gui: Gui,
 	descriptor: PluginDescriptor,
 	id: PluginId,
+	sender: Sender<AudioThreadMessage<Event>>,
 	params: NoDebug<Box<[Param]>>,
 	is_open: bool,
 }
@@ -30,6 +32,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		instance: PluginInstance<Host<Event>>,
 		gui: Gui,
 		descriptor: PluginDescriptor,
+		sender: Sender<AudioThreadMessage<Event>>,
 		id: PluginId,
 		params: Box<[Param]>,
 	) -> Self {
@@ -38,6 +41,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			gui,
 			descriptor,
 			id,
+			sender,
 			params: params.into(),
 			is_open: false,
 		}
@@ -90,6 +94,12 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	pub fn call_on_main_thread_callback(&mut self) {
 		self.instance.call_on_main_thread_callback();
+	}
+
+	pub fn request_restart(&self) {
+		self.sender
+			.try_send(AudioThreadMessage::RequestRestart)
+			.unwrap();
 	}
 
 	#[must_use]
@@ -221,9 +231,7 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn send_event(&self, event: Event) {
-		self.instance
-			.access_shared_handler(|s| s)
-			.audio_sender
+		self.sender
 			.try_send(AudioThreadMessage::Event(event))
 			.unwrap();
 	}
@@ -235,11 +243,9 @@ impl<Event: EventImpl> Plugin<Event> {
 			.unwrap()
 			.get(&mut self.instance.plugin_handle());
 
-		self.instance.access_shared_handler(|sh| {
-			sh.audio_sender
-				.try_send(AudioThreadMessage::LatencyChanged(latency))
-				.unwrap();
-		});
+		self.sender
+			.try_send(AudioThreadMessage::LatencyChanged(latency))
+			.unwrap();
 	}
 
 	pub fn set_realtime(&mut self, realtime: bool) {
