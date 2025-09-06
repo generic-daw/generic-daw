@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 use daw::Daw;
 use iced::{Result, daemon};
 use icons::LUCIDE_BYTES;
