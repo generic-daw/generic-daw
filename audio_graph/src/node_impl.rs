@@ -4,7 +4,12 @@ use std::fmt::Debug;
 pub trait NodeImpl: Debug + Send {
 	type Event: EventImpl;
 	type State;
-	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>);
+	fn process(
+		&mut self,
+		state: &mut Self::State,
+		audio: &mut [f32],
+		events: &mut Vec<Self::Event>,
+	);
 	#[must_use]
 	fn id(&self) -> NodeId;
 	fn reset(&mut self);

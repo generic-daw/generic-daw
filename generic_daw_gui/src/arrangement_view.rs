@@ -1,5 +1,4 @@
 use crate::{
-	arrangement_view::arrangement::Batch,
 	clap_host::{ClapHost, Message as ClapHostMessage},
 	components::{
 		circle_plus, icon_button, space, styled_scrollable, styled_scrollable_with_direction,
@@ -24,7 +23,7 @@ use arrangement::Arrangement as ArrangementWrapper;
 use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
-	AudioClip, Clip, Decibels, MidiClip, MidiNote, MusicalTime, NodeId, Recording, Sample,
+	AudioClip, Clip, Decibels, MidiClip, MidiNote, MusicalTime, NodeId, Recording, Sample, Update,
 	clap_host::{self, MainThreadMessage, PluginBundle, PluginDescriptor},
 };
 use generic_daw_utils::{EnumDispatcher, NoDebug, Vec2};
@@ -76,7 +75,7 @@ enum LoadStatus {
 #[derive(Clone, Debug)]
 pub enum Message {
 	ClapHost(ClapHostMessage),
-	Batch(Batch),
+	Update(Update),
 
 	Gc,
 
@@ -196,7 +195,7 @@ impl ArrangementView {
 
 				tree: iced_persistent::Tree::empty(),
 			},
-			task.map(Message::Batch),
+			task.map(Message::Update),
 		)
 	}
 
@@ -210,7 +209,7 @@ impl ArrangementView {
 			Message::ClapHost(msg) => {
 				return self.clap_host.update(msg, config).map(Message::ClapHost);
 			}
-			Message::Batch(msg) => self.arrangement.update(msg, Instant::now()),
+			Message::Update(msg) => self.arrangement.update(msg, Instant::now()),
 			Message::Gc => {
 				self.audios.retain(|_, audio| {
 					if let LoadStatus::Loaded(_, audio) = audio {
@@ -710,8 +709,8 @@ impl ArrangementView {
 						container(
 							row![
 								row![
-									PeakMeter::new(&node.peak[0][0], node.enabled),
-									PeakMeter::new(&node.peak[0][1], node.enabled)
+									PeakMeter::new(&node.peaks[0][0], node.enabled),
+									PeakMeter::new(&node.peaks[0][1], node.enabled)
 								]
 								.spacing(2),
 								column![
@@ -908,7 +907,7 @@ impl ArrangementView {
 						.align_x(Alignment::Center)
 						.padding(2),
 					row![
-						PeakMeter::new(&node.peak[1][0], node.enabled).width(16.0),
+						PeakMeter::new(&node.peaks[1][0], node.enabled).width(16.0),
 						vertical_slider(0.0..=1.0, node.volume.cbrt(), |v| {
 							Message::ChannelVolumeChanged(node.id, v.powi(3))
 						})
@@ -918,7 +917,7 @@ impl ArrangementView {
 						} else {
 							slider_secondary
 						}),
-						PeakMeter::new(&node.peak[1][1], node.enabled).width(16.0),
+						PeakMeter::new(&node.peaks[1][1], node.enabled).width(16.0),
 					]
 					.spacing(3),
 					connect(node.enabled, node.id)

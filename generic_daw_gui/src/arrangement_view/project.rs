@@ -158,7 +158,7 @@ impl ArrangementView {
 		let mut futs = Vec::new();
 
 		let (mut arrangement, task) = ArrangementWrapper::create(config);
-		futs.push(task.map(Message::Batch));
+		futs.push(task.map(Message::Update));
 
 		arrangement.set_bpm(reader.rtstate().bpm as u16);
 		arrangement.set_numerator(reader.rtstate().numerator as u8);
@@ -341,7 +341,7 @@ impl ArrangementView {
 		let mut futs = Vec::new();
 
 		let (arrangement, task) = ArrangementWrapper::create(config);
-		futs.push(task.map(Message::Batch));
+		futs.push(task.map(Message::Update));
 
 		futs.extend(self.clear(config));
 

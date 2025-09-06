@@ -11,7 +11,12 @@ impl NodeImpl for Track {
 	type Event = Event;
 	type State = State;
 
-	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
+	fn process(
+		&mut self,
+		state: &mut Self::State,
+		audio: &mut [f32],
+		events: &mut Vec<Self::Event>,
+	) {
 		for clip in &self.clips {
 			clip.process(&state.rtstate, audio, events);
 		}

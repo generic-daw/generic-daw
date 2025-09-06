@@ -14,7 +14,7 @@ pub enum NodeType {
 pub struct Node {
 	pub ty: NodeType,
 	pub id: NodeId,
-	pub peak: [[peak_meter::State; 2]; 2],
+	pub peaks: [[peak_meter::State; 2]; 2],
 	pub enabled: bool,
 	pub volume: f32,
 	pub pan: f32,
@@ -26,7 +26,7 @@ impl Node {
 		Self {
 			ty,
 			id,
-			peak: [
+			peaks: [
 				[peak_meter::State::new(1.0), peak_meter::State::new(1.0)],
 				[peak_meter::State::new(3.0), peak_meter::State::new(3.0)],
 			],
@@ -37,10 +37,10 @@ impl Node {
 		}
 	}
 
-	pub fn update(&mut self, l_r: [f32; 2], now: Instant) {
-		self.peak[0][0].update(l_r[0], now);
-		self.peak[0][1].update(l_r[1], now);
-		self.peak[1][0].update(l_r[0].cbrt(), now);
-		self.peak[1][1].update(l_r[1].cbrt(), now);
+	pub fn update(&mut self, peaks: [f32; 2], now: Instant) {
+		self.peaks[0][0].update(peaks[0], now);
+		self.peaks[0][1].update(peaks[1], now);
+		self.peaks[1][0].update(peaks[0].cbrt(), now);
+		self.peaks[1][1].update(peaks[1].cbrt(), now);
 	}
 }

@@ -1,4 +1,4 @@
-use crate::{Action, Update, daw_ctx::State, event::Event};
+use crate::{Action, daw_ctx::State, event::Event};
 use audio_graph::{NodeId, NodeImpl};
 use clap_host::AudioProcessor;
 use generic_daw_utils::ShiftMoveExt as _;
@@ -34,7 +34,12 @@ impl NodeImpl for Mixer {
 	type Event = Event;
 	type State = State;
 
-	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
+	fn process(
+		&mut self,
+		state: &mut Self::State,
+		audio: &mut [f32],
+		events: &mut Vec<Self::Event>,
+	) {
 		if !self.enabled {
 			for s in audio {
 				*s = 0.0;
@@ -53,9 +58,9 @@ impl NodeImpl for Mixer {
 
 		let [lpan, rpan] = pan(self.pan).map(|s| s * self.volume);
 
-		let l_r = l_r(audio, lpan, rpan);
-		if l_r != [0.0; 2] {
-			_ = state.sender.try_send(Update::LR(self.id, l_r));
+		let peaks = peaks(audio, lpan, rpan);
+		if peaks != [0.0; 2] {
+			state.update.peaks.push((self.id, peaks));
 		}
 	}
 
@@ -107,11 +112,11 @@ impl Default for Mixer {
 
 fn pan(pan: f32) -> [f32; 2] {
 	let angle = (pan + 1.0) * FRAC_PI_4;
-
-	[angle.cos() * SQRT_2, angle.sin() * SQRT_2]
+	let (sin, cos) = angle.sin_cos();
+	[cos * SQRT_2, sin * SQRT_2]
 }
 
-fn l_r(audio: &mut [f32], lpan: f32, rpan: f32) -> [f32; 2] {
+fn peaks(audio: &mut [f32], lpan: f32, rpan: f32) -> [f32; 2] {
 	fn pan_abs<const N: usize>(chunk: &mut [f32; N], lpan: f32, rpan: f32) -> [f32; N] {
 		for (i, s) in chunk.iter_mut().enumerate() {
 			*s *= if i % 2 == 0 { lpan } else { rpan }
@@ -128,20 +133,22 @@ fn l_r(audio: &mut [f32], lpan: f32, rpan: f32) -> [f32; 2] {
 		old
 	}
 
-	let (chunks, rest) = audio.as_chunks_mut::<4>();
-	chunks
+	let (chunks_8, rest) = audio.as_chunks_mut::<8>();
+	let (chunks_4, rest) = rest.as_chunks_mut::<4>();
+	let (chunks_2, rest) = rest.as_chunks_mut::<2>();
+	debug_assert!(rest.is_empty());
+
+	chunks_8
 		.iter_mut()
 		.map(|chunk| pan_abs(chunk, lpan, rpan))
-		.fold([0.0; _], array_max)
-		.as_chunks()
-		.0
-		.iter()
-		.copied()
-		.chain(
-			rest.as_chunks_mut()
-				.0
-				.iter_mut()
-				.map(|chunk| pan_abs(chunk, lpan, rpan)),
-		)
-		.fold([0.0; _], array_max)
+		.reduce(array_max)
+		.into_iter()
+		.flat_map(|chunk| <[[_; 4]; 2]>::try_from(chunk.as_chunks().0).unwrap())
+		.chain(chunks_4.iter_mut().map(|chunk| pan_abs(chunk, lpan, rpan)))
+		.reduce(array_max)
+		.into_iter()
+		.flat_map(|chunk| <[[_; 2]; 2]>::try_from(chunk.as_chunks().0).unwrap())
+		.chain(chunks_2.iter_mut().map(|chunk| pan_abs(chunk, lpan, rpan)))
+		.reduce(array_max)
+		.unwrap_or([0.0; _])
 }

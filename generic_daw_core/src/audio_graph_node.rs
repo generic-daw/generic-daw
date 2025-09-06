@@ -12,7 +12,12 @@ impl NodeImpl for AudioGraphNode {
 	type Event = Event;
 	type State = State;
 
-	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
+	fn process(
+		&mut self,
+		state: &mut Self::State,
+		audio: &mut [f32],
+		events: &mut Vec<Self::Event>,
+	) {
 		match self {
 			Self::Master(node) => node.process(state, audio, events),
 			Self::Mixer(node) => node.process(state, audio, events),

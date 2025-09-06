@@ -25,6 +25,8 @@ pub enum Message {
 	Reset,
 	Sample(Version, usize),
 
+	ReturnUpdateBuffer(Vec<(NodeId, [f32; 2])>),
+
 	RequestAudioGraph(oneshot::Sender<AudioGraph<AudioGraphNode>>),
 	AudioGraph(AudioGraph<AudioGraphNode>),
 }
@@ -44,11 +46,10 @@ pub enum Action {
 	PluginMixChanged(usize, f32),
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum Update {
-	LR(NodeId, [f32; 2]),
-	Sample(Version, usize),
-	Done,
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Update {
+	pub sample: Option<usize>,
+	pub peaks: Vec<(NodeId, [f32; 2])>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -67,12 +68,14 @@ pub struct State {
 	pub rtstate: RtState,
 	pub sender: Sender<Update>,
 	pub receiver: Receiver<Message>,
+	pub update: Update,
 }
 
 pub struct DawCtx {
 	audio_graph: AudioGraph<AudioGraphNode>,
 	state: State,
 	version: Version,
+	update_buffers: Vec<Vec<(NodeId, [f32; 2])>>,
 }
 
 impl DawCtx {
@@ -95,6 +98,7 @@ impl DawCtx {
 			},
 			sender,
 			receiver,
+			update: Update::default(),
 		};
 
 		let audio_graph = AudioGraph::new(Master::new(state.rtstate.sample_rate).into());
@@ -104,6 +108,7 @@ impl DawCtx {
 			audio_graph,
 			state,
 			version: Version::unique(),
+			update_buffers: Vec::new(),
 		};
 		let rtstate = audio_ctx.state.rtstate;
 
@@ -137,6 +142,10 @@ impl DawCtx {
 					self.state.rtstate.sample = sample;
 					self.version = version;
 				}
+				Message::ReturnUpdateBuffer(update) => {
+					debug_assert!(update.is_empty());
+					self.update_buffers.push(update);
+				}
 				Message::RequestAudioGraph(sender) => {
 					debug_assert!(self.state.receiver.is_empty());
 					let mut audio_graph = AudioGraph::new(Mixer::default().into());
@@ -147,7 +156,14 @@ impl DawCtx {
 			}
 		}
 
-		self.audio_graph.process(&self.state, buf);
+		if self.state.update.peaks.capacity() == 0 {
+			self.state.update = Update {
+				sample: None,
+				peaks: self.update_buffers.pop().unwrap_or_default(),
+			};
+		}
+
+		self.audio_graph.process(&mut self.state, buf);
 
 		for s in &mut *buf {
 			*s = s.clamp(-1.0, 1.0);
@@ -155,12 +171,14 @@ impl DawCtx {
 
 		if self.state.rtstate.playing {
 			self.state.rtstate.sample += buf.len();
-			self.state
-				.sender
-				.try_send(Update::Sample(self.version, self.state.rtstate.sample))
-				.unwrap();
+			self.state.update.sample = Some(self.state.rtstate.sample);
 		}
 
-		self.state.sender.try_send(Update::Done).unwrap();
+		if self.state.update.sample.is_some() || !self.state.update.peaks.is_empty() {
+			self.state
+				.sender
+				.try_send(std::mem::take(&mut self.state.update))
+				.unwrap();
+		}
 	}
 }

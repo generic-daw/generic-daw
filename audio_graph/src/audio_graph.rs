@@ -30,7 +30,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		}
 	}
 
-	pub fn process(&mut self, state: &Node::State, buf: &mut [f32]) {
+	pub fn process(&mut self, state: &mut Node::State, buf: &mut [f32]) {
 		for &node in &self.list {
 			for s in &mut *buf {
 				*s = 0.0;

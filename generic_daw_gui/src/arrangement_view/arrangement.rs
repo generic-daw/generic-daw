@@ -12,7 +12,7 @@ use generic_daw_core::{
 	export,
 };
 use generic_daw_utils::{HoleyVec, NoDebug, ShiftMoveExt as _};
-use iced::{Task, futures::SinkExt as _, stream};
+use iced::Task;
 use smol::channel::Sender;
 use std::{path::Path, time::Instant};
 
@@ -28,14 +28,8 @@ pub struct Arrangement {
 	stream: NoDebug<Stream>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Batch {
-	sample: Option<usize>,
-	l_r: Vec<(NodeId, [f32; 2])>,
-}
-
 impl Arrangement {
-	pub fn create(config: &Config) -> (Self, Task<Batch>) {
+	pub fn create(config: &Config) -> (Self, Task<Update>) {
 		let (stream, master_node_id, rtstate, sender, receiver) = build_output_stream(
 			config.output_device.name.as_deref(),
 			config.output_device.sample_rate.unwrap_or(44100),
@@ -50,21 +44,6 @@ impl Arrangement {
 			),
 		);
 
-		let task = Task::stream(stream::channel(100, async move |mut sender| {
-			let mut batch = Batch::default();
-
-			while let Ok(update) = receiver.recv().await {
-				match update {
-					Update::LR(node, l_r) => batch.l_r.push((node, l_r)),
-					Update::Sample(ver, sample) if ver.is_last() => batch.sample = Some(sample),
-					Update::Done if batch != Batch::default() => {
-						sender.send(std::mem::take(&mut batch)).await.unwrap();
-					}
-					_ => {}
-				}
-			}
-		}));
-
 		(
 			Self {
 				rtstate,
@@ -76,18 +55,22 @@ impl Arrangement {
 				sender,
 				stream: stream.into(),
 			},
-			task,
+			Task::stream(receiver),
 		)
 	}
 
-	pub fn update(&mut self, batch: Batch, now: Instant) {
-		if let Some(sample) = batch.sample {
+	pub fn update(&mut self, mut update: Update, now: Instant) {
+		if let Some(sample) = update.sample {
 			self.rtstate.sample = sample;
 		}
 
-		for (node, l_r) in batch.l_r {
-			self.nodes.get_mut(*node).unwrap().0.update(l_r, now);
+		for (node, peaks) in update.peaks.drain(..) {
+			self.nodes.get_mut(*node).unwrap().0.update(peaks, now);
 		}
+
+		self.sender
+			.try_send(Message::ReturnUpdateBuffer(update.peaks))
+			.unwrap();
 	}
 
 	pub fn rtstate(&self) -> &RtState {

@@ -22,7 +22,12 @@ impl NodeImpl for Master {
 	type Event = Event;
 	type State = State;
 
-	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
+	fn process(
+		&mut self,
+		state: &mut Self::State,
+		audio: &mut [f32],
+		events: &mut Vec<Self::Event>,
+	) {
 		if state.rtstate.playing && state.rtstate.metronome {
 			let buf_start = MusicalTime::from_samples(state.rtstate.sample, &state.rtstate);
 			let mut buf_end =

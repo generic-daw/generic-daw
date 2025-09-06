@@ -1,4 +1,7 @@
-use crate::{AudioGraphNode, MusicalTime, RtState, daw_ctx::State};
+use crate::{
+	AudioGraphNode, MusicalTime, RtState,
+	daw_ctx::{State, Update},
+};
 use audio_graph::AudioGraph;
 use hound::WavWriter;
 use std::path::Path;
@@ -13,6 +16,7 @@ pub fn export(
 		rtstate,
 		sender: async_channel::unbounded().0,
 		receiver: async_channel::unbounded().1,
+		update: Update::default(),
 	};
 
 	state.rtstate.playing = true;
@@ -41,19 +45,22 @@ pub fn export(
 	for i in (0..delay).step_by(buffer_size) {
 		state.rtstate.sample = i;
 
-		audio_graph.process(&state, &mut buf);
+		audio_graph.process(&mut state, &mut buf);
+		state.update.peaks.clear();
 	}
 
 	if skip != 0 {
 		state.rtstate.sample = delay - skip;
 
-		audio_graph.process(&state, &mut buf[..skip]);
+		audio_graph.process(&mut state, &mut buf[..skip]);
+		state.update.peaks.clear();
 	}
 
 	for i in (delay..end + delay).step_by(buffer_size) {
 		state.rtstate.sample = i;
 
-		audio_graph.process(&state, &mut buf);
+		audio_graph.process(&mut state, &mut buf);
+		state.update.peaks.clear();
 
 		for &s in &buf {
 			writer.write_sample(s).unwrap();
