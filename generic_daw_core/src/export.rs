@@ -1,5 +1,5 @@
 use crate::{
-	AudioGraphNode, MusicalTime, RtState,
+	AudioGraphNode, MusicalTime, RtState, Version,
 	daw_ctx::{State, Update},
 };
 use audio_graph::AudioGraph;
@@ -14,9 +14,7 @@ pub fn export(
 ) {
 	let mut state = State {
 		rtstate,
-		sender: async_channel::unbounded().0,
-		receiver: async_channel::unbounded().1,
-		update: Update::default(),
+		update: Update::new(Version::unique()),
 	};
 
 	state.rtstate.playing = true;

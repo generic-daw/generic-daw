@@ -1,6 +1,6 @@
 use crate::{AudioGraphNode, Clip, Event, Master, Mixer};
 use async_channel::{Receiver, Sender};
-use audio_graph::{AudioGraph, NodeId};
+use audio_graph::{AudioGraph, NodeId, NodeImpl as _};
 use clap_host::AudioProcessor;
 use generic_daw_utils::unique_id;
 use log::trace;
@@ -46,10 +46,22 @@ pub enum Action {
 	PluginMixChanged(usize, f32),
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Update {
+	pub version: Version,
 	pub sample: Option<usize>,
 	pub peaks: Vec<(NodeId, [f32; 2])>,
+}
+
+impl Update {
+	#[must_use]
+	pub fn new(version: Version) -> Self {
+		Self {
+			version,
+			sample: None,
+			peaks: Vec::new(),
+		}
+	}
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -66,8 +78,6 @@ pub struct RtState {
 #[derive(Debug)]
 pub struct State {
 	pub rtstate: RtState,
-	pub sender: Sender<Update>,
-	pub receiver: Receiver<Message>,
 	pub update: Update,
 }
 
@@ -75,6 +85,8 @@ pub struct DawCtx {
 	audio_graph: AudioGraph<AudioGraphNode>,
 	state: State,
 	version: Version,
+	sender: Sender<Update>,
+	receiver: Receiver<Message>,
 	update_buffers: Vec<Vec<(NodeId, [f32; 2])>>,
 }
 
@@ -86,37 +98,38 @@ impl DawCtx {
 		let (r_sender, receiver) = async_channel::unbounded();
 		let (sender, r_receiver) = async_channel::unbounded();
 
-		let state = State {
-			rtstate: RtState {
-				sample_rate,
-				buffer_size,
-				bpm: 140,
-				numerator: 4,
-				playing: false,
-				metronome: false,
-				sample: 0,
-			},
-			sender,
-			receiver,
-			update: Update::default(),
-		};
+		let master = Master::new(sample_rate);
+		let id = master.id();
 
-		let audio_graph = AudioGraph::new(Master::new(state.rtstate.sample_rate).into());
-		let id = audio_graph.root();
+		let version = Version::unique();
+
+		let rtstate = RtState {
+			sample_rate,
+			buffer_size,
+			bpm: 140,
+			numerator: 4,
+			playing: false,
+			metronome: false,
+			sample: 0,
+		};
 
 		let audio_ctx = Self {
-			audio_graph,
-			state,
-			version: Version::unique(),
+			audio_graph: AudioGraph::new(master.into()),
+			state: State {
+				rtstate,
+				update: Update::new(version),
+			},
+			version,
+			sender,
+			receiver,
 			update_buffers: Vec::new(),
 		};
-		let rtstate = audio_ctx.state.rtstate;
 
 		(audio_ctx, id, rtstate, r_sender, r_receiver)
 	}
 
 	pub fn process(&mut self, buf: &mut [f32]) {
-		while let Ok(msg) = self.state.receiver.try_recv() {
+		while let Ok(msg) = self.receiver.try_recv() {
 			trace!("{msg:?}");
 
 			match msg {
@@ -141,13 +154,14 @@ impl DawCtx {
 				Message::Sample(version, sample) => {
 					self.state.rtstate.sample = sample;
 					self.version = version;
+					self.state.update.version = self.version;
 				}
 				Message::ReturnUpdateBuffer(update) => {
 					debug_assert!(update.is_empty());
 					self.update_buffers.push(update);
 				}
 				Message::RequestAudioGraph(sender) => {
-					debug_assert!(self.state.receiver.is_empty());
+					debug_assert!(self.receiver.is_empty());
 					let mut audio_graph = AudioGraph::new(Mixer::default().into());
 					std::mem::swap(&mut self.audio_graph, &mut audio_graph);
 					sender.send(audio_graph).unwrap();
@@ -157,10 +171,7 @@ impl DawCtx {
 		}
 
 		if self.state.update.peaks.capacity() == 0 {
-			self.state.update = Update {
-				sample: None,
-				peaks: self.update_buffers.pop().unwrap_or_default(),
-			};
+			self.state.update.peaks = self.update_buffers.pop().unwrap_or_default();
 		}
 
 		self.audio_graph.process(&mut self.state, buf);
@@ -175,10 +186,9 @@ impl DawCtx {
 		}
 
 		if self.state.update.sample.is_some() || !self.state.update.peaks.is_empty() {
-			self.state
-				.sender
-				.try_send(std::mem::take(&mut self.state.update))
-				.unwrap();
+			let mut update = Update::new(self.version);
+			std::mem::swap(&mut update, &mut self.state.update);
+			self.sender.try_send(update).unwrap();
 		}
 	}
 }

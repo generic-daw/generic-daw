@@ -60,7 +60,9 @@ impl Arrangement {
 	}
 
 	pub fn update(&mut self, mut update: Update, now: Instant) {
-		if let Some(sample) = update.sample {
+		if let Some(sample) = update.sample
+			&& update.version.is_last()
+		{
 			self.rtstate.sample = sample;
 		}
 
