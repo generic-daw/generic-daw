@@ -4,9 +4,9 @@ use crate::{
 };
 use async_channel::Receiver;
 use clack_extensions::params::PluginParams;
-use clack_host::process::StartedPluginAudioProcessor;
+use clack_host::process::PluginAudioProcessor;
 use generic_daw_utils::NoDebug;
-use log::trace;
+use log::{trace, warn};
 
 #[derive(Clone, Copy, Debug)]
 pub enum AudioThreadMessage<Event: EventImpl> {
@@ -17,7 +17,7 @@ pub enum AudioThreadMessage<Event: EventImpl> {
 
 #[derive(Debug)]
 pub struct AudioProcessor<Event: EventImpl> {
-	started_processor: Option<NoDebug<StartedPluginAudioProcessor<Host>>>,
+	processor: NoDebug<PluginAudioProcessor<Host>>,
 	descriptor: PluginDescriptor,
 	id: PluginId,
 	steady_time: u64,
@@ -29,7 +29,7 @@ pub struct AudioProcessor<Event: EventImpl> {
 impl<Event: EventImpl> AudioProcessor<Event> {
 	#[must_use]
 	pub fn new(
-		started_processor: StartedPluginAudioProcessor<Host>,
+		started_processor: impl Into<PluginAudioProcessor<Host>>,
 		descriptor: PluginDescriptor,
 		id: PluginId,
 		audio_buffers: AudioBuffers,
@@ -37,7 +37,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		receiver: Receiver<AudioThreadMessage<Event>>,
 	) -> Self {
 		Self {
-			started_processor: Some(started_processor.into()),
+			processor: started_processor.into().into(),
 			descriptor,
 			id,
 			steady_time: 0,
@@ -62,19 +62,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			trace!("{}: {msg:?}", self.descriptor);
 
 			match msg {
-				AudioThreadMessage::RequestRestart => {
-					let mut stopped_processor =
-						self.started_processor.take().unwrap().0.stop_processing();
-
-					let started_processor = loop {
-						match stopped_processor.start_processing() {
-							Ok(started_processor) => break started_processor,
-							Err(err) => stopped_processor = err.into_stopped_processor(),
-						}
-					};
-
-					self.started_processor = Some(started_processor.into());
-				}
+				AudioThreadMessage::RequestRestart => _ = self.processor.stop_processing(),
 				AudioThreadMessage::LatencyChanged(latency) => {
 					self.audio_buffers.latency_changed(latency);
 				}
@@ -86,34 +74,36 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32) {
 		self.recv_events(events);
 
-		self.audio_buffers.read_in(audio);
-		self.event_buffers.read_in(events);
+		match self.processor.ensure_processing_started() {
+			Ok(processor) => {
+				self.audio_buffers.read_in(audio);
+				self.event_buffers.read_in(events);
 
-		let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len());
+				let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len());
 
-		self.started_processor
-			.as_mut()
-			.unwrap()
-			.process(
-				&input_audio,
-				&mut output_audio,
-				&self.event_buffers.input_events.as_input(),
-				&mut self.event_buffers.output_events.as_output(),
-				Some(self.steady_time),
-				None,
-			)
-			.unwrap();
+				processor
+					.process(
+						&input_audio,
+						&mut output_audio,
+						&self.event_buffers.input_events.as_input(),
+						&mut self.event_buffers.output_events.as_output(),
+						Some(self.steady_time),
+						None,
+					)
+					.unwrap();
 
-		self.steady_time += u64::from(input_audio.min_available_frames_with(&output_audio));
+				self.steady_time += u64::from(input_audio.min_available_frames_with(&output_audio));
 
-		self.audio_buffers.write_out(audio, mix_level);
-		self.event_buffers.write_out(
-			events,
-			self.started_processor
-				.as_ref()
-				.unwrap()
-				.access_shared_handler(|s| s),
-		);
+				self.audio_buffers.write_out(audio, mix_level);
+				self.event_buffers
+					.write_out(events, self.processor.access_shared_handler(|s| &s.sender));
+			}
+			Err(err) => {
+				warn!("{}: {err}", self.descriptor);
+
+				self.flush(events);
+			}
+		}
 	}
 
 	pub fn flush(&mut self, events: &mut Vec<Event>) {
@@ -122,31 +112,25 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		self.event_buffers.read_in(events);
 
 		if let Some(params) = self
-			.started_processor
-			.as_mut()
-			.unwrap()
+			.processor
 			.plugin_handle()
 			.get_extension::<PluginParams>()
 		{
 			params.flush_active(
-				&mut self.started_processor.as_mut().unwrap().plugin_handle(),
+				&mut self.processor.plugin_handle(),
 				&self.event_buffers.input_events.as_input(),
 				&mut self.event_buffers.output_events.as_output(),
 			);
 		}
 
-		self.event_buffers.write_out(
-			events,
-			self.started_processor
-				.as_ref()
-				.unwrap()
-				.access_shared_handler(|s| s),
-		);
+		self.event_buffers
+			.write_out(events, self.processor.access_shared_handler(|s| &s.sender));
+		events.clear();
 	}
 
 	pub fn reset(&mut self) {
 		self.event_buffers.reset();
-		self.started_processor.as_mut().unwrap().reset();
+		self.processor.reset();
 		self.steady_time = 0;
 	}
 

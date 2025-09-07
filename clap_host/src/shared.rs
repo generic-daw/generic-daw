@@ -7,20 +7,26 @@ use clack_extensions::{
 };
 use clack_host::prelude::*;
 use log::{debug, error, info, warn};
+use std::sync::OnceLock;
 
 #[derive(Debug)]
-pub struct Shared {
+pub struct Shared<'a> {
+	pub instance: OnceLock<InitializedPluginHandle<'a>>,
 	pub descriptor: PluginDescriptor,
 	pub sender: Sender<MainThreadMessage>,
 }
 
-impl Shared {
+impl Shared<'_> {
 	pub fn new(descriptor: PluginDescriptor, sender: Sender<MainThreadMessage>) -> Self {
-		Self { descriptor, sender }
+		Self {
+			instance: OnceLock::new(),
+			descriptor,
+			sender,
+		}
 	}
 }
 
-impl SharedHandler<'_> for Shared {
+impl<'a> SharedHandler<'a> for Shared<'a> {
 	fn request_process(&self) {}
 
 	fn request_callback(&self) {
@@ -36,15 +42,15 @@ impl SharedHandler<'_> for Shared {
 	}
 }
 
-impl HostGuiImpl for Shared {
+impl HostGuiImpl for Shared<'_> {
 	fn resize_hints_changed(&self) {}
 
 	fn request_resize(&self, GuiSize { width, height }: GuiSize) -> Result<(), HostError> {
 		self.sender
-			.try_send(MainThreadMessage::GuiRequestResize(Size::Native {
-				width: width as f32,
-				height: height as f32,
-			}))
+			.try_send(MainThreadMessage::GuiRequestResize(Size::from_native((
+				width as f32,
+				height as f32,
+			))))
 			.unwrap();
 
 		Ok(())
@@ -71,7 +77,7 @@ impl HostGuiImpl for Shared {
 	}
 }
 
-impl HostLogImpl for Shared {
+impl HostLogImpl for Shared<'_> {
 	fn log(&self, severity: LogSeverity, message: &str) {
 		match severity {
 			LogSeverity::Debug => debug!("{}: {message}", self.descriptor),
@@ -85,6 +91,6 @@ impl HostLogImpl for Shared {
 	}
 }
 
-impl HostParamsImplShared for Shared {
+impl HostParamsImplShared for Shared<'_> {
 	fn request_flush(&self) {}
 }

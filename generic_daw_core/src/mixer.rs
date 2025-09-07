@@ -54,7 +54,6 @@ impl NodeImpl for Mixer {
 				entry.processor.process(audio, events, entry.mix);
 			} else {
 				entry.processor.flush(events);
-				events.clear();
 			}
 		}
 

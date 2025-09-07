@@ -1,4 +1,4 @@
-use crate::{gui::Gui, params::Param};
+use crate::{audio_thread::AudioThread, gui::Gui, params::Param};
 use async_channel::Receiver;
 use audio_buffers::AudioBuffers;
 use clack_extensions::gui::GuiApiType;
@@ -18,6 +18,7 @@ use walkdir::WalkDir;
 mod audio_buffers;
 mod audio_ports_config;
 mod audio_processor;
+mod audio_thread;
 mod event_buffers;
 mod event_impl;
 pub mod events;
@@ -167,9 +168,7 @@ pub fn init<Event: EventImpl>(
 
 	let plugin_audio_processor = AudioProcessor::new(
 		instance
-			.activate(|_, _| (), config)
-			.unwrap()
-			.start_processing()
+			.activate(|shared, _| AudioThread::new(shared), config)
 			.unwrap(),
 		descriptor.clone(),
 		id,

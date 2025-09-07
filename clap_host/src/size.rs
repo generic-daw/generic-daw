@@ -4,7 +4,6 @@ use crate::API_TYPE;
 pub enum Size {
 	Logical { width: f32, height: f32 },
 	Physical { width: f32, height: f32 },
-	Native { width: f32, height: f32 },
 }
 
 impl Size {
@@ -18,8 +17,12 @@ impl Size {
 		match self {
 			Self::Logical { width, height } => (width, height),
 			Self::Physical { width, height } => (width * scale_factor, height * scale_factor),
-			Self::Native { .. } => self.normalize().to_logical(scale_factor),
 		}
+	}
+
+	#[must_use]
+	pub fn ensure_logical(self, scale_factor: f32) -> Self {
+		Self::from_logical(self.to_logical(scale_factor))
 	}
 
 	#[must_use]
@@ -32,13 +35,21 @@ impl Size {
 		match self {
 			Self::Logical { width, height } => (width / scale_factor, height / scale_factor),
 			Self::Physical { width, height } => (width, height),
-			Self::Native { .. } => self.normalize().to_physical(scale_factor),
 		}
 	}
 
 	#[must_use]
+	pub fn ensure_physical(self, scale_factor: f32) -> Self {
+		Self::from_physical(self.to_physical(scale_factor))
+	}
+
+	#[must_use]
 	pub fn from_native((width, height): (f32, f32)) -> Self {
-		Self::Native { width, height }
+		if API_TYPE.uses_logical_size() {
+			Self::Logical { width, height }
+		} else {
+			Self::Physical { width, height }
+		}
 	}
 
 	#[must_use]
@@ -47,18 +58,6 @@ impl Size {
 			self.to_logical(scale_factor)
 		} else {
 			self.to_physical(scale_factor)
-		}
-	}
-
-	fn normalize(self) -> Self {
-		if let Self::Native { width, height } = self {
-			if API_TYPE.uses_logical_size() {
-				Self::Logical { width, height }
-			} else {
-				Self::Physical { width, height }
-			}
-		} else {
-			self
 		}
 	}
 }

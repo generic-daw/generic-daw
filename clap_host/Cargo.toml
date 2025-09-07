@@ -22,9 +22,11 @@ clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
 	"raw-window-handle_06",
 	"render",
 	"state",
+	"thread-pool",
 	"timer",
 ] }
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
 log = "0.4.28"
 raw-window-handle = "0.6.2"
+rayon-core = "1.13.0"
 walkdir = "2.5.0"

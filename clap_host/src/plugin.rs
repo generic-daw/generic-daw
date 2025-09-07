@@ -77,9 +77,14 @@ impl<Event: EventImpl> Plugin<Event> {
 			panic!("called \"set_scale\" on a non-embedded gui")
 		};
 
-		*scale_factor = scale;
-		ext.set_scale(&mut self.instance.plugin_handle(), scale.into())
-			.unwrap();
+		if !API_TYPE.uses_logical_size()
+			&& let Err(err) = ext.set_scale(&mut self.instance.plugin_handle(), scale.into())
+		{
+			// If I unwrap here, vital doesn't load. Why?
+			warn!("{}: {err}", self.descriptor);
+		} else {
+			*scale_factor = scale;
+		}
 	}
 
 	#[must_use]
@@ -191,12 +196,15 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	#[must_use]
 	pub fn get_size(&mut self) -> Option<Size> {
-		let Gui::Embedded { ext, .. } = self.gui else {
+		let Gui::Embedded {
+			ext, scale_factor, ..
+		} = self.gui
+		else {
 			return None;
 		};
 
 		let GuiSize { width, height } = ext.get_size(&mut self.instance.plugin_handle())?;
-		Some(Size::from_native((width as f32, height as f32)))
+		Some(Size::from_native((width as f32, height as f32)).ensure_logical(scale_factor))
 	}
 
 	#[must_use]
@@ -227,7 +235,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			.unwrap();
 
 		let GuiSize { width, height } = size;
-		Some(Size::from_native((width as f32, height as f32)))
+		Some(Size::from_native((width as f32, height as f32)).ensure_logical(scale_factor))
 	}
 
 	pub fn send_event(&self, event: Event) {

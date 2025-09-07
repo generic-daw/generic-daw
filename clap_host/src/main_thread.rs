@@ -27,12 +27,12 @@ pub enum MainThreadMessage {
 
 #[derive(Debug)]
 pub struct MainThread<'a> {
-	shared: &'a Shared,
+	shared: &'a Shared<'a>,
 	next_timer_id: u32,
 }
 
 impl<'a> MainThread<'a> {
-	pub fn new(shared: &'a Shared) -> Self {
+	pub fn new(shared: &'a Shared<'a>) -> Self {
 		Self {
 			shared,
 			next_timer_id: 0,
@@ -41,7 +41,9 @@ impl<'a> MainThread<'a> {
 }
 
 impl<'a> MainThreadHandler<'a> for MainThread<'a> {
-	fn initialized(&mut self, _instance: InitializedPluginHandle<'a>) {}
+	fn initialized(&mut self, instance: InitializedPluginHandle<'a>) {
+		self.shared.instance.set(instance).unwrap();
+	}
 }
 
 impl HostAudioPortsImpl for MainThread<'_> {

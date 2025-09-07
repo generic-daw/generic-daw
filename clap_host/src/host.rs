@@ -1,7 +1,8 @@
-use crate::{MainThread, Shared};
+use crate::{MainThread, Shared, audio_thread::AudioThread};
 use clack_extensions::{
 	audio_ports::HostAudioPorts, gui::HostGui, latency::HostLatency, log::HostLog,
-	note_ports::HostNotePorts, params::HostParams, state::HostState, timer::HostTimer,
+	note_ports::HostNotePorts, params::HostParams, state::HostState, thread_pool::HostThreadPool,
+	timer::HostTimer,
 };
 use clack_host::prelude::*;
 
@@ -9,18 +10,20 @@ use clack_host::prelude::*;
 pub struct Host;
 
 impl HostHandlers for Host {
-	type Shared<'a> = Shared;
+	type Shared<'a> = Shared<'a>;
 	type MainThread<'a> = MainThread<'a>;
-	type AudioProcessor<'a> = ();
+	type AudioProcessor<'a> = AudioThread<'a>;
 
 	fn declare_extensions(builder: &mut HostExtensions<'_, Self>, _shared: &Self::Shared<'_>) {
-		builder.register::<HostAudioPorts>();
-		builder.register::<HostGui>();
-		builder.register::<HostLatency>();
-		builder.register::<HostLog>();
-		builder.register::<HostNotePorts>();
-		builder.register::<HostParams>();
-		builder.register::<HostState>();
-		builder.register::<HostTimer>();
+		builder
+			.register::<HostAudioPorts>()
+			.register::<HostGui>()
+			.register::<HostLatency>()
+			.register::<HostLog>()
+			.register::<HostNotePorts>()
+			.register::<HostParams>()
+			.register::<HostState>()
+			.register::<HostThreadPool>()
+			.register::<HostTimer>();
 	}
 }
