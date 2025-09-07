@@ -1,5 +1,5 @@
 use crate::shared::Shared;
-use clack_extensions::thread_pool::{HostThreadPoolImpl, PluginThreadPool};
+use clack_extensions::thread_pool::HostThreadPoolImpl;
 use clack_host::prelude::*;
 
 #[derive(Debug)]
@@ -18,7 +18,7 @@ impl<'a> AudioProcessorHandler<'a> for AudioThread<'a> {}
 impl HostThreadPoolImpl for AudioThread<'_> {
 	fn request_exec(&mut self, task_count: u32) -> Result<(), HostError> {
 		let instance = self.shared.instance.get().unwrap();
-		let ext = instance.get_extension::<PluginThreadPool>().unwrap();
+		let ext = self.shared.thread_pool.get().unwrap();
 
 		match task_count {
 			0 => {}

@@ -1,5 +1,4 @@
-use crate::audio_ports_config::AudioPortsConfig;
-use clack_extensions::latency::PluginLatency;
+use crate::{audio_ports_config::AudioPortsConfig, host::Host};
 use clack_host::prelude::*;
 use generic_daw_utils::{NoDebug, RotateConcatExt as _};
 
@@ -20,7 +19,7 @@ pub struct AudioBuffers {
 }
 
 impl AudioBuffers {
-	pub fn new(plugin: &mut PluginMainThreadHandle<'_>, config: PluginAudioConfiguration) -> Self {
+	pub fn new(plugin: &mut PluginInstance<Host>, config: PluginAudioConfiguration) -> Self {
 		let input_config = AudioPortsConfig::from_ports(plugin, true).unwrap_or_default();
 		let output_config = AudioPortsConfig::from_ports(plugin, false).unwrap_or_default();
 
@@ -28,8 +27,8 @@ impl AudioBuffers {
 		let output_ports = AudioPorts::from(&output_config).into();
 
 		let latency = plugin
-			.get_extension::<PluginLatency>()
-			.map(|ext| ext.get(plugin))
+			.access_shared_handler(|s| s.latency.get().copied())
+			.map(|ext| ext.get(&mut plugin.plugin_handle()))
 			.unwrap_or_default();
 
 		let input_buffers = input_config

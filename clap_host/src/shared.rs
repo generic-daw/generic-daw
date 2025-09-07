@@ -1,32 +1,84 @@
 use crate::{MainThreadMessage, PluginDescriptor, Size};
 use async_channel::Sender;
 use clack_extensions::{
-	gui::{GuiSize, HostGuiImpl},
+	audio_ports::PluginAudioPorts,
+	gui::{GuiSize, HostGuiImpl, PluginGui},
+	latency::PluginLatency,
 	log::{HostLogImpl, LogSeverity},
-	params::HostParamsImplShared,
+	note_ports::PluginNotePorts,
+	params::{HostParamsImplShared, PluginParams},
+	render::PluginRender,
+	state::PluginState,
+	thread_pool::PluginThreadPool,
+	timer::PluginTimer,
 };
 use clack_host::prelude::*;
+use generic_daw_utils::NoDebug;
 use log::{debug, error, info, warn};
 use std::sync::OnceLock;
 
 #[derive(Debug)]
 pub struct Shared<'a> {
-	pub instance: OnceLock<InitializedPluginHandle<'a>>,
 	pub descriptor: PluginDescriptor,
 	pub sender: Sender<MainThreadMessage>,
+	pub instance: OnceLock<InitializedPluginHandle<'a>>,
+	pub audio_ports: OnceLock<NoDebug<PluginAudioPorts>>,
+	pub gui: OnceLock<NoDebug<PluginGui>>,
+	pub latency: OnceLock<NoDebug<PluginLatency>>,
+	pub note_ports: OnceLock<NoDebug<PluginNotePorts>>,
+	pub params: OnceLock<NoDebug<PluginParams>>,
+	pub render: OnceLock<NoDebug<PluginRender>>,
+	pub state: OnceLock<NoDebug<PluginState>>,
+	pub thread_pool: OnceLock<NoDebug<PluginThreadPool>>,
+	pub timer: OnceLock<NoDebug<PluginTimer>>,
 }
 
 impl Shared<'_> {
 	pub fn new(descriptor: PluginDescriptor, sender: Sender<MainThreadMessage>) -> Self {
 		Self {
-			instance: OnceLock::new(),
 			descriptor,
 			sender,
+			instance: OnceLock::new(),
+			audio_ports: OnceLock::new(),
+			gui: OnceLock::new(),
+			latency: OnceLock::new(),
+			note_ports: OnceLock::new(),
+			params: OnceLock::new(),
+			render: OnceLock::new(),
+			state: OnceLock::new(),
+			thread_pool: OnceLock::new(),
+			timer: OnceLock::new(),
 		}
 	}
 }
 
 impl<'a> SharedHandler<'a> for Shared<'a> {
+	fn initializing(&self, instance: InitializingPluginHandle<'a>) {
+		macro_rules! initializing {
+			($($ident:ident),*) => {
+				$(
+					if self.$ident.get().is_none()
+						&& let Some(ext) = instance.get_extension()
+					{
+						_ = self.$ident.set(NoDebug(ext));
+					}
+				)*
+			};
+		}
+
+		initializing![
+			audio_ports,
+			gui,
+			latency,
+			note_ports,
+			params,
+			render,
+			state,
+			thread_pool,
+			timer
+		];
+	}
+
 	fn request_process(&self) {}
 
 	fn request_callback(&self) {

@@ -5,11 +5,9 @@ use crate::{
 use async_channel::Sender;
 use clack_extensions::{
 	gui::{GuiConfiguration, GuiSize, Window as ClapWindow},
-	latency::PluginLatency,
 	params::ParamInfoFlags,
-	render::{PluginRender, RenderMode},
-	state::PluginState,
-	timer::{PluginTimer, TimerId},
+	render::RenderMode,
+	timer::TimerId,
 };
 use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
@@ -66,19 +64,21 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	#[must_use]
 	pub fn is_floating(&self) -> bool {
-		matches!(self.gui, Gui::Floating { .. })
+		matches!(self.gui, Gui::Floating)
 	}
 
 	pub fn set_scale(&mut self, scale: f32) {
-		let Gui::Embedded {
-			ext, scale_factor, ..
-		} = &mut self.gui
-		else {
+		let ext = self
+			.instance
+			.access_shared_handler(|s| s.gui.get().copied());
+		let Gui::Embedded { scale_factor, .. } = &mut self.gui else {
 			panic!("called \"set_scale\" on a non-embedded gui")
 		};
 
 		if !API_TYPE.uses_logical_size()
-			&& let Err(err) = ext.set_scale(&mut self.instance.plugin_handle(), scale.into())
+			&& let Err(err) = ext
+				.unwrap()
+				.set_scale(&mut self.instance.plugin_handle(), scale.into())
 		{
 			// If I unwrap here, vital doesn't load. Why?
 			warn!("{}: {err}", self.descriptor);
@@ -89,14 +89,15 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	#[must_use]
 	pub fn can_resize(&mut self) -> bool {
-		let Gui::Embedded {
-			ext, can_resize, ..
-		} = &mut self.gui
-		else {
+		let ext = self
+			.instance
+			.access_shared_handler(|s| s.gui.get().copied());
+		let Gui::Embedded { can_resize, .. } = &mut self.gui else {
 			panic!("called \"can_resize\" on a non-embedded gui")
 		};
 
-		*can_resize.get_or_insert_with(|| ext.can_resize(&mut self.instance.plugin_handle()))
+		*can_resize
+			.get_or_insert_with(|| ext.unwrap().can_resize(&mut self.instance.plugin_handle()))
 	}
 
 	pub fn call_on_main_thread_callback(&mut self) {
@@ -121,27 +122,25 @@ impl<Event: EventImpl> Plugin<Event> {
 			.iter_mut()
 			.find(|param| param.id == param_id)
 			.unwrap()
-			.update_with_value(value, &mut self.instance.plugin_handle());
+			.update_with_value(value, &mut self.instance);
 	}
 
 	pub fn rescan_values(&mut self) {
 		for param in &mut *self.params {
-			param.rescan_value(&mut self.instance.plugin_handle());
+			param.rescan_value(&mut self.instance);
 		}
 	}
 
 	pub fn tick_timer(&mut self, id: u32) {
 		self.instance
-			.plugin_handle()
-			.get_extension::<PluginTimer>()
-			.unwrap()
+			.access_shared_handler(|s| *s.timer.get().unwrap())
 			.on_timer(&mut self.instance.plugin_handle(), TimerId(id));
 	}
 
 	pub fn create(&mut self) {
 		self.destroy();
 
-		let Some(ext) = self.gui.ext() else {
+		let Some(&ext) = self.instance.access_shared_handler(|s| s.gui.get()) else {
 			return;
 		};
 
@@ -157,24 +156,26 @@ impl<Event: EventImpl> Plugin<Event> {
 	/// # SAFETY
 	/// The underlying window must remain valid for the lifetime of this plugin instance's gui.
 	pub unsafe fn set_parent(&mut self, window_handle: RawWindowHandle) {
-		let Gui::Embedded { ext, .. } = self.gui else {
+		let Gui::Embedded { .. } = self.gui else {
 			panic!("called \"set_parent\" on a non-embedded gui");
 		};
 
 		// SAFETY:
 		// Ensured by the caller.
 		unsafe {
-			ext.set_parent(
-				&mut self.instance.plugin_handle(),
-				ClapWindow::from_window_handle(window_handle).unwrap(),
-			)
-			.unwrap();
+			self.instance
+				.access_shared_handler(|s| *s.gui.get().unwrap())
+				.set_parent(
+					&mut self.instance.plugin_handle(),
+					ClapWindow::from_window_handle(window_handle).unwrap(),
+				)
+				.unwrap();
 		}
 	}
 
 	pub fn show(&mut self) {
 		if !self.is_open
-			&& let Some(ext) = self.gui.ext()
+			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.gui.get())
 			&& let Err(err) = ext.show(&mut self.instance.plugin_handle())
 		{
 			// If I unwrap here, nih-plug plugins don't load. Why?
@@ -186,7 +187,7 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	pub fn destroy(&mut self) {
 		if self.is_open
-			&& let Some(ext) = self.gui.ext()
+			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.gui.get())
 		{
 			ext.destroy(&mut self.instance.plugin_handle());
 		}
@@ -196,21 +197,20 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	#[must_use]
 	pub fn get_size(&mut self) -> Option<Size> {
-		let Gui::Embedded {
-			ext, scale_factor, ..
-		} = self.gui
-		else {
+		let Gui::Embedded { scale_factor, .. } = self.gui else {
 			return None;
 		};
 
-		let GuiSize { width, height } = ext.get_size(&mut self.instance.plugin_handle())?;
+		let GuiSize { width, height } = self
+			.instance
+			.access_shared_handler(|s| *s.gui.get().unwrap())
+			.get_size(&mut self.instance.plugin_handle())?;
 		Some(Size::from_native((width as f32, height as f32)).ensure_logical(scale_factor))
 	}
 
 	#[must_use]
 	pub fn resize(&mut self, size: Size) -> Option<Size> {
 		let Gui::Embedded {
-			ext,
 			can_resize,
 			scale_factor,
 		} = self.gui
@@ -218,7 +218,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			return None;
 		};
 
-		if !can_resize? {
+		if !can_resize.unwrap() {
 			return None;
 		}
 
@@ -228,6 +228,9 @@ impl<Event: EventImpl> Plugin<Event> {
 			height: height as u32,
 		};
 
+		let ext = self
+			.instance
+			.access_shared_handler(|s| *s.gui.get().unwrap());
 		let size = ext
 			.adjust_size(&mut self.instance.plugin_handle(), size)
 			.unwrap();
@@ -247,9 +250,7 @@ impl<Event: EventImpl> Plugin<Event> {
 	pub fn latency_changed(&mut self) {
 		let latency = self
 			.instance
-			.plugin_handle()
-			.get_extension::<PluginLatency>()
-			.unwrap()
+			.access_shared_handler(|s| *s.latency.get().unwrap())
 			.get(&mut self.instance.plugin_handle());
 
 		self.sender
@@ -258,11 +259,7 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn set_realtime(&mut self, realtime: bool) {
-		if let Some(render) = self
-			.instance
-			.plugin_handle()
-			.get_extension::<PluginRender>()
-		{
+		if let Some(&render) = self.instance.access_shared_handler(|s| s.render.get()) {
 			render
 				.set(
 					&mut self.instance.plugin_handle(),
@@ -281,8 +278,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		let mut buf = Vec::new();
 
 		self.instance
-			.plugin_handle()
-			.get_extension::<PluginState>()?
+			.access_shared_handler(|s| s.state.get().copied())?
 			.save(&mut self.instance.plugin_handle(), &mut buf)
 			.ok()?;
 
@@ -291,9 +287,7 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	pub fn set_state(&mut self, buf: &[u8]) {
 		self.instance
-			.plugin_handle()
-			.get_extension::<PluginState>()
-			.unwrap()
+			.access_shared_handler(|s| s.state.get().copied().unwrap())
 			.load(&mut self.instance.plugin_handle(), &mut Cursor::new(buf))
 			.unwrap();
 	}

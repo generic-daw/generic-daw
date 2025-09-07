@@ -1,6 +1,6 @@
-use crate::{EventImpl, MainThreadMessage, events::ClapEvent};
+use crate::{EventImpl, MainThreadMessage, events::ClapEvent, host::Host};
 use async_channel::Sender;
-use clack_extensions::note_ports::{NoteDialect, NotePortInfoBuffer, PluginNotePorts};
+use clack_extensions::note_ports::{NoteDialect, NotePortInfoBuffer};
 use clack_host::{
 	events::{
 		Match,
@@ -19,7 +19,7 @@ pub struct EventBuffers {
 }
 
 impl EventBuffers {
-	pub fn new(plugin: &mut PluginMainThreadHandle<'_>) -> Self {
+	pub fn new(plugin: &mut PluginInstance<Host>) -> Self {
 		let (main_input_port, input_prefers_midi) =
 			Self::from_ports(plugin, true).unwrap_or_default();
 
@@ -32,18 +32,21 @@ impl EventBuffers {
 		}
 	}
 
-	fn from_ports(plugin: &mut PluginMainThreadHandle<'_>, is_input: bool) -> Option<(u16, bool)> {
-		let ports = plugin.get_extension::<PluginNotePorts>()?;
+	fn from_ports(plugin: &mut PluginInstance<Host>, is_input: bool) -> Option<(u16, bool)> {
+		let ports = *plugin.access_shared_handler(|s| s.note_ports.get())?;
 
 		let mut buffer = NotePortInfoBuffer::new();
 
-		(0..ports.count(plugin, is_input).min(u16::MAX.into())).find_map(|i| {
-			let port = ports.get(plugin, i, is_input, &mut buffer)?;
+		(0..ports
+			.count(&mut plugin.plugin_handle(), is_input)
+			.min(u16::MAX.into()))
+			.find_map(|i| {
+				let port = ports.get(&mut plugin.plugin_handle(), i, is_input, &mut buffer)?;
 
-			(port.supported_dialects.supports(NoteDialect::Midi)
-				|| port.supported_dialects.supports(NoteDialect::Clap))
-			.then_some((i as u16, port.preferred_dialect == Some(NoteDialect::Midi)))
-		})
+				(port.supported_dialects.supports(NoteDialect::Midi)
+					|| port.supported_dialects.supports(NoteDialect::Clap))
+				.then_some((i as u16, port.preferred_dialect == Some(NoteDialect::Midi)))
+			})
 	}
 
 	pub fn read_in(&mut self, events: &mut Vec<impl EventImpl>) {

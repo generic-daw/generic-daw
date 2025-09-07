@@ -1,4 +1,5 @@
-use clack_extensions::params::{ParamInfo, ParamInfoBuffer, ParamInfoFlags, PluginParams};
+use crate::host::Host;
+use clack_extensions::params::{ParamInfo, ParamInfoBuffer, ParamInfoFlags};
 use clack_host::{prelude::*, utils::Cookie};
 use std::{mem::MaybeUninit, ops::RangeInclusive, sync::Arc};
 
@@ -32,14 +33,17 @@ impl TryFrom<ParamInfo<'_>> for Param {
 }
 
 impl Param {
-	pub fn all(plugin: &mut PluginMainThreadHandle<'_>) -> Option<Box<[Self]>> {
-		let ext = plugin.get_extension::<PluginParams>()?;
+	pub fn all(plugin: &mut PluginInstance<Host>) -> Option<Box<[Self]>> {
+		let ext = *plugin.access_shared_handler(|s| s.params.get())?;
 
-		let count = ext.count(plugin) as usize;
+		let count = ext.count(&mut plugin.plugin_handle()) as usize;
 		let buffer = &mut ParamInfoBuffer::new();
 
 		let mut params = (0..)
-			.filter_map(|index| ext.get_info(plugin, index, buffer).map(Self::try_from))
+			.filter_map(|index| {
+				ext.get_info(&mut plugin.plugin_handle(), index, buffer)
+					.map(Self::try_from)
+			})
 			.take(count)
 			.flatten()
 			.collect::<Box<_>>();
@@ -51,22 +55,25 @@ impl Param {
 		Some(params)
 	}
 
-	pub fn rescan_value(&mut self, plugin: &mut PluginMainThreadHandle<'_>) {
-		if let Some(ext) = plugin.get_extension::<PluginParams>()
-			&& let Some(value) = ext.get_value(plugin, self.id)
+	pub fn rescan_value(&mut self, plugin: &mut PluginInstance<Host>) {
+		if let Some(&ext) = plugin.access_shared_handler(|s| s.params.get())
+			&& let Some(value) = ext.get_value(&mut plugin.plugin_handle(), self.id)
 		{
 			self.update_with_value(value as f32, plugin);
 		}
 	}
 
-	pub fn update_with_value(&mut self, value: f32, plugin: &mut PluginMainThreadHandle<'_>) {
+	pub fn update_with_value(&mut self, value: f32, plugin: &mut PluginInstance<Host>) {
 		self.value = value;
 
 		let value = f64::from(value);
-		self.value_text = if let Some(ext) = plugin.get_extension::<PluginParams>()
-			&& let Ok(value_text) =
-				ext.value_to_text(plugin, self.id, value, &mut [MaybeUninit::zeroed(); 32])
-			&& let Ok(value_text) = str::from_utf8(value_text)
+		self.value_text = if let Some(&ext) = plugin.access_shared_handler(|s| s.params.get())
+			&& let Ok(value_text) = ext.value_to_text(
+				&mut plugin.plugin_handle(),
+				self.id,
+				value,
+				&mut [MaybeUninit::zeroed(); 32],
+			) && let Ok(value_text) = str::from_utf8(value_text)
 			&& !value_text.is_empty()
 		{
 			Some(value_text.into())

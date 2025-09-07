@@ -1,14 +1,11 @@
-use clack_extensions::gui::{GuiApiType, GuiConfiguration, PluginGui};
-use clack_host::plugin::PluginMainThreadHandle;
-use generic_daw_utils::NoDebug;
+use crate::host::Host;
+use clack_extensions::gui::{GuiApiType, GuiConfiguration};
+use clack_host::plugin::PluginInstance;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Gui {
-	Floating {
-		ext: NoDebug<PluginGui>,
-	},
+	Floating,
 	Embedded {
-		ext: NoDebug<PluginGui>,
 		can_resize: Option<bool>,
 		scale_factor: f32,
 	},
@@ -16,36 +13,28 @@ pub enum Gui {
 }
 
 impl Gui {
-	pub fn new(plugin: &mut PluginMainThreadHandle<'_>) -> Self {
+	pub fn new(plugin: &mut PluginInstance<Host>) -> Self {
 		plugin
-			.get_extension::<PluginGui>()
+			.access_shared_handler(|s| s.gui.get().copied())
 			.map_or(Self::None, |ext| {
 				let mut config = GuiConfiguration {
 					api_type: const { GuiApiType::default_for_current_platform().unwrap() },
 					is_floating: false,
 				};
 
-				if ext.is_api_supported(plugin, config) {
+				if ext.is_api_supported(&mut plugin.plugin_handle(), config) {
 					Self::Embedded {
-						ext: ext.into(),
 						can_resize: None,
 						scale_factor: 1.0,
 					}
 				} else {
 					config.is_floating = true;
-					if ext.is_api_supported(plugin, config) {
-						Self::Floating { ext: ext.into() }
+					if ext.is_api_supported(&mut plugin.plugin_handle(), config) {
+						Self::Floating
 					} else {
 						Self::None
 					}
 				}
 			})
-	}
-
-	pub fn ext(&self) -> Option<PluginGui> {
-		match self {
-			Self::Floating { ext } | Self::Embedded { ext, .. } => Some(ext.0),
-			Self::None => None,
-		}
 	}
 }

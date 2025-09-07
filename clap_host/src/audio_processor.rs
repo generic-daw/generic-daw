@@ -3,7 +3,6 @@ use crate::{
 	event_buffers::EventBuffers,
 };
 use async_channel::Receiver;
-use clack_extensions::params::PluginParams;
 use clack_host::process::PluginAudioProcessor;
 use generic_daw_utils::NoDebug;
 use log::{trace, warn};
@@ -111,11 +110,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 		self.event_buffers.read_in(events);
 
-		if let Some(params) = self
-			.processor
-			.plugin_handle()
-			.get_extension::<PluginParams>()
-		{
+		if let Some(&params) = self.processor.access_shared_handler(|s| s.params.get()) {
 			params.flush_active(
 				&mut self.processor.plugin_handle(),
 				&self.event_buffers.input_events.as_input(),

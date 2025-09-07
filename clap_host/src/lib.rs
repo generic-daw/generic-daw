@@ -162,8 +162,8 @@ pub fn init<Event: EventImpl>(
 		max_frames_count: max_buffer_size / 2,
 	};
 
-	let audio_buffers = AudioBuffers::new(&mut instance.plugin_handle(), config);
-	let event_buffers = EventBuffers::new(&mut instance.plugin_handle());
+	let audio_buffers = AudioBuffers::new(&mut instance, config);
+	let event_buffers = EventBuffers::new(&mut instance);
 	let id = PluginId::unique();
 
 	let plugin_audio_processor = AudioProcessor::new(
@@ -177,8 +177,8 @@ pub fn init<Event: EventImpl>(
 		audio_receiver,
 	);
 
-	let params = Param::all(&mut instance.plugin_handle()).unwrap_or_default();
-	let gui = Gui::new(&mut instance.plugin_handle());
+	let params = Param::all(&mut instance).unwrap_or_default();
+	let gui = Gui::new(&mut instance);
 
 	let plugin = Plugin::new(instance, gui, descriptor, audio_sender, id, params);
 
