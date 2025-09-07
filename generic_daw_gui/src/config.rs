@@ -74,7 +74,7 @@ impl Default for Autosave {
 fn default_sample_paths() -> Vec<Arc<Path>> {
 	vec![
 		dirs::home_dir().unwrap().into(),
-		dirs::data_dir().unwrap().join("Generic Daw").into(),
+		dirs::data_dir().unwrap().join("Generic DAW").into(),
 	]
 }
 

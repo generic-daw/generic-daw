@@ -24,7 +24,7 @@ use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
 	AudioClip, Clip, Decibels, MidiClip, MidiNote, MusicalTime, NodeId, Recording, Sample, Update,
-	clap_host::{self, MainThreadMessage, PluginBundle, PluginDescriptor},
+	clap_host::{self, HostInfo, MainThreadMessage, PluginBundle, PluginDescriptor},
 };
 use generic_daw_utils::{EnumDispatcher, NoDebug, Vec2};
 use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
@@ -56,7 +56,7 @@ use std::{
 	iter::once,
 	ops::Deref as _,
 	path::Path,
-	sync::{Arc, Weak},
+	sync::{Arc, LazyLock, Weak},
 	time::{Duration, Instant, SystemTime},
 };
 
@@ -266,11 +266,21 @@ impl ArrangementView {
 			Message::ChannelPanChanged(id, pan) => self.arrangement.node_pan_changed(id, pan),
 			Message::ChannelToggleEnabled(id) => self.arrangement.node_toggle_enabled(id),
 			Message::PluginLoad(node, descriptor, show) => {
+				static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
+					HostInfo::new_from_cstring(
+						c"Generic DAW".to_owned(),
+						c"Generic DAW".to_owned(),
+						c"https://github.com/generic-daw/generic-daw".to_owned(),
+						c"0.0.0".to_owned(),
+					)
+				});
+
 				let (plugin, receiver, audio_processor) = clap_host::init(
 					&plugin_bundles[&descriptor],
 					descriptor,
 					self.arrangement.rtstate().sample_rate,
 					self.arrangement.rtstate().buffer_size,
+					&HOST,
 				);
 				let id = plugin.plugin_id();
 
@@ -1268,7 +1278,7 @@ fn format_pan(pan: f32) -> String {
 fn recording_path() -> Arc<Path> {
 	let file_name = format!("recording-{}.wav", format_rfc3339(SystemTime::now()));
 
-	let data_dir = dirs::data_dir().unwrap().join("Generic Daw");
+	let data_dir = dirs::data_dir().unwrap().join("Generic DAW");
 	_ = std::fs::create_dir(&data_dir);
 
 	data_dir.join(file_name).into()

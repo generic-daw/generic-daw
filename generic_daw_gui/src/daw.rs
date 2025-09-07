@@ -150,7 +150,7 @@ impl Daw {
 			Message::OpenFileDialog => {
 				return Task::future(
 					AsyncFileDialog::new()
-						.add_filter("Generic Daw project file", &["gdp"])
+						.add_filter("Generic DAW project file", &["gdp"])
 						.pick_file(),
 				)
 				.and_then(Task::done)
@@ -173,7 +173,7 @@ impl Daw {
 			Message::SaveAsFileDialog => {
 				return Task::future(
 					AsyncFileDialog::new()
-						.add_filter("Generic Daw project file", &["gdp"])
+						.add_filter("Generic DAW project file", &["gdp"])
 						.save_file(),
 				)
 				.and_then(Task::done)

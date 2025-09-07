@@ -34,6 +34,7 @@ pub use audio_processor::AudioProcessor;
 pub use clack_extensions::params::ParamInfoFlags;
 pub use clack_host::{
 	bundle::PluginBundle,
+	host::HostInfo,
 	utils::{ClapId, Cookie},
 };
 pub use event_impl::EventImpl;
@@ -136,6 +137,7 @@ pub fn init<Event: EventImpl>(
 	descriptor: PluginDescriptor,
 	sample_rate: u32,
 	max_buffer_size: u32,
+	host: &HostInfo,
 ) -> (
 	Plugin<Event>,
 	Receiver<MainThreadMessage<Event>>,
@@ -149,7 +151,7 @@ pub fn init<Event: EventImpl>(
 		|shared| MainThread::new(shared),
 		bundle,
 		&descriptor.id,
-		&HostInfo::new("", "", "", "").unwrap(),
+		host,
 	)
 	.unwrap();
 
