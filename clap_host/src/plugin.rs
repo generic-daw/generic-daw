@@ -5,9 +5,11 @@ use crate::{
 use async_channel::Sender;
 use clack_extensions::{
 	gui::{GuiConfiguration, GuiSize, Window as ClapWindow},
+	latency::PluginLatency,
 	params::ParamInfoFlags,
-	render::RenderMode,
-	timer::TimerId,
+	render::{PluginRender, RenderMode},
+	state::PluginState,
+	timer::{PluginTimer, TimerId},
 };
 use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
@@ -110,25 +112,23 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn update_param(&mut self, param_id: ClapId, value: f32) {
-		let ext = self.instance.access_handler(|mt| mt.params).unwrap().0;
 		self.params
 			.iter_mut()
 			.find(|param| param.id == param_id)
 			.unwrap()
-			.update_with_value(f64::from(value), &mut self.instance.plugin_handle(), ext);
+			.update_with_value(f64::from(value), &mut self.instance.plugin_handle());
 	}
 
 	pub fn rescan_values(&mut self) {
-		let ext = self.instance.access_handler(|mt| mt.params).unwrap().0;
-
 		for param in &mut *self.params {
-			param.rescan_value(&mut self.instance.plugin_handle(), ext);
+			param.rescan_value(&mut self.instance.plugin_handle());
 		}
 	}
 
 	pub fn tick_timer(&mut self, id: u32) {
 		self.instance
-			.access_handler(|mt| mt.timers)
+			.plugin_handle()
+			.get_extension::<PluginTimer>()
 			.unwrap()
 			.on_timer(&mut self.instance.plugin_handle(), TimerId(id));
 	}
@@ -239,7 +239,8 @@ impl<Event: EventImpl> Plugin<Event> {
 	pub fn latency_changed(&mut self) {
 		let latency = self
 			.instance
-			.access_handler(|mt| mt.latency)
+			.plugin_handle()
+			.get_extension::<PluginLatency>()
 			.unwrap()
 			.get(&mut self.instance.plugin_handle());
 
@@ -249,7 +250,11 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn set_realtime(&mut self, realtime: bool) {
-		if let Some(render) = self.instance.access_handler(|mt| mt.render) {
+		if let Some(render) = self
+			.instance
+			.plugin_handle()
+			.get_extension::<PluginRender>()
+		{
 			render
 				.set(
 					&mut self.instance.plugin_handle(),
@@ -268,7 +273,8 @@ impl<Event: EventImpl> Plugin<Event> {
 		let mut buf = Vec::new();
 
 		self.instance
-			.access_handler(|mt| mt.state)?
+			.plugin_handle()
+			.get_extension::<PluginState>()?
 			.save(&mut self.instance.plugin_handle(), &mut buf)
 			.ok()?;
 
@@ -277,7 +283,8 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	pub fn set_state(&mut self, buf: &[u8]) {
 		self.instance
-			.access_handler(|mt| mt.state)
+			.plugin_handle()
+			.get_extension::<PluginState>()
 			.unwrap()
 			.load(&mut self.instance.plugin_handle(), &mut Cursor::new(buf))
 			.unwrap();

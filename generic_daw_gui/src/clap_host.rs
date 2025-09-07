@@ -254,9 +254,7 @@ impl ClapHost {
 								.reset(param.reset)
 								.radius(25.0)
 								.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
-								.maybe_tooltip(
-									(!param.value_text.is_empty()).then_some(&param.value_text)
-								)
+								.maybe_tooltip(param.value_text.as_deref())
 							)
 							.padding([0, 10]),
 							text(&*param.name)

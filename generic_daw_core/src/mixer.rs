@@ -49,12 +49,14 @@ impl NodeImpl for Mixer {
 			return;
 		}
 
-		self.plugins
-			.iter_mut()
-			.filter(|entry| entry.enabled)
-			.for_each(|entry| {
+		for entry in &mut self.plugins {
+			if entry.enabled {
 				entry.processor.process(audio, events, entry.mix);
-			});
+			} else {
+				entry.processor.flush(events);
+				events.clear();
+			}
+		}
 
 		let [lpan, rpan] = pan(self.pan).map(|s| s * self.volume);
 
@@ -77,6 +79,7 @@ impl NodeImpl for Mixer {
 	fn delay(&self) -> usize {
 		self.plugins
 			.iter()
+			.filter(|entry| entry.enabled)
 			.map(|entry| entry.processor.delay())
 			.sum()
 	}

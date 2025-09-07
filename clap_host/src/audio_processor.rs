@@ -3,6 +3,7 @@ use crate::{
 	event_buffers::EventBuffers,
 };
 use async_channel::Receiver;
+use clack_extensions::params::PluginParams;
 use clack_host::process::StartedPluginAudioProcessor;
 use generic_daw_utils::NoDebug;
 use log::trace;
@@ -56,7 +57,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		self.id
 	}
 
-	pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32) {
+	fn recv_events(&mut self, events: &mut Vec<Event>) {
 		while let Ok(msg) = self.receiver.try_recv() {
 			trace!("{}: {msg:?}", self.descriptor);
 
@@ -80,6 +81,10 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 				AudioThreadMessage::Event(event) => events.push(event),
 			}
 		}
+	}
+
+	pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32) {
+		self.recv_events(events);
 
 		self.audio_buffers.read_in(audio);
 		self.event_buffers.read_in(events);
@@ -102,6 +107,34 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		self.steady_time += u64::from(input_audio.min_available_frames_with(&output_audio));
 
 		self.audio_buffers.write_out(audio, mix_level);
+		self.event_buffers.write_out(
+			events,
+			self.started_processor
+				.as_ref()
+				.unwrap()
+				.access_shared_handler(|s| s),
+		);
+	}
+
+	pub fn flush(&mut self, events: &mut Vec<Event>) {
+		self.recv_events(events);
+
+		self.event_buffers.read_in(events);
+
+		if let Some(params) = self
+			.started_processor
+			.as_mut()
+			.unwrap()
+			.plugin_handle()
+			.get_extension::<PluginParams>()
+		{
+			params.flush_active(
+				&mut self.started_processor.as_mut().unwrap().plugin_handle(),
+				&self.event_buffers.input_events.as_input(),
+				&mut self.event_buffers.output_events.as_output(),
+			);
+		}
+
 		self.event_buffers.write_out(
 			events,
 			self.started_processor

@@ -1,16 +1,13 @@
 use crate::{EventImpl, Size, shared::Shared};
 use clack_extensions::{
 	audio_ports::{HostAudioPortsImpl, RescanType},
-	gui::PluginGui,
-	latency::{HostLatencyImpl, PluginLatency},
+	latency::HostLatencyImpl,
 	note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
-	params::{HostParamsImplMainThread, ParamClearFlags, ParamRescanFlags, PluginParams},
-	render::PluginRender,
-	state::{HostStateImpl, PluginState},
-	timer::{HostTimerImpl, PluginTimer, TimerId},
+	params::{HostParamsImplMainThread, ParamClearFlags, ParamRescanFlags},
+	state::HostStateImpl,
+	timer::{HostTimerImpl, TimerId},
 };
 use clack_host::prelude::*;
-use generic_daw_utils::NoDebug;
 use std::time::Duration;
 
 #[derive(Clone, Copy, Debug)]
@@ -31,12 +28,6 @@ pub enum MainThreadMessage<Event: EventImpl> {
 #[derive(Debug)]
 pub struct MainThread<'a, Event: EventImpl> {
 	shared: &'a Shared<Event>,
-	pub gui: Option<NoDebug<PluginGui>>,
-	pub latency: Option<NoDebug<PluginLatency>>,
-	pub params: Option<NoDebug<PluginParams>>,
-	pub render: Option<NoDebug<PluginRender>>,
-	pub state: Option<NoDebug<PluginState>>,
-	pub timers: Option<NoDebug<PluginTimer>>,
 	next_timer_id: u32,
 }
 
@@ -44,26 +35,13 @@ impl<'a, Event: EventImpl> MainThread<'a, Event> {
 	pub fn new(shared: &'a Shared<Event>) -> Self {
 		Self {
 			shared,
-			gui: None,
-			timers: None,
-			params: None,
-			render: None,
-			state: None,
-			latency: None,
 			next_timer_id: 0,
 		}
 	}
 }
 
 impl<'a, Event: EventImpl> MainThreadHandler<'a> for MainThread<'a, Event> {
-	fn initialized(&mut self, instance: InitializedPluginHandle<'_>) {
-		self.gui = instance.get_extension().map(NoDebug);
-		self.timers = instance.get_extension().map(NoDebug);
-		self.params = instance.get_extension().map(NoDebug);
-		self.render = instance.get_extension().map(NoDebug);
-		self.state = instance.get_extension().map(NoDebug);
-		self.latency = instance.get_extension().map(NoDebug);
-	}
+	fn initialized(&mut self, _instance: InitializedPluginHandle<'a>) {}
 }
 
 impl<Event: EventImpl> HostAudioPortsImpl for MainThread<'_, Event> {

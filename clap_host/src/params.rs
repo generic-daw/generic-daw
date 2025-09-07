@@ -11,7 +11,7 @@ pub struct Param {
 	pub range: RangeInclusive<f32>,
 	pub reset: f32,
 	pub value: f32,
-	pub value_text: Arc<str>,
+	pub value_text: Option<Arc<str>>,
 }
 
 impl TryFrom<ParamInfo<'_>> for Param {
@@ -26,7 +26,7 @@ impl TryFrom<ParamInfo<'_>> for Param {
 			range: value.min_value as f32..=value.max_value as f32,
 			reset: value.default_value as f32,
 			value: value.default_value as f32,
-			value_text: "".into(),
+			value_text: None,
 		})
 	}
 }
@@ -45,37 +45,33 @@ impl Param {
 			.collect::<Box<_>>();
 
 		for param in &mut params {
-			param.rescan_value(plugin, ext);
+			param.rescan_value(plugin);
 		}
 
 		Some(params)
 	}
 
-	pub fn rescan_value(&mut self, plugin: &mut PluginMainThreadHandle<'_>, ext: PluginParams) {
-		let Some(value) = ext.get_value(plugin, self.id) else {
-			return;
-		};
-
-		self.update_with_value(value, plugin, ext);
+	pub fn rescan_value(&mut self, plugin: &mut PluginMainThreadHandle<'_>) {
+		if let Some(ext) = plugin.get_extension::<PluginParams>()
+			&& let Some(value) = ext.get_value(plugin, self.id)
+		{
+			self.update_with_value(value, plugin);
+		}
 	}
 
-	pub fn update_with_value(
-		&mut self,
-		value: f64,
-		plugin: &mut PluginMainThreadHandle<'_>,
-		ext: PluginParams,
-	) {
+	pub fn update_with_value(&mut self, value: f64, plugin: &mut PluginMainThreadHandle<'_>) {
 		self.value = value as f32;
 
 		let mut buf = [MaybeUninit::uninit(); 32];
 
-		self.value_text = if let Ok(value_text) =
-			ext.value_to_text(plugin, self.id, value, &mut buf)
+		self.value_text = if let Some(ext) = plugin.get_extension::<PluginParams>()
+			&& let Ok(value_text) = ext.value_to_text(plugin, self.id, value, &mut buf)
 			&& let Ok(value_text) = str::from_utf8(value_text)
+			&& !value_text.is_empty()
 		{
-			value_text.into()
+			Some(value_text.into())
 		} else {
-			"".into()
+			None
 		};
 	}
 }
