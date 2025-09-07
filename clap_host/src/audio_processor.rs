@@ -17,7 +17,7 @@ pub enum AudioThreadMessage<Event: EventImpl> {
 
 #[derive(Debug)]
 pub struct AudioProcessor<Event: EventImpl> {
-	started_processor: Option<NoDebug<StartedPluginAudioProcessor<Host<Event>>>>,
+	started_processor: Option<NoDebug<StartedPluginAudioProcessor<Host>>>,
 	descriptor: PluginDescriptor,
 	id: PluginId,
 	steady_time: u64,
@@ -29,7 +29,7 @@ pub struct AudioProcessor<Event: EventImpl> {
 impl<Event: EventImpl> AudioProcessor<Event> {
 	#[must_use]
 	pub fn new(
-		started_processor: StartedPluginAudioProcessor<Host<Event>>,
+		started_processor: StartedPluginAudioProcessor<Host>,
 		descriptor: PluginDescriptor,
 		id: PluginId,
 		audio_buffers: AudioBuffers,

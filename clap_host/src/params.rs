@@ -55,17 +55,17 @@ impl Param {
 		if let Some(ext) = plugin.get_extension::<PluginParams>()
 			&& let Some(value) = ext.get_value(plugin, self.id)
 		{
-			self.update_with_value(value, plugin);
+			self.update_with_value(value as f32, plugin);
 		}
 	}
 
-	pub fn update_with_value(&mut self, value: f64, plugin: &mut PluginMainThreadHandle<'_>) {
-		self.value = value as f32;
+	pub fn update_with_value(&mut self, value: f32, plugin: &mut PluginMainThreadHandle<'_>) {
+		self.value = value;
 
-		let mut buf = [MaybeUninit::uninit(); 32];
-
+		let value = f64::from(value);
 		self.value_text = if let Some(ext) = plugin.get_extension::<PluginParams>()
-			&& let Ok(value_text) = ext.value_to_text(plugin, self.id, value, &mut buf)
+			&& let Ok(value_text) =
+				ext.value_to_text(plugin, self.id, value, &mut [MaybeUninit::zeroed(); 32])
 			&& let Ok(value_text) = str::from_utf8(value_text)
 			&& !value_text.is_empty()
 		{

@@ -19,7 +19,7 @@ use std::{io::Cursor, panic};
 
 #[derive(Debug)]
 pub struct Plugin<Event: EventImpl> {
-	instance: NoDebug<PluginInstance<Host<Event>>>,
+	instance: NoDebug<PluginInstance<Host>>,
 	gui: Gui,
 	descriptor: PluginDescriptor,
 	id: PluginId,
@@ -31,7 +31,7 @@ pub struct Plugin<Event: EventImpl> {
 impl<Event: EventImpl> Plugin<Event> {
 	#[must_use]
 	pub fn new(
-		instance: PluginInstance<Host<Event>>,
+		instance: PluginInstance<Host>,
 		gui: Gui,
 		descriptor: PluginDescriptor,
 		sender: Sender<AudioThreadMessage<Event>>,
@@ -116,7 +116,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			.iter_mut()
 			.find(|param| param.id == param_id)
 			.unwrap()
-			.update_with_value(f64::from(value), &mut self.instance.plugin_handle());
+			.update_with_value(value, &mut self.instance.plugin_handle());
 	}
 
 	pub fn rescan_values(&mut self) {

@@ -140,7 +140,7 @@ pub fn init<Event: EventImpl>(
 	host: &HostInfo,
 ) -> (
 	Plugin<Event>,
-	Receiver<MainThreadMessage<Event>>,
+	Receiver<MainThreadMessage>,
 	AudioProcessor<Event>,
 ) {
 	let (main_sender, main_receiver) = async_channel::unbounded();

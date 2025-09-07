@@ -21,13 +21,10 @@ use std::{ops::Deref as _, sync::Arc, time::Duration};
 
 #[derive(Clone, Debug)]
 pub enum Message {
-	MainThread(PluginId, MainThreadMessage<Event>),
+	MainThread(PluginId, MainThreadMessage),
 	SendEvent(PluginId, Event),
 	TickTimer(usize, u32),
-	Loaded(
-		Arc<Fragile<Plugin<Event>>>,
-		Receiver<MainThreadMessage<Event>>,
-	),
+	Loaded(Arc<Fragile<Plugin<Event>>>, Receiver<MainThreadMessage>),
 	GuiShown(Arc<Fragile<Plugin<Event>>>),
 	GuiSetState(PluginId, Box<[u8]>),
 	GuiRequestResize(Id, Size),
@@ -49,10 +46,15 @@ impl ClapHost {
 			Message::MainThread(id, msg) => return self.main_thread_message(id, msg, config),
 			Message::SendEvent(id, event) => {
 				self.plugins.get_mut(*id).unwrap().send_event(event);
-				return self.update(
-					Message::MainThread(id, MainThreadMessage::LiveEvent(event)),
-					config,
-				);
+				if let Event::ParamValue {
+					param_id, value, ..
+				} = event
+				{
+					return self.update(
+						Message::MainThread(id, MainThreadMessage::ParamChanged(param_id, value)),
+						config,
+					);
+				}
 			}
 			Message::TickTimer(id, timer_id) => {
 				self.plugins.get_mut(id).unwrap().tick_timer(timer_id);
@@ -108,7 +110,7 @@ impl ClapHost {
 	fn main_thread_message(
 		&mut self,
 		id: PluginId,
-		msg: MainThreadMessage<Event>,
+		msg: MainThreadMessage,
 		config: &Config,
 	) -> Task<Message> {
 		let Some(plugin) = self.plugins.get_mut(*id) else {
@@ -203,18 +205,9 @@ impl ClapHost {
 			}
 			MainThreadMessage::LatencyChanged => plugin.latency_changed(),
 			MainThreadMessage::RescanValues => plugin.rescan_values(),
-			MainThreadMessage::LiveEvent(msg) => return Self::live_event(plugin, msg),
-		}
-
-		Task::none()
-	}
-
-	fn live_event(plugin: &mut Plugin<Event>, event: Event) -> Task<Message> {
-		if let Event::ParamValue {
-			param_id, value, ..
-		} = event
-		{
-			plugin.update_param(param_id, value);
+			MainThreadMessage::ParamChanged(param_id, value) => {
+				plugin.update_param(param_id, value);
+			}
 		}
 
 		Task::none()

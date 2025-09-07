@@ -66,7 +66,7 @@ impl clap_host::EventImpl for Event {
 				time,
 				key,
 				velocity,
-			} => ClapEvent::NoteOnEvent(NoteOnEvent::new(
+			} => ClapEvent::NoteOn(NoteOnEvent::new(
 				time,
 				Pckn::new(port_index, Match::All, key, Match::All),
 				velocity.into(),
@@ -75,16 +75,16 @@ impl clap_host::EventImpl for Event {
 				time,
 				key,
 				velocity,
-			} => ClapEvent::NoteOffEvent(NoteOffEvent::new(
+			} => ClapEvent::NoteOff(NoteOffEvent::new(
 				time,
 				Pckn::new(port_index, Match::All, key, Match::All),
 				velocity.into(),
 			)),
-			Self::Choke { time, key } => ClapEvent::NoteChokeEvent(NoteChokeEvent::new(
+			Self::Choke { time, key } => ClapEvent::NoteChoke(NoteChokeEvent::new(
 				time,
 				Pckn::new(port_index, Match::All, key, Match::All),
 			)),
-			Self::End { time, key } => ClapEvent::NoteEndEvent(NoteEndEvent::new(
+			Self::End { time, key } => ClapEvent::NoteEnd(NoteEndEvent::new(
 				time,
 				Pckn::new(port_index, Match::All, key, Match::All),
 			)),
@@ -93,7 +93,7 @@ impl clap_host::EventImpl for Event {
 				param_id,
 				value,
 				cookie,
-			} => ClapEvent::ParamValueEvent(ParamValueEvent::new(
+			} => ClapEvent::ParamValue(ParamValueEvent::new(
 				time,
 				param_id,
 				Pckn::new(port_index, Match::All, Match::All, Match::All),
@@ -135,43 +135,31 @@ impl clap_host::EventImpl for Event {
 	}
 
 	fn try_from_unknown(value: &UnknownEvent) -> Option<Self> {
-		value
-			.as_event::<MidiEvent>()
-			.map_or_else(|| Self::from_clap(value), Self::from_midi)
-	}
-}
+		if let Some(event) = value.as_event::<MidiEvent>() {
+			let time = event.time();
+			let data = event.data();
+			let value = f32::from(data[2]) / 127.0;
 
-impl Event {
-	fn from_midi(event: &MidiEvent) -> Option<Self> {
-		let time = event.time();
-		let data = event.data();
-		let kind = data[0] & 0xf0;
-		let bytes = data[1];
-		let value = f32::from(data[2]) / 127.0;
-
-		match kind {
-			0x90 => Some(Self::On {
-				time,
-				key: bytes,
-				velocity: value,
-			}),
-			0x80 => Some(Self::Off {
-				time,
-				key: bytes,
-				velocity: value,
-			}),
-			0xb0 if bytes < 0x78 => Some(Self::ParamValue {
-				time,
-				param_id: ClapId::from_raw(bytes.into())?,
-				value,
-				cookie: Cookie::empty(),
-			}),
-			_ => None,
-		}
-	}
-
-	fn from_clap(value: &UnknownEvent) -> Option<Self> {
-		if let Some(event) = value.as_event::<NoteOnEvent>() {
+			match data[0] & 0xf0 {
+				0x90 => Some(Self::On {
+					time,
+					key: data[1],
+					velocity: value,
+				}),
+				0x80 => Some(Self::Off {
+					time,
+					key: data[1],
+					velocity: value,
+				}),
+				0xb0 if data[1] < 0x78 => Some(Self::ParamValue {
+					time,
+					param_id: ClapId::from_raw(data[1].into())?,
+					value,
+					cookie: Cookie::empty(),
+				}),
+				_ => None,
+			}
+		} else if let Some(event) = value.as_event::<NoteOnEvent>() {
 			Some(Self::On {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,

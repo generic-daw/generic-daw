@@ -1,8 +1,8 @@
-use crate::{EventImpl, MainThreadMessage, shared::Shared};
+use crate::{EventImpl, MainThreadMessage, events::ClapEvent, shared::Shared};
 use clack_extensions::note_ports::{NoteDialect, NotePortInfoBuffer, PluginNotePorts};
 use clack_host::{
 	events::{
-		EventFlags, Match,
+		Match,
 		event_types::{MidiEvent, NoteChokeEvent},
 	},
 	prelude::*,
@@ -61,16 +61,22 @@ impl EventBuffers {
 		self.input_events.sort();
 	}
 
-	pub fn write_out<Event: EventImpl>(&mut self, events: &mut Vec<Event>, shared: &Shared<Event>) {
+	pub fn write_out<Event: EventImpl>(&mut self, events: &mut Vec<Event>, shared: &Shared) {
 		for unknown in &self.output_events {
 			let Some(event) = Event::try_from_unknown(unknown) else {
 				continue;
 			};
 
-			if unknown.header().flags().contains(EventFlags::IS_LIVE) {
+			// the reference host handles:
+			// - CLAP_EVENT_PARAM_VALUE
+			// - CLAP_EVENT_PARAM_GESTURE_BEGIN (we don't have this)
+			// - CLAP_EVENT_PARAM_GESTURE_END (we don't have this)
+			if let ClapEvent::ParamValue(event) = event.to_clap(0)
+				&& let Some(id) = event.param_id()
+			{
 				shared
 					.sender
-					.try_send(MainThreadMessage::LiveEvent(event))
+					.try_send(MainThreadMessage::ParamChanged(id, event.value() as f32))
 					.unwrap();
 			} else {
 				events.push(event);
