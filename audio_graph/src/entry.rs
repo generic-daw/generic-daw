@@ -5,17 +5,17 @@ use generic_daw_utils::HoleyVec;
 pub struct Entry<Node: NodeImpl> {
 	pub node: Node,
 	pub connections: HoleyVec<(Vec<f32>, Vec<Node::Event>)>,
-	pub audio: Vec<f32>,
+	pub audio: Box<[f32]>,
 	pub events: Vec<Node::Event>,
 	pub delay: usize,
 }
 
 impl<Node: NodeImpl> Entry<Node> {
-	pub fn new(node: Node) -> Self {
+	pub fn new(node: Node, buffer_size: u32) -> Self {
 		Self {
 			node,
 			connections: HoleyVec::default(),
-			audio: Vec::new(),
+			audio: vec![0.0; buffer_size as usize].into_boxed_slice(),
 			events: Vec::new(),
 			delay: 0,
 		}

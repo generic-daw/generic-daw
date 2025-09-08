@@ -114,7 +114,7 @@ impl DawCtx {
 		};
 
 		let audio_ctx = Self {
-			audio_graph: AudioGraph::new(master.into()),
+			audio_graph: AudioGraph::new(master.into(), buffer_size),
 			state: State {
 				rtstate,
 				update: Update::new(version),
@@ -162,7 +162,8 @@ impl DawCtx {
 				}
 				Message::RequestAudioGraph(sender) => {
 					debug_assert!(self.receiver.is_empty());
-					let mut audio_graph = AudioGraph::new(Mixer::default().into());
+					let mut audio_graph =
+						AudioGraph::new(Mixer::default().into(), self.state.rtstate.buffer_size);
 					std::mem::swap(&mut self.audio_graph, &mut audio_graph);
 					sender.send(audio_graph).unwrap();
 				}

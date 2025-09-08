@@ -6,6 +6,7 @@ use generic_daw_utils::{HoleyVec, RotateConcatExt as _};
 pub struct AudioGraph<Node: NodeImpl> {
 	graph: HoleyVec<Entry<Node>>,
 	root: NodeId,
+	buffer_size: u32,
 	list: Vec<usize>,
 	swap_list: Vec<usize>,
 	to_visit: BitSet,
@@ -14,15 +15,16 @@ pub struct AudioGraph<Node: NodeImpl> {
 
 impl<Node: NodeImpl> AudioGraph<Node> {
 	#[must_use]
-	pub fn new(node: Node) -> Self {
+	pub fn new(node: Node, buffer_size: u32) -> Self {
 		let root = node.id();
 
 		let mut graph = HoleyVec::default();
-		graph.insert(*root, Entry::new(node));
+		graph.insert(*root, Entry::new(node, buffer_size));
 
 		Self {
 			graph,
 			root,
+			buffer_size,
 			list: vec![*root],
 			swap_list: Vec::new(),
 			seen: BitSet::default(),
@@ -31,12 +33,18 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	pub fn process(&mut self, state: &mut Node::State, buf: &mut [f32]) {
+		let len = buf.len();
+
 		for &node in &self.list {
+			let mut entry = self.graph.remove(node).unwrap();
+
 			for s in &mut *buf {
 				*s = 0.0;
 			}
-
-			let mut entry = self.graph.remove(node).unwrap();
+			for s in &mut entry.audio[..len] {
+				*s = 0.0;
+			}
+			entry.events.clear();
 
 			let max_delay = entry
 				.connections
@@ -45,20 +53,16 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 				.max()
 				.unwrap_or_default();
 
-			entry.audio.clear();
-			entry.audio.resize(buf.len(), 0.0);
-			entry.events.clear();
-
 			for (dep, (audio, events)) in entry.connections.iter_mut() {
 				let dep_entry = &self.graph[dep];
 				let dep_delay = max_delay - dep_entry.delay;
 
-				buf.copy_from_slice(&dep_entry.audio);
+				buf.copy_from_slice(&dep_entry.audio[..len]);
 				audio.resize(dep_delay, 0.0);
 				audio.rotate_right_concat(buf);
 
 				buf.iter()
-					.zip(&mut entry.audio)
+					.zip(&mut entry.audio[..len])
 					.for_each(|(&sample, buf)| *buf += sample);
 
 				events.extend(
@@ -70,7 +74,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 				entry.events.extend(events.extract_if(.., |e| {
 					e.time()
-						.checked_sub(buf.len())
+						.checked_sub(len)
 						.map(|time| {
 							*e = e.with_time(time);
 						})
@@ -80,14 +84,14 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 			entry
 				.node
-				.process(state, &mut entry.audio, &mut entry.events);
+				.process(state, &mut entry.audio[..len], &mut entry.events);
 
 			entry.delay = entry.node.delay() + max_delay;
 
 			self.graph.insert(node, entry);
 		}
 
-		buf.copy_from_slice(&self.graph[*self.root()].audio);
+		buf.copy_from_slice(&self.graph[*self.root()].audio[..len]);
 	}
 
 	#[must_use]
@@ -161,7 +165,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			return;
 		}
 
-		self.graph.insert(*id, Entry::new(node));
+		self.graph.insert(*id, Entry::new(node, self.buffer_size));
 		self.list.push(*id);
 	}
 

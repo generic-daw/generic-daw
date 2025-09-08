@@ -86,19 +86,26 @@ fn build_input_stream(
 		buffer_size,
 	);
 
+	let buffer_size = match config.buffer_size {
+		BufferSize::Fixed(buffer_size) => buffer_size,
+		BufferSize::Default => buffer_size,
+	};
+	let channels = u32::from(config.channels);
+
 	info!("starting input stream with config {config:?}");
 
-	let mut stereo = vec![];
+	let frames = buffer_size / channels;
+	let mut stereo = vec![0.0; 2 * frames as usize].into_boxed_slice();
 
 	let stream = device
 		.build_input_stream(
 			&config,
 			move |buf, _| {
-				let frames = buf.len() / config.channels as usize;
-				stereo.clear();
-				stereo.resize(frames * 2, 0.0);
-				from_other_to_stereo(&mut stereo, buf, frames);
-				sender.try_send(stereo.clone().into_boxed_slice()).unwrap();
+				for buf in buf.chunks(buffer_size as usize) {
+					let frames = buf.len() / config.channels as usize;
+					from_other_to_stereo(&mut stereo[..2 * frames], buf, frames);
+					sender.try_send(stereo[..2 * frames].into()).unwrap();
+				}
 			},
 			|err| panic!("{err}"),
 			None,
@@ -139,11 +146,11 @@ pub fn build_output_stream(
 	let channels = u32::from(config.channels);
 	let frames = buffer_size / channels;
 
-	let (mut ctx, node, rtstate, sender, receiver) = DawCtx::create(sample_rate, buffer_size);
+	let (mut ctx, node, rtstate, sender, receiver) = DawCtx::create(sample_rate, 2 * frames);
 
 	info!("starting output stream with config {config:?}");
 
-	let mut stereo = Vec::with_capacity(2 * frames as usize);
+	let mut stereo = vec![0.0; 2 * frames as usize].into_boxed_slice();
 
 	let stream = device
 		.build_output_stream(
@@ -151,10 +158,8 @@ pub fn build_output_stream(
 			move |buf, _| {
 				for buf in buf.chunks_mut(buffer_size as usize) {
 					let frames = buf.len() / channels as usize;
-					stereo.clear();
-					stereo.resize(2 * frames, 0.0);
-					ctx.process(&mut stereo);
-					from_stereo_to_other(buf, &stereo, frames);
+					ctx.process(&mut stereo[..2 * frames]);
+					from_stereo_to_other(buf, &stereo[..2 * frames], frames);
 				}
 			},
 			|err| panic!("{err}"),
@@ -177,7 +182,7 @@ fn choose_config(
 		.min_by(|l, r| {
 			compare_by_sample_rate(l, r, sample_rate)
 				.then_with(|| compare_by_buffer_size(l, r, buffer_size))
-				.then_with(|| compare_by_channel_count(l, r, 2))
+				.then_with(|| compare_by_channel_count(l, r))
 		})
 		.unwrap();
 
@@ -240,17 +245,20 @@ fn compare_by_buffer_size(
 fn compare_by_channel_count(
 	l: &SupportedStreamConfigRange,
 	r: &SupportedStreamConfigRange,
-	channel_count: u16,
 ) -> Ordering {
-	let ldiff = match l.channels().cmp(&channel_count) {
-		Ordering::Less => 5,
-		Ordering::Equal => 0,
-		Ordering::Greater => l.channels(),
+	let ldiff = match l.channels() {
+		0 => u16::MAX,
+		1 => 5,
+		2 => 0,
+		x if x % 2 == 0 => x,
+		x => 2 * x,
 	};
-	let rdiff = match r.channels().cmp(&channel_count) {
-		Ordering::Less => 5,
-		Ordering::Equal => 0,
-		Ordering::Greater => r.channels(),
+	let rdiff = match r.channels() {
+		0 => u16::MAX,
+		1 => 5,
+		2 => 0,
+		x if x % 2 == 0 => x,
+		x => 2 * x,
 	};
 
 	ldiff.cmp(&rdiff)
