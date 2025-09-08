@@ -63,7 +63,7 @@ pub fn get_output_devices() -> Vec<Arc<str>> {
 		.collect()
 }
 
-pub fn build_input_stream(
+fn build_input_stream(
 	device_name: Option<&str>,
 	sample_rate: u32,
 	buffer_size: u32,
@@ -131,22 +131,31 @@ pub fn build_output_stream(
 		buffer_size,
 	);
 
-	let (mut ctx, node, rtstate, sender, receiver) =
-		DawCtx::create(config.sample_rate.0, buffer_size);
+	let sample_rate = config.sample_rate.0;
+	let buffer_size = match config.buffer_size {
+		BufferSize::Fixed(buffer_size) => buffer_size,
+		BufferSize::Default => buffer_size,
+	};
+	let channels = u32::from(config.channels);
+	let frames = buffer_size / channels;
+
+	let (mut ctx, node, rtstate, sender, receiver) = DawCtx::create(sample_rate, buffer_size);
 
 	info!("starting output stream with config {config:?}");
 
-	let mut stereo = vec![];
+	let mut stereo = Vec::with_capacity(2 * frames as usize);
 
 	let stream = device
 		.build_output_stream(
 			&config,
 			move |buf, _| {
-				let frames = buf.len() / config.channels as usize;
-				stereo.clear();
-				stereo.resize(frames * 2, 0.0);
-				ctx.process(&mut stereo);
-				from_stereo_to_other(buf, &stereo, frames);
+				for buf in buf.chunks_mut(buffer_size as usize) {
+					let frames = buf.len() / channels as usize;
+					stereo.clear();
+					stereo.resize(2 * frames, 0.0);
+					ctx.process(&mut stereo);
+					from_stereo_to_other(buf, &stereo, frames);
+				}
 			},
 			|err| panic!("{err}"),
 			None,
@@ -168,7 +177,7 @@ fn choose_config(
 		.min_by(|l, r| {
 			compare_by_sample_rate(l, r, sample_rate)
 				.then_with(|| compare_by_buffer_size(l, r, buffer_size))
-				.then_with(|| r.channels().cmp(&l.channels()))
+				.then_with(|| compare_by_channel_count(l, r, 2))
 		})
 		.unwrap();
 
@@ -228,20 +237,41 @@ fn compare_by_buffer_size(
 	}
 }
 
+fn compare_by_channel_count(
+	l: &SupportedStreamConfigRange,
+	r: &SupportedStreamConfigRange,
+	channel_count: u16,
+) -> Ordering {
+	let ldiff = match l.channels().cmp(&channel_count) {
+		Ordering::Less => 5,
+		Ordering::Equal => 0,
+		Ordering::Greater => l.channels(),
+	};
+	let rdiff = match r.channels().cmp(&channel_count) {
+		Ordering::Less => 5,
+		Ordering::Equal => 0,
+		Ordering::Greater => r.channels(),
+	};
+
+	ldiff.cmp(&rdiff)
+}
+
 fn from_stereo_to_other(a: &mut [f32], b: &[f32], frames: usize) {
 	debug_assert!(a.len().is_multiple_of(frames));
 	debug_assert!(b.len().is_multiple_of(frames));
 	debug_assert!(b.len() / frames == 2);
 
-	if a.len() >= b.len() {
-		a.chunks_exact_mut(a.len() / frames)
+	match a.len().cmp(&b.len()) {
+		Ordering::Greater => a
+			.chunks_exact_mut(a.len() / frames)
 			.flat_map(|a| a.iter_mut().take(2))
 			.zip(b)
-			.for_each(|(a, b)| *a = *b);
-	} else {
-		a.iter_mut()
+			.for_each(|(a, b)| *a = *b),
+		Ordering::Equal => a.iter_mut().zip(b).for_each(|(a, b)| *a = *b),
+		Ordering::Less => a
+			.iter_mut()
 			.zip(b.as_chunks().0.iter().map(|[l, r]| l + r))
-			.for_each(|(a, b)| *a = b);
+			.for_each(|(a, b)| *a = b),
 	}
 }
 
@@ -250,14 +280,16 @@ fn from_other_to_stereo(a: &mut [f32], b: &[f32], frames: usize) {
 	debug_assert!(a.len() / frames == 2);
 	debug_assert!(b.len().is_multiple_of(frames));
 
-	if a.len() < b.len() {
-		b.chunks_exact(b.len() / frames)
+	match a.len().cmp(&b.len()) {
+		Ordering::Less => b
+			.chunks_exact(b.len() / frames)
 			.flat_map(|b| b.iter().take(2))
 			.zip(a)
-			.for_each(|(b, a)| *a = *b);
-	} else {
-		a.iter_mut()
+			.for_each(|(b, a)| *a = *b),
+		Ordering::Equal => a.iter_mut().zip(b).for_each(|(a, b)| *a = *b),
+		Ordering::Greater => a
+			.iter_mut()
 			.zip(b.iter().flat_map(|x| [x, x]))
-			.for_each(|(a, b)| *a = *b);
+			.for_each(|(a, b)| *a = *b),
 	}
 }

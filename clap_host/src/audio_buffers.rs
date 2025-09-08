@@ -98,14 +98,14 @@ impl AudioBuffers {
 			.port_channel_counts
 			.get(self.input_config.main_port_index)
 			.filter(|&&x| x != 0)
-			.map_or(frames, |n_channels| frames / n_channels);
+			.map_or(frames, |n_channels| frames / n_channels.clamp(&1, &2));
 
 		let output_frames = self
 			.output_config
 			.port_channel_counts
 			.get(self.output_config.main_port_index)
 			.filter(|&&x| x != 0)
-			.map_or(frames, |n_channels| frames / n_channels);
+			.map_or(frames, |n_channels| frames / n_channels.clamp(&1, &2));
 
 		(
 			self.input_ports
