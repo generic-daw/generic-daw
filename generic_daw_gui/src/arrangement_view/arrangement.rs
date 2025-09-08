@@ -3,17 +3,19 @@ use super::{
 	plugin::Plugin,
 	track::Track,
 };
-use crate::config::Config;
+use crate::{
+	arrangement_view::poll_consumer, clap_host::Message as ClapHostMessage, config::Config,
+};
 use bit_set::BitSet;
 use generic_daw_core::{
-	self as core, Action, Clip, Event, Message, Mixer, MusicalTime, NodeId, NodeImpl as _, RtState,
-	Stream, StreamTrait as _, Update, Version, build_output_stream,
-	clap_host::{AudioProcessor, PluginId},
+	self as core, Action, Batch, Clip, Event, Message, Mixer, MusicalTime, NodeId, NodeImpl as _,
+	RtState, Stream, StreamTrait as _, Update, Version, build_output_stream,
+	clap_host::{AudioProcessor, MainThreadMessage, PluginId},
 	export,
 };
 use generic_daw_utils::{HoleyVec, NoDebug, ShiftMoveExt as _};
 use iced::Task;
-use smol::channel::Sender;
+use rtrb::Producer;
 use std::{path::Path, time::Instant};
 
 #[derive(Debug)]
@@ -24,13 +26,13 @@ pub struct Arrangement {
 	nodes: HoleyVec<(Node, BitSet)>,
 	master_node_id: NodeId,
 
-	sender: Sender<Message>,
+	producer: Producer<Message>,
 	stream: NoDebug<Stream>,
 }
 
 impl Arrangement {
-	pub fn create(config: &Config) -> (Self, Task<Update>) {
-		let (stream, master_node_id, rtstate, sender, receiver) = build_output_stream(
+	pub fn create(config: &Config) -> (Self, Task<Batch>) {
+		let (stream, master_node_id, rtstate, sender, consumer) = build_output_stream(
 			config.output_device.name.as_deref(),
 			config.output_device.sample_rate.unwrap_or(44100),
 			config.output_device.buffer_size.unwrap_or(1024),
@@ -52,35 +54,50 @@ impl Arrangement {
 				nodes,
 				master_node_id,
 
-				sender,
+				producer: sender,
 				stream: stream.into(),
 			},
-			Task::stream(receiver),
+			poll_consumer(consumer, rtstate.sample_rate, rtstate.frames),
 		)
 	}
 
-	pub fn update(&mut self, mut update: Update, now: Instant) {
+	pub fn update(&mut self, mut update: Batch, now: Instant) -> Task<ClapHostMessage> {
 		if let Some(sample) = update.sample
 			&& update.version.is_last()
 		{
 			self.rtstate.sample = sample;
 		}
 
-		for (node, peaks) in update.peaks.drain(..) {
-			self.nodes.get_mut(*node).unwrap().0.update(peaks, now);
-		}
+		let task = Task::batch(
+			update
+				.updates
+				.drain(..)
+				.filter_map(|event| match event {
+					Update::Peak(node, peaks) => {
+						self.nodes.get_mut(*node).unwrap().0.update(peaks, now);
+						None
+					}
+					Update::Param(id, param_id, value) => Some(ClapHostMessage::MainThread(
+						id,
+						MainThreadMessage::ParamChanged(param_id, value),
+					)),
+				})
+				.map(Task::done),
+		);
 
-		self.sender
-			.try_send(Message::ReturnUpdateBuffer(update.peaks))
+		self.producer
+			.push(Message::ReturnUpdateBuffer(update.updates))
 			.unwrap();
+
+		task
 	}
 
 	pub fn rtstate(&self) -> &RtState {
 		&self.rtstate
 	}
 
-	fn action(&self, node: NodeId, action: Action) {
-		self.sender.try_send(Message::Action(node, action)).unwrap();
+	fn action(&mut self, node: NodeId, action: Action) {
+		self.producer.push(Message::Action(node, action)).unwrap();
 	}
 
 	pub fn node_volume_changed(&mut self, node: NodeId, volume: f32) {
@@ -140,8 +157,8 @@ impl Arrangement {
 			return;
 		}
 		self.rtstate.sample = sample;
-		self.sender
-			.try_send(Message::Sample(Version::unique(), sample))
+		self.producer
+			.push(Message::Sample(Version::unique(), sample))
 			.unwrap();
 	}
 
@@ -150,7 +167,7 @@ impl Arrangement {
 			return;
 		}
 		self.rtstate.bpm = bpm;
-		self.sender.try_send(Message::Bpm(bpm)).unwrap();
+		self.producer.push(Message::Bpm(bpm)).unwrap();
 	}
 
 	pub fn set_numerator(&mut self, numerator: u8) {
@@ -158,7 +175,7 @@ impl Arrangement {
 			return;
 		}
 		self.rtstate.numerator = numerator;
-		self.sender.try_send(Message::Numerator(numerator)).unwrap();
+		self.producer.push(Message::Numerator(numerator)).unwrap();
 	}
 
 	pub fn play(&mut self) {
@@ -175,18 +192,18 @@ impl Arrangement {
 
 	pub fn toggle_playback(&mut self) {
 		self.rtstate.playing ^= true;
-		self.sender.try_send(Message::TogglePlayback).unwrap();
+		self.producer.push(Message::TogglePlayback).unwrap();
 	}
 
 	pub fn stop(&mut self) {
 		self.pause();
 		self.seek_to(MusicalTime::ZERO);
-		self.sender.try_send(Message::Reset).unwrap();
+		self.producer.push(Message::Reset).unwrap();
 	}
 
 	pub fn toggle_metronome(&mut self) {
 		self.rtstate.metronome ^= true;
-		self.sender.try_send(Message::ToggleMetronome).unwrap();
+		self.producer.push(Message::ToggleMetronome).unwrap();
 	}
 
 	pub fn master(&self) -> &(Node, BitSet) {
@@ -246,7 +263,7 @@ impl Arrangement {
 			*node.id(),
 			(Node::new(NodeType::Mixer, node.id()), BitSet::default()),
 		);
-		self.sender.try_send(Message::Insert(node.into())).unwrap();
+		self.producer.push(Message::Insert(node.into())).unwrap();
 	}
 
 	pub fn add_channel(&mut self) -> oneshot::Receiver<(NodeId, NodeId)> {
@@ -258,7 +275,7 @@ impl Arrangement {
 
 	pub fn remove_channel(&mut self, id: NodeId) -> Node {
 		let node = self.nodes.remove(*id).unwrap().0;
-		self.sender.try_send(Message::Remove(id)).unwrap();
+		self.producer.push(Message::Remove(id)).unwrap();
 		node
 	}
 
@@ -270,7 +287,7 @@ impl Arrangement {
 			*track.id(),
 			(Node::new(NodeType::Track, track.id()), BitSet::default()),
 		);
-		self.sender.try_send(Message::Insert(track.into())).unwrap();
+		self.producer.push(Message::Insert(track.into())).unwrap();
 	}
 
 	pub fn add_track(&mut self) -> oneshot::Receiver<(NodeId, NodeId)> {
@@ -284,10 +301,14 @@ impl Arrangement {
 		self.tracks.remove(idx);
 	}
 
-	pub fn request_connect(&self, from: NodeId, to: NodeId) -> oneshot::Receiver<(NodeId, NodeId)> {
+	pub fn request_connect(
+		&mut self,
+		from: NodeId,
+		to: NodeId,
+	) -> oneshot::Receiver<(NodeId, NodeId)> {
 		let (sender, receiver) = oneshot::channel();
-		self.sender
-			.try_send(Message::Connect(from, to, sender))
+		self.producer
+			.push(Message::Connect(from, to, sender))
 			.unwrap();
 		receiver
 	}
@@ -298,14 +319,14 @@ impl Arrangement {
 
 	pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
 		self.nodes.get_mut(*to).unwrap().1.remove(*from);
-		self.sender.try_send(Message::Disconnect(from, to)).unwrap();
+		self.producer.push(Message::Disconnect(from, to)).unwrap();
 	}
 
 	pub fn add_clip(&mut self, track: usize, clip: impl Into<Clip>) {
 		let clip = clip.into();
 		self.tracks[track].clips.push(clip.clone());
-		self.sender
-			.try_send(Message::Action(
+		self.producer
+			.push(Message::Action(
 				self.tracks[track].id,
 				Action::AddClip(clip),
 			))
@@ -315,8 +336,8 @@ impl Arrangement {
 	pub fn clone_clip(&mut self, track: usize, clip: usize) {
 		let clip = self.tracks[track].clips[clip].deep_clone();
 		self.tracks[track].clips.push(clip.clone());
-		self.sender
-			.try_send(Message::Action(
+		self.producer
+			.push(Message::Action(
 				self.tracks[track].id,
 				Action::AddClip(clip),
 			))
@@ -325,8 +346,8 @@ impl Arrangement {
 
 	pub fn remove_clip(&mut self, track: usize, clip: usize) {
 		self.tracks[track].clips.remove(clip);
-		self.sender
-			.try_send(Message::Action(
+		self.producer
+			.push(Message::Action(
 				self.tracks[track].id,
 				Action::RemoveClip(clip),
 			))
@@ -336,24 +357,24 @@ impl Arrangement {
 	pub fn clip_switch_track(&mut self, track: usize, clip_index: usize, new_track: usize) {
 		let clip = self.tracks[track].clips.remove(clip_index);
 		self.tracks[new_track].clips.push(clip.clone());
-		self.sender
-			.try_send(Message::Action(
+		self.producer
+			.push(Message::Action(
 				self.tracks[track].id,
 				Action::RemoveClip(clip_index),
 			))
 			.unwrap();
-		self.sender
-			.try_send(Message::Action(
+		self.producer
+			.push(Message::Action(
 				self.tracks[new_track].id,
 				Action::AddClip(clip),
 			))
 			.unwrap();
 	}
 
-	pub fn export(&self, path: &Path) {
+	pub fn export(&mut self, path: &Path) {
 		let (sender, receiver) = oneshot::channel();
-		self.sender
-			.try_send(Message::RequestAudioGraph(sender))
+		self.producer
+			.push(Message::RequestAudioGraph(sender))
 			.unwrap();
 		let mut audio_graph = receiver.recv().unwrap();
 		self.stream.pause().unwrap();
@@ -367,8 +388,8 @@ impl Arrangement {
 				.max()
 				.unwrap_or_default(),
 		);
-		self.sender
-			.try_send(Message::AudioGraph(audio_graph))
+		self.producer
+			.push(Message::AudioGraph(audio_graph))
 			.unwrap();
 		self.stream.play().unwrap();
 	}

@@ -2,10 +2,10 @@ use crate::{
 	EventImpl, Host, PluginDescriptor, PluginId, audio_buffers::AudioBuffers,
 	event_buffers::EventBuffers,
 };
-use async_channel::Receiver;
 use clack_host::process::PluginAudioProcessor;
 use generic_daw_utils::NoDebug;
 use log::{trace, warn};
+use rtrb::Consumer;
 
 #[derive(Clone, Copy, Debug)]
 pub enum AudioThreadMessage<Event: EventImpl> {
@@ -22,7 +22,7 @@ pub struct AudioProcessor<Event: EventImpl> {
 	steady_time: u64,
 	audio_buffers: AudioBuffers,
 	event_buffers: EventBuffers,
-	receiver: Receiver<AudioThreadMessage<Event>>,
+	receiver: Consumer<AudioThreadMessage<Event>>,
 }
 
 impl<Event: EventImpl> AudioProcessor<Event> {
@@ -33,7 +33,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		id: PluginId,
 		audio_buffers: AudioBuffers,
 		event_buffers: EventBuffers,
-		receiver: Receiver<AudioThreadMessage<Event>>,
+		receiver: Consumer<AudioThreadMessage<Event>>,
 	) -> Self {
 		Self {
 			processor: started_processor.into().into(),
@@ -57,7 +57,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	}
 
 	fn recv_events(&mut self, events: &mut Vec<Event>) {
-		while let Ok(msg) = self.receiver.try_recv() {
+		while let Ok(msg) = self.receiver.pop() {
 			trace!("{}: {msg:?}", self.descriptor);
 
 			match msg {
@@ -94,12 +94,10 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 				self.steady_time += u64::from(input_audio.min_available_frames_with(&output_audio));
 
 				self.audio_buffers.write_out(audio, mix_level);
-				self.event_buffers
-					.write_out(events, self.processor.access_shared_handler(|s| &s.sender));
+				self.event_buffers.write_out(events);
 			}
 			Err(err) => {
 				warn!("{}: {err}", self.descriptor);
-
 				self.flush(events);
 			}
 		}
@@ -118,8 +116,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			);
 		}
 
-		self.event_buffers
-			.write_out(events, self.processor.access_shared_handler(|s| &s.sender));
+		self.event_buffers.write_out(events);
 		events.clear();
 	}
 

@@ -11,11 +11,11 @@ pub struct Entry<Node: NodeImpl> {
 }
 
 impl<Node: NodeImpl> Entry<Node> {
-	pub fn new(node: Node, buffer_size: u32) -> Self {
+	pub fn new(node: Node, frames: u32) -> Self {
 		Self {
 			node,
 			connections: HoleyVec::default(),
-			audio: vec![0.0; buffer_size as usize].into_boxed_slice(),
+			audio: vec![0.0; 2 * frames as usize].into_boxed_slice(),
 			events: Vec::new(),
 			delay: 0,
 		}

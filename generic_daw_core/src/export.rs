@@ -1,6 +1,6 @@
 use crate::{
 	AudioGraphNode, MusicalTime, RtState, Version,
-	daw_ctx::{State, Update},
+	daw_ctx::{Batch, State},
 };
 use audio_graph::AudioGraph;
 use hound::WavWriter;
@@ -14,7 +14,7 @@ pub fn export(
 ) {
 	let mut state = State {
 		rtstate,
-		update: Update::new(Version::unique()),
+		batch: Batch::new(Version::unique()),
 	};
 
 	state.rtstate.playing = true;
@@ -33,7 +33,7 @@ pub fn export(
 	)
 	.unwrap();
 
-	let buffer_size = rtstate.buffer_size as usize;
+	let buffer_size = 2 * rtstate.frames as usize;
 	let mut buf = vec![0.0; buffer_size].into_boxed_slice();
 
 	let delay = audio_graph.delay();
@@ -44,21 +44,21 @@ pub fn export(
 		state.rtstate.sample = i;
 
 		audio_graph.process(&mut state, &mut buf);
-		state.update.peaks.clear();
+		state.batch.updates.clear();
 	}
 
 	if skip != 0 {
 		state.rtstate.sample = delay - skip;
 
 		audio_graph.process(&mut state, &mut buf[..skip]);
-		state.update.peaks.clear();
+		state.batch.updates.clear();
 	}
 
 	for i in (delay..end + delay).step_by(buffer_size) {
 		state.rtstate.sample = i;
 
 		audio_graph.process(&mut state, &mut buf);
-		state.update.peaks.clear();
+		state.batch.updates.clear();
 
 		for &s in &buf {
 			writer.write_sample(s).unwrap();

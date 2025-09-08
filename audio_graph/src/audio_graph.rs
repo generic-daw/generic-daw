@@ -6,7 +6,7 @@ use generic_daw_utils::{HoleyVec, RotateConcatExt as _};
 pub struct AudioGraph<Node: NodeImpl> {
 	graph: HoleyVec<Entry<Node>>,
 	root: NodeId,
-	buffer_size: u32,
+	frames: u32,
 	list: Vec<usize>,
 	swap_list: Vec<usize>,
 	to_visit: BitSet,
@@ -15,16 +15,16 @@ pub struct AudioGraph<Node: NodeImpl> {
 
 impl<Node: NodeImpl> AudioGraph<Node> {
 	#[must_use]
-	pub fn new(node: Node, buffer_size: u32) -> Self {
+	pub fn new(node: Node, frames: u32) -> Self {
 		let root = node.id();
 
 		let mut graph = HoleyVec::default();
-		graph.insert(*root, Entry::new(node, buffer_size));
+		graph.insert(*root, Entry::new(node, frames));
 
 		Self {
 			graph,
 			root,
-			buffer_size,
+			frames,
 			list: vec![*root],
 			swap_list: Vec::new(),
 			seen: BitSet::default(),
@@ -165,7 +165,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			return;
 		}
 
-		self.graph.insert(*id, Entry::new(node, self.buffer_size));
+		self.graph.insert(*id, Entry::new(node, self.frames));
 		self.list.push(*id);
 	}
 

@@ -2,7 +2,6 @@ use crate::{
 	API_TYPE, EventImpl, PluginDescriptor, PluginId, audio_processor::AudioThreadMessage, gui::Gui,
 	host::Host, params::Param, size::Size,
 };
-use async_channel::Sender;
 use clack_extensions::{
 	gui::{GuiConfiguration, GuiSize, Window as ClapWindow},
 	params::ParamInfoFlags,
@@ -13,6 +12,7 @@ use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
 use log::warn;
 use raw_window_handle::RawWindowHandle;
+use rtrb::Producer;
 use std::{io::Cursor, panic};
 
 #[derive(Debug)]
@@ -21,7 +21,7 @@ pub struct Plugin<Event: EventImpl> {
 	gui: Gui,
 	descriptor: PluginDescriptor,
 	id: PluginId,
-	sender: Sender<AudioThreadMessage<Event>>,
+	sender: Producer<AudioThreadMessage<Event>>,
 	params: NoDebug<Box<[Param]>>,
 	is_open: bool,
 }
@@ -32,7 +32,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		instance: PluginInstance<Host>,
 		gui: Gui,
 		descriptor: PluginDescriptor,
-		sender: Sender<AudioThreadMessage<Event>>,
+		sender: Producer<AudioThreadMessage<Event>>,
 		id: PluginId,
 		params: Box<[Param]>,
 	) -> Self {
@@ -104,9 +104,9 @@ impl<Event: EventImpl> Plugin<Event> {
 		self.instance.call_on_main_thread_callback();
 	}
 
-	pub fn request_restart(&self) {
+	pub fn request_restart(&mut self) {
 		self.sender
-			.try_send(AudioThreadMessage::RequestRestart)
+			.push(AudioThreadMessage::RequestRestart)
 			.unwrap();
 	}
 
@@ -241,10 +241,8 @@ impl<Event: EventImpl> Plugin<Event> {
 		Some(Size::from_native((width as f32, height as f32)).ensure_logical(scale_factor))
 	}
 
-	pub fn send_event(&self, event: Event) {
-		self.sender
-			.try_send(AudioThreadMessage::Event(event))
-			.unwrap();
+	pub fn send_event(&mut self, event: Event) {
+		self.sender.push(AudioThreadMessage::Event(event)).unwrap();
 	}
 
 	pub fn latency_changed(&mut self) {
@@ -254,7 +252,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			.get(&mut self.instance.plugin_handle());
 
 		self.sender
-			.try_send(AudioThreadMessage::LatencyChanged(latency))
+			.push(AudioThreadMessage::LatencyChanged(latency))
 			.unwrap();
 	}
 

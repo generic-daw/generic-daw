@@ -26,11 +26,6 @@ impl AudioBuffers {
 		let input_ports = AudioPorts::from(&input_config).into();
 		let output_ports = AudioPorts::from(&output_config).into();
 
-		let latency = plugin
-			.access_shared_handler(|s| s.latency.get().copied())
-			.map(|ext| ext.get(&mut plugin.plugin_handle()))
-			.unwrap_or_default();
-
 		let input_buffers = input_config
 			.port_channel_counts
 			.iter()
@@ -44,7 +39,11 @@ impl AudioBuffers {
 			.collect::<Box<[_]>>()
 			.into();
 
-		let latency_comp = vec![0.0; latency as usize * 2];
+		let latency = plugin
+			.access_shared_handler(|s| s.latency.get().copied())
+			.map(|ext| ext.get(&mut plugin.plugin_handle()))
+			.unwrap_or_default();
+		let latency_comp = vec![0.0; 2 * latency as usize];
 
 		Self {
 			config,
@@ -170,7 +169,7 @@ impl AudioBuffers {
 	}
 
 	pub fn latency_changed(&mut self, latency: u32) {
-		self.latency_comp.resize(latency as usize * 2, 0.0);
+		self.latency_comp.resize(2 * latency as usize, 0.0);
 	}
 
 	pub fn delay(&self) -> usize {

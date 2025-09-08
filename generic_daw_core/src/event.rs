@@ -41,7 +41,7 @@ impl audio_graph::EventImpl for Event {
 			| Self::Off { time, .. }
 			| Self::Choke { time, .. }
 			| Self::End { time, .. }
-			| Self::ParamValue { time, .. } => time as usize * 2,
+			| Self::ParamValue { time, .. } => time as usize,
 		}
 	}
 
@@ -52,7 +52,7 @@ impl audio_graph::EventImpl for Event {
 			| Self::Choke { time, .. }
 			| Self::End { time, .. }
 			| Self::ParamValue { time, .. } => {
-				*time = (to / 2) as u32;
+				*time = to as u32;
 			}
 		}
 		self

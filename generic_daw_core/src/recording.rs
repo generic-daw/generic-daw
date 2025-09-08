@@ -1,11 +1,11 @@
 use crate::{
-	LOD_LEVELS, MusicalTime, RtState, Sample, Stream, build_input_stream, lod::update_lods,
-	resampler::Resampler,
+	LOD_LEVELS, MusicalTime, RtState, Sample, Stream, buffer_size_of_config, build_input_stream,
+	lod::update_lods, resampler::Resampler,
 };
-use async_channel::Receiver;
 use cpal::StreamConfig;
 use generic_daw_utils::NoDebug;
 use hound::{SampleFormat, WavSpec, WavWriter};
+use rtrb::Consumer;
 use std::{path::Path, sync::Arc};
 
 #[derive(Debug)]
@@ -28,9 +28,9 @@ impl Recording {
 		rtstate: &RtState,
 		device_name: Option<&str>,
 		sample_rate: u32,
-		buffer_size: u32,
-	) -> (Self, Receiver<Box<[f32]>>) {
-		let (stream, config, receiver) = build_input_stream(device_name, sample_rate, buffer_size);
+		frames: u32,
+	) -> (Self, Consumer<Box<[f32]>>) {
+		let (stream, config, receiver) = build_input_stream(device_name, sample_rate, frames);
 
 		let position = MusicalTime::from_samples(rtstate.sample, rtstate);
 		let name = path.file_name().unwrap().to_str().unwrap().into();
@@ -56,6 +56,17 @@ impl Recording {
 			},
 			receiver,
 		)
+	}
+
+	#[must_use]
+	pub fn sample_rate(&self) -> u32 {
+		self.config.sample_rate.0
+	}
+
+	#[must_use]
+	pub fn frames(&self) -> Option<u32> {
+		buffer_size_of_config(&self.config)
+			.map(|buffer_size| buffer_size / u32::from(self.config.channels))
 	}
 
 	pub fn write(&mut self, samples: &[f32]) {

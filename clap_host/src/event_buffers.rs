@@ -1,5 +1,4 @@
-use crate::{EventImpl, MainThreadMessage, events::ClapEvent, host::Host};
-use async_channel::Sender;
+use crate::{EventImpl, host::Host};
 use clack_extensions::note_ports::{NoteDialect, NotePortInfoBuffer};
 use clack_host::{
 	events::{
@@ -65,30 +64,12 @@ impl EventBuffers {
 		self.input_events.sort();
 	}
 
-	pub fn write_out<Event: EventImpl>(
-		&mut self,
-		events: &mut Vec<Event>,
-		sender: &Sender<MainThreadMessage>,
-	) {
-		for unknown in &self.output_events {
-			let Some(event) = Event::try_from_unknown(unknown) else {
-				continue;
-			};
-
-			// the reference host handles:
-			// - CLAP_EVENT_PARAM_VALUE
-			// - CLAP_EVENT_PARAM_GESTURE_BEGIN (we don't have this)
-			// - CLAP_EVENT_PARAM_GESTURE_END (we don't have this)
-			if let ClapEvent::ParamValue(event) = event.to_clap(0)
-				&& let Some(id) = event.param_id()
-			{
-				sender
-					.try_send(MainThreadMessage::ParamChanged(id, event.value() as f32))
-					.unwrap();
-			} else {
-				events.push(event);
-			}
-		}
+	pub fn write_out(&mut self, events: &mut Vec<impl EventImpl>) {
+		events.extend(
+			self.output_events
+				.iter()
+				.filter_map(EventImpl::try_from_unknown),
+		);
 
 		self.output_events.clear();
 	}

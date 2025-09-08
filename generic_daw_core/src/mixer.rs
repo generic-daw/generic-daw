@@ -1,4 +1,8 @@
-use crate::{Action, daw_ctx::State, event::Event};
+use crate::{
+	Action,
+	daw_ctx::{State, Update},
+	event::Event,
+};
 use audio_graph::{NodeId, NodeImpl};
 use clap_host::AudioProcessor;
 use generic_daw_utils::ShiftMoveExt as _;
@@ -49,19 +53,34 @@ impl NodeImpl for Mixer {
 			return;
 		}
 
-		for entry in &mut self.plugins {
-			if entry.enabled {
-				entry.processor.process(audio, events, entry.mix);
+		for plugin in &mut self.plugins {
+			if plugin.enabled {
+				plugin.processor.process(audio, events, plugin.mix);
 			} else {
-				entry.processor.flush(events);
+				plugin.processor.flush(events);
 			}
+
+			state.batch.updates.extend(
+				events
+					.extract_if(.., |event| matches!(event, Event::ParamValue { .. }))
+					.map(|event| {
+						let Event::ParamValue {
+							param_id, value, ..
+						} = event
+						else {
+							unreachable!()
+						};
+
+						Update::Param(plugin.processor.id(), param_id, value)
+					}),
+			);
 		}
 
 		let [lpan, rpan] = pan(self.pan).map(|s| s * self.volume);
 
 		let peaks = peaks(audio, lpan, rpan);
 		if peaks != [0.0; 2] {
-			state.update.peaks.push((self.id, peaks));
+			state.batch.updates.push(Update::Peak(self.id, peaks));
 		}
 	}
 
@@ -135,14 +154,18 @@ fn peaks(audio: &mut [f32], lpan: f32, rpan: f32) -> [f32; 2] {
 		old
 	}
 
-	let (chunks_8, rest) = audio.as_chunks_mut::<8>();
+	let (chunks_16, rest) = audio.as_chunks_mut::<16>();
+	let (chunks_8, rest) = rest.as_chunks_mut::<8>();
 	let (chunks_4, rest) = rest.as_chunks_mut::<4>();
-	let (chunks_2, rest) = rest.as_chunks_mut::<2>();
-	debug_assert!(rest.is_empty());
+	let (rest, _) = rest.as_chunks_mut::<2>();
 
-	chunks_8
+	chunks_16
 		.iter_mut()
 		.map(|chunk| pan_abs(chunk, lpan, rpan))
+		.reduce(array_max)
+		.into_iter()
+		.flat_map(|chunk| <[[_; 8]; 2]>::try_from(chunk.as_chunks().0).unwrap())
+		.chain(chunks_8.iter_mut().map(|chunk| pan_abs(chunk, lpan, rpan)))
 		.reduce(array_max)
 		.into_iter()
 		.flat_map(|chunk| <[[_; 4]; 2]>::try_from(chunk.as_chunks().0).unwrap())
@@ -150,7 +173,7 @@ fn peaks(audio: &mut [f32], lpan: f32, rpan: f32) -> [f32; 2] {
 		.reduce(array_max)
 		.into_iter()
 		.flat_map(|chunk| <[[_; 2]; 2]>::try_from(chunk.as_chunks().0).unwrap())
-		.chain(chunks_2.iter_mut().map(|chunk| pan_abs(chunk, lpan, rpan)))
+		.chain(rest.iter_mut().map(|chunk| pan_abs(chunk, lpan, rpan)))
 		.reduce(array_max)
 		.unwrap_or([0.0; _])
 }

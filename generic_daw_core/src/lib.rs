@@ -1,4 +1,3 @@
-use async_channel::{Receiver, Sender};
 use audio_graph_node::AudioGraphNode;
 use cpal::{
 	BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
@@ -7,6 +6,7 @@ use cpal::{
 use daw_ctx::DawCtx;
 use log::info;
 use master::Master;
+use rtrb::{Consumer, Producer, RingBuffer};
 use std::{cmp::Ordering, sync::Arc};
 
 mod audio_clip;
@@ -32,7 +32,7 @@ pub use clap_host;
 pub use clip::Clip;
 pub use clip_position::ClipPosition;
 pub use cpal::{Stream, traits::StreamTrait};
-pub use daw_ctx::{Action, Message, RtState, Update, Version};
+pub use daw_ctx::{Action, Batch, Message, RtState, Update, Version};
 pub use decibels::Decibels;
 pub use event::Event;
 pub use export::export;
@@ -63,12 +63,19 @@ pub fn get_output_devices() -> Vec<Arc<str>> {
 		.collect()
 }
 
+fn buffer_size_of_config(config: &StreamConfig) -> Option<u32> {
+	match config.buffer_size {
+		BufferSize::Fixed(buffer_size) => Some(buffer_size),
+		BufferSize::Default => None,
+	}
+}
+
 fn build_input_stream(
 	device_name: Option<&str>,
 	sample_rate: u32,
-	buffer_size: u32,
-) -> (Stream, StreamConfig, Receiver<Box<[f32]>>) {
-	let (sender, receiver) = async_channel::unbounded();
+	frames: u32,
+) -> (Stream, StreamConfig, Consumer<Box<[f32]>>) {
+	let (mut producer, consumer) = RingBuffer::new(256);
 
 	let host = cpal::default_host();
 
@@ -83,18 +90,15 @@ fn build_input_stream(
 	let config = choose_config(
 		device.supported_input_configs().unwrap(),
 		sample_rate,
-		buffer_size,
+		frames,
 	);
 
-	let buffer_size = match config.buffer_size {
-		BufferSize::Fixed(buffer_size) => buffer_size,
-		BufferSize::Default => buffer_size,
-	};
+	let buffer_size = buffer_size_of_config(&config).unwrap_or(frames);
 	let channels = u32::from(config.channels);
+	let frames = buffer_size / channels;
 
 	info!("starting input stream with config {config:?}");
 
-	let frames = buffer_size / channels;
 	let mut stereo = vec![0.0; 2 * frames as usize].into_boxed_slice();
 
 	let stream = device
@@ -104,7 +108,7 @@ fn build_input_stream(
 				for buf in buf.chunks(buffer_size as usize) {
 					let frames = buf.len() / config.channels as usize;
 					from_other_to_stereo(&mut stereo[..2 * frames], buf, frames);
-					sender.try_send(stereo[..2 * frames].into()).unwrap();
+					producer.push(stereo[..2 * frames].into()).unwrap();
 				}
 			},
 			|err| panic!("{err}"),
@@ -114,14 +118,14 @@ fn build_input_stream(
 
 	stream.play().unwrap();
 
-	(stream, config, receiver)
+	(stream, config, consumer)
 }
 
 pub fn build_output_stream(
 	device_name: Option<&str>,
 	sample_rate: u32,
-	buffer_size: u32,
-) -> (Stream, NodeId, RtState, Sender<Message>, Receiver<Update>) {
+	frames: u32,
+) -> (Stream, NodeId, RtState, Producer<Message>, Consumer<Batch>) {
 	let host = cpal::default_host();
 
 	let device = device_name
@@ -135,18 +139,15 @@ pub fn build_output_stream(
 	let config = choose_config(
 		device.supported_output_configs().unwrap(),
 		sample_rate,
-		buffer_size,
+		frames,
 	);
 
 	let sample_rate = config.sample_rate.0;
-	let buffer_size = match config.buffer_size {
-		BufferSize::Fixed(buffer_size) => buffer_size,
-		BufferSize::Default => buffer_size,
-	};
+	let buffer_size = buffer_size_of_config(&config).unwrap_or(frames);
 	let channels = u32::from(config.channels);
 	let frames = buffer_size / channels;
 
-	let (mut ctx, node, rtstate, sender, receiver) = DawCtx::create(sample_rate, 2 * frames);
+	let (mut ctx, node, rtstate, producer, consumer) = DawCtx::create(sample_rate, frames);
 
 	info!("starting output stream with config {config:?}");
 
@@ -169,19 +170,19 @@ pub fn build_output_stream(
 
 	stream.play().unwrap();
 
-	(stream, node, rtstate, sender, receiver)
+	(stream, node, rtstate, producer, consumer)
 }
 
 fn choose_config(
 	configs: impl IntoIterator<Item = SupportedStreamConfigRange>,
 	sample_rate: u32,
-	buffer_size: u32,
+	frames: u32,
 ) -> StreamConfig {
 	let config = configs
 		.into_iter()
 		.min_by(|l, r| {
 			compare_by_sample_rate(l, r, sample_rate)
-				.then_with(|| compare_by_buffer_size(l, r, buffer_size))
+				.then_with(|| compare_by_frames(l, r, frames))
 				.then_with(|| compare_by_channel_count(l, r))
 		})
 		.unwrap();
@@ -191,7 +192,9 @@ fn choose_config(
 
 	let buffer_size = match *config.buffer_size() {
 		SupportedBufferSize::Unknown => BufferSize::Default,
-		SupportedBufferSize::Range { min, max } => BufferSize::Fixed(buffer_size.clamp(min, max)),
+		SupportedBufferSize::Range { min, max } => {
+			BufferSize::Fixed((frames * u32::from(config.channels())).clamp(min, max))
+		}
 	};
 
 	StreamConfig {
@@ -216,10 +219,10 @@ fn compare_by_sample_rate(
 	ldiff.cmp(&rdiff)
 }
 
-fn compare_by_buffer_size(
+fn compare_by_frames(
 	l: &SupportedStreamConfigRange,
 	r: &SupportedStreamConfigRange,
-	buffer_size: u32,
+	frames: u32,
 ) -> Ordering {
 	match (*l.buffer_size(), *r.buffer_size()) {
 		(SupportedBufferSize::Unknown, SupportedBufferSize::Unknown) => Ordering::Equal,
@@ -235,8 +238,18 @@ fn compare_by_buffer_size(
 				max: rmax,
 			},
 		) => {
-			let ldiff = buffer_size.clamp(lmin, lmax).abs_diff(buffer_size);
-			let rdiff = buffer_size.clamp(rmin, rmax).abs_diff(buffer_size);
+			let ldiff = frames
+				.clamp(
+					lmin / u32::from(l.channels()),
+					lmax / u32::from(l.channels()),
+				)
+				.abs_diff(frames);
+			let rdiff = frames
+				.clamp(
+					rmin / u32::from(r.channels()),
+					rmax / u32::from(r.channels()),
+				)
+				.abs_diff(frames);
 			ldiff.cmp(&rdiff)
 		}
 	}
@@ -250,15 +263,13 @@ fn compare_by_channel_count(
 		0 => u16::MAX,
 		1 => 5,
 		2 => 0,
-		x if x % 2 == 0 => x,
-		x => 2 * x,
+		x => x,
 	};
 	let rdiff = match r.channels() {
 		0 => u16::MAX,
 		1 => 5,
 		2 => 0,
-		x if x % 2 == 0 => x,
-		x => 2 * x,
+		x => x,
 	};
 
 	ldiff.cmp(&rdiff)

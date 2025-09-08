@@ -23,7 +23,7 @@ use arrangement::Arrangement as ArrangementWrapper;
 use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
-	AudioClip, Clip, Decibels, MidiClip, MidiNote, MusicalTime, NodeId, Recording, Sample, Update,
+	AudioClip, Batch, Clip, Decibels, MidiClip, MidiNote, MusicalTime, NodeId, Recording, Sample,
 	clap_host::{self, HostInfo, MainThreadMessage, PluginBundle, PluginDescriptor},
 };
 use generic_daw_utils::{EnumDispatcher, NoDebug, Vec2};
@@ -31,9 +31,10 @@ use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
 use humantime::format_rfc3339;
 use iced::{
 	Alignment, Element, Fill, Function as _, Size, Subscription, Task, border,
+	futures::SinkExt as _,
 	mouse::Interaction,
 	overlay::menu,
-	padding,
+	padding, stream,
 	task::Handle,
 	time::every,
 	widget::{
@@ -47,7 +48,8 @@ use iced::{
 use iced_persistent::persistent;
 use iced_split::{Strategy, vertical_split};
 use node::{Node, NodeType};
-use smol::unblock;
+use rtrb::Consumer;
+use smol::{Timer, unblock};
 use std::{
 	cmp::Ordering,
 	collections::BTreeMap,
@@ -56,7 +58,10 @@ use std::{
 	iter::once,
 	ops::Deref as _,
 	path::Path,
-	sync::{Arc, LazyLock, Weak},
+	sync::{
+		Arc, LazyLock, Weak,
+		atomic::{self, Ordering::Acquire},
+	},
 	time::{Duration, Instant, SystemTime},
 };
 
@@ -75,7 +80,7 @@ enum LoadStatus {
 #[derive(Clone, Debug)]
 pub enum Message {
 	ClapHost(ClapHostMessage),
-	Update(Update),
+	Batch(Batch),
 
 	Gc,
 
@@ -195,7 +200,7 @@ impl ArrangementView {
 
 				tree: iced_persistent::Tree::empty(),
 			},
-			task.map(Message::Update),
+			task.map(Message::Batch),
 		)
 	}
 
@@ -209,7 +214,12 @@ impl ArrangementView {
 			Message::ClapHost(msg) => {
 				return self.clap_host.update(msg, config).map(Message::ClapHost);
 			}
-			Message::Update(msg) => self.arrangement.update(msg, Instant::now()),
+			Message::Batch(msg) => {
+				return self
+					.arrangement
+					.update(msg, Instant::now())
+					.map(Message::ClapHost);
+			}
 			Message::Gc => {
 				self.audios.retain(|_, audio| {
 					if let LoadStatus::Loaded(_, audio) = audio {
@@ -279,7 +289,7 @@ impl ArrangementView {
 					&plugin_bundles[&descriptor],
 					descriptor,
 					self.arrangement.rtstate().sample_rate,
-					self.arrangement.rtstate().buffer_size,
+					self.arrangement.rtstate().frames,
 					&HOST,
 				);
 				let id = plugin.plugin_id();
@@ -486,18 +496,25 @@ impl ArrangementView {
 					);
 				}
 
-				let (recording, receiver) = Recording::create(
+				let (recording, task) = Recording::create(
 					recording_path(),
 					self.arrangement.rtstate(),
 					config.input_device.name.as_deref(),
 					config.input_device.sample_rate.unwrap_or(44100),
 					config.input_device.buffer_size.unwrap_or(1024),
 				);
+
+				let sample_rate = recording.sample_rate();
+				let frames = recording
+					.frames()
+					.or(config.input_device.buffer_size)
+					.unwrap_or(1024);
+
 				self.recording = Some((recording, id));
 
 				self.arrangement.play();
 
-				return Task::stream(receiver)
+				return poll_consumer(task, sample_rate, frames)
 					.map(NoDebug)
 					.map(Message::RecordingChunk);
 			}
@@ -1300,4 +1317,44 @@ fn crc(mut r: impl Read) -> u32 {
 	}
 
 	crc
+}
+
+fn poll_consumer<T: Send + 'static>(
+	mut consumer: Consumer<T>,
+	sample_rate: u32,
+	frames: u32,
+) -> Task<T> {
+	let wait = 1_000_000 / sample_rate.div_ceil(frames).min(1_000);
+	let mut backoff = 500;
+	let mut backoff = move |reset| {
+		Timer::after(Duration::from_micros(u64::from(if reset {
+			backoff = wait.min(backoff * 2);
+			backoff
+		} else {
+			backoff = 500;
+			wait
+		})))
+	};
+
+	Task::stream(stream::channel(
+		consumer.buffer().capacity(),
+		async move |mut sender| {
+			loop {
+				let mut timer = backoff(true);
+				if consumer.is_abandoned() {
+					atomic::fence(Acquire);
+				}
+				while let Ok(t) = consumer.pop() {
+					timer = backoff(false);
+					if sender.send(t).await.is_err() {
+						break;
+					}
+				}
+				if consumer.is_abandoned() {
+					break;
+				}
+				timer.await;
+			}
+		},
+	))
 }

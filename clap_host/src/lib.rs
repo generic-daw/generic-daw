@@ -7,6 +7,7 @@ use event_buffers::EventBuffers;
 use generic_daw_utils::unique_id;
 use host::Host;
 use main_thread::MainThread;
+use rtrb::RingBuffer;
 use shared::Shared;
 use std::{
 	collections::{BTreeMap, HashSet},
@@ -137,7 +138,7 @@ pub fn init<Event: EventImpl>(
 	bundle: &PluginBundle,
 	descriptor: PluginDescriptor,
 	sample_rate: u32,
-	max_buffer_size: u32,
+	frames: u32,
 	host: &HostInfo,
 ) -> (
 	Plugin<Event>,
@@ -145,7 +146,7 @@ pub fn init<Event: EventImpl>(
 	AudioProcessor<Event>,
 ) {
 	let (main_sender, main_receiver) = async_channel::unbounded();
-	let (audio_sender, audio_receiver) = async_channel::unbounded();
+	let (audio_sender, audio_receiver) = RingBuffer::new(256);
 
 	let mut instance = PluginInstance::new(
 		|()| Shared::new(descriptor.clone(), main_sender),
@@ -159,7 +160,7 @@ pub fn init<Event: EventImpl>(
 	let config = PluginAudioConfiguration {
 		sample_rate: sample_rate.into(),
 		min_frames_count: 1,
-		max_frames_count: max_buffer_size / 2,
+		max_frames_count: frames,
 	};
 
 	let audio_buffers = AudioBuffers::new(&mut instance, config);
