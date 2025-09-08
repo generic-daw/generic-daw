@@ -66,7 +66,7 @@ impl Param {
 	pub fn update_with_value(&mut self, value: f32, plugin: &mut PluginInstance<Host>) {
 		self.value = value;
 
-		let value = f64::from(value);
+		let value = value.into();
 		self.value_text = if let Some(&ext) = plugin.access_shared_handler(|s| s.params.get())
 			&& let Ok(value_text) = ext.value_to_text(
 				&mut plugin.plugin_handle(),

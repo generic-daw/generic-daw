@@ -40,7 +40,7 @@ impl NodeImpl for Master {
 
 				let click = if buf_end
 					.beat()
-					.is_multiple_of(u32::from(state.rtstate.numerator))
+					.is_multiple_of(state.rtstate.numerator.into())
 				{
 					self.on_bar_click.clone()
 				} else {

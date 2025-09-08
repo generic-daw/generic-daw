@@ -541,9 +541,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		while beat <= end_beat {
 			let bar = beat.bar(self.rtstate);
 
-			if beat
-				.beat()
-				.is_multiple_of(u32::from(self.rtstate.numerator))
+			if beat.beat().is_multiple_of(self.rtstate.numerator.into())
 				&& bar.is_multiple_of(bar_inc)
 			{
 				draw_text(beat, bar);

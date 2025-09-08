@@ -75,19 +75,19 @@ impl AudioBuffers {
 			.get(self.input_config.main_port_index)
 			.unwrap_or(&0);
 
+		let buf = buf.as_chunks().0.iter();
+
 		if n_channels == 1 {
-			buf.as_chunks()
-				.0
-				.iter()
-				.map(|[l, r]| l + r)
+			buf.map(|[l, r]| l + r)
 				.zip(input_buffer)
 				.for_each(|(buf, sample)| *sample = buf);
 		} else if n_channels != 0 {
 			let (l, r) = input_buffer.split_at_mut(self.config.max_frames_count as usize);
 
-			buf.iter()
-				.zip(l.iter_mut().zip(r).flat_map(<[_; _]>::from))
-				.for_each(|(buf, sample)| *sample = *buf);
+			buf.zip(l.iter_mut().zip(r)).for_each(|(buf, (l, r))| {
+				*l = buf[0];
+				*r = buf[1];
+			});
 		}
 	}
 
@@ -145,26 +145,20 @@ impl AudioBuffers {
 			.get(self.output_config.main_port_index)
 			.unwrap_or(&0);
 
+		let buf = buf.as_chunks_mut::<2>().0.iter_mut();
+
 		if n_channels == 1 {
-			output_buffer
-				.iter()
-				.flat_map(|x| [x, x])
-				.zip(buf)
-				.for_each(|(sample, buf)| {
-					*buf *= 1.0 - mix_level;
-					*buf += sample * mix_level;
-				});
+			output_buffer.iter().zip(buf).for_each(|(sample, buf)| {
+				buf[0] = buf[0].mul_add(1.0 - mix_level, sample * mix_level);
+				buf[1] = buf[1].mul_add(1.0 - mix_level, sample * mix_level);
+			});
 		} else if n_channels != 0 {
 			let (l, r) = output_buffer.split_at(self.config.max_frames_count as usize);
 
-			l.iter()
-				.zip(r)
-				.flat_map(<[_; _]>::from)
-				.zip(buf)
-				.for_each(|(sample, buf)| {
-					*buf *= 1.0 - mix_level;
-					*buf += sample * mix_level;
-				});
+			l.iter().zip(r).zip(buf).for_each(|((l, r), buf)| {
+				buf[0] = buf[0].mul_add(1.0 - mix_level, l * mix_level);
+				buf[1] = buf[1].mul_add(1.0 - mix_level, r * mix_level);
+			});
 		}
 	}
 
