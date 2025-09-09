@@ -14,21 +14,21 @@ macro_rules! icon {
 }
 
 // https://unpkg.com/lucide-static@latest/font/info.json
-icon!(chevron_down = 57457);
-icon!(chevron_right = 57459);
-icon!(chevron_up = 57460);
-icon!(file = 57540);
-icon!(grip_vertical = 57583);
-icon!(mic = 57628);
-icon!(pause = 57650);
-icon!(play = 57664);
-icon!(plus = 57665);
-icon!(rotate_ccw = 57676);
-icon!(save = 57681);
-icon!(sliders_vertical = 57702);
-icon!(square = 57707);
+icon!(chevron_down = 57453);
+icon!(chevron_right = 57455);
+icon!(chevron_up = 57456);
+icon!(file = 57536);
+icon!(grip_vertical = 57579);
+icon!(mic = 57624);
+icon!(pause = 57646);
+icon!(play = 57660);
+icon!(plus = 57661);
+icon!(rotate_ccw = 57672);
+icon!(save = 57677);
+icon!(sliders_vertical = 57698);
+icon!(square = 57703);
 icon!(volume_2 = 57771);
 icon!(x = 57778);
 icon!(move_vertical = 57799);
-icon!(chart_no_axes_gantt = 58569);
-icon!(file_music = 58723);
+icon!(chart_no_axes_gantt = 58568);
+icon!(file_music = 58722);
