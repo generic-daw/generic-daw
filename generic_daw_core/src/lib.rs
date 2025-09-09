@@ -180,6 +180,7 @@ fn choose_config(
 ) -> StreamConfig {
 	let config = configs
 		.into_iter()
+		.filter(|config| config.channels() != 0)
 		.min_by(|l, r| {
 			compare_by_sample_rate(l, r, sample_rate)
 				.then_with(|| compare_by_frames(l, r, frames))

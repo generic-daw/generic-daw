@@ -15,13 +15,8 @@ pub struct Resampler {
 }
 
 impl Resampler {
-	pub fn new(
-		sample_rate_input: usize,
-		sample_rate_output: usize,
-		nbr_channels: usize,
-	) -> Option<Self> {
-		let fft =
-			FftFixedIn::new(sample_rate_input, sample_rate_output, 1024, 1, nbr_channels).ok()?;
+	pub fn new(sample_rate_input: usize, sample_rate_output: usize) -> Option<Self> {
+		let fft = FftFixedIn::new(sample_rate_input, sample_rate_output, 1024, 1, 2).ok()?;
 		let resample_ratio = sample_rate_output as f64 / sample_rate_input as f64;
 		let input_buffer = fft.input_buffer_allocate(false);
 		let output_buffer = fft.output_buffer_allocate(true);

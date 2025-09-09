@@ -60,7 +60,7 @@ impl Sample {
 		let delay = track.codec_params.delay.unwrap_or_default() as usize;
 		let padding = track.codec_params.padding.unwrap_or_default() as usize;
 
-		let mut samples = Vec::with_capacity(n_frames * n_channels);
+		let mut stereo = Vec::with_capacity(2 * n_frames);
 
 		let mut decoder = symphonia::default::get_codecs()
 			.make(&track.codec_params, &DecoderOptions::default())
@@ -81,15 +81,29 @@ impl Sample {
 			});
 
 			sample_buf.copy_interleaved_ref(audio_buf.clone());
-			samples.extend(sample_buf.samples());
+
+			if n_channels == 1 {
+				stereo.extend(sample_buf.samples().iter().flat_map(|x| [x, x]));
+			} else if n_channels == 2 {
+				stereo.extend(sample_buf.samples());
+			} else if n_channels != 0 {
+				stereo.extend(
+					sample_buf
+						.samples()
+						.chunks_exact(n_channels)
+						.flat_map(|x| x.iter().take(2)),
+				);
+			}
 		}
 
-		let samples = &samples[delay * n_channels..];
-		let samples = &samples[..samples.len() - padding * n_channels];
+		let stereo = &stereo[2 * delay..][..stereo.len() - 2 * padding];
 
-		let mut resampler =
-			Resampler::new(file_sample_rate as usize, sample_rate as usize, n_channels)?;
-		resampler.process(samples);
-		Some(resampler.finish().into_boxed_slice())
+		if file_sample_rate == sample_rate {
+			Some(stereo.into())
+		} else {
+			let mut resampler = Resampler::new(file_sample_rate as usize, sample_rate as usize)?;
+			resampler.process(stereo);
+			Some(resampler.finish().into_boxed_slice())
+		}
 	}
 }
