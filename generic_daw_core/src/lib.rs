@@ -284,14 +284,16 @@ fn from_stereo_to_other(a: &mut [f32], b: &[f32], frames: usize) {
 	match a.len().cmp(&b.len()) {
 		Ordering::Greater => a
 			.chunks_exact_mut(a.len() / frames)
-			.flat_map(|a| a.iter_mut().take(2))
-			.zip(b)
-			.for_each(|(a, b)| *a = *b),
+			.zip(b.chunks_exact(2))
+			.for_each(|(a, b)| {
+				a[0] = b[0];
+				a[1] = b[1];
+			}),
 		Ordering::Equal => a.iter_mut().zip(b).for_each(|(a, b)| *a = *b),
 		Ordering::Less => a
 			.iter_mut()
-			.zip(b.as_chunks().0.iter().map(|[l, r]| l + r))
-			.for_each(|(a, b)| *a = b),
+			.zip(b.chunks_exact(2))
+			.for_each(|(a, b)| *a = b[0] + b[1]),
 	}
 }
 
@@ -303,13 +305,15 @@ fn from_other_to_stereo(a: &mut [f32], b: &[f32], frames: usize) {
 	match a.len().cmp(&b.len()) {
 		Ordering::Less => b
 			.chunks_exact(b.len() / frames)
-			.flat_map(|b| b.iter().take(2))
-			.zip(a)
-			.for_each(|(b, a)| *a = *b),
+			.zip(a.chunks_exact_mut(2))
+			.for_each(|(b, a)| {
+				a[0] = b[0];
+				a[1] = b[1];
+			}),
 		Ordering::Equal => a.iter_mut().zip(b).for_each(|(a, b)| *a = *b),
-		Ordering::Greater => a
-			.iter_mut()
-			.zip(b.iter().flat_map(|x| [x, x]))
-			.for_each(|(a, b)| *a = *b),
+		Ordering::Greater => a.chunks_exact_mut(2).zip(b).for_each(|(a, b)| {
+			a[0] = *b;
+			a[1] = *b;
+		}),
 	}
 }

@@ -82,16 +82,16 @@ impl Sample {
 
 			sample_buf.copy_interleaved_ref(audio_buf.clone());
 
-			if n_channels == 1 {
-				stereo.extend(sample_buf.samples().iter().flat_map(|x| [x, x]));
-			} else if n_channels == 2 {
+			if n_channels == 2 {
 				stereo.extend(sample_buf.samples());
+			} else if n_channels == 1 {
+				stereo.extend(sample_buf.samples().iter().flat_map(|x| [x, x]));
 			} else if n_channels != 0 {
 				stereo.extend(
 					sample_buf
 						.samples()
 						.chunks_exact(n_channels)
-						.flat_map(|x| x.iter().take(2)),
+						.flat_map(|x| [x[0], x[1]]),
 				);
 			}
 		}
