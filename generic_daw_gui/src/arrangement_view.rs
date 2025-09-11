@@ -771,7 +771,7 @@ impl ArrangementView {
 									)
 									.on_press(Message::TrackToggleEnabled(id)),
 									icon_button(
-										"M",
+										"S",
 										if self.soloed_track == Some(id) {
 											button::warning
 										} else if node.enabled {
@@ -1054,7 +1054,7 @@ impl ArrangementView {
 										)
 										.on_press(Message::TrackToggleEnabled(id)),
 										icon_button(
-											"M",
+											"S",
 											if self.soloed_track == Some(id) {
 												button::warning
 											} else if enabled {
