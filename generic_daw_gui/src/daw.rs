@@ -62,6 +62,8 @@ pub enum Message {
 	SplitAt(f32),
 }
 
+const _: () = assert!(size_of::<Message>() <= 128);
+
 pub struct Daw {
 	config: Config,
 	state: State,

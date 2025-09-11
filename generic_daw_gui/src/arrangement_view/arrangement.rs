@@ -263,7 +263,9 @@ impl Arrangement {
 			*node.id(),
 			(Node::new(NodeType::Mixer, node.id()), BitSet::default()),
 		);
-		self.producer.push(Message::Insert(node.into())).unwrap();
+		self.producer
+			.push(Message::Insert(Box::new(node.into())))
+			.unwrap();
 	}
 
 	pub fn add_channel(&mut self) -> oneshot::Receiver<(NodeId, NodeId)> {
@@ -287,7 +289,9 @@ impl Arrangement {
 			*track.id(),
 			(Node::new(NodeType::Track, track.id()), BitSet::default()),
 		);
-		self.producer.push(Message::Insert(track.into())).unwrap();
+		self.producer
+			.push(Message::Insert(Box::new(track.into())))
+			.unwrap();
 	}
 
 	pub fn add_track(&mut self) -> oneshot::Receiver<(NodeId, NodeId)> {
@@ -325,50 +329,25 @@ impl Arrangement {
 	pub fn add_clip(&mut self, track: usize, clip: impl Into<Clip>) {
 		let clip = clip.into();
 		self.tracks[track].clips.push(clip.clone());
-		self.producer
-			.push(Message::Action(
-				self.tracks[track].id,
-				Action::AddClip(clip),
-			))
-			.unwrap();
+		self.action(self.tracks[track].id, Action::AddClip(clip));
 	}
 
 	pub fn clone_clip(&mut self, track: usize, clip: usize) {
 		let clip = self.tracks[track].clips[clip].deep_clone();
 		self.tracks[track].clips.push(clip.clone());
-		self.producer
-			.push(Message::Action(
-				self.tracks[track].id,
-				Action::AddClip(clip),
-			))
-			.unwrap();
+		self.action(self.tracks[track].id, Action::AddClip(clip));
 	}
 
 	pub fn remove_clip(&mut self, track: usize, clip: usize) {
 		self.tracks[track].clips.remove(clip);
-		self.producer
-			.push(Message::Action(
-				self.tracks[track].id,
-				Action::RemoveClip(clip),
-			))
-			.unwrap();
+		self.action(self.tracks[track].id, Action::RemoveClip(clip));
 	}
 
 	pub fn clip_switch_track(&mut self, track: usize, clip_index: usize, new_track: usize) {
 		let clip = self.tracks[track].clips.remove(clip_index);
 		self.tracks[new_track].clips.push(clip.clone());
-		self.producer
-			.push(Message::Action(
-				self.tracks[track].id,
-				Action::RemoveClip(clip_index),
-			))
-			.unwrap();
-		self.producer
-			.push(Message::Action(
-				self.tracks[new_track].id,
-				Action::AddClip(clip),
-			))
-			.unwrap();
+		self.action(self.tracks[track].id, Action::RemoveClip(clip_index));
+		self.action(self.tracks[new_track].id, Action::AddClip(clip));
 	}
 
 	pub fn export(&mut self, path: &Path) {
@@ -389,7 +368,7 @@ impl Arrangement {
 				.unwrap_or_default(),
 		);
 		self.producer
-			.push(Message::AudioGraph(audio_graph))
+			.push(Message::AudioGraph(Box::new(audio_graph)))
 			.unwrap();
 		self.stream.play().unwrap();
 	}

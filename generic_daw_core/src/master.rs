@@ -1,10 +1,7 @@
 use crate::{Action, Mixer, MusicalTime, daw_ctx::State, event::Event, resampler::Resampler};
 use audio_graph::{NodeId, NodeImpl};
 use generic_daw_utils::include_f32s;
-use live_sample::LiveSample;
 use std::sync::Arc;
-
-mod live_sample;
 
 static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
 static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
@@ -13,9 +10,10 @@ static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 pub struct Master {
 	node: Mixer,
 
-	click: Option<LiveSample>,
 	on_bar_click: Arc<[f32]>,
 	off_bar_click: Arc<[f32]>,
+	click_on_bar: bool,
+	click_sidx: isize,
 }
 
 impl NodeImpl for Master {
@@ -36,28 +34,38 @@ impl NodeImpl for Master {
 			if (buf_start.beat() != buf_end.beat() || buf_start.tick() == 0) && buf_end.tick() != 0
 			{
 				buf_end = buf_end.floor();
-				let offset = (buf_end - buf_start).to_samples(&state.rtstate);
 
-				let click = if buf_end
+				self.click_on_bar = buf_end
 					.beat()
-					.is_multiple_of(state.rtstate.numerator.into())
-				{
-					self.on_bar_click.clone()
-				} else {
-					self.off_bar_click.clone()
-				};
+					.is_multiple_of(state.rtstate.numerator.into());
 
-				self.click = Some(LiveSample::new(click, offset));
+				self.click_sidx = -(buf_end - buf_start)
+					.to_samples(&state.rtstate)
+					.cast_signed();
 			}
 		}
 
-		if let Some(c) = self.click.as_mut() {
-			c.process(audio);
+		let click = if self.click_on_bar {
+			&*self.on_bar_click
+		} else {
+			&*self.off_bar_click
+		};
 
-			if c.over() {
-				self.click = None;
-			}
+		let click_uidx = self.click_sidx.unsigned_abs();
+
+		if click_uidx < click.len() && self.click_sidx >= 0 {
+			click[click_uidx..]
+				.iter()
+				.zip(&mut *audio)
+				.for_each(|(sample, buf)| *buf += sample);
+		} else if click_uidx < audio.len() {
+			click
+				.iter()
+				.zip(&mut audio[click_uidx..])
+				.for_each(|(sample, buf)| *buf += sample);
 		}
+
+		self.click_sidx += audio.len().cast_signed();
 
 		self.node.process(state, audio, events);
 	}
@@ -67,8 +75,8 @@ impl NodeImpl for Master {
 	}
 
 	fn reset(&mut self) {
-		self.click = None;
 		self.node.reset();
+		self.click_sidx = isize::MIN;
 	}
 
 	fn delay(&self) -> usize {
@@ -86,10 +94,11 @@ impl Master {
 		off_bar_click.process(OFF_BAR_CLICK);
 
 		Self {
-			click: None,
 			on_bar_click: on_bar_click.finish().into(),
 			off_bar_click: off_bar_click.finish().into(),
 			node: Mixer::default(),
+			click_on_bar: false,
+			click_sidx: isize::MIN,
 		}
 	}
 

@@ -13,7 +13,7 @@ pub use version::Id as Version;
 pub enum Message {
 	Action(NodeId, Action),
 
-	Insert(AudioGraphNode),
+	Insert(Box<AudioGraphNode>),
 	Remove(NodeId),
 	Connect(NodeId, NodeId, oneshot::Sender<(NodeId, NodeId)>),
 	Disconnect(NodeId, NodeId),
@@ -28,8 +28,10 @@ pub enum Message {
 	ReturnUpdateBuffer(Vec<Update>),
 
 	RequestAudioGraph(oneshot::Sender<AudioGraph<AudioGraphNode>>),
-	AudioGraph(AudioGraph<AudioGraphNode>),
+	AudioGraph(Box<AudioGraph<AudioGraphNode>>),
 }
+
+const _: () = assert!(size_of::<Message>() <= 128);
 
 #[derive(Debug)]
 pub enum Action {
@@ -144,7 +146,7 @@ impl DawCtx {
 						node.apply(action);
 					}
 				}
-				Message::Insert(node) => self.audio_graph.insert(node),
+				Message::Insert(node) => self.audio_graph.insert(*node),
 				Message::Remove(node) => self.audio_graph.remove(node),
 				Message::Connect(from, to, sender) => {
 					if self.audio_graph.connect(from, to) {
@@ -173,7 +175,7 @@ impl DawCtx {
 					std::mem::swap(&mut self.audio_graph, &mut audio_graph);
 					sender.send(audio_graph).unwrap();
 				}
-				Message::AudioGraph(audio_graph) => self.audio_graph = audio_graph,
+				Message::AudioGraph(audio_graph) => self.audio_graph = *audio_graph,
 			}
 		}
 
