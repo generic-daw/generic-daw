@@ -157,7 +157,8 @@ fn peaks(audio: &mut [f32], lpan: f32, rpan: f32) -> [f32; 2] {
 	let (chunks_16, rest) = audio.as_chunks_mut::<16>();
 	let (chunks_8, rest) = rest.as_chunks_mut::<8>();
 	let (chunks_4, rest) = rest.as_chunks_mut::<4>();
-	let (rest, _) = rest.as_chunks_mut::<2>();
+	let (chunks_2, rest) = rest.as_chunks_mut::<2>();
+	debug_assert!(rest.is_empty());
 
 	chunks_16
 		.iter_mut()
@@ -173,7 +174,7 @@ fn peaks(audio: &mut [f32], lpan: f32, rpan: f32) -> [f32; 2] {
 		.reduce(array_max)
 		.into_iter()
 		.flat_map(|chunk| <[[_; 2]; 2]>::try_from(chunk.as_chunks().0).unwrap())
-		.chain(rest.iter_mut().map(|chunk| pan_abs(chunk, lpan, rpan)))
+		.chain(chunks_2.iter_mut().map(|chunk| pan_abs(chunk, lpan, rpan)))
 		.reduce(array_max)
 		.unwrap_or([0.0; _])
 }

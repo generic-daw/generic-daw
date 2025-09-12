@@ -3,10 +3,10 @@ use audio_graph::{AudioGraph, NodeId, NodeImpl as _};
 use clap_host::{AudioProcessor, ClapId, PluginId};
 use generic_daw_utils::unique_id;
 use log::{trace, warn};
+use rtrb::{Consumer, Producer, RingBuffer};
 
 unique_id!(version);
 
-use rtrb::{Consumer, Producer, RingBuffer};
 pub use version::Id as Version;
 
 #[derive(Debug)]
