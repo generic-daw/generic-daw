@@ -28,22 +28,22 @@ impl HostThreadPoolImpl for AudioThread<'_> {
 			));
 		}
 
+		if task_count == 0 {
+			return Ok(());
+		}
+
 		let instance = self.shared.instance.get().unwrap();
 		let ext = self.shared.thread_pool.get().unwrap();
 
-		match task_count {
-			0 => {}
-			1 => instance.access(|s| ext.exec(&s, 0)).unwrap(),
-			_ => {
-				rayon_core::scope(|s| {
-					for i in 0..task_count {
-						s.spawn(move |_| {
-							instance.access(|s| ext.exec(&s, i)).unwrap();
-						});
-					}
+		rayon_core::in_place_scope(|s| {
+			for i in 1..task_count {
+				s.spawn(move |_| {
+					instance.access(|s| ext.exec(&s, i)).unwrap();
 				});
 			}
-		}
+
+			instance.access(|s| ext.exec(&s, 0)).unwrap();
+		});
 
 		Ok(())
 	}

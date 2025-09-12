@@ -1,6 +1,6 @@
 use crate::host::Host;
 use clack_extensions::gui::{GuiApiType, GuiConfiguration};
-use clack_host::plugin::PluginInstance;
+use clack_host::prelude::*;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Gui {
