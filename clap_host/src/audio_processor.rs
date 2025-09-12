@@ -29,7 +29,7 @@ pub struct AudioProcessor<Event: EventImpl> {
 impl<Event: EventImpl> AudioProcessor<Event> {
 	#[must_use]
 	pub fn new(
-		started_processor: impl Into<PluginAudioProcessor<Host>>,
+		processor: impl Into<PluginAudioProcessor<Host>>,
 		descriptor: PluginDescriptor,
 		id: PluginId,
 		audio_buffers: AudioBuffers,
@@ -37,7 +37,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		receiver: Consumer<AudioThreadMessage<Event>>,
 	) -> Self {
 		Self {
-			processor: started_processor.into().into(),
+			processor: processor.into().into(),
 			descriptor,
 			id,
 			steady_time: 0,
@@ -74,6 +74,10 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32) {
 		self.recv_events(events);
 
+		self.processor.access_shared_handler(|s| {
+			CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
+		});
+
 		match self.processor.ensure_processing_started() {
 			Ok(processor) => {
 				self.audio_buffers.read_in(audio);
@@ -81,9 +85,6 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 				let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len());
 
-				processor.access_shared_handler(|s| {
-					CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
-				});
 				processor.access_handler(|at| at.processing.store(true, Release));
 
 				processor
