@@ -1,12 +1,12 @@
 use crate::{
 	EventImpl, Host, PluginDescriptor, PluginId, audio_buffers::AudioBuffers,
-	event_buffers::EventBuffers,
+	event_buffers::EventBuffers, shared::CURRENT_THREAD_ID,
 };
 use clack_host::process::PluginAudioProcessor;
 use generic_daw_utils::NoDebug;
 use log::{trace, warn};
 use rtrb::Consumer;
-use std::sync::atomic::Ordering::Release;
+use std::sync::atomic::Ordering::{Relaxed, Release};
 
 #[derive(Clone, Copy, Debug)]
 pub enum AudioThreadMessage<Event: EventImpl> {
@@ -81,6 +81,9 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 				let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len());
 
+				processor.access_shared_handler(|s| {
+					CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
+				});
 				processor.access_handler(|at| at.processing.store(true, Release));
 
 				processor

@@ -74,11 +74,6 @@ impl NodeImpl for Master {
 		self.node.id()
 	}
 
-	fn reset(&mut self) {
-		self.node.reset();
-		self.click_sidx = isize::MIN;
-	}
-
 	fn delay(&self) -> usize {
 		self.node.delay()
 	}
@@ -104,5 +99,10 @@ impl Master {
 
 	pub fn apply(&mut self, action: Action) {
 		self.node.apply(action);
+	}
+
+	pub fn reset(&mut self) {
+		self.node.reset();
+		self.click_sidx = isize::MIN;
 	}
 }

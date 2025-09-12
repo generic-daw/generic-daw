@@ -158,7 +158,7 @@ impl DawCtx {
 				Message::Numerator(numerator) => self.state.rtstate.numerator = numerator,
 				Message::TogglePlayback => self.state.rtstate.playing ^= true,
 				Message::ToggleMetronome => self.state.rtstate.metronome ^= true,
-				Message::Reset => self.audio_graph.reset(),
+				Message::Reset => self.audio_graph.for_each_mut(AudioGraphNode::reset),
 				Message::Sample(version, sample) => {
 					self.state.rtstate.sample = sample;
 					self.version = version;

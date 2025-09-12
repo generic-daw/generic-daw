@@ -28,10 +28,6 @@ impl NodeImpl for Track {
 		self.node.id()
 	}
 
-	fn reset(&mut self) {
-		self.node.reset();
-	}
-
 	fn delay(&self) -> usize {
 		self.node.delay()
 	}
@@ -44,5 +40,9 @@ impl Track {
 			Action::RemoveClip(index) => _ = self.clips.remove(index),
 			action => self.node.apply(action),
 		}
+	}
+
+	pub fn reset(&mut self) {
+		self.node.reset();
 	}
 }

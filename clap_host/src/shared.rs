@@ -9,13 +9,22 @@ use clack_extensions::{
 	params::{HostParamsImplShared, PluginParams},
 	render::PluginRender,
 	state::PluginState,
+	thread_check::HostThreadCheckImpl,
 	thread_pool::PluginThreadPool,
 	timer::PluginTimer,
 };
 use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
 use log::{debug, error, info, warn};
-use std::sync::OnceLock;
+use std::sync::{
+	OnceLock,
+	atomic::{AtomicU64, Ordering::Relaxed},
+};
+
+static NEXT_THREAD_ID: AtomicU64 = AtomicU64::new(0);
+thread_local! {
+	pub static CURRENT_THREAD_ID: u64 = NEXT_THREAD_ID.fetch_add(1, Relaxed);
+}
 
 #[derive(Debug)]
 pub struct Shared<'a> {
@@ -31,10 +40,14 @@ pub struct Shared<'a> {
 	pub state: OnceLock<NoDebug<PluginState>>,
 	pub thread_pool: OnceLock<NoDebug<PluginThreadPool>>,
 	pub timer: OnceLock<NoDebug<PluginTimer>>,
+	pub main_thread: u64,
+	pub audio_thread: AtomicU64,
 }
 
 impl Shared<'_> {
 	pub fn new(descriptor: PluginDescriptor, sender: Sender<MainThreadMessage>) -> Self {
+		let main_thread = CURRENT_THREAD_ID.with(|id| *id);
+
 		Self {
 			descriptor,
 			sender,
@@ -48,6 +61,8 @@ impl Shared<'_> {
 			state: OnceLock::new(),
 			thread_pool: OnceLock::new(),
 			timer: OnceLock::new(),
+			main_thread,
+			audio_thread: AtomicU64::new(main_thread),
 		}
 	}
 }
@@ -145,4 +160,14 @@ impl HostLogImpl for Shared<'_> {
 
 impl HostParamsImplShared for Shared<'_> {
 	fn request_flush(&self) {}
+}
+
+impl HostThreadCheckImpl for Shared<'_> {
+	fn is_main_thread(&self) -> bool {
+		CURRENT_THREAD_ID.with(|&id| id == self.main_thread)
+	}
+
+	fn is_audio_thread(&self) -> bool {
+		CURRENT_THREAD_ID.with(|&id| id == self.audio_thread.load(Relaxed))
+	}
 }

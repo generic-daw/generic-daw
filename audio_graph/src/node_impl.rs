@@ -12,7 +12,6 @@ pub trait NodeImpl: Debug + Send {
 	);
 	#[must_use]
 	fn id(&self) -> NodeId;
-	fn reset(&mut self);
 	#[must_use]
 	fn delay(&self) -> usize;
 }

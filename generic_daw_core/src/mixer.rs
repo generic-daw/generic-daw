@@ -88,12 +88,6 @@ impl NodeImpl for Mixer {
 		self.id
 	}
 
-	fn reset(&mut self) {
-		for plugin in &mut self.plugins {
-			plugin.processor.reset();
-		}
-	}
-
 	fn delay(&self) -> usize {
 		self.plugins
 			.iter()
@@ -115,6 +109,12 @@ impl Mixer {
 			Action::PluginToggleEnabled(index) => self.plugins[index].enabled ^= true,
 			Action::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
 			_ => panic!(),
+		}
+	}
+
+	pub fn reset(&mut self) {
+		for plugin in &mut self.plugins {
+			plugin.processor.reset();
 		}
 	}
 }

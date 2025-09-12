@@ -20,7 +20,7 @@ pub fn export(
 	state.rtstate.playing = true;
 	state.rtstate.metronome = false;
 
-	audio_graph.reset();
+	audio_graph.for_each_mut(AudioGraphNode::reset);
 
 	let mut writer = WavWriter::create(
 		path,

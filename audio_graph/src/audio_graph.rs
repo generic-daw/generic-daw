@@ -100,18 +100,13 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	#[must_use]
-	pub fn node(&self, node: NodeId) -> Option<&Node> {
-		self.graph.get(*node).map(|entry| &entry.node)
-	}
-
-	#[must_use]
 	pub fn node_mut(&mut self, node: NodeId) -> Option<&mut Node> {
 		self.graph.get_mut(*node).map(|entry| &mut entry.node)
 	}
 
-	pub fn reset(&mut self) {
+	pub fn for_each_mut(&mut self, mut f: impl FnMut(&mut Node)) {
 		for entry in self.graph.values_mut() {
-			entry.node.reset();
+			f(&mut entry.node);
 		}
 	}
 

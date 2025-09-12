@@ -33,14 +33,6 @@ impl NodeImpl for AudioGraphNode {
 		}
 	}
 
-	fn reset(&mut self) {
-		match self {
-			Self::Master(node) => node.reset(),
-			Self::Mixer(node) => node.reset(),
-			Self::Track(node) => node.reset(),
-		}
-	}
-
 	fn delay(&self) -> usize {
 		match self {
 			Self::Master(node) => node.delay(),
@@ -56,6 +48,14 @@ impl AudioGraphNode {
 			Self::Master(node) => node.apply(action),
 			Self::Mixer(node) => node.apply(action),
 			Self::Track(node) => node.apply(action),
+		}
+	}
+
+	pub fn reset(&mut self) {
+		match self {
+			Self::Master(node) => node.reset(),
+			Self::Mixer(node) => node.reset(),
+			Self::Track(node) => node.reset(),
 		}
 	}
 }
