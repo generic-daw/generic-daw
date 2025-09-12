@@ -6,6 +6,7 @@ use clack_host::process::PluginAudioProcessor;
 use generic_daw_utils::NoDebug;
 use log::{trace, warn};
 use rtrb::Consumer;
+use std::sync::atomic::Ordering::Release;
 
 #[derive(Clone, Copy, Debug)]
 pub enum AudioThreadMessage<Event: EventImpl> {
@@ -80,6 +81,8 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 				let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len());
 
+				processor.access_handler(|at| at.processing.store(true, Release));
+
 				processor
 					.process(
 						&input_audio,
@@ -90,6 +93,8 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 						None,
 					)
 					.unwrap();
+
+				processor.access_handler(|at| at.processing.store(false, Release));
 
 				self.steady_time += u64::from(input_audio.min_available_frames_with(&output_audio));
 
