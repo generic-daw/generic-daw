@@ -38,9 +38,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		for &node in &self.list {
 			let mut entry = self.graph.remove(node).unwrap();
 
-			for s in &mut *buf {
-				*s = 0.0;
-			}
 			for s in &mut entry.audio[..len] {
 				*s = 0.0;
 			}
