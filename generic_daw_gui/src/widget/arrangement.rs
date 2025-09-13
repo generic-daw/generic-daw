@@ -34,7 +34,7 @@ enum State {
 }
 
 impl State {
-	fn unselect(&mut self) -> bool {
+	fn drop(&mut self) -> bool {
 		let unselect = matches!(
 			self,
 			Self::DraggingClip(..) | Self::ClipTrimmingStart(..) | Self::ClipTrimmingEnd(..)
@@ -102,6 +102,10 @@ where
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
+		let Some(viewport) = layout.bounds().intersection(viewport) else {
+			return;
+		};
+
 		self.children.as_widget_mut().update(
 			&mut tree.children[0],
 			event,
@@ -110,7 +114,7 @@ where
 			renderer,
 			clipboard,
 			shell,
-			viewport,
+			&viewport,
 		);
 
 		if let Event::Window(window::Event::RedrawRequested(..)) = event {
@@ -122,21 +126,17 @@ where
 			return;
 		}
 
-		let Some(bounds) = layout.bounds().intersection(viewport) else {
-			return;
-		};
-
-		let state = tree.state.downcast_mut::<State>();
-
-		let Some(cursor) = cursor.position_in(bounds) else {
-			if state.unselect() {
-				shell.publish((self.f)(Action::Drop));
-			}
-
-			return;
-		};
-
 		if let Event::Mouse(event) = event {
+			let state = tree.state.downcast_mut::<State>();
+
+			let Some(cursor) = cursor.position_in(viewport) else {
+				if state.drop() {
+					shell.publish((self.f)(Action::Drop));
+				}
+
+				return;
+			};
+
 			match event {
 				mouse::Event::ButtonPressed { button, modifiers } => match button {
 					mouse::Button::Left => {
@@ -150,7 +150,7 @@ where
 
 						if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
 							let clip_bounds = clip_bounds(&layout, track, clip).unwrap()
-								- Vector::new(bounds.x, bounds.y);
+								- Vector::new(viewport.x, viewport.y);
 
 							let start_pixel = clip_bounds.x;
 							let end_pixel = clip_bounds.x + clip_bounds.width;
@@ -191,7 +191,7 @@ where
 					_ => {}
 				},
 				mouse::Event::ButtonReleased(..) if *state != State::None => {
-					if state.unselect() {
+					if state.drop() {
 						shell.publish((self.f)(Action::Drop));
 					}
 
@@ -299,7 +299,7 @@ where
 		cursor: Cursor,
 		viewport: &Rectangle,
 	) {
-		let Some(bounds) = layout.bounds().intersection(viewport) else {
+		let Some(viewport) = layout.bounds().intersection(viewport) else {
 			return;
 		};
 
@@ -310,7 +310,7 @@ where
 			style,
 			layout.children().next().unwrap(),
 			cursor,
-			&bounds,
+			&viewport,
 		);
 	}
 

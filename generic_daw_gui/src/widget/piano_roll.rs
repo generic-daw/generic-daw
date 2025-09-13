@@ -40,7 +40,7 @@ enum State {
 }
 
 impl State {
-	fn unselect(&mut self) -> bool {
+	fn drop(&mut self) -> bool {
 		let unselect = matches!(
 			self,
 			Self::DraggingNote(..) | Self::NoteTrimmingStart(..) | Self::NoteTrimmingEnd(..)
@@ -103,21 +103,21 @@ where
 			return;
 		}
 
-		let Some(bounds) = layout.bounds().intersection(viewport) else {
-			return;
-		};
-
-		let state = tree.state.downcast_mut::<State>();
-
-		let Some(cursor) = cursor.position_in(bounds) else {
-			if state.unselect() {
-				shell.publish((self.f)(Action::Drop));
-			}
-
-			return;
-		};
-
 		if let Event::Mouse(event) = event {
+			let Some(bounds) = layout.bounds().intersection(viewport) else {
+				return;
+			};
+
+			let state = tree.state.downcast_mut::<State>();
+
+			let Some(cursor) = cursor.position_in(bounds) else {
+				if state.drop() {
+					shell.publish((self.f)(Action::Drop));
+				}
+
+				return;
+			};
+
 			match event {
 				mouse::Event::ButtonPressed { button, modifiers } => match button {
 					mouse::Button::Left => {
@@ -179,7 +179,7 @@ where
 					_ => {}
 				},
 				mouse::Event::ButtonReleased(..) if *state != State::None => {
-					if state.unselect() {
+					if state.drop() {
 						shell.publish((self.f)(Action::Drop));
 					}
 
@@ -266,13 +266,13 @@ where
 		};
 
 		for note in self.notes.iter() {
-			let viewport = self.note_bounds(note) + Vector::new(bounds.x, bounds.y);
-			let Some(note_bounds) = viewport.intersection(&bounds) else {
+			let note_bounds = self.note_bounds(note) + Vector::new(bounds.x, bounds.y);
+			let Some(bounds) = note_bounds.intersection(&bounds) else {
 				continue;
 			};
 
-			renderer.with_layer(note_bounds, |renderer| {
-				Self::draw_note(note, renderer, theme, viewport.position(), note_bounds);
+			renderer.with_layer(bounds, |renderer| {
+				Self::draw_note(note, renderer, theme, note_bounds.position(), bounds);
 			});
 		}
 	}

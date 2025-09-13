@@ -102,7 +102,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		_viewport: &Rectangle,
 	) {
 		let bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
-		let right_half = Self::right_half(layout);
 
 		self.children
 			.iter_mut()
@@ -122,22 +121,23 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			return;
 		}
 
-		let state = tree.state.downcast_mut::<State>();
-
-		let Some(mut cursor) = cursor.position_in(right_half) else {
-			state.hovering = false;
-			state.seeking = None;
-
-			return;
-		};
-		cursor.y -= LINE_HEIGHT;
-
 		if let Event::Mouse(event) = event {
+			let state = tree.state.downcast_mut::<State>();
+
+			let Some(cursor) = cursor.position_in(layout.bounds()) else {
+				state.hovering = false;
+				state.seeking = None;
+
+				return;
+			};
+
+			let offset = (-cursor.x).max(layout.position().x - Self::right_half(layout).x);
+
 			match event {
 				mouse::Event::CursorMoved { modifiers, .. } => {
 					if let Some(last_time) = state.seeking {
 						let time = get_time(
-							cursor.x + self.offset,
+							cursor.x + offset + self.offset,
 							*modifiers,
 							self.rtstate,
 							*self.position,
@@ -151,14 +151,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 						}
 					}
 
-					state.hovering = cursor.y < 0.0;
+					state.hovering = cursor.y < LINE_HEIGHT;
 				}
 				mouse::Event::ButtonPressed {
 					button: mouse::Button::Left,
 					modifiers,
 				} if state.hovering => {
 					let time = get_time(
-						cursor.x + self.offset,
+						cursor.x + offset + self.offset,
 						*modifiers,
 						self.rtstate,
 						*self.position,
@@ -190,8 +190,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 						(true, false, false) => {
 							x = y / 128.0;
 
-							let x_pos =
-								cursor.x * (self.scale.x.exp2() - (self.scale.x + x).exp2());
+							let x_pos = (cursor.x + offset)
+								* (self.scale.x.exp2() - (self.scale.x + x).exp2());
 
 							shell.publish((self.position_scale_delta)(
 								Vec2::new(x_pos, 0.0),
@@ -213,7 +213,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 						(false, false, true) => {
 							y /= -8.0;
 
-							let y_pos = (cursor.y * y) / (self.scale.y * (self.scale.y + y));
+							let y_pos = (y * (cursor.y - LINE_HEIGHT))
+								/ (self.scale.y * (self.scale.y + y));
 
 							shell.publish((self.position_scale_delta)(
 								Vec2::new(0.0, y_pos),
@@ -368,13 +369,9 @@ impl<'a, Message> Seeker<'a, Message> {
 	}
 
 	fn seeker_bounds(layout: Layout<'_>) -> Rectangle {
-		let bounds = layout.bounds();
-		let right_child_bounds = layout.children().next_back().unwrap().bounds();
-
-		Rectangle::new(
-			Point::new(right_child_bounds.x, bounds.y),
-			Size::new(right_child_bounds.width, LINE_HEIGHT),
-		)
+		let mut bounds = Self::right_half(layout);
+		bounds.height = LINE_HEIGHT;
+		bounds
 	}
 
 	fn right_half(layout: Layout<'_>) -> Rectangle {

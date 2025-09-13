@@ -116,9 +116,9 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 			return;
 		}
 
-		let state = tree.state.downcast_mut::<State>();
-
 		if let Event::Mouse(event) = event {
+			let state = tree.state.downcast_mut::<State>();
+
 			match event {
 				mouse::Event::ButtonPressed {
 					button: mouse::Button::Left,

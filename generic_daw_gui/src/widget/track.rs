@@ -141,15 +141,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 			return;
 		}
 
-		let Some(cursor) = cursor.position_in(layout.bounds()) else {
-			return;
-		};
-
 		if let Event::Mouse(mouse::Event::ButtonPressed {
 			button: mouse::Button::Left,
 			modifiers,
 		}) = event
 		{
+			let Some(cursor) = cursor.position_in(layout.bounds()) else {
+				return;
+			};
+
 			let state = tree.state.downcast_mut::<State>();
 
 			let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
