@@ -520,11 +520,7 @@ impl ArrangementView {
 			}
 			Message::RecordingSplit(id) => {
 				if let Some((mut recording, track)) = self.recording.take() {
-					let mut pos = MusicalTime::from_samples(
-						self.arrangement.rtstate().sample,
-						self.arrangement.rtstate(),
-					);
-					(pos, recording.position) = (recording.position, pos);
+					let pos = recording.position;
 
 					let sample = recording.split_off(recording_path(), self.arrangement.rtstate());
 					self.audios.insert(
