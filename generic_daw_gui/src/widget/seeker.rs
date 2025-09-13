@@ -158,7 +158,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					modifiers,
 				} if state.hovering => {
 					let time = get_time(
-						cursor.x,
+						cursor.x + self.offset,
 						*modifiers,
 						self.rtstate,
 						*self.position,

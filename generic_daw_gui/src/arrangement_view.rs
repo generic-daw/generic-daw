@@ -596,7 +596,7 @@ impl ArrangementView {
 					.y
 					.clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
 
-				if scale == Vec2::ZERO || old_scale == self.piano_roll_scale {
+				if scale == Vec2::ZERO || old_scale != self.piano_roll_scale {
 					self.piano_roll_position += pos;
 					self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
 					self.piano_roll_position.y = self.piano_roll_position.y.clamp(
