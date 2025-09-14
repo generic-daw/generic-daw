@@ -1,6 +1,6 @@
 use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry};
 use bit_set::BitSet;
-use generic_daw_utils::{HoleyVec, RotateConcatExt as _};
+use generic_daw_utils::{FunnelShiftExt as _, HoleyVec};
 
 #[derive(Debug)]
 pub struct AudioGraph<Node: NodeImpl> {
@@ -38,9 +38,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		for &node in &self.list {
 			let mut entry = self.graph.remove(node).unwrap();
 
-			for s in &mut entry.audio[..len] {
-				*s = 0.0;
-			}
+			entry.audio[..len].fill(0.0);
 			entry.events.clear();
 
 			let max_delay = entry
@@ -56,7 +54,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 				buf.copy_from_slice(&dep_entry.audio[..len]);
 				audio.resize(dep_delay, 0.0);
-				audio.rotate_right_concat(buf);
+				audio.funnel_shift_left(buf);
 
 				buf.iter()
 					.zip(&mut entry.audio[..len])

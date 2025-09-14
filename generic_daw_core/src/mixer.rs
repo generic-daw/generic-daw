@@ -45,11 +45,8 @@ impl NodeImpl for Mixer {
 		events: &mut Vec<Self::Event>,
 	) {
 		if !self.enabled {
-			for s in audio {
-				*s = 0.0;
-			}
+			audio.fill(0.0);
 			events.clear();
-
 			return;
 		}
 
@@ -89,11 +86,15 @@ impl NodeImpl for Mixer {
 	}
 
 	fn delay(&self) -> usize {
-		self.plugins
-			.iter()
-			.filter(|entry| entry.enabled)
-			.map(|entry| entry.processor.delay())
-			.sum()
+		if self.enabled {
+			self.plugins
+				.iter()
+				.filter(|entry| entry.enabled)
+				.map(|entry| entry.processor.delay())
+				.sum()
+		} else {
+			0
+		}
 	}
 }
 

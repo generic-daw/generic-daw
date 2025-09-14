@@ -1,6 +1,6 @@
 use crate::{audio_ports_config::AudioPortsConfig, host::Host};
 use clack_host::prelude::*;
-use generic_daw_utils::{NoDebug, RotateConcatExt as _};
+use generic_daw_utils::{FunnelShiftExt as _, NoDebug};
 
 #[derive(Debug)]
 pub struct AudioBuffers {
@@ -92,20 +92,6 @@ impl AudioBuffers {
 	}
 
 	pub fn prepare(&mut self, frames: usize) -> (InputAudioBuffers<'_>, OutputAudioBuffers<'_>) {
-		let input_frames = self
-			.input_config
-			.port_channel_counts
-			.get(self.input_config.main_port_index)
-			.filter(|&&x| x != 0)
-			.map_or(frames, |n_channels| frames / n_channels.clamp(&1, &2));
-
-		let output_frames = self
-			.output_config
-			.port_channel_counts
-			.get(self.output_config.main_port_index)
-			.filter(|&&x| x != 0)
-			.map_or(frames, |n_channels| frames / n_channels.clamp(&1, &2));
-
 		(
 			self.input_ports
 				.with_input_buffers(self.input_buffers.iter_mut().map(|c| {
@@ -113,7 +99,7 @@ impl AudioBuffers {
 						latency: 0,
 						channels: AudioPortBufferType::f32_input_only(
 							c.chunks_exact_mut(self.config.max_frames_count as usize)
-								.map(|b| &mut b[..input_frames])
+								.map(|b| &mut b[..frames])
 								.map(InputChannel::variable),
 						),
 					}
@@ -124,7 +110,7 @@ impl AudioBuffers {
 						latency: 0,
 						channels: AudioPortBufferType::f32_output_only(
 							c.chunks_exact_mut(self.config.max_frames_count as usize)
-								.map(|b| &mut b[..output_frames]),
+								.map(|b| &mut b[..frames]),
 						),
 					}
 				})),
@@ -132,7 +118,7 @@ impl AudioBuffers {
 	}
 
 	pub fn write_out(&mut self, buf: &mut [f32], mix_level: f32) {
-		self.latency_comp.rotate_right_concat(buf);
+		self.latency_comp.funnel_shift_left(buf);
 
 		let Some(output_buffer) = self.output_buffers.get(self.output_config.main_port_index)
 		else {

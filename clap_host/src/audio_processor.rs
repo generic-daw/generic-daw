@@ -83,7 +83,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 				self.audio_buffers.read_in(audio);
 				self.event_buffers.read_in(events);
 
-				let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len());
+				let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len() / 2);
 
 				processor.access_handler(|at| at.processing.store(true, Release));
 
