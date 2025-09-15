@@ -39,11 +39,7 @@ impl AudioBuffers {
 			.collect::<Box<[_]>>()
 			.into();
 
-		let latency = plugin
-			.access_shared_handler(|s| s.latency.get().copied())
-			.map(|ext| ext.get(&mut plugin.plugin_handle()))
-			.unwrap_or_default();
-		let latency_comp = AudioRingbuf::new(2 * latency as usize);
+		let latency_comp = AudioRingbuf::new(0);
 
 		Self {
 			config,

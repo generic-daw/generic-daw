@@ -163,14 +163,20 @@ pub fn init<Event: EventImpl>(
 		max_frames_count: frames,
 	};
 
-	let audio_buffers = AudioBuffers::new(&mut instance, config);
+	let mut audio_buffers = AudioBuffers::new(&mut instance, config);
 	let event_buffers = EventBuffers::new(&mut instance);
 	let id = PluginId::unique();
 
-	let plugin_audio_processor = AudioProcessor::new(
-		instance
-			.activate(|shared, _| AudioThread::new(shared), config)
-			.unwrap(),
+	let processor = instance
+		.activate(|shared, _| AudioThread::new(shared), config)
+		.unwrap();
+
+	if let Some(&latency) = instance.access_shared_handler(|s| s.latency.get()) {
+		audio_buffers.latency_changed(latency.get(&mut instance.plugin_handle()));
+	}
+
+	let audio_processor = AudioProcessor::new(
+		processor,
 		descriptor.clone(),
 		id,
 		audio_buffers,
@@ -183,5 +189,5 @@ pub fn init<Event: EventImpl>(
 
 	let plugin = Plugin::new(instance, gui, descriptor, audio_sender, id, params);
 
-	(plugin, main_receiver, plugin_audio_processor)
+	(plugin, main_receiver, audio_processor)
 }
