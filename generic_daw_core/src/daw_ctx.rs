@@ -1,7 +1,7 @@
 use crate::{AudioGraphNode, Clip, Event, Master, Mixer};
 use audio_graph::{AudioGraph, NodeId, NodeImpl as _};
 use clap_host::{AudioProcessor, ClapId, PluginId};
-use generic_daw_utils::unique_id;
+use generic_daw_utils::{NoDebug, unique_id};
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, RingBuffer};
 
@@ -28,7 +28,7 @@ pub enum Message {
 	ReturnUpdateBuffer(Vec<Update>),
 
 	RequestAudioGraph(oneshot::Sender<AudioGraph<AudioGraphNode>>),
-	AudioGraph(Box<AudioGraph<AudioGraphNode>>),
+	AudioGraph(NoDebug<Box<AudioGraph<AudioGraphNode>>>),
 }
 
 const _: () = assert!(size_of::<Message>() <= 128);
@@ -175,7 +175,7 @@ impl DawCtx {
 					std::mem::swap(&mut self.audio_graph, &mut audio_graph);
 					sender.send(audio_graph).unwrap();
 				}
-				Message::AudioGraph(audio_graph) => self.audio_graph = *audio_graph,
+				Message::AudioGraph(audio_graph) => self.audio_graph = *audio_graph.0,
 			}
 		}
 

@@ -4,7 +4,8 @@ use crate::{
 };
 use audio_graph::AudioGraph;
 use hound::WavWriter;
-use std::path::Path;
+use log::info;
+use std::{path::Path, time::Instant};
 
 pub fn export(
 	audio_graph: &mut AudioGraph<AudioGraphNode>,
@@ -12,6 +13,8 @@ pub fn export(
 	rtstate: RtState,
 	end: MusicalTime,
 ) {
+	let now = Instant::now();
+
 	let mut state = State {
 		rtstate,
 		batch: Batch::new(Version::unique()),
@@ -66,4 +69,10 @@ pub fn export(
 	}
 
 	writer.finalize().unwrap();
+
+	info!(
+		"export of {} finished in {:?}",
+		path.display(),
+		now.elapsed()
+	);
 }

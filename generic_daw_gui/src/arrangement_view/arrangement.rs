@@ -372,7 +372,7 @@ impl Arrangement {
 				.unwrap_or_default(),
 		);
 		self.producer
-			.push(Message::AudioGraph(Box::new(audio_graph)))
+			.push(Message::AudioGraph(NoDebug(Box::new(audio_graph))))
 			.unwrap();
 		self.stream.play().unwrap();
 	}
