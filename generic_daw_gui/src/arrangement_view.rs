@@ -26,7 +26,7 @@ use generic_daw_core::{
 	AudioClip, Batch, Clip, Decibels, MidiClip, MidiNote, MusicalTime, NodeId, Recording, Sample,
 	clap_host::{self, HostInfo, MainThreadMessage, PluginBundle, PluginDescriptor},
 };
-use generic_daw_utils::{EnumDispatcher, NoDebug, Vec2};
+use generic_daw_utils::{EnumDispatcher, NoClone, NoDebug, Vec2};
 use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
 use humantime::format_rfc3339;
 use iced::{
@@ -291,7 +291,7 @@ impl ArrangementView {
 				self.arrangement.plugin_load(node, audio_processor);
 
 				let mut fut = self.clap_host.update(
-					ClapHostMessage::Loaded(Arc::new(Fragile::new(plugin)), receiver),
+					ClapHostMessage::Loaded(NoClone(Box::new(Fragile::new(plugin))), receiver),
 					config,
 				);
 

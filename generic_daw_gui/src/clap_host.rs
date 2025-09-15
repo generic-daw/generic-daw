@@ -4,7 +4,7 @@ use generic_daw_core::{
 	Event,
 	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, PluginId, Size},
 };
-use generic_daw_utils::HoleyVec;
+use generic_daw_utils::{HoleyVec, NoClone};
 use generic_daw_widget::knob::Knob;
 use iced::{
 	Alignment::Center,
@@ -17,15 +17,18 @@ use iced::{
 };
 use log::info;
 use smol::{Timer, channel::Receiver};
-use std::{ops::Deref as _, sync::Arc, time::Duration};
+use std::{ops::Deref as _, time::Duration};
 
 #[derive(Clone, Debug)]
 pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
 	SendEvent(PluginId, Event),
 	TickTimer(usize, u32),
-	Loaded(Arc<Fragile<Plugin<Event>>>, Receiver<MainThreadMessage>),
-	GuiShown(Arc<Fragile<Plugin<Event>>>),
+	Loaded(
+		NoClone<Box<Fragile<Plugin<Event>>>>,
+		Receiver<MainThreadMessage>,
+	),
+	GuiShown(NoClone<Box<Fragile<Plugin<Event>>>>),
 	GuiSetState(PluginId, Box<[u8]>),
 	GuiRequestResize(Id, Size),
 	GuiRequestHide(Id),
@@ -60,13 +63,13 @@ impl ClapHost {
 				self.plugins.get_mut(id).unwrap().tick_timer(timer_id);
 			}
 			Message::Loaded(plugin, receiver) => {
-				let plugin = Arc::into_inner(plugin).unwrap().into_inner();
+				let plugin = plugin.0.into_inner();
 				let id = plugin.plugin_id();
 				self.plugins.insert(*id, plugin);
 				return Task::stream(receiver).map(Message::MainThread.with(id));
 			}
 			Message::GuiShown(plugin) => {
-				let mut plugin = Arc::into_inner(plugin).unwrap().into_inner();
+				let mut plugin = plugin.0.into_inner();
 				let id = plugin.plugin_id();
 
 				plugin.show();
@@ -140,11 +143,15 @@ impl ClapHost {
 					});
 					self.windows.insert(*id, window);
 
-					spawn.discard().chain(
-						self.update(Message::GuiShown(Arc::new(Fragile::new(plugin))), config),
-					)
+					spawn.discard().chain(self.update(
+						Message::GuiShown(NoClone(Box::new(Fragile::new(plugin)))),
+						config,
+					))
 				} else if plugin.is_floating() {
-					self.update(Message::GuiShown(Arc::new(Fragile::new(plugin))), config)
+					self.update(
+						Message::GuiShown(NoClone(Box::new(Fragile::new(plugin)))),
+						config,
+					)
 				} else {
 					plugin.set_scale(config.scale_factor);
 
@@ -173,7 +180,7 @@ impl ClapHost {
 					spawn
 						.discard()
 						.chain(embed)
-						.map(move |plugin| Message::GuiShown(Arc::new(plugin)))
+						.map(move |plugin| Message::GuiShown(NoClone(Box::new(plugin))))
 				};
 			}
 			MainThreadMessage::GuiRequestResize(size) => {

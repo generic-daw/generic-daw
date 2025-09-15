@@ -10,9 +10,10 @@ use crate::{
 	widget::LINE_HEIGHT,
 };
 use generic_daw_core::{
-	MusicalTime,
+	AudioGraph, MusicalTime,
 	clap_host::{PluginBundle, PluginDescriptor, get_installed_plugins},
 };
+use generic_daw_utils::NoClone;
 use generic_daw_widget::dot::Dot;
 use iced::{
 	Alignment, Color, Element, Event, Fill, Subscription, Task, Theme, border,
@@ -21,14 +22,15 @@ use iced::{
 	mouse::Interaction,
 	time::every,
 	widget::{
-		button, center, column, container, horizontal_space, mouse_area, opaque, pick_list, row,
-		stack,
+		button, center, column, container, horizontal_space, mouse_area, opaque, pick_list,
+		progress_bar, row, stack,
 	},
 	window::{self, Id},
 };
 use iced_split::{Strategy, vertical_split};
 use log::trace;
 use rfd::AsyncFileDialog;
+use smol::unblock;
 use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
 
 #[derive(Clone, Debug)]
@@ -48,6 +50,8 @@ pub enum Message {
 	OpenFile(Arc<Path>),
 	SaveAsFile(Arc<Path>),
 	ExportFile(Arc<Path>),
+	ExportProgress(f32),
+	FinishExport(NoClone<Box<AudioGraph>>),
 
 	OpenConfigView,
 	CloseConfigView,
@@ -75,6 +79,8 @@ pub struct Daw {
 	file_tree: FileTree,
 	config_view: Option<ConfigView>,
 	split_at: f32,
+
+	export_progress: Option<f32>,
 }
 
 impl Daw {
@@ -110,6 +116,8 @@ impl Daw {
 				file_tree,
 				config_view: None,
 				split_at: 300.0,
+
+				export_progress: None,
 			},
 			open,
 		)
@@ -214,9 +222,24 @@ impl Daw {
 				}
 			}
 			Message::ExportFile(path) => {
+				self.export_progress = Some(0.0);
 				self.arrangement_view.clap_host.set_realtime(false);
-				self.arrangement_view.arrangement.export(&path);
+				let (sender, receiver) = smol::channel::unbounded();
+				let export_fn = self.arrangement_view.arrangement.start_export(path, sender);
+				return Task::batch([
+					Task::perform(unblock(export_fn), |audio_graph| {
+						Message::FinishExport(NoClone(Box::new(audio_graph)))
+					}),
+					Task::stream(receiver).map(Message::ExportProgress),
+				]);
+			}
+			Message::ExportProgress(progress) => self.export_progress = Some(progress),
+			Message::FinishExport(audio_graph) => {
+				self.arrangement_view
+					.arrangement
+					.finish_export(*audio_graph.0);
 				self.arrangement_view.clap_host.set_realtime(true);
+				self.export_progress = None;
 			}
 			Message::OpenConfigView => {
 				self.config_view = Some(ConfigView::new(self.config.clone()));
@@ -445,6 +468,14 @@ impl Daw {
 			));
 		}
 
+		if let Some(progress) = self.export_progress {
+			base = base.push(opaque(
+				center(progress_bar(0.0..=1.0, progress))
+					.padding(50)
+					.style(|_| container::background(Color::BLACK.scale_alpha(0.8))),
+			));
+		}
+
 		base.into()
 	}
 
@@ -459,7 +490,7 @@ impl Daw {
 		self.config.theme.into()
 	}
 
-	pub fn scale_factor(&self, _: Id) -> f32 {
+	pub fn scale_factor(&self, _window: Id) -> f32 {
 		self.config.scale_factor
 	}
 
@@ -471,7 +502,7 @@ impl Daw {
 			Subscription::none()
 		};
 
-		let keybinds = if self.config_view.is_none() {
+		let keybinds = if self.config_view.is_none() && self.export_progress.is_none() {
 			keybinds()
 		} else {
 			Subscription::none()

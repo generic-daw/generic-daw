@@ -13,6 +13,16 @@ pub fn export(
 	rtstate: RtState,
 	end: MusicalTime,
 ) {
+	export_with(audio_graph, path, rtstate, end, |_| ());
+}
+
+pub fn export_with(
+	audio_graph: &mut AudioGraph<AudioGraphNode>,
+	path: &Path,
+	rtstate: RtState,
+	end: MusicalTime,
+	mut progress_fn: impl FnMut(f32),
+) {
 	let now = Instant::now();
 
 	let mut state = State {
@@ -66,6 +76,8 @@ pub fn export(
 		for &s in &buf {
 			writer.write_sample(s).unwrap();
 		}
+
+		progress_fn((state.rtstate.sample - delay) as f32 / end as f32);
 	}
 
 	writer.finalize().unwrap();

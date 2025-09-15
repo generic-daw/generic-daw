@@ -4,7 +4,7 @@ use std::{
 	ops::{Deref, DerefMut},
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct NoDebug<T>(pub T);
 
 impl<T> Debug for NoDebug<T> {

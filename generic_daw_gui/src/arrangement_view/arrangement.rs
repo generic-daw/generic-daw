@@ -8,15 +8,16 @@ use crate::{
 };
 use bit_set::BitSet;
 use generic_daw_core::{
-	self as core, Action, Batch, Clip, Event, Message, Mixer, MusicalTime, NodeId, NodeImpl as _,
-	RtState, Stream, StreamTrait as _, Update, Version, build_output_stream,
+	self as core, Action, AudioGraph, Batch, Clip, Event, Message, Mixer, MusicalTime, NodeId,
+	NodeImpl as _, RtState, Stream, StreamTrait as _, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage},
-	export,
+	export_with,
 };
 use generic_daw_utils::{HoleyVec, NoDebug, ShiftMoveExt as _};
 use iced::Task;
 use rtrb::Producer;
-use std::{path::Path, time::Instant};
+use smol::channel::Sender;
+use std::{path::Path, sync::Arc, time::Instant};
 
 #[derive(Debug)]
 pub struct Arrangement {
@@ -354,23 +355,35 @@ impl Arrangement {
 		self.action(self.tracks[new_track].id, Action::AddClip(clip));
 	}
 
-	pub fn export(&mut self, path: &Path) {
+	pub fn start_export(
+		&mut self,
+		path: Arc<Path>,
+		progress: Sender<f32>,
+	) -> impl FnOnce() -> AudioGraph + 'static {
 		let (sender, receiver) = oneshot::channel();
 		self.producer
 			.push(Message::RequestAudioGraph(sender))
 			.unwrap();
 		let mut audio_graph = receiver.recv().unwrap();
 		self.stream.pause().unwrap();
-		export(
-			&mut audio_graph,
-			path,
-			self.rtstate,
-			self.tracks()
-				.iter()
-				.map(Track::len)
-				.max()
-				.unwrap_or_default(),
-		);
+
+		let rtstate = self.rtstate;
+		let end = self
+			.tracks()
+			.iter()
+			.map(Track::len)
+			.max()
+			.unwrap_or_default();
+
+		move || {
+			export_with(&mut audio_graph, &path, rtstate, end, |f| {
+				progress.try_send(f).unwrap();
+			});
+			audio_graph
+		}
+	}
+
+	pub fn finish_export(&mut self, audio_graph: AudioGraph) {
 		self.producer
 			.push(Message::AudioGraph(NoDebug(Box::new(audio_graph))))
 			.unwrap();
