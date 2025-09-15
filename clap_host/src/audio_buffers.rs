@@ -1,6 +1,6 @@
 use crate::{audio_ports_config::AudioPortsConfig, host::Host};
 use clack_host::prelude::*;
-use generic_daw_utils::{FunnelShiftExt as _, NoDebug};
+use generic_daw_utils::{AudioRingbuf, NoDebug};
 
 #[derive(Debug)]
 pub struct AudioBuffers {
@@ -15,7 +15,7 @@ pub struct AudioBuffers {
 	input_buffers: NoDebug<Box<[Box<[f32]>]>>,
 	output_buffers: NoDebug<Box<[Box<[f32]>]>>,
 
-	latency_comp: Vec<f32>,
+	latency_comp: AudioRingbuf,
 }
 
 impl AudioBuffers {
@@ -43,7 +43,7 @@ impl AudioBuffers {
 			.access_shared_handler(|s| s.latency.get().copied())
 			.map(|ext| ext.get(&mut plugin.plugin_handle()))
 			.unwrap_or_default();
-		let latency_comp = vec![0.0; 2 * latency as usize];
+		let latency_comp = AudioRingbuf::new(2 * latency as usize);
 
 		Self {
 			config,
@@ -118,7 +118,7 @@ impl AudioBuffers {
 	}
 
 	pub fn write_out(&mut self, buf: &mut [f32], mix_level: f32) {
-		self.latency_comp.funnel_shift_left(buf);
+		self.latency_comp.next(buf);
 
 		let Some(output_buffer) = self.output_buffers.get(self.output_config.main_port_index)
 		else {
@@ -149,7 +149,7 @@ impl AudioBuffers {
 	}
 
 	pub fn latency_changed(&mut self, latency: u32) {
-		self.latency_comp.resize(2 * latency as usize, 0.0);
+		self.latency_comp.resize(2 * latency as usize);
 	}
 
 	pub fn delay(&self) -> usize {
