@@ -75,7 +75,7 @@ fn build_input_stream(
 	sample_rate: u32,
 	frames: u32,
 ) -> (Stream, StreamConfig, Consumer<Box<[f32]>>) {
-	let (mut producer, consumer) = RingBuffer::new(256);
+	let (mut producer, consumer) = RingBuffer::new(sample_rate.div_ceil(frames) as usize);
 
 	let host = cpal::default_host();
 
@@ -97,7 +97,7 @@ fn build_input_stream(
 	let channels = u32::from(config.channels);
 	let frames = buffer_size / channels;
 
-	info!("starting input stream with config {config:?}");
+	info!("starting input stream with config {config:#?}");
 
 	let mut stereo = vec![0.0; 2 * frames as usize].into_boxed_slice();
 
@@ -149,7 +149,7 @@ pub fn build_output_stream(
 
 	let (mut ctx, node, rtstate, producer, consumer) = DawCtx::create(sample_rate, frames);
 
-	info!("starting output stream with config {config:?}");
+	info!("starting output stream with config {config:#?}");
 
 	let mut stereo = vec![0.0; 2 * frames as usize].into_boxed_slice();
 

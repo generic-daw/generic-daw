@@ -1,4 +1,4 @@
-use log::warn;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
 	fs::{read_to_string, write},
@@ -21,6 +21,8 @@ pub static STATE_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
 #[serde(default)]
 pub struct State {
 	pub last_project: Option<Arc<Path>>,
+	#[serde(skip)]
+	pub current_project: Option<Arc<Path>>,
 }
 
 impl State {
@@ -37,6 +39,8 @@ impl State {
 		if config.is_err_and(|e| e.kind() == io::ErrorKind::NotFound) {
 			read.write();
 		}
+
+		info!("loaded state {read:#?}");
 
 		read
 	}

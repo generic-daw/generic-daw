@@ -1,6 +1,6 @@
 use crate::theme::Theme;
 use generic_daw_core::clap_host::default_clap_paths;
-use log::warn;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
 	fs::{read_to_string, write},
@@ -92,6 +92,8 @@ impl Config {
 		if config.is_err_and(|e| e.kind() == io::ErrorKind::NotFound) {
 			read.write();
 		}
+
+		info!("loaded config {read:#?}");
 
 		read
 	}

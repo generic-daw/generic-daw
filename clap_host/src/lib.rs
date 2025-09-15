@@ -146,7 +146,7 @@ pub fn init<Event: EventImpl>(
 	AudioProcessor<Event>,
 ) {
 	let (main_sender, main_receiver) = async_channel::unbounded();
-	let (audio_sender, audio_receiver) = RingBuffer::new(256);
+	let (audio_sender, audio_receiver) = RingBuffer::new(frames as usize);
 
 	let mut instance = PluginInstance::new(
 		|()| Shared::new(descriptor.clone(), main_sender),

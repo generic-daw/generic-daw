@@ -41,6 +41,7 @@ pub enum Message {
 	OpenFileDialog,
 	OpenLastFile,
 	SaveFile,
+	AutosaveFile,
 	SaveAsFileDialog,
 	ExportFileDialog,
 
@@ -86,25 +87,17 @@ impl Daw {
 		.discard();
 
 		let config = Config::read();
-		trace!("loaded config {config:?}");
-
 		let state = State::read();
-		trace!("loaded state {state:?}");
+
+		if config.open_last_project {
+			open = open.chain(Task::done(Message::OpenLastFile));
+		}
 
 		let plugin_bundles = get_installed_plugins(&config.clap_paths);
 		let file_tree = FileTree::new(&config.sample_paths);
 
-		let (mut arrangement_view, futs) = ArrangementView::new(&config, &plugin_bundles);
+		let (arrangement_view, futs) = ArrangementView::new(&config, &plugin_bundles);
 		open = open.chain(futs.map(Message::Arrangement));
-
-		if config.open_last_project
-			&& let Some(futs) = state
-				.last_project
-				.as_deref()
-				.and_then(|path| arrangement_view.load(path, &config, &plugin_bundles))
-		{
-			open = open.chain(futs.map(Message::Arrangement));
-		}
 
 		(
 			Self {
@@ -142,7 +135,6 @@ impl Daw {
 			}
 			Message::NewFile => {
 				self.reload_config();
-				self.state.last_project = None;
 				return self
 					.arrangement_view
 					.unload(&self.config, &self.plugin_bundles)
@@ -167,10 +159,15 @@ impl Daw {
 			Message::SaveFile => {
 				return self.update(
 					self.state
-						.last_project
+						.current_project
 						.clone()
 						.map_or(Message::SaveAsFileDialog, Message::SaveAsFile),
 				);
+			}
+			Message::AutosaveFile => {
+				if let Some(current_project) = self.state.current_project.clone() {
+					return self.update(Message::SaveAsFile(current_project));
+				}
 			}
 			Message::SaveAsFileDialog => {
 				return Task::future(
@@ -195,18 +192,22 @@ impl Daw {
 			}
 			Message::OpenFile(path) => {
 				self.reload_config();
-				if self.state.last_project.as_deref() != Some(&path) {
-					self.state.last_project = Some(path.clone());
-					self.state.write();
+				if let Some(futs) =
+					self.arrangement_view
+						.load(&path, &self.config, &self.plugin_bundles)
+				{
+					self.state.current_project = Some(path.clone());
+					if self.state.last_project.as_deref() != Some(&path) {
+						self.state.last_project = Some(path);
+						self.state.write();
+					}
+
+					return futs.map(Message::Arrangement);
 				}
-				return self
-					.arrangement_view
-					.load(&path, &self.config, &self.plugin_bundles)
-					.unwrap()
-					.map(Message::Arrangement);
 			}
 			Message::SaveAsFile(path) => {
 				self.arrangement_view.save(&path);
+				self.state.current_project = Some(path.clone());
 				if self.state.last_project.as_deref() != Some(&path) {
 					self.state.last_project = Some(path);
 					self.state.write();
@@ -458,9 +459,9 @@ impl Daw {
 	}
 
 	pub fn subscription(&self) -> Subscription<Message> {
-		let autosave = if self.config.autosave.enabled && self.state.last_project.is_some() {
+		let autosave = if self.config.autosave.enabled {
 			every(Duration::from_secs(self.config.autosave.interval.get()))
-				.map(|_| Message::SaveFile)
+				.map(|_| Message::AutosaveFile)
 		} else {
 			Subscription::none()
 		};

@@ -103,8 +103,8 @@ impl DawCtx {
 		sample_rate: u32,
 		frames: u32,
 	) -> (Self, NodeId, RtState, Producer<Message>, Consumer<Batch>) {
-		let (r_sender, receiver) = RingBuffer::new(256);
-		let (sender, r_receiver) = RingBuffer::new(256);
+		let (r_sender, receiver) = RingBuffer::new(frames as usize);
+		let (sender, r_receiver) = RingBuffer::new(sample_rate.div_ceil(frames) as usize);
 
 		let master = Master::new(sample_rate);
 		let id = master.id();
