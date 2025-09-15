@@ -10,10 +10,10 @@ use clack_extensions::{
 };
 use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
-use log::warn;
+use log::{info, warn};
 use raw_window_handle::RawWindowHandle;
 use rtrb::Producer;
-use std::{io::Cursor, panic};
+use std::{io::Cursor, panic, time::Instant};
 
 #[derive(Debug)]
 pub struct Plugin<Event: EventImpl> {
@@ -294,5 +294,15 @@ impl<Event: EventImpl> Plugin<Event> {
 impl<Event: EventImpl> Drop for Plugin<Event> {
 	fn drop(&mut self) {
 		self.destroy();
+		if self.instance.try_deactivate().is_err() {
+			let now = Instant::now();
+			self.instance.access_shared_handler(|s| s.once.wait());
+			while self.instance.try_deactivate().is_err() {}
+			info!(
+				"waited for {:?} to deactivate {}",
+				now.elapsed(),
+				self.descriptor
+			);
+		}
 	}
 }

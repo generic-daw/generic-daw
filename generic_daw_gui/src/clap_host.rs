@@ -328,4 +328,12 @@ impl ClapHost {
 				]),
 		)
 	}
+
+	pub fn clear(&mut self) -> impl Iterator<Item = Message> {
+		self.timers.clear();
+		self.windows.clear();
+		self.plugins
+			.values()
+			.map(|plugin| Message::MainThread(plugin.plugin_id(), MainThreadMessage::GuiClosed))
+	}
 }

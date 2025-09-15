@@ -10,7 +10,7 @@ use bit_set::BitSet;
 use generic_daw_core::{
 	self as core, Action, Batch, Clip, Event, Message, Mixer, MusicalTime, NodeId, NodeImpl as _,
 	RtState, Stream, StreamTrait as _, Update, Version, build_output_stream,
-	clap_host::{AudioProcessor, MainThreadMessage, PluginId},
+	clap_host::{AudioProcessor, MainThreadMessage},
 	export,
 };
 use generic_daw_utils::{HoleyVec, NoDebug, ShiftMoveExt as _};
@@ -248,10 +248,14 @@ impl Arrangement {
 			.filter_map(|(node, _)| (node.ty == NodeType::Mixer).then_some(node))
 	}
 
-	pub fn plugins(&self) -> impl Iterator<Item = PluginId> {
-		self.nodes
-			.values()
-			.flat_map(|(node, _)| node.plugins.iter().map(|plugin| plugin.id))
+	pub fn clear(&mut self) {
+		let mut nodes = std::mem::take(&mut self.nodes);
+		for (node, _) in nodes.values_mut() {
+			for _ in node.plugins.drain(..) {
+				self.action(node.id, Action::PluginRemove(0));
+			}
+		}
+		self.nodes = nodes;
 	}
 
 	pub fn node(&self, id: NodeId) -> &(Node, BitSet) {

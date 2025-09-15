@@ -1,13 +1,12 @@
 use super::{ArrangementWrapper, Node};
 use crate::{
 	arrangement_view::{ArrangementView, LoadStatus, Message, crc},
-	clap_host::Message as ClapHostMessage,
 	config::Config,
 };
 use arc_swap::ArcSwap;
 use generic_daw_core::{
 	AudioClip, Clip, MidiClip, MidiKey, MidiNote, Mixer, NodeImpl as _, Sample, Track,
-	clap_host::{MainThreadMessage, PluginBundle, PluginDescriptor},
+	clap_host::{PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use iced::{Task, widget::combo_box};
@@ -318,7 +317,7 @@ impl ArrangementView {
 
 		info!("loaded project {}", path.display());
 
-		futs.extend(self.clear(config));
+		futs.extend(self.clear());
 
 		self.plugins = combo_box::State::new(plugin_bundles.keys().cloned().collect());
 		self.arrangement = arrangement;
@@ -343,7 +342,7 @@ impl ArrangementView {
 		let (arrangement, task) = ArrangementWrapper::create(config);
 		futs.push(task.map(Message::Batch));
 
-		futs.extend(self.clear(config));
+		futs.extend(self.clear());
 
 		self.plugins = combo_box::State::new(plugin_bundles.keys().cloned().collect());
 		self.arrangement = arrangement;
@@ -351,17 +350,20 @@ impl ArrangementView {
 		Task::batch(futs)
 	}
 
-	fn clear(&mut self, config: &Config) -> impl Iterator<Item = Task<Message>> {
+	fn clear(&mut self) -> impl Iterator<Item = Task<Message>> {
 		self.recording = None;
 		self.soloed_track = None;
 		self.selected_channel = None;
-		self.arrangement.plugins().map(|id| {
-			self.clap_host
-				.update(
-					ClapHostMessage::MainThread(id, MainThreadMessage::GuiClosed),
-					config,
-				)
-				.map(Message::ClapHost)
-		})
+		self.arrangement.clear();
+		self.clap_host
+			.clear()
+			.map(Message::ClapHost)
+			.map(Task::done)
+	}
+}
+
+impl Drop for ArrangementView {
+	fn drop(&mut self) {
+		self.clear().for_each(|_| ());
 	}
 }

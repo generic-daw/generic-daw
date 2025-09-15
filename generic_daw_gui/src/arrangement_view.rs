@@ -100,8 +100,8 @@ pub enum Message {
 	PluginSetState(NodeId, usize, Box<[u8]>),
 	PluginMixChanged(NodeId, usize, f32),
 	PluginToggleEnabled(NodeId, usize),
-	PluginsReordered(DragEvent),
-	PluginRemove(usize),
+	PluginsReordered(NodeId, DragEvent),
+	PluginRemove(NodeId, usize),
 
 	SampleLoadFromFile(Arc<Path>),
 	SampleLoadedFromFile(Arc<Path>, Option<(u32, Arc<Sample>)>),
@@ -143,10 +143,10 @@ pub enum Tab {
 }
 
 pub struct ArrangementView {
-	pub clap_host: ClapHost,
-	plugins: combo_box::State<PluginDescriptor>,
-
 	pub arrangement: ArrangementWrapper,
+	pub clap_host: ClapHost,
+
+	plugins: combo_box::State<PluginDescriptor>,
 	audios: BTreeMap<Arc<Path>, LoadStatus>,
 	midis: Vec<Weak<ArcSwap<Vec<MidiNote>>>>,
 
@@ -326,20 +326,17 @@ impl ArrangementView {
 			Message::PluginToggleEnabled(node, i) => {
 				self.arrangement.plugin_toggle_enabled(node, i);
 			}
-			Message::PluginsReordered(event) => {
+			Message::PluginsReordered(node, event) => {
 				if let DragEvent::Dropped {
 					index,
 					target_index,
 				} = event && index != target_index
 				{
-					let selected = self.selected_channel.unwrap();
-
-					self.arrangement.plugin_moved(selected, index, target_index);
+					self.arrangement.plugin_moved(node, index, target_index);
 				}
 			}
-			Message::PluginRemove(i) => {
-				let selected = self.selected_channel.unwrap();
-				let plugin = self.arrangement.plugin_remove(selected, i);
+			Message::PluginRemove(node, i) => {
+				let plugin = self.arrangement.plugin_remove(node, i);
 				return self
 					.clap_host
 					.update(
@@ -967,14 +964,12 @@ impl ArrangementView {
 			.into()
 		}
 
-		let selected_channel = self.selected_channel.map(|c| self.arrangement.node(c));
+		let selected_channel = self.selected_channel.map(|c| (c, self.arrangement.node(c)));
 
 		let connect = |enabled: bool, id: NodeId| {
 			selected_channel.map_or_else(
 				|| Element::new(space().height(LINE_HEIGHT)),
-				|(node, connections)| {
-					let selected_channel = self.selected_channel.unwrap();
-
+				|(selected_channel, (node, connections))| {
 					if node.ty == NodeType::Master || id == selected_channel {
 						space().height(LINE_HEIGHT).into()
 					} else {
@@ -1211,7 +1206,7 @@ impl ArrangementView {
 													button::secondary
 												}
 											)
-											.on_press(Message::PluginRemove(i)),
+											.on_press(Message::PluginRemove(selected, i)),
 										]
 										.spacing(5),
 										mouse_area(
@@ -1229,7 +1224,7 @@ impl ArrangementView {
 								})
 						)
 						.spacing(5)
-						.on_drag(Message::PluginsReordered),
+						.on_drag(Message::PluginsReordered.with(selected)),
 					)
 					.height(Fill)
 				],

@@ -62,7 +62,9 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			trace!("{}: {msg:?}", self.descriptor);
 
 			match msg {
-				AudioThreadMessage::RequestRestart => _ = self.processor.stop_processing(),
+				AudioThreadMessage::RequestRestart => {
+					self.processor.ensure_processing_stopped();
+				}
 				AudioThreadMessage::LatencyChanged(latency) => {
 					self.audio_buffers.latency_changed(latency);
 				}
@@ -138,5 +140,14 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	#[must_use]
 	pub fn delay(&self) -> usize {
 		self.audio_buffers.delay()
+	}
+}
+
+impl<Event: EventImpl> Drop for AudioProcessor<Event> {
+	fn drop(&mut self) {
+		self.processor.ensure_processing_stopped();
+		self.processor.access_shared_handler(|s| {
+			s.once.call_once(|| ());
+		});
 	}
 }

@@ -50,6 +50,10 @@ impl<T> HoleyVec<T> {
 		self.get(key).is_some()
 	}
 
+	pub fn clear(&mut self) {
+		self.0.clear();
+	}
+
 	pub fn iter(&self) -> impl Iterator<Item = (usize, &T)> {
 		self.0
 			.iter()

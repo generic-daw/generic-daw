@@ -17,7 +17,7 @@ use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
 use log::{debug, error, info, warn};
 use std::sync::{
-	OnceLock,
+	Once, OnceLock,
 	atomic::{AtomicU64, Ordering::Relaxed},
 };
 
@@ -42,6 +42,7 @@ pub struct Shared<'a> {
 	pub timer: OnceLock<NoDebug<PluginTimer>>,
 	pub main_thread: u64,
 	pub audio_thread: AtomicU64,
+	pub once: Once,
 }
 
 impl Shared<'_> {
@@ -63,6 +64,7 @@ impl Shared<'_> {
 			timer: OnceLock::new(),
 			main_thread,
 			audio_thread: AtomicU64::new(main_thread),
+			once: Once::new(),
 		}
 	}
 }
