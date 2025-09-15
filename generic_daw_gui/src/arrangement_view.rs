@@ -87,7 +87,6 @@ pub enum Message {
 	ConnectRequest((NodeId, NodeId)),
 	ConnectSucceeded((NodeId, NodeId)),
 	Disconnect((NodeId, NodeId)),
-	Export(Box<Path>),
 
 	ChannelAdd,
 	ChannelRemove(NodeId),
@@ -237,11 +236,6 @@ impl ArrangementView {
 			}
 			Message::ConnectSucceeded((from, to)) => self.arrangement.connect_succeeded(from, to),
 			Message::Disconnect((from, to)) => self.arrangement.disconnect(from, to),
-			Message::Export(path) => {
-				self.clap_host.set_realtime(false);
-				self.arrangement.export(&path);
-				self.clap_host.set_realtime(true);
-			}
 			Message::ChannelAdd => {
 				return Task::perform(self.arrangement.add_channel(), |con| {
 					Message::ConnectSucceeded(con.unwrap())

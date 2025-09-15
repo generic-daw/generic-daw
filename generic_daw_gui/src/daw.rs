@@ -47,6 +47,7 @@ pub enum Message {
 
 	OpenFile(Arc<Path>),
 	SaveAsFile(Arc<Path>),
+	ExportFile(Arc<Path>),
 
 	OpenConfigView,
 	CloseConfigView,
@@ -187,8 +188,7 @@ impl Daw {
 				)
 				.and_then(Task::done)
 				.map(|p| p.path().with_extension("wav").into())
-				.map(ArrangementMessage::Export)
-				.map(Message::Arrangement);
+				.map(Message::ExportFile);
 			}
 			Message::OpenFile(path) => {
 				self.reload_config();
@@ -212,6 +212,11 @@ impl Daw {
 					self.state.last_project = Some(path);
 					self.state.write();
 				}
+			}
+			Message::ExportFile(path) => {
+				self.arrangement_view.clap_host.set_realtime(false);
+				self.arrangement_view.arrangement.export(&path);
+				self.arrangement_view.clap_host.set_realtime(true);
 			}
 			Message::OpenConfigView => {
 				self.config_view = Some(ConfigView::new(self.config.clone()));
