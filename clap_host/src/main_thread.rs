@@ -1,4 +1,4 @@
-use crate::{Size, audio_processor_wrapper::AudioProcessorWrapper, shared::Shared};
+use crate::{Size, host::Host, shared::Shared};
 use clack_extensions::{
 	audio_ports::{HostAudioPortsImpl, RescanType},
 	latency::HostLatencyImpl,
@@ -7,15 +7,16 @@ use clack_extensions::{
 	state::HostStateImpl,
 	timer::{HostTimerImpl, TimerId},
 };
-use clack_host::prelude::*;
-use generic_daw_utils::NoClone;
+use clack_host::{prelude::*, process::PluginAudioProcessor};
+use generic_daw_utils::{NoClone, NoDebug};
 use std::time::Duration;
 
 #[derive(Clone, Debug)]
 pub enum MainThreadMessage {
 	RequestCallback,
-	RequestRestart,
-	Restart(NoClone<AudioProcessorWrapper>),
+	LatencyChanged,
+	Restart(NoClone<NoDebug<PluginAudioProcessor<Host>>>),
+	Destroy(NoClone<NoDebug<PluginAudioProcessor<Host>>>),
 	GuiRequestShow,
 	GuiRequestResize(Size),
 	GuiRequestHide,
@@ -56,7 +57,12 @@ impl HostAudioPortsImpl for MainThread<'_> {
 }
 
 impl HostLatencyImpl for MainThread<'_> {
-	fn changed(&mut self) {}
+	fn changed(&mut self) {
+		self.shared
+			.sender
+			.try_send(MainThreadMessage::LatencyChanged)
+			.unwrap();
+	}
 }
 
 impl HostNotePortsImpl for MainThread<'_> {

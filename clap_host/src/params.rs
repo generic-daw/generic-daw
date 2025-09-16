@@ -34,7 +34,7 @@ impl TryFrom<ParamInfo<'_>> for Param {
 
 impl Param {
 	pub fn all(plugin: &mut PluginInstance<Host>) -> Option<Box<[Self]>> {
-		let ext = *plugin.access_shared_handler(|s| s.params.get())?;
+		let ext = *plugin.access_shared_handler(|s| s.ext.params.get())?;
 
 		let count = ext.count(&mut plugin.plugin_handle()) as usize;
 		let buffer = &mut ParamInfoBuffer::new();
@@ -56,7 +56,7 @@ impl Param {
 	}
 
 	pub fn rescan_value(&mut self, plugin: &mut PluginInstance<Host>) {
-		if let Some(&ext) = plugin.access_shared_handler(|s| s.params.get())
+		if let Some(&ext) = plugin.access_shared_handler(|s| s.ext.params.get())
 			&& let Some(value) = ext.get_value(&mut plugin.plugin_handle(), self.id)
 		{
 			self.update_with_value(value as f32, plugin);
@@ -67,7 +67,7 @@ impl Param {
 		self.value = value;
 
 		let value = value.into();
-		self.value_text = if let Some(&ext) = plugin.access_shared_handler(|s| s.params.get())
+		self.value_text = if let Some(&ext) = plugin.access_shared_handler(|s| s.ext.params.get())
 			&& let Ok(value_text) = ext.value_to_text(
 				&mut plugin.plugin_handle(),
 				self.id,

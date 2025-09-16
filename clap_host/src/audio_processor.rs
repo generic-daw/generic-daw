@@ -1,23 +1,22 @@
 use crate::{
 	EventImpl, MainThreadMessage, PluginDescriptor, PluginId, audio_buffers::AudioBuffers,
-	audio_processor_wrapper::AudioProcessorWrapper, event_buffers::EventBuffers,
-	shared::CURRENT_THREAD_ID,
+	event_buffers::EventBuffers, host::Host, shared::CURRENT_THREAD_ID,
 };
+use clack_host::process::PluginAudioProcessor;
+use generic_daw_utils::{NoClone, NoDebug};
 use log::{trace, warn};
 use rtrb::Consumer;
-use std::sync::atomic::Ordering::{Relaxed, Release};
+use std::sync::atomic::Ordering::Relaxed;
 
 #[derive(Debug)]
 pub enum AudioThreadMessage<Event: EventImpl> {
-	RequestRestart,
-	Activated(AudioProcessorWrapper),
-	LatencyChanged(u32),
+	Activated(NoDebug<PluginAudioProcessor<Host>>),
 	Event(Event),
 }
 
 #[derive(Debug)]
 pub struct AudioProcessor<Event: EventImpl> {
-	processor: Option<AudioProcessorWrapper>,
+	processor: Option<NoDebug<PluginAudioProcessor<Host>>>,
 	descriptor: PluginDescriptor,
 	id: PluginId,
 	steady_time: u64,
@@ -61,20 +60,23 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			trace!("{}: {msg:?}", self.descriptor);
 
 			match msg {
-				AudioThreadMessage::RequestRestart => {
-					if let Some(processor) = self.processor.take() {
-						processor
-							.inner()
-							.access_shared_handler(|s| s.sender.clone())
-							.try_send(MainThreadMessage::Restart(processor.into()))
-							.unwrap();
-					}
-				}
 				AudioThreadMessage::Activated(processor) => self.processor = Some(processor),
-				AudioThreadMessage::LatencyChanged(latency) => {
-					self.audio_buffers.latency_changed(latency);
-				}
 				AudioThreadMessage::Event(event) => events.push(event),
+			}
+		}
+
+		if let Some(processor) = self.processor.take() {
+			if processor.access_shared_handler(|s| {
+				CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
+				self.audio_buffers.latency_changed(s.latency.load(Relaxed));
+				s.needs_restart.load(Relaxed)
+			}) {
+				processor
+					.access_shared_handler(|s| s.sender.clone())
+					.try_send(MainThreadMessage::Restart(NoClone(processor)))
+					.unwrap();
+			} else {
+				self.processor = Some(processor);
 			}
 		}
 	}
@@ -86,18 +88,14 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			return;
 		};
 
-		processor.inner().access_shared_handler(|s| {
-			CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
-		});
-
-		match processor.inner_mut().ensure_processing_started() {
+		match processor.ensure_processing_started() {
 			Ok(processor) => {
 				self.audio_buffers.read_in(audio);
 				self.event_buffers.read_in(events);
 
 				let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len() / 2);
 
-				processor.access_handler(|at| at.processing.store(true, Release));
+				processor.access_handler(|at| at.processing.store(true, Relaxed));
 
 				processor
 					.process(
@@ -110,7 +108,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 					)
 					.unwrap();
 
-				processor.access_handler(|at| at.processing.store(false, Release));
+				processor.access_handler(|at| at.processing.store(false, Relaxed));
 
 				self.steady_time += u64::from(input_audio.min_available_frames_with(&output_audio));
 
@@ -133,9 +131,9 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 		self.event_buffers.read_in(events);
 
-		if let Some(&params) = processor.inner().access_shared_handler(|s| s.params.get()) {
+		if let Some(&params) = processor.access_shared_handler(|s| s.ext.params.get()) {
 			params.flush_active(
-				&mut processor.inner_mut().plugin_handle(),
+				&mut processor.plugin_handle(),
 				&self.event_buffers.input_events.as_input(),
 				&mut self.event_buffers.output_events.as_output(),
 			);
@@ -147,7 +145,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 	pub fn reset(&mut self) {
 		if let Some(processor) = &mut self.processor {
-			processor.inner_mut().reset();
+			processor.reset();
 		}
 		self.steady_time = 0;
 		self.event_buffers.reset();
@@ -155,6 +153,21 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 	#[must_use]
 	pub fn delay(&self) -> usize {
-		self.audio_buffers.delay()
+		self.processor
+			.as_ref()
+			.map_or(self.audio_buffers.delay(), |processor| {
+				processor.access_shared_handler(|s| s.latency.load(Relaxed)) as usize
+			})
+	}
+}
+
+impl<Event: EventImpl> Drop for AudioProcessor<Event> {
+	fn drop(&mut self) {
+		if let Some(processor) = self.processor.take() {
+			processor
+				.access_shared_handler(|s| s.sender.clone())
+				.try_send(MainThreadMessage::Destroy(NoClone(processor)))
+				.unwrap();
+		}
 	}
 }

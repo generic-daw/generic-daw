@@ -317,7 +317,7 @@ impl ArrangementView {
 
 		info!("loaded project {}", path.display());
 
-		futs.extend(self.clear());
+		self.clear();
 
 		self.plugins = combo_box::State::new(plugin_bundles.keys().cloned().collect());
 		self.arrangement = arrangement;
@@ -337,33 +337,21 @@ impl ArrangementView {
 		config: &Config,
 		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
 	) -> Task<Message> {
-		let mut futs = Vec::new();
+		let (arrangement, futs) = ArrangementWrapper::create(config);
 
-		let (arrangement, task) = ArrangementWrapper::create(config);
-		futs.push(task.map(Message::Batch));
-
-		futs.extend(self.clear());
+		self.clear();
 
 		self.plugins = combo_box::State::new(plugin_bundles.keys().cloned().collect());
 		self.arrangement = arrangement;
 
-		Task::batch(futs)
+		futs.map(Message::Batch)
 	}
 
-	fn clear(&mut self) -> impl Iterator<Item = Task<Message>> {
+	fn clear(&mut self) {
 		self.recording = None;
 		self.soloed_track = None;
 		self.selected_channel = None;
 		self.arrangement.clear();
-		self.clap_host
-			.clear()
-			.map(Message::ClapHost)
-			.map(Task::done)
-	}
-}
-
-impl Drop for ArrangementView {
-	fn drop(&mut self) {
-		self.clear().for_each(|_| ());
+		self.clap_host.clear();
 	}
 }

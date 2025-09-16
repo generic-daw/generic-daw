@@ -1,7 +1,7 @@
 use crate::shared::Shared;
 use clack_extensions::thread_pool::HostThreadPoolImpl;
 use clack_host::prelude::*;
-use std::sync::atomic::{AtomicBool, Ordering::Acquire};
+use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 
 #[derive(Debug)]
 pub struct AudioThread<'a> {
@@ -22,7 +22,7 @@ impl<'a> AudioProcessorHandler<'a> for AudioThread<'a> {}
 
 impl HostThreadPoolImpl for AudioThread<'_> {
 	fn request_exec(&mut self, task_count: u32) -> Result<(), HostError> {
-		if !self.processing.load(Acquire) {
+		if !self.processing.load(Relaxed) {
 			return Err(HostError::Message(
 				"called `request_exec` while outside the `process` call",
 			));
@@ -33,7 +33,7 @@ impl HostThreadPoolImpl for AudioThread<'_> {
 		}
 
 		let instance = self.shared.instance.get().unwrap();
-		let ext = self.shared.thread_pool.get().unwrap();
+		let ext = self.shared.ext.thread_pool.get().unwrap();
 
 		rayon_core::in_place_scope(|s| {
 			for i in 1..task_count {

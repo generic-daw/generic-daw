@@ -2,7 +2,6 @@ use std::{
 	borrow::{Borrow, BorrowMut},
 	fmt::Debug,
 	ops::{Deref, DerefMut},
-	panic,
 };
 
 #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

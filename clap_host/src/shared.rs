@@ -17,8 +17,8 @@ use clack_host::prelude::*;
 use generic_daw_utils::NoDebug;
 use log::{debug, error, info, warn};
 use std::sync::{
-	Once, OnceLock,
-	atomic::{AtomicU64, Ordering::Relaxed},
+	OnceLock,
+	atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::Relaxed},
 };
 
 static NEXT_THREAD_ID: AtomicU64 = AtomicU64::new(0);
@@ -26,11 +26,8 @@ thread_local! {
 	pub static CURRENT_THREAD_ID: u64 = NEXT_THREAD_ID.fetch_add(1, Relaxed);
 }
 
-#[derive(Debug)]
-pub struct Shared<'a> {
-	pub descriptor: PluginDescriptor,
-	pub sender: Sender<MainThreadMessage>,
-	pub instance: OnceLock<InitializedPluginHandle<'a>>,
+#[derive(Debug, Default)]
+pub struct Ext {
 	pub audio_ports: OnceLock<NoDebug<PluginAudioPorts>>,
 	pub gui: OnceLock<NoDebug<PluginGui>>,
 	pub latency: OnceLock<NoDebug<PluginLatency>>,
@@ -40,9 +37,18 @@ pub struct Shared<'a> {
 	pub state: OnceLock<NoDebug<PluginState>>,
 	pub thread_pool: OnceLock<NoDebug<PluginThreadPool>>,
 	pub timer: OnceLock<NoDebug<PluginTimer>>,
+}
+
+#[derive(Debug)]
+pub struct Shared<'a> {
+	pub instance: OnceLock<InitializedPluginHandle<'a>>,
+	pub descriptor: PluginDescriptor,
+	pub sender: Sender<MainThreadMessage>,
+	pub ext: Ext,
 	pub main_thread: u64,
 	pub audio_thread: AtomicU64,
-	pub once: Once,
+	pub latency: AtomicU32,
+	pub needs_restart: AtomicBool,
 }
 
 impl Shared<'_> {
@@ -50,21 +56,14 @@ impl Shared<'_> {
 		let main_thread = CURRENT_THREAD_ID.with(|id| *id);
 
 		Self {
+			instance: OnceLock::new(),
 			descriptor,
 			sender,
-			instance: OnceLock::new(),
-			audio_ports: OnceLock::new(),
-			gui: OnceLock::new(),
-			latency: OnceLock::new(),
-			note_ports: OnceLock::new(),
-			params: OnceLock::new(),
-			render: OnceLock::new(),
-			state: OnceLock::new(),
-			thread_pool: OnceLock::new(),
-			timer: OnceLock::new(),
+			ext: Ext::default(),
 			main_thread,
 			audio_thread: AtomicU64::new(main_thread),
-			once: Once::new(),
+			latency: AtomicU32::new(0),
+			needs_restart: AtomicBool::new(false),
 		}
 	}
 }
@@ -74,10 +73,10 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 		macro_rules! initializing {
 			($($ident:ident),*) => {
 				$(
-					if self.$ident.get().is_none()
+					if self.ext.$ident.get().is_none()
 						&& let Some(ext) = instance.get_extension()
 					{
-						_ = self.$ident.set(NoDebug(ext));
+						_ = self.ext.$ident.set(NoDebug(ext));
 					}
 				)*
 			};
@@ -105,9 +104,7 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 	}
 
 	fn request_restart(&self) {
-		self.sender
-			.try_send(MainThreadMessage::RequestRestart)
-			.unwrap();
+		self.needs_restart.store(true, Relaxed);
 	}
 }
 

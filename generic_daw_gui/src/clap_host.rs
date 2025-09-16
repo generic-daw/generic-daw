@@ -117,20 +117,41 @@ impl ClapHost {
 		msg: MainThreadMessage,
 		config: &Config,
 	) -> Task<Message> {
-		let Some(plugin) = self.plugins.get_mut(*id) else {
-			let msg = Message::MainThread(id, msg);
-			info!("retrying {msg:?}");
-			return Task::perform(Timer::after(Duration::from_millis(100)), |_| msg);
-		};
+		macro_rules! plugin {
+			($expr:expr) => {{
+				let Some(plugin) = self.plugins.get_mut(*id) else {
+					let msg = Message::MainThread(id, $expr);
+					info!("retrying {msg:?}");
+					return Task::perform(Timer::after(Duration::from_millis(100)), |_| msg);
+				};
+				plugin
+			}};
+		}
 
 		match msg {
-			MainThreadMessage::RequestCallback => plugin.call_on_main_thread_callback(),
-			MainThreadMessage::RequestRestart => plugin.request_restart(),
+			MainThreadMessage::RequestCallback => {
+				plugin!(MainThreadMessage::RequestCallback).call_on_main_thread_callback();
+			}
+			MainThreadMessage::LatencyChanged => {
+				plugin!(MainThreadMessage::LatencyChanged).latency_changed();
+			}
 			MainThreadMessage::Restart(processor) => {
+				let plugin = plugin!(MainThreadMessage::Restart(processor));
 				plugin.deactivate(processor);
 				plugin.activate();
 			}
+			MainThreadMessage::Destroy(processor) => {
+				plugin!(MainThreadMessage::Destroy(processor));
+
+				self.plugins.remove(*id).unwrap().deactivate(processor);
+				return self.update(
+					Message::MainThread(id, MainThreadMessage::GuiClosed),
+					config,
+				);
+			}
 			MainThreadMessage::GuiRequestShow => {
+				plugin!(MainThreadMessage::GuiRequestShow);
+
 				if self.windows.contains_key(*id) {
 					return Task::none();
 				}
@@ -199,9 +220,7 @@ impl ClapHost {
 				}
 			}
 			MainThreadMessage::GuiClosed => {
-				self.plugins.remove(*id).unwrap();
 				self.timers.remove(*id);
-
 				if let Some(&window) = self.windows.get(*id) {
 					return window::close(window);
 				}
@@ -215,9 +234,12 @@ impl ClapHost {
 			MainThreadMessage::UnregisterTimer(timer_id) => {
 				self.timers.get_mut(*id).unwrap().remove(timer_id as usize);
 			}
-			MainThreadMessage::RescanParamValues => plugin.rescan_param_values(),
+			MainThreadMessage::RescanParamValues => {
+				plugin!(MainThreadMessage::RescanParamValues).rescan_param_values();
+			}
 			MainThreadMessage::ParamUpdate(param_id, value) => {
-				plugin.update_param(param_id, value);
+				plugin!(MainThreadMessage::ParamUpdate(param_id, value))
+					.update_param(param_id, value);
 			}
 		}
 
@@ -340,11 +362,8 @@ impl ClapHost {
 		)
 	}
 
-	pub fn clear(&mut self) -> impl Iterator<Item = Message> {
+	pub fn clear(&mut self) {
 		self.timers.clear();
 		self.windows.clear();
-		self.plugins
-			.values()
-			.map(|plugin| Message::MainThread(plugin.plugin_id(), MainThreadMessage::GuiClosed))
 	}
 }

@@ -242,20 +242,10 @@ impl ArrangementView {
 				});
 			}
 			Message::ChannelRemove(id) => {
-				let node = self.arrangement.remove_channel(id);
-
+				self.arrangement.remove_channel(id);
 				if self.selected_channel == Some(id) {
 					self.selected_channel = None;
 				}
-
-				return Task::batch(node.plugins.into_iter().map(|plugin| {
-					self.clap_host
-						.update(
-							ClapHostMessage::MainThread(plugin.id, MainThreadMessage::GuiClosed),
-							config,
-						)
-						.map(Message::ClapHost)
-				}));
 			}
 			Message::ChannelSelect(id) => {
 				self.selected_channel = if self.selected_channel == Some(id) {
@@ -330,14 +320,7 @@ impl ArrangementView {
 				}
 			}
 			Message::PluginRemove(node, i) => {
-				let plugin = self.arrangement.plugin_remove(node, i);
-				return self
-					.clap_host
-					.update(
-						ClapHostMessage::MainThread(plugin.id, MainThreadMessage::GuiClosed),
-						config,
-					)
-					.map(Message::ClapHost);
+				self.arrangement.plugin_remove(node, i);
 			}
 			Message::SampleLoadFromFile(path) => {
 				if let Some(entry) = self.audios.get_mut(&path) {

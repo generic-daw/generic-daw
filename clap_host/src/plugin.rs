@@ -1,7 +1,6 @@
 use crate::{
 	API_TYPE, AudioProcessor, EventImpl, MainThreadMessage, PluginDescriptor, PluginId,
-	audio_buffers::AudioBuffers, audio_processor::AudioThreadMessage,
-	audio_processor_wrapper::AudioProcessorWrapper, audio_thread::AudioThread,
+	audio_buffers::AudioBuffers, audio_processor::AudioThreadMessage, audio_thread::AudioThread,
 	event_buffers::EventBuffers, gui::Gui, host::Host, main_thread::MainThread, params::Param,
 	shared::Shared, size::Size,
 };
@@ -12,12 +11,12 @@ use clack_extensions::{
 	render::RenderMode,
 	timer::TimerId,
 };
-use clack_host::prelude::*;
+use clack_host::{prelude::*, process::PluginAudioProcessor};
 use generic_daw_utils::{NoClone, NoDebug};
 use log::{info, warn};
 use raw_window_handle::RawWindowHandle;
 use rtrb::{Producer, RingBuffer};
-use std::{io::Cursor, panic, time::Instant};
+use std::{io::Cursor, sync::atomic::Ordering::Relaxed};
 
 #[derive(Debug)]
 pub struct Plugin<Event: EventImpl> {
@@ -104,7 +103,7 @@ impl<Event: EventImpl> Plugin<Event> {
 	pub fn set_scale(&mut self, scale: f32) {
 		let ext = self
 			.instance
-			.access_shared_handler(|s| s.gui.get().copied());
+			.access_shared_handler(|s| s.ext.gui.get().copied());
 		let Gui::Embedded { scale_factor, .. } = &mut self.gui else {
 			panic!("called \"set_scale\" on a non-embedded gui")
 		};
@@ -125,7 +124,7 @@ impl<Event: EventImpl> Plugin<Event> {
 	pub fn can_resize(&mut self) -> bool {
 		let ext = self
 			.instance
-			.access_shared_handler(|s| s.gui.get().copied());
+			.access_shared_handler(|s| s.ext.gui.get().copied());
 		let Gui::Embedded { can_resize, .. } = &mut self.gui else {
 			panic!("called \"can_resize\" on a non-embedded gui")
 		};
@@ -138,16 +137,6 @@ impl<Event: EventImpl> Plugin<Event> {
 		self.instance.call_on_main_thread_callback();
 	}
 
-	pub fn request_restart(&mut self) {
-		self.sender
-			.push(AudioThreadMessage::RequestRestart)
-			.unwrap();
-	}
-
-	pub fn deactivate(&mut self, processor: NoClone<AudioProcessorWrapper>) {
-		self.instance.deactivate(processor.0.into_stopped());
-	}
-
 	pub fn activate(&mut self) {
 		let processor = self
 			.instance
@@ -155,16 +144,29 @@ impl<Event: EventImpl> Plugin<Event> {
 			.unwrap()
 			.into();
 
-		self.sender
-			.push(AudioThreadMessage::Activated(processor))
-			.unwrap();
-
-		if let Some(&latency) = self.instance.access_shared_handler(|s| s.latency.get()) {
-			let latency = latency.get(&mut self.instance.plugin_handle());
-			self.sender
-				.push(AudioThreadMessage::LatencyChanged(latency))
-				.unwrap();
+		if self
+			.instance
+			.access_shared_handler(|s| s.ext.latency.get().is_some())
+		{
+			self.latency_changed();
 		}
+
+		self.sender
+			.push(AudioThreadMessage::Activated(NoDebug(processor)))
+			.unwrap();
+	}
+
+	pub fn deactivate(&mut self, processor: NoClone<NoDebug<PluginAudioProcessor<Host>>>) {
+		self.instance.deactivate(processor.0.0.into_stopped());
+	}
+
+	pub fn latency_changed(&mut self) {
+		let latency = self
+			.instance
+			.access_shared_handler(|s| *s.ext.latency.get().unwrap());
+		let latency = latency.get(&mut self.instance.plugin_handle());
+		self.instance
+			.access_shared_handler(|s| s.latency.store(latency, Relaxed));
 	}
 
 	#[must_use]
@@ -190,14 +192,14 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	pub fn tick_timer(&mut self, id: u32) {
 		self.instance
-			.access_shared_handler(|s| *s.timer.get().unwrap())
+			.access_shared_handler(|s| *s.ext.timer.get().unwrap())
 			.on_timer(&mut self.instance.plugin_handle(), TimerId(id));
 	}
 
 	pub fn create(&mut self) {
 		self.destroy();
 
-		let Some(&ext) = self.instance.access_shared_handler(|s| s.gui.get()) else {
+		let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get()) else {
 			return;
 		};
 
@@ -221,7 +223,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		// Ensured by the caller.
 		unsafe {
 			self.instance
-				.access_shared_handler(|s| *s.gui.get().unwrap())
+				.access_shared_handler(|s| *s.ext.gui.get().unwrap())
 				.set_parent(
 					&mut self.instance.plugin_handle(),
 					ClapWindow::from_window_handle(window_handle).unwrap(),
@@ -232,7 +234,7 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	pub fn show(&mut self) {
 		if !self.is_open
-			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.gui.get())
+			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get())
 			&& let Err(err) = ext.show(&mut self.instance.plugin_handle())
 		{
 			// If I unwrap here, nih-plug plugins don't load. Why?
@@ -244,7 +246,7 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	pub fn destroy(&mut self) {
 		if self.is_open
-			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.gui.get())
+			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get())
 		{
 			ext.destroy(&mut self.instance.plugin_handle());
 		}
@@ -260,7 +262,7 @@ impl<Event: EventImpl> Plugin<Event> {
 
 		let GuiSize { width, height } = self
 			.instance
-			.access_shared_handler(|s| *s.gui.get().unwrap())
+			.access_shared_handler(|s| *s.ext.gui.get().unwrap())
 			.get_size(&mut self.instance.plugin_handle())?;
 		Some(Size::from_native((width as f32, height as f32)).ensure_logical(scale_factor))
 	}
@@ -287,7 +289,7 @@ impl<Event: EventImpl> Plugin<Event> {
 
 		let ext = self
 			.instance
-			.access_shared_handler(|s| *s.gui.get().unwrap());
+			.access_shared_handler(|s| *s.ext.gui.get().unwrap());
 		let size = ext
 			.adjust_size(&mut self.instance.plugin_handle(), size)
 			.unwrap();
@@ -303,7 +305,7 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn set_realtime(&mut self, realtime: bool) {
-		if let Some(&render) = self.instance.access_shared_handler(|s| s.render.get()) {
+		if let Some(&render) = self.instance.access_shared_handler(|s| s.ext.render.get()) {
 			render
 				.set(
 					&mut self.instance.plugin_handle(),
@@ -322,7 +324,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		let mut buf = Vec::new();
 
 		self.instance
-			.access_shared_handler(|s| s.state.get().copied())?
+			.access_shared_handler(|s| s.ext.state.get().copied())?
 			.save(&mut self.instance.plugin_handle(), &mut buf)
 			.ok()?;
 
@@ -331,7 +333,7 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	pub fn set_state(&mut self, buf: &[u8]) {
 		self.instance
-			.access_shared_handler(|s| s.state.get().copied().unwrap())
+			.access_shared_handler(|s| s.ext.state.get().copied().unwrap())
 			.load(&mut self.instance.plugin_handle(), &mut Cursor::new(buf))
 			.unwrap();
 	}
@@ -340,15 +342,14 @@ impl<Event: EventImpl> Plugin<Event> {
 impl<Event: EventImpl> Drop for Plugin<Event> {
 	fn drop(&mut self) {
 		self.destroy();
-		if self.instance.try_deactivate().is_err() {
-			let now = Instant::now();
-			self.instance.access_shared_handler(|s| s.once.wait());
-			while self.instance.try_deactivate().is_err() {}
-			info!(
-				"waited for {:?} to deactivate {}",
-				now.elapsed(),
-				self.descriptor
-			);
+
+		if matches!(
+			self.instance.try_deactivate(),
+			Err(PluginInstanceError::StillActivatedPlugin)
+		) {
+			warn!("leaked resources of {}", self.descriptor);
 		}
+
+		info!("dropped plugin {}", self.descriptor);
 	}
 }

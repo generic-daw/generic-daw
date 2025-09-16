@@ -15,7 +15,7 @@ pub enum Gui {
 impl Gui {
 	pub fn new(plugin: &mut PluginInstance<Host>) -> Self {
 		plugin
-			.access_shared_handler(|s| s.gui.get().copied())
+			.access_shared_handler(|s| s.ext.gui.get().copied())
 			.map_or(Self::None, |ext| {
 				let mut config = GuiConfiguration {
 					api_type: const { GuiApiType::default_for_current_platform().unwrap() },

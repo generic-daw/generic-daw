@@ -32,7 +32,7 @@ impl EventBuffers {
 	}
 
 	fn from_ports(plugin: &mut PluginInstance<Host>, is_input: bool) -> Option<(u16, bool)> {
-		let ports = *plugin.access_shared_handler(|s| s.note_ports.get())?;
+		let ports = *plugin.access_shared_handler(|s| s.ext.note_ports.get())?;
 
 		let mut buffer = NotePortInfoBuffer::new();
 
