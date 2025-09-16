@@ -148,7 +148,8 @@ where
 							*self.scale,
 						);
 
-						if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
+						if let Some((track, clip)) = self.get_track_clip(&layout, viewport, cursor)
+						{
 							let clip_bounds = clip_bounds(&layout, track, clip).unwrap()
 								- Vector::new(viewport.x, viewport.y);
 
@@ -181,7 +182,8 @@ where
 					mouse::Button::Right if !self.deleted => {
 						*state = State::DeletingClips;
 
-						if let Some((track, clip)) = self.get_track_clip(&layout, cursor) {
+						if let Some((track, clip)) = self.get_track_clip(&layout, viewport, cursor)
+						{
 							self.deleted = true;
 
 							shell.publish((self.f)(Action::Delete(track, clip)));
@@ -250,7 +252,8 @@ where
 					}
 					State::DeletingClips => {
 						if !self.deleted
-							&& let Some((track, clip)) = self.get_track_clip(&layout, cursor)
+							&& let Some((track, clip)) =
+								self.get_track_clip(&layout, viewport, cursor)
 						{
 							self.deleted = true;
 
@@ -371,15 +374,20 @@ where
 	}
 
 	fn get_track(&self, y: f32) -> usize {
-		(y / self.scale.y) as usize
+		(y / self.scale.y + self.position.y) as usize
 	}
 
-	fn get_track_clip(&self, layout: &Layout<'_>, cursor: Point) -> Option<(usize, usize)> {
+	fn get_track_clip(
+		&self,
+		layout: &Layout<'_>,
+		viewport: Rectangle,
+		cursor: Point,
+	) -> Option<(usize, usize)> {
 		let track = self.get_track(cursor.y);
-		let offset = Vector::new(layout.position().x, layout.position().y);
+		let offset = Vector::new(viewport.position().x, viewport.position().y);
 		let clip = track_layout(layout, track)?
 			.children()
-			.rposition(|l| (l.bounds() - offset).contains(cursor))?;
+			.rposition(|l| l.bounds().contains(cursor + offset))?;
 		Some((track, clip))
 	}
 }

@@ -225,12 +225,15 @@ impl Daw {
 				self.export_progress = Some(0.0);
 				self.arrangement_view.clap_host.set_realtime(false);
 				let (sender, receiver) = smol::channel::unbounded();
-				let export_fn = self.arrangement_view.arrangement.start_export(path, sender);
+				let (audio_graph, export_fn) =
+					self.arrangement_view.arrangement.start_export(path, sender);
 				return Task::batch([
-					Task::perform(unblock(export_fn), |audio_graph| {
-						Message::FinishExport(NoClone(Box::new(audio_graph)))
-					}),
-					Task::stream(receiver).map(Message::ExportProgress),
+					Task::future(unblock(export_fn)).discard(),
+					Task::stream(receiver)
+						.map(Message::ExportProgress)
+						.chain(Task::perform(audio_graph, |audio_graph| {
+							Message::FinishExport(NoClone(Box::new(audio_graph.unwrap())))
+						})),
 				]);
 			}
 			Message::ExportProgress(progress) => self.export_progress = Some(progress),

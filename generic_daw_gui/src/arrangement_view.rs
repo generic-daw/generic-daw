@@ -41,7 +41,7 @@ use iced::{
 		button, column, combo_box, container, horizontal_rule, mouse_area, row,
 		scrollable::{Direction, Scrollbar},
 		slider, text,
-		text::Wrapping,
+		text::{IntoFragment, Wrapping},
 		value, vertical_rule, vertical_slider, vertical_space,
 	},
 };
@@ -890,7 +890,7 @@ impl ArrangementView {
 	fn mixer(&self) -> Element<'_, Message> {
 		fn channel<'a>(
 			selected_channel: Option<NodeId>,
-			name: String,
+			name: impl IntoFragment<'a>,
 			node: &'a Node,
 			buttons: impl Fn(bool, NodeId) -> Element<'a, Message>,
 			connect: impl Fn(bool, NodeId) -> Element<'a, Message>,
@@ -991,7 +991,7 @@ impl ArrangementView {
 			styled_scrollable_with_direction(
 				row(once(channel(
 					self.selected_channel,
-					"M".to_owned(),
+					"M",
 					&self.arrangement.master().0,
 					|enabled, id| {
 						column![

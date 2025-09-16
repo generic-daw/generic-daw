@@ -359,7 +359,7 @@ impl Arrangement {
 		&mut self,
 		path: Arc<Path>,
 		progress: Sender<f32>,
-	) -> impl FnOnce() -> AudioGraph + 'static {
+	) -> (oneshot::Receiver<AudioGraph>, impl FnOnce() + 'static) {
 		let (sender, receiver) = oneshot::channel();
 		self.producer
 			.push(Message::RequestAudioGraph(sender))
@@ -367,20 +367,22 @@ impl Arrangement {
 		let mut audio_graph = receiver.recv().unwrap();
 		self.stream.pause().unwrap();
 
+		let (sender, receiver) = oneshot::channel();
+
 		let rtstate = self.rtstate;
-		let end = self
+		let len = self
 			.tracks()
 			.iter()
 			.map(Track::len)
 			.max()
 			.unwrap_or_default();
 
-		move || {
-			export_with(&mut audio_graph, &path, rtstate, end, |f| {
+		(receiver, move || {
+			export_with(&mut audio_graph, &path, rtstate, len, |f| {
 				progress.try_send(f).unwrap();
 			});
-			audio_graph
-		}
+			sender.send(audio_graph).unwrap();
+		})
 	}
 
 	pub fn finish_export(&mut self, audio_graph: AudioGraph) {
