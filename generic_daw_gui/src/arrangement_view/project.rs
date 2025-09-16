@@ -231,7 +231,7 @@ impl ArrangementView {
 					task = task.chain(Task::done(Message::PluginSetState(
 						node.id,
 						i,
-						state.into(),
+						state.into_boxed_slice().into(),
 					)));
 				}
 

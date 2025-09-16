@@ -22,7 +22,7 @@ pub struct Plugin<Event: EventImpl> {
 	descriptor: PluginDescriptor,
 	id: PluginId,
 	sender: Producer<AudioThreadMessage<Event>>,
-	params: NoDebug<Box<[Param]>>,
+	params: Box<[Param]>,
 	is_open: bool,
 }
 
@@ -42,7 +42,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			descriptor,
 			id,
 			sender,
-			params: params.into(),
+			params,
 			is_open: false,
 		}
 	}

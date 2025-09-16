@@ -1,8 +1,9 @@
+use crate::NoDebug;
 use std::cmp::Ordering;
 
 #[derive(Clone, Debug)]
 pub struct AudioRingbuf {
-	buf: Vec<f32>,
+	buf: NoDebug<Vec<f32>>,
 	head: usize,
 }
 
@@ -10,7 +11,7 @@ impl AudioRingbuf {
 	#[must_use]
 	pub fn new(len: usize) -> Self {
 		Self {
-			buf: vec![0.0; len],
+			buf: vec![0.0; len].into(),
 			head: 0,
 		}
 	}

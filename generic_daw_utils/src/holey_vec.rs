@@ -1,7 +1,12 @@
-use std::ops::Index;
+use std::{fmt::Debug, ops::Index};
 
-#[derive(Debug)]
 pub struct HoleyVec<T>(Vec<Option<T>>);
+
+impl<T: Debug> Debug for HoleyVec<T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_map().entries(self.iter()).finish()
+	}
+}
 
 impl<T> Default for HoleyVec<T> {
 	fn default() -> Self {

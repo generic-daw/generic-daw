@@ -4,7 +4,7 @@ use generic_daw_core::{
 	Event,
 	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, PluginId, Size},
 };
-use generic_daw_utils::{HoleyVec, NoClone};
+use generic_daw_utils::{HoleyVec, NoClone, NoDebug};
 use generic_daw_widget::knob::Knob;
 use iced::{
 	Alignment::Center,
@@ -29,7 +29,7 @@ pub enum Message {
 		Receiver<MainThreadMessage>,
 	),
 	GuiShown(NoClone<Box<Fragile<Plugin<Event>>>>),
-	GuiSetState(PluginId, Box<[u8]>),
+	GuiSetState(PluginId, NoDebug<Box<[u8]>>),
 	GuiRequestResize(Id, Size),
 	GuiRequestHide(Id),
 	GuiHidden(Id),

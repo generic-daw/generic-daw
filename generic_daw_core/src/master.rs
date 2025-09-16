@@ -1,6 +1,6 @@
 use crate::{Action, Mixer, MusicalTime, daw_ctx::State, event::Event, resampler::Resampler};
 use audio_graph::{NodeId, NodeImpl};
-use generic_daw_utils::include_f32s;
+use generic_daw_utils::{NoDebug, include_f32s};
 use std::sync::Arc;
 
 static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
@@ -10,8 +10,8 @@ static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
 pub struct Master {
 	node: Mixer,
 
-	on_bar_click: Arc<[f32]>,
-	off_bar_click: Arc<[f32]>,
+	on_bar_click: NoDebug<Arc<[f32]>>,
+	off_bar_click: NoDebug<Arc<[f32]>>,
 	click_on_bar: bool,
 	click_sidx: isize,
 }
@@ -89,8 +89,8 @@ impl Master {
 		off_bar_click.process(OFF_BAR_CLICK);
 
 		Self {
-			on_bar_click: on_bar_click.finish().into(),
-			off_bar_click: off_bar_click.finish().into(),
+			on_bar_click: NoDebug(on_bar_click.finish().into()),
+			off_bar_click: NoDebug(off_bar_click.finish().into()),
 			node: Mixer::default(),
 			click_on_bar: false,
 			click_sidx: isize::MIN,

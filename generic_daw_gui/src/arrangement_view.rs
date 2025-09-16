@@ -96,7 +96,7 @@ pub enum Message {
 	ChannelToggleEnabled(NodeId),
 
 	PluginLoad(NodeId, PluginDescriptor, bool),
-	PluginSetState(NodeId, usize, Box<[u8]>),
+	PluginSetState(NodeId, usize, NoDebug<Box<[u8]>>),
 	PluginMixChanged(NodeId, usize, f32),
 	PluginToggleEnabled(NodeId, usize),
 	PluginsReordered(NodeId, DragEvent),

@@ -387,7 +387,7 @@ impl Arrangement {
 
 	pub fn finish_export(&mut self, audio_graph: AudioGraph) {
 		self.producer
-			.push(Message::AudioGraph(NoDebug(Box::new(audio_graph))))
+			.push(Message::AudioGraph(Box::new(audio_graph)))
 			.unwrap();
 		self.stream.play().unwrap();
 	}

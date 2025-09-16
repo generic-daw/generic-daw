@@ -1,11 +1,11 @@
 use crate::NodeImpl;
-use generic_daw_utils::{AudioRingbuf, HoleyVec};
+use generic_daw_utils::{AudioRingbuf, HoleyVec, NoDebug};
 
 #[derive(Debug)]
 pub struct Entry<Node: NodeImpl> {
 	pub node: Node,
 	pub connections: HoleyVec<(AudioRingbuf, Vec<Node::Event>)>,
-	pub audio: Box<[f32]>,
+	pub audio: NoDebug<Box<[f32]>>,
 	pub events: Vec<Node::Event>,
 	pub delay: usize,
 }
@@ -15,7 +15,7 @@ impl<Node: NodeImpl> Entry<Node> {
 		Self {
 			node,
 			connections: HoleyVec::default(),
-			audio: vec![0.0; 2 * frames as usize].into_boxed_slice(),
+			audio: vec![0.0; 2 * frames as usize].into_boxed_slice().into(),
 			events: Vec::new(),
 			delay: 0,
 		}
