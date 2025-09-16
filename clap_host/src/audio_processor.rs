@@ -1,23 +1,23 @@
 use crate::{
-	EventImpl, Host, PluginDescriptor, PluginId, audio_buffers::AudioBuffers,
-	event_buffers::EventBuffers, shared::CURRENT_THREAD_ID,
+	EventImpl, MainThreadMessage, PluginDescriptor, PluginId, audio_buffers::AudioBuffers,
+	audio_processor_wrapper::AudioProcessorWrapper, event_buffers::EventBuffers,
+	shared::CURRENT_THREAD_ID,
 };
-use clack_host::process::PluginAudioProcessor;
-use generic_daw_utils::NoDebug;
 use log::{trace, warn};
 use rtrb::Consumer;
 use std::sync::atomic::Ordering::{Relaxed, Release};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub enum AudioThreadMessage<Event: EventImpl> {
 	RequestRestart,
+	Activated(AudioProcessorWrapper),
 	LatencyChanged(u32),
 	Event(Event),
 }
 
 #[derive(Debug)]
 pub struct AudioProcessor<Event: EventImpl> {
-	processor: NoDebug<PluginAudioProcessor<Host>>,
+	processor: Option<AudioProcessorWrapper>,
 	descriptor: PluginDescriptor,
 	id: PluginId,
 	steady_time: u64,
@@ -29,7 +29,6 @@ pub struct AudioProcessor<Event: EventImpl> {
 impl<Event: EventImpl> AudioProcessor<Event> {
 	#[must_use]
 	pub fn new(
-		processor: impl Into<PluginAudioProcessor<Host>>,
 		descriptor: PluginDescriptor,
 		id: PluginId,
 		audio_buffers: AudioBuffers,
@@ -37,7 +36,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		receiver: Consumer<AudioThreadMessage<Event>>,
 	) -> Self {
 		Self {
-			processor: processor.into().into(),
+			processor: None,
 			descriptor,
 			id,
 			steady_time: 0,
@@ -63,8 +62,15 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 			match msg {
 				AudioThreadMessage::RequestRestart => {
-					self.processor.ensure_processing_stopped();
+					if let Some(processor) = self.processor.take() {
+						processor
+							.inner()
+							.access_shared_handler(|s| s.sender.clone())
+							.try_send(MainThreadMessage::Restart(processor.into()))
+							.unwrap();
+					}
 				}
+				AudioThreadMessage::Activated(processor) => self.processor = Some(processor),
 				AudioThreadMessage::LatencyChanged(latency) => {
 					self.audio_buffers.latency_changed(latency);
 				}
@@ -76,11 +82,15 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32) {
 		self.recv_events(events);
 
-		self.processor.access_shared_handler(|s| {
+		let Some(processor) = &mut self.processor else {
+			return;
+		};
+
+		processor.inner().access_shared_handler(|s| {
 			CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
 		});
 
-		match self.processor.ensure_processing_started() {
+		match processor.inner_mut().ensure_processing_started() {
 			Ok(processor) => {
 				self.audio_buffers.read_in(audio);
 				self.event_buffers.read_in(events);
@@ -117,11 +127,15 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	pub fn flush(&mut self, events: &mut Vec<Event>) {
 		self.recv_events(events);
 
+		let Some(processor) = &mut self.processor else {
+			return;
+		};
+
 		self.event_buffers.read_in(events);
 
-		if let Some(&params) = self.processor.access_shared_handler(|s| s.params.get()) {
+		if let Some(&params) = processor.inner().access_shared_handler(|s| s.params.get()) {
 			params.flush_active(
-				&mut self.processor.plugin_handle(),
+				&mut processor.inner_mut().plugin_handle(),
 				&self.event_buffers.input_events.as_input(),
 				&mut self.event_buffers.output_events.as_output(),
 			);
@@ -132,22 +146,15 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	}
 
 	pub fn reset(&mut self) {
-		self.event_buffers.reset();
-		self.processor.reset();
+		if let Some(processor) = &mut self.processor {
+			processor.inner_mut().reset();
+		}
 		self.steady_time = 0;
+		self.event_buffers.reset();
 	}
 
 	#[must_use]
 	pub fn delay(&self) -> usize {
 		self.audio_buffers.delay()
-	}
-}
-
-impl<Event: EventImpl> Drop for AudioProcessor<Event> {
-	fn drop(&mut self) {
-		self.processor.ensure_processing_stopped();
-		self.processor.access_shared_handler(|s| {
-			s.once.call_once(|| ());
-		});
 	}
 }

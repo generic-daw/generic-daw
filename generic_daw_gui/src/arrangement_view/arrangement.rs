@@ -80,7 +80,7 @@ impl Arrangement {
 					}
 					Update::Param(id, param_id, value) => Some(ClapHostMessage::MainThread(
 						id,
-						MainThreadMessage::ParamChanged(param_id, value),
+						MainThreadMessage::ParamUpdate(param_id, value),
 					)),
 				})
 				.map(Task::done),

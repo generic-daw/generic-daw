@@ -1,4 +1,4 @@
-use crate::{Size, shared::Shared};
+use crate::{Size, audio_processor_wrapper::AudioProcessorWrapper, shared::Shared};
 use clack_extensions::{
 	audio_ports::{HostAudioPortsImpl, RescanType},
 	latency::HostLatencyImpl,
@@ -8,21 +8,22 @@ use clack_extensions::{
 	timer::{HostTimerImpl, TimerId},
 };
 use clack_host::prelude::*;
+use generic_daw_utils::NoClone;
 use std::time::Duration;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum MainThreadMessage {
 	RequestCallback,
 	RequestRestart,
+	Restart(NoClone<AudioProcessorWrapper>),
 	GuiRequestShow,
 	GuiRequestResize(Size),
 	GuiRequestHide,
 	GuiClosed,
 	RegisterTimer(u32, Duration),
 	UnregisterTimer(u32),
-	LatencyChanged,
-	RescanValues,
-	ParamChanged(ClapId, f32),
+	RescanParamValues,
+	ParamUpdate(ClapId, f32),
 }
 
 #[derive(Debug)]
@@ -55,12 +56,7 @@ impl HostAudioPortsImpl for MainThread<'_> {
 }
 
 impl HostLatencyImpl for MainThread<'_> {
-	fn changed(&mut self) {
-		self.shared
-			.sender
-			.try_send(MainThreadMessage::LatencyChanged)
-			.unwrap();
-	}
+	fn changed(&mut self) {}
 }
 
 impl HostNotePortsImpl for MainThread<'_> {
@@ -76,7 +72,7 @@ impl HostParamsImplMainThread for MainThread<'_> {
 		if flags.contains(ParamRescanFlags::VALUES) {
 			self.shared
 				.sender
-				.try_send(MainThreadMessage::RescanValues)
+				.try_send(MainThreadMessage::RescanParamValues)
 				.unwrap();
 		}
 	}

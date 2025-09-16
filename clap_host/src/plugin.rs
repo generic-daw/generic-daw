@@ -1,7 +1,11 @@
 use crate::{
-	API_TYPE, EventImpl, PluginDescriptor, PluginId, audio_processor::AudioThreadMessage, gui::Gui,
-	host::Host, params::Param, size::Size,
+	API_TYPE, AudioProcessor, EventImpl, MainThreadMessage, PluginDescriptor, PluginId,
+	audio_buffers::AudioBuffers, audio_processor::AudioThreadMessage,
+	audio_processor_wrapper::AudioProcessorWrapper, audio_thread::AudioThread,
+	event_buffers::EventBuffers, gui::Gui, host::Host, main_thread::MainThread, params::Param,
+	shared::Shared, size::Size,
 };
+use async_channel::Receiver;
 use clack_extensions::{
 	gui::{GuiConfiguration, GuiSize, Window as ClapWindow},
 	params::ParamInfoFlags,
@@ -9,42 +13,72 @@ use clack_extensions::{
 	timer::TimerId,
 };
 use clack_host::prelude::*;
-use generic_daw_utils::NoDebug;
+use generic_daw_utils::{NoClone, NoDebug};
 use log::{info, warn};
 use raw_window_handle::RawWindowHandle;
-use rtrb::Producer;
+use rtrb::{Producer, RingBuffer};
 use std::{io::Cursor, panic, time::Instant};
 
 #[derive(Debug)]
 pub struct Plugin<Event: EventImpl> {
-	instance: NoDebug<PluginInstance<Host>>,
 	gui: Gui,
+	params: Box<[Param]>,
+	instance: NoDebug<PluginInstance<Host>>,
 	descriptor: PluginDescriptor,
 	id: PluginId,
 	sender: Producer<AudioThreadMessage<Event>>,
-	params: Box<[Param]>,
+	config: PluginAudioConfiguration,
 	is_open: bool,
 }
 
 impl<Event: EventImpl> Plugin<Event> {
 	#[must_use]
 	pub fn new(
-		instance: PluginInstance<Host>,
-		gui: Gui,
+		bundle: &PluginBundle,
 		descriptor: PluginDescriptor,
-		sender: Producer<AudioThreadMessage<Event>>,
-		id: PluginId,
-		params: Box<[Param]>,
-	) -> Self {
-		Self {
-			instance: instance.into(),
-			gui,
-			descriptor,
-			id,
-			sender,
-			params,
-			is_open: false,
-		}
+		sample_rate: u32,
+		frames: u32,
+		host: &HostInfo,
+	) -> (AudioProcessor<Event>, Self, Receiver<MainThreadMessage>) {
+		let (shared_sender, receiver) = async_channel::unbounded();
+		let (sender, audio_receiver) = RingBuffer::new(frames as usize);
+
+		let mut instance = PluginInstance::new(
+			|()| Shared::new(descriptor.clone(), shared_sender),
+			|shared| MainThread::new(shared),
+			bundle,
+			&descriptor.id,
+			host,
+		)
+		.unwrap();
+
+		let config = PluginAudioConfiguration {
+			sample_rate: sample_rate.into(),
+			min_frames_count: 1,
+			max_frames_count: frames,
+		};
+		let id = PluginId::unique();
+
+		(
+			AudioProcessor::new(
+				descriptor.clone(),
+				id,
+				AudioBuffers::new(&mut instance, config),
+				EventBuffers::new(&mut instance),
+				audio_receiver,
+			),
+			Self {
+				gui: Gui::new(&mut instance),
+				params: Param::all(&mut instance).unwrap_or_default(),
+				instance: instance.into(),
+				descriptor,
+				id,
+				sender,
+				config,
+				is_open: false,
+			},
+			receiver,
+		)
 	}
 
 	#[must_use]
@@ -110,6 +144,29 @@ impl<Event: EventImpl> Plugin<Event> {
 			.unwrap();
 	}
 
+	pub fn deactivate(&mut self, processor: NoClone<AudioProcessorWrapper>) {
+		self.instance.deactivate(processor.0.into_stopped());
+	}
+
+	pub fn activate(&mut self) {
+		let processor = self
+			.instance
+			.activate(|shared, _| AudioThread::new(shared), self.config)
+			.unwrap()
+			.into();
+
+		self.sender
+			.push(AudioThreadMessage::Activated(processor))
+			.unwrap();
+
+		if let Some(&latency) = self.instance.access_shared_handler(|s| s.latency.get()) {
+			let latency = latency.get(&mut self.instance.plugin_handle());
+			self.sender
+				.push(AudioThreadMessage::LatencyChanged(latency))
+				.unwrap();
+		}
+	}
+
 	#[must_use]
 	pub fn params(&self) -> impl DoubleEndedIterator<Item = &Param> {
 		self.params
@@ -125,7 +182,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			.update_with_value(value, &mut self.instance);
 	}
 
-	pub fn rescan_values(&mut self) {
+	pub fn rescan_param_values(&mut self) {
 		for param in &mut *self.params {
 			param.rescan_value(&mut self.instance);
 		}
@@ -243,17 +300,6 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	pub fn send_event(&mut self, event: Event) {
 		self.sender.push(AudioThreadMessage::Event(event)).unwrap();
-	}
-
-	pub fn latency_changed(&mut self) {
-		let latency = self
-			.instance
-			.access_shared_handler(|s| *s.latency.get().unwrap())
-			.get(&mut self.instance.plugin_handle());
-
-		self.sender
-			.push(AudioThreadMessage::LatencyChanged(latency))
-			.unwrap();
 	}
 
 	pub fn set_realtime(&mut self, realtime: bool) {

@@ -1,13 +1,6 @@
-use crate::{audio_thread::AudioThread, gui::Gui, params::Param};
-use async_channel::Receiver;
-use audio_buffers::AudioBuffers;
 use clack_extensions::gui::GuiApiType;
-use clack_host::prelude::*;
-use event_buffers::EventBuffers;
 use generic_daw_utils::unique_id;
-use host::Host;
 use main_thread::MainThread;
-use rtrb::RingBuffer;
 use shared::Shared;
 use std::{
 	collections::{BTreeMap, HashSet},
@@ -19,6 +12,7 @@ use walkdir::WalkDir;
 mod audio_buffers;
 mod audio_ports_config;
 mod audio_processor;
+mod audio_processor_wrapper;
 mod audio_thread;
 mod event_buffers;
 mod event_impl;
@@ -131,63 +125,4 @@ pub fn default_clap_paths() -> Vec<Arc<Path>> {
 	}
 
 	paths
-}
-
-#[must_use]
-pub fn init<Event: EventImpl>(
-	bundle: &PluginBundle,
-	descriptor: PluginDescriptor,
-	sample_rate: u32,
-	frames: u32,
-	host: &HostInfo,
-) -> (
-	Plugin<Event>,
-	Receiver<MainThreadMessage>,
-	AudioProcessor<Event>,
-) {
-	let (main_sender, main_receiver) = async_channel::unbounded();
-	let (audio_sender, audio_receiver) = RingBuffer::new(frames as usize);
-
-	let mut instance = PluginInstance::new(
-		|()| Shared::new(descriptor.clone(), main_sender),
-		|shared| MainThread::new(shared),
-		bundle,
-		&descriptor.id,
-		host,
-	)
-	.unwrap();
-
-	let config = PluginAudioConfiguration {
-		sample_rate: sample_rate.into(),
-		min_frames_count: 1,
-		max_frames_count: frames,
-	};
-
-	let mut audio_buffers = AudioBuffers::new(&mut instance, config);
-	let event_buffers = EventBuffers::new(&mut instance);
-	let id = PluginId::unique();
-
-	let processor = instance
-		.activate(|shared, _| AudioThread::new(shared), config)
-		.unwrap();
-
-	if let Some(&latency) = instance.access_shared_handler(|s| s.latency.get()) {
-		audio_buffers.latency_changed(latency.get(&mut instance.plugin_handle()));
-	}
-
-	let audio_processor = AudioProcessor::new(
-		processor,
-		descriptor.clone(),
-		id,
-		audio_buffers,
-		event_buffers,
-		audio_receiver,
-	);
-
-	let params = Param::all(&mut instance).unwrap_or_default();
-	let gui = Gui::new(&mut instance);
-
-	let plugin = Plugin::new(instance, gui, descriptor, audio_sender, id, params);
-
-	(plugin, main_receiver, audio_processor)
 }

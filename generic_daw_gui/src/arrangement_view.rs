@@ -24,7 +24,7 @@ use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
 	AudioClip, Batch, Clip, Decibels, MidiClip, MidiNote, MusicalTime, NodeId, Recording, Sample,
-	clap_host::{self, HostInfo, MainThreadMessage, PluginBundle, PluginDescriptor},
+	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
 use generic_daw_utils::{EnumDispatcher, NoClone, NoDebug, Vec2};
 use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
@@ -279,7 +279,7 @@ impl ArrangementView {
 					)
 				});
 
-				let (plugin, receiver, audio_processor) = clap_host::init(
+				let (audio_processor, plugin, receiver) = Plugin::new(
 					&plugin_bundles[&descriptor],
 					descriptor,
 					self.arrangement.rtstate().sample_rate,

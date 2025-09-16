@@ -54,7 +54,7 @@ impl ClapHost {
 				} = event
 				{
 					return self.update(
-						Message::MainThread(id, MainThreadMessage::ParamChanged(param_id, value)),
+						Message::MainThread(id, MainThreadMessage::ParamUpdate(param_id, value)),
 						config,
 					);
 				}
@@ -63,7 +63,8 @@ impl ClapHost {
 				self.plugins.get_mut(id).unwrap().tick_timer(timer_id);
 			}
 			Message::Loaded(plugin, receiver) => {
-				let plugin = plugin.0.into_inner();
+				let mut plugin = plugin.0.into_inner();
+				plugin.activate();
 				let id = plugin.plugin_id();
 				self.plugins.insert(*id, plugin);
 				return Task::stream(receiver).map(Message::MainThread.with(id));
@@ -125,6 +126,10 @@ impl ClapHost {
 		match msg {
 			MainThreadMessage::RequestCallback => plugin.call_on_main_thread_callback(),
 			MainThreadMessage::RequestRestart => plugin.request_restart(),
+			MainThreadMessage::Restart(processor) => {
+				plugin.deactivate(processor);
+				plugin.activate();
+			}
 			MainThreadMessage::GuiRequestShow => {
 				if self.windows.contains_key(*id) {
 					return Task::none();
@@ -210,9 +215,8 @@ impl ClapHost {
 			MainThreadMessage::UnregisterTimer(timer_id) => {
 				self.timers.get_mut(*id).unwrap().remove(timer_id as usize);
 			}
-			MainThreadMessage::LatencyChanged => plugin.latency_changed(),
-			MainThreadMessage::RescanValues => plugin.rescan_values(),
-			MainThreadMessage::ParamChanged(param_id, value) => {
+			MainThreadMessage::RescanParamValues => plugin.rescan_param_values(),
+			MainThreadMessage::ParamUpdate(param_id, value) => {
 				plugin.update_param(param_id, value);
 			}
 		}
