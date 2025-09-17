@@ -23,14 +23,15 @@ pub enum MainThreadMessage {
 	GuiClosed,
 	RegisterTimer(u32, Duration),
 	UnregisterTimer(u32),
-	RescanParamValues,
-	ParamUpdate(ClapId, f32),
+	RescanParams(ParamRescanFlags),
+	RescanParam(ClapId, ParamRescanFlags),
 }
 
 #[derive(Debug)]
 pub struct MainThread<'a> {
-	shared: &'a Shared<'a>,
-	next_timer_id: u32,
+	pub shared: &'a Shared<'a>,
+	pub next_timer_id: u32,
+	pub needs_param_rescan: bool,
 }
 
 impl<'a> MainThread<'a> {
@@ -38,6 +39,7 @@ impl<'a> MainThread<'a> {
 		Self {
 			shared,
 			next_timer_id: 0,
+			needs_param_rescan: false,
 		}
 	}
 }
@@ -60,7 +62,7 @@ impl HostLatencyImpl for MainThread<'_> {
 	fn changed(&mut self) {
 		self.shared
 			.sender
-			.try_send(MainThreadMessage::LatencyChanged)
+			.send(MainThreadMessage::LatencyChanged)
 			.unwrap();
 	}
 }
@@ -75,10 +77,13 @@ impl HostNotePortsImpl for MainThread<'_> {
 
 impl HostParamsImplMainThread for MainThread<'_> {
 	fn rescan(&mut self, flags: ParamRescanFlags) {
-		if flags.contains(ParamRescanFlags::VALUES) {
+		if flags.contains(ParamRescanFlags::ALL) {
+			self.needs_param_rescan = true;
+			self.shared.request_restart();
+		} else if !flags.is_empty() {
 			self.shared
 				.sender
-				.try_send(MainThreadMessage::RescanParamValues)
+				.send(MainThreadMessage::RescanParams(flags))
 				.unwrap();
 		}
 	}
@@ -97,7 +102,7 @@ impl HostTimerImpl for MainThread<'_> {
 
 		self.shared
 			.sender
-			.try_send(MainThreadMessage::RegisterTimer(
+			.send(MainThreadMessage::RegisterTimer(
 				timer_id.0,
 				Duration::from_millis(period_ms.into()),
 			))
@@ -109,7 +114,7 @@ impl HostTimerImpl for MainThread<'_> {
 	fn unregister_timer(&mut self, timer_id: TimerId) -> Result<(), HostError> {
 		self.shared
 			.sender
-			.try_send(MainThreadMessage::UnregisterTimer(timer_id.0))
+			.send(MainThreadMessage::UnregisterTimer(timer_id.0))
 			.unwrap();
 
 		Ok(())

@@ -4,10 +4,9 @@ use crate::{
 	event_buffers::EventBuffers, gui::Gui, host::Host, main_thread::MainThread, params::Param,
 	shared::Shared, size::Size,
 };
-use async_channel::Receiver;
 use clack_extensions::{
 	gui::{GuiConfiguration, GuiSize, Window as ClapWindow},
-	params::ParamInfoFlags,
+	params::{ParamInfoFlags, ParamRescanFlags},
 	render::RenderMode,
 	timer::TimerId,
 };
@@ -16,7 +15,10 @@ use generic_daw_utils::{NoClone, NoDebug};
 use log::{info, warn};
 use raw_window_handle::RawWindowHandle;
 use rtrb::{Producer, RingBuffer};
-use std::{io::Cursor, sync::atomic::Ordering::Relaxed};
+use std::{
+	io::Cursor,
+	sync::{atomic::Ordering::Relaxed, mpsc::Receiver},
+};
 
 #[derive(Debug)]
 pub struct Plugin<Event: EventImpl> {
@@ -39,7 +41,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		frames: u32,
 		host: &HostInfo,
 	) -> (AudioProcessor<Event>, Self, Receiver<MainThreadMessage>) {
-		let (shared_sender, receiver) = async_channel::unbounded();
+		let (shared_sender, receiver) = std::sync::mpsc::channel();
 		let (sender, audio_receiver) = RingBuffer::new(frames as usize);
 
 		let mut instance = PluginInstance::new(
@@ -138,6 +140,14 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn activate(&mut self) {
+		if self.instance.access_handler_mut(|mt| {
+			let needs_param_rescan = mt.needs_param_rescan;
+			mt.needs_param_rescan = false;
+			needs_param_rescan
+		}) {
+			self.params = Param::all(&mut self.instance).unwrap_or_default();
+		}
+
 		let processor = self
 			.instance
 			.activate(|shared, _| AudioThread::new(shared), self.config)
@@ -176,17 +186,17 @@ impl<Event: EventImpl> Plugin<Event> {
 			.filter(|param| !param.flags.contains(ParamInfoFlags::IS_HIDDEN))
 	}
 
-	pub fn update_param(&mut self, param_id: ClapId, value: f32) {
+	pub fn rescan_param(&mut self, param_id: ClapId, flags: ParamRescanFlags) {
 		self.params
 			.iter_mut()
 			.find(|param| param.id == param_id)
 			.unwrap()
-			.update_with_value(value, &mut self.instance);
+			.rescan(&mut self.instance, flags);
 	}
 
-	pub fn rescan_param_values(&mut self) {
+	pub fn rescan_params(&mut self, flags: ParamRescanFlags) {
 		for param in &mut *self.params {
-			param.rescan_value(&mut self.instance);
+			param.rescan(&mut self.instance, flags);
 		}
 	}
 

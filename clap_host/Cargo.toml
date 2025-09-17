@@ -10,7 +10,6 @@ workspace = true
 [dependencies]
 generic_daw_utils = { workspace = true }
 
-async-channel = "2.5.0"
 clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
 	"audio-ports",
 	"clack-host",

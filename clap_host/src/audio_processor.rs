@@ -73,7 +73,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			}) {
 				processor
 					.access_shared_handler(|s| s.sender.clone())
-					.try_send(MainThreadMessage::Restart(NoClone(processor)))
+					.send(MainThreadMessage::Restart(NoClone(processor)))
 					.unwrap();
 			} else {
 				self.processor = Some(processor);
@@ -166,7 +166,7 @@ impl<Event: EventImpl> Drop for AudioProcessor<Event> {
 		if let Some(processor) = self.processor.take() {
 			processor
 				.access_shared_handler(|s| s.sender.clone())
-				.try_send(MainThreadMessage::Destroy(NoClone(processor)))
+				.send(MainThreadMessage::Destroy(NoClone(processor)))
 				.unwrap();
 		}
 	}

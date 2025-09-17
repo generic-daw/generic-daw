@@ -51,7 +51,7 @@ pub enum Action {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Update {
 	Peak(NodeId, [f32; 2]),
-	Param(PluginId, ClapId, f32),
+	Param(PluginId, ClapId),
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -61,14 +61,11 @@ impl NodeImpl for Mixer {
 				events
 					.extract_if(.., |event| matches!(event, Event::ParamValue { .. }))
 					.map(|event| {
-						let Event::ParamValue {
-							param_id, value, ..
-						} = event
-						else {
+						let Event::ParamValue { param_id, .. } = event else {
 							unreachable!()
 						};
 
-						Update::Param(plugin.processor.id(), param_id, value)
+						Update::Param(plugin.processor.id(), param_id)
 					}),
 			);
 		}

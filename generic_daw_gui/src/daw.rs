@@ -237,10 +237,10 @@ impl Daw {
 				]);
 			}
 			Message::ExportProgress(progress) => self.export_progress = Some(progress),
-			Message::FinishExport(audio_graph) => {
+			Message::FinishExport(NoClone(audio_graph)) => {
 				self.arrangement_view
 					.arrangement
-					.finish_export(*audio_graph.0);
+					.finish_export(*audio_graph);
 				self.arrangement_view.clap_host.set_realtime(true);
 				self.export_progress = None;
 			}

@@ -1,5 +1,4 @@
 use crate::{MainThreadMessage, PluginDescriptor, Size};
-use async_channel::Sender;
 use clack_extensions::{
 	audio_ports::PluginAudioPorts,
 	gui::{GuiSize, HostGuiImpl, PluginGui},
@@ -19,6 +18,7 @@ use log::{debug, error, info, warn};
 use std::sync::{
 	OnceLock,
 	atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::Relaxed},
+	mpsc::Sender,
 };
 
 static NEXT_THREAD_ID: AtomicU64 = AtomicU64::new(0);
@@ -99,7 +99,7 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 
 	fn request_callback(&self) {
 		self.sender
-			.try_send(MainThreadMessage::RequestCallback)
+			.send(MainThreadMessage::RequestCallback)
 			.unwrap();
 	}
 
@@ -113,7 +113,7 @@ impl HostGuiImpl for Shared<'_> {
 
 	fn request_resize(&self, GuiSize { width, height }: GuiSize) -> Result<(), HostError> {
 		self.sender
-			.try_send(MainThreadMessage::GuiRequestResize(Size::from_native((
+			.send(MainThreadMessage::GuiRequestResize(Size::from_native((
 				width as f32,
 				height as f32,
 			))))
@@ -123,23 +123,19 @@ impl HostGuiImpl for Shared<'_> {
 	}
 
 	fn request_show(&self) -> Result<(), HostError> {
-		self.sender
-			.try_send(MainThreadMessage::GuiRequestShow)
-			.unwrap();
+		self.sender.send(MainThreadMessage::GuiRequestShow).unwrap();
 
 		Ok(())
 	}
 
 	fn request_hide(&self) -> Result<(), HostError> {
-		self.sender
-			.try_send(MainThreadMessage::GuiRequestHide)
-			.unwrap();
+		self.sender.send(MainThreadMessage::GuiRequestHide).unwrap();
 
 		Ok(())
 	}
 
 	fn closed(&self, _was_destroyed: bool) {
-		self.sender.try_send(MainThreadMessage::GuiClosed).unwrap();
+		self.sender.send(MainThreadMessage::GuiClosed).unwrap();
 	}
 }
 

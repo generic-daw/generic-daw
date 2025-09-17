@@ -10,7 +10,7 @@ use bit_set::BitSet;
 use generic_daw_core::{
 	self as core, Action, AudioGraph, Batch, Clip, Event, Message, Mixer, MusicalTime, NodeId,
 	NodeImpl as _, RtState, Stream, StreamTrait as _, Update, Version, build_output_stream,
-	clap_host::{AudioProcessor, MainThreadMessage},
+	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 	export_with,
 };
 use generic_daw_utils::{HoleyVec, NoDebug, ShiftMoveExt as _};
@@ -78,9 +78,9 @@ impl Arrangement {
 						self.nodes.get_mut(*node).unwrap().0.update(peaks, now);
 						None
 					}
-					Update::Param(id, param_id, value) => Some(ClapHostMessage::MainThread(
+					Update::Param(id, param_id) => Some(ClapHostMessage::MainThread(
 						id,
-						MainThreadMessage::ParamUpdate(param_id, value),
+						MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
 					)),
 				})
 				.map(Task::done),

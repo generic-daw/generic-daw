@@ -281,7 +281,7 @@ impl ArrangementView {
 				self.arrangement.plugin_load(node, audio_processor);
 
 				let mut fut = self.clap_host.update(
-					ClapHostMessage::Loaded(NoClone(Box::new(Fragile::new(plugin))), receiver),
+					ClapHostMessage::Loaded(NoClone((Box::new(Fragile::new(plugin)), receiver))),
 					config,
 				);
 
@@ -711,21 +711,19 @@ impl ArrangementView {
 								]
 								.spacing(2),
 								column![
-									Knob::new(
-										0.0..=1.0,
-										node.volume.cbrt(),
-										node.enabled,
-										move |v| Message::ChannelVolumeChanged(id, v.powi(3))
-									)
+									Knob::new(0.0..=1.0, node.volume.cbrt(), move |v| {
+										Message::ChannelVolumeChanged(id, v.powi(3))
+									})
+									.enabled(node.enabled)
 									.tooltip(Decibels::from_amplitude(node.volume)),
 									Knob::new(
 										-1.0..=1.0,
 										node.pan,
-										node.enabled,
 										Message::ChannelPanChanged.with(id)
 									)
 									.center(0.0)
 									.reset(0.0)
+									.enabled(node.enabled)
 									.tooltip(format_pan(node.pan)),
 								]
 								.spacing(5)
@@ -886,11 +884,11 @@ impl ArrangementView {
 							Knob::new(
 								-1.0..=1.0,
 								node.pan,
-								node.enabled,
 								Message::ChannelPanChanged.with(node.id)
 							)
 							.center(0.0)
 							.reset(0.0)
+							.enabled(node.enabled)
 							.tooltip(format_pan(node.pan)),
 						]
 						.spacing(3)
@@ -1133,15 +1131,11 @@ impl ArrangementView {
 								.enumerate()
 								.map(|(i, plugin)| {
 									row![
-										Knob::new(
-											0.0..=1.0,
-											plugin.mix,
-											plugin.enabled,
-											move |mix| {
-												Message::PluginMixChanged(selected, i, mix)
-											}
-										)
+										Knob::new(0.0..=1.0, plugin.mix, move |mix| {
+											Message::PluginMixChanged(selected, i, mix)
+										})
 										.radius(TEXT_HEIGHT)
+										.enabled(plugin.enabled)
 										.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
 										button(
 											container(

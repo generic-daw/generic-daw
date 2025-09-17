@@ -1,5 +1,5 @@
 use crate::host::Host;
-use clack_extensions::params::{ParamInfo, ParamInfoBuffer, ParamInfoFlags};
+use clack_extensions::params::{ParamInfoBuffer, ParamInfoFlags, ParamRescanFlags};
 use clack_host::{prelude::*, utils::Cookie};
 use std::{mem::MaybeUninit, ops::RangeInclusive, sync::Arc};
 
@@ -13,72 +13,70 @@ pub struct Param {
 	pub reset: f32,
 	pub value: f32,
 	pub value_text: Option<Arc<str>>,
-}
-
-impl TryFrom<ParamInfo<'_>> for Param {
-	type Error = ();
-
-	fn try_from(value: ParamInfo<'_>) -> Result<Self, Self::Error> {
-		Ok(Self {
-			id: value.id,
-			flags: value.flags,
-			cookie: value.cookie,
-			name: str::from_utf8(value.name).map_err(|_| ())?.into(),
-			range: value.min_value as f32..=value.max_value as f32,
-			reset: value.default_value as f32,
-			value: value.default_value as f32,
-			value_text: None,
-		})
-	}
+	index: u32,
 }
 
 impl Param {
 	pub fn all(plugin: &mut PluginInstance<Host>) -> Option<Box<[Self]>> {
 		let ext = *plugin.access_shared_handler(|s| s.ext.params.get())?;
 
-		let count = ext.count(&mut plugin.plugin_handle()) as usize;
-		let buffer = &mut ParamInfoBuffer::new();
+		let count = ext.count(&mut plugin.plugin_handle());
 
-		let mut params = (0..)
-			.filter_map(|index| {
-				ext.get_info(&mut plugin.plugin_handle(), index, buffer)
-					.map(Self::try_from)
-			})
-			.take(count)
-			.flatten()
+		let mut params = (0..count)
+			.filter_map(|index| Self::try_new(plugin, index))
 			.collect::<Box<_>>();
 
 		for param in &mut params {
-			param.rescan_value(plugin);
+			param.rescan(plugin, ParamRescanFlags::VALUES);
 		}
 
 		Some(params)
 	}
 
-	pub fn rescan_value(&mut self, plugin: &mut PluginInstance<Host>) {
-		if let Some(&ext) = plugin.access_shared_handler(|s| s.ext.params.get())
-			&& let Some(value) = ext.get_value(&mut plugin.plugin_handle(), self.id)
-		{
-			self.update_with_value(value as f32, plugin);
-		}
+	fn try_new(plugin: &mut PluginInstance<Host>, index: u32) -> Option<Self> {
+		let ext = *plugin.access_shared_handler(|s| s.ext.params.get())?;
+		let mut buffer = ParamInfoBuffer::new();
+		let param = ext.get_info(&mut plugin.plugin_handle(), index, &mut buffer)?;
+
+		Some(Self {
+			id: param.id,
+			flags: param.flags,
+			cookie: param.cookie,
+			name: str::from_utf8(param.name).ok()?.into(),
+			range: param.min_value as f32..=param.max_value as f32,
+			reset: param.default_value as f32,
+			value: param.default_value as f32,
+			value_text: None,
+			index,
+		})
 	}
 
-	pub fn update_with_value(&mut self, value: f32, plugin: &mut PluginInstance<Host>) {
-		self.value = value;
+	pub fn rescan(&mut self, plugin: &mut PluginInstance<Host>, flags: ParamRescanFlags) {
+		let ext = plugin.access_shared_handler(|s| *s.ext.params.get().unwrap());
 
-		let value = value.into();
-		self.value_text = if let Some(&ext) = plugin.access_shared_handler(|s| s.ext.params.get())
+		if flags.contains(ParamRescanFlags::INFO)
+			&& let Some(param) = Self::try_new(plugin, self.index)
+		{
+			self.name = param.name;
+			self.flags = param.flags;
+		}
+
+		if flags.contains(ParamRescanFlags::VALUES)
+			&& let Some(value) = ext.get_value(&mut plugin.plugin_handle(), self.id)
+		{
+			self.value = value as f32;
+		}
+
+		if (flags.contains(ParamRescanFlags::VALUES) || flags.contains(ParamRescanFlags::TEXT))
 			&& let Ok(value_text) = ext.value_to_text(
 				&mut plugin.plugin_handle(),
 				self.id,
-				value,
+				f64::from(self.value),
 				&mut [MaybeUninit::zeroed(); 32],
 			) && let Ok(value_text) = str::from_utf8(value_text)
 			&& !value_text.is_empty()
 		{
-			Some(value_text.into())
-		} else {
-			None
-		};
+			self.value_text = Some(value_text.into());
+		}
 	}
 }

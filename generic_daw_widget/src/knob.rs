@@ -47,18 +47,13 @@ pub struct Knob<'a, Message> {
 
 impl<'a, Message> Knob<'a, Message> {
 	#[must_use]
-	pub fn new(
-		range: RangeInclusive<f32>,
-		value: f32,
-		enabled: bool,
-		f: impl Fn(f32) -> Message + 'a,
-	) -> Self {
+	pub fn new(range: RangeInclusive<f32>, value: f32, f: impl Fn(f32) -> Message + 'a) -> Self {
 		Self {
 			value: value.clamp(*range.start(), *range.end()),
 			center: *range.start(),
 			reset: *range.end(),
 			range,
-			enabled,
+			enabled: true,
 			f: NoDebug(Box::from(f)),
 			radius: 20.0,
 			stepped: false,
@@ -81,6 +76,12 @@ impl<'a, Message> Knob<'a, Message> {
 	#[must_use]
 	pub fn radius(mut self, radius: f32) -> Self {
 		self.radius = radius;
+		self
+	}
+
+	#[must_use]
+	pub fn enabled(mut self, enabled: bool) -> Self {
+		self.enabled = enabled;
 		self
 	}
 
@@ -256,7 +257,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 				mouse::Event::ButtonPressed {
 					button: mouse::Button::Left,
 					..
-				} if state.dragging.is_none() && state.hovering => {
+				} if self.enabled && state.dragging.is_none() && state.hovering => {
 					let pos = cursor.position().unwrap();
 					state.dragging = Some((self.value, pos.y));
 
@@ -282,7 +283,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					position: Point { y, .. },
 					..
 				} => {
-					if let Some((value, pos)) = state.dragging {
+					if self.enabled
+						&& let Some((value, pos)) = state.dragging
+					{
 						let diff = (pos - y) * (self.range.end() - self.range.start()) * 0.005;
 						let mut new_value =
 							(value + diff).clamp(*self.range.start(), *self.range.end());
@@ -302,7 +305,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					}
 				}
 				mouse::Event::WheelScrolled { delta, .. }
-					if state.dragging.is_none() && state.hovering =>
+					if self.enabled && state.dragging.is_none() && state.hovering =>
 				{
 					let diff = match delta {
 						ScrollDelta::Lines { y, .. } => *y,
@@ -360,7 +363,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 	) -> Interaction {
 		let state = tree.state.downcast_ref::<State>();
 
-		if state.dragging.is_some() {
+		if !self.enabled {
+			Interaction::default()
+		} else if state.dragging.is_some() {
 			Interaction::Grabbing
 		} else if state.hovering {
 			Interaction::Grab

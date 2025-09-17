@@ -2,7 +2,7 @@ use crate::{components::space, config::Config, widget::LINE_HEIGHT};
 use fragile::Fragile;
 use generic_daw_core::{
 	Event,
-	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, PluginId, Size},
+	clap_host::{MainThreadMessage, ParamInfoFlags, ParamRescanFlags, Plugin, PluginId, Size},
 };
 use generic_daw_utils::{HoleyVec, NoClone, NoDebug};
 use generic_daw_widget::knob::Knob;
@@ -16,18 +16,15 @@ use iced::{
 	window::{self, Id, Level, close_events, close_requests, resize_events},
 };
 use log::info;
-use smol::{Timer, channel::Receiver};
-use std::{ops::Deref as _, time::Duration};
+use smol::{Timer, unblock};
+use std::{ops::Deref as _, sync::mpsc::Receiver, time::Duration};
 
 #[derive(Clone, Debug)]
 pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
 	SendEvent(PluginId, Event),
 	TickTimer(usize, u32),
-	Loaded(
-		NoClone<Box<Fragile<Plugin<Event>>>>,
-		Receiver<MainThreadMessage>,
-	),
+	Loaded(NoClone<(Box<Fragile<Plugin<Event>>>, Receiver<MainThreadMessage>)>),
 	GuiShown(NoClone<Box<Fragile<Plugin<Event>>>>),
 	GuiSetState(PluginId, NoDebug<Box<[u8]>>),
 	GuiRequestResize(Id, Size),
@@ -49,12 +46,12 @@ impl ClapHost {
 			Message::MainThread(id, msg) => return self.main_thread_message(id, msg, config),
 			Message::SendEvent(id, event) => {
 				self.plugins.get_mut(*id).unwrap().send_event(event);
-				if let Event::ParamValue {
-					param_id, value, ..
-				} = event
-				{
+				if let Event::ParamValue { param_id, .. } = event {
 					return self.update(
-						Message::MainThread(id, MainThreadMessage::ParamUpdate(param_id, value)),
+						Message::MainThread(
+							id,
+							MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
+						),
 						config,
 					);
 				}
@@ -62,15 +59,26 @@ impl ClapHost {
 			Message::TickTimer(id, timer_id) => {
 				self.plugins.get_mut(id).unwrap().tick_timer(timer_id);
 			}
-			Message::Loaded(plugin, receiver) => {
-				let mut plugin = plugin.0.into_inner();
+			Message::Loaded(NoClone((plugin, plugin_receiver))) => {
+				let mut plugin = plugin.into_inner();
 				plugin.activate();
 				let id = plugin.plugin_id();
 				self.plugins.insert(*id, plugin);
-				return Task::stream(receiver).map(Message::MainThread.with(id));
+				let (sender, receiver) = smol::channel::unbounded();
+				return Task::batch([
+					Task::future(unblock(move || {
+						while let Ok(msg) = plugin_receiver.recv() {
+							if sender.try_send(msg).is_err() {
+								break;
+							}
+						}
+					}))
+					.discard(),
+					Task::stream(receiver).map(Message::MainThread.with(id)),
+				]);
 			}
-			Message::GuiShown(plugin) => {
-				let mut plugin = plugin.0.into_inner();
+			Message::GuiShown(NoClone(plugin)) => {
+				let mut plugin = plugin.into_inner();
 				let id = plugin.plugin_id();
 
 				plugin.show();
@@ -234,12 +242,12 @@ impl ClapHost {
 			MainThreadMessage::UnregisterTimer(timer_id) => {
 				self.timers.get_mut(*id).unwrap().remove(timer_id as usize);
 			}
-			MainThreadMessage::RescanParamValues => {
-				plugin!(MainThreadMessage::RescanParamValues).rescan_param_values();
+			MainThreadMessage::RescanParams(flags) => {
+				plugin!(MainThreadMessage::RescanParams(flags)).rescan_params(flags);
 			}
-			MainThreadMessage::ParamUpdate(param_id, value) => {
-				plugin!(MainThreadMessage::ParamUpdate(param_id, value))
-					.update_param(param_id, value);
+			MainThreadMessage::RescanParam(param_id, flags) => {
+				plugin!(MainThreadMessage::RescanParam(param_id, flags))
+					.rescan_param(param_id, flags);
 			}
 		}
 
@@ -266,7 +274,7 @@ impl ClapHost {
 					row(plugin.params().map(|param| {
 						column![
 							container(
-								Knob::new(param.range.clone(), param.value, true, |value| {
+								Knob::new(param.range.clone(), param.value, |value| {
 									Message::SendEvent(
 										plugin.plugin_id(),
 										Event::ParamValue {
@@ -279,6 +287,7 @@ impl ClapHost {
 								})
 								.reset(param.reset)
 								.radius(25.0)
+								.enabled(!param.flags.contains(ParamInfoFlags::IS_READONLY))
 								.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
 								.maybe_tooltip(param.value_text.as_deref())
 							)
