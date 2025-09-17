@@ -17,7 +17,7 @@ use generic_daw_utils::NoDebug;
 use log::{debug, error, info, warn};
 use std::sync::{
 	OnceLock,
-	atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::Relaxed},
+	atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
 	mpsc::Sender,
 };
 
@@ -47,7 +47,6 @@ pub struct Shared<'a> {
 	pub ext: Ext,
 	pub main_thread: u64,
 	pub audio_thread: AtomicU64,
-	pub latency: AtomicU32,
 	pub needs_restart: AtomicBool,
 }
 
@@ -62,7 +61,6 @@ impl Shared<'_> {
 			ext: Ext::default(),
 			main_thread,
 			audio_thread: AtomicU64::new(main_thread),
-			latency: AtomicU32::new(0),
 			needs_restart: AtomicBool::new(false),
 		}
 	}

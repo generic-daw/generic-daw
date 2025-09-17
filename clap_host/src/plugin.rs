@@ -10,15 +10,12 @@ use clack_extensions::{
 	render::RenderMode,
 	timer::TimerId,
 };
-use clack_host::{prelude::*, process::PluginAudioProcessor};
+use clack_host::prelude::*;
 use generic_daw_utils::{NoClone, NoDebug};
 use log::{info, warn};
 use raw_window_handle::RawWindowHandle;
 use rtrb::{Producer, RingBuffer};
-use std::{
-	io::Cursor,
-	sync::{atomic::Ordering::Relaxed, mpsc::Receiver},
-};
+use std::{io::Cursor, sync::mpsc::Receiver};
 
 #[derive(Debug)]
 pub struct Plugin<Event: EventImpl> {
@@ -156,29 +153,18 @@ impl<Event: EventImpl> Plugin<Event> {
 			.unwrap()
 			.into();
 
-		if self
+		let latency = self
 			.instance
-			.access_shared_handler(|s| s.ext.latency.get().is_some())
-		{
-			self.latency_changed();
-		}
+			.access_shared_handler(|s| s.ext.latency.get().copied())
+			.map_or(0, |latency| latency.get(&mut self.instance.plugin_handle()));
 
 		self.sender
-			.push(AudioThreadMessage::Activated(NoDebug(processor)))
+			.push(AudioThreadMessage::Activated(NoDebug(processor), latency))
 			.unwrap();
 	}
 
-	pub fn deactivate(&mut self, processor: NoClone<NoDebug<PluginAudioProcessor<Host>>>) {
-		self.instance.deactivate(processor.0.0.into_stopped());
-	}
-
-	pub fn latency_changed(&mut self) {
-		let latency = self
-			.instance
-			.access_shared_handler(|s| *s.ext.latency.get().unwrap());
-		let latency = latency.get(&mut self.instance.plugin_handle());
-		self.instance
-			.access_shared_handler(|s| s.latency.store(latency, Relaxed));
+	pub fn deactivate(&mut self, processor: NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>) {
+		self.instance.deactivate(processor.0.0);
 	}
 
 	#[must_use]

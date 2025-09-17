@@ -141,9 +141,6 @@ impl ClapHost {
 			MainThreadMessage::RequestCallback => {
 				plugin!(MainThreadMessage::RequestCallback).call_on_main_thread_callback();
 			}
-			MainThreadMessage::LatencyChanged => {
-				plugin!(MainThreadMessage::LatencyChanged).latency_changed();
-			}
 			MainThreadMessage::Restart(processor) => {
 				let plugin = plugin!(MainThreadMessage::Restart(processor));
 				plugin.deactivate(processor);

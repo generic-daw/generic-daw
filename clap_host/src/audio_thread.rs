@@ -11,6 +11,8 @@ pub struct AudioThread<'a> {
 
 impl<'a> AudioThread<'a> {
 	pub fn new(shared: &'a Shared<'a>) -> Self {
+		shared.needs_restart.store(false, Relaxed);
+
 		Self {
 			shared,
 			processing: AtomicBool::new(false),
@@ -24,7 +26,7 @@ impl HostThreadPoolImpl for AudioThread<'_> {
 	fn request_exec(&mut self, task_count: u32) -> Result<(), HostError> {
 		if !self.processing.load(Relaxed) {
 			return Err(HostError::Message(
-				"called `request_exec` while outside the `process` call",
+				"called `request_exec` outside of `process`",
 			));
 		}
 

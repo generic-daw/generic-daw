@@ -10,7 +10,7 @@ use std::sync::atomic::Ordering::Relaxed;
 
 #[derive(Debug)]
 pub enum AudioThreadMessage<Event: EventImpl> {
-	Activated(NoDebug<PluginAudioProcessor<Host>>),
+	Activated(NoDebug<PluginAudioProcessor<Host>>, u32),
 	Event(Event),
 }
 
@@ -60,21 +60,24 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			trace!("{}: {msg:?}", self.descriptor);
 
 			match msg {
-				AudioThreadMessage::Activated(processor) => self.processor = Some(processor),
+				AudioThreadMessage::Activated(processor, latency) => {
+					self.audio_buffers.latency_changed(latency);
+					self.processor = Some(processor);
+				}
 				AudioThreadMessage::Event(event) => events.push(event),
 			}
 		}
 
-		if let Some(mut processor) = self.processor.take() {
+		if let Some(processor) = self.processor.take() {
 			if processor.access_shared_handler(|s| {
 				CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
-				self.audio_buffers.latency_changed(s.latency.load(Relaxed));
-				s.needs_restart.swap(false, Relaxed)
+				s.needs_restart.load(Relaxed)
 			}) {
-				processor.ensure_processing_stopped();
 				processor
 					.access_shared_handler(|s| s.sender.clone())
-					.send(MainThreadMessage::Restart(NoClone(processor)))
+					.send(MainThreadMessage::Restart(NoClone(NoDebug(
+						processor.0.into_stopped(),
+					))))
 					.unwrap();
 			} else {
 				self.processor = Some(processor);
@@ -154,11 +157,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 	#[must_use]
 	pub fn delay(&self) -> usize {
-		self.processor
-			.as_ref()
-			.map_or(self.audio_buffers.delay(), |processor| {
-				processor.access_shared_handler(|s| s.latency.load(Relaxed)) as usize
-			})
+		self.audio_buffers.delay()
 	}
 }
 
@@ -168,7 +167,9 @@ impl<Event: EventImpl> Drop for AudioProcessor<Event> {
 			processor.ensure_processing_stopped();
 			processor
 				.access_shared_handler(|s| s.sender.clone())
-				.send(MainThreadMessage::Destroy(NoClone(processor)))
+				.send(MainThreadMessage::Destroy(NoClone(NoDebug(
+					processor.0.into_stopped(),
+				))))
 				.unwrap();
 		}
 	}

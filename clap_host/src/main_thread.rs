@@ -7,16 +7,15 @@ use clack_extensions::{
 	state::HostStateImpl,
 	timer::{HostTimerImpl, TimerId},
 };
-use clack_host::{prelude::*, process::PluginAudioProcessor};
+use clack_host::prelude::*;
 use generic_daw_utils::{NoClone, NoDebug};
 use std::time::Duration;
 
 #[derive(Clone, Debug)]
 pub enum MainThreadMessage {
 	RequestCallback,
-	LatencyChanged,
-	Restart(NoClone<NoDebug<PluginAudioProcessor<Host>>>),
-	Destroy(NoClone<NoDebug<PluginAudioProcessor<Host>>>),
+	Restart(NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>),
+	Destroy(NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>),
 	GuiRequestResize(Size),
 	GuiRequestShow,
 	GuiRequestHide,
@@ -59,12 +58,7 @@ impl HostAudioPortsImpl for MainThread<'_> {
 }
 
 impl HostLatencyImpl for MainThread<'_> {
-	fn changed(&mut self) {
-		self.shared
-			.sender
-			.send(MainThreadMessage::LatencyChanged)
-			.unwrap();
-	}
+	fn changed(&mut self) {}
 }
 
 impl HostNotePortsImpl for MainThread<'_> {
