@@ -69,7 +69,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			if processor.access_shared_handler(|s| {
 				CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
 				self.audio_buffers.latency_changed(s.latency.load(Relaxed));
-				s.needs_restart.load(Relaxed)
+				s.needs_restart.swap(false, Relaxed)
 			}) {
 				processor.ensure_processing_stopped();
 				processor
