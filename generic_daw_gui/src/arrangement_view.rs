@@ -301,7 +301,7 @@ impl ArrangementView {
 				let id = self.arrangement.node(node).0.plugins[i].id;
 				return self
 					.clap_host
-					.update(ClapHostMessage::GuiSetState(id, state), config)
+					.update(ClapHostMessage::SetState(id, state), config)
 					.map(Message::ClapHost);
 			}
 			Message::PluginMixChanged(node, i, mix) => {

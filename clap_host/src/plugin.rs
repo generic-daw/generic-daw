@@ -29,7 +29,8 @@ pub struct Plugin<Event: EventImpl> {
 	id: PluginId,
 	sender: Producer<AudioThreadMessage<Event>>,
 	config: PluginAudioConfiguration,
-	is_open: bool,
+	is_created: bool,
+	is_shown: bool,
 }
 
 impl<Event: EventImpl> Plugin<Event> {
@@ -76,7 +77,8 @@ impl<Event: EventImpl> Plugin<Event> {
 				id,
 				sender,
 				config,
-				is_open: false,
+				is_created: false,
+				is_shown: false,
 			},
 			receiver,
 		)
@@ -207,19 +209,31 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn create(&mut self) {
-		self.destroy();
-
-		let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get()) else {
-			return;
-		};
-
 		let config = GuiConfiguration {
 			api_type: API_TYPE,
 			is_floating: self.is_floating(),
 		};
 
-		ext.create(&mut self.instance.plugin_handle(), config)
-			.unwrap();
+		if !self.is_created
+			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get())
+			&& let Err(err) = ext.create(&mut self.instance.plugin_handle(), config)
+		{
+			warn!("{}: {err}", self.descriptor);
+		}
+
+		self.is_created = true;
+	}
+
+	pub fn destroy(&mut self) {
+		self.hide();
+
+		if self.is_created
+			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get())
+		{
+			ext.destroy(&mut self.instance.plugin_handle());
+		}
+
+		self.is_created = false;
 	}
 
 	/// # SAFETY
@@ -243,7 +257,9 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn show(&mut self) {
-		if !self.is_open
+		self.create();
+
+		if !self.is_shown
 			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get())
 			&& let Err(err) = ext.show(&mut self.instance.plugin_handle())
 		{
@@ -251,17 +267,19 @@ impl<Event: EventImpl> Plugin<Event> {
 			warn!("{}: {err}", self.descriptor);
 		}
 
-		self.is_open = true;
+		self.is_shown = true;
 	}
 
-	pub fn destroy(&mut self) {
-		if self.is_open
+	pub fn hide(&mut self) {
+		if self.is_shown
 			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get())
+			&& let Err(err) = ext.hide(&mut self.instance.plugin_handle())
 		{
-			ext.destroy(&mut self.instance.plugin_handle());
+			// If I unwrap here, nih-plug plugins don't load. Why?
+			warn!("{}: {err}", self.descriptor);
 		}
 
-		self.is_open = false;
+		self.is_shown = false;
 	}
 
 	#[must_use]
@@ -351,6 +369,7 @@ impl<Event: EventImpl> Plugin<Event> {
 
 impl<Event: EventImpl> Drop for Plugin<Event> {
 	fn drop(&mut self) {
+		self.hide();
 		self.destroy();
 
 		if matches!(

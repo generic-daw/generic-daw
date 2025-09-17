@@ -25,11 +25,11 @@ pub enum Message {
 	SendEvent(PluginId, Event),
 	TickTimer(usize, u32),
 	Loaded(NoClone<(Box<Fragile<Plugin<Event>>>, Receiver<MainThreadMessage>)>),
-	GuiShown(NoClone<Box<Fragile<Plugin<Event>>>>),
-	GuiSetState(PluginId, NoDebug<Box<[u8]>>),
-	GuiRequestResize(Id, Size),
-	GuiRequestHide(Id),
-	GuiHidden(Id),
+	SetState(PluginId, NoDebug<Box<[u8]>>),
+	GuiEmbedded(NoClone<Box<Fragile<Plugin<Event>>>>),
+	WindowResized(Id, Size),
+	WindowCloseRequested(Id),
+	WindowClosed(Id),
 	SetPluginSize(PluginId, Size),
 }
 
@@ -79,17 +79,16 @@ impl ClapHost {
 					Task::stream(receiver).map(Message::MainThread.with(id)),
 				]);
 			}
-			Message::GuiShown(NoClone(plugin)) => {
+			Message::SetState(plugin, state) => {
+				self.plugins.get_mut(*plugin).unwrap().set_state(&state);
+			}
+			Message::GuiEmbedded(NoClone(plugin)) => {
 				let mut plugin = plugin.into_inner();
 				let id = plugin.plugin_id();
-
 				plugin.show();
 				self.plugins.insert(*id, plugin);
 			}
-			Message::GuiSetState(plugin, state) => {
-				self.plugins.get_mut(*plugin).unwrap().set_state(&state);
-			}
-			Message::GuiRequestResize(window, size) => {
+			Message::WindowResized(window, size) => {
 				if let Some(id) = self.windows.key_of(&window)
 					&& let Some(plugin) = self.plugins.get_mut(id)
 					&& let Some(new_size) = plugin.resize(size)
@@ -99,7 +98,7 @@ impl ClapHost {
 					return window::resize(window, new_size.to_logical(config.scale_factor).into());
 				}
 			}
-			Message::GuiRequestHide(window) => {
+			Message::WindowCloseRequested(window) => {
 				return if let Some(plugin) = self.windows.key_of(&window) {
 					self.plugins.get_mut(plugin).unwrap().destroy();
 					window::close(window)
@@ -107,7 +106,7 @@ impl ClapHost {
 					iced::exit()
 				};
 			}
-			Message::GuiHidden(window) => {
+			Message::WindowClosed(window) => {
 				let id = self.windows.key_of(&window).unwrap();
 				self.windows.remove(id).unwrap();
 			}
@@ -162,18 +161,15 @@ impl ClapHost {
 				);
 			}
 			MainThreadMessage::GuiRequestShow => {
-				plugin!(MainThreadMessage::GuiRequestShow);
+				let plugin = plugin!(MainThreadMessage::GuiRequestShow);
 
 				if self.windows.contains_key(*id) {
 					return Task::none();
 				}
 
-				let mut plugin = self.plugins.remove(*id).unwrap();
-				plugin.create();
-
-				return if !plugin.has_gui() {
+				if !plugin.has_gui() {
 					let (window, spawn) = window::open(window::Settings {
-						size: (400.0, 640.0).into(),
+						size: (400.0, 600.0).into(),
 						resizable: false,
 						exit_on_close_request: false,
 						level: Level::AlwaysOnTop,
@@ -181,20 +177,16 @@ impl ClapHost {
 					});
 					self.windows.insert(*id, window);
 
-					spawn.discard().chain(self.update(
-						Message::GuiShown(NoClone(Box::new(Fragile::new(plugin)))),
-						config,
-					))
+					return spawn.discard();
 				} else if plugin.is_floating() {
-					self.update(
-						Message::GuiShown(NoClone(Box::new(Fragile::new(plugin)))),
-						config,
-					)
+					plugin.show();
 				} else {
+					plugin.create();
+
 					plugin.set_scale(config.scale_factor);
 
 					let (window, spawn) = window::open(window::Settings {
-						size: plugin.get_size().map_or((480.0, 640.0).into(), |size| {
+						size: plugin.get_size().map_or((400.0, 600.0).into(), |size| {
 							size.to_logical(config.scale_factor).into()
 						}),
 						resizable: plugin.can_resize(),
@@ -204,7 +196,7 @@ impl ClapHost {
 					});
 					self.windows.insert(*id, window);
 
-					let mut plugin = Fragile::new(plugin);
+					let mut plugin = Fragile::new(self.plugins.remove(*id).unwrap());
 					let embed = window::run_with_handle(window, move |handle| {
 						// SAFETY:
 						// The plugin gui is destroyed before the window is closed (see
@@ -212,24 +204,23 @@ impl ClapHost {
 						unsafe {
 							plugin.get_mut().set_parent(handle.as_raw());
 						}
-						plugin
+						Message::GuiEmbedded(NoClone(Box::new(plugin)))
 					});
 
-					spawn
-						.discard()
-						.chain(embed)
-						.map(move |plugin| Message::GuiShown(NoClone(Box::new(plugin))))
-				};
+					return spawn.discard().chain(embed);
+				}
 			}
 			MainThreadMessage::GuiRequestResize(size) => {
 				if let Some(&window) = self.windows.get(*id) {
-					return self.update(Message::GuiRequestResize(window, size), config);
+					return self.update(Message::WindowResized(window, size), config);
 				}
 			}
 			MainThreadMessage::GuiRequestHide => {
 				if let Some(&window) = self.windows.get(*id) {
-					return self.update(Message::GuiRequestHide(window), config);
+					return self.update(Message::WindowCloseRequested(window), config);
 				}
+
+				plugin!(MainThreadMessage::GuiRequestHide).hide();
 			}
 			MainThreadMessage::GuiClosed => {
 				if let Some(&window) = self.windows.get(*id) {
@@ -360,7 +351,7 @@ impl ClapHost {
 				})
 				.chain([
 					resize_events().map(|(id, size)| {
-						Message::GuiRequestResize(
+						Message::WindowResized(
 							id,
 							Size::Logical {
 								width: size.width,
@@ -368,8 +359,8 @@ impl ClapHost {
 							},
 						)
 					}),
-					close_requests().map(Message::GuiRequestHide),
-					close_events().map(Message::GuiHidden),
+					close_requests().map(Message::WindowCloseRequested),
+					close_events().map(Message::WindowClosed),
 				]),
 		)
 	}
