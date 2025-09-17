@@ -11,6 +11,7 @@ use std::sync::atomic::Ordering::Relaxed;
 #[derive(Debug)]
 pub enum AudioThreadMessage<Event: EventImpl> {
 	Activated(NoDebug<PluginAudioProcessor<Host>>, u32),
+	SetRealtime(bool),
 	Event(Event),
 }
 
@@ -23,6 +24,7 @@ pub struct AudioProcessor<Event: EventImpl> {
 	audio_buffers: AudioBuffers,
 	event_buffers: EventBuffers,
 	receiver: Consumer<AudioThreadMessage<Event>>,
+	realtime: bool,
 }
 
 impl<Event: EventImpl> AudioProcessor<Event> {
@@ -42,6 +44,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			audio_buffers,
 			event_buffers,
 			receiver,
+			realtime: true,
 		}
 	}
 
@@ -56,31 +59,38 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	}
 
 	fn recv_events(&mut self, events: &mut Vec<Event>) {
-		while let Ok(msg) = self.receiver.pop() {
-			trace!("{}: {msg:?}", self.descriptor);
+		loop {
+			while let Ok(msg) = self.receiver.pop() {
+				trace!("{}: {msg:?}", self.descriptor);
 
-			match msg {
-				AudioThreadMessage::Activated(processor, latency) => {
-					self.audio_buffers.latency_changed(latency);
+				match msg {
+					AudioThreadMessage::Activated(processor, latency) => {
+						self.audio_buffers.latency_changed(latency);
+						self.processor = Some(processor);
+					}
+					AudioThreadMessage::SetRealtime(realtime) => self.realtime = realtime,
+					AudioThreadMessage::Event(event) => events.push(event),
+				}
+			}
+
+			if let Some(processor) = self.processor.take() {
+				if processor.access_shared_handler(|s| {
+					CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
+					s.needs_restart.load(Relaxed)
+				}) {
+					processor
+						.access_shared_handler(|s| s.sender.clone())
+						.send(MainThreadMessage::Restart(NoClone(NoDebug(
+							processor.0.into_stopped(),
+						))))
+						.unwrap();
+				} else {
 					self.processor = Some(processor);
 				}
-				AudioThreadMessage::Event(event) => events.push(event),
 			}
-		}
 
-		if let Some(processor) = self.processor.take() {
-			if processor.access_shared_handler(|s| {
-				CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
-				s.needs_restart.load(Relaxed)
-			}) {
-				processor
-					.access_shared_handler(|s| s.sender.clone())
-					.send(MainThreadMessage::Restart(NoClone(NoDebug(
-						processor.0.into_stopped(),
-					))))
-					.unwrap();
-			} else {
-				self.processor = Some(processor);
+			if self.realtime || self.processor.is_some() {
+				break;
 			}
 		}
 	}

@@ -319,6 +319,10 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn set_realtime(&mut self, realtime: bool) {
+		self.sender
+			.push(AudioThreadMessage::SetRealtime(realtime))
+			.unwrap();
+
 		if let Some(&render) = self.instance.access_shared_handler(|s| s.ext.render.get()) {
 			render
 				.set(
