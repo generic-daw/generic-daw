@@ -200,10 +200,10 @@ impl<Event: EventImpl> Plugin<Event> {
 		}
 	}
 
-	pub fn tick_timer(&mut self, id: u32) {
+	pub fn tick_timer(&mut self, timer_id: u32) {
 		self.instance
 			.access_shared_handler(|s| *s.ext.timer.get().unwrap())
-			.on_timer(&mut self.instance.plugin_handle(), TimerId(id));
+			.on_timer(&mut self.instance.plugin_handle(), TimerId(timer_id));
 	}
 
 	pub fn create(&mut self) {

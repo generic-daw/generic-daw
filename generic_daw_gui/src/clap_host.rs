@@ -57,7 +57,9 @@ impl ClapHost {
 				}
 			}
 			Message::TickTimer(id, timer_id) => {
-				self.plugins.get_mut(id).unwrap().tick_timer(timer_id);
+				if let Some(plugin) = self.plugins.get_mut(id) {
+					plugin.tick_timer(timer_id);
+				}
 			}
 			Message::Loaded(NoClone((plugin, plugin_receiver))) => {
 				let mut plugin = plugin.into_inner();
@@ -98,12 +100,12 @@ impl ClapHost {
 				}
 			}
 			Message::GuiRequestHide(window) => {
-				let Some(plugin) = self.windows.key_of(&window) else {
-					return iced::exit();
+				return if let Some(plugin) = self.windows.key_of(&window) {
+					self.plugins.get_mut(plugin).unwrap().destroy();
+					window::close(window)
+				} else {
+					iced::exit()
 				};
-
-				self.plugins.get_mut(plugin).unwrap().destroy();
-				return window::close(window);
 			}
 			Message::GuiHidden(window) => {
 				let id = self.windows.key_of(&window).unwrap();
@@ -152,6 +154,8 @@ impl ClapHost {
 				plugin!(MainThreadMessage::Destroy(processor));
 
 				self.plugins.remove(*id).unwrap().deactivate(processor);
+				self.timers.remove(*id);
+
 				return self.update(
 					Message::MainThread(id, MainThreadMessage::GuiClosed),
 					config,
@@ -228,7 +232,6 @@ impl ClapHost {
 				}
 			}
 			MainThreadMessage::GuiClosed => {
-				self.timers.remove(*id);
 				if let Some(&window) = self.windows.get(*id) {
 					return window::close(window);
 				}
@@ -240,7 +243,9 @@ impl ClapHost {
 					.insert(timer_id as usize, duration);
 			}
 			MainThreadMessage::UnregisterTimer(timer_id) => {
-				self.timers.get_mut(*id).unwrap().remove(timer_id as usize);
+				if let Some(timers) = self.timers.get_mut(*id) {
+					timers.remove(timer_id as usize);
+				}
 			}
 			MainThreadMessage::RescanParams(flags) => {
 				plugin!(MainThreadMessage::RescanParams(flags)).rescan_params(flags);
@@ -340,9 +345,8 @@ impl ClapHost {
 
 	pub fn subscription(&self) -> Subscription<Message> {
 		Subscription::batch(
-			self.windows
+			self.plugins
 				.keys()
-				.filter(|id| self.plugins.contains_key(*id))
 				.flat_map(|id| {
 					self.timers
 						.get(id)
@@ -350,9 +354,8 @@ impl ClapHost {
 						.flat_map(HoleyVec::iter)
 						.map(move |(k, &v)| {
 							every(v)
-								.with(k)
-								.with(id)
-								.map(|(id, (k, _))| Message::TickTimer(id, k as u32))
+								.with((id, k))
+								.map(|((id, k), _)| Message::TickTimer(id, k as u32))
 						})
 				})
 				.chain([
