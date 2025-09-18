@@ -197,7 +197,7 @@ impl ClapHost {
 					let embed = window::run_with_handle(window, move |handle| {
 						// SAFETY:
 						// The plugin gui is destroyed before the window is closed (see
-						// [`Message::GuiRequestHide`]).
+						// [`Message::WindowCloseRequested`]).
 						unsafe {
 							plugin.get_mut().set_parent(handle.as_raw());
 						}
