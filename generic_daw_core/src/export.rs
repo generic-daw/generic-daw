@@ -1,7 +1,4 @@
-use crate::{
-	AudioGraphNode, MusicalTime, RtState, Version,
-	daw_ctx::{Batch, State},
-};
+use crate::{AudioGraphNode, MusicalTime, daw_ctx::State};
 use audio_graph::AudioGraph;
 use hound::WavWriter;
 use log::info;
@@ -10,50 +7,49 @@ use std::{path::Path, time::Instant};
 pub fn export(
 	audio_graph: &mut AudioGraph<AudioGraphNode>,
 	path: &Path,
-	rtstate: RtState,
+	state: impl Into<State>,
 	len: MusicalTime,
 ) {
-	export_with(audio_graph, path, rtstate, len, |_| ());
+	export_with(audio_graph, path, state, len, |_| ());
 }
 
 pub fn export_with(
 	audio_graph: &mut AudioGraph<AudioGraphNode>,
 	path: &Path,
-	mut rtstate: RtState,
+	state: impl Into<State>,
 	len: MusicalTime,
 	mut progress_fn: impl FnMut(f32),
 ) {
 	let now = Instant::now();
 
-	rtstate.sample = 0;
-	rtstate.playing = true;
-	rtstate.metronome = false;
-
-	audio_graph.for_each_mut(AudioGraphNode::reset);
-
-	let mut state = State {
-		rtstate,
-		batch: Batch::new(Version::unique()),
-	};
+	let mut state = state.into();
+	state.rtstate.playing = true;
+	state.rtstate.metronome = false;
 
 	let mut writer = WavWriter::create(
 		path,
 		hound::WavSpec {
 			channels: 2,
-			sample_rate: rtstate.sample_rate,
+			sample_rate: state.rtstate.sample_rate,
 			bits_per_sample: 32,
 			sample_format: hound::SampleFormat::Float,
 		},
 	)
 	.unwrap();
 
-	let buffer_size = 2 * rtstate.frames as usize;
+	let buffer_size = 2 * state.rtstate.frames as usize;
 	let mut buf = vec![0.0; buffer_size].into_boxed_slice();
 
-	let delay = audio_graph.delay().next_multiple_of(2);
-	let end = len.to_samples(&rtstate).next_multiple_of(2) + delay;
+	let mut delay;
+	let mut end;
 
-	while state.rtstate.sample < delay {
+	audio_graph.for_each_mut(AudioGraphNode::reset);
+
+	while {
+		delay = audio_graph.delay().next_multiple_of(2);
+		end = len.to_samples(&state.rtstate).next_multiple_of(2) + delay;
+		state.rtstate.sample < delay
+	} {
 		let diff = buffer_size.min(delay - state.rtstate.sample);
 		state.rtstate.sample += diff;
 
@@ -63,7 +59,11 @@ pub fn export_with(
 		progress_fn(state.rtstate.sample as f32 / end as f32);
 	}
 
-	while state.rtstate.sample < end {
+	while {
+		delay = audio_graph.delay().next_multiple_of(2);
+		end = len.to_samples(&state.rtstate).next_multiple_of(2) + delay;
+		state.rtstate.sample < end
+	} {
 		let diff = buffer_size.min(end - state.rtstate.sample);
 		state.rtstate.sample += diff;
 
@@ -71,7 +71,7 @@ pub fn export_with(
 		state.batch.updates.clear();
 
 		for &s in &buf[..diff] {
-			writer.write_sample(-s).unwrap();
+			writer.write_sample(s).unwrap();
 		}
 
 		progress_fn(state.rtstate.sample as f32 / end as f32);

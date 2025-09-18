@@ -89,6 +89,15 @@ pub struct State {
 	pub batch: Batch,
 }
 
+impl From<RtState> for State {
+	fn from(value: RtState) -> Self {
+		Self {
+			rtstate: value,
+			batch: Batch::new(Version::unique()),
+		}
+	}
+}
+
 pub struct DawCtx {
 	audio_graph: AudioGraph<AudioGraphNode>,
 	state: State,
