@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-pub trait EventImpl: Copy + Debug {
+pub trait EventImpl: Copy + Debug + Send + Sync {
 	#[must_use]
 	fn time(self) -> usize;
 	#[must_use]

@@ -51,6 +51,16 @@ impl<T> HoleyVec<T> {
 	}
 
 	#[must_use]
+	pub fn len(&self) -> usize {
+		self.iter().count()
+	}
+
+	#[must_use]
+	pub fn is_empty(&self) -> bool {
+		self.iter().next().is_none()
+	}
+
+	#[must_use]
 	pub fn contains_key(&self, key: usize) -> bool {
 		self.get(key).is_some()
 	}
@@ -59,29 +69,34 @@ impl<T> HoleyVec<T> {
 		self.0.clear();
 	}
 
-	pub fn iter(&self) -> impl Iterator<Item = (usize, &T)> {
+	#[must_use]
+	pub fn iter(&self) -> impl DoubleEndedIterator<Item = (usize, &T)> {
 		self.0
 			.iter()
 			.enumerate()
 			.filter_map(|(k, v)| Some((k, v.as_ref()?)))
 	}
 
-	pub fn iter_mut(&mut self) -> impl Iterator<Item = (usize, &mut T)> {
+	#[must_use]
+	pub fn iter_mut(&mut self) -> impl DoubleEndedIterator<Item = (usize, &mut T)> {
 		self.0
 			.iter_mut()
 			.enumerate()
 			.filter_map(|(k, v)| Some((k, v.as_mut()?)))
 	}
 
-	pub fn keys(&self) -> impl Iterator<Item = usize> {
+	#[must_use]
+	pub fn keys(&self) -> impl DoubleEndedIterator<Item = usize> {
 		self.iter().map(|(k, _)| k)
 	}
 
-	pub fn values(&self) -> impl Iterator<Item = &T> {
+	#[must_use]
+	pub fn values(&self) -> impl DoubleEndedIterator<Item = &T> {
 		self.iter().map(|(_, v)| v)
 	}
 
-	pub fn values_mut(&mut self) -> impl Iterator<Item = &mut T> {
+	#[must_use]
+	pub fn values_mut(&mut self) -> impl DoubleEndedIterator<Item = &mut T> {
 		self.iter_mut().map(|(_, v)| v)
 	}
 }

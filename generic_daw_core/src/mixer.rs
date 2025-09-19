@@ -38,12 +38,7 @@ impl NodeImpl for Mixer {
 	type Event = Event;
 	type State = State;
 
-	fn process(
-		&mut self,
-		state: &mut Self::State,
-		audio: &mut [f32],
-		events: &mut Vec<Self::Event>,
-	) {
+	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
 		if !self.enabled {
 			audio.fill(0.0);
 			events.clear();
@@ -57,24 +52,23 @@ impl NodeImpl for Mixer {
 				plugin.processor.flush(events);
 			}
 
-			state.batch.updates.extend(
-				events
-					.extract_if(.., |event| matches!(event, Event::ParamValue { .. }))
-					.map(|event| {
-						let Event::ParamValue { param_id, .. } = event else {
-							unreachable!()
-						};
+			events
+				.extract_if(.., |event| matches!(event, Event::ParamValue { .. }))
+				.map(|event| {
+					let Event::ParamValue { param_id, .. } = event else {
+						unreachable!()
+					};
 
-						Update::Param(plugin.processor.id(), param_id)
-					}),
-			);
+					Update::Param(plugin.processor.id(), param_id)
+				})
+				.for_each(|update| state.updates.push(update));
 		}
 
 		let [lpan, rpan] = pan(self.pan).map(|s| s * self.volume);
 
 		let peaks = peaks(audio, lpan, rpan);
 		if peaks != [0.0; 2] {
-			state.batch.updates.push(Update::Peak(self.id, peaks));
+			state.updates.push(Update::Peak(self.id, peaks));
 		}
 	}
 
@@ -92,6 +86,10 @@ impl NodeImpl for Mixer {
 		} else {
 			0
 		}
+	}
+
+	fn expensive(&self) -> bool {
+		self.plugins.iter().any(|plugin| plugin.enabled)
 	}
 }
 

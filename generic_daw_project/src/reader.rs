@@ -57,7 +57,7 @@ impl Reader {
 			.zip(&self.0.channels)
 	}
 
-	pub fn iter_track_channel_connections(
+	pub fn iter_track_to_channel(
 		&self,
 	) -> impl Iterator<Item = (proto::TrackIndex, proto::ChannelIndex)> {
 		(0..)
@@ -72,7 +72,7 @@ impl Reader {
 			})
 	}
 
-	pub fn iter_channel_channel_connections(
+	pub fn iter_channel_to_channel(
 		&self,
 	) -> impl Iterator<Item = (proto::ChannelIndex, proto::ChannelIndex)> {
 		(0..)

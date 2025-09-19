@@ -1,6 +1,7 @@
 use crate::{AudioGraphNode, Clip, Event, Master, Mixer};
 use audio_graph::{AudioGraph, NodeId, NodeImpl as _};
 use clap_host::{AudioProcessor, ClapId, PluginId};
+use crossbeam_queue::SegQueue;
 use generic_daw_utils::unique_id;
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, RingBuffer};
@@ -61,17 +62,6 @@ pub struct Batch {
 	pub updates: Vec<Update>,
 }
 
-impl Batch {
-	#[must_use]
-	pub fn new(version: Version) -> Self {
-		Self {
-			version,
-			sample: None,
-			updates: Vec::new(),
-		}
-	}
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct RtState {
 	pub sample_rate: u32,
@@ -86,14 +76,14 @@ pub struct RtState {
 #[derive(Debug)]
 pub struct State {
 	pub rtstate: RtState,
-	pub batch: Batch,
+	pub updates: SegQueue<Update>,
 }
 
 impl From<RtState> for State {
 	fn from(value: RtState) -> Self {
 		Self {
 			rtstate: value,
-			batch: Batch::new(Version::unique()),
+			updates: SegQueue::new(),
 		}
 	}
 }
@@ -134,7 +124,7 @@ impl DawCtx {
 			audio_graph: AudioGraph::new(master.into(), frames),
 			state: State {
 				rtstate,
-				batch: Batch::new(version),
+				updates: SegQueue::new(),
 			},
 			version,
 			sender,
@@ -150,11 +140,9 @@ impl DawCtx {
 			trace!("{msg:?}");
 
 			match msg {
-				Message::Action(node, action) => {
-					if let Some(node) = self.audio_graph.node_mut(node) {
-						node.apply(action);
-					}
-				}
+				Message::Action(node, action) => self
+					.audio_graph
+					.with_mut_node(node, move |node| node.apply(action)),
 				Message::Insert(node) => self.audio_graph.insert(*node),
 				Message::Remove(node) => self.audio_graph.remove(node),
 				Message::Connect(from, to, sender) => {
@@ -167,11 +155,10 @@ impl DawCtx {
 				Message::Numerator(numerator) => self.state.rtstate.numerator = numerator,
 				Message::TogglePlayback => self.state.rtstate.playing ^= true,
 				Message::ToggleMetronome => self.state.rtstate.metronome ^= true,
-				Message::Reset => self.audio_graph.for_each_mut(AudioGraphNode::reset),
+				Message::Reset => self.audio_graph.for_each_mut_node(AudioGraphNode::reset),
 				Message::Sample(version, sample) => {
 					self.state.rtstate.sample = sample;
 					self.version = version;
-					self.state.batch.version = self.version;
 				}
 				Message::ReturnUpdateBuffer(update) => {
 					debug_assert!(update.is_empty());
@@ -188,25 +175,27 @@ impl DawCtx {
 			}
 		}
 
-		if self.state.batch.updates.capacity() == 0 {
-			self.state.batch.updates = self.update_buffers.pop().unwrap_or_default();
-		}
-
-		self.audio_graph.process(&mut self.state, buf);
+		self.audio_graph.process(&self.state, buf);
 
 		for s in &mut *buf {
 			*s = s.clamp(-1.0, 1.0);
 		}
 
-		if self.state.rtstate.playing {
+		let sample = self.state.rtstate.playing.then(|| {
 			self.state.rtstate.sample += buf.len();
-			self.state.batch.sample = Some(self.state.rtstate.sample);
-		}
+			self.state.rtstate.sample
+		});
 
-		if self.state.batch.sample.is_some() || !self.state.batch.updates.is_empty() {
-			let mut update = Batch::new(self.version);
-			std::mem::swap(&mut update, &mut self.state.batch);
-			if let Err(err) = self.sender.push(update) {
+		if sample.is_some() || !self.state.updates.is_empty() {
+			let mut batch = Batch {
+				version: self.version,
+				sample,
+				updates: self.update_buffers.pop().unwrap_or_default(),
+			};
+			while let Some(update) = self.state.updates.pop() {
+				batch.updates.push(update);
+			}
+			if let Err(err) = self.sender.push(batch) {
 				warn!("{err}");
 			}
 		}

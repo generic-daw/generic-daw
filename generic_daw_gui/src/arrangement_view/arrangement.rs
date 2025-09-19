@@ -207,7 +207,7 @@ impl Arrangement {
 		self.producer.push(Message::ToggleMetronome).unwrap();
 	}
 
-	pub fn master(&self) -> &(Node, BitSet) {
+	pub fn master(&self) -> &Node {
 		self.node(self.master_node_id)
 	}
 
@@ -243,7 +243,7 @@ impl Arrangement {
 		}
 	}
 
-	pub fn channels(&self) -> impl Iterator<Item = &Node> {
+	pub fn channels(&self) -> impl DoubleEndedIterator<Item = &Node> {
 		self.nodes
 			.values()
 			.filter_map(|(node, _)| (node.ty == NodeType::Mixer).then_some(node))
@@ -259,8 +259,12 @@ impl Arrangement {
 		self.nodes = nodes;
 	}
 
-	pub fn node(&self, id: NodeId) -> &(Node, BitSet) {
-		&self.nodes[*id]
+	pub fn node(&self, id: NodeId) -> &Node {
+		&self.nodes[*id].0
+	}
+
+	pub fn outgoing(&self, id: NodeId) -> &BitSet {
+		&self.nodes[*id].1
 	}
 
 	pub fn push_channel(&mut self, node: Mixer) {
@@ -277,7 +281,7 @@ impl Arrangement {
 		let node = Mixer::default();
 		let id = node.id();
 		self.push_channel(node);
-		self.request_connect(self.master_node_id, id)
+		self.request_connect(id, self.master_node_id)
 	}
 
 	pub fn remove_channel(&mut self, id: NodeId) -> Node {
@@ -303,7 +307,7 @@ impl Arrangement {
 		let track = core::Track::default();
 		let id = track.id();
 		self.push_track(track);
-		self.request_connect(self.master_node_id, id)
+		self.request_connect(id, self.master_node_id)
 	}
 
 	pub fn remove_track(&mut self, idx: usize) {
@@ -323,11 +327,11 @@ impl Arrangement {
 	}
 
 	pub fn connect_succeeded(&mut self, from: NodeId, to: NodeId) {
-		self.nodes.get_mut(*to).unwrap().1.insert(*from);
+		self.nodes.get_mut(*from).unwrap().1.insert(*to);
 	}
 
 	pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
-		self.nodes.get_mut(*to).unwrap().1.remove(*from);
+		self.nodes.get_mut(*from).unwrap().1.remove(*to);
 		self.producer.push(Message::Disconnect(from, to)).unwrap();
 	}
 

@@ -21,3 +21,4 @@ oneshot = "0.1.11"
 rubato = "0.16.2"
 symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
 rtrb = "0.3.2"
+crossbeam-queue = "0.3.12"

@@ -47,7 +47,7 @@ use iced::{
 };
 use iced_persistent::persistent;
 use iced_split::{Strategy, vertical_split};
-use node::{Node, NodeType};
+use node::Node;
 use rtrb::Consumer;
 use smol::{Timer, unblock};
 use std::{
@@ -230,9 +230,9 @@ impl ArrangementView {
 				self.midis.retain(|midi| midi.strong_count() > 0);
 			}
 			Message::ConnectRequest((from, to)) => {
-				return Task::perform(self.arrangement.request_connect(from, to), |con| {
-					Message::ConnectSucceeded(con.unwrap())
-				});
+				return Task::future(self.arrangement.request_connect(from, to))
+					.and_then(Task::done)
+					.map(Message::ConnectSucceeded);
 			}
 			Message::ConnectSucceeded((from, to)) => self.arrangement.connect_succeeded(from, to),
 			Message::Disconnect((from, to)) => self.arrangement.disconnect(from, to),
@@ -298,7 +298,7 @@ impl ArrangementView {
 				return fut.map(Message::ClapHost);
 			}
 			Message::PluginSetState(node, i, state) => {
-				let id = self.arrangement.node(node).0.plugins[i].id;
+				let id = self.arrangement.node(node).plugins[i].id;
 				return self
 					.clap_host
 					.update(ClapHostMessage::SetState(id, state), config)
@@ -701,7 +701,7 @@ impl ArrangementView {
 					.iter()
 					.map(|track| track.id)
 					.map(|id| {
-						let node = &self.arrangement.node(id).0;
+						let node = self.arrangement.node(id);
 
 						container(
 							row![
@@ -811,7 +811,7 @@ impl ArrangementView {
 						.iter()
 						.map(|track| {
 							let id = track.id;
-							let node = &self.arrangement.node(track.id).0;
+							let node = self.arrangement.node(track.id);
 
 							let clips_iter = track.clips.iter().map(|clip| match clip {
 								Clip::Audio(clip) => AudioClipWidget::new(
@@ -939,16 +939,18 @@ impl ArrangementView {
 			.into()
 		}
 
-		let selected_channel = self.selected_channel.map(|c| (c, self.arrangement.node(c)));
+		let selected_channel = self
+			.selected_channel
+			.map(|c| (self.arrangement.node(c), self.arrangement.outgoing(c)));
 
 		let connect = |enabled: bool, id: NodeId| {
 			selected_channel.map_or_else(
 				|| Element::new(space().height(LINE_HEIGHT)),
-				|(selected_channel, (node, connections))| {
-					if node.ty == NodeType::Master || id == selected_channel {
+				|(node, outgoing)| {
+					if node.id == id {
 						space().height(LINE_HEIGHT).into()
 					} else {
-						let connected = connections.contains(*id);
+						let connected = outgoing.contains(*id);
 
 						button(chevron_up())
 							.style(if enabled && connected {
@@ -958,9 +960,9 @@ impl ArrangementView {
 							})
 							.padding(0)
 							.on_press(if connected {
-								Message::Disconnect((id, selected_channel))
+								Message::Disconnect((node.id, id))
 							} else {
-								Message::ConnectRequest((id, selected_channel))
+								Message::ConnectRequest((node.id, id))
 							})
 							.into()
 					}
@@ -973,7 +975,7 @@ impl ArrangementView {
 				row(once(channel(
 					self.selected_channel,
 					"M",
-					&self.arrangement.master().0,
+					self.arrangement.master(),
 					|enabled, id| {
 						column![
 							icon_button(
@@ -1002,7 +1004,7 @@ impl ArrangementView {
 						.enumerate()
 						.map(|(i, track)| {
 							let name = format!("T{}", i + 1);
-							let node = &self.arrangement.node(track.id).0;
+							let node = self.arrangement.node(track.id);
 
 							channel(
 								self.selected_channel,
@@ -1125,7 +1127,6 @@ impl ArrangementView {
 						dragking::column(
 							self.arrangement
 								.node(selected)
-								.0
 								.plugins
 								.iter()
 								.enumerate()

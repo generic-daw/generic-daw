@@ -12,12 +12,7 @@ impl NodeImpl for AudioGraphNode {
 	type Event = Event;
 	type State = State;
 
-	fn process(
-		&mut self,
-		state: &mut Self::State,
-		audio: &mut [f32],
-		events: &mut Vec<Self::Event>,
-	) {
+	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
 		match self {
 			Self::Master(node) => node.process(state, audio, events),
 			Self::Mixer(node) => node.process(state, audio, events),
@@ -38,6 +33,14 @@ impl NodeImpl for AudioGraphNode {
 			Self::Master(node) => node.delay(),
 			Self::Mixer(node) => node.delay(),
 			Self::Track(node) => node.delay(),
+		}
+	}
+
+	fn expensive(&self) -> bool {
+		match self {
+			Self::Master(node) => node.expensive(),
+			Self::Mixer(node) => node.expensive(),
+			Self::Track(node) => node.expensive(),
 		}
 	}
 }

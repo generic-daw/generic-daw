@@ -6,7 +6,7 @@ use clack_host::process::PluginAudioProcessor;
 use generic_daw_utils::{NoClone, NoDebug};
 use log::{trace, warn};
 use rtrb::Consumer;
-use std::sync::atomic::Ordering::Relaxed;
+use std::{hint::spin_loop, sync::atomic::Ordering::Relaxed};
 
 #[derive(Debug)]
 pub enum AudioThreadMessage<Event: EventImpl> {
@@ -92,6 +92,8 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			if self.realtime || self.processor.is_some() {
 				break;
 			}
+
+			spin_loop();
 		}
 	}
 

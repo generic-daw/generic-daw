@@ -43,7 +43,7 @@ pub fn export_with(
 	let mut delay;
 	let mut end;
 
-	audio_graph.for_each_mut(AudioGraphNode::reset);
+	audio_graph.for_each_mut_node(AudioGraphNode::reset);
 
 	while {
 		delay = audio_graph.delay().next_multiple_of(2);
@@ -53,8 +53,8 @@ pub fn export_with(
 		let diff = buffer_size.min(delay - state.rtstate.sample);
 		state.rtstate.sample += diff;
 
-		audio_graph.process(&mut state, &mut buf[..diff]);
-		state.batch.updates.clear();
+		audio_graph.process(&state, &mut buf[..diff]);
+		while state.updates.pop().is_some() {}
 
 		progress_fn(state.rtstate.sample as f32 / end as f32);
 	}
@@ -67,8 +67,8 @@ pub fn export_with(
 		let diff = buffer_size.min(end - state.rtstate.sample);
 		state.rtstate.sample += diff;
 
-		audio_graph.process(&mut state, &mut buf[..diff]);
-		state.batch.updates.clear();
+		audio_graph.process(&state, &mut buf[..diff]);
+		while state.updates.pop().is_some() {}
 
 		for &s in &buf[..diff] {
 			writer.write_sample(s).unwrap();

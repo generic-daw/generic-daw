@@ -61,7 +61,7 @@ impl ArrangementView {
 
 		let mut tracks = HashMap::new();
 		for track in self.arrangement.tracks() {
-			let node = &self.arrangement.node(track.id).0;
+			let node = self.arrangement.node(track.id);
 			tracks.insert(
 				track.id,
 				writer.push_track(
@@ -87,7 +87,6 @@ impl ArrangementView {
 					}),
 					self.arrangement
 						.node(track.id)
-						.0
 						.plugins
 						.iter()
 						.map(|plugin| proto::Plugin {
@@ -103,13 +102,12 @@ impl ArrangementView {
 		}
 
 		let mut channels = HashMap::new();
-		for channel in once(&self.arrangement.master().0).chain(self.arrangement.channels()) {
+		for channel in once(self.arrangement.master()).chain(self.arrangement.channels()) {
 			channels.insert(
 				channel.id,
 				writer.push_channel(
 					self.arrangement
 						.node(channel.id)
-						.0
 						.plugins
 						.iter()
 						.map(|plugin| proto::Plugin {
@@ -125,14 +123,14 @@ impl ArrangementView {
 		}
 
 		for track in self.arrangement.tracks() {
-			for connection in &self.arrangement.node(track.id).1 {
-				writer.connect_track_to_channel(tracks[&track.id], channels[&connection]);
+			for outgoing in self.arrangement.outgoing(track.id) {
+				writer.connect_track_to_channel(tracks[&track.id], channels[&outgoing]);
 			}
 		}
 
 		for channel in self.arrangement.channels() {
-			for connection in &self.arrangement.node(channel.id).1 {
-				writer.connect_channel_to_channel(channels[&channel.id], channels[&connection]);
+			for outgoing in self.arrangement.outgoing(channel.id) {
+				writer.connect_channel_to_channel(channels[&channel.id], channels[&outgoing]);
 			}
 		}
 
@@ -154,10 +152,7 @@ impl ArrangementView {
 		File::open(path).ok()?.read_to_end(&mut gdp).ok()?;
 		let reader = Reader::new(&gdp)?;
 
-		let mut futs = Vec::new();
-
-		let (mut arrangement, task) = ArrangementWrapper::create(config);
-		futs.push(task.map(Message::Batch));
+		let (mut arrangement, futs) = ArrangementWrapper::create(config);
 
 		arrangement.set_bpm(reader.rtstate().bpm as u16);
 		arrangement.set_numerator(reader.rtstate().numerator as u8);
@@ -213,43 +208,44 @@ impl ArrangementView {
 			audios.insert(idx, audio?);
 		}
 
-		let load_channel = |node: &Node, channel: &proto::Channel| {
-			let mut task = Task::done(Message::ChannelVolumeChanged(node.id, channel.volume))
-				.chain(Task::done(Message::ChannelPanChanged(node.id, channel.pan)));
+		let mut messages = Vec::new();
+
+		let mut load_channel = |node: &Node, channel: &proto::Channel| {
+			if channel.volume != 1.0 {
+				messages.push(Message::ChannelVolumeChanged(node.id, channel.volume));
+			}
+
+			if channel.pan != 0.0 {
+				messages.push(Message::ChannelPanChanged(node.id, channel.pan));
+			}
 
 			for (i, plugin) in channel.plugins.iter().enumerate() {
-				task = task.chain(Task::done(Message::PluginLoad(
+				let id = plugin.id();
+				messages.push(Message::PluginLoad(
 					node.id,
-					plugin_bundles
-						.keys()
-						.find(|d| *d.id == *plugin.id())?
-						.clone(),
+					plugin_bundles.keys().find(|d| *d.id == id)?.clone(),
 					false,
-				)));
+				));
 
 				if let Some(state) = plugin.state.clone() {
-					task = task.chain(Task::done(Message::PluginSetState(
+					messages.push(Message::PluginSetState(
 						node.id,
 						i,
 						state.into_boxed_slice().into(),
-					)));
+					));
 				}
 
 				if plugin.mix != 1.0 {
-					task = task.chain(Task::done(Message::PluginMixChanged(
-						node.id, i, plugin.mix,
-					)));
+					messages.push(Message::PluginMixChanged(node.id, i, plugin.mix));
 				}
 
 				if !plugin.enabled {
-					task = task.chain(Task::done(Message::PluginToggleEnabled(node.id, i)));
+					messages.push(Message::PluginToggleEnabled(node.id, i));
 				}
 			}
 
-			Some(task)
+			Some(())
 		};
-
-		let mut task = Task::none();
 
 		let mut tracks = HashMap::new();
 		for (idx, clips, channel) in reader.iter_tracks() {
@@ -280,15 +276,15 @@ impl ArrangementView {
 			let id = track.id();
 			tracks.insert(idx, id);
 			arrangement.push_track(track);
-			task = task.chain(load_channel(&arrangement.node(id).0, channel)?);
+			load_channel(arrangement.node(id), channel)?;
 		}
 
 		let mut channels = HashMap::new();
 		let mut iter_channels = reader.iter_channels();
 
-		let node = &arrangement.master().0;
+		let node = arrangement.master();
 		let (idx, channel) = iter_channels.next()?;
-		task = task.chain(load_channel(node, channel)?);
+		load_channel(node, channel)?;
 		channels.insert(idx, node.id);
 
 		for (idx, channel) in iter_channels {
@@ -296,24 +292,22 @@ impl ArrangementView {
 			let id = mixer_node.id();
 			channels.insert(idx, id);
 			arrangement.push_channel(mixer_node);
-			task = task.chain(load_channel(&arrangement.node(id).0, channel)?);
+			load_channel(arrangement.node(id), channel)?;
 		}
 
-		for (from, to) in reader.iter_track_channel_connections() {
-			task = task.chain(Task::perform(
-				arrangement.request_connect(*channels.get(&to)?, *tracks.get(&from)?),
-				|con| Message::ConnectSucceeded(con.unwrap()),
-			));
+		for (from, to) in reader.iter_track_to_channel() {
+			messages.push(Message::ConnectRequest((
+				*tracks.get(&from)?,
+				*channels.get(&to)?,
+			)));
 		}
 
-		for (from, to) in reader.iter_channel_channel_connections() {
-			task = task.chain(Task::perform(
-				arrangement.request_connect(*channels.get(&from)?, *channels.get(&to)?),
-				|con| Message::ConnectSucceeded(con.unwrap()),
-			));
+		for (from, to) in reader.iter_channel_to_channel() {
+			messages.push(Message::ConnectRequest((
+				*channels.get(&from)?,
+				*channels.get(&to)?,
+			)));
 		}
-
-		futs.push(task);
 
 		info!("loaded project {}", path.display());
 
@@ -329,7 +323,13 @@ impl ArrangementView {
 		}));
 		self.midis.extend(midis.values().map(Arc::downgrade));
 
-		Some(Task::batch(futs))
+		Some(Task::batch([
+			futs.map(Message::Batch),
+			messages
+				.into_iter()
+				.map(Task::done)
+				.fold(Task::none(), Task::chain),
+		]))
 	}
 
 	pub fn unload(
@@ -352,6 +352,5 @@ impl ArrangementView {
 		self.soloed_track = None;
 		self.selected_channel = None;
 		self.arrangement.clear();
-		self.clap_host.clear();
 	}
 }

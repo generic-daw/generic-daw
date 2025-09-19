@@ -362,9 +362,4 @@ impl ClapHost {
 				]),
 		)
 	}
-
-	pub fn clear(&mut self) {
-		self.timers.clear();
-		self.windows.clear();
-	}
 }
