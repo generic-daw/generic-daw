@@ -71,6 +71,8 @@ mod plugin;
 mod project;
 mod track;
 
+pub use project::PartialArrangementView;
+
 #[derive(Clone, Debug)]
 enum LoadStatus {
 	Loading(usize, #[expect(dead_code)] Handle),

@@ -35,7 +35,7 @@ pub use cpal::{Stream, traits::StreamTrait};
 pub use daw_ctx::{Action, Batch, Message, RtState, Update, Version};
 pub use decibels::Decibels;
 pub use event::Event;
-pub use export::{export, export_with};
+pub use export::export;
 pub use lod::LOD_LEVELS;
 pub use midi_clip::{Key, MidiClip, MidiKey, MidiNote};
 pub use mixer::Mixer;

@@ -1,27 +1,47 @@
-use super::{ArrangementWrapper, Node};
-use crate::{
-	arrangement_view::{ArrangementView, LoadStatus, Message, crc},
-	config::Config,
-};
+use super::{ArrangementView, ArrangementWrapper, LoadStatus, Message, Node, crc};
+use crate::{config::Config, daw::Message as DawMessage};
 use arc_swap::ArcSwap;
 use generic_daw_core::{
 	AudioClip, Clip, MidiClip, MidiKey, MidiNote, Mixer, NodeImpl as _, Sample, Track,
 	clap_host::{PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
+use generic_daw_utils::NoClone;
 use iced::{Task, widget::combo_box};
 use log::info;
+use smol::unblock;
 use std::{
 	collections::{BTreeMap, HashMap},
 	fs::File,
 	io::{Read as _, Write as _},
 	iter::once,
 	path::Path,
-	sync::{Arc, mpsc},
+	sync::{Arc, Weak, mpsc},
 };
 use walkdir::WalkDir;
 
+#[derive(Debug)]
+pub struct PartialArrangementView {
+	arrangement: ArrangementWrapper,
+	audios: Vec<(Arc<Path>, LoadStatus)>,
+	midis: Vec<Weak<ArcSwap<Vec<MidiNote>>>>,
+}
+
 impl ArrangementView {
+	pub fn apply_partial(
+		&mut self,
+		partial: PartialArrangementView,
+		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
+	) {
+		self.arrangement = partial.arrangement;
+		self.audios.extend(partial.audios);
+		self.midis.extend(partial.midis);
+		self.plugins = combo_box::State::new(plugin_bundles.keys().cloned().collect());
+		self.recording = None;
+		self.soloed_track = None;
+		self.selected_channel = None;
+	}
+
 	pub fn save(&mut self, path: &Path) {
 		let mut writer = Writer::new(
 			self.arrangement.rtstate().bpm.into(),
@@ -140,16 +160,43 @@ impl ArrangementView {
 			.unwrap();
 	}
 
-	pub fn load(
-		&mut self,
-		path: &Path,
+	pub fn start_load(
+		path: Arc<Path>,
+		config: Config,
+		plugin_bundles: Arc<BTreeMap<PluginDescriptor, PluginBundle>>,
+	) -> Task<DawMessage> {
+		let (partial_sender, partial_receiver) = oneshot::channel();
+		let (progress_sender, progress_receiver) = smol::channel::unbounded();
+
+		Task::batch([
+			Task::future(unblock(move || {
+				partial_sender
+					.send(Self::load(path, &config, &plugin_bundles, |f| {
+						progress_sender.try_send(f).unwrap();
+					}))
+					.unwrap();
+			}))
+			.discard(),
+			Task::stream(progress_receiver)
+				.map(DawMessage::Progress)
+				.chain(Task::future(partial_receiver).and_then(|tasks| {
+					tasks.unwrap_or_else(|| Task::done(DawMessage::OpenedFile(None)))
+				})),
+		])
+	}
+
+	fn load(
+		path: Arc<Path>,
 		config: &Config,
 		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
-	) -> Option<Task<Message>> {
+		mut progress_fn: impl FnMut(f32),
+	) -> Option<Task<DawMessage>> {
 		info!("loading project {}", path.display());
 
+		let config = &config;
+
 		let mut gdp = Vec::new();
-		File::open(path).ok()?.read_to_end(&mut gdp).ok()?;
+		File::open(&path).ok()?.read_to_end(&mut gdp).ok()?;
 		let reader = Reader::new(&gdp)?;
 
 		let (mut arrangement, futs) = ArrangementWrapper::create(config);
@@ -158,54 +205,72 @@ impl ArrangementView {
 		arrangement.set_numerator(reader.rtstate().numerator as u8);
 
 		let mut audios = HashMap::new();
-		let mut midis = HashMap::new();
 
 		let (sender, receiver) = mpsc::channel();
+		let audios_map = reader
+			.iter_audios()
+			.map(|(idx, audio)| (&*audio.name, (idx, audio.crc)))
+			.collect::<HashMap<_, _>>();
+
 		std::thread::scope(|s| {
-			for (idx, audio) in reader.iter_audios() {
-				let sender = sender.clone();
-				let sample_rate = arrangement.rtstate().sample_rate;
-				s.spawn(move || {
-					let audio = config
-						.sample_paths
-						.iter()
-						.flat_map(WalkDir::new)
-						.flatten()
-						.filter(|dir_entry| dir_entry.file_type().is_file())
-						.filter(|dir_entry| {
-							dir_entry
-								.path()
-								.file_name()
-								.is_some_and(|name| *name == *audio.name)
-						})
-						.filter(|dir_entry| {
-							File::open(dir_entry.path()).is_ok_and(|file| crc(file) == audio.crc)
-						})
-						.find_map(|dir_entry| Sample::create(dir_entry.path().into(), sample_rate))
-						.map(|sample| (audio.crc, sample));
-
-					sender.send((idx, audio)).unwrap();
+			config
+				.sample_paths
+				.iter()
+				.flat_map(WalkDir::new)
+				.flatten()
+				.filter(|dir_entry| dir_entry.file_type().is_file())
+				.filter_map(|dir_entry| {
+					dir_entry
+						.file_name()
+						.to_str()
+						.filter(|name| audios_map.contains_key(name))
+						.map(|name| (name.to_owned(), dir_entry.path().to_owned()))
+				})
+				.filter(|(name, path)| {
+					File::open(path).is_ok_and(|file| crc(file) == audios_map[&**name].1)
+				})
+				.for_each(|(name, path)| {
+					let audios_map = &audios_map;
+					let sender = sender.clone();
+					let sample_rate = arrangement.rtstate().sample_rate;
+					s.spawn(move || {
+						sender
+							.send((
+								audios_map[&*name].0,
+								Sample::create(path.into(), sample_rate)
+									.map(|sample| (audios_map[&*name].1, sample)),
+							))
+							.unwrap();
+					});
 				});
+
+			drop(sender);
+
+			let mut current_progress = 0.0;
+			let progress_per_audio = 1.0 / (reader.iter_audios().count() as f32);
+			while let Ok((idx, audio)) = receiver.recv() {
+				audios.insert(idx, audio?);
+				current_progress += progress_per_audio;
+				progress_fn(current_progress);
 			}
 
-			for (idx, notes) in reader.iter_midis() {
-				let pattern = notes
-					.notes
-					.iter()
-					.map(|note| MidiNote {
-						key: MidiKey(note.key as u8),
-						velocity: note.velocity,
-						start: note.start.into(),
-						end: note.end.into(),
-					})
-					.collect();
+			Some(())
+		})?;
 
-				midis.insert(idx, Arc::new(ArcSwap::new(Arc::new(pattern))));
-			}
-		});
+		let mut midis = HashMap::new();
+		for (idx, notes) in reader.iter_midis() {
+			let pattern = notes
+				.notes
+				.iter()
+				.map(|note| MidiNote {
+					key: MidiKey(note.key as u8),
+					velocity: note.velocity,
+					start: note.start.into(),
+					end: note.end.into(),
+				})
+				.collect();
 
-		while let Ok((idx, audio)) = receiver.try_recv() {
-			audios.insert(idx, audio?);
+			midis.insert(idx, Arc::new(ArcSwap::new(Arc::new(pattern))));
 		}
 
 		let mut messages = Vec::new();
@@ -311,25 +376,31 @@ impl ArrangementView {
 
 		info!("loaded project {}", path.display());
 
-		self.clear();
+		let partial = PartialArrangementView {
+			arrangement,
+			audios: audios
+				.values()
+				.map(|(crc, audio)| {
+					(
+						audio.path.clone(),
+						LoadStatus::Loaded(*crc, Arc::downgrade(audio)),
+					)
+				})
+				.collect(),
+			midis: midis.values().map(Arc::downgrade).collect(),
+		};
 
-		self.plugins = combo_box::State::new(plugin_bundles.keys().cloned().collect());
-		self.arrangement = arrangement;
-		self.audios.extend(audios.values().map(|(crc, audio)| {
-			(
-				audio.path.clone(),
-				LoadStatus::Loaded(*crc, Arc::downgrade(audio)),
-			)
-		}));
-		self.midis.extend(midis.values().map(Arc::downgrade));
-
-		Some(Task::batch([
-			futs.map(Message::Batch),
-			messages
-				.into_iter()
-				.map(Task::done)
-				.fold(Task::none(), Task::chain),
-		]))
+		Some(
+			Task::done(DawMessage::ApplyPartial(NoClone(Box::new(partial)))).chain(Task::batch([
+				futs.map(Message::Batch).map(DawMessage::Arrangement),
+				messages
+					.into_iter()
+					.map(Task::done)
+					.fold(Task::none(), Task::chain)
+					.map(DawMessage::Arrangement)
+					.chain(Task::done(DawMessage::OpenedFile(Some(path)))),
+			])),
+		)
 	}
 
 	pub fn unload(
@@ -339,18 +410,15 @@ impl ArrangementView {
 	) -> Task<Message> {
 		let (arrangement, futs) = ArrangementWrapper::create(config);
 
-		self.clear();
-
-		self.plugins = combo_box::State::new(plugin_bundles.keys().cloned().collect());
-		self.arrangement = arrangement;
+		self.apply_partial(
+			PartialArrangementView {
+				arrangement,
+				audios: Vec::new(),
+				midis: Vec::new(),
+			},
+			plugin_bundles,
+		);
 
 		futs.map(Message::Batch)
-	}
-
-	fn clear(&mut self) {
-		self.recording = None;
-		self.soloed_track = None;
-		self.selected_channel = None;
-		self.arrangement.clear();
 	}
 }

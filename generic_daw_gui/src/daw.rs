@@ -1,5 +1,7 @@
 use crate::{
-	arrangement_view::{ArrangementView, Message as ArrangementMessage, Tab},
+	arrangement_view::{
+		ArrangementView, Message as ArrangementMessage, PartialArrangementView, Tab,
+	},
 	components::{number_input, pick_list_custom_handle, space},
 	config::Config,
 	config_view::{ConfigView, Message as ConfigViewMessage},
@@ -30,7 +32,6 @@ use iced::{
 use iced_split::{Strategy, vertical_split};
 use log::trace;
 use rfd::AsyncFileDialog;
-use smol::unblock;
 use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
 
 #[derive(Clone, Debug)]
@@ -47,11 +48,15 @@ pub enum Message {
 	SaveAsFileDialog,
 	ExportFileDialog,
 
-	OpenFile(Arc<Path>),
+	Progress(f32),
+
 	SaveAsFile(Arc<Path>),
+	OpenFile(Arc<Path>),
+	ApplyPartial(NoClone<Box<PartialArrangementView>>),
+	OpenedFile(Option<Arc<Path>>),
+
 	ExportFile(Arc<Path>),
-	ExportProgress(f32),
-	FinishExport(NoClone<Box<AudioGraph>>),
+	ExportedFile(NoClone<Box<AudioGraph>>),
 
 	OpenConfigView,
 	CloseConfigView,
@@ -73,14 +78,14 @@ const _: () = assert!(size_of::<Message>() <= 128);
 pub struct Daw {
 	config: Config,
 	state: State,
-	plugin_bundles: BTreeMap<PluginDescriptor, PluginBundle>,
+	plugin_bundles: Arc<BTreeMap<PluginDescriptor, PluginBundle>>,
 
 	arrangement_view: ArrangementView,
 	file_tree: FileTree,
 	config_view: Option<ConfigView>,
 	split_at: f32,
 
-	export_progress: Option<f32>,
+	progress: Option<f32>,
 }
 
 impl Daw {
@@ -110,14 +115,14 @@ impl Daw {
 			Self {
 				config,
 				state,
-				plugin_bundles,
+				plugin_bundles: plugin_bundles.into(),
 
 				arrangement_view,
 				file_tree,
 				config_view: None,
 				split_at: 300.0,
 
-				export_progress: None,
+				progress: None,
 			},
 			open,
 		)
@@ -198,21 +203,7 @@ impl Daw {
 				.map(|p| p.path().with_extension("wav").into())
 				.map(Message::ExportFile);
 			}
-			Message::OpenFile(path) => {
-				self.reload_config();
-				if let Some(futs) =
-					self.arrangement_view
-						.load(&path, &self.config, &self.plugin_bundles)
-				{
-					self.state.current_project = Some(path.clone());
-					if self.state.last_project.as_deref() != Some(&path) {
-						self.state.last_project = Some(path);
-						self.state.write();
-					}
-
-					return futs.map(Message::Arrangement);
-				}
-			}
+			Message::Progress(progress) => self.progress = Some(progress),
 			Message::SaveAsFile(path) => {
 				self.arrangement_view.save(&path);
 				self.state.current_project = Some(path.clone());
@@ -221,28 +212,44 @@ impl Daw {
 					self.state.write();
 				}
 			}
-			Message::ExportFile(path) => {
-				self.export_progress = Some(0.0);
-				self.arrangement_view.clap_host.set_realtime(false);
-				let (sender, receiver) = smol::channel::unbounded();
-				let (audio_graph, export_fn) =
-					self.arrangement_view.arrangement.start_export(path, sender);
-				return Task::batch([
-					Task::future(unblock(export_fn)).discard(),
-					Task::stream(receiver)
-						.map(Message::ExportProgress)
-						.chain(Task::perform(audio_graph, |audio_graph| {
-							Message::FinishExport(NoClone(Box::new(audio_graph.unwrap())))
-						})),
-				]);
+			Message::OpenFile(path) => {
+				if self.progress.is_none() {
+					self.progress = Some(0.0);
+					self.reload_config();
+					return ArrangementView::start_load(
+						path,
+						self.config.clone(),
+						self.plugin_bundles.clone(),
+					);
+				}
 			}
-			Message::ExportProgress(progress) => self.export_progress = Some(progress),
-			Message::FinishExport(NoClone(audio_graph)) => {
+			Message::ApplyPartial(NoClone(partial)) => {
+				self.arrangement_view
+					.apply_partial(*partial, &self.plugin_bundles);
+			}
+			Message::OpenedFile(path) => {
+				if let Some(path) = path
+					&& self.state.last_project.as_deref() != Some(&path)
+				{
+					self.state.current_project = Some(path.clone());
+					self.state.last_project = Some(path);
+					self.state.write();
+				}
+				self.progress = None;
+			}
+			Message::ExportFile(path) => {
+				if self.progress.is_none() {
+					self.progress = Some(0.0);
+					self.arrangement_view.clap_host.set_realtime(false);
+					return self.arrangement_view.arrangement.start_export(path);
+				}
+			}
+			Message::ExportedFile(NoClone(audio_graph)) => {
 				self.arrangement_view
 					.arrangement
 					.finish_export(*audio_graph);
 				self.arrangement_view.clap_host.set_realtime(true);
-				self.export_progress = None;
+				self.progress = None;
 			}
 			Message::OpenConfigView => {
 				self.config_view = Some(ConfigView::new(self.config.clone()));
@@ -322,7 +329,7 @@ impl Daw {
 		let config = Config::read();
 
 		if self.config.clap_paths != config.clap_paths {
-			self.plugin_bundles = get_installed_plugins(&config.clap_paths);
+			self.plugin_bundles = get_installed_plugins(&config.clap_paths).into();
 		}
 
 		if self.config.sample_paths != config.sample_paths {
@@ -471,7 +478,7 @@ impl Daw {
 			));
 		}
 
-		if let Some(progress) = self.export_progress {
+		if let Some(progress) = self.progress {
 			base = base.push(opaque(
 				center(progress_bar(0.0..=1.0, progress))
 					.padding(50)
@@ -505,7 +512,7 @@ impl Daw {
 			Subscription::none()
 		};
 
-		let keybinds = if self.config_view.is_none() && self.export_progress.is_none() {
+		let keybinds = if self.config_view.is_none() && self.progress.is_none() {
 			keybinds()
 		} else {
 			Subscription::none()

@@ -31,7 +31,7 @@ impl Recording {
 		sample_rate: u32,
 		frames: u32,
 	) -> (Self, Consumer<Box<[f32]>>) {
-		let (stream, config, receiver) = build_input_stream(device_name, sample_rate, frames);
+		let (stream, config, consumer) = build_input_stream(device_name, sample_rate, frames);
 
 		let name = path.file_name().unwrap().to_str().unwrap().into();
 
@@ -62,7 +62,7 @@ impl Recording {
 				_stream: stream.into(),
 				config,
 			},
-			receiver,
+			consumer,
 		)
 	}
 

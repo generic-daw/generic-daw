@@ -23,7 +23,7 @@ pub struct AudioProcessor<Event: EventImpl> {
 	steady_time: u64,
 	audio_buffers: AudioBuffers,
 	event_buffers: EventBuffers,
-	receiver: Consumer<AudioThreadMessage<Event>>,
+	consumer: Consumer<AudioThreadMessage<Event>>,
 	realtime: bool,
 }
 
@@ -34,7 +34,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		id: PluginId,
 		audio_buffers: AudioBuffers,
 		event_buffers: EventBuffers,
-		receiver: Consumer<AudioThreadMessage<Event>>,
+		consumer: Consumer<AudioThreadMessage<Event>>,
 	) -> Self {
 		Self {
 			processor: None,
@@ -43,7 +43,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			steady_time: 0,
 			audio_buffers,
 			event_buffers,
-			receiver,
+			consumer,
 			realtime: true,
 		}
 	}
@@ -60,7 +60,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 	fn recv_events(&mut self, events: &mut Vec<Event>) {
 		loop {
-			while let Ok(msg) = self.receiver.pop() {
+			while let Ok(msg) = self.consumer.pop() {
 				trace!("{}: {msg:?}", self.descriptor);
 
 				match msg {

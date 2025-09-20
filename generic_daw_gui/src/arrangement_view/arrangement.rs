@@ -1,22 +1,21 @@
 use super::{
 	node::{Node, NodeType},
 	plugin::Plugin,
+	poll_consumer,
 	track::Track,
 };
-use crate::{
-	arrangement_view::poll_consumer, clap_host::Message as ClapHostMessage, config::Config,
-};
+use crate::{clap_host::Message as ClapHostMessage, config::Config, daw::Message as DawMessage};
 use bit_set::BitSet;
 use generic_daw_core::{
 	self as core, Action, AudioGraph, Batch, Clip, Event, Message, Mixer, MusicalTime, NodeId,
 	NodeImpl as _, RtState, Stream, StreamTrait as _, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
-	export_with,
+	export,
 };
-use generic_daw_utils::{HoleyVec, NoDebug, ShiftMoveExt as _};
+use generic_daw_utils::{HoleyVec, NoClone, NoDebug, ShiftMoveExt as _};
 use iced::Task;
 use rtrb::Producer;
-use smol::channel::Sender;
+use smol::unblock;
 use std::{path::Path, sync::Arc, time::Instant};
 
 #[derive(Debug)]
@@ -33,7 +32,7 @@ pub struct Arrangement {
 
 impl Arrangement {
 	pub fn create(config: &Config) -> (Self, Task<Batch>) {
-		let (stream, master_node_id, rtstate, sender, consumer) = build_output_stream(
+		let (stream, master_node_id, rtstate, producer, consumer) = build_output_stream(
 			config.output_device.name.as_deref(),
 			config.output_device.sample_rate.unwrap_or(44100),
 			config.output_device.buffer_size.unwrap_or(1024),
@@ -55,7 +54,7 @@ impl Arrangement {
 				nodes,
 				master_node_id,
 
-				producer: sender,
+				producer,
 				stream: stream.into(),
 			},
 			poll_consumer(consumer, rtstate.sample_rate, rtstate.frames),
@@ -249,16 +248,6 @@ impl Arrangement {
 			.filter_map(|(node, _)| (node.ty == NodeType::Mixer).then_some(node))
 	}
 
-	pub fn clear(&mut self) {
-		let mut nodes = std::mem::take(&mut self.nodes);
-		for (node, _) in nodes.values_mut() {
-			for _ in node.plugins.drain(..) {
-				self.action(node.id, Action::PluginRemove(0));
-			}
-		}
-		self.nodes = nodes;
-	}
-
 	pub fn node(&self, id: NodeId) -> &Node {
 		&self.nodes[*id].0
 	}
@@ -359,11 +348,7 @@ impl Arrangement {
 		self.action(self.tracks[new_track].id, Action::AddClip(clip));
 	}
 
-	pub fn start_export(
-		&mut self,
-		path: Arc<Path>,
-		progress: Sender<f32>,
-	) -> (oneshot::Receiver<AudioGraph>, impl FnOnce() + 'static) {
+	pub fn start_export(&mut self, path: Arc<Path>) -> Task<DawMessage> {
 		let (sender, receiver) = oneshot::channel();
 		self.producer
 			.push(Message::RequestAudioGraph(sender))
@@ -371,7 +356,8 @@ impl Arrangement {
 		let mut audio_graph = receiver.recv().unwrap();
 		self.stream.pause().unwrap();
 
-		let (sender, receiver) = oneshot::channel();
+		let (progress_sender, progress_receiver) = smol::channel::unbounded();
+		let (audio_graph_sender, audio_graph_receiver) = oneshot::channel();
 
 		let rtstate = self.rtstate;
 		let len = self
@@ -381,12 +367,20 @@ impl Arrangement {
 			.max()
 			.unwrap_or_default();
 
-		(receiver, move || {
-			export_with(&mut audio_graph, &path, rtstate, len, |f| {
-				progress.try_send(f).unwrap();
-			});
-			sender.send(audio_graph).unwrap();
-		})
+		Task::batch([
+			Task::future(unblock(move || {
+				export(&mut audio_graph, &path, rtstate, len, |f| {
+					progress_sender.try_send(f).unwrap();
+				});
+				audio_graph_sender.send(audio_graph).unwrap();
+			}))
+			.discard(),
+			Task::stream(progress_receiver)
+				.map(DawMessage::Progress)
+				.chain(Task::perform(audio_graph_receiver, |audio_graph| {
+					DawMessage::ExportedFile(NoClone(Box::new(audio_graph.unwrap())))
+				})),
+		])
 	}
 
 	pub fn finish_export(&mut self, audio_graph: AudioGraph) {

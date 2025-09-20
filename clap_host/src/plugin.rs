@@ -24,7 +24,7 @@ pub struct Plugin<Event: EventImpl> {
 	instance: NoDebug<PluginInstance<Host>>,
 	descriptor: PluginDescriptor,
 	id: PluginId,
-	sender: Producer<AudioThreadMessage<Event>>,
+	producer: Producer<AudioThreadMessage<Event>>,
 	config: PluginAudioConfiguration,
 	is_created: bool,
 	is_shown: bool,
@@ -40,7 +40,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		host: &HostInfo,
 	) -> (AudioProcessor<Event>, Self, Receiver<MainThreadMessage>) {
 		let (shared_sender, receiver) = std::sync::mpsc::channel();
-		let (sender, audio_receiver) = RingBuffer::new(frames as usize);
+		let (producer, audio_consumer) = RingBuffer::new(frames as usize);
 
 		let mut instance = PluginInstance::new(
 			|()| Shared::new(descriptor.clone(), shared_sender),
@@ -64,7 +64,7 @@ impl<Event: EventImpl> Plugin<Event> {
 				id,
 				AudioBuffers::new(&mut instance, config),
 				EventBuffers::new(&mut instance),
-				audio_receiver,
+				audio_consumer,
 			),
 			Self {
 				gui: Gui::new(&mut instance),
@@ -72,7 +72,7 @@ impl<Event: EventImpl> Plugin<Event> {
 				instance: instance.into(),
 				descriptor,
 				id,
-				sender,
+				producer,
 				config,
 				is_created: false,
 				is_shown: false,
@@ -158,7 +158,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			.access_shared_handler(|s| s.ext.latency.get().copied())
 			.map_or(0, |latency| latency.get(&mut self.instance.plugin_handle()));
 
-		self.sender
+		self.producer
 			.push(AudioThreadMessage::Activated(NoDebug(processor), latency))
 			.unwrap();
 	}
@@ -315,11 +315,13 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn send_event(&mut self, event: Event) {
-		self.sender.push(AudioThreadMessage::Event(event)).unwrap();
+		self.producer
+			.push(AudioThreadMessage::Event(event))
+			.unwrap();
 	}
 
 	pub fn set_realtime(&mut self, realtime: bool) {
-		self.sender
+		self.producer
 			.push(AudioThreadMessage::SetRealtime(realtime))
 			.unwrap();
 

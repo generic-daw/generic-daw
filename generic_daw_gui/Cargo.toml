@@ -37,11 +37,11 @@ infer = { version = "0.19.0", default-features = false }
 log = "0.4.28"
 oneshot = "0.1.11"
 rfd = "0.15.4"
+rtrb = "0.3.2"
 serde = { version = "1.0.225", features = ["derive", "rc"] }
 smol = "2.0.2"
 toml = "0.9.7"
 walkdir = "2.5.0"
-rtrb = "0.3.2"
 
 # https://github.com/PolyMeilex/rfd/pull/255
 [target.'cfg(unix)'.dependencies]

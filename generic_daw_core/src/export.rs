@@ -9,15 +9,6 @@ pub fn export(
 	path: &Path,
 	state: impl Into<State>,
 	len: MusicalTime,
-) {
-	export_with(audio_graph, path, state, len, |_| ());
-}
-
-pub fn export_with(
-	audio_graph: &mut AudioGraph<AudioGraphNode>,
-	path: &Path,
-	state: impl Into<State>,
-	len: MusicalTime,
 	mut progress_fn: impl FnMut(f32),
 ) {
 	let now = Instant::now();

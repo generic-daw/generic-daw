@@ -1,5 +1,6 @@
 use super::plugin::Plugin;
 use generic_daw_core::NodeId;
+use generic_daw_utils::NoDebug;
 use generic_daw_widget::peak_meter;
 use std::time::Instant;
 
@@ -14,7 +15,7 @@ pub enum NodeType {
 pub struct Node {
 	pub ty: NodeType,
 	pub id: NodeId,
-	pub peaks: [[peak_meter::State; 2]; 2],
+	pub peaks: NoDebug<[[peak_meter::State; 2]; 2]>,
 	pub enabled: bool,
 	pub volume: f32,
 	pub pan: f32,
@@ -26,10 +27,10 @@ impl Node {
 		Self {
 			ty,
 			id,
-			peaks: [
+			peaks: NoDebug([
 				[peak_meter::State::new(1.0), peak_meter::State::new(1.0)],
 				[peak_meter::State::new(3.0), peak_meter::State::new(3.0)],
-			],
+			]),
 			enabled: true,
 			volume: 1.0,
 			pan: 0.0,

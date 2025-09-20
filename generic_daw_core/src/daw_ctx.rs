@@ -92,8 +92,8 @@ pub struct DawCtx {
 	audio_graph: AudioGraph<AudioGraphNode>,
 	state: State,
 	version: Version,
-	sender: Producer<Batch>,
-	receiver: Consumer<Message>,
+	producer: Producer<Batch>,
+	consumer: Consumer<Message>,
 	update_buffers: Vec<Vec<Update>>,
 }
 
@@ -102,8 +102,8 @@ impl DawCtx {
 		sample_rate: u32,
 		frames: u32,
 	) -> (Self, NodeId, RtState, Producer<Message>, Consumer<Batch>) {
-		let (r_sender, receiver) = RingBuffer::new(frames as usize);
-		let (sender, r_receiver) = RingBuffer::new(sample_rate.div_ceil(frames) as usize);
+		let (r_sender, consumer) = RingBuffer::new(frames as usize);
+		let (producer, r_receiver) = RingBuffer::new(sample_rate.div_ceil(frames) as usize);
 
 		let master = Master::new(sample_rate);
 		let id = master.id();
@@ -127,8 +127,8 @@ impl DawCtx {
 				updates: SegQueue::new(),
 			},
 			version,
-			sender,
-			receiver,
+			producer,
+			consumer,
 			update_buffers: Vec::new(),
 		};
 
@@ -136,7 +136,7 @@ impl DawCtx {
 	}
 
 	pub fn process(&mut self, buf: &mut [f32]) {
-		while let Ok(msg) = self.receiver.pop() {
+		while let Ok(msg) = self.consumer.pop() {
 			trace!("{msg:?}");
 
 			match msg {
@@ -165,7 +165,7 @@ impl DawCtx {
 					self.update_buffers.push(update);
 				}
 				Message::RequestAudioGraph(sender) => {
-					debug_assert!(self.receiver.is_empty());
+					debug_assert!(self.consumer.is_empty());
 					let mut audio_graph =
 						AudioGraph::new(Mixer::default().into(), self.state.rtstate.frames);
 					std::mem::swap(&mut self.audio_graph, &mut audio_graph);
@@ -195,7 +195,7 @@ impl DawCtx {
 			while let Some(update) = self.state.updates.pop() {
 				batch.updates.push(update);
 			}
-			if let Err(err) = self.sender.push(batch) {
+			if let Err(err) = self.producer.push(batch) {
 				warn!("{err}");
 			}
 		}
