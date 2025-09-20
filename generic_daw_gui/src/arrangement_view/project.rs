@@ -213,6 +213,9 @@ impl ArrangementView {
 			.collect::<HashMap<_, _>>();
 
 		std::thread::scope(|s| {
+			let mut current_progress = 0.0;
+			let progress_per_audio = 0.5 / (reader.iter_audios().count() as f32);
+
 			config
 				.sample_paths
 				.iter()
@@ -230,6 +233,9 @@ impl ArrangementView {
 					File::open(path).is_ok_and(|file| crc(file) == audios_map[&**name].1)
 				})
 				.for_each(|(name, path)| {
+					current_progress += progress_per_audio;
+					progress_fn(current_progress);
+
 					let audios_map = &audios_map;
 					let sender = sender.clone();
 					let sample_rate = arrangement.rtstate().sample_rate;
@@ -246,8 +252,6 @@ impl ArrangementView {
 
 			drop(sender);
 
-			let mut current_progress = 0.0;
-			let progress_per_audio = 1.0 / (reader.iter_audios().count() as f32);
 			while let Ok((idx, audio)) = receiver.recv() {
 				audios.insert(idx, audio?);
 				current_progress += progress_per_audio;
