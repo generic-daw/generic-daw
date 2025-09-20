@@ -210,7 +210,10 @@ impl ArrangementView {
 		let audios_map = reader
 			.iter_audios()
 			.map(|(idx, audio)| (&*audio.name, (idx, audio.crc)))
-			.collect::<HashMap<_, _>>();
+			.fold(HashMap::<_, Vec<_>>::new(), |mut acc, (k, v)| {
+				acc.entry(k).or_default().push(v);
+				acc
+			});
 
 		std::thread::scope(|s| {
 			let mut current_progress = 0.0;
@@ -227,24 +230,29 @@ impl ArrangementView {
 						.file_name()
 						.to_str()
 						.filter(|name| audios_map.contains_key(name))
-						.map(|name| (name.to_owned(), dir_entry.path().to_owned()))
+						.and_then(|name| {
+							File::open(dir_entry.path())
+								.ok()
+								.map(|file| (name, crc(file)))
+						})
+						.and_then(|(name, crc)| {
+							audios_map[name]
+								.iter()
+								.find(|(_, c)| *c == crc)
+								.map(|(index, crc)| (dir_entry.path().into(), *index, *crc))
+						})
 				})
-				.filter(|(name, path)| {
-					File::open(path).is_ok_and(|file| crc(file) == audios_map[&**name].1)
-				})
-				.for_each(|(name, path)| {
+				.for_each(|(path, index, crc)| {
 					current_progress += progress_per_audio;
 					progress_fn(current_progress);
 
-					let audios_map = &audios_map;
 					let sender = sender.clone();
 					let sample_rate = arrangement.rtstate().sample_rate;
 					s.spawn(move || {
 						sender
 							.send((
-								audios_map[&*name].0,
-								Sample::create(path.into(), sample_rate)
-									.map(|sample| (audios_map[&*name].1, sample)),
+								index,
+								Sample::create(path, sample_rate).map(|sample| (crc, sample)),
 							))
 							.unwrap();
 					});
