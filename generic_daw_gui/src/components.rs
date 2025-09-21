@@ -1,11 +1,12 @@
 use crate::{
 	icons::{LUCIDE_FONT, move_vertical, plus},
-	stylefns::{button_with_radius, menu_with_border},
+	stylefns::{bordered_box_with_radius, button_with_radius, menu_with_border},
 	widget::LINE_HEIGHT,
 };
 use generic_daw_widget::drag_handle::DragHandle;
 use iced::{
-	Alignment, Element, Font,
+	Alignment::Center,
+	Element, Font,
 	Length::Fill,
 	Shrink, Theme,
 	border::{self, Radius},
@@ -33,7 +34,7 @@ where
 	button(
 		container(t.into().size(13).line_height(1.0))
 			.width(13)
-			.align_x(Alignment::Center),
+			.align_x(Center),
 	)
 	.style(button_with_radius(style, 0))
 	.padding(0)
@@ -52,13 +53,8 @@ where
 	row![
 		DragHandle::new(
 			container(move_vertical())
-				.style(|t| {
-					container::background(t.extended_palette().background.weakest.color).border(
-						border::width(1)
-							.color(t.extended_palette().background.strong.color)
-							.rounded(border::left(5)),
-					)
-				})
+				.style(|t| bordered_box_with_radius(border::left(5))(t)
+					.background(t.extended_palette().background.weakest.color))
 				.padding([5, 0])
 				.height(Fill),
 			current,
@@ -86,7 +82,7 @@ where
 	button(
 		container(plus().size(LINE_HEIGHT + 6.0))
 			.width(LINE_HEIGHT + 6.0)
-			.align_x(Alignment::Center),
+			.align_x(Center),
 	)
 	.style(|t, s| {
 		let mut style = button::primary(t, s);

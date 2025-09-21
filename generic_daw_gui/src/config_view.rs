@@ -375,8 +375,7 @@ impl ConfigView {
 			.width(530),
 		))
 		.style(|t| {
-			container::background(t.extended_palette().background.weakest.color)
-				.border(border::width(1).color(t.extended_palette().background.strong.color))
+			bordered_box_with_radius(0)(t).background(t.extended_palette().background.weakest.color)
 		})
 		.into()
 	}

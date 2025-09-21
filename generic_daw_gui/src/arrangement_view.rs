@@ -30,7 +30,8 @@ use generic_daw_utils::{EnumDispatcher, NoClone, NoDebug, Vec2};
 use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
 use humantime::format_rfc3339;
 use iced::{
-	Alignment, Element, Fill, Function as _, Size, Subscription, Task, border,
+	Alignment::Center,
+	Element, Fill, Function as _, Size, Subscription, Task, border,
 	futures::SinkExt as _,
 	mouse::Interaction,
 	overlay::menu,
@@ -71,7 +72,7 @@ mod plugin;
 mod project;
 mod track;
 
-pub use project::PartialArrangementView;
+pub use project::{Feedback, PartialArrangementView};
 
 #[derive(Clone, Debug)]
 enum LoadStatus {
@@ -802,7 +803,7 @@ impl ArrangementView {
 							.into(),
 					)),
 			)
-			.align_x(Alignment::Center),
+			.align_x(Center),
 			ArrangementWidget::new(
 				self.arrangement.rtstate(),
 				&self.arrangement_position,
@@ -894,14 +895,14 @@ impl ArrangementView {
 							.tooltip(format_pan(node.pan)),
 						]
 						.spacing(3)
-						.align_x(Alignment::Center),
+						.align_x(Center),
 						buttons(node.enabled, node.id)
 					]
 					.spacing(3),
 					container(value(Decibels::from_amplitude(node.volume)).line_height(1.0))
 						.width(54)
 						.style(bordered_box_with_radius(0))
-						.align_x(Alignment::Center)
+						.align_x(Center)
 						.padding(2),
 					row![
 						PeakMeter::new(&node.peaks[1][0], node.enabled).width(16.0),
@@ -920,7 +921,7 @@ impl ArrangementView {
 					connect(node.enabled, node.id)
 				]
 				.spacing(3)
-				.align_x(Alignment::Center),
+				.align_x(Center),
 			)
 			.padding(5)
 			.on_press(Message::ChannelSelect(node.id))
@@ -1107,7 +1108,7 @@ impl ArrangementView {
 					}
 				})
 				.chain(once(circle_plus().on_press(Message::ChannelAdd).into())))
-				.align_y(Alignment::Center)
+				.align_y(Center)
 				.spacing(5),
 				Direction::Horizontal(Scrollbar::default()),
 			)

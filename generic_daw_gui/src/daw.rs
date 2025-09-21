@@ -1,6 +1,6 @@
 use crate::{
 	arrangement_view::{
-		ArrangementView, Message as ArrangementMessage, PartialArrangementView, Tab,
+		ArrangementView, Feedback, Message as ArrangementMessage, PartialArrangementView, Tab,
 	},
 	components::{number_input, pick_list_custom_handle, space},
 	config::Config,
@@ -8,7 +8,7 @@ use crate::{
 	file_tree::{FileTree, Message as FileTreeMessage},
 	icons::{chart_no_axes_gantt, pause, play, sliders_vertical, square},
 	state::State,
-	stylefns::{button_with_radius, pick_list_with_radius},
+	stylefns::{bordered_box_with_radius, button_with_radius, pick_list_with_radius},
 	widget::LINE_HEIGHT,
 };
 use generic_daw_core::{
@@ -18,14 +18,15 @@ use generic_daw_core::{
 use generic_daw_utils::NoClone;
 use generic_daw_widget::dot::Dot;
 use iced::{
-	Alignment, Color, Element, Event, Fill, Subscription, Task, Theme, border,
+	Alignment::Center,
+	Color, Element, Event, Fill, Font, Function as _, Subscription, Task, Theme, border,
 	event::{self, Status},
 	keyboard,
 	mouse::Interaction,
 	time::every,
 	widget::{
 		button, center, column, container, horizontal_space, mouse_area, opaque, pick_list,
-		progress_bar, row, stack,
+		progress_bar, row, stack, text,
 	},
 	window::{self, Id},
 };
@@ -41,17 +42,21 @@ pub enum Message {
 	ConfigView(ConfigViewMessage),
 
 	NewFile,
-	OpenFileDialog,
 	OpenLastFile,
 	SaveFile,
+	SaveAsFile(Arc<Path>),
 	AutosaveFile,
+
+	OpenFileDialog,
 	SaveAsFileDialog,
+	PickSampleFileDialog(usize),
 	ExportFileDialog,
 
 	Progress(f32),
 
-	SaveAsFile(Arc<Path>),
 	OpenFile(Arc<Path>),
+	CantLoadSample(Arc<str>, NoClone<oneshot::Sender<Feedback<Arc<Path>>>>),
+	FoundSampleResponse(usize, Feedback<Arc<Path>>),
 	ApplyPartial(NoClone<Box<PartialArrangementView>>),
 	OpenedFile(Option<Arc<Path>>),
 
@@ -86,6 +91,7 @@ pub struct Daw {
 	split_at: f32,
 
 	progress: Option<f32>,
+	missing_samples: Vec<(Arc<str>, oneshot::Sender<Feedback<Arc<Path>>>)>,
 }
 
 impl Daw {
@@ -123,6 +129,7 @@ impl Daw {
 				split_at: 300.0,
 
 				progress: None,
+				missing_samples: Vec::new(),
 			},
 			open,
 		)
@@ -155,16 +162,6 @@ impl Daw {
 					.map(Message::Arrangement);
 			}
 			Message::ChangedTab(tab) => self.arrangement_view.tab = tab,
-			Message::OpenFileDialog => {
-				return Task::future(
-					AsyncFileDialog::new()
-						.add_filter("Generic DAW project file", &["gdp"])
-						.pick_file(),
-				)
-				.and_then(Task::done)
-				.map(|p| p.path().into())
-				.map(Message::OpenFile);
-			}
 			Message::OpenLastFile => {
 				if let Some(last_project) = self.state.last_project.clone() {
 					return self.update(Message::OpenFile(last_project));
@@ -178,10 +175,28 @@ impl Daw {
 						.map_or(Message::SaveAsFileDialog, Message::SaveAsFile),
 				);
 			}
+			Message::SaveAsFile(path) => {
+				self.arrangement_view.save(&path);
+				self.state.current_project = Some(path.clone());
+				if self.state.last_project.as_deref() != Some(&path) {
+					self.state.last_project = Some(path);
+					self.state.write();
+				}
+			}
 			Message::AutosaveFile => {
 				if let Some(current_project) = self.state.current_project.clone() {
 					return self.update(Message::SaveAsFile(current_project));
 				}
+			}
+			Message::OpenFileDialog => {
+				return Task::future(
+					AsyncFileDialog::new()
+						.add_filter("Generic DAW project file", &["gdp"])
+						.pick_file(),
+				)
+				.and_then(Task::done)
+				.map(|p| p.path().into())
+				.map(Message::OpenFile);
 			}
 			Message::SaveAsFileDialog => {
 				return Task::future(
@@ -192,6 +207,13 @@ impl Daw {
 				.and_then(Task::done)
 				.map(|p| p.path().with_extension("gdp").into())
 				.map(Message::SaveAsFile);
+			}
+			Message::PickSampleFileDialog(idx) => {
+				return Task::future(AsyncFileDialog::new().pick_file())
+					.and_then(Task::done)
+					.map(|p| p.path().into())
+					.map(Feedback::Use)
+					.map(Message::FoundSampleResponse.with(idx));
 			}
 			Message::ExportFileDialog => {
 				return Task::future(
@@ -204,14 +226,7 @@ impl Daw {
 				.map(Message::ExportFile);
 			}
 			Message::Progress(progress) => self.progress = Some(progress),
-			Message::SaveAsFile(path) => {
-				self.arrangement_view.save(&path);
-				self.state.current_project = Some(path.clone());
-				if self.state.last_project.as_deref() != Some(&path) {
-					self.state.last_project = Some(path);
-					self.state.write();
-				}
-			}
+
 			Message::OpenFile(path) => {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
@@ -223,18 +238,25 @@ impl Daw {
 					);
 				}
 			}
+			Message::CantLoadSample(name, NoClone(sender)) => {
+				if self.progress.is_some() {
+					self.missing_samples.push((name, sender));
+				}
+			}
+			Message::FoundSampleResponse(idx, response) => {
+				self.missing_samples.remove(idx).1.send(response).unwrap();
+			}
 			Message::ApplyPartial(NoClone(partial)) => {
 				self.arrangement_view
 					.apply_partial(*partial, &self.plugin_bundles);
 			}
 			Message::OpenedFile(path) => {
-				if let Some(path) = path
-					&& self.state.last_project.as_deref() != Some(&path)
-				{
+				if let Some(path) = path {
 					self.state.current_project = Some(path.clone());
 					self.state.last_project = Some(path);
 					self.state.write();
 				}
+				self.missing_samples.clear();
 				self.progress = None;
 			}
 			Message::ExportFile(path) => {
@@ -353,7 +375,7 @@ impl Daw {
 		.beat()
 		.is_multiple_of(2);
 
-		let mut base = stack![
+		stack![
 			column![
 				row![
 					pick_list_custom_handle(
@@ -389,19 +411,15 @@ impl Daw {
 								play()
 							})
 							.width(LINE_HEIGHT)
-							.align_x(Alignment::Center)
+							.align_x(Center)
 						)
 						.style(button_with_radius(button::primary, border::left(5)))
 						.padding([5, 7])
 						.on_press(Message::TogglePlayback),
-						button(
-							container(square())
-								.width(LINE_HEIGHT)
-								.align_x(Alignment::Center)
-						)
-						.style(button_with_radius(button::primary, border::right(5)))
-						.padding([5, 7])
-						.on_press(Message::Stop),
+						button(container(square()).width(LINE_HEIGHT).align_x(Center))
+							.style(button_with_radius(button::primary, border::right(5)))
+							.padding([5, 7])
+							.on_press(Message::Stop),
 					],
 					number_input(
 						self.arrangement_view.arrangement.rtstate().numerator as usize,
@@ -449,7 +467,7 @@ impl Daw {
 					],
 				]
 				.spacing(10)
-				.align_y(Alignment::Center),
+				.align_y(Center),
 				vertical_split(
 					self.file_tree.view().map(Message::FileTree),
 					self.arrangement_view.view().map(Message::Arrangement),
@@ -459,37 +477,104 @@ impl Daw {
 				.strategy(Strategy::Start)
 			]
 			.padding(10)
-			.spacing(10)
-		];
-
-		if self.arrangement_view.loading() {
-			base = base.push(
-				mouse_area(space().width(Fill).height(Fill)).interaction(Interaction::Progress),
-			);
-		}
-
-		if let Some(config_view) = &self.config_view {
-			base = base.push(opaque(
+			.spacing(10),
+			self.arrangement_view
+				.loading()
+				.then(|| mouse_area(space().width(Fill).height(Fill))
+					.interaction(Interaction::Progress)),
+			self.config_view.as_ref().map(|config_view| opaque(
 				mouse_area(
 					center(opaque(config_view.view().map(Message::ConfigView)))
 						.style(|_| container::background(Color::BLACK.scale_alpha(0.8))),
 				)
 				.on_press(Message::CloseConfigView),
-			));
-		}
-
-		if let Some(progress) = self.progress {
-			base = base.push(opaque(
+			)),
+			self.progress.map(|progress| opaque(
 				mouse_area(
-					center(progress_bar(0.0..=1.0, progress))
-						.padding(50)
-						.style(|_| container::background(Color::BLACK.scale_alpha(0.8))),
+					center(
+						column![
+							progress_bar(0.0..=1.0, progress).style(
+								if self.missing_samples.is_empty() {
+									progress_bar::primary
+								} else {
+									progress_bar::danger
+								}
+							),
+							(!self.missing_samples.is_empty()).then(|| container(
+								container(
+									column(
+										self.missing_samples
+											.iter()
+											.map(|(name, _)| &**name)
+											.enumerate()
+											.map(|(i, name)| {
+												row![
+													row![
+														"can't find sample",
+														container(text(name).font(Font::MONOSPACE))
+															.padding([5, 10])
+															.style(|t| {
+																bordered_box_with_radius(5)(t)
+																	.background(
+																		t.extended_palette()
+																			.background
+																			.weakest
+																			.color,
+																	)
+															}),
+													]
+													.spacing(10)
+													.align_y(Center),
+													row![
+														button("Pick")
+															.on_press(
+																Message::PickSampleFileDialog(i)
+															)
+															.style(button_with_radius(
+																button::success,
+																border::left(5)
+															)),
+														button("Ignore")
+															.on_press(Message::FoundSampleResponse(
+																i,
+																Feedback::Ignore
+															))
+															.style(button_with_radius(
+																button::warning,
+																0
+															)),
+														button("Cancel")
+															.on_press(Message::FoundSampleResponse(
+																i,
+																Feedback::Cancel
+															))
+															.style(button_with_radius(
+																button::danger,
+																border::right(5)
+															))
+													]
+												]
+												.spacing(20)
+												.align_y(Center)
+												.into()
+											}),
+									)
+									.spacing(10)
+								)
+								.padding(10)
+								.style(bordered_box_with_radius(5))
+							)
+							.center_x(Fill))
+						]
+						.spacing(20)
+					)
+					.padding(50)
+					.style(|_| container::background(Color::BLACK.scale_alpha(0.8))),
 				)
 				.interaction(Interaction::Progress),
-			));
-		}
-
-		base.into()
+			))
+		]
+		.into()
 	}
 
 	pub fn title(&self, window: Id) -> String {

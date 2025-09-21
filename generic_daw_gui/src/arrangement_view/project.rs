@@ -8,7 +8,6 @@ use generic_daw_core::{
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use generic_daw_utils::NoClone;
 use iced::{Task, widget::combo_box};
-use log::info;
 use smol::{channel::Sender, unblock};
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
@@ -25,6 +24,13 @@ pub struct PartialArrangementView {
 	arrangement: ArrangementWrapper,
 	audios: Vec<(Arc<Path>, LoadStatus)>,
 	midis: Vec<Weak<ArcSwap<Vec<MidiNote>>>>,
+}
+
+#[derive(Clone, Debug)]
+pub enum Feedback<T> {
+	Use(T),
+	Ignore,
+	Cancel,
 }
 
 impl ArrangementView {
@@ -185,10 +191,8 @@ impl ArrangementView {
 		path: Arc<Path>,
 		config: &Config,
 		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
-		progress: &Sender<DawMessage>,
+		daw: &Sender<DawMessage>,
 	) -> Option<Task<DawMessage>> {
-		info!("loading project {}", path.display());
-
 		let config = &config;
 
 		let mut gdp = Vec::new();
@@ -203,7 +207,7 @@ impl ArrangementView {
 		let mut audios = HashMap::new();
 
 		std::thread::scope(|s| {
-			let (sender, receiver) = mpsc::channel();
+			let (done, receiver) = mpsc::channel();
 
 			let audios_map = reader
 				.iter_audios()
@@ -214,11 +218,11 @@ impl ArrangementView {
 				});
 
 			let mut current_progress = 0.0;
-			let progress_per_audio = 0.5 / (reader.iter_audios().count() as f32);
+			let progress_per_audio = 1.0 / (reader.iter_audios().count() as f32);
 
 			let mut seen = HashSet::new();
 
-			config
+			let mut paths = config
 				.sample_paths
 				.iter()
 				.flat_map(WalkDir::new)
@@ -236,38 +240,79 @@ impl ArrangementView {
 								.map(|file| (name, crc(file)))
 						})
 						.and_then(|(name, crc)| {
-							audios_map[name]
-								.iter()
-								.find(|(_, c)| *c == crc)
-								.map(|&(index, crc)| (dir_entry.path().into(), index, crc))
+							audios_map[name].iter().find_map(|&(index, c)| {
+								(c == crc).then(|| (index, Arc::<Path>::from(dir_entry.path())))
+							})
 						})
 				})
-				.for_each(|(path, index, crc)| {
-					current_progress += progress_per_audio;
-					progress
-						.try_send(DawMessage::Progress(current_progress))
-						.unwrap();
-
-					let sender = sender.clone();
-					let sample_rate = arrangement.rtstate().sample_rate;
-					s.spawn(move || {
-						sender
-							.send((
-								index,
-								Sample::create(path, sample_rate).map(|sample| (crc, sample)),
-							))
-							.unwrap();
-					});
-				});
+				.collect::<HashMap<_, _>>();
 
 			drop(seen);
-			drop(sender);
+
+			for (idx, audio) in reader.iter_audios() {
+				let sample_rate = arrangement.rtstate().sample_rate;
+				let done = done.clone();
+
+				let mut path = paths.remove(&idx);
+				let mut sample_name = Arc::<str>::from(&*audio.name);
+				s.spawn(move || {
+					loop {
+						if let Some(path) = &path
+							&& let Some(sample) = Sample::create(path.clone(), sample_rate)
+						{
+							done.send((
+								idx,
+								Feedback::Use((crc(File::open(path).unwrap()), sample)),
+							))
+							.unwrap();
+							return;
+						}
+
+						if let Some(path) = &path
+							&& let Some(name) = path.file_name()
+							&& let Some(name) = name.to_str()
+						{
+							sample_name = name.into();
+						}
+
+						let (sender, receiver) = oneshot::channel();
+
+						daw.try_send(DawMessage::CantLoadSample(
+							sample_name.clone(),
+							NoClone(sender),
+						))
+						.unwrap();
+
+						path = match receiver.recv() {
+							Ok(Feedback::Use(p)) => Some(p),
+							Ok(Feedback::Ignore) => {
+								_ = done.send((idx, Feedback::Ignore));
+								return;
+							}
+							Ok(Feedback::Cancel) | Err(_) => {
+								_ = done.send((idx, Feedback::Cancel));
+								return;
+							}
+						};
+					}
+				});
+			}
+
+			drop(paths);
+			drop(done);
 
 			while let Ok((idx, audio)) = receiver.recv() {
-				audios.insert(idx, audio?);
+				match audio {
+					audio @ (Feedback::Use(_) | Feedback::Ignore) => {
+						audios.insert(idx, audio);
+					}
+					Feedback::Cancel => {
+						daw.try_send(DawMessage::OpenedFile(None)).unwrap();
+						return None;
+					}
+				}
 				current_progress += progress_per_audio;
-				progress
-					.try_send(DawMessage::Progress(current_progress))
+				daw.try_send(DawMessage::Progress(current_progress))
 					.unwrap();
 			}
 
@@ -334,25 +379,30 @@ impl ArrangementView {
 			let mut track = Track::default();
 
 			for clip in clips {
-				track.clips.push(match clip {
+				let clip = match clip {
 					proto::Clip::Audio(audio) => {
-						let clip = AudioClip::create(
-							audios.get(&audio.audio)?.1.clone(),
-							arrangement.rtstate(),
-						);
-						clip.position.trim_start_to(audio.position.offset.into());
-						clip.position.move_to(audio.position.start.into());
-						clip.position.trim_end_to(audio.position.end.into());
-						Clip::Audio(clip)
+						if let Feedback::Use((_, clip)) = audios.get(&audio.audio)? {
+							let clip = AudioClip::create(clip.clone(), arrangement.rtstate());
+							clip.position.trim_start_to(audio.position.offset.into());
+							clip.position.move_to(audio.position.start.into());
+							clip.position.trim_end_to(audio.position.end.into());
+							Some(Clip::Audio(clip))
+						} else {
+							None
+						}
 					}
 					proto::Clip::Midi(midi) => {
 						let clip = MidiClip::create(midis.get(&midi.midi)?.clone());
 						clip.position.trim_start_to(midi.position.offset.into());
 						clip.position.move_to(midi.position.start.into());
 						clip.position.trim_end_to(midi.position.end.into());
-						Clip::Midi(clip)
+						Some(Clip::Midi(clip))
 					}
-				});
+				};
+
+				if let Some(clip) = clip {
+					track.clips.push(clip);
+				}
 			}
 
 			let id = track.id();
@@ -384,6 +434,8 @@ impl ArrangementView {
 			)));
 		}
 
+		drop(tracks);
+
 		for (from, to) in reader.iter_channel_to_channel() {
 			messages.push(Message::ConnectRequest((
 				*channels.get(&from)?,
@@ -391,12 +443,19 @@ impl ArrangementView {
 			)));
 		}
 
-		info!("loaded project {}", path.display());
+		drop(channels);
 
 		let partial = PartialArrangementView {
 			arrangement,
 			audios: audios
 				.values()
+				.filter_map(|audio| {
+					if let Feedback::Use((crc, audio)) = audio {
+						Some((crc, audio))
+					} else {
+						None
+					}
+				})
 				.map(|(crc, audio)| {
 					(
 						audio.path.clone(),
