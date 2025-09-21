@@ -6,7 +6,7 @@ use generic_daw_core::{
 	clap_host::{PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
-use generic_daw_utils::NoClone;
+use generic_daw_utils::{NoClone, NoDebug};
 use iced::{Task, widget::combo_box};
 use smol::{channel::Sender, unblock};
 use std::{
@@ -14,6 +14,7 @@ use std::{
 	fs::File,
 	io::{Read as _, Write as _},
 	iter::once,
+	ops::Deref as _,
 	path::Path,
 	sync::{Arc, Weak, mpsc},
 };
@@ -254,7 +255,7 @@ impl ArrangementView {
 				let done = done.clone();
 
 				let mut path = paths.remove(&idx);
-				let mut sample_name = Arc::<str>::from(&*audio.name);
+				let mut sample_name = audio.name.clone();
 				s.spawn(move || {
 					loop {
 						if let Some(path) = &path
@@ -272,13 +273,13 @@ impl ArrangementView {
 							&& let Some(name) = path.file_name()
 							&& let Some(name) = name.to_str()
 						{
-							sample_name = name.into();
+							sample_name = name.to_owned();
 						}
 
 						let (sender, receiver) = oneshot::channel();
 
 						daw.try_send(DawMessage::CantLoadSample(
-							sample_name.clone(),
+							sample_name.deref().into(),
 							NoClone(sender),
 						))
 						.unwrap();
@@ -354,11 +355,11 @@ impl ArrangementView {
 					false,
 				));
 
-				if let Some(state) = plugin.state.clone() {
+				if let Some(state) = plugin.state.as_deref() {
 					messages.push(Message::PluginSetState(
 						node.id,
 						i,
-						state.into_boxed_slice().into(),
+						NoDebug(Box::from(state)),
 					));
 				}
 
@@ -379,30 +380,25 @@ impl ArrangementView {
 			let mut track = Track::default();
 
 			for clip in clips {
-				let clip = match clip {
+				track.clips.push(match clip {
 					proto::Clip::Audio(audio) => {
-						if let Feedback::Use((_, clip)) = audios.get(&audio.audio)? {
-							let clip = AudioClip::create(clip.clone(), arrangement.rtstate());
-							clip.position.trim_start_to(audio.position.offset.into());
-							clip.position.move_to(audio.position.start.into());
-							clip.position.trim_end_to(audio.position.end.into());
-							Some(Clip::Audio(clip))
-						} else {
-							None
-						}
+						let Feedback::Use((_, clip)) = audios.get(&audio.audio)? else {
+							continue;
+						};
+						let clip = AudioClip::create(clip.clone(), arrangement.rtstate());
+						clip.position.trim_start_to(audio.position.offset.into());
+						clip.position.move_to(audio.position.start.into());
+						clip.position.trim_end_to(audio.position.end.into());
+						Clip::Audio(clip)
 					}
 					proto::Clip::Midi(midi) => {
 						let clip = MidiClip::create(midis.get(&midi.midi)?.clone());
 						clip.position.trim_start_to(midi.position.offset.into());
 						clip.position.move_to(midi.position.start.into());
 						clip.position.trim_end_to(midi.position.end.into());
-						Some(Clip::Midi(clip))
+						Clip::Midi(clip)
 					}
-				};
-
-				if let Some(clip) = clip {
-					track.clips.push(clip);
-				}
+				});
 			}
 
 			let id = track.id();

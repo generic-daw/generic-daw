@@ -226,7 +226,6 @@ impl Daw {
 				.map(Message::ExportFile);
 			}
 			Message::Progress(progress) => self.progress = Some(progress),
-
 			Message::OpenFile(path) => {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
@@ -253,8 +252,10 @@ impl Daw {
 			Message::OpenedFile(path) => {
 				if let Some(path) = path {
 					self.state.current_project = Some(path.clone());
-					self.state.last_project = Some(path);
-					self.state.write();
+					if self.state.last_project.as_deref() != Some(&path) {
+						self.state.last_project = Some(path);
+						self.state.write();
+					}
 				}
 				self.missing_samples.clear();
 				self.progress = None;

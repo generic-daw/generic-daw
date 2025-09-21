@@ -15,10 +15,10 @@ generic_daw_utils = { workspace = true }
 arc-swap = "1.7.1"
 atomig = { version = "0.4.3", features = ["derive"] }
 cpal = "0.16.0"
+crossbeam-queue = "0.3.12"
 hound = "3.5.1"
 log = "0.4.28"
 oneshot = "0.1.11"
+rtrb = "0.3.2"
 rubato = "0.16.2"
 symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
-rtrb = "0.3.2"
-crossbeam-queue = "0.3.12"
