@@ -18,7 +18,7 @@ pub struct Recording {
 	resampler: Resampler,
 	writer: NoDebug<WavWriter<BufWriter<File>>>,
 
-	_stream: NoDebug<Stream>,
+	stream: NoDebug<Stream>,
 	config: StreamConfig,
 }
 
@@ -59,7 +59,7 @@ impl Recording {
 				resampler,
 				writer: writer.into(),
 
-				_stream: stream.into(),
+				stream: stream.into(),
 				config,
 			},
 			consumer,
@@ -143,8 +143,11 @@ impl Recording {
 			path,
 			resampler,
 			mut writer,
+			stream,
 			..
 		} = self;
+
+		drop(stream);
 
 		let start = resampler.samples().len();
 		let samples = resampler.finish();
