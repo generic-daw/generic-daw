@@ -9,7 +9,7 @@ use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use generic_daw_utils::NoClone;
 use iced::{Task, widget::combo_box};
 use log::info;
-use smol::unblock;
+use smol::{channel::Sender, unblock};
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
 	fs::File,
@@ -171,17 +171,13 @@ impl ArrangementView {
 		Task::batch([
 			Task::future(unblock(move || {
 				partial_sender
-					.send(Self::load(path, &config, &plugin_bundles, |f| {
-						progress_sender.try_send(f).unwrap();
-					}))
+					.send(Self::load(path, &config, &plugin_bundles, &progress_sender))
 					.unwrap();
 			}))
 			.discard(),
-			Task::stream(progress_receiver)
-				.map(DawMessage::Progress)
-				.chain(Task::future(partial_receiver).and_then(|tasks| {
-					tasks.unwrap_or_else(|| Task::done(DawMessage::OpenedFile(None)))
-				})),
+			Task::stream(progress_receiver).chain(Task::future(partial_receiver).and_then(
+				|tasks| tasks.unwrap_or_else(|| Task::done(DawMessage::OpenedFile(None))),
+			)),
 		])
 	}
 
@@ -189,7 +185,7 @@ impl ArrangementView {
 		path: Arc<Path>,
 		config: &Config,
 		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
-		mut progress_fn: impl FnMut(f32),
+		progress: &Sender<DawMessage>,
 	) -> Option<Task<DawMessage>> {
 		info!("loading project {}", path.display());
 
@@ -248,7 +244,9 @@ impl ArrangementView {
 				})
 				.for_each(|(path, index, crc)| {
 					current_progress += progress_per_audio;
-					progress_fn(current_progress);
+					progress
+						.try_send(DawMessage::Progress(current_progress))
+						.unwrap();
 
 					let sender = sender.clone();
 					let sample_rate = arrangement.rtstate().sample_rate;
@@ -268,7 +266,9 @@ impl ArrangementView {
 			while let Ok((idx, audio)) = receiver.recv() {
 				audios.insert(idx, audio?);
 				current_progress += progress_per_audio;
-				progress_fn(current_progress);
+				progress
+					.try_send(DawMessage::Progress(current_progress))
+					.unwrap();
 			}
 
 			Some(())
