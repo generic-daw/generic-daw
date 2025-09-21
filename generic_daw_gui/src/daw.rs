@@ -480,9 +480,12 @@ impl Daw {
 
 		if let Some(progress) = self.progress {
 			base = base.push(opaque(
-				center(progress_bar(0.0..=1.0, progress))
-					.padding(50)
-					.style(|_| container::background(Color::BLACK.scale_alpha(0.8))),
+				mouse_area(
+					center(progress_bar(0.0..=1.0, progress))
+						.padding(50)
+						.style(|_| container::background(Color::BLACK.scale_alpha(0.8))),
+				)
+				.interaction(Interaction::Progress),
 			));
 		}
 
