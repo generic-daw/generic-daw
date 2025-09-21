@@ -61,16 +61,11 @@ pub fn get_installed_plugins(
 				.extension()
 				.is_some_and(|ext| ext == "clap")
 		})
-		.filter_map(|path| {
-			if seen.contains(path.path()) {
-				None
-			} else {
-				// SAFETY:
-				// Loading an external library object file is inherently unsafe.
-				let bundle = unsafe { PluginBundle::load(path.path()).ok() };
-				seen.insert(path.into_path());
-				bundle
-			}
+		.filter(|dir_entry| seen.insert(dir_entry.path().to_owned()))
+		.filter_map(|dir_entry| {
+			// SAFETY:
+			// Loading an external library object file is inherently unsafe.
+			unsafe { PluginBundle::load(dir_entry.path()).ok() }
 		})
 		.for_each(|bundle| {
 			if let Some(factory) = bundle.get_plugin_factory() {

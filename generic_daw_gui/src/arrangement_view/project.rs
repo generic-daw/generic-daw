@@ -11,7 +11,7 @@ use iced::{Task, widget::combo_box};
 use log::info;
 use smol::unblock;
 use std::{
-	collections::{BTreeMap, HashMap},
+	collections::{BTreeMap, HashMap, HashSet},
 	fs::File,
 	io::{Read as _, Write as _},
 	iter::once,
@@ -206,18 +206,21 @@ impl ArrangementView {
 
 		let mut audios = HashMap::new();
 
-		let (sender, receiver) = mpsc::channel();
-		let audios_map = reader
-			.iter_audios()
-			.map(|(idx, audio)| (&*audio.name, (idx, audio.crc)))
-			.fold(HashMap::<_, Vec<_>>::new(), |mut acc, (k, v)| {
-				acc.entry(k).or_default().push(v);
-				acc
-			});
-
 		std::thread::scope(|s| {
+			let (sender, receiver) = mpsc::channel();
+
+			let audios_map = reader
+				.iter_audios()
+				.map(|(idx, audio)| (&*audio.name, (idx, audio.crc)))
+				.fold(HashMap::<_, Vec<_>>::new(), |mut acc, (k, v)| {
+					acc.entry(k).or_default().push(v);
+					acc
+				});
+
 			let mut current_progress = 0.0;
 			let progress_per_audio = 0.5 / (reader.iter_audios().count() as f32);
+
+			let mut seen = HashSet::new();
 
 			config
 				.sample_paths
@@ -230,6 +233,7 @@ impl ArrangementView {
 						.file_name()
 						.to_str()
 						.filter(|name| audios_map.contains_key(name))
+						.filter(|_| seen.insert(dir_entry.path().to_owned()))
 						.and_then(|name| {
 							File::open(dir_entry.path())
 								.ok()
@@ -239,7 +243,7 @@ impl ArrangementView {
 							audios_map[name]
 								.iter()
 								.find(|(_, c)| *c == crc)
-								.map(|(index, crc)| (dir_entry.path().into(), *index, *crc))
+								.map(|&(index, crc)| (dir_entry.path().into(), index, crc))
 						})
 				})
 				.for_each(|(path, index, crc)| {
@@ -258,6 +262,7 @@ impl ArrangementView {
 					});
 				});
 
+			drop(seen);
 			drop(sender);
 
 			while let Ok((idx, audio)) = receiver.recv() {
