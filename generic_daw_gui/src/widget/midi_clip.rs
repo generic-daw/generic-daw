@@ -9,6 +9,7 @@ use iced::{
 		renderer::{Quad, Style},
 		widget::{Tree, tree},
 	},
+	border,
 	mouse::{self, Cursor, Interaction},
 	padding,
 };
@@ -122,6 +123,7 @@ where
 
 		let clip_background = Quad {
 			bounds: lower_bounds,
+			border: border::width(1).color(color),
 			..Quad::default()
 		};
 		renderer.fill_quad(clip_background, color.scale_alpha(0.2));

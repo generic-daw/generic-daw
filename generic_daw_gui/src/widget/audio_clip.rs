@@ -11,6 +11,7 @@ use iced::{
 		widget::{Tree, tree},
 	},
 	alignment::Vertical,
+	border,
 	mouse::{Cursor, Interaction},
 	padding,
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
@@ -163,6 +164,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
 		let clip_background = Quad {
 			bounds: lower_bounds,
+			border: border::width(1).color(color),
 			..Quad::default()
 		};
 		renderer.fill_quad(clip_background, color.scale_alpha(0.2));
