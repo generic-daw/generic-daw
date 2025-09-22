@@ -26,7 +26,7 @@ use generic_daw_core::{
 	AudioClip, Batch, Clip, Decibels, MidiClip, MidiNote, MusicalTime, NodeId, Recording, Sample,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
-use generic_daw_utils::{EnumDispatcher, NoClone, NoDebug, Vec2};
+use generic_daw_utils::{NoClone, NoDebug, Vec2};
 use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
 use humantime::format_rfc3339;
 use iced::{
@@ -108,7 +108,6 @@ pub enum Message {
 	SampleLoadFromFile(Arc<Path>),
 	SampleLoadedFromFile(Arc<Path>, Option<(u32, Arc<Sample>)>),
 
-	AddMidiClip(NodeId, MusicalTime),
 	OpenMidiClip(Arc<MidiClip>),
 
 	TrackAdd,
@@ -414,17 +413,6 @@ impl ArrangementView {
 					grabbed_note: None,
 				}
 			}
-			Message::AddMidiClip(track, pos) => {
-				let pattern = Arc::default();
-				self.midis.push(Arc::downgrade(&pattern));
-				let clip = MidiClip::create(pattern);
-				clip.position.trim_end_to(
-					MusicalTime::BEAT * u32::from(self.arrangement.rtstate().numerator),
-				);
-				clip.position.move_to(pos);
-				let track = self.arrangement.track_of(track).unwrap();
-				self.arrangement.add_clip(track, clip);
-			}
 			Message::TrackAdd => {
 				return Task::perform(self.arrangement.add_track(), |con| {
 					Message::ConnectSucceeded(con.unwrap())
@@ -592,6 +580,18 @@ impl ArrangementView {
 		match action {
 			ArrangementAction::Grab(track, clip) => *grabbed_clip = Some((track, clip, None)),
 			ArrangementAction::Drop => *grabbed_clip = None,
+			ArrangementAction::Add(track, pos) => {
+				let pattern = Arc::default();
+				self.midis.push(Arc::downgrade(&pattern));
+				let clip = MidiClip::create(pattern);
+				clip.position.trim_end_to(
+					MusicalTime::BEAT * 4 * u32::from(self.arrangement.rtstate().numerator),
+				);
+				clip.position.move_to(pos);
+				self.arrangement.add_clip(track, clip);
+				let clip = self.arrangement.tracks()[track].clips.len() - 1;
+				*grabbed_clip = Some((track, clip, None));
+			}
 			ArrangementAction::Clone(track, mut clip) => {
 				self.arrangement.clone_clip(track, clip);
 				clip = self.arrangement.tracks()[track].clips.len() - 1;
@@ -863,52 +863,46 @@ impl ArrangementView {
 						.tracks()
 						.iter()
 						.map(|track| {
-							let id = track.id;
 							let node = self.arrangement.node(track.id);
 
-							let clips_iter = track.clips.iter().map(|clip| match clip {
-								Clip::Audio(clip) => AudioClipWidget::new(
-									clip,
-									self.arrangement.rtstate(),
-									&self.arrangement_position,
-									&self.arrangement_scale,
-									node.enabled,
-								)
-								.into(),
-								Clip::Midi(clip) => MidiClipWidget::new(
-									clip,
-									self.arrangement.rtstate(),
-									&self.arrangement_position,
-									&self.arrangement_scale,
-									node.enabled,
-									Message::OpenMidiClip(clip.clone()),
-								)
-								.into(),
-							});
-
-							let clips_iter =
-								if self.recording.as_ref().is_some_and(|&(_, i)| i == id) {
-									EnumDispatcher::A(
-										clips_iter.chain(once(
-											RecordingWidget::new(
-												&self.recording.as_ref().unwrap().0,
-												self.arrangement.rtstate(),
-												&self.arrangement_position,
-												&self.arrangement_scale,
-											)
-											.into(),
-										)),
-									)
-								} else {
-									EnumDispatcher::B(clips_iter)
-								};
-
 							TrackWidget::new(
-								self.arrangement.rtstate(),
-								&self.arrangement_position,
 								&self.arrangement_scale,
-								clips_iter,
-								Message::AddMidiClip.with(id),
+								track
+									.clips
+									.iter()
+									.map(|clip| match clip {
+										Clip::Audio(clip) => AudioClipWidget::new(
+											clip,
+											self.arrangement.rtstate(),
+											&self.arrangement_position,
+											&self.arrangement_scale,
+											node.enabled,
+										)
+										.into(),
+										Clip::Midi(clip) => MidiClipWidget::new(
+											clip,
+											self.arrangement.rtstate(),
+											&self.arrangement_position,
+											&self.arrangement_scale,
+											node.enabled,
+											Message::OpenMidiClip(clip.clone()),
+										)
+										.into(),
+									})
+									.chain(
+										self.recording
+											.as_ref()
+											.is_some_and(|&(_, i)| i == track.id)
+											.then(|| {
+												RecordingWidget::new(
+													&self.recording.as_ref().unwrap().0,
+													self.arrangement.rtstate(),
+													&self.arrangement_position,
+													&self.arrangement_scale,
+												)
+												.into()
+											}),
+									),
 							)
 						})
 						.map(Element::new),
@@ -1103,11 +1097,8 @@ impl ArrangementView {
 						})
 						.peekable();
 
-					if iter.peek().is_some() {
-						EnumDispatcher::A(iter.chain(once(vertical_rule(1).into())))
-					} else {
-						EnumDispatcher::B(iter)
-					}
+					let one = iter.peek().map(|_| vertical_rule(1).into());
+					iter.chain(one)
 				})
 				.chain({
 					let mut iter = self
@@ -1151,11 +1142,8 @@ impl ArrangementView {
 						})
 						.peekable();
 
-					if iter.peek().is_some() {
-						EnumDispatcher::A(iter.chain(once(vertical_rule(1).into())))
-					} else {
-						EnumDispatcher::B(iter)
-					}
+					let one = iter.peek().map(|_| vertical_rule(1).into());
+					iter.chain(one)
 				})
 				.chain(once(circle_plus().on_press(Message::ChannelAdd).into())))
 				.align_y(Center)

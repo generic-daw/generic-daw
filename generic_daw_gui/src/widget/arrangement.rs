@@ -17,6 +17,7 @@ use iced::{
 pub enum Action {
 	Grab(usize, usize),
 	Drop,
+	Add(usize, MusicalTime),
 	Clone(usize, usize),
 	Drag(usize, MusicalTime),
 	SplitAt(usize, usize, MusicalTime),
@@ -191,6 +192,11 @@ where
 							}
 
 							shell.capture_event();
+						} else {
+							let track = self.get_track(cursor);
+
+							shell.publish((self.f)(Action::Add(track, time)));
+							*state = State::DraggingClip(0.0, track, time);
 						}
 					}
 					mouse::Button::Right if !self.deleted => {
@@ -216,7 +222,7 @@ where
 				mouse::Event::CursorMoved { modifiers, .. } => match *state {
 					State::DraggingClip(offset, track, time) => {
 						let new_track = self
-							.get_track(cursor.y)
+							.get_track(cursor)
 							.min(layout.children().next().unwrap().children().count() - 1);
 						let new_start = get_time(
 							cursor.x + offset,
@@ -400,8 +406,8 @@ where
 		}
 	}
 
-	fn get_track(&self, y: f32) -> usize {
-		(y / self.scale.y + self.position.y) as usize
+	fn get_track(&self, cursor: Point) -> usize {
+		(cursor.y / self.scale.y + self.position.y) as usize
 	}
 
 	fn get_track_clip(
@@ -410,7 +416,7 @@ where
 		viewport: Rectangle,
 		cursor: Point,
 	) -> Option<(usize, usize)> {
-		let track = self.get_track(cursor.y);
+		let track = self.get_track(cursor);
 		let offset = Vector::new(viewport.position().x, viewport.position().y);
 		let clip = track_layout(layout, track)?
 			.children()

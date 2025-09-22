@@ -1,42 +1,23 @@
-use super::get_time;
-use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
 	Element, Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
 		Clipboard, Layout, Renderer as _, Shell, Widget,
 		layout::{Limits, Node},
-		mouse::{Click, click::Kind},
 		overlay,
 		renderer::Style,
-		widget::{Operation, Tree, tree},
+		widget::{Operation, Tree},
 	},
-	mouse::{self, Cursor, Interaction},
+	mouse::{Cursor, Interaction},
 };
-
-#[derive(Default)]
-struct State {
-	last_click: Option<Click>,
-}
 
 #[derive(Debug)]
 pub struct Track<'a, Message> {
-	rtstate: &'a RtState,
-	position: &'a Vec2,
 	scale: &'a Vec2,
 	children: NoDebug<Box<[Element<'a, Message>]>>,
-	on_double_click: NoDebug<Box<dyn Fn(MusicalTime) -> Message + 'a>>,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
-	fn tag(&self) -> tree::Tag {
-		tree::Tag::of::<State>()
-	}
-
-	fn state(&self) -> tree::State {
-		tree::State::new(State::default())
-	}
-
 	fn diff(&self, tree: &mut Tree) {
 		tree.diff_children(&self.children);
 	}
@@ -136,38 +117,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 					state, event, layout, cursor, renderer, clipboard, shell, &bounds,
 				);
 			});
-
-		if shell.is_event_captured() {
-			return;
-		}
-
-		if let Event::Mouse(mouse::Event::ButtonPressed {
-			button: mouse::Button::Left,
-			modifiers,
-		}) = event
-		{
-			let Some(cursor) = cursor.position_in(layout.bounds()) else {
-				return;
-			};
-
-			let state = tree.state.downcast_mut::<State>();
-
-			let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
-			state.last_click = Some(new_click);
-
-			if new_click.kind() == Kind::Double {
-				let time = get_time(
-					cursor.x,
-					*modifiers,
-					self.rtstate,
-					*self.position,
-					*self.scale,
-				);
-
-				shell.publish((self.on_double_click)(time));
-				shell.capture_event();
-			}
-		}
 	}
 
 	fn overlay<'a>(
@@ -213,19 +162,10 @@ impl<'a, Message> Track<'a, Message>
 where
 	Message: 'a,
 {
-	pub fn new(
-		rtstate: &'a RtState,
-		position: &'a Vec2,
-		scale: &'a Vec2,
-		children: impl IntoIterator<Item = Element<'a, Message>>,
-		on_double_click: impl Fn(MusicalTime) -> Message + 'a,
-	) -> Self {
+	pub fn new(scale: &'a Vec2, children: impl IntoIterator<Item = Element<'a, Message>>) -> Self {
 		Self {
-			rtstate,
-			position,
 			scale,
 			children: children.into_iter().collect::<Box<_>>().into(),
-			on_double_click: NoDebug(Box::new(on_double_click)),
 		}
 	}
 }
