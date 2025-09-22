@@ -40,6 +40,9 @@ pub enum Action {
 	RemoveClip(usize),
 
 	NodeToggleEnabled,
+	NodeToggleBypassed,
+	NodeTogglePolarityInverted,
+	NodeToggleChannelsSwapped,
 	NodeVolumeChanged(f32),
 	NodePanChanged(f32),
 	PluginLoad(Box<AudioProcessor<Event>>),

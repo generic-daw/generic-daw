@@ -416,13 +416,12 @@ impl Daw {
 							} else {
 								play()
 							})
-							.width(LINE_HEIGHT)
-							.align_x(Center)
+							.center_x(LINE_HEIGHT)
 						)
 						.style(button_with_radius(button::primary, border::left(5)))
 						.padding([5, 7])
 						.on_press(Message::TogglePlayback),
-						button(container(square()).width(LINE_HEIGHT).align_x(Center))
+						button(container(square()).center_x(LINE_HEIGHT))
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding([5, 7])
 							.on_press(Message::Stop),

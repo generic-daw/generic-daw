@@ -38,7 +38,7 @@ pub use event::Event;
 pub use export::export;
 pub use lod::LOD_LEVELS;
 pub use midi_clip::{Key, MidiClip, MidiKey, MidiNote};
-pub use mixer::Mixer;
+pub use mixer::{Flags, Mixer};
 pub use musical_time::MusicalTime;
 pub use recording::Recording;
 pub use track::Track;

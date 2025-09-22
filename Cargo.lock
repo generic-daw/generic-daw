@@ -1311,6 +1311,7 @@ dependencies = [
  "arc-swap",
  "atomig",
  "audio_graph",
+ "bitflags 2.9.4",
  "clap_host",
  "cpal",
  "crossbeam-queue",

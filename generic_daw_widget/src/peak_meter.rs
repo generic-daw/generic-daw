@@ -130,6 +130,12 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 			theme.extended_palette().secondary.strong.color
 		};
 
+		let clipping = if self.enabled {
+			theme.extended_palette().danger.weak.color
+		} else {
+			theme.extended_palette().secondary.strong.color
+		};
+
 		let background_color = mix(base, theme.extended_palette().background.weak.color, 0.5);
 		let background = Quad {
 			bounds,
@@ -137,20 +143,11 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 		};
 		renderer.fill_quad(background, background_color);
 
-		let mix_amt = |val: f32| {
-			let amt = 0.05 / self.state.time;
-			(val + amt - 1.0).clamp(0.0, amt) * (1.0 / amt)
-		};
-
 		let bar = self
 			.state
 			.bar
 			.interpolate_with(identity, self.state.now.get());
-		let bar_color = mix(
-			base,
-			theme.extended_palette().danger.weak.color,
-			mix_amt(bar),
-		);
+		let bar_color = if bar > 1.0 { clipping } else { base };
 		let bar_pos = bounds.height * bar.min(1.0);
 		let bar = Quad {
 			bounds: Rectangle::new(
@@ -165,11 +162,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 			.state
 			.line
 			.interpolate_with(identity, self.state.now.get());
-		let line_color = mix(
-			base,
-			theme.extended_palette().danger.weak.color,
-			mix_amt(line),
-		);
+		let line_color = if line > 1.0 { clipping } else { base };
 		let line_pos = bounds.height * line.min(1.0);
 		let max_line_height = bounds.height.sqrt();
 		let line_height = max_line_height.min(line_pos);

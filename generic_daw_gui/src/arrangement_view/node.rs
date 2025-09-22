@@ -1,5 +1,5 @@
 use super::plugin::Plugin;
-use generic_daw_core::NodeId;
+use generic_daw_core::{Flags, NodeId};
 use generic_daw_utils::NoDebug;
 use generic_daw_widget::peak_meter;
 use std::time::Instant;
@@ -15,11 +15,11 @@ pub enum NodeType {
 pub struct Node {
 	pub ty: NodeType,
 	pub id: NodeId,
-	pub peaks: NoDebug<[[peak_meter::State; 2]; 2]>,
-	pub enabled: bool,
+	pub plugins: Vec<Plugin>,
 	pub volume: f32,
 	pub pan: f32,
-	pub plugins: Vec<Plugin>,
+	pub flags: Flags,
+	pub peaks: NoDebug<[[peak_meter::State; 2]; 2]>,
 }
 
 impl Node {
@@ -27,14 +27,14 @@ impl Node {
 		Self {
 			ty,
 			id,
+			plugins: Vec::new(),
+			volume: 1.0,
+			pan: 0.0,
+			flags: Flags::ENABLED,
 			peaks: NoDebug([
 				[peak_meter::State::new(1.0), peak_meter::State::new(1.0)],
 				[peak_meter::State::new(3.0), peak_meter::State::new(3.0)],
 			]),
-			enabled: true,
-			volume: 1.0,
-			pan: 0.0,
-			plugins: Vec::new(),
 		}
 	}
 

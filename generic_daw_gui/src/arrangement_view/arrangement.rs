@@ -7,8 +7,8 @@ use super::{
 use crate::{clap_host::Message as ClapHostMessage, config::Config, daw::Message as DawMessage};
 use bit_set::BitSet;
 use generic_daw_core::{
-	self as core, Action, AudioGraph, Batch, Clip, Event, Message, Mixer, MusicalTime, NodeId,
-	NodeImpl as _, RtState, Stream, StreamTrait as _, Update, Version, build_output_stream,
+	self as core, Action, AudioGraph, Batch, Clip, Event, Flags, Message, Mixer, MusicalTime,
+	NodeId, NodeImpl as _, RtState, Stream, StreamTrait as _, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 	export,
 };
@@ -103,53 +103,60 @@ impl Arrangement {
 	}
 
 	pub fn node_volume_changed(&mut self, node: NodeId, volume: f32) {
-		self.nodes.get_mut(*node).unwrap().0.volume = volume;
+		self.node_mut(node).volume = volume;
 		self.action(node, Action::NodeVolumeChanged(volume));
 	}
 
 	pub fn node_pan_changed(&mut self, node: NodeId, pan: f32) {
-		self.nodes.get_mut(*node).unwrap().0.pan = pan;
+		self.node_mut(node).pan = pan;
 		self.action(node, Action::NodePanChanged(pan));
 	}
 
 	pub fn node_toggle_enabled(&mut self, node: NodeId) {
-		self.nodes.get_mut(*node).unwrap().0.enabled ^= true;
+		self.node_mut(node).flags.toggle(Flags::ENABLED);
 		self.action(node, Action::NodeToggleEnabled);
 	}
 
+	pub fn node_toggle_bypassed(&mut self, node: NodeId) {
+		self.node_mut(node).flags.toggle(Flags::BYPASSED);
+		self.action(node, Action::NodeToggleBypassed);
+	}
+
+	pub fn node_toggle_polarity_inverted(&mut self, node: NodeId) {
+		self.node_mut(node).flags.toggle(Flags::POLARITY_INVERTED);
+		self.action(node, Action::NodeTogglePolarityInverted);
+	}
+
+	pub fn node_toggle_channels_swapped(&mut self, node: NodeId) {
+		self.node_mut(node).flags.toggle(Flags::CHANNELS_SWAPPED);
+		self.action(node, Action::NodeToggleChannelsSwapped);
+	}
+
 	pub fn plugin_load(&mut self, node: NodeId, processor: AudioProcessor<Event>) {
-		self.nodes
-			.get_mut(*node)
-			.unwrap()
-			.0
+		self.node_mut(node)
 			.plugins
 			.push(Plugin::new(processor.id(), processor.descriptor().clone()));
 		self.action(node, Action::PluginLoad(Box::new(processor)));
 	}
 
 	pub fn plugin_remove(&mut self, node: NodeId, index: usize) -> Plugin {
-		let plugin = self.nodes.get_mut(*node).unwrap().0.plugins.remove(index);
+		let plugin = self.node_mut(node).plugins.remove(index);
 		self.action(node, Action::PluginRemove(index));
 		plugin
 	}
 
 	pub fn plugin_moved(&mut self, node: NodeId, from: usize, to: usize) {
-		self.nodes
-			.get_mut(*node)
-			.unwrap()
-			.0
-			.plugins
-			.shift_move(from, to);
+		self.node_mut(node).plugins.shift_move(from, to);
 		self.action(node, Action::PluginMoved(from, to));
 	}
 
 	pub fn plugin_toggle_enabled(&mut self, node: NodeId, index: usize) {
-		self.nodes.get_mut(*node).unwrap().0.plugins[index].enabled ^= true;
+		self.node_mut(node).plugins[index].enabled ^= true;
 		self.action(node, Action::PluginToggleEnabled(index));
 	}
 
 	pub fn plugin_mix_changed(&mut self, node: NodeId, index: usize, mix: f32) {
-		self.nodes.get_mut(*node).unwrap().0.plugins[index].mix = mix;
+		self.node_mut(node).plugins[index].mix = mix;
 		self.action(node, Action::PluginMixChanged(index, mix));
 	}
 
@@ -222,25 +229,25 @@ impl Arrangement {
 
 	pub fn solo_track(&mut self, id: NodeId) {
 		for i in 0..self.tracks.len() {
-			let track = &self.tracks[i];
+			let track_id = self.tracks[i].id;
 
-			if self.nodes.get_mut(*track.id).unwrap().0.enabled == (track.id == id) {
+			if self.node_mut(track_id).flags.contains(Flags::ENABLED) == (id == track_id) {
 				continue;
 			}
 
-			self.node_toggle_enabled(track.id);
+			self.node_toggle_enabled(track_id);
 		}
 	}
 
 	pub fn enable_all_tracks(&mut self) {
 		for i in 0..self.tracks.len() {
-			let track = &self.tracks[i];
+			let track_id = self.tracks[i].id;
 
-			if self.nodes.get_mut(*track.id).unwrap().0.enabled {
+			if self.node_mut(track_id).flags.contains(Flags::ENABLED) {
 				continue;
 			}
 
-			self.node_toggle_enabled(track.id);
+			self.node_toggle_enabled(track_id);
 		}
 	}
 
@@ -254,8 +261,16 @@ impl Arrangement {
 		&self.nodes[*id].0
 	}
 
+	fn node_mut(&mut self, id: NodeId) -> &mut Node {
+		&mut self.nodes.get_mut(*id).unwrap().0
+	}
+
 	pub fn outgoing(&self, id: NodeId) -> &BitSet {
 		&self.nodes[*id].1
+	}
+
+	fn outgoing_mut(&mut self, id: NodeId) -> &mut BitSet {
+		&mut self.nodes.get_mut(*id).unwrap().1
 	}
 
 	pub fn push_channel(&mut self, node: Mixer) {
@@ -318,11 +333,11 @@ impl Arrangement {
 	}
 
 	pub fn connect_succeeded(&mut self, from: NodeId, to: NodeId) {
-		self.nodes.get_mut(*from).unwrap().1.insert(*to);
+		self.outgoing_mut(from).insert(*to);
 	}
 
 	pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
-		self.nodes.get_mut(*from).unwrap().1.remove(*to);
+		self.outgoing_mut(from).remove(*to);
 		self.producer.push(Message::Disconnect(from, to)).unwrap();
 	}
 

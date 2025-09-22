@@ -1,13 +1,15 @@
 use crate::{
+	arrangement_view::node::NodeType,
 	clap_host::{ClapHost, Message as ClapHostMessage},
 	components::{
-		circle_plus, icon_button, space, styled_scrollable, styled_scrollable_with_direction,
+		circle_plus, icon_button, icon_text_button, space, styled_scrollable,
+		styled_scrollable_with_direction,
 	},
 	config::Config,
-	icons::{chevron_up, grip_vertical, x},
+	icons::{arrow_left_right, arrow_up_down, chevron_up, circle_off, grip_vertical, x},
 	stylefns::{bordered_box_with_radius, button_with_radius, menu_with_border, slider_secondary},
 	widget::{
-		LINE_HEIGHT, TEXT_HEIGHT,
+		LINE_HEIGHT,
 		arrangement::{Action as ArrangementAction, Arrangement as ArrangementWidget},
 		audio_clip::AudioClip as AudioClipWidget,
 		midi_clip::MidiClip as MidiClipWidget,
@@ -23,7 +25,8 @@ use arrangement::Arrangement as ArrangementWrapper;
 use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
-	AudioClip, Batch, Clip, Decibels, MidiClip, MidiNote, MusicalTime, NodeId, Recording, Sample,
+	AudioClip, Batch, Clip, Decibels, Flags, MidiClip, MidiNote, MusicalTime, NodeId, Recording,
+	Sample,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
 use generic_daw_utils::{NoClone, NoDebug, Vec2};
@@ -43,7 +46,7 @@ use iced::{
 		scrollable::{Direction, Scrollbar},
 		slider, text,
 		text::{IntoFragment, Wrapping},
-		value, vertical_rule, vertical_slider, vertical_space,
+		value, vertical_rule, vertical_slider,
 	},
 };
 use iced_persistent::persistent;
@@ -97,6 +100,9 @@ pub enum Message {
 	ChannelVolumeChanged(NodeId, f32),
 	ChannelPanChanged(NodeId, f32),
 	ChannelToggleEnabled(NodeId),
+	ChannelToggleBypassed(NodeId),
+	ChannelTogglePolarityInverted(NodeId),
+	ChannelToggleChannelsSwapped(NodeId),
 
 	PluginLoad(NodeId, PluginDescriptor, bool),
 	PluginSetState(NodeId, usize, NoDebug<Box<[u8]>>),
@@ -239,9 +245,9 @@ impl ArrangementView {
 			Message::ConnectSucceeded((from, to)) => self.arrangement.connect_succeeded(from, to),
 			Message::Disconnect((from, to)) => self.arrangement.disconnect(from, to),
 			Message::ChannelAdd => {
-				return Task::perform(self.arrangement.add_channel(), |con| {
-					Message::ConnectSucceeded(con.unwrap())
-				});
+				return Task::future(self.arrangement.add_channel())
+					.and_then(Task::done)
+					.map(Message::ConnectSucceeded);
 			}
 			Message::ChannelRemove(id) => {
 				self.arrangement.remove_channel(id);
@@ -261,6 +267,13 @@ impl ArrangementView {
 			}
 			Message::ChannelPanChanged(id, pan) => self.arrangement.node_pan_changed(id, pan),
 			Message::ChannelToggleEnabled(id) => self.arrangement.node_toggle_enabled(id),
+			Message::ChannelToggleBypassed(id) => self.arrangement.node_toggle_bypassed(id),
+			Message::ChannelToggleChannelsSwapped(id) => {
+				self.arrangement.node_toggle_channels_swapped(id);
+			}
+			Message::ChannelTogglePolarityInverted(id) => {
+				self.arrangement.node_toggle_polarity_inverted(id);
+			}
 			Message::PluginLoad(node, descriptor, show) => {
 				static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
 					HostInfo::new_from_cstring(
@@ -397,9 +410,11 @@ impl ArrangementView {
 					}
 
 					if track == self.arrangement.tracks().len() {
-						futs.push(Task::perform(self.arrangement.add_track(), |con| {
-							Message::ConnectSucceeded(con.unwrap())
-						}));
+						futs.push(
+							Task::future(self.arrangement.add_track())
+								.and_then(Task::done)
+								.map(Message::ConnectSucceeded),
+						);
 					}
 
 					self.arrangement.add_clip(track, clip.clone());
@@ -414,9 +429,9 @@ impl ArrangementView {
 				}
 			}
 			Message::TrackAdd => {
-				return Task::perform(self.arrangement.add_track(), |con| {
-					Message::ConnectSucceeded(con.unwrap())
-				});
+				return Task::future(self.arrangement.add_track())
+					.and_then(Task::done)
+					.map(Message::ConnectSucceeded);
 			}
 			Message::TrackRemove(id) => {
 				let track = self.arrangement.track_of(id).unwrap();
@@ -535,7 +550,7 @@ impl ArrangementView {
 
 				self.arrangement_scale += scale;
 				self.arrangement_scale.x = self.arrangement_scale.x.clamp(3.0, 15f32.next_down());
-				self.arrangement_scale.y = self.arrangement_scale.y.clamp(77.0, 200.0);
+				self.arrangement_scale.y = self.arrangement_scale.y.clamp(50.0, 200.0);
 
 				if scale == Vec2::ZERO || old_scale != self.arrangement_scale {
 					self.arrangement_position += pos;
@@ -755,19 +770,30 @@ impl ArrangementView {
 					.map(|track| track.id)
 					.map(|id| {
 						let node = self.arrangement.node(id);
+						let enabled = node.flags.contains(Flags::ENABLED);
+
+						let button_style = |cond| {
+							if !node.flags.contains(Flags::ENABLED) {
+								button::secondary
+							} else if cond {
+								button::warning
+							} else {
+								button::primary
+							}
+						};
 
 						container(
 							row![
 								row![
-									PeakMeter::new(&node.peaks[0][0], node.enabled),
-									PeakMeter::new(&node.peaks[0][1], node.enabled)
+									PeakMeter::new(&node.peaks[0][0], enabled),
+									PeakMeter::new(&node.peaks[0][1], enabled)
 								]
 								.spacing(2),
 								column![
 									Knob::new(0.0..=1.0, node.volume.cbrt(), move |v| {
 										Message::ChannelVolumeChanged(id, v.powi(3))
 									})
-									.enabled(node.enabled)
+									.enabled(enabled)
 									.tooltip(Decibels::from_amplitude(node.volume)),
 									Knob::new(
 										-1.0..=1.0,
@@ -776,69 +802,42 @@ impl ArrangementView {
 									)
 									.center(0.0)
 									.reset(0.0)
-									.enabled(node.enabled)
+									.enabled(enabled)
 									.tooltip(format_pan(node.pan)),
 								]
 								.spacing(5)
 								.wrap(),
 								column![
 									icon_button(
-										"M",
-										if node.enabled {
-											button::primary
-										} else {
-											button::secondary
-										}
-									)
-									.on_press(Message::TrackToggleEnabled(id)),
-									icon_button(
-										"S",
-										if self.soloed_track == Some(id) {
-											button::warning
-										} else if node.enabled {
-											button::primary
-										} else {
-											button::secondary
-										}
-									)
-									.on_press(Message::TrackToggleSolo(id)),
-									icon_button(
 										x(),
-										if node.enabled {
+										if enabled {
 											button::danger
 										} else {
 											button::secondary
 										}
 									)
 									.on_press(Message::TrackRemove(id)),
-									column![
-										vertical_space(),
-										button(
-											Dot::new(
-												self.recording
-													.as_ref()
-													.is_some_and(|&(_, i)| i == id)
-											)
-											.radius(5.0)
+									icon_text_button("M", button_style(false))
+										.on_press(Message::TrackToggleEnabled(id)),
+									icon_text_button(
+										"S",
+										button_style(self.soloed_track == Some(id))
+									)
+									.on_press(Message::TrackToggleSolo(id)),
+									button(
+										Dot::new(
+											self.recording.as_ref().is_some_and(|&(_, i)| i == id)
 										)
-										.padding(1.5)
-										.on_press(Message::ToggleRecord(id))
-										.style(
-											if self
-												.recording
-												.as_ref()
-												.is_some_and(|&(_, i)| i == id)
-											{
-												button::danger
-											} else if node.enabled {
-												button::primary
-											} else {
-												button::secondary
-											}
-										)
-									]
+										.radius(5.5)
+									)
+									.padding(2.0)
+									.on_press(Message::ToggleRecord(id))
+									.style(button_style(
+										self.recording.as_ref().is_some_and(|&(_, i)| i == id)
+									))
 								]
 								.spacing(5)
+								.wrap()
 							]
 							.spacing(5),
 						)
@@ -864,6 +863,7 @@ impl ArrangementView {
 						.iter()
 						.map(|track| {
 							let node = self.arrangement.node(track.id);
+							let enabled = node.flags.contains(Flags::ENABLED);
 
 							TrackWidget::new(
 								&self.arrangement_scale,
@@ -876,7 +876,7 @@ impl ArrangementView {
 											self.arrangement.rtstate(),
 											&self.arrangement_position,
 											&self.arrangement_scale,
-											node.enabled,
+											enabled,
 										)
 										.into(),
 										Clip::Midi(clip) => MidiClipWidget::new(
@@ -884,7 +884,7 @@ impl ArrangementView {
 											self.arrangement.rtstate(),
 											&self.arrangement_position,
 											&self.arrangement_scale,
-											node.enabled,
+											enabled,
 											Message::OpenMidiClip(clip.clone()),
 										)
 										.into(),
@@ -916,236 +916,37 @@ impl ArrangementView {
 	}
 
 	fn mixer(&self) -> Element<'_, Message> {
-		fn channel<'a>(
-			selected_channel: Option<NodeId>,
-			name: impl IntoFragment<'a>,
-			node: &'a Node,
-			buttons: impl Fn(bool, NodeId) -> Element<'a, Message>,
-			connect: impl Fn(bool, NodeId) -> Element<'a, Message>,
-		) -> Element<'a, Message> {
-			button(
-				column![
-					row![
-						column![
-							text(name).size(13).line_height(1.0),
-							Knob::new(
-								-1.0..=1.0,
-								node.pan,
-								Message::ChannelPanChanged.with(node.id)
-							)
-							.center(0.0)
-							.reset(0.0)
-							.enabled(node.enabled)
-							.tooltip(format_pan(node.pan)),
-						]
-						.spacing(3)
-						.align_x(Center),
-						buttons(node.enabled, node.id)
-					]
-					.spacing(3),
-					container(value(Decibels::from_amplitude(node.volume)).line_height(1.0))
-						.width(54)
-						.style(bordered_box_with_radius(0))
-						.align_x(Center)
-						.padding(2),
-					row![
-						PeakMeter::new(&node.peaks[1][0], node.enabled).width(16.0),
-						vertical_slider(0.0..=1.0, node.volume.cbrt(), |v| {
-							Message::ChannelVolumeChanged(node.id, v.powi(3))
-						})
-						.step(f32::EPSILON)
-						.style(if node.enabled {
-							slider::default
-						} else {
-							slider_secondary
-						}),
-						PeakMeter::new(&node.peaks[1][1], node.enabled).width(16.0),
-					]
-					.spacing(3),
-					connect(node.enabled, node.id)
-				]
-				.spacing(3)
-				.align_x(Center),
-			)
-			.padding(5)
-			.on_press(Message::ChannelSelect(node.id))
-			.style(move |t, _| {
-				let pair = if Some(node.id) == selected_channel {
-					t.extended_palette().background.weak
-				} else {
-					t.extended_palette().background.weakest
-				};
-
-				button::Style {
-					background: Some(pair.color.into()),
-					text_color: pair.text,
-					border: border::width(1).color(t.extended_palette().background.strong.color),
-					..button::Style::default()
-				}
-			})
-			.into()
-		}
-
-		let selected_channel = self
-			.selected_channel
-			.map(|c| (self.arrangement.node(c), self.arrangement.outgoing(c)));
-
-		let connect = |enabled: bool, id: NodeId| {
-			selected_channel.map_or_else(
-				|| Element::new(space().height(LINE_HEIGHT)),
-				|(node, outgoing)| {
-					if node.id == id {
-						space().height(LINE_HEIGHT).into()
-					} else {
-						let connected = outgoing.contains(*id);
-
-						button(chevron_up())
-							.style(if enabled && connected {
-								button::primary
-							} else {
-								button::secondary
-							})
-							.padding(0)
-							.on_press(if connected {
-								Message::Disconnect((node.id, id))
-							} else {
-								Message::ConnectRequest((node.id, id))
-							})
-							.into()
-					}
-				},
-			)
-		};
-
 		let mixer_panel = persistent(
 			styled_scrollable_with_direction(
-				row(once(channel(
-					self.selected_channel,
-					"M",
-					self.arrangement.master(),
-					|enabled, id| {
-						column![
-							icon_button(
-								"M",
-								if enabled {
-									button::primary
-								} else {
-									button::secondary
-								}
-							)
-							.on_press(Message::ChannelToggleEnabled(id)),
-							space().height(13),
-							space().height(13)
-						]
-						.spacing(5)
-						.into()
-					},
-					connect,
-				))
-				.chain(once(vertical_rule(1).into()))
-				.chain({
-					let mut iter = self
-						.arrangement
-						.tracks()
-						.iter()
-						.enumerate()
-						.map(|(i, track)| {
-							let name = format!("T{}", i + 1);
-							let node = self.arrangement.node(track.id);
+				row(
+					once(self.mixer_channel(self.arrangement.master(), "M".to_owned()))
+						.chain(once(vertical_rule(1).into()))
+						.chain({
+							let mut iter = self
+								.arrangement
+								.tracks()
+								.iter()
+								.map(|track| self.arrangement.node(track.id))
+								.enumerate()
+								.map(|(i, node)| self.mixer_channel(node, format!("T{}", i + 1)))
+								.peekable();
 
-							channel(
-								self.selected_channel,
-								name,
-								node,
-								|enabled, id| {
-									column![
-										icon_button(
-											"M",
-											if enabled {
-												button::primary
-											} else {
-												button::secondary
-											}
-										)
-										.on_press(Message::TrackToggleEnabled(id)),
-										icon_button(
-											"S",
-											if self.soloed_track == Some(id) {
-												button::warning
-											} else if enabled {
-												button::primary
-											} else {
-												button::secondary
-											}
-										)
-										.on_press(Message::TrackToggleSolo(id)),
-										icon_button(
-											x(),
-											if enabled {
-												button::danger
-											} else {
-												button::secondary
-											}
-										)
-										.on_press(Message::TrackRemove(id))
-									]
-									.spacing(5)
-									.into()
-								},
-								|_, _| space().height(LINE_HEIGHT).into(),
-							)
+							let one = iter.peek().map(|_| vertical_rule(1).into());
+							iter.chain(one)
 						})
-						.peekable();
+						.chain({
+							let mut iter = self
+								.arrangement
+								.channels()
+								.enumerate()
+								.map(|(i, node)| self.mixer_channel(node, format!("C{}", i + 1)))
+								.peekable();
 
-					let one = iter.peek().map(|_| vertical_rule(1).into());
-					iter.chain(one)
-				})
-				.chain({
-					let mut iter = self
-						.arrangement
-						.channels()
-						.enumerate()
-						.map(|(i, node)| {
-							let name = format!("C{}", i + 1);
-
-							channel(
-								self.selected_channel,
-								name,
-								node,
-								|enabled, id| {
-									column![
-										icon_button(
-											"M",
-											if enabled {
-												button::primary
-											} else {
-												button::secondary
-											}
-										)
-										.on_press(Message::ChannelToggleEnabled(id)),
-										space().height(13),
-										icon_button(
-											x(),
-											if enabled {
-												button::danger
-											} else {
-												button::secondary
-											}
-										)
-										.on_press(Message::ChannelRemove(id)),
-									]
-									.spacing(5)
-									.into()
-								},
-								connect,
-							)
+							let one = iter.peek().map(|_| vertical_rule(1).into());
+							iter.chain(one)
 						})
-						.peekable();
-
-					let one = iter.peek().map(|_| vertical_rule(1).into());
-					iter.chain(one)
-				})
-				.chain(once(circle_plus().on_press(Message::ChannelAdd).into())))
+						.chain(once(circle_plus().on_press(Message::ChannelAdd).into())),
+				)
 				.align_y(Center)
 				.spacing(5),
 				Direction::Horizontal(Scrollbar::default()),
@@ -1176,7 +977,7 @@ impl ArrangementView {
 										Knob::new(0.0..=1.0, plugin.mix, move |mix| {
 											Message::PluginMixChanged(selected, i, mix)
 										})
-										.radius(TEXT_HEIGHT)
+										.radius(LINE_HEIGHT.midpoint(14.0))
 										.enabled(plugin.enabled)
 										.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
 										button(
@@ -1184,8 +985,10 @@ impl ArrangementView {
 												text(&*plugin.descriptor.name)
 													.wrapping(Wrapping::None)
 											)
+											.padding(7)
 											.clip(true)
 										)
+										.padding(0)
 										.style(button_with_radius(
 											if plugin.enabled {
 												button::primary
@@ -1202,7 +1005,7 @@ impl ArrangementView {
 											)
 										)),
 										column![
-											icon_button(
+											icon_text_button(
 												"M",
 												if plugin.enabled {
 													button::primary
@@ -1225,7 +1028,7 @@ impl ArrangementView {
 										mouse_area(
 											container(
 												grip_vertical().line_height(
-													(LINE_HEIGHT + 10.0) / LINE_HEIGHT
+													(LINE_HEIGHT + 14.0) / LINE_HEIGHT
 												)
 											)
 											.style(bordered_box_with_radius(border::right(5)))
@@ -1249,6 +1052,144 @@ impl ArrangementView {
 		} else {
 			mixer_panel.into()
 		}
+	}
+
+	fn mixer_channel<'a>(
+		&'a self,
+		node: &'a Node,
+		name: impl IntoFragment<'a>,
+	) -> Element<'a, Message> {
+		let button_style = |cond| {
+			if !node.flags.contains(Flags::ENABLED) {
+				button::secondary
+			} else if cond {
+				button::warning
+			} else {
+				button::primary
+			}
+		};
+
+		button(
+			column![
+				text(name).size(14).line_height(1.0),
+				Knob::new(
+					-1.0..=1.0,
+					node.pan,
+					Message::ChannelPanChanged.with(node.id)
+				)
+				.center(0.0)
+				.reset(0.0)
+				.radius(23.0)
+				.enabled(node.flags.contains(Flags::ENABLED))
+				.tooltip(format_pan(node.pan)),
+				row![
+					icon_text_button("M", button_style(false))
+						.on_press(Message::ChannelToggleEnabled(node.id)),
+					icon_text_button("S", button_style(self.soloed_track == Some(node.id)))
+						.on_press_maybe(
+							(node.ty == NodeType::Track)
+								.then_some(Message::TrackToggleSolo(node.id)),
+						),
+					icon_button(
+						x(),
+						if node.flags.contains(Flags::ENABLED) {
+							button::danger
+						} else {
+							button::secondary
+						},
+					)
+					.on_press_maybe(
+						(node.ty != NodeType::Master).then_some(Message::TrackRemove(node.id)),
+					),
+				]
+				.spacing(5),
+				row![
+					icon_button(
+						circle_off(),
+						button_style(node.flags.contains(Flags::BYPASSED))
+					)
+					.on_press(Message::ChannelToggleBypassed(node.id)),
+					icon_button(
+						arrow_left_right(),
+						button_style(node.flags.contains(Flags::CHANNELS_SWAPPED))
+					)
+					.on_press(Message::ChannelToggleChannelsSwapped(node.id)),
+					icon_button(
+						arrow_up_down(),
+						button_style(node.flags.contains(Flags::POLARITY_INVERTED))
+					)
+					.on_press(Message::ChannelTogglePolarityInverted(node.id)),
+				]
+				.spacing(5),
+				container(value(Decibels::from_amplitude(node.volume)).line_height(1.0))
+					.style(bordered_box_with_radius(0))
+					.center_x(55)
+					.padding(2),
+				row![
+					PeakMeter::new(&node.peaks[1][0], node.flags.contains(Flags::ENABLED))
+						.width(16.0),
+					vertical_slider(0.0..=1.0, node.volume.cbrt(), |v| {
+						Message::ChannelVolumeChanged(node.id, v.powi(3))
+					})
+					.width(17)
+					.step(f32::EPSILON)
+					.style(if node.flags.contains(Flags::ENABLED) {
+						slider::default
+					} else {
+						slider_secondary
+					}),
+					PeakMeter::new(&node.peaks[1][1], node.flags.contains(Flags::ENABLED))
+						.width(16.0),
+				]
+				.spacing(3),
+				self.selected_channel.map_or_else(
+					|| Element::new(space().height(LINE_HEIGHT)),
+					|selected_channel| {
+						if selected_channel == node.id {
+							space().height(LINE_HEIGHT).into()
+						} else {
+							let connected = self
+								.arrangement
+								.outgoing(selected_channel)
+								.contains(*node.id);
+
+							button(chevron_up())
+								.style(if node.flags.contains(Flags::ENABLED) && connected {
+									button::primary
+								} else {
+									button::secondary
+								})
+								.padding(0)
+								.on_press(if connected {
+									Message::Disconnect((selected_channel, node.id))
+								} else {
+									Message::ConnectRequest((selected_channel, node.id))
+								})
+								.into()
+						}
+					},
+				)
+			]
+			.spacing(5)
+			.align_x(Center),
+		)
+		.padding(5)
+		.on_press(Message::ChannelSelect(node.id))
+		.style(move |t, _| {
+			let pair = if Some(node.id) == self.selected_channel {
+				t.extended_palette().background.weak
+			} else {
+				t.extended_palette().background.weakest
+			};
+
+			button::Style {
+				background: Some(pair.color.into()),
+				text_color: pair.text,
+				border: border::width(1).color(t.extended_palette().background.strong.color),
+				..button::Style::default()
+			}
+		})
+		.into()
 	}
 
 	fn piano_roll<'a>(&'a self, clip: &'a MidiClip) -> Element<'a, Message> {

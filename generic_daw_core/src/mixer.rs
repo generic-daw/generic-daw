@@ -4,6 +4,7 @@ use crate::{
 	event::Event,
 };
 use audio_graph::{NodeId, NodeImpl};
+use bitflags::bitflags;
 use clap_host::AudioProcessor;
 use generic_daw_utils::ShiftMoveExt as _;
 use std::f32::consts::{FRAC_PI_4, SQRT_2};
@@ -25,13 +26,29 @@ impl Plugin {
 	}
 }
 
+bitflags! {
+	#[derive(Clone, Copy, Debug)]
+	pub struct Flags: u8 {
+		const ENABLED = 1 << 0;
+		const BYPASSED = 1 << 1;
+		const POLARITY_INVERTED = 1 << 2;
+		const CHANNELS_SWAPPED = 1 << 3;
+	}
+}
+
+impl Flags {
+	fn processing(self) -> bool {
+		self.contains(Self::ENABLED) && !self.contains(Self::BYPASSED)
+	}
+}
+
 #[derive(Debug)]
 pub struct Mixer {
 	id: NodeId,
 	plugins: Vec<Plugin>,
 	volume: f32,
 	pan: f32,
-	enabled: bool,
+	flags: Flags,
 }
 
 impl NodeImpl for Mixer {
@@ -39,14 +56,8 @@ impl NodeImpl for Mixer {
 	type State = State;
 
 	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
-		if !self.enabled {
-			audio.fill(0.0);
-			events.clear();
-			return;
-		}
-
 		for plugin in &mut self.plugins {
-			if plugin.enabled {
+			if self.flags.processing() && plugin.enabled {
 				plugin.processor.process(audio, events, plugin.mix);
 			} else {
 				plugin.processor.flush(events);
@@ -64,7 +75,24 @@ impl NodeImpl for Mixer {
 				.for_each(|update| state.updates.push(update));
 		}
 
-		let [lpan, rpan] = pan(self.pan).map(|s| s * self.volume);
+		if !self.flags.contains(Flags::ENABLED) {
+			audio.fill(0.0);
+			events.clear();
+			return;
+		}
+
+		if self.flags.contains(Flags::CHANNELS_SWAPPED) {
+			for [l, r] in audio.as_chunks_mut().0 {
+				(*l, *r) = (*r, *l);
+			}
+		}
+
+		let [mut lpan, mut rpan] = pan(self.pan).map(|s| s * self.volume);
+
+		if self.flags.contains(Flags::POLARITY_INVERTED) {
+			lpan = -lpan;
+			rpan = -rpan;
+		}
 
 		let peaks = peaks(audio, lpan, rpan);
 		if peaks != [0.0; 2] {
@@ -77,26 +105,25 @@ impl NodeImpl for Mixer {
 	}
 
 	fn delay(&self) -> usize {
-		if self.enabled {
-			self.plugins
-				.iter()
-				.filter(|entry| entry.enabled)
-				.map(|entry| entry.processor.delay())
-				.sum()
-		} else {
-			0
-		}
+		self.plugins
+			.iter()
+			.filter(|entry| self.flags.processing() && entry.enabled)
+			.map(|entry| entry.processor.delay())
+			.sum()
 	}
 
 	fn expensive(&self) -> bool {
-		self.plugins.iter().any(|plugin| plugin.enabled)
+		self.flags.processing() && self.plugins.iter().any(|plugin| plugin.enabled)
 	}
 }
 
 impl Mixer {
 	pub fn apply(&mut self, action: Action) {
 		match action {
-			Action::NodeToggleEnabled => self.enabled ^= true,
+			Action::NodeToggleEnabled => self.flags.toggle(Flags::ENABLED),
+			Action::NodeToggleBypassed => self.flags.toggle(Flags::BYPASSED),
+			Action::NodeTogglePolarityInverted => self.flags.toggle(Flags::POLARITY_INVERTED),
+			Action::NodeToggleChannelsSwapped => self.flags.toggle(Flags::CHANNELS_SWAPPED),
 			Action::NodeVolumeChanged(volume) => self.volume = volume,
 			Action::NodePanChanged(pan) => self.pan = pan,
 			Action::PluginLoad(processor) => self.plugins.push(Plugin::new(*processor)),
@@ -122,7 +149,7 @@ impl Default for Mixer {
 			id: NodeId::unique(),
 			volume: 1.0,
 			pan: 0.0,
-			enabled: true,
+			flags: Flags::ENABLED,
 		}
 	}
 }

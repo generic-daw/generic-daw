@@ -5,12 +5,12 @@ use crate::{
 };
 use generic_daw_widget::drag_handle::DragHandle;
 use iced::{
-	Alignment::Center,
 	Element, Font,
 	Length::Fill,
 	Shrink, Theme,
 	border::{self, Radius},
 	overlay::menu,
+	padding,
 	widget::{
 		Button, PickList, Scrollable, Space, Text, button, container, pick_list, row,
 		scrollable::{self, Direction},
@@ -25,19 +25,25 @@ pub fn space() -> Space {
 }
 
 pub fn icon_button<'a, Message>(
-	t: impl Into<Text<'a>>,
+	t: Text<'a>,
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
 ) -> Button<'a, Message>
 where
 	Message: Clone + 'a,
 {
-	button(
-		container(t.into().size(13).line_height(1.0))
-			.width(13)
-			.align_x(Center),
-	)
-	.style(button_with_radius(style, 0))
-	.padding(0)
+	button(container(t.size(13).line_height(1.0)).center_x(13))
+		.style(button_with_radius(style, 0))
+		.padding(padding::all(1).top(2).bottom(0))
+}
+
+pub fn icon_text_button<'a, Message>(
+	t: &'a str,
+	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
+) -> Button<'a, Message>
+where
+	Message: Clone + 'a,
+{
+	icon_button(t.into(), style).padding(1)
 }
 
 pub fn number_input<'a, Message>(
@@ -79,17 +85,13 @@ pub fn circle_plus<'a, Message>() -> Button<'a, Message>
 where
 	Message: Clone + 'a,
 {
-	button(
-		container(plus().size(LINE_HEIGHT + 6.0))
-			.width(LINE_HEIGHT + 6.0)
-			.align_x(Center),
-	)
-	.style(|t, s| {
-		let mut style = button::primary(t, s);
-		style.border.radius = f32::INFINITY.into();
-		style
-	})
-	.padding(5)
+	button(container(plus().size(LINE_HEIGHT + 6.0)).center_x(LINE_HEIGHT + 6.0))
+		.style(|t, s| {
+			let mut style = button::primary(t, s);
+			style.border.radius = f32::INFINITY.into();
+			style
+		})
+		.padding(5)
 }
 
 pub fn pick_list_custom_handle<'a, T, L, V, Message>(

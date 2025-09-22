@@ -1,5 +1,10 @@
+use iced::{Font, font::Family};
+
 pub static LUCIDE_BYTES: &[u8] = include_bytes!("../../Lucide.ttf");
-pub static LUCIDE_FONT: iced::Font = iced::Font::with_name("lucide");
+pub static LUCIDE_FONT: Font = Font {
+	family: Family::Name("lucide"),
+	..Font::MONOSPACE
+};
 
 macro_rules! icon {
 	($name:ident = $icon:literal) => {
@@ -30,5 +35,8 @@ icon!(square = 57703);
 icon!(volume_2 = 57771);
 icon!(x = 57778);
 icon!(move_vertical = 57799);
+icon!(arrow_left_right = 57930);
+icon!(arrow_up_down = 58241);
+icon!(circle_off = 58373);
 icon!(chart_no_axes_gantt = 58568);
 icon!(file_music = 58722);
