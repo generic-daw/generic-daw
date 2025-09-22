@@ -8,7 +8,10 @@ use crate::{
 	file_tree::{FileTree, Message as FileTreeMessage},
 	icons::{chart_no_axes_gantt, pause, play, sliders_vertical, square},
 	state::State,
-	stylefns::{bordered_box_with_radius, button_with_radius, pick_list_with_radius},
+	stylefns::{
+		bordered_box_with_radius, button_with_radius, pick_list_with_radius,
+		progress_bar_with_radius,
+	},
 	widget::LINE_HEIGHT,
 };
 use generic_daw_core::{
@@ -19,7 +22,9 @@ use generic_daw_utils::NoClone;
 use generic_daw_widget::dot::Dot;
 use iced::{
 	Alignment::Center,
-	Color, Element, Event, Fill, Font, Function as _, Subscription, Task, Theme, border,
+	Color, Element, Event, Fill, Font, Function as _,
+	Length::Shrink,
+	Subscription, Task, Theme, border,
 	event::{self, Status},
 	keyboard,
 	mouse::Interaction,
@@ -494,79 +499,72 @@ impl Daw {
 				mouse_area(
 					center(
 						column![
-							progress_bar(0.0..=1.0, progress).style(
+							progress_bar(0.0..=1.0, progress).style(progress_bar_with_radius(
 								if self.missing_samples.is_empty() {
 									progress_bar::primary
 								} else {
 									progress_bar::danger
-								}
-							),
+								},
+								5
+							)),
 							(!self.missing_samples.is_empty()).then(|| container(
-								container(
-									column(
-										self.missing_samples
-											.iter()
-											.map(|(name, _)| &**name)
-											.enumerate()
-											.map(|(i, name)| {
+								column(
+									self.missing_samples
+										.iter()
+										.map(|(name, _)| &**name)
+										.enumerate()
+										.map(|(i, name)| {
+											row![
+												"can't find sample",
+												container(text(name).font(Font::MONOSPACE))
+													.padding([5, 10])
+													.style(|t| bordered_box_with_radius(5)(t)
+														.background(
+															t.extended_palette()
+																.background
+																.weakest
+																.color
+														)),
+												horizontal_space(),
 												row![
-													row![
-														"can't find sample",
-														container(text(name).font(Font::MONOSPACE))
-															.padding([5, 10])
-															.style(|t| {
-																bordered_box_with_radius(5)(t)
-																	.background(
-																		t.extended_palette()
-																			.background
-																			.weakest
-																			.color,
-																	)
-															}),
-													]
-													.spacing(10)
-													.align_y(Center),
-													row![
-														button("Pick")
-															.on_press(
-																Message::PickSampleFileDialog(i)
-															)
-															.style(button_with_radius(
-																button::success,
-																border::left(5)
-															)),
-														button("Ignore")
-															.on_press(Message::FoundSampleResponse(
-																i,
-																Feedback::Ignore
-															))
-															.style(button_with_radius(
-																button::warning,
-																0
-															)),
-														button("Cancel")
-															.on_press(Message::FoundSampleResponse(
-																i,
-																Feedback::Cancel
-															))
-															.style(button_with_radius(
-																button::danger,
-																border::right(5)
-															))
-													]
+													button("Pick")
+														.on_press(Message::PickSampleFileDialog(i))
+														.style(button_with_radius(
+															button::success,
+															border::left(5)
+														)),
+													button("Ignore")
+														.on_press(Message::FoundSampleResponse(
+															i,
+															Feedback::Ignore
+														))
+														.style(button_with_radius(
+															button::warning,
+															0
+														)),
+													button("Cancel")
+														.on_press(Message::FoundSampleResponse(
+															i,
+															Feedback::Cancel
+														))
+														.style(button_with_radius(
+															button::danger,
+															border::right(5)
+														))
 												]
-												.spacing(20)
-												.align_y(Center)
-												.into()
-											}),
-									)
-									.spacing(10)
+											]
+											.spacing(10)
+											.width(Shrink)
+											.align_y(Center)
+											.into()
+										}),
 								)
-								.padding(10)
-								.style(bordered_box_with_radius(5))
+								.spacing(10)
 							)
-							.center_x(Fill))
+							.padding(10)
+							.style(bordered_box_with_radius(5)))
 						]
+						.align_x(Center)
 						.spacing(20)
 					)
 					.padding(50)

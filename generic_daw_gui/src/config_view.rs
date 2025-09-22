@@ -368,14 +368,14 @@ impl ConfigView {
 						.style(button_with_radius(button::primary, border::right(5)))
 						.padding(5)
 						.on_press(Message::ResetConfigToPrev)
-				],)
+				])
 			]
 			.spacing(10)
 			.padding(10)
 			.width(530),
 		))
 		.style(|t| {
-			bordered_box_with_radius(0)(t).background(t.extended_palette().background.weakest.color)
+			bordered_box_with_radius(5)(t).background(t.extended_palette().background.weakest.color)
 		})
 		.into()
 	}

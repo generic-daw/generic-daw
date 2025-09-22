@@ -2,7 +2,7 @@ use iced::{
 	Border, Theme,
 	border::{self, Radius},
 	overlay::menu,
-	widget::{button, container, pick_list, slider},
+	widget::{button, container, pick_list, progress_bar, slider},
 };
 
 pub fn slider_secondary(theme: &Theme, status: slider::Status) -> slider::Style {
@@ -42,6 +42,18 @@ pub fn pick_list_with_radius(
 		let mut style = f(t, s);
 		style.border.radius = r;
 		style.placeholder_color = t.extended_palette().background.weak.text;
+		style
+	}
+}
+
+pub fn progress_bar_with_radius(
+	f: impl Fn(&Theme) -> progress_bar::Style,
+	r: impl Into<Radius>,
+) -> impl Fn(&Theme) -> progress_bar::Style {
+	let r = r.into();
+	move |t| {
+		let mut style = f(t);
+		style.border.radius = r;
 		style
 	}
 }
