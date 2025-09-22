@@ -2,8 +2,8 @@ use crate::{
 	arrangement_view::node::NodeType,
 	clap_host::{ClapHost, Message as ClapHostMessage},
 	components::{
-		circle_plus, icon_button, icon_text_button, space, styled_scrollable,
-		styled_scrollable_with_direction,
+		circle_plus, icon_button, space, styled_scrollable, styled_scrollable_with_direction,
+		text_icon_button,
 	},
 	config::Config,
 	icons::{arrow_left_right, arrow_up_down, chevron_up, circle_off, grip_vertical, x},
@@ -817,9 +817,9 @@ impl ArrangementView {
 										}
 									)
 									.on_press(Message::TrackRemove(id)),
-									icon_text_button("M", button_style(false))
+									text_icon_button("M", button_style(false))
 										.on_press(Message::TrackToggleEnabled(id)),
-									icon_text_button(
+									text_icon_button(
 										"S",
 										button_style(self.soloed_track == Some(id))
 									)
@@ -1005,7 +1005,7 @@ impl ArrangementView {
 											)
 										)),
 										column![
-											icon_text_button(
+											text_icon_button(
 												"M",
 												if plugin.enabled {
 													button::primary
@@ -1026,12 +1026,9 @@ impl ArrangementView {
 										]
 										.spacing(5),
 										mouse_area(
-											container(
-												grip_vertical().line_height(
-													(LINE_HEIGHT + 14.0) / LINE_HEIGHT
-												)
-											)
-											.style(bordered_box_with_radius(border::right(5)))
+											container(grip_vertical())
+												.center_y(LINE_HEIGHT + 14.0)
+												.style(bordered_box_with_radius(border::right(5)))
 										)
 										.interaction(Interaction::Grab),
 									]
@@ -1083,9 +1080,9 @@ impl ArrangementView {
 				.enabled(node.flags.contains(Flags::ENABLED))
 				.tooltip(format_pan(node.pan)),
 				row![
-					icon_text_button("M", button_style(false))
+					text_icon_button("M", button_style(false))
 						.on_press(Message::ChannelToggleEnabled(node.id)),
-					icon_text_button("S", button_style(self.soloed_track == Some(node.id)))
+					text_icon_button("S", button_style(self.soloed_track == Some(node.id)))
 						.on_press_maybe(
 							(node.ty == NodeType::Track)
 								.then_some(Message::TrackToggleSolo(node.id)),

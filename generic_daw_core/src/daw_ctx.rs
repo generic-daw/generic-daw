@@ -52,13 +52,13 @@ pub enum Action {
 	PluginMixChanged(usize, f32),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 pub enum Update {
 	Peak(NodeId, [f32; 2]),
 	Param(PluginId, ClapId),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Batch {
 	pub version: Version,
 	pub sample: Option<usize>,

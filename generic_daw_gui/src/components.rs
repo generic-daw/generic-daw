@@ -1,5 +1,5 @@
 use crate::{
-	icons::{LUCIDE_FONT, move_vertical, plus},
+	icons::{Icon, LUCIDE_FONT, move_vertical, plus},
 	stylefns::{bordered_box_with_radius, button_with_radius, menu_with_border},
 	widget::LINE_HEIGHT,
 };
@@ -10,7 +10,6 @@ use iced::{
 	Shrink, Theme,
 	border::{self, Radius},
 	overlay::menu,
-	padding,
 	widget::{
 		Button, PickList, Scrollable, Space, Text, button, container, pick_list, row,
 		scrollable::{self, Direction},
@@ -25,25 +24,27 @@ pub fn space() -> Space {
 }
 
 pub fn icon_button<'a, Message>(
-	t: Text<'a>,
+	t: Icon,
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
 ) -> Button<'a, Message>
 where
 	Message: Clone + 'a,
 {
-	button(container(t.size(13).line_height(1.0)).center_x(13))
+	button(t.size(13.0))
 		.style(button_with_radius(style, 0))
-		.padding(padding::all(1).top(2).bottom(0))
+		.padding(1)
 }
 
-pub fn icon_text_button<'a, Message>(
-	t: &'a str,
+pub fn text_icon_button<'a, Message>(
+	t: impl Into<Text<'a>>,
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
 ) -> Button<'a, Message>
 where
 	Message: Clone + 'a,
 {
-	icon_button(t.into(), style).padding(1)
+	button(container(t.into().size(13).line_height(1.0)).center_x(13))
+		.style(button_with_radius(style, 0))
+		.padding(1)
 }
 
 pub fn number_input<'a, Message>(
@@ -85,7 +86,7 @@ pub fn circle_plus<'a, Message>() -> Button<'a, Message>
 where
 	Message: Clone + 'a,
 {
-	button(container(plus().size(LINE_HEIGHT + 6.0)).center_x(LINE_HEIGHT + 6.0))
+	button(plus().size(LINE_HEIGHT + 6.0))
 		.style(|t, s| {
 			let mut style = button::primary(t, s);
 			style.border.radius = f32::INFINITY.into();

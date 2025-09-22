@@ -1,4 +1,9 @@
-use iced::{Font, font::Family};
+use iced::{
+	Element, Font,
+	font::Family,
+	padding,
+	widget::{container, text, text::Shaping},
+};
 
 pub static LUCIDE_BYTES: &[u8] = include_bytes!("../../Lucide.ttf");
 pub static LUCIDE_FONT: Font = Font {
@@ -6,14 +11,41 @@ pub static LUCIDE_FONT: Font = Font {
 	..Font::MONOSPACE
 };
 
+#[derive(Clone, Copy, Debug)]
+pub struct Icon {
+	character: char,
+	size: f32,
+}
+
+impl Icon {
+	pub fn size(mut self, size: f32) -> Self {
+		self.size = size;
+		self
+	}
+}
+
+impl<'a, Message: 'a> From<Icon> for Element<'a, Message> {
+	fn from(value: Icon) -> Self {
+		container(
+			text(value.character)
+				.font(LUCIDE_FONT)
+				.shaping(Shaping::Basic)
+				.size(value.size)
+				.line_height(1.0),
+		)
+		.center_x(value.size)
+		.padding(padding::top(0.5).bottom(-0.5))
+		.into()
+	}
+}
+
 macro_rules! icon {
 	($name:ident = $icon:literal) => {
-		pub fn $name<'a>() -> ::iced::widget::Text<'a> {
-			::iced::widget::text(const { ::core::char::from_u32($icon).unwrap() })
-				.font(LUCIDE_FONT)
-				.shaping(::iced::widget::text::Shaping::Basic)
-				.size(crate::widget::LINE_HEIGHT)
-				.line_height(1.0)
+		pub fn $name() -> Icon {
+			Icon {
+				character: const { ::core::char::from_u32($icon).unwrap() },
+				size: crate::widget::LINE_HEIGHT,
+			}
 		}
 	};
 }
