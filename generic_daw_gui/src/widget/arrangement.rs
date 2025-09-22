@@ -19,6 +19,8 @@ pub enum Action {
 	Drop,
 	Clone(usize, usize),
 	Drag(usize, MusicalTime),
+	SplitAt(usize, usize, MusicalTime),
+	DragSplit(MusicalTime),
 	TrimStart(MusicalTime),
 	TrimEnd(MusicalTime),
 	Delete(usize, usize),
@@ -28,6 +30,7 @@ pub enum Action {
 enum State {
 	None,
 	DraggingClip(f32, usize, MusicalTime),
+	DraggingSplit(MusicalTime),
 	ClipTrimmingStart(f32, MusicalTime),
 	ClipTrimmingEnd(f32, MusicalTime),
 	DeletingClips,
@@ -157,25 +160,36 @@ where
 							let end_pixel = clip_bounds.x + clip_bounds.width;
 							let offset = start_pixel - cursor.x;
 
-							*state = match (
-								cursor.x - start_pixel < 10.0,
-								end_pixel - cursor.x < 10.0,
-							) {
-								(true, true) if cursor.x - start_pixel < end_pixel - cursor.x => {
-									State::ClipTrimmingStart(offset, time)
+							match (modifiers.command(), modifiers.shift()) {
+								(true, false) => {
+									shell.publish((self.f)(Action::Clone(track, clip)));
+									*state = State::DraggingClip(offset, track, time);
 								}
-								(true, false) => State::ClipTrimmingStart(offset, time),
-								(_, true) => {
-									State::ClipTrimmingEnd(offset + end_pixel - start_pixel, time)
+								(false, true) => {
+									shell.publish((self.f)(Action::SplitAt(track, clip, time)));
+									*state = State::DraggingSplit(time);
 								}
-								(false, false) => State::DraggingClip(offset, track, time),
-							};
+								_ => {
+									shell.publish((self.f)(Action::Grab(track, clip)));
+									*state = match (
+										cursor.x - start_pixel < 10.0,
+										end_pixel - cursor.x < 10.0,
+									) {
+										(true, true)
+											if cursor.x - start_pixel < end_pixel - cursor.x =>
+										{
+											State::ClipTrimmingStart(offset, time)
+										}
+										(true, false) => State::ClipTrimmingStart(offset, time),
+										(_, true) => State::ClipTrimmingEnd(
+											offset + end_pixel - start_pixel,
+											time,
+										),
+										(false, false) => State::DraggingClip(offset, track, time),
+									};
+								}
+							}
 
-							shell.publish((self.f)(if modifiers.control() {
-								Action::Clone(track, clip)
-							} else {
-								Action::Grab(track, clip)
-							}));
 							shell.capture_event();
 						}
 					}
@@ -204,7 +218,6 @@ where
 						let new_track = self
 							.get_track(cursor.y)
 							.min(layout.children().next().unwrap().children().count() - 1);
-
 						let new_start = get_time(
 							cursor.x + offset,
 							*modifiers,
@@ -212,11 +225,25 @@ where
 							*self.position,
 							*self.scale,
 						);
-
 						if new_track != track || new_start != time {
 							*state = State::DraggingClip(offset, new_track, new_start);
 
 							shell.publish((self.f)(Action::Drag(new_track, new_start)));
+							shell.capture_event();
+						}
+					}
+					State::DraggingSplit(time) => {
+						let new_time = get_time(
+							cursor.x,
+							*modifiers,
+							self.rtstate,
+							*self.position,
+							*self.scale,
+						);
+						if new_time != time {
+							*state = State::DraggingSplit(new_time);
+
+							shell.publish((self.f)(Action::DragSplit(new_time)));
 							shell.capture_event();
 						}
 					}
@@ -277,9 +304,9 @@ where
 		renderer: &Renderer,
 	) -> Interaction {
 		match tree.state.downcast_ref::<State>() {
-			State::ClipTrimmingStart(..) | State::ClipTrimmingEnd(..) => {
-				Interaction::ResizingHorizontally
-			}
+			State::ClipTrimmingStart(..)
+			| State::ClipTrimmingEnd(..)
+			| State::DraggingSplit(..) => Interaction::ResizingHorizontally,
 			State::DraggingClip(..) => Interaction::Grabbing,
 			State::DeletingClips => Interaction::NoDrop,
 			State::None => self.children.as_widget().mouse_interaction(

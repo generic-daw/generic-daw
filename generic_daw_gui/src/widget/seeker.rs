@@ -175,7 +175,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 						ScrollDelta::Lines { x, y } => (-x * 60.0, -y * 60.0),
 					};
 
-					match (modifiers.control(), modifiers.shift(), modifiers.alt()) {
+					match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
 						(false, false, false) => {
 							x *= self.scale.x.exp2();
 							y /= self.scale.y;

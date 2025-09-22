@@ -25,6 +25,8 @@ pub enum Action {
 	Add(MidiKey, MusicalTime),
 	Clone(usize),
 	Drag(MidiKey, MusicalTime),
+	SplitAt(usize, MusicalTime),
+	DragSplit(MusicalTime),
 	TrimStart(MusicalTime),
 	TrimEnd(MusicalTime),
 	Delete(usize),
@@ -34,6 +36,7 @@ pub enum Action {
 enum State {
 	None,
 	DraggingNote(f32, MidiKey, MusicalTime),
+	DraggingSplit(MusicalTime),
 	NoteTrimmingStart(f32, MusicalTime),
 	NoteTrimmingEnd(f32, MusicalTime),
 	DeletingNotes,
@@ -137,31 +140,42 @@ where
 							let end_pixel = note_bounds.x + note_bounds.width;
 							let offset = start_pixel - cursor.x;
 
-							*state = match (
-								cursor.x - start_pixel < 10.0,
-								end_pixel - cursor.x < 10.0,
-							) {
-								(true, true) if cursor.x - start_pixel < end_pixel - cursor.x => {
-									State::NoteTrimmingStart(offset, time)
+							match (modifiers.command(), modifiers.shift()) {
+								(true, false) => {
+									shell.publish((self.f)(Action::Clone(i)));
+									*state = State::DraggingNote(offset, note.key, time);
 								}
-								(true, false) => State::NoteTrimmingStart(offset, time),
-								(_, true) => {
-									State::NoteTrimmingEnd(offset + end_pixel - start_pixel, time)
+								(false, true) => {
+									shell.publish((self.f)(Action::SplitAt(i, time)));
+									*state = State::DraggingSplit(time);
 								}
-								(false, false) => State::DraggingNote(offset, note.key, time),
-							};
-
-							shell.publish((self.f)(if modifiers.control() {
-								Action::Clone(i)
-							} else {
-								Action::Grab(i)
-							}));
+								_ => {
+									shell.publish((self.f)(Action::Grab(i)));
+									*state = match (
+										cursor.x - start_pixel < 10.0,
+										end_pixel - cursor.x < 10.0,
+									) {
+										(true, true)
+											if cursor.x - start_pixel < end_pixel - cursor.x =>
+										{
+											State::NoteTrimmingStart(offset, time)
+										}
+										(true, false) => State::NoteTrimmingStart(offset, time),
+										(_, true) => State::NoteTrimmingEnd(
+											offset + end_pixel - start_pixel,
+											time,
+										),
+										(false, false) => {
+											State::DraggingNote(offset, note.key, time)
+										}
+									};
+								}
+							}
 						} else {
 							let key = self.get_key(cursor);
 
-							*state = State::DraggingNote(0.0, key, time);
-
 							shell.publish((self.f)(Action::Add(key, time)));
+							*state = State::DraggingNote(0.0, key, time);
 						}
 
 						shell.capture_event();
@@ -188,7 +202,6 @@ where
 				mouse::Event::CursorMoved { modifiers, .. } => match *state {
 					State::DraggingNote(offset, key, time) => {
 						let new_key = self.get_key(cursor);
-
 						let new_start = get_time(
 							cursor.x + offset,
 							*modifiers,
@@ -196,11 +209,25 @@ where
 							*self.position,
 							*self.scale,
 						);
-
 						if new_key != key || new_start != time {
 							*state = State::DraggingNote(offset, new_key, new_start);
 
 							shell.publish((self.f)(Action::Drag(new_key, new_start)));
+							shell.capture_event();
+						}
+					}
+					State::DraggingSplit(time) => {
+						let new_time = get_time(
+							cursor.x,
+							*modifiers,
+							self.rtstate,
+							*self.position,
+							*self.scale,
+						);
+						if new_time != time {
+							*state = State::DraggingSplit(new_time);
+
+							shell.publish((self.f)(Action::DragSplit(new_time)));
 							shell.capture_event();
 						}
 					}
@@ -286,9 +313,9 @@ where
 		_renderer: &Renderer,
 	) -> Interaction {
 		match tree.state.downcast_ref::<State>() {
-			State::NoteTrimmingStart(..) | State::NoteTrimmingEnd(..) => {
-				Interaction::ResizingHorizontally
-			}
+			State::NoteTrimmingStart(..)
+			| State::NoteTrimmingEnd(..)
+			| State::DraggingSplit(..) => Interaction::ResizingHorizontally,
 			State::DraggingNote(..) => Interaction::Grabbing,
 			State::DeletingNotes => Interaction::NoDrop,
 			State::None => layout

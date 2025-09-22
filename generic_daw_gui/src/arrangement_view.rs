@@ -135,12 +135,12 @@ pub enum Message {
 #[derive(Clone, Debug)]
 pub enum Tab {
 	Arrangement {
-		grabbed_clip: Option<[usize; 2]>,
+		grabbed_clip: Option<(usize, usize, Option<usize>)>,
 	},
 	Mixer,
 	PianoRoll {
 		clip: Arc<MidiClip>,
-		grabbed_note: Option<usize>,
+		grabbed_note: Option<(usize, Option<usize>)>,
 	},
 }
 
@@ -590,34 +590,72 @@ impl ArrangementView {
 		};
 
 		match action {
-			ArrangementAction::Grab(track, clip) => *grabbed_clip = Some([track, clip]),
+			ArrangementAction::Grab(track, clip) => *grabbed_clip = Some((track, clip, None)),
 			ArrangementAction::Drop => *grabbed_clip = None,
 			ArrangementAction::Clone(track, mut clip) => {
 				self.arrangement.clone_clip(track, clip);
 				clip = self.arrangement.tracks()[track].clips.len() - 1;
-				*grabbed_clip = Some([track, clip]);
+				*grabbed_clip = Some((track, clip, None));
 			}
 			ArrangementAction::Drag(new_track, pos) => {
-				let [track, clip] = grabbed_clip.as_mut().unwrap();
-
+				let (track, clip, ..) = grabbed_clip.as_mut().unwrap();
 				if *track != new_track {
 					self.arrangement.clip_switch_track(*track, *clip, new_track);
 					*track = new_track;
 					*clip = self.arrangement.tracks()[*track].clips.len() - 1;
 				}
-
 				self.arrangement.tracks()[*track].clips[*clip]
 					.position()
 					.move_to(pos);
 			}
+			ArrangementAction::SplitAt(track, lhs, mut pos) => {
+				let start = self.arrangement.tracks()[track].clips[lhs]
+					.position()
+					.start() + MusicalTime::TICK;
+				let end = self.arrangement.tracks()[track].clips[lhs].position().end()
+					- MusicalTime::TICK;
+				if start > end {
+					return;
+				}
+				self.arrangement.clone_clip(track, lhs);
+				let rhs = self.arrangement.tracks()[track].clips.len() - 1;
+				pos = pos.clamp(start, end);
+				self.arrangement.tracks()[track].clips[lhs]
+					.position()
+					.trim_end_to(pos);
+				self.arrangement.tracks()[track].clips[rhs]
+					.position()
+					.trim_start_to(pos);
+				*grabbed_clip = Some((track, lhs, Some(rhs)));
+			}
+			ArrangementAction::DragSplit(mut pos) => {
+				let (track, lhs, Some(rhs)) = grabbed_clip.unwrap() else {
+					return;
+				};
+				let start = self.arrangement.tracks()[track].clips[lhs]
+					.position()
+					.start() + MusicalTime::TICK;
+				let end = self.arrangement.tracks()[track].clips[rhs].position().end()
+					- MusicalTime::TICK;
+				if start > end {
+					return;
+				}
+				pos = pos.clamp(start, end);
+				self.arrangement.tracks()[track].clips[lhs]
+					.position()
+					.trim_end_to(pos);
+				self.arrangement.tracks()[track].clips[rhs]
+					.position()
+					.trim_start_to(pos);
+			}
 			ArrangementAction::TrimStart(pos) => {
-				let [track, clip] = grabbed_clip.unwrap();
+				let (track, clip, ..) = grabbed_clip.unwrap();
 				self.arrangement.tracks()[track].clips[clip]
 					.position()
 					.trim_start_to(pos);
 			}
 			ArrangementAction::TrimEnd(pos) => {
-				let [track, clip] = grabbed_clip.unwrap();
+				let (track, clip, ..) = grabbed_clip.unwrap();
 				self.arrangement.tracks()[track].clips[clip]
 					.position()
 					.trim_end_to(pos);
@@ -631,52 +669,64 @@ impl ArrangementView {
 			panic!()
 		};
 
+		let mut notes = clip.pattern.load().deref().deref().clone();
+
 		match action {
-			PianoRollAction::Grab(note) => *grabbed_note = Some(note),
+			PianoRollAction::Grab(note) => *grabbed_note = Some((note, None)),
 			PianoRollAction::Drop => {
-				let note = clip.pattern.load()[grabbed_note.unwrap()];
+				let note = clip.pattern.load()[grabbed_note.unwrap().0];
 				self.last_note_len = note.end - note.start;
 				*grabbed_note = None;
 			}
 			PianoRollAction::Add(key, pos) => {
-				let mut notes = clip.pattern.load().deref().deref().clone();
 				notes.push(MidiNote {
 					key,
 					velocity: 1.0,
 					start: pos,
 					end: pos + self.last_note_len,
 				});
-				*grabbed_note = Some(notes.len() - 1);
-				clip.pattern.store(Arc::new(notes));
+				*grabbed_note = Some((notes.len() - 1, None));
 			}
 			PianoRollAction::Clone(note) => {
-				let mut notes = clip.pattern.load().deref().deref().clone();
 				notes.push(notes[note]);
-				*grabbed_note = Some(notes.len() - 1);
-				clip.pattern.store(Arc::new(notes));
+				*grabbed_note = Some((notes.len() - 1, None));
 			}
 			PianoRollAction::Drag(key, pos) => {
-				let mut notes = clip.pattern.load().deref().deref().clone();
-				notes[grabbed_note.unwrap()].move_to(pos);
-				notes[grabbed_note.unwrap()].key = key;
-				clip.pattern.store(Arc::new(notes));
+				notes[grabbed_note.unwrap().0].move_to(pos);
+				notes[grabbed_note.unwrap().0].key = key;
 			}
-			PianoRollAction::TrimStart(pos) => {
-				let mut notes = clip.pattern.load().deref().deref().clone();
-				notes[grabbed_note.unwrap()].trim_start_to(pos);
-				clip.pattern.store(Arc::new(notes));
+			PianoRollAction::SplitAt(lhs, mut pos) => {
+				let start = notes[lhs].start + MusicalTime::TICK;
+				let end = notes[lhs].end - MusicalTime::TICK;
+				if start > end {
+					return;
+				}
+				notes.push(notes[lhs]);
+				let rhs = notes.len() - 1;
+				pos = pos.clamp(start, end);
+				notes[lhs].trim_end_to(pos);
+				notes[rhs].trim_start_to(pos);
+				*grabbed_note = Some((lhs, Some(rhs)));
 			}
-			PianoRollAction::TrimEnd(pos) => {
-				let mut notes = clip.pattern.load().deref().deref().clone();
-				notes[grabbed_note.unwrap()].trim_end_to(pos);
-				clip.pattern.store(Arc::new(notes));
+			PianoRollAction::DragSplit(mut pos) => {
+				let (lhs, Some(rhs)) = grabbed_note.unwrap() else {
+					return;
+				};
+				let start = notes[lhs].start + MusicalTime::TICK;
+				let end = notes[rhs].end - MusicalTime::TICK;
+				if start > end {
+					return;
+				}
+				pos = pos.clamp(start, end);
+				notes[lhs].trim_end_to(pos);
+				notes[rhs].trim_start_to(pos);
 			}
-			PianoRollAction::Delete(note) => {
-				let mut notes = clip.pattern.load().deref().deref().clone();
-				notes.remove(note);
-				clip.pattern.store(Arc::new(notes));
-			}
+			PianoRollAction::TrimStart(pos) => notes[grabbed_note.unwrap().0].trim_start_to(pos),
+			PianoRollAction::TrimEnd(pos) => notes[grabbed_note.unwrap().0].trim_end_to(pos),
+			PianoRollAction::Delete(note) => _ = notes.remove(note),
 		}
+
+		clip.pattern.store(Arc::new(notes));
 	}
 
 	pub fn loading(&self) -> bool {
