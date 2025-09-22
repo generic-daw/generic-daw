@@ -96,7 +96,7 @@ impl Sample {
 			}
 		}
 
-		let stereo = &stereo[2 * delay..][..stereo.len() - 2 * padding];
+		let stereo = &stereo[2 * delay..stereo.len() - 2 * padding];
 
 		if file_sample_rate == sample_rate {
 			Some(stereo.into())
