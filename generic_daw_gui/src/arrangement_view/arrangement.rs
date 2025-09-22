@@ -74,7 +74,9 @@ impl Arrangement {
 				.drain(..)
 				.filter_map(|event| match event {
 					Update::Peak(node, peaks) => {
-						self.nodes.get_mut(*node).unwrap().0.update(peaks, now);
+						if let Some(node) = self.nodes.get_mut(*node) {
+							node.0.update(peaks, now);
+						}
 						None
 					}
 					Update::Param(id, param_id) => Some(ClapHostMessage::MainThread(
