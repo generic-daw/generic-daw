@@ -37,28 +37,33 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			entry.expensive = entry.node().expensive();
 		}
 
-		for entry in self.graph.values() {
-			if entry.indegree.load(Relaxed) == 0 && !entry.expensive {
-				self.worker(entry, len, state, false);
-			}
+		let iter = self
+			.graph
+			.values()
+			.filter(|entry| !entry.expensive)
+			.filter(|entry| entry.indegree.load(Relaxed) == 0);
+
+		for entry in iter {
+			self.worker(None, entry, len, state, false);
 		}
 
 		rayon_core::in_place_scope(|s| {
 			let mut iter = self
 				.graph
 				.values()
+				.filter(|entry| entry.expensive)
 				.filter(|entry| entry.indegree.load(Relaxed) == 0);
 
 			let first = iter.next();
 
 			for entry in iter {
-				s.spawn(|_| {
-					self.worker(entry, len, state, true);
+				s.spawn(|s| {
+					self.worker(Some(s), entry, len, state, true);
 				});
 			}
 
 			if let Some(entry) = first {
-				self.worker(entry, len, state, true);
+				self.worker(Some(s), entry, len, state, true);
 			}
 		});
 
@@ -69,16 +74,17 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		buf.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..len]);
 	}
 
-	fn worker(
-		&self,
+	fn worker<'a>(
+		&'a self,
+		s: Option<&rayon_core::Scope<'a>>,
 		entry: &Entry<Node>,
 		len: usize,
-		state: &Node::State,
-		recurse_into_expensive_nodes: bool,
+		state: &'a Node::State,
+		tail: bool,
 	) {
 		let indegree = entry.indegree.fetch_sub(1, Relaxed);
 		debug_assert_eq!(indegree, 0);
-		debug_assert!(recurse_into_expensive_nodes || !entry.expensive);
+		debug_assert!(s.is_some() || !entry.expensive);
 
 		let mut node_lock = entry.node_uncontended();
 		let mut buffers_lock = entry.write_buffers_uncontended();
@@ -135,13 +141,42 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		drop(node_lock);
 		drop(buffers_lock);
 
-		for node in &entry.read_buffers_uncontended().outgoing {
-			let entry = &self.graph[node];
-			if entry.indegree.fetch_sub(1, Relaxed) == 1
-				&& (recurse_into_expensive_nodes || !entry.expensive)
-			{
-				self.worker(entry, len, state, recurse_into_expensive_nodes);
+		let outgoing = &entry.read_buffers_uncontended().outgoing;
+
+		let iter = outgoing
+			.iter()
+			.map(|node| &self.graph[node])
+			.filter(|entry| !entry.expensive)
+			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 1);
+
+		for entry in iter {
+			self.worker(s, entry, len, state, false);
+		}
+
+		if let Some(s) = s {
+			let mut iter = outgoing
+				.iter()
+				.map(|node| &self.graph[node])
+				.filter(|entry| entry.expensive)
+				.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 1);
+
+			let first = if tail { iter.next() } else { None };
+
+			for entry in iter {
+				s.spawn(move |s| {
+					self.worker(Some(s), entry, len, state, true);
+				});
 			}
+
+			if let Some(entry) = first {
+				self.worker(Some(s), entry, len, state, true);
+			}
+		} else {
+			outgoing
+				.iter()
+				.map(|node| &self.graph[node])
+				.filter(|entry| entry.expensive)
+				.for_each(|entry| _ = entry.indegree.fetch_sub(1, Relaxed));
 		}
 	}
 
