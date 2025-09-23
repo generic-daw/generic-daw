@@ -1,4 +1,4 @@
-use crate::{components::space, config::Config, widget::LINE_HEIGHT};
+use crate::{config::Config, widget::LINE_HEIGHT};
 use fragile::Fragile;
 use generic_daw_core::{
 	Event,
@@ -12,7 +12,7 @@ use iced::{
 	Length::{Fill, Shrink},
 	Subscription, Task,
 	time::every,
-	widget::{column, container, horizontal_rule, row, sensor, text, text::Wrapping},
+	widget::{column, container, row, rule, sensor, space, text, text::Wrapping},
 	window::{self, Id, Level, close_events, close_requests, resize_events},
 };
 use log::info;
@@ -264,7 +264,7 @@ impl ClapHost {
 						.size(LINE_HEIGHT)
 						.line_height(1.0)
 						.font(Font::MONOSPACE),
-					container(horizontal_rule(1)).padding([5, 0]),
+					container(rule::vertical(1)).padding([5, 0]),
 					row(plugin.params().map(|param| {
 						column![
 							container(

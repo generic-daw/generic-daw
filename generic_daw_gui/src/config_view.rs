@@ -1,5 +1,5 @@
 use crate::{
-	components::{number_input, pick_list_custom_handle, space, styled_scrollable},
+	components::{number_input, pick_list_custom_handle, styled_scrollable},
 	config::{Config, Device},
 	icons::{mic, plus, rotate_ccw, save, volume_2, x},
 	stylefns::{bordered_box_with_radius, button_with_radius, pick_list_with_radius},
@@ -10,8 +10,7 @@ use generic_daw_core::{get_input_devices, get_output_devices};
 use iced::{
 	Center, Element, Font, Task, border,
 	widget::{
-		button, column, container, horizontal_rule, horizontal_space, pick_list, row, slider, text,
-		toggler, value,
+		button, column, container, pick_list, row, rule, slider, space, text, toggler, value,
 	},
 };
 use rfd::AsyncFileDialog;
@@ -131,7 +130,7 @@ impl ConfigView {
 						.size(LINE_HEIGHT)
 						.line_height(1.0)
 						.font(Font::MONOSPACE),
-					horizontal_space(),
+					space::horizontal(),
 					button(rotate_ccw())
 						.style(button_with_radius(button::primary, 5))
 						.padding(5)
@@ -140,10 +139,10 @@ impl ConfigView {
 								.then_some(Message::ResetConfigToDefault)
 						)
 				],
-				container(horizontal_rule(1)).padding([5, 0]),
+				container(rule::vertical(1)).padding([5, 0]),
 				row![
 					"Sample Paths",
-					horizontal_space(),
+					space::horizontal(),
 					button(plus())
 						.style(button_with_radius(button::primary, 5))
 						.padding(0)
@@ -159,7 +158,7 @@ impl ConfigView {
 							.map(|(idx, path)| {
 								row![
 									value(path.display()).font(Font::MONOSPACE),
-									horizontal_space(),
+									space::horizontal(),
 									button(x())
 										.style(button_with_radius(button::danger, 5))
 										.padding(0)
@@ -172,10 +171,10 @@ impl ConfigView {
 					.spacing(5)
 				)
 				.style(bordered_box_with_radius(5)),
-				horizontal_rule(1),
+				rule::vertical(1),
 				row![
 					"CLAP Plugin Paths",
-					horizontal_space(),
+					space::horizontal(),
 					button(plus())
 						.style(button_with_radius(button::primary, 5))
 						.padding(0)
@@ -191,7 +190,7 @@ impl ConfigView {
 							.map(|(idx, path)| {
 								row![
 									value(path.display()).font(Font::MONOSPACE),
-									horizontal_space(),
+									space::horizontal(),
 									button(x())
 										.style(button_with_radius(button::danger, 5))
 										.padding(0)
@@ -204,7 +203,7 @@ impl ConfigView {
 					.spacing(5)
 				)
 				.style(bordered_box_with_radius(5)),
-				horizontal_rule(1),
+				rule::vertical(1),
 				row![
 					row![
 						button(mic())
@@ -221,7 +220,7 @@ impl ConfigView {
 									.then_some(Message::ChangedTab(Tab::Output))
 							)
 					],
-					horizontal_space(),
+					space::horizontal(),
 					match self.tab {
 						Tab::Input => "Input",
 						Tab::Output => "Output",
@@ -232,7 +231,7 @@ impl ConfigView {
 					column![
 						row![
 							"Name: ",
-							horizontal_space(),
+							space::horizontal(),
 							pick_list_custom_handle(devices, device.name.as_ref(), |name| {
 								Message::ChangedName(Some(name))
 							})
@@ -252,7 +251,7 @@ impl ConfigView {
 						.align_y(Center),
 						row![
 							"Sample Rate: ",
-							horizontal_space(),
+							space::horizontal(),
 							pick_list_custom_handle(
 								COMMON_SAMPLE_RATES,
 								device.sample_rate,
@@ -271,7 +270,7 @@ impl ConfigView {
 						.align_y(Center),
 						row![
 							"Buffer Size: ",
-							horizontal_space(),
+							space::horizontal(),
 							pick_list_custom_handle(
 								COMMON_BUFFER_SIZES,
 								device.buffer_size,
@@ -293,7 +292,7 @@ impl ConfigView {
 						.align_y(Center)
 					]
 				}),
-				horizontal_rule(1),
+				rule::vertical(1),
 				row![
 					toggler(self.config.autosave.enabled)
 						.label("Autosave every ")
@@ -313,10 +312,10 @@ impl ConfigView {
 				toggler(self.config.open_last_project)
 					.label("Open last project on startup")
 					.on_toggle(|_| Message::ToggledOpenLastProject),
-				horizontal_rule(1),
+				rule::vertical(1),
 				row![
 					"Theme: ",
-					horizontal_space(),
+					space::horizontal(),
 					pick_list_custom_handle(
 						Theme::VARIANTS,
 						Some(self.config.theme),
@@ -336,7 +335,7 @@ impl ConfigView {
 				row![
 					"Scale factor: ",
 					text(format!("{:.1}", self.config.scale_factor)).font(Font::MONOSPACE),
-					horizontal_space(),
+					space::horizontal(),
 					slider(
 						0.5..=2.0,
 						self.config.scale_factor,
@@ -354,12 +353,12 @@ impl ConfigView {
 						)
 				]
 				.align_y(Center),
-				(self.config != self.prev_config).then_some(horizontal_rule(1)),
+				(self.config != self.prev_config).then_some(rule::vertical(1)),
 				(self.config != self.prev_config).then_some(row![
 					container("Changes will only take effect after a project reload!")
 						.padding([5, 10])
 						.style(|t| container::warning(t).border(border::rounded(f32::INFINITY))),
-					horizontal_space(),
+					space::horizontal(),
 					button(save())
 						.style(button_with_radius(button::primary, border::left(5)))
 						.padding(5)

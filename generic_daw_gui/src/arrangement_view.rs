@@ -2,7 +2,7 @@ use crate::{
 	arrangement_view::node::NodeType,
 	clap_host::{ClapHost, Message as ClapHostMessage},
 	components::{
-		circle_plus, icon_button, space, styled_scrollable, styled_scrollable_with_direction,
+		circle_plus, icon_button, styled_scrollable, styled_scrollable_with_direction,
 		text_icon_button,
 	},
 	config::Config,
@@ -42,11 +42,11 @@ use iced::{
 	task::Handle,
 	time::every,
 	widget::{
-		button, column, combo_box, container, horizontal_rule, mouse_area, row,
+		button, column, combo_box, container, mouse_area, row, rule,
 		scrollable::{Direction, Scrollbar},
-		slider, text,
+		slider, space, text,
 		text::{IntoFragment, Wrapping},
-		value, vertical_rule, vertical_slider,
+		value, vertical_slider,
 	},
 };
 use iced_persistent::persistent;
@@ -920,7 +920,7 @@ impl ArrangementView {
 			styled_scrollable_with_direction(
 				row(
 					once(self.mixer_channel(self.arrangement.master(), "M".to_owned()))
-						.chain(once(vertical_rule(1).into()))
+						.chain(once(rule::vertical(1).into()))
 						.chain({
 							let mut iter = self
 								.arrangement
@@ -931,7 +931,7 @@ impl ArrangementView {
 								.map(|(i, node)| self.mixer_channel(node, format!("T{}", i + 1)))
 								.peekable();
 
-							let one = iter.peek().map(|_| vertical_rule(1).into());
+							let one = iter.peek().map(|_| rule::vertical(1).into());
 							iter.chain(one)
 						})
 						.chain({
@@ -942,7 +942,7 @@ impl ArrangementView {
 								.map(|(i, node)| self.mixer_channel(node, format!("C{}", i + 1)))
 								.peekable();
 
-							let one = iter.peek().map(|_| vertical_rule(1).into());
+							let one = iter.peek().map(|_| rule::vertical(1).into());
 							iter.chain(one)
 						})
 						.chain(once(circle_plus().on_press(Message::ChannelAdd).into())),
@@ -964,7 +964,7 @@ impl ArrangementView {
 					})
 					.menu_style(menu_with_border(menu::default, border::width(0)))
 					.width(Fill),
-					container(horizontal_rule(1)).padding([5, 0]),
+					container(rule::vertical(1)).padding([5, 0]),
 					styled_scrollable(
 						dragking::column(
 							self.arrangement

@@ -2,7 +2,7 @@ use crate::{
 	arrangement_view::{
 		ArrangementView, Feedback, Message as ArrangementMessage, PartialArrangementView, Tab,
 	},
-	components::{number_input, pick_list_custom_handle, space},
+	components::{number_input, pick_list_custom_handle},
 	config::Config,
 	config_view::{ConfigView, Message as ConfigViewMessage},
 	file_tree::{FileTree, Message as FileTreeMessage},
@@ -30,8 +30,8 @@ use iced::{
 	mouse::Interaction,
 	time::every,
 	widget::{
-		button, center, column, container, horizontal_space, mouse_area, opaque, pick_list,
-		progress_bar, row, stack, text,
+		button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row, space,
+		stack, text,
 	},
 	window::{self, Id},
 };
@@ -451,7 +451,7 @@ impl Daw {
 						))
 						.padding(8)
 						.on_press(Message::ToggleMetronome),
-					horizontal_space(),
+					space::horizontal(),
 					row![
 						button(chart_no_axes_gantt())
 							.style(button_with_radius(button::primary, border::left(5)))
@@ -524,7 +524,7 @@ impl Daw {
 																.weakest
 																.color
 														)),
-												horizontal_space(),
+												space::horizontal(),
 												row![
 													button("Pick")
 														.on_press(Message::PickSampleFileDialog(i))

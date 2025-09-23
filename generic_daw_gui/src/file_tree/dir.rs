@@ -8,7 +8,7 @@ use iced::{
 	Element, Fill, Task,
 	futures::{StreamExt as _, TryStreamExt as _},
 	padding,
-	widget::{button, column, container, row, text, text::Wrapping, vertical_rule},
+	widget::{button, column, container, row, rule, text, text::Wrapping},
 };
 use std::{path::Path, sync::Arc};
 
@@ -112,7 +112,7 @@ impl Dir {
 		{
 			col = col.push(
 				row![
-					container(vertical_rule(2))
+					container(rule::vertical(2))
 						.padding(padding::left(LINE_HEIGHT / 2.0).right(LINE_HEIGHT / 4.0)),
 					column(
 						dirs.iter()

@@ -261,7 +261,8 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		renderer: &Renderer,
 		operation: &mut dyn Operation,
 	) {
-		operation.container(None, layout.bounds(), &mut |operation| {
+		operation.container(None, layout.bounds());
+		operation.traverse(&mut |operation| {
 			self.child
 				.as_widget_mut()
 				.operate(&mut tree.children[0], layout, renderer, operation);

@@ -11,17 +11,13 @@ use iced::{
 	border::{self, Radius},
 	overlay::menu,
 	widget::{
-		Button, PickList, Scrollable, Space, Text, button, container, pick_list, row,
+		Button, PickList, Scrollable, Text, button, container, pick_list, row,
 		scrollable::{self, Direction},
 		text::Shaping,
 		text_input,
 	},
 };
 use std::borrow::Borrow;
-
-pub fn space() -> Space {
-	Space::new(Shrink, Shrink)
-}
 
 pub fn icon_button<'a, Message>(
 	t: Icon,
