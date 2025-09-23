@@ -194,7 +194,7 @@ impl ArrangementView {
 				recording: None,
 
 				arrangement_position: Vec2::default(),
-				arrangement_scale: Vec2::new(10.0, 95.0),
+				arrangement_scale: Vec2::new(10.0, 87.0),
 				soloed_track: None,
 
 				piano_roll_position: Vec2::new(0.0, 40.0),
@@ -545,7 +545,7 @@ impl ArrangementView {
 
 				self.arrangement_scale += scale;
 				self.arrangement_scale.x = self.arrangement_scale.x.clamp(3.0, 15f32.next_down());
-				self.arrangement_scale.y = self.arrangement_scale.y.clamp(50.0, 200.0);
+				self.arrangement_scale.y = self.arrangement_scale.y.clamp(46.0, 200.0);
 
 				if scale == Vec2::ZERO || old_scale != self.arrangement_scale {
 					self.arrangement_position += pos;
@@ -970,7 +970,7 @@ impl ArrangementView {
 					})
 					.menu_style(menu_with_border(menu::default, border::width(0)))
 					.width(Fill),
-					container(rule::vertical(1)).padding([5, 0]),
+					container(rule::horizontal(1)).padding([5, 0]),
 					styled_scrollable(
 						dragking::column(
 							self.arrangement
@@ -1011,8 +1011,8 @@ impl ArrangementView {
 											)
 										)),
 										column![
-											text_icon_button(
-												"M",
+											icon_button(
+												circle_off(),
 												if plugin.enabled {
 													button::primary
 												} else {
@@ -1038,6 +1038,7 @@ impl ArrangementView {
 										)
 										.interaction(Interaction::Grab),
 									]
+									.align_y(Center)
 									.spacing(5)
 									.into()
 								})

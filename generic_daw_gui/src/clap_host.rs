@@ -264,7 +264,7 @@ impl ClapHost {
 						.size(LINE_HEIGHT)
 						.line_height(1.0)
 						.font(Font::MONOSPACE),
-					container(rule::vertical(1)).padding([5, 0]),
+					container(rule::horizontal(1)).padding([5, 0]),
 					row(plugin.params().map(|param| {
 						column![
 							container(

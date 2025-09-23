@@ -139,7 +139,7 @@ impl ConfigView {
 								.then_some(Message::ResetConfigToDefault)
 						)
 				],
-				container(rule::vertical(1)).padding([5, 0]),
+				container(rule::horizontal(1)).padding([5, 0]),
 				row![
 					"Sample Paths",
 					space::horizontal(),
@@ -171,7 +171,7 @@ impl ConfigView {
 					.spacing(5)
 				)
 				.style(bordered_box_with_radius(5)),
-				rule::vertical(1),
+				rule::horizontal(1),
 				row![
 					"CLAP Plugin Paths",
 					space::horizontal(),
@@ -203,7 +203,7 @@ impl ConfigView {
 					.spacing(5)
 				)
 				.style(bordered_box_with_radius(5)),
-				rule::vertical(1),
+				rule::horizontal(1),
 				row![
 					row![
 						button(mic())
@@ -292,7 +292,7 @@ impl ConfigView {
 						.align_y(Center)
 					]
 				}),
-				rule::vertical(1),
+				rule::horizontal(1),
 				row![
 					toggler(self.config.autosave.enabled)
 						.label("Autosave every ")
@@ -312,7 +312,7 @@ impl ConfigView {
 				toggler(self.config.open_last_project)
 					.label("Open last project on startup")
 					.on_toggle(|_| Message::ToggledOpenLastProject),
-				rule::vertical(1),
+				rule::horizontal(1),
 				row![
 					"Theme: ",
 					space::horizontal(),
@@ -353,7 +353,7 @@ impl ConfigView {
 						)
 				]
 				.align_y(Center),
-				(self.config != self.prev_config).then_some(rule::vertical(1)),
+				(self.config != self.prev_config).then_some(rule::horizontal(1)),
 				(self.config != self.prev_config).then_some(row![
 					container("Changes will only take effect after a project reload!")
 						.padding([5, 10])

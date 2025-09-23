@@ -106,8 +106,15 @@ impl<'a, Message> Knob<'a, Message> {
 		}
 	}
 
+	fn border_radius(&self) -> f32 {
+		(self.radius * 0.1).min(3.0)
+	}
+
 	fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
-		let center = frame.center();
+		let border_radius = self.border_radius();
+		let dot_radius = border_radius * 1.5;
+
+		let center = frame.center() + Vector::new(0.0, border_radius);
 
 		let circle = |angle: Radians, offset: f32, radius: f32| {
 			Path::circle(
@@ -146,21 +153,18 @@ impl<'a, Message> Knob<'a, Message> {
 
 		frame.fill(&arc, contrast_color);
 
-		let thickness = (self.radius * 0.1).clamp(1.5, 3.0);
-		let radius = thickness * 1.5;
-
 		frame.fill(
-			&Path::circle(center, self.radius - thickness - thickness),
+			&Path::circle(center, self.radius - border_radius - border_radius),
 			main_color,
 		);
 
 		frame.fill(
-			&circle(center_angle, self.radius - thickness, thickness),
+			&circle(center_angle, self.radius - border_radius, border_radius),
 			contrast_color,
 		);
 
 		frame.fill(
-			&circle(value_angle, self.radius - thickness, thickness),
+			&circle(value_angle, self.radius - border_radius, border_radius),
 			contrast_color,
 		);
 
@@ -171,8 +175,8 @@ impl<'a, Message> Knob<'a, Message> {
 				frame.fill(
 					&circle(
 						angle_of(step as f32),
-						self.radius.midpoint(radius),
-						radius / 2.0,
+						self.radius.midpoint(dot_radius),
+						dot_radius / 2.0,
 					),
 					mixed_color,
 				);
@@ -180,7 +184,7 @@ impl<'a, Message> Knob<'a, Message> {
 		}
 
 		frame.fill(
-			&circle(value_angle, self.radius / 2.0, radius),
+			&circle(value_angle, self.radius / 2.0, dot_radius),
 			contrast_color,
 		);
 	}
@@ -190,7 +194,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 	fn size(&self) -> Size<Length> {
 		Size::new(
 			Length::Fixed(2.0 * self.radius),
-			Length::Fixed(2.0 * self.radius),
+			Length::Fixed(2.0 * (self.radius - self.border_radius())),
 		)
 	}
 
@@ -218,7 +222,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-		Node::new(Size::new(2.0 * self.radius, 2.0 * self.radius))
+		Node::new(Size::new(
+			2.0 * self.radius,
+			2.0 * (self.radius - self.border_radius()),
+		))
 	}
 
 	fn update(
