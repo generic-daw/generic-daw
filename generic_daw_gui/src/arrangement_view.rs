@@ -2,11 +2,10 @@ use crate::{
 	arrangement_view::node::NodeType,
 	clap_host::{ClapHost, Message as ClapHostMessage},
 	components::{
-		circle_plus, icon_button, styled_scrollable, styled_scrollable_with_direction,
-		text_icon_button,
+		icon_button, styled_scrollable, styled_scrollable_with_direction, text_icon_button,
 	},
 	config::Config,
-	icons::{arrow_left_right, arrow_up_down, chevron_up, circle_off, grip_vertical, x},
+	icons::{arrow_left_right, arrow_up_down, chevron_up, circle_off, grip_vertical, plus, x},
 	stylefns::{bordered_box_with_radius, button_with_radius, menu_with_border, slider_secondary},
 	widget::{
 		LINE_HEIGHT,
@@ -843,9 +842,14 @@ impl ArrangementView {
 					})
 					.map(Element::new)
 					.chain(once(
-						container(circle_plus().on_press(Message::TrackAdd))
-							.padding(padding::right(5).top(5))
-							.into(),
+						container(
+							button(plus().size(LINE_HEIGHT + 6.0))
+								.padding(5)
+								.style(button_with_radius(button::primary, f32::INFINITY))
+								.on_press(Message::TrackAdd),
+						)
+						.padding(padding::right(5).top(5))
+						.into(),
 					)),
 			)
 			.align_x(Center),
@@ -941,7 +945,13 @@ impl ArrangementView {
 							let one = iter.peek().map(|_| rule::vertical(1).into());
 							iter.chain(one)
 						})
-						.chain(once(circle_plus().on_press(Message::ChannelAdd).into())),
+						.chain(once(
+							button(plus().size(LINE_HEIGHT + 6.0))
+								.padding(5)
+								.style(button_with_radius(button::primary, f32::INFINITY))
+								.on_press(Message::ChannelAdd)
+								.into(),
+						)),
 				)
 				.align_y(Center)
 				.spacing(5),

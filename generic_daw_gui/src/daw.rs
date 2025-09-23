@@ -12,7 +12,6 @@ use crate::{
 		bordered_box_with_radius, button_with_radius, pick_list_with_radius,
 		progress_bar_with_radius,
 	},
-	widget::LINE_HEIGHT,
 };
 use generic_daw_core::{
 	AudioGraph, MusicalTime,
@@ -410,18 +409,15 @@ impl Daw {
 					)
 					.style(pick_list_with_radius(pick_list::default, 5)),
 					row![
-						button(
-							container(if self.arrangement_view.arrangement.rtstate().playing {
-								pause()
-							} else {
-								play()
-							})
-							.center_x(LINE_HEIGHT)
-						)
+						button(if self.arrangement_view.arrangement.rtstate().playing {
+							pause()
+						} else {
+							play()
+						})
 						.style(button_with_radius(button::primary, border::left(5)))
 						.padding([5, 7])
 						.on_press(Message::TogglePlayback),
-						button(container(square()).center_x(LINE_HEIGHT))
+						button(square())
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding([5, 7])
 							.on_press(Message::Stop),

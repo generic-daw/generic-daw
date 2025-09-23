@@ -1,7 +1,6 @@
 use crate::{
-	icons::{Icon, LUCIDE_FONT, move_vertical, plus},
+	icons::{Icon, LUCIDE_FONT, move_vertical},
 	stylefns::{bordered_box_with_radius, button_with_radius, menu_with_border},
-	widget::LINE_HEIGHT,
 };
 use generic_daw_widget::drag_handle::DragHandle;
 use iced::{
@@ -76,19 +75,6 @@ where
 	]
 	.height(Shrink)
 	.into()
-}
-
-pub fn circle_plus<'a, Message>() -> Button<'a, Message>
-where
-	Message: Clone + 'a,
-{
-	button(plus().size(LINE_HEIGHT + 6.0))
-		.style(|t, s| {
-			let mut style = button::primary(t, s);
-			style.border.radius = f32::INFINITY.into();
-			style
-		})
-		.padding(5)
 }
 
 pub fn pick_list_custom_handle<'a, T, L, V, Message>(
