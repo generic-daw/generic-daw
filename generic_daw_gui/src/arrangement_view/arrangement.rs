@@ -7,8 +7,8 @@ use super::{
 use crate::{clap_host::Message as ClapHostMessage, config::Config, daw::Message as DawMessage};
 use bit_set::BitSet;
 use generic_daw_core::{
-	self as core, Action, AudioGraph, Batch, Clip, Event, Flags, Message, Mixer, MusicalTime,
-	NodeId, NodeImpl as _, RtState, Stream, StreamTrait as _, Update, Version, build_output_stream,
+	self as core, Action, AudioGraph, Batch, Clip, Event, Flags, Message, MusicalTime, NodeId,
+	NodeImpl as _, RtState, Stream, StreamTrait as _, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 	export,
 };
@@ -98,66 +98,66 @@ impl Arrangement {
 		&self.rtstate
 	}
 
-	fn action(&mut self, node: NodeId, action: Action) {
-		self.producer.push(Message::Action(node, action)).unwrap();
+	fn action(&mut self, id: NodeId, action: Action) {
+		self.producer.push(Message::Action(id, action)).unwrap();
 	}
 
-	pub fn node_volume_changed(&mut self, node: NodeId, volume: f32) {
-		self.node_mut(node).volume = volume;
-		self.action(node, Action::NodeVolumeChanged(volume));
+	pub fn channel_volume_changed(&mut self, id: NodeId, volume: f32) {
+		self.node_mut(id).volume = volume;
+		self.action(id, Action::ChannelVolumeChanged(volume));
 	}
 
-	pub fn node_pan_changed(&mut self, node: NodeId, pan: f32) {
-		self.node_mut(node).pan = pan;
-		self.action(node, Action::NodePanChanged(pan));
+	pub fn channel_pan_changed(&mut self, id: NodeId, pan: f32) {
+		self.node_mut(id).pan = pan;
+		self.action(id, Action::ChannelPanChanged(pan));
 	}
 
-	pub fn node_toggle_enabled(&mut self, node: NodeId) {
-		self.node_mut(node).flags.toggle(Flags::ENABLED);
-		self.action(node, Action::NodeToggleEnabled);
+	pub fn channel_toggle_enabled(&mut self, id: NodeId) {
+		self.node_mut(id).flags.toggle(Flags::ENABLED);
+		self.action(id, Action::ChannelToggleEnabled);
 	}
 
-	pub fn node_toggle_bypassed(&mut self, node: NodeId) {
-		self.node_mut(node).flags.toggle(Flags::BYPASSED);
-		self.action(node, Action::NodeToggleBypassed);
+	pub fn channel_toggle_bypassed(&mut self, id: NodeId) {
+		self.node_mut(id).flags.toggle(Flags::BYPASSED);
+		self.action(id, Action::ChannelToggleBypassed);
 	}
 
-	pub fn node_toggle_polarity_inverted(&mut self, node: NodeId) {
-		self.node_mut(node).flags.toggle(Flags::POLARITY_INVERTED);
-		self.action(node, Action::NodeTogglePolarityInverted);
+	pub fn channel_toggle_polarity(&mut self, id: NodeId) {
+		self.node_mut(id).flags.toggle(Flags::POLARITY_INVERTED);
+		self.action(id, Action::ChannelTogglePolarity);
 	}
 
-	pub fn node_toggle_channels_swapped(&mut self, node: NodeId) {
-		self.node_mut(node).flags.toggle(Flags::CHANNELS_SWAPPED);
-		self.action(node, Action::NodeToggleChannelsSwapped);
+	pub fn channel_swap_channels(&mut self, id: NodeId) {
+		self.node_mut(id).flags.toggle(Flags::CHANNELS_SWAPPED);
+		self.action(id, Action::ChannelSwapChannels);
 	}
 
-	pub fn plugin_load(&mut self, node: NodeId, processor: AudioProcessor<Event>) {
-		self.node_mut(node)
+	pub fn plugin_load(&mut self, id: NodeId, processor: AudioProcessor<Event>) {
+		self.node_mut(id)
 			.plugins
 			.push(Plugin::new(processor.id(), processor.descriptor().clone()));
-		self.action(node, Action::PluginLoad(Box::new(processor)));
+		self.action(id, Action::PluginLoad(Box::new(processor)));
 	}
 
-	pub fn plugin_remove(&mut self, node: NodeId, index: usize) -> Plugin {
-		let plugin = self.node_mut(node).plugins.remove(index);
-		self.action(node, Action::PluginRemove(index));
+	pub fn plugin_remove(&mut self, id: NodeId, index: usize) -> Plugin {
+		let plugin = self.node_mut(id).plugins.remove(index);
+		self.action(id, Action::PluginRemove(index));
 		plugin
 	}
 
-	pub fn plugin_moved(&mut self, node: NodeId, from: usize, to: usize) {
-		self.node_mut(node).plugins.shift_move(from, to);
-		self.action(node, Action::PluginMoved(from, to));
+	pub fn plugin_moved(&mut self, id: NodeId, from: usize, to: usize) {
+		self.node_mut(id).plugins.shift_move(from, to);
+		self.action(id, Action::PluginMoved(from, to));
 	}
 
-	pub fn plugin_toggle_enabled(&mut self, node: NodeId, index: usize) {
-		self.node_mut(node).plugins[index].enabled ^= true;
-		self.action(node, Action::PluginToggleEnabled(index));
+	pub fn plugin_toggle_enabled(&mut self, id: NodeId, index: usize) {
+		self.node_mut(id).plugins[index].enabled ^= true;
+		self.action(id, Action::PluginToggleEnabled(index));
 	}
 
-	pub fn plugin_mix_changed(&mut self, node: NodeId, index: usize, mix: f32) {
-		self.node_mut(node).plugins[index].mix = mix;
-		self.action(node, Action::PluginMixChanged(index, mix));
+	pub fn plugin_mix_changed(&mut self, id: NodeId, index: usize, mix: f32) {
+		self.node_mut(id).plugins[index].mix = mix;
+		self.action(id, Action::PluginMixChanged(index, mix));
 	}
 
 	pub fn seek_to(&mut self, position: MusicalTime) {
@@ -235,7 +235,7 @@ impl Arrangement {
 				continue;
 			}
 
-			self.node_toggle_enabled(track_id);
+			self.channel_toggle_enabled(track_id);
 		}
 	}
 
@@ -247,14 +247,14 @@ impl Arrangement {
 				continue;
 			}
 
-			self.node_toggle_enabled(track_id);
+			self.channel_toggle_enabled(track_id);
 		}
 	}
 
 	pub fn channels(&self) -> impl DoubleEndedIterator<Item = &Node> {
 		self.nodes
 			.values()
-			.filter_map(|(node, _)| (node.ty == NodeType::Mixer).then_some(node))
+			.filter_map(|(node, _)| (node.ty == NodeType::Channel).then_some(node))
 	}
 
 	pub fn node(&self, id: NodeId) -> &Node {
@@ -273,18 +273,21 @@ impl Arrangement {
 		&mut self.nodes.get_mut(*id).unwrap().1
 	}
 
-	pub fn push_channel(&mut self, node: Mixer) {
+	pub fn push_channel(&mut self, channel: core::Channel) {
 		self.nodes.insert(
-			*node.id(),
-			(Node::new(NodeType::Mixer, node.id()), BitSet::default()),
+			*channel.id(),
+			(
+				Node::new(NodeType::Channel, channel.id()),
+				BitSet::default(),
+			),
 		);
 		self.producer
-			.push(Message::Insert(Box::new(node.into())))
+			.push(Message::Insert(Box::new(channel.into())))
 			.unwrap();
 	}
 
 	pub fn add_channel(&mut self) -> oneshot::Receiver<(NodeId, NodeId)> {
-		let node = Mixer::default();
+		let node = core::Channel::default();
 		let id = node.id();
 		self.push_channel(node);
 		self.request_connect(id, self.master_node_id)

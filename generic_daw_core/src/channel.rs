@@ -43,7 +43,7 @@ impl Flags {
 }
 
 #[derive(Debug)]
-pub struct Mixer {
+pub struct Channel {
 	id: NodeId,
 	plugins: Vec<Plugin>,
 	volume: f32,
@@ -51,7 +51,7 @@ pub struct Mixer {
 	flags: Flags,
 }
 
-impl NodeImpl for Mixer {
+impl NodeImpl for Channel {
 	type Event = Event;
 	type State = State;
 
@@ -117,15 +117,15 @@ impl NodeImpl for Mixer {
 	}
 }
 
-impl Mixer {
+impl Channel {
 	pub fn apply(&mut self, action: Action) {
 		match action {
-			Action::NodeToggleEnabled => self.flags.toggle(Flags::ENABLED),
-			Action::NodeToggleBypassed => self.flags.toggle(Flags::BYPASSED),
-			Action::NodeTogglePolarityInverted => self.flags.toggle(Flags::POLARITY_INVERTED),
-			Action::NodeToggleChannelsSwapped => self.flags.toggle(Flags::CHANNELS_SWAPPED),
-			Action::NodeVolumeChanged(volume) => self.volume = volume,
-			Action::NodePanChanged(pan) => self.pan = pan,
+			Action::ChannelToggleEnabled => self.flags.toggle(Flags::ENABLED),
+			Action::ChannelToggleBypassed => self.flags.toggle(Flags::BYPASSED),
+			Action::ChannelTogglePolarity => self.flags.toggle(Flags::POLARITY_INVERTED),
+			Action::ChannelSwapChannels => self.flags.toggle(Flags::CHANNELS_SWAPPED),
+			Action::ChannelVolumeChanged(volume) => self.volume = volume,
+			Action::ChannelPanChanged(pan) => self.pan = pan,
 			Action::PluginLoad(processor) => self.plugins.push(Plugin::new(*processor)),
 			Action::PluginRemove(index) => _ = self.plugins.remove(index),
 			Action::PluginMoved(from, to) => self.plugins.shift_move(from, to),
@@ -142,7 +142,7 @@ impl Mixer {
 	}
 }
 
-impl Default for Mixer {
+impl Default for Channel {
 	fn default() -> Self {
 		Self {
 			plugins: Vec::new(),

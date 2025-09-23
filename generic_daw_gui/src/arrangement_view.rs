@@ -101,8 +101,8 @@ pub enum Message {
 	ChannelPanChanged(NodeId, f32),
 	ChannelToggleEnabled(NodeId),
 	ChannelToggleBypassed(NodeId),
-	ChannelTogglePolarityInverted(NodeId),
-	ChannelToggleChannelsSwapped(NodeId),
+	ChannelInvertPolarity(NodeId),
+	ChannelSwapChannels(NodeId),
 
 	PluginLoad(NodeId, PluginDescriptor, bool),
 	PluginSetState(NodeId, usize, NoDebug<Box<[u8]>>),
@@ -263,17 +263,13 @@ impl ArrangementView {
 				};
 			}
 			Message::ChannelVolumeChanged(id, volume) => {
-				self.arrangement.node_volume_changed(id, volume);
+				self.arrangement.channel_volume_changed(id, volume);
 			}
-			Message::ChannelPanChanged(id, pan) => self.arrangement.node_pan_changed(id, pan),
-			Message::ChannelToggleEnabled(id) => self.arrangement.node_toggle_enabled(id),
-			Message::ChannelToggleBypassed(id) => self.arrangement.node_toggle_bypassed(id),
-			Message::ChannelToggleChannelsSwapped(id) => {
-				self.arrangement.node_toggle_channels_swapped(id);
-			}
-			Message::ChannelTogglePolarityInverted(id) => {
-				self.arrangement.node_toggle_polarity_inverted(id);
-			}
+			Message::ChannelPanChanged(id, pan) => self.arrangement.channel_pan_changed(id, pan),
+			Message::ChannelToggleEnabled(id) => self.arrangement.channel_toggle_enabled(id),
+			Message::ChannelToggleBypassed(id) => self.arrangement.channel_toggle_bypassed(id),
+			Message::ChannelSwapChannels(id) => self.arrangement.channel_swap_channels(id),
+			Message::ChannelInvertPolarity(id) => self.arrangement.channel_toggle_polarity(id),
 			Message::PluginLoad(node, descriptor, show) => {
 				static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
 					HostInfo::new_from_cstring(
@@ -919,7 +915,7 @@ impl ArrangementView {
 		let mixer_panel = persistent(
 			styled_scrollable_with_direction(
 				row(
-					once(self.mixer_channel(self.arrangement.master(), "M".to_owned()))
+					once(self.channel(self.arrangement.master(), "M".to_owned()))
 						.chain(once(rule::vertical(1).into()))
 						.chain({
 							let mut iter = self
@@ -928,7 +924,7 @@ impl ArrangementView {
 								.iter()
 								.map(|track| self.arrangement.node(track.id))
 								.enumerate()
-								.map(|(i, node)| self.mixer_channel(node, format!("T{}", i + 1)))
+								.map(|(i, node)| self.channel(node, format!("T{}", i + 1)))
 								.peekable();
 
 							let one = iter.peek().map(|_| rule::vertical(1).into());
@@ -939,7 +935,7 @@ impl ArrangementView {
 								.arrangement
 								.channels()
 								.enumerate()
-								.map(|(i, node)| self.mixer_channel(node, format!("C{}", i + 1)))
+								.map(|(i, node)| self.channel(node, format!("C{}", i + 1)))
 								.peekable();
 
 							let one = iter.peek().map(|_| rule::vertical(1).into());
@@ -1051,11 +1047,7 @@ impl ArrangementView {
 		}
 	}
 
-	fn mixer_channel<'a>(
-		&'a self,
-		node: &'a Node,
-		name: impl IntoFragment<'a>,
-	) -> Element<'a, Message> {
+	fn channel<'a>(&'a self, node: &'a Node, name: impl IntoFragment<'a>) -> Element<'a, Message> {
 		let button_style = |cond| {
 			if !node.flags.contains(Flags::ENABLED) {
 				button::secondary
@@ -1110,12 +1102,12 @@ impl ArrangementView {
 						arrow_left_right(),
 						button_style(node.flags.contains(Flags::CHANNELS_SWAPPED))
 					)
-					.on_press(Message::ChannelToggleChannelsSwapped(node.id)),
+					.on_press(Message::ChannelSwapChannels(node.id)),
 					icon_button(
 						arrow_up_down(),
 						button_style(node.flags.contains(Flags::POLARITY_INVERTED))
 					)
-					.on_press(Message::ChannelTogglePolarityInverted(node.id)),
+					.on_press(Message::ChannelInvertPolarity(node.id)),
 				]
 				.spacing(5),
 				container(value(Decibels::from_amplitude(node.volume)).line_height(1.0))

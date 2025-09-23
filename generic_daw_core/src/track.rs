@@ -1,10 +1,10 @@
-use crate::{Action, Clip, Mixer, daw_ctx::State, event::Event};
+use crate::{Action, Channel, Clip, daw_ctx::State, event::Event};
 use audio_graph::{NodeId, NodeImpl};
 
 #[derive(Debug, Default)]
 pub struct Track {
 	pub clips: Vec<Clip>,
-	pub node: Mixer,
+	pub node: Channel,
 }
 
 impl NodeImpl for Track {

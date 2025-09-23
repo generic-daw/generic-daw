@@ -2,7 +2,7 @@ use super::{ArrangementView, ArrangementWrapper, LoadStatus, Message, Node, crc}
 use crate::{config::Config, daw::Message as DawMessage};
 use arc_swap::ArcSwap;
 use generic_daw_core::{
-	AudioClip, Clip, MidiClip, MidiKey, MidiNote, Mixer, NodeImpl as _, Sample, Track,
+	AudioClip, Channel, Clip, MidiClip, MidiKey, MidiNote, NodeImpl as _, Sample, Track,
 	clap_host::{PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
@@ -416,10 +416,10 @@ impl ArrangementView {
 		channels.insert(idx, node.id);
 
 		for (idx, channel) in iter_channels {
-			let mixer_node = Mixer::default();
-			let id = mixer_node.id();
+			let channel_node = Channel::default();
+			let id = channel_node.id();
 			channels.insert(idx, id);
-			arrangement.push_channel(mixer_node);
+			arrangement.push_channel(channel_node);
 			load_channel(arrangement.node(id), channel)?;
 		}
 

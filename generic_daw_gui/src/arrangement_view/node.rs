@@ -7,7 +7,7 @@ use std::time::Instant;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NodeType {
 	Master,
-	Mixer,
+	Channel,
 	Track,
 }
 

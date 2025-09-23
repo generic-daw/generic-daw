@@ -1,4 +1,4 @@
-use crate::{AudioGraphNode, Clip, Event, Master, Mixer};
+use crate::{AudioGraphNode, Channel, Clip, Event, Master};
 use audio_graph::{AudioGraph, NodeId, NodeImpl as _};
 use clap_host::{AudioProcessor, ClapId, PluginId};
 use crossbeam_queue::SegQueue;
@@ -39,12 +39,12 @@ pub enum Action {
 	AddClip(Clip),
 	RemoveClip(usize),
 
-	NodeToggleEnabled,
-	NodeToggleBypassed,
-	NodeTogglePolarityInverted,
-	NodeToggleChannelsSwapped,
-	NodeVolumeChanged(f32),
-	NodePanChanged(f32),
+	ChannelToggleEnabled,
+	ChannelToggleBypassed,
+	ChannelTogglePolarity,
+	ChannelSwapChannels,
+	ChannelVolumeChanged(f32),
+	ChannelPanChanged(f32),
 	PluginLoad(Box<AudioProcessor<Event>>),
 	PluginRemove(usize),
 	PluginMoved(usize, usize),
@@ -170,7 +170,7 @@ impl DawCtx {
 				Message::RequestAudioGraph(sender) => {
 					debug_assert!(self.consumer.is_empty());
 					let mut audio_graph =
-						AudioGraph::new(Mixer::default().into(), self.state.rtstate.frames);
+						AudioGraph::new(Channel::default().into(), self.state.rtstate.frames);
 					std::mem::swap(&mut self.audio_graph, &mut audio_graph);
 					sender.send(audio_graph).unwrap();
 				}
