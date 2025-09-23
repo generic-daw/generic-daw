@@ -3,8 +3,8 @@ use audio_graph::{NodeId, NodeImpl};
 use generic_daw_utils::{NoDebug, include_f32s};
 use std::sync::Arc;
 
-static ON_BAR_CLICK: &[f32] = include_f32s!("../../assets/on_bar_click.pcm");
-static OFF_BAR_CLICK: &[f32] = include_f32s!("../../assets/off_bar_click.pcm");
+static ON_BAR_CLICK: &[f32] = &include_f32s!("../../assets/on_bar_click.pcm");
+static OFF_BAR_CLICK: &[f32] = &include_f32s!("../../assets/off_bar_click.pcm");
 
 #[derive(Debug)]
 pub struct Master {
@@ -60,7 +60,7 @@ impl NodeImpl for Master {
 				.for_each(|(sample, buf)| *buf += sample);
 		}
 
-		self.click_sidx += audio.len().cast_signed();
+		self.click_sidx = self.click_sidx.saturating_add_unsigned(audio.len());
 
 		self.node.process(state, audio, events);
 	}
@@ -92,7 +92,7 @@ impl Master {
 			off_bar_click: NoDebug(off_bar_click.finish().into()),
 			node: Channel::default(),
 			click_on_bar: false,
-			click_sidx: isize::MIN,
+			click_sidx: isize::MAX,
 		}
 	}
 
@@ -102,6 +102,6 @@ impl Master {
 
 	pub fn reset(&mut self) {
 		self.node.reset();
-		self.click_sidx = isize::MIN;
+		self.click_sidx = isize::MAX;
 	}
 }

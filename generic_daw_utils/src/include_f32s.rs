@@ -1,14 +1,25 @@
 #[macro_export]
 macro_rules! include_f32s {
-	($file:expr) => {{
-		#[repr(align(4))]
-		struct Align<T: ?Sized>(T);
-		static ALIGNED: &Align<[u8]> = &Align(*::core::include_bytes!($file));
-		assert!(ALIGNED.0.len().is_multiple_of(4));
-		// SAFETY:
-		// Every valid [u8; 4] bitpattern is a valid f32 bitpattern. The resulting
-		// slice is correctly aligned to 4 bytes and inhabits exactly the same memory
-		// as the original slice.
-		unsafe { ::std::slice::from_raw_parts(ALIGNED.0.as_ptr().cast(), ALIGNED.0.len() / 4) }
-	}};
+	($file:expr) => {
+		const {
+			const BYTES: &[u8] = ::core::include_bytes!($file);
+			assert!(BYTES.len().is_multiple_of(4));
+
+			let mut f32s = [0.0; const { BYTES.len() / 4 }];
+			let mut i = 0;
+
+			while i < f32s.len() {
+				f32s[i] = f32::from_le_bytes([
+					BYTES[4 * i],
+					BYTES[4 * i + 1],
+					BYTES[4 * i + 2],
+					BYTES[4 * i + 3],
+				]);
+
+				i += 1;
+			}
+
+			f32s
+		}
+	};
 }

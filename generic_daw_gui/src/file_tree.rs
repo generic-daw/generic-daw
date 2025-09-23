@@ -54,10 +54,8 @@ impl FileTree {
 
 	pub fn diff(&mut self, dirs: impl IntoIterator<Item: AsRef<Path>>) {
 		for (i, dir) in dirs.into_iter().enumerate() {
-			let j = self
-				.dirs
+			let j = self.dirs[i..]
 				.iter()
-				.skip(i)
 				.position(|entry| entry.path() == dir.as_ref())
 				.map_or(self.dirs.len(), |j| j + i);
 			self.dirs.drain(i..j);
