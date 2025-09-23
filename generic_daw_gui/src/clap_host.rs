@@ -92,10 +92,11 @@ impl ClapHost {
 				if let Some(id) = self.windows.key_of(&window)
 					&& let Some(plugin) = self.plugins.get_mut(id)
 					&& let Some(new_size) = plugin.resize(size)
-					&& size.to_physical(config.scale_factor)
-						!= new_size.to_physical(config.scale_factor)
+					&& let Some(scale_factor) = plugin.get_scale()
+					&& let new_size = new_size.to_logical(scale_factor)
+					&& size.to_physical(scale_factor) != new_size
 				{
-					return window::resize(window, new_size.to_logical(config.scale_factor).into());
+					return window::resize(window, new_size.into());
 				}
 			}
 			Message::WindowCloseRequested(window) => {
@@ -112,7 +113,7 @@ impl ClapHost {
 			}
 			Message::SetPluginSize(id, size) => {
 				if let Some(&window) = self.windows.get(*id) {
-					return window::resize(window, size.to_logical(config.scale_factor).into());
+					return window::resize(window, size.to_logical(config.app_scale_factor).into());
 				}
 			}
 		}
@@ -180,12 +181,16 @@ impl ClapHost {
 				} else {
 					plugin.create();
 
-					plugin.set_scale(config.scale_factor);
+					plugin.set_scale(
+						config
+							.plugin_scale_factor
+							.unwrap_or(config.app_scale_factor),
+					);
 
 					let (window, spawn) = window::open(window::Settings {
 						size: plugin.get_size().map_or_else(
 							|| (400.0, 600.0).into(),
-							|size| size.to_logical(config.scale_factor).into(),
+							|size| size.to_logical(plugin.get_scale().unwrap()).into(),
 						),
 						resizable: plugin.can_resize(),
 						exit_on_close_request: false,
@@ -248,7 +253,7 @@ impl ClapHost {
 		Task::none()
 	}
 
-	pub fn plugin_gui(&self, window: Id) -> Option<Element<'_, Message>> {
+	pub fn view(&self, window: Id) -> Option<Element<'_, Message>> {
 		let Some(plugin) = &self.plugins.get(self.windows.key_of(&window)?) else {
 			return Some(space().into());
 		};
@@ -322,14 +327,11 @@ impl ClapHost {
 			.map(|plugin| plugin.descriptor().name.deref().to_owned())
 	}
 
-	pub fn set_realtime(&mut self, realtime: bool) {
-		for plugin in self.plugins.values_mut() {
-			plugin.set_realtime(realtime);
-		}
-	}
-
-	pub fn get_state(&mut self, id: PluginId) -> Option<Vec<u8>> {
-		self.plugins.get_mut(*id).unwrap().get_state()
+	pub fn scale_factor(&self, window: Id) -> Option<f32> {
+		self.windows
+			.key_of(&window)
+			.and_then(|id| self.plugins.get(id))
+			.and_then(Plugin::get_scale)
 	}
 
 	pub fn subscription(&self) -> Subscription<Message> {
@@ -361,5 +363,15 @@ impl ClapHost {
 					close_events().map(Message::WindowClosed),
 				]),
 		)
+	}
+
+	pub fn set_realtime(&mut self, realtime: bool) {
+		for plugin in self.plugins.values_mut() {
+			plugin.set_realtime(realtime);
+		}
+	}
+
+	pub fn get_state(&mut self, id: PluginId) -> Option<Vec<u8>> {
+		self.plugins.get_mut(*id).unwrap().get_state()
 	}
 }

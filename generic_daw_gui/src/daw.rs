@@ -367,7 +367,7 @@ impl Daw {
 	}
 
 	pub fn view(&self, window: Id) -> Element<'_, Message> {
-		if let Some(gui) = self.arrangement_view.clap_host.plugin_gui(window) {
+		if let Some(gui) = self.arrangement_view.clap_host.view(window) {
 			return gui
 				.map(ArrangementMessage::ClapHost)
 				.map(Message::Arrangement);
@@ -479,10 +479,9 @@ impl Daw {
 			]
 			.padding(10)
 			.spacing(10),
-			self.arrangement_view
-				.loading()
-				.then(|| mouse_area(space().width(Fill).height(Fill))
-					.interaction(Interaction::Progress)),
+			self.arrangement_view.loading().then_some(
+				mouse_area(space().width(Fill).height(Fill)).interaction(Interaction::Progress)
+			),
 			self.config_view.as_ref().map(|config_view| opaque(
 				mouse_area(
 					center(opaque(config_view.view().map(Message::ConfigView)))
@@ -502,62 +501,66 @@ impl Daw {
 								},
 								5
 							)),
-							(!self.missing_samples.is_empty()).then(|| container(
-								column(
-									self.missing_samples
-										.iter()
-										.map(|(name, _)| &**name)
-										.enumerate()
-										.map(|(i, name)| {
-											row![
-												"can't find sample",
-												container(text(name).font(Font::MONOSPACE))
-													.padding([5, 10])
-													.style(|t| bordered_box_with_radius(5)(t)
-														.background(
-															t.extended_palette()
-																.background
-																.weakest
-																.color
-														)),
-												space::horizontal(),
+							(!self.missing_samples.is_empty()).then_some(
+								container(
+									column(
+										self.missing_samples
+											.iter()
+											.map(|(name, _)| &**name)
+											.enumerate()
+											.map(|(i, name)| {
 												row![
-													button("Pick")
-														.on_press(Message::PickSampleFileDialog(i))
-														.style(button_with_radius(
-															button::success,
-															border::left(5)
-														)),
-													button("Ignore")
-														.on_press(Message::FoundSampleResponse(
-															i,
-															Feedback::Ignore
-														))
-														.style(button_with_radius(
-															button::warning,
-															0
-														)),
-													button("Cancel")
-														.on_press(Message::FoundSampleResponse(
-															i,
-															Feedback::Cancel
-														))
-														.style(button_with_radius(
-															button::danger,
-															border::right(5)
-														))
+													"can't find sample",
+													container(text(name).font(Font::MONOSPACE))
+														.padding([5, 10])
+														.style(|t| bordered_box_with_radius(5)(t)
+															.background(
+																t.extended_palette()
+																	.background
+																	.weakest
+																	.color
+															)),
+													space::horizontal(),
+													row![
+														button("Pick")
+															.on_press(
+																Message::PickSampleFileDialog(i)
+															)
+															.style(button_with_radius(
+																button::success,
+																border::left(5)
+															)),
+														button("Ignore")
+															.on_press(Message::FoundSampleResponse(
+																i,
+																Feedback::Ignore
+															))
+															.style(button_with_radius(
+																button::warning,
+																0
+															)),
+														button("Cancel")
+															.on_press(Message::FoundSampleResponse(
+																i,
+																Feedback::Cancel
+															))
+															.style(button_with_radius(
+																button::danger,
+																border::right(5)
+															))
+													]
 												]
-											]
-											.spacing(10)
-											.width(Shrink)
-											.align_y(Center)
-											.into()
-										}),
+												.spacing(10)
+												.width(Shrink)
+												.align_y(Center)
+												.into()
+											}),
+									)
+									.spacing(10)
 								)
-								.spacing(10)
+								.padding(10)
+								.style(bordered_box_with_radius(5))
 							)
-							.padding(10)
-							.style(bordered_box_with_radius(5)))
 						]
 						.align_x(Center)
 						.spacing(20)
@@ -582,8 +585,11 @@ impl Daw {
 		self.config.theme.into()
 	}
 
-	pub fn scale_factor(&self, _window: Id) -> f32 {
-		self.config.scale_factor
+	pub fn scale_factor(&self, window: Id) -> f32 {
+		self.arrangement_view
+			.clap_host
+			.scale_factor(window)
+			.unwrap_or(self.config.app_scale_factor)
 	}
 
 	pub fn subscription(&self) -> Subscription<Message> {

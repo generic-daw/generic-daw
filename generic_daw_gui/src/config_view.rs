@@ -1,14 +1,16 @@
 use crate::{
 	components::{number_input, pick_list_custom_handle, styled_scrollable},
 	config::{Config, Device},
-	icons::{mic, plus, rotate_ccw, save, volume_2, x},
+	icons::{link, mic, plus, rotate_ccw, save, unlink, volume_2, x},
 	stylefns::{bordered_box_with_radius, button_with_radius, pick_list_with_radius},
 	theme::Theme,
 	widget::LINE_HEIGHT,
 };
 use generic_daw_core::{get_input_devices, get_output_devices};
 use iced::{
-	Center, Element, Font, Task, border,
+	Center, Element, Font,
+	Length::Fill,
+	Task, border,
 	widget::{
 		button, column, container, pick_list, row, rule, slider, space, text, toggler, value,
 	},
@@ -42,7 +44,8 @@ pub enum Message {
 	ChangedAutosaveIntervalText(String),
 	ToggledOpenLastProject,
 	ChangedTheme(Theme),
-	ChangedScaleFactor(f32),
+	ChangedAppScaleFactor(f32),
+	ChangedPluginScaleFactor(Option<f32>),
 	WriteConfig,
 	ResetConfigToPrev,
 	ResetConfigToDefault,
@@ -110,7 +113,12 @@ impl ConfigView {
 			}
 			Message::ToggledOpenLastProject => self.config.open_last_project ^= true,
 			Message::ChangedTheme(theme) => self.config.theme = theme,
-			Message::ChangedScaleFactor(scale_factor) => self.config.scale_factor = scale_factor,
+			Message::ChangedAppScaleFactor(app_scale_factor) => {
+				self.config.app_scale_factor = app_scale_factor;
+			}
+			Message::ChangedPluginScaleFactor(plugin_scale_factor) => {
+				self.config.plugin_scale_factor = plugin_scale_factor;
+			}
 			Message::WriteConfig => {
 				self.config.write();
 				self.prev_config = self.config.clone();
@@ -294,25 +302,110 @@ impl ConfigView {
 				}),
 				rule::horizontal(1),
 				row![
-					toggler(self.config.autosave.enabled)
-						.label("Autosave every ")
-						.on_toggle(|_| Message::ToggledAutosave),
-					number_input(
-						self.config.autosave.interval.get() as usize,
-						600,
-						3,
-						|x| Message::ChangedAutosaveInterval(
-							NonZero::new(x as u64).unwrap_or(NonZero::<u64>::MIN)
+					row![
+						toggler(self.config.autosave.enabled)
+							.label("Autosave every ")
+							.on_toggle(|_| Message::ToggledAutosave),
+						number_input(
+							self.config.autosave.interval.get() as usize,
+							600,
+							3,
+							|x| Message::ChangedAutosaveInterval(
+								NonZero::new(x as u64).unwrap_or(NonZero::<u64>::MIN)
+							),
+							Message::ChangedAutosaveIntervalText
 						),
-						Message::ChangedAutosaveIntervalText
-					),
-					" s"
+						" s"
+					]
+					.align_y(Center)
+					.width(Fill),
+					row![
+						toggler(self.config.open_last_project)
+							.label("Open last project on startup")
+							.on_toggle(|_| Message::ToggledOpenLastProject)
+					]
+					.width(Fill)
 				]
 				.align_y(Center),
-				toggler(self.config.open_last_project)
-					.label("Open last project on startup")
-					.on_toggle(|_| Message::ToggledOpenLastProject),
 				rule::horizontal(1),
+				row![
+					column![
+						row![
+							"App scale factor:  ",
+							text(format!("{:.1}", self.config.app_scale_factor))
+								.font(Font::MONOSPACE),
+							space::horizontal(),
+							button(rotate_ccw().size(LINE_HEIGHT - 3.0))
+								.style(button_with_radius(button::primary, 5))
+								.padding(3)
+								.on_press_maybe(
+									(self.config.app_scale_factor != 1.0)
+										.then_some(Message::ChangedAppScaleFactor(1.0))
+								),
+							space().width(5)
+						],
+						slider(
+							0.5..=2.0,
+							self.config.app_scale_factor,
+							Message::ChangedAppScaleFactor
+						)
+						.step(0.1),
+					]
+					.spacing(5),
+					container(
+						button(
+							self.config
+								.plugin_scale_factor
+								.map_or_else(link, |_| unlink())
+								.size(LINE_HEIGHT - 3.0)
+						)
+						.padding(0)
+						.style(button::text)
+						.on_press(self.config.plugin_scale_factor.map_or(
+							Message::ChangedPluginScaleFactor(Some(self.config.app_scale_factor)),
+							|_| Message::ChangedPluginScaleFactor(None)
+						))
+					)
+					.align_bottom(Fill)
+					.width(LINE_HEIGHT - 2.0),
+					column![
+						row![
+							"Plugin scale factor:  ",
+							text(format!(
+								"{:.1}",
+								self.config
+									.plugin_scale_factor
+									.unwrap_or(self.config.app_scale_factor)
+							))
+							.font(Font::MONOSPACE),
+							space::horizontal(),
+							button(rotate_ccw().size(LINE_HEIGHT - 3.0))
+								.style(button_with_radius(button::primary, 5))
+								.padding(3)
+								.on_press_maybe(
+									self.config
+										.plugin_scale_factor
+										.map(|_| Message::ChangedPluginScaleFactor(None))
+								),
+							space().width(5)
+						],
+						slider(
+							0.5..=2.0,
+							self.config
+								.plugin_scale_factor
+								.unwrap_or(self.config.app_scale_factor),
+							|scale| self
+								.config
+								.plugin_scale_factor
+								.map_or(Message::ChangedAppScaleFactor(scale), |_| {
+									Message::ChangedPluginScaleFactor(Some(scale))
+								})
+						)
+						.step(0.1)
+					]
+					.spacing(5)
+				]
+				.spacing(10),
 				row![
 					"Theme: ",
 					space::horizontal(),
@@ -329,27 +422,6 @@ impl ConfigView {
 						.on_press_maybe(
 							(self.config.theme != Theme::CatppuccinFrappe)
 								.then_some(Message::ChangedTheme(Theme::CatppuccinFrappe))
-						)
-				]
-				.align_y(Center),
-				row![
-					"Scale factor: ",
-					text(format!("{:.1}", self.config.scale_factor)).font(Font::MONOSPACE),
-					space::horizontal(),
-					slider(
-						0.5..=2.0,
-						self.config.scale_factor,
-						Message::ChangedScaleFactor
-					)
-					.step(0.1)
-					.width(212),
-					space().width(5),
-					button(rotate_ccw())
-						.style(button_with_radius(button::primary, 5))
-						.padding(5)
-						.on_press_maybe(
-							(self.config.scale_factor != 1.0)
-								.then_some(Message::ChangedScaleFactor(1.0))
 						)
 				]
 				.align_y(Center),

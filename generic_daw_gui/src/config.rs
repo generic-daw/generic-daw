@@ -28,8 +28,9 @@ pub struct Config {
 	pub output_device: Device,
 	pub autosave: Autosave,
 	pub open_last_project: bool,
+	pub app_scale_factor: f32,
+	pub plugin_scale_factor: Option<f32>,
 	pub theme: Theme,
-	pub scale_factor: f32,
 }
 
 impl Default for Config {
@@ -41,8 +42,9 @@ impl Default for Config {
 			output_device: Device::default(),
 			autosave: Autosave::default(),
 			open_last_project: false,
+			app_scale_factor: 1.0,
+			plugin_scale_factor: None,
 			theme: Theme::default(),
-			scale_factor: 1.0,
 		}
 	}
 }

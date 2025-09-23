@@ -101,17 +101,23 @@ impl<Event: EventImpl> Plugin<Event> {
 		matches!(self.gui, Gui::Floating)
 	}
 
+	pub fn get_scale(&self) -> Option<f32> {
+		if let Gui::Embedded { scale_factor, .. } = &self.gui {
+			Some(*scale_factor)
+		} else {
+			None
+		}
+	}
+
 	pub fn set_scale(&mut self, scale: f32) {
-		let ext = self
-			.instance
-			.access_shared_handler(|s| s.ext.gui.get().copied());
 		let Gui::Embedded { scale_factor, .. } = &mut self.gui else {
 			panic!("called \"set_scale\" on a non-embedded gui")
 		};
 
 		if !API_TYPE.uses_logical_size()
-			&& let Err(err) = ext
-				.unwrap()
+			&& let Err(err) = self
+				.instance
+				.access_shared_handler(|s| *s.ext.gui.get().unwrap())
 				.set_scale(&mut self.instance.plugin_handle(), scale.into())
 		{
 			// If I unwrap here, vital doesn't load. Why?
@@ -123,15 +129,15 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	#[must_use]
 	pub fn can_resize(&mut self) -> bool {
-		let ext = self
-			.instance
-			.access_shared_handler(|s| s.ext.gui.get().copied());
 		let Gui::Embedded { can_resize, .. } = &mut self.gui else {
 			panic!("called \"can_resize\" on a non-embedded gui")
 		};
 
-		*can_resize
-			.get_or_insert_with(|| ext.unwrap().can_resize(&mut self.instance.plugin_handle()))
+		*can_resize.get_or_insert_with(|| {
+			self.instance
+				.access_shared_handler(|s| *s.ext.gui.get().unwrap())
+				.can_resize(&mut self.instance.plugin_handle())
+		})
 	}
 
 	pub fn call_on_main_thread_callback(&mut self) {

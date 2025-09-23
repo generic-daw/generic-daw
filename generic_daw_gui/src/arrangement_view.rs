@@ -8,7 +8,7 @@ use crate::{
 	icons::{arrow_left_right, arrow_up_down, chevron_up, circle_off, grip_vertical, plus, x},
 	stylefns::{bordered_box_with_radius, button_with_radius, menu_with_border, slider_secondary},
 	widget::{
-		LINE_HEIGHT,
+		LINE_HEIGHT, TEXT_HEIGHT,
 		arrangement::{Action as ArrangementAction, Arrangement as ArrangementWidget},
 		audio_clip::AudioClip as AudioClipWidget,
 		midi_clip::MidiClip as MidiClipWidget,
@@ -892,10 +892,10 @@ impl ArrangementView {
 									.chain(
 										self.recording
 											.as_ref()
-											.is_some_and(|&(_, i)| i == track.id)
-											.then(|| {
+											.filter(|&&(_, i)| i == track.id)
+											.map(|(recording, _)| {
 												RecordingWidget::new(
-													&self.recording.as_ref().unwrap().0,
+													recording,
 													self.arrangement.rtstate(),
 													&self.arrangement_position,
 													&self.arrangement_scale,
@@ -983,7 +983,7 @@ impl ArrangementView {
 										Knob::new(0.0..=1.0, plugin.mix, move |mix| {
 											Message::PluginMixChanged(selected, i, mix)
 										})
-										.radius(LINE_HEIGHT.midpoint(14.0))
+										.radius(TEXT_HEIGHT)
 										.enabled(plugin.enabled)
 										.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
 										button(
@@ -1222,7 +1222,7 @@ impl ArrangementView {
 
 	pub fn subscription(&self) -> Subscription<Message> {
 		Subscription::batch([
-			every(Duration::from_secs(60)).map(|_| Message::Gc),
+			every(Duration::from_secs(10)).map(|_| Message::Gc),
 			self.clap_host.subscription().map(Message::ClapHost),
 		])
 	}
