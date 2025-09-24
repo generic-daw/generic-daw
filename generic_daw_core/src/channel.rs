@@ -63,7 +63,7 @@ impl NodeImpl for Channel {
 				plugin.processor.flush(events);
 			}
 
-			events
+			let mut events = events
 				.extract_if(.., |event| matches!(event, Event::ParamValue { .. }))
 				.map(|event| {
 					let Event::ParamValue { param_id, .. } = event else {
@@ -72,7 +72,11 @@ impl NodeImpl for Channel {
 
 					Update::Param(plugin.processor.id(), param_id)
 				})
-				.for_each(|update| state.updates.push(update));
+				.peekable();
+
+			if events.peek().is_some() {
+				state.updates.lock().unwrap().extend(events);
+			}
 		}
 
 		if !self.flags.contains(Flags::ENABLED) {
@@ -96,7 +100,11 @@ impl NodeImpl for Channel {
 
 		let peaks = peaks(audio, lpan, rpan);
 		if peaks.iter().all(|&peak| peak >= f32::EPSILON) {
-			state.updates.push(Update::Peak(self.id, peaks));
+			state
+				.updates
+				.lock()
+				.unwrap()
+				.push(Update::Peak(self.id, peaks));
 		}
 	}
 

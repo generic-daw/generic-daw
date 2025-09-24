@@ -1,10 +1,10 @@
 use crate::{AudioGraphNode, Channel, Clip, Event, Master};
 use audio_graph::{AudioGraph, NodeId, NodeImpl as _};
 use clap_host::{AudioProcessor, ClapId, PluginId};
-use crossbeam_queue::SegQueue;
 use generic_daw_utils::unique_id;
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, RingBuffer};
+use std::sync::Mutex;
 
 unique_id!(version);
 
@@ -79,14 +79,14 @@ pub struct RtState {
 #[derive(Debug)]
 pub struct State {
 	pub rtstate: RtState,
-	pub updates: SegQueue<Update>,
+	pub updates: Mutex<Vec<Update>>,
 }
 
 impl From<RtState> for State {
 	fn from(value: RtState) -> Self {
 		Self {
 			rtstate: value,
-			updates: SegQueue::new(),
+			updates: Mutex::new(Vec::new()),
 		}
 	}
 }
@@ -125,10 +125,7 @@ impl DawCtx {
 
 		let audio_ctx = Self {
 			audio_graph: AudioGraph::new(master.into(), frames),
-			state: State {
-				rtstate,
-				updates: SegQueue::new(),
-			},
+			state: rtstate.into(),
 			version,
 			producer,
 			consumer,
@@ -160,8 +157,8 @@ impl DawCtx {
 				Message::ToggleMetronome => self.state.rtstate.metronome ^= true,
 				Message::Reset => self.audio_graph.for_each_mut_node(AudioGraphNode::reset),
 				Message::Sample(version, sample) => {
-					self.state.rtstate.sample = sample;
 					self.version = version;
+					self.state.rtstate.sample = sample;
 				}
 				Message::ReturnUpdateBuffer(update) => {
 					debug_assert!(update.is_empty());
@@ -178,6 +175,12 @@ impl DawCtx {
 			}
 		}
 
+		let updates = self.state.updates.get_mut().unwrap();
+
+		if updates.capacity() == 0 {
+			*updates = self.update_buffers.pop().unwrap_or_default();
+		}
+
 		self.audio_graph.process(&self.state, buf);
 
 		for s in &mut *buf {
@@ -189,15 +192,15 @@ impl DawCtx {
 			self.state.rtstate.sample
 		});
 
-		if sample.is_some() || !self.state.updates.is_empty() {
-			let mut batch = Batch {
+		let updates = self.state.updates.get_mut().unwrap();
+
+		if sample.is_some() || !updates.is_empty() {
+			let batch = Batch {
 				version: self.version,
 				sample,
-				updates: self.update_buffers.pop().unwrap_or_default(),
+				updates: std::mem::take(updates),
 			};
-			while let Some(update) = self.state.updates.pop() {
-				batch.updates.push(update);
-			}
+
 			if let Err(err) = self.producer.push(batch) {
 				warn!("{err}");
 			}

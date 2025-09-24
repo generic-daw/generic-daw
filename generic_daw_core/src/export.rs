@@ -45,7 +45,7 @@ pub fn export(
 		state.rtstate.sample += diff;
 
 		audio_graph.process(&state, &mut buf[..diff]);
-		while state.updates.pop().is_some() {}
+		state.updates.get_mut().unwrap().clear();
 
 		progress_fn(state.rtstate.sample as f32 / end as f32);
 	}
@@ -59,7 +59,7 @@ pub fn export(
 		state.rtstate.sample += diff;
 
 		audio_graph.process(&state, &mut buf[..diff]);
-		while state.updates.pop().is_some() {}
+		state.updates.get_mut().unwrap().clear();
 
 		for &s in &buf[..diff] {
 			writer.write_sample(s).unwrap();

@@ -11,16 +11,25 @@ pub struct Resampler {
 	output: Vec<f32>,
 
 	frames_written: usize,
-	frames_to_trim: usize,
+	start_trim_left: usize,
+	end_trim_left: usize,
 }
 
 impl Resampler {
 	pub fn new(sample_rate_input: usize, sample_rate_output: usize) -> Option<Self> {
+		Self::with_capacity(sample_rate_input, sample_rate_output, 0)
+	}
+
+	pub fn with_capacity(
+		sample_rate_input: usize,
+		sample_rate_output: usize,
+		frames: usize,
+	) -> Option<Self> {
 		let fft = FftFixedIn::new(sample_rate_input, sample_rate_output, 1024, 1, 2).ok()?;
 		let resample_ratio = sample_rate_output as f64 / sample_rate_input as f64;
 		let input_buffer = fft.input_buffer_allocate(false);
 		let output_buffer = fft.output_buffer_allocate(true);
-		let frames_to_trim = fft.output_delay();
+		let start_trim_left = fft.output_delay();
 
 		Some(Self {
 			resample_ratio,
@@ -28,11 +37,23 @@ impl Resampler {
 			fft: fft.into(),
 			input_buffer,
 			output_buffer,
-			output: Vec::new(),
+			output: Vec::with_capacity(2 * frames),
 
 			frames_written: 0,
-			frames_to_trim,
+			start_trim_left,
+			end_trim_left: 0,
 		})
+	}
+
+	pub fn trim_start(mut self, frames: usize) -> Self {
+		self.start_trim_left =
+			self.fft.output_delay() + (frames as f64 * self.resample_ratio) as usize;
+		self
+	}
+
+	pub fn trim_end(mut self, frames: usize) -> Self {
+		self.end_trim_left = (frames as f64 * self.resample_ratio) as usize;
+		self
 	}
 
 	pub fn process(&mut self, mut samples: &[f32]) {
@@ -62,7 +83,7 @@ impl Resampler {
 				.process_into_buffer(&self.input_buffer, &mut self.output_buffer, None)
 				.unwrap();
 
-			for i in self.frames_to_trim..frames_out {
+			for i in self.start_trim_left..frames_out {
 				for buf in &self.output_buffer {
 					self.output.push(buf[i]);
 				}
@@ -73,13 +94,14 @@ impl Resampler {
 			}
 
 			self.frames_written += frames_in;
-			self.frames_to_trim = self.frames_to_trim.saturating_sub(frames_out);
+			self.start_trim_left = self.start_trim_left.saturating_sub(frames_out);
 		}
 	}
 
 	pub fn finish(mut self) -> Vec<f32> {
 		let input_frames = self.frames_written + self.input_buffer[0].len();
-		let expected_output_frames = (input_frames as f64 * self.resample_ratio).ceil() as usize;
+		let expected_output_frames =
+			(input_frames as f64 * self.resample_ratio).ceil() as usize - self.end_trim_left;
 
 		while self.frames_written < expected_output_frames {
 			let len = self.fft.input_frames_next();
