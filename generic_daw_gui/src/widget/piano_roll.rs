@@ -192,7 +192,7 @@ where
 					}
 					_ => {}
 				},
-				mouse::Event::ButtonReleased(..) if *state != State::None => {
+				mouse::Event::ButtonReleased { .. } if *state != State::None => {
 					if state.drop() {
 						shell.publish((self.f)(Action::Drop));
 					}

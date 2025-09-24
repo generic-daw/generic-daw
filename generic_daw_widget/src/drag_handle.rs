@@ -142,7 +142,10 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 
 					shell.capture_event();
 				}
-				mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
+				mouse::Event::ButtonReleased {
+					button: mouse::Button::Left,
+					..
+				} if state.dragging.is_some() => {
 					state.dragging = None;
 					shell.capture_event();
 				}

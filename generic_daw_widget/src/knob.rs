@@ -277,7 +277,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 
 					shell.capture_event();
 				}
-				mouse::Event::ButtonReleased(mouse::Button::Left) if state.dragging.is_some() => {
+				mouse::Event::ButtonReleased {
+					button: mouse::Button::Left,
+					..
+				} if state.dragging.is_some() => {
 					if !state.hovering {
 						state.cache.clear();
 						shell.request_redraw();

@@ -168,7 +168,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					shell.publish((self.seek_to)(time));
 					shell.capture_event();
 				}
-				mouse::Event::ButtonReleased(mouse::Button::Left) => state.seeking = None,
+				mouse::Event::ButtonReleased {
+					button: mouse::Button::Left,
+					..
+				} => state.seeking = None,
 				mouse::Event::WheelScrolled { delta, modifiers } => {
 					let (mut x, mut y) = match *delta {
 						ScrollDelta::Pixels { x, y } => (-x, -y),
