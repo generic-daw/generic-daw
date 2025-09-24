@@ -192,9 +192,7 @@ where
 							}
 
 							shell.capture_event();
-						} else {
-							let track = self.get_track(cursor);
-
+						} else if let Some(track) = self.get_track(cursor, &layout) {
 							shell.publish((self.f)(Action::Add(track, time)));
 							*state = State::DraggingClip(0.0, track, time);
 						}
@@ -221,9 +219,9 @@ where
 				}
 				mouse::Event::CursorMoved { modifiers, .. } => match *state {
 					State::DraggingClip(offset, track, time) => {
-						let new_track = self
-							.get_track(cursor)
-							.min(layout.children().next().unwrap().children().count() - 1);
+						let new_track = self.get_track(cursor, &layout).unwrap_or_else(|| {
+							layout.children().next().unwrap().children().len() - 1
+						});
 						let new_start = get_time(
 							cursor.x + offset,
 							*modifiers,
@@ -395,7 +393,7 @@ where
 		position: &'a Vec2,
 		scale: &'a Vec2,
 		children: impl Into<Element<'a, Message>>,
-		action: fn(Action) -> Message,
+		f: fn(Action) -> Message,
 	) -> Self {
 		Self {
 			rtstate,
@@ -403,12 +401,14 @@ where
 			position,
 			scale,
 			deleted: false,
-			f: action,
+			f,
 		}
 	}
 
-	fn get_track(&self, cursor: Point) -> usize {
-		(cursor.y / self.scale.y + self.position.y) as usize
+	fn get_track(&self, cursor: Point, layout: &Layout<'_>) -> Option<usize> {
+		let track = (cursor.y / self.scale.y + self.position.y) as usize;
+		let tracks = layout.children().next().unwrap().children().len();
+		(track < tracks).then_some(track)
 	}
 
 	fn get_track_clip(
@@ -417,7 +417,7 @@ where
 		viewport: Rectangle,
 		cursor: Point,
 	) -> Option<(usize, usize)> {
-		let track = self.get_track(cursor);
+		let track = self.get_track(cursor, layout)?;
 		let offset = Vector::new(viewport.position().x, viewport.position().y);
 		let clip = track_layout(layout, track)?
 			.children()

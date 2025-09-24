@@ -95,7 +95,7 @@ impl NodeImpl for Channel {
 		}
 
 		let peaks = peaks(audio, lpan, rpan);
-		if peaks != [0.0; 2] {
+		if peaks.iter().all(|&peak| peak >= f32::EPSILON) {
 			state.updates.push(Update::Peak(self.id, peaks));
 		}
 	}

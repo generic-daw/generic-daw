@@ -70,6 +70,8 @@ pub fn export(
 
 	writer.finalize().unwrap();
 
+	audio_graph.for_each_mut_node(AudioGraphNode::reset);
+
 	info!(
 		"export of {} finished in {:?}",
 		path.display(),
