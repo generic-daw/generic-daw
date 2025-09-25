@@ -35,8 +35,12 @@ impl Recording {
 
 		let name = path.file_name().unwrap().to_str().unwrap().into();
 
-		let resampler =
-			Resampler::new(config.sample_rate.0 as usize, rtstate.sample_rate as usize).unwrap();
+		let resampler = Resampler::new(
+			config.sample_rate.0 as usize,
+			rtstate.sample_rate as usize,
+			2,
+		)
+		.unwrap();
 
 		let writer = WavWriter::create(
 			&path,
@@ -101,6 +105,7 @@ impl Recording {
 		let mut resampler = Resampler::new(
 			self.config.sample_rate.0 as usize,
 			rtstate.sample_rate as usize,
+			2,
 		)
 		.unwrap();
 		std::mem::swap(&mut self.resampler, &mut resampler);

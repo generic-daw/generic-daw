@@ -14,11 +14,11 @@ pub struct AudioClip {
 impl AudioClip {
 	#[must_use]
 	pub fn create(sample: Arc<Sample>, rtstate: &RtState) -> Arc<Self> {
-		let len = sample.samples.len();
+		let len = MusicalTime::from_samples(sample.samples.len(), rtstate) + MusicalTime::TICK;
 
 		Arc::new(Self {
 			sample,
-			position: ClipPosition::with_len(MusicalTime::from_samples(len, rtstate)),
+			position: ClipPosition::with_len(len),
 		})
 	}
 
@@ -30,7 +30,7 @@ impl AudioClip {
 		let start = self.position.start().to_samples(rtstate);
 		let end = self.position.end().to_samples(rtstate);
 		let offset = self.position.offset().to_samples(rtstate);
-		let len = end - start;
+		let len = (self.sample.samples.len() - offset).min(end - start);
 
 		let uidx = rtstate.sample.abs_diff(start);
 

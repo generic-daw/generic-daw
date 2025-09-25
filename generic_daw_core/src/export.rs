@@ -14,6 +14,7 @@ pub fn export(
 	let now = Instant::now();
 
 	let mut state = state.into();
+	state.rtstate.sample = 0;
 	state.rtstate.playing = true;
 	state.rtstate.metronome = false;
 
@@ -42,11 +43,11 @@ pub fn export(
 		state.rtstate.sample < delay
 	} {
 		let diff = buffer_size.min(delay - state.rtstate.sample);
-		state.rtstate.sample += diff;
 
 		audio_graph.process(&state, &mut buf[..diff]);
 		state.updates.get_mut().unwrap().clear();
 
+		state.rtstate.sample += diff;
 		progress_fn(state.rtstate.sample as f32 / end as f32);
 	}
 
@@ -56,7 +57,6 @@ pub fn export(
 		state.rtstate.sample < end
 	} {
 		let diff = buffer_size.min(end - state.rtstate.sample);
-		state.rtstate.sample += diff;
 
 		audio_graph.process(&state, &mut buf[..diff]);
 		state.updates.get_mut().unwrap().clear();
@@ -65,6 +65,7 @@ pub fn export(
 			writer.write_sample(s).unwrap();
 		}
 
+		state.rtstate.sample += diff;
 		progress_fn(state.rtstate.sample as f32 / end as f32);
 	}
 

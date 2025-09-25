@@ -58,13 +58,14 @@ impl Sample {
 		let delay = track.codec_params.delay.unwrap_or_default() as usize;
 		let padding = track.codec_params.padding.unwrap_or_default() as usize;
 
-		let mut resampler = Resampler::with_capacity(
+		let mut resampler = Resampler::new(
 			track.codec_params.sample_rate? as usize,
 			sample_rate as usize,
-			track.codec_params.n_frames.unwrap_or_default() as usize,
+			2,
 		)?
 		.trim_start(delay)
-		.trim_end(padding);
+		.trim_end(padding)
+		.reserve(track.codec_params.n_frames.unwrap_or_default() as usize);
 
 		let mut stereo = Vec::with_capacity(
 			2 * track.codec_params.max_frames_per_packet.unwrap_or_default() as usize,

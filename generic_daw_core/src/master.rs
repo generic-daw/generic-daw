@@ -81,10 +81,10 @@ impl NodeImpl for Master {
 impl Master {
 	#[must_use]
 	pub fn new(sample_rate: u32) -> Self {
-		let mut on_bar_click = Resampler::new(44100, sample_rate as usize).unwrap();
+		let mut on_bar_click = Resampler::new(44100, sample_rate as usize, 2).unwrap();
 		on_bar_click.process(ON_BAR_CLICK);
 
-		let mut off_bar_click = Resampler::new(44100, sample_rate as usize).unwrap();
+		let mut off_bar_click = Resampler::new(44100, sample_rate as usize, 2).unwrap();
 		off_bar_click.process(OFF_BAR_CLICK);
 
 		Self {
