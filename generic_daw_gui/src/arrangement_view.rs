@@ -1066,9 +1066,11 @@ impl ArrangementView {
 							button::secondary
 						},
 					)
-					.on_press_maybe(
-						(node.ty != NodeType::Master).then_some(Message::TrackRemove(node.id)),
-					),
+					.on_press_maybe(match node.ty {
+						NodeType::Master => None,
+						NodeType::Channel => Some(Message::ChannelRemove(node.id)),
+						NodeType::Track => Some(Message::TrackRemove(node.id)),
+					}),
 				]
 				.spacing(5),
 				row![
@@ -1113,7 +1115,10 @@ impl ArrangementView {
 				self.selected_channel.map_or_else(
 					|| Element::new(space().height(LINE_HEIGHT)),
 					|selected_channel| {
-						if selected_channel == node.id {
+						if node.ty == NodeType::Track
+							|| node.id == selected_channel
+							|| self.arrangement.master().id == selected_channel
+						{
 							space().height(LINE_HEIGHT).into()
 						} else {
 							let connected = self
