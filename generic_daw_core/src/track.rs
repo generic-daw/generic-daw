@@ -1,4 +1,4 @@
-use crate::{Action, Channel, Clip, daw_ctx::State, event::Event};
+use crate::{Channel, Clip, NodeAction, daw_ctx::State, event::Event};
 use audio_graph::{NodeId, NodeImpl};
 
 #[derive(Debug, Default)]
@@ -12,8 +12,8 @@ impl NodeImpl for Track {
 	type State = State;
 
 	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
-		for clip in &self.clips {
-			clip.process(&state.rtstate, audio, events);
+		for clip in &mut self.clips {
+			clip.process(state, audio, events);
 		}
 
 		self.node.process(state, audio, events);
@@ -33,10 +33,15 @@ impl NodeImpl for Track {
 }
 
 impl Track {
-	pub fn apply(&mut self, action: Action) {
+	pub fn apply(&mut self, action: NodeAction) {
 		match action {
-			Action::AddClip(clip) => self.clips.push(clip),
-			Action::RemoveClip(index) => _ = self.clips.remove(index),
+			NodeAction::ClipAdd(clip) => self.clips.push(clip),
+			NodeAction::ClipRemove(index) => _ = self.clips.remove(index),
+			NodeAction::ClipMoveTo(index, pos) => self.clips[index].position().move_to(pos),
+			NodeAction::ClipTrimStartTo(index, pos) => {
+				self.clips[index].position().trim_start_to(pos);
+			}
+			NodeAction::ClipTrimEndTo(index, pos) => self.clips[index].position().trim_end_to(pos),
 			action => self.node.apply(action),
 		}
 	}

@@ -1,51 +1,38 @@
-use crate::{LOD_LEVELS, lod::create_lods, resampler::Resampler};
-use generic_daw_utils::NoDebug;
-use log::info;
-use std::{fs::File, path::Path, sync::Arc};
+use crate::resampler::Resampler;
+use generic_daw_utils::{NoDebug, unique_id};
 use symphonia::core::{
 	audio::SampleBuffer,
 	codecs::DecoderOptions,
 	formats::FormatOptions,
-	io::{MediaSourceStream, MediaSourceStreamOptions},
+	io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions},
 	meta::MetadataOptions,
 	probe::Hint,
 };
 
+unique_id!(sample_id);
+
+pub use sample_id::Id as SampleId;
+
 #[derive(Debug)]
 pub struct Sample {
+	pub id: SampleId,
 	pub samples: NoDebug<Box<[f32]>>,
-	pub lods: NoDebug<Box<[Box<[(f32, f32)]>; LOD_LEVELS]>>,
-	pub path: Arc<Path>,
-	pub name: Arc<str>,
 }
 
 impl Sample {
 	#[must_use]
-	pub fn create(path: Arc<Path>, sample_rate: u32) -> Option<Arc<Self>> {
-		info!("loading sample {}", path.display());
-
-		let name = path.file_name()?.to_str()?.into();
-		let samples = Self::read_audio_file(&path, sample_rate)?;
-		let lods = create_lods(&samples);
-
-		info!("loaded sample {}", path.display());
-
-		Some(Arc::new(Self {
-			samples: samples.into(),
-			lods: lods.into(),
-			path,
-			name,
-		}))
+	pub fn new(source: Box<dyn MediaSource>, sample_rate: u32) -> Option<Self> {
+		Some(Self {
+			samples: Self::read_audio_file(source, sample_rate)?.into(),
+			id: SampleId::unique(),
+		})
 	}
 
-	fn read_audio_file(path: impl AsRef<Path>, sample_rate: u32) -> Option<Box<[f32]>> {
+	fn read_audio_file(source: Box<dyn MediaSource>, sample_rate: u32) -> Option<Box<[f32]>> {
 		let mut format = symphonia::default::get_probe()
 			.format(
 				&Hint::default(),
-				MediaSourceStream::new(
-					Box::new(File::open(path).ok()?),
-					MediaSourceStreamOptions::default(),
-				),
+				MediaSourceStream::new(source, MediaSourceStreamOptions::default()),
 				&FormatOptions::default(),
 				&MetadataOptions::default(),
 			)

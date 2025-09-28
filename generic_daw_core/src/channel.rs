@@ -1,5 +1,5 @@
 use crate::{
-	Action,
+	NodeAction,
 	daw_ctx::{State, Update},
 	event::Event,
 };
@@ -126,19 +126,19 @@ impl NodeImpl for Channel {
 }
 
 impl Channel {
-	pub fn apply(&mut self, action: Action) {
+	pub fn apply(&mut self, action: NodeAction) {
 		match action {
-			Action::ChannelToggleEnabled => self.flags.toggle(Flags::ENABLED),
-			Action::ChannelToggleBypassed => self.flags.toggle(Flags::BYPASSED),
-			Action::ChannelTogglePolarity => self.flags.toggle(Flags::POLARITY_INVERTED),
-			Action::ChannelSwapChannels => self.flags.toggle(Flags::CHANNELS_SWAPPED),
-			Action::ChannelVolumeChanged(volume) => self.volume = volume,
-			Action::ChannelPanChanged(pan) => self.pan = pan,
-			Action::PluginLoad(processor) => self.plugins.push(Plugin::new(*processor)),
-			Action::PluginRemove(index) => _ = self.plugins.remove(index),
-			Action::PluginMoved(from, to) => self.plugins.shift_move(from, to),
-			Action::PluginToggleEnabled(index) => self.plugins[index].enabled ^= true,
-			Action::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
+			NodeAction::ChannelToggleEnabled => self.flags.toggle(Flags::ENABLED),
+			NodeAction::ChannelToggleBypassed => self.flags.toggle(Flags::BYPASSED),
+			NodeAction::ChannelTogglePolarity => self.flags.toggle(Flags::POLARITY_INVERTED),
+			NodeAction::ChannelSwapChannels => self.flags.toggle(Flags::CHANNELS_SWAPPED),
+			NodeAction::ChannelVolumeChanged(volume) => self.volume = volume,
+			NodeAction::ChannelPanChanged(pan) => self.pan = pan,
+			NodeAction::PluginLoad(processor) => self.plugins.push(Plugin::new(*processor)),
+			NodeAction::PluginRemove(index) => _ = self.plugins.remove(index),
+			NodeAction::PluginMoveTo(from, to) => self.plugins.shift_move(from, to),
+			NodeAction::PluginToggleEnabled(index) => self.plugins[index].enabled ^= true,
+			NodeAction::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
 			_ => panic!(),
 		}
 	}

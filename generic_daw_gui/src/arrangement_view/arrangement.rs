@@ -4,11 +4,21 @@ use super::{
 	poll_consumer,
 	track::Track,
 };
-use crate::{clap_host::Message as ClapHostMessage, config::Config, daw::Message as DawMessage};
+use crate::{
+	arrangement_view::{
+		clip::Clip,
+		pattern::{Pattern, PatternPair},
+		sample::{Sample, SamplePair},
+	},
+	clap_host::Message as ClapHostMessage,
+	config::Config,
+	daw::Message as DawMessage,
+};
 use bit_set::BitSet;
 use generic_daw_core::{
-	self as core, Action, AudioGraph, Batch, Clip, Event, Flags, Message, MusicalTime, NodeId,
-	NodeImpl as _, RtState, Stream, StreamTrait as _, Update, Version, build_output_stream,
+	self as core, AudioGraph, Batch, Event, Flags, Message, MidiKey, MidiNote, MusicalTime,
+	NodeAction, NodeId, NodeImpl as _, PatternAction, PatternId, RtState, SampleId, Stream,
+	StreamTrait as _, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 	export,
 };
@@ -21,6 +31,9 @@ use std::{path::Path, sync::Arc, time::Instant};
 #[derive(Debug)]
 pub struct Arrangement {
 	rtstate: RtState,
+
+	samples: HoleyVec<Sample>,
+	patterns: HoleyVec<Pattern>,
 
 	tracks: Vec<Track>,
 	nodes: HoleyVec<(Node, BitSet)>,
@@ -50,6 +63,9 @@ impl Arrangement {
 			Self {
 				rtstate,
 
+				samples: HoleyVec::default(),
+				patterns: HoleyVec::default(),
+
 				tracks: Vec::new(),
 				nodes,
 				master_node_id,
@@ -62,34 +78,37 @@ impl Arrangement {
 	}
 
 	pub fn update(&mut self, mut update: Batch, now: Instant) -> Task<ClapHostMessage> {
-		if let Some(sample) = update.sample
-			&& update.version.is_last()
-		{
-			self.rtstate.sample = sample;
-		}
+		let task = if update.epoch == self.rtstate().epoch {
+			if let Some(sample) = update.sample
+				&& update.version.is_last()
+			{
+				self.rtstate.sample = sample;
+			}
 
-		let task = Task::batch(
-			update
-				.updates
-				.drain(..)
-				.filter_map(|event| match event {
-					Update::Peak(node, peaks) => {
-						if let Some(node) = self.nodes.get_mut(*node) {
-							node.0.update(peaks, now);
+			Task::batch(
+				update
+					.updates
+					.drain(..)
+					.filter_map(|event| match event {
+						Update::Peak(node, peaks) => {
+							if let Some(node) = self.nodes.get_mut(*node) {
+								node.0.update(peaks, now);
+							}
+							None
 						}
-						None
-					}
-					Update::Param(id, param_id) => Some(ClapHostMessage::MainThread(
-						id,
-						MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
-					)),
-				})
-				.map(Task::done),
-		);
+						Update::Param(id, param_id) => Some(ClapHostMessage::MainThread(
+							id,
+							MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
+						)),
+					})
+					.map(Task::done),
+			)
+		} else {
+			update.updates.clear();
+			Task::none()
+		};
 
-		self.producer
-			.push(Message::ReturnUpdateBuffer(update.updates))
-			.unwrap();
+		self.send(Message::ReturnUpdateBuffer(update.updates));
 
 		task
 	}
@@ -98,93 +117,103 @@ impl Arrangement {
 		&self.rtstate
 	}
 
-	fn action(&mut self, id: NodeId, action: Action) {
-		self.producer.push(Message::Action(id, action)).unwrap();
+	pub fn samples(&self) -> &HoleyVec<Sample> {
+		&self.samples
+	}
+
+	pub fn patterns(&self) -> &HoleyVec<Pattern> {
+		&self.patterns
+	}
+
+	fn send(&mut self, message: Message) {
+		self.producer.push(message).unwrap();
+	}
+
+	fn node_action(&mut self, id: NodeId, action: NodeAction) {
+		self.send(Message::NodeAction(id, action));
+	}
+
+	fn pattern_action(&mut self, id: PatternId, action: PatternAction) {
+		self.send(Message::PatternAction(id, action));
 	}
 
 	pub fn channel_volume_changed(&mut self, id: NodeId, volume: f32) {
 		self.node_mut(id).volume = volume;
-		self.action(id, Action::ChannelVolumeChanged(volume));
+		self.node_action(id, NodeAction::ChannelVolumeChanged(volume));
 	}
 
 	pub fn channel_pan_changed(&mut self, id: NodeId, pan: f32) {
 		self.node_mut(id).pan = pan;
-		self.action(id, Action::ChannelPanChanged(pan));
+		self.node_action(id, NodeAction::ChannelPanChanged(pan));
 	}
 
 	pub fn channel_toggle_enabled(&mut self, id: NodeId) {
 		self.node_mut(id).flags.toggle(Flags::ENABLED);
-		self.action(id, Action::ChannelToggleEnabled);
+		self.node_action(id, NodeAction::ChannelToggleEnabled);
 	}
 
 	pub fn channel_toggle_bypassed(&mut self, id: NodeId) {
 		self.node_mut(id).flags.toggle(Flags::BYPASSED);
-		self.action(id, Action::ChannelToggleBypassed);
+		self.node_action(id, NodeAction::ChannelToggleBypassed);
 	}
 
 	pub fn channel_toggle_polarity(&mut self, id: NodeId) {
 		self.node_mut(id).flags.toggle(Flags::POLARITY_INVERTED);
-		self.action(id, Action::ChannelTogglePolarity);
+		self.node_action(id, NodeAction::ChannelTogglePolarity);
 	}
 
 	pub fn channel_swap_channels(&mut self, id: NodeId) {
 		self.node_mut(id).flags.toggle(Flags::CHANNELS_SWAPPED);
-		self.action(id, Action::ChannelSwapChannels);
+		self.node_action(id, NodeAction::ChannelSwapChannels);
 	}
 
 	pub fn plugin_load(&mut self, id: NodeId, processor: AudioProcessor<Event>) {
 		self.node_mut(id)
 			.plugins
 			.push(Plugin::new(processor.id(), processor.descriptor().clone()));
-		self.action(id, Action::PluginLoad(Box::new(processor)));
+		self.node_action(id, NodeAction::PluginLoad(Box::new(processor)));
 	}
 
 	pub fn plugin_remove(&mut self, id: NodeId, index: usize) -> Plugin {
-		let plugin = self.node_mut(id).plugins.remove(index);
-		self.action(id, Action::PluginRemove(index));
-		plugin
+		self.node_action(id, NodeAction::PluginRemove(index));
+		self.node_mut(id).plugins.remove(index)
 	}
 
-	pub fn plugin_moved(&mut self, id: NodeId, from: usize, to: usize) {
+	pub fn plugin_move_to(&mut self, id: NodeId, from: usize, to: usize) {
 		self.node_mut(id).plugins.shift_move(from, to);
-		self.action(id, Action::PluginMoved(from, to));
+		self.node_action(id, NodeAction::PluginMoveTo(from, to));
 	}
 
 	pub fn plugin_toggle_enabled(&mut self, id: NodeId, index: usize) {
 		self.node_mut(id).plugins[index].enabled ^= true;
-		self.action(id, Action::PluginToggleEnabled(index));
+		self.node_action(id, NodeAction::PluginToggleEnabled(index));
 	}
 
 	pub fn plugin_mix_changed(&mut self, id: NodeId, index: usize, mix: f32) {
 		self.node_mut(id).plugins[index].mix = mix;
-		self.action(id, Action::PluginMixChanged(index, mix));
+		self.node_action(id, NodeAction::PluginMixChanged(index, mix));
 	}
 
 	pub fn seek_to(&mut self, position: MusicalTime) {
 		let sample = position.to_samples(&self.rtstate);
-		if self.rtstate.sample == sample {
-			return;
+		if self.rtstate.sample != sample {
+			self.rtstate.sample = sample;
+			self.send(Message::Sample(Version::unique(), sample));
 		}
-		self.rtstate.sample = sample;
-		self.producer
-			.push(Message::Sample(Version::unique(), sample))
-			.unwrap();
 	}
 
 	pub fn set_bpm(&mut self, bpm: u16) {
-		if self.rtstate.bpm == bpm {
-			return;
+		if self.rtstate.bpm != bpm {
+			self.rtstate.bpm = bpm;
+			self.send(Message::Bpm(bpm));
 		}
-		self.rtstate.bpm = bpm;
-		self.producer.push(Message::Bpm(bpm)).unwrap();
 	}
 
 	pub fn set_numerator(&mut self, numerator: u8) {
-		if self.rtstate.numerator == numerator {
-			return;
+		if self.rtstate.numerator != numerator {
+			self.rtstate.numerator = numerator;
+			self.send(Message::Numerator(numerator));
 		}
-		self.rtstate.numerator = numerator;
-		self.producer.push(Message::Numerator(numerator)).unwrap();
 	}
 
 	pub fn play(&mut self) {
@@ -201,18 +230,18 @@ impl Arrangement {
 
 	pub fn toggle_playback(&mut self) {
 		self.rtstate.playing ^= true;
-		self.producer.push(Message::TogglePlayback).unwrap();
+		self.send(Message::TogglePlayback);
 	}
 
 	pub fn stop(&mut self) {
 		self.pause();
 		self.seek_to(MusicalTime::ZERO);
-		self.producer.push(Message::Reset).unwrap();
+		self.send(Message::Reset);
 	}
 
 	pub fn toggle_metronome(&mut self) {
 		self.rtstate.metronome ^= true;
-		self.producer.push(Message::ToggleMetronome).unwrap();
+		self.send(Message::ToggleMetronome);
 	}
 
 	pub fn master(&self) -> &Node {
@@ -273,54 +302,39 @@ impl Arrangement {
 		&mut self.nodes.get_mut(*id).unwrap().1
 	}
 
-	pub fn push_channel(&mut self, channel: core::Channel) {
-		self.nodes.insert(
-			*channel.id(),
-			(
-				Node::new(NodeType::Channel, channel.id()),
-				BitSet::default(),
-			),
-		);
-		self.producer
-			.push(Message::Insert(Box::new(channel.into())))
-			.unwrap();
-	}
-
-	pub fn add_channel(&mut self) -> oneshot::Receiver<(NodeId, NodeId)> {
-		let node = core::Channel::default();
-		let id = node.id();
-		self.push_channel(node);
-		self.request_connect(id, self.master_node_id)
+	pub fn add_channel(&mut self) -> NodeId {
+		let channel = core::Channel::default();
+		let id = channel.id();
+		self.nodes
+			.insert(*id, (Node::new(NodeType::Channel, id), BitSet::default()));
+		self.send(Message::NodeAdd(Box::new(channel.into())));
+		id
 	}
 
 	pub fn remove_channel(&mut self, id: NodeId) -> Node {
 		let node = self.nodes.remove(*id).unwrap().0;
-		self.producer.push(Message::Remove(id)).unwrap();
+		self.send(Message::NodeRemove(id));
 		node
 	}
 
-	pub fn push_track(&mut self, track: core::Track) {
-		let mut track2 = Track::new(track.id());
-		track2.clips.clone_from(&track.clips);
-		self.tracks.push(track2);
-		self.nodes.insert(
-			*track.id(),
-			(Node::new(NodeType::Track, track.id()), BitSet::default()),
-		);
-		self.producer
-			.push(Message::Insert(Box::new(track.into())))
-			.unwrap();
-	}
-
-	pub fn add_track(&mut self) -> oneshot::Receiver<(NodeId, NodeId)> {
+	pub fn add_track(&mut self) -> usize {
 		let track = core::Track::default();
 		let id = track.id();
-		self.push_track(track);
-		self.request_connect(id, self.master_node_id)
+		self.tracks.push(Track::new(id));
+		self.nodes
+			.insert(*id, (Node::new(NodeType::Track, id), BitSet::default()));
+		self.send(Message::NodeAdd(Box::new(track.into())));
+		self.tracks.len() - 1
 	}
 
 	pub fn remove_track(&mut self, idx: usize) {
-		self.tracks.remove(idx);
+		let track = self.tracks.remove(idx);
+		for clip in track.clips {
+			match clip {
+				Clip::Audio(audio) => self.maybe_remove_sample(audio.sample),
+				Clip::Midi(midi) => self.maybe_remove_pattern(midi.pattern),
+			}
+		}
 	}
 
 	pub fn request_connect(
@@ -329,9 +343,7 @@ impl Arrangement {
 		to: NodeId,
 	) -> oneshot::Receiver<(NodeId, NodeId)> {
 		let (sender, receiver) = oneshot::channel();
-		self.producer
-			.push(Message::Connect(from, to, sender))
-			.unwrap();
+		self.send(Message::NodeConnect(from, to, sender));
 		receiver
 	}
 
@@ -341,38 +353,122 @@ impl Arrangement {
 
 	pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
 		self.outgoing_mut(from).remove(*to);
-		self.producer.push(Message::Disconnect(from, to)).unwrap();
+		self.send(Message::NodeDisconnect(from, to));
 	}
 
-	pub fn add_clip(&mut self, track: usize, clip: impl Into<Clip>) {
+	pub fn add_sample(&mut self, sample: SamplePair) {
+		self.samples.insert(*sample.gui.id, sample.gui);
+		self.send(Message::SampleAdd(sample.core));
+	}
+
+	pub fn maybe_remove_sample(&mut self, sample: SampleId) {
+		if self
+			.tracks
+			.iter()
+			.flat_map(|track| &track.clips)
+			.all(|clip| match clip {
+				Clip::Audio(audio) => audio.sample != sample,
+				Clip::Midi(..) => true,
+			}) {
+			self.samples.remove(*sample);
+			self.send(Message::SampleRemove(sample));
+		}
+	}
+
+	pub fn add_pattern(&mut self, pattern: PatternPair) {
+		self.patterns.insert(*pattern.gui.id, pattern.gui);
+		self.send(Message::PatternAdd(pattern.core));
+	}
+
+	pub fn maybe_remove_pattern(&mut self, pattern: PatternId) {
+		if self
+			.tracks
+			.iter()
+			.flat_map(|track| &track.clips)
+			.all(|clip| match clip {
+				Clip::Audio(..) => true,
+				Clip::Midi(midi) => midi.pattern != pattern,
+			}) {
+			self.patterns.remove(*pattern);
+			self.send(Message::PatternRemove(pattern));
+		}
+	}
+
+	pub fn add_clip(&mut self, track: usize, clip: impl Into<Clip>) -> usize {
 		let clip = clip.into();
-		self.tracks[track].clips.push(clip.clone());
-		self.action(self.tracks[track].id, Action::AddClip(clip));
+		self.tracks[track].clips.push(clip);
+		self.node_action(self.tracks[track].id, NodeAction::ClipAdd(clip.into()));
+		self.tracks[track].clips.len() - 1
 	}
 
-	pub fn clone_clip(&mut self, track: usize, clip: usize) {
-		let clip = self.tracks[track].clips[clip].deep_clone();
-		self.tracks[track].clips.push(clip.clone());
-		self.action(self.tracks[track].id, Action::AddClip(clip));
+	pub fn remove_clip(&mut self, track: usize, clip: usize) -> Clip {
+		self.node_action(self.tracks[track].id, NodeAction::ClipRemove(clip));
+		self.tracks[track].clips.remove(clip)
 	}
 
-	pub fn remove_clip(&mut self, track: usize, clip: usize) {
-		self.tracks[track].clips.remove(clip);
-		self.action(self.tracks[track].id, Action::RemoveClip(clip));
+	pub fn clip_switch_track(&mut self, track: usize, clip: usize, new_track: usize) -> usize {
+		let clip = self.remove_clip(track, clip);
+		self.add_clip(new_track, clip)
 	}
 
-	pub fn clip_switch_track(&mut self, track: usize, clip_index: usize, new_track: usize) {
-		let clip = self.tracks[track].clips.remove(clip_index);
-		self.tracks[new_track].clips.push(clip.clone());
-		self.action(self.tracks[track].id, Action::RemoveClip(clip_index));
-		self.action(self.tracks[new_track].id, Action::AddClip(clip));
+	pub fn clip_move_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
+		self.tracks[track].clips[clip].move_to(pos);
+		self.node_action(self.tracks[track].id, NodeAction::ClipMoveTo(clip, pos));
+	}
+
+	pub fn clip_trim_start_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
+		self.tracks[track].clips[clip].trim_start_to(pos);
+		self.node_action(
+			self.tracks[track].id,
+			NodeAction::ClipTrimStartTo(clip, pos),
+		);
+	}
+
+	pub fn clip_trim_end_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
+		self.tracks[track].clips[clip].trim_end_to(pos);
+		self.node_action(self.tracks[track].id, NodeAction::ClipTrimEndTo(clip, pos));
+	}
+
+	pub fn add_note(&mut self, pattern: PatternId, note: MidiNote) -> usize {
+		self.patterns.get_mut(*pattern).unwrap().notes.push(note);
+		self.pattern_action(pattern, PatternAction::Add(note));
+		self.patterns[*pattern].notes.len() - 1
+	}
+
+	pub fn remove_note(&mut self, pattern: PatternId, note: usize) -> MidiNote {
+		self.pattern_action(pattern, PatternAction::Remove(note));
+		self.patterns.get_mut(*pattern).unwrap().notes.remove(note)
+	}
+
+	pub fn note_switch_key(&mut self, pattern: PatternId, note: usize, key: MidiKey) {
+		self.patterns.get_mut(*pattern).unwrap().notes[note].key = key;
+		self.pattern_action(pattern, PatternAction::ChangeKey(note, key));
+	}
+
+	pub fn note_move_to(&mut self, pattern: PatternId, note: usize, pos: MusicalTime) {
+		self.patterns.get_mut(*pattern).unwrap().notes[note]
+			.position
+			.move_to(pos);
+		self.pattern_action(pattern, PatternAction::MoveTo(note, pos));
+	}
+
+	pub fn note_trim_start_to(&mut self, pattern: PatternId, note: usize, pos: MusicalTime) {
+		self.patterns.get_mut(*pattern).unwrap().notes[note]
+			.position
+			.trim_start_to(pos);
+		self.pattern_action(pattern, PatternAction::TrimStartTo(note, pos));
+	}
+
+	pub fn note_trim_end_to(&mut self, pattern: PatternId, note: usize, pos: MusicalTime) {
+		self.patterns.get_mut(*pattern).unwrap().notes[note]
+			.position
+			.trim_end_to(pos);
+		self.pattern_action(pattern, PatternAction::TrimEndTo(note, pos));
 	}
 
 	pub fn start_export(&mut self, path: Arc<Path>) -> Task<DawMessage> {
 		let (sender, receiver) = oneshot::channel();
-		self.producer
-			.push(Message::RequestAudioGraph(sender))
-			.unwrap();
+		self.send(Message::RequestAudioGraph(sender));
 		let mut audio_graph = receiver.recv().unwrap();
 		self.stream.pause().unwrap();
 
@@ -404,9 +500,7 @@ impl Arrangement {
 	}
 
 	pub fn finish_export(&mut self, audio_graph: AudioGraph) {
-		self.producer
-			.push(Message::AudioGraph(Box::new(audio_graph)))
-			.unwrap();
+		self.send(Message::AudioGraph(Box::new(audio_graph)));
 		self.stream.play().unwrap();
 	}
 }

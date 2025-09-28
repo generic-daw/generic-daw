@@ -1,13 +1,20 @@
-use super::{ArrangementView, ArrangementWrapper, LoadStatus, Message, Node, crc};
-use crate::{config::Config, daw::Message as DawMessage};
-use arc_swap::ArcSwap;
+use super::{ArrangementWrapper, Message, Node, crc};
+use crate::{
+	arrangement_view::{
+		audio_clip::AudioClip, clip::Clip, midi_clip::MidiClip, pattern::PatternPair,
+		sample::SamplePair,
+	},
+	clap_host::ClapHost,
+	config::Config,
+	daw::Message as DawMessage,
+};
 use generic_daw_core::{
-	AudioClip, Channel, Clip, MidiClip, MidiKey, MidiNote, NodeImpl as _, Sample, Track,
+	ClipPosition, MidiKey, MidiNote, NotePosition,
 	clap_host::{PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use generic_daw_utils::{NoClone, NoDebug};
-use iced::{Task, widget::combo_box};
+use iced::Task;
 use smol::{channel::Sender, unblock};
 use std::{
 	collections::{BTreeMap, HashMap, HashSet},
@@ -16,16 +23,9 @@ use std::{
 	iter::once,
 	ops::Deref as _,
 	path::Path,
-	sync::{Arc, Weak, mpsc},
+	sync::{Arc, mpsc},
 };
 use walkdir::WalkDir;
-
-#[derive(Debug)]
-pub struct PartialArrangementView {
-	arrangement: ArrangementWrapper,
-	audios: Vec<(Arc<Path>, LoadStatus)>,
-	midis: Vec<Weak<ArcSwap<Vec<MidiNote>>>>,
-}
 
 #[derive(Clone, Debug)]
 pub enum Feedback<T> {
@@ -34,91 +34,66 @@ pub enum Feedback<T> {
 	Cancel,
 }
 
-impl ArrangementView {
-	pub fn apply_partial(
-		&mut self,
-		partial: PartialArrangementView,
-		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
-	) {
-		self.arrangement = partial.arrangement;
-		self.audios.extend(partial.audios);
-		self.midis.extend(partial.midis);
-		self.plugins = combo_box::State::new(plugin_bundles.keys().cloned().collect());
-		self.recording = None;
-		self.soloed_track = None;
-		self.selected_channel = None;
-	}
+impl ArrangementWrapper {
+	pub fn save(&self, path: &Path, clap_host: &mut ClapHost) {
+		let mut writer = Writer::new(self.rtstate().bpm.into(), self.rtstate().numerator.into());
 
-	pub fn save(&mut self, path: &Path) {
-		let mut writer = Writer::new(
-			self.arrangement.rtstate().bpm.into(),
-			self.arrangement.rtstate().numerator.into(),
-		);
-
-		let mut audios = HashMap::new();
-		for entry in &self.audios {
-			let (crc, audio) = match entry.1 {
-				LoadStatus::Loaded(crc, audio) => {
-					let Some(audio) = audio.upgrade() else {
-						continue;
-					};
-					(crc, audio)
-				}
-				LoadStatus::Loading(..) => continue,
-			};
-			audios.insert(audio.path.clone(), writer.push_audio(&audio.name, *crc));
+		let mut samples = HashMap::new();
+		for sample in self.samples().values() {
+			samples.insert(sample.id, writer.push_sample(&sample.name, sample.crc));
 		}
 
-		let mut midis = HashMap::new();
-		for entry in &self.midis {
-			let Some(pattern) = entry.upgrade() else {
-				continue;
-			};
-
-			midis.insert(
-				Arc::as_ptr(&pattern).addr(),
-				writer.push_midi(pattern.load().iter().map(|note| proto::Note {
+		let mut patterns = HashMap::new();
+		for pattern in self.patterns().values() {
+			patterns.insert(
+				pattern.id,
+				writer.push_pattern(pattern.notes.iter().map(|note| proto::Note {
 					key: note.key.0.into(),
 					velocity: note.velocity,
-					start: note.start.into(),
-					end: note.end.into(),
+					position: proto::NotePosition {
+						start: note.position.start().into(),
+						end: note.position.end().into(),
+					},
 				})),
 			);
 		}
 
 		let mut tracks = HashMap::new();
-		for track in self.arrangement.tracks() {
-			let node = self.arrangement.node(track.id);
+		for track in self.tracks() {
+			let node = self.node(track.id);
 			tracks.insert(
 				track.id,
 				writer.push_track(
 					track.clips.iter().map(|clip| match clip {
 						Clip::Audio(audio) => proto::AudioClip {
-							audio: audios[&audio.sample.path],
+							sample: samples[&audio.sample],
 							position: proto::ClipPosition {
-								start: audio.position.start().into(),
-								end: audio.position.end().into(),
+								position: proto::NotePosition {
+									start: audio.position.start().into(),
+									end: audio.position.end().into(),
+								},
 								offset: audio.position.offset().into(),
 							},
 						}
 						.into(),
 						Clip::Midi(midi) => proto::MidiClip {
-							midi: midis[&Arc::as_ptr(&midi.pattern).addr()],
+							pattern: patterns[&midi.pattern],
 							position: proto::ClipPosition {
-								start: midi.position.start().into(),
-								end: midi.position.end().into(),
+								position: proto::NotePosition {
+									start: midi.position.start().into(),
+									end: midi.position.end().into(),
+								},
 								offset: midi.position.offset().into(),
 							},
 						}
 						.into(),
 					}),
-					self.arrangement
-						.node(track.id)
+					self.node(track.id)
 						.plugins
 						.iter()
 						.map(|plugin| proto::Plugin {
 							id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
-							state: self.clap_host.get_state(plugin.id),
+							state: clap_host.get_state(plugin.id),
 							mix: plugin.mix,
 							enabled: plugin.enabled,
 						}),
@@ -129,17 +104,16 @@ impl ArrangementView {
 		}
 
 		let mut channels = HashMap::new();
-		for channel in once(self.arrangement.master()).chain(self.arrangement.channels()) {
+		for channel in once(self.master()).chain(self.channels()) {
 			channels.insert(
 				channel.id,
 				writer.push_channel(
-					self.arrangement
-						.node(channel.id)
+					self.node(channel.id)
 						.plugins
 						.iter()
 						.map(|plugin| proto::Plugin {
 							id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
-							state: self.clap_host.get_state(plugin.id),
+							state: clap_host.get_state(plugin.id),
 							mix: plugin.mix,
 							enabled: plugin.enabled,
 						}),
@@ -149,14 +123,14 @@ impl ArrangementView {
 			);
 		}
 
-		for track in self.arrangement.tracks() {
-			for outgoing in self.arrangement.outgoing(track.id) {
+		for track in self.tracks() {
+			for outgoing in self.outgoing(track.id) {
 				writer.connect_track_to_channel(tracks[&track.id], channels[&outgoing]);
 			}
 		}
 
-		for channel in self.arrangement.channels() {
-			for outgoing in self.arrangement.outgoing(channel.id) {
+		for channel in self.channels() {
+			for outgoing in self.outgoing(channel.id) {
 				writer.connect_channel_to_channel(channels[&channel.id], channels[&outgoing]);
 			}
 		}
@@ -200,18 +174,18 @@ impl ArrangementView {
 		File::open(&path).ok()?.read_to_end(&mut gdp).ok()?;
 		let reader = Reader::new(&gdp)?;
 
-		let (mut arrangement, futs) = ArrangementWrapper::create(config);
+		let (mut arrangement, futs) = Self::create(config);
 
 		arrangement.set_bpm(reader.rtstate().bpm as u16);
 		arrangement.set_numerator(reader.rtstate().numerator as u8);
 
-		let mut audios = HashMap::new();
+		let mut samples = HashMap::new();
 
 		std::thread::scope(|s| {
 			let (done, receiver) = mpsc::channel();
 
-			let audios_map = reader
-				.iter_audios()
+			let samples_map = reader
+				.iter_samples()
 				.map(|(idx, audio)| (&*audio.name, (idx, audio.crc)))
 				.fold(HashMap::<_, Vec<_>>::new(), |mut acc, (k, v)| {
 					acc.entry(k).or_default().push(v);
@@ -219,7 +193,7 @@ impl ArrangementView {
 				});
 
 			let mut current_progress = 0.0;
-			let progress_per_audio = 1.0 / (reader.iter_audios().count() as f32);
+			let progress_per_audio = 1.0 / (reader.iter_samples().count() as f32);
 
 			let mut seen = HashSet::new();
 
@@ -233,7 +207,7 @@ impl ArrangementView {
 					dir_entry
 						.file_name()
 						.to_str()
-						.filter(|name| audios_map.contains_key(name))
+						.filter(|name| samples_map.contains_key(name))
 						.filter(|_| seen.insert(dir_entry.path().to_owned()))
 						.and_then(|name| {
 							File::open(dir_entry.path())
@@ -241,7 +215,7 @@ impl ArrangementView {
 								.map(|file| (name, crc(file)))
 						})
 						.and_then(|(name, crc)| {
-							audios_map[name].iter().find_map(|&(index, c)| {
+							samples_map[name].iter().find_map(|&(index, c)| {
 								(c == crc).then(|| (index, Arc::<Path>::from(dir_entry.path())))
 							})
 						})
@@ -250,22 +224,18 @@ impl ArrangementView {
 
 			drop(seen);
 
-			for (idx, audio) in reader.iter_audios() {
+			for (idx, sample) in reader.iter_samples() {
 				let sample_rate = arrangement.rtstate().sample_rate;
 				let done = done.clone();
 
 				let mut path = paths.remove(&idx);
-				let mut sample_name = audio.name.clone();
+				let mut sample_name = sample.name.clone();
 				s.spawn(move || {
 					loop {
 						if let Some(path) = &path
-							&& let Some(sample) = Sample::create(path.clone(), sample_rate)
+							&& let Some(sample) = SamplePair::new(path, sample_rate)
 						{
-							done.send((
-								idx,
-								Feedback::Use((crc(File::open(path).unwrap()), sample)),
-							))
-							.unwrap();
+							done.send((idx, Feedback::Use(sample))).unwrap();
 							return;
 						}
 
@@ -302,11 +272,14 @@ impl ArrangementView {
 			drop(paths);
 			drop(done);
 
-			while let Ok((idx, audio)) = receiver.recv() {
-				match audio {
-					audio @ (Feedback::Use(_) | Feedback::Ignore) => {
-						audios.insert(idx, audio);
+			while let Ok((idx, sample)) = receiver.recv() {
+				match sample {
+					Feedback::Use(sample) => {
+						let id = sample.gui.id;
+						arrangement.add_sample(sample);
+						samples.insert(idx, Feedback::Use(id));
 					}
+					Feedback::Ignore => _ = samples.insert(idx, Feedback::Ignore),
 					Feedback::Cancel => {
 						daw.try_send(DawMessage::OpenedFile(None)).unwrap();
 						return None;
@@ -320,20 +293,25 @@ impl ArrangementView {
 			Some(())
 		})?;
 
-		let mut midis = HashMap::new();
-		for (idx, notes) in reader.iter_midis() {
+		let mut patterns = HashMap::new();
+		for (idx, notes) in reader.iter_patterns() {
 			let pattern = notes
 				.notes
 				.iter()
 				.map(|note| MidiNote {
 					key: MidiKey(note.key as u8),
 					velocity: note.velocity,
-					start: note.start.into(),
-					end: note.end.into(),
+					position: NotePosition::new(
+						note.position.start.into(),
+						note.position.end.into(),
+					),
 				})
 				.collect();
 
-			midis.insert(idx, Arc::new(ArcSwap::new(Arc::new(pattern))));
+			let pattern = PatternPair::new(pattern);
+			let id = pattern.gui.id;
+			arrangement.add_pattern(pattern);
+			patterns.insert(idx, id);
 		}
 
 		let mut messages = Vec::new();
@@ -377,34 +355,43 @@ impl ArrangementView {
 
 		let mut tracks = HashMap::new();
 		for (idx, clips, channel) in reader.iter_tracks() {
-			let mut track = Track::default();
+			let track = arrangement.add_track();
+			let id = arrangement.tracks()[track].id;
+			tracks.insert(idx, id);
+			load_channel(arrangement.node(id), channel)?;
 
 			for clip in clips {
-				track.clips.push(match clip {
-					proto::Clip::Audio(audio) => {
-						let Feedback::Use((_, clip)) = audios.get(&audio.audio)? else {
-							continue;
-						};
-						let clip = AudioClip::create(clip.clone(), arrangement.rtstate());
-						clip.position.trim_start_to(audio.position.offset.into());
-						clip.position.move_to(audio.position.start.into());
-						clip.position.trim_end_to(audio.position.end.into());
-						Clip::Audio(clip)
-					}
-					proto::Clip::Midi(midi) => {
-						let clip = MidiClip::create(midis.get(&midi.midi)?.clone());
-						clip.position.trim_start_to(midi.position.offset.into());
-						clip.position.move_to(midi.position.start.into());
-						clip.position.trim_end_to(midi.position.end.into());
-						Clip::Midi(clip)
-					}
-				});
+				arrangement.add_clip(
+					track,
+					match clip {
+						proto::Clip::Audio(audio) => {
+							let Feedback::Use(sample) = samples.get(&audio.sample)? else {
+								continue;
+							};
+							let mut clip = AudioClip::new(*sample);
+							clip.position = ClipPosition::new(
+								NotePosition::new(
+									audio.position.position.start.into(),
+									audio.position.position.end.into(),
+								),
+								audio.position.offset.into(),
+							);
+							Clip::Audio(clip)
+						}
+						proto::Clip::Midi(midi) => {
+							let mut clip = MidiClip::new(*patterns.get(&midi.pattern)?);
+							clip.position = ClipPosition::new(
+								NotePosition::new(
+									midi.position.position.start.into(),
+									midi.position.position.end.into(),
+								),
+								midi.position.offset.into(),
+							);
+							Clip::Midi(clip)
+						}
+					},
+				);
 			}
-
-			let id = track.id();
-			tracks.insert(idx, id);
-			arrangement.push_track(track);
-			load_channel(arrangement.node(id), channel)?;
 		}
 
 		let mut channels = HashMap::new();
@@ -416,81 +403,41 @@ impl ArrangementView {
 		channels.insert(idx, node.id);
 
 		for (idx, channel) in iter_channels {
-			let channel_node = Channel::default();
-			let id = channel_node.id();
+			let id = arrangement.add_channel();
 			channels.insert(idx, id);
-			arrangement.push_channel(channel_node);
 			load_channel(arrangement.node(id), channel)?;
 		}
 
 		for (from, to) in reader.iter_track_to_channel() {
-			messages.push(Message::ConnectRequest((
+			messages.push(Message::ConnectRequest(
 				*tracks.get(&from)?,
 				*channels.get(&to)?,
-			)));
+			));
 		}
 
 		drop(tracks);
 
 		for (from, to) in reader.iter_channel_to_channel() {
-			messages.push(Message::ConnectRequest((
+			messages.push(Message::ConnectRequest(
 				*channels.get(&from)?,
 				*channels.get(&to)?,
-			)));
+			));
 		}
 
 		drop(channels);
 
-		let partial = PartialArrangementView {
-			arrangement,
-			audios: audios
-				.values()
-				.filter_map(|audio| {
-					if let Feedback::Use((crc, audio)) = audio {
-						Some((crc, audio))
-					} else {
-						None
-					}
-				})
-				.map(|(crc, audio)| {
-					(
-						audio.path.clone(),
-						LoadStatus::Loaded(*crc, Arc::downgrade(audio)),
-					)
-				})
-				.collect(),
-			midis: midis.values().map(Arc::downgrade).collect(),
-		};
-
 		Some(
-			Task::done(DawMessage::ApplyPartial(NoClone(Box::new(partial)))).chain(Task::batch([
-				futs.map(Message::Batch).map(DawMessage::Arrangement),
-				messages
-					.into_iter()
-					.map(Task::done)
-					.fold(Task::none(), Task::chain)
-					.map(DawMessage::Arrangement)
-					.chain(Task::done(DawMessage::OpenedFile(Some(path)))),
-			])),
+			Task::done(DawMessage::SetArrangement(NoClone(Box::new(arrangement)))).chain(
+				Task::batch([
+					futs.map(Message::Batch).map(DawMessage::Arrangement),
+					messages
+						.into_iter()
+						.map(Task::done)
+						.fold(Task::none(), Task::chain)
+						.map(DawMessage::Arrangement)
+						.chain(Task::done(DawMessage::OpenedFile(Some(path)))),
+				]),
+			),
 		)
-	}
-
-	pub fn unload(
-		&mut self,
-		config: &Config,
-		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
-	) -> Task<Message> {
-		let (arrangement, futs) = ArrangementWrapper::create(config);
-
-		self.apply_partial(
-			PartialArrangementView {
-				arrangement,
-				audios: Vec::new(),
-				midis: Vec::new(),
-			},
-			plugin_bundles,
-		);
-
-		futs.map(Message::Batch)
 	}
 }

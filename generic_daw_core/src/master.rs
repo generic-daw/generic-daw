@@ -1,4 +1,4 @@
-use crate::{Action, Channel, MusicalTime, daw_ctx::State, event::Event, resampler::Resampler};
+use crate::{Channel, MusicalTime, NodeAction, daw_ctx::State, event::Event, resampler::Resampler};
 use audio_graph::{NodeId, NodeImpl};
 use generic_daw_utils::{NoDebug, include_f32s};
 use std::sync::Arc;
@@ -96,7 +96,7 @@ impl Master {
 		}
 	}
 
-	pub fn apply(&mut self, action: Action) {
+	pub fn apply(&mut self, action: NodeAction) {
 		self.node.apply(action);
 	}
 

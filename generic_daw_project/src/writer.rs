@@ -15,25 +15,28 @@ impl Writer {
 	}
 
 	#[must_use]
-	pub fn push_audio(&mut self, name: impl AsRef<str>, crc: u32) -> proto::AudioIndex {
-		self.0.audios.push(proto::Audio {
+	pub fn push_sample(&mut self, name: impl AsRef<str>, crc: u32) -> proto::SampleIndex {
+		self.0.samples.push(proto::Sample {
 			name: name.as_ref().to_owned(),
 			crc,
 		});
 
-		proto::AudioIndex {
-			index: self.0.audios.len() as u32 - 1,
+		proto::SampleIndex {
+			index: self.0.samples.len() as u32 - 1,
 		}
 	}
 
 	#[must_use]
-	pub fn push_midi(&mut self, notes: impl IntoIterator<Item = proto::Note>) -> proto::MidiIndex {
-		self.0.midis.push(proto::Midi {
+	pub fn push_pattern(
+		&mut self,
+		notes: impl IntoIterator<Item = proto::Note>,
+	) -> proto::PatternIndex {
+		self.0.patterns.push(proto::Pattern {
 			notes: notes.into_iter().collect(),
 		});
 
-		proto::MidiIndex {
-			index: self.0.midis.len() as u32 - 1,
+		proto::PatternIndex {
+			index: self.0.patterns.len() as u32 - 1,
 		}
 	}
 

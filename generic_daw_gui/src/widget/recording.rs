@@ -1,5 +1,6 @@
 use super::{LINE_HEIGHT, Vec2, waveform};
-use generic_daw_core::{MusicalTime, Recording as RecordingInner, RtState};
+use crate::arrangement_view::Recording as RecordingWrapper;
+use generic_daw_core::{MusicalTime, RtState};
 use iced::{
 	Element, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
@@ -19,7 +20,7 @@ use iced::{
 
 #[derive(Clone, Debug)]
 pub struct Recording<'a> {
-	inner: &'a RecordingInner,
+	inner: &'a RecordingWrapper,
 	rtstate: &'a RtState,
 	position: &'a Vec2,
 	scale: &'a Vec2,
@@ -32,7 +33,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
 		let start = self.inner.position.to_samples_f(self.rtstate);
-		let len = self.inner.len() as f32;
+		let len = (self.inner.lods[0].len() * 8 + 7) as f32;
 		let pixel_size = self.scale.x.exp2();
 
 		Node::new(Size::new(len / pixel_size, self.scale.y))
@@ -113,7 +114,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
 
 impl<'a> Recording<'a> {
 	pub fn new(
-		inner: &'a RecordingInner,
+		inner: &'a RecordingWrapper,
 		rtstate: &'a RtState,
 		position: &'a Vec2,
 		scale: &'a Vec2,

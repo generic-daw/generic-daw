@@ -13,34 +13,37 @@ mod audio_clip;
 mod audio_graph_node;
 mod channel;
 mod clip;
-mod clip_position;
 mod daw_ctx;
-mod decibels;
 mod event;
 mod export;
-mod lod;
 mod master;
 mod midi_clip;
+mod midi_key;
+mod midi_note;
 mod musical_time;
+mod pattern;
 mod recording;
 mod resampler;
+mod sample;
 mod track;
 
-pub use audio_clip::{AudioClip, Sample};
+pub use audio_clip::AudioClip;
 pub use audio_graph::{NodeId, NodeImpl};
 pub use channel::{Channel, Flags};
 pub use clap_host;
 pub use clip::Clip;
-pub use clip_position::ClipPosition;
 pub use cpal::{Stream, traits::StreamTrait};
-pub use daw_ctx::{Action, Batch, Message, RtState, Update, Version};
-pub use decibels::Decibels;
+pub use daw_ctx::{Batch, Message, NodeAction, PatternAction, RtState, Update, Version};
 pub use event::Event;
 pub use export::export;
-pub use lod::LOD_LEVELS;
-pub use midi_clip::{Key, MidiClip, MidiKey, MidiNote};
-pub use musical_time::MusicalTime;
+pub use midi_clip::MidiClip;
+pub use midi_key::{Key, MidiKey};
+pub use midi_note::MidiNote;
+pub use musical_time::{ClipPosition, MusicalTime, NotePosition};
+pub use pattern::{Pattern, PatternId};
 pub use recording::Recording;
+pub use sample::{Sample, SampleId};
+pub use symphonia::core::io::MediaSource;
 pub use track::Track;
 
 pub type AudioGraph = audio_graph::AudioGraph<AudioGraphNode>;
@@ -149,7 +152,8 @@ pub fn build_output_stream(
 	let channels = u32::from(config.channels);
 	let frames = buffer_size / channels;
 
-	let (mut ctx, node, rtstate, producer, consumer) = DawCtx::create(sample_rate, frames);
+	let rtstate = RtState::new(sample_rate, frames);
+	let (mut ctx, node, producer, consumer) = DawCtx::create(rtstate);
 
 	info!("starting output stream with config {config:#?}");
 

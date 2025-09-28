@@ -16,7 +16,6 @@ use iced::{
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 	window,
 };
-use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
@@ -46,7 +45,10 @@ impl State {
 	fn drop(&mut self) -> bool {
 		let unselect = matches!(
 			self,
-			Self::DraggingNote(..) | Self::NoteTrimmingStart(..) | Self::NoteTrimmingEnd(..)
+			Self::DraggingNote(..)
+				| Self::DraggingSplit(..)
+				| Self::NoteTrimmingStart(..)
+				| Self::NoteTrimmingEnd(..)
 		);
 
 		*self = Self::None;
@@ -57,7 +59,7 @@ impl State {
 
 #[derive(Debug)]
 pub struct PianoRoll<'a, Message> {
-	notes: Arc<Vec<MidiNote>>,
+	notes: &'a [MidiNote],
 	rtstate: &'a RtState,
 	position: &'a Vec2,
 	scale: &'a Vec2,
@@ -292,7 +294,7 @@ where
 			return;
 		};
 
-		for note in self.notes.iter() {
+		for note in self.notes {
 			let note_bounds = self.note_bounds(note) + Vector::new(bounds.x, bounds.y);
 			let Some(bounds) = note_bounds.intersection(&bounds) else {
 				continue;
@@ -344,7 +346,7 @@ where
 
 impl<'a, Message> PianoRoll<'a, Message> {
 	pub fn new(
-		notes: Arc<Vec<MidiNote>>,
+		notes: &'a [MidiNote],
 		rtstate: &'a RtState,
 		position: &'a Vec2,
 		scale: &'a Vec2,
@@ -374,8 +376,9 @@ impl<'a, Message> PianoRoll<'a, Message> {
 	fn note_bounds(&self, note: &MidiNote) -> Rectangle {
 		let sample_size = self.scale.x.exp2();
 
-		let start = (note.start.to_samples_f(self.rtstate) - self.position.x) / sample_size;
-		let end = (note.end.to_samples_f(self.rtstate) - self.position.x) / sample_size;
+		let start =
+			(note.position.start().to_samples_f(self.rtstate) - self.position.x) / sample_size;
+		let end = (note.position.end().to_samples_f(self.rtstate) - self.position.x) / sample_size;
 
 		Rectangle::new(
 			Point::new(

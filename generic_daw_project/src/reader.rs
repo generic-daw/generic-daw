@@ -18,16 +18,16 @@ impl Reader {
 		self.0.rtstate
 	}
 
-	pub fn iter_audios(&self) -> impl Iterator<Item = (proto::AudioIndex, &proto::Audio)> {
+	pub fn iter_samples(&self) -> impl Iterator<Item = (proto::SampleIndex, &proto::Sample)> {
 		(0..)
-			.map(|index| proto::AudioIndex { index })
-			.zip(&self.0.audios)
+			.map(|index| proto::SampleIndex { index })
+			.zip(&self.0.samples)
 	}
 
-	pub fn iter_midis(&self) -> impl Iterator<Item = (proto::MidiIndex, &proto::Midi)> {
+	pub fn iter_patterns(&self) -> impl Iterator<Item = (proto::PatternIndex, &proto::Pattern)> {
 		(0..)
-			.map(|index| proto::MidiIndex { index })
-			.zip(&self.0.midis)
+			.map(|index| proto::PatternIndex { index })
+			.zip(&self.0.patterns)
 	}
 
 	pub fn iter_tracks(

@@ -1,11 +1,16 @@
 use crate::RtState;
-use atomig::{Atom, AtomInteger};
 use std::{
 	fmt::{Debug, Formatter},
 	ops::{Add, AddAssign, Mul, Sub, SubAssign},
 };
 
-#[derive(Atom, AtomInteger, Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+mod clip_position;
+mod note_position;
+
+pub use clip_position::ClipPosition;
+pub use note_position::NotePosition;
+
+#[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct MusicalTime(u32);
 
 impl Debug for MusicalTime {

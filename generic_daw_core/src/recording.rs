@@ -1,39 +1,32 @@
 use crate::{
-	LOD_LEVELS, MusicalTime, RtState, Sample, Stream, buffer_size_of_config, build_input_stream,
-	lod::update_lods, resampler::Resampler,
+	RtState, Sample, SampleId, Stream, buffer_size_of_config, build_input_stream,
+	resampler::Resampler,
 };
 use cpal::StreamConfig;
 use generic_daw_utils::NoDebug;
 use hound::{SampleFormat, WavSpec, WavWriter};
 use rtrb::Consumer;
-use std::{fs::File, io::BufWriter, path::Path, sync::Arc};
+use std::io;
 
 #[derive(Debug)]
-pub struct Recording {
-	pub lods: NoDebug<Box<[Vec<(f32, f32)>; LOD_LEVELS]>>,
-	path: Arc<Path>,
-	pub name: Arc<str>,
-	pub position: MusicalTime,
-
+pub struct Recording<W: io::Write + io::Seek> {
 	resampler: Resampler,
-	writer: NoDebug<WavWriter<BufWriter<File>>>,
+	writer: NoDebug<WavWriter<W>>,
 
 	stream: NoDebug<Stream>,
 	config: StreamConfig,
 }
 
-impl Recording {
+impl<W: io::Write + io::Seek> Recording<W> {
 	#[must_use]
 	pub fn create(
-		path: Arc<Path>,
+		writer: W,
 		rtstate: &RtState,
 		device_name: Option<&str>,
 		sample_rate: u32,
 		frames: u32,
 	) -> (Self, Consumer<Box<[f32]>>) {
 		let (stream, config, consumer) = build_input_stream(device_name, sample_rate, frames);
-
-		let name = path.file_name().unwrap().to_str().unwrap().into();
 
 		let resampler = Resampler::new(
 			config.sample_rate.0 as usize,
@@ -42,8 +35,8 @@ impl Recording {
 		)
 		.unwrap();
 
-		let writer = WavWriter::create(
-			&path,
+		let writer = WavWriter::new(
+			writer,
 			WavSpec {
 				channels: 2,
 				sample_rate: config.sample_rate.0,
@@ -55,11 +48,6 @@ impl Recording {
 
 		(
 			Self {
-				lods: Box::new([const { Vec::new() }; LOD_LEVELS]).into(),
-				path,
-				name,
-				position: MusicalTime::from_samples(rtstate.sample, rtstate),
-
 				resampler,
 				writer: writer.into(),
 
@@ -81,27 +69,20 @@ impl Recording {
 			.map(|buffer_size| buffer_size / u32::from(self.config.channels))
 	}
 
+	#[must_use]
+	pub fn samples(&self) -> &[f32] {
+		self.resampler.samples()
+	}
+
 	pub fn write(&mut self, samples: &[f32]) {
 		let start = self.resampler.samples().len();
 		self.resampler.process(samples);
-		update_lods(self.resampler.samples(), &mut self.lods, start);
-
 		for &s in &self.resampler.samples()[start..] {
 			self.writer.write_sample(s).unwrap();
 		}
 	}
 
-	pub fn split_off(&mut self, path: Arc<Path>, rtstate: &RtState) -> Arc<Sample> {
-		let mut lods = Box::new([const { Vec::new() }; LOD_LEVELS]).into();
-		std::mem::swap(&mut self.lods, &mut lods);
-
-		self.path = path.clone();
-
-		let mut name = path.file_name().unwrap().to_str().unwrap().into();
-		std::mem::swap(&mut self.name, &mut name);
-
-		self.position = MusicalTime::from_samples(rtstate.sample, rtstate);
-
+	pub fn split_off(&mut self, writer: W, rtstate: &RtState) -> Sample {
 		let mut resampler = Resampler::new(
 			self.config.sample_rate.0 as usize,
 			rtstate.sample_rate as usize,
@@ -110,8 +91,8 @@ impl Recording {
 		.unwrap();
 		std::mem::swap(&mut self.resampler, &mut resampler);
 
-		let mut writer = WavWriter::create(
-			&path,
+		let mut writer = WavWriter::new(
+			writer,
 			WavSpec {
 				channels: 2,
 				sample_rate: self.config.sample_rate.0,
@@ -125,27 +106,21 @@ impl Recording {
 
 		let start = resampler.samples().len();
 		let samples = resampler.finish();
-		update_lods(&samples, &mut lods, start);
 
-		for &s in &samples {
+		for &s in &samples[start..] {
 			writer.write_sample(s).unwrap();
 		}
 		writer.0.finalize().unwrap();
 
-		Arc::new(Sample {
+		Sample {
+			id: SampleId::unique(),
 			samples: samples.into_boxed_slice().into(),
-			lods: Box::new(lods.0.map(|x| x.into_boxed_slice())).into(),
-			path,
-			name,
-		})
+		}
 	}
 
 	#[must_use]
-	pub fn finalize(self) -> Arc<Sample> {
+	pub fn finalize(self) -> Sample {
 		let Self {
-			mut lods,
-			name,
-			path,
 			resampler,
 			mut writer,
 			stream,
@@ -156,28 +131,15 @@ impl Recording {
 
 		let start = resampler.samples().len();
 		let samples = resampler.finish();
-		update_lods(&samples, &mut lods, start);
 
 		for &s in &samples[start..] {
 			writer.write_sample(s).unwrap();
 		}
 		writer.0.finalize().unwrap();
 
-		Arc::new(Sample {
+		Sample {
+			id: SampleId::unique(),
 			samples: samples.into_boxed_slice().into(),
-			lods: Box::new(lods.0.map(|x| x.into_boxed_slice())).into(),
-			path,
-			name,
-		})
-	}
-
-	#[must_use]
-	pub fn len(&self) -> usize {
-		self.resampler.samples().len()
-	}
-
-	#[must_use]
-	pub fn is_empty(&self) -> bool {
-		self.len() == 0
+		}
 	}
 }

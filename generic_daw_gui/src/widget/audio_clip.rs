@@ -1,5 +1,6 @@
 use super::{LINE_HEIGHT, Vec2, waveform};
-use generic_daw_core::{self as core, RtState};
+use crate::arrangement_view::AudioClipRef;
+use generic_daw_core::RtState;
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
@@ -32,18 +33,9 @@ struct State {
 	last_addr: usize,
 }
 
-impl State {
-	fn new(inner: &core::AudioClip) -> Self {
-		Self {
-			last_addr: std::ptr::from_ref(inner).addr(),
-			..Self::default()
-		}
-	}
-}
-
 #[derive(Clone, Debug)]
 pub struct AudioClip<'a> {
-	inner: &'a core::AudioClip,
+	inner: AudioClipRef<'a>,
 	rtstate: &'a RtState,
 	position: &'a Vec2,
 	scale: &'a Vec2,
@@ -56,7 +48,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 	}
 
 	fn state(&self) -> tree::State {
-		tree::State::new(State::new(self.inner))
+		tree::State::new(State::default())
 	}
 
 	fn size(&self) -> Size<Length> {
@@ -66,14 +58,14 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 	fn diff(&self, tree: &mut Tree) {
 		let state = tree.state.downcast_mut::<State>();
 
-		if state.last_addr != std::ptr::from_ref(self.inner).addr() {
-			*state = State::new(self.inner);
+		if state.last_addr != std::ptr::from_ref(self.inner.clip).addr() {
+			*state = State::default();
 		}
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-		let start = self.inner.position.start().to_samples_f(self.rtstate);
-		let end = self.inner.position.end().to_samples_f(self.rtstate);
+		let start = self.inner.clip.position.start().to_samples_f(self.rtstate);
+		let end = self.inner.clip.position.end().to_samples_f(self.rtstate);
 		let pixel_size = self.scale.x.exp2();
 
 		Node::new(Size::new((end - start) / pixel_size, self.scale.y))
@@ -172,8 +164,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		if state.cache.borrow().is_none()
 			&& let Some(mesh) = waveform::mesh(
 				self.rtstate,
-				self.inner.position.start(),
-				self.inner.position.offset(),
+				self.inner.clip.position.start(),
+				self.inner.clip.position.offset(),
 				&self.inner.sample.lods,
 				*self.position,
 				*self.scale,
@@ -222,7 +214,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
 impl<'a> AudioClip<'a> {
 	pub fn new(
-		inner: &'a core::AudioClip,
+		inner: AudioClipRef<'a>,
 		rtstate: &'a RtState,
 		position: &'a Vec2,
 		scale: &'a Vec2,

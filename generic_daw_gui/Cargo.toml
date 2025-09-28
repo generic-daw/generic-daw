@@ -13,7 +13,6 @@ generic_daw_project = { workspace = true }
 generic_daw_utils = { workspace = true }
 generic_daw_widget = { workspace = true }
 
-arc-swap = "1.7.1"
 bit-set = "0.8.0"
 crc32c = "0.6.8"
 dirs = "6.0.0"
@@ -38,7 +37,7 @@ log = "0.4.28"
 oneshot = "0.1.11"
 rfd = "0.15.4"
 rtrb = "0.3.2"
-serde = { version = "1.0.226", features = ["derive", "rc"] }
+serde = { version = "1.0.228", features = ["derive", "rc"] }
 smol = "2.0.2"
 toml = "0.9.7"
 walkdir = "2.5.0"

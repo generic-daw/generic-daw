@@ -1,6 +1,6 @@
 use crate::{
 	arrangement_view::{
-		ArrangementView, Feedback, Message as ArrangementMessage, PartialArrangementView, Tab,
+		ArrangementView, ArrangementWrapper, Feedback, Message as ArrangementMessage, Tab,
 	},
 	components::{number_input, pick_list_custom_handle},
 	config::Config,
@@ -21,7 +21,7 @@ use generic_daw_utils::NoClone;
 use generic_daw_widget::dot::Dot;
 use iced::{
 	Alignment::Center,
-	Color, Element, Event, Fill, Font, Function as _,
+	Color, Element, Event, Font, Function as _,
 	Length::Shrink,
 	Subscription, Task, Theme, border,
 	event::{self, Status},
@@ -61,7 +61,7 @@ pub enum Message {
 	OpenFile(Arc<Path>),
 	CantLoadSample(Arc<str>, NoClone<oneshot::Sender<Feedback<Arc<Path>>>>),
 	FoundSampleResponse(usize, Feedback<Arc<Path>>),
-	ApplyPartial(NoClone<Box<PartialArrangementView>>),
+	SetArrangement(NoClone<Box<ArrangementWrapper>>),
 	OpenedFile(Option<Arc<Path>>),
 
 	ExportFile(Arc<Path>),
@@ -160,9 +160,10 @@ impl Daw {
 			}
 			Message::NewFile => {
 				self.reload_config();
-				return self
-					.arrangement_view
-					.unload(&self.config, &self.plugin_bundles)
+				let (arrangement, futs) = ArrangementWrapper::create(&self.config);
+				self.arrangement_view.arrangement = arrangement;
+				return futs
+					.map(ArrangementMessage::Batch)
 					.map(Message::Arrangement);
 			}
 			Message::ChangedTab(tab) => self.arrangement_view.tab = tab,
@@ -180,7 +181,9 @@ impl Daw {
 				);
 			}
 			Message::SaveAsFile(path) => {
-				self.arrangement_view.save(&path);
+				self.arrangement_view
+					.arrangement
+					.save(&path, &mut self.arrangement_view.clap_host);
 				self.state.current_project = Some(path.clone());
 				if self.state.last_project.as_deref() != Some(&path) {
 					self.state.last_project = Some(path);
@@ -234,7 +237,7 @@ impl Daw {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
 					self.reload_config();
-					return ArrangementView::start_load(
+					return ArrangementWrapper::start_load(
 						path,
 						self.config.clone(),
 						self.plugin_bundles.clone(),
@@ -249,9 +252,8 @@ impl Daw {
 			Message::FoundSampleResponse(idx, response) => {
 				self.missing_samples.remove(idx).1.send(response).unwrap();
 			}
-			Message::ApplyPartial(NoClone(partial)) => {
-				self.arrangement_view
-					.apply_partial(*partial, &self.plugin_bundles);
+			Message::SetArrangement(NoClone(arrangement)) => {
+				self.arrangement_view.arrangement = *arrangement;
 			}
 			Message::OpenedFile(path) => {
 				if let Some(path) = path {
@@ -479,9 +481,6 @@ impl Daw {
 			]
 			.padding(10)
 			.spacing(10),
-			self.arrangement_view.loading().then_some(
-				mouse_area(space().width(Fill).height(Fill)).interaction(Interaction::Progress)
-			),
 			self.config_view.as_ref().map(|config_view| opaque(
 				mouse_area(
 					center(opaque(config_view.view().map(Message::ConfigView)))

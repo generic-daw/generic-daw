@@ -25,6 +25,8 @@ mod plugin_descriptor;
 mod shared;
 mod size;
 
+unique_id!(plugin_id);
+
 pub use audio_processor::AudioProcessor;
 pub use clack_extensions::params::{ParamInfoFlags, ParamRescanFlags};
 pub use clack_host::{
@@ -38,8 +40,6 @@ pub use plugin::Plugin;
 pub use plugin_descriptor::PluginDescriptor;
 pub use plugin_id::Id as PluginId;
 pub use size::Size;
-
-unique_id!(plugin_id);
 
 const API_TYPE: GuiApiType<'_> = const { GuiApiType::default_for_current_platform().unwrap() };
 

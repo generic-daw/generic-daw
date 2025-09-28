@@ -2,13 +2,13 @@ use prost::{Message, Oneof};
 use std::ffi::CStr;
 
 #[derive(Clone, Copy, Eq, Hash, Message, PartialEq)]
-pub struct AudioIndex {
+pub struct SampleIndex {
 	#[prost(uint32)]
 	pub(crate) index: u32,
 }
 
 #[derive(Clone, Copy, Eq, Hash, Message, PartialEq)]
-pub struct MidiIndex {
+pub struct PatternIndex {
 	#[prost(uint32)]
 	pub(crate) index: u32,
 }
@@ -30,9 +30,9 @@ pub struct Project {
 	#[prost(message, required)]
 	pub rtstate: RtState,
 	#[prost(message, repeated)]
-	pub audios: Vec<Audio>,
+	pub samples: Vec<Sample>,
 	#[prost(message, repeated)]
-	pub midis: Vec<Midi>,
+	pub patterns: Vec<Pattern>,
 	#[prost(message, repeated)]
 	pub tracks: Vec<Track>,
 	#[prost(message, repeated)]
@@ -48,7 +48,7 @@ pub struct RtState {
 }
 
 #[derive(Message)]
-pub struct Audio {
+pub struct Sample {
 	#[prost(string)]
 	pub name: String,
 	#[prost(uint32)]
@@ -56,7 +56,7 @@ pub struct Audio {
 }
 
 #[derive(Message)]
-pub struct Midi {
+pub struct Pattern {
 	#[prost(message, repeated)]
 	pub notes: Vec<Note>,
 }
@@ -87,10 +87,8 @@ pub struct Note {
 	pub key: u32,
 	#[prost(float, default = 1.0)]
 	pub velocity: f32,
-	#[prost(uint32)]
-	pub start: u32,
-	#[prost(uint32)]
-	pub end: u32,
+	#[prost(message, required)]
+	pub position: NotePosition,
 }
 
 #[derive(Clone, Copy, Message)]
@@ -110,7 +108,7 @@ pub enum Clip {
 #[derive(Clone, Copy, Message)]
 pub struct AudioClip {
 	#[prost(message, required)]
-	pub audio: AudioIndex,
+	pub sample: SampleIndex,
 	#[prost(message, required)]
 	pub position: ClipPosition,
 }
@@ -118,17 +116,23 @@ pub struct AudioClip {
 #[derive(Clone, Copy, Message)]
 pub struct MidiClip {
 	#[prost(message, required)]
-	pub midi: MidiIndex,
+	pub pattern: PatternIndex,
 	#[prost(message, required)]
 	pub position: ClipPosition,
 }
 
 #[derive(Clone, Copy, Message)]
-pub struct ClipPosition {
+pub struct NotePosition {
 	#[prost(uint32)]
 	pub start: u32,
 	#[prost(uint32)]
 	pub end: u32,
+}
+
+#[derive(Clone, Copy, Message)]
+pub struct ClipPosition {
+	#[prost(message, required)]
+	pub position: NotePosition,
 	#[prost(uint32)]
 	pub offset: u32,
 }

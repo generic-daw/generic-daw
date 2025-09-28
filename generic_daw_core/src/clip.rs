@@ -1,45 +1,35 @@
-use crate::{AudioClip, ClipPosition, MidiClip, RtState, event::Event};
-use std::sync::Arc;
+use crate::{AudioClip, ClipPosition, MidiClip, daw_ctx::State, event::Event};
 
 #[derive(Clone, Debug)]
 pub enum Clip {
-	Audio(Arc<AudioClip>),
-	Midi(Arc<MidiClip>),
+	Audio(AudioClip),
+	Midi(MidiClip),
 }
 
 impl Clip {
-	pub fn process(&self, rtstate: &RtState, audio: &mut [f32], events: &mut Vec<Event>) {
+	pub fn process(&mut self, state: &State, audio: &mut [f32], events: &mut Vec<Event>) {
 		match self {
-			Self::Audio(clip) => clip.process(rtstate, audio),
-			Self::Midi(clip) => clip.process(rtstate, audio, events),
+			Self::Audio(clip) => clip.process(state, audio),
+			Self::Midi(clip) => clip.process(state, audio, events),
 		}
 	}
 
-	#[must_use]
-	pub fn position(&self) -> &ClipPosition {
+	pub fn position(&mut self) -> &mut ClipPosition {
 		match self {
-			Self::Audio(clip) => &clip.position,
-			Self::Midi(clip) => &clip.position,
-		}
-	}
-
-	#[must_use]
-	pub fn deep_clone(&self) -> Self {
-		match self {
-			Self::Audio(audio) => Self::Audio(Arc::new((**audio).clone())),
-			Self::Midi(midi) => Self::Midi(Arc::new((**midi).clone())),
+			Self::Audio(clip) => &mut clip.position,
+			Self::Midi(clip) => &mut clip.position,
 		}
 	}
 }
 
-impl From<Arc<AudioClip>> for Clip {
-	fn from(value: Arc<AudioClip>) -> Self {
+impl From<AudioClip> for Clip {
+	fn from(value: AudioClip) -> Self {
 		Self::Audio(value)
 	}
 }
 
-impl From<Arc<MidiClip>> for Clip {
-	fn from(value: Arc<MidiClip>) -> Self {
+impl From<MidiClip> for Clip {
+	fn from(value: MidiClip) -> Self {
 		Self::Midi(value)
 	}
 }

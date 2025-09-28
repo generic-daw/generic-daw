@@ -1,74 +1,52 @@
-use crate::{ClipPosition, RtState, event::Event};
-use arc_swap::ArcSwap;
+use crate::{ClipPosition, Event, PatternId, daw_ctx::State};
 use generic_daw_utils::NoDebug;
-use std::{
-	cmp::Ordering,
-	iter::repeat_n,
-	sync::{Arc, Mutex},
-};
-
-mod midi_key;
-mod midi_note;
-
-pub use midi_key::{Key, MidiKey};
-pub use midi_note::MidiNote;
+use std::{cmp::Ordering, iter::repeat_n};
 
 #[derive(Debug)]
 pub struct MidiClip {
-	pub pattern: Arc<ArcSwap<Vec<MidiNote>>>,
+	pub pattern: PatternId,
 	pub position: ClipPosition,
-	notes: NoDebug<Mutex<[u8; 128]>>,
+	pub notes: NoDebug<Box<[u8; 128]>>,
 }
 
 impl Clone for MidiClip {
 	fn clone(&self) -> Self {
 		Self {
-			pattern: self.pattern.clone(),
-			position: self.position.clone(),
-			notes: Mutex::new([0; 128]).into(),
+			pattern: self.pattern,
+			position: self.position,
+			notes: Box::new([0; 128]).into(),
 		}
 	}
 }
 
 impl MidiClip {
 	#[must_use]
-	pub fn create(pattern: Arc<ArcSwap<Vec<MidiNote>>>) -> Arc<Self> {
-		let len = pattern
-			.load()
-			.iter()
-			.map(|note| note.end)
-			.max()
-			.unwrap_or_default();
-
-		Arc::new(Self {
+	pub fn new(pattern: PatternId) -> Self {
+		Self {
 			pattern,
-			position: ClipPosition::with_len(len),
-			notes: Mutex::new([0; 128]).into(),
-		})
+			position: ClipPosition::default(),
+			notes: Box::new([0; 128]).into(),
+		}
 	}
 
-	pub fn process(&self, rtstate: &RtState, audio: &[f32], events: &mut Vec<Event>) {
-		let start = self.position.start();
-		let end = self.position.end();
-		let offset = self.position.offset();
-
-		let start_sample = rtstate.sample;
+	pub fn process(&mut self, state: &State, audio: &[f32], events: &mut Vec<Event>) {
+		let start_sample = state.rtstate.sample;
 		let end_sample = start_sample + audio.len();
 
 		let mut notes = [0; 128];
 
-		if rtstate.playing {
-			self.pattern
-				.load()
+		let pattern = &state.patterns[*self.pattern];
+
+		if state.rtstate.playing {
+			pattern
+				.notes
 				.iter()
-				.filter_map(|&note| {
-					(note + start)
-						.saturating_sub(offset)
-						.and_then(|note| note.clamp(start, end))
-				})
+				.map(|&note| note + self.position.start())
+				.filter(|note| note.position.start() >= self.position.offset())
+				.map(|note| note - self.position.offset())
 				.for_each(|note| {
-					let start = note.start.to_samples(rtstate);
-					let end = note.end.to_samples(rtstate);
+					let start = note.position.start().to_samples(&state.rtstate);
+					let end = note.position.end().to_samples(&state.rtstate);
 
 					if start < start_sample && end >= start_sample {
 						notes[note.key.0 as usize] += 1;
@@ -76,12 +54,8 @@ impl MidiClip {
 				});
 		}
 
-		let mut lock = self
-			.notes
-			.try_lock()
-			.expect("this is only locked from the audio thread");
-
-		lock.iter()
+		self.notes
+			.iter()
 			.zip(notes)
 			.enumerate()
 			.for_each(|(key, (before, after))| {
@@ -102,18 +76,16 @@ impl MidiClip {
 				events.extend(repeat_n(event, before.abs_diff(after) as usize));
 			});
 
-		if rtstate.playing {
-			self.pattern
-				.load()
+		if state.rtstate.playing {
+			pattern
+				.notes
 				.iter()
-				.filter_map(|&note| {
-					(note + start)
-						.saturating_sub(offset)
-						.and_then(|note| note.clamp(start, end))
-				})
+				.map(|&note| note + self.position.start())
+				.filter(|note| note.position.start() >= self.position.offset())
+				.map(|note| note - self.position.offset())
 				.for_each(|note| {
-					let start = note.start.to_samples(rtstate);
-					let end = note.end.to_samples(rtstate);
+					let start = note.position.start().to_samples(&state.rtstate);
+					let end = note.position.end().to_samples(&state.rtstate);
 
 					if start >= start_sample && start < end_sample {
 						events.push(Event::On {
@@ -134,6 +106,6 @@ impl MidiClip {
 				});
 		}
 
-		*lock = notes;
+		**self.notes = notes;
 	}
 }

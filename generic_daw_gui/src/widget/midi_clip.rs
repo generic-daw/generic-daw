@@ -1,5 +1,6 @@
 use super::{LINE_HEIGHT, Vec2};
-use generic_daw_core::{self as core, RtState};
+use crate::arrangement_view::MidiClipRef;
+use generic_daw_core::RtState;
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
@@ -21,7 +22,7 @@ struct State {
 
 #[derive(Clone, Debug)]
 pub struct MidiClip<'a, Message> {
-	inner: &'a core::MidiClip,
+	inner: MidiClipRef<'a>,
 	rtstate: &'a RtState,
 	position: &'a Vec2,
 	scale: &'a Vec2,
@@ -46,8 +47,8 @@ where
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-		let start = self.inner.position.start().to_samples_f(self.rtstate);
-		let end = self.inner.position.end().to_samples_f(self.rtstate);
+		let start = self.inner.clip.position.start().to_samples_f(self.rtstate);
+		let end = self.inner.clip.position.end().to_samples_f(self.rtstate);
 		let pixel_size = self.scale.x.exp2();
 
 		Node::new(Size::new((end - start) / pixel_size, self.scale.y))
@@ -128,48 +129,50 @@ where
 		};
 		renderer.fill_quad(clip_background, color.scale_alpha(0.2));
 
-		let pattern = self.inner.pattern.load();
-
-		let (min, max) = pattern.iter().fold((255, 0), |(min, max), note| {
-			(note.key.0.min(min), note.key.0.max(max))
-		});
+		let (min, max) = self
+			.inner
+			.pattern
+			.notes
+			.iter()
+			.fold((255, 0), |(min, max), note| {
+				(note.key.0.min(min), note.key.0.max(max))
+			});
 
 		if min > max {
 			return;
 		}
 
-		let note_height = (self.scale.y - LINE_HEIGHT) / f32::from(max - min + 3);
-
-		let offset = self.inner.position.offset();
 		let pixel_size = self.scale.x.exp2();
+		let note_height = (self.scale.y - LINE_HEIGHT) / f32::from(max - min + 3);
+		let offset = Vector::new(layout.position().x, layout.position().y);
 
-		let position = Vector::new(lower_bounds.x, layout.position().y);
-		let clip_bounds = Rectangle::new(
-			Point::new(0.0, lower_bounds.y - position.y),
-			lower_bounds.size(),
-		);
-
-		for note in &**pattern {
-			let start_pixel = (note.start.saturating_sub(offset).to_samples_f(self.rtstate)
-				- self.position.x)
+		for note in &self.inner.pattern.notes {
+			let start_pixel = (note
+				.position
+				.start()
+				.saturating_sub(self.inner.clip.position.offset())
+				.to_samples_f(self.rtstate))
 				/ pixel_size;
-			let end_pixel = (note.end.saturating_sub(offset).to_samples_f(self.rtstate)
-				- self.position.x)
+			let end_pixel = (note
+				.position
+				.end()
+				.saturating_sub(self.inner.clip.position.offset())
+				.to_samples_f(self.rtstate))
 				/ pixel_size;
 
 			let top_pixel = f32::from(max - note.key.0 + 1).mul_add(note_height, LINE_HEIGHT);
 
 			let note_bounds = Rectangle::new(
-				Point::new(start_pixel, top_pixel),
+				Point::new(start_pixel, top_pixel) + offset,
 				Size::new(end_pixel - start_pixel, note_height),
 			);
 
-			let Some(note_bounds) = note_bounds.intersection(&clip_bounds) else {
+			let Some(bounds) = note_bounds.intersection(&lower_bounds) else {
 				continue;
 			};
 
 			let note = Quad {
-				bounds: note_bounds + position,
+				bounds,
 				..Quad::default()
 			};
 
@@ -203,7 +206,7 @@ where
 
 impl<'a, Message> MidiClip<'a, Message> {
 	pub fn new(
-		inner: &'a core::MidiClip,
+		inner: MidiClipRef<'a>,
 		rtstate: &'a RtState,
 		position: &'a Vec2,
 		scale: &'a Vec2,

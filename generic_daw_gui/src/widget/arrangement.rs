@@ -41,7 +41,10 @@ impl State {
 	fn drop(&mut self) -> bool {
 		let unselect = matches!(
 			self,
-			Self::DraggingClip(..) | Self::ClipTrimmingStart(..) | Self::ClipTrimmingEnd(..)
+			Self::DraggingClip(..)
+				| Self::DraggingSplit(..)
+				| Self::ClipTrimmingStart(..)
+				| Self::ClipTrimmingEnd(..)
 		);
 
 		*self = Self::None;

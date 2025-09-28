@@ -1,45 +1,40 @@
-use crate::{ClipPosition, MusicalTime, RtState};
-use std::sync::Arc;
+use crate::{ClipPosition, SampleId, daw_ctx::State};
 
-mod sample;
-
-pub use sample::Sample;
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct AudioClip {
-	pub sample: Arc<Sample>,
+	pub sample: SampleId,
 	pub position: ClipPosition,
 }
 
 impl AudioClip {
 	#[must_use]
-	pub fn create(sample: Arc<Sample>, rtstate: &RtState) -> Arc<Self> {
-		let len = MusicalTime::from_samples(sample.samples.len(), rtstate) + MusicalTime::TICK;
-
-		Arc::new(Self {
+	pub fn new(sample: SampleId) -> Self {
+		Self {
 			sample,
-			position: ClipPosition::with_len(len),
-		})
+			position: ClipPosition::default(),
+		}
 	}
 
-	pub fn process(&self, rtstate: &RtState, audio: &mut [f32]) {
-		if !rtstate.playing {
+	pub fn process(&self, state: &State, audio: &mut [f32]) {
+		if !state.rtstate.playing {
 			return;
 		}
 
-		let start = self.position.start().to_samples(rtstate);
-		let end = self.position.end().to_samples(rtstate);
-		let offset = self.position.offset().to_samples(rtstate);
-		let len = (self.sample.samples.len() - offset).min(end - start);
+		let sample = &state.samples[*self.sample];
 
-		let uidx = rtstate.sample.abs_diff(start);
+		let start = self.position.start().to_samples(&state.rtstate);
+		let end = self.position.end().to_samples(&state.rtstate);
+		let offset = self.position.offset().to_samples(&state.rtstate);
+		let len = (sample.samples.len() - offset).min(end - start);
 
-		if rtstate.sample > start {
+		let uidx = state.rtstate.sample.abs_diff(start);
+
+		if state.rtstate.sample > start {
 			if uidx >= len {
 				return;
 			}
 
-			self.sample.samples[offset..][..len][uidx..]
+			sample.samples[offset..][..len][uidx..]
 				.iter()
 				.zip(audio)
 				.for_each(|(sample, buf)| *buf += sample);
@@ -48,7 +43,7 @@ impl AudioClip {
 				return;
 			}
 
-			self.sample.samples[offset..][..len]
+			sample.samples[offset..][..len]
 				.iter()
 				.zip(&mut audio[uidx..])
 				.for_each(|(sample, buf)| *buf += sample);

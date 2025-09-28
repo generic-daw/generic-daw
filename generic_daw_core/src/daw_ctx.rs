@@ -1,30 +1,41 @@
-use crate::{AudioGraphNode, Channel, Clip, Event, Master};
+use crate::{
+	AudioGraphNode, Channel, Clip, Event, Master, MidiKey, MidiNote, MusicalTime, Pattern,
+	PatternId, Sample, SampleId,
+};
 use audio_graph::{AudioGraph, NodeId, NodeImpl as _};
 use clap_host::{AudioProcessor, ClapId, PluginId};
-use generic_daw_utils::unique_id;
+use generic_daw_utils::{HoleyVec, unique_id};
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, RingBuffer};
 use std::sync::Mutex;
 
+unique_id!(epoch);
 unique_id!(version);
 
+pub use epoch::Id as Epoch;
 pub use version::Id as Version;
 
 #[derive(Debug)]
 pub enum Message {
-	Action(NodeId, Action),
+	NodeAction(NodeId, NodeAction),
+	PatternAction(PatternId, PatternAction),
 
-	Insert(Box<AudioGraphNode>),
-	Remove(NodeId),
-	Connect(NodeId, NodeId, oneshot::Sender<(NodeId, NodeId)>),
-	Disconnect(NodeId, NodeId),
+	SampleAdd(Sample),
+	SampleRemove(SampleId),
+	PatternAdd(Pattern),
+	PatternRemove(PatternId),
+
+	NodeAdd(Box<AudioGraphNode>),
+	NodeRemove(NodeId),
+	NodeConnect(NodeId, NodeId, oneshot::Sender<(NodeId, NodeId)>),
+	NodeDisconnect(NodeId, NodeId),
 
 	Bpm(u16),
 	Numerator(u8),
 	TogglePlayback,
 	ToggleMetronome,
-	Reset,
 	Sample(Version, usize),
+	Reset,
 
 	ReturnUpdateBuffer(Vec<Update>),
 
@@ -34,10 +45,23 @@ pub enum Message {
 
 const _: () = assert!(size_of::<Message>() <= 128);
 
+#[derive(Clone, Copy, Debug)]
+pub enum PatternAction {
+	Add(MidiNote),
+	Remove(usize),
+	ChangeKey(usize, MidiKey),
+	MoveTo(usize, MusicalTime),
+	TrimStartTo(usize, MusicalTime),
+	TrimEndTo(usize, MusicalTime),
+}
+
 #[derive(Debug)]
-pub enum Action {
-	AddClip(Clip),
-	RemoveClip(usize),
+pub enum NodeAction {
+	ClipAdd(Clip),
+	ClipRemove(usize),
+	ClipMoveTo(usize, MusicalTime),
+	ClipTrimStartTo(usize, MusicalTime),
+	ClipTrimEndTo(usize, MusicalTime),
 
 	ChannelToggleEnabled,
 	ChannelToggleBypassed,
@@ -45,9 +69,10 @@ pub enum Action {
 	ChannelSwapChannels,
 	ChannelVolumeChanged(f32),
 	ChannelPanChanged(f32),
+
 	PluginLoad(Box<AudioProcessor<Event>>),
 	PluginRemove(usize),
-	PluginMoved(usize, usize),
+	PluginMoveTo(usize, usize),
 	PluginToggleEnabled(usize),
 	PluginMixChanged(usize, f32),
 }
@@ -60,6 +85,7 @@ pub enum Update {
 
 #[derive(Clone, Debug)]
 pub struct Batch {
+	pub epoch: Epoch,
 	pub version: Version,
 	pub sample: Option<usize>,
 	pub updates: Vec<Update>,
@@ -67,6 +93,8 @@ pub struct Batch {
 
 #[derive(Clone, Copy, Debug)]
 pub struct RtState {
+	pub epoch: Epoch,
+	pub version: Version,
 	pub sample_rate: u32,
 	pub frames: u32,
 	pub bpm: u16,
@@ -76,9 +104,28 @@ pub struct RtState {
 	pub sample: usize,
 }
 
+impl RtState {
+	#[must_use]
+	pub fn new(sample_rate: u32, frames: u32) -> Self {
+		Self {
+			epoch: Epoch::unique(),
+			version: Version::unique(),
+			sample_rate,
+			frames,
+			bpm: 140,
+			numerator: 4,
+			playing: false,
+			metronome: false,
+			sample: 0,
+		}
+	}
+}
+
 #[derive(Debug)]
 pub struct State {
 	pub rtstate: RtState,
+	pub samples: HoleyVec<Sample>,
+	pub patterns: HoleyVec<Pattern>,
 	pub updates: Mutex<Vec<Update>>,
 }
 
@@ -86,6 +133,8 @@ impl From<RtState> for State {
 	fn from(value: RtState) -> Self {
 		Self {
 			rtstate: value,
+			samples: HoleyVec::default(),
+			patterns: HoleyVec::default(),
 			updates: Mutex::new(Vec::new()),
 		}
 	}
@@ -94,45 +143,29 @@ impl From<RtState> for State {
 pub struct DawCtx {
 	audio_graph: AudioGraph<AudioGraphNode>,
 	state: State,
-	version: Version,
 	producer: Producer<Batch>,
 	consumer: Consumer<Message>,
 	update_buffers: Vec<Vec<Update>>,
 }
 
 impl DawCtx {
-	pub fn create(
-		sample_rate: u32,
-		frames: u32,
-	) -> (Self, NodeId, RtState, Producer<Message>, Consumer<Batch>) {
-		let (r_sender, consumer) = RingBuffer::new(frames as usize);
-		let (producer, r_receiver) = RingBuffer::new(sample_rate.div_ceil(frames) as usize);
+	pub fn create(rtstate: RtState) -> (Self, NodeId, Producer<Message>, Consumer<Batch>) {
+		let (r_sender, consumer) = RingBuffer::new(rtstate.frames as usize);
+		let (producer, r_receiver) =
+			RingBuffer::new(rtstate.sample_rate.div_ceil(rtstate.frames) as usize);
 
-		let master = Master::new(sample_rate);
+		let master = Master::new(rtstate.sample_rate);
 		let id = master.id();
 
-		let version = Version::unique();
-
-		let rtstate = RtState {
-			sample_rate,
-			frames,
-			bpm: 140,
-			numerator: 4,
-			playing: false,
-			metronome: false,
-			sample: 0,
-		};
-
 		let audio_ctx = Self {
-			audio_graph: AudioGraph::new(master.into(), frames),
+			audio_graph: AudioGraph::new(master.into(), rtstate.frames),
 			state: rtstate.into(),
-			version,
 			producer,
 			consumer,
 			update_buffers: Vec::new(),
 		};
 
-		(audio_ctx, id, rtstate, r_sender, r_receiver)
+		(audio_ctx, id, r_sender, r_receiver)
 	}
 
 	pub fn process(&mut self, buf: &mut [f32]) {
@@ -140,26 +173,35 @@ impl DawCtx {
 			trace!("{msg:?}");
 
 			match msg {
-				Message::Action(node, action) => self
+				Message::NodeAction(node, action) => self
 					.audio_graph
 					.with_mut_node(node, move |node| node.apply(action)),
-				Message::Insert(node) => self.audio_graph.insert(*node),
-				Message::Remove(node) => self.audio_graph.remove(node),
-				Message::Connect(from, to, sender) => {
+				Message::PatternAction(pattern, action) => {
+					self.state.patterns.get_mut(*pattern).unwrap().apply(action);
+				}
+				Message::SampleAdd(sample) => _ = self.state.samples.insert(*sample.id, sample),
+				Message::SampleRemove(sample) => _ = self.state.samples.remove(*sample),
+				Message::PatternAdd(pattern) => {
+					self.state.patterns.insert(*pattern.id, pattern);
+				}
+				Message::PatternRemove(pattern) => _ = self.state.patterns.remove(*pattern),
+				Message::NodeAdd(node) => self.audio_graph.insert(*node),
+				Message::NodeRemove(node) => self.audio_graph.remove(node),
+				Message::NodeConnect(from, to, sender) => {
 					if self.audio_graph.connect(from, to) {
 						sender.send((from, to)).unwrap();
 					}
 				}
-				Message::Disconnect(from, to) => self.audio_graph.disconnect(from, to),
+				Message::NodeDisconnect(from, to) => self.audio_graph.disconnect(from, to),
 				Message::Bpm(bpm) => self.state.rtstate.bpm = bpm,
 				Message::Numerator(numerator) => self.state.rtstate.numerator = numerator,
 				Message::TogglePlayback => self.state.rtstate.playing ^= true,
 				Message::ToggleMetronome => self.state.rtstate.metronome ^= true,
-				Message::Reset => self.audio_graph.for_each_mut_node(AudioGraphNode::reset),
 				Message::Sample(version, sample) => {
-					self.version = version;
+					self.state.rtstate.version = version;
 					self.state.rtstate.sample = sample;
 				}
+				Message::Reset => self.audio_graph.for_each_mut_node(AudioGraphNode::reset),
 				Message::ReturnUpdateBuffer(update) => {
 					debug_assert!(update.is_empty());
 					self.update_buffers.push(update);
@@ -196,7 +238,8 @@ impl DawCtx {
 
 		if sample.is_some() || !updates.is_empty() {
 			let batch = Batch {
-				version: self.version,
+				epoch: self.state.rtstate.epoch,
+				version: self.state.rtstate.version,
 				sample,
 				updates: std::mem::take(updates),
 			};

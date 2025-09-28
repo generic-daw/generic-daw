@@ -1,5 +1,5 @@
-use crate::widget::LINE_HEIGHT;
-use generic_daw_core::{LOD_LEVELS, MusicalTime, RtState};
+use crate::{lod::LOD_LEVELS, widget::LINE_HEIGHT};
+use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::Vec2;
 use iced::{Point, Rectangle, Theme, Transformation, advanced::graphics::color, debug};
 use iced_wgpu::graphics::{

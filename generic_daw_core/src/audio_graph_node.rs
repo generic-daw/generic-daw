@@ -1,4 +1,4 @@
-use crate::{Action, Channel, Master, Track, daw_ctx::State, event::Event};
+use crate::{Channel, Master, NodeAction, Track, daw_ctx::State, event::Event};
 use audio_graph::NodeImpl;
 
 #[derive(Debug)]
@@ -46,7 +46,7 @@ impl NodeImpl for AudioGraphNode {
 }
 
 impl AudioGraphNode {
-	pub fn apply(&mut self, action: Action) {
+	pub fn apply(&mut self, action: NodeAction) {
 		match self {
 			Self::Master(node) => node.apply(action),
 			Self::Channel(node) => node.apply(action),
