@@ -14,7 +14,7 @@ use crate::{
 	},
 };
 use generic_daw_core::{
-	AudioGraph, MusicalTime,
+	Export, MusicalTime,
 	clap_host::{PluginBundle, PluginDescriptor, get_installed_plugins},
 };
 use generic_daw_utils::NoClone;
@@ -64,7 +64,7 @@ pub enum Message {
 	OpenedFile(Option<Arc<Path>>),
 
 	ExportFile(Arc<Path>),
-	ExportedFile(NoClone<Box<AudioGraph>>),
+	ExportedFile(NoClone<Box<Export>>),
 
 	OpenConfigView,
 	CloseConfigView,

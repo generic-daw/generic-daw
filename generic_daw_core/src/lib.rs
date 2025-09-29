@@ -35,7 +35,7 @@ pub use clip::Clip;
 pub use cpal::{Stream, traits::StreamTrait};
 pub use daw_ctx::{Batch, Message, NodeAction, PatternAction, RtState, Update, Version};
 pub use event::Event;
-pub use export::export;
+pub use export::Export;
 pub use midi_clip::MidiClip;
 pub use midi_key::{Key, MidiKey};
 pub use midi_note::MidiNote;

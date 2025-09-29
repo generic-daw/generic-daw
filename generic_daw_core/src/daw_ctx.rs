@@ -1,8 +1,8 @@
 use crate::{
-	AudioGraphNode, Channel, Clip, Event, Master, MidiKey, MidiNote, MusicalTime, Pattern,
-	PatternId, Sample, SampleId,
+	AudioGraph, AudioGraphNode, Channel, Clip, Event, Export, Master, MidiKey, MidiNote,
+	MusicalTime, Pattern, PatternId, Sample, SampleId,
 };
-use audio_graph::{AudioGraph, NodeId, NodeImpl as _};
+use audio_graph::{NodeId, NodeImpl as _};
 use clap_host::{AudioProcessor, ClapId, PluginId};
 use generic_daw_utils::{HoleyVec, unique_id};
 use log::{trace, warn};
@@ -39,8 +39,8 @@ pub enum Message {
 
 	ReturnUpdateBuffer(Vec<Update>),
 
-	RequestAudioGraph(oneshot::Sender<AudioGraph<AudioGraphNode>>),
-	AudioGraph(Box<AudioGraph<AudioGraphNode>>),
+	RequestAudioGraph(oneshot::Sender<Export>),
+	AudioGraph(Box<Export>),
 }
 
 const _: () = assert!(size_of::<Message>() <= 128);
@@ -141,7 +141,7 @@ impl From<RtState> for State {
 }
 
 pub struct DawCtx {
-	audio_graph: AudioGraph<AudioGraphNode>,
+	audio_graph: AudioGraph,
 	state: State,
 	producer: Producer<Batch>,
 	consumer: Consumer<Message>,
@@ -211,9 +211,21 @@ impl DawCtx {
 					let mut audio_graph =
 						AudioGraph::new(Channel::default().into(), self.state.rtstate.frames);
 					std::mem::swap(&mut self.audio_graph, &mut audio_graph);
-					sender.send(audio_graph).unwrap();
+
+					let mut state = State {
+						rtstate: self.state.rtstate,
+						patterns: HoleyVec::default(),
+						samples: HoleyVec::default(),
+						updates: Mutex::default(),
+					};
+					std::mem::swap(&mut self.state, &mut state);
+
+					sender.send(Export { audio_graph, state }).unwrap();
 				}
-				Message::AudioGraph(audio_graph) => self.audio_graph = *audio_graph,
+				Message::AudioGraph(export) => {
+					self.audio_graph = export.audio_graph;
+					self.state = export.state;
+				}
 			}
 		}
 

@@ -16,11 +16,10 @@ use crate::{
 };
 use bit_set::BitSet;
 use generic_daw_core::{
-	self as core, AudioGraph, Batch, Event, Flags, Message, MidiKey, MidiNote, MusicalTime,
-	NodeAction, NodeId, NodeImpl as _, PatternAction, PatternId, RtState, SampleId, Stream,
-	StreamTrait as _, Update, Version, build_output_stream,
+	self as core, Batch, Event, Export, Flags, Message, MidiKey, MidiNote, MusicalTime, NodeAction,
+	NodeId, NodeImpl as _, PatternAction, PatternId, RtState, SampleId, Stream, StreamTrait as _,
+	Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
-	export,
 };
 use generic_daw_utils::{HoleyVec, NoClone, NoDebug, ShiftMoveExt as _};
 use iced::Task;
@@ -467,13 +466,12 @@ impl Arrangement {
 	pub fn start_export(&mut self, path: Arc<Path>) -> Task<DawMessage> {
 		let (sender, receiver) = oneshot::channel();
 		self.send(Message::RequestAudioGraph(sender));
-		let mut audio_graph = receiver.recv().unwrap();
+		let mut export = receiver.recv().unwrap();
 		self.stream.pause().unwrap();
 
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
-		let (audio_graph_sender, audio_graph_receiver) = oneshot::channel();
+		let (export_sender, audio_graph_receiver) = oneshot::channel();
 
-		let rtstate = self.rtstate;
 		let len = self
 			.tracks()
 			.iter()
@@ -483,22 +481,22 @@ impl Arrangement {
 
 		Task::batch([
 			Task::future(unblock(move || {
-				export(&mut audio_graph, &path, rtstate, len, |f| {
+				export.export(&path, len, |f| {
 					progress_sender.try_send(f).unwrap();
 				});
-				audio_graph_sender.send(audio_graph).unwrap();
+				export_sender.send(export).unwrap();
 			}))
 			.discard(),
 			Task::stream(progress_receiver)
 				.map(DawMessage::Progress)
-				.chain(Task::perform(audio_graph_receiver, |audio_graph| {
-					DawMessage::ExportedFile(NoClone(Box::new(audio_graph.unwrap())))
+				.chain(Task::perform(audio_graph_receiver, |export| {
+					DawMessage::ExportedFile(NoClone(Box::new(export.unwrap())))
 				})),
 		])
 	}
 
-	pub fn finish_export(&mut self, audio_graph: AudioGraph) {
-		self.send(Message::AudioGraph(Box::new(audio_graph)));
+	pub fn finish_export(&mut self, export: Export) {
+		self.send(Message::AudioGraph(Box::new(export)));
 		self.stream.play().unwrap();
 	}
 }
