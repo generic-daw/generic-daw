@@ -13,6 +13,9 @@ impl Export {
 	pub fn export(&mut self, path: &Path, len: MusicalTime, mut progress_fn: impl FnMut(f32)) {
 		let now = Instant::now();
 
+		let old = self.state.rtstate;
+		self.audio_graph.for_each_mut_node(AudioGraphNode::reset);
+
 		self.state.rtstate.sample = 0;
 		self.state.rtstate.playing = true;
 		self.state.rtstate.metronome = false;
@@ -33,8 +36,6 @@ impl Export {
 
 		let mut delay;
 		let mut end;
-
-		self.audio_graph.for_each_mut_node(AudioGraphNode::reset);
 
 		while {
 			delay = self.audio_graph.delay().next_multiple_of(2);
@@ -70,6 +71,7 @@ impl Export {
 
 		writer.finalize().unwrap();
 
+		self.state.rtstate = old;
 		self.audio_graph.for_each_mut_node(AudioGraphNode::reset);
 
 		info!(

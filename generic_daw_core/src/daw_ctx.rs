@@ -129,17 +129,6 @@ pub struct State {
 	pub updates: Mutex<Vec<Update>>,
 }
 
-impl From<RtState> for State {
-	fn from(value: RtState) -> Self {
-		Self {
-			rtstate: value,
-			samples: HoleyVec::default(),
-			patterns: HoleyVec::default(),
-			updates: Mutex::new(Vec::new()),
-		}
-	}
-}
-
 pub struct DawCtx {
 	audio_graph: AudioGraph,
 	state: State,
@@ -159,7 +148,12 @@ impl DawCtx {
 
 		let audio_ctx = Self {
 			audio_graph: AudioGraph::new(master.into(), rtstate.frames),
-			state: rtstate.into(),
+			state: State {
+				rtstate,
+				samples: HoleyVec::default(),
+				patterns: HoleyVec::default(),
+				updates: Mutex::new(Vec::new()),
+			},
 			producer,
 			consumer,
 			update_buffers: Vec::new(),
