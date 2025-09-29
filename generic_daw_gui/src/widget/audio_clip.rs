@@ -60,6 +60,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
 		if state.last_addr != std::ptr::from_ref(self.inner.clip).addr() {
 			*state = State::default();
+			state.last_addr = std::ptr::from_ref(self.inner.clip).addr();
 		}
 	}
 

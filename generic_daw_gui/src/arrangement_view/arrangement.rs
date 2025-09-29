@@ -48,6 +48,7 @@ impl Arrangement {
 			config.output_device.name.as_deref(),
 			config.output_device.sample_rate.unwrap_or(44100),
 			config.output_device.buffer_size.unwrap_or(1024),
+			|f| iced::debug::time_with("Output callback", f),
 		);
 		let mut nodes = HoleyVec::default();
 		nodes.insert(

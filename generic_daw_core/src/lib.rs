@@ -130,6 +130,7 @@ pub fn build_output_stream(
 	device_name: Option<&str>,
 	sample_rate: u32,
 	frames: u32,
+	metrics: impl Fn(&mut dyn FnMut()) + Send + 'static,
 ) -> (Stream, NodeId, RtState, Producer<Message>, Consumer<Batch>) {
 	let host = cpal::default_host();
 
@@ -163,11 +164,13 @@ pub fn build_output_stream(
 		.build_output_stream(
 			&config,
 			move |buf, _| {
-				for buf in buf.chunks_mut(buffer_size as usize) {
-					let frames = buf.len() / channels as usize;
-					ctx.process(&mut stereo[..2 * frames]);
-					from_stereo_to_other(buf, &stereo[..2 * frames], frames);
-				}
+				metrics(&mut || {
+					for buf in buf.chunks_mut(buffer_size as usize) {
+						let frames = buf.len() / channels as usize;
+						ctx.process(&mut stereo[..2 * frames]);
+						from_stereo_to_other(buf, &stereo[..2 * frames], frames);
+					}
+				});
 			},
 			|err| panic!("{err}"),
 			None,
