@@ -88,6 +88,8 @@ pub enum Message {
 	ClapHost(ClapHostMessage),
 	Batch(Batch),
 
+	SetArrangement(NoClone<Box<ArrangementWrapper>>),
+
 	ConnectRequest(NodeId, NodeId),
 	ConnectSucceeded((NodeId, NodeId)),
 	Disconnect(NodeId, NodeId),
@@ -222,6 +224,15 @@ impl ArrangementView {
 					.arrangement
 					.update(msg, Instant::now())
 					.map(Message::ClapHost);
+			}
+			Message::SetArrangement(NoClone(arrangement)) => {
+				self.arrangement = *arrangement;
+				self.selected_channel = None;
+				match &mut self.tab {
+					Tab::Arrangement { grabbed_clip } => *grabbed_clip = None,
+					Tab::Mixer => {}
+					Tab::PianoRoll { .. } => self.tab = Tab::Arrangement { grabbed_clip: None },
+				}
 			}
 			Message::ConnectRequest(from, to) => {
 				return Task::future(self.arrangement.request_connect(from, to))

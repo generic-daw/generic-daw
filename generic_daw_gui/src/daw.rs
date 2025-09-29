@@ -61,7 +61,6 @@ pub enum Message {
 	OpenFile(Arc<Path>),
 	CantLoadSample(Arc<str>, NoClone<oneshot::Sender<Feedback<Arc<Path>>>>),
 	FoundSampleResponse(usize, Feedback<Arc<Path>>),
-	SetArrangement(NoClone<Box<ArrangementWrapper>>),
 	OpenedFile(Option<Arc<Path>>),
 
 	ExportFile(Arc<Path>),
@@ -251,9 +250,6 @@ impl Daw {
 			}
 			Message::FoundSampleResponse(idx, response) => {
 				self.missing_samples.remove(idx).1.send(response).unwrap();
-			}
-			Message::SetArrangement(NoClone(arrangement)) => {
-				self.arrangement_view.arrangement = *arrangement;
 			}
 			Message::OpenedFile(path) => {
 				if let Some(path) = path {

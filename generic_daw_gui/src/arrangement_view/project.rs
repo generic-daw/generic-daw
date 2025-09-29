@@ -1,8 +1,8 @@
 use super::{ArrangementWrapper, Message, Node, crc};
 use crate::{
 	arrangement_view::{
-		audio_clip::AudioClip, clip::Clip, midi_clip::MidiClip, pattern::PatternPair,
-		sample::SamplePair,
+		Message as ArrangementMessage, audio_clip::AudioClip, clip::Clip, midi_clip::MidiClip,
+		pattern::PatternPair, sample::SamplePair,
 	},
 	clap_host::ClapHost,
 	config::Config,
@@ -427,17 +427,18 @@ impl ArrangementWrapper {
 		drop(channels);
 
 		Some(
-			Task::done(DawMessage::SetArrangement(NoClone(Box::new(arrangement)))).chain(
-				Task::batch([
-					futs.map(Message::Batch).map(DawMessage::Arrangement),
-					messages
-						.into_iter()
-						.map(Task::done)
-						.fold(Task::none(), Task::chain)
-						.map(DawMessage::Arrangement)
-						.chain(Task::done(DawMessage::OpenedFile(Some(path)))),
-				]),
-			),
+			Task::done(DawMessage::Arrangement(ArrangementMessage::SetArrangement(
+				NoClone(Box::new(arrangement)),
+			)))
+			.chain(Task::batch([
+				futs.map(Message::Batch).map(DawMessage::Arrangement),
+				messages
+					.into_iter()
+					.map(Task::done)
+					.fold(Task::none(), Task::chain)
+					.map(DawMessage::Arrangement)
+					.chain(Task::done(DawMessage::OpenedFile(Some(path)))),
+			])),
 		)
 	}
 }

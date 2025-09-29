@@ -91,9 +91,7 @@ impl Arrangement {
 					.drain(..)
 					.filter_map(|event| match event {
 						Update::Peak(node, peaks) => {
-							if let Some(node) = self.nodes.get_mut(*node) {
-								node.0.update(peaks, now);
-							}
+							self.node_mut(node).update(peaks, now);
 							None
 						}
 						Update::Param(id, param_id) => Some(ClapHostMessage::MainThread(
