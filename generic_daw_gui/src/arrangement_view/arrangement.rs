@@ -17,8 +17,8 @@ use crate::{
 use bit_set::BitSet;
 use generic_daw_core::{
 	self as core, Batch, Event, Export, Flags, Message, MidiKey, MidiNote, MusicalTime, NodeAction,
-	NodeId, NodeImpl as _, PatternAction, PatternId, RtState, SampleId, Stream, StreamTrait as _,
-	Update, Version, build_output_stream,
+	NodeId, NodeImpl as _, PanMode, PatternAction, PatternId, RtState, SampleId, Stream,
+	StreamTrait as _, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
 use generic_daw_utils::{HoleyVec, NoClone, NoDebug, ShiftMoveExt as _};
@@ -91,7 +91,9 @@ impl Arrangement {
 					.drain(..)
 					.filter_map(|event| match event {
 						Update::Peak(node, peaks) => {
-							self.node_mut(node).update(peaks, now);
+							if let Some((node, _)) = self.nodes.get_mut(*node) {
+								node.update(peaks, now);
+							}
 							None
 						}
 						Update::Param(id, param_id) => Some(ClapHostMessage::MainThread(
@@ -140,7 +142,7 @@ impl Arrangement {
 		self.node_action(id, NodeAction::ChannelVolumeChanged(volume));
 	}
 
-	pub fn channel_pan_changed(&mut self, id: NodeId, pan: f32) {
+	pub fn channel_pan_changed(&mut self, id: NodeId, pan: PanMode) {
 		self.node_mut(id).pan = pan;
 		self.node_action(id, NodeAction::ChannelPanChanged(pan));
 	}
@@ -158,11 +160,6 @@ impl Arrangement {
 	pub fn channel_toggle_polarity(&mut self, id: NodeId) {
 		self.node_mut(id).flags.toggle(Flags::POLARITY_INVERTED);
 		self.node_action(id, NodeAction::ChannelTogglePolarity);
-	}
-
-	pub fn channel_swap_channels(&mut self, id: NodeId) {
-		self.node_mut(id).flags.toggle(Flags::CHANNELS_SWAPPED);
-		self.node_action(id, NodeAction::ChannelSwapChannels);
 	}
 
 	pub fn plugin_load(&mut self, id: NodeId, processor: AudioProcessor<Event>) {

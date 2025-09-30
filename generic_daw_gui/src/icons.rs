@@ -2,7 +2,7 @@ use iced::{
 	Element, Font,
 	font::Family,
 	padding,
-	widget::{container, text, text::Shaping},
+	widget::{container, text},
 };
 
 pub static LUCIDE_BYTES: &[u8] = include_bytes!("../../Lucide.ttf");
@@ -29,7 +29,7 @@ impl<'a, Message: 'a> From<Icon> for Element<'a, Message> {
 		container(
 			text(value.character)
 				.font(LUCIDE_FONT)
-				.shaping(Shaping::Basic)
+				.shaping(text::Shaping::Basic)
 				.size(value.size)
 				.line_height(1.0),
 		)
@@ -73,4 +73,5 @@ icon!(arrow_left_right = 57930);
 icon!(arrow_up_down = 58241);
 icon!(circle_off = 58373);
 icon!(chart_no_axes_gantt = 58568);
+icon!(radius = 58673);
 icon!(file_music = 58722);

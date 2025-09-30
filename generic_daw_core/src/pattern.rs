@@ -1,4 +1,4 @@
-use crate::{MidiNote, daw_ctx::PatternAction};
+use crate::{MidiNote, PatternAction};
 use generic_daw_utils::unique_id;
 
 unique_id!(pattern_id);

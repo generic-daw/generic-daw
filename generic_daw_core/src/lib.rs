@@ -29,7 +29,7 @@ mod track;
 
 pub use audio_clip::AudioClip;
 pub use audio_graph::{NodeId, NodeImpl};
-pub use channel::{Channel, Flags};
+pub use channel::{Channel, Flags, PanMode};
 pub use clap_host;
 pub use clip::Clip;
 pub use cpal::{Stream, traits::StreamTrait};

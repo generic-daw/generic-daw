@@ -10,9 +10,7 @@ use iced::{
 	border::{self, Radius},
 	overlay::menu,
 	widget::{
-		Button, PickList, Scrollable, Text, button, container, pick_list, row,
-		scrollable::{self, Direction},
-		text::Shaping,
+		Button, PickList, Scrollable, Text, button, container, pick_list, row, scrollable, text,
 		text_input,
 	},
 };
@@ -95,14 +93,14 @@ where
 				code_point: const { char::from_u32(57453).unwrap() },
 				size: None,
 				line_height: 1.0.into(),
-				shaping: Shaping::Basic,
+				shaping: text::Shaping::Basic,
 			},
 			open: pick_list::Icon {
 				font: LUCIDE_FONT,
 				code_point: const { char::from_u32(57456).unwrap() },
 				size: None,
 				line_height: 1.0.into(),
-				shaping: Shaping::Basic,
+				shaping: text::Shaping::Basic,
 			},
 		})
 		.menu_style(menu_with_border(menu::default, border::width(0)))
@@ -111,12 +109,12 @@ where
 pub fn styled_scrollable<'a, Message>(
 	content: impl Into<Element<'a, Message>>,
 ) -> Scrollable<'a, Message> {
-	styled_scrollable_with_direction(content, Direction::default())
+	styled_scrollable_with_direction(content, scrollable::Direction::default())
 }
 
 pub fn styled_scrollable_with_direction<'a, Message>(
 	content: impl Into<Element<'a, Message>>,
-	direction: impl Into<Direction>,
+	direction: impl Into<scrollable::Direction>,
 ) -> Scrollable<'a, Message> {
 	Scrollable::with_direction(content, direction)
 		.spacing(5)

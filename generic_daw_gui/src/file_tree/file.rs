@@ -5,7 +5,7 @@ use crate::{
 };
 use iced::{
 	Element, Fill,
-	widget::{button, row, text, text::Wrapping},
+	widget::{button, row, text},
 };
 use smol::io::AsyncReadExt as _;
 use std::{io, path::Path, sync::Arc};
@@ -36,7 +36,7 @@ impl File {
 			button(
 				row![
 					if self.is_music { file_music() } else { file() },
-					text(&*self.name).wrapping(Wrapping::None)
+					text(&*self.name).wrapping(text::Wrapping::None)
 				]
 				.spacing(2),
 			)

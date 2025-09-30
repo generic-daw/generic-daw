@@ -38,8 +38,8 @@ impl Export {
 		let mut end;
 
 		while {
-			delay = self.audio_graph.delay().next_multiple_of(2);
-			end = len.to_samples(&self.state.rtstate).next_multiple_of(2) + delay;
+			delay = self.audio_graph.delay();
+			end = len.to_samples(&self.state.rtstate) + delay;
 			self.state.rtstate.sample < delay
 		} {
 			let diff = buffer_size.min(delay - self.state.rtstate.sample);
@@ -52,8 +52,8 @@ impl Export {
 		}
 
 		while {
-			delay = self.audio_graph.delay().next_multiple_of(2);
-			end = len.to_samples(&self.state.rtstate).next_multiple_of(2) + delay;
+			delay = self.audio_graph.delay();
+			end = len.to_samples(&self.state.rtstate) + delay;
 			self.state.rtstate.sample < end
 		} {
 			let diff = buffer_size.min(end - self.state.rtstate.sample);

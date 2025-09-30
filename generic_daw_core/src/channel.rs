@@ -1,13 +1,53 @@
-use crate::{
-	NodeAction,
-	daw_ctx::{State, Update},
-	event::Event,
-};
+use crate::{Event, NodeAction, Update, daw_ctx::State};
 use audio_graph::{NodeId, NodeImpl};
 use bitflags::bitflags;
 use clap_host::AudioProcessor;
 use generic_daw_utils::ShiftMoveExt as _;
 use std::f32::consts::{FRAC_PI_4, SQRT_2};
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PanMode {
+	Balance(f32),
+	Stereo(f32, f32),
+}
+
+impl PanMode {
+	pub fn pan(self, audio: &mut [f32], invert: bool) {
+		fn split(pan: f32, fac: f32) -> (f32, f32) {
+			let angle = (pan + 1.0) * FRAC_PI_4;
+			let (sin, cos) = angle.sin_cos();
+			(cos * fac, sin * fac)
+		}
+
+		let (audio, rest) = audio.as_chunks_mut();
+		debug_assert!(rest.is_empty());
+
+		match self {
+			Self::Balance(pan) => {
+				let (mut l, mut r) = split(pan, SQRT_2);
+				if invert {
+					(l, r) = (-l, -r);
+				}
+				for [ls, rs] in audio {
+					*ls *= l;
+					*rs *= r;
+				}
+			}
+			Self::Stereo(l, r) => {
+				let (mut ll, mut lr) = split(l, 1.0);
+				let (mut rl, mut rr) = split(r, 1.0);
+				if invert {
+					(ll, lr, rl, rr) = (-ll, -lr, -rl, -rr);
+				}
+				for [ls, rs] in audio {
+					let ols = *ls;
+					*ls = ls.mul_add(ll, *rs * rl);
+					*rs = rs.mul_add(rr, ols * lr);
+				}
+			}
+		}
+	}
+}
 
 #[derive(Debug)]
 struct Plugin {
@@ -32,7 +72,6 @@ bitflags! {
 		const ENABLED = 1 << 0;
 		const BYPASSED = 1 << 1;
 		const POLARITY_INVERTED = 1 << 2;
-		const CHANNELS_SWAPPED = 1 << 3;
 	}
 }
 
@@ -47,7 +86,7 @@ pub struct Channel {
 	id: NodeId,
 	plugins: Vec<Plugin>,
 	volume: f32,
-	pan: f32,
+	pan: PanMode,
 	flags: Flags,
 }
 
@@ -85,21 +124,11 @@ impl NodeImpl for Channel {
 			return;
 		}
 
-		if self.flags.contains(Flags::CHANNELS_SWAPPED) {
-			for [l, r] in audio.as_chunks_mut().0 {
-				(*l, *r) = (*r, *l);
-			}
-		}
+		self.pan
+			.pan(audio, self.flags.contains(Flags::POLARITY_INVERTED));
 
-		let [mut lpan, mut rpan] = pan(self.pan).map(|s| s * self.volume);
-
-		if self.flags.contains(Flags::POLARITY_INVERTED) {
-			lpan = -lpan;
-			rpan = -rpan;
-		}
-
-		let peaks = peaks(audio, lpan, rpan);
-		if peaks.iter().all(|&peak| peak >= f32::EPSILON) {
+		let peaks = max_peaks(audio);
+		if peaks.iter().any(|&peak| peak >= f32::EPSILON) {
 			state
 				.updates
 				.lock()
@@ -131,7 +160,6 @@ impl Channel {
 			NodeAction::ChannelToggleEnabled => self.flags.toggle(Flags::ENABLED),
 			NodeAction::ChannelToggleBypassed => self.flags.toggle(Flags::BYPASSED),
 			NodeAction::ChannelTogglePolarity => self.flags.toggle(Flags::POLARITY_INVERTED),
-			NodeAction::ChannelSwapChannels => self.flags.toggle(Flags::CHANNELS_SWAPPED),
 			NodeAction::ChannelVolumeChanged(volume) => self.volume = volume,
 			NodeAction::ChannelPanChanged(pan) => self.pan = pan,
 			NodeAction::PluginLoad(processor) => self.plugins.push(Plugin::new(*processor)),
@@ -156,26 +184,13 @@ impl Default for Channel {
 			plugins: Vec::new(),
 			id: NodeId::unique(),
 			volume: 1.0,
-			pan: 0.0,
+			pan: PanMode::Balance(0.0),
 			flags: Flags::ENABLED,
 		}
 	}
 }
 
-fn pan(pan: f32) -> [f32; 2] {
-	let angle = (pan + 1.0) * FRAC_PI_4;
-	let (sin, cos) = angle.sin_cos();
-	[cos * SQRT_2, sin * SQRT_2]
-}
-
-fn peaks(audio: &mut [f32], lpan: f32, rpan: f32) -> [f32; 2] {
-	fn pan_abs<const N: usize>(chunk: &mut [f32; N], lpan: f32, rpan: f32) -> [f32; N] {
-		for (i, s) in chunk.iter_mut().enumerate() {
-			*s *= if i % 2 == 0 { lpan } else { rpan }
-		}
-		chunk.map(f32::abs)
-	}
-
+fn max_peaks(audio: &mut [f32]) -> [f32; 2] {
 	fn array_max<const N: usize>(mut old: [f32; N], new: [f32; N]) -> [f32; N] {
 		for (old, new) in old.iter_mut().zip(new) {
 			if new > *old {
@@ -186,26 +201,16 @@ fn peaks(audio: &mut [f32], lpan: f32, rpan: f32) -> [f32; 2] {
 	}
 
 	let (chunks_16, rest) = audio.as_chunks_mut::<16>();
-	let (chunks_8, rest) = rest.as_chunks_mut::<8>();
-	let (chunks_4, rest) = rest.as_chunks_mut::<4>();
 	let (chunks_2, rest) = rest.as_chunks_mut::<2>();
 	debug_assert!(rest.is_empty());
 
 	chunks_16
 		.iter_mut()
-		.map(|chunk| pan_abs(chunk, lpan, rpan))
+		.map(|chunk| chunk.map(f32::abs))
 		.reduce(array_max)
 		.into_iter()
-		.flat_map(|chunk| <[[_; 8]; 2]>::try_from(chunk.as_chunks().0).unwrap())
-		.chain(chunks_8.iter_mut().map(|chunk| pan_abs(chunk, lpan, rpan)))
-		.reduce(array_max)
-		.into_iter()
-		.flat_map(|chunk| <[[_; 4]; 2]>::try_from(chunk.as_chunks().0).unwrap())
-		.chain(chunks_4.iter_mut().map(|chunk| pan_abs(chunk, lpan, rpan)))
-		.reduce(array_max)
-		.into_iter()
-		.flat_map(|chunk| <[[_; 2]; 2]>::try_from(chunk.as_chunks().0).unwrap())
-		.chain(chunks_2.iter_mut().map(|chunk| pan_abs(chunk, lpan, rpan)))
+		.flat_map(|chunk| <[[_; 2]; 8]>::try_from(chunk.as_chunks().0).unwrap())
+		.chain(chunks_2.iter_mut().map(|chunk| chunk.map(f32::abs)))
 		.reduce(array_max)
 		.unwrap_or([0.0; _])
 }

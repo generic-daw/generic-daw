@@ -12,7 +12,7 @@ use iced::{
 	Length::{Fill, Shrink},
 	Subscription, Task,
 	time::every,
-	widget::{column, container, row, rule, sensor, space, text, text::Wrapping},
+	widget::{column, container, row, rule, sensor, space, text},
 	window::{self, Id, Level, close_events, close_requests, resize_events},
 };
 use log::info;
@@ -292,7 +292,7 @@ impl ClapHost {
 							)
 							.padding([0, 10]),
 							text(&*param.name)
-								.wrapping(Wrapping::WordOrGlyph)
+								.wrapping(text::Wrapping::WordOrGlyph)
 								.align_x(Center)
 								.width(Fill)
 						]

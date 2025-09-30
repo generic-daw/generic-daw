@@ -9,7 +9,7 @@ use crate::{
 	daw::Message as DawMessage,
 };
 use generic_daw_core::{
-	ClipPosition, MidiKey, MidiNote, NotePosition,
+	ClipPosition, MidiKey, MidiNote, NotePosition, PanMode,
 	clap_host::{PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
@@ -98,7 +98,10 @@ impl ArrangementWrapper {
 							enabled: plugin.enabled,
 						}),
 					node.volume,
-					node.pan,
+					match node.pan {
+						PanMode::Balance(pan) => proto::PanModeBalance { pan }.into(),
+						PanMode::Stereo(l, r) => proto::PanModeStereo { l, r }.into(),
+					},
 				),
 			);
 		}
@@ -118,7 +121,10 @@ impl ArrangementWrapper {
 							enabled: plugin.enabled,
 						}),
 					channel.volume,
-					channel.pan,
+					match channel.pan {
+						PanMode::Balance(pan) => proto::PanModeBalance { pan }.into(),
+						PanMode::Stereo(l, r) => proto::PanModeStereo { l, r }.into(),
+					},
 				),
 			);
 		}
@@ -321,8 +327,19 @@ impl ArrangementWrapper {
 				messages.push(Message::ChannelVolumeChanged(node.id, channel.volume));
 			}
 
-			if channel.pan != 0.0 {
-				messages.push(Message::ChannelPanChanged(node.id, channel.pan));
+			if channel.pan.pan_mode? != proto::PanMode::Balance(proto::PanModeBalance { pan: 0.0 })
+			{
+				messages.push(Message::ChannelPanChanged(
+					node.id,
+					match channel.pan.pan_mode? {
+						proto::PanMode::Balance(proto::PanModeBalance { pan }) => {
+							PanMode::Balance(pan)
+						}
+						proto::PanMode::Stereo(proto::PanModeStereo { l, r }) => {
+							PanMode::Stereo(l, r)
+						}
+					},
+				));
 			}
 
 			for (i, plugin) in channel.plugins.iter().enumerate() {

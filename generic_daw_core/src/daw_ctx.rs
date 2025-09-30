@@ -1,6 +1,6 @@
 use crate::{
 	AudioGraph, AudioGraphNode, Channel, Clip, Event, Export, Master, MidiKey, MidiNote,
-	MusicalTime, Pattern, PatternId, Sample, SampleId,
+	MusicalTime, PanMode, Pattern, PatternId, Sample, SampleId,
 };
 use audio_graph::{NodeId, NodeImpl as _};
 use clap_host::{AudioProcessor, ClapId, PluginId};
@@ -68,7 +68,7 @@ pub enum NodeAction {
 	ChannelTogglePolarity,
 	ChannelSwapChannels,
 	ChannelVolumeChanged(f32),
-	ChannelPanChanged(f32),
+	ChannelPanChanged(PanMode),
 
 	PluginLoad(Box<AudioProcessor<Event>>),
 	PluginRemove(usize),

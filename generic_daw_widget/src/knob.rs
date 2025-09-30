@@ -308,7 +308,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 						shell.capture_event();
 					}
 
-					if cursor.is_over(layout.bounds()) != state.hovering {
+					if (cursor.is_over(layout.bounds())
+						&& cursor.position().unwrap().distance(
+							layout.bounds().center() + Vector::new(0.0, self.border_radius()),
+						) <= self.radius) != state.hovering
+					{
 						state.hovering ^= true;
 						state.cache.clear();
 						shell.request_redraw();

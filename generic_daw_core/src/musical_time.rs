@@ -90,6 +90,8 @@ impl MusicalTime {
 
 	#[must_use]
 	pub const fn from_samples(samples: usize, rtstate: &RtState) -> Self {
+		debug_assert!(samples.is_multiple_of(2));
+
 		let samples = samples as u64;
 		let bpm = rtstate.bpm as u64;
 		let sample_rate = rtstate.sample_rate as u64;
@@ -118,7 +120,7 @@ impl MusicalTime {
 
 		let samples = time * (sample_rate * 15) / (bpm * 32);
 
-		samples as usize
+		samples.next_multiple_of(2) as usize
 	}
 
 	#[must_use]

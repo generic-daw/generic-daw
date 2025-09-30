@@ -1,4 +1,4 @@
-use crate::{MusicalTime, musical_time::note_position::NotePosition};
+use crate::{MusicalTime, NotePosition};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ClipPosition {

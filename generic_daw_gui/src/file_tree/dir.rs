@@ -8,7 +8,7 @@ use iced::{
 	Element, Fill, Task,
 	futures::{StreamExt as _, TryStreamExt as _},
 	padding,
-	widget::{button, column, container, row, rule, text, text::Wrapping},
+	widget::{button, column, container, row, rule, text},
 };
 use std::{path::Path, sync::Arc};
 
@@ -94,7 +94,7 @@ impl Dir {
 					} else {
 						chevron_right()
 					},
-					text(&*self.name).wrapping(Wrapping::None)
+					text(&*self.name).wrapping(text::Wrapping::None)
 				]
 				.spacing(2)
 			)

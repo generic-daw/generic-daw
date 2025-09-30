@@ -1,4 +1,4 @@
-use crate::{Channel, Clip, NodeAction, daw_ctx::State, event::Event};
+use crate::{Channel, Clip, Event, NodeAction, daw_ctx::State};
 use audio_graph::{NodeId, NodeImpl};
 
 #[derive(Debug, Default)]

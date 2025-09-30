@@ -77,8 +77,52 @@ pub struct Channel {
 	pub plugins: Vec<Plugin>,
 	#[prost(float, default = 1.0)]
 	pub volume: f32,
-	#[prost(float)]
+	#[prost(message, required)]
+	pub pan: OptionPanMode,
+}
+
+#[derive(Clone, Copy, Message)]
+pub struct OptionPanMode {
+	#[prost(oneof = "PanMode", tags = "1, 2")]
+	pub pan_mode: Option<PanMode>,
+}
+
+#[derive(Clone, Copy, Oneof, PartialEq)]
+pub enum PanMode {
+	#[prost(message, tag = "1")]
+	Balance(PanModeBalance),
+	#[prost(message, tag = "2")]
+	Stereo(PanModeStereo),
+}
+
+#[derive(Clone, Copy, Message, PartialEq)]
+pub struct PanModeBalance {
+	#[prost(float, default = 0.0)]
 	pub pan: f32,
+}
+
+#[derive(Clone, Copy, Message, PartialEq)]
+pub struct PanModeStereo {
+	#[prost(float, default = -1.0)]
+	pub l: f32,
+	#[prost(float, default = 1.0)]
+	pub r: f32,
+}
+
+impl From<PanModeBalance> for OptionPanMode {
+	fn from(value: PanModeBalance) -> Self {
+		Self {
+			pan_mode: Some(PanMode::Balance(value)),
+		}
+	}
+}
+
+impl From<PanModeStereo> for OptionPanMode {
+	fn from(value: PanModeStereo) -> Self {
+		Self {
+			pan_mode: Some(PanMode::Stereo(value)),
+		}
+	}
 }
 
 #[derive(Clone, Copy, Message)]

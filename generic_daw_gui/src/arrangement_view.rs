@@ -8,7 +8,7 @@ use crate::{
 		icon_button, styled_scrollable, styled_scrollable_with_direction, text_icon_button,
 	},
 	config::Config,
-	icons::{arrow_left_right, arrow_up_down, chevron_up, circle_off, grip_vertical, plus, x},
+	icons::{arrow_up_down, chevron_up, circle_off, grip_vertical, plus, x},
 	stylefns::{bordered_box_with_radius, button_with_radius, menu_with_border, slider_secondary},
 	widget::{
 		LINE_HEIGHT, TEXT_HEIGHT,
@@ -25,7 +25,7 @@ use crate::{
 use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
-	Batch, Flags, MidiNote, MusicalTime, NodeId, NotePosition, SampleId,
+	Batch, Flags, MidiNote, MusicalTime, NodeId, NotePosition, PanMode, SampleId,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
 use generic_daw_utils::{NoClone, NoDebug, Vec2};
@@ -33,17 +33,16 @@ use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
 use humantime::format_rfc3339;
 use iced::{
 	Alignment::Center,
-	Element, Fill, Function as _, Size, Subscription, Task, border,
+	Element, Fill, Function as _,
+	Length::Shrink,
+	Size, Subscription, Task, border,
 	futures::SinkExt as _,
 	mouse::Interaction,
 	overlay::menu,
 	padding, stream,
 	widget::{
-		button, column, combo_box, container, mouse_area, row, rule,
-		scrollable::{Direction, Scrollbar},
-		slider, space, text,
-		text::{IntoFragment, Wrapping},
-		vertical_slider,
+		button, column, combo_box, container, mouse_area, row, rule, scrollable, slider, space,
+		text, vertical_slider,
 	},
 };
 use iced_persistent::persistent;
@@ -52,7 +51,6 @@ use node::Node;
 use rtrb::Consumer;
 use smol::{Timer, unblock};
 use std::{
-	cmp::Ordering,
 	collections::BTreeMap,
 	fmt::Write as _,
 	io::Read,
@@ -98,11 +96,10 @@ pub enum Message {
 	ChannelRemove(NodeId),
 	ChannelSelect(NodeId),
 	ChannelVolumeChanged(NodeId, f32),
-	ChannelPanChanged(NodeId, f32),
+	ChannelPanChanged(NodeId, PanMode),
 	ChannelToggleEnabled(NodeId),
 	ChannelToggleBypassed(NodeId),
 	ChannelInvertPolarity(NodeId),
-	ChannelSwapChannels(NodeId),
 
 	PluginLoad(NodeId, PluginDescriptor, bool),
 	PluginSetState(NodeId, usize, NoDebug<Box<[u8]>>),
@@ -269,7 +266,6 @@ impl ArrangementView {
 			Message::ChannelPanChanged(id, pan) => self.arrangement.channel_pan_changed(id, pan),
 			Message::ChannelToggleEnabled(id) => self.arrangement.channel_toggle_enabled(id),
 			Message::ChannelToggleBypassed(id) => self.arrangement.channel_toggle_bypassed(id),
-			Message::ChannelSwapChannels(id) => self.arrangement.channel_swap_channels(id),
 			Message::ChannelInvertPolarity(id) => self.arrangement.channel_toggle_polarity(id),
 			Message::PluginLoad(node, descriptor, show) => {
 				static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
@@ -763,16 +759,9 @@ impl ArrangementView {
 									})
 									.enabled(node.flags.contains(Flags::ENABLED))
 									.tooltip(format_decibels(node.volume)),
-									Knob::new(
-										-1.0..=1.0,
-										node.pan,
-										Message::ChannelPanChanged.with(id)
-									)
-									.center(0.0)
-									.reset(0.0)
-									.enabled(node.flags.contains(Flags::ENABLED))
-									.tooltip(format_pan(node.pan)),
+									node.pan_knob(20.0),
 								]
+								.align_x(Center)
 								.spacing(5)
 								.wrap(),
 								column![
@@ -934,7 +923,7 @@ impl ArrangementView {
 				)
 				.align_y(Center)
 				.spacing(5),
-				Direction::Horizontal(Scrollbar::default()),
+				scrollable::Direction::Horizontal(scrollable::Scrollbar::default()),
 			)
 			.width(Fill),
 			&self.tree,
@@ -968,7 +957,7 @@ impl ArrangementView {
 										button(
 											container(
 												text(&*plugin.descriptor.name)
-													.wrapping(Wrapping::None)
+													.wrapping(text::Wrapping::None)
 											)
 											.padding(7)
 											.clip(true)
@@ -1037,7 +1026,11 @@ impl ArrangementView {
 		}
 	}
 
-	fn channel<'a>(&'a self, node: &'a Node, name: impl IntoFragment<'a>) -> Element<'a, Message> {
+	fn channel<'a>(
+		&'a self,
+		node: &'a Node,
+		name: impl text::IntoFragment<'a>,
+	) -> Element<'a, Message> {
 		let button_style = |cond| {
 			if !node.flags.contains(Flags::ENABLED) {
 				button::secondary
@@ -1051,16 +1044,7 @@ impl ArrangementView {
 		button(
 			column![
 				text(name).size(14).line_height(1.0),
-				Knob::new(
-					-1.0..=1.0,
-					node.pan,
-					Message::ChannelPanChanged.with(node.id)
-				)
-				.center(0.0)
-				.reset(0.0)
-				.radius(23.0)
-				.enabled(node.flags.contains(Flags::ENABLED))
-				.tooltip(format_pan(node.pan)),
+				node.pan_knob(23.0),
 				row![
 					text_icon_button("M", button_style(false))
 						.on_press(Message::ChannelToggleEnabled(node.id)),
@@ -1091,15 +1075,11 @@ impl ArrangementView {
 					)
 					.on_press(Message::ChannelToggleBypassed(node.id)),
 					icon_button(
-						arrow_left_right(),
-						button_style(node.flags.contains(Flags::CHANNELS_SWAPPED))
-					)
-					.on_press(Message::ChannelSwapChannels(node.id)),
-					icon_button(
 						arrow_up_down(),
 						button_style(node.flags.contains(Flags::POLARITY_INVERTED))
 					)
 					.on_press(Message::ChannelInvertPolarity(node.id)),
+					node.pan_switcher()
 				]
 				.spacing(5),
 				container(text(format_decibels(node.volume)).line_height(1.0))
@@ -1154,6 +1134,7 @@ impl ArrangementView {
 					},
 				)
 			]
+			.width(Shrink)
 			.spacing(5)
 			.align_x(Center),
 		)
@@ -1209,21 +1190,13 @@ impl ArrangementView {
 	}
 }
 
-fn format_pan(pan: f32) -> String {
-	let pan = (pan * 100.0) as i8;
-	match pan.cmp(&0) {
-		Ordering::Greater => format!("{}% right", pan.abs()),
-		Ordering::Equal => "center".to_owned(),
-		Ordering::Less => format!("{}% left", pan.abs()),
-	}
-}
-
 fn format_decibels(amp: f32) -> String {
 	let mut f = String::with_capacity(4);
 
 	let db = 20.0 * amp.log10();
+	let dba = db.abs();
 
-	if db.abs() >= 0.05 {
+	if dba >= 0.05 {
 		if db.is_sign_positive() {
 			write!(f, "+").unwrap();
 		} else {
@@ -1231,7 +1204,7 @@ fn format_decibels(amp: f32) -> String {
 		}
 	}
 
-	write!(f, "{db:.*}", (db.abs() < 9.95).into()).unwrap();
+	write!(f, "{dba:.*}", (dba < 9.95).into()).unwrap();
 
 	f
 }
