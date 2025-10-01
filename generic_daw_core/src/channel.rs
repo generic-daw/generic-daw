@@ -193,8 +193,8 @@ impl Default for Channel {
 	}
 }
 
-fn max_peaks(audio: &mut [f32]) -> [f32; 2] {
-	fn array_max<const N: usize>(mut old: [f32; N], new: [f32; N]) -> [f32; N] {
+fn max_peaks(audio: &[f32]) -> [f32; 2] {
+	fn max_peaks<const N: usize>(mut old: [f32; N], new: [f32; N]) -> [f32; N] {
 		for (old, new) in old.iter_mut().zip(new) {
 			if new > *old {
 				*old = new;
@@ -203,17 +203,17 @@ fn max_peaks(audio: &mut [f32]) -> [f32; 2] {
 		old
 	}
 
-	let (chunks_16, rest) = audio.as_chunks_mut::<16>();
-	let (chunks_2, rest) = rest.as_chunks_mut::<2>();
+	let (chunks_16, rest) = audio.as_chunks::<16>();
+	let (chunks_2, rest) = rest.as_chunks::<2>();
 	debug_assert!(rest.is_empty());
 
 	chunks_16
-		.iter_mut()
+		.iter()
 		.map(|chunk| chunk.map(f32::abs))
-		.reduce(array_max)
+		.reduce(max_peaks)
 		.into_iter()
 		.flat_map(|chunk| <[[_; 2]; 8]>::try_from(chunk.as_chunks().0).unwrap())
-		.chain(chunks_2.iter_mut().map(|chunk| chunk.map(f32::abs)))
-		.reduce(array_max)
+		.chain(chunks_2.iter().map(|chunk| chunk.map(f32::abs)))
+		.reduce(max_peaks)
 		.unwrap_or([0.0; _])
 }
