@@ -12,7 +12,7 @@ pub enum PanMode {
 }
 
 impl PanMode {
-	pub fn pan(self, audio: &mut [f32], invert: bool) {
+	pub fn pan(self, audio: &mut [f32], volume: f32, invert: bool) {
 		fn split(pan: f32, fac: f32) -> (f32, f32) {
 			let angle = (pan + 1.0) * FRAC_PI_4;
 			let (sin, cos) = angle.sin_cos();
@@ -24,7 +24,7 @@ impl PanMode {
 
 		match self {
 			Self::Balance(pan) => {
-				let (mut l, mut r) = split(pan, SQRT_2);
+				let (mut l, mut r) = split(pan, volume * SQRT_2);
 				if invert {
 					(l, r) = (-l, -r);
 				}
@@ -34,8 +34,8 @@ impl PanMode {
 				}
 			}
 			Self::Stereo(l, r) => {
-				let (mut ll, mut lr) = split(l, 1.0);
-				let (mut rl, mut rr) = split(r, 1.0);
+				let (mut ll, mut lr) = split(l, volume);
+				let (mut rl, mut rr) = split(r, volume);
 				if invert {
 					(ll, lr, rl, rr) = (-ll, -lr, -rl, -rr);
 				}
@@ -124,8 +124,11 @@ impl NodeImpl for Channel {
 			return;
 		}
 
-		self.pan
-			.pan(audio, self.flags.contains(Flags::POLARITY_INVERTED));
+		self.pan.pan(
+			audio,
+			self.volume,
+			self.flags.contains(Flags::POLARITY_INVERTED),
+		);
 
 		let peaks = max_peaks(audio);
 		if peaks.iter().any(|&peak| peak >= f32::EPSILON) {
