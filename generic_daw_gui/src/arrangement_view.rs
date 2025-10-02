@@ -588,24 +588,37 @@ impl ArrangementView {
 				self.arrangement.clip_move_to(*track, *clip, pos);
 			}
 			ArrangementAction::SplitAt(track, lhs, mut pos) => {
-				let start = self.arrangement.tracks()[track].clips[lhs]
-					.position()
-					.start() + MusicalTime::TICK;
-				let end = self.arrangement.tracks()[track].clips[lhs].position().end()
-					- MusicalTime::TICK;
-				if start > end {
-					return;
-				}
-				let rhs = self
-					.arrangement
-					.add_clip(track, self.arrangement.tracks()[track].clips[lhs]);
-				pos = pos.clamp(start, end);
-				self.arrangement.clip_trim_end_to(track, lhs, pos);
-				self.arrangement.clip_trim_start_to(track, rhs, pos);
+				let clip = self.arrangement.tracks()[track].clips[lhs];
+				let (lhs, rhs) = if clip.position().end() == pos
+					&& let Some(rhs) = self.arrangement.tracks()[track]
+						.clips
+						.iter()
+						.position(|clip| clip.position().start() == pos)
+				{
+					(lhs, rhs)
+				} else if clip.position().start() == pos
+					&& let Some(rhs) = self.arrangement.tracks()[track]
+						.clips
+						.iter()
+						.position(|clip| clip.position().end() == pos)
+				{
+					(rhs, lhs)
+				} else {
+					let start = clip.position().start() + MusicalTime::TICK;
+					let end = clip.position().end() - MusicalTime::TICK;
+					if start > end {
+						return;
+					}
+					let rhs = self.arrangement.add_clip(track, clip);
+					pos = pos.clamp(start, end);
+					self.arrangement.clip_trim_end_to(track, lhs, pos);
+					self.arrangement.clip_trim_start_to(track, rhs, pos);
+					(lhs, rhs)
+				};
 				*grabbed_clip = Some((track, lhs, Some(rhs)));
 			}
 			ArrangementAction::DragSplit(mut pos) => {
-				let (track, lhs, Some(rhs)) = grabbed_clip.unwrap() else {
+				let Some((track, lhs, Some(rhs))) = *grabbed_clip else {
 					return;
 				};
 				let start = self.arrangement.tracks()[track].clips[lhs]
@@ -673,19 +686,31 @@ impl ArrangementView {
 				self.arrangement.note_move_to(clip.pattern, note, pos);
 			}
 			PianoRollAction::SplitAt(lhs, mut pos) => {
-				let start = notes[lhs].position.start() + MusicalTime::TICK;
-				let end = notes[lhs].position.end() - MusicalTime::TICK;
-				if start > end {
-					return;
-				}
-				let rhs = self.arrangement.add_note(clip.pattern, notes[lhs]);
-				pos = pos.clamp(start, end);
-				self.arrangement.note_trim_end_to(clip.pattern, lhs, pos);
-				self.arrangement.note_trim_start_to(clip.pattern, rhs, pos);
+				let note = notes[lhs];
+				let (lhs, rhs) = if note.position.end() == pos
+					&& let Some(rhs) = notes.iter().position(|note| note.position.start() == pos)
+				{
+					(lhs, rhs)
+				} else if clip.position.start() == pos
+					&& let Some(rhs) = notes.iter().position(|note| note.position.end() == pos)
+				{
+					(rhs, lhs)
+				} else {
+					let start = note.position.start() + MusicalTime::TICK;
+					let end = note.position.end() - MusicalTime::TICK;
+					if start > end {
+						return;
+					}
+					let rhs = self.arrangement.add_note(clip.pattern, note);
+					pos = pos.clamp(start, end);
+					self.arrangement.note_trim_end_to(clip.pattern, lhs, pos);
+					self.arrangement.note_trim_start_to(clip.pattern, rhs, pos);
+					(lhs, rhs)
+				};
 				*grabbed_note = Some((lhs, Some(rhs)));
 			}
 			PianoRollAction::DragSplit(mut pos) => {
-				let (lhs, Some(rhs)) = grabbed_note.unwrap() else {
+				let Some((lhs, Some(rhs))) = *grabbed_note else {
 					return;
 				};
 				let start = notes[lhs].position.start() + MusicalTime::TICK;

@@ -28,7 +28,7 @@ impl NotePosition {
 	}
 
 	pub fn trim_start_to(&mut self, new_start: MusicalTime) {
-		self.start = new_start.clamp(self.start, self.end - MusicalTime::TICK);
+		self.start = new_start.min(self.end - MusicalTime::TICK);
 	}
 
 	pub fn trim_end_to(&mut self, new_end: MusicalTime) {
