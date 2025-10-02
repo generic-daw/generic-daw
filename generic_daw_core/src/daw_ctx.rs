@@ -1,6 +1,6 @@
 use crate::{
 	AudioGraph, AudioGraphNode, Channel, Clip, Event, Export, Master, MidiKey, MidiNote,
-	MusicalTime, PanMode, Pattern, PatternId, Sample, SampleId,
+	MusicalTime, NotePosition, PanMode, Pattern, PatternId, Sample, SampleId,
 };
 use audio_graph::{NodeId, NodeImpl as _};
 use clap_host::{AudioProcessor, ClapId, PluginId};
@@ -35,6 +35,7 @@ pub enum Message {
 	TogglePlayback,
 	ToggleMetronome,
 	Sample(Version, usize),
+	LoopMarker(Option<NotePosition>),
 	Reset,
 
 	ReturnUpdateBuffer(Vec<Update>),
@@ -102,6 +103,7 @@ pub struct RtState {
 	pub playing: bool,
 	pub metronome: bool,
 	pub sample: usize,
+	pub loop_marker: Option<NotePosition>,
 }
 
 impl RtState {
@@ -117,6 +119,7 @@ impl RtState {
 			playing: false,
 			metronome: false,
 			sample: 0,
+			loop_marker: None,
 		}
 	}
 }
@@ -162,7 +165,7 @@ impl DawCtx {
 		(audio_ctx, id, r_sender, r_receiver)
 	}
 
-	pub fn process(&mut self, buf: &mut [f32]) {
+	pub fn process(&mut self, mut buf: &mut [f32]) {
 		while let Ok(msg) = self.consumer.pop() {
 			trace!("{msg:?}");
 
@@ -195,6 +198,7 @@ impl DawCtx {
 					self.state.rtstate.version = version;
 					self.state.rtstate.sample = sample;
 				}
+				Message::LoopMarker(loop_marker) => self.state.rtstate.loop_marker = loop_marker,
 				Message::Reset => self.audio_graph.for_each_mut_node(AudioGraphNode::reset),
 				Message::ReturnUpdateBuffer(update) => {
 					debug_assert!(update.is_empty());
@@ -229,8 +233,28 @@ impl DawCtx {
 			*updates = self.update_buffers.pop().unwrap_or_default();
 		}
 
-		self.audio_graph.process(&self.state, buf);
+		if self.state.rtstate.playing
+			&& let Some(loop_marker) = self.state.rtstate.loop_marker
+		{
+			let loop_start = loop_marker.start().to_samples(&self.state.rtstate);
+			let loop_end = loop_marker.end().to_samples(&self.state.rtstate);
 
+			if (loop_start..=loop_end).contains(&self.state.rtstate.sample) {
+				while loop_end <= self.state.rtstate.sample + buf.len() {
+					let diff = loop_end - self.state.rtstate.sample;
+
+					self.audio_graph.process(&self.state, &mut buf[..diff]);
+					for s in &mut buf[..diff] {
+						*s = s.clamp(-1.0, 1.0);
+					}
+
+					self.state.rtstate.sample = loop_start;
+					buf = &mut buf[diff..];
+				}
+			}
+		}
+
+		self.audio_graph.process(&self.state, buf);
 		for s in &mut *buf {
 			*s = s.clamp(-1.0, 1.0);
 		}

@@ -9,6 +9,7 @@ pub struct ClipPosition {
 impl ClipPosition {
 	#[must_use]
 	pub fn new(position: NotePosition, offset: MusicalTime) -> Self {
+		debug_assert!(offset < position.len());
 		Self { position, offset }
 	}
 

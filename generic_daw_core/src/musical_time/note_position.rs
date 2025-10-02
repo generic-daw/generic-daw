@@ -1,14 +1,21 @@
 use crate::MusicalTime;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct NotePosition {
 	start: MusicalTime,
 	end: MusicalTime,
 }
 
+impl Default for NotePosition {
+	fn default() -> Self {
+		Self::new(MusicalTime::ZERO, MusicalTime::TICK)
+	}
+}
+
 impl NotePosition {
 	#[must_use]
 	pub fn new(start: MusicalTime, end: MusicalTime) -> Self {
+		debug_assert!(start < end);
 		Self { start, end }
 	}
 
