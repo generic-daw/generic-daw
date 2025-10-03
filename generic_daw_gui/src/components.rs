@@ -6,8 +6,7 @@ use generic_daw_widget::drag_handle::DragHandle;
 use iced::{
 	Element, Font,
 	Length::Fill,
-	Shrink, Theme,
-	border::{self, Radius},
+	Shrink, Theme, border,
 	overlay::menu,
 	widget::{
 		Button, PickList, Scrollable, Text, button, container, pick_list, row, scrollable, text,
@@ -120,10 +119,10 @@ pub fn styled_scrollable_with_direction<'a, Message>(
 		.spacing(5)
 		.style(|t, s| {
 			let mut style = scrollable::default(t, s);
-			style.vertical_rail.border.radius = Radius::default();
-			style.vertical_rail.scroller.border.radius = Radius::default();
-			style.horizontal_rail.border.radius = Radius::default();
-			style.horizontal_rail.scroller.border.radius = Radius::default();
+			style.vertical_rail.border.radius = 0.into();
+			style.vertical_rail.scroller.border.radius = 0.into();
+			style.horizontal_rail.border.radius = 0.into();
+			style.horizontal_rail.scroller.border.radius = 0.into();
 			style
 		})
 }

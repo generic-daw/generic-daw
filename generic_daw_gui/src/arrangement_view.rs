@@ -32,10 +32,7 @@ use generic_daw_utils::{NoClone, NoDebug, Vec2};
 use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
 use humantime::format_rfc3339;
 use iced::{
-	Alignment::Center,
-	Element, Fill, Function as _,
-	Length::Shrink,
-	Size, Subscription, Task, border,
+	Center, Element, Fill, Function as _, Shrink, Size, Subscription, Task, border,
 	futures::SinkExt as _,
 	mouse::Interaction,
 	overlay::menu,

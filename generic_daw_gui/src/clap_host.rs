@@ -7,13 +7,12 @@ use generic_daw_core::{
 use generic_daw_utils::{HoleyVec, NoClone, NoDebug};
 use generic_daw_widget::knob::Knob;
 use iced::{
-	Alignment::Center,
-	Element, Font, Function as _,
+	Center, Element, Font, Function as _,
 	Length::{Fill, Shrink},
 	Subscription, Task,
 	time::every,
 	widget::{column, container, row, rule, sensor, space, text},
-	window::{self, Id, Level, close_events, close_requests, resize_events},
+	window,
 };
 use log::info;
 use smol::{Timer, unblock};
@@ -27,9 +26,9 @@ pub enum Message {
 	Loaded(NoClone<(Box<Fragile<Plugin<Event>>>, Receiver<MainThreadMessage>)>),
 	SetState(PluginId, NoDebug<Box<[u8]>>),
 	GuiEmbedded(NoClone<Box<Fragile<Plugin<Event>>>>),
-	WindowResized(Id, Size),
-	WindowCloseRequested(Id),
-	WindowClosed(Id),
+	WindowResized(window::Id, Size),
+	WindowCloseRequested(window::Id),
+	WindowClosed(window::Id),
 	SetPluginSize(PluginId, Size),
 }
 
@@ -37,7 +36,7 @@ pub enum Message {
 pub struct ClapHost {
 	plugins: HoleyVec<Plugin<Event>>,
 	timers: HoleyVec<HoleyVec<Duration>>,
-	windows: HoleyVec<Id>,
+	windows: HoleyVec<window::Id>,
 }
 
 impl ClapHost {
@@ -170,7 +169,7 @@ impl ClapHost {
 						size: (400.0, 600.0).into(),
 						resizable: false,
 						exit_on_close_request: false,
-						level: Level::AlwaysOnTop,
+						level: window::Level::AlwaysOnTop,
 						..window::Settings::default()
 					});
 					self.windows.insert(*id, window);
@@ -194,7 +193,7 @@ impl ClapHost {
 						),
 						resizable: plugin.can_resize(),
 						exit_on_close_request: false,
-						level: Level::AlwaysOnTop,
+						level: window::Level::AlwaysOnTop,
 						..window::Settings::default()
 					});
 					self.windows.insert(*id, window);
@@ -253,7 +252,7 @@ impl ClapHost {
 		Task::none()
 	}
 
-	pub fn view(&self, window: Id) -> Option<Element<'_, Message>> {
+	pub fn view(&self, window: window::Id) -> Option<Element<'_, Message>> {
 		let Some(plugin) = &self.plugins.get(self.windows.key_of(&window)?) else {
 			return Some(space().into());
 		};
@@ -320,14 +319,14 @@ impl ClapHost {
 		)
 	}
 
-	pub fn title(&self, window: Id) -> Option<String> {
+	pub fn title(&self, window: window::Id) -> Option<String> {
 		self.windows
 			.key_of(&window)
 			.and_then(|id| self.plugins.get(id))
 			.map(|plugin| plugin.descriptor().name.deref().to_owned())
 	}
 
-	pub fn scale_factor(&self, window: Id) -> Option<f32> {
+	pub fn scale_factor(&self, window: window::Id) -> Option<f32> {
 		self.windows
 			.key_of(&window)
 			.and_then(|id| self.plugins.get(id))
@@ -350,7 +349,7 @@ impl ClapHost {
 						})
 				})
 				.chain([
-					resize_events().map(|(id, size)| {
+					window::resize_events().map(|(id, size)| {
 						Message::WindowResized(
 							id,
 							Size::Logical {
@@ -359,8 +358,8 @@ impl ClapHost {
 							},
 						)
 					}),
-					close_requests().map(Message::WindowCloseRequested),
-					close_events().map(Message::WindowClosed),
+					window::close_requests().map(Message::WindowCloseRequested),
+					window::close_events().map(Message::WindowClosed),
 				]),
 		)
 	}

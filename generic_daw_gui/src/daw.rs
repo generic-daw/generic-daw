@@ -20,19 +20,15 @@ use generic_daw_core::{
 use generic_daw_utils::{NoClone, NoDebug};
 use generic_daw_widget::dot::Dot;
 use iced::{
-	Alignment::Center,
-	Color, Element, Event, Font, Function as _,
-	Length::Shrink,
-	Subscription, Task, Theme, border,
-	event::{self, Status},
-	keyboard,
+	Center, Color, Element, Event, Font, Function as _, Shrink, Subscription, Task, Theme, border,
+	event, keyboard,
 	mouse::Interaction,
 	time::every,
 	widget::{
 		button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row, space,
 		stack, text,
 	},
-	window::{self, Id},
+	window,
 };
 use iced_split::{Strategy, vertical_split};
 use log::trace;
@@ -341,7 +337,7 @@ impl Daw {
 		self.config = config;
 	}
 
-	pub fn view(&self, window: Id) -> Element<'_, Message> {
+	pub fn view(&self, window: window::Id) -> Element<'_, Message> {
 		if let Some(gui) = self.arrangement_view.clap_host.view(window) {
 			return gui
 				.map(ArrangementMessage::ClapHost)
@@ -546,18 +542,18 @@ impl Daw {
 		.into()
 	}
 
-	pub fn title(&self, window: Id) -> String {
+	pub fn title(&self, window: window::Id) -> String {
 		self.arrangement_view
 			.clap_host
 			.title(window)
 			.unwrap_or_else(|| "Generic DAW".to_owned())
 	}
 
-	pub fn theme(&self, _window: Id) -> Theme {
+	pub fn theme(&self, _window: window::Id) -> Theme {
 		self.config.theme.into()
 	}
 
-	pub fn scale_factor(&self, window: Id) -> f32 {
+	pub fn scale_factor(&self, window: window::Id) -> f32 {
 		self.arrangement_view
 			.clap_host
 			.scale_factor(window)
@@ -590,7 +586,7 @@ impl Daw {
 
 fn keybinds() -> Subscription<Message> {
 	event::listen_with(|e, s, _| match s {
-		Status::Ignored => match e {
+		event::Status::Ignored => match e {
 			Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
 				match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
 					(false, false, false) => match key {
@@ -621,6 +617,6 @@ fn keybinds() -> Subscription<Message> {
 			}
 			_ => None,
 		},
-		Status::Captured => None,
+		event::Status::Captured => None,
 	})
 }

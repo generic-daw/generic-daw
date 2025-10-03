@@ -1,10 +1,13 @@
 use crate::{lod::LOD_LEVELS, widget::LINE_HEIGHT};
 use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::Vec2;
-use iced::{Point, Rectangle, Theme, Transformation, advanced::graphics::color, debug};
-use iced_wgpu::graphics::{
-	Mesh,
-	mesh::{Indexed, SolidVertex2D},
+use iced::{
+	Point, Rectangle, Theme, Transformation,
+	advanced::graphics::{
+		Mesh, color,
+		mesh::{Indexed, SolidVertex2D},
+	},
+	debug,
 };
 
 pub fn mesh(

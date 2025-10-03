@@ -1,6 +1,5 @@
 use iced::{
-	Border, Theme,
-	border::{self, Radius},
+	Border, Theme, border,
 	overlay::menu,
 	widget::{button, container, pick_list, progress_bar, slider},
 };
@@ -23,7 +22,7 @@ pub fn slider_secondary(theme: &Theme, status: slider::Status) -> slider::Style 
 
 pub fn button_with_radius(
 	f: impl Fn(&Theme, button::Status) -> button::Style,
-	r: impl Into<Radius>,
+	r: impl Into<border::Radius>,
 ) -> impl Fn(&Theme, button::Status) -> button::Style {
 	let r = r.into();
 	move |t, s| {
@@ -35,7 +34,7 @@ pub fn button_with_radius(
 
 pub fn pick_list_with_radius(
 	f: impl Fn(&Theme, pick_list::Status) -> pick_list::Style,
-	r: impl Into<Radius>,
+	r: impl Into<border::Radius>,
 ) -> impl Fn(&Theme, pick_list::Status) -> pick_list::Style {
 	let r = r.into();
 	move |t, s| {
@@ -48,7 +47,7 @@ pub fn pick_list_with_radius(
 
 pub fn progress_bar_with_radius(
 	f: impl Fn(&Theme) -> progress_bar::Style,
-	r: impl Into<Radius>,
+	r: impl Into<border::Radius>,
 ) -> impl Fn(&Theme) -> progress_bar::Style {
 	let r = r.into();
 	move |t| {
@@ -70,7 +69,9 @@ pub fn menu_with_border(
 	}
 }
 
-pub fn bordered_box_with_radius(r: impl Into<Radius>) -> impl Fn(&Theme) -> container::Style {
+pub fn bordered_box_with_radius(
+	r: impl Into<border::Radius>,
+) -> impl Fn(&Theme) -> container::Style {
 	let r = r.into();
 	move |t| {
 		container::background(t.extended_palette().background.weak.color).border(
