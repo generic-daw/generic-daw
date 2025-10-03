@@ -1,6 +1,6 @@
 use crate::{MusicalTime, NotePosition};
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct ClipPosition {
 	position: NotePosition,
 	offset: MusicalTime,

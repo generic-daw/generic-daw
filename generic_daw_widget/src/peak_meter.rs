@@ -127,13 +127,13 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 		let base = if self.enabled {
 			theme.extended_palette().primary.weak.color
 		} else {
-			theme.extended_palette().secondary.strong.color
+			theme.extended_palette().secondary.base.color
 		};
 
 		let clipping = if self.enabled {
 			theme.extended_palette().danger.weak.color
 		} else {
-			theme.extended_palette().secondary.strong.color
+			theme.extended_palette().secondary.base.color
 		};
 
 		let background_color = mix(base, theme.extended_palette().background.weak.color, 0.5);

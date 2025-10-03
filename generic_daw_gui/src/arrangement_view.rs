@@ -121,6 +121,7 @@ pub enum Message {
 	TrackToggleSolo(NodeId),
 
 	SeekTo(MusicalTime),
+	SetLoopMarker(Option<NotePosition>),
 
 	ToggleRecord(NodeId),
 	RecordingSplit(NodeId),
@@ -429,6 +430,7 @@ impl ArrangementView {
 				}
 			}
 			Message::SeekTo(pos) => self.arrangement.seek_to(pos),
+			Message::SetLoopMarker(marker) => self.arrangement.set_loop_marker(marker),
 			Message::ToggleRecord(node) => {
 				if let Some((_, i)) = &self.recording {
 					return self.update(
@@ -903,6 +905,7 @@ impl ArrangementView {
 				Message::ArrangementAction,
 			),
 			Message::SeekTo,
+			Message::SetLoopMarker,
 			|p, s, _| Message::ArrangementPositionScaleDelta(p, s),
 		)
 		.into()
@@ -1196,6 +1199,7 @@ impl ArrangementView {
 				Message::PianoRollAction,
 			),
 			Message::SeekTo,
+			Message::SetLoopMarker,
 			Message::PianoRollPositionScaleDelta,
 		)
 		.with_offset(

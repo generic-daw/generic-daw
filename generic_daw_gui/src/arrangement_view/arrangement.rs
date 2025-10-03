@@ -1,14 +1,12 @@
-use super::{
-	node::{Node, NodeType},
-	plugin::Plugin,
-	poll_consumer,
-	track::Track,
-};
 use crate::{
 	arrangement_view::{
 		clip::Clip,
+		node::{Node, NodeType},
 		pattern::{Pattern, PatternPair},
+		plugin::Plugin,
+		poll_consumer,
 		sample::{Sample, SamplePair},
+		track::Track,
 	},
 	clap_host::Message as ClapHostMessage,
 	config::Config,
@@ -17,8 +15,8 @@ use crate::{
 use bit_set::BitSet;
 use generic_daw_core::{
 	self as core, Batch, Event, Export, Flags, Message, MidiKey, MidiNote, MusicalTime, NodeAction,
-	NodeId, NodeImpl as _, PanMode, PatternAction, PatternId, RtState, SampleId, Stream,
-	StreamTrait as _, Update, Version, build_output_stream,
+	NodeId, NodeImpl as _, NotePosition, PanMode, PatternAction, PatternId, RtState, SampleId,
+	Stream, StreamTrait as _, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
 use generic_daw_utils::{HoleyVec, NoClone, NoDebug, ShiftMoveExt as _};
@@ -187,6 +185,13 @@ impl Arrangement {
 	pub fn plugin_mix_changed(&mut self, id: NodeId, index: usize, mix: f32) {
 		self.node_mut(id).plugins[index].mix = mix;
 		self.node_action(id, NodeAction::PluginMixChanged(index, mix));
+	}
+
+	pub fn set_loop_marker(&mut self, loop_marker: Option<NotePosition>) {
+		if self.rtstate.loop_marker != loop_marker {
+			self.rtstate.loop_marker = loop_marker;
+			self.send(Message::LoopMarker(loop_marker));
+		}
 	}
 
 	pub fn seek_to(&mut self, position: MusicalTime) {

@@ -1,5 +1,5 @@
 use super::{LINE_HEIGHT, get_time};
-use generic_daw_core::{MusicalTime, RtState};
+use generic_daw_core::{MusicalTime, NotePosition, RtState};
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
 	Background, Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme,
@@ -14,16 +14,18 @@ use iced::{
 	},
 	alignment::Vertical,
 	border,
+	gradient::Linear,
 	mouse::{self, Cursor, Interaction, ScrollDelta},
 	padding,
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
-use std::f32;
+use std::f32::consts::FRAC_PI_2;
 
 #[derive(Default)]
 struct State {
 	hovering: bool,
 	seeking: Option<MusicalTime>,
+	loop_marker: Option<MusicalTime>,
 }
 
 #[derive(Debug)]
@@ -34,6 +36,7 @@ pub struct Seeker<'a, Message> {
 	offset: f32,
 	children: NoDebug<[Element<'a, Message>; 2]>,
 	seek_to: fn(MusicalTime) -> Message,
+	set_loop_marker: fn(Option<NotePosition>) -> Message,
 	position_scale_delta: fn(Vec2, Vec2, Size) -> Message,
 }
 
@@ -127,6 +130,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			let Some(cursor) = cursor.position_in(layout.bounds()) else {
 				state.hovering = false;
 				state.seeking = None;
+				state.loop_marker = None;
 
 				return;
 			};
@@ -135,20 +139,31 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
 			match event {
 				mouse::Event::CursorMoved { modifiers, .. } => {
-					if let Some(last_time) = state.seeking {
-						let time = get_time(
-							cursor.x + offset + self.offset,
-							*modifiers,
-							self.rtstate,
-							*self.position,
-							*self.scale,
-						);
+					let time = get_time(
+						cursor.x + offset + self.offset,
+						*modifiers,
+						self.rtstate,
+						*self.position,
+						*self.scale,
+					);
 
+					if let Some(last_time) = state.seeking {
 						if last_time != time {
 							state.seeking = Some(time);
 							shell.publish((self.seek_to)(time));
 							shell.capture_event();
 						}
+					} else if let Some(last_time) = state.loop_marker {
+						if last_time == time {
+							shell.publish((self.set_loop_marker)(None));
+						} else {
+							let start = last_time.min(time);
+							let end = last_time.max(time);
+							shell.publish((self.set_loop_marker)(Some(NotePosition::new(
+								start, end,
+							))));
+						}
+						shell.capture_event();
 					}
 
 					state.hovering = cursor.y < LINE_HEIGHT;
@@ -164,14 +179,33 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 						*self.position,
 						*self.scale,
 					);
-					state.seeking = Some(time);
-					shell.publish((self.seek_to)(time));
+					if modifiers.command() {
+						if let Some(loop_marker) = self.rtstate.loop_marker {
+							if time == loop_marker.start() {
+								state.loop_marker = Some(loop_marker.end());
+							} else if time == loop_marker.end() {
+								state.loop_marker = Some(loop_marker.start());
+							} else {
+								state.loop_marker = Some(time);
+								shell.publish((self.set_loop_marker)(None));
+							}
+						} else {
+							state.loop_marker = Some(time);
+							shell.publish((self.set_loop_marker)(None));
+						}
+					} else {
+						state.seeking = Some(time);
+						shell.publish((self.seek_to)(time));
+					}
 					shell.capture_event();
 				}
 				mouse::Event::ButtonReleased {
 					button: mouse::Button::Left,
 					..
-				} => state.seeking = None,
+				} => {
+					state.seeking = None;
+					state.loop_marker = None;
+				}
 				mouse::Event::WheelScrolled { delta, modifiers } => {
 					let (mut x, mut y) = match *delta {
 						ScrollDelta::Pixels { x, y } => (-x, -y),
@@ -283,7 +317,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 	) -> Interaction {
 		let state = tree.state.downcast_ref::<State>();
 
-		if state.hovering || state.seeking.is_some() {
+		if state.hovering || state.seeking.is_some() || state.loop_marker.is_some() {
 			Interaction::ResizingHorizontally
 		} else {
 			let bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
@@ -354,6 +388,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		left: impl Into<Element<'a, Message>>,
 		right: impl Into<Element<'a, Message>>,
 		seek_to: fn(MusicalTime) -> Message,
+		set_loop_marker: fn(Option<NotePosition>) -> Message,
 		position_scale_delta: fn(Vec2, Vec2, Size) -> Message,
 	) -> Self {
 		Self {
@@ -363,6 +398,7 @@ impl<'a, Message> Seeker<'a, Message> {
 			offset: 0.0,
 			children: [left.into(), right.into()].into(),
 			seek_to,
+			set_loop_marker,
 			position_scale_delta,
 		}
 	}
@@ -488,17 +524,60 @@ impl<'a, Message> Seeker<'a, Message> {
 				bounds,
 				..Quad::default()
 			},
-			theme.extended_palette().primary.base.color,
+			if self.rtstate.loop_marker.is_some() {
+				theme.extended_palette().secondary.base.color
+			} else {
+				theme.extended_palette().primary.base.color
+			},
 		);
 
 		let sample_size = self.scale.x.exp2();
 
-		let x = (self.rtstate.sample as f32 - self.position.x) / sample_size - self.offset;
+		let offset_pos = |time: f32| Vector::new((time - self.position.x) / sample_size, 0.0);
+		let offset_time = |time: MusicalTime| offset_pos(time.to_samples_f(self.rtstate));
+
+		if let Some(loop_marker) = self.rtstate.loop_marker {
+			const GRADIENT_SIZE: f32 = 10.0;
+
+			let start = bounds.position() + offset_time(loop_marker.start());
+			let end = bounds.position() + offset_time(loop_marker.end());
+
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(
+						start - Vector::new(GRADIENT_SIZE, 0.0),
+						Size::new(GRADIENT_SIZE, f32::MAX),
+					),
+					..Quad::default()
+				},
+				Linear::new(FRAC_PI_2)
+					.add_stop(0.0, Color::TRANSPARENT)
+					.add_stop(1.0, theme.extended_palette().secondary.base.color),
+			);
+
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(end, Size::new(GRADIENT_SIZE, f32::MAX)),
+					..Quad::default()
+				},
+				Linear::new(FRAC_PI_2)
+					.add_stop(0.0, theme.extended_palette().secondary.base.color)
+					.add_stop(1.0, Color::TRANSPARENT),
+			);
+
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(start, Size::new(end.x - start.x, bounds.height)),
+					..Quad::default()
+				},
+				theme.extended_palette().primary.base.color,
+			);
+		}
 
 		renderer.fill_quad(
 			Quad {
 				bounds: Rectangle::new(
-					bounds.position() + Vector::new(x, 0.0),
+					bounds.position() + offset_pos(self.rtstate.sample as f32),
 					Size::new(1.5, f32::MAX),
 				),
 				..Quad::default()
@@ -507,7 +586,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		);
 
 		let mut draw_text = |beat: MusicalTime, bar: u32| {
-			let x = (beat.to_samples_f(self.rtstate) - self.position.x) / sample_size;
+			let time = offset_time(beat);
 
 			let bar = Text {
 				content: (bar + 1).to_string(),
@@ -523,7 +602,7 @@ impl<'a, Message> Seeker<'a, Message> {
 
 			renderer.fill_text(
 				bar,
-				bounds.position() + Vector::new(x + 3.0, 0.0),
+				bounds.position() + time + Vector::new(3.0, 0.0),
 				theme.extended_palette().primary.base.text,
 				bounds,
 			);
