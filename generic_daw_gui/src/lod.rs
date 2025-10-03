@@ -4,7 +4,7 @@ pub fn create_lods(samples: &[f32]) -> [Box<[(f32, f32)]>; LOD_LEVELS] {
 	let mut lods =
 		std::array::from_fn(|i| Vec::with_capacity(samples.len().div_ceil(1 << (i + 3))));
 	update_lods(samples, &mut lods, 0);
-	lods.map(|lod| lod.into_boxed_slice())
+	lods.map(Vec::into_boxed_slice)
 }
 
 pub fn update_lods(samples: &[f32], lods: &mut [Vec<(f32, f32)>; LOD_LEVELS], mut start: usize) {

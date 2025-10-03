@@ -154,16 +154,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 							shell.capture_event();
 						}
 					} else if let Some(last_time) = state.loop_marker {
-						if last_time == time {
-							shell.publish((self.set_loop_marker)(None));
-						} else {
+						let loop_marker = (last_time != time).then(|| {
 							let start = last_time.min(time);
 							let end = last_time.max(time);
-							shell.publish((self.set_loop_marker)(Some(NotePosition::new(
-								start, end,
-							))));
+							NotePosition::new(start, end)
+						});
+
+						if self.rtstate.loop_marker != loop_marker {
+							shell.publish((self.set_loop_marker)(loop_marker));
+							shell.capture_event();
 						}
-						shell.capture_event();
 					}
 
 					state.hovering = cursor.y < LINE_HEIGHT;
@@ -533,14 +533,17 @@ impl<'a, Message> Seeker<'a, Message> {
 
 		let sample_size = self.scale.x.exp2();
 
-		let offset_pos = |time: f32| Vector::new((time - self.position.x) / sample_size, 0.0);
+		let offset_pos = |time: f32| {
+			bounds.position()
+				+ Vector::new((time - self.position.x) / sample_size - self.offset, 0.0)
+		};
 		let offset_time = |time: MusicalTime| offset_pos(time.to_samples_f(self.rtstate));
 
 		if let Some(loop_marker) = self.rtstate.loop_marker {
 			const GRADIENT_SIZE: f32 = 10.0;
 
-			let start = bounds.position() + offset_time(loop_marker.start());
-			let end = bounds.position() + offset_time(loop_marker.end());
+			let start = offset_time(loop_marker.start());
+			let end = offset_time(loop_marker.end());
 
 			renderer.fill_quad(
 				Quad {
@@ -577,7 +580,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		renderer.fill_quad(
 			Quad {
 				bounds: Rectangle::new(
-					bounds.position() + offset_pos(self.rtstate.sample as f32),
+					offset_pos(self.rtstate.sample as f32),
 					Size::new(1.5, f32::MAX),
 				),
 				..Quad::default()
@@ -586,8 +589,6 @@ impl<'a, Message> Seeker<'a, Message> {
 		);
 
 		let mut draw_text = |beat: MusicalTime, bar: u32| {
-			let time = offset_time(beat);
-
 			let bar = Text {
 				content: (bar + 1).to_string(),
 				bounds: Size::new(f32::INFINITY, 0.0),
@@ -602,7 +603,7 @@ impl<'a, Message> Seeker<'a, Message> {
 
 			renderer.fill_text(
 				bar,
-				bounds.position() + time + Vector::new(3.0, 0.0),
+				offset_time(beat) + Vector::new(3.0, 0.0),
 				theme.extended_palette().primary.base.text,
 				bounds,
 			);
