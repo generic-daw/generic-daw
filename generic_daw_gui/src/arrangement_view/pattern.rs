@@ -6,6 +6,7 @@ pub struct Pattern {
 	pub notes: Vec<MidiNote>,
 }
 
+#[derive(Debug)]
 pub struct PatternPair {
 	pub core: core::Pattern,
 	pub gui: Pattern,

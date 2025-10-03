@@ -57,7 +57,7 @@ pub struct Device {
 	pub buffer_size: Option<u32>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
 pub struct Autosave {
 	pub enabled: bool,

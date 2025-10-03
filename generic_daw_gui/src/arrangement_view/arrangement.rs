@@ -1,5 +1,6 @@
 use crate::{
 	arrangement_view::{
+		Message as ArrangementMessage,
 		clip::Clip,
 		node::{Node, NodeType},
 		pattern::{Pattern, PatternPair},
@@ -75,40 +76,41 @@ impl Arrangement {
 		)
 	}
 
-	pub fn update(&mut self, mut update: Batch, now: Instant) -> Task<ClapHostMessage> {
-		let task = if update.epoch == self.rtstate().epoch {
-			if let Some(sample) = update.sample
+	pub fn update(&mut self, mut update: Batch, now: Instant) -> Option<Vec<ArrangementMessage>> {
+		let messages = (update.epoch == self.rtstate().epoch).then(|| {
+			let mut messages = Vec::new();
+
+			if let Some((sample, looped)) = update.sample
 				&& update.version.is_last()
 			{
 				self.rtstate.sample = sample;
+
+				if looped {
+					messages.push(ArrangementMessage::RecordingEndStream);
+				}
 			}
 
-			Task::batch(
-				update
-					.updates
-					.drain(..)
-					.filter_map(|event| match event {
-						Update::Peak(node, peaks) => {
-							if let Some((node, _)) = self.nodes.get_mut(*node) {
-								node.update(peaks, now);
-							}
-							None
-						}
-						Update::Param(id, param_id) => Some(ClapHostMessage::MainThread(
-							id,
-							MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
-						)),
-					})
-					.map(Task::done),
-			)
-		} else {
-			update.updates.clear();
-			Task::none()
-		};
+			messages.extend(update.updates.drain(..).filter_map(|event| match event {
+				Update::Peak(node, peaks) => {
+					if let Some((node, _)) = self.nodes.get_mut(*node) {
+						node.update(peaks, now);
+					}
+					None
+				}
+				Update::Param(id, param_id) => {
+					Some(ArrangementMessage::ClapHost(ClapHostMessage::MainThread(
+						id,
+						MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
+					)))
+				}
+			}));
+
+			messages
+		});
 
 		self.send(Message::ReturnUpdateBuffer(update.updates));
 
-		task
+		messages
 	}
 
 	pub fn rtstate(&self) -> &RtState {
@@ -327,7 +329,8 @@ impl Arrangement {
 		self.tracks.len() - 1
 	}
 
-	pub fn remove_track(&mut self, idx: usize) {
+	pub fn remove_track(&mut self, id: NodeId) {
+		let idx = self.track_of(id).unwrap();
 		let track = self.tracks.remove(idx);
 		for clip in track.clips {
 			match clip {

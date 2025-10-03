@@ -22,6 +22,7 @@ pub enum Action {
 	DirOpened(Box<[Dir]>, Box<[File]>),
 }
 
+#[derive(Debug)]
 pub struct FileTree {
 	dirs: Vec<Dir>,
 }

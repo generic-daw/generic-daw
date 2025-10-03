@@ -33,7 +33,7 @@ pub enum Message {
 	SetPluginSize(PluginId, Size),
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ClapHost {
 	plugins: HoleyVec<Plugin<Event>>,
 	timers: HoleyVec<HoleyVec<Duration>>,

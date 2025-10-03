@@ -93,6 +93,10 @@ impl Recording {
 		}
 	}
 
+	pub fn end_stream(&mut self) {
+		self.core.end_stream();
+	}
+
 	pub fn finalize(mut self) -> SamplePair {
 		let start = self.core.samples().len();
 		let core = self.core.finalize();

@@ -5,7 +5,7 @@ use std::{
 	sync::Arc,
 };
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PluginDescriptor {
 	pub name: Arc<str>,
 	pub id: Arc<CStr>,

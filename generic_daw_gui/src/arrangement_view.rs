@@ -51,7 +51,7 @@ use node::Node;
 use rtrb::Consumer;
 use smol::{Timer, unblock};
 use std::{
-	collections::BTreeMap,
+	collections::HashMap,
 	fmt::Write as _,
 	io::Read,
 	iter::once,
@@ -111,7 +111,6 @@ pub enum Message {
 	SampleLoadFromFile(Arc<Path>),
 	SampleLoadedFromFile(NoClone<Option<Box<SamplePair>>>),
 	AddSample(SampleId),
-	AddSampleToTrack(SampleId, usize),
 
 	OpenMidiClip(MidiClip),
 
@@ -120,13 +119,15 @@ pub enum Message {
 	TrackToggleEnabled(NodeId),
 	TrackToggleSolo(NodeId),
 
+	TogglePlayback,
+	Stop,
 	SeekTo(MusicalTime),
 	SetLoopMarker(Option<NotePosition>),
 
-	ToggleRecord(NodeId),
-	RecordingSplit(NodeId),
-	RecordingChunk(NoDebug<Box<[f32]>>),
-	StopRecord,
+	Recording(NodeId),
+	RecordingEndStream,
+	RecordingFinalize,
+	RecordingWrite(NoDebug<Box<[f32]>>),
 
 	ArrangementAction(ArrangementAction),
 	ArrangementPositionScaleDelta(Vec2, Vec2),
@@ -137,7 +138,7 @@ pub enum Message {
 	SplitAt(f32),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Tab {
 	Arrangement {
 		grabbed_clip: Option<(usize, usize, Option<usize>)>,
@@ -149,15 +150,13 @@ pub enum Tab {
 	},
 }
 
+#[derive(Debug)]
 pub struct ArrangementView {
 	pub arrangement: ArrangementWrapper,
 	pub clap_host: ClapHost,
 
-	plugins: combo_box::State<PluginDescriptor>,
-
+	pub recording: Option<(Recording, NodeId)>,
 	pub tab: Tab,
-
-	recording: Option<(Recording, NodeId)>,
 
 	arrangement_position: Vec2,
 	arrangement_scale: Vec2,
@@ -169,26 +168,27 @@ pub struct ArrangementView {
 	selected_channel: Option<NodeId>,
 
 	split_at: f32,
-
+	plugins: combo_box::State<PluginDescriptor>,
 	tree: iced_persistent::Tree,
 }
 
 impl ArrangementView {
 	pub fn new(
 		config: &Config,
-		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
+		plugin_bundles: &HashMap<PluginDescriptor, NoDebug<PluginBundle>>,
 	) -> (Self, Task<Message>) {
 		let (arrangement, task) = ArrangementWrapper::create(config);
+
+		let mut plugins = plugin_bundles.keys().cloned().collect::<Vec<_>>();
+		plugins.sort_unstable();
+
 		(
 			Self {
-				clap_host: ClapHost::default(),
-				plugins: combo_box::State::new(plugin_bundles.keys().cloned().collect()),
-
 				arrangement,
-
-				tab: Tab::Arrangement { grabbed_clip: None },
+				clap_host: ClapHost::default(),
 
 				recording: None,
+				tab: Tab::Arrangement { grabbed_clip: None },
 
 				arrangement_position: Vec2::default(),
 				arrangement_scale: Vec2::new(10.0, 87.0),
@@ -200,7 +200,7 @@ impl ArrangementView {
 				selected_channel: None,
 
 				split_at: 300.0,
-
+				plugins: combo_box::State::new(plugins),
 				tree: iced_persistent::Tree::empty(),
 			},
 			task.map(Message::Batch),
@@ -211,17 +211,20 @@ impl ArrangementView {
 		&mut self,
 		message: Message,
 		config: &Config,
-		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
+		plugin_bundles: &HashMap<PluginDescriptor, NoDebug<PluginBundle>>,
 	) -> Task<Message> {
 		match message {
 			Message::ClapHost(msg) => {
 				return self.clap_host.update(msg, config).map(Message::ClapHost);
 			}
 			Message::Batch(msg) => {
-				return self
-					.arrangement
-					.update(msg, Instant::now())
-					.map(Message::ClapHost);
+				return Task::batch(
+					self.arrangement
+						.update(msg, Instant::now())
+						.into_iter()
+						.flatten()
+						.map(|msg| self.update(msg, config, plugin_bundles)),
+				);
 			}
 			Message::SetArrangement(NoClone(arrangement)) => {
 				self.arrangement = *arrangement;
@@ -359,26 +362,16 @@ impl ArrangementView {
 				return self.update(Message::AddSample(id), config, plugin_bundles);
 			}
 			Message::AddSample(sample) => {
-				let track = self.arrangement.add_track();
-				return Task::future(self.arrangement.request_connect(
-					self.arrangement.tracks()[track].id,
-					self.arrangement.master().id,
-				))
-				.and_then(Task::done)
-				.map(Message::ConnectSucceeded)
-				.chain(self.update(
-					Message::AddSampleToTrack(sample, track),
-					config,
-					plugin_bundles,
-				));
-			}
-			Message::AddSampleToTrack(sample, track) => {
-				let mut clip = AudioClip::new(sample);
-				clip.position.trim_end_to(MusicalTime::from_samples(
-					self.arrangement.samples()[*sample].len,
-					self.arrangement.rtstate(),
-				));
-				self.arrangement.add_clip(track, clip);
+				let task = self.update(Message::TrackAdd, config, plugin_bundles);
+				self.arrangement.add_clip(
+					self.arrangement.tracks().len() - 1,
+					AudioClip::new(
+						sample,
+						self.arrangement.samples()[*sample].len,
+						self.arrangement.rtstate(),
+					),
+				);
+				return task;
 			}
 			Message::OpenMidiClip(clip) => {
 				self.tab = Tab::PianoRoll {
@@ -387,8 +380,11 @@ impl ArrangementView {
 				}
 			}
 			Message::TrackAdd => {
-				self.soloed_track = None;
 				let track = self.arrangement.add_track();
+				if self.soloed_track.is_some() {
+					self.arrangement
+						.channel_toggle_enabled(self.arrangement.tracks()[track].id);
+				}
 				return Task::future(self.arrangement.request_connect(
 					self.arrangement.tracks()[track].id,
 					self.arrangement.master().id,
@@ -397,24 +393,20 @@ impl ArrangementView {
 				.map(Message::ConnectSucceeded);
 			}
 			Message::TrackRemove(id) => {
+				self.arrangement.remove_track(id);
 				if self.soloed_track == Some(id) {
 					self.soloed_track = None;
 				}
 
-				if self.recording.as_ref().is_some_and(|&(_, i)| i == id) {
-					self.recording = None;
-				}
-
-				let track = self.arrangement.track_of(id).unwrap();
-				self.arrangement.remove_track(track);
-
-				return self
-					.update(
+				return Task::batch([
+					self.update(
 						Message::ArrangementPositionScaleDelta(Vec2::ZERO, Vec2::ZERO),
 						config,
 						plugin_bundles,
-					)
-					.chain(self.update(Message::ChannelRemove(id), config, plugin_bundles));
+					),
+					self.update(Message::ChannelRemove(id), config, plugin_bundles),
+					self.update(Message::RecordingEndStream, config, plugin_bundles),
+				]);
 			}
 			Message::TrackToggleEnabled(id) => {
 				self.soloed_track = None;
@@ -429,88 +421,92 @@ impl ArrangementView {
 					self.arrangement.solo_track(id);
 				}
 			}
-			Message::SeekTo(pos) => self.arrangement.seek_to(pos),
-			Message::SetLoopMarker(marker) => self.arrangement.set_loop_marker(marker),
-			Message::ToggleRecord(node) => {
-				if let Some((_, i)) = &self.recording {
-					return self.update(
-						if *i == node {
-							Message::StopRecord
-						} else {
-							Message::RecordingSplit(node)
-						},
-						config,
-						plugin_bundles,
-					);
-				}
-
-				let (recording, task) = Recording::create(
-					recording_path(),
-					self.arrangement.rtstate(),
-					config.input_device.name.as_deref(),
-					config.input_device.sample_rate.unwrap_or(44100),
-					config.input_device.buffer_size.unwrap_or(1024),
-				);
-
-				let sample_rate = recording.sample_rate();
-				let frames = recording
-					.frames()
-					.or(config.input_device.buffer_size)
-					.unwrap_or(1024);
-
-				self.recording = Some((recording, node));
-
-				self.arrangement.play();
-
-				return poll_consumer(task, sample_rate, frames)
-					.map(NoDebug)
-					.map(Message::RecordingChunk);
+			Message::TogglePlayback => {
+				self.arrangement.toggle_playback();
+				return self.update(Message::RecordingEndStream, config, plugin_bundles);
 			}
-			Message::RecordingSplit(node) => {
-				if let Some((mut recording, track)) = self.recording.take() {
+			Message::Stop => {
+				self.arrangement.stop();
+				return self.update(Message::RecordingEndStream, config, plugin_bundles);
+			}
+			Message::SeekTo(pos) => {
+				self.arrangement.seek_to(pos);
+				return self.update(Message::RecordingEndStream, config, plugin_bundles);
+			}
+			Message::SetLoopMarker(marker) => self.arrangement.set_loop_marker(marker),
+			Message::Recording(node) => {
+				if let Some((recording, r_node)) = &mut self.recording {
+					if node == *r_node {
+						return self.update(Message::RecordingEndStream, config, plugin_bundles);
+					}
+
 					let pos = recording.position;
 
 					let sample = recording.split_off(recording_path(), self.arrangement.rtstate());
 					let id = sample.gui.id;
 					self.arrangement.add_sample(sample);
 
-					let track = self.arrangement.track_of(track).unwrap();
-					let mut clip = AudioClip::new(id);
-					clip.position.trim_end_to(MusicalTime::from_samples(
+					let track = self.arrangement.track_of(*r_node).unwrap();
+
+					let mut clip = AudioClip::new(
+						id,
 						self.arrangement.samples()[*id].len,
 						self.arrangement.rtstate(),
-					));
+					);
 					clip.position.move_to(pos);
 					self.arrangement.add_clip(track, clip);
 
-					self.recording = Some((recording, node));
-				}
-			}
-			Message::RecordingChunk(samples) => {
-				if let Some((recording, _)) = self.recording.as_mut() {
-					recording.write(&samples);
-				}
-			}
-			Message::StopRecord => {
-				if let Some((recording, track)) = self.recording.take() {
-					self.arrangement.pause();
-					let pos = recording.position;
+					self.recording.as_mut().unwrap().1 = node;
+				} else {
+					let (recording, task) = Recording::create(
+						recording_path(),
+						self.arrangement.rtstate(),
+						config.input_device.name.as_deref(),
+						config.input_device.sample_rate.unwrap_or(44100),
+						config.input_device.buffer_size.unwrap_or(1024),
+					);
 
-					let sample = recording.finalize();
+					let sample_rate = recording.sample_rate();
+					let frames = recording
+						.frames()
+						.or(config.input_device.buffer_size)
+						.unwrap_or(1024);
+
+					self.recording = Some((recording, node));
+
+					self.arrangement.play();
+
+					return poll_consumer(task, sample_rate, frames)
+						.map(NoDebug)
+						.map(Message::RecordingWrite)
+						.chain(Task::done(Message::RecordingFinalize));
+				}
+			}
+			Message::RecordingEndStream => {
+				if let Some((recording, _)) = &mut self.recording {
+					recording.end_stream();
+				}
+			}
+			Message::RecordingFinalize => {
+				let (recording, node) = self.recording.take().unwrap();
+				let pos = recording.position;
+
+				let sample = recording.finalize();
+
+				if let Some(track) = self.arrangement.track_of(node) {
 					let id = sample.gui.id;
 					self.arrangement.add_sample(sample);
 
-					let track = self.arrangement.track_of(track).unwrap();
-
-					let mut clip = AudioClip::new(id);
-					clip.position.trim_end_to(MusicalTime::from_samples(
+					let mut clip = AudioClip::new(
+						id,
 						self.arrangement.samples()[*id].len,
 						self.arrangement.rtstate(),
-					));
+					);
 					clip.position.move_to(pos);
 					self.arrangement.add_clip(track, clip);
 				}
 			}
+			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().0.write(&samples),
 			Message::ArrangementAction(action) => self.handle_arrangement_action(action),
 			Message::ArrangementPositionScaleDelta(pos, scale) => {
 				let old_scale = self.arrangement_scale;
@@ -815,7 +811,7 @@ impl ArrangementView {
 										.radius(5.5)
 									)
 									.padding(2.0)
-									.on_press(Message::ToggleRecord(id))
+									.on_press(Message::Recording(id))
 									.style(button_style(
 										self.recording.as_ref().is_some_and(|&(_, i)| i == id)
 									))

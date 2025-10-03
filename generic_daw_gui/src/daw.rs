@@ -17,7 +17,7 @@ use generic_daw_core::{
 	Export, MusicalTime,
 	clap_host::{PluginBundle, PluginDescriptor, get_installed_plugins},
 };
-use generic_daw_utils::NoClone;
+use generic_daw_utils::{NoClone, NoDebug};
 use generic_daw_widget::dot::Dot;
 use iced::{
 	Alignment::Center,
@@ -37,7 +37,7 @@ use iced::{
 use iced_split::{Strategy, vertical_split};
 use log::trace;
 use rfd::AsyncFileDialog;
-use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
+use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -69,8 +69,6 @@ pub enum Message {
 	OpenConfigView,
 	CloseConfigView,
 
-	Stop,
-	TogglePlayback,
 	ToggleMetronome,
 	ChangedBpm(u16),
 	ChangedBpmText(String),
@@ -83,10 +81,11 @@ pub enum Message {
 
 const _: () = assert!(size_of::<Message>() <= 128);
 
+#[derive(Debug)]
 pub struct Daw {
 	config: Config,
 	state: State,
-	plugin_bundles: Arc<BTreeMap<PluginDescriptor, PluginBundle>>,
+	plugin_bundles: Arc<HashMap<PluginDescriptor, NoDebug<PluginBundle>>>,
 
 	arrangement_view: ArrangementView,
 	file_tree: FileTree,
@@ -280,28 +279,6 @@ impl Daw {
 				self.config_view = Some(ConfigView::new(self.config.clone()));
 			}
 			Message::CloseConfigView => self.config_view = None,
-			Message::Stop => {
-				self.arrangement_view.arrangement.stop();
-				return self
-					.arrangement_view
-					.update(
-						ArrangementMessage::StopRecord,
-						&self.config,
-						&self.plugin_bundles,
-					)
-					.map(Message::Arrangement);
-			}
-			Message::TogglePlayback => {
-				self.arrangement_view.arrangement.toggle_playback();
-				return self
-					.arrangement_view
-					.update(
-						ArrangementMessage::StopRecord,
-						&self.config,
-						&self.plugin_bundles,
-					)
-					.map(Message::Arrangement);
-			}
 			Message::ToggleMetronome => self.arrangement_view.arrangement.toggle_metronome(),
 			Message::ChangedBpm(bpm) => self
 				.arrangement_view
@@ -414,11 +391,11 @@ impl Daw {
 						})
 						.style(button_with_radius(button::primary, border::left(5)))
 						.padding([5, 7])
-						.on_press(Message::TogglePlayback),
+						.on_press(Message::Arrangement(ArrangementMessage::TogglePlayback)),
 						button(square())
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding([5, 7])
-							.on_press(Message::Stop),
+							.on_press(Message::Arrangement(ArrangementMessage::Stop)),
 					],
 					number_input(
 						self.arrangement_view.arrangement.rtstate().numerator as usize,
@@ -618,7 +595,7 @@ fn keybinds() -> Subscription<Message> {
 				match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
 					(false, false, false) => match key {
 						keyboard::Key::Named(keyboard::key::Named::Space) => {
-							Some(Message::TogglePlayback)
+							Some(Message::Arrangement(ArrangementMessage::TogglePlayback))
 						}
 						_ => None,
 					},

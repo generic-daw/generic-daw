@@ -17,7 +17,7 @@ use generic_daw_utils::{NoClone, NoDebug};
 use iced::Task;
 use smol::{channel::Sender, unblock};
 use std::{
-	collections::{BTreeMap, HashMap, HashSet},
+	collections::{HashMap, HashSet},
 	fs::File,
 	io::{Read as _, Write as _},
 	iter::once,
@@ -150,7 +150,7 @@ impl ArrangementWrapper {
 	pub fn start_load(
 		path: Arc<Path>,
 		config: Config,
-		plugin_bundles: Arc<BTreeMap<PluginDescriptor, PluginBundle>>,
+		plugin_bundles: Arc<HashMap<PluginDescriptor, NoDebug<PluginBundle>>>,
 	) -> Task<DawMessage> {
 		let (partial_sender, partial_receiver) = oneshot::channel();
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
@@ -171,7 +171,7 @@ impl ArrangementWrapper {
 	fn load(
 		path: Arc<Path>,
 		config: &Config,
-		plugin_bundles: &BTreeMap<PluginDescriptor, PluginBundle>,
+		plugin_bundles: &HashMap<PluginDescriptor, NoDebug<PluginBundle>>,
 		daw: &Sender<DawMessage>,
 	) -> Option<Task<DawMessage>> {
 		let config = &config;
@@ -385,27 +385,27 @@ impl ArrangementWrapper {
 							let Feedback::Use(sample) = samples.get(&audio.sample)? else {
 								continue;
 							};
-							let mut clip = AudioClip::new(*sample);
-							clip.position = ClipPosition::new(
-								NotePosition::new(
-									audio.position.position.start.into(),
-									audio.position.position.end.into(),
+							Clip::Audio(AudioClip {
+								sample: *sample,
+								position: ClipPosition::new(
+									NotePosition::new(
+										audio.position.position.start.into(),
+										audio.position.position.end.into(),
+									),
+									audio.position.offset.into(),
 								),
-								audio.position.offset.into(),
-							);
-							Clip::Audio(clip)
+							})
 						}
-						proto::Clip::Midi(midi) => {
-							let mut clip = MidiClip::new(*patterns.get(&midi.pattern)?);
-							clip.position = ClipPosition::new(
+						proto::Clip::Midi(midi) => Clip::Midi(MidiClip {
+							pattern: *patterns.get(&midi.pattern)?,
+							position: ClipPosition::new(
 								NotePosition::new(
 									midi.position.position.start.into(),
 									midi.position.position.end.into(),
 								),
 								midi.position.offset.into(),
-							);
-							Clip::Midi(clip)
-						}
+							),
+						}),
 					},
 				);
 			}

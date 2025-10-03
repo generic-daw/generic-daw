@@ -51,6 +51,7 @@ pub enum Message {
 	ResetConfigToDefault,
 }
 
+#[derive(Debug)]
 pub struct ConfigView {
 	prev_config: Config,
 	config: Config,

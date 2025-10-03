@@ -88,7 +88,7 @@ pub enum Update {
 pub struct Batch {
 	pub epoch: Epoch,
 	pub version: Version,
-	pub sample: Option<usize>,
+	pub sample: Option<(usize, bool)>,
 	pub updates: Vec<Update>,
 }
 
@@ -233,6 +233,8 @@ impl DawCtx {
 			*updates = self.update_buffers.pop().unwrap_or_default();
 		}
 
+		let mut looped = false;
+
 		if self.state.rtstate.playing
 			&& let Some(loop_marker) = self.state.rtstate.loop_marker
 		{
@@ -241,6 +243,7 @@ impl DawCtx {
 
 			if (loop_start..=loop_end).contains(&self.state.rtstate.sample) {
 				while loop_end <= self.state.rtstate.sample + buf.len() {
+					looped = true;
 					let diff = loop_end - self.state.rtstate.sample;
 
 					self.audio_graph.process(&self.state, &mut buf[..diff]);
@@ -261,7 +264,7 @@ impl DawCtx {
 
 		let sample = self.state.rtstate.playing.then(|| {
 			self.state.rtstate.sample += buf.len();
-			self.state.rtstate.sample
+			(self.state.rtstate.sample, looped)
 		});
 
 		let updates = self.state.updates.get_mut().unwrap();

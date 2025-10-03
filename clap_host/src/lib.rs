@@ -1,9 +1,9 @@
 use clack_extensions::gui::GuiApiType;
-use generic_daw_utils::unique_id;
+use generic_daw_utils::{NoDebug, unique_id};
 use main_thread::MainThread;
 use shared::Shared;
 use std::{
-	collections::{BTreeMap, HashSet},
+	collections::{HashMap, HashSet},
 	path::{Path, PathBuf},
 	sync::Arc,
 };
@@ -46,9 +46,9 @@ const API_TYPE: GuiApiType<'_> = const { GuiApiType::default_for_current_platfor
 #[must_use]
 pub fn get_installed_plugins(
 	paths: impl IntoIterator<Item: AsRef<Path>>,
-) -> BTreeMap<PluginDescriptor, PluginBundle> {
+) -> HashMap<PluginDescriptor, NoDebug<PluginBundle>> {
 	let mut seen = HashSet::new();
-	let mut bundles = BTreeMap::new();
+	let mut bundles = HashMap::new();
 
 	paths
 		.into_iter()
@@ -73,7 +73,7 @@ pub fn get_installed_plugins(
 					.plugin_descriptors()
 					.filter_map(|d| d.try_into().ok())
 					.for_each(|d| {
-						bundles.insert(d, bundle.clone());
+						bundles.insert(d, NoDebug(bundle.clone()));
 					});
 			}
 		});

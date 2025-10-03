@@ -13,7 +13,7 @@ pub struct Recording<W: io::Write + io::Seek> {
 	resampler: Resampler,
 	writer: NoDebug<WavWriter<W>>,
 
-	stream: NoDebug<Stream>,
+	stream: Option<NoDebug<Stream>>,
 	config: StreamConfig,
 }
 
@@ -51,7 +51,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 				resampler,
 				writer: writer.into(),
 
-				stream: stream.into(),
+				stream: Some(stream.into()),
 				config,
 			},
 			consumer,
@@ -118,6 +118,10 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		}
 	}
 
+	pub fn end_stream(&mut self) {
+		self.stream.take();
+	}
+
 	#[must_use]
 	pub fn finalize(self) -> Sample {
 		let Self {
@@ -127,7 +131,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 			..
 		} = self;
 
-		drop(stream);
+		debug_assert!(stream.is_none());
 
 		let start = resampler.samples().len();
 		let samples = resampler.finish();
