@@ -35,6 +35,8 @@ use log::trace;
 use rfd::AsyncFileDialog;
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 
+pub const DEFAULT_SPLIT_POSITION: f32 = 300.0;
+
 #[derive(Clone, Debug)]
 pub enum Message {
 	Arrangement(ArrangementMessage),
@@ -124,7 +126,7 @@ impl Daw {
 				arrangement_view,
 				file_tree,
 				config_view: None,
-				split_at: 300.0,
+				split_at: DEFAULT_SPLIT_POSITION,
 
 				progress: None,
 				missing_samples: Vec::new(),
@@ -447,6 +449,7 @@ impl Daw {
 					Message::SplitAt
 				)
 				.strategy(Strategy::Start)
+				.on_double_click(Message::SplitAt(DEFAULT_SPLIT_POSITION))
 			]
 			.padding(10)
 			.spacing(10),

@@ -8,6 +8,7 @@ use crate::{
 		icon_button, styled_scrollable, styled_scrollable_with_direction, text_icon_button,
 	},
 	config::Config,
+	daw::DEFAULT_SPLIT_POSITION,
 	icons::{arrow_up_down, chevron_up, circle_off, grip_vertical, plus, x},
 	stylefns::{bordered_box_with_radius, button_with_radius, menu_with_border, slider_secondary},
 	widget::{
@@ -196,7 +197,7 @@ impl ArrangementView {
 				last_note_len: MusicalTime::BEAT,
 				selected_channel: None,
 
-				split_at: 300.0,
+				split_at: DEFAULT_SPLIT_POSITION,
 				plugins: combo_box::State::new(plugins),
 				tree: iced_persistent::Tree::empty(),
 			},
@@ -750,7 +751,7 @@ impl ArrangementView {
 					.map(|id| {
 						let node = self.arrangement.node(id);
 
-						let button_style = |cond| {
+						let button_style = |cond: bool| {
 							if !node.flags.contains(Flags::ENABLED) {
 								button::secondary
 							} else if cond {
@@ -1041,6 +1042,7 @@ impl ArrangementView {
 				Message::SplitAt,
 			)
 			.strategy(Strategy::End)
+			.on_double_click(Message::SplitAt(DEFAULT_SPLIT_POSITION))
 			.into()
 		} else {
 			mixer_panel.into()
@@ -1052,7 +1054,7 @@ impl ArrangementView {
 		node: &'a Node,
 		name: impl text::IntoFragment<'a>,
 	) -> Element<'a, Message> {
-		let button_style = |cond| {
+		let button_style = |cond: bool| {
 			if !node.flags.contains(Flags::ENABLED) {
 				button::secondary
 			} else if cond {
