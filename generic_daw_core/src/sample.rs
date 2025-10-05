@@ -22,13 +22,6 @@ pub struct Sample {
 impl Sample {
 	#[must_use]
 	pub fn new(source: Box<dyn MediaSource>, sample_rate: u32) -> Option<Self> {
-		Some(Self {
-			samples: Self::read_audio_file(source, sample_rate)?.into(),
-			id: SampleId::unique(),
-		})
-	}
-
-	fn read_audio_file(source: Box<dyn MediaSource>, sample_rate: u32) -> Option<Box<[f32]>> {
 		let mut format = symphonia::default::get_probe()
 			.format(
 				&Hint::default(),
@@ -96,6 +89,9 @@ impl Sample {
 			stereo.clear();
 		}
 
-		Some(resampler.finish().into_boxed_slice())
+		Some(Self {
+			samples: resampler.finish().into_boxed_slice().into(),
+			id: SampleId::unique(),
+		})
 	}
 }

@@ -18,7 +18,6 @@ mod event;
 mod export;
 mod master;
 mod midi_clip;
-mod midi_key;
 mod midi_note;
 mod musical_time;
 mod pattern;
@@ -37,8 +36,7 @@ pub use daw_ctx::{Batch, Message, NodeAction, PatternAction, RtState, Update, Ve
 pub use event::Event;
 pub use export::Export;
 pub use midi_clip::MidiClip;
-pub use midi_key::{Key, MidiKey};
-pub use midi_note::MidiNote;
+pub use midi_note::{Key, MidiKey, MidiNote};
 pub use musical_time::{ClipPosition, MusicalTime, NotePosition};
 pub use pattern::{Pattern, PatternId};
 pub use recording::Recording;
@@ -111,7 +109,7 @@ fn build_input_stream(
 			&config,
 			move |buf, _| {
 				for buf in buf.chunks(buffer_size as usize) {
-					let frames = buf.len() / config.channels as usize;
+					let frames = buf.len() / usize::from(config.channels);
 					from_other_to_stereo(&mut stereo[..2 * frames], buf, frames);
 					producer.push(stereo[..2 * frames].into()).unwrap();
 				}

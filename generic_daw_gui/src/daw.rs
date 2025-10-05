@@ -396,14 +396,14 @@ impl Daw {
 							.on_press(Message::Arrangement(ArrangementMessage::Stop)),
 					],
 					number_input(
-						self.arrangement_view.arrangement.rtstate().numerator as usize,
+						self.arrangement_view.arrangement.rtstate().numerator.into(),
 						4,
 						2,
 						|x| Message::ChangedNumerator(x as u8),
 						Message::ChangedNumeratorText
 					),
 					number_input(
-						self.arrangement_view.arrangement.rtstate().bpm as usize,
+						self.arrangement_view.arrangement.rtstate().bpm.into(),
 						140,
 						3,
 						|x| Message::ChangedBpm(x as u16),

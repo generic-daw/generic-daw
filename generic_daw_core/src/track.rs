@@ -25,39 +25,11 @@ impl NodeImpl for Track {
 	type State = State;
 
 	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
-		let mut notes = [0; 128];
+		self.collect_notes(state, events);
 
 		for clip in &mut self.clips {
-			clip.collect_notes(state, &mut notes);
+			clip.process(state, audio, events, &mut self.notes);
 		}
-
-		self.notes
-			.iter()
-			.zip(notes)
-			.enumerate()
-			.for_each(|(key, (before, after))| {
-				let event = match before.cmp(&after) {
-					Ordering::Equal => return,
-					Ordering::Less => Event::On {
-						time: 0,
-						key: key as u8,
-						velocity: 1.0,
-					},
-					Ordering::Greater => Event::Off {
-						time: 0,
-						key: key as u8,
-						velocity: 1.0,
-					},
-				};
-
-				events.extend(repeat_n(event, before.abs_diff(after) as usize));
-			});
-
-		for clip in &mut self.clips {
-			clip.process(state, audio, events, &mut notes);
-		}
-
-		**self.notes = notes;
 
 		self.node.process(state, audio, events);
 	}
@@ -91,5 +63,33 @@ impl Track {
 
 	pub fn reset(&mut self) {
 		self.node.reset();
+	}
+
+	pub fn collect_notes(&mut self, state: &State, events: &mut Vec<Event>) {
+		let mut notes = [0; 128];
+
+		for clip in &mut self.clips {
+			clip.collect_notes(state, &mut notes);
+		}
+
+		for (key, (before, after)) in self.notes.iter().zip(&notes).enumerate() {
+			let event = match before.cmp(after) {
+				Ordering::Equal => continue,
+				Ordering::Less => Event::On {
+					time: 0,
+					key: key as u8,
+					velocity: 1.0,
+				},
+				Ordering::Greater => Event::Off {
+					time: 0,
+					key: key as u8,
+					velocity: 1.0,
+				},
+			};
+
+			events.extend(repeat_n(event, before.abs_diff(*after) as usize));
+		}
+
+		**self.notes = notes;
 	}
 }

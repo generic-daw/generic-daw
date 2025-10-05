@@ -24,7 +24,7 @@ impl MidiClip {
 					let end = note.position.end().to_samples(&state.rtstate);
 
 					if start < start_sample && end >= start_sample {
-						notes[note.key.0 as usize] += 1;
+						notes[usize::from(note.key.0)] += 1;
 					}
 				});
 		}
@@ -59,7 +59,7 @@ impl MidiClip {
 							key: note.key.0,
 							velocity: note.velocity,
 						});
-						notes[note.key.0 as usize] += 1;
+						notes[usize::from(note.key.0)] += 1;
 					}
 
 					if end >= start_sample && end < end_sample {
@@ -67,7 +67,7 @@ impl MidiClip {
 							time: (end - start_sample) as u32 / 2,
 							key: note.key.0,
 						});
-						notes[note.key.0 as usize] -= 1;
+						notes[usize::from(note.key.0)] -= 1;
 					}
 				});
 		}
