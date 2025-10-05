@@ -1,6 +1,5 @@
 use crate::arrangement_view::{audio_clip::AudioClip, midi_clip::MidiClip};
 use generic_daw_core::{self as core, ClipPosition, MusicalTime};
-use generic_daw_utils::NoDebug;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Clip {
@@ -56,11 +55,9 @@ impl From<Clip> for core::Clip {
 			Clip::Audio(AudioClip { sample, position }) => {
 				Self::Audio(core::AudioClip { sample, position })
 			}
-			Clip::Midi(MidiClip { pattern, position }) => Self::Midi(core::MidiClip {
-				pattern,
-				position,
-				notes: NoDebug(Box::new([0; 128])),
-			}),
+			Clip::Midi(MidiClip { pattern, position }) => {
+				Self::Midi(core::MidiClip { pattern, position })
+			}
 		}
 	}
 }

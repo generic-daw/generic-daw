@@ -7,14 +7,6 @@ pub struct AudioClip {
 }
 
 impl AudioClip {
-	#[must_use]
-	pub fn new(sample: SampleId) -> Self {
-		Self {
-			sample,
-			position: ClipPosition::default(),
-		}
-	}
-
 	pub fn process(&self, state: &State, audio: &mut [f32]) {
 		if !state.rtstate.playing {
 			return;

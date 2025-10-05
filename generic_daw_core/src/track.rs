@@ -1,10 +1,23 @@
 use crate::{Channel, Clip, Event, NodeAction, daw_ctx::State};
 use audio_graph::{NodeId, NodeImpl};
+use generic_daw_utils::NoDebug;
+use std::{cmp::Ordering, iter::repeat_n};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Track {
-	pub clips: Vec<Clip>,
-	pub node: Channel,
+	clips: Vec<Clip>,
+	notes: NoDebug<Box<[u8; 128]>>,
+	node: Channel,
+}
+
+impl Default for Track {
+	fn default() -> Self {
+		Self {
+			clips: Vec::new(),
+			notes: Box::new([0; 128]).into(),
+			node: Channel::default(),
+		}
+	}
 }
 
 impl NodeImpl for Track {
@@ -12,9 +25,39 @@ impl NodeImpl for Track {
 	type State = State;
 
 	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
+		let mut notes = [0; 128];
+
 		for clip in &mut self.clips {
-			clip.process(state, audio, events);
+			clip.collect_notes(state, &mut notes);
 		}
+
+		self.notes
+			.iter()
+			.zip(notes)
+			.enumerate()
+			.for_each(|(key, (before, after))| {
+				let event = match before.cmp(&after) {
+					Ordering::Equal => return,
+					Ordering::Less => Event::On {
+						time: 0,
+						key: key as u8,
+						velocity: 1.0,
+					},
+					Ordering::Greater => Event::Off {
+						time: 0,
+						key: key as u8,
+						velocity: 1.0,
+					},
+				};
+
+				events.extend(repeat_n(event, before.abs_diff(after) as usize));
+			});
+
+		for clip in &mut self.clips {
+			clip.process(state, audio, events, &mut notes);
+		}
+
+		**self.notes = notes;
 
 		self.node.process(state, audio, events);
 	}
