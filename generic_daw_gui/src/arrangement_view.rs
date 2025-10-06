@@ -402,7 +402,6 @@ impl ArrangementView {
 						config,
 						plugin_bundles,
 					),
-					self.update(Message::ChannelRemove(id), config, plugin_bundles),
 					self.update(Message::RecordingEndStream, config, plugin_bundles),
 				]);
 			}
@@ -638,10 +637,8 @@ impl ArrangementView {
 				self.arrangement.clip_trim_end_to(track, clip, pos);
 			}
 			ArrangementAction::Delete(track, clip) => {
-				match self.arrangement.remove_clip(track, clip) {
-					Clip::Audio(audio) => self.arrangement.maybe_remove_sample(audio.sample),
-					Clip::Midi(midi) => self.arrangement.maybe_remove_pattern(midi.pattern),
-				}
+				let clip = self.arrangement.remove_clip(track, clip);
+				self.arrangement.gc(clip);
 			}
 		}
 	}

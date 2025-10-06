@@ -14,6 +14,7 @@ pub struct Sample {
 	pub path: Arc<Path>,
 	pub len: usize,
 	pub crc: u32,
+	pub refs: usize,
 }
 
 #[derive(Debug)]
@@ -33,6 +34,7 @@ impl SamplePair {
 			name: name.into(),
 			len: core.samples.len(),
 			crc: crc(File::open(path).ok()?),
+			refs: 0,
 		};
 		Some(Self { gui, core })
 	}

@@ -4,6 +4,7 @@ use generic_daw_core::{self as core, MidiNote, PatternId};
 pub struct Pattern {
 	pub id: PatternId,
 	pub notes: Vec<MidiNote>,
+	pub refs: usize,
 }
 
 #[derive(Debug)]
@@ -20,7 +21,7 @@ impl PatternPair {
 				id,
 				notes: notes.clone(),
 			},
-			gui: Pattern { id, notes },
+			gui: Pattern { id, notes, refs: 0 },
 		}
 	}
 }

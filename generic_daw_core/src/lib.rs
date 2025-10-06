@@ -1,4 +1,3 @@
-use audio_graph_node::AudioGraphNode;
 use cpal::{
 	BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
 	traits::{DeviceTrait as _, HostTrait as _},
@@ -28,6 +27,7 @@ mod track;
 
 pub use audio_clip::AudioClip;
 pub use audio_graph::{NodeId, NodeImpl};
+pub use audio_graph_node::AudioGraphNode;
 pub use channel::{Channel, Flags, PanMode};
 pub use clap_host;
 pub use clip::Clip;

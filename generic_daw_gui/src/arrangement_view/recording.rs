@@ -88,6 +88,7 @@ impl Recording {
 				len: core.samples.len(),
 				crc: crc(File::open(&path).unwrap()),
 				path,
+				refs: 0,
 			},
 			core,
 		}
@@ -110,6 +111,7 @@ impl Recording {
 				len: core.samples.len(),
 				crc: crc(File::open(&self.path).unwrap()),
 				path: self.path,
+				refs: 0,
 			},
 			core,
 		}
