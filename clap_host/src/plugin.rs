@@ -4,6 +4,8 @@ use crate::{
 	event_buffers::EventBuffers, gui::Gui, host::Host, main_thread::MainThread, params::Param,
 	shared::Shared, size::Size,
 };
+#[cfg(unix)]
+use clack_extensions::posix_fd::FdFlags;
 use clack_extensions::{
 	gui::{GuiConfiguration, GuiSize, Window as ClapWindow},
 	params::{ParamInfoFlags, ParamRescanFlags},
@@ -15,6 +17,8 @@ use generic_daw_utils::{NoClone, NoDebug};
 use log::{info, warn};
 use raw_window_handle::RawWindowHandle;
 use rtrb::{Producer, RingBuffer};
+#[cfg(unix)]
+use std::os::fd::RawFd;
 use std::{io::Cursor, sync::mpsc::Receiver};
 
 #[derive(Debug)]
@@ -142,6 +146,13 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	pub fn call_on_main_thread_callback(&mut self) {
 		self.instance.call_on_main_thread_callback();
+	}
+
+	#[cfg(unix)]
+	pub fn on_fd(&mut self, fd: RawFd, flags: FdFlags) {
+		self.instance
+			.access_shared_handler(|s| *s.ext.posix_fd.get().unwrap())
+			.on_fd(&mut self.instance.plugin_handle(), fd, flags);
 	}
 
 	pub fn activate(&mut self) {

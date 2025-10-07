@@ -1,4 +1,6 @@
 use crate::{Size, host::Host, shared::Shared};
+#[cfg(unix)]
+use clack_extensions::posix_fd::{FdFlags, HostPosixFdImpl};
 use clack_extensions::{
 	audio_ports::{HostAudioPortsImpl, RescanType},
 	latency::HostLatencyImpl,
@@ -9,6 +11,8 @@ use clack_extensions::{
 };
 use clack_host::prelude::*;
 use generic_daw_utils::{NoClone, NoDebug};
+#[cfg(unix)]
+use std::os::fd::RawFd;
 use std::time::Duration;
 
 #[derive(Clone, Debug)]
@@ -24,6 +28,17 @@ pub enum MainThreadMessage {
 	UnregisterTimer(u32),
 	RescanParams(ParamRescanFlags),
 	RescanParam(ClapId, ParamRescanFlags),
+	#[cfg(unix)]
+	PosixFd(RawFd, PosixFd),
+}
+
+#[cfg(unix)]
+#[derive(Clone, Copy, Debug)]
+pub enum PosixFd {
+	OnFd(FdFlags),
+	Register(FdFlags),
+	Modify(FdFlags),
+	Unregister,
 }
 
 #[derive(Debug)]
@@ -83,6 +98,48 @@ impl HostParamsImplMainThread for MainThread<'_> {
 	}
 
 	fn clear(&mut self, _param_id: ClapId, _flags: ParamClearFlags) {}
+}
+
+#[cfg(unix)]
+impl HostPosixFdImpl for MainThread<'_> {
+	fn register_fd(&mut self, fd: RawFd, flags: FdFlags) -> Result<(), HostError> {
+		if fd == -1 {
+			return Err(HostError::Message("recieved fd -1"));
+		} else if !flags.is_empty() {
+			self.shared
+				.sender
+				.send(MainThreadMessage::PosixFd(fd, PosixFd::Register(flags)))
+				.unwrap();
+		}
+
+		Ok(())
+	}
+
+	fn modify_fd(&mut self, fd: RawFd, flags: FdFlags) -> Result<(), HostError> {
+		if fd == -1 {
+			return Err(HostError::Message("recieved fd -1"));
+		} else if !flags.is_empty() {
+			self.shared
+				.sender
+				.send(MainThreadMessage::PosixFd(fd, PosixFd::Modify(flags)))
+				.unwrap();
+		}
+
+		Ok(())
+	}
+
+	fn unregister_fd(&mut self, fd: RawFd) -> Result<(), HostError> {
+		if fd == -1 {
+			return Err(HostError::Message("recieved fd -1"));
+		}
+
+		self.shared
+			.sender
+			.send(MainThreadMessage::PosixFd(fd, PosixFd::Unregister))
+			.unwrap();
+
+		Ok(())
+	}
 }
 
 impl HostStateImpl for MainThread<'_> {

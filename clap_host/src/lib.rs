@@ -29,6 +29,8 @@ unique_id!(plugin_id);
 
 pub use audio_processor::AudioProcessor;
 pub use clack_extensions::params::{ParamInfoFlags, ParamRescanFlags};
+#[cfg(unix)]
+pub use clack_extensions::posix_fd::FdFlags;
 pub use clack_host::{
 	bundle::PluginBundle,
 	host::HostInfo,
@@ -36,6 +38,8 @@ pub use clack_host::{
 };
 pub use event_impl::EventImpl;
 pub use main_thread::MainThreadMessage;
+#[cfg(unix)]
+pub use main_thread::PosixFd;
 pub use plugin::Plugin;
 pub use plugin_descriptor::PluginDescriptor;
 pub use plugin_id::Id as PluginId;

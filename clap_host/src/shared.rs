@@ -1,4 +1,6 @@
 use crate::{MainThreadMessage, PluginDescriptor, Size};
+#[cfg(unix)]
+use clack_extensions::posix_fd::PluginPosixFd;
 use clack_extensions::{
 	audio_ports::PluginAudioPorts,
 	gui::{GuiSize, HostGuiImpl, PluginGui},
@@ -33,6 +35,8 @@ pub struct Ext {
 	pub latency: OnceLock<NoDebug<PluginLatency>>,
 	pub note_ports: OnceLock<NoDebug<PluginNotePorts>>,
 	pub params: OnceLock<NoDebug<PluginParams>>,
+	#[cfg(unix)]
+	pub posix_fd: OnceLock<NoDebug<PluginPosixFd>>,
 	pub render: OnceLock<NoDebug<PluginRender>>,
 	pub state: OnceLock<NoDebug<PluginState>>,
 	pub thread_pool: OnceLock<NoDebug<PluginThreadPool>>,
@@ -91,6 +95,9 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 			thread_pool,
 			timer
 		];
+
+		#[cfg(unix)]
+		initializing![posix_fd];
 	}
 
 	fn request_process(&self) {}

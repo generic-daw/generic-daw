@@ -18,6 +18,7 @@ clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
 	"log",
 	"note-ports",
 	"params",
+	"posix-fd",
 	"raw-window-handle_06",
 	"render",
 	"state",

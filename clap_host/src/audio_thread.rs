@@ -26,7 +26,7 @@ impl HostThreadPoolImpl for AudioThread<'_> {
 	fn request_exec(&mut self, task_count: u32) -> Result<(), HostError> {
 		if !self.processing.load(Relaxed) {
 			return Err(HostError::Message(
-				"called `request_exec` outside of `process`",
+				"called `request_exec` while not processing",
 			));
 		}
 

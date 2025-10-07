@@ -1,5 +1,7 @@
 use crate::{config::Config, widget::LINE_HEIGHT};
 use fragile::Fragile;
+#[cfg(unix)]
+use generic_daw_core::clap_host::{FdFlags, PosixFd};
 use generic_daw_core::{
 	Event,
 	clap_host::{MainThreadMessage, ParamInfoFlags, ParamRescanFlags, Plugin, PluginId, Size},
@@ -14,8 +16,21 @@ use iced::{
 	widget::{column, container, row, rule, sensor, space, text},
 	window,
 };
+#[cfg(unix)]
+use iced::{
+	futures::{FutureExt as _, SinkExt as _},
+	stream,
+	task::Handle,
+};
 use log::info;
+#[cfg(unix)]
+use smol::future::race;
 use smol::{Timer, unblock};
+#[cfg(unix)]
+use std::{
+	collections::HashMap,
+	os::fd::{BorrowedFd, RawFd},
+};
 use std::{ops::Deref as _, sync::mpsc::Receiver, time::Duration};
 
 #[derive(Clone, Debug)]
@@ -37,6 +52,8 @@ pub struct ClapHost {
 	plugins: HoleyVec<Plugin<Event>>,
 	timers: HoleyVec<HoleyVec<Duration>>,
 	windows: HoleyVec<window::Id>,
+	#[cfg(unix)]
+	fds: HoleyVec<HashMap<RawFd, Handle>>,
 }
 
 impl ClapHost {
@@ -152,6 +169,9 @@ impl ClapHost {
 				self.plugins.remove(*id).unwrap().deactivate(processor);
 				self.timers.remove(*id);
 
+				#[cfg(unix)]
+				self.fds.remove(*id);
+
 				return self.update(
 					Message::MainThread(id, MainThreadMessage::GuiClosed),
 					config,
@@ -246,6 +266,100 @@ impl ClapHost {
 			MainThreadMessage::RescanParam(param_id, flags) => {
 				plugin!(MainThreadMessage::RescanParam(param_id, flags))
 					.rescan_param(param_id, flags);
+			}
+			#[cfg(unix)]
+			MainThreadMessage::PosixFd(fd, msg) => {
+				return self
+					.fd_message(id, fd, msg)
+					.map(move |msg| Message::MainThread(id, msg));
+			}
+		}
+
+		Task::none()
+	}
+
+	#[cfg(unix)]
+	fn fd_message(&mut self, id: PluginId, fd: RawFd, msg: PosixFd) -> Task<MainThreadMessage> {
+		macro_rules! plugin {
+			($expr:expr) => {{
+				let Some(plugin) = self.plugins.get_mut(*id) else {
+					let msg = MainThreadMessage::PosixFd(fd, $expr);
+					info!("retrying {msg:?}");
+					return Task::perform(Timer::after(Duration::from_millis(100)), |_| msg);
+				};
+				plugin
+			}};
+		}
+
+		match msg {
+			PosixFd::OnFd(flags) => {
+				plugin!(PosixFd::OnFd(flags)).on_fd(fd, flags);
+			}
+			PosixFd::Register(flags) => {
+				let (_, handle) = Task::<()>::none().abortable();
+
+				let handle = self
+					.fds
+					.entry(*id)
+					.get_or_insert_default()
+					.insert(fd, handle.abort_on_drop());
+				debug_assert!(handle.is_none());
+
+				return self.fd_message(id, fd, PosixFd::Modify(flags));
+			}
+			PosixFd::Modify(flags) => {
+				// SAFETY:
+				// This fd is owned by the plugin, and is open at least until
+				// [`PosixFd::Unregister`] is processed. The fd is not -1.
+				let async_fd = smol::Async::new(unsafe { BorrowedFd::borrow_raw(fd) }).unwrap();
+
+				let (task, handle) = Task::stream(stream::channel(100, async move |mut sender| {
+					loop {
+						let msg = match (
+							flags.contains(FdFlags::READ),
+							flags.contains(FdFlags::WRITE),
+						) {
+							(true, false) => {
+								async_fd
+									.readable()
+									.map(|_| PosixFd::OnFd(FdFlags::READ))
+									.await
+							}
+							(false, true) => {
+								async_fd
+									.writable()
+									.map(|_| PosixFd::OnFd(FdFlags::WRITE))
+									.await
+							}
+							(true, true) => {
+								race(
+									async_fd.readable().map(|_| PosixFd::OnFd(FdFlags::READ)),
+									async_fd.writable().map(|_| PosixFd::OnFd(FdFlags::WRITE)),
+								)
+								.await
+							}
+							(false, false) => return,
+						};
+
+						if sender.send(msg).await.is_err() {
+							return;
+						}
+					}
+				}))
+				.abortable();
+
+				let handle = self
+					.fds
+					.get_mut(*id)
+					.unwrap()
+					.insert(fd, handle.abort_on_drop());
+				debug_assert!(handle.is_some());
+
+				return task.map(move |msg| MainThreadMessage::PosixFd(fd, msg));
+			}
+			PosixFd::Unregister => {
+				let handle = self.fds.get_mut(*id).unwrap().remove(&fd);
+				debug_assert!(handle.is_some());
 			}
 		}
 
