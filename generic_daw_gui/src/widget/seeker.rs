@@ -549,7 +549,7 @@ impl<'a, Message> Seeker<'a, Message> {
 				Quad {
 					bounds: Rectangle::new(
 						start - Vector::new(GRADIENT_SIZE, 0.0),
-						Size::new(GRADIENT_SIZE, f32::MAX),
+						Size::new(GRADIENT_SIZE, 10000.0),
 					),
 					..Quad::default()
 				},
@@ -560,7 +560,7 @@ impl<'a, Message> Seeker<'a, Message> {
 
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(end, Size::new(GRADIENT_SIZE, f32::MAX)),
+					bounds: Rectangle::new(end, Size::new(GRADIENT_SIZE, 10000.0)),
 					..Quad::default()
 				},
 				Linear::new(FRAC_PI_2)
@@ -581,7 +581,7 @@ impl<'a, Message> Seeker<'a, Message> {
 			Quad {
 				bounds: Rectangle::new(
 					offset_pos(self.rtstate.sample as f32),
-					Size::new(1.5, f32::MAX),
+					Size::new(1.5, 10000.0),
 				),
 				..Quad::default()
 			},

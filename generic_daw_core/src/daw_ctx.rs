@@ -165,7 +165,7 @@ impl DawCtx {
 		(audio_ctx, id, r_sender, r_receiver)
 	}
 
-	pub fn process(&mut self, mut buf: &mut [f32]) {
+	fn recv_events(&mut self) {
 		while let Ok(msg) = self.consumer.pop() {
 			trace!("{msg:?}");
 
@@ -176,12 +176,22 @@ impl DawCtx {
 				Message::PatternAction(pattern, action) => {
 					self.state.patterns.get_mut(*pattern).unwrap().apply(action);
 				}
-				Message::SampleAdd(sample) => _ = self.state.samples.insert(*sample.id, sample),
-				Message::SampleRemove(sample) => _ = self.state.samples.remove(*sample),
-				Message::PatternAdd(pattern) => {
-					self.state.patterns.insert(*pattern.id, pattern);
+				Message::SampleAdd(sample) => {
+					let sample = self.state.samples.insert(*sample.id, sample);
+					debug_assert!(sample.is_none());
 				}
-				Message::PatternRemove(pattern) => _ = self.state.patterns.remove(*pattern),
+				Message::SampleRemove(sample) => {
+					let sample = self.state.samples.remove(*sample);
+					debug_assert!(sample.is_some());
+				}
+				Message::PatternAdd(pattern) => {
+					let pattern = self.state.patterns.insert(*pattern.id, pattern);
+					debug_assert!(pattern.is_none());
+				}
+				Message::PatternRemove(pattern) => {
+					let pattern = self.state.patterns.remove(*pattern);
+					debug_assert!(pattern.is_some());
+				}
 				Message::NodeAdd(node) => self.audio_graph.insert(*node),
 				Message::NodeRemove(node) => self.audio_graph.remove(node),
 				Message::NodeConnect(from, to, sender) => {
@@ -226,6 +236,10 @@ impl DawCtx {
 				}
 			}
 		}
+	}
+
+	pub fn process(&mut self, mut buf: &mut [f32]) {
+		self.recv_events();
 
 		let updates = self.state.updates.get_mut().unwrap();
 

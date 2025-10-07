@@ -1,19 +1,19 @@
 use crate::{
-	RtState, Sample, SampleId, Stream, buffer_size_of_config, build_input_stream,
-	resampler::Resampler,
+	InputRequest, InputResponse, RtState, STREAM_THREAD, Sample, SampleId, StreamMessage,
+	StreamToken, buffer_size_of_config, resampler::Resampler,
 };
 use cpal::StreamConfig;
 use generic_daw_utils::NoDebug;
 use hound::{SampleFormat, WavSpec, WavWriter};
 use rtrb::Consumer;
-use std::io;
+use std::{io, sync::Arc};
 
 #[derive(Debug)]
 pub struct Recording<W: io::Write + io::Seek> {
 	resampler: Resampler,
 	writer: NoDebug<WavWriter<W>>,
 
-	stream: Option<NoDebug<Stream>>,
+	stream: Option<StreamToken>,
 	config: StreamConfig,
 }
 
@@ -22,11 +22,28 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	pub fn create(
 		writer: W,
 		rtstate: &RtState,
-		device_name: Option<&str>,
+		device_name: Option<Arc<str>>,
 		sample_rate: u32,
 		frames: u32,
 	) -> (Self, Consumer<Box<[f32]>>) {
-		let (stream, config, consumer) = build_input_stream(device_name, sample_rate, frames);
+		let (sender, receiver) = oneshot::channel();
+
+		STREAM_THREAD
+			.send(StreamMessage::Input(
+				InputRequest {
+					device_name,
+					sample_rate,
+					frames,
+				},
+				sender,
+			))
+			.unwrap();
+
+		let InputResponse {
+			config,
+			consumer,
+			token,
+		} = receiver.recv().unwrap();
 
 		let resampler = Resampler::new(
 			config.sample_rate.0 as usize,
@@ -51,7 +68,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 				resampler,
 				writer: writer.into(),
 
-				stream: Some(stream.into()),
+				stream: Some(token),
 				config,
 			},
 			consumer,

@@ -23,7 +23,7 @@ impl Recording {
 	pub fn create(
 		path: impl AsRef<Path>,
 		rtstate: &RtState,
-		device_name: Option<&str>,
+		device_name: Option<Arc<str>>,
 		sample_rate: u32,
 		frames: u32,
 	) -> (Self, Consumer<Box<[f32]>>) {

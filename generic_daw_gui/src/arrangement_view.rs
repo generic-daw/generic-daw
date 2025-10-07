@@ -458,7 +458,7 @@ impl ArrangementView {
 					let (recording, task) = Recording::create(
 						recording_path(),
 						self.arrangement.rtstate(),
-						config.input_device.name.as_deref(),
+						config.input_device.name.clone(),
 						config.input_device.sample_rate.unwrap_or(44100),
 						config.input_device.buffer_size.unwrap_or(1024),
 					);
