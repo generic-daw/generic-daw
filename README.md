@@ -26,7 +26,7 @@ An early-in-development, open source, cross-platform digital audio workstation (
 ```bash
 git clone https://github.com/generic-daw/generic-daw.git
 cd generic-daw
-wget https://unpkg.com/lucide-static@latest/font/Lucide.ttf
+curl https://unpkg.com/lucide-static@latest/font/Lucide.ttf -Lo Lucide.ttf
 cargo build --release
 ```
 
