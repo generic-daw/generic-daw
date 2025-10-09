@@ -20,8 +20,8 @@ use generic_daw_core::{
 use generic_daw_utils::{NoClone, NoDebug};
 use generic_daw_widget::dot::Dot;
 use iced::{
-	Center, Color, Element, Event, Font, Function as _, Shrink, Subscription, Task, Theme, border,
-	event, keyboard,
+	Center, Color, Element, Event, Fill, Font, Function as _, Shrink, Subscription, Task, Theme,
+	border, event, keyboard,
 	mouse::Interaction,
 	time::every,
 	widget::{
@@ -453,6 +453,10 @@ impl Daw {
 			]
 			.padding(10)
 			.spacing(10),
+			self.arrangement_view
+				.loading()
+				.then(|| mouse_area(space().width(Fill).height(Fill))
+					.interaction(Interaction::Progress)),
 			self.config_view.as_ref().map(|config_view| opaque(
 				mouse_area(
 					center(opaque(config_view.view().map(Message::ConfigView)))
@@ -472,66 +476,62 @@ impl Daw {
 								},
 								5
 							)),
-							(!self.missing_samples.is_empty()).then_some(
-								container(
-									column(
-										self.missing_samples
-											.iter()
-											.map(|(name, _)| &**name)
-											.enumerate()
-											.map(|(i, name)| {
+							(!self.missing_samples.is_empty()).then(|| container(
+								column(
+									self.missing_samples
+										.iter()
+										.map(|(name, _)| &**name)
+										.enumerate()
+										.map(|(i, name)| {
+											row![
+												"can't find sample",
+												container(text(name).font(Font::MONOSPACE))
+													.padding([5, 10])
+													.style(|t| bordered_box_with_radius(5)(t)
+														.background(
+															t.extended_palette()
+																.background
+																.weakest
+																.color
+														)),
+												space::horizontal(),
 												row![
-													"can't find sample",
-													container(text(name).font(Font::MONOSPACE))
-														.padding([5, 10])
-														.style(|t| bordered_box_with_radius(5)(t)
-															.background(
-																t.extended_palette()
-																	.background
-																	.weakest
-																	.color
-															)),
-													space::horizontal(),
-													row![
-														button("Pick")
-															.on_press(
-																Message::PickSampleFileDialog(i)
-															)
-															.style(button_with_radius(
-																button::success,
-																border::left(5)
-															)),
-														button("Ignore")
-															.on_press(Message::FoundSampleResponse(
-																i,
-																Feedback::Ignore
-															))
-															.style(button_with_radius(
-																button::warning,
-																0
-															)),
-														button("Cancel")
-															.on_press(Message::FoundSampleResponse(
-																i,
-																Feedback::Cancel
-															))
-															.style(button_with_radius(
-																button::danger,
-																border::right(5)
-															))
-													]
+													button("Pick")
+														.on_press(Message::PickSampleFileDialog(i))
+														.style(button_with_radius(
+															button::success,
+															border::left(5)
+														)),
+													button("Ignore")
+														.on_press(Message::FoundSampleResponse(
+															i,
+															Feedback::Ignore
+														))
+														.style(button_with_radius(
+															button::warning,
+															0
+														)),
+													button("Cancel")
+														.on_press(Message::FoundSampleResponse(
+															i,
+															Feedback::Cancel
+														))
+														.style(button_with_radius(
+															button::danger,
+															border::right(5)
+														))
 												]
-												.spacing(10)
-												.width(Shrink)
-												.align_y(Center)
-												.into()
-											}),
-									)
-									.spacing(10)
+											]
+											.spacing(10)
+											.width(Shrink)
+											.align_y(Center)
+											.into()
+										}),
 								)
-								.padding(10)
-								.style(bordered_box_with_radius(5))
+								.spacing(10)
 							)
+							.padding(10)
+							.style(bordered_box_with_radius(5)))
 						]
 						.align_x(Center)
 						.spacing(20)

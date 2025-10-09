@@ -168,6 +168,8 @@ pub struct ArrangementView {
 	split_at: f32,
 	plugins: combo_box::State<PluginDescriptor>,
 	tree: iced_persistent::Tree,
+
+	loading: usize,
 }
 
 impl ArrangementView {
@@ -200,6 +202,8 @@ impl ArrangementView {
 				split_at: DEFAULT_SPLIT_POSITION,
 				plugins: combo_box::State::new(plugins),
 				tree: iced_persistent::Tree::empty(),
+
+				loading: 0,
 			},
 			task.map(Message::Batch),
 		)
@@ -337,6 +341,7 @@ impl ArrangementView {
 					return self.update(Message::AddAudioClip(sample.id), config, plugin_bundles);
 				}
 
+				self.loading += 1;
 				let sample_rate = self.arrangement.rtstate().sample_rate;
 
 				return Task::perform(
@@ -345,6 +350,7 @@ impl ArrangementView {
 				);
 			}
 			Message::SampleLoadedFromFile(NoClone(sample)) => {
+				self.loading -= 1;
 				let Some(sample) = sample else {
 					return Task::none();
 				};
@@ -1220,6 +1226,10 @@ impl ArrangementView {
 
 	pub fn subscription(&self) -> Subscription<Message> {
 		self.clap_host.subscription().map(Message::ClapHost)
+	}
+
+	pub fn loading(&self) -> bool {
+		self.loading > 0
 	}
 }
 

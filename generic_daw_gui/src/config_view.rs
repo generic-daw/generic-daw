@@ -426,8 +426,8 @@ impl ConfigView {
 						)
 				]
 				.align_y(Center),
-				(self.config != self.prev_config).then_some(rule::horizontal(1)),
-				(self.config != self.prev_config).then_some(row![
+				(self.config != self.prev_config).then(|| rule::horizontal(1)),
+				(self.config != self.prev_config).then(|| row![
 					container("Changes will only take effect after a project reload!")
 						.padding([5, 10])
 						.style(|t| container::warning(t).border(border::rounded(f32::INFINITY))),
