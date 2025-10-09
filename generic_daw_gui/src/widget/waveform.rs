@@ -9,6 +9,7 @@ use iced::{
 	},
 	debug,
 };
+use std::sync::Arc;
 
 pub fn mesh(
 	rtstate: &RtState,
@@ -100,7 +101,7 @@ fn make_mesh(
 				},
 			]
 		})
-		.collect::<Vec<_>>();
+		.collect::<Arc<_>>();
 
 	let indices = (0..vertices.len() as u32 - 2)
 		.flat_map(|i| [i, i + 1, i + 2])

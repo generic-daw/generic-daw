@@ -5,7 +5,7 @@ use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
 		Clipboard, Layout, Renderer as _, Shell, Text, Widget,
-		graphics::geometry::Renderer as _,
+		graphics::{Mesh, mesh::Renderer as _},
 		layout::{Limits, Node},
 		renderer::{Quad, Style},
 		text::Renderer as _,
@@ -18,16 +18,11 @@ use iced::{
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 	window,
 };
-use iced_wgpu::{
-	Geometry,
-	geometry::Cache,
-	graphics::cache::{Cached as _, Group},
-};
 use std::cell::RefCell;
 
 #[derive(Default)]
 struct State {
-	cache: RefCell<Option<Cache>>,
+	cache: RefCell<Option<Mesh>>,
 	last_bounds: Rectangle,
 	last_viewport: Rectangle,
 	last_addr: usize,
@@ -174,18 +169,11 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 				Point::new(bounds.x, layout.position().y),
 				lower_bounds,
 			) {
-			state.cache.borrow_mut().replace(
-				Geometry::Live {
-					meshes: vec![mesh],
-					images: Vec::new(),
-					text: Vec::new(),
-				}
-				.cache(Group::unique(), None),
-			);
+			state.cache.borrow_mut().replace(mesh);
 		}
 
-		if let Some(cache) = state.cache.borrow().as_ref() {
-			renderer.draw_geometry(Geometry::load(cache));
+		if let Some(mesh) = state.cache.borrow().clone() {
+			renderer.draw_mesh(mesh);
 		}
 	}
 
