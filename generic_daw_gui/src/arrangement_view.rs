@@ -108,7 +108,7 @@ pub enum Message {
 
 	SampleLoadFromFile(Arc<Path>),
 	SampleLoadedFromFile(NoClone<Option<Box<SamplePair>>>),
-	AddSample(SampleId),
+	AddAudioClip(SampleId),
 
 	OpenMidiClip(MidiClip),
 
@@ -329,25 +329,18 @@ impl ArrangementView {
 					self.arrangement.plugin_move_to(node, index, target_index);
 				}
 			}
-			Message::PluginRemove(node, i) => {
-				self.arrangement.plugin_remove(node, i);
-			}
+			Message::PluginRemove(node, i) => _ = self.arrangement.plugin_remove(node, i),
 			Message::SampleLoadFromFile(path) => {
 				let mut iter = self.arrangement.samples().values();
 				if let Some(sample) = iter.find(|sample| sample.path == path) {
 					drop(iter);
-					return self.update(Message::AddSample(sample.id), config, plugin_bundles);
+					return self.update(Message::AddAudioClip(sample.id), config, plugin_bundles);
 				}
 
 				let sample_rate = self.arrangement.rtstate().sample_rate;
 
 				return Task::perform(
-					{
-						let path = path.clone();
-						unblock(move || {
-							NoClone(SamplePair::new(path.clone(), sample_rate).map(Box::new))
-						})
-					},
+					unblock(move || NoClone(SamplePair::new(path, sample_rate).map(Box::new))),
 					Message::SampleLoadedFromFile,
 				);
 			}
@@ -357,18 +350,37 @@ impl ArrangementView {
 				};
 				let id = sample.gui.id;
 				self.arrangement.add_sample(*sample);
-				return self.update(Message::AddSample(id), config, plugin_bundles);
+				return self.update(Message::AddAudioClip(id), config, plugin_bundles);
 			}
-			Message::AddSample(sample) => {
-				let task = self.update(Message::TrackAdd, config, plugin_bundles);
-				self.arrangement.add_clip(
-					self.arrangement.tracks().len() - 1,
-					AudioClip::new(
-						sample,
-						self.arrangement.samples()[*sample].len,
-						self.arrangement.rtstate(),
-					),
+			Message::AddAudioClip(sample) => {
+				let audio = AudioClip::new(
+					sample,
+					self.arrangement.samples()[*sample].len,
+					self.arrangement.rtstate(),
 				);
+
+				let (task, track) = self
+					.arrangement
+					.tracks()
+					.iter()
+					.position(|track| {
+						track
+							.clips
+							.iter()
+							.all(|clip| clip.position().start() >= audio.position.len())
+					})
+					.map_or_else(
+						|| {
+							(
+								self.update(Message::TrackAdd, config, plugin_bundles),
+								self.arrangement.tracks().len() - 1,
+							)
+						},
+						|track| (Task::none(), track),
+					);
+
+				self.arrangement.add_clip(track, audio);
+
 				return task;
 			}
 			Message::OpenMidiClip(clip) => {

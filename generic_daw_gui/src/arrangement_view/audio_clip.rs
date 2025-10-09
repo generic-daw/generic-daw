@@ -12,7 +12,10 @@ impl AudioClip {
 		Self {
 			sample,
 			position: ClipPosition::new(
-				NotePosition::new(MusicalTime::ZERO, MusicalTime::from_samples(len, rtstate)),
+				NotePosition::new(
+					MusicalTime::ZERO,
+					MusicalTime::from_samples(len, rtstate).max(MusicalTime::TICK),
+				),
 				MusicalTime::ZERO,
 			),
 		}
