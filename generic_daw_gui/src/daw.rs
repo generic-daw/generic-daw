@@ -590,34 +590,35 @@ impl Daw {
 fn keybinds() -> Subscription<Message> {
 	event::listen_with(|e, s, _| match s {
 		event::Status::Ignored => match e {
-			Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
-				match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-					(false, false, false) => match key {
-						keyboard::Key::Named(keyboard::key::Named::Space) => {
-							Some(Message::Arrangement(ArrangementMessage::TogglePlayback))
-						}
-						_ => None,
-					},
-					(true, false, false) => match key {
-						keyboard::Key::Character(c) => match c.as_str() {
-							"e" => Some(Message::ExportFileDialog),
-							"n" => Some(Message::NewFile),
-							"o" => Some(Message::OpenFileDialog),
-							"s" => Some(Message::SaveFile),
-							_ => None,
-						},
-						_ => None,
-					},
-					(true, true, false) => match key {
-						keyboard::Key::Character(c) => match c.as_str() {
-							"s" => Some(Message::SaveAsFileDialog),
-							_ => None,
-						},
-						_ => None,
-					},
+			Event::Keyboard(keyboard::Event::KeyPressed {
+				physical_key,
+				modifiers,
+				..
+			}) => match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
+				(false, false, false) => match physical_key {
+					keyboard::key::Physical::Code(keyboard::key::Code::Space) => {
+						Some(Message::Arrangement(ArrangementMessage::TogglePlayback))
+					}
 					_ => None,
-				}
-			}
+				},
+				(true, false, false) => match physical_key {
+					keyboard::key::Physical::Code(code) => match code {
+						keyboard::key::Code::KeyE => Some(Message::ExportFileDialog),
+						keyboard::key::Code::KeyN => Some(Message::NewFile),
+						keyboard::key::Code::KeyO => Some(Message::OpenFileDialog),
+						keyboard::key::Code::KeyS => Some(Message::SaveFile),
+						_ => None,
+					},
+					keyboard::key::Physical::Unidentified(..) => None,
+				},
+				(true, true, false) => match physical_key {
+					keyboard::key::Physical::Code(keyboard::key::Code::KeyS) => {
+						Some(Message::SaveAsFileDialog)
+					}
+					_ => None,
+				},
+				_ => None,
+			},
 			_ => None,
 		},
 		event::Status::Captured => None,
