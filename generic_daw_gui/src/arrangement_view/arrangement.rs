@@ -347,9 +347,9 @@ impl Arrangement {
 	}
 
 	pub fn remove_track(&mut self, id: NodeId) {
-		self.remove_channel(id);
 		let idx = self.track_of(id).unwrap();
 		let track = self.tracks.remove(idx);
+		self.remove_channel(id);
 		for clip in track.clips {
 			match clip {
 				Clip::Audio(audio) => self.samples.get_mut(*audio.sample).unwrap().refs -= 1,

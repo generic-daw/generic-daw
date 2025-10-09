@@ -527,7 +527,7 @@ impl ArrangementView {
 				let old_scale = self.arrangement_scale;
 
 				self.arrangement_scale += scale;
-				self.arrangement_scale.x = self.arrangement_scale.x.clamp(3.0, 15f32.next_down());
+				self.arrangement_scale.x = self.arrangement_scale.x.clamp(1.0, 15f32.next_down());
 				self.arrangement_scale.y = self.arrangement_scale.y.clamp(46.0, 200.0);
 
 				if scale == Vec2::ZERO || old_scale != self.arrangement_scale {
@@ -544,7 +544,7 @@ impl ArrangementView {
 				let old_scale = self.piano_roll_scale;
 
 				self.piano_roll_scale += scale;
-				self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(3.0, 15f32.next_down());
+				self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(1.0, 15f32.next_down());
 				self.piano_roll_scale.y = self
 					.piano_roll_scale
 					.y
@@ -580,7 +580,7 @@ impl ArrangementView {
 
 				let mut clip = MidiClip::new(id);
 				clip.position.trim_end_to(
-					MusicalTime::BEAT * 4 * u32::from(self.arrangement.rtstate().numerator),
+					MusicalTime::BEAT * 4 * u64::from(self.arrangement.rtstate().numerator),
 				);
 				clip.position.move_to(pos);
 				let clip = self.arrangement.add_clip(track, clip);

@@ -33,7 +33,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
 		let start = self.inner.position.to_samples_f(self.rtstate);
-		let len = (self.inner.lods[0].len() * 8 + 7) as f32;
+		let len = 2.0 * self.inner.lods[0].len() as f32;
 		let pixel_size = self.scale.x.exp2();
 
 		Node::new(Size::new(len / pixel_size, self.scale.y))

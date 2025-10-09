@@ -32,7 +32,7 @@ fn make_mesh(
 	rtstate: &RtState,
 	start: MusicalTime,
 	offset: MusicalTime,
-	lods: &[impl AsRef<[(f32, f32)]>],
+	lods: &[impl AsRef<[(f32, f32)]>; LOD_LEVELS],
 	position: Vec2,
 	scale: Vec2,
 	theme: &Theme,
@@ -50,7 +50,7 @@ fn make_mesh(
 	let lod_samples_per_pixel = lod_sample_size / pixel_size;
 
 	let color = color::pack(theme.extended_palette().background.strong.text);
-	let lod = scale.x as usize - 3;
+	let lod = scale.x as usize - 1;
 
 	let start = start.to_samples_f(rtstate);
 	let offset = offset.to_samples_f(rtstate);

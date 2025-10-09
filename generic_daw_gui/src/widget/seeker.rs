@@ -431,7 +431,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		let end_beat = beat + MusicalTime::from_samples_f(bounds.width * sample_size, self.rtstate);
 		beat = beat.snap_floor(self.scale.x + 1.0, self.rtstate);
 
-		let background_step = MusicalTime::new(4 * u32::from(self.rtstate.numerator), 0);
+		let background_step = MusicalTime::new(4 * u64::from(self.rtstate.numerator), 0);
 		let mut background_beat =
 			MusicalTime::new(beat.beat() - (beat.beat() % background_step.beat()), 0);
 		let background_width = background_step.to_samples_f(self.rtstate) / sample_size;
@@ -462,7 +462,7 @@ impl<'a, Message> Seeker<'a, Message> {
 			let color = if snap_step >= MusicalTime::BEAT {
 				if beat
 					.beat()
-					.is_multiple_of(snap_step.beat() * u32::from(self.rtstate.numerator))
+					.is_multiple_of(snap_step.beat() * u64::from(self.rtstate.numerator))
 				{
 					theme.extended_palette().background.strong.color
 				} else {
@@ -588,7 +588,7 @@ impl<'a, Message> Seeker<'a, Message> {
 			theme.extended_palette().primary.base.color,
 		);
 
-		let mut draw_text = |beat: MusicalTime, bar: u32| {
+		let mut draw_text = |beat: MusicalTime, bar: u64| {
 			let bar = Text {
 				content: (bar + 1).to_string(),
 				bounds: Size::new(f32::INFINITY, 0.0),

@@ -109,22 +109,6 @@ pub struct PanModeStereo {
 	pub r: f32,
 }
 
-impl From<PanModeBalance> for OptionPanMode {
-	fn from(value: PanModeBalance) -> Self {
-		Self {
-			pan_mode: Some(PanMode::Balance(value)),
-		}
-	}
-}
-
-impl From<PanModeStereo> for OptionPanMode {
-	fn from(value: PanModeStereo) -> Self {
-		Self {
-			pan_mode: Some(PanMode::Stereo(value)),
-		}
-	}
-}
-
 #[derive(Clone, Copy, Message)]
 pub struct Note {
 	#[prost(uint32)]
@@ -167,18 +151,18 @@ pub struct MidiClip {
 
 #[derive(Clone, Copy, Message)]
 pub struct NotePosition {
-	#[prost(uint32)]
-	pub start: u32,
-	#[prost(uint32)]
-	pub end: u32,
+	#[prost(uint64)]
+	pub start: u64,
+	#[prost(uint64)]
+	pub end: u64,
 }
 
 #[derive(Clone, Copy, Message)]
 pub struct ClipPosition {
 	#[prost(message, required)]
 	pub position: NotePosition,
-	#[prost(uint32)]
-	pub offset: u32,
+	#[prost(uint64)]
+	pub offset: u64,
 }
 
 #[derive(Message)]
@@ -197,6 +181,22 @@ impl Plugin {
 	#[must_use]
 	pub fn id(&self) -> &CStr {
 		CStr::from_bytes_with_nul(&self.id).unwrap()
+	}
+}
+
+impl From<PanModeBalance> for OptionPanMode {
+	fn from(value: PanModeBalance) -> Self {
+		Self {
+			pan_mode: Some(PanMode::Balance(value)),
+		}
+	}
+}
+
+impl From<PanModeStereo> for OptionPanMode {
+	fn from(value: PanModeStereo) -> Self {
+		Self {
+			pan_mode: Some(PanMode::Stereo(value)),
+		}
 	}
 }
 

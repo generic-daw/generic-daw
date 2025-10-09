@@ -11,7 +11,7 @@ pub use clip_position::ClipPosition;
 pub use note_position::NotePosition;
 
 #[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct MusicalTime(u32);
+pub struct MusicalTime(u64);
 
 impl Debug for MusicalTime {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -27,53 +27,52 @@ impl MusicalTime {
 	pub const BEAT: Self = Self::new(1, 0);
 	pub const TICK: Self = Self::new(0, 1);
 
-	#[must_use]
-	pub const fn new(beat: u32, tick: u32) -> Self {
-		debug_assert!(tick < 256);
-		debug_assert!(beat <= u32::MAX >> 8);
+	const TICK_BITS: u8 = 16;
+	pub const TICKS_PER_BEAT: u64 = 1 << Self::TICK_BITS;
 
-		Self((beat << 8) | tick)
+	#[must_use]
+	pub const fn new(beat: u64, tick: u64) -> Self {
+		debug_assert!(tick <= Self::TICKS_PER_BEAT);
+		debug_assert!(beat <= u64::MAX / Self::TICKS_PER_BEAT);
+
+		Self(beat * Self::TICKS_PER_BEAT + tick)
 	}
 
 	#[must_use]
-	pub const fn bar(self, rtstate: &RtState) -> u32 {
-		self.beat() / rtstate.numerator as u32
+	pub const fn bar(self, rtstate: &RtState) -> u64 {
+		self.beat() / rtstate.numerator as u64
 	}
 
 	#[must_use]
-	pub const fn beat(self) -> u32 {
-		self.0 >> 8
+	pub const fn beat(self) -> u64 {
+		self.0 / Self::TICKS_PER_BEAT
 	}
 
 	#[must_use]
-	pub const fn tick(self) -> u32 {
-		self.0 & 0xff
+	pub const fn tick(self) -> u64 {
+		self.0 % Self::TICKS_PER_BEAT
 	}
 
 	#[must_use]
 	pub const fn floor(mut self) -> Self {
-		self.0 &= !0xff;
+		self.0 -= self.0 % Self::TICKS_PER_BEAT;
 		self
 	}
 
 	#[must_use]
 	pub const fn ceil(mut self) -> Self {
-		if self.tick() != 0 {
-			self.0 &= !0xff;
-			self.0 += 1 << 8;
-		}
-
+		self.0 += Self::TICKS_PER_BEAT - (self.0 % Self::TICKS_PER_BEAT);
 		self
 	}
 
 	#[must_use]
 	pub const fn round(mut self) -> Self {
-		if self.0 & 0x80 != 0 {
-			self.0 += 1 << 8;
+		let diff = self.0 % Self::TICKS_PER_BEAT;
+		if diff < Self::TICKS_PER_BEAT / 2 {
+			self.0 -= diff;
+		} else {
+			self.0 += Self::TICKS_PER_BEAT - diff;
 		}
-
-		self.0 &= !0xff;
-
 		self
 	}
 
@@ -83,9 +82,9 @@ impl MusicalTime {
 		let bpm = rtstate.bpm as f64;
 		let sample_rate = rtstate.sample_rate as f64;
 
-		let time = samples * (bpm * 32.0) / (sample_rate * 15.0);
+		let time = (samples * bpm * (Self::TICKS_PER_BEAT / 2) as f64) / (sample_rate * 60.0);
 
-		Self(time as u32)
+		Self(time as u64)
 	}
 
 	#[must_use]
@@ -96,9 +95,9 @@ impl MusicalTime {
 		let bpm = rtstate.bpm as u64;
 		let sample_rate = rtstate.sample_rate as u64;
 
-		let time = samples * (bpm * 32) / (sample_rate * 15);
+		let time = (samples * bpm * (Self::TICKS_PER_BEAT / 2)) / (sample_rate * 60);
 
-		Self(time as u32)
+		Self(time)
 	}
 
 	#[must_use]
@@ -107,18 +106,18 @@ impl MusicalTime {
 		let bpm = rtstate.bpm as f64;
 		let sample_rate = rtstate.sample_rate as f64;
 
-		let samples = beat * (sample_rate * 15.0) / (bpm * 32.0);
+		let samples = (beat * sample_rate * 60.0) / (bpm * (Self::TICKS_PER_BEAT / 2) as f64);
 
 		samples as f32
 	}
 
 	#[must_use]
 	pub const fn to_samples(self, rtstate: &RtState) -> usize {
-		let time = self.0 as u64;
+		let time = self.0;
 		let bpm = rtstate.bpm as u64;
 		let sample_rate = rtstate.sample_rate as u64;
 
-		let samples = time * (sample_rate * 15) / (bpm * 32);
+		let samples = (time * sample_rate * 60) / (bpm * (Self::TICKS_PER_BEAT / 2));
 
 		samples.next_multiple_of(2) as usize
 	}
@@ -140,27 +139,22 @@ impl MusicalTime {
 	#[must_use]
 	pub fn snap_round(mut self, scale: f32, rtstate: &RtState) -> Self {
 		let modulo = Self::snap_step(scale, rtstate).0;
-
 		let diff = self.0 % modulo;
-
-		if diff > modulo / 2 {
-			self.0 += modulo - diff;
-		} else {
+		if diff < modulo / 2 {
 			self.0 -= diff;
+		} else {
+			self.0 += modulo - diff;
 		}
-
 		self
 	}
 
 	#[must_use]
 	pub fn snap_step(mut scale: f32, rtstate: &RtState) -> Self {
-		scale += f32::from(rtstate.bpm).log2() - 10.0;
-		Self(if scale < 0.0 {
-			1
-		} else if scale < 9.0 {
-			1 << scale.floor() as u8
+		scale += f32::from(rtstate.bpm).log2() - 18.0 + f32::from(Self::TICK_BITS);
+		Self(if scale < f32::from(Self::TICK_BITS + 1) {
+			1 << scale as u8
 		} else {
-			u32::from(rtstate.numerator) << (scale.floor() as u8 - 1)
+			u64::from(rtstate.numerator) << (scale as u8 - 1)
 		})
 	}
 
@@ -203,22 +197,22 @@ impl SubAssign for MusicalTime {
 	}
 }
 
-impl Mul<u32> for MusicalTime {
+impl Mul<u64> for MusicalTime {
 	type Output = Self;
 
-	fn mul(mut self, rhs: u32) -> Self::Output {
+	fn mul(mut self, rhs: u64) -> Self::Output {
 		self.0 *= rhs;
 		self
 	}
 }
 
-impl From<u32> for MusicalTime {
-	fn from(value: u32) -> Self {
+impl From<u64> for MusicalTime {
+	fn from(value: u64) -> Self {
 		Self(value)
 	}
 }
 
-impl From<MusicalTime> for u32 {
+impl From<MusicalTime> for u64 {
 	fn from(value: MusicalTime) -> Self {
 		value.0
 	}
