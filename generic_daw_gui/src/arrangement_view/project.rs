@@ -187,7 +187,7 @@ impl ArrangementWrapper {
 
 		let mut samples = HashMap::new();
 
-		std::thread::scope(|s| {
+		rayon_core::in_place_scope(|s| {
 			let (done, receiver) = mpsc::channel();
 
 			let samples_map = reader
@@ -236,7 +236,7 @@ impl ArrangementWrapper {
 
 				let mut path = paths.remove(&idx);
 				let mut sample_name = sample.name.clone();
-				s.spawn(move || {
+				s.spawn(move |_| {
 					loop {
 						if let Some(path) = &path
 							&& let Some(sample) = SamplePair::new(path, sample_rate)

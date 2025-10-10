@@ -1258,6 +1258,7 @@ dependencies = [
  "infer",
  "log",
  "oneshot",
+ "rayon-core",
  "rfd",
  "rtrb",
  "serde",
