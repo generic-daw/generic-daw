@@ -9,15 +9,12 @@ use iced_widget::{
 		layout::{Limits, Node},
 		mouse::Cursor,
 		renderer::{Quad, Style},
+		time::{Duration, Instant},
 		widget::Tree,
 		window,
 	},
 };
-use std::{
-	cell::Cell,
-	convert::identity,
-	time::{Duration, Instant},
-};
+use std::{cell::Cell, convert::identity};
 
 #[derive(Debug)]
 pub struct State {

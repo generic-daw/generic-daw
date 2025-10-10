@@ -6,11 +6,11 @@ use iced_widget::{
 		layout::{Limits, Node},
 		mouse::Cursor,
 		renderer::{Quad, Style},
+		time::Instant,
 		widget::{Tree, tree},
 		window,
 	},
 };
-use std::time::Instant;
 
 struct State {
 	animation: Animation<bool>,

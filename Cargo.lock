@@ -845,9 +845,9 @@ source = "git+https://github.com/iced-rs/winit.git?rev=05b8ff17a06562f0a10bb46e6
 [[package]]
 name = "dragking"
 version = "0.1.0"
-source = "git+https://github.com/edwloef/dragking.git?branch=generic-daw#93e3cda486e0eba7b17e7f2d2f0c8c55f24e6cfc"
+source = "git+https://github.com/edwloef/dragking.git?branch=generic-daw#fefbd1392c801ee52dae19e23ce87ad350a0ba3a"
 dependencies = [
- "iced",
+ "iced_core",
 ]
 
 [[package]]

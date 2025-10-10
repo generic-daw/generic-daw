@@ -1,7 +1,6 @@
 use crate::{AudioGraph, AudioGraphNode, MusicalTime, daw_ctx::State};
 use hound::WavWriter;
-use log::info;
-use std::{path::Path, time::Instant};
+use std::path::Path;
 
 #[derive(Debug)]
 pub struct Export {
@@ -11,8 +10,6 @@ pub struct Export {
 
 impl Export {
 	pub fn export(&mut self, path: &Path, len: MusicalTime, mut progress_fn: impl FnMut(f32)) {
-		let now = Instant::now();
-
 		let old = self.state.rtstate;
 		self.audio_graph.for_each_mut_node(AudioGraphNode::reset);
 
@@ -73,11 +70,5 @@ impl Export {
 
 		self.state.rtstate = old;
 		self.audio_graph.for_each_mut_node(AudioGraphNode::reset);
-
-		info!(
-			"export of {} finished in {:?}",
-			path.display(),
-			now.elapsed()
-		);
 	}
 }
