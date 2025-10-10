@@ -73,8 +73,14 @@ impl Shared<'_> {
 impl<'a> SharedHandler<'a> for Shared<'a> {
 	fn initializing(&self, instance: InitializingPluginHandle<'a>) {
 		macro_rules! initializing {
-			($($ident:ident),*) => {
+			(
 				$(
+					$(#[$meta:meta])*
+					$ident:ident
+				),*
+			) => {
+				$(
+					$(#[$meta])*
 					if self.ext.$ident.get().is_none()
 						&& let Some(ext) = instance.get_extension()
 					{
@@ -90,14 +96,13 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 			latency,
 			note_ports,
 			params,
+			#[cfg(unix)]
+			posix_fd,
 			render,
 			state,
 			thread_pool,
 			timer
 		];
-
-		#[cfg(unix)]
-		initializing![posix_fd];
 	}
 
 	fn request_process(&self) {}

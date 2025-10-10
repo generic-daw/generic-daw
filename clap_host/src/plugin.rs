@@ -378,7 +378,6 @@ impl<Event: EventImpl> Plugin<Event> {
 
 impl<Event: EventImpl> Drop for Plugin<Event> {
 	fn drop(&mut self) {
-		self.hide();
 		self.destroy();
 
 		if matches!(

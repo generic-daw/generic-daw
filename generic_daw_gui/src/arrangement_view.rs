@@ -351,12 +351,12 @@ impl ArrangementView {
 			}
 			Message::SampleLoadedFromFile(NoClone(sample)) => {
 				self.loading -= 1;
-				let Some(sample) = sample else {
-					return Task::none();
-				};
-				let id = sample.gui.id;
-				self.arrangement.add_sample(*sample);
-				return self.update(Message::AddAudioClip(id), config, plugin_bundles);
+
+				if let Some(sample) = sample {
+					let id = sample.gui.id;
+					self.arrangement.add_sample(*sample);
+					return self.update(Message::AddAudioClip(id), config, plugin_bundles);
+				}
 			}
 			Message::AddAudioClip(sample) => {
 				let audio = AudioClip::new(

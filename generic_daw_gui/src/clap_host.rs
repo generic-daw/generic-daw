@@ -181,10 +181,7 @@ impl ClapHost {
 				let plugin = plugin!(MainThreadMessage::GuiRequestShow);
 
 				if self.windows.contains_key(*id) {
-					return Task::none();
-				}
-
-				if !plugin.has_gui() {
+				} else if !plugin.has_gui() {
 					let (window, spawn) = window::open(window::Settings {
 						size: (400.0, 600.0).into(),
 						resizable: false,
