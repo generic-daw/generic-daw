@@ -12,7 +12,6 @@ audio_graph = { workspace = true }
 clap_host = { workspace = true }
 generic_daw_utils = { workspace = true }
 
-bitflags = "2.9.4"
 cpal = "0.16.0"
 hound = "3.5.1"
 log = "0.4.28"

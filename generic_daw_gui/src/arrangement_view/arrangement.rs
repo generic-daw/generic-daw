@@ -15,10 +15,9 @@ use crate::{
 };
 use bit_set::BitSet;
 use generic_daw_core::{
-	self as core, AudioGraphNode, Batch, Event, Export, Flags, Message, MidiKey, MidiNote,
-	MusicalTime, NodeAction, NodeId, NodeImpl, NotePosition, OutputRequest, OutputResponse,
-	PanMode, PatternAction, PatternId, RtState, STREAM_THREAD, StreamMessage, StreamToken, Update,
-	Version,
+	self as core, AudioGraphNode, Batch, Event, Export, Message, MidiKey, MidiNote, MusicalTime,
+	NodeAction, NodeId, NodeImpl, NotePosition, OutputRequest, OutputResponse, PanMode,
+	PatternAction, PatternId, RtState, STREAM_THREAD, StreamMessage, StreamToken, Update, Version,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
 use generic_daw_utils::{HoleyVec, NoClone, NoDebug, ShiftMoveExt as _};
@@ -165,18 +164,13 @@ impl Arrangement {
 	}
 
 	pub fn channel_toggle_enabled(&mut self, id: NodeId) {
-		self.node_mut(id).flags.toggle(Flags::ENABLED);
+		self.node_mut(id).enabled ^= true;
 		self.node_action(id, NodeAction::ChannelToggleEnabled);
 	}
 
 	pub fn channel_toggle_bypassed(&mut self, id: NodeId) {
-		self.node_mut(id).flags.toggle(Flags::BYPASSED);
+		self.node_mut(id).bypassed ^= true;
 		self.node_action(id, NodeAction::ChannelToggleBypassed);
-	}
-
-	pub fn channel_toggle_polarity(&mut self, id: NodeId) {
-		self.node_mut(id).flags.toggle(Flags::POLARITY_INVERTED);
-		self.node_action(id, NodeAction::ChannelTogglePolarity);
 	}
 
 	pub fn plugin_load(&mut self, id: NodeId, processor: AudioProcessor<Event>) {
@@ -279,7 +273,7 @@ impl Arrangement {
 		for i in 0..self.tracks.len() {
 			let track_id = self.tracks[i].id;
 
-			if self.node_mut(track_id).flags.contains(Flags::ENABLED) == (id == track_id) {
+			if self.node_mut(track_id).enabled == (id == track_id) {
 				continue;
 			}
 
@@ -291,7 +285,7 @@ impl Arrangement {
 		for i in 0..self.tracks.len() {
 			let track_id = self.tracks[i].id;
 
-			if self.node_mut(track_id).flags.contains(Flags::ENABLED) {
+			if self.node_mut(track_id).enabled {
 				continue;
 			}
 

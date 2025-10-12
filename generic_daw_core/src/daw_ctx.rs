@@ -66,7 +66,6 @@ pub enum NodeAction {
 
 	ChannelToggleEnabled,
 	ChannelToggleBypassed,
-	ChannelTogglePolarity,
 	ChannelSwapChannels,
 	ChannelVolumeChanged(f32),
 	ChannelPanChanged(PanMode),

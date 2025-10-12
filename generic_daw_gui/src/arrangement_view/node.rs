@@ -4,7 +4,7 @@ use crate::{
 	components::icon_button,
 	icons::{arrow_left_right, radius},
 };
-use generic_daw_core::{Flags, NodeId, PanMode};
+use generic_daw_core::{NodeId, PanMode};
 use generic_daw_utils::NoDebug;
 use generic_daw_widget::{knob::Knob, peak_meter};
 use iced::{
@@ -28,7 +28,8 @@ pub struct Node {
 	pub plugins: Vec<Plugin>,
 	pub volume: f32,
 	pub pan: PanMode,
-	pub flags: Flags,
+	pub enabled: bool,
+	pub bypassed: bool,
 	pub peaks: NoDebug<[[peak_meter::State; 2]; 2]>,
 }
 
@@ -40,7 +41,8 @@ impl Node {
 			plugins: Vec::new(),
 			volume: 1.0,
 			pan: PanMode::Balance(0.0),
-			flags: Flags::ENABLED,
+			enabled: true,
+			bypassed: false,
 			peaks: NoDebug([
 				[peak_meter::State::new(1.0), peak_meter::State::new(1.0)],
 				[peak_meter::State::new(3.0), peak_meter::State::new(3.0)],
@@ -66,7 +68,7 @@ impl Node {
 			.center(0.0)
 			.reset(0.0)
 			.radius(radius)
-			.enabled(self.flags.contains(Flags::ENABLED))
+			.enabled(self.enabled)
 			.tooltip(format_pan(pan))
 			.into(),
 			PanMode::Stereo(l, r) => row![
@@ -77,7 +79,7 @@ impl Node {
 					.center(0.0)
 					.reset(-1.0)
 					.radius(radius * RADIUS)
-					.enabled(self.flags.contains(Flags::ENABLED))
+					.enabled(self.enabled)
 					.tooltip(format_pan(l))
 				)
 				.align_top(Fill),
@@ -88,7 +90,7 @@ impl Node {
 					.center(0.0)
 					.reset(1.0)
 					.radius(radius * RADIUS)
-					.enabled(self.flags.contains(Flags::ENABLED))
+					.enabled(self.enabled)
 					.tooltip(format_pan(r))
 				)
 				.align_bottom(Fill)
@@ -104,7 +106,7 @@ impl Node {
 		match self.pan {
 			PanMode::Balance(..) => icon_button(
 				arrow_left_right(),
-				if self.flags.contains(Flags::ENABLED) {
+				if self.enabled {
 					button::primary
 				} else {
 					button::secondary
@@ -117,7 +119,7 @@ impl Node {
 			.into(),
 			PanMode::Stereo(..) => icon_button(
 				radius(),
-				if self.flags.contains(Flags::ENABLED) {
+				if self.enabled {
 					button::primary
 				} else {
 					button::secondary

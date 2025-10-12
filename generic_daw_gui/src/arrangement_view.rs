@@ -26,7 +26,7 @@ use crate::{
 use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
-	Batch, Flags, MidiNote, MusicalTime, NodeId, NotePosition, PanMode, SampleId,
+	Batch, MidiNote, MusicalTime, NodeId, NotePosition, PanMode, SampleId,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
 use generic_daw_utils::{NoClone, NoDebug, Vec2};
@@ -97,7 +97,6 @@ pub enum Message {
 	ChannelPanChanged(NodeId, PanMode),
 	ChannelToggleEnabled(NodeId),
 	ChannelToggleBypassed(NodeId),
-	ChannelInvertPolarity(NodeId),
 
 	PluginLoad(NodeId, PluginDescriptor, bool),
 	PluginSetState(NodeId, usize, NoDebug<Box<[u8]>>),
@@ -272,7 +271,6 @@ impl ArrangementView {
 			Message::ChannelPanChanged(id, pan) => self.arrangement.channel_pan_changed(id, pan),
 			Message::ChannelToggleEnabled(id) => self.arrangement.channel_toggle_enabled(id),
 			Message::ChannelToggleBypassed(id) => self.arrangement.channel_toggle_bypassed(id),
-			Message::ChannelInvertPolarity(id) => self.arrangement.channel_toggle_polarity(id),
 			Message::PluginLoad(node, descriptor, show) => {
 				static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
 					HostInfo::new_from_cstring(
@@ -767,7 +765,7 @@ impl ArrangementView {
 						let node = self.arrangement.node(id);
 
 						let button_style = |cond: bool| {
-							if !node.flags.contains(Flags::ENABLED) {
+							if !node.enabled {
 								button::secondary
 							} else if cond {
 								button::warning
@@ -779,22 +777,19 @@ impl ArrangementView {
 						container(
 							row![
 								row![
-									PeakMeter::new(
-										&node.peaks[0][0],
-										node.flags.contains(Flags::ENABLED)
-									),
-									PeakMeter::new(
-										&node.peaks[0][1],
-										node.flags.contains(Flags::ENABLED)
-									)
+									PeakMeter::new(&node.peaks[0][0], node.enabled),
+									PeakMeter::new(&node.peaks[0][1], node.enabled)
 								]
 								.spacing(2),
 								column![
-									Knob::new(0.0..=1.0, node.volume.cbrt(), move |v| {
-										Message::ChannelVolumeChanged(id, v.powi(3))
+									Knob::new(0.0..=1.0, node.volume.abs().cbrt(), move |v| {
+										Message::ChannelVolumeChanged(
+											id,
+											v.powi(3).copysign(node.volume),
+										)
 									})
-									.enabled(node.flags.contains(Flags::ENABLED))
-									.tooltip(format_decibels(node.volume)),
+									.enabled(node.enabled)
+									.tooltip(format_decibels(node.volume.abs())),
 									node.pan_knob(20.0),
 								]
 								.align_x(Center)
@@ -803,7 +798,7 @@ impl ArrangementView {
 								column![
 									icon_button(
 										x(),
-										if node.flags.contains(Flags::ENABLED) {
+										if node.enabled {
 											button::danger
 										} else {
 											button::secondary
@@ -876,7 +871,7 @@ impl ArrangementView {
 											self.arrangement.rtstate(),
 											&self.arrangement_position,
 											&self.arrangement_scale,
-											node.flags.contains(Flags::ENABLED),
+											node.enabled,
 										)
 										.into(),
 										Clip::Midi(clip) => MidiClipWidget::new(
@@ -888,7 +883,7 @@ impl ArrangementView {
 											self.arrangement.rtstate(),
 											&self.arrangement_position,
 											&self.arrangement_scale,
-											node.flags.contains(Flags::ENABLED),
+											node.enabled,
 											Message::OpenMidiClip(*clip),
 										)
 										.into(),
@@ -1070,7 +1065,7 @@ impl ArrangementView {
 		name: impl text::IntoFragment<'a>,
 	) -> Element<'a, Message> {
 		let button_style = |cond: bool| {
-			if !node.flags.contains(Flags::ENABLED) {
+			if !node.enabled {
 				button::secondary
 			} else if cond {
 				button::warning
@@ -1093,7 +1088,7 @@ impl ArrangementView {
 						),
 					icon_button(
 						x(),
-						if node.flags.contains(Flags::ENABLED) {
+						if node.enabled {
 							button::danger
 						} else {
 							button::secondary
@@ -1107,38 +1102,33 @@ impl ArrangementView {
 				]
 				.spacing(5),
 				row![
-					icon_button(
-						circle_off(),
-						button_style(node.flags.contains(Flags::BYPASSED))
-					)
-					.on_press(Message::ChannelToggleBypassed(node.id)),
+					icon_button(circle_off(), button_style(node.bypassed))
+						.on_press(Message::ChannelToggleBypassed(node.id)),
 					icon_button(
 						arrow_up_down(),
-						button_style(node.flags.contains(Flags::POLARITY_INVERTED))
+						button_style(node.volume.is_sign_negative())
 					)
-					.on_press(Message::ChannelInvertPolarity(node.id)),
+					.on_press(Message::ChannelVolumeChanged(node.id, -node.volume)),
 					node.pan_switcher()
 				]
 				.spacing(5),
-				container(text(format_decibels(node.volume)).line_height(1.0))
+				container(text(format_decibels(node.volume.abs())).line_height(1.0))
 					.style(bordered_box_with_radius(0))
 					.center_x(55)
 					.padding(2),
 				row![
-					PeakMeter::new(&node.peaks[1][0], node.flags.contains(Flags::ENABLED))
-						.width(16.0),
-					vertical_slider(0.0..=1.0, node.volume.cbrt(), |v| {
-						Message::ChannelVolumeChanged(node.id, v.powi(3))
+					PeakMeter::new(&node.peaks[1][0], node.enabled).width(16.0),
+					vertical_slider(0.0..=1.0, node.volume.abs().cbrt(), |v| {
+						Message::ChannelVolumeChanged(node.id, v.powi(3).copysign(node.volume))
 					})
 					.width(17)
 					.step(f32::EPSILON)
-					.style(if node.flags.contains(Flags::ENABLED) {
+					.style(if node.enabled {
 						slider::default
 					} else {
 						slider_secondary
 					}),
-					PeakMeter::new(&node.peaks[1][1], node.flags.contains(Flags::ENABLED))
-						.width(16.0),
+					PeakMeter::new(&node.peaks[1][1], node.enabled).width(16.0),
 				]
 				.spacing(3),
 				self.selected_channel.map_or_else(
@@ -1156,7 +1146,7 @@ impl ArrangementView {
 								.contains(*node.id);
 
 							button(chevron_up())
-								.style(if node.flags.contains(Flags::ENABLED) && connected {
+								.style(if node.enabled && connected {
 									button::primary
 								} else {
 									button::secondary

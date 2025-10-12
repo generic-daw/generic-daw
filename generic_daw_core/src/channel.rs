@@ -1,6 +1,5 @@
 use crate::{Event, NodeAction, Update, daw_ctx::State};
 use audio_graph::{NodeId, NodeImpl};
-use bitflags::bitflags;
 use clap_host::AudioProcessor;
 use generic_daw_utils::ShiftMoveExt as _;
 use std::f32::consts::{FRAC_PI_4, SQRT_2};
@@ -12,7 +11,7 @@ pub enum PanMode {
 }
 
 impl PanMode {
-	pub fn pan(self, audio: &mut [f32], volume: f32, invert: bool) {
+	pub fn pan(self, audio: &mut [f32], volume: f32) {
 		fn split(pan: f32, fac: f32) -> (f32, f32) {
 			let angle = (pan + 1.0) * FRAC_PI_4;
 			let (sin, cos) = angle.sin_cos();
@@ -24,21 +23,15 @@ impl PanMode {
 
 		match self {
 			Self::Balance(pan) => {
-				let (mut l, mut r) = split(pan, volume * SQRT_2);
-				if invert {
-					(l, r) = (-l, -r);
-				}
+				let (l, r) = split(pan, volume * SQRT_2);
 				for [ls, rs] in audio {
 					*ls *= l;
 					*rs *= r;
 				}
 			}
 			Self::Stereo(l, r) => {
-				let (mut ll, mut lr) = split(l, volume);
-				let (mut rl, mut rr) = split(r, volume);
-				if invert {
-					(ll, lr, rl, rr) = (-ll, -lr, -rl, -rr);
-				}
+				let (ll, lr) = split(l, volume);
+				let (rl, rr) = split(r, volume);
 				for [ls, rs] in audio {
 					let ols = *ls;
 					*ls = ls.mul_add(ll, *rs * rl);
@@ -66,28 +59,14 @@ impl Plugin {
 	}
 }
 
-bitflags! {
-	#[derive(Clone, Copy, Debug)]
-	pub struct Flags: u8 {
-		const ENABLED = 1 << 0;
-		const BYPASSED = 1 << 1;
-		const POLARITY_INVERTED = 1 << 2;
-	}
-}
-
-impl Flags {
-	fn processing(self) -> bool {
-		self.contains(Self::ENABLED) && !self.contains(Self::BYPASSED)
-	}
-}
-
 #[derive(Debug)]
 pub struct Channel {
 	id: NodeId,
 	plugins: Vec<Plugin>,
 	volume: f32,
 	pan: PanMode,
-	flags: Flags,
+	enabled: bool,
+	bypassed: bool,
 }
 
 impl NodeImpl for Channel {
@@ -95,8 +74,10 @@ impl NodeImpl for Channel {
 	type State = State;
 
 	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
+		let processing = self.processing();
+
 		for plugin in &mut self.plugins {
-			if self.flags.processing() && plugin.enabled {
+			if processing && plugin.enabled {
 				plugin.processor.process(audio, events, plugin.mix);
 			} else {
 				plugin.processor.flush(events);
@@ -118,17 +99,13 @@ impl NodeImpl for Channel {
 			}
 		}
 
-		if !self.flags.contains(Flags::ENABLED) {
+		if !self.enabled {
 			audio.fill(0.0);
 			events.clear();
 			return;
 		}
 
-		self.pan.pan(
-			audio,
-			self.volume,
-			self.flags.contains(Flags::POLARITY_INVERTED),
-		);
+		self.pan.pan(audio, self.volume);
 
 		let peaks = max_peaks(audio);
 		if peaks.iter().any(|&peak| peak >= f32::EPSILON) {
@@ -147,22 +124,23 @@ impl NodeImpl for Channel {
 	fn delay(&self) -> usize {
 		self.plugins
 			.iter()
-			.filter(|entry| self.flags.processing() && entry.enabled)
-			.map(|entry| entry.processor.delay())
+			.filter(|plugin| self.processing() && plugin.enabled)
+			.map(|plugin| plugin.processor.delay())
 			.sum()
 	}
 
 	fn expensive(&self) -> bool {
-		self.flags.processing() && self.plugins.iter().any(|plugin| plugin.enabled)
+		self.plugins
+			.iter()
+			.any(|plugin| self.processing() && plugin.enabled)
 	}
 }
 
 impl Channel {
 	pub fn apply(&mut self, action: NodeAction) {
 		match action {
-			NodeAction::ChannelToggleEnabled => self.flags.toggle(Flags::ENABLED),
-			NodeAction::ChannelToggleBypassed => self.flags.toggle(Flags::BYPASSED),
-			NodeAction::ChannelTogglePolarity => self.flags.toggle(Flags::POLARITY_INVERTED),
+			NodeAction::ChannelToggleEnabled => self.enabled ^= true,
+			NodeAction::ChannelToggleBypassed => self.bypassed ^= true,
 			NodeAction::ChannelVolumeChanged(volume) => self.volume = volume,
 			NodeAction::ChannelPanChanged(pan) => self.pan = pan,
 			NodeAction::PluginLoad(processor) => self.plugins.push(Plugin::new(*processor)),
@@ -179,6 +157,10 @@ impl Channel {
 			plugin.processor.reset();
 		}
 	}
+
+	fn processing(&self) -> bool {
+		self.enabled && !self.bypassed
+	}
 }
 
 impl Default for Channel {
@@ -188,7 +170,8 @@ impl Default for Channel {
 			id: NodeId::unique(),
 			volume: 1.0,
 			pan: PanMode::Balance(0.0),
-			flags: Flags::ENABLED,
+			enabled: true,
+			bypassed: false,
 		}
 	}
 }

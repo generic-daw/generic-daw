@@ -1273,7 +1273,6 @@ name = "generic_daw_core"
 version = "0.0.0"
 dependencies = [
  "audio_graph",
- "bitflags 2.9.4",
  "clap_host",
  "cpal",
  "generic_daw_utils",
