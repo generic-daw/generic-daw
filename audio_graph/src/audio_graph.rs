@@ -63,7 +63,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		});
 
 		for entry in self.graph.values_mut() {
-			debug_assert_eq!(entry.indegree.load(Relaxed), -1);
+			debug_assert_eq!(*entry.indegree.get_mut(), -1);
 		}
 
 		buf.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..len]);
@@ -259,8 +259,8 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		}
 
 		self.graph
-			.values()
-			.any(|entry| entry.indegree.load(Relaxed) != -1)
+			.values_mut()
+			.any(|entry| *entry.indegree.get_mut() != -1)
 	}
 
 	fn visit(&self, entry: &Entry<Node>) {
