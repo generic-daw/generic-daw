@@ -1,21 +1,13 @@
 use crate::NoDebug;
 use std::cmp::Ordering;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct AudioRingbuf {
 	buf: NoDebug<Vec<f32>>,
 	head: usize,
 }
 
 impl AudioRingbuf {
-	#[must_use]
-	pub fn new(len: usize) -> Self {
-		Self {
-			buf: vec![0.0; len].into(),
-			head: 0,
-		}
-	}
-
 	pub fn next(&mut self, buf: &mut [f32]) {
 		let diff = self.buf.len() - self.head;
 		if self.buf.len() < buf.len() {

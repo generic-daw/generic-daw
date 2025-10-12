@@ -1,5 +1,4 @@
 use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry};
-use bit_set::BitSet;
 use generic_daw_utils::{AudioRingbuf, HoleyVec};
 use std::sync::atomic::Ordering::Relaxed;
 
@@ -8,8 +7,6 @@ pub struct AudioGraph<Node: NodeImpl> {
 	graph: HoleyVec<Entry<Node>>,
 	root: NodeId,
 	frames: u32,
-	to_visit: BitSet,
-	seen: BitSet,
 }
 
 impl<Node: NodeImpl> AudioGraph<Node> {
@@ -24,8 +21,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			graph,
 			root,
 			frames,
-			seen: BitSet::default(),
-			to_visit: BitSet::default(),
 		}
 	}
 
@@ -68,7 +63,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		});
 
 		for entry in self.graph.values_mut() {
-			debug_assert!(entry.indegree.load(Relaxed) < 0);
+			debug_assert_eq!(entry.indegree.load(Relaxed), -1);
 		}
 
 		buf.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..len]);
@@ -153,13 +148,13 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			self.worker(s, entry, len, state, false);
 		}
 
-		if let Some(s) = s {
-			let mut iter = outgoing
-				.iter()
-				.map(|node| &self.graph[node])
-				.filter(|entry| entry.expensive)
-				.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 1);
+		let mut iter = outgoing
+			.iter()
+			.map(|node| &self.graph[node])
+			.filter(|entry| entry.expensive)
+			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 1);
 
+		if let Some(s) = s {
 			let first = if tail { iter.next() } else { None };
 
 			for entry in iter {
@@ -172,11 +167,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 				self.worker(Some(s), entry, len, state, true);
 			}
 		} else {
-			outgoing
-				.iter()
-				.map(|node| &self.graph[node])
-				.filter(|entry| entry.expensive)
-				.for_each(|entry| _ = entry.indegree.fetch_sub(1, Relaxed));
+			iter.for_each(|_| ());
 		}
 	}
 
@@ -214,15 +205,16 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			return true;
 		}
 
-		if self.has_cycle() {
-			self.entry_mut(from).buffers().outgoing.remove(*to);
-			return false;
-		}
-
 		self.entry_mut(to)
 			.buffers()
 			.incoming
-			.insert(*from, (AudioRingbuf::new(0), Vec::new()));
+			.insert(*from, (AudioRingbuf::default(), Vec::new()));
+
+		if self.has_cycle() {
+			self.entry_mut(from).buffers().outgoing.remove(*to);
+			self.entry_mut(to).buffers().incoming.remove(*from);
+			return false;
+		}
 
 		true
 	}
@@ -253,44 +245,37 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	fn has_cycle(&mut self) -> bool {
-		self.to_visit.clear();
-		self.to_visit.extend(self.graph.keys());
-		self.seen.clear();
-
-		while let Some(node) = self.to_visit.iter().next() {
-			if Self::visit(&self.graph, &mut self.seen, &mut self.to_visit, node) {
-				return true;
-			}
+		for entry in self.graph.values_mut() {
+			*entry.indegree.get_mut() = entry.buffers().incoming.len().cast_signed();
 		}
 
-		false
+		let iter = self
+			.graph
+			.values()
+			.filter(|entry| entry.indegree.load(Relaxed) == 0);
+
+		for entry in iter {
+			self.visit(entry);
+		}
+
+		self.graph
+			.values()
+			.any(|entry| entry.indegree.load(Relaxed) != -1)
 	}
 
-	fn visit(
-		graph: &HoleyVec<Entry<Node>>,
-		seen: &mut BitSet,
-		to_visit: &mut BitSet,
-		current: usize,
-	) -> bool {
-		if !to_visit.contains(current) {
-			return false;
-		}
+	fn visit(&self, entry: &Entry<Node>) {
+		let indegree = entry.indegree.fetch_sub(1, Relaxed);
+		debug_assert_eq!(indegree, 0);
 
-		if !seen.insert(current) {
-			return true;
-		}
+		let outgoing = &entry.read_buffers_uncontended().outgoing;
 
-		if graph[current]
-			.read_buffers_uncontended()
-			.outgoing
+		let iter = outgoing
 			.iter()
-			.any(|current| Self::visit(graph, seen, to_visit, current))
-		{
-			return true;
+			.map(|node| &self.graph[node])
+			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 1);
+
+		for entry in iter {
+			self.visit(entry);
 		}
-
-		to_visit.remove(current);
-
-		false
 	}
 }

@@ -19,4 +19,4 @@ log = "0.4.28"
 oneshot = "0.1.11"
 rtrb = "0.3.2"
 rubato = "0.16.2"
-symphonia = { version = "0.5.4", features = ["all", "opt-simd"] }
+symphonia = { version = "0.5.5", features = ["all", "opt-simd"] }

@@ -4,7 +4,7 @@ use std::{
 	ops::{Deref, DerefMut},
 };
 
-#[derive(Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct NoClone<T>(pub T);
 
 impl<T: Debug> Debug for NoClone<T> {

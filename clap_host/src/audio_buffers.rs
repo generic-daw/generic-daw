@@ -39,7 +39,7 @@ impl AudioBuffers {
 			.collect::<Box<[_]>>()
 			.into();
 
-		let latency_comp = AudioRingbuf::new(0);
+		let latency_comp = AudioRingbuf::default();
 
 		Self {
 			config,
