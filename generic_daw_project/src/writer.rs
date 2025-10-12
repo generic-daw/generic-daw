@@ -47,6 +47,8 @@ impl Writer {
 		plugins: impl IntoIterator<Item = proto::Plugin>,
 		volume: f32,
 		pan: proto::OptionPanMode,
+		enabled: bool,
+		bypassed: bool,
 	) -> proto::TrackIndex {
 		self.0.tracks.push(proto::Track {
 			clips: clips.into_iter().collect(),
@@ -55,6 +57,8 @@ impl Writer {
 				plugins: plugins.into_iter().collect(),
 				volume,
 				pan,
+				enabled,
+				bypassed,
 			},
 		});
 
@@ -69,12 +73,16 @@ impl Writer {
 		plugins: impl IntoIterator<Item = proto::Plugin>,
 		volume: f32,
 		pan: proto::OptionPanMode,
+		enabled: bool,
+		bypassed: bool,
 	) -> proto::ChannelIndex {
 		self.0.channels.push(proto::Channel {
 			connections: Vec::new(),
 			plugins: plugins.into_iter().collect(),
 			volume,
 			pan,
+			enabled,
+			bypassed,
 		});
 
 		proto::ChannelIndex {

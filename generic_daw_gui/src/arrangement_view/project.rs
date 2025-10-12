@@ -102,6 +102,8 @@ impl ArrangementWrapper {
 						PanMode::Balance(pan) => proto::PanModeBalance { pan }.into(),
 						PanMode::Stereo(l, r) => proto::PanModeStereo { l, r }.into(),
 					},
+					node.enabled,
+					node.bypassed,
 				),
 			);
 		}
@@ -125,6 +127,8 @@ impl ArrangementWrapper {
 						PanMode::Balance(pan) => proto::PanModeBalance { pan }.into(),
 						PanMode::Stereo(l, r) => proto::PanModeStereo { l, r }.into(),
 					},
+					channel.enabled,
+					channel.bypassed,
 				),
 			);
 		}
@@ -340,6 +344,14 @@ impl ArrangementWrapper {
 						}
 					},
 				));
+			}
+
+			if !channel.enabled {
+				messages.push(Message::ChannelToggleEnabled(node.id));
+			}
+
+			if channel.bypassed {
+				messages.push(Message::ChannelToggleBypassed(node.id));
 			}
 
 			for (i, plugin) in channel.plugins.iter().enumerate() {

@@ -79,6 +79,10 @@ pub struct Channel {
 	pub volume: f32,
 	#[prost(message, required)]
 	pub pan: OptionPanMode,
+	#[prost(bool, default = true)]
+	pub enabled: bool,
+	#[prost(bool, default = false)]
+	pub bypassed: bool,
 }
 
 #[derive(Clone, Copy, Message)]
