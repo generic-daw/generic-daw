@@ -1,4 +1,4 @@
-use super::{LINE_HEIGHT, Vec2, waveform};
+use super::{LINE_HEIGHT, Vec2};
 use crate::arrangement_view::{AudioClipRef, Recording as RecordingWrapper};
 use generic_daw_core::{MusicalTime, RtState};
 use iced::{
@@ -12,7 +12,7 @@ use iced::{
 		widget::{Tree, tree},
 	},
 	alignment::Vertical,
-	border,
+	border, debug,
 	mouse::{Cursor, Interaction},
 	padding,
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
@@ -90,7 +90,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 			}
 			Inner::Recording(inner) => {
 				let start = inner.position.to_samples_f(self.rtstate);
-				let len = 2.0 * inner.lods[0].len() as f32;
+				let len = 2.0 * inner.core.samples().len() as f32;
 				(start, len)
 			}
 		};
@@ -199,30 +199,30 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		let state = tree.state.downcast_ref::<State>();
 
 		if state.cache.borrow().is_none()
-			&& let Some(mesh) = match self.inner {
-				Inner::Sample(inner) => waveform::mesh(
+			&& let Some(mesh) = debug::time_with("Waveform Mesh", || match self.inner {
+				Inner::Sample(inner) => inner.sample.lods.mesh(
+					&inner.sample.samples,
 					self.rtstate,
 					inner.clip.position.start(),
 					inner.clip.position.offset(),
-					&inner.sample.lods,
 					*self.position,
 					*self.scale,
 					theme,
 					layout.position().y,
 					lower_bounds,
 				),
-				Inner::Recording(inner) => waveform::mesh(
+				Inner::Recording(inner) => inner.lods.mesh(
+					inner.core.samples(),
 					self.rtstate,
 					inner.position,
 					MusicalTime::ZERO,
-					&inner.lods,
 					*self.position,
 					*self.scale,
 					theme,
 					layout.position().y,
 					lower_bounds,
 				),
-			} {
+			}) {
 			state.cache.borrow_mut().replace(mesh);
 		}
 

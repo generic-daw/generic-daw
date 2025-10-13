@@ -3,17 +3,16 @@ use crate::{
 		crc,
 		sample::{Sample, SamplePair},
 	},
-	lod::{LOD_LEVELS, update_lods},
+	lod::Lods,
 };
 use generic_daw_core::{self as core, MusicalTime, RtState};
-use generic_daw_utils::NoDebug;
 use rtrb::Consumer;
 use std::{fs::File, io::BufWriter, path::Path, sync::Arc};
 
 #[derive(Debug)]
 pub struct Recording {
 	pub core: core::Recording<BufWriter<File>>,
-	pub lods: NoDebug<[Vec<(f32, f32)>; LOD_LEVELS]>,
+	pub lods: Lods<Vec<(f32, f32)>>,
 	pub position: MusicalTime,
 	pub name: Arc<str>,
 	pub path: Arc<Path>,
@@ -38,7 +37,7 @@ impl Recording {
 		(
 			Self {
 				core,
-				lods: NoDebug([const { Vec::new() }; _]),
+				lods: Lods::default(),
 				position: MusicalTime::from_samples(rtstate.sample, rtstate),
 				path: path.as_ref().into(),
 				name: path.as_ref().file_name().unwrap().to_str().unwrap().into(),
@@ -58,7 +57,7 @@ impl Recording {
 	pub fn write(&mut self, samples: &[f32]) {
 		let start = self.core.samples().len();
 		self.core.write(samples);
-		update_lods(self.core.samples(), &mut self.lods, start);
+		self.lods.update(self.core.samples(), start);
 	}
 
 	pub fn split_off(&mut self, path: impl AsRef<Path>, rtstate: &RtState) -> SamplePair {
@@ -67,10 +66,10 @@ impl Recording {
 			BufWriter::new(File::create(path.as_ref()).unwrap()),
 			rtstate,
 		);
-		update_lods(&core.samples, &mut self.lods, start);
+		self.lods.update(self.core.samples(), start);
 
-		let mut lods = [const { Vec::new() }; _];
-		std::mem::swap(&mut *self.lods, &mut lods);
+		let mut lods = Lods::default();
+		std::mem::swap(&mut self.lods, &mut lods);
 
 		self.position = MusicalTime::from_samples(rtstate.sample, rtstate);
 
@@ -83,11 +82,11 @@ impl Recording {
 		SamplePair {
 			gui: Sample {
 				id: core.id,
-				lods: lods.map(Vec::into_boxed_slice).into(),
+				lods: lods.finalize(),
 				name,
-				len: core.samples.len(),
+				path: path.clone(),
+				samples: core.samples.clone(),
 				crc: crc(File::open(&path).unwrap()),
-				path,
 				refs: 0,
 			},
 			core,
@@ -101,16 +100,16 @@ impl Recording {
 	pub fn finalize(mut self) -> SamplePair {
 		let start = self.core.samples().len();
 		let core = self.core.finalize();
-		update_lods(&core.samples, &mut self.lods, start);
+		self.lods.update(&core.samples, start);
 
 		SamplePair {
 			gui: Sample {
 				id: core.id,
-				lods: self.lods.0.map(Vec::into_boxed_slice).into(),
+				lods: self.lods.finalize(),
 				name: self.name,
-				len: core.samples.len(),
+				path: self.path.clone(),
+				samples: core.samples.clone(),
 				crc: crc(File::open(&self.path).unwrap()),
-				path: self.path,
 				refs: 0,
 			},
 			core,

@@ -9,7 +9,6 @@ pub mod piano;
 pub mod piano_roll;
 pub mod seeker;
 pub mod track;
-pub mod waveform;
 
 pub const LINE_HEIGHT: f32 = TEXT_HEIGHT * 1.3;
 pub const TEXT_HEIGHT: f32 = 16.0;

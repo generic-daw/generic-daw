@@ -131,7 +131,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 
 		Sample {
 			id: SampleId::unique(),
-			samples: samples.into_boxed_slice().into(),
+			samples: NoDebug(samples.into()),
 		}
 	}
 
@@ -160,7 +160,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 
 		Sample {
 			id: SampleId::unique(),
-			samples: samples.into_boxed_slice().into(),
+			samples: NoDebug(samples.into()),
 		}
 	}
 }

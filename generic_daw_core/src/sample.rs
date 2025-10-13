@@ -1,5 +1,6 @@
 use crate::resampler::Resampler;
 use generic_daw_utils::{NoDebug, unique_id};
+use std::sync::Arc;
 use symphonia::core::{
 	audio::SampleBuffer,
 	codecs::DecoderOptions,
@@ -16,7 +17,7 @@ pub use sample_id::Id as SampleId;
 #[derive(Debug)]
 pub struct Sample {
 	pub id: SampleId,
-	pub samples: NoDebug<Box<[f32]>>,
+	pub samples: NoDebug<Arc<[f32]>>,
 }
 
 impl Sample {
@@ -90,7 +91,7 @@ impl Sample {
 		}
 
 		Some(Self {
-			samples: resampler.finish().into_boxed_slice().into(),
+			samples: NoDebug(resampler.finish().into()),
 			id: SampleId::unique(),
 		})
 	}

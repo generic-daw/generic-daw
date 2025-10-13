@@ -358,7 +358,7 @@ impl ArrangementView {
 			Message::AddAudioClip(sample) => {
 				let audio = AudioClip::new(
 					sample,
-					self.arrangement.samples()[*sample].len,
+					self.arrangement.samples()[*sample].samples.len(),
 					self.arrangement.rtstate(),
 				);
 
@@ -462,7 +462,7 @@ impl ArrangementView {
 
 					let mut clip = AudioClip::new(
 						id,
-						self.arrangement.samples()[*id].len,
+						self.arrangement.samples()[*id].samples.len(),
 						self.arrangement.rtstate(),
 					);
 					clip.position.move_to(pos);
@@ -511,7 +511,7 @@ impl ArrangementView {
 
 					let mut clip = AudioClip::new(
 						id,
-						self.arrangement.samples()[*id].len,
+						self.arrangement.samples()[*id].samples.len(),
 						self.arrangement.rtstate(),
 					);
 					clip.position.move_to(pos);
@@ -524,7 +524,7 @@ impl ArrangementView {
 				let old_scale = self.arrangement_scale;
 
 				self.arrangement_scale += scale;
-				self.arrangement_scale.x = self.arrangement_scale.x.clamp(1.0, 15f32.next_down());
+				self.arrangement_scale.x = self.arrangement_scale.x.clamp(1.0, 16f32.next_down());
 				self.arrangement_scale.y = self.arrangement_scale.y.clamp(46.0, 200.0);
 
 				if scale == Vec2::ZERO || old_scale != self.arrangement_scale {
@@ -541,7 +541,7 @@ impl ArrangementView {
 				let old_scale = self.piano_roll_scale;
 
 				self.piano_roll_scale += scale;
-				self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(1.0, 15f32.next_down());
+				self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(1.0, 16f32.next_down());
 				self.piano_roll_scale.y = self
 					.piano_roll_scale
 					.y
