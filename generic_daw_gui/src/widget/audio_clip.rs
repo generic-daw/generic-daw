@@ -2,7 +2,7 @@ use super::{LINE_HEIGHT, Vec2, waveform};
 use crate::arrangement_view::AudioClipRef;
 use generic_daw_core::RtState;
 use iced::{
-	Element, Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
+	Element, Event, Fill, Length, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
 		Clipboard, Layout, Renderer as _, Shell, Text, Widget,
 		graphics::{Mesh, mesh::Renderer as _},
@@ -24,7 +24,6 @@ use std::cell::RefCell;
 struct State {
 	cache: RefCell<Option<Mesh>>,
 	last_bounds: Rectangle,
-	last_viewport: Rectangle,
 	last_addr: usize,
 }
 
@@ -80,17 +79,16 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		viewport: &Rectangle,
 	) {
 		if let Event::Window(window::Event::RedrawRequested(..)) = event {
-			let state = tree.state.downcast_mut::<State>();
-			let bounds = layout.bounds();
+			let mut bounds = layout.bounds();
+			if let Some(intersection) = bounds.intersection(viewport) {
+				bounds.y = 0.0;
+				bounds.height = intersection.height;
 
-			if state.last_bounds != bounds {
-				state.last_bounds = bounds;
-				*state.cache.get_mut() = None;
-			}
-
-			if state.last_viewport != *viewport {
-				state.last_viewport = *viewport;
-				*state.cache.get_mut() = None;
+				let state = tree.state.downcast_mut::<State>();
+				if state.last_bounds != bounds {
+					state.last_bounds = bounds;
+					*state.cache.get_mut() = None;
+				}
 			}
 		}
 	}
@@ -124,8 +122,6 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		};
 		renderer.fill_quad(text_background, color);
 
-		let state = tree.state.downcast_ref::<State>();
-
 		let text = Text {
 			content: self.inner.sample.name.as_ref().into(),
 			bounds: Size::new(f32::INFINITY, 0.0),
@@ -157,6 +153,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		};
 		renderer.fill_quad(clip_background, color.scale_alpha(0.2));
 
+		let state = tree.state.downcast_ref::<State>();
+
 		if state.cache.borrow().is_none()
 			&& let Some(mesh) = waveform::mesh(
 				self.rtstate,
@@ -166,14 +164,16 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 				*self.position,
 				*self.scale,
 				theme,
-				Point::new(bounds.x, layout.position().y),
+				layout.position().y,
 				lower_bounds,
 			) {
 			state.cache.borrow_mut().replace(mesh);
 		}
 
 		if let Some(mesh) = state.cache.borrow().clone() {
-			renderer.draw_mesh(mesh);
+			renderer.with_translation(Vector::new(bounds.x, layout.position().y), |renderer| {
+				renderer.draw_mesh(mesh);
+			});
 		}
 	}
 

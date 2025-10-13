@@ -19,12 +19,12 @@ pub fn mesh(
 	position: Vec2,
 	scale: Vec2,
 	theme: &Theme,
-	point: Point,
+	pos_y: f32,
 	bounds: Rectangle,
 ) -> Option<Mesh> {
 	debug::time_with("Waveform Mesh", || {
 		make_mesh(
-			rtstate, start, offset, lods, position, scale, theme, point, bounds,
+			rtstate, start, offset, lods, position, scale, theme, pos_y, bounds,
 		)
 	})
 }
@@ -37,7 +37,7 @@ fn make_mesh(
 	position: Vec2,
 	scale: Vec2,
 	theme: &Theme,
-	point: Point,
+	pos_y: f32,
 	bounds: Rectangle,
 ) -> Option<Mesh> {
 	let height = scale.y - LINE_HEIGHT;
@@ -109,10 +109,7 @@ fn make_mesh(
 
 	Some(Mesh::Solid {
 		buffers: Indexed { vertices, indices },
-		transformation: Transformation::translate(point.x, point.y),
-		clip_bounds: Rectangle::new(
-			Point::new(0.0, (bounds.y - point.y).max(0.0)),
-			bounds.size(),
-		),
+		transformation: Transformation::IDENTITY,
+		clip_bounds: Rectangle::new(Point::new(0.0, (bounds.y - pos_y).max(0.0)), bounds.size()),
 	})
 }

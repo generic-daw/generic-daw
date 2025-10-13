@@ -2,21 +2,30 @@ use super::{LINE_HEIGHT, Vec2, waveform};
 use crate::arrangement_view::Recording as RecordingWrapper;
 use generic_daw_core::{MusicalTime, RtState};
 use iced::{
-	Element, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
+	Element, Event, Fill, Length, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
-		Layout, Renderer as _, Text, Widget,
-		graphics::mesh::Renderer as _,
+		Clipboard, Layout, Renderer as _, Shell, Text, Widget,
+		graphics::{Mesh, mesh::Renderer as _},
 		layout::{Limits, Node},
 		renderer::{Quad, Style},
 		text::Renderer as _,
-		widget::Tree,
+		widget::{Tree, tree},
 	},
 	alignment::Vertical,
 	border,
 	mouse::Cursor,
 	padding,
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
+	window,
 };
+use std::cell::RefCell;
+
+#[derive(Default)]
+struct State {
+	cache: RefCell<Option<Mesh>>,
+	last_bounds: Rectangle,
+	last_addr: usize,
+}
 
 #[derive(Clone, Debug)]
 pub struct Recording<'a> {
@@ -27,8 +36,25 @@ pub struct Recording<'a> {
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
+	fn tag(&self) -> tree::Tag {
+		tree::Tag::of::<State>()
+	}
+
+	fn state(&self) -> tree::State {
+		tree::State::new(State::default())
+	}
+
 	fn size(&self) -> Size<Length> {
 		Size::new(Shrink, Fill)
+	}
+
+	fn diff(&self, tree: &mut Tree) {
+		let state = tree.state.downcast_mut::<State>();
+
+		if state.last_addr != std::ptr::from_ref(self.inner).addr() {
+			*state = State::default();
+			state.last_addr = std::ptr::from_ref(self.inner).addr();
+		}
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
@@ -40,9 +66,35 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
 			.translate(Vector::new((start - self.position.x) / pixel_size, 0.0))
 	}
 
+	fn update(
+		&mut self,
+		tree: &mut Tree,
+		event: &Event,
+		layout: Layout<'_>,
+		_cursor: Cursor,
+		_renderer: &Renderer,
+		_clipboard: &mut dyn Clipboard,
+		_shell: &mut Shell<'_, Message>,
+		viewport: &Rectangle,
+	) {
+		if let Event::Window(window::Event::RedrawRequested(..)) = event {
+			let mut bounds = layout.bounds();
+			if let Some(intersection) = bounds.intersection(viewport) {
+				bounds.y = 0.0;
+				bounds.height = intersection.height;
+
+				let state = tree.state.downcast_mut::<State>();
+				if state.last_bounds != bounds {
+					state.last_bounds = bounds;
+					*state.cache.get_mut() = None;
+				}
+			}
+		}
+	}
+
 	fn draw(
 		&self,
-		_tree: &Tree,
+		tree: &Tree,
 		renderer: &mut Renderer,
 		theme: &Theme,
 		_style: &Style,
@@ -96,18 +148,27 @@ impl<Message> Widget<Message, Theme, Renderer> for Recording<'_> {
 		};
 		renderer.fill_quad(clip_background, color.scale_alpha(0.2));
 
-		if let Some(waveform) = waveform::mesh(
-			self.rtstate,
-			self.inner.position,
-			MusicalTime::ZERO,
-			&self.inner.lods,
-			*self.position,
-			*self.scale,
-			theme,
-			Point::new(bounds.x, layout.position().y),
-			lower_bounds,
-		) {
-			renderer.draw_mesh(waveform);
+		let state = tree.state.downcast_ref::<State>();
+
+		if state.cache.borrow().is_none()
+			&& let Some(mesh) = waveform::mesh(
+				self.rtstate,
+				self.inner.position,
+				MusicalTime::ZERO,
+				&self.inner.lods,
+				*self.position,
+				*self.scale,
+				theme,
+				layout.position().y,
+				lower_bounds,
+			) {
+			state.cache.borrow_mut().replace(mesh);
+		}
+
+		if let Some(mesh) = state.cache.borrow().clone() {
+			renderer.with_translation(Vector::new(bounds.x, layout.position().y), |renderer| {
+				renderer.draw_mesh(mesh);
+			});
 		}
 	}
 }
