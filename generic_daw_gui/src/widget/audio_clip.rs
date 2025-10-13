@@ -1,6 +1,6 @@
 use super::{LINE_HEIGHT, Vec2, waveform};
-use crate::arrangement_view::AudioClipRef;
-use generic_daw_core::RtState;
+use crate::arrangement_view::{AudioClipRef, Recording as RecordingWrapper};
+use generic_daw_core::{MusicalTime, RtState};
 use iced::{
 	Element, Event, Fill, Length, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
@@ -28,8 +28,26 @@ struct State {
 }
 
 #[derive(Clone, Debug)]
+pub enum Inner<'a> {
+	Sample(AudioClipRef<'a>),
+	Recording(&'a RecordingWrapper),
+}
+
+impl<'a> From<AudioClipRef<'a>> for Inner<'a> {
+	fn from(value: AudioClipRef<'a>) -> Self {
+		Self::Sample(value)
+	}
+}
+
+impl<'a> From<&'a RecordingWrapper> for Inner<'a> {
+	fn from(value: &'a RecordingWrapper) -> Self {
+		Self::Recording(value)
+	}
+}
+
+#[derive(Clone, Debug)]
 pub struct AudioClip<'a> {
-	inner: AudioClipRef<'a>,
+	inner: Inner<'a>,
 	rtstate: &'a RtState,
 	position: &'a Vec2,
 	scale: &'a Vec2,
@@ -52,18 +70,33 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 	fn diff(&self, tree: &mut Tree) {
 		let state = tree.state.downcast_mut::<State>();
 
-		if state.last_addr != std::ptr::from_ref(self.inner.clip).addr() {
+		let addr = match self.inner {
+			Inner::Sample(inner) => std::ptr::from_ref(inner.clip).addr(),
+			Inner::Recording(inner) => std::ptr::from_ref(inner).addr(),
+		};
+
+		if state.last_addr != addr {
 			*state = State::default();
-			state.last_addr = std::ptr::from_ref(self.inner.clip).addr();
+			state.last_addr = addr;
 		}
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-		let start = self.inner.clip.position.start().to_samples_f(self.rtstate);
-		let end = self.inner.clip.position.end().to_samples_f(self.rtstate);
-		let pixel_size = self.scale.x.exp2();
+		let (start, len) = match self.inner {
+			Inner::Sample(inner) => {
+				let start = inner.clip.position.start().to_samples_f(self.rtstate);
+				let end = inner.clip.position.end().to_samples_f(self.rtstate);
+				(start, end - start)
+			}
+			Inner::Recording(inner) => {
+				let start = inner.position.to_samples_f(self.rtstate);
+				let len = 2.0 * inner.lods[0].len() as f32;
+				(start, len)
+			}
+		};
 
-		Node::new(Size::new((end - start) / pixel_size, self.scale.y))
+		let pixel_size = self.scale.x.exp2();
+		Node::new(Size::new(len / pixel_size, self.scale.y))
 			.translate(Vector::new((start - self.position.x) / pixel_size, 0.0))
 	}
 
@@ -110,10 +143,15 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		let mut upper_bounds = bounds;
 		upper_bounds.height = upper_bounds.height.min(LINE_HEIGHT);
 
-		let color = if self.enabled {
-			theme.extended_palette().primary.weak.color
-		} else {
-			theme.extended_palette().secondary.weak.color
+		let color = match self.inner {
+			Inner::Sample(..) => {
+				if self.enabled {
+					theme.extended_palette().primary.weak.color
+				} else {
+					theme.extended_palette().secondary.weak.color
+				}
+			}
+			Inner::Recording(..) => theme.extended_palette().danger.weak.color,
 		};
 
 		let text_background = Quad {
@@ -122,8 +160,13 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		};
 		renderer.fill_quad(text_background, color);
 
+		let name = match self.inner {
+			Inner::Sample(inner) => inner.sample.name.as_ref(),
+			Inner::Recording(inner) => inner.name.as_ref(),
+		};
+
 		let text = Text {
-			content: self.inner.sample.name.as_ref().into(),
+			content: name.into(),
 			bounds: Size::new(f32::INFINITY, 0.0),
 			size: renderer.default_size(),
 			line_height: LineHeight::default(),
@@ -156,17 +199,30 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		let state = tree.state.downcast_ref::<State>();
 
 		if state.cache.borrow().is_none()
-			&& let Some(mesh) = waveform::mesh(
-				self.rtstate,
-				self.inner.clip.position.start(),
-				self.inner.clip.position.offset(),
-				&self.inner.sample.lods,
-				*self.position,
-				*self.scale,
-				theme,
-				layout.position().y,
-				lower_bounds,
-			) {
+			&& let Some(mesh) = match self.inner {
+				Inner::Sample(inner) => waveform::mesh(
+					self.rtstate,
+					inner.clip.position.start(),
+					inner.clip.position.offset(),
+					&inner.sample.lods,
+					*self.position,
+					*self.scale,
+					theme,
+					layout.position().y,
+					lower_bounds,
+				),
+				Inner::Recording(inner) => waveform::mesh(
+					self.rtstate,
+					inner.position,
+					MusicalTime::ZERO,
+					&inner.lods,
+					*self.position,
+					*self.scale,
+					theme,
+					layout.position().y,
+					lower_bounds,
+				),
+			} {
 			state.cache.borrow_mut().replace(mesh);
 		}
 
@@ -193,24 +249,29 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 			return Interaction::default();
 		};
 
-		if cursor.x < 10.0 || bounds.width - cursor.x < 10.0 {
-			Interaction::ResizingHorizontally
-		} else {
-			Interaction::Grab
+		match self.inner {
+			Inner::Sample(..) => {
+				if cursor.x < 10.0 || bounds.width - cursor.x < 10.0 {
+					Interaction::ResizingHorizontally
+				} else {
+					Interaction::Grab
+				}
+			}
+			Inner::Recording(..) => Interaction::NoDrop,
 		}
 	}
 }
 
 impl<'a> AudioClip<'a> {
 	pub fn new(
-		inner: AudioClipRef<'a>,
+		inner: impl Into<Inner<'a>>,
 		rtstate: &'a RtState,
 		position: &'a Vec2,
 		scale: &'a Vec2,
 		enabled: bool,
 	) -> Self {
 		Self {
-			inner,
+			inner: inner.into(),
 			rtstate,
 			position,
 			scale,

@@ -7,7 +7,6 @@ pub mod audio_clip;
 pub mod midi_clip;
 pub mod piano;
 pub mod piano_roll;
-pub mod recording;
 pub mod seeker;
 pub mod track;
 pub mod waveform;

@@ -19,7 +19,6 @@ use crate::{
 		midi_clip::MidiClip as MidiClipWidget,
 		piano::Piano,
 		piano_roll::{Action as PianoRollAction, PianoRoll},
-		recording::Recording as RecordingWidget,
 		seeker::Seeker,
 		track::Track as TrackWidget,
 	},
@@ -893,11 +892,12 @@ impl ArrangementView {
 											.as_ref()
 											.filter(|&&(_, i)| i == track.id)
 											.map(|(recording, _)| {
-												RecordingWidget::new(
+												AudioClipWidget::new(
 													recording,
 													self.arrangement.rtstate(),
 													&self.arrangement_position,
 													&self.arrangement_scale,
+													node.enabled,
 												)
 												.into()
 											}),
