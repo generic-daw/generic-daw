@@ -4,13 +4,14 @@ use crate::{
 		pattern::PatternPair, sample::SamplePair,
 	},
 	clap_host::{ClapHost, Message as ClapHostMessage},
-	components::{
-		icon_button, styled_scrollable, styled_scrollable_with_direction, text_icon_button,
-	},
+	components::{icon_button, text_icon_button},
 	config::Config,
 	daw::DEFAULT_SPLIT_POSITION,
 	icons::{arrow_up_down, chevron_up, circle_off, grip_vertical, plus, x},
-	stylefns::{bordered_box_with_radius, button_with_radius, menu_with_border, slider_secondary},
+	stylefns::{
+		bordered_box_with_radius, button_with_radius, menu_style, scrollable_style,
+		slider_secondary, split_style,
+	},
 	widget::{
 		LINE_HEIGHT, TEXT_HEIGHT,
 		arrangement::{Action as ArrangementAction, Arrangement as ArrangementWidget},
@@ -36,7 +37,6 @@ use iced::{
 	Center, Element, Fill, Function as _, Shrink, Size, Subscription, Task, border,
 	futures::SinkExt as _,
 	mouse::Interaction,
-	overlay::menu,
 	padding, stream,
 	widget::{
 		button, column, combo_box, container, mouse_area, row, rule, scrollable, slider, space,
@@ -917,7 +917,7 @@ impl ArrangementView {
 
 	fn mixer(&self) -> Element<'_, Message> {
 		let mixer_panel = persistent(
-			styled_scrollable_with_direction(
+			scrollable(
 				row(
 					once(self.channel(self.arrangement.master(), "M".to_owned()))
 						.chain(once(rule::vertical(1).into()))
@@ -955,8 +955,12 @@ impl ArrangementView {
 				)
 				.align_y(Center)
 				.spacing(5),
-				scrollable::Direction::Horizontal(scrollable::Scrollbar::default()),
 			)
+			.direction(scrollable::Direction::Horizontal(
+				scrollable::Scrollbar::default(),
+			))
+			.spacing(5)
+			.style(scrollable_style())
 			.width(Fill),
 			&self.tree,
 		);
@@ -968,10 +972,10 @@ impl ArrangementView {
 					combo_box(&self.plugins, "Add Plugin", None, move |descriptor| {
 						Message::PluginLoad(selected, descriptor, true)
 					})
-					.menu_style(menu_with_border(menu::default, border::width(0)))
+					.menu_style(menu_style())
 					.width(Fill),
 					container(rule::horizontal(1)).padding([5, 0]),
-					styled_scrollable(
+					scrollable(
 						dragking::column(
 							self.arrangement
 								.node(selected)
@@ -1046,6 +1050,8 @@ impl ArrangementView {
 						.spacing(5)
 						.on_drag(Message::PluginMoveTo.with(selected)),
 					)
+					.spacing(5)
+					.style(scrollable_style())
 					.height(Fill)
 				],
 				self.split_at,
@@ -1053,6 +1059,8 @@ impl ArrangementView {
 			)
 			.strategy(Strategy::End)
 			.on_double_click(Message::SplitAt(DEFAULT_SPLIT_POSITION))
+			.focus_delay(Duration::ZERO)
+			.style(split_style())
 			.into()
 		} else {
 			mixer_panel.into()

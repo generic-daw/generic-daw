@@ -1,9 +1,9 @@
-use crate::{components::styled_scrollable, stylefns::bordered_box_with_radius};
+use crate::stylefns::{bordered_box_with_radius, scrollable_style};
 use dir::{Dir, DirId};
 use file::File;
 use iced::{
 	Element, Fill, Task, padding,
-	widget::{column, container},
+	widget::{column, container, scrollable},
 };
 use std::{path::Path, sync::Arc};
 
@@ -35,9 +35,11 @@ impl FileTree {
 	}
 
 	pub fn view(&self) -> Element<'_, Message> {
-		container(styled_scrollable(
-			container(column(self.dirs.iter().map(|dir| dir.view().0))).clip(true),
-		))
+		container(
+			scrollable(container(column(self.dirs.iter().map(|dir| dir.view().0))).clip(true))
+				.spacing(5)
+				.style(scrollable_style()),
+		)
 		.style(|t| {
 			bordered_box_with_radius(0)(t).background(t.extended_palette().background.weakest.color)
 		})

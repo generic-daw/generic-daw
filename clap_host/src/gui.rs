@@ -1,5 +1,5 @@
-use crate::host::Host;
-use clack_extensions::gui::{GuiApiType, GuiConfiguration};
+use crate::{API_TYPE, host::Host};
+use clack_extensions::gui::GuiConfiguration;
 use clack_host::prelude::*;
 
 #[derive(Clone, Copy, Debug)]
@@ -18,7 +18,7 @@ impl Gui {
 			.access_shared_handler(|s| s.ext.gui.get().copied())
 			.map_or(Self::None, |ext| {
 				let mut config = GuiConfiguration {
-					api_type: const { GuiApiType::default_for_current_platform().unwrap() },
+					api_type: API_TYPE,
 					is_floating: false,
 				};
 

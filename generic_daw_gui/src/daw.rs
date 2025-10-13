@@ -2,15 +2,15 @@ use crate::{
 	arrangement_view::{
 		ArrangementView, ArrangementWrapper, Feedback, Message as ArrangementMessage, Tab,
 	},
-	components::{number_input, pick_list_custom_handle},
+	components::{PICK_LIST_HANDLE, number_input},
 	config::Config,
 	config_view::{ConfigView, Message as ConfigViewMessage},
 	file_tree::{FileTree, Message as FileTreeMessage},
 	icons::{chart_no_axes_gantt, pause, play, sliders_vertical, square},
 	state::State,
 	stylefns::{
-		bordered_box_with_radius, button_with_radius, pick_list_with_radius,
-		progress_bar_with_radius,
+		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
+		progress_bar_with_radius, split_style,
 	},
 };
 use generic_daw_core::{
@@ -356,7 +356,7 @@ impl Daw {
 		stack![
 			column![
 				row![
-					pick_list_custom_handle(
+					pick_list(
 						[
 							"New",
 							"Open",
@@ -380,7 +380,9 @@ impl Daw {
 							}
 						}
 					)
-					.style(pick_list_with_radius(pick_list::default, 5)),
+					.handle(PICK_LIST_HANDLE)
+					.style(pick_list_with_radius(5))
+					.menu_style(menu_style()),
 					row![
 						button(if self.arrangement_view.arrangement.rtstate().playing {
 							pause()
@@ -450,6 +452,8 @@ impl Daw {
 				)
 				.strategy(Strategy::Start)
 				.on_double_click(Message::SplitAt(DEFAULT_SPLIT_POSITION))
+				.focus_delay(Duration::ZERO)
+				.style(split_style())
 			]
 			.padding(10)
 			.spacing(10),

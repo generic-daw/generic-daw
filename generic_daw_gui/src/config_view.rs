@@ -1,8 +1,11 @@
 use crate::{
-	components::{number_input, pick_list_custom_handle, styled_scrollable},
+	components::{PICK_LIST_HANDLE, number_input},
 	config::{Config, Device},
 	icons::{link, mic, plus, rotate_ccw, save, unlink, volume_2, x},
-	stylefns::{bordered_box_with_radius, button_with_radius, pick_list_with_radius},
+	stylefns::{
+		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
+		scrollable_style,
+	},
 	theme::Theme,
 	widget::LINE_HEIGHT,
 };
@@ -12,7 +15,8 @@ use iced::{
 	Length::Fill,
 	Task, border,
 	widget::{
-		button, column, container, pick_list, row, rule, slider, space, text, toggler, value,
+		button, column, container, pick_list, row, rule, scrollable, slider, space, text, toggler,
+		value,
 	},
 };
 use rfd::AsyncFileDialog;
@@ -132,320 +136,335 @@ impl ConfigView {
 	}
 
 	pub fn view(&self) -> Element<'_, Message> {
-		container(styled_scrollable(
-			column![
-				row![
-					text("Settings")
-						.size(LINE_HEIGHT)
-						.line_height(1.0)
-						.font(Font::MONOSPACE),
-					space::horizontal(),
-					button(rotate_ccw())
-						.style(button_with_radius(button::primary, 5))
-						.padding(5)
-						.on_press_maybe(
-							(self.config != Config::default())
-								.then_some(Message::ResetConfigToDefault)
-						)
-				],
-				container(rule::horizontal(1)).padding([5, 0]),
-				row![
-					"Sample Paths",
-					space::horizontal(),
-					button(plus())
-						.style(button_with_radius(button::primary, 5))
-						.padding(0)
-						.on_press(Message::AddSamplePathFileDialog),
-					space().width(5)
-				],
-				container(
-					column(
-						self.config
-							.sample_paths
-							.iter()
-							.enumerate()
-							.map(|(idx, path)| {
-								row![
-									value(path.display()).font(Font::MONOSPACE),
-									space::horizontal(),
-									button(x())
-										.style(button_with_radius(button::danger, 5))
-										.padding(0)
-										.on_press(Message::RemoveSamplePath(idx))
-								]
-								.into()
-							})
-					)
-					.padding(5)
-					.spacing(5)
-				)
-				.style(bordered_box_with_radius(5)),
-				rule::horizontal(1),
-				row![
-					"CLAP Plugin Paths",
-					space::horizontal(),
-					button(plus())
-						.style(button_with_radius(button::primary, 5))
-						.padding(0)
-						.on_press(Message::AddClapPathFileDialog),
-					space().width(5)
-				],
-				container(
-					column(
-						self.config
-							.clap_paths
-							.iter()
-							.enumerate()
-							.map(|(idx, path)| {
-								row![
-									value(path.display()).font(Font::MONOSPACE),
-									space::horizontal(),
-									button(x())
-										.style(button_with_radius(button::danger, 5))
-										.padding(0)
-										.on_press(Message::RemoveClapPath(idx))
-								]
-								.into()
-							})
-					)
-					.padding(5)
-					.spacing(5)
-				)
-				.style(bordered_box_with_radius(5)),
-				rule::horizontal(1),
-				row![
+		container(
+			scrollable(
+				column![
 					row![
-						button(mic())
-							.style(button_with_radius(button::primary, border::left(5)))
+						text("Settings")
+							.size(LINE_HEIGHT)
+							.line_height(1.0)
+							.font(Font::MONOSPACE),
+						space::horizontal(),
+						button(rotate_ccw())
+							.style(button_with_radius(button::primary, 5))
 							.padding(5)
 							.on_press_maybe(
-								(self.tab != Tab::Input).then_some(Message::ChangedTab(Tab::Input))
+								(self.config != Config::default())
+									.then_some(Message::ResetConfigToDefault)
+							)
+					],
+					container(rule::horizontal(1)).padding([5, 0]),
+					row![
+						"Sample Paths",
+						space::horizontal(),
+						button(plus())
+							.style(button_with_radius(button::primary, 5))
+							.padding(0)
+							.on_press(Message::AddSamplePathFileDialog),
+						space().width(5)
+					],
+					container(
+						column(
+							self.config
+								.sample_paths
+								.iter()
+								.enumerate()
+								.map(|(idx, path)| {
+									row![
+										value(path.display()).font(Font::MONOSPACE),
+										space::horizontal(),
+										button(x())
+											.style(button_with_radius(button::danger, 5))
+											.padding(0)
+											.on_press(Message::RemoveSamplePath(idx))
+									]
+									.into()
+								})
+						)
+						.padding(5)
+						.spacing(5)
+					)
+					.style(bordered_box_with_radius(5)),
+					rule::horizontal(1),
+					row![
+						"CLAP Plugin Paths",
+						space::horizontal(),
+						button(plus())
+							.style(button_with_radius(button::primary, 5))
+							.padding(0)
+							.on_press(Message::AddClapPathFileDialog),
+						space().width(5)
+					],
+					container(
+						column(
+							self.config
+								.clap_paths
+								.iter()
+								.enumerate()
+								.map(|(idx, path)| {
+									row![
+										value(path.display()).font(Font::MONOSPACE),
+										space::horizontal(),
+										button(x())
+											.style(button_with_radius(button::danger, 5))
+											.padding(0)
+											.on_press(Message::RemoveClapPath(idx))
+									]
+									.into()
+								})
+						)
+						.padding(5)
+						.spacing(5)
+					)
+					.style(bordered_box_with_radius(5)),
+					rule::horizontal(1),
+					row![
+						row![
+							button(mic())
+								.style(button_with_radius(button::primary, border::left(5)))
+								.padding(5)
+								.on_press_maybe(
+									(self.tab != Tab::Input)
+										.then_some(Message::ChangedTab(Tab::Input))
+								),
+							button(volume_2())
+								.style(button_with_radius(button::primary, border::right(5)))
+								.padding(5)
+								.on_press_maybe(
+									(self.tab != Tab::Output)
+										.then_some(Message::ChangedTab(Tab::Output))
+								)
+						],
+						space::horizontal(),
+						match self.tab {
+							Tab::Input => "Input",
+							Tab::Output => "Output",
+						}
+					]
+					.align_y(Center),
+					self.with_device(|device, devices| {
+						column![
+							row![
+								"Name: ",
+								space::horizontal(),
+								pick_list(devices, device.name.as_ref(), |name| {
+									Message::ChangedName(Some(name))
+								})
+								.handle(PICK_LIST_HANDLE)
+								.placeholder("Default")
+								.width(222)
+								.style(pick_list_with_radius(border::top_left(5)))
+								.menu_style(menu_style()),
+								button(rotate_ccw())
+									.style(button_with_radius(
+										button::primary,
+										border::top_right(5)
+									))
+									.padding(5)
+									.on_press_maybe(
+										device.name.as_deref().map(|_| Message::ChangedName(None))
+									)
+							]
+							.align_y(Center),
+							row![
+								"Sample Rate: ",
+								space::horizontal(),
+								pick_list(COMMON_SAMPLE_RATES, device.sample_rate, |sample_rate| {
+									Message::ChangedSampleRate(Some(sample_rate))
+								})
+								.handle(PICK_LIST_HANDLE)
+								.placeholder("Default")
+								.width(222)
+								.style(pick_list_with_radius(0))
+								.menu_style(menu_style()),
+								button(rotate_ccw())
+									.style(button_with_radius(button::primary, 0))
+									.padding(5)
+									.on_press_maybe(
+										device
+											.sample_rate
+											.map(|_| Message::ChangedSampleRate(None))
+									)
+							]
+							.align_y(Center),
+							row![
+								"Buffer Size: ",
+								space::horizontal(),
+								pick_list(COMMON_BUFFER_SIZES, device.buffer_size, |buffer_size| {
+									Message::ChangedBufferSize(Some(buffer_size))
+								})
+								.handle(PICK_LIST_HANDLE)
+								.placeholder("Default")
+								.width(222)
+								.style(pick_list_with_radius(border::bottom_left(5)))
+								.menu_style(menu_style()),
+								button(rotate_ccw())
+									.style(button_with_radius(
+										button::primary,
+										border::bottom_right(5)
+									))
+									.padding(5)
+									.on_press_maybe(
+										device
+											.buffer_size
+											.map(|_| Message::ChangedBufferSize(None))
+									)
+							]
+							.align_y(Center)
+						]
+					}),
+					rule::horizontal(1),
+					row![
+						row![
+							toggler(self.config.autosave.enabled)
+								.label("Autosave every ")
+								.on_toggle(|_| Message::ToggledAutosave),
+							number_input(
+								self.config.autosave.interval.get() as usize,
+								600,
+								3,
+								|x| Message::ChangedAutosaveInterval(
+									NonZero::new(x as u64).unwrap_or(NonZero::<u64>::MIN)
+								),
+								Message::ChangedAutosaveIntervalText
 							),
-						button(volume_2())
+							" s"
+						]
+						.align_y(Center)
+						.width(Fill),
+						row![
+							toggler(self.config.open_last_project)
+								.label("Open last project on startup")
+								.on_toggle(|_| Message::ToggledOpenLastProject)
+						]
+						.width(Fill)
+					]
+					.align_y(Center),
+					rule::horizontal(1),
+					row![
+						column![
+							row![
+								"App scale factor:  ",
+								text(format!("{:.1}", self.config.app_scale_factor))
+									.font(Font::MONOSPACE),
+								space::horizontal(),
+								button(rotate_ccw().size(LINE_HEIGHT - 3.0))
+									.style(button_with_radius(button::primary, 5))
+									.padding(3)
+									.on_press_maybe(
+										(self.config.app_scale_factor != 1.0)
+											.then_some(Message::ChangedAppScaleFactor(1.0))
+									),
+								space().width(5)
+							],
+							slider(
+								0.5..=2.0,
+								self.config.app_scale_factor,
+								Message::ChangedAppScaleFactor
+							)
+							.step(0.1),
+						]
+						.spacing(5),
+						container(
+							button(
+								self.config
+									.plugin_scale_factor
+									.map_or_else(link, |_| unlink())
+									.size(LINE_HEIGHT - 3.0)
+							)
+							.padding(0)
+							.style(button::text)
+							.on_press(self.config.plugin_scale_factor.map_or(
+								Message::ChangedPluginScaleFactor(Some(
+									self.config.app_scale_factor
+								)),
+								|_| Message::ChangedPluginScaleFactor(None)
+							))
+						)
+						.align_bottom(Fill)
+						.width(LINE_HEIGHT - 2.0),
+						column![
+							row![
+								"Plugin scale factor:  ",
+								text(format!(
+									"{:.1}",
+									self.config
+										.plugin_scale_factor
+										.unwrap_or(self.config.app_scale_factor)
+								))
+								.font(Font::MONOSPACE),
+								space::horizontal(),
+								button(rotate_ccw().size(LINE_HEIGHT - 3.0))
+									.style(button_with_radius(button::primary, 5))
+									.padding(3)
+									.on_press_maybe(
+										self.config
+											.plugin_scale_factor
+											.map(|_| Message::ChangedPluginScaleFactor(None))
+									),
+								space().width(5)
+							],
+							slider(
+								0.5..=2.0,
+								self.config
+									.plugin_scale_factor
+									.unwrap_or(self.config.app_scale_factor),
+								|scale| self
+									.config
+									.plugin_scale_factor
+									.map_or(Message::ChangedAppScaleFactor(scale), |_| {
+										Message::ChangedPluginScaleFactor(Some(scale))
+									})
+							)
+							.step(0.1)
+						]
+						.spacing(5)
+					]
+					.spacing(10),
+					row![
+						"Theme: ",
+						space::horizontal(),
+						pick_list(
+							Theme::VARIANTS,
+							Some(self.config.theme),
+							Message::ChangedTheme
+						)
+						.handle(PICK_LIST_HANDLE)
+						.width(222)
+						.style(pick_list_with_radius(border::left(5)))
+						.menu_style(menu_style()),
+						button(rotate_ccw())
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding(5)
 							.on_press_maybe(
-								(self.tab != Tab::Output)
-									.then_some(Message::ChangedTab(Tab::Output))
+								(self.config.theme != Theme::CatppuccinFrappe)
+									.then_some(Message::ChangedTheme(Theme::CatppuccinFrappe))
 							)
-					],
-					space::horizontal(),
-					match self.tab {
-						Tab::Input => "Input",
-						Tab::Output => "Output",
-					}
+					]
+					.align_y(Center),
+					(self.config != self.prev_config).then(|| rule::horizontal(1)),
+					(self.config != self.prev_config).then(|| row![
+						container("Changes will only take effect after a project reload!")
+							.padding([5, 10])
+							.style(|t| container::warning(t).border(border::rounded(f32::INFINITY))),
+						space::horizontal(),
+						button(save())
+							.style(button_with_radius(button::primary, border::left(5)))
+							.padding(5)
+							.on_press(Message::WriteConfig),
+						button(rotate_ccw())
+							.style(button_with_radius(button::primary, border::right(5)))
+							.padding(5)
+							.on_press(Message::ResetConfigToPrev)
+					])
 				]
-				.align_y(Center),
-				self.with_device(|device, devices| {
-					column![
-						row![
-							"Name: ",
-							space::horizontal(),
-							pick_list_custom_handle(devices, device.name.as_ref(), |name| {
-								Message::ChangedName(Some(name))
-							})
-							.placeholder("Default")
-							.width(222)
-							.style(pick_list_with_radius(
-								pick_list::default,
-								border::top_left(5)
-							)),
-							button(rotate_ccw())
-								.style(button_with_radius(button::primary, border::top_right(5)))
-								.padding(5)
-								.on_press_maybe(
-									device.name.as_deref().map(|_| Message::ChangedName(None))
-								)
-						]
-						.align_y(Center),
-						row![
-							"Sample Rate: ",
-							space::horizontal(),
-							pick_list_custom_handle(
-								COMMON_SAMPLE_RATES,
-								device.sample_rate,
-								|sample_rate| { Message::ChangedSampleRate(Some(sample_rate)) }
-							)
-							.placeholder("Default")
-							.width(222)
-							.style(pick_list_with_radius(pick_list::default, 0)),
-							button(rotate_ccw())
-								.style(button_with_radius(button::primary, 0))
-								.padding(5)
-								.on_press_maybe(
-									device.sample_rate.map(|_| Message::ChangedSampleRate(None))
-								)
-						]
-						.align_y(Center),
-						row![
-							"Buffer Size: ",
-							space::horizontal(),
-							pick_list_custom_handle(
-								COMMON_BUFFER_SIZES,
-								device.buffer_size,
-								|buffer_size| { Message::ChangedBufferSize(Some(buffer_size)) }
-							)
-							.placeholder("Default")
-							.width(222)
-							.style(pick_list_with_radius(
-								pick_list::default,
-								border::bottom_left(5)
-							)),
-							button(rotate_ccw())
-								.style(button_with_radius(button::primary, border::bottom_right(5)))
-								.padding(5)
-								.on_press_maybe(
-									device.buffer_size.map(|_| Message::ChangedBufferSize(None))
-								)
-						]
-						.align_y(Center)
-					]
-				}),
-				rule::horizontal(1),
-				row![
-					row![
-						toggler(self.config.autosave.enabled)
-							.label("Autosave every ")
-							.on_toggle(|_| Message::ToggledAutosave),
-						number_input(
-							self.config.autosave.interval.get() as usize,
-							600,
-							3,
-							|x| Message::ChangedAutosaveInterval(
-								NonZero::new(x as u64).unwrap_or(NonZero::<u64>::MIN)
-							),
-							Message::ChangedAutosaveIntervalText
-						),
-						" s"
-					]
-					.align_y(Center)
-					.width(Fill),
-					row![
-						toggler(self.config.open_last_project)
-							.label("Open last project on startup")
-							.on_toggle(|_| Message::ToggledOpenLastProject)
-					]
-					.width(Fill)
-				]
-				.align_y(Center),
-				rule::horizontal(1),
-				row![
-					column![
-						row![
-							"App scale factor:  ",
-							text(format!("{:.1}", self.config.app_scale_factor))
-								.font(Font::MONOSPACE),
-							space::horizontal(),
-							button(rotate_ccw().size(LINE_HEIGHT - 3.0))
-								.style(button_with_radius(button::primary, 5))
-								.padding(3)
-								.on_press_maybe(
-									(self.config.app_scale_factor != 1.0)
-										.then_some(Message::ChangedAppScaleFactor(1.0))
-								),
-							space().width(5)
-						],
-						slider(
-							0.5..=2.0,
-							self.config.app_scale_factor,
-							Message::ChangedAppScaleFactor
-						)
-						.step(0.1),
-					]
-					.spacing(5),
-					container(
-						button(
-							self.config
-								.plugin_scale_factor
-								.map_or_else(link, |_| unlink())
-								.size(LINE_HEIGHT - 3.0)
-						)
-						.padding(0)
-						.style(button::text)
-						.on_press(self.config.plugin_scale_factor.map_or(
-							Message::ChangedPluginScaleFactor(Some(self.config.app_scale_factor)),
-							|_| Message::ChangedPluginScaleFactor(None)
-						))
-					)
-					.align_bottom(Fill)
-					.width(LINE_HEIGHT - 2.0),
-					column![
-						row![
-							"Plugin scale factor:  ",
-							text(format!(
-								"{:.1}",
-								self.config
-									.plugin_scale_factor
-									.unwrap_or(self.config.app_scale_factor)
-							))
-							.font(Font::MONOSPACE),
-							space::horizontal(),
-							button(rotate_ccw().size(LINE_HEIGHT - 3.0))
-								.style(button_with_radius(button::primary, 5))
-								.padding(3)
-								.on_press_maybe(
-									self.config
-										.plugin_scale_factor
-										.map(|_| Message::ChangedPluginScaleFactor(None))
-								),
-							space().width(5)
-						],
-						slider(
-							0.5..=2.0,
-							self.config
-								.plugin_scale_factor
-								.unwrap_or(self.config.app_scale_factor),
-							|scale| self
-								.config
-								.plugin_scale_factor
-								.map_or(Message::ChangedAppScaleFactor(scale), |_| {
-									Message::ChangedPluginScaleFactor(Some(scale))
-								})
-						)
-						.step(0.1)
-					]
-					.spacing(5)
-				]
-				.spacing(10),
-				row![
-					"Theme: ",
-					space::horizontal(),
-					pick_list_custom_handle(
-						Theme::VARIANTS,
-						Some(self.config.theme),
-						Message::ChangedTheme
-					)
-					.width(222)
-					.style(pick_list_with_radius(pick_list::default, border::left(5))),
-					button(rotate_ccw())
-						.style(button_with_radius(button::primary, border::right(5)))
-						.padding(5)
-						.on_press_maybe(
-							(self.config.theme != Theme::CatppuccinFrappe)
-								.then_some(Message::ChangedTheme(Theme::CatppuccinFrappe))
-						)
-				]
-				.align_y(Center),
-				(self.config != self.prev_config).then(|| rule::horizontal(1)),
-				(self.config != self.prev_config).then(|| row![
-					container("Changes will only take effect after a project reload!")
-						.padding([5, 10])
-						.style(|t| container::warning(t).border(border::rounded(f32::INFINITY))),
-					space::horizontal(),
-					button(save())
-						.style(button_with_radius(button::primary, border::left(5)))
-						.padding(5)
-						.on_press(Message::WriteConfig),
-					button(rotate_ccw())
-						.style(button_with_radius(button::primary, border::right(5)))
-						.padding(5)
-						.on_press(Message::ResetConfigToPrev)
-				])
-			]
-			.spacing(10)
-			.padding(10)
-			.width(530),
-		))
+				.spacing(10)
+				.padding(10)
+				.width(530),
+			)
+			.spacing(5)
+			.style(scrollable_style()),
+		)
 		.style(|t| {
 			bordered_box_with_radius(5)(t).background(t.extended_palette().background.weakest.color)
 		})

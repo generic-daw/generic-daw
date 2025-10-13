@@ -1,19 +1,14 @@
 use crate::{
 	icons::{Icon, LUCIDE_FONT, move_vertical},
-	stylefns::{bordered_box_with_radius, button_with_radius, menu_with_border},
+	stylefns::{bordered_box_with_radius, button_with_radius},
 };
 use generic_daw_widget::drag_handle::DragHandle;
 use iced::{
 	Element, Font,
 	Length::Fill,
 	Shrink, Theme, border,
-	overlay::menu,
-	widget::{
-		Button, PickList, Scrollable, Text, button, container, pick_list, row, scrollable, text,
-		text_input,
-	},
+	widget::{Button, Text, button, container, pick_list, row, text, text_input},
 };
-use std::borrow::Borrow;
 
 pub fn icon_button<'a, Message>(
 	t: Icon,
@@ -74,55 +69,19 @@ where
 	.into()
 }
 
-pub fn pick_list_custom_handle<'a, T, L, V, Message>(
-	options: L,
-	selected: Option<V>,
-	on_selected: impl Fn(T) -> Message + 'a,
-) -> PickList<'a, T, L, V, Message>
-where
-	T: ToString + PartialEq + Clone + 'a,
-	L: Borrow<[T]> + 'a,
-	V: Borrow<T> + 'a,
-	Message: Clone,
-{
-	pick_list(options, selected, on_selected)
-		.handle(pick_list::Handle::Dynamic {
-			closed: pick_list::Icon {
-				font: LUCIDE_FONT,
-				code_point: const { char::from_u32(57453).unwrap() },
-				size: None,
-				line_height: 1.0.into(),
-				shaping: text::Shaping::Basic,
-			},
-			open: pick_list::Icon {
-				font: LUCIDE_FONT,
-				code_point: const { char::from_u32(57456).unwrap() },
-				size: None,
-				line_height: 1.0.into(),
-				shaping: text::Shaping::Basic,
-			},
-		})
-		.menu_style(menu_with_border(menu::default, border::width(0)))
-}
-
-pub fn styled_scrollable<'a, Message>(
-	content: impl Into<Element<'a, Message>>,
-) -> Scrollable<'a, Message> {
-	styled_scrollable_with_direction(content, scrollable::Direction::default())
-}
-
-pub fn styled_scrollable_with_direction<'a, Message>(
-	content: impl Into<Element<'a, Message>>,
-	direction: impl Into<scrollable::Direction>,
-) -> Scrollable<'a, Message> {
-	Scrollable::with_direction(content, direction)
-		.spacing(5)
-		.style(|t, s| {
-			let mut style = scrollable::default(t, s);
-			style.vertical_rail.border.radius = 0.into();
-			style.vertical_rail.scroller.border.radius = 0.into();
-			style.horizontal_rail.border.radius = 0.into();
-			style.horizontal_rail.scroller.border.radius = 0.into();
-			style
-		})
-}
+pub const PICK_LIST_HANDLE: pick_list::Handle<Font> = pick_list::Handle::Dynamic {
+	closed: pick_list::Icon {
+		font: LUCIDE_FONT,
+		code_point: char::from_u32(57453).unwrap(),
+		size: None,
+		line_height: text::LineHeight::Relative(1.0),
+		shaping: text::Shaping::Basic,
+	},
+	open: pick_list::Icon {
+		font: LUCIDE_FONT,
+		code_point: char::from_u32(57456).unwrap(),
+		size: None,
+		line_height: text::LineHeight::Relative(1.0),
+		shaping: text::Shaping::Basic,
+	},
+};
