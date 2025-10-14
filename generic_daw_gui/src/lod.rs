@@ -1,8 +1,7 @@
-use crate::widget::LINE_HEIGHT;
-use generic_daw_core::{MusicalTime, RtState};
-use generic_daw_utils::{NoDebug, Vec2};
+use generic_daw_core::{ClipPosition, RtState};
+use generic_daw_utils::NoDebug;
 use iced::{
-	Point, Rectangle, Theme, Transformation,
+	Point, Rectangle, Size, Theme, Transformation,
 	advanced::graphics::{
 		Mesh,
 		color::{self, Packed},
@@ -24,30 +23,36 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 		&self,
 		samples: &[f32],
 		rtstate: &RtState,
-		start: MusicalTime,
-		offset: MusicalTime,
-		position: Vec2,
-		scale: Vec2,
+		clip_position: ClipPosition,
+		x_position: f32,
+		x_scale: f32,
 		theme: &Theme,
-		pos_y: f32,
-		bounds: Rectangle,
+		clipped_size: Size,
+		unclipped_height: f32,
+		hidden_top_px: f32,
 	) -> Option<Mesh> {
 		fn vertices(
 			iter: impl IntoIterator<Item = (f32, f32)>,
-			height: f32,
-			subpixel: f32,
-			lod_samples_per_pixel: f32,
+			unclipped_height: f32,
+			px_per_mesh_slice: f32,
 			color: Packed,
+			hidden_top_px: f32,
 		) -> Arc<[SolidVertex2D]> {
 			let mut last = None::<(f32, f32)>;
 			iter.into_iter()
+				.map(|(min, max)| {
+					(
+						min.mul_add(unclipped_height, hidden_top_px),
+						max.mul_add(unclipped_height, hidden_top_px),
+					)
+				})
 				.map(|(mut min, mut max)| {
 					if let Some((l_max, l_min)) = last {
 						min = min.min(l_max);
 						max = max.max(l_min);
 					}
 					last = Some((max, min));
-					(min * height, max * height)
+					(min, max)
 				})
 				.map(|(min, max)| {
 					if max - min < 1.0 {
@@ -58,16 +63,15 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 					}
 				})
 				.enumerate()
+				.map(|(x, mm)| (x as f32 * px_per_mesh_slice, mm))
 				.flat_map(|(x, (min, max))| {
-					let x = (x as f32 - subpixel) * lod_samples_per_pixel;
-
 					[
 						SolidVertex2D {
-							position: [x, min + LINE_HEIGHT],
+							position: [x, min],
 							color,
 						},
 						SolidVertex2D {
-							position: [x, max + LINE_HEIGHT],
+							position: [x, max],
 							color,
 						},
 					]
@@ -75,67 +79,67 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 				.collect()
 		}
 
-		let height = scale.y - LINE_HEIGHT;
+		let mesh_lod = x_scale as usize - 1;
+		let saved_lod = mesh_lod / STEP_SIZE;
+		let lod_slices_per_mesh_slice = 1 << (mesh_lod % STEP_SIZE);
 
-		debug_assert!(height > 0.0);
+		let samples_per_mesh_slice = x_scale.floor().exp2();
+		let samples_per_px = x_scale.exp2();
 
-		let lod_sample_size = scale.x.floor().exp2();
+		let px_per_mesh_slice = samples_per_mesh_slice / samples_per_px;
 
-		let pixel_size = scale.x.exp2();
+		let lod_slices_per_sample = lod_slices_per_mesh_slice as f32 / samples_per_mesh_slice;
+		let lod_slices_per_px = lod_slices_per_mesh_slice as f32 / px_per_mesh_slice;
 
-		let lod_samples_per_pixel = lod_sample_size / pixel_size;
+		let start = clip_position.start().to_samples_f(rtstate);
+		let end = clip_position.end().to_samples_f(rtstate);
+		let offset = clip_position.offset().to_samples_f(rtstate);
 
-		let color = color::pack(theme.extended_palette().background.strong.text);
+		let hidden_start_samples = 0f32.max(x_position - start);
 
-		let start = start.to_samples_f(rtstate);
-		let offset = offset.to_samples_f(rtstate);
-		let subpixel = (offset / lod_sample_size).fract();
-
-		let diff = 0f32.max(position.x - start);
-
-		let lod = scale.x as usize - 1;
-		let chunk = 1 << (lod % STEP_SIZE);
-		let lod = lod / STEP_SIZE;
-		let len = lod
+		let lod_start = ((offset + hidden_start_samples) * lod_slices_per_sample) as usize;
+		let view_len = (end - start) * lod_slices_per_sample;
+		let view_len = view_len.min(clipped_size.width * lod_slices_per_px) as usize;
+		let lod_len = saved_lod
 			.checked_sub(1)
-			.map_or(samples.len() / 2, |lod| self.0[lod].as_ref().len())
-			/ chunk;
+			.map_or(samples.len() / 2, |saved_lod| {
+				self.0[saved_lod].as_ref().len()
+			});
+		let lod_end = lod_len.min(lod_start + view_len);
 
-		let first_index = ((diff + offset) / lod_sample_size) as usize;
-		let last_index = first_index + (bounds.width / lod_samples_per_pixel) as usize;
-		let last_index = last_index.min(len);
-
-		if last_index <= first_index || last_index - first_index <= 2 {
+		if lod_end <= lod_start {
 			return None;
 		}
 
-		let first_index = chunk * first_index;
-		let last_index = chunk * last_index;
-
-		let vertices = lod.checked_sub(1).map_or_else(
+		let color = color::pack(theme.extended_palette().background.strong.text);
+		let vertices = saved_lod.checked_sub(1).map_or_else(
 			|| {
 				vertices(
-					samples[2 * first_index..2 * last_index]
-						.chunks(2 * chunk)
-						.map(first_min_max),
-					height,
-					subpixel,
-					lod_samples_per_pixel,
+					samples[2 * lod_start..2 * lod_end]
+						.chunks(2 * lod_slices_per_mesh_slice)
+						.map(samples_min_max),
+					unclipped_height,
+					px_per_mesh_slice,
 					color,
+					hidden_top_px,
 				)
 			},
-			|lod| {
+			|saved_lod| {
 				vertices(
-					self.0[lod].as_ref()[first_index..last_index]
-						.chunks(chunk)
-						.map(other_min_max),
-					height,
-					subpixel,
-					lod_samples_per_pixel,
+					self.0[saved_lod].as_ref()[lod_start..lod_end]
+						.chunks(lod_slices_per_mesh_slice)
+						.map(lod_min_max),
+					unclipped_height,
+					px_per_mesh_slice,
 					color,
+					hidden_top_px,
 				)
 			},
 		);
+
+		if vertices.len() < 3 {
+			return None;
+		}
 
 		let indices = (0..vertices.len() as u32 - 2)
 			.flat_map(|i| [i, i + 1, i + 2])
@@ -144,10 +148,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 		Some(Mesh::Solid {
 			buffers: Indexed { vertices, indices },
 			transformation: Transformation::IDENTITY,
-			clip_bounds: Rectangle::new(
-				Point::new(0.0, (bounds.y - pos_y).max(0.0)),
-				bounds.size(),
-			),
+			clip_bounds: Rectangle::new(Point::ORIGIN, clipped_size),
 		})
 	}
 }
@@ -167,7 +168,7 @@ impl Lods<Vec<(f32, f32)>> {
 		const FIRST: usize = 2 * CHUNK_SIZE;
 		start /= FIRST;
 		self.0[0].truncate(start);
-		self.0[0].extend(samples[FIRST * start..].chunks(FIRST).map(first_min_max));
+		self.0[0].extend(samples[FIRST * start..].chunks(FIRST).map(samples_min_max));
 
 		for i in 1..SAVED_LOD_LEVELS {
 			let [last, current] = &mut self.0[i - 1..=i] else {
@@ -179,7 +180,7 @@ impl Lods<Vec<(f32, f32)>> {
 			current.extend(
 				last[CHUNK_SIZE * start..]
 					.chunks(CHUNK_SIZE)
-					.map(other_min_max),
+					.map(lod_min_max),
 			);
 		}
 	}
@@ -189,7 +190,7 @@ impl Lods<Vec<(f32, f32)>> {
 	}
 }
 
-fn first_min_max(chunk: &[f32]) -> (f32, f32) {
+fn samples_min_max(chunk: &[f32]) -> (f32, f32) {
 	let (min, max) = chunk
 		.iter()
 		.fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
@@ -198,7 +199,7 @@ fn first_min_max(chunk: &[f32]) -> (f32, f32) {
 	(min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5))
 }
 
-fn other_min_max(chunk: &[(f32, f32)]) -> (f32, f32) {
+fn lod_min_max(chunk: &[(f32, f32)]) -> (f32, f32) {
 	chunk
 		.iter()
 		.fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {

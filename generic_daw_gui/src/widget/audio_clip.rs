@@ -1,6 +1,6 @@
 use super::{LINE_HEIGHT, Vec2};
 use crate::arrangement_view::{AudioClipRef, Recording as RecordingWrapper};
-use generic_daw_core::{MusicalTime, RtState};
+use generic_daw_core::{ClipPosition, MusicalTime, NotePosition, RtState};
 use iced::{
 	Element, Event, Fill, Length, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
@@ -198,36 +198,47 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
 		let state = tree.state.downcast_ref::<State>();
 
-		if state.cache.borrow().is_none()
-			&& let Some(mesh) = debug::time_with("Waveform Mesh", || match self.inner {
-				Inner::Sample(inner) => inner.sample.lods.mesh(
-					&inner.sample.samples,
-					self.rtstate,
-					inner.clip.position.start(),
-					inner.clip.position.offset(),
-					*self.position,
-					*self.scale,
-					theme,
-					layout.position().y,
-					lower_bounds,
-				),
-				Inner::Recording(inner) => inner.lods.mesh(
-					inner.core.samples(),
-					self.rtstate,
-					inner.position,
+		let mesh = || match self.inner {
+			Inner::Sample(inner) => inner.sample.lods.mesh(
+				&inner.sample.samples,
+				self.rtstate,
+				inner.clip.position,
+				self.position.x,
+				self.scale.x,
+				theme,
+				lower_bounds.size(),
+				layout.bounds().height - LINE_HEIGHT,
+				bounds.y - layout.bounds().y,
+			),
+			Inner::Recording(inner) => inner.lods.mesh(
+				inner.core.samples(),
+				self.rtstate,
+				ClipPosition::new(
+					NotePosition::new(
+						inner.position,
+						inner.position
+							+ MusicalTime::from_samples_f(layout.bounds().width, self.rtstate)
+								.max(MusicalTime::TICK),
+					),
 					MusicalTime::ZERO,
-					*self.position,
-					*self.scale,
-					theme,
-					layout.position().y,
-					lower_bounds,
 				),
-			}) {
+				self.position.x,
+				self.scale.x,
+				theme,
+				lower_bounds.size(),
+				layout.bounds().height - LINE_HEIGHT,
+				bounds.y - layout.bounds().y,
+			),
+		};
+
+		if state.cache.borrow().is_none()
+			&& let Some(mesh) = debug::time_with("Waveform Mesh", mesh)
+		{
 			state.cache.borrow_mut().replace(mesh);
 		}
 
 		if let Some(mesh) = state.cache.borrow().clone() {
-			renderer.with_translation(Vector::new(bounds.x, layout.position().y), |renderer| {
+			renderer.with_translation(Vector::new(lower_bounds.x, lower_bounds.y), |renderer| {
 				renderer.draw_mesh(mesh);
 			});
 		}

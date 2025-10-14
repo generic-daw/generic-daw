@@ -30,7 +30,7 @@ pub fn button_with_radius(
 }
 
 pub fn menu_style() -> impl Fn(&Theme) -> menu::Style {
-	move |t| {
+	|t| {
 		let mut style = menu::default(t);
 		style.border = border::width(0);
 		style
@@ -62,7 +62,7 @@ pub fn progress_bar_with_radius(
 }
 
 pub fn scrollable_style() -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style {
-	move |t, s| {
+	|t, s| {
 		let mut style = scrollable::default(t, s);
 		style.vertical_rail.border.radius = 0.into();
 		style.vertical_rail.scroller.border.radius = 0.into();

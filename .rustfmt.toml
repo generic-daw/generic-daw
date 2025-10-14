@@ -1,4 +1,4 @@
 edition = "2024"
-group_imports = "One"
+# group_imports = "One"
 hard_tabs = true
-imports_granularity = "Crate"
+# imports_granularity = "Crate"
