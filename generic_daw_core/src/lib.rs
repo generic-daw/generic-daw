@@ -3,7 +3,7 @@ use cpal::{
 	traits::{DeviceTrait as _, HostTrait as _},
 };
 use master::Master;
-use std::sync::Arc;
+use std::{num::NonZero, sync::Arc};
 
 mod audio_clip;
 mod audio_graph_node;
@@ -67,9 +67,9 @@ pub fn get_output_devices() -> Vec<Arc<str>> {
 		.collect()
 }
 
-fn buffer_size_of_config(config: &StreamConfig) -> Option<u32> {
+fn frames_of_config(config: &StreamConfig) -> Option<NonZero<u32>> {
 	match config.buffer_size {
-		BufferSize::Fixed(buffer_size) => Some(buffer_size),
+		BufferSize::Fixed(buffer_size) => NonZero::new(buffer_size),
 		BufferSize::Default => None,
 	}
 }

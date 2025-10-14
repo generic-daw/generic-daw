@@ -1,4 +1,4 @@
-use crate::{Batch, Message, RtState, buffer_size_of_config, daw_ctx::DawCtx};
+use crate::{Batch, Message, RtState, daw_ctx::DawCtx, frames_of_config};
 use audio_graph::NodeId;
 use cpal::{
 	BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
@@ -63,8 +63,8 @@ pub enum StreamMessage {
 #[derive(Debug)]
 pub struct InputRequest {
 	pub device_name: Option<Arc<str>>,
-	pub sample_rate: u32,
-	pub frames: u32,
+	pub sample_rate: NonZero<u32>,
+	pub frames: Option<NonZero<u32>>,
 }
 
 #[derive(Debug)]
@@ -77,8 +77,8 @@ pub struct InputResponse {
 #[derive(Debug)]
 pub struct OutputRequest {
 	pub device_name: Option<Arc<str>>,
-	pub sample_rate: u32,
-	pub frames: u32,
+	pub sample_rate: NonZero<u32>,
+	pub frames: Option<NonZero<u32>>,
 	pub metrics: NoDebug<&'static (dyn Fn(&mut dyn FnMut()) + Send + Sync)>,
 }
 
@@ -103,9 +103,6 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 
 			match msg {
 				StreamMessage::Input(req, sender) => {
-					let (mut producer, consumer) =
-						RingBuffer::new(req.sample_rate.div_ceil(req.frames) as usize);
-
 					let device = req
 						.device_name
 						.and_then(|device_name| Some((device_name, host.input_devices().ok()?)))
@@ -124,9 +121,16 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 
 					info!("starting input stream with config {config:#?}");
 
-					let buffer_size = buffer_size_of_config(&config).unwrap_or(req.frames);
+					let sample_rate = config.sample_rate.0;
+					let frames = frames_of_config(&config)
+						.or(req.frames)
+						.unwrap_or(NonZero::new(2048).unwrap())
+						.get();
 					let channels = u32::from(config.channels);
-					let frames = buffer_size / channels;
+					let buffer_len = frames * channels;
+
+					let (mut producer, consumer) =
+						RingBuffer::new(sample_rate.div_ceil(frames) as usize);
 
 					let mut stereo = vec![0.0; 2 * frames as usize].into_boxed_slice();
 
@@ -134,7 +138,7 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 						.build_input_stream(
 							&config,
 							move |buf, _| {
-								for buf in buf.chunks(buffer_size as usize) {
+								for buf in buf.chunks(buffer_len as usize) {
 									let frames = buf.len() / usize::from(config.channels);
 									from_other_to_stereo(&mut stereo[..2 * frames], buf, frames);
 									producer.push(stereo[..2 * frames].into()).unwrap();
@@ -179,9 +183,12 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 					info!("starting output stream with config {config:#?}");
 
 					let sample_rate = config.sample_rate.0;
-					let buffer_size = buffer_size_of_config(&config).unwrap_or(req.frames);
+					let frames = frames_of_config(&config)
+						.or(req.frames)
+						.unwrap_or(NonZero::new(2048).unwrap())
+						.get();
 					let channels = u32::from(config.channels);
-					let frames = buffer_size / channels;
+					let buffer_len = frames * channels;
 
 					let rtstate = RtState::new(sample_rate, frames);
 					let (mut ctx, master_node_id, producer, consumer) = DawCtx::create(rtstate);
@@ -193,7 +200,7 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 							&config,
 							move |buf, _| {
 								(req.metrics)(&mut || {
-									for buf in buf.chunks_mut(buffer_size as usize) {
+									for buf in buf.chunks_mut(buffer_len as usize) {
 										let frames = buf.len() / channels as usize;
 										ctx.process(&mut stereo[..2 * frames]);
 										from_stereo_to_other(buf, &stereo[..2 * frames], frames);
@@ -240,26 +247,31 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 
 fn choose_config(
 	configs: impl IntoIterator<Item = SupportedStreamConfigRange>,
-	sample_rate: u32,
-	frames: u32,
+	sample_rate: NonZero<u32>,
+	frames: Option<NonZero<u32>>,
 ) -> StreamConfig {
 	let config = configs
 		.into_iter()
 		.filter(|config| config.channels() != 0)
 		.min_by(|l, r| {
 			compare_by_sample_rate(l, r, sample_rate)
-				.then_with(|| compare_by_frames(l, r, frames))
+				.then_with(|| {
+					frames.map_or(Ordering::Equal, |frames| compare_by_frames(l, r, frames))
+				})
 				.then_with(|| compare_by_channel_count(l, r))
 		})
 		.unwrap();
 
-	let sample_rate =
-		SampleRate(sample_rate.clamp(config.min_sample_rate().0, config.max_sample_rate().0));
+	let sample_rate = SampleRate(
+		sample_rate
+			.get()
+			.clamp(config.min_sample_rate().0, config.max_sample_rate().0),
+	);
 
-	let buffer_size = match *config.buffer_size() {
-		SupportedBufferSize::Unknown => BufferSize::Default,
-		SupportedBufferSize::Range { min, max } => {
-			BufferSize::Fixed((frames * u32::from(config.channels())).clamp(min, max))
+	let buffer_size = match (*config.buffer_size(), frames) {
+		(SupportedBufferSize::Unknown, _) | (_, None) => BufferSize::Default,
+		(SupportedBufferSize::Range { min, max }, Some(frames)) => {
+			BufferSize::Fixed(frames.get().clamp(min, max))
 		}
 	};
 
@@ -273,8 +285,9 @@ fn choose_config(
 fn compare_by_sample_rate(
 	l: &SupportedStreamConfigRange,
 	r: &SupportedStreamConfigRange,
-	sample_rate: u32,
+	sample_rate: NonZero<u32>,
 ) -> Ordering {
+	let sample_rate = sample_rate.get();
 	let ldiff = sample_rate
 		.clamp(l.min_sample_rate().0, l.max_sample_rate().0)
 		.abs_diff(sample_rate);
@@ -288,7 +301,7 @@ fn compare_by_sample_rate(
 fn compare_by_frames(
 	l: &SupportedStreamConfigRange,
 	r: &SupportedStreamConfigRange,
-	frames: u32,
+	frames: NonZero<u32>,
 ) -> Ordering {
 	match (*l.buffer_size(), *r.buffer_size()) {
 		(SupportedBufferSize::Unknown, SupportedBufferSize::Unknown) => Ordering::Equal,
@@ -304,6 +317,7 @@ fn compare_by_frames(
 				max: rmax,
 			},
 		) => {
+			let frames = frames.get();
 			let ldiff = frames
 				.clamp(
 					lmin / u32::from(l.channels()),

@@ -1,12 +1,12 @@
 use crate::{
 	InputRequest, InputResponse, RtState, STREAM_THREAD, Sample, SampleId, StreamMessage,
-	StreamToken, buffer_size_of_config, resampler::Resampler,
+	StreamToken, frames_of_config, resampler::Resampler,
 };
 use cpal::StreamConfig;
 use generic_daw_utils::NoDebug;
 use hound::{SampleFormat, WavSpec, WavWriter};
 use rtrb::Consumer;
-use std::{io, sync::Arc};
+use std::{io, num::NonZero, sync::Arc};
 
 #[derive(Debug)]
 pub struct Recording<W: io::Write + io::Seek> {
@@ -23,8 +23,8 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		writer: W,
 		rtstate: &RtState,
 		device_name: Option<Arc<str>>,
-		sample_rate: u32,
-		frames: u32,
+		sample_rate: NonZero<u32>,
+		frames: Option<NonZero<u32>>,
 	) -> (Self, Consumer<Box<[f32]>>) {
 		let (sender, receiver) = oneshot::channel();
 
@@ -81,9 +81,8 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	}
 
 	#[must_use]
-	pub fn frames(&self) -> Option<u32> {
-		buffer_size_of_config(&self.config)
-			.map(|buffer_size| buffer_size / u32::from(self.config.channels))
+	pub fn frames(&self) -> Option<NonZero<u32>> {
+		frames_of_config(&self.config)
 	}
 
 	#[must_use]

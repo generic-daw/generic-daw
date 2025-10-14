@@ -41,8 +41,8 @@ pub enum Message {
 	RemoveClapPath(usize),
 	ChangedTab(Tab),
 	ChangedName(Option<Arc<str>>),
-	ChangedSampleRate(Option<u32>),
-	ChangedBufferSize(Option<u32>),
+	ChangedSampleRate(Option<NonZero<u32>>),
+	ChangedBufferSize(Option<NonZero<u32>>),
 	ToggledAutosave,
 	ChangedAutosaveInterval(NonZero<u64>),
 	ChangedAutosaveIntervalText(String),
@@ -269,9 +269,13 @@ impl ConfigView {
 							row![
 								"Sample Rate: ",
 								space::horizontal(),
-								pick_list(COMMON_SAMPLE_RATES, device.sample_rate, |sample_rate| {
-									Message::ChangedSampleRate(Some(sample_rate))
-								})
+								pick_list(
+									COMMON_SAMPLE_RATES,
+									device.sample_rate.map(NonZero::get),
+									|sample_rate| {
+										Message::ChangedSampleRate(NonZero::new(sample_rate))
+									}
+								)
 								.handle(PICK_LIST_HANDLE)
 								.placeholder("Default")
 								.width(222)
@@ -290,9 +294,13 @@ impl ConfigView {
 							row![
 								"Buffer Size: ",
 								space::horizontal(),
-								pick_list(COMMON_BUFFER_SIZES, device.buffer_size, |buffer_size| {
-									Message::ChangedBufferSize(Some(buffer_size))
-								})
+								pick_list(
+									COMMON_BUFFER_SIZES,
+									device.buffer_size.map(NonZero::get),
+									|buffer_size| {
+										Message::ChangedBufferSize(NonZero::new(buffer_size))
+									}
+								)
 								.handle(PICK_LIST_HANDLE)
 								.placeholder("Default")
 								.width(222)

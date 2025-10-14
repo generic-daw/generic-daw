@@ -24,7 +24,7 @@ use generic_daw_utils::{HoleyVec, NoClone, NoDebug, ShiftMoveExt as _};
 use iced::Task;
 use rtrb::Producer;
 use smol::unblock;
-use std::{path::Path, sync::Arc, time::Instant};
+use std::{num::NonZero, path::Path, sync::Arc, time::Instant};
 
 #[derive(Debug)]
 pub struct Arrangement {
@@ -49,8 +49,11 @@ impl Arrangement {
 			.send(StreamMessage::Output(
 				OutputRequest {
 					device_name: config.output_device.name.clone(),
-					sample_rate: config.output_device.sample_rate.unwrap_or(44100),
-					frames: config.output_device.buffer_size.unwrap_or(1024),
+					sample_rate: config
+						.output_device
+						.sample_rate
+						.unwrap_or(NonZero::new(44100).unwrap()),
+					frames: config.output_device.buffer_size,
 					metrics: NoDebug(&|f| iced::debug::time_with("Output callback", f)),
 				},
 				sender,

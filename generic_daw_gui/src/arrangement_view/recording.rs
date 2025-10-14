@@ -7,7 +7,7 @@ use crate::{
 };
 use generic_daw_core::{self as core, MusicalTime, RtState};
 use rtrb::Consumer;
-use std::{fs::File, io::BufWriter, path::Path, sync::Arc};
+use std::{fs::File, io::BufWriter, num::NonZero, path::Path, sync::Arc};
 
 #[derive(Debug)]
 pub struct Recording {
@@ -23,8 +23,8 @@ impl Recording {
 		path: impl AsRef<Path>,
 		rtstate: &RtState,
 		device_name: Option<Arc<str>>,
-		sample_rate: u32,
-		frames: u32,
+		sample_rate: NonZero<u32>,
+		frames: Option<NonZero<u32>>,
 	) -> (Self, Consumer<Box<[f32]>>) {
 		let (core, consumer) = core::Recording::create(
 			BufWriter::new(File::create(path.as_ref()).unwrap()),
@@ -50,7 +50,7 @@ impl Recording {
 		self.core.sample_rate()
 	}
 
-	pub fn frames(&self) -> Option<u32> {
+	pub fn frames(&self) -> Option<NonZero<u32>> {
 		self.core.frames()
 	}
 
