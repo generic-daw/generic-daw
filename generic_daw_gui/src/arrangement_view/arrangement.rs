@@ -127,6 +127,7 @@ impl Arrangement {
 			messages
 		});
 
+		update.updates.clear();
 		self.send(Message::ReturnUpdateBuffer(update.updates));
 
 		messages

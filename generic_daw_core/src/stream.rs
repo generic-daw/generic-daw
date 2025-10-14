@@ -318,18 +318,8 @@ fn compare_by_frames(
 			},
 		) => {
 			let frames = frames.get();
-			let ldiff = frames
-				.clamp(
-					lmin / u32::from(l.channels()),
-					lmax / u32::from(l.channels()),
-				)
-				.abs_diff(frames);
-			let rdiff = frames
-				.clamp(
-					rmin / u32::from(r.channels()),
-					rmax / u32::from(r.channels()),
-				)
-				.abs_diff(frames);
+			let ldiff = frames.clamp(lmin, lmax).abs_diff(frames);
+			let rdiff = frames.clamp(rmin, rmax).abs_diff(frames);
 			ldiff.cmp(&rdiff)
 		}
 	}
