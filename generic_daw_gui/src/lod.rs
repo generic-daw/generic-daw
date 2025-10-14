@@ -36,6 +36,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 			unclipped_height: f32,
 			px_per_mesh_slice: f32,
 			color: Packed,
+			jitter_correct: f32,
 			hidden_top_px: f32,
 		) -> Arc<[SolidVertex2D]> {
 			let mut last = None::<(f32, f32)>;
@@ -63,7 +64,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 					}
 				})
 				.enumerate()
-				.map(|(x, mm)| (x as f32 * px_per_mesh_slice, mm))
+				.map(|(x, mm)| ((x as f32).mul_add(px_per_mesh_slice, jitter_correct), mm))
 				.flat_map(|(x, (min, max))| {
 					[
 						SolidVertex2D {
@@ -97,21 +98,29 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 
 		let hidden_start_samples = 0f32.max(x_position - start);
 
-		let lod_start = ((offset + hidden_start_samples) * lod_slices_per_sample) as usize;
-		let view_len = (end - start) * lod_slices_per_sample;
-		let view_len = view_len.min(clipped_size.width * lod_slices_per_px) as usize;
+		let lod_start_f = (offset + hidden_start_samples) * lod_slices_per_sample;
+		let view_len_f = (end - start) * lod_slices_per_sample;
+		let view_len_f = view_len_f.min(clipped_size.width * lod_slices_per_px);
+		let lod_end_f = lod_start_f + view_len_f;
+
+		let lod_start = lod_start_f / lod_slices_per_mesh_slice as f32;
+		let lod_start = lod_start as usize * lod_slices_per_mesh_slice;
+		let lod_end = lod_end_f / lod_slices_per_mesh_slice as f32;
+		let lod_end = lod_end as usize * lod_slices_per_mesh_slice;
+
 		let lod_len = saved_lod
 			.checked_sub(1)
 			.map_or(samples.len() / 2, |saved_lod| {
 				self.0[saved_lod].as_ref().len()
 			});
-		let lod_end = lod_len.min(lod_start + view_len);
+		let lod_end = lod_end.min(lod_len);
 
 		if lod_end <= lod_start {
 			return None;
 		}
 
 		let color = color::pack(theme.extended_palette().background.strong.text);
+		let jitter_correct = -(offset / samples_per_mesh_slice).fract() * px_per_mesh_slice;
 		let vertices = saved_lod.checked_sub(1).map_or_else(
 			|| {
 				vertices(
@@ -121,6 +130,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 					unclipped_height,
 					px_per_mesh_slice,
 					color,
+					jitter_correct,
 					hidden_top_px,
 				)
 			},
@@ -132,6 +142,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 					unclipped_height,
 					px_per_mesh_slice,
 					color,
+					jitter_correct,
 					hidden_top_px,
 				)
 			},
