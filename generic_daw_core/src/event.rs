@@ -1,4 +1,4 @@
-use clap_host::{
+use crate::clap_host::{
 	ClapId, Cookie,
 	events::{
 		ClapEvent, Event as _, Match, MidiEvent, NoteChokeEvent, NoteEndEvent, NoteOffEvent,

@@ -1,10 +1,10 @@
 use crate::{
-	AudioGraph, AudioGraphNode, Channel, Clip, Event, Export, Master, MidiKey, MidiNote,
-	MusicalTime, NotePosition, PanMode, Pattern, PatternId, Sample, SampleId,
+	AudioGraph, AudioGraphNode, Channel, Clip, Event, Export, MidiKey, MidiNote, MusicalTime,
+	NodeId, NotePosition, PanMode, Pattern, PatternId, Sample, SampleId,
+	clap_host::{AudioProcessor, ClapId, PluginId},
+	resampler::Resampler,
 };
-use audio_graph::{NodeId, NodeImpl as _};
-use clap_host::{AudioProcessor, ClapId, PluginId};
-use generic_daw_utils::{HoleyVec, unique_id};
+use generic_daw_utils::{HoleyVec, NoDebug, include_f32s, unique_id};
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, RingBuffer};
 use std::sync::Mutex;
@@ -14,6 +14,9 @@ unique_id!(version);
 
 pub use epoch::Id as Epoch;
 pub use version::Id as Version;
+
+static ON_BAR_CLICK: [f32; 2940] = include_f32s!("../../assets/on_bar_click.pcm");
+static OFF_BAR_CLICK: [f32; 2940] = include_f32s!("../../assets/off_bar_click.pcm");
 
 #[derive(Debug)]
 pub enum Message {
@@ -136,20 +139,25 @@ pub struct DawCtx {
 	state: State,
 	producer: Producer<Batch>,
 	consumer: Consumer<Message>,
+	on_bar_click: NoDebug<Box<[f32]>>,
+	off_bar_click: NoDebug<Box<[f32]>>,
 	update_buffers: Vec<Vec<Update>>,
 }
 
 impl DawCtx {
 	pub fn create(rtstate: RtState) -> (Self, NodeId, Producer<Message>, Consumer<Batch>) {
-		let (r_sender, consumer) = RingBuffer::new(rtstate.frames as usize);
-		let (producer, r_receiver) =
+		let (r_producer, consumer) = RingBuffer::new(rtstate.frames as usize);
+		let (producer, r_consumer) =
 			RingBuffer::new(rtstate.sample_rate.div_ceil(rtstate.frames) as usize);
 
-		let master = Master::new(rtstate.sample_rate);
-		let id = master.id();
+		let mut on_bar_click = Resampler::new(44100, rtstate.sample_rate as usize, 2).unwrap();
+		on_bar_click.process(&ON_BAR_CLICK);
 
-		let audio_ctx = Self {
-			audio_graph: AudioGraph::new(master.into(), rtstate.frames),
+		let mut off_bar_click = Resampler::new(44100, rtstate.sample_rate as usize, 2).unwrap();
+		off_bar_click.process(&OFF_BAR_CLICK);
+
+		let daw_ctx = Self {
+			audio_graph: AudioGraph::new(Channel::default(), rtstate.frames),
 			state: State {
 				rtstate,
 				samples: HoleyVec::default(),
@@ -158,10 +166,13 @@ impl DawCtx {
 			},
 			producer,
 			consumer,
+			on_bar_click: on_bar_click.finish().into_boxed_slice().into(),
+			off_bar_click: off_bar_click.finish().into_boxed_slice().into(),
 			update_buffers: Vec::new(),
 		};
 
-		(audio_ctx, id, r_sender, r_receiver)
+		let id = daw_ctx.audio_graph.root();
+		(daw_ctx, id, r_producer, r_consumer)
 	}
 
 	fn recv_events(&mut self) {
@@ -171,7 +182,7 @@ impl DawCtx {
 			match msg {
 				Message::NodeAction(node, action) => self
 					.audio_graph
-					.with_mut_node(node, move |node| node.apply(action)),
+					.for_node_mut(node, move |node| node.apply(action)),
 				Message::PatternAction(pattern, action) => {
 					self.state.patterns.get_mut(*pattern).unwrap().apply(action);
 				}
@@ -208,7 +219,7 @@ impl DawCtx {
 					self.state.rtstate.sample = sample;
 				}
 				Message::LoopMarker(loop_marker) => self.state.rtstate.loop_marker = loop_marker,
-				Message::Reset => self.audio_graph.for_each_mut_node(AudioGraphNode::reset),
+				Message::Reset => self.audio_graph.for_each_node_mut(AudioGraphNode::reset),
 				Message::ReturnUpdateBuffer(update) => {
 					debug_assert!(update.is_empty());
 					self.update_buffers.push(update);
@@ -216,7 +227,7 @@ impl DawCtx {
 				Message::RequestAudioGraph(sender) => {
 					debug_assert!(self.consumer.is_empty());
 					let mut audio_graph =
-						AudioGraph::new(Channel::default().into(), self.state.rtstate.frames);
+						AudioGraph::new(Channel::default(), self.state.rtstate.frames);
 					std::mem::swap(&mut self.audio_graph, &mut audio_graph);
 
 					let mut state = State {
@@ -240,12 +251,6 @@ impl DawCtx {
 	pub fn process(&mut self, mut buf: &mut [f32]) {
 		self.recv_events();
 
-		let updates = self.state.updates.get_mut().unwrap();
-
-		if updates.capacity() == 0 {
-			*updates = self.update_buffers.pop().unwrap_or_default();
-		}
-
 		let mut looped = false;
 
 		if self.state.rtstate.playing
@@ -254,7 +259,7 @@ impl DawCtx {
 			let loop_start = loop_marker.start().to_samples(&self.state.rtstate);
 			let loop_end = loop_marker.end().to_samples(&self.state.rtstate);
 
-			if (loop_start..=loop_end).contains(&self.state.rtstate.sample) {
+			if loop_end >= self.state.rtstate.sample {
 				while loop_end <= self.state.rtstate.sample + buf.len() {
 					looped = true;
 					let diff = loop_end - self.state.rtstate.sample;
@@ -263,6 +268,7 @@ impl DawCtx {
 					for s in &mut buf[..diff] {
 						*s = s.clamp(-1.0, 1.0);
 					}
+					self.metronome(&mut buf[..diff]);
 
 					self.state.rtstate.sample = loop_start;
 					buf = &mut buf[diff..];
@@ -274,6 +280,7 @@ impl DawCtx {
 		for s in &mut *buf {
 			*s = s.clamp(-1.0, 1.0);
 		}
+		self.metronome(buf);
 
 		let sample = self.state.rtstate.playing.then(|| {
 			self.state.rtstate.sample += buf.len();
@@ -290,9 +297,50 @@ impl DawCtx {
 				updates: std::mem::take(updates),
 			};
 
+			*updates = self.update_buffers.pop().unwrap_or_default();
+
 			if let Err(err) = self.producer.push(batch) {
 				warn!("{err}");
 			}
+		}
+	}
+
+	fn metronome(&self, buf: &mut [f32]) {
+		if !self.state.rtstate.metronome || !self.state.rtstate.playing {
+			return;
+		}
+
+		let mut start =
+			MusicalTime::from_samples(self.state.rtstate.sample, &self.state.rtstate).floor();
+		let end =
+			MusicalTime::from_samples(self.state.rtstate.sample + buf.len(), &self.state.rtstate)
+				.ceil();
+
+		while start < end {
+			let start_samples = start.to_samples(&self.state.rtstate);
+
+			let click = if start
+				.beat()
+				.is_multiple_of(u64::from(self.state.rtstate.numerator))
+			{
+				&**self.on_bar_click
+			} else {
+				&**self.off_bar_click
+			};
+
+			start += MusicalTime::BEAT;
+
+			let buf_idx = start_samples.saturating_sub(self.state.rtstate.sample);
+			let click_idx = self.state.rtstate.sample.saturating_sub(start_samples);
+
+			if click_idx >= click.len() {
+				continue;
+			}
+
+			buf[buf_idx..]
+				.iter_mut()
+				.zip(&click[click_idx..])
+				.for_each(|(buf, sample)| *buf += sample);
 		}
 	}
 }

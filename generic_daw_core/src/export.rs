@@ -11,11 +11,10 @@ pub struct Export {
 impl Export {
 	pub fn export(&mut self, path: &Path, len: MusicalTime, mut progress_fn: impl FnMut(f32)) {
 		let old = self.state.rtstate;
-		self.audio_graph.for_each_mut_node(AudioGraphNode::reset);
+		self.audio_graph.for_each_node_mut(AudioGraphNode::reset);
 
 		self.state.rtstate.sample = 0;
 		self.state.rtstate.playing = true;
-		self.state.rtstate.metronome = false;
 
 		let mut writer = WavWriter::create(
 			path,
@@ -69,6 +68,6 @@ impl Export {
 		writer.finalize().unwrap();
 
 		self.state.rtstate = old;
-		self.audio_graph.for_each_mut_node(AudioGraphNode::reset);
+		self.audio_graph.for_each_node_mut(AudioGraphNode::reset);
 	}
 }

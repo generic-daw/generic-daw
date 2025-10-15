@@ -1,11 +1,11 @@
-use crate::resampler::Resampler;
+use crate::{MediaSource, resampler::Resampler};
 use generic_daw_utils::{NoDebug, unique_id};
 use std::sync::Arc;
 use symphonia::core::{
 	audio::SampleBuffer,
 	codecs::DecoderOptions,
 	formats::FormatOptions,
-	io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions},
+	io::{MediaSourceStream, MediaSourceStreamOptions},
 	meta::MetadataOptions,
 	probe::Hint,
 };

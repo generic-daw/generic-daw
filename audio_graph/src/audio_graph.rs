@@ -11,7 +11,8 @@ pub struct AudioGraph<Node: NodeImpl> {
 
 impl<Node: NodeImpl> AudioGraph<Node> {
 	#[must_use]
-	pub fn new(node: Node, frames: u32) -> Self {
+	pub fn new(node: impl Into<Node>, frames: u32) -> Self {
+		let node = node.into();
 		let root = node.id();
 
 		let mut graph = HoleyVec::default();
@@ -180,11 +181,11 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		self.graph.get_mut(*node).unwrap()
 	}
 
-	pub fn with_mut_node(&mut self, node: NodeId, f: impl FnOnce(&mut Node)) {
+	pub fn for_node_mut(&mut self, node: NodeId, f: impl FnOnce(&mut Node)) {
 		f(&mut *self.entry_mut(node).node());
 	}
 
-	pub fn for_each_mut_node(&mut self, mut f: impl FnMut(&mut Node)) {
+	pub fn for_each_node_mut(&mut self, mut f: impl FnMut(&mut Node)) {
 		for entry in self.graph.values_mut() {
 			f(&mut *entry.node());
 		}

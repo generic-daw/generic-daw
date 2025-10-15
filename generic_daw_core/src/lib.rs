@@ -2,7 +2,6 @@ use cpal::{
 	BufferSize, StreamConfig,
 	traits::{DeviceTrait as _, HostTrait as _},
 };
-use master::Master;
 use std::{num::NonZero, sync::Arc};
 
 mod audio_clip;
@@ -12,7 +11,6 @@ mod clip;
 mod daw_ctx;
 mod event;
 mod export;
-mod master;
 mod midi_clip;
 mod midi_note;
 mod musical_time;
