@@ -236,6 +236,16 @@ impl ConfigView {
 								)
 						],
 						space::horizontal(),
+						self.with_device(|device, _| device
+							.sample_rate
+							.zip(device.buffer_size)
+							.map(|(sample_rate, buffer_size)| text(format!(
+								"{buffer_size} smp @ {sample_rate} hz = {:.1} ms",
+								buffer_size.get() as f32 / sample_rate.get() as f32 * 1000.0
+							))
+							.font(Font::MONOSPACE)
+							.size(12))),
+						space::horizontal(),
 						match self.tab {
 							Tab::Input => "Input",
 							Tab::Output => "Output",
