@@ -575,10 +575,18 @@ impl Daw {
 			Subscription::none()
 		};
 
-		let keybinds = if self.config_view.is_none() && self.progress.is_none() {
-			keybinds()
-		} else {
+		let keybinds = if self.progress.is_some() {
 			Subscription::none()
+		} else if self.config_view.is_some() {
+			event::listen_with(|e, s, _| match s {
+				event::Status::Ignored => Self::config_view_keybinds(&e),
+				event::Status::Captured => None,
+			})
+		} else {
+			event::listen_with(|e, s, _| match s {
+				event::Status::Ignored => Self::base_keybinds(&e),
+				event::Status::Captured => None,
+			})
 		};
 
 		Subscription::batch([
@@ -589,11 +597,29 @@ impl Daw {
 			keybinds,
 		])
 	}
-}
 
-fn keybinds() -> Subscription<Message> {
-	event::listen_with(|e, s, _| match s {
-		event::Status::Ignored => match e {
+	fn config_view_keybinds(event: &Event) -> Option<Message> {
+		match event {
+			Event::Keyboard(keyboard::Event::KeyPressed {
+				physical_key,
+				modifiers,
+				..
+			}) => match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
+				(false, false, false) => match physical_key {
+					keyboard::key::Physical::Code(keyboard::key::Code::Escape) => {
+						Some(Message::CloseConfigView)
+					}
+					_ => None,
+				},
+				_ => None,
+			},
+			_ => None,
+		}
+		.or_else(|| Self::base_keybinds(event))
+	}
+
+	fn base_keybinds(event: &Event) -> Option<Message> {
+		match event {
 			Event::Keyboard(keyboard::Event::KeyPressed {
 				physical_key,
 				modifiers,
@@ -624,7 +650,6 @@ fn keybinds() -> Subscription<Message> {
 				_ => None,
 			},
 			_ => None,
-		},
-		event::Status::Captured => None,
-	})
+		}
+	}
 }
