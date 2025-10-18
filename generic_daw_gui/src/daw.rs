@@ -450,8 +450,8 @@ impl Daw {
 					self.split_at,
 					Message::SplitAt
 				)
-				.strategy(Strategy::Start)
 				.on_double_click(Message::SplitAt(DEFAULT_SPLIT_POSITION))
+				.strategy(Strategy::Start)
 				.focus_delay(Duration::ZERO)
 				.style(split_style())
 			]

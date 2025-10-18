@@ -42,8 +42,7 @@ use iced::{
 		text, vertical_slider,
 	},
 };
-use iced_persistent::persistent;
-use iced_split::{Strategy, vertical_split};
+use iced_split::{Split, Strategy};
 use node::Node;
 use rtrb::Consumer;
 use smol::{Timer, unblock};
@@ -166,7 +165,6 @@ pub struct ArrangementView {
 
 	split_at: f32,
 	plugins: combo_box::State<PluginDescriptor>,
-	tree: iced_persistent::Tree,
 
 	loading: usize,
 }
@@ -200,7 +198,6 @@ impl ArrangementView {
 
 				split_at: DEFAULT_SPLIT_POSITION,
 				plugins: combo_box::State::new(plugins),
-				tree: iced_persistent::Tree::empty(),
 
 				loading: 0,
 			},
@@ -921,7 +918,7 @@ impl ArrangementView {
 	}
 
 	fn mixer(&self) -> Element<'_, Message> {
-		let mixer_panel = persistent(
+		Split::new(
 			scrollable(
 				row(
 					once(self.channel(self.arrangement.master(), "M".to_owned()))
@@ -967,12 +964,7 @@ impl ArrangementView {
 			.spacing(5)
 			.style(scrollable_style())
 			.width(Fill),
-			&self.tree,
-		);
-
-		if let Some(selected) = self.selected_channel {
-			vertical_split(
-				mixer_panel,
+			self.selected_channel.map(|selected| {
 				column![
 					combo_box(&self.plugins, "Add Plugin", None, move |descriptor| {
 						Message::PluginLoad(selected, descriptor, true)
@@ -1058,18 +1050,19 @@ impl ArrangementView {
 					.spacing(5)
 					.style(scrollable_style())
 					.height(Fill)
-				],
-				self.split_at,
-				Message::SplitAt,
-			)
-			.strategy(Strategy::End)
-			.on_double_click(Message::SplitAt(DEFAULT_SPLIT_POSITION))
-			.focus_delay(Duration::ZERO)
-			.style(split_style())
-			.into()
-		} else {
-			mixer_panel.into()
-		}
+				]
+			}),
+			self.selected_channel.map_or(0.0, |_| self.split_at),
+		)
+		.on_drag_maybe(self.selected_channel.map(|_| Message::SplitAt))
+		.on_double_click_maybe(
+			self.selected_channel
+				.map(|_| Message::SplitAt(DEFAULT_SPLIT_POSITION)),
+		)
+		.strategy(Strategy::End)
+		.focus_delay(Duration::ZERO)
+		.style(split_style())
+		.into()
 	}
 
 	fn channel<'a>(
@@ -1144,15 +1137,13 @@ impl ArrangementView {
 					PeakMeter::new(&node.peaks[1][1], node.enabled).width(16.0),
 				]
 				.spacing(3),
-				self.selected_channel.map_or_else(
-					|| Element::new(space().height(LINE_HEIGHT)),
-					|selected_channel| {
-						if node.ty == NodeType::Track
-							|| node.id == selected_channel
-							|| self.arrangement.master().id == selected_channel
-						{
-							space().height(LINE_HEIGHT).into()
-						} else {
+				self.selected_channel
+					.filter(|_| node.ty != NodeType::Track)
+					.filter(|&selected_channel| node.id != selected_channel)
+					.filter(|&selected_channel| self.arrangement.master().id != selected_channel)
+					.map_or_else(
+						|| Element::new(space().height(LINE_HEIGHT)),
+						|selected_channel| {
 							let connected = self
 								.arrangement
 								.outgoing(selected_channel)
@@ -1172,8 +1163,7 @@ impl ArrangementView {
 								})
 								.into()
 						}
-					},
-				)
+					)
 			]
 			.width(Shrink)
 			.spacing(5)
