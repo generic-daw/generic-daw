@@ -38,7 +38,7 @@ impl FileTree {
 		container(
 			scrollable(container(column(self.dirs.iter().map(|dir| dir.view().0))).clip(true))
 				.spacing(5)
-				.style(scrollable_style()),
+				.style(scrollable_style),
 		)
 		.style(|t| {
 			bordered_box_with_radius(0)(t).background(t.extended_palette().background.weakest.color)

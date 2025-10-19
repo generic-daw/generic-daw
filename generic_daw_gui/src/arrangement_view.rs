@@ -962,14 +962,14 @@ impl ArrangementView {
 				scrollable::Scrollbar::default(),
 			))
 			.spacing(5)
-			.style(scrollable_style())
+			.style(scrollable_style)
 			.width(Fill),
 			self.selected_channel.map(|selected| {
 				column![
 					combo_box(&self.plugins, "Add Plugin", None, move |descriptor| {
 						Message::PluginLoad(selected, descriptor, true)
 					})
-					.menu_style(menu_style())
+					.menu_style(menu_style)
 					.width(Fill),
 					container(rule::horizontal(1)).padding([5, 0]),
 					scrollable(
@@ -1048,7 +1048,7 @@ impl ArrangementView {
 						.on_drag(Message::PluginMoveTo.with(selected)),
 					)
 					.spacing(5)
-					.style(scrollable_style())
+					.style(scrollable_style)
 					.height(Fill)
 				]
 			}),
@@ -1061,7 +1061,7 @@ impl ArrangementView {
 		)
 		.strategy(Strategy::End)
 		.focus_delay(Duration::ZERO)
-		.style(split_style())
+		.style(split_style)
 		.into()
 	}
 

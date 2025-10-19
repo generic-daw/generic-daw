@@ -264,7 +264,7 @@ impl ConfigView {
 								.placeholder("Default")
 								.width(222)
 								.style(pick_list_with_radius(border::top_left(5)))
-								.menu_style(menu_style()),
+								.menu_style(menu_style),
 								button(rotate_ccw())
 									.style(button_with_radius(
 										button::primary,
@@ -290,7 +290,7 @@ impl ConfigView {
 								.placeholder("Default")
 								.width(222)
 								.style(pick_list_with_radius(0))
-								.menu_style(menu_style()),
+								.menu_style(menu_style),
 								button(rotate_ccw())
 									.style(button_with_radius(button::primary, 0))
 									.padding(5)
@@ -315,7 +315,7 @@ impl ConfigView {
 								.placeholder("Default")
 								.width(222)
 								.style(pick_list_with_radius(border::bottom_left(5)))
-								.menu_style(menu_style()),
+								.menu_style(menu_style),
 								button(rotate_ccw())
 									.style(button_with_radius(
 										button::primary,
@@ -450,7 +450,7 @@ impl ConfigView {
 						.handle(PICK_LIST_HANDLE)
 						.width(222)
 						.style(pick_list_with_radius(border::left(5)))
-						.menu_style(menu_style()),
+						.menu_style(menu_style),
 						button(rotate_ccw())
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding(5)
@@ -481,7 +481,7 @@ impl ConfigView {
 				.width(530),
 			)
 			.spacing(5)
-			.style(scrollable_style()),
+			.style(scrollable_style),
 		)
 		.style(|t| {
 			bordered_box_with_radius(5)(t).background(t.extended_palette().background.weakest.color)

@@ -29,12 +29,10 @@ pub fn button_with_radius(
 	}
 }
 
-pub fn menu_style() -> impl Fn(&Theme) -> menu::Style {
-	|t| {
-		let mut style = menu::default(t);
-		style.border = border::width(0);
-		style
-	}
+pub fn menu_style(t: &Theme) -> menu::Style {
+	let mut style = menu::default(t);
+	style.border = border::width(0);
+	style
 }
 
 pub fn pick_list_with_radius(
@@ -61,15 +59,13 @@ pub fn progress_bar_with_radius(
 	}
 }
 
-pub fn scrollable_style() -> impl Fn(&Theme, scrollable::Status) -> scrollable::Style {
-	|t, s| {
-		let mut style = scrollable::default(t, s);
-		style.vertical_rail.border.radius = 0.into();
-		style.vertical_rail.scroller.border.radius = 0.into();
-		style.horizontal_rail.border.radius = 0.into();
-		style.horizontal_rail.scroller.border.radius = 0.into();
-		style
-	}
+pub fn scrollable_style(t: &Theme, s: scrollable::Status) -> scrollable::Style {
+	let mut style = scrollable::default(t, s);
+	style.vertical_rail.border.radius = 0.into();
+	style.vertical_rail.scroller.border.radius = 0.into();
+	style.horizontal_rail.border.radius = 0.into();
+	style.horizontal_rail.scroller.border.radius = 0.into();
+	style
 }
 
 pub fn slider_secondary(theme: &Theme, status: slider::Status) -> slider::Style {
@@ -88,14 +84,12 @@ pub fn slider_secondary(theme: &Theme, status: slider::Status) -> slider::Style 
 	style
 }
 
-pub fn split_style() -> impl Fn(&Theme) -> iced_split::Style {
-	|t| {
-		let mut style = iced_split::default(t);
-		style.focused = iced_split::Styled {
-			color: t.extended_palette().background.strong.color,
-			width: 3.0,
-			radius: 1.5.into(),
-		};
-		style
-	}
+pub fn split_style(t: &Theme) -> iced_split::Style {
+	let mut style = iced_split::default(t);
+	style.focused = iced_split::Styled {
+		color: t.extended_palette().background.strong.color,
+		width: 3.0,
+		radius: 1.5.into(),
+	};
+	style
 }

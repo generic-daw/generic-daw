@@ -382,7 +382,7 @@ impl Daw {
 					)
 					.handle(PICK_LIST_HANDLE)
 					.style(pick_list_with_radius(5))
-					.menu_style(menu_style()),
+					.menu_style(menu_style),
 					row![
 						button(if self.arrangement_view.arrangement.rtstate().playing {
 							pause()
@@ -453,7 +453,7 @@ impl Daw {
 				.on_double_click(Message::SplitAt(DEFAULT_SPLIT_POSITION))
 				.strategy(Strategy::Start)
 				.focus_delay(Duration::ZERO)
-				.style(split_style())
+				.style(split_style)
 			]
 			.padding(10)
 			.spacing(10),
