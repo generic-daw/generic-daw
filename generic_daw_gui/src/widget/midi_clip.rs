@@ -46,12 +46,12 @@ where
 		Size::new(Shrink, Fill)
 	}
 
-	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
+	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
 		let start = self.inner.clip.position.start().to_samples_f(self.rtstate);
 		let end = self.inner.clip.position.end().to_samples_f(self.rtstate);
 		let pixel_size = self.scale.x.exp2();
 
-		Node::new(Size::new((end - start) / pixel_size, self.scale.y))
+		Node::new(Size::new((end - start) / pixel_size, limits.max().height))
 			.translate(Vector::new((start - self.position.x) / pixel_size, 0.0))
 	}
 

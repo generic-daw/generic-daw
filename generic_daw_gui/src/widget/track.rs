@@ -36,7 +36,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 			self.children
 				.iter_mut()
 				.zip(&mut tree.children)
-				.map(|(widget, tree)| widget.as_widget_mut().layout(tree, renderer, limits))
+				.map(|(widget, tree)| {
+					widget
+						.as_widget_mut()
+						.layout(tree, renderer, &limits.height(self.scale.y))
+				})
 				.collect(),
 		)
 	}

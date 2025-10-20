@@ -81,7 +81,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		}
 	}
 
-	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
+	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
 		let (start, len) = match self.inner {
 			Inner::Sample(inner) => {
 				let start = inner.clip.position.start().to_samples_f(self.rtstate);
@@ -96,7 +96,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		};
 
 		let pixel_size = self.scale.x.exp2();
-		Node::new(Size::new(len / pixel_size, self.scale.y))
+		Node::new(Size::new(len / pixel_size, limits.max().height))
 			.translate(Vector::new((start - self.position.x) / pixel_size, 0.0))
 	}
 
@@ -208,7 +208,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 				theme,
 				lower_bounds.size(),
 				layout.bounds().height - LINE_HEIGHT,
-				bounds.y - layout.bounds().y,
+				layout.bounds().y - bounds.y,
 			),
 			Inner::Recording(inner) => inner.lods.mesh(
 				inner.core.samples(),
@@ -227,7 +227,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 				theme,
 				lower_bounds.size(),
 				layout.bounds().height - LINE_HEIGHT,
-				bounds.y - layout.bounds().y,
+				layout.bounds().y - bounds.y,
 			),
 		};
 

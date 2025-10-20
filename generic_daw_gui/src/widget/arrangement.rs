@@ -155,9 +155,10 @@ where
 							*self.scale,
 						);
 
-						if let Some((track, clip)) = self.get_track_clip(&layout, viewport, cursor)
+						if let Some(track) = track_idx(&layout, viewport, cursor)
+							&& let Some(clip) = clip_idx(&layout, viewport, cursor, track)
 						{
-							let clip_bounds = clip_bounds(&layout, track, clip).unwrap()
+							let clip_bounds = clip_layout(&layout, track, clip).unwrap().bounds()
 								- Vector::new(viewport.x, viewport.y);
 
 							let start_pixel = clip_bounds.x;
@@ -195,7 +196,7 @@ where
 							}
 
 							shell.capture_event();
-						} else if let Some(track) = self.get_track(cursor, &layout) {
+						} else if let Some(track) = track_idx(&layout, viewport, cursor) {
 							shell.publish((self.f)(Action::Add(track, time)));
 							*state = State::DraggingClip(0.0, track, time);
 						}
@@ -203,7 +204,8 @@ where
 					mouse::Button::Right if !self.deleted => {
 						*state = State::DeletingClips;
 
-						if let Some((track, clip)) = self.get_track_clip(&layout, viewport, cursor)
+						if let Some(track) = track_idx(&layout, viewport, cursor)
+							&& let Some(clip) = clip_idx(&layout, viewport, cursor, track)
 						{
 							self.deleted = true;
 
@@ -222,7 +224,7 @@ where
 				}
 				mouse::Event::CursorMoved { modifiers, .. } => match *state {
 					State::DraggingClip(offset, track, time) => {
-						let new_track = self.get_track(cursor, &layout).unwrap_or_else(|| {
+						let new_track = track_idx(&layout, viewport, cursor).unwrap_or_else(|| {
 							layout.children().next().unwrap().children().len() - 1
 						});
 						let new_start = get_time(
@@ -286,8 +288,8 @@ where
 					}
 					State::DeletingClips => {
 						if !self.deleted
-							&& let Some((track, clip)) =
-								self.get_track_clip(&layout, viewport, cursor)
+							&& let Some(track) = track_idx(&layout, viewport, cursor)
+							&& let Some(clip) = clip_idx(&layout, viewport, cursor, track)
 						{
 							self.deleted = true;
 
@@ -407,26 +409,6 @@ where
 			f,
 		}
 	}
-
-	fn get_track(&self, cursor: Point, layout: &Layout<'_>) -> Option<usize> {
-		let track = (cursor.y / self.scale.y + self.position.y) as usize;
-		let tracks = layout.children().next().unwrap().children().len();
-		(track < tracks).then_some(track)
-	}
-
-	fn get_track_clip(
-		&self,
-		layout: &Layout<'_>,
-		viewport: Rectangle,
-		cursor: Point,
-	) -> Option<(usize, usize)> {
-		let track = self.get_track(cursor, layout)?;
-		let offset = Vector::new(viewport.position().x, viewport.position().y);
-		let clip = track_layout(layout, track)?
-			.children()
-			.rposition(|l| l.bounds().contains(cursor + offset))?;
-		Some((track, clip))
-	}
 }
 
 impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message>
@@ -438,10 +420,31 @@ where
 	}
 }
 
+fn track_idx(layout: &Layout<'_>, viewport: Rectangle, cursor: Point) -> Option<usize> {
+	let offset = Vector::new(viewport.position().x, viewport.position().y);
+	layout
+		.children()
+		.next()?
+		.children()
+		.position(|child| child.bounds().contains(cursor + offset))
+}
+
+fn clip_idx(
+	layout: &Layout<'_>,
+	viewport: Rectangle,
+	cursor: Point,
+	track: usize,
+) -> Option<usize> {
+	let offset = Vector::new(viewport.position().x, viewport.position().y);
+	track_layout(layout, track)?
+		.children()
+		.rposition(|child| child.bounds().contains(cursor + offset))
+}
+
 fn track_layout<'a>(layout: &Layout<'a>, track: usize) -> Option<Layout<'a>> {
 	layout.children().next()?.children().nth(track)
 }
 
-fn clip_bounds(layout: &Layout<'_>, track: usize, clip: usize) -> Option<Rectangle> {
-	Some(track_layout(layout, track)?.children().nth(clip)?.bounds())
+fn clip_layout<'a>(layout: &Layout<'a>, track: usize, clip: usize) -> Option<Layout<'a>> {
+	track_layout(layout, track)?.children().nth(clip)
 }
