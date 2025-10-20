@@ -161,8 +161,11 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 							}) * 0.1)
 							.trunc();
 
-						shell.publish((self.f)(value.saturating_add_signed(diff as isize)));
-						shell.capture_event();
+						let new_value = value.saturating_add_signed(diff as isize);
+						if new_value != self.value {
+							shell.publish((self.f)(new_value));
+							shell.capture_event();
+						}
 					}
 
 					state.hovering = cursor.is_over(layout.bounds());
@@ -176,8 +179,11 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 					} + state.scroll;
 					state.scroll = diff.fract();
 
-					shell.publish((self.f)(self.value.saturating_add_signed(diff as isize)));
-					shell.capture_event();
+					let new_value = self.value.saturating_add_signed(diff as isize);
+					if new_value != self.value {
+						shell.publish((self.f)(new_value));
+						shell.capture_event();
+					}
 				}
 				_ => {}
 			}

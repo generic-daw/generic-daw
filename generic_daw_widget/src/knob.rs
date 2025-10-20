@@ -324,13 +324,20 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					let diff = match delta {
 						ScrollDelta::Lines { y, .. } => *y,
 						ScrollDelta::Pixels { y, .. } => y / 60.0,
-					} * (self.range.end() - self.range.start())
-						* 0.05;
+					};
 
-					shell.publish((self.f)(
-						(self.value + diff).clamp(*self.range.start(), *self.range.end()),
-					));
-					shell.capture_event();
+					let diff = if self.stepped {
+						1f32.copysign(diff)
+					} else {
+						0.05 * (self.range.end() - self.range.start()) * diff
+					};
+
+					let new_value =
+						(self.value + diff).clamp(*self.range.start(), *self.range.end());
+					if new_value != self.value {
+						shell.publish((self.f)(new_value));
+						shell.capture_event();
+					}
 				}
 				_ => {}
 			}
