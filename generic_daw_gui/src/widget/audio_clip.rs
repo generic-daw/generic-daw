@@ -90,7 +90,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 			}
 			Inner::Recording(inner) => {
 				let start = inner.position.to_samples_f(self.rtstate);
-				let len = 2.0 * inner.core.samples().len() as f32;
+				let len = inner.core.samples().len() as f32;
 				(start, len)
 			}
 		};
@@ -217,7 +217,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 					NotePosition::new(
 						inner.position,
 						inner.position
-							+ MusicalTime::from_samples_f(layout.bounds().width, self.rtstate)
+							+ MusicalTime::from_samples(inner.core.samples().len(), self.rtstate)
 								.max(MusicalTime::TICK),
 					),
 					MusicalTime::ZERO,
