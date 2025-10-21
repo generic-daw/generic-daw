@@ -11,6 +11,8 @@
 An early-in-development, open source, cross-platform digital audio workstation (DAW) built in Rust.
 </div>
 
+![screenshot](assets/screenshot.png)
+
 ## Installation & Getting Started
 
 ### Requirements
