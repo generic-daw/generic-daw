@@ -4,7 +4,7 @@ use cpal::{
 	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
 };
 use generic_daw_utils::NoDebug;
-use log::{info, trace};
+use log::{error, info, trace};
 use rtrb::{Consumer, Producer, RingBuffer};
 use std::{
 	cmp::Ordering,
@@ -143,7 +143,7 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 									producer.push(stereo[..2 * frames].into()).unwrap();
 								}
 							},
-							|err| panic!("{err}"),
+							|err| error!("{err}"),
 							None,
 						)
 						.unwrap();
@@ -206,7 +206,7 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 									}
 								});
 							},
-							|err| panic!("{err}"),
+							|err| error!("{err}"),
 							None,
 						)
 						.unwrap();
