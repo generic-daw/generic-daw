@@ -4,7 +4,7 @@ use fragile::Fragile;
 use generic_daw_core::clap_host::{FdFlags, PosixFd};
 use generic_daw_core::{
 	Event,
-	clap_host::{MainThreadMessage, ParamInfoFlags, ParamRescanFlags, Plugin, PluginId, Size},
+	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, PluginId, Size},
 };
 use generic_daw_utils::{HoleyVec, NoClone, NoDebug};
 use generic_daw_widget::knob::Knob;
@@ -60,18 +60,7 @@ impl ClapHost {
 	pub fn update(&mut self, message: Message, config: &Config) -> Task<Message> {
 		match message {
 			Message::MainThread(id, msg) => return self.main_thread_message(id, msg, config),
-			Message::SendEvent(id, event) => {
-				self.plugins.get_mut(*id).unwrap().send_event(event);
-				if let Event::ParamValue { param_id, .. } = event {
-					return self.update(
-						Message::MainThread(
-							id,
-							MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
-						),
-						config,
-					);
-				}
-			}
+			Message::SendEvent(id, event) => self.plugins.get_mut(*id).unwrap().send_event(event),
 			Message::TickTimer(id, timer_id) => {
 				if let Some(plugin) = self.plugins.get_mut(id) {
 					plugin.tick_timer(timer_id);

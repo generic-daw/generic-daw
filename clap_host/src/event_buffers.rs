@@ -42,15 +42,15 @@ impl EventBuffers {
 			})
 	}
 
-	pub fn read_in(&mut self, events: &mut Vec<impl EventImpl>) {
+	pub fn read_in(&mut self, events: &[impl EventImpl]) {
 		self.input_events.clear();
 
 		if self.input_prefers_midi {
-			for e in events.drain(..) {
+			for e in events {
 				self.input_events.push(&e.to_midi(self.main_input_port));
 			}
 		} else {
-			for e in events.drain(..) {
+			for e in events {
 				self.input_events.push(&e.to_clap(self.main_input_port));
 			}
 		}

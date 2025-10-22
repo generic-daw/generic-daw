@@ -90,13 +90,13 @@ impl NodeImpl for Channel {
 			}
 
 			let mut iter = events
-				.extract_if(.., |event| matches!(event, Event::ParamValue { .. }))
-				.map(|event| {
-					let Event::ParamValue { param_id, .. } = event else {
-						unreachable!()
-					};
-
-					Update::Param(plugin.processor.id(), param_id)
+				.drain(..)
+				.filter_map(|event| {
+					if let Event::ParamValue { param_id, .. } = event {
+						Some(Update::Param(plugin.processor.id(), param_id))
+					} else {
+						None
+					}
 				})
 				.peekable();
 
