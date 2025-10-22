@@ -6,7 +6,7 @@ use crate::{
 };
 use generic_daw_utils::{HoleyVec, NoDebug, include_f32s, unique_id};
 use log::{trace, warn};
-use rtrb::{Consumer, Producer, RingBuffer};
+use rtrb::{Consumer, Producer, PushError, RingBuffer};
 use std::sync::Mutex;
 
 unique_id!(epoch);
@@ -301,6 +301,9 @@ impl DawCtx {
 
 			if let Err(err) = self.producer.push(batch) {
 				warn!("{err}");
+				let PushError::Full(mut batch) = err;
+				batch.updates.clear();
+				self.update_buffers.push(batch.updates);
 			}
 		}
 	}
