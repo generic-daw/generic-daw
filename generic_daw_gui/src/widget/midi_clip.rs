@@ -196,10 +196,19 @@ where
 			return Interaction::default();
 		};
 
-		if cursor.x < 10.0 || bounds.width - cursor.x < 10.0 {
-			Interaction::ResizingHorizontally
-		} else {
-			Interaction::Grab
+		match (cursor.x < 10.0, bounds.width - cursor.x < 10.0) {
+			(true, true) => {
+				match (
+					cursor.x < bounds.width / 3.0,
+					bounds.width - cursor.x < bounds.width / 3.0,
+				) {
+					(false, false) => Interaction::Grab,
+					(true, false) | (false, true) => Interaction::ResizingHorizontally,
+					(true, true) => unreachable!(),
+				}
+			}
+			(true, false) | (false, true) => Interaction::ResizingHorizontally,
+			(false, false) => Interaction::Grab,
 		}
 	}
 }

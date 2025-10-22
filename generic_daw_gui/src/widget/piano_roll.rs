@@ -153,17 +153,30 @@ where
 								}
 								_ => {
 									shell.publish((self.f)(Action::Grab(i)));
-									*state = match (
-										cursor.x - start_pixel < 10.0,
-										end_pixel - cursor.x < 10.0,
-									) {
-										(true, true)
-											if cursor.x - start_pixel < end_pixel - cursor.x =>
-										{
-											State::NoteTrimmingStart(offset, time)
+									let start_offset = cursor.x - start_pixel;
+									let end_offset = end_pixel - cursor.x;
+									*state = match (start_offset < 10.0, end_offset < 10.0) {
+										(true, true) => {
+											let width = end_pixel - start_pixel;
+											match (
+												start_offset < width / 3.0,
+												end_offset < width / 3.0,
+											) {
+												(false, false) => {
+													State::DraggingNote(offset, note.key, time)
+												}
+												(true, false) => {
+													State::NoteTrimmingStart(offset, time)
+												}
+												(false, true) => State::NoteTrimmingEnd(
+													offset + end_pixel - start_pixel,
+													time,
+												),
+												(true, true) => unreachable!(),
+											}
 										}
 										(true, false) => State::NoteTrimmingStart(offset, time),
-										(_, true) => State::NoteTrimmingEnd(
+										(false, true) => State::NoteTrimmingEnd(
 											offset + end_pixel - start_pixel,
 											time,
 										),
@@ -332,10 +345,21 @@ where
 						.map(|note_bounds| {
 							let x = cursor.x - note_bounds.x;
 
-							if x < 10.0 || note_bounds.width - x < 10.0 {
-								Interaction::ResizingHorizontally
-							} else {
-								Interaction::Grab
+							match (x < 10.0, note_bounds.width - x < 10.0) {
+								(true, true) => {
+									match (
+										x < note_bounds.width / 3.0,
+										note_bounds.width - x < note_bounds.width / 3.0,
+									) {
+										(false, false) => Interaction::Grab,
+										(true, false) | (false, true) => {
+											Interaction::ResizingHorizontally
+										}
+										(true, true) => unreachable!(),
+									}
+								}
+								(true, false) | (false, true) => Interaction::ResizingHorizontally,
+								(false, false) => Interaction::Grab,
 							}
 						})
 				})
