@@ -85,16 +85,14 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 							processor.0.into_stopped(),
 						))))
 						.unwrap();
+				} else {
+					if self.needs_reset {
+						self.needs_reset = false;
+						processor.reset();
+					}
 
-					continue;
+					self.processor = Some(processor);
 				}
-
-				if self.needs_reset {
-					self.needs_reset = false;
-					processor.reset();
-				}
-
-				self.processor = Some(processor);
 			}
 
 			if self.realtime || self.processor.is_some() {
