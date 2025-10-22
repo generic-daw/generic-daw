@@ -111,17 +111,16 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		_shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
-		if let Event::Window(window::Event::RedrawRequested(..)) = event {
-			let mut bounds = layout.bounds();
-			if let Some(intersection) = bounds.intersection(viewport) {
-				bounds.y = 0.0;
-				bounds.height = intersection.height;
+		if let Event::Window(window::Event::RedrawRequested(..)) = event
+			&& let Some(mut bounds) = layout.bounds().intersection(viewport)
+		{
+			bounds.x = layout.position().x;
+			bounds.y = 0.0;
 
-				let state = tree.state.downcast_mut::<State>();
-				if state.last_bounds != bounds {
-					state.last_bounds = bounds;
-					*state.cache.get_mut() = None;
-				}
+			let state = tree.state.downcast_mut::<State>();
+			if state.last_bounds != bounds {
+				state.last_bounds = bounds;
+				*state.cache.get_mut() = None;
 			}
 		}
 	}
@@ -208,7 +207,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 				theme,
 				lower_bounds.size(),
 				layout.bounds().height - LINE_HEIGHT,
-				layout.bounds().y - bounds.y,
+				layout.position().y - bounds.y,
 			),
 			Inner::Recording(inner) => inner.lods.mesh(
 				inner.core.samples(),
@@ -227,7 +226,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 				theme,
 				lower_bounds.size(),
 				layout.bounds().height - LINE_HEIGHT,
-				layout.bounds().y - bounds.y,
+				layout.position().y - bounds.y,
 			),
 		};
 
