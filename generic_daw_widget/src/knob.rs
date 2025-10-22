@@ -29,6 +29,7 @@ struct State {
 	last_enabled: bool,
 	last_theme: RefCell<Option<Theme>>,
 	cache: Cache,
+	scroll: f32,
 	last_click: Option<Click>,
 }
 
@@ -321,16 +322,19 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 				mouse::Event::WheelScrolled { delta, .. }
 					if self.enabled && state.dragging.is_none() && state.hovering =>
 				{
-					let diff = match delta {
+					if !self.stepped {
+						state.scroll = 0.0;
+					}
+
+					let mut diff = match delta {
 						ScrollDelta::Lines { y, .. } => *y,
 						ScrollDelta::Pixels { y, .. } => y / 60.0,
-					};
+					} + state.scroll;
 
-					let diff = if self.stepped {
-						1f32.copysign(diff)
-					} else {
-						0.05 * (self.range.end() - self.range.start()) * diff
-					};
+					if self.stepped {
+						state.scroll = diff.fract();
+						diff = diff.floor();
+					}
 
 					let new_value =
 						(self.value + diff).clamp(*self.range.start(), *self.range.end());
