@@ -115,7 +115,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 			&& let Some(mut bounds) = layout.bounds().intersection(viewport)
 		{
 			bounds.x = layout.position().x;
-			bounds.y = 0.0;
+			bounds.y = layout.position().y - bounds.y;
 
 			let state = tree.state.downcast_mut::<State>();
 			if state.last_bounds != bounds {
