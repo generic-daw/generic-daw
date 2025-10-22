@@ -268,7 +268,7 @@ impl DawCtx {
 					for s in &mut buf[..diff] {
 						*s = s.clamp(-1.0, 1.0);
 					}
-					self.metronome(&mut buf[..diff]);
+					self.metronome(&mut buf[..diff], self.audio_graph.delay());
 
 					self.state.rtstate.sample = loop_start;
 					buf = &mut buf[diff..];
@@ -280,7 +280,7 @@ impl DawCtx {
 		for s in &mut *buf {
 			*s = s.clamp(-1.0, 1.0);
 		}
-		self.metronome(buf);
+		self.metronome(buf, self.audio_graph.delay());
 
 		let sample = self.state.rtstate.playing.then(|| {
 			self.state.rtstate.sample += buf.len();
@@ -305,19 +305,24 @@ impl DawCtx {
 		}
 	}
 
-	fn metronome(&self, buf: &mut [f32]) {
+	fn metronome(&self, buf: &mut [f32], delay: usize) {
 		if !self.state.rtstate.metronome || !self.state.rtstate.playing {
 			return;
 		}
 
-		let mut start =
-			MusicalTime::from_samples(self.state.rtstate.sample, &self.state.rtstate).floor();
-		let end =
-			MusicalTime::from_samples(self.state.rtstate.sample + buf.len(), &self.state.rtstate)
-				.ceil();
+		let mut start = MusicalTime::from_samples(
+			self.state.rtstate.sample.saturating_sub(delay),
+			&self.state.rtstate,
+		)
+		.floor();
+		let end = MusicalTime::from_samples(
+			(self.state.rtstate.sample + buf.len()).saturating_sub(delay),
+			&self.state.rtstate,
+		)
+		.ceil();
 
 		while start < end {
-			let start_samples = start.to_samples(&self.state.rtstate);
+			let start_samples = start.to_samples(&self.state.rtstate) + delay;
 
 			let click = if start
 				.beat()
@@ -333,7 +338,7 @@ impl DawCtx {
 			let buf_idx = start_samples.saturating_sub(self.state.rtstate.sample);
 			let click_idx = self.state.rtstate.sample.saturating_sub(start_samples);
 
-			if click_idx >= click.len() {
+			if buf_idx >= buf.len() || click_idx >= click.len() {
 				continue;
 			}
 

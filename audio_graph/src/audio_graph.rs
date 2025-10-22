@@ -33,38 +33,34 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			entry.expensive = entry.node().expensive();
 		}
 
-		let iter = self
-			.graph
-			.values()
-			.filter(|entry| !entry.expensive)
-			.filter(|entry| entry.indegree.load(Relaxed) == 0);
-
-		for entry in iter {
-			self.worker(None, entry, len, state, false);
-		}
-
 		rayon_core::in_place_scope(|s| {
-			let mut iter = self
-				.graph
+			let mut first = None;
+
+			self.graph
 				.values()
-				.filter(|entry| entry.expensive)
-				.filter(|entry| entry.indegree.load(Relaxed) == 0);
-
-			let first = iter.next();
-
-			for entry in iter {
-				s.spawn(|s| {
-					self.worker(Some(s), entry, len, state, true);
+				.filter(|entry| entry.indegree.load(Relaxed) == 0)
+				.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 0)
+				.for_each(|entry| {
+					if entry.expensive {
+						if first.is_none() {
+							first = Some(entry);
+						} else {
+							s.spawn(|s| {
+								self.worker(s, entry, len, state, true);
+							});
+						}
+					} else {
+						self.worker(s, entry, len, state, false);
+					}
 				});
-			}
 
 			if let Some(entry) = first {
-				self.worker(Some(s), entry, len, state, true);
+				self.worker(s, entry, len, state, true);
 			}
 		});
 
 		for entry in self.graph.values_mut() {
-			debug_assert_eq!(*entry.indegree.get_mut(), -1);
+			debug_assert!(entry.indegree.get_mut().is_negative());
 		}
 
 		buf.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..len]);
@@ -72,15 +68,13 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 	fn worker<'a>(
 		&'a self,
-		s: Option<&rayon_core::Scope<'a>>,
+		s: &rayon_core::Scope<'a>,
 		entry: &Entry<Node>,
 		len: usize,
 		state: &'a Node::State,
 		tail: bool,
 	) {
-		let indegree = entry.indegree.fetch_sub(1, Relaxed);
-		debug_assert_eq!(indegree, 0);
-		debug_assert!(s.is_some() || !entry.expensive);
+		debug_assert!(entry.indegree.load(Relaxed).is_negative());
 
 		let mut node_lock = entry.node_uncontended();
 		let mut buffers_lock = entry.write_buffers_uncontended();
@@ -139,36 +133,29 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 		let outgoing = &entry.read_buffers_uncontended().outgoing;
 
-		let iter = outgoing
+		let mut first = None;
+
+		outgoing
 			.iter()
 			.map(|node| &self.graph[node])
-			.filter(|entry| !entry.expensive)
-			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 1);
+			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 1)
+			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 0)
+			.for_each(|entry| {
+				if entry.expensive {
+					if tail && first.is_none() {
+						first = Some(entry);
+					} else {
+						s.spawn(move |s| {
+							self.worker(s, entry, len, state, true);
+						});
+					}
+				} else {
+					self.worker(s, entry, len, state, false);
+				}
+			});
 
-		for entry in iter {
-			self.worker(s, entry, len, state, false);
-		}
-
-		let mut iter = outgoing
-			.iter()
-			.map(|node| &self.graph[node])
-			.filter(|entry| entry.expensive)
-			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 1);
-
-		if let Some(s) = s {
-			let first = if tail { iter.next() } else { None };
-
-			for entry in iter {
-				s.spawn(move |s| {
-					self.worker(Some(s), entry, len, state, true);
-				});
-			}
-
-			if let Some(entry) = first {
-				self.worker(Some(s), entry, len, state, true);
-			}
-		} else {
-			iter.for_each(|_| ());
+		if let Some(entry) = first {
+			self.worker(s, entry, len, state, true);
 		}
 	}
 
