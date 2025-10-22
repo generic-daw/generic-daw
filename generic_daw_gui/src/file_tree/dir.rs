@@ -86,49 +86,51 @@ impl Dir {
 	}
 
 	pub fn view(&self) -> (Element<'_, Message>, f32) {
-		let mut col = column!(
-			button(
-				row![
-					if self.open {
-						chevron_down()
-					} else {
-						chevron_right()
-					},
-					text(&*self.name).wrapping(text::Wrapping::None)
-				]
-				.spacing(2)
-			)
-			.style(button::text)
-			.padding(1)
-			.width(Fill)
-			.on_press(Message::Action(self.id, Action::DirToggleOpen))
-		);
-
 		let mut height = 0.0;
-
-		if self.open
-			&& let LoadStatus::Loaded { dirs, files } = &self.children
-			&& dirs.len().max(files.len()) != 0
-		{
-			col = col.push(
-				row![
-					container(rule::vertical(2))
-						.padding(padding::left(LINE_HEIGHT / 2.0).right(LINE_HEIGHT / 4.0)),
-					column(
+		(
+			column![
+				button(
+					row![
+						if self.open {
+							chevron_down()
+						} else {
+							chevron_right()
+						},
+						text(&*self.name).wrapping(text::Wrapping::None)
+					]
+					.spacing(2),
+				)
+				.style(button::text)
+				.padding(1)
+				.width(Fill)
+				.on_press(Message::Action(self.id, Action::DirToggleOpen)),
+				if self.open
+					&& let LoadStatus::Loaded { dirs, files } = &self.children
+					&& !(dirs.is_empty() && files.is_empty())
+				{
+					let children = column(
 						dirs.iter()
 							.map(Self::view)
 							.chain(files.iter().map(File::view))
 							.map(|(e, h)| {
 								height += h;
 								e
-							})
-					)
-				]
-				.height(height.ceil()),
-			);
-		}
+							}),
+					);
 
-		(col.into(), height + LINE_HEIGHT + 2.0)
+					Some(row![
+						container(rule::vertical(2))
+							.padding(padding::left(LINE_HEIGHT / 2.0).right(LINE_HEIGHT / 4.0))
+							.height(height),
+						children
+					])
+				} else {
+					None
+				}
+			]
+			.into(),
+			height + LINE_HEIGHT + 2.0,
+		)
 	}
 
 	async fn load(path: impl AsRef<Path>) -> (Box<[Self]>, Box<[File]>) {
