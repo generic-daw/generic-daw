@@ -76,16 +76,16 @@ impl NodeImpl for Channel {
 	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
 		let processing = self.processing();
 
-		let mut has_non_param_event = events
-			.iter()
-			.any(|event| !matches!(event, Event::ParamValue { .. }));
-
 		for plugin in &mut self.plugins {
 			if processing && plugin.enabled {
 				plugin.processor.process(audio, events, plugin.mix);
-			} else if has_non_param_event {
-				plugin.processor.process(&mut [0.0; 2], events, plugin.mix);
 			} else {
+				debug_assert!(
+					events
+						.iter()
+						.all(|event| matches!(event, Event::ParamValue { .. }))
+				);
+
 				plugin.processor.flush(events);
 			}
 
@@ -105,8 +105,6 @@ impl NodeImpl for Channel {
 			} else {
 				drop(iter);
 			}
-
-			has_non_param_event = !events.is_empty();
 		}
 
 		if !self.enabled {
@@ -166,6 +164,11 @@ impl Channel {
 		for plugin in &mut self.plugins {
 			plugin.processor.reset();
 		}
+	}
+
+	#[must_use]
+	pub fn enabled(&self) -> bool {
+		self.enabled
 	}
 
 	fn processing(&self) -> bool {

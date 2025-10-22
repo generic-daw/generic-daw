@@ -59,9 +59,11 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			}
 		});
 
-		for entry in self.graph.values_mut() {
-			debug_assert!(entry.indegree.get_mut().is_negative());
-		}
+		debug_assert!(
+			self.graph
+				.values_mut()
+				.all(|entry| entry.indegree.get_mut().is_negative())
+		);
 
 		buf.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..len]);
 	}

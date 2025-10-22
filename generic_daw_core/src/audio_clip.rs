@@ -8,9 +8,7 @@ pub struct AudioClip {
 
 impl AudioClip {
 	pub fn process(&self, state: &State, audio: &mut [f32]) {
-		if !state.rtstate.playing {
-			return;
-		}
+		debug_assert!(state.rtstate.playing);
 
 		let sample = &state.samples[*self.sample];
 

@@ -6,7 +6,7 @@ use std::{cmp::Ordering, iter::repeat_n};
 pub struct Track {
 	clips: Vec<Clip>,
 	notes: NoDebug<Box<[u8; 128]>>,
-	node: Channel,
+	channel: Channel,
 }
 
 impl Default for Track {
@@ -14,7 +14,7 @@ impl Default for Track {
 		Self {
 			clips: Vec::new(),
 			notes: Box::new([0; 128]).into(),
-			node: Channel::default(),
+			channel: Channel::default(),
 		}
 	}
 }
@@ -24,25 +24,29 @@ impl NodeImpl for Track {
 	type State = State;
 
 	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
-		self.collect_notes(state, events);
+		if self.channel.enabled() {
+			self.diff_notes(state, events);
 
-		for clip in &mut self.clips {
-			clip.process(state, audio, events, &mut self.notes);
+			if state.rtstate.playing {
+				for clip in &mut self.clips {
+					clip.process(state, audio, events, &mut self.notes);
+				}
+			}
 		}
 
-		self.node.process(state, audio, events);
+		self.channel.process(state, audio, events);
 	}
 
 	fn id(&self) -> NodeId {
-		self.node.id()
+		self.channel.id()
 	}
 
 	fn delay(&self) -> usize {
-		self.node.delay()
+		self.channel.delay()
 	}
 
 	fn expensive(&self) -> bool {
-		self.node.expensive()
+		self.channel.expensive()
 	}
 }
 
@@ -56,19 +60,21 @@ impl Track {
 				self.clips[index].position().trim_start_to(pos);
 			}
 			NodeAction::ClipTrimEndTo(index, pos) => self.clips[index].position().trim_end_to(pos),
-			action => self.node.apply(action),
+			action => self.channel.apply(action),
 		}
 	}
 
 	pub fn reset(&mut self) {
-		self.node.reset();
+		self.channel.reset();
 	}
 
-	pub fn collect_notes(&mut self, state: &State, events: &mut Vec<Event>) {
+	pub fn diff_notes(&mut self, state: &State, events: &mut Vec<Event>) {
 		let mut notes = [0; 128];
 
-		for clip in &mut self.clips {
-			clip.collect_notes(state, &mut notes);
+		if state.rtstate.playing {
+			for clip in &mut self.clips {
+				clip.collect_notes(state, &mut notes);
+			}
 		}
 
 		for (key, (before, after)) in self.notes.iter().zip(&notes).enumerate() {
