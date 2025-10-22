@@ -1,4 +1,5 @@
 use crate::MusicalTime;
+use std::ops::Add;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct NotePosition {
@@ -50,5 +51,29 @@ impl NotePosition {
 			self.end -= diff;
 		}
 		self.start = new_start;
+	}
+
+	#[must_use]
+	pub fn saturating_sub(mut self, diff: MusicalTime) -> Option<Self> {
+		self.start = self.start.saturating_sub(diff);
+		self.end = self.end.saturating_sub(diff);
+		(self.start != self.end).then_some(self)
+	}
+
+	#[must_use]
+	pub fn clamp(mut self, other: Self) -> Option<Self> {
+		self.start = self.start.clamp(other.start(), other.end());
+		self.end = self.end.clamp(other.start(), other.end());
+		(self.start != self.end).then_some(self)
+	}
+}
+
+impl Add<MusicalTime> for NotePosition {
+	type Output = Self;
+
+	fn add(mut self, rhs: MusicalTime) -> Self::Output {
+		self.start += rhs;
+		self.end += rhs;
+		self
 	}
 }

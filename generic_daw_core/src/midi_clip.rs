@@ -16,9 +16,12 @@ impl MidiClip {
 			pattern
 				.notes
 				.iter()
-				.map(|&note| note + self.position.start())
-				.filter(|note| note.position.start() >= self.position.offset())
-				.map(|note| note - self.position.offset())
+				.filter_map(|&(mut note)| {
+					note.position = (note.position + self.position.start())
+						.saturating_sub(self.position.offset())?
+						.clamp(self.position.note_position())?;
+					Some(note)
+				})
 				.for_each(|note| {
 					let start = note.position.start().to_samples(&state.rtstate);
 					let end = note.position.end().to_samples(&state.rtstate);
@@ -46,9 +49,12 @@ impl MidiClip {
 			pattern
 				.notes
 				.iter()
-				.map(|&note| note + self.position.start())
-				.filter(|note| note.position.start() >= self.position.offset())
-				.map(|note| note - self.position.offset())
+				.filter_map(|&(mut note)| {
+					note.position = (note.position + self.position.start())
+						.saturating_sub(self.position.offset())?
+						.clamp(self.position.note_position())?;
+					Some(note)
+				})
 				.for_each(|note| {
 					let start = note.position.start().to_samples(&state.rtstate);
 					let end = note.position.end().to_samples(&state.rtstate);

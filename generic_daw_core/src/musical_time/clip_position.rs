@@ -29,7 +29,7 @@ impl ClipPosition {
 
 	#[must_use]
 	pub fn len(self) -> MusicalTime {
-		self.end() - self.start()
+		self.position.len()
 	}
 
 	pub fn trim_start_to(&mut self, mut new_start: MusicalTime) {
@@ -53,5 +53,10 @@ impl ClipPosition {
 
 	pub fn move_to(&mut self, new_start: MusicalTime) {
 		self.position.move_to(new_start);
+	}
+
+	#[must_use]
+	pub fn note_position(self) -> NotePosition {
+		self.position
 	}
 }

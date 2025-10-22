@@ -1,8 +1,5 @@
-use crate::{MusicalTime, NotePosition};
-use std::{
-	fmt::{Debug, Display, Formatter},
-	ops::{Add, Sub},
-};
+use crate::NotePosition;
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Clone, Copy)]
 pub enum Key {
@@ -123,22 +120,4 @@ pub struct MidiNote {
 	pub key: MidiKey,
 	pub velocity: f32,
 	pub position: NotePosition,
-}
-
-impl Add<MusicalTime> for MidiNote {
-	type Output = Self;
-
-	fn add(mut self, rhs: MusicalTime) -> Self::Output {
-		self.position.move_to(self.position.start() + rhs);
-		self
-	}
-}
-
-impl Sub<MusicalTime> for MidiNote {
-	type Output = Self;
-
-	fn sub(mut self, rhs: MusicalTime) -> Self::Output {
-		self.position.move_to(self.position.start() - rhs);
-		self
-	}
 }
