@@ -119,7 +119,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 				let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len() / 2);
 
-				processor.access_handler(|at| at.processing.store(true, Relaxed));
+				processor.access_handler_mut(|at| at.processing = true);
 
 				processor
 					.process(
@@ -132,7 +132,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 					)
 					.unwrap();
 
-				processor.access_handler(|at| at.processing.store(false, Relaxed));
+				processor.access_handler_mut(|at| at.processing = false);
 
 				self.steady_time += u64::from(input_audio.min_available_frames_with(&output_audio));
 

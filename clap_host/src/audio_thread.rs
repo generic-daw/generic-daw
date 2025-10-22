@@ -1,12 +1,12 @@
 use crate::shared::Shared;
 use clack_extensions::thread_pool::HostThreadPoolImpl;
 use clack_host::prelude::*;
-use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+use std::sync::atomic::Ordering::Relaxed;
 
 #[derive(Debug)]
 pub struct AudioThread<'a> {
 	shared: &'a Shared<'a>,
-	pub processing: AtomicBool,
+	pub processing: bool,
 }
 
 impl<'a> AudioThread<'a> {
@@ -15,7 +15,7 @@ impl<'a> AudioThread<'a> {
 
 		Self {
 			shared,
-			processing: AtomicBool::new(false),
+			processing: false,
 		}
 	}
 }
@@ -24,7 +24,7 @@ impl<'a> AudioProcessorHandler<'a> for AudioThread<'a> {}
 
 impl HostThreadPoolImpl for AudioThread<'_> {
 	fn request_exec(&mut self, task_count: u32) -> Result<(), HostError> {
-		if !self.processing.load(Relaxed) {
+		if !self.processing {
 			return Err(HostError::Message(
 				"called `request_exec` while not processing",
 			));
