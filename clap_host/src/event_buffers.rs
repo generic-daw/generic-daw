@@ -1,12 +1,6 @@
 use crate::{EventImpl, host::Host};
 use clack_extensions::note_ports::{NoteDialect, NotePortInfoBuffer};
-use clack_host::{
-	events::{
-		Match,
-		event_types::{MidiEvent, NoteChokeEvent},
-	},
-	prelude::*,
-};
+use clack_host::prelude::*;
 
 #[derive(Debug, Default)]
 pub struct EventBuffers {
@@ -72,17 +66,5 @@ impl EventBuffers {
 		);
 
 		self.output_events.clear();
-	}
-
-	pub fn reset(&mut self) {
-		if self.input_prefers_midi {
-			self.input_events
-				.push(&MidiEvent::new(0, self.main_input_port, [0xb0, 0x7b, 0x00]));
-		} else {
-			self.input_events.push(&NoteChokeEvent::new(
-				0,
-				Pckn::new(self.main_input_port, 0u8, Match::All, Match::All),
-			));
-		}
 	}
 }

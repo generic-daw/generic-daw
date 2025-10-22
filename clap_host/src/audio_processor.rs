@@ -24,6 +24,7 @@ pub struct AudioProcessor<Event: EventImpl> {
 	audio_buffers: AudioBuffers,
 	event_buffers: EventBuffers,
 	consumer: Consumer<AudioThreadMessage<Event>>,
+	needs_reset: bool,
 	realtime: bool,
 }
 
@@ -44,6 +45,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			audio_buffers,
 			event_buffers,
 			consumer,
+			needs_reset: false,
 			realtime: true,
 		}
 	}
@@ -65,28 +67,34 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 				match msg {
 					AudioThreadMessage::Activated(processor, latency) => {
-						self.audio_buffers.latency_changed(latency);
 						self.processor = Some(processor);
+						self.audio_buffers.latency_changed(latency);
 					}
 					AudioThreadMessage::SetRealtime(realtime) => self.realtime = realtime,
 					AudioThreadMessage::Event(event) => events.push(event),
 				}
 			}
 
-			if let Some(processor) = self.processor.take() {
-				if processor.access_shared_handler(|s| {
+			if let Some(mut processor) = self.processor.take() {
+				if let Some(sender) = processor.access_shared_handler(|s| {
 					CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
-					s.needs_restart.load(Relaxed)
+					s.needs_restart.load(Relaxed).then(|| s.sender.clone())
 				}) {
-					processor
-						.access_shared_handler(|s| s.sender.clone())
+					sender
 						.send(MainThreadMessage::Restart(NoClone(NoDebug(
 							processor.0.into_stopped(),
 						))))
 						.unwrap();
-				} else {
-					self.processor = Some(processor);
+
+					continue;
 				}
+
+				if self.needs_reset {
+					self.needs_reset = false;
+					processor.reset();
+				}
+
+				self.processor = Some(processor);
 			}
 
 			if self.realtime || self.processor.is_some() {
@@ -160,11 +168,8 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	}
 
 	pub fn reset(&mut self) {
-		if let Some(processor) = &mut self.processor {
-			processor.reset();
-		}
+		self.needs_reset = true;
 		self.steady_time = 0;
-		self.event_buffers.reset();
 	}
 
 	#[must_use]
