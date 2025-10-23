@@ -2,7 +2,7 @@ use crate::{
 	EventImpl, MainThreadMessage, PluginDescriptor, PluginId, audio_buffers::AudioBuffers,
 	event_buffers::EventBuffers, host::Host, shared::CURRENT_THREAD_ID,
 };
-use clack_host::process::PluginAudioProcessor;
+use clack_host::process::{PluginAudioProcessor, ProcessStatus};
 use generic_daw_utils::{NoClone, NoDebug};
 use log::{trace, warn};
 use rtrb::Consumer;
@@ -110,16 +110,26 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			return;
 		};
 
+		if processor.access_shared_handler(|s| !s.processing.load(Relaxed))
+			&& events.is_empty()
+			&& audio.iter().all(|&f| f == 0.0)
+		{
+			trace!("{}: skipping process", &self.descriptor);
+			self.flush(events);
+			return;
+		}
+
 		match processor.ensure_processing_started() {
-			Ok(processor) => {
+			Ok(started_processor) => {
 				self.audio_buffers.read_in(audio);
 				self.event_buffers.read_in(events);
 
 				let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len() / 2);
 
-				processor.access_handler_mut(|at| at.processing = true);
+				started_processor.access_handler_mut(|at| at.processing = true);
 
-				processor
+				trace!("{}: processing", &self.descriptor);
+				let status = started_processor
 					.process(
 						&input_audio,
 						&mut output_audio,
@@ -130,12 +140,26 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 					)
 					.unwrap();
 
-				processor.access_handler_mut(|at| at.processing = false);
+				started_processor.access_handler_mut(|at| at.processing = false);
 
 				self.steady_time += u64::from(input_audio.min_available_frames_with(&output_audio));
 
 				self.audio_buffers.write_out(audio, mix_level);
 				self.event_buffers.write_out(events);
+
+				let processing = match status {
+					ProcessStatus::Continue | ProcessStatus::Tail => true,
+					ProcessStatus::ContinueIfNotQuiet => audio.iter().any(|&f| f != 0.0),
+					ProcessStatus::Sleep => false,
+				};
+
+				if !processing {
+					processor.ensure_processing_stopped();
+				}
+
+				processor.access_shared_handler(|s| {
+					s.processing.store(processing, Relaxed);
+				});
 			}
 			Err(err) => {
 				warn!("{}: {err}", self.descriptor);
@@ -151,18 +175,25 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			return;
 		};
 
-		self.event_buffers.read_in(events);
+		if !processor.access_shared_handler(|s| s.needs_flush.swap(false, Relaxed))
+			&& events.is_empty()
+		{
+			trace!("{}: skipping flush", &self.descriptor);
+			return;
+		}
 
 		if let Some(&params) = processor.access_shared_handler(|s| s.ext.params.get()) {
+			self.event_buffers.read_in(events);
+
+			trace!("{}: flushing events", &self.descriptor);
 			params.flush_active(
 				&mut processor.plugin_handle(),
 				&self.event_buffers.input_events.as_input(),
 				&mut self.event_buffers.output_events.as_output(),
 			);
-		}
 
-		self.event_buffers.write_out(events);
-		events.clear();
+			self.event_buffers.write_out(events);
+		}
 	}
 
 	pub fn reset(&mut self) {

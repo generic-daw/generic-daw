@@ -51,6 +51,8 @@ pub struct Shared<'a> {
 	pub ext: Ext,
 	pub main_thread: u64,
 	pub audio_thread: AtomicU64,
+	pub processing: AtomicBool,
+	pub needs_flush: AtomicBool,
 	pub needs_restart: AtomicBool,
 }
 
@@ -65,6 +67,8 @@ impl Shared<'_> {
 			ext: Ext::default(),
 			main_thread,
 			audio_thread: AtomicU64::new(main_thread),
+			processing: AtomicBool::new(true),
+			needs_flush: AtomicBool::new(false),
 			needs_restart: AtomicBool::new(false),
 		}
 	}
@@ -105,7 +109,9 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 		];
 	}
 
-	fn request_process(&self) {}
+	fn request_process(&self) {
+		self.processing.store(true, Relaxed);
+	}
 
 	fn request_callback(&self) {
 		self.sender
@@ -164,7 +170,9 @@ impl HostLogImpl for Shared<'_> {
 }
 
 impl HostParamsImplShared for Shared<'_> {
-	fn request_flush(&self) {}
+	fn request_flush(&self) {
+		self.needs_flush.store(true, Relaxed);
+	}
 }
 
 impl HostThreadCheckImpl for Shared<'_> {
