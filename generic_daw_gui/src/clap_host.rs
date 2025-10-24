@@ -384,7 +384,7 @@ impl ClapHost {
 										},
 									)
 								})
-								.reset(param.reset)
+								.default(param.reset)
 								.radius(25.0)
 								.enabled(!param.flags.contains(ParamInfoFlags::IS_READONLY))
 								.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))

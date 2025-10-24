@@ -1130,6 +1130,7 @@ impl ArrangementView {
 					vertical_slider(0.0..=1.0, node.volume.abs().cbrt(), |v| {
 						Message::ChannelVolumeChanged(node.id, v.powi(3).copysign(node.volume))
 					})
+					.default(1.0)
 					.width(17)
 					.step(f32::EPSILON)
 					.style(if node.enabled {

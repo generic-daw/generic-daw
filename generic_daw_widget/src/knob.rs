@@ -7,7 +7,7 @@ use iced_widget::{
 		Clipboard, Element, Event, Layout, Length, Point, Radians, Rectangle, Renderer as _, Shell,
 		Size, Theme, Vector, Widget, border,
 		layout::{Limits, Node},
-		mouse::{self, Click, Cursor, Interaction, ScrollDelta, click::Kind},
+		mouse::{self, Cursor, Interaction, ScrollDelta},
 		overlay,
 		renderer::{Quad, Style},
 		widget::{Text, Tree, tree},
@@ -30,7 +30,6 @@ struct State {
 	last_theme: RefCell<Option<Theme>>,
 	cache: Cache,
 	scroll: f32,
-	last_click: Option<Click>,
 }
 
 #[derive(Debug)]
@@ -38,7 +37,7 @@ pub struct Knob<'a, Message> {
 	range: RangeInclusive<f32>,
 	value: f32,
 	center: f32,
-	reset: f32,
+	default: f32,
 	enabled: bool,
 	f: NoDebug<Box<dyn Fn(f32) -> Message + 'a>>,
 	radius: f32,
@@ -52,7 +51,7 @@ impl<'a, Message> Knob<'a, Message> {
 		Self {
 			value: value.clamp(*range.start(), *range.end()),
 			center: *range.start(),
-			reset: *range.end(),
+			default: *range.end(),
 			range,
 			enabled: true,
 			f: NoDebug(Box::from(f)),
@@ -69,8 +68,8 @@ impl<'a, Message> Knob<'a, Message> {
 	}
 
 	#[must_use]
-	pub fn reset(mut self, reset: f32) -> Self {
-		self.reset = reset;
+	pub fn default(mut self, default: f32) -> Self {
+		self.default = default;
 		self
 	}
 
@@ -264,16 +263,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 			match event {
 				mouse::Event::ButtonPressed {
 					button: mouse::Button::Left,
+					modifiers,
 					..
 				} if self.enabled && state.dragging.is_none() && state.hovering => {
 					let pos = cursor.position().unwrap();
 					state.dragging = Some((self.value, pos.y));
 
-					let new_click = Click::new(pos, mouse::Button::Left, state.last_click);
-					state.last_click = Some(new_click);
-
-					if new_click.kind() == Kind::Double {
-						shell.publish((self.f)(self.reset));
+					if modifiers.control() || modifiers.command() {
+						shell.publish((self.f)(self.default));
 					}
 
 					shell.capture_event();
