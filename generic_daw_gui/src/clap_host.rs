@@ -241,11 +241,13 @@ impl ClapHost {
 					.insert(id, timer_id);
 			}
 			MainThreadMessage::UnregisterTimer(timer_id) => {
-				self.timers
+				if let Some(set) = self
+					.timers
 					.values_mut()
 					.find(|set| set.get(&id) == Some(&timer_id))
-					.unwrap()
-					.remove(&id);
+				{
+					set.remove(&id);
+				}
 			}
 			MainThreadMessage::RescanParams(flags) => {
 				plugin!(MainThreadMessage::RescanParams(flags)).rescan_params(flags);
