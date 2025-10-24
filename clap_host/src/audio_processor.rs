@@ -211,10 +211,12 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 impl<Event: EventImpl> Drop for AudioProcessor<Event> {
 	fn drop(&mut self) {
-		if let Some(mut processor) = self.processor.take() {
-			processor.ensure_processing_stopped();
+		if let Some(processor) = self.processor.take() {
 			processor
-				.access_shared_handler(|s| s.sender.clone())
+				.access_shared_handler(|s| {
+					CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
+					s.sender.clone()
+				})
 				.send(MainThreadMessage::Destroy(NoClone(NoDebug(
 					processor.0.into_stopped(),
 				))))
