@@ -24,6 +24,7 @@ use std::cell::RefCell;
 struct State {
 	cache: RefCell<Option<Mesh>>,
 	last_bounds: Rectangle,
+	last_scale: Vec2,
 	last_addr: usize,
 }
 
@@ -71,13 +72,18 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		let state = tree.state.downcast_mut::<State>();
 
 		let addr = match self.inner {
-			Inner::Sample(inner) => std::ptr::from_ref(inner.clip).addr(),
+			Inner::Sample(inner) => std::ptr::from_ref(inner.sample).addr(),
 			Inner::Recording(inner) => std::ptr::from_ref(inner).addr(),
 		};
 
 		if state.last_addr != addr {
-			*state = State::default();
+			*state.cache.get_mut() = None;
 			state.last_addr = addr;
+		}
+
+		if state.last_scale != *self.scale {
+			*state.cache.get_mut() = None;
+			state.last_scale = *self.scale;
 		}
 	}
 
@@ -119,8 +125,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
 			let state = tree.state.downcast_mut::<State>();
 			if state.last_bounds != bounds {
-				state.last_bounds = bounds;
 				*state.cache.get_mut() = None;
+				state.last_bounds = bounds;
 			}
 		}
 	}

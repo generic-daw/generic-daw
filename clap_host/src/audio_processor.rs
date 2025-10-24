@@ -112,7 +112,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 		if processor.access_shared_handler(|s| !s.processing.load(Relaxed))
 			&& events.is_empty()
-			&& audio.iter().all(|&f| f == 0.0)
+			&& audio.iter().all(|f| f.abs() < f32::EPSILON)
 		{
 			trace!("{}: skipping process", &self.descriptor);
 			self.flush(events);
@@ -149,7 +149,9 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 				let processing = match status {
 					ProcessStatus::Continue | ProcessStatus::Tail => true,
-					ProcessStatus::ContinueIfNotQuiet => audio.iter().any(|&f| f != 0.0),
+					ProcessStatus::ContinueIfNotQuiet => {
+						audio.iter().any(|f| f.abs() >= f32::EPSILON)
+					}
 					ProcessStatus::Sleep => false,
 				};
 
