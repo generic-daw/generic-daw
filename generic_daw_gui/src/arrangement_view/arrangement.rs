@@ -334,6 +334,9 @@ impl Arrangement {
 	pub fn remove_channel(&mut self, id: NodeId) -> Node {
 		debug_assert!(self.track_of(id).is_none());
 		let node = self.nodes.remove(*id).unwrap().0;
+		for (_, outgoing) in self.nodes.values_mut() {
+			outgoing.remove(*id);
+		}
 		self.send(Message::NodeRemove(id));
 		node
 	}
