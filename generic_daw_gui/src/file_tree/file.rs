@@ -5,9 +5,9 @@ use crate::{
 };
 use iced::{
 	Element, Fill,
+	futures::AsyncReadExt as _,
 	widget::{button, row, text},
 };
-use smol::io::AsyncReadExt as _;
 use std::{io, path::Path, sync::Arc};
 
 #[derive(Clone, Debug)]

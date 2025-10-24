@@ -137,12 +137,12 @@ pub enum Message {
 #[derive(Clone, Copy, Debug)]
 pub enum Tab {
 	Arrangement {
-		grabbed_clip: Option<(usize, usize, Option<usize>)>,
+		grabbed: Option<(usize, usize, Option<usize>)>,
 	},
 	Mixer,
 	PianoRoll {
 		clip: MidiClip,
-		grabbed_note: Option<(usize, Option<usize>)>,
+		grabbed: Option<(usize, Option<usize>)>,
 	},
 }
 
@@ -158,10 +158,11 @@ pub struct ArrangementView {
 	arrangement_scale: Vec2,
 	soloed_track: Option<NodeId>,
 
+	selected_channel: Option<NodeId>,
+
 	piano_roll_position: Vec2,
 	piano_roll_scale: Vec2,
 	last_note_len: MusicalTime,
-	selected_channel: Option<NodeId>,
 
 	split_at: f32,
 	plugins: combo_box::State<PluginDescriptor>,
@@ -185,16 +186,17 @@ impl ArrangementView {
 				clap_host: ClapHost::default(),
 
 				recording: None,
-				tab: Tab::Arrangement { grabbed_clip: None },
+				tab: Tab::Arrangement { grabbed: None },
 
 				arrangement_position: Vec2::default(),
 				arrangement_scale: Vec2::new(10.0, 87.0),
 				soloed_track: None,
 
+				selected_channel: None,
+
 				piano_roll_position: Vec2::new(0.0, 40.0),
 				piano_roll_scale: Vec2::new(8.0, LINE_HEIGHT),
 				last_note_len: MusicalTime::BEAT,
-				selected_channel: None,
 
 				split_at: DEFAULT_SPLIT_POSITION,
 				plugins: combo_box::State::new(plugins),
@@ -228,9 +230,9 @@ impl ArrangementView {
 				self.arrangement = *arrangement;
 				self.selected_channel = None;
 				match &mut self.tab {
-					Tab::Arrangement { grabbed_clip } => *grabbed_clip = None,
+					Tab::Arrangement { grabbed } => *grabbed = None,
 					Tab::Mixer => {}
-					Tab::PianoRoll { .. } => self.tab = Tab::Arrangement { grabbed_clip: None },
+					Tab::PianoRoll { .. } => self.tab = Tab::Arrangement { grabbed: None },
 				}
 			}
 			Message::ConnectRequest(from, to) => {
@@ -387,8 +389,8 @@ impl ArrangementView {
 			Message::OpenMidiClip(clip) => {
 				self.tab = Tab::PianoRoll {
 					clip,
-					grabbed_note: None,
-				}
+					grabbed: None,
+				};
 			}
 			Message::TrackAdd => {
 				let track = self.arrangement.add_track();
@@ -565,13 +567,12 @@ impl ArrangementView {
 	}
 
 	fn handle_arrangement_action(&mut self, action: ArrangementAction) {
-		let Tab::Arrangement { grabbed_clip } = &mut self.tab else {
+		let Tab::Arrangement { grabbed } = &mut self.tab else {
 			panic!()
 		};
 
 		match action {
-			ArrangementAction::Grab(track, clip) => *grabbed_clip = Some((track, clip, None)),
-			ArrangementAction::Drop => *grabbed_clip = None,
+			ArrangementAction::Grab(track, clip) => *grabbed = Some((track, clip, None)),
 			ArrangementAction::Add(track, pos) => {
 				let pattern = PatternPair::new(Vec::new());
 				let id = pattern.gui.id;
@@ -583,16 +584,16 @@ impl ArrangementView {
 				);
 				clip.position.move_to(pos);
 				let clip = self.arrangement.add_clip(track, clip);
-				*grabbed_clip = Some((track, clip, None));
+				*grabbed = Some((track, clip, None));
 			}
 			ArrangementAction::Clone(track, mut clip) => {
 				clip = self
 					.arrangement
 					.add_clip(track, self.arrangement.tracks()[track].clips[clip]);
-				*grabbed_clip = Some((track, clip, None));
+				*grabbed = Some((track, clip, None));
 			}
 			ArrangementAction::Drag(new_track, pos) => {
-				let (track, clip, ..) = grabbed_clip.as_mut().unwrap();
+				let (track, clip, ..) = grabbed.as_mut().unwrap();
 				if *track != new_track {
 					*clip = self.arrangement.clip_switch_track(*track, *clip, new_track);
 					*track = new_track;
@@ -627,10 +628,10 @@ impl ArrangementView {
 					self.arrangement.clip_trim_start_to(track, rhs, pos);
 					(lhs, rhs)
 				};
-				*grabbed_clip = Some((track, lhs, Some(rhs)));
+				*grabbed = Some((track, lhs, Some(rhs)));
 			}
 			ArrangementAction::DragSplit(mut pos) => {
-				let Some((track, lhs, Some(rhs))) = *grabbed_clip else {
+				let Some((track, lhs, Some(rhs))) = *grabbed else {
 					return;
 				};
 				let start = self.arrangement.tracks()[track].clips[lhs]
@@ -646,11 +647,11 @@ impl ArrangementView {
 				self.arrangement.clip_trim_start_to(track, rhs, pos);
 			}
 			ArrangementAction::TrimStart(pos) => {
-				let (track, clip, ..) = grabbed_clip.unwrap();
+				let (track, clip, ..) = grabbed.unwrap();
 				self.arrangement.clip_trim_start_to(track, clip, pos);
 			}
 			ArrangementAction::TrimEnd(pos) => {
-				let (track, clip, ..) = grabbed_clip.unwrap();
+				let (track, clip, ..) = grabbed.unwrap();
 				self.arrangement.clip_trim_end_to(track, clip, pos);
 			}
 			ArrangementAction::Delete(track, clip) => {
@@ -661,18 +662,14 @@ impl ArrangementView {
 	}
 
 	fn handle_piano_roll_action(&mut self, action: PianoRollAction) {
-		let Tab::PianoRoll { clip, grabbed_note } = &mut self.tab else {
+		let Tab::PianoRoll { clip, grabbed } = &mut self.tab else {
 			panic!()
 		};
 
 		let notes = &self.arrangement.patterns()[*clip.pattern].notes;
 
 		match action {
-			PianoRollAction::Grab(note) => *grabbed_note = Some((note, None)),
-			PianoRollAction::Drop => {
-				let (note, ..) = grabbed_note.take().unwrap();
-				self.last_note_len = notes[note].position.len();
-			}
+			PianoRollAction::Grab(note) => *grabbed = Some((note, None)),
 			PianoRollAction::Add(key, pos) => {
 				let note = self.arrangement.add_note(
 					clip.pattern,
@@ -682,14 +679,14 @@ impl ArrangementView {
 						position: NotePosition::new(pos, pos + self.last_note_len),
 					},
 				);
-				*grabbed_note = Some((note, None));
+				*grabbed = Some((note, None));
 			}
 			PianoRollAction::Clone(note) => {
 				let note = self.arrangement.add_note(clip.pattern, notes[note]);
-				*grabbed_note = Some((note, None));
+				*grabbed = Some((note, None));
 			}
 			PianoRollAction::Drag(key, pos) => {
-				let (note, ..) = grabbed_note.unwrap();
+				let (note, ..) = grabbed.unwrap();
 				if notes[note].key != key {
 					self.arrangement.note_switch_key(clip.pattern, note, key);
 				}
@@ -717,10 +714,10 @@ impl ArrangementView {
 					self.arrangement.note_trim_start_to(clip.pattern, rhs, pos);
 					(lhs, rhs)
 				};
-				*grabbed_note = Some((lhs, Some(rhs)));
+				*grabbed = Some((lhs, Some(rhs)));
 			}
 			PianoRollAction::DragSplit(mut pos) => {
-				let Some((lhs, Some(rhs))) = *grabbed_note else {
+				let Some((lhs, Some(rhs))) = *grabbed else {
 					return;
 				};
 				let start = notes[lhs].position.start() + MusicalTime::TICK;
@@ -733,14 +730,20 @@ impl ArrangementView {
 				self.arrangement.note_trim_start_to(clip.pattern, rhs, pos);
 			}
 			PianoRollAction::TrimStart(pos) => {
-				let (note, ..) = grabbed_note.unwrap();
+				let (note, ..) = grabbed.unwrap();
 				self.arrangement.note_trim_start_to(clip.pattern, note, pos);
 			}
 			PianoRollAction::TrimEnd(pos) => {
-				let (note, ..) = grabbed_note.unwrap();
+				let (note, ..) = grabbed.unwrap();
 				self.arrangement.note_trim_end_to(clip.pattern, note, pos);
 			}
 			PianoRollAction::Delete(note) => _ = self.arrangement.remove_note(clip.pattern, note),
+		}
+
+		if let Some((note, ..)) = grabbed {
+			self.last_note_len = self.arrangement.patterns()[*clip.pattern].notes[*note]
+				.position
+				.len();
 		}
 	}
 

@@ -20,7 +20,6 @@ use iced::{
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
 	Grab(usize),
-	Drop,
 	Add(MidiKey, MusicalTime),
 	Clone(usize),
 	Drag(MidiKey, MusicalTime),
@@ -39,22 +38,6 @@ enum State {
 	NoteTrimmingStart(f32, MusicalTime),
 	NoteTrimmingEnd(f32, MusicalTime),
 	DeletingNotes,
-}
-
-impl State {
-	fn drop(&mut self) -> bool {
-		let unselect = matches!(
-			self,
-			Self::DraggingNote(..)
-				| Self::DraggingSplit(..)
-				| Self::NoteTrimmingStart(..)
-				| Self::NoteTrimmingEnd(..)
-		);
-
-		*self = Self::None;
-
-		unselect
-	}
 }
 
 #[derive(Debug)]
@@ -116,10 +99,7 @@ where
 			let state = tree.state.downcast_mut::<State>();
 
 			let Some(cursor) = cursor.position_in(bounds) else {
-				if state.drop() {
-					shell.publish((self.f)(Action::Drop));
-				}
-
+				*state = State::None;
 				return;
 			};
 
@@ -208,10 +188,7 @@ where
 					_ => {}
 				},
 				mouse::Event::ButtonReleased { .. } if *state != State::None => {
-					if state.drop() {
-						shell.publish((self.f)(Action::Drop));
-					}
-
+					*state = State::None;
 					shell.capture_event();
 				}
 				mouse::Event::CursorMoved { modifiers, .. } => match *state {

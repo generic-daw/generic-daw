@@ -1,3 +1,5 @@
+#![warn(clippy::iter_over_hash_type)]
+
 use super::{ArrangementWrapper, Message, Node, crc};
 use crate::{
 	arrangement_view::{

@@ -430,7 +430,7 @@ impl Daw {
 							.on_press_maybe(
 								(!matches!(self.arrangement_view.tab, Tab::Arrangement { .. }))
 									.then_some(Message::ChangedTab(Tab::Arrangement {
-										grabbed_clip: None
+										grabbed: None
 									}))
 							),
 						button(sliders_vertical())
