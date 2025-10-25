@@ -53,10 +53,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 		viewport: &Rectangle,
 		renderer: &Renderer,
 	) -> Interaction {
-		let Some(bounds) = layout.bounds().intersection(viewport) else {
-			return Interaction::default();
-		};
-
 		self.children
 			.iter()
 			.zip(&tree.children)
@@ -64,7 +60,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 			.map(|((child, tree), clip_layout)| {
 				child
 					.as_widget()
-					.mouse_interaction(tree, clip_layout, cursor, &bounds, renderer)
+					.mouse_interaction(tree, clip_layout, cursor, viewport, renderer)
 			})
 			.rfind(|&i| i != Interaction::default())
 			.unwrap_or_default()
@@ -80,21 +76,33 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 		cursor: Cursor,
 		viewport: &Rectangle,
 	) {
-		let Some(bounds) = layout.bounds().intersection(viewport) else {
-			return;
-		};
+		let mut rects = Vec::new();
+
+		renderer.start_layer(Rectangle::INFINITE);
 
 		self.children
 			.iter()
 			.zip(&tree.children)
 			.zip(layout.children())
 			.for_each(|((child, tree), layout)| {
-				renderer.with_layer(bounds, |renderer| {
-					child
-						.as_widget()
-						.draw(tree, renderer, theme, style, layout, cursor, viewport);
-				});
+				let Some(bounds) = layout.bounds().intersection(viewport) else {
+					return;
+				};
+
+				if rects.iter().any(|b| bounds.intersects(b)) {
+					rects.clear();
+					renderer.end_layer();
+					renderer.start_layer(Rectangle::INFINITE);
+				}
+
+				rects.push(bounds);
+
+				child
+					.as_widget()
+					.draw(tree, renderer, theme, style, layout, cursor, viewport);
 			});
+
+		renderer.end_layer();
 	}
 
 	fn update(
@@ -108,17 +116,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
-		let Some(bounds) = layout.bounds().intersection(viewport) else {
-			return;
-		};
-
 		self.children
 			.iter_mut()
 			.zip(&mut tree.children)
 			.zip(layout.children())
 			.for_each(|((child, state), layout)| {
 				child.as_widget_mut().update(
-					state, event, layout, cursor, renderer, clipboard, shell, &bounds,
+					state, event, layout, cursor, renderer, clipboard, shell, viewport,
 				);
 			});
 	}

@@ -135,26 +135,8 @@ where
 									shell.publish((self.f)(Action::Grab(i)));
 									let start_offset = cursor.x - start_pixel;
 									let end_offset = end_pixel - cursor.x;
-									*state = match (start_offset < 10.0, end_offset < 10.0) {
-										(true, true) => {
-											let width = end_pixel - start_pixel;
-											match (
-												start_offset < width / 3.0,
-												end_offset < width / 3.0,
-											) {
-												(false, false) => {
-													State::DraggingNote(offset, note.key, time)
-												}
-												(true, false) => {
-													State::NoteTrimmingStart(offset, time)
-												}
-												(false, true) => State::NoteTrimmingEnd(
-													offset + end_pixel - start_pixel,
-													time,
-												),
-												(true, true) => unreachable!(),
-											}
-										}
+									let border = 10f32.min((end_pixel - start_pixel) / 3.0);
+									*state = match (start_offset < border, end_offset < border) {
 										(true, false) => State::NoteTrimmingStart(offset, time),
 										(false, true) => State::NoteTrimmingEnd(
 											offset + end_pixel - start_pixel,
@@ -163,6 +145,7 @@ where
 										(false, false) => {
 											State::DraggingNote(offset, note.key, time)
 										}
+										(true, true) => unreachable!(),
 									};
 								}
 							}
@@ -321,22 +304,11 @@ where
 						.rfind(|note_bounds| note_bounds.contains(cursor))
 						.map(|note_bounds| {
 							let x = cursor.x - note_bounds.x;
-
-							match (x < 10.0, note_bounds.width - x < 10.0) {
-								(true, true) => {
-									match (
-										x < note_bounds.width / 3.0,
-										note_bounds.width - x < note_bounds.width / 3.0,
-									) {
-										(false, false) => Interaction::Grab,
-										(true, false) | (false, true) => {
-											Interaction::ResizingHorizontally
-										}
-										(true, true) => unreachable!(),
-									}
-								}
-								(true, false) | (false, true) => Interaction::ResizingHorizontally,
+							let border = 10f32.min(note_bounds.width / 3.0);
+							match (x < border, note_bounds.width - x < border) {
 								(false, false) => Interaction::Grab,
+								(true, false) | (false, true) => Interaction::ResizingHorizontally,
+								(true, true) => unreachable!(),
 							}
 						})
 				})

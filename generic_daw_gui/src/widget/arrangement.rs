@@ -158,32 +158,15 @@ where
 									shell.publish((self.f)(Action::Grab(track, clip)));
 									let start_offset = cursor.x - start_pixel;
 									let end_offset = end_pixel - cursor.x;
-									*state = match (start_offset < 10.0, end_offset < 10.0) {
-										(true, true) => {
-											let width = end_pixel - start_pixel;
-											match (
-												start_offset < width / 3.0,
-												end_offset < width / 3.0,
-											) {
-												(false, false) => {
-													State::DraggingClip(offset, track, time)
-												}
-												(true, false) => {
-													State::ClipTrimmingStart(offset, time)
-												}
-												(false, true) => State::ClipTrimmingEnd(
-													offset + end_pixel - start_pixel,
-													time,
-												),
-												(true, true) => unreachable!(),
-											}
-										}
+									let border = 10f32.min((end_pixel - start_pixel) / 3.0);
+									*state = match (start_offset < border, end_offset < border) {
 										(true, false) => State::ClipTrimmingStart(offset, time),
 										(false, true) => State::ClipTrimmingEnd(
 											offset + end_pixel - start_pixel,
 											time,
 										),
 										(false, false) => State::DraggingClip(offset, track, time),
+										(true, true) => unreachable!(),
 									};
 								}
 							}

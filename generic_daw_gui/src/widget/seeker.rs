@@ -286,21 +286,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			self.grid(renderer, right_child_bounds, theme);
 		});
 
-		self.children
-			.iter()
-			.zip(&tree.children)
-			.zip(layout.children())
-			.for_each(|((child, tree), layout)| {
-				let Some(viewport) = layout.bounds().intersection(&bounds) else {
-					return;
-				};
-
-				renderer.with_layer(viewport, |renderer| {
+		renderer.with_layer(bounds, |renderer| {
+			self.children
+				.iter()
+				.zip(&tree.children)
+				.zip(layout.children())
+				.for_each(|((child, tree), layout)| {
 					child
 						.as_widget()
-						.draw(tree, renderer, theme, style, layout, cursor, &viewport);
+						.draw(tree, renderer, theme, style, layout, cursor, &bounds);
 				});
-			});
+		});
 
 		renderer.with_layer(right_half, |renderer| {
 			self.seeker(renderer, Self::seeker_bounds(layout), theme);

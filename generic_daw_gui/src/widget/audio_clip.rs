@@ -260,29 +260,23 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		viewport: &Rectangle,
 		_renderer: &Renderer,
 	) -> Interaction {
-		let Some(bounds) = layout.bounds().intersection(viewport) else {
+		if !cursor.is_over(*viewport) {
 			return Interaction::default();
-		};
+		}
 
-		let Some(cursor) = cursor.position_in(bounds) else {
+		let Some(cursor) = cursor.position_in(layout.bounds()) else {
 			return Interaction::default();
 		};
 
 		match self.inner {
-			Inner::Sample(..) => match (cursor.x < 10.0, bounds.width - cursor.x < 10.0) {
-				(true, true) => {
-					match (
-						cursor.x < bounds.width / 3.0,
-						bounds.width - cursor.x < bounds.width / 3.0,
-					) {
-						(false, false) => Interaction::Grab,
-						(true, false) | (false, true) => Interaction::ResizingHorizontally,
-						(true, true) => unreachable!(),
-					}
+			Inner::Sample(..) => {
+				let border = 10f32.min(layout.bounds().width / 3.0);
+				match (cursor.x < border, layout.bounds().width - cursor.x < border) {
+					(false, false) => Interaction::Grab,
+					(true, false) | (false, true) => Interaction::ResizingHorizontally,
+					(true, true) => unreachable!(),
 				}
-				(true, false) | (false, true) => Interaction::ResizingHorizontally,
-				(false, false) => Interaction::Grab,
-			},
+			}
 			Inner::Recording(..) => Interaction::NoDrop,
 		}
 	}
