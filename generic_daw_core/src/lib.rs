@@ -1,8 +1,5 @@
-use cpal::{
-	BufferSize, StreamConfig,
-	traits::{DeviceTrait as _, HostTrait as _},
-};
-use std::{num::NonZero, sync::Arc};
+use cpal::traits::{DeviceTrait as _, HostTrait as _};
+use std::sync::Arc;
 
 mod audio_clip;
 mod audio_graph_node;
@@ -63,11 +60,4 @@ pub fn get_output_devices() -> Vec<Arc<str>> {
 		.filter_map(|device| device.name().ok())
 		.map(Arc::from)
 		.collect()
-}
-
-fn frames_of_config(config: &StreamConfig) -> Option<NonZero<u32>> {
-	match config.buffer_size {
-		BufferSize::Fixed(buffer_size) => NonZero::new(buffer_size),
-		BufferSize::Default => None,
-	}
 }

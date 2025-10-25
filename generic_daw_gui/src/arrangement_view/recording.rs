@@ -46,14 +46,6 @@ impl Recording {
 		)
 	}
 
-	pub fn sample_rate(&self) -> u32 {
-		self.core.sample_rate()
-	}
-
-	pub fn frames(&self) -> Option<NonZero<u32>> {
-		self.core.frames()
-	}
-
 	pub fn write(&mut self, samples: &[f32]) {
 		let start = self.core.samples().len();
 		self.core.write(samples);

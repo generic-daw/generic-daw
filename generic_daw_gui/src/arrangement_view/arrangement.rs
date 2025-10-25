@@ -22,9 +22,9 @@ use generic_daw_core::{
 };
 use generic_daw_utils::{HoleyVec, NoClone, NoDebug, ShiftMoveExt as _};
 use iced::Task;
-use rtrb::Producer;
+use rtrb::{Producer, PushError};
 use smol::unblock;
-use std::{num::NonZero, path::Path, sync::Arc, time::Instant};
+use std::{hint::spin_loop, num::NonZero, path::Path, sync::Arc};
 
 #[derive(Debug)]
 pub struct Arrangement {
@@ -91,16 +91,16 @@ impl Arrangement {
 				producer,
 				stream: token.into(),
 			},
-			poll_consumer(consumer, rtstate.sample_rate, rtstate.frames),
+			poll_consumer(consumer),
 		)
 	}
 
-	pub fn update(&mut self, mut update: Batch, now: Instant) -> Option<Vec<ArrangementMessage>> {
-		let messages = (update.epoch == self.rtstate().epoch).then(|| {
+	pub fn update(&mut self, mut batch: Batch) -> Option<Vec<ArrangementMessage>> {
+		let messages = (batch.epoch == self.rtstate().epoch).then(|| {
 			let mut messages = Vec::new();
 
-			if let Some((sample, looped)) = update.sample
-				&& update.version.is_last()
+			if let Some((sample, looped)) = batch.sample
+				&& batch.version.is_last()
 			{
 				self.rtstate.sample = sample;
 
@@ -109,10 +109,10 @@ impl Arrangement {
 				}
 			}
 
-			messages.extend(update.updates.drain(..).filter_map(|event| match event {
+			messages.extend(batch.updates.drain(..).filter_map(|event| match event {
 				Update::Peak(node, peaks) => {
 					if let Some((node, _)) = self.nodes.get_mut(*node) {
-						node.update(peaks, now);
+						node.update(peaks, batch.now);
 					}
 					None
 				}
@@ -127,8 +127,8 @@ impl Arrangement {
 			messages
 		});
 
-		update.updates.clear();
-		self.send(Message::ReturnUpdateBuffer(update.updates));
+		batch.updates.clear();
+		self.send(Message::ReturnUpdateBuffer(batch.updates));
 
 		messages
 	}
@@ -145,8 +145,12 @@ impl Arrangement {
 		&self.patterns
 	}
 
-	fn send(&mut self, message: Message) {
-		self.producer.push(message).unwrap();
+	fn send(&mut self, mut message: Message) {
+		while let Err(err) = self.producer.push(message) {
+			let PushError::Full(err) = err;
+			message = err;
+			spin_loop();
+		}
 	}
 
 	fn node_action(&mut self, id: NodeId, action: NodeAction) {

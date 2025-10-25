@@ -23,7 +23,7 @@ use rfd::AsyncFileDialog;
 use std::{num::NonZero, path::Path, sync::Arc};
 
 static COMMON_SAMPLE_RATES: &[u32] = &[44_100, 48_000, 88_200, 96_000, 176_400, 192_000];
-static COMMON_BUFFER_SIZES: &[u32] = &[16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192];
+static COMMON_BUFFER_SIZES: &[u32] = &[64, 128, 256, 512, 1024, 2048, 4096, 8192];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Tab {
@@ -342,7 +342,7 @@ impl ConfigView {
 								600,
 								3,
 								|x| Message::ChangedAutosaveInterval(
-									NonZero::new(x as u64).unwrap_or(NonZero::<u64>::MIN)
+									NonZero::new(x as u64).unwrap_or(NonZero::new(1).unwrap())
 								),
 								Message::ChangedAutosaveIntervalText
 							),

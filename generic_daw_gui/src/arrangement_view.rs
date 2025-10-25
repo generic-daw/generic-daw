@@ -53,11 +53,8 @@ use std::{
 	iter::once,
 	num::NonZero,
 	path::Path,
-	sync::{
-		Arc, LazyLock,
-		atomic::{self, Ordering::Acquire},
-	},
-	time::{Duration, Instant, SystemTime},
+	sync::{Arc, LazyLock},
+	time::{Duration, SystemTime},
 };
 
 mod arrangement;
@@ -220,7 +217,7 @@ impl ArrangementView {
 			Message::Batch(msg) => {
 				return Task::batch(
 					self.arrangement
-						.update(msg, Instant::now())
+						.update(msg)
 						.into_iter()
 						.flatten()
 						.map(|msg| self.update(msg, config, plugin_bundles)),
@@ -481,18 +478,10 @@ impl ArrangementView {
 						config.input_device.buffer_size,
 					);
 
-					let sample_rate = recording.sample_rate();
-					let frames = recording
-						.frames()
-						.or(config.input_device.buffer_size)
-						.unwrap_or(NonZero::new(2048).unwrap())
-						.get();
-
 					self.recording = Some((recording, node));
-
 					self.arrangement.play();
 
-					return poll_consumer(task, sample_rate, frames)
+					return poll_consumer(task)
 						.map(NoDebug)
 						.map(Message::RecordingWrite)
 						.chain(Task::done(Message::RecordingFinalize));
@@ -1276,33 +1265,25 @@ fn crc(mut r: impl Read) -> u32 {
 	crc
 }
 
-fn poll_consumer<T: Send + 'static>(
-	mut consumer: Consumer<T>,
-	sample_rate: u32,
-	frames: u32,
-) -> Task<T> {
-	let wait = 1_000_000 / sample_rate.div_ceil(frames).min(1_000);
-	let mut backoff = 500;
-	let mut backoff = move |reset| {
-		Timer::after(Duration::from_micros(u64::from(if reset {
-			backoff = wait.min(backoff * 2);
-			backoff
+fn poll_consumer<T: Send + 'static>(mut consumer: Consumer<T>) -> Task<T> {
+	let mut backoff = 0;
+	let mut backoff = move |counter: u64| {
+		backoff = if counter == 0 {
+			backoff * 2
 		} else {
-			backoff = 500;
-			wait
-		})))
+			backoff / counter
+		}
+		.clamp(1, 100);
+		Timer::after(Duration::from_millis(backoff))
 	};
 
 	Task::stream(stream::channel(
 		consumer.buffer().capacity(),
 		async move |mut sender| {
 			loop {
-				let mut timer = backoff(true);
-				if consumer.is_abandoned() {
-					atomic::fence(Acquire);
-				}
+				let mut counter = 0;
 				while let Ok(t) = consumer.pop() {
-					timer = backoff(false);
+					counter += 1;
 					if sender.send(t).await.is_err() {
 						break;
 					}
@@ -1310,7 +1291,7 @@ fn poll_consumer<T: Send + 'static>(
 				if consumer.is_abandoned() {
 					break;
 				}
-				timer.await;
+				backoff(counter).await;
 			}
 		},
 	))

@@ -1,6 +1,6 @@
 use crate::{
 	InputRequest, InputResponse, RtState, STREAM_THREAD, Sample, SampleId, StreamMessage,
-	StreamToken, frames_of_config, resampler::Resampler,
+	StreamToken, resampler::Resampler,
 };
 use cpal::StreamConfig;
 use generic_daw_utils::NoDebug;
@@ -73,16 +73,6 @@ impl<W: io::Write + io::Seek> Recording<W> {
 			},
 			consumer,
 		)
-	}
-
-	#[must_use]
-	pub fn sample_rate(&self) -> u32 {
-		self.config.sample_rate.0
-	}
-
-	#[must_use]
-	pub fn frames(&self) -> Option<NonZero<u32>> {
-		frames_of_config(&self.config)
 	}
 
 	#[must_use]

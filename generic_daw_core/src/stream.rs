@@ -1,4 +1,4 @@
-use crate::{Batch, Message, NodeId, RtState, daw_ctx::DawCtx, frames_of_config};
+use crate::{Batch, Message, NodeId, RtState, daw_ctx::DawCtx};
 use cpal::{
 	BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
 	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
@@ -123,7 +123,7 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 					let sample_rate = config.sample_rate.0;
 					let frames = frames_of_config(&config)
 						.or(req.frames)
-						.unwrap_or(NonZero::new(2048).unwrap())
+						.unwrap_or(NonZero::new(8192).unwrap())
 						.get();
 					let channels = u32::from(config.channels);
 					let buffer_len = frames * channels;
@@ -184,7 +184,7 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 					let sample_rate = config.sample_rate.0;
 					let frames = frames_of_config(&config)
 						.or(req.frames)
-						.unwrap_or(NonZero::new(2048).unwrap())
+						.unwrap_or(NonZero::new(8192).unwrap())
 						.get();
 					let channels = u32::from(config.channels);
 					let buffer_len = frames * channels;
@@ -383,5 +383,12 @@ fn from_other_to_stereo(a: &mut [f32], b: &[f32], frames: usize) {
 			a[0] = *b;
 			a[1] = *b;
 		}),
+	}
+}
+
+fn frames_of_config(config: &StreamConfig) -> Option<NonZero<u32>> {
+	match config.buffer_size {
+		BufferSize::Fixed(buffer_size) => NonZero::new(buffer_size),
+		BufferSize::Default => None,
 	}
 }

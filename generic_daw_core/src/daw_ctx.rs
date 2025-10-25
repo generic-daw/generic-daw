@@ -7,7 +7,7 @@ use crate::{
 use generic_daw_utils::{HoleyVec, NoDebug, include_f32s, unique_id};
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, PushError, RingBuffer};
-use std::sync::Mutex;
+use std::{sync::Mutex, time::Instant};
 
 unique_id!(epoch);
 unique_id!(version);
@@ -92,6 +92,7 @@ pub struct Batch {
 	pub version: Version,
 	pub sample: Option<(usize, bool)>,
 	pub updates: Vec<Update>,
+	pub now: Instant,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -295,6 +296,7 @@ impl DawCtx {
 				version: self.state.rtstate.version,
 				sample,
 				updates: std::mem::take(updates),
+				now: Instant::now(),
 			};
 
 			*updates = self.update_buffers.pop().unwrap_or_default();
