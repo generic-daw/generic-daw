@@ -1,5 +1,5 @@
-use super::Message;
 use crate::{
+	file_tree::Message,
 	icons::{file, file_music},
 	widget::LINE_HEIGHT,
 };

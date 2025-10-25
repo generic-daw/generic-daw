@@ -21,34 +21,44 @@ pub struct State {
 	line: Animation<f32>,
 	bar: Animation<f32>,
 	now: Cell<Instant>,
-	time: f32,
+	delay: Instant,
 }
 
-impl State {
-	#[must_use]
-	pub fn new(time: f32) -> Self {
+impl Default for State {
+	fn default() -> Self {
+		let now = Instant::now();
 		Self {
 			line: Animation::new(0.0),
 			bar: Animation::new(0.0),
-			now: Cell::new(Instant::now()),
-			time,
+			now: Cell::new(now),
+			delay: now,
 		}
 	}
+}
 
+impl State {
 	pub fn update(&mut self, peak: f32, now: Instant) {
-		if peak > self.bar.interpolate_with(identity, now) {
-			self.bar = Animation::new(peak)
-				.duration(Duration::from_secs_f32(peak.exp2() * self.time))
-				.easing(Easing::EaseOutExpo)
-				.go(0.0, now);
-		}
+		let old_bar = self.bar.interpolate_with(identity, now);
+		self.bar = if peak >= old_bar {
+			Animation::new(peak)
+		} else {
+			Animation::new(old_bar)
+				.easing(Easing::Linear)
+				.duration(Duration::from_secs_f32(old_bar - peak))
+				.go(peak, now)
+		};
 
-		if peak > self.line.interpolate_with(identity, now) {
-			self.line = Animation::new(peak)
-				.duration(Duration::from_secs_f32(peak * self.time * 3.0))
-				.delay(Duration::from_secs_f32(peak.exp2()))
-				.go(0.0, now);
-		}
+		let old_line = self.line.interpolate_with(identity, now);
+		self.line = if peak >= old_line {
+			self.delay = now + Duration::from_millis(500);
+			Animation::new(peak)
+		} else {
+			Animation::new(old_line)
+				.easing(Easing::Linear)
+				.duration(3 * Duration::from_secs_f32(old_line - peak))
+				.delay(self.delay.saturating_duration_since(now))
+				.go(peak, now)
+		};
 	}
 }
 

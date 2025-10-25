@@ -1,6 +1,6 @@
-use super::{Vec2, get_time};
+use crate::widget::get_time;
 use generic_daw_core::{MusicalTime, RtState};
-use generic_daw_utils::NoDebug;
+use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{

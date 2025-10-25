@@ -1,5 +1,5 @@
-use super::{Action, Message, file::File};
 use crate::{
+	file_tree::{Action, Message, file::File},
 	icons::{chevron_down, chevron_right},
 	widget::LINE_HEIGHT,
 };

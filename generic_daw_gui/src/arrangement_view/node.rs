@@ -1,6 +1,5 @@
-use super::plugin::Plugin;
 use crate::{
-	arrangement_view::Message,
+	arrangement_view::{Message, plugin::Plugin},
 	components::icon_button,
 	icons::{arrow_left_right, radius},
 };
@@ -30,7 +29,8 @@ pub struct Node {
 	pub pan: PanMode,
 	pub enabled: bool,
 	pub bypassed: bool,
-	pub peaks: NoDebug<[[peak_meter::State; 2]; 2]>,
+	pub peaks_lin: NoDebug<[peak_meter::State; 2]>,
+	pub peaks_cbrt: NoDebug<[peak_meter::State; 2]>,
 }
 
 impl Node {
@@ -43,18 +43,16 @@ impl Node {
 			pan: PanMode::Balance(0.0),
 			enabled: true,
 			bypassed: false,
-			peaks: NoDebug([
-				[peak_meter::State::new(1.0), peak_meter::State::new(1.0)],
-				[peak_meter::State::new(3.0), peak_meter::State::new(3.0)],
-			]),
+			peaks_lin: NoDebug([peak_meter::State::default(), peak_meter::State::default()]),
+			peaks_cbrt: NoDebug([peak_meter::State::default(), peak_meter::State::default()]),
 		}
 	}
 
 	pub fn update(&mut self, peaks: [f32; 2], now: Instant) {
-		self.peaks[0][0].update(peaks[0], now);
-		self.peaks[0][1].update(peaks[1], now);
-		self.peaks[1][0].update(peaks[0].cbrt(), now);
-		self.peaks[1][1].update(peaks[1].cbrt(), now);
+		self.peaks_lin[0].update(peaks[0], now);
+		self.peaks_lin[1].update(peaks[1], now);
+		self.peaks_cbrt[0].update(peaks[0].cbrt(), now);
+		self.peaks_cbrt[1].update(peaks[1].cbrt(), now);
 	}
 
 	pub fn pan_knob(&self, radius: f32) -> Element<'_, Message> {

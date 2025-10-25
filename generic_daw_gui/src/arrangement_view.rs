@@ -1,7 +1,11 @@
 use crate::{
 	arrangement_view::{
-		audio_clip::AudioClip, clip::Clip, midi_clip::MidiClip, node::NodeType,
-		pattern::PatternPair, sample::SamplePair,
+		audio_clip::AudioClip,
+		clip::Clip,
+		midi_clip::MidiClip,
+		node::{Node, NodeType},
+		pattern::PatternPair,
+		sample::SamplePair,
 	},
 	clap_host::{ClapHost, Message as ClapHostMessage},
 	components::{icon_button, text_icon_button},
@@ -43,7 +47,6 @@ use iced::{
 	},
 };
 use iced_split::{Split, Strategy};
-use node::Node;
 use rtrb::Consumer;
 use smol::{Timer, unblock};
 use std::{
@@ -770,8 +773,8 @@ impl ArrangementView {
 						container(
 							row![
 								row![
-									PeakMeter::new(&node.peaks[0][0], node.enabled),
-									PeakMeter::new(&node.peaks[0][1], node.enabled)
+									PeakMeter::new(&node.peaks_lin[0], node.enabled),
+									PeakMeter::new(&node.peaks_lin[1], node.enabled)
 								]
 								.spacing(2),
 								column![
@@ -1115,7 +1118,7 @@ impl ArrangementView {
 					.center_x(55)
 					.padding(2),
 				row![
-					PeakMeter::new(&node.peaks[1][0], node.enabled).width(16.0),
+					PeakMeter::new(&node.peaks_cbrt[0], node.enabled).width(16.0),
 					vertical_slider(0.0..=1.0, node.volume.abs().cbrt(), |v| {
 						Message::ChannelVolumeChanged(node.id, v.powi(3).copysign(node.volume))
 					})
@@ -1127,7 +1130,7 @@ impl ArrangementView {
 					} else {
 						slider_secondary
 					}),
-					PeakMeter::new(&node.peaks[1][1], node.enabled).width(16.0),
+					PeakMeter::new(&node.peaks_cbrt[1], node.enabled).width(16.0),
 				]
 				.spacing(3),
 				self.selected_channel

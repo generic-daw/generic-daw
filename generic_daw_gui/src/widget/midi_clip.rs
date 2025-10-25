@@ -1,6 +1,6 @@
-use super::{LINE_HEIGHT, Vec2};
-use crate::arrangement_view::MidiClipRef;
+use crate::{arrangement_view::MidiClipRef, widget::LINE_HEIGHT};
 use generic_daw_core::RtState;
+use generic_daw_utils::Vec2;
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{

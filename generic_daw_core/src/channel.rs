@@ -67,6 +67,7 @@ pub struct Channel {
 	pan: PanMode,
 	enabled: bool,
 	bypassed: bool,
+	last_peaks: [f32; 2],
 }
 
 impl NodeImpl for Channel {
@@ -115,8 +116,9 @@ impl NodeImpl for Channel {
 
 		self.pan.pan(audio, self.volume);
 
-		let peaks = max_peaks(audio);
-		if peaks.iter().any(|&peak| peak >= f32::EPSILON) {
+		let peaks = max_peaks(audio).map(|x| if x < f32::EPSILON { 0.0 } else { x });
+		if peaks != self.last_peaks {
+			self.last_peaks = peaks;
 			state
 				.updates
 				.lock()
@@ -185,6 +187,7 @@ impl Default for Channel {
 			pan: PanMode::Balance(0.0),
 			enabled: true,
 			bypassed: false,
+			last_peaks: [0.0; 2],
 		}
 	}
 }

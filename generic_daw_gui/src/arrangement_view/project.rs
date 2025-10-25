@@ -1,10 +1,9 @@
 #![warn(clippy::iter_over_hash_type)]
 
-use super::{ArrangementWrapper, Message, Node, crc};
 use crate::{
 	arrangement_view::{
-		Message as ArrangementMessage, audio_clip::AudioClip, clip::Clip, midi_clip::MidiClip,
-		pattern::PatternPair, sample::SamplePair,
+		ArrangementWrapper, Message as ArrangementMessage, Message, Node, audio_clip::AudioClip,
+		clip::Clip, crc, midi_clip::MidiClip, pattern::PatternPair, sample::SamplePair,
 	},
 	clap_host::ClapHost,
 	config::Config,

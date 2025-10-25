@@ -1,4 +1,4 @@
-use super::{LINE_HEIGHT, get_time};
+use crate::widget::{LINE_HEIGHT, get_time};
 use generic_daw_core::{MusicalTime, NotePosition, RtState};
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{

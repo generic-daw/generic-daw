@@ -1,4 +1,4 @@
-use super::get_time;
+use crate::widget::get_time;
 use generic_daw_core::{MidiKey, MidiNote, MusicalTime, RtState};
 use generic_daw_utils::Vec2;
 use iced::{

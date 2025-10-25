@@ -1,6 +1,9 @@
-use super::{LINE_HEIGHT, Vec2};
-use crate::arrangement_view::{AudioClipRef, Recording as RecordingWrapper};
+use crate::{
+	arrangement_view::{AudioClipRef, Recording as RecordingWrapper},
+	widget::LINE_HEIGHT,
+};
 use generic_daw_core::{ClipPosition, MusicalTime, NotePosition, RtState};
+use generic_daw_utils::Vec2;
 use iced::{
 	Element, Event, Fill, Length, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
