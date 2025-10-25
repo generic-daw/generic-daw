@@ -146,9 +146,8 @@ impl Arrangement {
 	}
 
 	fn send(&mut self, mut message: Message) {
-		while let Err(err) = self.producer.push(message) {
-			let PushError::Full(err) = err;
-			message = err;
+		while let Err(PushError::Full(msg)) = self.producer.push(message) {
+			message = msg;
 			spin_loop();
 		}
 	}

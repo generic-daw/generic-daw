@@ -301,9 +301,8 @@ impl DawCtx {
 
 			*updates = self.update_buffers.pop().unwrap_or_default();
 
-			if let Err(err) = self.producer.push(batch) {
-				warn!("{err}");
-				let PushError::Full(mut batch) = err;
+			if let Err(PushError::Full(mut batch)) = self.producer.push(batch) {
+				warn!("full ring buffer");
 				batch.updates.clear();
 				self.update_buffers.push(batch.updates);
 			}

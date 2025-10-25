@@ -128,7 +128,7 @@ impl ClapHost {
 	fn main_thread_message(
 		&mut self,
 		id: PluginId,
-		msg: MainThreadMessage,
+		message: MainThreadMessage,
 		config: &Config,
 	) -> Task<Message> {
 		macro_rules! plugin {
@@ -142,7 +142,7 @@ impl ClapHost {
 			}};
 		}
 
-		match msg {
+		match message {
 			MainThreadMessage::RequestCallback => {
 				plugin!(MainThreadMessage::RequestCallback).call_on_main_thread_callback();
 			}
@@ -268,7 +268,7 @@ impl ClapHost {
 	}
 
 	#[cfg(unix)]
-	fn fd_message(&mut self, id: PluginId, fd: RawFd, msg: PosixFd) -> Task<MainThreadMessage> {
+	fn fd_message(&mut self, id: PluginId, fd: RawFd, message: PosixFd) -> Task<MainThreadMessage> {
 		macro_rules! plugin {
 			($expr:expr) => {{
 				let Some(plugin) = self.plugins.get_mut(*id) else {
@@ -280,7 +280,7 @@ impl ClapHost {
 			}};
 		}
 
-		match msg {
+		match message {
 			PosixFd::OnFd(flags) => plugin!(PosixFd::OnFd(flags)).on_fd(fd, flags),
 			PosixFd::Register(flags) => {
 				let (_, handle) = Task::<()>::none().abortable();
