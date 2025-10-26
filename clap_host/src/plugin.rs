@@ -113,7 +113,10 @@ impl<Event: EventImpl> Plugin<Event> {
 		}
 	}
 
-	pub fn set_scale(&mut self, scale: f32) {
+	#[must_use]
+	pub fn set_scale(&mut self, scale: f32) -> f32 {
+		self.create();
+
 		let Gui::Embedded { scale_factor, .. } = &mut self.gui else {
 			panic!("called \"set_scale\" on a non-embedded gui")
 		};
@@ -124,15 +127,18 @@ impl<Event: EventImpl> Plugin<Event> {
 				.access_shared_handler(|s| *s.ext.gui.get().unwrap())
 				.set_scale(&mut self.instance.plugin_handle(), scale.into())
 		{
-			// If I unwrap here, vital doesn't load. Why?
 			warn!("{}: {err}", self.descriptor);
 		} else {
 			*scale_factor = scale;
 		}
+
+		*scale_factor
 	}
 
 	#[must_use]
 	pub fn can_resize(&mut self) -> bool {
+		self.create();
+
 		let Gui::Embedded { can_resize, .. } = &mut self.gui else {
 			panic!("called \"can_resize\" on a non-embedded gui")
 		};
@@ -156,11 +162,10 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn activate(&mut self) {
-		if self.instance.access_handler_mut(|mt| {
-			let needs_param_rescan = mt.needs_param_rescan;
-			mt.needs_param_rescan = false;
-			needs_param_rescan
-		}) {
+		if self
+			.instance
+			.access_handler_mut(|mt| std::mem::take(&mut mt.needs_param_rescan))
+		{
 			self.params = Param::all(&mut self.instance).unwrap_or_default();
 		}
 
@@ -266,7 +271,6 @@ impl<Event: EventImpl> Plugin<Event> {
 			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get())
 			&& let Err(err) = ext.show(&mut self.instance.plugin_handle())
 		{
-			// If I unwrap here, nih-plug plugins don't load. Why?
 			warn!("{}: {err}", self.descriptor);
 		}
 
@@ -278,7 +282,6 @@ impl<Event: EventImpl> Plugin<Event> {
 			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get())
 			&& let Err(err) = ext.hide(&mut self.instance.plugin_handle())
 		{
-			// If I unwrap here, nih-plug plugins don't load. Why?
 			warn!("{}: {err}", self.descriptor);
 		}
 
@@ -287,6 +290,8 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	#[must_use]
 	pub fn get_size(&mut self) -> Option<Size> {
+		self.create();
+
 		let Gui::Embedded { scale_factor, .. } = self.gui else {
 			return None;
 		};
@@ -300,15 +305,11 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	#[must_use]
 	pub fn resize(&mut self, size: Size) -> Option<Size> {
-		let Gui::Embedded {
-			can_resize,
-			scale_factor,
-		} = self.gui
-		else {
+		let Gui::Embedded { scale_factor, .. } = self.gui else {
 			return None;
 		};
 
-		if !can_resize.unwrap() {
+		if !self.can_resize() {
 			return None;
 		}
 

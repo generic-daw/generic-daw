@@ -183,9 +183,7 @@ impl ClapHost {
 				} else if plugin.is_floating() {
 					plugin.show();
 				} else {
-					plugin.create();
-
-					plugin.set_scale(
+					let scale_factor = plugin.set_scale(
 						config
 							.plugin_scale_factor
 							.unwrap_or(config.app_scale_factor),
@@ -194,7 +192,7 @@ impl ClapHost {
 					let (window, spawn) = window::open(window::Settings {
 						size: plugin.get_size().map_or_else(
 							|| (400.0, 600.0).into(),
-							|size| size.to_logical(plugin.get_scale().unwrap()).into(),
+							|size| size.to_logical(scale_factor).into(),
 						),
 						resizable: plugin.can_resize(),
 						exit_on_close_request: false,
