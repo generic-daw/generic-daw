@@ -47,14 +47,10 @@ pub struct PianoRoll<'a, Message> {
 	position: &'a Vec2,
 	scale: &'a Vec2,
 	deleted: bool,
-
 	f: fn(Action) -> Message,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message>
-where
-	Message: Clone,
-{
+impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 	fn tag(&self) -> tree::Tag {
 		tree::Tag::of::<State>()
 	}
@@ -104,72 +100,75 @@ where
 			};
 
 			match event {
-				mouse::Event::ButtonPressed { button, modifiers } => match button {
-					mouse::Button::Left => {
-						let time = get_time(
-							cursor.x,
-							*modifiers,
-							self.rtstate,
-							*self.position,
-							*self.scale,
-						);
+				mouse::Event::ButtonPressed { button, modifiers } if *state == State::None => {
+					match button {
+						mouse::Button::Left => {
+							let time = get_time(
+								cursor.x,
+								*modifiers,
+								self.rtstate,
+								*self.position,
+								*self.scale,
+							);
 
-						if let Some(i) = self.get_note(cursor) {
-							let note = &self.notes[i];
-							let note_bounds = self.note_bounds(note);
+							if let Some(i) = self.get_note(cursor) {
+								let note = &self.notes[i];
+								let note_bounds = self.note_bounds(note);
 
-							let start_pixel = note_bounds.x;
-							let end_pixel = note_bounds.x + note_bounds.width;
-							let offset = start_pixel - cursor.x;
+								let start_pixel = note_bounds.x;
+								let end_pixel = note_bounds.x + note_bounds.width;
+								let offset = start_pixel - cursor.x;
 
-							match (modifiers.command(), modifiers.shift()) {
-								(true, false) => {
-									shell.publish((self.f)(Action::Clone(i)));
-									*state = State::DraggingNote(offset, note.key, time);
+								match (modifiers.command(), modifiers.shift()) {
+									(true, false) => {
+										shell.publish((self.f)(Action::Clone(i)));
+										*state = State::DraggingNote(offset, note.key, time);
+									}
+									(false, true) => {
+										shell.publish((self.f)(Action::SplitAt(i, time)));
+										*state = State::DraggingSplit(time);
+									}
+									_ => {
+										shell.publish((self.f)(Action::Grab(i)));
+										let start_offset = cursor.x - start_pixel;
+										let end_offset = end_pixel - cursor.x;
+										let border = 10f32.min((end_pixel - start_pixel) / 3.0);
+										*state = match (start_offset < border, end_offset < border)
+										{
+											(true, false) => State::NoteTrimmingStart(offset, time),
+											(false, true) => State::NoteTrimmingEnd(
+												offset + end_pixel - start_pixel,
+												time,
+											),
+											(false, false) => {
+												State::DraggingNote(offset, note.key, time)
+											}
+											(true, true) => unreachable!(),
+										};
+									}
 								}
-								(false, true) => {
-									shell.publish((self.f)(Action::SplitAt(i, time)));
-									*state = State::DraggingSplit(time);
-								}
-								_ => {
-									shell.publish((self.f)(Action::Grab(i)));
-									let start_offset = cursor.x - start_pixel;
-									let end_offset = end_pixel - cursor.x;
-									let border = 10f32.min((end_pixel - start_pixel) / 3.0);
-									*state = match (start_offset < border, end_offset < border) {
-										(true, false) => State::NoteTrimmingStart(offset, time),
-										(false, true) => State::NoteTrimmingEnd(
-											offset + end_pixel - start_pixel,
-											time,
-										),
-										(false, false) => {
-											State::DraggingNote(offset, note.key, time)
-										}
-										(true, true) => unreachable!(),
-									};
-								}
+							} else {
+								let key = self.get_key(cursor);
+
+								shell.publish((self.f)(Action::Add(key, time)));
+								*state = State::DraggingNote(0.0, key, time);
 							}
-						} else {
-							let key = self.get_key(cursor);
 
-							shell.publish((self.f)(Action::Add(key, time)));
-							*state = State::DraggingNote(0.0, key, time);
-						}
-
-						shell.capture_event();
-					}
-					mouse::Button::Right if !self.deleted => {
-						*state = State::DeletingNotes;
-
-						if let Some(note) = self.get_note(cursor) {
-							self.deleted = true;
-
-							shell.publish((self.f)(Action::Delete(note)));
 							shell.capture_event();
 						}
+						mouse::Button::Right if !self.deleted => {
+							*state = State::DeletingNotes;
+
+							if let Some(note) = self.get_note(cursor) {
+								self.deleted = true;
+
+								shell.publish((self.f)(Action::Delete(note)));
+								shell.capture_event();
+							}
+						}
+						_ => {}
 					}
-					_ => {}
-				},
+				}
 				mouse::Event::ButtonReleased { .. } if *state != State::None => {
 					*state = State::None;
 					shell.capture_event();
@@ -267,16 +266,28 @@ where
 			return;
 		};
 
+		let mut rects = Vec::new();
+
+		renderer.start_layer(Rectangle::INFINITE);
+
 		for note in self.notes {
 			let note_bounds = self.note_bounds(note) + Vector::new(bounds.x, bounds.y);
 			let Some(bounds) = note_bounds.intersection(&bounds) else {
 				continue;
 			};
 
-			renderer.with_layer(bounds, |renderer| {
-				Self::draw_note(note, renderer, theme, note_bounds.position(), bounds);
-			});
+			if rects.iter().any(|b| bounds.intersects(b)) {
+				rects.clear();
+				renderer.end_layer();
+				renderer.start_layer(Rectangle::INFINITE);
+			}
+
+			rects.push(bounds);
+
+			Self::draw_note(note, renderer, theme, bounds);
 		}
+
+		renderer.end_layer();
 	}
 
 	fn mouse_interaction(
@@ -362,13 +373,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		)
 	}
 
-	fn draw_note(
-		note: &MidiNote,
-		renderer: &mut Renderer,
-		theme: &Theme,
-		point: Point,
-		bounds: Rectangle,
-	) {
+	fn draw_note(note: &MidiNote, renderer: &mut Renderer, theme: &Theme, bounds: Rectangle) {
 		renderer.fill_quad(
 			Quad {
 				bounds,
@@ -392,7 +397,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 
 		renderer.fill_text(
 			note_name,
-			point + Vector::new(3.0, 0.0),
+			bounds.position() + Vector::new(3.0, 0.0),
 			theme.extended_palette().primary.weak.text,
 			bounds,
 		);
@@ -401,7 +406,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 
 impl<'a, Message> From<PianoRoll<'a, Message>> for Element<'a, Message>
 where
-	Message: Clone + 'a,
+	Message: 'a,
 {
 	fn from(value: PianoRoll<'a, Message>) -> Self {
 		Self::new(value)

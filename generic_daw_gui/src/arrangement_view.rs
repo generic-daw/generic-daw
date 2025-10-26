@@ -732,10 +732,10 @@ impl ArrangementView {
 			PianoRollAction::Delete(note) => _ = self.arrangement.remove_note(clip.pattern, note),
 		}
 
-		if let Some((note, ..)) = grabbed {
-			self.last_note_len = self.arrangement.patterns()[*clip.pattern].notes[*note]
-				.position
-				.len();
+		if let Some((note, ..)) = grabbed
+			&& let Some(note) = self.arrangement.patterns()[*clip.pattern].notes.get(*note)
+		{
+			self.last_note_len = note.position.len();
 		}
 	}
 
@@ -846,63 +846,56 @@ impl ArrangementView {
 				self.arrangement.rtstate(),
 				&self.arrangement_position,
 				&self.arrangement_scale,
-				column(
-					self.arrangement
-						.tracks()
-						.iter()
-						.map(|track| {
-							let node = self.arrangement.node(track.id);
+				self.arrangement.tracks().iter().map(|track| {
+					let node = self.arrangement.node(track.id);
 
-							TrackWidget::new(
-								&self.arrangement_scale,
-								track
-									.clips
-									.iter()
-									.map(|clip| match clip {
-										Clip::Audio(clip) => AudioClipWidget::new(
-											AudioClipRef {
-												sample: &self.arrangement.samples()[*clip.sample],
-												clip,
-											},
+					TrackWidget::new(
+						&self.arrangement_scale,
+						track
+							.clips
+							.iter()
+							.map(|clip| match clip {
+								Clip::Audio(clip) => AudioClipWidget::new(
+									AudioClipRef {
+										sample: &self.arrangement.samples()[*clip.sample],
+										clip,
+									},
+									self.arrangement.rtstate(),
+									&self.arrangement_position,
+									&self.arrangement_scale,
+									node.enabled,
+								)
+								.into(),
+								Clip::Midi(clip) => MidiClipWidget::new(
+									MidiClipRef {
+										pattern: &self.arrangement.patterns()[*clip.pattern],
+										clip,
+									},
+									self.arrangement.rtstate(),
+									&self.arrangement_position,
+									&self.arrangement_scale,
+									node.enabled,
+									Message::OpenMidiClip(*clip),
+								)
+								.into(),
+							})
+							.chain(
+								self.recording
+									.as_ref()
+									.filter(|&&(_, i)| i == track.id)
+									.map(|(recording, _)| {
+										AudioClipWidget::new(
+											recording,
 											self.arrangement.rtstate(),
 											&self.arrangement_position,
 											&self.arrangement_scale,
 											node.enabled,
 										)
-										.into(),
-										Clip::Midi(clip) => MidiClipWidget::new(
-											MidiClipRef {
-												pattern: &self.arrangement.patterns()
-													[*clip.pattern],
-												clip,
-											},
-											self.arrangement.rtstate(),
-											&self.arrangement_position,
-											&self.arrangement_scale,
-											node.enabled,
-											Message::OpenMidiClip(*clip),
-										)
-										.into(),
-									})
-									.chain(
-										self.recording
-											.as_ref()
-											.filter(|&&(_, i)| i == track.id)
-											.map(|(recording, _)| {
-												AudioClipWidget::new(
-													recording,
-													self.arrangement.rtstate(),
-													&self.arrangement_position,
-													&self.arrangement_scale,
-													node.enabled,
-												)
-												.into()
-											}),
-									),
-							)
-						})
-						.map(Element::new),
-				),
+										.into()
+									}),
+							),
+					)
+				}),
 				Message::ArrangementAction,
 			),
 			Message::SeekTo,

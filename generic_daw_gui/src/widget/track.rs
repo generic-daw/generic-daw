@@ -2,7 +2,7 @@ use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
 	Element, Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
-		Clipboard, Layout, Renderer as _, Shell, Widget,
+		Clipboard, Layout, Shell, Widget,
 		layout::{Limits, Node},
 		overlay,
 		renderer::Style,
@@ -10,6 +10,7 @@ use iced::{
 	},
 	mouse::{Cursor, Interaction},
 };
+use std::borrow::{Borrow, BorrowMut};
 
 #[derive(Debug)]
 pub struct Track<'a, Message> {
@@ -68,41 +69,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 
 	fn draw(
 		&self,
-		tree: &Tree,
-		renderer: &mut Renderer,
-		theme: &Theme,
-		style: &Style,
-		layout: Layout<'_>,
-		cursor: Cursor,
-		viewport: &Rectangle,
+		_tree: &Tree,
+		_renderer: &mut Renderer,
+		_theme: &Theme,
+		_style: &Style,
+		_layout: Layout<'_>,
+		_cursor: Cursor,
+		_viewport: &Rectangle,
 	) {
-		let mut rects = Vec::new();
-
-		renderer.start_layer(Rectangle::INFINITE);
-
-		self.children
-			.iter()
-			.zip(&tree.children)
-			.zip(layout.children())
-			.for_each(|((child, tree), layout)| {
-				let Some(bounds) = layout.bounds().intersection(viewport) else {
-					return;
-				};
-
-				if rects.iter().any(|b| bounds.intersects(b)) {
-					rects.clear();
-					renderer.end_layer();
-					renderer.start_layer(Rectangle::INFINITE);
-				}
-
-				rects.push(bounds);
-
-				child
-					.as_widget()
-					.draw(tree, renderer, theme, style, layout, cursor, viewport);
-			});
-
-		renderer.end_layer();
+		panic!()
 	}
 
 	fn update(
@@ -177,13 +152,71 @@ where
 			children: children.into_iter().collect::<Box<_>>().into(),
 		}
 	}
+
+	pub(super) fn fill_layer(
+		&self,
+		start: usize,
+		rects: &mut Vec<Rectangle>,
+		tree: &Tree,
+		renderer: &mut Renderer,
+		theme: &Theme,
+		style: &Style,
+		layout: Layout<'_>,
+		cursor: Cursor,
+		viewport: &Rectangle,
+	) -> Option<usize> {
+		rects.clear();
+
+		for (i, ((child, tree), layout)) in self
+			.children
+			.iter()
+			.zip(&tree.children)
+			.zip(layout.children())
+			.enumerate()
+			.skip(start)
+		{
+			let Some(bounds) = layout.bounds().intersection(viewport) else {
+				continue;
+			};
+
+			if rects.iter().any(|b| bounds.intersects(b)) {
+				return Some(i);
+			}
+
+			rects.push(bounds);
+
+			child
+				.as_widget()
+				.draw(tree, renderer, theme, style, layout, cursor, viewport);
+		}
+
+		None
+	}
 }
 
-impl<'a, Message> From<Track<'a, Message>> for Element<'a, Message>
+impl<'a, Message> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Track<'a, Message>
 where
 	Message: 'a,
 {
-	fn from(value: Track<'a, Message>) -> Self {
-		Element::new(value)
+	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
+		self
+	}
+}
+
+impl<'a, Message> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for &Track<'a, Message>
+where
+	Message: 'a,
+{
+	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
+		*self
+	}
+}
+
+impl<'a, Message> BorrowMut<dyn Widget<Message, Theme, Renderer> + 'a> for Track<'a, Message>
+where
+	Message: 'a,
+{
+	fn borrow_mut(&mut self) -> &mut (dyn Widget<Message, Theme, Renderer> + 'a) {
+		self
 	}
 }
