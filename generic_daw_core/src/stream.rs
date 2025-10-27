@@ -171,7 +171,7 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 								device.name().is_ok_and(|name| *name == *device_name)
 							})
 						})
-						.unwrap_or_else(|| host.default_input_device().unwrap());
+						.unwrap_or_else(|| host.default_output_device().unwrap());
 
 					let config = choose_config(
 						device.supported_output_configs().unwrap(),

@@ -89,7 +89,7 @@ pub fn get_installed_plugins(
 pub fn default_clap_paths() -> Vec<Arc<Path>> {
 	let mut paths = Vec::new();
 
-	#[cfg(unix)]
+	#[cfg(target_os = "linux")]
 	{
 		if let Some(path) = std::env::var_os("HOME").map(PathBuf::from) {
 			paths.push(path.join(".clap").into());
