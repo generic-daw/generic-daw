@@ -49,7 +49,7 @@ pub struct Arrangement<'a, Message> {
 
 impl<'a, Message> Widget<Message, Theme, Renderer> for Arrangement<'a, Message>
 where
-	Message: 'a,
+	Message: Clone + 'a,
 {
 	fn tag(&self) -> tree::Tag {
 		tree::Tag::of::<State>()
@@ -421,7 +421,7 @@ where
 
 impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message>
 where
-	Message: 'a,
+	Message: Clone + 'a,
 {
 	fn from(value: Arrangement<'a, Message>) -> Self {
 		Self::new(value)

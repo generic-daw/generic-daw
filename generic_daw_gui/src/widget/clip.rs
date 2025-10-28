@@ -1,31 +1,36 @@
 use crate::{
-	arrangement_view::{AudioClipRef, Recording as RecordingWrapper},
+	arrangement_view::{AudioClipRef, MidiClipRef, Recording as RecordingWrapper},
 	widget::LINE_HEIGHT,
 };
 use generic_daw_core::{ClipPosition, MusicalTime, NotePosition, RtState};
 use generic_daw_utils::Vec2;
 use iced::{
-	Element, Event, Fill, Length, Rectangle, Renderer, Shrink, Size, Theme, Vector,
+	Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
 		Clipboard, Layout, Renderer as _, Shell, Text, Widget,
 		graphics::{Mesh, mesh::Renderer as _},
 		layout::{Limits, Node},
+		mouse::{Click, click::Kind},
 		renderer::{Quad, Style},
 		text::Renderer as _,
 		widget::{Tree, tree},
 	},
 	alignment::Vertical,
 	border, debug,
-	mouse::{Cursor, Interaction},
+	mouse::{self, Cursor, Interaction},
 	padding,
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 	window,
 };
-use std::cell::RefCell;
+use std::{
+	borrow::{Borrow, BorrowMut},
+	cell::RefCell,
+};
 
 #[derive(Default)]
 struct State {
 	cache: RefCell<Option<Mesh>>,
+	last_click: Option<Click>,
 	last_bounds: Rectangle,
 	last_scale: Vec2,
 	last_addr: usize,
@@ -33,13 +38,20 @@ struct State {
 
 #[derive(Clone, Debug)]
 pub enum Inner<'a> {
-	Sample(AudioClipRef<'a>),
+	AudioClip(AudioClipRef<'a>),
+	MidiClip(MidiClipRef<'a>),
 	Recording(&'a RecordingWrapper),
 }
 
 impl<'a> From<AudioClipRef<'a>> for Inner<'a> {
 	fn from(value: AudioClipRef<'a>) -> Self {
-		Self::Sample(value)
+		Self::AudioClip(value)
+	}
+}
+
+impl<'a> From<MidiClipRef<'a>> for Inner<'a> {
+	fn from(value: MidiClipRef<'a>) -> Self {
+		Self::MidiClip(value)
 	}
 }
 
@@ -50,15 +62,19 @@ impl<'a> From<&'a RecordingWrapper> for Inner<'a> {
 }
 
 #[derive(Clone, Debug)]
-pub struct AudioClip<'a> {
+pub struct Clip<'a, Message> {
 	inner: Inner<'a>,
 	rtstate: &'a RtState,
 	position: &'a Vec2,
 	scale: &'a Vec2,
 	enabled: bool,
+	on_double_click: Option<Message>,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
+impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message>
+where
+	Message: Clone,
+{
 	fn tag(&self) -> tree::Tag {
 		tree::Tag::of::<State>()
 	}
@@ -75,7 +91,8 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		let state = tree.state.downcast_mut::<State>();
 
 		let addr = match self.inner {
-			Inner::Sample(inner) => std::ptr::from_ref(inner.sample).addr(),
+			Inner::AudioClip(inner) => std::ptr::from_ref(inner.sample).addr(),
+			Inner::MidiClip(inner) => std::ptr::from_ref(inner.pattern).addr(),
 			Inner::Recording(inner) => std::ptr::from_ref(inner).addr(),
 		};
 
@@ -92,7 +109,12 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
 		let (start, len) = match self.inner {
-			Inner::Sample(inner) => {
+			Inner::AudioClip(inner) => {
+				let start = inner.clip.position.start().to_samples_f(self.rtstate);
+				let end = inner.clip.position.end().to_samples_f(self.rtstate);
+				(start, end - start)
+			}
+			Inner::MidiClip(inner) => {
 				let start = inner.clip.position.start().to_samples_f(self.rtstate);
 				let end = inner.clip.position.end().to_samples_f(self.rtstate);
 				(start, end - start)
@@ -114,10 +136,10 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		tree: &mut Tree,
 		event: &Event,
 		layout: Layout<'_>,
-		_cursor: Cursor,
+		cursor: Cursor,
 		_renderer: &Renderer,
 		_clipboard: &mut dyn Clipboard,
-		_shell: &mut Shell<'_, Message>,
+		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
 		if let Event::Window(window::Event::RedrawRequested(..)) = event
@@ -130,6 +152,27 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 			if state.last_bounds != bounds {
 				*state.cache.get_mut() = None;
 				state.last_bounds = bounds;
+			}
+		}
+
+		if shell.is_event_captured() {
+			return;
+		}
+
+		if let Event::Mouse(mouse::Event::ButtonPressed {
+			button: mouse::Button::Left,
+			..
+		}) = event && let Some(cursor) = cursor.position_in(layout.bounds())
+			&& let Some(on_double_click) = &self.on_double_click
+		{
+			let state = tree.state.downcast_mut::<State>();
+
+			let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
+			state.last_click = Some(new_click);
+
+			if new_click.kind() == Kind::Double {
+				shell.publish(on_double_click.clone());
+				shell.capture_event();
 			}
 		}
 	}
@@ -152,7 +195,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		upper_bounds.height = upper_bounds.height.min(LINE_HEIGHT);
 
 		let color = match self.inner {
-			Inner::Sample(..) => {
+			Inner::AudioClip(..) | Inner::MidiClip(..) => {
 				if self.enabled {
 					theme.extended_palette().primary.weak.color
 				} else {
@@ -169,8 +212,9 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		renderer.fill_quad(text_background, color);
 
 		let name = match self.inner {
-			Inner::Sample(inner) => inner.sample.name.as_ref(),
-			Inner::Recording(inner) => inner.name.as_ref(),
+			Inner::AudioClip(inner) => &inner.sample.name,
+			Inner::MidiClip(..) => "MIDI Clip",
+			Inner::Recording(inner) => &inner.name,
 		};
 
 		let text = Text {
@@ -204,24 +248,90 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		};
 		renderer.fill_quad(clip_background, color.scale_alpha(0.2));
 
-		let state = tree.state.downcast_ref::<State>();
+		let cache = &mut *tree.state.downcast_ref::<State>().cache.borrow_mut();
 
-		let mesh = || match self.inner {
-			Inner::Sample(inner) => inner.sample.lods.mesh(
-				&inner.sample.samples,
-				self.rtstate,
-				inner.clip.position,
-				self.position.x,
-				self.scale.x,
-				theme,
-				lower_bounds.size(),
-				layout.bounds().height - LINE_HEIGHT,
-				layout.position().y - bounds.y,
-			),
-			Inner::Recording(inner) => inner.lods.mesh(
-				inner.core.samples(),
-				self.rtstate,
-				ClipPosition::new(
+		let unclipped_height = layout.bounds().height - LINE_HEIGHT;
+		let hidden_top_px = layout.position().y - bounds.y;
+
+		match self.inner {
+			Inner::AudioClip(inner) => 'blk: {
+				if cache.is_some() {
+					break 'blk;
+				}
+
+				*cache = debug::time_with("Waveform Mesh", || {
+					inner.sample.lods.mesh(
+						&inner.sample.samples,
+						self.rtstate,
+						inner.clip.position,
+						self.position.x,
+						self.scale.x,
+						theme,
+						lower_bounds.size(),
+						unclipped_height,
+						hidden_top_px,
+					)
+				});
+			}
+			Inner::MidiClip(inner) => 'blk: {
+				debug_assert!(cache.is_none());
+
+				let (min, max) = inner
+					.pattern
+					.notes
+					.iter()
+					.fold((255, 0), |(min, max), note| {
+						(note.key.0.min(min), note.key.0.max(max))
+					});
+
+				if min > max {
+					break 'blk;
+				}
+
+				let samples_per_px = self.scale.x.exp2();
+				let note_height = unclipped_height / f32::from(max - min + 3);
+				let offset = Vector::new(layout.position().x, layout.position().y + LINE_HEIGHT);
+
+				for note in &inner.pattern.notes {
+					let start_pixel = (note
+						.position
+						.start()
+						.saturating_sub(inner.clip.position.offset())
+						.to_samples_f(self.rtstate))
+						/ samples_per_px;
+					let end_pixel = (note
+						.position
+						.end()
+						.saturating_sub(inner.clip.position.offset())
+						.to_samples_f(self.rtstate))
+						/ samples_per_px;
+
+					let top_pixel = f32::from(max - note.key.0 + 1) * note_height;
+
+					let note_bounds = Rectangle::new(
+						Point::new(start_pixel, top_pixel) + offset,
+						Size::new(end_pixel - start_pixel, note_height),
+					);
+
+					let Some(bounds) = note_bounds.intersection(&lower_bounds) else {
+						continue;
+					};
+
+					renderer.fill_quad(
+						Quad {
+							bounds,
+							..Quad::default()
+						},
+						theme.extended_palette().background.strong.text,
+					);
+				}
+			}
+			Inner::Recording(inner) => 'blk: {
+				if cache.is_some() {
+					break 'blk;
+				}
+
+				let clip_position = ClipPosition::new(
 					NotePosition::new(
 						inner.position,
 						inner.position
@@ -229,25 +339,27 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 								.max(MusicalTime::TICK),
 					),
 					MusicalTime::ZERO,
-				),
-				self.position.x,
-				self.scale.x,
-				theme,
-				lower_bounds.size(),
-				layout.bounds().height - LINE_HEIGHT,
-				layout.position().y - bounds.y,
-			),
-		};
+				);
 
-		if state.cache.borrow().is_none()
-			&& let Some(mesh) = debug::time_with("Waveform Mesh", mesh)
-		{
-			state.cache.borrow_mut().replace(mesh);
+				*cache = debug::time_with("Waveform Mesh", || {
+					inner.lods.mesh(
+						inner.core.samples(),
+						self.rtstate,
+						clip_position,
+						self.position.x,
+						self.scale.x,
+						theme,
+						lower_bounds.size(),
+						unclipped_height,
+						hidden_top_px,
+					)
+				});
+			}
 		}
 
-		if let Some(mesh) = state.cache.borrow().clone() {
+		if let Some(mesh) = cache {
 			renderer.with_translation(Vector::new(lower_bounds.x, lower_bounds.y), |renderer| {
-				renderer.draw_mesh(mesh);
+				renderer.draw_mesh(mesh.clone());
 			});
 		}
 	}
@@ -269,7 +381,7 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 		};
 
 		match self.inner {
-			Inner::Sample(..) => {
+			Inner::AudioClip(..) | Inner::MidiClip(..) => {
 				let border = 10f32.min(layout.bounds().width / 3.0);
 				match (cursor.x < border, layout.bounds().width - cursor.x < border) {
 					(false, false) => Interaction::Grab,
@@ -282,13 +394,14 @@ impl<Message> Widget<Message, Theme, Renderer> for AudioClip<'_> {
 	}
 }
 
-impl<'a> AudioClip<'a> {
+impl<'a, Message> Clip<'a, Message> {
 	pub fn new(
 		inner: impl Into<Inner<'a>>,
 		rtstate: &'a RtState,
 		position: &'a Vec2,
 		scale: &'a Vec2,
 		enabled: bool,
+		on_double_click: Option<Message>,
 	) -> Self {
 		Self {
 			inner: inner.into(),
@@ -296,15 +409,34 @@ impl<'a> AudioClip<'a> {
 			position,
 			scale,
 			enabled,
+			on_double_click,
 		}
 	}
 }
 
-impl<'a, Message> From<AudioClip<'a>> for Element<'a, Message>
+impl<'a, Message> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Clip<'a, Message>
 where
-	Message: 'a,
+	Message: Clone + 'a,
 {
-	fn from(value: AudioClip<'a>) -> Self {
-		Self::new(value)
+	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
+		self
+	}
+}
+
+impl<'a, Message> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for &Clip<'a, Message>
+where
+	Message: Clone + 'a,
+{
+	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
+		*self
+	}
+}
+
+impl<'a, Message> BorrowMut<dyn Widget<Message, Theme, Renderer> + 'a> for Clip<'a, Message>
+where
+	Message: Clone + 'a,
+{
+	fn borrow_mut(&mut self) -> &mut (dyn Widget<Message, Theme, Renderer> + 'a) {
+		self
 	}
 }

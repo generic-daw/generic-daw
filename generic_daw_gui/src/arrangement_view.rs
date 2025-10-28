@@ -19,8 +19,7 @@ use crate::{
 	widget::{
 		LINE_HEIGHT, TEXT_HEIGHT,
 		arrangement::{Action as ArrangementAction, Arrangement as ArrangementWidget},
-		audio_clip::AudioClip as AudioClipWidget,
-		midi_clip::MidiClip as MidiClipWidget,
+		clip::Clip as ClipWidget,
 		piano::Piano,
 		piano_roll::{Action as PianoRollAction, PianoRoll},
 		seeker::Seeker,
@@ -855,7 +854,7 @@ impl ArrangementView {
 							.clips
 							.iter()
 							.map(|clip| match clip {
-								Clip::Audio(clip) => AudioClipWidget::new(
+								Clip::Audio(clip) => ClipWidget::new(
 									AudioClipRef {
 										sample: &self.arrangement.samples()[*clip.sample],
 										clip,
@@ -864,9 +863,9 @@ impl ArrangementView {
 									&self.arrangement_position,
 									&self.arrangement_scale,
 									node.enabled,
-								)
-								.into(),
-								Clip::Midi(clip) => MidiClipWidget::new(
+									None,
+								),
+								Clip::Midi(clip) => ClipWidget::new(
 									MidiClipRef {
 										pattern: &self.arrangement.patterns()[*clip.pattern],
 										clip,
@@ -875,23 +874,22 @@ impl ArrangementView {
 									&self.arrangement_position,
 									&self.arrangement_scale,
 									node.enabled,
-									Message::OpenMidiClip(*clip),
-								)
-								.into(),
+									Some(Message::OpenMidiClip(*clip)),
+								),
 							})
 							.chain(
 								self.recording
 									.as_ref()
 									.filter(|&&(_, i)| i == track.id)
 									.map(|(recording, _)| {
-										AudioClipWidget::new(
+										ClipWidget::new(
 											recording,
 											self.arrangement.rtstate(),
 											&self.arrangement_position,
 											&self.arrangement_scale,
 											node.enabled,
+											None,
 										)
-										.into()
 									}),
 							),
 					)

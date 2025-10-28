@@ -1,6 +1,7 @@
+use crate::widget::clip::Clip;
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
-	Element, Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
+	Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
 		Clipboard, Layout, Shell, Widget,
 		layout::{Limits, Node},
@@ -15,10 +16,13 @@ use std::borrow::{Borrow, BorrowMut};
 #[derive(Debug)]
 pub struct Track<'a, Message> {
 	scale: &'a Vec2,
-	children: NoDebug<Box<[Element<'a, Message>]>>,
+	children: NoDebug<Box<[Clip<'a, Message>]>>,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
+impl<'a, Message> Widget<Message, Theme, Renderer> for Track<'a, Message>
+where
+	Message: Clone + 'a,
+{
 	fn diff(&self, tree: &mut Tree) {
 		tree.diff_children(&self.children);
 	}
@@ -37,11 +41,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 			self.children
 				.iter_mut()
 				.zip(&mut tree.children)
-				.map(|(widget, tree)| {
-					widget
-						.as_widget_mut()
-						.layout(tree, renderer, &limits.height(self.scale.y))
-				})
+				.map(|(widget, tree)| widget.layout(tree, renderer, &limits.height(self.scale.y)))
 				.collect(),
 		)
 	}
@@ -59,9 +59,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 			.zip(&tree.children)
 			.zip(layout.children())
 			.map(|((child, tree), clip_layout)| {
-				child
-					.as_widget()
-					.mouse_interaction(tree, clip_layout, cursor, viewport, renderer)
+				child.mouse_interaction(tree, clip_layout, cursor, viewport, renderer)
 			})
 			.rfind(|&i| i != Interaction::default())
 			.unwrap_or_default()
@@ -96,20 +94,20 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 			.zip(&mut tree.children)
 			.zip(layout.children())
 			.for_each(|((child, state), layout)| {
-				child.as_widget_mut().update(
+				child.update(
 					state, event, layout, cursor, renderer, clipboard, shell, viewport,
 				);
 			});
 	}
 
-	fn overlay<'a>(
-		&'a mut self,
-		tree: &'a mut Tree,
-		layout: Layout<'a>,
+	fn overlay<'b>(
+		&'b mut self,
+		tree: &'b mut Tree,
+		layout: Layout<'b>,
 		renderer: &Renderer,
 		viewport: &Rectangle,
 		translation: Vector,
-	) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
+	) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
 		overlay::from_children(
 			&mut self.children,
 			tree,
@@ -134,19 +132,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 				.zip(&mut tree.children)
 				.zip(layout.children())
 				.for_each(|((child, state), layout)| {
-					child
-						.as_widget_mut()
-						.operate(state, layout, renderer, operation);
+					child.operate(state, layout, renderer, operation);
 				});
 		});
 	}
 }
 
-impl<'a, Message> Track<'a, Message>
-where
-	Message: 'a,
-{
-	pub fn new(scale: &'a Vec2, children: impl IntoIterator<Item = Element<'a, Message>>) -> Self {
+impl<'a, Message> Track<'a, Message> {
+	pub fn new(scale: &'a Vec2, children: impl IntoIterator<Item = Clip<'a, Message>>) -> Self
+	where
+		Message: 'a,
+	{
 		Self {
 			scale,
 			children: children.into_iter().collect::<Box<_>>().into(),
@@ -164,7 +160,10 @@ where
 		layout: Layout<'_>,
 		cursor: Cursor,
 		viewport: &Rectangle,
-	) -> Option<usize> {
+	) -> Option<usize>
+	where
+		Message: Clone,
+	{
 		rects.clear();
 
 		for (i, ((child, tree), layout)) in self
@@ -185,9 +184,7 @@ where
 
 			rects.push(bounds);
 
-			child
-				.as_widget()
-				.draw(tree, renderer, theme, style, layout, cursor, viewport);
+			child.draw(tree, renderer, theme, style, layout, cursor, viewport);
 		}
 
 		None
@@ -196,7 +193,7 @@ where
 
 impl<'a, Message> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Track<'a, Message>
 where
-	Message: 'a,
+	Message: Clone + 'a,
 {
 	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
 		self
@@ -205,7 +202,7 @@ where
 
 impl<'a, Message> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for &Track<'a, Message>
 where
-	Message: 'a,
+	Message: Clone + 'a,
 {
 	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
 		*self
@@ -214,7 +211,7 @@ where
 
 impl<'a, Message> BorrowMut<dyn Widget<Message, Theme, Renderer> + 'a> for Track<'a, Message>
 where
-	Message: 'a,
+	Message: Clone + 'a,
 {
 	fn borrow_mut(&mut self) -> &mut (dyn Widget<Message, Theme, Renderer> + 'a) {
 		self

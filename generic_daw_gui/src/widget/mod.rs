@@ -3,8 +3,7 @@ use generic_daw_utils::Vec2;
 use iced::keyboard::Modifiers;
 
 pub mod arrangement;
-pub mod audio_clip;
-pub mod midi_clip;
+pub mod clip;
 pub mod piano;
 pub mod piano_roll;
 pub mod seeker;
