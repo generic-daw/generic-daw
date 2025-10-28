@@ -235,17 +235,18 @@ impl ArrangementView {
 				}
 			}
 			Message::ConnectRequest(from, to) => {
-				return Task::future(self.arrangement.request_connect(from, to))
+				return Task::perform(self.arrangement.request_connect(from, to), Result::ok)
 					.and_then(Task::done)
 					.map(Message::ConnectSucceeded);
 			}
 			Message::ConnectSucceeded((from, to)) => self.arrangement.connect_succeeded(from, to),
 			Message::Disconnect(from, to) => self.arrangement.disconnect(from, to),
 			Message::ChannelAdd => {
-				let node = self.arrangement.add_channel();
-				return Task::future(
+				let id = self.arrangement.add_channel();
+				return Task::perform(
 					self.arrangement
-						.request_connect(node, self.arrangement.master().id),
+						.request_connect(id, self.arrangement.master().id),
+					Result::ok,
 				)
 				.and_then(Task::done)
 				.map(Message::ConnectSucceeded);
@@ -393,14 +394,15 @@ impl ArrangementView {
 			}
 			Message::TrackAdd => {
 				let track = self.arrangement.add_track();
+				let id = self.arrangement.tracks()[track].id;
 				if self.soloed_track.is_some() {
-					self.arrangement
-						.channel_toggle_enabled(self.arrangement.tracks()[track].id);
+					self.arrangement.channel_toggle_enabled(id);
 				}
-				return Task::future(self.arrangement.request_connect(
-					self.arrangement.tracks()[track].id,
-					self.arrangement.master().id,
-				))
+				return Task::perform(
+					self.arrangement
+						.request_connect(id, self.arrangement.master().id),
+					Result::ok,
+				)
 				.and_then(Task::done)
 				.map(Message::ConnectSucceeded);
 			}

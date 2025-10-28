@@ -167,9 +167,11 @@ impl ArrangementWrapper {
 					.unwrap();
 			}))
 			.discard(),
-			Task::stream(progress_receiver).chain(Task::future(partial_receiver).and_then(
-				|tasks| tasks.unwrap_or_else(|| Task::done(DawMessage::OpenedFile(None))),
-			)),
+			Task::stream(progress_receiver).chain(
+				Task::perform(partial_receiver, Result::ok).and_then(|tasks| {
+					tasks.unwrap_or_else(|| Task::done(DawMessage::OpenedFile(None)))
+				}),
+			),
 		])
 	}
 
