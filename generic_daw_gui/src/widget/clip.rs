@@ -126,9 +126,9 @@ where
 			}
 		};
 
-		let pixel_size = self.scale.x.exp2();
-		Node::new(Size::new(len / pixel_size, limits.max().height))
-			.translate(Vector::new((start - self.position.x) / pixel_size, 0.0))
+		let samples_per_px = self.scale.x.exp2();
+		Node::new(Size::new(len / samples_per_px, limits.max().height))
+			.translate(Vector::new((start - self.position.x) / samples_per_px, 0.0))
 	}
 
 	fn update(

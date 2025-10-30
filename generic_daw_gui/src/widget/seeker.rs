@@ -14,12 +14,10 @@ use iced::{
 	},
 	alignment::Vertical,
 	border,
-	gradient::Linear,
 	mouse::{self, Cursor, Interaction, ScrollDelta},
 	padding,
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
-use std::f32::consts::FRAC_PI_2;
 
 #[derive(Default)]
 struct State {
@@ -421,21 +419,22 @@ impl<'a, Message> Seeker<'a, Message> {
 	}
 
 	fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-		let sample_size = self.scale.x.exp2();
+		let samples_per_px = self.scale.x.exp2();
 
 		let mut beat = MusicalTime::from_samples_f(self.position.x, self.rtstate);
-		let end_beat = beat + MusicalTime::from_samples_f(bounds.width * sample_size, self.rtstate);
+		let end_beat =
+			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.rtstate);
 		beat = beat.snap_floor(self.scale.x + 1.0, self.rtstate);
 
 		let background_step = MusicalTime::new(4 * u64::from(self.rtstate.numerator), 0);
 		let mut background_beat =
 			MusicalTime::new(beat.beat() - (beat.beat() % background_step.beat()), 0);
-		let background_width = background_step.to_samples_f(self.rtstate) / sample_size;
+		let background_width = background_step.to_samples_f(self.rtstate) / samples_per_px;
 
 		while background_beat < end_beat {
 			if background_beat.bar(self.rtstate).is_multiple_of(8) {
 				let x =
-					(background_beat.to_samples_f(self.rtstate) - self.position.x) / sample_size;
+					(background_beat.to_samples_f(self.rtstate) - self.position.x) / samples_per_px;
 
 				renderer.fill_quad(
 					Quad {
@@ -470,7 +469,7 @@ impl<'a, Message> Seeker<'a, Message> {
 				theme.extended_palette().background.weak.color
 			};
 
-			let x = (beat.to_samples_f(self.rtstate) - self.position.x) / sample_size;
+			let x = (beat.to_samples_f(self.rtstate) - self.position.x) / samples_per_px;
 
 			renderer.fill_quad(
 				Quad {
@@ -527,41 +526,61 @@ impl<'a, Message> Seeker<'a, Message> {
 			},
 		);
 
-		let sample_size = self.scale.x.exp2();
+		let samples_per_px = self.scale.x.exp2();
 
 		let offset_pos = |time: f32| {
 			bounds.position()
-				+ Vector::new((time - self.position.x) / sample_size - self.offset, 0.0)
+				+ Vector::new((time - self.position.x) / samples_per_px - self.offset, 0.0)
 		};
 		let offset_time = |time: MusicalTime| offset_pos(time.to_samples_f(self.rtstate));
 
 		if let Some(loop_marker) = self.rtstate.loop_marker {
-			const GRADIENT_SIZE: f32 = 10.0;
-
 			let start = offset_time(loop_marker.start());
 			let end = offset_time(loop_marker.end());
 
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(
-						start - Vector::new(GRADIENT_SIZE, 0.0),
-						Size::new(GRADIENT_SIZE, 10000.0),
-					),
+					bounds: Rectangle::new(start - Vector::new(1.5, 0.0), Size::new(1.5, 10000.0)),
 					..Quad::default()
 				},
-				Linear::new(FRAC_PI_2)
-					.add_stop(0.0, Color::TRANSPARENT)
-					.add_stop(1.0, theme.extended_palette().secondary.base.color),
+				theme.extended_palette().secondary.base.color,
 			);
 
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(end, Size::new(GRADIENT_SIZE, 10000.0)),
+					bounds: Rectangle::new(
+						start - Vector::new(10000.0, 0.0),
+						Size::new(10000.0, 10000.0),
+					),
 					..Quad::default()
 				},
-				Linear::new(FRAC_PI_2)
-					.add_stop(0.0, theme.extended_palette().secondary.base.color)
-					.add_stop(1.0, Color::TRANSPARENT),
+				theme
+					.extended_palette()
+					.secondary
+					.base
+					.color
+					.scale_alpha(0.2),
+			);
+
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(end, Size::new(1.5, 10000.0)),
+					..Quad::default()
+				},
+				theme.extended_palette().secondary.base.color,
+			);
+
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(end, Size::new(10000.0, 10000.0)),
+					..Quad::default()
+				},
+				theme
+					.extended_palette()
+					.secondary
+					.base
+					.color
+					.scale_alpha(0.2),
 			);
 
 			renderer.fill_quad(
@@ -607,7 +626,7 @@ impl<'a, Message> Seeker<'a, Message> {
 
 		let mut beat = MusicalTime::from_samples_f(self.position.x, self.rtstate);
 		let mut end_beat =
-			beat + MusicalTime::from_samples_f(bounds.width * sample_size, self.rtstate);
+			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.rtstate);
 		beat = beat.snap_floor(self.scale.x + 2.0, self.rtstate).floor();
 		end_beat = end_beat.snap_floor(self.scale.x + 2.0, self.rtstate);
 
