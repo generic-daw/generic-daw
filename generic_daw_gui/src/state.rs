@@ -1,20 +1,18 @@
-use log::{info, warn};
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::{
 	fs::{read_to_string, write},
 	io,
-	path::{Path, PathBuf},
+	path::Path,
 	sync::{Arc, LazyLock},
 };
 
-pub static STATE_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+pub static STATE_PATH: LazyLock<Arc<Path>> = LazyLock::new(|| {
 	dirs::state_dir()
 		.or_else(dirs::data_dir)
-		.or_else(|| {
-			warn!("can't find the system's state/data dir!");
-			None
-		})
-		.map(|path| path.join("generic_daw.toml"))
+		.unwrap()
+		.join("generic_daw.toml")
+		.into()
 });
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -27,11 +25,7 @@ pub struct State {
 
 impl State {
 	pub fn read() -> Self {
-		let Some(state_path) = &*STATE_PATH else {
-			return Self::default();
-		};
-
-		let config = read_to_string(state_path);
+		let config = read_to_string(&*STATE_PATH);
 
 		let read =
 			toml::from_str::<Self>(config.as_deref().unwrap_or_default()).unwrap_or_default();
@@ -46,10 +40,6 @@ impl State {
 	}
 
 	pub fn write(&self) {
-		let Some(state_path) = &*STATE_PATH else {
-			return;
-		};
-
-		write(state_path, toml::to_string(self).unwrap()).unwrap();
+		write(&*STATE_PATH, toml::to_string(self).unwrap()).unwrap();
 	}
 }

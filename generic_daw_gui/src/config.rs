@@ -1,23 +1,20 @@
-use crate::theme::Theme;
-use generic_daw_core::clap_host::default_clap_paths;
-use log::{info, warn};
+use crate::{arrangement_view::DATA_PATH, theme::Theme};
+use generic_daw_core::clap_host::DEFAULT_CLAP_PATHS;
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::{
 	fs::{read_to_string, write},
 	io,
 	num::NonZero,
-	path::{Path, PathBuf},
+	path::Path,
 	sync::{Arc, LazyLock},
 };
 
-pub static CONFIG_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
-	dirs::config_dir()
-		.or_else(|| {
-			warn!("can't find the system's config dir!");
-			None
-		})
-		.map(|path| path.join("generic_daw.toml"))
-});
+pub static CONFIG_PATH: LazyLock<Arc<Path>> =
+	LazyLock::new(|| dirs::config_dir().unwrap().join("generic_daw.toml").into());
+
+pub static DEFAULT_SAMPLE_PATHS: LazyLock<Vec<Arc<Path>>> =
+	LazyLock::new(|| vec![dirs::home_dir().unwrap().into(), DATA_PATH.clone()]);
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default)]
@@ -36,8 +33,8 @@ pub struct Config {
 impl Default for Config {
 	fn default() -> Self {
 		Self {
-			sample_paths: default_sample_paths(),
-			clap_paths: default_clap_paths(),
+			sample_paths: DEFAULT_SAMPLE_PATHS.clone(),
+			clap_paths: DEFAULT_CLAP_PATHS.clone(),
 			input_device: Device::default(),
 			output_device: Device::default(),
 			autosave: Autosave::default(),
@@ -73,20 +70,9 @@ impl Default for Autosave {
 	}
 }
 
-fn default_sample_paths() -> Vec<Arc<Path>> {
-	vec![
-		dirs::home_dir().unwrap().into(),
-		dirs::data_dir().unwrap().join("Generic DAW").into(),
-	]
-}
-
 impl Config {
 	pub fn read() -> Self {
-		let Some(config_path) = &*CONFIG_PATH else {
-			return Self::default();
-		};
-
-		let config = read_to_string(config_path);
+		let config = read_to_string(&*CONFIG_PATH);
 
 		let read =
 			toml::from_str::<Self>(config.as_deref().unwrap_or_default()).unwrap_or_default();
@@ -101,10 +87,6 @@ impl Config {
 	}
 
 	pub fn write(&self) {
-		let Some(config_path) = &*CONFIG_PATH else {
-			return;
-		};
-
-		write(config_path, toml::to_string(self).unwrap()).unwrap();
+		write(&*CONFIG_PATH, toml::to_string(self).unwrap()).unwrap();
 	}
 }

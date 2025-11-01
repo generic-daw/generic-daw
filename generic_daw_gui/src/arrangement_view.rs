@@ -77,6 +77,12 @@ pub use midi_clip::MidiClipRef;
 pub use project::Feedback;
 pub use recording::Recording;
 
+pub static DATA_PATH: LazyLock<Arc<Path>> = LazyLock::new(|| {
+	let data_path = dirs::data_dir().unwrap().join("Generic DAW").into();
+	_ = std::fs::create_dir(&data_path);
+	data_path
+});
+
 #[derive(Clone, Debug)]
 pub enum Message {
 	ClapHost(ClapHostMessage),
@@ -1235,12 +1241,12 @@ fn format_decibels(amp: f32) -> String {
 }
 
 fn recording_path() -> Arc<Path> {
-	let file_name = format!("recording-{}.wav", format_rfc3339(SystemTime::now()));
-
-	let data_dir = dirs::data_dir().unwrap().join("Generic DAW");
-	_ = std::fs::create_dir(&data_dir);
-
-	data_dir.join(file_name).into()
+	DATA_PATH
+		.join(format!(
+			"recording-{}.wav",
+			format_rfc3339(SystemTime::now())
+		))
+		.into()
 }
 
 fn crc(mut r: impl Read) -> u32 {

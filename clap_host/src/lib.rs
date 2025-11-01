@@ -5,7 +5,7 @@ use shared::Shared;
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
-	sync::Arc,
+	sync::{Arc, LazyLock},
 };
 use walkdir::WalkDir;
 
@@ -47,44 +47,7 @@ pub use size::Size;
 
 const API_TYPE: GuiApiType<'_> = const { GuiApiType::default_for_current_platform().unwrap() };
 
-#[must_use]
-pub fn get_installed_plugins(
-	paths: impl IntoIterator<Item: AsRef<Path>>,
-) -> HashMap<PluginDescriptor, NoDebug<PluginBundle>> {
-	let mut bundles = HashMap::new();
-
-	paths
-		.into_iter()
-		.flat_map(WalkDir::new)
-		.flatten()
-		.filter(|dir_entry| dir_entry.file_type().is_file())
-		.filter(|dir_entry| {
-			dir_entry
-				.path()
-				.extension()
-				.is_some_and(|ext| ext == "clap")
-		})
-		.filter_map(|dir_entry| {
-			// SAFETY:
-			// Loading an external library object file is inherently unsafe.
-			unsafe { PluginBundle::load(dir_entry.path()).ok() }
-		})
-		.for_each(|bundle| {
-			if let Some(factory) = bundle.get_plugin_factory() {
-				factory
-					.plugin_descriptors()
-					.filter_map(|d| d.try_into().ok())
-					.for_each(|d| {
-						bundles.insert(d, NoDebug(bundle.clone()));
-					});
-			}
-		});
-
-	bundles
-}
-
-#[must_use]
-pub fn default_clap_paths() -> Vec<Arc<Path>> {
+pub static DEFAULT_CLAP_PATHS: LazyLock<Vec<Arc<Path>>> = LazyLock::new(|| {
 	let mut paths = Vec::new();
 
 	#[cfg(target_os = "linux")]
@@ -121,4 +84,40 @@ pub fn default_clap_paths() -> Vec<Arc<Path>> {
 	}
 
 	paths
+});
+
+#[must_use]
+pub fn get_installed_plugins(
+	paths: impl IntoIterator<Item: AsRef<Path>>,
+) -> HashMap<PluginDescriptor, NoDebug<PluginBundle>> {
+	let mut bundles = HashMap::new();
+
+	paths
+		.into_iter()
+		.flat_map(WalkDir::new)
+		.flatten()
+		.filter(|dir_entry| dir_entry.file_type().is_file())
+		.filter(|dir_entry| {
+			dir_entry
+				.path()
+				.extension()
+				.is_some_and(|ext| ext == "clap")
+		})
+		.filter_map(|dir_entry| {
+			// SAFETY:
+			// Loading an external library object file is inherently unsafe.
+			unsafe { PluginBundle::load(dir_entry.path()).ok() }
+		})
+		.for_each(|bundle| {
+			if let Some(factory) = bundle.get_plugin_factory() {
+				factory
+					.plugin_descriptors()
+					.filter_map(|d| d.try_into().ok())
+					.for_each(|d| {
+						bundles.insert(d, NoDebug(bundle.clone()));
+					});
+			}
+		});
+
+	bundles
 }
