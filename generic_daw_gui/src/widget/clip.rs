@@ -1,6 +1,10 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef, Recording as RecordingWrapper},
-	widget::LINE_HEIGHT,
+	widget::{
+		LINE_HEIGHT,
+		arrangement::{Action, Selection, Status},
+		get_time, get_unsnapped_time,
+	},
 };
 use generic_daw_core::{ClipPosition, MusicalTime, NotePosition, RtState};
 use generic_daw_utils::Vec2;
@@ -10,15 +14,13 @@ use iced::{
 		Clipboard, Layout, Renderer as _, Shell, Text, Widget,
 		graphics::{Mesh, mesh::Renderer as _},
 		layout::{Limits, Node},
-		mouse::{Click, click::Kind},
+		mouse::{self, Click, Cursor, Interaction, click::Kind},
 		renderer::{Quad, Style},
 		text::Renderer as _,
 		widget::{Tree, tree},
 	},
 	alignment::Vertical,
-	border, debug,
-	mouse::{self, Cursor, Interaction},
-	padding,
+	border, debug, padding,
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 	window,
 };
@@ -63,12 +65,13 @@ impl<'a> From<&'a RecordingWrapper> for Inner<'a> {
 
 #[derive(Clone, Debug)]
 pub struct Clip<'a, Message> {
-	inner: Inner<'a>,
+	pub(super) inner: Inner<'a>,
+	selection: &'a RefCell<Selection>,
 	rtstate: &'a RtState,
 	position: &'a Vec2,
 	scale: &'a Vec2,
 	enabled: bool,
-	on_double_click: Option<Message>,
+	f: fn(Action) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message>
@@ -81,10 +84,6 @@ where
 
 	fn state(&self) -> tree::State {
 		tree::State::new(State::default())
-	}
-
-	fn size(&self) -> Size<Length> {
-		Size::new(Shrink, Fill)
 	}
 
 	fn diff(&self, tree: &mut Tree) {
@@ -105,6 +104,10 @@ where
 			*state.cache.get_mut() = None;
 			state.last_scale = *self.scale;
 		}
+	}
+
+	fn size(&self) -> Size<Length> {
+		Size::new(Shrink, Fill)
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
@@ -142,13 +145,14 @@ where
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
+		let state = tree.state.downcast_mut::<State>();
+
 		if let Event::Window(window::Event::RedrawRequested(..)) = event
 			&& let Some(mut bounds) = layout.bounds().intersection(viewport)
 		{
 			bounds.x = layout.position().x;
 			bounds.y = layout.position().y - bounds.y;
 
-			let state = tree.state.downcast_mut::<State>();
 			if state.last_bounds != bounds {
 				*state.cache.get_mut() = None;
 				state.last_bounds = bounds;
@@ -159,20 +163,109 @@ where
 			return;
 		}
 
-		if let Event::Mouse(mouse::Event::ButtonPressed {
-			button: mouse::Button::Left,
-			..
-		}) = event && let Some(cursor) = cursor.position_in(layout.bounds())
-			&& let Some(on_double_click) = &self.on_double_click
+		let (Inner::AudioClip(AudioClipRef { idx, .. }) | Inner::MidiClip(MidiClipRef { idx, .. })) =
+			self.inner
+		else {
+			return;
+		};
+
+		let Some(cursor) = cursor.position_in(*viewport) else {
+			return;
+		};
+
+		let mut selection = self.selection.borrow_mut();
+		let clip_bounds = layout.bounds() - Vector::new(viewport.x, viewport.y);
+
+		if let Event::Mouse(event) = event
+			&& clip_bounds.contains(cursor)
 		{
-			let state = tree.state.downcast_mut::<State>();
+			match event {
+				mouse::Event::ButtonPressed { button, modifiers }
+					if selection.status == Status::None =>
+				{
+					let mut clear = selection.selected.insert(idx);
 
-			let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
-			state.last_click = Some(new_click);
+					match button {
+						mouse::Button::Left => {
+							let time = get_unsnapped_time(
+								cursor.x,
+								*self.position,
+								*self.scale,
+								self.rtstate,
+							);
 
-			if new_click.kind() == Kind::Double {
-				shell.publish(on_double_click.clone());
-				shell.capture_event();
+							selection.status = match (modifiers.command(), modifiers.shift()) {
+								(false, false) => {
+									let start_pixel = clip_bounds.x;
+									let end_pixel = clip_bounds.x + clip_bounds.width;
+									let start_offset = cursor.x - start_pixel;
+									let end_offset = end_pixel - cursor.x;
+									let border = 10f32.min((end_pixel - start_pixel) / 3.0);
+									match (start_offset < border, end_offset < border) {
+										(true, false) => Status::TrimmingStart(time),
+										(false, true) => Status::TrimmingEnd(time),
+										(false, false) => Status::Dragging(idx.0, time),
+										(true, true) => unreachable!(),
+									}
+								}
+								(true, false) => {
+									clear = false;
+									let time = get_time(
+										cursor.x,
+										*self.position,
+										*self.scale,
+										self.rtstate,
+										*modifiers,
+									);
+									Status::Selecting(idx.0, idx.0, time, time)
+								}
+								(false, true) => {
+									shell.publish((self.f)(Action::Clone));
+									Status::Dragging(idx.0, time)
+								}
+								(true, true) => {
+									let time = get_time(
+										cursor.x,
+										*self.position,
+										*self.scale,
+										self.rtstate,
+										*modifiers,
+									);
+									shell.publish((self.f)(Action::SplitAt(time)));
+									Status::DraggingSplit(time)
+								}
+							};
+
+							if matches!(self.inner, Inner::MidiClip(..)) {
+								let new_click =
+									Click::new(cursor, mouse::Button::Left, state.last_click);
+								state.last_click = Some(new_click);
+
+								if new_click.kind() == Kind::Double {
+									shell.publish((self.f)(Action::Open));
+								}
+							}
+
+							shell.capture_event();
+							shell.request_redraw();
+						}
+						mouse::Button::Right if selection.status != Status::Deleting => {
+							selection.status = Status::Deleting;
+							shell.publish((self.f)(Action::Delete));
+							shell.capture_event();
+						}
+						_ => {}
+					}
+
+					if clear {
+						selection.selected.clear();
+						selection.selected.insert(idx);
+					}
+				}
+				mouse::Event::CursorMoved { .. } if selection.status == Status::Deleting => {
+					selection.selected.insert(idx);
+				}
+				_ => {}
 			}
 		}
 	}
@@ -194,15 +287,24 @@ where
 		let mut upper_bounds = bounds;
 		upper_bounds.height = upper_bounds.height.min(LINE_HEIGHT);
 
-		let color = match self.inner {
-			Inner::AudioClip(..) | Inner::MidiClip(..) => {
-				if self.enabled {
-					theme.extended_palette().primary.weak.color
-				} else {
-					theme.extended_palette().secondary.weak.color
+		let selection = self.selection.borrow();
+
+		let color = match &self.inner {
+			Inner::AudioClip(AudioClipRef { idx, .. })
+			| Inner::MidiClip(MidiClipRef { idx, .. }) => {
+				match (
+					self.enabled,
+					selection.selecting.contains(idx)
+						|| selection.selected.contains(idx)
+						|| selection.attached.contains(idx),
+				) {
+					(true, true) => theme.extended_palette().danger.weak.color,
+					(true, false) => theme.extended_palette().primary.weak.color,
+					(false, true) => theme.extended_palette().secondary.strong.color,
+					(false, false) => theme.extended_palette().secondary.weak.color,
 				}
 			}
-			Inner::Recording(..) => theme.extended_palette().danger.weak.color,
+			Inner::Recording(..) => theme.extended_palette().warning.weak.color,
 		};
 
 		let text_background = Quad {
@@ -397,19 +499,21 @@ where
 impl<'a, Message> Clip<'a, Message> {
 	pub fn new(
 		inner: impl Into<Inner<'a>>,
+		selection: &'a RefCell<Selection>,
 		rtstate: &'a RtState,
 		position: &'a Vec2,
 		scale: &'a Vec2,
 		enabled: bool,
-		on_double_click: Option<Message>,
+		f: fn(Action) -> Message,
 	) -> Self {
 		Self {
 			inner: inner.into(),
+			selection,
 			rtstate,
 			position,
 			scale,
 			enabled,
-			on_double_click,
+			f,
 		}
 	}
 }

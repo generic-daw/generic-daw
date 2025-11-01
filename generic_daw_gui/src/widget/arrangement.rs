@@ -1,4 +1,7 @@
-use crate::widget::{get_time, track::Track};
+use crate::{
+	arrangement_view::{AudioClipRef, MidiClipRef},
+	widget::{clip, get_time, get_unsnapped_time, track::Track},
+};
 use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::Vec2;
 use iced::{
@@ -6,44 +9,72 @@ use iced::{
 	advanced::{
 		Clipboard, Renderer as _, Shell,
 		layout::{self, Layout, Limits, Node},
+		mouse::{self, Cursor, Interaction},
 		overlay,
-		renderer::Style,
-		widget::{Operation, Tree, Widget, tree},
+		renderer::{Quad, Style},
+		widget::{Operation, Tree, Widget},
 	},
-	mouse::{self, Cursor, Interaction},
-	window,
+	border, keyboard,
 };
+use std::{cell::RefCell, collections::HashSet, ops::Add};
+
+#[derive(Clone, Copy, Debug)]
+pub enum Delta<T> {
+	Positive(T),
+	Negative(T),
+}
+
+impl Add<Delta<Self>> for MusicalTime {
+	type Output = Self;
+
+	fn add(self, rhs: Delta<Self>) -> Self::Output {
+		match rhs {
+			Delta::Positive(diff) => self + diff,
+			Delta::Negative(diff) => self.saturating_sub(diff),
+		}
+	}
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
-	Grab(usize, usize),
+	Open,
+	Clone,
+	Drag(isize, Delta<MusicalTime>),
+	TrimStart(Delta<MusicalTime>),
+	TrimEnd(Delta<MusicalTime>),
+	Delete,
 	Add(usize, MusicalTime),
-	Clone(usize, usize),
-	Drag(usize, MusicalTime),
-	SplitAt(usize, usize, MusicalTime),
+	SplitAt(MusicalTime),
 	DragSplit(MusicalTime),
-	TrimStart(MusicalTime),
-	TrimEnd(MusicalTime),
-	Delete(usize, usize),
 }
 
-#[derive(Clone, Copy, PartialEq)]
-enum State {
-	None,
-	DraggingClip(f32, usize, MusicalTime),
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) enum Status {
+	Selecting(usize, usize, MusicalTime, MusicalTime),
+	Dragging(usize, MusicalTime),
+	TrimmingStart(MusicalTime),
+	TrimmingEnd(MusicalTime),
+	Deleting,
 	DraggingSplit(MusicalTime),
-	ClipTrimmingStart(f32, MusicalTime),
-	ClipTrimmingEnd(f32, MusicalTime),
-	DeletingClips,
+	#[default]
+	None,
+}
+
+#[derive(Debug, Default)]
+pub struct Selection {
+	pub(super) status: Status,
+	pub(super) selecting: HashSet<(usize, usize)>,
+	pub selected: HashSet<(usize, usize)>,
+	pub attached: HashSet<(usize, usize)>,
 }
 
 #[derive(Debug)]
 pub struct Arrangement<'a, Message> {
+	selection: &'a RefCell<Selection>,
 	rtstate: &'a RtState,
 	position: &'a Vec2,
 	scale: &'a Vec2,
-	children: Box<[Track<'a, Message>]>,
-	deleted: bool,
+	tracks: Box<[Track<'a, Message>]>,
 	f: fn(Action) -> Message,
 }
 
@@ -51,24 +82,15 @@ impl<'a, Message> Widget<Message, Theme, Renderer> for Arrangement<'a, Message>
 where
 	Message: Clone + 'a,
 {
-	fn tag(&self) -> tree::Tag {
-		tree::Tag::of::<State>()
-	}
-
-	fn state(&self) -> tree::State {
-		tree::State::new(State::None)
-	}
-
-	fn size(&self) -> Size<Length> {
-		Size::new(Fill, Fill)
-	}
-
 	fn diff(&self, tree: &mut Tree) {
-		tree.diff_children(&self.children);
+		tree.diff_children(&self.tracks);
 	}
 
 	fn children(&self) -> Vec<Tree> {
-		self.children.iter().map(Tree::new).collect()
+		self.tracks.iter().map(Tree::new).collect()
+	}
+	fn size(&self) -> Size<Length> {
+		Size::new(Fill, Fill)
 	}
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
@@ -81,7 +103,7 @@ where
 			0.into(),
 			0.0,
 			Alignment::Start,
-			&mut self.children,
+			&mut self.tracks,
 			&mut tree.children,
 		)
 	}
@@ -101,7 +123,7 @@ where
 			return;
 		};
 
-		self.children
+		self.tracks
 			.iter_mut()
 			.zip(&mut tree.children)
 			.zip(layout.children())
@@ -111,179 +133,246 @@ where
 				);
 			});
 
-		if let Event::Window(window::Event::RedrawRequested(..)) = event {
-			self.deleted = false;
-			return;
-		}
-
 		if shell.is_event_captured() {
 			return;
 		}
 
-		if let Event::Mouse(event) = event {
-			let state = tree.state.downcast_mut::<State>();
+		let selection = &mut *self.selection.borrow_mut();
 
-			let Some(cursor) = cursor.position_in(viewport) else {
-				*state = State::None;
-				return;
-			};
+		match event {
+			Event::Mouse(event) => {
+				let Some(cursor) = cursor.position_in(viewport) else {
+					selection.status = Status::None;
+					return;
+				};
 
-			match event {
-				mouse::Event::ButtonPressed { button, modifiers } if *state == State::None => {
-					match button {
+				match event {
+					mouse::Event::ButtonPressed { button, modifiers } => match button {
 						mouse::Button::Left => {
-							let time = get_time(
-								cursor.x,
-								*modifiers,
-								self.rtstate,
-								*self.position,
-								*self.scale,
-							);
+							if modifiers.command() {
+								let Some(track) = track_idx(&layout, viewport, cursor)
+									.or_else(|| layout.children().len().checked_sub(1))
+								else {
+									return;
+								};
 
-							if let Some(track) = track_idx(&layout, viewport, cursor)
-								&& let Some(clip) = clip_idx(&layout, viewport, cursor, track)
-							{
-								let clip_bounds = clip_layout(&layout, track, clip)
-									.unwrap()
-									.bounds() - Vector::new(viewport.x, viewport.y);
+								let time = get_time(
+									cursor.x,
+									*self.position,
+									*self.scale,
+									self.rtstate,
+									*modifiers,
+								);
 
-								let start_pixel = clip_bounds.x;
-								let end_pixel = clip_bounds.x + clip_bounds.width;
-								let offset = start_pixel - cursor.x;
-
-								match (modifiers.command(), modifiers.shift()) {
-									(true, false) => {
-										shell.publish((self.f)(Action::Clone(track, clip)));
-										*state = State::DraggingClip(offset, track, time);
-									}
-									(false, true) => {
-										shell.publish((self.f)(Action::SplitAt(track, clip, time)));
-										*state = State::DraggingSplit(time);
-									}
-									_ => {
-										shell.publish((self.f)(Action::Grab(track, clip)));
-										let start_offset = cursor.x - start_pixel;
-										let end_offset = end_pixel - cursor.x;
-										let border = 10f32.min((end_pixel - start_pixel) / 3.0);
-										*state = match (start_offset < border, end_offset < border)
-										{
-											(true, false) => State::ClipTrimmingStart(offset, time),
-											(false, true) => State::ClipTrimmingEnd(
-												offset + end_pixel - start_pixel,
-												time,
-											),
-											(false, false) => {
-												State::DraggingClip(offset, track, time)
-											}
-											(true, true) => unreachable!(),
-										};
-									}
-								}
-
+								selection.status = Status::Selecting(track, track, time, time);
+								shell.request_redraw();
 								shell.capture_event();
-							} else if let Some(track) = track_idx(&layout, viewport, cursor) {
-								shell.publish((self.f)(Action::Add(track, time)));
-								*state = State::DraggingClip(0.0, track, time);
+							} else if !selection.selected.is_empty() {
+								selection.selected.clear();
+								shell.request_redraw();
+								shell.capture_event();
 							}
 						}
-						mouse::Button::Right if !self.deleted => {
-							*state = State::DeletingClips;
-
-							if let Some(track) = track_idx(&layout, viewport, cursor)
-								&& let Some(clip) = clip_idx(&layout, viewport, cursor, track)
-							{
-								self.deleted = true;
-
-								shell.publish((self.f)(Action::Delete(track, clip)));
-								shell.capture_event();
-							}
+						mouse::Button::Right => {
+							selection.selected.clear();
+							selection.status = Status::Deleting;
 						}
 						_ => {}
+					},
+					mouse::Event::ButtonReleased { .. } if selection.status != Status::None => {
+						selection.status = Status::None;
+						selection.selected.extend(selection.selecting.drain());
+						selection.selected.extend(selection.attached.drain());
+						shell.capture_event();
+						shell.request_redraw();
 					}
+					mouse::Event::CursorMoved { modifiers, .. } => match selection.status {
+						Status::Selecting(start_track, last_end_track, start_pos, last_end_pos) => {
+							let Some(end_track) = track_idx(&layout, viewport, cursor)
+								.or_else(|| layout.children().len().checked_sub(1))
+							else {
+								return;
+							};
+
+							let end_pos = get_time(
+								cursor.x,
+								*self.position,
+								*self.scale,
+								self.rtstate,
+								*modifiers,
+							);
+
+							if end_track == last_end_track && end_pos == last_end_pos {
+								return;
+							}
+
+							selection.status =
+								Status::Selecting(start_track, end_track, start_pos, end_pos);
+
+							let (start_track, end_track) =
+								(start_track.min(end_track), start_track.max(end_track));
+							let (start_pos, end_pos) =
+								(start_pos.min(end_pos), start_pos.max(end_pos));
+
+							self.tracks
+								.iter()
+								.enumerate()
+								.flat_map(|(t_idx, track)| {
+									track
+										.clips
+										.iter()
+										.enumerate()
+										.map(move |(c_idx, clip)| ((t_idx, c_idx), clip))
+								})
+								.for_each(|(idx, clip)| {
+									let clip_pos = match clip.inner {
+										clip::Inner::AudioClip(AudioClipRef { clip, .. }) => {
+											clip.position
+										}
+										clip::Inner::MidiClip(MidiClipRef { clip, .. }) => {
+											clip.position
+										}
+										clip::Inner::Recording(..) => return,
+									};
+
+									if (start_track..=end_track).contains(&idx.0)
+										&& (start_pos.max(clip_pos.start())
+											< end_pos.min(clip_pos.end()))
+									{
+										selection.selecting.insert(idx);
+									} else {
+										selection.selecting.remove(&idx);
+									}
+								});
+
+							shell.request_redraw();
+						}
+						Status::Dragging(track, time) => {
+							let Some(new_track) = track_idx(&layout, viewport, cursor)
+								.or_else(|| layout.children().len().checked_sub(1))
+							else {
+								return;
+							};
+
+							let new_time = get_unsnapped_time(
+								cursor.x,
+								*self.position,
+								*self.scale,
+								self.rtstate,
+							);
+
+							let mut abs_diff = new_time.abs_diff(time);
+							if !modifiers.alt() {
+								abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
+							}
+
+							if new_track != track || abs_diff != MusicalTime::ZERO {
+								let delta = if new_time > time {
+									Delta::Positive
+								} else {
+									Delta::Negative
+								}(abs_diff);
+
+								selection.status = Status::Dragging(new_track, time + delta);
+								shell.publish((self.f)(Action::Drag(
+									new_track.cast_signed() - track.cast_signed(),
+									delta,
+								)));
+								shell.capture_event();
+							}
+						}
+						Status::DraggingSplit(time) => {
+							let new_time = get_time(
+								cursor.x,
+								*self.position,
+								*self.scale,
+								self.rtstate,
+								*modifiers,
+							);
+
+							if new_time != time {
+								selection.status = Status::DraggingSplit(new_time);
+								shell.publish((self.f)(Action::DragSplit(new_time)));
+								shell.capture_event();
+							}
+						}
+						Status::TrimmingStart(time) => {
+							let new_time = get_unsnapped_time(
+								cursor.x,
+								*self.position,
+								*self.scale,
+								self.rtstate,
+							);
+
+							let mut abs_diff = new_time.abs_diff(time);
+							if !modifiers.alt() {
+								abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
+							}
+
+							if abs_diff != MusicalTime::ZERO {
+								let delta = if new_time > time {
+									Delta::Positive
+								} else {
+									Delta::Negative
+								}(abs_diff);
+
+								selection.status = Status::TrimmingStart(time + delta);
+								shell.publish((self.f)(Action::TrimStart(delta)));
+								shell.capture_event();
+							}
+						}
+						Status::TrimmingEnd(time) => {
+							let new_time = get_unsnapped_time(
+								cursor.x,
+								*self.position,
+								*self.scale,
+								self.rtstate,
+							);
+
+							let mut abs_diff = new_time.abs_diff(time);
+							if !modifiers.alt() {
+								abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
+							}
+
+							if abs_diff != MusicalTime::ZERO {
+								let delta = if new_time > time {
+									Delta::Positive
+								} else {
+									Delta::Negative
+								}(abs_diff);
+
+								selection.status = Status::TrimmingEnd(time + delta);
+								shell.publish((self.f)(Action::TrimEnd(delta)));
+								shell.capture_event();
+							}
+						}
+						Status::Deleting => {
+							if !selection.selected.is_empty() {
+								shell.publish((self.f)(Action::Delete));
+								shell.capture_event();
+							}
+						}
+						Status::None => {}
+					},
+					_ => {}
 				}
-				mouse::Event::ButtonReleased { .. } if *state != State::None => {
-					*state = State::None;
+			}
+			Event::Keyboard(keyboard::Event::KeyPressed {
+				physical_key: keyboard::key::Physical::Code(code),
+				..
+			}) if selection.status == Status::None && !selection.selected.is_empty() => match code {
+				keyboard::key::Code::Delete | keyboard::key::Code::Backspace => {
+					shell.publish((self.f)(Action::Delete));
 					shell.capture_event();
 				}
-				mouse::Event::CursorMoved { modifiers, .. } => match *state {
-					State::DraggingClip(offset, track, time) => {
-						let new_track = track_idx(&layout, viewport, cursor).unwrap_or_else(|| {
-							layout.children().next().unwrap().children().len() - 1
-						});
-						let new_start = get_time(
-							cursor.x + offset,
-							*modifiers,
-							self.rtstate,
-							*self.position,
-							*self.scale,
-						);
-						if new_track != track || new_start != time {
-							*state = State::DraggingClip(offset, new_track, new_start);
-
-							shell.publish((self.f)(Action::Drag(new_track, new_start)));
-							shell.capture_event();
-						}
-					}
-					State::DraggingSplit(time) => {
-						let new_time = get_time(
-							cursor.x,
-							*modifiers,
-							self.rtstate,
-							*self.position,
-							*self.scale,
-						);
-						if new_time != time {
-							*state = State::DraggingSplit(new_time);
-
-							shell.publish((self.f)(Action::DragSplit(new_time)));
-							shell.capture_event();
-						}
-					}
-					State::ClipTrimmingStart(offset, time) => {
-						let new_start = get_time(
-							cursor.x + offset,
-							*modifiers,
-							self.rtstate,
-							*self.position,
-							*self.scale,
-						);
-						if new_start != time {
-							*state = State::ClipTrimmingStart(offset, new_start);
-
-							shell.publish((self.f)(Action::TrimStart(new_start)));
-							shell.capture_event();
-						}
-					}
-					State::ClipTrimmingEnd(offset, time) => {
-						let new_end = get_time(
-							cursor.x + offset,
-							*modifiers,
-							self.rtstate,
-							*self.position,
-							*self.scale,
-						);
-						if new_end != time {
-							*state = State::ClipTrimmingEnd(offset, new_end);
-
-							shell.publish((self.f)(Action::TrimEnd(new_end)));
-							shell.capture_event();
-						}
-					}
-					State::DeletingClips => {
-						if !self.deleted
-							&& let Some(track) = track_idx(&layout, viewport, cursor)
-							&& let Some(clip) = clip_idx(&layout, viewport, cursor, track)
-						{
-							self.deleted = true;
-
-							shell.publish((self.f)(Action::Delete(track, clip)));
-							shell.capture_event();
-						}
-					}
-					State::None => {}
-				},
+				keyboard::key::Code::Escape => {
+					selection.selected.clear();
+					shell.capture_event();
+					shell.request_redraw();
+				}
 				_ => {}
-			}
+			},
+			_ => {}
 		}
 	}
 
@@ -295,14 +384,15 @@ where
 		viewport: &Rectangle,
 		renderer: &Renderer,
 	) -> Interaction {
-		match tree.state.downcast_ref::<State>() {
-			State::ClipTrimmingStart(..)
-			| State::ClipTrimmingEnd(..)
-			| State::DraggingSplit(..) => Interaction::ResizingHorizontally,
-			State::DraggingClip(..) => Interaction::Grabbing,
-			State::DeletingClips => Interaction::NoDrop,
-			State::None => self
-				.children
+		match self.selection.borrow().status {
+			Status::Selecting(..) => Interaction::Idle,
+			Status::Dragging(..) => Interaction::Grabbing,
+			Status::TrimmingStart(..) | Status::TrimmingEnd(..) | Status::DraggingSplit(..) => {
+				Interaction::ResizingHorizontally
+			}
+			Status::Deleting => Interaction::NoDrop,
+			Status::None => self
+				.tracks
 				.iter()
 				.zip(&tree.children)
 				.zip(layout.children())
@@ -329,13 +419,13 @@ where
 		};
 
 		let rects = &mut vec![];
-		let mut starts = vec![Some(0); self.children.len()];
+		let mut starts = vec![Some(0); self.tracks.len()];
 
 		loop {
 			let mut done = true;
 
 			renderer.with_layer(Rectangle::INFINITE, |renderer| {
-				self.children
+				self.tracks
 					.iter()
 					.zip(&tree.children)
 					.zip(layout.children())
@@ -357,6 +447,43 @@ where
 				break;
 			}
 		}
+
+		if let Status::Selecting(start_track, end_track, start_pos, end_pos) =
+			self.selection.borrow().status
+			&& start_pos != end_pos
+		{
+			let (start_track, end_track) = (start_track.min(end_track), start_track.max(end_track));
+			let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
+			renderer.with_layer(viewport, |renderer| {
+				renderer.with_translation(Vector::new(viewport.x, 0.0), |renderer| {
+					let samples_per_px = self.scale.x.exp2();
+
+					let y = layout.child(start_track).position().y;
+					let height = layout.child(end_track).position().y
+						+ layout.child(end_track).bounds().height
+						- y;
+
+					let x = start_pos.to_samples_f(self.rtstate) / samples_per_px;
+					let width = end_pos.to_samples_f(self.rtstate) / samples_per_px - x;
+					let x = x - self.position.x / samples_per_px;
+
+					renderer.fill_quad(
+						Quad {
+							bounds: Rectangle {
+								x,
+								y,
+								width,
+								height,
+							},
+							border: border::width(1)
+								.color(theme.extended_palette().danger.weak.color),
+							..Quad::default()
+						},
+						theme.extended_palette().danger.weak.color.scale_alpha(0.2),
+					);
+				});
+			});
+		}
 	}
 
 	fn overlay<'b>(
@@ -368,7 +495,7 @@ where
 		translation: Vector,
 	) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
 		overlay::from_children(
-			&mut self.children,
+			&mut self.tracks,
 			tree,
 			layout,
 			renderer,
@@ -386,7 +513,7 @@ where
 	) {
 		operation.container(None, layout.bounds());
 		operation.traverse(&mut |operation| {
-			self.children
+			self.tracks
 				.iter_mut()
 				.zip(&mut tree.children)
 				.zip(layout.children())
@@ -402,6 +529,7 @@ where
 	Message: 'a,
 {
 	pub fn new(
+		selection: &'a RefCell<Selection>,
 		rtstate: &'a RtState,
 		position: &'a Vec2,
 		scale: &'a Vec2,
@@ -409,11 +537,11 @@ where
 		f: fn(Action) -> Message,
 	) -> Self {
 		Self {
+			selection,
 			rtstate,
-			children: children.into_iter().collect(),
+			tracks: children.into_iter().collect(),
 			position,
 			scale,
-			deleted: false,
 			f,
 		}
 	}
@@ -433,24 +561,4 @@ fn track_idx(layout: &Layout<'_>, viewport: Rectangle, cursor: Point) -> Option<
 	layout
 		.children()
 		.position(|child| child.bounds().contains(cursor + offset))
-}
-
-fn clip_idx(
-	layout: &Layout<'_>,
-	viewport: Rectangle,
-	cursor: Point,
-	track: usize,
-) -> Option<usize> {
-	let offset = Vector::new(viewport.position().x, viewport.position().y);
-	track_layout(layout, track)?
-		.children()
-		.rposition(|child| child.bounds().contains(cursor + offset))
-}
-
-fn track_layout<'a>(layout: &Layout<'a>, track: usize) -> Option<Layout<'a>> {
-	layout.children().nth(track)
-}
-
-fn clip_layout<'a>(layout: &Layout<'a>, track: usize, clip: usize) -> Option<Layout<'a>> {
-	track_layout(layout, track)?.children().nth(clip)
 }

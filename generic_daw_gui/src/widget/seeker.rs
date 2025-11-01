@@ -7,15 +7,14 @@ use iced::{
 	advanced::{
 		Clipboard, Layout, Renderer as _, Shell, Text, Widget,
 		layout::{Limits, Node},
+		mouse::{self, Cursor, Interaction, ScrollDelta},
 		overlay,
 		renderer::{Quad, Style},
 		text::Renderer as _,
 		widget::{Operation, Tree, tree},
 	},
 	alignment::Vertical,
-	border,
-	mouse::{self, Cursor, Interaction, ScrollDelta},
-	padding,
+	border, padding,
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
 
@@ -139,10 +138,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				mouse::Event::CursorMoved { modifiers, .. } => {
 					let time = get_time(
 						cursor.x + offset + self.offset,
-						*modifiers,
-						self.rtstate,
 						*self.position,
 						*self.scale,
+						self.rtstate,
+						*modifiers,
 					);
 
 					if let Some(last_time) = state.seeking {
@@ -172,10 +171,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				} if state.hovering => {
 					let time = get_time(
 						cursor.x + offset + self.offset,
-						*modifiers,
-						self.rtstate,
 						*self.position,
 						*self.scale,
+						self.rtstate,
+						*modifiers,
 					);
 					if modifiers.command() {
 						if let Some(loop_marker) = self.rtstate.loop_marker {

@@ -18,7 +18,7 @@ use crate::{
 	},
 	widget::{
 		LINE_HEIGHT, TEXT_HEIGHT,
-		arrangement::{Action as ArrangementAction, Arrangement as ArrangementWidget},
+		arrangement::{Action as ArrangementAction, Arrangement as ArrangementWidget, Selection},
 		clip::Clip as ClipWidget,
 		piano::Piano,
 		piano_roll::{Action as PianoRollAction, PianoRoll},
@@ -26,6 +26,7 @@ use crate::{
 		track::Track as TrackWidget,
 	},
 };
+use bit_set::BitSet;
 use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
@@ -49,7 +50,9 @@ use iced_split::{Split, Strategy};
 use rtrb::Consumer;
 use smol::{Timer, unblock};
 use std::{
-	collections::HashMap,
+	cell::RefCell,
+	cmp::{Ordering, Reverse},
+	collections::{HashMap, HashSet},
 	fmt::Write as _,
 	io::Read,
 	iter::once,
@@ -113,8 +116,6 @@ pub enum Message {
 	SampleLoadedFromFile(NoClone<Option<Box<SamplePair>>>),
 	AddAudioClip(SampleId),
 
-	OpenMidiClip(MidiClip),
-
 	TrackAdd,
 	TrackRemove(NodeId),
 	TrackToggleEnabled(NodeId),
@@ -141,9 +142,7 @@ pub enum Message {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Tab {
-	Arrangement {
-		grabbed: Option<(usize, usize, Option<usize>)>,
-	},
+	Arrangement,
 	Mixer,
 	PianoRoll {
 		clip: MidiClip,
@@ -162,6 +161,7 @@ pub struct ArrangementView {
 	arrangement_position: Vec2,
 	arrangement_scale: Vec2,
 	soloed_track: Option<NodeId>,
+	arrangement_selection: RefCell<Selection>,
 
 	selected_channel: Option<NodeId>,
 
@@ -191,11 +191,12 @@ impl ArrangementView {
 				clap_host: ClapHost::default(),
 
 				recording: None,
-				tab: Tab::Arrangement { grabbed: None },
+				tab: Tab::Arrangement,
 
 				arrangement_position: Vec2::default(),
 				arrangement_scale: Vec2::new(10.0, 87.0),
 				soloed_track: None,
+				arrangement_selection: RefCell::default(),
 
 				selected_channel: None,
 
@@ -233,11 +234,10 @@ impl ArrangementView {
 			}
 			Message::SetArrangement(NoClone(arrangement)) => {
 				self.arrangement = *arrangement;
+				self.arrangement_selection.get_mut().selected.clear();
 				self.selected_channel = None;
-				match &mut self.tab {
-					Tab::Arrangement { grabbed } => *grabbed = None,
-					Tab::Mixer => {}
-					Tab::PianoRoll { .. } => self.tab = Tab::Arrangement { grabbed: None },
+				if matches!(self.tab, Tab::PianoRoll { .. }) {
+					self.tab = Tab::Arrangement;
 				}
 			}
 			Message::ConnectRequest(from, to) => {
@@ -392,12 +392,6 @@ impl ArrangementView {
 
 				return task;
 			}
-			Message::OpenMidiClip(clip) => {
-				self.tab = Tab::PianoRoll {
-					clip,
-					grabbed: None,
-				};
-			}
 			Message::TrackAdd => {
 				let track = self.arrangement.add_track();
 				let id = self.arrangement.tracks()[track].id;
@@ -413,10 +407,24 @@ impl ArrangementView {
 				.map(Message::ConnectSucceeded);
 			}
 			Message::TrackRemove(id) => {
+				let idx = self.arrangement.track_of(id).unwrap();
 				self.arrangement.remove_track(id);
+
 				if self.soloed_track == Some(id) {
 					self.soloed_track = None;
 				}
+
+				let mut selection = self.arrangement_selection.borrow_mut();
+				selection.selected = selection
+					.selected
+					.drain()
+					.filter_map(|(track, clip)| match track.cmp(&idx) {
+						Ordering::Equal => None,
+						Ordering::Less => Some((track, clip)),
+						Ordering::Greater => Some((track - 1, clip)),
+					})
+					.collect();
+				drop(selection);
 
 				return Task::batch([
 					self.update(
@@ -566,12 +574,24 @@ impl ArrangementView {
 	}
 
 	fn handle_arrangement_action(&mut self, action: ArrangementAction) {
-		let Tab::Arrangement { grabbed } = &mut self.tab else {
-			panic!()
-		};
+		let Selection {
+			selected, attached, ..
+		} = self.arrangement_selection.get_mut();
 
 		match action {
-			ArrangementAction::Grab(track, clip) => *grabbed = Some((track, clip, None)),
+			ArrangementAction::Open => {
+				debug_assert_eq!(selected.len(), 1);
+				let &(track, clip) = selected.iter().next().unwrap();
+
+				let Clip::Midi(clip) = self.arrangement.tracks()[track].clips[clip] else {
+					panic!()
+				};
+
+				self.tab = Tab::PianoRoll {
+					clip,
+					grabbed: None,
+				};
+			}
 			ArrangementAction::Add(track, pos) => {
 				let pattern = PatternPair::new(Vec::new());
 				let id = pattern.gui.id;
@@ -583,79 +603,149 @@ impl ArrangementView {
 				);
 				clip.position.move_to(pos);
 				let clip = self.arrangement.add_clip(track, clip);
-				*grabbed = Some((track, clip, None));
+				selected.insert((track, clip));
 			}
-			ArrangementAction::Clone(track, mut clip) => {
-				clip = self
-					.arrangement
-					.add_clip(track, self.arrangement.tracks()[track].clips[clip]);
-				*grabbed = Some((track, clip, None));
-			}
-			ArrangementAction::Drag(new_track, pos) => {
-				let (track, clip, ..) = grabbed.as_mut().unwrap();
-				if *track != new_track {
-					*clip = self.arrangement.clip_switch_track(*track, *clip, new_track);
-					*track = new_track;
+			ArrangementAction::Clone => {
+				let mut new = HashSet::with_capacity(selected.len());
+				for (track, clip) in selected.drain() {
+					new.insert((
+						track,
+						self.arrangement
+							.add_clip(track, self.arrangement.tracks()[track].clips[clip]),
+					));
 				}
-				self.arrangement.clip_move_to(*track, *clip, pos);
+				*selected = new;
 			}
-			ArrangementAction::SplitAt(track, lhs, mut pos) => {
-				let clip = self.arrangement.tracks()[track].clips[lhs];
-				let (lhs, rhs) = if clip.position().end() == pos
-					&& let Some(rhs) = self.arrangement.tracks()[track]
-						.clips
-						.iter()
-						.position(|clip| clip.position().start() == pos)
-				{
-					(lhs, rhs)
-				} else if clip.position().start() == pos
-					&& let Some(rhs) = self.arrangement.tracks()[track]
-						.clips
-						.iter()
-						.position(|clip| clip.position().end() == pos)
-				{
-					(rhs, lhs)
-				} else {
-					let start = clip.position().start() + MusicalTime::TICK;
-					let end = clip.position().end() - MusicalTime::TICK;
-					if start > end {
-						return;
+			ArrangementAction::Drag(track_diff, pos_diff) => {
+				let mut sorted = selected.drain().collect::<Vec<_>>();
+				match track_diff.cmp(&0) {
+					Ordering::Equal => {}
+					Ordering::Less => sorted.sort_unstable_by_key(|&(t, c)| (t, Reverse(c))),
+					Ordering::Greater => {
+						sorted.sort_unstable_by_key(|&(t, c)| (Reverse(t), Reverse(c)));
 					}
-					let rhs = self.arrangement.add_clip(track, clip);
-					pos = pos.clamp(start, end);
-					self.arrangement.clip_trim_end_to(track, lhs, pos);
-					self.arrangement.clip_trim_start_to(track, rhs, pos);
-					(lhs, rhs)
-				};
-				*grabbed = Some((track, lhs, Some(rhs)));
-			}
-			ArrangementAction::DragSplit(mut pos) => {
-				let Some((track, lhs, Some(rhs))) = *grabbed else {
-					return;
-				};
-				let start = self.arrangement.tracks()[track].clips[lhs]
-					.position()
-					.start() + MusicalTime::TICK;
-				let end = self.arrangement.tracks()[track].clips[rhs].position().end()
-					- MusicalTime::TICK;
-				if start > end {
-					return;
 				}
-				pos = pos.clamp(start, end);
-				self.arrangement.clip_trim_end_to(track, lhs, pos);
-				self.arrangement.clip_trim_start_to(track, rhs, pos);
+
+				for (mut track, mut clip) in sorted {
+					let new_track = track
+						.saturating_add_signed(track_diff)
+						.min(self.arrangement.tracks().len() - 1);
+					if track != new_track {
+						clip = self.arrangement.clip_switch_track(track, clip, new_track);
+						track = new_track;
+					}
+
+					let pos = self.arrangement.tracks()[track].clips[clip]
+						.position()
+						.start();
+					self.arrangement.clip_move_to(track, clip, pos + pos_diff);
+
+					selected.insert((track, clip));
+				}
 			}
-			ArrangementAction::TrimStart(pos) => {
-				let (track, clip, ..) = grabbed.unwrap();
-				self.arrangement.clip_trim_start_to(track, clip, pos);
+			ArrangementAction::SplitAt(mut pos) => {
+				let filtered = selected
+					.drain()
+					.filter(|&(track, clip)| {
+						let position = self.arrangement.tracks()[track].clips[clip].position();
+						(position.start()..=position.end()).contains(&pos)
+					})
+					.collect::<Vec<_>>();
+
+				let mut seen = BitSet::new();
+				for (track, lhs) in filtered {
+					if seen.insert(track) {
+						self.arrangement.tracks()[track]
+							.clips
+							.iter()
+							.enumerate()
+							.for_each(|(lhs, clip)| {
+								if clip.position().start() == pos {
+									selected.insert((track, lhs));
+								}
+
+								if clip.position().end() == pos {
+									attached.insert((track, lhs));
+								}
+							});
+					}
+
+					let clip = self.arrangement.tracks()[track].clips[lhs];
+					if clip.position().start() != pos
+						&& clip.position().end() != pos
+						&& clip.position().len() > MusicalTime::TICK
+					{
+						let start = clip.position().start() + MusicalTime::TICK;
+						let end = clip.position().end() - MusicalTime::TICK;
+						pos = pos.clamp(start, end);
+						let rhs = self.arrangement.add_clip(track, clip);
+						self.arrangement.clip_trim_end_to(track, lhs, pos);
+						self.arrangement.clip_trim_start_to(track, rhs, pos);
+						selected.insert((track, lhs));
+						attached.insert((track, rhs));
+					}
+				}
 			}
-			ArrangementAction::TrimEnd(pos) => {
-				let (track, clip, ..) = grabbed.unwrap();
-				self.arrangement.clip_trim_end_to(track, clip, pos);
+			ArrangementAction::DragSplit(pos) => {
+				let mut clamped = HashMap::new();
+				for &(track, _) in &*selected {
+					clamped.entry(track).or_insert_with(|| {
+						let mut pos = pos;
+
+						for &(_, lhs) in selected.iter().filter(|&&(t, _)| t == track) {
+							pos = pos.max(
+								self.arrangement.tracks()[track].clips[lhs]
+									.position()
+									.start() + MusicalTime::TICK,
+							);
+						}
+
+						for &(_, rhs) in attached.iter().filter(|&&(t, _)| t == track) {
+							pos = pos.min(
+								self.arrangement.tracks()[track].clips[rhs].position().end()
+									- MusicalTime::TICK,
+							);
+						}
+
+						pos
+					});
+				}
+
+				for &(track, lhs) in &*selected {
+					self.arrangement
+						.clip_trim_end_to(track, lhs, clamped[&track]);
+				}
+
+				for &(track, rhs) in &*attached {
+					self.arrangement
+						.clip_trim_start_to(track, rhs, clamped[&track]);
+				}
 			}
-			ArrangementAction::Delete(track, clip) => {
-				let clip = self.arrangement.remove_clip(track, clip);
-				self.arrangement.gc(clip);
+			ArrangementAction::TrimStart(pos_diff) => {
+				for &(track, clip) in &*selected {
+					let pos = self.arrangement.tracks()[track].clips[clip]
+						.position()
+						.start();
+					self.arrangement
+						.clip_trim_start_to(track, clip, pos + pos_diff);
+				}
+			}
+			ArrangementAction::TrimEnd(pos_diff) => {
+				for &(track, clip) in &*selected {
+					let pos = self.arrangement.tracks()[track].clips[clip]
+						.position()
+						.end();
+					self.arrangement
+						.clip_trim_end_to(track, clip, pos + pos_diff);
+				}
+			}
+			ArrangementAction::Delete => {
+				let mut sorted = selected.drain().collect::<Vec<_>>();
+				sorted.sort_unstable_by_key(|&(_, c)| Reverse(c));
+				for (track, clip) in sorted {
+					let clip = self.arrangement.remove_clip(track, clip);
+					self.arrangement.gc(clip);
+				}
 			}
 		}
 	}
@@ -748,7 +838,7 @@ impl ArrangementView {
 
 	pub fn view(&self) -> Element<'_, Message> {
 		match &self.tab {
-			Tab::Arrangement { .. } => self.arrangement(),
+			Tab::Arrangement => self.arrangement(),
 			Tab::Mixer => self.mixer(),
 			Tab::PianoRoll { clip, .. } => self.piano_roll(clip),
 		}
@@ -850,58 +940,73 @@ impl ArrangementView {
 			)
 			.align_x(Center),
 			ArrangementWidget::new(
+				&self.arrangement_selection,
 				self.arrangement.rtstate(),
 				&self.arrangement_position,
 				&self.arrangement_scale,
-				self.arrangement.tracks().iter().map(|track| {
-					let node = self.arrangement.node(track.id);
+				self.arrangement
+					.tracks()
+					.iter()
+					.enumerate()
+					.map(|(track_idx, track)| {
+						let node = self.arrangement.node(track.id);
 
-					TrackWidget::new(
-						&self.arrangement_scale,
-						track
-							.clips
-							.iter()
-							.map(|clip| match clip {
-								Clip::Audio(clip) => ClipWidget::new(
-									AudioClipRef {
-										sample: &self.arrangement.samples()[*clip.sample],
-										clip,
-									},
-									self.arrangement.rtstate(),
-									&self.arrangement_position,
-									&self.arrangement_scale,
-									node.enabled,
-									None,
+						TrackWidget::new(
+							track_idx,
+							self.arrangement.rtstate(),
+							&self.arrangement_position,
+							&self.arrangement_scale,
+							track
+								.clips
+								.iter()
+								.enumerate()
+								.map(|(clip_idx, clip)| match clip {
+									Clip::Audio(clip) => ClipWidget::new(
+										AudioClipRef {
+											sample: &self.arrangement.samples()[*clip.sample],
+											clip,
+											idx: (track_idx, clip_idx),
+										},
+										&self.arrangement_selection,
+										self.arrangement.rtstate(),
+										&self.arrangement_position,
+										&self.arrangement_scale,
+										node.enabled,
+										Message::ArrangementAction,
+									),
+									Clip::Midi(clip) => ClipWidget::new(
+										MidiClipRef {
+											pattern: &self.arrangement.patterns()[*clip.pattern],
+											clip,
+											idx: (track_idx, clip_idx),
+										},
+										&self.arrangement_selection,
+										self.arrangement.rtstate(),
+										&self.arrangement_position,
+										&self.arrangement_scale,
+										node.enabled,
+										Message::ArrangementAction,
+									),
+								})
+								.chain(
+									self.recording
+										.as_ref()
+										.filter(|&&(_, i)| i == track.id)
+										.map(|(recording, _)| {
+											ClipWidget::new(
+												recording,
+												&self.arrangement_selection,
+												self.arrangement.rtstate(),
+												&self.arrangement_position,
+												&self.arrangement_scale,
+												node.enabled,
+												Message::ArrangementAction,
+											)
+										}),
 								),
-								Clip::Midi(clip) => ClipWidget::new(
-									MidiClipRef {
-										pattern: &self.arrangement.patterns()[*clip.pattern],
-										clip,
-									},
-									self.arrangement.rtstate(),
-									&self.arrangement_position,
-									&self.arrangement_scale,
-									node.enabled,
-									Some(Message::OpenMidiClip(*clip)),
-								),
-							})
-							.chain(
-								self.recording
-									.as_ref()
-									.filter(|&&(_, i)| i == track.id)
-									.map(|(recording, _)| {
-										ClipWidget::new(
-											recording,
-											self.arrangement.rtstate(),
-											&self.arrangement_position,
-											&self.arrangement_scale,
-											node.enabled,
-											None,
-										)
-									}),
-							),
-					)
-				}),
+							Message::ArrangementAction,
+						)
+					}),
 				Message::ArrangementAction,
 			),
 			Message::SeekTo,

@@ -1,44 +1,62 @@
-use crate::widget::clip::Clip;
+use crate::widget::{arrangement::Action, clip::Clip, get_time};
+use generic_daw_core::RtState;
 use generic_daw_utils::{NoDebug, Vec2};
 use iced::{
 	Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
 		Clipboard, Layout, Shell, Widget,
 		layout::{Limits, Node},
+		mouse::{self, Click, Cursor, Interaction, click::Kind},
 		overlay,
 		renderer::Style,
-		widget::{Operation, Tree},
+		widget::{Operation, Tree, tree},
 	},
-	mouse::{Cursor, Interaction},
 };
 use std::borrow::{Borrow, BorrowMut};
 
+#[derive(Default)]
+struct State {
+	last_click: Option<Click>,
+}
+
 #[derive(Debug)]
 pub struct Track<'a, Message> {
+	idx: usize,
+	rtstate: &'a RtState,
+	position: &'a Vec2,
 	scale: &'a Vec2,
-	children: NoDebug<Box<[Clip<'a, Message>]>>,
+	pub(super) clips: NoDebug<Box<[Clip<'a, Message>]>>,
+	f: fn(Action) -> Message,
 }
 
 impl<'a, Message> Widget<Message, Theme, Renderer> for Track<'a, Message>
 where
 	Message: Clone + 'a,
 {
+	fn tag(&self) -> tree::Tag {
+		tree::Tag::of::<State>()
+	}
+
+	fn state(&self) -> tree::State {
+		tree::State::new(State::default())
+	}
+
 	fn diff(&self, tree: &mut Tree) {
-		tree.diff_children(&self.children);
+		tree.diff_children(&self.clips);
+	}
+
+	fn children(&self) -> Vec<Tree> {
+		self.clips.iter().map(Tree::new).collect()
 	}
 
 	fn size(&self) -> Size<Length> {
 		Size::new(Fill, Length::Fixed(self.scale.y))
 	}
 
-	fn children(&self) -> Vec<Tree> {
-		self.children.iter().map(Tree::new).collect()
-	}
-
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
 		Node::with_children(
 			Size::new(limits.max().width, self.scale.y),
-			self.children
+			self.clips
 				.iter_mut()
 				.zip(&mut tree.children)
 				.map(|(widget, tree)| widget.layout(tree, renderer, &limits.height(self.scale.y)))
@@ -54,14 +72,15 @@ where
 		viewport: &Rectangle,
 		renderer: &Renderer,
 	) -> Interaction {
-		self.children
+		self.clips
 			.iter()
 			.zip(&tree.children)
 			.zip(layout.children())
+			.rev()
 			.map(|((child, tree), clip_layout)| {
 				child.mouse_interaction(tree, clip_layout, cursor, viewport, renderer)
 			})
-			.rfind(|&i| i != Interaction::default())
+			.find(|&i| i != Interaction::default())
 			.unwrap_or_default()
 	}
 
@@ -89,15 +108,46 @@ where
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
-		self.children
+		self.clips
 			.iter_mut()
 			.zip(&mut tree.children)
 			.zip(layout.children())
+			.rev()
 			.for_each(|((child, state), layout)| {
 				child.update(
 					state, event, layout, cursor, renderer, clipboard, shell, viewport,
 				);
 			});
+
+		if shell.is_event_captured() {
+			return;
+		}
+
+		let track_bounds = layout.bounds() - Vector::new(viewport.x, viewport.y);
+
+		if let Event::Mouse(mouse::Event::ButtonPressed {
+			button: mouse::Button::Left,
+			modifiers,
+		}) = event && let Some(cursor) = cursor.position_in(*viewport)
+			&& track_bounds.contains(cursor)
+		{
+			let state = tree.state.downcast_mut::<State>();
+
+			let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
+			state.last_click = Some(new_click);
+
+			if new_click.kind() == Kind::Double {
+				let time = get_time(
+					cursor.x,
+					*self.position,
+					*self.scale,
+					self.rtstate,
+					*modifiers,
+				);
+				shell.publish((self.f)(Action::Add(self.idx, time)));
+				shell.capture_event();
+			}
+		}
 	}
 
 	fn overlay<'b>(
@@ -109,7 +159,7 @@ where
 		translation: Vector,
 	) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
 		overlay::from_children(
-			&mut self.children,
+			&mut self.clips,
 			tree,
 			layout,
 			renderer,
@@ -127,7 +177,7 @@ where
 	) {
 		operation.container(None, layout.bounds());
 		operation.traverse(&mut |operation| {
-			self.children
+			self.clips
 				.iter_mut()
 				.zip(&mut tree.children)
 				.zip(layout.children())
@@ -139,13 +189,24 @@ where
 }
 
 impl<'a, Message> Track<'a, Message> {
-	pub fn new(scale: &'a Vec2, children: impl IntoIterator<Item = Clip<'a, Message>>) -> Self
+	pub fn new(
+		idx: usize,
+		rtstate: &'a RtState,
+		position: &'a Vec2,
+		scale: &'a Vec2,
+		children: impl IntoIterator<Item = Clip<'a, Message>>,
+		f: fn(Action) -> Message,
+	) -> Self
 	where
 		Message: 'a,
 	{
 		Self {
+			idx,
+			rtstate,
+			position,
 			scale,
-			children: children.into_iter().collect::<Box<_>>().into(),
+			clips: children.into_iter().collect::<Box<_>>().into(),
+			f,
 		}
 	}
 
@@ -167,7 +228,7 @@ impl<'a, Message> Track<'a, Message> {
 		rects.clear();
 
 		for (i, ((child, tree), layout)) in self
-			.children
+			.clips
 			.iter()
 			.zip(&tree.children)
 			.zip(layout.children())

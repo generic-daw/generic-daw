@@ -47,6 +47,7 @@ missing_panics_doc = "allow"
 
 nursery = { level = "warn", priority = -1 }
 missing_const_for_fn = "allow"
+set_contains_or_insert = "allow"
 
 allow_attributes = "warn"
 empty_enum_variants_with_brackets = "warn"

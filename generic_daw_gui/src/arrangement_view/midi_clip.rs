@@ -20,4 +20,5 @@ impl MidiClip {
 pub struct MidiClipRef<'a> {
 	pub pattern: &'a Pattern,
 	pub clip: &'a MidiClip,
+	pub idx: (usize, usize),
 }

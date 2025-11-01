@@ -443,10 +443,8 @@ impl Daw {
 							.style(button_with_radius(button::primary, border::left(5)))
 							.padding([5, 7])
 							.on_press_maybe(
-								(!matches!(self.arrangement_view.tab, Tab::Arrangement { .. }))
-									.then_some(Message::ChangedTab(Tab::Arrangement {
-										grabbed: None
-									}))
+								(!matches!(self.arrangement_view.tab, Tab::Arrangement))
+									.then_some(Message::ChangedTab(Tab::Arrangement))
 							),
 						button(sliders_vertical())
 							.style(button_with_radius(button::primary, border::right(5)))

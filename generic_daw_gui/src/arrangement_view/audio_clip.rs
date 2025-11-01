@@ -26,4 +26,5 @@ impl AudioClip {
 pub struct AudioClipRef<'a> {
 	pub sample: &'a Sample,
 	pub clip: &'a AudioClip,
+	pub idx: (usize, usize),
 }
