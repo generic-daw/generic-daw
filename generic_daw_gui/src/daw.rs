@@ -601,14 +601,12 @@ impl Daw {
 	fn config_view_keybinds(event: &Event) -> Option<Message> {
 		match event {
 			Event::Keyboard(keyboard::Event::KeyPressed {
-				physical_key,
+				physical_key: keyboard::key::Physical::Code(code),
 				modifiers,
 				..
 			}) => match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-				(false, false, false) => match physical_key {
-					keyboard::key::Physical::Code(keyboard::key::Code::Escape) => {
-						Some(Message::CloseConfigView)
-					}
+				(false, false, false) => match code {
+					keyboard::key::Code::Escape => Some(Message::CloseConfigView),
 					_ => None,
 				},
 				_ => None,
@@ -621,30 +619,25 @@ impl Daw {
 	fn base_keybinds(event: &Event) -> Option<Message> {
 		match event {
 			Event::Keyboard(keyboard::Event::KeyPressed {
-				physical_key,
+				physical_key: keyboard::key::Physical::Code(code),
 				modifiers,
 				..
 			}) => match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-				(false, false, false) => match physical_key {
-					keyboard::key::Physical::Code(keyboard::key::Code::Space) => {
+				(false, false, false) => match code {
+					keyboard::key::Code::Space => {
 						Some(Message::Arrangement(ArrangementMessage::TogglePlayback))
 					}
 					_ => None,
 				},
-				(true, false, false) => match physical_key {
-					keyboard::key::Physical::Code(code) => match code {
-						keyboard::key::Code::KeyE => Some(Message::ExportFileDialog),
-						keyboard::key::Code::KeyN => Some(Message::NewFile),
-						keyboard::key::Code::KeyO => Some(Message::OpenFileDialog),
-						keyboard::key::Code::KeyS => Some(Message::SaveFile),
-						_ => None,
-					},
-					keyboard::key::Physical::Unidentified(..) => None,
+				(true, false, false) => match code {
+					keyboard::key::Code::KeyE => Some(Message::ExportFileDialog),
+					keyboard::key::Code::KeyN => Some(Message::NewFile),
+					keyboard::key::Code::KeyO => Some(Message::OpenFileDialog),
+					keyboard::key::Code::KeyS => Some(Message::SaveFile),
+					_ => None,
 				},
-				(true, true, false) => match physical_key {
-					keyboard::key::Physical::Code(keyboard::key::Code::KeyS) => {
-						Some(Message::SaveAsFileDialog)
-					}
+				(true, true, false) => match code {
+					keyboard::key::Code::KeyS => Some(Message::SaveAsFileDialog),
 					_ => None,
 				},
 				_ => None,
