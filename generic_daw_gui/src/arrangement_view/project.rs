@@ -163,7 +163,7 @@ impl ArrangementWrapper {
 		Task::batch([
 			Task::future(unblock(move || {
 				partial_sender
-					.send(Self::load(path, &config, &plugin_bundles, &progress_sender))
+					.send(Self::load(path, config, &plugin_bundles, &progress_sender))
 					.unwrap();
 			}))
 			.discard(),
@@ -177,17 +177,15 @@ impl ArrangementWrapper {
 
 	fn load(
 		path: Arc<Path>,
-		config: &Config,
+		config: Config,
 		plugin_bundles: &HashMap<PluginDescriptor, NoDebug<PluginBundle>>,
 		daw: &Sender<DawMessage>,
 	) -> Option<Task<DawMessage>> {
-		let config = &config;
-
 		let mut gdp = Vec::new();
 		File::open(&path).ok()?.read_to_end(&mut gdp).ok()?;
 		let reader = Reader::new(&gdp)?;
 
-		let (mut arrangement, futs) = Self::create(config);
+		let (mut arrangement, task) = Self::create(&config);
 
 		arrangement.set_bpm(reader.rtstate().bpm as u16);
 		arrangement.set_numerator(reader.rtstate().numerator as u8);
@@ -459,18 +457,19 @@ impl ArrangementWrapper {
 		drop(channels);
 
 		Some(
-			Task::done(DawMessage::Arrangement(ArrangementMessage::SetArrangement(
-				NoClone(Box::new(arrangement)),
-			)))
-			.chain(Task::batch([
-				futs.map(Message::Batch).map(DawMessage::Arrangement),
-				messages
-					.into_iter()
-					.map(Task::done)
-					.fold(Task::none(), Task::chain)
-					.map(DawMessage::Arrangement)
-					.chain(Task::done(DawMessage::OpenedFile(Some(path)))),
-			])),
+			Task::done(DawMessage::MergeConfig(config.into(), false))
+				.chain(Task::done(DawMessage::Arrangement(
+					ArrangementMessage::SetArrangement(NoClone(Box::new(arrangement))),
+				)))
+				.chain(Task::batch([
+					task.map(Message::Batch).map(DawMessage::Arrangement),
+					messages
+						.into_iter()
+						.map(Task::done)
+						.fold(Task::none(), Task::chain)
+						.map(DawMessage::Arrangement)
+						.chain(Task::done(DawMessage::OpenedFile(Some(path)))),
+				])),
 		)
 	}
 }

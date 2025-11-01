@@ -1,4 +1,5 @@
 use crate::{
+	action::Action,
 	components::{PICK_LIST_HANDLE, number_input},
 	config::{Config, Device},
 	icons::{link, mic, plus, rotate_ccw, save, unlink, volume_2, x},
@@ -57,37 +58,42 @@ pub enum Message {
 
 #[derive(Debug)]
 pub struct ConfigView {
-	prev_config: Config,
 	config: Config,
+	prev_config: Config,
 	tab: Tab,
 	input_devices: Vec<Arc<str>>,
 	output_devices: Vec<Arc<str>>,
 }
 
-impl ConfigView {
-	pub fn new(prev_config: Config) -> Self {
+impl Default for ConfigView {
+	fn default() -> Self {
 		let mut input_devices = get_input_devices();
 		input_devices.sort_unstable();
 
 		let mut output_devices = get_output_devices();
 		output_devices.sort_unstable();
 
+		let config = Config::read();
+
 		Self {
-			config: prev_config.clone(),
-			prev_config,
+			config: config.clone(),
+			prev_config: config,
 			tab: Tab::Output,
 			input_devices,
 			output_devices,
 		}
 	}
+}
 
-	pub fn update(&mut self, message: Message) -> Task<Message> {
+impl ConfigView {
+	pub fn update(&mut self, message: Message) -> Action<Config, Message> {
 		match message {
 			Message::AddSamplePathFileDialog => {
 				return Task::future(AsyncFileDialog::new().pick_folder())
 					.and_then(Task::done)
 					.map(|p| p.path().into())
-					.map(Message::AddSamplePath);
+					.map(Message::AddSamplePath)
+					.into();
 			}
 			Message::AddSamplePath(path) => self.config.sample_paths.push(path),
 			Message::RemoveSamplePath(idx) => _ = self.config.sample_paths.remove(idx),
@@ -95,7 +101,8 @@ impl ConfigView {
 				return Task::future(AsyncFileDialog::new().pick_folder())
 					.and_then(Task::done)
 					.map(|p| p.path().into())
-					.map(Message::AddClapPath);
+					.map(Message::AddClapPath)
+					.into();
 			}
 			Message::AddClapPath(path) => self.config.clap_paths.push(path),
 			Message::RemoveClapPath(idx) => _ = self.config.clap_paths.remove(idx),
@@ -125,17 +132,16 @@ impl ConfigView {
 				self.config.plugin_scale_factor = plugin_scale_factor;
 			}
 			Message::WriteConfig => {
-				self.config.write();
-				self.prev_config = self.config.clone();
+				return Action::instruction(self.config.clone());
 			}
 			Message::ResetConfigToPrev => self.config = self.prev_config.clone(),
 			Message::ResetConfigToDefault => self.config = Config::default(),
 		}
 
-		Task::none()
+		Action::none()
 	}
 
-	pub fn view(&self) -> Element<'_, Message> {
+	pub fn view(&self, live_config: &Config) -> Element<'_, Message> {
 		container(
 			scrollable(
 				column![
@@ -460,21 +466,30 @@ impl ConfigView {
 							)
 					]
 					.align_y(Center),
-					(self.config != self.prev_config).then(|| rule::horizontal(1)),
-					(self.config != self.prev_config).then(|| row![
-						container("Changes will only take effect after a project reload!")
-							.padding([5, 10])
-							.style(|t| container::warning(t).border(border::rounded(f32::INFINITY))),
+					rule::horizontal(1),
+					row![
+						(!self.config.is_mergeable(live_config)).then(|| {
+							container("Some changes may only take effect after a reload!")
+								.padding([5, 10])
+								.style(|t| {
+									container::warning(t).border(border::rounded(f32::INFINITY))
+								})
+						}),
 						space::horizontal(),
 						button(save())
 							.style(button_with_radius(button::primary, border::left(5)))
 							.padding(5)
-							.on_press(Message::WriteConfig),
+							.on_press_maybe(
+								(self.config != self.prev_config).then_some(Message::WriteConfig)
+							),
 						button(rotate_ccw())
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding(5)
-							.on_press(Message::ResetConfigToPrev)
-					])
+							.on_press_maybe(
+								(self.config != self.prev_config)
+									.then_some(Message::ResetConfigToPrev)
+							)
+					]
 				]
 				.spacing(10)
 				.padding(10)

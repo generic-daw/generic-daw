@@ -7,6 +7,7 @@ use log::LevelFilter;
 #[cfg(unix)]
 use wayland_sys as _;
 
+mod action;
 mod arrangement_view;
 mod clap_host;
 mod components;

@@ -46,6 +46,17 @@ impl Default for Config {
 	}
 }
 
+impl Config {
+	pub fn merge_with(&mut self, mut other: Self) {
+		std::mem::swap(self, &mut other);
+		self.output_device = other.output_device;
+	}
+
+	pub fn is_mergeable(&self, other: &Self) -> bool {
+		self.output_device == other.output_device
+	}
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
 pub struct Device {

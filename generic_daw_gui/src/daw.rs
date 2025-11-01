@@ -66,6 +66,7 @@ pub enum Message {
 
 	OpenConfigView,
 	CloseConfigView,
+	MergeConfig(Box<Config>, bool),
 
 	ToggleMetronome,
 	ChangedBpm(u16),
@@ -147,20 +148,36 @@ impl Daw {
 			}
 			Message::FileTree(action) => return self.handle_file_tree_action(action),
 			Message::ConfigView(message) => {
-				return self
-					.config_view
-					.as_mut()
-					.unwrap()
-					.update(message)
-					.map(Message::ConfigView);
+				let action = self.config_view.as_mut().unwrap().update(message);
+				let mut futs = vec![action.task.map(Message::ConfigView)];
+
+				if let Some(config) = action.instruction {
+					config.write();
+					futs.push(self.update(Message::MergeConfig(config.into(), true)));
+					futs.push(self.update(Message::OpenConfigView));
+				}
+
+				return Task::batch(futs);
 			}
 			Message::NewFile => {
-				self.reload_config();
-				let (arrangement, futs) = ArrangementWrapper::create(&self.config);
-				self.arrangement_view.arrangement = arrangement;
-				return futs
-					.map(ArrangementMessage::Batch)
+				let config = Config::read();
+				let (arrangement, task) = ArrangementWrapper::create(&config);
+				let fut1 = self.update(Message::MergeConfig(config.into(), false));
+				let fut2 = self
+					.arrangement_view
+					.update(
+						ArrangementMessage::SetArrangement(NoClone(Box::new(arrangement))),
+						&self.config,
+						&self.plugin_bundles,
+					)
 					.map(Message::Arrangement);
+
+				return Task::batch([
+					fut1,
+					fut2,
+					task.map(ArrangementMessage::Batch)
+						.map(Message::Arrangement),
+				]);
 			}
 			Message::ChangedTab(tab) => self.arrangement_view.tab = tab,
 			Message::OpenLastFile => {
@@ -232,10 +249,9 @@ impl Daw {
 			Message::OpenFile(path) => {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
-					self.reload_config();
 					return ArrangementWrapper::start_load(
 						path,
-						self.config.clone(),
+						Config::read(),
 						self.plugin_bundles.clone(),
 					);
 				}
@@ -273,10 +289,23 @@ impl Daw {
 				self.arrangement_view.clap_host.set_realtime(true);
 				self.progress = None;
 			}
-			Message::OpenConfigView => {
-				self.config_view = Some(ConfigView::new(self.config.clone()));
-			}
+			Message::OpenConfigView => self.config_view = Some(ConfigView::default()),
 			Message::CloseConfigView => self.config_view = None,
+			Message::MergeConfig(config, live) => {
+				if self.config.clap_paths != config.clap_paths {
+					self.plugin_bundles = get_installed_plugins(&config.clap_paths).into();
+				}
+
+				if self.config.sample_paths != config.sample_paths {
+					self.file_tree.diff(&config.sample_paths);
+				}
+
+				if live {
+					self.config.merge_with(*config);
+				} else {
+					self.config = *config;
+				}
+			}
 			Message::ToggleMetronome => self.arrangement_view.arrangement.toggle_metronome(),
 			Message::ChangedBpm(bpm) => self
 				.arrangement_view
@@ -323,20 +352,6 @@ impl Daw {
 				self.file_tree.update(id, &action).map(Message::FileTree)
 			}
 		}
-	}
-
-	fn reload_config(&mut self) {
-		let config = Config::read();
-
-		if self.config.clap_paths != config.clap_paths {
-			self.plugin_bundles = get_installed_plugins(&config.clap_paths).into();
-		}
-
-		if self.config.sample_paths != config.sample_paths {
-			self.file_tree.diff(&config.sample_paths);
-		}
-
-		self.config = config;
 	}
 
 	pub fn view(&self, window: window::Id) -> Element<'_, Message> {
@@ -463,8 +478,10 @@ impl Daw {
 					.interaction(Interaction::Progress)),
 			self.config_view.as_ref().map(|config_view| opaque(
 				mouse_area(
-					center(opaque(config_view.view().map(Message::ConfigView)))
-						.style(|_| container::background(Color::BLACK.scale_alpha(0.8))),
+					center(opaque(
+						config_view.view(&self.config).map(Message::ConfigView)
+					))
+					.style(|_| container::background(Color::BLACK.scale_alpha(0.8))),
 				)
 				.on_press(Message::CloseConfigView),
 			)),
