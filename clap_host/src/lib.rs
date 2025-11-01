@@ -3,7 +3,7 @@ use generic_daw_utils::{NoDebug, unique_id};
 use main_thread::MainThread;
 use shared::Shared;
 use std::{
-	collections::{HashMap, HashSet},
+	collections::HashMap,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
@@ -51,7 +51,6 @@ const API_TYPE: GuiApiType<'_> = const { GuiApiType::default_for_current_platfor
 pub fn get_installed_plugins(
 	paths: impl IntoIterator<Item: AsRef<Path>>,
 ) -> HashMap<PluginDescriptor, NoDebug<PluginBundle>> {
-	let mut seen = HashSet::new();
 	let mut bundles = HashMap::new();
 
 	paths
@@ -65,7 +64,6 @@ pub fn get_installed_plugins(
 				.extension()
 				.is_some_and(|ext| ext == "clap")
 		})
-		.filter(|dir_entry| seen.insert(dir_entry.path().to_owned()))
 		.filter_map(|dir_entry| {
 			// SAFETY:
 			// Loading an external library object file is inherently unsafe.
