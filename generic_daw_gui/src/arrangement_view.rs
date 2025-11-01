@@ -414,7 +414,7 @@ impl ArrangementView {
 					self.soloed_track = None;
 				}
 
-				let mut selection = self.arrangement_selection.borrow_mut();
+				let selection = self.arrangement_selection.get_mut();
 				selection.selected = selection
 					.selected
 					.drain()
@@ -424,7 +424,6 @@ impl ArrangementView {
 						Ordering::Greater => Some((track - 1, clip)),
 					})
 					.collect();
-				drop(selection);
 
 				return Task::batch([
 					self.update(

@@ -173,7 +173,7 @@ where
 			return;
 		};
 
-		let mut selection = self.selection.borrow_mut();
+		let selection = &mut *self.selection.borrow_mut();
 		let clip_bounds = layout.bounds() - Vector::new(viewport.x, viewport.y);
 
 		if let Event::Mouse(event) = event
