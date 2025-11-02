@@ -24,7 +24,7 @@ use iced::{
 };
 use log::info;
 #[cfg(unix)]
-use smol::future::race;
+use smol::future::or;
 use smol::{Timer, unblock};
 #[cfg(unix)]
 use std::os::fd::{BorrowedFd, RawFd};
@@ -324,7 +324,7 @@ impl ClapHost {
 									.await
 							}
 							(true, true) => {
-								race(
+								or(
 									async_fd
 										.readable()
 										.map(|_| PosixFdMessage::OnFd(FdFlags::READ)),
