@@ -1,6 +1,6 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef},
-	widget::{clip, get_time, get_unsnapped_time, track::Track},
+	widget::{Delta, clip, get_time, get_unsnapped_time, track::Track},
 };
 use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::Vec2;
@@ -16,24 +16,7 @@ use iced::{
 	},
 	border, keyboard,
 };
-use std::{cell::RefCell, collections::HashSet, ops::Add};
-
-#[derive(Clone, Copy, Debug)]
-pub enum Delta<T> {
-	Positive(T),
-	Negative(T),
-}
-
-impl Add<Delta<Self>> for MusicalTime {
-	type Output = Self;
-
-	fn add(self, rhs: Delta<Self>) -> Self::Output {
-		match rhs {
-			Delta::Positive(diff) => self + diff,
-			Delta::Negative(diff) => self.saturating_sub(diff),
-		}
-	}
-}
+use std::{cell::RefCell, collections::HashSet};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
@@ -164,12 +147,12 @@ where
 								);
 
 								selection.status = Status::Selecting(track, track, time, time);
-								shell.request_redraw();
 								shell.capture_event();
+								shell.request_redraw();
 							} else if !selection.primary.is_empty() {
 								selection.primary.clear();
-								shell.request_redraw();
 								shell.capture_event();
+								shell.request_redraw();
 							}
 						}
 						mouse::Button::Right => {

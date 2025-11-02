@@ -143,10 +143,7 @@ pub enum Message {
 pub enum Tab {
 	Playlist,
 	Mixer,
-	PianoRoll {
-		clip: MidiClip,
-		grabbed: Option<(usize, Option<usize>)>,
-	},
+	PianoRoll(MidiClip),
 }
 
 #[derive(Debug)]
@@ -159,14 +156,14 @@ pub struct ArrangementView {
 
 	playlist_position: Vec2,
 	playlist_scale: Vec2,
-	soloed_track: Option<NodeId>,
 	playlist_selection: RefCell<playlist::Selection>,
+	soloed_track: Option<NodeId>,
 
 	selected_channel: Option<NodeId>,
 
 	piano_roll_position: Vec2,
 	piano_roll_scale: Vec2,
-	last_note_len: MusicalTime,
+	piano_roll_selection: RefCell<piano_roll::Selection>,
 
 	split_at: f32,
 	plugins: combo_box::State<PluginDescriptor>,
@@ -194,14 +191,14 @@ impl ArrangementView {
 
 				playlist_position: Vec2::default(),
 				playlist_scale: Vec2::new(10.0, 87.0),
-				soloed_track: None,
 				playlist_selection: RefCell::default(),
+				soloed_track: None,
 
 				selected_channel: None,
 
 				piano_roll_position: Vec2::new(0.0, 40.0),
 				piano_roll_scale: Vec2::new(8.0, LINE_HEIGHT),
-				last_note_len: MusicalTime::BEAT,
+				piano_roll_selection: RefCell::default(),
 
 				split_at: DEFAULT_SPLIT_POSITION,
 				plugins: combo_box::State::new(plugins),
@@ -235,6 +232,7 @@ impl ArrangementView {
 				self.arrangement = *arrangement;
 				self.playlist_selection.get_mut().primary.clear();
 				self.selected_channel = None;
+				self.piano_roll_selection.get_mut().primary.clear();
 				if matches!(self.tab, Tab::PianoRoll { .. }) {
 					self.tab = Tab::Playlist;
 				}
@@ -573,24 +571,20 @@ impl ArrangementView {
 
 	fn handle_playlist_action(&mut self, action: playlist::Action) {
 		let playlist::Selection {
-			primary: selected,
-			secondary: attached,
-			..
+			primary, secondary, ..
 		} = self.playlist_selection.get_mut();
 
 		match action {
 			playlist::Action::Open => {
-				debug_assert_eq!(selected.len(), 1);
-				let &(track, clip) = selected.iter().next().unwrap();
+				debug_assert_eq!(primary.len(), 1);
+				let &(track, clip) = primary.iter().next().unwrap();
 
 				let clip::Clip::Midi(clip) = self.arrangement.tracks()[track].clips[clip] else {
 					panic!()
 				};
 
-				self.tab = Tab::PianoRoll {
-					clip,
-					grabbed: None,
-				};
+				self.piano_roll_selection.get_mut().primary.clear();
+				self.tab = Tab::PianoRoll(clip);
 			}
 			playlist::Action::Add(track, pos) => {
 				let pattern = PatternPair::new(Vec::new());
@@ -603,21 +597,21 @@ impl ArrangementView {
 				);
 				clip.position.move_to(pos);
 				let clip = self.arrangement.add_clip(track, clip);
-				selected.insert((track, clip));
+				primary.insert((track, clip));
 			}
 			playlist::Action::Clone => {
-				let mut new = HashSet::with_capacity(selected.len());
-				for (track, clip) in selected.drain() {
+				let mut new = HashSet::new();
+				for &(track, clip) in &*primary {
 					new.insert((
 						track,
 						self.arrangement
 							.add_clip(track, self.arrangement.tracks()[track].clips[clip]),
 					));
 				}
-				*selected = new;
+				*primary = new;
 			}
 			playlist::Action::Drag(track_diff, pos_diff) => {
-				let mut sorted = selected.drain().collect::<Vec<_>>();
+				let mut sorted = primary.drain().collect::<Vec<_>>();
 				match track_diff.cmp(&0) {
 					Ordering::Equal => {}
 					Ordering::Less => sorted.sort_unstable_by_key(|&(t, c)| (t, Reverse(c))),
@@ -640,11 +634,11 @@ impl ArrangementView {
 						.start();
 					self.arrangement.clip_move_to(track, clip, pos + pos_diff);
 
-					selected.insert((track, clip));
+					primary.insert((track, clip));
 				}
 			}
 			playlist::Action::SplitAt(mut pos) => {
-				let filtered = selected
+				let filtered = primary
 					.drain()
 					.filter(|&(track, clip)| {
 						let position = self.arrangement.tracks()[track].clips[clip].position();
@@ -652,77 +646,60 @@ impl ArrangementView {
 					})
 					.collect::<Vec<_>>();
 
-				let mut seen = BitSet::new();
 				for (track, lhs) in filtered {
-					if seen.insert(track) {
-						self.arrangement.tracks()[track]
-							.clips
-							.iter()
-							.enumerate()
-							.for_each(|(lhs, clip)| {
-								if clip.position().start() == pos {
-									selected.insert((track, lhs));
-								}
-
-								if clip.position().end() == pos {
-									attached.insert((track, lhs));
-								}
-							});
-					}
-
 					let clip = self.arrangement.tracks()[track].clips[lhs];
-					if clip.position().start() != pos
-						&& clip.position().end() != pos
-						&& clip.position().len() > MusicalTime::TICK
-					{
+					if clip.position().start() == pos {
+						primary.insert((track, lhs));
+					} else if clip.position().end() == pos {
+						secondary.insert((track, lhs));
+					} else if clip.position().len() > MusicalTime::TICK {
 						let start = clip.position().start() + MusicalTime::TICK;
 						let end = clip.position().end() - MusicalTime::TICK;
 						pos = pos.clamp(start, end);
 						let rhs = self.arrangement.add_clip(track, clip);
 						self.arrangement.clip_trim_end_to(track, lhs, pos);
 						self.arrangement.clip_trim_start_to(track, rhs, pos);
-						selected.insert((track, lhs));
-						attached.insert((track, rhs));
+						primary.insert((track, lhs));
+						secondary.insert((track, rhs));
 					}
 				}
 			}
 			playlist::Action::DragSplit(pos) => {
 				let mut clamped = HashMap::new();
-				for &(track, _) in &*selected {
-					clamped.entry(track).or_insert_with(|| {
-						let mut pos = pos;
 
-						for &(_, lhs) in selected.iter().filter(|&&(t, _)| t == track) {
-							pos = pos.max(
-								self.arrangement.tracks()[track].clips[lhs]
-									.position()
-									.start() + MusicalTime::TICK,
-							);
-						}
+				for &(track, lhs) in &*primary {
+					let new = self.arrangement.tracks()[track].clips[lhs]
+						.position()
+						.start() + MusicalTime::TICK;
 
-						for &(_, rhs) in attached.iter().filter(|&&(t, _)| t == track) {
-							pos = pos.min(
-								self.arrangement.tracks()[track].clips[rhs].position().end()
-									- MusicalTime::TICK,
-							);
-						}
-
-						pos
-					});
+					clamped
+						.entry(track)
+						.and_modify(|old| *old = new.max(*old))
+						.or_insert_with(|| new.max(pos));
 				}
 
-				for &(track, lhs) in &*selected {
+				for &(track, rhs) in &*secondary {
+					let new = self.arrangement.tracks()[track].clips[rhs].position().end()
+						- MusicalTime::TICK;
+
+					clamped
+						.entry(track)
+						.and_modify(|old| *old = new.min(*old))
+						.or_insert_with(|| new.min(pos));
+				}
+
+				for &(track, lhs) in &*primary {
 					self.arrangement
 						.clip_trim_end_to(track, lhs, clamped[&track]);
 				}
 
-				for &(track, rhs) in &*attached {
+				for &(track, rhs) in &*secondary {
 					self.arrangement
 						.clip_trim_start_to(track, rhs, clamped[&track]);
 				}
 			}
 			playlist::Action::TrimStart(pos_diff) => {
-				for &(track, clip) in &*selected {
+				for &(track, clip) in &*primary {
 					let pos = self.arrangement.tracks()[track].clips[clip]
 						.position()
 						.start();
@@ -731,7 +708,7 @@ impl ArrangementView {
 				}
 			}
 			playlist::Action::TrimEnd(pos_diff) => {
-				for &(track, clip) in &*selected {
+				for &(track, clip) in &*primary {
 					let pos = self.arrangement.tracks()[track].clips[clip]
 						.position()
 						.end();
@@ -740,7 +717,7 @@ impl ArrangementView {
 				}
 			}
 			playlist::Action::Delete => {
-				let mut sorted = selected.drain().collect::<Vec<_>>();
+				let mut sorted = primary.drain().collect::<Vec<_>>();
 				sorted.sort_unstable_by_key(|&(_, c)| Reverse(c));
 				for (track, clip) in sorted {
 					let clip = self.arrangement.remove_clip(track, clip);
@@ -751,98 +728,145 @@ impl ArrangementView {
 	}
 
 	fn handle_piano_roll_action(&mut self, action: piano_roll::Action) {
-		let Tab::PianoRoll { clip, grabbed } = &mut self.tab else {
+		let Tab::PianoRoll(clip) = &mut self.tab else {
 			panic!()
 		};
 
-		let notes = &self.arrangement.patterns()[*clip.pattern].notes;
+		let piano_roll::Selection {
+			primary, secondary, ..
+		} = self.piano_roll_selection.get_mut();
 
 		match action {
-			piano_roll::Action::Grab(note) => *grabbed = Some((note, None)),
 			piano_roll::Action::Add(key, pos) => {
 				let note = self.arrangement.add_note(
 					clip.pattern,
 					MidiNote {
 						key,
 						velocity: 1.0,
-						position: NotePosition::new(pos, pos + self.last_note_len),
+						position: NotePosition::new(pos, pos + MusicalTime::BEAT),
 					},
 				);
-				*grabbed = Some((note, None));
+				primary.insert(note);
 			}
-			piano_roll::Action::Clone(note) => {
-				let note = self.arrangement.add_note(clip.pattern, notes[note]);
-				*grabbed = Some((note, None));
-			}
-			piano_roll::Action::Drag(key, pos) => {
-				let (note, ..) = grabbed.unwrap();
-				if notes[note].key != key {
-					self.arrangement.note_switch_key(clip.pattern, note, key);
+			piano_roll::Action::Clone => {
+				let mut new = BitSet::new();
+				for note in &*primary {
+					new.insert(self.arrangement.add_note(
+						clip.pattern,
+						self.arrangement.patterns()[*clip.pattern].notes[note],
+					));
 				}
-				self.arrangement.note_move_to(clip.pattern, note, pos);
+				*primary = new;
 			}
-			piano_roll::Action::SplitAt(lhs, mut pos) => {
-				let note = notes[lhs];
-				let (lhs, rhs) = if note.position.end() == pos
-					&& let Some(rhs) = notes.iter().position(|note| note.position.start() == pos)
-				{
-					(lhs, rhs)
-				} else if clip.position.start() == pos
-					&& let Some(rhs) = notes.iter().position(|note| note.position.end() == pos)
-				{
-					(rhs, lhs)
-				} else {
-					let start = note.position.start() + MusicalTime::TICK;
-					let end = note.position.end() - MusicalTime::TICK;
-					if start > end {
-						return;
+			piano_roll::Action::Drag(key_diff, pos_diff) => {
+				for idx in &*primary {
+					let note = self.arrangement.patterns()[*clip.pattern].notes[idx];
+					let new_key = note.key + key_diff;
+					if new_key != note.key {
+						self.arrangement.note_switch_key(clip.pattern, idx, new_key);
 					}
-					let rhs = self.arrangement.add_note(clip.pattern, note);
-					pos = pos.clamp(start, end);
-					self.arrangement.note_trim_end_to(clip.pattern, lhs, pos);
-					self.arrangement.note_trim_start_to(clip.pattern, rhs, pos);
-					(lhs, rhs)
-				};
-				*grabbed = Some((lhs, Some(rhs)));
-			}
-			piano_roll::Action::DragSplit(mut pos) => {
-				let Some((lhs, Some(rhs))) = *grabbed else {
-					return;
-				};
-				let start = notes[lhs].position.start() + MusicalTime::TICK;
-				let end = notes[rhs].position.end() - MusicalTime::TICK;
-				if start > end {
-					return;
+					let pos = note.position.start();
+					self.arrangement
+						.note_move_to(clip.pattern, idx, pos + pos_diff);
 				}
-				pos = pos.clamp(start, end);
-				self.arrangement.note_trim_end_to(clip.pattern, lhs, pos);
-				self.arrangement.note_trim_start_to(clip.pattern, rhs, pos);
 			}
-			piano_roll::Action::TrimStart(pos) => {
-				let (note, ..) = grabbed.unwrap();
-				self.arrangement.note_trim_start_to(clip.pattern, note, pos);
-			}
-			piano_roll::Action::TrimEnd(pos) => {
-				let (note, ..) = grabbed.unwrap();
-				self.arrangement.note_trim_end_to(clip.pattern, note, pos);
-			}
-			piano_roll::Action::Delete(note) => {
-				self.arrangement.remove_note(clip.pattern, note);
-			}
-		}
+			piano_roll::Action::SplitAt(mut pos) => {
+				let filtered = primary
+					.iter()
+					.filter(|&lhs| {
+						let note = self.arrangement.patterns()[*clip.pattern].notes[lhs];
+						(note.position.start()..=note.position.end()).contains(&pos)
+					})
+					.collect::<BitSet>();
+				primary.clear();
 
-		if let Some((note, ..)) = grabbed
-			&& let Some(note) = self.arrangement.patterns()[*clip.pattern].notes.get(*note)
-		{
-			self.last_note_len = note.position.len();
+				for lhs in &filtered {
+					let note = self.arrangement.patterns()[*clip.pattern].notes[lhs];
+					if note.position.start() == pos {
+						primary.insert(lhs);
+					} else if note.position.end() == pos {
+						secondary.insert(lhs);
+					} else if note.position.len() > MusicalTime::TICK {
+						let start = note.position.start() + MusicalTime::TICK;
+						let end = note.position.end() - MusicalTime::TICK;
+						pos = pos.clamp(start, end);
+						let rhs = self.arrangement.add_note(clip.pattern, note);
+						self.arrangement.note_trim_end_to(clip.pattern, lhs, pos);
+						self.arrangement.note_trim_start_to(clip.pattern, rhs, pos);
+						primary.insert(lhs);
+						secondary.insert(rhs);
+					}
+				}
+			}
+			piano_roll::Action::DragSplit(pos) => {
+				let mut clamped = HashMap::new();
+
+				for lhs in &*primary {
+					let note = self.arrangement.patterns()[*clip.pattern].notes[lhs];
+					let new = note.position.start() + MusicalTime::TICK;
+
+					clamped
+						.entry(note.key)
+						.and_modify(|old| *old = new.max(*old))
+						.or_insert_with(|| new.max(pos));
+				}
+
+				for rhs in &*secondary {
+					let note = self.arrangement.patterns()[*clip.pattern].notes[rhs];
+					let new = note.position.end() - MusicalTime::TICK;
+
+					clamped
+						.entry(note.key)
+						.and_modify(|old| *old = new.min(*old))
+						.or_insert_with(|| new.min(pos));
+				}
+
+				for lhs in &*primary {
+					let note = self.arrangement.patterns()[*clip.pattern].notes[lhs];
+					self.arrangement
+						.note_trim_end_to(clip.pattern, lhs, clamped[&note.key]);
+				}
+
+				for rhs in &*secondary {
+					let note = self.arrangement.patterns()[*clip.pattern].notes[rhs];
+					self.arrangement
+						.note_trim_start_to(clip.pattern, rhs, clamped[&note.key]);
+				}
+			}
+			piano_roll::Action::TrimStart(pos_diff) => {
+				for note in &*primary {
+					let pos = self.arrangement.patterns()[*clip.pattern].notes[note]
+						.position
+						.start();
+					self.arrangement
+						.note_trim_start_to(clip.pattern, note, pos + pos_diff);
+				}
+			}
+			piano_roll::Action::TrimEnd(pos_diff) => {
+				for note in &*primary {
+					let pos = self.arrangement.patterns()[*clip.pattern].notes[note]
+						.position
+						.end();
+					self.arrangement
+						.note_trim_end_to(clip.pattern, note, pos + pos_diff);
+				}
+			}
+			piano_roll::Action::Delete => {
+				let mut sorted = primary.iter().collect::<Vec<_>>();
+				primary.clear();
+				sorted.sort_unstable_by_key(|&n| Reverse(n));
+				for note in sorted {
+					self.arrangement.remove_note(clip.pattern, note);
+				}
+			}
 		}
 	}
 
 	pub fn view(&self) -> Element<'_, Message> {
-		match &self.tab {
+		match self.tab {
 			Tab::Playlist => self.arrangement(),
 			Tab::Mixer => self.mixer(),
-			Tab::PianoRoll { clip, .. } => self.piano_roll(clip),
+			Tab::PianoRoll(clip) => self.piano_roll(clip),
 		}
 	}
 
@@ -1290,13 +1314,14 @@ impl ArrangementView {
 		.into()
 	}
 
-	fn piano_roll<'a>(&'a self, clip: &'a MidiClip) -> Element<'a, Message> {
+	fn piano_roll(&self, clip: MidiClip) -> Element<'_, Message> {
 		Seeker::new(
 			self.arrangement.rtstate(),
 			&self.piano_roll_position,
 			&self.piano_roll_scale,
 			Piano::new(&self.piano_roll_position, &self.piano_roll_scale),
 			PianoRoll::new(
+				&self.piano_roll_selection,
 				&self.arrangement.patterns()[*clip.pattern].notes,
 				self.arrangement.rtstate(),
 				&self.piano_roll_position,

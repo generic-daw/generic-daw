@@ -186,6 +186,22 @@ where
 
 					match button {
 						mouse::Button::Left => {
+							if matches!(self.inner, Inner::MidiClip(..)) {
+								let new_click =
+									Click::new(cursor, mouse::Button::Left, state.last_click);
+								state.last_click = Some(new_click);
+
+								if new_click.kind() == Kind::Double {
+									if clear {
+										selection.primary.clear();
+										selection.primary.insert(idx);
+									}
+									shell.publish((self.f)(Action::Open));
+									shell.capture_event();
+									return;
+								}
+							}
+
 							let time = get_unsnapped_time(
 								cursor.x,
 								*self.position,
@@ -234,16 +250,6 @@ where
 									Status::DraggingSplit(time)
 								}
 							};
-
-							if matches!(self.inner, Inner::MidiClip(..)) {
-								let new_click =
-									Click::new(cursor, mouse::Button::Left, state.last_click);
-								state.last_click = Some(new_click);
-
-								if new_click.kind() == Kind::Double {
-									shell.publish((self.f)(Action::Open));
-								}
-							}
 
 							shell.capture_event();
 							shell.request_redraw();

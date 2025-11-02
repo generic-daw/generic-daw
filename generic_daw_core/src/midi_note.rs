@@ -1,7 +1,7 @@
 use crate::NotePosition;
 use std::fmt::{Debug, Display, Formatter};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Key {
 	C = 0,
 	CSharp = 1,
@@ -74,7 +74,7 @@ impl Display for Key {
 	}
 }
 
-#[derive(Clone, Copy, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct MidiKey(pub u8);
 
 impl MidiKey {
