@@ -30,8 +30,9 @@ pub enum Action {
 	Delete(usize),
 }
 
-#[derive(Clone, Copy, PartialEq)]
-enum State {
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum Status {
+	#[default]
 	None,
 	DraggingNote(f32, MidiKey, MusicalTime),
 	DraggingSplit(MusicalTime),
@@ -52,11 +53,11 @@ pub struct PianoRoll<'a, Message> {
 
 impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 	fn tag(&self) -> tree::Tag {
-		tree::Tag::of::<State>()
+		tree::Tag::of::<Status>()
 	}
 
 	fn state(&self) -> tree::State {
-		tree::State::new(State::None)
+		tree::State::new(Status::None)
 	}
 
 	fn size(&self) -> Size<Length> {
@@ -92,15 +93,15 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				return;
 			};
 
-			let state = tree.state.downcast_mut::<State>();
+			let state = tree.state.downcast_mut::<Status>();
 
 			let Some(cursor) = cursor.position_in(bounds) else {
-				*state = State::None;
+				*state = Status::None;
 				return;
 			};
 
 			match event {
-				mouse::Event::ButtonPressed { button, modifiers } if *state == State::None => {
+				mouse::Event::ButtonPressed { button, modifiers } if *state == Status::None => {
 					match button {
 						mouse::Button::Left => {
 							let time = get_time(
@@ -122,11 +123,11 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 								match (modifiers.command(), modifiers.shift()) {
 									(true, false) => {
 										shell.publish((self.f)(Action::Clone(i)));
-										*state = State::DraggingNote(offset, note.key, time);
+										*state = Status::DraggingNote(offset, note.key, time);
 									}
 									(false, true) => {
 										shell.publish((self.f)(Action::SplitAt(i, time)));
-										*state = State::DraggingSplit(time);
+										*state = Status::DraggingSplit(time);
 									}
 									_ => {
 										shell.publish((self.f)(Action::Grab(i)));
@@ -135,13 +136,15 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 										let border = 10f32.min((end_pixel - start_pixel) / 3.0);
 										*state = match (start_offset < border, end_offset < border)
 										{
-											(true, false) => State::NoteTrimmingStart(offset, time),
-											(false, true) => State::NoteTrimmingEnd(
+											(true, false) => {
+												Status::NoteTrimmingStart(offset, time)
+											}
+											(false, true) => Status::NoteTrimmingEnd(
 												offset + end_pixel - start_pixel,
 												time,
 											),
 											(false, false) => {
-												State::DraggingNote(offset, note.key, time)
+												Status::DraggingNote(offset, note.key, time)
 											}
 											(true, true) => unreachable!(),
 										};
@@ -151,13 +154,13 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 								let key = self.get_key(cursor);
 
 								shell.publish((self.f)(Action::Add(key, time)));
-								*state = State::DraggingNote(0.0, key, time);
+								*state = Status::DraggingNote(0.0, key, time);
 							}
 
 							shell.capture_event();
 						}
 						mouse::Button::Right if !self.deleted => {
-							*state = State::DeletingNotes;
+							*state = Status::DeletingNotes;
 
 							if let Some(note) = self.get_note(cursor) {
 								self.deleted = true;
@@ -169,12 +172,12 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 						_ => {}
 					}
 				}
-				mouse::Event::ButtonReleased { .. } if *state != State::None => {
-					*state = State::None;
+				mouse::Event::ButtonReleased { .. } if *state != Status::None => {
+					*state = Status::None;
 					shell.capture_event();
 				}
 				mouse::Event::CursorMoved { modifiers, .. } => match *state {
-					State::DraggingNote(offset, key, time) => {
+					Status::DraggingNote(offset, key, time) => {
 						let new_key = self.get_key(cursor);
 						let new_start = get_time(
 							cursor.x + offset,
@@ -184,13 +187,13 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							*modifiers,
 						);
 						if new_key != key || new_start != time {
-							*state = State::DraggingNote(offset, new_key, new_start);
+							*state = Status::DraggingNote(offset, new_key, new_start);
 
 							shell.publish((self.f)(Action::Drag(new_key, new_start)));
 							shell.capture_event();
 						}
 					}
-					State::DraggingSplit(time) => {
+					Status::DraggingSplit(time) => {
 						let new_time = get_time(
 							cursor.x,
 							*self.position,
@@ -199,13 +202,13 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							*modifiers,
 						);
 						if new_time != time {
-							*state = State::DraggingSplit(new_time);
+							*state = Status::DraggingSplit(new_time);
 
 							shell.publish((self.f)(Action::DragSplit(new_time)));
 							shell.capture_event();
 						}
 					}
-					State::NoteTrimmingStart(offset, time) => {
+					Status::NoteTrimmingStart(offset, time) => {
 						let new_start = get_time(
 							cursor.x + offset,
 							*self.position,
@@ -214,13 +217,13 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							*modifiers,
 						);
 						if new_start != time {
-							*state = State::NoteTrimmingStart(offset, new_start);
+							*state = Status::NoteTrimmingStart(offset, new_start);
 
 							shell.publish((self.f)(Action::TrimStart(new_start)));
 							shell.capture_event();
 						}
 					}
-					State::NoteTrimmingEnd(offset, time) => {
+					Status::NoteTrimmingEnd(offset, time) => {
 						let new_end = get_time(
 							cursor.x + offset,
 							*self.position,
@@ -229,13 +232,13 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							*modifiers,
 						);
 						if new_end != time {
-							*state = State::NoteTrimmingEnd(offset, new_end);
+							*state = Status::NoteTrimmingEnd(offset, new_end);
 
 							shell.publish((self.f)(Action::TrimEnd(new_end)));
 							shell.capture_event();
 						}
 					}
-					State::DeletingNotes => {
+					Status::DeletingNotes => {
 						if !self.deleted
 							&& let Some(note) = self.get_note(cursor)
 						{
@@ -245,7 +248,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							shell.capture_event();
 						}
 					}
-					State::None => {}
+					Status::None => {}
 				},
 				_ => {}
 			}
@@ -298,13 +301,13 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		viewport: &Rectangle,
 		_renderer: &Renderer,
 	) -> Interaction {
-		match tree.state.downcast_ref::<State>() {
-			State::NoteTrimmingStart(..)
-			| State::NoteTrimmingEnd(..)
-			| State::DraggingSplit(..) => Interaction::ResizingHorizontally,
-			State::DraggingNote(..) => Interaction::Grabbing,
-			State::DeletingNotes => Interaction::NoDrop,
-			State::None => layout
+		match tree.state.downcast_ref::<Status>() {
+			Status::NoteTrimmingStart(..)
+			| Status::NoteTrimmingEnd(..)
+			| Status::DraggingSplit(..) => Interaction::ResizingHorizontally,
+			Status::DraggingNote(..) => Interaction::Grabbing,
+			Status::DeletingNotes => Interaction::NoDrop,
+			Status::None => layout
 				.bounds()
 				.intersection(viewport)
 				.and_then(|bounds| cursor.position_in(bounds))

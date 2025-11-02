@@ -2,10 +2,10 @@ use generic_daw_core::{MusicalTime, RtState};
 use generic_daw_utils::Vec2;
 use iced::keyboard::Modifiers;
 
-pub mod arrangement;
 pub mod clip;
 pub mod piano;
 pub mod piano_roll;
+pub mod playlist;
 pub mod seeker;
 pub mod track;
 

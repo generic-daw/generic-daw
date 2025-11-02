@@ -1,11 +1,9 @@
 use crate::{
-	arrangement_view::{
-		ArrangementView, ArrangementWrapper, Feedback, Message as ArrangementMessage, Tab,
-	},
+	arrangement_view::{self, Arrangement, ArrangementView, Feedback, Tab},
 	components::{PICK_LIST_HANDLE, number_input},
 	config::Config,
-	config_view::{ConfigView, Message as ConfigViewMessage},
-	file_tree::{FileTree, Message as FileTreeMessage},
+	config_view::{self, ConfigView},
+	file_tree::{self, FileTree},
 	icons::{chart_no_axes_gantt, pause, play, sliders_vertical, square},
 	state::State,
 	stylefns::{
@@ -39,9 +37,9 @@ pub const DEFAULT_SPLIT_POSITION: f32 = 300.0;
 
 #[derive(Clone, Debug)]
 pub enum Message {
-	Arrangement(ArrangementMessage),
-	FileTree(FileTreeMessage),
-	ConfigView(ConfigViewMessage),
+	Arrangement(arrangement_view::Message),
+	FileTree(file_tree::Message),
+	ConfigView(config_view::Message),
 
 	NewFile,
 	OpenLastFile,
@@ -146,7 +144,7 @@ impl Daw {
 					.update(message, &self.config, &self.plugin_bundles)
 					.map(Message::Arrangement);
 			}
-			Message::FileTree(action) => return self.handle_file_tree_action(action),
+			Message::FileTree(action) => return self.handle_file_tree_message(action),
 			Message::ConfigView(message) => {
 				let action = self.config_view.as_mut().unwrap().update(message);
 				let mut futs = vec![action.task.map(Message::ConfigView)];
@@ -161,12 +159,12 @@ impl Daw {
 			}
 			Message::NewFile => {
 				let config = Config::read();
-				let (arrangement, task) = ArrangementWrapper::create(&config);
+				let (wrapper, task) = Arrangement::create(&config);
 				let fut1 = self.update(Message::MergeConfig(config.into(), false));
 				let fut2 = self
 					.arrangement_view
 					.update(
-						ArrangementMessage::SetArrangement(NoClone(Box::new(arrangement))),
+						arrangement_view::Message::SetArrangement(NoClone(Box::new(wrapper))),
 						&self.config,
 						&self.plugin_bundles,
 					)
@@ -175,7 +173,7 @@ impl Daw {
 				return Task::batch([
 					fut1,
 					fut2,
-					task.map(ArrangementMessage::Batch)
+					task.map(arrangement_view::Message::Batch)
 						.map(Message::Arrangement),
 				]);
 			}
@@ -249,7 +247,7 @@ impl Daw {
 			Message::OpenFile(path) => {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
-					return ArrangementWrapper::start_load(
+					return Arrangement::start_load(
 						path,
 						Config::read(),
 						self.plugin_bundles.clone(),
@@ -338,17 +336,17 @@ impl Daw {
 		Task::none()
 	}
 
-	fn handle_file_tree_action(&mut self, action: FileTreeMessage) -> Task<Message> {
+	fn handle_file_tree_message(&mut self, action: file_tree::Message) -> Task<Message> {
 		match action {
-			FileTreeMessage::File(path) => self
+			file_tree::Message::File(path) => self
 				.arrangement_view
 				.update(
-					ArrangementMessage::SampleLoadFromFile(path),
+					arrangement_view::Message::SampleLoadFromFile(path),
 					&self.config,
 					&self.plugin_bundles,
 				)
 				.map(Message::Arrangement),
-			FileTreeMessage::Action(id, action) => {
+			file_tree::Message::Action(id, action) => {
 				self.file_tree.update(id, &action).map(Message::FileTree)
 			}
 		}
@@ -357,7 +355,7 @@ impl Daw {
 	pub fn view(&self, window: window::Id) -> Element<'_, Message> {
 		if let Some(gui) = self.arrangement_view.clap_host.view(window) {
 			return gui
-				.map(ArrangementMessage::ClapHost)
+				.map(arrangement_view::Message::ClapHost)
 				.map(Message::Arrangement);
 		}
 
@@ -406,11 +404,13 @@ impl Daw {
 						})
 						.style(button_with_radius(button::primary, border::left(5)))
 						.padding([5, 7])
-						.on_press(Message::Arrangement(ArrangementMessage::TogglePlayback)),
+						.on_press(Message::Arrangement(
+							arrangement_view::Message::TogglePlayback
+						)),
 						button(square())
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding([5, 7])
-							.on_press(Message::Arrangement(ArrangementMessage::Stop)),
+							.on_press(Message::Arrangement(arrangement_view::Message::Stop)),
 					],
 					number_input(
 						self.arrangement_view.arrangement.rtstate().numerator.into(),
@@ -443,8 +443,8 @@ impl Daw {
 							.style(button_with_radius(button::primary, border::left(5)))
 							.padding([5, 7])
 							.on_press_maybe(
-								(!matches!(self.arrangement_view.tab, Tab::Arrangement))
-									.then_some(Message::ChangedTab(Tab::Arrangement))
+								(!matches!(self.arrangement_view.tab, Tab::Playlist))
+									.then_some(Message::ChangedTab(Tab::Playlist))
 							),
 						button(sliders_vertical())
 							.style(button_with_radius(button::primary, border::right(5)))
@@ -639,9 +639,9 @@ impl Daw {
 				..
 			}) => match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
 				(false, false, false) => match code {
-					keyboard::key::Code::Space => {
-						Some(Message::Arrangement(ArrangementMessage::TogglePlayback))
-					}
+					keyboard::key::Code::Space => Some(Message::Arrangement(
+						arrangement_view::Message::TogglePlayback,
+					)),
 					_ => None,
 				},
 				(true, false, false) => match code {

@@ -1,7 +1,7 @@
 use crate::{config::Config, widget::LINE_HEIGHT};
 use fragile::Fragile;
 #[cfg(unix)]
-use generic_daw_core::clap_host::{FdFlags, PosixFd};
+use generic_daw_core::clap_host::{FdFlags, PosixFdMessage};
 use generic_daw_core::{
 	Event,
 	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, PluginId, Size},
@@ -56,7 +56,9 @@ pub struct ClapHost {
 impl ClapHost {
 	pub fn update(&mut self, message: Message, config: &Config) -> Task<Message> {
 		match message {
-			Message::MainThread(id, msg) => return self.main_thread_message(id, msg, config),
+			Message::MainThread(id, msg) => {
+				return self.handle_main_thread_message(id, msg, config);
+			}
 			Message::SendEvent(id, event) => self.plugins.get_mut(*id).unwrap().send_event(event),
 			Message::TickTimer(duration) => {
 				for (&plugin, &timer_id) in &self.timers[&duration] {
@@ -125,7 +127,7 @@ impl ClapHost {
 		Task::none()
 	}
 
-	fn main_thread_message(
+	fn handle_main_thread_message(
 		&mut self,
 		id: PluginId,
 		message: MainThreadMessage,
@@ -257,7 +259,7 @@ impl ClapHost {
 			#[cfg(unix)]
 			MainThreadMessage::PosixFd(fd, msg) => {
 				return self
-					.fd_message(id, fd, msg)
+					.handle_posix_fd_message(id, fd, msg)
 					.map(move |msg| Message::MainThread(id, msg));
 			}
 		}
@@ -266,7 +268,12 @@ impl ClapHost {
 	}
 
 	#[cfg(unix)]
-	fn fd_message(&mut self, id: PluginId, fd: RawFd, message: PosixFd) -> Task<MainThreadMessage> {
+	fn handle_posix_fd_message(
+		&mut self,
+		id: PluginId,
+		fd: RawFd,
+		message: PosixFdMessage,
+	) -> Task<MainThreadMessage> {
 		macro_rules! plugin {
 			($expr:expr) => {{
 				let Some(plugin) = self.plugins.get_mut(*id) else {
@@ -279,8 +286,8 @@ impl ClapHost {
 		}
 
 		match message {
-			PosixFd::OnFd(flags) => plugin!(PosixFd::OnFd(flags)).on_fd(fd, flags),
-			PosixFd::Register(flags) => {
+			PosixFdMessage::OnFd(flags) => plugin!(PosixFdMessage::OnFd(flags)).on_fd(fd, flags),
+			PosixFdMessage::Register(flags) => {
 				let (_, handle) = Task::<()>::none().abortable();
 
 				let handle = self
@@ -290,9 +297,9 @@ impl ClapHost {
 					.insert(fd, handle.abort_on_drop());
 				debug_assert!(handle.is_none());
 
-				return self.fd_message(id, fd, PosixFd::Modify(flags));
+				return self.handle_posix_fd_message(id, fd, PosixFdMessage::Modify(flags));
 			}
-			PosixFd::Modify(flags) => {
+			PosixFdMessage::Modify(flags) => {
 				// SAFETY:
 				// This fd is owned by the plugin, and is open at least until
 				// [`PosixFd::Unregister`] is processed. The fd is not -1.
@@ -307,19 +314,23 @@ impl ClapHost {
 							(true, false) => {
 								async_fd
 									.readable()
-									.map(|_| PosixFd::OnFd(FdFlags::READ))
+									.map(|_| PosixFdMessage::OnFd(FdFlags::READ))
 									.await
 							}
 							(false, true) => {
 								async_fd
 									.writable()
-									.map(|_| PosixFd::OnFd(FdFlags::WRITE))
+									.map(|_| PosixFdMessage::OnFd(FdFlags::WRITE))
 									.await
 							}
 							(true, true) => {
 								race(
-									async_fd.readable().map(|_| PosixFd::OnFd(FdFlags::READ)),
-									async_fd.writable().map(|_| PosixFd::OnFd(FdFlags::WRITE)),
+									async_fd
+										.readable()
+										.map(|_| PosixFdMessage::OnFd(FdFlags::READ)),
+									async_fd
+										.writable()
+										.map(|_| PosixFdMessage::OnFd(FdFlags::WRITE)),
 								)
 								.await
 							}
@@ -342,7 +353,7 @@ impl ClapHost {
 
 				return task.map(move |msg| MainThreadMessage::PosixFd(fd, msg));
 			}
-			PosixFd::Unregister => {
+			PosixFdMessage::Unregister => {
 				let handle = self.fds.get_mut(*id).unwrap().remove(&fd);
 				debug_assert!(handle.is_some());
 			}

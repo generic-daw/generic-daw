@@ -2,12 +2,12 @@
 
 use crate::{
 	arrangement_view::{
-		ArrangementWrapper, Message as ArrangementMessage, Message, Node, audio_clip::AudioClip,
-		clip::Clip, crc, midi_clip::MidiClip, pattern::PatternPair, sample::SamplePair,
+		self, Arrangement, Node, audio_clip::AudioClip, clip::Clip, crc, midi_clip::MidiClip,
+		pattern::PatternPair, sample::SamplePair,
 	},
 	clap_host::ClapHost,
 	config::Config,
-	daw::Message as DawMessage,
+	daw,
 };
 use generic_daw_core::{
 	ClipPosition, MidiKey, MidiNote, NotePosition, PanMode,
@@ -35,7 +35,7 @@ pub enum Feedback<T> {
 	Cancel,
 }
 
-impl ArrangementWrapper {
+impl Arrangement {
 	pub fn save(&self, path: &Path, clap_host: &mut ClapHost) {
 		let mut writer = Writer::new(self.rtstate().bpm.into(), self.rtstate().numerator.into());
 
@@ -156,7 +156,7 @@ impl ArrangementWrapper {
 		path: Arc<Path>,
 		config: Config,
 		plugin_bundles: Arc<HashMap<PluginDescriptor, NoDebug<PluginBundle>>>,
-	) -> Task<DawMessage> {
+	) -> Task<daw::Message> {
 		let (partial_sender, partial_receiver) = oneshot::channel();
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
 
@@ -169,7 +169,7 @@ impl ArrangementWrapper {
 			.discard(),
 			Task::stream(progress_receiver).chain(
 				Task::perform(partial_receiver, Result::ok).and_then(|tasks| {
-					tasks.unwrap_or_else(|| Task::done(DawMessage::OpenedFile(None)))
+					tasks.unwrap_or_else(|| Task::done(daw::Message::OpenedFile(None)))
 				}),
 			),
 		])
@@ -179,8 +179,8 @@ impl ArrangementWrapper {
 		path: Arc<Path>,
 		config: Config,
 		plugin_bundles: &HashMap<PluginDescriptor, NoDebug<PluginBundle>>,
-		daw: &Sender<DawMessage>,
-	) -> Option<Task<DawMessage>> {
+		daw: &Sender<daw::Message>,
+	) -> Option<Task<daw::Message>> {
 		let mut gdp = Vec::new();
 		File::open(&path).ok()?.read_to_end(&mut gdp).ok()?;
 		let reader = Reader::new(&gdp)?;
@@ -259,7 +259,7 @@ impl ArrangementWrapper {
 
 						let (sender, receiver) = oneshot::channel();
 
-						daw.try_send(DawMessage::CantLoadSample(
+						daw.try_send(daw::Message::CantLoadSample(
 							sample_name.deref().into(),
 							NoClone(sender),
 						))
@@ -292,12 +292,12 @@ impl ArrangementWrapper {
 					}
 					Feedback::Ignore => _ = samples.insert(idx, Feedback::Ignore),
 					Feedback::Cancel => {
-						daw.try_send(DawMessage::OpenedFile(None)).unwrap();
+						daw.try_send(daw::Message::OpenedFile(None)).unwrap();
 						return None;
 					}
 				}
 				current_progress += progress_per_audio;
-				daw.try_send(DawMessage::Progress(current_progress))
+				daw.try_send(daw::Message::Progress(current_progress))
 					.unwrap();
 			}
 
@@ -329,12 +329,15 @@ impl ArrangementWrapper {
 
 		let mut load_channel = |node: &Node, channel: &proto::Channel| {
 			if channel.volume != 1.0 {
-				messages.push(Message::ChannelVolumeChanged(node.id, channel.volume));
+				messages.push(arrangement_view::Message::ChannelVolumeChanged(
+					node.id,
+					channel.volume,
+				));
 			}
 
 			if channel.pan.pan_mode? != proto::PanMode::Balance(proto::PanModeBalance { pan: 0.0 })
 			{
-				messages.push(Message::ChannelPanChanged(
+				messages.push(arrangement_view::Message::ChannelPanChanged(
 					node.id,
 					match channel.pan.pan_mode? {
 						proto::PanMode::Balance(proto::PanModeBalance { pan }) => {
@@ -348,23 +351,23 @@ impl ArrangementWrapper {
 			}
 
 			if !channel.enabled {
-				messages.push(Message::ChannelToggleEnabled(node.id));
+				messages.push(arrangement_view::Message::ChannelToggleEnabled(node.id));
 			}
 
 			if channel.bypassed {
-				messages.push(Message::ChannelToggleBypassed(node.id));
+				messages.push(arrangement_view::Message::ChannelToggleBypassed(node.id));
 			}
 
 			for (i, plugin) in channel.plugins.iter().enumerate() {
 				let id = plugin.id();
-				messages.push(Message::PluginLoad(
+				messages.push(arrangement_view::Message::PluginLoad(
 					node.id,
 					plugin_bundles.keys().find(|d| *d.id == id)?.clone(),
 					false,
 				));
 
 				if let Some(state) = plugin.state.as_deref() {
-					messages.push(Message::PluginSetState(
+					messages.push(arrangement_view::Message::PluginSetState(
 						node.id,
 						i,
 						NoDebug(Box::from(state)),
@@ -372,11 +375,13 @@ impl ArrangementWrapper {
 				}
 
 				if plugin.mix != 1.0 {
-					messages.push(Message::PluginMixChanged(node.id, i, plugin.mix));
+					messages.push(arrangement_view::Message::PluginMixChanged(
+						node.id, i, plugin.mix,
+					));
 				}
 
 				if !plugin.enabled {
-					messages.push(Message::PluginToggleEnabled(node.id, i));
+					messages.push(arrangement_view::Message::PluginToggleEnabled(node.id, i));
 				}
 			}
 
@@ -439,7 +444,7 @@ impl ArrangementWrapper {
 		}
 
 		for (from, to) in reader.iter_track_to_channel() {
-			messages.push(Message::ConnectRequest(
+			messages.push(arrangement_view::Message::ConnectRequest(
 				*tracks.get(&from)?,
 				*channels.get(&to)?,
 			));
@@ -448,7 +453,7 @@ impl ArrangementWrapper {
 		drop(tracks);
 
 		for (from, to) in reader.iter_channel_to_channel() {
-			messages.push(Message::ConnectRequest(
+			messages.push(arrangement_view::Message::ConnectRequest(
 				*channels.get(&from)?,
 				*channels.get(&to)?,
 			));
@@ -457,18 +462,19 @@ impl ArrangementWrapper {
 		drop(channels);
 
 		Some(
-			Task::done(DawMessage::MergeConfig(config.into(), false))
-				.chain(Task::done(DawMessage::Arrangement(
-					ArrangementMessage::SetArrangement(NoClone(Box::new(arrangement))),
+			Task::done(daw::Message::MergeConfig(config.into(), false))
+				.chain(Task::done(daw::Message::Arrangement(
+					arrangement_view::Message::SetArrangement(NoClone(Box::new(arrangement))),
 				)))
 				.chain(Task::batch([
-					task.map(Message::Batch).map(DawMessage::Arrangement),
+					task.map(arrangement_view::Message::Batch)
+						.map(daw::Message::Arrangement),
 					messages
 						.into_iter()
 						.map(Task::done)
 						.fold(Task::none(), Task::chain)
-						.map(DawMessage::Arrangement)
-						.chain(Task::done(DawMessage::OpenedFile(Some(path)))),
+						.map(daw::Message::Arrangement)
+						.chain(Task::done(daw::Message::OpenedFile(Some(path)))),
 				])),
 		)
 	}

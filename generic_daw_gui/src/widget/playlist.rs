@@ -63,13 +63,12 @@ pub(super) enum Status {
 #[derive(Debug, Default)]
 pub struct Selection {
 	pub(super) status: Status,
-	pub(super) selecting: HashSet<(usize, usize)>,
-	pub selected: HashSet<(usize, usize)>,
-	pub attached: HashSet<(usize, usize)>,
+	pub primary: HashSet<(usize, usize)>,
+	pub secondary: HashSet<(usize, usize)>,
 }
 
 #[derive(Debug)]
-pub struct Arrangement<'a, Message> {
+pub struct Playlist<'a, Message> {
 	selection: &'a RefCell<Selection>,
 	rtstate: &'a RtState,
 	position: &'a Vec2,
@@ -78,7 +77,7 @@ pub struct Arrangement<'a, Message> {
 	f: fn(Action) -> Message,
 }
 
-impl<'a, Message> Widget<Message, Theme, Renderer> for Arrangement<'a, Message>
+impl<'a, Message> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 where
 	Message: Clone + 'a,
 {
@@ -167,22 +166,21 @@ where
 								selection.status = Status::Selecting(track, track, time, time);
 								shell.request_redraw();
 								shell.capture_event();
-							} else if !selection.selected.is_empty() {
-								selection.selected.clear();
+							} else if !selection.primary.is_empty() {
+								selection.primary.clear();
 								shell.request_redraw();
 								shell.capture_event();
 							}
 						}
 						mouse::Button::Right => {
-							selection.selected.clear();
+							selection.primary.clear();
 							selection.status = Status::Deleting;
 						}
 						_ => {}
 					},
 					mouse::Event::ButtonReleased { .. } if selection.status != Status::None => {
 						selection.status = Status::None;
-						selection.selected.extend(selection.selecting.drain());
-						selection.selected.extend(selection.attached.drain());
+						selection.primary.extend(selection.secondary.drain());
 						shell.capture_event();
 						shell.request_redraw();
 					}
@@ -239,9 +237,9 @@ where
 										&& (start_pos.max(clip_pos.start())
 											< end_pos.min(clip_pos.end()))
 									{
-										selection.selecting.insert(idx);
+										selection.secondary.insert(idx);
 									} else {
-										selection.selecting.remove(&idx);
+										selection.secondary.remove(&idx);
 									}
 								});
 
@@ -347,7 +345,7 @@ where
 							}
 						}
 						Status::Deleting => {
-							if !selection.selected.is_empty() {
+							if !selection.primary.is_empty() {
 								shell.publish((self.f)(Action::Delete));
 								shell.capture_event();
 							}
@@ -360,13 +358,13 @@ where
 			Event::Keyboard(keyboard::Event::KeyPressed {
 				physical_key: keyboard::key::Physical::Code(code),
 				..
-			}) if selection.status == Status::None && !selection.selected.is_empty() => match code {
+			}) if selection.status == Status::None && !selection.primary.is_empty() => match code {
 				keyboard::key::Code::Delete | keyboard::key::Code::Backspace => {
 					shell.publish((self.f)(Action::Delete));
 					shell.capture_event();
 				}
 				keyboard::key::Code::Escape => {
-					selection.selected.clear();
+					selection.primary.clear();
 					shell.capture_event();
 					shell.request_redraw();
 				}
@@ -524,7 +522,7 @@ where
 	}
 }
 
-impl<'a, Message> Arrangement<'a, Message>
+impl<'a, Message> Playlist<'a, Message>
 where
 	Message: 'a,
 {
@@ -547,11 +545,11 @@ where
 	}
 }
 
-impl<'a, Message> From<Arrangement<'a, Message>> for Element<'a, Message>
+impl<'a, Message> From<Playlist<'a, Message>> for Element<'a, Message>
 where
 	Message: Clone + 'a,
 {
-	fn from(value: Arrangement<'a, Message>) -> Self {
+	fn from(value: Playlist<'a, Message>) -> Self {
 		Self::new(value)
 	}
 }

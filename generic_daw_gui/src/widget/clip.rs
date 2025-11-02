@@ -1,9 +1,8 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef, Recording as RecordingWrapper},
 	widget::{
-		LINE_HEIGHT,
-		arrangement::{Action, Selection, Status},
-		get_time, get_unsnapped_time,
+		LINE_HEIGHT, get_time, get_unsnapped_time,
+		playlist::{Action, Selection, Status},
 	},
 };
 use generic_daw_core::{ClipPosition, MusicalTime, NotePosition, RtState};
@@ -183,7 +182,7 @@ where
 				mouse::Event::ButtonPressed { button, modifiers }
 					if selection.status == Status::None =>
 				{
-					let mut clear = selection.selected.insert(idx);
+					let mut clear = selection.primary.insert(idx);
 
 					match button {
 						mouse::Button::Left => {
@@ -258,12 +257,12 @@ where
 					}
 
 					if clear {
-						selection.selected.clear();
-						selection.selected.insert(idx);
+						selection.primary.clear();
+						selection.primary.insert(idx);
 					}
 				}
 				mouse::Event::CursorMoved { .. } if selection.status == Status::Deleting => {
-					selection.selected.insert(idx);
+					selection.primary.insert(idx);
 				}
 				_ => {}
 			}
@@ -294,9 +293,7 @@ where
 			| Inner::MidiClip(MidiClipRef { idx, .. }) => {
 				match (
 					self.enabled,
-					selection.selecting.contains(idx)
-						|| selection.selected.contains(idx)
-						|| selection.attached.contains(idx),
+					selection.primary.contains(idx) || selection.secondary.contains(idx),
 				) {
 					(true, true) => theme.extended_palette().danger.weak.color,
 					(true, false) => theme.extended_palette().primary.weak.color,

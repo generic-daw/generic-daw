@@ -29,12 +29,12 @@ pub enum MainThreadMessage {
 	RescanParams(ParamRescanFlags),
 	RescanParam(ClapId, ParamRescanFlags),
 	#[cfg(unix)]
-	PosixFd(RawFd, PosixFd),
+	PosixFd(RawFd, PosixFdMessage),
 }
 
 #[cfg(unix)]
 #[derive(Clone, Copy, Debug)]
-pub enum PosixFd {
+pub enum PosixFdMessage {
 	OnFd(FdFlags),
 	Register(FdFlags),
 	Modify(FdFlags),
@@ -110,7 +110,10 @@ impl HostPosixFdImpl for MainThread<'_> {
 		} else if !flags.is_empty() {
 			self.shared
 				.sender
-				.send(MainThreadMessage::PosixFd(fd, PosixFd::Register(flags)))
+				.send(MainThreadMessage::PosixFd(
+					fd,
+					PosixFdMessage::Register(flags),
+				))
 				.unwrap();
 		}
 
@@ -125,7 +128,10 @@ impl HostPosixFdImpl for MainThread<'_> {
 		} else if !flags.is_empty() {
 			self.shared
 				.sender
-				.send(MainThreadMessage::PosixFd(fd, PosixFd::Modify(flags)))
+				.send(MainThreadMessage::PosixFd(
+					fd,
+					PosixFdMessage::Modify(flags),
+				))
 				.unwrap();
 		}
 
@@ -139,7 +145,7 @@ impl HostPosixFdImpl for MainThread<'_> {
 
 		self.shared
 			.sender
-			.send(MainThreadMessage::PosixFd(fd, PosixFd::Unregister))
+			.send(MainThreadMessage::PosixFd(fd, PosixFdMessage::Unregister))
 			.unwrap();
 
 		Ok(())
