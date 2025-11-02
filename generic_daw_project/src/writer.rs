@@ -7,9 +7,9 @@ pub struct Writer(proto::Project);
 
 impl Writer {
 	#[must_use]
-	pub fn new(bpm: u32, numerator: u32) -> Self {
+	pub fn new(rtstate: proto::RtState) -> Self {
 		Self(proto::Project {
-			rtstate: proto::RtState { bpm, numerator },
+			rtstate,
 			..proto::Project::default()
 		})
 	}

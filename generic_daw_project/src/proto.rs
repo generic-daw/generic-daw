@@ -45,6 +45,8 @@ pub struct RtState {
 	pub bpm: u32,
 	#[prost(uint32)]
 	pub numerator: u32,
+	#[prost(message)]
+	pub loop_marker: Option<NotePosition>,
 }
 
 #[derive(Message)]

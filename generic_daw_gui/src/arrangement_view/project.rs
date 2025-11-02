@@ -37,7 +37,17 @@ pub enum Feedback<T> {
 
 impl Arrangement {
 	pub fn save(&self, path: &Path, clap_host: &mut ClapHost) {
-		let mut writer = Writer::new(self.rtstate().bpm.into(), self.rtstate().numerator.into());
+		let mut writer = Writer::new(proto::RtState {
+			bpm: self.rtstate().bpm.into(),
+			numerator: self.rtstate().numerator.into(),
+			loop_marker: self
+				.rtstate()
+				.loop_marker
+				.map(|loop_marker| proto::NotePosition {
+					start: loop_marker.start().into(),
+					end: loop_marker.end().into(),
+				}),
+		});
 
 		let mut samples = HashMap::new();
 		for sample in self.samples().values() {
@@ -187,8 +197,17 @@ impl Arrangement {
 
 		let (mut arrangement, task) = Self::create(&config);
 
-		arrangement.set_bpm(reader.rtstate().bpm as u16);
-		arrangement.set_numerator(reader.rtstate().numerator as u8);
+		let proto::RtState {
+			bpm,
+			numerator,
+			loop_marker,
+		} = reader.rtstate();
+
+		arrangement.set_bpm(bpm as u16);
+		arrangement.set_numerator(numerator as u8);
+		arrangement.set_loop_marker(loop_marker.map(|loop_marker| {
+			NotePosition::new(loop_marker.start.into(), loop_marker.end.into())
+		}));
 
 		let mut samples = HashMap::new();
 
