@@ -2,7 +2,7 @@ use crate::clap_host::{
 	ClapId, Cookie,
 	events::{
 		ClapEvent, Event as _, Match, MidiEvent, NoteChokeEvent, NoteEndEvent, NoteOffEvent,
-		NoteOnEvent, ParamValueEvent, Pckn, UnknownEvent,
+		NoteOnEvent, ParamValueEvent, Pckn, UnknownEvent, spaces::CoreEventSpace,
 	},
 };
 
@@ -135,61 +135,57 @@ impl clap_host::EventImpl for Event {
 	}
 
 	fn try_from_unknown(value: &UnknownEvent) -> Option<Self> {
-		if let Some(event) = value.as_event::<MidiEvent>() {
-			let time = event.time();
-			let data = event.data();
-			let value = f32::from(data[2]) / 127.0;
-
-			match data[0] & 0xf0 {
-				0x90 => Some(Self::On {
-					time,
-					key: data[1],
-					velocity: value,
-				}),
-				0x80 => Some(Self::Off {
-					time,
-					key: data[1],
-					velocity: value,
-				}),
-				0xb0 if data[1] < 0x78 => Some(Self::ParamValue {
-					time,
-					param_id: ClapId::from_raw(data[1].into())?,
-					value,
-					cookie: Cookie::empty(),
-				}),
-				_ => None,
-			}
-		} else if let Some(event) = value.as_event::<NoteOnEvent>() {
-			Some(Self::On {
+		match value.as_core_event()? {
+			CoreEventSpace::NoteOn(event) => Some(Self::On {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,
 				velocity: event.velocity() as f32,
-			})
-		} else if let Some(event) = value.as_event::<NoteOffEvent>() {
-			Some(Self::Off {
+			}),
+			CoreEventSpace::NoteOff(event) => Some(Self::Off {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,
 				velocity: event.velocity() as f32,
-			})
-		} else if let Some(event) = value.as_event::<NoteChokeEvent>() {
-			Some(Self::Choke {
+			}),
+			CoreEventSpace::NoteChoke(event) => Some(Self::Choke {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,
-			})
-		} else if let Some(event) = value.as_event::<NoteEndEvent>() {
-			Some(Self::End {
+			}),
+			CoreEventSpace::NoteEnd(event) => Some(Self::End {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,
-			})
-		} else if let Some(event) = value.as_event::<ParamValueEvent>() {
-			Some(Self::ParamValue {
+			}),
+			CoreEventSpace::ParamValue(event) => Some(Self::ParamValue {
 				time: event.time(),
 				param_id: event.param_id()?,
 				value: event.value() as f32,
 				cookie: event.cookie(),
-			})
-		} else {
-			None
+			}),
+			CoreEventSpace::Midi(event) => {
+				let time = event.time();
+				let data = event.data();
+				let value = f32::from(data[2]) / 127.0;
+
+				match data[0] & 0xf0 {
+					0x90 => Some(Self::On {
+						time,
+						key: data[1],
+						velocity: value,
+					}),
+					0x80 => Some(Self::Off {
+						time,
+						key: data[1],
+						velocity: value,
+					}),
+					0xb0 if data[1] < 0x78 => Some(Self::ParamValue {
+						time,
+						param_id: ClapId::from_raw(data[1].into())?,
+						value,
+						cookie: Cookie::empty(),
+					}),
+					_ => None,
+				}
+			}
+			_ => None,
 		}
 	}
 }
