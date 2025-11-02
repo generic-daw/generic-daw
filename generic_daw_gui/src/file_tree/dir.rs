@@ -92,10 +92,10 @@ impl Dir {
 				button(
 					row![
 						if self.open {
-							chevron_down()
+							chevron_down
 						} else {
-							chevron_right()
-						},
+							chevron_right
+						}(),
 						text(&*self.name).wrapping(text::Wrapping::None)
 					]
 					.spacing(2),

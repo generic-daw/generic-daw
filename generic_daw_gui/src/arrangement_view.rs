@@ -10,7 +10,7 @@ use crate::{
 	components::{icon_button, text_icon_button},
 	config::Config,
 	daw::DEFAULT_SPLIT_POSITION,
-	icons::{arrow_up_down, chevron_up, circle_off, grip_vertical, plus, x},
+	icons::{arrow_up_down, chevron_up, grip_vertical, plus, power, power_off, x},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, scrollable_style,
 		slider_secondary, split_style,
@@ -1090,6 +1090,7 @@ impl ArrangementView {
 			.style(scrollable_style)
 			.width(Fill),
 			self.selected_channel.map(|selected| {
+				let node = self.arrangement.node(selected);
 				column![
 					combo_box(&self.plugins, "Add Plugin", None, move |descriptor| {
 						Message::PluginLoad(selected, descriptor, true)
@@ -1098,77 +1099,73 @@ impl ArrangementView {
 					.width(Fill),
 					container(rule::horizontal(1)).padding([5, 0]),
 					scrollable(
-						dragking::column(
-							self.arrangement
-								.node(selected)
-								.plugins
-								.iter()
-								.enumerate()
-								.map(|(i, plugin)| {
-									row![
-										Knob::new(0.0..=1.0, plugin.mix, move |mix| {
-											Message::PluginMixChanged(selected, i, mix)
-										})
-										.radius(TEXT_HEIGHT)
-										.enabled(plugin.enabled)
-										.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
-										button(
-											container(
-												text(&*plugin.descriptor.name)
-													.wrapping(text::Wrapping::None)
-											)
-											.padding(7)
-											.clip(true)
-										)
-										.padding(0)
-										.style(button_with_radius(
-											if plugin.enabled {
-												button::primary
-											} else {
-												button::secondary
-											},
-											border::left(5)
-										))
-										.width(Fill)
-										.on_press(Message::ClapHost(
-											clap_host::Message::MainThread(
-												plugin.id,
-												MainThreadMessage::GuiRequestShow,
-											)
-										)),
-										column![
-											icon_button(
-												circle_off(),
-												if plugin.enabled {
-													button::primary
-												} else {
-													button::secondary
-												}
-											)
-											.on_press(Message::PluginToggleEnabled(selected, i)),
-											icon_button(
-												x(),
-												if plugin.enabled {
-													button::danger
-												} else {
-													button::secondary
-												}
-											)
-											.on_press(Message::PluginRemove(selected, i)),
-										]
-										.spacing(5),
-										mouse_area(
-											container(grip_vertical())
-												.center_y(LINE_HEIGHT + 14.0)
-												.style(bordered_box_with_radius(border::right(5)))
-										)
-										.interaction(Interaction::Grab),
-									]
-									.align_y(Center)
-									.spacing(5)
-									.into()
+						dragking::column(node.plugins.iter().enumerate().map(|(i, plugin)| {
+							let button_style = |cond: bool| {
+								if !plugin.enabled || !node.enabled {
+									button::secondary
+								} else if cond {
+									button::warning
+								} else {
+									button::primary
+								}
+							};
+
+							row![
+								Knob::new(0.0..=1.0, plugin.mix, move |mix| {
+									Message::PluginMixChanged(selected, i, mix)
 								})
-						)
+								.radius(TEXT_HEIGHT)
+								.enabled(plugin.enabled && node.enabled)
+								.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
+								button(
+									container(
+										text(&*plugin.descriptor.name)
+											.wrapping(text::Wrapping::None)
+									)
+									.padding(7)
+									.clip(true)
+								)
+								.padding(0)
+								.style(button_with_radius(button_style(false), border::left(5)))
+								.width(Fill)
+								.on_press(Message::ClapHost(
+									clap_host::Message::MainThread(
+										plugin.id,
+										MainThreadMessage::GuiRequestShow,
+									)
+								)),
+								column![
+									icon_button(
+										if plugin.enabled && !node.bypassed {
+											power
+										} else {
+											power_off
+										}(),
+										button_style(node.bypassed)
+									)
+									.on_press(Message::PluginToggleEnabled(selected, i)),
+									icon_button(
+										x(),
+										if plugin.enabled && node.enabled {
+											button::danger
+										} else {
+											button::secondary
+										}
+									)
+									.on_press(Message::PluginRemove(selected, i)),
+								]
+								.spacing(5),
+								mouse_area(
+									container(grip_vertical())
+										.center_y(LINE_HEIGHT + 14.0)
+										.style(bordered_box_with_radius(border::right(5)))
+								)
+								.interaction(Interaction::Grab),
+							]
+							.align_y(Center)
+							.spacing(5)
+							.into()
+						}))
 						.spacing(5)
 						.on_drag(Message::PluginMoveTo.with(selected)),
 					)
@@ -1233,8 +1230,11 @@ impl ArrangementView {
 				]
 				.spacing(5),
 				row![
-					icon_button(circle_off(), button_style(node.bypassed))
-						.on_press(Message::ChannelToggleBypassed(node.id)),
+					icon_button(
+						if node.bypassed { power_off } else { power }(),
+						button_style(node.bypassed)
+					)
+					.on_press(Message::ChannelToggleBypassed(node.id)),
 					icon_button(
 						arrow_up_down(),
 						button_style(node.volume.is_sign_negative())

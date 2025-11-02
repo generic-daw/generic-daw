@@ -35,7 +35,7 @@ impl File {
 		(
 			button(
 				row![
-					if self.is_music { file_music() } else { file() },
+					if self.is_music { file_music } else { file }(),
 					text(&*self.name).wrapping(text::Wrapping::None)
 				]
 				.spacing(2),
