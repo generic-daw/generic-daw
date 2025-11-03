@@ -1,9 +1,9 @@
 #[macro_export]
 macro_rules! include_f32s {
-	($file:expr) => {
+	($file:expr $(,)?) => {
 		const {
 			const BYTES: &[u8] = ::core::include_bytes!($file);
-			assert!(BYTES.len().is_multiple_of(4));
+			::core::assert!(BYTES.len().is_multiple_of(4));
 
 			let mut f32s = [0.0; BYTES.len() / 4];
 			let mut i = 0;

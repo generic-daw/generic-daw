@@ -43,8 +43,8 @@ macro_rules! icon {
 	($name:ident = $icon:literal) => {
 		pub const fn $name() -> Icon {
 			Icon {
-				character: ::core::char::from_u32($icon).unwrap(),
-				size: crate::widget::LINE_HEIGHT,
+				character: char::from_u32($icon).unwrap(),
+				size: $crate::widget::LINE_HEIGHT,
 			}
 		}
 	};
