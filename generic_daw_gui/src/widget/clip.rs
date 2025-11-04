@@ -35,6 +35,7 @@ struct State {
 	last_bounds: Rectangle,
 	last_scale: Vec2,
 	last_addr: usize,
+	last_theme: RefCell<Option<Theme>>,
 }
 
 #[derive(Clone, Debug)]
@@ -353,7 +354,14 @@ where
 		};
 		renderer.fill_quad(clip_background, color.scale_alpha(0.2));
 
-		let cache = &mut *tree.state.downcast_ref::<State>().cache.borrow_mut();
+		let state = tree.state.downcast_ref::<State>();
+		let cache = &mut *state.cache.borrow_mut();
+		let last_theme = &mut *state.last_theme.borrow_mut();
+
+		if last_theme.as_ref() != Some(theme) {
+			*last_theme = Some(theme.clone());
+			*cache = None;
+		}
 
 		let unclipped_height = layout.bounds().height - LINE_HEIGHT;
 		let hidden_top_px = layout.position().y - bounds.y;

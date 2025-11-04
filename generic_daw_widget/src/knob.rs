@@ -11,7 +11,6 @@ use iced_widget::{
 		overlay,
 		renderer::{Quad, Style},
 		widget::{Text, Tree, tree},
-		window,
 	},
 	graphics::geometry::Renderer as _,
 };
@@ -25,11 +24,11 @@ use std::{
 struct State {
 	dragging: Option<(f32, f32)>,
 	hovering: bool,
+	scroll: f32,
+	cache: Cache,
 	last_value: f32,
 	last_enabled: bool,
 	last_theme: RefCell<Option<Theme>>,
-	cache: Cache,
-	scroll: f32,
 }
 
 #[derive(Debug)]
@@ -203,6 +202,18 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 	}
 
 	fn diff(&self, tree: &mut Tree) {
+		let state = tree.state.downcast_mut::<State>();
+
+		if self.enabled != state.last_enabled {
+			state.last_enabled = self.enabled;
+			state.cache.clear();
+		}
+
+		if self.value != state.last_value {
+			state.last_value = self.value;
+			state.cache.clear();
+		}
+
 		if let Some(tooltip) = self.tooltip.as_deref() {
 			tree.diff_children(&[tooltip as &dyn Widget<Message, Theme, Renderer>]);
 		} else {
@@ -239,27 +250,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 		shell: &mut Shell<'_, Message>,
 		_viewport: &Rectangle,
 	) {
-		let state = tree.state.downcast_mut::<State>();
-
-		if let Event::Window(window::Event::RedrawRequested(..)) = event {
-			if self.enabled != state.last_enabled {
-				state.last_enabled = self.enabled;
-				state.cache.clear();
-			}
-
-			if self.value != state.last_value {
-				state.last_value = self.value;
-				state.cache.clear();
-			}
-
-			return;
-		}
-
 		if shell.is_event_captured() {
 			return;
 		}
 
 		if let Event::Mouse(event) = event {
+			let state = tree.state.downcast_mut::<State>();
+
 			match event {
 				mouse::Event::ButtonPressed {
 					button: mouse::Button::Left,
