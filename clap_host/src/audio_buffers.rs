@@ -114,7 +114,7 @@ impl AudioBuffers {
 	}
 
 	pub fn write_out(&mut self, buf: &mut [f32], mix_level: f32) {
-		self.latency_comp.next(buf);
+		self.latency_comp.shift(buf);
 
 		let Some(output_buffer) = self.output_buffers.get(self.output_config.main_port_index)
 		else {

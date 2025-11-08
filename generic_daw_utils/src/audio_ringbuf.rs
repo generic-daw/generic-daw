@@ -8,7 +8,7 @@ pub struct AudioRingbuf {
 }
 
 impl AudioRingbuf {
-	pub fn next(&mut self, buf: &mut [f32]) {
+	pub fn shift(&mut self, buf: &mut [f32]) {
 		let diff = self.buf.len() - self.head;
 		if self.buf.len() < buf.len() {
 			buf.rotate_right(self.buf.len());
