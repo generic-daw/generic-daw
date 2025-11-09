@@ -24,7 +24,7 @@ use generic_daw_utils::{HoleyVec, NoClone, NoDebug, ShiftMoveExt as _};
 use iced::Task;
 use rtrb::{Producer, PushError};
 use smol::unblock;
-use std::{hint::spin_loop, num::NonZero, path::Path, sync::Arc};
+use std::{num::NonZero, path::Path, sync::Arc};
 
 #[derive(Debug)]
 pub struct Arrangement {
@@ -148,7 +148,7 @@ impl Arrangement {
 	fn send(&mut self, mut message: Message) {
 		while let Err(PushError::Full(msg)) = self.producer.push(message) {
 			message = msg;
-			spin_loop();
+			std::thread::yield_now();
 		}
 	}
 
