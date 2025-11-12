@@ -52,6 +52,7 @@ use std::{
 	cell::RefCell,
 	cmp::{Ordering, Reverse},
 	collections::{HashMap, HashSet},
+	f32::consts::SQRT_2,
 	fmt::Write as _,
 	io::Read,
 	iter::once,
@@ -485,20 +486,21 @@ impl ArrangementView {
 						recording_path(),
 						self.arrangement.rtstate(),
 						config.input_device.name.clone(),
-						config
-							.input_device
-							.sample_rate
-							.unwrap_or(NonZero::new(44100).unwrap()),
+						config.input_device.sample_rate,
 						config.input_device.buffer_size,
 					);
 
 					self.recording = Some((recording, node));
 					self.arrangement.play();
 
-					return poll_consumer(task)
-						.map(NoDebug)
-						.map(Message::RecordingWrite)
-						.chain(Task::done(Message::RecordingFinalize));
+					return poll_consumer(
+						task,
+						config.input_device.sample_rate,
+						config.input_device.buffer_size,
+					)
+					.map(NoDebug)
+					.map(Message::RecordingWrite)
+					.chain(Task::done(Message::RecordingFinalize));
 				}
 			}
 			Message::RecordingEndStream => {
@@ -593,7 +595,7 @@ impl ArrangementView {
 
 				let mut clip = MidiClip::new(id);
 				clip.position.trim_end_to(
-					MusicalTime::BEAT * 4 * u64::from(self.arrangement.rtstate().numerator),
+					MusicalTime::BEAT * 4 * u64::from(self.arrangement.rtstate().numerator.get()),
 				);
 				clip.position.move_to(pos);
 				let clip = self.arrangement.add_clip(track, clip);
@@ -1399,16 +1401,22 @@ fn crc(mut r: impl Read) -> u32 {
 	crc
 }
 
-fn poll_consumer<T: Send + 'static>(mut consumer: Consumer<T>) -> Task<T> {
-	let mut backoff = 0;
-	let mut backoff = move |counter: u64| {
+fn poll_consumer<T: Send + 'static>(
+	mut consumer: Consumer<T>,
+	sample_rate: NonZero<u32>,
+	frames: Option<NonZero<u32>>,
+) -> Task<T> {
+	let min = 64.0 / sample_rate.get() as f32;
+	let max = frames.or(NonZero::new(8192)).unwrap().get() as f32 / sample_rate.get() as f32;
+	let mut backoff = 0.0;
+	let mut backoff = move |counter: u16| {
 		backoff = if counter == 0 {
-			backoff * 2
+			backoff * SQRT_2
 		} else {
-			backoff / counter
+			backoff / f32::from(counter)
 		}
-		.clamp(1, 100);
-		Timer::after(Duration::from_millis(backoff))
+		.clamp(min, max);
+		Timer::after(Duration::from_secs_f32(backoff))
 	};
 
 	Task::stream(stream::channel(

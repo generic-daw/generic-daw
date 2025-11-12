@@ -30,13 +30,13 @@ impl AudioBuffers {
 			.port_channel_counts
 			.iter()
 			.map(|c| vec![0.0; config.max_frames_count as usize * c].into_boxed_slice())
-			.collect::<Box<[_]>>()
+			.collect::<Box<_>>()
 			.into();
 		let output_buffers = output_config
 			.port_channel_counts
 			.iter()
 			.map(|c| vec![0.0; config.max_frames_count as usize * c].into_boxed_slice())
-			.collect::<Box<[_]>>()
+			.collect::<Box<_>>()
 			.into();
 
 		let latency_comp = AudioRingbuf::default();

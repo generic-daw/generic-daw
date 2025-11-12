@@ -46,9 +46,9 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		} = receiver.recv().unwrap();
 
 		let resampler = Resampler::new(
-			config.sample_rate.0 as usize,
-			rtstate.sample_rate as usize,
-			2,
+			NonZero::new(config.sample_rate.0).unwrap(),
+			rtstate.sample_rate,
+			NonZero::new(2).unwrap(),
 		)
 		.unwrap();
 
@@ -76,6 +76,11 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	}
 
 	#[must_use]
+	pub fn sample_rate(&self) -> NonZero<u32> {
+		NonZero::new(self.config.sample_rate.0).unwrap()
+	}
+
+	#[must_use]
 	pub fn samples(&self) -> &[f32] {
 		self.resampler.samples()
 	}
@@ -90,9 +95,9 @@ impl<W: io::Write + io::Seek> Recording<W> {
 
 	pub fn split_off(&mut self, writer: W, rtstate: &RtState) -> Sample {
 		let mut resampler = Resampler::new(
-			self.config.sample_rate.0 as usize,
-			rtstate.sample_rate as usize,
-			2,
+			NonZero::new(self.config.sample_rate.0).unwrap(),
+			rtstate.sample_rate,
+			NonZero::new(2).unwrap(),
 		)
 		.unwrap();
 		std::mem::swap(&mut self.resampler, &mut resampler);

@@ -49,10 +49,7 @@ impl Arrangement {
 			.send(StreamMessage::Output(
 				OutputRequest {
 					device_name: config.output_device.name.clone(),
-					sample_rate: config
-						.output_device
-						.sample_rate
-						.unwrap_or(NonZero::new(44100).unwrap()),
+					sample_rate: config.output_device.sample_rate,
 					frames: config.output_device.buffer_size,
 					metrics: NoDebug(&|f| iced::debug::time_with("Output callback", f)),
 				},
@@ -91,7 +88,7 @@ impl Arrangement {
 				producer,
 				stream: token.into(),
 			},
-			poll_consumer(consumer),
+			poll_consumer(consumer, rtstate.sample_rate, Some(rtstate.frames)),
 		)
 	}
 
@@ -222,14 +219,14 @@ impl Arrangement {
 		}
 	}
 
-	pub fn set_bpm(&mut self, bpm: u16) {
+	pub fn set_bpm(&mut self, bpm: NonZero<u16>) {
 		if self.rtstate.bpm != bpm {
 			self.rtstate.bpm = bpm;
 			self.send(Message::Bpm(bpm));
 		}
 	}
 
-	pub fn set_numerator(&mut self, numerator: u8) {
+	pub fn set_numerator(&mut self, numerator: NonZero<u8>) {
 		if self.rtstate.numerator != numerator {
 			self.rtstate.numerator = numerator;
 			self.send(Message::Numerator(numerator));

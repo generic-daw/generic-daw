@@ -20,14 +20,14 @@ impl Export {
 			path,
 			hound::WavSpec {
 				channels: 2,
-				sample_rate: self.state.rtstate.sample_rate,
+				sample_rate: self.state.rtstate.sample_rate.get(),
 				bits_per_sample: 32,
 				sample_format: hound::SampleFormat::Float,
 			},
 		)
 		.unwrap();
 
-		let buffer_size = 2 * self.state.rtstate.frames as usize;
+		let buffer_size = 2 * self.state.rtstate.frames.get() as usize;
 		let mut buf = vec![0.0; buffer_size].into_boxed_slice();
 
 		let mut delay;

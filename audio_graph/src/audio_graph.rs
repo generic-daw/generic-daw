@@ -1,17 +1,17 @@
 use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry};
 use generic_daw_utils::{AudioRingbuf, HoleyVec};
-use std::sync::atomic::Ordering::Relaxed;
+use std::{num::NonZero, sync::atomic::Ordering::Relaxed};
 
 #[derive(Debug)]
 pub struct AudioGraph<Node: NodeImpl> {
 	graph: HoleyVec<Entry<Node>>,
 	root: NodeId,
-	frames: u32,
+	frames: NonZero<u32>,
 }
 
 impl<Node: NodeImpl> AudioGraph<Node> {
 	#[must_use]
-	pub fn new(node: impl Into<Node>, frames: u32) -> Self {
+	pub fn new(node: impl Into<Node>, frames: NonZero<u32>) -> Self {
 		let node = node.into();
 		let root = node.id();
 

@@ -31,7 +31,7 @@ use iced::{
 use iced_split::{Strategy, vertical_split};
 use log::trace;
 use rfd::AsyncFileDialog;
-use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
+use std::{collections::HashMap, num::NonZero, path::Path, sync::Arc, time::Duration};
 
 pub const DEFAULT_SPLIT_POSITION: f32 = 300.0;
 
@@ -308,7 +308,7 @@ impl Daw {
 			Message::ChangedBpm(bpm) => self
 				.arrangement_view
 				.arrangement
-				.set_bpm(bpm.clamp(10, 999)),
+				.set_bpm(NonZero::new(bpm.clamp(10, 999)).unwrap()),
 			Message::ChangedBpmText(bpm) => {
 				if let Ok(bpm) = bpm.parse() {
 					return self.update(Message::ChangedBpm(bpm));
@@ -317,7 +317,7 @@ impl Daw {
 			Message::ChangedNumerator(numerator) => {
 				self.arrangement_view
 					.arrangement
-					.set_numerator(numerator.clamp(1, 99));
+					.set_numerator(NonZero::new(numerator.clamp(1, 99)).unwrap());
 			}
 			Message::ChangedNumeratorText(numerator) => {
 				if let Ok(numerator) = numerator.parse() {
@@ -359,12 +359,10 @@ impl Daw {
 				.map(Message::Arrangement);
 		}
 
-		let fill = MusicalTime::from_samples(
+		let now = MusicalTime::from_samples(
 			self.arrangement_view.arrangement.rtstate().sample,
 			self.arrangement_view.arrangement.rtstate(),
-		)
-		.beat()
-		.is_multiple_of(2);
+		);
 
 		stack![
 			column![
@@ -413,30 +411,60 @@ impl Daw {
 							.on_press(Message::Arrangement(arrangement_view::Message::Stop)),
 					],
 					number_input(
-						self.arrangement_view.arrangement.rtstate().numerator.into(),
+						self.arrangement_view
+							.arrangement
+							.rtstate()
+							.numerator
+							.get()
+							.into(),
 						4,
 						2,
 						|x| Message::ChangedNumerator(x as u8),
 						Message::ChangedNumeratorText
 					),
 					number_input(
-						self.arrangement_view.arrangement.rtstate().bpm.into(),
+						self.arrangement_view.arrangement.rtstate().bpm.get().into(),
 						140,
 						3,
 						|x| Message::ChangedBpm(x as u16),
 						Message::ChangedBpmText
 					),
-					button(row![Dot::new(fill), Dot::new(!fill)].spacing(5))
+					row![
+						container(
+							text(format!(
+								"{:#03}:{:#digits$}",
+								now.bar(self.arrangement_view.arrangement.rtstate()) + 1,
+								now.beat_in_bar(self.arrangement_view.arrangement.rtstate()) + 1,
+								digits = self
+									.arrangement_view
+									.arrangement
+									.rtstate()
+									.numerator
+									.ilog10() as usize + 1,
+							))
+							.font(Font::MONOSPACE)
+						)
+						.padding([5.6, 7.0])
+						.style(|t| bordered_box_with_radius(border::left(5))(t)
+							.background(t.extended_palette().background.weakest.color)),
+						button(
+							row![
+								Dot::new(now.beat().is_multiple_of(2)),
+								Dot::new(!now.beat().is_multiple_of(2))
+							]
+							.spacing(5)
+						)
 						.style(button_with_radius(
 							if self.arrangement_view.arrangement.rtstate().metronome {
 								button::primary
 							} else {
 								button::secondary
 							},
-							5
+							border::right(5)
 						))
 						.padding(8)
 						.on_press(Message::ToggleMetronome),
+					],
 					space::horizontal(),
 					row![
 						button(chart_no_axes_gantt())

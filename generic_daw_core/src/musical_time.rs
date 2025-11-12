@@ -40,12 +40,17 @@ impl MusicalTime {
 
 	#[must_use]
 	pub const fn bar(self, rtstate: &RtState) -> u64 {
-		self.beat() / rtstate.numerator as u64
+		self.beat() / rtstate.numerator.get() as u64
 	}
 
 	#[must_use]
 	pub const fn beat(self) -> u64 {
 		self.0 / Self::TICKS_PER_BEAT
+	}
+
+	#[must_use]
+	pub const fn beat_in_bar(self, rtstate: &RtState) -> u64 {
+		self.beat() % rtstate.numerator.get() as u64
 	}
 
 	#[must_use]
@@ -79,8 +84,8 @@ impl MusicalTime {
 	#[must_use]
 	pub const fn from_samples_f(samples: f32, rtstate: &RtState) -> Self {
 		let samples = samples as f64;
-		let bpm = rtstate.bpm as f64;
-		let sample_rate = rtstate.sample_rate as f64;
+		let bpm = rtstate.bpm.get() as f64;
+		let sample_rate = rtstate.sample_rate.get() as f64;
 
 		let time = (samples * bpm * (Self::TICKS_PER_BEAT / 2) as f64) / (sample_rate * 60.0);
 
@@ -92,8 +97,8 @@ impl MusicalTime {
 		debug_assert!(samples.is_multiple_of(2));
 
 		let samples = samples as u64;
-		let bpm = rtstate.bpm as u64;
-		let sample_rate = rtstate.sample_rate as u64;
+		let bpm = rtstate.bpm.get() as u64;
+		let sample_rate = rtstate.sample_rate.get() as u64;
 
 		let time = (samples * bpm * (Self::TICKS_PER_BEAT / 2)) / (sample_rate * 60);
 
@@ -103,8 +108,8 @@ impl MusicalTime {
 	#[must_use]
 	pub const fn to_samples_f(self, rtstate: &RtState) -> f32 {
 		let beat = self.0 as f64;
-		let bpm = rtstate.bpm as f64;
-		let sample_rate = rtstate.sample_rate as f64;
+		let bpm = rtstate.bpm.get() as f64;
+		let sample_rate = rtstate.sample_rate.get() as f64;
 
 		let samples = (beat * sample_rate * 60.0) / (bpm * (Self::TICKS_PER_BEAT / 2) as f64);
 
@@ -114,8 +119,8 @@ impl MusicalTime {
 	#[must_use]
 	pub const fn to_samples(self, rtstate: &RtState) -> usize {
 		let time = self.0;
-		let bpm = rtstate.bpm as u64;
-		let sample_rate = rtstate.sample_rate as u64;
+		let bpm = rtstate.bpm.get() as u64;
+		let sample_rate = rtstate.sample_rate.get() as u64;
 
 		let samples = (time * sample_rate * 60) / (bpm * (Self::TICKS_PER_BEAT / 2));
 
@@ -150,11 +155,11 @@ impl MusicalTime {
 
 	#[must_use]
 	pub fn snap_step(mut scale: f32, rtstate: &RtState) -> Self {
-		scale += f32::from(rtstate.bpm).log2() - 18.0 + f32::from(Self::TICK_BITS);
+		scale += f32::from(rtstate.bpm.get()).log2() - 18.0 + f32::from(Self::TICK_BITS);
 		Self(if scale < f32::from(Self::TICK_BITS + 1) {
 			1 << scale as u8
 		} else {
-			u64::from(rtstate.numerator) << (scale as u8 - 1)
+			u64::from(rtstate.numerator.get()) << (scale as u8 - 1)
 		})
 	}
 

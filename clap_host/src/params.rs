@@ -71,7 +71,7 @@ impl Param {
 			&& let Ok(value_text) = ext.value_to_text(
 				&mut plugin.plugin_handle(),
 				self.id,
-				f64::from(self.value),
+				self.value.into(),
 				&mut [MaybeUninit::zeroed(); 32],
 			) && let Ok(value_text) = str::from_utf8(value_text)
 			&& !value_text.is_empty()

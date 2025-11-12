@@ -19,7 +19,7 @@ use raw_window_handle::RawWindowHandle;
 use rtrb::{Producer, RingBuffer};
 #[cfg(unix)]
 use std::os::fd::RawFd;
-use std::{io::Cursor, sync::mpsc::Receiver};
+use std::{io::Cursor, num::NonZero, sync::mpsc::Receiver};
 
 #[derive(Debug)]
 pub struct Plugin<Event: EventImpl> {
@@ -39,12 +39,12 @@ impl<Event: EventImpl> Plugin<Event> {
 	pub fn new(
 		bundle: &PluginBundle,
 		descriptor: PluginDescriptor,
-		sample_rate: u32,
-		frames: u32,
+		sample_rate: NonZero<u32>,
+		frames: NonZero<u32>,
 		host: &HostInfo,
 	) -> (AudioProcessor<Event>, Self, Receiver<MainThreadMessage>) {
 		let (shared_sender, receiver) = std::sync::mpsc::channel();
-		let (producer, audio_consumer) = RingBuffer::new(frames as usize);
+		let (producer, audio_consumer) = RingBuffer::new(frames.get() as usize);
 
 		let mut instance = PluginInstance::new(
 			|()| Shared::new(descriptor.clone(), shared_sender),
@@ -56,9 +56,9 @@ impl<Event: EventImpl> Plugin<Event> {
 		.unwrap();
 
 		let config = PluginAudioConfiguration {
-			sample_rate: sample_rate.into(),
+			sample_rate: sample_rate.get().into(),
 			min_frames_count: 1,
-			max_frames_count: frames,
+			max_frames_count: frames.get(),
 		};
 		let id = PluginId::unique();
 

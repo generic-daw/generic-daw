@@ -42,7 +42,7 @@ pub enum Message {
 	RemoveClapPath(usize),
 	ChangedTab(Tab),
 	ChangedName(Option<Arc<str>>),
-	ChangedSampleRate(Option<NonZero<u32>>),
+	ChangedSampleRate(NonZero<u32>),
 	ChangedBufferSize(Option<NonZero<u32>>),
 	ToggledAutosave,
 	ChangedAutosaveInterval(NonZero<u64>),
@@ -242,15 +242,15 @@ impl ConfigView {
 								)
 						],
 						space::horizontal(),
-						self.with_device(|device, _| device
-							.sample_rate
-							.zip(device.buffer_size)
-							.map(|(sample_rate, buffer_size)| text(format!(
-								"{buffer_size} smp @ {sample_rate} hz = {:.1} ms",
-								buffer_size.get() as f32 / sample_rate.get() as f32 * 1000.0
-							))
-							.font(Font::MONOSPACE)
-							.size(12))),
+						self.with_device(|device, _| device.buffer_size.map(|buffer_size| text(
+							format!(
+								"{buffer_size} smp @ {} hz = {:.1} ms",
+								device.sample_rate,
+								buffer_size.get() as f32 / device.sample_rate.get() as f32 * 1000.0
+							)
+						)
+						.font(Font::MONOSPACE)
+						.size(12))),
 						space::horizontal(),
 						match self.tab {
 							Tab::Input => "Input",
@@ -287,9 +287,11 @@ impl ConfigView {
 								space::horizontal(),
 								pick_list(
 									COMMON_SAMPLE_RATES,
-									device.sample_rate.map(NonZero::get),
+									Some(device.sample_rate.get()),
 									|sample_rate| {
-										Message::ChangedSampleRate(NonZero::new(sample_rate))
+										Message::ChangedSampleRate(
+											NonZero::new(sample_rate).unwrap(),
+										)
 									}
 								)
 								.handle(PICK_LIST_HANDLE)
@@ -300,11 +302,9 @@ impl ConfigView {
 								button(rotate_ccw())
 									.style(button_with_radius(button::primary, 0))
 									.padding(5)
-									.on_press_maybe(
-										device
-											.sample_rate
-											.map(|_| Message::ChangedSampleRate(None))
-									)
+									.on_press_maybe((device.sample_rate.get() != 44100).then_some(
+										Message::ChangedSampleRate(NonZero::new(44100).unwrap(),)
+									))
 							]
 							.align_y(Center),
 							row![
@@ -348,7 +348,7 @@ impl ConfigView {
 								600,
 								3,
 								|x| Message::ChangedAutosaveInterval(
-									NonZero::new(x as u64).unwrap_or(NonZero::new(1).unwrap())
+									NonZero::new(x as u64).or(NonZero::new(1)).unwrap()
 								),
 								Message::ChangedAutosaveIntervalText
 							),

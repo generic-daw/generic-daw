@@ -7,7 +7,7 @@ use crate::{
 use generic_daw_utils::{HoleyVec, NoDebug, include_f32s, unique_id};
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, PushError, RingBuffer};
-use std::{sync::Mutex, time::Instant};
+use std::{num::NonZero, sync::Mutex, time::Instant};
 
 unique_id!(epoch);
 unique_id!(version);
@@ -33,8 +33,8 @@ pub enum Message {
 	NodeConnect(NodeId, NodeId, oneshot::Sender<(NodeId, NodeId)>),
 	NodeDisconnect(NodeId, NodeId),
 
-	Bpm(u16),
-	Numerator(u8),
+	Bpm(NonZero<u16>),
+	Numerator(NonZero<u8>),
 	TogglePlayback,
 	ToggleMetronome,
 	Sample(Version, usize),
@@ -99,10 +99,10 @@ pub struct Batch {
 pub struct RtState {
 	pub epoch: Epoch,
 	pub version: Version,
-	pub sample_rate: u32,
-	pub frames: u32,
-	pub bpm: u16,
-	pub numerator: u8,
+	pub sample_rate: NonZero<u32>,
+	pub frames: NonZero<u32>,
+	pub bpm: NonZero<u16>,
+	pub numerator: NonZero<u8>,
 	pub playing: bool,
 	pub metronome: bool,
 	pub sample: usize,
@@ -111,14 +111,14 @@ pub struct RtState {
 
 impl RtState {
 	#[must_use]
-	pub fn new(sample_rate: u32, frames: u32) -> Self {
+	pub fn new(sample_rate: NonZero<u32>, frames: NonZero<u32>) -> Self {
 		Self {
 			epoch: Epoch::unique(),
 			version: Version::unique(),
 			sample_rate,
 			frames,
-			bpm: 140,
-			numerator: 4,
+			bpm: NonZero::new(140).unwrap(),
+			numerator: NonZero::new(4).unwrap(),
 			playing: false,
 			metronome: false,
 			sample: 0,
@@ -147,14 +147,24 @@ pub struct DawCtx {
 
 impl DawCtx {
 	pub fn create(rtstate: RtState) -> (Self, NodeId, Producer<Message>, Consumer<Batch>) {
-		let (r_producer, consumer) = RingBuffer::new(rtstate.frames as usize);
+		let (r_producer, consumer) = RingBuffer::new(rtstate.frames.get() as usize);
 		let (producer, r_consumer) =
-			RingBuffer::new(rtstate.sample_rate.div_ceil(rtstate.frames) as usize);
+			RingBuffer::new(rtstate.sample_rate.get().div_ceil(rtstate.frames.get()) as usize);
 
-		let mut on_bar_click = Resampler::new(44100, rtstate.sample_rate as usize, 2).unwrap();
+		let mut on_bar_click = Resampler::new(
+			NonZero::new(44100).unwrap(),
+			rtstate.sample_rate,
+			NonZero::new(2).unwrap(),
+		)
+		.unwrap();
 		on_bar_click.process(&ON_BAR_CLICK);
 
-		let mut off_bar_click = Resampler::new(44100, rtstate.sample_rate as usize, 2).unwrap();
+		let mut off_bar_click = Resampler::new(
+			NonZero::new(44100).unwrap(),
+			rtstate.sample_rate,
+			NonZero::new(2).unwrap(),
+		)
+		.unwrap();
 		off_bar_click.process(&OFF_BAR_CLICK);
 
 		let daw_ctx = Self {
@@ -263,16 +273,16 @@ impl DawCtx {
 			if loop_end >= self.state.rtstate.sample {
 				while loop_end <= self.state.rtstate.sample + buf.len() {
 					looped = true;
-					let diff = loop_end - self.state.rtstate.sample;
+					let len = loop_end - self.state.rtstate.sample;
 
-					self.audio_graph.process(&self.state, &mut buf[..diff]);
-					for s in &mut buf[..diff] {
+					self.audio_graph.process(&self.state, &mut buf[..len]);
+					for s in &mut buf[..len] {
 						*s = s.clamp(-1.0, 1.0);
 					}
-					self.metronome(&mut buf[..diff], self.audio_graph.delay());
+					self.metronome(&mut buf[..len], self.audio_graph.delay());
 
 					self.state.rtstate.sample = loop_start;
-					buf = &mut buf[diff..];
+					buf = &mut buf[len..];
 				}
 			}
 		}
@@ -330,7 +340,7 @@ impl DawCtx {
 
 			let click = if start
 				.beat()
-				.is_multiple_of(u64::from(self.state.rtstate.numerator))
+				.is_multiple_of(self.state.rtstate.numerator.get().into())
 			{
 				&**self.on_bar_click
 			} else {

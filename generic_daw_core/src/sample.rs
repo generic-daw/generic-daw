@@ -1,6 +1,6 @@
 use crate::{MediaSource, resampler::Resampler};
 use generic_daw_utils::{NoDebug, unique_id};
-use std::sync::Arc;
+use std::{num::NonZero, sync::Arc};
 use symphonia::core::{
 	audio::SampleBuffer,
 	codecs::DecoderOptions,
@@ -22,7 +22,7 @@ pub struct Sample {
 
 impl Sample {
 	#[must_use]
-	pub fn new(source: Box<dyn MediaSource>, sample_rate: u32) -> Option<Self> {
+	pub fn new(source: Box<dyn MediaSource>, sample_rate: NonZero<u32>) -> Option<Self> {
 		let mut format = symphonia::default::get_probe()
 			.format(
 				&Hint::default(),
@@ -40,9 +40,9 @@ impl Sample {
 		let padding = track.codec_params.padding.unwrap_or_default() as usize;
 
 		let mut resampler = Resampler::new(
-			track.codec_params.sample_rate? as usize,
-			sample_rate as usize,
-			2,
+			NonZero::new(track.codec_params.sample_rate?)?,
+			sample_rate,
+			NonZero::new(2).unwrap(),
 		)?
 		.trim_start(delay)
 		.trim_end(padding)

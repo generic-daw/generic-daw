@@ -110,7 +110,8 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 								device.name().is_ok_and(|name| *name == *device_name)
 							})
 						})
-						.unwrap_or_else(|| host.default_input_device().unwrap());
+						.or_else(|| host.default_input_device())
+						.unwrap();
 
 					let config = choose_config(
 						device.supported_input_configs().unwrap(),
@@ -120,24 +121,24 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 
 					info!("starting input stream with config {config:#?}");
 
-					let sample_rate = config.sample_rate.0;
+					let sample_rate = NonZero::new(config.sample_rate.0).unwrap();
 					let frames = frames_of_config(&config)
 						.or(req.frames)
-						.unwrap_or(NonZero::new(8192).unwrap())
-						.get();
-					let channels = u32::from(config.channels);
-					let buffer_len = frames * channels;
+						.or(NonZero::new(8192))
+						.unwrap();
+					let channels = NonZero::new(config.channels.into()).unwrap();
+					let buffer_len = frames.checked_mul(channels).unwrap();
 
 					let (mut producer, consumer) =
-						RingBuffer::new(sample_rate.div_ceil(frames) as usize);
+						RingBuffer::new(sample_rate.get().div_ceil(frames.get()) as usize);
 
-					let mut stereo = vec![0.0; 2 * frames as usize].into_boxed_slice();
+					let mut stereo = vec![0.0; 2 * frames.get() as usize].into_boxed_slice();
 
 					let stream = device
 						.build_input_stream(
 							&config,
 							move |buf, _| {
-								for buf in buf.chunks(buffer_len as usize) {
+								for buf in buf.chunks(buffer_len.get() as usize) {
 									let frames = buf.len() / usize::from(config.channels);
 									from_other_to_stereo(&mut stereo[..2 * frames], buf, frames);
 									producer.push(stereo[..2 * frames].into()).unwrap();
@@ -171,7 +172,8 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 								device.name().is_ok_and(|name| *name == *device_name)
 							})
 						})
-						.unwrap_or_else(|| host.default_output_device().unwrap());
+						.or_else(|| host.default_output_device())
+						.unwrap();
 
 					let config = choose_config(
 						device.supported_output_configs().unwrap(),
@@ -181,26 +183,26 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 
 					info!("starting output stream with config {config:#?}");
 
-					let sample_rate = config.sample_rate.0;
+					let sample_rate = NonZero::new(config.sample_rate.0).unwrap();
 					let frames = frames_of_config(&config)
 						.or(req.frames)
-						.unwrap_or(NonZero::new(8192).unwrap())
-						.get();
-					let channels = u32::from(config.channels);
-					let buffer_len = frames * channels;
+						.or(NonZero::new(8192))
+						.unwrap();
+					let channels = NonZero::new(config.channels.into()).unwrap();
+					let buffer_len = frames.checked_mul(channels).unwrap();
 
 					let rtstate = RtState::new(sample_rate, frames);
 					let (mut ctx, master_node_id, producer, consumer) = DawCtx::create(rtstate);
 
-					let mut stereo = vec![0.0; 2 * frames as usize].into_boxed_slice();
+					let mut stereo = vec![0.0; 2 * frames.get() as usize].into_boxed_slice();
 
 					let stream = device
 						.build_output_stream(
 							&config,
 							move |buf, _| {
 								(req.metrics)(&mut || {
-									for buf in buf.chunks_mut(buffer_len as usize) {
-										let frames = buf.len() / channels as usize;
+									for buf in buf.chunks_mut(buffer_len.get() as usize) {
+										let frames = buf.len() / channels.get() as usize;
 										ctx.process(&mut stereo[..2 * frames]);
 										from_stereo_to_other(buf, &stereo[..2 * frames], frames);
 									}
@@ -330,13 +332,13 @@ fn compare_by_channel_count(
 ) -> Ordering {
 	let ldiff = match l.channels() {
 		0 => u16::MAX,
-		1 => u16::from(u8::MAX),
+		1 => u8::MAX.into(),
 		2 => 0,
 		x => x,
 	};
 	let rdiff = match r.channels() {
 		0 => u16::MAX,
-		1 => u16::from(u8::MAX),
+		1 => u8::MAX.into(),
 		2 => 0,
 		x => x,
 	};

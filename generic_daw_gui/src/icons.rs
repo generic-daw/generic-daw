@@ -30,11 +30,12 @@ impl<'a, Message: 'a> From<Icon> for Element<'a, Message> {
 			text(value.character)
 				.font(LUCIDE_FONT)
 				.shaping(text::Shaping::Basic)
+				.line_height(1.0)
 				.size(value.size)
-				.line_height(1.0),
+				.width(value.size)
+				.center(),
 		)
-		.center_x(value.size)
-		.padding(padding::top(0.5).bottom(-0.5))
+		.padding(padding::top(0.025 * value.size).bottom(-0.025 * value.size))
 		.into()
 	}
 }

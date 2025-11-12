@@ -1,9 +1,12 @@
 use crate::NodeImpl;
 use bit_set::BitSet;
 use generic_daw_utils::{AudioRingbuf, HoleyVec, NoDebug};
-use std::sync::{
-	Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
-	atomic::{AtomicIsize, AtomicUsize},
+use std::{
+	num::NonZero,
+	sync::{
+		Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
+		atomic::{AtomicIsize, AtomicUsize},
+	},
 };
 
 #[derive(Debug)]
@@ -25,14 +28,18 @@ pub struct Buffers<Node: NodeImpl> {
 }
 
 impl<Node: NodeImpl> Entry<Node> {
-	pub fn new(node: Node, frames: u32) -> Self {
+	pub fn new(node: Node, frames: NonZero<u32>) -> Self {
 		Self {
 			node: Mutex::new(node),
 			buffers: RwLock::new(Buffers {
 				incoming: HoleyVec::default(),
 				outgoing: BitSet::default(),
-				audio: vec![0.0; 2 * frames as usize].into_boxed_slice().into(),
-				buf: vec![0.0; 2 * frames as usize].into_boxed_slice().into(),
+				audio: vec![0.0; 2 * frames.get() as usize]
+					.into_boxed_slice()
+					.into(),
+				buf: vec![0.0; 2 * frames.get() as usize]
+					.into_boxed_slice()
+					.into(),
 				events: Vec::new(),
 			}),
 			indegree: AtomicIsize::new(0),

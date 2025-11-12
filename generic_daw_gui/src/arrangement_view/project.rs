@@ -22,6 +22,7 @@ use std::{
 	fs::File,
 	io::{Read as _, Write as _},
 	iter::once,
+	num::NonZero,
 	ops::Deref as _,
 	path::Path,
 	sync::{Arc, mpsc},
@@ -38,8 +39,8 @@ pub enum Feedback<T> {
 impl Arrangement {
 	pub fn save(&self, path: &Path, clap_host: &mut ClapHost) {
 		let mut writer = Writer::new(proto::RtState {
-			bpm: self.rtstate().bpm.into(),
-			numerator: self.rtstate().numerator.into(),
+			bpm: self.rtstate().bpm.get().into(),
+			numerator: self.rtstate().numerator.get().into(),
 			loop_marker: self
 				.rtstate()
 				.loop_marker
@@ -203,8 +204,8 @@ impl Arrangement {
 			loop_marker,
 		} = reader.rtstate();
 
-		arrangement.set_bpm(bpm as u16);
-		arrangement.set_numerator(numerator as u8);
+		arrangement.set_bpm(NonZero::new(bpm as u16)?);
+		arrangement.set_numerator(NonZero::new(numerator as u8)?);
 		arrangement.set_loop_marker(loop_marker.map(|loop_marker| {
 			NotePosition::new(loop_marker.start.into(), loop_marker.end.into())
 		}));
@@ -246,7 +247,7 @@ impl Arrangement {
 						})
 						.and_then(|(name, crc)| {
 							samples_map[name].iter().find_map(|&(index, c)| {
-								(c == crc).then(|| (index, Arc::<Path>::from(dir_entry.path())))
+								(c == crc).then(|| (index, dir_entry.path().into()))
 							})
 						})
 				})
@@ -258,7 +259,7 @@ impl Arrangement {
 				let sample_rate = arrangement.rtstate().sample_rate;
 				let done = done.clone();
 
-				let mut path = paths.remove(&idx);
+				let mut path: Option<Arc<_>> = paths.remove(&idx);
 				let mut sample_name = sample.name.clone();
 				s.spawn(move |_| {
 					loop {

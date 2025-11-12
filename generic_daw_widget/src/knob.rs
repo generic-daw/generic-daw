@@ -493,7 +493,7 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 			renderer,
 			theme,
 			style,
-			layout.children().next().unwrap(),
+			layout.child(0),
 			cursor,
 			&Rectangle::INFINITE,
 		);

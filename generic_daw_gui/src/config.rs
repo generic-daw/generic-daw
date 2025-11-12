@@ -57,12 +57,22 @@ impl Config {
 	}
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
 pub struct Device {
 	pub name: Option<Arc<str>>,
-	pub sample_rate: Option<NonZero<u32>>,
+	pub sample_rate: NonZero<u32>,
 	pub buffer_size: Option<NonZero<u32>>,
+}
+
+impl Default for Device {
+	fn default() -> Self {
+		Self {
+			name: None,
+			sample_rate: NonZero::new(44100).unwrap(),
+			buffer_size: None,
+		}
+	}
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
