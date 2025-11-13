@@ -46,16 +46,16 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 							first = Some(entry);
 						} else {
 							s.spawn(|s| {
-								self.worker(s, entry, len, state, true);
+								self.worker(s, entry, len, state);
 							});
 						}
 					} else {
-						self.worker(s, entry, len, state, false);
+						self.worker(s, entry, len, state);
 					}
 				});
 
 			if let Some(entry) = first {
-				self.worker(s, entry, len, state, true);
+				self.worker(s, entry, len, state);
 			}
 		});
 
@@ -74,7 +74,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		entry: &Entry<Node>,
 		len: usize,
 		state: &'a Node::State,
-		tail: bool,
 	) {
 		debug_assert!(entry.indegree.load(Relaxed).is_negative());
 
@@ -133,31 +132,31 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		drop(node_lock);
 		drop(buffers_lock);
 
-		let outgoing = &entry.read_buffers_uncontended().outgoing;
-
 		let mut first = None;
 
-		outgoing
+		entry
+			.read_buffers_uncontended()
+			.outgoing
 			.iter()
 			.map(|node| &self.graph[node])
-			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 1)
-			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 0)
-			.for_each(|entry| {
-				if entry.expensive {
-					if tail && first.is_none() {
-						first = Some(entry);
+			.filter(|dep| dep.indegree.fetch_sub(1, Relaxed) == 1)
+			.filter(|dep| dep.indegree.fetch_sub(1, Relaxed) == 0)
+			.for_each(|dep| {
+				if dep.expensive {
+					if entry.expensive && first.is_none() {
+						first = Some(dep);
 					} else {
 						s.spawn(move |s| {
-							self.worker(s, entry, len, state, true);
+							self.worker(s, dep, len, state);
 						});
 					}
 				} else {
-					self.worker(s, entry, len, state, false);
+					self.worker(s, dep, len, state);
 				}
 			});
 
 		if let Some(entry) = first {
-			self.worker(s, entry, len, state, true);
+			self.worker(s, entry, len, state);
 		}
 	}
 
@@ -269,8 +268,8 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			.outgoing
 			.iter()
 			.map(|node| &self.graph[node])
-			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 1)
-			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 0)
-			.for_each(|entry| self.visit(entry));
+			.filter(|dep| dep.indegree.fetch_sub(1, Relaxed) == 1)
+			.filter(|dep| dep.indegree.fetch_sub(1, Relaxed) == 0)
+			.for_each(|dep| self.visit(dep));
 	}
 }
