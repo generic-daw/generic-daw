@@ -117,8 +117,8 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 								if modifiers.command() {
 									selection.status = Status::Selecting(key, key, time, time);
-									shell.request_redraw();
 									shell.capture_event();
+									shell.request_redraw();
 								} else {
 									selection.primary.clear();
 									selection.status = Status::Dragging(key, time);

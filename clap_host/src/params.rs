@@ -72,7 +72,7 @@ impl Param {
 				&mut plugin.plugin_handle(),
 				self.id,
 				self.value.into(),
-				&mut [MaybeUninit::zeroed(); 32],
+				&mut [MaybeUninit::zeroed(); 256],
 			) && let Ok(value_text) = str::from_utf8(value_text)
 			&& !value_text.is_empty()
 		{

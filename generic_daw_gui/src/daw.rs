@@ -84,6 +84,8 @@ pub struct Daw {
 	state: State,
 	plugin_bundles: Arc<HashMap<PluginDescriptor, NoDebug<PluginBundle>>>,
 
+	current_project: Option<Arc<Path>>,
+
 	arrangement_view: ArrangementView,
 	file_tree: FileTree,
 	config_view: Option<ConfigView>,
@@ -114,13 +116,15 @@ impl Daw {
 		let file_tree = FileTree::new(&config.sample_paths);
 
 		let (arrangement_view, futs) = ArrangementView::new(&config, &plugin_bundles);
-		open = open.chain(futs.map(Message::Arrangement));
+		open = Task::batch([open, futs.map(Message::Arrangement)]);
 
 		(
 			Self {
 				config,
 				state,
 				plugin_bundles: plugin_bundles.into(),
+
+				current_project: None,
 
 				arrangement_view,
 				file_tree,
@@ -185,8 +189,7 @@ impl Daw {
 			}
 			Message::SaveFile => {
 				return self.update(
-					self.state
-						.current_project
+					self.current_project
 						.clone()
 						.map_or(Message::SaveAsFileDialog, Message::SaveAsFile),
 				);
@@ -195,14 +198,14 @@ impl Daw {
 				self.arrangement_view
 					.arrangement
 					.save(&path, &mut self.arrangement_view.clap_host);
-				self.state.current_project = Some(path.clone());
+				self.current_project = Some(path.clone());
 				if self.state.last_project.as_deref() != Some(&path) {
 					self.state.last_project = Some(path);
 					self.state.write();
 				}
 			}
 			Message::AutosaveFile => {
-				if let Some(current_project) = self.state.current_project.clone() {
+				if let Some(current_project) = self.current_project.clone() {
 					return self.update(Message::SaveAsFile(current_project));
 				}
 			}
@@ -264,7 +267,7 @@ impl Daw {
 			}
 			Message::OpenedFile(path) => {
 				if let Some(path) = path {
-					self.state.current_project = Some(path.clone());
+					self.current_project = Some(path.clone());
 					if self.state.last_project.as_deref() != Some(&path) {
 						self.state.last_project = Some(path);
 						self.state.write();

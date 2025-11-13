@@ -19,8 +19,6 @@ pub static STATE_PATH: LazyLock<Arc<Path>> = LazyLock::new(|| {
 #[serde(default)]
 pub struct State {
 	pub last_project: Option<Arc<Path>>,
-	#[serde(skip)]
-	pub current_project: Option<Arc<Path>>,
 }
 
 impl State {
