@@ -73,7 +73,9 @@ pub enum Message {
 	ChangedNumeratorText(String),
 	ChangedTab(Tab),
 
-	SplitAt(f32),
+	OnDrag(f32),
+	OnDragEnd,
+	OnDoubleClick,
 }
 
 const _: () = assert!(size_of::<Message>() <= 128);
@@ -115,8 +117,10 @@ impl Daw {
 		let plugin_bundles = get_installed_plugins(&config.clap_paths);
 		let file_tree = FileTree::new(&config.sample_paths);
 
-		let (arrangement_view, futs) = ArrangementView::new(&config, &plugin_bundles);
+		let (arrangement_view, futs) = ArrangementView::new(&config, &state, &plugin_bundles);
 		open = Task::batch([open, futs.map(Message::Arrangement)]);
+
+		let split_at = state.file_tree_split_at;
 
 		(
 			Self {
@@ -129,7 +133,7 @@ impl Daw {
 				arrangement_view,
 				file_tree,
 				config_view: None,
-				split_at: DEFAULT_SPLIT_POSITION,
+				split_at,
 
 				progress: None,
 				missing_samples: Vec::new(),
@@ -145,7 +149,7 @@ impl Daw {
 			Message::Arrangement(message) => {
 				return self
 					.arrangement_view
-					.update(message, &self.config, &self.plugin_bundles)
+					.update(message, &self.config, &mut self.state, &self.plugin_bundles)
 					.map(Message::Arrangement);
 			}
 			Message::FileTree(action) => return self.handle_file_tree_message(action),
@@ -170,6 +174,7 @@ impl Daw {
 					.update(
 						arrangement_view::Message::SetArrangement(NoClone(Box::new(wrapper))),
 						&self.config,
+						&mut self.state,
 						&self.plugin_bundles,
 					)
 					.map(Message::Arrangement);
@@ -327,12 +332,24 @@ impl Daw {
 					return self.update(Message::ChangedNumerator(numerator));
 				}
 			}
-			Message::SplitAt(split_at) => {
+			Message::OnDrag(split_at) => {
 				self.split_at = if split_at >= 20.0 {
 					split_at.clamp(200.0, 1000.0)
 				} else {
 					0.0
 				};
+			}
+			Message::OnDragEnd => {
+				if self.state.file_tree_split_at != self.split_at {
+					self.state.file_tree_split_at = self.split_at;
+					self.state.write();
+				}
+			}
+			Message::OnDoubleClick => {
+				return Task::batch([
+					self.update(Message::OnDrag(DEFAULT_SPLIT_POSITION)),
+					self.update(Message::OnDragEnd),
+				]);
 			}
 		}
 
@@ -346,6 +363,7 @@ impl Daw {
 				.update(
 					arrangement_view::Message::SampleLoadFromFile(path),
 					&self.config,
+					&mut self.state,
 					&self.plugin_bundles,
 				)
 				.map(Message::Arrangement),
@@ -492,9 +510,10 @@ impl Daw {
 					self.file_tree.view().map(Message::FileTree),
 					self.arrangement_view.view().map(Message::Arrangement),
 					self.split_at,
-					Message::SplitAt
+					Message::OnDrag
 				)
-				.on_double_click(Message::SplitAt(DEFAULT_SPLIT_POSITION))
+				.on_drag_end(Message::OnDragEnd)
+				.on_double_click(Message::OnDoubleClick)
 				.strategy(Strategy::Start)
 				.focus_delay(Duration::ZERO)
 				.style(split_style)

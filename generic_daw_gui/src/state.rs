@@ -1,3 +1,4 @@
+use crate::daw::DEFAULT_SPLIT_POSITION;
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -15,10 +16,22 @@ pub static STATE_PATH: LazyLock<Arc<Path>> = LazyLock::new(|| {
 		.into()
 });
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct State {
 	pub last_project: Option<Arc<Path>>,
+	pub file_tree_split_at: f32,
+	pub plugins_panel_split_at: f32,
+}
+
+impl Default for State {
+	fn default() -> Self {
+		Self {
+			last_project: None,
+			file_tree_split_at: DEFAULT_SPLIT_POSITION,
+			plugins_panel_split_at: DEFAULT_SPLIT_POSITION,
+		}
+	}
 }
 
 impl State {

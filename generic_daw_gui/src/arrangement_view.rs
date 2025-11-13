@@ -11,6 +11,7 @@ use crate::{
 	config::Config,
 	daw::DEFAULT_SPLIT_POSITION,
 	icons::{arrow_up_down, chevron_up, grip_vertical, plus, power, power_off, x},
+	state::State,
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, scrollable_style,
 		slider_secondary, split_style,
@@ -137,7 +138,9 @@ pub enum Message {
 	PianoRollAction(piano_roll::Action),
 	PianoRollScroll(Vec2, Vec2, Size),
 
-	SplitAt(f32),
+	OnDrag(f32),
+	OnDragEnd,
+	OnDoubleClick,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -175,6 +178,7 @@ pub struct ArrangementView {
 impl ArrangementView {
 	pub fn new(
 		config: &Config,
+		state: &State,
 		plugin_bundles: &HashMap<PluginDescriptor, NoDebug<PluginBundle>>,
 	) -> (Self, Task<Message>) {
 		let (arrangement, task) = Arrangement::create(config);
@@ -201,7 +205,7 @@ impl ArrangementView {
 				piano_roll_scale: Vec2::new(8.0, LINE_HEIGHT),
 				piano_roll_selection: RefCell::default(),
 
-				split_at: DEFAULT_SPLIT_POSITION,
+				split_at: state.plugins_panel_split_at,
 				plugins: combo_box::State::new(plugins),
 
 				loading: 0,
@@ -214,6 +218,7 @@ impl ArrangementView {
 		&mut self,
 		message: Message,
 		config: &Config,
+		state: &mut State,
 		plugin_bundles: &HashMap<PluginDescriptor, NoDebug<PluginBundle>>,
 	) -> Task<Message> {
 		match message {
@@ -226,7 +231,7 @@ impl ArrangementView {
 						.update(msg)
 						.into_iter()
 						.flatten()
-						.map(|msg| self.update(msg, config, plugin_bundles)),
+						.map(|msg| self.update(msg, config, state, plugin_bundles)),
 				);
 			}
 			Message::SetArrangement(NoClone(arrangement)) => {
@@ -339,7 +344,12 @@ impl ArrangementView {
 				let mut iter = self.arrangement.samples().values();
 				if let Some(sample) = iter.find(|sample| sample.path == path) {
 					drop(iter);
-					return self.update(Message::AddAudioClip(sample.id), config, plugin_bundles);
+					return self.update(
+						Message::AddAudioClip(sample.id),
+						config,
+						state,
+						plugin_bundles,
+					);
 				}
 
 				self.loading += 1;
@@ -356,7 +366,7 @@ impl ArrangementView {
 				if let Some(sample) = sample {
 					let id = sample.gui.id;
 					self.arrangement.add_sample(*sample);
-					return self.update(Message::AddAudioClip(id), config, plugin_bundles);
+					return self.update(Message::AddAudioClip(id), config, state, plugin_bundles);
 				}
 			}
 			Message::AddAudioClip(sample) => {
@@ -379,7 +389,7 @@ impl ArrangementView {
 					.map_or_else(
 						|| {
 							(
-								self.update(Message::TrackAdd, config, plugin_bundles),
+								self.update(Message::TrackAdd, config, state, plugin_bundles),
 								self.arrangement.tracks().len() - 1,
 							)
 						},
@@ -427,14 +437,20 @@ impl ArrangementView {
 					self.update(
 						Message::PlaylistScroll(Vec2::ZERO, Vec2::ZERO),
 						config,
+						state,
 						plugin_bundles,
 					),
-					self.update(Message::RecordingEndStream, config, plugin_bundles),
+					self.update(Message::RecordingEndStream, config, state, plugin_bundles),
 				]);
 			}
 			Message::TrackToggleEnabled(id) => {
 				self.soloed_track = None;
-				return self.update(Message::ChannelToggleEnabled(id), config, plugin_bundles);
+				return self.update(
+					Message::ChannelToggleEnabled(id),
+					config,
+					state,
+					plugin_bundles,
+				);
 			}
 			Message::TrackToggleSolo(id) => {
 				if self.soloed_track == Some(id) {
@@ -447,21 +463,26 @@ impl ArrangementView {
 			}
 			Message::TogglePlayback => {
 				self.arrangement.toggle_playback();
-				return self.update(Message::RecordingEndStream, config, plugin_bundles);
+				return self.update(Message::RecordingEndStream, config, state, plugin_bundles);
 			}
 			Message::Stop => {
 				self.arrangement.stop();
-				return self.update(Message::RecordingEndStream, config, plugin_bundles);
+				return self.update(Message::RecordingEndStream, config, state, plugin_bundles);
 			}
 			Message::SeekTo(pos) => {
 				self.arrangement.seek_to(pos);
-				return self.update(Message::RecordingEndStream, config, plugin_bundles);
+				return self.update(Message::RecordingEndStream, config, state, plugin_bundles);
 			}
 			Message::SetLoopMarker(marker) => self.arrangement.set_loop_marker(marker),
 			Message::Recording(node) => {
 				if let Some((recording, r_node)) = &mut self.recording {
 					if node == *r_node {
-						return self.update(Message::RecordingEndStream, config, plugin_bundles);
+						return self.update(
+							Message::RecordingEndStream,
+							config,
+							state,
+							plugin_bundles,
+						);
 					}
 
 					let pos = recording.position;
@@ -565,7 +586,24 @@ impl ArrangementView {
 					);
 				}
 			}
-			Message::SplitAt(split_at) => self.split_at = split_at.clamp(200.0, 400.0),
+			Message::OnDrag(split_at) => self.split_at = split_at.clamp(200.0, 400.0),
+			Message::OnDragEnd => {
+				if state.plugins_panel_split_at != self.split_at {
+					state.plugins_panel_split_at = self.split_at;
+					state.write();
+				}
+			}
+			Message::OnDoubleClick => {
+				return Task::batch([
+					self.update(
+						Message::OnDrag(DEFAULT_SPLIT_POSITION),
+						config,
+						state,
+						plugin_bundles,
+					),
+					self.update(Message::OnDragEnd, config, state, plugin_bundles),
+				]);
+			}
 		}
 
 		Task::none()
@@ -1178,11 +1216,9 @@ impl ArrangementView {
 			}),
 			self.selected_channel.map_or(0.0, |_| self.split_at),
 		)
-		.on_drag_maybe(self.selected_channel.map(|_| Message::SplitAt))
-		.on_double_click_maybe(
-			self.selected_channel
-				.map(|_| Message::SplitAt(DEFAULT_SPLIT_POSITION)),
-		)
+		.on_drag_maybe(self.selected_channel.map(|_| Message::OnDrag))
+		.on_drag_end_maybe(self.selected_channel.map(|_| Message::OnDragEnd))
+		.on_double_click_maybe(self.selected_channel.map(|_| Message::OnDoubleClick))
 		.strategy(Strategy::End)
 		.focus_delay(Duration::ZERO)
 		.style(split_style)
