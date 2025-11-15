@@ -243,12 +243,14 @@ impl ArrangementView {
 				);
 			}
 			Message::SetArrangement(NoClone(arrangement)) => {
-				let scale_diff = (arrangement.rtstate().sample_rate.get() as f32
-					/ self.arrangement.rtstate().sample_rate.get() as f32)
-					.log2();
+				let pos_fact = arrangement.rtstate().sample_rate.get() as f32
+					/ self.arrangement.rtstate().sample_rate.get() as f32;
+				let scale_diff = pos_fact.log2();
+				self.playlist_position.x *= pos_fact;
 				self.playlist_scale.x += scale_diff;
 				self.playlist_selection.get_mut().clear();
 				self.selected_channel = None;
+				self.piano_roll_position.x *= pos_fact;
 				self.piano_roll_scale.x += scale_diff;
 				self.piano_roll_selection.get_mut().clear();
 				if matches!(self.tab, Tab::PianoRoll { .. }) {
