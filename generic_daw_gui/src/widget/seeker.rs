@@ -222,27 +222,27 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					};
 
 					match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-						(false, false, false) => {
+						(false, false, false) if x != 0.0 || y != 0.0 => {
 							x *= self.scale.x.exp2();
 							y /= self.scale.y;
 
 							shell.publish((self.pan)(Vector::new(x, y), size));
 							shell.capture_event();
 						}
-						(true, false, false) => {
-							x = y / 128.0;
+						(true, false, false) if y != 0.0 => {
+							y /= 128.0;
 
 							let cursor = cursor + Vector::new(offset, -LINE_HEIGHT);
-							shell.publish((self.zoom)(Vector::new(x, 0.0), cursor, size));
+							shell.publish((self.zoom)(Vector::new(y, 0.0), cursor, size));
 							shell.capture_event();
 						}
-						(false, true, false) => {
+						(false, true, false) if y != 0.0 => {
 							y *= 4.0 * self.scale.x.exp2();
 
 							shell.publish((self.pan)(Vector::new(y, 0.0), size));
 							shell.capture_event();
 						}
-						(false, false, true) => {
+						(false, false, true) if y != 0.0 => {
 							y /= -8.0;
 
 							let cursor = cursor + Vector::new(offset, -LINE_HEIGHT);
