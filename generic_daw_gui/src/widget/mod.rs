@@ -1,6 +1,5 @@
 use generic_daw_core::{MidiKey, MusicalTime, RtState};
-use generic_daw_utils::Vec2;
-use iced::keyboard::Modifiers;
+use iced::{Vector, keyboard::Modifiers};
 use std::ops::Add;
 
 pub mod clip;
@@ -41,14 +40,14 @@ impl Add<Delta<Self>> for MidiKey {
 	}
 }
 
-fn get_unsnapped_time(x: f32, position: Vec2, scale: Vec2, rtstate: &RtState) -> MusicalTime {
+fn get_unsnapped_time(x: f32, position: Vector, scale: Vector, rtstate: &RtState) -> MusicalTime {
 	MusicalTime::from_samples_f(x.mul_add(scale.x.exp2(), position.x).max(0.0), rtstate)
 }
 
 fn get_time(
 	x: f32,
-	position: Vec2,
-	scale: Vec2,
+	position: Vector,
+	scale: Vector,
 	rtstate: &RtState,
 	modifiers: Modifiers,
 ) -> MusicalTime {

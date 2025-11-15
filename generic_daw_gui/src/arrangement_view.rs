@@ -33,11 +33,11 @@ use generic_daw_core::{
 	Batch, MidiNote, MusicalTime, NodeId, NotePosition, PanMode, SampleId,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
-use generic_daw_utils::{NoClone, NoDebug, Vec2};
+use generic_daw_utils::{NoClone, NoDebug};
 use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
 use humantime::format_rfc3339;
 use iced::{
-	Center, Element, Fill, Function as _, Shrink, Size, Subscription, Task, border,
+	Center, Element, Fill, Function as _, Shrink, Size, Subscription, Task, Vector, border,
 	futures::SinkExt as _,
 	mouse::Interaction,
 	padding, stream,
@@ -133,10 +133,10 @@ pub enum Message {
 	RecordingWrite(NoDebug<Box<[f32]>>),
 
 	PlaylistAction(playlist::Action),
-	PlaylistScroll(Vec2, Vec2),
+	PlaylistScroll(Vector, Vector),
 
 	PianoRollAction(piano_roll::Action),
-	PianoRollScroll(Vec2, Vec2, Size),
+	PianoRollScroll(Vector, Vector, Size),
 
 	DeleteSelection,
 	ClearSelection,
@@ -161,15 +161,15 @@ pub struct ArrangementView {
 	pub recording: Option<(Recording, NodeId)>,
 	pub tab: Tab,
 
-	playlist_position: Vec2,
-	playlist_scale: Vec2,
+	playlist_position: Vector,
+	playlist_scale: Vector,
 	playlist_selection: RefCell<playlist::Selection>,
 	soloed_track: Option<NodeId>,
 
 	selected_channel: Option<NodeId>,
 
-	piano_roll_position: Vec2,
-	piano_roll_scale: Vec2,
+	piano_roll_position: Vector,
+	piano_roll_scale: Vector,
 	piano_roll_selection: RefCell<piano_roll::Selection>,
 
 	split_at: f32,
@@ -200,15 +200,15 @@ impl ArrangementView {
 				recording: None,
 				tab: Tab::Playlist,
 
-				playlist_position: Vec2::default(),
-				playlist_scale: Vec2::new(playlist_scale_x, 87.0),
+				playlist_position: Vector::default(),
+				playlist_scale: Vector::new(playlist_scale_x, 87.0),
 				playlist_selection: RefCell::default(),
 				soloed_track: None,
 
 				selected_channel: None,
 
-				piano_roll_position: Vec2::new(0.0, 40.0),
-				piano_roll_scale: Vec2::new(piano_roll_scale_x, LINE_HEIGHT),
+				piano_roll_position: Vector::new(0.0, 40.0),
+				piano_roll_scale: Vector::new(piano_roll_scale_x, LINE_HEIGHT),
 				piano_roll_selection: RefCell::default(),
 
 				split_at: state.plugins_panel_split_at,
@@ -255,13 +255,13 @@ impl ArrangementView {
 				self.arrangement = *arrangement;
 				return Task::batch([
 					self.update(
-						Message::PlaylistScroll(Vec2::ZERO, Vec2::ZERO),
+						Message::PlaylistScroll(Vector::ZERO, Vector::ZERO),
 						config,
 						state,
 						plugin_bundles,
 					),
 					self.update(
-						Message::PianoRollScroll(Vec2::ZERO, Vec2::ZERO, Size::ZERO),
+						Message::PianoRollScroll(Vector::ZERO, Vector::ZERO, Size::ZERO),
 						config,
 						state,
 						plugin_bundles,
@@ -460,7 +460,7 @@ impl ArrangementView {
 
 				return Task::batch([
 					self.update(
-						Message::PlaylistScroll(Vec2::ZERO, Vec2::ZERO),
+						Message::PlaylistScroll(Vector::ZERO, Vector::ZERO),
 						config,
 						state,
 						plugin_bundles,
@@ -578,12 +578,12 @@ impl ArrangementView {
 			Message::PlaylistScroll(pos, scale) => {
 				let old_scale = self.playlist_scale;
 
-				self.playlist_scale += scale;
+				self.playlist_scale = self.playlist_scale + scale;
 				self.playlist_scale.x = self.playlist_scale.x.clamp(1.0, 16f32.next_down());
 				self.playlist_scale.y = self.playlist_scale.y.clamp(46.0, 200.0);
 
-				if scale == Vec2::ZERO || old_scale != self.playlist_scale {
-					self.playlist_position += pos;
+				if scale == Vector::ZERO || old_scale != self.playlist_scale {
+					self.playlist_position = self.playlist_position + pos;
 					self.playlist_position.x = self.playlist_position.x.max(0.0);
 					self.playlist_position.y = self.playlist_position.y.clamp(
 						0.0,
@@ -595,15 +595,15 @@ impl ArrangementView {
 			Message::PianoRollScroll(pos, scale, size) => {
 				let old_scale = self.piano_roll_scale;
 
-				self.piano_roll_scale += scale;
+				self.piano_roll_scale = self.piano_roll_scale + scale;
 				self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(1.0, 16f32.next_down());
 				self.piano_roll_scale.y = self
 					.piano_roll_scale
 					.y
 					.clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
 
-				if scale == Vec2::ZERO || old_scale != self.piano_roll_scale {
-					self.piano_roll_position += pos;
+				if scale == Vector::ZERO || old_scale != self.piano_roll_scale {
+					self.piano_roll_position = self.piano_roll_position + pos;
 					self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
 					self.piano_roll_position.y = self.piano_roll_position.y.clamp(
 						0.0,

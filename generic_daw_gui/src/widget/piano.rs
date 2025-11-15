@@ -1,5 +1,4 @@
 use generic_daw_core::MidiKey;
-use generic_daw_utils::Vec2;
 use iced::{
 	Background, Color, Element, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
@@ -18,8 +17,8 @@ const PIANO_WIDTH: f32 = 50.0;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Piano<'a> {
-	position: &'a Vec2,
-	scale: &'a Vec2,
+	position: &'a Vector,
+	scale: &'a Vector,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
@@ -100,7 +99,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 }
 
 impl<'a> Piano<'a> {
-	pub fn new(position: &'a Vec2, scale: &'a Vec2) -> Self {
+	pub fn new(position: &'a Vector, scale: &'a Vector) -> Self {
 		Self { position, scale }
 	}
 }

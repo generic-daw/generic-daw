@@ -3,7 +3,6 @@ use crate::{
 	widget::{Delta, clip, get_time, get_unsnapped_time, track::Track},
 };
 use generic_daw_core::{MusicalTime, RtState};
-use generic_daw_utils::Vec2;
 use iced::{
 	Alignment, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
@@ -62,8 +61,8 @@ impl Selection {
 pub struct Playlist<'a, Message> {
 	selection: &'a RefCell<Selection>,
 	rtstate: &'a RtState,
-	position: &'a Vec2,
-	scale: &'a Vec2,
+	position: &'a Vector,
+	scale: &'a Vector,
 	tracks: Box<[Track<'a, Message>]>,
 	f: fn(Action) -> Message,
 }
@@ -488,8 +487,8 @@ where
 	pub fn new(
 		selection: &'a RefCell<Selection>,
 		rtstate: &'a RtState,
-		position: &'a Vec2,
-		scale: &'a Vec2,
+		position: &'a Vector,
+		scale: &'a Vector,
 		children: impl IntoIterator<Item = Track<'a, Message>>,
 		f: fn(Action) -> Message,
 	) -> Self {

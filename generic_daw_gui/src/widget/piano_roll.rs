@@ -1,7 +1,6 @@
 use crate::widget::{Delta, get_time, get_unsnapped_time};
 use bit_set::BitSet;
 use generic_daw_core::{MidiKey, MidiNote, MusicalTime, RtState};
-use generic_daw_utils::Vec2;
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
@@ -62,8 +61,8 @@ pub struct PianoRoll<'a, Message> {
 	selection: &'a RefCell<Selection>,
 	notes: &'a [MidiNote],
 	rtstate: &'a RtState,
-	position: &'a Vec2,
-	scale: &'a Vec2,
+	position: &'a Vector,
+	scale: &'a Vector,
 	f: fn(Action) -> Message,
 }
 
@@ -397,8 +396,8 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		selection: &'a RefCell<Selection>,
 		notes: &'a [MidiNote],
 		rtstate: &'a RtState,
-		position: &'a Vec2,
-		scale: &'a Vec2,
+		position: &'a Vector,
+		scale: &'a Vector,
 		f: fn(Action) -> Message,
 	) -> Self {
 		Self {

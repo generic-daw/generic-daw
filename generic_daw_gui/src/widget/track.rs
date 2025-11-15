@@ -1,6 +1,6 @@
 use crate::widget::{clip::Clip, get_time, playlist::Action};
 use generic_daw_core::RtState;
-use generic_daw_utils::{NoDebug, Vec2};
+use generic_daw_utils::NoDebug;
 use iced::{
 	Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
@@ -23,8 +23,8 @@ struct State {
 pub struct Track<'a, Message> {
 	idx: usize,
 	rtstate: &'a RtState,
-	position: &'a Vec2,
-	scale: &'a Vec2,
+	position: &'a Vector,
+	scale: &'a Vector,
 	pub(super) clips: NoDebug<Box<[Clip<'a, Message>]>>,
 	f: fn(Action) -> Message,
 }
@@ -192,8 +192,8 @@ impl<'a, Message> Track<'a, Message> {
 	pub fn new(
 		idx: usize,
 		rtstate: &'a RtState,
-		position: &'a Vec2,
-		scale: &'a Vec2,
+		position: &'a Vector,
+		scale: &'a Vector,
 		children: impl IntoIterator<Item = Clip<'a, Message>>,
 		f: fn(Action) -> Message,
 	) -> Self

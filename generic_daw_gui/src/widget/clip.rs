@@ -6,7 +6,6 @@ use crate::{
 	},
 };
 use generic_daw_core::{ClipPosition, MusicalTime, NotePosition, RtState};
-use generic_daw_utils::Vec2;
 use iced::{
 	Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
@@ -33,7 +32,7 @@ struct State {
 	cache: RefCell<Option<Mesh>>,
 	last_click: Option<Click>,
 	last_bounds: Rectangle,
-	last_scale: Vec2,
+	last_scale: Vector,
 	last_addr: usize,
 	last_theme: RefCell<Option<Theme>>,
 }
@@ -68,8 +67,8 @@ pub struct Clip<'a, Message> {
 	pub(super) inner: Inner<'a>,
 	selection: &'a RefCell<Selection>,
 	rtstate: &'a RtState,
-	position: &'a Vec2,
-	scale: &'a Vec2,
+	position: &'a Vector,
+	scale: &'a Vector,
 	enabled: bool,
 	f: fn(Action) -> Message,
 }
@@ -512,8 +511,8 @@ impl<'a, Message> Clip<'a, Message> {
 		inner: impl Into<Inner<'a>>,
 		selection: &'a RefCell<Selection>,
 		rtstate: &'a RtState,
-		position: &'a Vec2,
-		scale: &'a Vec2,
+		position: &'a Vector,
+		scale: &'a Vector,
 		enabled: bool,
 		f: fn(Action) -> Message,
 	) -> Self {

@@ -1,6 +1,6 @@
 use crate::widget::{LINE_HEIGHT, get_time};
 use generic_daw_core::{MusicalTime, NotePosition, RtState};
-use generic_daw_utils::{NoDebug, Vec2};
+use generic_daw_utils::NoDebug;
 use iced::{
 	Background, Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme,
 	Vector,
@@ -30,13 +30,13 @@ struct State {
 #[derive(Debug)]
 pub struct Seeker<'a, Message> {
 	rtstate: &'a RtState,
-	position: &'a Vec2,
-	scale: &'a Vec2,
+	position: &'a Vector,
+	scale: &'a Vector,
 	offset: f32,
 	children: NoDebug<[Element<'a, Message>; 2]>,
 	seek_to: fn(MusicalTime) -> Message,
 	set_loop_marker: fn(Option<NotePosition>) -> Message,
-	position_scale_delta: fn(Vec2, Vec2, Size) -> Message,
+	position_scale_delta: fn(Vector, Vector, Size) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
@@ -126,8 +126,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		{
 			state.last_size = layout.bounds().size();
 			shell.publish((self.position_scale_delta)(
-				Vec2::ZERO,
-				Vec2::ZERO,
+				Vector::ZERO,
+				Vector::ZERO,
 				state.last_size,
 			));
 			return;
@@ -229,8 +229,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 							y /= self.scale.y;
 
 							shell.publish((self.position_scale_delta)(
-								Vec2::new(x, y),
-								Vec2::ZERO,
+								Vector::new(x, y),
+								Vector::ZERO,
 								layout.bounds().size(),
 							));
 							shell.capture_event();
@@ -242,8 +242,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 								* (self.scale.x.exp2() - (self.scale.x + x).exp2());
 
 							shell.publish((self.position_scale_delta)(
-								Vec2::new(x_pos, 0.0),
-								Vec2::new(x, 0.0),
+								Vector::new(x_pos, 0.0),
+								Vector::new(x, 0.0),
 								layout.bounds().size(),
 							));
 							shell.capture_event();
@@ -252,8 +252,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 							y *= 4.0 * self.scale.x.exp2();
 
 							shell.publish((self.position_scale_delta)(
-								Vec2::new(y, 0.0),
-								Vec2::ZERO,
+								Vector::new(y, 0.0),
+								Vector::ZERO,
 								layout.bounds().size(),
 							));
 							shell.capture_event();
@@ -265,8 +265,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 								/ (self.scale.y * (self.scale.y + y));
 
 							shell.publish((self.position_scale_delta)(
-								Vec2::new(0.0, y_pos),
-								Vec2::new(0.0, y),
+								Vector::new(0.0, y_pos),
+								Vector::new(0.0, y),
 								layout.bounds().size(),
 							));
 							shell.capture_event();
@@ -390,13 +390,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 impl<'a, Message> Seeker<'a, Message> {
 	pub fn new(
 		rtstate: &'a RtState,
-		position: &'a Vec2,
-		scale: &'a Vec2,
+		position: &'a Vector,
+		scale: &'a Vector,
 		left: impl Into<Element<'a, Message>>,
 		right: impl Into<Element<'a, Message>>,
 		seek_to: fn(MusicalTime) -> Message,
 		set_loop_marker: fn(Option<NotePosition>) -> Message,
-		position_scale_delta: fn(Vec2, Vec2, Size) -> Message,
+		position_scale_delta: fn(Vector, Vector, Size) -> Message,
 	) -> Self {
 		Self {
 			rtstate,
