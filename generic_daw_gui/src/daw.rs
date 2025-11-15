@@ -692,6 +692,12 @@ impl Daw {
 					keyboard::key::Code::Space => Some(Message::Arrangement(
 						arrangement_view::Message::TogglePlayback,
 					)),
+					keyboard::key::Code::Delete | keyboard::key::Code::Backspace => Some(
+						Message::Arrangement(arrangement_view::Message::DeleteSelection),
+					),
+					keyboard::key::Code::Escape => Some(Message::Arrangement(
+						arrangement_view::Message::ClearSelection,
+					)),
 					_ => None,
 				},
 				(true, false, false) => match code {

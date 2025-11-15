@@ -13,7 +13,7 @@ use iced::{
 		widget::Tree,
 	},
 	alignment::Vertical,
-	border, keyboard,
+	border,
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
 use std::cell::RefCell;
@@ -30,8 +30,8 @@ pub enum Action {
 	DragSplit(MusicalTime),
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-enum Status {
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Status {
 	Selecting(MidiKey, MidiKey, MusicalTime, MusicalTime),
 	Dragging(MidiKey, MusicalTime),
 	TrimmingStart(MusicalTime),
@@ -44,9 +44,17 @@ enum Status {
 
 #[derive(Debug, Default)]
 pub struct Selection {
-	status: Status,
+	pub status: Status,
 	pub primary: BitSet,
 	pub secondary: BitSet,
+}
+
+impl Selection {
+	pub fn clear(&mut self) {
+		self.status = Status::None;
+		self.primary.clear();
+		self.secondary.clear();
+	}
 }
 
 #[derive(Debug)]
@@ -91,216 +99,183 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			return;
 		}
 
-		let selection = &mut *self.selection.borrow_mut();
+		if let Event::Mouse(event) = event {
+			let selection = &mut *self.selection.borrow_mut();
+			let Some(cursor) = cursor.position_in(viewport) else {
+				selection.status = Status::None;
+				return;
+			};
 
-		match event {
-			Event::Mouse(event) => {
-				let Some(cursor) = cursor.position_in(viewport) else {
-					selection.status = Status::None;
-					return;
-				};
+			match event {
+				mouse::Event::ButtonPressed { button, modifiers }
+					if selection.status == Status::None =>
+				{
+					match button {
+						mouse::Button::Left => {
+							let time = get_time(
+								cursor.x,
+								*self.position,
+								*self.scale,
+								self.rtstate,
+								*modifiers,
+							);
+							let key = self.get_key(cursor);
 
-				match event {
-					mouse::Event::ButtonPressed { button, modifiers }
-						if selection.status == Status::None =>
-					{
-						match button {
-							mouse::Button::Left => {
-								let time = get_time(
-									cursor.x,
-									*self.position,
-									*self.scale,
-									self.rtstate,
-									*modifiers,
-								);
-								let key = self.get_key(cursor);
-
-								if modifiers.command() {
-									selection.status = Status::Selecting(key, key, time, time);
-									shell.capture_event();
-									shell.request_redraw();
-								} else {
-									selection.primary.clear();
-									selection.status = Status::Dragging(key, time);
-									shell.publish((self.f)(Action::Add(key, time)));
-								}
-							}
-							mouse::Button::Right => {
+							if modifiers.command() {
+								selection.status = Status::Selecting(key, key, time, time);
+								shell.capture_event();
+								shell.request_redraw();
+							} else {
 								selection.primary.clear();
-								selection.status = Status::Deleting;
+								selection.status = Status::Dragging(key, time);
+								shell.publish((self.f)(Action::Add(key, time)));
 							}
-							_ => {}
 						}
+						mouse::Button::Right => {
+							selection.primary.clear();
+							selection.status = Status::Deleting;
+						}
+						_ => {}
 					}
-					mouse::Event::ButtonReleased { .. } if selection.status != Status::None => {
-						selection.status = Status::None;
-						selection.primary.extend(&selection.secondary);
-						selection.secondary.clear();
-						shell.capture_event();
-						shell.request_redraw();
-					}
-					mouse::Event::CursorMoved { modifiers, .. } => match selection.status {
-						Status::Selecting(start_key, last_end_key, start_pos, last_end_pos) => {
-							let end_key = self.get_key(cursor);
-
-							let end_pos = get_time(
-								cursor.x,
-								*self.position,
-								*self.scale,
-								self.rtstate,
-								*modifiers,
-							);
-
-							if end_key == last_end_key && end_pos == last_end_pos {
-								return;
-							}
-
-							selection.status =
-								Status::Selecting(start_key, end_key, start_pos, end_pos);
-
-							let (start_key, end_key) =
-								(start_key.min(end_key), start_key.max(end_key));
-							let (start_pos, end_pos) =
-								(start_pos.min(end_pos), start_pos.max(end_pos));
-
-							self.notes.iter().enumerate().for_each(|(idx, note)| {
-								if (start_key..=end_key).contains(&note.key)
-									&& (start_pos.max(note.position.start())
-										< end_pos.min(note.position.end()))
-								{
-									selection.secondary.insert(idx);
-								} else {
-									selection.secondary.remove(idx);
-								}
-							});
-
-							shell.request_redraw();
-						}
-						Status::Dragging(key, time) => {
-							let new_key = self.get_key(cursor);
-
-							let new_time = get_unsnapped_time(
-								cursor.x,
-								*self.position,
-								*self.scale,
-								self.rtstate,
-							);
-
-							let mut abs_diff = new_time.abs_diff(time);
-							if !modifiers.alt() {
-								abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
-							}
-
-							if new_key != key || abs_diff != MusicalTime::ZERO {
-								let key_delta = if new_key > key {
-									Delta::Positive
-								} else {
-									Delta::Negative
-								}(MidiKey(new_key.0.abs_diff(key.0)));
-
-								let time_delta = if new_time > time {
-									Delta::Positive
-								} else {
-									Delta::Negative
-								}(abs_diff);
-
-								selection.status = Status::Dragging(new_key, time + time_delta);
-								shell.publish((self.f)(Action::Drag(key_delta, time_delta)));
-								shell.capture_event();
-							}
-						}
-						Status::DraggingSplit(time) => {
-							let new_time = get_time(
-								cursor.x,
-								*self.position,
-								*self.scale,
-								self.rtstate,
-								*modifiers,
-							);
-
-							if new_time != time {
-								selection.status = Status::DraggingSplit(new_time);
-								shell.publish((self.f)(Action::DragSplit(new_time)));
-								shell.capture_event();
-							}
-						}
-						Status::TrimmingStart(time) => {
-							let new_time = get_unsnapped_time(
-								cursor.x,
-								*self.position,
-								*self.scale,
-								self.rtstate,
-							);
-
-							let mut abs_diff = new_time.abs_diff(time);
-							if !modifiers.alt() {
-								abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
-							}
-
-							if abs_diff != MusicalTime::ZERO {
-								let delta = if new_time > time {
-									Delta::Positive
-								} else {
-									Delta::Negative
-								}(abs_diff);
-
-								selection.status = Status::TrimmingStart(time + delta);
-								shell.publish((self.f)(Action::TrimStart(delta)));
-								shell.capture_event();
-							}
-						}
-						Status::TrimmingEnd(time) => {
-							let new_time = get_unsnapped_time(
-								cursor.x,
-								*self.position,
-								*self.scale,
-								self.rtstate,
-							);
-
-							let mut abs_diff = new_time.abs_diff(time);
-							if !modifiers.alt() {
-								abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
-							}
-
-							if abs_diff != MusicalTime::ZERO {
-								let delta = if new_time > time {
-									Delta::Positive
-								} else {
-									Delta::Negative
-								}(abs_diff);
-
-								selection.status = Status::TrimmingEnd(time + delta);
-								shell.publish((self.f)(Action::TrimEnd(delta)));
-								shell.capture_event();
-							}
-						}
-						Status::Deleting => {
-							if !selection.primary.is_empty() {
-								shell.publish((self.f)(Action::Delete));
-								shell.capture_event();
-							}
-						}
-						Status::None => {}
-					},
-					_ => {}
 				}
-			}
-			Event::Keyboard(keyboard::Event::KeyPressed {
-				physical_key: keyboard::key::Physical::Code(code),
-				..
-			}) if selection.status == Status::None && !selection.primary.is_empty() => match code {
-				keyboard::key::Code::Delete | keyboard::key::Code::Backspace => {
-					shell.publish((self.f)(Action::Delete));
-					shell.capture_event();
-				}
-				keyboard::key::Code::Escape => {
-					selection.primary.clear();
+				mouse::Event::ButtonReleased { .. } if selection.status != Status::None => {
+					selection.status = Status::None;
+					selection.primary.extend(&selection.secondary);
+					selection.secondary.clear();
 					shell.capture_event();
 					shell.request_redraw();
 				}
+				mouse::Event::CursorMoved { modifiers, .. } => match selection.status {
+					Status::Selecting(start_key, last_end_key, start_pos, last_end_pos) => {
+						let end_key = self.get_key(cursor);
+
+						let end_pos = get_time(
+							cursor.x,
+							*self.position,
+							*self.scale,
+							self.rtstate,
+							*modifiers,
+						);
+
+						if end_key == last_end_key && end_pos == last_end_pos {
+							return;
+						}
+
+						selection.status =
+							Status::Selecting(start_key, end_key, start_pos, end_pos);
+
+						let (start_key, end_key) = (start_key.min(end_key), start_key.max(end_key));
+						let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
+
+						self.notes.iter().enumerate().for_each(|(idx, note)| {
+							if (start_key..=end_key).contains(&note.key)
+								&& (start_pos.max(note.position.start())
+									< end_pos.min(note.position.end()))
+							{
+								selection.secondary.insert(idx);
+							} else {
+								selection.secondary.remove(idx);
+							}
+						});
+
+						shell.request_redraw();
+					}
+					Status::Dragging(key, time) => {
+						let new_key = self.get_key(cursor);
+
+						let new_time =
+							get_unsnapped_time(cursor.x, *self.position, *self.scale, self.rtstate);
+
+						let mut abs_diff = new_time.abs_diff(time);
+						if !modifiers.alt() {
+							abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
+						}
+
+						if new_key != key || abs_diff != MusicalTime::ZERO {
+							let key_delta = if new_key > key {
+								Delta::Positive
+							} else {
+								Delta::Negative
+							}(MidiKey(new_key.0.abs_diff(key.0)));
+
+							let time_delta = if new_time > time {
+								Delta::Positive
+							} else {
+								Delta::Negative
+							}(abs_diff);
+
+							selection.status = Status::Dragging(new_key, time + time_delta);
+							shell.publish((self.f)(Action::Drag(key_delta, time_delta)));
+							shell.capture_event();
+						}
+					}
+					Status::DraggingSplit(time) => {
+						let new_time = get_time(
+							cursor.x,
+							*self.position,
+							*self.scale,
+							self.rtstate,
+							*modifiers,
+						);
+
+						if new_time != time {
+							selection.status = Status::DraggingSplit(new_time);
+							shell.publish((self.f)(Action::DragSplit(new_time)));
+							shell.capture_event();
+						}
+					}
+					Status::TrimmingStart(time) => {
+						let new_time =
+							get_unsnapped_time(cursor.x, *self.position, *self.scale, self.rtstate);
+
+						let mut abs_diff = new_time.abs_diff(time);
+						if !modifiers.alt() {
+							abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
+						}
+
+						if abs_diff != MusicalTime::ZERO {
+							let delta = if new_time > time {
+								Delta::Positive
+							} else {
+								Delta::Negative
+							}(abs_diff);
+
+							selection.status = Status::TrimmingStart(time + delta);
+							shell.publish((self.f)(Action::TrimStart(delta)));
+							shell.capture_event();
+						}
+					}
+					Status::TrimmingEnd(time) => {
+						let new_time =
+							get_unsnapped_time(cursor.x, *self.position, *self.scale, self.rtstate);
+
+						let mut abs_diff = new_time.abs_diff(time);
+						if !modifiers.alt() {
+							abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
+						}
+
+						if abs_diff != MusicalTime::ZERO {
+							let delta = if new_time > time {
+								Delta::Positive
+							} else {
+								Delta::Negative
+							}(abs_diff);
+
+							selection.status = Status::TrimmingEnd(time + delta);
+							shell.publish((self.f)(Action::TrimEnd(delta)));
+							shell.capture_event();
+						}
+					}
+					Status::Deleting => {
+						if !selection.primary.is_empty() {
+							shell.publish((self.f)(Action::Delete));
+							shell.capture_event();
+						}
+					}
+					Status::None => {}
+				},
 				_ => {}
-			},
-			_ => {}
+			}
 		}
 	}
 

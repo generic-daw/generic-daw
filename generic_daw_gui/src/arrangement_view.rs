@@ -138,6 +138,9 @@ pub enum Message {
 	PianoRollAction(piano_roll::Action),
 	PianoRollScroll(Vec2, Vec2, Size),
 
+	DeleteSelection,
+	ClearSelection,
+
 	OnDrag(f32),
 	OnDragEnd,
 	OnDoubleClick,
@@ -586,6 +589,16 @@ impl ArrangementView {
 					);
 				}
 			}
+			Message::DeleteSelection => match self.tab {
+				Tab::Playlist => self.handle_piano_roll_action(piano_roll::Action::Delete),
+				Tab::Mixer => {}
+				Tab::PianoRoll(..) => self.handle_playlist_action(playlist::Action::Delete),
+			},
+			Message::ClearSelection => match self.tab {
+				Tab::Playlist => self.playlist_selection.get_mut().clear(),
+				Tab::Mixer => {}
+				Tab::PianoRoll(..) => self.piano_roll_selection.get_mut().clear(),
+			},
 			Message::OnDrag(split_at) => self.split_at = split_at.clamp(200.0, 400.0),
 			Message::OnDragEnd => {
 				if state.plugins_panel_split_at != self.split_at {
