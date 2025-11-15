@@ -384,10 +384,11 @@ impl ArrangementView {
 				self.loading += 1;
 				let sample_rate = self.arrangement.rtstate().sample_rate;
 
-				return Task::perform(
-					unblock(move || NoClone(SamplePair::new(path, sample_rate).map(Box::new))),
-					Message::SampleLoadedFromFile,
-				);
+				return Task::future(unblock(move || {
+					Message::SampleLoadedFromFile(NoClone(
+						SamplePair::new(path, sample_rate).map(Box::new),
+					))
+				}));
 			}
 			Message::SampleLoadedFromFile(NoClone(sample)) => {
 				self.loading -= 1;

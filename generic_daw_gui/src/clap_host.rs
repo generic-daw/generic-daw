@@ -18,7 +18,7 @@ use iced::{
 };
 #[cfg(unix)]
 use iced::{
-	futures::{FutureExt as _, SinkExt as _},
+	futures::{SinkExt as _, TryFutureExt as _},
 	stream,
 	task::Handle,
 };
@@ -260,7 +260,7 @@ impl ClapHost {
 			MainThreadMessage::PosixFd(fd, msg) => {
 				return self
 					.handle_posix_fd_message(id, fd, msg)
-					.map(move |msg| Message::MainThread(id, msg));
+					.map(Message::MainThread.with(id));
 			}
 		}
 
@@ -307,37 +307,22 @@ impl ClapHost {
 
 				let (task, handle) = Task::stream(stream::channel(100, async move |mut sender| {
 					loop {
-						let msg = match (
-							flags.contains(FdFlags::READ),
-							flags.contains(FdFlags::WRITE),
-						) {
-							(true, false) => {
-								async_fd
-									.readable()
-									.map(|_| PosixFdMessage::OnFd(FdFlags::READ))
-									.await
-							}
-							(false, true) => {
-								async_fd
-									.writable()
-									.map(|_| PosixFdMessage::OnFd(FdFlags::WRITE))
-									.await
-							}
-							(true, true) => {
-								or(
-									async_fd
-										.readable()
-										.map(|_| PosixFdMessage::OnFd(FdFlags::READ)),
-									async_fd
-										.writable()
-										.map(|_| PosixFdMessage::OnFd(FdFlags::WRITE)),
-								)
-								.await
-							}
-							(false, false) => return,
-						};
+						let msg = or(
+							async_fd
+								.readable()
+								.map_ok_or_else(|_| FdFlags::READ, |()| FdFlags::ERROR),
+							async_fd
+								.writable()
+								.map_ok_or_else(|_| FdFlags::WRITE, |()| FdFlags::ERROR),
+						)
+						.await;
 
-						if sender.send(msg).await.is_err() {
+						if flags.intersects(msg)
+							&& sender
+								.send(MainThreadMessage::PosixFd(fd, PosixFdMessage::OnFd(msg)))
+								.await
+								.is_err()
+						{
 							return;
 						}
 					}
@@ -351,7 +336,7 @@ impl ClapHost {
 					.insert(fd, handle.abort_on_drop());
 				debug_assert!(handle.is_some());
 
-				return task.map(move |msg| MainThreadMessage::PosixFd(fd, msg));
+				return task;
 			}
 			PosixFdMessage::Unregister => {
 				let handle = self.fds.get_mut(*id).unwrap().remove(&fd);

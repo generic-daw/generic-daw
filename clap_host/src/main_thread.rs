@@ -102,9 +102,7 @@ impl HostParamsImplMainThread for MainThread<'_> {
 
 #[cfg(unix)]
 impl HostPosixFdImpl for MainThread<'_> {
-	fn register_fd(&mut self, fd: RawFd, mut flags: FdFlags) -> Result<(), HostError> {
-		flags.remove(FdFlags::ERROR);
-
+	fn register_fd(&mut self, fd: RawFd, flags: FdFlags) -> Result<(), HostError> {
 		if fd == -1 {
 			return Err(HostError::Message("recieved fd -1"));
 		} else if !flags.is_empty() {
@@ -120,9 +118,7 @@ impl HostPosixFdImpl for MainThread<'_> {
 		Ok(())
 	}
 
-	fn modify_fd(&mut self, fd: RawFd, mut flags: FdFlags) -> Result<(), HostError> {
-		flags.remove(FdFlags::ERROR);
-
+	fn modify_fd(&mut self, fd: RawFd, flags: FdFlags) -> Result<(), HostError> {
 		if fd == -1 {
 			return Err(HostError::Message("recieved fd -1"));
 		} else if !flags.is_empty() {

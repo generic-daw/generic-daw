@@ -509,16 +509,14 @@ impl Arrangement {
 		Task::batch([
 			Task::future(unblock(move || {
 				export.export(&path, len, |f| {
-					progress_sender.try_send(f).unwrap();
+					progress_sender.try_send(DawMessage::Progress(f)).unwrap();
 				});
 				export_sender.send(export).unwrap();
 			}))
 			.discard(),
-			Task::stream(progress_receiver)
-				.map(DawMessage::Progress)
-				.chain(Task::perform(audio_graph_receiver, |export| {
-					DawMessage::ExportedFile(NoClone(Box::new(export.unwrap())))
-				})),
+			Task::stream(progress_receiver).chain(Task::perform(audio_graph_receiver, |export| {
+				DawMessage::ExportedFile(NoClone(Box::new(export.unwrap())))
+			})),
 		])
 	}
 
