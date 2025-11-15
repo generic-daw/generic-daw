@@ -189,6 +189,9 @@ impl ArrangementView {
 		let mut plugins = plugin_bundles.keys().cloned().collect::<Vec<_>>();
 		plugins.sort_unstable();
 
+		let playlist_scale_x = (arrangement.rtstate().sample_rate.get() as f32).log2() - 5.0;
+		let piano_roll_scale_x = playlist_scale_x - 2.0;
+
 		(
 			Self {
 				arrangement,
@@ -198,14 +201,14 @@ impl ArrangementView {
 				tab: Tab::Playlist,
 
 				playlist_position: Vec2::default(),
-				playlist_scale: Vec2::new(10.0, 87.0),
+				playlist_scale: Vec2::new(playlist_scale_x, 87.0),
 				playlist_selection: RefCell::default(),
 				soloed_track: None,
 
 				selected_channel: None,
 
 				piano_roll_position: Vec2::new(0.0, 40.0),
-				piano_roll_scale: Vec2::new(8.0, LINE_HEIGHT),
+				piano_roll_scale: Vec2::new(piano_roll_scale_x, LINE_HEIGHT),
 				piano_roll_selection: RefCell::default(),
 
 				split_at: state.plugins_panel_split_at,
@@ -238,13 +241,32 @@ impl ArrangementView {
 				);
 			}
 			Message::SetArrangement(NoClone(arrangement)) => {
-				self.arrangement = *arrangement;
-				self.playlist_selection.get_mut().primary.clear();
+				let scale_diff = (arrangement.rtstate().sample_rate.get() as f32
+					/ self.arrangement.rtstate().sample_rate.get() as f32)
+					.log2();
+				self.playlist_scale.x += scale_diff;
+				self.playlist_selection.get_mut().clear();
 				self.selected_channel = None;
-				self.piano_roll_selection.get_mut().primary.clear();
+				self.piano_roll_scale.x += scale_diff;
+				self.piano_roll_selection.get_mut().clear();
 				if matches!(self.tab, Tab::PianoRoll { .. }) {
 					self.tab = Tab::Playlist;
 				}
+				self.arrangement = *arrangement;
+				return Task::batch([
+					self.update(
+						Message::PlaylistScroll(Vec2::ZERO, Vec2::ZERO),
+						config,
+						state,
+						plugin_bundles,
+					),
+					self.update(
+						Message::PianoRollScroll(Vec2::ZERO, Vec2::ZERO, Size::ZERO),
+						config,
+						state,
+						plugin_bundles,
+					),
+				]);
 			}
 			Message::ConnectRequest(from, to) => {
 				return Task::perform(self.arrangement.request_connect(from, to), Result::ok)

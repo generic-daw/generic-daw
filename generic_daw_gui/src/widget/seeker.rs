@@ -16,6 +16,7 @@ use iced::{
 	alignment::Vertical,
 	border, padding,
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
+	window,
 };
 
 #[derive(Default)]
@@ -23,6 +24,7 @@ struct State {
 	hovering: bool,
 	seeking: Option<MusicalTime>,
 	loop_marker: Option<MusicalTime>,
+	last_size: Size,
 }
 
 #[derive(Debug)]
@@ -117,13 +119,25 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				);
 			});
 
+		let state = tree.state.downcast_mut::<State>();
+
+		if let Event::Window(window::Event::RedrawRequested(..)) = event
+			&& layout.bounds().size() != state.last_size
+		{
+			state.last_size = layout.bounds().size();
+			shell.publish((self.position_scale_delta)(
+				Vec2::ZERO,
+				Vec2::ZERO,
+				state.last_size,
+			));
+			return;
+		}
+
 		if shell.is_event_captured() {
 			return;
 		}
 
 		if let Event::Mouse(event) = event {
-			let state = tree.state.downcast_mut::<State>();
-
 			let Some(cursor) = cursor.position_in(layout.bounds()) else {
 				state.hovering = false;
 				state.seeking = None;
