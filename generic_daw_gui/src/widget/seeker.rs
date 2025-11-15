@@ -36,7 +36,8 @@ pub struct Seeker<'a, Message> {
 	children: NoDebug<[Element<'a, Message>; 2]>,
 	seek_to: fn(MusicalTime) -> Message,
 	set_loop_marker: fn(Option<NotePosition>) -> Message,
-	position_scale_delta: fn(Vector, Vector, Size) -> Message,
+	pan: fn(Vector, Size) -> Message,
+	zoom: fn(Vector, Point, Size) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
@@ -120,16 +121,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			});
 
 		let state = tree.state.downcast_mut::<State>();
+		let size = layout.bounds().size();
 
 		if let Event::Window(window::Event::RedrawRequested(..)) = event
-			&& layout.bounds().size() != state.last_size
+			&& size != state.last_size
 		{
-			state.last_size = layout.bounds().size();
-			shell.publish((self.position_scale_delta)(
-				Vector::ZERO,
-				Vector::ZERO,
-				state.last_size,
-			));
+			state.last_size = size;
+			shell.publish((self.pan)(Vector::ZERO, size));
 			return;
 		}
 
@@ -228,47 +226,27 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 							x *= self.scale.x.exp2();
 							y /= self.scale.y;
 
-							shell.publish((self.position_scale_delta)(
-								Vector::new(x, y),
-								Vector::ZERO,
-								layout.bounds().size(),
-							));
+							shell.publish((self.pan)(Vector::new(x, y), size));
 							shell.capture_event();
 						}
 						(true, false, false) => {
 							x = y / 128.0;
 
-							let x_pos = (cursor.x + offset)
-								* (self.scale.x.exp2() - (self.scale.x + x).exp2());
-
-							shell.publish((self.position_scale_delta)(
-								Vector::new(x_pos, 0.0),
-								Vector::new(x, 0.0),
-								layout.bounds().size(),
-							));
+							let cursor = cursor + Vector::new(offset, -LINE_HEIGHT);
+							shell.publish((self.zoom)(Vector::new(x, 0.0), cursor, size));
 							shell.capture_event();
 						}
 						(false, true, false) => {
 							y *= 4.0 * self.scale.x.exp2();
 
-							shell.publish((self.position_scale_delta)(
-								Vector::new(y, 0.0),
-								Vector::ZERO,
-								layout.bounds().size(),
-							));
+							shell.publish((self.pan)(Vector::new(y, 0.0), size));
 							shell.capture_event();
 						}
 						(false, false, true) => {
 							y /= -8.0;
 
-							let y_pos = (y * (cursor.y - LINE_HEIGHT))
-								/ (self.scale.y * (self.scale.y + y));
-
-							shell.publish((self.position_scale_delta)(
-								Vector::new(0.0, y_pos),
-								Vector::new(0.0, y),
-								layout.bounds().size(),
-							));
+							let cursor = cursor + Vector::new(offset, -LINE_HEIGHT);
+							shell.publish((self.zoom)(Vector::new(0.0, y), cursor, size));
 							shell.capture_event();
 						}
 						_ => {}
@@ -396,7 +374,8 @@ impl<'a, Message> Seeker<'a, Message> {
 		right: impl Into<Element<'a, Message>>,
 		seek_to: fn(MusicalTime) -> Message,
 		set_loop_marker: fn(Option<NotePosition>) -> Message,
-		position_scale_delta: fn(Vector, Vector, Size) -> Message,
+		pan: fn(Vector, Size) -> Message,
+		zoom: fn(Vector, Point, Size) -> Message,
 	) -> Self {
 		Self {
 			rtstate,
@@ -406,7 +385,8 @@ impl<'a, Message> Seeker<'a, Message> {
 			children: [left.into(), right.into()].into(),
 			seek_to,
 			set_loop_marker,
-			position_scale_delta,
+			pan,
+			zoom,
 		}
 	}
 

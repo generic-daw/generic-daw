@@ -37,7 +37,7 @@ use generic_daw_utils::{NoClone, NoDebug};
 use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
 use humantime::format_rfc3339;
 use iced::{
-	Center, Element, Fill, Function as _, Shrink, Size, Subscription, Task, Vector, border,
+	Center, Element, Fill, Function as _, Point, Shrink, Size, Subscription, Task, Vector, border,
 	futures::SinkExt as _,
 	mouse::Interaction,
 	padding, stream,
@@ -133,10 +133,12 @@ pub enum Message {
 	RecordingWrite(NoDebug<Box<[f32]>>),
 
 	PlaylistAction(playlist::Action),
-	PlaylistScroll(Vector, Vector),
+	PlaylistPan(Vector),
+	PlaylistZoom(Vector, Point),
 
 	PianoRollAction(piano_roll::Action),
-	PianoRollScroll(Vector, Vector, Size),
+	PianoRollPan(Vector, Size),
+	PianoRollZoom(Vector, Point, Size),
 
 	DeleteSelection,
 	ClearSelection,
@@ -255,13 +257,13 @@ impl ArrangementView {
 				self.arrangement = *arrangement;
 				return Task::batch([
 					self.update(
-						Message::PlaylistScroll(Vector::ZERO, Vector::ZERO),
+						Message::PlaylistZoom(Vector::ZERO, Point::ORIGIN),
 						config,
 						state,
 						plugin_bundles,
 					),
 					self.update(
-						Message::PianoRollScroll(Vector::ZERO, Vector::ZERO, Size::ZERO),
+						Message::PianoRollZoom(Vector::ZERO, Point::ORIGIN, Size::ZERO),
 						config,
 						state,
 						plugin_bundles,
@@ -460,7 +462,7 @@ impl ArrangementView {
 
 				return Task::batch([
 					self.update(
-						Message::PlaylistScroll(Vector::ZERO, Vector::ZERO),
+						Message::PlaylistPan(Vector::ZERO),
 						config,
 						state,
 						plugin_bundles,
@@ -575,41 +577,63 @@ impl ArrangementView {
 			}
 			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().0.write(&samples),
 			Message::PlaylistAction(action) => self.handle_playlist_action(action),
-			Message::PlaylistScroll(pos, scale) => {
+			Message::PlaylistPan(pos_diff) => {
+				self.playlist_position = self.playlist_position + pos_diff;
+				self.playlist_position.x = self.playlist_position.x.max(0.0);
+				self.playlist_position.y = self.playlist_position.y.clamp(
+					0.0,
+					self.arrangement.tracks().len().saturating_sub(1) as f32,
+				);
+			}
+			Message::PlaylistZoom(scale_diff, cursor) => {
 				let old_scale = self.playlist_scale;
 
-				self.playlist_scale = self.playlist_scale + scale;
+				self.playlist_scale = old_scale + scale_diff;
 				self.playlist_scale.x = self.playlist_scale.x.clamp(1.0, 16f32.next_down());
 				self.playlist_scale.y = self.playlist_scale.y.clamp(46.0, 200.0);
 
-				if scale == Vector::ZERO || old_scale != self.playlist_scale {
-					self.playlist_position = self.playlist_position + pos;
-					self.playlist_position.x = self.playlist_position.x.max(0.0);
-					self.playlist_position.y = self.playlist_position.y.clamp(
-						0.0,
-						self.arrangement.tracks().len().saturating_sub(1) as f32,
-					);
-				}
+				let pos_diff = Vector::new(
+					cursor.x * (old_scale.x.exp2() - self.playlist_scale.x.exp2()),
+					cursor.y * (old_scale.y.recip() - self.playlist_scale.y.recip()),
+				);
+
+				return self.update(
+					Message::PlaylistPan(pos_diff),
+					config,
+					state,
+					plugin_bundles,
+				);
 			}
 			Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
-			Message::PianoRollScroll(pos, scale, size) => {
+			Message::PianoRollPan(pos_diff, size) => {
+				self.piano_roll_position = self.piano_roll_position + pos_diff;
+				self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
+				self.piano_roll_position.y = self.piano_roll_position.y.clamp(
+					0.0,
+					128.0 - ((size.height - LINE_HEIGHT) / self.piano_roll_scale.y),
+				);
+			}
+			Message::PianoRollZoom(scale_diff, cursor, size) => {
 				let old_scale = self.piano_roll_scale;
 
-				self.piano_roll_scale = self.piano_roll_scale + scale;
+				self.piano_roll_scale = old_scale + scale_diff;
 				self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(1.0, 16f32.next_down());
 				self.piano_roll_scale.y = self
 					.piano_roll_scale
 					.y
 					.clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
 
-				if scale == Vector::ZERO || old_scale != self.piano_roll_scale {
-					self.piano_roll_position = self.piano_roll_position + pos;
-					self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
-					self.piano_roll_position.y = self.piano_roll_position.y.clamp(
-						0.0,
-						128.0 - ((size.height - LINE_HEIGHT) / self.piano_roll_scale.y),
-					);
-				}
+				let pos_diff = Vector::new(
+					cursor.x * (old_scale.x.exp2() - self.piano_roll_scale.x.exp2()),
+					cursor.y * (old_scale.y.recip() - self.piano_roll_scale.y.recip()),
+				);
+
+				return self.update(
+					Message::PianoRollPan(pos_diff, size),
+					config,
+					state,
+					plugin_bundles,
+				);
 			}
 			Message::DeleteSelection => match self.tab {
 				Tab::Playlist => self.handle_piano_roll_action(piano_roll::Action::Delete),
@@ -1112,7 +1136,8 @@ impl ArrangementView {
 			),
 			Message::SeekTo,
 			Message::SetLoopMarker,
-			|p, s, _| Message::PlaylistScroll(p, s),
+			|p, _| Message::PlaylistPan(p),
+			|s, c, _| Message::PlaylistZoom(s, c),
 		)
 		.into()
 	}
@@ -1403,7 +1428,8 @@ impl ArrangementView {
 			),
 			Message::SeekTo,
 			Message::SetLoopMarker,
-			Message::PianoRollScroll,
+			Message::PianoRollPan,
+			Message::PianoRollZoom,
 		)
 		.with_offset(
 			clip.position
