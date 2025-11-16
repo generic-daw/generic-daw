@@ -209,7 +209,7 @@ impl ArrangementView {
 
 				selected_channel: None,
 
-				piano_roll_position: Vector::new(0.0, 40.0),
+				piano_roll_position: Vector::new(0.0, 1000.0),
 				piano_roll_scale: Vector::new(piano_roll_scale_x, LINE_HEIGHT),
 				piano_roll_selection: RefCell::default(),
 
@@ -585,7 +585,8 @@ impl ArrangementView {
 				self.playlist_position.x = self.playlist_position.x.max(0.0);
 				self.playlist_position.y = self.playlist_position.y.clamp(
 					0.0,
-					self.arrangement.tracks().len().saturating_sub(1) as f32,
+					self.playlist_scale.y
+						* self.arrangement.tracks().len().saturating_sub(1) as f32,
 				);
 			}
 			Message::PlaylistZoom(scale_diff, cursor) => {
@@ -597,7 +598,9 @@ impl ArrangementView {
 
 				let pos_diff = Vector::new(
 					cursor.x * (old_scale.x.exp2() - self.playlist_scale.x.exp2()),
-					cursor.y * (old_scale.y.recip() - self.playlist_scale.y.recip()),
+					(cursor.y + self.playlist_position.y)
+						* (old_scale.y.recip() - self.playlist_scale.y.recip())
+						* self.playlist_scale.y,
 				);
 
 				return self.update(
@@ -614,7 +617,7 @@ impl ArrangementView {
 				self.piano_roll_position.y = self
 					.piano_roll_position
 					.y
-					.clamp(0.0, 128.0 - (size.height / self.piano_roll_scale.y));
+					.clamp(0.0, self.piano_roll_scale.y.mul_add(128.0, -size.height));
 			}
 			Message::PianoRollZoom(scale_diff, cursor, size) => {
 				let old_scale = self.piano_roll_scale;
@@ -628,7 +631,9 @@ impl ArrangementView {
 
 				let pos_diff = Vector::new(
 					cursor.x * (old_scale.x.exp2() - self.piano_roll_scale.x.exp2()),
-					cursor.y * (old_scale.y.recip() - self.piano_roll_scale.y.recip()),
+					(cursor.y + self.piano_roll_position.y)
+						* (old_scale.y.recip() - self.piano_roll_scale.y.recip())
+						* self.piano_roll_scale.y,
 				);
 
 				return self.update(

@@ -130,7 +130,7 @@ where
 
 		let samples_per_px = self.scale.x.exp2();
 		Node::new(Size::new(len / samples_per_px, limits.max().height))
-			.translate(Vector::new((start - self.position.x) / samples_per_px, 0.0))
+			.translate(Vector::new(start / samples_per_px, 0.0))
 	}
 
 	fn update(

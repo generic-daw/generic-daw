@@ -2,8 +2,7 @@ use crate::widget::{LINE_HEIGHT, get_time};
 use generic_daw_core::{MusicalTime, NotePosition, RtState};
 use generic_daw_utils::NoDebug;
 use iced::{
-	Background, Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme,
-	Vector,
+	Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
 		Clipboard, Layout, Renderer as _, Shell, Text, Widget,
 		layout::{Limits, Node},
@@ -81,14 +80,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		Node::with_children(
 			limits.max(),
 			vec![
-				left.translate(Vector::new(
-					0.0,
-					self.position.y.mul_add(-self.scale.y, LINE_HEIGHT),
-				)),
-				right.translate(Vector::new(
-					left_width,
-					self.position.y.mul_add(-self.scale.y, LINE_HEIGHT),
-				)),
+				left.translate(Vector::new(0.0, LINE_HEIGHT - self.position.y)),
+				right.translate(Vector::new(left_width, LINE_HEIGHT - self.position.y)),
 			],
 		)
 	}
@@ -224,7 +217,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
 						(false, false, false) if x != 0.0 || y != 0.0 => {
 							x *= self.scale.x.exp2();
-							y /= self.scale.y;
 
 							shell.publish((self.pan)(Vector::new(x, y), right_half.size()));
 							shell.capture_event();
@@ -240,10 +232,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 							));
 							shell.capture_event();
 						}
-						(false, true, false) if y != 0.0 => {
-							y *= 4.0 * self.scale.x.exp2();
+						(false, true, false) if x != 0.0 || y != 0.0 => {
+							y *= self.scale.x.exp2();
 
-							shell.publish((self.pan)(Vector::new(y, 0.0), right_half.size()));
+							shell.publish((self.pan)(Vector::new(y, x), right_half.size()));
 							shell.capture_event();
 						}
 						(false, false, true) if y != 0.0 => {
@@ -486,31 +478,13 @@ impl<'a, Message> Seeker<'a, Message> {
 			beat += snap_step;
 		}
 
-		let offset = self.position.y.fract() * self.scale.y;
-
-		let rows = (bounds.height / self.scale.y).ceil() as u8;
-
-		for i in 0..rows {
-			renderer.fill_quad(
-				Quad {
-					bounds: Rectangle::new(
-						bounds.position()
-							+ Vector::new(0.0, f32::from(i).mul_add(self.scale.y, -offset - 0.5)),
-						Size::new(bounds.width, 1.0),
-					),
-					..Quad::default()
-				},
-				theme.extended_palette().background.strong.color,
-			);
-		}
-
 		renderer.fill_quad(
 			Quad {
 				bounds,
 				border: border::width(1).color(theme.extended_palette().background.strong.color),
 				..Quad::default()
 			},
-			Background::Color(Color::TRANSPARENT),
+			Color::TRANSPARENT,
 		);
 	}
 

@@ -1,4 +1,4 @@
-use crate::widget::{Delta, get_time, get_unsnapped_time};
+use crate::widget::{Delta, get_time, get_unsnapped_time, key_y};
 use bit_set::BitSet;
 use generic_daw_core::{MidiKey, MidiNote, MusicalTime, RtState};
 use iced::{
@@ -292,6 +292,20 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			return;
 		};
 
+		for key in (0..127).map(MidiKey) {
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(
+						viewport.position()
+							+ Vector::new(0.0, key_y(key, *self.position, *self.scale)),
+						Size::new(viewport.width, 1.0),
+					),
+					..Quad::default()
+				},
+				theme.extended_palette().background.strong.color,
+			);
+		}
+
 		let mut rects = Vec::new();
 
 		renderer.start_layer(Rectangle::INFINITE);
@@ -326,8 +340,8 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				renderer.with_translation(Vector::new(viewport.x, viewport.y), |renderer| {
 					let samples_per_px = self.scale.x.exp2();
 
-					let y = self.key_y(start_key);
-					let height = self.key_y(end_key) + self.scale.y - y;
+					let y = key_y(start_key, *self.position, *self.scale);
+					let height = key_y(end_key, *self.position, *self.scale) + self.scale.y - y;
 
 					let x = start_pos.to_samples_f(self.rtstate) / samples_per_px;
 					let width = end_pos.to_samples_f(self.rtstate) / samples_per_px - x;
@@ -411,12 +425,8 @@ impl<'a, Message> PianoRoll<'a, Message> {
 	}
 
 	fn get_key(&self, cursor: Point) -> MidiKey {
-		let new_key = 128.0 - cursor.y / self.scale.y - self.position.y;
-		MidiKey(new_key as u8)
-	}
-
-	fn key_y(&self, key: MidiKey) -> f32 {
-		(127.0 - f32::from(key.0) - self.position.y) * self.scale.y
+		let new_key = 127.0 - (cursor.y + self.position.y) / self.scale.y;
+		MidiKey(new_key.ceil() as u8)
 	}
 
 	fn note_bounds(&self, note: &MidiNote) -> Rectangle {
@@ -427,7 +437,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		let x = x - self.position.x / samples_per_px;
 
 		Rectangle::new(
-			Point::new(x, self.key_y(note.key)),
+			Point::new(x, key_y(note.key, *self.position, *self.scale)),
 			Size::new(width, self.scale.y),
 		)
 	}

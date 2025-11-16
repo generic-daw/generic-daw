@@ -57,3 +57,7 @@ fn get_time(
 	}
 	time
 }
+
+fn key_y(key: MidiKey, position: Vector, scale: Vector) -> f32 {
+	scale.y.mul_add(127.0 - f32::from(key.0), -position.y)
+}

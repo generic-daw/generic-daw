@@ -374,6 +374,23 @@ where
 			return;
 		};
 
+		for layout in layout.children() {
+			let Some(bounds) = layout.bounds().intersection(&viewport) else {
+				continue;
+			};
+
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(
+						bounds.position() + Vector::new(0.0, bounds.height - 1.0),
+						Size::new(bounds.width, 1.0),
+					),
+					..Quad::default()
+				},
+				theme.extended_palette().background.strong.color,
+			);
+		}
+
 		let rects = &mut vec![];
 		let mut starts = vec![Some(0); self.tracks.len()];
 

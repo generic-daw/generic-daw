@@ -1,6 +1,7 @@
+use crate::widget::key_y;
 use generic_daw_core::MidiKey;
 use iced::{
-	Background, Color, Element, Length, Rectangle, Renderer, Size, Theme, Vector,
+	Color, Element, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
 		Layout, Renderer as _, Text, Widget,
 		layout::{Limits, Node},
@@ -47,16 +48,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 			return;
 		};
 
-		let base = self.position.y as u8;
-		let offset = self.position.y.fract() * self.scale.y;
-
-		let rows = ((offset + bounds.height) / self.scale.y).ceil() as u8;
-
-		for i in 0..rows {
-			let key = MidiKey(127 - base - i);
-
+		for key in (0..128).map(MidiKey) {
 			let note_bounds = Rectangle::new(
-				bounds.position() + Vector::new(0.0, f32::from(i).mul_add(self.scale.y, -offset)),
+				bounds.position() + Vector::new(0.0, key_y(key, *self.position, *self.scale)),
 				Size::new(PIANO_WIDTH, self.scale.y),
 			);
 
@@ -66,9 +60,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 					..Quad::default()
 				},
 				if key.is_black() {
-					Background::Color(Color::BLACK)
+					Color::BLACK
 				} else {
-					Background::Color(Color::WHITE)
+					Color::WHITE
 				},
 			);
 
