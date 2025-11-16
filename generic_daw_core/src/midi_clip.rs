@@ -1,8 +1,8 @@
-use crate::{ClipPosition, Event, PatternId, daw_ctx::State};
+use crate::{ClipPosition, Event, MidiPatternId, daw_ctx::State};
 
 #[derive(Clone, Copy, Debug)]
 pub struct MidiClip {
-	pub pattern: PatternId,
+	pub pattern: MidiPatternId,
 	pub position: ClipPosition,
 }
 
@@ -10,7 +10,7 @@ impl MidiClip {
 	pub fn collect_notes(&self, state: &State, notes: &mut [u8; 128]) {
 		debug_assert!(state.rtstate.playing);
 
-		state.patterns[*self.pattern]
+		state.midi_patterns[*self.pattern]
 			.notes
 			.iter()
 			.filter_map(|&(mut note)| {
@@ -38,7 +38,7 @@ impl MidiClip {
 	) {
 		debug_assert!(state.rtstate.playing);
 
-		state.patterns[*self.pattern]
+		state.midi_patterns[*self.pattern]
 			.notes
 			.iter()
 			.filter_map(|&(mut note)| {

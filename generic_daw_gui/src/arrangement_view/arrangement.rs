@@ -2,8 +2,8 @@ use crate::{
 	arrangement_view::{
 		Message as ArrangementMessage,
 		clip::Clip,
+		midi_pattern::{MidiPattern, MidiPatternPair},
 		node::{Node, NodeType},
-		pattern::{Pattern, PatternPair},
 		plugin::Plugin,
 		poll_consumer,
 		sample::{Sample, SamplePair},
@@ -15,9 +15,10 @@ use crate::{
 };
 use bit_set::BitSet;
 use generic_daw_core::{
-	self as core, AudioGraphNode, Batch, Event, Export, Message, MidiKey, MidiNote, MusicalTime,
-	NodeAction, NodeId, NodeImpl, NotePosition, OutputRequest, OutputResponse, PanMode,
-	PatternAction, PatternId, RtState, STREAM_THREAD, StreamMessage, StreamToken, Update, Version,
+	self as core, AudioGraphNode, Batch, Event, Export, Message, MidiKey, MidiNote,
+	MidiPatternAction, MidiPatternId, MusicalTime, NodeAction, NodeId, NodeImpl, NotePosition,
+	OutputRequest, OutputResponse, PanMode, RtState, STREAM_THREAD, StreamMessage, StreamToken,
+	Update, Version,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
 use generic_daw_utils::{HoleyVec, NoClone, NoDebug, ShiftMoveExt as _};
@@ -31,7 +32,7 @@ pub struct Arrangement {
 	rtstate: RtState,
 
 	samples: HoleyVec<Sample>,
-	patterns: HoleyVec<Pattern>,
+	midi_patterns: HoleyVec<MidiPattern>,
 
 	tracks: Vec<Track>,
 	nodes: HoleyVec<(Node, BitSet)>,
@@ -79,7 +80,7 @@ impl Arrangement {
 				rtstate,
 
 				samples: HoleyVec::default(),
-				patterns: HoleyVec::default(),
+				midi_patterns: HoleyVec::default(),
 
 				tracks: Vec::new(),
 				nodes,
@@ -138,8 +139,8 @@ impl Arrangement {
 		&self.samples
 	}
 
-	pub fn patterns(&self) -> &HoleyVec<Pattern> {
-		&self.patterns
+	pub fn midi_patterns(&self) -> &HoleyVec<MidiPattern> {
+		&self.midi_patterns
 	}
 
 	fn send(&mut self, mut message: Message) {
@@ -153,8 +154,8 @@ impl Arrangement {
 		self.send(Message::NodeAction(id, action));
 	}
 
-	fn pattern_action(&mut self, id: PatternId, action: PatternAction) {
-		self.send(Message::PatternAction(id, action));
+	fn midi_pattern_action(&mut self, id: MidiPatternId, action: MidiPatternAction) {
+		self.send(Message::MidiPatternAction(id, action));
 	}
 
 	pub fn channel_volume_changed(&mut self, id: NodeId, volume: f32) {
@@ -354,7 +355,7 @@ impl Arrangement {
 		for clip in track.clips {
 			match clip {
 				Clip::Audio(audio) => self.samples.get_mut(*audio.sample).unwrap().refs -= 1,
-				Clip::Midi(midi) => self.patterns.get_mut(*midi.pattern).unwrap().refs -= 1,
+				Clip::Midi(midi) => self.midi_patterns.get_mut(*midi.pattern).unwrap().refs -= 1,
 			}
 
 			self.gc(clip);
@@ -394,24 +395,24 @@ impl Arrangement {
 				}
 			}
 			Clip::Midi(midi) => {
-				if self.patterns[*midi.pattern].refs == 0 {
-					self.patterns.remove(*midi.pattern);
-					self.send(Message::PatternRemove(midi.pattern));
+				if self.midi_patterns[*midi.pattern].refs == 0 {
+					self.midi_patterns.remove(*midi.pattern);
+					self.send(Message::MidiPatternRemove(midi.pattern));
 				}
 			}
 		}
 	}
 
-	pub fn add_pattern(&mut self, pattern: PatternPair) {
-		self.patterns.insert(*pattern.gui.id, pattern.gui);
-		self.send(Message::PatternAdd(pattern.core));
+	pub fn add_midi_pattern(&mut self, pattern: MidiPatternPair) {
+		self.midi_patterns.insert(*pattern.gui.id, pattern.gui);
+		self.send(Message::MidiPatternAdd(pattern.core));
 	}
 
 	pub fn add_clip(&mut self, track: usize, clip: impl Into<Clip>) -> usize {
 		let clip = clip.into();
 		match clip {
 			Clip::Audio(audio) => self.samples.get_mut(*audio.sample).unwrap().refs += 1,
-			Clip::Midi(midi) => self.patterns.get_mut(*midi.pattern).unwrap().refs += 1,
+			Clip::Midi(midi) => self.midi_patterns.get_mut(*midi.pattern).unwrap().refs += 1,
 		}
 		self.tracks[track].clips.push(clip);
 		self.node_action(self.tracks[track].id, NodeAction::ClipAdd(clip.into()));
@@ -423,7 +424,7 @@ impl Arrangement {
 		let clip = self.tracks[track].clips.remove(clip);
 		match clip {
 			Clip::Audio(audio) => self.samples.get_mut(*audio.sample).unwrap().refs -= 1,
-			Clip::Midi(midi) => self.patterns.get_mut(*midi.pattern).unwrap().refs -= 1,
+			Clip::Midi(midi) => self.midi_patterns.get_mut(*midi.pattern).unwrap().refs -= 1,
 		}
 		clip
 	}
@@ -451,41 +452,49 @@ impl Arrangement {
 		self.node_action(self.tracks[track].id, NodeAction::ClipTrimEndTo(clip, pos));
 	}
 
-	pub fn add_note(&mut self, pattern: PatternId, note: MidiNote) -> usize {
-		self.patterns.get_mut(*pattern).unwrap().notes.push(note);
-		self.pattern_action(pattern, PatternAction::Add(note));
-		self.patterns[*pattern].notes.len() - 1
+	pub fn add_note(&mut self, pattern: MidiPatternId, note: MidiNote) -> usize {
+		self.midi_patterns
+			.get_mut(*pattern)
+			.unwrap()
+			.notes
+			.push(note);
+		self.midi_pattern_action(pattern, MidiPatternAction::Add(note));
+		self.midi_patterns[*pattern].notes.len() - 1
 	}
 
-	pub fn remove_note(&mut self, pattern: PatternId, note: usize) -> MidiNote {
-		self.pattern_action(pattern, PatternAction::Remove(note));
-		self.patterns.get_mut(*pattern).unwrap().notes.remove(note)
+	pub fn remove_note(&mut self, pattern: MidiPatternId, note: usize) -> MidiNote {
+		self.midi_pattern_action(pattern, MidiPatternAction::Remove(note));
+		self.midi_patterns
+			.get_mut(*pattern)
+			.unwrap()
+			.notes
+			.remove(note)
 	}
 
-	pub fn note_switch_key(&mut self, pattern: PatternId, note: usize, key: MidiKey) {
-		self.patterns.get_mut(*pattern).unwrap().notes[note].key = key;
-		self.pattern_action(pattern, PatternAction::ChangeKey(note, key));
+	pub fn note_switch_key(&mut self, pattern: MidiPatternId, note: usize, key: MidiKey) {
+		self.midi_patterns.get_mut(*pattern).unwrap().notes[note].key = key;
+		self.midi_pattern_action(pattern, MidiPatternAction::ChangeKey(note, key));
 	}
 
-	pub fn note_move_to(&mut self, pattern: PatternId, note: usize, pos: MusicalTime) {
-		self.patterns.get_mut(*pattern).unwrap().notes[note]
+	pub fn note_move_to(&mut self, pattern: MidiPatternId, note: usize, pos: MusicalTime) {
+		self.midi_patterns.get_mut(*pattern).unwrap().notes[note]
 			.position
 			.move_to(pos);
-		self.pattern_action(pattern, PatternAction::MoveTo(note, pos));
+		self.midi_pattern_action(pattern, MidiPatternAction::MoveTo(note, pos));
 	}
 
-	pub fn note_trim_start_to(&mut self, pattern: PatternId, note: usize, pos: MusicalTime) {
-		self.patterns.get_mut(*pattern).unwrap().notes[note]
+	pub fn note_trim_start_to(&mut self, pattern: MidiPatternId, note: usize, pos: MusicalTime) {
+		self.midi_patterns.get_mut(*pattern).unwrap().notes[note]
 			.position
 			.trim_start_to(pos);
-		self.pattern_action(pattern, PatternAction::TrimStartTo(note, pos));
+		self.midi_pattern_action(pattern, MidiPatternAction::TrimStartTo(note, pos));
 	}
 
-	pub fn note_trim_end_to(&mut self, pattern: PatternId, note: usize, pos: MusicalTime) {
-		self.patterns.get_mut(*pattern).unwrap().notes[note]
+	pub fn note_trim_end_to(&mut self, pattern: MidiPatternId, note: usize, pos: MusicalTime) {
+		self.midi_patterns.get_mut(*pattern).unwrap().notes[note]
 			.position
 			.trim_end_to(pos);
-		self.pattern_action(pattern, PatternAction::TrimEndTo(note, pos));
+		self.midi_pattern_action(pattern, MidiPatternAction::TrimEndTo(note, pos));
 	}
 
 	pub fn start_export(&mut self, path: Arc<Path>) -> Task<DawMessage> {

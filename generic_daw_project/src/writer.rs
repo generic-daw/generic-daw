@@ -30,13 +30,13 @@ impl Writer {
 	pub fn push_pattern(
 		&mut self,
 		notes: impl IntoIterator<Item = proto::Note>,
-	) -> proto::PatternIndex {
-		self.0.patterns.push(proto::Pattern {
+	) -> proto::MidiPatternIndex {
+		self.0.midi_patterns.push(proto::Pattern {
 			notes: notes.into_iter().collect(),
 		});
 
-		proto::PatternIndex {
-			index: self.0.patterns.len() as u32 - 1,
+		proto::MidiPatternIndex {
+			index: self.0.midi_patterns.len() as u32 - 1,
 		}
 	}
 

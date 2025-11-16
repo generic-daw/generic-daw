@@ -24,10 +24,12 @@ impl Reader {
 			.zip(&self.0.samples)
 	}
 
-	pub fn iter_patterns(&self) -> impl Iterator<Item = (proto::PatternIndex, &proto::Pattern)> {
+	pub fn iter_midi_patterns(
+		&self,
+	) -> impl Iterator<Item = (proto::MidiPatternIndex, &proto::Pattern)> {
 		(0..)
-			.map(|index| proto::PatternIndex { index })
-			.zip(&self.0.patterns)
+			.map(|index| proto::MidiPatternIndex { index })
+			.zip(&self.0.midi_patterns)
 	}
 
 	pub fn iter_tracks(

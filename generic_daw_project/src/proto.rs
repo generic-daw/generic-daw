@@ -8,7 +8,7 @@ pub struct SampleIndex {
 }
 
 #[derive(Clone, Copy, Eq, Hash, Message, PartialEq)]
-pub struct PatternIndex {
+pub struct MidiPatternIndex {
 	#[prost(uint32)]
 	pub(crate) index: u32,
 }
@@ -32,7 +32,7 @@ pub struct Project {
 	#[prost(message, repeated)]
 	pub samples: Vec<Sample>,
 	#[prost(message, repeated)]
-	pub patterns: Vec<Pattern>,
+	pub midi_patterns: Vec<Pattern>,
 	#[prost(message, repeated)]
 	pub tracks: Vec<Track>,
 	#[prost(message, repeated)]
@@ -150,7 +150,7 @@ pub struct AudioClip {
 #[derive(Clone, Copy, Message)]
 pub struct MidiClip {
 	#[prost(message, required)]
-	pub pattern: PatternIndex,
+	pub pattern: MidiPatternIndex,
 	#[prost(message, required)]
 	pub position: ClipPosition,
 }

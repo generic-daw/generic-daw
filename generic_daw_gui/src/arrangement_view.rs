@@ -2,8 +2,8 @@ use crate::{
 	arrangement_view::{
 		audio_clip::AudioClip,
 		midi_clip::MidiClip,
+		midi_pattern::MidiPatternPair,
 		node::{Node, NodeType},
-		pattern::PatternPair,
 		sample::SamplePair,
 	},
 	clap_host::{self, ClapHost},
@@ -67,8 +67,8 @@ mod arrangement;
 mod audio_clip;
 mod clip;
 mod midi_clip;
+mod midi_pattern;
 mod node;
-mod pattern;
 mod plugin;
 mod project;
 mod recording;
@@ -689,9 +689,9 @@ impl ArrangementView {
 				self.tab = Tab::PianoRoll(clip);
 			}
 			playlist::Action::Add(track, pos) => {
-				let pattern = PatternPair::new(Vec::new());
+				let pattern = MidiPatternPair::new(Vec::new());
 				let id = pattern.gui.id;
-				self.arrangement.add_pattern(pattern);
+				self.arrangement.add_midi_pattern(pattern);
 
 				let mut clip = MidiClip::new(id);
 				clip.position.trim_end_to(
@@ -855,14 +855,14 @@ impl ArrangementView {
 				for note in &*primary {
 					new.insert(self.arrangement.add_note(
 						clip.pattern,
-						self.arrangement.patterns()[*clip.pattern].notes[note],
+						self.arrangement.midi_patterns()[*clip.pattern].notes[note],
 					));
 				}
 				*primary = new;
 			}
 			piano_roll::Action::Drag(key_diff, pos_diff) => {
 				for idx in &*primary {
-					let note = self.arrangement.patterns()[*clip.pattern].notes[idx];
+					let note = self.arrangement.midi_patterns()[*clip.pattern].notes[idx];
 					let new_key = note.key + key_diff;
 					if new_key != note.key {
 						self.arrangement.note_switch_key(clip.pattern, idx, new_key);
@@ -876,14 +876,14 @@ impl ArrangementView {
 				let filtered = primary
 					.iter()
 					.filter(|&lhs| {
-						let note = self.arrangement.patterns()[*clip.pattern].notes[lhs];
+						let note = self.arrangement.midi_patterns()[*clip.pattern].notes[lhs];
 						(note.position.start()..=note.position.end()).contains(&pos)
 					})
 					.collect::<BitSet>();
 				primary.clear();
 
 				for lhs in &filtered {
-					let note = self.arrangement.patterns()[*clip.pattern].notes[lhs];
+					let note = self.arrangement.midi_patterns()[*clip.pattern].notes[lhs];
 					if note.position.start() == pos {
 						primary.insert(lhs);
 					} else if note.position.end() == pos {
@@ -904,7 +904,7 @@ impl ArrangementView {
 				let mut clamped = HashMap::new();
 
 				for lhs in &*primary {
-					let note = self.arrangement.patterns()[*clip.pattern].notes[lhs];
+					let note = self.arrangement.midi_patterns()[*clip.pattern].notes[lhs];
 					let new = note.position.start() + MusicalTime::TICK;
 
 					clamped
@@ -914,7 +914,7 @@ impl ArrangementView {
 				}
 
 				for rhs in &*secondary {
-					let note = self.arrangement.patterns()[*clip.pattern].notes[rhs];
+					let note = self.arrangement.midi_patterns()[*clip.pattern].notes[rhs];
 					let new = note.position.end() - MusicalTime::TICK;
 
 					clamped
@@ -924,20 +924,20 @@ impl ArrangementView {
 				}
 
 				for lhs in &*primary {
-					let note = self.arrangement.patterns()[*clip.pattern].notes[lhs];
+					let note = self.arrangement.midi_patterns()[*clip.pattern].notes[lhs];
 					self.arrangement
 						.note_trim_end_to(clip.pattern, lhs, clamped[&note.key]);
 				}
 
 				for rhs in &*secondary {
-					let note = self.arrangement.patterns()[*clip.pattern].notes[rhs];
+					let note = self.arrangement.midi_patterns()[*clip.pattern].notes[rhs];
 					self.arrangement
 						.note_trim_start_to(clip.pattern, rhs, clamped[&note.key]);
 				}
 			}
 			piano_roll::Action::TrimStart(pos_diff) => {
 				for note in &*primary {
-					let pos = self.arrangement.patterns()[*clip.pattern].notes[note]
+					let pos = self.arrangement.midi_patterns()[*clip.pattern].notes[note]
 						.position
 						.start();
 					self.arrangement
@@ -946,7 +946,7 @@ impl ArrangementView {
 			}
 			piano_roll::Action::TrimEnd(pos_diff) => {
 				for note in &*primary {
-					let pos = self.arrangement.patterns()[*clip.pattern].notes[note]
+					let pos = self.arrangement.midi_patterns()[*clip.pattern].notes[note]
 						.position
 						.end();
 					self.arrangement
@@ -1104,7 +1104,8 @@ impl ArrangementView {
 									),
 									clip::Clip::Midi(clip) => Clip::new(
 										MidiClipRef {
-											pattern: &self.arrangement.patterns()[*clip.pattern],
+											pattern: &self.arrangement.midi_patterns()
+												[*clip.pattern],
 											clip,
 											idx: (track_idx, clip_idx),
 										},
@@ -1423,7 +1424,7 @@ impl ArrangementView {
 			Piano::new(&self.piano_roll_position, &self.piano_roll_scale),
 			PianoRoll::new(
 				&self.piano_roll_selection,
-				&self.arrangement.patterns()[*clip.pattern].notes,
+				&self.arrangement.midi_patterns()[*clip.pattern].notes,
 				self.arrangement.rtstate(),
 				&self.piano_roll_position,
 				&self.piano_roll_scale,

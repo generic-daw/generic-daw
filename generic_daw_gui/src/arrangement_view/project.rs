@@ -3,7 +3,7 @@
 use crate::{
 	arrangement_view::{
 		self, Arrangement, Node, audio_clip::AudioClip, clip::Clip, crc, midi_clip::MidiClip,
-		pattern::PatternPair, sample::SamplePair,
+		midi_pattern::MidiPatternPair, sample::SamplePair,
 	},
 	clap_host::ClapHost,
 	config::Config,
@@ -55,9 +55,9 @@ impl Arrangement {
 			samples.insert(sample.id, writer.push_sample(&sample.name, sample.crc));
 		}
 
-		let mut patterns = HashMap::new();
-		for pattern in self.patterns().values() {
-			patterns.insert(
+		let mut midi_patterns = HashMap::new();
+		for pattern in self.midi_patterns().values() {
+			midi_patterns.insert(
 				pattern.id,
 				writer.push_pattern(pattern.notes.iter().map(|note| proto::Note {
 					key: note.key.0.into(),
@@ -89,7 +89,7 @@ impl Arrangement {
 						}
 						.into(),
 						Clip::Midi(midi) => proto::MidiClip {
-							pattern: patterns[&midi.pattern],
+							pattern: midi_patterns[&midi.pattern],
 							position: proto::ClipPosition {
 								position: proto::NotePosition {
 									start: midi.position.start().into(),
@@ -224,7 +224,7 @@ impl Arrangement {
 				});
 
 			let mut current_progress = 0.0;
-			let progress_per_audio = 1.0 / (reader.iter_samples().count() as f32);
+			let progress_per_audio = (reader.iter_samples().count() as f32).recip();
 
 			let mut seen = HashSet::new();
 
@@ -324,8 +324,8 @@ impl Arrangement {
 			Some(())
 		})?;
 
-		let mut patterns = HashMap::new();
-		for (idx, notes) in reader.iter_patterns() {
+		let mut midi_patterns = HashMap::new();
+		for (idx, notes) in reader.iter_midi_patterns() {
 			let pattern = notes
 				.notes
 				.iter()
@@ -339,10 +339,10 @@ impl Arrangement {
 				})
 				.collect();
 
-			let pattern = PatternPair::new(pattern);
+			let pattern = MidiPatternPair::new(pattern);
 			let id = pattern.gui.id;
-			arrangement.add_pattern(pattern);
-			patterns.insert(idx, id);
+			arrangement.add_midi_pattern(pattern);
+			midi_patterns.insert(idx, id);
 		}
 
 		let mut messages = Vec::new();
@@ -435,7 +435,7 @@ impl Arrangement {
 							})
 						}
 						proto::Clip::Midi(midi) => Clip::Midi(MidiClip {
-							pattern: *patterns.get(&midi.pattern)?,
+							pattern: *midi_patterns.get(&midi.pattern)?,
 							position: ClipPosition::new(
 								NotePosition::new(
 									midi.position.position.start.into(),

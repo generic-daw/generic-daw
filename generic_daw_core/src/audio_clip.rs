@@ -20,19 +20,11 @@ impl AudioClip {
 		let uidx = state.rtstate.sample.abs_diff(start);
 
 		if state.rtstate.sample > start {
-			if uidx >= len {
-				return;
-			}
-
 			sample.samples[offset..][..len][uidx..]
 				.iter()
 				.zip(audio)
 				.for_each(|(sample, buf)| *buf += sample);
 		} else {
-			if uidx >= audio.len() {
-				return;
-			}
-
 			sample.samples[offset..][..len]
 				.iter()
 				.zip(&mut audio[uidx..])

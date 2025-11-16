@@ -1,5 +1,6 @@
 use crate::{
-	Event, NodeAction, NodeId, NodeImpl, Update, clap_host::AudioProcessor, daw_ctx::State,
+	Event, NodeAction, NodeId, NodeImpl, Update, automation_lane::AutomationLane,
+	clap_host::AudioProcessor, daw_ctx::State,
 };
 use generic_daw_utils::ShiftMoveExt as _;
 use std::f32::consts::{FRAC_PI_4, SQRT_2};
@@ -45,6 +46,7 @@ impl PanMode {
 #[derive(Debug)]
 struct Plugin {
 	processor: AudioProcessor<Event>,
+	lanes: Vec<AutomationLane>,
 	mix: f32,
 	enabled: bool,
 }
@@ -53,6 +55,7 @@ impl Plugin {
 	pub fn new(processor: AudioProcessor<Event>) -> Self {
 		Self {
 			processor,
+			lanes: Vec::new(),
 			mix: 1.0,
 			enabled: true,
 		}
@@ -78,6 +81,10 @@ impl NodeImpl for Channel {
 		let processing = self.processing();
 
 		for plugin in &mut self.plugins {
+			for lane in &mut plugin.lanes {
+				lane.process(state, events);
+			}
+
 			if processing && plugin.enabled {
 				plugin.processor.process(audio, events, plugin.mix);
 			} else {

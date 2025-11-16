@@ -25,11 +25,16 @@ impl NodeImpl for Track {
 
 	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
 		if self.channel.enabled() {
-			self.diff_notes(state, events);
+			self.diff_notes(state, audio, events);
 
 			if state.rtstate.playing {
 				for clip in &mut self.clips {
-					clip.process(state, audio, events, &mut self.notes);
+					let start = clip.position().start().to_samples(&state.rtstate);
+					let end = clip.position().end().to_samples(&state.rtstate);
+
+					if start < state.rtstate.sample + audio.len() && end >= state.rtstate.sample {
+						clip.process(state, audio, events, &mut self.notes);
+					}
 				}
 			}
 		}
@@ -68,12 +73,17 @@ impl Track {
 		self.channel.reset();
 	}
 
-	pub fn diff_notes(&mut self, state: &State, events: &mut Vec<Event>) {
+	pub fn diff_notes(&mut self, state: &State, audio: &[f32], events: &mut Vec<Event>) {
 		let mut notes = [0; 128];
 
 		if state.rtstate.playing {
 			for clip in &mut self.clips {
-				clip.collect_notes(state, &mut notes);
+				let start = clip.position().start().to_samples(&state.rtstate);
+				let end = clip.position().end().to_samples(&state.rtstate);
+
+				if start < state.rtstate.sample + audio.len() && end >= state.rtstate.sample {
+					clip.collect_notes(state, &mut notes);
+				}
 			}
 		}
 

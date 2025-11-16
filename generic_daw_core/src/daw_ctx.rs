@@ -1,6 +1,6 @@
 use crate::{
-	AudioGraph, AudioGraphNode, Channel, Clip, Event, Export, MidiKey, MidiNote, MusicalTime,
-	NodeId, NotePosition, PanMode, Pattern, PatternId, Sample, SampleId,
+	AudioGraph, AudioGraphNode, AutomationPattern, Channel, Clip, Event, Export, MidiPattern,
+	MidiPatternAction, MidiPatternId, MusicalTime, NodeId, NotePosition, PanMode, Sample, SampleId,
 	clap_host::{AudioProcessor, ClapId, PluginId},
 	resampler::Resampler,
 };
@@ -21,12 +21,12 @@ static OFF_BAR_CLICK: [f32; 2940] = include_f32s!("../../assets/off_bar_click.pc
 #[derive(Debug)]
 pub enum Message {
 	NodeAction(NodeId, NodeAction),
-	PatternAction(PatternId, PatternAction),
+	MidiPatternAction(MidiPatternId, MidiPatternAction),
 
 	SampleAdd(Sample),
 	SampleRemove(SampleId),
-	PatternAdd(Pattern),
-	PatternRemove(PatternId),
+	MidiPatternAdd(MidiPattern),
+	MidiPatternRemove(MidiPatternId),
 
 	NodeAdd(Box<AudioGraphNode>),
 	NodeRemove(NodeId),
@@ -48,16 +48,6 @@ pub enum Message {
 }
 
 const _: () = assert!(size_of::<Message>() <= 128);
-
-#[derive(Clone, Copy, Debug)]
-pub enum PatternAction {
-	Add(MidiNote),
-	Remove(usize),
-	ChangeKey(usize, MidiKey),
-	MoveTo(usize, MusicalTime),
-	TrimStartTo(usize, MusicalTime),
-	TrimEndTo(usize, MusicalTime),
-}
 
 #[derive(Debug)]
 pub enum NodeAction {
@@ -131,7 +121,8 @@ impl RtState {
 pub struct State {
 	pub rtstate: RtState,
 	pub samples: HoleyVec<Sample>,
-	pub patterns: HoleyVec<Pattern>,
+	pub midi_patterns: HoleyVec<MidiPattern>,
+	pub automation_patterns: HoleyVec<AutomationPattern>,
 	pub updates: Mutex<Vec<Update>>,
 }
 
@@ -172,7 +163,8 @@ impl DawCtx {
 			state: State {
 				rtstate,
 				samples: HoleyVec::default(),
-				patterns: HoleyVec::default(),
+				midi_patterns: HoleyVec::default(),
+				automation_patterns: HoleyVec::default(),
 				updates: Mutex::new(Vec::new()),
 			},
 			producer,
@@ -194,8 +186,12 @@ impl DawCtx {
 				Message::NodeAction(node, action) => self
 					.audio_graph
 					.for_node_mut(node, move |node| node.apply(action)),
-				Message::PatternAction(pattern, action) => {
-					self.state.patterns.get_mut(*pattern).unwrap().apply(action);
+				Message::MidiPatternAction(pattern, action) => {
+					self.state
+						.midi_patterns
+						.get_mut(*pattern)
+						.unwrap()
+						.apply(action);
 				}
 				Message::SampleAdd(sample) => {
 					let sample = self.state.samples.insert(*sample.id, sample);
@@ -205,12 +201,12 @@ impl DawCtx {
 					let sample = self.state.samples.remove(*sample);
 					debug_assert!(sample.is_some());
 				}
-				Message::PatternAdd(pattern) => {
-					let pattern = self.state.patterns.insert(*pattern.id, pattern);
+				Message::MidiPatternAdd(pattern) => {
+					let pattern = self.state.midi_patterns.insert(*pattern.id, pattern);
 					debug_assert!(pattern.is_none());
 				}
-				Message::PatternRemove(pattern) => {
-					let pattern = self.state.patterns.remove(*pattern);
+				Message::MidiPatternRemove(pattern) => {
+					let pattern = self.state.midi_patterns.remove(*pattern);
 					debug_assert!(pattern.is_some());
 				}
 				Message::NodeAdd(node) => self.audio_graph.insert(*node),
@@ -243,8 +239,9 @@ impl DawCtx {
 
 					let mut state = State {
 						rtstate: self.state.rtstate,
-						patterns: HoleyVec::default(),
 						samples: HoleyVec::default(),
+						midi_patterns: HoleyVec::default(),
+						automation_patterns: HoleyVec::default(),
 						updates: Mutex::default(),
 					};
 					std::mem::swap(&mut self.state, &mut state);
