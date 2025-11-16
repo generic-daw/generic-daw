@@ -121,13 +121,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			});
 
 		let state = tree.state.downcast_mut::<State>();
-		let size = layout.bounds().size();
+		let right_half = Self::right_half(layout).shrink(padding::top(LINE_HEIGHT));
 
 		if let Event::Window(window::Event::RedrawRequested(..)) = event
-			&& size != state.last_size
+			&& state.last_size != right_half.size()
 		{
-			state.last_size = size;
-			shell.publish((self.pan)(Vector::ZERO, size));
+			state.last_size = right_half.size();
+			shell.publish((self.pan)(Vector::ZERO, state.last_size));
 			return;
 		}
 
@@ -144,7 +144,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				return;
 			};
 
-			let offset = (-cursor.x).max(layout.position().x - Self::right_half(layout).x);
+			let offset = (-cursor.x).max(layout.position().x - right_half.x);
 
 			match event {
 				mouse::Event::CursorMoved { modifiers, .. } => {
@@ -226,27 +226,35 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 							x *= self.scale.x.exp2();
 							y /= self.scale.y;
 
-							shell.publish((self.pan)(Vector::new(x, y), size));
+							shell.publish((self.pan)(Vector::new(x, y), right_half.size()));
 							shell.capture_event();
 						}
 						(true, false, false) if y != 0.0 => {
 							y /= 128.0;
 
 							let cursor = cursor + Vector::new(offset, -LINE_HEIGHT);
-							shell.publish((self.zoom)(Vector::new(y, 0.0), cursor, size));
+							shell.publish((self.zoom)(
+								Vector::new(y, 0.0),
+								cursor,
+								right_half.size(),
+							));
 							shell.capture_event();
 						}
 						(false, true, false) if y != 0.0 => {
 							y *= 4.0 * self.scale.x.exp2();
 
-							shell.publish((self.pan)(Vector::new(y, 0.0), size));
+							shell.publish((self.pan)(Vector::new(y, 0.0), right_half.size()));
 							shell.capture_event();
 						}
 						(false, false, true) if y != 0.0 => {
 							y /= -8.0;
 
 							let cursor = cursor + Vector::new(offset, -LINE_HEIGHT);
-							shell.publish((self.zoom)(Vector::new(0.0, y), cursor, size));
+							shell.publish((self.zoom)(
+								Vector::new(0.0, y),
+								cursor,
+								right_half.size(),
+							));
 							shell.capture_event();
 						}
 						_ => {}

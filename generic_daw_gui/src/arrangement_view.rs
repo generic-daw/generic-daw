@@ -611,10 +611,10 @@ impl ArrangementView {
 			Message::PianoRollPan(pos_diff, size) => {
 				self.piano_roll_position = self.piano_roll_position + pos_diff;
 				self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
-				self.piano_roll_position.y = self.piano_roll_position.y.clamp(
-					0.0,
-					128.0 - ((size.height - LINE_HEIGHT) / self.piano_roll_scale.y),
-				);
+				self.piano_roll_position.y = self
+					.piano_roll_position
+					.y
+					.clamp(0.0, 128.0 - (size.height / self.piano_roll_scale.y));
 			}
 			Message::PianoRollZoom(scale_diff, cursor, size) => {
 				let old_scale = self.piano_roll_scale;
