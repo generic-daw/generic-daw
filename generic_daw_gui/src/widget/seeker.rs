@@ -13,16 +13,23 @@ use iced::{
 		widget::{Operation, Tree, tree},
 	},
 	alignment::Vertical,
-	border, padding,
+	border, keyboard, padding,
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 	window,
 };
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Status {
+	Seeking(MusicalTime),
+	DraggingLoop(MusicalTime),
+	Hovering,
+	#[default]
+	None,
+}
+
 #[derive(Default)]
 struct State {
-	hovering: bool,
-	seeking: Option<MusicalTime>,
-	loop_marker: Option<MusicalTime>,
+	status: Status,
 	last_size: Size,
 }
 
@@ -128,34 +135,33 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			return;
 		}
 
-		if let Event::Mouse(event) = event {
-			let Some(cursor) = cursor.position_in(layout.bounds()) else {
-				state.hovering = false;
-				state.seeking = None;
-				state.loop_marker = None;
+		let Some(mut cursor) = cursor.position_in(layout.bounds()) else {
+			state.status = Status::None;
+			return;
+		};
+		cursor = cursor - Vector::new(right_half.x - layout.position().x, LINE_HEIGHT);
+		cursor.x = cursor.x.max(0.0);
 
-				return;
-			};
+		match event {
+			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
+			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
+				let time = get_time(
+					cursor.x + self.offset,
+					*self.position,
+					*self.scale,
+					self.rtstate,
+					*modifiers,
+				);
 
-			let offset = (-cursor.x).max(layout.position().x - right_half.x);
-
-			match event {
-				mouse::Event::CursorMoved { modifiers, .. } => {
-					let time = get_time(
-						cursor.x + offset + self.offset,
-						*self.position,
-						*self.scale,
-						self.rtstate,
-						*modifiers,
-					);
-
-					if let Some(last_time) = state.seeking {
+				match state.status {
+					Status::Seeking(last_time) => {
 						if last_time != time {
-							state.seeking = Some(time);
+							state.status = Status::Seeking(time);
 							shell.publish((self.seek_to)(time));
 							shell.capture_event();
 						}
-					} else if let Some(last_time) = state.loop_marker {
+					}
+					Status::DraggingLoop(last_time) => {
 						let loop_marker = (last_time != time).then(|| {
 							let start = last_time.min(time);
 							let end = last_time.max(time);
@@ -167,93 +173,92 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 							shell.capture_event();
 						}
 					}
-
-					state.hovering = cursor.y < LINE_HEIGHT;
-				}
-				mouse::Event::ButtonPressed {
-					button: mouse::Button::Left,
-					modifiers,
-				} if state.hovering => {
-					let time = get_time(
-						cursor.x + offset + self.offset,
-						*self.position,
-						*self.scale,
-						self.rtstate,
-						*modifiers,
-					);
-					if modifiers.command() {
-						if let Some(loop_marker) = self.rtstate.loop_marker {
-							if time == loop_marker.start() {
-								state.loop_marker = Some(loop_marker.end());
-							} else if time == loop_marker.end() {
-								state.loop_marker = Some(loop_marker.start());
-							} else {
-								state.loop_marker = Some(time);
-								shell.publish((self.set_loop_marker)(None));
-							}
+					_ => {
+						state.status = if cursor.y < 0.0 {
+							Status::Hovering
 						} else {
-							state.loop_marker = Some(time);
+							Status::None
+						};
+					}
+				}
+			}
+			Event::Mouse(mouse::Event::ButtonPressed {
+				button: mouse::Button::Left,
+				modifiers,
+			}) if state.status == Status::Hovering => {
+				let time = get_time(
+					cursor.x + self.offset,
+					*self.position,
+					*self.scale,
+					self.rtstate,
+					*modifiers,
+				);
+				state.status = if modifiers.command() {
+					if let Some(loop_marker) = self.rtstate.loop_marker {
+						if time == loop_marker.start() {
+							Status::DraggingLoop(loop_marker.end())
+						} else if time == loop_marker.end() {
+							Status::DraggingLoop(loop_marker.start())
+						} else {
 							shell.publish((self.set_loop_marker)(None));
+							Status::DraggingLoop(time)
 						}
 					} else {
-						state.seeking = Some(time);
-						shell.publish((self.seek_to)(time));
+						shell.publish((self.set_loop_marker)(None));
+						Status::DraggingLoop(time)
 					}
-					shell.capture_event();
-				}
-				mouse::Event::ButtonReleased {
-					button: mouse::Button::Left,
-					..
-				} => {
-					state.seeking = None;
-					state.loop_marker = None;
-				}
-				mouse::Event::WheelScrolled { delta, modifiers } => {
-					let (mut x, mut y) = match *delta {
-						ScrollDelta::Pixels { x, y } => (-x, -y),
-						ScrollDelta::Lines { x, y } => (-x * 60.0, -y * 60.0),
-					};
-
-					match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-						(false, false, false) if x != 0.0 || y != 0.0 => {
-							x *= self.scale.x.exp2();
-
-							shell.publish((self.pan)(Vector::new(x, y), right_half.size()));
-							shell.capture_event();
-						}
-						(true, false, false) if y != 0.0 => {
-							y /= 128.0;
-
-							let cursor = cursor + Vector::new(offset, -LINE_HEIGHT);
-							shell.publish((self.zoom)(
-								Vector::new(y, 0.0),
-								cursor,
-								right_half.size(),
-							));
-							shell.capture_event();
-						}
-						(false, true, false) if x != 0.0 || y != 0.0 => {
-							y *= self.scale.x.exp2();
-
-							shell.publish((self.pan)(Vector::new(y, x), right_half.size()));
-							shell.capture_event();
-						}
-						(false, false, true) if y != 0.0 => {
-							y /= -8.0;
-
-							let cursor = cursor + Vector::new(offset, -LINE_HEIGHT);
-							shell.publish((self.zoom)(
-								Vector::new(0.0, y),
-								cursor,
-								right_half.size(),
-							));
-							shell.capture_event();
-						}
-						_ => {}
-					}
-				}
-				_ => {}
+				} else {
+					shell.publish((self.seek_to)(time));
+					Status::Seeking(time)
+				};
+				shell.capture_event();
 			}
+			Event::Mouse(mouse::Event::ButtonReleased {
+				button: mouse::Button::Left,
+				..
+			}) if matches!(state.status, Status::Seeking(..) | Status::DraggingLoop(..)) => {
+				state.status = if cursor.y < 0.0 {
+					Status::Hovering
+				} else {
+					Status::None
+				};
+				shell.capture_event();
+			}
+			Event::Mouse(mouse::Event::WheelScrolled { delta, modifiers }) => {
+				let (mut x, mut y) = match *delta {
+					ScrollDelta::Pixels { x, y } => (-x, -y),
+					ScrollDelta::Lines { x, y } => (-x * 60.0, -y * 60.0),
+				};
+
+				match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
+					(false, false, false) if x != 0.0 || y != 0.0 => {
+						x *= self.scale.x.exp2();
+
+						shell.publish((self.pan)(Vector::new(x, y), right_half.size()));
+						shell.capture_event();
+					}
+					(true, false, false) if y != 0.0 => {
+						y /= 128.0;
+
+						shell.publish((self.zoom)(Vector::new(y, 0.0), cursor, right_half.size()));
+						shell.capture_event();
+					}
+					(false, true, false) if x != 0.0 || y != 0.0 => {
+						y *= self.scale.x.exp2();
+
+						shell.publish((self.pan)(Vector::new(y, x), right_half.size()));
+						shell.capture_event();
+					}
+					(false, false, true) if y != 0.0 => {
+						y /= -8.0;
+
+						shell.publish((self.zoom)(Vector::new(0.0, y), cursor, right_half.size()));
+						shell.capture_event();
+					}
+					_ => {}
+				}
+			}
+			_ => {}
 		}
 	}
 
@@ -301,10 +306,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		renderer: &Renderer,
 	) -> Interaction {
 		let state = tree.state.downcast_ref::<State>();
-
-		if state.hovering || state.seeking.is_some() || state.loop_marker.is_some() {
-			Interaction::ResizingHorizontally
-		} else {
+		if state.status == Status::None {
 			let bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
 
 			self.children
@@ -322,6 +324,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				})
 				.max()
 				.unwrap_or_default()
+		} else {
+			Interaction::ResizingHorizontally
 		}
 	}
 
