@@ -133,7 +133,7 @@ impl Dir {
 		)
 	}
 
-	async fn load(path: impl AsRef<Path>) -> (Box<[Self]>, Box<[File]>) {
+	async fn load(path: Arc<Path>) -> (Box<[Self]>, Box<[File]>) {
 		let Ok(entry) = smol::fs::read_dir(path).await else {
 			return ([].into(), [].into());
 		};

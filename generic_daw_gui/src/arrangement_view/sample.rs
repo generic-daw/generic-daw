@@ -21,16 +21,17 @@ pub struct SamplePair {
 }
 
 impl SamplePair {
-	pub fn new(path: impl AsRef<Path>, sample_rate: NonZero<u32>) -> Option<Self> {
-		let name = path.as_ref().file_name()?.to_str()?;
-		let core = core::Sample::new(Box::from(File::open(path.as_ref()).ok()?), sample_rate)?;
+	pub fn new(path: Arc<Path>, sample_rate: NonZero<u32>) -> Option<Self> {
+		let name = path.file_name()?.to_str()?.into();
+		let core = core::Sample::new(Box::from(File::open(&path).ok()?), sample_rate)?;
+		let crc = crc(File::open(&path).ok()?);
 		let gui = Sample {
 			id: core.id,
 			lods: Lods::new(&core.samples),
-			path: path.as_ref().into(),
-			name: name.into(),
+			path,
+			name,
 			samples: core.samples.clone(),
-			crc: crc(File::open(path).ok()?),
+			crc,
 			refs: 0,
 		};
 		Some(Self { gui, core })

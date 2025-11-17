@@ -263,7 +263,7 @@ impl Arrangement {
 				let mut sample_name = sample.name.clone();
 				s.spawn(move |_| {
 					loop {
-						if let Some(path) = &path
+						if let Some(path) = path.clone()
 							&& let Some(sample) = SamplePair::new(path, sample_rate)
 						{
 							done.send((idx, Feedback::Use(sample))).unwrap();

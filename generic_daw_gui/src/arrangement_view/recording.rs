@@ -20,27 +20,28 @@ pub struct Recording {
 
 impl Recording {
 	pub fn create(
-		path: impl AsRef<Path>,
+		path: Arc<Path>,
 		rtstate: &RtState,
 		device_name: Option<Arc<str>>,
 		sample_rate: NonZero<u32>,
 		frames: Option<NonZero<u32>>,
 	) -> (Self, Consumer<Box<[f32]>>) {
 		let (core, consumer) = core::Recording::create(
-			BufWriter::new(File::create(path.as_ref()).unwrap()),
+			BufWriter::new(File::create(&path).unwrap()),
 			rtstate,
 			device_name,
 			sample_rate,
 			frames,
 		);
+		let name = path.file_name().unwrap().to_str().unwrap().into();
 
 		(
 			Self {
 				core,
 				lods: Lods::default(),
 				position: MusicalTime::from_samples(rtstate.sample, rtstate),
-				path: path.as_ref().into(),
-				name: path.as_ref().file_name().unwrap().to_str().unwrap().into(),
+				path,
+				name,
 			},
 			consumer,
 		)
@@ -52,12 +53,11 @@ impl Recording {
 		self.lods.update(self.core.samples(), start);
 	}
 
-	pub fn split_off(&mut self, path: impl AsRef<Path>, rtstate: &RtState) -> SamplePair {
+	pub fn split_off(&mut self, mut path: Arc<Path>, rtstate: &RtState) -> SamplePair {
 		let start = self.core.samples().len();
-		let core = self.core.split_off(
-			BufWriter::new(File::create(path.as_ref()).unwrap()),
-			rtstate,
-		);
+		let core = self
+			.core
+			.split_off(BufWriter::new(File::create(&path).unwrap()), rtstate);
 		self.lods.update(self.core.samples(), start);
 
 		let mut lods = Lods::default();
@@ -65,10 +65,9 @@ impl Recording {
 
 		self.position = MusicalTime::from_samples(rtstate.sample, rtstate);
 
-		let mut name = path.as_ref().file_name().unwrap().to_str().unwrap().into();
+		let mut name = path.file_name().unwrap().to_str().unwrap().into();
 		std::mem::swap(&mut self.name, &mut name);
 
-		let mut path = path.as_ref().into();
 		std::mem::swap(&mut self.path, &mut path);
 
 		SamplePair {
