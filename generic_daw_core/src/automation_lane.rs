@@ -1,5 +1,8 @@
-use crate::{AutomationClip, Event, daw_ctx::State};
-use clap_host::{ClapId, Cookie};
+use crate::{
+	AutomationClip, Event,
+	clap_host::{ClapId, Cookie},
+	daw_ctx::State,
+};
 
 #[derive(Debug)]
 pub struct AutomationLane {

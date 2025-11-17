@@ -1,6 +1,4 @@
-use crate::{
-	AutomationPatternId, ClipPosition, automation_pattern::AutomationTransition, daw_ctx::State,
-};
+use crate::{AutomationPatternId, AutomationTransition, ClipPosition, daw_ctx::State};
 use std::f32::consts::{FRAC_PI_2, PI};
 
 #[derive(Clone, Copy, Debug)]

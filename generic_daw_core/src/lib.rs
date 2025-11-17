@@ -26,7 +26,9 @@ pub use audio_graph::{NodeId, NodeImpl};
 pub use audio_graph_node::AudioGraphNode;
 pub use automation_clip::AutomationClip;
 pub use automation_lane::AutomationLane;
-pub use automation_pattern::{AutomationPattern, AutomationPatternId};
+pub use automation_pattern::{
+	AutomationPattern, AutomationPatternId, AutomationPoint, AutomationTransition,
+};
 pub use channel::{Channel, PanMode};
 pub use clap_host;
 pub use clip::Clip;
