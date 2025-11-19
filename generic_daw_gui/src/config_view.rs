@@ -14,7 +14,7 @@ use generic_daw_core::{get_input_devices, get_output_devices};
 use iced::{
 	Center, Element, Font,
 	Length::Fill,
-	Task, border,
+	Task, border, padding,
 	widget::{
 		button, column, container, pick_list, row, rule, scrollable, slider, space, text, toggler,
 		value,
@@ -159,7 +159,7 @@ impl ConfigView {
 									.then_some(Message::ResetConfigToDefault)
 							)
 					],
-					container(rule::horizontal(1)).padding([5, 0]),
+					container(rule::horizontal(1)).padding(padding::vertical(5)),
 					row![
 						"Sample Paths",
 						space::horizontal(),
@@ -470,7 +470,7 @@ impl ConfigView {
 					row![
 						(!self.config.is_mergeable(live_config)).then(|| {
 							container("Some changes may only take effect after a reload!")
-								.padding([5, 10])
+								.padding(padding::horizontal(10).vertical(5))
 								.style(|t| {
 									container::warning(t).border(border::rounded(f32::INFINITY))
 								})

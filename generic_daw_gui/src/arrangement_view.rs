@@ -1204,7 +1204,7 @@ impl ArrangementView {
 					})
 					.menu_style(menu_style)
 					.width(Fill),
-					container(rule::horizontal(1)).padding([5, 0]),
+					container(rule::horizontal(1)).padding(padding::vertical(5)),
 					scrollable(
 						dragking::column(node.plugins.iter().enumerate().map(|(i, plugin)| {
 							let button_style = |cond: bool| {

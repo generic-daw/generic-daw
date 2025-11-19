@@ -4,7 +4,7 @@ use crate::{
 };
 use generic_daw_widget::drag_handle::DragHandle;
 use iced::{
-	Element, Font, Shrink, Theme, border,
+	Element, Font, Shrink, Theme, border, padding,
 	widget::{Button, Text, button, container, pick_list, row, text, text_input},
 };
 
@@ -47,7 +47,7 @@ where
 			container(move_vertical())
 				.style(|t| bordered_box_with_radius(border::left(5))(t)
 					.background(t.extended_palette().background.weakest.color))
-				.padding([5, 0]),
+				.padding(padding::vertical(5)),
 			current,
 			default,
 			drag_update

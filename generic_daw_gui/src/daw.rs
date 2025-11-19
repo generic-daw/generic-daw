@@ -21,6 +21,7 @@ use iced::{
 	Center, Color, Element, Event, Fill, Font, Function as _, Shrink, Subscription, Task, Theme,
 	border, event, keyboard,
 	mouse::Interaction,
+	padding,
 	time::every,
 	widget::{
 		button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row, space,
@@ -422,13 +423,13 @@ impl Daw {
 							play
 						}())
 						.style(button_with_radius(button::primary, border::left(5)))
-						.padding([5, 7])
+						.padding(padding::horizontal(7).vertical(5))
 						.on_press(Message::Arrangement(
 							arrangement_view::Message::TogglePlayback
 						)),
 						button(square())
 							.style(button_with_radius(button::primary, border::right(5)))
-							.padding([5, 7])
+							.padding(padding::horizontal(7).vertical(5))
 							.on_press(Message::Arrangement(arrangement_view::Message::Stop)),
 					],
 					number_input(
@@ -465,7 +466,7 @@ impl Daw {
 							))
 							.font(Font::MONOSPACE)
 						)
-						.padding([5.6, 7.0])
+						.padding(padding::horizontal(7).vertical(5.6))
 						.style(|t| bordered_box_with_radius(border::left(5))(t)
 							.background(t.extended_palette().background.weakest.color)),
 						button(
@@ -490,14 +491,14 @@ impl Daw {
 					row![
 						button(chart_no_axes_gantt())
 							.style(button_with_radius(button::primary, border::left(5)))
-							.padding([5, 7])
+							.padding(padding::horizontal(7).vertical(5))
 							.on_press_maybe(
 								(!matches!(self.arrangement_view.tab, Tab::Playlist))
 									.then_some(Message::ChangedTab(Tab::Playlist))
 							),
 						button(sliders_vertical())
 							.style(button_with_radius(button::primary, border::right(5)))
-							.padding([5, 7])
+							.padding(padding::horizontal(7).vertical(5))
 							.on_press_maybe(
 								(!matches!(self.arrangement_view.tab, Tab::Mixer))
 									.then_some(Message::ChangedTab(Tab::Mixer))
@@ -555,7 +556,7 @@ impl Daw {
 											row![
 												"can't find sample",
 												container(text(name).font(Font::MONOSPACE))
-													.padding([5, 10])
+													.padding(padding::horizontal(10).vertical(5))
 													.style(|t| bordered_box_with_radius(5)(t)
 														.background(
 															t.extended_palette()

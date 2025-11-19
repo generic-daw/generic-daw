@@ -11,7 +11,7 @@ use generic_daw_widget::knob::Knob;
 use iced::{
 	Center, Element, Font, Function as _,
 	Length::{Fill, Shrink},
-	Subscription, Task,
+	Subscription, Task, padding,
 	time::every,
 	widget::{column, container, row, rule, sensor, space, text},
 	window,
@@ -363,7 +363,7 @@ impl ClapHost {
 						.size(LINE_HEIGHT)
 						.line_height(1.0)
 						.font(Font::MONOSPACE),
-					container(rule::horizontal(1)).padding([5, 0]),
+					container(rule::horizontal(1)).padding(padding::vertical(5)),
 					row(plugin.params().map(|param| {
 						column![
 							container(
@@ -384,7 +384,7 @@ impl ClapHost {
 								.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
 								.maybe_tooltip(param.value_text.as_deref())
 							)
-							.padding([0, 10]),
+							.padding(padding::horizontal(10)),
 							text(&*param.name)
 								.wrapping(text::Wrapping::WordOrGlyph)
 								.align_x(Center)
