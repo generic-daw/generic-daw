@@ -1,4 +1,3 @@
-use crate::mix;
 use iced_widget::{
 	Renderer,
 	core::{
@@ -9,6 +8,7 @@ use iced_widget::{
 		layout::{Limits, Node},
 		mouse::Cursor,
 		renderer::{Quad, Style},
+		theme::palette::mix,
 		time::{Duration, Instant},
 		widget::Tree,
 		window,

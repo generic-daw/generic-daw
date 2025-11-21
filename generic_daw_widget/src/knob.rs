@@ -1,4 +1,3 @@
-use crate::mix;
 use generic_daw_utils::NoDebug;
 use iced_widget::{
 	Renderer,
@@ -10,6 +9,7 @@ use iced_widget::{
 		mouse::{self, Cursor, Interaction, ScrollDelta},
 		overlay,
 		renderer::{Quad, Style},
+		theme::palette::mix,
 		widget::{Text, Tree, tree},
 	},
 	graphics::geometry::Renderer as _,
