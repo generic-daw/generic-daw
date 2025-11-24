@@ -204,14 +204,14 @@ impl ClapHost {
 					self.windows.insert(*id, window);
 
 					let mut plugin = Fragile::new(self.plugins.remove(*id).unwrap());
-					let embed = window::run(window, move |handle| {
+					let embed = window::run(window, move |window| {
 						// SAFETY:
 						// The plugin gui is destroyed before the window is closed (see
 						// [`Message::WindowCloseRequested`]).
 						unsafe {
 							plugin
 								.get_mut()
-								.set_parent(handle.window_handle().unwrap().as_raw());
+								.set_parent(window.window_handle().unwrap().as_raw());
 						}
 						Message::GuiEmbedded(NoClone(Box::new(plugin)))
 					});
