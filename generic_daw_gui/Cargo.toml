@@ -32,13 +32,9 @@ infer = { version = "0.19.0", default-features = false }
 log = "0.4.28"
 oneshot = "0.1.11"
 rayon-core = "1.13.0"
-rfd = "0.15.4"
+rfd = { version = "0.16.0", default-features = false, features = ["xdg-portal", "async-std"] }
 rtrb = "0.3.2"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 smol = "2.0.2"
 toml = "0.9.8"
 walkdir = "2.5.0"
-
-# https://github.com/PolyMeilex/rfd/pull/255
-[target.'cfg(unix)'.dependencies]
-wayland-sys = { version = "0.31.7", features = ["dlopen"] }
