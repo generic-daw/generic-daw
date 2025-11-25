@@ -16,7 +16,7 @@ use iced::{
 	Length::Fill,
 	Task, border, padding,
 	widget::{
-		button, column, container, pick_list, row, rule, scrollable, slider, space, text, toggler,
+		button, checkbox, column, container, pick_list, row, rule, scrollable, slider, space, text,
 		value,
 	},
 };
@@ -168,7 +168,8 @@ impl ConfigView {
 							.padding(0)
 							.on_press(Message::AddSamplePathFileDialog),
 						space().width(5)
-					],
+					]
+					.align_y(Center),
 					container(
 						column(
 							self.config
@@ -184,6 +185,7 @@ impl ConfigView {
 											.padding(0)
 											.on_press(Message::RemoveSamplePath(idx))
 									]
+									.align_y(Center)
 									.into()
 								})
 						)
@@ -216,6 +218,7 @@ impl ConfigView {
 											.padding(0)
 											.on_press(Message::RemoveClapPath(idx))
 									]
+									.align_y(Center)
 									.into()
 								})
 						)
@@ -340,7 +343,7 @@ impl ConfigView {
 					rule::horizontal(1),
 					row![
 						row![
-							toggler(self.config.autosave.enabled)
+							checkbox(self.config.autosave.enabled)
 								.label("Autosave every ")
 								.on_toggle(|_| Message::ToggledAutosave),
 							number_input(
@@ -356,11 +359,11 @@ impl ConfigView {
 						]
 						.align_y(Center)
 						.width(Fill),
-						row![
-							toggler(self.config.open_last_project)
+						container(
+							checkbox(self.config.open_last_project)
 								.label("Open last project on startup")
 								.on_toggle(|_| Message::ToggledOpenLastProject)
-						]
+						)
 						.width(Fill)
 					]
 					.align_y(Center),
@@ -380,7 +383,8 @@ impl ConfigView {
 											.then_some(Message::ChangedAppScaleFactor(1.0))
 									),
 								space().width(5)
-							],
+							]
+							.align_y(Center),
 							slider(
 								0.5..=2.0,
 								self.config.app_scale_factor,
@@ -427,7 +431,8 @@ impl ConfigView {
 											.map(|_| Message::ChangedPluginScaleFactor(None))
 									),
 								space().width(5)
-							],
+							]
+							.align_y(Center),
 							slider(
 								0.5..=2.0,
 								self.config
@@ -444,6 +449,7 @@ impl ConfigView {
 						]
 						.spacing(5)
 					]
+					.align_y(Center)
 					.spacing(10),
 					row![
 						"Theme: ",
