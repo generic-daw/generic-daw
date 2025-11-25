@@ -94,7 +94,7 @@ impl Arrangement {
 	}
 
 	pub fn update(&mut self, mut batch: Batch) -> Option<Vec<ArrangementMessage>> {
-		let messages = (batch.epoch == self.rtstate().epoch).then(|| {
+		let messages = (batch.epoch == self.rtstate.epoch).then(|| {
 			let mut messages = Vec::new();
 
 			if let Some((sample, looped)) = batch.sample
@@ -253,7 +253,11 @@ impl Arrangement {
 
 	pub fn stop(&mut self) {
 		self.pause();
-		self.seek_to(MusicalTime::ZERO);
+		self.seek_to(
+			self.rtstate
+				.loop_marker
+				.map_or(MusicalTime::ZERO, NotePosition::start),
+		);
 		self.send(Message::Reset);
 	}
 
