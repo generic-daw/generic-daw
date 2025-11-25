@@ -115,15 +115,17 @@ impl NodeImpl for Channel {
 			}
 		}
 
-		if !self.enabled {
+		let peaks = if self.enabled {
+			self.pan.pan(audio, self.volume);
+
+			max_peaks(audio).map(|x| if x < f32::EPSILON { 0.0 } else { x })
+		} else {
 			audio.fill(0.0);
 			events.clear();
-			return;
-		}
 
-		self.pan.pan(audio, self.volume);
+			[0.0, 0.0]
+		};
 
-		let peaks = max_peaks(audio).map(|x| if x < f32::EPSILON { 0.0 } else { x });
 		if peaks != self.last_peaks {
 			self.last_peaks = peaks;
 			state
