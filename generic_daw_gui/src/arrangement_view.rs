@@ -451,6 +451,9 @@ impl ArrangementView {
 				if self.soloed_track == Some(id) {
 					self.soloed_track = None;
 				}
+				if self.selected_channel == Some(id) {
+					self.selected_channel = None;
+				}
 
 				let selection = self.playlist_selection.get_mut();
 				selection.primary = selection
