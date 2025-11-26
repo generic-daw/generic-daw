@@ -8,7 +8,7 @@ use crate::{
 		scrollable_style,
 	},
 	theme::Theme,
-	widget::LINE_HEIGHT,
+	widget::{LINE_HEIGHT, TEXT_HEIGHT},
 };
 use generic_daw_core::{get_input_devices, get_output_devices};
 use iced::{
@@ -16,8 +16,8 @@ use iced::{
 	Length::Fill,
 	Task, border, padding,
 	widget::{
-		button, checkbox, column, container, pick_list, row, rule, scrollable, slider, space, text,
-		value,
+		button, checkbox, column, container, iced, pick_list, row, rule, scrollable, slider, space,
+		text, value,
 	},
 };
 use rfd::AsyncFileDialog;
@@ -474,13 +474,16 @@ impl ConfigView {
 					.align_y(Center),
 					rule::horizontal(1),
 					row![
-						(!self.config.is_mergeable(live_config)).then(|| {
+						if self.config.is_mergeable(live_config) {
+							iced(TEXT_HEIGHT)
+						} else {
 							container("Some changes may only take effect after a reload!")
 								.padding(padding::horizontal(10).vertical(5))
 								.style(|t| {
 									container::warning(t).border(border::rounded(f32::INFINITY))
 								})
-						}),
+								.into()
+						},
 						space::horizontal(),
 						button(save())
 							.style(button_with_radius(button::primary, border::left(5)))
@@ -496,6 +499,7 @@ impl ConfigView {
 									.then_some(Message::ResetConfigToPrev)
 							)
 					]
+					.align_y(Center)
 				]
 				.spacing(10)
 				.padding(10)
