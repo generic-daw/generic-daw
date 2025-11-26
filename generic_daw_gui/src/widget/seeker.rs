@@ -1,4 +1,4 @@
-use crate::widget::{LINE_HEIGHT, get_time};
+use crate::widget::{LINE_HEIGHT, get_time, maybe_snap_time};
 use generic_daw_core::{MusicalTime, NotePosition, RtState};
 use generic_daw_utils::NoDebug;
 use iced::{
@@ -145,12 +145,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		match event {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
-				let time = get_time(
-					cursor.x + self.offset,
-					*self.position,
-					*self.scale,
-					self.rtstate,
+				let time = maybe_snap_time(
+					get_time(cursor.x, *self.position, *self.scale, self.rtstate),
 					*modifiers,
+					|time| time.snap_round(self.scale.x, self.rtstate),
 				);
 
 				match state.status {
@@ -186,12 +184,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				button: mouse::Button::Left,
 				modifiers,
 			}) if state.status == Status::Hovering => {
-				let time = get_time(
-					cursor.x + self.offset,
-					*self.position,
-					*self.scale,
-					self.rtstate,
+				let time = maybe_snap_time(
+					get_time(cursor.x, *self.position, *self.scale, self.rtstate),
 					*modifiers,
+					|time| time.snap_round(self.scale.x, self.rtstate),
 				);
 				state.status = if modifiers.command() {
 					if let Some(loop_marker) = self.rtstate.loop_marker {

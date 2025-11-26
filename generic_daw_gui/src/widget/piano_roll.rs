@@ -1,4 +1,4 @@
-use crate::widget::{Delta, get_time, get_unsnapped_time, key_y};
+use crate::widget::{Delta, get_time, key_y, maybe_snap_time};
 use bit_set::BitSet;
 use generic_daw_core::{MidiKey, MidiNote, MusicalTime, RtState};
 use iced::{
@@ -110,12 +110,10 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			{
 				match button {
 					mouse::Button::Left => {
-						let time = get_time(
-							cursor.x,
-							*self.position,
-							*self.scale,
-							self.rtstate,
+						let time = maybe_snap_time(
+							get_time(cursor.x, *self.position, *self.scale, self.rtstate),
 							*modifiers,
+							|time| time.snap_round(self.scale.x, self.rtstate),
 						);
 						let key = self.get_key(cursor);
 
@@ -150,12 +148,10 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				Status::Selecting(start_key, last_end_key, start_pos, last_end_pos) => {
 					let end_key = self.get_key(cursor);
 
-					let end_pos = get_time(
-						cursor.x,
-						*self.position,
-						*self.scale,
-						self.rtstate,
+					let end_pos = maybe_snap_time(
+						get_time(cursor.x, *self.position, *self.scale, self.rtstate),
 						*modifiers,
+						|time| time.snap_round(self.scale.x, self.rtstate),
 					);
 
 					if end_key == last_end_key && end_pos == last_end_pos {
@@ -183,13 +179,12 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				Status::Dragging(key, time) => {
 					let new_key = self.get_key(cursor);
 
-					let new_time =
-						get_unsnapped_time(cursor.x, *self.position, *self.scale, self.rtstate);
+					let new_time = get_time(cursor.x, *self.position, *self.scale, self.rtstate);
 
-					let mut abs_diff = new_time.abs_diff(time);
-					if !modifiers.alt() {
-						abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
-					}
+					let abs_diff =
+						maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
+							abs_diff.snap_round(self.scale.x, self.rtstate)
+						});
 
 					if new_key != key || abs_diff != MusicalTime::ZERO {
 						let key_delta = if new_key > key {
@@ -210,12 +205,10 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					}
 				}
 				Status::DraggingSplit(time) => {
-					let new_time = get_time(
-						cursor.x,
-						*self.position,
-						*self.scale,
-						self.rtstate,
+					let new_time = maybe_snap_time(
+						get_time(cursor.x, *self.position, *self.scale, self.rtstate),
 						*modifiers,
+						|time| time.snap_round(self.scale.x, self.rtstate),
 					);
 
 					if new_time != time {
@@ -225,13 +218,12 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					}
 				}
 				Status::TrimmingStart(time) => {
-					let new_time =
-						get_unsnapped_time(cursor.x, *self.position, *self.scale, self.rtstate);
+					let new_time = get_time(cursor.x, *self.position, *self.scale, self.rtstate);
 
-					let mut abs_diff = new_time.abs_diff(time);
-					if !modifiers.alt() {
-						abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
-					}
+					let abs_diff =
+						maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
+							abs_diff.snap_round(self.scale.x, self.rtstate)
+						});
 
 					if abs_diff != MusicalTime::ZERO {
 						let delta = if new_time > time {
@@ -246,13 +238,12 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					}
 				}
 				Status::TrimmingEnd(time) => {
-					let new_time =
-						get_unsnapped_time(cursor.x, *self.position, *self.scale, self.rtstate);
+					let new_time = get_time(cursor.x, *self.position, *self.scale, self.rtstate);
 
-					let mut abs_diff = new_time.abs_diff(time);
-					if !modifiers.alt() {
-						abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
-					}
+					let abs_diff =
+						maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
+							abs_diff.snap_round(self.scale.x, self.rtstate)
+						});
 
 					if abs_diff != MusicalTime::ZERO {
 						let delta = if new_time > time {
@@ -469,12 +460,8 @@ impl<'a, Message> PianoRoll<'a, Message> {
 					match button {
 						mouse::Button::Left => {
 							let key = self.notes[note].key;
-							let time = get_unsnapped_time(
-								cursor.x,
-								*self.position,
-								*self.scale,
-								self.rtstate,
-							);
+							let time =
+								get_time(cursor.x, *self.position, *self.scale, self.rtstate);
 
 							selection.status = match (modifiers.command(), modifiers.shift()) {
 								(false, false) => {
@@ -492,12 +479,15 @@ impl<'a, Message> PianoRoll<'a, Message> {
 								}
 								(true, false) => {
 									clear = false;
-									let time = get_time(
-										cursor.x,
-										*self.position,
-										*self.scale,
-										self.rtstate,
+									let time = maybe_snap_time(
+										get_time(
+											cursor.x,
+											*self.position,
+											*self.scale,
+											self.rtstate,
+										),
 										*modifiers,
+										|time| time.snap_round(self.scale.x, self.rtstate),
 									);
 									Status::Selecting(key, key, time, time)
 								}
@@ -506,12 +496,15 @@ impl<'a, Message> PianoRoll<'a, Message> {
 									Status::Dragging(key, time)
 								}
 								(true, true) => {
-									let time = get_time(
-										cursor.x,
-										*self.position,
-										*self.scale,
-										self.rtstate,
+									let time = maybe_snap_time(
+										get_time(
+											cursor.x,
+											*self.position,
+											*self.scale,
+											self.rtstate,
+										),
 										*modifiers,
+										|time| time.snap_round(self.scale.x, self.rtstate),
 									);
 									shell.publish((self.f)(Action::SplitAt(time)));
 									Status::DraggingSplit(time)

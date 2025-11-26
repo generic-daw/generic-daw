@@ -18,9 +18,10 @@ use generic_daw_core::{
 use generic_daw_utils::{NoClone, NoDebug};
 use generic_daw_widget::dot::Dot;
 use iced::{
-	Center, Color, Element, Event, Fill, Font, Function as _, Shrink, Subscription, Task, Theme,
-	border, event, keyboard,
-	mouse::Interaction,
+	Center, Color, Element, Event, Font, Function as _,
+	Length::Fill,
+	Shrink, Subscription, Task, Theme, border, event, keyboard,
+	mouse::{self, Interaction},
 	padding,
 	time::every,
 	widget::{
@@ -72,7 +73,6 @@ pub enum Message {
 	ChangedBpmText(String),
 	ChangedNumerator(u8),
 	ChangedNumeratorText(String),
-	ChangedTab(Tab),
 
 	OnDrag(f32),
 	OnDragEnd,
@@ -187,7 +187,6 @@ impl Daw {
 						.map(Message::Arrangement),
 				]);
 			}
-			Message::ChangedTab(tab) => self.arrangement_view.tab = tab,
 			Message::OpenLastFile => {
 				if let Some(last_project) = self.state.last_project.clone() {
 					return self.update(Message::OpenFile(last_project));
@@ -359,19 +358,18 @@ impl Daw {
 
 	fn handle_file_tree_message(&mut self, action: file_tree::Message) -> Task<Message> {
 		match action {
-			file_tree::Message::File(path) => self
-				.arrangement_view
-				.update(
-					arrangement_view::Message::SampleLoadFromFile(path),
-					&self.config,
-					&mut self.state,
-					&self.plugin_bundles,
-				)
-				.map(Message::Arrangement),
-			file_tree::Message::Action(id, action) => {
-				self.file_tree.update(id, &action).map(Message::FileTree)
+			file_tree::Message::File(path) => {
+				self.arrangement_view.playlist_selection.get_mut().file = Some((path, None));
 			}
+			file_tree::Message::Action(id, action) => {
+				if let Some(task) = self.file_tree.update(id, &action) {
+					return task.map(Message::FileTree);
+				}
+			}
+			file_tree::Message::Unreachable => unreachable!(),
 		}
+
+		Task::none()
 	}
 
 	pub fn view(&self, window: window::Id) -> Element<'_, Message> {
@@ -493,15 +491,21 @@ impl Daw {
 							.style(button_with_radius(button::primary, border::left(5)))
 							.padding(padding::horizontal(7).vertical(5))
 							.on_press_maybe(
-								(!matches!(self.arrangement_view.tab, Tab::Playlist))
-									.then_some(Message::ChangedTab(Tab::Playlist))
+								(!matches!(self.arrangement_view.tab, Tab::Playlist)).then_some(
+									Message::Arrangement(arrangement_view::Message::ChangedTab(
+										Tab::Playlist
+									))
+								)
 							),
 						button(sliders_vertical())
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding(padding::horizontal(7).vertical(5))
 							.on_press_maybe(
-								(!matches!(self.arrangement_view.tab, Tab::Mixer))
-									.then_some(Message::ChangedTab(Tab::Mixer))
+								(!matches!(self.arrangement_view.tab, Tab::Mixer)).then_some(
+									Message::Arrangement(arrangement_view::Message::ChangedTab(
+										Tab::Mixer
+									))
+								)
 							)
 					],
 				]
@@ -521,6 +525,14 @@ impl Daw {
 			]
 			.padding(10)
 			.spacing(10),
+			self.arrangement_view
+				.playlist_selection
+				.borrow()
+				.file
+				.as_ref()
+				.map(
+					|_| mouse_area(space().width(Fill).height(Fill)).interaction(Interaction::Copy)
+				),
 			self.arrangement_view
 				.loading()
 				.then(|| mouse_area(space().width(Fill).height(Fill))
@@ -676,8 +688,12 @@ impl Daw {
 				..
 			}) => match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
 				(false, false, false) => match code {
-					keyboard::key::Code::F5 => Some(Message::ChangedTab(Tab::Playlist)),
-					keyboard::key::Code::F9 => Some(Message::ChangedTab(Tab::Mixer)),
+					keyboard::key::Code::F5 => Some(Message::Arrangement(
+						arrangement_view::Message::ChangedTab(Tab::Playlist),
+					)),
+					keyboard::key::Code::F9 => Some(Message::Arrangement(
+						arrangement_view::Message::ChangedTab(Tab::Mixer),
+					)),
 					keyboard::key::Code::Delete | keyboard::key::Code::Backspace => Some(
 						Message::Arrangement(arrangement_view::Message::DeleteSelection),
 					),
@@ -688,6 +704,12 @@ impl Daw {
 				},
 				_ => None,
 			},
+			Event::Mouse(mouse::Event::ButtonReleased {
+				button: mouse::Button::Left,
+				..
+			}) => Some(Message::Arrangement(
+				arrangement_view::Message::LoadHoveredSample,
+			)),
 			_ => None,
 		}
 	}

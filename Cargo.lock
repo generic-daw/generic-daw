@@ -867,9 +867,9 @@ dependencies = [
 
 [[package]]
 name = "endi"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3d8a32ae18130a3c84dd492d4215c3d913c3b07c6b63c2eb3eb7ff1101ab7bf"
+checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 
 [[package]]
 name = "enumflags2"
@@ -1477,7 +1477,7 @@ checksum = "135b12329e5e3ce057a9f972339ea52bc954fe1e9358ef27f95e89716fbc5424"
 [[package]]
 name = "iced"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#883504bff83303869e59845fce0cc5db78baeaa9"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#013e51a960dd18c4d8b4f4ae4a73944e741d0446"
 dependencies = [
  "iced_core",
  "iced_debug",
@@ -1492,7 +1492,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#883504bff83303869e59845fce0cc5db78baeaa9"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#013e51a960dd18c4d8b4f4ae4a73944e741d0446"
 dependencies = [
  "bitflags 2.10.0",
  "bytes",
@@ -1509,7 +1509,7 @@ dependencies = [
 [[package]]
 name = "iced_debug"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#883504bff83303869e59845fce0cc5db78baeaa9"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#013e51a960dd18c4d8b4f4ae4a73944e741d0446"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1519,7 +1519,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#883504bff83303869e59845fce0cc5db78baeaa9"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#013e51a960dd18c4d8b4f4ae4a73944e741d0446"
 dependencies = [
  "futures",
  "iced_core",
@@ -1533,7 +1533,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#883504bff83303869e59845fce0cc5db78baeaa9"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#013e51a960dd18c4d8b4f4ae4a73944e741d0446"
 dependencies = [
  "bitflags 2.10.0",
  "bytemuck",
@@ -1552,7 +1552,7 @@ dependencies = [
 [[package]]
 name = "iced_program"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#883504bff83303869e59845fce0cc5db78baeaa9"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#013e51a960dd18c4d8b4f4ae4a73944e741d0446"
 dependencies = [
  "iced_graphics",
  "iced_runtime",
@@ -1561,7 +1561,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#883504bff83303869e59845fce0cc5db78baeaa9"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#013e51a960dd18c4d8b4f4ae4a73944e741d0446"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -1573,7 +1573,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#883504bff83303869e59845fce0cc5db78baeaa9"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#013e51a960dd18c4d8b4f4ae4a73944e741d0446"
 dependencies = [
  "bytes",
  "iced_core",
@@ -1593,7 +1593,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#883504bff83303869e59845fce0cc5db78baeaa9"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#013e51a960dd18c4d8b4f4ae4a73944e741d0446"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -1609,7 +1609,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#883504bff83303869e59845fce0cc5db78baeaa9"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#013e51a960dd18c4d8b4f4ae4a73944e741d0446"
 dependencies = [
  "bitflags 2.10.0",
  "bytemuck",
@@ -1629,7 +1629,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#883504bff83303869e59845fce0cc5db78baeaa9"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#013e51a960dd18c4d8b4f4ae4a73944e741d0446"
 dependencies = [
  "iced_renderer",
  "log",
@@ -1642,7 +1642,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.14.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#883504bff83303869e59845fce0cc5db78baeaa9"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#013e51a960dd18c4d8b4f4ae4a73944e741d0446"
 dependencies = [
  "iced_debug",
  "iced_program",
@@ -3636,9 +3636,9 @@ checksum = "df8b2b54733674ad286d16267dcfc7a71ed5c776e4ac7aa3c3e2561f7c637bf2"
 
 [[package]]
 name = "tracing"
-version = "0.1.42"
+version = "0.1.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8eb41cbdb933e23b7929f47bb577710643157d7602ef3a2ebd3902b13ac5eda6"
+checksum = "784e0ac535deb450455cbfa28a6f0df145ea1bb7ae51b821cf5e7927fdcfbdd0"
 dependencies = [
  "pin-project-lite",
  "tracing-attributes",
@@ -4459,9 +4459,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.7.13"
+version = "0.7.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21a0236b59786fed61e2a80582dd500fe61f18b5dca67a4a067d0bc9039339cf"
+checksum = "5a5364e9d77fcdeeaa6062ced926ee3381faa2ee02d3eb83a5c27a8825540829"
 dependencies = [
  "memchr",
 ]

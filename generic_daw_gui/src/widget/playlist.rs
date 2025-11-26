@@ -1,10 +1,11 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef},
-	widget::{Delta, clip, get_time, get_unsnapped_time, track::Track},
+	widget::{Delta, clip, get_time, maybe_snap_time, track::Track},
 };
 use generic_daw_core::{MusicalTime, RtState};
 use iced::{
-	Alignment, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+	Alignment, Color, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme,
+	Vector,
 	advanced::{
 		Clipboard, Renderer as _, Shell,
 		layout::{self, Layout, Limits, Node},
@@ -13,9 +14,11 @@ use iced::{
 		renderer::{Quad, Style},
 		widget::{Operation, Tree, Widget},
 	},
-	border, keyboard,
+	border,
+	gradient::Linear,
+	keyboard,
 };
-use std::{cell::RefCell, collections::HashSet};
+use std::{cell::RefCell, collections::HashSet, f32::consts::FRAC_PI_2, path::Path, sync::Arc};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
@@ -47,6 +50,7 @@ pub struct Selection {
 	pub status: Status,
 	pub primary: HashSet<(usize, usize)>,
 	pub secondary: HashSet<(usize, usize)>,
+	pub file: Option<(Arc<Path>, Option<(usize, MusicalTime)>)>,
 }
 
 impl Selection {
@@ -102,7 +106,7 @@ where
 		tree: &mut Tree,
 		event: &Event,
 		layout: Layout<'_>,
-		cursor: Cursor,
+		mut cursor: Cursor,
 		renderer: &Renderer,
 		clipboard: &mut dyn Clipboard,
 		shell: &mut Shell<'_, Message>,
@@ -127,8 +131,16 @@ where
 		}
 
 		let selection = &mut *self.selection.borrow_mut();
+
+		if selection.file.is_some() {
+			cursor = cursor.land();
+		}
+
 		let Some(cursor) = cursor.position_in(viewport) else {
 			selection.status = Status::None;
+			if let Some((_, hovering)) = &mut selection.file {
+				*hovering = None;
+			}
 			return;
 		};
 
@@ -142,12 +154,10 @@ where
 							return;
 						};
 
-						let time = get_time(
-							cursor.x,
-							*self.position,
-							*self.scale,
-							self.rtstate,
+						let time = maybe_snap_time(
+							get_time(cursor.x, *self.position, *self.scale, self.rtstate),
 							*modifiers,
+							|time| time.snap_round(self.scale.x, self.rtstate),
 						);
 
 						selection.status = Status::Selecting(track, track, time, time);
@@ -174,156 +184,181 @@ where
 				shell.request_redraw();
 			}
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
-			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match selection.status {
-				Status::Selecting(start_track, last_end_track, start_pos, last_end_pos) => {
-					let Some(end_track) = track_idx(&layout, viewport, cursor)
-						.or_else(|| layout.children().len().checked_sub(1))
-					else {
-						return;
-					};
+			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
+				match selection.file.clone() {
+					Some((path, time)) => {
+						if let Some(track) = track_idx(&layout, viewport, cursor)
+							.or_else(|| layout.children().len().checked_sub(1))
+						{
+							let new_time = maybe_snap_time(
+								get_time(cursor.x, *self.position, *self.scale, self.rtstate),
+								*modifiers,
+								|time| time.snap_floor(self.scale.x, self.rtstate),
+							);
 
-					let end_pos = get_time(
-						cursor.x,
-						*self.position,
-						*self.scale,
-						self.rtstate,
-						*modifiers,
-					);
+							let new_time = Some((track, new_time));
+							selection.file = Some((path, new_time));
 
-					if end_track == last_end_track && end_pos == last_end_pos {
-						return;
+							if time != new_time {
+								shell.capture_event();
+								shell.request_redraw();
+							}
+						}
 					}
-
-					selection.status =
-						Status::Selecting(start_track, end_track, start_pos, end_pos);
-
-					let (start_track, end_track) =
-						(start_track.min(end_track), start_track.max(end_track));
-					let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
-
-					self.tracks
-						.iter()
-						.enumerate()
-						.flat_map(|(t_idx, track)| {
-							track
-								.clips
-								.iter()
-								.enumerate()
-								.map(move |(c_idx, clip)| ((t_idx, c_idx), clip))
-						})
-						.for_each(|(idx, clip)| {
-							let clip_pos = match clip.inner {
-								clip::Inner::AudioClip(AudioClipRef { clip, .. }) => clip.position,
-								clip::Inner::MidiClip(MidiClipRef { clip, .. }) => clip.position,
-								clip::Inner::Recording(..) => return,
+					None => match selection.status {
+						Status::Selecting(start_track, last_end_track, start_pos, last_end_pos) => {
+							let Some(end_track) = track_idx(&layout, viewport, cursor)
+								.or_else(|| layout.children().len().checked_sub(1))
+							else {
+								return;
 							};
 
-							if (start_track..=end_track).contains(&idx.0)
-								&& (start_pos.max(clip_pos.start()) < end_pos.min(clip_pos.end()))
-							{
-								selection.secondary.insert(idx);
-							} else {
-								selection.secondary.remove(&idx);
+							let end_pos = maybe_snap_time(
+								get_time(cursor.x, *self.position, *self.scale, self.rtstate),
+								*modifiers,
+								|time| time.snap_round(self.scale.x, self.rtstate),
+							);
+
+							if end_track == last_end_track && end_pos == last_end_pos {
+								return;
 							}
-						});
 
-					shell.request_redraw();
+							selection.status =
+								Status::Selecting(start_track, end_track, start_pos, end_pos);
+
+							let (start_track, end_track) =
+								(start_track.min(end_track), start_track.max(end_track));
+							let (start_pos, end_pos) =
+								(start_pos.min(end_pos), start_pos.max(end_pos));
+
+							self.tracks
+								.iter()
+								.enumerate()
+								.flat_map(|(t_idx, track)| {
+									track
+										.clips
+										.iter()
+										.enumerate()
+										.map(move |(c_idx, clip)| ((t_idx, c_idx), clip))
+								})
+								.for_each(|(idx, clip)| {
+									let clip_pos = match clip.inner {
+										clip::Inner::AudioClip(AudioClipRef { clip, .. }) => {
+											clip.position
+										}
+										clip::Inner::MidiClip(MidiClipRef { clip, .. }) => {
+											clip.position
+										}
+										clip::Inner::Recording(..) => return,
+									};
+
+									if (start_track..=end_track).contains(&idx.0)
+										&& (start_pos.max(clip_pos.start())
+											< end_pos.min(clip_pos.end()))
+									{
+										selection.secondary.insert(idx);
+									} else {
+										selection.secondary.remove(&idx);
+									}
+								});
+
+							shell.request_redraw();
+						}
+						Status::Dragging(track, time) => {
+							let Some(new_track) = track_idx(&layout, viewport, cursor)
+								.or_else(|| layout.children().len().checked_sub(1))
+							else {
+								return;
+							};
+
+							let new_time =
+								get_time(cursor.x, *self.position, *self.scale, self.rtstate);
+
+							let abs_diff =
+								maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
+									abs_diff.snap_round(self.scale.x, self.rtstate)
+								});
+
+							if new_track != track || abs_diff != MusicalTime::ZERO {
+								let delta = if new_time > time {
+									Delta::Positive
+								} else {
+									Delta::Negative
+								}(abs_diff);
+
+								selection.status = Status::Dragging(new_track, time + delta);
+								shell.publish((self.f)(Action::Drag(
+									new_track.cast_signed() - track.cast_signed(),
+									delta,
+								)));
+								shell.capture_event();
+							}
+						}
+						Status::TrimmingStart(time) => {
+							let new_time =
+								get_time(cursor.x, *self.position, *self.scale, self.rtstate);
+
+							let abs_diff =
+								maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
+									abs_diff.snap_round(self.scale.x, self.rtstate)
+								});
+
+							if abs_diff != MusicalTime::ZERO {
+								let delta = if new_time > time {
+									Delta::Positive
+								} else {
+									Delta::Negative
+								}(abs_diff);
+
+								selection.status = Status::TrimmingStart(time + delta);
+								shell.publish((self.f)(Action::TrimStart(delta)));
+								shell.capture_event();
+							}
+						}
+						Status::TrimmingEnd(time) => {
+							let new_time =
+								get_time(cursor.x, *self.position, *self.scale, self.rtstate);
+
+							let abs_diff =
+								maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
+									abs_diff.snap_round(self.scale.x, self.rtstate)
+								});
+
+							if abs_diff != MusicalTime::ZERO {
+								let delta = if new_time > time {
+									Delta::Positive
+								} else {
+									Delta::Negative
+								}(abs_diff);
+
+								selection.status = Status::TrimmingEnd(time + delta);
+								shell.publish((self.f)(Action::TrimEnd(delta)));
+								shell.capture_event();
+							}
+						}
+						Status::Deleting => {
+							if !selection.primary.is_empty() {
+								shell.publish((self.f)(Action::Delete));
+								shell.capture_event();
+							}
+						}
+						Status::DraggingSplit(time) => {
+							let new_time = maybe_snap_time(
+								get_time(cursor.x, *self.position, *self.scale, self.rtstate),
+								*modifiers,
+								|time| time.snap_round(self.scale.x, self.rtstate),
+							);
+
+							if new_time != time {
+								selection.status = Status::DraggingSplit(new_time);
+								shell.publish((self.f)(Action::DragSplit(new_time)));
+								shell.capture_event();
+							}
+						}
+						Status::None => {}
+					},
 				}
-				Status::Dragging(track, time) => {
-					let Some(new_track) = track_idx(&layout, viewport, cursor)
-						.or_else(|| layout.children().len().checked_sub(1))
-					else {
-						return;
-					};
-
-					let new_time =
-						get_unsnapped_time(cursor.x, *self.position, *self.scale, self.rtstate);
-
-					let mut abs_diff = new_time.abs_diff(time);
-					if !modifiers.alt() {
-						abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
-					}
-
-					if new_track != track || abs_diff != MusicalTime::ZERO {
-						let delta = if new_time > time {
-							Delta::Positive
-						} else {
-							Delta::Negative
-						}(abs_diff);
-
-						selection.status = Status::Dragging(new_track, time + delta);
-						shell.publish((self.f)(Action::Drag(
-							new_track.cast_signed() - track.cast_signed(),
-							delta,
-						)));
-						shell.capture_event();
-					}
-				}
-				Status::DraggingSplit(time) => {
-					let new_time = get_time(
-						cursor.x,
-						*self.position,
-						*self.scale,
-						self.rtstate,
-						*modifiers,
-					);
-
-					if new_time != time {
-						selection.status = Status::DraggingSplit(new_time);
-						shell.publish((self.f)(Action::DragSplit(new_time)));
-						shell.capture_event();
-					}
-				}
-				Status::TrimmingStart(time) => {
-					let new_time =
-						get_unsnapped_time(cursor.x, *self.position, *self.scale, self.rtstate);
-
-					let mut abs_diff = new_time.abs_diff(time);
-					if !modifiers.alt() {
-						abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
-					}
-
-					if abs_diff != MusicalTime::ZERO {
-						let delta = if new_time > time {
-							Delta::Positive
-						} else {
-							Delta::Negative
-						}(abs_diff);
-
-						selection.status = Status::TrimmingStart(time + delta);
-						shell.publish((self.f)(Action::TrimStart(delta)));
-						shell.capture_event();
-					}
-				}
-				Status::TrimmingEnd(time) => {
-					let new_time =
-						get_unsnapped_time(cursor.x, *self.position, *self.scale, self.rtstate);
-
-					let mut abs_diff = new_time.abs_diff(time);
-					if !modifiers.alt() {
-						abs_diff = abs_diff.snap_round(self.scale.x, self.rtstate);
-					}
-
-					if abs_diff != MusicalTime::ZERO {
-						let delta = if new_time > time {
-							Delta::Positive
-						} else {
-							Delta::Negative
-						}(abs_diff);
-
-						selection.status = Status::TrimmingEnd(time + delta);
-						shell.publish((self.f)(Action::TrimEnd(delta)));
-						shell.capture_event();
-					}
-				}
-				Status::Deleting => {
-					if !selection.primary.is_empty() {
-						shell.publish((self.f)(Action::Delete));
-						shell.capture_event();
-					}
-				}
-				Status::None => {}
-			},
+			}
 			_ => {}
 		}
 	}
@@ -370,7 +405,9 @@ where
 			return;
 		};
 
-		for layout in layout.children() {
+		let selection = &*self.selection.borrow();
+
+		for (i, layout) in layout.children().enumerate() {
 			let Some(bounds) = layout.bounds().intersection(&viewport) else {
 				continue;
 			};
@@ -385,6 +422,27 @@ where
 				},
 				theme.extended_palette().background.strong.color,
 			);
+
+			if let Some((_, Some((track, pos)))) = selection.file
+				&& track == i
+			{
+				let samples_per_px = self.scale.x.exp2();
+				let x = pos.to_samples_f(self.rtstate) / samples_per_px;
+				let x = x - self.position.x / samples_per_px;
+
+				renderer.fill_quad(
+					Quad {
+						bounds: Rectangle::new(
+							bounds.position() + Vector::new(x, 0.0),
+							Size::new(50.0, bounds.height),
+						),
+						..Quad::default()
+					},
+					Linear::new(FRAC_PI_2)
+						.add_stop(0.0, theme.extended_palette().background.strong.color)
+						.add_stop(1.0, Color::BLACK.scale_alpha(0.0)),
+				);
+			}
 		}
 
 		let rects = &mut vec![];

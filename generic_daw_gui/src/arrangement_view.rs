@@ -98,6 +98,8 @@ pub enum Message {
 	ConnectSucceeded((NodeId, NodeId)),
 	Disconnect(NodeId, NodeId),
 
+	ChangedTab(Tab),
+
 	ChannelAdd,
 	ChannelRemove(NodeId),
 	ChannelSelect(NodeId),
@@ -113,9 +115,9 @@ pub enum Message {
 	PluginMoveTo(NodeId, DragEvent),
 	PluginRemove(NodeId, usize),
 
-	SampleLoadFromFile(Arc<Path>),
-	SampleLoadedFromFile(NoClone<Option<Box<SamplePair>>>),
-	AddAudioClip(SampleId),
+	LoadHoveredSample,
+	SampleLoaded(NoClone<Option<Box<SamplePair>>>, usize, MusicalTime),
+	AddAudioClip(SampleId, usize, MusicalTime),
 
 	TrackAdd,
 	TrackRemove(NodeId),
@@ -165,7 +167,7 @@ pub struct ArrangementView {
 
 	playlist_position: Vector,
 	playlist_scale: Vector,
-	playlist_selection: RefCell<playlist::Selection>,
+	pub playlist_selection: RefCell<playlist::Selection>,
 	soloed_track: Option<NodeId>,
 
 	selected_channel: Option<NodeId>,
@@ -279,6 +281,19 @@ impl ArrangementView {
 			}
 			Message::ConnectSucceeded((from, to)) => self.arrangement.connect_succeeded(from, to),
 			Message::Disconnect(from, to) => self.arrangement.disconnect(from, to),
+			Message::ChangedTab(tab) => {
+				match self.tab {
+					Tab::Playlist => {
+						self.playlist_selection.get_mut().status = playlist::Status::None;
+					}
+					Tab::Mixer => {}
+					Tab::PianoRoll(..) => {
+						self.piano_roll_selection.get_mut().status = piano_roll::Status::None;
+					}
+				}
+
+				self.tab = tab;
+			}
 			Message::ChannelAdd => {
 				let id = self.arrangement.add_channel();
 				return Task::perform(
@@ -369,66 +384,58 @@ impl ArrangementView {
 				}
 			}
 			Message::PluginRemove(node, i) => _ = self.arrangement.plugin_remove(node, i),
-			Message::SampleLoadFromFile(path) => {
+			Message::LoadHoveredSample => {
+				let playlist::Selection { file: hovering, .. } = self.playlist_selection.get_mut();
+
+				let (Some((path, Some((track, pos)))), Tab::Playlist) =
+					(std::mem::take(hovering), self.tab)
+				else {
+					return Task::none();
+				};
+
 				let mut iter = self.arrangement.samples().values();
-				if let Some(sample) = iter.find(|sample| sample.path == path) {
+				return if let Some(sample) = iter.find(|sample| sample.path == path) {
 					drop(iter);
-					return self.update(
-						Message::AddAudioClip(sample.id),
+					self.update(
+						Message::AddAudioClip(sample.id, track, pos),
 						config,
 						state,
 						plugin_bundles,
-					);
-				}
-
-				self.loading += 1;
-				let sample_rate = self.arrangement.rtstate().sample_rate;
-
-				return Task::future(unblock(move || {
-					Message::SampleLoadedFromFile(NoClone(
-						SamplePair::new(path, sample_rate).map(Box::new),
-					))
-				}));
+					)
+				} else {
+					self.loading += 1;
+					let sample_rate = self.arrangement.rtstate().sample_rate;
+					Task::future(unblock(move || {
+						Message::SampleLoaded(
+							NoClone(SamplePair::new(path, sample_rate).map(Box::new)),
+							track,
+							pos,
+						)
+					}))
+				};
 			}
-			Message::SampleLoadedFromFile(NoClone(sample)) => {
+			Message::SampleLoaded(NoClone(sample), track, pos) => {
 				self.loading -= 1;
 
 				if let Some(sample) = sample {
 					let id = sample.gui.id;
 					self.arrangement.add_sample(*sample);
-					return self.update(Message::AddAudioClip(id), config, state, plugin_bundles);
+					return self.update(
+						Message::AddAudioClip(id, track, pos),
+						config,
+						state,
+						plugin_bundles,
+					);
 				}
 			}
-			Message::AddAudioClip(sample) => {
-				let audio = AudioClip::new(
+			Message::AddAudioClip(sample, track, pos) => {
+				let mut audio = AudioClip::new(
 					sample,
 					self.arrangement.samples()[*sample].samples.len(),
 					self.arrangement.rtstate(),
 				);
-
-				let (task, track) = self
-					.arrangement
-					.tracks()
-					.iter()
-					.position(|track| {
-						track
-							.clips
-							.iter()
-							.all(|clip| clip.position().start() >= audio.position.len())
-					})
-					.map_or_else(
-						|| {
-							(
-								self.update(Message::TrackAdd, config, state, plugin_bundles),
-								self.arrangement.tracks().len() - 1,
-							)
-						},
-						|track| (Task::none(), track),
-					);
-
+				audio.position.move_to(pos);
 				self.arrangement.add_clip(track, audio);
-
-				return task;
 			}
 			Message::TrackAdd => {
 				let track = self.arrangement.add_track();
@@ -647,9 +654,9 @@ impl ArrangementView {
 				);
 			}
 			Message::DeleteSelection => match self.tab {
-				Tab::Playlist => self.handle_piano_roll_action(piano_roll::Action::Delete),
+				Tab::Playlist => self.handle_playlist_action(playlist::Action::Delete),
 				Tab::Mixer => {}
-				Tab::PianoRoll(..) => self.handle_playlist_action(playlist::Action::Delete),
+				Tab::PianoRoll(..) => self.handle_piano_roll_action(piano_roll::Action::Delete),
 			},
 			Message::ClearSelection => match self.tab {
 				Tab::Playlist => self.playlist_selection.get_mut().clear(),

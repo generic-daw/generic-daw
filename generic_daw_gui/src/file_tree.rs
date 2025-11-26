@@ -14,6 +14,7 @@ mod file;
 pub enum Message {
 	Action(DirId, Action),
 	File(Arc<Path>),
+	Unreachable,
 }
 
 #[derive(Clone, Debug)]
@@ -48,11 +49,8 @@ impl FileTree {
 		.into()
 	}
 
-	pub fn update(&mut self, id: DirId, action: &Action) -> Task<Message> {
-		self.dirs
-			.iter_mut()
-			.find_map(|dir| dir.update(id, action))
-			.unwrap_or_else(Task::none)
+	pub fn update(&mut self, id: DirId, action: &Action) -> Option<Task<Message>> {
+		self.dirs.iter_mut().find_map(|dir| dir.update(id, action))
 	}
 
 	pub fn diff(&mut self, dirs: impl IntoIterator<Item: AsRef<Path>>) {

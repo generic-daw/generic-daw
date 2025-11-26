@@ -1,4 +1,4 @@
-use crate::widget::{clip::Clip, get_time, playlist::Action};
+use crate::widget::{clip::Clip, get_time, maybe_snap_time, playlist::Action};
 use generic_daw_core::RtState;
 use generic_daw_utils::NoDebug;
 use iced::{
@@ -140,12 +140,10 @@ where
 			state.last_click = Some(new_click);
 
 			if new_click.kind() == Kind::Double {
-				let time = get_time(
-					cursor.x,
-					*self.position,
-					*self.scale,
-					self.rtstate,
+				let time = maybe_snap_time(
+					get_time(cursor.x, *self.position, *self.scale, self.rtstate),
 					*modifiers,
+					|time| time.snap_round(self.scale.x, self.rtstate),
 				);
 				shell.publish((self.f)(Action::Add(self.idx, time)));
 				shell.capture_event();

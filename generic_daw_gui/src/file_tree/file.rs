@@ -6,7 +6,7 @@ use crate::{
 use iced::{
 	Element, Fill,
 	futures::AsyncReadExt as _,
-	widget::{button, row, text},
+	widget::{button, mouse_area, row, text},
 };
 use std::{io, path::Path, sync::Arc};
 
@@ -34,16 +34,20 @@ impl File {
 	pub fn view(&self) -> (Element<'_, Message>, f32) {
 		(
 			button(
-				row![
-					if self.is_music { file_music } else { file }(),
-					text(&*self.name).wrapping(text::Wrapping::None)
-				]
-				.spacing(2),
+				mouse_area(
+					row![
+						if self.is_music { file_music } else { file }(),
+						text(&*self.name).wrapping(text::Wrapping::None)
+					]
+					.padding(1)
+					.spacing(2)
+					.width(Fill),
+				)
+				.on_press(Message::File(self.path.clone())),
 			)
+			.padding(0)
 			.style(button::text)
-			.padding(1)
-			.width(Fill)
-			.on_press(Message::File(self.path.clone()))
+			.on_press(Message::Unreachable)
 			.into(),
 			LINE_HEIGHT + 2.0,
 		)

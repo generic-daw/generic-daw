@@ -1,7 +1,7 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef, Recording as RecordingWrapper},
 	widget::{
-		LINE_HEIGHT, get_time, get_unsnapped_time,
+		LINE_HEIGHT, get_time, maybe_snap_time,
 		playlist::{Action, Selection, Status},
 	},
 };
@@ -202,12 +202,8 @@ where
 								}
 							}
 
-							let time = get_unsnapped_time(
-								cursor.x,
-								*self.position,
-								*self.scale,
-								self.rtstate,
-							);
+							let time =
+								get_time(cursor.x, *self.position, *self.scale, self.rtstate);
 
 							selection.status = match (modifiers.command(), modifiers.shift()) {
 								(false, false) => {
@@ -225,12 +221,15 @@ where
 								}
 								(true, false) => {
 									clear = false;
-									let time = get_time(
-										cursor.x,
-										*self.position,
-										*self.scale,
-										self.rtstate,
+									let time = maybe_snap_time(
+										get_time(
+											cursor.x,
+											*self.position,
+											*self.scale,
+											self.rtstate,
+										),
 										*modifiers,
+										|time| time.snap_round(self.scale.x, self.rtstate),
 									);
 									Status::Selecting(idx.0, idx.0, time, time)
 								}
@@ -239,12 +238,15 @@ where
 									Status::Dragging(idx.0, time)
 								}
 								(true, true) => {
-									let time = get_time(
-										cursor.x,
-										*self.position,
-										*self.scale,
-										self.rtstate,
+									let time = maybe_snap_time(
+										get_time(
+											cursor.x,
+											*self.position,
+											*self.scale,
+											self.rtstate,
+										),
 										*modifiers,
+										|time| time.snap_round(self.scale.x, self.rtstate),
 									);
 									shell.publish((self.f)(Action::SplitAt(time)));
 									Status::DraggingSplit(time)
@@ -501,7 +503,7 @@ where
 					(true, true) => unreachable!(),
 				}
 			}
-			Inner::Recording(..) => Interaction::NoDrop,
+			Inner::Recording(..) => Interaction::NotAllowed,
 		}
 	}
 }
