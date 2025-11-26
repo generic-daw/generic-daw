@@ -645,12 +645,16 @@ impl Daw {
 			Subscription::none()
 		} else if self.config_view.is_some() {
 			event::listen_with(|e, s, _| match s {
-				event::Status::Ignored => Self::config_view_keybinds(&e),
+				event::Status::Ignored => {
+					Self::config_view_keybinds(&e).or_else(|| Self::base_keybinds(&e))
+				}
 				event::Status::Captured => None,
 			})
 		} else {
 			event::listen_with(|e, s, _| match s {
-				event::Status::Ignored => Self::base_keybinds(&e),
+				event::Status::Ignored => {
+					Self::arrangement_view_keybinds(&e).or_else(|| Self::base_keybinds(&e))
+				}
 				event::Status::Captured => None,
 			})
 		};
@@ -662,6 +666,30 @@ impl Daw {
 			autosave,
 			keybinds,
 		])
+	}
+
+	fn arrangement_view_keybinds(event: &Event) -> Option<Message> {
+		match event {
+			Event::Keyboard(keyboard::Event::KeyPressed {
+				physical_key: keyboard::key::Physical::Code(code),
+				modifiers,
+				..
+			}) => match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
+				(false, false, false) => match code {
+					keyboard::key::Code::F5 => Some(Message::ChangedTab(Tab::Playlist)),
+					keyboard::key::Code::F9 => Some(Message::ChangedTab(Tab::Mixer)),
+					keyboard::key::Code::Delete | keyboard::key::Code::Backspace => Some(
+						Message::Arrangement(arrangement_view::Message::DeleteSelection),
+					),
+					keyboard::key::Code::Escape => Some(Message::Arrangement(
+						arrangement_view::Message::ClearSelection,
+					)),
+					_ => None,
+				},
+				_ => None,
+			},
+			_ => None,
+		}
 	}
 
 	fn config_view_keybinds(event: &Event) -> Option<Message> {
@@ -679,7 +707,6 @@ impl Daw {
 			},
 			_ => None,
 		}
-		.or_else(|| Self::base_keybinds(event))
 	}
 
 	fn base_keybinds(event: &Event) -> Option<Message> {
@@ -692,12 +719,6 @@ impl Daw {
 				(false, false, false) => match code {
 					keyboard::key::Code::Space => Some(Message::Arrangement(
 						arrangement_view::Message::TogglePlayback,
-					)),
-					keyboard::key::Code::Delete | keyboard::key::Code::Backspace => Some(
-						Message::Arrangement(arrangement_view::Message::DeleteSelection),
-					),
-					keyboard::key::Code::Escape => Some(Message::Arrangement(
-						arrangement_view::Message::ClearSelection,
 					)),
 					_ => None,
 				},
