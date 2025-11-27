@@ -283,7 +283,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		});
 
 		renderer.with_layer(right_half, |renderer| {
-			self.seeker(renderer, Self::seeker_bounds(layout), theme);
+			self.seeker(renderer, right_half, theme);
 		});
 	}
 
@@ -389,12 +389,6 @@ impl<'a, Message> Seeker<'a, Message> {
 		self
 	}
 
-	fn seeker_bounds(layout: Layout<'_>) -> Rectangle {
-		let mut bounds = Self::right_half(layout);
-		bounds.height = LINE_HEIGHT;
-		bounds
-	}
-
 	fn right_half(layout: Layout<'_>) -> Rectangle {
 		let bounds = layout.bounds();
 		let right_child_bounds = layout.child(1).bounds();
@@ -485,7 +479,7 @@ impl<'a, Message> Seeker<'a, Message> {
 	fn seeker(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
 		renderer.fill_quad(
 			Quad {
-				bounds,
+				bounds: Rectangle::new(bounds.position(), Size::new(bounds.width, LINE_HEIGHT)),
 				..Quad::default()
 			},
 			if self.rtstate.loop_marker.is_some() {
@@ -509,7 +503,26 @@ impl<'a, Message> Seeker<'a, Message> {
 
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(start - Vector::new(1.5, 0.0), Size::new(1.5, 10000.0)),
+					bounds: Rectangle::new(start, Size::new(end.x - start.x, LINE_HEIGHT)),
+					..Quad::default()
+				},
+				theme.extended_palette().primary.base.color,
+			);
+
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(
+						start - Vector::new(1.5, 0.0),
+						Size::new(1.5, bounds.height),
+					),
+					..Quad::default()
+				},
+				theme.extended_palette().secondary.base.color,
+			);
+
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(end, Size::new(1.5, bounds.height)),
 					..Quad::default()
 				},
 				theme.extended_palette().secondary.base.color,
@@ -518,8 +531,8 @@ impl<'a, Message> Seeker<'a, Message> {
 			renderer.fill_quad(
 				Quad {
 					bounds: Rectangle::new(
-						start - Vector::new(10000.0, 0.0),
-						Size::new(10000.0, 10000.0),
+						bounds.position(),
+						Size::new(bounds.width.min(start.x - bounds.x), bounds.height),
 					),
 					..Quad::default()
 				},
@@ -533,15 +546,10 @@ impl<'a, Message> Seeker<'a, Message> {
 
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(end, Size::new(1.5, 10000.0)),
-					..Quad::default()
-				},
-				theme.extended_palette().secondary.base.color,
-			);
-
-			renderer.fill_quad(
-				Quad {
-					bounds: Rectangle::new(end, Size::new(10000.0, 10000.0)),
+					bounds: Rectangle::new(
+						end,
+						Size::new(bounds.width + 0f32.max(bounds.x - end.x), bounds.height),
+					),
 					..Quad::default()
 				},
 				theme
@@ -551,21 +559,13 @@ impl<'a, Message> Seeker<'a, Message> {
 					.color
 					.scale_alpha(0.2),
 			);
-
-			renderer.fill_quad(
-				Quad {
-					bounds: Rectangle::new(start, Size::new(end.x - start.x, bounds.height)),
-					..Quad::default()
-				},
-				theme.extended_palette().primary.base.color,
-			);
 		}
 
 		renderer.fill_quad(
 			Quad {
 				bounds: Rectangle::new(
 					offset_pos(self.rtstate.sample as f32),
-					Size::new(1.5, 10000.0),
+					Size::new(1.5, bounds.height),
 				),
 				..Quad::default()
 			},
