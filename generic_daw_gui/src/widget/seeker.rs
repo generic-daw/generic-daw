@@ -596,10 +596,10 @@ impl<'a, Message> Seeker<'a, Message> {
 		let mut beat = MusicalTime::from_samples_f(self.position.x * samples_per_px, self.rtstate);
 		let mut end_beat =
 			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.rtstate);
-		beat = beat.snap_floor(self.scale.x + 2.0, self.rtstate).floor();
-		end_beat = end_beat.snap_floor(self.scale.x + 2.0, self.rtstate);
+		beat = beat.snap_floor(self.scale.x + 3.0, self.rtstate).floor();
+		end_beat = end_beat.snap_floor(self.scale.x + 3.0, self.rtstate);
 
-		let bar_inc = MusicalTime::snap_step(self.scale.x + 2.0, self.rtstate)
+		let bar_inc = MusicalTime::snap_step(self.scale.x + 3.0, self.rtstate)
 			.bar(self.rtstate)
 			.max(1);
 

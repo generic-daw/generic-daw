@@ -610,8 +610,7 @@ impl ArrangementView {
 					(cursor.x + self.playlist_position.x)
 						* ((old_scale.x - self.playlist_scale.x).exp2() - 1.0),
 					(cursor.y + self.playlist_position.y)
-						* (old_scale.y.recip() - self.playlist_scale.y.recip())
-						* self.playlist_scale.y,
+						* ((self.playlist_scale.y / old_scale.y) - 1.0),
 				);
 
 				return self.update(
@@ -644,8 +643,7 @@ impl ArrangementView {
 					(cursor.x + self.piano_roll_position.x)
 						* ((old_scale.x - self.piano_roll_scale.x).exp2() - 1.0),
 					(cursor.y + self.piano_roll_position.y)
-						* (old_scale.y.recip() - self.piano_roll_scale.y.recip())
-						* self.piano_roll_scale.y,
+						* ((self.piano_roll_scale.y / old_scale.y) - 1.0),
 				);
 
 				return self.update(

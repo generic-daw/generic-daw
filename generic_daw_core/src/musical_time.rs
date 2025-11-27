@@ -155,12 +155,15 @@ impl MusicalTime {
 
 	#[must_use]
 	pub fn snap_step(mut scale: f32, rtstate: &RtState) -> Self {
-		scale += (f32::from(rtstate.bpm.get()) / rtstate.sample_rate.get() as f32).log2() - 2.5
+		scale += (f32::from(rtstate.bpm.get()) / rtstate.sample_rate.get() as f32).log2() - 3.0
 			+ f32::from(Self::TICK_BITS);
+		let extra = f32::from(rtstate.numerator.get()).log2();
 		Self(if scale < f32::from(Self::TICK_BITS + 1) {
 			1 << scale as u8
+		} else if scale < f32::from(Self::TICK_BITS + 1) + extra {
+			u64::from(rtstate.numerator.get()) << Self::TICK_BITS
 		} else {
-			u64::from(rtstate.numerator.get()) << (scale as u8 - 1)
+			u64::from(rtstate.numerator.get()) << (scale - extra) as u8
 		})
 	}
 
