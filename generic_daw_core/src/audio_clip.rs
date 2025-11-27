@@ -15,7 +15,7 @@ impl AudioClip {
 		let start = self.position.start().to_samples(&state.rtstate);
 		let end = self.position.end().to_samples(&state.rtstate);
 		let offset = self.position.offset().to_samples(&state.rtstate);
-		let len = (sample.samples.len() - offset).min(end - start);
+		let len = sample.samples.len().saturating_sub(offset).min(end - start);
 
 		let uidx = state.rtstate.sample.abs_diff(start);
 
