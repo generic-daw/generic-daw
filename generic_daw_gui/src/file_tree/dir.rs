@@ -3,7 +3,7 @@ use crate::{
 	icons::{chevron_down, chevron_right},
 	widget::LINE_HEIGHT,
 };
-use generic_daw_utils::unique_id;
+use generic_daw_utils::{natural_cmp, unique_id};
 use iced::{
 	Element, Fill, Task,
 	futures::{StreamExt as _, TryStreamExt as _},
@@ -168,8 +168,12 @@ impl Dir {
 		let mut files = files.into_inner();
 		let mut dirs = dirs.into_inner();
 
-		files.sort_unstable_by(|(_, aname), (_, bname)| aname.cmp(bname));
-		dirs.sort_unstable_by(|(_, aname), (_, bname)| aname.cmp(bname));
+		files.sort_unstable_by(|(_, aname), (_, bname)| {
+			natural_cmp(aname.as_encoded_bytes(), bname.as_encoded_bytes())
+		});
+		dirs.sort_unstable_by(|(_, aname), (_, bname)| {
+			natural_cmp(aname.as_encoded_bytes(), bname.as_encoded_bytes())
+		});
 
 		let files = files.into_iter().map(|(file, _)| file).collect();
 		let dirs = dirs.into_iter().map(|(dir, _)| dir).collect();
