@@ -7,7 +7,7 @@ pub use midi_pattern_id::Id as MidiPatternId;
 
 #[derive(Clone, Copy, Debug)]
 pub enum MidiPatternAction {
-	Add(MidiNote),
+	Add(MidiNote, usize),
 	Remove(usize),
 	ChangeKey(usize, MidiKey),
 	MoveTo(usize, MusicalTime),
@@ -41,7 +41,7 @@ impl MidiPattern {
 
 	pub fn apply(&mut self, action: MidiPatternAction) {
 		match action {
-			MidiPatternAction::Add(note) => self.notes.push(note),
+			MidiPatternAction::Add(note, idx) => self.notes.insert(idx, note),
 			MidiPatternAction::Remove(index) => _ = self.notes.remove(index),
 			MidiPatternAction::ChangeKey(index, key) => self.notes[index].key = key,
 			MidiPatternAction::MoveTo(index, pos) => self.notes[index].position.move_to(pos),

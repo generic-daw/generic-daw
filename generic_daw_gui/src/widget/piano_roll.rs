@@ -90,7 +90,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			return;
 		};
 
-		for note in 0..self.notes.len() {
+		for note in (0..self.notes.len()).rev() {
 			self.update_note(note, event, cursor, shell, &viewport);
 		}
 

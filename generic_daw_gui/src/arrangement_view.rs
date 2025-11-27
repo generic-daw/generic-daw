@@ -52,7 +52,7 @@ use smol::{Timer, unblock};
 use std::{
 	cell::RefCell,
 	cmp::{Ordering, Reverse},
-	collections::{HashMap, HashSet},
+	collections::HashMap,
 	f32::consts::SQRT_2,
 	fmt::Write as _,
 	io::Read,
@@ -717,15 +717,14 @@ impl ArrangementView {
 				primary.insert((track, clip));
 			}
 			playlist::Action::Clone => {
-				let mut new = HashSet::new();
-				for &(track, clip) in &*primary {
-					new.insert((
+				let sorted = primary.drain().collect::<Vec<_>>();
+				for (track, clip) in sorted {
+					primary.insert((
 						track,
 						self.arrangement
 							.add_clip(track, self.arrangement.tracks()[track].clips[clip]),
 					));
 				}
-				*primary = new;
 			}
 			playlist::Action::Drag(track_diff, pos_diff) => {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
@@ -755,15 +754,21 @@ impl ArrangementView {
 				}
 			}
 			playlist::Action::SplitAt(mut pos) => {
-				let filtered = primary
+				let mut extra = HashMap::<_, usize>::new();
+
+				let mut sorted = primary
 					.drain()
 					.filter(|&(track, clip)| {
 						let position = self.arrangement.tracks()[track].clips[clip].position();
 						(position.start()..=position.end()).contains(&pos)
 					})
 					.collect::<Vec<_>>();
+				sorted.sort_unstable_by_key(|&(_, c)| c);
 
-				for (track, lhs) in filtered {
+				for (track, mut lhs) in sorted {
+					let extra = extra.entry(track).or_default();
+					lhs += *extra;
+
 					let clip = self.arrangement.tracks()[track].clips[lhs];
 					if clip.position().start() == pos {
 						primary.insert((track, lhs));
@@ -773,11 +778,12 @@ impl ArrangementView {
 						let start = clip.position().start() + MusicalTime::TICK;
 						let end = clip.position().end() - MusicalTime::TICK;
 						pos = pos.clamp(start, end);
-						let rhs = self.arrangement.add_clip(track, clip);
+						let rhs = self.arrangement.insert_clip(track, clip, lhs + 1);
 						self.arrangement.clip_trim_end_to(track, lhs, pos);
 						self.arrangement.clip_trim_start_to(track, rhs, pos);
 						primary.insert((track, lhs));
 						secondary.insert((track, rhs));
+						*extra += 1;
 					}
 				}
 			}
@@ -888,7 +894,9 @@ impl ArrangementView {
 				}
 			}
 			piano_roll::Action::SplitAt(mut pos) => {
-				let filtered = primary
+				let mut extra = 0;
+
+				let sorted = primary
 					.iter()
 					.filter(|&lhs| {
 						let note = self.arrangement.midi_patterns()[*clip.pattern].notes[lhs];
@@ -897,7 +905,8 @@ impl ArrangementView {
 					.collect::<BitSet>();
 				primary.clear();
 
-				for lhs in &filtered {
+				for mut lhs in &sorted {
+					lhs += extra;
 					let note = self.arrangement.midi_patterns()[*clip.pattern].notes[lhs];
 					if note.position.start() == pos {
 						primary.insert(lhs);
@@ -907,11 +916,12 @@ impl ArrangementView {
 						let start = note.position.start() + MusicalTime::TICK;
 						let end = note.position.end() - MusicalTime::TICK;
 						pos = pos.clamp(start, end);
-						let rhs = self.arrangement.add_note(clip.pattern, note);
+						let rhs = self.arrangement.insert_note(clip.pattern, note, lhs + 1);
 						self.arrangement.note_trim_end_to(clip.pattern, lhs, pos);
 						self.arrangement.note_trim_start_to(clip.pattern, rhs, pos);
 						primary.insert(lhs);
 						secondary.insert(rhs);
+						extra += 1;
 					}
 				}
 			}

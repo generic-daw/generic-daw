@@ -58,7 +58,7 @@ impl NodeImpl for Track {
 impl Track {
 	pub fn apply(&mut self, action: NodeAction) {
 		match action {
-			NodeAction::ClipAdd(clip) => self.clips.push(clip),
+			NodeAction::ClipAdd(clip, idx) => self.clips.insert(idx, clip),
 			NodeAction::ClipRemove(index) => _ = self.clips.remove(index),
 			NodeAction::ClipMoveTo(index, pos) => self.clips[index].position().move_to(pos),
 			NodeAction::ClipTrimStartTo(index, pos) => {

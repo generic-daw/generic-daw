@@ -51,7 +51,7 @@ const _: () = assert!(size_of::<Message>() <= 128);
 
 #[derive(Debug)]
 pub enum NodeAction {
-	ClipAdd(Clip),
+	ClipAdd(Clip, usize),
 	ClipRemove(usize),
 	ClipMoveTo(usize, MusicalTime),
 	ClipTrimStartTo(usize, MusicalTime),
