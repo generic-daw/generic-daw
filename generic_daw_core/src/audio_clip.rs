@@ -17,7 +17,7 @@ impl AudioClip {
 		let offset = self.position.offset().to_samples(&state.rtstate);
 		let len = sample.samples.len().saturating_sub(offset).min(end - start);
 
-		let uidx = state.rtstate.sample.abs_diff(start);
+		let uidx = state.rtstate.sample.abs_diff(start).min(len);
 
 		if state.rtstate.sample > start {
 			sample.samples[offset..][..len][uidx..]
