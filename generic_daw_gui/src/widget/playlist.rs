@@ -406,6 +406,7 @@ where
 		};
 
 		let selection = &*self.selection.borrow();
+		let samples_per_px = self.scale.x.exp2();
 
 		for (i, layout) in layout.children().enumerate() {
 			let Some(bounds) = layout.bounds().intersection(&viewport) else {
@@ -426,9 +427,7 @@ where
 			if let Some((_, Some((track, pos)))) = selection.file
 				&& track == i
 			{
-				let samples_per_px = self.scale.x.exp2();
-				let x = pos.to_samples_f(self.rtstate) / samples_per_px;
-				let x = x - self.position.x / samples_per_px;
+				let x = pos.to_samples_f(self.rtstate) / samples_per_px - self.position.x;
 
 				renderer.fill_quad(
 					Quad {
@@ -483,8 +482,6 @@ where
 			let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
 			renderer.with_layer(viewport, |renderer| {
 				renderer.with_translation(Vector::new(viewport.x, 0.0), |renderer| {
-					let samples_per_px = self.scale.x.exp2();
-
 					let y = layout.child(start_track).position().y;
 					let height = layout.child(end_track).position().y
 						+ layout.child(end_track).bounds().height
@@ -492,7 +489,7 @@ where
 
 					let x = start_pos.to_samples_f(self.rtstate) / samples_per_px;
 					let width = end_pos.to_samples_f(self.rtstate) / samples_per_px - x;
-					let x = x - self.position.x / samples_per_px;
+					let x = x - self.position.x;
 
 					renderer.fill_quad(
 						Quad {

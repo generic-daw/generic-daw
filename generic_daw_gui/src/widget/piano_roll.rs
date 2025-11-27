@@ -336,7 +336,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 					let x = start_pos.to_samples_f(self.rtstate) / samples_per_px;
 					let width = end_pos.to_samples_f(self.rtstate) / samples_per_px - x;
-					let x = x - self.position.x / samples_per_px;
+					let x = x - self.position.x;
 
 					renderer.fill_quad(
 						Quad {
@@ -425,7 +425,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 
 		let x = note.position.start().to_samples_f(self.rtstate) / samples_per_px;
 		let width = note.position.end().to_samples_f(self.rtstate) / samples_per_px - x;
-		let x = x - self.position.x / samples_per_px;
+		let x = x - self.position.x;
 
 		Rectangle::new(
 			Point::new(x, key_y(note.key, *self.position, *self.scale)),

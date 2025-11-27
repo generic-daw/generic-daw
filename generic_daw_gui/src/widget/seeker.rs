@@ -221,33 +221,27 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				shell.capture_event();
 			}
 			Event::Mouse(mouse::Event::WheelScrolled { delta, modifiers }) => {
-				let (mut x, mut y) = match *delta {
+				let (x, mut y) = match *delta {
 					ScrollDelta::Pixels { x, y } => (-x, -y),
 					ScrollDelta::Lines { x, y } => (-x * 60.0, -y * 60.0),
 				};
 
 				match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
 					(false, false, false) if x != 0.0 || y != 0.0 => {
-						x *= self.scale.x.exp2();
-
 						shell.publish((self.pan)(Vector::new(x, y), right_half.size()));
 						shell.capture_event();
 					}
 					(true, false, false) if y != 0.0 => {
 						y /= 128.0;
-
 						shell.publish((self.zoom)(Vector::new(y, 0.0), cursor, right_half.size()));
 						shell.capture_event();
 					}
 					(false, true, false) if x != 0.0 || y != 0.0 => {
-						y *= self.scale.x.exp2();
-
 						shell.publish((self.pan)(Vector::new(y, x), right_half.size()));
 						shell.capture_event();
 					}
 					(false, false, true) if y != 0.0 => {
 						y /= -8.0;
-
 						shell.publish((self.zoom)(Vector::new(0.0, y), cursor, right_half.size()));
 						shell.capture_event();
 					}
@@ -414,7 +408,7 @@ impl<'a, Message> Seeker<'a, Message> {
 	fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
 		let samples_per_px = self.scale.x.exp2();
 
-		let mut beat = MusicalTime::from_samples_f(self.position.x, self.rtstate);
+		let mut beat = MusicalTime::from_samples_f(self.position.x * samples_per_px, self.rtstate);
 		let end_beat =
 			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.rtstate);
 		beat = beat.snap_floor(self.scale.x + 1.0, self.rtstate);
@@ -427,7 +421,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		while background_beat < end_beat {
 			if background_beat.bar(self.rtstate).is_multiple_of(8) {
 				let x =
-					(background_beat.to_samples_f(self.rtstate) - self.position.x) / samples_per_px;
+					background_beat.to_samples_f(self.rtstate) / samples_per_px - self.position.x;
 
 				renderer.fill_quad(
 					Quad {
@@ -462,7 +456,7 @@ impl<'a, Message> Seeker<'a, Message> {
 				theme.extended_palette().background.weak.color
 			};
 
-			let x = (beat.to_samples_f(self.rtstate) - self.position.x) / samples_per_px;
+			let x = beat.to_samples_f(self.rtstate) / samples_per_px - self.position.x;
 
 			renderer.fill_quad(
 				Quad {
@@ -505,7 +499,7 @@ impl<'a, Message> Seeker<'a, Message> {
 
 		let offset_pos = |time: f32| {
 			bounds.position()
-				+ Vector::new((time - self.position.x) / samples_per_px - self.offset, 0.0)
+				+ Vector::new(time / samples_per_px - self.position.x - self.offset, 0.0)
 		};
 		let offset_time = |time: MusicalTime| offset_pos(time.to_samples_f(self.rtstate));
 
@@ -599,7 +593,7 @@ impl<'a, Message> Seeker<'a, Message> {
 			);
 		};
 
-		let mut beat = MusicalTime::from_samples_f(self.position.x, self.rtstate);
+		let mut beat = MusicalTime::from_samples_f(self.position.x * samples_per_px, self.rtstate);
 		let mut end_beat =
 			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.rtstate);
 		beat = beat.snap_floor(self.scale.x + 2.0, self.rtstate).floor();

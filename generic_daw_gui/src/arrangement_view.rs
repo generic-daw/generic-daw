@@ -607,7 +607,8 @@ impl ArrangementView {
 				self.playlist_scale.y = self.playlist_scale.y.clamp(46.0, 200.0);
 
 				let pos_diff = Vector::new(
-					cursor.x * (old_scale.x.exp2() - self.playlist_scale.x.exp2()),
+					(cursor.x + self.playlist_position.x)
+						* ((old_scale.x - self.playlist_scale.x).exp2() - 1.0),
 					(cursor.y + self.playlist_position.y)
 						* (old_scale.y.recip() - self.playlist_scale.y.recip())
 						* self.playlist_scale.y,
@@ -640,7 +641,8 @@ impl ArrangementView {
 					.clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
 
 				let pos_diff = Vector::new(
-					cursor.x * (old_scale.x.exp2() - self.piano_roll_scale.x.exp2()),
+					(cursor.x + self.piano_roll_position.x)
+						* ((old_scale.x - self.piano_roll_scale.x).exp2() - 1.0),
 					(cursor.y + self.piano_roll_position.y)
 						* (old_scale.y.recip() - self.piano_roll_scale.y.recip())
 						* self.piano_roll_scale.y,

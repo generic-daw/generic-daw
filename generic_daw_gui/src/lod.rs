@@ -96,7 +96,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 		let end = clip_position.end().to_samples_f(rtstate);
 		let offset = clip_position.offset().to_samples_f(rtstate);
 
-		let hidden_start_samples = 0f32.max(x_position - start);
+		let hidden_start_samples = x_position.mul_add(samples_per_px, -start).max(0.0);
 
 		let lod_start_f = (offset + hidden_start_samples) * lod_slices_per_sample;
 		let view_len_f = (end - start) * lod_slices_per_sample;
