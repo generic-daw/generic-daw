@@ -4,8 +4,7 @@ use crate::{
 };
 use generic_daw_core::{MusicalTime, RtState};
 use iced::{
-	Alignment, Color, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme,
-	Vector,
+	Alignment, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
 		Clipboard, Renderer as _, Shell,
 		layout::{self, Layout, Limits, Node},
@@ -439,7 +438,15 @@ where
 					},
 					Linear::new(FRAC_PI_2)
 						.add_stop(0.0, theme.extended_palette().background.strong.color)
-						.add_stop(1.0, Color::BLACK.scale_alpha(0.0)),
+						.add_stop(
+							1.0,
+							theme
+								.extended_palette()
+								.background
+								.strong
+								.color
+								.scale_alpha(0.0),
+						),
 				);
 			}
 		}

@@ -714,7 +714,8 @@ impl ArrangementView {
 				primary.insert((track, clip));
 			}
 			playlist::Action::Clone => {
-				let sorted = primary.drain().collect::<Vec<_>>();
+				let mut sorted = primary.drain().collect::<Vec<_>>();
+				sorted.sort_unstable_by_key(|&(_, c)| c);
 				for (track, clip) in sorted {
 					primary.insert((
 						track,
@@ -869,14 +870,14 @@ impl ArrangementView {
 				primary.insert(note);
 			}
 			piano_roll::Action::Clone => {
-				let mut new = BitSet::new();
-				for note in &*primary {
-					new.insert(self.arrangement.add_note(
+				let sorted = primary.clone();
+				primary.clear();
+				for note in &sorted {
+					primary.insert(self.arrangement.add_note(
 						clip.pattern,
 						self.arrangement.midi_patterns()[*clip.pattern].notes[note],
 					));
 				}
-				*primary = new;
 			}
 			piano_roll::Action::Drag(key_diff, pos_diff) => {
 				for idx in &*primary {
