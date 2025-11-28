@@ -156,20 +156,18 @@ impl Daw {
 			}
 			Message::FileTree(action) => return self.handle_file_tree_message(action),
 			Message::ConfigView(message) => {
-				let action = self
-					.config_view
-					.as_mut()
-					.unwrap()
-					.update(message, self.window_id);
-				let mut futs = vec![action.task.map(Message::ConfigView)];
+				if let Some(config_view) = self.config_view.as_mut() {
+					let action = config_view.update(message, self.window_id);
+					let mut futs = vec![action.task.map(Message::ConfigView)];
 
-				if let Some(config) = action.instruction {
-					config.write();
-					futs.push(self.update(Message::MergeConfig(config.into(), true)));
-					futs.push(self.update(Message::OpenConfigView));
+					if let Some(config) = action.instruction {
+						config.write();
+						futs.push(self.update(Message::MergeConfig(config.into(), true)));
+						futs.push(self.update(Message::OpenConfigView));
+					}
+
+					return Task::batch(futs);
 				}
-
-				return Task::batch(futs);
 			}
 			Message::NewFile => {
 				let config = Config::read();

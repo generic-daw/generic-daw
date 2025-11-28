@@ -386,33 +386,30 @@ impl ArrangementView {
 			Message::PluginRemove(node, i) => _ = self.arrangement.plugin_remove(node, i),
 			Message::LoadHoveredSample => {
 				let playlist::Selection { file: hovering, .. } = self.playlist_selection.get_mut();
-
-				let (Some((path, Some((track, pos)))), Tab::Playlist) =
+				if let (Some((path, Some((track, pos)))), Tab::Playlist) =
 					(std::mem::take(hovering), self.tab)
-				else {
-					return Task::none();
-				};
-
-				let mut iter = self.arrangement.samples().values();
-				return if let Some(sample) = iter.find(|sample| sample.path == path) {
-					drop(iter);
-					self.update(
-						Message::AddAudioClip(sample.id, track, pos),
-						config,
-						state,
-						plugin_bundles,
-					)
-				} else {
-					self.loading += 1;
-					let sample_rate = self.arrangement.rtstate().sample_rate;
-					Task::future(unblock(move || {
-						Message::SampleLoaded(
-							NoClone(SamplePair::new(path, sample_rate).map(Box::new)),
-							track,
-							pos,
+				{
+					let mut iter = self.arrangement.samples().values();
+					return if let Some(sample) = iter.find(|sample| sample.path == path) {
+						drop(iter);
+						self.update(
+							Message::AddAudioClip(sample.id, track, pos),
+							config,
+							state,
+							plugin_bundles,
 						)
-					}))
-				};
+					} else {
+						self.loading += 1;
+						let sample_rate = self.arrangement.rtstate().sample_rate;
+						Task::future(unblock(move || {
+							Message::SampleLoaded(
+								NoClone(SamplePair::new(path, sample_rate).map(Box::new)),
+								track,
+								pos,
+							)
+						}))
+					};
+				}
 			}
 			Message::SampleLoaded(NoClone(sample), track, pos) => {
 				self.loading -= 1;
