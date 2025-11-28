@@ -19,6 +19,7 @@ use iced::{
 		button, checkbox, column, container, iced, pick_list, row, rule, scrollable, slider, space,
 		text, value,
 	},
+	window,
 };
 use rfd::AsyncFileDialog;
 use std::{num::NonZero, path::Path, sync::Arc};
@@ -86,23 +87,29 @@ impl Default for ConfigView {
 }
 
 impl ConfigView {
-	pub fn update(&mut self, message: Message) -> Action<Config, Message> {
+	pub fn update(&mut self, message: Message, window_id: window::Id) -> Action<Config, Message> {
 		match message {
 			Message::AddSamplePathFileDialog => {
-				return Task::future(AsyncFileDialog::new().pick_folder())
-					.and_then(Task::done)
-					.map(|p| p.path().into())
-					.map(Message::AddSamplePath)
-					.into();
+				return window::run(window_id, |window| {
+					AsyncFileDialog::new().set_parent(window).pick_folder()
+				})
+				.then(Task::future)
+				.and_then(Task::done)
+				.map(|p| p.path().into())
+				.map(Message::AddSamplePath)
+				.into();
 			}
 			Message::AddSamplePath(path) => self.config.sample_paths.push(path),
 			Message::RemoveSamplePath(idx) => _ = self.config.sample_paths.remove(idx),
 			Message::AddClapPathFileDialog => {
-				return Task::future(AsyncFileDialog::new().pick_folder())
-					.and_then(Task::done)
-					.map(|p| p.path().into())
-					.map(Message::AddClapPath)
-					.into();
+				return window::run(window_id, |window| {
+					AsyncFileDialog::new().set_parent(window).pick_folder()
+				})
+				.then(Task::future)
+				.and_then(Task::done)
+				.map(|p| p.path().into())
+				.map(Message::AddClapPath)
+				.into();
 			}
 			Message::AddClapPath(path) => self.config.clap_paths.push(path),
 			Message::RemoveClapPath(idx) => _ = self.config.clap_paths.remove(idx),
@@ -120,7 +127,7 @@ impl ConfigView {
 			Message::ChangedAutosaveInterval(interval) => self.config.autosave.interval = interval,
 			Message::ChangedAutosaveIntervalText(text) => {
 				if let Ok(interval) = text.parse() {
-					return self.update(Message::ChangedAutosaveInterval(interval));
+					return self.update(Message::ChangedAutosaveInterval(interval), window_id);
 				}
 			}
 			Message::ToggledOpenLastProject => self.config.open_last_project ^= true,

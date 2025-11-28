@@ -51,8 +51,8 @@ pub enum Message {
 
 	OpenFileDialog,
 	SaveAsFileDialog,
-	PickSampleFileDialog(usize),
 	ExportFileDialog,
+	PickSampleFileDialog(usize),
 
 	Progress(f32),
 
@@ -87,6 +87,7 @@ pub struct Daw {
 	state: State,
 	plugin_bundles: Arc<HashMap<PluginDescriptor, NoDebug<PluginBundle>>>,
 
+	window_id: window::Id,
 	current_project: Option<Arc<Path>>,
 
 	arrangement_view: ArrangementView,
@@ -100,13 +101,12 @@ pub struct Daw {
 
 impl Daw {
 	pub fn create() -> (Self, Task<Message>) {
-		let mut open = window::open(window::Settings {
+		let (main_window_id, open) = window::open(window::Settings {
 			exit_on_close_request: false,
 			maximized: true,
 			..window::Settings::default()
-		})
-		.1
-		.discard();
+		});
+		let mut open = open.discard();
 
 		let config = Config::read();
 		let state = State::read();
@@ -129,6 +129,7 @@ impl Daw {
 				state,
 				plugin_bundles: plugin_bundles.into(),
 
+				window_id: main_window_id,
 				current_project: None,
 
 				arrangement_view,
@@ -155,7 +156,11 @@ impl Daw {
 			}
 			Message::FileTree(action) => return self.handle_file_tree_message(action),
 			Message::ConfigView(message) => {
-				let action = self.config_view.as_mut().unwrap().update(message);
+				let action = self
+					.config_view
+					.as_mut()
+					.unwrap()
+					.update(message, self.window_id);
 				let mut futs = vec![action.task.map(Message::ConfigView)];
 
 				if let Some(config) = action.instruction {
@@ -215,41 +220,50 @@ impl Daw {
 				}
 			}
 			Message::OpenFileDialog => {
-				return Task::future(
+				return window::run(self.window_id, |window| {
 					AsyncFileDialog::new()
+						.set_parent(window)
 						.add_filter("Generic DAW project file", &["gdp"])
-						.pick_file(),
-				)
+						.pick_file()
+				})
+				.then(Task::future)
 				.and_then(Task::done)
 				.map(|p| p.path().into())
 				.map(Message::OpenFile);
 			}
 			Message::SaveAsFileDialog => {
-				return Task::future(
+				return window::run(self.window_id, |window| {
 					AsyncFileDialog::new()
+						.set_parent(window)
 						.add_filter("Generic DAW project file", &["gdp"])
-						.save_file(),
-				)
+						.save_file()
+				})
+				.then(Task::future)
 				.and_then(Task::done)
 				.map(|p| p.path().with_extension("gdp").into())
 				.map(Message::SaveAsFile);
 			}
-			Message::PickSampleFileDialog(idx) => {
-				return Task::future(AsyncFileDialog::new().pick_file())
-					.and_then(Task::done)
-					.map(|p| p.path().into())
-					.map(Feedback::Use)
-					.map(Message::FoundSampleResponse.with(idx));
-			}
 			Message::ExportFileDialog => {
-				return Task::future(
+				return window::run(self.window_id, |window| {
 					AsyncFileDialog::new()
+						.set_parent(window)
 						.add_filter("Wave File", &["wav"])
-						.save_file(),
-				)
+						.save_file()
+				})
+				.then(Task::future)
 				.and_then(Task::done)
 				.map(|p| p.path().with_extension("wav").into())
 				.map(Message::ExportFile);
+			}
+			Message::PickSampleFileDialog(idx) => {
+				return window::run(self.window_id, |window| {
+					AsyncFileDialog::new().set_parent(window).pick_file()
+				})
+				.then(Task::future)
+				.and_then(Task::done)
+				.map(|p| p.path().into())
+				.map(Feedback::Use)
+				.map(Message::FoundSampleResponse.with(idx));
 			}
 			Message::Progress(progress) => self.progress = Some(progress),
 			Message::OpenFile(path) => {
@@ -378,6 +392,8 @@ impl Daw {
 				.map(arrangement_view::Message::ClapHost)
 				.map(Message::Arrangement);
 		}
+
+		debug_assert_eq!(window, self.window_id);
 
 		let now = MusicalTime::from_samples(
 			self.arrangement_view.arrangement.rtstate().sample,
