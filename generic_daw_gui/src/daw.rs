@@ -18,10 +18,10 @@ use generic_daw_core::{
 use generic_daw_utils::{NoClone, NoDebug};
 use generic_daw_widget::dot::Dot;
 use iced::{
-	Center, Color, Element, Event, Font, Function as _,
+	Center, Color, Element, Font, Function as _,
 	Length::Fill,
-	Shrink, Subscription, Task, Theme, border, event, keyboard,
-	mouse::{self, Interaction},
+	Shrink, Subscription, Task, Theme, border, keyboard,
+	mouse::Interaction,
 	padding,
 	time::every,
 	widget::{
@@ -544,9 +544,11 @@ impl Daw {
 				.borrow()
 				.file
 				.as_ref()
-				.map(
-					|_| mouse_area(space().width(Fill).height(Fill)).interaction(Interaction::Copy)
-				),
+				.map(|_| mouse_area(space().width(Fill).height(Fill))
+					.interaction(Interaction::Copy)
+					.on_release(Message::Arrangement(
+						arrangement_view::Message::LoadHoveredSample,
+					))),
 			self.arrangement_view
 				.loading()
 				.then(|| mouse_area(space().width(Fill).height(Fill))
@@ -670,18 +672,12 @@ impl Daw {
 		let keybinds = if self.progress.is_some() {
 			Subscription::none()
 		} else if self.config_view.is_some() {
-			event::listen_with(|e, s, _| match s {
-				event::Status::Ignored => {
-					Self::config_view_keybinds(&e).or_else(|| Self::base_keybinds(&e))
-				}
-				event::Status::Captured => None,
+			keyboard::on_key_press(|k, m| {
+				Self::config_view_keybinds(&k, m).or_else(|| Self::base_keybinds(&k, m))
 			})
 		} else {
-			event::listen_with(|e, s, _| match s {
-				event::Status::Ignored => {
-					Self::arrangement_view_keybinds(&e).or_else(|| Self::base_keybinds(&e))
-				}
-				event::Status::Captured => None,
+			keyboard::on_key_press(|k, m| {
+				Self::arrangement_view_keybinds(&k, m).or_else(|| Self::base_keybinds(&k, m))
 			})
 		};
 
@@ -694,81 +690,64 @@ impl Daw {
 		])
 	}
 
-	fn arrangement_view_keybinds(event: &Event) -> Option<Message> {
-		match event {
-			Event::Keyboard(keyboard::Event::KeyPressed {
-				physical_key: keyboard::key::Physical::Code(code),
-				modifiers,
-				..
-			}) => match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-				(false, false, false) => match code {
-					keyboard::key::Code::F5 => Some(Message::Arrangement(
-						arrangement_view::Message::ChangedTab(Tab::Playlist),
-					)),
-					keyboard::key::Code::F9 => Some(Message::Arrangement(
-						arrangement_view::Message::ChangedTab(Tab::Mixer),
-					)),
-					keyboard::key::Code::Delete | keyboard::key::Code::Backspace => Some(
-						Message::Arrangement(arrangement_view::Message::DeleteSelection),
-					),
-					keyboard::key::Code::Escape => Some(Message::Arrangement(
-						arrangement_view::Message::ClearSelection,
-					)),
-					_ => None,
-				},
-				_ => None,
-			},
-			Event::Mouse(mouse::Event::ButtonReleased {
-				button: mouse::Button::Left,
-				..
-			}) => Some(Message::Arrangement(
-				arrangement_view::Message::LoadHoveredSample,
-			)),
-			_ => None,
-		}
-	}
-
-	fn config_view_keybinds(event: &Event) -> Option<Message> {
-		match event {
-			Event::Keyboard(keyboard::Event::KeyPressed {
-				physical_key: keyboard::key::Physical::Code(code),
-				modifiers,
-				..
-			}) => match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-				(false, false, false) => match code {
-					keyboard::key::Code::Escape => Some(Message::CloseConfigView),
-					_ => None,
-				},
+	fn arrangement_view_keybinds(
+		key: &keyboard::Key,
+		modifiers: keyboard::Modifiers,
+	) -> Option<Message> {
+		match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
+			(false, false, false) => match key.as_ref() {
+				keyboard::Key::Named(keyboard::key::Named::F5) => Some(Message::Arrangement(
+					arrangement_view::Message::ChangedTab(Tab::Playlist),
+				)),
+				keyboard::Key::Named(keyboard::key::Named::F9) => Some(Message::Arrangement(
+					arrangement_view::Message::ChangedTab(Tab::Mixer),
+				)),
+				keyboard::Key::Named(
+					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
+				) => Some(Message::Arrangement(
+					arrangement_view::Message::DeleteSelection,
+				)),
+				keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::Arrangement(
+					arrangement_view::Message::ClearSelection,
+				)),
 				_ => None,
 			},
 			_ => None,
 		}
 	}
 
-	fn base_keybinds(event: &Event) -> Option<Message> {
-		match event {
-			Event::Keyboard(keyboard::Event::KeyPressed {
-				physical_key: keyboard::key::Physical::Code(code),
-				modifiers,
-				..
-			}) => match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-				(false, false, false) => match code {
-					keyboard::key::Code::Space => Some(Message::Arrangement(
-						arrangement_view::Message::TogglePlayback,
-					)),
-					_ => None,
-				},
-				(true, false, false) => match code {
-					keyboard::key::Code::KeyE => Some(Message::ExportFileDialog),
-					keyboard::key::Code::KeyN => Some(Message::NewFile),
-					keyboard::key::Code::KeyO => Some(Message::OpenFileDialog),
-					keyboard::key::Code::KeyS => Some(Message::SaveFile),
-					_ => None,
-				},
-				(true, true, false) => match code {
-					keyboard::key::Code::KeyS => Some(Message::SaveAsFileDialog),
-					_ => None,
-				},
+	fn config_view_keybinds(
+		key: &keyboard::Key,
+		modifiers: keyboard::Modifiers,
+	) -> Option<Message> {
+		match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
+			(false, false, false) => match key.as_ref() {
+				keyboard::Key::Named(keyboard::key::Named::Escape) => {
+					Some(Message::CloseConfigView)
+				}
+				_ => None,
+			},
+			_ => None,
+		}
+	}
+
+	fn base_keybinds(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> Option<Message> {
+		match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
+			(false, false, false) => match key.as_ref() {
+				keyboard::Key::Named(keyboard::key::Named::Space) => Some(Message::Arrangement(
+					arrangement_view::Message::TogglePlayback,
+				)),
+				_ => None,
+			},
+			(true, false, false) => match key.as_ref() {
+				keyboard::Key::Character("e") => Some(Message::ExportFileDialog),
+				keyboard::Key::Character("n") => Some(Message::NewFile),
+				keyboard::Key::Character("o") => Some(Message::OpenFileDialog),
+				keyboard::Key::Character("s") => Some(Message::SaveFile),
+				_ => None,
+			},
+			(true, true, false) => match key.as_ref() {
+				keyboard::Key::Character("s") => Some(Message::SaveAsFileDialog),
 				_ => None,
 			},
 			_ => None,
