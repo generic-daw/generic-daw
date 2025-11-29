@@ -236,16 +236,9 @@ where
 								}
 								(true, false) => {
 									clear = false;
-									let time = maybe_snap_time(
-										get_time(
-											cursor.x,
-											*self.position,
-											*self.scale,
-											self.transport,
-										),
-										*modifiers,
-										|time| time.snap_round(self.scale.x, self.transport),
-									);
+									let time = maybe_snap_time(time, *modifiers, |time| {
+										time.snap_round(self.scale.x, self.transport)
+									});
 									Status::Selecting(idx.0, idx.0, time, time)
 								}
 								(false, true) => {
@@ -253,16 +246,9 @@ where
 									Status::Dragging(idx.0, time)
 								}
 								(true, true) => {
-									let time = maybe_snap_time(
-										get_time(
-											cursor.x,
-											*self.position,
-											*self.scale,
-											self.transport,
-										),
-										*modifiers,
-										|time| time.snap_round(self.scale.x, self.transport),
-									);
+									let time = maybe_snap_time(time, *modifiers, |time| {
+										time.snap_round(self.scale.x, self.transport)
+									});
 									shell.publish((self.f)(Action::SplitAt(time)));
 									Status::DraggingSplit(time)
 								}
