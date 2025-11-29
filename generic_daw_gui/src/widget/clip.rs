@@ -207,10 +207,8 @@ where
 								state.last_click = Some(new_click);
 
 								if new_click.kind() == Kind::Double {
-									if clear {
-										selection.primary.clear();
-										selection.primary.insert(idx);
-									}
+									selection.primary.clear();
+									selection.primary.insert(idx);
 									shell.publish((self.f)(Action::Open));
 									shell.capture_event();
 									return;
