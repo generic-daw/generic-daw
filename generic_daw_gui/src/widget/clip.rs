@@ -363,7 +363,8 @@ where
 			cache.update(Arc::default());
 		}
 
-		let unclipped_height = layout.bounds().height - LINE_HEIGHT;
+		let height = layout.bounds().height - LINE_HEIGHT;
+		let hidden_start_px = layout.position().x - bounds.x;
 		let hidden_top_px = layout.position().y - bounds.y;
 
 		match self.inner {
@@ -374,11 +375,11 @@ where
 							&inner.sample.samples,
 							self.transport,
 							inner.clip.position,
-							self.position.x,
 							self.scale.x,
-							theme,
+							height,
+							theme.extended_palette().background.strong.text,
 							lower_bounds.size(),
-							unclipped_height,
+							hidden_start_px,
 							hidden_top_px,
 						)
 					}) {
@@ -401,7 +402,7 @@ where
 				}
 
 				let samples_per_px = self.scale.x.exp2();
-				let note_height = unclipped_height / f32::from(max - min + 3);
+				let note_height = height / f32::from(max - min + 3);
 				let offset = Vector::new(layout.position().x, layout.position().y + LINE_HEIGHT);
 
 				for note in &inner.pattern.notes {
@@ -458,11 +459,11 @@ where
 							inner.core.samples(),
 							self.transport,
 							clip_position,
-							self.position.x,
 							self.scale.x,
-							theme,
+							height,
+							theme.extended_palette().background.strong.text,
 							lower_bounds.size(),
-							unclipped_height,
+							hidden_start_px,
 							hidden_top_px,
 						)
 					}) {

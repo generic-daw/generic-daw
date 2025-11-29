@@ -1,7 +1,7 @@
 use generic_daw_core::{ClipPosition, Transport};
 use generic_daw_utils::NoDebug;
 use iced::{
-	Point, Rectangle, Size, Theme, Transformation,
+	Color, Point, Rectangle, Size, Transformation,
 	advanced::graphics::{
 		Mesh,
 		color::{self, Packed},
@@ -23,18 +23,18 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 		samples: &[f32],
 		transport: &Transport,
 		clip_position: ClipPosition,
-		x_position: f32,
 		x_scale: f32,
-		theme: &Theme,
+		height: f32,
+		color: Color,
 		clipped_size: Size,
-		unclipped_height: f32,
+		hidden_start_px: f32,
 		hidden_top_px: f32,
 	) -> Option<Mesh> {
 		fn vertices(
 			iter: impl IntoIterator<Item = (f32, f32)>,
-			unclipped_height: f32,
-			px_per_mesh_slice: f32,
+			height: f32,
 			color: Packed,
+			px_per_mesh_slice: f32,
 			jitter_correct: f32,
 			hidden_top_px: f32,
 		) -> Vec<SolidVertex2D> {
@@ -42,8 +42,8 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 			iter.into_iter()
 				.map(|(min, max)| {
 					(
-						min.mul_add(unclipped_height, hidden_top_px),
-						max.mul_add(unclipped_height, hidden_top_px),
+						min.mul_add(height, hidden_top_px),
+						max.mul_add(height, hidden_top_px),
 					)
 				})
 				.map(|(mut min, mut max)| {
@@ -95,7 +95,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 		let end = clip_position.end().to_samples_f(transport);
 		let offset = clip_position.offset().to_samples_f(transport);
 
-		let hidden_start_samples = x_position.mul_add(samples_per_px, -start).max(0.0);
+		let hidden_start_samples = 0f32.max(hidden_start_px * -samples_per_px);
 
 		let lod_start_f = (offset + hidden_start_samples) * lod_slices_per_sample;
 		let view_len_f = (end - start) * lod_slices_per_sample;
@@ -118,7 +118,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 			return None;
 		}
 
-		let color = color::pack(theme.extended_palette().background.strong.text);
+		let color = color::pack(color);
 		let jitter_correct = -(offset / samples_per_mesh_slice).fract() * px_per_mesh_slice;
 		let vertices = saved_lod.checked_sub(1).map_or_else(
 			|| {
@@ -126,9 +126,9 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 					samples[2 * lod_start..2 * lod_end]
 						.chunks(2 * lod_slices_per_mesh_slice)
 						.map(samples_min_max),
-					unclipped_height,
-					px_per_mesh_slice,
+					height,
 					color,
+					px_per_mesh_slice,
 					jitter_correct,
 					hidden_top_px,
 				)
@@ -138,9 +138,9 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 					self.0[saved_lod].as_ref()[lod_start..lod_end]
 						.chunks(lod_slices_per_mesh_slice)
 						.map(lod_min_max),
-					unclipped_height,
-					px_per_mesh_slice,
+					height,
 					color,
+					px_per_mesh_slice,
 					jitter_correct,
 					hidden_top_px,
 				)
