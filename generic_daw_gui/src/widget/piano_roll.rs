@@ -479,16 +479,9 @@ impl<'a, Message> PianoRoll<'a, Message> {
 								}
 								(true, false) => {
 									clear = false;
-									let time = maybe_snap_time(
-										get_time(
-											cursor.x,
-											*self.position,
-											*self.scale,
-											self.transport,
-										),
-										*modifiers,
-										|time| time.snap_round(self.scale.x, self.transport),
-									);
+									let time = maybe_snap_time(time, *modifiers, |time| {
+										time.snap_round(self.scale.x, self.transport)
+									});
 									Status::Selecting(key, key, time, time)
 								}
 								(false, true) => {
@@ -496,16 +489,9 @@ impl<'a, Message> PianoRoll<'a, Message> {
 									Status::Dragging(key, time)
 								}
 								(true, true) => {
-									let time = maybe_snap_time(
-										get_time(
-											cursor.x,
-											*self.position,
-											*self.scale,
-											self.transport,
-										),
-										*modifiers,
-										|time| time.snap_round(self.scale.x, self.transport),
-									);
+									let time = maybe_snap_time(time, *modifiers, |time| {
+										time.snap_round(self.scale.x, self.transport)
+									});
 									shell.publish((self.f)(Action::SplitAt(time)));
 									Status::DraggingSplit(time)
 								}
