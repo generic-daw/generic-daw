@@ -72,7 +72,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
-		Node::new(Size::new(limits.max().width, 128.0 * self.scale.y))
+		Node::new(limits.height(128.0 * self.scale.y).max())
 	}
 
 	fn update(

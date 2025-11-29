@@ -92,7 +92,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
-		Node::new(Size::new(self.width, limits.max().height))
+		Node::new(limits.width(self.width).max())
 	}
 
 	fn update(

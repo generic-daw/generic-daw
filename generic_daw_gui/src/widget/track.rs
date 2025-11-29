@@ -12,7 +12,7 @@ use iced::{
 		widget::{Operation, Tree, tree},
 	},
 };
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 
 #[derive(Default)]
 struct State {
@@ -55,7 +55,7 @@ where
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
 		Node::with_children(
-			Size::new(limits.max().width, self.scale.y),
+			limits.height(self.scale.y).max(),
 			self.clips
 				.iter_mut()
 				.zip(&mut tree.children)
@@ -157,14 +157,17 @@ where
 		viewport: &Rectangle,
 		translation: Vector,
 	) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-		overlay::from_children(
-			&mut self.clips,
-			tree,
-			layout,
-			renderer,
-			viewport,
-			translation,
-		)
+		let children = self
+			.clips
+			.iter_mut()
+			.zip(&mut tree.children)
+			.zip(layout.children())
+			.filter_map(|((child, state), layout)| {
+				child.overlay(state, layout, renderer, viewport, translation)
+			})
+			.collect::<Vec<_>>();
+
+		(!children.is_empty()).then(|| overlay::Group::with_children(children).overlay())
 	}
 
 	fn operate(
@@ -266,14 +269,5 @@ where
 {
 	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
 		*self
-	}
-}
-
-impl<'a, Message> BorrowMut<dyn Widget<Message, Theme, Renderer> + 'a> for Track<'a, Message>
-where
-	Message: Clone + 'a,
-{
-	fn borrow_mut(&mut self) -> &mut (dyn Widget<Message, Theme, Renderer> + 'a) {
-		self
 	}
 }

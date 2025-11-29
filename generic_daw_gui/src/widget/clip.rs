@@ -22,11 +22,7 @@ use iced::{
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 	window,
 };
-use std::{
-	borrow::{Borrow, BorrowMut},
-	cell::RefCell,
-	sync::Arc,
-};
+use std::{borrow::Borrow, cell::RefCell, sync::Arc};
 
 struct State {
 	cache: RefCell<Cache>,
@@ -563,14 +559,5 @@ where
 {
 	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
 		*self
-	}
-}
-
-impl<'a, Message> BorrowMut<dyn Widget<Message, Theme, Renderer> + 'a> for Clip<'a, Message>
-where
-	Message: Clone + 'a,
-{
-	fn borrow_mut(&mut self) -> &mut (dyn Widget<Message, Theme, Renderer> + 'a) {
-		self
 	}
 }

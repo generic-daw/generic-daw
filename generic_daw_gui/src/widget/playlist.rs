@@ -4,10 +4,10 @@ use crate::{
 };
 use generic_daw_core::{MusicalTime, Transport};
 use iced::{
-	Alignment, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+	Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
 		Clipboard, Renderer as _, Shell,
-		layout::{self, Layout, Limits, Node},
+		layout::{Layout, Limits, Node},
 		mouse::{self, Cursor, Interaction},
 		overlay,
 		renderer::{Quad, Style},
@@ -86,17 +86,19 @@ where
 	}
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-		layout::flex::resolve(
-			layout::flex::Axis::Vertical,
-			renderer,
-			limits,
-			Fill,
-			Fill,
-			0.into(),
-			0.0,
-			Alignment::Start,
-			&mut self.tracks,
-			&mut tree.children,
+		let mut offset = 0.0;
+		Node::with_children(
+			limits.max(),
+			self.tracks
+				.iter_mut()
+				.zip(&mut tree.children)
+				.map(|(child, tree)| child.layout(tree, renderer, limits))
+				.map(|node| {
+					let node = node.translate(Vector::new(0.0, offset));
+					offset += node.bounds().height;
+					node
+				})
+				.collect(),
 		)
 	}
 
@@ -385,7 +387,7 @@ where
 				.map(|((child, tree), layout)| {
 					child.mouse_interaction(tree, layout, cursor, viewport, renderer)
 				})
-				.max()
+				.find(|&i| i != Interaction::default())
 				.unwrap_or_default(),
 		}
 	}
@@ -525,14 +527,17 @@ where
 		viewport: &Rectangle,
 		translation: Vector,
 	) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-		overlay::from_children(
-			&mut self.tracks,
-			tree,
-			layout,
-			renderer,
-			viewport,
-			translation,
-		)
+		let children = self
+			.tracks
+			.iter_mut()
+			.zip(&mut tree.children)
+			.zip(layout.children())
+			.filter_map(|((child, state), layout)| {
+				child.overlay(state, layout, renderer, viewport, translation)
+			})
+			.collect::<Vec<_>>();
+
+		(!children.is_empty()).then(|| overlay::Group::with_children(children).overlay())
 	}
 
 	fn operate(
