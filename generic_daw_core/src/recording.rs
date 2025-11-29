@@ -1,6 +1,6 @@
 use crate::{
-	InputRequest, InputResponse, RtState, STREAM_THREAD, Sample, SampleId, StreamMessage,
-	StreamToken, resampler::Resampler,
+	InputRequest, InputResponse, STREAM_THREAD, Sample, SampleId, StreamMessage, StreamToken,
+	Transport, resampler::Resampler,
 };
 use cpal::StreamConfig;
 use generic_daw_utils::NoDebug;
@@ -21,7 +21,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	#[must_use]
 	pub fn create(
 		writer: W,
-		rtstate: &RtState,
+		transport: &Transport,
 		device_name: Option<Arc<str>>,
 		sample_rate: NonZero<u32>,
 		frames: Option<NonZero<u32>>,
@@ -47,7 +47,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 
 		let resampler = Resampler::new(
 			NonZero::new(config.sample_rate.0).unwrap(),
-			rtstate.sample_rate,
+			transport.sample_rate,
 			NonZero::new(2).unwrap(),
 		)
 		.unwrap();
@@ -93,10 +93,10 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		}
 	}
 
-	pub fn split_off(&mut self, writer: W, rtstate: &RtState) -> Sample {
+	pub fn split_off(&mut self, writer: W, transport: &Transport) -> Sample {
 		let mut resampler = Resampler::new(
 			NonZero::new(self.config.sample_rate.0).unwrap(),
-			rtstate.sample_rate,
+			transport.sample_rate,
 			NonZero::new(2).unwrap(),
 		)
 		.unwrap();

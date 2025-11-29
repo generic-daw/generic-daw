@@ -8,7 +8,7 @@ pub struct MidiClip {
 
 impl MidiClip {
 	pub fn collect_notes(&self, state: &State, notes: &mut [u8; 128]) {
-		debug_assert!(state.rtstate.playing);
+		debug_assert!(state.transport.playing);
 
 		state.midi_patterns[*self.pattern]
 			.notes
@@ -20,10 +20,10 @@ impl MidiClip {
 				Some(note)
 			})
 			.for_each(|note| {
-				let start = note.position.start().to_samples(&state.rtstate);
-				let end = note.position.end().to_samples(&state.rtstate);
+				let start = note.position.start().to_samples(&state.transport);
+				let end = note.position.end().to_samples(&state.transport);
 
-				if start < state.rtstate.sample && end >= state.rtstate.sample {
+				if start < state.transport.sample && end >= state.transport.sample {
 					notes[usize::from(note.key.0)] += 1;
 				}
 			});
@@ -36,7 +36,7 @@ impl MidiClip {
 		events: &mut Vec<Event>,
 		notes: &mut [u8; 128],
 	) {
-		debug_assert!(state.rtstate.playing);
+		debug_assert!(state.transport.playing);
 
 		state.midi_patterns[*self.pattern]
 			.notes
@@ -48,10 +48,10 @@ impl MidiClip {
 				Some(note)
 			})
 			.for_each(|note| {
-				let start = note.position.start().to_samples(&state.rtstate);
-				let end = note.position.end().to_samples(&state.rtstate);
+				let start = note.position.start().to_samples(&state.transport);
+				let end = note.position.end().to_samples(&state.transport);
 
-				if let Some(time) = start.checked_sub(state.rtstate.sample)
+				if let Some(time) = start.checked_sub(state.transport.sample)
 					&& time < audio.len()
 				{
 					events.push(Event::On {
@@ -62,7 +62,7 @@ impl MidiClip {
 					notes[usize::from(note.key.0)] += 1;
 				}
 
-				if let Some(time) = end.checked_sub(state.rtstate.sample)
+				if let Some(time) = end.checked_sub(state.transport.sample)
 					&& time < audio.len()
 				{
 					events.push(Event::End {

@@ -32,7 +32,7 @@ pub use automation_pattern::{
 pub use channel::{Channel, PanMode};
 pub use clap_host;
 pub use clip::Clip;
-pub use daw_ctx::{Batch, Message, NodeAction, RtState, Update, Version};
+pub use daw_ctx::{Batch, Message, NodeAction, Transport, Update, Version};
 pub use event::Event;
 pub use export::Export;
 pub use midi_clip::MidiClip;

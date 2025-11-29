@@ -19,10 +19,13 @@ impl AutomationLane {
 		let mut before = None::<&AutomationClip>;
 
 		for clip in &self.clips {
-			let start = clip.position.start().to_samples(&state.rtstate);
-			let end = clip.position.end().to_samples(&state.rtstate);
+			let start = clip.position.start().to_samples(&state.transport);
+			let end = clip.position.end().to_samples(&state.transport);
 
-			match (start <= state.rtstate.sample, end >= state.rtstate.sample) {
+			match (
+				start <= state.transport.sample,
+				end >= state.transport.sample,
+			) {
 				(true, true) => {
 					inside = inside
 						.filter(|inside| inside.position.start() > clip.position.start())

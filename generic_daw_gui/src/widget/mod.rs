@@ -1,4 +1,4 @@
-use generic_daw_core::{MidiKey, MusicalTime, RtState};
+use generic_daw_core::{MidiKey, MusicalTime, Transport};
 use iced::{Vector, keyboard::Modifiers};
 use std::ops::Add;
 
@@ -40,8 +40,8 @@ impl Add<Delta<Self>> for MidiKey {
 	}
 }
 
-fn get_time(x: f32, position: Vector, scale: Vector, rtstate: &RtState) -> MusicalTime {
-	MusicalTime::from_samples_f(((x + position.x) * scale.x.exp2()).max(0.0), rtstate)
+fn get_time(x: f32, position: Vector, scale: Vector, transport: &Transport) -> MusicalTime {
+	MusicalTime::from_samples_f(((x + position.x) * scale.x.exp2()).max(0.0), transport)
 }
 
 fn maybe_snap_time(

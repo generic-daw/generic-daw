@@ -1,4 +1,4 @@
-use crate::{Batch, Message, NodeId, RtState, daw_ctx::DawCtx};
+use crate::{Batch, Message, NodeId, Transport, daw_ctx::DawCtx};
 use cpal::{
 	BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
 	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
@@ -84,7 +84,7 @@ pub struct OutputRequest {
 #[derive(Debug)]
 pub struct OutputResponse {
 	pub master_node_id: NodeId,
-	pub rtstate: RtState,
+	pub transport: Transport,
 	pub producer: Producer<Message>,
 	pub consumer: Consumer<Batch>,
 	pub token: StreamToken,
@@ -191,8 +191,8 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 					let channels = NonZero::new(config.channels.into()).unwrap();
 					let buffer_len = frames.checked_mul(channels).unwrap();
 
-					let rtstate = RtState::new(sample_rate, frames);
-					let (mut ctx, master_node_id, producer, consumer) = DawCtx::create(rtstate);
+					let transport = Transport::new(sample_rate, frames);
+					let (mut ctx, master_node_id, producer, consumer) = DawCtx::create(transport);
 
 					let mut stereo = vec![0.0; 2 * frames.get() as usize].into_boxed_slice();
 
@@ -222,7 +222,7 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 					sender
 						.send(OutputResponse {
 							master_node_id,
-							rtstate,
+							transport,
 							producer,
 							consumer,
 							token,

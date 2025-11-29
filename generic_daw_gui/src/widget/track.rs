@@ -1,5 +1,5 @@
 use crate::widget::{clip::Clip, get_time, maybe_snap_time, playlist::Action};
-use generic_daw_core::RtState;
+use generic_daw_core::Transport;
 use generic_daw_utils::NoDebug;
 use iced::{
 	Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
@@ -22,7 +22,7 @@ struct State {
 #[derive(Debug)]
 pub struct Track<'a, Message> {
 	idx: usize,
-	rtstate: &'a RtState,
+	transport: &'a Transport,
 	position: &'a Vector,
 	scale: &'a Vector,
 	pub(super) clips: NoDebug<Box<[Clip<'a, Message>]>>,
@@ -139,9 +139,9 @@ where
 
 			if new_click.kind() == Kind::Double {
 				let time = maybe_snap_time(
-					get_time(cursor.x, *self.position, *self.scale, self.rtstate),
+					get_time(cursor.x, *self.position, *self.scale, self.transport),
 					*modifiers,
-					|time| time.snap_round(self.scale.x, self.rtstate),
+					|time| time.snap_round(self.scale.x, self.transport),
 				);
 				shell.publish((self.f)(Action::Add(self.idx, time)));
 				shell.capture_event();
@@ -190,7 +190,7 @@ where
 impl<'a, Message> Track<'a, Message> {
 	pub fn new(
 		idx: usize,
-		rtstate: &'a RtState,
+		transport: &'a Transport,
 		position: &'a Vector,
 		scale: &'a Vector,
 		children: impl IntoIterator<Item = Clip<'a, Message>>,
@@ -201,7 +201,7 @@ impl<'a, Message> Track<'a, Message> {
 	{
 		Self {
 			idx,
-			rtstate,
+			transport,
 			position,
 			scale,
 			clips: children.into_iter().collect::<Box<_>>().into(),

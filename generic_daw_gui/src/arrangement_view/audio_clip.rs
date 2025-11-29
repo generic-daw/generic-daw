@@ -1,5 +1,5 @@
 use crate::arrangement_view::sample::Sample;
-use generic_daw_core::{ClipPosition, MusicalTime, NotePosition, RtState, SampleId};
+use generic_daw_core::{ClipPosition, MusicalTime, NotePosition, SampleId, Transport};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AudioClip {
@@ -8,13 +8,13 @@ pub struct AudioClip {
 }
 
 impl AudioClip {
-	pub fn new(sample: SampleId, len: usize, rtstate: &RtState) -> Self {
+	pub fn new(sample: SampleId, len: usize, transport: &Transport) -> Self {
 		Self {
 			sample,
 			position: ClipPosition::new(
 				NotePosition::new(
 					MusicalTime::ZERO,
-					MusicalTime::from_samples(len, rtstate).max(MusicalTime::TICK),
+					MusicalTime::from_samples(len, transport).max(MusicalTime::TICK),
 				),
 				MusicalTime::ZERO,
 			),

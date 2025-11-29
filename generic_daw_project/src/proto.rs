@@ -28,7 +28,7 @@ pub struct ChannelIndex {
 #[derive(Message)]
 pub struct Project {
 	#[prost(message, required)]
-	pub rtstate: RtState,
+	pub transport: Transport,
 	#[prost(message, repeated)]
 	pub samples: Vec<Sample>,
 	#[prost(message, repeated)]
@@ -40,7 +40,7 @@ pub struct Project {
 }
 
 #[derive(Clone, Copy, Message)]
-pub struct RtState {
+pub struct Transport {
 	#[prost(uint32)]
 	pub bpm: u32,
 	#[prost(uint32)]

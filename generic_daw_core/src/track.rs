@@ -27,12 +27,13 @@ impl NodeImpl for Track {
 		if self.channel.enabled() {
 			self.diff_notes(state, audio, events);
 
-			if state.rtstate.playing {
+			if state.transport.playing {
 				for clip in &mut self.clips {
-					let start = clip.position().start().to_samples(&state.rtstate);
-					let end = clip.position().end().to_samples(&state.rtstate);
+					let start = clip.position().start().to_samples(&state.transport);
+					let end = clip.position().end().to_samples(&state.transport);
 
-					if start < state.rtstate.sample + audio.len() && end >= state.rtstate.sample {
+					if start < state.transport.sample + audio.len() && end >= state.transport.sample
+					{
 						clip.process(state, audio, events, &mut self.notes);
 					}
 				}
@@ -76,12 +77,12 @@ impl Track {
 	pub fn diff_notes(&mut self, state: &State, audio: &[f32], events: &mut Vec<Event>) {
 		let mut notes = [0; 128];
 
-		if state.rtstate.playing {
+		if state.transport.playing {
 			for clip in &mut self.clips {
-				let start = clip.position().start().to_samples(&state.rtstate);
-				let end = clip.position().end().to_samples(&state.rtstate);
+				let start = clip.position().start().to_samples(&state.transport);
+				let end = clip.position().end().to_samples(&state.transport);
 
-				if start < state.rtstate.sample + audio.len() && end >= state.rtstate.sample {
+				if start < state.transport.sample + audio.len() && end >= state.transport.sample {
 					clip.collect_notes(state, &mut notes);
 				}
 			}

@@ -1,5 +1,5 @@
 use crate::widget::{LINE_HEIGHT, get_time, maybe_snap_time};
-use generic_daw_core::{MusicalTime, NotePosition, RtState};
+use generic_daw_core::{MusicalTime, NotePosition, Transport};
 use generic_daw_utils::NoDebug;
 use iced::{
 	Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -35,7 +35,7 @@ struct State {
 
 #[derive(Debug)]
 pub struct Seeker<'a, Message> {
-	rtstate: &'a RtState,
+	transport: &'a Transport,
 	position: &'a Vector,
 	scale: &'a Vector,
 	offset: f32,
@@ -146,9 +146,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
 				let time = maybe_snap_time(
-					get_time(cursor.x, *self.position, *self.scale, self.rtstate),
+					get_time(cursor.x, *self.position, *self.scale, self.transport),
 					*modifiers,
-					|time| time.snap_round(self.scale.x, self.rtstate),
+					|time| time.snap_round(self.scale.x, self.transport),
 				);
 
 				match state.status {
@@ -166,7 +166,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 							NotePosition::new(start, end)
 						});
 
-						if self.rtstate.loop_marker != loop_marker {
+						if self.transport.loop_marker != loop_marker {
 							shell.publish((self.set_loop_marker)(loop_marker));
 							shell.capture_event();
 						}
@@ -185,12 +185,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				modifiers,
 			}) if state.status == Status::Hovering => {
 				let time = maybe_snap_time(
-					get_time(cursor.x, *self.position, *self.scale, self.rtstate),
+					get_time(cursor.x, *self.position, *self.scale, self.transport),
 					*modifiers,
-					|time| time.snap_round(self.scale.x, self.rtstate),
+					|time| time.snap_round(self.scale.x, self.transport),
 				);
 				state.status = if modifiers.command() {
-					if let Some(loop_marker) = self.rtstate.loop_marker {
+					if let Some(loop_marker) = self.transport.loop_marker {
 						if time == loop_marker.start() {
 							Status::DraggingLoop(loop_marker.end())
 						} else if time == loop_marker.end() {
@@ -361,7 +361,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
 impl<'a, Message> Seeker<'a, Message> {
 	pub fn new(
-		rtstate: &'a RtState,
+		transport: &'a Transport,
 		position: &'a Vector,
 		scale: &'a Vector,
 		left: impl Into<Element<'a, Message>>,
@@ -372,7 +372,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		zoom: fn(Vector, Point, Size) -> Message,
 	) -> Self {
 		Self {
-			rtstate,
+			transport,
 			position,
 			scale,
 			offset: 0.0,
@@ -402,20 +402,21 @@ impl<'a, Message> Seeker<'a, Message> {
 	fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
 		let samples_per_px = self.scale.x.exp2();
 
-		let mut beat = MusicalTime::from_samples_f(self.position.x * samples_per_px, self.rtstate);
+		let mut beat =
+			MusicalTime::from_samples_f(self.position.x * samples_per_px, self.transport);
 		let end_beat =
-			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.rtstate);
-		beat = beat.snap_floor(self.scale.x + 1.0, self.rtstate);
+			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.transport);
+		beat = beat.snap_floor(self.scale.x + 1.0, self.transport);
 
-		let background_step = MusicalTime::new(4 * u64::from(self.rtstate.numerator.get()), 0);
+		let background_step = MusicalTime::new(4 * u64::from(self.transport.numerator.get()), 0);
 		let mut background_beat =
 			MusicalTime::new(beat.beat() - (beat.beat() % background_step.beat()), 0);
-		let background_width = background_step.to_samples_f(self.rtstate) / samples_per_px;
+		let background_width = background_step.to_samples_f(self.transport) / samples_per_px;
 
 		while background_beat < end_beat {
-			if background_beat.bar(self.rtstate).is_multiple_of(8) {
+			if background_beat.bar(self.transport).is_multiple_of(8) {
 				let x =
-					background_beat.to_samples_f(self.rtstate) / samples_per_px - self.position.x;
+					background_beat.to_samples_f(self.transport) / samples_per_px - self.position.x;
 
 				renderer.fill_quad(
 					Quad {
@@ -432,13 +433,13 @@ impl<'a, Message> Seeker<'a, Message> {
 			background_beat += background_step;
 		}
 
-		let snap_step = MusicalTime::snap_step(self.scale.x + 1.0, self.rtstate);
+		let snap_step = MusicalTime::snap_step(self.scale.x + 1.0, self.transport);
 
 		while beat <= end_beat {
 			let color = if snap_step >= MusicalTime::BEAT {
 				if beat
 					.beat()
-					.is_multiple_of(snap_step.beat() * u64::from(self.rtstate.numerator.get()))
+					.is_multiple_of(snap_step.beat() * u64::from(self.transport.numerator.get()))
 				{
 					theme.extended_palette().background.strong.color
 				} else {
@@ -450,7 +451,7 @@ impl<'a, Message> Seeker<'a, Message> {
 				theme.extended_palette().background.weak.color
 			};
 
-			let x = beat.to_samples_f(self.rtstate) / samples_per_px - self.position.x;
+			let x = beat.to_samples_f(self.transport) / samples_per_px - self.position.x;
 
 			renderer.fill_quad(
 				Quad {
@@ -482,7 +483,7 @@ impl<'a, Message> Seeker<'a, Message> {
 				bounds: Rectangle::new(bounds.position(), Size::new(bounds.width, LINE_HEIGHT)),
 				..Quad::default()
 			},
-			if self.rtstate.loop_marker.is_some() {
+			if self.transport.loop_marker.is_some() {
 				theme.extended_palette().secondary.base.color
 			} else {
 				theme.extended_palette().primary.base.color
@@ -495,9 +496,9 @@ impl<'a, Message> Seeker<'a, Message> {
 			bounds.position()
 				+ Vector::new(time / samples_per_px - self.position.x - self.offset, 0.0)
 		};
-		let offset_time = |time: MusicalTime| offset_pos(time.to_samples_f(self.rtstate));
+		let offset_time = |time: MusicalTime| offset_pos(time.to_samples_f(self.transport));
 
-		if let Some(loop_marker) = self.rtstate.loop_marker {
+		if let Some(loop_marker) = self.transport.loop_marker {
 			let start = offset_time(loop_marker.start());
 			let end = offset_time(loop_marker.end());
 
@@ -564,7 +565,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		renderer.fill_quad(
 			Quad {
 				bounds: Rectangle::new(
-					offset_pos(self.rtstate.sample as f32),
+					offset_pos(self.transport.sample as f32),
 					Size::new(1.5, bounds.height),
 				),
 				..Quad::default()
@@ -593,22 +594,23 @@ impl<'a, Message> Seeker<'a, Message> {
 			);
 		};
 
-		let mut beat = MusicalTime::from_samples_f(self.position.x * samples_per_px, self.rtstate);
+		let mut beat =
+			MusicalTime::from_samples_f(self.position.x * samples_per_px, self.transport);
 		let mut end_beat =
-			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.rtstate);
-		beat = beat.snap_floor(self.scale.x + 3.0, self.rtstate).floor();
-		end_beat = end_beat.snap_floor(self.scale.x + 3.0, self.rtstate);
+			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.transport);
+		beat = beat.snap_floor(self.scale.x + 3.0, self.transport).floor();
+		end_beat = end_beat.snap_floor(self.scale.x + 3.0, self.transport);
 
-		let bar_inc = MusicalTime::snap_step(self.scale.x + 3.0, self.rtstate)
-			.bar(self.rtstate)
+		let bar_inc = MusicalTime::snap_step(self.scale.x + 3.0, self.transport)
+			.bar(self.transport)
 			.max(1);
 
 		while beat <= end_beat {
-			let bar = beat.bar(self.rtstate);
+			let bar = beat.bar(self.transport);
 
 			if beat
 				.beat()
-				.is_multiple_of(self.rtstate.numerator.get().into())
+				.is_multiple_of(self.transport.numerator.get().into())
 				&& bar.is_multiple_of(bar_inc)
 			{
 				draw_text(beat, bar);

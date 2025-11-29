@@ -5,7 +5,7 @@ use crate::{
 		playlist::{Action, Selection, Status},
 	},
 };
-use generic_daw_core::{ClipPosition, MusicalTime, NotePosition, RtState};
+use generic_daw_core::{ClipPosition, MusicalTime, NotePosition, Transport};
 use iced::{
 	Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
@@ -66,7 +66,7 @@ impl<'a> From<&'a RecordingWrapper> for Inner<'a> {
 pub struct Clip<'a, Message> {
 	pub(super) inner: Inner<'a>,
 	selection: &'a RefCell<Selection>,
-	rtstate: &'a RtState,
+	transport: &'a Transport,
 	position: &'a Vector,
 	scale: &'a Vector,
 	enabled: bool,
@@ -112,17 +112,17 @@ where
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
 		let (start, len) = match self.inner {
 			Inner::AudioClip(inner) => {
-				let start = inner.clip.position.start().to_samples_f(self.rtstate);
-				let end = inner.clip.position.end().to_samples_f(self.rtstate);
+				let start = inner.clip.position.start().to_samples_f(self.transport);
+				let end = inner.clip.position.end().to_samples_f(self.transport);
 				(start, end - start)
 			}
 			Inner::MidiClip(inner) => {
-				let start = inner.clip.position.start().to_samples_f(self.rtstate);
-				let end = inner.clip.position.end().to_samples_f(self.rtstate);
+				let start = inner.clip.position.start().to_samples_f(self.transport);
+				let end = inner.clip.position.end().to_samples_f(self.transport);
 				(start, end - start)
 			}
 			Inner::Recording(inner) => {
-				let start = inner.position.to_samples_f(self.rtstate);
+				let start = inner.position.to_samples_f(self.transport);
 				let len = inner.core.samples().len() as f32;
 				(start, len)
 			}
@@ -203,7 +203,7 @@ where
 							}
 
 							let time =
-								get_time(cursor.x, *self.position, *self.scale, self.rtstate);
+								get_time(cursor.x, *self.position, *self.scale, self.transport);
 
 							selection.status = match (modifiers.command(), modifiers.shift()) {
 								(false, false) => {
@@ -226,10 +226,10 @@ where
 											cursor.x,
 											*self.position,
 											*self.scale,
-											self.rtstate,
+											self.transport,
 										),
 										*modifiers,
-										|time| time.snap_round(self.scale.x, self.rtstate),
+										|time| time.snap_round(self.scale.x, self.transport),
 									);
 									Status::Selecting(idx.0, idx.0, time, time)
 								}
@@ -243,10 +243,10 @@ where
 											cursor.x,
 											*self.position,
 											*self.scale,
-											self.rtstate,
+											self.transport,
 										),
 										*modifiers,
-										|time| time.snap_round(self.scale.x, self.rtstate),
+										|time| time.snap_round(self.scale.x, self.transport),
 									);
 									shell.publish((self.f)(Action::SplitAt(time)));
 									Status::DraggingSplit(time)
@@ -376,7 +376,7 @@ where
 				*cache = debug::time_with("Waveform Mesh", || {
 					inner.sample.lods.mesh(
 						&inner.sample.samples,
-						self.rtstate,
+						self.transport,
 						inner.clip.position,
 						self.position.x,
 						self.scale.x,
@@ -411,13 +411,13 @@ where
 						.position
 						.start()
 						.saturating_sub(inner.clip.position.offset())
-						.to_samples_f(self.rtstate))
+						.to_samples_f(self.transport))
 						/ samples_per_px;
 					let end_pixel = (note
 						.position
 						.end()
 						.saturating_sub(inner.clip.position.offset())
-						.to_samples_f(self.rtstate))
+						.to_samples_f(self.transport))
 						/ samples_per_px;
 
 					let top_pixel = f32::from(max - note.key.0 + 1) * note_height;
@@ -449,7 +449,7 @@ where
 					NotePosition::new(
 						inner.position,
 						inner.position
-							+ MusicalTime::from_samples(inner.core.samples().len(), self.rtstate)
+							+ MusicalTime::from_samples(inner.core.samples().len(), self.transport)
 								.max(MusicalTime::TICK),
 					),
 					MusicalTime::ZERO,
@@ -458,7 +458,7 @@ where
 				*cache = debug::time_with("Waveform Mesh", || {
 					inner.lods.mesh(
 						inner.core.samples(),
-						self.rtstate,
+						self.transport,
 						clip_position,
 						self.position.x,
 						self.scale.x,
@@ -512,7 +512,7 @@ impl<'a, Message> Clip<'a, Message> {
 	pub fn new(
 		inner: impl Into<Inner<'a>>,
 		selection: &'a RefCell<Selection>,
-		rtstate: &'a RtState,
+		transport: &'a Transport,
 		position: &'a Vector,
 		scale: &'a Vector,
 		enabled: bool,
@@ -521,7 +521,7 @@ impl<'a, Message> Clip<'a, Message> {
 		Self {
 			inner: inner.into(),
 			selection,
-			rtstate,
+			transport,
 			position,
 			scale,
 			enabled,

@@ -191,7 +191,7 @@ impl ArrangementView {
 		let mut plugins = plugin_bundles.keys().cloned().collect::<Vec<_>>();
 		plugins.sort_unstable();
 
-		let playlist_scale_x = (arrangement.rtstate().sample_rate.get() as f32).log2() - 5.0;
+		let playlist_scale_x = (arrangement.transport().sample_rate.get() as f32).log2() - 5.0;
 		let piano_roll_scale_x = playlist_scale_x - 2.0;
 
 		(
@@ -242,8 +242,8 @@ impl ArrangementView {
 				);
 			}
 			Message::SetArrangement(NoClone(arrangement)) => {
-				let pos_fact = arrangement.rtstate().sample_rate.get() as f32
-					/ self.arrangement.rtstate().sample_rate.get() as f32;
+				let pos_fact = arrangement.transport().sample_rate.get() as f32
+					/ self.arrangement.transport().sample_rate.get() as f32;
 				let scale_diff = pos_fact.log2();
 				self.playlist_position.x *= pos_fact;
 				self.playlist_scale.x += scale_diff;
@@ -326,8 +326,8 @@ impl ArrangementView {
 				let (audio_processor, plugin, receiver) = Plugin::new(
 					&plugin_bundles[&descriptor],
 					descriptor,
-					self.arrangement.rtstate().sample_rate,
-					self.arrangement.rtstate().frames,
+					self.arrangement.transport().sample_rate,
+					self.arrangement.transport().frames,
 					&HOST,
 				);
 				let id = plugin.plugin_id();
@@ -390,7 +390,7 @@ impl ArrangementView {
 						)
 					} else {
 						self.loading += 1;
-						let sample_rate = self.arrangement.rtstate().sample_rate;
+						let sample_rate = self.arrangement.transport().sample_rate;
 						Task::future(unblock(move || {
 							Message::SampleLoaded(
 								NoClone(SamplePair::new(path, sample_rate).map(Box::new)),
@@ -419,7 +419,7 @@ impl ArrangementView {
 				let mut audio = AudioClip::new(
 					sample,
 					self.arrangement.samples()[*sample].samples.len(),
-					self.arrangement.rtstate(),
+					self.arrangement.transport(),
 				);
 				audio.position.move_to(pos);
 				self.arrangement.add_clip(track, audio);
@@ -506,7 +506,8 @@ impl ArrangementView {
 
 					let pos = recording.position;
 
-					let sample = recording.split_off(recording_path(), self.arrangement.rtstate());
+					let sample =
+						recording.split_off(recording_path(), self.arrangement.transport());
 					let id = sample.gui.id;
 					self.arrangement.add_sample(sample);
 
@@ -515,7 +516,7 @@ impl ArrangementView {
 					let mut clip = AudioClip::new(
 						id,
 						self.arrangement.samples()[*id].samples.len(),
-						self.arrangement.rtstate(),
+						self.arrangement.transport(),
 					);
 					clip.position.move_to(pos);
 					self.arrangement.add_clip(track, clip);
@@ -524,7 +525,7 @@ impl ArrangementView {
 				} else {
 					let (recording, task) = Recording::create(
 						recording_path(),
-						self.arrangement.rtstate(),
+						self.arrangement.transport(),
 						config.input_device.name.clone(),
 						config.input_device.sample_rate,
 						config.input_device.buffer_size,
@@ -561,7 +562,7 @@ impl ArrangementView {
 					let mut clip = AudioClip::new(
 						id,
 						self.arrangement.samples()[*id].samples.len(),
-						self.arrangement.rtstate(),
+						self.arrangement.transport(),
 					);
 					clip.position.move_to(pos);
 					self.arrangement.add_clip(track, clip);
@@ -674,7 +675,7 @@ impl ArrangementView {
 
 				let mut clip = MidiClip::new(id);
 				clip.position.trim_end_to(
-					MusicalTime::BEAT * 4 * u64::from(self.arrangement.rtstate().numerator.get()),
+					MusicalTime::BEAT * 4 * u64::from(self.arrangement.transport().numerator.get()),
 				);
 				clip.position.move_to(pos);
 				let clip = self.arrangement.add_clip(track, clip);
@@ -967,7 +968,7 @@ impl ArrangementView {
 
 	fn arrangement(&self) -> Element<'_, Message> {
 		Seeker::new(
-			self.arrangement.rtstate(),
+			self.arrangement.transport(),
 			&self.playlist_position,
 			&self.playlist_scale,
 			column(
@@ -1062,7 +1063,7 @@ impl ArrangementView {
 			.align_x(Center),
 			Playlist::new(
 				&self.playlist_selection,
-				self.arrangement.rtstate(),
+				self.arrangement.transport(),
 				&self.playlist_position,
 				&self.playlist_scale,
 				self.arrangement
@@ -1074,7 +1075,7 @@ impl ArrangementView {
 
 						Track::new(
 							track_idx,
-							self.arrangement.rtstate(),
+							self.arrangement.transport(),
 							&self.playlist_position,
 							&self.playlist_scale,
 							track
@@ -1089,7 +1090,7 @@ impl ArrangementView {
 											idx: (track_idx, clip_idx),
 										},
 										&self.playlist_selection,
-										self.arrangement.rtstate(),
+										self.arrangement.transport(),
 										&self.playlist_position,
 										&self.playlist_scale,
 										node.enabled,
@@ -1103,7 +1104,7 @@ impl ArrangementView {
 											idx: (track_idx, clip_idx),
 										},
 										&self.playlist_selection,
-										self.arrangement.rtstate(),
+										self.arrangement.transport(),
 										&self.playlist_position,
 										&self.playlist_scale,
 										node.enabled,
@@ -1118,7 +1119,7 @@ impl ArrangementView {
 											Clip::new(
 												recording,
 												&self.playlist_selection,
-												self.arrangement.rtstate(),
+												self.arrangement.transport(),
 												&self.playlist_position,
 												&self.playlist_scale,
 												node.enabled,
@@ -1409,14 +1410,14 @@ impl ArrangementView {
 
 	fn piano_roll(&self, clip: MidiClip) -> Element<'_, Message> {
 		Seeker::new(
-			self.arrangement.rtstate(),
+			self.arrangement.transport(),
 			&self.piano_roll_position,
 			&self.piano_roll_scale,
 			Piano::new(&self.piano_roll_position, &self.piano_roll_scale),
 			PianoRoll::new(
 				&self.piano_roll_selection,
 				&self.arrangement.midi_patterns()[*clip.pattern].notes,
-				self.arrangement.rtstate(),
+				self.arrangement.transport(),
 				&self.piano_roll_position,
 				&self.piano_roll_scale,
 				Message::PianoRollAction,
@@ -1429,11 +1430,11 @@ impl ArrangementView {
 		.with_offset(
 			clip.position
 				.start()
-				.to_samples_f(self.arrangement.rtstate())
+				.to_samples_f(self.arrangement.transport())
 				- clip
 					.position
 					.offset()
-					.to_samples_f(self.arrangement.rtstate()),
+					.to_samples_f(self.arrangement.transport()),
 		)
 		.into()
 	}

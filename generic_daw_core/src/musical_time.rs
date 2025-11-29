@@ -1,4 +1,4 @@
-use crate::RtState;
+use crate::Transport;
 use std::{
 	fmt::{Debug, Formatter},
 	ops::{Add, AddAssign, Mul, Sub, SubAssign},
@@ -39,8 +39,8 @@ impl MusicalTime {
 	}
 
 	#[must_use]
-	pub const fn bar(self, rtstate: &RtState) -> u64 {
-		self.beat() / rtstate.numerator.get() as u64
+	pub const fn bar(self, transport: &Transport) -> u64 {
+		self.beat() / transport.numerator.get() as u64
 	}
 
 	#[must_use]
@@ -49,8 +49,8 @@ impl MusicalTime {
 	}
 
 	#[must_use]
-	pub const fn beat_in_bar(self, rtstate: &RtState) -> u64 {
-		self.beat() % rtstate.numerator.get() as u64
+	pub const fn beat_in_bar(self, transport: &Transport) -> u64 {
+		self.beat() % transport.numerator.get() as u64
 	}
 
 	#[must_use]
@@ -82,10 +82,10 @@ impl MusicalTime {
 	}
 
 	#[must_use]
-	pub const fn from_samples_f(samples: f32, rtstate: &RtState) -> Self {
+	pub const fn from_samples_f(samples: f32, transport: &Transport) -> Self {
 		let samples = samples as f64;
-		let bpm = rtstate.bpm.get() as f64;
-		let sample_rate = rtstate.sample_rate.get() as f64;
+		let bpm = transport.bpm.get() as f64;
+		let sample_rate = transport.sample_rate.get() as f64;
 
 		let time = (samples * bpm * (Self::TICKS_PER_BEAT / 2) as f64) / (sample_rate * 60.0);
 
@@ -93,12 +93,12 @@ impl MusicalTime {
 	}
 
 	#[must_use]
-	pub const fn from_samples(samples: usize, rtstate: &RtState) -> Self {
+	pub const fn from_samples(samples: usize, transport: &Transport) -> Self {
 		debug_assert!(samples.is_multiple_of(2));
 
 		let samples = samples as u64;
-		let bpm = rtstate.bpm.get() as u64;
-		let sample_rate = rtstate.sample_rate.get() as u64;
+		let bpm = transport.bpm.get() as u64;
+		let sample_rate = transport.sample_rate.get() as u64;
 
 		let time = (samples * bpm * (Self::TICKS_PER_BEAT / 2)) / (sample_rate * 60);
 
@@ -106,10 +106,10 @@ impl MusicalTime {
 	}
 
 	#[must_use]
-	pub const fn to_samples_f(self, rtstate: &RtState) -> f32 {
+	pub const fn to_samples_f(self, transport: &Transport) -> f32 {
 		let beat = self.0 as f64;
-		let bpm = rtstate.bpm.get() as f64;
-		let sample_rate = rtstate.sample_rate.get() as f64;
+		let bpm = transport.bpm.get() as f64;
+		let sample_rate = transport.sample_rate.get() as f64;
 
 		let samples = (beat * sample_rate * 60.0) / (bpm * (Self::TICKS_PER_BEAT / 2) as f64);
 
@@ -117,10 +117,10 @@ impl MusicalTime {
 	}
 
 	#[must_use]
-	pub const fn to_samples(self, rtstate: &RtState) -> usize {
+	pub const fn to_samples(self, transport: &Transport) -> usize {
 		let time = self.0;
-		let bpm = rtstate.bpm.get() as u64;
-		let sample_rate = rtstate.sample_rate.get() as u64;
+		let bpm = transport.bpm.get() as u64;
+		let sample_rate = transport.sample_rate.get() as u64;
 
 		let samples = (time * sample_rate * 60) / (bpm * (Self::TICKS_PER_BEAT / 2));
 
@@ -128,22 +128,22 @@ impl MusicalTime {
 	}
 
 	#[must_use]
-	pub fn snap_floor(mut self, scale: f32, rtstate: &RtState) -> Self {
-		let snap_step = Self::snap_step(scale, rtstate).0;
+	pub fn snap_floor(mut self, scale: f32, transport: &Transport) -> Self {
+		let snap_step = Self::snap_step(scale, transport).0;
 		self.0 -= self.0 % snap_step;
 		self
 	}
 
 	#[must_use]
-	pub fn snap_ceil(mut self, scale: f32, rtstate: &RtState) -> Self {
-		let snap_step = Self::snap_step(scale, rtstate).0;
+	pub fn snap_ceil(mut self, scale: f32, transport: &Transport) -> Self {
+		let snap_step = Self::snap_step(scale, transport).0;
 		self.0 += snap_step - (self.0 % snap_step);
 		self
 	}
 
 	#[must_use]
-	pub fn snap_round(mut self, scale: f32, rtstate: &RtState) -> Self {
-		let modulo = Self::snap_step(scale, rtstate).0;
+	pub fn snap_round(mut self, scale: f32, transport: &Transport) -> Self {
+		let modulo = Self::snap_step(scale, transport).0;
 		let diff = self.0 % modulo;
 		if diff < modulo / 2 {
 			self.0 -= diff;
@@ -154,16 +154,16 @@ impl MusicalTime {
 	}
 
 	#[must_use]
-	pub fn snap_step(mut scale: f32, rtstate: &RtState) -> Self {
-		scale += (f32::from(rtstate.bpm.get()) / rtstate.sample_rate.get() as f32).log2() - 3.0
+	pub fn snap_step(mut scale: f32, transport: &Transport) -> Self {
+		scale += (f32::from(transport.bpm.get()) / transport.sample_rate.get() as f32).log2() - 3.0
 			+ f32::from(Self::TICK_BITS);
-		let extra = f32::from(rtstate.numerator.get()).log2();
+		let extra = f32::from(transport.numerator.get()).log2();
 		Self(if scale < f32::from(Self::TICK_BITS + 1) {
 			1 << scale as u8
 		} else if scale < f32::from(Self::TICK_BITS + 1) + extra {
-			u64::from(rtstate.numerator.get()) << Self::TICK_BITS
+			u64::from(transport.numerator.get()) << Self::TICK_BITS
 		} else {
-			u64::from(rtstate.numerator.get()) << (scale - extra) as u8
+			u64::from(transport.numerator.get()) << (scale - extra) as u8
 		})
 	}
 

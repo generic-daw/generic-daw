@@ -14,8 +14,8 @@ impl Reader {
 	}
 
 	#[must_use]
-	pub fn rtstate(&self) -> proto::RtState {
-		self.0.rtstate
+	pub fn transport(&self) -> proto::Transport {
+		self.0.transport
 	}
 
 	pub fn iter_samples(&self) -> impl Iterator<Item = (proto::SampleIndex, &proto::Sample)> {

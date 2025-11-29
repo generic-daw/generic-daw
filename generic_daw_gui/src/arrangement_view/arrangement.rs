@@ -17,7 +17,7 @@ use bit_set::BitSet;
 use generic_daw_core::{
 	self as core, AudioGraphNode, Batch, Event, Export, Message, MidiKey, MidiNote,
 	MidiPatternAction, MidiPatternId, MusicalTime, NodeAction, NodeId, NodeImpl, NotePosition,
-	OutputRequest, OutputResponse, PanMode, RtState, STREAM_THREAD, StreamMessage, StreamToken,
+	OutputRequest, OutputResponse, PanMode, STREAM_THREAD, StreamMessage, StreamToken, Transport,
 	Update, Version,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
@@ -29,7 +29,7 @@ use std::{num::NonZero, path::Path, sync::Arc};
 
 #[derive(Debug)]
 pub struct Arrangement {
-	rtstate: RtState,
+	transport: Transport,
 
 	samples: HoleyVec<Sample>,
 	midi_patterns: HoleyVec<MidiPattern>,
@@ -60,7 +60,7 @@ impl Arrangement {
 
 		let OutputResponse {
 			master_node_id,
-			rtstate,
+			transport,
 			producer,
 			consumer,
 			token,
@@ -77,7 +77,7 @@ impl Arrangement {
 
 		(
 			Self {
-				rtstate,
+				transport,
 
 				samples: HoleyVec::default(),
 				midi_patterns: HoleyVec::default(),
@@ -89,18 +89,18 @@ impl Arrangement {
 				producer,
 				stream: token.into(),
 			},
-			poll_consumer(consumer, rtstate.sample_rate, Some(rtstate.frames)),
+			poll_consumer(consumer, transport.sample_rate, Some(transport.frames)),
 		)
 	}
 
 	pub fn update(&mut self, mut batch: Batch) -> Vec<ArrangementMessage> {
 		let mut messages = Vec::new();
 
-		if batch.epoch == self.rtstate.epoch {
+		if batch.epoch == self.transport.epoch {
 			if let Some((sample, looped)) = batch.sample
 				&& batch.version.is_last()
 			{
-				self.rtstate.sample = sample;
+				self.transport.sample = sample;
 				if looped {
 					messages.push(ArrangementMessage::RecordingEndStream);
 				}
@@ -128,8 +128,8 @@ impl Arrangement {
 		messages
 	}
 
-	pub fn rtstate(&self) -> &RtState {
-		&self.rtstate
+	pub fn transport(&self) -> &Transport {
+		&self.transport
 	}
 
 	pub fn samples(&self) -> &HoleyVec<Sample> {
@@ -203,55 +203,55 @@ impl Arrangement {
 	}
 
 	pub fn set_loop_marker(&mut self, loop_marker: Option<NotePosition>) {
-		if self.rtstate.loop_marker != loop_marker {
-			self.rtstate.loop_marker = loop_marker;
+		if self.transport.loop_marker != loop_marker {
+			self.transport.loop_marker = loop_marker;
 			self.send(Message::LoopMarker(loop_marker));
 		}
 	}
 
 	pub fn seek_to(&mut self, position: MusicalTime) {
-		let sample = position.to_samples(&self.rtstate);
-		if self.rtstate.sample != sample {
-			self.rtstate.sample = sample;
+		let sample = position.to_samples(&self.transport);
+		if self.transport.sample != sample {
+			self.transport.sample = sample;
 			self.send(Message::Sample(Version::unique(), sample));
 		}
 	}
 
 	pub fn set_bpm(&mut self, bpm: NonZero<u16>) {
-		if self.rtstate.bpm != bpm {
-			self.rtstate.bpm = bpm;
+		if self.transport.bpm != bpm {
+			self.transport.bpm = bpm;
 			self.send(Message::Bpm(bpm));
 		}
 	}
 
 	pub fn set_numerator(&mut self, numerator: NonZero<u8>) {
-		if self.rtstate.numerator != numerator {
-			self.rtstate.numerator = numerator;
+		if self.transport.numerator != numerator {
+			self.transport.numerator = numerator;
 			self.send(Message::Numerator(numerator));
 		}
 	}
 
 	pub fn play(&mut self) {
-		if !self.rtstate.playing {
+		if !self.transport.playing {
 			self.toggle_playback();
 		}
 	}
 
 	pub fn pause(&mut self) {
-		if self.rtstate.playing {
+		if self.transport.playing {
 			self.toggle_playback();
 		}
 	}
 
 	pub fn toggle_playback(&mut self) {
-		self.rtstate.playing ^= true;
+		self.transport.playing ^= true;
 		self.send(Message::TogglePlayback);
 	}
 
 	pub fn stop(&mut self) {
 		self.pause();
 		self.seek_to(
-			self.rtstate
+			self.transport
 				.loop_marker
 				.map_or(MusicalTime::ZERO, NotePosition::start),
 		);
@@ -259,7 +259,7 @@ impl Arrangement {
 	}
 
 	pub fn toggle_metronome(&mut self) {
-		self.rtstate.metronome ^= true;
+		self.transport.metronome ^= true;
 		self.send(Message::ToggleMetronome);
 	}
 

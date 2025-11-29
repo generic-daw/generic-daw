@@ -1,6 +1,6 @@
 use crate::widget::{Delta, get_time, key_y, maybe_snap_time};
 use bit_set::BitSet;
-use generic_daw_core::{MidiKey, MidiNote, MusicalTime, RtState};
+use generic_daw_core::{MidiKey, MidiNote, MusicalTime, Transport};
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
@@ -60,7 +60,7 @@ impl Selection {
 pub struct PianoRoll<'a, Message> {
 	selection: &'a RefCell<Selection>,
 	notes: &'a [MidiNote],
-	rtstate: &'a RtState,
+	transport: &'a Transport,
 	position: &'a Vector,
 	scale: &'a Vector,
 	f: fn(Action) -> Message,
@@ -111,9 +111,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				match button {
 					mouse::Button::Left => {
 						let time = maybe_snap_time(
-							get_time(cursor.x, *self.position, *self.scale, self.rtstate),
+							get_time(cursor.x, *self.position, *self.scale, self.transport),
 							*modifiers,
-							|time| time.snap_round(self.scale.x, self.rtstate),
+							|time| time.snap_round(self.scale.x, self.transport),
 						);
 						let key = self.get_key(cursor);
 
@@ -149,9 +149,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					let end_key = self.get_key(cursor);
 
 					let end_pos = maybe_snap_time(
-						get_time(cursor.x, *self.position, *self.scale, self.rtstate),
+						get_time(cursor.x, *self.position, *self.scale, self.transport),
 						*modifiers,
-						|time| time.snap_round(self.scale.x, self.rtstate),
+						|time| time.snap_round(self.scale.x, self.transport),
 					);
 
 					if end_key == last_end_key && end_pos == last_end_pos {
@@ -179,11 +179,11 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				Status::Dragging(key, time) => {
 					let new_key = self.get_key(cursor);
 
-					let new_time = get_time(cursor.x, *self.position, *self.scale, self.rtstate);
+					let new_time = get_time(cursor.x, *self.position, *self.scale, self.transport);
 
 					let abs_diff =
 						maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
-							abs_diff.snap_round(self.scale.x, self.rtstate)
+							abs_diff.snap_round(self.scale.x, self.transport)
 						});
 
 					if new_key != key || abs_diff != MusicalTime::ZERO {
@@ -206,9 +206,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				}
 				Status::DraggingSplit(time) => {
 					let new_time = maybe_snap_time(
-						get_time(cursor.x, *self.position, *self.scale, self.rtstate),
+						get_time(cursor.x, *self.position, *self.scale, self.transport),
 						*modifiers,
-						|time| time.snap_round(self.scale.x, self.rtstate),
+						|time| time.snap_round(self.scale.x, self.transport),
 					);
 
 					if new_time != time {
@@ -218,11 +218,11 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					}
 				}
 				Status::TrimmingStart(time) => {
-					let new_time = get_time(cursor.x, *self.position, *self.scale, self.rtstate);
+					let new_time = get_time(cursor.x, *self.position, *self.scale, self.transport);
 
 					let abs_diff =
 						maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
-							abs_diff.snap_round(self.scale.x, self.rtstate)
+							abs_diff.snap_round(self.scale.x, self.transport)
 						});
 
 					if abs_diff != MusicalTime::ZERO {
@@ -238,11 +238,11 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					}
 				}
 				Status::TrimmingEnd(time) => {
-					let new_time = get_time(cursor.x, *self.position, *self.scale, self.rtstate);
+					let new_time = get_time(cursor.x, *self.position, *self.scale, self.transport);
 
 					let abs_diff =
 						maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
-							abs_diff.snap_round(self.scale.x, self.rtstate)
+							abs_diff.snap_round(self.scale.x, self.transport)
 						});
 
 					if abs_diff != MusicalTime::ZERO {
@@ -334,8 +334,8 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					let y = key_y(start_key, *self.position, *self.scale);
 					let height = key_y(end_key, *self.position, *self.scale) + self.scale.y - y;
 
-					let x = start_pos.to_samples_f(self.rtstate) / samples_per_px;
-					let width = end_pos.to_samples_f(self.rtstate) / samples_per_px - x;
+					let x = start_pos.to_samples_f(self.transport) / samples_per_px;
+					let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
 					let x = x - self.position.x;
 
 					renderer.fill_quad(
@@ -400,7 +400,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 	pub fn new(
 		selection: &'a RefCell<Selection>,
 		notes: &'a [MidiNote],
-		rtstate: &'a RtState,
+		transport: &'a Transport,
 		position: &'a Vector,
 		scale: &'a Vector,
 		f: fn(Action) -> Message,
@@ -408,7 +408,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		Self {
 			selection,
 			notes,
-			rtstate,
+			transport,
 			position,
 			scale,
 			f,
@@ -423,8 +423,8 @@ impl<'a, Message> PianoRoll<'a, Message> {
 	fn note_bounds(&self, note: &MidiNote) -> Rectangle {
 		let samples_per_px = self.scale.x.exp2();
 
-		let x = note.position.start().to_samples_f(self.rtstate) / samples_per_px;
-		let width = note.position.end().to_samples_f(self.rtstate) / samples_per_px - x;
+		let x = note.position.start().to_samples_f(self.transport) / samples_per_px;
+		let width = note.position.end().to_samples_f(self.transport) / samples_per_px - x;
 		let x = x - self.position.x;
 
 		Rectangle::new(
@@ -461,7 +461,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 						mouse::Button::Left => {
 							let key = self.notes[note].key;
 							let time =
-								get_time(cursor.x, *self.position, *self.scale, self.rtstate);
+								get_time(cursor.x, *self.position, *self.scale, self.transport);
 
 							selection.status = match (modifiers.command(), modifiers.shift()) {
 								(false, false) => {
@@ -484,10 +484,10 @@ impl<'a, Message> PianoRoll<'a, Message> {
 											cursor.x,
 											*self.position,
 											*self.scale,
-											self.rtstate,
+											self.transport,
 										),
 										*modifiers,
-										|time| time.snap_round(self.scale.x, self.rtstate),
+										|time| time.snap_round(self.scale.x, self.transport),
 									);
 									Status::Selecting(key, key, time, time)
 								}
@@ -501,10 +501,10 @@ impl<'a, Message> PianoRoll<'a, Message> {
 											cursor.x,
 											*self.position,
 											*self.scale,
-											self.rtstate,
+											self.transport,
 										),
 										*modifiers,
-										|time| time.snap_round(self.scale.x, self.rtstate),
+										|time| time.snap_round(self.scale.x, self.transport),
 									);
 									shell.publish((self.f)(Action::SplitAt(time)));
 									Status::DraggingSplit(time)

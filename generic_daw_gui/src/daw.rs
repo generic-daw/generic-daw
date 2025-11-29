@@ -394,8 +394,8 @@ impl Daw {
 		debug_assert_eq!(window, self.window_id);
 
 		let now = MusicalTime::from_samples(
-			self.arrangement_view.arrangement.rtstate().sample,
-			self.arrangement_view.arrangement.rtstate(),
+			self.arrangement_view.arrangement.transport().sample,
+			self.arrangement_view.arrangement.transport(),
 		);
 
 		stack![
@@ -429,7 +429,7 @@ impl Daw {
 					.style(pick_list_with_radius(5))
 					.menu_style(menu_style),
 					row![
-						button(if self.arrangement_view.arrangement.rtstate().playing {
+						button(if self.arrangement_view.arrangement.transport().playing {
 							pause
 						} else {
 							play
@@ -447,7 +447,7 @@ impl Daw {
 					number_input(
 						self.arrangement_view
 							.arrangement
-							.rtstate()
+							.transport()
 							.numerator
 							.get()
 							.into(),
@@ -457,7 +457,12 @@ impl Daw {
 						Message::ChangedNumeratorText
 					),
 					number_input(
-						self.arrangement_view.arrangement.rtstate().bpm.get().into(),
+						self.arrangement_view
+							.arrangement
+							.transport()
+							.bpm
+							.get()
+							.into(),
 						140,
 						3,
 						|x| Message::ChangedBpm(x as u16),
@@ -467,12 +472,12 @@ impl Daw {
 						container(
 							text(format!(
 								"{:#03}:{:#digits$}",
-								now.bar(self.arrangement_view.arrangement.rtstate()) + 1,
-								now.beat_in_bar(self.arrangement_view.arrangement.rtstate()) + 1,
+								now.bar(self.arrangement_view.arrangement.transport()) + 1,
+								now.beat_in_bar(self.arrangement_view.arrangement.transport()) + 1,
 								digits = self
 									.arrangement_view
 									.arrangement
-									.rtstate()
+									.transport()
 									.numerator
 									.ilog10() as usize + 1,
 							))
@@ -489,7 +494,7 @@ impl Daw {
 							.spacing(5)
 						)
 						.style(button_with_radius(
-							if self.arrangement_view.arrangement.rtstate().metronome {
+							if self.arrangement_view.arrangement.transport().metronome {
 								button::primary
 							} else {
 								button::secondary

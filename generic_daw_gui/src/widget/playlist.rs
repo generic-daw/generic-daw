@@ -2,7 +2,7 @@ use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef},
 	widget::{Delta, clip, get_time, maybe_snap_time, track::Track},
 };
-use generic_daw_core::{MusicalTime, RtState};
+use generic_daw_core::{MusicalTime, Transport};
 use iced::{
 	Alignment, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
@@ -63,7 +63,7 @@ impl Selection {
 #[derive(Debug)]
 pub struct Playlist<'a, Message> {
 	selection: &'a RefCell<Selection>,
-	rtstate: &'a RtState,
+	transport: &'a Transport,
 	position: &'a Vector,
 	scale: &'a Vector,
 	tracks: Box<[Track<'a, Message>]>,
@@ -154,9 +154,9 @@ where
 						};
 
 						let time = maybe_snap_time(
-							get_time(cursor.x, *self.position, *self.scale, self.rtstate),
+							get_time(cursor.x, *self.position, *self.scale, self.transport),
 							*modifiers,
-							|time| time.snap_round(self.scale.x, self.rtstate),
+							|time| time.snap_round(self.scale.x, self.transport),
 						);
 
 						selection.status = Status::Selecting(track, track, time, time);
@@ -190,9 +190,9 @@ where
 							.or_else(|| layout.children().len().checked_sub(1))
 						{
 							let new_time = maybe_snap_time(
-								get_time(cursor.x, *self.position, *self.scale, self.rtstate),
+								get_time(cursor.x, *self.position, *self.scale, self.transport),
 								*modifiers,
-								|time| time.snap_floor(self.scale.x, self.rtstate),
+								|time| time.snap_floor(self.scale.x, self.transport),
 							);
 
 							let new_time = Some((track, new_time));
@@ -213,9 +213,9 @@ where
 							};
 
 							let end_pos = maybe_snap_time(
-								get_time(cursor.x, *self.position, *self.scale, self.rtstate),
+								get_time(cursor.x, *self.position, *self.scale, self.transport),
 								*modifiers,
-								|time| time.snap_round(self.scale.x, self.rtstate),
+								|time| time.snap_round(self.scale.x, self.transport),
 							);
 
 							if end_track == last_end_track && end_pos == last_end_pos {
@@ -271,11 +271,11 @@ where
 							};
 
 							let new_time =
-								get_time(cursor.x, *self.position, *self.scale, self.rtstate);
+								get_time(cursor.x, *self.position, *self.scale, self.transport);
 
 							let abs_diff =
 								maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
-									abs_diff.snap_round(self.scale.x, self.rtstate)
+									abs_diff.snap_round(self.scale.x, self.transport)
 								});
 
 							if new_track != track || abs_diff != MusicalTime::ZERO {
@@ -295,11 +295,11 @@ where
 						}
 						Status::TrimmingStart(time) => {
 							let new_time =
-								get_time(cursor.x, *self.position, *self.scale, self.rtstate);
+								get_time(cursor.x, *self.position, *self.scale, self.transport);
 
 							let abs_diff =
 								maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
-									abs_diff.snap_round(self.scale.x, self.rtstate)
+									abs_diff.snap_round(self.scale.x, self.transport)
 								});
 
 							if abs_diff != MusicalTime::ZERO {
@@ -316,11 +316,11 @@ where
 						}
 						Status::TrimmingEnd(time) => {
 							let new_time =
-								get_time(cursor.x, *self.position, *self.scale, self.rtstate);
+								get_time(cursor.x, *self.position, *self.scale, self.transport);
 
 							let abs_diff =
 								maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
-									abs_diff.snap_round(self.scale.x, self.rtstate)
+									abs_diff.snap_round(self.scale.x, self.transport)
 								});
 
 							if abs_diff != MusicalTime::ZERO {
@@ -343,9 +343,9 @@ where
 						}
 						Status::DraggingSplit(time) => {
 							let new_time = maybe_snap_time(
-								get_time(cursor.x, *self.position, *self.scale, self.rtstate),
+								get_time(cursor.x, *self.position, *self.scale, self.transport),
 								*modifiers,
-								|time| time.snap_round(self.scale.x, self.rtstate),
+								|time| time.snap_round(self.scale.x, self.transport),
 							);
 
 							if new_time != time {
@@ -426,7 +426,7 @@ where
 			if let Some((_, Some((track, pos)))) = selection.file
 				&& track == i
 			{
-				let x = pos.to_samples_f(self.rtstate) / samples_per_px - self.position.x;
+				let x = pos.to_samples_f(self.transport) / samples_per_px - self.position.x;
 
 				renderer.fill_quad(
 					Quad {
@@ -494,8 +494,8 @@ where
 						+ layout.child(end_track).bounds().height
 						- y;
 
-					let x = start_pos.to_samples_f(self.rtstate) / samples_per_px;
-					let width = end_pos.to_samples_f(self.rtstate) / samples_per_px - x;
+					let x = start_pos.to_samples_f(self.transport) / samples_per_px;
+					let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
 					let x = x - self.position.x;
 
 					renderer.fill_quad(
@@ -561,7 +561,7 @@ where
 {
 	pub fn new(
 		selection: &'a RefCell<Selection>,
-		rtstate: &'a RtState,
+		transport: &'a Transport,
 		position: &'a Vector,
 		scale: &'a Vector,
 		children: impl IntoIterator<Item = Track<'a, Message>>,
@@ -569,7 +569,7 @@ where
 	) -> Self {
 		Self {
 			selection,
-			rtstate,
+			transport,
 			tracks: children.into_iter().collect(),
 			position,
 			scale,

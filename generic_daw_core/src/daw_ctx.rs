@@ -85,7 +85,7 @@ pub struct Batch {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct RtState {
+pub struct Transport {
 	pub epoch: Epoch,
 	pub version: Version,
 	pub sample_rate: NonZero<u32>,
@@ -98,7 +98,7 @@ pub struct RtState {
 	pub loop_marker: Option<NotePosition>,
 }
 
-impl RtState {
+impl Transport {
 	#[must_use]
 	pub fn new(sample_rate: NonZero<u32>, frames: NonZero<u32>) -> Self {
 		Self {
@@ -118,7 +118,7 @@ impl RtState {
 
 #[derive(Debug)]
 pub struct State {
-	pub rtstate: RtState,
+	pub transport: Transport,
 	pub samples: HoleyVec<Sample>,
 	pub midi_patterns: HoleyVec<MidiPattern>,
 	pub automation_patterns: HoleyVec<AutomationPattern>,
@@ -136,14 +136,14 @@ pub struct DawCtx {
 }
 
 impl DawCtx {
-	pub fn create(rtstate: RtState) -> (Self, NodeId, Producer<Message>, Consumer<Batch>) {
-		let (r_producer, consumer) = RingBuffer::new(rtstate.frames.get() as usize);
+	pub fn create(transport: Transport) -> (Self, NodeId, Producer<Message>, Consumer<Batch>) {
+		let (r_producer, consumer) = RingBuffer::new(transport.frames.get() as usize);
 		let (producer, r_consumer) =
-			RingBuffer::new(rtstate.sample_rate.get().div_ceil(rtstate.frames.get()) as usize);
+			RingBuffer::new(transport.sample_rate.get().div_ceil(transport.frames.get()) as usize);
 
 		let mut on_bar_click = Resampler::new(
 			NonZero::new(44100).unwrap(),
-			rtstate.sample_rate,
+			transport.sample_rate,
 			NonZero::new(2).unwrap(),
 		)
 		.unwrap();
@@ -151,16 +151,16 @@ impl DawCtx {
 
 		let mut off_bar_click = Resampler::new(
 			NonZero::new(44100).unwrap(),
-			rtstate.sample_rate,
+			transport.sample_rate,
 			NonZero::new(2).unwrap(),
 		)
 		.unwrap();
 		off_bar_click.process(&OFF_BAR_CLICK);
 
 		let daw_ctx = Self {
-			audio_graph: AudioGraph::new(Channel::default(), rtstate.frames),
+			audio_graph: AudioGraph::new(Channel::default(), transport.frames),
 			state: State {
-				rtstate,
+				transport,
 				samples: HoleyVec::default(),
 				midi_patterns: HoleyVec::default(),
 				automation_patterns: HoleyVec::default(),
@@ -216,15 +216,15 @@ impl DawCtx {
 					}
 				}
 				Message::NodeDisconnect(from, to) => self.audio_graph.disconnect(from, to),
-				Message::Bpm(bpm) => self.state.rtstate.bpm = bpm,
-				Message::Numerator(numerator) => self.state.rtstate.numerator = numerator,
-				Message::TogglePlayback => self.state.rtstate.playing ^= true,
-				Message::ToggleMetronome => self.state.rtstate.metronome ^= true,
+				Message::Bpm(bpm) => self.state.transport.bpm = bpm,
+				Message::Numerator(numerator) => self.state.transport.numerator = numerator,
+				Message::TogglePlayback => self.state.transport.playing ^= true,
+				Message::ToggleMetronome => self.state.transport.metronome ^= true,
 				Message::Sample(version, sample) => {
-					self.state.rtstate.version = version;
-					self.state.rtstate.sample = sample;
+					self.state.transport.version = version;
+					self.state.transport.sample = sample;
 				}
-				Message::LoopMarker(loop_marker) => self.state.rtstate.loop_marker = loop_marker,
+				Message::LoopMarker(loop_marker) => self.state.transport.loop_marker = loop_marker,
 				Message::Reset => self.audio_graph.for_each_node_mut(AudioGraphNode::reset),
 				Message::ReturnUpdateBuffer(update) => {
 					debug_assert!(update.is_empty());
@@ -233,11 +233,11 @@ impl DawCtx {
 				Message::RequestAudioGraph(sender) => {
 					debug_assert!(self.consumer.is_empty());
 					let mut audio_graph =
-						AudioGraph::new(Channel::default(), self.state.rtstate.frames);
+						AudioGraph::new(Channel::default(), self.state.transport.frames);
 					std::mem::swap(&mut self.audio_graph, &mut audio_graph);
 
 					let mut state = State {
-						rtstate: self.state.rtstate,
+						transport: self.state.transport,
 						samples: HoleyVec::default(),
 						midi_patterns: HoleyVec::default(),
 						automation_patterns: HoleyVec::default(),
@@ -260,16 +260,16 @@ impl DawCtx {
 
 		let mut looped = false;
 
-		if self.state.rtstate.playing
-			&& let Some(loop_marker) = self.state.rtstate.loop_marker
+		if self.state.transport.playing
+			&& let Some(loop_marker) = self.state.transport.loop_marker
 		{
-			let loop_start = loop_marker.start().to_samples(&self.state.rtstate);
-			let loop_end = loop_marker.end().to_samples(&self.state.rtstate);
+			let loop_start = loop_marker.start().to_samples(&self.state.transport);
+			let loop_end = loop_marker.end().to_samples(&self.state.transport);
 
-			if loop_end >= self.state.rtstate.sample {
-				while loop_end <= self.state.rtstate.sample + buf.len() {
+			if loop_end >= self.state.transport.sample {
+				while loop_end <= self.state.transport.sample + buf.len() {
 					looped = true;
-					let len = loop_end - self.state.rtstate.sample;
+					let len = loop_end - self.state.transport.sample;
 
 					self.audio_graph.process(&self.state, &mut buf[..len]);
 					for s in &mut buf[..len] {
@@ -277,7 +277,7 @@ impl DawCtx {
 					}
 					self.metronome(&mut buf[..len], self.audio_graph.delay());
 
-					self.state.rtstate.sample = loop_start;
+					self.state.transport.sample = loop_start;
 					buf = &mut buf[len..];
 				}
 			}
@@ -289,17 +289,17 @@ impl DawCtx {
 		}
 		self.metronome(buf, self.audio_graph.delay());
 
-		let sample = self.state.rtstate.playing.then(|| {
-			self.state.rtstate.sample += buf.len();
-			(self.state.rtstate.sample, looped)
+		let sample = self.state.transport.playing.then(|| {
+			self.state.transport.sample += buf.len();
+			(self.state.transport.sample, looped)
 		});
 
 		let updates = self.state.updates.get_mut().unwrap();
 
 		if sample.is_some() || !updates.is_empty() {
 			let batch = Batch {
-				epoch: self.state.rtstate.epoch,
-				version: self.state.rtstate.version,
+				epoch: self.state.transport.epoch,
+				version: self.state.transport.version,
 				sample,
 				updates: std::mem::take(updates),
 				now: Instant::now(),
@@ -316,27 +316,27 @@ impl DawCtx {
 	}
 
 	fn metronome(&self, buf: &mut [f32], delay: usize) {
-		if !self.state.rtstate.metronome || !self.state.rtstate.playing {
+		if !self.state.transport.metronome || !self.state.transport.playing {
 			return;
 		}
 
 		let mut start = MusicalTime::from_samples(
-			self.state.rtstate.sample.saturating_sub(delay),
-			&self.state.rtstate,
+			self.state.transport.sample.saturating_sub(delay),
+			&self.state.transport,
 		)
 		.floor();
 		let end = MusicalTime::from_samples(
-			(self.state.rtstate.sample + buf.len()).saturating_sub(delay),
-			&self.state.rtstate,
+			(self.state.transport.sample + buf.len()).saturating_sub(delay),
+			&self.state.transport,
 		)
 		.ceil();
 
 		while start < end {
-			let start_samples = start.to_samples(&self.state.rtstate) + delay;
+			let start_samples = start.to_samples(&self.state.transport) + delay;
 
 			let click = if start
 				.beat()
-				.is_multiple_of(self.state.rtstate.numerator.get().into())
+				.is_multiple_of(self.state.transport.numerator.get().into())
 			{
 				&**self.on_bar_click
 			} else {
@@ -345,8 +345,8 @@ impl DawCtx {
 
 			start += MusicalTime::BEAT;
 
-			let buf_idx = start_samples.saturating_sub(self.state.rtstate.sample);
-			let click_idx = self.state.rtstate.sample.saturating_sub(start_samples);
+			let buf_idx = start_samples.saturating_sub(self.state.transport.sample);
+			let click_idx = self.state.transport.sample.saturating_sub(start_samples);
 
 			if buf_idx >= buf.len() || click_idx >= click.len() {
 				continue;

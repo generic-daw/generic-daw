@@ -38,11 +38,11 @@ pub enum Feedback<T> {
 
 impl Arrangement {
 	pub fn save(&self, path: &Path, clap_host: &mut ClapHost) {
-		let mut writer = Writer::new(proto::RtState {
-			bpm: self.rtstate().bpm.get().into(),
-			numerator: self.rtstate().numerator.get().into(),
+		let mut writer = Writer::new(proto::Transport {
+			bpm: self.transport().bpm.get().into(),
+			numerator: self.transport().numerator.get().into(),
 			loop_marker: self
-				.rtstate()
+				.transport()
 				.loop_marker
 				.map(|loop_marker| proto::NotePosition {
 					start: loop_marker.start().into(),
@@ -198,11 +198,11 @@ impl Arrangement {
 
 		let (mut arrangement, task) = Self::create(&config);
 
-		let proto::RtState {
+		let proto::Transport {
 			bpm,
 			numerator,
 			loop_marker,
-		} = reader.rtstate();
+		} = reader.transport();
 
 		arrangement.set_bpm(NonZero::new(bpm as u16)?);
 		arrangement.set_numerator(NonZero::new(numerator as u8)?);
@@ -256,7 +256,7 @@ impl Arrangement {
 			drop(seen);
 
 			for (idx, sample) in reader.iter_samples() {
-				let sample_rate = arrangement.rtstate().sample_rate;
+				let sample_rate = arrangement.transport().sample_rate;
 				let done = done.clone();
 
 				let mut path: Option<Arc<_>> = paths.remove(&idx);

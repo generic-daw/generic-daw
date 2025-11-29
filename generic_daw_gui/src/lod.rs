@@ -1,4 +1,4 @@
-use generic_daw_core::{ClipPosition, RtState};
+use generic_daw_core::{ClipPosition, Transport};
 use generic_daw_utils::NoDebug;
 use iced::{
 	Point, Rectangle, Size, Theme, Transformation,
@@ -22,7 +22,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 	pub fn mesh(
 		&self,
 		samples: &[f32],
-		rtstate: &RtState,
+		transport: &Transport,
 		clip_position: ClipPosition,
 		x_position: f32,
 		x_scale: f32,
@@ -92,9 +92,9 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 		let lod_slices_per_sample = lod_slices_per_mesh_slice as f32 / samples_per_mesh_slice;
 		let lod_slices_per_px = lod_slices_per_mesh_slice as f32 / px_per_mesh_slice;
 
-		let start = clip_position.start().to_samples_f(rtstate);
-		let end = clip_position.end().to_samples_f(rtstate);
-		let offset = clip_position.offset().to_samples_f(rtstate);
+		let start = clip_position.start().to_samples_f(transport);
+		let end = clip_position.end().to_samples_f(transport);
+		let offset = clip_position.offset().to_samples_f(transport);
 
 		let hidden_start_samples = x_position.mul_add(samples_per_px, -start).max(0.0);
 

@@ -5,7 +5,7 @@ use crate::{
 	},
 	lod::Lods,
 };
-use generic_daw_core::{self as core, MusicalTime, RtState};
+use generic_daw_core::{self as core, MusicalTime, Transport};
 use rtrb::Consumer;
 use std::{fs::File, io::BufWriter, num::NonZero, path::Path, sync::Arc};
 
@@ -21,14 +21,14 @@ pub struct Recording {
 impl Recording {
 	pub fn create(
 		path: Arc<Path>,
-		rtstate: &RtState,
+		transport: &Transport,
 		device_name: Option<Arc<str>>,
 		sample_rate: NonZero<u32>,
 		frames: Option<NonZero<u32>>,
 	) -> (Self, Consumer<Box<[f32]>>) {
 		let (core, consumer) = core::Recording::create(
 			BufWriter::new(File::create(&path).unwrap()),
-			rtstate,
+			transport,
 			device_name,
 			sample_rate,
 			frames,
@@ -39,7 +39,7 @@ impl Recording {
 			Self {
 				core,
 				lods: Lods::default(),
-				position: MusicalTime::from_samples(rtstate.sample, rtstate),
+				position: MusicalTime::from_samples(transport.sample, transport),
 				path,
 				name,
 			},
@@ -53,17 +53,17 @@ impl Recording {
 		self.lods.update(self.core.samples(), start);
 	}
 
-	pub fn split_off(&mut self, mut path: Arc<Path>, rtstate: &RtState) -> SamplePair {
+	pub fn split_off(&mut self, mut path: Arc<Path>, transport: &Transport) -> SamplePair {
 		let start = self.core.samples().len();
 		let core = self
 			.core
-			.split_off(BufWriter::new(File::create(&path).unwrap()), rtstate);
+			.split_off(BufWriter::new(File::create(&path).unwrap()), transport);
 		self.lods.update(self.core.samples(), start);
 
 		let mut lods = Lods::default();
 		std::mem::swap(&mut self.lods, &mut lods);
 
-		self.position = MusicalTime::from_samples(rtstate.sample, rtstate);
+		self.position = MusicalTime::from_samples(transport.sample, transport);
 
 		let mut name = path.file_name().unwrap().to_str().unwrap().into();
 		std::mem::swap(&mut self.name, &mut name);

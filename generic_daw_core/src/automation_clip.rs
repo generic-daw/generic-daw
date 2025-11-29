@@ -11,8 +11,8 @@ impl AutomationClip {
 	pub fn interpolate(&self, state: &State) -> f32 {
 		let pattern = &state.automation_patterns[*self.pattern];
 
-		let start = self.position.start().to_samples(&state.rtstate);
-		let now = state.rtstate.sample - start;
+		let start = self.position.start().to_samples(&state.transport);
+		let now = state.transport.sample - start;
 
 		pattern
 			.points
@@ -25,12 +25,12 @@ impl AutomationClip {
 				next.time += self.position.offset();
 				[this, next]
 			})
-			.find(|[_, next]| next.time.to_samples(&state.rtstate) > now)
+			.find(|[_, next]| next.time.to_samples(&state.transport) > now)
 			.map_or_else(
 				|| pattern.points.last().unwrap().value,
 				|[this, next]| {
-					let this_time = this.time.to_samples(&state.rtstate);
-					let next_time = next.time.to_samples(&state.rtstate);
+					let this_time = this.time.to_samples(&state.transport);
+					let next_time = next.time.to_samples(&state.transport);
 
 					if now < this_time {
 						return this.value;
