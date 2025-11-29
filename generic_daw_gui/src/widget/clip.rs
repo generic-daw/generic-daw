@@ -10,7 +10,7 @@ use iced::{
 	Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
 		Clipboard, Layout, Renderer as _, Shell, Text, Widget,
-		graphics::{Mesh, mesh::Renderer as _},
+		graphics::mesh::{Cache, Renderer as _},
 		layout::{Limits, Node},
 		mouse::{self, Click, Cursor, Interaction, click::Kind},
 		renderer::{Quad, Style},
@@ -25,16 +25,29 @@ use iced::{
 use std::{
 	borrow::{Borrow, BorrowMut},
 	cell::RefCell,
+	sync::Arc,
 };
 
-#[derive(Default)]
 struct State {
-	cache: RefCell<Option<Mesh>>,
+	cache: RefCell<Cache>,
 	last_click: Option<Click>,
 	last_bounds: Rectangle,
 	last_scale: Vector,
 	last_addr: usize,
 	last_theme: RefCell<Option<Theme>>,
+}
+
+impl Default for State {
+	fn default() -> Self {
+		Self {
+			cache: RefCell::new(Cache::new(Arc::default())),
+			last_click: None,
+			last_bounds: Rectangle::default(),
+			last_scale: Vector::default(),
+			last_addr: 0,
+			last_theme: RefCell::default(),
+		}
+	}
 }
 
 #[derive(Clone, Debug)]
@@ -95,13 +108,17 @@ where
 		};
 
 		if state.last_addr != addr {
-			*state.cache.get_mut() = None;
 			state.last_addr = addr;
+			if !state.cache.get_mut().is_empty() {
+				state.cache.get_mut().update(Arc::default());
+			}
 		}
 
 		if state.last_scale != *self.scale {
-			*state.cache.get_mut() = None;
 			state.last_scale = *self.scale;
+			if !state.cache.get_mut().is_empty() {
+				state.cache.get_mut().update(Arc::default());
+			}
 		}
 	}
 
@@ -153,8 +170,10 @@ where
 			bounds.y = layout.position().y - bounds.y;
 
 			if state.last_bounds != bounds {
-				*state.cache.get_mut() = None;
 				state.last_bounds = bounds;
+				if !state.cache.get_mut().is_empty() {
+					state.cache.get_mut().update(Arc::default());
+				}
 			}
 		}
 
@@ -361,34 +380,33 @@ where
 
 		if last_theme.as_ref() != Some(theme) {
 			*last_theme = Some(theme.clone());
-			*cache = None;
+			cache.update(Arc::default());
 		}
 
 		let unclipped_height = layout.bounds().height - LINE_HEIGHT;
 		let hidden_top_px = layout.position().y - bounds.y;
 
 		match self.inner {
-			Inner::AudioClip(inner) => 'blk: {
-				if cache.is_some() {
-					break 'blk;
+			Inner::AudioClip(inner) => {
+				if cache.is_empty()
+					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
+						inner.sample.lods.mesh(
+							&inner.sample.samples,
+							self.transport,
+							inner.clip.position,
+							self.position.x,
+							self.scale.x,
+							theme,
+							lower_bounds.size(),
+							unclipped_height,
+							hidden_top_px,
+						)
+					}) {
+					cache.update(Arc::from([mesh]));
 				}
-
-				*cache = debug::time_with("Waveform Mesh", || {
-					inner.sample.lods.mesh(
-						&inner.sample.samples,
-						self.transport,
-						inner.clip.position,
-						self.position.x,
-						self.scale.x,
-						theme,
-						lower_bounds.size(),
-						unclipped_height,
-						hidden_top_px,
-					)
-				});
 			}
 			Inner::MidiClip(inner) => 'blk: {
-				debug_assert!(cache.is_none());
+				debug_assert!(cache.is_empty());
 
 				let (min, max) = inner
 					.pattern
@@ -440,42 +458,42 @@ where
 					);
 				}
 			}
-			Inner::Recording(inner) => 'blk: {
-				if cache.is_some() {
-					break 'blk;
+			Inner::Recording(inner) => {
+				if cache.is_empty()
+					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
+						let clip_position = ClipPosition::new(
+							NotePosition::new(
+								inner.position,
+								inner.position
+									+ MusicalTime::from_samples(
+										inner.core.samples().len(),
+										self.transport,
+									)
+									.max(MusicalTime::TICK),
+							),
+							MusicalTime::ZERO,
+						);
+
+						inner.lods.mesh(
+							inner.core.samples(),
+							self.transport,
+							clip_position,
+							self.position.x,
+							self.scale.x,
+							theme,
+							lower_bounds.size(),
+							unclipped_height,
+							hidden_top_px,
+						)
+					}) {
+					cache.update(Arc::from([mesh]));
 				}
-
-				let clip_position = ClipPosition::new(
-					NotePosition::new(
-						inner.position,
-						inner.position
-							+ MusicalTime::from_samples(inner.core.samples().len(), self.transport)
-								.max(MusicalTime::TICK),
-					),
-					MusicalTime::ZERO,
-				);
-
-				*cache = debug::time_with("Waveform Mesh", || {
-					inner.lods.mesh(
-						inner.core.samples(),
-						self.transport,
-						clip_position,
-						self.position.x,
-						self.scale.x,
-						theme,
-						lower_bounds.size(),
-						unclipped_height,
-						hidden_top_px,
-					)
-				});
 			}
 		}
 
-		if let Some(mesh) = cache {
-			renderer.with_translation(Vector::new(lower_bounds.x, lower_bounds.y), |renderer| {
-				renderer.draw_mesh(mesh.clone());
-			});
-		}
+		renderer.with_translation(Vector::new(lower_bounds.x, lower_bounds.y), |renderer| {
+			renderer.draw_mesh_cache(cache.clone());
+		});
 	}
 
 	fn mouse_interaction(

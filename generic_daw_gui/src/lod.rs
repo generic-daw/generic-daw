@@ -8,7 +8,6 @@ use iced::{
 		mesh::{Indexed, SolidVertex2D},
 	},
 };
-use std::sync::Arc;
 
 const STEP_SIZE: usize = 3;
 const CHUNK_SIZE: usize = 1 << STEP_SIZE;
@@ -38,7 +37,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 			color: Packed,
 			jitter_correct: f32,
 			hidden_top_px: f32,
-		) -> Arc<[SolidVertex2D]> {
+		) -> Vec<SolidVertex2D> {
 			let mut last = None::<(f32, f32)>;
 			iter.into_iter()
 				.map(|(min, max)| {
