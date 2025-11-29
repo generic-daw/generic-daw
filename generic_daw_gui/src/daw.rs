@@ -79,7 +79,7 @@ pub enum Message {
 	OnDoubleClick,
 }
 
-const _: () = assert!(size_of::<Message>() <= 128);
+const _: () = assert!(size_of::<Message>() == 56);
 
 #[derive(Debug)]
 pub struct Daw {
@@ -186,7 +186,8 @@ impl Daw {
 				return Task::batch([
 					fut1,
 					fut2,
-					task.map(arrangement_view::Message::Batch)
+					task.map(Box::new)
+						.map(arrangement_view::Message::Batch)
 						.map(Message::Arrangement),
 				]);
 			}
@@ -378,7 +379,6 @@ impl Daw {
 					return task.map(Message::FileTree);
 				}
 			}
-			file_tree::Message::Unreachable => unreachable!(),
 		}
 
 		Task::none()

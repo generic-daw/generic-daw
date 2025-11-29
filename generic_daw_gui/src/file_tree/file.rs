@@ -47,7 +47,7 @@ impl File {
 			)
 			.padding(0)
 			.style(button::text)
-			.on_press(Message::Unreachable)
+			.on_press_with(|| unreachable!())
 			.into(),
 			LINE_HEIGHT + 2.0,
 		)

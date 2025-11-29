@@ -93,15 +93,14 @@ impl Arrangement {
 		)
 	}
 
-	pub fn update(&mut self, mut batch: Batch) -> Option<Vec<ArrangementMessage>> {
-		let messages = (batch.epoch == self.rtstate.epoch).then(|| {
-			let mut messages = Vec::new();
+	pub fn update(&mut self, mut batch: Batch) -> Vec<ArrangementMessage> {
+		let mut messages = Vec::new();
 
+		if batch.epoch == self.rtstate.epoch {
 			if let Some((sample, looped)) = batch.sample
 				&& batch.version.is_last()
 			{
 				self.rtstate.sample = sample;
-
 				if looped {
 					messages.push(ArrangementMessage::RecordingEndStream);
 				}
@@ -121,9 +120,7 @@ impl Arrangement {
 					)))
 				}
 			}));
-
-			messages
-		});
+		}
 
 		batch.updates.clear();
 		self.send(Message::ReturnUpdateBuffer(batch.updates));

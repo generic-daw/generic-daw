@@ -47,6 +47,7 @@ use iced::{
 	},
 };
 use iced_split::{Split, Strategy};
+use log::warn;
 use rtrb::Consumer;
 use smol::{Timer, unblock};
 use std::{
@@ -90,7 +91,7 @@ pub static DATA_PATH: LazyLock<Arc<Path>> = LazyLock::new(|| {
 #[derive(Clone, Debug)]
 pub enum Message {
 	ClapHost(clap_host::Message),
-	Batch(Batch),
+	Batch(Box<Batch>),
 
 	SetArrangement(NoClone<Box<Arrangement>>),
 
@@ -135,12 +136,9 @@ pub enum Message {
 	RecordingWrite(NoDebug<Box<[f32]>>),
 
 	PlaylistAction(playlist::Action),
-	PlaylistPan(Vector),
-	PlaylistZoom(Vector, Point),
-
 	PianoRollAction(piano_roll::Action),
-	PianoRollPan(Vector, Size),
-	PianoRollZoom(Vector, Point, Size),
+	Pan(Vector, Size),
+	Zoom(Vector, Point, Size),
 
 	DeleteSelection,
 	ClearSelection,
@@ -220,7 +218,7 @@ impl ArrangementView {
 
 				loading: 0,
 			},
-			task.map(Message::Batch),
+			task.map(Box::new).map(Message::Batch),
 		)
 	}
 
@@ -238,9 +236,8 @@ impl ArrangementView {
 			Message::Batch(msg) => {
 				return Task::batch(
 					self.arrangement
-						.update(msg)
+						.update(*msg)
 						.into_iter()
-						.flatten()
 						.map(|msg| self.update(msg, config, state, plugin_bundles)),
 				);
 			}
@@ -259,20 +256,6 @@ impl ArrangementView {
 					self.tab = Tab::Playlist;
 				}
 				self.arrangement = *arrangement;
-				return Task::batch([
-					self.update(
-						Message::PlaylistZoom(Vector::ZERO, Point::ORIGIN),
-						config,
-						state,
-						plugin_bundles,
-					),
-					self.update(
-						Message::PianoRollZoom(Vector::ZERO, Point::ORIGIN, Size::ZERO),
-						config,
-						state,
-						plugin_bundles,
-					),
-				]);
 			}
 			Message::ConnectRequest(from, to) => {
 				return Task::perform(self.arrangement.request_connect(from, to), Result::ok)
@@ -284,11 +267,18 @@ impl ArrangementView {
 			Message::ChangedTab(tab) => {
 				match self.tab {
 					Tab::Playlist => {
-						self.playlist_selection.get_mut().status = playlist::Status::None;
+						let playlist_selection = self.playlist_selection.get_mut();
+						playlist_selection.status = playlist::Status::None;
+						playlist_selection
+							.primary
+							.extend(playlist_selection.secondary.drain());
 					}
 					Tab::Mixer => {}
 					Tab::PianoRoll(..) => {
-						self.piano_roll_selection.get_mut().status = piano_roll::Status::None;
+						let piano_roll_selection = self.piano_roll_selection.get_mut();
+						piano_roll_selection.status = piano_roll::Status::None;
+						piano_roll_selection.primary.clear();
+						piano_roll_selection.secondary.clear();
 					}
 				}
 
@@ -470,15 +460,7 @@ impl ArrangementView {
 					})
 					.collect();
 
-				return Task::batch([
-					self.update(
-						Message::PlaylistPan(Vector::ZERO),
-						config,
-						state,
-						plugin_bundles,
-					),
-					self.update(Message::RecordingEndStream, config, state, plugin_bundles),
-				]);
+				return self.update(Message::RecordingEndStream, config, state, plugin_bundles);
 			}
 			Message::TrackToggleEnabled(id) => {
 				self.soloed_track = None;
@@ -586,72 +568,56 @@ impl ArrangementView {
 				}
 			}
 			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().0.write(&samples),
-			Message::PlaylistAction(action) => self.handle_playlist_action(action),
-			Message::PlaylistPan(pos_diff) => {
-				self.playlist_position = self.playlist_position + pos_diff;
-				self.playlist_position.x = self.playlist_position.x.max(0.0);
-				self.playlist_position.y = self.playlist_position.y.clamp(
-					0.0,
-					self.playlist_scale.y
-						* self.arrangement.tracks().len().saturating_sub(1) as f32,
-				);
-			}
-			Message::PlaylistZoom(scale_diff, cursor) => {
-				let old_scale = self.playlist_scale;
-
-				self.playlist_scale = old_scale + scale_diff;
-				self.playlist_scale.x = self.playlist_scale.x.clamp(1.0, 16f32.next_down());
-				self.playlist_scale.y = self.playlist_scale.y.clamp(46.0, 200.0);
-
-				let pos_diff = Vector::new(
-					(cursor.x + self.playlist_position.x)
-						* ((old_scale.x - self.playlist_scale.x).exp2() - 1.0),
-					(cursor.y + self.playlist_position.y)
-						* ((self.playlist_scale.y / old_scale.y) - 1.0),
-				);
-
-				return self.update(
-					Message::PlaylistPan(pos_diff),
-					config,
-					state,
-					plugin_bundles,
-				);
-			}
+			Message::PlaylistAction(action) => return self.handle_playlist_action(action),
 			Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
-			Message::PianoRollPan(pos_diff, size) => {
-				self.piano_roll_position = self.piano_roll_position + pos_diff;
-				self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
-				self.piano_roll_position.y = self
-					.piano_roll_position
-					.y
-					.clamp(0.0, self.piano_roll_scale.y.mul_add(128.0, -size.height));
-			}
-			Message::PianoRollZoom(scale_diff, cursor, size) => {
-				let old_scale = self.piano_roll_scale;
-
-				self.piano_roll_scale = old_scale + scale_diff;
-				self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(1.0, 16f32.next_down());
-				self.piano_roll_scale.y = self
-					.piano_roll_scale
-					.y
-					.clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
+			Message::Pan(pos_diff, size) => match self.tab {
+				Tab::Playlist => {
+					self.playlist_position = self.playlist_position + pos_diff;
+					self.playlist_position.x = self.playlist_position.x.max(0.0);
+					self.playlist_position.y = self.playlist_position.y.max(0.0);
+				}
+				Tab::Mixer => {}
+				Tab::PianoRoll(..) => {
+					self.piano_roll_position = self.piano_roll_position + pos_diff;
+					self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
+					self.piano_roll_position.y = self
+						.piano_roll_position
+						.y
+						.clamp(0.0, self.piano_roll_scale.y.mul_add(128.0, -size.height));
+				}
+			},
+			Message::Zoom(scale_diff, cursor, size) => {
+				let (old_scale, pos, new_scale) = match self.tab {
+					Tab::Playlist => {
+						let old_scale = self.playlist_scale;
+						self.playlist_scale = self.playlist_scale + scale_diff;
+						self.playlist_scale.x = self.playlist_scale.x.clamp(1.0, 16f32.next_down());
+						self.playlist_scale.y = self.playlist_scale.y.clamp(46.0, 200.0);
+						(old_scale, self.playlist_position, self.playlist_scale)
+					}
+					Tab::Mixer => return Task::none(),
+					Tab::PianoRoll(..) => {
+						let old_scale = self.piano_roll_scale;
+						self.piano_roll_scale = self.piano_roll_scale + scale_diff;
+						self.piano_roll_scale.x =
+							self.piano_roll_scale.x.clamp(1.0, 16f32.next_down());
+						self.piano_roll_scale.y = self
+							.piano_roll_scale
+							.y
+							.clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
+						(old_scale, self.piano_roll_position, self.piano_roll_scale)
+					}
+				};
 
 				let pos_diff = Vector::new(
-					(cursor.x + self.piano_roll_position.x)
-						* ((old_scale.x - self.piano_roll_scale.x).exp2() - 1.0),
-					(cursor.y + self.piano_roll_position.y)
-						* ((self.piano_roll_scale.y / old_scale.y) - 1.0),
+					(cursor.x + pos.x) * ((old_scale.x - new_scale.x).exp2() - 1.0),
+					(cursor.y + pos.y) * ((new_scale.y / old_scale.y) - 1.0),
 				);
 
-				return self.update(
-					Message::PianoRollPan(pos_diff, size),
-					config,
-					state,
-					plugin_bundles,
-				);
+				return self.update(Message::Pan(pos_diff, size), config, state, plugin_bundles);
 			}
 			Message::DeleteSelection => match self.tab {
-				Tab::Playlist => self.handle_playlist_action(playlist::Action::Delete),
+				Tab::Playlist => return self.handle_playlist_action(playlist::Action::Delete),
 				Tab::Mixer => {}
 				Tab::PianoRoll(..) => self.handle_piano_roll_action(piano_roll::Action::Delete),
 			},
@@ -683,7 +649,7 @@ impl ArrangementView {
 		Task::none()
 	}
 
-	fn handle_playlist_action(&mut self, action: playlist::Action) {
+	fn handle_playlist_action(&mut self, action: playlist::Action) -> Task<Message> {
 		let playlist::Selection {
 			primary, secondary, ..
 		} = self.playlist_selection.get_mut();
@@ -694,11 +660,12 @@ impl ArrangementView {
 				let &(track, clip) = primary.iter().next().unwrap();
 
 				let clip::Clip::Midi(clip) = self.arrangement.tracks()[track].clips[clip] else {
-					panic!()
+					warn!("tried to open non-midi clip at {track}:{clip}");
+					return Task::none();
 				};
 
 				self.piano_roll_selection.get_mut().primary.clear();
-				self.tab = Tab::PianoRoll(clip);
+				return Task::done(Message::ChangedTab(Tab::PianoRoll(clip)));
 			}
 			playlist::Action::Add(track, pos) => {
 				let pattern = MidiPatternPair::new(Vec::new());
@@ -846,11 +813,14 @@ impl ArrangementView {
 				}
 			}
 		}
+
+		Task::none()
 	}
 
 	fn handle_piano_roll_action(&mut self, action: piano_roll::Action) {
 		let Tab::PianoRoll(clip) = &mut self.tab else {
-			panic!()
+			warn!("tried to handle {:?} while in {:?}", action, self.tab);
+			return;
 		};
 
 		let piano_roll::Selection {
@@ -1163,8 +1133,8 @@ impl ArrangementView {
 			),
 			Message::SeekTo,
 			Message::SetLoopMarker,
-			|p, _| Message::PlaylistPan(p),
-			|s, c, _| Message::PlaylistZoom(s, c),
+			Message::Pan,
+			Message::Zoom,
 		)
 		.into()
 	}
@@ -1453,8 +1423,8 @@ impl ArrangementView {
 			),
 			Message::SeekTo,
 			Message::SetLoopMarker,
-			Message::PianoRollPan,
-			Message::PianoRollZoom,
+			Message::Pan,
+			Message::Zoom,
 		)
 		.with_offset(
 			clip.position

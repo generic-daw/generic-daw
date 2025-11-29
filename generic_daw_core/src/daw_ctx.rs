@@ -47,7 +47,7 @@ pub enum Message {
 	AudioGraph(Box<Export>),
 }
 
-const _: () = assert!(size_of::<Message>() <= 128);
+const _: () = assert!(size_of::<Message>() == 56);
 
 #[derive(Debug)]
 pub enum NodeAction {

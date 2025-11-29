@@ -14,7 +14,6 @@ mod file;
 pub enum Message {
 	Action(DirId, Action),
 	File(Arc<Path>),
-	Unreachable,
 }
 
 #[derive(Clone, Debug)]

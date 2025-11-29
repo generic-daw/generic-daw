@@ -487,7 +487,8 @@ impl Arrangement {
 					arrangement_view::Message::SetArrangement(NoClone(Box::new(arrangement))),
 				)))
 				.chain(Task::batch([
-					task.map(arrangement_view::Message::Batch)
+					task.map(Box::new)
+						.map(arrangement_view::Message::Batch)
 						.map(daw::Message::Arrangement),
 					messages
 						.into_iter()

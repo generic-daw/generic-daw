@@ -6,8 +6,6 @@ pub enum AudioGraphNode {
 	Track(Track),
 }
 
-const _: () = assert!(size_of::<AudioGraphNode>() <= 128);
-
 impl NodeImpl for AudioGraphNode {
 	type Event = Event;
 	type State = State;
