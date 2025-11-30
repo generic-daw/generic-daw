@@ -252,12 +252,10 @@ impl ConfigView {
 								)
 						],
 						space::horizontal(),
-						self.with_device(|device, _| device.buffer_size.map(|buffer_size| text(
-							format!(
-								"{buffer_size} smp @ {} hz = {:.1} ms",
-								device.sample_rate,
-								buffer_size.get() as f32 / device.sample_rate.get() as f32 * 1000.0
-							)
+						self.with_device(|device, _| device.buffer_size.map(|buffer_size| text!(
+							"{buffer_size} smp @ {} hz = {:.1} ms",
+							device.sample_rate,
+							buffer_size.get() as f32 / device.sample_rate.get() as f32 * 1000.0
 						)
 						.font(Font::MONOSPACE)
 						.size(12))),
@@ -379,8 +377,7 @@ impl ConfigView {
 						column![
 							row![
 								"App scale factor:  ",
-								text(format!("{:.1}", self.config.app_scale_factor))
-									.font(Font::MONOSPACE),
+								text!("{:.1}", self.config.app_scale_factor).font(Font::MONOSPACE),
 								space::horizontal(),
 								button(rotate_ccw().size(LINE_HEIGHT - 3.0))
 									.style(button_with_radius(button::primary, 5))
@@ -421,12 +418,12 @@ impl ConfigView {
 						column![
 							row![
 								"Plugin scale factor:  ",
-								text(format!(
+								text!(
 									"{:.1}",
 									self.config
 										.plugin_scale_factor
 										.unwrap_or(self.config.app_scale_factor)
-								))
+								)
 								.font(Font::MONOSPACE),
 								space::horizontal(),
 								button(rotate_ccw().size(LINE_HEIGHT - 3.0))

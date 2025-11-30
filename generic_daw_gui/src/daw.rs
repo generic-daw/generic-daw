@@ -471,7 +471,7 @@ impl Daw {
 					),
 					row![
 						container(
-							text(format!(
+							text!(
 								"{:#03}:{:#digits$}",
 								now.bar(self.arrangement_view.arrangement.transport()) + 1,
 								now.beat_in_bar(self.arrangement_view.arrangement.transport()) + 1,
@@ -481,7 +481,7 @@ impl Daw {
 									.transport()
 									.numerator
 									.ilog10() as usize + 1,
-							))
+							)
 							.font(Font::MONOSPACE)
 						)
 						.padding(padding::horizontal(7).vertical(5.6))
