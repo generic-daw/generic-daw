@@ -1,4 +1,4 @@
-use crate::{arrangement_view::DATA_PATH, theme::Theme};
+use crate::{arrangement_view::DATA_DIR, theme::Theme};
 use generic_daw_core::clap_host::DEFAULT_CLAP_PATHS;
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,7 @@ pub static CONFIG_PATH: LazyLock<Arc<Path>> =
 	LazyLock::new(|| dirs::config_dir().unwrap().join("generic_daw.toml").into());
 
 pub static DEFAULT_SAMPLE_PATHS: LazyLock<Vec<Arc<Path>>> =
-	LazyLock::new(|| vec![dirs::home_dir().unwrap().into(), DATA_PATH.clone()]);
+	LazyLock::new(|| vec![dirs::home_dir().unwrap().into(), DATA_DIR.clone()]);
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default)]

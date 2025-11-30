@@ -1,4 +1,3 @@
-use crate::daw::DEFAULT_SPLIT_POSITION;
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -15,6 +14,8 @@ pub static STATE_PATH: LazyLock<Arc<Path>> = LazyLock::new(|| {
 		.join("generic_daw.toml")
 		.into()
 });
+
+pub const DEFAULT_SPLIT_POSITION: f32 = 300.0;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]

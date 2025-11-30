@@ -1,11 +1,11 @@
 use crate::{
-	arrangement_view::{self, Arrangement, ArrangementView, Feedback, Tab},
+	arrangement_view::{self, Arrangement, ArrangementView, Feedback, PROJECT_DIR, Tab},
 	components::{PICK_LIST_HANDLE, number_input},
 	config::Config,
 	config_view::{self, ConfigView},
 	file_tree::{self, FileTree},
 	icons::{chart_no_axes_gantt, pause, play, sliders_vertical, square},
-	state::State,
+	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
 		progress_bar_with_radius, split_style,
@@ -34,8 +34,6 @@ use iced_split::{Strategy, vertical_split};
 use log::trace;
 use rfd::AsyncFileDialog;
 use std::{collections::HashMap, num::NonZero, path::Path, sync::Arc, time::Duration};
-
-pub const DEFAULT_SPLIT_POSITION: f32 = 300.0;
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -223,6 +221,7 @@ impl Daw {
 					AsyncFileDialog::new()
 						.set_parent(window)
 						.add_filter("Generic DAW project file", &["gdp"])
+						.set_directory(&*PROJECT_DIR)
 						.pick_file()
 				})
 				.then(Task::future)
@@ -235,6 +234,7 @@ impl Daw {
 					AsyncFileDialog::new()
 						.set_parent(window)
 						.add_filter("Generic DAW project file", &["gdp"])
+						.set_directory(&*PROJECT_DIR)
 						.save_file()
 				})
 				.then(Task::future)
@@ -246,7 +246,8 @@ impl Daw {
 				return window::run(self.window_id, |window| {
 					AsyncFileDialog::new()
 						.set_parent(window)
-						.add_filter("Wave File", &["wav"])
+						.add_filter("Wave file", &["wav"])
+						.set_directory(&*PROJECT_DIR)
 						.save_file()
 				})
 				.then(Task::future)

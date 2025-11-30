@@ -9,9 +9,8 @@ use crate::{
 	clap_host::{self, ClapHost},
 	components::{icon_button, text_icon_button},
 	config::Config,
-	daw::DEFAULT_SPLIT_POSITION,
 	icons::{arrow_up_down, chevron_up, grip_vertical, plus, power, power_off, x},
-	state::State,
+	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, scrollable_style,
 		slider_secondary, split_style,
@@ -82,10 +81,22 @@ pub use midi_clip::MidiClipRef;
 pub use project::Feedback;
 pub use recording::Recording;
 
-pub static DATA_PATH: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let data_path = dirs::data_dir().unwrap().join("Generic DAW").into();
-	_ = std::fs::create_dir(&data_path);
-	data_path
+pub static DATA_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
+	let data_dir = dirs::data_dir().unwrap().join("Generic DAW").into();
+	_ = std::fs::create_dir(&data_dir);
+	data_dir
+});
+
+pub static RECORDING_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
+	let recording_dir = DATA_DIR.join("Recordings").into();
+	_ = std::fs::create_dir(&recording_dir);
+	recording_dir
+});
+
+pub static PROJECT_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
+	let project_dir = DATA_DIR.join("Projects").into();
+	_ = std::fs::create_dir(&project_dir);
+	project_dir
 });
 
 #[derive(Clone, Debug)]
@@ -494,6 +505,13 @@ impl ArrangementView {
 			}
 			Message::SetLoopMarker(marker) => self.arrangement.set_loop_marker(marker),
 			Message::Recording(node) => {
+				let path = RECORDING_DIR
+					.join(format!(
+						"recording-{}.wav",
+						format_rfc3339(SystemTime::now())
+					))
+					.into();
+
 				if let Some((recording, r_node)) = &mut self.recording {
 					if node == *r_node {
 						return self.update(
@@ -506,8 +524,7 @@ impl ArrangementView {
 
 					let pos = recording.position;
 
-					let sample =
-						recording.split_off(recording_path(), self.arrangement.transport());
+					let sample = recording.split_off(path, self.arrangement.transport());
 					let id = sample.gui.id;
 					self.arrangement.add_sample(sample);
 
@@ -524,7 +541,7 @@ impl ArrangementView {
 					self.recording.as_mut().unwrap().1 = node;
 				} else {
 					let (recording, task) = Recording::create(
-						recording_path(),
+						path,
 						self.arrangement.transport(),
 						config.input_device.name.clone(),
 						config.input_device.sample_rate,
@@ -1465,15 +1482,6 @@ fn format_decibels(amp: f32) -> String {
 	write!(f, "{dba:.*}", (dba < 9.95).into()).unwrap();
 
 	f
-}
-
-fn recording_path() -> Arc<Path> {
-	DATA_PATH
-		.join(format!(
-			"recording-{}.wav",
-			format_rfc3339(SystemTime::now())
-		))
-		.into()
 }
 
 fn crc(mut r: impl Read) -> u32 {
