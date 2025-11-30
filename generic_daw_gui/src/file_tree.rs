@@ -28,9 +28,9 @@ pub struct FileTree {
 }
 
 impl FileTree {
-	pub fn new(dirs: impl IntoIterator<Item: AsRef<Path>>) -> Self {
+	pub fn new(dirs: &[impl AsRef<Path>]) -> Self {
 		Self {
-			dirs: dirs.into_iter().map(Dir::new).collect(),
+			dirs: dirs.iter().map(Dir::new).collect(),
 		}
 	}
 
@@ -52,8 +52,8 @@ impl FileTree {
 		self.dirs.iter_mut().find_map(|dir| dir.update(id, action))
 	}
 
-	pub fn diff(&mut self, dirs: impl IntoIterator<Item: AsRef<Path>>) {
-		for (i, dir) in dirs.into_iter().enumerate() {
+	pub fn diff(&mut self, dirs: &[impl AsRef<Path>]) {
+		for (i, dir) in dirs.iter().enumerate() {
 			let j = self.dirs[i..]
 				.iter()
 				.position(|entry| entry.path() == dir.as_ref())
@@ -64,5 +64,7 @@ impl FileTree {
 				self.dirs.push(Dir::new(dir));
 			}
 		}
+
+		self.dirs.truncate(dirs.len());
 	}
 }
