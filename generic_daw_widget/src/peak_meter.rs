@@ -20,6 +20,7 @@ use std::{cell::Cell, convert::identity};
 pub struct State {
 	line: Animation<f32>,
 	bar: Animation<f32>,
+	last_update: Instant,
 	now: Cell<Instant>,
 	delay: Instant,
 }
@@ -30,6 +31,7 @@ impl Default for State {
 		Self {
 			line: Animation::new(0.0),
 			bar: Animation::new(0.0),
+			last_update: now,
 			now: Cell::new(now),
 			delay: now,
 		}
@@ -38,13 +40,16 @@ impl Default for State {
 
 impl State {
 	pub fn update(&mut self, peak: f32, now: Instant) {
+		let min_duration = now - self.last_update;
+		self.last_update = now;
+
 		let old_bar = self.bar.interpolate_with(identity, now);
 		self.bar = if peak >= old_bar {
 			Animation::new(peak)
 		} else {
 			Animation::new(old_bar)
 				.easing(Easing::Linear)
-				.duration(Duration::from_secs_f32(old_bar - peak))
+				.duration(Duration::from_secs_f32(old_bar - peak).max(min_duration))
 				.go(peak, now)
 		};
 
@@ -55,7 +60,7 @@ impl State {
 		} else {
 			Animation::new(old_line)
 				.easing(Easing::Linear)
-				.duration(3 * Duration::from_secs_f32(old_line - peak))
+				.duration(Duration::from_secs_f32(3.0 * (old_line - peak)).max(min_duration))
 				.delay(self.delay.saturating_duration_since(now))
 				.go(peak, now)
 		};
