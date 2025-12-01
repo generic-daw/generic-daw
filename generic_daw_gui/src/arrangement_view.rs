@@ -88,19 +88,19 @@ pub static DATA_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 });
 
 pub static RECORDING_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let recording_dir = DATA_DIR.join("Recordings").into();
+	let recording_dir = DATA_DIR.join("recordings").into();
 	_ = std::fs::create_dir(&recording_dir);
 	recording_dir
 });
 
 pub static PROJECT_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let project_dir = DATA_DIR.join("Projects").into();
+	let project_dir = DATA_DIR.join("projects").into();
 	_ = std::fs::create_dir(&project_dir);
 	project_dir
 });
 
 pub static AUTOSAVE_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let autosave_dir = PROJECT_DIR.join("Autosaved").into();
+	let autosave_dir = PROJECT_DIR.join("autosaved").into();
 	_ = std::fs::create_dir(&autosave_dir);
 	autosave_dir
 });
