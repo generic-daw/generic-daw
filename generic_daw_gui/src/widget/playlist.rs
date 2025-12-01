@@ -86,17 +86,16 @@ where
 	}
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-		let mut offset = 0.0;
 		Node::with_children(
 			limits.max(),
 			self.tracks
 				.iter_mut()
 				.zip(&mut tree.children)
 				.map(|(child, tree)| child.layout(tree, renderer, limits))
-				.map(|node| {
-					let node = node.translate(Vector::new(0.0, offset));
-					offset += node.bounds().height;
-					node
+				.scan(0.0, |acc, node| {
+					let node = node.translate(Vector::new(0.0, *acc));
+					*acc += node.bounds().height;
+					Some(node)
 				})
 				.collect(),
 		)

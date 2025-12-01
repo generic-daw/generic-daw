@@ -38,7 +38,6 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 			jitter_correct: f32,
 			hidden_top_px: f32,
 		) -> Vec<SolidVertex2D> {
-			let mut last = None::<(f32, f32)>;
 			iter.into_iter()
 				.map(|(min, max)| {
 					(
@@ -46,13 +45,13 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 						max.mul_add(height, hidden_top_px),
 					)
 				})
-				.map(|(mut min, mut max)| {
-					if let Some((l_max, l_min)) = last {
+				.scan(None, |acc, (mut min, mut max)| {
+					if let Some((l_max, l_min)) = *acc {
 						min = min.min(l_max);
 						max = max.max(l_min);
 					}
-					last = Some((max, min));
-					(min, max)
+					*acc = Some((max, min));
+					Some((min, max))
 				})
 				.map(|(min, max)| {
 					if max - min < 1.0 {
