@@ -34,7 +34,7 @@ use generic_daw_core::{
 };
 use generic_daw_utils::{NoClone, NoDebug};
 use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
-use humantime::format_rfc3339;
+use humantime::format_rfc3339_seconds;
 use iced::{
 	Center, Element, Fill, Function as _, Point, Shrink, Size, Subscription, Task, Vector, border,
 	futures::SinkExt as _,
@@ -97,6 +97,12 @@ pub static PROJECT_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 	let project_dir = DATA_DIR.join("Projects").into();
 	_ = std::fs::create_dir(&project_dir);
 	project_dir
+});
+
+pub static AUTOSAVE_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
+	let autosave_dir = PROJECT_DIR.join("Autosaved").into();
+	_ = std::fs::create_dir(&autosave_dir);
+	autosave_dir
 });
 
 #[derive(Clone, Debug)]
@@ -508,7 +514,7 @@ impl ArrangementView {
 				let path = RECORDING_DIR
 					.join(format!(
 						"recording-{}.wav",
-						format_rfc3339(SystemTime::now())
+						format_rfc3339_seconds(SystemTime::now())
 					))
 					.into();
 
@@ -590,13 +596,13 @@ impl ArrangementView {
 			Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
 			Message::Pan(pos_diff, size) => match self.tab {
 				Tab::Playlist => {
-					self.playlist_position = self.playlist_position + pos_diff;
+					self.playlist_position += pos_diff;
 					self.playlist_position.x = self.playlist_position.x.max(0.0);
 					self.playlist_position.y = self.playlist_position.y.max(0.0);
 				}
 				Tab::Mixer => {}
 				Tab::PianoRoll(..) => {
-					self.piano_roll_position = self.piano_roll_position + pos_diff;
+					self.piano_roll_position += pos_diff;
 					self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
 					self.piano_roll_position.y = self
 						.piano_roll_position
@@ -608,7 +614,7 @@ impl ArrangementView {
 				let (old_scale, pos, new_scale) = match self.tab {
 					Tab::Playlist => {
 						let old_scale = self.playlist_scale;
-						self.playlist_scale = self.playlist_scale + scale_diff;
+						self.playlist_scale += scale_diff;
 						self.playlist_scale.x = self.playlist_scale.x.clamp(1.0, 16f32.next_down());
 						self.playlist_scale.y = self.playlist_scale.y.clamp(46.0, 200.0);
 						(old_scale, self.playlist_position, self.playlist_scale)
@@ -616,7 +622,7 @@ impl ArrangementView {
 					Tab::Mixer => return Task::none(),
 					Tab::PianoRoll(..) => {
 						let old_scale = self.piano_roll_scale;
-						self.piano_roll_scale = self.piano_roll_scale + scale_diff;
+						self.piano_roll_scale += scale_diff;
 						self.piano_roll_scale.x =
 							self.piano_roll_scale.x.clamp(1.0, 16f32.next_down());
 						self.piano_roll_scale.y = self

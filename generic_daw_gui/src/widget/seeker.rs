@@ -139,7 +139,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			state.status = Status::None;
 			return;
 		};
-		cursor = cursor - Vector::new(right_half.x - layout.position().x, LINE_HEIGHT);
+		cursor -= Vector::new(right_half.x - layout.position().x, LINE_HEIGHT);
 		cursor.x = cursor.x.max(0.0);
 
 		match event {

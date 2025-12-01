@@ -1,5 +1,7 @@
 use crate::{
-	arrangement_view::{self, Arrangement, ArrangementView, Feedback, PROJECT_DIR, Tab},
+	arrangement_view::{
+		self, AUTOSAVE_DIR, Arrangement, ArrangementView, Feedback, PROJECT_DIR, Tab,
+	},
 	components::{PICK_LIST_HANDLE, number_input},
 	config::Config,
 	config_view::{self, ConfigView},
@@ -17,6 +19,7 @@ use generic_daw_core::{
 };
 use generic_daw_utils::{NoClone, NoDebug};
 use generic_daw_widget::dot::Dot;
+use humantime::format_rfc3339_seconds;
 use iced::{
 	Center, Color, Element, Font, Function as _,
 	Length::Fill,
@@ -33,7 +36,13 @@ use iced::{
 use iced_split::{Strategy, vertical_split};
 use log::trace;
 use rfd::AsyncFileDialog;
-use std::{collections::HashMap, num::NonZero, path::Path, sync::Arc, time::Duration};
+use std::{
+	collections::HashMap,
+	num::NonZero,
+	path::Path,
+	sync::Arc,
+	time::{Duration, SystemTime},
+};
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -212,9 +221,22 @@ impl Daw {
 				}
 			}
 			Message::AutosaveFile => {
-				if let Some(current_project) = self.current_project.clone() {
-					return self.update(Message::SaveAsFile(current_project));
-				}
+				let name = self
+					.current_project
+					.as_deref()
+					.and_then(|path| path.file_prefix())
+					.and_then(|name| name.to_str())
+					.unwrap_or("autosaved");
+
+				let path = AUTOSAVE_DIR.join(format!(
+					"{}-{}.gdp",
+					name,
+					format_rfc3339_seconds(SystemTime::now())
+				));
+
+				self.arrangement_view
+					.arrangement
+					.save(&path, &mut self.arrangement_view.clap_host);
 			}
 			Message::OpenFileDialog => {
 				return window::run(self.window_id, |window| {

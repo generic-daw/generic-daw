@@ -85,8 +85,8 @@ pub struct Autosave {
 impl Default for Autosave {
 	fn default() -> Self {
 		Self {
-			enabled: false,
-			interval: NonZero::new(600).unwrap(),
+			enabled: true,
+			interval: NonZero::new(300).unwrap(),
 		}
 	}
 }
