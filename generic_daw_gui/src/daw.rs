@@ -394,8 +394,8 @@ impl Daw {
 
 	fn handle_file_tree_message(&mut self, action: file_tree::Message) -> Task<Message> {
 		match action {
-			file_tree::Message::File(path) => {
-				self.arrangement_view.playlist_selection.get_mut().file = Some((path, None));
+			file_tree::Message::File(file) => {
+				self.arrangement_view.hover_file(file);
 			}
 			file_tree::Message::Action(id, action) => {
 				if let Some(task) = self.file_tree.update(id, &action) {
@@ -533,7 +533,7 @@ impl Daw {
 							.style(button_with_radius(button::primary, border::left(5)))
 							.padding(padding::horizontal(7).vertical(5))
 							.on_press_maybe(
-								(!matches!(self.arrangement_view.tab, Tab::Playlist)).then_some(
+								(!matches!(self.arrangement_view.tab(), Tab::Playlist)).then_some(
 									Message::Arrangement(arrangement_view::Message::ChangedTab(
 										Tab::Playlist
 									))
@@ -543,7 +543,7 @@ impl Daw {
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding(padding::horizontal(7).vertical(5))
 							.on_press_maybe(
-								(!matches!(self.arrangement_view.tab, Tab::Mixer)).then_some(
+								(!matches!(self.arrangement_view.tab(), Tab::Mixer)).then_some(
 									Message::Arrangement(arrangement_view::Message::ChangedTab(
 										Tab::Mixer
 									))
@@ -567,16 +567,13 @@ impl Daw {
 			]
 			.padding(10)
 			.spacing(10),
-			self.arrangement_view
-				.playlist_selection
-				.borrow()
-				.file
-				.as_ref()
-				.map(|_| mouse_area(space().width(Fill).height(Fill))
-					.interaction(Interaction::Copy)
-					.on_release(Message::Arrangement(
-						arrangement_view::Message::LoadHoveredSample,
-					))),
+			self.arrangement_view.hovering_file().then(|| mouse_area(
+				space().width(Fill).height(Fill)
+			)
+			.interaction(Interaction::Copy)
+			.on_release(Message::Arrangement(
+				arrangement_view::Message::LoadHoveredFile,
+			))),
 			self.arrangement_view
 				.loading()
 				.then(|| mouse_area(space().width(Fill).height(Fill))

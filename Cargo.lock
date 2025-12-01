@@ -1551,7 +1551,7 @@ dependencies = [
 [[package]]
 name = "iced_split"
 version = "0.1.0"
-source = "git+https://github.com/edwloef/iced_split.git?branch=generic-daw#11427052d6c169898014beec5022b42c4de13906"
+source = "git+https://github.com/edwloef/iced_split.git?branch=generic-daw#0b33371c1de0b210e59b4f43e03da171eca8f748"
 dependencies = [
  "iced_core",
 ]
@@ -2678,9 +2678,9 @@ checksum = "3eb8486b569e12e2c32ad3e204dbaba5e4b5b216e9367044f25f1dba42341773"
 
 [[package]]
 name = "prost"
-version = "0.14.2"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "101fec8d036f8d9d4a1e8ebf90d566d1d798f3b1aa379d2576a54a0d9acea5bd"
+checksum = "7231bd9b3d3d33c86b58adbac74b5ec0ad9f496b19d22801d773636feaa95f3d"
 dependencies = [
  "bytes",
  "prost-derive",
@@ -2688,9 +2688,9 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.14.2"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2d93e596a829ebe00afa41c3a056e6308d6b8a4c7d869edf184e2c91b1ba564"
+checksum = "9120690fafc389a67ba3803df527d0ec9cbbc9cc45e4cc20b332996dfb672425"
 dependencies = [
  "anyhow",
  "itertools",

@@ -133,7 +133,7 @@ pub enum Message {
 	PluginMoveTo(NodeId, DragEvent),
 	PluginRemove(NodeId, usize),
 
-	LoadHoveredSample,
+	LoadHoveredFile,
 	SampleLoaded(NoClone<Option<Box<SamplePair>>>, usize, MusicalTime),
 	AddAudioClip(SampleId, usize, MusicalTime),
 
@@ -177,12 +177,12 @@ pub struct ArrangementView {
 	pub arrangement: Arrangement,
 	pub clap_host: ClapHost,
 
-	pub recording: Option<(Recording, NodeId)>,
-	pub tab: Tab,
+	recording: Option<(Recording, NodeId)>,
+	tab: Tab,
 
 	playlist_position: Vector,
 	playlist_scale: Vector,
-	pub playlist_selection: RefCell<playlist::Selection>,
+	playlist_selection: RefCell<playlist::Selection>,
 	soloed_track: Option<NodeId>,
 
 	selected_channel: Option<NodeId>,
@@ -391,10 +391,10 @@ impl ArrangementView {
 				}
 			}
 			Message::PluginRemove(node, i) => _ = self.arrangement.plugin_remove(node, i),
-			Message::LoadHoveredSample => {
-				let playlist::Selection { file: hovering, .. } = self.playlist_selection.get_mut();
+			Message::LoadHoveredFile => {
+				let playlist::Selection { file, .. } = self.playlist_selection.get_mut();
 				if let (Some((path, Some((track, pos)))), Tab::Playlist) =
-					(std::mem::take(hovering), self.tab)
+					(std::mem::take(file), self.tab)
 				{
 					let mut iter = self.arrangement.samples().values();
 					return if let Some(sample) = iter.find(|sample| sample.path == path) {
@@ -1464,6 +1464,18 @@ impl ArrangementView {
 
 	pub fn subscription(&self) -> Subscription<Message> {
 		self.clap_host.subscription().map(Message::ClapHost)
+	}
+
+	pub fn hover_file(&mut self, file: Arc<Path>) {
+		self.playlist_selection.get_mut().file = Some((file, None));
+	}
+
+	pub fn hovering_file(&self) -> bool {
+		self.playlist_selection.borrow().file.is_some()
+	}
+
+	pub fn tab(&self) -> &Tab {
+		&self.tab
 	}
 
 	pub fn loading(&self) -> bool {
