@@ -45,7 +45,7 @@ pub use plugin_descriptor::PluginDescriptor;
 pub use plugin_id::Id as PluginId;
 pub use size::Size;
 
-const API_TYPE: GuiApiType<'_> = const { GuiApiType::default_for_current_platform().unwrap() };
+const API_TYPE: GuiApiType<'_> = GuiApiType::default_for_current_platform().unwrap();
 
 pub static DEFAULT_CLAP_PATHS: LazyLock<Vec<Arc<Path>>> = LazyLock::new(|| {
 	let mut paths = Vec::new();
