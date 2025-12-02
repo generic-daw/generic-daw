@@ -687,6 +687,10 @@ impl Daw {
 	}
 
 	pub fn subscription(&self) -> Subscription<Message> {
+		if self.progress.is_some() {
+			return Subscription::none();
+		}
+
 		let autosave = if self.config.autosave.enabled {
 			every(Duration::from_secs(self.config.autosave.interval.get()))
 				.map(|_| Message::AutosaveFile)
@@ -694,9 +698,7 @@ impl Daw {
 			Subscription::none()
 		};
 
-		let keybinds = if self.progress.is_some() {
-			Subscription::none()
-		} else if self.config_view.is_some() {
+		let keybinds = if self.config_view.is_some() {
 			keyboard::listen().filter_map(|e| match e {
 				keyboard::Event::KeyPressed {
 					key,
