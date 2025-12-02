@@ -697,12 +697,26 @@ impl Daw {
 		let keybinds = if self.progress.is_some() {
 			Subscription::none()
 		} else if self.config_view.is_some() {
-			keyboard::on_key_press(|k, m| {
-				Self::config_view_keybinds(&k, m).or_else(|| Self::base_keybinds(&k, m))
+			keyboard::listen().filter_map(|e| match e {
+				keyboard::Event::KeyPressed {
+					key,
+					physical_key,
+					modifiers,
+					..
+				} => Self::config_view_keybinds(&key, modifiers)
+					.or_else(|| Self::base_keybinds(&key, physical_key, modifiers)),
+				_ => None,
 			})
 		} else {
-			keyboard::on_key_press(|k, m| {
-				Self::arrangement_view_keybinds(&k, m).or_else(|| Self::base_keybinds(&k, m))
+			keyboard::listen().filter_map(|e| match e {
+				keyboard::Event::KeyPressed {
+					key,
+					physical_key,
+					modifiers,
+					..
+				} => Self::arrangement_view_keybinds(&key, modifiers)
+					.or_else(|| Self::base_keybinds(&key, physical_key, modifiers)),
+				_ => None,
 			})
 		};
 
@@ -756,7 +770,11 @@ impl Daw {
 		}
 	}
 
-	fn base_keybinds(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> Option<Message> {
+	fn base_keybinds(
+		key: &keyboard::Key,
+		physical_key: keyboard::key::Physical,
+		modifiers: keyboard::Modifiers,
+	) -> Option<Message> {
 		match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
 			(false, false, false) => match key.as_ref() {
 				keyboard::Key::Named(keyboard::key::Named::Space) => Some(Message::Arrangement(
@@ -764,15 +782,15 @@ impl Daw {
 				)),
 				_ => None,
 			},
-			(true, false, false) => match key.as_ref() {
-				keyboard::Key::Character("e") => Some(Message::ExportFileDialog),
-				keyboard::Key::Character("n") => Some(Message::NewFile),
-				keyboard::Key::Character("o") => Some(Message::OpenFileDialog),
-				keyboard::Key::Character("s") => Some(Message::SaveFile),
+			(true, false, false) => match key.to_latin(physical_key)? {
+				'e' => Some(Message::ExportFileDialog),
+				'n' => Some(Message::NewFile),
+				'o' => Some(Message::OpenFileDialog),
+				's' => Some(Message::SaveFile),
 				_ => None,
 			},
-			(true, true, false) => match key.as_ref() {
-				keyboard::Key::Character("s") => Some(Message::SaveAsFileDialog),
+			(true, true, false) => match key.to_latin(physical_key)? {
+				's' => Some(Message::SaveAsFileDialog),
 				_ => None,
 			},
 			_ => None,
