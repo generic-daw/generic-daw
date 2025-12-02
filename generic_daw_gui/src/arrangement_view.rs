@@ -36,7 +36,7 @@ use generic_daw_utils::{NoClone, NoDebug};
 use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
 use humantime::format_rfc3339_seconds;
 use iced::{
-	Center, Element, Fill, Function as _, Point, Shrink, Size, Subscription, Task, Vector, border,
+	Center, Element, Fill, Function as _, Point, Shrink, Size, Task, Vector, border,
 	futures::SinkExt as _,
 	mouse::Interaction,
 	padding, stream,
@@ -1460,10 +1460,6 @@ impl ArrangementView {
 					.to_samples_f(self.arrangement.transport()),
 		)
 		.into()
-	}
-
-	pub fn subscription(&self) -> Subscription<Message> {
-		self.clap_host.subscription().map(Message::ClapHost)
 	}
 
 	pub fn hover_file(&mut self, file: Arc<Path>) {

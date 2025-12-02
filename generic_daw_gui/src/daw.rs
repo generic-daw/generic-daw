@@ -722,7 +722,9 @@ impl Daw {
 
 		Subscription::batch([
 			self.arrangement_view
+				.clap_host
 				.subscription()
+				.map(arrangement_view::Message::ClapHost)
 				.map(Message::Arrangement),
 			autosave,
 			keybinds,
