@@ -27,7 +27,7 @@ clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
 	"timer",
 ] }
 clack-host = { git = "https://github.com/prokopyl/clack.git" }
-log = "0.4.28"
+log = "0.4.29"
 raw-window-handle = "0.6.2"
 rayon-core = "1.13.0"
 rtrb = "0.3.2"

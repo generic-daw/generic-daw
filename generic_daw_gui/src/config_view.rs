@@ -269,78 +269,88 @@ impl ConfigView {
 					self.with_device(|device, devices| {
 						column![
 							row![
-								"Name: ",
-								space::horizontal(),
-								pick_list(devices, device.name.as_ref(), |name| {
-									Message::ChangedName(Some(name))
-								})
-								.handle(PICK_LIST_HANDLE)
-								.placeholder("Default")
-								.width(222)
-								.style(pick_list_with_radius(border::top_left(5)))
-								.menu_style(menu_style),
-								button(rotate_ccw())
-									.style(button_with_radius(
-										button::primary,
-										border::top_right(5)
-									))
-									.padding(5)
-									.on_press_maybe(
-										device.name.as_deref().map(|_| Message::ChangedName(None))
-									)
-							]
-							.align_y(Center),
-							row![
-								"Sample Rate: ",
-								space::horizontal(),
-								pick_list(
-									COMMON_SAMPLE_RATES,
-									Some(device.sample_rate.get()),
-									|sample_rate| {
-										Message::ChangedSampleRate(
-											NonZero::new(sample_rate).unwrap(),
+								text("Name:").width(Fill),
+								row![
+									pick_list(devices, device.name.as_ref(), |name| {
+										Message::ChangedName(Some(name))
+									})
+									.handle(PICK_LIST_HANDLE)
+									.placeholder("Default")
+									.width(Fill)
+									.style(pick_list_with_radius(border::top_left(5)))
+									.menu_style(menu_style),
+									button(rotate_ccw())
+										.style(button_with_radius(
+											button::primary,
+											border::top_right(5)
+										))
+										.padding(5)
+										.on_press_maybe(
+											device
+												.name
+												.as_deref()
+												.map(|_| Message::ChangedName(None))
 										)
-									}
-								)
-								.handle(PICK_LIST_HANDLE)
-								.placeholder("Default")
-								.width(222)
-								.style(pick_list_with_radius(0))
-								.menu_style(menu_style),
-								button(rotate_ccw())
-									.style(button_with_radius(button::primary, 0))
-									.padding(5)
-									.on_press_maybe((device.sample_rate.get() != 44100).then_some(
-										Message::ChangedSampleRate(NonZero::new(44100).unwrap(),)
-									))
+								]
 							]
 							.align_y(Center),
 							row![
-								"Buffer Size: ",
-								space::horizontal(),
-								pick_list(
-									COMMON_BUFFER_SIZES,
-									device.buffer_size.map(NonZero::get),
-									|buffer_size| {
-										Message::ChangedBufferSize(NonZero::new(buffer_size))
-									}
-								)
-								.handle(PICK_LIST_HANDLE)
-								.placeholder("Default")
-								.width(222)
-								.style(pick_list_with_radius(border::bottom_left(5)))
-								.menu_style(menu_style),
-								button(rotate_ccw())
-									.style(button_with_radius(
-										button::primary,
-										border::bottom_right(5)
-									))
-									.padding(5)
-									.on_press_maybe(
-										device
-											.buffer_size
-											.map(|_| Message::ChangedBufferSize(None))
+								text("Sample Rate:").width(Fill),
+								row![
+									pick_list(
+										COMMON_SAMPLE_RATES,
+										Some(device.sample_rate.get()),
+										|sample_rate| {
+											Message::ChangedSampleRate(
+												NonZero::new(sample_rate).unwrap(),
+											)
+										}
 									)
+									.handle(PICK_LIST_HANDLE)
+									.placeholder("Default")
+									.width(Fill)
+									.style(pick_list_with_radius(0))
+									.menu_style(menu_style),
+									button(rotate_ccw())
+										.style(button_with_radius(button::primary, 0))
+										.padding(5)
+										.on_press_maybe(
+											(device.sample_rate.get() != 44100).then_some(
+												Message::ChangedSampleRate(
+													NonZero::new(44100).unwrap(),
+												)
+											)
+										)
+								]
+							]
+							.align_y(Center),
+							row![
+								text("Buffer Size:").width(Fill),
+								row![
+									pick_list(
+										COMMON_BUFFER_SIZES,
+										device.buffer_size.map(NonZero::get),
+										|buffer_size| {
+											Message::ChangedBufferSize(NonZero::new(buffer_size))
+										}
+									)
+									.handle(PICK_LIST_HANDLE)
+									.placeholder("Default")
+									.width(Fill)
+									.style(pick_list_with_radius(border::bottom_left(5)))
+									.menu_style(menu_style),
+									button(rotate_ccw())
+										.style(button_with_radius(
+											button::primary,
+											border::bottom_right(5)
+										))
+										.padding(5)
+										.on_press_maybe(
+											device
+												.buffer_size
+												.map(|_| Message::ChangedBufferSize(None))
+										)
+								]
 							]
 							.align_y(Center)
 						]
@@ -456,24 +466,25 @@ impl ConfigView {
 					.align_y(Center)
 					.spacing(10),
 					row![
-						"Theme: ",
-						space::horizontal(),
-						pick_list(
-							Theme::VARIANTS,
-							Some(self.config.theme),
-							Message::ChangedTheme
-						)
-						.handle(PICK_LIST_HANDLE)
-						.width(222)
-						.style(pick_list_with_radius(border::left(5)))
-						.menu_style(menu_style),
-						button(rotate_ccw())
-							.style(button_with_radius(button::primary, border::right(5)))
-							.padding(5)
-							.on_press_maybe(
-								(self.config.theme != Theme::CatppuccinFrappe)
-									.then_some(Message::ChangedTheme(Theme::CatppuccinFrappe))
+						text("Theme:").width(Fill),
+						row![
+							pick_list(
+								Theme::VARIANTS,
+								Some(self.config.theme),
+								Message::ChangedTheme
 							)
+							.handle(PICK_LIST_HANDLE)
+							.width(Fill)
+							.style(pick_list_with_radius(border::left(5)))
+							.menu_style(menu_style),
+							button(rotate_ccw())
+								.style(button_with_radius(button::primary, border::right(5)))
+								.padding(5)
+								.on_press_maybe(
+									(self.config.theme != Theme::CatppuccinFrappe)
+										.then_some(Message::ChangedTheme(Theme::CatppuccinFrappe))
+								)
+						]
 					]
 					.align_y(Center),
 					rule::horizontal(1),
@@ -507,7 +518,7 @@ impl ConfigView {
 				]
 				.spacing(10)
 				.padding(10)
-				.width(530),
+				.width(540),
 			)
 			.spacing(5)
 			.style(scrollable_style),

@@ -14,7 +14,7 @@ generic_daw_utils = { workspace = true }
 
 cpal = "0.16.0"
 hound = "3.5.1"
-log = "0.4.28"
+log = "0.4.29"
 oneshot = "0.1.11"
 rtrb = "0.3.2"
 rubato = "0.16.2"
