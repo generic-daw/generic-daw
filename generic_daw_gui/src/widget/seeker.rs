@@ -568,7 +568,20 @@ impl<'a, Message> Seeker<'a, Message> {
 			theme.extended_palette().primary.base.color,
 		);
 
-		let mut draw_text = |beat: MusicalTime| {
+		let mut beat = MusicalTime::from_samples_f(
+			(self.position.x + self.offset) * samples_per_px,
+			self.transport,
+		);
+		let end_beat =
+			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.transport);
+		beat = beat
+			.snap_floor(self.scale.x + 3.0, self.transport)
+			.bar_floor(self.transport);
+
+		let snap_step =
+			MusicalTime::snap_step(self.scale.x + 3.0, self.transport).bar_ceil(self.transport);
+
+		while beat <= end_beat {
 			let bar = Text {
 				content: (beat.bar(self.transport) + 1).to_string(),
 				bounds: Size::new(f32::INFINITY, 0.0),
@@ -587,23 +600,7 @@ impl<'a, Message> Seeker<'a, Message> {
 				theme.extended_palette().primary.base.text,
 				bounds,
 			);
-		};
 
-		let mut beat = MusicalTime::from_samples_f(
-			(self.position.x + self.offset) * samples_per_px,
-			self.transport,
-		);
-		let end_beat =
-			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.transport);
-		beat = beat
-			.snap_floor(self.scale.x + 3.0, self.transport)
-			.bar_floor(self.transport);
-
-		let snap_step =
-			MusicalTime::snap_step(self.scale.x + 3.0, self.transport).bar_ceil(self.transport);
-
-		while beat <= end_beat {
-			draw_text(beat);
 			beat += snap_step;
 		}
 	}
