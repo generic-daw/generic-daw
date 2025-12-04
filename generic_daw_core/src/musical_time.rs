@@ -59,29 +59,6 @@ impl MusicalTime {
 	}
 
 	#[must_use]
-	pub const fn floor(mut self) -> Self {
-		self.0 -= self.0 % Self::TICKS_PER_BEAT;
-		self
-	}
-
-	#[must_use]
-	pub const fn ceil(mut self) -> Self {
-		self.0 += Self::TICKS_PER_BEAT - (self.0 % Self::TICKS_PER_BEAT);
-		self
-	}
-
-	#[must_use]
-	pub const fn round(mut self) -> Self {
-		let diff = self.0 % Self::TICKS_PER_BEAT;
-		if diff < Self::TICKS_PER_BEAT / 2 {
-			self.0 -= diff;
-		} else {
-			self.0 += Self::TICKS_PER_BEAT - diff;
-		}
-		self
-	}
-
-	#[must_use]
 	pub const fn from_samples_f(samples: f32, transport: &Transport) -> Self {
 		let samples = samples as f64;
 		let bpm = transport.bpm.get() as f64;
@@ -128,29 +105,71 @@ impl MusicalTime {
 	}
 
 	#[must_use]
-	pub fn snap_floor(mut self, scale: f32, transport: &Transport) -> Self {
-		let snap_step = Self::snap_step(scale, transport).0;
-		self.0 -= self.0 % snap_step;
+	pub const fn floor(mut self, modulo: Self) -> Self {
+		self.0 -= self.0 % modulo.0;
 		self
 	}
 
 	#[must_use]
-	pub fn snap_ceil(mut self, scale: f32, transport: &Transport) -> Self {
-		let snap_step = Self::snap_step(scale, transport).0;
-		self.0 += snap_step - (self.0 % snap_step);
+	pub const fn ceil(mut self, modulo: Self) -> Self {
+		self.0 += (modulo.0 - (self.0 % modulo.0)) % modulo.0;
 		self
 	}
 
 	#[must_use]
-	pub fn snap_round(mut self, scale: f32, transport: &Transport) -> Self {
-		let modulo = Self::snap_step(scale, transport).0;
-		let diff = self.0 % modulo;
-		if diff < modulo / 2 {
+	pub const fn round(mut self, modulo: Self) -> Self {
+		let diff = self.0 % modulo.0;
+		if diff < modulo.0 / 2 {
 			self.0 -= diff;
 		} else {
-			self.0 += modulo - diff;
+			self.0 += modulo.0 - diff;
 		}
 		self
+	}
+
+	#[must_use]
+	pub const fn beat_floor(self) -> Self {
+		self.floor(Self::BEAT)
+	}
+
+	#[must_use]
+	pub const fn beat_ceil(self) -> Self {
+		self.ceil(Self::BEAT)
+	}
+
+	#[must_use]
+	pub const fn beat_round(self) -> Self {
+		self.round(Self::BEAT)
+	}
+
+	#[must_use]
+	pub const fn bar_floor(self, transport: &Transport) -> Self {
+		self.floor(Self::new(transport.numerator.get() as u64, 0))
+	}
+
+	#[must_use]
+	pub const fn bar_ceil(self, transport: &Transport) -> Self {
+		self.ceil(Self::new(transport.numerator.get() as u64, 0))
+	}
+
+	#[must_use]
+	pub const fn bar_round(self, transport: &Transport) -> Self {
+		self.round(Self::new(transport.numerator.get() as u64, 0))
+	}
+
+	#[must_use]
+	pub fn snap_floor(self, scale: f32, transport: &Transport) -> Self {
+		self.floor(Self::snap_step(scale, transport))
+	}
+
+	#[must_use]
+	pub fn snap_ceil(self, scale: f32, transport: &Transport) -> Self {
+		self.ceil(Self::snap_step(scale, transport))
+	}
+
+	#[must_use]
+	pub fn snap_round(self, scale: f32, transport: &Transport) -> Self {
+		self.round(Self::snap_step(scale, transport))
 	}
 
 	#[must_use]

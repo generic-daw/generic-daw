@@ -401,33 +401,35 @@ impl<'a, Message> Seeker<'a, Message> {
 	fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
 		let samples_per_px = self.scale.x.exp2();
 
-		let mut beat =
-			MusicalTime::from_samples_f(self.position.x * samples_per_px, self.transport);
+		let offset_pos = |time: f32| {
+			bounds.position()
+				+ Vector::new(time / samples_per_px - self.position.x - self.offset, 0.0)
+		};
+		let offset_time = |time: MusicalTime| offset_pos(time.to_samples_f(self.transport));
+
+		let mut beat = MusicalTime::from_samples_f(
+			(self.position.x + self.offset) * samples_per_px,
+			self.transport,
+		);
 		let end_beat =
 			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.transport);
 		beat = beat.snap_floor(self.scale.x + 1.0, self.transport);
 
-		let background_step = MusicalTime::new(4 * u64::from(self.transport.numerator.get()), 0);
-		let mut background_beat =
-			MusicalTime::new(beat.beat() - (beat.beat() % background_step.beat()), 0);
-		let background_width = background_step.to_samples_f(self.transport) / samples_per_px;
+		let background_step = MusicalTime::new(8 * u64::from(self.transport.numerator.get()), 0);
+		let mut background_beat = beat.round(background_step);
+		let background_width = background_step.to_samples_f(self.transport) / samples_per_px / 2.0;
 
 		while background_beat < end_beat {
-			if background_beat.bar(self.transport).is_multiple_of(8) {
-				let x =
-					background_beat.to_samples_f(self.transport) / samples_per_px - self.position.x;
-
-				renderer.fill_quad(
-					Quad {
-						bounds: Rectangle::new(
-							bounds.position() + Vector::new(x, 0.0),
-							Size::new(background_width, bounds.height),
-						),
-						..Quad::default()
-					},
-					theme.extended_palette().background.weakest.color,
-				);
-			}
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(
+						offset_time(background_beat),
+						Size::new(background_width, bounds.height),
+					),
+					..Quad::default()
+				},
+				theme.extended_palette().background.weakest.color,
+			);
 
 			background_beat += background_step;
 		}
@@ -449,14 +451,9 @@ impl<'a, Message> Seeker<'a, Message> {
 				theme.extended_palette().background.weak.color
 			};
 
-			let x = beat.to_samples_f(self.transport) / samples_per_px - self.position.x;
-
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(
-						bounds.position() + Vector::new(x, 0.0),
-						Size::new(1.0, bounds.height),
-					),
+					bounds: Rectangle::new(offset_time(beat), Size::new(1.0, bounds.height)),
 					..Quad::default()
 				},
 				color,
@@ -571,9 +568,9 @@ impl<'a, Message> Seeker<'a, Message> {
 			theme.extended_palette().primary.base.color,
 		);
 
-		let mut draw_text = |beat: MusicalTime, bar: u64| {
+		let mut draw_text = |beat: MusicalTime| {
 			let bar = Text {
-				content: (bar + 1).to_string(),
+				content: (beat.bar(self.transport) + 1).to_string(),
 				bounds: Size::new(f32::INFINITY, 0.0),
 				size: renderer.default_size(),
 				line_height: LineHeight::default(),
@@ -584,33 +581,29 @@ impl<'a, Message> Seeker<'a, Message> {
 				wrapping: Wrapping::None,
 			};
 
-			let x = beat.to_samples_f(self.transport) / samples_per_px - self.position.x;
-
 			renderer.fill_text(
 				bar,
-				bounds.position() + Vector::new(x + 3.0, 0.0),
+				offset_time(beat) + Vector::new(3.0, 0.0),
 				theme.extended_palette().primary.base.text,
 				bounds,
 			);
 		};
 
-		let mut beat =
-			MusicalTime::from_samples_f(self.position.x * samples_per_px, self.transport);
+		let mut beat = MusicalTime::from_samples_f(
+			(self.position.x + self.offset) * samples_per_px,
+			self.transport,
+		);
 		let end_beat =
 			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.transport);
-		beat = beat.snap_floor(self.scale.x + 3.0, self.transport);
+		beat = beat
+			.snap_floor(self.scale.x + 3.0, self.transport)
+			.bar_floor(self.transport);
 
 		let snap_step =
-			MusicalTime::snap_step(self.scale.x + 3.0, self.transport).max(MusicalTime::BEAT);
-		let bar_inc = snap_step.bar(self.transport).max(1);
+			MusicalTime::snap_step(self.scale.x + 3.0, self.transport).bar_ceil(self.transport);
 
 		while beat <= end_beat {
-			let bar = beat.bar(self.transport);
-
-			if beat.beat_in_bar(self.transport) == 0 && bar.is_multiple_of(bar_inc) {
-				draw_text(beat, bar);
-			}
-
+			draw_text(beat);
 			beat += snap_step;
 		}
 	}

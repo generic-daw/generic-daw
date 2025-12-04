@@ -324,12 +324,12 @@ impl DawCtx {
 			self.state.transport.sample.saturating_sub(delay),
 			&self.state.transport,
 		)
-		.floor();
+		.beat_floor();
 		let end = MusicalTime::from_samples(
 			(self.state.transport.sample + buf.len()).saturating_sub(delay),
 			&self.state.transport,
 		)
-		.ceil();
+		.beat_ceil();
 
 		while start < end {
 			let start_samples = start.to_samples(&self.state.transport) + delay;
