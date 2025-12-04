@@ -68,29 +68,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 	}
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-		let left = self.children[0].as_widget_mut().layout(
-			&mut tree.children[0],
-			renderer,
-			&Limits::new(limits.min(), Size::new(limits.max().width, f32::INFINITY)),
-		);
-		let left_width = left.size().width;
+		let left = self.children[0]
+			.as_widget_mut()
+			.layout(&mut tree.children[0], renderer, &Limits::NONE)
+			.translate(Vector::new(0.0, LINE_HEIGHT - self.position.y));
 
-		let right = self.children[1].as_widget_mut().layout(
-			&mut tree.children[1],
-			renderer,
-			&Limits::new(
-				limits.min(),
-				Size::new(limits.max().width - left_width, f32::INFINITY),
-			),
-		);
+		let right = self.children[1]
+			.as_widget_mut()
+			.layout(&mut tree.children[1], renderer, &Limits::NONE)
+			.translate(Vector::new(left.size().width, LINE_HEIGHT) - *self.position);
 
-		Node::with_children(
-			limits.max(),
-			vec![
-				left.translate(Vector::new(0.0, LINE_HEIGHT - self.position.y)),
-				right.translate(Vector::new(left_width, LINE_HEIGHT - self.position.y)),
-			],
-		)
+		Node::with_children(limits.max(), vec![left, right])
 	}
 
 	fn update(
@@ -104,17 +92,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		shell: &mut Shell<'_, Message>,
 		_viewport: &Rectangle,
 	) {
-		let bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
-
 		self.children
 			.iter_mut()
 			.zip(&mut tree.children)
 			.zip(layout.children())
-			.for_each(|((child, tree), layout)| {
-				let Some(viewport) = layout.bounds().intersection(&bounds) else {
-					return;
-				};
-
+			.zip(Self::viewports(layout))
+			.for_each(|(((child, tree), layout), viewport)| {
 				child.as_widget_mut().update(
 					tree, event, layout, cursor, renderer, clipboard, shell, &viewport,
 				);
@@ -262,25 +245,28 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		cursor: Cursor,
 		_viewport: &Rectangle,
 	) {
-		let bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
 		let right_half = Self::right_half(layout);
-		let right_child_bounds = right_half.shrink(padding::top(LINE_HEIGHT));
+		let right_child = right_half.shrink(padding::top(LINE_HEIGHT));
 
-		renderer.with_layer(right_child_bounds, |renderer| {
-			self.grid(renderer, right_child_bounds, theme);
+		renderer.with_layer(right_child, |renderer| {
+			self.grid(renderer, right_child, theme);
 		});
 
-		renderer.with_layer(bounds, |renderer| {
-			self.children
-				.iter()
-				.zip(&tree.children)
-				.zip(layout.children())
-				.for_each(|((child, tree), layout)| {
-					child
-						.as_widget()
-						.draw(tree, renderer, theme, style, layout, cursor, &bounds);
-				});
-		});
+		renderer.with_layer(
+			layout.bounds().shrink(padding::top(LINE_HEIGHT)),
+			|renderer| {
+				self.children
+					.iter()
+					.zip(&tree.children)
+					.zip(layout.children())
+					.zip(Self::viewports(layout))
+					.for_each(|(((child, tree), layout), viewport)| {
+						child
+							.as_widget()
+							.draw(tree, renderer, theme, style, layout, cursor, &viewport);
+					});
+			},
+		);
 
 		renderer.with_layer(right_half, |renderer| {
 			self.seeker(renderer, right_half, theme);
@@ -295,22 +281,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		_viewport: &Rectangle,
 		renderer: &Renderer,
 	) -> Interaction {
-		let state = tree.state.downcast_ref::<State>();
-		if state.status == Status::None {
-			let bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
-
+		if tree.state.downcast_ref::<State>().status == Status::None {
 			self.children
 				.iter()
 				.zip(&tree.children)
 				.zip(layout.children())
-				.filter_map(|((child, tree), layout)| {
-					let viewport = layout.bounds().intersection(&bounds)?;
-
-					Some(
-						child
-							.as_widget()
-							.mouse_interaction(tree, layout, cursor, &viewport, renderer),
-					)
+				.zip(Self::viewports(layout))
+				.map(|(((child, tree), layout), viewport)| {
+					child
+						.as_widget()
+						.mouse_interaction(tree, layout, cursor, &viewport, renderer)
 				})
 				.max()
 				.unwrap_or_default()
@@ -324,17 +304,23 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		tree: &'a mut Tree,
 		layout: Layout<'a>,
 		renderer: &Renderer,
-		viewport: &Rectangle,
+		_viewport: &Rectangle,
 		translation: Vector,
 	) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
-		overlay::from_children(
-			&mut *self.children,
-			tree,
-			layout,
-			renderer,
-			viewport,
-			translation,
-		)
+		let children = self
+			.children
+			.iter_mut()
+			.zip(&mut tree.children)
+			.zip(layout.children())
+			.zip(Self::viewports(layout))
+			.filter_map(|(((child, state), layout), viewport)| {
+				child
+					.as_widget_mut()
+					.overlay(state, layout, renderer, &viewport, translation)
+			})
+			.collect::<Vec<_>>();
+
+		(!children.is_empty()).then(|| overlay::Group::with_children(children).overlay())
 	}
 
 	fn operate(
@@ -389,14 +375,27 @@ impl<'a, Message> Seeker<'a, Message> {
 		self
 	}
 
-	fn right_half(layout: Layout<'_>) -> Rectangle {
+	fn viewports(layout: Layout<'_>) -> impl IntoIterator<Item = Rectangle> {
+		[
+			Self::left_half(layout).shrink(padding::top(LINE_HEIGHT)),
+			Self::right_half(layout).shrink(padding::top(LINE_HEIGHT)),
+		]
+	}
+
+	fn left_half(layout: Layout<'_>) -> Rectangle {
 		let bounds = layout.bounds();
-		let right_child_bounds = layout.child(1).bounds();
+		let left_bounds = layout.child(0).bounds();
 
 		Rectangle::new(
-			Point::new(right_child_bounds.x, bounds.y),
-			Size::new(right_child_bounds.width, bounds.height),
+			Point::new(left_bounds.x, bounds.y),
+			Size::new(left_bounds.width, bounds.height),
 		)
+	}
+
+	fn right_half(layout: Layout<'_>) -> Rectangle {
+		layout
+			.bounds()
+			.shrink(padding::left(Self::left_half(layout).width))
 	}
 
 	fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {

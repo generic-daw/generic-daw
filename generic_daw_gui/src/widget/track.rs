@@ -60,7 +60,6 @@ where
 				.iter_mut()
 				.zip(&mut tree.children)
 				.map(|(child, tree)| child.layout(tree, renderer, &limits.height(self.scale.y)))
-				.map(|node| node.translate(Vector::new(-self.position.x, 0.0)))
 				.collect(),
 		)
 	}
