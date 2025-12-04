@@ -1,7 +1,7 @@
 use crate::Transport;
 use std::{
 	fmt::{Debug, Formatter},
-	ops::{Add, AddAssign, Mul, Sub, SubAssign},
+	ops::{Add, AddAssign, Sub, SubAssign},
 };
 
 mod clip_position;
@@ -203,15 +203,6 @@ impl Sub for MusicalTime {
 impl SubAssign for MusicalTime {
 	fn sub_assign(&mut self, rhs: Self) {
 		self.0 -= rhs.0;
-	}
-}
-
-impl Mul<u64> for MusicalTime {
-	type Output = Self;
-
-	fn mul(mut self, rhs: u64) -> Self::Output {
-		self.0 *= rhs;
-		self
 	}
 }
 

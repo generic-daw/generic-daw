@@ -697,9 +697,10 @@ impl ArrangementView {
 				self.arrangement.add_midi_pattern(pattern);
 
 				let mut clip = MidiClip::new(id);
-				clip.position.trim_end_to(
-					MusicalTime::BEAT * 4 * u64::from(self.arrangement.transport().numerator.get()),
-				);
+				clip.position.trim_end_to(MusicalTime::new(
+					4 * u64::from(self.arrangement.transport().numerator.get()),
+					0,
+				));
 				clip.position.move_to(pos);
 				let clip = self.arrangement.add_clip(track, clip);
 				primary.insert((track, clip));
