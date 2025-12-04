@@ -189,7 +189,7 @@ impl ClapHost {
 						config
 							.plugin_scale_factor
 							.unwrap_or(config.app_scale_factor),
-					);
+					) / config.app_scale_factor;
 
 					let (window, spawn) = window::open(window::Settings {
 						size: plugin.get_size().map_or_else(
@@ -220,7 +220,7 @@ impl ClapHost {
 				}
 			}
 			MainThreadMessage::GuiRequestResize(size) => {
-				let plugin = plugin!(MainThreadMessage::GuiRequestShow);
+				let plugin = plugin!(MainThreadMessage::GuiRequestResize(size));
 
 				if let Some(&window) = self.windows.get(*id)
 					&& let Some(scale_factor) = plugin.get_scale()
