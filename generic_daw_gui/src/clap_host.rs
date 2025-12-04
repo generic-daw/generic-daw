@@ -220,8 +220,12 @@ impl ClapHost {
 				}
 			}
 			MainThreadMessage::GuiRequestResize(size) => {
-				if let Some(&window) = self.windows.get(*id) {
-					return self.update(Message::WindowResized(window, size), config);
+				let plugin = plugin!(MainThreadMessage::GuiRequestShow);
+
+				if let Some(&window) = self.windows.get(*id)
+					&& let Some(scale_factor) = plugin.get_scale()
+				{
+					return window::resize(window, size.to_logical(scale_factor).into());
 				}
 			}
 			MainThreadMessage::GuiRequestHide => {

@@ -121,15 +121,16 @@ impl<Event: EventImpl> Plugin<Event> {
 			panic!("called \"set_scale\" on a non-embedded gui")
 		};
 
-		if !API_TYPE.uses_logical_size()
-			&& let Err(err) = self
+		if !API_TYPE.uses_logical_size() {
+			if let Err(err) = self
 				.instance
 				.access_shared_handler(|s| *s.ext.gui.get().unwrap())
 				.set_scale(&mut self.instance.plugin_handle(), scale.into())
-		{
-			warn!("{}: {err}", self.descriptor);
-		} else {
-			*scale_factor = scale;
+			{
+				warn!("{}: {err}", self.descriptor);
+			} else {
+				*scale_factor = scale;
+			}
 		}
 
 		*scale_factor
@@ -292,15 +293,15 @@ impl<Event: EventImpl> Plugin<Event> {
 	pub fn get_size(&mut self) -> Option<Size> {
 		self.create();
 
-		let Gui::Embedded { scale_factor, .. } = self.gui else {
+		if !matches!(self.gui, Gui::Embedded { .. }) {
 			return None;
-		};
+		}
 
 		let GuiSize { width, height } = self
 			.instance
 			.access_shared_handler(|s| *s.ext.gui.get().unwrap())
 			.get_size(&mut self.instance.plugin_handle())?;
-		Some(Size::from_native((width as f32, height as f32)).ensure_logical(scale_factor))
+		Some(Size::from_native((width as f32, height as f32)))
 	}
 
 	#[must_use]
@@ -329,7 +330,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			.unwrap();
 
 		let GuiSize { width, height } = size;
-		Some(Size::from_native((width as f32, height as f32)).ensure_logical(scale_factor))
+		Some(Size::from_native((width as f32, height as f32)))
 	}
 
 	pub fn send_event(&mut self, event: Event) {

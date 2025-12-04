@@ -22,11 +22,6 @@ impl Size {
 	}
 
 	#[must_use]
-	pub fn ensure_logical(self, scale_factor: f32) -> Self {
-		Self::from_logical(self.to_logical(scale_factor))
-	}
-
-	#[must_use]
 	pub fn from_physical((width, height): (f32, f32)) -> Self {
 		Self::Physical { width, height }
 	}
@@ -38,11 +33,6 @@ impl Size {
 			Self::Physical { width, height } => (width, height),
 		};
 		(f32::trunc(width), f32::trunc(height))
-	}
-
-	#[must_use]
-	pub fn ensure_physical(self, scale_factor: f32) -> Self {
-		Self::from_physical(self.to_physical(scale_factor))
 	}
 
 	#[must_use]
