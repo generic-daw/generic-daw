@@ -573,6 +573,9 @@ impl Daw {
 			.interaction(Interaction::Copy)
 			.on_release(Message::Arrangement(
 				arrangement_view::Message::LoadHoveredFile,
+			))
+			.on_exit(Message::Arrangement(
+				arrangement_view::Message::LoadHoveredFile,
 			))),
 			self.arrangement_view
 				.loading()
