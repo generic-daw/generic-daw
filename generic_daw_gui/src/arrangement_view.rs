@@ -53,7 +53,6 @@ use std::{
 	cell::RefCell,
 	cmp::{Ordering, Reverse},
 	collections::HashMap,
-	f32::consts::SQRT_2,
 	fmt::Write as _,
 	io::Read,
 	iter::once,
@@ -1526,12 +1525,8 @@ fn poll_consumer<T: Send + 'static>(
 	let max = frames.or(NonZero::new(8192)).unwrap().get() as f32 / sample_rate.get() as f32;
 	let mut backoff = 0.0;
 	let mut backoff = move |counter: u16| {
-		backoff = if counter == 0 {
-			backoff * SQRT_2
-		} else {
-			backoff / f32::from(counter)
-		}
-		.clamp(min, max);
+		let divisor = f32::from(counter).max(0.5);
+		backoff = ((backoff + backoff / divisor) * 0.5).clamp(min, max);
 		Timer::after(Duration::from_secs_f32(backoff))
 	};
 
