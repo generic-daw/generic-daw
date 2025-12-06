@@ -22,12 +22,16 @@ impl AllPass {
 		self
 	}
 
+	#[must_use]
+	pub fn tick(&mut self, input: f32) -> f32 {
+		self.delay_line
+			.write(self.feedback.mul_add(self.delay_line.read(), input))
+			- input
+	}
+
 	pub fn process(&mut self, audio: &mut [f32]) {
 		for sample in audio {
-			*sample = self
-				.delay_line
-				.write(self.feedback.mul_add(self.delay_line.read(), *sample))
-				- *sample;
+			*sample = self.tick(*sample);
 		}
 	}
 }

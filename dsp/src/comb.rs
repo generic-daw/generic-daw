@@ -33,15 +33,19 @@ impl Comb {
 		self
 	}
 
+	#[must_use]
+	pub fn tick(&mut self, input: f32) -> f32 {
+		let delayed = self.delay_line.read();
+		self.filter_state = self
+			.filter_state
+			.mul_add(self.dampening.0, delayed * self.dampening.1);
+		self.delay_line
+			.write(self.filter_state.mul_add(self.feedback, input))
+	}
+
 	pub fn process(&mut self, audio: &mut [f32]) {
 		for sample in audio {
-			let delayed = self.delay_line.read();
-			self.filter_state = self
-				.filter_state
-				.mul_add(self.dampening.0, delayed * self.dampening.1);
-			*sample = self
-				.delay_line
-				.write(self.filter_state.mul_add(self.feedback, *sample));
+			*sample = self.tick(*sample);
 		}
 	}
 }
