@@ -17,7 +17,6 @@ use generic_daw_core::{
 	Export, MusicalTime,
 	clap_host::{PluginBundle, PluginDescriptor, get_installed_plugins},
 };
-use generic_daw_utils::{NoClone, NoDebug};
 use generic_daw_widget::dot::Dot;
 use humantime::format_rfc3339_seconds;
 use iced::{
@@ -43,6 +42,7 @@ use std::{
 	sync::Arc,
 	time::{Duration, SystemTime},
 };
+use utils::{NoClone, NoDebug};
 
 #[derive(Clone, Debug)]
 pub enum Message {

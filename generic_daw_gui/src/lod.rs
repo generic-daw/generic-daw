@@ -1,5 +1,4 @@
 use generic_daw_core::{ClipPosition, Transport};
-use generic_daw_utils::NoDebug;
 use iced::{
 	Color, Point, Rectangle, Size, Transformation,
 	advanced::graphics::{
@@ -8,6 +7,7 @@ use iced::{
 		mesh::{Indexed, SolidVertex2D},
 	},
 };
+use utils::NoDebug;
 
 const STEP_SIZE: usize = 3;
 const CHUNK_SIZE: usize = 1 << STEP_SIZE;

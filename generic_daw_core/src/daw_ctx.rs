@@ -4,10 +4,10 @@ use crate::{
 	clap_host::{AudioProcessor, ClapId, PluginId},
 	resampler::Resampler,
 };
-use generic_daw_utils::{HoleyVec, NoDebug, include_f32s, unique_id};
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, PushError, RingBuffer};
 use std::{num::NonZero, sync::Mutex, time::Instant};
+use utils::{HoleyVec, NoDebug, include_f32s, unique_id};
 
 unique_id!(epoch);
 unique_id!(version);

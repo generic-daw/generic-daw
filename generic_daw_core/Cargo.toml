@@ -8,9 +8,9 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-audio_graph = { workspace = true }
-clap_host = { workspace = true }
-generic_daw_utils = { workspace = true }
+audio_graph.workspace = true
+clap_host.workspace = true
+utils.workspace = true
 
 cpal = "0.16.0"
 hound = "3.5.1"

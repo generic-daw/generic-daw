@@ -1,5 +1,5 @@
 [package]
-name = "audio_graph"
+name = "utils"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,8 +8,3 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-dsp.workspace = true
-utils.workspace = true
-
-bit-set = "0.8.0"
-rayon-core = "1.13.0"

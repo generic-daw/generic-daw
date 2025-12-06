@@ -4,7 +4,6 @@ use crate::{
 	icons::{arrow_left_right, radius},
 };
 use generic_daw_core::{NodeId, PanMode};
-use generic_daw_utils::NoDebug;
 use generic_daw_widget::{knob::Knob, peak_meter};
 use iced::{
 	Element,
@@ -12,6 +11,7 @@ use iced::{
 	widget::{button, container, row},
 };
 use std::{cmp::Ordering, time::Instant};
+use utils::NoDebug;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NodeType {

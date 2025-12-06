@@ -1,5 +1,4 @@
 use crate::{MediaSource, resampler::Resampler};
-use generic_daw_utils::{NoDebug, unique_id};
 use std::{num::NonZero, sync::Arc};
 use symphonia::core::{
 	audio::SampleBuffer,
@@ -9,6 +8,7 @@ use symphonia::core::{
 	meta::MetadataOptions,
 	probe::Hint,
 };
+use utils::{NoDebug, unique_id};
 
 unique_id!(sample_id);
 

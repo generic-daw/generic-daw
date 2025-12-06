@@ -8,7 +8,8 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-generic_daw_utils = { workspace = true }
+dsp.workspace = true
+utils.workspace = true
 
 clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
 	"audio-ports",

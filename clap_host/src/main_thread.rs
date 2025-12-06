@@ -10,10 +10,10 @@ use clack_extensions::{
 	timer::{HostTimerImpl, TimerId},
 };
 use clack_host::prelude::*;
-use generic_daw_utils::{NoClone, NoDebug};
 #[cfg(unix)]
 use std::os::fd::RawFd;
 use std::time::Duration;
+use utils::{NoClone, NoDebug};
 
 #[derive(Clone, Debug)]
 pub enum MainThreadMessage {

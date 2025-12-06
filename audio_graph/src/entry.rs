@@ -1,6 +1,6 @@
 use crate::NodeImpl;
 use bit_set::BitSet;
-use generic_daw_utils::{DelayLine, HoleyVec, NoDebug};
+use dsp::DelayLine;
 use std::{
 	num::NonZero,
 	sync::{
@@ -8,6 +8,7 @@ use std::{
 		atomic::{AtomicIsize, AtomicUsize},
 	},
 };
+use utils::{HoleyVec, NoDebug};
 
 #[derive(Debug)]
 pub struct Entry<Node: NodeImpl> {

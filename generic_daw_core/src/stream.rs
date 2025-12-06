@@ -3,7 +3,6 @@ use cpal::{
 	BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
 	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
 };
-use generic_daw_utils::NoDebug;
 use log::{error, info, trace};
 use rtrb::{Consumer, Producer, RingBuffer};
 use std::{
@@ -16,6 +15,7 @@ use std::{
 		mpsc::Sender,
 	},
 };
+use utils::NoDebug;
 
 static NEXT_STREAM_TOKEN: AtomicUsize = AtomicUsize::new(1);
 

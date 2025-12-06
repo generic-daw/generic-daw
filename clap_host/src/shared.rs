@@ -15,13 +15,13 @@ use clack_extensions::{
 	timer::PluginTimer,
 };
 use clack_host::prelude::*;
-use generic_daw_utils::NoDebug;
 use log::{debug, error, info, warn};
 use std::sync::{
 	OnceLock,
 	atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
 	mpsc::Sender,
 };
+use utils::NoDebug;
 
 static NEXT_THREAD_ID: AtomicU64 = AtomicU64::new(0);
 thread_local! {

@@ -1,6 +1,6 @@
-use generic_daw_utils::NoDebug;
 use rubato::{FftFixedIn, Resampler as _};
 use std::num::NonZero;
+use utils::NoDebug;
 
 #[derive(Debug)]
 pub struct Resampler {

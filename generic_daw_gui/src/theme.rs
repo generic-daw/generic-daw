@@ -1,6 +1,6 @@
-use generic_daw_utils::variants;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+use utils::variants;
 
 variants! {
 	#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

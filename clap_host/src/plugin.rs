@@ -13,13 +13,13 @@ use clack_extensions::{
 	timer::TimerId,
 };
 use clack_host::prelude::*;
-use generic_daw_utils::{NoClone, NoDebug};
 use log::{info, warn};
 use raw_window_handle::RawWindowHandle;
 use rtrb::{Producer, RingBuffer};
 #[cfg(unix)]
 use std::os::fd::RawFd;
 use std::{io::Cursor, num::NonZero, sync::mpsc::Receiver};
+use utils::{NoClone, NoDebug};
 
 #[derive(Debug)]
 pub struct Plugin<Event: EventImpl> {

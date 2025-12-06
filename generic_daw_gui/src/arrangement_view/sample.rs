@@ -1,7 +1,7 @@
 use crate::{arrangement_view::crc, lod::Lods};
 use generic_daw_core::{self as core, SampleId};
-use generic_daw_utils::NoDebug;
 use std::{fs::File, num::NonZero, path::Path, sync::Arc};
+use utils::NoDebug;
 
 #[derive(Debug)]
 pub struct Sample {

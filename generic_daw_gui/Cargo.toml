@@ -8,10 +8,10 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-generic_daw_core = { workspace = true }
-generic_daw_project = { workspace = true }
-generic_daw_utils = { workspace = true }
-generic_daw_widget = { workspace = true }
+generic_daw_core.workspace = true
+generic_daw_project.workspace = true
+generic_daw_widget.workspace = true
+utils.workspace = true
 
 bit-set = "0.8.0"
 crc32c = "0.6.8"

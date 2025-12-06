@@ -2,8 +2,8 @@ use crate::{
 	AutomationLane, Event, NodeAction, NodeId, NodeImpl, Update, clap_host::AudioProcessor,
 	daw_ctx::State,
 };
-use generic_daw_utils::ShiftMoveExt as _;
 use std::f32::consts::{FRAC_PI_4, SQRT_2};
+use utils::ShiftMoveExt as _;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PanMode {

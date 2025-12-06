@@ -6,7 +6,6 @@ use generic_daw_core::{
 	Event,
 	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, PluginId, Size},
 };
-use generic_daw_utils::{HoleyVec, NoClone, NoDebug};
 use generic_daw_widget::knob::Knob;
 use iced::{
 	Center, Element, Font, Function as _,
@@ -29,6 +28,7 @@ use smol::{Timer, unblock};
 #[cfg(unix)]
 use std::os::fd::{BorrowedFd, RawFd};
 use std::{collections::HashMap, ops::Deref as _, sync::mpsc::Receiver, time::Duration};
+use utils::{HoleyVec, NoClone, NoDebug};
 
 #[derive(Clone, Debug)]
 pub enum Message {

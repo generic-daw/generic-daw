@@ -1,5 +1,5 @@
 use crate::MusicalTime;
-use generic_daw_utils::unique_id;
+use utils::unique_id;
 
 unique_id!(automation_pattern_id);
 

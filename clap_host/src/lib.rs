@@ -1,5 +1,4 @@
 use clack_extensions::gui::GuiApiType;
-use generic_daw_utils::{NoDebug, unique_id};
 use main_thread::MainThread;
 use shared::Shared;
 use std::{
@@ -7,6 +6,7 @@ use std::{
 	path::{Path, PathBuf},
 	sync::{Arc, LazyLock},
 };
+use utils::{NoDebug, unique_id};
 use walkdir::WalkDir;
 
 mod audio_buffers;

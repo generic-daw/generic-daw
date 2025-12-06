@@ -1,4 +1,4 @@
-use generic_daw_utils::unique_id;
+use utils::unique_id;
 
 mod audio_graph;
 mod entry;

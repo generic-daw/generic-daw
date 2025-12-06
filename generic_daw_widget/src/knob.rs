@@ -1,4 +1,3 @@
-use generic_daw_utils::NoDebug;
 use iced_widget::{
 	Renderer,
 	canvas::{Cache, Frame, Path, path::Arc},
@@ -19,6 +18,7 @@ use std::{
 	fmt::{Debug, Display},
 	ops::RangeInclusive,
 };
+use utils::NoDebug;
 
 #[derive(Default)]
 struct State {

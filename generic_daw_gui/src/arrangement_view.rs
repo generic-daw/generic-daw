@@ -32,7 +32,6 @@ use generic_daw_core::{
 	Batch, MidiNote, MusicalTime, NodeId, NotePosition, PanMode, SampleId,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
-use generic_daw_utils::{NoClone, NoDebug};
 use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
 use humantime::format_rfc3339_seconds;
 use iced::{
@@ -61,6 +60,7 @@ use std::{
 	sync::{Arc, LazyLock},
 	time::{Duration, SystemTime},
 };
+use utils::{NoClone, NoDebug};
 
 mod arrangement;
 mod audio_clip;

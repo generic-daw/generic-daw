@@ -1,23 +1,24 @@
 [workspace]
 members = [
 	"audio_graph",
-	"clap_host",
+	"clap_host", "dsp",
 	"generic_daw_core",
 	"generic_daw_gui",
 	"generic_daw_project",
-	"generic_daw_utils",
 	"generic_daw_widget",
+	"utils",
 ]
 resolver = "3"
 
 [workspace.dependencies]
-audio_graph = { path = "audio_graph" }
-clap_host = { path = "clap_host" }
-generic_daw_core = { path = "generic_daw_core" }
-generic_daw_gui = { path = "generic_daw_gui" }
-generic_daw_project = { path = "generic_daw_project" }
-generic_daw_utils = { path = "generic_daw_utils" }
-generic_daw_widget = { path = "generic_daw_widget" }
+audio_graph.path = "audio_graph"
+clap_host.path = "clap_host"
+dsp.path = "dsp"
+generic_daw_core.path = "generic_daw_core"
+generic_daw_gui.path = "generic_daw_gui"
+generic_daw_project.path = "generic_daw_project"
+generic_daw_widget.path = "generic_daw_widget"
+utils.path = "utils"
 
 [workspace.package]
 version = "0.0.0"

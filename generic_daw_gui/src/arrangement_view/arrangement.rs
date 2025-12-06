@@ -21,11 +21,11 @@ use generic_daw_core::{
 	Update, Version,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
-use generic_daw_utils::{HoleyVec, NoClone, NoDebug, ShiftMoveExt as _};
 use iced::Task;
 use rtrb::{Producer, PushError};
 use smol::unblock;
 use std::{num::NonZero, path::Path, sync::Arc};
+use utils::{HoleyVec, NoClone, NoDebug, ShiftMoveExt as _};
 
 #[derive(Debug)]
 pub struct Arrangement {

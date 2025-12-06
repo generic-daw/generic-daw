@@ -276,8 +276,9 @@ name = "audio_graph"
 version = "0.0.0"
 dependencies = [
  "bit-set",
- "generic_daw_utils",
+ "dsp",
  "rayon-core",
+ "utils",
 ]
 
 [[package]]
@@ -398,9 +399,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.48"
+version = "1.2.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c481bdbf0ed3b892f6f806287d72acd515b352a4ec27a208489b8c1bc839633a"
+checksum = "90583009037521a116abf44494efecd645ba48b6622457080f080b85544e2215"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -469,11 +470,12 @@ version = "0.0.0"
 dependencies = [
  "clack-extensions",
  "clack-host",
- "generic_daw_utils",
+ "dsp",
  "log",
  "raw-window-handle",
  "rayon-core",
  "rtrb",
+ "utils",
  "walkdir",
 ]
 
@@ -838,6 +840,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "dsp"
+version = "0.0.0"
+dependencies = [
+ "utils",
+]
+
+[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1184,7 +1193,6 @@ dependencies = [
  "fragile",
  "generic_daw_core",
  "generic_daw_project",
- "generic_daw_utils",
  "generic_daw_widget",
  "humantime",
  "iced",
@@ -1198,6 +1206,7 @@ dependencies = [
  "serde",
  "smol",
  "toml",
+ "utils",
  "walkdir",
 ]
 
@@ -1208,13 +1217,13 @@ dependencies = [
  "audio_graph",
  "clap_host",
  "cpal",
- "generic_daw_utils",
  "hound",
  "log",
  "oneshot",
  "rtrb",
  "rubato",
  "symphonia",
+ "utils",
 ]
 
 [[package]]
@@ -1226,15 +1235,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "generic_daw_utils"
-version = "0.0.0"
-
-[[package]]
 name = "generic_daw_widget"
 version = "0.0.0"
 dependencies = [
- "generic_daw_utils",
  "iced_widget",
+ "utils",
 ]
 
 [[package]]
@@ -3053,9 +3058,9 @@ checksum = "7a2ae44ef20feb57a68b23d846850f861394c2e02dc425a50098ae8c90267589"
 
 [[package]]
 name = "slotmap"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "811fec94324ff439b2d5e4a1cf88cc5b6c09d92358715d600b2fe91c0489b5cb"
+checksum = "bdd58c3c93c3d278ca835519292445cb4b0d4dc59ccfdf7ceadaab3f8aeb4038"
 dependencies = [
  "version_check",
 ]
@@ -3547,9 +3552,9 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.23.8"
+version = "0.23.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a9b7ac41d92f2d2803f233e297127bac397df7b337e0460a1cc39d6c006dee4"
+checksum = "5d7cbc3b4b49633d57a0509303158ca50de80ae32c265093b24c414705807832"
 dependencies = [
  "indexmap",
  "toml_datetime",
@@ -3692,6 +3697,10 @@ name = "utf8_iter"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
+
+[[package]]
+name = "utils"
+version = "0.0.0"
 
 [[package]]
 name = "uuid"

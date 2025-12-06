@@ -3,7 +3,6 @@ use crate::{
 	icons::{chevron_down, chevron_right},
 	widget::LINE_HEIGHT,
 };
-use generic_daw_utils::{natural_cmp, unique_id};
 use iced::{
 	Element, Fill, Task,
 	futures::{StreamExt as _, TryStreamExt as _},
@@ -11,6 +10,7 @@ use iced::{
 	widget::{button, column, container, row, rule, text},
 };
 use std::{path::Path, sync::Arc};
+use utils::{natural_cmp, unique_id};
 
 unique_id!(dir_entry);
 

@@ -1,5 +1,5 @@
 use crate::{MidiKey, MidiNote, MusicalTime};
-use generic_daw_utils::unique_id;
+use utils::unique_id;
 
 unique_id!(midi_pattern_id);
 

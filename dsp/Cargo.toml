@@ -1,5 +1,5 @@
 [package]
-name = "generic_daw_utils"
+name = "dsp"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,3 +8,4 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+utils.workspace = true

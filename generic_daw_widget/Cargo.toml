@@ -8,7 +8,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-generic_daw_utils = { workspace = true }
+utils.workspace = true
 
 iced_widget = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", features = [
 	"canvas",

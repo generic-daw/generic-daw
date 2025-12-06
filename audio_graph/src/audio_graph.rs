@@ -1,6 +1,7 @@
 use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry};
-use generic_daw_utils::{DelayLine, HoleyVec};
+use dsp::DelayLine;
 use std::{num::NonZero, sync::atomic::Ordering::Relaxed};
+use utils::HoleyVec;
 
 #[derive(Debug)]
 pub struct AudioGraph<Node: NodeImpl> {
@@ -93,14 +94,14 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			.max()
 			.unwrap_or_default();
 
-		for (dep, (buf, events)) in buffers.incoming.iter_mut() {
+		for (dep, (delay_line, events)) in buffers.incoming.iter_mut() {
 			let dep_entry = &self.graph[dep];
-			let dep_buffers = dep_entry.read_buffers_uncontended();
+			let dep_buffers = &*dep_entry.read_buffers_uncontended();
 			let delay_diff = max_delay - dep_entry.delay.load(Relaxed);
 
 			buffers.buf[..len].copy_from_slice(&dep_buffers.audio[..len]);
-			buf.resize(delay_diff);
-			buf.advance(&mut buffers.buf[..len]);
+			delay_line.resize(delay_diff);
+			delay_line.advance(&mut buffers.buf[..len]);
 
 			buffers.buf[..len]
 				.iter()
@@ -113,8 +114,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 					.iter()
 					.map(|e| e.with_time(e.time() + delay_diff)),
 			);
-
-			drop(dep_buffers);
 
 			buffers.events.extend(events.extract_if(.., |e| {
 				e.time()

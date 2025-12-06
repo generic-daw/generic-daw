@@ -1,5 +1,5 @@
-use crate::NoDebug;
 use std::cmp::Ordering;
+use utils::NoDebug;
 
 #[derive(Clone, Debug, Default)]
 pub struct DelayLine {
@@ -8,6 +8,13 @@ pub struct DelayLine {
 }
 
 impl DelayLine {
+	#[must_use]
+	pub fn new(len: usize) -> Self {
+		let mut delay_line = Self::default();
+		delay_line.resize(len);
+		delay_line
+	}
+
 	pub fn advance(&mut self, buf: &mut [f32]) {
 		let diff = self.buf.len() - self.head;
 		if self.buf.len() < buf.len() {
@@ -22,6 +29,17 @@ impl DelayLine {
 			self.buf[self.head..][..buf.len()].swap_with_slice(buf);
 			self.head += buf.len();
 		}
+	}
+
+	#[must_use]
+	pub fn read(&self) -> f32 {
+		self.buf[self.head]
+	}
+
+	pub fn write(&mut self, value: f32) -> f32 {
+		self.buf[self.head] = value;
+		self.head = (self.head + 1) % self.buf.len();
+		value
 	}
 
 	#[must_use]

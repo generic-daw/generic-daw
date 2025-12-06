@@ -1,6 +1,5 @@
 use crate::widget::{clip::Clip, get_time, maybe_snap_time, playlist::Action};
 use generic_daw_core::Transport;
-use generic_daw_utils::NoDebug;
 use iced::{
 	Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
@@ -13,6 +12,7 @@ use iced::{
 	},
 };
 use std::borrow::Borrow;
+use utils::NoDebug;
 
 #[derive(Default)]
 struct State {

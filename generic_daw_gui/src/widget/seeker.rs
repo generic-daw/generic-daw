@@ -1,6 +1,5 @@
 use crate::widget::{LINE_HEIGHT, get_time, maybe_snap_time};
 use generic_daw_core::{MusicalTime, NotePosition, Transport};
-use generic_daw_utils::NoDebug;
 use iced::{
 	Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
@@ -17,6 +16,7 @@ use iced::{
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 	window,
 };
+use utils::NoDebug;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Status {

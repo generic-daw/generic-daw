@@ -3,10 +3,10 @@ use crate::{
 	Transport, resampler::Resampler,
 };
 use cpal::StreamConfig;
-use generic_daw_utils::NoDebug;
 use hound::{SampleFormat, WavSpec, WavWriter};
 use rtrb::Consumer;
 use std::{io, num::NonZero, sync::Arc};
+use utils::NoDebug;
 
 #[derive(Debug)]
 pub struct Recording<W: io::Write + io::Seek> {

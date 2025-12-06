@@ -1,4 +1,3 @@
-use generic_daw_utils::NoDebug;
 use iced_widget::{
 	Renderer,
 	core::{
@@ -11,6 +10,7 @@ use iced_widget::{
 		widget::{Operation, Tree, tree},
 	},
 };
+use utils::NoDebug;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Strategy {

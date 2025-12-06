@@ -1,6 +1,6 @@
 use crate::{Channel, Clip, Event, NodeAction, NodeId, NodeImpl, daw_ctx::State};
-use generic_daw_utils::NoDebug;
 use std::{cmp::Ordering, iter::repeat_n};
+use utils::NoDebug;
 
 #[derive(Debug)]
 pub struct Track {

@@ -14,7 +14,6 @@ use generic_daw_core::{
 	clap_host::{PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
-use generic_daw_utils::{NoClone, NoDebug};
 use iced::Task;
 use smol::{channel::Sender, unblock};
 use std::{
@@ -27,6 +26,7 @@ use std::{
 	path::Path,
 	sync::{Arc, mpsc},
 };
+use utils::{NoClone, NoDebug};
 use walkdir::WalkDir;
 
 #[derive(Clone, Debug)]

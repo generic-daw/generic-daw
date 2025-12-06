@@ -3,10 +3,10 @@ use crate::{
 	event_buffers::EventBuffers, host::Host, shared::CURRENT_THREAD_ID,
 };
 use clack_host::process::{PluginAudioProcessor, ProcessStatus};
-use generic_daw_utils::{NoClone, NoDebug};
 use log::{trace, warn};
 use rtrb::Consumer;
 use std::sync::atomic::Ordering::Relaxed;
+use utils::{NoClone, NoDebug};
 
 #[derive(Debug)]
 pub enum AudioThreadMessage<Event: EventImpl> {
