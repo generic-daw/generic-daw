@@ -1,14 +1,14 @@
 use crate::DelayLine;
 
 #[derive(Clone, Debug)]
-pub struct Comb {
+pub struct LowpassFeedbackComb {
 	delay_line: DelayLine,
 	filter_state: f32,
 	feedback: f32,
 	dampening: (f32, f32),
 }
 
-impl Comb {
+impl LowpassFeedbackComb {
 	#[must_use]
 	pub fn new(len: usize) -> Self {
 		Self {

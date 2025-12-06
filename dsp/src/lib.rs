@@ -1,9 +1,9 @@
-mod allpass;
+mod allpass_comb;
 mod biquad;
-mod comb;
 mod delay_line;
+mod lowpass_feedback_comb;
 
-pub use allpass::AllPass;
+pub use allpass_comb::AllpassComb;
 pub use biquad::{Biquad, BiquadCoeffs};
-pub use comb::Comb;
 pub use delay_line::DelayLine;
+pub use lowpass_feedback_comb::LowpassFeedbackComb;

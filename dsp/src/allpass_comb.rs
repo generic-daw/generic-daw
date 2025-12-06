@@ -1,12 +1,12 @@
 use crate::DelayLine;
 
 #[derive(Clone, Debug)]
-pub struct AllPass {
+pub struct AllpassComb {
 	delay_line: DelayLine,
 	feedback: f32,
 }
 
-impl AllPass {
+impl AllpassComb {
 	#[must_use]
 	pub fn new(len: usize) -> Self {
 		Self {
@@ -24,9 +24,10 @@ impl AllPass {
 
 	#[must_use]
 	pub fn tick(&mut self, input: f32) -> f32 {
-		self.delay_line
-			.write(self.feedback.mul_add(self.delay_line.read(), input))
-			- input
+		let delayed = self.delay_line.read();
+		let output = delayed - input;
+		self.delay_line.write(self.feedback.mul_add(delayed, input));
+		output
 	}
 
 	pub fn process(&mut self, audio: &mut [f32]) {
