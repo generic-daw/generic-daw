@@ -2,13 +2,13 @@ use crate::NoDebug;
 use std::cmp::Ordering;
 
 #[derive(Clone, Debug, Default)]
-pub struct AudioRingbuf {
+pub struct DelayLine {
 	buf: NoDebug<Vec<f32>>,
 	head: usize,
 }
 
-impl AudioRingbuf {
-	pub fn shift(&mut self, buf: &mut [f32]) {
+impl DelayLine {
+	pub fn advance(&mut self, buf: &mut [f32]) {
 		let diff = self.buf.len() - self.head;
 		if self.buf.len() < buf.len() {
 			buf.rotate_right(self.buf.len());

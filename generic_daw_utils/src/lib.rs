@@ -1,4 +1,4 @@
-mod audio_ringbuf;
+mod delay_line;
 mod holey_vec;
 mod include_f32s;
 mod natural_cmp;
@@ -8,7 +8,7 @@ mod shift_move_ext;
 mod unique_id;
 mod variants;
 
-pub use audio_ringbuf::AudioRingbuf;
+pub use delay_line::DelayLine;
 pub use holey_vec::HoleyVec;
 pub use natural_cmp::natural_cmp;
 pub use no_clone::NoClone;

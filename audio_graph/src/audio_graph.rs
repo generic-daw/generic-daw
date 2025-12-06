@@ -1,5 +1,5 @@
 use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry};
-use generic_daw_utils::{AudioRingbuf, HoleyVec};
+use generic_daw_utils::{DelayLine, HoleyVec};
 use std::{num::NonZero, sync::atomic::Ordering::Relaxed};
 
 #[derive(Debug)]
@@ -100,7 +100,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 			buffers.buf[..len].copy_from_slice(&dep_buffers.audio[..len]);
 			buf.resize(delay_diff);
-			buf.shift(&mut buffers.buf[..len]);
+			buf.advance(&mut buffers.buf[..len]);
 
 			buffers.buf[..len]
 				.iter()
@@ -197,7 +197,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		self.entry_mut(to)
 			.buffers()
 			.incoming
-			.insert(*from, (AudioRingbuf::default(), Vec::new()));
+			.insert(*from, (DelayLine::default(), Vec::new()));
 
 		if self.has_cycle() {
 			self.entry_mut(from).buffers().outgoing.remove(*to);

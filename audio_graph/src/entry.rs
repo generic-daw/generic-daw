@@ -1,6 +1,6 @@
 use crate::NodeImpl;
 use bit_set::BitSet;
-use generic_daw_utils::{AudioRingbuf, HoleyVec, NoDebug};
+use generic_daw_utils::{DelayLine, HoleyVec, NoDebug};
 use std::{
 	num::NonZero,
 	sync::{
@@ -20,7 +20,7 @@ pub struct Entry<Node: NodeImpl> {
 
 #[derive(Debug)]
 pub struct Buffers<Node: NodeImpl> {
-	pub incoming: HoleyVec<(AudioRingbuf, Vec<Node::Event>)>,
+	pub incoming: HoleyVec<(DelayLine, Vec<Node::Event>)>,
 	pub outgoing: BitSet,
 	pub audio: NoDebug<Box<[f32]>>,
 	pub buf: NoDebug<Box<[f32]>>,

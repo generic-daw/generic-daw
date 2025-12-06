@@ -1,6 +1,6 @@
 use crate::{audio_ports_config::AudioPortsConfig, host::Host};
 use clack_host::prelude::*;
-use generic_daw_utils::{AudioRingbuf, NoDebug};
+use generic_daw_utils::{DelayLine, NoDebug};
 
 #[derive(Debug)]
 pub struct AudioBuffers {
@@ -15,7 +15,7 @@ pub struct AudioBuffers {
 	input_buffers: NoDebug<Box<[Box<[f32]>]>>,
 	output_buffers: NoDebug<Box<[Box<[f32]>]>>,
 
-	latency_comp: AudioRingbuf,
+	latency_comp: DelayLine,
 }
 
 impl AudioBuffers {
@@ -39,7 +39,7 @@ impl AudioBuffers {
 			.collect::<Box<_>>()
 			.into();
 
-		let latency_comp = AudioRingbuf::default();
+		let latency_comp = DelayLine::default();
 
 		Self {
 			config,
@@ -114,7 +114,7 @@ impl AudioBuffers {
 	}
 
 	pub fn write_out(&mut self, buf: &mut [f32], mix_level: f32) {
-		self.latency_comp.shift(buf);
+		self.latency_comp.advance(buf);
 
 		let Some(output_buffer) = self.output_buffers.get(self.output_config.main_port_index)
 		else {
