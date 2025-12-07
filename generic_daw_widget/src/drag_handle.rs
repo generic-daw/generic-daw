@@ -170,13 +170,14 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 
 					state.hovering = cursor.is_over(layout.bounds());
 				}
-				mouse::Event::WheelScrolled { delta, .. }
-					if state.dragging.is_none() && state.hovering =>
-				{
+				mouse::Event::WheelScrolled {
+					delta, modifiers, ..
+				} if state.dragging.is_none() && state.hovering => {
 					let diff = match delta {
 						ScrollDelta::Lines { y, .. } => *y,
 						ScrollDelta::Pixels { y, .. } => y / 60.0,
-					} + state.scroll;
+					}
+					.mul_add(if modifiers.command() { 10.0 } else { 1.0 }, state.scroll);
 					state.scroll = diff.fract();
 
 					let new_value = self.value.saturating_add_signed(diff as isize);
