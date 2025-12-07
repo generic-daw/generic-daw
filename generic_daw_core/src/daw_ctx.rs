@@ -4,9 +4,10 @@ use crate::{
 	clap_host::{AudioProcessor, ClapId, PluginId},
 	resampler::Resampler,
 };
+use crossbeam_queue::ArrayQueue;
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, PushError, RingBuffer};
-use std::{num::NonZero, sync::Mutex, time::Instant};
+use std::{num::NonZero, time::Instant};
 use utils::{HoleyVec, NoDebug, include_f32s, unique_id};
 
 unique_id!(version);
@@ -117,7 +118,7 @@ pub struct State {
 	pub samples: HoleyVec<Sample>,
 	pub midi_patterns: HoleyVec<MidiPattern>,
 	pub automation_patterns: HoleyVec<AutomationPattern>,
-	pub updates: Mutex<Vec<Update>>,
+	pub updates: ArrayQueue<Update>,
 }
 
 pub struct DawCtx {
@@ -159,7 +160,7 @@ impl DawCtx {
 				samples: HoleyVec::default(),
 				midi_patterns: HoleyVec::default(),
 				automation_patterns: HoleyVec::default(),
-				updates: Mutex::new(Vec::new()),
+				updates: ArrayQueue::new(8192),
 			},
 			producer,
 			consumer,
@@ -236,7 +237,7 @@ impl DawCtx {
 						samples: HoleyVec::default(),
 						midi_patterns: HoleyVec::default(),
 						automation_patterns: HoleyVec::default(),
-						updates: Mutex::default(),
+						updates: ArrayQueue::new(1),
 					};
 					std::mem::swap(&mut self.state, &mut state);
 
@@ -289,17 +290,20 @@ impl DawCtx {
 			(self.state.transport.sample, looped)
 		});
 
-		let updates = self.state.updates.get_mut().unwrap();
+		if sample.is_some() || !self.state.updates.is_empty() {
+			let mut updates = self.update_buffers.pop().unwrap_or_default();
+			updates.reserve_exact(self.state.updates.len());
 
-		if sample.is_some() || !updates.is_empty() {
+			while let Some(update) = self.state.updates.pop() {
+				updates.push(update);
+			}
+
 			let batch = Batch {
 				version: self.state.transport.version,
 				sample,
-				updates: std::mem::take(updates),
+				updates,
 				now: Instant::now(),
 			};
-
-			*updates = self.update_buffers.pop().unwrap_or_default();
 
 			if let Err(PushError::Full(mut batch)) = self.producer.push(batch) {
 				warn!("full ring buffer");

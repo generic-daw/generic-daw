@@ -97,21 +97,12 @@ impl NodeImpl for Channel {
 				plugin.processor.flush(events);
 			}
 
-			let mut iter = events
-				.drain(..)
-				.filter_map(|event| {
-					if let Event::ParamValue { param_id, .. } = event {
-						Some(Update::Param(plugin.processor.id(), param_id))
-					} else {
-						None
-					}
-				})
-				.peekable();
-
-			if iter.peek().is_some() {
-				state.updates.lock().unwrap().extend(iter);
-			} else {
-				drop(iter);
+			for event in events.drain(..) {
+				if let Event::ParamValue { param_id, .. } = event {
+					_ = state
+						.updates
+						.push(Update::Param(plugin.processor.id(), param_id));
+				}
 			}
 		}
 
@@ -128,11 +119,7 @@ impl NodeImpl for Channel {
 
 		if peaks != self.last_peaks {
 			self.last_peaks = peaks;
-			state
-				.updates
-				.lock()
-				.unwrap()
-				.push(Update::Peak(self.id, peaks));
+			_ = state.updates.push(Update::Peak(self.id, peaks));
 		}
 	}
 

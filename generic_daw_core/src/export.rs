@@ -41,7 +41,7 @@ impl Export {
 			let diff = buffer_size.min(delay - self.state.transport.sample);
 
 			self.audio_graph.process(&self.state, &mut buf[..diff]);
-			self.state.updates.get_mut().unwrap().clear();
+			while self.state.updates.pop().is_some() {}
 
 			self.state.transport.sample += diff;
 			progress_fn(self.state.transport.sample as f32 / end as f32);
@@ -55,7 +55,7 @@ impl Export {
 			let diff = buffer_size.min(end - self.state.transport.sample);
 
 			self.audio_graph.process(&self.state, &mut buf[..diff]);
-			self.state.updates.get_mut().unwrap().clear();
+			while self.state.updates.pop().is_some() {}
 
 			for &s in &buf[..diff] {
 				writer.write_sample(s).unwrap();

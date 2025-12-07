@@ -105,20 +105,21 @@ impl Arrangement {
 			}
 		}
 
-		messages.extend(batch.updates.drain(..).filter_map(|event| match event {
-			Update::Peak(node, peaks) => {
-				if let Some((node, _)) = self.nodes.get_mut(*node) {
-					node.update(peaks, batch.now);
+		for update in batch.updates.drain(..) {
+			match update {
+				Update::Peak(node, peaks) => {
+					if let Some((node, _)) = self.nodes.get_mut(*node) {
+						node.update(peaks, batch.now);
+					}
 				}
-				None
+				Update::Param(id, param_id) => {
+					messages.push(ArrangementMessage::ClapHost(ClapHostMessage::MainThread(
+						id,
+						MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
+					)));
+				}
 			}
-			Update::Param(id, param_id) => {
-				Some(ArrangementMessage::ClapHost(ClapHostMessage::MainThread(
-					id,
-					MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
-				)))
-			}
-		}));
+		}
 
 		self.send(Message::ReturnUpdateBuffer(batch.updates));
 
