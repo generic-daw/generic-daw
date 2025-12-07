@@ -33,7 +33,7 @@ macro_rules! unique_id {
                     )
                 }
 
-                pub fn is_last(self) -> bool {
+                pub fn is_latest(self) -> bool {
                     self.0.wrapping_add(1) == ID.load(::core::sync::atomic::Ordering::Relaxed)
                 }
             }

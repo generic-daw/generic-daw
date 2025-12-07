@@ -2,8 +2,8 @@
 
 use crate::{
 	arrangement_view::{
-		self, Arrangement, Node, audio_clip::AudioClip, clip::Clip, crc, midi_clip::MidiClip,
-		midi_pattern::MidiPatternPair, sample::SamplePair,
+		self, Arrangement, Epoch, Node, audio_clip::AudioClip, clip::Clip, crc,
+		midi_clip::MidiClip, midi_pattern::MidiPatternPair, sample::SamplePair,
 	},
 	clap_host::ClapHost,
 	config::Config,
@@ -14,7 +14,7 @@ use generic_daw_core::{
 	clap_host::{PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
-use iced::Task;
+use iced::{Function as _, Task};
 use smol::{channel::Sender, unblock};
 use std::{
 	collections::{HashMap, HashSet},
@@ -488,7 +488,7 @@ impl Arrangement {
 				)))
 				.chain(Task::batch([
 					task.map(Box::new)
-						.map(arrangement_view::Message::Batch)
+						.map(arrangement_view::Message::Batch.with(Epoch::unique()))
 						.map(daw::Message::Arrangement),
 					messages
 						.into_iter()

@@ -96,33 +96,30 @@ impl Arrangement {
 	pub fn update(&mut self, mut batch: Batch) -> Vec<ArrangementMessage> {
 		let mut messages = Vec::new();
 
-		if batch.epoch == self.transport.epoch {
-			if let Some((sample, looped)) = batch.sample
-				&& batch.version.is_last()
-			{
-				self.transport.sample = sample;
-				if looped {
-					messages.push(ArrangementMessage::RecordingEndStream);
-				}
+		if let Some((sample, looped)) = batch.sample
+			&& batch.version.is_latest()
+		{
+			self.transport.sample = sample;
+			if looped {
+				messages.push(ArrangementMessage::RecordingEndStream);
 			}
-
-			messages.extend(batch.updates.drain(..).filter_map(|event| match event {
-				Update::Peak(node, peaks) => {
-					if let Some((node, _)) = self.nodes.get_mut(*node) {
-						node.update(peaks, batch.now);
-					}
-					None
-				}
-				Update::Param(id, param_id) => {
-					Some(ArrangementMessage::ClapHost(ClapHostMessage::MainThread(
-						id,
-						MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
-					)))
-				}
-			}));
 		}
 
-		batch.updates.clear();
+		messages.extend(batch.updates.drain(..).filter_map(|event| match event {
+			Update::Peak(node, peaks) => {
+				if let Some((node, _)) = self.nodes.get_mut(*node) {
+					node.update(peaks, batch.now);
+				}
+				None
+			}
+			Update::Param(id, param_id) => {
+				Some(ArrangementMessage::ClapHost(ClapHostMessage::MainThread(
+					id,
+					MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
+				)))
+			}
+		}));
+
 		self.send(Message::ReturnUpdateBuffer(batch.updates));
 
 		messages

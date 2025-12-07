@@ -1,6 +1,6 @@
 use crate::{
 	arrangement_view::{
-		self, AUTOSAVE_DIR, Arrangement, ArrangementView, Feedback, PROJECT_DIR, Tab,
+		self, AUTOSAVE_DIR, Arrangement, ArrangementView, Epoch, Feedback, PROJECT_DIR, Tab,
 	},
 	components::{PICK_LIST_HANDLE, number_input},
 	config::Config,
@@ -194,7 +194,7 @@ impl Daw {
 					fut1,
 					fut2,
 					task.map(Box::new)
-						.map(arrangement_view::Message::Batch)
+						.map(arrangement_view::Message::Batch.with(Epoch::unique()))
 						.map(Message::Arrangement),
 				]);
 			}

@@ -9,10 +9,8 @@ use rtrb::{Consumer, Producer, PushError, RingBuffer};
 use std::{num::NonZero, sync::Mutex, time::Instant};
 use utils::{HoleyVec, NoDebug, include_f32s, unique_id};
 
-unique_id!(epoch);
 unique_id!(version);
 
-pub use epoch::Id as Epoch;
 pub use version::Id as Version;
 
 static ON_BAR_CLICK: [f32; 2940] = include_f32s!("../../assets/on_bar_click.pcm");
@@ -77,7 +75,6 @@ pub enum Update {
 
 #[derive(Clone, Debug)]
 pub struct Batch {
-	pub epoch: Epoch,
 	pub version: Version,
 	pub sample: Option<(usize, bool)>,
 	pub updates: Vec<Update>,
@@ -86,7 +83,6 @@ pub struct Batch {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Transport {
-	pub epoch: Epoch,
 	pub version: Version,
 	pub sample_rate: NonZero<u32>,
 	pub frames: NonZero<u32>,
@@ -102,7 +98,6 @@ impl Transport {
 	#[must_use]
 	pub fn new(sample_rate: NonZero<u32>, frames: NonZero<u32>) -> Self {
 		Self {
-			epoch: Epoch::unique(),
 			version: Version::unique(),
 			sample_rate,
 			frames,
@@ -298,7 +293,6 @@ impl DawCtx {
 
 		if sample.is_some() || !updates.is_empty() {
 			let batch = Batch {
-				epoch: self.state.transport.epoch,
 				version: self.state.transport.version,
 				sample,
 				updates: std::mem::take(updates),

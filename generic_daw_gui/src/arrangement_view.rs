@@ -60,7 +60,7 @@ use std::{
 	sync::{Arc, LazyLock},
 	time::{Duration, SystemTime},
 };
-use utils::{NoClone, NoDebug};
+use utils::{NoClone, NoDebug, unique_id};
 
 mod arrangement;
 mod audio_clip;
@@ -74,8 +74,11 @@ mod recording;
 mod sample;
 mod track;
 
+unique_id!(epoch);
+
 pub use arrangement::Arrangement;
 pub use audio_clip::AudioClipRef;
+pub use epoch::Id as Epoch;
 pub use midi_clip::MidiClipRef;
 pub use project::Feedback;
 pub use recording::Recording;
@@ -107,7 +110,7 @@ pub static AUTOSAVE_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 #[derive(Clone, Debug)]
 pub enum Message {
 	ClapHost(clap_host::Message),
-	Batch(Box<Batch>),
+	Batch(Epoch, Box<Batch>),
 
 	SetArrangement(NoClone<Box<Arrangement>>),
 
@@ -234,7 +237,7 @@ impl ArrangementView {
 
 				loading: 0,
 			},
-			task.map(Box::new).map(Message::Batch),
+			task.map(Box::new).map(Message::Batch.with(Epoch::unique())),
 		)
 	}
 
@@ -249,13 +252,15 @@ impl ArrangementView {
 			Message::ClapHost(msg) => {
 				return self.clap_host.update(msg, config).map(Message::ClapHost);
 			}
-			Message::Batch(msg) => {
-				return Task::batch(
-					self.arrangement
-						.update(*msg)
-						.into_iter()
-						.map(|msg| self.update(msg, config, state, plugin_bundles)),
-				);
+			Message::Batch(epoch, msg) => {
+				if epoch.is_latest() {
+					return Task::batch(
+						self.arrangement
+							.update(*msg)
+							.into_iter()
+							.map(|msg| self.update(msg, config, state, plugin_bundles)),
+					);
+				}
 			}
 			Message::SetArrangement(NoClone(arrangement)) => {
 				let pos_fact = arrangement.transport().sample_rate.get() as f32
