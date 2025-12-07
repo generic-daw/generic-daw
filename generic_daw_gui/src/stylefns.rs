@@ -86,7 +86,7 @@ pub fn slider_secondary(theme: &Theme, status: slider::Status) -> slider::Style 
 
 pub fn split_style(t: &Theme) -> iced_split::Style {
 	let mut style = iced_split::default(t);
-	style.focused = iced_split::Styled {
+	style.focused = iced_split::StyleSheet {
 		color: t.extended_palette().background.strong.color,
 		width: 3.0,
 		radius: 1.5.into(),

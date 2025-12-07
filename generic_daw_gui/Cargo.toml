@@ -21,7 +21,6 @@ fragile = "2.0.1"
 humantime = "2.3.0"
 iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", default-features = false, features = [
 	"advanced",
-	"canvas",
 	"smol",
 	"wgpu",
 	"x11",
