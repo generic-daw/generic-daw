@@ -841,14 +841,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 
 [[package]]
-name = "dragking"
-version = "0.1.0"
-source = "git+https://github.com/edwloef/dragking.git?branch=generic-daw#fefbd1392c801ee52dae19e23ce87ad350a0ba3a"
-dependencies = [
- "iced_core",
-]
-
-[[package]]
 name = "dsp"
 version = "0.0.0"
 dependencies = [
@@ -1197,7 +1189,6 @@ dependencies = [
  "bit-set",
  "crc32c",
  "dirs",
- "dragking",
  "env_logger",
  "fragile",
  "generic_daw_core",
@@ -1214,6 +1205,7 @@ dependencies = [
  "rtrb",
  "serde",
  "smol",
+ "sweeten",
  "toml",
  "utils",
  "walkdir",
@@ -3182,6 +3174,17 @@ dependencies = [
  "skrifa",
  "yazi",
  "zeno",
+]
+
+[[package]]
+name = "sweeten"
+version = "0.14.0-dev"
+source = "git+https://github.com/edwloef/sweeten.git?branch=generic-daw#e4a673a733514a14fdec76834e7b052adb8a33fa"
+dependencies = [
+ "iced_core",
+ "iced_runtime",
+ "iced_widget",
+ "unicode-segmentation",
 ]
 
 [[package]]

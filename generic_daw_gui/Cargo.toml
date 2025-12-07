@@ -16,7 +16,6 @@ utils.workspace = true
 bit-set = "0.8.0"
 crc32c = "0.6.8"
 dirs = "6.0.0"
-dragking = { git = "https://github.com/edwloef/dragking.git", branch = "generic-daw" }
 env_logger = { version = "0.11.8", default-features = false }
 fragile = "2.0.1"
 humantime = "2.3.0"
@@ -36,5 +35,6 @@ rfd = { version = "0.16.0", default-features = false, features = ["xdg-portal", 
 rtrb = "0.3.2"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 smol = "2.0.2"
+sweeten = { git = "https://github.com/edwloef/sweeten.git", branch = "generic-daw" }
 toml = "0.9.8"
 walkdir = "2.5.0"

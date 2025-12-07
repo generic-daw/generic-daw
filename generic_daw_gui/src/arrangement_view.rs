@@ -26,7 +26,6 @@ use crate::{
 	},
 };
 use bit_set::BitSet;
-use dragking::DragEvent;
 use fragile::Fragile;
 use generic_daw_core::{
 	Batch, MidiNote, MusicalTime, NodeId, NotePosition, PanMode, SampleId,
@@ -60,6 +59,7 @@ use std::{
 	sync::{Arc, LazyLock},
 	time::{Duration, SystemTime},
 };
+use sweeten::widget::drag::DragEvent;
 use utils::{NoClone, NoDebug, unique_id};
 
 mod arrangement;
@@ -1223,7 +1223,7 @@ impl ArrangementView {
 					.width(Fill),
 					container(rule::horizontal(1)).padding(padding::vertical(5)),
 					scrollable(
-						dragking::column(node.plugins.iter().enumerate().map(|(i, plugin)| {
+						sweeten::column(node.plugins.iter().enumerate().map(|(i, plugin)| {
 							let button_style = |cond: bool| {
 								if !plugin.enabled || !node.enabled {
 									button::secondary
