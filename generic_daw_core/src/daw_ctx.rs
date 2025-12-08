@@ -27,6 +27,8 @@ pub enum Message {
 	SampleRemove(SampleId),
 	MidiPatternAdd(MidiPattern),
 	MidiPatternRemove(MidiPatternId),
+	AutomationPatternAdd(AutomationPattern),
+	AutomationPatternRemove(AutomationPatternId),
 
 	NodeAdd(Box<AudioGraphNode>),
 	NodeRemove(NodeId),
@@ -208,6 +210,14 @@ impl DawCtx {
 				}
 				Message::MidiPatternRemove(pattern) => {
 					let pattern = self.state.midi_patterns.remove(*pattern);
+					debug_assert!(pattern.is_some());
+				}
+				Message::AutomationPatternAdd(pattern) => {
+					let pattern = self.state.automation_patterns.insert(*pattern.id, pattern);
+					debug_assert!(pattern.is_none());
+				}
+				Message::AutomationPatternRemove(pattern) => {
+					let pattern = self.state.automation_patterns.remove(*pattern);
 					debug_assert!(pattern.is_some());
 				}
 				Message::NodeAdd(node) => self.audio_graph.insert(*node),
