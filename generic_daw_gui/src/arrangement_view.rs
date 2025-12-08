@@ -279,8 +279,9 @@ impl ArrangementView {
 				self.arrangement = *arrangement;
 			}
 			Message::ConnectRequest(from, to) => {
-				return Task::perform(self.arrangement.request_connect(from, to), Result::ok)
-					.and_then(Task::done)
+				return self
+					.arrangement
+					.request_connect(from, to)
 					.map(Message::ConnectSucceeded);
 			}
 			Message::ConnectSucceeded((from, to)) => self.arrangement.connect_succeeded(from, to),
@@ -307,13 +308,10 @@ impl ArrangementView {
 			}
 			Message::ChannelAdd => {
 				let id = self.arrangement.add_channel();
-				return Task::perform(
-					self.arrangement
-						.request_connect(id, self.arrangement.master().id),
-					Result::ok,
-				)
-				.and_then(Task::done)
-				.map(Message::ConnectSucceeded);
+				return self
+					.arrangement
+					.request_connect(id, self.arrangement.master().id)
+					.map(Message::ConnectSucceeded);
 			}
 			Message::ChannelRemove(id) => {
 				self.arrangement.remove_channel(id);
@@ -451,13 +449,10 @@ impl ArrangementView {
 				if self.soloed_track.is_some() {
 					self.arrangement.channel_toggle_enabled(id);
 				}
-				return Task::perform(
-					self.arrangement
-						.request_connect(id, self.arrangement.master().id),
-					Result::ok,
-				)
-				.and_then(Task::done)
-				.map(Message::ConnectSucceeded);
+				return self
+					.arrangement
+					.request_connect(id, self.arrangement.master().id)
+					.map(Message::ConnectSucceeded);
 			}
 			Message::TrackRemove(id) => {
 				let idx = self.arrangement.track_of(id).unwrap();

@@ -361,14 +361,13 @@ impl Arrangement {
 		}
 	}
 
-	pub fn request_connect(
-		&mut self,
-		from: NodeId,
-		to: NodeId,
-	) -> oneshot::Receiver<(NodeId, NodeId)> {
+	pub fn request_connect(&mut self, from: NodeId, to: NodeId) -> Task<(NodeId, NodeId)> {
 		let (sender, receiver) = oneshot::channel();
 		self.send(Message::NodeConnect(from, to, sender));
-		receiver
+		Task::perform(receiver, Result::ok)
+			.and_then(Task::done)
+			.map(move |success| success.then_some((from, to)))
+			.and_then(Task::done)
 	}
 
 	pub fn connect_succeeded(&mut self, from: NodeId, to: NodeId) {

@@ -32,7 +32,7 @@ pub enum Message {
 
 	NodeAdd(Box<AudioGraphNode>),
 	NodeRemove(NodeId),
-	NodeConnect(NodeId, NodeId, oneshot::Sender<(NodeId, NodeId)>),
+	NodeConnect(NodeId, NodeId, oneshot::Sender<bool>),
 	NodeDisconnect(NodeId, NodeId),
 
 	Bpm(NonZero<u16>),
@@ -223,9 +223,7 @@ impl DawCtx {
 				Message::NodeAdd(node) => self.audio_graph.insert(*node),
 				Message::NodeRemove(node) => self.audio_graph.remove(node),
 				Message::NodeConnect(from, to, sender) => {
-					if self.audio_graph.connect(from, to) {
-						sender.send((from, to)).unwrap();
-					}
+					sender.send(self.audio_graph.connect(from, to)).unwrap();
 				}
 				Message::NodeDisconnect(from, to) => self.audio_graph.disconnect(from, to),
 				Message::Bpm(bpm) => self.state.transport.bpm = bpm,
