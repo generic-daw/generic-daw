@@ -430,7 +430,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 [[package]]
 name = "clack-common"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#f97ae8999ea0bba27ff3828b19871508e1574fb4"
+source = "git+https://github.com/prokopyl/clack.git#4557cbfe9880e108c56036bb223a244c32ae7050"
 dependencies = [
  "bitflags 2.10.0",
  "clap-sys",
@@ -439,7 +439,7 @@ dependencies = [
 [[package]]
 name = "clack-extensions"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#f97ae8999ea0bba27ff3828b19871508e1574fb4"
+source = "git+https://github.com/prokopyl/clack.git#4557cbfe9880e108c56036bb223a244c32ae7050"
 dependencies = [
  "bitflags 2.10.0",
  "clack-common",
@@ -451,7 +451,7 @@ dependencies = [
 [[package]]
 name = "clack-host"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#f97ae8999ea0bba27ff3828b19871508e1574fb4"
+source = "git+https://github.com/prokopyl/clack.git#4557cbfe9880e108c56036bb223a244c32ae7050"
 dependencies = [
  "clack-common",
  "clap-sys",
@@ -1560,7 +1560,7 @@ dependencies = [
 [[package]]
 name = "iced_split"
 version = "0.1.0"
-source = "git+https://github.com/edwloef/iced_split.git?branch=generic-daw#3dcf1486d922239ce346b9bb84504e2e682808be"
+source = "git+https://github.com/edwloef/iced_split.git?branch=generic-daw#1a97be057eccb74fad252a059ba0fb7b5150f112"
 dependencies = [
  "iced_core",
 ]
