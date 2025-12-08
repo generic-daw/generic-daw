@@ -71,6 +71,7 @@ pub struct Channel {
 	enabled: bool,
 	bypassed: bool,
 	last_peaks: [f32; 2],
+	updates: Vec<Update>,
 }
 
 impl NodeImpl for Channel {
@@ -99,8 +100,7 @@ impl NodeImpl for Channel {
 
 			for event in events.drain(..) {
 				if let Event::ParamValue { param_id, .. } = event {
-					_ = state
-						.updates
+					self.updates
 						.push(Update::Param(plugin.processor.id(), param_id));
 				}
 			}
@@ -119,7 +119,7 @@ impl NodeImpl for Channel {
 
 		if peaks != self.last_peaks {
 			self.last_peaks = peaks;
-			_ = state.updates.push(Update::Peak(self.id, peaks));
+			self.updates.push(Update::Peak(self.id, peaks));
 		}
 	}
 
@@ -164,6 +164,10 @@ impl Channel {
 		}
 	}
 
+	pub fn collect_updates(&mut self, updates: &mut Vec<Update>) {
+		updates.append(&mut self.updates);
+	}
+
 	#[must_use]
 	pub fn enabled(&self) -> bool {
 		self.enabled
@@ -184,6 +188,7 @@ impl Default for Channel {
 			enabled: true,
 			bypassed: false,
 			last_peaks: [0.0; 2],
+			updates: Vec::new(),
 		}
 	}
 }

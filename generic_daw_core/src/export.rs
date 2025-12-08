@@ -30,6 +30,8 @@ impl Export {
 		let buffer_size = 2 * self.state.transport.frames.get() as usize;
 		let mut buf = vec![0.0; buffer_size].into_boxed_slice();
 
+		let mut updates = Vec::new();
+
 		let mut delay;
 		let mut end;
 
@@ -41,7 +43,9 @@ impl Export {
 			let diff = buffer_size.min(delay - self.state.transport.sample);
 
 			self.audio_graph.process(&self.state, &mut buf[..diff]);
-			while self.state.updates.pop().is_some() {}
+			self.audio_graph
+				.for_each_node_mut(|node| node.collect_updates(&mut updates));
+			updates.clear();
 
 			self.state.transport.sample += diff;
 			progress_fn(self.state.transport.sample as f32 / end as f32);
@@ -55,7 +59,9 @@ impl Export {
 			let diff = buffer_size.min(end - self.state.transport.sample);
 
 			self.audio_graph.process(&self.state, &mut buf[..diff]);
-			while self.state.updates.pop().is_some() {}
+			self.audio_graph
+				.for_each_node_mut(|node| node.collect_updates(&mut updates));
+			updates.clear();
 
 			for &s in &buf[..diff] {
 				writer.write_sample(s).unwrap();

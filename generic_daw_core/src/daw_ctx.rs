@@ -4,7 +4,6 @@ use crate::{
 	clap_host::{AudioProcessor, ClapId, PluginId},
 	resampler::Resampler,
 };
-use crossbeam_queue::ArrayQueue;
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, PushError, RingBuffer};
 use std::{num::NonZero, time::Instant};
@@ -118,7 +117,6 @@ pub struct State {
 	pub samples: HoleyVec<Sample>,
 	pub midi_patterns: HoleyVec<MidiPattern>,
 	pub automation_patterns: HoleyVec<AutomationPattern>,
-	pub updates: ArrayQueue<Update>,
 }
 
 pub struct DawCtx {
@@ -160,7 +158,6 @@ impl DawCtx {
 				samples: HoleyVec::default(),
 				midi_patterns: HoleyVec::default(),
 				automation_patterns: HoleyVec::default(),
-				updates: ArrayQueue::new(8192),
 			},
 			producer,
 			consumer,
@@ -237,7 +234,6 @@ impl DawCtx {
 						samples: HoleyVec::default(),
 						midi_patterns: HoleyVec::default(),
 						automation_patterns: HoleyVec::default(),
-						updates: ArrayQueue::new(1),
 					};
 					std::mem::swap(&mut self.state, &mut state);
 
@@ -255,6 +251,7 @@ impl DawCtx {
 		self.recv_events();
 
 		let mut looped = false;
+		let mut updates = self.update_buffers.pop().unwrap_or_default();
 
 		if self.state.transport.playing
 			&& let Some(loop_marker) = self.state.transport.loop_marker
@@ -268,6 +265,8 @@ impl DawCtx {
 					let len = loop_end - self.state.transport.sample;
 
 					self.audio_graph.process(&self.state, &mut buf[..len]);
+					self.audio_graph
+						.for_each_node_mut(|node| node.collect_updates(&mut updates));
 					for s in &mut buf[..len] {
 						*s = s.clamp(-1.0, 1.0);
 					}
@@ -280,6 +279,8 @@ impl DawCtx {
 		}
 
 		self.audio_graph.process(&self.state, buf);
+		self.audio_graph
+			.for_each_node_mut(|node| node.collect_updates(&mut updates));
 		for s in &mut *buf {
 			*s = s.clamp(-1.0, 1.0);
 		}
@@ -290,14 +291,7 @@ impl DawCtx {
 			(self.state.transport.sample, looped)
 		});
 
-		if sample.is_some() || !self.state.updates.is_empty() {
-			let mut updates = self.update_buffers.pop().unwrap_or_default();
-			updates.reserve_exact(self.state.updates.len());
-
-			while let Some(update) = self.state.updates.pop() {
-				updates.push(update);
-			}
-
+		if sample.is_some() || !updates.is_empty() {
 			let batch = Batch {
 				version: self.state.transport.version,
 				sample,

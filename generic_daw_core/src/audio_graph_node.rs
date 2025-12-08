@@ -1,4 +1,4 @@
-use crate::{Channel, Event, NodeAction, NodeImpl, Track, daw_ctx::State};
+use crate::{Channel, Event, NodeAction, NodeImpl, Track, Update, daw_ctx::State};
 
 #[derive(Debug)]
 pub enum AudioGraphNode {
@@ -51,6 +51,13 @@ impl AudioGraphNode {
 		match self {
 			Self::Channel(node) => node.reset(),
 			Self::Track(node) => node.reset(),
+		}
+	}
+
+	pub fn collect_updates(&mut self, updates: &mut Vec<Update>) {
+		match self {
+			Self::Channel(node) => node.collect_updates(updates),
+			Self::Track(node) => node.collect_updates(updates),
 		}
 	}
 }

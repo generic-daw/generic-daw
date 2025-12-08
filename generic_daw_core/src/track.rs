@@ -1,4 +1,4 @@
-use crate::{Channel, Clip, Event, NodeAction, NodeId, NodeImpl, daw_ctx::State};
+use crate::{Channel, Clip, Event, NodeAction, NodeId, NodeImpl, Update, daw_ctx::State};
 use std::{cmp::Ordering, iter::repeat_n};
 use utils::NoDebug;
 
@@ -72,6 +72,10 @@ impl Track {
 
 	pub fn reset(&mut self) {
 		self.channel.reset();
+	}
+
+	pub fn collect_updates(&mut self, updates: &mut Vec<Update>) {
+		self.channel.collect_updates(updates);
 	}
 
 	pub fn diff_notes(&mut self, state: &State, audio: &[f32], events: &mut Vec<Event>) {

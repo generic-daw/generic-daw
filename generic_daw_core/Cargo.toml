@@ -13,7 +13,6 @@ clap_host.workspace = true
 utils.workspace = true
 
 cpal = "0.16.0"
-crossbeam-queue = "0.3.12"
 hound = "3.5.1"
 log = "0.4.29"
 oneshot = "0.1.11"

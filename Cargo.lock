@@ -430,7 +430,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 [[package]]
 name = "clack-common"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#4557cbfe9880e108c56036bb223a244c32ae7050"
+source = "git+https://github.com/prokopyl/clack.git#6422c6a21930471df3dc7f38074f9a477709f8ae"
 dependencies = [
  "bitflags 2.10.0",
  "clap-sys",
@@ -439,7 +439,7 @@ dependencies = [
 [[package]]
 name = "clack-extensions"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#4557cbfe9880e108c56036bb223a244c32ae7050"
+source = "git+https://github.com/prokopyl/clack.git#6422c6a21930471df3dc7f38074f9a477709f8ae"
 dependencies = [
  "bitflags 2.10.0",
  "clack-common",
@@ -451,7 +451,7 @@ dependencies = [
 [[package]]
 name = "clack-host"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#4557cbfe9880e108c56036bb223a244c32ae7050"
+source = "git+https://github.com/prokopyl/clack.git#6422c6a21930471df3dc7f38074f9a477709f8ae"
 dependencies = [
  "clack-common",
  "clap-sys",
@@ -710,15 +710,6 @@ name = "crossbeam-epoch"
 version = "0.9.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b82ac4a3c2ca9c3460964f020e1402edd5753411d7737aa39c3714ad1b5420e"
-dependencies = [
- "crossbeam-utils",
-]
-
-[[package]]
-name = "crossbeam-queue"
-version = "0.3.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f58bbc28f91df819d0aa2a2c00cd19754769c2fad90579b3592b1c9ba7a3115"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -1218,7 +1209,6 @@ dependencies = [
  "audio_graph",
  "clap_host",
  "cpal",
- "crossbeam-queue",
  "hound",
  "log",
  "oneshot",

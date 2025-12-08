@@ -8,6 +8,7 @@ pub struct AutomationClip {
 }
 
 impl AutomationClip {
+	#[must_use]
 	pub fn interpolate(&self, state: &State) -> f32 {
 		let pattern = &state.automation_patterns[*self.pattern];
 
