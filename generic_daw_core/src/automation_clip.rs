@@ -22,16 +22,16 @@ impl AutomationClip {
 				let &[mut this, mut next] = points else {
 					unreachable!()
 				};
-				this.time += self.position.offset();
-				next.time += self.position.offset();
+				this.position += self.position.offset();
+				next.position += self.position.offset();
 				[this, next]
 			})
-			.find(|[_, next]| next.time.to_samples(&state.transport) > now)
+			.find(|[_, next]| next.position.to_samples(&state.transport) > now)
 			.map_or_else(
 				|| pattern.points.last().unwrap().value,
 				|[this, next]| {
-					let this_time = this.time.to_samples(&state.transport);
-					let next_time = next.time.to_samples(&state.transport);
+					let this_time = this.position.to_samples(&state.transport);
+					let next_time = next.position.to_samples(&state.transport);
 
 					if now < this_time {
 						return this.value;

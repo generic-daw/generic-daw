@@ -6,6 +6,7 @@ mod audio_graph_node;
 mod automation_clip;
 mod automation_lane;
 mod automation_pattern;
+mod automation_point;
 mod channel;
 mod clip;
 mod daw_ctx;
@@ -26,9 +27,8 @@ pub use audio_graph::{NodeId, NodeImpl};
 pub use audio_graph_node::AudioGraphNode;
 pub use automation_clip::AutomationClip;
 pub use automation_lane::AutomationLane;
-pub use automation_pattern::{
-	AutomationPattern, AutomationPatternId, AutomationPoint, AutomationTransition,
-};
+pub use automation_pattern::{AutomationPattern, AutomationPatternAction, AutomationPatternId};
+pub use automation_point::{AutomationPoint, AutomationTransition};
 pub use channel::{Channel, PanMode};
 pub use clap_host;
 pub use clip::Clip;

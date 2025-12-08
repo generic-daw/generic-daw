@@ -1,6 +1,7 @@
 use crate::{
-	AudioGraph, AudioGraphNode, AutomationPattern, Channel, Clip, Event, Export, MidiPattern,
-	MidiPatternAction, MidiPatternId, MusicalTime, NodeId, NotePosition, PanMode, Sample, SampleId,
+	AudioGraph, AudioGraphNode, AutomationPattern, AutomationPatternAction, AutomationPatternId,
+	Channel, Clip, Event, Export, MidiPattern, MidiPatternAction, MidiPatternId, MusicalTime,
+	NodeId, NotePosition, PanMode, Sample, SampleId,
 	clap_host::{AudioProcessor, ClapId, PluginId},
 	resampler::Resampler,
 };
@@ -20,6 +21,7 @@ static OFF_BAR_CLICK: [f32; 2940] = include_f32s!("../../assets/off_bar_click.pc
 pub enum Message {
 	NodeAction(NodeId, NodeAction),
 	MidiPatternAction(MidiPatternId, MidiPatternAction),
+	AutomationPatternAction(AutomationPatternId, AutomationPatternAction),
 
 	SampleAdd(Sample),
 	SampleRemove(SampleId),
@@ -181,6 +183,13 @@ impl DawCtx {
 				Message::MidiPatternAction(pattern, action) => {
 					self.state
 						.midi_patterns
+						.get_mut(*pattern)
+						.unwrap()
+						.apply(action);
+				}
+				Message::AutomationPatternAction(pattern, action) => {
+					self.state
+						.automation_patterns
 						.get_mut(*pattern)
 						.unwrap()
 						.apply(action);

@@ -21,15 +21,6 @@ pub struct MidiPattern {
 	pub notes: Vec<MidiNote>,
 }
 
-impl Default for MidiPattern {
-	fn default() -> Self {
-		Self {
-			id: MidiPatternId::unique(),
-			notes: Vec::new(),
-		}
-	}
-}
-
 impl MidiPattern {
 	#[must_use]
 	pub fn new(notes: Vec<MidiNote>) -> Self {
@@ -41,7 +32,7 @@ impl MidiPattern {
 
 	pub fn apply(&mut self, action: MidiPatternAction) {
 		match action {
-			MidiPatternAction::Add(note, idx) => self.notes.insert(idx, note),
+			MidiPatternAction::Add(note, index) => self.notes.insert(index, note),
 			MidiPatternAction::Remove(index) => _ = self.notes.remove(index),
 			MidiPatternAction::ChangeKey(index, key) => self.notes[index].key = key,
 			MidiPatternAction::MoveTo(index, pos) => self.notes[index].position.move_to(pos),
