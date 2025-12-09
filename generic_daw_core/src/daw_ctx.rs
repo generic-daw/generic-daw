@@ -136,8 +136,7 @@ pub struct DawCtx {
 impl DawCtx {
 	pub fn create(transport: Transport) -> (Self, NodeId, Producer<Message>, Consumer<Batch>) {
 		let (r_producer, consumer) = RingBuffer::new(transport.frames.get() as usize);
-		let (producer, r_consumer) =
-			RingBuffer::new(transport.sample_rate.get().div_ceil(transport.frames.get()) as usize);
+		let (producer, r_consumer) = RingBuffer::new(transport.frames.get() as usize);
 
 		let mut on_bar_click = Resampler::new(
 			NonZero::new(44100).unwrap(),

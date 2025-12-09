@@ -388,7 +388,7 @@ fn from_other_to_stereo(a: &mut [f32], b: &[f32], frames: usize) {
 	}
 }
 
-fn frames_of_config(config: &StreamConfig) -> Option<NonZero<u32>> {
+pub fn frames_of_config(config: &StreamConfig) -> Option<NonZero<u32>> {
 	match config.buffer_size {
 		BufferSize::Fixed(buffer_size) => NonZero::new(buffer_size),
 		BufferSize::Default => None,

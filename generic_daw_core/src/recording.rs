@@ -1,6 +1,6 @@
 use crate::{
 	InputRequest, InputResponse, STREAM_THREAD, Sample, SampleId, StreamMessage, StreamToken,
-	Transport, resampler::Resampler,
+	Transport, resampler::Resampler, stream::frames_of_config,
 };
 use cpal::StreamConfig;
 use hound::{SampleFormat, WavSpec, WavWriter};
@@ -13,7 +13,7 @@ pub struct Recording<W: io::Write + io::Seek> {
 	resampler: Resampler,
 	writer: NoDebug<WavWriter<W>>,
 
-	stream: Option<StreamToken>,
+	stream: Option<NoDebug<StreamToken>>,
 	config: StreamConfig,
 }
 
@@ -68,7 +68,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 				resampler,
 				writer: writer.into(),
 
-				stream: Some(token),
+				stream: Some(token.into()),
 				config,
 			},
 			consumer,
@@ -78,6 +78,11 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	#[must_use]
 	pub fn sample_rate(&self) -> NonZero<u32> {
 		NonZero::new(self.config.sample_rate.0).unwrap()
+	}
+
+	#[must_use]
+	pub fn frames(&self) -> Option<NonZero<u32>> {
+		frames_of_config(&self.config)
 	}
 
 	#[must_use]

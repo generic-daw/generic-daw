@@ -15,7 +15,7 @@ use clack_extensions::{
 use clack_host::prelude::*;
 use log::{info, warn};
 use raw_window_handle::RawWindowHandle;
-use rtrb::{Producer, RingBuffer};
+use rtrb::{Producer, PushError, RingBuffer};
 #[cfg(unix)]
 use std::os::fd::RawFd;
 use std::{io::Cursor, num::NonZero, sync::mpsc::Receiver};
@@ -83,6 +83,13 @@ impl<Event: EventImpl> Plugin<Event> {
 			},
 			receiver,
 		)
+	}
+
+	fn send(&mut self, mut message: AudioThreadMessage<Event>) {
+		while let Err(PushError::Full(msg)) = self.producer.push(message) {
+			message = msg;
+			std::thread::yield_now();
+		}
 	}
 
 	#[must_use]
@@ -181,9 +188,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			.access_shared_handler(|s| s.ext.latency.get().copied())
 			.map_or(0, |latency| latency.get(&mut self.instance.plugin_handle()));
 
-		self.producer
-			.push(AudioThreadMessage::Activated(NoDebug(processor), latency))
-			.unwrap();
+		self.send(AudioThreadMessage::Activated(NoDebug(processor), latency));
 	}
 
 	pub fn deactivate(&mut self, processor: NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>) {
@@ -323,38 +328,32 @@ impl<Event: EventImpl> Plugin<Event> {
 		let ext = self
 			.instance
 			.access_shared_handler(|s| *s.ext.gui.get().unwrap());
-		let size = ext
-			.adjust_size(&mut self.instance.plugin_handle(), size)
-			.unwrap();
+		let size = ext.adjust_size(&mut self.instance.plugin_handle(), size)?;
 		ext.set_size(&mut self.instance.plugin_handle(), size)
-			.unwrap();
+			.inspect_err(|err| warn!("{}: {err}", self.descriptor))
+			.ok()?;
 
 		let GuiSize { width, height } = size;
 		Some(Size::from_native((width as f32, height as f32)))
 	}
 
 	pub fn send_event(&mut self, event: Event) {
-		self.producer
-			.push(AudioThreadMessage::Event(event))
-			.unwrap();
+		self.send(AudioThreadMessage::Event(event));
 	}
 
 	pub fn set_realtime(&mut self, realtime: bool) {
-		self.producer
-			.push(AudioThreadMessage::SetRealtime(realtime))
-			.unwrap();
+		self.send(AudioThreadMessage::SetRealtime(realtime));
 
-		if let Some(&render) = self.instance.access_shared_handler(|s| s.ext.render.get()) {
-			render
-				.set(
-					&mut self.instance.plugin_handle(),
-					if realtime {
-						RenderMode::Realtime
-					} else {
-						RenderMode::Offline
-					},
-				)
-				.unwrap();
+		if let Some(&render) = self.instance.access_shared_handler(|s| s.ext.render.get())
+			&& let Err(err) = render.set(
+				&mut self.instance.plugin_handle(),
+				if realtime {
+					RenderMode::Realtime
+				} else {
+					RenderMode::Offline
+				},
+			) {
+			warn!("{}: {err}", self.descriptor);
 		}
 	}
 
@@ -365,16 +364,20 @@ impl<Event: EventImpl> Plugin<Event> {
 		self.instance
 			.access_shared_handler(|s| s.ext.state.get().copied())?
 			.save(&mut self.instance.plugin_handle(), &mut buf)
+			.inspect_err(|err| warn!("{}: {err}", self.descriptor))
 			.ok()?;
 
 		Some(buf)
 	}
 
 	pub fn set_state(&mut self, buf: &[u8]) {
-		self.instance
+		if let Err(err) = self
+			.instance
 			.access_shared_handler(|s| s.ext.state.get().copied().unwrap())
 			.load(&mut self.instance.plugin_handle(), &mut Cursor::new(buf))
-			.unwrap();
+		{
+			warn!("{}: {err}", self.descriptor);
+		}
 	}
 }
 

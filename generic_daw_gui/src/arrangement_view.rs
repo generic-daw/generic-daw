@@ -553,17 +553,16 @@ impl ArrangementView {
 						config.input_device.buffer_size,
 					);
 
+					let sample_rate = recording.sample_rate();
+					let frames = recording.frames().or(config.input_device.buffer_size);
+
 					self.recording = Some((recording, node));
 					self.arrangement.play();
 
-					return poll_consumer(
-						task,
-						config.input_device.sample_rate,
-						config.input_device.buffer_size,
-					)
-					.map(NoDebug)
-					.map(Message::RecordingWrite)
-					.chain(Task::done(Message::RecordingFinalize));
+					return poll_consumer(task, sample_rate, frames)
+						.map(NoDebug)
+						.map(Message::RecordingWrite)
+						.chain(Task::done(Message::RecordingFinalize));
 				}
 			}
 			Message::RecordingEndStream => {
