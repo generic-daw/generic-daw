@@ -1,6 +1,6 @@
 use crate::{
-	InputRequest, InputResponse, STREAM_THREAD, Sample, SampleId, StreamMessage, StreamToken,
-	Transport, resampler::Resampler, stream::frames_of_config,
+	Sample, SampleId, Stream, Transport, build_input_stream, resampler::Resampler,
+	stream::frames_of_config,
 };
 use cpal::StreamConfig;
 use hound::{SampleFormat, WavSpec, WavWriter};
@@ -13,7 +13,7 @@ pub struct Recording<W: io::Write + io::Seek> {
 	resampler: Resampler,
 	writer: NoDebug<WavWriter<W>>,
 
-	stream: Option<NoDebug<StreamToken>>,
+	stream: Option<NoDebug<Stream>>,
 	config: StreamConfig,
 }
 
@@ -26,27 +26,10 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		sample_rate: NonZero<u32>,
 		frames: Option<NonZero<u32>>,
 	) -> (Self, Consumer<Box<[f32]>>) {
-		let (sender, receiver) = oneshot::channel();
-
-		STREAM_THREAD
-			.send(StreamMessage::Input(
-				InputRequest {
-					device_name,
-					sample_rate,
-					frames,
-				},
-				sender,
-			))
-			.unwrap();
-
-		let InputResponse {
-			config,
-			consumer,
-			token,
-		} = receiver.recv().unwrap();
+		let (config, consumer, stream) = build_input_stream(device_name, sample_rate, frames);
 
 		let resampler = Resampler::new(
-			NonZero::new(config.sample_rate.0).unwrap(),
+			NonZero::new(config.sample_rate).unwrap(),
 			transport.sample_rate,
 			NonZero::new(2).unwrap(),
 		)
@@ -56,7 +39,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 			writer,
 			WavSpec {
 				channels: 2,
-				sample_rate: config.sample_rate.0,
+				sample_rate: config.sample_rate,
 				bits_per_sample: 32,
 				sample_format: SampleFormat::Float,
 			},
@@ -68,7 +51,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 				resampler,
 				writer: writer.into(),
 
-				stream: Some(token.into()),
+				stream: Some(stream.into()),
 				config,
 			},
 			consumer,
@@ -77,7 +60,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 
 	#[must_use]
 	pub fn sample_rate(&self) -> NonZero<u32> {
-		NonZero::new(self.config.sample_rate.0).unwrap()
+		NonZero::new(self.config.sample_rate).unwrap()
 	}
 
 	#[must_use]
@@ -100,7 +83,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 
 	pub fn split_off(&mut self, writer: W, transport: &Transport) -> Sample {
 		let mut resampler = Resampler::new(
-			NonZero::new(self.config.sample_rate.0).unwrap(),
+			NonZero::new(self.config.sample_rate).unwrap(),
 			transport.sample_rate,
 			NonZero::new(2).unwrap(),
 		)
@@ -111,7 +94,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 			writer,
 			WavSpec {
 				channels: 2,
-				sample_rate: self.config.sample_rate.0,
+				sample_rate: self.config.sample_rate,
 				bits_per_sample: 32,
 				sample_format: SampleFormat::Float,
 			},
