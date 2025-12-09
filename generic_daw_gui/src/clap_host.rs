@@ -1,4 +1,4 @@
-use crate::{config::Config, widget::LINE_HEIGHT};
+use crate::{config::Config, stylefns::scrollable_style, widget::LINE_HEIGHT};
 use fragile::Fragile;
 #[cfg(unix)]
 use generic_daw_core::clap_host::{FdFlags, PosixFdMessage};
@@ -9,10 +9,10 @@ use generic_daw_core::{
 use generic_daw_widget::knob::Knob;
 use iced::{
 	Center, Element, Font, Function as _,
-	Length::{Fill, Shrink},
+	Length::Fill,
 	Subscription, Task, padding,
 	time::every,
-	widget::{column, container, row, rule, sensor, space, text},
+	widget::{column, container, row, rule, scrollable, space, text},
 	window,
 };
 #[cfg(unix)]
@@ -41,7 +41,6 @@ pub enum Message {
 	WindowResized(window::Id, Size),
 	WindowCloseRequested(window::Id),
 	WindowClosed(window::Id),
-	SetPluginSize(PluginId, Size),
 }
 
 #[derive(Debug, Default)]
@@ -117,11 +116,6 @@ impl ClapHost {
 				let id = self.windows.key_of(&window).unwrap();
 				self.windows.remove(id).unwrap();
 			}
-			Message::SetPluginSize(id, size) => {
-				if let Some(&window) = self.windows.get(*id) {
-					return window::resize(window, size.to_logical(config.app_scale_factor).into());
-				}
-			}
 		}
 
 		Task::none()
@@ -174,7 +168,6 @@ impl ClapHost {
 				} else if !plugin.has_gui() {
 					let (window, spawn) = window::open(window::Settings {
 						size: (400.0, 600.0).into(),
-						resizable: false,
 						exit_on_close_request: false,
 						level: window::Level::AlwaysOnTop,
 						..window::Settings::default()
@@ -363,59 +356,47 @@ impl ClapHost {
 		}
 
 		Some(
-			sensor(
-				column![
-					text(&*plugin.descriptor().name)
-						.size(LINE_HEIGHT)
-						.line_height(1.0)
-						.font(Font::MONOSPACE),
-					container(rule::horizontal(1)).padding(padding::vertical(5)),
+			column![
+				text(&*plugin.descriptor().name)
+					.size(LINE_HEIGHT)
+					.line_height(1.0)
+					.font(Font::MONOSPACE),
+				container(rule::horizontal(1)).padding(padding::vertical(5)),
+				scrollable(
 					row(plugin.params().map(|param| {
 						column![
-							container(
-								Knob::new(param.range.clone(), param.value, |value| {
-									Message::SendEvent(
-										plugin.plugin_id(),
-										Event::ParamValue {
-											time: 0,
-											param_id: param.id,
-											value,
-											cookie: param.cookie,
-										},
-									)
-								})
-								.default(param.reset)
-								.radius(25.0)
-								.enabled(!param.flags.contains(ParamInfoFlags::IS_READONLY))
-								.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
-								.maybe_tooltip(param.value_text.as_deref())
-							)
-							.padding(padding::horizontal(10)),
-							text(&*param.name)
-								.wrapping(text::Wrapping::WordOrGlyph)
-								.align_x(Center)
-								.width(Fill)
+							Knob::new(param.range.clone(), param.value, |value| {
+								Message::SendEvent(
+									plugin.plugin_id(),
+									Event::ParamValue {
+										time: 0,
+										param_id: param.id,
+										value,
+										cookie: param.cookie,
+									},
+								)
+							})
+							.default(param.reset)
+							.radius(25.0)
+							.enabled(!param.flags.contains(ParamInfoFlags::IS_READONLY))
+							.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
+							.maybe_tooltip(param.value_text.as_deref()),
+							text(&*param.name).wrapping(text::Wrapping::WordOrGlyph)
 						]
 						.spacing(5)
-						.width(Shrink)
+						.width(70)
+						.align_x(Center)
 						.into()
 					}))
 					.spacing(10)
 					.wrap()
 					.vertical_spacing(10)
-				]
-				.width(Shrink)
-				.padding(10),
-			)
-			.on_show(|size| {
-				Message::SetPluginSize(
-					plugin.plugin_id(),
-					Size::Logical {
-						width: size.width,
-						height: size.height,
-					},
 				)
-			})
+				.width(Fill)
+				.spacing(5)
+				.style(scrollable_style)
+			]
+			.padding(10)
 			.into(),
 		)
 	}
