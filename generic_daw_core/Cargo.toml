@@ -20,4 +20,4 @@ midly = { version = "0.5.3", default-features = false, features = ["std", "stric
 oneshot = "0.1.13"
 rtrb = "0.3.2"
 rubato = "1.0.1"
-symphonia = { version = "0.5.5", features = ["all", "opt-simd"] }
+symphonia = { git = "https://github.com/pdeljanov/Symphonia", branch = "dev-0.6", features = ["all", "opt-simd"] }
