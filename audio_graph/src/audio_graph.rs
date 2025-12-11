@@ -1,6 +1,9 @@
 use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry};
 use dsp::DelayLine;
-use std::{num::NonZero, sync::atomic::Ordering::Relaxed};
+use std::{
+	num::NonZero,
+	sync::{RwLockWriteGuard, atomic::Ordering::Relaxed},
+};
 use utils::HoleyVec;
 
 #[derive(Debug)]
@@ -69,6 +72,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		buf.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..len]);
 	}
 
+	#[expect(clippy::significant_drop_tightening)]
 	fn worker<'a>(
 		&'a self,
 		s: &rayon_core::Scope<'a>,
@@ -78,10 +82,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	) {
 		debug_assert!(entry.indegree.load(Relaxed).is_negative());
 
-		let mut node_lock = entry.node_uncontended();
 		let mut buffers_lock = entry.write_buffers_uncontended();
-
-		let node = &mut *node_lock;
 		let buffers = &mut *buffers_lock;
 
 		buffers.audio[..len].fill(0.0);
@@ -125,16 +126,16 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			}));
 		}
 
+		let mut node = entry.node_uncontended();
+
 		node.process(state, &mut buffers.audio[..len], &mut buffers.events);
 		entry.delay.store(node.delay() + max_delay, Relaxed);
 
-		drop(node_lock);
-		drop(buffers_lock);
+		drop(node);
 
 		let mut first = None;
 
-		entry
-			.read_buffers_uncontended()
+		RwLockWriteGuard::downgrade(buffers_lock)
 			.outgoing
 			.iter()
 			.map(|node| &self.graph[node])
