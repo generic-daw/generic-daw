@@ -3,31 +3,31 @@ use std::fmt::{Display, Formatter};
 use utils::variants;
 
 variants! {
-	#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-	pub enum Theme {
-		Light,
-		Dark,
-		Dracula,
-		Nord,
-		SolarizedLight,
-		SolarizedDark,
-		GruvboxLight,
-		GruvboxDark,
-		CatppuccinLatte,
-		#[default]
-		CatppuccinFrappe,
-		CatppuccinMacchiato,
-		CatppuccinMocha,
-		TokyoNight,
-		TokyoNightStorm,
-		TokyoNightLight,
-		KanagawaWave,
-		KanagawaLotus,
-		Moonfly,
-		Nightfly,
-		Oxocarbon,
-		Ferra,
-	}
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum Theme {
+	Light,
+	Dark,
+	Dracula,
+	Nord,
+	SolarizedLight,
+	SolarizedDark,
+	GruvboxLight,
+	GruvboxDark,
+	CatppuccinLatte,
+	CatppuccinFrappe,
+	CatppuccinMacchiato,
+	CatppuccinMocha,
+	TokyoNight,
+	TokyoNightStorm,
+	TokyoNightLight,
+	KanagawaWave,
+	KanagawaDragon,
+	KanagawaLotus,
+	Moonfly,
+	Nightfly,
+	Oxocarbon,
+	Ferra,
+}
 }
 
 impl From<Theme> for iced::Theme {
@@ -49,6 +49,7 @@ impl From<Theme> for iced::Theme {
 			Theme::TokyoNightStorm => Self::TokyoNightStorm,
 			Theme::TokyoNightLight => Self::TokyoNightLight,
 			Theme::KanagawaWave => Self::KanagawaWave,
+			Theme::KanagawaDragon => Self::KanagawaDragon,
 			Theme::KanagawaLotus => Self::KanagawaLotus,
 			Theme::Moonfly => Self::Moonfly,
 			Theme::Nightfly => Self::Nightfly,

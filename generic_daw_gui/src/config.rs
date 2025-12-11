@@ -41,7 +41,7 @@ impl Default for Config {
 			open_last_project: false,
 			app_scale_factor: 1.0,
 			plugin_scale_factor: None,
-			theme: Theme::default(),
+			theme: Theme::CatppuccinFrappe,
 		}
 	}
 }

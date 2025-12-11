@@ -37,12 +37,54 @@ use log::trace;
 use rfd::AsyncFileDialog;
 use std::{
 	collections::HashMap,
+	fmt::{Display, Formatter},
 	num::NonZero,
 	path::Path,
 	sync::Arc,
 	time::{Duration, SystemTime},
 };
-use utils::{NoClone, NoDebug};
+use utils::{NoClone, NoDebug, variants};
+
+variants! {
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum FileMenu {
+	New,
+	Open,
+	OpenLast,
+	Save,
+	SaveAs,
+	Export,
+	Settings,
+}
+}
+
+impl From<FileMenu> for Message {
+	fn from(value: FileMenu) -> Self {
+		match value {
+			FileMenu::New => Self::NewFile,
+			FileMenu::Open => Self::OpenFileDialog,
+			FileMenu::OpenLast => Self::OpenLastFile,
+			FileMenu::Save => Self::SaveFile,
+			FileMenu::SaveAs => Self::SaveAsFileDialog,
+			FileMenu::Export => Self::ExportFileDialog,
+			FileMenu::Settings => Self::OpenConfigView,
+		}
+	}
+}
+
+impl Display for FileMenu {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		f.write_str(match self {
+			Self::New => "New",
+			Self::Open => "Open",
+			Self::OpenLast => "Open Last",
+			Self::Save => "Save",
+			Self::SaveAs => "Save As",
+			Self::Export => "Export",
+			Self::Settings => "Settings",
+		})
+	}
+}
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -424,33 +466,11 @@ impl Daw {
 		stack![
 			column![
 				row![
-					pick_list(
-						[
-							"New",
-							"Open",
-							"Open Last",
-							"Save",
-							"Save As",
-							"Export",
-							"Settings"
-						],
-						Some("File"),
-						|s| {
-							match s {
-								"New" => Message::NewFile,
-								"Open" => Message::OpenFileDialog,
-								"Open Last" => Message::OpenLastFile,
-								"Save" => Message::SaveFile,
-								"Save As" => Message::SaveAsFileDialog,
-								"Export" => Message::ExportFileDialog,
-								"Settings" => Message::OpenConfigView,
-								_ => unreachable!(),
-							}
-						}
-					)
-					.handle(PICK_LIST_HANDLE)
-					.style(pick_list_with_radius(5))
-					.menu_style(menu_style),
+					pick_list(FileMenu::VARIANTS, None::<FileMenu>, Message::from)
+						.handle(PICK_LIST_HANDLE)
+						.placeholder("File")
+						.style(pick_list_with_radius(5))
+						.menu_style(menu_style),
 					row![
 						button(if self.arrangement_view.arrangement.transport().playing {
 							pause

@@ -1,8 +1,7 @@
 use crate::MusicalTime;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub enum AutomationTransition {
-	#[default]
 	Linear,
 	UCos(f32),
 	BCos(f32),
