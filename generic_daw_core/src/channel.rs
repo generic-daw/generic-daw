@@ -19,8 +19,7 @@ impl PanMode {
 			(cos * fac, sin * fac)
 		}
 
-		let (audio, rest) = audio.as_chunks_mut();
-		debug_assert!(rest.is_empty());
+		let audio = audio.as_chunks_mut().0;
 
 		match self {
 			Self::Balance(pan) => {
