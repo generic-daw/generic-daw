@@ -107,6 +107,8 @@ pub static AUTOSAVE_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 	autosave_dir
 });
 
+const CBRT_TWO: f32 = 1.259_921_1;
+
 #[derive(Clone, Debug)]
 pub enum Message {
 	ClapHost(clap_host::Message),
@@ -1014,17 +1016,18 @@ impl ArrangementView {
 						container(
 							row![
 								row![
-									PeakMeter::new(&node.peaks_lin[0], node.enabled),
-									PeakMeter::new(&node.peaks_lin[1], node.enabled)
+									PeakMeter::new(&node.peaks[0]),
+									PeakMeter::new(&node.peaks[1])
 								]
 								.spacing(2),
 								column![
-									Knob::new(0.0..=1.0, node.volume.abs().cbrt(), move |v| {
+									Knob::new(0.0..=CBRT_TWO, node.volume.abs().cbrt(), move |v| {
 										Message::ChannelVolumeChanged(
 											id,
 											v.powi(3).copysign(node.volume),
 										)
 									})
+									.default(1.0)
 									.enabled(node.enabled)
 									.tooltip(format_decibels(node.volume.abs())),
 									node.pan_knob(20.0),
@@ -1176,17 +1179,12 @@ impl ArrangementView {
 						let one = iter.peek().map(|_| rule::vertical(1).into());
 						iter.chain(one)
 					})
-					.chain({
-						let mut iter = self
-							.arrangement
+					.chain(
+						self.arrangement
 							.channels()
 							.enumerate()
-							.map(|(i, node)| self.channel(node, format!("C{}", i + 1)))
-							.peekable();
-
-						let one = iter.peek().map(|_| rule::vertical(1).into());
-						iter.chain(one)
-					})
+							.map(|(i, node)| self.channel(node, format!("C{}", i + 1))),
+					)
 					.chain(once(
 						button(plus().size(LINE_HEIGHT + 6.0))
 							.padding(5)
@@ -1360,8 +1358,9 @@ impl ArrangementView {
 					.center_x(55)
 					.padding(2),
 				row![
-					PeakMeter::new(&node.peaks_cbrt[0], node.enabled).width(16.0),
-					vertical_slider(0.0..=1.0, node.volume.abs().cbrt(), |v| {
+					container(PeakMeter::new(&node.peaks[0]).width(16.0))
+						.padding(padding::vertical(7)),
+					vertical_slider(0.0..=CBRT_TWO, node.volume.abs().cbrt(), |v| {
 						Message::ChannelVolumeChanged(node.id, v.powi(3).copysign(node.volume))
 					})
 					.default(1.0)
@@ -1372,7 +1371,8 @@ impl ArrangementView {
 					} else {
 						slider_secondary
 					}),
-					PeakMeter::new(&node.peaks_cbrt[1], node.enabled).width(16.0),
+					container(PeakMeter::new(&node.peaks[1]).width(16.0))
+						.padding(padding::vertical(7)),
 				]
 				.spacing(3),
 				self.selected_channel

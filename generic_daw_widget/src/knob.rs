@@ -8,16 +8,13 @@ use iced_widget::{
 		mouse::{self, Cursor, Interaction, ScrollDelta},
 		overlay,
 		renderer::{Quad, Style},
+		text,
 		theme::palette::mix,
 		widget::{Text, Tree, tree},
 	},
 	graphics::geometry::Renderer as _,
 };
-use std::{
-	cell::RefCell,
-	fmt::{Debug, Display},
-	ops::RangeInclusive,
-};
+use std::{cell::RefCell, fmt::Debug, ops::RangeInclusive};
 use utils::NoDebug;
 
 #[derive(Default)]
@@ -91,13 +88,13 @@ impl<'a, Message> Knob<'a, Message> {
 	}
 
 	#[must_use]
-	pub fn tooltip(mut self, tooltip: impl Display) -> Self {
-		self.tooltip = Some(NoDebug(Text::new(tooltip.to_string()).line_height(1.0)));
+	pub fn tooltip(mut self, tooltip: impl text::IntoFragment<'a>) -> Self {
+		self.tooltip = Some(NoDebug(Text::new(tooltip).line_height(1.0)));
 		self
 	}
 
 	#[must_use]
-	pub fn maybe_tooltip(self, tooltip: Option<impl Display>) -> Self {
+	pub fn maybe_tooltip(self, tooltip: Option<impl text::IntoFragment<'a>>) -> Self {
 		if let Some(tooltip) = tooltip {
 			self.tooltip(tooltip)
 		} else {
@@ -143,32 +140,39 @@ impl<'a, Message> Knob<'a, Message> {
 			b.close();
 		});
 
-		let main_color = if !self.enabled || state.hovering || state.dragging.is_some() {
-			theme.extended_palette().secondary.weak.color
+		let color = if self.enabled {
+			if state.hovering || state.dragging.is_some() {
+				theme.extended_palette().primary.base.color
+			} else {
+				theme.extended_palette().primary.weak.color
+			}
+		} else if state.hovering || state.dragging.is_some() {
+			theme.extended_palette().secondary.base.color
 		} else {
-			theme.extended_palette().primary.weak.color
+			theme.extended_palette().secondary.weak.color
 		};
-		let contrast_color = theme.extended_palette().background.strong.text;
 
-		frame.fill(&arc, contrast_color);
+		let text = theme.extended_palette().background.strong.text;
+
+		frame.fill(&arc, text);
 
 		frame.fill(
 			&Path::circle(center, self.radius - border_radius - border_radius),
-			main_color,
+			color,
 		);
 
 		frame.fill(
 			&circle(center_angle, self.radius - border_radius, border_radius),
-			contrast_color,
+			text,
 		);
 
 		frame.fill(
 			&circle(value_angle, self.radius - border_radius, border_radius),
-			contrast_color,
+			text,
 		);
 
 		if self.stepped {
-			let mixed_color = mix(main_color, contrast_color, 0.25);
+			let mixed_color = mix(color, text, 0.25);
 
 			for step in *self.range.start() as i32..=*self.range.end() as i32 {
 				frame.fill(
@@ -182,10 +186,7 @@ impl<'a, Message> Knob<'a, Message> {
 			}
 		}
 
-		frame.fill(
-			&circle(value_angle, self.radius / 2.0, dot_radius),
-			contrast_color,
-		);
+		frame.fill(&circle(value_angle, self.radius / 2.0, dot_radius), text);
 	}
 }
 
@@ -262,7 +263,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					button: mouse::Button::Left,
 					modifiers,
 					..
-				} if self.enabled && state.dragging.is_none() && state.hovering => {
+				} if state.dragging.is_none() && state.hovering => {
 					let pos = cursor.position().unwrap();
 					state.dragging = Some((self.value, pos.y));
 
@@ -288,9 +289,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					position: Point { y, .. },
 					..
 				} => {
-					if self.enabled
-						&& let Some((value, pos)) = state.dragging
-					{
+					if let Some((value, pos)) = state.dragging {
 						let diff = (pos - y) * (self.range.end() - self.range.start()) * 0.005;
 						let mut new_value =
 							(value + diff).clamp(*self.range.start(), *self.range.end());
@@ -314,7 +313,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					}
 				}
 				mouse::Event::WheelScrolled { delta, .. }
-					if self.enabled && state.dragging.is_none() && state.hovering =>
+					if state.dragging.is_none() && state.hovering =>
 				{
 					if !self.stepped {
 						state.scroll = 0.0;
@@ -382,9 +381,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 	) -> Interaction {
 		let state = tree.state.downcast_ref::<State>();
 
-		if !self.enabled {
-			Interaction::default()
-		} else if state.dragging.is_some() {
+		if state.dragging.is_some() {
 			Interaction::Grabbing
 		} else if state.hovering {
 			Interaction::Grab
@@ -417,6 +414,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 		}
 	}
 }
+
 impl<'a, Message> From<Knob<'a, Message>> for Element<'a, Message, Theme, Renderer>
 where
 	Message: 'a,

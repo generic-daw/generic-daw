@@ -4,17 +4,19 @@ use iced_widget::{
 		Animation, Clipboard, Element, Event, Layout, Length, Rectangle, Renderer as _, Shell,
 		Size, Theme, Vector, Widget,
 		animation::Easing,
-		gradient::Linear,
 		layout::{Limits, Node},
 		mouse::Cursor,
 		renderer::{Quad, Style},
-		theme::palette::mix,
 		time::{Duration, Instant},
 		widget::Tree,
 		window,
 	},
+	theme::palette::mix,
 };
 use std::{cell::Cell, convert::identity};
+
+const CBRT_HALF: f32 = 0.793_700_5;
+const CBRT_QUARTER: f32 = 0.629_960_54;
 
 #[derive(Debug)]
 pub struct State {
@@ -40,6 +42,8 @@ impl Default for State {
 
 impl State {
 	pub fn update(&mut self, peak: f32, now: Instant) {
+		let peak = (peak / 2.0).cbrt();
+
 		let min_duration = now - self.last_update;
 		self.last_update = now;
 
@@ -49,13 +53,13 @@ impl State {
 		} else {
 			Animation::new(old_bar)
 				.easing(Easing::Linear)
-				.duration(Duration::from_secs_f32(old_bar - peak).max(min_duration))
+				.duration(Duration::from_secs_f32(1.5 * (old_bar - peak)).max(min_duration))
 				.go(peak, now)
 		};
 
 		let old_line = self.line.interpolate_with(identity, now);
 		self.line = if peak >= old_line {
-			self.delay = now + Duration::from_millis(500);
+			self.delay = now + Duration::from_secs(1);
 			Animation::new(peak)
 		} else {
 			Animation::new(old_line)
@@ -70,18 +74,13 @@ impl State {
 #[derive(Debug)]
 pub struct PeakMeter<'a> {
 	state: &'a State,
-	enabled: bool,
 	width: f32,
 }
 
 impl<'a> PeakMeter<'a> {
 	#[must_use]
-	pub fn new(state: &'a State, enabled: bool) -> Self {
-		Self {
-			state,
-			enabled,
-			width: 14.0,
-		}
+	pub fn new(state: &'a State) -> Self {
+		Self { state, width: 13.0 }
 	}
 
 	#[must_use]
@@ -136,64 +135,103 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 			return;
 		}
 
-		let base = if self.enabled {
-			theme.extended_palette().primary.weak.color
-		} else {
-			theme.extended_palette().secondary.base.color
-		};
+		let success = theme.palette().success;
+		let warning = theme.palette().warning;
+		let danger = theme.palette().danger;
+		let background = theme.palette().background;
 
-		let clipping = if self.enabled {
-			theme.extended_palette().danger.weak.color
-		} else {
-			theme.extended_palette().secondary.base.color
-		};
-
-		let background_color = mix(base, theme.extended_palette().background.weak.color, 0.5);
-		let background = Quad {
-			bounds,
-			..Quad::default()
-		};
-		renderer.fill_quad(background, background_color);
+		let muted = |color| mix(color, background, 2.0 / 3.0);
 
 		let bar = self
 			.state
 			.bar
 			.interpolate_with(identity, self.state.now.get());
-		let bar_color = if bar > 1.0 { clipping } else { base };
-		let bar_pos = bounds.height * bar.min(1.0);
-		let bar = Quad {
-			bounds: Rectangle::new(
-				bounds.position() + Vector::new(0.0, bounds.height - bar_pos),
-				Size::new(bounds.width, bar_pos),
-			),
-			..Quad::default()
-		};
-		renderer.fill_quad(bar, bar_color);
+
+		if bar < 1.0 {
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(
+						bounds.position(),
+						Size::new(bounds.width, bounds.height * (1.0 - CBRT_HALF)),
+					),
+					..Quad::default()
+				},
+				muted(danger),
+			);
+		}
+
+		if bar < CBRT_HALF {
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(
+						bounds.position() + Vector::new(0.0, bounds.height * (1.0 - CBRT_HALF)),
+						Size::new(bounds.width, bounds.height * (CBRT_HALF - CBRT_QUARTER)),
+					),
+					..Quad::default()
+				},
+				muted(warning),
+			);
+		}
+
+		if bar < CBRT_QUARTER {
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(
+						bounds.position() + Vector::new(0.0, bounds.height * (1.0 - CBRT_QUARTER)),
+						Size::new(bounds.width, bounds.height * CBRT_QUARTER),
+					),
+					..Quad::default()
+				},
+				muted(success),
+			);
+		}
+
+		if bar > 0.0 {
+			let bar_pos = bounds.height * bar.min(1.0);
+			let bar_quad = Quad {
+				bounds: Rectangle::new(
+					bounds.position() + Vector::new(0.0, bounds.height - bar_pos),
+					Size::new(bounds.width, bar_pos),
+				),
+				..Quad::default()
+			};
+			renderer.fill_quad(
+				bar_quad,
+				if bar > CBRT_HALF {
+					danger
+				} else if bar > CBRT_QUARTER {
+					warning
+				} else {
+					success
+				},
+			);
+		}
 
 		let line = self
 			.state
 			.line
 			.interpolate_with(identity, self.state.now.get());
-		let line_color = if line > 1.0 { clipping } else { base };
-		let line_pos = bounds.height * line.min(1.0);
-		let max_line_height = bounds.height.sqrt();
-		let line_height = max_line_height.min(line_pos);
-		let line = Quad {
-			bounds: Rectangle::new(
-				bounds.position() + Vector::new(0.0, bounds.height - line_pos),
-				Size::new(bounds.width, line_height),
-			),
-			..Quad::default()
-		};
-		renderer.fill_quad(
-			line,
-			Linear::new(0.0)
-				.add_stop(
-					0.0,
-					line_color.scale_alpha(1.0 - (line_height / max_line_height)),
-				)
-				.add_stop(1.0, line_color),
-		);
+
+		if line > 0.0 {
+			let line_pos = bounds.height * line.min(1.0);
+			let line_quad = Quad {
+				bounds: Rectangle::new(
+					bounds.position() + Vector::new(0.0, bounds.height - line_pos),
+					Size::new(bounds.width, line_pos.min(2.0)),
+				),
+				..Quad::default()
+			};
+			renderer.fill_quad(
+				line_quad,
+				if line > CBRT_HALF {
+					danger
+				} else if line > CBRT_QUARTER {
+					warning
+				} else {
+					success
+				},
+			);
+		}
 	}
 }
 

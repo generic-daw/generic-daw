@@ -29,8 +29,7 @@ pub struct Node {
 	pub pan: PanMode,
 	pub enabled: bool,
 	pub bypassed: bool,
-	pub peaks_lin: NoDebug<[peak_meter::State; 2]>,
-	pub peaks_cbrt: NoDebug<[peak_meter::State; 2]>,
+	pub peaks: NoDebug<[peak_meter::State; 2]>,
 }
 
 impl Node {
@@ -43,16 +42,13 @@ impl Node {
 			pan: PanMode::Balance(0.0),
 			enabled: true,
 			bypassed: false,
-			peaks_lin: NoDebug([peak_meter::State::default(), peak_meter::State::default()]),
-			peaks_cbrt: NoDebug([peak_meter::State::default(), peak_meter::State::default()]),
+			peaks: NoDebug([peak_meter::State::default(), peak_meter::State::default()]),
 		}
 	}
 
 	pub fn update(&mut self, peaks: [f32; 2], now: Instant) {
-		self.peaks_lin[0].update(peaks[0], now);
-		self.peaks_lin[1].update(peaks[1], now);
-		self.peaks_cbrt[0].update(peaks[0].cbrt(), now);
-		self.peaks_cbrt[1].update(peaks[1].cbrt(), now);
+		self.peaks[0].update(peaks[0], now);
+		self.peaks[1].update(peaks[1], now);
 	}
 
 	pub fn pan_knob(&self, radius: f32) -> Element<'_, Message> {
