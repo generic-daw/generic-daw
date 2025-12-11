@@ -727,6 +727,7 @@ impl Daw {
 					key,
 					physical_key,
 					modifiers,
+					repeat: false,
 					..
 				} => Self::config_view_keybinds(&key, modifiers)
 					.or_else(|| Self::base_keybinds(&key, physical_key, modifiers)),
@@ -738,6 +739,7 @@ impl Daw {
 					key,
 					physical_key,
 					modifiers,
+					repeat: false,
 					..
 				} => Self::arrangement_view_keybinds(&key, modifiers)
 					.or_else(|| Self::base_keybinds(&key, physical_key, modifiers)),
