@@ -12,12 +12,6 @@ use iced_widget::{
 };
 use utils::NoDebug;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Strategy {
-	Horizontal,
-	Vertical,
-}
-
 #[derive(Default)]
 struct State {
 	dragging: Option<(usize, f32)>,
@@ -31,7 +25,6 @@ pub struct DragHandle<'a, Message> {
 	child: NoDebug<Element<'a, Message, Theme, Renderer>>,
 	value: usize,
 	reset: usize,
-	strategy: Strategy,
 	f: NoDebug<Box<dyn Fn(usize) -> Message + 'a>>,
 }
 
@@ -47,15 +40,8 @@ impl<'a, Message> DragHandle<'a, Message> {
 			child: child.into().into(),
 			value,
 			reset,
-			strategy: Strategy::Vertical,
 			f: NoDebug(Box::from(f)),
 		}
-	}
-
-	#[must_use]
-	pub fn strategy(mut self, strategy: Strategy) -> Self {
-		self.strategy = strategy;
-		self
 	}
 }
 
@@ -125,13 +111,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 					..
 				} if state.dragging.is_none() && state.hovering => {
 					let pos = cursor.position().unwrap();
-					state.dragging = Some((
-						self.value,
-						match self.strategy {
-							Strategy::Horizontal => pos.x,
-							Strategy::Vertical => pos.y,
-						},
-					));
+					state.dragging = Some((self.value, pos.y));
 
 					let new_click = Click::new(pos, mouse::Button::Left, state.last_click);
 					state.last_click = Some(new_click);
@@ -150,16 +130,11 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 					shell.capture_event();
 				}
 				mouse::Event::CursorMoved {
-					position: Point { x, y },
+					position: Point { y, .. },
 					..
 				} => {
 					if let Some((value, pos)) = state.dragging {
-						let diff = ((pos
-							- match self.strategy {
-								Strategy::Horizontal => x,
-								Strategy::Vertical => y,
-							}) * 0.1)
-							.trunc();
+						let diff = ((pos - y) * 0.1).trunc();
 
 						let new_value = value.saturating_add_signed(diff as isize);
 						if new_value != self.value {
@@ -221,10 +196,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		renderer: &Renderer,
 	) -> Interaction {
 		if tree.state.downcast_ref::<State>().dragging.is_some() {
-			match self.strategy {
-				Strategy::Horizontal => Interaction::ResizingHorizontally,
-				Strategy::Vertical => Interaction::ResizingVertically,
-			}
+			Interaction::ResizingVertically
 		} else if cursor.is_over(layout.bounds()) {
 			let interaction = self.child.as_widget().mouse_interaction(
 				&tree.children[0],
@@ -235,10 +207,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 			);
 
 			if interaction == Interaction::default() {
-				match self.strategy {
-					Strategy::Horizontal => Interaction::ResizingHorizontally,
-					Strategy::Vertical => Interaction::ResizingVertically,
-				}
+				Interaction::ResizingVertically
 			} else {
 				interaction
 			}

@@ -9,7 +9,7 @@ use crate::{
 	clap_host::{self, ClapHost},
 	components::{icon_button, text_icon_button},
 	config::Config,
-	icons::{arrow_up_down, chevron_up, grip_vertical, plus, power, power_off, x},
+	icons::{arrow_up_down, chevron_up, grip_vertical, mic, plus, power, power_off, x},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, scrollable_style,
@@ -31,7 +31,7 @@ use generic_daw_core::{
 	Batch, MidiNote, MusicalTime, NodeId, NotePosition, PanMode, SampleId,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
-use generic_daw_widget::{dot::Dot, knob::Knob, peak_meter::PeakMeter};
+use generic_daw_widget::{knob::Knob, peak_meter::PeakMeter};
 use humantime::format_rfc3339_seconds;
 use iced::{
 	Center, Element, Fill, Function as _, Point, Shrink, Size, Task, Vector, border,
@@ -1049,17 +1049,13 @@ impl ArrangementView {
 										button_style(self.soloed_track == Some(id))
 									)
 									.on_press(Message::TrackToggleSolo(id)),
-									button(
-										Dot::new(
+									icon_button(
+										mic(),
+										button_style(
 											self.recording.as_ref().is_some_and(|&(_, i)| i == id)
 										)
-										.radius(5.5)
 									)
-									.padding(2.0)
 									.on_press(Message::Recording(id))
-									.style(button_style(
-										self.recording.as_ref().is_some_and(|&(_, i)| i == id)
-									))
 								]
 								.spacing(5)
 								.wrap()
