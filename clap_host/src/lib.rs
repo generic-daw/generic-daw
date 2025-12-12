@@ -1,4 +1,5 @@
 use clack_extensions::gui::GuiApiType;
+use log::warn;
 use main_thread::MainThread;
 use shared::Shared;
 use std::{
@@ -96,7 +97,13 @@ pub fn get_installed_plugins(
 		.into_iter()
 		.flat_map(WalkDir::new)
 		.flatten()
-		.filter(|dir_entry| dir_entry.file_type().is_file())
+		.filter(|dir_entry| {
+			if cfg!(target_os = "macos") {
+				dir_entry.file_type().is_dir()
+			} else {
+				dir_entry.file_type().is_file()
+			}
+		})
 		.filter(|dir_entry| {
 			dir_entry
 				.path()
@@ -106,7 +113,9 @@ pub fn get_installed_plugins(
 		.filter_map(|dir_entry| {
 			// SAFETY:
 			// Loading an external library object file is inherently unsafe.
-			unsafe { PluginBundle::load(dir_entry.path()).ok() }
+			unsafe { PluginBundle::load(dir_entry.path()) }
+				.inspect_err(|err| warn!("{}: {err}", dir_entry.path().display()))
+				.ok()
 		})
 		.for_each(|bundle| {
 			if let Some(factory) = bundle.get_plugin_factory() {

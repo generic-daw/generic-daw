@@ -430,7 +430,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 [[package]]
 name = "clack-common"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#223be45eb6914a7bc3ec9c53f96cac99b415d8bb"
+source = "git+https://github.com/edwloef/clack.git?branch=macos-clap-bundles#a92d8b0268c6c9fb24988d3b27e78fd58eb67cbe"
 dependencies = [
  "bitflags 2.10.0",
  "clap-sys",
@@ -439,7 +439,7 @@ dependencies = [
 [[package]]
 name = "clack-extensions"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#223be45eb6914a7bc3ec9c53f96cac99b415d8bb"
+source = "git+https://github.com/edwloef/clack.git?branch=macos-clap-bundles#a92d8b0268c6c9fb24988d3b27e78fd58eb67cbe"
 dependencies = [
  "bitflags 2.10.0",
  "clack-common",
@@ -451,7 +451,7 @@ dependencies = [
 [[package]]
 name = "clack-host"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#223be45eb6914a7bc3ec9c53f96cac99b415d8bb"
+source = "git+https://github.com/edwloef/clack.git?branch=macos-clap-bundles#a92d8b0268c6c9fb24988d3b27e78fd58eb67cbe"
 dependencies = [
  "clack-common",
  "clap-sys",
@@ -501,11 +501,11 @@ dependencies = [
 
 [[package]]
 name = "clipboard_x11"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4274ea815e013e0f9f04a2633423e14194e408a0576c943ce3d14ca56c50031c"
+checksum = "bd63e33452ffdafd39924c4f05a5dd1e94db646c779c6bd59148a3d95fff5ad4"
 dependencies = [
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "x11rb",
 ]
 
@@ -4023,15 +4023,15 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "window_clipboard"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5793d0b08c9e6a1240fe9ab2bd8db277487bf92436fd1a6321861a90a1b0cb7e"
+checksum = "d5654226305eaf2dde8853fb482861d28e5dcecbbd40cb88e8393d94bb80d733"
 dependencies = [
  "clipboard-win",
  "clipboard_macos",
  "clipboard_x11",
  "raw-window-handle",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
 ]
 
 [[package]]

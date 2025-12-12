@@ -11,7 +11,7 @@ workspace = true
 dsp.workspace = true
 utils.workspace = true
 
-clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
+clack-extensions = { git = "https://github.com/edwloef/clack.git", branch = "macos-clap-bundles", features = [
 	"audio-ports",
 	"clack-host",
 	"gui",
@@ -27,7 +27,7 @@ clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
 	"thread-pool",
 	"timer",
 ] }
-clack-host = { git = "https://github.com/prokopyl/clack.git" }
+clack-host = { git = "https://github.com/edwloef/clack.git", branch = "macos-clap-bundles" }
 log = "0.4.29"
 raw-window-handle = "0.6.2"
 rayon-core = "1.13.0"
