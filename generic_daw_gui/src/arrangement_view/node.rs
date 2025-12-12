@@ -42,7 +42,7 @@ impl Node {
 			pan: PanMode::Balance(0.0),
 			enabled: true,
 			bypassed: false,
-			peaks: NoDebug([peak_meter::State::default(), peak_meter::State::default()]),
+			peaks: [peak_meter::State::default(), peak_meter::State::default()].into(),
 		}
 	}
 

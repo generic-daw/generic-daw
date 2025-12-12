@@ -114,7 +114,7 @@ pub fn get_installed_plugins(
 					.plugin_descriptors()
 					.filter_map(|d| d.try_into().ok())
 					.for_each(|d| {
-						bundles.insert(d, NoDebug(bundle.clone()));
+						bundles.insert(d, bundle.clone().into());
 					});
 			}
 		});

@@ -167,8 +167,8 @@ impl Daw {
 		let plugin_bundles = get_installed_plugins(&config.clap_paths);
 		let file_tree = FileTree::new(&config.sample_paths);
 
-		let (arrangement_view, futs) = ArrangementView::new(&config, &state, &plugin_bundles);
-		open = Task::batch([open, futs.map(Message::Arrangement)]);
+		let (mut arrangement_view, futs) = ArrangementView::new(&config, &state);
+		arrangement_view.set_plugins(&plugin_bundles);
 
 		let split_at = state.file_tree_split_at;
 
@@ -189,7 +189,7 @@ impl Daw {
 				progress: None,
 				missing_samples: Vec::new(),
 			},
-			open,
+			Task::batch([open, futs.map(Message::Arrangement)]),
 		)
 	}
 
@@ -378,6 +378,7 @@ impl Daw {
 			Message::MergeConfig(config, live) => {
 				if self.config.clap_paths != config.clap_paths {
 					self.plugin_bundles = get_installed_plugins(&config.clap_paths).into();
+					self.arrangement_view.set_plugins(&self.plugin_bundles);
 				}
 
 				if self.config.sample_paths != config.sample_paths {

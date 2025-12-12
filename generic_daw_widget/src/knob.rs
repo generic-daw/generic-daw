@@ -89,7 +89,7 @@ impl<'a, Message> Knob<'a, Message> {
 
 	#[must_use]
 	pub fn tooltip(mut self, tooltip: impl text::IntoFragment<'a>) -> Self {
-		self.tooltip = Some(NoDebug(Text::new(tooltip).line_height(1.0)));
+		self.tooltip = Some(Text::new(tooltip).line_height(1.0).into());
 		self
 	}
 

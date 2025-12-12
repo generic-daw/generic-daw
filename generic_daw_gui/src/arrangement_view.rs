@@ -202,15 +202,8 @@ pub struct ArrangementView {
 }
 
 impl ArrangementView {
-	pub fn new(
-		config: &Config,
-		state: &State,
-		plugin_bundles: &HashMap<PluginDescriptor, NoDebug<PluginBundle>>,
-	) -> (Self, Task<Message>) {
+	pub fn new(config: &Config, state: &State) -> (Self, Task<Message>) {
 		let (arrangement, task) = Arrangement::create(config);
-
-		let mut plugins = plugin_bundles.keys().cloned().collect::<Vec<_>>();
-		plugins.sort_unstable();
 
 		let playlist_scale_x = (arrangement.transport().sample_rate.get() as f32).log2() - 5.0;
 		let piano_roll_scale_x = playlist_scale_x - 2.0;
@@ -235,7 +228,7 @@ impl ArrangementView {
 				piano_roll_selection: RefCell::default(),
 
 				split_at: state.plugins_panel_split_at,
-				plugins: combo_box::State::new(plugins),
+				plugins: combo_box::State::new(Vec::new()),
 
 				loading: 0,
 			},
@@ -1455,6 +1448,15 @@ impl ArrangementView {
 					.to_samples_f(self.arrangement.transport()),
 		)
 		.into()
+	}
+
+	pub fn set_plugins(
+		&mut self,
+		plugin_bundles: &HashMap<PluginDescriptor, NoDebug<PluginBundle>>,
+	) {
+		let mut plugins = plugin_bundles.keys().cloned().collect::<Vec<_>>();
+		plugins.sort_unstable();
+		self.plugins = combo_box::State::new(plugins);
 	}
 
 	pub fn hover_file(&mut self, file: Arc<Path>) {
