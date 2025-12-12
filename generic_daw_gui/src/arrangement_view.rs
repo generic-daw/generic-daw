@@ -436,7 +436,13 @@ impl ArrangementView {
 					self.arrangement.transport(),
 				);
 				audio.position.move_to(pos);
+				let task = if track == self.arrangement.tracks().len() {
+					self.update(Message::TrackAdd, config, state, plugin_bundles)
+				} else {
+					Task::none()
+				};
 				self.arrangement.add_clip(track, audio);
+				return task;
 			}
 			Message::TrackAdd => {
 				let track = self.arrangement.add_track();

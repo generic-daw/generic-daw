@@ -17,7 +17,13 @@ use iced::{
 	gradient::Linear,
 	keyboard,
 };
-use std::{cell::RefCell, collections::HashSet, f32::consts::FRAC_PI_2, path::Path, sync::Arc};
+use std::{
+	cell::RefCell,
+	collections::HashSet,
+	f32::consts::{FRAC_PI_2, PI},
+	path::Path,
+	sync::Arc,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
@@ -138,8 +144,11 @@ where
 
 		let Some(cursor) = cursor.position_in(viewport) else {
 			selection.status = Status::None;
-			if let Some((_, hovering)) = &mut selection.file {
+			if let Some((_, hovering)) = &mut selection.file
+				&& hovering.is_some()
+			{
 				*hovering = None;
+				shell.request_redraw();
 			}
 			return;
 		};
@@ -187,22 +196,21 @@ where
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
 				match selection.file.clone() {
 					Some((path, time)) => {
-						if let Some(track) = track_idx(&layout, viewport, cursor)
-							.or_else(|| layout.children().len().checked_sub(1))
-						{
-							let new_time = maybe_snap_time(
-								get_time(cursor.x, *self.position, *self.scale, self.transport),
-								*modifiers,
-								|time| time.snap_floor(self.scale.x, self.transport),
-							);
+						let track = track_idx(&layout, viewport, cursor)
+							.unwrap_or_else(|| layout.children().len());
 
-							let new_time = Some((track, new_time));
-							selection.file = Some((path, new_time));
+						let new_time = maybe_snap_time(
+							get_time(cursor.x, *self.position, *self.scale, self.transport),
+							*modifiers,
+							|time| time.snap_floor(self.scale.x, self.transport),
+						);
 
-							if time != new_time {
-								shell.capture_event();
-								shell.request_redraw();
-							}
+						let new_time = Some((track, new_time));
+						selection.file = Some((path, new_time));
+
+						if time != new_time {
+							shell.capture_event();
+							shell.request_redraw();
 						}
 					}
 					None => match selection.status {
@@ -408,7 +416,7 @@ where
 		let selection = &*self.selection.borrow();
 		let samples_per_px = self.scale.x.exp2();
 
-		for (i, layout) in layout.children().enumerate() {
+		for layout in layout.children() {
 			let Some(bounds) = layout.bounds().intersection(&viewport) else {
 				continue;
 			};
@@ -423,21 +431,50 @@ where
 				},
 				theme.extended_palette().background.strong.color,
 			);
+		}
 
-			if let Some((_, Some((track, pos)))) = selection.file
-				&& track == i
-			{
-				let x = pos.to_samples_f(self.transport) / samples_per_px - self.position.x;
-
+		if let Some((_, Some((track, pos)))) = selection.file {
+			if let Some(bounds) = layout.children().nth(track).map(|layout| layout.bounds()) {
 				renderer.fill_quad(
 					Quad {
 						bounds: Rectangle::new(
-							bounds.position() + Vector::new(x, 0.0),
+							bounds.position()
+								+ Vector::new(
+									pos.to_samples_f(self.transport) / samples_per_px
+										- self.position.x,
+									0.0,
+								),
 							Size::new(50.0, bounds.height),
 						),
 						..Quad::default()
 					},
 					Linear::new(FRAC_PI_2)
+						.add_stop(0.0, theme.extended_palette().background.strong.color)
+						.add_stop(
+							1.0,
+							theme
+								.extended_palette()
+								.background
+								.strong
+								.color
+								.scale_alpha(0.0),
+						),
+				);
+			} else {
+				renderer.fill_quad(
+					Quad {
+						bounds: Rectangle::new(
+							layout.children().next_back().map_or_else(
+								|| layout.position(),
+								|layout| {
+									layout.position() + Vector::new(0.0, layout.bounds().height)
+								},
+							),
+							Size::new(viewport.width, 50.0),
+						),
+						..Quad::default()
+					},
+					Linear::new(PI)
 						.add_stop(0.0, theme.extended_palette().background.strong.color)
 						.add_stop(
 							1.0,
