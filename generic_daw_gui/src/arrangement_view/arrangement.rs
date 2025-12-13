@@ -173,16 +173,12 @@ impl Arrangement {
 		self.node_action(id, NodeAction::ChannelToggleBypassed);
 	}
 
-	pub fn plugin_load(
-		&mut self,
-		id: NodeId,
-		plugin_id: PluginId,
-		processor: AudioProcessor<Event>,
-	) {
-		self.node_mut(id)
-			.plugins
-			.push(Plugin::new(plugin_id, processor.descriptor().clone()));
+	pub fn plugin_load(&mut self, id: NodeId, processor: AudioProcessor<Event>) -> PluginId {
+		let plugin = Plugin::new(processor.descriptor().clone());
+		let plugin_id = plugin.id;
+		self.node_mut(id).plugins.push(plugin);
 		self.node_action(id, NodeAction::PluginLoad(plugin_id, Box::new(processor)));
+		plugin_id
 	}
 
 	pub fn plugin_remove(&mut self, id: NodeId, index: usize) -> Plugin {

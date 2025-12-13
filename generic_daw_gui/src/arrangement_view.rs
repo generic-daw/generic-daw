@@ -27,7 +27,7 @@ use crate::{
 };
 use bit_set::BitSet;
 use generic_daw_core::{
-	Batch, MidiNote, MusicalTime, NodeId, NotePosition, PanMode, PluginId, SampleId,
+	Batch, MidiNote, MusicalTime, NodeId, NotePosition, PanMode, SampleId,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
 use generic_daw_widget::{knob::Knob, peak_meter::PeakMeter};
@@ -344,8 +344,7 @@ impl ArrangementView {
 					&HOST,
 				);
 
-				let id = PluginId::unique();
-				self.arrangement.plugin_load(node, id, audio_processor);
+				let id = self.arrangement.plugin_load(node, audio_processor);
 				let mut fut = self.clap_host.plugin_load(id, plugin, receiver);
 
 				if show {

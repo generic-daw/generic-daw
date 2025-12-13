@@ -15,13 +15,12 @@ pub struct MidiPatternPair {
 
 impl MidiPatternPair {
 	pub fn new(notes: Vec<MidiNote>) -> Self {
-		let id = MidiPatternId::unique();
-		Self {
-			core: core::MidiPattern {
-				id,
-				notes: notes.clone(),
-			},
-			gui: MidiPattern { id, notes, refs: 0 },
-		}
+		let core = core::MidiPattern::new(notes.clone());
+		let gui = MidiPattern {
+			id: core.id,
+			notes,
+			refs: 0,
+		};
+		Self { core, gui }
 	}
 }

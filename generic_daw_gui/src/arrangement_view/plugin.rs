@@ -9,9 +9,9 @@ pub struct Plugin {
 }
 
 impl Plugin {
-	pub fn new(id: PluginId, descriptor: PluginDescriptor) -> Self {
+	pub fn new(descriptor: PluginDescriptor) -> Self {
 		Self {
-			id,
+			id: PluginId::unique(),
 			descriptor,
 			enabled: true,
 			mix: 1.0,
