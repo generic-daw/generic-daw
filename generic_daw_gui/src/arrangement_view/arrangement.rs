@@ -17,8 +17,8 @@ use bit_set::BitSet;
 use generic_daw_core::{
 	self as core, AudioGraphNode, Batch, Event, Export, Message, MidiKey, MidiNote,
 	MidiPatternAction, MidiPatternId, MusicalTime, NodeAction, NodeId, NodeImpl, NotePosition,
-	OutputRequest, OutputResponse, PanMode, STREAM_THREAD, StreamMessage, StreamToken, Transport,
-	Update, Version,
+	OutputRequest, OutputResponse, PanMode, PluginId, STREAM_THREAD, StreamMessage, StreamToken,
+	Transport, Update, Version,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
 use iced::Task;
@@ -173,11 +173,16 @@ impl Arrangement {
 		self.node_action(id, NodeAction::ChannelToggleBypassed);
 	}
 
-	pub fn plugin_load(&mut self, id: NodeId, processor: AudioProcessor<Event>) {
+	pub fn plugin_load(
+		&mut self,
+		id: NodeId,
+		plugin_id: PluginId,
+		processor: AudioProcessor<Event>,
+	) {
 		self.node_mut(id)
 			.plugins
-			.push(Plugin::new(processor.id(), processor.descriptor().clone()));
-		self.node_action(id, NodeAction::PluginLoad(Box::new(processor)));
+			.push(Plugin::new(plugin_id, processor.descriptor().clone()));
+		self.node_action(id, NodeAction::PluginLoad(plugin_id, Box::new(processor)));
 	}
 
 	pub fn plugin_remove(&mut self, id: NodeId, index: usize) -> Plugin {

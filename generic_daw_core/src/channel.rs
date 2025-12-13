@@ -3,7 +3,11 @@ use crate::{
 	daw_ctx::State,
 };
 use std::f32::consts::{FRAC_PI_4, SQRT_2};
-use utils::ShiftMoveExt as _;
+use utils::{ShiftMoveExt as _, unique_id};
+
+unique_id!(plugin);
+
+pub use plugin::Id as PluginId;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PanMode {
@@ -44,6 +48,7 @@ impl PanMode {
 
 #[derive(Debug)]
 struct Plugin {
+	id: PluginId,
 	processor: AudioProcessor<Event>,
 	lanes: Vec<AutomationLane>,
 	mix: f32,
@@ -51,8 +56,9 @@ struct Plugin {
 }
 
 impl Plugin {
-	pub fn new(processor: AudioProcessor<Event>) -> Self {
+	pub fn new(id: PluginId, processor: AudioProcessor<Event>) -> Self {
 		Self {
+			id,
 			processor,
 			lanes: Vec::new(),
 			mix: 1.0,
@@ -99,8 +105,7 @@ impl NodeImpl for Channel {
 
 			for event in events.drain(..) {
 				if let Event::ParamValue { param_id, .. } = event {
-					self.updates
-						.push(Update::Param(plugin.processor.id(), param_id));
+					self.updates.push(Update::Param(plugin.id, param_id));
 				}
 			}
 		}
@@ -148,7 +153,7 @@ impl Channel {
 			NodeAction::ChannelToggleBypassed => self.bypassed ^= true,
 			NodeAction::ChannelVolumeChanged(volume) => self.volume = volume,
 			NodeAction::ChannelPanChanged(pan) => self.pan = pan,
-			NodeAction::PluginLoad(processor) => self.plugins.push(Plugin::new(*processor)),
+			NodeAction::PluginLoad(id, processor) => self.plugins.push(Plugin::new(id, *processor)),
 			NodeAction::PluginRemove(index) => _ = self.plugins.remove(index),
 			NodeAction::PluginMoveTo(from, to) => self.plugins.shift_move(from, to),
 			NodeAction::PluginToggleEnabled(index) => self.plugins[index].enabled ^= true,

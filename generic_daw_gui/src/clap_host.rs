@@ -3,8 +3,8 @@ use fragile::Fragile;
 #[cfg(unix)]
 use generic_daw_core::clap_host::{FdFlags, PosixFdMessage};
 use generic_daw_core::{
-	Event,
-	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, PluginId, Size},
+	Event, PluginId,
+	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, Size},
 };
 use generic_daw_widget::knob::Knob;
 use iced::{
@@ -33,11 +33,10 @@ use utils::{HoleyVec, NoClone, NoDebug};
 #[derive(Clone, Debug)]
 pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
-	SendEvent(PluginId, Event),
+	SendEvent(usize, Event),
 	TickTimer(Duration),
-	Loaded(NoClone<(Box<Fragile<Plugin<Event>>>, Receiver<MainThreadMessage>)>),
 	SetState(PluginId, NoDebug<Box<[u8]>>),
-	GuiEmbedded(NoClone<Box<Fragile<Plugin<Event>>>>),
+	GuiEmbedded(PluginId, NoClone<Box<Fragile<Plugin<Event>>>>),
 	WindowResized(window::Id, Size),
 	WindowCloseRequested(window::Id),
 	WindowClosed(window::Id),
@@ -58,7 +57,7 @@ impl ClapHost {
 			Message::MainThread(id, msg) => {
 				return self.handle_main_thread_message(id, msg, config);
 			}
-			Message::SendEvent(id, event) => self.plugins.get_mut(*id).unwrap().send_event(event),
+			Message::SendEvent(id, event) => self.plugins.get_mut(id).unwrap().send_event(event),
 			Message::TickTimer(duration) => {
 				for (&plugin, &timer_id) in &self.timers[&duration] {
 					if let Some(plugin) = self.plugins.get_mut(*plugin) {
@@ -66,30 +65,11 @@ impl ClapHost {
 					}
 				}
 			}
-			Message::Loaded(NoClone((plugin, plugin_receiver))) => {
-				let mut plugin = plugin.into_inner();
-				plugin.activate();
-				let id = plugin.plugin_id();
-				self.plugins.insert(*id, plugin);
-				let (sender, receiver) = smol::channel::unbounded();
-				return Task::batch([
-					Task::future(unblock(move || {
-						while let Ok(msg) = plugin_receiver.recv() {
-							if sender.try_send(msg).is_err() {
-								break;
-							}
-						}
-					}))
-					.discard(),
-					Task::stream(receiver).map(Message::MainThread.with(id)),
-				]);
-			}
 			Message::SetState(plugin, state) => {
 				self.plugins.get_mut(*plugin).unwrap().set_state(&state);
 			}
-			Message::GuiEmbedded(NoClone(plugin)) => {
+			Message::GuiEmbedded(id, NoClone(plugin)) => {
 				let mut plugin = plugin.into_inner();
-				let id = plugin.plugin_id();
 				plugin.show();
 				self.plugins.insert(*id, plugin);
 			}
@@ -206,7 +186,7 @@ impl ClapHost {
 								.get_mut()
 								.set_parent(window.window_handle().unwrap().as_raw());
 						}
-						Message::GuiEmbedded(NoClone(Box::new(plugin)))
+						Message::GuiEmbedded(id, NoClone(Box::new(plugin)))
 					});
 
 					return spawn.discard().chain(embed);
@@ -347,7 +327,8 @@ impl ClapHost {
 	}
 
 	pub fn view(&self, window: window::Id) -> Option<Element<'_, Message>> {
-		let Some(plugin) = &self.plugins.get(self.windows.key_of(&window)?) else {
+		let id = self.windows.key_of(&window)?;
+		let Some(plugin) = &self.plugins.get(id) else {
 			return Some(space().into());
 		};
 
@@ -365,9 +346,9 @@ impl ClapHost {
 				scrollable(
 					row(plugin.params().map(|param| {
 						column![
-							Knob::new(param.range.clone(), param.value, |value| {
+							Knob::new(param.range.clone(), param.value, move |value| {
 								Message::SendEvent(
-									plugin.plugin_id(),
+									id,
 									Event::ParamValue {
 										time: 0,
 										param_id: param.id,
@@ -435,6 +416,28 @@ impl ClapHost {
 					window::close_events().map(Message::WindowClosed),
 				]),
 		)
+	}
+
+	pub fn plugin_load(
+		&mut self,
+		id: PluginId,
+		mut plugin: Plugin<Event>,
+		receiver: Receiver<MainThreadMessage>,
+	) -> Task<Message> {
+		plugin.activate();
+		self.plugins.insert(*id, plugin);
+		let (sender, stream) = smol::channel::unbounded();
+		Task::batch([
+			Task::future(unblock(move || {
+				while let Ok(msg) = receiver.recv() {
+					if sender.try_send(msg).is_err() {
+						break;
+					}
+				}
+			}))
+			.discard(),
+			Task::stream(stream).map(Message::MainThread.with(id)),
+		])
 	}
 
 	pub fn set_realtime(&mut self, realtime: bool) {

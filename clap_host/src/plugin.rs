@@ -1,5 +1,5 @@
 use crate::{
-	API_TYPE, AudioProcessor, EventImpl, MainThreadMessage, PluginDescriptor, PluginId,
+	API_TYPE, AudioProcessor, EventImpl, MainThreadMessage, PluginDescriptor,
 	audio_buffers::AudioBuffers, audio_processor::AudioThreadMessage, audio_thread::AudioThread,
 	event_buffers::EventBuffers, gui::Gui, host::Host, main_thread::MainThread, params::Param,
 	shared::Shared, size::Size,
@@ -27,7 +27,6 @@ pub struct Plugin<Event: EventImpl> {
 	params: Box<[Param]>,
 	instance: NoDebug<PluginInstance<Host>>,
 	descriptor: PluginDescriptor,
-	id: PluginId,
 	producer: Producer<AudioThreadMessage<Event>>,
 	config: PluginAudioConfiguration,
 	is_created: bool,
@@ -60,12 +59,10 @@ impl<Event: EventImpl> Plugin<Event> {
 			min_frames_count: 1,
 			max_frames_count: frames.get(),
 		};
-		let id = PluginId::unique();
 
 		(
 			AudioProcessor::new(
 				descriptor.clone(),
-				id,
 				AudioBuffers::new(&mut instance, config),
 				EventBuffers::new(&mut instance),
 				audio_consumer,
@@ -75,7 +72,6 @@ impl<Event: EventImpl> Plugin<Event> {
 				params: Param::all(&mut instance).unwrap_or_default(),
 				instance: instance.into(),
 				descriptor,
-				id,
 				producer,
 				config,
 				is_created: false,
@@ -95,11 +91,6 @@ impl<Event: EventImpl> Plugin<Event> {
 	#[must_use]
 	pub fn descriptor(&self) -> &PluginDescriptor {
 		&self.descriptor
-	}
-
-	#[must_use]
-	pub fn plugin_id(&self) -> PluginId {
-		self.id
 	}
 
 	#[must_use]

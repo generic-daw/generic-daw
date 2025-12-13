@@ -7,7 +7,7 @@ use std::{
 	path::{Path, PathBuf},
 	sync::{Arc, LazyLock},
 };
-use utils::{NoDebug, unique_id};
+use utils::NoDebug;
 use walkdir::WalkDir;
 
 mod audio_buffers;
@@ -26,8 +26,6 @@ mod plugin_descriptor;
 mod shared;
 mod size;
 
-unique_id!(plugin_id);
-
 pub use audio_processor::AudioProcessor;
 pub use clack_extensions::params::{ParamInfoFlags, ParamRescanFlags};
 #[cfg(unix)]
@@ -43,7 +41,6 @@ pub use main_thread::MainThreadMessage;
 pub use main_thread::PosixFdMessage;
 pub use plugin::Plugin;
 pub use plugin_descriptor::PluginDescriptor;
-pub use plugin_id::Id as PluginId;
 pub use size::Size;
 
 const API_TYPE: GuiApiType<'_> = GuiApiType::default_for_current_platform().unwrap();

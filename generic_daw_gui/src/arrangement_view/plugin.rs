@@ -1,4 +1,4 @@
-use generic_daw_core::clap_host::{PluginDescriptor, PluginId};
+use generic_daw_core::{PluginId, clap_host::PluginDescriptor};
 
 #[derive(Debug)]
 pub struct Plugin {

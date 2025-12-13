@@ -1,5 +1,5 @@
 use crate::{
-	EventImpl, MainThreadMessage, PluginDescriptor, PluginId, audio_buffers::AudioBuffers,
+	EventImpl, MainThreadMessage, PluginDescriptor, audio_buffers::AudioBuffers,
 	event_buffers::EventBuffers, host::Host, shared::CURRENT_THREAD_ID,
 };
 use clack_host::process::{PluginAudioProcessor, ProcessStatus};
@@ -19,7 +19,6 @@ pub enum AudioThreadMessage<Event: EventImpl> {
 pub struct AudioProcessor<Event: EventImpl> {
 	processor: Option<NoDebug<PluginAudioProcessor<Host>>>,
 	descriptor: PluginDescriptor,
-	id: PluginId,
 	steady_time: u64,
 	audio_buffers: AudioBuffers,
 	event_buffers: EventBuffers,
@@ -32,7 +31,6 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	#[must_use]
 	pub fn new(
 		descriptor: PluginDescriptor,
-		id: PluginId,
 		audio_buffers: AudioBuffers,
 		event_buffers: EventBuffers,
 		consumer: Consumer<AudioThreadMessage<Event>>,
@@ -40,7 +38,6 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		Self {
 			processor: None,
 			descriptor,
-			id,
 			steady_time: 0,
 			audio_buffers,
 			event_buffers,
@@ -53,11 +50,6 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	#[must_use]
 	pub fn descriptor(&self) -> &PluginDescriptor {
 		&self.descriptor
-	}
-
-	#[must_use]
-	pub fn id(&self) -> PluginId {
-		self.id
 	}
 
 	fn recv_events(&mut self, events: &mut Vec<Event>) {

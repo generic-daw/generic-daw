@@ -26,9 +26,8 @@ use crate::{
 	},
 };
 use bit_set::BitSet;
-use fragile::Fragile;
 use generic_daw_core::{
-	Batch, MidiNote, MusicalTime, NodeId, NotePosition, PanMode, SampleId,
+	Batch, MidiNote, MusicalTime, NodeId, NotePosition, PanMode, PluginId, SampleId,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
 use generic_daw_widget::{knob::Knob, peak_meter::PeakMeter};
@@ -344,14 +343,10 @@ impl ArrangementView {
 					self.arrangement.transport().frames,
 					&HOST,
 				);
-				let id = plugin.plugin_id();
 
-				self.arrangement.plugin_load(node, audio_processor);
-
-				let mut fut = self.clap_host.update(
-					clap_host::Message::Loaded(NoClone((Box::new(Fragile::new(plugin)), receiver))),
-					config,
-				);
+				let id = PluginId::unique();
+				self.arrangement.plugin_load(node, id, audio_processor);
+				let mut fut = self.clap_host.plugin_load(id, plugin, receiver);
 
 				if show {
 					fut = Task::batch([

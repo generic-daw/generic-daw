@@ -29,7 +29,7 @@ pub use automation_clip::AutomationClip;
 pub use automation_lane::AutomationLane;
 pub use automation_pattern::{AutomationPattern, AutomationPatternAction, AutomationPatternId};
 pub use automation_point::{AutomationPoint, AutomationTransition};
-pub use channel::{Channel, PanMode};
+pub use channel::{Channel, PanMode, PluginId};
 pub use clap_host;
 pub use clip::Clip;
 pub use daw_ctx::{Batch, Message, NodeAction, Transport, Update, Version};

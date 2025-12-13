@@ -1,8 +1,8 @@
 use crate::{
 	AudioGraph, AudioGraphNode, AutomationPattern, AutomationPatternAction, AutomationPatternId,
 	Channel, Clip, Event, Export, MidiPattern, MidiPatternAction, MidiPatternId, MusicalTime,
-	NodeId, NotePosition, PanMode, Sample, SampleId,
-	clap_host::{AudioProcessor, ClapId, PluginId},
+	NodeId, NotePosition, PanMode, PluginId, Sample, SampleId,
+	clap_host::{AudioProcessor, ClapId},
 	resampler::Resampler,
 };
 use log::{trace, warn};
@@ -64,7 +64,7 @@ pub enum NodeAction {
 	ChannelVolumeChanged(f32),
 	ChannelPanChanged(PanMode),
 
-	PluginLoad(Box<AudioProcessor<Event>>),
+	PluginLoad(PluginId, Box<AudioProcessor<Event>>),
 	PluginRemove(usize),
 	PluginMoveTo(usize, usize),
 	PluginToggleEnabled(usize),
