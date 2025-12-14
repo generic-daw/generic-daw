@@ -393,19 +393,16 @@ impl ClapHost {
 											.await;
 
 											if flags.intersects(msg)
-												&& sender
-													.send(MainThreadMessage::PosixFd(
-														fd,
-														PosixFdMessage::OnFd(msg),
-													))
-													.await
-													.is_err()
+												&& sender.send(msg).await.is_err()
 											{
 												return;
 											}
 										}
 									})
 								})
+								.map(PosixFdMessage::OnFd)
+								.with(fd)
+								.map(|(fd, msg)| MainThreadMessage::PosixFd(fd, msg))
 								.with(PluginId(id))
 								.map(|(id, msg)| Message::MainThread(id, msg))
 							},
