@@ -1535,11 +1535,11 @@ fn poll_consumer<T: Send + 'static>(
 				while let Ok(t) = consumer.pop() {
 					counter += 1;
 					if sender.send(t).await.is_err() {
-						break;
+						return;
 					}
 				}
 				if consumer.is_abandoned() {
-					break;
+					return;
 				}
 				backoff(counter).await;
 			}
