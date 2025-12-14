@@ -1305,117 +1305,115 @@ impl ArrangementView {
 			}
 		};
 
-		button(
-			column![
-				text(name).size(14).line_height(1.0),
-				node.pan_knob(23.0),
-				row![
-					text_icon_button("M", button_style(false))
-						.on_press(Message::ChannelToggleEnabled(node.id)),
-					text_icon_button("S", button_style(self.soloed_track == Some(node.id)))
-						.on_press_maybe(
-							(node.ty == NodeType::Track)
-								.then_some(Message::TrackToggleSolo(node.id)),
-						),
-					icon_button(
-						x(),
-						if node.enabled {
-							button::danger
+		mouse_area(
+			container(
+				column![
+					text(name).size(14).line_height(1.0),
+					node.pan_knob(23.0),
+					row![
+						text_icon_button("M", button_style(false))
+							.on_press(Message::ChannelToggleEnabled(node.id)),
+						text_icon_button("S", button_style(self.soloed_track == Some(node.id)))
+							.on_press_maybe(
+								(node.ty == NodeType::Track)
+									.then_some(Message::TrackToggleSolo(node.id)),
+							),
+						icon_button(
+							x(),
+							if node.enabled {
+								button::danger
+							} else {
+								button::secondary
+							},
+						)
+						.on_press_maybe(match node.ty {
+							NodeType::Master => None,
+							NodeType::Channel => Some(Message::ChannelRemove(node.id)),
+							NodeType::Track => Some(Message::TrackRemove(node.id)),
+						}),
+					]
+					.spacing(5),
+					row![
+						icon_button(
+							if node.bypassed { power_off } else { power }(),
+							button_style(node.bypassed)
+						)
+						.on_press(Message::ChannelToggleBypassed(node.id)),
+						icon_button(
+							arrow_up_down(),
+							button_style(node.volume.is_sign_negative())
+						)
+						.on_press(Message::ChannelVolumeChanged(node.id, -node.volume)),
+						node.pan_switcher()
+					]
+					.spacing(5),
+					container(text(format_decibels(node.volume.abs())).line_height(1.0))
+						.style(bordered_box_with_radius(0))
+						.center_x(55)
+						.padding(2),
+					row![
+						container(PeakMeter::new(&node.peaks[0]).width(16.0))
+							.padding(padding::vertical(7)),
+						vertical_slider(0.0..=CBRT_TWO, node.volume.abs().cbrt(), |v| {
+							Message::ChannelVolumeChanged(node.id, v.powi(3).copysign(node.volume))
+						})
+						.default(1.0)
+						.width(17)
+						.step(f32::EPSILON)
+						.style(if node.enabled {
+							slider::default
 						} else {
-							button::secondary
-						},
-					)
-					.on_press_maybe(match node.ty {
-						NodeType::Master => None,
-						NodeType::Channel => Some(Message::ChannelRemove(node.id)),
-						NodeType::Track => Some(Message::TrackRemove(node.id)),
-					}),
-				]
-				.spacing(5),
-				row![
-					icon_button(
-						if node.bypassed { power_off } else { power }(),
-						button_style(node.bypassed)
-					)
-					.on_press(Message::ChannelToggleBypassed(node.id)),
-					icon_button(
-						arrow_up_down(),
-						button_style(node.volume.is_sign_negative())
-					)
-					.on_press(Message::ChannelVolumeChanged(node.id, -node.volume)),
-					node.pan_switcher()
-				]
-				.spacing(5),
-				container(text(format_decibels(node.volume.abs())).line_height(1.0))
-					.style(bordered_box_with_radius(0))
-					.center_x(55)
-					.padding(2),
-				row![
-					container(PeakMeter::new(&node.peaks[0]).width(16.0))
-						.padding(padding::vertical(7)),
-					vertical_slider(0.0..=CBRT_TWO, node.volume.abs().cbrt(), |v| {
-						Message::ChannelVolumeChanged(node.id, v.powi(3).copysign(node.volume))
-					})
-					.default(1.0)
-					.width(17)
-					.step(f32::EPSILON)
-					.style(if node.enabled {
-						slider::default
-					} else {
-						slider_secondary
-					}),
-					container(PeakMeter::new(&node.peaks[1]).width(16.0))
-						.padding(padding::vertical(7)),
-				]
-				.spacing(3),
-				self.selected_channel
-					.filter(|_| node.ty != NodeType::Track)
-					.filter(|&selected_channel| node.id != selected_channel)
-					.filter(|&selected_channel| self.arrangement.master().id != selected_channel)
-					.map_or_else(
-						|| Element::new(space().height(LINE_HEIGHT)),
-						|selected_channel| {
-							let connected = self
-								.arrangement
-								.outgoing(selected_channel)
-								.contains(*node.id);
+							slider_secondary
+						}),
+						container(PeakMeter::new(&node.peaks[1]).width(16.0))
+							.padding(padding::vertical(7)),
+					]
+					.spacing(3),
+					self.selected_channel
+						.filter(|_| node.ty != NodeType::Track)
+						.filter(|&selected_channel| node.id != selected_channel)
+						.filter(|&selected_channel| self.arrangement.master().id != selected_channel)
+						.map_or_else(
+							|| Element::new(space().height(LINE_HEIGHT)),
+							|selected_channel| {
+								let connected = self
+									.arrangement
+									.outgoing(selected_channel)
+									.contains(*node.id);
 
-							button(chevron_up())
-								.style(if node.enabled && connected {
-									button::primary
-								} else {
-									button::secondary
-								})
-								.padding(0)
-								.on_press(if connected {
-									Message::Disconnect(selected_channel, node.id)
-								} else {
-									Message::ConnectRequest(selected_channel, node.id)
-								})
-								.into()
-						}
-					)
-			]
-			.width(Shrink)
-			.spacing(5)
-			.align_x(Center),
+								button(chevron_up())
+									.style(if node.enabled && connected {
+										button::primary
+									} else {
+										button::secondary
+									})
+									.padding(0)
+									.on_press(if connected {
+										Message::Disconnect(selected_channel, node.id)
+									} else {
+										Message::ConnectRequest(selected_channel, node.id)
+									})
+									.into()
+							}
+						)
+				]
+				.width(Shrink)
+				.spacing(5)
+				.align_x(Center),
+			)
+			.padding(5)
+			.style(|t| {
+				if self.selected_channel == Some(node.id) {
+					bordered_box_with_radius(0)(t)
+						.background(t.extended_palette().background.weaker.color)
+				} else {
+					bordered_box_with_radius(0)(t)
+						.background(t.extended_palette().background.weakest.color)
+				}
+			}),
 		)
-		.padding(5)
+		.interaction(Interaction::Pointer)
 		.on_press(Message::ChannelSelect(node.id))
-		.style(move |t, _| {
-			let pair = if Some(node.id) == self.selected_channel {
-				t.extended_palette().background.weak
-			} else {
-				t.extended_palette().background.weakest
-			};
-
-			button::Style {
-				background: Some(pair.color.into()),
-				text_color: pair.text,
-				border: border::width(1).color(t.extended_palette().background.strong.color),
-				..button::Style::default()
-			}
-		})
 		.into()
 	}
 
