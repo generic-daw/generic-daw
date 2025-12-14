@@ -19,21 +19,23 @@ use iced::{
 use iced::{
 	futures::{SinkExt as _, TryFutureExt as _},
 	stream,
-	task::Handle,
 };
 use log::info;
 #[cfg(unix)]
 use smol::future::or;
 use smol::{Timer, unblock};
-#[cfg(unix)]
-use std::os::fd::{BorrowedFd, RawFd};
 use std::{collections::HashMap, ops::Deref as _, sync::mpsc::Receiver, time::Duration};
+#[cfg(unix)]
+use std::{
+	iter::repeat,
+	os::fd::{BorrowedFd, RawFd},
+};
 use utils::{HoleyVec, NoClone, NoDebug};
 
 #[derive(Clone, Debug)]
 pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
-	SendEvent(usize, Event),
+	SendEvent(PluginId, Event),
 	TickTimer(Duration),
 	SetState(PluginId, NoDebug<Box<[u8]>>),
 	GuiEmbedded(PluginId, NoClone<Box<Fragile<Plugin<Event>>>>),
@@ -48,7 +50,7 @@ pub struct ClapHost {
 	timers: HashMap<Duration, HashMap<PluginId, u32>>,
 	windows: HoleyVec<window::Id>,
 	#[cfg(unix)]
-	fds: HoleyVec<HashMap<RawFd, Handle>>,
+	fds: HoleyVec<HashMap<RawFd, FdFlags>>,
 }
 
 impl ClapHost {
@@ -57,7 +59,7 @@ impl ClapHost {
 			Message::MainThread(id, msg) => {
 				return self.handle_main_thread_message(id, msg, config);
 			}
-			Message::SendEvent(id, event) => self.plugins.get_mut(id).unwrap().send_event(event),
+			Message::SendEvent(id, event) => self.plugins.get_mut(*id).unwrap().send_event(event),
 			Message::TickTimer(duration) => {
 				for (&plugin, &timer_id) in &self.timers[&duration] {
 					if let Some(plugin) = self.plugins.get_mut(*plugin) {
@@ -267,59 +269,20 @@ impl ClapHost {
 		match message {
 			PosixFdMessage::OnFd(flags) => plugin!(PosixFdMessage::OnFd(flags)).on_fd(fd, flags),
 			PosixFdMessage::Register(flags) => {
-				let (_, handle) = Task::<()>::none().abortable();
-
-				let handle = self
+				let flags = self
 					.fds
 					.entry(*id)
 					.get_or_insert_default()
-					.insert(fd, handle.abort_on_drop());
-				debug_assert!(handle.is_none());
-
-				return self.handle_posix_fd_message(id, fd, PosixFdMessage::Modify(flags));
+					.insert(fd, flags);
+				debug_assert!(flags.is_none());
 			}
 			PosixFdMessage::Modify(flags) => {
-				// SAFETY:
-				// This fd is owned by the plugin, and is open at least until
-				// [`PosixFd::Unregister`] is processed. The fd is not -1.
-				let async_fd = smol::Async::new(unsafe { BorrowedFd::borrow_raw(fd) }).unwrap();
-
-				let (task, handle) = Task::stream(stream::channel(100, async move |mut sender| {
-					loop {
-						let msg = or(
-							async_fd
-								.readable()
-								.map_ok_or_else(|_| FdFlags::READ, |()| FdFlags::ERROR),
-							async_fd
-								.writable()
-								.map_ok_or_else(|_| FdFlags::WRITE, |()| FdFlags::ERROR),
-						)
-						.await;
-
-						if flags.intersects(msg)
-							&& sender
-								.send(MainThreadMessage::PosixFd(fd, PosixFdMessage::OnFd(msg)))
-								.await
-								.is_err()
-						{
-							return;
-						}
-					}
-				}))
-				.abortable();
-
-				let handle = self
-					.fds
-					.get_mut(*id)
-					.unwrap()
-					.insert(fd, handle.abort_on_drop());
-				debug_assert!(handle.is_some());
-
-				return task;
+				let flags = self.fds.get_mut(*id).unwrap().insert(fd, flags);
+				debug_assert!(flags.is_some());
 			}
 			PosixFdMessage::Unregister => {
-				let handle = self.fds.get_mut(*id).unwrap().remove(&fd);
-				debug_assert!(handle.is_some());
+				let flags = self.fds.get_mut(*id).unwrap().remove(&fd);
+				debug_assert!(flags.is_some());
 			}
 		}
 
@@ -348,7 +311,7 @@ impl ClapHost {
 						column![
 							Knob::new(param.range.clone(), param.value, move |value| {
 								Message::SendEvent(
-									id,
+									PluginId(id),
 									Event::ParamValue {
 										time: 0,
 										param_id: param.id,
@@ -402,6 +365,55 @@ impl ClapHost {
 				.iter()
 				.filter(|(_, v)| !v.is_empty())
 				.map(|(&k, _)| every(k).with(k).map(|(k, _)| Message::TickTimer(k)))
+				.chain({
+					#[cfg(unix)]
+					{
+						self.fds.iter().flat_map(|(k, v)| repeat(k).zip(v)).map(
+							|(id, (&fd, &flags))| {
+								Subscription::run_with((fd, flags), |&(fd, flags)| {
+									// SAFETY:
+									// This fd is owned by the plugin, and is open at least until
+									// [`PosixFd::Unregister`] is processed. This fd is not -1.
+									let async_fd =
+										smol::Async::new(unsafe { BorrowedFd::borrow_raw(fd) })
+											.unwrap();
+
+									stream::channel(100, async move |mut sender| {
+										loop {
+											let msg = or(
+												async_fd.readable().map_ok_or_else(
+													|_| FdFlags::READ,
+													|()| FdFlags::ERROR,
+												),
+												async_fd.writable().map_ok_or_else(
+													|_| FdFlags::WRITE,
+													|()| FdFlags::ERROR,
+												),
+											)
+											.await;
+
+											if flags.intersects(msg)
+												&& sender
+													.send(MainThreadMessage::PosixFd(
+														fd,
+														PosixFdMessage::OnFd(msg),
+													))
+													.await
+													.is_err()
+											{
+												return;
+											}
+										}
+									})
+								})
+								.with(PluginId(id))
+								.map(|(id, msg)| Message::MainThread(id, msg))
+							},
+						)
+					}
+					#[cfg(not(unix))]
+					[]
+				})
 				.chain([
 					window::resize_events().map(|(id, size)| {
 						Message::WindowResized(

@@ -3,7 +3,10 @@ macro_rules! unique_id {
     ($mod_name:ident) => {
         unique_id!($mod_name: usize);
     };
-    ($mod_name:ident: $ty:ident) => {
+    ($mod_name:ident: $vis:vis) => {
+        unique_id!($mod_name: $vis usize);
+    };
+    ($mod_name:ident: $vis:vis $ty:ident) => {
         mod $mod_name {
             mod atomic {
                 #![allow(non_camel_case_types)]
@@ -24,7 +27,7 @@ macro_rules! unique_id {
             static ID: atomic::$ty = atomic::$ty::new($ty::MIN);
 
             #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-            pub struct Id($ty);
+            pub struct Id($vis $ty);
 
             impl Id {
                 pub fn unique() -> Self {
