@@ -76,6 +76,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 				align_y: Vertical::Top,
 				shaping: Shaping::Basic,
 				wrapping: Wrapping::None,
+				hint_factor: renderer.scale_factor(),
 			};
 
 			renderer.fill_text(

@@ -333,6 +333,7 @@ where
 			align_y: Vertical::Top,
 			shaping: Shaping::Auto,
 			wrapping: Wrapping::None,
+			hint_factor: renderer.scale_factor(),
 		};
 		renderer.fill_text(
 			text,
