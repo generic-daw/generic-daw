@@ -2,6 +2,7 @@ use clack_host::plugin;
 use std::{
 	ffi::CStr,
 	fmt::{Display, Formatter},
+	str,
 	sync::Arc,
 };
 
@@ -18,12 +19,12 @@ impl Display for PluginDescriptor {
 }
 
 impl TryFrom<&plugin::PluginDescriptor> for PluginDescriptor {
-	type Error = ();
+	type Error = Option<str::Utf8Error>;
 
 	fn try_from(value: &plugin::PluginDescriptor) -> Result<Self, Self::Error> {
 		Ok(Self {
-			name: value.name().ok_or(())?.to_str().map_err(|_| ())?.into(),
-			id: value.id().ok_or(())?.into(),
+			name: value.name().ok_or(None)?.to_str()?.into(),
+			id: value.id().ok_or(None)?.into(),
 		})
 	}
 }
