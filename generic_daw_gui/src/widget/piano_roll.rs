@@ -286,10 +286,6 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			);
 		}
 
-		let mut rects = Vec::new();
-
-		renderer.start_layer(Rectangle::INFINITE);
-
 		for note in 0..self.notes.len() {
 			let note_bounds =
 				self.note_bounds(&self.notes[note]) + Vector::new(viewport.x, viewport.y);
@@ -297,18 +293,10 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				continue;
 			};
 
-			if rects.iter().any(|b| bounds.intersects(b)) {
-				rects.clear();
-				renderer.end_layer();
-				renderer.start_layer(Rectangle::INFINITE);
-			}
-
-			rects.push(bounds);
-
-			self.draw_note(note, renderer, theme, bounds);
+			renderer.with_layer(Rectangle::INFINITE, |renderer| {
+				self.draw_note(note, renderer, theme, bounds);
+			});
 		}
-
-		renderer.end_layer();
 
 		if let Status::Selecting(start_key, end_key, start_pos, end_pos) =
 			self.selection.borrow().status
