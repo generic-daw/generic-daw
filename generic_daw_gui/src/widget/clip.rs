@@ -256,6 +256,7 @@ where
 							shell.request_redraw();
 						}
 						mouse::Button::Right if selection.status != Status::Deleting => {
+							clear = true;
 							selection.status = Status::Deleting;
 							shell.publish((self.f)(Action::Delete));
 							shell.capture_event();
@@ -361,7 +362,9 @@ where
 
 		if last_theme.as_ref() != Some(theme) {
 			*last_theme = Some(theme.clone());
-			cache.update(Arc::default());
+			if !cache.is_empty() {
+				cache.update(Arc::default());
+			}
 		}
 
 		let height = layout.bounds().height - LINE_HEIGHT;

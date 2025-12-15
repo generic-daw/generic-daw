@@ -103,6 +103,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			selection.status = Status::None;
 			return;
 		};
+		let new_time = get_time(cursor.x, *self.position, *self.scale, self.transport);
 
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
@@ -110,11 +111,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			{
 				match button {
 					mouse::Button::Left => {
-						let time = maybe_snap_time(
-							get_time(cursor.x, *self.position, *self.scale, self.transport),
-							*modifiers,
-							|time| time.snap_round(self.scale.x, self.transport),
-						);
+						let time = maybe_snap_time(new_time, *modifiers, |time| {
+							time.snap_round(self.scale.x, self.transport)
+						});
 						let key = self.get_key(cursor);
 
 						if modifiers.command() {
@@ -148,11 +147,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				Status::Selecting(start_key, last_end_key, start_pos, last_end_pos) => {
 					let end_key = self.get_key(cursor);
 
-					let end_pos = maybe_snap_time(
-						get_time(cursor.x, *self.position, *self.scale, self.transport),
-						*modifiers,
-						|time| time.snap_round(self.scale.x, self.transport),
-					);
+					let end_pos = maybe_snap_time(new_time, *modifiers, |time| {
+						time.snap_round(self.scale.x, self.transport)
+					});
 
 					if end_key == last_end_key && end_pos == last_end_pos {
 						return;
@@ -179,8 +176,6 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				Status::Dragging(key, time) => {
 					let new_key = self.get_key(cursor);
 
-					let new_time = get_time(cursor.x, *self.position, *self.scale, self.transport);
-
 					let abs_diff =
 						maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
 							abs_diff.snap_round(self.scale.x, self.transport)
@@ -205,11 +200,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					}
 				}
 				Status::DraggingSplit(time) => {
-					let new_time = maybe_snap_time(
-						get_time(cursor.x, *self.position, *self.scale, self.transport),
-						*modifiers,
-						|time| time.snap_round(self.scale.x, self.transport),
-					);
+					let new_time = maybe_snap_time(new_time, *modifiers, |time| {
+						time.snap_round(self.scale.x, self.transport)
+					});
 
 					if new_time != time {
 						selection.status = Status::DraggingSplit(new_time);
@@ -218,8 +211,6 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					}
 				}
 				Status::TrimmingStart(time) => {
-					let new_time = get_time(cursor.x, *self.position, *self.scale, self.transport);
-
 					let abs_diff =
 						maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
 							abs_diff.snap_round(self.scale.x, self.transport)
@@ -238,8 +229,6 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					}
 				}
 				Status::TrimmingEnd(time) => {
-					let new_time = get_time(cursor.x, *self.position, *self.scale, self.transport);
-
 					let abs_diff =
 						maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
 							abs_diff.snap_round(self.scale.x, self.transport)
@@ -501,6 +490,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 							shell.request_redraw();
 						}
 						mouse::Button::Right if selection.status != Status::Deleting => {
+							clear = true;
 							selection.status = Status::Deleting;
 							shell.publish((self.f)(Action::Delete));
 							shell.capture_event();
