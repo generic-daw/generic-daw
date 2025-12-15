@@ -116,9 +116,8 @@ impl<W: io::Write + io::Seek> Recording<W> {
 				sample_format: SampleFormat::Float,
 			},
 		)
-		.unwrap()
-		.into();
-		std::mem::swap(&mut self.writer, &mut writer);
+		.unwrap();
+		std::mem::swap(&mut *self.writer, &mut writer);
 
 		let start = resampler.samples().len();
 		let samples = resampler.finish();
@@ -126,7 +125,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		for &s in &samples[start..] {
 			writer.write_sample(s).unwrap();
 		}
-		writer.0.finalize().unwrap();
+		writer.finalize().unwrap();
 
 		Sample {
 			id: SampleId::unique(),
@@ -142,7 +141,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	pub fn finalize(self) -> Sample {
 		let Self {
 			resampler,
-			mut writer,
+			writer: NoDebug(mut writer),
 			stream,
 			..
 		} = self;
@@ -155,7 +154,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		for &s in &samples[start..] {
 			writer.write_sample(s).unwrap();
 		}
-		writer.0.finalize().unwrap();
+		writer.finalize().unwrap();
 
 		Sample {
 			id: SampleId::unique(),

@@ -67,14 +67,14 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 				}
 			}
 
-			if let Some(mut processor) = self.processor.take() {
+			if let Some(NoDebug(mut processor)) = self.processor.take() {
 				if let Some(sender) = processor.access_shared_handler(|s| {
 					CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
 					s.needs_restart.load(Relaxed).then(|| s.sender.clone())
 				}) {
 					sender
 						.send(MainThreadMessage::Restart(NoClone(NoDebug(
-							processor.0.into_stopped(),
+							processor.into_stopped(),
 						))))
 						.unwrap();
 				} else {
@@ -83,7 +83,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 						processor.reset();
 					}
 
-					self.processor = Some(processor);
+					self.processor = Some(processor.into());
 				}
 			}
 
@@ -203,14 +203,14 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 impl<Event: EventImpl> Drop for AudioProcessor<Event> {
 	fn drop(&mut self) {
-		if let Some(processor) = self.processor.take() {
+		if let Some(NoDebug(processor)) = self.processor.take() {
 			processor
 				.access_shared_handler(|s| {
 					CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
 					s.sender.clone()
 				})
 				.send(MainThreadMessage::Destroy(NoClone(NoDebug(
-					processor.0.into_stopped(),
+					processor.into_stopped(),
 				))))
 				.unwrap();
 		}

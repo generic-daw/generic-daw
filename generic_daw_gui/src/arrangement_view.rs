@@ -401,7 +401,7 @@ impl ArrangementView {
 						let sample_rate = self.arrangement.transport().sample_rate;
 						Task::future(unblock(move || {
 							Message::SampleLoaded(
-								NoClone(SamplePair::new(path, sample_rate).map(Box::new)),
+								SamplePair::new(path, sample_rate).map(Box::new).into(),
 								track,
 								pos,
 							)
@@ -1496,16 +1496,16 @@ fn format_decibels(amp: f32) -> String {
 fn crc(mut r: impl Read) -> u32 {
 	#[repr(align(8))]
 	struct Aligned([u8; 4096]);
-	let mut buf = Aligned([0; 4096]);
+	let Aligned(buf) = &mut Aligned([0; 4096]);
 
 	let mut crc = 0;
 	let mut len;
 
 	while {
-		len = r.read(&mut buf.0).unwrap();
+		len = r.read(buf).unwrap();
 		len != 0
 	} {
-		crc = crc32c::crc32c_append(crc, &buf.0[..len]);
+		crc = crc32c::crc32c_append(crc, &buf[..len]);
 	}
 
 	crc

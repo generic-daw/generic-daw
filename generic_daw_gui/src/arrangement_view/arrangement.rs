@@ -25,7 +25,7 @@ use iced::Task;
 use rtrb::{Producer, PushError};
 use smol::unblock;
 use std::{num::NonZero, path::Path, sync::Arc};
-use utils::{HoleyVec, NoClone, NoDebug, ShiftMoveExt as _};
+use utils::{HoleyVec, NoDebug, ShiftMoveExt as _};
 
 #[derive(Debug)]
 pub struct Arrangement {
@@ -531,7 +531,7 @@ impl Arrangement {
 			}))
 			.discard(),
 			Task::stream(progress_receiver).chain(Task::perform(audio_graph_receiver, |export| {
-				DawMessage::ExportedFile(NoClone(Box::new(export.unwrap())))
+				DawMessage::ExportedFile(Box::new(export.unwrap()).into())
 			})),
 		])
 	}

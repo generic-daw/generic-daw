@@ -26,7 +26,7 @@ use std::{
 	path::Path,
 	sync::{Arc, mpsc},
 };
-use utils::{NoClone, NoDebug};
+use utils::NoDebug;
 use walkdir::WalkDir;
 
 #[derive(Clone, Debug)]
@@ -281,7 +281,7 @@ impl Arrangement {
 
 						daw.try_send(daw::Message::CantLoadSample(
 							sample_name.deref().into(),
-							NoClone(sender),
+							sender.into(),
 						))
 						.unwrap();
 
@@ -484,7 +484,7 @@ impl Arrangement {
 		Some(
 			Task::done(daw::Message::MergeConfig(config.into(), false))
 				.chain(Task::done(daw::Message::Arrangement(
-					arrangement_view::Message::SetArrangement(NoClone(Box::new(arrangement))),
+					arrangement_view::Message::SetArrangement(Box::new(arrangement).into()),
 				)))
 				.chain(Task::batch([
 					task.map(Box::new)

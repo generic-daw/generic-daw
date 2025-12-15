@@ -188,7 +188,7 @@ impl ClapHost {
 								.get_mut()
 								.set_parent(window.window_handle().unwrap().as_raw());
 						}
-						Message::GuiEmbedded(id, NoClone(Box::new(plugin)))
+						Message::GuiEmbedded(id, Box::new(plugin).into())
 					});
 
 					return spawn.discard().chain(embed);

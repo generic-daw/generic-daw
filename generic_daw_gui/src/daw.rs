@@ -225,7 +225,7 @@ impl Daw {
 				let fut2 = self
 					.arrangement_view
 					.update(
-						arrangement_view::Message::SetArrangement(NoClone(Box::new(wrapper))),
+						arrangement_view::Message::SetArrangement(Box::new(wrapper).into()),
 						&self.config,
 						&mut self.state,
 						&self.plugin_bundles,

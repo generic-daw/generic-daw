@@ -163,7 +163,7 @@ impl<Event: EventImpl> Plugin<Event> {
 	pub fn activate(&mut self) {
 		if self
 			.instance
-			.access_handler_mut(|mt| std::mem::take(&mut mt.needs_param_rescan))
+			.access_handler_mut(|mt| std::mem::take(&mut mt.rescan_params))
 		{
 			self.params = Param::all(&mut self.instance).unwrap_or_default();
 		}
@@ -182,8 +182,11 @@ impl<Event: EventImpl> Plugin<Event> {
 		self.send(AudioThreadMessage::Activated(NoDebug(processor), latency));
 	}
 
-	pub fn deactivate(&mut self, processor: NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>) {
-		self.instance.deactivate(processor.0.0);
+	pub fn deactivate(
+		&mut self,
+		NoClone(NoDebug(processor)): NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>,
+	) {
+		self.instance.deactivate(processor);
 	}
 
 	#[must_use]
