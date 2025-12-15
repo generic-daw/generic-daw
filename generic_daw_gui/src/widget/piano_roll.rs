@@ -273,13 +273,17 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		};
 
 		for key in (0..127).map(MidiKey) {
+			let Some(bounds) = Rectangle::new(
+				viewport.position() + Vector::new(0.0, key_y(key, *self.position, *self.scale)),
+				Size::new(viewport.width, 1.0),
+			)
+			.intersection(&viewport) else {
+				continue;
+			};
+
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(
-						viewport.position()
-							+ Vector::new(0.0, key_y(key, *self.position, *self.scale)),
-						Size::new(viewport.width, 1.0),
-					),
+					bounds,
 					..Quad::default()
 				},
 				theme.extended_palette().background.strong.color,
@@ -312,7 +316,8 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			let x = start_pos.to_samples_f(self.transport) / samples_per_px;
 			let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
 			let x = x - self.position.x;
-			renderer.with_layer(Rectangle::INFINITE, |renderer| {
+
+			renderer.with_layer(viewport, |renderer| {
 				renderer.with_translation(Vector::new(viewport.x, viewport.y), |renderer| {
 					renderer.fill_quad(
 						Quad {

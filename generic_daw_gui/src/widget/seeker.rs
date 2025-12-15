@@ -269,7 +269,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			},
 		);
 
-		renderer.with_layer(right_half, |renderer| {
+		renderer.with_layer(Rectangle::INFINITE, |renderer| {
 			self.header(renderer, right_half, theme);
 		});
 	}
@@ -401,7 +401,6 @@ impl<'a, Message> Seeker<'a, Message> {
 
 	fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
 		let samples_per_px = self.scale.x.exp2();
-
 		let offset_pos = |time: f32| {
 			bounds.position()
 				+ Vector::new(time / samples_per_px - self.position.x - self.offset, 0.0)
@@ -421,49 +420,47 @@ impl<'a, Message> Seeker<'a, Message> {
 		let background_width = background_step.to_samples_f(self.transport) / samples_per_px / 2.0;
 
 		while background_beat < end_beat {
-			let bounds = Rectangle::new(
-				offset_time(background_beat),
-				Size::new(background_width, bounds.height),
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(
+						offset_time(background_beat),
+						Size::new(background_width, bounds.height),
+					)
+					.intersection(&bounds)
+					.unwrap_or_default(),
+					..Quad::default()
+				},
+				theme.extended_palette().background.weakest.color,
 			);
-			if let Some(bounds) = bounds.intersection(&bounds) {
-				renderer.fill_quad(
-					Quad {
-						bounds,
-						..Quad::default()
-					},
-					theme.extended_palette().background.weakest.color,
-				);
-			}
 			background_beat += background_step;
 		}
 
 		let snap_step = MusicalTime::snap_step(self.scale.x + 1.0, self.transport);
 
 		while beat <= end_beat {
-			let bounds = Rectangle::new(offset_time(beat), Size::new(1.0, bounds.height));
-			if let Some(bounds) = bounds.intersection(&bounds) {
-				let color = if snap_step >= MusicalTime::BEAT {
-					if beat.beat_in_bar(self.transport) == 0
-						&& beat.bar(self.transport).is_multiple_of(snap_step.beat())
-					{
-						theme.extended_palette().background.strong.color
-					} else {
-						theme.extended_palette().background.weak.color
-					}
-				} else if beat.tick() == 0 {
+			let color = if snap_step >= MusicalTime::BEAT {
+				if beat.beat_in_bar(self.transport) == 0
+					&& beat.bar(self.transport).is_multiple_of(snap_step.beat())
+				{
 					theme.extended_palette().background.strong.color
 				} else {
 					theme.extended_palette().background.weak.color
-				};
+				}
+			} else if beat.tick() == 0 {
+				theme.extended_palette().background.strong.color
+			} else {
+				theme.extended_palette().background.weak.color
+			};
 
-				renderer.fill_quad(
-					Quad {
-						bounds,
-						..Quad::default()
-					},
-					color,
-				);
-			}
+			renderer.fill_quad(
+				Quad {
+					bounds: Rectangle::new(offset_time(beat), Size::new(1.0, bounds.height))
+						.intersection(&bounds)
+						.unwrap_or_default(),
+					..Quad::default()
+				},
+				color,
+			);
 			beat += snap_step;
 		}
 
@@ -478,9 +475,18 @@ impl<'a, Message> Seeker<'a, Message> {
 	}
 
 	fn header(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
+		let samples_per_px = self.scale.x.exp2();
+		let offset_pos = |time: f32| {
+			bounds.position()
+				+ Vector::new(time / samples_per_px - self.position.x - self.offset, 0.0)
+		};
+		let offset_time = |time: MusicalTime| offset_pos(time.to_samples_f(self.transport));
+
 		renderer.fill_quad(
 			Quad {
-				bounds: Rectangle::new(bounds.position(), Size::new(bounds.width, LINE_HEIGHT)),
+				bounds: Rectangle::new(bounds.position(), Size::new(bounds.width, LINE_HEIGHT))
+					.intersection(&bounds)
+					.unwrap_or_default(),
 				..Quad::default()
 			},
 			if self.transport.loop_marker.is_some() {
@@ -490,21 +496,15 @@ impl<'a, Message> Seeker<'a, Message> {
 			},
 		);
 
-		let samples_per_px = self.scale.x.exp2();
-
-		let offset_pos = |time: f32| {
-			bounds.position()
-				+ Vector::new(time / samples_per_px - self.position.x - self.offset, 0.0)
-		};
-		let offset_time = |time: MusicalTime| offset_pos(time.to_samples_f(self.transport));
-
 		if let Some(loop_marker) = self.transport.loop_marker {
 			let start = offset_time(loop_marker.start());
 			let end = offset_time(loop_marker.end());
 
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(start, Size::new(end.x - start.x, LINE_HEIGHT)),
+					bounds: Rectangle::new(start, Size::new(end.x - start.x, LINE_HEIGHT))
+						.intersection(&bounds)
+						.unwrap_or_default(),
 					..Quad::default()
 				},
 				theme.extended_palette().primary.base.color,
@@ -515,7 +515,9 @@ impl<'a, Message> Seeker<'a, Message> {
 					bounds: Rectangle::new(
 						start - Vector::new(1.5, 0.0),
 						Size::new(1.5, bounds.height),
-					),
+					)
+					.intersection(&bounds)
+					.unwrap_or_default(),
 					..Quad::default()
 				},
 				theme.extended_palette().secondary.base.color,
@@ -523,7 +525,9 @@ impl<'a, Message> Seeker<'a, Message> {
 
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(end, Size::new(1.5, bounds.height)),
+					bounds: Rectangle::new(end, Size::new(1.5, bounds.height))
+						.intersection(&bounds)
+						.unwrap_or_default(),
 					..Quad::default()
 				},
 				theme.extended_palette().secondary.base.color,
@@ -562,7 +566,9 @@ impl<'a, Message> Seeker<'a, Message> {
 				bounds: Rectangle::new(
 					offset_pos(self.transport.sample as f32),
 					Size::new(1.5, bounds.height),
-				),
+				)
+				.intersection(&bounds)
+				.unwrap_or_default(),
 				..Quad::default()
 			},
 			theme.extended_palette().primary.base.color,

@@ -397,16 +397,17 @@ where
 		let selection = &*self.selection.borrow();
 
 		for layout in layout.children() {
-			let Some(bounds) = layout.bounds().intersection(&viewport) else {
+			let Some(bounds) = Rectangle::new(
+				layout.position() + Vector::new(0.0, layout.bounds().height - 1.0),
+				Size::new(layout.bounds().width, 1.0),
+			)
+			.intersection(&viewport) else {
 				continue;
 			};
 
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(
-						bounds.position() + Vector::new(0.0, bounds.height - 1.0),
-						Size::new(bounds.width, 1.0),
-					),
+					bounds,
 					..Quad::default()
 				},
 				theme.extended_palette().background.strong.color,
@@ -495,11 +496,12 @@ where
 			let y = layout.child(start_track).position().y;
 			let height =
 				layout.child(end_track).position().y + layout.child(end_track).bounds().height - y;
+
 			let x = start_pos.to_samples_f(self.transport) / samples_per_px;
 			let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
 			let x = x - self.position.x;
 
-			renderer.with_layer(Rectangle::INFINITE, |renderer| {
+			renderer.with_layer(viewport, |renderer| {
 				renderer.with_translation(Vector::new(viewport.x, 0.0), |renderer| {
 					renderer.fill_quad(
 						Quad {

@@ -1,8 +1,8 @@
 use iced_widget::{
 	Renderer,
 	core::{
-		Animation, Clipboard, Element, Event, Layout, Length, Rectangle, Renderer as _, Shell,
-		Size, Theme, Vector, Widget,
+		Animation, Clipboard, Color, Element, Event, Layout, Length, Rectangle, Renderer as _,
+		Shell, Size, Theme, Vector, Widget,
 		animation::Easing,
 		layout::{Limits, Node},
 		mouse::Cursor,
@@ -140,7 +140,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 		let danger = theme.palette().danger;
 		let background = theme.palette().background;
 
-		let muted = |color| mix(color, background, 2.0 / 3.0);
+		let muted = |color: Color| mix(color, background, 2.0 / 3.0);
 
 		let bar = self
 			.state
