@@ -4,7 +4,7 @@ use crate::{
 };
 use generic_daw_core::{MusicalTime, Transport};
 use iced::{
-	Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+	Color, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
 		Clipboard, Renderer as _, Shell,
 		layout::{Layout, Limits, Node},
@@ -395,7 +395,6 @@ where
 		};
 
 		let selection = &*self.selection.borrow();
-		let samples_per_px = self.scale.x.exp2();
 
 		for layout in layout.children() {
 			let Some(bounds) = layout.bounds().intersection(&viewport) else {
@@ -415,6 +414,7 @@ where
 		}
 
 		if let Some((_, Some((track, pos)))) = selection.file {
+			let samples_per_px = self.scale.x.exp2();
 			if let Some(bounds) = layout.children().nth(track).map(|layout| layout.bounds()) {
 				renderer.fill_quad(
 					Quad {
@@ -431,15 +431,7 @@ where
 					},
 					Linear::new(FRAC_PI_2)
 						.add_stop(0.0, theme.extended_palette().background.strong.color)
-						.add_stop(
-							1.0,
-							theme
-								.extended_palette()
-								.background
-								.strong
-								.color
-								.scale_alpha(0.0),
-						),
+						.add_stop(1.0, Color::TRANSPARENT),
 				);
 			} else {
 				renderer.fill_quad(
@@ -457,15 +449,7 @@ where
 					},
 					Linear::new(PI)
 						.add_stop(0.0, theme.extended_palette().background.strong.color)
-						.add_stop(
-							1.0,
-							theme
-								.extended_palette()
-								.background
-								.strong
-								.color
-								.scale_alpha(0.0),
-						),
+						.add_stop(1.0, Color::TRANSPARENT),
 				);
 			}
 		}
@@ -506,17 +490,17 @@ where
 		{
 			let (start_track, end_track) = (start_track.min(end_track), start_track.max(end_track));
 			let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
+			let samples_per_px = self.scale.x.exp2();
+
+			let y = layout.child(start_track).position().y;
+			let height =
+				layout.child(end_track).position().y + layout.child(end_track).bounds().height - y;
+			let x = start_pos.to_samples_f(self.transport) / samples_per_px;
+			let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
+			let x = x - self.position.x;
+
 			renderer.with_layer(viewport, |renderer| {
 				renderer.with_translation(Vector::new(viewport.x, 0.0), |renderer| {
-					let y = layout.child(start_track).position().y;
-					let height = layout.child(end_track).position().y
-						+ layout.child(end_track).bounds().height
-						- y;
-
-					let x = start_pos.to_samples_f(self.transport) / samples_per_px;
-					let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
-					let x = x - self.position.x;
-
 					renderer.fill_quad(
 						Quad {
 							bounds: Rectangle {

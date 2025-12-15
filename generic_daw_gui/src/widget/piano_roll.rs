@@ -316,17 +316,16 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		{
 			let (start_key, end_key) = (start_key.max(end_key), start_key.min(end_key));
 			let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
+			let samples_per_px = self.scale.x.exp2();
+
+			let y = key_y(start_key, *self.position, *self.scale);
+			let height = key_y(end_key, *self.position, *self.scale) + self.scale.y - y;
+
+			let x = start_pos.to_samples_f(self.transport) / samples_per_px;
+			let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
+			let x = x - self.position.x;
 			renderer.with_layer(viewport, |renderer| {
 				renderer.with_translation(Vector::new(viewport.x, viewport.y), |renderer| {
-					let samples_per_px = self.scale.x.exp2();
-
-					let y = key_y(start_key, *self.position, *self.scale);
-					let height = key_y(end_key, *self.position, *self.scale) + self.scale.y - y;
-
-					let x = start_pos.to_samples_f(self.transport) / samples_per_px;
-					let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
-					let x = x - self.position.x;
-
 					renderer.fill_quad(
 						Quad {
 							bounds: Rectangle {
