@@ -499,7 +499,7 @@ where
 			let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
 			let x = x - self.position.x;
 
-			renderer.with_layer(viewport, |renderer| {
+			renderer.with_layer(Rectangle::INFINITE, |renderer| {
 				renderer.with_translation(Vector::new(viewport.x, 0.0), |renderer| {
 					renderer.fill_quad(
 						Quad {

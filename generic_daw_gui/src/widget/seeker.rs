@@ -246,11 +246,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		_viewport: &Rectangle,
 	) {
 		let right_half = Self::right_half(layout);
-		let right_child = right_half.shrink(padding::top(LINE_HEIGHT));
 
-		renderer.with_layer(right_child, |renderer| {
-			self.grid(renderer, right_child, theme);
-		});
+		self.grid(
+			renderer,
+			right_half.shrink(padding::top(LINE_HEIGHT)),
+			theme,
+		);
 
 		renderer.with_layer(
 			layout.bounds().shrink(padding::top(LINE_HEIGHT)),
@@ -420,45 +421,49 @@ impl<'a, Message> Seeker<'a, Message> {
 		let background_width = background_step.to_samples_f(self.transport) / samples_per_px / 2.0;
 
 		while background_beat < end_beat {
-			renderer.fill_quad(
-				Quad {
-					bounds: Rectangle::new(
-						offset_time(background_beat),
-						Size::new(background_width, bounds.height),
-					),
-					..Quad::default()
-				},
-				theme.extended_palette().background.weakest.color,
+			let bounds = Rectangle::new(
+				offset_time(background_beat),
+				Size::new(background_width, bounds.height),
 			);
-
+			if let Some(bounds) = bounds.intersection(&bounds) {
+				renderer.fill_quad(
+					Quad {
+						bounds,
+						..Quad::default()
+					},
+					theme.extended_palette().background.weakest.color,
+				);
+			}
 			background_beat += background_step;
 		}
 
 		let snap_step = MusicalTime::snap_step(self.scale.x + 1.0, self.transport);
 
 		while beat <= end_beat {
-			let color = if snap_step >= MusicalTime::BEAT {
-				if beat.beat_in_bar(self.transport) == 0
-					&& beat.bar(self.transport).is_multiple_of(snap_step.beat())
-				{
+			let bounds = Rectangle::new(offset_time(beat), Size::new(1.0, bounds.height));
+			if let Some(bounds) = bounds.intersection(&bounds) {
+				let color = if snap_step >= MusicalTime::BEAT {
+					if beat.beat_in_bar(self.transport) == 0
+						&& beat.bar(self.transport).is_multiple_of(snap_step.beat())
+					{
+						theme.extended_palette().background.strong.color
+					} else {
+						theme.extended_palette().background.weak.color
+					}
+				} else if beat.tick() == 0 {
 					theme.extended_palette().background.strong.color
 				} else {
 					theme.extended_palette().background.weak.color
-				}
-			} else if beat.tick() == 0 {
-				theme.extended_palette().background.strong.color
-			} else {
-				theme.extended_palette().background.weak.color
-			};
+				};
 
-			renderer.fill_quad(
-				Quad {
-					bounds: Rectangle::new(offset_time(beat), Size::new(1.0, bounds.height)),
-					..Quad::default()
-				},
-				color,
-			);
-
+				renderer.fill_quad(
+					Quad {
+						bounds,
+						..Quad::default()
+					},
+					color,
+				);
+			}
 			beat += snap_step;
 		}
 
@@ -526,10 +531,8 @@ impl<'a, Message> Seeker<'a, Message> {
 
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(
-						bounds.position(),
-						Size::new(bounds.width.min(start.x - bounds.x), bounds.height),
-					),
+					bounds: bounds
+						.shrink(padding::right(0f32.max(bounds.x + bounds.width - start.x))),
 					..Quad::default()
 				},
 				theme
@@ -542,10 +545,7 @@ impl<'a, Message> Seeker<'a, Message> {
 
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(
-						end,
-						Size::new(bounds.width + 0f32.max(bounds.x - end.x), bounds.height),
-					),
+					bounds: bounds.shrink(padding::left(0f32.max(end.x - bounds.x))),
 					..Quad::default()
 				},
 				theme
