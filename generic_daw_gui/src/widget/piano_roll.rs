@@ -434,80 +434,80 @@ impl<'a, Message> PianoRoll<'a, Message> {
 			return;
 		};
 
-		let selection = &mut *self.selection.borrow_mut();
 		let note_bounds = self.note_bounds(&self.notes[note]);
+		if !note_bounds.contains(cursor) {
+			return;
+		}
 
-		if let Event::Mouse(event) = event
-			&& note_bounds.contains(cursor)
-		{
-			match event {
-				mouse::Event::ButtonPressed { button, modifiers }
-					if selection.status == Status::None =>
-				{
-					let mut clear = selection.primary.insert(note);
+		let selection = &mut *self.selection.borrow_mut();
+		match event {
+			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
+				if selection.status == Status::None =>
+			{
+				let mut clear = selection.primary.insert(note);
 
-					match button {
-						mouse::Button::Left => {
-							let key = self.notes[note].key;
-							let time =
-								get_time(cursor.x, *self.position, *self.scale, self.transport);
+				match button {
+					mouse::Button::Left => {
+						let key = self.notes[note].key;
+						let time = get_time(cursor.x, *self.position, *self.scale, self.transport);
 
-							selection.status = match (modifiers.command(), modifiers.shift()) {
-								(false, false) => {
-									let start_pixel = note_bounds.x;
-									let end_pixel = note_bounds.x + note_bounds.width;
-									let start_offset = cursor.x - start_pixel;
-									let end_offset = end_pixel - cursor.x;
-									let border = 10f32.min((end_pixel - start_pixel) / 3.0);
-									match (start_offset < border, end_offset < border) {
-										(true, false) => Status::TrimmingStart(time),
-										(false, true) => Status::TrimmingEnd(time),
-										(false, false) => Status::Dragging(key, time),
-										(true, true) => unreachable!(),
-									}
+						selection.status = match (modifiers.command(), modifiers.shift()) {
+							(false, false) => {
+								let start_pixel = note_bounds.x;
+								let end_pixel = note_bounds.x + note_bounds.width;
+								let start_offset = cursor.x - start_pixel;
+								let end_offset = end_pixel - cursor.x;
+								let border = 10f32.min((end_pixel - start_pixel) / 3.0);
+								match (start_offset < border, end_offset < border) {
+									(true, false) => Status::TrimmingStart(time),
+									(false, true) => Status::TrimmingEnd(time),
+									(false, false) => Status::Dragging(key, time),
+									(true, true) => unreachable!(),
 								}
-								(true, false) => {
-									clear = false;
-									let time = maybe_snap_time(time, *modifiers, |time| {
-										time.snap_round(self.scale.x, self.transport)
-									});
-									Status::Selecting(key, key, time, time)
-								}
-								(false, true) => {
-									shell.publish((self.f)(Action::Clone));
-									Status::Dragging(key, time)
-								}
-								(true, true) => {
-									let time = maybe_snap_time(time, *modifiers, |time| {
-										time.snap_round(self.scale.x, self.transport)
-									});
-									shell.publish((self.f)(Action::SplitAt(time)));
-									Status::DraggingSplit(time)
-								}
-							};
+							}
+							(true, false) => {
+								clear = false;
+								let time = maybe_snap_time(time, *modifiers, |time| {
+									time.snap_round(self.scale.x, self.transport)
+								});
+								Status::Selecting(key, key, time, time)
+							}
+							(false, true) => {
+								shell.publish((self.f)(Action::Clone));
+								Status::Dragging(key, time)
+							}
+							(true, true) => {
+								let time = maybe_snap_time(time, *modifiers, |time| {
+									time.snap_round(self.scale.x, self.transport)
+								});
+								shell.publish((self.f)(Action::SplitAt(time)));
+								Status::DraggingSplit(time)
+							}
+						};
 
-							shell.capture_event();
-							shell.request_redraw();
-						}
-						mouse::Button::Right if selection.status != Status::Deleting => {
-							clear = true;
-							selection.status = Status::Deleting;
-							shell.publish((self.f)(Action::Delete));
-							shell.capture_event();
-						}
-						_ => {}
+						shell.capture_event();
+						shell.request_redraw();
 					}
-
-					if clear {
-						selection.primary.clear();
-						selection.primary.insert(note);
+					mouse::Button::Right if selection.status != Status::Deleting => {
+						clear = true;
+						selection.status = Status::Deleting;
+						shell.publish((self.f)(Action::Delete));
+						shell.capture_event();
 					}
+					_ => {}
 				}
-				mouse::Event::CursorMoved { .. } if selection.status == Status::Deleting => {
+
+				if clear {
+					selection.primary.clear();
 					selection.primary.insert(note);
 				}
-				_ => {}
 			}
+			Event::Mouse(mouse::Event::CursorMoved { .. })
+				if selection.status == Status::Deleting =>
+			{
+				selection.primary.insert(note);
+			}
+			_ => {}
 		}
 	}
 

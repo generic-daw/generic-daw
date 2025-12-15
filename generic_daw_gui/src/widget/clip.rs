@@ -187,93 +187,93 @@ where
 			return;
 		};
 
-		let selection = &mut *self.selection.borrow_mut();
 		let clip_bounds = layout.bounds() - Vector::new(viewport.x, viewport.y);
+		if !clip_bounds.contains(cursor) {
+			return;
+		}
 
-		if let Event::Mouse(event) = event
-			&& clip_bounds.contains(cursor)
-		{
-			match event {
-				mouse::Event::ButtonPressed { button, modifiers }
-					if selection.status == Status::None =>
-				{
-					let mut clear = selection.primary.insert(idx);
+		let selection = &mut *self.selection.borrow_mut();
+		match event {
+			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
+				if selection.status == Status::None =>
+			{
+				let mut clear = selection.primary.insert(idx);
 
-					match button {
-						mouse::Button::Left => {
-							if matches!(self.inner, Inner::MidiClip(..)) {
-								let new_click =
-									Click::new(cursor, mouse::Button::Left, state.last_click);
-								state.last_click = Some(new_click);
+				match button {
+					mouse::Button::Left => {
+						if matches!(self.inner, Inner::MidiClip(..)) {
+							let new_click =
+								Click::new(cursor, mouse::Button::Left, state.last_click);
+							state.last_click = Some(new_click);
 
-								if new_click.kind() == Kind::Double {
-									selection.primary.clear();
-									selection.primary.insert(idx);
-									shell.publish((self.f)(Action::Open));
-									shell.capture_event();
-									return;
+							if new_click.kind() == Kind::Double {
+								selection.primary.clear();
+								selection.primary.insert(idx);
+								shell.publish((self.f)(Action::Open));
+								shell.capture_event();
+								return;
+							}
+						}
+
+						let time = get_time(cursor.x, *self.position, *self.scale, self.transport);
+
+						selection.status = match (modifiers.command(), modifiers.shift()) {
+							(false, false) => {
+								let start_pixel = clip_bounds.x;
+								let end_pixel = clip_bounds.x + clip_bounds.width;
+								let start_offset = cursor.x - start_pixel;
+								let end_offset = end_pixel - cursor.x;
+								let border = 10f32.min((end_pixel - start_pixel) / 3.0);
+								match (start_offset < border, end_offset < border) {
+									(true, false) => Status::TrimmingStart(time),
+									(false, true) => Status::TrimmingEnd(time),
+									(false, false) => Status::Dragging(idx.0, time),
+									(true, true) => unreachable!(),
 								}
 							}
+							(true, false) => {
+								clear = false;
+								let time = maybe_snap_time(time, *modifiers, |time| {
+									time.snap_round(self.scale.x, self.transport)
+								});
+								Status::Selecting(idx.0, idx.0, time, time)
+							}
+							(false, true) => {
+								shell.publish((self.f)(Action::Clone));
+								Status::Dragging(idx.0, time)
+							}
+							(true, true) => {
+								let time = maybe_snap_time(time, *modifiers, |time| {
+									time.snap_round(self.scale.x, self.transport)
+								});
+								shell.publish((self.f)(Action::SplitAt(time)));
+								Status::DraggingSplit(time)
+							}
+						};
 
-							let time =
-								get_time(cursor.x, *self.position, *self.scale, self.transport);
-
-							selection.status = match (modifiers.command(), modifiers.shift()) {
-								(false, false) => {
-									let start_pixel = clip_bounds.x;
-									let end_pixel = clip_bounds.x + clip_bounds.width;
-									let start_offset = cursor.x - start_pixel;
-									let end_offset = end_pixel - cursor.x;
-									let border = 10f32.min((end_pixel - start_pixel) / 3.0);
-									match (start_offset < border, end_offset < border) {
-										(true, false) => Status::TrimmingStart(time),
-										(false, true) => Status::TrimmingEnd(time),
-										(false, false) => Status::Dragging(idx.0, time),
-										(true, true) => unreachable!(),
-									}
-								}
-								(true, false) => {
-									clear = false;
-									let time = maybe_snap_time(time, *modifiers, |time| {
-										time.snap_round(self.scale.x, self.transport)
-									});
-									Status::Selecting(idx.0, idx.0, time, time)
-								}
-								(false, true) => {
-									shell.publish((self.f)(Action::Clone));
-									Status::Dragging(idx.0, time)
-								}
-								(true, true) => {
-									let time = maybe_snap_time(time, *modifiers, |time| {
-										time.snap_round(self.scale.x, self.transport)
-									});
-									shell.publish((self.f)(Action::SplitAt(time)));
-									Status::DraggingSplit(time)
-								}
-							};
-
-							shell.capture_event();
-							shell.request_redraw();
-						}
-						mouse::Button::Right if selection.status != Status::Deleting => {
-							clear = true;
-							selection.status = Status::Deleting;
-							shell.publish((self.f)(Action::Delete));
-							shell.capture_event();
-						}
-						_ => {}
+						shell.capture_event();
+						shell.request_redraw();
 					}
-
-					if clear {
-						selection.primary.clear();
-						selection.primary.insert(idx);
+					mouse::Button::Right if selection.status != Status::Deleting => {
+						clear = true;
+						selection.status = Status::Deleting;
+						shell.publish((self.f)(Action::Delete));
+						shell.capture_event();
 					}
+					_ => {}
 				}
-				mouse::Event::CursorMoved { .. } if selection.status == Status::Deleting => {
+
+				if clear {
+					selection.primary.clear();
 					selection.primary.insert(idx);
 				}
-				_ => {}
 			}
+			Event::Mouse(mouse::Event::CursorMoved { .. })
+				if selection.status == Status::Deleting =>
+			{
+				selection.primary.insert(idx);
+			}
+			_ => {}
 		}
 	}
 

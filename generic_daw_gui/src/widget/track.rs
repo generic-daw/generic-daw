@@ -123,16 +123,21 @@ where
 			return;
 		}
 
-		let track_bounds = layout.bounds() - Vector::new(viewport.x, viewport.y);
+		let Some(cursor) = cursor.position_in(*viewport) else {
+			return;
+		};
 
+		let track_bounds = layout.bounds() - Vector::new(viewport.x, viewport.y);
+		if !track_bounds.contains(cursor) {
+			return;
+		}
+
+		let state = tree.state.downcast_mut::<State>();
 		if let Event::Mouse(mouse::Event::ButtonPressed {
 			button: mouse::Button::Left,
 			modifiers,
-		}) = event && let Some(cursor) = cursor.position_in(*viewport)
-			&& track_bounds.contains(cursor)
+		}) = event
 		{
-			let state = tree.state.downcast_mut::<State>();
-
 			let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
 			state.last_click = Some(new_click);
 
