@@ -4,7 +4,7 @@ use fragile::Fragile;
 use generic_daw_core::clap_host::{FdFlags, PosixFdMessage};
 use generic_daw_core::{
 	Event, PluginId,
-	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, Size},
+	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, Size, TimerId},
 };
 use generic_daw_widget::knob::Knob;
 use iced::{
@@ -47,7 +47,7 @@ pub enum Message {
 #[derive(Debug, Default)]
 pub struct ClapHost {
 	plugins: HoleyVec<Plugin<Event>>,
-	timers: HashMap<Duration, HashMap<PluginId, u32>>,
+	timers: HashMap<Duration, HashMap<PluginId, TimerId>>,
 	windows: HoleyVec<window::Id>,
 	#[cfg(unix)]
 	fds: HoleyVec<HashMap<RawFd, FdFlags>>,

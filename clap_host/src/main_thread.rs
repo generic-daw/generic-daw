@@ -24,8 +24,8 @@ pub enum MainThreadMessage {
 	GuiRequestShow,
 	GuiRequestHide,
 	GuiClosed,
-	RegisterTimer(u32, Duration),
-	UnregisterTimer(u32),
+	RegisterTimer(TimerId, Duration),
+	UnregisterTimer(TimerId),
 	RescanParams(ParamRescanFlags),
 	RescanParam(ClapId, ParamRescanFlags),
 	#[cfg(unix)]
@@ -160,7 +160,7 @@ impl HostTimerImpl for MainThread<'_> {
 		self.shared
 			.sender
 			.send(MainThreadMessage::RegisterTimer(
-				timer_id.0,
+				timer_id,
 				Duration::from_millis(period_ms.into()),
 			))
 			.unwrap();
@@ -171,7 +171,7 @@ impl HostTimerImpl for MainThread<'_> {
 	fn unregister_timer(&mut self, timer_id: TimerId) -> Result<(), HostError> {
 		self.shared
 			.sender
-			.send(MainThreadMessage::UnregisterTimer(timer_id.0))
+			.send(MainThreadMessage::UnregisterTimer(timer_id))
 			.unwrap();
 
 		Ok(())

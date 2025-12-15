@@ -27,9 +27,12 @@ mod shared;
 mod size;
 
 pub use audio_processor::AudioProcessor;
-pub use clack_extensions::params::{ParamInfoFlags, ParamRescanFlags};
 #[cfg(unix)]
 pub use clack_extensions::posix_fd::FdFlags;
+pub use clack_extensions::{
+	params::{ParamInfoFlags, ParamRescanFlags},
+	timer::TimerId,
+};
 pub use clack_host::{
 	bundle::PluginBundle,
 	host::HostInfo,
