@@ -30,7 +30,10 @@ use generic_daw_core::{
 	Batch, MidiNote, MusicalTime, NodeId, NotePosition, PanMode, SampleId,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
-use generic_daw_widget::{knob::Knob, peak_meter::PeakMeter};
+use generic_daw_widget::{
+	knob::Knob,
+	peak_meter::{MAX_VAL, PeakMeter},
+};
 use humantime::format_rfc3339_seconds;
 use iced::{
 	Center, Element, Fill, Function as _, Point, Shrink, Size, Task, Vector, border,
@@ -105,8 +108,6 @@ pub static AUTOSAVE_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 	_ = std::fs::create_dir(&autosave_dir);
 	autosave_dir
 });
-
-const CBRT_TWO: f32 = 1.259_921_1;
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -1014,7 +1015,7 @@ impl ArrangementView {
 								]
 								.spacing(2),
 								column![
-									Knob::new(0.0..=CBRT_TWO, node.volume.abs().cbrt(), move |v| {
+									Knob::new(0.0..=MAX_VAL, node.volume.abs().cbrt(), move |v| {
 										Message::ChannelVolumeChanged(
 											id,
 											v.powi(3).copysign(node.volume),
@@ -1354,7 +1355,7 @@ impl ArrangementView {
 					row![
 						container(PeakMeter::new(&node.peaks[0]).width(16.0))
 							.padding(padding::vertical(7)),
-						vertical_slider(0.0..=CBRT_TWO, node.volume.abs().cbrt(), |v| {
+						vertical_slider(0.0..=MAX_VAL, node.volume.abs().cbrt(), |v| {
 							Message::ChannelVolumeChanged(node.id, v.powi(3).copysign(node.volume))
 						})
 						.default(1.0)

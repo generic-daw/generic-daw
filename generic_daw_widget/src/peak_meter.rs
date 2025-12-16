@@ -15,8 +15,9 @@ use iced_widget::{
 };
 use std::{cell::Cell, convert::identity};
 
-const CBRT_HALF: f32 = 0.793_700_5;
-const CBRT_QUARTER: f32 = 0.629_960_54;
+pub const MAX_VAL: f32 = 1.206_299_5; // 1.0 + (1.0 - cbrt(0.5))
+const DANGER: f32 = 1.0 / MAX_VAL;
+const WARNING: f32 = 0.793_700_5 / MAX_VAL;
 
 #[derive(Debug)]
 pub struct State {
@@ -42,7 +43,7 @@ impl Default for State {
 
 impl State {
 	pub fn update(&mut self, peak: f32, now: Instant) {
-		let peak = (peak / 2.0).cbrt();
+		let peak = peak.cbrt() / MAX_VAL;
 
 		let min_duration = now - self.last_update;
 		self.last_update = now;
@@ -152,7 +153,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 				Quad {
 					bounds: Rectangle::new(
 						bounds.position(),
-						Size::new(bounds.width, bounds.height * (1.0 - CBRT_HALF)),
+						Size::new(bounds.width, bounds.height * (1.0 - DANGER)),
 					),
 					..Quad::default()
 				},
@@ -160,12 +161,12 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 			);
 		}
 
-		if bar < CBRT_HALF {
+		if bar < DANGER {
 			renderer.fill_quad(
 				Quad {
 					bounds: Rectangle::new(
-						bounds.position() + Vector::new(0.0, bounds.height * (1.0 - CBRT_HALF)),
-						Size::new(bounds.width, bounds.height * (CBRT_HALF - CBRT_QUARTER)),
+						bounds.position() + Vector::new(0.0, bounds.height * (1.0 - DANGER)),
+						Size::new(bounds.width, bounds.height * (DANGER - WARNING)),
 					),
 					..Quad::default()
 				},
@@ -173,12 +174,12 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 			);
 		}
 
-		if bar < CBRT_QUARTER {
+		if bar < WARNING {
 			renderer.fill_quad(
 				Quad {
 					bounds: Rectangle::new(
-						bounds.position() + Vector::new(0.0, bounds.height * (1.0 - CBRT_QUARTER)),
-						Size::new(bounds.width, bounds.height * CBRT_QUARTER),
+						bounds.position() + Vector::new(0.0, bounds.height * (1.0 - WARNING)),
+						Size::new(bounds.width, bounds.height * WARNING),
 					),
 					..Quad::default()
 				},
@@ -197,9 +198,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 			};
 			renderer.fill_quad(
 				bar_quad,
-				if bar > CBRT_HALF {
+				if bar > DANGER {
 					danger
-				} else if bar > CBRT_QUARTER {
+				} else if bar > WARNING {
 					warning
 				} else {
 					success
@@ -223,9 +224,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 			};
 			renderer.fill_quad(
 				line_quad,
-				if line > CBRT_HALF {
+				if line > DANGER {
 					danger
-				} else if line > CBRT_QUARTER {
+				} else if line > WARNING {
 					warning
 				} else {
 					success
