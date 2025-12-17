@@ -163,7 +163,7 @@ impl<Event: EventImpl> Plugin<Event> {
 	pub fn activate(&mut self) {
 		if self
 			.instance
-			.access_handler_mut(|mt| std::mem::take(&mut mt.rescan_params))
+			.access_handler_mut(|mt| std::mem::take(&mut mt.params_rescan))
 		{
 			self.params = Param::all(&mut self.instance).unwrap_or_default();
 		}
@@ -174,10 +174,15 @@ impl<Event: EventImpl> Plugin<Event> {
 			.unwrap()
 			.into();
 
-		let latency = self
+		let latency = if self
 			.instance
-			.access_shared_handler(|s| s.ext.latency.get().copied())
-			.map_or(0, |latency| latency.get(&mut self.instance.plugin_handle()));
+			.access_handler_mut(|mt| std::mem::take(&mut mt.latency_changed))
+			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.latency.get())
+		{
+			Some(ext.get(&mut self.instance.plugin_handle()))
+		} else {
+			None
+		};
 
 		self.send(AudioThreadMessage::Activated(NoDebug(processor), latency));
 	}

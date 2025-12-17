@@ -10,7 +10,7 @@ use utils::{NoClone, NoDebug};
 
 #[derive(Debug)]
 pub enum AudioThreadMessage<Event: EventImpl> {
-	Activated(NoDebug<PluginAudioProcessor<Host>>, u32),
+	Activated(NoDebug<PluginAudioProcessor<Host>>, Option<u32>),
 	SetRealtime(bool),
 	Event(Event),
 }
@@ -60,7 +60,9 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 				match msg {
 					AudioThreadMessage::Activated(processor, latency) => {
 						self.processor = Some(processor);
-						self.audio_buffers.latency_changed(latency);
+						if let Some(latency) = latency {
+							self.audio_buffers.latency_changed(latency);
+						}
 					}
 					AudioThreadMessage::SetRealtime(realtime) => self.realtime = realtime,
 					AudioThreadMessage::Event(event) => events.push(event),
@@ -78,8 +80,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 						))))
 						.unwrap();
 				} else {
-					if self.needs_reset {
-						self.needs_reset = false;
+					if std::mem::take(&mut self.needs_reset) {
 						processor.reset();
 					}
 
@@ -152,6 +153,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 				}
 
 				processor.access_shared_handler(|s| {
+					s.needs_flush.store(false, Relaxed);
 					s.processing.store(processing, Relaxed);
 				});
 			}

@@ -44,7 +44,8 @@ pub enum PosixFdMessage {
 #[derive(Debug)]
 pub struct MainThread<'a> {
 	pub shared: &'a Shared<'a>,
-	pub rescan_params: bool,
+	pub latency_changed: bool,
+	pub params_rescan: bool,
 	pub next_timer_id: u32,
 }
 
@@ -52,7 +53,8 @@ impl<'a> MainThread<'a> {
 	pub fn new(shared: &'a Shared<'a>) -> Self {
 		Self {
 			shared,
-			rescan_params: false,
+			latency_changed: false,
+			params_rescan: false,
 			next_timer_id: 0,
 		}
 	}
@@ -73,7 +75,9 @@ impl HostAudioPortsImpl for MainThread<'_> {
 }
 
 impl HostLatencyImpl for MainThread<'_> {
-	fn changed(&mut self) {}
+	fn changed(&mut self) {
+		self.latency_changed = true;
+	}
 }
 
 impl HostNotePortsImpl for MainThread<'_> {
@@ -87,8 +91,7 @@ impl HostNotePortsImpl for MainThread<'_> {
 impl HostParamsImplMainThread for MainThread<'_> {
 	fn rescan(&mut self, flags: ParamRescanFlags) {
 		if flags.requires_restart() {
-			self.rescan_params = true;
-			self.shared.request_restart();
+			self.params_rescan = true;
 		} else if !flags.is_empty() {
 			self.shared
 				.sender
