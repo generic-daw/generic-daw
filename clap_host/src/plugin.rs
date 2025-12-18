@@ -18,7 +18,11 @@ use raw_window_handle::RawWindowHandle;
 use rtrb::{Producer, PushError, RingBuffer};
 #[cfg(unix)]
 use std::os::fd::RawFd;
-use std::{io::Cursor, num::NonZero, sync::mpsc::Receiver};
+use std::{
+	io::Cursor,
+	num::NonZero,
+	sync::{atomic::Ordering::Relaxed, mpsc::Receiver},
+};
 use utils::{NoClone, NoDebug};
 
 #[derive(Debug)]
@@ -150,7 +154,12 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn call_on_main_thread_callback(&mut self) {
-		self.instance.call_on_main_thread_callback();
+		if self
+			.instance
+			.access_shared_handler(|s| s.needs_callback.swap(false, Relaxed))
+		{
+			self.instance.call_on_main_thread_callback();
+		}
 	}
 
 	#[cfg(unix)]

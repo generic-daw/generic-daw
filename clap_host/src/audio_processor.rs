@@ -103,7 +103,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			return;
 		};
 
-		if processor.access_shared_handler(|s| !s.processing.load(Relaxed))
+		if processor.access_shared_handler(|s| !s.needs_process.load(Relaxed))
 			&& events.is_empty()
 			&& audio.iter().all(|f| f.abs() < f32::EPSILON)
 		{
@@ -154,7 +154,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 				processor.access_shared_handler(|s| {
 					s.needs_flush.store(false, Relaxed);
-					s.processing.store(processing, Relaxed);
+					s.needs_process.store(processing, Relaxed);
 				});
 			}
 			Err(err) => {
