@@ -75,7 +75,6 @@ pub struct Channel {
 	pan: PanMode,
 	enabled: bool,
 	bypassed: bool,
-	last_peaks: [f32; 2],
 	updates: Vec<Update>,
 }
 
@@ -94,12 +93,7 @@ impl NodeImpl for Channel {
 			if processing && plugin.enabled {
 				plugin.processor.process(audio, events, plugin.mix);
 			} else {
-				debug_assert!(
-					events
-						.iter()
-						.all(|event| matches!(event, Event::ParamValue { .. }))
-				);
-
+				events.retain(|event| matches!(event, Event::ParamValue { .. }));
 				plugin.processor.flush(events);
 			}
 
@@ -121,10 +115,7 @@ impl NodeImpl for Channel {
 			[0.0, 0.0]
 		};
 
-		if peaks != self.last_peaks {
-			self.last_peaks = peaks;
-			self.updates.push(Update::Peak(self.id, peaks));
-		}
+		self.updates.push(Update::Peak(self.id, peaks));
 	}
 
 	fn id(&self) -> NodeId {
@@ -191,7 +182,6 @@ impl Default for Channel {
 			pan: PanMode::Balance(0.0),
 			enabled: true,
 			bypassed: false,
-			last_peaks: [0.0; 2],
 			updates: Vec::new(),
 		}
 	}

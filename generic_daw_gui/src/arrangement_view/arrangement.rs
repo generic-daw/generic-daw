@@ -30,6 +30,7 @@ use utils::{HoleyVec, NoDebug, ShiftMoveExt as _};
 #[derive(Debug)]
 pub struct Arrangement {
 	transport: Transport,
+	cpu: f32,
 
 	samples: HoleyVec<Sample>,
 	midi_patterns: HoleyVec<MidiPattern>,
@@ -52,7 +53,6 @@ impl Arrangement {
 					device_name: config.output_device.name.clone(),
 					sample_rate: config.output_device.sample_rate,
 					frames: config.output_device.buffer_size,
-					metrics: NoDebug(&|f| iced::debug::time_with("Output callback", f)),
 				},
 				sender,
 			))
@@ -78,6 +78,7 @@ impl Arrangement {
 		(
 			Self {
 				transport,
+				cpu: 0.0,
 
 				samples: HoleyVec::default(),
 				midi_patterns: HoleyVec::default(),
@@ -109,7 +110,7 @@ impl Arrangement {
 			match update {
 				Update::Peak(node, peaks) => {
 					if let Some((node, _)) = self.nodes.get_mut(*node) {
-						node.update(peaks, batch.now);
+						node.update(peaks, batch.end);
 					}
 				}
 				Update::Param(id, param_id) => {
@@ -123,11 +124,19 @@ impl Arrangement {
 
 		self.send(Message::ReturnUpdateBuffer(batch.updates));
 
+		let mix = self.transport().sample_rate.get() as f32 / batch.frames as f32;
+		let cpu = (batch.end - batch.start).as_secs_f32() * mix;
+		self.cpu = self.cpu.mul_add(mix, cpu) / (mix + 1.0);
+
 		messages
 	}
 
 	pub fn transport(&self) -> &Transport {
 		&self.transport
+	}
+
+	pub fn cpu(&self) -> f32 {
+		self.cpu
 	}
 
 	pub fn samples(&self) -> &HoleyVec<Sample> {

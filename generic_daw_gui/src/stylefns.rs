@@ -84,6 +84,18 @@ pub fn slider_secondary(theme: &Theme, status: slider::Status) -> slider::Style 
 	style
 }
 
+pub fn slider_with_radius(
+	f: impl Fn(&Theme, slider::Status) -> slider::Style,
+	r: impl Into<border::Radius>,
+) -> impl Fn(&Theme, slider::Status) -> slider::Style {
+	let r = r.into();
+	move |t, s| {
+		let mut style = f(t, s);
+		style.handle.border.radius = r;
+		style
+	}
+}
+
 pub fn split_style(t: &Theme) -> iced_split::Style {
 	let mut style = iced_split::default(t);
 	style.focused = iced_split::StyleSheet {

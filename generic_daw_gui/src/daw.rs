@@ -6,7 +6,7 @@ use crate::{
 	config::Config,
 	config_view::{self, ConfigView},
 	file_tree::{self, FileTree},
-	icons::{chart_no_axes_gantt, pause, play, sliders_vertical, square},
+	icons::{chart_no_axes_gantt, cpu, pause, play, sliders_vertical, square},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
@@ -549,6 +549,12 @@ impl Daw {
 						.on_press(Message::ToggleMetronome),
 					],
 					space::horizontal(),
+					row![
+						cpu(),
+						text!("{:.1}%", self.arrangement_view.arrangement.cpu() * 100.0)
+							.font(Font::MONOSPACE)
+					]
+					.spacing(5),
 					row![
 						button(chart_no_axes_gantt())
 							.style(button_with_radius(button::primary, border::left(5)))

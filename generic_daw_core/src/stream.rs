@@ -15,7 +15,6 @@ use std::{
 		mpsc::Sender,
 	},
 };
-use utils::NoDebug;
 
 static NEXT_STREAM_TOKEN: AtomicUsize = AtomicUsize::new(1);
 
@@ -78,7 +77,6 @@ pub struct OutputRequest {
 	pub device_name: Option<Arc<str>>,
 	pub sample_rate: NonZero<u32>,
 	pub frames: Option<NonZero<u32>>,
-	pub metrics: NoDebug<&'static (dyn Fn(&mut dyn FnMut()) + Send + Sync)>,
 }
 
 #[derive(Debug)]
@@ -126,8 +124,8 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 						.or(req.frames)
 						.or(NonZero::new(8192))
 						.unwrap();
-					let channels = NonZero::new(config.channels.into()).unwrap();
-					let buffer_len = frames.checked_mul(channels).unwrap();
+					let channels = NonZero::new(u32::from(config.channels)).unwrap();
+					let buffer_len = frames.get() * channels.get();
 
 					let (mut producer, consumer) =
 						RingBuffer::new(sample_rate.get().div_ceil(frames.get()) as usize);
@@ -138,7 +136,7 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 						.build_input_stream(
 							&config,
 							move |buf, _| {
-								for buf in buf.chunks(buffer_len.get() as usize) {
+								for buf in buf.chunks(buffer_len as usize) {
 									let frames = buf.len() / usize::from(config.channels);
 									from_other_to_stereo(&mut stereo[..2 * frames], buf, frames);
 									producer.push(stereo[..2 * frames].into()).unwrap();
@@ -188,8 +186,8 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 						.or(req.frames)
 						.or(NonZero::new(8192))
 						.unwrap();
-					let channels = NonZero::new(config.channels.into()).unwrap();
-					let buffer_len = frames.checked_mul(channels).unwrap();
+					let channels = NonZero::new(u32::from(config.channels)).unwrap();
+					let buffer_len = frames.get() * channels.get();
 
 					let transport = Transport::new(sample_rate, frames);
 					let (mut ctx, master_node_id, producer, consumer) = DawCtx::create(transport);
@@ -200,13 +198,11 @@ pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
 						.build_output_stream(
 							&config,
 							move |buf, _| {
-								(req.metrics)(&mut || {
-									for buf in buf.chunks_mut(buffer_len.get() as usize) {
-										let frames = buf.len() / channels.get() as usize;
-										ctx.process(&mut stereo[..2 * frames]);
-										from_stereo_to_other(buf, &stereo[..2 * frames], frames);
-									}
-								});
+								for buf in buf.chunks_mut(buffer_len as usize) {
+									let frames = buf.len() / channels.get() as usize;
+									ctx.process(&mut stereo[..2 * frames]);
+									from_stereo_to_other(buf, &stereo[..2 * frames], frames);
+								}
 							},
 							|err| error!("{err}"),
 							None,

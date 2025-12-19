@@ -82,7 +82,9 @@ pub struct Batch {
 	pub version: Version,
 	pub sample: Option<(usize, bool)>,
 	pub updates: Vec<Update>,
-	pub now: Instant,
+	pub start: Instant,
+	pub end: Instant,
+	pub frames: usize,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -264,6 +266,9 @@ impl DawCtx {
 	}
 
 	pub fn process(&mut self, mut buf: &mut [f32]) {
+		let start = Instant::now();
+		let frames = buf.len() / 2;
+
 		self.recv_events();
 
 		let mut looped = false;
@@ -275,22 +280,20 @@ impl DawCtx {
 			let loop_start = loop_marker.start().to_samples(&self.state.transport);
 			let loop_end = loop_marker.end().to_samples(&self.state.transport);
 
-			if loop_end >= self.state.transport.sample {
-				while loop_end <= self.state.transport.sample + buf.len() {
-					looped = true;
-					let len = loop_end - self.state.transport.sample;
-
-					self.audio_graph.process(&self.state, &mut buf[..len]);
-					self.audio_graph
-						.for_each_node_mut(|node| node.collect_updates(&mut updates));
-					for s in &mut buf[..len] {
-						*s = s.clamp(-1.0, 1.0);
-					}
-					self.metronome(&mut buf[..len], self.audio_graph.delay());
-
-					self.state.transport.sample = loop_start;
-					buf = &mut buf[len..];
+			while let Some(len) = loop_end.checked_sub(self.state.transport.sample)
+				&& len < buf.len()
+			{
+				self.audio_graph.process(&self.state, &mut buf[..len]);
+				self.audio_graph
+					.for_each_node_mut(|node| node.collect_updates(&mut updates));
+				for s in &mut buf[..len] {
+					*s = s.clamp(-1.0, 1.0);
 				}
+				self.metronome(&mut buf[..len], self.audio_graph.delay());
+
+				self.state.transport.sample = loop_start;
+				buf = &mut buf[len..];
+				looped = true;
 			}
 		}
 
@@ -307,19 +310,19 @@ impl DawCtx {
 			(self.state.transport.sample, looped)
 		});
 
-		if sample.is_some() || !updates.is_empty() {
-			let batch = Batch {
-				version: self.state.transport.version,
-				sample,
-				updates,
-				now: Instant::now(),
-			};
+		let batch = Batch {
+			version: self.state.transport.version,
+			sample,
+			updates,
+			start,
+			end: Instant::now(),
+			frames,
+		};
 
-			if let Err(PushError::Full(mut batch)) = self.producer.push(batch) {
-				warn!("full ring buffer");
-				batch.updates.clear();
-				self.update_buffers.push(batch.updates);
-			}
+		if let Err(PushError::Full(mut batch)) = self.producer.push(batch) {
+			warn!("full ring buffer");
+			batch.updates.clear();
+			self.update_buffers.push(batch.updates);
 		}
 	}
 

@@ -55,6 +55,7 @@ macro_rules! icon {
 icon!(chevron_down = 57453);
 icon!(chevron_right = 57455);
 icon!(chevron_up = 57456);
+icon!(cpu = 57513);
 icon!(file = 57536);
 icon!(grip_vertical = 57579);
 icon!(link = 57602);

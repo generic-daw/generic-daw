@@ -13,7 +13,7 @@ use crate::{
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, scrollable_style,
-		slider_secondary, split_style,
+		slider_secondary, slider_with_radius, split_style,
 	},
 	widget::{
 		LINE_HEIGHT, TEXT_HEIGHT,
@@ -258,20 +258,28 @@ impl ArrangementView {
 				}
 			}
 			Message::SetArrangement(NoClone(arrangement)) => {
+				if let Some((recording, _)) = &mut self.recording {
+					recording.end_stream();
+				}
+
 				let pos_fact = arrangement.transport().sample_rate.get() as f32
 					/ self.arrangement.transport().sample_rate.get() as f32;
 				let scale_diff = pos_fact.log2();
+
+				self.arrangement = *arrangement;
+
+				self.tab = Tab::Playlist;
+
 				self.playlist_position.x *= pos_fact;
 				self.playlist_scale.x += scale_diff;
 				self.playlist_selection.get_mut().clear();
+				self.soloed_track = None;
+
 				self.selected_channel = None;
+
 				self.piano_roll_position.x *= pos_fact;
 				self.piano_roll_scale.x += scale_diff;
 				self.piano_roll_selection.get_mut().clear();
-				if matches!(self.tab, Tab::PianoRoll { .. }) {
-					self.tab = Tab::Playlist;
-				}
-				self.arrangement = *arrangement;
 			}
 			Message::ConnectRequest(from, to) => {
 				return self
@@ -1354,20 +1362,24 @@ impl ArrangementView {
 						.padding(2),
 					row![
 						container(PeakMeter::new(&node.peaks[0]).width(16.0))
-							.padding(padding::vertical(7)),
+							.padding(padding::vertical(10)),
 						vertical_slider(0.0..=MAX_VAL, node.volume.abs().cbrt(), |v| {
 							Message::ChannelVolumeChanged(node.id, v.powi(3).copysign(node.volume))
 						})
 						.default(1.0)
 						.width(17)
 						.step(f32::EPSILON)
-						.style(if node.enabled {
-							slider::default
-						} else {
-							slider_secondary
-						}),
+						.handle((15, 20))
+						.style(slider_with_radius(
+							if node.enabled {
+								slider::default
+							} else {
+								slider_secondary
+							},
+							5
+						)),
 						container(PeakMeter::new(&node.peaks[1]).width(16.0))
-							.padding(padding::vertical(7)),
+							.padding(padding::vertical(10)),
 					]
 					.spacing(3),
 					self.selected_channel
