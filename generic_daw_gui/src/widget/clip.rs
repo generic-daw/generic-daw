@@ -318,30 +318,33 @@ where
 		};
 		renderer.fill_quad(text_background, color);
 
-		let name = match self.inner {
-			Inner::AudioClip(inner) => &inner.sample.name,
-			Inner::MidiClip(..) => "MIDI Clip",
-			Inner::Recording(inner) => &inner.name,
-		};
+		if upper_bounds.width > 3.0 {
+			let name = match self.inner {
+				Inner::AudioClip(inner) => &inner.sample.name,
+				Inner::MidiClip(..) => "MIDI Clip",
+				Inner::Recording(inner) => &inner.name,
+			};
 
-		let text = Text {
-			content: name.into(),
-			bounds: Size::new(f32::INFINITY, 0.0),
-			size: renderer.default_size(),
-			line_height: LineHeight::default(),
-			font: renderer.default_font(),
-			align_x: Alignment::Left,
-			align_y: Vertical::Top,
-			shaping: Shaping::Auto,
-			wrapping: Wrapping::None,
-			hint_factor: renderer.scale_factor(),
-		};
-		renderer.fill_text(
-			text,
-			upper_bounds.position() + Vector::new(3.0, 0.0),
-			theme.extended_palette().background.strong.text,
-			upper_bounds,
-		);
+			let text = Text {
+				content: name.into(),
+				bounds: Size::new(f32::INFINITY, 0.0),
+				size: renderer.default_size(),
+				line_height: LineHeight::default(),
+				font: renderer.default_font(),
+				align_x: Alignment::Left,
+				align_y: Vertical::Top,
+				shaping: Shaping::Auto,
+				wrapping: Wrapping::None,
+				hint_factor: renderer.scale_factor(),
+			};
+
+			renderer.fill_text(
+				text,
+				upper_bounds.position() + Vector::new(3.0, 0.0),
+				theme.extended_palette().background.strong.text,
+				upper_bounds,
+			);
+		}
 
 		if bounds.height == upper_bounds.height {
 			return;
@@ -393,6 +396,10 @@ where
 			Inner::MidiClip(inner) => 'blk: {
 				debug_assert!(cache.is_empty());
 
+				if inner.pattern.notes.is_empty() {
+					break 'blk;
+				}
+
 				let (min, max) = inner
 					.pattern
 					.notes
@@ -400,10 +407,6 @@ where
 					.fold((255, 0), |(min, max), note| {
 						(note.key.0.min(min), note.key.0.max(max))
 					});
-
-				if min > max {
-					break 'blk;
-				}
 
 				let samples_per_px = self.scale.x.exp2();
 				let note_height = height / f32::from(max - min + 3);

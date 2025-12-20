@@ -521,25 +521,27 @@ impl<'a, Message> PianoRoll<'a, Message> {
 			color,
 		);
 
-		let note_name = Text {
-			content: self.notes[note].key.to_string(),
-			bounds: Size::new(f32::INFINITY, 0.0),
-			size: renderer.default_size(),
-			line_height: LineHeight::default(),
-			font: renderer.default_font(),
-			align_x: Alignment::Left,
-			align_y: Vertical::Top,
-			shaping: Shaping::Basic,
-			wrapping: Wrapping::None,
-			hint_factor: renderer.scale_factor(),
-		};
+		if bounds.width > 3.0 {
+			let note_name = Text {
+				content: self.notes[note].key.to_string(),
+				bounds: Size::new(f32::INFINITY, 0.0),
+				size: renderer.default_size(),
+				line_height: LineHeight::default(),
+				font: renderer.default_font(),
+				align_x: Alignment::Left,
+				align_y: Vertical::Top,
+				shaping: Shaping::Basic,
+				wrapping: Wrapping::None,
+				hint_factor: renderer.scale_factor(),
+			};
 
-		renderer.fill_text(
-			note_name,
-			bounds.position() + Vector::new(3.0, 0.0),
-			theme.extended_palette().primary.weak.text,
-			bounds,
-		);
+			renderer.fill_text(
+				note_name,
+				bounds.position() + Vector::new(3.0, 0.0),
+				theme.extended_palette().primary.weak.text,
+				bounds,
+			);
+		}
 	}
 }
 
