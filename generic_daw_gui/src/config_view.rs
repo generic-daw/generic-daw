@@ -10,7 +10,7 @@ use crate::{
 	theme::Theme,
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
 };
-use generic_daw_core::{get_input_devices, get_output_devices};
+use generic_daw_core::{input_devices, output_devices};
 use iced::{
 	Center, Element, Font,
 	Length::Fill,
@@ -68,10 +68,10 @@ pub struct ConfigView {
 
 impl Default for ConfigView {
 	fn default() -> Self {
-		let mut input_devices = get_input_devices();
+		let mut input_devices = input_devices();
 		input_devices.sort_unstable();
 
-		let mut output_devices = get_output_devices();
+		let mut output_devices = output_devices();
 		output_devices.sort_unstable();
 
 		let config = Config::read();

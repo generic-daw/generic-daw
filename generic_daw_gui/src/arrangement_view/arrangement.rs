@@ -17,8 +17,7 @@ use bit_set::BitSet;
 use generic_daw_core::{
 	self as core, AudioGraphNode, Batch, Event, Export, Message, MidiKey, MidiNote,
 	MidiPatternAction, MidiPatternId, MusicalTime, NodeAction, NodeId, NodeImpl, NotePosition,
-	OutputRequest, OutputResponse, PanMode, PluginId, STREAM_THREAD, StreamMessage, StreamToken,
-	Transport, Update, Version,
+	PanMode, PluginId, Stream, StreamTrait as _, Transport, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
 use iced::Task;
@@ -40,31 +39,16 @@ pub struct Arrangement {
 	master_node_id: NodeId,
 
 	producer: Producer<Message>,
-	stream: NoDebug<StreamToken>,
+	stream: NoDebug<Stream>,
 }
 
 impl Arrangement {
 	pub fn create(config: &Config) -> (Self, Task<Batch>) {
-		let (sender, receiver) = oneshot::channel();
-
-		STREAM_THREAD
-			.send(StreamMessage::Output(
-				OutputRequest {
-					device_name: config.output_device.name.clone(),
-					sample_rate: config.output_device.sample_rate,
-					frames: config.output_device.buffer_size,
-				},
-				sender,
-			))
-			.unwrap();
-
-		let OutputResponse {
-			master_node_id,
-			transport,
-			producer,
-			consumer,
-			token,
-		} = receiver.recv().unwrap();
+		let (master_node_id, transport, producer, consumer, stream) = build_output_stream(
+			config.output_device.name.clone(),
+			config.output_device.sample_rate,
+			config.output_device.buffer_size,
+		);
 
 		let mut nodes = HoleyVec::default();
 		nodes.insert(
@@ -88,7 +72,7 @@ impl Arrangement {
 				master_node_id,
 
 				producer,
-				stream: token.into(),
+				stream: stream.into(),
 			},
 			poll_consumer(consumer, transport.sample_rate, Some(transport.frames)),
 		)
@@ -517,9 +501,7 @@ impl Arrangement {
 		let (sender, receiver) = oneshot::channel();
 		self.send(Message::RequestAudioGraph(sender));
 		let mut export = receiver.recv().unwrap();
-		STREAM_THREAD
-			.send(StreamMessage::Pause(self.stream.get_ref()))
-			.unwrap();
+		self.stream.pause().unwrap();
 
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
 		let (export_sender, audio_graph_receiver) = oneshot::channel();
@@ -547,8 +529,6 @@ impl Arrangement {
 
 	pub fn finish_export(&mut self, export: Export) {
 		self.send(Message::AudioGraph(Box::new(export)));
-		STREAM_THREAD
-			.send(StreamMessage::Play(self.stream.get_ref()))
-			.unwrap();
+		self.stream.play().unwrap();
 	}
 }

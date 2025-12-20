@@ -12,7 +12,7 @@ audio_graph.workspace = true
 clap_host.workspace = true
 utils.workspace = true
 
-cpal = "0.16.0"
+cpal = "0.17.0"
 hound = "3.5.1"
 log = "0.4.29"
 oneshot = "0.1.11"

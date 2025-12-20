@@ -32,6 +32,7 @@ pub use automation_point::{AutomationPoint, AutomationTransition};
 pub use channel::{Channel, PanMode, PluginId};
 pub use clap_host;
 pub use clip::Clip;
+pub use cpal::{Stream, traits::StreamTrait};
 pub use daw_ctx::{Batch, Message, NodeAction, Transport, Update, Version};
 pub use event::Event;
 pub use export::Export;
@@ -41,31 +42,28 @@ pub use midi_pattern::{MidiPattern, MidiPatternAction, MidiPatternId};
 pub use musical_time::{ClipPosition, MusicalTime, NotePosition};
 pub use recording::Recording;
 pub use sample::{Sample, SampleId};
-pub use stream::{
-	InputRequest, InputResponse, OutputRequest, OutputResponse, STREAM_THREAD, StreamMessage,
-	StreamToken,
-};
+pub use stream::{build_input_stream, build_output_stream};
 pub use symphonia::core::io::MediaSource;
 pub use track::Track;
 
 pub type AudioGraph = audio_graph::AudioGraph<AudioGraphNode>;
 
 #[must_use]
-pub fn get_input_devices() -> Vec<Arc<str>> {
+pub fn input_devices() -> Vec<Arc<str>> {
 	cpal::default_host()
 		.input_devices()
 		.unwrap()
-		.filter_map(|device| device.name().ok())
-		.map(Arc::from)
+		.filter_map(|device| device.description().ok())
+		.map(|description| description.name().into())
 		.collect()
 }
 
 #[must_use]
-pub fn get_output_devices() -> Vec<Arc<str>> {
+pub fn output_devices() -> Vec<Arc<str>> {
 	cpal::default_host()
 		.output_devices()
 		.unwrap()
-		.filter_map(|device| device.name().ok())
-		.map(Arc::from)
+		.filter_map(|device| device.description().ok())
+		.map(|description| description.name().into())
 		.collect()
 }

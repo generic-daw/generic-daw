@@ -1,246 +1,137 @@
-use crate::{Batch, Message, NodeId, Transport, daw_ctx::DawCtx};
+use crate::{Batch, Message, NodeId, Stream, StreamTrait as _, Transport, daw_ctx::DawCtx};
 use cpal::{
-	BufferSize, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
-	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
+	BufferSize, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
+	traits::{DeviceTrait as _, HostTrait as _},
 };
-use log::{error, info, trace};
+use log::{error, info};
 use rtrb::{Consumer, Producer, RingBuffer};
-use std::{
-	cmp::Ordering,
-	collections::HashMap,
-	num::NonZero,
-	sync::{
-		Arc, LazyLock,
-		atomic::{AtomicUsize, Ordering::Relaxed},
-		mpsc::Sender,
-	},
-};
+use std::{cmp::Ordering, num::NonZero, sync::Arc};
 
-static NEXT_STREAM_TOKEN: AtomicUsize = AtomicUsize::new(1);
+pub fn build_input_stream(
+	device_name: Option<Arc<str>>,
+	sample_rate: NonZero<u32>,
+	frames: Option<NonZero<u32>>,
+) -> (StreamConfig, Consumer<Box<[f32]>>, Stream) {
+	let host = cpal::default_host();
 
-#[derive(Debug)]
-pub struct StreamToken(Option<NonZero<usize>>);
+	let device = device_name
+		.and_then(|device_name| Some((device_name, host.input_devices().ok()?)))
+		.and_then(|(device_name, mut devices)| {
+			devices.find(|device| {
+				device
+					.description()
+					.is_ok_and(|description| *description.name() == *device_name)
+			})
+		})
+		.or_else(|| host.default_input_device())
+		.unwrap();
 
-impl StreamToken {
-	#[must_use]
-	pub fn unique() -> Self {
-		Self(NonZero::new(NEXT_STREAM_TOKEN.fetch_add(1, Relaxed)))
-	}
+	let config = choose_config(
+		device.supported_input_configs().unwrap(),
+		sample_rate,
+		frames,
+	);
 
-	#[must_use]
-	pub fn get_ref(&self) -> StreamTokenRef {
-		StreamTokenRef(self.0.unwrap())
-	}
+	info!("starting input stream with config {config:#?}");
 
-	#[must_use]
-	pub(crate) fn take_ref(mut self) -> StreamTokenRef {
-		StreamTokenRef(self.0.take().unwrap())
-	}
-}
+	let sample_rate = NonZero::new(config.sample_rate).unwrap();
+	let frames = frames_of_config(&config)
+		.or(frames)
+		.or(NonZero::new(8192))
+		.unwrap();
+	let channels = NonZero::new(u32::from(config.channels)).unwrap();
+	let buffer_len = frames.get() * channels.get();
 
-impl Drop for StreamToken {
-	fn drop(&mut self) {
-		if self.0.is_some() {
-			_ = STREAM_THREAD.send(StreamMessage::Close(Self(std::mem::take(&mut self.0))));
-		}
-	}
-}
+	let (mut producer, consumer) =
+		RingBuffer::new(sample_rate.get().div_ceil(frames.get()) as usize);
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct StreamTokenRef(NonZero<usize>);
+	let mut stereo = vec![0.0; 2 * frames.get() as usize].into_boxed_slice();
 
-#[derive(Debug)]
-pub enum StreamMessage {
-	Input(InputRequest, oneshot::Sender<InputResponse>),
-	Output(OutputRequest, oneshot::Sender<OutputResponse>),
-	Pause(StreamTokenRef),
-	Play(StreamTokenRef),
-	Close(StreamToken),
-}
-
-#[derive(Debug)]
-pub struct InputRequest {
-	pub device_name: Option<Arc<str>>,
-	pub sample_rate: NonZero<u32>,
-	pub frames: Option<NonZero<u32>>,
-}
-
-#[derive(Debug)]
-pub struct InputResponse {
-	pub config: StreamConfig,
-	pub consumer: Consumer<Box<[f32]>>,
-	pub token: StreamToken,
-}
-
-#[derive(Debug)]
-pub struct OutputRequest {
-	pub device_name: Option<Arc<str>>,
-	pub sample_rate: NonZero<u32>,
-	pub frames: Option<NonZero<u32>>,
-}
-
-#[derive(Debug)]
-pub struct OutputResponse {
-	pub master_node_id: NodeId,
-	pub transport: Transport,
-	pub producer: Producer<Message>,
-	pub consumer: Consumer<Batch>,
-	pub token: StreamToken,
-}
-
-pub static STREAM_THREAD: LazyLock<Sender<StreamMessage>> = LazyLock::new(|| {
-	let (sender, receiver) = std::sync::mpsc::channel();
-
-	std::thread::spawn(move || {
-		let host = cpal::default_host();
-		let mut streams = HashMap::new();
-
-		while let Ok(msg) = receiver.recv() {
-			trace!("{msg:?}");
-
-			match msg {
-				StreamMessage::Input(req, sender) => {
-					let device = req
-						.device_name
-						.and_then(|device_name| Some((device_name, host.input_devices().ok()?)))
-						.and_then(|(device_name, mut devices)| {
-							devices.find(|device| {
-								device.name().is_ok_and(|name| *name == *device_name)
-							})
-						})
-						.or_else(|| host.default_input_device())
-						.unwrap();
-
-					let config = choose_config(
-						device.supported_input_configs().unwrap(),
-						req.sample_rate,
-						req.frames,
-					);
-
-					info!("starting input stream with config {config:#?}");
-
-					let sample_rate = NonZero::new(config.sample_rate.0).unwrap();
-					let frames = frames_of_config(&config)
-						.or(req.frames)
-						.or(NonZero::new(8192))
-						.unwrap();
-					let channels = NonZero::new(u32::from(config.channels)).unwrap();
-					let buffer_len = frames.get() * channels.get();
-
-					let (mut producer, consumer) =
-						RingBuffer::new(sample_rate.get().div_ceil(frames.get()) as usize);
-
-					let mut stereo = vec![0.0; 2 * frames.get() as usize].into_boxed_slice();
-
-					let stream = device
-						.build_input_stream(
-							&config,
-							move |buf, _| {
-								for buf in buf.chunks(buffer_len as usize) {
-									let frames = buf.len() / usize::from(config.channels);
-									from_other_to_stereo(&mut stereo[..2 * frames], buf, frames);
-									producer.push(stereo[..2 * frames].into()).unwrap();
-								}
-							},
-							|err| error!("{err}"),
-							None,
-						)
-						.unwrap();
-
-					stream.play().unwrap();
-
-					let token = StreamToken::unique();
-					let stream = streams.insert(token.get_ref(), stream);
-					debug_assert!(stream.is_none());
-
-					sender
-						.send(InputResponse {
-							config,
-							consumer,
-							token,
-						})
-						.unwrap();
+	let stream = device
+		.build_input_stream(
+			&config,
+			move |buf, _| {
+				for buf in buf.chunks(buffer_len as usize) {
+					let frames = buf.len() / usize::from(config.channels);
+					from_other_to_stereo(&mut stereo[..2 * frames], buf, frames);
+					producer.push(stereo[..2 * frames].into()).unwrap();
 				}
-				StreamMessage::Output(req, sender) => {
-					let device = req
-						.device_name
-						.and_then(|device_name| Some((device_name, host.output_devices().ok()?)))
-						.and_then(|(device_name, mut devices)| {
-							devices.find(|device| {
-								device.name().is_ok_and(|name| *name == *device_name)
-							})
-						})
-						.or_else(|| host.default_output_device())
-						.unwrap();
+			},
+			|err| error!("{err}"),
+			None,
+		)
+		.unwrap();
 
-					let config = choose_config(
-						device.supported_output_configs().unwrap(),
-						req.sample_rate,
-						req.frames,
-					);
+	stream.play().unwrap();
 
-					info!("starting output stream with config {config:#?}");
+	(config, consumer, stream)
+}
 
-					let sample_rate = NonZero::new(config.sample_rate.0).unwrap();
-					let frames = frames_of_config(&config)
-						.or(req.frames)
-						.or(NonZero::new(8192))
-						.unwrap();
-					let channels = NonZero::new(u32::from(config.channels)).unwrap();
-					let buffer_len = frames.get() * channels.get();
+pub fn build_output_stream(
+	device_name: Option<Arc<str>>,
+	sample_rate: NonZero<u32>,
+	frames: Option<NonZero<u32>>,
+) -> (
+	NodeId,
+	Transport,
+	Producer<Message>,
+	Consumer<Batch>,
+	Stream,
+) {
+	let host = cpal::default_host();
 
-					let transport = Transport::new(sample_rate, frames);
-					let (mut ctx, master_node_id, producer, consumer) = DawCtx::create(transport);
+	let device = device_name
+		.and_then(|device_name| Some((device_name, host.output_devices().ok()?)))
+		.and_then(|(device_name, mut devices)| {
+			devices.find(|device| {
+				device
+					.description()
+					.is_ok_and(|description| *description.name() == *device_name)
+			})
+		})
+		.or_else(|| host.default_output_device())
+		.unwrap();
 
-					let mut stereo = vec![0.0; 2 * frames.get() as usize].into_boxed_slice();
+	let config = choose_config(
+		device.supported_output_configs().unwrap(),
+		sample_rate,
+		frames,
+	);
 
-					let stream = device
-						.build_output_stream(
-							&config,
-							move |buf, _| {
-								for buf in buf.chunks_mut(buffer_len as usize) {
-									let frames = buf.len() / channels.get() as usize;
-									ctx.process(&mut stereo[..2 * frames]);
-									from_stereo_to_other(buf, &stereo[..2 * frames], frames);
-								}
-							},
-							|err| error!("{err}"),
-							None,
-						)
-						.unwrap();
+	info!("starting output stream with config {config:#?}");
 
-					stream.play().unwrap();
+	let sample_rate = NonZero::new(config.sample_rate).unwrap();
+	let frames = frames_of_config(&config)
+		.or(frames)
+		.or(NonZero::new(8192))
+		.unwrap();
+	let channels = NonZero::new(u32::from(config.channels)).unwrap();
+	let buffer_len = frames.get() * channels.get();
 
-					let token = StreamToken::unique();
-					let stream = streams.insert(token.get_ref(), stream);
-					debug_assert!(stream.is_none());
+	let transport = Transport::new(sample_rate, frames);
+	let (mut ctx, master_node_id, producer, consumer) = DawCtx::create(transport);
 
-					sender
-						.send(OutputResponse {
-							master_node_id,
-							transport,
-							producer,
-							consumer,
-							token,
-						})
-						.unwrap();
+	let mut stereo = vec![0.0; 2 * frames.get() as usize].into_boxed_slice();
+
+	let stream = device
+		.build_output_stream(
+			&config,
+			move |buf, _| {
+				for buf in buf.chunks_mut(buffer_len as usize) {
+					let frames = buf.len() / channels.get() as usize;
+					ctx.process(&mut stereo[..2 * frames]);
+					from_stereo_to_other(buf, &stereo[..2 * frames], frames);
 				}
-				StreamMessage::Play(token) => {
-					streams.get_mut(&token).unwrap().play().unwrap();
-				}
-				StreamMessage::Pause(token) => {
-					streams.get_mut(&token).unwrap().pause().unwrap();
-				}
-				StreamMessage::Close(token) => {
-					let stream = streams.remove(&token.take_ref());
-					debug_assert!(stream.is_some());
-				}
-			}
-		}
-	});
+			},
+			|err| error!("{err}"),
+			None,
+		)
+		.unwrap();
 
-	sender
-});
+	stream.play().unwrap();
+
+	(master_node_id, transport, producer, consumer, stream)
+}
 
 fn choose_config(
 	configs: impl IntoIterator<Item = SupportedStreamConfigRange>,
@@ -259,11 +150,9 @@ fn choose_config(
 		})
 		.unwrap();
 
-	let sample_rate = SampleRate(
-		sample_rate
-			.get()
-			.clamp(config.min_sample_rate().0, config.max_sample_rate().0),
-	);
+	let sample_rate = sample_rate
+		.get()
+		.clamp(config.min_sample_rate(), config.max_sample_rate());
 
 	let buffer_size = match (*config.buffer_size(), frames) {
 		(SupportedBufferSize::Unknown, _) | (_, None) => BufferSize::Default,
@@ -286,10 +175,10 @@ fn compare_by_sample_rate(
 ) -> Ordering {
 	let sample_rate = sample_rate.get();
 	let ldiff = sample_rate
-		.clamp(l.min_sample_rate().0, l.max_sample_rate().0)
+		.clamp(l.min_sample_rate(), l.max_sample_rate())
 		.abs_diff(sample_rate);
 	let rdiff = sample_rate
-		.clamp(r.min_sample_rate().0, r.max_sample_rate().0)
+		.clamp(r.min_sample_rate(), r.max_sample_rate())
 		.abs_diff(sample_rate);
 
 	ldiff.cmp(&rdiff)
