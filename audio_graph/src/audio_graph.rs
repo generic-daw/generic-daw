@@ -113,15 +113,13 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 				dep_buffers
 					.events
 					.iter()
-					.map(|e| e.with_time(e.time() + delay_diff)),
+					.map(|e| e.at(e.time() + delay_diff)),
 			);
 
 			buffers.events.extend(events.extract_if(.., |e| {
 				e.time()
 					.checked_sub(len)
-					.map(|time| {
-						*e = e.with_time(time);
-					})
+					.map(|time| *e = e.at(time))
 					.is_none()
 			}));
 		}

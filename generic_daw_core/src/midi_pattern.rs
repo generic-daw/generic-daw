@@ -10,6 +10,7 @@ pub enum MidiPatternAction {
 	Add(MidiNote, usize),
 	Remove(usize),
 	ChangeKey(usize, MidiKey),
+	ChangeVelocity(usize, f32),
 	MoveTo(usize, MusicalTime),
 	TrimStartTo(usize, MusicalTime),
 	TrimEndTo(usize, MusicalTime),
@@ -35,6 +36,9 @@ impl MidiPattern {
 			MidiPatternAction::Add(note, index) => self.notes.insert(index, note),
 			MidiPatternAction::Remove(index) => _ = self.notes.remove(index),
 			MidiPatternAction::ChangeKey(index, key) => self.notes[index].key = key,
+			MidiPatternAction::ChangeVelocity(index, velocity) => {
+				self.notes[index].velocity = velocity;
+			}
 			MidiPatternAction::MoveTo(index, pos) => self.notes[index].position.move_to(pos),
 			MidiPatternAction::TrimStartTo(index, pos) => {
 				self.notes[index].position.trim_start_to(pos);

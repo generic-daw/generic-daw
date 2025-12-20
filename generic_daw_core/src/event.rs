@@ -35,8 +35,8 @@ pub enum Event {
 }
 
 impl audio_graph::EventImpl for Event {
-	fn time(self) -> usize {
-		match self {
+	fn time(&self) -> usize {
+		match *self {
 			Self::On { time, .. }
 			| Self::Off { time, .. }
 			| Self::Choke { time, .. }
@@ -45,17 +45,18 @@ impl audio_graph::EventImpl for Event {
 		}
 	}
 
-	fn with_time(mut self, to: usize) -> Self {
-		match &mut self {
+	fn at(&self, at: usize) -> Self {
+		let mut this = *self;
+		match &mut this {
 			Self::On { time, .. }
 			| Self::Off { time, .. }
 			| Self::Choke { time, .. }
 			| Self::End { time, .. }
 			| Self::ParamValue { time, .. } => {
-				*time = to as u32;
+				*time = at as u32;
 			}
 		}
-		self
+		this
 	}
 }
 
