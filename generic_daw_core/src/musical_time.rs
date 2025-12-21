@@ -27,8 +27,7 @@ impl MusicalTime {
 	pub const BEAT: Self = Self::new(1, 0);
 	pub const TICK: Self = Self::new(0, 1);
 
-	const TICK_BITS: u8 = 16;
-	pub const TICKS_PER_BEAT: u64 = 1 << Self::TICK_BITS;
+	pub const TICKS_PER_BEAT: u64 = 28_224_000;
 
 	#[must_use]
 	pub const fn new(beat: u64, tick: u64) -> Self {
@@ -64,7 +63,7 @@ impl MusicalTime {
 		let bpm = transport.bpm.get() as f64;
 		let sample_rate = transport.sample_rate.get() as f64;
 
-		let time = (samples * bpm * (Self::TICKS_PER_BEAT / 2) as f64) / (sample_rate * 60.0);
+		let time = samples * bpm * (Self::TICKS_PER_BEAT / 60 / 2) as f64 / sample_rate;
 
 		Self(time as u64)
 	}
@@ -77,7 +76,7 @@ impl MusicalTime {
 		let bpm = transport.bpm.get() as u64;
 		let sample_rate = transport.sample_rate.get() as u64;
 
-		let time = (samples * bpm * (Self::TICKS_PER_BEAT / 2)) / (sample_rate * 60);
+		let time = samples * bpm * (Self::TICKS_PER_BEAT / 60 / 2) / sample_rate;
 
 		Self(time)
 	}
@@ -88,7 +87,7 @@ impl MusicalTime {
 		let bpm = transport.bpm.get() as f64;
 		let sample_rate = transport.sample_rate.get() as f64;
 
-		let samples = (beat * sample_rate * 60.0) / (bpm * (Self::TICKS_PER_BEAT / 2) as f64);
+		let samples = (beat * sample_rate) / (bpm * (Self::TICKS_PER_BEAT / 60 / 2) as f64);
 
 		samples as f32
 	}
@@ -99,7 +98,7 @@ impl MusicalTime {
 		let bpm = transport.bpm.get() as u64;
 		let sample_rate = transport.sample_rate.get() as u64;
 
-		let samples = (time * sample_rate * 60) / (bpm * (Self::TICKS_PER_BEAT / 2));
+		let samples = (time * sample_rate) / (bpm * (Self::TICKS_PER_BEAT / 60 / 2));
 
 		samples.next_multiple_of(2) as usize
 	}
@@ -174,16 +173,18 @@ impl MusicalTime {
 
 	#[must_use]
 	pub fn snap_step(mut scale: f32, transport: &Transport) -> Self {
-		scale += (f32::from(transport.bpm.get()) / transport.sample_rate.get() as f32).log2() - 3.0
-			+ f32::from(Self::TICK_BITS);
+		scale += (f32::from(transport.bpm.get()) / transport.sample_rate.get() as f32).log2() - 3.5;
 		let extra = f32::from(transport.numerator.get()).log2();
-		Self(if scale < f32::from(Self::TICK_BITS + 1) {
-			1 << scale as u8
-		} else if scale < f32::from(Self::TICK_BITS + 1) + extra {
-			u64::from(transport.numerator.get()) << Self::TICK_BITS
+		if scale < 0.0 {
+			Self::new(0, Self::TICKS_PER_BEAT >> -scale as u8)
+		} else if scale < extra {
+			Self::new(u64::from(transport.numerator.get()), 0)
 		} else {
-			u64::from(transport.numerator.get()) << (scale - extra) as u8
-		})
+			Self::new(
+				u64::from(transport.numerator.get()) << (scale - extra).ceil() as u8,
+				0,
+			)
+		}
 	}
 
 	#[must_use]
