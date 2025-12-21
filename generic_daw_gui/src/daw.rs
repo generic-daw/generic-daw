@@ -117,6 +117,7 @@ pub enum Message {
 	CloseConfigView,
 	MergeConfig(Box<Config>, bool),
 
+	ToggleShowSeconds,
 	ToggleMetronome,
 	ChangedBpm(u16),
 	ChangedBpmText(String),
@@ -143,6 +144,7 @@ pub struct Daw {
 	file_tree: FileTree,
 	config_view: Option<ConfigView>,
 	split_at: f32,
+	show_seconds: bool,
 
 	progress: Option<f32>,
 	missing_samples: Vec<(Arc<str>, oneshot::Sender<Feedback<Arc<Path>>>)>,
@@ -185,6 +187,7 @@ impl Daw {
 				file_tree,
 				config_view: None,
 				split_at,
+				show_seconds: false,
 
 				progress: None,
 				missing_samples: Vec::new(),
@@ -391,6 +394,7 @@ impl Daw {
 					self.config = *config;
 				}
 			}
+			Message::ToggleShowSeconds => self.show_seconds ^= true,
 			Message::ToggleMetronome => self.arrangement_view.arrangement.toggle_metronome(),
 			Message::ChangedBpm(bpm) => self
 				.arrangement_view
@@ -513,23 +517,40 @@ impl Daw {
 						Message::ChangedBpmText
 					),
 					row![
-						container(
-							text!(
-								"{:#03}:{:#digits$}",
-								now.bar(self.arrangement_view.arrangement.transport()) + 1,
-								now.beat_in_bar(self.arrangement_view.arrangement.transport()) + 1,
-								digits = self
-									.arrangement_view
-									.arrangement
-									.transport()
-									.numerator
-									.ilog10() as usize + 1,
+						mouse_area(
+							container(
+								if self.show_seconds {
+									let duration = now
+										.to_duration(self.arrangement_view.arrangement.transport());
+									text!(
+										"{:02}:{:02}:{:02}",
+										duration.as_secs() / 60,
+										duration.as_secs() % 60,
+										(duration.as_secs_f32().fract() * 100.0) as u8
+									)
+								} else {
+									text!(
+										"{:03}:{:digits$}",
+										now.bar(self.arrangement_view.arrangement.transport()) + 1,
+										now.beat_in_bar(
+											self.arrangement_view.arrangement.transport()
+										) + 1,
+										digits = self
+											.arrangement_view
+											.arrangement
+											.transport()
+											.numerator
+											.ilog10() as usize + 1,
+									)
+								}
+								.font(Font::MONOSPACE)
 							)
-							.font(Font::MONOSPACE)
+							.padding(padding::horizontal(7).vertical(5.6))
+							.style(|t| bordered_box_with_radius(border::left(5))(t)
+								.background(t.extended_palette().background.weakest.color))
 						)
-						.padding(padding::horizontal(7).vertical(5.6))
-						.style(|t| bordered_box_with_radius(border::left(5))(t)
-							.background(t.extended_palette().background.weakest.color)),
+						.on_press(Message::ToggleShowSeconds)
+						.interaction(Interaction::Pointer),
 						button(
 							row![
 								Dot::new(now.beat().is_multiple_of(2)),

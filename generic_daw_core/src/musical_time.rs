@@ -2,6 +2,7 @@ use crate::Transport;
 use std::{
 	fmt::{Debug, Formatter},
 	ops::{Add, AddAssign, Sub, SubAssign},
+	time::Duration,
 };
 
 mod clip_position;
@@ -101,6 +102,21 @@ impl MusicalTime {
 		let samples = (time * sample_rate) / (bpm * (Self::TICKS_PER_BEAT / 60 / 2));
 
 		samples.next_multiple_of(2) as usize
+	}
+
+	#[must_use]
+	pub const fn from_duration(duration: Duration, transport: &Transport) -> Self {
+		Self::from_samples_f(
+			duration.as_secs_f32() * 2.0 * transport.sample_rate.get() as f32,
+			transport,
+		)
+	}
+
+	#[must_use]
+	pub fn to_duration(self, transport: &Transport) -> Duration {
+		Duration::from_secs_f32(
+			self.to_samples_f(transport) / 2.0 / transport.sample_rate.get() as f32,
+		)
 	}
 
 	#[must_use]
