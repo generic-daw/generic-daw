@@ -2,11 +2,10 @@
 
 # Generic DAW
 
-[![iced](https://img.shields.io/badge/0.14-blue?logo=iced&style=for-the-badge)](https://github.com/iced-rs/iced)
-[![Tokei](https://tokei.rs/b1/github/generic-daw/generic-daw?style=for-the-badge)](https://github.com/XAMPPRocky/tokei)
+[![Iced](https://img.shields.io/badge/0.15-blue?logo=iced&style=for-the-badge)](https://github.com/iced-rs/iced)
 [![GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://github.com/generic-daw/generic-daw/blob/master/LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/generic-daw/generic-daw/rust.yml?style=for-the-badge&label=CI)](https://github.com/generic-daw/generic-daw/actions/workflows/rust.yml)
-[![deps](https://deps.rs/repo/github/generic-daw/generic-daw/status.svg?style=for-the-badge)](https://deps.rs/repo/github/generic-daw/generic-daw)
+[![Deps](https://deps.rs/repo/github/generic-daw/generic-daw/status.svg?style=for-the-badge)](https://deps.rs/repo/github/generic-daw/generic-daw)
 
 An early-in-development, open source, cross-platform digital audio workstation (DAW) built in Rust.
 </div>
