@@ -440,8 +440,7 @@ where
 						bounds: Rectangle::new(
 							bounds.position()
 								+ Vector::new(
-									pos.to_samples_f(self.transport) / samples_per_px
-										- self.position.x,
+									pos.to_samples_f(self.transport) / samples_per_px,
 									0.0,
 								),
 							Size::new(50.0, bounds.height),
@@ -461,7 +460,7 @@ where
 								|layout| {
 									layout.position() + Vector::new(0.0, layout.bounds().height)
 								},
-							),
+							) + Vector::new(self.position.x, 0.0),
 							Size::new(viewport.width, 50.0),
 						),
 						..Quad::default()
