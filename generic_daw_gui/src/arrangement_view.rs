@@ -1097,9 +1097,6 @@ impl ArrangementView {
 						let node = self.arrangement.node(track.id);
 
 						Track::new(
-							track_idx,
-							self.arrangement.transport(),
-							&self.playlist_position,
 							&self.playlist_scale,
 							track
 								.clips
@@ -1150,7 +1147,6 @@ impl ArrangementView {
 											)
 										}),
 								),
-							Message::PlaylistAction,
 						)
 					}),
 				Message::PlaylistAction,

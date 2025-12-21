@@ -1538,7 +1538,7 @@ dependencies = [
 [[package]]
 name = "iced_split"
 version = "0.1.0"
-source = "git+https://github.com/edwloef/iced_split.git?branch=generic-daw#c900ff021fc662c96e00633587ad939f1f2ff797"
+source = "git+https://github.com/edwloef/iced_split.git?branch=generic-daw#faa901d79c8f65b35ce8e48e7c02adfdd9badf53"
 dependencies = [
  "iced_core",
 ]

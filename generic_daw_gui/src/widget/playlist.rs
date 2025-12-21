@@ -8,10 +8,10 @@ use iced::{
 	advanced::{
 		Clipboard, Renderer as _, Shell,
 		layout::{Layout, Limits, Node},
-		mouse::{self, Cursor, Interaction},
+		mouse::{self, Click, Cursor, Interaction},
 		overlay,
 		renderer::{Quad, Style},
-		widget::{Operation, Tree, Widget},
+		widget::{Operation, Tree, Widget, tree},
 	},
 	border,
 	gradient::Linear,
@@ -66,6 +66,11 @@ impl Selection {
 	}
 }
 
+#[derive(Default)]
+struct State {
+	last_click: Option<Click>,
+}
+
 #[derive(Debug)]
 pub struct Playlist<'a, Message> {
 	selection: &'a RefCell<Selection>,
@@ -80,6 +85,14 @@ impl<'a, Message> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 where
 	Message: Clone + 'a,
 {
+	fn tag(&self) -> tree::Tag {
+		tree::Tag::of::<State>()
+	}
+
+	fn state(&self) -> tree::State {
+		tree::State::new(State::default())
+	}
+
 	fn diff(&self, tree: &mut Tree) {
 		tree.diff_children(&self.tracks);
 	}
@@ -157,24 +170,29 @@ where
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers }) => match button {
 				mouse::Button::Left => {
+					let state = tree.state.downcast_mut::<State>();
+					let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
+					state.last_click = Some(new_click);
+
+					let time = maybe_snap_time(new_time, *modifiers, |time| {
+						time.snap_round(self.scale.x, self.transport)
+					});
+					let track = track_idx(&layout, viewport, cursor);
+
 					if modifiers.command() {
-						let Some(track) = track_idx(&layout, viewport, cursor)
-							.or_else(|| layout.children().len().checked_sub(1))
+						let Some(track) = track.or_else(|| layout.children().len().checked_sub(1))
 						else {
 							return;
 						};
-
-						let time = maybe_snap_time(new_time, *modifiers, |time| {
-							time.snap_round(self.scale.x, self.transport)
-						});
-
 						selection.status = Status::Selecting(track, track, time, time);
 						shell.capture_event();
 						shell.request_redraw();
-					} else if !selection.primary.is_empty() {
+					} else if let Some(track) = track
+						&& new_click.kind() == mouse::click::Kind::Double
+					{
 						selection.primary.clear();
-						shell.capture_event();
-						shell.request_redraw();
+						selection.status = Status::Dragging(track, time);
+						shell.publish((self.f)(Action::Add(track, time)));
 					}
 				}
 				mouse::Button::Right => {

@@ -1,46 +1,28 @@
-use crate::widget::{clip::Clip, get_time, maybe_snap_time, playlist::Action};
-use generic_daw_core::Transport;
+use crate::widget::clip::Clip;
 use iced::{
 	Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
 		Clipboard, Layout, Shell, Widget,
 		layout::{Limits, Node},
-		mouse::{self, Click, Cursor, Interaction, click::Kind},
+		mouse::{Cursor, Interaction},
 		overlay,
 		renderer::Style,
-		widget::{Operation, Tree, tree},
+		widget::{Operation, Tree},
 	},
 };
 use std::borrow::Borrow;
 use utils::NoDebug;
 
-#[derive(Default)]
-struct State {
-	last_click: Option<Click>,
-}
-
 #[derive(Debug)]
 pub struct Track<'a, Message> {
-	idx: usize,
-	transport: &'a Transport,
-	position: &'a Vector,
 	scale: &'a Vector,
 	pub(super) clips: NoDebug<Box<[Clip<'a, Message>]>>,
-	f: fn(Action) -> Message,
 }
 
 impl<'a, Message> Widget<Message, Theme, Renderer> for Track<'a, Message>
 where
 	Message: Clone + 'a,
 {
-	fn tag(&self) -> tree::Tag {
-		tree::Tag::of::<State>()
-	}
-
-	fn state(&self) -> tree::State {
-		tree::State::new(State::default())
-	}
-
 	fn diff(&self, tree: &mut Tree) {
 		tree.diff_children(&self.clips);
 	}
@@ -118,39 +100,6 @@ where
 					state, event, layout, cursor, renderer, clipboard, shell, viewport,
 				);
 			});
-
-		if shell.is_event_captured() {
-			return;
-		}
-
-		let Some(cursor) = cursor.position_in(*viewport) else {
-			return;
-		};
-
-		let track_bounds = layout.bounds() - Vector::new(viewport.x, viewport.y);
-		if !track_bounds.contains(cursor) {
-			return;
-		}
-
-		let state = tree.state.downcast_mut::<State>();
-		if let Event::Mouse(mouse::Event::ButtonPressed {
-			button: mouse::Button::Left,
-			modifiers,
-		}) = event
-		{
-			let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
-			state.last_click = Some(new_click);
-
-			if new_click.kind() == Kind::Double {
-				let time = maybe_snap_time(
-					get_time(cursor.x, *self.position, *self.scale, self.transport),
-					*modifiers,
-					|time| time.snap_round(self.scale.x, self.transport),
-				);
-				shell.publish((self.f)(Action::Add(self.idx, time)));
-				shell.capture_event();
-			}
-		}
 	}
 
 	fn overlay<'b>(
@@ -195,24 +144,13 @@ where
 }
 
 impl<'a, Message> Track<'a, Message> {
-	pub fn new(
-		idx: usize,
-		transport: &'a Transport,
-		position: &'a Vector,
-		scale: &'a Vector,
-		children: impl IntoIterator<Item = Clip<'a, Message>>,
-		f: fn(Action) -> Message,
-	) -> Self
+	pub fn new(scale: &'a Vector, children: impl IntoIterator<Item = Clip<'a, Message>>) -> Self
 	where
 		Message: 'a,
 	{
 		Self {
-			idx,
-			transport,
-			position,
 			scale,
 			clips: children.into_iter().collect::<Box<_>>().into(),
-			f,
 		}
 	}
 
