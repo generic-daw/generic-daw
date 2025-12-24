@@ -1,6 +1,6 @@
 use crate::{
 	arrangement_view::{
-		self, AUTOSAVE_DIR, Arrangement, ArrangementView, Epoch, Feedback, PROJECT_DIR, Tab,
+		self, AUTOSAVE_DIR, Arrangement, ArrangementView, Feedback, PROJECT_DIR, Tab,
 	},
 	components::{PICK_LIST_HANDLE, number_input},
 	config::Config,
@@ -152,7 +152,7 @@ pub struct Daw {
 
 impl Daw {
 	pub fn create() -> (Self, Task<Message>) {
-		let (main_window_id, open) = window::open(window::Settings {
+		let (window_id, open) = window::open(window::Settings {
 			exit_on_close_request: false,
 			maximized: true,
 			..window::Settings::default()
@@ -180,7 +180,7 @@ impl Daw {
 				state,
 				plugin_bundles: plugin_bundles.into(),
 
-				window_id: main_window_id,
+				window_id,
 				current_project: None,
 
 				arrangement_view,
@@ -221,28 +221,7 @@ impl Daw {
 					return Task::batch(futs);
 				}
 			}
-			Message::NewFile => {
-				let config = Config::read();
-				let (wrapper, task) = Arrangement::create(&config);
-				let fut1 = self.update(Message::MergeConfig(config.into(), false));
-				let fut2 = self
-					.arrangement_view
-					.update(
-						arrangement_view::Message::SetArrangement(Box::new(wrapper).into()),
-						&self.config,
-						&mut self.state,
-						&self.plugin_bundles,
-					)
-					.map(Message::Arrangement);
-
-				return Task::batch([
-					fut1,
-					fut2,
-					task.map(Box::new)
-						.map(arrangement_view::Message::Batch.with(Epoch::unique()))
-						.map(Message::Arrangement),
-				]);
-			}
+			Message::NewFile => return Arrangement::empty(Config::read()),
 			Message::OpenLastFile => {
 				if let Some(last_project) = self.state.last_project.clone() {
 					return self.update(Message::OpenFile(last_project));

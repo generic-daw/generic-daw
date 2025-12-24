@@ -27,7 +27,7 @@ use crate::{
 };
 use bit_set::BitSet;
 use generic_daw_core::{
-	Batch, MidiNote, MusicalTime, NodeId, NotePosition, PanMode, SampleId,
+	MidiNote, MusicalTime, NodeId, NotePosition, PanMode, SampleId,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
 use generic_daw_widget::{
@@ -62,7 +62,7 @@ use std::{
 	time::{Duration, SystemTime},
 };
 use sweeten::widget::drag::DragEvent;
-use utils::{NoClone, NoDebug, unique_id};
+use utils::{NoClone, NoDebug};
 
 mod arrangement;
 mod audio_clip;
@@ -76,11 +76,8 @@ mod recording;
 mod sample;
 mod track;
 
-unique_id!(epoch);
-
-pub use arrangement::Arrangement;
+pub use arrangement::{Arrangement, Batch};
 pub use audio_clip::AudioClipRef;
-pub use epoch::Id as Epoch;
 pub use midi_clip::MidiClipRef;
 pub use project::Feedback;
 pub use recording::Recording;
@@ -112,7 +109,7 @@ pub static AUTOSAVE_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 #[derive(Clone, Debug)]
 pub enum Message {
 	ClapHost(clap_host::Message),
-	Batch(Epoch, Box<Batch>),
+	Batch(Box<Batch>),
 
 	SetArrangement(NoClone<Box<Arrangement>>),
 
@@ -232,7 +229,7 @@ impl ArrangementView {
 
 				loading: 0,
 			},
-			task.map(Box::new).map(Message::Batch.with(Epoch::unique())),
+			task.map(Box::new).map(Message::Batch),
 		)
 	}
 
@@ -247,15 +244,13 @@ impl ArrangementView {
 			Message::ClapHost(msg) => {
 				return self.clap_host.update(msg, config).map(Message::ClapHost);
 			}
-			Message::Batch(epoch, msg) => {
-				if epoch.is_latest() {
-					return Task::batch(
-						self.arrangement
-							.update(*msg)
-							.into_iter()
-							.map(|msg| self.update(msg, config, state, plugin_bundles)),
-					);
-				}
+			Message::Batch(msg) => {
+				return Task::batch(
+					self.arrangement
+						.update(*msg)
+						.into_iter()
+						.map(|msg| self.update(msg, config, state, plugin_bundles)),
+				);
 			}
 			Message::SetArrangement(NoClone(arrangement)) => {
 				if let Some((recording, _)) = &mut self.recording {

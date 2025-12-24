@@ -15,20 +15,24 @@ use crate::{
 };
 use bit_set::BitSet;
 use generic_daw_core::{
-	self as core, AudioGraphNode, Batch, Event, Export, Message, MidiKey, MidiNote,
-	MidiPatternAction, MidiPatternId, MusicalTime, NodeAction, NodeId, NodeImpl, NotePosition,
-	PanMode, PluginId, Stream, StreamTrait as _, Transport, Update, Version, build_output_stream,
+	self as core, AudioGraphNode, Event, Export, Message, MidiKey, MidiNote, MidiPatternAction,
+	MidiPatternId, MusicalTime, NodeAction, NodeId, NodeImpl, NotePosition, PanMode, PluginId,
+	Stream, StreamTrait as _, Transport, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
 use iced::Task;
+use project::Id as Project;
 use rtrb::{Producer, PushError};
 use smol::unblock;
 use std::{num::NonZero, path::Path, sync::Arc};
-use utils::{HoleyVec, NoDebug, ShiftMoveExt as _};
+use utils::{HoleyVec, NoDebug, ShiftMoveExt as _, unique_id};
+
+unique_id!(project);
 
 #[derive(Debug)]
 pub struct Arrangement {
 	transport: Transport,
+	project: Project,
 	cpu: f32,
 
 	samples: HoleyVec<Sample>,
@@ -40,6 +44,12 @@ pub struct Arrangement {
 
 	producer: Producer<Message>,
 	stream: NoDebug<Stream>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Batch {
+	core: core::Batch,
+	project: Project,
 }
 
 impl Arrangement {
@@ -59,10 +69,13 @@ impl Arrangement {
 			),
 		);
 
+		let project = Project::unique();
+
 		(
 			Self {
 				transport,
 				cpu: 0.0,
+				project,
 
 				samples: HoleyVec::default(),
 				midi_patterns: HoleyVec::default(),
@@ -74,15 +87,19 @@ impl Arrangement {
 				producer,
 				stream: stream.into(),
 			},
-			poll_consumer(consumer, transport.sample_rate, Some(transport.frames)),
+			poll_consumer(consumer, transport.sample_rate, Some(transport.frames))
+				.map(move |core| Batch { core, project }),
 		)
 	}
 
-	pub fn update(&mut self, mut batch: Batch) -> Vec<ArrangementMessage> {
+	pub fn update(&mut self, Batch { mut core, project }: Batch) -> Vec<ArrangementMessage> {
 		let mut messages = Vec::new();
+		if project != self.project {
+			return messages;
+		}
 
-		if let Some((sample, looped)) = batch.sample
-			&& batch.version.is_latest()
+		if let Some((sample, looped)) = core.sample
+			&& core.version.is_latest()
 		{
 			self.transport.sample = sample;
 			if looped {
@@ -90,11 +107,11 @@ impl Arrangement {
 			}
 		}
 
-		for update in batch.updates.drain(..) {
+		for update in core.updates.drain(..) {
 			match update {
 				Update::Peak(node, peaks) => {
 					if let Some((node, _)) = self.nodes.get_mut(*node) {
-						node.update(peaks, batch.end);
+						node.update(peaks, core.end);
 					}
 				}
 				Update::Param(id, param_id) => {
@@ -106,10 +123,10 @@ impl Arrangement {
 			}
 		}
 
-		self.send(Message::ReturnUpdateBuffer(batch.updates));
+		self.send(Message::ReturnUpdateBuffer(core.updates));
 
-		let mix = self.transport().sample_rate.get() as f32 / batch.frames as f32;
-		let cpu = (batch.end - batch.start).as_secs_f32() * mix;
+		let mix = self.transport().sample_rate.get() as f32 / core.frames as f32;
+		let cpu = (core.end - core.start).as_secs_f32() * mix;
 		self.cpu = self.cpu.mul_add(mix, cpu) / (mix + 1.0);
 
 		messages

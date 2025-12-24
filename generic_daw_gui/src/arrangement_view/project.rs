@@ -2,8 +2,8 @@
 
 use crate::{
 	arrangement_view::{
-		self, Arrangement, Epoch, Node, audio_clip::AudioClip, clip::Clip, crc,
-		midi_clip::MidiClip, midi_pattern::MidiPatternPair, sample::SamplePair,
+		self, Arrangement, Node, audio_clip::AudioClip, clip::Clip, crc, midi_clip::MidiClip,
+		midi_pattern::MidiPatternPair, sample::SamplePair,
 	},
 	clap_host::ClapHost,
 	config::Config,
@@ -14,7 +14,7 @@ use generic_daw_core::{
 	clap_host::{PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
-use iced::{Function as _, Task};
+use iced::Task;
 use smol::{channel::Sender, unblock};
 use std::{
 	collections::{HashMap, HashSet},
@@ -161,6 +161,19 @@ impl Arrangement {
 			.unwrap()
 			.write_all(&writer.finalize())
 			.unwrap();
+	}
+
+	pub fn empty(config: Config) -> Task<daw::Message> {
+		let (wrapper, task) = Self::create(&config);
+		Task::done(daw::Message::MergeConfig(config.into(), false))
+			.chain(Task::done(daw::Message::Arrangement(
+				arrangement_view::Message::SetArrangement(Box::new(wrapper).into()),
+			)))
+			.chain(
+				task.map(Box::new)
+					.map(arrangement_view::Message::Batch)
+					.map(daw::Message::Arrangement),
+			)
 	}
 
 	pub fn start_load(
@@ -488,7 +501,7 @@ impl Arrangement {
 				)))
 				.chain(Task::batch([
 					task.map(Box::new)
-						.map(arrangement_view::Message::Batch.with(Epoch::unique()))
+						.map(arrangement_view::Message::Batch)
 						.map(daw::Message::Arrangement),
 					messages
 						.into_iter()
