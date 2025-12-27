@@ -35,10 +35,6 @@ macro_rules! unique_id {
                         ID.fetch_add(1, ::core::sync::atomic::Ordering::Relaxed),
                     )
                 }
-
-                pub fn is_latest(self) -> bool {
-                    self.0.wrapping_add(1) == ID.load(::core::sync::atomic::Ordering::Relaxed)
-                }
             }
 
             impl ::core::convert::AsRef<$ty> for Id {

@@ -37,7 +37,7 @@ use generic_daw_widget::{
 use humantime::format_rfc3339_seconds;
 use iced::{
 	Center, Element, Fill, Function as _, Point, Shrink, Size, Task, Vector, border,
-	futures::SinkExt as _,
+	futures::{SinkExt as _, Stream},
 	mouse::Interaction,
 	padding, stream,
 	widget::{
@@ -558,7 +558,7 @@ impl ArrangementView {
 					self.recording = Some((recording, node));
 					self.arrangement.play();
 
-					return poll_consumer(task, sample_rate, frames)
+					return Task::stream(poll_consumer(task, sample_rate, frames))
 						.map(NoDebug)
 						.map(Message::RecordingWrite)
 						.chain(Task::done(Message::RecordingFinalize));
@@ -1519,7 +1519,7 @@ fn poll_consumer<T: Send + 'static>(
 	mut consumer: Consumer<T>,
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
-) -> Task<T> {
+) -> impl Stream<Item = T> {
 	let min = 64.0 / sample_rate.get() as f32;
 	let max = frames.or(NonZero::new(8192)).unwrap().get() as f32 / sample_rate.get() as f32;
 	let mut backoff = 0.0;
@@ -1529,22 +1529,19 @@ fn poll_consumer<T: Send + 'static>(
 		Timer::after(Duration::from_secs_f32(backoff))
 	};
 
-	Task::stream(stream::channel(
-		consumer.buffer().capacity(),
-		async move |mut sender| {
-			loop {
-				let mut counter = 0;
-				while let Ok(t) = consumer.pop() {
-					counter += 1;
-					if sender.send(t).await.is_err() {
-						return;
-					}
-				}
-				if consumer.is_abandoned() {
+	stream::channel(consumer.buffer().capacity(), async move |mut sender| {
+		loop {
+			let mut counter = 0;
+			while let Ok(t) = consumer.pop() {
+				counter += 1;
+				if sender.send(t).await.is_err() {
 					return;
 				}
-				backoff(counter).await;
 			}
-		},
-	))
+			if consumer.is_abandoned() {
+				return;
+			}
+			backoff(counter).await;
+		}
+	})
 }

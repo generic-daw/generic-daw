@@ -87,8 +87,12 @@ impl Arrangement {
 				producer,
 				stream: stream.into(),
 			},
-			poll_consumer(consumer, transport.sample_rate, Some(transport.frames))
-				.map(move |core| Batch { core, project }),
+			Task::stream(poll_consumer(
+				consumer,
+				transport.sample_rate,
+				Some(transport.frames),
+			))
+			.map(move |core| Batch { core, project }),
 		)
 	}
 
@@ -98,13 +102,10 @@ impl Arrangement {
 			return messages;
 		}
 
-		if let Some((sample, looped)) = core.sample
-			&& core.version.is_latest()
+		if let Some((version, sample)) = core.sample
+			&& version == self.transport.version
 		{
 			self.transport.sample = sample;
-			if looped {
-				messages.push(ArrangementMessage::RecordingEndStream);
-			}
 		}
 
 		for update in core.updates.drain(..) {
@@ -125,7 +126,7 @@ impl Arrangement {
 
 		self.send(Message::ReuseUpdateBuffer(core.updates));
 
-		let mix = self.transport().sample_rate.get() as f32 / core.frames as f32;
+		let mix = self.transport.sample_rate.get() as f32 / core.frames as f32;
 		let cpu = (core.end - core.start).as_secs_f32() * mix;
 		self.cpu = self.cpu.mul_add(mix, cpu) / (mix + 1.0);
 
@@ -222,7 +223,8 @@ impl Arrangement {
 		let sample = position.to_samples(&self.transport);
 		if self.transport.sample != sample {
 			self.transport.sample = sample;
-			self.send(Message::Sample(Version::unique(), sample));
+			self.transport.version = Version::unique();
+			self.send(Message::Sample(self.transport.version, sample));
 		}
 	}
 

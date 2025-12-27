@@ -79,8 +79,7 @@ pub enum Update {
 
 #[derive(Clone, Debug)]
 pub struct Batch {
-	pub version: Version,
-	pub sample: Option<(usize, bool)>,
+	pub sample: Option<(Version, usize)>,
 	pub updates: Vec<Update>,
 	pub start: Instant,
 	pub end: Instant,
@@ -271,7 +270,6 @@ impl DawCtx {
 
 		self.recv_events();
 
-		let mut looped = false;
 		let mut updates = self.update_buffers.pop().unwrap_or_default();
 
 		if self.state.transport.playing
@@ -293,7 +291,6 @@ impl DawCtx {
 
 				self.state.transport.sample = loop_start;
 				buf = &mut buf[len..];
-				looped = true;
 			}
 		}
 
@@ -307,11 +304,10 @@ impl DawCtx {
 
 		let sample = self.state.transport.playing.then(|| {
 			self.state.transport.sample += buf.len();
-			(self.state.transport.sample, looped)
+			(self.state.transport.version, self.state.transport.sample)
 		});
 
 		let batch = Batch {
-			version: self.state.transport.version,
 			sample,
 			updates,
 			start,

@@ -91,8 +91,8 @@ impl Sample {
 		}
 
 		Some(Self {
-			samples: NoDebug(resampler.finish().into()),
 			id: SampleId::unique(),
+			samples: NoDebug(resampler.finish().into()),
 		})
 	}
 }
