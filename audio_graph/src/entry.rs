@@ -8,7 +8,7 @@ use std::{
 		atomic::{AtomicIsize, AtomicUsize},
 	},
 };
-use utils::{HoleyVec, NoDebug};
+use utils::{HoleyVec, NoDebug, boxed_slice};
 
 #[derive(Debug)]
 pub struct Entry<Node: NodeImpl> {
@@ -24,23 +24,30 @@ pub struct Buffers<Node: NodeImpl> {
 	pub incoming: HoleyVec<(DelayLine, Vec<Node::Event>)>,
 	pub outgoing: BitSet,
 	pub audio: NoDebug<Box<[f32]>>,
-	pub buf: NoDebug<Box<[f32]>>,
+	pub scratch: NoDebug<Box<[f32]>>,
 	pub events: Vec<Node::Event>,
 }
 
 impl<Node: NodeImpl> Entry<Node> {
-	pub fn new(node: Node, frames: NonZero<u32>) -> Self {
+	pub fn new(node: Node, frames: NonZero<u32>, buffers: &mut Vec<Box<[f32]>>) -> Self {
+		let mut buf = || {
+			buffers.pop().map_or_else(
+				|| boxed_slice![0.0; 2 * frames.get() as usize],
+				|mut buf| {
+					debug_assert_eq!(buf.len(), 2 * frames.get() as usize);
+					buf.fill(0.0);
+					buf
+				},
+			)
+		};
+
 		Self {
 			node: Mutex::new(node),
 			buffers: RwLock::new(Buffers {
 				incoming: HoleyVec::default(),
 				outgoing: BitSet::default(),
-				audio: vec![0.0; 2 * frames.get() as usize]
-					.into_boxed_slice()
-					.into(),
-				buf: vec![0.0; 2 * frames.get() as usize]
-					.into_boxed_slice()
-					.into(),
+				audio: buf().into(),
+				scratch: buf().into(),
 				events: Vec::new(),
 			}),
 			indegree: AtomicIsize::new(0),

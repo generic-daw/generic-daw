@@ -1,7 +1,7 @@
 use crate::{audio_ports_config::AudioPortsConfig, host::Host};
 use clack_host::prelude::*;
 use dsp::DelayLine;
-use utils::NoDebug;
+use utils::{NoDebug, boxed_slice};
 
 #[derive(Debug)]
 pub struct AudioBuffers {
@@ -30,13 +30,13 @@ impl AudioBuffers {
 		let input_buffers = input_config
 			.port_channel_counts
 			.iter()
-			.map(|c| vec![0.0; config.max_frames_count as usize * c].into_boxed_slice())
+			.map(|c| boxed_slice![0.0; config.max_frames_count as usize * c])
 			.collect::<Box<_>>()
 			.into();
 		let output_buffers = output_config
 			.port_channel_counts
 			.iter()
-			.map(|c| vec![0.0; config.max_frames_count as usize * c].into_boxed_slice())
+			.map(|c| boxed_slice![0.0; config.max_frames_count as usize * c])
 			.collect::<Box<_>>()
 			.into();
 

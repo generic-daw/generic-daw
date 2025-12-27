@@ -43,7 +43,7 @@ pub enum Message {
 	LoopMarker(Option<NotePosition>),
 	Reset,
 
-	ReturnUpdateBuffer(Vec<Update>),
+	ReuseUpdateBuffer(Vec<Update>),
 
 	RequestAudioGraph(oneshot::Sender<Export>),
 	AudioGraph(Box<Export>),
@@ -237,7 +237,7 @@ impl DawCtx {
 				}
 				Message::LoopMarker(loop_marker) => self.state.transport.loop_marker = loop_marker,
 				Message::Reset => self.audio_graph.for_each_node_mut(AudioGraphNode::reset),
-				Message::ReturnUpdateBuffer(update) => {
+				Message::ReuseUpdateBuffer(update) => {
 					debug_assert!(update.is_empty());
 					self.update_buffers.push(update);
 				}

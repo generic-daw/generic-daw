@@ -1,6 +1,7 @@
 use crate::{AudioGraph, AudioGraphNode, MusicalTime, daw_ctx::State};
 use hound::WavWriter;
 use std::path::Path;
+use utils::boxed_slice;
 
 #[derive(Debug)]
 pub struct Export {
@@ -28,7 +29,7 @@ impl Export {
 		.unwrap();
 
 		let buffer_size = 2 * self.state.transport.frames.get() as usize;
-		let mut buf = vec![0.0; buffer_size].into_boxed_slice();
+		let mut buf = boxed_slice![0.0; buffer_size];
 
 		let mut updates = Vec::new();
 

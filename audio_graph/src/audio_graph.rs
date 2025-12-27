@@ -9,6 +9,7 @@ use utils::HoleyVec;
 #[derive(Debug)]
 pub struct AudioGraph<Node: NodeImpl> {
 	graph: HoleyVec<Entry<Node>>,
+	buffers: Vec<Box<[f32]>>,
 	root: NodeId,
 	frames: NonZero<u32>,
 }
@@ -19,11 +20,14 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		let node = node.into();
 		let root = node.id();
 
+		let mut buffers = Vec::new();
+
 		let mut graph = HoleyVec::default();
-		graph.insert(*root, Entry::new(node, frames));
+		graph.insert(*root, Entry::new(node, frames, &mut buffers));
 
 		Self {
 			graph,
+			buffers,
 			root,
 			frames,
 		}
@@ -100,11 +104,11 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			let dep_buffers = &*dep_entry.read_buffers_uncontended();
 			let delay_diff = max_delay - dep_entry.delay.load(Relaxed);
 
-			buffers.buf[..len].copy_from_slice(&dep_buffers.audio[..len]);
+			buffers.scratch[..len].copy_from_slice(&dep_buffers.audio[..len]);
 			delay_line.resize(delay_diff);
-			delay_line.advance(&mut buffers.buf[..len]);
+			delay_line.advance(&mut buffers.scratch[..len]);
 
-			buffers.buf[..len]
+			buffers.scratch[..len]
 				.iter()
 				.zip(&mut buffers.audio[..len])
 				.for_each(|(&sample, buf)| *buf += sample);
@@ -217,7 +221,8 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		if let Some(entry) = self.graph.get_mut(*id) {
 			*entry.node() = node;
 		} else {
-			self.graph.insert(*id, Entry::new(node, self.frames));
+			self.graph
+				.insert(*id, Entry::new(node, self.frames, &mut self.buffers));
 		}
 	}
 
@@ -240,6 +245,11 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 					.incoming
 					.remove(*node);
 			}
+
+			self.buffers
+				.push(std::mem::take(&mut entry.buffers().audio.0));
+			self.buffers
+				.push(std::mem::take(&mut entry.buffers().scratch.0));
 		}
 	}
 

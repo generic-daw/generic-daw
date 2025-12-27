@@ -66,7 +66,7 @@ impl<T> HoleyVec<T> {
 	}
 
 	pub fn clear(&mut self) {
-		self.0.clear();
+		self.0.fill_with(|| None);
 	}
 
 	#[must_use]

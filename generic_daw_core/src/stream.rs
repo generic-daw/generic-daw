@@ -6,6 +6,7 @@ use cpal::{
 use log::{error, info};
 use rtrb::{Consumer, Producer, RingBuffer};
 use std::{cmp::Ordering, num::NonZero, sync::Arc};
+use utils::boxed_slice;
 
 pub fn build_input_stream(
 	device_name: Option<Arc<str>>,
@@ -45,7 +46,7 @@ pub fn build_input_stream(
 	let (mut producer, consumer) =
 		RingBuffer::new(sample_rate.get().div_ceil(frames.get()) as usize);
 
-	let mut stereo = vec![0.0; 2 * frames.get() as usize].into_boxed_slice();
+	let mut stereo = boxed_slice![0.0; 2 * frames.get() as usize];
 
 	let stream = device
 		.build_input_stream(
@@ -111,7 +112,7 @@ pub fn build_output_stream(
 	let transport = Transport::new(sample_rate, frames);
 	let (mut ctx, master_node_id, producer, consumer) = DawCtx::create(transport);
 
-	let mut stereo = vec![0.0; 2 * frames.get() as usize].into_boxed_slice();
+	let mut stereo = boxed_slice![0.0; 2 * frames.get() as usize];
 
 	let stream = device
 		.build_output_stream(

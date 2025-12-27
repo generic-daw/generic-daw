@@ -1,3 +1,4 @@
+mod boxed_slice;
 mod holey_vec;
 mod include_f32s;
 mod natural_cmp;

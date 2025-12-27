@@ -123,7 +123,7 @@ impl Arrangement {
 			}
 		}
 
-		self.send(Message::ReturnUpdateBuffer(core.updates));
+		self.send(Message::ReuseUpdateBuffer(core.updates));
 
 		let mix = self.transport().sample_rate.get() as f32 / core.frames as f32;
 		let cpu = (core.end - core.start).as_secs_f32() * mix;
