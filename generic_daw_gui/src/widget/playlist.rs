@@ -193,6 +193,8 @@ where
 						selection.primary.clear();
 						selection.status = Status::Dragging(track, time);
 						shell.publish((self.f)(Action::Add(track, time)));
+					} else {
+						selection.primary.clear();
 					}
 				}
 				mouse::Button::Right => {
