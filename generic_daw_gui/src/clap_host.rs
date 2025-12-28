@@ -184,9 +184,7 @@ impl ClapHost {
 						// The plugin gui is destroyed before the window is closed (see
 						// [`Message::WindowCloseRequested`]).
 						unsafe {
-							plugin
-								.get_mut()
-								.set_parent(window.window_handle().unwrap().as_raw());
+							plugin.get_mut().set_parent(window.window_handle().unwrap());
 						}
 						Message::GuiEmbedded(id, Box::new(plugin).into())
 					});

@@ -14,7 +14,7 @@ use clack_extensions::{
 };
 use clack_host::prelude::*;
 use log::{info, warn};
-use raw_window_handle::RawWindowHandle;
+use raw_window_handle::HasWindowHandle;
 use rtrb::{Producer, PushError, RingBuffer};
 #[cfg(unix)]
 use std::os::fd::RawFd;
@@ -260,7 +260,7 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	/// # SAFETY
 	/// The underlying window must remain valid for the lifetime of this plugin instance's gui.
-	pub unsafe fn set_parent(&mut self, window_handle: RawWindowHandle) {
+	pub unsafe fn set_parent(&mut self, window: impl HasWindowHandle) {
 		let Gui::Embedded { .. } = self.gui else {
 			panic!("called \"set_parent\" on a non-embedded gui");
 		};
@@ -272,7 +272,7 @@ impl<Event: EventImpl> Plugin<Event> {
 				.access_shared_handler(|s| *s.ext.gui.get().unwrap())
 				.set_parent(
 					&mut self.instance.plugin_handle(),
-					ClapWindow::from_window_handle(window_handle).unwrap(),
+					ClapWindow::from_window(&window).unwrap(),
 				)
 				.unwrap();
 		}
