@@ -204,31 +204,30 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				shell.capture_event();
 			}
 			Event::Mouse(mouse::Event::WheelScrolled { delta, modifiers }) => {
-				let (x, mut y) = match *delta {
+				let (mut x, mut y) = match *delta {
 					ScrollDelta::Pixels { x, y } => (-x, -y),
 					ScrollDelta::Lines { x, y } => (-x * 60.0, -y * 60.0),
 				};
 
-				match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-					(false, false, false) if x != 0.0 || y != 0.0 => {
+				if x != 0.0 || y != 0.0 {
+					if !cfg!(target_os = "macos") && modifiers.shift() {
+						(x, y) = (y, x);
+					}
+
+					if modifiers.command() {
+						if modifiers.shift() {
+							x /= -8.0;
+							y = 0.0;
+						} else {
+							y /= 128.0;
+							x = 0.0;
+						}
+
+						shell.publish((self.zoom)(Vector::new(y, x), cursor, right_half.size()));
+					} else {
 						shell.publish((self.pan)(Vector::new(x, y), right_half.size()));
-						shell.capture_event();
 					}
-					(true, false, false) if y != 0.0 => {
-						y /= 128.0;
-						shell.publish((self.zoom)(Vector::new(y, 0.0), cursor, right_half.size()));
-						shell.capture_event();
-					}
-					(false, true, false) if x != 0.0 || y != 0.0 => {
-						shell.publish((self.pan)(Vector::new(y, x), right_half.size()));
-						shell.capture_event();
-					}
-					(false, false, true) if y != 0.0 => {
-						y /= -8.0;
-						shell.publish((self.zoom)(Vector::new(0.0, y), cursor, right_half.size()));
-						shell.capture_event();
-					}
-					_ => {}
+					shell.capture_event();
 				}
 			}
 			_ => {}
