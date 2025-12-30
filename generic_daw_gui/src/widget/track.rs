@@ -95,9 +95,9 @@ where
 			.zip(&mut tree.children)
 			.zip(layout.children())
 			.rev()
-			.for_each(|((child, state), layout)| {
+			.for_each(|((child, tree), layout)| {
 				child.update(
-					state, event, layout, cursor, renderer, clipboard, shell, viewport,
+					tree, event, layout, cursor, renderer, clipboard, shell, viewport,
 				);
 			});
 	}
@@ -115,8 +115,8 @@ where
 			.iter_mut()
 			.zip(&mut tree.children)
 			.zip(layout.children())
-			.filter_map(|((child, state), layout)| {
-				child.overlay(state, layout, renderer, viewport, translation)
+			.filter_map(|((child, tree), layout)| {
+				child.overlay(tree, layout, renderer, viewport, translation)
 			})
 			.collect::<Vec<_>>();
 
@@ -136,8 +136,8 @@ where
 				.iter_mut()
 				.zip(&mut tree.children)
 				.zip(layout.children())
-				.for_each(|((child, state), layout)| {
-					child.operate(state, layout, renderer, operation);
+				.for_each(|((child, tree), layout)| {
+					child.operate(tree, layout, renderer, operation);
 				});
 		});
 	}

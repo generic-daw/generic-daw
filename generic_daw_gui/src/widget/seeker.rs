@@ -314,10 +314,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			.zip(&mut tree.children)
 			.zip(layout.children())
 			.zip(Self::viewports(layout))
-			.filter_map(|(((child, state), layout), viewport)| {
+			.filter_map(|(((child, tree), layout), viewport)| {
 				child
 					.as_widget_mut()
-					.overlay(state, layout, renderer, &viewport, translation)
+					.overlay(tree, layout, renderer, &viewport, translation)
 			})
 			.collect::<Vec<_>>();
 
@@ -337,10 +337,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				.iter_mut()
 				.zip(&mut tree.children)
 				.zip(layout.children())
-				.for_each(|((child, state), layout)| {
+				.for_each(|((child, tree), layout)| {
 					child
 						.as_widget_mut()
-						.operate(state, layout, renderer, operation);
+						.operate(tree, layout, renderer, operation);
 				});
 		});
 	}

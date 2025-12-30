@@ -88,18 +88,14 @@ impl<'a, Message> Knob<'a, Message> {
 	}
 
 	#[must_use]
-	pub fn tooltip(mut self, tooltip: impl text::IntoFragment<'a>) -> Self {
-		self.tooltip = Some(text(tooltip).line_height(1.0).into());
-		self
+	pub fn tooltip(self, tooltip: impl text::IntoFragment<'a>) -> Self {
+		self.maybe_tooltip(Some(tooltip))
 	}
 
 	#[must_use]
-	pub fn maybe_tooltip(self, tooltip: Option<impl text::IntoFragment<'a>>) -> Self {
-		if let Some(tooltip) = tooltip {
-			self.tooltip(tooltip)
-		} else {
-			self
-		}
+	pub fn maybe_tooltip(mut self, tooltip: Option<impl text::IntoFragment<'a>>) -> Self {
+		self.tooltip = tooltip.map(|tooltip| text(tooltip).line_height(1.0).into());
+		self
 	}
 
 	fn border_radius(&self) -> f32 {
@@ -435,7 +431,7 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 	fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
 		let padding = 3.0;
 
-		let layout = Widget::<Message, Theme, Renderer>::layout(
+		let layout = Widget::<Message, _, _>::layout(
 			self.tooltip,
 			self.tree,
 			renderer,
@@ -485,7 +481,7 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 			theme.extended_palette().background.weak.color,
 		);
 
-		Widget::<Message, Theme, Renderer>::draw(
+		Widget::<Message, _, _>::draw(
 			self.tooltip,
 			self.tree,
 			renderer,

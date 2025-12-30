@@ -554,8 +554,8 @@ where
 			.iter_mut()
 			.zip(&mut tree.children)
 			.zip(layout.children())
-			.filter_map(|((child, state), layout)| {
-				child.overlay(state, layout, renderer, viewport, translation)
+			.filter_map(|((child, tree), layout)| {
+				child.overlay(tree, layout, renderer, viewport, translation)
 			})
 			.collect::<Vec<_>>();
 
