@@ -48,7 +48,7 @@ pub use size::Size;
 
 const API_TYPE: GuiApiType<'_> = GuiApiType::default_for_current_platform().unwrap();
 
-pub static DEFAULT_CLAP_PATHS: LazyLock<Vec<Arc<Path>>> = LazyLock::new(|| {
+pub static DEFAULT_CLAP_PATHS: LazyLock<Box<[Arc<Path>]>> = LazyLock::new(|| {
 	let mut paths = Vec::new();
 
 	if cfg!(target_os = "linux") {
@@ -81,7 +81,7 @@ pub static DEFAULT_CLAP_PATHS: LazyLock<Vec<Arc<Path>>> = LazyLock::new(|| {
 		paths.extend(std::env::split_paths(&clap_path).map(Arc::from));
 	}
 
-	paths
+	paths.into_boxed_slice()
 });
 
 #[must_use]

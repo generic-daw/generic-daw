@@ -8,11 +8,11 @@ use iced_widget::{
 		mouse::{self, Cursor, Interaction, ScrollDelta},
 		overlay,
 		renderer::{Quad, Style},
-		text,
 		theme::palette::mix,
 		widget::{Text, Tree, tree},
 	},
 	graphics::geometry::Renderer as _,
+	text,
 };
 use std::{cell::RefCell, fmt::Debug, ops::RangeInclusive};
 use utils::NoDebug;
@@ -89,7 +89,7 @@ impl<'a, Message> Knob<'a, Message> {
 
 	#[must_use]
 	pub fn tooltip(mut self, tooltip: impl text::IntoFragment<'a>) -> Self {
-		self.tooltip = Some(Text::new(tooltip).line_height(1.0).into());
+		self.tooltip = Some(text(tooltip).line_height(1.0).into());
 		self
 	}
 
