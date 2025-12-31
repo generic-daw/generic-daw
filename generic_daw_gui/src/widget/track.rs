@@ -11,12 +11,11 @@ use iced::{
 	},
 };
 use std::borrow::Borrow;
-use utils::NoDebug;
 
 #[derive(Debug)]
 pub struct Track<'a, Message> {
 	scale: &'a Vector,
-	pub(super) clips: NoDebug<Box<[Clip<'a, Message>]>>,
+	pub(super) clips: Box<[Clip<'a, Message>]>,
 }
 
 impl<'a, Message> Widget<Message, Theme, Renderer> for Track<'a, Message>
@@ -150,7 +149,7 @@ impl<'a, Message> Track<'a, Message> {
 	{
 		Self {
 			scale,
-			clips: children.into_iter().collect::<Box<_>>().into(),
+			clips: children.into_iter().collect(),
 		}
 	}
 

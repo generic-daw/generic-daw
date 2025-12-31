@@ -1,11 +1,11 @@
 use audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler as _};
 use std::num::NonZero;
-use utils::{NoDebug, boxed_slice};
+use utils::boxed_slice;
 
 #[derive(Debug)]
 pub struct Resampler {
-	fft: NoDebug<Fft<f32>>,
+	fft: Fft<f32>,
 
 	input_buffer: Vec<f32>,
 	output_buffer: Box<[f32]>,
@@ -37,7 +37,7 @@ impl Resampler {
 		let output_buffer = boxed_slice![0.0; fft.output_frames_max() * fft.nbr_channels()];
 
 		Some(Self {
-			fft: fft.into(),
+			fft,
 
 			input_buffer,
 			output_buffer,
