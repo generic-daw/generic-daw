@@ -1,14 +1,14 @@
-use rubato::{FftFixedIn, Resampler as _};
+use audioadapter_buffers::direct::InterleavedSlice;
+use rubato::{Fft, FixedSync, Resampler as _};
 use std::num::NonZero;
-use utils::NoDebug;
+use utils::{NoDebug, boxed_slice};
 
 #[derive(Debug)]
 pub struct Resampler {
-	fft: NoDebug<FftFixedIn<f32>>,
-	resample_ratio: f64,
+	fft: NoDebug<Fft<f32>>,
 
-	input_buffer: Box<[Vec<f32>]>,
-	output_buffer: Box<[Box<[f32]>]>,
+	input_buffer: Vec<f32>,
+	output_buffer: Box<[f32]>,
 	output: Vec<f32>,
 
 	frames_in: usize,
@@ -24,26 +24,20 @@ impl Resampler {
 		sample_rate_output: NonZero<u32>,
 		nbr_channels: NonZero<usize>,
 	) -> Option<Self> {
-		let fft = FftFixedIn::new(
+		let fft = Fft::new(
 			sample_rate_input.get() as usize,
 			sample_rate_output.get() as usize,
 			1024,
 			2,
 			nbr_channels.get(),
+			FixedSync::Both,
 		)
 		.ok()?;
-		let resample_ratio =
-			f64::from(sample_rate_output.get()) / f64::from(sample_rate_input.get());
-		let input_buffer = fft.input_buffer_allocate(false).into_boxed_slice();
-		let output_buffer = fft
-			.output_buffer_allocate(true)
-			.into_iter()
-			.map(Vec::into_boxed_slice)
-			.collect();
+		let input_buffer = Vec::with_capacity(fft.input_frames_max() * fft.nbr_channels());
+		let output_buffer = boxed_slice![0.0; fft.output_frames_max() * fft.nbr_channels()];
 
 		Some(Self {
 			fft: fft.into(),
-			resample_ratio,
 
 			input_buffer,
 			output_buffer,
@@ -68,16 +62,17 @@ impl Resampler {
 	}
 
 	pub fn reserve(mut self, frames: usize) -> Self {
-		let channels = self.input_buffer.len();
-		let frames = ((frames - self.trim_start - self.trim_end) as f64 * self.resample_ratio)
-			.ceil() as usize;
+		let channels = self.fft.nbr_channels();
+		let resample_ratio = self.fft.resample_ratio();
+		let frames =
+			((frames - self.trim_start - self.trim_end) as f64 * resample_ratio).ceil() as usize;
 		self.output
-			.reserve_exact(channels * frames + self.fft.output_frames_max());
+			.reserve_exact(channels * (frames + self.fft.output_frames_max()));
 		self
 	}
 
 	pub fn process(&mut self, mut samples: &[f32]) {
-		let channels = self.input_buffer.len();
+		let channels = self.fft.nbr_channels();
 		debug_assert!(samples.len().is_multiple_of(channels));
 
 		if channels * self.trim_start > samples.len() {
@@ -90,8 +85,9 @@ impl Resampler {
 
 		let mut len;
 		while {
-			len = channels * (self.fft.input_frames_next() - self.input_buffer[0].len());
-			samples.len() > len
+			let frames = self.fft.input_frames_next();
+			len = frames * channels - self.input_buffer.len();
+			len <= samples.len()
 		} {
 			self.process_inner(&samples[..len]);
 			samples = &samples[len..];
@@ -101,28 +97,32 @@ impl Resampler {
 	}
 
 	fn process_inner(&mut self, samples: &[f32]) {
-		let channels = self.input_buffer.len();
+		let channels = self.fft.nbr_channels();
+		let input_frames = self.fft.input_frames_next();
+		let output_frames = self.fft.output_frames_next();
 		debug_assert!(samples.len().is_multiple_of(channels));
 
-		for (i, buf) in self.input_buffer.iter_mut().enumerate() {
-			buf.extend(samples.iter().skip(i).step_by(channels).copied());
-		}
+		self.input_buffer.extend_from_slice(samples);
 
-		if self.input_buffer[0].len() >= self.fft.input_frames_next() {
+		if self.input_buffer.len() >= input_frames * channels {
+			let input_buffer =
+				InterleavedSlice::new(&self.input_buffer, channels, input_frames).unwrap();
+
+			let mut output_buffer =
+				InterleavedSlice::new_mut(&mut self.output_buffer, channels, output_frames)
+					.unwrap();
+
 			let (frames_in, frames_out) = self
 				.fft
-				.process_into_buffer(&self.input_buffer, &mut self.output_buffer, None)
+				.process_into_buffer(&input_buffer, &mut output_buffer, None)
 				.unwrap();
 
-			for i in self.fft.output_delay().saturating_sub(self.frames_out)..frames_out {
-				for buf in &self.output_buffer {
-					self.output.push(buf[i]);
-				}
-			}
+			self.input_buffer.drain(0..frames_in * channels);
 
-			for buf in &mut self.input_buffer {
-				buf.drain(0..frames_in);
-			}
+			let frames_delay = self.fft.output_delay().saturating_sub(self.frames_out);
+			self.output.extend_from_slice(
+				&self.output_buffer[frames_delay * channels..frames_out * channels],
+			);
 
 			self.frames_in += frames_in;
 			self.frames_out += frames_out;
@@ -130,17 +130,14 @@ impl Resampler {
 	}
 
 	pub fn finish(mut self) -> Vec<f32> {
-		let channels = self.input_buffer.len();
-		let frames_in = self.frames_in + self.input_buffer[0].len() - self.trim_end;
-		let frames_out = (frames_in as f64 * self.resample_ratio).ceil() as usize;
+		let channels = self.fft.nbr_channels();
+		let resample_ratio = self.fft.resample_ratio();
+		let frames_in = self.frames_in + self.input_buffer.len() / channels - self.trim_end;
+		let frames_out = (frames_in as f64 * resample_ratio).ceil() as usize;
 
 		while self.output.len() < channels * frames_out {
-			let len = self.fft.input_frames_next();
-
-			for buf in &mut self.input_buffer {
-				buf.resize(len, 0.0);
-			}
-
+			let frames = self.fft.input_frames_next();
+			self.input_buffer.resize(frames * channels, 0.0);
 			self.process_inner(&[]);
 		}
 
