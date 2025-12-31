@@ -112,7 +112,7 @@ impl Arrangement {
 			match update {
 				Update::Peak(node, peaks) => {
 					if let Some((node, _)) = self.nodes.get_mut(*node) {
-						node.update(peaks, core.end);
+						node.update(peaks, core.now);
 					}
 				}
 				Update::Param(id, param_id) => {
@@ -127,7 +127,7 @@ impl Arrangement {
 		self.send(Message::ReuseUpdateBuffer(core.updates));
 
 		let mix = self.transport.sample_rate.get() as f32 / core.frames as f32;
-		let cpu = (core.end - core.start).as_secs_f32() * mix;
+		let cpu = core.duration.as_secs_f32() * mix;
 		self.cpu = self.cpu.mul_add(mix, cpu) / (mix + 1.0);
 
 		messages
@@ -162,6 +162,10 @@ impl Arrangement {
 
 	fn midi_pattern_action(&mut self, id: MidiPatternId, action: MidiPatternAction) {
 		self.send(Message::MidiPatternAction(id, action));
+	}
+
+	pub fn request_update(&mut self) {
+		self.send(Message::RequestUpdate);
 	}
 
 	pub fn channel_volume_changed(&mut self, id: NodeId, volume: f32) {

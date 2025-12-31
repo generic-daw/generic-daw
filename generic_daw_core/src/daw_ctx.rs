@@ -7,7 +7,10 @@ use crate::{
 };
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, PushError, RingBuffer};
-use std::{num::NonZero, time::Instant};
+use std::{
+	num::NonZero,
+	time::{Duration, Instant},
+};
 use utils::{HoleyVec, NoDebug, include_f32s, unique_id};
 
 unique_id!(version);
@@ -43,6 +46,7 @@ pub enum Message {
 	LoopMarker(Option<NotePosition>),
 	Reset,
 
+	RequestUpdate,
 	ReuseUpdateBuffer(Vec<Update>),
 
 	RequestAudioGraph(oneshot::Sender<Export>),
@@ -81,8 +85,8 @@ pub enum Update {
 pub struct Batch {
 	pub sample: Option<(Version, usize)>,
 	pub updates: Vec<Update>,
-	pub start: Instant,
-	pub end: Instant,
+	pub now: Instant,
+	pub duration: Duration,
 	pub frames: usize,
 }
 
@@ -131,7 +135,11 @@ pub struct DawCtx {
 	consumer: Consumer<Message>,
 	on_bar_click: NoDebug<Box<[f32]>>,
 	off_bar_click: NoDebug<Box<[f32]>>,
+	needs_update: bool,
 	update_buffers: Vec<Vec<Update>>,
+	updates: Vec<Update>,
+	duration: Duration,
+	frames: usize,
 }
 
 impl DawCtx {
@@ -167,7 +175,11 @@ impl DawCtx {
 			consumer,
 			on_bar_click: on_bar_click.finish().into_boxed_slice().into(),
 			off_bar_click: off_bar_click.finish().into_boxed_slice().into(),
+			needs_update: false,
 			update_buffers: Vec::new(),
+			updates: Vec::new(),
+			duration: Duration::ZERO,
+			frames: 0,
 		};
 
 		let id = daw_ctx.audio_graph.root();
@@ -236,6 +248,7 @@ impl DawCtx {
 				}
 				Message::LoopMarker(loop_marker) => self.state.transport.loop_marker = loop_marker,
 				Message::Reset => self.audio_graph.for_each_node_mut(AudioGraphNode::reset),
+				Message::RequestUpdate => self.needs_update = true,
 				Message::ReuseUpdateBuffer(update) => {
 					debug_assert!(update.is_empty());
 					self.update_buffers.push(update);
@@ -270,7 +283,11 @@ impl DawCtx {
 
 		self.recv_events();
 
-		let mut updates = self.update_buffers.pop().unwrap_or_default();
+		if self.updates.capacity() == 0
+			&& let Some(updates) = self.update_buffers.pop()
+		{
+			self.updates = updates;
+		}
 
 		if self.state.transport.playing
 			&& let Some(loop_marker) = self.state.transport.loop_marker
@@ -283,7 +300,7 @@ impl DawCtx {
 			{
 				self.audio_graph.process(&self.state, &mut buf[..len]);
 				self.audio_graph
-					.for_each_node_mut(|node| node.collect_updates(&mut updates));
+					.for_each_node_mut(|node| node.collect_updates(&mut self.updates));
 				for s in &mut buf[..len] {
 					*s = s.clamp(-1.0, 1.0);
 				}
@@ -296,7 +313,7 @@ impl DawCtx {
 
 		self.audio_graph.process(&self.state, buf);
 		self.audio_graph
-			.for_each_node_mut(|node| node.collect_updates(&mut updates));
+			.for_each_node_mut(|node| node.collect_updates(&mut self.updates));
 		for s in &mut *buf {
 			*s = s.clamp(-1.0, 1.0);
 		}
@@ -307,18 +324,32 @@ impl DawCtx {
 			(self.state.transport.version, self.state.transport.sample)
 		});
 
-		let batch = Batch {
-			sample,
-			updates,
-			start,
-			end: Instant::now(),
-			frames,
-		};
+		let now = Instant::now();
+		let duration = now - start;
 
-		if let Err(PushError::Full(mut batch)) = self.producer.push(batch) {
-			warn!("full ring buffer");
-			batch.updates.clear();
-			self.update_buffers.push(batch.updates);
+		if std::mem::take(&mut self.needs_update) || sample.is_some() || !self.updates.is_empty() {
+			let updates = std::mem::take(&mut self.updates);
+			let duration = std::mem::take(&mut self.duration) + duration;
+			let frames = std::mem::take(&mut self.frames) + frames;
+
+			let batch = Batch {
+				sample,
+				updates,
+				now,
+				duration,
+				frames,
+			};
+
+			if let Err(PushError::Full(Batch { updates, .. })) = self.producer.push(batch) {
+				warn!("full ring buffer");
+
+				self.updates = updates;
+				self.duration = duration;
+				self.frames = frames;
+			}
+		} else {
+			self.duration += duration;
+			self.frames += frames;
 		}
 	}
 

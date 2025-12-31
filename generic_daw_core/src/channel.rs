@@ -75,6 +75,7 @@ pub struct Channel {
 	pan: PanMode,
 	enabled: bool,
 	bypassed: bool,
+	last_peaks: [f32; 2],
 	updates: Vec<Update>,
 }
 
@@ -115,7 +116,10 @@ impl NodeImpl for Channel {
 			[0.0, 0.0]
 		};
 
-		self.updates.push(Update::Peak(self.id, peaks));
+		if peaks != self.last_peaks {
+			self.last_peaks = peaks;
+			self.updates.push(Update::Peak(self.id, peaks));
+		}
 	}
 
 	fn id(&self) -> NodeId {
@@ -182,6 +186,7 @@ impl Default for Channel {
 			pan: PanMode::Balance(0.0),
 			enabled: true,
 			bypassed: false,
+			last_peaks: [0.0, 0.0],
 			updates: Vec::new(),
 		}
 	}

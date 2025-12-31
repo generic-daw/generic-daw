@@ -36,10 +36,11 @@ use generic_daw_widget::{
 };
 use humantime::format_rfc3339_seconds;
 use iced::{
-	Center, Element, Fill, Function as _, Point, Shrink, Size, Task, Vector, border,
+	Center, Element, Fill, Function as _, Point, Shrink, Size, Subscription, Task, Vector, border,
 	futures::{SinkExt as _, Stream},
 	mouse::Interaction,
 	padding, stream,
+	time::every,
 	widget::{
 		button, column, combo_box, container, mouse_area, row, rule, scrollable, slider, space,
 		text, vertical_slider,
@@ -112,6 +113,8 @@ pub enum Message {
 	Batch(Box<Batch>),
 
 	SetArrangement(NoClone<Box<Arrangement>>),
+
+	UpdateRequest,
 
 	ConnectRequest(NodeId, NodeId),
 	ConnectSucceeded((NodeId, NodeId)),
@@ -276,6 +279,7 @@ impl ArrangementView {
 				self.piano_roll_scale.x += scale_diff;
 				self.piano_roll_selection.get_mut().clear();
 			}
+			Message::UpdateRequest => self.arrangement.request_update(),
 			Message::ConnectRequest(from, to) => {
 				return self
 					.arrangement
@@ -1450,6 +1454,13 @@ impl ArrangementView {
 					.to_samples_f(self.arrangement.transport()),
 		)
 		.into()
+	}
+
+	pub fn subscription(&self) -> Subscription<Message> {
+		Subscription::batch([
+			self.clap_host.subscription().map(Message::ClapHost),
+			every(Duration::from_secs(1)).map(|_| Message::UpdateRequest),
+		])
 	}
 
 	pub fn set_plugins(
