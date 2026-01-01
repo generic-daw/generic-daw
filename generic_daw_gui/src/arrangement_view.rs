@@ -36,7 +36,7 @@ use generic_daw_widget::{
 };
 use humantime::format_rfc3339_seconds;
 use iced::{
-	Center, Element, Fill, Function as _, Point, Shrink, Size, Subscription, Task, Vector, border,
+	Center, Element, Fill, Function as _, Point, Shrink, Subscription, Task, Vector, border,
 	futures::{SinkExt as _, Stream},
 	mouse::Interaction,
 	padding, stream,
@@ -158,8 +158,8 @@ pub enum Message {
 
 	PlaylistAction(playlist::Action),
 	PianoRollAction(piano_roll::Action),
-	Pan(Vector, Size),
-	Zoom(Vector, Point, Size),
+	Pan(Vector, f32),
+	Zoom(Vector, Point, f32),
 
 	DeleteSelection,
 	ClearSelection,
@@ -595,11 +595,14 @@ impl ArrangementView {
 			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().0.write(&samples),
 			Message::PlaylistAction(action) => return self.handle_playlist_action(action),
 			Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
-			Message::Pan(pos_diff, size) => match self.tab {
+			Message::Pan(pos_diff, height) => match self.tab {
 				Tab::Playlist => {
 					self.playlist_position += pos_diff;
 					self.playlist_position.x = self.playlist_position.x.max(0.0);
-					self.playlist_position.y = self.playlist_position.y.max(0.0);
+					self.playlist_position.y = self.playlist_position.y.clamp(
+						0.0,
+						self.playlist_scale.y * self.arrangement.tracks().len() as f32,
+					);
 				}
 				Tab::Mixer => {}
 				Tab::PianoRoll(..) => {
@@ -608,7 +611,7 @@ impl ArrangementView {
 					self.piano_roll_position.y = self
 						.piano_roll_position
 						.y
-						.clamp(0.0, self.piano_roll_scale.y.mul_add(128.0, -size.height));
+						.clamp(0.0, self.piano_roll_scale.y.mul_add(128.0, -height));
 				}
 			},
 			Message::Zoom(scale_diff, cursor, size) => {
