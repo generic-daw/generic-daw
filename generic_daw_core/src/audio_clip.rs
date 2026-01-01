@@ -12,11 +12,8 @@ impl AudioClip {
 
 		let sample = &state.samples[*self.sample];
 
-		let start = self.position.start().to_samples(&state.transport);
-		let end = self.position.end().to_samples(&state.transport);
-		let offset = self.position.offset().to_samples(&state.transport);
+		let (start, end, offset) = self.position.to_samples(&state.transport);
 		let len = sample.samples.len().saturating_sub(offset).min(end - start);
-
 		let uidx = state.transport.sample.abs_diff(start).min(len);
 
 		if state.transport.sample > start {

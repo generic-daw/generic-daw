@@ -29,9 +29,7 @@ impl NodeImpl for Track {
 
 			if state.transport.playing {
 				for clip in &mut self.clips {
-					let start = clip.position().start().to_samples(&state.transport);
-					let end = clip.position().end().to_samples(&state.transport);
-
+					let (start, end) = clip.position().position().to_samples(&state.transport);
 					if start < state.transport.sample + audio.len() && end >= state.transport.sample
 					{
 						clip.process(state, audio, events, &mut self.notes);
@@ -83,9 +81,7 @@ impl Track {
 
 		if state.transport.playing {
 			for clip in &mut self.clips {
-				let start = clip.position().start().to_samples(&state.transport);
-				let end = clip.position().end().to_samples(&state.transport);
-
+				let (start, end) = clip.position().position().to_samples(&state.transport);
 				if start < state.transport.sample + audio.len() && end >= state.transport.sample {
 					clip.collect_notes(state, &mut notes);
 				}

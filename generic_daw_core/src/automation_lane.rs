@@ -19,8 +19,7 @@ impl AutomationLane {
 		let mut before = None::<&AutomationClip>;
 
 		for clip in &self.clips {
-			let start = clip.position.start().to_samples(&state.transport);
-			let end = clip.position.end().to_samples(&state.transport);
+			let (start, end) = clip.position.position().to_samples(&state.transport);
 
 			match (
 				start <= state.transport.sample,

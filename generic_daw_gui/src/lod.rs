@@ -90,9 +90,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 		let lod_slices_per_sample = lod_slices_per_mesh_slice as f32 / samples_per_mesh_slice;
 		let lod_slices_per_px = lod_slices_per_mesh_slice as f32 / px_per_mesh_slice;
 
-		let start = position.start().to_samples_f(transport);
-		let end = position.end().to_samples_f(transport);
-		let offset = position.offset().to_samples_f(transport);
+		let (start, end, offset) = position.to_samples_f(transport);
 
 		let hidden_start_samples = 0f32.max(hidden_start_px * -samples_per_px);
 

@@ -16,13 +16,11 @@ impl MidiClip {
 			.filter_map(|&(mut note)| {
 				note.position = (note.position + self.position.start())
 					.saturating_sub(self.position.offset())?
-					.clamp(self.position.note_position())?;
+					.clamp(self.position.position())?;
 				Some(note)
 			})
 			.for_each(|note| {
-				let start = note.position.start().to_samples(&state.transport);
-				let end = note.position.end().to_samples(&state.transport);
-
+				let (start, end) = note.position.to_samples(&state.transport);
 				if start < state.transport.sample && end >= state.transport.sample {
 					notes[usize::from(note.key.0)] += 1;
 				}
@@ -44,12 +42,11 @@ impl MidiClip {
 			.filter_map(|&(mut note)| {
 				note.position = (note.position + self.position.start())
 					.saturating_sub(self.position.offset())?
-					.clamp(self.position.note_position())?;
+					.clamp(self.position.position())?;
 				Some(note)
 			})
 			.for_each(|note| {
-				let start = note.position.start().to_samples(&state.transport);
-				let end = note.position.end().to_samples(&state.transport);
+				let (start, end) = note.position.to_samples(&state.transport);
 
 				if let Some(time) = start.checked_sub(state.transport.sample)
 					&& time < audio.len()

@@ -108,7 +108,7 @@ impl Arrangement {
 
 		for update in core.updates.drain(..) {
 			match update {
-				Update::Peak(node, peaks) => {
+				Update::Peaks(node, peaks) => {
 					if let Some((node, _)) = self.nodes.get_mut(*node) {
 						node.update(peaks, core.now);
 					}

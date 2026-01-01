@@ -404,8 +404,9 @@ impl<'a, Message> PianoRoll<'a, Message> {
 	fn note_bounds(&self, note: &MidiNote) -> Rectangle {
 		let samples_per_px = self.scale.x.exp2();
 
-		let x = note.position.start().to_samples_f(self.transport) / samples_per_px;
-		let width = note.position.end().to_samples_f(self.transport) / samples_per_px - x;
+		let (start, end) = note.position.to_samples_f(self.transport);
+		let x = start / samples_per_px;
+		let width = end / samples_per_px - x;
 		let x = x - self.position.x;
 
 		Rectangle::new(

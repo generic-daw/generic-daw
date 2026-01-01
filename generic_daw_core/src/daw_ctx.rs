@@ -77,7 +77,7 @@ pub enum NodeAction {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Update {
-	Peak(NodeId, [f32; 2]),
+	Peaks(NodeId, [f32; 2]),
 	Param(PluginId, ClapId),
 	Load(Duration, usize),
 }
@@ -286,43 +286,42 @@ impl DawCtx {
 			self.updates = updates;
 		}
 
-		if self.state.transport.playing
-			&& let Some(loop_marker) = self.state.transport.loop_marker
-		{
-			let loop_start = loop_marker.start().to_samples(&self.state.transport);
-			let loop_end = loop_marker.end().to_samples(&self.state.transport);
+		let loop_marker = self
+			.state
+			.transport
+			.loop_marker
+			.map(|loop_marker| loop_marker.to_samples(&self.state.transport));
 
-			while let Some(len) = loop_end.checked_sub(self.state.transport.sample)
-				&& len < buf.len()
+		while !buf.is_empty() {
+			if self.state.transport.playing
+				&& let Some((start, end)) = loop_marker
+				&& self.state.transport.sample == end
 			{
-				self.audio_graph.process(&self.state, &mut buf[..len]);
-				self.audio_graph
-					.for_each_node_mut(|node| node.collect_updates(&mut self.updates));
-				for s in &mut buf[..len] {
-					*s = s.clamp(-1.0, 1.0);
-				}
-				self.metronome(&mut buf[..len], self.audio_graph.delay());
-
-				self.state.transport.sample = loop_start;
-				buf = &mut buf[len..];
+				self.state.transport.sample = start;
 			}
-		}
 
-		self.audio_graph.process(&self.state, buf);
-		self.audio_graph
-			.for_each_node_mut(|node| node.collect_updates(&mut self.updates));
-		for s in &mut *buf {
-			*s = s.clamp(-1.0, 1.0);
-		}
-		self.metronome(buf, self.audio_graph.delay());
+			let len = loop_marker
+				.and_then(|(_, end)| end.checked_sub(self.state.transport.sample))
+				.map_or(buf.len(), |len| len.min(buf.len()));
 
-		if self.state.transport.playing {
-			self.state.transport.sample += buf.len();
+			self.audio_graph.process(&self.state, &mut buf[..len]);
+			for s in &mut buf[..len] {
+				*s = s.clamp(-1.0, 1.0);
+			}
+			self.metronome(&mut buf[..len], self.audio_graph.delay());
+
+			if self.state.transport.playing {
+				self.state.transport.sample += len;
+			}
+
+			buf = &mut buf[len..];
 		}
 
 		let now = Instant::now();
 		let duration = now - start;
 
+		self.audio_graph
+			.for_each_node_mut(|node| node.collect_updates(&mut self.updates));
 		self.updates.push(Update::Load(duration, frames));
 
 		if std::mem::take(&mut self.needs_update)

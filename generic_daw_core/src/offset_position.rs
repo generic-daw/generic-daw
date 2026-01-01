@@ -1,4 +1,4 @@
-use crate::{MusicalTime, Position};
+use crate::{MusicalTime, Position, Transport};
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct OffsetPosition {
@@ -13,17 +13,35 @@ impl OffsetPosition {
 	}
 
 	#[must_use]
-	pub fn start(self) -> MusicalTime {
+	pub const fn to_samples_f(self, transport: &Transport) -> (f32, f32, f32) {
+		(
+			self.start().to_samples_f(transport),
+			self.end().to_samples_f(transport),
+			self.offset().to_samples_f(transport),
+		)
+	}
+
+	#[must_use]
+	pub const fn to_samples(self, transport: &Transport) -> (usize, usize, usize) {
+		(
+			self.start().to_samples(transport),
+			self.end().to_samples(transport),
+			self.offset().to_samples(transport),
+		)
+	}
+
+	#[must_use]
+	pub const fn start(self) -> MusicalTime {
 		self.position.start()
 	}
 
 	#[must_use]
-	pub fn end(self) -> MusicalTime {
+	pub const fn end(self) -> MusicalTime {
 		self.position.end()
 	}
 
 	#[must_use]
-	pub fn offset(self) -> MusicalTime {
+	pub const fn offset(self) -> MusicalTime {
 		self.offset
 	}
 
@@ -56,7 +74,7 @@ impl OffsetPosition {
 	}
 
 	#[must_use]
-	pub fn note_position(self) -> Position {
+	pub fn position(self) -> Position {
 		self.position
 	}
 }

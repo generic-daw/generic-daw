@@ -125,13 +125,11 @@ where
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
 		let (start, len) = match self.inner {
 			Inner::AudioClip(inner) => {
-				let start = inner.clip.position.start().to_samples_f(self.transport);
-				let end = inner.clip.position.end().to_samples_f(self.transport);
+				let (start, end) = inner.clip.position.position().to_samples_f(self.transport);
 				(start, end - start)
 			}
 			Inner::MidiClip(inner) => {
-				let start = inner.clip.position.start().to_samples_f(self.transport);
-				let end = inner.clip.position.end().to_samples_f(self.transport);
+				let (start, end) = inner.clip.position.position().to_samples_f(self.transport);
 				(start, end - start)
 			}
 			Inner::Recording(inner) => {

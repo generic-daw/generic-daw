@@ -1,4 +1,4 @@
-use crate::MusicalTime;
+use crate::{MusicalTime, Transport};
 use std::ops::Add;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -21,12 +21,28 @@ impl Position {
 	}
 
 	#[must_use]
-	pub fn start(self) -> MusicalTime {
+	pub const fn to_samples_f(self, transport: &Transport) -> (f32, f32) {
+		(
+			self.start().to_samples_f(transport),
+			self.end().to_samples_f(transport),
+		)
+	}
+
+	#[must_use]
+	pub const fn to_samples(self, transport: &Transport) -> (usize, usize) {
+		(
+			self.start().to_samples(transport),
+			self.end().to_samples(transport),
+		)
+	}
+
+	#[must_use]
+	pub const fn start(self) -> MusicalTime {
 		self.start
 	}
 
 	#[must_use]
-	pub fn end(self) -> MusicalTime {
+	pub const fn end(self) -> MusicalTime {
 		self.end
 	}
 

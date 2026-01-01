@@ -84,14 +84,16 @@ impl NodeImpl for Channel {
 	type State = State;
 
 	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
-		let processing = self.processing();
+		let acc = self
+			.updates
+			.pop_if(|update| matches!(update, Update::Peaks(..)));
 
 		for plugin in &mut self.plugins {
 			for lane in &mut plugin.lanes {
 				lane.process(state, events);
 			}
 
-			if processing && plugin.enabled {
+			if self.enabled && !self.bypassed && plugin.enabled {
 				plugin.processor.process(audio, events, plugin.mix);
 			} else {
 				events.retain(|event| matches!(event, Event::ParamValue { .. }));
@@ -105,7 +107,7 @@ impl NodeImpl for Channel {
 			}
 		}
 
-		let peaks = if self.enabled {
+		let mut peaks = if self.enabled {
 			self.pan.pan(audio, self.volume);
 
 			max_peaks(audio).map(|x| if x < f32::EPSILON { 0.0 } else { x })
@@ -116,9 +118,12 @@ impl NodeImpl for Channel {
 			[0.0, 0.0]
 		};
 
+		if let Some(Update::Peaks(_, acc)) = acc {
+			peaks = [peaks[0].max(acc[0]), peaks[1].max(acc[1])];
+		}
+
 		if peaks != self.last_peaks {
-			self.last_peaks = peaks;
-			self.updates.push(Update::Peak(self.id, peaks));
+			self.updates.push(Update::Peaks(self.id, peaks));
 		}
 	}
 
@@ -127,17 +132,19 @@ impl NodeImpl for Channel {
 	}
 
 	fn delay(&self) -> usize {
-		self.plugins
-			.iter()
-			.filter(|plugin| self.processing() && plugin.enabled)
-			.map(|plugin| plugin.processor.delay())
-			.sum()
+		if self.enabled && !self.bypassed {
+			self.plugins
+				.iter()
+				.filter(|plugin| plugin.enabled)
+				.map(|plugin| plugin.processor.delay())
+				.sum()
+		} else {
+			0
+		}
 	}
 
 	fn expensive(&self) -> bool {
-		self.plugins
-			.iter()
-			.any(|plugin| self.processing() && plugin.enabled)
+		self.enabled && !self.bypassed && self.plugins.iter().any(|plugin| plugin.enabled)
 	}
 }
 
@@ -164,16 +171,17 @@ impl Channel {
 	}
 
 	pub fn collect_updates(&mut self, updates: &mut Vec<Update>) {
+		if let Some(&Update::Peaks(_, peaks)) = self.updates.last() {
+			debug_assert_ne!(self.last_peaks, peaks);
+			self.last_peaks = peaks;
+		}
+
 		updates.append(&mut self.updates);
 	}
 
 	#[must_use]
 	pub fn enabled(&self) -> bool {
 		self.enabled
-	}
-
-	fn processing(&self) -> bool {
-		self.enabled && !self.bypassed
 	}
 }
 
