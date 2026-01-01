@@ -1,7 +1,7 @@
 use crate::{
 	AudioGraph, AudioGraphNode, AutomationPattern, AutomationPatternAction, AutomationPatternId,
 	Channel, Clip, Event, Export, MidiPattern, MidiPatternAction, MidiPatternId, MusicalTime,
-	NodeId, NotePosition, PanMode, PluginId, Sample, SampleId,
+	NodeId, PanMode, PluginId, Position, Sample, SampleId,
 	clap_host::{AudioProcessor, ClapId},
 	resampler::Resampler,
 };
@@ -43,7 +43,7 @@ pub enum Message {
 	TogglePlayback,
 	ToggleMetronome,
 	Sample(Version, usize),
-	LoopMarker(Option<NotePosition>),
+	LoopMarker(Option<Position>),
 	Reset,
 
 	RequestUpdate,
@@ -100,7 +100,7 @@ pub struct Transport {
 	pub playing: bool,
 	pub metronome: bool,
 	pub sample: usize,
-	pub loop_marker: Option<NotePosition>,
+	pub loop_marker: Option<Position>,
 }
 
 impl Transport {

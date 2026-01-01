@@ -5,7 +5,7 @@ use crate::{
 		playlist::{Action, Selection, Status},
 	},
 };
-use generic_daw_core::{ClipPosition, MusicalTime, NotePosition, Transport};
+use generic_daw_core::{MusicalTime, Position, Transport};
 use iced::{
 	Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
@@ -449,23 +449,21 @@ where
 			Inner::Recording(inner) => {
 				if cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
-						let clip_position = ClipPosition::new(
-							NotePosition::new(
-								inner.position,
-								inner.position
-									+ MusicalTime::from_samples(
-										inner.core.samples().len(),
-										self.transport,
-									)
-									.max(MusicalTime::TICK),
-							),
-							MusicalTime::ZERO,
-						);
+						let position = Position::new(
+							inner.position,
+							inner.position
+								+ MusicalTime::from_samples(
+									inner.core.samples().len(),
+									self.transport,
+								)
+								.max(MusicalTime::TICK),
+						)
+						.into();
 
 						inner.lods.mesh(
 							inner.core.samples(),
 							self.transport,
-							clip_position,
+							position,
 							self.scale.x,
 							height,
 							theme.extended_palette().background.strong.text,

@@ -5,12 +5,6 @@ use std::{
 	time::Duration,
 };
 
-mod clip_position;
-mod note_position;
-
-pub use clip_position::ClipPosition;
-pub use note_position::NotePosition;
-
 #[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct MusicalTime(u64);
 

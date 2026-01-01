@@ -1,14 +1,14 @@
-use crate::{MusicalTime, NotePosition};
+use crate::{MusicalTime, Position};
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct ClipPosition {
-	position: NotePosition,
+pub struct OffsetPosition {
+	position: Position,
 	offset: MusicalTime,
 }
 
-impl ClipPosition {
+impl OffsetPosition {
 	#[must_use]
-	pub fn new(position: NotePosition, offset: MusicalTime) -> Self {
+	pub fn new(position: Position, offset: MusicalTime) -> Self {
 		Self { position, offset }
 	}
 
@@ -56,7 +56,13 @@ impl ClipPosition {
 	}
 
 	#[must_use]
-	pub fn note_position(self) -> NotePosition {
+	pub fn note_position(self) -> Position {
 		self.position
+	}
+}
+
+impl From<Position> for OffsetPosition {
+	fn from(value: Position) -> Self {
+		Self::new(value, MusicalTime::ZERO)
 	}
 }

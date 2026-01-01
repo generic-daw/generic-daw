@@ -27,7 +27,7 @@ use crate::{
 };
 use bit_set::BitSet;
 use generic_daw_core::{
-	MidiNote, MusicalTime, NodeId, NotePosition, PanMode, SampleId,
+	MidiNote, MusicalTime, NodeId, PanMode, Position, SampleId,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
 use generic_daw_widget::{
@@ -149,7 +149,7 @@ pub enum Message {
 	TogglePlayback,
 	Stop,
 	SeekTo(MusicalTime),
-	SetLoopMarker(Option<NotePosition>),
+	SetLoopMarker(Option<Position>),
 
 	Recording(NodeId),
 	RecordingEndStream,
@@ -860,7 +860,7 @@ impl ArrangementView {
 					MidiNote {
 						key,
 						velocity: 1.0,
-						position: NotePosition::new(pos, pos + MusicalTime::BEAT),
+						position: Position::new(pos, pos + MusicalTime::BEAT),
 					},
 				);
 				primary.insert(note);

@@ -1,4 +1,4 @@
-use crate::NotePosition;
+use crate::Position;
 use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -119,5 +119,5 @@ impl Display for MidiKey {
 pub struct MidiNote {
 	pub key: MidiKey,
 	pub velocity: f32,
-	pub position: NotePosition,
+	pub position: Position,
 }

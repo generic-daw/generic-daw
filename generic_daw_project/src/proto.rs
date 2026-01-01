@@ -46,7 +46,7 @@ pub struct Transport {
 	#[prost(uint32)]
 	pub numerator: u32,
 	#[prost(message)]
-	pub loop_marker: Option<NotePosition>,
+	pub loop_marker: Option<Position>,
 }
 
 #[derive(Message)]
@@ -122,7 +122,7 @@ pub struct Note {
 	#[prost(float, default = 1.0)]
 	pub velocity: f32,
 	#[prost(message, required)]
-	pub position: NotePosition,
+	pub position: Position,
 }
 
 #[derive(Clone, Copy, Message)]
@@ -144,7 +144,7 @@ pub struct AudioClip {
 	#[prost(message, required)]
 	pub sample: SampleIndex,
 	#[prost(message, required)]
-	pub position: ClipPosition,
+	pub position: OffsetPosition,
 }
 
 #[derive(Clone, Copy, Message)]
@@ -152,11 +152,11 @@ pub struct MidiClip {
 	#[prost(message, required)]
 	pub pattern: MidiPatternIndex,
 	#[prost(message, required)]
-	pub position: ClipPosition,
+	pub position: OffsetPosition,
 }
 
 #[derive(Clone, Copy, Message)]
-pub struct NotePosition {
+pub struct Position {
 	#[prost(uint64)]
 	pub start: u64,
 	#[prost(uint64)]
@@ -164,9 +164,9 @@ pub struct NotePosition {
 }
 
 #[derive(Clone, Copy, Message)]
-pub struct ClipPosition {
+pub struct OffsetPosition {
 	#[prost(message, required)]
-	pub position: NotePosition,
+	pub position: Position,
 	#[prost(uint64)]
 	pub offset: u64,
 }

@@ -1,9 +1,9 @@
-use crate::{ClipPosition, Event, MidiPatternId, daw_ctx::State};
+use crate::{Event, MidiPatternId, OffsetPosition, daw_ctx::State};
 
 #[derive(Clone, Copy, Debug)]
 pub struct MidiClip {
 	pub pattern: MidiPatternId,
-	pub position: ClipPosition,
+	pub position: OffsetPosition,
 }
 
 impl MidiClip {

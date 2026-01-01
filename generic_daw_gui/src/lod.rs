@@ -1,4 +1,4 @@
-use generic_daw_core::{ClipPosition, Transport};
+use generic_daw_core::{OffsetPosition, Transport};
 use iced::{
 	Color, Point, Rectangle, Size, Transformation,
 	advanced::graphics::{
@@ -22,7 +22,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 		&self,
 		samples: &[f32],
 		transport: &Transport,
-		clip_position: ClipPosition,
+		position: OffsetPosition,
 		x_scale: f32,
 		height: f32,
 		color: Color,
@@ -90,9 +90,9 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 		let lod_slices_per_sample = lod_slices_per_mesh_slice as f32 / samples_per_mesh_slice;
 		let lod_slices_per_px = lod_slices_per_mesh_slice as f32 / px_per_mesh_slice;
 
-		let start = clip_position.start().to_samples_f(transport);
-		let end = clip_position.end().to_samples_f(transport);
-		let offset = clip_position.offset().to_samples_f(transport);
+		let start = position.start().to_samples_f(transport);
+		let end = position.end().to_samples_f(transport);
+		let offset = position.offset().to_samples_f(transport);
 
 		let hidden_start_samples = 0f32.max(hidden_start_px * -samples_per_px);
 

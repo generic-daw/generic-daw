@@ -10,7 +10,7 @@ use crate::{
 	daw,
 };
 use generic_daw_core::{
-	ClipPosition, MidiKey, MidiNote, NotePosition, PanMode,
+	MidiKey, MidiNote, OffsetPosition, PanMode, Position,
 	clap_host::{PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
@@ -44,7 +44,7 @@ impl Arrangement {
 			loop_marker: self
 				.transport()
 				.loop_marker
-				.map(|loop_marker| proto::NotePosition {
+				.map(|loop_marker| proto::Position {
 					start: loop_marker.start().into(),
 					end: loop_marker.end().into(),
 				}),
@@ -62,7 +62,7 @@ impl Arrangement {
 				writer.push_pattern(pattern.notes.iter().map(|note| proto::Note {
 					key: note.key.0.into(),
 					velocity: note.velocity,
-					position: proto::NotePosition {
+					position: proto::Position {
 						start: note.position.start().into(),
 						end: note.position.end().into(),
 					},
@@ -79,8 +79,8 @@ impl Arrangement {
 					track.clips.iter().map(|clip| match clip {
 						Clip::Audio(audio) => proto::AudioClip {
 							sample: samples[&audio.sample],
-							position: proto::ClipPosition {
-								position: proto::NotePosition {
+							position: proto::OffsetPosition {
+								position: proto::Position {
 									start: audio.position.start().into(),
 									end: audio.position.end().into(),
 								},
@@ -90,8 +90,8 @@ impl Arrangement {
 						.into(),
 						Clip::Midi(midi) => proto::MidiClip {
 							pattern: midi_patterns[&midi.pattern],
-							position: proto::ClipPosition {
-								position: proto::NotePosition {
+							position: proto::OffsetPosition {
+								position: proto::Position {
 									start: midi.position.start().into(),
 									end: midi.position.end().into(),
 								},
@@ -219,9 +219,10 @@ impl Arrangement {
 
 		arrangement.set_bpm(NonZero::new(bpm as u16)?);
 		arrangement.set_numerator(NonZero::new(numerator as u8)?);
-		arrangement.set_loop_marker(loop_marker.map(|loop_marker| {
-			NotePosition::new(loop_marker.start.into(), loop_marker.end.into())
-		}));
+		arrangement
+			.set_loop_marker(loop_marker.map(|loop_marker| {
+				Position::new(loop_marker.start.into(), loop_marker.end.into())
+			}));
 
 		let mut samples = HashMap::new();
 
@@ -345,10 +346,7 @@ impl Arrangement {
 				.map(|note| MidiNote {
 					key: MidiKey(note.key as u8),
 					velocity: note.velocity,
-					position: NotePosition::new(
-						note.position.start.into(),
-						note.position.end.into(),
-					),
+					position: Position::new(note.position.start.into(), note.position.end.into()),
 				})
 				.collect();
 
@@ -438,8 +436,8 @@ impl Arrangement {
 							};
 							Clip::Audio(AudioClip {
 								sample: *sample,
-								position: ClipPosition::new(
-									NotePosition::new(
+								position: OffsetPosition::new(
+									Position::new(
 										audio.position.position.start.into(),
 										audio.position.position.end.into(),
 									),
@@ -449,8 +447,8 @@ impl Arrangement {
 						}
 						proto::Clip::Midi(midi) => Clip::Midi(MidiClip {
 							pattern: *midi_patterns.get(&midi.pattern)?,
-							position: ClipPosition::new(
-								NotePosition::new(
+							position: OffsetPosition::new(
+								Position::new(
 									midi.position.position.start.into(),
 									midi.position.position.end.into(),
 								),

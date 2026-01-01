@@ -2,18 +2,18 @@ use crate::MusicalTime;
 use std::ops::Add;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct NotePosition {
+pub struct Position {
 	start: MusicalTime,
 	end: MusicalTime,
 }
 
-impl Default for NotePosition {
+impl Default for Position {
 	fn default() -> Self {
 		Self::new(MusicalTime::ZERO, MusicalTime::TICK)
 	}
 }
 
-impl NotePosition {
+impl Position {
 	#[must_use]
 	pub fn new(start: MusicalTime, end: MusicalTime) -> Self {
 		debug_assert!(start < end);
@@ -68,7 +68,7 @@ impl NotePosition {
 	}
 }
 
-impl Add<MusicalTime> for NotePosition {
+impl Add<MusicalTime> for Position {
 	type Output = Self;
 
 	fn add(mut self, rhs: MusicalTime) -> Self::Output {

@@ -1,23 +1,21 @@
 use crate::arrangement_view::sample::Sample;
-use generic_daw_core::{ClipPosition, MusicalTime, NotePosition, SampleId, Transport};
+use generic_daw_core::{MusicalTime, OffsetPosition, Position, SampleId, Transport};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AudioClip {
 	pub sample: SampleId,
-	pub position: ClipPosition,
+	pub position: OffsetPosition,
 }
 
 impl AudioClip {
 	pub fn new(sample: SampleId, len: usize, transport: &Transport) -> Self {
 		Self {
 			sample,
-			position: ClipPosition::new(
-				NotePosition::new(
-					MusicalTime::ZERO,
-					MusicalTime::from_samples(len, transport).max(MusicalTime::TICK),
-				),
+			position: Position::new(
 				MusicalTime::ZERO,
-			),
+				MusicalTime::from_samples(len, transport).max(MusicalTime::TICK),
+			)
+			.into(),
 		}
 	}
 }

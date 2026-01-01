@@ -1,4 +1,4 @@
-use crate::{AudioClip, ClipPosition, Event, MidiClip, daw_ctx::State};
+use crate::{AudioClip, Event, MidiClip, OffsetPosition, daw_ctx::State};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Clip {
@@ -27,7 +27,7 @@ impl Clip {
 		}
 	}
 
-	pub fn position(&mut self) -> &mut ClipPosition {
+	pub fn position(&mut self) -> &mut OffsetPosition {
 		match self {
 			Self::Audio(clip) => &mut clip.position,
 			Self::Midi(clip) => &mut clip.position,

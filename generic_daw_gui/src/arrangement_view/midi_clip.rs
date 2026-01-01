@@ -1,17 +1,17 @@
 use crate::arrangement_view::midi_pattern::MidiPattern;
-use generic_daw_core::{ClipPosition, MidiPatternId};
+use generic_daw_core::{MidiPatternId, OffsetPosition};
 
 #[derive(Clone, Copy, Debug)]
 pub struct MidiClip {
 	pub pattern: MidiPatternId,
-	pub position: ClipPosition,
+	pub position: OffsetPosition,
 }
 
 impl MidiClip {
 	pub fn new(pattern: MidiPatternId) -> Self {
 		Self {
 			pattern,
-			position: ClipPosition::default(),
+			position: OffsetPosition::default(),
 		}
 	}
 }

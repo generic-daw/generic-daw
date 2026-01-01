@@ -16,8 +16,8 @@ use crate::{
 use bit_set::BitSet;
 use generic_daw_core::{
 	self as core, AudioGraphNode, Event, Export, Message, MidiKey, MidiNote, MidiPatternAction,
-	MidiPatternId, MusicalTime, NodeAction, NodeId, NodeImpl, NotePosition, PanMode, PluginId,
-	Stream, StreamTrait as _, Transport, Update, Version, build_output_stream,
+	MidiPatternId, MusicalTime, NodeAction, NodeId, NodeImpl, PanMode, PluginId, Position, Stream,
+	StreamTrait as _, Transport, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
 use iced::Task;
@@ -216,7 +216,7 @@ impl Arrangement {
 		self.node_action(id, NodeAction::PluginMixChanged(index, mix));
 	}
 
-	pub fn set_loop_marker(&mut self, loop_marker: Option<NotePosition>) {
+	pub fn set_loop_marker(&mut self, loop_marker: Option<Position>) {
 		if self.transport.loop_marker != loop_marker {
 			self.transport.loop_marker = loop_marker;
 			self.send(Message::LoopMarker(loop_marker));
@@ -268,7 +268,7 @@ impl Arrangement {
 		self.seek_to(
 			self.transport
 				.loop_marker
-				.map_or(MusicalTime::ZERO, NotePosition::start),
+				.map_or(MusicalTime::ZERO, Position::start),
 		);
 		self.send(Message::Reset);
 	}

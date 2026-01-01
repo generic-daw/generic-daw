@@ -1,5 +1,5 @@
 use crate::widget::{LINE_HEIGHT, get_time, maybe_snap_time};
-use generic_daw_core::{MusicalTime, NotePosition, Transport};
+use generic_daw_core::{MusicalTime, Position, Transport};
 use iced::{
 	Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
@@ -41,7 +41,7 @@ pub struct Seeker<'a, Message> {
 	offset: f32,
 	children: NoDebug<[Element<'a, Message>; 2]>,
 	seek_to: fn(MusicalTime) -> Message,
-	set_loop_marker: fn(Option<NotePosition>) -> Message,
+	set_loop_marker: fn(Option<Position>) -> Message,
 	pan: fn(Vector, Size) -> Message,
 	zoom: fn(Vector, Point, Size) -> Message,
 }
@@ -146,7 +146,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 						let loop_marker = (last_time != time).then(|| {
 							let start = last_time.min(time);
 							let end = last_time.max(time);
-							NotePosition::new(start, end)
+							Position::new(start, end)
 						});
 
 						if self.transport.loop_marker != loop_marker {
@@ -354,7 +354,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		left: impl Into<Element<'a, Message>>,
 		right: impl Into<Element<'a, Message>>,
 		seek_to: fn(MusicalTime) -> Message,
-		set_loop_marker: fn(Option<NotePosition>) -> Message,
+		set_loop_marker: fn(Option<Position>) -> Message,
 		pan: fn(Vector, Size) -> Message,
 		zoom: fn(Vector, Point, Size) -> Message,
 	) -> Self {
