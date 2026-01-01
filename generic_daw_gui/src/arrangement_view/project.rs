@@ -170,8 +170,7 @@ impl Arrangement {
 				arrangement_view::Message::SetArrangement(Box::new(wrapper).into()),
 			)))
 			.chain(
-				task.map(Box::new)
-					.map(arrangement_view::Message::Batch)
+				task.map(arrangement_view::Message::Batch)
 					.map(daw::Message::Arrangement),
 			)
 	}
@@ -187,7 +186,12 @@ impl Arrangement {
 		Task::batch([
 			Task::future(unblock(move || {
 				partial_sender
-					.send(Self::load(path, config, &plugin_bundles, &progress_sender))
+					.send(Self::do_load(
+						path,
+						config,
+						&plugin_bundles,
+						&progress_sender,
+					))
 					.unwrap();
 			}))
 			.discard(),
@@ -199,7 +203,7 @@ impl Arrangement {
 		])
 	}
 
-	fn load(
+	fn do_load(
 		path: Arc<Path>,
 		config: Config,
 		plugin_bundles: &HashMap<PluginDescriptor, NoDebug<PluginBundle>>,
@@ -498,8 +502,7 @@ impl Arrangement {
 					arrangement_view::Message::SetArrangement(Box::new(arrangement).into()),
 				)))
 				.chain(Task::batch([
-					task.map(Box::new)
-						.map(arrangement_view::Message::Batch)
+					task.map(arrangement_view::Message::Batch)
 						.map(daw::Message::Arrangement),
 					messages
 						.into_iter()

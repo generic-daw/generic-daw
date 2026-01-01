@@ -79,15 +79,15 @@ pub enum NodeAction {
 pub enum Update {
 	Peak(NodeId, [f32; 2]),
 	Param(PluginId, ClapId),
+	Load(Duration, usize),
 }
 
 #[derive(Clone, Debug)]
 pub struct Batch {
-	pub sample: Option<(Version, usize)>,
+	pub version: Version,
+	pub sample: usize,
 	pub updates: Vec<Update>,
 	pub now: Instant,
-	pub duration: Duration,
-	pub frames: usize,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -136,10 +136,8 @@ pub struct DawCtx {
 	on_bar_click: NoDebug<Box<[f32]>>,
 	off_bar_click: NoDebug<Box<[f32]>>,
 	needs_update: bool,
-	update_buffers: Vec<Vec<Update>>,
 	updates: Vec<Update>,
-	duration: Duration,
-	frames: usize,
+	update_buffers: Vec<Vec<Update>>,
 }
 
 impl DawCtx {
@@ -176,10 +174,8 @@ impl DawCtx {
 			on_bar_click: on_bar_click.finish().into_boxed_slice().into(),
 			off_bar_click: off_bar_click.finish().into_boxed_slice().into(),
 			needs_update: false,
-			update_buffers: Vec::new(),
 			updates: Vec::new(),
-			duration: Duration::ZERO,
-			frames: 0,
+			update_buffers: Vec::new(),
 		};
 
 		let id = daw_ctx.audio_graph.root();
@@ -280,6 +276,7 @@ impl DawCtx {
 	pub fn process(&mut self, mut buf: &mut [f32]) {
 		let start = Instant::now();
 		let frames = buf.len() / 2;
+		let updates = self.updates.len();
 
 		self.recv_events();
 
@@ -319,37 +316,31 @@ impl DawCtx {
 		}
 		self.metronome(buf, self.audio_graph.delay());
 
-		let sample = self.state.transport.playing.then(|| {
+		if self.state.transport.playing {
 			self.state.transport.sample += buf.len();
-			(self.state.transport.version, self.state.transport.sample)
-		});
+		}
 
 		let now = Instant::now();
 		let duration = now - start;
 
-		if std::mem::take(&mut self.needs_update) || sample.is_some() || !self.updates.is_empty() {
-			let updates = std::mem::take(&mut self.updates);
-			let duration = std::mem::take(&mut self.duration) + duration;
-			let frames = std::mem::take(&mut self.frames) + frames;
+		self.updates.push(Update::Load(duration, frames));
 
+		if std::mem::take(&mut self.needs_update)
+			|| self.state.transport.playing
+			|| self.updates.len() > updates + 1
+		{
 			let batch = Batch {
-				sample,
-				updates,
+				version: self.state.transport.version,
+				sample: self.state.transport.sample,
+				updates: std::mem::take(&mut self.updates),
 				now,
-				duration,
-				frames,
 			};
 
 			if let Err(PushError::Full(Batch { updates, .. })) = self.producer.push(batch) {
 				warn!("full ring buffer");
-
+				self.needs_update = true;
 				self.updates = updates;
-				self.duration = duration;
-				self.frames = frames;
 			}
-		} else {
-			self.duration += duration;
-			self.frames += frames;
 		}
 	}
 

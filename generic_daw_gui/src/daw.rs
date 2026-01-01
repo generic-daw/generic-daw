@@ -129,7 +129,7 @@ pub enum Message {
 	OnDoubleClick,
 }
 
-const _: () = assert!(size_of::<Message>() == 56);
+const _: () = assert!(size_of::<Message>() == 64);
 
 #[derive(Debug)]
 pub struct Daw {
@@ -551,7 +551,7 @@ impl Daw {
 					space::horizontal(),
 					row![
 						cpu(),
-						text!("{:.1}%", self.arrangement_view.arrangement.cpu() * 100.0)
+						text!("{:.1}%", self.arrangement_view.arrangement.load() * 100.0)
 							.font(Font::MONOSPACE)
 					]
 					.spacing(5),

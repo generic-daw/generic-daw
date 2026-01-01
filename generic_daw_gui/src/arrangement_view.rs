@@ -110,7 +110,7 @@ pub static AUTOSAVE_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 #[derive(Clone, Debug)]
 pub enum Message {
 	ClapHost(clap_host::Message),
-	Batch(Box<Batch>),
+	Batch(Batch),
 
 	SetArrangement(NoClone<Box<Arrangement>>),
 
@@ -232,7 +232,7 @@ impl ArrangementView {
 
 				loading: 0,
 			},
-			task.map(Box::new).map(Message::Batch),
+			task.map(Message::Batch),
 		)
 	}
 
@@ -250,7 +250,7 @@ impl ArrangementView {
 			Message::Batch(msg) => {
 				return Task::batch(
 					self.arrangement
-						.update(*msg)
+						.update(msg)
 						.into_iter()
 						.map(|msg| self.update(msg, config, state, plugin_bundles)),
 				);

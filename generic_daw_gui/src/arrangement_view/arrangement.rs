@@ -33,7 +33,7 @@ unique_id!(project);
 pub struct Arrangement {
 	transport: Transport,
 	project: Project,
-	cpu: f32,
+	load: f32,
 
 	samples: HoleyVec<Sample>,
 	midi_patterns: HoleyVec<MidiPattern>,
@@ -74,7 +74,7 @@ impl Arrangement {
 		(
 			Self {
 				transport,
-				cpu: 0.0,
+				load: 0.0,
 				project,
 
 				samples: HoleyVec::default(),
@@ -102,10 +102,8 @@ impl Arrangement {
 			return messages;
 		}
 
-		if let Some((version, sample)) = core.sample
-			&& version == self.transport.version
-		{
-			self.transport.sample = sample;
+		if core.version == self.transport.version {
+			self.transport.sample = core.sample;
 		}
 
 		for update in core.updates.drain(..) {
@@ -121,14 +119,15 @@ impl Arrangement {
 						MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
 					)));
 				}
+				Update::Load(duration, frames) => {
+					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
+					let load = duration.as_secs_f32() * mix;
+					self.load = self.load.mul_add(mix, load) / (mix + 1.0);
+				}
 			}
 		}
 
 		self.send(Message::ReuseUpdateBuffer(core.updates));
-
-		let mix = self.transport.sample_rate.get() as f32 / core.frames as f32;
-		let cpu = core.duration.as_secs_f32() * mix;
-		self.cpu = self.cpu.mul_add(mix, cpu) / (mix + 1.0);
 
 		messages
 	}
@@ -137,8 +136,8 @@ impl Arrangement {
 		&self.transport
 	}
 
-	pub fn cpu(&self) -> f32 {
-		self.cpu
+	pub fn load(&self) -> f32 {
+		self.load
 	}
 
 	pub fn samples(&self) -> &HoleyVec<Sample> {
