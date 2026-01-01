@@ -276,7 +276,10 @@ impl DawCtx {
 	pub fn process(&mut self, mut buf: &mut [f32]) {
 		let start = Instant::now();
 		let frames = buf.len() / 2;
-		let updates = self.updates.len();
+
+		let acc = self
+			.updates
+			.pop_if(|update| matches!(update, Update::Load(..)));
 
 		self.recv_events();
 
@@ -317,16 +320,23 @@ impl DawCtx {
 			buf = &mut buf[len..];
 		}
 
-		let now = Instant::now();
-		let duration = now - start;
-
 		self.audio_graph
 			.for_each_node_mut(|node| node.collect_updates(&mut self.updates));
+
+		let now = Instant::now();
+		let mut duration = now - start;
+		let mut frames = frames;
+
+		if let Some(Update::Load(d, f)) = acc {
+			duration += d;
+			frames += f;
+		}
+
 		self.updates.push(Update::Load(duration, frames));
 
 		if std::mem::take(&mut self.needs_update)
 			|| self.state.transport.playing
-			|| self.updates.len() > updates + 1
+			|| self.updates.len() > 1
 		{
 			let batch = Batch {
 				version: self.state.transport.version,

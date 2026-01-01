@@ -33,7 +33,7 @@ unique_id!(project);
 pub struct Arrangement {
 	transport: Transport,
 	project: Project,
-	load: f32,
+	load: Option<f32>,
 
 	samples: HoleyVec<Sample>,
 	midi_patterns: HoleyVec<MidiPattern>,
@@ -74,7 +74,7 @@ impl Arrangement {
 		(
 			Self {
 				transport,
-				load: 0.0,
+				load: None,
 				project,
 
 				samples: HoleyVec::default(),
@@ -122,7 +122,10 @@ impl Arrangement {
 				Update::Load(duration, frames) => {
 					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
 					let load = duration.as_secs_f32() * mix;
-					self.load = self.load.mul_add(mix, load) / (mix + 1.0);
+					self.load = Some(
+						self.load
+							.map_or(load, |l| l.mul_add(mix, load) / (mix + 1.0)),
+					);
 				}
 			}
 		}
@@ -137,7 +140,7 @@ impl Arrangement {
 	}
 
 	pub fn load(&self) -> f32 {
-		self.load
+		self.load.unwrap_or_default()
 	}
 
 	pub fn samples(&self) -> &HoleyVec<Sample> {

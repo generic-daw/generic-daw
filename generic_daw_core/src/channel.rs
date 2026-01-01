@@ -118,8 +118,8 @@ impl NodeImpl for Channel {
 			[0.0, 0.0]
 		};
 
-		if let Some(Update::Peaks(_, acc)) = acc {
-			peaks = [peaks[0].max(acc[0]), peaks[1].max(acc[1])];
+		if let Some(Update::Peaks(_, p)) = acc {
+			peaks = [peaks[0].max(p[0]), peaks[1].max(p[1])];
 		}
 
 		if peaks != self.last_peaks {
