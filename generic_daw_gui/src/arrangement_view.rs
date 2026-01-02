@@ -116,8 +116,7 @@ pub enum Message {
 
 	UpdateRequest,
 
-	ConnectRequest(NodeId, NodeId),
-	ConnectSucceeded((NodeId, NodeId)),
+	Connect(NodeId, NodeId),
 	Disconnect(NodeId, NodeId),
 
 	ChangedTab(Tab),
@@ -280,13 +279,7 @@ impl ArrangementView {
 				self.piano_roll_selection.get_mut().clear();
 			}
 			Message::UpdateRequest => self.arrangement.request_update(),
-			Message::ConnectRequest(from, to) => {
-				return self
-					.arrangement
-					.request_connect(from, to)
-					.map(Message::ConnectSucceeded);
-			}
-			Message::ConnectSucceeded((from, to)) => self.arrangement.connect_succeeded(from, to),
+			Message::Connect(from, to) => self.arrangement.connect(from, to),
 			Message::Disconnect(from, to) => self.arrangement.disconnect(from, to),
 			Message::ChangedTab(tab) => {
 				match self.tab {
@@ -310,10 +303,12 @@ impl ArrangementView {
 			}
 			Message::ChannelAdd => {
 				let id = self.arrangement.add_channel();
-				return self
-					.arrangement
-					.request_connect(id, self.arrangement.master().id)
-					.map(Message::ConnectSucceeded);
+				return self.update(
+					Message::Connect(id, self.arrangement.master().id),
+					config,
+					state,
+					plugin_bundles,
+				);
 			}
 			Message::ChannelRemove(id) => {
 				self.arrangement.remove_channel(id);
@@ -452,10 +447,12 @@ impl ArrangementView {
 				if self.soloed_track.is_some() {
 					self.arrangement.channel_toggle_enabled(id);
 				}
-				return self
-					.arrangement
-					.request_connect(id, self.arrangement.master().id)
-					.map(Message::ConnectSucceeded);
+				return self.update(
+					Message::Connect(id, self.arrangement.master().id),
+					config,
+					state,
+					plugin_bundles,
+				);
 			}
 			Message::TrackRemove(id) => {
 				let idx = self.arrangement.track_of(id).unwrap();
@@ -1402,7 +1399,7 @@ impl ArrangementView {
 									.on_press(if connected {
 										Message::Disconnect(selected_channel, node.id)
 									} else {
-										Message::ConnectRequest(selected_channel, node.id)
+										Message::Connect(selected_channel, node.id)
 									})
 									.into()
 							}

@@ -479,7 +479,7 @@ impl Arrangement {
 		}
 
 		for (from, to) in reader.iter_track_to_channel() {
-			messages.push(arrangement_view::Message::ConnectRequest(
+			messages.push(arrangement_view::Message::Connect(
 				*tracks.get(&from)?,
 				*channels.get(&to)?,
 			));
@@ -488,7 +488,7 @@ impl Arrangement {
 		drop(tracks);
 
 		for (from, to) in reader.iter_channel_to_channel() {
-			messages.push(arrangement_view::Message::ConnectRequest(
+			messages.push(arrangement_view::Message::Connect(
 				*channels.get(&from)?,
 				*channels.get(&to)?,
 			));

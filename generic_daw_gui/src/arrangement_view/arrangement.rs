@@ -119,6 +119,7 @@ impl Arrangement {
 						MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
 					)));
 				}
+				Update::Connect(from, to) => _ = self.outgoing_mut(from).insert(*to),
 				Update::Load(duration, frames) => {
 					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
 					let load = duration.as_secs_f32() * mix;
@@ -380,17 +381,8 @@ impl Arrangement {
 		}
 	}
 
-	pub fn request_connect(&mut self, from: NodeId, to: NodeId) -> Task<(NodeId, NodeId)> {
-		let (sender, receiver) = oneshot::channel();
-		self.send(Message::NodeConnect(from, to, sender));
-		Task::perform(receiver, Result::ok)
-			.and_then(Task::done)
-			.map(move |success| success.then_some((from, to)))
-			.and_then(Task::done)
-	}
-
-	pub fn connect_succeeded(&mut self, from: NodeId, to: NodeId) {
-		self.outgoing_mut(from).insert(*to);
+	pub fn connect(&mut self, from: NodeId, to: NodeId) {
+		self.send(Message::NodeConnect(from, to));
 	}
 
 	pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
