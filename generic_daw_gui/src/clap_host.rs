@@ -15,14 +15,13 @@ use iced::{
 	widget::{column, container, row, rule, scrollable, space, text},
 	window,
 };
-#[cfg(unix)]
-use iced::{
-	futures::{SinkExt as _, TryFutureExt as _},
-	stream,
-};
 use log::info;
 #[cfg(unix)]
-use smol::future::or;
+use smol::{
+	Async,
+	future::or,
+	stream::{StreamExt as _, unfold},
+};
 use smol::{Timer, unblock};
 use std::{collections::HashMap, ops::Deref as _, sync::mpsc::Receiver, time::Duration};
 #[cfg(unix)]
@@ -364,41 +363,37 @@ impl ClapHost {
 					{
 						self.fds.iter().flat_map(|(k, v)| repeat(k).zip(v)).map(
 							|(id, (&fd, &flags))| {
-								Subscription::run_with((fd, flags), |&(fd, flags)| {
+								Subscription::run_with((id, fd, flags), |&(id, fd, flags)| {
 									// SAFETY:
 									// This fd is owned by the plugin, and is open at least until
 									// [`PosixFd::Unregister`] is processed. This fd is not -1.
 									let async_fd =
-										smol::Async::new(unsafe { BorrowedFd::borrow_raw(fd) })
-											.unwrap();
+										Async::new(unsafe { BorrowedFd::borrow_raw(fd) }).unwrap();
 
-									stream::channel(100, async move |mut sender| {
-										loop {
-											let msg = or(
-												async_fd.readable().map_ok_or_else(
-													|_| FdFlags::READ,
-													|()| FdFlags::ERROR,
-												),
-												async_fd.writable().map_ok_or_else(
-													|_| FdFlags::WRITE,
-													|()| FdFlags::ERROR,
-												),
-											)
-											.await;
+									unfold(async_fd, async |async_fd| {
+										let msg = or(
+											async {
+												async_fd.readable().await.map_or_else(
+													|_| FdFlags::ERROR,
+													|()| FdFlags::READ,
+												)
+											},
+											async {
+												async_fd.writable().await.map_or_else(
+													|_| FdFlags::ERROR,
+													|()| FdFlags::WRITE,
+												)
+											},
+										)
+										.await;
 
-											if flags.intersects(msg)
-												&& sender.send(msg).await.is_err()
-											{
-												return;
-											}
-										}
+										Some((msg, async_fd))
 									})
+									.filter(move |&msg| flags.intersects(msg))
+									.map(PosixFdMessage::OnFd)
+									.map(MainThreadMessage::PosixFd.with(fd))
+									.map(Message::MainThread.with(PluginId(id)))
 								})
-								.map(PosixFdMessage::OnFd)
-								.with(fd)
-								.map(|(fd, msg)| MainThreadMessage::PosixFd(fd, msg))
-								.with(PluginId(id))
-								.map(|(id, msg)| Message::MainThread(id, msg))
 							},
 						)
 					}
