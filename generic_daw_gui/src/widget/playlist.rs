@@ -105,19 +105,22 @@ where
 	}
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-		Node::with_children(
-			limits.max(),
-			self.tracks
-				.iter_mut()
-				.zip(&mut tree.children)
-				.map(|(child, tree)| child.layout(tree, renderer, limits))
-				.scan(0.0, |acc, node| {
-					let node = node.translate(Vector::new(0.0, *acc));
-					*acc += node.bounds().height;
-					Some(node)
-				})
-				.collect(),
-		)
+		let mut height = 0.0;
+
+		let children = self
+			.tracks
+			.iter_mut()
+			.zip(&mut tree.children)
+			.map(|(child, tree)| {
+				let node = child
+					.layout(tree, renderer, limits)
+					.translate(Vector::new(0.0, height));
+				height += node.bounds().height;
+				node
+			})
+			.collect();
+
+		Node::with_children(Size::new(limits.max().width, height), children)
 	}
 
 	fn update(

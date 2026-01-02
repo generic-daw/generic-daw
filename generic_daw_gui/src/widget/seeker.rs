@@ -42,8 +42,8 @@ pub struct Seeker<'a, Message> {
 	children: NoDebug<[Element<'a, Message>; 2]>,
 	seek_to: fn(MusicalTime) -> Message,
 	set_loop_marker: fn(Option<Position>) -> Message,
-	pan: fn(Vector, f32) -> Message,
-	zoom: fn(Vector, Point, f32) -> Message,
+	pan: fn(Vector, f32, f32) -> Message,
+	zoom: fn(Vector, Point, f32, f32) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
@@ -105,12 +105,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
 		let state = tree.state.downcast_mut::<State>();
 		let right_half = Self::right_half(layout).shrink(padding::top(LINE_HEIGHT));
+		let height = right_half.height;
+
+		let right_child = layout.child(1).bounds();
+		let visible = right_child.y + right_child.height - right_half.y;
 
 		if let Event::Window(window::Event::RedrawRequested(..)) = event
-			&& state.last_height != right_half.height
+			&& state.last_height != height
 		{
-			state.last_height = right_half.height;
-			shell.publish((self.pan)(Vector::ZERO, state.last_height));
+			state.last_height = height;
+			shell.publish((self.pan)(Vector::ZERO, height, visible));
 			return;
 		}
 
@@ -211,21 +215,21 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
 				match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
 					(false, false, false) if x != 0.0 || y != 0.0 => {
-						shell.publish((self.pan)(Vector::new(x, y), right_half.height));
+						shell.publish((self.pan)(Vector::new(x, y), height, visible));
 						shell.capture_event();
 					}
 					(true, false, false) if y != 0.0 => {
 						y /= 128.0;
-						shell.publish((self.zoom)(Vector::new(y, 0.0), cursor, right_half.height));
+						shell.publish((self.zoom)(Vector::new(y, 0.0), cursor, height, visible));
 						shell.capture_event();
 					}
 					(false, true, false) if x != 0.0 || y != 0.0 => {
-						shell.publish((self.pan)(Vector::new(y, x), right_half.height));
+						shell.publish((self.pan)(Vector::new(y, x), height, visible));
 						shell.capture_event();
 					}
 					(false, false, true) if y != 0.0 => {
 						y /= -8.0;
-						shell.publish((self.zoom)(Vector::new(0.0, y), cursor, right_half.height));
+						shell.publish((self.zoom)(Vector::new(0.0, y), cursor, height, visible));
 						shell.capture_event();
 					}
 					_ => {}
@@ -355,8 +359,8 @@ impl<'a, Message> Seeker<'a, Message> {
 		right: impl Into<Element<'a, Message>>,
 		seek_to: fn(MusicalTime) -> Message,
 		set_loop_marker: fn(Option<Position>) -> Message,
-		pan: fn(Vector, f32) -> Message,
-		zoom: fn(Vector, Point, f32) -> Message,
+		pan: fn(Vector, f32, f32) -> Message,
+		zoom: fn(Vector, Point, f32, f32) -> Message,
 	) -> Self {
 		Self {
 			transport,

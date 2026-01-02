@@ -157,8 +157,8 @@ pub enum Message {
 
 	PlaylistAction(playlist::Action),
 	PianoRollAction(piano_roll::Action),
-	Pan(Vector, f32),
-	Zoom(Vector, Point, f32),
+	Pan(Vector, f32, f32),
+	Zoom(Vector, Point, f32, f32),
 
 	DeleteSelection,
 	ClearSelection,
@@ -592,26 +592,28 @@ impl ArrangementView {
 			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().0.write(&samples),
 			Message::PlaylistAction(action) => return self.handle_playlist_action(action),
 			Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
-			Message::Pan(pos_diff, height) => match self.tab {
+			Message::Pan(pos_diff, height, visible) => match self.tab {
 				Tab::Playlist => {
+					let old_position = self.playlist_position;
 					self.playlist_position += pos_diff;
 					self.playlist_position.x = self.playlist_position.x.max(0.0);
-					self.playlist_position.y = self.playlist_position.y.clamp(
-						0.0,
-						self.playlist_scale.y * self.arrangement.tracks().len() as f32,
-					);
+					self.playlist_position.y = self
+						.playlist_position
+						.y
+						.clamp(0.0, old_position.y + visible);
 				}
 				Tab::Mixer => {}
 				Tab::PianoRoll(..) => {
+					let old_position = self.piano_roll_position;
 					self.piano_roll_position += pos_diff;
 					self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
 					self.piano_roll_position.y = self
 						.piano_roll_position
 						.y
-						.clamp(0.0, self.piano_roll_scale.y.mul_add(128.0, -height));
+						.clamp(0.0, old_position.y + visible - height);
 				}
 			},
-			Message::Zoom(scale_diff, cursor, size) => {
+			Message::Zoom(scale_diff, cursor, height, visible) => {
 				let (old_scale, pos, new_scale) = match self.tab {
 					Tab::Playlist => {
 						let old_scale = self.playlist_scale;
@@ -639,7 +641,12 @@ impl ArrangementView {
 					(cursor.y + pos.y) * ((new_scale.y / old_scale.y) - 1.0),
 				);
 
-				return self.update(Message::Pan(pos_diff, size), config, state, plugin_bundles);
+				return self.update(
+					Message::Pan(pos_diff, height, visible),
+					config,
+					state,
+					plugin_bundles,
+				);
 			}
 			Message::DeleteSelection => match self.tab {
 				Tab::Playlist => return self.handle_playlist_action(playlist::Action::Delete),
