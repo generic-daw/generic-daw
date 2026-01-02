@@ -364,10 +364,7 @@ impl ArrangementView {
 			}
 			Message::PluginSetState(node, i, state) => {
 				let id = self.arrangement.node(node).plugins[i].id;
-				return self
-					.clap_host
-					.update(clap_host::Message::SetState(id, state), config)
-					.map(Message::ClapHost);
+				self.clap_host.set_state(id, &state);
 			}
 			Message::PluginMixChanged(node, i, mix) => {
 				self.arrangement.plugin_mix_changed(node, i, mix);
@@ -559,10 +556,10 @@ impl ArrangementView {
 					self.recording = Some((recording, node));
 					self.arrangement.play();
 
-					return Task::stream(poll_consumer(task, sample_rate, frames))
-						.map(NoDebug)
-						.map(Message::RecordingWrite)
-						.chain(Task::done(Message::RecordingFinalize));
+					return Task::run(poll_consumer(task, sample_rate, frames), |samples| {
+						Message::RecordingWrite(NoDebug(samples))
+					})
+					.chain(Task::done(Message::RecordingFinalize));
 				}
 			}
 			Message::RecordingEndStream => {

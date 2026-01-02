@@ -87,12 +87,10 @@ impl Arrangement {
 				producer,
 				stream: stream.into(),
 			},
-			Task::stream(poll_consumer(
-				consumer,
-				transport.sample_rate,
-				Some(transport.frames),
-			))
-			.map(move |core| Batch { core, project }),
+			Task::run(
+				poll_consumer(consumer, transport.sample_rate, Some(transport.frames)),
+				move |core| Batch { core, project },
+			),
 		)
 	}
 

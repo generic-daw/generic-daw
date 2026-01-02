@@ -30,14 +30,13 @@ use std::{
 	iter::repeat,
 	os::fd::{BorrowedFd, RawFd},
 };
-use utils::{HoleyVec, NoClone, NoDebug};
+use utils::{HoleyVec, NoClone};
 
 #[derive(Clone, Debug)]
 pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
 	SendEvent(PluginId, Event),
 	TickTimer(Duration),
-	SetState(PluginId, NoDebug<Box<[u8]>>),
 	GuiEmbedded(PluginId, NoClone<Box<Fragile<Plugin<Event>>>>),
 	WindowResized(window::Id, Size),
 	WindowCloseRequested(window::Id),
@@ -66,9 +65,6 @@ impl ClapHost {
 						plugin.tick_timer(timer_id);
 					}
 				}
-			}
-			Message::SetState(plugin, state) => {
-				self.plugins.get_mut(*plugin).unwrap().set_state(&state);
 			}
 			Message::GuiEmbedded(id, NoClone(plugin)) => {
 				let mut plugin = plugin.into_inner();
@@ -441,7 +437,7 @@ impl ClapHost {
 				{}
 			}))
 			.discard(),
-			Task::stream(stream).map(Message::MainThread.with(id)),
+			Task::run(stream, Message::MainThread.with(id)),
 		])
 	}
 
@@ -453,5 +449,9 @@ impl ClapHost {
 
 	pub fn get_state(&mut self, id: PluginId) -> Option<Vec<u8>> {
 		self.plugins.get_mut(*id).unwrap().get_state()
+	}
+
+	pub fn set_state(&mut self, id: PluginId, state: &[u8]) {
+		self.plugins.get_mut(*id).unwrap().set_state(state);
 	}
 }
