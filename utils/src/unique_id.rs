@@ -3,10 +3,7 @@ macro_rules! unique_id {
     ($mod_name:ident) => {
         unique_id!($mod_name: usize);
     };
-    ($mod_name:ident: $vis:vis) => {
-        unique_id!($mod_name: $vis usize);
-    };
-    ($mod_name:ident: $vis:vis $ty:ident) => {
+    ($mod_name:ident: $ty:ident) => {
         mod $mod_name {
             mod atomic {
                 #![allow(non_camel_case_types)]
@@ -26,34 +23,14 @@ macro_rules! unique_id {
 
             static ID: atomic::$ty = atomic::$ty::new($ty::MIN);
 
-            #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-            pub struct Id($vis $ty);
+            #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+            pub struct Id($ty);
 
             impl Id {
                 pub fn unique() -> Self {
                     Self(
                         ID.fetch_add(1, ::core::sync::atomic::Ordering::Relaxed),
                     )
-                }
-            }
-
-            impl ::core::convert::AsRef<$ty> for Id {
-                fn as_ref(&self) -> &$ty {
-                    &self.0
-                }
-            }
-
-            impl ::core::borrow::Borrow<$ty> for Id {
-                fn borrow(&self) -> &$ty {
-                    &self.0
-                }
-            }
-
-            impl ::core::ops::Deref for Id {
-                type Target = $ty;
-
-                fn deref(&self) -> &Self::Target {
-                    &self.0
                 }
             }
         }

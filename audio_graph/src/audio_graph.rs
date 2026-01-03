@@ -1,14 +1,14 @@
 use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry};
 use dsp::DelayLine;
 use std::{
+	collections::HashMap,
 	num::NonZero,
 	sync::{RwLockWriteGuard, atomic::Ordering::Relaxed},
 };
-use utils::HoleyVec;
 
 #[derive(Debug)]
 pub struct AudioGraph<Node: NodeImpl> {
-	graph: HoleyVec<Entry<Node>>,
+	graph: HashMap<NodeId, Entry<Node>>,
 	buffers: Vec<Box<[f32]>>,
 	root: NodeId,
 	frames: NonZero<u32>,
@@ -22,8 +22,8 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 		let mut buffers = Vec::new();
 
-		let mut graph = HoleyVec::default();
-		graph.insert(*root, Entry::new(node, frames, &mut buffers));
+		let mut graph = HashMap::default();
+		graph.insert(root, Entry::new(node, frames, &mut buffers));
 
 		Self {
 			graph,
@@ -99,7 +99,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			.max()
 			.unwrap_or_default();
 
-		for (dep, (delay_line, events)) in buffers.incoming.iter_mut() {
+		for (dep, (delay_line, events)) in &mut buffers.incoming {
 			let dep_entry = &self.graph[dep];
 			let dep_buffers = &*dep_entry.read_buffers_uncontended();
 			let delay_diff = max_delay - dep_entry.delay.load(Relaxed);
@@ -168,7 +168,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	fn entry_mut(&mut self, node: NodeId) -> &mut Entry<Node> {
-		self.graph.get_mut(*node).unwrap()
+		self.graph.get_mut(&node).unwrap()
 	}
 
 	pub fn for_node_mut(&mut self, node: NodeId, f: impl FnOnce(&mut Node)) {
@@ -183,27 +183,27 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 	#[must_use]
 	pub fn delay(&self) -> usize {
-		self.graph[*self.root()].delay.load(Relaxed)
+		self.graph[&self.root()].delay.load(Relaxed)
 	}
 
 	#[must_use]
 	pub fn connect(&mut self, from: NodeId, to: NodeId) -> bool {
-		if !self.graph.contains_key(*from) || !self.graph.contains_key(*to) {
+		if !self.graph.contains_key(&from) || !self.graph.contains_key(&to) {
 			return false;
 		}
 
-		if !self.entry_mut(from).buffers().outgoing.insert(*to) {
+		if !self.entry_mut(from).buffers().outgoing.insert(to) {
 			return true;
 		}
 
 		self.entry_mut(to)
 			.buffers()
 			.incoming
-			.insert(*from, (DelayLine::default(), Vec::new()));
+			.insert(from, (DelayLine::default(), Vec::new()));
 
 		if self.has_cycle() {
-			self.entry_mut(from).buffers().outgoing.remove(*to);
-			self.entry_mut(to).buffers().incoming.remove(*from);
+			self.entry_mut(from).buffers().outgoing.remove(&to);
+			self.entry_mut(to).buffers().incoming.remove(&from);
 			return false;
 		}
 
@@ -211,30 +211,30 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
-		self.entry_mut(from).buffers().outgoing.remove(*to);
-		self.entry_mut(to).buffers().incoming.remove(*from);
+		self.entry_mut(from).buffers().outgoing.remove(&to);
+		self.entry_mut(to).buffers().incoming.remove(&from);
 	}
 
 	pub fn insert(&mut self, node: Node) {
 		let id = node.id();
 
-		if let Some(entry) = self.graph.get_mut(*id) {
+		if let Some(entry) = self.graph.get_mut(&id) {
 			*entry.node() = node;
 		} else {
 			self.graph
-				.insert(*id, Entry::new(node, self.frames, &mut self.buffers));
+				.insert(id, Entry::new(node, self.frames, &mut self.buffers));
 		}
 	}
 
 	pub fn remove(&mut self, node: NodeId) {
-		if let Some(mut entry) = self.graph.remove(*node) {
+		if let Some(mut entry) = self.graph.remove(&node) {
 			for incoming in entry.buffers().incoming.keys() {
 				self.graph
 					.get_mut(incoming)
 					.unwrap()
 					.buffers()
 					.outgoing
-					.remove(*node);
+					.remove(&node);
 			}
 
 			for outgoing in &entry.buffers().outgoing {
@@ -243,7 +243,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 					.unwrap()
 					.buffers()
 					.incoming
-					.remove(*node);
+					.remove(&node);
 			}
 
 			self.buffers

@@ -1,5 +1,4 @@
 use crate::widget::{Delta, OPACITY_33, get_time, key_y, maybe_snap_time};
-use bit_set::BitSet;
 use generic_daw_core::{MidiKey, MidiNote, MusicalTime, Transport};
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -15,7 +14,7 @@ use iced::{
 	border, keyboard,
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashSet};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
@@ -44,8 +43,8 @@ pub enum Status {
 #[derive(Debug, Default)]
 pub struct Selection {
 	pub status: Status,
-	pub primary: BitSet,
-	pub secondary: BitSet,
+	pub primary: HashSet<usize>,
+	pub secondary: HashSet<usize>,
 }
 
 impl Selection {
@@ -167,7 +166,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 						{
 							selection.secondary.insert(idx);
 						} else {
-							selection.secondary.remove(idx);
+							selection.secondary.remove(&idx);
 						}
 					});
 
@@ -510,7 +509,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 	fn draw_note(&self, note: usize, renderer: &mut Renderer, theme: &Theme, bounds: Rectangle) {
 		let selection = self.selection.borrow();
 
-		let color = if selection.primary.contains(note) || selection.secondary.contains(note) {
+		let color = if selection.primary.contains(&note) || selection.secondary.contains(&note) {
 			theme.extended_palette().danger.weak.color
 		} else {
 			theme.extended_palette().primary.weak.color

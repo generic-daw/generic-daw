@@ -10,7 +10,7 @@ pub struct AutomationClip {
 impl AutomationClip {
 	#[must_use]
 	pub fn interpolate(&self, state: &State) -> f32 {
-		let pattern = &state.automation_patterns[*self.pattern];
+		let pattern = &state.automation_patterns[&self.pattern];
 
 		let (start, end, offset) = self.position.to_samples(&state.transport);
 		let now = state.transport.sample.clamp(start, end) + offset;

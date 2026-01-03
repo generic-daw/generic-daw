@@ -11,5 +11,4 @@ workspace = true
 dsp.workspace = true
 utils.workspace = true
 
-bit-set = "0.8.0"
 rayon-core = "1.13.0"

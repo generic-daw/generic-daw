@@ -82,7 +82,7 @@ impl MusicalTime {
 		let bpm = transport.bpm.get() as f64;
 		let sample_rate = transport.sample_rate.get() as f64;
 
-		let samples = (beat * sample_rate) / (bpm * (Self::TICKS_PER_BEAT / 60 / 2) as f64);
+		let samples = (beat * sample_rate) / bpm / (Self::TICKS_PER_BEAT / 60 / 2) as f64;
 
 		samples as f32
 	}
@@ -93,7 +93,7 @@ impl MusicalTime {
 		let bpm = transport.bpm.get() as u64;
 		let sample_rate = transport.sample_rate.get() as u64;
 
-		let samples = (time * sample_rate) / (bpm * (Self::TICKS_PER_BEAT / 60 / 2));
+		let samples = (time * sample_rate) / bpm / (Self::TICKS_PER_BEAT / 60 / 2);
 
 		samples.next_multiple_of(2) as usize
 	}

@@ -8,10 +8,11 @@ use crate::{
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, PushError, RingBuffer};
 use std::{
+	collections::HashMap,
 	num::NonZero,
 	time::{Duration, Instant},
 };
-use utils::{HoleyVec, NoDebug, include_f32s, unique_id};
+use utils::{NoDebug, include_f32s, unique_id};
 
 unique_id!(version);
 
@@ -124,9 +125,9 @@ impl Transport {
 #[derive(Debug)]
 pub struct State {
 	pub transport: Transport,
-	pub samples: HoleyVec<Sample>,
-	pub midi_patterns: HoleyVec<MidiPattern>,
-	pub automation_patterns: HoleyVec<AutomationPattern>,
+	pub samples: HashMap<SampleId, Sample>,
+	pub midi_patterns: HashMap<MidiPatternId, MidiPattern>,
+	pub automation_patterns: HashMap<AutomationPatternId, AutomationPattern>,
 }
 
 pub struct DawCtx {
@@ -166,9 +167,9 @@ impl DawCtx {
 			audio_graph: AudioGraph::new(Channel::default(), transport.frames),
 			state: State {
 				transport,
-				samples: HoleyVec::default(),
-				midi_patterns: HoleyVec::default(),
-				automation_patterns: HoleyVec::default(),
+				samples: HashMap::default(),
+				midi_patterns: HashMap::default(),
+				automation_patterns: HashMap::default(),
 			},
 			producer,
 			consumer,
@@ -194,39 +195,39 @@ impl DawCtx {
 				Message::MidiPatternAction(pattern, action) => {
 					self.state
 						.midi_patterns
-						.get_mut(*pattern)
+						.get_mut(&pattern)
 						.unwrap()
 						.apply(action);
 				}
 				Message::AutomationPatternAction(pattern, action) => {
 					self.state
 						.automation_patterns
-						.get_mut(*pattern)
+						.get_mut(&pattern)
 						.unwrap()
 						.apply(action);
 				}
 				Message::SampleAdd(sample) => {
-					let sample = self.state.samples.insert(*sample.id, sample);
+					let sample = self.state.samples.insert(sample.id, sample);
 					debug_assert!(sample.is_none());
 				}
 				Message::SampleRemove(sample) => {
-					let sample = self.state.samples.remove(*sample);
+					let sample = self.state.samples.remove(&sample);
 					debug_assert!(sample.is_some());
 				}
 				Message::MidiPatternAdd(pattern) => {
-					let pattern = self.state.midi_patterns.insert(*pattern.id, pattern);
+					let pattern = self.state.midi_patterns.insert(pattern.id, pattern);
 					debug_assert!(pattern.is_none());
 				}
 				Message::MidiPatternRemove(pattern) => {
-					let pattern = self.state.midi_patterns.remove(*pattern);
+					let pattern = self.state.midi_patterns.remove(&pattern);
 					debug_assert!(pattern.is_some());
 				}
 				Message::AutomationPatternAdd(pattern) => {
-					let pattern = self.state.automation_patterns.insert(*pattern.id, pattern);
+					let pattern = self.state.automation_patterns.insert(pattern.id, pattern);
 					debug_assert!(pattern.is_none());
 				}
 				Message::AutomationPatternRemove(pattern) => {
-					let pattern = self.state.automation_patterns.remove(*pattern);
+					let pattern = self.state.automation_patterns.remove(&pattern);
 					debug_assert!(pattern.is_some());
 				}
 				Message::NodeAdd(node) => self.audio_graph.insert(*node),
@@ -260,9 +261,9 @@ impl DawCtx {
 
 					let mut state = State {
 						transport: self.state.transport,
-						samples: HoleyVec::default(),
-						midi_patterns: HoleyVec::default(),
-						automation_patterns: HoleyVec::default(),
+						samples: HashMap::default(),
+						midi_patterns: HashMap::default(),
+						automation_patterns: HashMap::default(),
 					};
 					std::mem::swap(&mut self.state, &mut state);
 

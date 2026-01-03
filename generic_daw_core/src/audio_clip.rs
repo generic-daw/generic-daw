@@ -10,7 +10,7 @@ impl AudioClip {
 	pub fn process(&self, state: &State, audio: &mut [f32]) {
 		debug_assert!(state.transport.playing);
 
-		let sample = &state.samples[*self.sample];
+		let sample = &state.samples[&self.sample];
 
 		let (start, end, offset) = self.position.to_samples(&state.transport);
 		let len = sample.samples.len().saturating_sub(offset).min(end - start);

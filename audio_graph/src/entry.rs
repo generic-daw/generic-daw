@@ -1,14 +1,14 @@
-use crate::NodeImpl;
-use bit_set::BitSet;
+use crate::{NodeId, NodeImpl};
 use dsp::DelayLine;
 use std::{
+	collections::{HashMap, HashSet},
 	num::NonZero,
 	sync::{
 		Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
 		atomic::{AtomicIsize, AtomicUsize},
 	},
 };
-use utils::{HoleyVec, NoDebug, boxed_slice};
+use utils::{NoDebug, boxed_slice};
 
 #[derive(Debug)]
 pub struct Entry<Node: NodeImpl> {
@@ -21,8 +21,8 @@ pub struct Entry<Node: NodeImpl> {
 
 #[derive(Debug)]
 pub struct Buffers<Node: NodeImpl> {
-	pub incoming: HoleyVec<(DelayLine, Vec<Node::Event>)>,
-	pub outgoing: BitSet,
+	pub incoming: HashMap<NodeId, (DelayLine, Vec<Node::Event>)>,
+	pub outgoing: HashSet<NodeId>,
 	pub audio: NoDebug<Box<[f32]>>,
 	pub scratch: NoDebug<Box<[f32]>>,
 	pub events: Vec<Node::Event>,
@@ -44,8 +44,8 @@ impl<Node: NodeImpl> Entry<Node> {
 		Self {
 			node: Mutex::new(node),
 			buffers: RwLock::new(Buffers {
-				incoming: HoleyVec::default(),
-				outgoing: BitSet::default(),
+				incoming: HashMap::default(),
+				outgoing: HashSet::default(),
 				audio: buf().into(),
 				scratch: buf().into(),
 				events: Vec::new(),

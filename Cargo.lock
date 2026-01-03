@@ -281,7 +281,6 @@ checksum = "f93ebbf82d06013f4c41fe71303feb980cddd78496d904d06be627972de51a24"
 name = "audio_graph"
 version = "0.0.0"
 dependencies = [
- "bit-set",
  "dsp",
  "rayon-core",
  "utils",
@@ -1202,7 +1201,6 @@ dependencies = [
 name = "generic_daw"
 version = "0.0.0"
 dependencies = [
- "bit-set",
  "crc32c",
  "dirs",
  "env_logger",
@@ -3467,9 +3465,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.112"
+version = "2.0.113"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21f182278bf2d2bcb3c88b1b08a37df029d71ce3d3ae26168e3c653b213b99d4"
+checksum = "678faa00651c9eb72dd2020cbdf275d92eccb2400d568e419efdd64838145cb4"
 dependencies = [
  "proc-macro2",
  "quote",

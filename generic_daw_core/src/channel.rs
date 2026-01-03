@@ -5,7 +5,7 @@ use crate::{
 use std::f32::consts::{FRAC_PI_4, SQRT_2};
 use utils::{ShiftMoveExt as _, unique_id};
 
-unique_id!(plugin: pub);
+unique_id!(plugin);
 
 pub use plugin::Id as PluginId;
 

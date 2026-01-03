@@ -147,13 +147,13 @@ impl Arrangement {
 
 		for track in self.tracks() {
 			for outgoing in self.outgoing(track.id) {
-				writer.connect_track_to_channel(tracks[&track.id], channels[&outgoing]);
+				writer.connect_track_to_channel(tracks[&track.id], channels[outgoing]);
 			}
 		}
 
 		for channel in self.channels() {
 			for outgoing in self.outgoing(channel.id) {
-				writer.connect_channel_to_channel(channels[&channel.id], channels[&outgoing]);
+				writer.connect_channel_to_channel(channels[&channel.id], channels[outgoing]);
 			}
 		}
 
