@@ -1,6 +1,6 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef},
-	widget::{Delta, clip, get_time, maybe_snap_time, track::Track},
+	widget::{Delta, OPACITY_33, clip, get_time, maybe_snap_time, track::Track},
 };
 use generic_daw_core::{MusicalTime, Transport};
 use iced::{
@@ -521,25 +521,27 @@ where
 
 			let x = start_pos.to_samples_f(self.transport) / samples_per_px;
 			let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
-			let x = x - self.position.x;
+			let x = x + viewport.x - self.position.x;
 
 			renderer.with_layer(viewport, |renderer| {
-				renderer.with_translation(Vector::new(viewport.x, 0.0), |renderer| {
-					renderer.fill_quad(
-						Quad {
-							bounds: Rectangle {
-								x,
-								y,
-								width,
-								height,
-							},
-							border: border::width(1)
-								.color(theme.extended_palette().danger.weak.color),
-							..Quad::default()
+				renderer.fill_quad(
+					Quad {
+						bounds: Rectangle {
+							x,
+							y,
+							width,
+							height,
 						},
-						theme.extended_palette().danger.weak.color.scale_alpha(0.2),
-					);
-				});
+						border: border::width(1).color(theme.extended_palette().danger.weak.color),
+						..Quad::default()
+					},
+					theme
+						.extended_palette()
+						.danger
+						.weak
+						.color
+						.scale_alpha(OPACITY_33),
+				);
 			});
 		}
 	}

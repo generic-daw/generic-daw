@@ -109,9 +109,4 @@ where
 	pub fn key_of(&self, value: &T) -> Option<usize> {
 		self.iter().find_map(|(k, v)| (value == v).then_some(k))
 	}
-
-	#[must_use]
-	pub fn contains_value(&self, value: &T) -> bool {
-		self.key_of(value).is_some()
-	}
 }

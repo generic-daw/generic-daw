@@ -49,14 +49,19 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 		};
 
 		for key in (0..128).map(MidiKey) {
-			let note_bounds = Rectangle::new(
-				bounds.position() + Vector::new(0.0, key_y(key, *self.position, *self.scale)),
-				Size::new(PIANO_WIDTH, self.scale.y),
-			);
+			let note_position =
+				bounds.position() + Vector::new(0.0, key_y(key, *self.position, *self.scale));
+
+			let Some(clipped_bounds) =
+				Rectangle::new(note_position, Size::new(PIANO_WIDTH, self.scale.y))
+					.intersection(&bounds)
+			else {
+				continue;
+			};
 
 			renderer.fill_quad(
 				Quad {
-					bounds: note_bounds,
+					bounds: clipped_bounds,
 					..Quad::default()
 				},
 				if key.is_black() {
@@ -81,13 +86,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 
 			renderer.fill_text(
 				note_name,
-				note_bounds.position() + Vector::new(3.0, 0.0),
+				note_position + Vector::new(3.0, 0.0),
 				if key.is_black() {
 					Color::WHITE
 				} else {
 					Color::BLACK
 				},
-				note_bounds,
+				clipped_bounds,
 			);
 		}
 	}

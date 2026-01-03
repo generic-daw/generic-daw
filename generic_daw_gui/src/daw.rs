@@ -12,6 +12,7 @@ use crate::{
 		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
 		progress_bar_with_radius, split_style,
 	},
+	widget::OPACITY_67,
 };
 use generic_daw_core::{
 	Export, MusicalTime,
@@ -613,7 +614,7 @@ impl Daw {
 					center(opaque(
 						config_view.view(&self.config).map(Message::ConfigView)
 					))
-					.style(|_| container::background(Color::BLACK.scale_alpha(0.8))),
+					.style(|_| container::background(Color::BLACK.scale_alpha(OPACITY_67))),
 				)
 				.on_press(Message::CloseConfigView),
 			)),
@@ -690,7 +691,7 @@ impl Daw {
 						.spacing(20)
 					)
 					.padding(50)
-					.style(|_| container::background(Color::BLACK.scale_alpha(0.8))),
+					.style(|_| container::background(Color::BLACK.scale_alpha(OPACITY_67))),
 				)
 				.interaction(Interaction::Progress),
 			))

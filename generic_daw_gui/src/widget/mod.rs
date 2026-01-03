@@ -12,6 +12,9 @@ pub mod track;
 pub const LINE_HEIGHT: f32 = TEXT_HEIGHT * 1.3;
 pub const TEXT_HEIGHT: f32 = 16.0;
 
+pub const OPACITY_33: f32 = 1.0 / 3.0;
+pub const OPACITY_67: f32 = 2.0 / 3.0;
+
 #[derive(Clone, Copy, Debug)]
 pub enum Delta<T> {
 	Positive(T),

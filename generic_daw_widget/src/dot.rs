@@ -103,38 +103,29 @@ impl<Message> Widget<Message, Theme, Renderer> for Dot {
 		_cursor: Cursor,
 		_viewport: &Rectangle,
 	) {
-		let mut bounds = layout.bounds();
-		let border = border::rounded(f32::INFINITY).color(style.text_color);
-
-		let outline = Quad {
-			bounds,
-			border: border.width(2),
-			..Quad::default()
-		};
-
-		renderer.fill_quad(outline, Color::TRANSPARENT);
+		renderer.fill_quad(
+			Quad {
+				bounds: layout.bounds(),
+				border: border::rounded(f32::INFINITY)
+					.color(style.text_color)
+					.width(2),
+				..Quad::default()
+			},
+			Color::TRANSPARENT,
+		);
 
 		let state = tree.state.downcast_ref::<State>();
-
-		let factor = state.animation.interpolate(0.0, 1.0, state.now);
-		if factor == 0.0 {
-			return;
+		let animation = state.animation.interpolate(1.0, 0.0, state.now);
+		if animation != 1.0 {
+			renderer.fill_quad(
+				Quad {
+					bounds: layout.bounds().shrink(self.radius * animation),
+					border: border::rounded(f32::INFINITY),
+					..Quad::default()
+				},
+				style.text_color,
+			);
 		}
-
-		let offset = self.radius * (1.0 - factor);
-
-		bounds.x += offset;
-		bounds.y += offset;
-		bounds.width *= factor;
-		bounds.height *= factor;
-
-		let inner = Quad {
-			bounds,
-			border,
-			..Quad::default()
-		};
-
-		renderer.fill_quad(inner, style.text_color);
 	}
 }
 

@@ -1,7 +1,7 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef, Recording as RecordingWrapper},
 	widget::{
-		LINE_HEIGHT, get_time, maybe_snap_time,
+		LINE_HEIGHT, OPACITY_33, get_time, maybe_snap_time,
 		playlist::{Action, Selection, Status},
 	},
 };
@@ -310,21 +310,23 @@ where
 			Inner::Recording(..) => theme.extended_palette().warning.weak.color,
 		};
 
-		let text_background = Quad {
-			bounds: upper_bounds,
-			..Quad::default()
-		};
-		renderer.fill_quad(text_background, color);
+		renderer.fill_quad(
+			Quad {
+				bounds: upper_bounds,
+				..Quad::default()
+			},
+			color,
+		);
 
 		if upper_bounds.width > 3.0 {
-			let name = match self.inner {
+			let clip_name = match self.inner {
 				Inner::AudioClip(inner) => &inner.sample.name,
 				Inner::MidiClip(..) => "MIDI Clip",
 				Inner::Recording(inner) => &inner.name,
 			};
 
-			let text = Text {
-				content: name.into(),
+			let clip_name = Text {
+				content: clip_name.into(),
 				bounds: Size::new(f32::INFINITY, 0.0),
 				size: renderer.default_size(),
 				line_height: LineHeight::default(),
@@ -337,25 +339,26 @@ where
 			};
 
 			renderer.fill_text(
-				text,
+				clip_name,
 				upper_bounds.position() + Vector::new(3.0, 0.0),
 				theme.extended_palette().background.strong.text,
 				upper_bounds,
 			);
 		}
 
-		if bounds.height == upper_bounds.height {
+		let lower_bounds = bounds.shrink(padding::top(upper_bounds.height));
+		if lower_bounds.height <= 0.0 {
 			return;
 		}
 
-		let lower_bounds = bounds.shrink(padding::top(upper_bounds.height));
-
-		let clip_background = Quad {
-			bounds: lower_bounds,
-			border: border::width(1).color(color),
-			..Quad::default()
-		};
-		renderer.fill_quad(clip_background, color.scale_alpha(0.2));
+		renderer.fill_quad(
+			Quad {
+				bounds: lower_bounds,
+				border: border::width(1).color(color),
+				..Quad::default()
+			},
+			color.scale_alpha(OPACITY_33),
+		);
 
 		let state = tree.state.downcast_ref::<State>();
 		let cache = &mut *state.cache.borrow_mut();
@@ -426,12 +429,11 @@ where
 
 					let top_pixel = f32::from(max - note.key.0 + 1) * note_height;
 
-					let note_bounds = Rectangle::new(
+					let Some(bounds) = Rectangle::new(
 						Point::new(start_pixel, top_pixel) + offset,
 						Size::new(end_pixel - start_pixel, note_height),
-					);
-
-					let Some(bounds) = note_bounds.intersection(&lower_bounds) else {
+					)
+					.intersection(&lower_bounds) else {
 						continue;
 					};
 

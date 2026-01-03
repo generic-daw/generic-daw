@@ -22,6 +22,7 @@ humantime = "2.3.0"
 iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", default-features = false, features = [
 	"advanced",
 	"smol",
+	"web-colors",
 	"wgpu",
 	"x11",
 ] }

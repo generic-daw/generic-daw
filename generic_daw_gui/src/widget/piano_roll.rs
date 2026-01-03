@@ -1,4 +1,4 @@
-use crate::widget::{Delta, get_time, key_y, maybe_snap_time};
+use crate::widget::{Delta, OPACITY_33, get_time, key_y, maybe_snap_time};
 use bit_set::BitSet;
 use generic_daw_core::{MidiKey, MidiNote, MusicalTime, Transport};
 use iced::{
@@ -312,28 +312,31 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 			let y = key_y(start_key, *self.position, *self.scale);
 			let height = key_y(end_key, *self.position, *self.scale) + self.scale.y - y;
+			let y = y + viewport.y;
 
 			let x = start_pos.to_samples_f(self.transport) / samples_per_px;
 			let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
-			let x = x - self.position.x;
+			let x = x + viewport.x - self.position.x;
 
 			renderer.with_layer(viewport, |renderer| {
-				renderer.with_translation(Vector::new(viewport.x, viewport.y), |renderer| {
-					renderer.fill_quad(
-						Quad {
-							bounds: Rectangle {
-								x,
-								y,
-								width,
-								height,
-							},
-							border: border::width(1)
-								.color(theme.extended_palette().danger.weak.color),
-							..Quad::default()
+				renderer.fill_quad(
+					Quad {
+						bounds: Rectangle {
+							x,
+							y,
+							width,
+							height,
 						},
-						theme.extended_palette().danger.weak.color.scale_alpha(0.2),
-					);
-				});
+						border: border::width(1).color(theme.extended_palette().danger.weak.color),
+						..Quad::default()
+					},
+					theme
+						.extended_palette()
+						.danger
+						.weak
+						.color
+						.scale_alpha(OPACITY_33),
+				);
 			});
 		}
 	}

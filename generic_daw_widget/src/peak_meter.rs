@@ -189,15 +189,14 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 
 		if bar > 0.0 {
 			let bar_pos = bounds.height * bar.min(1.0);
-			let bar_quad = Quad {
-				bounds: Rectangle::new(
-					bounds.position() + Vector::new(0.0, bounds.height - bar_pos),
-					Size::new(bounds.width, bar_pos),
-				),
-				..Quad::default()
-			};
 			renderer.fill_quad(
-				bar_quad,
+				Quad {
+					bounds: Rectangle::new(
+						bounds.position() + Vector::new(0.0, bounds.height - bar_pos),
+						Size::new(bounds.width, bar_pos),
+					),
+					..Quad::default()
+				},
 				if bar > DANGER {
 					danger
 				} else if bar > WARNING {
@@ -215,15 +214,14 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 
 		if line > 0.0 {
 			let line_pos = bounds.height * line.min(1.0);
-			let line_quad = Quad {
-				bounds: Rectangle::new(
-					bounds.position() + Vector::new(0.0, bounds.height - line_pos),
-					Size::new(bounds.width, line_pos.min(2.0)),
-				),
-				..Quad::default()
-			};
 			renderer.fill_quad(
-				line_quad,
+				Quad {
+					bounds: Rectangle::new(
+						bounds.position() + Vector::new(0.0, bounds.height - line_pos),
+						Size::new(bounds.width, line_pos.min(2.0)),
+					),
+					..Quad::default()
+				},
 				if line > DANGER {
 					danger
 				} else if line > WARNING {
