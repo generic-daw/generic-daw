@@ -195,9 +195,11 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		viewport: &Rectangle,
 		renderer: &Renderer,
 	) -> Interaction {
-		if tree.state.downcast_ref::<State>().dragging.is_some() {
+		let state = tree.state.downcast_ref::<State>();
+
+		if state.dragging.is_some() {
 			Interaction::ResizingVertically
-		} else if cursor.is_over(layout.bounds()) {
+		} else if state.hovering {
 			let interaction = self.child.as_widget().mouse_interaction(
 				&tree.children[0],
 				layout,
