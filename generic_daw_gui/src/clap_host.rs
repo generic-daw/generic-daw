@@ -435,9 +435,11 @@ impl ClapHost {
 		let (sender, stream) = smol::channel::unbounded();
 		Task::batch([
 			Task::future(unblock(move || {
-				while let Ok(msg) = receiver.recv()
-					&& sender.try_send(msg).is_ok()
-				{}
+				for msg in receiver {
+					if sender.try_send(msg).is_err() {
+						return;
+					}
+				}
 			}))
 			.discard(),
 			Task::run(stream, Message::MainThread.with(id)),

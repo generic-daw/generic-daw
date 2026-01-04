@@ -245,7 +245,6 @@ impl Arrangement {
 			let progress_per_audio = (reader.iter_samples().count() as f32).recip();
 
 			let mut seen = HashSet::new();
-
 			let mut paths = config
 				.sample_paths
 				.iter()
@@ -272,6 +271,7 @@ impl Arrangement {
 				.collect::<HashMap<_, _>>();
 
 			drop(seen);
+			drop(samples_map);
 
 			for (idx, sample) in reader.iter_samples() {
 				let sample_rate = arrangement.transport().sample_rate;
@@ -321,7 +321,7 @@ impl Arrangement {
 			drop(paths);
 			drop(done);
 
-			while let Ok((idx, sample)) = receiver.recv() {
+			for (idx, sample) in receiver {
 				match sample {
 					Feedback::Use(sample) => {
 						let id = sample.gui.id;
@@ -464,6 +464,9 @@ impl Arrangement {
 			}
 		}
 
+		drop(samples);
+		drop(midi_patterns);
+
 		let mut channels = HashMap::new();
 		let mut iter_channels = reader.iter_channels();
 
@@ -495,6 +498,7 @@ impl Arrangement {
 		}
 
 		drop(channels);
+		drop(reader);
 
 		Some(
 			Task::done(daw::Message::MergeConfig(config.into(), false))

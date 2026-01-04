@@ -13,7 +13,7 @@ clap_host.workspace = true
 utils.workspace = true
 
 audioadapter-buffers = "2.0.0"
-cpal = "0.17.0"
+cpal = "0.17.1"
 hound = "3.5.1"
 log = "0.4.29"
 oneshot = "0.1.11"
