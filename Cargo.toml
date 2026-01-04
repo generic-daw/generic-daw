@@ -76,6 +76,7 @@ multiple_unsafe_ops_per_block = "deny"
 undocumented_unsafe_blocks = "deny"
 
 [profile.dev]
+lto = "off"
 opt-level = 1
 
 [profile.release]
