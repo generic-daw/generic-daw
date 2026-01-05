@@ -30,7 +30,7 @@ infer = { version = "0.19.0", default-features = false }
 log = "0.4.29"
 oneshot = "0.1.11"
 rayon-core = "1.13.0"
-rfd = { version = "0.16.0", default-features = false, features = ["xdg-portal", "async-std"] }
+rfd = { version = "0.17.1", default-features = false, features = ["xdg-portal"] }
 rtrb = "0.3.2"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 smol = "2.0.2"
