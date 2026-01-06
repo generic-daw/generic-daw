@@ -251,7 +251,7 @@ impl Arrangement {
 			let mut paths = config
 				.sample_paths
 				.iter()
-				.flat_map(WalkDir::new)
+				.flat_map(|path| WalkDir::new(path).follow_links(true))
 				.flatten()
 				.filter(|dir_entry| dir_entry.file_type().is_file())
 				.filter_map(|dir_entry| {

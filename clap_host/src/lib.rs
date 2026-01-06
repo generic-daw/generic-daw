@@ -92,7 +92,7 @@ pub fn get_installed_plugins(
 
 	paths
 		.into_iter()
-		.flat_map(WalkDir::new)
+		.flat_map(|path| WalkDir::new(path).follow_links(true))
 		.flatten()
 		.filter(|dir_entry| {
 			if cfg!(target_os = "macos") {
