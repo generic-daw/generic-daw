@@ -910,7 +910,7 @@ impl ArrangementView {
 					MidiNote {
 						key,
 						velocity: 1.0,
-						position: Position::new(pos, pos),
+						position: Position::new(pos, pos + MusicalTime::new(1, 0)),
 					},
 				);
 				primary.insert(note);

@@ -290,8 +290,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		}
 
 		for note in 0..self.notes.len() {
-			let note_bounds =
-				self.note_bounds(&self.notes[note]) + Vector::new(viewport.x, viewport.y);
+			let note_bounds = self.note_bounds(note) + Vector::new(viewport.x, viewport.y);
 			let Some(bounds) = note_bounds.intersection(&viewport) else {
 				continue;
 			};
@@ -360,8 +359,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				.intersection(viewport)
 				.and_then(|viewport| cursor.position_in(viewport))
 				.and_then(|cursor| {
-					self.notes
-						.iter()
+					(0..self.notes.len())
 						.map(|note| self.note_bounds(note))
 						.rfind(|note_bounds| note_bounds.contains(cursor))
 						.map(|note_bounds| {
@@ -403,16 +401,16 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		MidiKey(new_key.ceil() as u8)
 	}
 
-	fn note_bounds(&self, note: &MidiNote) -> Rectangle {
+	fn note_bounds(&self, note: usize) -> Rectangle {
 		let samples_per_px = self.scale.x.exp2();
 
-		let (start, end) = note.position.to_samples_f(self.transport);
+		let (start, end) = self.notes[note].position.to_samples_f(self.transport);
 		let x = start / samples_per_px;
 		let width = end / samples_per_px - x;
 		let x = x - self.position.x;
 
 		Rectangle::new(
-			Point::new(x, key_y(note.key, *self.position, *self.scale)),
+			Point::new(x, key_y(self.notes[note].key, *self.position, *self.scale)),
 			Size::new(width, self.scale.y),
 		)
 	}
@@ -429,7 +427,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 			return;
 		};
 
-		let note_bounds = self.note_bounds(&self.notes[note]);
+		let note_bounds = self.note_bounds(note);
 		if !note_bounds.contains(cursor) {
 			return;
 		}
