@@ -15,7 +15,7 @@ pub struct MidiPatternPair {
 
 impl MidiPatternPair {
 	pub fn new(notes: Vec<MidiNote>) -> Self {
-		let core = core::MidiPattern::new(notes.clone());
+		let core = core::MidiPattern::from_notes(notes.clone());
 		let gui = MidiPattern {
 			id: core.id,
 			notes,
