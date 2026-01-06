@@ -10,10 +10,12 @@ use std::{path::Path, sync::Arc};
 mod dir;
 mod file;
 
+pub use file::FileKind;
+
 #[derive(Clone, Debug)]
 pub enum Message {
 	Action(DirId, Action),
-	File(Arc<Path>),
+	File(Arc<Path>, FileKind),
 }
 
 #[derive(Clone, Debug)]

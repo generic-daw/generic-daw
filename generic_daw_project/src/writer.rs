@@ -29,9 +29,11 @@ impl Writer {
 	#[must_use]
 	pub fn push_pattern(
 		&mut self,
+		name: impl AsRef<str>,
 		notes: impl IntoIterator<Item = proto::Note>,
 	) -> proto::MidiPatternIndex {
 		self.0.midi_patterns.push(proto::Pattern {
+			name: name.as_ref().to_owned(),
 			notes: notes.into_iter().collect(),
 		});
 

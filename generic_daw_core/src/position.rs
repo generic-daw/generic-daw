@@ -9,15 +9,17 @@ pub struct Position {
 
 impl Default for Position {
 	fn default() -> Self {
-		Self::new(MusicalTime::ZERO, MusicalTime::TICK)
+		Self::new(MusicalTime::ZERO, MusicalTime::ZERO)
 	}
 }
 
 impl Position {
 	#[must_use]
 	pub fn new(start: MusicalTime, end: MusicalTime) -> Self {
-		debug_assert!(start < end);
-		Self { start, end }
+		Self {
+			start,
+			end: end.max(start + MusicalTime::TICK),
+		}
 	}
 
 	#[must_use]

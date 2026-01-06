@@ -9,6 +9,7 @@ use crate::{
 	clap_host::{self, ClapHost},
 	components::{icon_button, text_icon_button},
 	config::Config,
+	file_tree::FileKind,
 	icons::{arrow_up_down, chevron_up, grip_vertical, mic, plus, power, power_off, x},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
@@ -26,7 +27,7 @@ use crate::{
 	},
 };
 use generic_daw_core::{
-	MidiNote, MusicalTime, NodeId, PanMode, Position, SampleId,
+	MidiNote, MidiPatternId, MusicalTime, NodeId, PanMode, Position, SampleId,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
 };
 use generic_daw_widget::{
@@ -137,7 +138,9 @@ pub enum Message {
 
 	LoadHoveredFile,
 	SampleLoaded(NoClone<Option<Box<SamplePair>>>, usize, MusicalTime),
+	MidiPatternLoaded(NoClone<Option<Box<MidiPatternPair>>>, usize, MusicalTime),
 	AddAudioClip(SampleId, usize, MusicalTime),
+	AddMidiClip(MidiPatternId, usize, MusicalTime),
 
 	TrackAdd,
 	TrackRemove(NodeId),
@@ -383,11 +386,27 @@ impl ArrangementView {
 			Message::PluginRemove(node, i) => _ = self.arrangement.plugin_remove(node, i),
 			Message::LoadHoveredFile => {
 				let playlist::Selection { file, .. } = self.playlist_selection.get_mut();
-				if let (Some((path, Some((track, pos)))), Tab::Playlist) =
+				if let (Some((path, is_midi, Some((track, pos)))), Tab::Playlist) =
 					(std::mem::take(file), self.tab)
 				{
-					let mut iter = self.arrangement.samples().values();
-					return if let Some(sample) = iter.find(|sample| sample.path == path) {
+					return if is_midi {
+						self.loading += 1;
+						let transport = *self.arrangement.transport();
+						Task::future(unblock(move || {
+							Message::MidiPatternLoaded(
+								MidiPatternPair::from_midi(path, &transport)
+									.map(Box::new)
+									.into(),
+								track,
+								pos,
+							)
+						}))
+					} else if let Some(sample) = self
+						.arrangement
+						.samples()
+						.values()
+						.find(|sample| sample.path == path)
+					{
 						self.update(
 							Message::AddAudioClip(sample.id, track, pos),
 							config,
@@ -421,19 +440,51 @@ impl ArrangementView {
 					);
 				}
 			}
+			Message::MidiPatternLoaded(NoClone(pattern), track, pos) => {
+				self.loading -= 1;
+
+				if let Some(pattern) = pattern {
+					let id = pattern.gui.id;
+					self.arrangement.add_midi_pattern(*pattern);
+					return self.update(
+						Message::AddMidiClip(id, track, pos),
+						config,
+						state,
+						plugin_bundles,
+					);
+				}
+			}
 			Message::AddAudioClip(id, track, pos) => {
-				let mut audio = AudioClip::new(
-					id,
+				let mut clip = AudioClip::new(id);
+				clip.position.trim_end_to(MusicalTime::from_samples(
 					self.arrangement.samples()[&id].samples.len(),
 					self.arrangement.transport(),
-				);
-				audio.position.move_to(pos);
+				));
+				clip.position.move_to(pos);
 				let task = if track == self.arrangement.tracks().len() {
 					self.update(Message::TrackAdd, config, state, plugin_bundles)
 				} else {
 					Task::none()
 				};
-				self.arrangement.add_clip(track, audio);
+				self.arrangement.add_clip(track, clip);
+				return task;
+			}
+			Message::AddMidiClip(id, track, pos) => {
+				let mut clip = MidiClip::new(id);
+				clip.position
+					.trim_end_to(self.arrangement.midi_patterns()[&id].len().max(
+						MusicalTime::new(
+							u64::from(self.arrangement.transport().numerator.get()),
+							0,
+						),
+					));
+				clip.position.move_to(pos);
+				let task = if track == self.arrangement.tracks().len() {
+					self.update(Message::TrackAdd, config, state, plugin_bundles)
+				} else {
+					Task::none()
+				};
+				self.arrangement.add_clip(track, clip);
 				return task;
 			}
 			Message::TrackAdd => {
@@ -530,11 +581,11 @@ impl ArrangementView {
 
 					let track = self.arrangement.track_of(*r_node).unwrap();
 
-					let mut clip = AudioClip::new(
-						id,
+					let mut clip = AudioClip::new(id);
+					clip.position.trim_end_to(MusicalTime::from_samples(
 						self.arrangement.samples()[&id].samples.len(),
 						self.arrangement.transport(),
-					);
+					));
 					clip.position.move_to(pos);
 					self.arrangement.add_clip(track, clip);
 
@@ -575,11 +626,11 @@ impl ArrangementView {
 					let id = sample.gui.id;
 					self.arrangement.add_sample(sample);
 
-					let mut clip = AudioClip::new(
-						id,
+					let mut clip = AudioClip::new(id);
+					clip.position.trim_end_to(MusicalTime::from_samples(
 						self.arrangement.samples()[&id].samples.len(),
 						self.arrangement.transport(),
-					);
+					));
 					clip.position.move_to(pos);
 					self.arrangement.add_clip(track, clip);
 				}
@@ -695,18 +746,15 @@ impl ArrangementView {
 				return Task::done(Message::ChangedTab(Tab::PianoRoll(clip)));
 			}
 			playlist::Action::Add(track, pos) => {
-				let pattern = MidiPatternPair::new(Vec::new());
-				let id = pattern.gui.id;
-				self.arrangement.add_midi_pattern(pattern);
-
-				let mut clip = MidiClip::new(id);
-				clip.position.trim_end_to(MusicalTime::new(
-					4 * u64::from(self.arrangement.transport().numerator.get()),
-					0,
+				self.loading += 1;
+				return Task::done(Message::MidiPatternLoaded(
+					NoClone(Some(Box::new(MidiPatternPair::from_notes(
+						Vec::new(),
+						"MIDI Pattern",
+					)))),
+					track,
+					pos,
 				));
-				clip.position.move_to(pos);
-				let clip = self.arrangement.add_clip(track, clip);
-				primary.insert((track, clip));
 			}
 			playlist::Action::Clone => {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
@@ -862,7 +910,7 @@ impl ArrangementView {
 					MidiNote {
 						key,
 						velocity: 1.0,
-						position: Position::new(pos, pos + MusicalTime::BEAT),
+						position: Position::new(pos, pos),
 					},
 				);
 				primary.insert(note);
@@ -1474,8 +1522,8 @@ impl ArrangementView {
 		self.plugins = combo_box::State::new(plugins);
 	}
 
-	pub fn hover_file(&mut self, file: Arc<Path>) {
-		self.playlist_selection.get_mut().file = Some((file, None));
+	pub fn hover_file(&mut self, file: Arc<Path>, kind: FileKind) {
+		self.playlist_selection.get_mut().file = Some((file, kind == FileKind::Midi, None));
 	}
 
 	pub fn hovering_file(&self) -> bool {

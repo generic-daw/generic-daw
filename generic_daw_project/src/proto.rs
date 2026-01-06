@@ -61,6 +61,8 @@ pub struct Sample {
 pub struct Pattern {
 	#[prost(message, repeated)]
 	pub notes: Vec<Note>,
+	#[prost(string)]
+	pub name: String,
 }
 
 #[derive(Message)]

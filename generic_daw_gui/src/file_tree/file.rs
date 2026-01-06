@@ -11,19 +11,19 @@ use iced::{
 use infer::{audio::is_midi, is_audio};
 use std::{io, path::Path, sync::Arc};
 
-#[derive(Clone, Copy, Debug, Default)]
-enum Icon {
-	FileMusic,
-	FileHeadphone,
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum FileKind {
+	Midi,
+	Audio,
 	#[default]
-	File,
+	Unknown,
 }
 
 #[derive(Clone, Debug)]
 pub struct File {
 	path: Arc<Path>,
 	name: Arc<str>,
-	icon: Icon,
+	kind: FileKind,
 }
 
 impl File {
@@ -31,12 +31,12 @@ impl File {
 		let path = path.as_ref();
 		let name = path.file_name().unwrap().to_str().unwrap();
 
-		let icon = icon(path).await.unwrap_or_default();
+		let icon = file_kind(path).await.unwrap_or_default();
 
 		Self {
 			path: path.into(),
 			name: name.into(),
-			icon,
+			kind: icon,
 		}
 	}
 
@@ -45,10 +45,10 @@ impl File {
 			button(
 				mouse_area(
 					row![
-						match self.icon {
-							Icon::FileMusic => file_music,
-							Icon::FileHeadphone => file_headphone,
-							Icon::File => file,
+						match self.kind {
+							FileKind::Midi => file_music,
+							FileKind::Audio => file_headphone,
+							FileKind::Unknown => file,
 						}(),
 						text(&*self.name).wrapping(text::Wrapping::None)
 					]
@@ -56,7 +56,7 @@ impl File {
 					.spacing(2)
 					.width(Fill),
 				)
-				.on_press(Message::File(self.path.clone())),
+				.on_press(Message::File(self.path.clone(), self.kind)),
 			)
 			.padding(0)
 			.style(button::text)
@@ -67,16 +67,16 @@ impl File {
 	}
 }
 
-async fn icon(path: &Path) -> io::Result<Icon> {
+async fn file_kind(path: &Path) -> io::Result<FileKind> {
 	let mut file = smol::fs::File::open(path).await?;
 	let limit = file.metadata().await?.len() as usize;
 	let buf = &mut [0; 36][..limit.min(36)];
 	file.read_exact(buf).await?;
 	Ok(if is_midi(buf) {
-		Icon::FileMusic
+		FileKind::Midi
 	} else if is_audio(buf) {
-		Icon::FileHeadphone
+		FileKind::Audio
 	} else {
-		Icon::File
+		FileKind::Unknown
 	})
 }

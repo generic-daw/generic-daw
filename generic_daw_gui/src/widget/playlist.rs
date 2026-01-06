@@ -55,7 +55,7 @@ pub struct Selection {
 	pub status: Status,
 	pub primary: HashSet<(usize, usize)>,
 	pub secondary: HashSet<(usize, usize)>,
-	pub file: Option<(Arc<Path>, Option<(usize, MusicalTime)>)>,
+	pub file: Option<(Arc<Path>, bool, Option<(usize, MusicalTime)>)>,
 }
 
 impl Selection {
@@ -156,7 +156,7 @@ where
 
 		let Some(cursor) = cursor.position_in(*viewport) else {
 			selection.status = Status::None;
-			if let Some((_, hovering)) = &mut selection.file
+			if let Some((_, _, hovering)) = &mut selection.file
 				&& hovering.is_some()
 			{
 				*hovering = None;
@@ -212,7 +212,7 @@ where
 			}
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match &mut selection.file {
-				Some((_, time)) => {
+				Some((_, _, time)) => {
 					let track = track_idx(&layout, *viewport, cursor)
 						.unwrap_or_else(|| layout.children().len());
 
@@ -429,7 +429,7 @@ where
 			);
 		}
 
-		if let Some((_, Some((track, pos)))) = selection.file {
+		if let Some((_, _, Some((track, pos)))) = selection.file {
 			let samples_per_px = self.scale.x.exp2();
 			if let Some(bounds) = layout.children().nth(track).map(|layout| layout.bounds()) {
 				renderer.fill_quad(

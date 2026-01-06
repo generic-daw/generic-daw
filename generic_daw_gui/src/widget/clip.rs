@@ -320,9 +320,9 @@ where
 
 		if upper_bounds.width > 3.0 {
 			let clip_name = match self.inner {
-				Inner::AudioClip(inner) => &inner.sample.name,
-				Inner::MidiClip(..) => "MIDI Clip",
-				Inner::Recording(inner) => &inner.name,
+				Inner::AudioClip(inner) => &*inner.sample.name,
+				Inner::MidiClip(inner) => &*inner.pattern.name,
+				Inner::Recording(inner) => &*inner.name,
 			};
 
 			let clip_name = Text {
@@ -455,8 +455,7 @@ where
 								+ MusicalTime::from_samples(
 									inner.core.samples().len(),
 									self.transport,
-								)
-								.max(MusicalTime::TICK),
+								),
 						)
 						.into();
 

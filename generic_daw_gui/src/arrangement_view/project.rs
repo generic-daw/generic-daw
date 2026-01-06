@@ -59,14 +59,17 @@ impl Arrangement {
 		for pattern in self.midi_patterns().values() {
 			midi_patterns.insert(
 				pattern.id,
-				writer.push_pattern(pattern.notes.iter().map(|note| proto::Note {
-					key: note.key.0.into(),
-					velocity: note.velocity,
-					position: proto::Position {
-						start: note.position.start().into(),
-						end: note.position.end().into(),
-					},
-				})),
+				writer.push_pattern(
+					&pattern.name,
+					pattern.notes.iter().map(|note| proto::Note {
+						key: note.key.0.into(),
+						velocity: note.velocity,
+						position: proto::Position {
+							start: note.position.start().into(),
+							end: note.position.end().into(),
+						},
+					}),
+				),
 			);
 		}
 
@@ -343,8 +346,8 @@ impl Arrangement {
 		})?;
 
 		let mut midi_patterns = HashMap::new();
-		for (idx, notes) in reader.iter_midi_patterns() {
-			let pattern = notes
+		for (idx, pattern) in reader.iter_midi_patterns() {
+			let notes = pattern
 				.notes
 				.iter()
 				.map(|note| MidiNote {
@@ -354,7 +357,7 @@ impl Arrangement {
 				})
 				.collect();
 
-			let pattern = MidiPatternPair::new(pattern);
+			let pattern = MidiPatternPair::from_notes(notes, &pattern.name);
 			let id = pattern.gui.id;
 			arrangement.add_midi_pattern(pattern);
 			midi_patterns.insert(idx, id);

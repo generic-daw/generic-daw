@@ -421,8 +421,8 @@ impl Daw {
 
 	fn handle_file_tree_message(&mut self, action: file_tree::Message) -> Task<Message> {
 		match action {
-			file_tree::Message::File(file) => {
-				self.arrangement_view.hover_file(file);
+			file_tree::Message::File(file, kind) => {
+				self.arrangement_view.hover_file(file, kind);
 			}
 			file_tree::Message::Action(id, action) => {
 				if let Some(task) = self.file_tree.update(id, &action) {
