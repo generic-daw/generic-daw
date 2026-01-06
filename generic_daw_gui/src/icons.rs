@@ -74,6 +74,7 @@ icon!(x = 57778);
 icon!(move_vertical = 57799);
 icon!(power_off = 57865);
 icon!(arrow_left_right = 57930);
+icon!(file_headphone = 58138);
 icon!(arrow_up_down = 58237);
 icon!(chart_no_axes_gantt = 58564);
 icon!(radius = 58669);

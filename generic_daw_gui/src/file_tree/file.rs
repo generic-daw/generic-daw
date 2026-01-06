@@ -1,6 +1,6 @@
 use crate::{
 	file_tree::Message,
-	icons::{file, file_music},
+	icons::{file, file_headphone, file_music},
 	widget::LINE_HEIGHT,
 };
 use iced::{
@@ -8,13 +8,22 @@ use iced::{
 	futures::AsyncReadExt as _,
 	widget::{button, mouse_area, row, text},
 };
+use infer::{audio::is_midi, is_audio};
 use std::{io, path::Path, sync::Arc};
+
+#[derive(Clone, Copy, Debug, Default)]
+enum Icon {
+	FileMusic,
+	FileHeadphone,
+	#[default]
+	File,
+}
 
 #[derive(Clone, Debug)]
 pub struct File {
 	path: Arc<Path>,
 	name: Arc<str>,
-	is_music: bool,
+	icon: Icon,
 }
 
 impl File {
@@ -22,12 +31,12 @@ impl File {
 		let path = path.as_ref();
 		let name = path.file_name().unwrap().to_str().unwrap();
 
-		let is_music = is_music(path).await.unwrap_or_default();
+		let icon = icon(path).await.unwrap_or_default();
 
 		Self {
 			path: path.into(),
 			name: name.into(),
-			is_music,
+			icon,
 		}
 	}
 
@@ -36,7 +45,11 @@ impl File {
 			button(
 				mouse_area(
 					row![
-						if self.is_music { file_music } else { file }(),
+						match self.icon {
+							Icon::FileMusic => file_music,
+							Icon::FileHeadphone => file_headphone,
+							Icon::File => file,
+						}(),
 						text(&*self.name).wrapping(text::Wrapping::None)
 					]
 					.padding(1)
@@ -54,10 +67,16 @@ impl File {
 	}
 }
 
-pub async fn is_music(path: &Path) -> io::Result<bool> {
+async fn icon(path: &Path) -> io::Result<Icon> {
 	let mut file = smol::fs::File::open(path).await?;
 	let limit = file.metadata().await?.len() as usize;
 	let buf = &mut [0; 36][..limit.min(36)];
 	file.read_exact(buf).await?;
-	Ok(infer::get(buf).is_some_and(|x| x.matcher_type() == infer::MatcherType::Audio))
+	Ok(if is_midi(buf) {
+		Icon::FileMusic
+	} else if is_audio(buf) {
+		Icon::FileHeadphone
+	} else {
+		Icon::File
+	})
 }
