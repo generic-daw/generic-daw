@@ -134,17 +134,13 @@ where
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
-		let Some(viewport) = layout.bounds().intersection(viewport) else {
-			return;
-		};
-
 		self.tracks
 			.iter_mut()
 			.zip(&mut tree.children)
 			.zip(layout.children())
 			.for_each(|((child, tree), layout)| {
 				child.update(
-					tree, event, layout, cursor, renderer, clipboard, shell, &viewport,
+					tree, event, layout, cursor, renderer, clipboard, shell, viewport,
 				);
 			});
 
@@ -158,7 +154,7 @@ where
 			cursor = cursor.land();
 		}
 
-		let Some(cursor) = cursor.position_in(viewport) else {
+		let Some(cursor) = cursor.position_in(*viewport) else {
 			selection.status = Status::None;
 			if let Some((_, hovering)) = &mut selection.file
 				&& hovering.is_some()
@@ -180,7 +176,7 @@ where
 					let time = maybe_snap_time(new_time, *modifiers, |time| {
 						time.snap_round(self.scale.x, self.transport)
 					});
-					let track = track_idx(&layout, viewport, cursor);
+					let track = track_idx(&layout, *viewport, cursor);
 
 					if modifiers.command() {
 						let Some(track) = track.or_else(|| layout.children().len().checked_sub(1))
@@ -217,7 +213,7 @@ where
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match &mut selection.file {
 				Some((_, time)) => {
-					let track = track_idx(&layout, viewport, cursor)
+					let track = track_idx(&layout, *viewport, cursor)
 						.unwrap_or_else(|| layout.children().len());
 
 					let new_time = maybe_snap_time(new_time, *modifiers, |time| {
@@ -234,7 +230,7 @@ where
 				}
 				None => match selection.status {
 					Status::Selecting(start_track, last_end_track, start_pos, last_end_pos) => {
-						let Some(end_track) = track_idx(&layout, viewport, cursor)
+						let Some(end_track) = track_idx(&layout, *viewport, cursor)
 							.or_else(|| layout.children().len().checked_sub(1))
 						else {
 							return;
@@ -289,7 +285,7 @@ where
 						shell.request_redraw();
 					}
 					Status::Dragging(track, time) => {
-						let Some(new_track) = track_idx(&layout, viewport, cursor)
+						let Some(new_track) = track_idx(&layout, *viewport, cursor)
 							.or_else(|| layout.children().len().checked_sub(1))
 						else {
 							return;
@@ -413,10 +409,6 @@ where
 		cursor: Cursor,
 		viewport: &Rectangle,
 	) {
-		let Some(viewport) = layout.bounds().intersection(viewport) else {
-			return;
-		};
-
 		let selection = &*self.selection.borrow();
 
 		for layout in layout.children() {
@@ -424,7 +416,7 @@ where
 				layout.position() + Vector::new(0.0, layout.bounds().height - 1.0),
 				Size::new(layout.bounds().width, 1.0),
 			)
-			.intersection(&viewport) else {
+			.intersection(viewport) else {
 				continue;
 			};
 
@@ -497,7 +489,7 @@ where
 						done = false;
 
 						*start = child.fill_layer(
-							st, rects, tree, renderer, theme, style, layout, cursor, &viewport,
+							st, rects, tree, renderer, theme, style, layout, cursor, viewport,
 						);
 					});
 			});
@@ -523,7 +515,7 @@ where
 			let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
 			let x = x + viewport.x - self.position.x;
 
-			renderer.with_layer(viewport, |renderer| {
+			renderer.with_layer(*viewport, |renderer| {
 				renderer.fill_quad(
 					Quad {
 						bounds: Rectangle {
