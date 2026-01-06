@@ -111,6 +111,9 @@ impl ClapHost {
 		config: &Config,
 	) -> Task<Message> {
 		macro_rules! plugin {
+			() => {
+				plugin!(message)
+			};
 			($expr:expr) => {{
 				let Some(plugin) = self.plugins.get_mut(&id) else {
 					let msg = Message::MainThread(id, $expr);
@@ -122,9 +125,7 @@ impl ClapHost {
 		}
 
 		match message {
-			MainThreadMessage::RequestCallback => {
-				plugin!(MainThreadMessage::RequestCallback).call_on_main_thread_callback();
-			}
+			MainThreadMessage::RequestCallback => plugin!().call_on_main_thread_callback(),
 			MainThreadMessage::Restart(processor) => {
 				let plugin = plugin!(MainThreadMessage::Restart(processor));
 				plugin.deactivate(processor);
@@ -147,9 +148,8 @@ impl ClapHost {
 				);
 			}
 			MainThreadMessage::GuiRequestShow => {
-				let plugin = plugin!(MainThreadMessage::GuiRequestShow);
-
 				if let Entry::Vacant(entry) = self.window_of_plugin.entry(id) {
+					let plugin = plugin!();
 					if !plugin.has_gui() {
 						let (window, spawn) = window::open(window::Settings {
 							size: (400.0, 600.0).into(),
@@ -199,10 +199,8 @@ impl ClapHost {
 				}
 			}
 			MainThreadMessage::GuiRequestResize(size) => {
-				let plugin = plugin!(MainThreadMessage::GuiRequestResize(size));
-
 				if let Some(&window) = self.window_of_plugin.get(&id)
-					&& let Some(scale_factor) = plugin.get_scale()
+					&& let Some(scale_factor) = plugin!().get_scale()
 				{
 					return window::resize(window, size.to_logical(scale_factor).into());
 				}
@@ -212,7 +210,7 @@ impl ClapHost {
 					return self.update(Message::WindowCloseRequested(window), config);
 				}
 
-				plugin!(MainThreadMessage::GuiRequestHide).hide();
+				plugin!().hide();
 			}
 			MainThreadMessage::GuiClosed => {
 				if let Some(&window) = self.window_of_plugin.get(&id) {
@@ -234,12 +232,9 @@ impl ClapHost {
 					set.remove(&id);
 				}
 			}
-			MainThreadMessage::RescanParams(flags) => {
-				plugin!(MainThreadMessage::RescanParams(flags)).rescan_params(flags);
-			}
+			MainThreadMessage::RescanParams(flags) => plugin!().rescan_params(flags),
 			MainThreadMessage::RescanParam(param_id, flags) => {
-				plugin!(MainThreadMessage::RescanParam(param_id, flags))
-					.rescan_param(param_id, flags);
+				plugin!().rescan_param(param_id, flags);
 			}
 			#[cfg(unix)]
 			MainThreadMessage::PosixFd(fd, msg) => {
@@ -260,6 +255,9 @@ impl ClapHost {
 		message: PosixFdMessage,
 	) -> Task<MainThreadMessage> {
 		macro_rules! plugin {
+			() => {
+				plugin!(message)
+			};
 			($expr:expr) => {{
 				let Some(plugin) = self.plugins.get_mut(&id) else {
 					let msg = MainThreadMessage::PosixFd(fd, $expr);
@@ -271,7 +269,7 @@ impl ClapHost {
 		}
 
 		match message {
-			PosixFdMessage::OnFd(flags) => plugin!(PosixFdMessage::OnFd(flags)).on_fd(fd, flags),
+			PosixFdMessage::OnFd(flags) => plugin!().on_fd(fd, flags),
 			PosixFdMessage::Register(flags) => {
 				let flags = self.fds_of_plugin.entry(id).or_default().insert(fd, flags);
 				debug_assert!(flags.is_none());
