@@ -24,7 +24,7 @@ use smol::{
 };
 use smol::{Timer, unblock};
 use std::{
-	collections::{HashMap, hash_map::Entry},
+	collections::{HashMap, HashSet, hash_map::Entry},
 	ops::Deref as _,
 	sync::mpsc::Receiver,
 	time::Duration,
@@ -50,7 +50,7 @@ pub enum Message {
 #[derive(Debug, Default)]
 pub struct ClapHost {
 	plugins: HashMap<PluginId, Plugin<Event>>,
-	timers_of_plugin: HashMap<Duration, HashMap<PluginId, TimerId>>,
+	timers_of_duration: HashMap<Duration, HashMap<PluginId, HashSet<TimerId>>>,
 	window_of_plugin: HashMap<PluginId, window::Id>,
 	plugin_of_window: HashMap<window::Id, PluginId>,
 	#[cfg(unix)]
@@ -65,9 +65,11 @@ impl ClapHost {
 			}
 			Message::SendEvent(id, event) => self.plugins.get_mut(&id).unwrap().send_event(event),
 			Message::TickTimer(duration) => {
-				for (&plugin, &timer_id) in &self.timers_of_plugin[&duration] {
-					if let Some(plugin) = self.plugins.get_mut(&plugin) {
-						plugin.tick_timer(timer_id);
+				for (&plugin, timer_ids) in &self.timers_of_duration[&duration] {
+					for &timer_id in timer_ids {
+						if let Some(plugin) = self.plugins.get_mut(&plugin) {
+							plugin.tick_timer(timer_id);
+						}
 					}
 				}
 			}
@@ -135,7 +137,7 @@ impl ClapHost {
 				plugin!(MainThreadMessage::Destroy(processor));
 
 				self.plugins.remove(&id).unwrap().deactivate(processor);
-				self.timers_of_plugin
+				self.timers_of_duration
 					.values_mut()
 					.for_each(|set| _ = set.remove(&id));
 
@@ -218,18 +220,21 @@ impl ClapHost {
 				}
 			}
 			MainThreadMessage::RegisterTimer(timer_id, duration) => {
-				self.timers_of_plugin
+				self.timers_of_duration
 					.entry(duration)
 					.or_default()
-					.insert(id, timer_id);
+					.entry(id)
+					.or_default()
+					.insert(timer_id);
 			}
 			MainThreadMessage::UnregisterTimer(timer_id) => {
-				if let Some(set) = self
-					.timers_of_plugin
+				if let Some(timers) = self
+					.timers_of_duration
 					.values_mut()
-					.find(|set| set.get(&id) == Some(&timer_id))
+					.filter_map(|timers| timers.get_mut(&id))
+					.find(|timers| timers.contains(&timer_id))
 				{
-					set.remove(&id);
+					timers.remove(&timer_id);
 				}
 			}
 			MainThreadMessage::RescanParams(flags) => plugin!().rescan_params(flags),
@@ -271,16 +276,12 @@ impl ClapHost {
 		match message {
 			PosixFdMessage::OnFd(flags) => plugin!().on_fd(fd, flags),
 			PosixFdMessage::Register(flags) => {
-				let flags = self.fds_of_plugin.entry(id).or_default().insert(fd, flags);
-				debug_assert!(flags.is_none());
-			}
-			PosixFdMessage::Modify(flags) => {
-				let flags = self.fds_of_plugin.get_mut(&id).unwrap().insert(fd, flags);
-				debug_assert!(flags.is_some());
+				self.fds_of_plugin.entry(id).or_default().insert(fd, flags);
 			}
 			PosixFdMessage::Unregister => {
-				let flags = self.fds_of_plugin.get_mut(&id).unwrap().remove(&fd);
-				debug_assert!(flags.is_some());
+				if let Some(fds) = self.fds_of_plugin.get_mut(&id) {
+					fds.remove(&fd);
+				}
 			}
 		}
 
@@ -359,9 +360,9 @@ impl ClapHost {
 
 	pub fn subscription(&self) -> Subscription<Message> {
 		Subscription::batch(
-			self.timers_of_plugin
+			self.timers_of_duration
 				.iter()
-				.filter(|(_, v)| !v.is_empty())
+				.filter(|(_, v)| v.values().any(|v| !v.is_empty()))
 				.map(|(&k, _)| every(k).with(k).map(|(k, _)| Message::TickTimer(k)))
 				.chain({
 					#[cfg(unix)]

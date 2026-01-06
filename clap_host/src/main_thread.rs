@@ -37,7 +37,6 @@ pub enum MainThreadMessage {
 pub enum PosixFdMessage {
 	OnFd(FdFlags),
 	Register(FdFlags),
-	Modify(FdFlags),
 	Unregister,
 }
 
@@ -122,19 +121,7 @@ impl HostPosixFdImpl for MainThread<'_> {
 	}
 
 	fn modify_fd(&mut self, fd: RawFd, flags: FdFlags) -> Result<(), HostError> {
-		if fd == -1 {
-			return Err(HostError::Message("recieved fd -1"));
-		} else if !flags.is_empty() {
-			self.shared
-				.sender
-				.send(MainThreadMessage::PosixFd(
-					fd,
-					PosixFdMessage::Modify(flags),
-				))
-				.unwrap();
-		}
-
-		Ok(())
+		self.register_fd(fd, flags)
 	}
 
 	fn unregister_fd(&mut self, fd: RawFd) -> Result<(), HostError> {
