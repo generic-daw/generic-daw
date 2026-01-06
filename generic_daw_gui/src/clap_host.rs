@@ -19,7 +19,7 @@ use log::info;
 #[cfg(unix)]
 use smol::{
 	Async,
-	future::or,
+	future::{or, pending},
 	stream::{StreamExt as _, unfold},
 };
 use smol::{Timer, unblock};
@@ -379,24 +379,32 @@ impl ClapHost {
 									let async_fd =
 										Async::new(unsafe { BorrowedFd::borrow_raw(fd) }).unwrap();
 
-									unfold(async_fd, async |async_fd| {
+									unfold((async_fd, flags), async |(async_fd, flags)| {
 										let msg = or(
 											async {
-												async_fd.readable().await.map_or_else(
-													|_| FdFlags::ERROR,
-													|()| FdFlags::READ,
-												)
+												if flags.contains(FdFlags::READ) {
+													async_fd.readable().await.map_or_else(
+														|_| FdFlags::ERROR,
+														|()| FdFlags::READ,
+													)
+												} else {
+													pending().await
+												}
 											},
 											async {
-												async_fd.writable().await.map_or_else(
-													|_| FdFlags::ERROR,
-													|()| FdFlags::WRITE,
-												)
+												if flags.contains(FdFlags::WRITE) {
+													async_fd.writable().await.map_or_else(
+														|_| FdFlags::ERROR,
+														|()| FdFlags::WRITE,
+													)
+												} else {
+													pending().await
+												}
 											},
 										)
 										.await;
 
-										Some((msg, async_fd))
+										Some((msg, (async_fd, flags)))
 									})
 									.filter(move |&msg| flags.intersects(msg))
 									.map(PosixFdMessage::OnFd)
