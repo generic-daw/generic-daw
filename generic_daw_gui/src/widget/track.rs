@@ -75,7 +75,7 @@ where
 		_cursor: Cursor,
 		_viewport: &Rectangle,
 	) {
-		panic!()
+		panic!();
 	}
 
 	fn update(

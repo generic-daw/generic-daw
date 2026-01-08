@@ -179,7 +179,7 @@ impl Lods<Vec<(f32, f32)>> {
 
 		for i in 1..SAVED_LOD_LEVELS {
 			let [last, current] = &mut self.0[i - 1..=i] else {
-				unreachable!()
+				unreachable!();
 			};
 
 			start /= CHUNK_SIZE;

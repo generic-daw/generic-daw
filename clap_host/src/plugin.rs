@@ -120,7 +120,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		self.create();
 
 		let Gui::Embedded { scale_factor, .. } = &mut self.gui else {
-			panic!("called \"set_scale\" on a non-embedded gui")
+			panic!("called \"set_scale\" on a non-embedded gui");
 		};
 
 		if !API_TYPE.uses_logical_size() {
@@ -143,7 +143,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		self.create();
 
 		let Gui::Embedded { can_resize, .. } = &mut self.gui else {
-			panic!("called \"can_resize\" on a non-embedded gui")
+			panic!("called \"can_resize\" on a non-embedded gui");
 		};
 
 		*can_resize.get_or_insert_with(|| {

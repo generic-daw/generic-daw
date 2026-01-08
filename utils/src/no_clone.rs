@@ -15,7 +15,7 @@ impl<T: Debug> Debug for NoClone<T> {
 
 impl<T> Clone for NoClone<T> {
 	fn clone(&self) -> Self {
-		panic!()
+		panic!();
 	}
 }
 
