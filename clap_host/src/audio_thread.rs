@@ -34,17 +34,15 @@ impl HostThreadPoolImpl for AudioThread<'_> {
 			return Ok(());
 		}
 
-		let instance = self.shared.instance.get().unwrap();
 		let ext = self.shared.ext.thread_pool.get().unwrap();
+		self.shared.instance.get().unwrap().access(|plugin| {
+			rayon_core::in_place_scope(|s| {
+				for i in 1..task_count {
+					s.spawn(move |_| ext.exec(&plugin, i));
+				}
 
-		rayon_core::in_place_scope(|s| {
-			for i in 1..task_count {
-				s.spawn(move |_| {
-					instance.access(|s| ext.exec(&s, i)).unwrap();
-				});
-			}
-
-			instance.access(|s| ext.exec(&s, 0)).unwrap();
+				ext.exec(&plugin, 0);
+			});
 		});
 
 		Ok(())

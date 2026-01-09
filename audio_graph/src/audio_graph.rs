@@ -53,9 +53,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 						if first.is_none() {
 							first = Some(entry);
 						} else {
-							s.spawn(|s| {
-								self.worker(s, entry, len, state);
-							});
+							s.spawn(|s| self.worker(s, entry, len, state));
 						}
 					} else {
 						self.worker(s, entry, len, state);
@@ -148,9 +146,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 					if entry.expensive && first.is_none() {
 						first = Some(dep);
 					} else {
-						s.spawn(move |s| {
-							self.worker(s, dep, len, state);
-						});
+						s.spawn(move |s| self.worker(s, dep, len, state));
 					}
 				} else {
 					self.worker(s, dep, len, state);
