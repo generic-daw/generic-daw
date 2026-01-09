@@ -1,12 +1,14 @@
 use crate::{config::Config, stylefns::scrollable_style, widget::LINE_HEIGHT};
 use fragile::Fragile;
 #[cfg(unix)]
-use generic_daw_core::clap_host::{FdFlags, PosixFdMessage};
+use generic_daw_core::clap_host::FdFlags;
 use generic_daw_core::{
 	Event, PluginId,
 	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, Size, TimerId},
 };
 use generic_daw_widget::knob::Knob;
+#[cfg(unix)]
+use iced::task::Handle;
 use iced::{
 	Center, Element, Font, Function as _,
 	Length::Fill,
@@ -17,22 +19,15 @@ use iced::{
 };
 use log::info;
 #[cfg(unix)]
-use smol::{
-	Async,
-	future::{or, pending},
-	stream::{StreamExt as _, unfold},
-};
+use smol::{Async, future::or};
 use smol::{Timer, unblock};
+#[cfg(unix)]
+use std::os::fd::{BorrowedFd, RawFd};
 use std::{
 	collections::{HashMap, HashSet, hash_map::Entry},
 	ops::Deref as _,
 	sync::mpsc::Receiver,
 	time::Duration,
-};
-#[cfg(unix)]
-use std::{
-	iter::repeat,
-	os::fd::{BorrowedFd, RawFd},
 };
 use utils::NoClone;
 
@@ -41,6 +36,8 @@ pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
 	SendEvent(PluginId, Event),
 	TickTimer(Duration),
+	#[cfg(unix)]
+	OnFd(PluginId, RawFd, FdFlags),
 	GuiEmbedded(PluginId, NoClone<Box<Fragile<Plugin<Event>>>>),
 	WindowResized(window::Id, Size),
 	WindowCloseRequested(window::Id),
@@ -54,7 +51,7 @@ pub struct ClapHost {
 	window_of_plugin: HashMap<PluginId, window::Id>,
 	plugin_of_window: HashMap<window::Id, PluginId>,
 	#[cfg(unix)]
-	fds_of_plugin: HashMap<PluginId, HashMap<RawFd, FdFlags>>,
+	fds_of_plugin: HashMap<PluginId, HashMap<RawFd, (FdFlags, Handle)>>,
 }
 
 impl ClapHost {
@@ -65,12 +62,29 @@ impl ClapHost {
 			}
 			Message::SendEvent(id, event) => self.plugins.get_mut(&id).unwrap().send_event(event),
 			Message::TickTimer(duration) => {
-				for (&plugin, timer_ids) in &self.timers_of_duration[&duration] {
+				for (&id, timer_ids) in &self.timers_of_duration[&duration] {
 					for &timer_id in timer_ids {
-						if let Some(plugin) = self.plugins.get_mut(&plugin) {
+						if let Some(plugin) = self.plugins.get_mut(&id) {
 							plugin.tick_timer(timer_id);
 						}
 					}
+				}
+			}
+			#[cfg(unix)]
+			Message::OnFd(id, fd, flag) => {
+				if let Some(fds) = self.fds_of_plugin.get(&id)
+					&& let Some(&(flags, _)) = fds.get(&fd)
+					&& flag.intersects(flags)
+				{
+					if let Some(plugin) = self.plugins.get_mut(&id) {
+						plugin.on_fd(fd, flag);
+					}
+
+					return self.handle_main_thread_message(
+						id,
+						MainThreadMessage::RegisterFd(fd, flags),
+						config,
+					);
 				}
 			}
 			Message::GuiEmbedded(id, NoClone(plugin)) => {
@@ -242,43 +256,48 @@ impl ClapHost {
 				plugin!().rescan_param(param_id, flags);
 			}
 			#[cfg(unix)]
-			MainThreadMessage::PosixFd(fd, msg) => {
-				return self
-					.handle_posix_fd_message(id, fd, msg)
-					.map(Message::MainThread.with(id));
+			MainThreadMessage::RegisterFd(fd, flags) => {
+				let (task, handle) = Task::future(async move {
+					// SAFETY:
+					// This fd is owned by the plugin, and is open at least until
+					// [`PosixFd::Unregister`] is processed. This fd is not -1.
+					let async_fd = Async::new(unsafe { BorrowedFd::borrow_raw(fd) }).unwrap();
+
+					macro_rules! flag {
+						($flag:expr, $fut:expr) => {
+							async {
+								if flags.contains($flag) {
+									if $fut.await.is_ok() {
+										$flag
+									} else if flags.contains(FdFlags::ERROR) {
+										FdFlags::ERROR
+									} else {
+										smol::future::pending().await
+									}
+								} else {
+									smol::future::pending().await
+								}
+							}
+						};
+					}
+
+					or(
+						flag!(FdFlags::READ, async_fd.readable()),
+						flag!(FdFlags::WRITE, async_fd.writable()),
+					)
+					.await
+				})
+				.abortable();
+
+				self.fds_of_plugin
+					.entry(id)
+					.or_default()
+					.insert(fd, (flags, handle.abort_on_drop()));
+
+				return task.map(move |flag| Message::OnFd(id, fd, flag));
 			}
-		}
-
-		Task::none()
-	}
-
-	#[cfg(unix)]
-	fn handle_posix_fd_message(
-		&mut self,
-		id: PluginId,
-		fd: RawFd,
-		message: PosixFdMessage,
-	) -> Task<MainThreadMessage> {
-		macro_rules! plugin {
-			() => {
-				plugin!(message)
-			};
-			($expr:expr) => {{
-				let Some(plugin) = self.plugins.get_mut(&id) else {
-					let msg = MainThreadMessage::PosixFd(fd, $expr);
-					info!("retrying {msg:?}");
-					return Task::perform(Timer::after(Duration::from_millis(100)), |_| msg);
-				};
-				plugin
-			}};
-		}
-
-		match message {
-			PosixFdMessage::OnFd(flags) => plugin!().on_fd(fd, flags),
-			PosixFdMessage::Register(flags) => {
-				self.fds_of_plugin.entry(id).or_default().insert(fd, flags);
-			}
-			PosixFdMessage::Unregister => {
+			#[cfg(unix)]
+			MainThreadMessage::UnregisterFd(fd) => {
 				if let Some(fds) = self.fds_of_plugin.get_mut(&id) {
 					fds.remove(&fd);
 				}
@@ -364,57 +383,6 @@ impl ClapHost {
 				.iter()
 				.filter(|(_, v)| v.values().any(|v| !v.is_empty()))
 				.map(|(&k, _)| every(k).with(k).map(|(k, _)| Message::TickTimer(k)))
-				.chain({
-					#[cfg(unix)]
-					{
-						self.fds_of_plugin
-							.iter()
-							.flat_map(|(&k, v)| repeat(k).zip(v))
-							.map(|(id, (&fd, &flags))| {
-								Subscription::run_with((id, fd, flags), |&(id, fd, flags)| {
-									// SAFETY:
-									// This fd is owned by the plugin, and is open at least until
-									// [`PosixFd::Unregister`] is processed. This fd is not -1.
-									let async_fd =
-										Async::new(unsafe { BorrowedFd::borrow_raw(fd) }).unwrap();
-
-									unfold((async_fd, flags), async |(async_fd, flags)| {
-										let msg = or(
-											async {
-												if flags.contains(FdFlags::READ) {
-													async_fd.readable().await.map_or_else(
-														|_| FdFlags::ERROR,
-														|()| FdFlags::READ,
-													)
-												} else {
-													pending().await
-												}
-											},
-											async {
-												if flags.contains(FdFlags::WRITE) {
-													async_fd.writable().await.map_or_else(
-														|_| FdFlags::ERROR,
-														|()| FdFlags::WRITE,
-													)
-												} else {
-													pending().await
-												}
-											},
-										)
-										.await;
-
-										Some((msg, (async_fd, flags)))
-									})
-									.filter(move |&msg| flags.intersects(msg))
-									.map(PosixFdMessage::OnFd)
-									.map(MainThreadMessage::PosixFd.with(fd))
-									.map(Message::MainThread.with(id))
-								})
-							})
-					}
-					#[cfg(not(unix))]
-					[]
-				})
 				.chain([
 					window::resize_events().map(|(id, size)| {
 						Message::WindowResized(

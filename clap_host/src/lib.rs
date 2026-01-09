@@ -40,8 +40,6 @@ pub use clack_host::{
 };
 pub use event_impl::EventImpl;
 pub use main_thread::MainThreadMessage;
-#[cfg(unix)]
-pub use main_thread::PosixFdMessage;
 pub use plugin::Plugin;
 pub use plugin_descriptor::PluginDescriptor;
 pub use size::Size;
