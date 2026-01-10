@@ -6,7 +6,7 @@ use crate::{
 	config::Config,
 	config_view::{self, ConfigView},
 	file_tree::{self, FileTree},
-	icons::{chart_no_axes_gantt, cpu, pause, play, sliders_vertical, square},
+	icons::{chart_no_axes_gantt, cpu, pause, play, plus, sliders_vertical, square},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
@@ -28,8 +28,8 @@ use iced::{
 	padding,
 	time::every,
 	widget::{
-		button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row, space,
-		stack, text,
+		button, center, column, container, hover, mouse_area, opaque, pick_list, progress_bar, row,
+		space, stack, text,
 	},
 	window,
 };
@@ -118,6 +118,10 @@ pub enum Message {
 	CloseConfigView,
 	MergeConfig(Box<Config>, bool),
 
+	FileHovered,
+	FileDropped(Arc<Path>),
+	FileLeft,
+
 	ToggleShowSeconds,
 	ToggleMetronome,
 	ChangedBpm(u16),
@@ -149,6 +153,8 @@ pub struct Daw {
 
 	progress: Option<f32>,
 	missing_samples: Vec<(Arc<str>, oneshot::Sender<Feedback<Arc<Path>>>)>,
+
+	files_hovered: bool,
 }
 
 impl Daw {
@@ -192,6 +198,8 @@ impl Daw {
 
 				progress: None,
 				missing_samples: Vec::new(),
+
+				files_hovered: false,
 			},
 			Task::batch([open, futs.map(Message::Arrangement)]),
 		)
@@ -374,6 +382,16 @@ impl Daw {
 					self.config = *config;
 				}
 			}
+			Message::FileHovered => self.files_hovered = true,
+			Message::FileDropped(path) => {
+				self.files_hovered = false;
+				if std::fs::metadata(&path).is_ok_and(|metadata| metadata.is_dir()) {
+					self.config.sample_paths.push(path);
+					self.file_tree.diff(&self.config.sample_paths);
+					self.config.write();
+				}
+			}
+			Message::FileLeft => self.files_hovered = false,
 			Message::ToggleShowSeconds => self.show_seconds ^= true,
 			Message::ToggleMetronome => self.arrangement_view.arrangement.toggle_metronome(),
 			Message::ChangedBpm(bpm) => self
@@ -582,7 +600,15 @@ impl Daw {
 				.spacing(10)
 				.align_y(Center),
 				vertical_split(
-					self.file_tree.view().map(Message::FileTree),
+					hover(
+						self.file_tree.view().map(Message::FileTree),
+						self.files_hovered.then(|| container(plus().size(40.0))
+							.center_x(Fill)
+							.center_y(Fill)
+							.style(|_| container::background(
+								Color::BLACK.scale_alpha(OPACITY_67)
+							)))
+					),
 					self.arrangement_view.view().map(Message::Arrangement),
 					self.split_at,
 					Message::OnDrag
@@ -761,6 +787,12 @@ impl Daw {
 				.map(Message::Arrangement),
 			autosave,
 			keybinds,
+			window::events().filter_map(|(_, event)| match event {
+				window::Event::FileHovered(..) => Some(Message::FileHovered),
+				window::Event::FileDropped(file) => Some(Message::FileDropped(file.into())),
+				window::Event::FilesHoveredLeft => Some(Message::FileLeft),
+				_ => None,
+			}),
 		])
 	}
 
