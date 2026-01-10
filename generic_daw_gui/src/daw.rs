@@ -28,8 +28,8 @@ use iced::{
 	padding,
 	time::every,
 	widget::{
-		button, center, column, container, hover, mouse_area, opaque, pick_list, progress_bar, row,
-		space, stack, text,
+		button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row, space,
+		stack, text,
 	},
 	window,
 };
@@ -210,10 +210,16 @@ impl Daw {
 
 		match message {
 			Message::Arrangement(message) => {
-				return self
-					.arrangement_view
-					.update(message, &self.config, &mut self.state, &self.plugin_bundles)
-					.map(Message::Arrangement);
+				let action =
+					self.arrangement_view
+						.update(message, &self.config, &self.plugin_bundles);
+
+				if let Some(plugins_panel_split_at) = action.instruction {
+					self.state.plugins_panel_split_at = plugins_panel_split_at;
+					self.state.write();
+				}
+
+				return action.task.map(Message::Arrangement);
 			}
 			Message::FileTree(action) => return self.handle_file_tree_message(action),
 			Message::ConfigView(message) => {
@@ -385,7 +391,9 @@ impl Daw {
 			Message::FileHovered => self.files_hovered = true,
 			Message::FileDropped(path) => {
 				self.files_hovered = false;
-				if std::fs::metadata(&path).is_ok_and(|metadata| metadata.is_dir()) {
+				if self.split_at != 0.0
+					&& std::fs::metadata(&path).is_ok_and(|metadata| metadata.is_dir())
+				{
 					self.config.sample_paths.push(path);
 					self.file_tree.diff(&self.config.sample_paths);
 					self.config.write();
@@ -600,7 +608,7 @@ impl Daw {
 				.spacing(10)
 				.align_y(Center),
 				vertical_split(
-					hover(
+					stack![
 						self.file_tree.view().map(Message::FileTree),
 						self.files_hovered.then(|| container(plus().size(40.0))
 							.center_x(Fill)
@@ -608,7 +616,7 @@ impl Daw {
 							.style(|_| container::background(
 								Color::BLACK.scale_alpha(OPACITY_67)
 							)))
-					),
+					],
 					self.arrangement_view.view().map(Message::Arrangement),
 					self.split_at,
 					Message::OnDrag
