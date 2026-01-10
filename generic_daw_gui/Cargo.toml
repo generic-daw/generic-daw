@@ -35,5 +35,5 @@ rtrb = "0.3.2"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 smol = "2.0.2"
 sweeten = { git = "https://github.com/edwloef/sweeten.git", branch = "generic-daw" }
-toml = "0.9.10"
+toml = "0.9.11"
 walkdir = "2.5.0"

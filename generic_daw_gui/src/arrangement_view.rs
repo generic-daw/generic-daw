@@ -63,7 +63,7 @@ use std::{
 	time::{Duration, SystemTime},
 };
 use sweeten::widget::drag::DragEvent;
-use utils::{NoClone, NoDebug};
+use utils::{NoClone, NoDebug, natural_cmp};
 
 mod arrangement;
 mod audio_clip;
@@ -1518,7 +1518,7 @@ impl ArrangementView {
 		plugin_bundles: &HashMap<PluginDescriptor, NoDebug<PluginBundle>>,
 	) {
 		let mut plugins = plugin_bundles.keys().cloned().collect::<Vec<_>>();
-		plugins.sort_unstable();
+		plugins.sort_unstable_by(|l, r| natural_cmp(l.name.as_bytes(), r.name.as_bytes()));
 		self.plugins = combo_box::State::new(plugins);
 	}
 
