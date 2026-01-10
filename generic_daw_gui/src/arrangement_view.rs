@@ -1,12 +1,5 @@
 use crate::{
 	action::Action,
-	arrangement_view::{
-		audio_clip::AudioClip,
-		midi_clip::MidiClip,
-		midi_pattern::MidiPatternPair,
-		node::{Node, NodeType},
-		sample::SamplePair,
-	},
 	clap_host::{self, ClapHost},
 	components::{icon_button, text_icon_button},
 	config::Config,
@@ -27,6 +20,7 @@ use crate::{
 		track::Track,
 	},
 };
+use audio_clip::AudioClip;
 use generic_daw_core::{
 	MidiNote, MidiPatternId, MusicalTime, NodeId, PanMode, Position, SampleId,
 	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
@@ -49,7 +43,11 @@ use iced::{
 };
 use iced_split::{Split, Strategy};
 use log::warn;
+use midi_clip::MidiClip;
+use midi_pattern::MidiPatternPair;
+use node::{Node, NodeType};
 use rtrb::Consumer;
+use sample::SamplePair;
 use smol::{Timer, unblock};
 use std::{
 	cell::RefCell,

@@ -33,6 +33,16 @@ impl MusicalTime {
 	}
 
 	#[must_use]
+	pub const fn from_raw(raw: u64) -> Self {
+		Self(raw)
+	}
+
+	#[must_use]
+	pub const fn into_raw(self) -> u64 {
+		self.0
+	}
+
+	#[must_use]
 	pub const fn bar(self, transport: &Transport) -> u64 {
 		self.beat() / transport.numerator.get() as u64
 	}
@@ -233,17 +243,5 @@ impl Sub for MusicalTime {
 impl SubAssign for MusicalTime {
 	fn sub_assign(&mut self, rhs: Self) {
 		self.0 -= rhs.0;
-	}
-}
-
-impl From<u64> for MusicalTime {
-	fn from(value: u64) -> Self {
-		Self(value)
-	}
-}
-
-impl From<MusicalTime> for u64 {
-	fn from(value: MusicalTime) -> Self {
-		value.0
 	}
 }

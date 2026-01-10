@@ -10,7 +10,7 @@ use crate::{
 	daw,
 };
 use generic_daw_core::{
-	MidiKey, MidiNote, OffsetPosition, PanMode, Position,
+	MidiKey, MidiNote, MusicalTime, OffsetPosition, PanMode, Position,
 	clap_host::{PluginBundle, PluginDescriptor},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
@@ -45,8 +45,8 @@ impl Arrangement {
 				.transport()
 				.loop_marker
 				.map(|loop_marker| proto::Position {
-					start: loop_marker.start().into(),
-					end: loop_marker.end().into(),
+					start: loop_marker.start().into_raw(),
+					end: loop_marker.end().into_raw(),
 				}),
 		});
 
@@ -65,8 +65,8 @@ impl Arrangement {
 						key: note.key.0.into(),
 						velocity: note.velocity,
 						position: proto::Position {
-							start: note.position.start().into(),
-							end: note.position.end().into(),
+							start: note.position.start().into_raw(),
+							end: note.position.end().into_raw(),
 						},
 					}),
 				),
@@ -84,10 +84,10 @@ impl Arrangement {
 							sample: samples[&audio.sample],
 							position: proto::OffsetPosition {
 								position: proto::Position {
-									start: audio.position.start().into(),
-									end: audio.position.end().into(),
+									start: audio.position.start().into_raw(),
+									end: audio.position.end().into_raw(),
 								},
-								offset: audio.position.offset().into(),
+								offset: audio.position.offset().into_raw(),
 							},
 						}
 						.into(),
@@ -95,10 +95,10 @@ impl Arrangement {
 							pattern: midi_patterns[&midi.pattern],
 							position: proto::OffsetPosition {
 								position: proto::Position {
-									start: midi.position.start().into(),
-									end: midi.position.end().into(),
+									start: midi.position.start().into_raw(),
+									end: midi.position.end().into_raw(),
 								},
-								offset: midi.position.offset().into(),
+								offset: midi.position.offset().into_raw(),
 							},
 						}
 						.into(),
@@ -226,10 +226,12 @@ impl Arrangement {
 
 		arrangement.set_bpm(NonZero::new(bpm as u16)?);
 		arrangement.set_numerator(NonZero::new(numerator as u8)?);
-		arrangement
-			.set_loop_marker(loop_marker.map(|loop_marker| {
-				Position::new(loop_marker.start.into(), loop_marker.end.into())
-			}));
+		arrangement.set_loop_marker(loop_marker.map(|loop_marker| {
+			Position::new(
+				MusicalTime::from_raw(loop_marker.start),
+				MusicalTime::from_raw(loop_marker.end),
+			)
+		}));
 
 		let mut samples = HashMap::new();
 
@@ -353,7 +355,10 @@ impl Arrangement {
 				.map(|note| MidiNote {
 					key: MidiKey(note.key as u8),
 					velocity: note.velocity,
-					position: Position::new(note.position.start.into(), note.position.end.into()),
+					position: Position::new(
+						MusicalTime::from_raw(note.position.start),
+						MusicalTime::from_raw(note.position.end),
+					),
 				})
 				.collect();
 
@@ -445,10 +450,10 @@ impl Arrangement {
 								sample: *sample,
 								position: OffsetPosition::new(
 									Position::new(
-										audio.position.position.start.into(),
-										audio.position.position.end.into(),
+										MusicalTime::from_raw(audio.position.position.start),
+										MusicalTime::from_raw(audio.position.position.end),
 									),
-									audio.position.offset.into(),
+									MusicalTime::from_raw(audio.position.offset),
 								),
 							})
 						}
@@ -456,10 +461,10 @@ impl Arrangement {
 							pattern: *midi_patterns.get(&midi.pattern)?,
 							position: OffsetPosition::new(
 								Position::new(
-									midi.position.position.start.into(),
-									midi.position.position.end.into(),
+									MusicalTime::from_raw(midi.position.position.start),
+									MusicalTime::from_raw(midi.position.position.end),
 								),
-								midi.position.offset.into(),
+								MusicalTime::from_raw(midi.position.offset),
 							),
 						}),
 					},

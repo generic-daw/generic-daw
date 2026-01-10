@@ -5,7 +5,7 @@ use crate::{
 use generic_daw_widget::drag_handle::DragHandle;
 use iced::{
 	Element, Font, Shrink, Theme, border, padding,
-	widget::{Button, Text, button, container, pick_list, row, text, text_input},
+	widget::{Button, button, container, pick_list, row, text, text_input},
 };
 
 pub fn icon_button<'a, Message>(
@@ -13,7 +13,7 @@ pub fn icon_button<'a, Message>(
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
 ) -> Button<'a, Message>
 where
-	Message: Clone + 'a,
+	Message: 'a,
 {
 	button(t.size(13.0))
 		.style(button_with_radius(style, 0))
@@ -21,13 +21,13 @@ where
 }
 
 pub fn text_icon_button<'a, Message>(
-	t: impl Into<Text<'a>>,
+	t: impl text::IntoFragment<'a>,
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
 ) -> Button<'a, Message>
 where
-	Message: Clone + 'a,
+	Message: 'a,
 {
-	button(container(t.into().size(13).line_height(1.0)).center_x(13))
+	button(container(text(t).size(13).line_height(1.0)).center_x(13))
 		.style(button_with_radius(style, 0))
 		.padding(1)
 }
