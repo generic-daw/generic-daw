@@ -1,6 +1,6 @@
 use crate::{
 	arrangement_view::{
-		self, AUTOSAVE_DIR, Arrangement, ArrangementView, Feedback, PROJECT_DIR, Tab,
+		self, AUTOSAVE_DIR, Arrangement, ArrangementView, Feedback, PROJECT_DIR, Tab, format_now,
 	},
 	components::{PICK_LIST_HANDLE, number_input},
 	config::Config,
@@ -19,7 +19,6 @@ use generic_daw_core::{
 	clap_host::{PluginBundle, PluginDescriptor, get_installed_plugins},
 };
 use generic_daw_widget::dot::Dot;
-use humantime::format_rfc3339_seconds;
 use iced::{
 	Center, Color, Element, Font, Function as _,
 	Length::Fill,
@@ -42,7 +41,7 @@ use std::{
 	num::NonZero,
 	path::Path,
 	sync::Arc,
-	time::{Duration, SystemTime},
+	time::Duration,
 };
 use utils::{NoClone, NoDebug, variants};
 
@@ -267,11 +266,7 @@ impl Daw {
 					.and_then(|name| name.to_str())
 					.unwrap_or("autosaved");
 
-				let path = AUTOSAVE_DIR.join(format!(
-					"{}-{}.gdp",
-					name,
-					format_rfc3339_seconds(SystemTime::now())
-				));
+				let path = AUTOSAVE_DIR.join(format!("{} {}.gdp", name, format_now()));
 
 				self.arrangement_view
 					.arrangement

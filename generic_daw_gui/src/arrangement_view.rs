@@ -29,7 +29,6 @@ use generic_daw_widget::{
 	knob::Knob,
 	peak_meter::{MAX_VAL, PeakMeter},
 };
-use humantime::format_rfc3339_seconds;
 use iced::{
 	Center, Element, Fill, Function as _, Point, Shrink, Subscription, Task, Vector, border,
 	futures::{SinkExt as _, Stream},
@@ -59,7 +58,7 @@ use std::{
 	num::NonZero,
 	path::Path,
 	sync::{Arc, LazyLock},
-	time::{Duration, SystemTime},
+	time::Duration,
 };
 use sweeten::widget::drag::DragEvent;
 use utils::{NoClone, NoDebug, natural_cmp};
@@ -552,10 +551,7 @@ impl ArrangementView {
 			Message::SetLoopMarker(marker) => self.arrangement.set_loop_marker(marker),
 			Message::Recording(node) => {
 				let path = RECORDING_DIR
-					.join(format!(
-						"recording-{}.wav",
-						format_rfc3339_seconds(SystemTime::now())
-					))
+					.join(format!("recording {}.gdp", format_now()))
 					.into();
 
 				if let Some((recording, r_node)) = &mut self.recording {
@@ -1544,6 +1540,10 @@ fn format_decibels(amp: f32) -> String {
 	write!(f, "{dba:.*}", (dba < 9.95).into()).unwrap();
 
 	f
+}
+
+pub fn format_now() -> jiff::fmt::strtime::Display<'static> {
+	jiff::Zoned::now().strftime("%F %H-%M-%S")
 }
 
 fn crc(mut r: impl Read) -> u32 {
