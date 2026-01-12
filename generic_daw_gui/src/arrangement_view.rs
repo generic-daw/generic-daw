@@ -550,9 +550,7 @@ impl ArrangementView {
 			}
 			Message::SetLoopMarker(marker) => self.arrangement.set_loop_marker(marker),
 			Message::Recording(node) => {
-				let path = RECORDING_DIR
-					.join(format!("recording {}.gdp", format_now()))
-					.into();
+				let path = RECORDING_DIR.join(format!("{}.wav", format_now())).into();
 
 				if let Some((recording, r_node)) = &mut self.recording {
 					if node == *r_node {
