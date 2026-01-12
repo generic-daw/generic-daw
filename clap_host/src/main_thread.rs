@@ -6,13 +6,14 @@ use clack_extensions::{
 	latency::HostLatencyImpl,
 	note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
 	params::{HostParamsImplMainThread, ParamClearFlags, ParamRescanFlags},
+	preset_discovery::{HostPresetLoadImpl, prelude::*},
 	state::HostStateImpl,
 	timer::{HostTimerImpl, TimerId},
 };
 use clack_host::prelude::*;
 #[cfg(unix)]
 use std::os::fd::RawFd;
-use std::time::Duration;
+use std::{ffi::CStr, time::Duration};
 use utils::{NoClone, NoDebug};
 
 #[derive(Clone, Debug)]
@@ -126,6 +127,19 @@ impl HostPosixFdImpl for MainThread<'_> {
 			.unwrap();
 
 		Ok(())
+	}
+}
+
+impl HostPresetLoadImpl for MainThread<'_> {
+	fn loaded(&mut self, _location: Location<'_>, _load_key: Option<&CStr>) {}
+
+	fn on_error(
+		&mut self,
+		_location: Location<'_>,
+		_load_key: Option<&CStr>,
+		_os_error: i32,
+		_message: Option<&CStr>,
+	) {
 	}
 }
 

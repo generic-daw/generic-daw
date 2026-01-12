@@ -1,7 +1,5 @@
 use clack_extensions::gui::GuiApiType;
 use log::warn;
-use main_thread::MainThread;
-use shared::Shared;
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
@@ -20,9 +18,10 @@ pub mod events;
 mod gui;
 mod host;
 mod main_thread;
-mod params;
+mod param;
 mod plugin;
 mod plugin_descriptor;
+mod preset;
 mod shared;
 mod size;
 

@@ -8,6 +8,7 @@ use clack_extensions::{
 	log::{HostLogImpl, LogSeverity},
 	note_ports::PluginNotePorts,
 	params::{HostParamsImplShared, PluginParams},
+	preset_discovery::PluginPresetLoad,
 	render::PluginRender,
 	state::PluginState,
 	thread_check::HostThreadCheckImpl,
@@ -37,6 +38,7 @@ pub struct Ext {
 	pub params: OnceLock<NoDebug<PluginParams>>,
 	#[cfg(unix)]
 	pub posix_fd: OnceLock<NoDebug<PluginPosixFd>>,
+	pub preset_load: OnceLock<NoDebug<PluginPresetLoad>>,
 	pub render: OnceLock<NoDebug<PluginRender>>,
 	pub state: OnceLock<NoDebug<PluginState>>,
 	pub thread_pool: OnceLock<NoDebug<PluginThreadPool>>,
@@ -104,6 +106,7 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 			params,
 			#[cfg(unix)]
 			posix_fd,
+			preset_load,
 			render,
 			state,
 			thread_pool,

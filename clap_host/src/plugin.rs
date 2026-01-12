@@ -1,8 +1,8 @@
 use crate::{
 	API_TYPE, AudioProcessor, EventImpl, MainThreadMessage, PluginDescriptor,
 	audio_buffers::AudioBuffers, audio_processor::AudioThreadMessage, audio_thread::AudioThread,
-	event_buffers::EventBuffers, gui::Gui, host::Host, main_thread::MainThread, params::Param,
-	shared::Shared, size::Size,
+	event_buffers::EventBuffers, gui::Gui, host::Host, main_thread::MainThread, param::Param,
+	preset::Preset, shared::Shared, size::Size,
 };
 #[cfg(unix)]
 use clack_extensions::posix_fd::FdFlags;
@@ -29,6 +29,8 @@ use utils::{NoClone, NoDebug};
 pub struct Plugin<Event: EventImpl> {
 	gui: Gui,
 	params: Box<[Param]>,
+	presets: Box<[Preset]>,
+	current_preset: Option<usize>,
 	instance: NoDebug<PluginInstance<Host>>,
 	descriptor: PluginDescriptor,
 	producer: Producer<AudioThreadMessage<Event>>,
@@ -74,6 +76,8 @@ impl<Event: EventImpl> Plugin<Event> {
 			Self {
 				gui: Gui::new(&mut instance),
 				params: Param::all(&mut instance).unwrap_or_default(),
+				presets: Preset::all(bundle, &descriptor, host).unwrap_or_default(),
+				current_preset: None,
 				instance: instance.into(),
 				descriptor,
 				producer,
@@ -221,6 +225,26 @@ impl<Event: EventImpl> Plugin<Event> {
 	pub fn rescan_params(&mut self, flags: ParamRescanFlags) {
 		for param in &mut *self.params {
 			param.rescan(&mut self.instance, flags);
+		}
+	}
+
+	#[must_use]
+	pub fn presets(&self) -> &[Preset] {
+		&self.presets
+	}
+
+	pub fn load_preset(&mut self, preset: usize) {
+		if self
+			.instance
+			.access_shared_handler(|s| *s.ext.preset_load.get().unwrap())
+			.load_from_location(
+				&mut self.instance.plugin_handle(),
+				(&self.presets[preset].location).into(),
+				self.presets[preset].load_key.as_deref(),
+			)
+			.is_ok()
+		{
+			self.current_preset = Some(preset);
 		}
 	}
 
