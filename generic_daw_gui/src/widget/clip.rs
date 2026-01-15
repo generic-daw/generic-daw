@@ -1,5 +1,5 @@
 use crate::{
-	arrangement_view::{AudioClipRef, MidiClipRef, Recording as RecordingWrapper},
+	arrangement_view::{AudioClipRef, MidiClipRef, Recording},
 	widget::{
 		LINE_HEIGHT, OPACITY_33, get_time, maybe_snap_time,
 		playlist::{Action, Selection, Status},
@@ -50,7 +50,7 @@ impl Default for State {
 pub enum Inner<'a> {
 	AudioClip(AudioClipRef<'a>),
 	MidiClip(MidiClipRef<'a>),
-	Recording(&'a RecordingWrapper),
+	Recording(&'a Recording),
 }
 
 impl<'a> From<AudioClipRef<'a>> for Inner<'a> {
@@ -65,8 +65,8 @@ impl<'a> From<MidiClipRef<'a>> for Inner<'a> {
 	}
 }
 
-impl<'a> From<&'a RecordingWrapper> for Inner<'a> {
-	fn from(value: &'a RecordingWrapper) -> Self {
+impl<'a> From<&'a Recording> for Inner<'a> {
+	fn from(value: &'a Recording) -> Self {
 		Self::Recording(value)
 	}
 }

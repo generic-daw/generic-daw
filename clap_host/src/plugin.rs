@@ -7,7 +7,7 @@ use crate::{
 #[cfg(unix)]
 use clack_extensions::posix_fd::FdFlags;
 use clack_extensions::{
-	gui::{GuiConfiguration, GuiSize, Window as ClapWindow},
+	gui::{GuiConfiguration, GuiSize, Window},
 	params::{ParamInfoFlags, ParamRescanFlags},
 	render::RenderMode,
 	timer::TimerId,
@@ -291,14 +291,36 @@ impl<Event: EventImpl> Plugin<Event> {
 
 		// SAFETY:
 		// Ensured by the caller.
-		unsafe {
+		if let Err(err) = unsafe {
 			self.instance
 				.access_shared_handler(|s| *s.ext.gui.get().unwrap())
 				.set_parent(
 					&mut self.instance.plugin_handle(),
-					ClapWindow::from_window(&window).unwrap(),
+					Window::from_window(&window).unwrap(),
 				)
-				.unwrap();
+		} {
+			warn!("{}: {err}", self.descriptor);
+		}
+	}
+
+	/// # SAFETY
+	/// The underlying window must remain valid for the lifetime of this plugin instance's gui.
+	pub unsafe fn set_transient(&mut self, window: impl HasWindowHandle) {
+		let Gui::Floating = self.gui else {
+			panic!("called \"set_transient\" on a non-floating gui");
+		};
+
+		// SAFETY:
+		// Ensured by the caller.
+		if let Err(err) = unsafe {
+			self.instance
+				.access_shared_handler(|s| *s.ext.gui.get().unwrap())
+				.set_transient(
+					&mut self.instance.plugin_handle(),
+					Window::from_window(&window).unwrap(),
+				)
+		} {
+			warn!("{}: {err}", self.descriptor);
 		}
 	}
 
