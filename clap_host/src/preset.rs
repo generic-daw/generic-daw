@@ -1,4 +1,4 @@
-use crate::PluginDescriptor;
+use crate::{PluginDescriptor, host::Host};
 use clack_extensions::preset_discovery::prelude::*;
 use clack_host::prelude::*;
 use log::{log_enabled, warn};
@@ -17,10 +17,13 @@ pub struct Preset {
 
 impl Preset {
 	pub fn all(
+		plugin: &PluginInstance<Host>,
 		bundle: &PluginBundle,
 		descriptor: &PluginDescriptor,
 		host: &HostInfo,
 	) -> Option<Box<[Self]>> {
+		plugin.access_shared_handler(|s| s.ext.preset_load.get())?;
+
 		let preset_discovery_factory = bundle.get_factory::<PresetDiscoveryFactory<'_>>()?;
 
 		let mut cached_indexer = Indexer::default();

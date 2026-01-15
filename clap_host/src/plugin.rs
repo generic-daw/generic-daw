@@ -76,7 +76,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			Self {
 				gui: Gui::new(&mut instance),
 				params: Param::all(&mut instance).unwrap_or_default(),
-				presets: Preset::all(bundle, &descriptor, host).unwrap_or_default(),
+				presets: Preset::all(&instance, bundle, &descriptor, host).unwrap_or_default(),
 				current_preset: None,
 				instance: instance.into(),
 				descriptor,
