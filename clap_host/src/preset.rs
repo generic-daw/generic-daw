@@ -5,14 +5,15 @@ use log::{log_enabled, warn};
 use std::{
 	ffi::{CStr, CString},
 	fmt::Write as _,
+	sync::Arc,
 };
 use walkdir::WalkDir;
 
 #[derive(Debug)]
 pub struct Preset {
-	pub name: Box<str>,
+	pub name: Arc<str>,
 	pub location: MyLocation,
-	pub load_key: Option<Box<CStr>>,
+	pub load_key: Option<Arc<CStr>>,
 }
 
 impl Preset {
@@ -49,6 +50,7 @@ impl Preset {
 				let mut metadata_receiver = MetadataReceiver {
 					presets: &mut presets,
 					current_preset: None,
+					applicable: false,
 					descriptor,
 					location,
 				};
@@ -58,7 +60,11 @@ impl Preset {
 						provider.get_metadata(location.into(), &mut metadata_receiver);
 					}
 					MyLocation::File(path) => {
-						WalkDir::new(&*path.to_string_lossy())
+						let Ok(path) = path.to_str() else {
+							continue;
+						};
+
+						WalkDir::new(path)
 							.follow_links(true)
 							.into_iter()
 							.filter_map(Result::ok)
@@ -97,7 +103,7 @@ impl Preset {
 #[derive(Clone, Debug)]
 pub enum MyLocation {
 	Plugin,
-	File(Box<CStr>),
+	File(Arc<CStr>),
 }
 
 impl From<Location<'_>> for MyLocation {
@@ -131,9 +137,12 @@ impl IndexerImpl for &mut Indexer {
 			&& let Some(extension) = file_type.file_extension
 			&& !extension.is_empty()
 		{
-			self.file_types.push(extension.to_string_lossy().into());
+			if let Ok(extension) = extension.to_str() {
+				self.file_types.push(extension.into());
+			}
 		} else {
 			self.match_all = true;
+			self.file_types.clear();
 		}
 
 		Ok(())
@@ -152,6 +161,7 @@ impl IndexerImpl for &mut Indexer {
 struct MetadataReceiver<'a> {
 	presets: &'a mut Vec<Preset>,
 	current_preset: Option<Preset>,
+	applicable: bool,
 	descriptor: &'a PluginDescriptor,
 	location: &'a MyLocation,
 }
@@ -194,20 +204,24 @@ impl MetadataReceiverImpl for MetadataReceiver<'_> {
 		name: Option<&CStr>,
 		load_key: Option<&CStr>,
 	) -> Result<(), HostError> {
-		self.presets.extend(self.current_preset.take());
+		self.presets
+			.extend(self.current_preset.take().filter(|_| self.applicable));
+		self.applicable = false;
 
 		if let Some(name) = name {
 			self.current_preset = Some(Preset {
-				name: Box::from(name.to_str()?),
+				name: name.to_str()?.into(),
 				location: self.location.clone(),
-				load_key: load_key.map(Box::from),
+				load_key: load_key.map(Arc::from),
 			});
 		}
 
 		Ok(())
 	}
 
-	fn add_plugin_id(&mut self, _plugin_id: UniversalPluginId<'_>) {}
+	fn add_plugin_id(&mut self, plugin_id: UniversalPluginId<'_>) {
+		self.applicable |= plugin_id == UniversalPluginId::clap(&self.descriptor.id);
+	}
 
 	fn set_soundpack_id(&mut self, _soundpack_id: &CStr) {}
 
