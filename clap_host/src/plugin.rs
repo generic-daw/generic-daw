@@ -300,6 +300,8 @@ impl<Event: EventImpl> Plugin<Event> {
 			panic!("called \"set_parent\" on a non-embedded gui");
 		};
 
+		self.create();
+
 		// SAFETY:
 		// Ensured by the caller.
 		if let Err(err) = unsafe {
@@ -320,6 +322,8 @@ impl<Event: EventImpl> Plugin<Event> {
 		let Gui::Floating = self.gui else {
 			panic!("called \"set_transient\" on a non-floating gui");
 		};
+
+		self.create();
 
 		// SAFETY:
 		// Ensured by the caller.

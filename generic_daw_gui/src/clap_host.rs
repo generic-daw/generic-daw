@@ -194,7 +194,6 @@ impl ClapHost {
 
 						spawn.discard()
 					} else if plugin.is_floating() {
-						plugin.create();
 						let mut plugin = Fragile::new(self.plugins.remove(&id).unwrap());
 						window::run(self.main_window_id, move |window| {
 							// SAFETY:
