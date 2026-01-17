@@ -24,7 +24,7 @@ use smol::{Timer, unblock};
 #[cfg(unix)]
 use std::os::fd::{BorrowedFd, RawFd};
 use std::{
-	collections::{HashMap, HashSet, hash_map::Entry},
+	collections::{HashMap, HashSet},
 	ops::Deref as _,
 	sync::mpsc::Receiver,
 	time::Duration,
@@ -180,8 +180,8 @@ impl ClapHost {
 				);
 			}
 			MainThreadMessage::GuiRequestShow => {
-				if let Entry::Vacant(entry) = self.window_of_plugin.entry(id) {
-					let plugin = plugin!();
+				let plugin = plugin!();
+				if !plugin.is_created() {
 					return if !plugin.has_gui() {
 						let (window, spawn) = window::open(window::Settings {
 							size: (400.0, 600.0).into(),
@@ -189,11 +189,12 @@ impl ClapHost {
 							level: window::Level::AlwaysOnTop,
 							..window::Settings::default()
 						});
-						entry.insert(window);
+						self.window_of_plugin.insert(id, window);
 						self.plugin_of_window.insert(window, id);
 
 						spawn.discard()
 					} else if plugin.is_floating() {
+						plugin.create();
 						let mut plugin = Fragile::new(self.plugins.remove(&id).unwrap());
 						window::run(self.main_window_id, move |window| {
 							// SAFETY:
@@ -219,7 +220,7 @@ impl ClapHost {
 							level: window::Level::AlwaysOnTop,
 							..window::Settings::default()
 						});
-						entry.insert(window);
+						self.window_of_plugin.insert(id, window);
 						self.plugin_of_window.insert(window, id);
 
 						let mut plugin = Fragile::new(self.plugins.remove(&id).unwrap());

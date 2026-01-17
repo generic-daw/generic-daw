@@ -111,6 +111,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		matches!(self.gui, Gui::Floating)
 	}
 
+	#[must_use]
 	pub fn get_scale(&self) -> Option<f32> {
 		if let Gui::Embedded { scale_factor, .. } = &self.gui {
 			Some(*scale_factor)
@@ -252,6 +253,16 @@ impl<Event: EventImpl> Plugin<Event> {
 		self.instance
 			.access_shared_handler(|s| *s.ext.timer.get().unwrap())
 			.on_timer(&mut self.instance.plugin_handle(), timer_id);
+	}
+
+	#[must_use]
+	pub fn is_created(&self) -> bool {
+		self.is_created
+	}
+
+	#[must_use]
+	pub fn is_shown(&self) -> bool {
+		self.is_shown
 	}
 
 	pub fn create(&mut self) {
