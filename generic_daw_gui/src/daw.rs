@@ -764,10 +764,10 @@ impl Daw {
 					key,
 					physical_key,
 					modifiers,
-					repeat: false,
+					repeat,
 					..
-				} => Self::config_view_keybinds(&key, modifiers)
-					.or_else(|| Self::base_keybinds(&key, physical_key, modifiers)),
+				} => Self::config_view_keybinds(&key, modifiers, repeat)
+					.or_else(|| Self::base_keybinds(&key, physical_key, modifiers, repeat)),
 				_ => None,
 			})
 		} else {
@@ -776,10 +776,11 @@ impl Daw {
 					key,
 					physical_key,
 					modifiers,
-					repeat: false,
+					repeat,
 					..
-				} => Self::arrangement_view_keybinds(&key, modifiers)
-					.or_else(|| Self::base_keybinds(&key, physical_key, modifiers)),
+				} => Self::arrangement_view_keybinds(&key, modifiers, repeat)
+					.map(Message::Arrangement)
+					.or_else(|| Self::base_keybinds(&key, physical_key, modifiers, repeat)),
 				_ => None,
 			})
 		};
@@ -802,23 +803,45 @@ impl Daw {
 	fn arrangement_view_keybinds(
 		key: &keyboard::Key,
 		modifiers: keyboard::Modifiers,
-	) -> Option<Message> {
-		match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-			(false, false, false) => match key.as_ref() {
-				keyboard::Key::Named(keyboard::key::Named::F5) => Some(Message::Arrangement(
-					arrangement_view::Message::ChangedTab(Tab::Playlist),
-				)),
-				keyboard::Key::Named(keyboard::key::Named::F9) => Some(Message::Arrangement(
-					arrangement_view::Message::ChangedTab(Tab::Mixer),
-				)),
+		repeat: bool,
+	) -> Option<arrangement_view::Message> {
+		match (
+			modifiers.command(),
+			modifiers.shift(),
+			modifiers.alt(),
+			repeat,
+		) {
+			(false, false, false, false) => match key.as_ref() {
+				keyboard::Key::Named(keyboard::key::Named::F5) => {
+					Some(arrangement_view::Message::ChangedTab(Tab::Playlist))
+				}
+				keyboard::Key::Named(keyboard::key::Named::F9) => {
+					Some(arrangement_view::Message::ChangedTab(Tab::Mixer))
+				}
 				keyboard::Key::Named(
 					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
-				) => Some(Message::Arrangement(
-					arrangement_view::Message::DeleteSelection,
-				)),
-				keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::Arrangement(
-					arrangement_view::Message::ClearSelection,
-				)),
+				) => Some(arrangement_view::Message::DeleteSelection),
+				keyboard::Key::Named(keyboard::key::Named::Escape) => {
+					Some(arrangement_view::Message::ClearSelection)
+				}
+				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => {
+					Some(arrangement_view::Message::ArrowLeft)
+				}
+				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => {
+					Some(arrangement_view::Message::ArrowRight)
+				}
+				_ => None,
+			},
+			(false, false, false, true) => match key.as_ref() {
+				keyboard::Key::Named(
+					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
+				) => Some(arrangement_view::Message::DeleteSelection),
+				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => {
+					Some(arrangement_view::Message::ArrowLeft)
+				}
+				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => {
+					Some(arrangement_view::Message::ArrowRight)
+				}
 				_ => None,
 			},
 			_ => None,
@@ -828,9 +851,15 @@ impl Daw {
 	fn config_view_keybinds(
 		key: &keyboard::Key,
 		modifiers: keyboard::Modifiers,
+		repeat: bool,
 	) -> Option<Message> {
-		match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-			(false, false, false) => match key.as_ref() {
+		match (
+			modifiers.command(),
+			modifiers.shift(),
+			modifiers.alt(),
+			repeat,
+		) {
+			(false, false, false, false) => match key.as_ref() {
 				keyboard::Key::Named(keyboard::key::Named::Escape) => {
 					Some(Message::CloseConfigView)
 				}
@@ -844,22 +873,28 @@ impl Daw {
 		key: &keyboard::Key,
 		physical_key: keyboard::key::Physical,
 		modifiers: keyboard::Modifiers,
+		repeat: bool,
 	) -> Option<Message> {
-		match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
-			(false, false, false) => match key.as_ref() {
+		match (
+			modifiers.command(),
+			modifiers.shift(),
+			modifiers.alt(),
+			repeat,
+		) {
+			(false, false, false, false) => match key.as_ref() {
 				keyboard::Key::Named(keyboard::key::Named::Space) => Some(Message::Arrangement(
 					arrangement_view::Message::TogglePlayback,
 				)),
 				_ => None,
 			},
-			(true, false, false) => match key.to_latin(physical_key)? {
+			(true, false, false, false) => match key.to_latin(physical_key)? {
 				'e' => Some(Message::ExportFileDialog),
 				'n' => Some(Message::NewFile),
 				'o' => Some(Message::OpenFileDialog),
 				's' => Some(Message::SaveFile),
 				_ => None,
 			},
-			(true, true, false) => match key.to_latin(physical_key)? {
+			(true, true, false, false) => match key.to_latin(physical_key)? {
 				's' => Some(Message::SaveAsFileDialog),
 				_ => None,
 			},

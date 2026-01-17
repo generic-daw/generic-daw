@@ -78,8 +78,8 @@ impl Arrangement {
 		(
 			Self {
 				transport,
-				load: None,
 				project,
+				load: None,
 
 				samples: BTreeMap::default(),
 				midi_patterns: BTreeMap::default(),
@@ -265,11 +265,6 @@ impl Arrangement {
 		}
 	}
 
-	pub fn toggle_playback(&mut self) {
-		self.transport.playing ^= true;
-		self.send(Message::TogglePlayback);
-	}
-
 	pub fn stop(&mut self) {
 		self.pause();
 		self.seek_to(
@@ -278,6 +273,11 @@ impl Arrangement {
 				.map_or(MusicalTime::ZERO, Position::start),
 		);
 		self.send(Message::Reset);
+	}
+
+	pub fn toggle_playback(&mut self) {
+		self.transport.playing ^= true;
+		self.send(Message::TogglePlayback);
 	}
 
 	pub fn toggle_metronome(&mut self) {

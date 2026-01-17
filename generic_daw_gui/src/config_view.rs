@@ -54,7 +54,6 @@ pub enum Message {
 	ChangedPluginScaleFactor(Option<f32>),
 	WriteConfig,
 	ResetConfigToPrev,
-	ResetConfigToDefault,
 }
 
 #[derive(Debug)]
@@ -138,34 +137,26 @@ impl ConfigView {
 			Message::ChangedPluginScaleFactor(plugin_scale_factor) => {
 				self.config.plugin_scale_factor = plugin_scale_factor;
 			}
-			Message::WriteConfig => {
-				return Action::instruction(self.config.clone());
-			}
+			Message::WriteConfig => return Action::instruction(self.config.clone()),
 			Message::ResetConfigToPrev => self.config = self.prev_config.clone(),
-			Message::ResetConfigToDefault => self.config = Config::default(),
 		}
 
 		Action::none()
 	}
 
 	pub fn view(&self, live_config: &Config) -> Element<'_, Message> {
+		let (device, devices) = match self.tab {
+			Tab::Input => (&self.config.input_device, &*self.input_devices),
+			Tab::Output => (&self.config.output_device, &*self.output_devices),
+		};
+
 		container(
 			scrollable(
 				column![
-					row![
-						text("Settings")
-							.size(LINE_HEIGHT)
-							.line_height(1.0)
-							.font(Font::MONOSPACE),
-						space::horizontal(),
-						button(rotate_ccw())
-							.style(button_with_radius(button::primary, 5))
-							.padding(5)
-							.on_press_maybe(
-								(self.config != Config::default())
-									.then_some(Message::ResetConfigToDefault)
-							)
-					],
+					text("Settings")
+						.size(LINE_HEIGHT)
+						.line_height(1.0)
+						.font(Font::MONOSPACE),
 					container(rule::horizontal(1)).padding(padding::vertical(5)),
 					row![
 						"Sample Paths",
@@ -252,13 +243,13 @@ impl ConfigView {
 								)
 						],
 						space::horizontal(),
-						self.with_device(|device, _| device.buffer_size.map(|buffer_size| text!(
+						device.buffer_size.map(|buffer_size| text!(
 							"{buffer_size} smp @ {} hz = {:.1} ms",
 							device.sample_rate,
 							buffer_size.get() as f32 / device.sample_rate.get() as f32 * 1000.0
 						)
 						.font(Font::MONOSPACE)
-						.size(12))),
+						.size(12)),
 						space::horizontal(),
 						match self.tab {
 							Tab::Input => "Input",
@@ -266,95 +257,86 @@ impl ConfigView {
 						}
 					]
 					.align_y(Center),
-					self.with_device(|device, devices| {
-						column![
+					column![
+						row![
+							text("Name:").width(Fill),
 							row![
-								text("Name:").width(Fill),
-								row![
-									pick_list(devices, device.name.as_ref(), |name| {
-										Message::ChangedName(Some(name))
-									})
-									.handle(PICK_LIST_HANDLE)
-									.placeholder("Default")
-									.width(Fill)
-									.style(pick_list_with_radius(border::top_left(5)))
-									.menu_style(menu_style),
-									button(rotate_ccw())
-										.style(button_with_radius(
-											button::primary,
-											border::top_right(5)
-										))
-										.padding(5)
-										.on_press_maybe(
-											device
-												.name
-												.as_deref()
-												.map(|_| Message::ChangedName(None))
-										)
-								]
-							]
-							.align_y(Center),
-							row![
-								text("Sample Rate:").width(Fill),
-								row![
-									pick_list(
-										COMMON_SAMPLE_RATES,
-										Some(device.sample_rate.get()),
-										|sample_rate| {
-											Message::ChangedSampleRate(
-												NonZero::new(sample_rate).unwrap(),
-											)
-										}
+								pick_list(devices, device.name.as_ref(), |name| {
+									Message::ChangedName(Some(name))
+								})
+								.handle(PICK_LIST_HANDLE)
+								.placeholder("Default")
+								.width(Fill)
+								.style(pick_list_with_radius(border::top_left(5)))
+								.menu_style(menu_style),
+								button(rotate_ccw())
+									.style(button_with_radius(
+										button::primary,
+										border::top_right(5)
+									))
+									.padding(5)
+									.on_press_maybe(
+										device.name.as_deref().map(|_| Message::ChangedName(None))
 									)
-									.handle(PICK_LIST_HANDLE)
-									.placeholder("Default")
-									.width(Fill)
-									.style(pick_list_with_radius(0))
-									.menu_style(menu_style),
-									button(rotate_ccw())
-										.style(button_with_radius(button::primary, 0))
-										.padding(5)
-										.on_press_maybe(
-											(device.sample_rate.get() != 44100).then_some(
-												Message::ChangedSampleRate(
-													NonZero::new(44100).unwrap(),
-												)
-											)
-										)
-								]
 							]
-							.align_y(Center),
-							row![
-								text("Buffer Size:").width(Fill),
-								row![
-									pick_list(
-										COMMON_BUFFER_SIZES,
-										device.buffer_size.map(NonZero::get),
-										|buffer_size| {
-											Message::ChangedBufferSize(NonZero::new(buffer_size))
-										}
-									)
-									.handle(PICK_LIST_HANDLE)
-									.placeholder("Default")
-									.width(Fill)
-									.style(pick_list_with_radius(border::bottom_left(5)))
-									.menu_style(menu_style),
-									button(rotate_ccw())
-										.style(button_with_radius(
-											button::primary,
-											border::bottom_right(5)
-										))
-										.padding(5)
-										.on_press_maybe(
-											device
-												.buffer_size
-												.map(|_| Message::ChangedBufferSize(None))
-										)
-								]
-							]
-							.align_y(Center)
 						]
-					}),
+						.align_y(Center),
+						row![
+							text("Sample Rate:").width(Fill),
+							row![
+								pick_list(
+									COMMON_SAMPLE_RATES,
+									Some(device.sample_rate.get()),
+									|sample_rate| {
+										Message::ChangedSampleRate(
+											NonZero::new(sample_rate).unwrap(),
+										)
+									}
+								)
+								.handle(PICK_LIST_HANDLE)
+								.placeholder("Default")
+								.width(Fill)
+								.style(pick_list_with_radius(0))
+								.menu_style(menu_style),
+								button(rotate_ccw())
+									.style(button_with_radius(button::primary, 0))
+									.padding(5)
+									.on_press_maybe((device.sample_rate.get() != 44100).then_some(
+										Message::ChangedSampleRate(NonZero::new(44100).unwrap(),)
+									))
+							]
+						]
+						.align_y(Center),
+						row![
+							text("Buffer Size:").width(Fill),
+							row![
+								pick_list(
+									COMMON_BUFFER_SIZES,
+									device.buffer_size.map(NonZero::get),
+									|buffer_size| {
+										Message::ChangedBufferSize(NonZero::new(buffer_size))
+									}
+								)
+								.handle(PICK_LIST_HANDLE)
+								.placeholder("Default")
+								.width(Fill)
+								.style(pick_list_with_radius(border::bottom_left(5)))
+								.menu_style(menu_style),
+								button(rotate_ccw())
+									.style(button_with_radius(
+										button::primary,
+										border::bottom_right(5)
+									))
+									.padding(5)
+									.on_press_maybe(
+										device
+											.buffer_size
+											.map(|_| Message::ChangedBufferSize(None))
+									)
+							]
+						]
+						.align_y(Center)
+					],
 					rule::horizontal(1),
 					row![
 						row![
@@ -527,13 +509,6 @@ impl ConfigView {
 			bordered_box_with_radius(5)(t).background(t.extended_palette().background.weakest.color)
 		})
 		.into()
-	}
-
-	fn with_device<'a, T>(&'a self, f: impl FnOnce(&'a Device, &'a [Arc<str>]) -> T) -> T {
-		match self.tab {
-			Tab::Input => f(&self.config.input_device, &self.input_devices),
-			Tab::Output => f(&self.config.output_device, &self.output_devices),
-		}
 	}
 
 	fn with_device_mut<T>(&mut self, f: impl FnOnce(&mut Device) -> T) -> T {
