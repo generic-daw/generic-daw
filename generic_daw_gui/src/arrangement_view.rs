@@ -23,7 +23,7 @@ use crate::{
 use audio_clip::AudioClip;
 use generic_daw_core::{
 	MidiNote, MidiPatternId, MusicalTime, NodeId, PanMode, Position, SampleId,
-	clap_host::{HostInfo, MainThreadMessage, Plugin, PluginBundle, PluginDescriptor},
+	clap_host::{HostInfo, Plugin, PluginBundle, PluginDescriptor},
 };
 use generic_daw_widget::{
 	knob::Knob,
@@ -361,10 +361,8 @@ impl ArrangementView {
 				if show {
 					fut = Task::batch([
 						fut,
-						self.clap_host.update(
-							clap_host::Message::MainThread(id, MainThreadMessage::GuiRequestShow),
-							config,
-						),
+						self.clap_host
+							.update(clap_host::Message::GuiOpen(id), config),
 					]);
 				}
 
@@ -1274,12 +1272,9 @@ impl ArrangementView {
 								.padding(0)
 								.style(button_with_radius(button_style(false), border::left(5)))
 								.width(Fill)
-								.on_press(Message::ClapHost(
-									clap_host::Message::MainThread(
-										plugin.id,
-										MainThreadMessage::GuiRequestShow,
-									)
-								)),
+								.on_press(Message::ClapHost(clap_host::Message::GuiOpen(
+									plugin.id
+								))),
 								column![
 									icon_button(
 										if plugin.enabled && !node.bypassed {

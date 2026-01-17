@@ -38,7 +38,8 @@ pub enum Message {
 	TickTimer(Duration),
 	#[cfg(unix)]
 	OnFd(PluginId, RawFd, FdFlags),
-	GuiReturned(PluginId, NoClone<Box<Fragile<Plugin<Event>>>>),
+	GuiOpen(PluginId),
+	GuiOpened(PluginId, NoClone<Box<Fragile<Plugin<Event>>>>),
 	WindowResized(window::Id, Size),
 	WindowCloseRequested(window::Id),
 	WindowClosed(window::Id),
@@ -100,7 +101,69 @@ impl ClapHost {
 					);
 				}
 			}
-			Message::GuiReturned(id, NoClone(plugin)) => {
+			Message::GuiOpen(id) => {
+				let Some(plugin) = self.plugins.get_mut(&id) else {
+					info!("retrying {message:?}");
+					return Task::perform(Timer::after(Duration::from_millis(100)), |_| message);
+				};
+
+				return if plugin.is_shown() {
+					Task::none()
+				} else if !plugin.has_gui() {
+					let (window, spawn) = window::open(window::Settings {
+						size: (400.0, 600.0).into(),
+						exit_on_close_request: false,
+						level: window::Level::AlwaysOnTop,
+						..window::Settings::default()
+					});
+					self.window_of_plugin.insert(id, window);
+					self.plugin_of_window.insert(window, id);
+
+					plugin.show();
+
+					spawn.discard()
+				} else if plugin.is_floating() {
+					let mut plugin = Fragile::new(self.plugins.remove(&id).unwrap());
+					window::run(self.main_window_id, move |window| {
+						// SAFETY:
+						// The plugin gui is destroyed before the window is closed (see
+						// [`Message::WindowCloseRequested`]).
+						unsafe { plugin.get_mut().set_transient(window) }
+						Message::GuiOpened(id, Box::new(plugin).into())
+					})
+				} else {
+					let scale_factor = plugin.set_scale(
+						config
+							.plugin_scale_factor
+							.unwrap_or(config.app_scale_factor),
+					) / config.app_scale_factor;
+
+					let (window, spawn) = window::open(window::Settings {
+						size: plugin.get_size().map_or_else(
+							|| (400.0, 600.0).into(),
+							|size| size.to_logical(scale_factor).into(),
+						),
+						resizable: plugin.can_resize(),
+						exit_on_close_request: false,
+						level: window::Level::AlwaysOnTop,
+						..window::Settings::default()
+					});
+					self.window_of_plugin.insert(id, window);
+					self.plugin_of_window.insert(window, id);
+
+					let mut plugin = Fragile::new(self.plugins.remove(&id).unwrap());
+					let embed = window::run(window, move |window| {
+						// SAFETY:
+						// The plugin gui is destroyed before the window is closed (see
+						// [`Message::WindowCloseRequested`]).
+						unsafe { plugin.get_mut().set_parent(window) }
+						Message::GuiOpened(id, Box::new(plugin).into())
+					});
+
+					spawn.discard().chain(embed)
+				};
+			}
+			Message::GuiOpened(id, NoClone(plugin)) => {
 				let mut plugin = plugin.into_inner();
 				plugin.show();
 				self.plugins.insert(id, plugin);
@@ -179,62 +242,6 @@ impl ClapHost {
 					config,
 				);
 			}
-			MainThreadMessage::GuiRequestShow => {
-				let plugin = plugin!();
-				if !plugin.is_created() {
-					return if !plugin.has_gui() {
-						let (window, spawn) = window::open(window::Settings {
-							size: (400.0, 600.0).into(),
-							exit_on_close_request: false,
-							level: window::Level::AlwaysOnTop,
-							..window::Settings::default()
-						});
-						self.window_of_plugin.insert(id, window);
-						self.plugin_of_window.insert(window, id);
-
-						spawn.discard()
-					} else if plugin.is_floating() {
-						let mut plugin = Fragile::new(self.plugins.remove(&id).unwrap());
-						window::run(self.main_window_id, move |window| {
-							// SAFETY:
-							// The plugin gui is destroyed before the window is closed (see
-							// [`Message::WindowCloseRequested`]).
-							unsafe { plugin.get_mut().set_transient(window) }
-							Message::GuiReturned(id, Box::new(plugin).into())
-						})
-					} else {
-						let scale_factor = plugin.set_scale(
-							config
-								.plugin_scale_factor
-								.unwrap_or(config.app_scale_factor),
-						) / config.app_scale_factor;
-
-						let (window, spawn) = window::open(window::Settings {
-							size: plugin.get_size().map_or_else(
-								|| (400.0, 600.0).into(),
-								|size| size.to_logical(scale_factor).into(),
-							),
-							resizable: plugin.can_resize(),
-							exit_on_close_request: false,
-							level: window::Level::AlwaysOnTop,
-							..window::Settings::default()
-						});
-						self.window_of_plugin.insert(id, window);
-						self.plugin_of_window.insert(window, id);
-
-						let mut plugin = Fragile::new(self.plugins.remove(&id).unwrap());
-						let embed = window::run(window, move |window| {
-							// SAFETY:
-							// The plugin gui is destroyed before the window is closed (see
-							// [`Message::WindowCloseRequested`]).
-							unsafe { plugin.get_mut().set_parent(window) }
-							Message::GuiReturned(id, Box::new(plugin).into())
-						});
-
-						spawn.discard().chain(embed)
-					};
-				}
-			}
 			MainThreadMessage::GuiRequestResize(size) => {
 				if let Some(&window) = self.window_of_plugin.get(&id)
 					&& let Some(scale_factor) = plugin!().get_scale()
@@ -242,13 +249,8 @@ impl ClapHost {
 					return window::resize(window, size.to_logical(scale_factor).into());
 				}
 			}
-			MainThreadMessage::GuiRequestHide => {
-				if let Some(&window) = self.window_of_plugin.get(&id) {
-					return self.update(Message::WindowCloseRequested(window), config);
-				}
-
-				plugin!().hide();
-			}
+			MainThreadMessage::GuiRequestShow => plugin!().show(),
+			MainThreadMessage::GuiRequestHide => plugin!().hide(),
 			MainThreadMessage::GuiClosed => {
 				if let Some(&window) = self.window_of_plugin.get(&id) {
 					return window::close(window);
