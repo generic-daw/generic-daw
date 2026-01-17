@@ -38,13 +38,13 @@ pub enum Message {
 	TickTimer(Duration),
 	#[cfg(unix)]
 	OnFd(PluginId, RawFd, FdFlags),
-	GuiEmbedded(PluginId, NoClone<Box<Fragile<Plugin<Event>>>>),
+	GuiReturned(PluginId, NoClone<Box<Fragile<Plugin<Event>>>>),
 	WindowResized(window::Id, Size),
 	WindowCloseRequested(window::Id),
 	WindowClosed(window::Id),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ClapHost {
 	plugins: HashMap<PluginId, Plugin<Event>>,
 	timers_of_duration: HashMap<Duration, HashMap<PluginId, HashSet<TimerId>>>,
@@ -52,9 +52,22 @@ pub struct ClapHost {
 	plugin_of_window: HashMap<window::Id, PluginId>,
 	#[cfg(unix)]
 	fds_of_plugin: HashMap<PluginId, HashMap<RawFd, (FdFlags, Handle)>>,
+	main_window_id: window::Id,
 }
 
 impl ClapHost {
+	pub fn new(main_window_id: window::Id) -> Self {
+		Self {
+			plugins: HashMap::new(),
+			timers_of_duration: HashMap::new(),
+			window_of_plugin: HashMap::new(),
+			plugin_of_window: HashMap::new(),
+			#[cfg(unix)]
+			fds_of_plugin: HashMap::new(),
+			main_window_id,
+		}
+	}
+
 	pub fn update(&mut self, message: Message, config: &Config) -> Task<Message> {
 		match message {
 			Message::MainThread(id, msg) => {
@@ -87,7 +100,7 @@ impl ClapHost {
 					);
 				}
 			}
-			Message::GuiEmbedded(id, NoClone(plugin)) => {
+			Message::GuiReturned(id, NoClone(plugin)) => {
 				let mut plugin = plugin.into_inner();
 				plugin.show();
 				self.plugins.insert(id, plugin);
@@ -108,6 +121,9 @@ impl ClapHost {
 					self.plugins.get_mut(plugin).unwrap().destroy();
 					window::close(window)
 				} else {
+					for plugin in self.plugins.values_mut() {
+						plugin.destroy();
+					}
 					iced::exit()
 				};
 			}
@@ -166,7 +182,7 @@ impl ClapHost {
 			MainThreadMessage::GuiRequestShow => {
 				if let Entry::Vacant(entry) = self.window_of_plugin.entry(id) {
 					let plugin = plugin!();
-					if !plugin.has_gui() {
+					return if !plugin.has_gui() {
 						let (window, spawn) = window::open(window::Settings {
 							size: (400.0, 600.0).into(),
 							exit_on_close_request: false,
@@ -176,9 +192,16 @@ impl ClapHost {
 						entry.insert(window);
 						self.plugin_of_window.insert(window, id);
 
-						return spawn.discard();
+						spawn.discard()
 					} else if plugin.is_floating() {
-						plugin.show();
+						let mut plugin = Fragile::new(self.plugins.remove(&id).unwrap());
+						window::run(self.main_window_id, move |window| {
+							// SAFETY:
+							// The plugin gui is destroyed before the window is closed (see
+							// [`Message::WindowCloseRequested`]).
+							unsafe { plugin.get_mut().set_transient(window) }
+							Message::GuiReturned(id, Box::new(plugin).into())
+						})
 					} else {
 						let scale_factor = plugin.set_scale(
 							config
@@ -204,14 +227,12 @@ impl ClapHost {
 							// SAFETY:
 							// The plugin gui is destroyed before the window is closed (see
 							// [`Message::WindowCloseRequested`]).
-							unsafe {
-								plugin.get_mut().set_parent(window.window_handle().unwrap());
-							}
-							Message::GuiEmbedded(id, Box::new(plugin).into())
+							unsafe { plugin.get_mut().set_parent(window) }
+							Message::GuiReturned(id, Box::new(plugin).into())
 						});
 
-						return spawn.discard().chain(embed);
-					}
+						spawn.discard().chain(embed)
+					};
 				}
 			}
 			MainThreadMessage::GuiRequestResize(size) => {

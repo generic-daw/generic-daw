@@ -39,6 +39,7 @@ use iced::{
 		button, column, combo_box, container, mouse_area, row, rule, scrollable, slider, space,
 		text, vertical_slider,
 	},
+	window,
 };
 use iced_split::{Split, Strategy};
 use log::warn;
@@ -201,7 +202,11 @@ pub struct ArrangementView {
 }
 
 impl ArrangementView {
-	pub fn new(config: &Config, state: &State) -> (Self, Task<Message>) {
+	pub fn new(
+		config: &Config,
+		state: &State,
+		main_window_id: window::Id,
+	) -> (Self, Task<Message>) {
 		let (arrangement, task) = Arrangement::create(config);
 
 		let playlist_scale_x = (arrangement.transport().sample_rate.get() as f32).log2() - 5.0;
@@ -210,7 +215,7 @@ impl ArrangementView {
 		(
 			Self {
 				arrangement,
-				clap_host: ClapHost::default(),
+				clap_host: ClapHost::new(main_window_id),
 
 				recording: None,
 				tab: Tab::Playlist,

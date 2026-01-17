@@ -140,8 +140,6 @@ pub struct Daw {
 	config: Config,
 	state: State,
 	plugin_bundles: Arc<HashMap<PluginDescriptor, NoDebug<PluginBundle>>>,
-
-	window_id: window::Id,
 	current_project: Option<Arc<Path>>,
 
 	arrangement_view: ArrangementView,
@@ -153,12 +151,13 @@ pub struct Daw {
 	progress: Option<f32>,
 	missing_samples: Vec<(Arc<str>, oneshot::Sender<Feedback<Arc<Path>>>)>,
 
+	main_window_id: window::Id,
 	files_hovered: bool,
 }
 
 impl Daw {
 	pub fn create() -> (Self, Task<Message>) {
-		let (window_id, open) = window::open(window::Settings {
+		let (main_window_id, open) = window::open(window::Settings {
 			exit_on_close_request: false,
 			maximized: true,
 			..window::Settings::default()
@@ -175,7 +174,7 @@ impl Daw {
 		let plugin_bundles = get_installed_plugins(&config.clap_paths);
 		let file_tree = FileTree::new(&config.sample_paths);
 
-		let (mut arrangement_view, futs) = ArrangementView::new(&config, &state);
+		let (mut arrangement_view, futs) = ArrangementView::new(&config, &state, main_window_id);
 		arrangement_view.set_plugins(&plugin_bundles);
 
 		let split_at = state.file_tree_split_at;
@@ -185,8 +184,6 @@ impl Daw {
 				config,
 				state,
 				plugin_bundles: plugin_bundles.into(),
-
-				window_id,
 				current_project: None,
 
 				arrangement_view,
@@ -198,6 +195,7 @@ impl Daw {
 				progress: None,
 				missing_samples: Vec::new(),
 
+				main_window_id,
 				files_hovered: false,
 			},
 			Task::batch([open, futs.map(Message::Arrangement)]),
@@ -223,7 +221,7 @@ impl Daw {
 			Message::FileTree(action) => return self.handle_file_tree_message(action),
 			Message::ConfigView(message) => {
 				if let Some(config_view) = self.config_view.as_mut() {
-					let action = config_view.update(message, self.window_id);
+					let action = config_view.update(message);
 					let mut futs = vec![action.task.map(Message::ConfigView)];
 
 					if let Some(config) = action.instruction {
@@ -273,7 +271,7 @@ impl Daw {
 					.save(&path, &mut self.arrangement_view.clap_host);
 			}
 			Message::OpenFileDialog => {
-				return window::run(self.window_id, |window| {
+				return window::run(self.main_window_id, |window| {
 					AsyncFileDialog::new()
 						.set_parent(window)
 						.add_filter("Generic DAW project file", &["gdp"])
@@ -286,7 +284,7 @@ impl Daw {
 				.map(Message::OpenFile);
 			}
 			Message::SaveAsFileDialog => {
-				return window::run(self.window_id, |window| {
+				return window::run(self.main_window_id, |window| {
 					AsyncFileDialog::new()
 						.set_parent(window)
 						.add_filter("Generic DAW project file", &["gdp"])
@@ -299,7 +297,7 @@ impl Daw {
 				.map(Message::SaveAsFile);
 			}
 			Message::ExportFileDialog => {
-				return window::run(self.window_id, |window| {
+				return window::run(self.main_window_id, |window| {
 					AsyncFileDialog::new()
 						.set_parent(window)
 						.add_filter("Wave file", &["wav"])
@@ -312,7 +310,7 @@ impl Daw {
 				.map(Message::ExportFile);
 			}
 			Message::PickSampleFileDialog(idx) => {
-				return window::run(self.window_id, |window| {
+				return window::run(self.main_window_id, |window| {
 					AsyncFileDialog::new().set_parent(window).pick_file()
 				})
 				.then(Task::future)
@@ -365,7 +363,9 @@ impl Daw {
 				self.arrangement_view.clap_host.set_realtime(true);
 				self.progress = None;
 			}
-			Message::OpenConfigView => self.config_view = Some(ConfigView::default()),
+			Message::OpenConfigView => {
+				self.config_view = Some(ConfigView::new(self.main_window_id));
+			}
 			Message::CloseConfigView => self.config_view = None,
 			Message::MergeConfig(config, live) => {
 				if self.config.clap_paths != config.clap_paths {
@@ -462,7 +462,7 @@ impl Daw {
 				.map(Message::Arrangement);
 		}
 
-		debug_assert_eq!(window, self.window_id);
+		debug_assert_eq!(window, self.main_window_id);
 
 		let now = MusicalTime::from_samples(
 			self.arrangement_view.arrangement.transport().sample,

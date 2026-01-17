@@ -64,10 +64,11 @@ pub struct ConfigView {
 	tab: Tab,
 	input_devices: Vec<Arc<str>>,
 	output_devices: Vec<Arc<str>>,
+	main_window_id: window::Id,
 }
 
-impl Default for ConfigView {
-	fn default() -> Self {
+impl ConfigView {
+	pub fn new(main_window_id: window::Id) -> Self {
 		let mut input_devices = input_devices();
 		input_devices.sort_unstable();
 
@@ -82,15 +83,14 @@ impl Default for ConfigView {
 			tab: Tab::Output,
 			input_devices,
 			output_devices,
+			main_window_id,
 		}
 	}
-}
 
-impl ConfigView {
-	pub fn update(&mut self, message: Message, window_id: window::Id) -> Action<Config, Message> {
+	pub fn update(&mut self, message: Message) -> Action<Config, Message> {
 		match message {
 			Message::AddSamplePathFileDialog => {
-				return window::run(window_id, |window| {
+				return window::run(self.main_window_id, |window| {
 					AsyncFileDialog::new().set_parent(window).pick_folder()
 				})
 				.then(Task::future)
@@ -102,7 +102,7 @@ impl ConfigView {
 			Message::AddSamplePath(path) => self.config.sample_paths.push(path),
 			Message::RemoveSamplePath(idx) => _ = self.config.sample_paths.remove(idx),
 			Message::AddClapPathFileDialog => {
-				return window::run(window_id, |window| {
+				return window::run(self.main_window_id, |window| {
 					AsyncFileDialog::new().set_parent(window).pick_folder()
 				})
 				.then(Task::future)
@@ -127,7 +127,7 @@ impl ConfigView {
 			Message::ChangedAutosaveInterval(interval) => self.config.autosave.interval = interval,
 			Message::ChangedAutosaveIntervalText(text) => {
 				if let Ok(interval) = text.parse() {
-					return self.update(Message::ChangedAutosaveInterval(interval), window_id);
+					return self.update(Message::ChangedAutosaveInterval(interval));
 				}
 			}
 			Message::ToggledOpenLastProject => self.config.open_last_project ^= true,
