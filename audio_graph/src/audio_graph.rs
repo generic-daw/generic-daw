@@ -87,7 +87,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		let mut buffers_lock = entry.write_buffers_uncontended();
 		let buffers = &mut *buffers_lock;
 
-		buffers.audio[..len].fill(0.0);
+		let mut filled_audio = false;
 		buffers.events.clear();
 
 		let max_delay = buffers
@@ -111,10 +111,15 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 				&buffers.scratch[..len]
 			};
 
-			audio
-				.iter()
-				.zip(&mut buffers.audio[..len])
-				.for_each(|(&sample, buf)| *buf += sample);
+			if filled_audio {
+				audio
+					.iter()
+					.zip(&mut buffers.audio[..len])
+					.for_each(|(&sample, buf)| *buf += sample);
+			} else {
+				buffers.audio[..len].copy_from_slice(audio);
+				filled_audio = true;
+			}
 
 			events.extend(
 				dep_buffers
@@ -129,6 +134,10 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 					.map(|time| *e = e.at(time))
 					.is_none()
 			}));
+		}
+
+		if !filled_audio {
+			buffers.audio[..len].fill(0.0);
 		}
 
 		let mut node = entry.node_uncontended();
