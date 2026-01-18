@@ -1,6 +1,17 @@
 name: rust
 on: [push, pull_request]
 jobs:
+  fmt:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
   clippy:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -15,11 +26,22 @@ jobs:
         run: sudo apt-get install libasound2-dev
       - run: curl https://unpkg.com/lucide-static@latest/font/Lucide.ttf -Lo Lucide.ttf
       - run: cargo clippy -- -D warnings
-  fmt:
-    runs-on: ubuntu-latest
+  build-release:
+    name: build
+    needs: [fmt, clippy]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      - if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - run: curl https://unpkg.com/lucide-static@latest/font/Lucide.ttf -Lo Lucide.ttf
+      - run: cargo build --release
+      - uses: actions/upload-artifact@v4
         with:
-          components: rustfmt
-      - run: cargo fmt --all -- --check
+          name: generic-daw-${{ matrix.os }}
+          path: target/release/generic_daw*
+          compression-level: 9
