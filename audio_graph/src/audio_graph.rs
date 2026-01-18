@@ -46,7 +46,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 			self.graph
 				.values()
-				.filter(|entry| entry.indegree.load(Relaxed) == 0)
 				.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 0)
 				.for_each(|entry| {
 					if entry.expensive {
@@ -65,11 +64,11 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			}
 		});
 
-		debug_assert!(
-			self.graph
-				.values_mut()
-				.all(|entry| entry.indegree.get_mut().is_negative())
-		);
+		if cfg!(debug_assertions) {
+			for entry in self.graph.values_mut() {
+				assert_eq!(*entry.indegree.get_mut(), -1);
+			}
+		}
 
 		buf.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..len]);
 	}
@@ -82,7 +81,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		len: usize,
 		state: &'a Node::State,
 	) {
-		debug_assert!(entry.indegree.load(Relaxed).is_negative());
+		debug_assert_eq!(entry.indegree.load(Relaxed), -1);
 
 		let mut buffers_lock = entry.write_buffers_uncontended();
 		let buffers = &mut *buffers_lock;
@@ -153,7 +152,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			.outgoing
 			.iter()
 			.map(|node| &self.graph[node])
-			.filter(|dep| dep.indegree.fetch_sub(1, Relaxed) == 1)
 			.filter(|dep| dep.indegree.fetch_sub(1, Relaxed) == 0)
 			.for_each(|dep| {
 				if dep.expensive {
