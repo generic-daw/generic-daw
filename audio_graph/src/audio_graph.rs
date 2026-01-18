@@ -101,12 +101,17 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			let dep_entry = &self.graph[dep];
 			let dep_buffers = &*dep_entry.read_buffers_uncontended();
 			let delay_diff = max_delay - dep_entry.delay.load(Relaxed);
-
-			buffers.scratch[..len].copy_from_slice(&dep_buffers.audio[..len]);
 			delay_line.resize(delay_diff);
-			delay_line.advance(&mut buffers.scratch[..len]);
 
-			buffers.scratch[..len]
+			let audio = if delay_diff == 0 {
+				&dep_buffers.audio[..len]
+			} else {
+				buffers.scratch[..len].copy_from_slice(&dep_buffers.audio[..len]);
+				delay_line.advance(&mut buffers.scratch[..len]);
+				&buffers.scratch[..len]
+			};
+
+			audio
 				.iter()
 				.zip(&mut buffers.audio[..len])
 				.for_each(|(&sample, buf)| *buf += sample);
