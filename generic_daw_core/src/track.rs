@@ -81,31 +81,48 @@ impl Track {
 
 		if state.transport.playing {
 			for clip in &mut self.clips {
-				let (start, end) = clip.position().position().to_samples(&state.transport);
+				let Clip::Midi(clip) = clip else {
+					continue;
+				};
+
+				let (start, end) = clip.position.position().to_samples(&state.transport);
 				if start < state.transport.sample + audio.len() && end >= state.transport.sample {
 					clip.collect_notes(state, &mut notes);
 				}
 			}
 		}
 
-		for (key, (before, after)) in self.notes.iter().zip(&notes).enumerate() {
-			let event = match before.cmp(after) {
-				Ordering::Equal => continue,
-				Ordering::Less => Event::On {
-					time: 0,
-					key: key as u8,
-					velocity: 1.0,
-				},
-				Ordering::Greater => Event::Off {
-					time: 0,
-					key: key as u8,
-					velocity: 1.0,
-				},
-			};
+		for ((before, after), key) in self
+			.notes
+			.as_chunks_mut::<16>()
+			.0
+			.iter_mut()
+			.zip(notes.as_chunks::<16>().0)
+			.zip((0..).step_by(16))
+		{
+			if before == after {
+				continue;
+			}
 
-			events.extend(repeat_n(event, before.abs_diff(*after) as usize));
+			for ((before, after), key) in before.iter().zip(after).zip(key..) {
+				let event = match before.cmp(after) {
+					Ordering::Equal => continue,
+					Ordering::Less => Event::On {
+						time: 0,
+						key: key as u8,
+						velocity: 1.0,
+					},
+					Ordering::Greater => Event::Off {
+						time: 0,
+						key: key as u8,
+						velocity: 1.0,
+					},
+				};
+
+				events.extend(repeat_n(event, before.abs_diff(*after) as usize));
+			}
+
+			*before = *after;
 		}
-
-		**self.notes = notes;
 	}
 }

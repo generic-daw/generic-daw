@@ -314,7 +314,7 @@ impl Arrangement {
 								_ = done.send((idx, Feedback::Ignore));
 								return;
 							}
-							Ok(Feedback::Cancel) | Err(_) => {
+							Ok(Feedback::Cancel) | Err(..) => {
 								_ = done.send((idx, Feedback::Cancel));
 								return;
 							}

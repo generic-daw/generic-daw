@@ -7,13 +7,6 @@ pub enum Clip {
 }
 
 impl Clip {
-	pub fn collect_notes(&self, state: &State, notes: &mut [u8; 128]) {
-		match self {
-			Self::Audio(..) => {}
-			Self::Midi(clip) => clip.collect_notes(state, notes),
-		}
-	}
-
 	pub fn process(
 		&self,
 		state: &State,
