@@ -4,7 +4,7 @@ use fragile::Fragile;
 use generic_daw_core::clap_host::FdFlags;
 use generic_daw_core::{
 	Event, PluginId,
-	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, Size, TimerId},
+	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, Size, StateContextType, TimerId},
 };
 use generic_daw_widget::knob::Knob;
 #[cfg(unix)]
@@ -451,10 +451,16 @@ impl ClapHost {
 	}
 
 	pub fn get_state(&mut self, id: PluginId) -> Option<Vec<u8>> {
-		self.plugins.get_mut(&id).unwrap().get_state()
+		self.plugins
+			.get_mut(&id)
+			.unwrap()
+			.get_state(StateContextType::ForProject)
 	}
 
 	pub fn set_state(&mut self, id: PluginId, state: &[u8]) {
-		self.plugins.get_mut(&id).unwrap().set_state(state);
+		self.plugins
+			.get_mut(&id)
+			.unwrap()
+			.set_state(state, StateContextType::ForProject);
 	}
 }

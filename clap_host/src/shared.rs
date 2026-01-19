@@ -11,6 +11,7 @@ use clack_extensions::{
 	preset_discovery::PluginPresetLoad,
 	render::PluginRender,
 	state::PluginState,
+	state_context::PluginStateContext,
 	thread_check::HostThreadCheckImpl,
 	thread_pool::PluginThreadPool,
 	timer::PluginTimer,
@@ -41,6 +42,7 @@ pub struct Ext {
 	pub preset_load: OnceLock<NoDebug<PluginPresetLoad>>,
 	pub render: OnceLock<NoDebug<PluginRender>>,
 	pub state: OnceLock<NoDebug<PluginState>>,
+	pub state_context: OnceLock<NoDebug<PluginStateContext>>,
 	pub thread_pool: OnceLock<NoDebug<PluginThreadPool>>,
 	pub timer: OnceLock<NoDebug<PluginTimer>>,
 }
@@ -89,10 +91,9 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 			) => {
 				$(
 					$(#[$meta])*
-					if self.ext.$ident.get().is_none()
-						&& let Some(ext) = instance.get_extension()
-					{
-						_ = self.ext.$ident.set(NoDebug(ext));
+					if let Some(ext) = instance.get_extension() {
+						self.ext.$ident.set(NoDebug(ext)).unwrap();
+						info!("{}: implements '{}'", &self.descriptor, stringify!($ident));
 					}
 				)*
 			};
@@ -109,6 +110,7 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 			preset_load,
 			render,
 			state,
+			state_context,
 			thread_pool,
 			timer
 		];

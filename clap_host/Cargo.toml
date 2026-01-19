@@ -24,6 +24,7 @@ clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
 	"raw-window-handle_06",
 	"render",
 	"state",
+	"state-context",
 	"thread-check",
 	"thread-pool",
 	"timer",

@@ -1,5 +1,5 @@
-use crate::host::Host;
-use clack_extensions::params::{ParamInfoBuffer, ParamInfoFlags, ParamRescanFlags};
+use crate::{ParamInfoFlags, ParamRescanFlags, host::Host};
+use clack_extensions::params::ParamInfoBuffer;
 use clack_host::{prelude::*, utils::Cookie};
 use std::{mem::MaybeUninit, ops::RangeInclusive, sync::Arc};
 

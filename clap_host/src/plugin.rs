@@ -1,16 +1,15 @@
 use crate::{
-	API_TYPE, AudioProcessor, EventImpl, MainThreadMessage, PluginDescriptor,
-	audio_buffers::AudioBuffers, audio_processor::AudioThreadMessage, audio_thread::AudioThread,
-	event_buffers::EventBuffers, gui::Gui, host::Host, main_thread::MainThread, param::Param,
-	preset::Preset, shared::Shared, size::Size,
+	API_TYPE, AudioProcessor, EventImpl, MainThreadMessage, ParamInfoFlags, ParamRescanFlags,
+	PluginDescriptor, StateContextType, TimerId, audio_buffers::AudioBuffers,
+	audio_processor::AudioThreadMessage, audio_thread::AudioThread, event_buffers::EventBuffers,
+	gui::Gui, host::Host, main_thread::MainThread, param::Param, preset::Preset, shared::Shared,
+	size::Size,
 };
 #[cfg(unix)]
 use clack_extensions::posix_fd::FdFlags;
 use clack_extensions::{
 	gui::{GuiConfiguration, GuiSize, Window},
-	params::{ParamInfoFlags, ParamRescanFlags},
 	render::RenderMode,
-	timer::TimerId,
 };
 use clack_host::prelude::*;
 use log::{info, warn};
@@ -427,24 +426,41 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	#[must_use]
-	pub fn get_state(&mut self) -> Option<Vec<u8>> {
+	pub fn get_state(&mut self, context_type: StateContextType) -> Option<Vec<u8>> {
 		let mut buf = Vec::new();
 
-		self.instance
-			.access_shared_handler(|s| s.ext.state.get().copied())?
-			.save(&mut self.instance.plugin_handle(), &mut buf)
-			.inspect_err(|err| warn!("{}: {err}", self.descriptor))
-			.ok()?;
+		if let Err(err) = if let Some(&ext) = self
+			.instance
+			.access_shared_handler(|s| s.ext.state_context.get())
+		{
+			ext.save(&mut self.instance.plugin_handle(), &mut buf, context_type)
+		} else {
+			self.instance
+				.access_shared_handler(|s| s.ext.state.get().copied())?
+				.save(&mut self.instance.plugin_handle(), &mut buf)
+		} {
+			warn!("{}: {err}", self.descriptor);
+			return None;
+		}
 
 		Some(buf)
 	}
 
-	pub fn set_state(&mut self, buf: &[u8]) {
-		if let Err(err) = self
+	pub fn set_state(&mut self, buf: &[u8], context_type: StateContextType) {
+		if let Err(err) = if let Some(&ext) = self
 			.instance
-			.access_shared_handler(|s| s.ext.state.get().copied().unwrap())
-			.load(&mut self.instance.plugin_handle(), &mut Cursor::new(buf))
+			.access_shared_handler(|s| s.ext.state_context.get())
 		{
+			ext.load(
+				&mut self.instance.plugin_handle(),
+				&mut Cursor::new(buf),
+				context_type,
+			)
+		} else {
+			self.instance
+				.access_shared_handler(|s| *s.ext.state.get().unwrap())
+				.load(&mut self.instance.plugin_handle(), &mut Cursor::new(buf))
+		} {
 			warn!("{}: {err}", self.descriptor);
 		}
 	}

@@ -1,14 +1,14 @@
-use crate::{Size, host::Host, shared::Shared};
+use crate::{ParamRescanFlags, Size, TimerId, host::Host, shared::Shared};
 #[cfg(unix)]
 use clack_extensions::posix_fd::{FdFlags, HostPosixFdImpl};
 use clack_extensions::{
 	audio_ports::{HostAudioPortsImpl, RescanType},
 	latency::HostLatencyImpl,
 	note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
-	params::{HostParamsImplMainThread, ParamClearFlags, ParamRescanFlags},
+	params::{HostParamsImplMainThread, ParamClearFlags},
 	preset_discovery::{HostPresetLoadImpl, prelude::*},
 	state::HostStateImpl,
-	timer::{HostTimerImpl, TimerId},
+	timer::HostTimerImpl,
 };
 use clack_host::prelude::*;
 #[cfg(unix)]

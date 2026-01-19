@@ -30,6 +30,7 @@ pub use audio_processor::AudioProcessor;
 pub use clack_extensions::posix_fd::FdFlags;
 pub use clack_extensions::{
 	params::{ParamInfoFlags, ParamRescanFlags},
+	state_context::StateContextType,
 	timer::TimerId,
 };
 pub use clack_host::{
