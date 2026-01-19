@@ -29,19 +29,22 @@ jobs:
   build-release:
     name: build
     needs: [fmt, clippy]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        os:
+          - { os: ubuntu-latest, path: target/release/generic_daw }
+          - { os: windows-latest, path: target/release/generic_daw.exe }
+          - { os: macos-latest, path: target/release/generic_daw }
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - if: matrix.os == 'ubuntu-latest'
+      - if: matrix.os.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - run: curl https://unpkg.com/lucide-static@latest/font/Lucide.ttf -Lo Lucide.ttf
       - run: cargo build --release
       - uses: actions/upload-artifact@v4
         with:
-          name: generic-daw-${{ matrix.os }}
-          path: target/release/generic_daw*
+          name: generic-daw-${{ matrix.os.os }}
+          path: ${{ matrix.os.path }}
           compression-level: 9
