@@ -219,7 +219,7 @@ fn max_peaks(audio: &[f32]) -> [f32; 2] {
 		.map(|chunk| chunk.map(f32::abs))
 		.reduce(max_peaks)
 		.into_iter()
-		.flat_map(|chunk| <[[_; 2]; 8]>::try_from(chunk.as_chunks().0).unwrap())
+		.flat_map(|chunk| *chunk.as_chunks().0.as_array::<8>().unwrap())
 		.chain(chunks_2.iter().map(|chunk| chunk.map(f32::abs)))
 		.reduce(max_peaks)
 		.unwrap_or([0.0; _])
