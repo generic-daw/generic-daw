@@ -142,10 +142,6 @@ impl NodeImpl for Channel {
 			0
 		}
 	}
-
-	fn expensive(&self) -> bool {
-		self.enabled && !self.bypassed && self.plugins.iter().any(|plugin| plugin.enabled)
-	}
 }
 
 impl Channel {

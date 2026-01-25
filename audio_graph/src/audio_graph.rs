@@ -4,6 +4,7 @@ use std::{
 	collections::HashMap,
 	num::NonZero,
 	sync::{RwLockWriteGuard, atomic::Ordering::Relaxed},
+	time::Instant,
 };
 
 #[derive(Debug)]
@@ -11,12 +12,13 @@ pub struct AudioGraph<Node: NodeImpl> {
 	graph: HashMap<NodeId, Entry<Node>>,
 	buffers: Vec<Box<[f32]>>,
 	root: NodeId,
+	sample_rate: NonZero<u32>,
 	frames: NonZero<u32>,
 }
 
 impl<Node: NodeImpl> AudioGraph<Node> {
 	#[must_use]
-	pub fn new(node: impl Into<Node>, frames: NonZero<u32>) -> Self {
+	pub fn new(node: impl Into<Node>, sample_rate: NonZero<u32>, frames: NonZero<u32>) -> Self {
 		let node = node.into();
 		let root = node.id();
 
@@ -29,6 +31,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			graph,
 			buffers,
 			root,
+			sample_rate,
 			frames,
 		}
 	}
@@ -38,7 +41,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 		for entry in self.graph.values_mut() {
 			*entry.indegree.get_mut() = entry.buffers().incoming.len().cast_signed();
-			entry.expensive = entry.node().expensive();
 		}
 
 		rayon_core::in_place_scope(|s| {
@@ -48,14 +50,12 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 				.values()
 				.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 0)
 				.for_each(|entry| {
-					if entry.expensive {
-						if first.is_none() {
-							first = Some(entry);
-						} else {
-							s.spawn(|s| self.worker(s, entry, len, state));
-						}
-					} else {
+					if entry.inline.load(Relaxed) {
 						self.worker(s, entry, len, state);
+					} else if first.is_none() {
+						first = Some(entry);
+					} else {
+						s.spawn(|s| self.worker(s, entry, len, state));
 					}
 				});
 
@@ -82,6 +82,8 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		state: &'a Node::State,
 	) {
 		debug_assert_eq!(entry.indegree.load(Relaxed), -1);
+
+		let now = Instant::now();
 
 		let mut buffers_lock = entry.write_buffers_uncontended();
 		let buffers = &mut *buffers_lock;
@@ -146,6 +148,12 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 		drop(node);
 
+		let elapsed = now.elapsed().as_nanos() as usize;
+		let inline = entry.inline.swap(
+			elapsed < 5000.min(1_000_000 * len / self.sample_rate.get() as usize),
+			Relaxed,
+		);
+
 		let mut first = None;
 
 		RwLockWriteGuard::downgrade(buffers_lock)
@@ -153,15 +161,13 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			.iter()
 			.map(|node| &self.graph[node])
 			.filter(|dep| dep.indegree.fetch_sub(1, Relaxed) == 0)
-			.for_each(|dep| {
-				if dep.expensive {
-					if entry.expensive && first.is_none() {
-						first = Some(dep);
-					} else {
-						s.spawn(move |s| self.worker(s, dep, len, state));
-					}
+			.for_each(|entry| {
+				if entry.inline.load(Relaxed) {
+					self.worker(s, entry, len, state);
+				} else if !inline && first.is_none() {
+					first = Some(entry);
 				} else {
-					self.worker(s, dep, len, state);
+					s.spawn(move |s| self.worker(s, entry, len, state));
 				}
 			});
 

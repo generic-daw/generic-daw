@@ -48,10 +48,6 @@ impl NodeImpl for Track {
 	fn delay(&self) -> usize {
 		self.channel.delay()
 	}
-
-	fn expensive(&self) -> bool {
-		self.channel.expensive()
-	}
 }
 
 impl Track {

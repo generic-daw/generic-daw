@@ -9,6 +9,4 @@ pub trait NodeImpl: Debug + Send {
 	fn id(&self) -> NodeId;
 	#[must_use]
 	fn delay(&self) -> usize;
-	#[must_use]
-	fn expensive(&self) -> bool;
 }

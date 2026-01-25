@@ -30,13 +30,6 @@ impl NodeImpl for AudioGraphNode {
 			Self::Track(node) => node.delay(),
 		}
 	}
-
-	fn expensive(&self) -> bool {
-		match self {
-			Self::Channel(node) => node.expensive(),
-			Self::Track(node) => node.expensive(),
-		}
-	}
 }
 
 impl AudioGraphNode {

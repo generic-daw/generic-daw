@@ -5,7 +5,7 @@ use std::{
 	num::NonZero,
 	sync::{
 		Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
-		atomic::{AtomicIsize, AtomicUsize},
+		atomic::{AtomicBool, AtomicIsize, AtomicUsize},
 	},
 };
 use utils::{NoDebug, boxed_slice};
@@ -16,7 +16,7 @@ pub struct Entry<Node: NodeImpl> {
 	buffers: RwLock<Buffers<Node>>,
 	pub indegree: AtomicIsize,
 	pub delay: AtomicUsize,
-	pub expensive: bool,
+	pub inline: AtomicBool,
 }
 
 #[derive(Debug)]
@@ -52,7 +52,7 @@ impl<Node: NodeImpl> Entry<Node> {
 			}),
 			indegree: AtomicIsize::new(0),
 			delay: AtomicUsize::new(0),
-			expensive: true,
+			inline: AtomicBool::new(false),
 		}
 	}
 
