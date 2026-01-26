@@ -39,8 +39,10 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	pub fn process(&mut self, state: &Node::State, buf: &mut [f32]) {
 		let len = buf.len();
 
+		let threshold = (10_000 / len).max(1_000_000 / self.sample_rate.get() as usize);
 		for entry in self.graph.values_mut() {
 			*entry.indegree.get_mut() = entry.buffers().incoming.len().cast_signed();
+			entry.inline = *entry.elapsed.get_mut() <= threshold;
 		}
 
 		rayon_core::in_place_scope(|s| {
@@ -50,7 +52,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 				.values()
 				.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 0)
 				.for_each(|entry| {
-					if entry.inline.load(Relaxed) {
+					if entry.inline {
 						self.worker(s, entry, len, state);
 					} else if first.is_none() {
 						first = Some(entry);
@@ -149,10 +151,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		drop(node);
 
 		let elapsed = now.elapsed().as_nanos() as usize;
-		let inline = entry.inline.swap(
-			elapsed < 5000.min(1_000_000 * len / self.sample_rate.get() as usize),
-			Relaxed,
-		);
+		entry.elapsed.store(elapsed / len, Relaxed);
 
 		let mut first = None;
 
@@ -161,13 +160,13 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			.iter()
 			.map(|node| &self.graph[node])
 			.filter(|dep| dep.indegree.fetch_sub(1, Relaxed) == 0)
-			.for_each(|entry| {
-				if entry.inline.load(Relaxed) {
-					self.worker(s, entry, len, state);
-				} else if !inline && first.is_none() {
-					first = Some(entry);
+			.for_each(|dep| {
+				if dep.inline {
+					self.worker(s, dep, len, state);
+				} else if !entry.inline && first.is_none() {
+					first = Some(dep);
 				} else {
-					s.spawn(move |s| self.worker(s, entry, len, state));
+					s.spawn(move |s| self.worker(s, dep, len, state));
 				}
 			});
 
