@@ -274,23 +274,23 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 		self.graph
 			.values()
-			.filter(|entry| entry.indegree.load(Relaxed) == 0)
 			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 0)
 			.for_each(|entry| self.visit(entry));
 
 		!self
 			.graph
 			.values_mut()
-			.all(|entry| entry.indegree.get_mut().is_negative())
+			.all(|entry| *entry.indegree.get_mut() == -1)
 	}
 
 	fn visit(&self, entry: &Entry<Node>) {
+		debug_assert_eq!(entry.indegree.load(Relaxed), -1);
+
 		entry
 			.read_buffers_uncontended()
 			.outgoing
 			.iter()
 			.map(|node| &self.graph[node])
-			.filter(|dep| dep.indegree.fetch_sub(1, Relaxed) == 1)
 			.filter(|dep| dep.indegree.fetch_sub(1, Relaxed) == 0)
 			.for_each(|dep| self.visit(dep));
 	}
