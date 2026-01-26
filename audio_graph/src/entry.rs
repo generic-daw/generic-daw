@@ -61,7 +61,7 @@ impl<Node: NodeImpl> Entry<Node> {
 	}
 
 	pub fn node_uncontended(&self) -> MutexGuard<'_, Node> {
-		self.node.lock().expect("this is always uncontended")
+		self.node.try_lock().expect("this is always uncontended")
 	}
 
 	pub fn buffers(&mut self) -> &mut Buffers<Node> {
@@ -69,10 +69,12 @@ impl<Node: NodeImpl> Entry<Node> {
 	}
 
 	pub fn read_buffers_uncontended(&self) -> RwLockReadGuard<'_, Buffers<Node>> {
-		self.buffers.read().expect("this is always uncontended")
+		self.buffers.try_read().expect("this is always uncontended")
 	}
 
 	pub fn write_buffers_uncontended(&self) -> RwLockWriteGuard<'_, Buffers<Node>> {
-		self.buffers.write().expect("this is always uncontended")
+		self.buffers
+			.try_write()
+			.expect("this is always uncontended")
 	}
 }
