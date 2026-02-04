@@ -17,7 +17,7 @@ cpal = "0.17.1"
 hound = "3.5.1"
 log = "0.4.29"
 midly = { version = "0.5.3", default-features = false, features = ["std", "strict"] }
-oneshot = "0.1.12"
+oneshot = "0.1.13"
 rtrb = "0.3.2"
 rubato = "1.0.1"
 symphonia = { version = "0.5.5", features = ["all", "opt-simd"] }
