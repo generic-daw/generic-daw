@@ -6,7 +6,7 @@ use generic_daw_core::{MusicalTime, Transport};
 use iced::{
 	Color, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
-		Clipboard, Renderer as _, Shell,
+		Renderer as _, Shell,
 		layout::{Layout, Limits, Node},
 		mouse::{self, Click, Cursor, Interaction},
 		overlay,
@@ -130,7 +130,6 @@ where
 		layout: Layout<'_>,
 		mut cursor: Cursor,
 		renderer: &Renderer,
-		clipboard: &mut dyn Clipboard,
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
@@ -139,9 +138,7 @@ where
 			.zip(&mut tree.children)
 			.zip(layout.children())
 			.for_each(|((child, tree), layout)| {
-				child.update(
-					tree, event, layout, cursor, renderer, clipboard, shell, viewport,
-				);
+				child.update(tree, event, layout, cursor, renderer, shell, viewport);
 			});
 
 		if shell.is_event_captured() {

@@ -2,8 +2,8 @@ use iced_widget::{
 	Renderer,
 	canvas::{Cache, Frame, Path, path::Arc},
 	core::{
-		Clipboard, Element, Event, Layout, Length, Point, Radians, Rectangle, Renderer as _, Shell,
-		Size, Theme, Vector, Widget, border,
+		Element, Event, Layout, Length, Point, Radians, Rectangle, Renderer as _, Shell, Size,
+		Theme, Vector, Widget, border,
 		layout::{Limits, Node},
 		mouse::{self, Cursor, Interaction, ScrollDelta},
 		overlay,
@@ -243,7 +243,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 		layout: Layout<'_>,
 		cursor: Cursor,
 		_renderer: &Renderer,
-		_clipboard: &mut dyn Clipboard,
 		shell: &mut Shell<'_, Message>,
 		_viewport: &Rectangle,
 	) {

@@ -3,7 +3,7 @@ use generic_daw_core::{MusicalTime, Position, Transport};
 use iced::{
 	Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
-		Clipboard, Layout, Renderer as _, Shell, Text, Widget,
+		Layout, Renderer as _, Shell, Text, Widget,
 		layout::{Limits, Node},
 		mouse::{self, Cursor, Interaction, ScrollDelta},
 		overlay,
@@ -88,7 +88,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		layout: Layout<'_>,
 		cursor: Cursor,
 		renderer: &Renderer,
-		clipboard: &mut dyn Clipboard,
 		shell: &mut Shell<'_, Message>,
 		_viewport: &Rectangle,
 	) {
@@ -98,9 +97,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			.zip(layout.children())
 			.zip(Self::viewports(layout))
 			.for_each(|(((child, tree), layout), viewport)| {
-				child.as_widget_mut().update(
-					tree, event, layout, cursor, renderer, clipboard, shell, &viewport,
-				);
+				child
+					.as_widget_mut()
+					.update(tree, event, layout, cursor, renderer, shell, &viewport);
 			});
 
 		let state = tree.state.downcast_mut::<State>();

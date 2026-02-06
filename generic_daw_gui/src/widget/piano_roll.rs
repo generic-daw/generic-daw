@@ -3,7 +3,7 @@ use generic_daw_core::{MidiKey, MidiNote, MusicalTime, Transport};
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
-		Clipboard, Layout, Renderer as _, Shell, Text, Widget,
+		Layout, Renderer as _, Shell, Text, Widget,
 		layout::{Limits, Node},
 		mouse::{self, Cursor, Interaction},
 		renderer::{Quad, Style},
@@ -81,7 +81,6 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		layout: Layout<'_>,
 		cursor: Cursor,
 		_renderer: &Renderer,
-		_clipboard: &mut dyn Clipboard,
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {

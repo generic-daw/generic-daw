@@ -1,8 +1,7 @@
 use iced_widget::{
 	Renderer,
 	core::{
-		Clipboard, Element, Event, Layout, Length, Point, Rectangle, Shell, Size, Theme, Vector,
-		Widget,
+		Element, Event, Layout, Length, Point, Rectangle, Shell, Size, Theme, Vector, Widget,
 		layout::{Limits, Node},
 		mouse::{self, Click, Cursor, Interaction, ScrollDelta, click::Kind},
 		overlay,
@@ -83,7 +82,6 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		layout: Layout<'_>,
 		cursor: Cursor,
 		renderer: &Renderer,
-		clipboard: &mut dyn Clipboard,
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
@@ -93,7 +91,6 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 			layout,
 			cursor,
 			renderer,
-			clipboard,
 			shell,
 			viewport,
 		);

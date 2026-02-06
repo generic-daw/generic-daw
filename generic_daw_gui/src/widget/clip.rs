@@ -9,7 +9,7 @@ use generic_daw_core::{MusicalTime, Position, Transport};
 use iced::{
 	Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
-		Clipboard, Layout, Renderer as _, Shell, Text, Widget,
+		Layout, Renderer as _, Shell, Text, Widget,
 		graphics::mesh::{Cache, Renderer as _},
 		layout::{Limits, Node},
 		mouse::{self, Click, Cursor, Interaction, click::Kind},
@@ -151,7 +151,6 @@ where
 		layout: Layout<'_>,
 		cursor: Cursor,
 		_renderer: &Renderer,
-		_clipboard: &mut dyn Clipboard,
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {

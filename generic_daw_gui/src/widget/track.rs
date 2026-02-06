@@ -2,7 +2,7 @@ use crate::widget::clip::Clip;
 use iced::{
 	Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
-		Clipboard, Layout, Shell, Widget,
+		Layout, Shell, Widget,
 		layout::{Limits, Node},
 		mouse::{Cursor, Interaction},
 		overlay,
@@ -85,7 +85,6 @@ where
 		layout: Layout<'_>,
 		cursor: Cursor,
 		renderer: &Renderer,
-		clipboard: &mut dyn Clipboard,
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
@@ -95,9 +94,7 @@ where
 			.zip(layout.children())
 			.rev()
 			.for_each(|((child, tree), layout)| {
-				child.update(
-					tree, event, layout, cursor, renderer, clipboard, shell, viewport,
-				);
+				child.update(tree, event, layout, cursor, renderer, shell, viewport);
 			});
 	}
 

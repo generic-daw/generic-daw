@@ -1,8 +1,8 @@
 use iced_widget::{
 	Renderer,
 	core::{
-		Animation, Clipboard, Color, Element, Event, Layout, Length, Rectangle, Renderer as _,
-		Shell, Size, Theme, Widget, border,
+		Animation, Color, Element, Event, Layout, Length, Rectangle, Renderer as _, Shell, Size,
+		Theme, Widget, border,
 		layout::{Limits, Node},
 		mouse::Cursor,
 		renderer::{Quad, Style},
@@ -75,7 +75,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Dot {
 		_layout: Layout<'_>,
 		_cursor: Cursor,
 		_renderer: &Renderer,
-		_clipboard: &mut dyn Clipboard,
 		shell: &mut Shell<'_, Message>,
 		_viewport: &Rectangle,
 	) {

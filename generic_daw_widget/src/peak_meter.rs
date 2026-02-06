@@ -1,8 +1,8 @@
 use iced_widget::{
 	Renderer,
 	core::{
-		Animation, Clipboard, Color, Element, Event, Layout, Length, Rectangle, Renderer as _,
-		Shell, Size, Theme, Vector, Widget,
+		Animation, Color, Element, Event, Layout, Length, Rectangle, Renderer as _, Shell, Size,
+		Theme, Vector, Widget,
 		animation::Easing,
 		layout::{Limits, Node},
 		mouse::Cursor,
@@ -107,7 +107,6 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 		_layout: Layout<'_>,
 		_cursor: Cursor,
 		_renderer: &Renderer,
-		_clipboard: &mut dyn Clipboard,
 		shell: &mut Shell<'_, Message>,
 		_viewport: &Rectangle,
 	) {
