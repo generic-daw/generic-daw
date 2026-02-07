@@ -1,6 +1,6 @@
 use crate::{
 	file_tree::Message,
-	icons::{file, file_headphone, file_music},
+	icons::{file, file_headphone, file_music, file_play},
 	widget::LINE_HEIGHT,
 };
 use iced::{
@@ -15,6 +15,7 @@ use std::{io, path::Path, sync::Arc};
 pub enum FileKind {
 	Midi,
 	Audio,
+	Project,
 	#[default]
 	Unknown,
 }
@@ -48,6 +49,7 @@ impl File {
 						match self.kind {
 							FileKind::Midi => file_music(),
 							FileKind::Audio => file_headphone(),
+							FileKind::Project => file_play(),
 							FileKind::Unknown => file(),
 						},
 						text(&*self.name).wrapping(text::Wrapping::None)
@@ -76,6 +78,8 @@ async fn file_kind(path: &Path) -> io::Result<FileKind> {
 		FileKind::Midi
 	} else if is_audio(buf) {
 		FileKind::Audio
+	} else if buf.get(..3) == Some(b"gdp") {
+		FileKind::Project
 	} else {
 		FileKind::Unknown
 	})
