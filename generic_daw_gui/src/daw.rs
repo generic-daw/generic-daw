@@ -479,10 +479,10 @@ impl Daw {
 						.menu_style(menu_style),
 					row![
 						button(if self.arrangement_view.arrangement.transport().playing {
-							pause
+							pause()
 						} else {
-							play
-						}())
+							play()
+						})
 						.style(button_with_radius(button::primary, border::left(5)))
 						.padding(padding::horizontal(7).vertical(5))
 						.on_press(Message::Arrangement(

@@ -2,10 +2,10 @@ use crate::{
 	action::Action,
 	components::{PICK_LIST_HANDLE, number_input},
 	config::{Config, Device},
-	icons::{link, mic, plus, rotate_ccw, save, unlink, volume_2, x},
+	icons::{grip_vertical, link, mic, plus, rotate_ccw, save, unlink, volume_2, x},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
-		scrollable_style,
+		scrollable_style, sweeten_column_style,
 	},
 	theme::Theme,
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
@@ -14,15 +14,19 @@ use generic_daw_core::{input_devices, output_devices};
 use iced::{
 	Center, Element, Font,
 	Length::Fill,
-	Task, border, padding,
+	Task, border,
+	mouse::Interaction,
+	padding,
 	widget::{
-		button, checkbox, column, container, iced, pick_list, row, rule, scrollable, slider, space,
-		text, value,
+		button, checkbox, column, container, iced, mouse_area, opaque, pick_list, row, rule,
+		scrollable, slider, space, text, value,
 	},
 	window,
 };
 use rfd::AsyncFileDialog;
 use std::{num::NonZero, path::Path, sync::Arc};
+use sweeten::widget::drag::DragEvent;
+use utils::ShiftMoveExt as _;
 
 static COMMON_SAMPLE_RATES: &[u32] = &[44_100, 48_000, 64_000, 88_200, 96_000, 176_400, 192_000];
 static COMMON_BUFFER_SIZES: &[u32] = &[64, 128, 256, 512, 1024, 2048, 4096, 8192];
@@ -38,9 +42,11 @@ pub enum Message {
 	AddSamplePathFileDialog,
 	AddSamplePath(Arc<Path>),
 	RemoveSamplePath(usize),
+	MoveSamplePath(DragEvent),
 	AddClapPathFileDialog,
 	AddClapPath(Arc<Path>),
 	RemoveClapPath(usize),
+	MoveClapPath(DragEvent),
 	ChangedTab(Tab),
 	ChangedName(Option<Arc<str>>),
 	ChangedSampleRate(NonZero<u32>),
@@ -100,6 +106,15 @@ impl ConfigView {
 			}
 			Message::AddSamplePath(path) => self.config.sample_paths.push(path),
 			Message::RemoveSamplePath(idx) => _ = self.config.sample_paths.remove(idx),
+			Message::MoveSamplePath(event) => {
+				if let DragEvent::Dropped {
+					index,
+					target_index,
+				} = event && index != target_index
+				{
+					self.config.sample_paths.shift_move(index, target_index);
+				}
+			}
 			Message::AddClapPathFileDialog => {
 				return window::run(self.main_window_id, |window| {
 					AsyncFileDialog::new().set_parent(window).pick_folder()
@@ -112,6 +127,15 @@ impl ConfigView {
 			}
 			Message::AddClapPath(path) => self.config.clap_paths.push(path),
 			Message::RemoveClapPath(idx) => _ = self.config.clap_paths.remove(idx),
+			Message::MoveClapPath(event) => {
+				if let DragEvent::Dropped {
+					index,
+					target_index,
+				} = event && index != target_index
+				{
+					self.config.clap_paths.shift_move(index, target_index);
+				}
+			}
 			Message::ChangedTab(tab) => self.tab = tab,
 			Message::ChangedName(name) => self.with_device_mut(|device| {
 				device.name = name;
@@ -169,7 +193,7 @@ impl ConfigView {
 					]
 					.align_y(Center),
 					container(
-						column(
+						sweeten::column(
 							self.config
 								.sample_paths
 								.iter()
@@ -184,11 +208,18 @@ impl ConfigView {
 											.on_press(Message::RemoveSamplePath(idx))
 									]
 									.align_y(Center)
-									.into()
 								})
+								.map(|widget| row![
+									mouse_area(grip_vertical()).interaction(Interaction::Grab),
+									opaque(widget)
+								]
+								.align_y(Center)
+								.into())
 						)
 						.padding(5)
 						.spacing(5)
+						.on_drag(Message::MoveSamplePath)
+						.style(sweeten_column_style)
 					)
 					.style(bordered_box_with_radius(5)),
 					rule::horizontal(1),
@@ -202,7 +233,7 @@ impl ConfigView {
 						space().width(5)
 					],
 					container(
-						column(
+						sweeten::column(
 							self.config
 								.clap_paths
 								.iter()
@@ -217,11 +248,18 @@ impl ConfigView {
 											.on_press(Message::RemoveClapPath(idx))
 									]
 									.align_y(Center)
-									.into()
 								})
+								.map(|widget| row![
+									mouse_area(grip_vertical()).interaction(Interaction::Grab),
+									opaque(widget)
+								]
+								.align_y(Center)
+								.into())
 						)
 						.padding(5)
 						.spacing(5)
+						.on_drag(Message::MoveClapPath)
+						.style(sweeten_column_style)
 					)
 					.style(bordered_box_with_radius(5)),
 					rule::horizontal(1),

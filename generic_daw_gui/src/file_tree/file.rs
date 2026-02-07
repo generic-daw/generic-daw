@@ -46,10 +46,10 @@ impl File {
 				mouse_area(
 					row![
 						match self.kind {
-							FileKind::Midi => file_music,
-							FileKind::Audio => file_headphone,
-							FileKind::Unknown => file,
-						}(),
+							FileKind::Midi => file_music(),
+							FileKind::Audio => file_headphone(),
+							FileKind::Unknown => file(),
+						},
 						text(&*self.name).wrapping(text::Wrapping::None)
 					]
 					.padding(1)

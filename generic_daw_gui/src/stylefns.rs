@@ -1,8 +1,9 @@
 use iced::{
-	Theme, border,
+	Color, Theme, border,
 	overlay::menu,
 	widget::{button, container, pick_list, progress_bar, scrollable, slider},
 };
+use sweeten::widget::column;
 
 pub fn bordered_box_with_radius(
 	r: impl Into<border::Radius>,
@@ -103,5 +104,12 @@ pub fn split_style(t: &Theme) -> iced_split::Style {
 		width: 3.0,
 		radius: 1.5.into(),
 	};
+	style
+}
+
+pub fn sweeten_column_style(t: &Theme) -> column::Style {
+	let mut style = column::default(t);
+	style.moved_item_overlay = Color::TRANSPARENT;
+	style.ghost_border.radius = 5.into();
 	style
 }
