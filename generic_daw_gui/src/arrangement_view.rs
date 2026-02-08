@@ -811,16 +811,8 @@ impl ArrangementView {
 			Message::OnDrag(split_at) => self.split_at = split_at.clamp(200.0, 400.0),
 			Message::OnDragEnd => return Action::instruction(self.split_at),
 			Message::OnDoubleClick => {
-				return Task::batch([
-					self.update(
-						Message::OnDrag(DEFAULT_SPLIT_POSITION),
-						config,
-						plugin_bundles,
-					)
-					.task,
-					self.update(Message::OnDragEnd, config, plugin_bundles).task,
-				])
-				.into();
+				self.split_at = DEFAULT_SPLIT_POSITION;
+				return Action::instruction(self.split_at);
 			}
 		}
 

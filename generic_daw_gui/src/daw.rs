@@ -1,4 +1,5 @@
 use crate::{
+	action::Action,
 	arrangement_view::{
 		self, AUTOSAVE_DIR, Arrangement, ArrangementView, Feedback, PROJECT_DIR, Tab, format_now,
 	},
@@ -207,24 +208,24 @@ impl Daw {
 
 		match message {
 			Message::Arrangement(message) => {
-				let action =
+				let Action { instruction, task } =
 					self.arrangement_view
 						.update(message, &self.config, &self.plugin_bundles);
 
-				if let Some(plugins_panel_split_at) = action.instruction {
+				if let Some(plugins_panel_split_at) = instruction {
 					self.state.plugins_panel_split_at = plugins_panel_split_at;
 					self.state.write();
 				}
 
-				return action.task.map(Message::Arrangement);
+				return task.map(Message::Arrangement);
 			}
 			Message::FileTree(action) => return self.handle_file_tree_message(action),
 			Message::ConfigView(message) => {
 				if let Some(config_view) = self.config_view.as_mut() {
-					let action = config_view.update(message);
-					let mut futs = vec![action.task.map(Message::ConfigView)];
+					let Action { instruction, task } = config_view.update(message);
+					let mut futs = vec![task.map(Message::ConfigView)];
 
-					if let Some(config) = action.instruction {
+					if let Some(config) = instruction {
 						config.write();
 						futs.push(self.update(Message::MergeConfig(config.into(), true)));
 						futs.push(self.update(Message::OpenConfigView));
