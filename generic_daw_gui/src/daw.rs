@@ -17,7 +17,7 @@ use crate::{
 };
 use generic_daw_core::{
 	Export, MusicalTime,
-	clap_host::{PluginBundle, PluginDescriptor, get_installed_plugins},
+	clap_host::{DEFAULT_CLAP_PATHS, PluginBundle, PluginDescriptor, get_installed_plugins},
 };
 use generic_daw_widget::dot::Dot;
 use iced::{
@@ -172,7 +172,8 @@ impl Daw {
 			open = open.chain(Task::done(Message::OpenLastFile));
 		}
 
-		let plugin_bundles = get_installed_plugins(&config.clap_paths);
+		let plugin_bundles =
+			get_installed_plugins(DEFAULT_CLAP_PATHS.iter().chain(&config.clap_paths));
 		let file_tree = FileTree::new(&config.sample_paths);
 
 		let (mut arrangement_view, futs) = ArrangementView::new(&config, &state, main_window_id);

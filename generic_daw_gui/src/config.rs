@@ -1,5 +1,4 @@
 use crate::{arrangement_view::DATA_DIR, theme::Theme};
-use generic_daw_core::clap_host::DEFAULT_CLAP_PATHS;
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -35,7 +34,7 @@ impl Default for Config {
 	fn default() -> Self {
 		Self {
 			sample_paths: DEFAULT_SAMPLE_PATHS.clone().into_vec(),
-			clap_paths: DEFAULT_CLAP_PATHS.clone().into_vec(),
+			clap_paths: Vec::new(),
 			input_device: Device::default(),
 			output_device: Device::default(),
 			autosave: Autosave::default(),

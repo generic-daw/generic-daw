@@ -10,7 +10,7 @@ use crate::{
 	theme::Theme,
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
 };
-use generic_daw_core::{input_devices, output_devices};
+use generic_daw_core::{clap_host::DEFAULT_CLAP_PATHS, input_devices, output_devices};
 use iced::{
 	Center, Element, Font,
 	Length::Fill,
@@ -233,33 +233,49 @@ impl ConfigView {
 						space().width(5)
 					],
 					container(
-						sweeten::column(
-							self.config
-								.clap_paths
-								.iter()
-								.enumerate()
-								.map(|(idx, path)| {
-									row![
-										value(path.display()).font(Font::MONOSPACE),
-										space::horizontal(),
-										button(x())
-											.style(button_with_radius(button::danger, 5))
-											.padding(0)
-											.on_press(Message::RemoveClapPath(idx))
-									]
-									.align_y(Center)
-								})
-								.map(|widget| row![
-									mouse_area(grip_vertical()).interaction(Interaction::Grab),
-									opaque(widget)
+						column![
+							column(DEFAULT_CLAP_PATHS.iter().map(|path| {
+								row![
+									mouse_area(grip_vertical()).interaction(Interaction::NoDrop),
+									value(path.display()).font(Font::MONOSPACE),
+									space::horizontal(),
+									button(x())
+										.style(button_with_radius(button::danger, 5))
+										.padding(0)
 								]
 								.align_y(Center)
-								.into())
-						)
+								.into()
+							}))
+							.spacing(5),
+							(!self.config.clap_paths.is_empty()).then(|| sweeten::column(
+								self.config
+									.clap_paths
+									.iter()
+									.enumerate()
+									.map(|(idx, path)| {
+										row![
+											value(path.display()).font(Font::MONOSPACE),
+											space::horizontal(),
+											button(x())
+												.style(button_with_radius(button::danger, 5))
+												.padding(0)
+												.on_press(Message::RemoveClapPath(idx))
+										]
+										.align_y(Center)
+									})
+									.map(|widget| row![
+										mouse_area(grip_vertical()).interaction(Interaction::Grab),
+										opaque(widget)
+									]
+									.align_y(Center)
+									.into())
+							)
+							.spacing(5)
+							.on_drag(Message::MoveClapPath)
+							.style(sweeten_column_style))
+						]
 						.padding(padding::all(5).left(2))
 						.spacing(5)
-						.on_drag(Message::MoveClapPath)
-						.style(sweeten_column_style)
 					)
 					.style(bordered_box_with_radius(5)),
 					rule::horizontal(1),
