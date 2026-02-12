@@ -1,6 +1,6 @@
 use crate::proto;
 use prost::Message as _;
-use std::io::Cursor;
+use std::{io::Cursor, iter::repeat};
 use yazi::{Format, decompress};
 
 #[derive(Debug)]
@@ -65,13 +65,7 @@ impl Reader {
 		(0..)
 			.map(|index| proto::TrackIndex { index })
 			.zip(&self.0.tracks)
-			.flat_map(|(index, track)| {
-				track
-					.channel
-					.connections
-					.iter()
-					.map(move |&channel| (index, channel))
-			})
+			.flat_map(|(index, track)| repeat(index).zip(track.channel.connections.iter().copied()))
 	}
 
 	pub fn iter_channel_to_channel(
@@ -80,11 +74,6 @@ impl Reader {
 		(0..)
 			.map(|index| proto::ChannelIndex { index })
 			.zip(&self.0.channels)
-			.flat_map(|(index, channel)| {
-				channel
-					.connections
-					.iter()
-					.map(move |&channel| (index, channel))
-			})
+			.flat_map(|(index, channel)| repeat(index).zip(channel.connections.iter().copied()))
 	}
 }
