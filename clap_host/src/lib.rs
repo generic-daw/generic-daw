@@ -49,18 +49,6 @@ const API_TYPE: GuiApiType<'_> = GuiApiType::default_for_current_platform().unwr
 pub static DEFAULT_CLAP_PATHS: LazyLock<Box<[Arc<Path>]>> = LazyLock::new(|| {
 	let mut paths = Vec::new();
 
-	if cfg!(target_os = "linux") {
-		if let Some(path) = std::env::var_os("HOME").map(PathBuf::from) {
-			paths.push(path.join(".clap").into());
-		}
-
-		paths.push(Path::new("/usr/lib/clap").into());
-
-		if cfg!(target_pointer_width = "64") {
-			paths.push(Path::new("/usr/lib64/clap").into());
-		}
-	}
-
 	if cfg!(target_os = "windows") {
 		if let Some(path) = std::env::var_os("COMMONPROGRAMFILES").map(PathBuf::from) {
 			paths.push(path.join("CLAP").into());
@@ -77,6 +65,13 @@ pub static DEFAULT_CLAP_PATHS: LazyLock<Box<[Arc<Path>]>> = LazyLock::new(|| {
 		if let Some(path) = std::env::var_os("HOME").map(PathBuf::from) {
 			paths.push(path.join("Library/Audio/Plug-Ins/CLAP").into());
 		}
+	} else if cfg!(unix) {
+		if let Some(path) = std::env::var_os("HOME").map(PathBuf::from) {
+			paths.push(path.join(".clap").into());
+		}
+
+		paths.push(Path::new("/usr/lib/clap").into());
+		paths.push(Path::new("/usr/lib64/clap").into());
 	}
 
 	if let Some(clap_path) = std::env::var_os("CLAP_PATH") {
