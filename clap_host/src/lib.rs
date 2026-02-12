@@ -55,6 +55,10 @@ pub static DEFAULT_CLAP_PATHS: LazyLock<Box<[Arc<Path>]>> = LazyLock::new(|| {
 		}
 
 		paths.push(Path::new("/usr/lib/clap").into());
+
+		if cfg!(target_pointer_width = "64") {
+			paths.push(Path::new("/usr/lib64/clap").into());
+		}
 	}
 
 	if cfg!(target_os = "windows") {
