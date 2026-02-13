@@ -25,6 +25,11 @@ impl Key {
 			Self::CSharp | Self::DSharp | Self::FSharp | Self::GSharp | Self::ASharp
 		)
 	}
+
+	#[must_use]
+	pub const fn is_white(self) -> bool {
+		!self.is_black()
+	}
 }
 
 impl TryFrom<u8> for Key {
@@ -90,6 +95,11 @@ impl MidiKey {
 		self.0 %= 12;
 		self.0 += 12 * (octave + 1) as u8;
 		self
+	}
+
+	#[must_use]
+	pub fn is_white(self) -> bool {
+		Key::try_from(self.0 % 12).unwrap().is_white()
 	}
 
 	#[must_use]

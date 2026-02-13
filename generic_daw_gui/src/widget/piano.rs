@@ -48,6 +48,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 			return;
 		};
 
+		renderer.fill_quad(
+			Quad {
+				bounds,
+				..Quad::default()
+			},
+			Color::WHITE,
+		);
+
 		for key in (0..128).map(MidiKey) {
 			let note_position =
 				bounds.position() + Vector::new(0.0, key_y(key, *self.position, *self.scale));
@@ -59,17 +67,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 				continue;
 			};
 
-			renderer.fill_quad(
-				Quad {
-					bounds: clipped_bounds,
-					..Quad::default()
-				},
-				if key.is_black() {
-					Color::BLACK
-				} else {
-					Color::WHITE
-				},
-			);
+			if key.is_black() {
+				renderer.fill_quad(
+					Quad {
+						bounds: clipped_bounds,
+						..Quad::default()
+					},
+					Color::BLACK,
+				);
+			}
 
 			let note_name = Text {
 				content: key.to_string(),
