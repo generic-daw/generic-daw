@@ -19,6 +19,7 @@ env_logger = { version = "0.11.9", default-features = false }
 fragile = "2.0.1"
 iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", default-features = false, features = [
 	"advanced",
+	"hinting",
 	"smol",
 	"web-colors",
 	"wgpu",

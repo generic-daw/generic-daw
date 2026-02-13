@@ -1,7 +1,7 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef, Recording},
 	widget::{
-		LINE_HEIGHT, OPACITY_33, get_time, maybe_snap_time,
+		LINE_HEIGHT, OPACITY_33, get_time, maybe_snap,
 		playlist::{Action, Selection, Status},
 	},
 };
@@ -220,17 +220,17 @@ where
 								let end_pixel = clip_bounds.x + clip_bounds.width;
 								let start_offset = cursor.x - start_pixel;
 								let end_offset = end_pixel - cursor.x;
-								let border = 10f32.min((end_pixel - start_pixel) / 3.0);
+								let border = 10f32.min(clip_bounds.width / 3.0);
 								match (start_offset < border, end_offset < border) {
+									(false, false) => Status::Dragging(idx.0, time),
 									(true, false) => Status::TrimmingStart(time),
 									(false, true) => Status::TrimmingEnd(time),
-									(false, false) => Status::Dragging(idx.0, time),
 									(true, true) => unreachable!(),
 								}
 							}
 							(true, false) => {
 								clear = false;
-								let time = maybe_snap_time(time, *modifiers, |time| {
+								let time = maybe_snap(time, *modifiers, |time| {
 									time.snap_round(self.scale.x, self.transport)
 								});
 								Status::Selecting(idx.0, idx.0, time, time)
@@ -240,7 +240,7 @@ where
 								Status::Dragging(idx.0, time)
 							}
 							(true, true) => {
-								let time = maybe_snap_time(time, *modifiers, |time| {
+								let time = maybe_snap(time, *modifiers, |time| {
 									time.snap_round(self.scale.x, self.transport)
 								});
 								shell.publish((self.f)(Action::SplitAt(time)));

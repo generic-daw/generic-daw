@@ -1,4 +1,4 @@
-use crate::widget::{Delta, OPACITY_33, get_time, key_y, maybe_snap_time};
+use crate::widget::{Delta, OPACITY_33, get_time, key_y, maybe_snap};
 use generic_daw_core::{MidiKey, MidiNote, MusicalTime, Transport};
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -18,24 +18,26 @@ use std::{cell::RefCell, collections::HashSet};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
+	Add(MidiKey, MusicalTime),
 	Clone,
 	Drag(Delta<MidiKey>, Delta<MusicalTime>),
 	TrimStart(Delta<MusicalTime>),
 	TrimEnd(Delta<MusicalTime>),
-	Delete,
-	Add(MidiKey, MusicalTime),
 	SplitAt(MusicalTime),
 	DragSplit(MusicalTime),
+	DragVelocity(f32),
+	Delete,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Status {
 	Selecting(MidiKey, MidiKey, MusicalTime, MusicalTime),
 	Dragging(MidiKey, MusicalTime),
 	TrimmingStart(MusicalTime),
 	TrimmingEnd(MusicalTime),
-	Deleting,
 	DraggingSplit(MusicalTime),
+	DraggingVelocity(f32),
+	Deleting,
 	#[default]
 	None,
 }
@@ -109,7 +111,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			{
 				match button {
 					mouse::Button::Left => {
-						let time = maybe_snap_time(new_time, *modifiers, |time| {
+						let time = maybe_snap(new_time, *modifiers, |time| {
 							time.snap_round(self.scale.x, self.transport)
 						});
 						let key = self.get_key(cursor);
@@ -145,7 +147,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				Status::Selecting(start_key, last_end_key, start_pos, last_end_pos) => {
 					let end_key = self.get_key(cursor);
 
-					let end_pos = maybe_snap_time(new_time, *modifiers, |time| {
+					let end_pos = maybe_snap(new_time, *modifiers, |time| {
 						time.snap_round(self.scale.x, self.transport)
 					});
 
@@ -174,10 +176,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				Status::Dragging(key, time) => {
 					let new_key = self.get_key(cursor);
 
-					let abs_diff =
-						maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
-							abs_diff.snap_round(self.scale.x, self.transport)
-						});
+					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+						abs_diff.snap_round(self.scale.x, self.transport)
+					});
 
 					if new_key != key || abs_diff != MusicalTime::ZERO {
 						let key_delta = if new_key > key {
@@ -197,22 +198,10 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 						shell.capture_event();
 					}
 				}
-				Status::DraggingSplit(time) => {
-					let new_time = maybe_snap_time(new_time, *modifiers, |time| {
-						time.snap_round(self.scale.x, self.transport)
-					});
-
-					if new_time != time {
-						selection.status = Status::DraggingSplit(new_time);
-						shell.publish((self.f)(Action::DragSplit(new_time)));
-						shell.capture_event();
-					}
-				}
 				Status::TrimmingStart(time) => {
-					let abs_diff =
-						maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
-							abs_diff.snap_round(self.scale.x, self.transport)
-						});
+					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+						abs_diff.snap_round(self.scale.x, self.transport)
+					});
 
 					if abs_diff != MusicalTime::ZERO {
 						let delta = if new_time > time {
@@ -227,10 +216,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					}
 				}
 				Status::TrimmingEnd(time) => {
-					let abs_diff =
-						maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
-							abs_diff.snap_round(self.scale.x, self.transport)
-						});
+					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+						abs_diff.snap_round(self.scale.x, self.transport)
+					});
 
 					if abs_diff != MusicalTime::ZERO {
 						let delta = if new_time > time {
@@ -242,6 +230,36 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 						selection.status = Status::TrimmingEnd(time + delta);
 						shell.publish((self.f)(Action::TrimEnd(delta)));
 						shell.capture_event();
+					}
+				}
+				Status::DraggingSplit(time) => {
+					let new_time = maybe_snap(new_time, *modifiers, |time| {
+						time.snap_round(self.scale.x, self.transport)
+					});
+
+					if new_time != time {
+						selection.status = Status::DraggingSplit(new_time);
+						shell.publish((self.f)(Action::DragSplit(new_time)));
+						shell.capture_event();
+					}
+				}
+				Status::DraggingVelocity(val) => {
+					debug_assert!(selection.primary.len() == 1);
+					let note = *selection.primary.iter().next().unwrap();
+					let note_bounds = self.note_bounds(note, &viewport);
+					let border = 10f32.min(note_bounds.width / 3.0);
+					if let Some(note_bounds) = note_bounds.intersection(&viewport) {
+						let new_val = (cursor.x - border - note_bounds.x + viewport.x)
+							/ border.mul_add(-2.0, note_bounds.width - 1.0);
+
+						let new_val = maybe_snap(new_val.clamp(0.0, 1.0), *modifiers, |val| {
+							(val * 127.0).round() / 127.0
+						});
+						if val != new_val {
+							selection.status = Status::DraggingVelocity(new_val);
+							shell.publish((self.f)(Action::DragVelocity(new_val)));
+							shell.capture_event();
+						}
 					}
 				}
 				Status::Deleting => {
@@ -289,7 +307,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		}
 
 		for note in 0..self.notes.len() {
-			let note_bounds = self.note_bounds(note) + Vector::new(viewport.x, viewport.y);
+			let note_bounds = self.note_bounds(note, &viewport);
 			let Some(bounds) = note_bounds.intersection(&viewport) else {
 				continue;
 			};
@@ -341,7 +359,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 	fn mouse_interaction(
 		&self,
 		_tree: &Tree,
-		layout: Layout<'_>,
+		_layout: Layout<'_>,
 		cursor: Cursor,
 		viewport: &Rectangle,
 		_renderer: &Renderer,
@@ -349,23 +367,33 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		match self.selection.borrow().status {
 			Status::Selecting(..) => Interaction::Idle,
 			Status::Dragging(..) => Interaction::Grabbing,
-			Status::TrimmingStart(..) | Status::TrimmingEnd(..) | Status::DraggingSplit(..) => {
-				Interaction::ResizingHorizontally
-			}
+			Status::TrimmingStart(..)
+			| Status::TrimmingEnd(..)
+			| Status::DraggingSplit(..)
+			| Status::DraggingVelocity(..) => Interaction::ResizingHorizontally,
 			Status::Deleting => Interaction::NoDrop,
-			Status::None => layout
-				.bounds()
-				.intersection(viewport)
-				.and_then(|viewport| cursor.position_in(viewport))
+			Status::None => cursor
+				.position()
 				.and_then(|cursor| {
 					(0..self.notes.len())
-						.map(|note| self.note_bounds(note))
-						.rfind(|note_bounds| note_bounds.contains(cursor))
-						.map(|note_bounds| {
-							let x = cursor.x - note_bounds.x;
+						.map(|note| (self.notes[note], self.note_bounds(note, viewport)))
+						.rfind(|(_, note_bounds)| note_bounds.contains(cursor))
+						.map(|(note, note_bounds)| {
+							let start_offset = cursor.x - note_bounds.x;
+							let end_offset = note_bounds.width - start_offset;
 							let border = 10f32.min(note_bounds.width / 3.0);
-							match (x < border, note_bounds.width - x < border) {
-								(false, false) => Interaction::Grab,
+							match (start_offset < border, end_offset < border) {
+								(false, false) => {
+									let note_bounds = note_bounds.intersection(viewport).unwrap();
+									let vel_pixel = border
+										.mul_add(-2.0, note_bounds.width - 1.0)
+										.mul_add(note.velocity, border);
+									if (vel_pixel - start_offset).abs() < border / 2.0 {
+										Interaction::ResizingHorizontally
+									} else {
+										Interaction::Grab
+									}
+								}
 								(true, false) | (false, true) => Interaction::ResizingHorizontally,
 								(true, true) => unreachable!(),
 							}
@@ -400,7 +428,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		MidiKey(new_key.ceil() as u8)
 	}
 
-	fn note_bounds(&self, note: usize) -> Rectangle {
+	fn note_bounds(&self, note: usize, viewport: &Rectangle) -> Rectangle {
 		let samples_per_px = self.scale.x.exp2();
 
 		let (start, end) = self.notes[note].position.to_samples_f(self.transport);
@@ -411,7 +439,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		Rectangle::new(
 			Point::new(x, key_y(self.notes[note].key, *self.position, *self.scale)),
 			Size::new(width, self.scale.y),
-		)
+		) + Vector::new(viewport.x, viewport.y)
 	}
 
 	fn update_note(
@@ -422,11 +450,17 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
+		if shell.is_event_captured() {
+			return;
+		}
+
+		let bounds = self.note_bounds(note, viewport);
+
 		let Some(cursor) = cursor.position_in(*viewport) else {
 			return;
 		};
 
-		let note_bounds = self.note_bounds(note);
+		let note_bounds = bounds - Vector::new(viewport.x, viewport.y);
 		if !note_bounds.contains(cursor) {
 			return;
 		}
@@ -440,26 +474,38 @@ impl<'a, Message> PianoRoll<'a, Message> {
 
 				match button {
 					mouse::Button::Left => {
-						let key = self.notes[note].key;
+						let MidiNote { key, velocity, .. } = self.notes[note];
 						let time = get_time(cursor.x, *self.position, *self.scale, self.transport);
 
 						selection.status = match (modifiers.command(), modifiers.shift()) {
 							(false, false) => {
-								let start_pixel = note_bounds.x;
-								let end_pixel = note_bounds.x + note_bounds.width;
-								let start_offset = cursor.x - start_pixel;
-								let end_offset = end_pixel - cursor.x;
-								let border = 10f32.min((end_pixel - start_pixel) / 3.0);
+								let start_offset = cursor.x - note_bounds.x;
+								let end_offset = note_bounds.width - start_offset;
+								let border = 10f32.min(note_bounds.width / 3.0);
 								match (start_offset < border, end_offset < border) {
+									(false, false) => {
+										let bounds = bounds.intersection(viewport).unwrap();
+										let vel_pixel = velocity.mul_add(
+											border.mul_add(-2.0, bounds.width - 1.0),
+											border,
+										);
+										if (vel_pixel - start_offset).abs() < border / 2.0 {
+											selection.primary.remove(&note);
+											selection.secondary.extend(selection.primary.drain());
+											selection.primary.insert(note);
+											Status::DraggingVelocity(velocity)
+										} else {
+											Status::Dragging(key, time)
+										}
+									}
 									(true, false) => Status::TrimmingStart(time),
 									(false, true) => Status::TrimmingEnd(time),
-									(false, false) => Status::Dragging(key, time),
 									(true, true) => unreachable!(),
 								}
 							}
 							(true, false) => {
 								clear = false;
-								let time = maybe_snap_time(time, *modifiers, |time| {
+								let time = maybe_snap(time, *modifiers, |time| {
 									time.snap_round(self.scale.x, self.transport)
 								});
 								Status::Selecting(key, key, time, time)
@@ -469,7 +515,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 								Status::Dragging(key, time)
 							}
 							(true, true) => {
-								let time = maybe_snap_time(time, *modifiers, |time| {
+								let time = maybe_snap(time, *modifiers, |time| {
 									time.snap_round(self.scale.x, self.transport)
 								});
 								shell.publish((self.f)(Action::SplitAt(time)));
@@ -512,18 +558,37 @@ impl<'a, Message> PianoRoll<'a, Message> {
 			theme.extended_palette().primary.weak.color
 		};
 
+		let note = self.notes[note];
+
 		renderer.fill_quad(
 			Quad {
 				bounds,
 				border: border::width(1).color(color),
 				..Quad::default()
 			},
-			color.scale_alpha(self.notes[note].velocity),
+			color.scale_alpha(note.velocity),
+		);
+
+		let border = 10f32.min(bounds.width / 3.0);
+		renderer.fill_quad(
+			Quad {
+				bounds: Rectangle::new(
+					bounds.position()
+						+ Vector::new(
+							note.velocity
+								.mul_add(border.mul_add(-2.0, bounds.width - 1.0), border),
+							0.0,
+						),
+					Size::new(1.0, bounds.height),
+				),
+				..Quad::default()
+			},
+			theme.extended_palette().background.strong.text,
 		);
 
 		if bounds.width > 3.0 {
 			let note_name = Text {
-				content: self.notes[note].key.to_string(),
+				content: note.key.to_string(),
 				bounds: Size::new(f32::INFINITY, 0.0),
 				size: renderer.default_size(),
 				line_height: LineHeight::default(),

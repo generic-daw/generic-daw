@@ -15,6 +15,7 @@ pub static LUCIDE_FONT: Font = Font {
 pub struct Icon {
 	character: char,
 	size: f32,
+	offset: f32,
 }
 
 impl Icon {
@@ -35,17 +36,21 @@ impl<'a, Message: 'a> From<Icon> for Element<'a, Message> {
 				.width(value.size)
 				.center(),
 		)
-		.padding(padding::top(0.025 * value.size).bottom(-0.025 * value.size))
+		.padding(padding::top(value.offset * value.size).bottom(-value.offset * value.size))
 		.into()
 	}
 }
 
 macro_rules! icon {
 	($name:ident = $icon:literal) => {
+		icon!($name = $icon + 0.05);
+	};
+	($name:ident = $icon:literal + $offset:literal) => {
 		pub const fn $name() -> Icon {
 			Icon {
 				character: char::from_u32($icon).unwrap(),
 				size: $crate::widget::LINE_HEIGHT,
+				offset: $offset,
 			}
 		}
 	};
@@ -62,7 +67,7 @@ icon!(link = 57602);
 icon!(mic = 57624);
 icon!(pause = 57646);
 icon!(play = 57660);
-icon!(plus = 57661);
+icon!(plus = 57661 + 0.0);
 icon!(power = 57664);
 icon!(rotate_ccw = 57672);
 icon!(save = 57677);

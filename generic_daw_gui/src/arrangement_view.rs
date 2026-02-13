@@ -825,6 +825,17 @@ impl ArrangementView {
 		} = self.playlist_selection.get_mut();
 
 		match action {
+			playlist::Action::Add(track, pos) => {
+				self.loading += 1;
+				return Task::done(Message::MidiPatternLoaded(
+					NoClone(Some(Box::new(MidiPatternPair::from_notes(
+						Vec::new(),
+						"MIDI Pattern",
+					)))),
+					track,
+					pos,
+				));
+			}
 			playlist::Action::Open => {
 				debug_assert_eq!(primary.len(), 1);
 				let &(track, clip) = primary.iter().next().unwrap();
@@ -836,17 +847,6 @@ impl ArrangementView {
 
 				self.piano_roll_selection.get_mut().primary.clear();
 				return Task::done(Message::ChangedTab(Tab::PianoRoll(clip)));
-			}
-			playlist::Action::Add(track, pos) => {
-				self.loading += 1;
-				return Task::done(Message::MidiPatternLoaded(
-					NoClone(Some(Box::new(MidiPatternPair::from_notes(
-						Vec::new(),
-						"MIDI Pattern",
-					)))),
-					track,
-					pos,
-				));
 			}
 			playlist::Action::Clone => {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
@@ -886,6 +886,25 @@ impl ArrangementView {
 					primary.insert((track, clip));
 				}
 			}
+			playlist::Action::TrimStart(pos_diff) => {
+				for &(track, clip) in &*primary {
+					let pos = self.arrangement.tracks()[track].clips[clip]
+						.position()
+						.start();
+					self.arrangement
+						.clip_trim_start_to(track, clip, pos + pos_diff);
+				}
+			}
+			playlist::Action::TrimEnd(pos_diff) => {
+				for &(track, clip) in &*primary {
+					let pos = self.arrangement.tracks()[track].clips[clip]
+						.position()
+						.end();
+					self.arrangement
+						.clip_trim_end_to(track, clip, pos + pos_diff);
+				}
+			}
+
 			playlist::Action::SplitAt(mut pos) => {
 				let mut extra = HashMap::<_, usize>::new();
 
@@ -954,24 +973,6 @@ impl ArrangementView {
 						.clip_trim_start_to(track, rhs, clamped[&track]);
 				}
 			}
-			playlist::Action::TrimStart(pos_diff) => {
-				for &(track, clip) in &*primary {
-					let pos = self.arrangement.tracks()[track].clips[clip]
-						.position()
-						.start();
-					self.arrangement
-						.clip_trim_start_to(track, clip, pos + pos_diff);
-				}
-			}
-			playlist::Action::TrimEnd(pos_diff) => {
-				for &(track, clip) in &*primary {
-					let pos = self.arrangement.tracks()[track].clips[clip]
-						.position()
-						.end();
-					self.arrangement
-						.clip_trim_end_to(track, clip, pos + pos_diff);
-				}
-			}
 			playlist::Action::Delete => {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
 				sorted.sort_unstable_by_key(|&(_, c)| Reverse(c));
@@ -1022,11 +1023,29 @@ impl ArrangementView {
 					let note = self.arrangement.midi_patterns()[&clip.pattern].notes[idx];
 					let new_key = note.key + key_diff;
 					if new_key != note.key {
-						self.arrangement.note_switch_key(clip.pattern, idx, new_key);
+						self.arrangement.note_change_key(clip.pattern, idx, new_key);
 					}
 					let pos = note.position.start();
 					self.arrangement
 						.note_move_to(clip.pattern, idx, pos + pos_diff);
+				}
+			}
+			piano_roll::Action::TrimStart(pos_diff) => {
+				for &note in &*primary {
+					let pos = self.arrangement.midi_patterns()[&clip.pattern].notes[note]
+						.position
+						.start();
+					self.arrangement
+						.note_trim_start_to(clip.pattern, note, pos + pos_diff);
+				}
+			}
+			piano_roll::Action::TrimEnd(pos_diff) => {
+				for &note in &*primary {
+					let pos = self.arrangement.midi_patterns()[&clip.pattern].notes[note]
+						.position
+						.end();
+					self.arrangement
+						.note_trim_end_to(clip.pattern, note, pos + pos_diff);
 				}
 			}
 			piano_roll::Action::SplitAt(mut pos) => {
@@ -1097,22 +1116,10 @@ impl ArrangementView {
 						.note_trim_start_to(clip.pattern, rhs, clamped[&note.key]);
 				}
 			}
-			piano_roll::Action::TrimStart(pos_diff) => {
-				for &note in &*primary {
-					let pos = self.arrangement.midi_patterns()[&clip.pattern].notes[note]
-						.position
-						.start();
+			piano_roll::Action::DragVelocity(val) => {
+				for &note in primary.iter().chain(&*secondary) {
 					self.arrangement
-						.note_trim_start_to(clip.pattern, note, pos + pos_diff);
-				}
-			}
-			piano_roll::Action::TrimEnd(pos_diff) => {
-				for &note in &*primary {
-					let pos = self.arrangement.midi_patterns()[&clip.pattern].notes[note]
-						.position
-						.end();
-					self.arrangement
-						.note_trim_end_to(clip.pattern, note, pos + pos_diff);
+						.note_change_velocity(clip.pattern, note, val);
 				}
 			}
 			piano_roll::Action::Delete => {

@@ -1,4 +1,4 @@
-use crate::widget::{LINE_HEIGHT, OPACITY_33, get_time, maybe_snap_time};
+use crate::widget::{LINE_HEIGHT, OPACITY_33, get_time, maybe_snap};
 use generic_daw_core::{MusicalTime, Position, Transport};
 use iced::{
 	Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -130,9 +130,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		match event {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
-				let time = maybe_snap_time(
+				let time = maybe_snap(
 					get_time(
-						cursor.x + self.offset,
+						cursor.x.max(0.0) + self.offset,
 						*self.position,
 						*self.scale,
 						self.transport,
@@ -174,9 +174,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				button: mouse::Button::Left,
 				modifiers,
 			}) if state.status == Status::Hovering => {
-				let time = maybe_snap_time(
+				let time = maybe_snap(
 					get_time(
-						cursor.x + self.offset,
+						cursor.x.max(0.0) + self.offset,
 						*self.position,
 						*self.scale,
 						self.transport,

@@ -1,6 +1,6 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef},
-	widget::{Delta, OPACITY_33, clip, get_time, maybe_snap_time, track::Track},
+	widget::{Delta, OPACITY_33, clip, get_time, maybe_snap, track::Track},
 };
 use generic_daw_core::{MusicalTime, Transport};
 use iced::{
@@ -27,15 +27,15 @@ use std::{
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
+	Add(usize, MusicalTime),
 	Open,
 	Clone,
 	Drag(isize, Delta<MusicalTime>),
 	TrimStart(Delta<MusicalTime>),
 	TrimEnd(Delta<MusicalTime>),
-	Delete,
-	Add(usize, MusicalTime),
 	SplitAt(MusicalTime),
 	DragSplit(MusicalTime),
+	Delete,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -44,8 +44,8 @@ pub enum Status {
 	Dragging(usize, MusicalTime),
 	TrimmingStart(MusicalTime),
 	TrimmingEnd(MusicalTime),
-	Deleting,
 	DraggingSplit(MusicalTime),
+	Deleting,
 	#[default]
 	None,
 }
@@ -170,7 +170,7 @@ where
 					let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
 					state.last_click = Some(new_click);
 
-					let time = maybe_snap_time(new_time, *modifiers, |time| {
+					let time = maybe_snap(new_time, *modifiers, |time| {
 						time.snap_round(self.scale.x, self.transport)
 					});
 					let track = track_idx(&layout, *viewport, cursor);
@@ -191,6 +191,8 @@ where
 						shell.publish((self.f)(Action::Add(track, time)));
 					} else {
 						selection.primary.clear();
+						shell.capture_event();
+						shell.request_redraw();
 					}
 				}
 				mouse::Button::Right => {
@@ -213,7 +215,7 @@ where
 					let track = track_idx(&layout, *viewport, cursor)
 						.unwrap_or_else(|| layout.children().len());
 
-					let new_time = maybe_snap_time(new_time, *modifiers, |time| {
+					let new_time = maybe_snap(new_time, *modifiers, |time| {
 						time.snap_floor(self.scale.x, self.transport)
 					});
 
@@ -233,7 +235,7 @@ where
 							return;
 						};
 
-						let end_pos = maybe_snap_time(new_time, *modifiers, |time| {
+						let end_pos = maybe_snap(new_time, *modifiers, |time| {
 							time.snap_round(self.scale.x, self.transport)
 						});
 
@@ -289,7 +291,7 @@ where
 						};
 
 						let abs_diff =
-							maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
+							maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
 								abs_diff.snap_round(self.scale.x, self.transport)
 							});
 
@@ -310,7 +312,7 @@ where
 					}
 					Status::TrimmingStart(time) => {
 						let abs_diff =
-							maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
+							maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
 								abs_diff.snap_round(self.scale.x, self.transport)
 							});
 
@@ -328,7 +330,7 @@ where
 					}
 					Status::TrimmingEnd(time) => {
 						let abs_diff =
-							maybe_snap_time(new_time.abs_diff(time), *modifiers, |abs_diff| {
+							maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
 								abs_diff.snap_round(self.scale.x, self.transport)
 							});
 
@@ -344,20 +346,20 @@ where
 							shell.capture_event();
 						}
 					}
-					Status::Deleting => {
-						if !selection.primary.is_empty() {
-							shell.publish((self.f)(Action::Delete));
-							shell.capture_event();
-						}
-					}
 					Status::DraggingSplit(time) => {
-						let new_time = maybe_snap_time(new_time, *modifiers, |time| {
+						let new_time = maybe_snap(new_time, *modifiers, |time| {
 							time.snap_round(self.scale.x, self.transport)
 						});
 
 						if new_time != time {
 							selection.status = Status::DraggingSplit(new_time);
 							shell.publish((self.f)(Action::DragSplit(new_time)));
+							shell.capture_event();
+						}
+					}
+					Status::Deleting => {
+						if !selection.primary.is_empty() {
+							shell.publish((self.f)(Action::Delete));
 							shell.capture_event();
 						}
 					}

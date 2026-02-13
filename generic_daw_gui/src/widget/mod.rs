@@ -47,11 +47,7 @@ fn get_time(x: f32, position: Vector, scale: Vector, transport: &Transport) -> M
 	MusicalTime::from_samples_f(((x + position.x) * scale.x.exp2()).max(0.0), transport)
 }
 
-fn maybe_snap_time(
-	time: MusicalTime,
-	modifiers: Modifiers,
-	f: impl FnOnce(MusicalTime) -> MusicalTime,
-) -> MusicalTime {
+fn maybe_snap<T>(time: T, modifiers: Modifiers, f: impl FnOnce(T) -> T) -> T {
 	if modifiers.alt() { time } else { f(time) }
 }
 

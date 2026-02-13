@@ -492,9 +492,14 @@ impl Arrangement {
 			.remove(note)
 	}
 
-	pub fn note_switch_key(&mut self, pattern: MidiPatternId, note: usize, key: MidiKey) {
+	pub fn note_change_key(&mut self, pattern: MidiPatternId, note: usize, key: MidiKey) {
 		self.midi_patterns.get_mut(&pattern).unwrap().notes[note].key = key;
 		self.midi_pattern_action(pattern, MidiPatternAction::ChangeKey(note, key));
+	}
+
+	pub fn note_change_velocity(&mut self, pattern: MidiPatternId, note: usize, val: f32) {
+		self.midi_patterns.get_mut(&pattern).unwrap().notes[note].velocity = val;
+		self.midi_pattern_action(pattern, MidiPatternAction::ChangeVelocity(note, val));
 	}
 
 	pub fn note_move_to(&mut self, pattern: MidiPatternId, note: usize, pos: MusicalTime) {
