@@ -1,4 +1,4 @@
-use crate::widget::key_y;
+use crate::widget::{LINE_HEIGHT, key_y};
 use generic_daw_core::MidiKey;
 use iced::{
 	Color, Element, Length, Rectangle, Renderer, Size, Theme, Vector,
@@ -14,7 +14,7 @@ use iced::{
 	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
 };
 
-const PIANO_WIDTH: f32 = 50.0;
+const PIANO_WIDTH: f32 = 2.5 * LINE_HEIGHT;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Piano<'a> {
@@ -60,10 +60,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 			let note_position =
 				bounds.position() + Vector::new(0.0, key_y(key, *self.position, *self.scale));
 
-			let Some(clipped_bounds) =
-				Rectangle::new(note_position, Size::new(PIANO_WIDTH, self.scale.y))
-					.intersection(&bounds)
-			else {
+			let Some(clipped_bounds) = Rectangle::new(
+				note_position,
+				Size::new(PIANO_WIDTH - self.scale.y / 2.0, self.scale.y),
+			)
+			.intersection(&bounds) else {
 				continue;
 			};
 
@@ -75,31 +76,27 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 					},
 					Color::BLACK,
 				);
+			} else {
+				let note_name = Text {
+					content: key.to_string(),
+					bounds: Size::new(f32::INFINITY, 0.0),
+					size: renderer.default_size(),
+					line_height: LineHeight::default(),
+					font: renderer.default_font(),
+					align_x: Alignment::Right,
+					align_y: Vertical::Center,
+					shaping: Shaping::Basic,
+					wrapping: Wrapping::None,
+					hint_factor: renderer.scale_factor(),
+				};
+
+				renderer.fill_text(
+					note_name,
+					note_position + Vector::new(PIANO_WIDTH - 2.0, self.scale.y / 2.0),
+					Color::BLACK,
+					Rectangle::INFINITE,
+				);
 			}
-
-			let note_name = Text {
-				content: key.to_string(),
-				bounds: Size::new(f32::INFINITY, 0.0),
-				size: renderer.default_size(),
-				line_height: LineHeight::default(),
-				font: renderer.default_font(),
-				align_x: Alignment::Left,
-				align_y: Vertical::Top,
-				shaping: Shaping::Basic,
-				wrapping: Wrapping::None,
-				hint_factor: renderer.scale_factor(),
-			};
-
-			renderer.fill_text(
-				note_name,
-				note_position + Vector::new(3.0, 0.0),
-				if key.is_black() {
-					Color::WHITE
-				} else {
-					Color::BLACK
-				},
-				clipped_bounds,
-			);
 		}
 	}
 }

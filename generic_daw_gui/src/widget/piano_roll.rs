@@ -594,7 +594,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 				line_height: LineHeight::default(),
 				font: renderer.default_font(),
 				align_x: Alignment::Left,
-				align_y: Vertical::Top,
+				align_y: Vertical::Center,
 				shaping: Shaping::Basic,
 				wrapping: Wrapping::None,
 				hint_factor: renderer.scale_factor(),
@@ -602,7 +602,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 
 			renderer.fill_text(
 				note_name,
-				bounds.position() + Vector::new(3.0, 0.0),
+				bounds.position() + Vector::new(3.0, self.scale.y / 2.0),
 				theme.extended_palette().background.strong.text,
 				bounds,
 			);
