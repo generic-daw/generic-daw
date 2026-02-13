@@ -125,10 +125,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			state.status = Status::None;
 			return;
 		};
-		cursor -= Vector::new(
-			right_half.x - layout.position().x - self.offset,
-			LINE_HEIGHT,
-		);
+		cursor -= Vector::new(right_half.x - layout.position().x, LINE_HEIGHT);
 
 		match event {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })

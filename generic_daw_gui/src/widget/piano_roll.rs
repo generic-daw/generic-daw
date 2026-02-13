@@ -515,10 +515,10 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		renderer.fill_quad(
 			Quad {
 				bounds,
-				border: border::width(1).color(theme.extended_palette().background.strong.color),
+				border: border::width(1).color(color),
 				..Quad::default()
 			},
-			color,
+			color.scale_alpha(self.notes[note].velocity),
 		);
 
 		if bounds.width > 3.0 {
@@ -538,7 +538,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 			renderer.fill_text(
 				note_name,
 				bounds.position() + Vector::new(3.0, 0.0),
-				theme.extended_palette().primary.weak.text,
+				theme.extended_palette().background.strong.text,
 				bounds,
 			);
 		}
