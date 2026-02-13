@@ -131,7 +131,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
 				let time = maybe_snap_time(
-					get_time(cursor.x, *self.position, *self.scale, self.transport),
+					get_time(
+						cursor.x + self.offset,
+						*self.position,
+						*self.scale,
+						self.transport,
+					),
 					*modifiers,
 					|time| time.snap_round(self.scale.x, self.transport),
 				);
@@ -170,7 +175,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				modifiers,
 			}) if state.status == Status::Hovering => {
 				let time = maybe_snap_time(
-					get_time(cursor.x, *self.position, *self.scale, self.transport),
+					get_time(
+						cursor.x + self.offset,
+						*self.position,
+						*self.scale,
+						self.transport,
+					),
 					*modifiers,
 					|time| time.snap_round(self.scale.x, self.transport),
 				);
