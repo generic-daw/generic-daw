@@ -474,9 +474,9 @@ impl<Event: EventImpl> Drop for Plugin<Event> {
 			self.instance.try_deactivate(),
 			Err(PluginInstanceError::StillActivatedPlugin)
 		) {
-			warn!("leaked resources of {}", self.descriptor);
+			warn!("{}: leaked instance", self.descriptor);
+		} else {
+			info!("{}: dropped instance", self.descriptor);
 		}
-
-		info!("dropped plugin {}", self.descriptor);
 	}
 }

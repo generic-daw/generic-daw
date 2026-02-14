@@ -211,9 +211,9 @@ impl ClapHost {
 			};
 			($expr:expr) => {{
 				let Some(plugin) = self.plugins.get_mut(&id) else {
-					let msg = Message::MainThread(id, $expr);
-					info!("retrying {msg:?}");
-					return Task::perform(Timer::after(Duration::from_millis(100)), |_| msg);
+					let message = Message::MainThread(id, $expr);
+					info!("retrying {message:?}");
+					return Task::perform(Timer::after(Duration::from_millis(100)), |_| message);
 				};
 				plugin
 			}};
