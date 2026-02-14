@@ -30,8 +30,8 @@ use generic_daw_widget::{
 	peak_meter::{MAX_VAL, PeakMeter},
 };
 use iced::{
-	Center, Element, Fill, Function as _, Point, Shrink, Subscription, Task, Vector, border,
-	futures::{SinkExt as _, Stream},
+	Center, Element, Fill, Point, Shrink, Subscription, Task, Vector, border,
+	futures::SinkExt as _,
 	mouse::Interaction,
 	padding, stream,
 	time::every,
@@ -48,7 +48,7 @@ use midi_pattern::MidiPatternPair;
 use node::{Node, NodeType};
 use rtrb::Consumer;
 use sample::SamplePair;
-use smol::{Timer, unblock};
+use smol::{Timer, stream::Stream, unblock};
 use std::{
 	cell::RefCell,
 	cmp::{Ordering, Reverse},
@@ -1326,9 +1326,8 @@ impl ArrangementView {
 			)
 			.on_press(Message::ClearSelection),
 			column![
-				combo_box(&self.plugins, "Add Plugin", None, {
-					let selected_channel = self.selected_channel;
-					move |descriptor| Message::PluginLoad(selected_channel, descriptor, true)
+				combo_box(&self.plugins, "Add Plugin", None, move |descriptor| {
+					Message::PluginLoad(self.selected_channel, descriptor, true)
 				})
 				.menu_style(menu_style)
 				.width(Fill),
@@ -1414,7 +1413,7 @@ impl ArrangementView {
 							})
 					)
 					.spacing(5)
-					.on_drag(Message::PluginMoveTo.with(self.selected_channel))
+					.on_drag(|node| Message::PluginMoveTo(self.selected_channel, node))
 					.style(sweeten_column_style),
 				)
 				.spacing(5)

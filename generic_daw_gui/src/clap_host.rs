@@ -10,9 +10,7 @@ use generic_daw_widget::knob::Knob;
 #[cfg(unix)]
 use iced::task::Handle;
 use iced::{
-	Center, Element, Font, Function as _,
-	Length::Fill,
-	Subscription, Task, padding,
+	Center, Element, Fill, Font, Subscription, Task, padding,
 	time::every,
 	widget::{column, container, row, rule, scrollable, space, text},
 	window,
@@ -440,7 +438,7 @@ impl ClapHost {
 				}
 			}))
 			.discard(),
-			Task::run(stream, Message::MainThread.with(id)),
+			Task::run(stream, move |msg| Message::MainThread(id, msg)),
 		])
 	}
 

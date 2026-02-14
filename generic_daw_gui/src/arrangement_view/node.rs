@@ -6,8 +6,7 @@ use crate::{
 use generic_daw_core::{NodeId, PanMode};
 use generic_daw_widget::{knob::Knob, peak_meter};
 use iced::{
-	Element,
-	Length::Fill,
+	Element, Fill,
 	widget::{button, container, row},
 };
 use std::{cmp::Ordering, time::Instant};

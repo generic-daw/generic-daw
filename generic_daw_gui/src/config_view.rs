@@ -12,9 +12,7 @@ use crate::{
 };
 use generic_daw_core::{DeviceDescription, DeviceId, clap_host::DEFAULT_CLAP_PATHS, get_devices};
 use iced::{
-	Center, Element, Font,
-	Length::Fill,
-	Task, border,
+	Center, Element, Fill, Font, Task, border,
 	mouse::Interaction,
 	padding,
 	widget::{

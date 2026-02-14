@@ -18,9 +18,7 @@ use crate::{
 use generic_daw_core::{Export, MusicalTime};
 use generic_daw_widget::dot::Dot;
 use iced::{
-	Center, Color, Element, Font, Function as _,
-	Length::Fill,
-	Shrink, Subscription, Task, Theme, border, keyboard,
+	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
 	mouse::Interaction,
 	padding,
 	time::every,
@@ -310,7 +308,7 @@ impl Daw {
 				.and_then(Task::done)
 				.map(|p| p.path().into())
 				.map(Feedback::Use)
-				.map(Message::FoundSampleResponse.with(idx));
+				.map(move |response| Message::FoundSampleResponse(idx, response));
 			}
 			Message::Progress(progress) => self.progress = Some(progress),
 			Message::OpenFile(path) => {
@@ -495,7 +493,7 @@ impl Daw {
 							.into(),
 						4,
 						2,
-						|x| Message::ChangedNumerator(x as u8),
+						|numerator| Message::ChangedNumerator(numerator as u8),
 						Message::ChangedNumeratorText
 					),
 					number_input(
@@ -507,7 +505,7 @@ impl Daw {
 							.into(),
 						140,
 						3,
-						|x| Message::ChangedBpm(x as u16),
+						|bpm| Message::ChangedBpm(bpm as u16),
 						Message::ChangedBpmText
 					),
 					row![
