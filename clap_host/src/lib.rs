@@ -2,6 +2,8 @@ use clack_extensions::gui::GuiApiType;
 use clack_host::bundle::PluginBundle;
 use log::warn;
 use std::{
+	collections::HashSet,
+	fs::canonicalize,
 	path::{Path, PathBuf},
 	sync::{Arc, LazyLock},
 };
@@ -83,6 +85,8 @@ pub fn get_installed_plugins(
 	paths: impl IntoIterator<Item: AsRef<Path>>,
 	mut f: impl FnMut(PluginDescriptor),
 ) {
+	let mut seen = HashSet::new();
+
 	paths
 		.into_iter()
 		.flat_map(|path| WalkDir::new(path).follow_links(true))
@@ -100,16 +104,18 @@ pub fn get_installed_plugins(
 				.extension()
 				.is_some_and(|ext| ext == "clap")
 		})
-		.for_each(|dir_entry| {
+		.filter_map(|dir_entry| canonicalize(dir_entry.path()).ok())
+		.filter(|path| seen.insert(path.clone()))
+		.for_each(|path| {
 			// SAFETY:
 			// Loading an external library object file is inherently unsafe.
-			if let Some(bundle) = unsafe { PluginBundle::load(dir_entry.path()) }
-				.inspect_err(|err| warn!("{}: {err}", dir_entry.path().display()))
+			if let Some(bundle) = unsafe { PluginBundle::load(&path) }
+				.inspect_err(|err| warn!("{}: {err}", path.display()))
 				.ok() && let Some(factory) = bundle.get_plugin_factory()
 			{
 				factory
 					.plugin_descriptors()
-					.filter_map(|d| PluginDescriptor::try_new(d, dir_entry.path()).ok())
+					.filter_map(|d| PluginDescriptor::try_new(d, &path).ok())
 					.for_each(&mut f);
 			}
 		});
