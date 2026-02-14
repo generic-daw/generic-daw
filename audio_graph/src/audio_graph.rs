@@ -241,22 +241,12 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 	pub fn remove(&mut self, node: NodeId) {
 		if let Some(mut entry) = self.graph.remove(&node) {
-			for incoming in entry.buffers().incoming.keys() {
-				self.graph
-					.get_mut(incoming)
-					.unwrap()
-					.buffers()
-					.outgoing
-					.remove(&node);
+			for &incoming in entry.buffers().incoming.keys() {
+				self.entry_mut(incoming).buffers().outgoing.remove(&node);
 			}
 
-			for outgoing in &entry.buffers().outgoing {
-				self.graph
-					.get_mut(outgoing)
-					.unwrap()
-					.buffers()
-					.incoming
-					.remove(&node);
+			for &outgoing in &entry.buffers().outgoing {
+				self.entry_mut(outgoing).buffers().incoming.remove(&node);
 			}
 
 			self.buffers

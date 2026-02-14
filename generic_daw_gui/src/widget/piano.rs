@@ -68,7 +68,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 				continue;
 			};
 
-			if key.is_black() {
+			if key.key().is_black() {
 				renderer.fill_quad(
 					Quad {
 						bounds: clipped_bounds,
