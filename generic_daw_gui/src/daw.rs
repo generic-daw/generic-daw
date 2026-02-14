@@ -165,7 +165,7 @@ impl Daw {
 		let file_tree = FileTree::new(&config.sample_paths);
 
 		let (mut arrangement_view, batches) = ArrangementView::new(&config, &state, main_window_id);
-		let scan = arrangement_view.get_installed_plugins(&config);
+		let scan = arrangement_view.get_installed_plugins(config.clone());
 
 		let open = if config.open_last_project {
 			Task::done(Message::OpenLastFile)
@@ -375,17 +375,19 @@ impl Daw {
 			}
 			Message::CloseConfigView => self.config_view = None,
 			Message::MergeConfig(config, live) => {
+				let config = *config;
+
 				let fut = (self.config.clap_paths != config.clap_paths)
-					.then(|| self.arrangement_view.get_installed_plugins(&config));
+					.then(|| self.arrangement_view.get_installed_plugins(config.clone()));
 
 				if self.config.sample_paths != config.sample_paths {
 					self.file_tree.diff(&config.sample_paths);
 				}
 
 				if live {
-					self.config.merge_with(*config);
+					self.config.merge_with(config);
 				} else {
-					self.config = *config;
+					self.config = config;
 				}
 
 				if let Some(fut) = fut {

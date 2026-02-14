@@ -1,9 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use daw::Daw;
-use iced::{Result, daemon};
+use discovery::discover_plugins_send;
+use iced::daemon;
 use icons::LUCIDE_BYTES;
-use log::LevelFilter;
+use log::{LevelFilter, error};
 
 mod action;
 mod arrangement_view;
@@ -12,6 +13,7 @@ mod components;
 mod config;
 mod config_view;
 mod daw;
+mod discovery;
 mod file_tree;
 mod icons;
 mod lod;
@@ -20,7 +22,7 @@ mod stylefns;
 mod theme;
 mod widget;
 
-fn main() -> Result {
+fn main() {
 	env_logger::builder()
 		.filter_module("clap_host", LevelFilter::Warn)
 		.filter_module("generic_daw_core", LevelFilter::Warn)
@@ -28,7 +30,11 @@ fn main() -> Result {
 		.parse_default_env()
 		.init();
 
-	daemon(Daw::create, Daw::update, Daw::view)
+	if std::env::args().any(|arg| arg == "--discover") {
+		if let Err(Some(err)) = discover_plugins_send() {
+			error!("{err}");
+		}
+	} else if let Err(err) = daemon(Daw::create, Daw::update, Daw::view)
 		.title(Daw::title)
 		.theme(Daw::theme)
 		.scale_factor(Daw::scale_factor)
@@ -36,4 +42,7 @@ fn main() -> Result {
 		.antialiasing(true)
 		.font(LUCIDE_BYTES)
 		.run()
+	{
+		error!("{err}");
+	}
 }

@@ -3,6 +3,7 @@ use crate::{
 	clap_host::{self, ClapHost},
 	components::{icon_button, text_icon_button},
 	config::Config,
+	discovery::discover_plugins_recv,
 	file_tree::FileKind,
 	icons::{arrow_up_down, chevron_up, grip_vertical, mic, plus, power, power_off, x},
 	state::{DEFAULT_SPLIT_POSITION, State},
@@ -23,7 +24,7 @@ use crate::{
 use audio_clip::AudioClip;
 use generic_daw_core::{
 	MidiNote, MidiPatternId, MusicalTime, NodeId, PanMode, Position, SampleId,
-	clap_host::{DEFAULT_CLAP_PATHS, HostInfo, Plugin, PluginDescriptor, get_installed_plugins},
+	clap_host::{HostInfo, Plugin, PluginDescriptor},
 };
 use generic_daw_widget::{
 	knob::Knob,
@@ -42,7 +43,7 @@ use iced::{
 	window,
 };
 use iced_split::{Split, Strategy};
-use log::warn;
+use log::{error, warn};
 use midi_clip::MidiClip;
 use midi_pattern::MidiPatternPair;
 use node::{Node, NodeType};
@@ -1620,20 +1621,21 @@ impl ArrangementView {
 		])
 	}
 
-	pub fn get_installed_plugins(&mut self, config: &Config) -> Task<Message> {
+	pub fn get_installed_plugins(&mut self, config: Config) -> Task<Message> {
 		let scan = Scan::unique();
 
 		self.plugins = combo_box::State::default();
 		self.scan = Some(scan);
 
 		let (sender, receiver) = smol::channel::unbounded();
-		let clap_paths = config.clap_paths.clone();
 
 		Task::batch([
 			Task::future(unblock(move || {
-				get_installed_plugins(DEFAULT_CLAP_PATHS.iter().chain(&clap_paths), |descriptor| {
-					_ = sender.try_send(descriptor);
-				});
+				if let Err(err) =
+					discover_plugins_recv(&config, |descriptor| _ = sender.try_send(descriptor))
+				{
+					error!("{err}");
+				}
 			}))
 			.discard(),
 			Task::run(receiver, move |descriptor| {
