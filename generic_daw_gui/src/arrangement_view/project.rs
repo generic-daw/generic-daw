@@ -10,8 +10,7 @@ use crate::{
 	daw,
 };
 use generic_daw_core::{
-	MidiKey, MidiNote, MusicalTime, OffsetPosition, PanMode, Position,
-	clap_host::{PluginBundle, PluginDescriptor},
+	MidiKey, MidiNote, MusicalTime, OffsetPosition, PanMode, Position, clap_host::PluginDescriptor,
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use iced::Task;
@@ -181,7 +180,7 @@ impl Arrangement {
 	pub fn start_load(
 		path: Arc<Path>,
 		config: Config,
-		plugin_bundles: Arc<HashMap<PluginDescriptor, NoDebug<PluginBundle>>>,
+		plugin_bundles: Vec<PluginDescriptor>,
 	) -> Task<daw::Message> {
 		let (partial_sender, partial_receiver) = oneshot::channel();
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
@@ -209,7 +208,7 @@ impl Arrangement {
 	fn do_load(
 		path: Arc<Path>,
 		config: Config,
-		plugin_bundles: &HashMap<PluginDescriptor, NoDebug<PluginBundle>>,
+		plugin_bundles: &[PluginDescriptor],
 		daw: &Sender<daw::Message>,
 	) -> Option<Task<daw::Message>> {
 		let mut gdp = Vec::new();
@@ -405,7 +404,7 @@ impl Arrangement {
 				let id = plugin.id();
 				messages.push(arrangement_view::Message::PluginLoad(
 					node.id,
-					plugin_bundles.keys().find(|d| *d.id == id)?.clone(),
+					plugin_bundles.iter().find(|d| *d.id == id)?.clone(),
 					false,
 				));
 

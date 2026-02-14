@@ -2,6 +2,7 @@ use clack_host::plugin;
 use std::{
 	ffi::CStr,
 	fmt::{Display, Formatter},
+	path::Path,
 	str,
 	sync::Arc,
 };
@@ -10,21 +11,24 @@ use std::{
 pub struct PluginDescriptor {
 	pub name: Arc<str>,
 	pub id: Arc<CStr>,
+	pub path: Arc<str>,
+}
+
+impl PluginDescriptor {
+	pub fn try_new(
+		value: &plugin::PluginDescriptor,
+		path: &Path,
+	) -> Result<Self, Option<str::Utf8Error>> {
+		Ok(Self {
+			name: value.name().ok_or(None)?.to_str()?.into(),
+			id: value.id().ok_or(None)?.into(),
+			path: path.to_str().ok_or(None)?.into(),
+		})
+	}
 }
 
 impl Display for PluginDescriptor {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		self.name.fmt(f)
-	}
-}
-
-impl TryFrom<&plugin::PluginDescriptor> for PluginDescriptor {
-	type Error = Option<str::Utf8Error>;
-
-	fn try_from(value: &plugin::PluginDescriptor) -> Result<Self, Self::Error> {
-		Ok(Self {
-			name: value.name().ok_or(None)?.to_str()?.into(),
-			id: value.id().ok_or(None)?.into(),
-		})
 	}
 }

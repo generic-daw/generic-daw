@@ -1,11 +1,10 @@
 use clack_extensions::gui::GuiApiType;
+use clack_host::bundle::PluginBundle;
 use log::warn;
 use std::{
-	collections::HashMap,
 	path::{Path, PathBuf},
 	sync::{Arc, LazyLock},
 };
-use utils::NoDebug;
 use walkdir::WalkDir;
 
 mod audio_buffers;
@@ -34,7 +33,6 @@ pub use clack_extensions::{
 	timer::TimerId,
 };
 pub use clack_host::{
-	bundle::PluginBundle,
 	host::HostInfo,
 	utils::{ClapId, Cookie},
 };
@@ -81,12 +79,10 @@ pub static DEFAULT_CLAP_PATHS: LazyLock<Box<[Arc<Path>]>> = LazyLock::new(|| {
 	paths.into_boxed_slice()
 });
 
-#[must_use]
 pub fn get_installed_plugins(
 	paths: impl IntoIterator<Item: AsRef<Path>>,
-) -> HashMap<PluginDescriptor, NoDebug<PluginBundle>> {
-	let mut bundles = HashMap::new();
-
+	mut f: impl FnMut(PluginDescriptor),
+) {
 	paths
 		.into_iter()
 		.flat_map(|path| WalkDir::new(path).follow_links(true))
@@ -104,23 +100,17 @@ pub fn get_installed_plugins(
 				.extension()
 				.is_some_and(|ext| ext == "clap")
 		})
-		.filter_map(|dir_entry| {
+		.for_each(|dir_entry| {
 			// SAFETY:
 			// Loading an external library object file is inherently unsafe.
-			unsafe { PluginBundle::load(dir_entry.path()) }
+			if let Some(bundle) = unsafe { PluginBundle::load(dir_entry.path()) }
 				.inspect_err(|err| warn!("{}: {err}", dir_entry.path().display()))
-				.ok()
-		})
-		.for_each(|bundle| {
-			if let Some(factory) = bundle.get_plugin_factory() {
+				.ok() && let Some(factory) = bundle.get_plugin_factory()
+			{
 				factory
 					.plugin_descriptors()
-					.filter_map(|d| d.try_into().ok())
-					.for_each(|d| {
-						bundles.insert(d, bundle.clone().into());
-					});
+					.filter_map(|d| PluginDescriptor::try_new(d, dir_entry.path()).ok())
+					.for_each(&mut f);
 			}
 		});
-
-	bundles
 }

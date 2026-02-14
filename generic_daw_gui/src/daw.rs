@@ -15,10 +15,7 @@ use crate::{
 	},
 	widget::OPACITY_67,
 };
-use generic_daw_core::{
-	Export, MusicalTime,
-	clap_host::{DEFAULT_CLAP_PATHS, PluginBundle, PluginDescriptor, get_installed_plugins},
-};
+use generic_daw_core::{Export, MusicalTime};
 use generic_daw_widget::dot::Dot;
 use iced::{
 	Center, Color, Element, Font, Function as _,
@@ -37,14 +34,13 @@ use iced_split::{Strategy, vertical_split};
 use log::trace;
 use rfd::AsyncFileDialog;
 use std::{
-	collections::HashMap,
 	fmt::{Display, Formatter},
 	num::NonZero,
 	path::Path,
 	sync::Arc,
 	time::Duration,
 };
-use utils::{NoClone, NoDebug, variants};
+use utils::{NoClone, variants};
 
 variants! {
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -134,13 +130,12 @@ pub enum Message {
 	OnDoubleClick,
 }
 
-const _: () = assert!(size_of::<Message>() == 64);
+const _: () = assert!(size_of::<Message>() == 72);
 
 #[derive(Debug)]
 pub struct Daw {
 	config: Config,
 	state: State,
-	plugin_bundles: Arc<HashMap<PluginDescriptor, NoDebug<PluginBundle>>>,
 	current_project: Option<Arc<Path>>,
 
 	arrangement_view: ArrangementView,
@@ -172,12 +167,10 @@ impl Daw {
 			open = open.chain(Task::done(Message::OpenLastFile));
 		}
 
-		let plugin_bundles =
-			get_installed_plugins(DEFAULT_CLAP_PATHS.iter().chain(&config.clap_paths));
 		let file_tree = FileTree::new(&config.sample_paths);
 
 		let (mut arrangement_view, futs) = ArrangementView::new(&config, &state, main_window_id);
-		arrangement_view.set_plugins(&plugin_bundles);
+		arrangement_view.set_plugins(&config);
 
 		let split_at = state.file_tree_split_at;
 
@@ -185,7 +178,6 @@ impl Daw {
 			Self {
 				config,
 				state,
-				plugin_bundles: plugin_bundles.into(),
 				current_project: None,
 
 				arrangement_view,
@@ -210,8 +202,7 @@ impl Daw {
 		match message {
 			Message::Arrangement(message) => {
 				let Action { instruction, task } =
-					self.arrangement_view
-						.update(message, &self.config, &self.plugin_bundles);
+					self.arrangement_view.update(message, &self.config);
 
 				if let Some(plugins_panel_split_at) = instruction {
 					self.state.plugins_panel_split_at = plugins_panel_split_at;
@@ -328,7 +319,7 @@ impl Daw {
 					return Arrangement::start_load(
 						path,
 						Config::read(),
-						self.plugin_bundles.clone(),
+						self.arrangement_view.get_plugins(),
 					);
 				}
 			}
@@ -371,8 +362,7 @@ impl Daw {
 			Message::CloseConfigView => self.config_view = None,
 			Message::MergeConfig(config, live) => {
 				if self.config.clap_paths != config.clap_paths {
-					self.plugin_bundles = get_installed_plugins(&config.clap_paths).into();
-					self.arrangement_view.set_plugins(&self.plugin_bundles);
+					self.arrangement_view.set_plugins(&self.config);
 				}
 
 				if self.config.sample_paths != config.sample_paths {
