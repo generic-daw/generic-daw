@@ -1,29 +1,35 @@
-use crate::{Batch, Message, NodeId, Stream, StreamTrait as _, Transport, daw_ctx::DawCtx};
+use crate::{
+	Batch, DeviceDescription, DeviceId, Message, NodeId, Stream, StreamTrait as _, Transport,
+	daw_ctx::DawCtx,
+};
 use cpal::{
-	BufferSize, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
+	BufferSize, Device, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
 	traits::{DeviceTrait as _, HostTrait as _},
 };
 use log::{error, info};
 use rtrb::{Consumer, Producer, RingBuffer};
-use std::{cmp::Ordering, num::NonZero, sync::Arc};
+use std::{cmp::Ordering, collections::HashMap, num::NonZero};
 use utils::boxed_slice;
 
+#[must_use]
+pub fn get_devices() -> HashMap<DeviceId, DeviceDescription> {
+	cpal::default_host()
+		.devices()
+		.unwrap()
+		.filter_map(|device| Some((device.id().ok()?, device.description().ok()?)))
+		.collect()
+}
+
 pub fn build_input_stream(
-	device_name: Option<Arc<str>>,
+	device_id: Option<&DeviceId>,
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
 ) -> (StreamConfig, Consumer<Box<[f32]>>, Stream) {
 	let host = cpal::default_host();
 
-	let device = device_name
-		.and_then(|device_name| Some((device_name, host.input_devices().ok()?)))
-		.and_then(|(device_name, mut devices)| {
-			devices.find(|device| {
-				device
-					.description()
-					.is_ok_and(|description| *description.name() == *device_name)
-			})
-		})
+	let device = device_id
+		.and_then(|device_id| host.device_by_id(device_id))
+		.filter(Device::supports_input)
 		.or_else(|| host.default_input_device())
 		.unwrap();
 
@@ -69,7 +75,7 @@ pub fn build_input_stream(
 }
 
 pub fn build_output_stream(
-	device_name: Option<Arc<str>>,
+	device_id: Option<&DeviceId>,
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
 ) -> (
@@ -81,15 +87,9 @@ pub fn build_output_stream(
 ) {
 	let host = cpal::default_host();
 
-	let device = device_name
-		.and_then(|device_name| Some((device_name, host.output_devices().ok()?)))
-		.and_then(|(device_name, mut devices)| {
-			devices.find(|device| {
-				device
-					.description()
-					.is_ok_and(|description| *description.name() == *device_name)
-			})
-		})
+	let device = device_id
+		.and_then(|device_id| host.device_by_id(device_id))
+		.filter(Device::supports_output)
 		.or_else(|| host.default_output_device())
 		.unwrap();
 

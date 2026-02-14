@@ -81,9 +81,9 @@ pub struct Playlist<'a, Message> {
 	f: fn(Action) -> Message,
 }
 
-impl<'a, Message> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
+impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message>
 where
-	Message: Clone + 'a,
+	Message: Clone,
 {
 	fn tag(&self) -> tree::Tag {
 		tree::Tag::of::<State>()
@@ -537,14 +537,14 @@ where
 		}
 	}
 
-	fn overlay<'b>(
-		&'b mut self,
-		tree: &'b mut Tree,
-		layout: Layout<'b>,
+	fn overlay<'a>(
+		&'a mut self,
+		tree: &'a mut Tree,
+		layout: Layout<'a>,
 		renderer: &Renderer,
 		viewport: &Rectangle,
 		translation: Vector,
-	) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+	) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
 		let children = self
 			.tracks
 			.iter_mut()

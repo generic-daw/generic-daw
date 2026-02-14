@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
 use utils::variants;
 
 variants! {
@@ -56,11 +55,5 @@ impl From<Theme> for iced::Theme {
 			Theme::Oxocarbon => Self::Oxocarbon,
 			Theme::Ferra => Self::Ferra,
 		}
-	}
-}
-
-impl Display for Theme {
-	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		iced::Theme::from(*self).fmt(f)
 	}
 }

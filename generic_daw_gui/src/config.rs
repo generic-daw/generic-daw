@@ -1,4 +1,5 @@
 use crate::{arrangement_view::DATA_DIR, theme::Theme};
+use generic_daw_core::DeviceId;
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -60,7 +61,8 @@ impl Config {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
 pub struct Device {
-	pub name: Option<Arc<str>>,
+	#[serde(with = "option")]
+	pub id: Option<DeviceId>,
 	pub sample_rate: NonZero<u32>,
 	pub buffer_size: Option<NonZero<u32>>,
 }
@@ -68,7 +70,7 @@ pub struct Device {
 impl Default for Device {
 	fn default() -> Self {
 		Self {
-			name: None,
+			id: None,
 			sample_rate: NonZero::new(44100).unwrap(),
 			buffer_size: None,
 		}
@@ -109,5 +111,34 @@ impl Config {
 
 	pub fn write(&self) {
 		write(&*CONFIG_PATH, toml::to_string(self).unwrap()).unwrap();
+	}
+}
+
+mod option {
+	use serde::{Deserialize as _, Deserializer, Serializer};
+	use std::{fmt::Display, str::FromStr};
+
+	#[expect(clippy::ref_option)]
+	pub fn serialize<S, T>(value: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+		T: ToString,
+	{
+		match value {
+			Some(v) => serializer.serialize_some(&v.to_string()),
+			None => serializer.serialize_none(),
+		}
+	}
+
+	pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+	where
+		D: Deserializer<'de>,
+		T: FromStr,
+		T::Err: Display,
+	{
+		match Option::<&str>::deserialize(deserializer)? {
+			Some(s) => Ok(Some(T::from_str(s).map_err(serde::de::Error::custom)?)),
+			None => Ok(None),
+		}
 	}
 }

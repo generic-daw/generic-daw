@@ -1,11 +1,11 @@
 use crate::{
-	Sample, SampleId, Stream, Transport, build_input_stream, resampler::Resampler,
+	DeviceId, Sample, SampleId, Stream, Transport, build_input_stream, resampler::Resampler,
 	stream::frames_of_config,
 };
 use cpal::StreamConfig;
 use hound::{SampleFormat, WavSpec, WavWriter};
 use rtrb::Consumer;
-use std::{io, num::NonZero, sync::Arc};
+use std::{io, num::NonZero};
 use utils::NoDebug;
 
 #[derive(Debug)]
@@ -22,11 +22,11 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	pub fn create(
 		writer: W,
 		transport: &Transport,
-		device_name: Option<Arc<str>>,
+		device_id: Option<&DeviceId>,
 		sample_rate: NonZero<u32>,
 		frames: Option<NonZero<u32>>,
 	) -> (Self, Consumer<Box<[f32]>>) {
-		let (config, consumer, stream) = build_input_stream(device_name, sample_rate, frames);
+		let (config, consumer, stream) = build_input_stream(device_id, sample_rate, frames);
 
 		let resampler = Resampler::new(
 			NonZero::new(config.sample_rate).unwrap(),

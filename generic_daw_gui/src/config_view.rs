@@ -10,7 +10,7 @@ use crate::{
 	theme::Theme,
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
 };
-use generic_daw_core::{clap_host::DEFAULT_CLAP_PATHS, input_devices, output_devices};
+use generic_daw_core::{DeviceDescription, DeviceId, clap_host::DEFAULT_CLAP_PATHS, get_devices};
 use iced::{
 	Center, Element, Font,
 	Length::Fill,
@@ -24,12 +24,32 @@ use iced::{
 	window,
 };
 use rfd::AsyncFileDialog;
-use std::{num::NonZero, path::Path, sync::Arc};
+use std::{collections::HashMap, num::NonZero, path::Path, sync::Arc};
 use sweeten::widget::drag::DragEvent;
-use utils::ShiftMoveExt as _;
+use utils::{ShiftMoveExt as _, natural_cmp};
 
-static COMMON_SAMPLE_RATES: &[u32] = &[44_100, 48_000, 64_000, 88_200, 96_000, 176_400, 192_000];
-static COMMON_BUFFER_SIZES: &[u32] = &[64, 128, 256, 512, 1024, 2048, 4096, 8192];
+const SAMPLE_RATES: [NonZero<u32>; 7] = [
+	NonZero::new(44_100).unwrap(),
+	NonZero::new(48_000).unwrap(),
+	NonZero::new(64_000).unwrap(),
+	NonZero::new(88_200).unwrap(),
+	NonZero::new(96_000).unwrap(),
+	NonZero::new(176_400).unwrap(),
+	NonZero::new(192_000).unwrap(),
+];
+
+const BUFFER_SIZES: [NonZero<u32>; 10] = [
+	NonZero::new(16).unwrap(),
+	NonZero::new(32).unwrap(),
+	NonZero::new(64).unwrap(),
+	NonZero::new(128).unwrap(),
+	NonZero::new(256).unwrap(),
+	NonZero::new(512).unwrap(),
+	NonZero::new(1024).unwrap(),
+	NonZero::new(2048).unwrap(),
+	NonZero::new(4096).unwrap(),
+	NonZero::new(8192).unwrap(),
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Tab {
@@ -48,7 +68,7 @@ pub enum Message {
 	RemoveClapPath(usize),
 	MoveClapPath(DragEvent),
 	ChangedTab(Tab),
-	ChangedName(Option<Arc<str>>),
+	ChangedId(Option<DeviceId>),
 	ChangedSampleRate(NonZero<u32>),
 	ChangedBufferSize(Option<NonZero<u32>>),
 	ToggledAutosave,
@@ -67,18 +87,33 @@ pub struct ConfigView {
 	config: Config,
 	prev_config: Config,
 	tab: Tab,
-	input_devices: Vec<Arc<str>>,
-	output_devices: Vec<Arc<str>>,
+	devices: HashMap<DeviceId, DeviceDescription>,
+	input_devices: Box<[DeviceId]>,
+	output_devices: Box<[DeviceId]>,
 	main_window_id: window::Id,
 }
 
 impl ConfigView {
 	pub fn new(main_window_id: window::Id) -> Self {
-		let mut input_devices = input_devices();
-		input_devices.sort_unstable();
+		let devices = get_devices();
 
-		let mut output_devices = output_devices();
-		output_devices.sort_unstable();
+		let mut input_devices = devices
+			.iter()
+			.filter(|(_, device)| device.supports_input())
+			.map(|(id, _)| id.clone())
+			.collect::<Box<_>>();
+		let mut output_devices = devices
+			.iter()
+			.filter(|(_, device)| device.supports_output())
+			.map(|(id, _)| id.clone())
+			.collect::<Box<_>>();
+
+		input_devices.sort_unstable_by(|l, r| {
+			natural_cmp(devices[l].name().as_bytes(), devices[r].name().as_bytes())
+		});
+		output_devices.sort_unstable_by(|l, r| {
+			natural_cmp(devices[l].name().as_bytes(), devices[r].name().as_bytes())
+		});
 
 		let config = Config::read();
 
@@ -86,6 +121,7 @@ impl ConfigView {
 			config: config.clone(),
 			prev_config: config,
 			tab: Tab::Output,
+			devices,
 			input_devices,
 			output_devices,
 			main_window_id,
@@ -137,8 +173,8 @@ impl ConfigView {
 				}
 			}
 			Message::ChangedTab(tab) => self.tab = tab,
-			Message::ChangedName(name) => self.with_device_mut(|device| {
-				device.name = name;
+			Message::ChangedId(id) => self.with_device_mut(|device| {
+				device.id = id;
 			}),
 			Message::ChangedSampleRate(sample_rate) => self.with_device_mut(|device| {
 				device.sample_rate = sample_rate;
@@ -315,9 +351,9 @@ impl ConfigView {
 						row![
 							text("Name:").width(Fill),
 							row![
-								pick_list(devices, device.name.as_ref(), |name| {
-									Message::ChangedName(Some(name))
-								})
+								pick_list(device.id.as_ref(), devices, |id| self.devices[id]
+									.to_string())
+								.on_select(|id| Message::ChangedId(Some(id)))
 								.handle(PICK_LIST_HANDLE)
 								.placeholder("Default")
 								.width(Fill)
@@ -330,7 +366,7 @@ impl ConfigView {
 									))
 									.padding(5)
 									.on_press_maybe(
-										device.name.as_deref().map(|_| Message::ChangedName(None))
+										device.id.as_ref().map(|_| Message::ChangedId(None))
 									)
 							]
 						]
@@ -339,14 +375,11 @@ impl ConfigView {
 							text("Sample Rate:").width(Fill),
 							row![
 								pick_list(
-									COMMON_SAMPLE_RATES,
-									Some(device.sample_rate.get()),
-									|sample_rate| {
-										Message::ChangedSampleRate(
-											NonZero::new(sample_rate).unwrap(),
-										)
-									}
+									Some(device.sample_rate),
+									SAMPLE_RATES,
+									|sample_rate| format!("{sample_rate} hz")
 								)
+								.on_select(Message::ChangedSampleRate)
 								.handle(PICK_LIST_HANDLE)
 								.placeholder("Default")
 								.width(Fill)
@@ -364,13 +397,12 @@ impl ConfigView {
 						row![
 							text("Buffer Size:").width(Fill),
 							row![
-								pick_list(
-									COMMON_BUFFER_SIZES,
-									device.buffer_size.map(NonZero::get),
-									|buffer_size| {
-										Message::ChangedBufferSize(NonZero::new(buffer_size))
-									}
-								)
+								pick_list(device.buffer_size, BUFFER_SIZES, |buffer_size| format!(
+									"{buffer_size} smp"
+								))
+								.on_select(|buffer_size| {
+									Message::ChangedBufferSize(Some(buffer_size))
+								})
 								.handle(PICK_LIST_HANDLE)
 								.placeholder("Default")
 								.width(Fill)
@@ -504,11 +536,10 @@ impl ConfigView {
 					row![
 						text("Theme:").width(Fill),
 						row![
-							pick_list(
-								Theme::VARIANTS,
-								Some(self.config.theme),
-								Message::ChangedTheme
-							)
+							pick_list(Some(self.config.theme), Theme::VARIANTS, |&t| {
+								iced::Theme::from(t).to_string()
+							})
+							.on_select(Message::ChangedTheme)
 							.handle(PICK_LIST_HANDLE)
 							.width(Fill)
 							.style(pick_list_with_radius(border::left(5)))

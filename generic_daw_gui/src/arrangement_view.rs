@@ -560,7 +560,7 @@ impl ArrangementView {
 					let (recording, task) = Recording::create(
 						path,
 						self.arrangement.transport(),
-						config.input_device.name.clone(),
+						config.input_device.id.as_ref(),
 						config.input_device.sample_rate,
 						config.input_device.buffer_size,
 					);
@@ -1675,7 +1675,7 @@ fn crc(mut r: impl Read) -> u32 {
 	crc
 }
 
-fn poll_consumer<T: Send + 'static>(
+fn poll_consumer<T>(
 	mut consumer: Consumer<T>,
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,

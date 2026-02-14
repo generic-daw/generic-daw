@@ -59,7 +59,7 @@ pub struct Batch {
 impl Arrangement {
 	pub fn create(config: &Config) -> (Self, Task<Batch>) {
 		let (master_node_id, transport, producer, consumer, stream) = build_output_stream(
-			config.output_device.name.clone(),
+			config.output_device.id.as_ref(),
 			config.output_device.sample_rate,
 			config.output_device.buffer_size,
 		);

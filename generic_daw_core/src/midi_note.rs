@@ -3,7 +3,7 @@ use std::fmt::{Debug, Display, Formatter};
 use utils::variants;
 
 variants! {
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Key {
 	C,
 	CSharp,
@@ -49,7 +49,7 @@ impl Display for Key {
 	}
 }
 
-#[derive(Clone, Copy, Eq, Hash, Debug, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct MidiKey(pub u8);
 
 impl MidiKey {

@@ -464,7 +464,8 @@ impl Daw {
 		stack![
 			column![
 				row![
-					pick_list(FileMenu::VARIANTS, None::<FileMenu>, Message::from)
+					pick_list(None::<FileMenu>, FileMenu::VARIANTS, FileMenu::to_string)
+						.on_select(Message::from)
 						.handle(PICK_LIST_HANDLE)
 						.placeholder("File")
 						.style(pick_list_with_radius(5))
