@@ -128,6 +128,7 @@ pub enum Message {
 	ChannelToggleEnabled(NodeId),
 	ChannelToggleBypassed(NodeId),
 
+	PluginDiscovered(PluginDescriptor),
 	PluginLoad(NodeId, PluginDescriptor, bool),
 	PluginSetState(NodeId, usize, NoDebug<Box<[u8]>>),
 	PluginMixChanged(NodeId, usize, f32),
@@ -236,7 +237,7 @@ impl ArrangementView {
 				piano_roll_selection: RefCell::default(),
 
 				split_at: state.plugins_panel_split_at,
-				plugins: combo_box::State::new(Vec::new()),
+				plugins: combo_box::State::default(),
 
 				loading: 0,
 			},
@@ -329,6 +330,14 @@ impl ArrangementView {
 			Message::ChannelPanChanged(id, pan) => self.arrangement.channel_pan_changed(id, pan),
 			Message::ChannelToggleEnabled(id) => self.arrangement.channel_toggle_enabled(id),
 			Message::ChannelToggleBypassed(id) => self.arrangement.channel_toggle_bypassed(id),
+			Message::PluginDiscovered(descriptor) => {
+				self.plugins.insert(
+					self.plugins.options().partition_point(|d| {
+						natural_cmp(d.name.as_bytes(), descriptor.name.as_bytes()).is_lt()
+					}),
+					descriptor,
+				);
+			}
 			Message::PluginLoad(node, descriptor, show) => {
 				static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
 					HostInfo::new_from_cstring(
@@ -1602,18 +1611,25 @@ impl ArrangementView {
 		])
 	}
 
-	pub fn get_plugins(&self) -> Vec<PluginDescriptor> {
-		self.plugins.clone().into_options()
+	pub fn get_installed_plugins(&mut self, config: &Config) -> Task<Message> {
+		self.plugins = combo_box::State::default();
+
+		let (sender, receiver) = smol::channel::unbounded();
+		let clap_paths = config.clap_paths.clone();
+
+		Task::batch([
+			Task::future(unblock(move || {
+				get_installed_plugins(DEFAULT_CLAP_PATHS.iter().chain(&clap_paths), |descriptor| {
+					_ = sender.try_send(descriptor);
+				});
+			}))
+			.discard(),
+			Task::run(receiver, Message::PluginDiscovered),
+		])
 	}
 
-	pub fn set_plugins(&mut self, config: &Config) {
-		let mut plugins = Vec::new();
-		get_installed_plugins(
-			DEFAULT_CLAP_PATHS.iter().chain(&config.clap_paths),
-			|descriptor| plugins.push(descriptor),
-		);
-		plugins.sort_unstable_by(|l, r| natural_cmp(l.name.as_bytes(), r.name.as_bytes()));
-		self.plugins = combo_box::State::new(plugins);
+	pub fn get_discovered_plugins(&self) -> Vec<PluginDescriptor> {
+		self.plugins.clone().into_options()
 	}
 
 	pub fn hover_file(&mut self, file: Arc<Path>, kind: FileKind) {

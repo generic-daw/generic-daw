@@ -152,24 +152,26 @@ pub struct Daw {
 
 impl Daw {
 	pub fn create() -> (Self, Task<Message>) {
-		let (main_window_id, open) = window::open(window::Settings {
+		let (main_window_id, window) = window::open(window::Settings {
 			exit_on_close_request: false,
 			maximized: true,
 			..window::Settings::default()
 		});
-		let mut open = open.discard();
+		let window = window.discard();
 
 		let config = Config::read();
 		let state = State::read();
 
-		if config.open_last_project {
-			open = open.chain(Task::done(Message::OpenLastFile));
-		}
-
 		let file_tree = FileTree::new(&config.sample_paths);
 
-		let (mut arrangement_view, futs) = ArrangementView::new(&config, &state, main_window_id);
-		arrangement_view.set_plugins(&config);
+		let (mut arrangement_view, batches) = ArrangementView::new(&config, &state, main_window_id);
+		let scan = arrangement_view.get_installed_plugins(&config);
+
+		let open = if config.open_last_project {
+			Task::done(Message::OpenLastFile)
+		} else {
+			Task::none()
+		};
 
 		let split_at = state.file_tree_split_at;
 
@@ -191,7 +193,11 @@ impl Daw {
 				main_window_id,
 				files_hovered: false,
 			},
-			Task::batch([open, futs.map(Message::Arrangement)]),
+			Task::batch([
+				window,
+				batches.map(Message::Arrangement),
+				scan.map(Message::Arrangement).chain(open),
+			]),
 		)
 	}
 
@@ -326,7 +332,7 @@ impl Daw {
 					return Arrangement::start_load(
 						path,
 						Config::read(),
-						self.arrangement_view.get_plugins(),
+						self.arrangement_view.get_discovered_plugins(),
 					);
 				}
 			}
@@ -368,9 +374,8 @@ impl Daw {
 			}
 			Message::CloseConfigView => self.config_view = None,
 			Message::MergeConfig(config, live) => {
-				if self.config.clap_paths != config.clap_paths {
-					self.arrangement_view.set_plugins(&self.config);
-				}
+				let fut = (self.config.clap_paths != config.clap_paths)
+					.then(|| self.arrangement_view.get_installed_plugins(&config));
 
 				if self.config.sample_paths != config.sample_paths {
 					self.file_tree.diff(&config.sample_paths);
@@ -380,6 +385,10 @@ impl Daw {
 					self.config.merge_with(*config);
 				} else {
 					self.config = *config;
+				}
+
+				if let Some(fut) = fut {
+					return fut.map(Message::Arrangement);
 				}
 			}
 			Message::FileHovered => self.files_hovered = true,
