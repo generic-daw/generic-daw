@@ -174,6 +174,7 @@ impl Daw {
 		};
 
 		let split_at = state.file_tree_split_at;
+		let show_seconds = state.show_seconds;
 
 		(
 			Self {
@@ -185,7 +186,7 @@ impl Daw {
 				file_tree,
 				config_view: None,
 				split_at,
-				show_seconds: false,
+				show_seconds,
 
 				progress: None,
 				missing_samples: Vec::new(),
@@ -403,7 +404,13 @@ impl Daw {
 				}
 			}
 			Message::FileLeft => self.files_hovered = false,
-			Message::ToggleShowSeconds => self.show_seconds ^= true,
+			Message::ToggleShowSeconds => {
+				self.show_seconds ^= true;
+				if self.state.show_seconds != self.show_seconds {
+					self.state.show_seconds = self.show_seconds;
+					self.state.write();
+				}
+			}
 			Message::ToggleMetronome => self.arrangement_view.arrangement.toggle_metronome(),
 			Message::ChangedBpm(bpm) => self
 				.arrangement_view

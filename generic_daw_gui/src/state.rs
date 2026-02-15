@@ -23,6 +23,7 @@ pub struct State {
 	pub last_project: Option<Arc<Path>>,
 	pub file_tree_split_at: f32,
 	pub plugins_panel_split_at: f32,
+	pub show_seconds: bool,
 }
 
 impl Default for State {
@@ -31,6 +32,7 @@ impl Default for State {
 			last_project: None,
 			file_tree_split_at: DEFAULT_SPLIT_POSITION,
 			plugins_panel_split_at: DEFAULT_SPLIT_POSITION,
+			show_seconds: false,
 		}
 	}
 }
