@@ -115,7 +115,7 @@ impl Track {
 					},
 				};
 
-				events.extend(repeat_n(event, before.abs_diff(*after) as usize));
+				events.extend(repeat_n(event, before.abs_diff(*after).into()));
 			}
 
 			*before = *after;

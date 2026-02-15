@@ -55,7 +55,7 @@ pub struct MidiKey(pub u8);
 impl MidiKey {
 	#[must_use]
 	pub fn key(self) -> Key {
-		Key::VARIANTS[self.0 as usize % 12]
+		Key::VARIANTS[usize::from(self.0) % 12]
 	}
 
 	#[must_use]

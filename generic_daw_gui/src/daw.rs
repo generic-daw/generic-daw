@@ -92,6 +92,7 @@ pub enum Message {
 	SaveFile,
 	SaveAsFile(Arc<Path>),
 	AutosaveFile,
+	ToggleFullscreen,
 
 	OpenFileDialog,
 	SaveAsFileDialog,
@@ -260,6 +261,14 @@ impl Daw {
 				self.arrangement_view
 					.arrangement
 					.save(&path, &mut self.arrangement_view.clap_host);
+			}
+			Message::ToggleFullscreen => {
+				let id = self.main_window_id;
+				return window::mode(id).then(move |mode| match mode {
+					window::Mode::Windowed => window::set_mode(id, window::Mode::Fullscreen),
+					window::Mode::Fullscreen => window::set_mode(id, window::Mode::Windowed),
+					window::Mode::Hidden => Task::none(),
+				});
 			}
 			Message::OpenFileDialog => {
 				return window::run(self.main_window_id, |window| {
@@ -876,6 +885,7 @@ impl Daw {
 				keyboard::Key::Named(keyboard::key::Named::Space) => Some(Message::Arrangement(
 					arrangement_view::Message::TogglePlayback,
 				)),
+				keyboard::Key::Named(keyboard::key::Named::F11) => Some(Message::ToggleFullscreen),
 				_ => None,
 			},
 			(true, false, false, false) => match key.to_latin(physical_key)? {

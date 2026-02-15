@@ -3,7 +3,6 @@ use clack_host::bundle::PluginBundle;
 use log::warn;
 use std::{
 	collections::HashSet,
-	fs::canonicalize,
 	path::{Path, PathBuf},
 	sync::{Arc, LazyLock},
 };
@@ -104,7 +103,7 @@ pub fn get_installed_plugins(
 				.extension()
 				.is_some_and(|ext| ext == "clap")
 		})
-		.filter_map(|dir_entry| canonicalize(dir_entry.path()).ok())
+		.filter_map(|dir_entry| dir_entry.path().canonicalize().ok())
 		.filter(|path| seen.insert(path.clone()))
 		.for_each(|path| {
 			// SAFETY:
