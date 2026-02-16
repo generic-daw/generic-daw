@@ -18,7 +18,7 @@ use smol::{channel::Sender, unblock};
 use std::{
 	collections::{HashMap, HashSet},
 	fs::File,
-	io::{Read as _, Write as _},
+	io::{self, Read as _, Write as _},
 	iter::once,
 	num::NonZero,
 	ops::Deref as _,
@@ -36,7 +36,9 @@ pub enum Feedback<T> {
 }
 
 impl Arrangement {
-	pub fn save(&self, path: &Path, clap_host: &mut ClapHost) {
+	pub fn save(&self, path: &Path, clap_host: &mut ClapHost) -> io::Result<()> {
+		let mut file = File::create(path)?;
+
 		let mut writer = Writer::new(proto::Transport {
 			bpm: self.transport().bpm.get().into(),
 			numerator: self.transport().numerator.get().into(),
@@ -159,17 +161,16 @@ impl Arrangement {
 			}
 		}
 
-		File::create(path)
-			.unwrap()
-			.write_all(&writer.finalize())
-			.unwrap();
+		file.write_all(&writer.finalize())
 	}
 
-	pub fn empty(config: Config) -> Task<daw::Message> {
-		let (wrapper, task) = Self::create(&config);
+	pub fn empty() -> Task<daw::Message> {
+		let config = Config::read();
+		let (arrangement, task) = Self::create(&config);
+
 		Task::done(daw::Message::MergeConfig(config.into(), false))
 			.chain(Task::done(daw::Message::Arrangement(
-				arrangement_view::Message::SetArrangement(Box::new(wrapper).into()),
+				arrangement_view::Message::SetArrangement(Box::new(arrangement).into()),
 			)))
 			.chain(
 				task.map(arrangement_view::Message::Batch)
@@ -179,7 +180,6 @@ impl Arrangement {
 
 	pub fn start_load(
 		path: Arc<Path>,
-		config: Config,
 		plugin_bundles: Vec<PluginDescriptor>,
 	) -> Task<daw::Message> {
 		let (partial_sender, partial_receiver) = oneshot::channel();
@@ -188,12 +188,7 @@ impl Arrangement {
 		Task::batch([
 			Task::future(unblock(move || {
 				partial_sender
-					.send(Self::do_load(
-						path,
-						config,
-						&plugin_bundles,
-						&progress_sender,
-					))
+					.send(Self::do_load(path, &plugin_bundles, &progress_sender))
 					.unwrap();
 			}))
 			.discard(),
@@ -207,15 +202,15 @@ impl Arrangement {
 
 	fn do_load(
 		path: Arc<Path>,
-		config: Config,
 		plugin_bundles: &[PluginDescriptor],
 		daw: &Sender<daw::Message>,
 	) -> Option<Task<daw::Message>> {
+		let config = Config::read();
+		let (mut arrangement, task) = Self::create(&config);
+
 		let mut gdp = Vec::new();
 		File::open(&path).ok()?.read_to_end(&mut gdp).ok()?;
 		let reader = Reader::new(&gdp)?;
-
-		let (mut arrangement, task) = Self::create(&config);
 
 		let proto::Transport {
 			bpm,

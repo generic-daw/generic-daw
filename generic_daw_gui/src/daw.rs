@@ -232,7 +232,7 @@ impl Daw {
 					return Task::batch(futs);
 				}
 			}
-			Message::NewFile => return Arrangement::empty(Config::read()),
+			Message::NewFile => return Arrangement::empty(),
 			Message::OpenLastFile => {
 				if let Some(last_project) = self.state.last_project.clone() {
 					return self.update(Message::OpenFile(last_project));
@@ -246,13 +246,17 @@ impl Daw {
 				);
 			}
 			Message::SaveAsFile(path) => {
-				self.arrangement_view
+				if self
+					.arrangement_view
 					.arrangement
-					.save(&path, &mut self.arrangement_view.clap_host);
-				self.current_project = Some(path.clone());
-				if self.state.last_project.as_deref() != Some(&path) {
-					self.state.last_project = Some(path);
-					self.state.write();
+					.save(&path, &mut self.arrangement_view.clap_host)
+					.is_ok()
+				{
+					self.current_project = Some(path.clone());
+					if self.state.last_project.as_deref() != Some(&path) {
+						self.state.last_project = Some(path);
+						self.state.write();
+					}
 				}
 			}
 			Message::AutosaveFile => {
@@ -265,7 +269,8 @@ impl Daw {
 
 				let path = AUTOSAVE_DIR.join(format!("{} {}.gdp", name, format_now()));
 
-				self.arrangement_view
+				_ = self
+					.arrangement_view
 					.arrangement
 					.save(&path, &mut self.arrangement_view.clap_host);
 			}
@@ -332,7 +337,6 @@ impl Daw {
 					self.progress = Some(0.0);
 					return Arrangement::start_load(
 						path,
-						Config::read(),
 						self.arrangement_view.get_discovered_plugins(),
 					);
 				}
