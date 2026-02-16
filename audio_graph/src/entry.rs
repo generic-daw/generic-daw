@@ -45,8 +45,8 @@ impl<Node: NodeImpl> Entry<Node> {
 		Self {
 			node: Mutex::new(node),
 			buffers: RwLock::new(Buffers {
-				incoming: HashMap::default(),
-				outgoing: HashSet::default(),
+				incoming: HashMap::new(),
+				outgoing: HashSet::new(),
 				audio: buf().into(),
 				scratch: buf().into(),
 				events: Vec::new(),

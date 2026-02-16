@@ -20,20 +20,18 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	#[must_use]
 	pub fn new(node: impl Into<Node>, sample_rate: NonZero<u32>, frames: NonZero<u32>) -> Self {
 		let node = node.into();
-		let root = node.id();
 
-		let mut buffers = Vec::new();
-
-		let mut graph = HashMap::default();
-		graph.insert(root, Entry::new(node, frames, &mut buffers));
-
-		Self {
-			graph,
-			buffers,
-			root,
+		let mut this = Self {
+			graph: HashMap::new(),
+			buffers: Vec::new(),
+			root: node.id(),
 			sample_rate,
 			frames,
-		}
+		};
+
+		this.insert(node);
+
+		this
 	}
 
 	pub fn process(&mut self, state: &Node::State, buf: &mut [f32]) {

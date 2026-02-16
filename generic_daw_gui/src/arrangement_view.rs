@@ -48,6 +48,7 @@ use midi_pattern::MidiPatternPair;
 use node::{Node, NodeType};
 use rtrb::Consumer;
 use sample::SamplePair;
+use scan::Id as Scan;
 use smol::{Timer, stream::Stream, unblock};
 use std::{
 	cell::RefCell,
@@ -62,7 +63,7 @@ use std::{
 	time::Duration,
 };
 use sweeten::widget::drag::DragEvent;
-use utils::{NoClone, NoDebug, natural_cmp};
+use utils::{NoClone, NoDebug, natural_cmp, unique_id};
 
 mod arrangement;
 mod audio_clip;
@@ -75,6 +76,8 @@ mod project;
 mod recording;
 mod sample;
 mod track;
+
+unique_id!(scan);
 
 pub use arrangement::{Arrangement, Batch};
 pub use audio_clip::AudioClipRef;
@@ -128,7 +131,8 @@ pub enum Message {
 	ChannelToggleEnabled(NodeId),
 	ChannelToggleBypassed(NodeId),
 
-	PluginDiscovered(PluginDescriptor),
+	PluginDiscovered(Scan, PluginDescriptor),
+	PluginFinishedScan,
 	PluginLoad(NodeId, PluginDescriptor, bool),
 	PluginSetState(NodeId, usize, NoDebug<Box<[u8]>>),
 	PluginMixChanged(NodeId, usize, f32),
@@ -201,7 +205,8 @@ pub struct ArrangementView {
 	split_at: f32,
 	plugins: combo_box::State<PluginDescriptor>,
 
-	loading: usize,
+	clips_loading: usize,
+	scan: Option<Scan>,
 }
 
 impl ArrangementView {
@@ -239,7 +244,8 @@ impl ArrangementView {
 				split_at: state.plugins_panel_split_at,
 				plugins: combo_box::State::default(),
 
-				loading: 0,
+				clips_loading: 0,
+				scan: None,
 			},
 			task.map(Message::Batch),
 		)
@@ -330,14 +336,17 @@ impl ArrangementView {
 			Message::ChannelPanChanged(id, pan) => self.arrangement.channel_pan_changed(id, pan),
 			Message::ChannelToggleEnabled(id) => self.arrangement.channel_toggle_enabled(id),
 			Message::ChannelToggleBypassed(id) => self.arrangement.channel_toggle_bypassed(id),
-			Message::PluginDiscovered(descriptor) => {
-				self.plugins.insert(
-					self.plugins.options().partition_point(|d| {
-						natural_cmp(d.name.as_bytes(), descriptor.name.as_bytes()).is_lt()
-					}),
-					descriptor,
-				);
+			Message::PluginDiscovered(scan, descriptor) => {
+				if self.scan == Some(scan) {
+					self.plugins.insert(
+						self.plugins.options().partition_point(|d| {
+							natural_cmp(d.name.as_bytes(), descriptor.name.as_bytes()).is_lt()
+						}),
+						descriptor,
+					);
+				}
 			}
+			Message::PluginFinishedScan => self.scan = None,
 			Message::PluginLoad(node, descriptor, show) => {
 				static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
 					HostInfo::new_from_cstring(
@@ -394,7 +403,7 @@ impl ArrangementView {
 					(std::mem::take(file), self.tab)
 				{
 					return if is_midi {
-						self.loading += 1;
+						self.clips_loading += 1;
 						let transport = *self.arrangement.transport();
 						Task::future(unblock(move || {
 							Message::MidiPatternLoaded(
@@ -414,7 +423,7 @@ impl ArrangementView {
 					{
 						self.update(Message::AddAudioClip(sample.id, track, pos), config)
 					} else {
-						self.loading += 1;
+						self.clips_loading += 1;
 						let sample_rate = self.arrangement.transport().sample_rate;
 						Task::future(unblock(move || {
 							Message::SampleLoaded(
@@ -428,7 +437,7 @@ impl ArrangementView {
 				}
 			}
 			Message::SampleLoaded(NoClone(sample), track, pos) => {
-				self.loading -= 1;
+				self.clips_loading -= 1;
 
 				if let Some(sample) = sample {
 					let id = sample.gui.id;
@@ -437,7 +446,7 @@ impl ArrangementView {
 				}
 			}
 			Message::MidiPatternLoaded(NoClone(pattern), track, pos) => {
-				self.loading -= 1;
+				self.clips_loading -= 1;
 
 				if let Some(pattern) = pattern {
 					let id = pattern.gui.id;
@@ -805,7 +814,7 @@ impl ArrangementView {
 
 		match action {
 			playlist::Action::Add(track, pos) => {
-				self.loading += 1;
+				self.clips_loading += 1;
 				return self.update(
 					Message::MidiPatternLoaded(
 						NoClone(Some(Box::new(MidiPatternPair::from_notes(
@@ -1612,7 +1621,10 @@ impl ArrangementView {
 	}
 
 	pub fn get_installed_plugins(&mut self, config: &Config) -> Task<Message> {
+		let scan = Scan::unique();
+
 		self.plugins = combo_box::State::default();
+		self.scan = Some(scan);
 
 		let (sender, receiver) = smol::channel::unbounded();
 		let clap_paths = config.clap_paths.clone();
@@ -1624,7 +1636,10 @@ impl ArrangementView {
 				});
 			}))
 			.discard(),
-			Task::run(receiver, Message::PluginDiscovered),
+			Task::run(receiver, move |descriptor| {
+				Message::PluginDiscovered(scan, descriptor)
+			})
+			.chain(Task::done(Message::PluginFinishedScan)),
 		])
 	}
 
@@ -1645,7 +1660,7 @@ impl ArrangementView {
 	}
 
 	pub fn loading(&self) -> bool {
-		self.loading > 0
+		self.clips_loading > 0 || self.scan.is_some()
 	}
 }
 

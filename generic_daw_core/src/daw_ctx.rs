@@ -171,9 +171,9 @@ impl DawCtx {
 			),
 			state: State {
 				transport,
-				samples: HashMap::default(),
-				midi_patterns: HashMap::default(),
-				automation_patterns: HashMap::default(),
+				samples: HashMap::new(),
+				midi_patterns: HashMap::new(),
+				automation_patterns: HashMap::new(),
 			},
 			producer,
 			consumer,
@@ -268,9 +268,9 @@ impl DawCtx {
 
 					let mut state = State {
 						transport: self.state.transport,
-						samples: HashMap::default(),
-						midi_patterns: HashMap::default(),
-						automation_patterns: HashMap::default(),
+						samples: HashMap::new(),
+						midi_patterns: HashMap::new(),
+						automation_patterns: HashMap::new(),
 					};
 					std::mem::swap(&mut self.state, &mut state);
 

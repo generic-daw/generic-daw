@@ -14,8 +14,8 @@ impl LowpassFeedbackComb {
 		Self {
 			delay_line: DelayLine::new(len),
 			filter_state: 0.0,
-			feedback: Default::default(),
-			dampening: Default::default(),
+			feedback: 0.0,
+			dampening: (0.0, 0.0),
 		}
 		.feedback(0.5)
 		.dampening(0.5)

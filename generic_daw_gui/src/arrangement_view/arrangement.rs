@@ -64,13 +64,10 @@ impl Arrangement {
 			config.output_device.buffer_size,
 		);
 
-		let mut nodes = BTreeMap::default();
+		let mut nodes = BTreeMap::new();
 		nodes.insert(
 			master_node_id,
-			(
-				Node::new(NodeType::Master, master_node_id),
-				BTreeSet::default(),
-			),
+			(Node::new(NodeType::Master, master_node_id), BTreeSet::new()),
 		);
 
 		let project = Project::unique();
@@ -81,8 +78,8 @@ impl Arrangement {
 				project,
 				load: None,
 
-				samples: BTreeMap::default(),
-				midi_patterns: BTreeMap::default(),
+				samples: BTreeMap::new(),
+				midi_patterns: BTreeMap::new(),
 
 				tracks: Vec::new(),
 				nodes,
@@ -345,8 +342,7 @@ impl Arrangement {
 
 	fn add(&mut self, node: impl Into<AudioGraphNode> + NodeImpl, ty: NodeType) -> NodeId {
 		let id = node.id();
-		self.nodes
-			.insert(id, (Node::new(ty, id), BTreeSet::default()));
+		self.nodes.insert(id, (Node::new(ty, id), BTreeSet::new()));
 		self.send(Message::NodeAdd(Box::new(node.into())));
 		id
 	}
