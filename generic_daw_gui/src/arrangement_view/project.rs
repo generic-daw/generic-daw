@@ -328,10 +328,7 @@ impl Arrangement {
 						samples.insert(idx, Feedback::Use(id));
 					}
 					Feedback::Ignore => _ = samples.insert(idx, Feedback::Ignore),
-					Feedback::Cancel => {
-						daw.try_send(daw::Message::OpenedFile(None)).unwrap();
-						return None;
-					}
+					Feedback::Cancel => return None,
 				}
 				current_progress += progress_per_audio;
 				daw.try_send(daw::Message::Progress(current_progress))

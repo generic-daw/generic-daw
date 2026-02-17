@@ -252,11 +252,7 @@ impl Daw {
 					.save(&path, &mut self.arrangement_view.clap_host)
 					.is_ok()
 				{
-					self.current_project = Some(path.clone());
-					if self.state.last_project.as_deref() != Some(&path) {
-						self.state.last_project = Some(path);
-						self.state.write();
-					}
+					return self.update(Message::OpenedFile(Some(path)));
 				}
 			}
 			Message::AutosaveFile => {
@@ -352,10 +348,8 @@ impl Daw {
 			Message::OpenedFile(path) => {
 				if let Some(path) = path {
 					self.current_project = Some(path.clone());
-					if self.state.last_project.as_deref() != Some(&path) {
-						self.state.last_project = Some(path);
-						self.state.write();
-					}
+					self.state.last_project = Some(path);
+					self.state.write();
 				}
 				self.missing_samples.clear();
 				self.progress = None;
@@ -399,9 +393,7 @@ impl Daw {
 			Message::FileHovered => self.files_hovered = true,
 			Message::FileDropped(path) => {
 				self.files_hovered = false;
-				if self.split_at != 0.0
-					&& std::fs::metadata(&path).is_ok_and(|metadata| metadata.is_dir())
-				{
+				if self.split_at != 0.0 && path.metadata().is_ok_and(|metadata| metadata.is_dir()) {
 					self.config.sample_paths.push(path);
 					self.file_tree.diff(&self.config.sample_paths);
 					self.config.write();
@@ -410,10 +402,8 @@ impl Daw {
 			Message::FileLeft => self.files_hovered = false,
 			Message::ToggleShowSeconds => {
 				self.show_seconds ^= true;
-				if self.state.show_seconds != self.show_seconds {
-					self.state.show_seconds = self.show_seconds;
-					self.state.write();
-				}
+				self.state.show_seconds = self.show_seconds;
+				self.state.write();
 			}
 			Message::ToggleMetronome => self.arrangement_view.arrangement.toggle_metronome(),
 			Message::ChangedBpm(bpm) => self
@@ -443,10 +433,8 @@ impl Daw {
 				};
 			}
 			Message::OnDragEnd => {
-				if self.state.file_tree_split_at != self.split_at {
-					self.state.file_tree_split_at = self.split_at;
-					self.state.write();
-				}
+				self.state.file_tree_split_at = self.split_at;
+				self.state.write();
 			}
 			Message::OnDoubleClick => {
 				return Task::batch([
