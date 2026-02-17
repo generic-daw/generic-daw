@@ -13,6 +13,9 @@ pub fn natural_cmp(mut a: &[u8], mut b: &[u8]) -> Ordering {
 			ord => return ord,
 		}
 
+		(_, a) = cut(a, |&c| c != b'0');
+		(_, b) = cut(b, |&c| c != b'0');
+
 		(a_cut, a) = cut(a, |c| !c.is_ascii_digit());
 		(b_cut, b) = cut(b, |c| !c.is_ascii_digit());
 
