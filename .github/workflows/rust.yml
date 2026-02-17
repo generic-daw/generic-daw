@@ -20,7 +20,7 @@ jobs:
         with:
           components: clippy
       - if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install libasound2-dev
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - run: curl https://unpkg.com/lucide-static@latest/font/Lucide.ttf -Lo Lucide.ttf
       - run: cargo clippy -- -D warnings
   build-release:
