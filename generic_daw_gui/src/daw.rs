@@ -483,10 +483,8 @@ impl Daw {
 
 		debug_assert_eq!(window, self.main_window_id);
 
-		let now = MusicalTime::from_samples(
-			self.arrangement_view.arrangement.transport().sample,
-			self.arrangement_view.arrangement.transport(),
-		);
+		let transport = self.arrangement_view.arrangement.transport();
+		let now = MusicalTime::from_samples(transport.sample, transport);
 
 		stack![
 			column![
@@ -498,40 +496,26 @@ impl Daw {
 						.style(pick_list_with_radius(5))
 						.menu_style(menu_style),
 					row![
-						button(if self.arrangement_view.arrangement.transport().playing {
-							pause()
-						} else {
-							play()
-						})
-						.style(button_with_radius(button::primary, border::left(5)))
-						.padding(padding::horizontal(7).vertical(5))
-						.on_press(Message::Arrangement(
-							arrangement_view::Message::TogglePlayback
-						)),
+						button(if transport.playing { pause() } else { play() })
+							.style(button_with_radius(button::primary, border::left(5)))
+							.padding(padding::horizontal(7).vertical(5))
+							.on_press(Message::Arrangement(
+								arrangement_view::Message::TogglePlayback
+							)),
 						button(square())
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding(padding::horizontal(7).vertical(5))
 							.on_press(Message::Arrangement(arrangement_view::Message::Stop)),
 					],
 					number_input(
-						self.arrangement_view
-							.arrangement
-							.transport()
-							.numerator
-							.get()
-							.into(),
+						transport.numerator.get().into(),
 						4,
 						2,
 						|numerator| Message::ChangedNumerator(numerator as u8),
 						Message::ChangedNumeratorText
 					),
 					number_input(
-						self.arrangement_view
-							.arrangement
-							.transport()
-							.bpm
-							.get()
-							.into(),
+						transport.bpm.get().into(),
 						140,
 						3,
 						|bpm| Message::ChangedBpm(bpm as u16),
@@ -541,8 +525,7 @@ impl Daw {
 						mouse_area(
 							container(
 								if self.show_seconds {
-									let duration = now
-										.to_duration(self.arrangement_view.arrangement.transport());
+									let duration = now.to_duration(transport);
 									text!(
 										"{:02}:{:02}:{:02}",
 										duration.as_secs() / 60,
@@ -552,16 +535,9 @@ impl Daw {
 								} else {
 									text!(
 										"{:03}:{:digits$}",
-										now.bar(self.arrangement_view.arrangement.transport()) + 1,
-										now.beat_in_bar(
-											self.arrangement_view.arrangement.transport()
-										) + 1,
-										digits = self
-											.arrangement_view
-											.arrangement
-											.transport()
-											.numerator
-											.ilog10() as usize + 1,
+										now.bar(transport) + 1,
+										now.beat_in_bar(transport) + 1,
+										digits = transport.numerator.ilog10() as usize + 1,
 									)
 								}
 								.font(Font::MONOSPACE)
@@ -580,7 +556,7 @@ impl Daw {
 							.spacing(5)
 						)
 						.style(button_with_radius(
-							if self.arrangement_view.arrangement.transport().metronome {
+							if transport.metronome {
 								button::primary
 							} else {
 								button::secondary

@@ -4,7 +4,10 @@ use crate::{
 	components::{icon_button, text_icon_button},
 	config::Config,
 	file_tree::FileKind,
-	icons::{arrow_up_down, chevron_up, grip_vertical, mic, plus, power, power_off, x},
+	icons::{
+		arrow_left_right, arrow_up_down, chevron_up, grip_vertical, mic, plus, power, power_off,
+		radius, x,
+	},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, scrollable_style,
@@ -27,7 +30,7 @@ use generic_daw_core::{
 };
 use generic_daw_widget::{
 	knob::Knob,
-	peak_meter::{MAX_VAL, PeakMeter},
+	peak_meter::{MAX_VOL, PeakMeter},
 };
 use iced::{
 	Center, Element, Fill, Point, Shrink, Subscription, Task, Vector, border,
@@ -1162,7 +1165,7 @@ impl ArrangementView {
 								]
 								.spacing(2),
 								column![
-									Knob::new(0.0..=MAX_VAL, node.volume.abs().cbrt(), move |v| {
+									Knob::new(0.0..=MAX_VOL, node.volume.abs().cbrt(), move |v| {
 										Message::ChannelVolumeChanged(
 											id,
 											v.powi(3).copysign(node.volume),
@@ -1503,7 +1506,22 @@ impl ArrangementView {
 							button_style(node.volume.is_sign_negative())
 						)
 						.on_press(Message::ChannelVolumeChanged(node.id, -node.volume)),
-						node.pan_switcher()
+						icon_button(
+							if node.pan.is_balance() {
+								arrow_left_right()
+							} else {
+								radius()
+							},
+							button_style(false),
+						)
+						.on_press(Message::ChannelPanChanged(
+							node.id,
+							if node.pan.is_balance() {
+								PanMode::Stereo(-1.0, 1.0)
+							} else {
+								PanMode::Balance(0.0)
+							},
+						))
 					]
 					.spacing(5),
 					container(text(format_decibels(node.volume.abs())).line_height(1.0))
@@ -1513,7 +1531,7 @@ impl ArrangementView {
 					row![
 						container(PeakMeter::new(&node.peaks[0]).width(16.0))
 							.padding(padding::vertical(10)),
-						vertical_slider(0.0..=MAX_VAL, node.volume.abs().cbrt(), |v| {
+						vertical_slider(0.0..=MAX_VOL, node.volume.abs().cbrt(), |v| {
 							Message::ChannelVolumeChanged(node.id, v.powi(3).copysign(node.volume))
 						})
 						.default(1.0)

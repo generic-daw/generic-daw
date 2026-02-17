@@ -44,6 +44,11 @@ impl PanMode {
 			}
 		}
 	}
+
+	#[must_use]
+	pub fn is_balance(self) -> bool {
+		matches!(self, Self::Balance(..))
+	}
 }
 
 #[derive(Debug)]

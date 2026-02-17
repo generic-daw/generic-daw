@@ -15,9 +15,9 @@ use iced_widget::{
 };
 use std::{cell::Cell, convert::identity};
 
-pub const MAX_VAL: f32 = 1.206_299_5; // 1.0 + (1.0 - cbrt(0.5))
-const DANGER: f32 = 1.0 / MAX_VAL;
-const WARNING: f32 = 0.793_700_5 / MAX_VAL;
+pub const MAX_VOL: f32 = 1.206_299_5; // 1.0 + (1.0 - cbrt(0.5))
+const DANGER: f32 = 1.0 / MAX_VOL;
+const WARNING: f32 = 0.793_700_5 / MAX_VOL;
 
 #[derive(Debug)]
 pub struct State {
@@ -43,7 +43,7 @@ impl Default for State {
 
 impl State {
 	pub fn update(&mut self, peak: f32, now: Instant) {
-		let peak = peak.cbrt() / MAX_VAL;
+		let peak = peak.cbrt() / MAX_VOL;
 
 		let min_duration = now - self.last_update;
 		self.last_update = now;

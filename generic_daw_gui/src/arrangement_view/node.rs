@@ -1,13 +1,9 @@
-use crate::{
-	arrangement_view::{Message, plugin::Plugin},
-	components::icon_button,
-	icons::{arrow_left_right, radius},
-};
+use crate::arrangement_view::{Message, plugin::Plugin};
 use generic_daw_core::{NodeId, PanMode};
 use generic_daw_widget::{knob::Knob, peak_meter};
 use iced::{
 	Element, Fill,
-	widget::{button, container, row},
+	widget::{container, row},
 };
 use std::{cmp::Ordering, time::Instant};
 use utils::NoDebug;
@@ -91,34 +87,6 @@ impl Node {
 			.spacing(radius * SPACING)
 			.width(2.0 * radius)
 			.height(1.8 * radius)
-			.into(),
-		}
-	}
-
-	pub fn pan_switcher(&self) -> Element<'_, Message> {
-		match self.pan {
-			PanMode::Balance(..) => icon_button(
-				arrow_left_right(),
-				if self.enabled {
-					button::primary
-				} else {
-					button::secondary
-				},
-			)
-			.on_press(Message::ChannelPanChanged(
-				self.id,
-				PanMode::Stereo(-1.0, 1.0),
-			))
-			.into(),
-			PanMode::Stereo(..) => icon_button(
-				radius(),
-				if self.enabled {
-					button::primary
-				} else {
-					button::secondary
-				},
-			)
-			.on_press(Message::ChannelPanChanged(self.id, PanMode::Balance(0.0)))
 			.into(),
 		}
 	}
