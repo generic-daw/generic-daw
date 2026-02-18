@@ -221,15 +221,12 @@ impl Daw {
 			Message::ConfigView(message) => {
 				if let Some(config_view) = self.config_view.as_mut() {
 					let Action { instruction, task } = config_view.update(message);
-					let mut futs = vec![task.map(Message::ConfigView)];
-
-					if let Some(config) = instruction {
-						config.write();
-						futs.push(self.update(Message::MergeConfig(config.into(), true)));
-						futs.push(self.update(Message::OpenConfigView));
-					}
-
-					return Task::batch(futs);
+					return Task::batch([
+						task.map(Message::ConfigView),
+						instruction.map_or_else(Task::none, |config| {
+							self.update(Message::MergeConfig(config.into(), true))
+						}),
+					]);
 				}
 			}
 			Message::NewFile => return Arrangement::empty(),

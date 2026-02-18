@@ -195,7 +195,11 @@ impl ConfigView {
 			Message::ChangedPluginScaleFactor(plugin_scale_factor) => {
 				self.config.plugin_scale_factor = plugin_scale_factor;
 			}
-			Message::WriteConfig => return Action::instruction(self.config.clone()),
+			Message::WriteConfig => {
+				self.config.write();
+				self.prev_config = self.config.clone();
+				return Action::instruction(self.config.clone());
+			}
 			Message::ResetConfigToPrev => self.config = self.prev_config.clone(),
 		}
 
