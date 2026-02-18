@@ -22,9 +22,7 @@ mod widget;
 
 fn main() -> Result {
 	env_logger::builder()
-		.filter_module("clap_host", LevelFilter::Warn)
-		.filter_module("generic_daw_core", LevelFilter::Warn)
-		.filter_module("generic_daw", LevelFilter::Warn)
+		.filter_level(LevelFilter::Warn)
 		.parse_default_env()
 		.init();
 
