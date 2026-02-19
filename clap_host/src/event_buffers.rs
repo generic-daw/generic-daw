@@ -1,5 +1,5 @@
 use crate::{EventImpl, host::Host};
-use clack_extensions::note_ports::{NoteDialect, NotePortInfoBuffer};
+use clack_extensions::note_ports::{HostNotePortsImpl as _, NoteDialect, NotePortInfoBuffer};
 use clack_host::prelude::*;
 
 #[derive(Debug, Default)]
@@ -36,9 +36,14 @@ impl EventBuffers {
 			.find_map(|i| {
 				let port = ports.get(&mut plugin.plugin_handle(), i, is_input, &mut buffer)?;
 
-				(port.supported_dialects.supports(NoteDialect::Midi)
-					|| port.supported_dialects.supports(NoteDialect::Clap))
-				.then_some((i as u16, port.preferred_dialect == Some(NoteDialect::Midi)))
+				(port
+					.supported_dialects
+					.intersects(plugin.access_handler_mut(|mt| mt.supported_dialects())))
+				.then_some((
+					i as u16,
+					port.preferred_dialect == Some(NoteDialect::Midi)
+						|| !port.supported_dialects.supports(NoteDialect::Clap),
+				))
 			})
 	}
 

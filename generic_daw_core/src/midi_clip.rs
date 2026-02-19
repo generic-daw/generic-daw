@@ -62,9 +62,10 @@ impl MidiClip {
 				if let Some(time) = end.checked_sub(state.transport.sample)
 					&& time < audio.len()
 				{
-					events.push(Event::End {
+					events.push(Event::Off {
 						time: time as u32 / 2,
 						key: note.key.0,
+						velocity: note.velocity,
 					});
 					notes[usize::from(note.key.0)] -= 1;
 				}

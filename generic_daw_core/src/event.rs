@@ -69,7 +69,7 @@ impl clap_host::EventImpl for Event {
 				velocity,
 			} => ClapEvent::NoteOn(NoteOnEvent::new(
 				time,
-				Pckn::new(port_index, Match::All, key, Match::All),
+				Pckn::new(port_index, 0u16, key, Match::All),
 				velocity.into(),
 			)),
 			Self::Off {
@@ -78,16 +78,16 @@ impl clap_host::EventImpl for Event {
 				velocity,
 			} => ClapEvent::NoteOff(NoteOffEvent::new(
 				time,
-				Pckn::new(port_index, Match::All, key, Match::All),
+				Pckn::new(port_index, 0u16, key, Match::All),
 				velocity.into(),
 			)),
 			Self::Choke { time, key } => ClapEvent::NoteChoke(NoteChokeEvent::new(
 				time,
-				Pckn::new(port_index, Match::All, key, Match::All),
+				Pckn::new(port_index, 0u16, key, Match::All),
 			)),
 			Self::End { time, key } => ClapEvent::NoteEnd(NoteEndEvent::new(
 				time,
-				Pckn::new(port_index, Match::All, key, Match::All),
+				Pckn::new(port_index, 0u16, key, Match::All),
 			)),
 			Self::ParamValue {
 				time,
@@ -97,7 +97,7 @@ impl clap_host::EventImpl for Event {
 			} => ClapEvent::ParamValue(ParamValueEvent::new(
 				time,
 				param_id,
-				Pckn::new(port_index, Match::All, Match::All, Match::All),
+				Pckn::new(port_index, 0u16, Match::All, Match::All),
 				value.into(),
 				cookie,
 			)),
