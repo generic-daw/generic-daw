@@ -178,15 +178,10 @@ impl ClapHost {
 				}
 			}
 			Message::WindowCloseRequested(window) => {
-				return if let Some(plugin) = self.plugin_of_window.get(&window) {
+				if let Some(plugin) = self.plugin_of_window.get(&window) {
 					self.plugins.get_mut(plugin).unwrap().destroy();
-					window::close(window)
-				} else {
-					for plugin in self.plugins.values_mut() {
-						plugin.destroy();
-					}
-					iced::exit()
-				};
+					return window::close(window);
+				}
 			}
 			Message::WindowClosed(window) => {
 				let id = self.plugin_of_window.remove(&window).unwrap();

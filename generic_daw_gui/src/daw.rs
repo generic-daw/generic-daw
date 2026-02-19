@@ -112,9 +112,10 @@ pub enum Message {
 	CloseConfigView,
 	MergeConfig(Box<Config>, bool),
 
+	CloseRequested(window::Id),
 	FileHovered,
 	FileDropped(Arc<Path>),
-	FileLeft,
+	FileHoveredLeft,
 
 	ToggleShowSeconds,
 	ToggleMetronome,
@@ -386,6 +387,11 @@ impl Daw {
 					return fut.map(Message::Arrangement);
 				}
 			}
+			Message::CloseRequested(window) => {
+				if window == self.main_window_id {
+					return iced::exit();
+				}
+			}
 			Message::FileHovered => self.files_hovered = true,
 			Message::FileDropped(path) => {
 				self.files_hovered = false;
@@ -395,7 +401,7 @@ impl Daw {
 					self.config.write();
 				}
 			}
-			Message::FileLeft => self.files_hovered = false,
+			Message::FileHoveredLeft => self.files_hovered = false,
 			Message::ToggleShowSeconds => {
 				self.show_seconds ^= true;
 				self.state.show_seconds = self.show_seconds;
@@ -721,10 +727,6 @@ impl Daw {
 	}
 
 	pub fn subscription(&self) -> Subscription<Message> {
-		if self.progress.is_some() {
-			return Subscription::none();
-		}
-
 		let autosave = if self.config.autosave.enabled {
 			every(Duration::from_secs(self.config.autosave.interval.get()))
 				.map(|_| Message::AutosaveFile)
@@ -732,7 +734,9 @@ impl Daw {
 			Subscription::none()
 		};
 
-		let keybinds = if self.config_view.is_some() {
+		let keybinds = if self.progress.is_some() {
+			Subscription::none()
+		} else if self.config_view.is_some() {
 			keyboard::listen().filter_map(|e| match e {
 				keyboard::Event::KeyPressed {
 					key,
@@ -765,10 +769,11 @@ impl Daw {
 				.map(Message::Arrangement),
 			autosave,
 			keybinds,
-			window::events().filter_map(|(_, event)| match event {
+			window::events().filter_map(|(window, event)| match event {
+				window::Event::CloseRequested => Some(Message::CloseRequested(window)),
 				window::Event::FileHovered(..) => Some(Message::FileHovered),
 				window::Event::FileDropped(file) => Some(Message::FileDropped(file.into())),
-				window::Event::FilesHoveredLeft => Some(Message::FileLeft),
+				window::Event::FilesHoveredLeft => Some(Message::FileHoveredLeft),
 				_ => None,
 			}),
 		])
