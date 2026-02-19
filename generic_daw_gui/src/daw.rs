@@ -7,7 +7,7 @@ use crate::{
 	config::Config,
 	config_view::{self, ConfigView},
 	file_tree::{self, FileTree},
-	icons::{chart_no_axes_gantt, cpu, pause, play, plus, sliders_vertical, square},
+	icons::{chart_no_axes_gantt, cpu, metronome, pause, play, plus, sliders_vertical, square},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
@@ -16,7 +16,6 @@ use crate::{
 	widget::OPACITY_67,
 };
 use generic_daw_core::{Export, MusicalTime};
-use generic_daw_widget::dot::Dot;
 use iced::{
 	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
 	mouse::Interaction,
@@ -527,29 +526,23 @@ impl Daw {
 								}
 								.font(Font::MONOSPACE)
 							)
-							.padding(padding::horizontal(7).vertical(5.6))
+							.padding(padding::horizontal(7).vertical(5))
 							.style(|t| bordered_box_with_radius(border::left(5))(t)
 								.background(t.extended_palette().background.weakest.color))
 						)
 						.on_press(Message::ToggleShowSeconds)
 						.interaction(Interaction::Pointer),
-						button(
-							row![
-								Dot::new(now.beat().is_multiple_of(2)),
-								Dot::new(!now.beat().is_multiple_of(2))
-							]
-							.spacing(5)
-						)
-						.style(button_with_radius(
-							if transport.metronome {
-								button::primary
-							} else {
-								button::secondary
-							},
-							border::right(5)
-						))
-						.padding(8)
-						.on_press(Message::ToggleMetronome),
+						button(metronome())
+							.style(button_with_radius(
+								if transport.metronome {
+									button::primary
+								} else {
+									button::secondary
+								},
+								border::right(5)
+							))
+							.padding(padding::all(5).left(4))
+							.on_press(Message::ToggleMetronome),
 					],
 					space::horizontal(),
 					row![
