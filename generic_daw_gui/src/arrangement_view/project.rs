@@ -109,7 +109,7 @@ impl Arrangement {
 						.iter()
 						.map(|plugin| proto::Plugin {
 							id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
-							state: clap_host.get_state(plugin.id),
+							state: clap_host.get_state(plugin.id).map(Vec::from),
 							mix: plugin.mix,
 							enabled: plugin.enabled,
 						}),
@@ -134,7 +134,7 @@ impl Arrangement {
 						.iter()
 						.map(|plugin| proto::Plugin {
 							id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
-							state: clap_host.get_state(plugin.id),
+							state: clap_host.get_state(plugin.id).map(Vec::from),
 							mix: plugin.mix,
 							enabled: plugin.enabled,
 						}),

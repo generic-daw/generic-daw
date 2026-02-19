@@ -29,11 +29,11 @@ pub struct Plugin<Event: EventImpl> {
 	gui: Gui,
 	params: Box<[Param]>,
 	presets: Box<[Preset]>,
-	current_preset: Option<usize>,
 	instance: NoDebug<PluginInstance<Host>>,
 	descriptor: PluginDescriptor,
 	producer: Producer<AudioThreadMessage<Event>>,
 	config: PluginAudioConfiguration,
+	last_state: Option<Box<[u8]>>,
 	is_created: bool,
 	is_shown: bool,
 }
@@ -79,11 +79,11 @@ impl<Event: EventImpl> Plugin<Event> {
 				gui: Gui::new(&mut instance),
 				params: Param::all(&mut instance).unwrap_or_default(),
 				presets: Preset::all(&instance, &bundle, &descriptor, host).unwrap_or_default(),
-				current_preset: None,
 				instance: instance.into(),
 				descriptor,
 				producer,
 				config,
+				last_state: None,
 				is_created: false,
 				is_shown: false,
 			},
@@ -237,17 +237,15 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn load_preset(&mut self, preset: usize) {
-		if self
+		if let Err(err) = self
 			.instance
 			.access_shared_handler(|s| *s.ext.preset_load.get().unwrap())
 			.load_from_location(
 				&mut self.instance.plugin_handle(),
 				(&self.presets[preset].location).into(),
 				self.presets[preset].load_key.as_deref(),
-			)
-			.is_ok()
-		{
-			self.current_preset = Some(preset);
+			) {
+			warn!("{}: {err}", self.descriptor);
 		}
 	}
 
@@ -429,24 +427,30 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	#[must_use]
-	pub fn get_state(&mut self, context_type: StateContextType) -> Option<Vec<u8>> {
-		let mut buf = Vec::new();
+	pub fn get_state(&mut self, context_type: StateContextType) -> Option<&[u8]> {
+		if self.last_state.is_none() || self.instance.access_handler(|mt| mt.state_mark_dirty) {
+			let mut buf = Vec::new();
 
-		if let Err(err) = if let Some(&ext) = self
-			.instance
-			.access_shared_handler(|s| s.ext.state_context.get())
-		{
-			ext.save(&mut self.instance.plugin_handle(), &mut buf, context_type)
-		} else {
+			if let Err(err) = if let Some(&ext) = self
+				.instance
+				.access_shared_handler(|s| s.ext.state_context.get())
+			{
+				ext.save(&mut self.instance.plugin_handle(), &mut buf, context_type)
+			} else {
+				self.instance
+					.access_shared_handler(|s| s.ext.state.get().copied())?
+					.save(&mut self.instance.plugin_handle(), &mut buf)
+			} {
+				warn!("{}: {err}", self.descriptor);
+				return None;
+			}
+
 			self.instance
-				.access_shared_handler(|s| s.ext.state.get().copied())?
-				.save(&mut self.instance.plugin_handle(), &mut buf)
-		} {
-			warn!("{}: {err}", self.descriptor);
-			return None;
+				.access_handler_mut(|mt| mt.state_mark_dirty = false);
+			self.last_state = Some(buf.into_boxed_slice());
 		}
 
-		Some(buf)
+		self.last_state.as_deref()
 	}
 
 	pub fn set_state(&mut self, buf: &[u8], context_type: StateContextType) {
@@ -465,7 +469,10 @@ impl<Event: EventImpl> Plugin<Event> {
 				.load(&mut self.instance.plugin_handle(), &mut Cursor::new(buf))
 		} {
 			warn!("{}: {err}", self.descriptor);
+			return;
 		}
+
+		self.last_state = Some(buf.into());
 	}
 }
 

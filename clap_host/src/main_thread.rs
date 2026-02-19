@@ -40,6 +40,7 @@ pub struct MainThread<'a> {
 	pub shared: &'a Shared<'a>,
 	pub latency_changed: bool,
 	pub params_rescan: bool,
+	pub state_mark_dirty: bool,
 	pub next_timer_id: u32,
 }
 
@@ -49,6 +50,7 @@ impl<'a> MainThread<'a> {
 			shared,
 			latency_changed: false,
 			params_rescan: false,
+			state_mark_dirty: false,
 			next_timer_id: 0,
 		}
 	}
@@ -144,7 +146,9 @@ impl HostPresetLoadImpl for MainThread<'_> {
 }
 
 impl HostStateImpl for MainThread<'_> {
-	fn mark_dirty(&mut self) {}
+	fn mark_dirty(&mut self) {
+		self.state_mark_dirty = true;
+	}
 }
 
 impl HostTimerImpl for MainThread<'_> {

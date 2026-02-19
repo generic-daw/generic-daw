@@ -443,7 +443,7 @@ impl ClapHost {
 		}
 	}
 
-	pub fn get_state(&mut self, id: PluginId) -> Option<Vec<u8>> {
+	pub fn get_state(&mut self, id: PluginId) -> Option<&[u8]> {
 		self.plugins
 			.get_mut(&id)
 			.unwrap()
