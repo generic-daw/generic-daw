@@ -24,4 +24,10 @@ impl SmoothedF32 {
 		self.mem = self.mem.mul_add(1.0 - self.fac, self.goal * self.fac);
 		self.mem
 	}
+
+	pub fn settle(&mut self) {
+		if (self.mem - self.goal).abs() < self.goal.abs().mul_add(f32::EPSILON, f32::EPSILON) {
+			self.mem = self.goal;
+		}
+	}
 }

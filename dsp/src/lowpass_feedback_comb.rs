@@ -35,10 +35,9 @@ impl LowpassFeedbackComb {
 
 	#[must_use]
 	pub fn tick(&mut self, input: f32) -> f32 {
-		let delayed = self.delay_line.read();
 		self.filter_state = self
 			.filter_state
-			.mul_add(self.dampening.0, delayed * self.dampening.1);
+			.mul_add(self.dampening.0, self.delay_line.read() * self.dampening.1);
 		self.delay_line
 			.write(self.filter_state.mul_add(self.feedback, input))
 	}

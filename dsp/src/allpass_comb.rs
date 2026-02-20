@@ -11,9 +11,8 @@ impl AllpassComb {
 	pub fn new(len: usize) -> Self {
 		Self {
 			delay_line: DelayLine::new(len),
-			feedback: Default::default(),
+			feedback: 0.5,
 		}
-		.feedback(0.5)
 	}
 
 	#[must_use]
