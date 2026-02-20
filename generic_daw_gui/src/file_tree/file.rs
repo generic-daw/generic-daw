@@ -52,7 +52,9 @@ impl File {
 							FileKind::Project => file_play(),
 							FileKind::Unknown => file(),
 						},
-						text(&*self.name).wrapping(text::Wrapping::None)
+						text(&*self.name)
+							.wrapping(text::Wrapping::None)
+							.ellipsis(text::Ellipsis::End)
 					]
 					.padding(1)
 					.spacing(2)

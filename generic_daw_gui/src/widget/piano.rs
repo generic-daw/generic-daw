@@ -11,7 +11,7 @@ use iced::{
 	},
 	alignment::Vertical,
 	mouse::Cursor,
-	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
+	widget::text::{Alignment, Ellipsis, LineHeight, Shaping, Wrapping},
 };
 
 const PIANO_WIDTH: f32 = 2.5 * LINE_HEIGHT;
@@ -87,6 +87,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 					align_y: Vertical::Center,
 					shaping: Shaping::Basic,
 					wrapping: Wrapping::None,
+					ellipsis: Ellipsis::None,
 					hint_factor: renderer.scale_factor(),
 				};
 

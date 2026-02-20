@@ -1377,14 +1377,11 @@ impl ArrangementView {
 									.enabled(plugin.enabled && node.enabled)
 									.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
 									button(
-										container(
-											text(&*plugin.descriptor.name)
-												.wrapping(text::Wrapping::None)
-										)
-										.padding(7)
-										.clip(true)
+										text(&*plugin.descriptor.name)
+											.wrapping(text::Wrapping::None)
+											.ellipsis(text::Ellipsis::End)
 									)
-									.padding(0)
+									.padding(7)
 									.style(button_with_radius(button_style(false), border::left(5)))
 									.width(Fill)
 									.on_press(Message::ClapHost(

@@ -38,7 +38,7 @@ impl FileTree {
 
 	pub fn view(&self) -> Element<'_, Message> {
 		container(
-			scrollable(container(column(self.dirs.iter().map(|dir| dir.view().0))).clip(true))
+			scrollable(column(self.dirs.iter().map(|dir| dir.view().0)))
 				.spacing(5)
 				.style(scrollable_style),
 		)

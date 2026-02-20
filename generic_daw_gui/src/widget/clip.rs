@@ -19,7 +19,7 @@ use iced::{
 	},
 	alignment::Vertical,
 	border, debug, padding,
-	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
+	widget::text::{Alignment, Ellipsis, LineHeight, Shaping, Wrapping},
 	window,
 };
 use std::{borrow::Borrow, cell::RefCell, sync::Arc};
@@ -326,20 +326,21 @@ where
 
 			let clip_name = Text {
 				content: clip_name.into(),
-				bounds: Size::new(f32::INFINITY, 0.0),
+				bounds: upper_bounds.shrink(padding::horizontal(3)).size(),
 				size: renderer.default_size(),
 				line_height: LineHeight::default(),
 				font: renderer.default_font(),
 				align_x: Alignment::Left,
-				align_y: Vertical::Top,
+				align_y: Vertical::Center,
 				shaping: Shaping::Auto,
 				wrapping: Wrapping::None,
+				ellipsis: Ellipsis::Middle,
 				hint_factor: renderer.scale_factor(),
 			};
 
 			renderer.fill_text(
 				clip_name,
-				upper_bounds.position() + Vector::new(3.0, 0.0),
+				upper_bounds.position() + Vector::new(3.0, LINE_HEIGHT / 2.0),
 				theme.extended_palette().background.strong.text,
 				upper_bounds,
 			);

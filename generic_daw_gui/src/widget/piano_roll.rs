@@ -12,7 +12,7 @@ use iced::{
 	},
 	alignment::Vertical,
 	border, keyboard,
-	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
+	widget::text::{Alignment, Ellipsis, LineHeight, Shaping, Wrapping},
 };
 use std::{cell::RefCell, collections::HashSet};
 
@@ -597,6 +597,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 				align_y: Vertical::Center,
 				shaping: Shaping::Basic,
 				wrapping: Wrapping::None,
+				ellipsis: Ellipsis::None,
 				hint_factor: renderer.scale_factor(),
 			};
 

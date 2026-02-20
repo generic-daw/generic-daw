@@ -13,7 +13,7 @@ use iced::{
 	},
 	alignment::Vertical,
 	border, keyboard, padding,
-	widget::text::{Alignment, LineHeight, Shaping, Wrapping},
+	widget::text::{Alignment, Ellipsis, LineHeight, Shaping, Wrapping},
 	window,
 };
 use utils::NoDebug;
@@ -610,6 +610,7 @@ impl<'a, Message> Seeker<'a, Message> {
 				align_y: Vertical::Top,
 				shaping: Shaping::Basic,
 				wrapping: Wrapping::None,
+				ellipsis: Ellipsis::None,
 				hint_factor: renderer.scale_factor(),
 			};
 

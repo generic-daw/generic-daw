@@ -96,7 +96,9 @@ impl Dir {
 						} else {
 							chevron_right()
 						},
-						text(&*self.name).wrapping(text::Wrapping::None)
+						text(&*self.name)
+							.wrapping(text::Wrapping::None)
+							.ellipsis(text::Ellipsis::End)
 					]
 					.spacing(2),
 				)

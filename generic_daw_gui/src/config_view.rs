@@ -238,7 +238,10 @@ impl ConfigView {
 								.enumerate()
 								.map(|(idx, path)| {
 									row![
-										value(path.display()).font(Font::MONOSPACE),
+										value(path.display())
+											.font(Font::MONOSPACE)
+											.wrapping(text::Wrapping::None)
+											.ellipsis(text::Ellipsis::End),
 										space::horizontal(),
 										button(x())
 											.style(button_with_radius(button::danger, 5))
@@ -275,7 +278,10 @@ impl ConfigView {
 							column(DEFAULT_CLAP_PATHS.iter().map(|path| {
 								row![
 									mouse_area(grip_vertical()).interaction(Interaction::NoDrop),
-									value(path.display()).font(Font::MONOSPACE),
+									value(path.display())
+										.font(Font::MONOSPACE)
+										.wrapping(text::Wrapping::None)
+										.ellipsis(text::Ellipsis::End),
 									space::horizontal(),
 									button(x())
 										.style(button_with_radius(button::danger, 5))
@@ -292,7 +298,10 @@ impl ConfigView {
 									.enumerate()
 									.map(|(idx, path)| {
 										row![
-											value(path.display()).font(Font::MONOSPACE),
+											value(path.display())
+												.font(Font::MONOSPACE)
+												.wrapping(text::Wrapping::None)
+												.ellipsis(text::Ellipsis::End),
 											space::horizontal(),
 											button(x())
 												.style(button_with_radius(button::danger, 5))

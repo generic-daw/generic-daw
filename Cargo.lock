@@ -610,9 +610,9 @@ dependencies = [
 
 [[package]]
 name = "cosmic-text"
-version = "0.16.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4cadaea21e24c49c0c82116f2b465ae6a49d63c90e428b0f8d9ae1f638ac91f"
+checksum = "f8c19bd4aff026c1481de842c66e974d4d9a222d36faf62666d15b66f24b8e71"
 dependencies = [
  "bitflags 2.11.0",
  "fontdb",
@@ -620,10 +620,10 @@ dependencies = [
  "linebender_resource_handle",
  "log",
  "rangemap",
- "rustc-hash 1.1.0",
+ "rustc-hash 2.1.1",
  "self_cell",
- "skrifa 0.39.0",
- "smol_str",
+ "skrifa 0.40.0",
+ "smol_str 0.3.5",
  "swash",
  "sys-locale",
  "unicode-bidi",
@@ -705,7 +705,7 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 [[package]]
 name = "cryoglyph"
 version = "0.1.0"
-source = "git+https://github.com/iced-rs/cryoglyph.git?rev=3836ca7a17f410d30871c2254dcc0f2400876636#3836ca7a17f410d30871c2254dcc0f2400876636"
+source = "git+https://github.com/iced-rs/cryoglyph.git?rev=1d68895e9c4c9b73739f826e81c2e3012c155cce#1d68895e9c4c9b73739f826e81c2e3012c155cce"
 dependencies = [
  "cosmic-text",
  "etagere",
@@ -939,6 +939,15 @@ name = "font-types"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39a654f404bbcbd48ea58c617c2993ee91d1cb63727a37bf2323a4edeed1b8c5"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
+name = "font-types"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1e4d2d0cf79d38430cc9dc9aadec84774bff2e1ba30ae2bf6c16cfce9385a23"
 dependencies = [
  "bytemuck",
 ]
@@ -1291,14 +1300,14 @@ dependencies = [
 
 [[package]]
 name = "harfrust"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0caaee032384c10dd597af4579c67dee16650d862a9ccbe1233ff1a379abc07"
+checksum = "4f9f40651a03bc0f7316bd75267ff5767e93017ef3cfffe76c6aa7252cc5a31c"
 dependencies = [
  "bitflags 2.11.0",
  "bytemuck",
  "core_maths",
- "read-fonts 0.36.0",
+ "read-fonts 0.37.0",
  "smallvec",
 ]
 
@@ -1343,7 +1352,7 @@ checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
 [[package]]
 name = "iced"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#952da884c23d865e2e88a13a02ca05201d2859ad"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#fe7cd8acc9fcd66a54d7a44d160fa209605799ac"
 dependencies = [
  "iced_core",
  "iced_debug",
@@ -1358,7 +1367,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#952da884c23d865e2e88a13a02ca05201d2859ad"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#fe7cd8acc9fcd66a54d7a44d160fa209605799ac"
 dependencies = [
  "bitflags 2.11.0",
  "bytes",
@@ -1367,7 +1376,7 @@ dependencies = [
  "log",
  "num-traits",
  "rustc-hash 2.1.1",
- "smol_str",
+ "smol_str 0.2.2",
  "thiserror 2.0.18",
  "web-time",
 ]
@@ -1375,7 +1384,7 @@ dependencies = [
 [[package]]
 name = "iced_debug"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#952da884c23d865e2e88a13a02ca05201d2859ad"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#fe7cd8acc9fcd66a54d7a44d160fa209605799ac"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1385,7 +1394,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#952da884c23d865e2e88a13a02ca05201d2859ad"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#fe7cd8acc9fcd66a54d7a44d160fa209605799ac"
 dependencies = [
  "futures",
  "iced_core",
@@ -1399,7 +1408,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#952da884c23d865e2e88a13a02ca05201d2859ad"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#fe7cd8acc9fcd66a54d7a44d160fa209605799ac"
 dependencies = [
  "bitflags 2.11.0",
  "bytemuck",
@@ -1418,7 +1427,7 @@ dependencies = [
 [[package]]
 name = "iced_program"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#952da884c23d865e2e88a13a02ca05201d2859ad"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#fe7cd8acc9fcd66a54d7a44d160fa209605799ac"
 dependencies = [
  "iced_graphics",
  "iced_runtime",
@@ -1427,7 +1436,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#952da884c23d865e2e88a13a02ca05201d2859ad"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#fe7cd8acc9fcd66a54d7a44d160fa209605799ac"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -1439,7 +1448,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#952da884c23d865e2e88a13a02ca05201d2859ad"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#fe7cd8acc9fcd66a54d7a44d160fa209605799ac"
 dependencies = [
  "bytes",
  "iced_core",
@@ -1459,7 +1468,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#952da884c23d865e2e88a13a02ca05201d2859ad"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#fe7cd8acc9fcd66a54d7a44d160fa209605799ac"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -1475,7 +1484,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#952da884c23d865e2e88a13a02ca05201d2859ad"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#fe7cd8acc9fcd66a54d7a44d160fa209605799ac"
 dependencies = [
  "bitflags 2.11.0",
  "bytemuck",
@@ -1495,7 +1504,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#952da884c23d865e2e88a13a02ca05201d2859ad"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#fe7cd8acc9fcd66a54d7a44d160fa209605799ac"
 dependencies = [
  "iced_renderer",
  "log",
@@ -1508,7 +1517,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#952da884c23d865e2e88a13a02ca05201d2859ad"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#fe7cd8acc9fcd66a54d7a44d160fa209605799ac"
 dependencies = [
  "arboard",
  "iced_debug",
@@ -2575,18 +2584,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6717cf23b488adf64b9d711329542ba34de147df262370221940dfabc2c91358"
 dependencies = [
  "bytemuck",
- "font-types",
+ "font-types 0.10.1",
 ]
 
 [[package]]
 name = "read-fonts"
-version = "0.36.0"
+version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5eaa2941a4c05443ee3a7b26ab076a553c343ad5995230cc2b1d3e993bdc6345"
+checksum = "7b634fabf032fab15307ffd272149b622260f55974d9fad689292a5d33df02e5"
 dependencies = [
  "bytemuck",
  "core_maths",
- "font-types",
+ "font-types 0.11.0",
 ]
 
 [[package]]
@@ -2855,12 +2864,12 @@ dependencies = [
 
 [[package]]
 name = "skrifa"
-version = "0.39.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c9eb0b904a04d09bd68c65d946617b8ff733009999050f3b851c32fb3cfb60e"
+checksum = "7fbdfe3d2475fbd7ddd1f3e5cf8288a30eb3e5f95832829570cd88115a7434ac"
 dependencies = [
  "bytemuck",
- "read-fonts 0.36.0",
+ "read-fonts 0.37.0",
 ]
 
 [[package]]
@@ -2909,6 +2918,12 @@ checksum = "dd538fb6910ac1099850255cf94a94df6551fbdd602454387d0adb2d1ca6dead"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "smol_str"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f7a918bd2a9951d18ee6e48f076843e8e73a9a5d22cf05bcd4b7a81bdd04e17"
 
 [[package]]
 name = "softbuffer"
@@ -2984,7 +2999,7 @@ dependencies = [
 [[package]]
 name = "sweeten"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/sweeten.git?branch=generic-daw#a3f8754594e0ba738097131f1153e27593771445"
+source = "git+https://github.com/edwloef/sweeten.git?branch=generic-daw#dfd423dfb00fd87137a447cc5ead68d2f0b43b54"
 dependencies = [
  "iced_core",
  "iced_runtime",
@@ -4135,7 +4150,7 @@ dependencies = [
  "raw-window-handle",
  "redox_syscall 0.4.1",
  "rustix 0.38.44",
- "smol_str",
+ "smol_str 0.2.2",
  "tracing",
  "unicode-segmentation",
  "wasm-bindgen",
