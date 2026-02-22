@@ -1,5 +1,4 @@
-use crate::events::ClapEvent;
-use clack_host::events::{UnknownEvent, event_types::MidiEvent};
+use crate::events::{ClapEvent, MidiEvent, UnknownEvent};
 use std::fmt::Debug;
 
 pub trait EventImpl: Debug + Sized {

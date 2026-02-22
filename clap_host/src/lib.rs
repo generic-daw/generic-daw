@@ -1,5 +1,5 @@
 use clack_extensions::gui::GuiApiType;
-use clack_host::bundle::PluginBundle;
+use clack_host::prelude::*;
 use log::warn;
 use std::{
 	collections::HashSet,
@@ -108,9 +108,9 @@ pub fn get_installed_plugins(
 		.for_each(|path| {
 			// SAFETY:
 			// Loading an external library object file is inherently unsafe.
-			if let Some(bundle) = unsafe { PluginBundle::load(&path) }
+			if let Some(entry) = unsafe { PluginEntry::load(&path) }
 				.inspect_err(|err| warn!("{}: {err}", path.display()))
-				.ok() && let Some(factory) = bundle.get_plugin_factory()
+				.ok() && let Some(factory) = entry.get_plugin_factory()
 			{
 				factory
 					.plugin_descriptors()

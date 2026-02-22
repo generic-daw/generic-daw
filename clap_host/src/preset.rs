@@ -19,13 +19,13 @@ pub struct Preset {
 impl Preset {
 	pub fn all(
 		plugin: &PluginInstance<Host>,
-		bundle: &PluginBundle,
+		entry: &PluginEntry,
 		descriptor: &PluginDescriptor,
 		host: &HostInfo,
 	) -> Option<Box<[Self]>> {
 		plugin.access_shared_handler(|s| s.ext.preset_load.get())?;
 
-		let preset_discovery_factory = bundle.get_factory::<PresetDiscoveryFactory<'_>>()?;
+		let preset_discovery_factory = entry.get_factory::<PresetDiscoveryFactory<'_>>()?;
 
 		let mut cached_indexer = Indexer::default();
 		let mut presets = Vec::new();
@@ -39,7 +39,7 @@ impl Preset {
 			cached_indexer.file_types.clear();
 			cached_indexer.locations.clear();
 			let Ok(mut provider) =
-				Provider::instantiate(&mut cached_indexer, bundle, provider_id, host)
+				Provider::instantiate(&mut cached_indexer, entry, provider_id, host)
 			else {
 				continue;
 			};

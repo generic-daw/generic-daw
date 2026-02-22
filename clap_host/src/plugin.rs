@@ -48,7 +48,7 @@ impl<Event: EventImpl> Plugin<Event> {
 	) -> (AudioProcessor<Event>, Self, Receiver<MainThreadMessage>) {
 		// SAFETY:
 		// Loading an external library object file is inherently unsafe.
-		let bundle = unsafe { PluginBundle::load(&*descriptor.path) }.unwrap();
+		let entry = unsafe { PluginEntry::load(&*descriptor.path) }.unwrap();
 
 		let (shared_sender, receiver) = std::sync::mpsc::channel();
 		let (producer, audio_consumer) = RingBuffer::new(frames.get() as usize);
@@ -56,7 +56,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		let mut instance = PluginInstance::new(
 			|()| Shared::new(descriptor.clone(), shared_sender),
 			|shared| MainThread::new(shared),
-			&bundle,
+			&entry,
 			&descriptor.id,
 			host,
 		)
@@ -78,7 +78,7 @@ impl<Event: EventImpl> Plugin<Event> {
 			Self {
 				gui: Gui::new(&mut instance),
 				params: Param::all(&mut instance).unwrap_or_default(),
-				presets: Preset::all(&instance, &bundle, &descriptor, host).unwrap_or_default(),
+				presets: Preset::all(&instance, &entry, &descriptor, host).unwrap_or_default(),
 				instance: instance.into(),
 				descriptor,
 				producer,

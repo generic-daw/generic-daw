@@ -2,7 +2,7 @@ use crate::{
 	EventImpl, MainThreadMessage, PluginDescriptor, audio_buffers::AudioBuffers,
 	event_buffers::EventBuffers, host::Host, shared::CURRENT_THREAD_ID,
 };
-use clack_host::process::{PluginAudioProcessor, ProcessStatus};
+use clack_host::{prelude::*, process::PluginAudioProcessor};
 use log::{trace, warn};
 use rtrb::Consumer;
 use std::sync::atomic::Ordering::Relaxed;
