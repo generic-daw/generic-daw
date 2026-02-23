@@ -1,6 +1,6 @@
-use crate::{ParamInfoFlags, ParamRescanFlags, host::Host};
+use crate::{Cookie, ParamInfoFlags, ParamRescanFlags, host::Host};
 use clack_extensions::params::ParamInfoBuffer;
-use clack_host::{prelude::*, utils::Cookie};
+use clack_host::prelude::*;
 use std::{mem::MaybeUninit, ops::RangeInclusive, sync::Arc};
 
 #[derive(Debug)]

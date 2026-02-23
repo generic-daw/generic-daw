@@ -1,5 +1,5 @@
 use crate::arrangement_view::{audio_clip::AudioClip, midi_clip::MidiClip};
-use generic_daw_core::{self as core, MusicalTime, OffsetPosition};
+use generic_daw_core::{MusicalTime, OffsetPosition};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Clip {
@@ -49,14 +49,14 @@ impl From<MidiClip> for Clip {
 	}
 }
 
-impl From<Clip> for core::Clip {
+impl From<Clip> for generic_daw_core::Clip {
 	fn from(value: Clip) -> Self {
 		match value {
 			Clip::Audio(AudioClip { sample, position }) => {
-				Self::Audio(core::AudioClip { sample, position })
+				Self::Audio(generic_daw_core::AudioClip { sample, position })
 			}
 			Clip::Midi(MidiClip { pattern, position }) => {
-				Self::Midi(core::MidiClip { pattern, position })
+				Self::Midi(generic_daw_core::MidiClip { pattern, position })
 			}
 		}
 	}

@@ -25,30 +25,17 @@ pub struct Buffers<Node: NodeImpl> {
 	pub incoming: HashMap<NodeId, (DelayLine, Vec<Node::Event>)>,
 	pub outgoing: HashSet<NodeId>,
 	pub audio: NoDebug<Box<[f32]>>,
-	pub scratch: NoDebug<Box<[f32]>>,
 	pub events: Vec<Node::Event>,
 }
 
 impl<Node: NodeImpl> Entry<Node> {
-	pub fn new(node: Node, frames: NonZero<u32>, buffers: &mut Vec<Box<[f32]>>) -> Self {
-		let mut buf = || {
-			buffers.pop().map_or_else(
-				|| boxed_slice![0.0; 2 * frames.get() as usize],
-				|mut buf| {
-					debug_assert_eq!(buf.len(), 2 * frames.get() as usize);
-					buf.fill(0.0);
-					buf
-				},
-			)
-		};
-
+	pub fn new(node: Node, frames: NonZero<u32>) -> Self {
 		Self {
 			node: Mutex::new(node),
 			buffers: RwLock::new(Buffers {
 				incoming: HashMap::new(),
 				outgoing: HashSet::new(),
-				audio: buf().into(),
-				scratch: buf().into(),
+				audio: boxed_slice![0.0; 2 * frames.get() as usize].into(),
 				events: Vec::new(),
 			}),
 			indegree: AtomicIsize::new(0),

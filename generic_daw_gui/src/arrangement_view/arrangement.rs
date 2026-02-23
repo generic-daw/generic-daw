@@ -14,9 +14,9 @@ use crate::{
 	daw,
 };
 use generic_daw_core::{
-	self as core, AudioGraphNode, Event, Export, Message, MidiKey, MidiNote, MidiPatternAction,
-	MidiPatternId, MusicalTime, NodeAction, NodeId, NodeImpl, PanMode, PluginId, Position,
-	SampleId, Stream, StreamTrait as _, Transport, Update, Version, build_output_stream,
+	AudioGraphNode, Event, Export, Message, MidiKey, MidiNote, MidiPatternAction, MidiPatternId,
+	MusicalTime, NodeAction, NodeId, NodeImpl, PanMode, PluginId, Position, SampleId, Stream,
+	StreamTrait as _, Transport, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
 use iced::Task;
@@ -52,7 +52,7 @@ pub struct Arrangement {
 
 #[derive(Clone, Debug)]
 pub struct Batch {
-	core: core::Batch,
+	core: generic_daw_core::Batch,
 	project: Project,
 }
 
@@ -348,7 +348,7 @@ impl Arrangement {
 	}
 
 	pub fn add_channel(&mut self) -> NodeId {
-		self.add(core::Channel::default(), NodeType::Channel)
+		self.add(generic_daw_core::Channel::default(), NodeType::Channel)
 	}
 
 	pub fn remove_channel(&mut self, id: NodeId) -> Node {
@@ -362,7 +362,7 @@ impl Arrangement {
 	}
 
 	pub fn add_track(&mut self) -> usize {
-		let id = self.add(core::Track::default(), NodeType::Track);
+		let id = self.add(generic_daw_core::Track::default(), NodeType::Track);
 		self.tracks.push(Track::new(id));
 		self.tracks.len() - 1
 	}

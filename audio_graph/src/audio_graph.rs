@@ -1,4 +1,5 @@
 use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry};
+use crossbeam_queue::ArrayQueue;
 use dsp::DelayLine;
 use std::{
 	collections::HashMap,
@@ -6,11 +7,12 @@ use std::{
 	sync::{RwLockWriteGuard, atomic::Ordering::Relaxed},
 	time::Instant,
 };
+use utils::boxed_slice;
 
 #[derive(Debug)]
 pub struct AudioGraph<Node: NodeImpl> {
 	graph: HashMap<NodeId, Entry<Node>>,
-	buffers: Vec<Box<[f32]>>,
+	scratch: ArrayQueue<Box<[f32]>>,
 	root: NodeId,
 	sample_rate: NonZero<u32>,
 	frames: NonZero<u32>,
@@ -18,18 +20,25 @@ pub struct AudioGraph<Node: NodeImpl> {
 
 impl<Node: NodeImpl> AudioGraph<Node> {
 	#[must_use]
-	pub fn new(node: impl Into<Node>, sample_rate: NonZero<u32>, frames: NonZero<u32>) -> Self {
-		let node = node.into();
+	pub fn new(root: impl Into<Node>, sample_rate: NonZero<u32>, frames: NonZero<u32>) -> Self {
+		let root = root.into();
+
+		let scratch = ArrayQueue::new(rayon_core::current_num_threads());
+		while !scratch.is_full() {
+			scratch
+				.push(boxed_slice![0.0; 2 * frames.get() as usize])
+				.unwrap();
+		}
 
 		let mut this = Self {
 			graph: HashMap::new(),
-			buffers: Vec::new(),
-			root: node.id(),
+			scratch,
+			root: root.id(),
 			sample_rate,
 			frames,
 		};
 
-		this.insert(node);
+		this.insert(root);
 
 		this
 	}
@@ -98,6 +107,8 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			.max()
 			.unwrap_or_default();
 
+		let mut scratch = self.scratch.pop().unwrap();
+
 		for (dep, (delay_line, events)) in &mut buffers.incoming {
 			let dep_entry = &self.graph[dep];
 			let dep_buffers = &*dep_entry.read_buffers_uncontended();
@@ -107,9 +118,9 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			let audio = if delay_diff == 0 {
 				&dep_buffers.audio[..len]
 			} else {
-				buffers.scratch[..len].copy_from_slice(&dep_buffers.audio[..len]);
-				delay_line.advance(&mut buffers.scratch[..len]);
-				&buffers.scratch[..len]
+				scratch[..len].copy_from_slice(&dep_buffers.audio[..len]);
+				delay_line.advance(&mut scratch[..len]);
+				&scratch[..len]
 			};
 
 			if filled_audio {
@@ -136,6 +147,8 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 					.is_none()
 			}));
 		}
+
+		self.scratch.push(scratch).unwrap();
 
 		if !filled_audio {
 			buffers.audio[..len].fill(0.0);
@@ -232,8 +245,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		if let Some(entry) = self.graph.get_mut(&id) {
 			*entry.node() = node;
 		} else {
-			self.graph
-				.insert(id, Entry::new(node, self.frames, &mut self.buffers));
+			self.graph.insert(id, Entry::new(node, self.frames));
 		}
 	}
 
@@ -246,11 +258,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			for &outgoing in &entry.buffers().outgoing {
 				self.entry_mut(outgoing).buffers().incoming.remove(&node);
 			}
-
-			self.buffers
-				.push(std::mem::take(&mut entry.buffers().audio.0));
-			self.buffers
-				.push(std::mem::take(&mut entry.buffers().scratch.0));
 		}
 	}
 

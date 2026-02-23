@@ -11,4 +11,5 @@ workspace = true
 dsp.workspace = true
 utils.workspace = true
 
+crossbeam-queue = "0.3.12"
 rayon-core = "1.13.0"

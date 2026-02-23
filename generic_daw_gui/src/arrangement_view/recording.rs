@@ -5,13 +5,13 @@ use crate::{
 	},
 	lod::Lods,
 };
-use generic_daw_core::{self as core, DeviceId, MusicalTime, Transport};
+use generic_daw_core::{DeviceId, MusicalTime, Transport};
 use rtrb::Consumer;
 use std::{fs::File, io::BufWriter, num::NonZero, path::Path, sync::Arc};
 
 #[derive(Debug)]
 pub struct Recording {
-	pub core: core::Recording<BufWriter<File>>,
+	pub core: generic_daw_core::Recording<BufWriter<File>>,
 	pub lods: Lods<Vec<(f32, f32)>>,
 	pub position: MusicalTime,
 	pub name: Arc<str>,
@@ -26,7 +26,7 @@ impl Recording {
 		sample_rate: NonZero<u32>,
 		frames: Option<NonZero<u32>>,
 	) -> (Self, Consumer<Box<[f32]>>) {
-		let (core, consumer) = core::Recording::create(
+		let (core, consumer) = generic_daw_core::Recording::create(
 			BufWriter::new(File::create(&path).unwrap()),
 			transport,
 			device_id,
