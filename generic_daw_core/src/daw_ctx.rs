@@ -322,7 +322,7 @@ impl DawCtx {
 			for s in &mut buf[..len] {
 				*s = s.clamp(-1.0, 1.0);
 			}
-			self.metronome(&mut buf[..len], self.audio_graph.delay());
+			self.metronome(&mut buf[..len]);
 
 			if self.state.transport.playing {
 				self.state.transport.sample += len;
@@ -364,10 +364,12 @@ impl DawCtx {
 		}
 	}
 
-	fn metronome(&self, buf: &mut [f32], delay: usize) {
+	fn metronome(&self, buf: &mut [f32]) {
 		if !self.state.transport.metronome || !self.state.transport.playing {
 			return;
 		}
+
+		let delay = self.audio_graph.delay();
 
 		let mut start = MusicalTime::from_samples(
 			self.state.transport.sample.saturating_sub(delay),
