@@ -23,7 +23,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	pub fn new(root: impl Into<Node>, sample_rate: NonZero<u32>, frames: NonZero<u32>) -> Self {
 		let root = root.into();
 
-		let scratch = ArrayQueue::new(rayon_core::current_num_threads());
+		let scratch = ArrayQueue::new(rayon_core::current_num_threads() + 1);
 		while !scratch.is_full() {
 			scratch
 				.push(boxed_slice![0.0; 2 * frames.get() as usize])
