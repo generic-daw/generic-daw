@@ -229,7 +229,7 @@ impl Arrangement {
 
 		let mut samples = HashMap::new();
 
-		rayon_core::in_place_scope(|s| {
+		std::thread::scope(|s| {
 			let (done, receiver) = mpsc::channel();
 
 			let samples_map = reader
@@ -278,7 +278,7 @@ impl Arrangement {
 
 				let mut path: Option<Arc<_>> = paths.remove(&idx);
 				let mut sample_name = sample.name.clone();
-				s.spawn(move |_| {
+				s.spawn(move || {
 					loop {
 						if let Some(path) = path.clone()
 							&& let Some(sample) = SamplePair::new(path, sample_rate)

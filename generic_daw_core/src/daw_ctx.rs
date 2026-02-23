@@ -164,11 +164,7 @@ impl DawCtx {
 		off_bar_click.process(&OFF_BAR_CLICK);
 
 		let daw_ctx = Self {
-			audio_graph: AudioGraph::new(
-				Channel::default(),
-				transport.sample_rate,
-				transport.frames,
-			),
+			audio_graph: AudioGraph::new(Channel::default(), transport.frames),
 			state: State {
 				transport,
 				samples: HashMap::new(),
@@ -259,11 +255,8 @@ impl DawCtx {
 				}
 				Message::RequestAudioGraph(sender) => {
 					debug_assert!(self.consumer.is_empty());
-					let mut audio_graph = AudioGraph::new(
-						Channel::default(),
-						self.state.transport.sample_rate,
-						self.state.transport.frames,
-					);
+					let mut audio_graph =
+						AudioGraph::new(Channel::default(), self.state.transport.frames);
 					std::mem::swap(&mut self.audio_graph, &mut audio_graph);
 
 					let mut state = State {

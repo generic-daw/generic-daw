@@ -1,9 +1,8 @@
 use crate::{
 	API_TYPE, AudioProcessor, EventImpl, MainThreadMessage, ParamInfoFlags, ParamRescanFlags,
 	PluginDescriptor, StateContextType, TimerId, audio_buffers::AudioBuffers,
-	audio_processor::AudioThreadMessage, audio_thread::AudioThread, event_buffers::EventBuffers,
-	gui::Gui, host::Host, main_thread::MainThread, param::Param, preset::Preset, shared::Shared,
-	size::Size,
+	audio_processor::AudioThreadMessage, event_buffers::EventBuffers, gui::Gui, host::Host,
+	main_thread::MainThread, param::Param, preset::Preset, shared::Shared, size::Size,
 };
 #[cfg(unix)]
 use clack_extensions::posix_fd::FdFlags;
@@ -186,7 +185,7 @@ impl<Event: EventImpl> Plugin<Event> {
 
 		let processor = self
 			.instance
-			.activate(|shared, _| AudioThread::new(shared), self.config)
+			.activate(|_, _| (), self.config)
 			.unwrap()
 			.into();
 

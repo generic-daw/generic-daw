@@ -1,10 +1,10 @@
-use crate::{audio_thread::AudioThread, main_thread::MainThread, shared::Shared};
+use crate::{main_thread::MainThread, shared::Shared};
 #[cfg(unix)]
 use clack_extensions::posix_fd::HostPosixFd;
 use clack_extensions::{
 	audio_ports::HostAudioPorts, gui::HostGui, latency::HostLatency, log::HostLog,
 	note_ports::HostNotePorts, params::HostParams, preset_discovery::HostPresetLoad,
-	state::HostState, thread_check::HostThreadCheck, thread_pool::HostThreadPool, timer::HostTimer,
+	state::HostState, thread_check::HostThreadCheck, timer::HostTimer,
 };
 use clack_host::prelude::*;
 
@@ -14,7 +14,7 @@ pub struct Host;
 impl HostHandlers for Host {
 	type Shared<'a> = Shared<'a>;
 	type MainThread<'a> = MainThread<'a>;
-	type AudioProcessor<'a> = AudioThread<'a>;
+	type AudioProcessor<'a> = ();
 
 	fn declare_extensions(builder: &mut HostExtensions<'_, Self>, _shared: &Self::Shared<'_>) {
 		builder
@@ -27,7 +27,6 @@ impl HostHandlers for Host {
 			.register::<HostPresetLoad>()
 			.register::<HostState>()
 			.register::<HostThreadCheck>()
-			.register::<HostThreadPool>()
 			.register::<HostTimer>();
 
 		#[cfg(unix)]

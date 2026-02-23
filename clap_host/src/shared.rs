@@ -13,7 +13,6 @@ use clack_extensions::{
 	state::PluginState,
 	state_context::PluginStateContext,
 	thread_check::HostThreadCheckImpl,
-	thread_pool::PluginThreadPool,
 	timer::PluginTimer,
 };
 use clack_host::prelude::*;
@@ -43,7 +42,6 @@ pub struct Ext {
 	pub render: OnceLock<NoDebug<PluginRender>>,
 	pub state: OnceLock<NoDebug<PluginState>>,
 	pub state_context: OnceLock<NoDebug<PluginStateContext>>,
-	pub thread_pool: OnceLock<NoDebug<PluginThreadPool>>,
 	pub timer: OnceLock<NoDebug<PluginTimer>>,
 }
 
@@ -111,7 +109,6 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 			render,
 			state,
 			state_context,
-			thread_pool,
 			timer
 		];
 	}

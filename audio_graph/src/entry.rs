@@ -16,8 +16,6 @@ pub struct Entry<Node: NodeImpl> {
 	buffers: RwLock<Buffers<Node>>,
 	pub indegree: AtomicIsize,
 	pub delay: AtomicUsize,
-	pub elapsed: AtomicUsize,
-	pub inline: bool,
 }
 
 #[derive(Debug)]
@@ -40,8 +38,6 @@ impl<Node: NodeImpl> Entry<Node> {
 			}),
 			indegree: AtomicIsize::new(0),
 			delay: AtomicUsize::new(0),
-			elapsed: AtomicUsize::new(0),
-			inline: false,
 		}
 	}
 

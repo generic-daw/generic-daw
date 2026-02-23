@@ -1,40 +1,34 @@
-use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry};
+use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry, thread_pool::ThreadPool};
 use crossbeam_queue::ArrayQueue;
 use dsp::DelayLine;
 use std::{
 	collections::HashMap,
 	num::NonZero,
 	sync::{RwLockWriteGuard, atomic::Ordering::Relaxed},
-	time::Instant,
 };
-use utils::boxed_slice;
+use utils::NoDebug;
 
 #[derive(Debug)]
 pub struct AudioGraph<Node: NodeImpl> {
+	pool: Option<NoDebug<ThreadPool<Node>>>,
 	graph: HashMap<NodeId, Entry<Node>>,
-	scratch: ArrayQueue<Box<[f32]>>,
+	queue: ArrayQueue<NodeId>,
+	len: usize,
 	root: NodeId,
-	sample_rate: NonZero<u32>,
 	frames: NonZero<u32>,
 }
 
 impl<Node: NodeImpl> AudioGraph<Node> {
 	#[must_use]
-	pub fn new(root: impl Into<Node>, sample_rate: NonZero<u32>, frames: NonZero<u32>) -> Self {
+	pub fn new(root: impl Into<Node>, frames: NonZero<u32>) -> Self {
 		let root = root.into();
 
-		let scratch = ArrayQueue::new(rayon_core::current_num_threads() + 1);
-		while !scratch.is_full() {
-			scratch
-				.push(boxed_slice![0.0; 2 * frames.get() as usize])
-				.unwrap();
-		}
-
 		let mut this = Self {
+			pool: Some(ThreadPool::new(frames).into()),
 			graph: HashMap::new(),
-			scratch,
+			queue: ArrayQueue::new(4),
+			len: 0,
 			root: root.id(),
-			sample_rate,
 			frames,
 		};
 
@@ -44,34 +38,19 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	pub fn process(&mut self, state: &Node::State, buf: &mut [f32]) {
-		let len = buf.len();
+		self.len = buf.len();
 
-		let threshold = (10_000 / len).max(1_000_000 / self.sample_rate.get() as usize);
-		for entry in self.graph.values_mut() {
-			*entry.indegree.get_mut() = entry.buffers().incoming.len().cast_signed();
-			entry.inline = *entry.elapsed.get_mut() <= threshold;
+		for (id, entry) in &mut self.graph {
+			let indegree = entry.buffers().incoming.len().cast_signed();
+			*entry.indegree.get_mut() = indegree - 1;
+			if indegree == 0 {
+				self.queue.push(*id).unwrap();
+			}
 		}
 
-		rayon_core::in_place_scope(|s| {
-			let mut first = None;
-
-			self.graph
-				.values()
-				.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 0)
-				.for_each(|entry| {
-					if entry.inline {
-						self.worker(s, entry, len, state);
-					} else if first.is_none() {
-						first = Some(entry);
-					} else {
-						s.spawn(|s| self.worker(s, entry, len, state));
-					}
-				});
-
-			if let Some(entry) = first {
-				self.worker(s, entry, len, state);
-			}
-		});
+		let mut pool = self.pool.take().unwrap();
+		pool.run(self, state, self.graph.len());
+		self.pool = Some(pool);
 
 		if cfg!(debug_assertions) {
 			for entry in self.graph.values_mut() {
@@ -79,20 +58,25 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			}
 		}
 
-		buf.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..len]);
+		buf.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..buf.len()]);
+	}
+
+	pub(crate) fn next_node(&self) -> Option<NodeId> {
+		self.queue.pop()
 	}
 
 	#[expect(clippy::significant_drop_tightening)]
-	fn worker<'a>(
-		&'a self,
-		s: &rayon_core::Scope<'a>,
-		entry: &Entry<Node>,
-		len: usize,
-		state: &'a Node::State,
-	) {
+	pub(crate) fn process_node(
+		&self,
+		node: NodeId,
+		state: &Node::State,
+		scratch: &mut [f32],
+	) -> Option<NodeId> {
+		let entry = &self.graph[&node];
+
 		debug_assert_eq!(entry.indegree.load(Relaxed), -1);
 
-		let now = Instant::now();
+		let len = self.len;
 
 		let mut buffers_lock = entry.write_buffers_uncontended();
 		let buffers = &mut *buffers_lock;
@@ -106,8 +90,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			.map(|node| self.graph[node].delay.load(Relaxed))
 			.max()
 			.unwrap_or_default();
-
-		let mut scratch = self.scratch.pop().unwrap();
 
 		for (dep, (delay_line, events)) in &mut buffers.incoming {
 			let dep_entry = &self.graph[dep];
@@ -148,8 +130,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			}));
 		}
 
-		self.scratch.push(scratch).unwrap();
-
 		if !filled_audio {
 			buffers.audio[..len].fill(0.0);
 		}
@@ -161,29 +141,21 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 		drop(node);
 
-		let elapsed = now.elapsed().as_nanos() as usize;
-		entry.elapsed.store(elapsed / len, Relaxed);
+		let buffers_lock = RwLockWriteGuard::downgrade(buffers_lock);
 
-		let mut first = None;
-
-		RwLockWriteGuard::downgrade(buffers_lock)
+		let mut iter = buffers_lock
 			.outgoing
 			.iter()
-			.map(|node| &self.graph[node])
-			.filter(|dep| dep.indegree.fetch_sub(1, Relaxed) == 0)
-			.for_each(|dep| {
-				if dep.inline {
-					self.worker(s, dep, len, state);
-				} else if !entry.inline && first.is_none() {
-					first = Some(dep);
-				} else {
-					s.spawn(move |s| self.worker(s, dep, len, state));
-				}
-			});
+			.copied()
+			.filter(|node| self.graph[node].indegree.fetch_sub(1, Relaxed) == 0);
 
-		if let Some(entry) = first {
-			self.worker(s, entry, len, state);
+		let inline = iter.next();
+
+		for node in iter {
+			self.queue.push(node).unwrap();
 		}
+
+		inline
 	}
 
 	#[must_use]
@@ -246,6 +218,9 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			*entry.node() = node;
 		} else {
 			self.graph.insert(id, Entry::new(node, self.frames));
+			if self.queue.capacity() < self.graph.len() {
+				self.queue = ArrayQueue::new(2 * self.queue.capacity());
+			}
 		}
 	}
 
