@@ -18,6 +18,6 @@ hound = "3.5.1"
 log = "0.4.29"
 midly = { version = "0.5.3", default-features = false, features = ["std", "strict"] }
 oneshot = { version = "0.2.1", features = ["std"] }
-rtrb = "0.3.2"
+rtrb = "0.3.3"
 rubato = "1.0.1"
 symphonia = { version = "0.5.5", features = ["all", "opt-simd"] }

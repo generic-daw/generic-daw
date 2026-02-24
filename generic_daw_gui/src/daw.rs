@@ -407,7 +407,11 @@ impl Daw {
 				self.state.show_seconds = self.show_seconds;
 				self.state.write();
 			}
-			Message::ToggleMetronome => self.arrangement_view.arrangement.toggle_metronome(),
+			Message::ToggleMetronome => {
+				self.arrangement_view.arrangement.toggle_metronome();
+				self.state.metronome = self.arrangement_view.arrangement.transport().metronome;
+				self.state.write();
+			}
 			Message::ChangedBpm(bpm) => self
 				.arrangement_view
 				.arrangement

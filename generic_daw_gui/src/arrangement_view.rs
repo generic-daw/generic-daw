@@ -218,7 +218,11 @@ impl ArrangementView {
 		state: &State,
 		main_window_id: window::Id,
 	) -> (Self, Task<Message>) {
-		let (arrangement, task) = Arrangement::create(config);
+		let (mut arrangement, task) = Arrangement::create(config);
+
+		if state.metronome {
+			arrangement.toggle_metronome();
+		}
 
 		let playlist_scale_x = (arrangement.transport().sample_rate.get() as f32).log2() - 5.0;
 		let piano_roll_scale_x = playlist_scale_x - 2.0;
@@ -272,9 +276,13 @@ impl ArrangementView {
 				)
 				.into();
 			}
-			Message::SetArrangement(NoClone(arrangement)) => {
+			Message::SetArrangement(NoClone(mut arrangement)) => {
 				if let Some((recording, _)) = &mut self.recording {
 					recording.end_stream();
+				}
+
+				if self.arrangement.transport().metronome {
+					arrangement.toggle_metronome();
 				}
 
 				let pos_fact = arrangement.transport().sample_rate.get() as f32

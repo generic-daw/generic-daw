@@ -32,7 +32,7 @@ log = "0.4.29"
 oneshot = { version = "0.2.1", features = ["async", "std"] }
 rayon-core = "1.13.0"
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
-rtrb = "0.3.2"
+rtrb = "0.3.3"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 smol = "2.0.2"
 sweeten = { git = "https://github.com/edwloef/sweeten.git", branch = "generic-daw" }
