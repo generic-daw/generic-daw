@@ -543,9 +543,10 @@ impl Arrangement {
 				export_sender.send(export).unwrap();
 			}))
 			.discard(),
-			Task::stream(progress_receiver).chain(Task::perform(audio_graph_receiver, |export| {
-				daw::Message::ExportedFile(Box::new(export.unwrap()).into())
-			})),
+			Task::stream(progress_receiver).chain(Task::perform(
+				audio_graph_receiver.into_future(),
+				|export| daw::Message::ExportedFile(Box::new(export.unwrap()).into()),
+			)),
 		])
 	}
 
