@@ -134,10 +134,8 @@ where
 			),
 		};
 
-		let (start, end) = (
-			time_to_px(start, *self.position, *self.scale, self.transport),
-			time_to_px(end, *self.position, *self.scale, self.transport),
-		);
+		let start = time_to_px(start, *self.position, *self.scale, self.transport);
+		let end = time_to_px(end, *self.position, *self.scale, self.transport);
 
 		Node::new(Size::new(end - start, limits.max().height)).translate(Vector::new(start, 0.0))
 	}
@@ -339,7 +337,15 @@ where
 
 			renderer.fill_text(
 				clip_name,
-				upper_bounds.position() + Vector::new(3.0, LINE_HEIGHT / 2.0),
+				upper_bounds.position()
+					+ Vector::new(
+						3.0,
+						if upper_bounds.y == viewport.y {
+							upper_bounds.height - LINE_HEIGHT / 2.0
+						} else {
+							LINE_HEIGHT / 2.0
+						},
+					),
 				theme.extended_palette().background.strong.text,
 				upper_bounds,
 			);

@@ -307,13 +307,8 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		}
 
 		for note in 0..self.notes.len() {
-			let note_bounds = self.note_bounds(note, &viewport);
-			let Some(bounds) = note_bounds.intersection(&viewport) else {
-				continue;
-			};
-
 			renderer.with_layer(Rectangle::INFINITE, |renderer| {
-				self.draw_note(note, renderer, theme, bounds);
+				self.draw_note(note, renderer, theme, &viewport);
 			});
 		}
 
@@ -553,7 +548,11 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		}
 	}
 
-	fn draw_note(&self, note: usize, renderer: &mut Renderer, theme: &Theme, bounds: Rectangle) {
+	fn draw_note(&self, note: usize, renderer: &mut Renderer, theme: &Theme, viewport: &Rectangle) {
+		let Some(bounds) = self.note_bounds(note, viewport).intersection(viewport) else {
+			return;
+		};
+
 		let selection = self.selection.borrow();
 
 		let color = if selection.primary.contains(&note) || selection.secondary.contains(&note) {
@@ -607,7 +606,15 @@ impl<'a, Message> PianoRoll<'a, Message> {
 
 			renderer.fill_text(
 				note_name,
-				bounds.position() + Vector::new(3.0, self.scale.y / 2.0),
+				bounds.position()
+					+ Vector::new(
+						3.0,
+						if bounds.y == viewport.y {
+							bounds.height - self.scale.y / 2.0
+						} else {
+							self.scale.y / 2.0
+						},
+					),
 				theme.extended_palette().background.strong.text,
 				bounds,
 			);
