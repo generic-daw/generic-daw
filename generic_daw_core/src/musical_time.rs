@@ -63,38 +63,14 @@ impl MusicalTime {
 	}
 
 	#[must_use]
-	pub const fn from_samples_f(samples: f32, transport: &Transport) -> Self {
-		let samples = samples as f64;
-		let bpm = transport.bpm.get() as f64;
-		let sample_rate = transport.sample_rate.get() as f64;
-
-		let time = samples * bpm * (Self::TICKS_PER_BEAT / 60 / 2) as f64 / sample_rate;
-
-		Self(time as u64)
-	}
-
-	#[must_use]
 	pub const fn from_samples(samples: usize, transport: &Transport) -> Self {
-		debug_assert!(samples.is_multiple_of(2));
-
-		let samples = samples as u64;
+		let samples = samples.next_multiple_of(2) as u64;
 		let bpm = transport.bpm.get() as u64;
 		let sample_rate = transport.sample_rate.get() as u64;
 
 		let time = samples * bpm * (Self::TICKS_PER_BEAT / 60 / 2) / sample_rate;
 
 		Self(time)
-	}
-
-	#[must_use]
-	pub const fn to_samples_f(self, transport: &Transport) -> f32 {
-		let beat = self.0 as f64;
-		let bpm = transport.bpm.get() as f64;
-		let sample_rate = transport.sample_rate.get() as f64;
-
-		let samples = (beat * sample_rate) / bpm / (Self::TICKS_PER_BEAT / 60 / 2) as f64;
-
-		samples as f32
 	}
 
 	#[must_use]
@@ -110,8 +86,8 @@ impl MusicalTime {
 
 	#[must_use]
 	pub const fn from_duration(duration: Duration, transport: &Transport) -> Self {
-		Self::from_samples_f(
-			duration.as_secs_f32() * 2.0 * transport.sample_rate.get() as f32,
+		Self::from_samples(
+			(duration.as_secs_f32() * 2.0 * transport.sample_rate.get() as f32) as usize,
 			transport,
 		)
 	}
@@ -119,7 +95,7 @@ impl MusicalTime {
 	#[must_use]
 	pub fn to_duration(self, transport: &Transport) -> Duration {
 		Duration::from_secs_f32(
-			self.to_samples_f(transport) / 2.0 / transport.sample_rate.get() as f32,
+			self.to_samples(transport) as f32 / 2.0 / transport.sample_rate.get() as f32,
 		)
 	}
 

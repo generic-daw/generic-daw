@@ -329,8 +329,8 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			let height = key_y(end_key, *self.position, *self.scale) + self.scale.y - y;
 			let y = y + viewport.y;
 
-			let x = start_pos.to_samples_f(self.transport) / samples_per_px;
-			let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
+			let x = start_pos.to_samples(self.transport) as f32 / samples_per_px;
+			let width = end_pos.to_samples(self.transport) as f32 / samples_per_px - x;
 			let x = x + viewport.x - self.position.x;
 
 			renderer.with_layer(viewport, |renderer| {
@@ -431,9 +431,9 @@ impl<'a, Message> PianoRoll<'a, Message> {
 	fn note_bounds(&self, note: usize, viewport: &Rectangle) -> Rectangle {
 		let samples_per_px = self.scale.x.exp2();
 
-		let (start, end) = self.notes[note].position.to_samples_f(self.transport);
-		let x = start / samples_per_px;
-		let width = end / samples_per_px - x;
+		let (start, end) = self.notes[note].position.to_samples(self.transport);
+		let x = start as f32 / samples_per_px;
+		let width = end as f32 / samples_per_px - x;
 		let x = x - self.position.x;
 
 		Rectangle::new(

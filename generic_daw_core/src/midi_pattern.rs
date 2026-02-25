@@ -48,9 +48,8 @@ impl MidiPattern {
 
 		let (header, tracks) = midly::parse(bytes).ok()?;
 
-		let midi_tick_to_musical_time = |tick: u28| match header.timing {
+		let midi_tick_to_musical_time = |tick: u32| match header.timing {
 			Timing::Metrical(ticks_per_beat) => {
-				let tick = tick.as_int();
 				let ticks_per_beat = u32::from(ticks_per_beat.as_int());
 				MusicalTime::new(
 					u64::from(tick / ticks_per_beat),
@@ -59,7 +58,7 @@ impl MidiPattern {
 				)
 			}
 			Timing::Timecode(fps, subframe) => MusicalTime::from_duration(
-				Duration::from_secs_f32(1.0 / fps.as_f32() / f32::from(subframe)),
+				Duration::from_secs_f32(tick as f32 / fps.as_f32() / f32::from(subframe)),
 				transport,
 			),
 		};
@@ -97,8 +96,8 @@ impl MidiPattern {
 								key: MidiKey(key.as_int()),
 								velocity: f32::from(vel.as_int()) / 127.0,
 								position: Position::new(
-									midi_tick_to_musical_time(start),
-									midi_tick_to_musical_time(time),
+									midi_tick_to_musical_time(start.as_int()),
+									midi_tick_to_musical_time(time.as_int()),
 								),
 							};
 
@@ -115,8 +114,8 @@ impl MidiPattern {
 						key: MidiKey(key as u8),
 						velocity: f32::from(vel.as_int()) / 127.0,
 						position: Position::new(
-							midi_tick_to_musical_time(start),
-							midi_tick_to_musical_time(time),
+							midi_tick_to_musical_time(start.as_int()),
+							midi_tick_to_musical_time(time.as_int()),
 						),
 					};
 

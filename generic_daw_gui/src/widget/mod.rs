@@ -44,7 +44,7 @@ impl Add<Delta<Self>> for MidiKey {
 }
 
 fn get_time(x: f32, position: Vector, scale: Vector, transport: &Transport) -> MusicalTime {
-	MusicalTime::from_samples_f(((x + position.x) * scale.x.exp2()).max(0.0), transport)
+	MusicalTime::from_samples(((x + position.x) * scale.x.exp2()) as usize, transport)
 }
 
 fn maybe_snap<T>(t: T, modifiers: Modifiers, f: impl FnOnce(T) -> T) -> T {

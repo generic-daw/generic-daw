@@ -23,14 +23,6 @@ impl Position {
 	}
 
 	#[must_use]
-	pub const fn to_samples_f(self, transport: &Transport) -> (f32, f32) {
-		(
-			self.start().to_samples_f(transport),
-			self.end().to_samples_f(transport),
-		)
-	}
-
-	#[must_use]
 	pub const fn to_samples(self, transport: &Transport) -> (usize, usize) {
 		(
 			self.start().to_samples(transport),

@@ -76,7 +76,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		let right = self.children[1]
 			.as_widget_mut()
 			.layout(&mut tree.children[1], renderer, &Limits::NONE)
-			.translate(Vector::new(left.size().width, LINE_HEIGHT) - *self.position);
+			.translate(Vector::new(0.0, LINE_HEIGHT - self.position.y))
+			.translate(Vector::new(left.size().width, 0.0));
 
 		Node::with_children(limits.max(), vec![left, right])
 	}
@@ -89,25 +90,25 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		cursor: Cursor,
 		renderer: &Renderer,
 		shell: &mut Shell<'_, Message>,
-		_viewport: &Rectangle,
+		viewport: &Rectangle,
 	) {
 		self.children
 			.iter_mut()
 			.zip(&mut tree.children)
 			.zip(layout.children())
-			.zip(Self::viewports(layout))
+			.zip([viewport, &Self::right_viewport(layout)])
 			.for_each(|(((child, tree), layout), viewport)| {
 				child
 					.as_widget_mut()
-					.update(tree, event, layout, cursor, renderer, shell, &viewport);
+					.update(tree, event, layout, cursor, renderer, shell, viewport);
 			});
 
 		let state = tree.state.downcast_mut::<State>();
-		let right_half = Self::right_half(layout).shrink(padding::top(LINE_HEIGHT));
-		let height = right_half.height;
+		let right_viewport = Self::right_viewport(layout);
+		let height = right_viewport.height;
 
 		let right_child = layout.child(1).bounds();
-		let visible = right_child.y + right_child.height - right_half.y;
+		let visible = right_child.y + right_child.height - right_viewport.y;
 
 		if let Event::Window(window::Event::RedrawRequested(..)) = event
 			&& state.last_height != height
@@ -125,7 +126,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			state.status = Status::None;
 			return;
 		};
-		cursor -= Vector::new(right_half.x - layout.position().x, LINE_HEIGHT);
+		cursor -= Vector::new(right_viewport.x - layout.position().x, LINE_HEIGHT);
 
 		match event {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
@@ -255,15 +256,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		style: &Style,
 		layout: Layout<'_>,
 		cursor: Cursor,
-		_viewport: &Rectangle,
+		viewport: &Rectangle,
 	) {
-		let right_half = Self::right_half(layout);
-
-		self.grid(
-			renderer,
-			right_half.shrink(padding::top(LINE_HEIGHT)),
-			theme,
-		);
+		self.grid(renderer, Self::right_viewport(layout), theme);
 
 		renderer.with_layer(
 			layout.bounds().shrink(padding::top(LINE_HEIGHT)),
@@ -272,17 +267,21 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					.iter()
 					.zip(&tree.children)
 					.zip(layout.children())
-					.zip(Self::viewports(layout))
+					.zip([viewport, &Self::right_viewport(layout)])
 					.for_each(|(((child, tree), layout), viewport)| {
 						child
 							.as_widget()
-							.draw(tree, renderer, theme, style, layout, cursor, &viewport);
+							.draw(tree, renderer, theme, style, layout, cursor, viewport);
 					});
 			},
 		);
 
 		renderer.with_layer(Rectangle::INFINITE, |renderer| {
-			self.header(renderer, right_half, theme);
+			self.header(
+				renderer,
+				Self::right_viewport(layout).expand(padding::top(LINE_HEIGHT)),
+				theme,
+			);
 		});
 	}
 
@@ -291,7 +290,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		tree: &Tree,
 		layout: Layout<'_>,
 		cursor: Cursor,
-		_viewport: &Rectangle,
+		viewport: &Rectangle,
 		renderer: &Renderer,
 	) -> Interaction {
 		if tree.state.downcast_ref::<State>().status == Status::None {
@@ -299,11 +298,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				.iter()
 				.zip(&tree.children)
 				.zip(layout.children())
-				.zip(Self::viewports(layout))
+				.zip([viewport, &Self::right_viewport(layout)])
 				.map(|(((child, tree), layout), viewport)| {
 					child
 						.as_widget()
-						.mouse_interaction(tree, layout, cursor, &viewport, renderer)
+						.mouse_interaction(tree, layout, cursor, viewport, renderer)
 				})
 				.max()
 				.unwrap_or_default()
@@ -317,7 +316,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		tree: &'a mut Tree,
 		layout: Layout<'a>,
 		renderer: &Renderer,
-		_viewport: &Rectangle,
+		viewport: &Rectangle,
 		translation: Vector,
 	) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
 		let children = self
@@ -325,11 +324,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			.iter_mut()
 			.zip(&mut tree.children)
 			.zip(layout.children())
-			.zip(Self::viewports(layout))
+			.zip([viewport, &Self::right_viewport(layout)])
 			.filter_map(|(((child, tree), layout), viewport)| {
 				child
 					.as_widget_mut()
-					.overlay(tree, layout, renderer, &viewport, translation)
+					.overlay(tree, layout, renderer, viewport, translation)
 			})
 			.collect::<Vec<_>>();
 
@@ -388,48 +387,35 @@ impl<'a, Message> Seeker<'a, Message> {
 		self
 	}
 
-	fn viewports(layout: Layout<'_>) -> impl IntoIterator<Item = Rectangle> {
-		[
-			Self::left_half(layout).shrink(padding::top(LINE_HEIGHT)),
-			Self::right_half(layout).shrink(padding::top(LINE_HEIGHT)),
-		]
-	}
-
-	fn left_half(layout: Layout<'_>) -> Rectangle {
-		let bounds = layout.bounds();
-		let left_bounds = layout.child(0).bounds();
-
-		Rectangle::new(
-			Point::new(left_bounds.x, bounds.y),
-			Size::new(left_bounds.width, bounds.height),
-		)
-	}
-
-	fn right_half(layout: Layout<'_>) -> Rectangle {
+	fn right_viewport(layout: Layout<'_>) -> Rectangle {
 		layout
 			.bounds()
-			.shrink(padding::left(Self::left_half(layout).width))
+			.shrink(padding::left(layout.child(0).bounds().width).top(LINE_HEIGHT))
 	}
 
 	fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
 		let samples_per_px = self.scale.x.exp2();
-		let offset_pos = |time: f32| {
+		let offset_pos = |time: usize| {
 			bounds.position()
-				+ Vector::new(time / samples_per_px - self.position.x - self.offset, 0.0)
+				+ Vector::new(
+					time as f32 / samples_per_px - self.position.x - self.offset,
+					0.0,
+				)
 		};
-		let offset_time = |time: MusicalTime| offset_pos(time.to_samples_f(self.transport));
+		let offset_time = |time: MusicalTime| offset_pos(time.to_samples(self.transport));
 
-		let mut beat = MusicalTime::from_samples_f(
-			(self.position.x + self.offset) * samples_per_px,
+		let mut beat = MusicalTime::from_samples(
+			((self.position.x + self.offset) * samples_per_px) as usize,
 			self.transport,
 		);
-		let end_beat =
-			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.transport);
+		let end_beat = beat
+			+ MusicalTime::from_samples((bounds.width * samples_per_px) as usize, self.transport);
 		beat = beat.snap_floor(self.scale.x + 1.0, self.transport);
 
 		let background_step = MusicalTime::new(8 * u64::from(self.transport.numerator.get()), 0);
 		let mut background_beat = beat.round(background_step);
-		let background_width = background_step.to_samples_f(self.transport) / samples_per_px / 2.0;
+		let background_width =
+			background_step.to_samples(self.transport) as f32 / samples_per_px / 2.0;
 
 		while background_beat < end_beat {
 			renderer.fill_quad(
@@ -488,11 +474,14 @@ impl<'a, Message> Seeker<'a, Message> {
 
 	fn header(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
 		let samples_per_px = self.scale.x.exp2();
-		let offset_pos = |time: f32| {
+		let offset_pos = |time: usize| {
 			bounds.position()
-				+ Vector::new(time / samples_per_px - self.position.x - self.offset, 0.0)
+				+ Vector::new(
+					time as f32 / samples_per_px - self.position.x - self.offset,
+					0.0,
+				)
 		};
-		let offset_time = |time: MusicalTime| offset_pos(time.to_samples_f(self.transport));
+		let offset_time = |time: MusicalTime| offset_pos(time.to_samples(self.transport));
 
 		renderer.fill_quad(
 			Quad {
@@ -576,7 +565,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		renderer.fill_quad(
 			Quad {
 				bounds: Rectangle::new(
-					offset_pos(self.transport.sample as f32),
+					offset_pos(self.transport.sample),
 					Size::new(1.5, bounds.height),
 				)
 				.intersection(&bounds)
@@ -586,12 +575,12 @@ impl<'a, Message> Seeker<'a, Message> {
 			theme.extended_palette().primary.base.color,
 		);
 
-		let mut beat = MusicalTime::from_samples_f(
-			(self.position.x + self.offset) * samples_per_px,
+		let mut beat = MusicalTime::from_samples(
+			((self.position.x + self.offset) * samples_per_px) as usize,
 			self.transport,
 		);
-		let end_beat =
-			beat + MusicalTime::from_samples_f(bounds.width * samples_per_px, self.transport);
+		let end_beat = beat
+			+ MusicalTime::from_samples((bounds.width * samples_per_px) as usize, self.transport);
 		beat = beat
 			.snap_floor(self.scale.x + 3.0, self.transport)
 			.bar_floor(self.transport);

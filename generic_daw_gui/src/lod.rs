@@ -90,12 +90,12 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 		let lod_slices_per_sample = lod_slices_per_mesh_slice as f32 / samples_per_mesh_slice;
 		let lod_slices_per_px = lod_slices_per_mesh_slice as f32 / px_per_mesh_slice;
 
-		let (start, end, offset) = position.to_samples_f(transport);
+		let (start, end, offset) = position.to_samples(transport);
 
 		let hidden_start_samples = 0f32.max(hidden_start_px * -samples_per_px);
 
-		let lod_start_f = (offset + hidden_start_samples) * lod_slices_per_sample;
-		let view_len_f = (end - start) * lod_slices_per_sample;
+		let lod_start_f = (offset as f32 + hidden_start_samples) * lod_slices_per_sample;
+		let view_len_f = (end - start) as f32 * lod_slices_per_sample;
 		let view_len_f = view_len_f.min(clipped_size.width * lod_slices_per_px);
 		let lod_end_f = lod_start_f + view_len_f;
 
@@ -116,7 +116,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 		}
 
 		let color = color::pack(color);
-		let jitter_correct = -(offset / samples_per_mesh_slice).fract() * px_per_mesh_slice;
+		let jitter_correct = -(offset as f32 / samples_per_mesh_slice).fract() * px_per_mesh_slice;
 		let vertices = saved_lod.checked_sub(1).map_or_else(
 			|| {
 				vertices(

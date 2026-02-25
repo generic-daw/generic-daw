@@ -113,7 +113,7 @@ where
 			.zip(&mut tree.children)
 			.map(|(child, tree)| {
 				let node = child
-					.layout(tree, renderer, limits)
+					.layout(tree, renderer, &limits.height(self.scale.y))
 					.translate(Vector::new(0.0, height));
 				height += node.bounds().height;
 				node
@@ -436,7 +436,7 @@ where
 						bounds: Rectangle::new(
 							bounds.position()
 								+ Vector::new(
-									pos.to_samples_f(self.transport) / samples_per_px,
+									pos.to_samples(self.transport) as f32 / samples_per_px,
 									0.0,
 								),
 							Size::new(50.0, bounds.height),
@@ -510,8 +510,8 @@ where
 			let height =
 				layout.child(end_track).position().y + layout.child(end_track).bounds().height - y;
 
-			let x = start_pos.to_samples_f(self.transport) / samples_per_px;
-			let width = end_pos.to_samples_f(self.transport) / samples_per_px - x;
+			let x = start_pos.to_samples(self.transport) as f32 / samples_per_px;
+			let width = end_pos.to_samples(self.transport) as f32 / samples_per_px - x;
 			let x = x + viewport.x - self.position.x;
 
 			renderer.with_layer(*viewport, |renderer| {

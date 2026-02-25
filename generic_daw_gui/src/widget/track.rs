@@ -1,6 +1,6 @@
 use crate::widget::clip::Clip;
 use iced::{
-	Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
+	Event, Fill, Length, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
 		Layout, Shell, Widget,
 		layout::{Limits, Node},
@@ -14,7 +14,6 @@ use std::borrow::Borrow;
 
 #[derive(Debug)]
 pub struct Track<'a, Message> {
-	scale: &'a Vector,
 	pub(super) clips: Box<[Clip<'a, Message>]>,
 }
 
@@ -31,16 +30,16 @@ where
 	}
 
 	fn size(&self) -> Size<Length> {
-		Size::new(Fill, Length::Fixed(self.scale.y))
+		Size::new(Fill, Shrink)
 	}
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
 		Node::with_children(
-			limits.height(self.scale.y).max(),
+			limits.max(),
 			self.clips
 				.iter_mut()
 				.zip(&mut tree.children)
-				.map(|(child, tree)| child.layout(tree, renderer, &limits.height(self.scale.y)))
+				.map(|(child, tree)| child.layout(tree, renderer, limits))
 				.collect(),
 		)
 	}
@@ -140,12 +139,11 @@ where
 }
 
 impl<'a, Message> Track<'a, Message> {
-	pub fn new(scale: &'a Vector, children: impl IntoIterator<Item = Clip<'a, Message>>) -> Self
+	pub fn new(children: impl IntoIterator<Item = Clip<'a, Message>>) -> Self
 	where
 		Message: 'a,
 	{
 		Self {
-			scale,
 			clips: children.into_iter().collect(),
 		}
 	}

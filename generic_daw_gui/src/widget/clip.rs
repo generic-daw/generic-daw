@@ -125,23 +125,24 @@ where
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
 		let (start, len) = match self.inner {
 			Inner::AudioClip(inner) => {
-				let (start, end) = inner.clip.position.position().to_samples_f(self.transport);
+				let (start, end) = inner.clip.position.position().to_samples(self.transport);
 				(start, end - start)
 			}
 			Inner::MidiClip(inner) => {
-				let (start, end) = inner.clip.position.position().to_samples_f(self.transport);
+				let (start, end) = inner.clip.position.position().to_samples(self.transport);
 				(start, end - start)
 			}
 			Inner::Recording(inner) => {
-				let start = inner.position.to_samples_f(self.transport);
-				let len = inner.core.samples().len() as f32;
+				let start = inner.position.to_samples(self.transport);
+				let len = inner.core.samples().len();
 				(start, len)
 			}
 		};
 
 		let samples_per_px = self.scale.x.exp2();
-		Node::new(Size::new(len / samples_per_px, limits.max().height))
-			.translate(Vector::new(start / samples_per_px, 0.0))
+		Node::new(Size::new(len as f32 / samples_per_px, limits.max().height)).translate(
+			Vector::new(start as f32 / samples_per_px - self.position.x, 0.0),
+		)
 	}
 
 	fn update(
@@ -414,17 +415,17 @@ where
 				let offset = Vector::new(layout.position().x, layout.position().y + LINE_HEIGHT);
 
 				for note in &inner.pattern.notes {
-					let start_pixel = (note
+					let start_pixel = note
 						.position
 						.start()
 						.saturating_sub(inner.clip.position.offset())
-						.to_samples_f(self.transport))
+						.to_samples(self.transport) as f32
 						/ samples_per_px;
-					let end_pixel = (note
+					let end_pixel = note
 						.position
 						.end()
 						.saturating_sub(inner.clip.position.offset())
-						.to_samples_f(self.transport))
+						.to_samples(self.transport) as f32
 						/ samples_per_px;
 
 					let top_pixel = f32::from(max - note.key.0 + 1) * note_height;

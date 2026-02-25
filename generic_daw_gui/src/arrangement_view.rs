@@ -1247,7 +1247,6 @@ impl ArrangementView {
 						let node = self.arrangement.node(track.id);
 
 						Track::new(
-							&self.playlist_scale,
 							track
 								.clips
 								.iter()
@@ -1627,11 +1626,11 @@ impl ArrangementView {
 		.with_offset(
 			clip.position
 				.start()
-				.to_samples_f(self.arrangement.transport())
+				.to_samples(self.arrangement.transport()) as f32
 				- clip
 					.position
 					.offset()
-					.to_samples_f(self.arrangement.transport()),
+					.to_samples(self.arrangement.transport()) as f32,
 		)
 		.into()
 	}
