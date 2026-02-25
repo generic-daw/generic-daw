@@ -141,7 +141,10 @@ where
 
 		let samples_per_px = self.scale.x.exp2();
 		Node::new(Size::new(len as f32 / samples_per_px, limits.max().height)).translate(
-			Vector::new(start as f32 / samples_per_px - self.position.x, 0.0),
+			Vector::new(
+				(start as f64 / f64::from(samples_per_px) - f64::from(self.position.x)) as f32,
+				0.0,
+			),
 		)
 	}
 

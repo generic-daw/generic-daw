@@ -394,28 +394,23 @@ impl<'a, Message> Seeker<'a, Message> {
 	}
 
 	fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-		let samples_per_px = self.scale.x.exp2();
-		let offset_pos = |time: usize| {
-			bounds.position()
-				+ Vector::new(
-					time as f32 / samples_per_px - self.position.x - self.offset,
-					0.0,
-				)
+		let offset_time = |position: MusicalTime| {
+			bounds.position() + Vector::new(self.px_from_musical_time(position), 0.0)
 		};
-		let offset_time = |time: MusicalTime| offset_pos(time.to_samples(self.transport));
 
-		let mut beat = MusicalTime::from_samples(
-			((self.position.x + self.offset) * samples_per_px) as usize,
+		let mut beat = get_time(self.offset, *self.position, *self.scale, self.transport);
+		let end_beat = get_time(
+			self.offset + bounds.width,
+			*self.position,
+			*self.scale,
 			self.transport,
 		);
-		let end_beat = beat
-			+ MusicalTime::from_samples((bounds.width * samples_per_px) as usize, self.transport);
 		beat = beat.snap_floor(self.scale.x + 1.0, self.transport);
 
 		let background_step = MusicalTime::new(8 * u64::from(self.transport.numerator.get()), 0);
 		let mut background_beat = beat.round(background_step);
 		let background_width =
-			background_step.to_samples(self.transport) as f32 / samples_per_px / 2.0;
+			background_step.to_samples(self.transport) as f32 / self.scale.x.exp2() / 2.0;
 
 		while background_beat < end_beat {
 			renderer.fill_quad(
@@ -473,15 +468,9 @@ impl<'a, Message> Seeker<'a, Message> {
 	}
 
 	fn header(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-		let samples_per_px = self.scale.x.exp2();
-		let offset_pos = |time: usize| {
-			bounds.position()
-				+ Vector::new(
-					time as f32 / samples_per_px - self.position.x - self.offset,
-					0.0,
-				)
+		let offset_time = |position: MusicalTime| {
+			bounds.position() + Vector::new(self.px_from_musical_time(position), 0.0)
 		};
-		let offset_time = |time: MusicalTime| offset_pos(time.to_samples(self.transport));
 
 		renderer.fill_quad(
 			Quad {
@@ -565,7 +554,10 @@ impl<'a, Message> Seeker<'a, Message> {
 		renderer.fill_quad(
 			Quad {
 				bounds: Rectangle::new(
-					offset_pos(self.transport.sample),
+					offset_time(MusicalTime::from_samples(
+						self.transport.sample,
+						self.transport,
+					)),
 					Size::new(1.5, bounds.height),
 				)
 				.intersection(&bounds)
@@ -575,12 +567,13 @@ impl<'a, Message> Seeker<'a, Message> {
 			theme.extended_palette().primary.base.color,
 		);
 
-		let mut beat = MusicalTime::from_samples(
-			((self.position.x + self.offset) * samples_per_px) as usize,
+		let mut beat = get_time(self.offset, *self.position, *self.scale, self.transport);
+		let end_beat = get_time(
+			self.offset + bounds.width,
+			*self.position,
+			*self.scale,
 			self.transport,
 		);
-		let end_beat = beat
-			+ MusicalTime::from_samples((bounds.width * samples_per_px) as usize, self.transport);
 		beat = beat
 			.snap_floor(self.scale.x + 3.0, self.transport)
 			.bar_floor(self.transport);
@@ -612,6 +605,12 @@ impl<'a, Message> Seeker<'a, Message> {
 
 			beat += snap_step;
 		}
+	}
+
+	fn px_from_musical_time(&self, position: MusicalTime) -> f32 {
+		(position.to_samples(self.transport) as f64 / f64::from(self.scale.x.exp2())
+			- f64::from(self.position.x)
+			- f64::from(self.offset)) as f32
 	}
 }
 
