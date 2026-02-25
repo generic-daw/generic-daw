@@ -1,8 +1,9 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef, Recording},
 	widget::{
-		LINE_HEIGHT, OPACITY_33, get_time, maybe_snap,
+		LINE_HEIGHT, OPACITY_33, maybe_snap,
 		playlist::{Action, Selection, Status},
+		px_to_time, time_to_px,
 	},
 };
 use generic_daw_core::{MusicalTime, Position, Transport};
@@ -123,29 +124,22 @@ where
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
-		let (start, len) = match self.inner {
-			Inner::AudioClip(inner) => {
-				let (start, end) = inner.clip.position.position().to_samples(self.transport);
-				(start, end - start)
-			}
-			Inner::MidiClip(inner) => {
-				let (start, end) = inner.clip.position.position().to_samples(self.transport);
-				(start, end - start)
-			}
-			Inner::Recording(inner) => {
-				let start = inner.position.to_samples(self.transport);
-				let len = inner.core.samples().len();
-				(start, len)
-			}
+		let (start, end) = match self.inner {
+			Inner::AudioClip(inner) => (inner.clip.position.start(), inner.clip.position.end()),
+			Inner::MidiClip(inner) => (inner.clip.position.start(), inner.clip.position.end()),
+			Inner::Recording(inner) => (
+				inner.position,
+				inner.position
+					+ MusicalTime::from_samples(inner.core.samples().len(), self.transport),
+			),
 		};
 
-		let samples_per_px = self.scale.x.exp2();
-		Node::new(Size::new(len as f32 / samples_per_px, limits.max().height)).translate(
-			Vector::new(
-				(start as f64 / f64::from(samples_per_px) - f64::from(self.position.x)) as f32,
-				0.0,
-			),
-		)
+		let (start, end) = (
+			time_to_px(start, *self.position, *self.scale, self.transport),
+			time_to_px(end, *self.position, *self.scale, self.transport),
+		);
+
+		Node::new(Size::new(end - start, limits.max().height)).translate(Vector::new(start, 0.0))
 	}
 
 	fn update(
@@ -216,7 +210,8 @@ where
 							}
 						}
 
-						let time = get_time(cursor.x, *self.position, *self.scale, self.transport);
+						let time =
+							px_to_time(cursor.x, *self.position, *self.scale, self.transport);
 
 						selection.status = match (modifiers.command(), modifiers.shift()) {
 							(false, false) => {

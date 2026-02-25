@@ -43,17 +43,25 @@ impl Add<Delta<Self>> for MidiKey {
 	}
 }
 
-fn get_time(x: f32, position: Vector, scale: Vector, transport: &Transport) -> MusicalTime {
-	MusicalTime::from_samples(
-		((f64::from(x) + f64::from(position.x)) * f64::from(scale.x.exp2())) as usize,
-		transport,
-	)
-}
-
 fn maybe_snap<T>(t: T, modifiers: Modifiers, f: impl FnOnce(T) -> T) -> T {
 	if modifiers.alt() { t } else { f(t) }
 }
 
-fn key_y(key: MidiKey, position: Vector, scale: Vector) -> f32 {
+fn time_to_px(time: MusicalTime, position: Vector, scale: Vector, transport: &Transport) -> f32 {
+	(time.to_samples(transport) as f64 / f64::from(scale.x.exp2()) - f64::from(position.x)) as f32
+}
+
+fn px_to_time(px: f32, position: Vector, scale: Vector, transport: &Transport) -> MusicalTime {
+	MusicalTime::from_samples(
+		((f64::from(px) + f64::from(position.x)) * f64::from(scale.x.exp2())) as usize,
+		transport,
+	)
+}
+
+fn key_to_px(key: MidiKey, position: Vector, scale: Vector) -> f32 {
 	scale.y.mul_add(127.0 - f32::from(key.0), -position.y)
+}
+
+fn px_to_key(px: f32, position: Vector, scale: Vector) -> MidiKey {
+	MidiKey(127 - ((px + position.y) / scale.y) as u8)
 }

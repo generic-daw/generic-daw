@@ -1,6 +1,6 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef},
-	widget::{Delta, OPACITY_33, clip, get_time, maybe_snap, track::Track},
+	widget::{Delta, OPACITY_33, clip, maybe_snap, px_to_time, time_to_px, track::Track},
 };
 use generic_daw_core::{MusicalTime, Transport};
 use iced::{
@@ -161,7 +161,7 @@ where
 			}
 			return;
 		};
-		let new_time = get_time(cursor.x, *self.position, *self.scale, self.transport);
+		let new_time = px_to_time(cursor.x, *self.position, *self.scale, self.transport);
 
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers }) => match button {
@@ -408,6 +408,14 @@ where
 		cursor: Cursor,
 		viewport: &Rectangle,
 	) {
+		let offset_time = |time: MusicalTime| {
+			layout.bounds().position()
+				+ Vector::new(
+					time_to_px(time, *self.position, *self.scale, self.transport),
+					0.0,
+				)
+		};
+
 		let selection = &*self.selection.borrow();
 
 		for layout in layout.children() {
@@ -428,19 +436,11 @@ where
 			);
 		}
 
-		if let Some((_, _, Some((track, pos)))) = selection.file {
-			let samples_per_px = self.scale.x.exp2();
+		if let Some((_, _, Some((track, time)))) = selection.file {
 			if let Some(bounds) = layout.children().nth(track).map(|layout| layout.bounds()) {
 				renderer.fill_quad(
 					Quad {
-						bounds: Rectangle::new(
-							bounds.position()
-								+ Vector::new(
-									pos.to_samples(self.transport) as f32 / samples_per_px,
-									0.0,
-								),
-							Size::new(50.0, bounds.height),
-						),
+						bounds: Rectangle::new(offset_time(time), Size::new(50.0, bounds.height)),
 						..Quad::default()
 					},
 					Linear::new(FRAC_PI_2)
@@ -504,15 +504,14 @@ where
 		{
 			let (start_track, end_track) = (start_track.min(end_track), start_track.max(end_track));
 			let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
-			let samples_per_px = self.scale.x.exp2();
 
 			let y = layout.child(start_track).position().y;
 			let height =
 				layout.child(end_track).position().y + layout.child(end_track).bounds().height - y;
 
-			let x = start_pos.to_samples(self.transport) as f32 / samples_per_px;
-			let width = end_pos.to_samples(self.transport) as f32 / samples_per_px - x;
-			let x = x + viewport.x - self.position.x;
+			let x = time_to_px(start_pos, *self.position, *self.scale, self.transport);
+			let width = time_to_px(end_pos, *self.position, *self.scale, self.transport) - x;
+			let x = x + viewport.x;
 
 			renderer.with_layer(*viewport, |renderer| {
 				renderer.fill_quad(

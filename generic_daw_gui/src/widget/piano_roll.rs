@@ -1,4 +1,4 @@
-use crate::widget::{Delta, OPACITY_33, get_time, key_y, maybe_snap};
+use crate::widget::{Delta, OPACITY_33, key_to_px, maybe_snap, px_to_key, px_to_time, time_to_px};
 use generic_daw_core::{MidiKey, MidiNote, MusicalTime, Transport};
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -103,7 +103,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			selection.status = Status::None;
 			return;
 		};
-		let new_time = get_time(cursor.x, *self.position, *self.scale, self.transport);
+		let new_time = px_to_time(cursor.x, *self.position, *self.scale, self.transport);
 
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
@@ -114,7 +114,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 						let time = maybe_snap(new_time, *modifiers, |time| {
 							time.snap_round(self.scale.x, self.transport)
 						});
-						let key = self.get_key(cursor);
+						let key = px_to_key(cursor.y, *self.position, *self.scale);
 
 						if modifiers.command() {
 							selection.status = Status::Selecting(key, key, time, time);
@@ -145,7 +145,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match selection.status {
 				Status::Selecting(start_key, last_end_key, start_pos, last_end_pos) => {
-					let end_key = self.get_key(cursor);
+					let end_key = px_to_key(cursor.y, *self.position, *self.scale);
 
 					let end_pos = maybe_snap(new_time, *modifiers, |time| {
 						time.snap_round(self.scale.x, self.transport)
@@ -174,7 +174,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					shell.request_redraw();
 				}
 				Status::Dragging(key, time) => {
-					let new_key = self.get_key(cursor);
+					let new_key = px_to_key(cursor.y, *self.position, *self.scale);
 
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
 						abs_diff.snap_round(self.scale.x, self.transport)
@@ -290,7 +290,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 		for key in (0..127).map(MidiKey) {
 			let Some(bounds) = Rectangle::new(
-				viewport.position() + Vector::new(0.0, key_y(key, *self.position, *self.scale)),
+				viewport.position() + Vector::new(0.0, key_to_px(key, *self.position, *self.scale)),
 				Size::new(viewport.width, 1.0),
 			)
 			.intersection(&viewport) else {
@@ -323,15 +323,14 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		{
 			let (start_key, end_key) = (start_key.max(end_key), start_key.min(end_key));
 			let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
-			let samples_per_px = self.scale.x.exp2();
 
-			let y = key_y(start_key, *self.position, *self.scale);
-			let height = key_y(end_key, *self.position, *self.scale) + self.scale.y - y;
+			let y = key_to_px(start_key, *self.position, *self.scale);
+			let height = key_to_px(end_key, *self.position, *self.scale) + self.scale.y - y;
 			let y = y + viewport.y;
 
-			let x = start_pos.to_samples(self.transport) as f32 / samples_per_px;
-			let width = end_pos.to_samples(self.transport) as f32 / samples_per_px - x;
-			let x = x + viewport.x - self.position.x;
+			let x = time_to_px(start_pos, *self.position, *self.scale, self.transport);
+			let width = time_to_px(end_pos, *self.position, *self.scale, self.transport) - x;
+			let x = x + viewport.x;
 
 			renderer.with_layer(viewport, |renderer| {
 				renderer.fill_quad(
@@ -423,21 +422,25 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		}
 	}
 
-	fn get_key(&self, cursor: Point) -> MidiKey {
-		let new_key = 127.0 - (cursor.y + self.position.y) / self.scale.y;
-		MidiKey(new_key.ceil() as u8)
-	}
-
 	fn note_bounds(&self, note: usize, viewport: &Rectangle) -> Rectangle {
-		let samples_per_px = self.scale.x.exp2();
-
-		let (start, end) = self.notes[note].position.to_samples(self.transport);
-		let x = start as f32 / samples_per_px;
-		let width = end as f32 / samples_per_px - x;
-		let x = x - self.position.x;
+		let x = time_to_px(
+			self.notes[note].position.start(),
+			*self.position,
+			*self.scale,
+			self.transport,
+		);
+		let width = time_to_px(
+			self.notes[note].position.end(),
+			*self.position,
+			*self.scale,
+			self.transport,
+		) - x;
 
 		Rectangle::new(
-			Point::new(x, key_y(self.notes[note].key, *self.position, *self.scale)),
+			Point::new(
+				x,
+				key_to_px(self.notes[note].key, *self.position, *self.scale),
+			),
 			Size::new(width, self.scale.y),
 		) + Vector::new(viewport.x, viewport.y)
 	}
@@ -475,7 +478,8 @@ impl<'a, Message> PianoRoll<'a, Message> {
 				match button {
 					mouse::Button::Left => {
 						let MidiNote { key, velocity, .. } = self.notes[note];
-						let time = get_time(cursor.x, *self.position, *self.scale, self.transport);
+						let time =
+							px_to_time(cursor.x, *self.position, *self.scale, self.transport);
 
 						selection.status = match (modifiers.command(), modifiers.shift()) {
 							(false, false) => {

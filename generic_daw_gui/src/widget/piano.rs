@@ -1,4 +1,4 @@
-use crate::widget::{LINE_HEIGHT, key_y};
+use crate::widget::{LINE_HEIGHT, key_to_px};
 use generic_daw_core::MidiKey;
 use iced::{
 	Color, Element, Length, Rectangle, Renderer, Size, Theme, Vector,
@@ -58,7 +58,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 
 		for key in (0..128).map(MidiKey) {
 			let note_position =
-				bounds.position() + Vector::new(0.0, key_y(key, *self.position, *self.scale));
+				bounds.position() + Vector::new(0.0, key_to_px(key, *self.position, *self.scale));
 
 			let Some(clipped_bounds) = Rectangle::new(
 				note_position,

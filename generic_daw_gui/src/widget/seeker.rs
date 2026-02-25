@@ -1,4 +1,4 @@
-use crate::widget::{LINE_HEIGHT, OPACITY_33, get_time, maybe_snap};
+use crate::widget::{LINE_HEIGHT, OPACITY_33, maybe_snap, px_to_time, time_to_px};
 use generic_daw_core::{MusicalTime, Position, Transport};
 use iced::{
 	Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -132,7 +132,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
 				let time = maybe_snap(
-					get_time(
+					px_to_time(
 						cursor.x.max(0.0) + self.offset,
 						*self.position,
 						*self.scale,
@@ -176,7 +176,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				modifiers,
 			}) if state.status == Status::Hovering => {
 				let time = maybe_snap(
-					get_time(
+					px_to_time(
 						cursor.x.max(0.0) + self.offset,
 						*self.position,
 						*self.scale,
@@ -394,12 +394,16 @@ impl<'a, Message> Seeker<'a, Message> {
 	}
 
 	fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-		let offset_time = |position: MusicalTime| {
-			bounds.position() + Vector::new(self.px_from_musical_time(position), 0.0)
+		let offset_time = |time: MusicalTime| {
+			bounds.position()
+				+ Vector::new(
+					time_to_px(time, *self.position, *self.scale, self.transport) - self.offset,
+					0.0,
+				)
 		};
 
-		let mut beat = get_time(self.offset, *self.position, *self.scale, self.transport);
-		let end_beat = get_time(
+		let mut beat = px_to_time(self.offset, *self.position, *self.scale, self.transport);
+		let end_beat = px_to_time(
 			self.offset + bounds.width,
 			*self.position,
 			*self.scale,
@@ -468,8 +472,12 @@ impl<'a, Message> Seeker<'a, Message> {
 	}
 
 	fn header(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-		let offset_time = |position: MusicalTime| {
-			bounds.position() + Vector::new(self.px_from_musical_time(position), 0.0)
+		let offset_time = |time: MusicalTime| {
+			bounds.position()
+				+ Vector::new(
+					time_to_px(time, *self.position, *self.scale, self.transport) - self.offset,
+					0.0,
+				)
 		};
 
 		renderer.fill_quad(
@@ -567,8 +575,8 @@ impl<'a, Message> Seeker<'a, Message> {
 			theme.extended_palette().primary.base.color,
 		);
 
-		let mut beat = get_time(self.offset, *self.position, *self.scale, self.transport);
-		let end_beat = get_time(
+		let mut beat = px_to_time(self.offset, *self.position, *self.scale, self.transport);
+		let end_beat = px_to_time(
 			self.offset + bounds.width,
 			*self.position,
 			*self.scale,
@@ -605,12 +613,6 @@ impl<'a, Message> Seeker<'a, Message> {
 
 			beat += snap_step;
 		}
-	}
-
-	fn px_from_musical_time(&self, position: MusicalTime) -> f32 {
-		(position.to_samples(self.transport) as f64 / f64::from(self.scale.x.exp2())
-			- f64::from(self.position.x)
-			- f64::from(self.offset)) as f32
 	}
 }
 
