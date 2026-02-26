@@ -103,54 +103,52 @@ impl<'a, Message> Knob<'a, Message> {
 	}
 
 	fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
-		let border_radius = self.border_radius();
-		let dot_radius = border_radius * 1.5;
-
-		let center = frame.center() + Vector::new(0.0, border_radius);
-
-		let circle = |angle: Radians, offset: f32, radius: f32| {
-			Path::circle(
-				center + Vector::new(angle.0.cos(), angle.0.sin()) * offset,
-				radius,
-			)
+		let color = if self.enabled {
+			if state.hovering || state.dragging.is_some() {
+				theme.extended_palette().primary.strong.color
+			} else {
+				theme.extended_palette().primary.base.color
+			}
+		} else if state.hovering || state.dragging.is_some() {
+			theme.extended_palette().secondary.strong.color
+		} else {
+			theme.extended_palette().secondary.base.color
 		};
 
-		let angle_of = |value: f32| {
+		let border_radius = self.border_radius();
+		let dot_radius = border_radius * 1.5;
+		let center = frame.center() + Vector::new(0.0, border_radius);
+
+		let value_to_rad = |value: f32| {
 			Radians(f32::to_radians(
 				270.0 * (value - self.range.start()) / (self.range.end() - self.range.start())
 					- 135.0 - 90.0,
 			))
 		};
 
-		let center_angle = angle_of(self.center);
-		let value_angle = angle_of(self.value);
+		let center_angle = value_to_rad(self.center);
+		let value_angle = value_to_rad(self.value);
 
-		let arc = Path::new(|b| {
-			b.arc(Arc {
-				center,
-				radius: self.radius,
-				start_angle: center_angle,
-				end_angle: value_angle,
-			});
-			b.line_to(center);
-			b.close();
-		});
-
-		let color = if self.enabled {
-			if state.hovering || state.dragging.is_some() {
-				theme.extended_palette().primary.base.color
-			} else {
-				theme.extended_palette().primary.weak.color
-			}
-		} else if state.hovering || state.dragging.is_some() {
-			theme.extended_palette().secondary.base.color
-		} else {
-			theme.extended_palette().secondary.weak.color
+		let dot = |angle: Radians, offset: f32, radius: f32| {
+			Path::circle(
+				center + Vector::new(angle.0.cos(), angle.0.sin()) * offset,
+				radius,
+			)
 		};
 
-		let text = theme.extended_palette().background.strong.text;
-
-		frame.fill(&arc, text);
+		frame.fill(
+			&Path::new(|b| {
+				b.arc(Arc {
+					center,
+					radius: self.radius,
+					start_angle: center_angle,
+					end_angle: value_angle,
+				});
+				b.line_to(center);
+				b.close();
+			}),
+			theme.extended_palette().background.strong.text,
+		);
 
 		frame.fill(
 			&Path::circle(center, self.radius - border_radius - border_radius),
@@ -158,31 +156,32 @@ impl<'a, Message> Knob<'a, Message> {
 		);
 
 		frame.fill(
-			&circle(center_angle, self.radius - border_radius, border_radius),
-			text,
+			&dot(center_angle, self.radius - border_radius, border_radius),
+			theme.extended_palette().background.strong.text,
 		);
 
 		frame.fill(
-			&circle(value_angle, self.radius - border_radius, border_radius),
-			text,
+			&dot(value_angle, self.radius - border_radius, border_radius),
+			theme.extended_palette().background.strong.text,
 		);
 
 		if self.stepped {
-			let mixed_color = mix(color, text, 0.25);
-
 			for step in *self.range.start() as i32..=*self.range.end() as i32 {
 				frame.fill(
-					&circle(
-						angle_of(step as f32),
+					&dot(
+						value_to_rad(step as f32),
 						self.radius.midpoint(dot_radius),
 						dot_radius / 2.0,
 					),
-					mixed_color,
+					mix(color, theme.extended_palette().background.strong.text, 0.25),
 				);
 			}
 		}
 
-		frame.fill(&circle(value_angle, self.radius / 2.0, dot_radius), text);
+		frame.fill(
+			&dot(value_angle, self.radius / 2.0, dot_radius),
+			theme.extended_palette().background.strong.text,
+		);
 	}
 }
 
