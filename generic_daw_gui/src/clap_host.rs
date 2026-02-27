@@ -138,7 +138,7 @@ impl ClapHost {
 
 					let (window, spawn) = window::open(window::Settings {
 						size: plugin.get_size().map_or_else(
-							|| (400.0, 600.0).into(),
+							|| (640.0, 480.0).into(),
 							|size| size.to_logical(scale_factor).into(),
 						),
 						resizable: plugin.can_resize(),
@@ -171,10 +171,9 @@ impl ClapHost {
 					&& let Some(plugin) = self.plugins.get_mut(id)
 					&& let Some(new_size) = plugin.resize(size)
 					&& let Some(scale_factor) = plugin.get_scale()
-					&& let new_size = new_size.to_logical(scale_factor)
-					&& size.to_physical(scale_factor) != new_size
+					&& !size.approx_eq(new_size, scale_factor)
 				{
-					return window::resize(window, new_size.into());
+					return window::resize(window, new_size.to_logical(scale_factor).into());
 				}
 			}
 			Message::WindowCloseRequested(window) => {

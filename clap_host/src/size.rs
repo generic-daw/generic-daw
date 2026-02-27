@@ -18,7 +18,7 @@ impl Size {
 			Self::Logical { width, height } => (width, height),
 			Self::Physical { width, height } => (width * scale_factor, height * scale_factor),
 		};
-		(f32::trunc(width), f32::trunc(height))
+		(width, height)
 	}
 
 	#[must_use]
@@ -32,7 +32,7 @@ impl Size {
 			Self::Logical { width, height } => (width / scale_factor, height / scale_factor),
 			Self::Physical { width, height } => (width, height),
 		};
-		(f32::trunc(width), f32::trunc(height))
+		(width, height)
 	}
 
 	#[must_use]
@@ -51,5 +51,12 @@ impl Size {
 		} else {
 			self.to_physical(scale_factor)
 		}
+	}
+
+	#[must_use]
+	pub fn approx_eq(self, other: Self, scale_factor: f32) -> bool {
+		let (lw, lh) = self.to_logical(scale_factor);
+		let (rw, rh) = other.to_logical(scale_factor);
+		(lw - rw).abs() <= 1.0 && (lh - rh).abs() <= 1.0
 	}
 }
