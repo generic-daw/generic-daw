@@ -4,7 +4,6 @@ mod audio_graph;
 mod entry;
 mod event_impl;
 mod node_impl;
-mod thread_pool;
 
 unique_id!(node_id);
 

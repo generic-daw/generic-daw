@@ -252,8 +252,8 @@ name = "audio_graph"
 version = "0.0.0"
 dependencies = [
  "crossbeam-queue",
- "crossbeam-utils",
  "dsp",
+ "thread_pool",
  "utils",
 ]
 
@@ -3257,6 +3257,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "thread_pool"
+version = "0.0.0"
+dependencies = [
+ "crossbeam-utils",
 ]
 
 [[package]]

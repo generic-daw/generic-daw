@@ -1,19 +1,47 @@
-use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry, thread_pool::ThreadPool};
+use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry};
 use crossbeam_queue::ArrayQueue;
 use dsp::DelayLine;
 use std::{
 	collections::HashMap,
+	marker::PhantomData,
 	num::NonZero,
 	sync::{RwLockWriteGuard, atomic::Ordering::Relaxed},
 };
-use utils::NoDebug;
+use thread_pool::ThreadPool;
+use utils::{NoDebug, boxed_slice};
+
+struct ErasedWorkList<Node: NodeImpl>(PhantomData<Node>);
+
+impl<Node: NodeImpl> thread_pool::ErasedWorkList for ErasedWorkList<Node> {
+	type WorkList<'a> = WorkList<'a, Node>;
+	type Scratch = Box<[f32]>;
+}
+
+struct WorkList<'a, Node: NodeImpl> {
+	audio_graph: &'a AudioGraph<Node>,
+	state: &'a Node::State,
+	len: usize,
+}
+
+impl<Node: NodeImpl> thread_pool::WorkList for WorkList<'_, Node> {
+	type Item = NodeId;
+	type Scratch = Box<[f32]>;
+
+	fn next_item(&self) -> Option<Self::Item> {
+		self.audio_graph.queue.pop()
+	}
+
+	fn do_work(&self, item: Self::Item, scratch: &mut Self::Scratch) -> Option<Self::Item> {
+		self.audio_graph
+			.process_node(item, self.state, &mut scratch[..self.len])
+	}
+}
 
 #[derive(Debug)]
 pub struct AudioGraph<Node: NodeImpl> {
-	pool: Option<NoDebug<ThreadPool<Node>>>,
+	pool: Option<NoDebug<ThreadPool<ErasedWorkList<Node>>>>,
 	graph: HashMap<NodeId, Entry<Node>>,
 	queue: ArrayQueue<NodeId>,
-	len: usize,
 	root: NodeId,
 	frames: NonZero<u32>,
 }
@@ -24,10 +52,12 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		let root = root.into();
 
 		let mut this = Self {
-			pool: Some(ThreadPool::new(frames).into()),
+			pool: Some(
+				ThreadPool::new_with_scratch(|| boxed_slice![0.0; 2 * frames.get() as usize])
+					.into(),
+			),
 			graph: HashMap::new(),
 			queue: ArrayQueue::new(4),
-			len: 0,
 			root: root.id(),
 			frames,
 		};
@@ -38,8 +68,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	pub fn process(&mut self, state: &Node::State, buf: &mut [f32]) {
-		self.len = buf.len();
-
 		for (id, entry) in &mut self.graph {
 			let indegree = entry.buffers().incoming.len().cast_signed();
 			*entry.indegree.get_mut() = indegree - 1;
@@ -49,7 +77,14 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		}
 
 		let mut pool = self.pool.take().unwrap();
-		pool.run(self, state, self.graph.len());
+		pool.run(
+			&WorkList {
+				audio_graph: self,
+				state,
+				len: buf.len(),
+			},
+			self.graph.len(),
+		);
 		self.pool = Some(pool);
 
 		if cfg!(debug_assertions) {
@@ -61,10 +96,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		buf.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..buf.len()]);
 	}
 
-	pub(crate) fn next_node(&self) -> Option<NodeId> {
-		self.queue.pop()
-	}
-
 	#[expect(clippy::significant_drop_tightening)]
 	pub(crate) fn process_node(
 		&self,
@@ -73,10 +104,9 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		scratch: &mut [f32],
 	) -> Option<NodeId> {
 		let entry = &self.graph[&node];
+		let len = scratch.len();
 
 		debug_assert_eq!(entry.indegree.load(Relaxed), -1);
-
-		let len = self.len;
 
 		let mut buffers_lock = entry.write_buffers_uncontended();
 		let buffers = &mut *buffers_lock;
@@ -100,9 +130,9 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			let audio = if delay_diff == 0 {
 				&dep_buffers.audio[..len]
 			} else {
-				scratch[..len].copy_from_slice(&dep_buffers.audio[..len]);
-				delay_line.advance(&mut scratch[..len]);
-				&scratch[..len]
+				scratch.copy_from_slice(&dep_buffers.audio[..len]);
+				delay_line.advance(&mut *scratch);
+				&*scratch
 			};
 
 			if filled_audio {

@@ -6,6 +6,7 @@ members = [
 	"generic_daw_gui",
 	"generic_daw_project",
 	"generic_daw_widget",
+	"thread_pool",
 	"utils",
 ]
 resolver = "3"
@@ -18,6 +19,7 @@ generic_daw_core.path = "generic_daw_core"
 generic_daw_gui.path = "generic_daw_gui"
 generic_daw_project.path = "generic_daw_project"
 generic_daw_widget.path = "generic_daw_widget"
+thread_pool.path = "thread_pool"
 utils.path = "utils"
 
 [workspace.package]

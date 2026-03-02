@@ -10,6 +10,6 @@ workspace = true
 [dependencies]
 dsp.workspace = true
 utils.workspace = true
+thread_pool.workspace = true
 
 crossbeam-queue = "0.3.12"
-crossbeam-utils = "0.8.21"
