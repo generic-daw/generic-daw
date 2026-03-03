@@ -85,4 +85,4 @@ icon!(arrow_up_down = 58237);
 icon!(chart_no_axes_gantt = 58564);
 icon!(radius = 58669);
 icon!(file_music = 58718);
-icon!(metronome = 59085 + 0.025);
+icon!(metronome = 59057 + 0.025);
