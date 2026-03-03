@@ -4,7 +4,9 @@ use fragile::Fragile;
 use generic_daw_core::clap_host::FdFlags;
 use generic_daw_core::{
 	Event, PluginId,
-	clap_host::{MainThreadMessage, ParamInfoFlags, Plugin, Size, StateContextType, TimerId},
+	clap_host::{
+		MainThreadMessage, ParamInfoFlags, Plugin, RenderMode, Size, StateContextType, TimerId,
+	},
 };
 use generic_daw_widget::knob::Knob;
 #[cfg(unix)]
@@ -436,9 +438,9 @@ impl ClapHost {
 		])
 	}
 
-	pub fn set_realtime(&mut self, realtime: bool) {
+	pub fn set_render_mode(&mut self, render_mode: RenderMode) {
 		for plugin in self.plugins.values_mut() {
-			plugin.set_realtime(realtime);
+			plugin.set_render_mode(render_mode);
 		}
 	}
 

@@ -409,18 +409,12 @@ impl<Event: EventImpl> Plugin<Event> {
 		self.send(AudioThreadMessage::Event(event));
 	}
 
-	pub fn set_realtime(&mut self, realtime: bool) {
-		self.send(AudioThreadMessage::SetRealtime(realtime));
+	pub fn set_render_mode(&mut self, render_mode: RenderMode) {
+		self.send(AudioThreadMessage::RenderMode(render_mode));
 
 		if let Some(&render) = self.instance.access_shared_handler(|s| s.ext.render.get())
-			&& let Err(err) = render.set(
-				&mut self.instance.plugin_handle(),
-				if realtime {
-					RenderMode::Realtime
-				} else {
-					RenderMode::Offline
-				},
-			) {
+			&& let Err(err) = render.set(&mut self.instance.plugin_handle(), render_mode)
+		{
 			warn!("{}: {err}", self.descriptor);
 		}
 	}

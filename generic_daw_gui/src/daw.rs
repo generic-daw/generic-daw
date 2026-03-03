@@ -15,7 +15,7 @@ use crate::{
 	},
 	widget::OPACITY_67,
 };
-use generic_daw_core::{Export, MusicalTime};
+use generic_daw_core::{Export, MusicalTime, clap_host::RenderMode};
 use iced::{
 	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
 	mouse::Interaction,
@@ -354,7 +354,9 @@ impl Daw {
 			Message::ExportFile(path) => {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
-					self.arrangement_view.clap_host.set_realtime(false);
+					self.arrangement_view
+						.clap_host
+						.set_render_mode(RenderMode::Offline);
 					return self.arrangement_view.arrangement.start_export(path);
 				}
 			}
@@ -362,7 +364,9 @@ impl Daw {
 				self.arrangement_view
 					.arrangement
 					.finish_export(*audio_graph);
-				self.arrangement_view.clap_host.set_realtime(true);
+				self.arrangement_view
+					.clap_host
+					.set_render_mode(RenderMode::Realtime);
 				self.progress = None;
 			}
 			Message::OpenConfigView => {

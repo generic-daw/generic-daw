@@ -2,6 +2,7 @@ use crate::{
 	EventImpl, MainThreadMessage, PluginDescriptor, audio_buffers::AudioBuffers,
 	event_buffers::EventBuffers, host::Host, shared::CURRENT_THREAD_ID,
 };
+use clack_extensions::render::RenderMode;
 use clack_host::prelude::*;
 use log::{trace, warn};
 use rtrb::Consumer;
@@ -11,7 +12,7 @@ use utils::{NoClone, NoDebug};
 #[derive(Debug)]
 pub enum AudioThreadMessage<Event: EventImpl> {
 	Activated(NoDebug<PluginAudioProcessor<Host>>, Option<u32>),
-	SetRealtime(bool),
+	RenderMode(RenderMode),
 	Event(Event),
 }
 
@@ -24,7 +25,7 @@ pub struct AudioProcessor<Event: EventImpl> {
 	event_buffers: EventBuffers,
 	consumer: Consumer<AudioThreadMessage<Event>>,
 	needs_reset: bool,
-	realtime: bool,
+	render_mode: RenderMode,
 }
 
 impl<Event: EventImpl> AudioProcessor<Event> {
@@ -43,7 +44,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			event_buffers,
 			consumer,
 			needs_reset: false,
-			realtime: true,
+			render_mode: RenderMode::Realtime,
 		}
 	}
 
@@ -64,7 +65,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 							self.audio_buffers.latency_changed(latency);
 						}
 					}
-					AudioThreadMessage::SetRealtime(realtime) => self.realtime = realtime,
+					AudioThreadMessage::RenderMode(render_mode) => self.render_mode = render_mode,
 					AudioThreadMessage::Event(event) => events.push(event),
 				}
 			}
@@ -88,7 +89,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 				}
 			}
 
-			if self.realtime || self.processor.is_some() {
+			if self.render_mode == RenderMode::Realtime || self.processor.is_some() {
 				break;
 			}
 
