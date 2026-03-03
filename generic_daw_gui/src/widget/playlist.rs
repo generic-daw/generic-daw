@@ -408,14 +408,6 @@ where
 		cursor: Cursor,
 		viewport: &Rectangle,
 	) {
-		let offset_time = |time: MusicalTime| {
-			layout.bounds().position()
-				+ Vector::new(
-					time_to_px(time, *self.position, *self.scale, self.transport),
-					0.0,
-				)
-		};
-
 		let selection = &*self.selection.borrow();
 
 		for layout in layout.children() {
@@ -440,7 +432,14 @@ where
 			if let Some(bounds) = layout.children().nth(track).map(|layout| layout.bounds()) {
 				renderer.fill_quad(
 					Quad {
-						bounds: Rectangle::new(offset_time(time), Size::new(50.0, bounds.height)),
+						bounds: Rectangle::new(
+							bounds.position()
+								+ Vector::new(
+									time_to_px(time, *self.position, *self.scale, self.transport),
+									0.0,
+								),
+							Size::new(50.0, bounds.height),
+						),
 						..Quad::default()
 					},
 					Linear::new(FRAC_PI_2)
