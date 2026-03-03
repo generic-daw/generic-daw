@@ -77,7 +77,7 @@ impl<W: ErasedWorkList> ThreadPool<W> {
 			active: AtomicUsize::new(usize::MAX),
 			to_do: AtomicUsize::new(0),
 			stop: AtomicBool::new(false),
-			mt_working: AtomicBool::new(true),
+			mt_working: AtomicBool::new(false),
 		});
 
 		let scratch = make_scratch();
@@ -87,7 +87,7 @@ impl<W: ErasedWorkList> ThreadPool<W> {
 				let shared = shared.clone();
 				let scratch = make_scratch();
 				std::thread::Builder::new()
-					.name(format!("worker #{i}"))
+					.name(format!("worker-{i}"))
 					.spawn(move || shared.worker(scratch))
 					.unwrap()
 			})
