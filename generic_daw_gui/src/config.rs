@@ -15,7 +15,7 @@ pub static CONFIG_PATH: LazyLock<Arc<Path>> =
 	LazyLock::new(|| dirs::config_dir().unwrap().join("generic_daw.toml").into());
 
 pub static DEFAULT_SAMPLE_PATHS: LazyLock<Box<[Arc<Path>]>> =
-	LazyLock::new(|| boxed_slice![dirs::home_dir().unwrap().into(), DATA_DIR.clone()]);
+	LazyLock::new(|| boxed_slice![DATA_DIR.clone()]);
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default)]
