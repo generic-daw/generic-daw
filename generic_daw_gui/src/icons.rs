@@ -56,7 +56,7 @@ macro_rules! icon {
 	};
 }
 
-// https://unpkg.com/lucide-static@latest/font/info.json
+// https://unpkg.com/lucide-static@latest/font/codepoints.json
 icon!(chevron_down = 57453);
 icon!(chevron_right = 57455);
 icon!(chevron_up = 57456);

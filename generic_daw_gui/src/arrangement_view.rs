@@ -511,9 +511,11 @@ impl ArrangementView {
 					self.soloed_track = None;
 				}
 
-				_ = self.update(Message::ArrowRight, config);
-				if self.selected_channel == id {
-					_ = self.update(Message::ArrowLeft, config);
+				if matches!(self.tab, Tab::Mixer) {
+					_ = self.update(Message::ArrowRight, config);
+					if self.selected_channel == id {
+						_ = self.update(Message::ArrowLeft, config);
+					}
 				}
 
 				let idx = self.arrangement.track_of(id).unwrap();
