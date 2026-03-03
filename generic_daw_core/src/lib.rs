@@ -1,5 +1,4 @@
 mod audio_clip;
-mod audio_graph_node;
 mod automation_clip;
 mod automation_lane;
 mod automation_pattern;
@@ -13,6 +12,7 @@ mod midi_clip;
 mod midi_note;
 mod midi_pattern;
 mod musical_time;
+mod node;
 mod offset_position;
 mod position;
 mod recording;
@@ -23,7 +23,6 @@ mod track;
 
 pub use audio_clip::AudioClip;
 pub use audio_graph::{NodeId, NodeImpl};
-pub use audio_graph_node::AudioGraphNode;
 pub use automation_clip::AutomationClip;
 pub use automation_lane::AutomationLane;
 pub use automation_pattern::{AutomationPattern, AutomationPatternAction, AutomationPatternId};
@@ -39,6 +38,7 @@ pub use midi_clip::MidiClip;
 pub use midi_note::{Key, MidiKey, MidiNote};
 pub use midi_pattern::{MidiPattern, MidiPatternAction, MidiPatternId};
 pub use musical_time::MusicalTime;
+pub use node::Node;
 pub use offset_position::OffsetPosition;
 pub use position::Position;
 pub use recording::Recording;
@@ -47,4 +47,4 @@ pub use stream::{build_input_stream, build_output_stream, get_devices};
 pub use symphonia::core::io::MediaSource;
 pub use track::Track;
 
-type AudioGraph = audio_graph::AudioGraph<AudioGraphNode>;
+type AudioGraph = audio_graph::AudioGraph<Node>;

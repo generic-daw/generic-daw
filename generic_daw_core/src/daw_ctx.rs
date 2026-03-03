@@ -1,7 +1,7 @@
 use crate::{
-	AudioGraph, AudioGraphNode, AutomationPattern, AutomationPatternAction, AutomationPatternId,
-	Channel, Clip, Event, Export, MidiPattern, MidiPatternAction, MidiPatternId, MusicalTime,
-	NodeId, PanMode, PluginId, Position, Sample, SampleId,
+	AudioGraph, AutomationPattern, AutomationPatternAction, AutomationPatternId, Channel, Clip,
+	Event, Export, MidiPattern, MidiPatternAction, MidiPatternId, MusicalTime, Node, NodeId,
+	PanMode, PluginId, Position, Sample, SampleId,
 	clap_host::{AudioProcessor, ClapId},
 	resampler::Resampler,
 };
@@ -34,7 +34,7 @@ pub enum Message {
 	AutomationPatternAdd(AutomationPattern),
 	AutomationPatternRemove(AutomationPatternId),
 
-	NodeAdd(Box<AudioGraphNode>),
+	NodeAdd(Box<Node>),
 	NodeRemove(NodeId),
 	NodeConnect(NodeId, NodeId),
 	NodeDisconnect(NodeId, NodeId),
@@ -251,7 +251,7 @@ impl DawCtx {
 					self.state.transport.sample = sample;
 				}
 				Message::LoopMarker(loop_marker) => self.state.transport.loop_marker = loop_marker,
-				Message::Reset => self.audio_graph.for_each_node_mut(AudioGraphNode::reset),
+				Message::Reset => self.audio_graph.for_each_node_mut(Node::reset),
 				Message::RequestUpdate => self.needs_update = true,
 				Message::ReuseUpdateBuffer(update) => {
 					debug_assert!(update.is_empty());

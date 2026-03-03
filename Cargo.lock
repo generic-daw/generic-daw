@@ -1363,7 +1363,7 @@ checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
 [[package]]
 name = "iced"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#932e8950a655c5f47b421ddf071557261e72b32e"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#2a2a5146f2e2e8d1cd600a943893957cd03c8a2d"
 dependencies = [
  "iced_core",
  "iced_debug",
@@ -1378,7 +1378,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#932e8950a655c5f47b421ddf071557261e72b32e"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#2a2a5146f2e2e8d1cd600a943893957cd03c8a2d"
 dependencies = [
  "bitflags 2.11.0",
  "bytes",
@@ -1395,7 +1395,7 @@ dependencies = [
 [[package]]
 name = "iced_debug"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#932e8950a655c5f47b421ddf071557261e72b32e"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#2a2a5146f2e2e8d1cd600a943893957cd03c8a2d"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1405,7 +1405,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#932e8950a655c5f47b421ddf071557261e72b32e"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#2a2a5146f2e2e8d1cd600a943893957cd03c8a2d"
 dependencies = [
  "futures",
  "iced_core",
@@ -1419,7 +1419,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#932e8950a655c5f47b421ddf071557261e72b32e"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#2a2a5146f2e2e8d1cd600a943893957cd03c8a2d"
 dependencies = [
  "bitflags 2.11.0",
  "bytemuck",
@@ -1438,7 +1438,7 @@ dependencies = [
 [[package]]
 name = "iced_program"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#932e8950a655c5f47b421ddf071557261e72b32e"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#2a2a5146f2e2e8d1cd600a943893957cd03c8a2d"
 dependencies = [
  "iced_graphics",
  "iced_runtime",
@@ -1447,7 +1447,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#932e8950a655c5f47b421ddf071557261e72b32e"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#2a2a5146f2e2e8d1cd600a943893957cd03c8a2d"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -1459,7 +1459,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#932e8950a655c5f47b421ddf071557261e72b32e"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#2a2a5146f2e2e8d1cd600a943893957cd03c8a2d"
 dependencies = [
  "bytes",
  "iced_core",
@@ -1479,7 +1479,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#932e8950a655c5f47b421ddf071557261e72b32e"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#2a2a5146f2e2e8d1cd600a943893957cd03c8a2d"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -1495,7 +1495,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#932e8950a655c5f47b421ddf071557261e72b32e"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#2a2a5146f2e2e8d1cd600a943893957cd03c8a2d"
 dependencies = [
  "bitflags 2.11.0",
  "bytemuck",
@@ -1515,7 +1515,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#932e8950a655c5f47b421ddf071557261e72b32e"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#2a2a5146f2e2e8d1cd600a943893957cd03c8a2d"
 dependencies = [
  "iced_renderer",
  "log",
@@ -1528,7 +1528,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#932e8950a655c5f47b421ddf071557261e72b32e"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#2a2a5146f2e2e8d1cd600a943893957cd03c8a2d"
 dependencies = [
  "arboard",
  "iced_debug",
@@ -1570,9 +1570,9 @@ dependencies = [
 
 [[package]]
 name = "jiff"
-version = "0.2.21"
+version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3e3d65f018c6ae946ab16e80944b97096ed73c35b221d1c478a6c81d8f57940"
+checksum = "819b44bc7c87d9117eb522f14d46e918add69ff12713c475946b0a29363ed1c2"
 dependencies = [
  "jiff-static",
  "log",
@@ -1583,9 +1583,9 @@ dependencies = [
 
 [[package]]
 name = "jiff-static"
-version = "0.2.21"
+version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a17c2b211d863c7fde02cbea8a3c1a439b98e109286554f2860bdded7ff83818"
+checksum = "470252db18ecc35fd766c0891b1e3ec6cbbcd62507e85276c01bf75d8e94d4a1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1691,13 +1691,14 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libredox"
-version = "0.1.12"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d0b95e02c851351f877147b7deea7b1afb1df71b63aa5f8270716e0c5720616"
+checksum = "1744e39d1d6a9948f4f388969627434e31128196de472883b39f148769bfe30a"
 dependencies = [
  "bitflags 2.11.0",
  "libc",
- "redox_syscall 0.7.2",
+ "plain",
+ "redox_syscall 0.7.3",
 ]
 
 [[package]]
@@ -2433,9 +2434,9 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "piper"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96c8c490f422ef9a4efd2cb5b42b76c8613d7e7dfc1caf667b8a3350a5acc066"
+checksum = "c835479a4443ded371d6c535cbfd8d31ad92c5d23ae9770a61bc155e4992a3c1"
 dependencies = [
  "atomic-waker",
  "fastrand",
@@ -2447,6 +2448,12 @@ name = "pkg-config"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
+
+[[package]]
+name = "plain"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "polling"
@@ -2562,9 +2569,9 @@ checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
 
 [[package]]
 name = "range-alloc"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d6831663a5098ea164f89cff59c6284e95f4e3c76ce9848d4529f5ccca9bde"
+checksum = "ca45419789ae5a7899559e9512e58ca889e41f04f1f2445e9f4b290ceccd1d08"
 
 [[package]]
 name = "rangemap"
@@ -2638,9 +2645,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d94dd2f7cd932d4dc02cc8b2b50dfd38bd079a4e5d79198b99743d7fcf9a4b4"
+checksum = "6ce70a74e890531977d37e532c34d45e9055d2409ed08ddba14529471ed0be16"
 dependencies = [
  "bitflags 2.11.0",
 ]
@@ -3653,9 +3660,9 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "28.0.0"
+version = "28.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bb4c8b5db5f00e56f1f08869d870a0dff7c8bc7ebc01091fec140b0cf0211a9"
+checksum = "d23f4642f53f666adcfd2d3218ab174d1e6681101aef18696b90cbe64d1c10f9"
 dependencies = [
  "arrayvec",
  "bit-set",
@@ -3712,9 +3719,9 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "28.0.0"
+version = "28.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "293080d77fdd14d6b08a67c5487dfddbf874534bb7921526db56a7b75d7e3bef"
+checksum = "44d6cb474beb218824dcc9e1ce679d973f719262789bfb27407da560cac20eeb"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -4132,9 +4139,9 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
 name = "winit"
-version = "0.30.12"
+version = "0.30.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c66d4b9ed69c4009f6321f762d6e61ad8a2389cd431b97cb1e146812e9e6c732"
+checksum = "a6755fa58a9f8350bd1e472d4c3fcc25f824ec358933bba33306d0b63df5978d"
 dependencies = [
  "android-activity",
  "atomic-waker",

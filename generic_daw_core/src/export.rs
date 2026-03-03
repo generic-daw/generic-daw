@@ -1,4 +1,4 @@
-use crate::{AudioGraph, AudioGraphNode, MusicalTime, daw_ctx::State};
+use crate::{AudioGraph, MusicalTime, Node, daw_ctx::State};
 use hound::WavWriter;
 use std::path::Path;
 use utils::boxed_slice;
@@ -12,7 +12,7 @@ pub struct Export {
 impl Export {
 	pub fn export(&mut self, path: &Path, len: MusicalTime, mut progress_fn: impl FnMut(f32)) {
 		let old = self.state.transport;
-		self.audio_graph.for_each_node_mut(AudioGraphNode::reset);
+		self.audio_graph.for_each_node_mut(Node::reset);
 
 		self.state.transport.sample = 0;
 		self.state.transport.playing = true;
@@ -75,6 +75,6 @@ impl Export {
 		writer.finalize().unwrap();
 
 		self.state.transport = old;
-		self.audio_graph.for_each_node_mut(AudioGraphNode::reset);
+		self.audio_graph.for_each_node_mut(Node::reset);
 	}
 }

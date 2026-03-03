@@ -14,9 +14,9 @@ use crate::{
 	daw,
 };
 use generic_daw_core::{
-	AudioGraphNode, Event, Export, Message, MidiKey, MidiNote, MidiPatternAction, MidiPatternId,
-	MusicalTime, NodeAction, NodeId, NodeImpl, PanMode, PluginId, Position, SampleId, Stream,
-	StreamTrait as _, Transport, Update, Version, build_output_stream,
+	Event, Export, Message, MidiKey, MidiNote, MidiPatternAction, MidiPatternId, MusicalTime,
+	NodeAction, NodeId, NodeImpl, PanMode, PluginId, Position, SampleId, Stream, StreamTrait as _,
+	Transport, Update, Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
 use iced::Task;
@@ -340,7 +340,7 @@ impl Arrangement {
 		&mut self.nodes.get_mut(&id).unwrap().1
 	}
 
-	fn add(&mut self, node: impl Into<AudioGraphNode> + NodeImpl, ty: NodeType) -> NodeId {
+	fn add(&mut self, node: impl Into<generic_daw_core::Node> + NodeImpl, ty: NodeType) -> NodeId {
 		let id = node.id();
 		self.nodes.insert(id, (Node::new(ty, id), BTreeSet::new()));
 		self.send(Message::NodeAdd(Box::new(node.into())));

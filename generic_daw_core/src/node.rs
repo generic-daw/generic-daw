@@ -1,12 +1,12 @@
 use crate::{Channel, Event, NodeAction, NodeImpl, Track, Update, daw_ctx::State};
 
 #[derive(Debug)]
-pub enum AudioGraphNode {
+pub enum Node {
 	Channel(Channel),
 	Track(Track),
 }
 
-impl NodeImpl for AudioGraphNode {
+impl NodeImpl for Node {
 	type Event = Event;
 	type State = State;
 
@@ -32,7 +32,7 @@ impl NodeImpl for AudioGraphNode {
 	}
 }
 
-impl AudioGraphNode {
+impl Node {
 	pub fn apply(&mut self, action: NodeAction) {
 		match self {
 			Self::Channel(node) => node.apply(action),
@@ -55,13 +55,13 @@ impl AudioGraphNode {
 	}
 }
 
-impl From<Channel> for AudioGraphNode {
+impl From<Channel> for Node {
 	fn from(value: Channel) -> Self {
 		Self::Channel(value)
 	}
 }
 
-impl From<Track> for AudioGraphNode {
+impl From<Track> for Node {
 	fn from(value: Track) -> Self {
 		Self::Track(value)
 	}
