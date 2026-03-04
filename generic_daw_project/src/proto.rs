@@ -32,7 +32,7 @@ pub struct Project {
 	#[prost(message, repeated)]
 	pub samples: Vec<Sample>,
 	#[prost(message, repeated)]
-	pub midi_patterns: Vec<Pattern>,
+	pub midi_patterns: Vec<MidiPattern>,
 	#[prost(message, repeated)]
 	pub tracks: Vec<Track>,
 	#[prost(message, repeated)]
@@ -58,11 +58,21 @@ pub struct Sample {
 }
 
 #[derive(Message)]
-pub struct Pattern {
+pub struct MidiPattern {
 	#[prost(message, repeated)]
 	pub notes: Vec<Note>,
 	#[prost(string)]
 	pub name: String,
+}
+
+#[derive(Clone, Copy, Message)]
+pub struct Note {
+	#[prost(uint32)]
+	pub key: u32,
+	#[prost(float, default = 1.0)]
+	pub velocity: f32,
+	#[prost(message, required)]
+	pub position: Position,
 }
 
 #[derive(Message)]
@@ -76,7 +86,7 @@ pub struct Track {
 #[derive(Message)]
 pub struct Channel {
 	#[prost(message, repeated)]
-	pub connections: Vec<ChannelIndex>,
+	pub connections: Vec<Connection>,
 	#[prost(message, repeated)]
 	pub plugins: Vec<Plugin>,
 	#[prost(float, default = 1.0)]
@@ -87,6 +97,26 @@ pub struct Channel {
 	pub enabled: bool,
 	#[prost(bool, default = false)]
 	pub bypassed: bool,
+}
+
+#[derive(Clone, Copy, Message, PartialEq)]
+pub struct Connection {
+	#[prost(uint32)]
+	pub index: u32,
+	#[prost(float, default = 1.0)]
+	pub mix: f32,
+}
+
+#[derive(Message)]
+pub struct Plugin {
+	#[prost(bytes = "vec")]
+	pub id: Vec<u8>,
+	#[prost(bytes = "vec", optional)]
+	pub state: Option<Vec<u8>>,
+	#[prost(float, default = 1.0)]
+	pub mix: f32,
+	#[prost(bool, default = true)]
+	pub enabled: bool,
 }
 
 #[derive(Clone, Copy, Message)]
@@ -115,16 +145,6 @@ pub struct PanModeStereo {
 	pub l: f32,
 	#[prost(float, default = 1.0)]
 	pub r: f32,
-}
-
-#[derive(Clone, Copy, Message)]
-pub struct Note {
-	#[prost(uint32)]
-	pub key: u32,
-	#[prost(float, default = 1.0)]
-	pub velocity: f32,
-	#[prost(message, required)]
-	pub position: Position,
 }
 
 #[derive(Clone, Copy, Message)]
@@ -171,18 +191,6 @@ pub struct OffsetPosition {
 	pub position: Position,
 	#[prost(uint64)]
 	pub offset: u64,
-}
-
-#[derive(Message)]
-pub struct Plugin {
-	#[prost(bytes = "vec")]
-	pub id: Vec<u8>,
-	#[prost(bytes = "vec", optional)]
-	pub state: Option<Vec<u8>>,
-	#[prost(float, default = 1.0)]
-	pub mix: f32,
-	#[prost(bool, default = true)]
-	pub enabled: bool,
 }
 
 impl Plugin {

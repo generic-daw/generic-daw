@@ -60,7 +60,7 @@ impl Arrangement {
 		for pattern in self.midi_patterns().values() {
 			midi_patterns.insert(
 				pattern.id,
-				writer.push_pattern(
+				writer.push_midi_pattern(
 					&pattern.name,
 					pattern.notes.iter().map(|note| proto::Note {
 						key: note.key.0.into(),
@@ -150,14 +150,14 @@ impl Arrangement {
 		}
 
 		for track in self.tracks() {
-			for outgoing in self.outgoing(track.id) {
-				writer.connect_track_to_channel(tracks[&track.id], channels[outgoing]);
+			for (outgoing, &mix) in self.outgoing(track.id) {
+				writer.connect_track_to_channel(tracks[&track.id], channels[outgoing], mix);
 			}
 		}
 
 		for channel in self.channels() {
-			for outgoing in self.outgoing(channel.id) {
-				writer.connect_channel_to_channel(channels[&channel.id], channels[outgoing]);
+			for (outgoing, &mix) in self.outgoing(channel.id) {
+				writer.connect_channel_to_channel(channels[&channel.id], channels[outgoing], mix);
 			}
 		}
 
@@ -480,19 +480,21 @@ impl Arrangement {
 			load_channel(arrangement.node(id), channel)?;
 		}
 
-		for (from, to) in reader.iter_track_to_channel() {
+		for (from, to, mix) in reader.iter_track_to_channel() {
 			messages.push(arrangement_view::Message::Connect(
 				*tracks.get(&from)?,
 				*channels.get(&to)?,
+				mix,
 			));
 		}
 
 		drop(tracks);
 
-		for (from, to) in reader.iter_channel_to_channel() {
+		for (from, to, mix) in reader.iter_channel_to_channel() {
 			messages.push(arrangement_view::Message::Connect(
 				*channels.get(&from)?,
 				*channels.get(&to)?,
+				mix,
 			));
 		}
 

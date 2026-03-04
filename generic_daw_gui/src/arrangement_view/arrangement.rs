@@ -23,12 +23,7 @@ use iced::Task;
 use project::Id as Project;
 use rtrb::{Producer, PushError};
 use smol::unblock;
-use std::{
-	collections::{BTreeMap, BTreeSet},
-	num::NonZero,
-	path::Path,
-	sync::Arc,
-};
+use std::{collections::BTreeMap, num::NonZero, path::Path, sync::Arc};
 use utils::{NoDebug, ShiftMoveExt as _, unique_id};
 
 unique_id!(project);
@@ -43,7 +38,7 @@ pub struct Arrangement {
 	midi_patterns: BTreeMap<MidiPatternId, MidiPattern>,
 
 	tracks: Vec<Track>,
-	nodes: BTreeMap<NodeId, (Node, BTreeSet<NodeId>)>,
+	nodes: BTreeMap<NodeId, (Node, BTreeMap<NodeId, f32>)>,
 	master_node_id: NodeId,
 
 	producer: Producer<Message>,
@@ -67,7 +62,7 @@ impl Arrangement {
 		let mut nodes = BTreeMap::new();
 		nodes.insert(
 			master_node_id,
-			(Node::new(NodeType::Master, master_node_id), BTreeSet::new()),
+			(Node::new(NodeType::Master, master_node_id), BTreeMap::new()),
 		);
 
 		let project = Project::unique();
@@ -120,7 +115,7 @@ impl Arrangement {
 						),
 					));
 				}
-				Update::Connect(from, to) => _ = self.outgoing_mut(from).insert(to),
+				Update::Connect(from, to, mix) => _ = self.outgoing_mut(from).insert(to, mix),
 				Update::Load(duration, frames) => {
 					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
 					let load = duration.as_secs_f32() * mix;
@@ -332,17 +327,17 @@ impl Arrangement {
 		&mut self.nodes.get_mut(&id).unwrap().0
 	}
 
-	pub fn outgoing(&self, id: NodeId) -> &BTreeSet<NodeId> {
+	pub fn outgoing(&self, id: NodeId) -> &BTreeMap<NodeId, f32> {
 		&self.nodes[&id].1
 	}
 
-	fn outgoing_mut(&mut self, id: NodeId) -> &mut BTreeSet<NodeId> {
+	fn outgoing_mut(&mut self, id: NodeId) -> &mut BTreeMap<NodeId, f32> {
 		&mut self.nodes.get_mut(&id).unwrap().1
 	}
 
 	fn add(&mut self, node: impl Into<generic_daw_core::Node> + NodeImpl, ty: NodeType) -> NodeId {
 		let id = node.id();
-		self.nodes.insert(id, (Node::new(ty, id), BTreeSet::new()));
+		self.nodes.insert(id, (Node::new(ty, id), BTreeMap::new()));
 		self.send(Message::NodeAdd(Box::new(node.into())));
 		id
 	}
@@ -381,8 +376,8 @@ impl Arrangement {
 		}
 	}
 
-	pub fn connect(&mut self, from: NodeId, to: NodeId) {
-		self.send(Message::NodeConnect(from, to));
+	pub fn connect(&mut self, from: NodeId, to: NodeId, mix: f32) {
+		self.send(Message::NodeConnect(from, to, mix));
 	}
 
 	pub fn disconnect(&mut self, from: NodeId, to: NodeId) {

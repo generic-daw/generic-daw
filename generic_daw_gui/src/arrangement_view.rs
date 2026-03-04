@@ -121,7 +121,7 @@ pub enum Message {
 
 	UpdateRequest,
 
-	Connect(NodeId, NodeId),
+	Connect(NodeId, NodeId, f32),
 	Disconnect(NodeId, NodeId),
 
 	ChangedTab(Tab),
@@ -305,7 +305,7 @@ impl ArrangementView {
 				self.piano_roll_selection.get_mut().clear();
 			}
 			Message::UpdateRequest => self.arrangement.request_update(),
-			Message::Connect(from, to) => self.arrangement.connect(from, to),
+			Message::Connect(from, to, mix) => self.arrangement.connect(from, to, mix),
 			Message::Disconnect(from, to) => self.arrangement.disconnect(from, to),
 			Message::ChangedTab(tab) => {
 				match self.tab {
@@ -330,7 +330,10 @@ impl ArrangementView {
 			Message::ChannelAdd => {
 				let id = self.arrangement.add_channel();
 				self.selected_channel = id;
-				return self.update(Message::Connect(id, self.arrangement.master().id), config);
+				return self.update(
+					Message::Connect(id, self.arrangement.master().id, 1.0),
+					config,
+				);
 			}
 			Message::ChannelRemove(id) => {
 				_ = self.update(Message::ArrowRight, config);
@@ -504,7 +507,10 @@ impl ArrangementView {
 				if self.soloed_track.is_some() {
 					self.arrangement.channel_toggle_enabled(id);
 				}
-				return self.update(Message::Connect(id, self.arrangement.master().id), config);
+				return self.update(
+					Message::Connect(id, self.arrangement.master().id, 1.0),
+					config,
+				);
 			}
 			Message::TrackRemove(id) => {
 				if self.soloed_track == Some(id) {
@@ -1565,7 +1571,7 @@ impl ArrangementView {
 						let connected = self
 							.arrangement
 							.outgoing(self.selected_channel)
-							.contains(&node.id);
+							.contains_key(&node.id);
 
 						button(chevron_up())
 							.padding(0)
@@ -1580,7 +1586,7 @@ impl ArrangementView {
 							.on_press(if connected {
 								Message::Disconnect(self.selected_channel, node.id)
 							} else {
-								Message::Connect(self.selected_channel, node.id)
+								Message::Connect(self.selected_channel, node.id, 1.0)
 							})
 							.into()
 					}

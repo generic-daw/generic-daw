@@ -1,6 +1,8 @@
-use crate::{EventImpl as _, NodeId, NodeImpl, entry::Entry};
+use crate::{
+	EventImpl as _, NodeId, NodeImpl,
+	entry::{Entry, Incoming},
+};
 use crossbeam_queue::ArrayQueue;
-use dsp::DelayLine;
 use std::{
 	collections::HashMap,
 	marker::PhantomData,
@@ -111,7 +113,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		let mut buffers_lock = entry.write_buffers_uncontended();
 		let buffers = &mut *buffers_lock;
 
-		let mut filled_audio = false;
+		buffers.audio[..len].fill(0.0);
 		buffers.events.clear();
 
 		let max_delay = buffers
@@ -121,29 +123,24 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			.max()
 			.unwrap_or_default();
 
-		for (dep, (delay_line, events)) in &mut buffers.incoming {
+		for (dep, Incoming { delay, events, mix }) in &mut buffers.incoming {
 			let dep_entry = &self.graph[dep];
 			let dep_buffers = &*dep_entry.read_buffers_uncontended();
 			let delay_diff = max_delay - dep_entry.delay.load(Relaxed);
-			delay_line.resize(delay_diff);
+			delay.resize(delay_diff);
 
 			let audio = if delay_diff == 0 {
 				&dep_buffers.audio[..len]
 			} else {
 				scratch.copy_from_slice(&dep_buffers.audio[..len]);
-				delay_line.advance(&mut *scratch);
+				delay.advance(&mut *scratch);
 				&*scratch
 			};
 
-			if filled_audio {
-				audio
-					.iter()
-					.zip(&mut buffers.audio[..len])
-					.for_each(|(&sample, buf)| *buf += sample);
-			} else {
-				buffers.audio[..len].copy_from_slice(audio);
-				filled_audio = true;
-			}
+			audio
+				.iter()
+				.zip(&mut buffers.audio[..len])
+				.for_each(|(&sample, buf)| *buf += *mix * sample);
 
 			events.extend(
 				dep_buffers
@@ -158,10 +155,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 					.map(|time| *e = e.at(time))
 					.is_none()
 			}));
-		}
-
-		if !filled_audio {
-			buffers.audio[..len].fill(0.0);
 		}
 
 		let mut node = entry.node_uncontended();
@@ -213,19 +206,26 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	#[must_use]
-	pub fn connect(&mut self, from: NodeId, to: NodeId) -> bool {
+	pub fn connect(&mut self, from: NodeId, to: NodeId, mix: f32) -> bool {
 		if !self.graph.contains_key(&from) || !self.graph.contains_key(&to) {
 			return false;
 		}
 
 		if !self.entry_mut(from).buffers().outgoing.insert(to) {
+			self.entry_mut(to)
+				.buffers()
+				.incoming
+				.get_mut(&from)
+				.unwrap()
+				.mix = mix;
+
 			return true;
 		}
 
 		self.entry_mut(to)
 			.buffers()
 			.incoming
-			.insert(from, (DelayLine::default(), Vec::new()));
+			.insert(from, Incoming::new(mix));
 
 		if self.has_cycle() {
 			self.entry_mut(from).buffers().outgoing.remove(&to);

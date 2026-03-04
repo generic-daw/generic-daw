@@ -27,12 +27,12 @@ impl Writer {
 	}
 
 	#[must_use]
-	pub fn push_pattern(
+	pub fn push_midi_pattern(
 		&mut self,
 		name: impl AsRef<str>,
 		notes: impl IntoIterator<Item = proto::Note>,
 	) -> proto::MidiPatternIndex {
-		self.0.midi_patterns.push(proto::Pattern {
+		self.0.midi_patterns.push(proto::MidiPattern {
 			name: name.as_ref().to_owned(),
 			notes: notes.into_iter().collect(),
 		});
@@ -92,19 +92,33 @@ impl Writer {
 		}
 	}
 
-	pub fn connect_track_to_channel(&mut self, from: proto::TrackIndex, to: proto::ChannelIndex) {
+	pub fn connect_track_to_channel(
+		&mut self,
+		from: proto::TrackIndex,
+		to: proto::ChannelIndex,
+		mix: f32,
+	) {
 		self.0.tracks[from.index as usize]
 			.channel
 			.connections
-			.push(to);
+			.push(proto::Connection {
+				index: to.index,
+				mix,
+			});
 	}
 
 	pub fn connect_channel_to_channel(
 		&mut self,
 		from: proto::ChannelIndex,
 		to: proto::ChannelIndex,
+		mix: f32,
 	) {
-		self.0.channels[from.index as usize].connections.push(to);
+		self.0.channels[from.index as usize]
+			.connections
+			.push(proto::Connection {
+				index: to.index,
+				mix,
+			});
 	}
 
 	#[must_use]

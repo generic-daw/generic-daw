@@ -11,6 +11,23 @@ use std::{
 use utils::{NoDebug, boxed_slice};
 
 #[derive(Debug)]
+pub struct Incoming<Node: NodeImpl> {
+	pub delay: DelayLine,
+	pub events: Vec<Node::Event>,
+	pub mix: f32,
+}
+
+impl<Node: NodeImpl> Incoming<Node> {
+	pub fn new(mix: f32) -> Self {
+		Self {
+			delay: DelayLine::default(),
+			events: Vec::default(),
+			mix,
+		}
+	}
+}
+
+#[derive(Debug)]
 pub struct Entry<Node: NodeImpl> {
 	node: Mutex<Node>,
 	buffers: RwLock<Buffers<Node>>,
@@ -20,7 +37,7 @@ pub struct Entry<Node: NodeImpl> {
 
 #[derive(Debug)]
 pub struct Buffers<Node: NodeImpl> {
-	pub incoming: HashMap<NodeId, (DelayLine, Vec<Node::Event>)>,
+	pub incoming: HashMap<NodeId, Incoming<Node>>,
 	pub outgoing: HashSet<NodeId>,
 	pub audio: NoDebug<Box<[f32]>>,
 	pub events: Vec<Node::Event>,

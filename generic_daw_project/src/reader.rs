@@ -1,6 +1,6 @@
 use crate::proto;
 use prost::Message as _;
-use std::{io::Cursor, iter::repeat};
+use std::io::Cursor;
 use yazi::{Format, decompress};
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ impl Reader {
 
 	pub fn iter_midi_patterns(
 		&self,
-	) -> impl Iterator<Item = (proto::MidiPatternIndex, &proto::Pattern)> {
+	) -> impl Iterator<Item = (proto::MidiPatternIndex, &proto::MidiPattern)> {
 		(0..)
 			.map(|index| proto::MidiPatternIndex { index })
 			.zip(&self.0.midi_patterns)
@@ -61,19 +61,30 @@ impl Reader {
 
 	pub fn iter_track_to_channel(
 		&self,
-	) -> impl Iterator<Item = (proto::TrackIndex, proto::ChannelIndex)> {
+	) -> impl Iterator<Item = (proto::TrackIndex, proto::ChannelIndex, f32)> {
 		(0..)
 			.map(|index| proto::TrackIndex { index })
 			.zip(&self.0.tracks)
-			.flat_map(|(index, track)| repeat(index).zip(track.channel.connections.iter().copied()))
+			.flat_map(|(index, track)| {
+				track
+					.channel
+					.connections
+					.iter()
+					.map(move |conn| (index, proto::ChannelIndex { index: conn.index }, conn.mix))
+			})
 	}
 
 	pub fn iter_channel_to_channel(
 		&self,
-	) -> impl Iterator<Item = (proto::ChannelIndex, proto::ChannelIndex)> {
+	) -> impl Iterator<Item = (proto::ChannelIndex, proto::ChannelIndex, f32)> {
 		(0..)
 			.map(|index| proto::ChannelIndex { index })
 			.zip(&self.0.channels)
-			.flat_map(|(index, channel)| repeat(index).zip(channel.connections.iter().copied()))
+			.flat_map(|(index, channel)| {
+				channel
+					.connections
+					.iter()
+					.map(move |conn| (index, proto::ChannelIndex { index: conn.index }, conn.mix))
+			})
 	}
 }
