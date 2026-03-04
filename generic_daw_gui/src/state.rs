@@ -1,4 +1,4 @@
-use log::info;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
 	fs::{read_to_string, write},
@@ -41,14 +41,24 @@ impl Default for State {
 
 impl State {
 	pub fn read() -> Self {
-		let config = read_to_string(&*STATE_PATH);
-
-		let read =
-			toml::from_str::<Self>(config.as_deref().unwrap_or_default()).unwrap_or_default();
-
-		if config.is_err_and(|e| e.kind() == io::ErrorKind::NotFound) {
-			read.write();
-		}
+		let read = match read_to_string(&*STATE_PATH) {
+			Ok(read) => match toml::from_str(&read) {
+				Ok(read) => read,
+				Err(err) => {
+					warn!("{err}");
+					Self::default()
+				}
+			},
+			Err(err) if err.kind() == io::ErrorKind::NotFound => {
+				let read = Self::default();
+				read.write();
+				read
+			}
+			Err(err) => {
+				warn!("{err}");
+				Self::default()
+			}
+		};
 
 		info!("loaded state {read:#?}");
 
