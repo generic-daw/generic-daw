@@ -1539,7 +1539,7 @@ impl ArrangementView {
 					.spacing(5),
 					container(text(format_decibels(node.volume.abs())).line_height(1.0))
 						.style(bordered_box_with_radius(0))
-						.center_x(55)
+						.center_x(Fill)
 						.padding(2),
 					row![
 						container(PeakMeter::new(&node.peaks[0]).width(16.0))
