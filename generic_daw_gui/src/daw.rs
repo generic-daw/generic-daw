@@ -736,8 +736,10 @@ impl Daw {
 
 	pub fn subscription(&self) -> Subscription<Message> {
 		let autosave = if self.config.autosave.enabled {
-			every(Duration::from_secs(self.config.autosave.interval.get()))
-				.map(|_| Message::AutosaveFile)
+			every(Duration::from_secs(
+				self.config.autosave.interval.get().into(),
+			))
+			.map(|_| Message::AutosaveFile)
 		} else {
 			Subscription::none()
 		};

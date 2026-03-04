@@ -59,7 +59,7 @@ fn px_to_time(px: f32, position: Vector, scale: Vector, transport: &Transport) -
 }
 
 fn key_to_px(key: MidiKey, position: Vector, scale: Vector) -> f32 {
-	scale.y.mul_add(127.0 - f32::from(key.0), -position.y)
+	scale.y * f32::from(127 - key.0) - position.y
 }
 
 fn px_to_key(px: f32, position: Vector, scale: Vector) -> MidiKey {

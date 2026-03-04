@@ -35,7 +35,7 @@ where
 pub fn number_input<'a, Message>(
 	current: usize,
 	default: usize,
-	max_digits: usize,
+	max_digits: u32,
 	drag_update: fn(usize) -> Message,
 	text_update: fn(String) -> Message,
 ) -> Element<'a, Message>
@@ -59,7 +59,7 @@ where
 				style
 			})
 			.font(Font::MONOSPACE)
-			.width((max_digits as f32).mul_add(10.0, 14.0))
+			.width(max_digits * 10 + 14)
 			.on_input(text_update)
 	]
 	.height(Shrink)

@@ -71,7 +71,7 @@ pub enum Message {
 	ChangedSampleRate(NonZero<u32>),
 	ChangedBufferSize(Option<NonZero<u32>>),
 	ToggledAutosave,
-	ChangedAutosaveInterval(NonZero<u64>),
+	ChangedAutosaveInterval(NonZero<u16>),
 	ChangedAutosaveIntervalText(String),
 	ToggledOpenLastProject,
 	ChangedTheme(Theme),
@@ -182,7 +182,9 @@ impl ConfigView {
 				device.buffer_size = buffer_size;
 			}),
 			Message::ToggledAutosave => self.config.autosave.enabled ^= true,
-			Message::ChangedAutosaveInterval(interval) => self.config.autosave.interval = interval,
+			Message::ChangedAutosaveInterval(interval) => {
+				self.config.autosave.interval = interval.min(NonZero::new(999).unwrap());
+			}
 			Message::ChangedAutosaveIntervalText(text) => {
 				if let Ok(interval) = text.parse() {
 					return self.update(Message::ChangedAutosaveInterval(interval));
@@ -446,7 +448,7 @@ impl ConfigView {
 								600,
 								3,
 								|x| Message::ChangedAutosaveInterval(
-									NonZero::new(x as u64).or(NonZero::new(1)).unwrap()
+									NonZero::new(x as u16).or(NonZero::new(1)).unwrap()
 								),
 								Message::ChangedAutosaveIntervalText
 							),

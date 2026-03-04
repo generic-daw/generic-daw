@@ -130,15 +130,15 @@ impl AudioBuffers {
 
 		if n_channels == 1 {
 			output_buffer.iter().zip(buf).for_each(|(sample, buf)| {
-				buf[0] = buf[0].mul_add(1.0 - mix_level, sample * mix_level);
-				buf[1] = buf[1].mul_add(1.0 - mix_level, sample * mix_level);
+				buf[0] = buf[0] * (1.0 - mix_level) + sample * mix_level;
+				buf[1] = buf[1] * (1.0 - mix_level) + sample * mix_level;
 			});
 		} else if n_channels != 0 {
 			let (l, r) = output_buffer.split_at(self.config.max_frames_count as usize);
 
 			l.iter().zip(r).zip(buf).for_each(|((l, r), buf)| {
-				buf[0] = buf[0].mul_add(1.0 - mix_level, l * mix_level);
-				buf[1] = buf[1].mul_add(1.0 - mix_level, r * mix_level);
+				buf[0] = buf[0] * (1.0 - mix_level) + l * mix_level;
+				buf[1] = buf[1] * (1.0 - mix_level) + r * mix_level;
 			});
 		}
 	}

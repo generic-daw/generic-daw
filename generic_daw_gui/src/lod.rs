@@ -39,12 +39,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 			hidden_top_px: f32,
 		) -> Vec<SolidVertex2D> {
 			iter.into_iter()
-				.map(|(min, max)| {
-					(
-						min.mul_add(height, hidden_top_px),
-						max.mul_add(height, hidden_top_px),
-					)
-				})
+				.map(|(min, max)| (min * height + hidden_top_px, max * height + hidden_top_px))
 				.scan(None, |acc, (mut min, mut max)| {
 					if let Some((l_max, l_min)) = *acc {
 						min = min.min(l_max);
@@ -62,7 +57,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 					}
 				})
 				.enumerate()
-				.map(|(x, mm)| ((x as f32).mul_add(px_per_mesh_slice, jitter_correct), mm))
+				.map(|(x, mm)| (x as f32 * px_per_mesh_slice + jitter_correct, mm))
 				.flat_map(|(x, (min, max))| {
 					[
 						SolidVertex2D {
@@ -203,7 +198,7 @@ fn samples_min_max(chunk: &[f32]) -> (f32, f32) {
 		.fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
 			(min.min(c), max.max(c))
 		});
-	(min.mul_add(0.5, 0.5), max.mul_add(0.5, 0.5))
+	((min + 1.0) * 0.5, (max + 1.0) * 0.5)
 }
 
 fn lod_min_max(chunk: &[(f32, f32)]) -> (f32, f32) {

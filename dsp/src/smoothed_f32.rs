@@ -21,13 +21,18 @@ impl SmoothedF32 {
 
 	#[must_use]
 	pub fn tick(&mut self) -> f32 {
-		self.mem = self.mem.mul_add(1.0 - self.fac, self.goal * self.fac);
+		self.mem = self.mem * (1.0 - self.fac) + self.goal * self.fac;
 		self.mem
 	}
 
 	pub fn settle(&mut self) {
-		if (self.mem - self.goal).abs() < self.goal.abs().mul_add(f32::EPSILON, f32::EPSILON) {
+		if self.is_settled() {
 			self.mem = self.goal;
 		}
+	}
+
+	#[must_use]
+	pub fn is_settled(&self) -> bool {
+		(self.mem - self.goal).abs() < (self.goal.abs() + 1.0) * f32::EPSILON
 	}
 }

@@ -121,7 +121,7 @@ impl Arrangement {
 					let load = duration.as_secs_f32() * mix;
 					self.load = Some(
 						self.load
-							.map_or(load, |l| l.mul_add(mix, load) / (mix + 1.0)),
+							.map_or(load, |new| (new * mix + load) / (mix + 1.0)),
 					);
 				}
 			}

@@ -81,7 +81,7 @@ impl Default for Device {
 #[serde(default)]
 pub struct Autosave {
 	pub enabled: bool,
-	pub interval: NonZero<u64>,
+	pub interval: NonZero<u16>,
 }
 
 impl Default for Autosave {

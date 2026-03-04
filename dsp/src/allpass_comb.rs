@@ -25,7 +25,7 @@ impl AllpassComb {
 	pub fn tick(&mut self, input: f32) -> f32 {
 		let delayed = self.delay_line.read();
 		let output = delayed - input;
-		self.delay_line.write(self.feedback.mul_add(delayed, input));
+		self.delay_line.write(self.feedback * delayed + input);
 		output
 	}
 

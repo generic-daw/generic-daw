@@ -250,7 +250,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					let border = 10f32.min(note_bounds.width / 3.0);
 					if let Some(note_bounds) = note_bounds.intersection(&viewport) {
 						let new_val = (cursor.x - border - note_bounds.x + viewport.x)
-							/ border.mul_add(-2.0, note_bounds.width - 1.0);
+							/ (note_bounds.width - 2.0 * border - 1.0);
 
 						let new_val = maybe_snap(new_val.clamp(0.0, 1.0), *modifiers, |val| {
 							(val * 127.0).round() / 127.0
@@ -379,9 +379,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							match (start_offset < border, end_offset < border) {
 								(false, false) => {
 									let note_bounds = note_bounds.intersection(viewport).unwrap();
-									let vel_pixel = border
-										.mul_add(-2.0, note_bounds.width - 1.0)
-										.mul_add(note.velocity, border);
+									let vel_pixel = note.velocity
+										* (note_bounds.width - 2.0 * border - 1.0)
+										+ border;
 									if (vel_pixel - start_offset).abs() < border / 2.0 {
 										Interaction::ResizingHorizontally
 									} else {
@@ -484,10 +484,8 @@ impl<'a, Message> PianoRoll<'a, Message> {
 								match (start_offset < border, end_offset < border) {
 									(false, false) => {
 										let bounds = bounds.intersection(viewport).unwrap();
-										let vel_pixel = velocity.mul_add(
-											border.mul_add(-2.0, bounds.width - 1.0),
-											border,
-										);
+										let vel_pixel =
+											velocity * (bounds.width - 2.0 * border - 1.0) + border;
 										if (vel_pixel - start_offset).abs() < border / 2.0 {
 											selection.primary.remove(&note);
 											selection.secondary.extend(selection.primary.drain());
@@ -578,8 +576,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 				bounds: Rectangle::new(
 					bounds.position()
 						+ Vector::new(
-							note.velocity
-								.mul_add(border.mul_add(-2.0, bounds.width - 1.0), border),
+							note.velocity * (bounds.width - 2.0 * border - 1.0) + border,
 							0.0,
 						),
 					Size::new(1.0, bounds.height),

@@ -127,7 +127,6 @@ impl BiquadCoeffs {
 	}
 
 	#[must_use]
-	#[expect(clippy::suboptimal_flops)]
 	pub fn lowshelf(sample_rate: f32, center: f32, q: f32, gain: f32) -> Self {
 		let omega = TAU * center / sample_rate;
 		let alpha = omega.sin() / (2.0 * q);
@@ -148,7 +147,6 @@ impl BiquadCoeffs {
 	}
 
 	#[must_use]
-	#[expect(clippy::suboptimal_flops)]
 	pub fn highshelf(sample_rate: f32, center: f32, q: f32, gain: f32) -> Self {
 		let omega = TAU * center / sample_rate;
 		let alpha = omega.sin() / (2.0 * q);
@@ -192,16 +190,11 @@ impl Biquad {
 
 	#[must_use]
 	pub fn tick(&mut self, x0: f32) -> f32 {
-		let y0 = self.coeffs.b0.mul_add(
-			x0,
-			self.coeffs.b1.mul_add(
-				self.x1,
-				self.coeffs.b2.mul_add(
-					self.x2,
-					self.coeffs.a1.mul_add(self.y1, self.coeffs.a2 * self.y2),
-				),
-			),
-		);
+		let y0 = self.coeffs.b0 * x0
+			+ self.coeffs.b1 * self.x1
+			+ self.coeffs.b2 * self.x2
+			+ self.coeffs.a1 * self.y1
+			+ self.coeffs.a2 * self.y2;
 		self.x2 = self.x1;
 		self.x1 = x0;
 		self.y2 = self.y1;

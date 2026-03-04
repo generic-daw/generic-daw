@@ -148,8 +148,8 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 					let diff = match delta {
 						ScrollDelta::Lines { y, .. } => *y,
 						ScrollDelta::Pixels { y, .. } => y / 60.0,
-					}
-					.mul_add(if modifiers.command() { 10.0 } else { 1.0 }, state.scroll);
+					} * if modifiers.command() { 10.0 } else { 1.0 }
+						+ state.scroll;
 					state.scroll = diff.fract();
 
 					let new_value = self.value.saturating_add_signed(diff as isize);

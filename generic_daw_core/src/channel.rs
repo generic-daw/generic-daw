@@ -38,8 +38,8 @@ impl PanMode {
 				let (rl, rr) = split(r, volume);
 				for [ls, rs] in audio {
 					let ols = *ls;
-					*ls = ls.mul_add(ll, *rs * rl);
-					*rs = rs.mul_add(rr, ols * lr);
+					*ls = *ls * ll + *rs * rl;
+					*rs = *rs * rr + ols * lr;
 				}
 			}
 		}

@@ -14,7 +14,7 @@ use iced_widget::{
 	graphics::geometry::Renderer as _,
 	text,
 };
-use std::{cell::RefCell, fmt::Debug, ops::RangeInclusive};
+use std::{cell::RefCell, f32::consts::PI, fmt::Debug, ops::RangeInclusive};
 use utils::NoDebug;
 
 #[derive(Default)]
@@ -120,10 +120,11 @@ impl<'a, Message> Knob<'a, Message> {
 		let center = frame.center() + Vector::new(0.0, border_radius);
 
 		let value_to_rad = |value: f32| {
-			Radians(f32::to_radians(
-				270.0 * (value - self.range.start()) / (self.range.end() - self.range.start())
-					- 135.0 - 90.0,
-			))
+			Radians(
+				(value - self.range.start()) / (self.range.end() - self.range.start())
+					* (3.0 / 2.0 * PI)
+					- (5.0 / 4.0 * PI),
+			)
 		};
 
 		let center_angle = value_to_rad(self.center);

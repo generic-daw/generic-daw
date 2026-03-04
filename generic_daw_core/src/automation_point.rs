@@ -11,18 +11,18 @@ pub enum AutomationTransition {
 impl AutomationTransition {
 	#[must_use]
 	pub fn interpolate(self, from: f32, to: f32, amt: f32) -> f32 {
-		let linear = from.mul_add(1.0 - amt, to * amt);
+		let linear = from * (1.0 - amt) + to * amt;
 		match self {
 			Self::Linear => linear,
 			Self::UCos(mix) => {
-				let amt = amt.mul_add(FRAC_PI_2, -FRAC_PI_2).cos();
-				let ucos = amt.mul_add(to, from * (1.0 - amt));
-				mix.mul_add(linear - ucos, linear)
+				let amt = (FRAC_PI_2 * (amt - 1.0)).cos();
+				let ucos = from * (1.0 - amt) + to * amt;
+				mix * (linear - ucos) + linear
 			}
 			Self::BCos(mix) => {
-				let amt = amt.mul_add(PI, PI).cos().mul_add(0.5, 0.5);
-				let bcos = amt.mul_add(to, from * (1.0 - amt));
-				mix.mul_add(linear - bcos, linear)
+				let amt = 0.5 * ((PI * (amt + 1.0)).cos() + 1.0);
+				let bcos = from * (1.0 - amt) + to * amt;
+				mix * (linear - bcos) + linear
 			}
 		}
 	}
