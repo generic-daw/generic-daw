@@ -35,6 +35,7 @@ use generic_daw_widget::{
 use iced::{
 	Center, Element, Fill, Point, Shrink, Subscription, Task, Vector, border,
 	futures::SinkExt as _,
+	keyboard,
 	mouse::Interaction,
 	padding, stream,
 	time::every,
@@ -1648,6 +1649,44 @@ impl ArrangementView {
 			self.clap_host.subscription().map(Message::ClapHost),
 			every(Duration::from_secs(1)).map(|_| Message::UpdateRequest),
 		])
+	}
+
+	pub fn keybinds(
+		key: &keyboard::Key,
+		modifiers: keyboard::Modifiers,
+		repeat: bool,
+	) -> Option<Message> {
+		match (
+			modifiers.command(),
+			modifiers.shift(),
+			modifiers.alt(),
+			repeat,
+		) {
+			(false, false, false, false) => match key.as_ref() {
+				keyboard::Key::Named(keyboard::key::Named::F5) => {
+					Some(Message::ChangedTab(Tab::Playlist))
+				}
+				keyboard::Key::Named(keyboard::key::Named::F9) => {
+					Some(Message::ChangedTab(Tab::Mixer))
+				}
+				keyboard::Key::Named(
+					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
+				) => Some(Message::DeleteSelection),
+				keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::ClearSelection),
+				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => Some(Message::ArrowLeft),
+				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
+				_ => None,
+			},
+			(false, false, false, true) => match key.as_ref() {
+				keyboard::Key::Named(
+					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
+				) => Some(Message::DeleteSelection),
+				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => Some(Message::ArrowLeft),
+				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
+				_ => None,
+			},
+			_ => None,
+		}
 	}
 
 	pub fn get_installed_plugins(&mut self, config: &Config) -> Task<Message> {

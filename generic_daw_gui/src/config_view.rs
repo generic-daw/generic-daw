@@ -2,6 +2,7 @@ use crate::{
 	action::Action,
 	components::{PICK_LIST_HANDLE, number_input},
 	config::{Config, Device},
+	daw,
 	icons::{grip_vertical, link, mic, plus, rotate_ccw, save, unlink, volume_2, x},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
@@ -12,7 +13,7 @@ use crate::{
 };
 use generic_daw_core::{DeviceDescription, DeviceId, clap_host::DEFAULT_CLAP_PATHS, get_devices};
 use iced::{
-	Center, Element, Fill, Font, Task, border,
+	Center, Element, Fill, Font, Task, border, keyboard,
 	mouse::Interaction,
 	padding,
 	widget::{
@@ -605,6 +606,27 @@ impl ConfigView {
 			bordered_box_with_radius(5)(t).background(t.extended_palette().background.weakest.color)
 		})
 		.into()
+	}
+
+	pub fn keybinds(
+		key: &keyboard::Key,
+		modifiers: keyboard::Modifiers,
+		repeat: bool,
+	) -> Option<daw::Message> {
+		match (
+			modifiers.command(),
+			modifiers.shift(),
+			modifiers.alt(),
+			repeat,
+		) {
+			(false, false, false, false) => match key.as_ref() {
+				keyboard::Key::Named(keyboard::key::Named::Escape) => {
+					Some(daw::Message::CloseConfigView)
+				}
+				_ => None,
+			},
+			_ => None,
+		}
 	}
 
 	fn with_device_mut<T>(&mut self, f: impl FnOnce(&mut Device) -> T) -> T {

@@ -752,8 +752,8 @@ impl Daw {
 					modifiers,
 					repeat,
 					..
-				} => Self::config_view_keybinds(&key, modifiers, repeat)
-					.or_else(|| Self::base_keybinds(&key, physical_key, modifiers, repeat)),
+				} => ConfigView::keybinds(&key, modifiers, repeat)
+					.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
 				_ => None,
 			})
 		} else {
@@ -764,9 +764,9 @@ impl Daw {
 					modifiers,
 					repeat,
 					..
-				} => Self::arrangement_view_keybinds(&key, modifiers, repeat)
+				} => ArrangementView::keybinds(&key, modifiers, repeat)
 					.map(Message::Arrangement)
-					.or_else(|| Self::base_keybinds(&key, physical_key, modifiers, repeat)),
+					.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
 				_ => None,
 			})
 		};
@@ -787,76 +787,7 @@ impl Daw {
 		])
 	}
 
-	fn arrangement_view_keybinds(
-		key: &keyboard::Key,
-		modifiers: keyboard::Modifiers,
-		repeat: bool,
-	) -> Option<arrangement_view::Message> {
-		match (
-			modifiers.command(),
-			modifiers.shift(),
-			modifiers.alt(),
-			repeat,
-		) {
-			(false, false, false, false) => match key.as_ref() {
-				keyboard::Key::Named(keyboard::key::Named::F5) => {
-					Some(arrangement_view::Message::ChangedTab(Tab::Playlist))
-				}
-				keyboard::Key::Named(keyboard::key::Named::F9) => {
-					Some(arrangement_view::Message::ChangedTab(Tab::Mixer))
-				}
-				keyboard::Key::Named(
-					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
-				) => Some(arrangement_view::Message::DeleteSelection),
-				keyboard::Key::Named(keyboard::key::Named::Escape) => {
-					Some(arrangement_view::Message::ClearSelection)
-				}
-				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => {
-					Some(arrangement_view::Message::ArrowLeft)
-				}
-				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => {
-					Some(arrangement_view::Message::ArrowRight)
-				}
-				_ => None,
-			},
-			(false, false, false, true) => match key.as_ref() {
-				keyboard::Key::Named(
-					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
-				) => Some(arrangement_view::Message::DeleteSelection),
-				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => {
-					Some(arrangement_view::Message::ArrowLeft)
-				}
-				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => {
-					Some(arrangement_view::Message::ArrowRight)
-				}
-				_ => None,
-			},
-			_ => None,
-		}
-	}
-
-	fn config_view_keybinds(
-		key: &keyboard::Key,
-		modifiers: keyboard::Modifiers,
-		repeat: bool,
-	) -> Option<Message> {
-		match (
-			modifiers.command(),
-			modifiers.shift(),
-			modifiers.alt(),
-			repeat,
-		) {
-			(false, false, false, false) => match key.as_ref() {
-				keyboard::Key::Named(keyboard::key::Named::Escape) => {
-					Some(Message::CloseConfigView)
-				}
-				_ => None,
-			},
-			_ => None,
-		}
-	}
-
-	fn base_keybinds(
+	fn keybinds(
 		key: &keyboard::Key,
 		physical_key: keyboard::key::Physical,
 		modifiers: keyboard::Modifiers,
