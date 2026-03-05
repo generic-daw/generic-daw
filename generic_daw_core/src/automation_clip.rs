@@ -16,11 +16,8 @@ impl AutomationClip {
 
 		pattern
 			.points
-			.windows(2)
-			.map(|points| {
-				let &[mut this, mut next] = points else {
-					unreachable!();
-				};
+			.array_windows()
+			.map(|&[mut this, mut next]| {
 				this.position += self.position.start();
 				next.position += self.position.start();
 				[this, next]
