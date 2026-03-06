@@ -214,7 +214,7 @@ pub struct ArrangementView {
 }
 
 impl ArrangementView {
-	pub fn new(
+	pub fn create(
 		config: &Config,
 		state: &State,
 		main_window_id: window::Id,

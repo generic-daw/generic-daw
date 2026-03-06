@@ -164,7 +164,8 @@ impl Daw {
 
 		let file_tree = FileTree::new(&config.sample_paths);
 
-		let (mut arrangement_view, batches) = ArrangementView::new(&config, &state, main_window_id);
+		let (mut arrangement_view, batches) =
+			ArrangementView::create(&config, &state, main_window_id);
 		let scan = arrangement_view.get_installed_plugins(&config);
 
 		let open = if config.open_last_project {
