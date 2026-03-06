@@ -166,25 +166,11 @@ impl<W: ErasedWorkList> Shared<W> {
 	}
 
 	fn worker(&self, mut scratch: W::Scratch) {
-		let mut last_epoch = 0;
+		let mut epoch = 0;
 
 		let backoff = Backoff::new();
 		loop {
-			let new_epoch = self.epoch.load(Acquire);
-
-			if new_epoch == last_epoch {
-				if backoff.is_completed() {
-					std::thread::park();
-
-					backoff.reset();
-				} else {
-					backoff.snooze();
-				}
-
-				continue;
-			}
-
-			last_epoch = new_epoch;
+			epoch = self.wait_for_work(epoch);
 
 			if self.stop.load(Relaxed) {
 				return;
@@ -209,6 +195,24 @@ impl<W: ErasedWorkList> Shared<W> {
 			self.do_work::<false>(work_list, &mut scratch);
 
 			assert_ne!(self.active.fetch_sub(1, Release), usize::MAX);
+		}
+	}
+
+	fn wait_for_work(&self, last_epoch: usize) -> usize {
+		let backoff = Backoff::new();
+		loop {
+			let new_epoch = self.epoch.load(Acquire);
+			if new_epoch != last_epoch {
+				return new_epoch;
+			}
+
+			if backoff.is_completed() {
+				std::thread::park();
+
+				backoff.reset();
+			} else {
+				backoff.snooze();
+			}
 		}
 	}
 
