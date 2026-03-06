@@ -167,8 +167,6 @@ impl<W: ErasedWorkList> Shared<W> {
 
 	fn worker(&self, mut scratch: W::Scratch) {
 		let mut epoch = 0;
-
-		let backoff = Backoff::new();
 		loop {
 			epoch = self.wait_for_work(epoch);
 
@@ -182,8 +180,6 @@ impl<W: ErasedWorkList> Shared<W> {
 			else {
 				continue;
 			};
-
-			backoff.reset();
 
 			// SAFETY:
 			// `self.work_list` is a valid reference to a `W::WorkList`, because `install`
