@@ -58,7 +58,13 @@ impl<W: ErasedWorkList<Scratch = ()>> ThreadPool<W> {
 impl<W: ErasedWorkList> ThreadPool<W> {
 	#[must_use]
 	pub fn default_threads() -> NonZero<usize> {
-		available_parallelism().ok().or(NonZero::new(1)).unwrap()
+		if let Ok(threads) = available_parallelism()
+			&& let Some(threads) = NonZero::new(threads.get() - 1)
+		{
+			threads
+		} else {
+			NonZero::new(1).unwrap()
+		}
 	}
 
 	#[must_use]
