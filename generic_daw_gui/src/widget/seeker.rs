@@ -87,11 +87,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		tree: &mut Tree,
 		event: &Event,
 		layout: Layout<'_>,
-		cursor: Cursor,
+		mut cursor: Cursor,
 		renderer: &Renderer,
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
+		let levitate = !cursor.is_levitating()
+			&& !cursor.is_over(layout.bounds().shrink(padding::top(LINE_HEIGHT)));
+		if levitate {
+			cursor = cursor.levitate();
+		}
+
 		self.children
 			.iter_mut()
 			.zip(&mut tree.children)
@@ -102,6 +108,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					.as_widget_mut()
 					.update(tree, event, layout, cursor, renderer, shell, viewport);
 			});
+
+		if levitate {
+			cursor = cursor.land();
+		}
 
 		let state = tree.state.downcast_mut::<State>();
 		let right_viewport = Self::right_viewport(layout);
@@ -163,7 +173,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 						}
 					}
 					_ => {
-						state.status = if cursor.y < 0.0 {
+						state.status = if cursor.x >= 0.0 && cursor.y < 0.0 {
 							Status::Hovering
 						} else {
 							Status::None
@@ -255,10 +265,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		theme: &Theme,
 		style: &Style,
 		layout: Layout<'_>,
-		cursor: Cursor,
+		mut cursor: Cursor,
 		viewport: &Rectangle,
 	) {
 		self.grid(renderer, Self::right_viewport(layout), theme);
+
+		if !cursor.is_over(layout.bounds().shrink(padding::top(LINE_HEIGHT))) {
+			cursor = cursor.levitate();
+		}
 
 		renderer.with_layer(
 			layout.bounds().shrink(padding::top(LINE_HEIGHT)),
@@ -289,11 +303,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		&self,
 		tree: &Tree,
 		layout: Layout<'_>,
-		cursor: Cursor,
+		mut cursor: Cursor,
 		viewport: &Rectangle,
 		renderer: &Renderer,
 	) -> Interaction {
 		if tree.state.downcast_ref::<State>().status == Status::None {
+			if !cursor.is_over(layout.bounds().shrink(padding::top(LINE_HEIGHT))) {
+				cursor = cursor.levitate();
+			}
+
 			self.children
 				.iter()
 				.zip(&tree.children)
