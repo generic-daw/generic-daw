@@ -60,7 +60,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 			let note_position =
 				bounds.position() + Vector::new(0.0, key_to_px(key, *self.position, *self.scale));
 
-			let Some(clipped_bounds) = Rectangle::new(
+			let Some(bounds) = Rectangle::new(
 				note_position,
 				Size::new(PIANO_WIDTH - self.scale.y / 2.0, self.scale.y),
 			)
@@ -71,7 +71,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 			if key.key().is_black() {
 				renderer.fill_quad(
 					Quad {
-						bounds: clipped_bounds,
+						bounds,
 						..Quad::default()
 					},
 					Color::BLACK,

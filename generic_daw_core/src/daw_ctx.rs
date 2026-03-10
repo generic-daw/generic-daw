@@ -48,10 +48,10 @@ pub enum Message {
 	Reset,
 
 	RequestUpdate,
-	ReuseUpdateBuffer(Vec<Update>),
+	ReturnUpdate(Vec<Update>),
 
-	RequestAudioGraph(oneshot::Sender<Export>),
-	AudioGraph(Box<Export>),
+	RequestExport(oneshot::Sender<Export>),
+	ReturnExport(Box<Export>),
 }
 
 const _: () = assert!(size_of::<Message>() == 56);
@@ -249,27 +249,26 @@ impl DawCtx {
 				Message::LoopMarker(loop_marker) => self.state.transport.loop_marker = loop_marker,
 				Message::Reset => self.audio_graph.for_each_node_mut(Node::reset),
 				Message::RequestUpdate => self.needs_update = true,
-				Message::ReuseUpdateBuffer(update) => {
+				Message::ReturnUpdate(update) => {
 					debug_assert!(update.is_empty());
 					self.update_buffers.push(update);
 				}
-				Message::RequestAudioGraph(sender) => {
+				Message::RequestExport(sender) => {
 					debug_assert!(self.consumer.is_empty());
 					let mut audio_graph =
 						AudioGraph::new(Channel::default(), self.state.transport.frames);
 					std::mem::swap(&mut self.audio_graph, &mut audio_graph);
 
-					let mut state = State {
+					let state = State {
 						transport: self.state.transport,
-						samples: HashMap::new(),
-						midi_patterns: HashMap::new(),
-						automation_patterns: HashMap::new(),
+						samples: std::mem::take(&mut self.state.samples),
+						midi_patterns: std::mem::take(&mut self.state.midi_patterns),
+						automation_patterns: std::mem::take(&mut self.state.automation_patterns),
 					};
-					std::mem::swap(&mut self.state, &mut state);
 
 					sender.send(Export { audio_graph, state }).unwrap();
 				}
-				Message::AudioGraph(export) => {
+				Message::ReturnExport(export) => {
 					self.audio_graph = export.audio_graph;
 					self.state = export.state;
 				}

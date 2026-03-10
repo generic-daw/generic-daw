@@ -127,7 +127,7 @@ impl Arrangement {
 			}
 		}
 
-		self.send(Message::ReuseUpdateBuffer(core.updates));
+		self.send(Message::ReturnUpdate(core.updates));
 
 		messages
 	}
@@ -516,7 +516,7 @@ impl Arrangement {
 
 	pub fn start_export(&mut self, path: Arc<Path>) -> Task<daw::Message> {
 		let (sender, receiver) = oneshot::channel();
-		self.send(Message::RequestAudioGraph(sender));
+		self.send(Message::RequestExport(sender));
 		let mut export = receiver.recv().unwrap();
 		self.stream.pause().unwrap();
 
@@ -546,7 +546,7 @@ impl Arrangement {
 	}
 
 	pub fn finish_export(&mut self, export: Export) {
-		self.send(Message::AudioGraph(Box::new(export)));
+		self.send(Message::ReturnExport(Box::new(export)));
 		self.stream.play().unwrap();
 	}
 }

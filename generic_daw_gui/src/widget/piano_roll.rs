@@ -247,8 +247,8 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					debug_assert!(selection.primary.len() == 1);
 					let note = *selection.primary.iter().next().unwrap();
 					let note_bounds = self.note_bounds(note, &viewport);
-					let border = 10f32.min(note_bounds.width / 3.0);
 					if let Some(note_bounds) = note_bounds.intersection(&viewport) {
+						let border = 10f32.min(note_bounds.width / 3.0);
 						let new_val = (cursor.x - border - note_bounds.x + viewport.x)
 							/ (note_bounds.width - 2.0 * border - 1.0);
 
@@ -284,16 +284,16 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		_cursor: Cursor,
 		viewport: &Rectangle,
 	) {
-		let Some(viewport) = layout.bounds().intersection(viewport) else {
+		let Some(bounds) = layout.bounds().intersection(viewport) else {
 			return;
 		};
 
 		for key in (0..127).map(MidiKey) {
 			let Some(bounds) = Rectangle::new(
-				viewport.position() + Vector::new(0.0, key_to_px(key, *self.position, *self.scale)),
-				Size::new(viewport.width, 1.0),
+				bounds.position() + Vector::new(0.0, key_to_px(key, *self.position, *self.scale)),
+				Size::new(bounds.width, 1.0),
 			)
-			.intersection(&viewport) else {
+			.intersection(&bounds) else {
 				continue;
 			};
 
@@ -308,7 +308,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 		for note in 0..self.notes.len() {
 			renderer.with_layer(Rectangle::INFINITE, |renderer| {
-				self.draw_note(note, renderer, theme, &viewport);
+				self.draw_note(note, renderer, theme, &bounds);
 			});
 		}
 
@@ -321,13 +321,13 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 			let y = key_to_px(start_key, *self.position, *self.scale);
 			let height = key_to_px(end_key, *self.position, *self.scale) + self.scale.y - y;
-			let y = y + viewport.y;
+			let y = y + bounds.y;
 
 			let x = time_to_px(start_pos, *self.position, *self.scale, self.transport);
 			let width = time_to_px(end_pos, *self.position, *self.scale, self.transport) - x;
-			let x = x + viewport.x;
+			let x = x + bounds.x;
 
-			renderer.with_layer(viewport, |renderer| {
+			renderer.with_layer(bounds, |renderer| {
 				renderer.fill_quad(
 					Quad {
 						bounds: Rectangle {
@@ -382,6 +382,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 									let vel_pixel = note.velocity
 										* (note_bounds.width - 2.0 * border - 1.0)
 										+ border;
+									let start_offset = cursor.x - note_bounds.x;
 									if (vel_pixel - start_offset).abs() < border / 2.0 {
 										Interaction::ResizingHorizontally
 									} else {
@@ -452,12 +453,11 @@ impl<'a, Message> PianoRoll<'a, Message> {
 			return;
 		}
 
-		let bounds = self.note_bounds(note, viewport);
-
 		let Some(cursor) = cursor.position_in(*viewport) else {
 			return;
 		};
 
+		let bounds = self.note_bounds(note, viewport);
 		let note_bounds = bounds - Vector::new(viewport.x, viewport.y);
 		if !note_bounds.contains(cursor) {
 			return;
@@ -483,9 +483,11 @@ impl<'a, Message> PianoRoll<'a, Message> {
 								let border = 10f32.min(note_bounds.width / 3.0);
 								match (start_offset < border, end_offset < border) {
 									(false, false) => {
-										let bounds = bounds.intersection(viewport).unwrap();
+										let bounds = bounds.intersection(viewport).unwrap()
+											- Vector::new(viewport.x, viewport.y);
 										let vel_pixel =
 											velocity * (bounds.width - 2.0 * border - 1.0) + border;
+										let start_offset = cursor.x - bounds.x;
 										if (vel_pixel - start_offset).abs() < border / 2.0 {
 											selection.primary.remove(&note);
 											selection.secondary.extend(selection.primary.drain());
@@ -571,6 +573,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		);
 
 		let border = 10f32.min(bounds.width / 3.0);
+
 		renderer.fill_quad(
 			Quad {
 				bounds: Rectangle::new(
