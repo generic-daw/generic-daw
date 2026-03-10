@@ -1,0 +1,143 @@
+use std::{collections::BTreeSet, fs::File, io::Write as _};
+
+static LUCIDE_BYTES: &[u8] = include_bytes!("../Lucide.ttf");
+
+macro_rules! icon {
+	($name:ident = $icon:literal) => {
+		icon!($name = $icon + 0.05)
+	};
+	($name:ident = $icon:literal + $offset:literal) => {
+		(
+			stringify!($name),
+			const { char::from_u32($icon).unwrap() },
+			$offset,
+		)
+	};
+}
+
+// https://unpkg.com/lucide-static@latest/font/codepoints.json
+static GLYPHS: &[(&str, char, f32)] = &[
+	icon!(chevron_down = 57453),
+	icon!(chevron_right = 57455),
+	icon!(chevron_up = 57456),
+	icon!(cpu = 57513),
+	icon!(file = 57536),
+	icon!(grip_vertical = 57579),
+	icon!(link = 57602),
+	icon!(mic = 57624),
+	icon!(pause = 57646),
+	icon!(play = 57660),
+	icon!(plus = 57661 + 0.025),
+	icon!(power = 57664),
+	icon!(rotate_ccw = 57672),
+	icon!(save = 57677),
+	icon!(sliders_vertical = 57698),
+	icon!(square = 57703),
+	icon!(unlink = 57756),
+	icon!(volume_2 = 57771),
+	icon!(x = 57778),
+	icon!(move_vertical = 57799 + 0.025),
+	icon!(power_off = 57865),
+	icon!(arrow_left_right = 57930),
+	icon!(file_headphone = 58138),
+	icon!(file_play = 58145),
+	icon!(arrow_up_down = 58237),
+	icon!(chart_no_axes_gantt = 58564),
+	icon!(radius = 58669),
+	icon!(file_music = 58718),
+	icon!(metronome = 59068 + 0.025),
+];
+
+pub fn main() {
+	println!("cargo::rerun-if-changed=../Lucide.ttf");
+	println!("cargo::rerun-if-changed=src/icons.rs");
+
+	let mut icons_rs = File::create("src/icons.rs").unwrap();
+
+	icons_rs
+		.write_all(
+			br#"// automatically generated
+
+use crate::widget::LINE_HEIGHT;
+use iced::{
+	Element, Font, font, padding,
+	widget::{container, text},
+};
+
+pub static LUCIDE_BYTES: &[u8] = include_bytes!("../../icons.ttf");
+pub static LUCIDE_FONT: Font = Font {
+	family: font::Family::Name("lucide"),
+	..Font::MONOSPACE
+};
+
+#[derive(Clone, Copy, Debug)]
+pub struct Icon {
+	glyph: char,
+	size: f32,
+	offset: f32,
+}
+
+impl Icon {
+	pub const fn size(mut self, size: f32) -> Self {
+		self.size = size;
+		self
+	}
+
+	pub const fn glyph(self) -> char {
+		self.glyph
+	}
+}
+
+impl<'a, Message: 'a> From<Icon> for Element<'a, Message> {
+	fn from(value: Icon) -> Self {
+		container(
+			text(value.glyph)
+				.font(LUCIDE_FONT)
+				.shaping(text::Shaping::Basic)
+				.line_height(1.0)
+				.size(value.size)
+				.width(value.size)
+				.center(),
+		)
+		.padding(padding::top(value.offset * value.size).bottom(-value.offset * value.size))
+		.into()
+	}
+}
+"#,
+		)
+		.unwrap();
+
+	let mut subset = BTreeSet::new();
+
+	for &(name, glyph, offset) in GLYPHS {
+		subset.insert(glyph);
+		icons_rs
+			.write_all(
+				format!(
+					"
+pub const fn {name}() -> Icon {{
+	Icon {{
+		glyph: {glyph:?},
+		size: LINE_HEIGHT,
+		offset: {offset},
+	}}
+}}
+"
+				)
+				.as_bytes(),
+			)
+			.unwrap();
+	}
+
+	std::fs::write(
+		"../icons.ttf",
+		font_subset::FontReader::new(LUCIDE_BYTES)
+			.unwrap()
+			.read()
+			.unwrap()
+			.subset(&subset)
+			.unwrap()
+			.to_opentype(),
+	)
+	.unwrap();
+}

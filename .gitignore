@@ -1,6 +1,7 @@
-debug/
-target/
+debug
+target
 **/*.rs.bk
 *.pdb
+icons.ttf
 Lucide.ttf
-profile.json*
+profile.json.gz

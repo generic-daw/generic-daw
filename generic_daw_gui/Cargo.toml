@@ -37,3 +37,6 @@ smol = "2.0.2"
 sweeten = { git = "https://github.com/edwloef/sweeten.git", branch = "generic-daw" }
 toml = "1.0.6"
 walkdir = "2.5.0"
+
+[build-dependencies]
+font-subset = "0.1.0"

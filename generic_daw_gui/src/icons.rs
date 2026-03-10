@@ -1,14 +1,14 @@
+// automatically generated
+
 use crate::widget::LINE_HEIGHT;
 use iced::{
-	Element, Font,
-	font::Family,
-	padding,
+	Element, Font, font, padding,
 	widget::{container, text},
 };
 
-pub static LUCIDE_BYTES: &[u8] = include_bytes!("../../Lucide.ttf");
+pub static LUCIDE_BYTES: &[u8] = include_bytes!("../../icons.ttf");
 pub static LUCIDE_FONT: Font = Font {
-	family: Family::Name("lucide"),
+	family: font::Family::Name("lucide"),
 	..Font::MONOSPACE
 };
 
@@ -20,13 +20,13 @@ pub struct Icon {
 }
 
 impl Icon {
-	pub const fn glyph(self) -> char {
-		self.glyph
-	}
-
 	pub const fn size(mut self, size: f32) -> Self {
 		self.size = size;
 		self
+	}
+
+	pub const fn glyph(self) -> char {
+		self.glyph
 	}
 }
 
@@ -46,48 +46,234 @@ impl<'a, Message: 'a> From<Icon> for Element<'a, Message> {
 	}
 }
 
-macro_rules! icon {
-	($name:ident = $glyph:literal) => {
-		icon!($name = $glyph + 0.05);
-	};
-	($name:ident = $glyph:literal + $offset:literal) => {
-		pub const fn $name() -> Icon {
-			Icon {
-				glyph: const { char::from_u32($glyph).unwrap() },
-				size: LINE_HEIGHT,
-				offset: $offset,
-			}
-		}
-	};
+pub const fn chevron_down() -> Icon {
+	Icon {
+		glyph: '\u{e06d}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
 }
 
-// https://unpkg.com/lucide-static@latest/font/codepoints.json
-icon!(chevron_down = 57453);
-icon!(chevron_right = 57455);
-icon!(chevron_up = 57456);
-icon!(cpu = 57513);
-icon!(file = 57536);
-icon!(grip_vertical = 57579);
-icon!(link = 57602);
-icon!(mic = 57624);
-icon!(pause = 57646);
-icon!(play = 57660);
-icon!(plus = 57661 + 0.025);
-icon!(power = 57664);
-icon!(rotate_ccw = 57672);
-icon!(save = 57677);
-icon!(sliders_vertical = 57698);
-icon!(square = 57703);
-icon!(unlink = 57756);
-icon!(volume_2 = 57771);
-icon!(x = 57778);
-icon!(move_vertical = 57799 + 0.025);
-icon!(power_off = 57865);
-icon!(arrow_left_right = 57930);
-icon!(file_headphone = 58138);
-icon!(file_play = 58145);
-icon!(arrow_up_down = 58237);
-icon!(chart_no_axes_gantt = 58564);
-icon!(radius = 58669);
-icon!(file_music = 58718);
-icon!(metronome = 59068 + 0.025);
+pub const fn chevron_right() -> Icon {
+	Icon {
+		glyph: '\u{e06f}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn chevron_up() -> Icon {
+	Icon {
+		glyph: '\u{e070}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn cpu() -> Icon {
+	Icon {
+		glyph: '\u{e0a9}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn file() -> Icon {
+	Icon {
+		glyph: '\u{e0c0}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn grip_vertical() -> Icon {
+	Icon {
+		glyph: '\u{e0eb}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn link() -> Icon {
+	Icon {
+		glyph: '\u{e102}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn mic() -> Icon {
+	Icon {
+		glyph: '\u{e118}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn pause() -> Icon {
+	Icon {
+		glyph: '\u{e12e}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn play() -> Icon {
+	Icon {
+		glyph: '\u{e13c}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn plus() -> Icon {
+	Icon {
+		glyph: '\u{e13d}',
+		size: LINE_HEIGHT,
+		offset: 0.025,
+	}
+}
+
+pub const fn power() -> Icon {
+	Icon {
+		glyph: '\u{e140}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn rotate_ccw() -> Icon {
+	Icon {
+		glyph: '\u{e148}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn save() -> Icon {
+	Icon {
+		glyph: '\u{e14d}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn sliders_vertical() -> Icon {
+	Icon {
+		glyph: '\u{e162}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn square() -> Icon {
+	Icon {
+		glyph: '\u{e167}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn unlink() -> Icon {
+	Icon {
+		glyph: '\u{e19c}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn volume_2() -> Icon {
+	Icon {
+		glyph: '\u{e1ab}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn x() -> Icon {
+	Icon {
+		glyph: '\u{e1b2}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn move_vertical() -> Icon {
+	Icon {
+		glyph: '\u{e1c7}',
+		size: LINE_HEIGHT,
+		offset: 0.025,
+	}
+}
+
+pub const fn power_off() -> Icon {
+	Icon {
+		glyph: '\u{e209}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn arrow_left_right() -> Icon {
+	Icon {
+		glyph: '\u{e24a}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn file_headphone() -> Icon {
+	Icon {
+		glyph: '\u{e31a}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn file_play() -> Icon {
+	Icon {
+		glyph: '\u{e321}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn arrow_up_down() -> Icon {
+	Icon {
+		glyph: '\u{e37d}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn chart_no_axes_gantt() -> Icon {
+	Icon {
+		glyph: '\u{e4c4}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn radius() -> Icon {
+	Icon {
+		glyph: '\u{e52d}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn file_music() -> Icon {
+	Icon {
+		glyph: '\u{e55e}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn metronome() -> Icon {
+	Icon {
+		glyph: '\u{e6bc}',
+		size: LINE_HEIGHT,
+		offset: 0.025,
+	}
+}
