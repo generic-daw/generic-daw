@@ -1,3 +1,4 @@
+use crate::widget::LINE_HEIGHT;
 use iced::{
 	Element, Font,
 	font::Family,
@@ -13,13 +14,17 @@ pub static LUCIDE_FONT: Font = Font {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Icon {
-	character: char,
+	glyph: char,
 	size: f32,
 	offset: f32,
 }
 
 impl Icon {
-	pub fn size(mut self, size: f32) -> Self {
+	pub const fn glyph(self) -> char {
+		self.glyph
+	}
+
+	pub const fn size(mut self, size: f32) -> Self {
 		self.size = size;
 		self
 	}
@@ -28,7 +33,7 @@ impl Icon {
 impl<'a, Message: 'a> From<Icon> for Element<'a, Message> {
 	fn from(value: Icon) -> Self {
 		container(
-			text(value.character)
+			text(value.glyph)
 				.font(LUCIDE_FONT)
 				.shaping(text::Shaping::Basic)
 				.line_height(1.0)
@@ -42,14 +47,14 @@ impl<'a, Message: 'a> From<Icon> for Element<'a, Message> {
 }
 
 macro_rules! icon {
-	($name:ident = $icon:literal) => {
-		icon!($name = $icon + 0.05);
+	($name:ident = $glyph:literal) => {
+		icon!($name = $glyph + 0.05);
 	};
-	($name:ident = $icon:literal + $offset:literal) => {
+	($name:ident = $glyph:literal + $offset:literal) => {
 		pub const fn $name() -> Icon {
 			Icon {
-				character: char::from_u32($icon).unwrap(),
-				size: $crate::widget::LINE_HEIGHT,
+				glyph: const { char::from_u32($glyph).unwrap() },
+				size: LINE_HEIGHT,
 				offset: $offset,
 			}
 		}

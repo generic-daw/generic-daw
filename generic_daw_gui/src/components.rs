@@ -1,5 +1,5 @@
 use crate::{
-	icons::{Icon, LUCIDE_FONT, move_vertical},
+	icons::{Icon, LUCIDE_FONT, chevron_down, chevron_up, move_vertical},
 	stylefns::{bordered_box_with_radius, button_with_radius},
 };
 use generic_daw_widget::drag_handle::DragHandle;
@@ -69,14 +69,14 @@ where
 pub const PICK_LIST_HANDLE: pick_list::Handle<Font> = pick_list::Handle::Dynamic {
 	closed: pick_list::Icon {
 		font: LUCIDE_FONT,
-		code_point: char::from_u32(57453).unwrap(),
+		code_point: chevron_down().glyph(),
 		size: None,
 		line_height: text::LineHeight::Relative(1.0),
 		shaping: text::Shaping::Basic,
 	},
 	open: pick_list::Icon {
 		font: LUCIDE_FONT,
-		code_point: char::from_u32(57456).unwrap(),
+		code_point: chevron_up().glyph(),
 		size: None,
 		line_height: text::LineHeight::Relative(1.0),
 		shaping: text::Shaping::Basic,
