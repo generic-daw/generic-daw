@@ -1,5 +1,5 @@
 use crate::{Cookie, ParamInfoFlags, ParamRescanFlags, host::Host};
-use clack_extensions::params::ParamInfoBuffer;
+use clack_extensions::{params::ParamInfoBuffer, state::HostStateImpl as _};
 use clack_host::prelude::*;
 use std::{mem::MaybeUninit, ops::RangeInclusive, sync::Arc};
 
@@ -65,6 +65,7 @@ impl Param {
 			&& let Some(value) = ext.get_value(&mut plugin.plugin_handle(), self.id)
 		{
 			self.value = value as f32;
+			plugin.access_handler_mut(|mt| mt.mark_dirty());
 		}
 
 		if (flags.contains(ParamRescanFlags::VALUES) || flags.contains(ParamRescanFlags::TEXT))

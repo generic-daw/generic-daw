@@ -429,10 +429,10 @@ impl<Event: EventImpl> Plugin<Event> {
 				.access_shared_handler(|s| s.ext.state_context.get())
 			{
 				ext.save(&mut self.instance.plugin_handle(), &mut buf, context_type)
+			} else if let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.state.get()) {
+				ext.save(&mut self.instance.plugin_handle(), &mut buf)
 			} else {
-				self.instance
-					.access_shared_handler(|s| s.ext.state.get().copied())?
-					.save(&mut self.instance.plugin_handle(), &mut buf)
+				return None;
 			} {
 				warn!("{}: {err}", self.descriptor);
 				return None;
@@ -456,10 +456,10 @@ impl<Event: EventImpl> Plugin<Event> {
 				&mut Cursor::new(buf),
 				context_type,
 			)
+		} else if let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.state.get()) {
+			ext.load(&mut self.instance.plugin_handle(), &mut Cursor::new(buf))
 		} else {
-			self.instance
-				.access_shared_handler(|s| *s.ext.state.get().unwrap())
-				.load(&mut self.instance.plugin_handle(), &mut Cursor::new(buf))
+			return;
 		} {
 			warn!("{}: {err}", self.descriptor);
 			return;
