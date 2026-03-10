@@ -198,13 +198,13 @@ pub struct ArrangementView {
 	playlist_position: Vector,
 	playlist_scale: Vector,
 	playlist_selection: RefCell<playlist::Selection>,
-	soloed_track: Option<NodeId>,
-
-	selected_channel: NodeId,
 
 	piano_roll_position: Vector,
 	piano_roll_scale: Vector,
 	piano_roll_selection: RefCell<piano_roll::Selection>,
+
+	soloed_track: Option<NodeId>,
+	selected_node: NodeId,
 
 	split_at: f32,
 	plugins: combo_box::State<PluginDescriptor>,
@@ -228,7 +228,7 @@ impl ArrangementView {
 		let playlist_scale_x = (arrangement.transport().sample_rate.get() as f32).log2() - 5.0;
 		let piano_roll_scale_x = playlist_scale_x - 2.0;
 
-		let selected_channel = arrangement.master().id;
+		let selected_node = arrangement.master().id;
 
 		(
 			Self {
@@ -241,13 +241,13 @@ impl ArrangementView {
 				playlist_position: Vector::default(),
 				playlist_scale: Vector::new(playlist_scale_x, 87.0),
 				playlist_selection: RefCell::default(),
-				soloed_track: None,
-
-				selected_channel,
 
 				piano_roll_position: Vector::new(0.0, 1000.0),
 				piano_roll_scale: Vector::new(piano_roll_scale_x, LINE_HEIGHT),
 				piano_roll_selection: RefCell::default(),
+
+				soloed_track: None,
+				selected_node,
 
 				split_at: state.plugins_panel_split_at,
 				plugins: combo_box::State::default(),
@@ -299,7 +299,7 @@ impl ArrangementView {
 				self.playlist_selection.get_mut().clear();
 				self.soloed_track = None;
 
-				self.selected_channel = self.arrangement.master().id;
+				self.selected_node = self.arrangement.master().id;
 
 				self.piano_roll_position.x *= pos_fact;
 				self.piano_roll_scale.x += scale_diff;
@@ -330,7 +330,7 @@ impl ArrangementView {
 			}
 			Message::ChannelAdd => {
 				let id = self.arrangement.add_channel();
-				self.selected_channel = id;
+				self.selected_node = id;
 				return self.update(
 					Message::Connect(id, self.arrangement.master().id, 1.0),
 					config,
@@ -338,13 +338,13 @@ impl ArrangementView {
 			}
 			Message::ChannelRemove(id) => {
 				_ = self.update(Message::ArrowRight, config);
-				if self.selected_channel == id {
+				if self.selected_node == id {
 					_ = self.update(Message::ArrowLeft, config);
 				}
 
 				self.arrangement.remove_channel(id);
 			}
-			Message::ChannelSelect(id) => self.selected_channel = id,
+			Message::ChannelSelect(id) => self.selected_node = id,
 			Message::ChannelVolumeChanged(id, volume) => {
 				self.arrangement.channel_volume_changed(id, volume);
 			}
@@ -520,7 +520,7 @@ impl ArrangementView {
 
 				if matches!(self.tab, Tab::Mixer) {
 					_ = self.update(Message::ArrowRight, config);
-					if self.selected_channel == id {
+					if self.selected_node == id {
 						_ = self.update(Message::ArrowLeft, config);
 					}
 				}
@@ -699,13 +699,13 @@ impl ArrangementView {
 					return self.handle_playlist_action(playlist::Action::Delete, config);
 				}
 				Tab::Mixer => {
-					return match self.arrangement.node(self.selected_channel).ty {
+					return match self.arrangement.node(self.selected_node).ty {
 						NodeType::Master => Task::none().into(),
 						NodeType::Channel => {
-							self.update(Message::ChannelRemove(self.selected_channel), config)
+							self.update(Message::ChannelRemove(self.selected_node), config)
 						}
 						NodeType::Track => {
-							self.update(Message::TrackRemove(self.selected_channel), config)
+							self.update(Message::TrackRemove(self.selected_node), config)
 						}
 					};
 				}
@@ -730,26 +730,21 @@ impl ArrangementView {
 					);
 				}
 				Tab::Mixer => {
-					self.selected_channel =
-						if self.arrangement.node(self.selected_channel).ty == NodeType::Channel {
+					self.selected_node =
+						if self.arrangement.node(self.selected_node).ty == NodeType::Channel {
 							self.arrangement
 								.channels()
-								.rfind(|channel| channel.id < self.selected_channel)
-								.or_else(|| {
-									self.arrangement
-										.tracks()
-										.last()
-										.map(|track| self.arrangement.node(track.id))
-								})
+								.rfind(|channel| channel.id < self.selected_node)
+								.map(|channel| channel.id)
+								.or_else(|| self.arrangement.tracks().last().map(|track| track.id))
 						} else {
 							self.arrangement
 								.tracks()
 								.iter()
-								.map(|track| self.arrangement.node(track.id))
-								.rfind(|track| track.id < self.selected_channel)
+								.rfind(|track| track.id < self.selected_node)
+								.map(|track| track.id)
 						}
-						.unwrap_or_else(|| self.arrangement.master())
-						.id;
+						.unwrap_or_else(|| self.arrangement.master().id);
 				}
 				Tab::PianoRoll(..) => {
 					self.arrangement.seek_to(
@@ -777,28 +772,27 @@ impl ArrangementView {
 					);
 				}
 				Tab::Mixer => {
-					self.selected_channel =
-						if self.arrangement.node(self.selected_channel).ty == NodeType::Channel {
+					self.selected_node =
+						if self.arrangement.node(self.selected_node).ty == NodeType::Channel {
 							self.arrangement
 								.channels()
-								.find(|channel| channel.id > self.selected_channel)
-								.or_else(|| self.arrangement.channels().next_back())
+								.find(|&channel| channel.id > self.selected_node)
+								.map(|channel| channel.id)
+								.or_else(|| {
+									self.arrangement.channels().last().map(|channel| channel.id)
+								})
 						} else {
 							self.arrangement
 								.tracks()
 								.iter()
-								.map(|track| self.arrangement.node(track.id))
-								.find(|track| track.id > self.selected_channel)
-								.or_else(|| self.arrangement.channels().next())
+								.find(|track| track.id > self.selected_node)
+								.map(|track| track.id)
 								.or_else(|| {
-									self.arrangement
-										.tracks()
-										.last()
-										.map(|track| self.arrangement.node(track.id))
+									self.arrangement.channels().next().map(|channel| channel.id)
 								})
+								.or_else(|| self.arrangement.tracks().last().map(|track| track.id))
 						}
-						.unwrap_or_else(|| self.arrangement.master())
-						.id;
+						.unwrap_or_else(|| self.arrangement.master().id);
 				}
 				Tab::PianoRoll(..) => {
 					self.arrangement.seek_to(
@@ -1318,7 +1312,7 @@ impl ArrangementView {
 	}
 
 	fn mixer(&self) -> Element<'_, Message> {
-		let node = self.arrangement.node(self.selected_channel);
+		let node = self.arrangement.node(self.selected_node);
 
 		Split::new(
 			mouse_area(
@@ -1364,7 +1358,7 @@ impl ArrangementView {
 			.on_press(Message::ClearSelection),
 			column![
 				combo_box(&self.plugins, "Add Plugin", None, move |descriptor| {
-					Message::PluginLoad(self.selected_channel, descriptor, true)
+					Message::PluginLoad(self.selected_node, descriptor, true)
 				})
 				.menu_style(menu_style)
 				.width(Fill),
@@ -1387,7 +1381,7 @@ impl ArrangementView {
 
 								row![
 									Knob::new(0.0..=1.0, plugin.mix, move |mix| {
-										Message::PluginMixChanged(self.selected_channel, i, mix)
+										Message::PluginMixChanged(self.selected_node, i, mix)
 									})
 									.radius(TEXT_HEIGHT)
 									.enabled(plugin.enabled && node.enabled)
@@ -1413,7 +1407,7 @@ impl ArrangementView {
 											button_style(node.bypassed)
 										)
 										.on_press(Message::PluginToggleEnabled(
-											self.selected_channel,
+											self.selected_node,
 											i
 										)),
 										icon_button(
@@ -1424,7 +1418,7 @@ impl ArrangementView {
 												button::secondary
 											}
 										)
-										.on_press(Message::PluginRemove(self.selected_channel, i)),
+										.on_press(Message::PluginRemove(self.selected_node, i)),
 									]
 									.spacing(5),
 								]
@@ -1447,7 +1441,7 @@ impl ArrangementView {
 							})
 					)
 					.spacing(5)
-					.on_drag(|node| Message::PluginMoveTo(self.selected_channel, node))
+					.on_drag(|node| Message::PluginMoveTo(self.selected_node, node))
 					.style(sweeten_column_style),
 				)
 				.spacing(5)
@@ -1564,14 +1558,14 @@ impl ArrangementView {
 					]
 					.spacing(3),
 					if node.ty == NodeType::Track
-						|| node.id == self.selected_channel
-						|| self.arrangement.master().id == self.selected_channel
+						|| node.id == self.selected_node
+						|| self.arrangement.master().id == self.selected_node
 					{
 						Element::new(space().height(LINE_HEIGHT))
 					} else {
 						let connected = self
 							.arrangement
-							.outgoing(self.selected_channel)
+							.outgoing(self.selected_node)
 							.contains_key(&node.id);
 
 						button(chevron_up())
@@ -1585,9 +1579,9 @@ impl ArrangementView {
 								0,
 							))
 							.on_press(if connected {
-								Message::Disconnect(self.selected_channel, node.id)
+								Message::Disconnect(self.selected_node, node.id)
 							} else {
-								Message::Connect(self.selected_channel, node.id, 1.0)
+								Message::Connect(self.selected_node, node.id, 1.0)
 							})
 							.into()
 					}
@@ -1598,7 +1592,7 @@ impl ArrangementView {
 			)
 			.padding(5)
 			.style(|t| {
-				if self.selected_channel == node.id {
+				if self.selected_node == node.id {
 					container::background(t.extended_palette().background.weakest.color)
 						.border(border::width(1.5).color(t.extended_palette().primary.base.color))
 				} else {
