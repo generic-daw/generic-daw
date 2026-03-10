@@ -50,7 +50,6 @@ static GLYPHS: &[(&str, char, f32)] = &[
 
 pub fn main() {
 	println!("cargo::rerun-if-changed=../Lucide.ttf");
-	println!("cargo::rerun-if-changed=src/icons.rs");
 
 	let mut icons_rs = File::create("src/icons.rs").unwrap();
 
