@@ -43,7 +43,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 				*self.position,
 				*self.scale,
 				self.transport,
-			),
+			) + self.position.x,
 			self.scale.y,
 		))
 		.translate(Vector::new(
@@ -107,9 +107,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 											+ border;
 										let start_offset = cursor.x - bounds.x;
 										if (vel_pixel - start_offset).abs() < border / 2.0 {
-											selection.primary.remove(&self.idx);
-											selection.secondary.extend(selection.primary.drain());
-											selection.primary.insert(self.idx);
+											if !clear {
+												selection
+													.secondary
+													.extend(selection.primary.drain());
+												selection.secondary.remove(&self.idx);
+												selection.primary.insert(self.idx);
+											}
 											Status::DraggingVelocity(self.note.velocity)
 										} else {
 											Status::Dragging(self.note.key, time)
@@ -266,7 +270,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 		let border = 10f32.min(layout.bounds().width / 3.0);
 		match (cursor.x < border, layout.bounds().width - cursor.x < border) {
 			(false, false) => {
-				let bounds = layout.bounds().intersection(viewport).unwrap();
+				let bounds = layout.bounds().intersection(viewport).unwrap()
+					- Vector::new(layout.position().x, layout.position().y);
 				let vel_pixel = self.note.velocity * (bounds.width - 2.0 * border - 1.0) + border;
 				if (vel_pixel - cursor.x - bounds.x).abs() < border / 2.0 {
 					Interaction::ResizingHorizontally
