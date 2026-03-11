@@ -11,7 +11,6 @@ use iced_widget::{
 		widget::Tree,
 		window,
 	},
-	theme::palette::mix,
 };
 use std::{cell::Cell, convert::identity};
 
@@ -140,7 +139,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 		let danger = theme.palette().danger;
 		let background = theme.palette().background;
 
-		let muted = |color: Color| mix(color, background, 2.0 / 3.0);
+		let weaker = |color: Color| color.mix(background, 0.6);
 
 		let bar = self
 			.state
@@ -156,7 +155,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 					),
 					..Quad::default()
 				},
-				muted(danger),
+				weaker(danger),
 			);
 		}
 
@@ -169,7 +168,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 					),
 					..Quad::default()
 				},
-				muted(warning),
+				weaker(warning),
 			);
 		}
 
@@ -182,7 +181,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 					),
 					..Quad::default()
 				},
-				muted(success),
+				weaker(success),
 			);
 		}
 

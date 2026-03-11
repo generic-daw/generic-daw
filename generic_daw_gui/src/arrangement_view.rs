@@ -58,7 +58,6 @@ use std::{
 	cell::RefCell,
 	cmp::{Ordering, Reverse},
 	collections::HashMap,
-	fmt::Write as _,
 	io::Read,
 	iter::once,
 	num::NonZero,
@@ -1728,22 +1727,20 @@ impl ArrangementView {
 }
 
 fn format_decibels(amp: f32) -> String {
-	let mut f = String::with_capacity(4);
-
 	let db = 20.0 * amp.log10();
 	let dba = db.abs();
 
-	if dba >= 0.05 {
-		if db.is_sign_positive() {
-			write!(f, "+").unwrap();
+	format!(
+		"{}{dba:.*}",
+		if dba < 0.05 {
+			""
+		} else if db.is_sign_positive() {
+			"+"
 		} else {
-			write!(f, "-").unwrap();
-		}
-	}
-
-	write!(f, "{dba:.*}", (dba < 9.95).into()).unwrap();
-
-	f
+			"-"
+		},
+		(dba < 99.95).into()
+	)
 }
 
 pub fn format_now() -> jiff::fmt::strtime::Display<'static> {

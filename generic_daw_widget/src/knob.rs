@@ -8,7 +8,6 @@ use iced_widget::{
 		mouse::{self, Cursor, Interaction, ScrollDelta},
 		overlay,
 		renderer::{Quad, Style},
-		theme::palette::mix,
 		widget::{Text, Tree, tree},
 	},
 	graphics::geometry::Renderer as _,
@@ -103,16 +102,18 @@ impl<'a, Message> Knob<'a, Message> {
 	}
 
 	fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
-		let color = if self.enabled {
-			if state.hovering || state.dragging.is_some() {
-				theme.extended_palette().primary.strong.color
-			} else {
-				theme.extended_palette().primary.base.color
-			}
-		} else if state.hovering || state.dragging.is_some() {
-			theme.extended_palette().secondary.strong.color
+		let swatch = if self.enabled {
+			theme.extended_palette().primary
 		} else {
-			theme.extended_palette().secondary.base.color
+			theme.extended_palette().secondary
+		};
+
+		let color = if state.dragging.is_some() {
+			swatch.strong.color
+		} else if state.hovering {
+			swatch.weak.color
+		} else {
+			swatch.base.color
 		};
 
 		let border_radius = self.border_radius();
@@ -174,7 +175,7 @@ impl<'a, Message> Knob<'a, Message> {
 						self.radius.midpoint(dot_radius),
 						dot_radius / 2.0,
 					),
-					mix(color, theme.extended_palette().background.strong.text, 0.25),
+					swatch.base.color.mix(swatch.base.text, 0.5),
 				);
 			}
 		}
