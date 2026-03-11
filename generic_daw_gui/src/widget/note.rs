@@ -37,22 +37,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
-		Node::new(Size::new(
-			time_to_px(
-				self.note.position.len(),
-				*self.position,
-				*self.scale,
-				self.transport,
-			) + self.position.x,
-			self.scale.y,
-		))
-		.translate(Vector::new(
-			time_to_px(
-				self.note.position.start(),
-				*self.position,
-				*self.scale,
-				self.transport,
-			),
+		let (start, end) = (self.note.position.start(), self.note.position.end());
+
+		let start = time_to_px(start, *self.position, *self.scale, self.transport);
+		let end = time_to_px(end, *self.position, *self.scale, self.transport);
+
+		Node::new(Size::new(end - start, self.scale.y)).translate(Vector::new(
+			start,
 			key_to_px(self.note.key, *self.position, *self.scale) + self.position.y,
 		))
 	}
