@@ -1,7 +1,7 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef, Recording},
 	widget::{
-		LINE_HEIGHT, OPACITY_33, maybe_snap,
+		ALPHA_1_3, LINE_HEIGHT, maybe_snap,
 		playlist::{Action, Selection, Status},
 		px_to_time, time_to_px,
 	},
@@ -362,7 +362,7 @@ where
 				border: border::width(1).color(color),
 				..Quad::default()
 			},
-			color.scale_alpha(OPACITY_33),
+			color.scale_alpha(ALPHA_1_3),
 		);
 
 		let state = tree.state.downcast_ref::<State>();

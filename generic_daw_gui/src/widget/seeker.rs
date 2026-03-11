@@ -1,4 +1,4 @@
-use crate::widget::{LINE_HEIGHT, OPACITY_33, maybe_snap, px_to_time, time_to_px};
+use crate::widget::{ALPHA_1_3, LINE_HEIGHT, maybe_snap, px_to_time, time_to_px};
 use generic_daw_core::{MusicalTime, Position, Transport};
 use iced::{
 	Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -570,7 +570,7 @@ impl<'a, Message> Seeker<'a, Message> {
 					.secondary
 					.base
 					.color
-					.scale_alpha(OPACITY_33),
+					.scale_alpha(ALPHA_1_3),
 			);
 
 			renderer.fill_quad(
@@ -583,7 +583,7 @@ impl<'a, Message> Seeker<'a, Message> {
 					.secondary
 					.base
 					.color
-					.scale_alpha(OPACITY_33),
+					.scale_alpha(ALPHA_1_3),
 			);
 		}
 

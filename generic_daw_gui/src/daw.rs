@@ -13,7 +13,7 @@ use crate::{
 		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
 		progress_bar_with_radius, split_style,
 	},
-	widget::OPACITY_67,
+	widget::ALPHA_2_3,
 };
 use generic_daw_core::{Export, MusicalTime, clap_host::RenderMode};
 use iced::{
@@ -597,9 +597,7 @@ impl Daw {
 						self.files_hovered.then(|| container(plus().size(40.0))
 							.center_x(Fill)
 							.center_y(Fill)
-							.style(|_| container::background(
-								Color::BLACK.scale_alpha(OPACITY_67)
-							)))
+							.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))))
 					],
 					self.arrangement_view.view().map(Message::Arrangement),
 					self.split_at,
@@ -632,7 +630,7 @@ impl Daw {
 					center(opaque(
 						config_view.view(&self.config).map(Message::ConfigView)
 					))
-					.style(|_| container::background(Color::BLACK.scale_alpha(OPACITY_67))),
+					.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))),
 				)
 				.on_press(Message::CloseConfigView),
 			)),
@@ -709,7 +707,7 @@ impl Daw {
 						.spacing(20)
 					)
 					.padding(50)
-					.style(|_| container::background(Color::BLACK.scale_alpha(OPACITY_67))),
+					.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))),
 				)
 				.interaction(Interaction::Progress),
 			))

@@ -1,6 +1,6 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef},
-	widget::{Delta, OPACITY_33, clip, maybe_snap, px_to_time, time_to_px, track::Track},
+	widget::{ALPHA_1_3, Delta, clip, maybe_snap, px_to_time, time_to_px, track::Track},
 };
 use generic_daw_core::{MusicalTime, Transport};
 use iced::{
@@ -529,7 +529,7 @@ where
 						.danger
 						.weak
 						.color
-						.scale_alpha(OPACITY_33),
+						.scale_alpha(ALPHA_1_3),
 				);
 			});
 		}

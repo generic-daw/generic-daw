@@ -1,4 +1,6 @@
-use crate::widget::{Delta, OPACITY_33, key_to_px, maybe_snap, px_to_key, px_to_time, time_to_px};
+use crate::widget::{
+	ALPHA_1_3, ALPHA_2_3, Delta, key_to_px, maybe_snap, px_to_key, px_to_time, time_to_px,
+};
 use generic_daw_core::{MidiKey, MidiNote, MusicalTime, Transport};
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -344,7 +346,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 						.danger
 						.weak
 						.color
-						.scale_alpha(OPACITY_33),
+						.scale_alpha(ALPHA_1_3),
 				);
 			});
 		}
@@ -569,7 +571,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 				border: border::width(1).color(color),
 				..Quad::default()
 			},
-			color.scale_alpha(note.velocity),
+			color.scale_alpha(note.velocity * ALPHA_2_3),
 		);
 
 		let border = 10f32.min(bounds.width / 3.0);
