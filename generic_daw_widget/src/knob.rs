@@ -307,17 +307,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 						shell.request_redraw();
 					}
 				}
-				mouse::Event::WheelScrolled { delta, .. }
+				mouse::Event::WheelScrolled { delta, modifiers }
 					if state.dragging.is_none() && state.hovering =>
 				{
-					if !self.stepped {
-						state.scroll = 0.0;
-					}
-
 					let mut diff = match delta {
 						ScrollDelta::Lines { y, .. } => *y,
 						ScrollDelta::Pixels { y, .. } => y / 60.0,
-					} + state.scroll;
+					} * (self.range.end() - self.range.start())
+						* if modifiers.command() { 10.0 } else { 1.0 }
+						/ 101.0 + state.scroll;
 
 					if self.stepped {
 						state.scroll = diff.fract();
@@ -328,6 +326,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 						(self.value + diff).clamp(*self.range.start(), *self.range.end());
 					if new_value != self.value {
 						shell.publish((self.f)(new_value));
+						shell.capture_event();
+					} else if diff != 0.0 {
 						shell.capture_event();
 					}
 				}
