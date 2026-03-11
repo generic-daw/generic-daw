@@ -1,18 +1,18 @@
-use crate::widget::{ALPHA_1_3, Delta, key_to_px, maybe_snap, px_to_key, px_to_time, time_to_px};
-use generic_daw_core::{MidiKey, MidiNote, MusicalTime, Transport};
+use crate::widget::{
+	ALPHA_1_3, Delta, key_to_px, maybe_snap, note::Note, px_to_key, px_to_time, time_to_px,
+};
+use generic_daw_core::{MidiKey, MusicalTime, Transport};
 use iced::{
-	Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
+	Element, Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
-		Layout, Renderer as _, Shell, Text, Widget,
+		Layout, Renderer as _, Shell, Widget,
 		layout::{Limits, Node},
 		mouse::{self, Cursor, Interaction},
+		overlay,
 		renderer::{Quad, Style},
-		text::Renderer as _,
-		widget::Tree,
+		widget::{Operation, Tree},
 	},
-	alignment::Vertical,
 	border, keyboard,
-	widget::text::{Alignment, Ellipsis, LineHeight, Shaping, Wrapping},
 };
 use std::{cell::RefCell, collections::HashSet};
 
@@ -60,49 +60,67 @@ impl Selection {
 #[derive(Debug)]
 pub struct PianoRoll<'a, Message> {
 	selection: &'a RefCell<Selection>,
-	notes: &'a [MidiNote],
 	transport: &'a Transport,
 	position: &'a Vector,
 	scale: &'a Vector,
+	notes: Box<[Note<'a, Message>]>,
 	f: fn(Action) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
+	fn diff(&self, tree: &mut Tree) {
+		tree.diff_children(&self.notes);
+	}
+
+	fn children(&self) -> Vec<Tree> {
+		self.notes.iter().map(Tree::new).collect()
+	}
+
 	fn size(&self) -> Size<Length> {
 		Size::new(Fill, Length::Fixed(128.0 * self.scale.y))
 	}
 
-	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
-		Node::new(limits.height(128.0 * self.scale.y).max())
+	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+		Node::with_children(
+			limits.height(128.0 * self.scale.y).max(),
+			self.notes
+				.iter_mut()
+				.zip(&mut tree.children)
+				.map(|(child, tree)| child.layout(tree, renderer, limits))
+				.collect(),
+		)
 	}
 
 	fn update(
 		&mut self,
-		_tree: &mut Tree,
+		tree: &mut Tree,
 		event: &Event,
 		layout: Layout<'_>,
 		cursor: Cursor,
-		_renderer: &Renderer,
+		renderer: &Renderer,
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
-		let Some(viewport) = layout.bounds().intersection(viewport) else {
-			return;
-		};
-
-		for note in (0..self.notes.len()).rev() {
-			self.update_note(note, event, cursor, shell, &viewport);
-		}
+		self.notes
+			.iter_mut()
+			.zip(&mut tree.children)
+			.zip(layout.children())
+			.rev()
+			.for_each(|((child, tree), layout)| {
+				child.update(tree, event, layout, cursor, renderer, shell, viewport);
+			});
 
 		if shell.is_event_captured() {
 			return;
 		}
 
 		let selection = &mut *self.selection.borrow_mut();
-		let Some(cursor) = cursor.position_in(viewport) else {
+
+		let Some(cursor) = cursor.position_in(*viewport) else {
 			selection.status = Status::None;
 			return;
 		};
+
 		let new_time = px_to_time(cursor.x, *self.position, *self.scale, self.transport);
 
 		match event {
@@ -161,9 +179,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
 
 					self.notes.iter().enumerate().for_each(|(idx, note)| {
-						if (start_key..=end_key).contains(&note.key)
-							&& (start_pos.max(note.position.start())
-								< end_pos.min(note.position.end()))
+						if (start_key..=end_key).contains(&note.note.key)
+							&& (start_pos.max(note.note.position.start())
+								< end_pos.min(note.note.position.end()))
 						{
 							selection.secondary.insert(idx);
 						} else {
@@ -246,8 +264,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				Status::DraggingVelocity(val) => {
 					debug_assert!(selection.primary.len() == 1);
 					let note = *selection.primary.iter().next().unwrap();
-					let note_bounds = self.note_bounds(note, &viewport);
-					if let Some(note_bounds) = note_bounds.intersection(&viewport) {
+					if let Some(note_bounds) = layout.child(note).bounds().intersection(viewport) {
 						let border = 10f32.min(note_bounds.width / 3.0);
 						let new_val = (cursor.x - border - note_bounds.x + viewport.x)
 							/ (note_bounds.width - 2.0 * border - 1.0);
@@ -276,24 +293,20 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 	fn draw(
 		&self,
-		_tree: &Tree,
+		tree: &Tree,
 		renderer: &mut Renderer,
 		theme: &Theme,
-		_style: &Style,
+		style: &Style,
 		layout: Layout<'_>,
-		_cursor: Cursor,
+		cursor: Cursor,
 		viewport: &Rectangle,
 	) {
-		let Some(bounds) = layout.bounds().intersection(viewport) else {
-			return;
-		};
-
 		for key in (0..127).map(MidiKey) {
 			let Some(bounds) = Rectangle::new(
-				bounds.position() + Vector::new(0.0, key_to_px(key, *self.position, *self.scale)),
-				Size::new(bounds.width, 1.0),
+				viewport.position() + Vector::new(0.0, key_to_px(key, *self.position, *self.scale)),
+				Size::new(viewport.width, 1.0),
 			)
-			.intersection(&bounds) else {
+			.intersection(viewport) else {
 				continue;
 			};
 
@@ -306,11 +319,15 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			);
 		}
 
-		for note in 0..self.notes.len() {
-			renderer.with_layer(Rectangle::INFINITE, |renderer| {
-				self.draw_note(note, renderer, theme, &bounds);
+		self.notes
+			.iter()
+			.zip(&tree.children)
+			.zip(layout.children())
+			.for_each(|((child, tree), layout)| {
+				renderer.with_layer(Rectangle::INFINITE, |renderer| {
+					child.draw(tree, renderer, theme, style, layout, cursor, viewport);
+				});
 			});
-		}
 
 		if let Status::Selecting(start_key, end_key, start_pos, end_pos) =
 			self.selection.borrow().status
@@ -321,13 +338,13 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 			let y = key_to_px(start_key, *self.position, *self.scale);
 			let height = key_to_px(end_key, *self.position, *self.scale) + self.scale.y - y;
-			let y = y + bounds.y;
+			let y = y + viewport.y;
 
 			let x = time_to_px(start_pos, *self.position, *self.scale, self.transport);
 			let width = time_to_px(end_pos, *self.position, *self.scale, self.transport) - x;
-			let x = x + bounds.x;
+			let x = x + viewport.x;
 
-			renderer.with_layer(bounds, |renderer| {
+			renderer.with_layer(*viewport, |renderer| {
 				renderer.fill_quad(
 					Quad {
 						bounds: Rectangle {
@@ -347,11 +364,11 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 	fn mouse_interaction(
 		&self,
-		_tree: &Tree,
-		_layout: Layout<'_>,
+		tree: &Tree,
+		layout: Layout<'_>,
 		cursor: Cursor,
 		viewport: &Rectangle,
-		_renderer: &Renderer,
+		renderer: &Renderer,
 	) -> Interaction {
 		match self.selection.borrow().status {
 			Status::Selecting(..) => Interaction::Idle,
@@ -361,258 +378,76 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			| Status::DraggingSplit(..)
 			| Status::DraggingVelocity(..) => Interaction::ResizingHorizontally,
 			Status::Deleting => Interaction::NoDrop,
-			Status::None => cursor
-				.position()
-				.and_then(|cursor| {
-					(0..self.notes.len())
-						.map(|note| (self.notes[note], self.note_bounds(note, viewport)))
-						.rfind(|(_, note_bounds)| note_bounds.contains(cursor))
-						.map(|(note, note_bounds)| {
-							let start_offset = cursor.x - note_bounds.x;
-							let end_offset = note_bounds.width - start_offset;
-							let border = 10f32.min(note_bounds.width / 3.0);
-							match (start_offset < border, end_offset < border) {
-								(false, false) => {
-									let note_bounds = note_bounds.intersection(viewport).unwrap();
-									let vel_pixel = note.velocity
-										* (note_bounds.width - 2.0 * border - 1.0)
-										+ border;
-									let start_offset = cursor.x - note_bounds.x;
-									if (vel_pixel - start_offset).abs() < border / 2.0 {
-										Interaction::ResizingHorizontally
-									} else {
-										Interaction::Grab
-									}
-								}
-								(true, false) | (false, true) => Interaction::ResizingHorizontally,
-								(true, true) => unreachable!(),
-							}
-						})
+			Status::None => self
+				.notes
+				.iter()
+				.zip(&tree.children)
+				.zip(layout.children())
+				.map(|((child, tree), layout)| {
+					child.mouse_interaction(tree, layout, cursor, viewport, renderer)
 				})
+				.find(|&i| i != Interaction::default())
 				.unwrap_or_default(),
 		}
+	}
+
+	fn overlay<'a>(
+		&'a mut self,
+		tree: &'a mut Tree,
+		layout: Layout<'a>,
+		renderer: &Renderer,
+		viewport: &Rectangle,
+		translation: Vector,
+	) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
+		let children = self
+			.notes
+			.iter_mut()
+			.zip(&mut tree.children)
+			.zip(layout.children())
+			.filter_map(|((child, tree), layout)| {
+				child.overlay(tree, layout, renderer, viewport, translation)
+			})
+			.collect::<Vec<_>>();
+
+		(!children.is_empty()).then(|| overlay::Group::with_children(children).overlay())
+	}
+
+	fn operate(
+		&mut self,
+		tree: &mut Tree,
+		layout: Layout<'_>,
+		renderer: &Renderer,
+		operation: &mut dyn Operation,
+	) {
+		operation.container(None, layout.bounds());
+		operation.traverse(&mut |operation| {
+			self.notes
+				.iter_mut()
+				.zip(&mut tree.children)
+				.zip(layout.children())
+				.for_each(|((child, tree), layout)| {
+					child.operate(tree, layout, renderer, operation);
+				});
+		});
 	}
 }
 
 impl<'a, Message> PianoRoll<'a, Message> {
 	pub fn new(
 		selection: &'a RefCell<Selection>,
-		notes: &'a [MidiNote],
 		transport: &'a Transport,
 		position: &'a Vector,
 		scale: &'a Vector,
+		notes: impl IntoIterator<Item = Note<'a, Message>>,
 		f: fn(Action) -> Message,
 	) -> Self {
 		Self {
 			selection,
-			notes,
+			notes: notes.into_iter().collect(),
 			transport,
 			position,
 			scale,
 			f,
-		}
-	}
-
-	fn note_bounds(&self, note: usize, viewport: &Rectangle) -> Rectangle {
-		let x = time_to_px(
-			self.notes[note].position.start(),
-			*self.position,
-			*self.scale,
-			self.transport,
-		);
-		let width = time_to_px(
-			self.notes[note].position.end(),
-			*self.position,
-			*self.scale,
-			self.transport,
-		) - x;
-
-		Rectangle::new(
-			Point::new(
-				x,
-				key_to_px(self.notes[note].key, *self.position, *self.scale),
-			),
-			Size::new(width, self.scale.y),
-		) + Vector::new(viewport.x, viewport.y)
-	}
-
-	fn update_note(
-		&self,
-		note: usize,
-		event: &Event,
-		cursor: Cursor,
-		shell: &mut Shell<'_, Message>,
-		viewport: &Rectangle,
-	) {
-		if shell.is_event_captured() {
-			return;
-		}
-
-		let Some(cursor) = cursor.position_in(*viewport) else {
-			return;
-		};
-
-		let bounds = self.note_bounds(note, viewport);
-		let note_bounds = bounds - Vector::new(viewport.x, viewport.y);
-		if !note_bounds.contains(cursor) {
-			return;
-		}
-
-		let selection = &mut *self.selection.borrow_mut();
-		match event {
-			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
-				if selection.status == Status::None =>
-			{
-				let mut clear = selection.primary.insert(note);
-
-				match button {
-					mouse::Button::Left => {
-						let MidiNote { key, velocity, .. } = self.notes[note];
-						let time =
-							px_to_time(cursor.x, *self.position, *self.scale, self.transport);
-
-						selection.status = match (modifiers.command(), modifiers.shift()) {
-							(false, false) => {
-								let start_offset = cursor.x - note_bounds.x;
-								let end_offset = note_bounds.width - start_offset;
-								let border = 10f32.min(note_bounds.width / 3.0);
-								match (start_offset < border, end_offset < border) {
-									(false, false) => {
-										let bounds = bounds.intersection(viewport).unwrap()
-											- Vector::new(viewport.x, viewport.y);
-										let vel_pixel =
-											velocity * (bounds.width - 2.0 * border - 1.0) + border;
-										let start_offset = cursor.x - bounds.x;
-										if (vel_pixel - start_offset).abs() < border / 2.0 {
-											selection.primary.remove(&note);
-											selection.secondary.extend(selection.primary.drain());
-											selection.primary.insert(note);
-											Status::DraggingVelocity(velocity)
-										} else {
-											Status::Dragging(key, time)
-										}
-									}
-									(true, false) => Status::TrimmingStart(time),
-									(false, true) => Status::TrimmingEnd(time),
-									(true, true) => unreachable!(),
-								}
-							}
-							(true, false) => {
-								clear = false;
-								let time = maybe_snap(time, *modifiers, |time| {
-									time.snap_round(self.scale.x, self.transport)
-								});
-								Status::Selecting(key, key, time, time)
-							}
-							(false, true) => {
-								shell.publish((self.f)(Action::Clone));
-								Status::Dragging(key, time)
-							}
-							(true, true) => {
-								let time = maybe_snap(time, *modifiers, |time| {
-									time.snap_round(self.scale.x, self.transport)
-								});
-								shell.publish((self.f)(Action::SplitAt(time)));
-								Status::DraggingSplit(time)
-							}
-						};
-
-						shell.capture_event();
-						shell.request_redraw();
-					}
-					mouse::Button::Right if selection.status != Status::Deleting => {
-						clear = true;
-						selection.status = Status::Deleting;
-						shell.publish((self.f)(Action::Delete));
-						shell.capture_event();
-					}
-					_ => {}
-				}
-
-				if clear {
-					selection.primary.clear();
-					selection.primary.insert(note);
-				}
-			}
-			Event::Mouse(mouse::Event::CursorMoved { .. })
-				if selection.status == Status::Deleting =>
-			{
-				selection.primary.insert(note);
-			}
-			_ => {}
-		}
-	}
-
-	fn draw_note(&self, note: usize, renderer: &mut Renderer, theme: &Theme, viewport: &Rectangle) {
-		let Some(bounds) = self.note_bounds(note, viewport).intersection(viewport) else {
-			return;
-		};
-
-		let selection = self.selection.borrow();
-
-		let color = if selection.primary.contains(&note) || selection.secondary.contains(&note) {
-			theme.palette().danger.weak.color
-		} else {
-			theme.palette().primary.weak.color
-		};
-
-		let note = self.notes[note];
-
-		renderer.fill_quad(
-			Quad {
-				bounds,
-				border: border::width(1).color(color),
-				..Quad::default()
-			},
-			color.scale_alpha(note.velocity * ALPHA_1_3 + ALPHA_1_3),
-		);
-
-		let border = 10f32.min(bounds.width / 3.0);
-
-		renderer.fill_quad(
-			Quad {
-				bounds: Rectangle::new(
-					bounds.position()
-						+ Vector::new(
-							note.velocity * (bounds.width - 2.0 * border - 1.0) + border,
-							0.0,
-						),
-					Size::new(1.0, bounds.height),
-				),
-				..Quad::default()
-			},
-			theme.palette().background.strong.text,
-		);
-
-		if bounds.width > 3.0 {
-			let note_name = Text {
-				content: note.key.to_string(),
-				bounds: Size::new(f32::INFINITY, 0.0),
-				size: renderer.default_size(),
-				line_height: LineHeight::default(),
-				font: renderer.default_font(),
-				align_x: Alignment::Left,
-				align_y: Vertical::Center,
-				shaping: Shaping::Basic,
-				wrapping: Wrapping::None,
-				ellipsis: Ellipsis::None,
-				hint_factor: renderer.scale_factor(),
-			};
-
-			renderer.fill_text(
-				note_name,
-				bounds.position()
-					+ Vector::new(
-						3.0,
-						if bounds.y == viewport.y {
-							bounds.height - self.scale.y / 2.0
-						} else {
-							self.scale.y / 2.0
-						},
-					),
-				theme.palette().background.strong.text,
-				bounds,
-			);
 		}
 	}
 }

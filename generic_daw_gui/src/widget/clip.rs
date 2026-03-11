@@ -8,7 +8,7 @@ use crate::{
 };
 use generic_daw_core::{MusicalTime, Position, Transport};
 use iced::{
-	Event, Fill, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
+	Event, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
 		Layout, Renderer as _, Shell, Text, Widget,
 		graphics::mesh::{Cache, Renderer as _},
@@ -120,7 +120,7 @@ where
 	}
 
 	fn size(&self) -> Size<Length> {
-		Size::new(Shrink, Fill)
+		Size::new(Shrink, Shrink)
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {

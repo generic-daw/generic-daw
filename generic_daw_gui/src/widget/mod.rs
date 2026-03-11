@@ -3,6 +3,7 @@ use iced::{Vector, keyboard::Modifiers};
 use std::ops::Add;
 
 pub mod clip;
+pub mod note;
 pub mod piano;
 pub mod piano_roll;
 pub mod playlist;

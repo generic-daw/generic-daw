@@ -16,6 +16,7 @@ use crate::{
 	widget::{
 		LINE_HEIGHT, TEXT_HEIGHT,
 		clip::Clip,
+		note::Note,
 		piano::Piano,
 		piano_roll::{self, PianoRoll},
 		playlist::{self, Playlist},
@@ -1613,10 +1614,24 @@ impl ArrangementView {
 			Piano::new(&self.piano_roll_position, &self.piano_roll_scale),
 			PianoRoll::new(
 				&self.piano_roll_selection,
-				&self.arrangement.midi_patterns()[&clip.pattern].notes,
 				self.arrangement.transport(),
 				&self.piano_roll_position,
 				&self.piano_roll_scale,
+				self.arrangement.midi_patterns()[&clip.pattern]
+					.notes
+					.iter()
+					.enumerate()
+					.map(|(idx, note)| {
+						Note::new(
+							idx,
+							note,
+							&self.piano_roll_selection,
+							self.arrangement.transport(),
+							&self.piano_roll_position,
+							&self.piano_roll_scale,
+							Message::PianoRollAction,
+						)
+					}),
 				Message::PianoRollAction,
 			),
 			Message::SeekTo,

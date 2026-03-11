@@ -44,39 +44,6 @@ where
 		)
 	}
 
-	fn mouse_interaction(
-		&self,
-		tree: &Tree,
-		layout: Layout<'_>,
-		cursor: Cursor,
-		viewport: &Rectangle,
-		renderer: &Renderer,
-	) -> Interaction {
-		self.clips
-			.iter()
-			.zip(&tree.children)
-			.zip(layout.children())
-			.rev()
-			.map(|((child, tree), clip_layout)| {
-				child.mouse_interaction(tree, clip_layout, cursor, viewport, renderer)
-			})
-			.find(|&i| i != Interaction::default())
-			.unwrap_or_default()
-	}
-
-	fn draw(
-		&self,
-		_tree: &Tree,
-		_renderer: &mut Renderer,
-		_theme: &Theme,
-		_style: &Style,
-		_layout: Layout<'_>,
-		_cursor: Cursor,
-		_viewport: &Rectangle,
-	) {
-		panic!();
-	}
-
 	fn update(
 		&mut self,
 		tree: &mut Tree,
@@ -95,6 +62,39 @@ where
 			.for_each(|((child, tree), layout)| {
 				child.update(tree, event, layout, cursor, renderer, shell, viewport);
 			});
+	}
+
+	fn draw(
+		&self,
+		_tree: &Tree,
+		_renderer: &mut Renderer,
+		_theme: &Theme,
+		_style: &Style,
+		_layout: Layout<'_>,
+		_cursor: Cursor,
+		_viewport: &Rectangle,
+	) {
+		panic!();
+	}
+
+	fn mouse_interaction(
+		&self,
+		tree: &Tree,
+		layout: Layout<'_>,
+		cursor: Cursor,
+		viewport: &Rectangle,
+		renderer: &Renderer,
+	) -> Interaction {
+		self.clips
+			.iter()
+			.zip(&tree.children)
+			.zip(layout.children())
+			.rev()
+			.map(|((child, tree), clip_layout)| {
+				child.mouse_interaction(tree, clip_layout, cursor, viewport, renderer)
+			})
+			.find(|&i| i != Interaction::default())
+			.unwrap_or_default()
 	}
 
 	fn overlay<'a>(

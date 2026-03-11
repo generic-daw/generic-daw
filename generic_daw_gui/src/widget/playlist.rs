@@ -161,6 +161,7 @@ where
 			}
 			return;
 		};
+
 		let new_time = px_to_time(cursor.x, *self.position, *self.scale, self.transport);
 
 		match event {
@@ -370,34 +371,6 @@ where
 		}
 	}
 
-	fn mouse_interaction(
-		&self,
-		tree: &Tree,
-		layout: Layout<'_>,
-		cursor: Cursor,
-		viewport: &Rectangle,
-		renderer: &Renderer,
-	) -> Interaction {
-		match self.selection.borrow().status {
-			Status::Selecting(..) => Interaction::Idle,
-			Status::Dragging(..) => Interaction::Grabbing,
-			Status::TrimmingStart(..) | Status::TrimmingEnd(..) | Status::DraggingSplit(..) => {
-				Interaction::ResizingHorizontally
-			}
-			Status::Deleting => Interaction::NoDrop,
-			Status::None => self
-				.tracks
-				.iter()
-				.zip(&tree.children)
-				.zip(layout.children())
-				.map(|((child, tree), layout)| {
-					child.mouse_interaction(tree, layout, cursor, viewport, renderer)
-				})
-				.find(|&i| i != Interaction::default())
-				.unwrap_or_default(),
-		}
-	}
-
 	fn draw(
 		&self,
 		tree: &Tree,
@@ -530,6 +503,34 @@ where
 		}
 	}
 
+	fn mouse_interaction(
+		&self,
+		tree: &Tree,
+		layout: Layout<'_>,
+		cursor: Cursor,
+		viewport: &Rectangle,
+		renderer: &Renderer,
+	) -> Interaction {
+		match self.selection.borrow().status {
+			Status::Selecting(..) => Interaction::Idle,
+			Status::Dragging(..) => Interaction::Grabbing,
+			Status::TrimmingStart(..) | Status::TrimmingEnd(..) | Status::DraggingSplit(..) => {
+				Interaction::ResizingHorizontally
+			}
+			Status::Deleting => Interaction::NoDrop,
+			Status::None => self
+				.tracks
+				.iter()
+				.zip(&tree.children)
+				.zip(layout.children())
+				.map(|((child, tree), layout)| {
+					child.mouse_interaction(tree, layout, cursor, viewport, renderer)
+				})
+				.find(|&i| i != Interaction::default())
+				.unwrap_or_default(),
+		}
+	}
+
 	fn overlay<'a>(
 		&'a mut self,
 		tree: &'a mut Tree,
@@ -580,15 +581,15 @@ where
 		transport: &'a Transport,
 		position: &'a Vector,
 		scale: &'a Vector,
-		children: impl IntoIterator<Item = Track<'a, Message>>,
+		tracks: impl IntoIterator<Item = Track<'a, Message>>,
 		f: fn(Action) -> Message,
 	) -> Self {
 		Self {
 			selection,
 			transport,
-			tracks: children.into_iter().collect(),
 			position,
 			scale,
+			tracks: tracks.into_iter().collect(),
 			f,
 		}
 	}
