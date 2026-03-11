@@ -927,9 +927,9 @@ impl ArrangementView {
 					lhs += *extra;
 
 					let clip = self.arrangement.tracks()[track].clips[lhs];
-					if clip.position().start() == pos {
+					if clip.position().end() == pos {
 						primary.insert((track, lhs));
-					} else if clip.position().end() == pos {
+					} else if clip.position().start() == pos {
 						secondary.insert((track, lhs));
 					} else if clip.position().len() > MusicalTime::TICK {
 						let start = clip.position().start() + MusicalTime::TICK;
@@ -1069,9 +1069,9 @@ impl ArrangementView {
 					lhs += extra;
 
 					let note = self.arrangement.midi_patterns()[&clip.pattern].notes[lhs];
-					if note.position.start() == pos {
+					if note.position.end() == pos {
 						primary.insert(lhs);
-					} else if note.position.end() == pos {
+					} else if note.position.start() == pos {
 						secondary.insert(lhs);
 					} else if note.position.len() > MusicalTime::TICK {
 						let start = note.position.start() + MusicalTime::TICK;
