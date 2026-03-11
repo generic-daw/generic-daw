@@ -543,7 +543,7 @@ impl Daw {
 							)
 							.padding(padding::horizontal(7).vertical(5))
 							.style(|t| bordered_box_with_radius(border::left(5))(t)
-								.background(t.extended_palette().background.weakest.color))
+								.background(t.palette().background.weakest.color))
 						)
 						.on_press(Message::ToggleShowSeconds)
 						.interaction(Interaction::Pointer),
@@ -659,10 +659,7 @@ impl Daw {
 													.padding(padding::horizontal(10).vertical(5))
 													.style(|t| bordered_box_with_radius(5)(t)
 														.background(
-															t.extended_palette()
-																.background
-																.weakest
-																.color
+															t.palette().background.weakest.color
 														)),
 												space::horizontal(),
 												row![

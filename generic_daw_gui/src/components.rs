@@ -46,7 +46,7 @@ where
 		DragHandle::new(
 			container(move_vertical())
 				.style(|t| bordered_box_with_radius(border::left(5))(t)
-					.background(t.extended_palette().background.weakest.color))
+					.background(t.palette().background.weakest.color))
 				.padding(padding::vertical(5)),
 			current,
 			default,

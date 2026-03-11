@@ -302,7 +302,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					bounds,
 					..Quad::default()
 				},
-				theme.extended_palette().background.strong.color,
+				theme.palette().background.strong.color,
 			);
 		}
 
@@ -336,15 +336,10 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							width,
 							height,
 						},
-						border: border::width(1).color(theme.extended_palette().danger.weak.color),
+						border: border::width(1).color(theme.palette().danger.weak.color),
 						..Quad::default()
 					},
-					theme
-						.extended_palette()
-						.danger
-						.weak
-						.color
-						.scale_alpha(ALPHA_1_3),
+					theme.palette().danger.weak.color.scale_alpha(ALPHA_1_3),
 				);
 			});
 		}
@@ -556,9 +551,9 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		let selection = self.selection.borrow();
 
 		let color = if selection.primary.contains(&note) || selection.secondary.contains(&note) {
-			theme.extended_palette().danger.weak.color
+			theme.palette().danger.weak.color
 		} else {
-			theme.extended_palette().primary.weak.color
+			theme.palette().primary.weak.color
 		};
 
 		let note = self.notes[note];
@@ -586,7 +581,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 				),
 				..Quad::default()
 			},
-			theme.extended_palette().background.strong.text,
+			theme.palette().background.strong.text,
 		);
 
 		if bounds.width > 3.0 {
@@ -615,7 +610,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 							self.scale.y / 2.0
 						},
 					),
-				theme.extended_palette().background.strong.text,
+				theme.palette().background.strong.text,
 				bounds,
 			);
 		}

@@ -42,9 +42,7 @@ impl FileTree {
 				.spacing(5)
 				.style(scrollable_style),
 		)
-		.style(|t| {
-			bordered_box_with_radius(0)(t).background(t.extended_palette().background.weakest.color)
-		})
+		.style(|t| bordered_box_with_radius(0)(t).background(t.palette().background.weakest.color))
 		.padding(padding::all(1).left(0))
 		.height(Fill)
 		.into()

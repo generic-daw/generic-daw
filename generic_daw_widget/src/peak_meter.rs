@@ -134,10 +134,10 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 			return;
 		}
 
-		let success = theme.palette().success;
-		let warning = theme.palette().warning;
-		let danger = theme.palette().danger;
-		let background = theme.palette().background;
+		let success = theme.seed().success;
+		let warning = theme.seed().warning;
+		let danger = theme.seed().danger;
+		let background = theme.seed().background;
 
 		let weaker = |color: Color| color.mix(background, 0.6);
 

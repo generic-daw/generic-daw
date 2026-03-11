@@ -10,9 +10,9 @@ pub fn bordered_box_with_radius(
 ) -> impl Fn(&Theme) -> container::Style {
 	let r = r.into();
 	move |t| {
-		container::background(t.extended_palette().background.weak.color).border(
+		container::background(t.palette().background.weak.color).border(
 			border::width(1)
-				.color(t.extended_palette().background.strong.color)
+				.color(t.palette().background.strong.color)
 				.rounded(r),
 		)
 	}
@@ -43,7 +43,7 @@ pub fn pick_list_with_radius(
 	move |t, s| {
 		let mut style = pick_list::default(t, s);
 		style.border.radius = r;
-		style.placeholder_color = t.extended_palette().background.weak.text;
+		style.placeholder_color = t.palette().background.weak.text;
 		style
 	}
 }
@@ -70,7 +70,7 @@ pub fn scrollable_style(t: &Theme, s: scrollable::Status) -> scrollable::Style {
 }
 
 pub fn slider_secondary(theme: &Theme, status: slider::Status) -> slider::Style {
-	let palette = theme.extended_palette();
+	let palette = theme.palette();
 
 	let color = match status {
 		slider::Status::Active => palette.secondary.base.color,
@@ -100,7 +100,7 @@ pub fn slider_with_radius(
 pub fn split_style(t: &Theme) -> iced_split::Style {
 	let mut style = iced_split::default(t);
 	style.focused = iced_split::StyleSheet {
-		color: t.extended_palette().background.strong.color,
+		color: t.palette().background.strong.color,
 		width: 3.0,
 		radius: 1.5.into(),
 	};

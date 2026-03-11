@@ -604,9 +604,7 @@ impl ConfigView {
 			.spacing(5)
 			.style(scrollable_style),
 		)
-		.style(|t| {
-			bordered_box_with_radius(5)(t).background(t.extended_palette().background.weakest.color)
-		})
+		.style(|t| bordered_box_with_radius(5)(t).background(t.palette().background.weakest.color))
 		.into()
 	}
 

@@ -1592,12 +1592,11 @@ impl ArrangementView {
 			.padding(5)
 			.style(|t| {
 				if self.selected_node == node.id {
-					container::background(t.extended_palette().background.weakest.color)
-						.border(border::width(1.5).color(t.extended_palette().primary.base.color))
+					container::background(t.palette().background.weakest.color)
+						.border(border::width(1.5).color(t.palette().primary.base.color))
 				} else {
-					container::background(t.extended_palette().background.weakest.color).border(
-						border::width(1).color(t.extended_palette().background.strong.color),
-					)
+					container::background(t.palette().background.weakest.color)
+						.border(border::width(1).color(t.palette().background.strong.color))
 				}
 			}),
 		)

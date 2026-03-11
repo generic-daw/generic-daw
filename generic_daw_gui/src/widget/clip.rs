@@ -297,13 +297,13 @@ where
 					self.enabled,
 					selection.primary.contains(idx) || selection.secondary.contains(idx),
 				) {
-					(true, true) => theme.extended_palette().danger.weak.color,
-					(true, false) => theme.extended_palette().primary.weak.color,
-					(false, true) => theme.extended_palette().secondary.strong.color,
-					(false, false) => theme.extended_palette().secondary.weak.color,
+					(true, true) => theme.palette().danger.weak.color,
+					(true, false) => theme.palette().primary.weak.color,
+					(false, true) => theme.palette().secondary.strong.color,
+					(false, false) => theme.palette().secondary.weak.color,
 				}
 			}
-			Inner::Recording(..) => theme.extended_palette().warning.weak.color,
+			Inner::Recording(..) => theme.palette().warning.weak.color,
 		};
 
 		renderer.fill_quad(
@@ -346,7 +346,7 @@ where
 							LINE_HEIGHT / 2.0
 						},
 					),
-				theme.extended_palette().background.strong.text,
+				theme.palette().background.strong.text,
 				upper_bounds,
 			);
 		}
@@ -390,7 +390,7 @@ where
 							inner.clip.position,
 							self.scale.x,
 							height,
-							theme.extended_palette().background.strong.text,
+							theme.palette().background.strong.text,
 							lower_bounds.size(),
 							hidden_start_px,
 							hidden_top_px,
@@ -447,7 +447,7 @@ where
 							bounds,
 							..Quad::default()
 						},
-						theme.extended_palette().background.strong.text,
+						theme.palette().background.strong.text,
 					);
 				}
 			}
@@ -470,7 +470,7 @@ where
 							position,
 							self.scale.x,
 							height,
-							theme.extended_palette().background.strong.text,
+							theme.palette().background.strong.text,
 							lower_bounds.size(),
 							hidden_start_px,
 							hidden_top_px,

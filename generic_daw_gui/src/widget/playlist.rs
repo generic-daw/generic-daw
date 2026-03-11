@@ -424,7 +424,7 @@ where
 					bounds,
 					..Quad::default()
 				},
-				theme.extended_palette().background.strong.color,
+				theme.palette().background.strong.color,
 			);
 		}
 
@@ -443,7 +443,7 @@ where
 						..Quad::default()
 					},
 					Linear::new(FRAC_PI_2)
-						.add_stop(0.0, theme.extended_palette().background.strong.color)
+						.add_stop(0.0, theme.palette().background.strong.color)
 						.add_stop(1.0, Color::TRANSPARENT),
 				);
 			} else {
@@ -461,7 +461,7 @@ where
 						..Quad::default()
 					},
 					Linear::new(PI)
-						.add_stop(0.0, theme.extended_palette().background.strong.color)
+						.add_stop(0.0, theme.palette().background.strong.color)
 						.add_stop(1.0, Color::TRANSPARENT),
 				);
 			}
@@ -521,15 +521,10 @@ where
 							width,
 							height,
 						},
-						border: border::width(1).color(theme.extended_palette().danger.weak.color),
+						border: border::width(1).color(theme.palette().danger.weak.color),
 						..Quad::default()
 					},
-					theme
-						.extended_palette()
-						.danger
-						.weak
-						.color
-						.scale_alpha(ALPHA_1_3),
+					theme.palette().danger.weak.color.scale_alpha(ALPHA_1_3),
 				);
 			});
 		}

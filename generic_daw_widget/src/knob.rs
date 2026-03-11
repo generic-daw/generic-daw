@@ -103,9 +103,9 @@ impl<'a, Message> Knob<'a, Message> {
 
 	fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
 		let swatch = if self.enabled {
-			theme.extended_palette().primary
+			theme.palette().primary
 		} else {
-			theme.extended_palette().secondary
+			theme.palette().secondary
 		};
 
 		let color = if state.dragging.is_some() {
@@ -115,6 +115,8 @@ impl<'a, Message> Knob<'a, Message> {
 		} else {
 			swatch.base.color
 		};
+
+		let text = theme.palette().background.strong.text;
 
 		let border_radius = self.border_radius();
 		let dot_radius = border_radius * 1.5;
@@ -149,7 +151,7 @@ impl<'a, Message> Knob<'a, Message> {
 				b.line_to(center);
 				b.close();
 			}),
-			theme.extended_palette().background.strong.text,
+			text,
 		);
 
 		frame.fill(
@@ -159,12 +161,12 @@ impl<'a, Message> Knob<'a, Message> {
 
 		frame.fill(
 			&dot(center_angle, self.radius - border_radius, border_radius),
-			theme.extended_palette().background.strong.text,
+			text,
 		);
 
 		frame.fill(
 			&dot(value_angle, self.radius - border_radius, border_radius),
-			theme.extended_palette().background.strong.text,
+			text,
 		);
 
 		if self.stepped {
@@ -180,10 +182,7 @@ impl<'a, Message> Knob<'a, Message> {
 			}
 		}
 
-		frame.fill(
-			&dot(value_angle, self.radius / 2.0, dot_radius),
-			theme.extended_palette().background.strong.text,
-		);
+		frame.fill(&dot(value_angle, self.radius / 2.0, dot_radius), text);
 	}
 }
 
@@ -475,10 +474,10 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 				bounds: layout.bounds(),
 				border: border::width(1)
 					.rounded(2)
-					.color(theme.extended_palette().background.strong.color),
+					.color(theme.palette().background.strong.color),
 				..Quad::default()
 			},
-			theme.extended_palette().background.weak.color,
+			theme.palette().background.weak.color,
 		);
 
 		Widget::<Message, _, _>::draw(

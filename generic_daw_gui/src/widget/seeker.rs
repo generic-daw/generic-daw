@@ -455,7 +455,7 @@ impl<'a, Message> Seeker<'a, Message> {
 					.unwrap_or_default(),
 					..Quad::default()
 				},
-				theme.extended_palette().background.weakest.color,
+				theme.palette().background.weakest.color,
 			);
 			background_beat += background_step;
 		}
@@ -467,14 +467,14 @@ impl<'a, Message> Seeker<'a, Message> {
 				if beat.beat_in_bar(self.transport) == 0
 					&& beat.bar(self.transport).is_multiple_of(snap_step.beat())
 				{
-					theme.extended_palette().background.strong.color
+					theme.palette().background.strong.color
 				} else {
-					theme.extended_palette().background.weak.color
+					theme.palette().background.weak.color
 				}
 			} else if beat.tick() == 0 {
-				theme.extended_palette().background.strong.color
+				theme.palette().background.strong.color
 			} else {
-				theme.extended_palette().background.weak.color
+				theme.palette().background.weak.color
 			};
 
 			renderer.fill_quad(
@@ -492,7 +492,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		renderer.fill_quad(
 			Quad {
 				bounds,
-				border: border::width(1).color(theme.extended_palette().background.strong.color),
+				border: border::width(1).color(theme.palette().background.strong.color),
 				..Quad::default()
 			},
 			Color::TRANSPARENT,
@@ -516,9 +516,9 @@ impl<'a, Message> Seeker<'a, Message> {
 				..Quad::default()
 			},
 			if self.transport.loop_marker.is_some() {
-				theme.extended_palette().secondary.base.color
+				theme.palette().secondary.base.color
 			} else {
-				theme.extended_palette().primary.base.color
+				theme.palette().primary.base.color
 			},
 		);
 
@@ -533,7 +533,7 @@ impl<'a, Message> Seeker<'a, Message> {
 						.unwrap_or_default(),
 					..Quad::default()
 				},
-				theme.extended_palette().primary.base.color,
+				theme.palette().primary.base.color,
 			);
 
 			renderer.fill_quad(
@@ -546,7 +546,7 @@ impl<'a, Message> Seeker<'a, Message> {
 					.unwrap_or_default(),
 					..Quad::default()
 				},
-				theme.extended_palette().secondary.base.color,
+				theme.palette().secondary.base.color,
 			);
 
 			renderer.fill_quad(
@@ -556,7 +556,7 @@ impl<'a, Message> Seeker<'a, Message> {
 						.unwrap_or_default(),
 					..Quad::default()
 				},
-				theme.extended_palette().secondary.base.color,
+				theme.palette().secondary.base.color,
 			);
 
 			renderer.fill_quad(
@@ -565,12 +565,7 @@ impl<'a, Message> Seeker<'a, Message> {
 						.shrink(padding::right(0f32.max(bounds.x + bounds.width - start.x))),
 					..Quad::default()
 				},
-				theme
-					.extended_palette()
-					.secondary
-					.base
-					.color
-					.scale_alpha(ALPHA_1_3),
+				theme.palette().secondary.base.color.scale_alpha(ALPHA_1_3),
 			);
 
 			renderer.fill_quad(
@@ -578,12 +573,7 @@ impl<'a, Message> Seeker<'a, Message> {
 					bounds: bounds.shrink(padding::left(0f32.max(end.x - bounds.x))),
 					..Quad::default()
 				},
-				theme
-					.extended_palette()
-					.secondary
-					.base
-					.color
-					.scale_alpha(ALPHA_1_3),
+				theme.palette().secondary.base.color.scale_alpha(ALPHA_1_3),
 			);
 		}
 
@@ -600,7 +590,7 @@ impl<'a, Message> Seeker<'a, Message> {
 				.unwrap_or_default(),
 				..Quad::default()
 			},
-			theme.extended_palette().primary.base.color,
+			theme.palette().primary.base.color,
 		);
 
 		let mut beat = px_to_time(self.offset, *self.position, *self.scale, self.transport);
@@ -635,7 +625,7 @@ impl<'a, Message> Seeker<'a, Message> {
 			renderer.fill_text(
 				bar,
 				offset_time(beat) + Vector::new(3.0, 0.0),
-				theme.extended_palette().primary.base.text,
+				theme.palette().primary.base.text,
 				bounds,
 			);
 
