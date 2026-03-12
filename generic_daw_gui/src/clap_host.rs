@@ -175,10 +175,7 @@ impl ClapHost {
 					&& let Some(plugin_scale) = plugin.get_scale()
 					&& !size.approx_eq(new_size, plugin_scale)
 				{
-					return window::resize(
-						window,
-						new_size.to_logical(plugin_scale.recip()).into(),
-					);
+					return window::resize(window, new_size.to_logical(plugin_scale).into());
 				}
 			}
 			Message::WindowRescaled(window, scale_factor) => {
@@ -189,10 +186,7 @@ impl ClapHost {
 				{
 					let plugin_scale = plugin.set_scale(scale_factor);
 					if let Some(size) = plugin.get_size() {
-						return window::resize(
-							window,
-							size.to_logical(plugin_scale.recip()).into(),
-						);
+						return window::resize(window, size.to_logical(plugin_scale).into());
 					}
 				}
 			}
@@ -255,7 +249,7 @@ impl ClapHost {
 				if let Some(&window) = self.window_of_plugin.get(&id)
 					&& let Some(plugin_scale) = plugin!().get_scale()
 				{
-					return window::resize(window, size.to_logical(plugin_scale.recip()).into());
+					return window::resize(window, size.to_logical(plugin_scale).into());
 				}
 			}
 			MainThreadMessage::GuiRequestShow => plugin!().show(),
