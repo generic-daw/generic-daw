@@ -173,7 +173,6 @@ impl ClapHost {
 					&& let size = size * plugin_scale * scale_factor
 					&& let size = Size::from_logical((size.width, size.height))
 					&& let Some(new_size) = plugin.resize(size)
-					&& let Some(plugin_scale) = plugin.get_scale()
 					&& !size.approx_eq(new_size, plugin_scale)
 				{
 					return window::resize(
