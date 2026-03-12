@@ -14,11 +14,10 @@ impl Size {
 
 	#[must_use]
 	pub fn to_logical(self, scale_factor: f32) -> (f32, f32) {
-		let (width, height) = match self {
+		match self {
 			Self::Logical { width, height } => (width, height),
 			Self::Physical { width, height } => (width / scale_factor, height / scale_factor),
-		};
-		(width, height)
+		}
 	}
 
 	#[must_use]
@@ -28,11 +27,10 @@ impl Size {
 
 	#[must_use]
 	pub fn to_physical(self, scale_factor: f32) -> (f32, f32) {
-		let (width, height) = match self {
+		match self {
 			Self::Logical { width, height } => (width * scale_factor, height * scale_factor),
 			Self::Physical { width, height } => (width, height),
-		};
-		(width, height)
+		}
 	}
 
 	#[must_use]
