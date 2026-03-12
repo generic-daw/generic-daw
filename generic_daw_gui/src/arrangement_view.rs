@@ -262,11 +262,7 @@ impl ArrangementView {
 	pub fn update(&mut self, message: Message, config: &Config) -> Action<f32, Message> {
 		match message {
 			Message::ClapHost(msg) => {
-				return self
-					.clap_host
-					.update(msg, config)
-					.map(Message::ClapHost)
-					.into();
+				return self.clap_host.update(msg).map(Message::ClapHost).into();
 			}
 			Message::Batch(msg) => {
 				return Task::batch(
@@ -383,11 +379,8 @@ impl ArrangementView {
 				let mut fut = self.clap_host.plugin_load(id, plugin, receiver);
 
 				if show {
-					fut = Task::batch([
-						fut,
-						self.clap_host
-							.update(clap_host::Message::GuiOpen(id), config),
-					]);
+					fut =
+						Task::batch([fut, self.clap_host.update(clap_host::Message::GuiOpen(id))]);
 				}
 
 				return fut.map(Message::ClapHost).into();

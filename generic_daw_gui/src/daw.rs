@@ -727,7 +727,7 @@ impl Daw {
 		self.arrangement_view
 			.clap_host
 			.scale_factor(window)
-			.unwrap_or(self.config.app_scale_factor)
+			.unwrap_or(self.config.scale_factor)
 	}
 
 	pub fn subscription(&self) -> Subscription<Message> {

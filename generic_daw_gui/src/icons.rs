@@ -94,14 +94,6 @@ pub const fn grip_vertical() -> Icon {
 	}
 }
 
-pub const fn link() -> Icon {
-	Icon {
-		glyph: '\u{e102}',
-		size: LINE_HEIGHT,
-		offset: 0.05,
-	}
-}
-
 pub const fn mic() -> Icon {
 	Icon {
 		glyph: '\u{e118}',
@@ -169,14 +161,6 @@ pub const fn sliders_vertical() -> Icon {
 pub const fn square() -> Icon {
 	Icon {
 		glyph: '\u{e167}',
-		size: LINE_HEIGHT,
-		offset: 0.05,
-	}
-}
-
-pub const fn unlink() -> Icon {
-	Icon {
-		glyph: '\u{e19c}',
 		size: LINE_HEIGHT,
 		offset: 0.05,
 	}

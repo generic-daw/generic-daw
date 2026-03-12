@@ -1,4 +1,4 @@
-use crate::{config::Config, stylefns::scrollable_style, widget::LINE_HEIGHT};
+use crate::{stylefns::scrollable_style, widget::LINE_HEIGHT};
 use fragile::Fragile;
 #[cfg(unix)]
 use generic_daw_core::clap_host::FdFlags;
@@ -40,7 +40,8 @@ pub enum Message {
 	OnFd(PluginId, RawFd, FdFlags),
 	GuiOpen(PluginId),
 	GuiOpened(PluginId, NoClone<Box<Fragile<Plugin<Event>>>>),
-	WindowResized(window::Id, Size),
+	WindowResized(window::Id, iced::Size),
+	WindowRescaled(window::Id, f32),
 	WindowCloseRequested(window::Id),
 	WindowClosed(window::Id),
 }
@@ -51,6 +52,7 @@ pub struct ClapHost {
 	timers_of_duration: HashMap<Duration, HashMap<PluginId, HashSet<TimerId>>>,
 	window_of_plugin: HashMap<PluginId, window::Id>,
 	plugin_of_window: HashMap<window::Id, PluginId>,
+	scale_factor_of_window: HashMap<window::Id, f32>,
 	#[cfg(unix)]
 	fds_of_plugin: HashMap<PluginId, HashMap<RawFd, (FdFlags, Handle)>>,
 	main_window_id: window::Id,
@@ -63,16 +65,17 @@ impl ClapHost {
 			timers_of_duration: HashMap::new(),
 			window_of_plugin: HashMap::new(),
 			plugin_of_window: HashMap::new(),
+			scale_factor_of_window: HashMap::new(),
 			#[cfg(unix)]
 			fds_of_plugin: HashMap::new(),
 			main_window_id,
 		}
 	}
 
-	pub fn update(&mut self, message: Message, config: &Config) -> Task<Message> {
+	pub fn update(&mut self, message: Message) -> Task<Message> {
 		match message {
 			Message::MainThread(id, msg) => {
-				return self.handle_main_thread_message(id, msg, config);
+				return self.handle_main_thread_message(id, msg);
 			}
 			Message::SendEvent(id, event) => self.plugins.get_mut(&id).unwrap().send_event(event),
 			Message::TickTimer(duration) => {
@@ -94,11 +97,8 @@ impl ClapHost {
 						plugin.on_fd(fd, flag);
 					}
 
-					return self.handle_main_thread_message(
-						id,
-						MainThreadMessage::RegisterFd(fd, flags),
-						config,
-					);
+					return self
+						.handle_main_thread_message(id, MainThreadMessage::RegisterFd(fd, flags));
 				}
 			}
 			Message::GuiOpen(id) => {
@@ -132,17 +132,8 @@ impl ClapHost {
 						Message::GuiOpened(id, Box::new(plugin).into())
 					})
 				} else {
-					let scale_factor = plugin.set_scale(
-						config
-							.plugin_scale_factor
-							.unwrap_or(config.app_scale_factor),
-					) / config.app_scale_factor;
-
 					let (window, spawn) = window::open(window::Settings {
-						size: plugin.get_size().map_or_else(
-							|| (640.0, 480.0).into(),
-							|size| size.to_logical(scale_factor).into(),
-						),
+						size: (640.0, 480.0).into(),
 						resizable: plugin.can_resize(),
 						exit_on_close_request: false,
 						level: window::Level::AlwaysOnTop,
@@ -167,15 +158,43 @@ impl ClapHost {
 				let mut plugin = plugin.into_inner();
 				plugin.show();
 				self.plugins.insert(id, plugin);
+
+				if let Some(&window) = self.window_of_plugin.get(&id)
+					&& let Some(&scale_factor) = self.scale_factor_of_window.get(&window)
+				{
+					return self.update(Message::WindowRescaled(window, scale_factor));
+				}
 			}
 			Message::WindowResized(window, size) => {
-				if let Some(id) = self.plugin_of_window.get(&window)
-					&& let Some(plugin) = self.plugins.get_mut(id)
+				if let Some(&scale_factor) = self.scale_factor_of_window.get(&window)
+					&& let Some(&id) = self.plugin_of_window.get(&window)
+					&& let Some(plugin) = self.plugins.get_mut(&id)
+					&& let Some(plugin_scale) = plugin.get_scale()
+					&& let size = size * plugin_scale * scale_factor
+					&& let size = Size::from_logical((size.width, size.height))
 					&& let Some(new_size) = plugin.resize(size)
-					&& let Some(scale_factor) = plugin.get_scale()
-					&& !size.approx_eq(new_size, scale_factor)
+					&& let Some(plugin_scale) = plugin.get_scale()
+					&& !size.approx_eq(new_size, plugin_scale)
 				{
-					return window::resize(window, new_size.to_logical(scale_factor).into());
+					return window::resize(
+						window,
+						new_size.to_logical(plugin_scale.recip()).into(),
+					);
+				}
+			}
+			Message::WindowRescaled(window, scale_factor) => {
+				self.scale_factor_of_window.insert(window, scale_factor);
+
+				if let Some(&plugin) = self.plugin_of_window.get(&window)
+					&& let Some(plugin) = self.plugins.get_mut(&plugin)
+				{
+					let plugin_scale = plugin.set_scale(scale_factor);
+					if let Some(size) = plugin.get_size() {
+						return window::resize(
+							window,
+							size.to_logical(plugin_scale.recip()).into(),
+						);
+					}
 				}
 			}
 			Message::WindowCloseRequested(window) => {
@@ -187,6 +206,7 @@ impl ClapHost {
 			Message::WindowClosed(window) => {
 				let id = self.plugin_of_window.remove(&window).unwrap();
 				self.window_of_plugin.remove(&id).unwrap();
+				self.scale_factor_of_window.remove(&window);
 			}
 		}
 
@@ -197,7 +217,6 @@ impl ClapHost {
 		&mut self,
 		id: PluginId,
 		message: MainThreadMessage,
-		config: &Config,
 	) -> Task<Message> {
 		macro_rules! plugin {
 			() => {
@@ -231,16 +250,13 @@ impl ClapHost {
 				#[cfg(unix)]
 				self.fds_of_plugin.remove(&id);
 
-				return self.update(
-					Message::MainThread(id, MainThreadMessage::GuiClosed),
-					config,
-				);
+				return self.update(Message::MainThread(id, MainThreadMessage::GuiClosed));
 			}
 			MainThreadMessage::GuiRequestResize(size) => {
 				if let Some(&window) = self.window_of_plugin.get(&id)
-					&& let Some(scale_factor) = plugin!().get_scale()
+					&& let Some(plugin_scale) = plugin!().get_scale()
 				{
-					return window::resize(window, size.to_logical(scale_factor).into());
+					return window::resize(window, size.to_logical(plugin_scale.recip()).into());
 				}
 			}
 			MainThreadMessage::GuiRequestShow => plugin!().show(),
@@ -388,10 +404,15 @@ impl ClapHost {
 	}
 
 	pub fn scale_factor(&self, window: window::Id) -> Option<f32> {
-		self.plugin_of_window
-			.get(&window)
-			.and_then(|id| self.plugins.get(id))
-			.and_then(Plugin::get_scale)
+		if let Some(&scale_factor) = self.scale_factor_of_window.get(&window)
+			&& let Some(&plugin) = self.plugin_of_window.get(&window)
+			&& let Some(plugin) = self.plugins.get(&plugin)
+			&& let Some(plugin_scale) = plugin.get_scale()
+		{
+			Some(plugin_scale / scale_factor)
+		} else {
+			None
+		}
 	}
 
 	pub fn subscription(&self) -> Subscription<Message> {
@@ -400,19 +421,14 @@ impl ClapHost {
 				.iter()
 				.filter(|(_, v)| v.values().any(|v| !v.is_empty()))
 				.map(|(&k, _)| every(k).with(k).map(|(k, _)| Message::TickTimer(k)))
-				.chain([
-					window::resize_events().map(|(id, size)| {
-						Message::WindowResized(
-							id,
-							Size::Logical {
-								width: size.width,
-								height: size.height,
-							},
-						)
-					}),
-					window::close_requests().map(Message::WindowCloseRequested),
-					window::close_events().map(Message::WindowClosed),
-				]),
+				.chain([window::events().filter_map(|(id, event)| match event {
+					window::Event::Resized(size) => Some(Message::WindowResized(id, size)),
+					window::Event::Opened { scale_factor, .. }
+					| window::Event::Rescaled(scale_factor) => Some(Message::WindowRescaled(id, scale_factor)),
+					window::Event::CloseRequested => Some(Message::WindowCloseRequested(id)),
+					window::Event::Closed => Some(Message::WindowClosed(id)),
+					_ => None,
+				})]),
 		)
 	}
 

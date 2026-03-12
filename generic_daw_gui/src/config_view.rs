@@ -3,7 +3,7 @@ use crate::{
 	components::{PICK_LIST_HANDLE, number_input},
 	config::{Config, Device},
 	daw,
-	icons::{grip_vertical, link, mic, plus, rotate_ccw, save, unlink, volume_2, x},
+	icons::{grip_vertical, mic, plus, rotate_ccw, save, volume_2, x},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
 		scrollable_style, sweeten_column_style,
@@ -75,8 +75,7 @@ pub enum Message {
 	ChangedAutosaveIntervalText(String),
 	ToggledOpenLastProject,
 	ChangedTheme(Theme),
-	ChangedAppScaleFactor(f32),
-	ChangedPluginScaleFactor(Option<f32>),
+	ChangedScaleFactor(f32),
 	WriteConfig,
 	ResetConfigToPrev,
 }
@@ -192,11 +191,8 @@ impl ConfigView {
 			}
 			Message::ToggledOpenLastProject => self.config.open_last_project ^= true,
 			Message::ChangedTheme(theme) => self.config.theme = theme,
-			Message::ChangedAppScaleFactor(app_scale_factor) => {
-				self.config.app_scale_factor = app_scale_factor;
-			}
-			Message::ChangedPluginScaleFactor(plugin_scale_factor) => {
-				self.config.plugin_scale_factor = plugin_scale_factor;
+			Message::ChangedScaleFactor(scale_factor) => {
+				self.config.scale_factor = scale_factor;
 			}
 			Message::WriteConfig => {
 				self.config.write();
@@ -468,82 +464,28 @@ impl ConfigView {
 					row![
 						column![
 							row![
-								"App scale factor:  ",
-								text!("{:.1}", self.config.app_scale_factor).font(Font::MONOSPACE),
+								"Scale factor:  ",
+								text!("{:.1}", self.config.scale_factor).font(Font::MONOSPACE),
 								space::horizontal(),
-								button(rotate_ccw().size(LINE_HEIGHT - 3.0))
+								button(rotate_ccw())
 									.style(button_with_radius(button::primary, 5))
-									.padding(3)
+									.padding(5)
 									.on_press_maybe(
-										(self.config.app_scale_factor != 1.0)
-											.then_some(Message::ChangedAppScaleFactor(1.0))
+										(self.config.scale_factor != 1.0)
+											.then_some(Message::ChangedScaleFactor(1.0))
 									),
-								space().width(5)
 							]
 							.align_y(Center),
 							slider(
-								0.5..=2.0,
-								self.config.app_scale_factor,
-								Message::ChangedAppScaleFactor
+								-1.0..=1.0,
+								self.config.scale_factor.log2(),
+								|scale_factor| Message::ChangedScaleFactor(
+									(scale_factor.exp2() * 10.0).round() / 10.0
+								)
 							)
-							.step(0.1),
+							.step(f32::EPSILON),
 						]
 						.spacing(5),
-						container(
-							button(
-								self.config
-									.plugin_scale_factor
-									.map_or_else(link, |_| unlink())
-									.size(LINE_HEIGHT - 3.0)
-							)
-							.padding(0)
-							.style(button::text)
-							.on_press(self.config.plugin_scale_factor.map_or(
-								Message::ChangedPluginScaleFactor(Some(
-									self.config.app_scale_factor
-								)),
-								|_| Message::ChangedPluginScaleFactor(None)
-							))
-						)
-						.align_bottom(Fill)
-						.width(LINE_HEIGHT - 2.0),
-						column![
-							row![
-								"Plugin scale factor:  ",
-								text!(
-									"{:.1}",
-									self.config
-										.plugin_scale_factor
-										.unwrap_or(self.config.app_scale_factor)
-								)
-								.font(Font::MONOSPACE),
-								space::horizontal(),
-								button(rotate_ccw().size(LINE_HEIGHT - 3.0))
-									.style(button_with_radius(button::primary, 5))
-									.padding(3)
-									.on_press_maybe(
-										self.config
-											.plugin_scale_factor
-											.map(|_| Message::ChangedPluginScaleFactor(None))
-									),
-								space().width(5)
-							]
-							.align_y(Center),
-							slider(
-								0.5..=2.0,
-								self.config
-									.plugin_scale_factor
-									.unwrap_or(self.config.app_scale_factor),
-								|scale| self
-									.config
-									.plugin_scale_factor
-									.map_or(Message::ChangedAppScaleFactor(scale), |_| {
-										Message::ChangedPluginScaleFactor(Some(scale))
-									})
-							)
-							.step(0.1)
-						]
-						.spacing(5)
 					]
 					.align_y(Center)
 					.spacing(10),
