@@ -91,7 +91,7 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 					$(#[$meta])*
 					if let Some(ext) = instance.get_extension() {
 						self.ext.$ident.set(NoDebug(ext)).unwrap();
-						info!("{}: implements '{}'", &self.descriptor, stringify!($ident));
+						info!(concat!("{}: implements '", stringify!($ident), "'"), &self.descriptor);
 					}
 				)*
 			};
