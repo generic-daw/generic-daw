@@ -25,6 +25,7 @@ use smol::{Timer, unblock};
 use std::os::fd::{BorrowedFd, RawFd};
 use std::{
 	collections::{HashMap, HashSet},
+	iter::repeat,
 	ops::Deref as _,
 	sync::mpsc::Receiver,
 	time::Duration,
@@ -79,13 +80,16 @@ impl ClapHost {
 			}
 			Message::SendEvent(id, event) => self.plugins.get_mut(&id).unwrap().send_event(event),
 			Message::TickTimer(duration) => {
-				for (&id, timer_ids) in &self.timers_of_duration[&duration] {
-					for &timer_id in timer_ids {
-						if let Some(plugin) = self.plugins.get_mut(&id) {
+				self.timers_of_duration
+					.get(&duration)
+					.into_iter()
+					.flatten()
+					.flat_map(|(id, timer_ids)| repeat(id).zip(timer_ids))
+					.for_each(|(id, &timer_id)| {
+						if let Some(plugin) = self.plugins.get_mut(id) {
 							plugin.tick_timer(timer_id);
 						}
-					}
-				}
+					});
 			}
 			#[cfg(unix)]
 			Message::OnFd(id, fd, flag) => {
@@ -237,8 +241,7 @@ impl ClapHost {
 
 				self.plugins.remove(&id).unwrap().deactivate(processor);
 				self.timers_of_duration
-					.values_mut()
-					.for_each(|set| _ = set.remove(&id));
+					.retain(|_, set| set.remove(&id).is_some() && !set.is_empty());
 
 				#[cfg(unix)]
 				self.fds_of_plugin.remove(&id);
