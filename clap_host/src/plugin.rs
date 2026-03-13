@@ -129,16 +129,16 @@ impl<Event: EventImpl> Plugin<Event> {
 			panic!("called \"set_scale\" on a non-embedded gui");
 		};
 
-		if !API_TYPE.uses_logical_size() {
-			if let Err(err) = self
-				.instance
-				.access_shared_handler(|s| *s.ext.gui.get().unwrap())
-				.set_scale(&mut self.instance.plugin_handle(), scale.into())
-			{
-				warn!("{}: {err}", self.descriptor);
-			} else {
-				*scale_factor = scale;
-			}
+		if API_TYPE.uses_logical_size() {
+			*scale_factor = scale;
+		} else if let Err(err) = self
+			.instance
+			.access_shared_handler(|s| *s.ext.gui.get().unwrap())
+			.set_scale(&mut self.instance.plugin_handle(), scale.into())
+		{
+			warn!("{}: {err}", self.descriptor);
+		} else {
+			*scale_factor = scale;
 		}
 
 		*scale_factor
