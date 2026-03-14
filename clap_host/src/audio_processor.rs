@@ -53,7 +53,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		&self.descriptor
 	}
 
-	fn recv_events(&mut self, events: &mut Vec<Event>) {
+	pub fn recv_events(&mut self, events: &mut Vec<Event>) {
 		loop {
 			while let Ok(msg) = self.consumer.pop() {
 				trace!("{}: {msg:?}", self.descriptor);
@@ -70,22 +70,13 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 				}
 			}
 
-			if let Some(NoDebug(mut processor)) = self.processor.take() {
-				if let Some(sender) = processor.access_shared_handler(|s| {
+			if let Some(processor) = &mut self.processor {
+				processor.access_shared_handler(|s| {
 					CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
-					s.needs_restart.load(Relaxed).then(|| s.sender.clone())
-				}) {
-					sender
-						.send(MainThreadMessage::Restart(NoClone(NoDebug(
-							processor.into_stopped(),
-						))))
-						.unwrap();
-				} else {
-					if std::mem::take(&mut self.needs_reset) {
-						processor.reset();
-					}
+				});
 
-					self.processor = Some(processor.into());
+				if std::mem::take(&mut self.needs_reset) {
+					processor.reset();
 				}
 			}
 
@@ -97,9 +88,23 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		}
 	}
 
-	pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32) {
-		self.recv_events(events);
+	pub fn maybe_restart(&mut self) {
+		if let Some(NoDebug(processor)) = self.processor.take() {
+			if let Some(sender) = processor
+				.access_shared_handler(|s| s.needs_restart.load(Relaxed).then(|| s.sender.clone()))
+			{
+				sender
+					.send(MainThreadMessage::Restart(NoClone(NoDebug(
+						processor.into_stopped(),
+					))))
+					.unwrap();
+			} else {
+				self.processor = Some(processor.into());
+			}
+		}
+	}
 
+	pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32) {
 		let Some(processor) = &mut self.processor else {
 			return;
 		};
@@ -109,8 +114,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			&& audio.iter().all(|f| f.abs() < f32::EPSILON)
 		{
 			trace!("{}: skipping process", &self.descriptor);
-			self.flush(events);
-			return;
+			return self.flush(events);
 		}
 
 		match processor.ensure_processing_started() {
@@ -162,8 +166,6 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	}
 
 	pub fn flush(&mut self, events: &mut Vec<Event>) {
-		self.recv_events(events);
-
 		let Some(processor) = &mut self.processor else {
 			return;
 		};

@@ -174,7 +174,7 @@ impl<Event: EventImpl> Plugin<Event> {
 
 		let processor = self
 			.instance
-			.activate(|_, _| (), self.config)
+			.activate(|s, _| s.needs_restart.store(false, Relaxed), self.config)
 			.unwrap()
 			.into();
 

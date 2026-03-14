@@ -98,12 +98,15 @@ impl NodeImpl for Channel {
 				lane.process(state, events);
 			}
 
+			plugin.processor.recv_events(events);
+
 			if self.enabled && !self.bypassed && plugin.enabled {
 				plugin.processor.process(audio, events, plugin.mix);
 			} else {
-				events.retain(|event| matches!(event, Event::ParamValue { .. }));
 				plugin.processor.flush(events);
 			}
+
+			plugin.processor.maybe_restart();
 
 			for event in events.drain(..) {
 				if let Event::ParamValue { param_id, .. } = event {
