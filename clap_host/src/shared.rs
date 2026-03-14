@@ -1,6 +1,4 @@
 use crate::{MainThreadMessage, PluginDescriptor, Size};
-#[cfg(unix)]
-use clack_extensions::posix_fd::PluginPosixFd;
 use clack_extensions::{
 	audio_ports::PluginAudioPorts,
 	gui::{GuiSize, HostGuiImpl, PluginGui},
@@ -36,8 +34,6 @@ pub struct Ext {
 	pub latency: OnceLock<NoDebug<PluginLatency>>,
 	pub note_ports: OnceLock<NoDebug<PluginNotePorts>>,
 	pub params: OnceLock<NoDebug<PluginParams>>,
-	#[cfg(unix)]
-	pub posix_fd: OnceLock<NoDebug<PluginPosixFd>>,
 	pub preset_load: OnceLock<NoDebug<PluginPresetLoad>>,
 	pub render: OnceLock<NoDebug<PluginRender>>,
 	pub state: OnceLock<NoDebug<PluginState>>,
@@ -81,20 +77,12 @@ impl Shared<'_> {
 impl<'a> SharedHandler<'a> for Shared<'a> {
 	fn initializing(&self, instance: InitializingPluginHandle<'a>) {
 		macro_rules! initializing {
-			(
-				$(
-					$(#[$meta:meta])*
-					$ident:ident
-				),*
-			) => {
-				$(
-					$(#[$meta])*
-					if let Some(ext) = instance.get_extension() {
-						self.ext.$ident.set(NoDebug(ext)).unwrap();
-						info!(concat!("{}: implements '", stringify!($ident), "'"), &self.descriptor);
-					}
-				)*
-			};
+			($($ident:ident),*) => {$(
+				if let Some(ext) = instance.get_extension() {
+					self.ext.$ident.set(NoDebug(ext)).unwrap();
+					info!(concat!("{}: implements '", stringify!($ident), "'"), &self.descriptor);
+				}
+			)*};
 		}
 
 		initializing![
@@ -103,8 +91,6 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 			latency,
 			note_ports,
 			params,
-			#[cfg(unix)]
-			posix_fd,
 			preset_load,
 			render,
 			state,

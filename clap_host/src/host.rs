@@ -1,6 +1,4 @@
 use crate::{main_thread::MainThread, shared::Shared};
-#[cfg(unix)]
-use clack_extensions::posix_fd::HostPosixFd;
 use clack_extensions::{
 	audio_ports::HostAudioPorts, gui::HostGui, latency::HostLatency, log::HostLog,
 	note_ports::HostNotePorts, params::HostParams, preset_discovery::HostPresetLoad,
@@ -28,8 +26,5 @@ impl HostHandlers for Host {
 			.register::<HostState>()
 			.register::<HostThreadCheck>()
 			.register::<HostTimer>();
-
-		#[cfg(unix)]
-		builder.register::<HostPosixFd>();
 	}
 }

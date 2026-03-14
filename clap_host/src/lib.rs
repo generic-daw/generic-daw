@@ -25,8 +25,6 @@ mod shared;
 mod size;
 
 pub use audio_processor::AudioProcessor;
-#[cfg(unix)]
-pub use clack_extensions::posix_fd::FdFlags;
 pub use clack_extensions::{
 	params::{ParamInfoFlags, ParamRescanFlags},
 	render::RenderMode,
@@ -56,9 +54,7 @@ pub static DEFAULT_CLAP_PATHS: LazyLock<Box<[Arc<Path>]>> = LazyLock::new(|| {
 		if let Some(path) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
 			paths.push(path.join("Programs\\Common\\CLAP").into());
 		}
-	}
-
-	if cfg!(target_os = "macos") {
+	} else if cfg!(target_os = "macos") {
 		paths.push(Path::new("/Library/Audio/Plug-Ins/CLAP").into());
 
 		if let Some(path) = std::env::var_os("HOME").map(PathBuf::from) {

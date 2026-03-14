@@ -1,7 +1,5 @@
 use crate::{stylefns::scrollable_style, widget::LINE_HEIGHT};
 use fragile::Fragile;
-#[cfg(unix)]
-use generic_daw_core::clap_host::FdFlags;
 use generic_daw_core::{
 	Event, PluginId,
 	clap_host::{
@@ -9,8 +7,6 @@ use generic_daw_core::{
 	},
 };
 use generic_daw_widget::knob::Knob;
-#[cfg(unix)]
-use iced::task::Handle;
 use iced::{
 	Center, Element, Fill, Font, Subscription, Task, padding,
 	time::every,
@@ -18,11 +14,7 @@ use iced::{
 	window,
 };
 use log::info;
-#[cfg(unix)]
-use smol::{Async, future::or};
 use smol::{Timer, unblock};
-#[cfg(unix)]
-use std::os::fd::{BorrowedFd, RawFd};
 use std::{
 	collections::{HashMap, HashSet},
 	iter::repeat,
@@ -37,8 +29,6 @@ pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
 	SendEvent(PluginId, Event),
 	TickTimer(Duration),
-	#[cfg(unix)]
-	OnFd(PluginId, RawFd, FdFlags),
 	GuiOpen(PluginId),
 	GuiOpened(PluginId, NoClone<Box<Fragile<Plugin<Event>>>>),
 	WindowResized(window::Id, iced::Size),
@@ -54,8 +44,6 @@ pub struct ClapHost {
 	window_of_plugin: HashMap<PluginId, window::Id>,
 	plugin_of_window: HashMap<window::Id, PluginId>,
 	scale_factor_of_window: HashMap<window::Id, f32>,
-	#[cfg(unix)]
-	fds_of_plugin: HashMap<PluginId, HashMap<RawFd, (FdFlags, Handle)>>,
 	main_window_id: window::Id,
 }
 
@@ -67,8 +55,6 @@ impl ClapHost {
 			window_of_plugin: HashMap::new(),
 			plugin_of_window: HashMap::new(),
 			scale_factor_of_window: HashMap::new(),
-			#[cfg(unix)]
-			fds_of_plugin: HashMap::new(),
 			main_window_id,
 		}
 	}
@@ -90,20 +76,6 @@ impl ClapHost {
 							plugin.tick_timer(timer_id);
 						}
 					});
-			}
-			#[cfg(unix)]
-			Message::OnFd(id, fd, flag) => {
-				if let Some(fds) = self.fds_of_plugin.get(&id)
-					&& let Some(&(flags, _)) = fds.get(&fd)
-					&& flag.intersects(flags)
-				{
-					if let Some(plugin) = self.plugins.get_mut(&id) {
-						plugin.on_fd(fd, flag);
-					}
-
-					return self
-						.handle_main_thread_message(id, MainThreadMessage::RegisterFd(fd, flags));
-				}
 			}
 			Message::GuiOpen(id) => {
 				let Some(plugin) = self.plugins.get_mut(&id) else {
@@ -243,9 +215,6 @@ impl ClapHost {
 				self.timers_of_duration
 					.retain(|_, set| set.remove(&id).is_none() || !set.is_empty());
 
-				#[cfg(unix)]
-				self.fds_of_plugin.remove(&id);
-
 				return self.update(Message::MainThread(id, MainThreadMessage::GuiClosed));
 			}
 			MainThreadMessage::GuiRequestResize(size) => {
@@ -283,53 +252,6 @@ impl ClapHost {
 			MainThreadMessage::RescanParams(flags) => plugin!().rescan_params(flags),
 			MainThreadMessage::RescanParam(param_id, flags) => {
 				plugin!().rescan_param(param_id, flags);
-			}
-			#[cfg(unix)]
-			MainThreadMessage::RegisterFd(fd, flags) => {
-				let (task, handle) = Task::future(async move {
-					// SAFETY:
-					// This fd is owned by the plugin, and is open at least until
-					// [`PosixFd::Unregister`] is processed. This fd is not -1.
-					let async_fd = Async::new(unsafe { BorrowedFd::borrow_raw(fd) }).unwrap();
-
-					macro_rules! flag {
-						($flag:expr, $fut:expr) => {
-							async {
-								if flags.contains($flag) {
-									if $fut.await.is_ok() {
-										$flag
-									} else if flags.contains(FdFlags::ERROR) {
-										FdFlags::ERROR
-									} else {
-										smol::future::pending().await
-									}
-								} else {
-									smol::future::pending().await
-								}
-							}
-						};
-					}
-
-					or(
-						flag!(FdFlags::READ, async_fd.readable()),
-						flag!(FdFlags::WRITE, async_fd.writable()),
-					)
-					.await
-				})
-				.abortable();
-
-				self.fds_of_plugin
-					.entry(id)
-					.or_default()
-					.insert(fd, (flags, handle.abort_on_drop()));
-
-				return task.map(move |flag| Message::OnFd(id, fd, flag));
-			}
-			#[cfg(unix)]
-			MainThreadMessage::UnregisterFd(fd) => {
-				if let Some(fds) = self.fds_of_plugin.get_mut(&id) {
-					fds.remove(&fd);
-				}
 			}
 		}
 

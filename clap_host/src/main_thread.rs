@@ -1,6 +1,4 @@
 use crate::{ParamRescanFlags, Size, TimerId, host::Host, shared::Shared};
-#[cfg(unix)]
-use clack_extensions::posix_fd::{FdFlags, HostPosixFdImpl};
 use clack_extensions::{
 	audio_ports::{HostAudioPortsImpl, RescanType},
 	latency::HostLatencyImpl,
@@ -11,8 +9,6 @@ use clack_extensions::{
 	timer::HostTimerImpl,
 };
 use clack_host::prelude::*;
-#[cfg(unix)]
-use std::os::fd::RawFd;
 use std::{ffi::CStr, time::Duration};
 use utils::{NoClone, NoDebug};
 
@@ -29,10 +25,6 @@ pub enum MainThreadMessage {
 	UnregisterTimer(TimerId),
 	RescanParams(ParamRescanFlags),
 	RescanParam(ClapId, ParamRescanFlags),
-	#[cfg(unix)]
-	RegisterFd(RawFd, FdFlags),
-	#[cfg(unix)]
-	UnregisterFd(RawFd),
 }
 
 #[derive(Debug)]
@@ -97,39 +89,6 @@ impl HostParamsImplMainThread for MainThread<'_> {
 	}
 
 	fn clear(&mut self, _param_id: ClapId, _flags: ParamClearFlags) {}
-}
-
-#[cfg(unix)]
-impl HostPosixFdImpl for MainThread<'_> {
-	fn register_fd(&mut self, fd: RawFd, flags: FdFlags) -> Result<(), HostError> {
-		if fd == -1 {
-			return Err(HostError::Message("recieved fd -1"));
-		} else if !flags.is_empty() {
-			self.shared
-				.sender
-				.send(MainThreadMessage::RegisterFd(fd, flags))
-				.unwrap();
-		}
-
-		Ok(())
-	}
-
-	fn modify_fd(&mut self, fd: RawFd, flags: FdFlags) -> Result<(), HostError> {
-		self.register_fd(fd, flags)
-	}
-
-	fn unregister_fd(&mut self, fd: RawFd) -> Result<(), HostError> {
-		if fd == -1 {
-			return Err(HostError::Message("recieved fd -1"));
-		}
-
-		self.shared
-			.sender
-			.send(MainThreadMessage::UnregisterFd(fd))
-			.unwrap();
-
-		Ok(())
-	}
 }
 
 impl HostPresetLoadImpl for MainThread<'_> {
