@@ -231,8 +231,8 @@ impl<W: ErasedWorkList> Shared<W> {
 				loop {
 					assert_ne!(self.to_do.fetch_sub(1, Relaxed), 0);
 
-					if let Some(inline) = work_list.do_work(work_item, scratch) {
-						work_item = inline;
+					if let Some(reserved) = work_list.do_work(work_item, scratch) {
+						work_item = reserved;
 					} else {
 						break;
 					}
@@ -243,12 +243,10 @@ impl<W: ErasedWorkList> Shared<W> {
 				if MT {
 					self.mt_working.store(false, Relaxed);
 				}
-			} else if MT {
-				backoff.spin();
-			} else if backoff.is_completed() {
+			} else if !MT && backoff.is_completed() {
 				break;
 			} else {
-				backoff.snooze();
+				backoff.spin();
 			}
 		}
 	}
