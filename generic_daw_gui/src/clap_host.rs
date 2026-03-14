@@ -241,7 +241,7 @@ impl ClapHost {
 
 				self.plugins.remove(&id).unwrap().deactivate(processor);
 				self.timers_of_duration
-					.retain(|_, set| set.remove(&id).is_some() && !set.is_empty());
+					.retain(|_, set| set.remove(&id).is_none() || !set.is_empty());
 
 				#[cfg(unix)]
 				self.fds_of_plugin.remove(&id);
