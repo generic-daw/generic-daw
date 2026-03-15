@@ -36,7 +36,7 @@ pub enum Status {
 	TrimmingStart(MusicalTime),
 	TrimmingEnd(MusicalTime),
 	DraggingSplit(MusicalTime),
-	DraggingVelocity(f32),
+	DraggingVelocity(usize, f32),
 	Deleting,
 	#[default]
 	None,
@@ -261,9 +261,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 						shell.capture_event();
 					}
 				}
-				Status::DraggingVelocity(val) => {
-					debug_assert!(selection.primary.len() == 1);
-					let note = *selection.primary.iter().next().unwrap();
+				Status::DraggingVelocity(note, val) => {
 					if let Some(note_bounds) = layout.child(note).bounds().intersection(viewport) {
 						let border = 10f32.min(note_bounds.width / 3.0);
 						let new_val = (cursor.x - border - note_bounds.x + viewport.x)
@@ -273,7 +271,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							(val * 127.0).round() / 127.0
 						});
 						if val != new_val {
-							selection.status = Status::DraggingVelocity(new_val);
+							selection.status = Status::DraggingVelocity(note, new_val);
 							shell.publish((self.f)(Action::DragVelocity(new_val)));
 							shell.capture_event();
 						}

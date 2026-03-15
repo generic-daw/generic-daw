@@ -170,8 +170,8 @@ pub enum Message {
 	Pan(Vector, f32, f32),
 	Zoom(Vector, Point, f32, f32),
 
-	DeleteSelection,
-	ClearSelection,
+	Delete,
+	Escape,
 	ArrowLeft,
 	ArrowRight,
 
@@ -712,8 +712,9 @@ impl ArrangementView {
 
 				return self.update(Message::Pan(pos_diff, height, visible), config);
 			}
-			Message::DeleteSelection => match self.tab {
+			Message::Delete => match self.tab {
 				Tab::Playlist => {
+					self.piano_roll_selection.get_mut().status = piano_roll::Status::None;
 					return self.handle_playlist_action(playlist::Action::Delete, config);
 				}
 				Tab::Mixer => {
@@ -727,12 +728,21 @@ impl ArrangementView {
 						}
 					};
 				}
-				Tab::PianoRoll(..) => self.handle_piano_roll_action(piano_roll::Action::Delete),
+				Tab::PianoRoll(..) => {
+					self.playlist_selection.get_mut().status = playlist::Status::None;
+					self.handle_piano_roll_action(piano_roll::Action::Delete);
+				}
 			},
-			Message::ClearSelection => match self.tab {
-				Tab::Playlist => self.playlist_selection.get_mut().clear(),
+			Message::Escape => match self.tab {
+				Tab::Playlist => {
+					self.piano_roll_selection.get_mut().status = piano_roll::Status::None;
+					self.playlist_selection.get_mut().clear();
+				}
 				Tab::Mixer => {}
-				Tab::PianoRoll(..) => self.piano_roll_selection.get_mut().clear(),
+				Tab::PianoRoll(..) => {
+					self.playlist_selection.get_mut().status = playlist::Status::None;
+					self.piano_roll_selection.get_mut().clear();
+				}
 			},
 			Message::ArrowLeft => match self.tab {
 				Tab::Playlist => {
@@ -1140,7 +1150,7 @@ impl ArrangementView {
 				}
 			}
 			piano_roll::Action::DragVelocity(val) => {
-				for &note in primary.iter().chain(&*secondary) {
+				for &note in &*primary {
 					self.arrangement
 						.note_change_velocity(clip.pattern, note, val);
 				}
@@ -1373,7 +1383,7 @@ impl ArrangementView {
 				.style(scrollable_style)
 				.width(Fill),
 			)
-			.on_press(Message::ClearSelection),
+			.on_press(Message::Escape),
 			column![
 				combo_box(&self.plugins, "Add Plugin", None, move |descriptor| {
 					Message::PluginLoad(self.selected_node, descriptor, true)
@@ -1696,8 +1706,8 @@ impl ArrangementView {
 				}
 				keyboard::Key::Named(
 					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
-				) => Some(Message::DeleteSelection),
-				keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::ClearSelection),
+				) => Some(Message::Delete),
+				keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::Escape),
 				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => Some(Message::ArrowLeft),
 				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
 				_ => None,
@@ -1705,7 +1715,7 @@ impl ArrangementView {
 			(false, false, false, true) => match key.as_ref() {
 				keyboard::Key::Named(
 					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
-				) => Some(Message::DeleteSelection),
+				) => Some(Message::Delete),
 				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => Some(Message::ArrowLeft),
 				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
 				_ => None,

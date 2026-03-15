@@ -98,14 +98,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 											+ border;
 										let start_offset = cursor.x - bounds.x;
 										if (vel_pixel - start_offset).abs() < border / 2.0 {
-											if !clear {
-												selection
-													.secondary
-													.extend(selection.primary.drain());
-												selection.secondary.remove(&self.idx);
-												selection.primary.insert(self.idx);
-											}
-											Status::DraggingVelocity(self.note.velocity)
+											Status::DraggingVelocity(self.idx, self.note.velocity)
 										} else {
 											Status::Dragging(self.note.key, time)
 										}
