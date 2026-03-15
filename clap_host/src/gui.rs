@@ -17,6 +17,19 @@ impl Gui {
 		plugin
 			.access_shared_handler(|s| s.ext.gui.get().copied())
 			.map_or(Self::None, |ext| {
+				if let Some(config) = ext.get_preferred_api(&mut plugin.plugin_handle()) {
+					debug_assert_eq!(config.api_type, API_TYPE);
+
+					return if config.is_floating {
+						Self::Floating
+					} else {
+						Self::Embedded {
+							can_resize: None,
+							scale_factor: 1.0,
+						}
+					};
+				}
+
 				let mut config = GuiConfiguration {
 					api_type: API_TYPE,
 					is_floating: false,
