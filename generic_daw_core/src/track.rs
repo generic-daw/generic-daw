@@ -105,12 +105,12 @@ impl Track {
 					Ordering::Equal => continue,
 					Ordering::Less => Event::On {
 						time: 0,
-						key: key as u8,
+						key,
 						velocity: 1.0,
 					},
 					Ordering::Greater => Event::Off {
 						time: 0,
-						key: key as u8,
+						key,
 						velocity: 1.0,
 					},
 				};

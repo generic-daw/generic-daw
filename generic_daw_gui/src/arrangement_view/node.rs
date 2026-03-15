@@ -93,7 +93,7 @@ impl Node {
 }
 
 fn format_pan(pan: f32) -> String {
-	let pan = (pan * 100.0) as i8;
+	let pan = (pan * 100.0).round() as i8;
 	match pan.cmp(&0) {
 		Ordering::Greater => format!("{}% right", pan.abs()),
 		Ordering::Equal => "center".to_owned(),

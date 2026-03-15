@@ -341,10 +341,35 @@ impl ArrangementView {
 				self.arrangement.remove_channel(id);
 			}
 			Message::ChannelSelect(id) => self.selected_node = id,
-			Message::ChannelVolumeChanged(id, volume) => {
+			Message::ChannelVolumeChanged(id, mut volume) => {
+				let db = amp_to_db(volume.abs());
+				let nearest = (db / 6.0).round() * 6.0;
+
+				volume = if (db - nearest).abs() < 0.15 {
+					db_to_amp(nearest).copysign(volume)
+				} else {
+					volume
+				};
+
 				self.arrangement.channel_volume_changed(id, volume);
 			}
-			Message::ChannelPanChanged(id, pan) => self.arrangement.channel_pan_changed(id, pan),
+			Message::ChannelPanChanged(id, mut pan) => {
+				let snap = |pan: &mut f32| {
+					if pan.abs() < 0.015 {
+						*pan = 0.0;
+					}
+				};
+
+				match &mut pan {
+					PanMode::Balance(pan) => snap(pan),
+					PanMode::Stereo(l, r) => {
+						snap(l);
+						snap(r);
+					}
+				}
+
+				self.arrangement.channel_pan_changed(id, pan);
+			}
 			Message::ChannelToggleEnabled(id) => self.arrangement.channel_toggle_enabled(id),
 			Message::ChannelToggleBypassed(id) => self.arrangement.channel_toggle_bypassed(id),
 			Message::PluginDiscovered(scan, descriptor) => {
@@ -1177,7 +1202,7 @@ impl ArrangementView {
 									})
 									.default(1.0)
 									.enabled(node.enabled)
-									.tooltip(format_decibels(node.volume.abs())),
+									.tooltip(format_db(node.volume.abs())),
 									node.pan_knob(20.0),
 								]
 								.align_x(Center)
@@ -1524,7 +1549,7 @@ impl ArrangementView {
 						))
 					]
 					.spacing(5),
-					container(text(format_decibels(node.volume.abs())).line_height(1.0))
+					container(text(format_db(node.volume.abs())).line_height(1.0))
 						.style(bordered_box_with_radius(0))
 						.center_x(Fill)
 						.padding(2),
@@ -1733,8 +1758,16 @@ impl ArrangementView {
 	}
 }
 
-fn format_decibels(amp: f32) -> String {
-	let db = 20.0 * amp.log10();
+fn amp_to_db(amp: f32) -> f32 {
+	20.0 * amp.log10()
+}
+
+fn db_to_amp(db: f32) -> f32 {
+	10f32.powf(db / 20.0)
+}
+
+fn format_db(amp: f32) -> String {
+	let db = amp_to_db(amp);
 	let dba = db.abs();
 
 	format!(

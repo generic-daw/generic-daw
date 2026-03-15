@@ -71,7 +71,7 @@ pub enum Message {
 	ChangedSampleRate(NonZero<u32>),
 	ChangedBufferSize(Option<NonZero<u32>>),
 	ToggledAutosave,
-	ChangedAutosaveInterval(NonZero<u16>),
+	ChangedAutosaveInterval(u16),
 	ChangedAutosaveIntervalText(String),
 	ToggledOpenLastProject,
 	ChangedTheme(Theme),
@@ -182,7 +182,7 @@ impl ConfigView {
 			}),
 			Message::ToggledAutosave => self.config.autosave.enabled ^= true,
 			Message::ChangedAutosaveInterval(interval) => {
-				self.config.autosave.interval = interval.min(NonZero::new(999).unwrap());
+				self.config.autosave.interval = NonZero::new(interval.clamp(1, 999)).unwrap();
 			}
 			Message::ChangedAutosaveIntervalText(text) => {
 				if let Ok(interval) = text.parse() {
@@ -440,12 +440,10 @@ impl ConfigView {
 								.label("Autosave every ")
 								.on_toggle(|_| Message::ToggledAutosave),
 							number_input(
-								self.config.autosave.interval.get() as usize,
+								self.config.autosave.interval.get().into(),
 								600,
 								3,
-								|x| Message::ChangedAutosaveInterval(
-									NonZero::new(x as u16).or(NonZero::new(1)).unwrap()
-								),
+								|interval| Message::ChangedAutosaveInterval(interval as u16),
 								Message::ChangedAutosaveIntervalText
 							),
 							" s"
@@ -462,30 +460,23 @@ impl ConfigView {
 					.align_y(Center),
 					rule::horizontal(1),
 					row![
-						column![
-							row![
-								"Scale factor:  ",
-								text!("{:.1}", self.config.scale_factor).font(Font::MONOSPACE),
-								space::horizontal(),
-								button(rotate_ccw())
-									.style(button_with_radius(button::primary, 5))
-									.padding(5)
-									.on_press_maybe(
-										(self.config.scale_factor != 1.0)
-											.then_some(Message::ChangedScaleFactor(1.0))
-									),
-							]
-							.align_y(Center),
-							slider(
-								-1.0..=1.0,
-								self.config.scale_factor.log2(),
-								|scale_factor| Message::ChangedScaleFactor(
-									(scale_factor.exp2() * 10.0).round() / 10.0
-								)
+						"Scale factor:",
+						text!("{:.1}", self.config.scale_factor).font(Font::MONOSPACE),
+						slider(
+							-1.0..=1.0,
+							self.config.scale_factor.log2(),
+							|scale_factor| Message::ChangedScaleFactor(
+								(scale_factor.exp2() * 10.0).round() / 10.0
 							)
-							.step(f32::EPSILON),
-						]
-						.spacing(5),
+						)
+						.step(f32::EPSILON),
+						button(rotate_ccw())
+							.style(button_with_radius(button::primary, 5))
+							.padding(5)
+							.on_press_maybe(
+								(self.config.scale_factor != 1.0)
+									.then_some(Message::ChangedScaleFactor(1.0))
+							),
 					]
 					.align_y(Center)
 					.spacing(10),
