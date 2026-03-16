@@ -109,7 +109,7 @@ impl<W: ErasedWorkList> ThreadPool<W> {
 	pub fn run(&mut self, work_list: &W::WorkList<'_>, to_do: usize) {
 		self.shared.install(work_list, to_do);
 
-		for thread in &self.threads {
+		for thread in self.threads.iter().take(to_do.saturating_sub(1)) {
 			thread.thread().unpark();
 		}
 
