@@ -5,8 +5,8 @@ use crate::{
 	config::Config,
 	file_tree::FileKind,
 	icons::{
-		arrow_left_right, arrow_up_down, chevron_up, grip_vertical, mic, plus, power, power_off,
-		radius, x,
+		arrow_left_right, arrow_up_down, chevron_down, chevron_up, grip_vertical, mic, plus, power,
+		power_off, radius, x,
 	},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
@@ -34,7 +34,8 @@ use generic_daw_widget::{
 	peak_meter::{MAX_VOL, PeakMeter},
 };
 use iced::{
-	Center, Element, Fill, Point, Shrink, Subscription, Task, Vector, border,
+	Center, Element, Fill, Point, Shrink, Subscription, Task, Vector,
+	border::{self, Radius},
 	futures::SinkExt as _,
 	keyboard,
 	mouse::Interaction,
@@ -42,7 +43,7 @@ use iced::{
 	time::every,
 	widget::{
 		button, column, combo_box, container, mouse_area, opaque, row, rule, scrollable, slider,
-		space, text, vertical_slider,
+		text, vertical_slider,
 	},
 	window,
 };
@@ -344,12 +345,9 @@ impl ArrangementView {
 			Message::ChannelVolumeChanged(id, mut volume) => {
 				let db = amp_to_db(volume.abs());
 				let nearest = (db / 6.0).round() * 6.0;
-
-				volume = if (db - nearest).abs() < 0.15 {
-					db_to_amp(nearest).copysign(volume)
-				} else {
-					volume
-				};
+				if (db - nearest).abs() < 0.15 {
+					volume = db_to_amp(nearest).copysign(volume);
+				}
 
 				self.arrangement.channel_volume_changed(id, volume);
 			}
@@ -1566,6 +1564,8 @@ impl ArrangementView {
 					row![
 						container(PeakMeter::new(&node.peaks[0]).width(16.0))
 							.padding(padding::vertical(10)),
+						container(PeakMeter::new(&node.peaks[1]).width(16.0))
+							.padding(padding::vertical(10)),
 						vertical_slider(0.0..=MAX_VOL, node.volume.abs().cbrt(), |v| {
 							Message::ChannelVolumeChanged(node.id, v.powi(3).copysign(node.volume))
 						})
@@ -1581,37 +1581,73 @@ impl ArrangementView {
 							},
 							5
 						)),
-						container(PeakMeter::new(&node.peaks[1]).width(16.0))
-							.padding(padding::vertical(10)),
 					]
 					.spacing(3),
-					if node.ty == NodeType::Track
-						|| node.id == self.selected_node
-						|| self.arrangement.master().id == self.selected_node
 					{
-						Element::new(space().height(LINE_HEIGHT))
-					} else {
-						let connected = self
+						let incoming = self
+							.arrangement
+							.outgoing(node.id)
+							.contains_key(&self.selected_node);
+						let outgoing = self
 							.arrangement
 							.outgoing(self.selected_node)
 							.contains_key(&node.id);
 
-						button(chevron_up())
-							.padding(0)
-							.style(button_with_radius(
-								if node.enabled && connected {
-									button::primary
+						let down = |r: Radius| {
+							button(chevron_down())
+								.padding(0)
+								.style(button_with_radius(
+									if node.enabled && incoming {
+										button::primary
+									} else {
+										button::secondary
+									},
+									r,
+								))
+								.on_press_maybe(if outgoing {
+									None
+								} else if incoming {
+									Some(Message::Disconnect(node.id, self.selected_node))
 								} else {
-									button::secondary
-								},
-								0,
-							))
-							.on_press(if connected {
-								Message::Disconnect(self.selected_node, node.id)
-							} else {
-								Message::Connect(self.selected_node, node.id, 1.0)
-							})
-							.into()
+									Some(Message::Connect(node.id, self.selected_node, 1.0))
+								})
+						};
+
+						let up = |r: Radius| {
+							button(chevron_up())
+								.padding(0)
+								.style(button_with_radius(
+									if node.enabled && outgoing {
+										button::primary
+									} else {
+										button::secondary
+									},
+									r,
+								))
+								.on_press_maybe(if incoming {
+									None
+								} else if outgoing {
+									Some(Message::Disconnect(self.selected_node, node.id))
+								} else {
+									Some(Message::Connect(self.selected_node, node.id, 1.0))
+								})
+						};
+
+						if self.selected_node == node.id {
+							row![]
+						} else {
+							match (node.ty, self.arrangement.node(self.selected_node).ty) {
+								(NodeType::Track, NodeType::Track) => row![],
+								(_, NodeType::Master) | (NodeType::Track, NodeType::Channel) => {
+									row![down(border::radius(5))]
+								}
+								(NodeType::Master, _) | (_, NodeType::Track) => {
+									row![up(border::radius(5))]
+								}
+								_ => row![down(border::left(5)), up(border::right(5))],
+							}
+						}
+						.height(LINE_HEIGHT)
 					}
 				]
 				.width(Shrink)
