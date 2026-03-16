@@ -275,35 +275,26 @@ impl Arrangement {
 			for (idx, sample) in reader.iter_samples() {
 				let sample_rate = arrangement.transport().sample_rate;
 				let done = done.clone();
-
-				let mut path: Option<Arc<_>> = paths.remove(&idx);
-				let mut sample_name = sample.name.clone();
+				let path = paths.remove(&idx);
 				s.spawn(move || {
+					if let Some(path) = path.clone()
+						&& let Some(sample) = SamplePair::with_crc(path, sample_rate, sample.crc)
+					{
+						done.send((idx, Feedback::Use(sample))).unwrap();
+						return;
+					}
+
 					loop {
-						if let Some(path) = path.clone()
-							&& let Some(sample) = SamplePair::new(path, sample_rate)
-						{
-							done.send((idx, Feedback::Use(sample))).unwrap();
-							return;
-						}
-
-						if let Some(path) = &path
-							&& let Some(name) = path.file_name()
-							&& let Some(name) = name.to_str()
-						{
-							sample_name = name.to_owned();
-						}
-
 						let (sender, receiver) = oneshot::channel();
 
 						daw.try_send(daw::Message::CantLoadSample(
-							sample_name.deref().into(),
+							sample.name.deref().into(),
 							sender.into(),
 						))
 						.unwrap();
 
-						path = match receiver.recv() {
-							Ok(Feedback::Use(p)) => Some(p),
+						let path = match receiver.recv() {
+							Ok(Feedback::Use(path)) => path,
 							Ok(Feedback::Ignore) => {
 								_ = done.send((idx, Feedback::Ignore));
 								return;
@@ -313,6 +304,11 @@ impl Arrangement {
 								return;
 							}
 						};
+
+						if let Some(sample) = SamplePair::new(path, sample_rate) {
+							done.send((idx, Feedback::Use(sample))).unwrap();
+							return;
+						}
 					}
 				});
 			}

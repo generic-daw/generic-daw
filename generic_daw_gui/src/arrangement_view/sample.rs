@@ -22,9 +22,13 @@ pub struct SamplePair {
 
 impl SamplePair {
 	pub fn new(path: Arc<Path>, sample_rate: NonZero<u32>) -> Option<Self> {
+		let crc = crc(File::open(&path).ok()?);
+		Self::with_crc(path, sample_rate, crc)
+	}
+
+	pub fn with_crc(path: Arc<Path>, sample_rate: NonZero<u32>, crc: u32) -> Option<Self> {
 		let name = path.file_name()?.to_str()?.into();
 		let core = generic_daw_core::Sample::new(Box::from(File::open(&path).ok()?), sample_rate)?;
-		let crc = crc(File::open(&path).ok()?);
 		let gui = Sample {
 			id: core.id,
 			lods: Lods::new(&core.samples),
