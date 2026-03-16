@@ -159,6 +159,7 @@ impl ClapHost {
 
 				if let Some(&plugin) = self.plugin_of_window.get(&window)
 					&& let Some(plugin) = self.plugins.get_mut(&plugin)
+					&& plugin.has_gui()
 				{
 					let plugin_scale = plugin.set_scale(scale_factor);
 					if let Some(size) = plugin.get_size() {

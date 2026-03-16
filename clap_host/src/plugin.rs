@@ -100,12 +100,17 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	#[must_use]
 	pub fn has_gui(&self) -> bool {
-		!matches!(self.gui, Gui::None)
+		self.is_floating() || self.is_embedded()
 	}
 
 	#[must_use]
 	pub fn is_floating(&self) -> bool {
 		matches!(self.gui, Gui::Floating)
+	}
+
+	#[must_use]
+	pub fn is_embedded(&self) -> bool {
+		matches!(self.gui, Gui::Embedded { .. })
 	}
 
 	#[must_use]
