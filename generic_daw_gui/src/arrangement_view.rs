@@ -1584,29 +1584,23 @@ impl ArrangementView {
 					]
 					.spacing(3),
 					{
-						let incoming = self
-							.arrangement
-							.outgoing(node.id)
-							.contains_key(&self.selected_node);
-						let outgoing = self
-							.arrangement
-							.outgoing(self.selected_node)
-							.contains_key(&node.id);
+						let incoming = self.arrangement.outgoing(node.id).get(&self.selected_node);
+						let outgoing = self.arrangement.outgoing(self.selected_node).get(&node.id);
 
 						let down = |r: Radius| {
 							button(chevron_down())
 								.padding(0)
 								.style(button_with_radius(
-									if node.enabled && incoming {
+									if node.enabled && incoming.is_some() {
 										button::primary
 									} else {
 										button::secondary
 									},
 									r,
 								))
-								.on_press_maybe(if outgoing {
+								.on_press_maybe(if outgoing.is_some() {
 									None
-								} else if incoming {
+								} else if incoming.is_some() {
 									Some(Message::Disconnect(node.id, self.selected_node))
 								} else {
 									Some(Message::Connect(node.id, self.selected_node, 1.0))
@@ -1617,37 +1611,53 @@ impl ArrangementView {
 							button(chevron_up())
 								.padding(0)
 								.style(button_with_radius(
-									if node.enabled && outgoing {
+									if node.enabled && outgoing.is_some() {
 										button::primary
 									} else {
 										button::secondary
 									},
 									r,
 								))
-								.on_press_maybe(if incoming {
+								.on_press_maybe(if incoming.is_some() {
 									None
-								} else if outgoing {
+								} else if outgoing.is_some() {
 									Some(Message::Disconnect(self.selected_node, node.id))
 								} else {
 									Some(Message::Connect(self.selected_node, node.id, 1.0))
 								})
 						};
 
-						if self.selected_node == node.id {
-							row![]
-						} else {
-							match (node.ty, self.arrangement.node(self.selected_node).ty) {
-								(NodeType::Track, NodeType::Track) => row![],
-								(_, NodeType::Master) | (NodeType::Track, NodeType::Channel) => {
-									row![down(border::radius(5))]
+						column![
+							incoming
+								.map(|val| (val, node.id, self.selected_node))
+								.or_else(|| outgoing.map(|val| (val, self.selected_node, node.id)))
+								.map(|(val, from, to)| {
+									slider(0.0..=1.0, val.cbrt(), move |val| {
+										Message::Connect(from, to, val.powi(3))
+									})
+									.default(1.0)
+									.step(f32::EPSILON)
+									.handle((4, 4))
+								}),
+							if self.selected_node == node.id {
+								row![]
+							} else {
+								match (node.ty, self.arrangement.node(self.selected_node).ty) {
+									(NodeType::Track, NodeType::Track) => row![],
+									(_, NodeType::Master)
+									| (NodeType::Track, NodeType::Channel) => {
+										row![down(border::radius(5))]
+									}
+									(NodeType::Master, _) | (_, NodeType::Track) => {
+										row![up(border::radius(5))]
+									}
+									_ => row![down(border::left(5)), up(border::right(5))],
 								}
-								(NodeType::Master, _) | (_, NodeType::Track) => {
-									row![up(border::radius(5))]
-								}
-								_ => row![down(border::left(5)), up(border::right(5))],
 							}
-						}
-						.height(LINE_HEIGHT)
+							.height(LINE_HEIGHT)
+						]
+						.spacing(3)
+						.align_x(Center)
 					}
 				]
 				.width(Shrink)
