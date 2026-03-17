@@ -113,7 +113,6 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			&& events.is_empty()
 			&& audio.iter().all(|f| f.abs() < f32::EPSILON)
 		{
-			trace!("{}: skipping process", &self.descriptor);
 			return self.flush(events);
 		}
 
@@ -124,7 +123,6 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 				let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len() / 2);
 
-				trace!("{}: processing", &self.descriptor);
 				let status = started_processor
 					.process(
 						&input_audio,
@@ -173,14 +171,12 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		if !processor.access_shared_handler(|s| s.needs_flush.swap(false, Relaxed))
 			&& events.is_empty()
 		{
-			trace!("{}: skipping flush", &self.descriptor);
 			return;
 		}
 
 		if let Some(&params) = processor.access_shared_handler(|s| s.ext.params.get()) {
 			self.event_buffers.read_in(events);
 
-			trace!("{}: flushing events", &self.descriptor);
 			params.flush_active(
 				&mut processor.plugin_handle(),
 				&self.event_buffers.input_events.as_input(),
