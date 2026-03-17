@@ -480,8 +480,15 @@ impl Arrangement {
 			messages.push(arrangement_view::Message::Connect(
 				*tracks.get(&from)?,
 				*channels.get(&to)?,
-				mix,
 			));
+
+			if mix != 1.0 {
+				messages.push(arrangement_view::Message::SetMix(
+					*tracks.get(&from)?,
+					*channels.get(&to)?,
+					mix,
+				));
+			}
 		}
 
 		drop(tracks);
@@ -490,8 +497,15 @@ impl Arrangement {
 			messages.push(arrangement_view::Message::Connect(
 				*channels.get(&from)?,
 				*channels.get(&to)?,
-				mix,
 			));
+
+			if mix != 1.0 {
+				messages.push(arrangement_view::Message::SetMix(
+					*channels.get(&from)?,
+					*channels.get(&to)?,
+					mix,
+				));
+			}
 		}
 
 		drop(channels);

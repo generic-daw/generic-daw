@@ -115,7 +115,7 @@ impl Arrangement {
 						),
 					));
 				}
-				Update::Connect(from, to, mix) => _ = self.outgoing_mut(from).insert(to, mix),
+				Update::Connect(from, to) => _ = self.outgoing_mut(from).insert(to, 1.0),
 				Update::Load(duration, frames) => {
 					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
 					let load = duration.as_secs_f32() * mix;
@@ -376,8 +376,13 @@ impl Arrangement {
 		}
 	}
 
-	pub fn connect(&mut self, from: NodeId, to: NodeId, mix: f32) {
-		self.send(Message::NodeConnect(from, to, mix));
+	pub fn connect(&mut self, from: NodeId, to: NodeId) {
+		self.send(Message::NodeConnect(from, to));
+	}
+
+	pub fn set_mix(&mut self, from: NodeId, to: NodeId, mix: f32) {
+		*self.outgoing_mut(from).get_mut(&to).unwrap() = mix;
+		self.send(Message::NodeSetMix(from, to, mix));
 	}
 
 	pub fn disconnect(&mut self, from: NodeId, to: NodeId) {

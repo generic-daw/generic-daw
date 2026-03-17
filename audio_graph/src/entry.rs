@@ -17,12 +17,12 @@ pub struct Incoming<Node: NodeImpl> {
 	pub mix: f32,
 }
 
-impl<Node: NodeImpl> Incoming<Node> {
-	pub fn new(mix: f32) -> Self {
+impl<Node: NodeImpl> Default for Incoming<Node> {
+	fn default() -> Self {
 		Self {
 			delay: DelayLine::default(),
 			events: Vec::default(),
-			mix,
+			mix: 1.0,
 		}
 	}
 }

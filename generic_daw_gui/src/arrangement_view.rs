@@ -123,7 +123,8 @@ pub enum Message {
 
 	UpdateRequest,
 
-	Connect(NodeId, NodeId, f32),
+	Connect(NodeId, NodeId),
+	SetMix(NodeId, NodeId, f32),
 	Disconnect(NodeId, NodeId),
 
 	ChangedTab(Tab),
@@ -303,7 +304,8 @@ impl ArrangementView {
 				self.piano_roll_selection.get_mut().clear();
 			}
 			Message::UpdateRequest => self.arrangement.request_update(),
-			Message::Connect(from, to, mix) => self.arrangement.connect(from, to, mix),
+			Message::Connect(from, to) => self.arrangement.connect(from, to),
+			Message::SetMix(from, to, mix) => self.arrangement.set_mix(from, to, mix),
 			Message::Disconnect(from, to) => self.arrangement.disconnect(from, to),
 			Message::ChangedTab(tab) => {
 				match self.tab {
@@ -328,10 +330,7 @@ impl ArrangementView {
 			Message::ChannelAdd => {
 				let id = self.arrangement.add_channel();
 				self.selected_node = id;
-				return self.update(
-					Message::Connect(id, self.arrangement.master().id, 1.0),
-					config,
-				);
+				return self.update(Message::Connect(id, self.arrangement.master().id), config);
 			}
 			Message::ChannelRemove(id) => {
 				_ = self.update(Message::ArrowRight, config);
@@ -524,10 +523,7 @@ impl ArrangementView {
 				if self.soloed_track.is_some() {
 					self.arrangement.channel_toggle_enabled(id);
 				}
-				return self.update(
-					Message::Connect(id, self.arrangement.master().id, 1.0),
-					config,
-				);
+				return self.update(Message::Connect(id, self.arrangement.master().id), config);
 			}
 			Message::TrackRemove(id) => {
 				if self.soloed_track == Some(id) {
@@ -1603,7 +1599,7 @@ impl ArrangementView {
 								} else if incoming.is_some() {
 									Some(Message::Disconnect(node.id, self.selected_node))
 								} else {
-									Some(Message::Connect(node.id, self.selected_node, 1.0))
+									Some(Message::Connect(node.id, self.selected_node))
 								})
 						};
 
@@ -1623,7 +1619,7 @@ impl ArrangementView {
 								} else if outgoing.is_some() {
 									Some(Message::Disconnect(self.selected_node, node.id))
 								} else {
-									Some(Message::Connect(self.selected_node, node.id, 1.0))
+									Some(Message::Connect(self.selected_node, node.id))
 								})
 						};
 
@@ -1633,7 +1629,7 @@ impl ArrangementView {
 								.or_else(|| outgoing.map(|val| (val, self.selected_node, node.id)))
 								.map(|(val, from, to)| {
 									slider(0.0..=1.0, val.cbrt(), move |val| {
-										Message::Connect(from, to, val.powi(3))
+										Message::SetMix(from, to, val.powi(3))
 									})
 									.default(1.0)
 									.step(f32::EPSILON)

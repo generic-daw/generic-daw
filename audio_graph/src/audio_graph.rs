@@ -206,26 +206,19 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	#[must_use]
-	pub fn connect(&mut self, from: NodeId, to: NodeId, mix: f32) -> bool {
+	pub fn connect(&mut self, from: NodeId, to: NodeId) -> bool {
 		if !self.graph.contains_key(&from) || !self.graph.contains_key(&to) {
 			return false;
 		}
 
 		if !self.entry_mut(from).buffers().outgoing.insert(to) {
-			self.entry_mut(to)
-				.buffers()
-				.incoming
-				.get_mut(&from)
-				.unwrap()
-				.mix = mix;
-
 			return true;
 		}
 
 		self.entry_mut(to)
 			.buffers()
 			.incoming
-			.insert(from, Incoming::new(mix));
+			.insert(from, Incoming::default());
 
 		if self.has_cycle() {
 			self.entry_mut(from).buffers().outgoing.remove(&to);
@@ -234,6 +227,15 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		}
 
 		true
+	}
+
+	pub fn set_mix(&mut self, from: NodeId, to: NodeId, mix: f32) {
+		self.entry_mut(to)
+			.buffers()
+			.incoming
+			.get_mut(&from)
+			.unwrap()
+			.mix = mix;
 	}
 
 	pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
