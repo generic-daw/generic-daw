@@ -533,7 +533,7 @@ impl Daw {
 									)
 								} else {
 									text!(
-										"{:03}:{:digits$}",
+										"{:03}:{:0digits$}",
 										now.bar(transport) + 1,
 										now.beat_in_bar(transport) + 1,
 										digits = transport.numerator.ilog10() as usize + 1,
