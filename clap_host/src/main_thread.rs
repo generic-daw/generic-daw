@@ -1,6 +1,6 @@
 use crate::{ParamRescanFlags, Size, TimerId, host::Host, shared::Shared};
 use clack_extensions::{
-	audio_ports::{HostAudioPortsImpl, RescanType},
+	audio_ports::{AudioPortRescanFlags, HostAudioPortsImpl},
 	latency::HostLatencyImpl,
 	note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
 	params::{HostParamsImplMainThread, ParamClearFlags},
@@ -55,11 +55,11 @@ impl<'a> MainThreadHandler<'a> for MainThread<'a> {
 }
 
 impl HostAudioPortsImpl for MainThread<'_> {
-	fn is_rescan_flag_supported(&self, _flag: RescanType) -> bool {
+	fn is_rescan_flag_supported(&self, _flags: AudioPortRescanFlags) -> bool {
 		false
 	}
 
-	fn rescan(&mut self, _flag: RescanType) {}
+	fn rescan(&mut self, _flags: AudioPortRescanFlags) {}
 }
 
 impl HostLatencyImpl for MainThread<'_> {
