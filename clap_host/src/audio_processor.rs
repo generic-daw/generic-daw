@@ -123,16 +123,14 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 				let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len() / 2);
 
-				let status = started_processor
-					.process(
-						&input_audio,
-						&mut output_audio,
-						&self.event_buffers.input_events.as_input(),
-						&mut self.event_buffers.output_events.as_output(),
-						Some(self.steady_time),
-						None,
-					)
-					.unwrap();
+				let status = started_processor.process(
+					&input_audio,
+					&mut output_audio,
+					&self.event_buffers.input_events.as_input(),
+					&mut self.event_buffers.output_events.as_output(),
+					Some(self.steady_time),
+					None,
+				);
 
 				self.steady_time += u64::from(input_audio.min_available_frames_with(&output_audio));
 
@@ -140,11 +138,15 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 				self.event_buffers.write_out(events);
 
 				let processing = match status {
-					ProcessStatus::Continue | ProcessStatus::Tail => true,
-					ProcessStatus::ContinueIfNotQuiet => {
+					Ok(ProcessStatus::Continue | ProcessStatus::Tail) => true,
+					Ok(ProcessStatus::ContinueIfNotQuiet) => {
 						audio.iter().any(|f| f.abs() >= f32::EPSILON)
 					}
-					ProcessStatus::Sleep => false,
+					Ok(ProcessStatus::Sleep) => false,
+					Err(err) => {
+						warn!("{}: {err}", &self.descriptor);
+						true
+					}
 				};
 
 				if !processing {
