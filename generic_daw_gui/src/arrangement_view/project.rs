@@ -227,57 +227,61 @@ impl Arrangement {
 			)
 		}));
 
+		let samples = reader
+			.iter_samples()
+			.map(|(idx, audio)| (&*audio.name, (idx, audio.crc)))
+			.fold(HashMap::<_, Vec<_>>::new(), |mut acc, (k, v)| {
+				acc.entry(k).or_default().push(v);
+				acc
+			});
+
+		let mut current_progress = 0.0;
+		let progress_per_audio = (reader.iter_samples().count() as f32).recip();
+
+		let mut seen = HashSet::new();
+		let mut paths = config
+			.sample_paths
+			.iter()
+			.flat_map(|path| WalkDir::new(path).follow_links(true))
+			.flatten()
+			.filter(|dir_entry| dir_entry.file_type().is_file())
+			.filter_map(|dir_entry| dir_entry.path().canonicalize().ok())
+			.filter_map(|path| {
+				path.file_name()
+					.and_then(|name| name.to_str())
+					.filter(|name| samples.contains_key(name))
+					.filter(|_| seen.insert(path.clone()))
+					.inspect(|_| {
+						daw.try_send(daw::Message::SetStatus(path.to_string_lossy().into()))
+							.unwrap();
+					})
+					.and_then(|name| {
+						let file = File::open(&path).ok().map(|file| (name, crc(file)));
+						daw.try_send(daw::Message::ClearStatus).unwrap();
+						file
+					})
+					.and_then(|(name, crc)| {
+						samples[name].iter().find_map(|&(index, c)| {
+							(c == crc).then(|| (index, path.as_path().into()))
+						})
+					})
+			})
+			.collect::<HashMap<_, _>>();
+
+		drop(seen);
+		drop(samples);
+
 		let mut samples = HashMap::new();
 
 		std::thread::scope(|s| {
 			let (done, receiver) = mpsc::channel();
-
-			let samples_map = reader
-				.iter_samples()
-				.map(|(idx, audio)| (&*audio.name, (idx, audio.crc)))
-				.fold(HashMap::<_, Vec<_>>::new(), |mut acc, (k, v)| {
-					acc.entry(k).or_default().push(v);
-					acc
-				});
-
-			let mut current_progress = 0.0;
-			let progress_per_audio = (reader.iter_samples().count() as f32).recip();
-
-			let mut seen = HashSet::new();
-			let mut paths = config
-				.sample_paths
-				.iter()
-				.flat_map(|path| WalkDir::new(path).follow_links(true))
-				.flatten()
-				.filter(|dir_entry| dir_entry.file_type().is_file())
-				.filter_map(|dir_entry| {
-					dir_entry
-						.file_name()
-						.to_str()
-						.filter(|name| samples_map.contains_key(name))
-						.filter(|_| seen.insert(dir_entry.path().to_owned()))
-						.and_then(|name| {
-							File::open(dir_entry.path())
-								.ok()
-								.map(|file| (name, crc(file)))
-						})
-						.and_then(|(name, crc)| {
-							samples_map[name].iter().find_map(|&(index, c)| {
-								(c == crc).then(|| (index, dir_entry.path().into()))
-							})
-						})
-				})
-				.collect::<HashMap<_, _>>();
-
-			drop(seen);
-			drop(samples_map);
 
 			for (idx, sample) in reader.iter_samples() {
 				let sample_rate = arrangement.transport().sample_rate;
 				let done = done.clone();
 				let path = paths.remove(&idx);
 				s.spawn(move || {
-					if let Some(path) = path.clone()
+					if let Some(path) = path
 						&& let Some(sample) = SamplePair::with_crc(path, sample_rate, sample.crc)
 					{
 						done.send((idx, Feedback::Use(sample))).unwrap();

@@ -22,8 +22,8 @@ use iced::{
 	padding,
 	time::every,
 	widget::{
-		button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row, space,
-		stack, text,
+		button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row,
+		scrollable, space, stack, text,
 	},
 	window,
 };
@@ -99,6 +99,8 @@ pub enum Message {
 	PickSampleFileDialog(usize),
 
 	Progress(f32),
+	SetStatus(Arc<str>),
+	ClearStatus,
 
 	OpenFile(Arc<Path>),
 	CantLoadSample(Arc<str>, NoClone<oneshot::Sender<Feedback<Arc<Path>>>>),
@@ -144,6 +146,7 @@ pub struct Daw {
 	show_seconds: bool,
 
 	progress: Option<f32>,
+	scanning: Option<Arc<str>>,
 	missing_samples: Vec<(Arc<str>, oneshot::Sender<Feedback<Arc<Path>>>)>,
 
 	main_window_id: window::Id,
@@ -190,6 +193,7 @@ impl Daw {
 				show_seconds,
 
 				progress: None,
+				scanning: None,
 				missing_samples: Vec::new(),
 
 				main_window_id,
@@ -326,6 +330,8 @@ impl Daw {
 				.map(move |response| Message::FoundSampleResponse(idx, response));
 			}
 			Message::Progress(progress) => self.progress = Some(progress),
+			Message::SetStatus(scanning) => self.scanning = Some(scanning),
+			Message::ClearStatus => self.scanning = None,
 			Message::OpenFile(path) => {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
@@ -349,8 +355,9 @@ impl Daw {
 					self.state.last_project = Some(path);
 					self.state.write();
 				}
-				self.missing_samples.clear();
 				self.progress = None;
+				self.scanning = None;
+				self.missing_samples.clear();
 			}
 			Message::ExportFile(path) => {
 				if self.progress.is_none() {
@@ -646,59 +653,89 @@ impl Daw {
 								},
 								5
 							)),
-							(!self.missing_samples.is_empty()).then(|| container(
-								column(
-									self.missing_samples
-										.iter()
-										.map(|(name, _)| &**name)
-										.enumerate()
-										.map(|(i, name)| {
-											row![
-												"can't find sample",
-												container(text(name).font(Font::MONOSPACE))
-													.padding(padding::horizontal(10).vertical(5))
-													.style(|t| bordered_box_with_radius(5)(t)
-														.background(
-															t.palette().background.weakest.color
-														)),
-												space::horizontal(),
-												row![
-													button("Pick")
-														.on_press(Message::PickSampleFileDialog(i))
-														.style(button_with_radius(
-															button::success,
-															border::left(5)
-														)),
-													button("Ignore")
-														.on_press(Message::FoundSampleResponse(
-															i,
-															Feedback::Ignore
-														))
-														.style(button_with_radius(
-															button::warning,
-															0
-														)),
-													button("Cancel")
-														.on_press(Message::FoundSampleResponse(
-															i,
-															Feedback::Cancel
-														))
-														.style(button_with_radius(
-															button::danger,
-															border::right(5)
-														))
-												]
-											]
-											.spacing(10)
-											.width(Shrink)
-											.align_y(Center)
-											.into()
-										}),
-								)
+							self.scanning.as_deref().map(|scanning| container(
+								row![
+									"scanning",
+									container(
+										text(scanning)
+											.font(Font::MONOSPACE)
+											.wrapping(text::Wrapping::None)
+											.ellipsis(text::Ellipsis::Middle)
+									)
+									.padding(padding::horizontal(10).vertical(5))
+									.style(|t| bordered_box_with_radius(5)(t)
+										.background(t.palette().background.weakest.color)),
+								]
 								.spacing(10)
+								.width(Shrink)
+								.align_y(Center)
 							)
 							.padding(10)
-							.style(bordered_box_with_radius(5)))
+							.style(bordered_box_with_radius(5))),
+							(!self.missing_samples.is_empty()).then(|| scrollable(
+								container(
+									column(
+										self.missing_samples
+											.iter()
+											.map(|(name, _)| &**name)
+											.enumerate()
+											.map(|(i, name)| {
+												row![
+													"can't find sample",
+													container(
+														text(name)
+															.font(Font::MONOSPACE)
+															.wrapping(text::Wrapping::None)
+															.ellipsis(text::Ellipsis::Middle)
+													)
+													.padding(padding::horizontal(10).vertical(5))
+													.style(|t| {
+														bordered_box_with_radius(5)(t).background(
+															t.palette().background.weakest.color,
+														)
+													}),
+													space::horizontal(),
+													row![
+														button("Pick")
+															.on_press(
+																Message::PickSampleFileDialog(i)
+															)
+															.style(button_with_radius(
+																button::success,
+																border::left(5)
+															)),
+														button("Ignore")
+															.on_press(Message::FoundSampleResponse(
+																i,
+																Feedback::Ignore
+															))
+															.style(button_with_radius(
+																button::warning,
+																0
+															)),
+														button("Cancel")
+															.on_press(Message::FoundSampleResponse(
+																i,
+																Feedback::Cancel
+															))
+															.style(button_with_radius(
+																button::danger,
+																border::right(5)
+															))
+													]
+												]
+												.spacing(10)
+												.width(Shrink)
+												.align_y(Center)
+												.into()
+											}),
+									)
+									.spacing(10)
+								)
+								.padding(10)
+								.style(bordered_box_with_radius(5))
+							)
+							.spacing(0))
 						]
 						.align_x(Center)
 						.spacing(20)
