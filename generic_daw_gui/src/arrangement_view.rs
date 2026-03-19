@@ -429,10 +429,10 @@ impl ArrangementView {
 			Message::PluginRemove(node, i) => _ = self.arrangement.plugin_remove(node, i),
 			Message::LoadHoveredFile => {
 				let playlist::Selection { file, .. } = self.playlist_selection.get_mut();
-				if let (Some((path, is_midi, Some((track, pos)))), Tab::Playlist) =
+				if let (Some((path, kind, Some((track, pos)))), Tab::Playlist) =
 					(std::mem::take(file), self.tab)
 				{
-					return if is_midi {
+					return if kind == FileKind::Midi {
 						self.clips_loading += 1;
 						let transport = *self.arrangement.transport();
 						Task::future(unblock(move || {
@@ -1794,7 +1794,7 @@ impl ArrangementView {
 	}
 
 	pub fn hover_file(&mut self, file: Arc<Path>, kind: FileKind) {
-		self.playlist_selection.get_mut().file = Some((file, kind == FileKind::Midi, None));
+		self.playlist_selection.get_mut().file = Some((file, kind, None));
 	}
 
 	pub fn hovering_file(&self) -> bool {

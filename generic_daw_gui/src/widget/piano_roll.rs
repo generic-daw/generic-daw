@@ -117,7 +117,11 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		let selection = &mut *self.selection.borrow_mut();
 
 		let Some(cursor) = cursor.position_in(*viewport) else {
-			selection.status = Status::None;
+			if selection.status != Status::None {
+				selection.status = Status::None;
+				selection.primary.extend(selection.secondary.drain());
+				shell.request_redraw();
+			}
 			return;
 		};
 
@@ -155,8 +159,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				if selection.status != Status::None =>
 			{
 				selection.status = Status::None;
-				selection.primary.extend(&selection.secondary);
-				selection.secondary.clear();
+				selection.primary.extend(selection.secondary.drain());
 				shell.capture_event();
 				shell.request_redraw();
 			}

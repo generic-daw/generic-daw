@@ -1,5 +1,6 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef},
+	file_tree::FileKind,
 	widget::{ALPHA_1_3, Delta, clip, maybe_snap, px_to_time, time_to_px, track::Track},
 };
 use generic_daw_core::{MusicalTime, Transport};
@@ -55,7 +56,7 @@ pub struct Selection {
 	pub status: Status,
 	pub primary: HashSet<(usize, usize)>,
 	pub secondary: HashSet<(usize, usize)>,
-	pub file: Option<(Arc<Path>, bool, Option<(usize, MusicalTime)>)>,
+	pub file: Option<(Arc<Path>, FileKind, Option<(usize, MusicalTime)>)>,
 }
 
 impl Selection {
@@ -152,7 +153,11 @@ where
 		}
 
 		let Some(cursor) = cursor.position_in(*viewport) else {
-			selection.status = Status::None;
+			if selection.status != Status::None {
+				selection.status = Status::None;
+				selection.primary.extend(selection.secondary.drain());
+				shell.request_redraw();
+			}
 			if let Some((_, _, hovering)) = &mut selection.file
 				&& hovering.is_some()
 			{
