@@ -437,7 +437,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 [[package]]
 name = "clack-common"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#2a7a406a7dabe0c951bb97b57f3c90ab534f9fcd"
+source = "git+https://github.com/prokopyl/clack.git#3dacc989da356a76aa341a9a2a48f77261b16cef"
 dependencies = [
  "bitflags 2.11.0",
  "clap-sys",
@@ -446,7 +446,7 @@ dependencies = [
 [[package]]
 name = "clack-extensions"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#2a7a406a7dabe0c951bb97b57f3c90ab534f9fcd"
+source = "git+https://github.com/prokopyl/clack.git#3dacc989da356a76aa341a9a2a48f77261b16cef"
 dependencies = [
  "bitflags 2.11.0",
  "clack-common",
@@ -458,7 +458,7 @@ dependencies = [
 [[package]]
 name = "clack-host"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#2a7a406a7dabe0c951bb97b57f3c90ab534f9fcd"
+source = "git+https://github.com/prokopyl/clack.git#3dacc989da356a76aa341a9a2a48f77261b16cef"
 dependencies = [
  "clack-common",
  "clap-sys",
@@ -942,9 +942,9 @@ dependencies = [
 
 [[package]]
 name = "font-types"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1e4d2d0cf79d38430cc9dc9aadec84774bff2e1ba30ae2bf6c16cfce9385a23"
+checksum = "73829a7b5c91198af28a99159b7ae4afbb252fb906159ff7f189f3a2ceaa3df2"
 dependencies = [
  "bytemuck",
 ]
@@ -2590,7 +2590,7 @@ checksum = "7b634fabf032fab15307ffd272149b622260f55974d9fad689292a5d33df02e5"
 dependencies = [
  "bytemuck",
  "core_maths",
- "font-types 0.11.0",
+ "font-types 0.11.1",
 ]
 
 [[package]]
@@ -4242,18 +4242,18 @@ checksum = "6df3dc4292935e51816d896edcd52aa30bc297907c26167fec31e2b0c6a32524"
 
 [[package]]
 name = "zerocopy"
-version = "0.8.46"
+version = "0.8.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c5030500cb2d66bdfbb4ebc9563be6ce7005a4b5d0f26be0c523870fe372ca6"
+checksum = "efbb2a062be311f2ba113ce66f697a4dc589f85e78a4aea276200804cea0ed87"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.46"
+version = "0.8.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5f86989a046a79640b9d8867c823349a139367bda96549794fcc3313ce91f4e"
+checksum = "0e8bc7269b54418e7aeeef514aa68f8690b8c0489a06b0136e5f57c4c5ccab89"
 dependencies = [
  "proc-macro2",
  "quote",

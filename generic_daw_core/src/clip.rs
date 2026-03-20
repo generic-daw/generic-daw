@@ -1,4 +1,4 @@
-use crate::{AudioClip, Event, MidiClip, OffsetPosition, daw_ctx::State};
+use crate::{AudioClip, Event, MidiClip, OffsetPosition, audio_processor::State};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Clip {

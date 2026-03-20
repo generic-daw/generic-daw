@@ -11,12 +11,7 @@ use std::{
 	thread::{JoinHandle, available_parallelism},
 };
 
-pub trait ErasedWorkList: 'static {
-	type WorkList<'a>: WorkList<Scratch = Self::Scratch>;
-	type Scratch: Send;
-}
-
-pub trait WorkList: Sync {
+pub trait WorkList: Sync + 'static {
 	type Item;
 	type Scratch: Send;
 	#[must_use]
@@ -25,25 +20,20 @@ pub trait WorkList: Sync {
 	fn do_work(&self, item: Self::Item, scratch: &mut Self::Scratch) -> Option<Self::Item>;
 }
 
-impl<T: WorkList + 'static> ErasedWorkList for T {
-	type WorkList<'a> = T;
-	type Scratch = <T as WorkList>::Scratch;
-}
-
 #[expect(missing_debug_implementations)]
-pub struct ThreadPool<W: ErasedWorkList> {
+pub struct ThreadPool<W: WorkList> {
 	shared: Arc<Shared<W>>,
 	threads: Box<[JoinHandle<()>]>,
 	scratch: W::Scratch,
 }
 
-impl<W: ErasedWorkList<Scratch = ()>> Default for ThreadPool<W> {
+impl<W: WorkList<Scratch = ()>> Default for ThreadPool<W> {
 	fn default() -> Self {
 		Self::new()
 	}
 }
 
-impl<W: ErasedWorkList<Scratch = ()>> ThreadPool<W> {
+impl<W: WorkList<Scratch = ()>> ThreadPool<W> {
 	#[must_use]
 	pub fn new() -> Self {
 		Self::new_with_threads(Self::default_threads())
@@ -55,7 +45,7 @@ impl<W: ErasedWorkList<Scratch = ()>> ThreadPool<W> {
 	}
 }
 
-impl<W: ErasedWorkList> ThreadPool<W> {
+impl<W: WorkList> ThreadPool<W> {
 	#[must_use]
 	pub fn default_threads() -> NonZero<usize> {
 		if let Ok(threads) = available_parallelism()
@@ -106,7 +96,7 @@ impl<W: ErasedWorkList> ThreadPool<W> {
 		}
 	}
 
-	pub fn run(&mut self, work_list: &W::WorkList<'_>, to_do: usize) {
+	pub fn run(&mut self, work_list: &W, to_do: usize) {
 		self.shared.install(work_list, to_do);
 
 		for thread in self.threads.iter().take(to_do.saturating_sub(1)) {
@@ -119,7 +109,7 @@ impl<W: ErasedWorkList> ThreadPool<W> {
 	}
 }
 
-impl<W: ErasedWorkList> Drop for ThreadPool<W> {
+impl<W: WorkList> Drop for ThreadPool<W> {
 	fn drop(&mut self) {
 		self.shared.stop.store(true, Relaxed);
 		self.shared.epoch.fetch_add(1, Release);
@@ -134,8 +124,8 @@ impl<W: ErasedWorkList> Drop for ThreadPool<W> {
 	}
 }
 
-struct Shared<W: ErasedWorkList> {
-	work_list: AtomicPtr<W::WorkList<'static>>,
+struct Shared<W: WorkList> {
+	work_list: AtomicPtr<W>,
 	epoch: AtomicUsize,
 	active: AtomicUsize,
 	to_do: AtomicUsize,
@@ -143,13 +133,13 @@ struct Shared<W: ErasedWorkList> {
 	mt_working: AtomicBool,
 }
 
-impl<W: ErasedWorkList> Shared<W> {
-	fn install(&self, work_list: &W::WorkList<'_>, to_do: usize) {
+impl<W: WorkList> Shared<W> {
+	fn install(&self, work_list: &W, to_do: usize) {
 		self.to_do.store(to_do, Relaxed);
 		self.mt_working.store(true, Relaxed);
 
 		self.work_list
-			.store(std::ptr::from_ref(work_list).cast_mut().cast(), Relaxed);
+			.store(std::ptr::from_ref(work_list).cast_mut(), Relaxed);
 
 		assert_eq!(self.active.swap(0, Release), usize::MAX);
 
@@ -188,10 +178,10 @@ impl<W: ErasedWorkList> Shared<W> {
 			};
 
 			// SAFETY:
-			// `self.work_list` is a valid reference to a `W::WorkList`, because `install`
-			// previously set it to a reference to a `W::WorkList` that is valid at least until
-			// `join` finishes. `join` hasn't finished yet because `self.active` wasn't `usize::MAX`
-			// at the `fetch_update`, and can't be `usize::MAX` again before the `fetch_sub`.
+			// `self.work_list` is a valid reference to a `W`, because `install` previously set it
+			// to a reference to a `W` that is valid at least until `join` finishes. `join` hasn't
+			// finished yet because `self.active` wasn't `usize::MAX` at the `fetch_update`, and
+			// can't be `usize::MAX` again before the `fetch_sub`.
 			let work_list = unsafe { self.work_list.load(Relaxed).as_ref() }.unwrap();
 
 			self.do_work::<false>(work_list, &mut scratch);
@@ -218,7 +208,7 @@ impl<W: ErasedWorkList> Shared<W> {
 		}
 	}
 
-	fn do_work<const MT: bool>(&self, work_list: &W::WorkList<'_>, scratch: &mut W::Scratch) {
+	fn do_work<const MT: bool>(&self, work_list: &W, scratch: &mut W::Scratch) {
 		let backoff = Backoff::new();
 		while self.to_do.load(Relaxed) != 0 {
 			if (MT || self.mt_working.load(Relaxed))

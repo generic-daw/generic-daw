@@ -1,4 +1,4 @@
-use crate::{AutomationPatternId, OffsetPosition, daw_ctx::State};
+use crate::{AutomationPatternId, OffsetPosition, audio_processor::State};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AutomationClip {

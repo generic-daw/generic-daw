@@ -1,18 +1,18 @@
 use crate::{
 	AudioGraph, AutomationPattern, AutomationPatternAction, AutomationPatternId, Channel, Clip,
-	Event, Export, MidiPattern, MidiPatternAction, MidiPatternId, MusicalTime, Node, NodeId,
-	PanMode, PluginId, Position, Sample, SampleId,
-	clap_host::{AudioProcessor, ClapId},
-	resampler::Resampler,
+	Event, MidiPattern, MidiPatternAction, MidiPatternId, MusicalTime, Node, NodeId, PanMode,
+	PluginId, Position, Sample, SampleId, clap_host::ClapId, resampler::Resampler,
 };
+use hound::WavWriter;
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, PushError, RingBuffer};
 use std::{
 	collections::HashMap,
 	num::NonZero,
+	path::Path,
 	time::{Duration, Instant},
 };
-use utils::{NoDebug, include_f32s, unique_id};
+use utils::{NoDebug, boxed_slice, include_f32s, unique_id};
 
 unique_id!(version);
 
@@ -51,8 +51,10 @@ pub enum Message {
 	RequestUpdate,
 	ReturnUpdate(Vec<Update>),
 
-	RequestExport(oneshot::Sender<Export>),
-	ReturnExport(Box<Export>),
+	RequestExport(
+		oneshot::Sender<AudioProcessor>,
+		oneshot::Receiver<AudioProcessor>,
+	),
 }
 
 const _: () = assert!(size_of::<Message>() == 56);
@@ -70,7 +72,7 @@ pub enum NodeAction {
 	ChannelVolumeChanged(f32),
 	ChannelPanChanged(PanMode),
 
-	PluginLoad(PluginId, Box<AudioProcessor<Event>>),
+	PluginLoad(PluginId, Box<clap_host::AudioProcessor<Event>>),
 	PluginRemove(usize),
 	PluginMoveTo(usize, usize),
 	PluginToggleEnabled(usize),
@@ -131,9 +133,9 @@ pub struct State {
 	pub automation_patterns: HashMap<AutomationPatternId, AutomationPattern>,
 }
 
-pub struct DawCtx {
+#[derive(Debug)]
+pub struct AudioProcessor {
 	audio_graph: AudioGraph,
-	state: State,
 	producer: Producer<Batch>,
 	consumer: Consumer<Message>,
 	on_bar_click: NoDebug<Box<[f32]>>,
@@ -143,8 +145,8 @@ pub struct DawCtx {
 	update_buffers: Vec<Vec<Update>>,
 }
 
-impl DawCtx {
-	pub fn create(transport: Transport) -> (Self, NodeId, Producer<Message>, Consumer<Batch>) {
+impl AudioProcessor {
+	pub fn create(transport: Transport) -> (Callback, NodeId, Producer<Message>, Consumer<Batch>) {
 		let (r_producer, consumer) = RingBuffer::new(transport.frames.get() as usize);
 		let (producer, r_consumer) = RingBuffer::new(transport.frames.get() as usize);
 
@@ -164,14 +166,17 @@ impl DawCtx {
 		.unwrap();
 		off_bar_click.process(&OFF_BAR_CLICK);
 
-		let daw_ctx = Self {
-			audio_graph: AudioGraph::new(Channel::default(), transport.frames),
-			state: State {
-				transport,
-				samples: HashMap::new(),
-				midi_patterns: HashMap::new(),
-				automation_patterns: HashMap::new(),
-			},
+		let processor = Self {
+			audio_graph: AudioGraph::new(
+				State {
+					transport,
+					samples: HashMap::new(),
+					midi_patterns: HashMap::new(),
+					automation_patterns: HashMap::new(),
+				},
+				Channel::default(),
+				transport.frames,
+			),
 			producer,
 			consumer,
 			on_bar_click: on_bar_click.finish().into_boxed_slice().into(),
@@ -181,11 +186,12 @@ impl DawCtx {
 			update_buffers: Vec::new(),
 		};
 
-		let id = daw_ctx.audio_graph.root();
-		(daw_ctx, id, r_producer, r_consumer)
+		let id = processor.audio_graph.root();
+		(Callback::Processing(processor), id, r_producer, r_consumer)
 	}
 
-	fn recv_events(&mut self) {
+	#[must_use]
+	fn recv_events(&mut self) -> Option<(oneshot::Sender<Self>, oneshot::Receiver<Self>)> {
 		while let Ok(msg) = self.consumer.pop() {
 			trace!("{msg:?}");
 
@@ -194,41 +200,44 @@ impl DawCtx {
 					.audio_graph
 					.for_node_mut(node, move |node| node.apply(action)),
 				Message::MidiPatternAction(pattern, action) => {
-					self.state
+					self.state_mut()
 						.midi_patterns
 						.get_mut(&pattern)
 						.unwrap()
 						.apply(action);
 				}
 				Message::AutomationPatternAction(pattern, action) => {
-					self.state
+					self.state_mut()
 						.automation_patterns
 						.get_mut(&pattern)
 						.unwrap()
 						.apply(action);
 				}
 				Message::SampleAdd(sample) => {
-					let sample = self.state.samples.insert(sample.id, sample);
+					let sample = self.state_mut().samples.insert(sample.id, sample);
 					debug_assert!(sample.is_none());
 				}
 				Message::SampleRemove(sample) => {
-					let sample = self.state.samples.remove(&sample);
+					let sample = self.state_mut().samples.remove(&sample);
 					debug_assert!(sample.is_some());
 				}
 				Message::MidiPatternAdd(pattern) => {
-					let pattern = self.state.midi_patterns.insert(pattern.id, pattern);
+					let pattern = self.state_mut().midi_patterns.insert(pattern.id, pattern);
 					debug_assert!(pattern.is_none());
 				}
 				Message::MidiPatternRemove(pattern) => {
-					let pattern = self.state.midi_patterns.remove(&pattern);
+					let pattern = self.state_mut().midi_patterns.remove(&pattern);
 					debug_assert!(pattern.is_some());
 				}
 				Message::AutomationPatternAdd(pattern) => {
-					let pattern = self.state.automation_patterns.insert(pattern.id, pattern);
+					let pattern = self
+						.state_mut()
+						.automation_patterns
+						.insert(pattern.id, pattern);
 					debug_assert!(pattern.is_none());
 				}
 				Message::AutomationPatternRemove(pattern) => {
-					let pattern = self.state.automation_patterns.remove(&pattern);
+					let pattern = self.state_mut().automation_patterns.remove(&pattern);
 					debug_assert!(pattern.is_some());
 				}
 				Message::NodeAdd(node) => self.audio_graph.insert(*node),
@@ -240,45 +249,33 @@ impl DawCtx {
 				}
 				Message::NodeSetMix(from, to, mix) => self.audio_graph.set_mix(from, to, mix),
 				Message::NodeDisconnect(from, to) => self.audio_graph.disconnect(from, to),
-				Message::Bpm(bpm) => self.state.transport.bpm = bpm,
-				Message::Numerator(numerator) => self.state.transport.numerator = numerator,
-				Message::TogglePlayback => self.state.transport.playing ^= true,
-				Message::ToggleMetronome => self.state.transport.metronome ^= true,
+				Message::Bpm(bpm) => self.transport_mut().bpm = bpm,
+				Message::Numerator(numerator) => self.transport_mut().numerator = numerator,
+				Message::TogglePlayback => self.transport_mut().playing ^= true,
+				Message::ToggleMetronome => self.transport_mut().metronome ^= true,
 				Message::Sample(version, sample) => {
-					self.state.transport.version = version;
-					self.state.transport.sample = sample;
+					self.transport_mut().version = version;
+					self.transport_mut().sample = sample;
 				}
-				Message::LoopMarker(loop_marker) => self.state.transport.loop_marker = loop_marker,
+				Message::LoopMarker(loop_marker) => self.transport_mut().loop_marker = loop_marker,
 				Message::Reset => self.audio_graph.for_each_node_mut(Node::reset),
 				Message::RequestUpdate => self.needs_update = true,
 				Message::ReturnUpdate(update) => {
 					debug_assert!(update.is_empty());
 					self.update_buffers.push(update);
 				}
-				Message::RequestExport(sender) => {
-					debug_assert!(self.consumer.is_empty());
-					let mut audio_graph =
-						AudioGraph::new(Channel::default(), self.state.transport.frames);
-					std::mem::swap(&mut self.audio_graph, &mut audio_graph);
-
-					let state = State {
-						transport: self.state.transport,
-						samples: std::mem::take(&mut self.state.samples),
-						midi_patterns: std::mem::take(&mut self.state.midi_patterns),
-						automation_patterns: std::mem::take(&mut self.state.automation_patterns),
-					};
-
-					sender.send(Export { audio_graph, state }).unwrap();
-				}
-				Message::ReturnExport(export) => {
-					self.audio_graph = export.audio_graph;
-					self.state = export.state;
-				}
+				Message::RequestExport(sender, receiver) => return Some((sender, receiver)),
 			}
 		}
+
+		None
 	}
 
-	pub fn process(&mut self, mut buf: &mut [f32]) {
+	#[must_use]
+	pub fn process(
+		&mut self,
+		mut buf: &mut [f32],
+	) -> Option<(oneshot::Sender<Self>, oneshot::Receiver<Self>)> {
 		let start = Instant::now();
 		let frames = buf.len() / 2;
 
@@ -286,7 +283,9 @@ impl DawCtx {
 			.updates
 			.pop_if(|update| matches!(update, Update::Load(..)));
 
-		self.recv_events();
+		if let Some((sender, receiver)) = self.recv_events() {
+			return Some((sender, receiver));
+		}
 
 		if self.updates.capacity() == 0
 			&& let Some(updates) = self.update_buffers.pop()
@@ -295,31 +294,30 @@ impl DawCtx {
 		}
 
 		let loop_marker = self
-			.state
-			.transport
+			.transport()
 			.loop_marker
-			.map(|loop_marker| loop_marker.to_samples(&self.state.transport));
+			.map(|loop_marker| loop_marker.to_samples(self.transport()));
 
 		while !buf.is_empty() {
-			if self.state.transport.playing
+			if self.transport().playing
 				&& let Some((start, end)) = loop_marker
-				&& self.state.transport.sample == end
+				&& self.transport().sample == end
 			{
-				self.state.transport.sample = start;
+				self.transport_mut().sample = start;
 			}
 
 			let len = loop_marker
-				.and_then(|(_, end)| end.checked_sub(self.state.transport.sample))
+				.and_then(|(_, end)| end.checked_sub(self.transport().sample))
 				.map_or(buf.len(), |len| len.min(buf.len()));
 
-			self.audio_graph.process(&self.state, &mut buf[..len]);
+			self.audio_graph.process(&mut buf[..len]);
 			for s in &mut buf[..len] {
 				*s = s.clamp(-1.0, 1.0);
 			}
 			self.metronome(&mut buf[..len]);
 
-			if self.state.transport.playing {
-				self.state.transport.sample += len;
+			if self.transport().playing {
+				self.transport_mut().sample += len;
 			}
 
 			buf = &mut buf[len..];
@@ -340,12 +338,12 @@ impl DawCtx {
 		self.updates.push(Update::Load(duration, frames));
 
 		if std::mem::take(&mut self.needs_update)
-			|| self.state.transport.playing
+			|| self.transport().playing
 			|| self.updates.len() > 1
 		{
 			let batch = Batch {
-				version: self.state.transport.version,
-				sample: self.state.transport.sample,
+				version: self.transport().version,
+				sample: self.transport().sample,
 				updates: std::mem::take(&mut self.updates),
 				now,
 			};
@@ -356,32 +354,34 @@ impl DawCtx {
 				self.updates = updates;
 			}
 		}
+
+		None
 	}
 
 	fn metronome(&self, buf: &mut [f32]) {
-		if !self.state.transport.metronome || !self.state.transport.playing {
+		if !self.transport().metronome || !self.transport().playing {
 			return;
 		}
 
 		let delay = self.audio_graph.delay();
 
 		let mut start = MusicalTime::from_samples(
-			self.state.transport.sample.saturating_sub(delay),
-			&self.state.transport,
+			self.transport().sample.saturating_sub(delay),
+			self.transport(),
 		)
 		.beat_floor();
 		let end = MusicalTime::from_samples(
-			(self.state.transport.sample + buf.len()).saturating_sub(delay),
-			&self.state.transport,
+			(self.transport().sample + buf.len()).saturating_sub(delay),
+			self.transport(),
 		)
 		.beat_ceil();
 
 		while start < end {
-			let start_samples = start.to_samples(&self.state.transport) + delay;
+			let start_samples = start.to_samples(self.transport()) + delay;
 
 			let click = if start
 				.beat()
-				.is_multiple_of(self.state.transport.numerator.get().into())
+				.is_multiple_of(self.transport().numerator.get().into())
 			{
 				&**self.on_bar_click
 			} else {
@@ -390,8 +390,8 @@ impl DawCtx {
 
 			start += MusicalTime::BEAT;
 
-			let buf_idx = start_samples.saturating_sub(self.state.transport.sample);
-			let click_idx = self.state.transport.sample.saturating_sub(start_samples);
+			let buf_idx = start_samples.saturating_sub(self.transport().sample);
+			let click_idx = self.transport().sample.saturating_sub(start_samples);
 
 			if buf_idx >= buf.len() || click_idx >= click.len() {
 				continue;
@@ -401,6 +401,126 @@ impl DawCtx {
 				.iter_mut()
 				.zip(&click[click_idx..])
 				.for_each(|(buf, sample)| *buf += sample);
+		}
+	}
+
+	pub fn export(
+		&mut self,
+		path: impl AsRef<Path>,
+		len: MusicalTime,
+		mut progress_fn: impl FnMut(f32),
+	) {
+		let old = *self.transport();
+		self.audio_graph.for_each_node_mut(Node::reset);
+
+		self.transport_mut().sample = 0;
+		self.transport_mut().playing = true;
+
+		let mut writer = WavWriter::create(
+			path,
+			hound::WavSpec {
+				channels: 2,
+				sample_rate: self.transport().sample_rate.get(),
+				bits_per_sample: 32,
+				sample_format: hound::SampleFormat::Float,
+			},
+		)
+		.unwrap();
+
+		let buffer_size = 2 * self.transport().frames.get() as usize;
+		let mut buf = boxed_slice![0.0; buffer_size];
+
+		let mut updates = Vec::new();
+
+		let mut delay;
+		let mut end;
+
+		while {
+			delay = self.audio_graph.delay();
+			end = len.to_samples(self.transport()) + delay;
+			self.transport().sample < delay
+		} {
+			let diff = buffer_size.min(delay - self.transport().sample);
+
+			self.audio_graph.process(&mut buf[..diff]);
+			self.audio_graph
+				.for_each_node_mut(|node| node.collect_updates(&mut updates));
+			updates.clear();
+
+			self.transport_mut().sample += diff;
+			progress_fn(self.transport().sample as f32 / end as f32);
+		}
+
+		while {
+			delay = self.audio_graph.delay();
+			end = len.to_samples(self.transport()) + delay;
+			self.transport().sample < end
+		} {
+			let diff = buffer_size.min(end - self.transport().sample);
+
+			self.audio_graph.process(&mut buf[..diff]);
+			self.audio_graph
+				.for_each_node_mut(|node| node.collect_updates(&mut updates));
+			updates.clear();
+
+			for &s in &buf[..diff] {
+				writer.write_sample(s).unwrap();
+			}
+
+			self.transport_mut().sample += diff;
+			progress_fn(self.transport().sample as f32 / end as f32);
+		}
+
+		writer.finalize().unwrap();
+
+		*self.transport_mut() = old;
+		self.audio_graph.for_each_node_mut(Node::reset);
+	}
+
+	fn state(&self) -> &State {
+		self.audio_graph.state()
+	}
+
+	fn state_mut(&mut self) -> &mut State {
+		self.audio_graph.state_mut()
+	}
+
+	fn transport(&self) -> &Transport {
+		&self.state().transport
+	}
+
+	fn transport_mut(&mut self) -> &mut Transport {
+		&mut self.state_mut().transport
+	}
+}
+
+#[derive(Debug)]
+#[expect(clippy::large_enum_variant)]
+pub enum Callback {
+	Processing(AudioProcessor),
+	Exporting(oneshot::Receiver<AudioProcessor>),
+}
+
+impl Callback {
+	pub fn process(&mut self, buf: &mut [f32]) {
+		match self {
+			Self::Processing(processor) => {
+				if let Some((sender, receiver)) = processor.process(buf) {
+					let Self::Processing(processor) =
+						std::mem::replace(self, Self::Exporting(receiver))
+					else {
+						unreachable!();
+					};
+
+					sender.send(processor).unwrap();
+				}
+			}
+			Self::Exporting(receiver) => {
+				if let Ok(processor) = receiver.try_recv() {
+					*self = Self::Processing(processor);
+					self.process(buf);
+				}
+			}
 		}
 	}
 }

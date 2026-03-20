@@ -1,7 +1,7 @@
 use crate::{
 	AutomationClip, Event,
+	audio_processor::State,
 	clap_host::{ClapId, Cookie},
-	daw_ctx::State,
 };
 
 #[derive(Debug)]

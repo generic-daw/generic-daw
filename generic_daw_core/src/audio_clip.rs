@@ -1,4 +1,4 @@
-use crate::{OffsetPosition, SampleId, daw_ctx::State};
+use crate::{OffsetPosition, SampleId, audio_processor::State};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AudioClip {

@@ -15,7 +15,7 @@ use crate::{
 	},
 	widget::ALPHA_2_3,
 };
-use generic_daw_core::{Export, MusicalTime, clap_host::RenderMode};
+use generic_daw_core::{MusicalTime, clap_host::RenderMode};
 use iced::{
 	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
 	mouse::Interaction,
@@ -108,7 +108,7 @@ pub enum Message {
 	OpenedFile(Option<Arc<Path>>),
 
 	ExportFile(Arc<Path>),
-	ExportedFile(NoClone<Box<Export>>),
+	ExportedFile,
 
 	OpenConfigView,
 	CloseConfigView,
@@ -368,10 +368,7 @@ impl Daw {
 					return self.arrangement_view.arrangement.start_export(path);
 				}
 			}
-			Message::ExportedFile(NoClone(audio_graph)) => {
-				self.arrangement_view
-					.arrangement
-					.finish_export(*audio_graph);
+			Message::ExportedFile => {
 				self.arrangement_view
 					.clap_host
 					.set_render_mode(RenderMode::Realtime);

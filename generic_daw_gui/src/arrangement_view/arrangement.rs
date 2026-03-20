@@ -14,9 +14,9 @@ use crate::{
 	daw,
 };
 use generic_daw_core::{
-	Event, Export, Message, MidiKey, MidiNote, MidiPatternAction, MidiPatternId, MusicalTime,
-	NodeAction, NodeId, NodeImpl, PanMode, PluginId, Position, SampleId, Stream, StreamTrait as _,
-	Transport, Update, Version, build_output_stream,
+	Event, Message, MidiKey, MidiNote, MidiPatternAction, MidiPatternId, MusicalTime, NodeAction,
+	NodeId, NodeImpl, PanMode, PluginId, Position, SampleId, Stream, Transport, Update, Version,
+	build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
 use iced::Task;
@@ -42,7 +42,7 @@ pub struct Arrangement {
 	master_node_id: NodeId,
 
 	producer: Producer<Message>,
-	stream: NoDebug<Stream>,
+	_stream: NoDebug<Stream>,
 }
 
 #[derive(Clone, Debug)]
@@ -81,7 +81,7 @@ impl Arrangement {
 				master_node_id,
 
 				producer,
-				stream: stream.into(),
+				_stream: stream.into(),
 			},
 			Task::run(
 				poll_consumer(consumer, transport.sample_rate, Some(transport.frames)),
@@ -520,13 +520,12 @@ impl Arrangement {
 	}
 
 	pub fn start_export(&mut self, path: Arc<Path>) -> Task<daw::Message> {
-		let (sender, receiver) = oneshot::channel();
-		self.send(Message::RequestExport(sender));
-		let mut export = receiver.recv().unwrap();
-		self.stream.pause().unwrap();
+		let (a_sender, p_receiver) = oneshot::channel();
+		let (p_sender, a_receiver) = oneshot::channel();
+		self.send(Message::RequestExport(a_sender, a_receiver));
+		let mut processor = p_receiver.recv().unwrap();
 
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
-		let (export_sender, audio_graph_receiver) = oneshot::channel();
 
 		let len = self
 			.tracks()
@@ -537,21 +536,14 @@ impl Arrangement {
 
 		Task::batch([
 			Task::future(unblock(move || {
-				export.export(&path, len, |f| {
+				processor.export(&path, len, |f| {
 					progress_sender.try_send(daw::Message::Progress(f)).unwrap();
 				});
-				export_sender.send(export).unwrap();
+				p_sender.send(processor).unwrap();
+				daw::Message::ExportedFile
 			}))
 			.discard(),
-			Task::stream(progress_receiver).chain(Task::perform(
-				audio_graph_receiver.into_future(),
-				|export| daw::Message::ExportedFile(Box::new(export.unwrap()).into()),
-			)),
+			Task::stream(progress_receiver).chain(Task::done(daw::Message::ExportedFile)),
 		])
-	}
-
-	pub fn finish_export(&mut self, export: Export) {
-		self.send(Message::ReturnExport(Box::new(export)));
-		self.stream.play().unwrap();
 	}
 }

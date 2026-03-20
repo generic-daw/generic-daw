@@ -1,10 +1,10 @@
 use crate::{
-	Batch, DeviceDescription, DeviceId, Message, NodeId, Stream, StreamTrait as _, Transport,
-	daw_ctx::DawCtx,
+	Batch, DeviceDescription, DeviceId, Message, NodeId, Stream, Transport,
+	audio_processor::AudioProcessor,
 };
 use cpal::{
 	BufferSize, Device, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
-	traits::{DeviceTrait as _, HostTrait as _},
+	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
 };
 use log::{error, info};
 use rtrb::{Consumer, Producer, RingBuffer};
@@ -110,7 +110,7 @@ pub fn build_output_stream(
 	let buffer_len = frames.get() * channels.get();
 
 	let transport = Transport::new(sample_rate, frames);
-	let (mut ctx, master_node_id, producer, consumer) = DawCtx::create(transport);
+	let (mut processor, master_node_id, producer, consumer) = AudioProcessor::create(transport);
 
 	let mut stereo = boxed_slice![0.0; 2 * frames.get() as usize];
 
@@ -120,7 +120,7 @@ pub fn build_output_stream(
 			move |buf, _| {
 				for buf in buf.chunks_mut(buffer_len as usize) {
 					let frames = buf.len() / channels.get() as usize;
-					ctx.process(&mut stereo[..2 * frames]);
+					processor.process(&mut stereo[..2 * frames]);
 					from_stereo_to_other(buf, &stereo[..2 * frames], frames);
 				}
 			},
