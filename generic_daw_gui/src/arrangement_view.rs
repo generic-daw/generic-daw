@@ -42,8 +42,8 @@ use iced::{
 	padding, stream,
 	time::every,
 	widget::{
-		button, column, combo_box, container, mouse_area, opaque, row, rule, scrollable, slider,
-		text, vertical_slider,
+		button, center_x, column, combo_box, container, mouse_area, opaque, row, rule, scrollable,
+		slider, text, vertical_slider,
 	},
 	window,
 };
@@ -1553,9 +1553,8 @@ impl ArrangementView {
 						))
 					]
 					.spacing(5),
-					container(text(format_db(node.volume.abs())).line_height(1.0))
+					center_x(text(format_db(node.volume.abs())).line_height(1.0))
 						.style(bordered_box_with_radius(0))
-						.center_x(Fill)
 						.padding(2),
 					row![
 						container(PeakMeter::new(&node.peaks[0]).width(16.0))

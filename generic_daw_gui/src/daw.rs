@@ -22,8 +22,8 @@ use iced::{
 	padding,
 	time::every,
 	widget::{
-		button, center, column, container, mouse_area, opaque, pick_list, progress_bar, row,
-		scrollable, space, stack, text,
+		bottom_center, button, center, column, container, mouse_area, opaque, pick_list,
+		progress_bar, row, scrollable, space, stack, text,
 	},
 	window,
 };
@@ -146,7 +146,7 @@ pub struct Daw {
 	show_seconds: bool,
 
 	progress: Option<f32>,
-	scanning: Option<Arc<str>>,
+	status: Option<Arc<str>>,
 	missing_samples: Vec<(Arc<str>, oneshot::Sender<Feedback<Arc<Path>>>)>,
 
 	main_window_id: window::Id,
@@ -193,7 +193,7 @@ impl Daw {
 				show_seconds,
 
 				progress: None,
-				scanning: None,
+				status: None,
 				missing_samples: Vec::new(),
 
 				main_window_id,
@@ -330,8 +330,8 @@ impl Daw {
 				.map(move |response| Message::FoundSampleResponse(idx, response));
 			}
 			Message::Progress(progress) => self.progress = Some(progress),
-			Message::SetStatus(scanning) => self.scanning = Some(scanning),
-			Message::ClearStatus => self.scanning = None,
+			Message::SetStatus(scanning) => self.status = Some(scanning),
+			Message::ClearStatus => self.status = None,
 			Message::OpenFile(path) => {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
@@ -356,7 +356,7 @@ impl Daw {
 					self.state.write();
 				}
 				self.progress = None;
-				self.scanning = None;
+				self.status = None;
 				self.missing_samples.clear();
 			}
 			Message::ExportFile(path) => {
@@ -598,9 +598,7 @@ impl Daw {
 				vertical_split(
 					stack![
 						self.file_tree.view().map(Message::FileTree),
-						self.files_hovered.then(|| container(plus().size(40.0))
-							.center_x(Fill)
-							.center_y(Fill)
+						self.files_hovered.then(|| center(plus().size(40.0))
 							.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))))
 					],
 					self.arrangement_view.view().map(Message::Arrangement),
@@ -638,19 +636,11 @@ impl Daw {
 				)
 				.on_press(Message::CloseConfigView),
 			)),
-			self.progress.map(|progress| opaque(
-				mouse_area(
-					center(
-						column![
-							progress_bar(0.0..=1.0, progress).style(progress_bar_with_radius(
-								if self.missing_samples.is_empty() {
-									progress_bar::primary
-								} else {
-									progress_bar::danger
-								},
-								5
-							)),
-							self.scanning.as_deref().map(|scanning| container(
+			self.progress.map(|progress| mouse_area(
+				container(
+					column![
+						bottom_center(self.status.as_deref().map(|scanning| {
+							container(
 								row![
 									"scanning",
 									container(
@@ -665,18 +655,28 @@ impl Daw {
 								]
 								.spacing(10)
 								.width(Shrink)
-								.align_y(Center)
+								.align_y(Center),
 							)
 							.padding(10)
-							.style(bordered_box_with_radius(5))),
+							.style(bordered_box_with_radius(5))
+						})),
+						column![
+							progress_bar(0.0..=1.0, progress).style(progress_bar_with_radius(
+								if self.missing_samples.is_empty() {
+									progress_bar::primary
+								} else {
+									progress_bar::danger
+								},
+								5
+							)),
 							(!self.missing_samples.is_empty()).then(|| scrollable(
-								container(
-									column(
-										self.missing_samples
-											.iter()
-											.map(|(name, _)| &**name)
-											.enumerate()
-											.map(|(i, name)| {
+								column(
+									self.missing_samples
+										.iter()
+										.map(|(name, _)| &**name)
+										.enumerate()
+										.map(|(i, name)| {
+											container(
 												row![
 													"can't find sample",
 													container(
@@ -721,27 +721,31 @@ impl Daw {
 															))
 													]
 												]
-												.spacing(10)
 												.width(Shrink)
 												.align_y(Center)
-												.into()
-											}),
-									)
-									.spacing(10)
+												.spacing(10),
+											)
+											.padding(10)
+											.style(bordered_box_with_radius(5))
+											.into()
+										}),
 								)
-								.padding(10)
-								.style(bordered_box_with_radius(5))
+								.align_x(Center)
+								.spacing(10)
 							)
-							.spacing(0))
+							.spacing(10))
 						]
 						.align_x(Center)
-						.spacing(20)
-					)
-					.padding(50)
-					.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))),
+						.spacing(20),
+						space::vertical(),
+					]
+					.align_x(Center)
+					.spacing(20)
 				)
-				.interaction(Interaction::Progress),
-			))
+				.padding(50)
+				.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))),
+			)
+			.interaction(Interaction::Progress))
 		]
 		.into()
 	}

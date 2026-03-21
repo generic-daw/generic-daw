@@ -25,7 +25,7 @@ pub struct ChannelIndex {
 	pub(crate) index: u32,
 }
 
-#[derive(Message)]
+#[derive(Clone, Message)]
 pub struct Project {
 	#[prost(message, required)]
 	pub transport: Transport,
@@ -49,7 +49,7 @@ pub struct Transport {
 	pub loop_marker: Option<Position>,
 }
 
-#[derive(Message)]
+#[derive(Clone, Message)]
 pub struct Sample {
 	#[prost(string)]
 	pub name: String,
@@ -57,7 +57,7 @@ pub struct Sample {
 	pub crc: u32,
 }
 
-#[derive(Message)]
+#[derive(Clone, Message)]
 pub struct MidiPattern {
 	#[prost(message, repeated)]
 	pub notes: Vec<Note>,
@@ -75,7 +75,7 @@ pub struct Note {
 	pub position: Position,
 }
 
-#[derive(Message)]
+#[derive(Clone, Message)]
 pub struct Track {
 	#[prost(message, repeated)]
 	pub clips: Vec<OptionClip>,
@@ -83,7 +83,7 @@ pub struct Track {
 	pub channel: Channel,
 }
 
-#[derive(Message)]
+#[derive(Clone, Message)]
 pub struct Channel {
 	#[prost(message, repeated)]
 	pub connections: Vec<Connection>,
@@ -107,7 +107,7 @@ pub struct Connection {
 	pub mix: f32,
 }
 
-#[derive(Message)]
+#[derive(Clone, Message)]
 pub struct Plugin {
 	#[prost(bytes = "vec")]
 	pub id: Vec<u8>,

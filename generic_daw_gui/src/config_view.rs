@@ -399,7 +399,7 @@ impl ConfigView {
 									.style(button_with_radius(button::primary, 0))
 									.padding(5)
 									.on_press_maybe((device.sample_rate.get() != 44100).then_some(
-										Message::ChangedSampleRate(NonZero::new(44100).unwrap(),)
+										Message::ChangedSampleRate(NonZero::new(44100).unwrap())
 									))
 							]
 						]
