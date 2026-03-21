@@ -1,7 +1,7 @@
 use crate::{Cookie, ParamInfoFlags, ParamRescanFlags, host::Host};
 use clack_extensions::{params::ParamInfoBuffer, state::HostStateImpl as _};
 use clack_host::prelude::*;
-use std::{mem::MaybeUninit, ops::RangeInclusive, sync::Arc};
+use std::{ops::RangeInclusive, sync::Arc};
 
 #[derive(Debug)]
 pub struct Param {
@@ -73,7 +73,7 @@ impl Param {
 				&mut plugin.plugin_handle(),
 				self.id,
 				self.value.into(),
-				&mut [MaybeUninit::zeroed(); 256],
+				&mut [0; 256],
 			) && let Ok(value_text) = str::from_utf8(value_text)
 			&& !value_text.is_empty()
 		{

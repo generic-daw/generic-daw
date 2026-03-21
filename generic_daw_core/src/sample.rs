@@ -1,4 +1,4 @@
-use crate::{MediaSource, resampler::Resampler};
+use crate::{MediaSource, Transport, resampler::Resampler};
 use std::{num::NonZero, sync::Arc};
 use symphonia::core::{
 	audio::SampleBuffer,
@@ -22,7 +22,7 @@ pub struct Sample {
 
 impl Sample {
 	#[must_use]
-	pub fn new(source: Box<dyn MediaSource>, sample_rate: NonZero<u32>) -> Option<Self> {
+	pub fn new(source: Box<dyn MediaSource>, transport: &Transport) -> Option<Self> {
 		let mut format = symphonia::default::get_probe()
 			.format(
 				&Hint::default(),
@@ -41,7 +41,7 @@ impl Sample {
 
 		let mut resampler = Resampler::new(
 			NonZero::new(track.codec_params.sample_rate?)?,
-			sample_rate,
+			transport.sample_rate,
 			NonZero::new(2).unwrap(),
 		)?
 		.trim_start(delay)

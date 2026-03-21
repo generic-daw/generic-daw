@@ -454,10 +454,10 @@ impl ArrangementView {
 						self.update(Message::AddAudioClip(sample.id, track, pos), config)
 					} else {
 						self.clips_loading += 1;
-						let sample_rate = self.arrangement.transport().sample_rate;
+						let transport = *self.arrangement.transport();
 						Task::future(unblock(move || {
 							Message::SampleLoaded(
-								SamplePair::new(path, sample_rate).map(Box::new).into(),
+								SamplePair::new(path, &transport).map(Box::new).into(),
 								track,
 								pos,
 							)

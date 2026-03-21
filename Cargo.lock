@@ -437,7 +437,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 [[package]]
 name = "clack-common"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#3dacc989da356a76aa341a9a2a48f77261b16cef"
+source = "git+https://github.com/prokopyl/clack.git#accc70115905d673232f5f24edaede098ca6671f"
 dependencies = [
  "bitflags 2.11.0",
  "clap-sys",
@@ -446,7 +446,7 @@ dependencies = [
 [[package]]
 name = "clack-extensions"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#3dacc989da356a76aa341a9a2a48f77261b16cef"
+source = "git+https://github.com/prokopyl/clack.git#accc70115905d673232f5f24edaede098ca6671f"
 dependencies = [
  "bitflags 2.11.0",
  "clack-common",
@@ -458,7 +458,7 @@ dependencies = [
 [[package]]
 name = "clack-host"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#3dacc989da356a76aa341a9a2a48f77261b16cef"
+source = "git+https://github.com/prokopyl/clack.git#accc70115905d673232f5f24edaede098ca6671f"
 dependencies = [
  "clack-common",
  "clap-sys",
@@ -1785,9 +1785,9 @@ dependencies = [
 
 [[package]]
 name = "lyon_tessellation"
-version = "1.0.19"
+version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05a35a7dd71b845ff317ce1834c4185506b79790294bde397df8d5c23031e357"
+checksum = "8e43b7e44161571868f5c931d12583592c223c5583eef86b08aa02b7048a3552"
 dependencies = [
  "float_next_after",
  "lyon_path",

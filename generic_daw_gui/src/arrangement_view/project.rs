@@ -273,70 +273,72 @@ impl Arrangement {
 
 		let mut samples = HashMap::new();
 
-		std::thread::scope(|s| {
-			let (done, receiver) = mpsc::channel();
+		let (done, receiver) = mpsc::channel();
 
-			for (idx, sample) in reader.iter_samples() {
-				let sample_rate = arrangement.transport().sample_rate;
-				let done = done.clone();
-				let path = paths.remove(&idx);
-				s.spawn(move || {
-					if let Some(path) = path
-						&& let Some(sample) = SamplePair::with_crc(path, sample_rate, sample.crc)
-					{
-						done.send((idx, Feedback::Use(sample))).unwrap();
-						return;
-					}
+		for (idx, sample) in reader.iter_samples() {
+			let done = done.clone();
+			let path = paths.remove(&idx);
+			let sample = sample.clone();
+			let transport = *arrangement.transport();
 
-					loop {
-						let (sender, receiver) = oneshot::channel();
+			std::thread::spawn(move || {
+				if let Some(path) = path
+					&& let Some(sample) = SamplePair::with_crc(path, &transport, sample.crc)
+				{
+					done.send((idx, Feedback::Use(Ok(sample)))).unwrap();
+					return;
+				}
 
-						daw.try_send(daw::Message::CantLoadSample(
+				loop {
+					let (sender, receiver) = oneshot::channel();
+
+					done.send((
+						idx,
+						Feedback::Use(Err(daw::Message::CantLoadSample(
 							sample.name.deref().into(),
 							sender.into(),
-						))
-						.unwrap();
+						))),
+					))
+					.unwrap();
 
-						let path = match receiver.recv() {
-							Ok(Feedback::Use(path)) => path,
-							Ok(Feedback::Ignore) => {
-								_ = done.send((idx, Feedback::Ignore));
-								return;
-							}
-							Ok(Feedback::Cancel) | Err(..) => {
-								_ = done.send((idx, Feedback::Cancel));
-								return;
-							}
-						};
-
-						if let Some(sample) = SamplePair::new(path, sample_rate) {
-							done.send((idx, Feedback::Use(sample))).unwrap();
+					let path = match receiver.recv() {
+						Ok(Feedback::Use(path)) => path,
+						Ok(Feedback::Ignore) => {
+							_ = done.send((idx, Feedback::Ignore));
 							return;
 						}
-					}
-				});
-			}
+						Ok(Feedback::Cancel) | Err(..) => {
+							_ = done.send((idx, Feedback::Cancel));
+							return;
+						}
+					};
 
-			drop(paths);
-			drop(done);
-
-			for (idx, sample) in receiver {
-				match sample {
-					Feedback::Use(sample) => {
-						let id = sample.gui.id;
-						arrangement.add_sample(sample);
-						samples.insert(idx, Feedback::Use(id));
+					if let Some(sample) = SamplePair::new(path, &transport) {
+						done.send((idx, Feedback::Use(Ok(sample)))).unwrap();
+						return;
 					}
-					Feedback::Ignore => _ = samples.insert(idx, Feedback::Ignore),
-					Feedback::Cancel => return None,
 				}
-				current_progress += progress_per_audio;
-				daw.try_send(daw::Message::Progress(current_progress))
-					.unwrap();
-			}
+			});
+		}
 
-			Some(())
-		})?;
+		drop(paths);
+		drop(done);
+
+		for (idx, sample) in receiver {
+			match sample {
+				Feedback::Use(Ok(sample)) => {
+					let id = sample.gui.id;
+					arrangement.add_sample(sample);
+					samples.insert(idx, Feedback::Use(id));
+				}
+				Feedback::Use(Err(msg)) => daw.try_send(msg).unwrap(),
+				Feedback::Ignore => _ = samples.insert(idx, Feedback::Ignore),
+				Feedback::Cancel => return None,
+			}
+			current_progress += progress_per_audio;
+			daw.try_send(daw::Message::Progress(current_progress))
+				.unwrap();
+		}
 
 		let mut midi_patterns = HashMap::new();
 		for (idx, pattern) in reader.iter_midi_patterns() {
