@@ -48,6 +48,10 @@ impl NodeImpl for Track {
 	fn delay(&self) -> usize {
 		self.channel.delay()
 	}
+
+	fn reset(&mut self) {
+		self.channel.reset();
+	}
 }
 
 impl Track {
@@ -62,10 +66,6 @@ impl Track {
 			NodeAction::ClipTrimEndTo(index, pos) => self.clips[index].position().trim_end_to(pos),
 			action => self.channel.apply(action),
 		}
-	}
-
-	pub fn reset(&mut self) {
-		self.channel.reset();
 	}
 
 	pub fn collect_updates(&mut self, updates: &mut Vec<Update>) {

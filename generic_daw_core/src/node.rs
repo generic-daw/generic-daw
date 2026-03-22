@@ -30,6 +30,13 @@ impl NodeImpl for Node {
 			Self::Track(node) => node.delay(),
 		}
 	}
+
+	fn reset(&mut self) {
+		match self {
+			Self::Channel(node) => node.reset(),
+			Self::Track(node) => node.reset(),
+		}
+	}
 }
 
 impl Node {
@@ -37,13 +44,6 @@ impl Node {
 		match self {
 			Self::Channel(node) => node.apply(action),
 			Self::Track(node) => node.apply(action),
-		}
-	}
-
-	pub fn reset(&mut self) {
-		match self {
-			Self::Channel(node) => node.reset(),
-			Self::Track(node) => node.reset(),
 		}
 	}
 

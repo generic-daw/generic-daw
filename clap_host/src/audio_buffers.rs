@@ -120,6 +120,14 @@ impl AudioBuffers {
 			.all(|f| f.abs() < f32::EPSILON)
 	}
 
+	pub fn flush(&mut self, buf: &mut [f32], mix_level: f32) {
+		self.delay_line.advance(buf);
+
+		for sample in buf {
+			*sample *= 1.0 - mix_level;
+		}
+	}
+
 	pub fn write_out(&mut self, buf: &mut [f32], mix_level: f32) {
 		self.steady_time += buf.len() as u64 / 2;
 
@@ -159,6 +167,7 @@ impl AudioBuffers {
 
 	pub fn reset(&mut self) {
 		self.steady_time = 0;
+		self.delay_line.reset();
 	}
 
 	pub fn delay(&self) -> usize {

@@ -46,4 +46,9 @@ impl LowpassFeedbackComb {
 			*sample = self.tick(*sample);
 		}
 	}
+
+	pub fn reset(&mut self) {
+		self.filter_state = 0.0;
+		self.delay_line.reset();
+	}
 }

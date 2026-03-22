@@ -105,6 +105,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 	pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32) {
 		let Some(processor) = &mut self.processor else {
+			self.audio_buffers.flush(audio, mix_level);
 			return;
 		};
 
@@ -112,7 +113,9 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			&& events.is_empty()
 			&& audio.iter().all(|f| f.abs() < f32::EPSILON)
 		{
-			return self.flush(events);
+			self.audio_buffers.flush(audio, mix_level);
+			self.flush(events);
+			return;
 		}
 
 		match processor.ensure_processing_started() {
@@ -134,7 +137,9 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 					Ok(ProcessStatus::Sleep) => true,
 					Err(err) => {
 						warn!("{}: {err}", &self.descriptor);
-						false
+						self.audio_buffers.flush(audio, mix_level);
+						self.flush(events);
+						return;
 					}
 				} {
 					processor.ensure_processing_stopped();
@@ -148,6 +153,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			}
 			Err(err) => {
 				warn!("{}: {err}", self.descriptor);
+				self.audio_buffers.flush(audio, mix_level);
 				self.flush(events);
 			}
 		}

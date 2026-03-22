@@ -207,4 +207,11 @@ impl Biquad {
 			*sample = self.tick(*sample);
 		}
 	}
+
+	pub fn reset(&mut self) {
+		self.x1 = 0.0;
+		self.x2 = 0.0;
+		self.y1 = 0.0;
+		self.y2 = 0.0;
+	}
 }

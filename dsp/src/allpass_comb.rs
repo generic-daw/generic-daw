@@ -34,4 +34,8 @@ impl AllpassComb {
 			*sample = self.tick(*sample);
 		}
 	}
+
+	pub fn reset(&mut self) {
+		self.delay_line.reset();
+	}
 }

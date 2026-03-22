@@ -31,26 +31,28 @@ pub struct AudioGraph<Node: NodeImpl> {
 	pool: Option<NoDebug<ThreadPool<Self>>>,
 	queue: ArrayQueue<NodeId>,
 	root: NodeId,
-	frames: NonZero<u32>,
-	len: usize,
+	max_frames: NonZero<u32>,
+	curr_len: usize,
+	needs_reset: bool,
 }
 
 impl<Node: NodeImpl> AudioGraph<Node> {
 	#[must_use]
-	pub fn new(state: Node::State, root: impl Into<Node>, frames: NonZero<u32>) -> Self {
+	pub fn new(state: Node::State, root: impl Into<Node>, max_frames: NonZero<u32>) -> Self {
 		let root = root.into();
 
 		let mut this = Self {
 			state,
 			graph: HashMap::new(),
 			pool: Some(
-				ThreadPool::new_with_scratch(|| boxed_slice![0.0; 2 * frames.get() as usize])
+				ThreadPool::new_with_scratch(|| boxed_slice![0.0; 2 * max_frames.get() as usize])
 					.into(),
 			),
 			queue: ArrayQueue::new(4),
 			root: root.id(),
-			frames,
-			len: 0,
+			max_frames,
+			curr_len: 0,
+			needs_reset: false,
 		};
 
 		this.insert(root);
@@ -58,20 +60,24 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		this
 	}
 
-	pub fn process(&mut self, buf: &mut [f32]) {
-		self.len = buf.len();
+	pub fn process(&mut self, audio: &mut [f32]) {
+		debug_assert!(audio.len() <= 2 * self.max_frames.get() as usize);
 
-		for (id, entry) in &mut self.graph {
+		for (&id, entry) in &mut self.graph {
 			let indegree = entry.buffers().incoming.len().cast_signed();
 			*entry.indegree.get_mut() = indegree - 1;
 			if indegree == 0 {
-				self.queue.push(*id).unwrap();
+				self.queue.push(id).unwrap();
 			}
 		}
+
+		self.curr_len = audio.len();
 
 		let mut pool = self.pool.take().unwrap();
 		pool.run(self, self.graph.len());
 		self.pool = Some(pool);
+
+		self.needs_reset = false;
 
 		if cfg!(debug_assertions) {
 			for entry in self.graph.values_mut() {
@@ -79,7 +85,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			}
 		}
 
-		buf.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..buf.len()]);
+		audio.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..audio.len()]);
 	}
 
 	#[expect(clippy::significant_drop_tightening)]
@@ -88,10 +94,21 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 		debug_assert_eq!(entry.indegree.load(Relaxed), -1);
 
+		let mut node = entry.node_uncontended();
+
 		let mut buffers_lock = entry.write_buffers_uncontended();
 		let buffers = &mut *buffers_lock;
 
-		buffers.audio[..self.len].fill(0.0);
+		if self.needs_reset {
+			node.reset();
+
+			for Incoming { delay, events, .. } in buffers.incoming.values_mut() {
+				delay.reset();
+				events.clear();
+			}
+		}
+
+		buffers.audio[..self.curr_len].fill(0.0);
 		buffers.events.clear();
 
 		let max_delay = buffers
@@ -108,16 +125,16 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			delay.resize(delay_diff);
 
 			let audio = if delay_diff == 0 {
-				&dep_buffers.audio[..self.len]
+				&dep_buffers.audio[..self.curr_len]
 			} else {
-				scratch[..self.len].copy_from_slice(&dep_buffers.audio[..self.len]);
-				delay.advance(&mut scratch[..self.len]);
-				&scratch[..self.len]
+				scratch[..self.curr_len].copy_from_slice(&dep_buffers.audio[..self.curr_len]);
+				delay.advance(&mut scratch[..self.curr_len]);
+				&scratch[..self.curr_len]
 			};
 
 			audio
 				.iter()
-				.zip(&mut buffers.audio[..self.len])
+				.zip(&mut buffers.audio[..self.curr_len])
 				.for_each(|(&sample, buf)| *buf += *mix * sample);
 
 			events.extend(
@@ -129,17 +146,15 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 			buffers.events.extend(events.extract_if(.., |e| {
 				e.time()
-					.checked_sub(self.len)
+					.checked_sub(self.curr_len)
 					.map(|time| *e = e.at(time))
 					.is_none()
 			}));
 		}
 
-		let mut node = entry.node_uncontended();
-
 		node.process(
 			&self.state,
-			&mut buffers.audio[..self.len],
+			&mut buffers.audio[..self.curr_len],
 			&mut buffers.events,
 		);
 		entry.delay.store(node.delay() + max_delay, Relaxed);
@@ -161,6 +176,10 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		}
 
 		inline
+	}
+
+	pub fn reset(&mut self) {
+		self.needs_reset = true;
 	}
 
 	pub fn state(&self) -> &Node::State {
@@ -239,7 +258,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		if let Some(entry) = self.graph.get_mut(&id) {
 			*entry.node() = node;
 		} else {
-			self.graph.insert(id, Entry::new(node, self.frames));
+			self.graph.insert(id, Entry::new(node, self.max_frames));
 			if self.queue.capacity() < self.graph.len() {
 				self.queue = ArrayQueue::new(2 * self.queue.capacity());
 			}

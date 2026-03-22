@@ -71,4 +71,9 @@ impl DelayLine {
 
 		self.buf.resize(len, 0.0);
 	}
+
+	pub fn reset(&mut self) {
+		self.head = 0;
+		self.buf.fill(0.0);
+	}
 }

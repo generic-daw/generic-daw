@@ -150,6 +150,12 @@ impl NodeImpl for Channel {
 			0
 		}
 	}
+
+	fn reset(&mut self) {
+		for plugin in &mut self.plugins {
+			plugin.processor.reset();
+		}
+	}
 }
 
 impl Channel {
@@ -165,12 +171,6 @@ impl Channel {
 			NodeAction::PluginToggleEnabled(index) => self.plugins[index].enabled ^= true,
 			NodeAction::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
 			_ => panic!(),
-		}
-	}
-
-	pub fn reset(&mut self) {
-		for plugin in &mut self.plugins {
-			plugin.processor.reset();
 		}
 	}
 

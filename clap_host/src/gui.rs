@@ -17,9 +17,9 @@ impl Gui {
 		plugin
 			.access_shared_handler(|s| s.ext.gui.get().copied())
 			.map_or(Self::None, |ext| {
-				if let Some(config) = ext.get_preferred_api(&mut plugin.plugin_handle()) {
-					debug_assert_eq!(config.api_type, API_TYPE);
-
+				if let Some(config) = ext.get_preferred_api(&mut plugin.plugin_handle())
+					&& config.api_type == API_TYPE
+				{
 					return if config.is_floating {
 						Self::Floating
 					} else {

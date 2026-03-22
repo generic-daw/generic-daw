@@ -258,7 +258,7 @@ impl AudioProcessor {
 					self.transport_mut().sample = sample;
 				}
 				Message::LoopMarker(loop_marker) => self.transport_mut().loop_marker = loop_marker,
-				Message::Reset => self.audio_graph.for_each_node_mut(Node::reset),
+				Message::Reset => self.audio_graph.reset(),
 				Message::RequestUpdate => self.needs_update = true,
 				Message::ReturnUpdate(update) => {
 					debug_assert!(update.is_empty());
@@ -411,7 +411,7 @@ impl AudioProcessor {
 		mut progress_fn: impl FnMut(f32),
 	) {
 		let old = *self.transport();
-		self.audio_graph.for_each_node_mut(Node::reset);
+		self.audio_graph.reset();
 
 		self.transport_mut().sample = 0;
 		self.transport_mut().playing = true;
@@ -474,7 +474,7 @@ impl AudioProcessor {
 		writer.finalize().unwrap();
 
 		*self.transport_mut() = old;
-		self.audio_graph.for_each_node_mut(Node::reset);
+		self.audio_graph.reset();
 	}
 
 	fn state(&self) -> &State {
