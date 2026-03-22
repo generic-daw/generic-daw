@@ -519,6 +519,8 @@ impl Callback {
 				if let Ok(processor) = receiver.try_recv() {
 					*self = Self::Processing(processor);
 					self.process(buf);
+				} else {
+					buf.fill(0.0);
 				}
 			}
 		}
