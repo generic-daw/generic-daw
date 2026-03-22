@@ -11,6 +11,7 @@ pub struct Sample {
 	pub path: Arc<Path>,
 	pub samples: NoDebug<Arc<[f32]>>,
 	pub crc: u32,
+	pub len: u64,
 	pub refs: usize,
 }
 
@@ -22,11 +23,20 @@ pub struct SamplePair {
 
 impl SamplePair {
 	pub fn new(path: Arc<Path>, transport: &Transport) -> Option<Self> {
-		let crc = crc(File::open(&path).ok()?);
-		Self::with_crc(path, transport, crc)
+		Self::with_crc_and_len(
+			path.clone(),
+			transport,
+			crc(File::open(&path).ok()?),
+			std::fs::metadata(path).ok()?.len(),
+		)
 	}
 
-	pub fn with_crc(path: Arc<Path>, transport: &Transport, crc: u32) -> Option<Self> {
+	pub fn with_crc_and_len(
+		path: Arc<Path>,
+		transport: &Transport,
+		crc: u32,
+		len: u64,
+	) -> Option<Self> {
 		let name = path.file_name()?.to_str()?.into();
 		let core = generic_daw_core::Sample::new(Box::from(File::open(&path).ok()?), transport)?;
 		let gui = Sample {
@@ -36,6 +46,7 @@ impl SamplePair {
 			name,
 			samples: core.samples.clone(),
 			crc,
+			len,
 			refs: 0,
 		};
 		Some(Self { gui, core })

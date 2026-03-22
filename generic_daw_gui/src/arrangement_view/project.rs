@@ -53,7 +53,10 @@ impl Arrangement {
 
 		let mut samples = HashMap::new();
 		for sample in self.samples().values() {
-			samples.insert(sample.id, writer.push_sample(&sample.name, sample.crc));
+			samples.insert(
+				sample.id,
+				writer.push_sample(&sample.name, sample.crc, sample.len),
+			);
 		}
 
 		let mut midi_patterns = HashMap::new();
@@ -227,13 +230,15 @@ impl Arrangement {
 			)
 		}));
 
-		let samples = reader
-			.iter_samples()
-			.map(|(idx, audio)| (&*audio.name, (idx, audio.crc)))
-			.fold(HashMap::<_, Vec<_>>::new(), |mut acc, (k, v)| {
-				acc.entry(k).or_default().push(v);
-				acc
-			});
+		let mut samples = HashMap::<_, HashMap<_, HashMap<_, _>>>::new();
+		for (idx, sample) in reader.iter_samples() {
+			samples
+				.entry(&*sample.name)
+				.or_default()
+				.entry(sample.len)
+				.or_default()
+				.insert(sample.crc, idx);
+		}
 
 		let mut current_progress = 0.0;
 		let progress_per_audio = (reader.iter_samples().count() as f32).recip();
@@ -250,20 +255,20 @@ impl Arrangement {
 				path.file_name()
 					.and_then(|name| name.to_str())
 					.filter(|name| samples.contains_key(name))
+					.and_then(|name| std::fs::metadata(&path).ok().map(|meta| (name, meta.len())))
+					.filter(|(name, len)| samples[name].contains_key(len))
 					.filter(|_| seen.insert(path.clone()))
-					.inspect(|_| {
+					.and_then(|(name, len)| {
 						daw.try_send(daw::Message::SetStatus(path.to_string_lossy().into()))
 							.unwrap();
-					})
-					.and_then(|name| {
-						let file = File::open(&path).ok().map(|file| (name, crc(file)));
+						let crc = File::open(&path).ok().map(crc);
 						daw.try_send(daw::Message::ClearStatus).unwrap();
-						file
+						crc.map(|crc| (name, crc, len))
 					})
-					.and_then(|(name, crc)| {
-						samples[name].iter().find_map(|&(index, c)| {
-							(c == crc).then(|| (index, path.as_path().into()))
-						})
+					.and_then(|(name, crc, len)| {
+						samples[name][&len]
+							.get(&crc)
+							.map(|&idx| (idx, path.as_path().into()))
 					})
 			})
 			.collect::<HashMap<_, _>>();
@@ -283,7 +288,8 @@ impl Arrangement {
 
 			std::thread::spawn(move || {
 				if let Some(path) = path
-					&& let Some(sample) = SamplePair::with_crc(path, &transport, sample.crc)
+					&& let Some(sample) =
+						SamplePair::with_crc_and_len(path, &transport, sample.crc, sample.len)
 				{
 					done.send((idx, Feedback::Use(Ok(sample)))).unwrap();
 					return;

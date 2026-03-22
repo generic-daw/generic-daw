@@ -55,6 +55,8 @@ pub struct Sample {
 	pub name: String,
 	#[prost(uint32)]
 	pub crc: u32,
+	#[prost(uint64)]
+	pub len: u64,
 }
 
 #[derive(Clone, Message)]

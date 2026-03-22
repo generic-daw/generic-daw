@@ -15,10 +15,11 @@ impl Writer {
 	}
 
 	#[must_use]
-	pub fn push_sample(&mut self, name: impl AsRef<str>, crc: u32) -> proto::SampleIndex {
+	pub fn push_sample(&mut self, name: impl AsRef<str>, crc: u32, len: u64) -> proto::SampleIndex {
 		self.0.samples.push(proto::Sample {
 			name: name.as_ref().to_owned(),
 			crc,
+			len,
 		});
 
 		proto::SampleIndex {
