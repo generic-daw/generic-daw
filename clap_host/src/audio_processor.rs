@@ -20,7 +20,6 @@ pub enum AudioThreadMessage<Event: EventImpl> {
 pub struct AudioProcessor<Event: EventImpl> {
 	processor: Option<NoDebug<PluginAudioProcessor<Host>>>,
 	descriptor: PluginDescriptor,
-	steady_time: u64,
 	audio_buffers: AudioBuffers,
 	event_buffers: EventBuffers,
 	consumer: Consumer<AudioThreadMessage<Event>>,
@@ -39,7 +38,6 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		Self {
 			processor: None,
 			descriptor,
-			steady_time: 0,
 			audio_buffers,
 			event_buffers,
 			consumer,
@@ -77,6 +75,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 				if std::mem::take(&mut self.needs_reset) {
 					processor.reset();
+					self.audio_buffers.reset();
 				}
 			}
 
@@ -118,45 +117,34 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 		match processor.ensure_processing_started() {
 			Ok(started_processor) => {
-				self.audio_buffers.read_in(audio);
+				let (input_audio, mut output_audio, steady_time) =
+					self.audio_buffers.read_in(audio);
 				self.event_buffers.read_in(events);
 
-				let (input_audio, mut output_audio) = self.audio_buffers.prepare(audio.len() / 2);
-
-				let status = started_processor.process(
+				if match started_processor.process(
 					&input_audio,
 					&mut output_audio,
 					&self.event_buffers.input_events.as_input(),
 					&mut self.event_buffers.output_events.as_output(),
-					Some(self.steady_time),
+					Some(steady_time),
 					None,
-				);
-
-				self.steady_time += u64::from(input_audio.min_available_frames_with(&output_audio));
+				) {
+					Ok(ProcessStatus::Continue | ProcessStatus::Tail) => false,
+					Ok(ProcessStatus::ContinueIfNotQuiet) => self.audio_buffers.are_outputs_quiet(),
+					Ok(ProcessStatus::Sleep) => true,
+					Err(err) => {
+						warn!("{}: {err}", &self.descriptor);
+						false
+					}
+				} {
+					processor.ensure_processing_stopped();
+					processor.access_shared_handler(|s| s.needs_process.store(false, Relaxed));
+				}
 
 				self.audio_buffers.write_out(audio, mix_level);
 				self.event_buffers.write_out(events);
 
-				let processing = match status {
-					Ok(ProcessStatus::Continue | ProcessStatus::Tail) => true,
-					Ok(ProcessStatus::ContinueIfNotQuiet) => {
-						audio.iter().any(|f| f.abs() >= f32::EPSILON)
-					}
-					Ok(ProcessStatus::Sleep) => false,
-					Err(err) => {
-						warn!("{}: {err}", &self.descriptor);
-						true
-					}
-				};
-
-				if !processing {
-					processor.ensure_processing_stopped();
-				}
-
-				processor.access_shared_handler(|s| {
-					s.needs_flush.store(false, Relaxed);
-					s.needs_process.store(processing, Relaxed);
-				});
+				processor.access_shared_handler(|s| s.needs_flush.store(false, Relaxed));
 			}
 			Err(err) => {
 				warn!("{}: {err}", self.descriptor);
@@ -191,7 +179,6 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 	pub fn reset(&mut self) {
 		self.needs_reset = true;
-		self.steady_time = 0;
 	}
 
 	#[must_use]

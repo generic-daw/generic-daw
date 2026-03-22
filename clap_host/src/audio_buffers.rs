@@ -16,6 +16,7 @@ pub struct AudioBuffers {
 	input_buffers: NoDebug<Box<[Box<[f32]>]>>,
 	output_buffers: NoDebug<Box<[Box<[f32]>]>>,
 
+	steady_time: u64,
 	delay_line: DelayLine,
 }
 
@@ -52,67 +53,76 @@ impl AudioBuffers {
 			input_buffers,
 			output_buffers,
 
+			steady_time: 0,
 			delay_line: DelayLine::default(),
 		}
 	}
 
-	pub fn read_in(&mut self, buf: &[f32]) {
-		let Some(input_buffer) = self
+	pub fn read_in(&mut self, buf: &[f32]) -> (InputAudioBuffers<'_>, OutputAudioBuffers<'_>, u64) {
+		if let Some(input_buffer) = self
 			.input_buffers
 			.get_mut(self.input_config.main_port_index)
-		else {
-			return;
-		};
+		{
+			let n_channels = *self
+				.input_config
+				.port_channel_counts
+				.get(self.input_config.main_port_index)
+				.unwrap_or(&0);
 
-		let n_channels = *self
-			.input_config
-			.port_channel_counts
-			.get(self.input_config.main_port_index)
-			.unwrap_or(&0);
+			let buf = buf.as_chunks().0.iter();
 
-		let buf = buf.as_chunks().0.iter();
+			if n_channels == 1 {
+				buf.map(|[l, r]| l + r)
+					.zip(input_buffer)
+					.for_each(|(buf, sample)| *sample = buf);
+			} else if n_channels != 0 {
+				let (l, r) = input_buffer.split_at_mut(self.config.max_frames_count as usize);
 
-		if n_channels == 1 {
-			buf.map(|[l, r]| l + r)
-				.zip(input_buffer)
-				.for_each(|(buf, sample)| *sample = buf);
-		} else if n_channels != 0 {
-			let (l, r) = input_buffer.split_at_mut(self.config.max_frames_count as usize);
-
-			buf.zip(l.iter_mut().zip(r)).for_each(|(buf, (l, r))| {
-				*l = buf[0];
-				*r = buf[1];
-			});
+				buf.zip(l.iter_mut().zip(r)).for_each(|(buf, (l, r))| {
+					*l = buf[0];
+					*r = buf[1];
+				});
+			}
 		}
-	}
 
-	pub fn prepare(&mut self, frames: usize) -> (InputAudioBuffers<'_>, OutputAudioBuffers<'_>) {
-		(
-			self.input_ports
-				.with_input_buffers(self.input_buffers.iter_mut().map(|c| {
-					AudioPortBuffer {
-						latency: 0,
-						channels: AudioPortBufferType::f32_input_only(
-							c.chunks_exact_mut(self.config.max_frames_count as usize)
-								.map(|b| &mut b[..frames])
-								.map(InputChannel::variable),
-						),
-					}
-				})),
+		let input_audio = self
+			.input_ports
+			.with_input_buffers(self.input_buffers.iter_mut().map(|c| {
+				AudioPortBuffer {
+					latency: 0,
+					channels: AudioPortBufferType::f32_input_only(
+						c.chunks_exact_mut(self.config.max_frames_count as usize)
+							.map(|b| &mut b[..buf.len() / 2])
+							.map(InputChannel::variable),
+					),
+				}
+			}));
+
+		let output_audio =
 			self.output_ports
 				.with_output_buffers(self.output_buffers.iter_mut().map(|c| {
 					AudioPortBuffer {
 						latency: 0,
 						channels: AudioPortBufferType::f32_output_only(
 							c.chunks_exact_mut(self.config.max_frames_count as usize)
-								.map(|b| &mut b[..frames]),
+								.map(|b| &mut b[..buf.len() / 2]),
 						),
 					}
-				})),
-		)
+				}));
+
+		(input_audio, output_audio, self.steady_time)
+	}
+
+	pub fn are_outputs_quiet(&self) -> bool {
+		self.output_buffers
+			.iter()
+			.flatten()
+			.all(|f| f.abs() < f32::EPSILON)
 	}
 
 	pub fn write_out(&mut self, buf: &mut [f32], mix_level: f32) {
+		self.steady_time += buf.len() as u64 / 2;
+
 		self.delay_line.advance(buf);
 
 		let Some(output_buffer) = self.output_buffers.get(self.output_config.main_port_index)
@@ -145,6 +155,10 @@ impl AudioBuffers {
 
 	pub fn latency_changed(&mut self, latency: u32) {
 		self.delay_line.resize(2 * latency as usize);
+	}
+
+	pub fn reset(&mut self) {
+		self.steady_time = 0;
 	}
 
 	pub fn delay(&self) -> usize {
