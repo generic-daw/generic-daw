@@ -800,7 +800,7 @@ impl Daw {
 					modifiers,
 					repeat,
 					..
-				} => ArrangementView::keybinds(&key, modifiers, repeat)
+				} => ArrangementView::keybinds(&key, physical_key, modifiers, repeat)
 					.map(Message::Arrangement)
 					.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
 				_ => None,

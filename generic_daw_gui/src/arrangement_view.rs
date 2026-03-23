@@ -14,7 +14,7 @@ use crate::{
 		slider_secondary, slider_with_radius, split_style, sweeten_column_style,
 	},
 	widget::{
-		LINE_HEIGHT, TEXT_HEIGHT,
+		Delta, LINE_HEIGHT, TEXT_HEIGHT,
 		clip::Clip,
 		note::Note,
 		piano::Piano,
@@ -26,7 +26,7 @@ use crate::{
 };
 use audio_clip::AudioClip;
 use generic_daw_core::{
-	MidiNote, MidiPatternId, MusicalTime, NodeId, PanMode, Position, SampleId,
+	MidiKey, MidiNote, MidiPatternId, MusicalTime, NodeId, PanMode, Position, SampleId,
 	clap_host::{DEFAULT_CLAP_PATHS, HostInfo, Plugin, PluginDescriptor, get_installed_plugins},
 };
 use generic_daw_widget::{
@@ -176,6 +176,7 @@ pub enum Message {
 	Escape,
 	ArrowLeft,
 	ArrowRight,
+	Duplicate,
 
 	OnDrag(f32),
 	OnDragEnd,
@@ -826,6 +827,49 @@ impl ArrangementView {
 							self.arrangement.transport(),
 						),
 					);
+				}
+			},
+			Message::Duplicate => match self.tab {
+				Tab::Playlist => {
+					if let Some(delta) = self
+						.playlist_selection
+						.get_mut()
+						.primary
+						.iter()
+						.map(|&(track, clip)| {
+							self.arrangement.tracks()[track].clips[clip]
+								.position()
+								.position()
+						})
+						.reduce(|old, new| {
+							Position::new(old.start().min(new.start()), old.end().max(new.end()))
+						}) {
+						_ = self.handle_playlist_action(playlist::Action::Clone, config);
+						_ = self.handle_playlist_action(
+							playlist::Action::Drag(0, Delta::Positive(delta.len())),
+							config,
+						);
+					}
+				}
+				Tab::Mixer => {}
+				Tab::PianoRoll(clip) => {
+					if let Some(delta) = self
+						.piano_roll_selection
+						.get_mut()
+						.primary
+						.iter()
+						.map(|&note| {
+							self.arrangement.midi_patterns()[&clip.pattern].notes[note].position
+						})
+						.reduce(|old, new| {
+							Position::new(old.start().min(new.start()), old.end().max(new.end()))
+						}) {
+						self.handle_piano_roll_action(piano_roll::Action::Clone);
+						self.handle_piano_roll_action(piano_roll::Action::Drag(
+							Delta::Positive(MidiKey(0)),
+							Delta::Positive(delta.len()),
+						));
+					}
 				}
 			},
 			Message::OnDrag(split_at) => self.split_at = split_at.clamp(200.0, 400.0),
@@ -1729,6 +1773,7 @@ impl ArrangementView {
 
 	pub fn keybinds(
 		key: &keyboard::Key,
+		physical_key: keyboard::key::Physical,
 		modifiers: keyboard::Modifiers,
 		repeat: bool,
 	) -> Option<Message> {
@@ -1759,6 +1804,10 @@ impl ArrangementView {
 				) => Some(Message::Delete),
 				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => Some(Message::ArrowLeft),
 				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
+				_ => None,
+			},
+			(true, false, false, _) => match key.to_latin(physical_key)? {
+				'd' => Some(Message::Duplicate),
 				_ => None,
 			},
 			_ => None,
