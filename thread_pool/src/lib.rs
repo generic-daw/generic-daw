@@ -233,10 +233,12 @@ impl<W: WorkList> Shared<W> {
 				if MT {
 					self.mt_working.store(false, Relaxed);
 				}
-			} else if !MT && backoff.is_completed() {
+			} else if MT {
+				backoff.spin();
+			} else if backoff.is_completed() {
 				break;
 			} else {
-				backoff.spin();
+				backoff.snooze();
 			}
 		}
 	}
