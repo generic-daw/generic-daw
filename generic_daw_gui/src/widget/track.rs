@@ -148,45 +148,38 @@ impl<'a, Message> Track<'a, Message> {
 		}
 	}
 
-	pub(super) fn fill_layer(
-		&self,
-		start: usize,
-		rects: &mut Vec<Rectangle>,
-		tree: &Tree,
-		renderer: &mut Renderer,
-		theme: &Theme,
-		style: &Style,
+	pub(super) fn alloc_layers(
+		by_end: &mut Vec<(f32, usize)>,
+		by_layer: &mut Vec<(usize, f32)>,
 		layout: Layout<'_>,
-		cursor: Cursor,
 		viewport: &Rectangle,
-	) -> Option<usize>
-	where
-		Message: Clone,
-	{
-		rects.clear();
+	) -> Vec<Vec<usize>> {
+		by_end.clear();
+		by_layer.clear();
 
-		for (i, ((child, tree), layout)) in self
-			.clips
-			.iter()
-			.zip(&tree.children)
-			.zip(layout.children())
-			.enumerate()
-			.skip(start)
-		{
+		let mut result = Vec::<Vec<_>>::new();
+
+		for (i, layout) in layout.children().enumerate() {
 			let Some(bounds) = layout.bounds().intersection(viewport) else {
 				continue;
 			};
 
-			if rects.iter().any(|b| bounds.intersects(b)) {
-				return Some(i);
+			by_end.retain(|&(e, _)| e > bounds.x);
+			by_layer.retain(|&(_, e)| e > bounds.x);
+
+			let layer = by_layer.iter().map(|&(l, _)| l).max().map_or(0, |l| l + 1);
+
+			by_end.push((bounds.x + bounds.width, layer));
+			by_layer.push((layer, bounds.x + bounds.width));
+
+			if layer == result.len() {
+				result.push(Vec::new());
 			}
 
-			rects.push(bounds);
-
-			child.draw(tree, renderer, theme, style, layout, cursor, viewport);
+			result[layer].push(i);
 		}
 
-		None
+		result
 	}
 }
 

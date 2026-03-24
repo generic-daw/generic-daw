@@ -445,34 +445,31 @@ where
 			}
 		}
 
-		let rects = &mut vec![];
-		let mut starts = vec![Some(0); self.tracks.len()];
+		let by_end = &mut Vec::new();
+		let by_layer = &mut Vec::new();
 
-		loop {
-			let mut done = true;
+		let allocs = layout
+			.children()
+			.map(|layout| Track::<Message>::alloc_layers(by_end, by_layer, layout, viewport))
+			.collect::<Vec<_>>();
 
+		for i in 0..allocs.iter().map(Vec::len).max().unwrap_or_default() {
 			renderer.with_layer(Rectangle::INFINITE, |renderer| {
 				self.tracks
 					.iter()
 					.zip(&tree.children)
 					.zip(layout.children())
-					.zip(&mut starts)
-					.for_each(|(((child, tree), layout), start)| {
-						let Some(st) = *start else {
-							return;
-						};
-
-						done = false;
-
-						*start = child.fill_layer(
-							st, rects, tree, renderer, theme, style, layout, cursor, viewport,
-						);
+					.zip(&allocs)
+					.filter(|(_, alloc)| i < alloc.len())
+					.for_each(|(((child, tree), layout), alloc)| {
+						alloc[i]
+							.iter()
+							.map(|&i| ((&child.clips[i], &tree.children[i]), layout.child(i)))
+							.for_each(|((child, tree), layout)| {
+								child.draw(tree, renderer, theme, style, layout, cursor, viewport);
+							});
 					});
 			});
-
-			if done {
-				break;
-			}
 		}
 
 		if let Status::Selecting(start_track, end_track, start_pos, end_pos) =
