@@ -445,12 +445,11 @@ where
 			}
 		}
 
-		let by_end = &mut Vec::new();
-		let by_layer = &mut Vec::new();
+		let active = &mut Vec::new();
 
 		let allocs = layout
 			.children()
-			.map(|layout| Track::<Message>::alloc_layers(by_end, by_layer, layout, viewport))
+			.map(|layout| Track::<Message>::alloc_layers(active, layout, viewport))
 			.collect::<Vec<_>>();
 
 		for i in 0..allocs.iter().map(Vec::len).max().unwrap_or_default() {

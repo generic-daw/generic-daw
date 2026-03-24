@@ -149,13 +149,11 @@ impl<'a, Message> Track<'a, Message> {
 	}
 
 	pub(super) fn alloc_layers(
-		by_end: &mut Vec<(f32, usize)>,
-		by_layer: &mut Vec<(usize, f32)>,
+		active: &mut Vec<(usize, f32)>,
 		layout: Layout<'_>,
 		viewport: &Rectangle,
 	) -> Vec<Vec<usize>> {
-		by_end.clear();
-		by_layer.clear();
+		active.clear();
 
 		let mut result = Vec::<Vec<_>>::new();
 
@@ -164,13 +162,9 @@ impl<'a, Message> Track<'a, Message> {
 				continue;
 			};
 
-			by_end.retain(|&(e, _)| e > bounds.x);
-			by_layer.retain(|&(_, e)| e > bounds.x);
-
-			let layer = by_layer.iter().map(|&(l, _)| l).max().map_or(0, |l| l + 1);
-
-			by_end.push((bounds.x + bounds.width, layer));
-			by_layer.push((layer, bounds.x + bounds.width));
+			active.retain(|&(_, e)| e > bounds.x);
+			let layer = active.iter().map(|&(l, _)| l).max().map_or(0, |l| l + 1);
+			active.push((layer, bounds.x + bounds.width));
 
 			if layer == result.len() {
 				result.push(Vec::new());
