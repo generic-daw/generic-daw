@@ -1396,47 +1396,44 @@ impl ArrangementView {
 		let node = self.arrangement.node(self.selected_node);
 
 		Split::new(
-			mouse_area(
-				scrollable(
-					row(once(self.channel(self.arrangement.master(), "M"))
-						.chain(once(rule::vertical(1).into()))
-						.chain({
-							let mut iter = self
-								.arrangement
-								.tracks()
-								.iter()
-								.map(|track| self.arrangement.node(track.id))
-								.enumerate()
-								.map(|(i, node)| self.channel(node, format!("T{}", i + 1)))
-								.peekable();
+			scrollable(
+				row(once(self.channel(self.arrangement.master(), "M"))
+					.chain(once(rule::vertical(1).into()))
+					.chain({
+						let mut iter = self
+							.arrangement
+							.tracks()
+							.iter()
+							.map(|track| self.arrangement.node(track.id))
+							.enumerate()
+							.map(|(i, node)| self.channel(node, format!("T{}", i + 1)))
+							.peekable();
 
-							let one = iter.peek().map(|_| rule::vertical(1).into());
-							iter.chain(one)
-						})
-						.chain(
-							self.arrangement
-								.channels()
-								.enumerate()
-								.map(|(i, node)| self.channel(node, format!("C{}", i + 1))),
-						)
-						.chain(once(
-							button(plus().size(LINE_HEIGHT + 6.0))
-								.padding(5)
-								.style(button_with_radius(button::primary, f32::INFINITY))
-								.on_press(Message::ChannelAdd)
-								.into(),
-						)))
-					.align_y(Center)
-					.spacing(5),
-				)
-				.direction(scrollable::Direction::Horizontal(
-					scrollable::Scrollbar::default(),
-				))
-				.spacing(5)
-				.style(scrollable_style)
-				.width(Fill),
+						let one = iter.peek().map(|_| rule::vertical(1).into());
+						iter.chain(one)
+					})
+					.chain(
+						self.arrangement
+							.channels()
+							.enumerate()
+							.map(|(i, node)| self.channel(node, format!("C{}", i + 1))),
+					)
+					.chain(once(
+						button(plus().size(LINE_HEIGHT + 6.0))
+							.padding(5)
+							.style(button_with_radius(button::primary, f32::INFINITY))
+							.on_press(Message::ChannelAdd)
+							.into(),
+					)))
+				.align_y(Center)
+				.spacing(5),
 			)
-			.on_press(Message::UnselectAll),
+			.direction(scrollable::Direction::Horizontal(
+				scrollable::Scrollbar::default(),
+			))
+			.spacing(5)
+			.style(scrollable_style)
+			.width(Fill),
 			column![
 				combo_box(&self.plugins, "Add Plugin", None, move |descriptor| {
 					Message::PluginLoad(self.selected_node, descriptor, true)
