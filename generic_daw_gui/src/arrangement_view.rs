@@ -61,7 +61,7 @@ use std::{
 	cmp::{Ordering, Reverse},
 	collections::HashMap,
 	io::Read,
-	iter::once,
+	iter::{once, repeat},
 	num::NonZero,
 	path::Path,
 	sync::{Arc, LazyLock},
@@ -172,11 +172,12 @@ pub enum Message {
 	Pan(Vector, f32, f32),
 	Zoom(Vector, Point, f32, f32),
 
-	Delete,
-	Escape,
 	ArrowLeft,
 	ArrowRight,
+	SelectAll,
+	UnselectAll,
 	Duplicate,
+	Delete,
 
 	OnDrag(f32),
 	OnDragEnd,
@@ -606,7 +607,7 @@ impl ArrangementView {
 					clip.position.move_to(pos);
 					self.arrangement.add_clip(track, clip);
 
-					self.recording.as_mut().unwrap().1 = node;
+					*r_node = node;
 				} else {
 					let (recording, task) = Recording::create(
 						path,
@@ -707,38 +708,6 @@ impl ArrangementView {
 
 				return self.update(Message::Pan(pos_diff, height, visible), config);
 			}
-			Message::Delete => match self.tab {
-				Tab::Playlist => {
-					self.piano_roll_selection.get_mut().status = piano_roll::Status::None;
-					return self.handle_playlist_action(playlist::Action::Delete, config);
-				}
-				Tab::Mixer => {
-					return match self.arrangement.node(self.selected_node).ty {
-						NodeType::Master => Task::none().into(),
-						NodeType::Channel => {
-							self.update(Message::ChannelRemove(self.selected_node), config)
-						}
-						NodeType::Track => {
-							self.update(Message::TrackRemove(self.selected_node), config)
-						}
-					};
-				}
-				Tab::PianoRoll(..) => {
-					self.playlist_selection.get_mut().status = playlist::Status::None;
-					self.handle_piano_roll_action(piano_roll::Action::Delete);
-				}
-			},
-			Message::Escape => match self.tab {
-				Tab::Playlist => {
-					self.piano_roll_selection.get_mut().status = piano_roll::Status::None;
-					self.playlist_selection.get_mut().clear();
-				}
-				Tab::Mixer => {}
-				Tab::PianoRoll(..) => {
-					self.playlist_selection.get_mut().status = playlist::Status::None;
-					self.piano_roll_selection.get_mut().clear();
-				}
-			},
 			Message::ArrowLeft => match self.tab {
 				Tab::Playlist => {
 					self.arrangement.seek_to(
@@ -829,6 +798,31 @@ impl ArrangementView {
 					);
 				}
 			},
+			Message::SelectAll => match self.tab {
+				Tab::Playlist => {
+					self.playlist_selection.get_mut().clear();
+					self.playlist_selection.get_mut().primary.extend(
+						self.arrangement
+							.tracks()
+							.iter()
+							.enumerate()
+							.flat_map(|(i, t)| repeat(i).zip(0..t.clips.len())),
+					);
+				}
+				Tab::Mixer => {}
+				Tab::PianoRoll(clip) => {
+					self.piano_roll_selection.get_mut().clear();
+					self.piano_roll_selection
+						.get_mut()
+						.primary
+						.extend(0..self.arrangement.midi_patterns()[&clip.pattern].notes.len());
+				}
+			},
+			Message::UnselectAll => match self.tab {
+				Tab::Playlist => self.playlist_selection.get_mut().clear(),
+				Tab::Mixer => {}
+				Tab::PianoRoll(..) => self.piano_roll_selection.get_mut().clear(),
+			},
 			Message::Duplicate => match self.tab {
 				Tab::Playlist => {
 					if let Some(delta) = self
@@ -844,6 +838,7 @@ impl ArrangementView {
 						.reduce(|old, new| {
 							Position::new(old.start().min(new.start()), old.end().max(new.end()))
 						}) {
+						self.playlist_selection.get_mut().status = playlist::Status::None;
 						_ = self.handle_playlist_action(playlist::Action::Clone, config);
 						_ = self.handle_playlist_action(
 							playlist::Action::Drag(0, Delta::Positive(delta.len())),
@@ -864,12 +859,32 @@ impl ArrangementView {
 						.reduce(|old, new| {
 							Position::new(old.start().min(new.start()), old.end().max(new.end()))
 						}) {
+						self.piano_roll_selection.get_mut().status = piano_roll::Status::None;
 						self.handle_piano_roll_action(piano_roll::Action::Clone);
 						self.handle_piano_roll_action(piano_roll::Action::Drag(
 							Delta::Positive(MidiKey(0)),
 							Delta::Positive(delta.len()),
 						));
 					}
+				}
+			},
+			Message::Delete => match self.tab {
+				Tab::Playlist => {
+					self.playlist_selection.get_mut().status = playlist::Status::None;
+					_ = self.handle_playlist_action(playlist::Action::Delete, config);
+				}
+				Tab::Mixer => match self.arrangement.node(self.selected_node).ty {
+					NodeType::Master => {}
+					NodeType::Channel => {
+						return self.update(Message::ChannelRemove(self.selected_node), config);
+					}
+					NodeType::Track => {
+						return self.update(Message::TrackRemove(self.selected_node), config);
+					}
+				},
+				Tab::PianoRoll(..) => {
+					self.piano_roll_selection.get_mut().status = piano_roll::Status::None;
+					self.handle_piano_roll_action(piano_roll::Action::Delete);
 				}
 			},
 			Message::OnDrag(split_at) => self.split_at = split_at.clamp(200.0, 400.0),
@@ -1421,7 +1436,7 @@ impl ArrangementView {
 				.style(scrollable_style)
 				.width(Fill),
 			)
-			.on_press(Message::Escape),
+			.on_press(Message::UnselectAll),
 			column![
 				combo_box(&self.plugins, "Add Plugin", None, move |descriptor| {
 					Message::PluginLoad(self.selected_node, descriptor, true)
@@ -1793,7 +1808,7 @@ impl ArrangementView {
 				keyboard::Key::Named(
 					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
 				) => Some(Message::Delete),
-				keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::Escape),
+				keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::UnselectAll),
 				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => Some(Message::ArrowLeft),
 				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
 				_ => None,
@@ -1806,7 +1821,12 @@ impl ArrangementView {
 				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
 				_ => None,
 			},
-			(true, false, false, _) => match key.to_latin(physical_key)? {
+			(true, false, false, false) => match key.to_latin(physical_key)? {
+				'a' => Some(Message::SelectAll),
+				'd' => Some(Message::Duplicate),
+				_ => None,
+			},
+			(true, false, false, true) => match key.to_latin(physical_key)? {
 				'd' => Some(Message::Duplicate),
 				_ => None,
 			},
