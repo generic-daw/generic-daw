@@ -1382,6 +1382,7 @@ impl ArrangementView {
 								),
 						)
 					}),
+				Message::Pan,
 				Message::PlaylistAction,
 			),
 			Message::SeekTo,
@@ -1757,6 +1758,7 @@ impl ArrangementView {
 							Message::PianoRollAction,
 						)
 					}),
+				Message::Pan,
 				Message::PianoRollAction,
 			),
 			Message::SeekTo,

@@ -16,7 +16,7 @@ use iced::{
 	},
 	border,
 	gradient::Linear,
-	keyboard,
+	keyboard, window,
 };
 use std::{
 	cell::RefCell,
@@ -24,6 +24,7 @@ use std::{
 	f32::consts::{FRAC_PI_2, PI},
 	path::Path,
 	sync::Arc,
+	time::Instant,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -70,6 +71,8 @@ impl Selection {
 #[derive(Default)]
 struct State {
 	last_click: Option<Click>,
+	autoscroll_start: Option<Instant>,
+	last_autoscroll: Option<Instant>,
 }
 
 #[derive(Debug)]
@@ -79,7 +82,8 @@ pub struct Playlist<'a, Message> {
 	position: &'a Vector,
 	scale: &'a Vector,
 	tracks: Box<[Track<'a, Message>]>,
-	f: fn(Action) -> Message,
+	pan: fn(Vector, f32, f32) -> Message,
+	action: fn(Action) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message>
@@ -148,23 +152,77 @@ where
 
 		let selection = &mut *self.selection.borrow_mut();
 
-		if selection.file.is_some() {
-			cursor = cursor.land();
-		}
+		cursor = cursor.land();
 
-		let Some(cursor) = cursor.position_in(*viewport) else {
-			if selection.status != Status::None {
+		let cursor = 'block: {
+			if let Some(cursor) = cursor.position_in(*viewport) {
+				break 'block cursor;
+			}
+
+			if selection.status == Status::None {
+				if let Some((_, _, hovering)) = &mut selection.file
+					&& hovering.is_some()
+				{
+					*hovering = None;
+					shell.request_redraw();
+				}
+				return;
+			}
+
+			let Some(cursor) = cursor.position_from(viewport.position()) else {
 				selection.status = Status::None;
 				selection.primary.extend(selection.secondary.drain());
 				shell.request_redraw();
+				return;
+			};
+
+			let clamped = Point::new(
+				cursor.x.clamp(0.0, viewport.width),
+				cursor.y.clamp(0.0, viewport.height),
+			);
+
+			let state = tree.state.downcast_mut::<State>();
+
+			if cursor == clamped {
+				state.autoscroll_start = None;
+				state.last_autoscroll = None;
+				break 'block clamped;
 			}
-			if let Some((_, _, hovering)) = &mut selection.file
-				&& hovering.is_some()
-			{
-				*hovering = None;
-				shell.request_redraw();
+
+			shell.request_redraw();
+
+			let &Event::Window(window::Event::RedrawRequested(now)) = event else {
+				break 'block clamped;
+			};
+
+			if state.last_autoscroll == Some(now) {
+			} else if let Some(autoscroll_start) = state.autoscroll_start {
+				let height = viewport.height;
+				let visible = layout.position().y + layout.bounds().height - viewport.y;
+
+				let autoscroll_amt = (now - autoscroll_start).as_secs_f32().sqrt();
+
+				let delta = Vector::new(
+					if cursor.x == clamped.x {
+						0.0
+					} else {
+						20.0 * autoscroll_amt.copysign(cursor.x - clamped.x)
+					},
+					if cursor.y == clamped.y {
+						0.0
+					} else {
+						10.0 * autoscroll_amt.copysign(cursor.y - clamped.y)
+					},
+				);
+
+				shell.publish((self.pan)(delta, height, visible));
+
+				state.last_autoscroll = Some(now);
+			} else {
+				state.autoscroll_start = Some(now);
 			}
-			return;
+
+			clamped
 		};
 
 		let new_time = px_to_time(cursor.x, *self.position, *self.scale, self.transport);
@@ -194,7 +252,7 @@ where
 					{
 						selection.primary.clear();
 						selection.status = Status::Dragging(track, time);
-						shell.publish((self.f)(Action::Add(track, time)));
+						shell.publish((self.action)(Action::Add(track, time)));
 					} else {
 						selection.primary.clear();
 						shell.capture_event();
@@ -309,7 +367,7 @@ where
 							}(abs_diff);
 
 							selection.status = Status::Dragging(new_track, time + delta);
-							shell.publish((self.f)(Action::Drag(
+							shell.publish((self.action)(Action::Drag(
 								new_track.cast_signed() - track.cast_signed(),
 								delta,
 							)));
@@ -330,7 +388,7 @@ where
 							}(abs_diff);
 
 							selection.status = Status::TrimmingStart(time + delta);
-							shell.publish((self.f)(Action::TrimStart(delta)));
+							shell.publish((self.action)(Action::TrimStart(delta)));
 							shell.capture_event();
 						}
 					}
@@ -348,7 +406,7 @@ where
 							}(abs_diff);
 
 							selection.status = Status::TrimmingEnd(time + delta);
-							shell.publish((self.f)(Action::TrimEnd(delta)));
+							shell.publish((self.action)(Action::TrimEnd(delta)));
 							shell.capture_event();
 						}
 					}
@@ -359,13 +417,13 @@ where
 
 						if new_time != time {
 							selection.status = Status::DraggingSplit(new_time);
-							shell.publish((self.f)(Action::DragSplit(new_time)));
+							shell.publish((self.action)(Action::DragSplit(new_time)));
 							shell.capture_event();
 						}
 					}
 					Status::Deleting => {
 						if !selection.primary.is_empty() {
-							shell.publish((self.f)(Action::Delete));
+							shell.publish((self.action)(Action::Delete));
 							shell.capture_event();
 						}
 					}
@@ -583,7 +641,8 @@ where
 		position: &'a Vector,
 		scale: &'a Vector,
 		tracks: impl IntoIterator<Item = Track<'a, Message>>,
-		f: fn(Action) -> Message,
+		pan: fn(Vector, f32, f32) -> Message,
+		action: fn(Action) -> Message,
 	) -> Self {
 		Self {
 			selection,
@@ -591,7 +650,8 @@ where
 			position,
 			scale,
 			tracks: tracks.into_iter().collect(),
-			f,
+			pan,
+			action,
 		}
 	}
 }
