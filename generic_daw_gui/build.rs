@@ -43,6 +43,7 @@ static GLYPHS: &[(&str, char, f32)] = &[
 	icon!(chart_no_axes_gantt = 58564),
 	icon!(radius = 58669),
 	icon!(file_music = 58718),
+	icon!(keyboard_music = 58720),
 	icon!(metronome = 59068 + 0.025),
 ];
 

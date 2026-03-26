@@ -48,7 +48,6 @@ use iced::{
 	window,
 };
 use iced_split::{Split, Strategy};
-use log::warn;
 use midi_clip::MidiClip;
 use midi_pattern::MidiPatternPair;
 use node::{Node, NodeType};
@@ -127,7 +126,8 @@ pub enum Message {
 	SetMix(NodeId, NodeId, f32),
 	Disconnect(NodeId, NodeId),
 
-	CycleTab,
+	CycleTabForwards,
+	CycleTabBackwards,
 	ChangedTab(Tab),
 
 	ChannelAdd,
@@ -189,7 +189,7 @@ pub enum Message {
 pub enum Tab {
 	Playlist,
 	Mixer,
-	PianoRoll(MidiClip),
+	PianoRoll,
 }
 
 #[derive(Debug)]
@@ -197,8 +197,9 @@ pub struct ArrangementView {
 	pub arrangement: Arrangement,
 	pub clap_host: ClapHost,
 
-	recording: Option<(Recording, NodeId)>,
 	tab: Tab,
+	midi_clip: Option<(usize, usize)>,
+	recording: Option<(Recording, NodeId)>,
 
 	playlist_position: Vector,
 	playlist_scale: Vector,
@@ -240,8 +241,9 @@ impl ArrangementView {
 				arrangement,
 				clap_host: ClapHost::new(main_window_id),
 
-				recording: None,
 				tab: Tab::Playlist,
+				midi_clip: None,
+				recording: None,
 
 				playlist_position: Vector::default(),
 				playlist_scale: Vector::new(playlist_scale_x, 87.0),
@@ -310,19 +312,31 @@ impl ArrangementView {
 			Message::Connect(from, to) => self.arrangement.connect(from, to),
 			Message::SetMix(from, to, mix) => self.arrangement.set_mix(from, to, mix),
 			Message::Disconnect(from, to) => self.arrangement.disconnect(from, to),
-			Message::CycleTab => {
-				return match self.tab {
-					Tab::Playlist => self.update(Message::ChangedTab(Tab::Mixer), config),
-					Tab::Mixer | Tab::PianoRoll(..) => {
-						self.update(Message::ChangedTab(Tab::Playlist), config)
-					}
-				};
+			Message::CycleTabForwards => {
+				return self.update(
+					Message::ChangedTab(match self.tab {
+						Tab::Playlist => Tab::Mixer,
+						Tab::Mixer if self.midi_clip.is_some() => Tab::PianoRoll,
+						Tab::Mixer | Tab::PianoRoll => Tab::Playlist,
+					}),
+					config,
+				);
+			}
+			Message::CycleTabBackwards => {
+				return self.update(
+					Message::ChangedTab(match self.tab {
+						Tab::Mixer => Tab::Playlist,
+						Tab::Playlist if self.midi_clip.is_some() => Tab::PianoRoll,
+						Tab::Playlist | Tab::PianoRoll => Tab::Mixer,
+					}),
+					config,
+				);
 			}
 			Message::ChangedTab(tab) => {
 				match self.tab {
 					Tab::Playlist => self.playlist_selection.get_mut().reset(),
 					Tab::Mixer => {}
-					Tab::PianoRoll(..) => self.piano_roll_selection.get_mut().clear(),
+					Tab::PianoRoll => self.piano_roll_selection.get_mut().reset(),
 				}
 
 				self.tab = tab;
@@ -537,18 +551,18 @@ impl ArrangementView {
 					}
 				}
 
-				let idx = self.arrangement.track_of(id).unwrap();
+				let track = self.arrangement.track_of(id).unwrap();
 				self.arrangement.remove_track(id);
+
+				self.midi_clip = self
+					.midi_clip
+					.and_then(|midi_clip| update_selection(midi_clip, track, None));
 
 				let selection = self.playlist_selection.get_mut();
 				selection.primary = selection
 					.primary
 					.drain()
-					.filter_map(|(track, clip)| match track.cmp(&idx) {
-						Ordering::Equal => None,
-						Ordering::Less => Some((track, clip)),
-						Ordering::Greater => Some((track - 1, clip)),
-					})
+					.filter_map(|clip| update_selection(clip, track, None))
 					.collect();
 
 				if self.recording.as_ref().is_some_and(|&(_, node)| node == id) {
@@ -666,7 +680,7 @@ impl ArrangementView {
 						.clamp(0.0, old_position.y + visible);
 				}
 				Tab::Mixer => {}
-				Tab::PianoRoll(..) => {
+				Tab::PianoRoll => {
 					let old_position = self.piano_roll_position;
 					self.piano_roll_position += pos_diff;
 					self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
@@ -686,7 +700,7 @@ impl ArrangementView {
 						(old_scale, self.playlist_position, self.playlist_scale)
 					}
 					Tab::Mixer => return Action::none(),
-					Tab::PianoRoll(..) => {
+					Tab::PianoRoll => {
 						let old_scale = self.piano_roll_scale;
 						self.piano_roll_scale += scale_diff;
 						self.piano_roll_scale.x =
@@ -736,7 +750,7 @@ impl ArrangementView {
 						}
 						.unwrap_or_else(|| self.arrangement.master().id);
 				}
-				Tab::PianoRoll(..) => {
+				Tab::PianoRoll => {
 					self.arrangement.seek_to(
 						MusicalTime::from_samples(
 							self.arrangement.transport().sample,
@@ -784,7 +798,7 @@ impl ArrangementView {
 						}
 						.unwrap_or_else(|| self.arrangement.master().id);
 				}
-				Tab::PianoRoll(..) => {
+				Tab::PianoRoll => {
 					self.arrangement.seek_to(
 						MusicalTime::from_samples(
 							self.arrangement.transport().sample,
@@ -808,7 +822,8 @@ impl ArrangementView {
 					);
 				}
 				Tab::Mixer => {}
-				Tab::PianoRoll(clip) => {
+				Tab::PianoRoll => {
+					let clip = self.midi_clip().unwrap();
 					self.piano_roll_selection.get_mut().clear();
 					self.piano_roll_selection
 						.get_mut()
@@ -819,7 +834,7 @@ impl ArrangementView {
 			Message::UnselectAll => match self.tab {
 				Tab::Playlist => self.playlist_selection.get_mut().clear(),
 				Tab::Mixer => {}
-				Tab::PianoRoll(..) => self.piano_roll_selection.get_mut().clear(),
+				Tab::PianoRoll => self.piano_roll_selection.get_mut().clear(),
 			},
 			Message::Duplicate => match self.tab {
 				Tab::Playlist => {
@@ -845,7 +860,8 @@ impl ArrangementView {
 					}
 				}
 				Tab::Mixer => {}
-				Tab::PianoRoll(clip) => {
+				Tab::PianoRoll => {
+					let clip = self.midi_clip().unwrap();
 					if let Some(delta) = self
 						.piano_roll_selection
 						.get_mut()
@@ -880,7 +896,7 @@ impl ArrangementView {
 						return self.update(Message::TrackRemove(self.selected_node), config);
 					}
 				},
-				Tab::PianoRoll(..) => {
+				Tab::PianoRoll => {
 					self.piano_roll_selection.get_mut().reset();
 					self.handle_piano_roll_action(piano_roll::Action::Delete);
 				}
@@ -921,12 +937,12 @@ impl ArrangementView {
 				);
 			}
 			playlist::Action::Open(track, clip) => {
-				let clip::Clip::Midi(clip) = self.arrangement.tracks()[track].clips[clip] else {
-					warn!("tried to open non-midi clip at {track}:{clip}");
-					return Action::none();
-				};
+				if self.midi_clip != Some((track, clip)) {
+					self.midi_clip = Some((track, clip));
+					self.piano_roll_selection.get_mut().clear();
+				}
 
-				return self.update(Message::ChangedTab(Tab::PianoRoll(clip)), config);
+				return self.update(Message::ChangedTab(Tab::PianoRoll), config);
 			}
 			playlist::Action::Clone => {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
@@ -1057,6 +1073,10 @@ impl ArrangementView {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
 				sorted.sort_unstable_by_key(|&(_, c)| Reverse(c));
 				for (track, clip) in sorted {
+					self.midi_clip = self
+						.midi_clip
+						.and_then(|midi_clip| update_selection(midi_clip, track, Some(clip)));
+
 					let clip = self.arrangement.remove_clip(track, clip);
 					self.arrangement.gc(clip);
 				}
@@ -1067,10 +1087,7 @@ impl ArrangementView {
 	}
 
 	fn handle_piano_roll_action(&mut self, action: piano_roll::Action) {
-		let Tab::PianoRoll(clip) = &mut self.tab else {
-			warn!("tried to handle {:?} while in {:?}", action, self.tab);
-			return;
-		};
+		let clip = self.midi_clip().unwrap();
 
 		let piano_roll::Selection {
 			primary, secondary, ..
@@ -1216,7 +1233,7 @@ impl ArrangementView {
 		match self.tab {
 			Tab::Playlist => self.arrangement(),
 			Tab::Mixer => self.mixer(),
-			Tab::PianoRoll(clip) => self.piano_roll(clip),
+			Tab::PianoRoll => self.piano_roll(),
 		}
 	}
 
@@ -1726,7 +1743,9 @@ impl ArrangementView {
 		.into()
 	}
 
-	fn piano_roll(&self, clip: MidiClip) -> Element<'_, Message> {
+	fn piano_roll(&self) -> Element<'_, Message> {
+		let clip = self.midi_clip().unwrap();
+
 		Seeker::new(
 			self.arrangement.transport(),
 			&self.piano_roll_position,
@@ -1792,7 +1811,7 @@ impl ArrangementView {
 			repeat,
 		) {
 			(false, false, false, false) => match key.as_ref() {
-				keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::CycleTab),
+				keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::CycleTabForwards),
 				keyboard::Key::Named(
 					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
 				) => Some(Message::Delete),
@@ -1816,6 +1835,10 @@ impl ArrangementView {
 			},
 			(true, false, false, true) => match key.to_latin(physical_key)? {
 				'd' => Some(Message::Duplicate),
+				_ => None,
+			},
+			(false, true, false, false) => match key.as_ref() {
+				keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::CycleTabBackwards),
 				_ => None,
 			},
 			_ => None,
@@ -1861,9 +1884,37 @@ impl ArrangementView {
 		&self.tab
 	}
 
+	pub fn midi_clip(&self) -> Option<MidiClip> {
+		let (track, clip) = self.midi_clip?;
+		if let clip::Clip::Midi(clip) = self.arrangement.tracks()[track].clips[clip] {
+			Some(clip)
+		} else {
+			None
+		}
+	}
+
 	pub fn loading(&self) -> bool {
 		self.clips_loading > 0 || self.scan.is_some()
 	}
+}
+
+fn update_selection(
+	(ct, cc): (usize, usize),
+	track: usize,
+	clip: Option<usize>,
+) -> Option<(usize, usize)> {
+	clip.filter(|_| ct == track).map_or_else(
+		|| match ct.cmp(&track) {
+			Ordering::Equal => None,
+			Ordering::Less => Some((ct, cc)),
+			Ordering::Greater => Some((ct - 1, cc)),
+		},
+		|clip| match cc.cmp(&clip) {
+			Ordering::Equal => None,
+			Ordering::Less => Some((ct, cc)),
+			Ordering::Greater => Some((ct, cc - 1)),
+		},
+	)
 }
 
 fn amp_to_db(amp: f32) -> f32 {

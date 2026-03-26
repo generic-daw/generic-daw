@@ -254,6 +254,14 @@ pub const fn file_music() -> Icon {
 	}
 }
 
+pub const fn keyboard_music() -> Icon {
+	Icon {
+		glyph: '\u{e560}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
 pub const fn metronome() -> Icon {
 	Icon {
 		glyph: '\u{e6bc}',

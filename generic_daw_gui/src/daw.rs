@@ -7,7 +7,10 @@ use crate::{
 	config::Config,
 	config_view::{self, ConfigView},
 	file_tree::{self, FileTree},
-	icons::{chart_no_axes_gantt, cpu, metronome, pause, play, plus, sliders_vertical, square},
+	icons::{
+		chart_no_axes_gantt, cpu, keyboard_music, metronome, pause, play, plus, sliders_vertical,
+		square,
+	},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
@@ -582,7 +585,7 @@ impl Daw {
 								)
 							),
 						button(sliders_vertical())
-							.style(button_with_radius(button::primary, border::right(5)))
+							.style(button_with_radius(button::primary, 0))
 							.padding(padding::horizontal(7).vertical(5))
 							.on_press_maybe(
 								(!matches!(self.arrangement_view.tab(), Tab::Mixer)).then_some(
@@ -590,7 +593,24 @@ impl Daw {
 										Tab::Mixer
 									))
 								)
-							)
+							),
+						button(keyboard_music())
+							.style(button_with_radius(
+								if self.arrangement_view.midi_clip().is_some() {
+									button::primary
+								} else {
+									button::secondary
+								},
+								border::right(5)
+							))
+							.padding(padding::horizontal(7).vertical(5))
+							.on_press_maybe(
+								(self.arrangement_view.midi_clip().is_some()
+									&& !matches!(self.arrangement_view.tab(), Tab::PianoRoll))
+								.then_some(Message::Arrangement(
+									arrangement_view::Message::ChangedTab(Tab::PianoRoll)
+								))
+							),
 					],
 				]
 				.spacing(10)
