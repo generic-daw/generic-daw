@@ -87,31 +87,31 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		tree: &mut Tree,
 		event: &Event,
 		layout: Layout<'_>,
-		mut cursor: Cursor,
+		cursor: Cursor,
 		renderer: &Renderer,
 		shell: &mut Shell<'_, Message>,
 		_viewport: &Rectangle,
 	) {
-		let levitate = !cursor.is_levitating()
-			&& !cursor.is_over(layout.bounds().shrink(padding::top(LINE_HEIGHT)));
-		if levitate {
-			cursor = cursor.levitate();
-		}
-
 		self.children
 			.iter_mut()
 			.zip(&mut tree.children)
 			.zip(layout.children())
 			.zip(Self::viewports(layout))
 			.for_each(|(((child, tree), layout), viewport)| {
-				child
-					.as_widget_mut()
-					.update(tree, event, layout, cursor, renderer, shell, &viewport);
+				child.as_widget_mut().update(
+					tree,
+					event,
+					layout,
+					if cursor.is_over(viewport) {
+						cursor
+					} else {
+						cursor.levitate()
+					},
+					renderer,
+					shell,
+					&viewport,
+				);
 			});
-
-		if levitate {
-			cursor = cursor.land();
-		}
 
 		let state = tree.state.downcast_mut::<State>();
 		let right_viewport = Self::right_viewport(layout);
@@ -265,14 +265,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		theme: &Theme,
 		style: &Style,
 		layout: Layout<'_>,
-		mut cursor: Cursor,
+		cursor: Cursor,
 		_viewport: &Rectangle,
 	) {
 		self.grid(renderer, Self::right_viewport(layout), theme);
-
-		if !cursor.is_over(layout.bounds().shrink(padding::top(LINE_HEIGHT))) {
-			cursor = cursor.levitate();
-		}
 
 		renderer.with_layer(
 			layout.bounds().shrink(padding::top(LINE_HEIGHT)),
@@ -283,9 +279,19 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					.zip(layout.children())
 					.zip(Self::viewports(layout))
 					.for_each(|(((child, tree), layout), viewport)| {
-						child
-							.as_widget()
-							.draw(tree, renderer, theme, style, layout, cursor, &viewport);
+						child.as_widget().draw(
+							tree,
+							renderer,
+							theme,
+							style,
+							layout,
+							if cursor.is_over(viewport) {
+								cursor
+							} else {
+								cursor.levitate()
+							},
+							&viewport,
+						);
 					});
 			},
 		);
@@ -303,24 +309,28 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		&self,
 		tree: &Tree,
 		layout: Layout<'_>,
-		mut cursor: Cursor,
+		cursor: Cursor,
 		_viewport: &Rectangle,
 		renderer: &Renderer,
 	) -> Interaction {
 		if tree.state.downcast_ref::<State>().status == Status::None {
-			if !cursor.is_over(layout.bounds().shrink(padding::top(LINE_HEIGHT))) {
-				cursor = cursor.levitate();
-			}
-
 			self.children
 				.iter()
 				.zip(&tree.children)
 				.zip(layout.children())
 				.zip(Self::viewports(layout))
 				.map(|(((child, tree), layout), viewport)| {
-					child
-						.as_widget()
-						.mouse_interaction(tree, layout, cursor, &viewport, renderer)
+					child.as_widget().mouse_interaction(
+						tree,
+						layout,
+						if cursor.is_over(viewport) {
+							cursor
+						} else {
+							cursor.levitate()
+						},
+						&viewport,
+						renderer,
+					)
 				})
 				.max()
 				.unwrap_or_default()
