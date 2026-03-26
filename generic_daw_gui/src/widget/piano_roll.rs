@@ -50,6 +50,11 @@ pub struct Selection {
 }
 
 impl Selection {
+	pub fn reset(&mut self) {
+		self.status = Status::None;
+		self.primary.extend(self.secondary.drain());
+	}
+
 	pub fn clear(&mut self) {
 		self.status = Status::None;
 		self.primary.clear();
@@ -143,8 +148,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			}
 
 			let Some(cursor) = cursor.position_from(viewport.position()) else {
-				selection.status = Status::None;
-				selection.primary.extend(selection.secondary.drain());
+				selection.reset();
 				shell.request_redraw();
 				return;
 			};
@@ -216,13 +220,13 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							shell.capture_event();
 							shell.request_redraw();
 						} else {
-							selection.primary.clear();
+							selection.clear();
 							selection.status = Status::Dragging(key, time);
 							shell.publish((self.action)(Action::Add(key, time)));
 						}
 					}
 					mouse::Button::Right => {
-						selection.primary.clear();
+						selection.clear();
 						selection.status = Status::Deleting;
 					}
 					_ => {}
@@ -231,8 +235,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			Event::Mouse(mouse::Event::ButtonReleased { .. })
 				if selection.status != Status::None =>
 			{
-				selection.status = Status::None;
-				selection.primary.extend(selection.secondary.drain());
+				selection.reset();
 				shell.capture_event();
 				shell.request_redraw();
 			}

@@ -127,6 +127,7 @@ pub enum Message {
 	SetMix(NodeId, NodeId, f32),
 	Disconnect(NodeId, NodeId),
 
+	CycleTab,
 	ChangedTab(Tab),
 
 	ChannelAdd,
@@ -309,22 +310,19 @@ impl ArrangementView {
 			Message::Connect(from, to) => self.arrangement.connect(from, to),
 			Message::SetMix(from, to, mix) => self.arrangement.set_mix(from, to, mix),
 			Message::Disconnect(from, to) => self.arrangement.disconnect(from, to),
+			Message::CycleTab => {
+				return match self.tab {
+					Tab::Playlist => self.update(Message::ChangedTab(Tab::Mixer), config),
+					Tab::Mixer | Tab::PianoRoll(..) => {
+						self.update(Message::ChangedTab(Tab::Playlist), config)
+					}
+				};
+			}
 			Message::ChangedTab(tab) => {
 				match self.tab {
-					Tab::Playlist => {
-						let playlist_selection = self.playlist_selection.get_mut();
-						playlist_selection.status = playlist::Status::None;
-						playlist_selection
-							.primary
-							.extend(playlist_selection.secondary.drain());
-					}
+					Tab::Playlist => self.playlist_selection.get_mut().reset(),
 					Tab::Mixer => {}
-					Tab::PianoRoll(..) => {
-						let piano_roll_selection = self.piano_roll_selection.get_mut();
-						piano_roll_selection.status = piano_roll::Status::None;
-						piano_roll_selection.primary.clear();
-						piano_roll_selection.secondary.clear();
-					}
+					Tab::PianoRoll(..) => self.piano_roll_selection.get_mut().clear(),
 				}
 
 				self.tab = tab;
@@ -838,7 +836,7 @@ impl ArrangementView {
 						.reduce(|old, new| {
 							Position::new(old.start().min(new.start()), old.end().max(new.end()))
 						}) {
-						self.playlist_selection.get_mut().status = playlist::Status::None;
+						self.playlist_selection.get_mut().reset();
 						_ = self.handle_playlist_action(playlist::Action::Clone, config);
 						_ = self.handle_playlist_action(
 							playlist::Action::Drag(0, Delta::Positive(delta.len())),
@@ -859,7 +857,7 @@ impl ArrangementView {
 						.reduce(|old, new| {
 							Position::new(old.start().min(new.start()), old.end().max(new.end()))
 						}) {
-						self.piano_roll_selection.get_mut().status = piano_roll::Status::None;
+						self.piano_roll_selection.get_mut().reset();
 						self.handle_piano_roll_action(piano_roll::Action::Clone);
 						self.handle_piano_roll_action(piano_roll::Action::Drag(
 							Delta::Positive(MidiKey(0)),
@@ -870,7 +868,7 @@ impl ArrangementView {
 			},
 			Message::Delete => match self.tab {
 				Tab::Playlist => {
-					self.playlist_selection.get_mut().status = playlist::Status::None;
+					self.playlist_selection.get_mut().reset();
 					_ = self.handle_playlist_action(playlist::Action::Delete, config);
 				}
 				Tab::Mixer => match self.arrangement.node(self.selected_node).ty {
@@ -883,7 +881,7 @@ impl ArrangementView {
 					}
 				},
 				Tab::PianoRoll(..) => {
-					self.piano_roll_selection.get_mut().status = piano_roll::Status::None;
+					self.piano_roll_selection.get_mut().reset();
 					self.handle_piano_roll_action(piano_roll::Action::Delete);
 				}
 			},
@@ -922,16 +920,12 @@ impl ArrangementView {
 					config,
 				);
 			}
-			playlist::Action::Open => {
-				debug_assert_eq!(primary.len(), 1);
-				let &(track, clip) = primary.iter().next().unwrap();
-
+			playlist::Action::Open(track, clip) => {
 				let clip::Clip::Midi(clip) = self.arrangement.tracks()[track].clips[clip] else {
 					warn!("tried to open non-midi clip at {track}:{clip}");
 					return Action::none();
 				};
 
-				self.piano_roll_selection.get_mut().primary.clear();
 				return self.update(Message::ChangedTab(Tab::PianoRoll(clip)), config);
 			}
 			playlist::Action::Clone => {
@@ -1798,12 +1792,7 @@ impl ArrangementView {
 			repeat,
 		) {
 			(false, false, false, false) => match key.as_ref() {
-				keyboard::Key::Named(keyboard::key::Named::F5) => {
-					Some(Message::ChangedTab(Tab::Playlist))
-				}
-				keyboard::Key::Named(keyboard::key::Named::F9) => {
-					Some(Message::ChangedTab(Tab::Mixer))
-				}
+				keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::CycleTab),
 				keyboard::Key::Named(
 					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
 				) => Some(Message::Delete),
