@@ -3,7 +3,7 @@ use generic_daw_core::{NodeId, PanMode};
 use generic_daw_widget::{knob::Knob, peak_meter};
 use iced::{
 	Element, Fill,
-	widget::{container, row},
+	widget::{self, container, row},
 };
 use std::{cmp::Ordering, time::Instant};
 use utils::NoDebug;
@@ -19,6 +19,7 @@ pub enum NodeType {
 pub struct Node {
 	pub ty: NodeType,
 	pub id: NodeId,
+	pub widget_id: widget::Id,
 	pub plugins: Vec<Plugin>,
 	pub volume: f32,
 	pub pan: PanMode,
@@ -32,6 +33,7 @@ impl Node {
 		Self {
 			ty,
 			id,
+			widget_id: widget::Id::unique(),
 			plugins: Vec::new(),
 			volume: 1.0,
 			pan: PanMode::Balance(0.0),

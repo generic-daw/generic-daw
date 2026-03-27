@@ -15,6 +15,7 @@ mod daw;
 mod file_tree;
 mod icons;
 mod lod;
+mod operation;
 mod state;
 mod stylefns;
 mod theme;

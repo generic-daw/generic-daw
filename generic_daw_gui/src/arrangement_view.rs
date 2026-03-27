@@ -8,6 +8,7 @@ use crate::{
 		arrow_left_right, arrow_up_down, chevron_down, chevron_up, grip_vertical, mic, plus, power,
 		power_off, radius, x,
 	},
+	operation::scroll_into_view,
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
 		bordered_box_with_radius, button_with_radius, menu_style, scrollable_style,
@@ -749,6 +750,12 @@ impl ArrangementView {
 								.map(|track| track.id)
 						}
 						.unwrap_or_else(|| self.arrangement.master().id);
+
+					return scroll_into_view(
+						"mixer",
+						self.arrangement.node(self.selected_node).widget_id.clone(),
+					)
+					.into();
 				}
 				Tab::PianoRoll => {
 					self.arrangement.seek_to(
@@ -797,6 +804,12 @@ impl ArrangementView {
 								.or_else(|| self.arrangement.tracks().last().map(|track| track.id))
 						}
 						.unwrap_or_else(|| self.arrangement.master().id);
+
+					return scroll_into_view(
+						"mixer",
+						self.arrangement.node(self.selected_node).widget_id.clone(),
+					)
+					.into();
 				}
 				Tab::PianoRoll => {
 					self.arrangement.seek_to(
@@ -1440,6 +1453,7 @@ impl ArrangementView {
 				.align_y(Center)
 				.spacing(5),
 			)
+			.id("mixer")
 			.direction(scrollable::Direction::Horizontal(
 				scrollable::Scrollbar::default(),
 			))
@@ -1727,6 +1741,7 @@ impl ArrangementView {
 				.spacing(5)
 				.align_x(Center),
 			)
+			.id(node.widget_id.clone())
 			.padding(5)
 			.style(|t| {
 				if self.selected_node == node.id {
