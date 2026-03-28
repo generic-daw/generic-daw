@@ -467,10 +467,7 @@ impl<Event: EventImpl> Drop for Plugin<Event> {
 	fn drop(&mut self) {
 		self.destroy();
 
-		if matches!(
-			self.instance.try_deactivate(),
-			Err(PluginInstanceError::StillActivatedPlugin)
-		) {
+		if self.instance.try_deactivate() == Err(PluginInstanceError::StillActivatedPlugin) {
 			warn!("{}: leaked instance", self.descriptor);
 		} else {
 			info!("{}: dropped instance", self.descriptor);

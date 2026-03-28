@@ -578,7 +578,7 @@ impl Daw {
 							.style(button_with_radius(button::primary, border::left(5)))
 							.padding(padding::horizontal(7).vertical(5))
 							.on_press_maybe(
-								(!matches!(self.arrangement_view.tab(), Tab::Playlist)).then_some(
+								(self.arrangement_view.tab() != Tab::Playlist).then_some(
 									Message::Arrangement(arrangement_view::Message::ChangedTab(
 										Tab::Playlist
 									))
@@ -587,13 +587,11 @@ impl Daw {
 						button(sliders_vertical())
 							.style(button_with_radius(button::primary, 0))
 							.padding(padding::horizontal(7).vertical(5))
-							.on_press_maybe(
-								(!matches!(self.arrangement_view.tab(), Tab::Mixer)).then_some(
-									Message::Arrangement(arrangement_view::Message::ChangedTab(
-										Tab::Mixer
-									))
-								)
-							),
+							.on_press_maybe((self.arrangement_view.tab() != Tab::Mixer).then_some(
+								Message::Arrangement(arrangement_view::Message::ChangedTab(
+									Tab::Mixer
+								))
+							)),
 						button(keyboard_music())
 							.style(button_with_radius(
 								if self.arrangement_view.midi_clip().is_some() {
@@ -606,10 +604,10 @@ impl Daw {
 							.padding(padding::horizontal(7).vertical(5))
 							.on_press_maybe(
 								(self.arrangement_view.midi_clip().is_some()
-									&& !matches!(self.arrangement_view.tab(), Tab::PianoRoll))
-								.then_some(Message::Arrangement(
-									arrangement_view::Message::ChangedTab(Tab::PianoRoll)
-								))
+									&& self.arrangement_view.tab() != Tab::PianoRoll)
+									.then_some(Message::Arrangement(
+										arrangement_view::Message::ChangedTab(Tab::PianoRoll)
+									))
 							),
 					],
 				]

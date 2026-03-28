@@ -183,7 +183,7 @@ pub enum Message {
 	OnDoubleClick,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Tab {
 	Playlist,
 	Mixer,
@@ -348,7 +348,17 @@ impl ArrangementView {
 
 				self.arrangement.remove_channel(id);
 			}
-			Message::ChannelSelect(id) => self.selected_node = id,
+			Message::ChannelSelect(id) => {
+				self.selected_node = id;
+
+				if self.tab == Tab::Mixer {
+					return scroll_into_view(
+						"mixer",
+						self.arrangement.node(self.selected_node).widget_id.clone(),
+					)
+					.into();
+				}
+			}
 			Message::ChannelVolumeChanged(id, mut volume) => {
 				let db = amp_to_db(volume.abs());
 				let nearest = (db / 6.0).round() * 6.0;
@@ -499,7 +509,7 @@ impl ArrangementView {
 					self.soloed_track = None;
 				}
 
-				if matches!(self.tab, Tab::Mixer) {
+				if self.tab == Tab::Mixer {
 					_ = self.update(Message::ArrowRight, config);
 					if self.selected_node == id {
 						_ = self.update(Message::ArrowLeft, config);
@@ -1875,8 +1885,8 @@ impl ArrangementView {
 		self.playlist.get_mut().status = playlist::Status::Hovering(file, kind, None);
 	}
 
-	pub fn tab(&self) -> &Tab {
-		&self.tab
+	pub fn tab(&self) -> Tab {
+		self.tab
 	}
 
 	pub fn midi_clip(&self) -> Option<MidiClip> {

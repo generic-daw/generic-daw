@@ -39,7 +39,7 @@ impl MidiPattern {
 
 	#[must_use]
 	pub fn from_midi(bytes: &[u8], transport: &Transport) -> Option<Self> {
-		#[derive(Clone, Copy, Default)]
+		#[derive(Clone, Copy, Default, Eq, PartialEq)]
 		enum Entry {
 			Some(u28, u7),
 			#[default]
@@ -81,7 +81,7 @@ impl MidiPattern {
 					} => {
 						let entry = &mut playing[usize::from(key.as_int())];
 
-						if matches!(entry, Entry::None) {
+						if *entry == Entry::None {
 							*entry = Entry::Some(time, vel);
 						}
 					}
@@ -125,7 +125,7 @@ impl MidiPattern {
 				}
 			}
 
-			if matches!(header.format, Format::Parallel) {
+			if header.format == Format::Parallel {
 				time = u28::new(0);
 			}
 		}
