@@ -16,13 +16,13 @@ use iced::{
 	widget::text::{Alignment, Ellipsis, LineHeight, Shaping, Wrapping},
 	window,
 };
+use std::time::Instant;
 use utils::NoDebug;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Status {
 	Seeking(MusicalTime),
 	DraggingLoop(MusicalTime),
-	Hovering,
 	#[default]
 	None,
 }
@@ -31,6 +31,8 @@ pub enum Status {
 struct State {
 	status: Status,
 	last_height: f32,
+	autoscroll_start: Option<Instant>,
+	last_autoscroll: Option<Instant>,
 }
 
 #[derive(Debug)]
@@ -132,18 +134,69 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			return;
 		}
 
-		let Some(mut cursor) = cursor.position_in(layout.bounds()) else {
-			state.status = Status::None;
-			return;
+		let cursor = 'block: {
+			let viewport = right_viewport.expand(padding::top(LINE_HEIGHT));
+
+			if let Some(cursor) = cursor.position_in(viewport) {
+				break 'block cursor;
+			}
+
+			if state.status == Status::None {
+				return;
+			}
+
+			let Some(cursor) = cursor.position_from(viewport.position()) else {
+				state.status = Status::None;
+				shell.request_redraw();
+				return;
+			};
+
+			let clamped = Point::new(
+				cursor.x.clamp(0.0, viewport.width),
+				cursor.y.clamp(0.0, viewport.height),
+			);
+
+			if cursor == clamped {
+				state.autoscroll_start = None;
+				state.last_autoscroll = None;
+				break 'block clamped;
+			}
+
+			shell.request_redraw();
+
+			let &Event::Window(window::Event::RedrawRequested(now)) = event else {
+				break 'block clamped;
+			};
+
+			if state.last_autoscroll == Some(now) {
+			} else if let Some(autoscroll_start) = state.autoscroll_start {
+				let autoscroll_amt = (now - autoscroll_start).as_secs_f32().sqrt();
+
+				let delta = Vector::new(
+					if cursor.x == clamped.x {
+						0.0
+					} else {
+						20.0 * autoscroll_amt.copysign(cursor.x - clamped.x)
+					},
+					0.0,
+				);
+
+				shell.publish((self.pan)(delta, height, visible));
+
+				state.last_autoscroll = Some(now);
+			} else {
+				state.autoscroll_start = Some(now);
+			}
+
+			clamped
 		};
-		cursor -= Vector::new(right_viewport.x - layout.position().x, LINE_HEIGHT);
 
 		match event {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
 				let time = maybe_snap(
 					px_to_time(
-						cursor.x.max(0.0) + self.offset,
+						cursor.x + self.offset,
 						*self.position,
 						*self.scale,
 						self.transport,
@@ -172,22 +225,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 							shell.capture_event();
 						}
 					}
-					_ => {
-						state.status = if cursor.x >= 0.0 && cursor.y < 0.0 {
-							Status::Hovering
-						} else {
-							Status::None
-						};
-					}
+					Status::None => {}
 				}
 			}
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Left,
 				modifiers,
-			}) if state.status == Status::Hovering => {
+			}) if cursor.y < LINE_HEIGHT => {
 				let time = maybe_snap(
 					px_to_time(
-						cursor.x.max(0.0) + self.offset,
+						cursor.x + self.offset,
 						*self.position,
 						*self.scale,
 						self.transport,
@@ -219,11 +266,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				button: mouse::Button::Left,
 				..
 			}) if matches!(state.status, Status::Seeking(..) | Status::DraggingLoop(..)) => {
-				state.status = if cursor.y < 0.0 {
-					Status::Hovering
-				} else {
-					Status::None
-				};
+				state.status = Status::None;
 				shell.capture_event();
 			}
 			Event::Mouse(mouse::Event::WheelScrolled { delta, modifiers }) => {
@@ -239,7 +282,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					}
 					(true, false, false) if y != 0.0 => {
 						y /= 128.0;
-						shell.publish((self.zoom)(Vector::new(y, 0.0), cursor, height, visible));
+						shell.publish((self.zoom)(
+							Vector::new(y, 0.0),
+							cursor - Vector::new(0.0, LINE_HEIGHT),
+							height,
+							visible,
+						));
 						shell.capture_event();
 					}
 					(false, true, false) if x != 0.0 || y != 0.0 => {
@@ -248,7 +296,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					}
 					(false, false, true) if y != 0.0 => {
 						y /= -8.0;
-						shell.publish((self.zoom)(Vector::new(0.0, y), cursor, height, visible));
+						shell.publish((self.zoom)(
+							Vector::new(0.0, y),
+							cursor - Vector::new(0.0, LINE_HEIGHT),
+							height,
+							visible,
+						));
 						shell.capture_event();
 					}
 					_ => {}
@@ -313,7 +366,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		_viewport: &Rectangle,
 		renderer: &Renderer,
 	) -> Interaction {
-		if tree.state.downcast_ref::<State>().status == Status::None {
+		if tree.state.downcast_ref::<State>().status == Status::None
+			&& cursor
+				.position_in(Self::right_viewport(layout).expand(padding::top(LINE_HEIGHT)))
+				.is_none_or(|cursor| cursor.y >= LINE_HEIGHT)
+		{
 			self.children
 				.iter()
 				.zip(&tree.children)
