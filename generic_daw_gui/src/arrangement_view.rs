@@ -204,7 +204,7 @@ pub enum Message {
 	OnDoubleClick,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Tab {
 	Playlist,
 	Mixer,

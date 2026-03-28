@@ -1,7 +1,7 @@
 use crate::{arrangement_view, arrangement_view::Tab, daw::Message};
 use iced::keyboard::{self, key::Named};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CommandId {
 	NewProject,
 	OpenProject,
@@ -30,7 +30,7 @@ pub enum CommandId {
 	ToggleClipReverse,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Context {
 	pub config_open: bool,
 	pub has_midi_clip: bool,

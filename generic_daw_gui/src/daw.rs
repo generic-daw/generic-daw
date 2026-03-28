@@ -869,57 +869,73 @@ impl Daw {
 			Subscription::none()
 		};
 		let command_context = self.command_context();
-		let config_open = self.config_view.is_some();
 		let command_palette_open = self.command_palette.is_some();
 		let command_palette_selection = self.command_palette_selection();
 
 		let keybinds = if self.progress.is_some() || !self.main_window_focused {
 			Subscription::none()
 		} else {
-			keyboard::listen().filter_map(move |e| match e {
-				keyboard::Event::KeyPressed {
-					key,
-					physical_key,
-					modifiers,
-					repeat,
-					..
-				} => {
-					if command_palette_open {
-						return Self::command_palette_keybinds(
-							command_palette_selection,
-							&key,
+			keyboard::listen()
+				.with((
+					command_context,
+					command_palette_open,
+					command_palette_selection,
+				))
+				.filter_map(
+					|(
+						(command_context, command_palette_open, command_palette_selection),
+						event,
+					)| match event {
+						keyboard::Event::KeyPressed {
+							key,
+							physical_key,
 							modifiers,
 							repeat,
-						);
-					}
+							..
+						} => {
+							if command_palette_open {
+								return Self::command_palette_keybinds(
+									command_palette_selection,
+									&key,
+									modifiers,
+									repeat,
+								);
+							}
 
-					Self::open_command_palette_keybind(&key, physical_key, modifiers, repeat)
-						.or_else(|| {
-							(!config_open)
-								.then_some(())
-								.and_then(|_| {
-									ArrangementView::typing_keyboard_press(physical_key, repeat)
-								})
-								.map(Message::Arrangement)
-						})
-						.or_else(|| {
-							commands::matching_shortcut(
-								command_context,
+							Self::open_command_palette_keybind(
 								&key,
 								physical_key,
 								modifiers,
 								repeat,
 							)
-							.map(commands::dispatch)
-						})
-				}
-				keyboard::Event::KeyReleased { physical_key, .. } => (!config_open
-					&& !command_palette_open)
-					.then_some(())
-					.and_then(|_| ArrangementView::typing_keyboard_release(physical_key))
-					.map(Message::Arrangement),
-				_ => None,
-			})
+							.or_else(|| {
+								(!command_context.config_open)
+									.then_some(())
+									.and_then(|_| {
+										ArrangementView::typing_keyboard_press(physical_key, repeat)
+									})
+									.map(Message::Arrangement)
+							})
+							.or_else(|| {
+								commands::matching_shortcut(
+									command_context,
+									&key,
+									physical_key,
+									modifiers,
+									repeat,
+								)
+								.map(commands::dispatch)
+							})
+						}
+						keyboard::Event::KeyReleased { physical_key, .. } => (!command_context
+							.config_open
+							&& !command_palette_open)
+							.then_some(())
+							.and_then(|_| ArrangementView::typing_keyboard_release(physical_key))
+							.map(Message::Arrangement),
+						_ => None,
+					},
+				)
 		};
 
 		Subscription::batch([
