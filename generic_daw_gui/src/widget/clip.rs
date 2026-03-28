@@ -2,7 +2,7 @@ use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef, Recording},
 	widget::{
 		ALPHA_1_3, LINE_HEIGHT, maybe_snap,
-		playlist::{Action, Selection, Status},
+		playlist::{self, Action, Status},
 		px_to_time, time_to_px,
 	},
 };
@@ -75,10 +75,8 @@ impl<'a> From<&'a Recording> for Inner<'a> {
 #[derive(Clone, Debug)]
 pub struct Clip<'a, Message> {
 	pub(super) inner: Inner<'a>,
-	selection: &'a RefCell<Selection>,
+	playlist: &'a RefCell<playlist::State>,
 	transport: &'a Transport,
-	position: &'a Vector,
-	scale: &'a Vector,
 	enabled: bool,
 	f: fn(Action) -> Message,
 }
@@ -111,8 +109,10 @@ where
 			}
 		}
 
-		if state.last_scale != *self.scale {
-			state.last_scale = *self.scale;
+		let playlist = self.playlist.borrow();
+
+		if state.last_scale != playlist.scale {
+			state.last_scale = playlist.scale;
 			if !state.cache.get_mut().is_empty() {
 				state.cache.get_mut().update(Arc::default());
 			}
@@ -124,6 +124,8 @@ where
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+		let playlist = self.playlist.borrow();
+
 		let (start, end) = match self.inner {
 			Inner::AudioClip(inner) => (inner.clip.position.start(), inner.clip.position.end()),
 			Inner::MidiClip(inner) => (inner.clip.position.start(), inner.clip.position.end()),
@@ -134,8 +136,8 @@ where
 			),
 		};
 
-		let start = time_to_px(start, *self.position, *self.scale, self.transport);
-		let end = time_to_px(end, *self.position, *self.scale, self.transport);
+		let start = time_to_px(start, playlist.position, playlist.scale, self.transport);
+		let end = time_to_px(end, playlist.position, playlist.scale, self.transport);
 
 		Node::new(Size::new(end - start, limits.max().height)).translate(Vector::new(start, 0.0))
 	}
@@ -185,12 +187,12 @@ where
 			return;
 		}
 
-		let selection = &mut *self.selection.borrow_mut();
+		let playlist = &mut *self.playlist.borrow_mut();
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
-				if selection.status == Status::None =>
+				if playlist.status == Status::None =>
 			{
-				let mut clear = selection.primary.insert(idx);
+				let mut clear = playlist.primary.insert(idx);
 
 				match button {
 					mouse::Button::Left => {
@@ -207,9 +209,9 @@ where
 						}
 
 						let time =
-							px_to_time(cursor.x, *self.position, *self.scale, self.transport);
+							px_to_time(cursor.x, playlist.position, playlist.scale, self.transport);
 
-						selection.status = match (modifiers.command(), modifiers.shift()) {
+						playlist.status = match (modifiers.command(), modifiers.shift()) {
 							(false, false) => {
 								let start_pixel = clip_bounds.x;
 								let end_pixel = clip_bounds.x + clip_bounds.width;
@@ -226,7 +228,7 @@ where
 							(true, false) => {
 								clear = false;
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.snap_round(self.scale.x, self.transport)
+									time.snap_round(playlist.scale.x, self.transport)
 								});
 								Status::Selecting(idx.0, idx.0, time, time)
 							}
@@ -236,7 +238,7 @@ where
 							}
 							(true, true) => {
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.snap_round(self.scale.x, self.transport)
+									time.snap_round(playlist.scale.x, self.transport)
 								});
 								shell.publish((self.f)(Action::SplitAt(time)));
 								Status::DraggingSplit(time)
@@ -246,9 +248,9 @@ where
 						shell.capture_event();
 						shell.request_redraw();
 					}
-					mouse::Button::Right if selection.status != Status::Deleting => {
+					mouse::Button::Right if playlist.status != Status::Deleting => {
 						clear = true;
-						selection.status = Status::Deleting;
+						playlist.status = Status::Deleting;
 						shell.publish((self.f)(Action::Delete));
 						shell.capture_event();
 					}
@@ -256,14 +258,14 @@ where
 				}
 
 				if clear {
-					selection.primary.clear();
-					selection.primary.insert(idx);
+					playlist.primary.clear();
+					playlist.primary.insert(idx);
 				}
 			}
 			Event::Mouse(mouse::Event::CursorMoved { .. })
-				if selection.status == Status::Deleting =>
+				if playlist.status == Status::Deleting =>
 			{
-				selection.primary.insert(idx);
+				playlist.primary.insert(idx);
 			}
 			_ => {}
 		}
@@ -283,17 +285,17 @@ where
 			return;
 		};
 
+		let playlist = self.playlist.borrow();
+
 		let mut upper_bounds = bounds;
 		upper_bounds.height = upper_bounds.height.min(LINE_HEIGHT);
-
-		let selection = self.selection.borrow();
 
 		let color = match &self.inner {
 			Inner::AudioClip(AudioClipRef { idx, .. })
 			| Inner::MidiClip(MidiClipRef { idx, .. }) => {
 				match (
 					self.enabled,
-					selection.primary.contains(idx) || selection.secondary.contains(idx),
+					playlist.primary.contains(idx) || playlist.secondary.contains(idx),
 				) {
 					(true, true) => theme.palette().danger.weak.color,
 					(true, false) => theme.palette().primary.weak.color,
@@ -386,7 +388,7 @@ where
 							&inner.sample.samples,
 							self.transport,
 							inner.clip.position,
-							self.scale.x,
+							playlist.scale.x,
 							height,
 							theme.palette().background.strong.text,
 							lower_bounds.size(),
@@ -412,7 +414,7 @@ where
 						(note.key.0.min(min), note.key.0.max(max))
 					});
 
-				let samples_per_px = self.scale.x.exp2();
+				let samples_per_px = playlist.scale.x.exp2();
 				let note_height = height / f32::from(max - min + 3);
 				let offset = Vector::new(layout.position().x, layout.position().y + LINE_HEIGHT);
 
@@ -466,7 +468,7 @@ where
 							inner.core.samples(),
 							self.transport,
 							position,
-							self.scale.x,
+							playlist.scale.x,
 							height,
 							theme.palette().background.strong.text,
 							lower_bounds.size(),
@@ -517,19 +519,15 @@ where
 impl<'a, Message> Clip<'a, Message> {
 	pub fn new(
 		inner: impl Into<Inner<'a>>,
-		selection: &'a RefCell<Selection>,
+		playlist: &'a RefCell<playlist::State>,
 		transport: &'a Transport,
-		position: &'a Vector,
-		scale: &'a Vector,
 		enabled: bool,
 		f: fn(Action) -> Message,
 	) -> Self {
 		Self {
 			inner: inner.into(),
-			selection,
+			playlist,
 			transport,
-			position,
-			scale,
 			enabled,
 			f,
 		}

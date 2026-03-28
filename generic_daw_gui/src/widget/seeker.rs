@@ -38,8 +38,8 @@ struct State {
 #[derive(Debug)]
 pub struct Seeker<'a, Message> {
 	transport: &'a Transport,
-	position: &'a Vector,
-	scale: &'a Vector,
+	position: Vector,
+	scale: Vector,
 	offset: f32,
 	children: NoDebug<[Element<'a, Message>; 2]>,
 	seek_to: fn(MusicalTime) -> Message,
@@ -197,8 +197,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				let time = maybe_snap(
 					px_to_time(
 						cursor.x + self.offset,
-						*self.position,
-						*self.scale,
+						self.position,
+						self.scale,
 						self.transport,
 					),
 					*modifiers,
@@ -235,8 +235,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				let time = maybe_snap(
 					px_to_time(
 						cursor.x + self.offset,
-						*self.position,
-						*self.scale,
+						self.position,
+						self.scale,
 						self.transport,
 					),
 					*modifiers,
@@ -445,8 +445,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 impl<'a, Message> Seeker<'a, Message> {
 	pub fn new(
 		transport: &'a Transport,
-		position: &'a Vector,
-		scale: &'a Vector,
+		position: Vector,
+		scale: Vector,
 		left: impl Into<Element<'a, Message>>,
 		right: impl Into<Element<'a, Message>>,
 		seek_to: fn(MusicalTime) -> Message,
@@ -492,16 +492,16 @@ impl<'a, Message> Seeker<'a, Message> {
 		let offset_time = |time: MusicalTime| {
 			bounds.position()
 				+ Vector::new(
-					time_to_px(time, *self.position, *self.scale, self.transport) - self.offset,
+					time_to_px(time, self.position, self.scale, self.transport) - self.offset,
 					0.0,
 				)
 		};
 
-		let mut beat = px_to_time(self.offset, *self.position, *self.scale, self.transport);
+		let mut beat = px_to_time(self.offset, self.position, self.scale, self.transport);
 		let end_beat = px_to_time(
 			self.offset + bounds.width,
-			*self.position,
-			*self.scale,
+			self.position,
+			self.scale,
 			self.transport,
 		);
 		beat = beat.snap_floor(self.scale.x + 1.0, self.transport);
@@ -570,7 +570,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		let offset_time = |time: MusicalTime| {
 			bounds.position()
 				+ Vector::new(
-					time_to_px(time, *self.position, *self.scale, self.transport) - self.offset,
+					time_to_px(time, self.position, self.scale, self.transport) - self.offset,
 					0.0,
 				)
 		};
@@ -660,11 +660,11 @@ impl<'a, Message> Seeker<'a, Message> {
 			theme.palette().primary.base.color,
 		);
 
-		let mut beat = px_to_time(self.offset, *self.position, *self.scale, self.transport);
+		let mut beat = px_to_time(self.offset, self.position, self.scale, self.transport);
 		let end_beat = px_to_time(
 			self.offset + bounds.width,
-			*self.position,
-			*self.scale,
+			self.position,
+			self.scale,
 			self.transport,
 		);
 		beat = beat
