@@ -27,8 +27,9 @@ use crate::{
 };
 use audio_clip::AudioClip;
 use generic_daw_core::{
-	MidiKey, MidiNote, MidiPatternId, MusicalTime, NodeId, PanMode, Position, SampleId,
-	clap_host::{DEFAULT_CLAP_PATHS, HostInfo, Plugin, PluginDescriptor, get_installed_plugins},
+	MidiInputEvent, MidiKey, MidiNote, MidiPatternId, MusicalTime, NodeId, PanMode, Position,
+	SampleId, clap_host::{DEFAULT_CLAP_PATHS, HostInfo, Plugin, PluginDescriptor, get_installed_plugins},
+	connect_midi_input,
 };
 use generic_daw_widget::{
 	knob::Knob,
@@ -37,7 +38,7 @@ use generic_daw_widget::{
 use iced::{
 	Center, Element, Fill, Point, Shrink, Subscription, Task, Vector,
 	border::{self, Radius},
-	futures::SinkExt as _,
+	futures::{SinkExt as _, StreamExt as _},
 	keyboard,
 	mouse::Interaction,
 	padding, stream,
@@ -49,7 +50,9 @@ use iced::{
 	window,
 };
 use iced_split::{Split, Strategy};
+use live_midi::LiveMidiState;
 use midi_clip::MidiClip;
+use midi_recording::MidiRecording;
 use midi_pattern::MidiPatternPair;
 use node::{Node, NodeType};
 use rtrb::Consumer;
@@ -73,7 +76,9 @@ use utils::{NoClone, NoDebug, natural_cmp, unique_id};
 mod arrangement;
 mod audio_clip;
 mod clip;
+mod live_midi;
 mod midi_clip;
+mod midi_recording;
 mod midi_pattern;
 mod node;
 mod plugin;
@@ -158,8 +163,10 @@ pub enum Message {
 	TrackRemove(NodeId),
 	TrackToggleEnabled(NodeId),
 	TrackToggleSolo(NodeId),
+	TrackToggleMidiArm(NodeId),
 
 	TogglePlayback,
+	ToggleRecord,
 	Stop,
 	SeekTo(MusicalTime),
 	SetLoopMarker(Option<Position>),
@@ -168,6 +175,10 @@ pub enum Message {
 	RecordingEndStream,
 	RecordingFinalize,
 	RecordingWrite(NoDebug<Box<[f32]>>),
+	MidiInput(MidiInputEvent),
+	TypingKeyboardPress(keyboard::key::Physical),
+	TypingKeyboardRelease(keyboard::key::Physical),
+	ReleaseTypingKeyboard,
 
 	PlaylistAction(playlist::Action),
 	PianoRollAction(piano_roll::Action),
@@ -201,6 +212,9 @@ pub struct ArrangementView {
 	tab: Tab,
 	midi_clip: Option<(usize, usize)>,
 	recording: Option<(Recording, NodeId)>,
+	midi_recording: Option<(MidiRecording, NodeId)>,
+	armed_track: Option<NodeId>,
+	live_midi: LiveMidiState,
 
 	playlist_position: Vector,
 	playlist_scale: Vector,
@@ -245,6 +259,9 @@ impl ArrangementView {
 				tab: Tab::Playlist,
 				midi_clip: None,
 				recording: None,
+				midi_recording: None,
+				armed_track: None,
+				live_midi: LiveMidiState::default(),
 
 				playlist_position: Vector::default(),
 				playlist_scale: Vector::new(playlist_scale_x, 87.0),
@@ -285,6 +302,9 @@ impl ArrangementView {
 				if let Some((recording, _)) = &mut self.recording {
 					recording.end_stream();
 				}
+				self.midi_recording = None;
+				self.armed_track = None;
+				self.live_midi = LiveMidiState::default();
 
 				if self.arrangement.transport().metronome {
 					arrangement.toggle_metronome();
@@ -541,6 +561,13 @@ impl ArrangementView {
 				return self.update(Message::Connect(id, self.arrangement.master().id), config);
 			}
 			Message::TrackRemove(id) => {
+				if self.midi_recording.as_ref().is_some_and(|&(_, node)| node == id) {
+					self.finalize_midi_recording();
+				}
+				if self.armed_track == Some(id) {
+					self.release_live_input();
+					self.armed_track = None;
+				}
 				if self.soloed_track == Some(id) {
 					self.soloed_track = None;
 				}
@@ -574,6 +601,15 @@ impl ArrangementView {
 				self.soloed_track = None;
 				return self.update(Message::ChannelToggleEnabled(id), config);
 			}
+			Message::TrackToggleMidiArm(id) => {
+				if self.midi_recording.is_some() {
+					self.finalize_midi_recording();
+				}
+				if self.armed_track != Some(id) {
+					self.release_live_input();
+				}
+				self.armed_track = (self.armed_track != Some(id)).then_some(id);
+			}
 			Message::TrackToggleSolo(id) => {
 				if self.soloed_track == Some(id) {
 					self.soloed_track = None;
@@ -584,14 +620,32 @@ impl ArrangementView {
 				}
 			}
 			Message::TogglePlayback => {
+				if self.midi_recording.is_some() {
+					self.finalize_midi_recording();
+				}
 				self.arrangement.toggle_playback();
 				return self.update(Message::RecordingEndStream, config);
 			}
+			Message::ToggleRecord => {
+				if self.midi_recording.is_some() {
+					self.finalize_midi_recording();
+				} else if let Some(node) = self.armed_track {
+					self.midi_recording = Some((MidiRecording::new(self.arrangement.transport()), node));
+					self.arrangement.play();
+				}
+			}
 			Message::Stop => {
+				if self.midi_recording.is_some() {
+					self.finalize_midi_recording();
+				}
+				self.release_live_input();
 				self.arrangement.stop();
 				return self.update(Message::RecordingEndStream, config);
 			}
 			Message::SeekTo(pos) => {
+				if self.midi_recording.is_some() {
+					self.finalize_midi_recording();
+				}
 				self.arrangement.seek_to(pos);
 				return self.update(Message::RecordingEndStream, config);
 			}
@@ -668,6 +722,28 @@ impl ArrangementView {
 				}
 			}
 			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().0.write(&samples),
+			Message::MidiInput(input) => {
+				let Some(event) = self.live_input_event(input) else {
+					return Action::none();
+				};
+				self.apply_live_event(event);
+			}
+			Message::TypingKeyboardPress(physical) => {
+				let Some(armed_track) = self.armed_track else {
+					return Action::none();
+				};
+				let Some(event) = self.live_midi.typing_press(physical) else {
+					return Action::none();
+				};
+				self.apply_live_event_to_track(armed_track, event);
+			}
+			Message::TypingKeyboardRelease(physical) => {
+				let Some(event) = self.live_midi.typing_release(physical) else {
+					return Action::none();
+				};
+				self.apply_live_event(event);
+			}
+			Message::ReleaseTypingKeyboard => self.release_live_input(),
 			Message::PlaylistAction(action) => return self.handle_playlist_action(action, config),
 			Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
 			Message::Pan(pos_diff, height, visible) => match self.tab {
@@ -1238,6 +1314,70 @@ impl ArrangementView {
 		}
 	}
 
+	fn live_input_event(&mut self, input: MidiInputEvent) -> Option<generic_daw_core::Event> {
+		self.armed_track?;
+
+		match input {
+			MidiInputEvent::NoteOn {
+				channel,
+				key,
+				velocity,
+			} => Some(self.live_midi.note_on(channel, key, velocity)),
+			MidiInputEvent::NoteOff {
+				channel,
+				key,
+				velocity,
+			} => self.live_midi.note_off(channel, key, velocity),
+		}
+	}
+
+	fn apply_live_event(&mut self, event: generic_daw_core::Event) {
+		let Some(track) = self.armed_track else {
+			return;
+		};
+
+		self.apply_live_event_to_track(track, event);
+	}
+
+	fn apply_live_event_to_track(&mut self, track: NodeId, event: generic_daw_core::Event) {
+		self.arrangement.track_event(track, event);
+
+		if let Some((recording, node)) = &mut self.midi_recording
+			&& *node == track
+		{
+			recording.on_event(event, self.arrangement.transport());
+		}
+	}
+
+	fn release_live_input(&mut self) {
+		for event in self.live_midi.release_all() {
+			self.apply_live_event(event);
+		}
+	}
+
+	fn finalize_midi_recording(&mut self) {
+		let Some((recording, node)) = self.midi_recording.take() else {
+			return;
+		};
+
+		let pos = recording.start_position(self.arrangement.transport());
+		let Some(pattern) = recording.finalize(self.arrangement.transport()) else {
+			return;
+		};
+		let Some(track) = self.arrangement.track_of(node) else {
+			return;
+		};
+
+		let id = pattern.gui.id;
+		self.arrangement.add_midi_pattern(pattern);
+
+		let mut clip = MidiClip::new(id);
+		clip.position
+			.trim_end_to(self.arrangement.midi_patterns()[&id].len().max(MusicalTime::TICK));
+		clip.position.move_to(pos);
+		self.arrangement.add_clip(track, clip);
+	}
+
 	pub fn view(&self) -> Element<'_, Message> {
 		match self.tab {
 			Tab::Playlist => self.arrangement(),
@@ -1308,6 +1448,11 @@ impl ArrangementView {
 										button_style(self.soloed_track == Some(id))
 									)
 									.on_press(Message::TrackToggleSolo(id)),
+									text_icon_button(
+										"R",
+										button_style(self.armed_track == Some(id))
+									)
+									.on_press(Message::TrackToggleMidiArm(id)),
 									icon_button(
 										mic(),
 										button_style(
@@ -1802,10 +1947,14 @@ impl ArrangementView {
 		.into()
 	}
 
-	pub fn subscription(&self) -> Subscription<Message> {
+	pub fn subscription(&self, config: &Config) -> Subscription<Message> {
 		Subscription::batch([
 			self.clap_host.subscription().map(Message::ClapHost),
 			every(Duration::from_secs(1)).map(|_| Message::UpdateRequest),
+			Subscription::run_with(
+				config.preferred_midi_input_port.clone(),
+				midi_input_stream,
+			),
 		])
 	}
 
@@ -1856,6 +2005,61 @@ impl ArrangementView {
 		}
 	}
 
+	pub fn typing_keyboard_press(
+		physical_key: keyboard::key::Physical,
+		repeat: bool,
+	) -> Option<Message> {
+		if repeat {
+			return None;
+		}
+
+		Some(Message::TypingKeyboardPress(physical_key)).filter(|_| {
+			matches!(
+				physical_key,
+				keyboard::key::Physical::Code(
+					keyboard::key::Code::KeyA
+						| keyboard::key::Code::KeyW
+						| keyboard::key::Code::KeyS
+						| keyboard::key::Code::KeyE
+						| keyboard::key::Code::KeyD
+						| keyboard::key::Code::KeyF
+						| keyboard::key::Code::KeyT
+						| keyboard::key::Code::KeyG
+						| keyboard::key::Code::KeyY
+						| keyboard::key::Code::KeyH
+						| keyboard::key::Code::KeyU
+						| keyboard::key::Code::KeyJ
+						| keyboard::key::Code::KeyK
+						| keyboard::key::Code::KeyZ
+						| keyboard::key::Code::KeyX
+				)
+			)
+		})
+	}
+
+	pub fn typing_keyboard_release(physical_key: keyboard::key::Physical) -> Option<Message> {
+		Some(Message::TypingKeyboardRelease(physical_key)).filter(|_| {
+			matches!(
+				physical_key,
+				keyboard::key::Physical::Code(
+					keyboard::key::Code::KeyA
+						| keyboard::key::Code::KeyW
+						| keyboard::key::Code::KeyS
+						| keyboard::key::Code::KeyE
+						| keyboard::key::Code::KeyD
+						| keyboard::key::Code::KeyF
+						| keyboard::key::Code::KeyT
+						| keyboard::key::Code::KeyG
+						| keyboard::key::Code::KeyY
+						| keyboard::key::Code::KeyH
+						| keyboard::key::Code::KeyU
+						| keyboard::key::Code::KeyJ
+						| keyboard::key::Code::KeyK
+				)
+			)
+		})
+	}
+
 	pub fn get_installed_plugins(&mut self, config: &Config) -> Task<Message> {
 		let scan = Scan::unique();
 
@@ -1893,6 +2097,14 @@ impl ArrangementView {
 
 	pub fn tab(&self) -> &Tab {
 		&self.tab
+	}
+
+	pub fn armed_track(&self) -> Option<NodeId> {
+		self.armed_track
+	}
+
+	pub fn recording_active(&self) -> bool {
+		self.midi_recording.is_some()
 	}
 
 	pub fn midi_clip(&self) -> Option<MidiClip> {
@@ -1955,6 +2167,26 @@ fn format_db(amp: f32) -> String {
 
 pub fn format_now() -> jiff::fmt::strtime::Display<'static> {
 	jiff::Zoned::now().strftime("%F %H-%M-%S")
+}
+
+fn midi_input_stream(port_name: &Option<Arc<str>>) -> iced::futures::stream::BoxStream<'static, Message> {
+	let port_name = port_name.clone();
+
+	stream::channel(64, async move |mut output| {
+		let (sender, receiver) = smol::channel::unbounded();
+		let Some(_connection) = connect_midi_input(port_name.as_deref(), move |event| {
+			_ = sender.try_send(event);
+		}) else {
+			return;
+		};
+
+		while let Ok(event) = receiver.recv().await {
+			if output.send(Message::MidiInput(event)).await.is_err() {
+				return;
+			}
+		}
+	})
+	.boxed()
 }
 
 fn crc(mut r: impl Read) -> u32 {

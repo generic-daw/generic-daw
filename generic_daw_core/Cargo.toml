@@ -21,3 +21,7 @@ oneshot = { version = "0.2.1", features = ["std"] }
 rtrb = "0.3.3"
 rubato = "1.0.1"
 symphonia = { version = "0.5.5", features = ["all", "opt-simd"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+alsa = "0.11"
+libc = "0.2"

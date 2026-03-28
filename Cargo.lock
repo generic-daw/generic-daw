@@ -1137,11 +1137,13 @@ dependencies = [
 name = "generic_daw_core"
 version = "0.0.0"
 dependencies = [
+ "alsa",
  "audio_graph",
  "audioadapter-buffers",
  "clap_host",
  "cpal",
  "hound",
+ "libc",
  "log",
  "midly",
  "oneshot",

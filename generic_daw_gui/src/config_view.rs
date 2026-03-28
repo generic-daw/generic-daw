@@ -11,7 +11,9 @@ use crate::{
 	theme::Theme,
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
 };
-use generic_daw_core::{DeviceDescription, DeviceId, clap_host::DEFAULT_CLAP_PATHS, get_devices};
+use generic_daw_core::{
+	DeviceDescription, DeviceId, clap_host::DEFAULT_CLAP_PATHS, get_devices, get_midi_inputs,
+};
 use iced::{
 	Center, Element, Fill, Font, Task, border, keyboard,
 	mouse::Interaction,
@@ -67,6 +69,7 @@ pub enum Message {
 	RemoveClapPath(usize),
 	MoveClapPath(DragEvent),
 	ChangedTab(Tab),
+	ChangedMidiInput(Option<Arc<str>>),
 	ChangedId(Option<DeviceId>),
 	ChangedSampleRate(NonZero<u32>),
 	ChangedBufferSize(Option<NonZero<u32>>),
@@ -86,6 +89,7 @@ pub struct ConfigView {
 	prev_config: Config,
 	tab: Tab,
 	devices: HashMap<DeviceId, DeviceDescription>,
+	midi_inputs: Box<[Arc<str>]>,
 	input_devices: Box<[DeviceId]>,
 	output_devices: Box<[DeviceId]>,
 	main_window_id: window::Id,
@@ -114,12 +118,18 @@ impl ConfigView {
 		});
 
 		let config = Config::read();
+		let midi_inputs = get_midi_inputs()
+			.into_vec()
+			.into_iter()
+			.map(Arc::from)
+			.collect();
 
 		Self {
 			config: config.clone(),
 			prev_config: config,
 			tab: Tab::Output,
 			devices,
+			midi_inputs,
 			input_devices,
 			output_devices,
 			main_window_id,
@@ -171,6 +181,7 @@ impl ConfigView {
 				}
 			}
 			Message::ChangedTab(tab) => self.tab = tab,
+			Message::ChangedMidiInput(port) => self.config.preferred_midi_input_port = port,
 			Message::ChangedId(id) => self.with_device_mut(|device| {
 				device.id = id;
 			}),
@@ -359,13 +370,16 @@ impl ConfigView {
 					.align_y(Center),
 					column![
 						row![
-							text("Name:").width(Fill),
+							text("MIDI Input:").width(Fill),
 							row![
-								pick_list(device.id.as_ref(), devices, |id| self.devices[id]
-									.to_string())
-								.on_select(|id| Message::ChangedId(Some(id)))
+								pick_list(
+									self.config.preferred_midi_input_port.as_ref(),
+									&*self.midi_inputs,
+									|name| name.to_string()
+								)
+								.on_select(|name| Message::ChangedMidiInput(Some(name)))
 								.handle(PICK_LIST_HANDLE)
-								.placeholder("Default")
+								.placeholder("First available")
 								.width(Fill)
 								.style(pick_list_with_radius(border::top_left(5)))
 								.menu_style(menu_style),
@@ -374,6 +388,29 @@ impl ConfigView {
 										button::primary,
 										border::top_right(5)
 									))
+									.padding(5)
+									.on_press_maybe(
+										self.config
+											.preferred_midi_input_port
+											.as_ref()
+											.map(|_| Message::ChangedMidiInput(None))
+									)
+							]
+						]
+						.align_y(Center),
+						row![
+							text("Name:").width(Fill),
+							row![
+								pick_list(device.id.as_ref(), devices, |id| self.devices[id]
+									.to_string())
+								.on_select(|id| Message::ChangedId(Some(id)))
+								.handle(PICK_LIST_HANDLE)
+								.placeholder("Default")
+								.width(Fill)
+								.style(pick_list_with_radius(0))
+								.menu_style(menu_style),
+								button(rotate_ccw())
+									.style(button_with_radius(button::primary, 0))
 									.padding(5)
 									.on_press_maybe(
 										device.id.as_ref().map(|_| Message::ChangedId(None))

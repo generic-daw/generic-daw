@@ -22,6 +22,7 @@ pub static DEFAULT_SAMPLE_PATHS: LazyLock<Box<[Arc<Path>]>> =
 pub struct Config {
 	pub sample_paths: Vec<Arc<Path>>,
 	pub clap_paths: Vec<Arc<Path>>,
+	pub preferred_midi_input_port: Option<Arc<str>>,
 	pub input_device: Device,
 	pub output_device: Device,
 	pub autosave: Autosave,
@@ -32,11 +33,12 @@ pub struct Config {
 
 impl Default for Config {
 	fn default() -> Self {
-		Self {
-			sample_paths: DEFAULT_SAMPLE_PATHS.clone().into_vec(),
-			clap_paths: Vec::new(),
-			input_device: Device::default(),
-			output_device: Device::default(),
+			Self {
+				sample_paths: DEFAULT_SAMPLE_PATHS.clone().into_vec(),
+				clap_paths: Vec::new(),
+				preferred_midi_input_port: None,
+				input_device: Device::default(),
+				output_device: Device::default(),
 			autosave: Autosave::default(),
 			open_last_project: false,
 			scale_factor: 1.0,

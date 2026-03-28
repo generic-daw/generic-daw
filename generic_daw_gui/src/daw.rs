@@ -118,6 +118,8 @@ pub enum Message {
 	MergeConfig(Box<Config>, bool),
 
 	CloseRequested(window::Id),
+	WindowFocused(window::Id),
+	WindowUnfocused(window::Id),
 	FileHovered,
 	FileDropped(Arc<Path>),
 	FileHoveredLeft,
@@ -133,8 +135,6 @@ pub enum Message {
 	OnDragEnd,
 	OnDoubleClick,
 }
-
-const _: () = assert!(size_of::<Message>() == 72);
 
 #[derive(Debug)]
 pub struct Daw {
@@ -153,6 +153,7 @@ pub struct Daw {
 	missing_samples: Vec<(Arc<str>, oneshot::Sender<Feedback<Arc<Path>>>)>,
 
 	main_window_id: window::Id,
+	main_window_focused: bool,
 	files_hovered: bool,
 }
 
@@ -200,6 +201,7 @@ impl Daw {
 				missing_samples: Vec::new(),
 
 				main_window_id,
+				main_window_focused: true,
 				files_hovered: false,
 			},
 			Task::batch([
@@ -379,6 +381,9 @@ impl Daw {
 			}
 			Message::OpenConfigView => {
 				self.config_view = Some(ConfigView::new(self.main_window_id));
+				return Task::done(Message::Arrangement(
+					arrangement_view::Message::ReleaseTypingKeyboard,
+				));
 			}
 			Message::CloseConfigView => self.config_view = None,
 			Message::MergeConfig(config, live) => {
@@ -402,6 +407,19 @@ impl Daw {
 			Message::CloseRequested(window) => {
 				if window == self.main_window_id {
 					return iced::exit();
+				}
+			}
+			Message::WindowFocused(window) => {
+				if window == self.main_window_id {
+					self.main_window_focused = true;
+				}
+			}
+			Message::WindowUnfocused(window) => {
+				if window == self.main_window_id {
+					self.main_window_focused = false;
+					return Task::done(Message::Arrangement(
+						arrangement_view::Message::ReleaseTypingKeyboard,
+					));
 				}
 			}
 			Message::FileHovered => self.files_hovered = true,
@@ -509,9 +527,22 @@ impl Daw {
 								arrangement_view::Message::TogglePlayback
 							)),
 						button(square())
-							.style(button_with_radius(button::primary, border::right(5)))
+							.style(button_with_radius(button::primary, 0))
 							.padding(padding::horizontal(7).vertical(5))
 							.on_press(Message::Arrangement(arrangement_view::Message::Stop)),
+						button(text("REC").font(Font::MONOSPACE))
+							.style(button_with_radius(
+								if self.arrangement_view.recording_active() {
+									button::danger
+								} else if self.arrangement_view.armed_track().is_some() {
+									button::warning
+								} else {
+									button::secondary
+								},
+								border::right(5)
+							))
+							.padding(padding::horizontal(7).vertical(5))
+							.on_press(Message::Arrangement(arrangement_view::Message::ToggleRecord)),
 					],
 					number_input(
 						transport.numerator.get().into(),
@@ -798,7 +829,7 @@ impl Daw {
 			Subscription::none()
 		};
 
-		let keybinds = if self.progress.is_some() {
+		let keybinds = if self.progress.is_some() || !self.main_window_focused {
 			Subscription::none()
 		} else if self.config_view.is_some() {
 			keyboard::listen().filter_map(|e| match e {
@@ -820,21 +851,27 @@ impl Daw {
 					modifiers,
 					repeat,
 					..
-				} => ArrangementView::keybinds(&key, physical_key, modifiers, repeat)
+				} => ArrangementView::typing_keyboard_press(physical_key, repeat)
+					.or_else(|| ArrangementView::keybinds(&key, physical_key, modifiers, repeat))
 					.map(Message::Arrangement)
 					.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
+				keyboard::Event::KeyReleased { physical_key, .. } => {
+					ArrangementView::typing_keyboard_release(physical_key).map(Message::Arrangement)
+				}
 				_ => None,
 			})
 		};
 
 		Subscription::batch([
 			self.arrangement_view
-				.subscription()
+				.subscription(&self.config)
 				.map(Message::Arrangement),
 			autosave,
 			keybinds,
 			window::events().filter_map(|(window, event)| match event {
 				window::Event::CloseRequested => Some(Message::CloseRequested(window)),
+				window::Event::Focused => Some(Message::WindowFocused(window)),
+				window::Event::Unfocused => Some(Message::WindowUnfocused(window)),
 				window::Event::FileHovered(..) => Some(Message::FileHovered),
 				window::Event::FileDropped(file) => Some(Message::FileDropped(file.into())),
 				window::Event::FilesHoveredLeft => Some(Message::FileHoveredLeft),

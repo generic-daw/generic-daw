@@ -465,6 +465,10 @@ impl Arrangement {
 		self.node_action(self.tracks[track].id, NodeAction::ClipTrimEndTo(clip, pos));
 	}
 
+	pub fn track_event(&mut self, id: NodeId, event: Event) {
+		self.node_action(id, NodeAction::TrackEvent(event));
+	}
+
 	pub fn add_note(&mut self, pattern: MidiPatternId, note: MidiNote) -> usize {
 		self.insert_note(pattern, note, self.midi_patterns[&pattern].notes.len())
 	}
