@@ -35,7 +35,7 @@ use generic_daw_widget::{
 	peak_meter::{MAX_VOL, PeakMeter},
 };
 use iced::{
-	Center, Element, Fill, Point, Shrink, Subscription, Task, Vector,
+	Center, Element, Fill, Shrink, Subscription, Task, Vector,
 	border::{self, Radius},
 	futures::SinkExt as _,
 	keyboard,
@@ -171,8 +171,6 @@ pub enum Message {
 
 	PlaylistAction(playlist::Action),
 	PianoRollAction(piano_roll::Action),
-	Pan(Vector, f32, f32),
-	Zoom(Vector, Point, f32, f32),
 
 	ArrowLeft,
 	ArrowRight,
@@ -670,57 +668,6 @@ impl ArrangementView {
 			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().0.write(&samples),
 			Message::PlaylistAction(action) => return self.handle_playlist_action(action, config),
 			Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
-			Message::Pan(pos_diff, height, visible) => match self.tab {
-				Tab::Playlist => {
-					let old_position = self.playlist_position;
-					self.playlist_position += pos_diff;
-					self.playlist_position.x = self.playlist_position.x.max(0.0);
-					self.playlist_position.y = self
-						.playlist_position
-						.y
-						.clamp(0.0, old_position.y + visible);
-				}
-				Tab::Mixer => {}
-				Tab::PianoRoll => {
-					let old_position = self.piano_roll_position;
-					self.piano_roll_position += pos_diff;
-					self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
-					self.piano_roll_position.y = self
-						.piano_roll_position
-						.y
-						.clamp(0.0, old_position.y + visible - height);
-				}
-			},
-			Message::Zoom(scale_diff, cursor, height, visible) => {
-				let (old_scale, pos, new_scale) = match self.tab {
-					Tab::Playlist => {
-						let old_scale = self.playlist_scale;
-						self.playlist_scale += scale_diff;
-						self.playlist_scale.x = self.playlist_scale.x.clamp(1.0, 16f32.next_down());
-						self.playlist_scale.y = self.playlist_scale.y.clamp(46.0, 200.0);
-						(old_scale, self.playlist_position, self.playlist_scale)
-					}
-					Tab::Mixer => return Action::none(),
-					Tab::PianoRoll => {
-						let old_scale = self.piano_roll_scale;
-						self.piano_roll_scale += scale_diff;
-						self.piano_roll_scale.x =
-							self.piano_roll_scale.x.clamp(1.0, 16f32.next_down());
-						self.piano_roll_scale.y = self
-							.piano_roll_scale
-							.y
-							.clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
-						(old_scale, self.piano_roll_position, self.piano_roll_scale)
-					}
-				};
-
-				let pos_diff = Vector::new(
-					(cursor.x + pos.x) * ((old_scale.x - new_scale.x).exp2() - 1.0),
-					(cursor.y + pos.y) * ((new_scale.y / old_scale.y) - 1.0),
-				);
-
-				return self.update(Message::Pan(pos_diff, height, visible), config);
-			}
 			Message::ArrowLeft => match self.tab {
 				Tab::Playlist => {
 					self.arrangement.seek_to(
@@ -935,6 +882,34 @@ impl ArrangementView {
 		} = self.playlist_selection.get_mut();
 
 		match action {
+			playlist::Action::Pan(pos_diff, visible) => {
+				let old_position = self.playlist_position;
+				self.playlist_position += pos_diff;
+				self.playlist_position.x = self.playlist_position.x.max(0.0);
+				self.playlist_position.y = self
+					.playlist_position
+					.y
+					.clamp(0.0, old_position.y + visible);
+			}
+			playlist::Action::Zoom(scale_diff, cursor, visible) => {
+				let old_scale = self.playlist_scale;
+				self.playlist_scale += scale_diff;
+				self.playlist_scale.x = self.playlist_scale.x.clamp(1.0, 16f32.next_down());
+				self.playlist_scale.y = self.playlist_scale.y.clamp(46.0, 200.0);
+
+				return self.handle_playlist_action(
+					playlist::Action::Pan(
+						Vector::new(
+							(cursor.x + self.playlist_position.x)
+								* ((old_scale.x - self.playlist_scale.x).exp2() - 1.0),
+							(cursor.y + self.playlist_position.y)
+								* ((self.playlist_scale.y / old_scale.y) - 1.0),
+						),
+						visible,
+					),
+					config,
+				);
+			}
 			playlist::Action::Add(track, pos) => {
 				self.clips_loading += 1;
 				return self.update(
@@ -1107,6 +1082,35 @@ impl ArrangementView {
 		} = self.piano_roll_selection.get_mut();
 
 		match action {
+			piano_roll::Action::Pan(pos_diff, height, visible) => {
+				let old_position = self.piano_roll_position;
+				self.piano_roll_position += pos_diff;
+				self.piano_roll_position.x = self.piano_roll_position.x.max(0.0);
+				self.piano_roll_position.y = self
+					.piano_roll_position
+					.y
+					.clamp(0.0, old_position.y + visible - height);
+			}
+			piano_roll::Action::Zoom(scale_diff, cursor, height, visible) => {
+				let old_scale = self.piano_roll_scale;
+				self.piano_roll_scale += scale_diff;
+				self.piano_roll_scale.x = self.piano_roll_scale.x.clamp(1.0, 16f32.next_down());
+				self.piano_roll_scale.y = self
+					.piano_roll_scale
+					.y
+					.clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
+
+				self.handle_piano_roll_action(piano_roll::Action::Pan(
+					Vector::new(
+						(cursor.x + self.piano_roll_position.x)
+							* ((old_scale.x - self.piano_roll_scale.x).exp2() - 1.0),
+						(cursor.y + self.piano_roll_position.y)
+							* ((self.piano_roll_scale.y / old_scale.y) - 1.0),
+					),
+					height,
+					visible,
+				));
+			}
 			piano_roll::Action::Add(key, pos) => {
 				let note = self.arrangement.add_note(
 					clip.pattern,
@@ -1406,13 +1410,16 @@ impl ArrangementView {
 								),
 						)
 					}),
-				Message::Pan,
 				Message::PlaylistAction,
 			),
 			Message::SeekTo,
 			Message::SetLoopMarker,
-			Message::Pan,
-			Message::Zoom,
+			|pos_diff, _, visible| {
+				Message::PlaylistAction(playlist::Action::Pan(pos_diff, visible))
+			},
+			|scale_diff, cursor, _, visible| {
+				Message::PlaylistAction(playlist::Action::Zoom(scale_diff, cursor, visible))
+			},
 		)
 		.into()
 	}
@@ -1786,13 +1793,18 @@ impl ArrangementView {
 							Message::PianoRollAction,
 						)
 					}),
-				Message::Pan,
 				Message::PianoRollAction,
 			),
 			Message::SeekTo,
 			Message::SetLoopMarker,
-			Message::Pan,
-			Message::Zoom,
+			|pos_diff, height, visible| {
+				Message::PianoRollAction(piano_roll::Action::Pan(pos_diff, height, visible))
+			},
+			|scale_diff, cursor, height, visible| {
+				Message::PianoRollAction(piano_roll::Action::Zoom(
+					scale_diff, cursor, height, visible,
+				))
+			},
 		)
 		.with_offset(
 			clip.position

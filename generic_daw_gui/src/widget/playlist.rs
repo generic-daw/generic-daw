@@ -29,6 +29,8 @@ use std::{
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
+	Pan(Vector, f32),
+	Zoom(Vector, Point, f32),
 	Add(usize, MusicalTime),
 	Open(usize, usize),
 	Clone,
@@ -87,7 +89,6 @@ pub struct Playlist<'a, Message> {
 	position: &'a Vector,
 	scale: &'a Vector,
 	tracks: Box<[Track<'a, Message>]>,
-	pan: fn(Vector, f32, f32) -> Message,
 	action: fn(Action) -> Message,
 }
 
@@ -201,7 +202,6 @@ where
 
 			if state.last_autoscroll == Some(now) {
 			} else if let Some(autoscroll_start) = state.autoscroll_start {
-				let height = viewport.height;
 				let visible = layout.position().y + layout.bounds().height - viewport.y;
 
 				let autoscroll_amt = (now - autoscroll_start).as_secs_f32().sqrt();
@@ -219,7 +219,7 @@ where
 					},
 				);
 
-				shell.publish((self.pan)(delta, height, visible));
+				shell.publish((self.action)(Action::Pan(delta, visible)));
 
 				state.last_autoscroll = Some(now);
 			} else {
@@ -644,7 +644,6 @@ where
 		position: &'a Vector,
 		scale: &'a Vector,
 		tracks: impl IntoIterator<Item = Track<'a, Message>>,
-		pan: fn(Vector, f32, f32) -> Message,
 		action: fn(Action) -> Message,
 	) -> Self {
 		Self {
@@ -653,7 +652,6 @@ where
 			position,
 			scale,
 			tracks: tracks.into_iter().collect(),
-			pan,
 			action,
 		}
 	}

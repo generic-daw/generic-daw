@@ -18,6 +18,8 @@ use std::{cell::RefCell, collections::HashSet, time::Instant};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
+	Pan(Vector, f32, f32),
+	Zoom(Vector, Point, f32, f32),
 	Add(MidiKey, MusicalTime),
 	Clone,
 	Drag(Delta<MidiKey>, Delta<MusicalTime>),
@@ -75,7 +77,6 @@ pub struct PianoRoll<'a, Message> {
 	position: &'a Vector,
 	scale: &'a Vector,
 	notes: Box<[Note<'a, Message>]>,
-	pan: fn(Vector, f32, f32) -> Message,
 	action: fn(Action) -> Message,
 }
 
@@ -192,7 +193,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					},
 				);
 
-				shell.publish((self.pan)(delta, height, visible));
+				shell.publish((self.action)(Action::Pan(delta, height, visible)));
 
 				state.last_autoscroll = Some(now);
 			} else {
@@ -516,7 +517,6 @@ impl<'a, Message> PianoRoll<'a, Message> {
 		position: &'a Vector,
 		scale: &'a Vector,
 		notes: impl IntoIterator<Item = Note<'a, Message>>,
-		pan: fn(Vector, f32, f32) -> Message,
 		action: fn(Action) -> Message,
 	) -> Self {
 		Self {
@@ -525,7 +525,6 @@ impl<'a, Message> PianoRoll<'a, Message> {
 			transport,
 			position,
 			scale,
-			pan,
 			action,
 		}
 	}
