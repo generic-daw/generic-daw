@@ -633,16 +633,6 @@ impl Daw {
 			]
 			.padding(10)
 			.spacing(10),
-			self.arrangement_view.hovering_file().then(|| mouse_area(
-				space().width(Fill).height(Fill)
-			)
-			.interaction(Interaction::Copy)
-			.on_release(Message::Arrangement(
-				arrangement_view::Message::LoadHoveredFile,
-			))
-			.on_exit(Message::Arrangement(
-				arrangement_view::Message::LoadHoveredFile,
-			))),
 			self.arrangement_view
 				.loading()
 				.then(|| mouse_area(space().width(Fill).height(Fill))

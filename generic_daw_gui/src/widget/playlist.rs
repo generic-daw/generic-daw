@@ -27,11 +27,11 @@ use std::{
 	time::Instant,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Action {
 	Pan(Vector, f32),
 	Zoom(Vector, Point, f32),
-	Add(usize, MusicalTime),
+	Add(Option<(Arc<Path>, FileKind)>, usize, MusicalTime),
 	Open(usize, usize),
 	Clone,
 	Drag(isize, Delta<MusicalTime>),
@@ -42,8 +42,9 @@ pub enum Action {
 	Delete,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum Status {
+	Hovering(Arc<Path>, FileKind, Option<(usize, MusicalTime)>),
 	Selecting(usize, usize, MusicalTime, MusicalTime),
 	Dragging(usize, MusicalTime),
 	TrimmingStart(MusicalTime),
@@ -59,7 +60,6 @@ pub struct Selection {
 	pub status: Status,
 	pub primary: HashSet<(usize, usize)>,
 	pub secondary: HashSet<(usize, usize)>,
-	pub file: Option<(Arc<Path>, FileKind, Option<(usize, MusicalTime)>)>,
 }
 
 impl Selection {
@@ -166,12 +166,6 @@ where
 			}
 
 			if selection.status == Status::None {
-				if let Some((_, _, hovering)) = &mut selection.file
-					&& hovering.is_some()
-				{
-					*hovering = None;
-					shell.request_redraw();
-				}
 				return;
 			}
 
@@ -256,7 +250,7 @@ where
 					{
 						selection.primary.clear();
 						selection.status = Status::Dragging(track, time);
-						shell.publish((self.action)(Action::Add(track, time)));
+						shell.publish((self.action)(Action::Add(None, track, time)));
 					} else {
 						selection.primary.clear();
 						shell.capture_event();
@@ -272,29 +266,34 @@ where
 			Event::Mouse(mouse::Event::ButtonReleased { .. })
 				if selection.status != Status::None =>
 			{
+				if let Status::Hovering(path, kind, Some((track, time))) = selection.status.clone()
+				{
+					shell.publish((self.action)(Action::Add(Some((path, kind)), track, time)));
+				}
+
 				selection.reset();
 				shell.capture_event();
 				shell.request_redraw();
 			}
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
-			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match &mut selection.file {
-				Some((_, _, time)) => {
-					let track = track_idx(&layout, *viewport, cursor)
-						.unwrap_or_else(|| layout.children().len());
+			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
+				match selection.status.clone() {
+					Status::Hovering(path, kind, time) => {
+						let track = track_idx(&layout, *viewport, cursor)
+							.unwrap_or_else(|| layout.children().len());
 
-					let new_time = maybe_snap(new_time, *modifiers, |time| {
-						time.snap_floor(self.scale.x, self.transport)
-					});
+						let new_time = maybe_snap(new_time, *modifiers, |time| {
+							time.snap_floor(self.scale.x, self.transport)
+						});
 
-					let new_time = Some((track, new_time));
+						let new_time = Some((track, new_time));
 
-					if *time != new_time {
-						*time = new_time;
-						shell.capture_event();
-						shell.request_redraw();
+						if time != new_time {
+							selection.status = Status::Hovering(path, kind, new_time);
+							shell.capture_event();
+							shell.request_redraw();
+						}
 					}
-				}
-				None => match selection.status {
 					Status::Selecting(start_track, last_end_track, start_pos, last_end_pos) => {
 						let Some(end_track) = track_idx(&layout, *viewport, cursor)
 							.or_else(|| layout.children().len().checked_sub(1))
@@ -431,8 +430,8 @@ where
 						}
 					}
 					Status::None => {}
-				},
-			},
+				}
+			}
 			_ => {}
 		}
 	}
@@ -467,7 +466,7 @@ where
 			);
 		}
 
-		if let Some((_, _, Some((track, time)))) = selection.file {
+		if let Status::Hovering(_, _, Some((track, time))) = selection.status {
 			if let Some(bounds) = layout.children().nth(track).map(|layout| layout.bounds()) {
 				renderer.fill_quad(
 					Quad {
@@ -574,6 +573,7 @@ where
 		renderer: &Renderer,
 	) -> Interaction {
 		match self.selection.borrow().status {
+			Status::Hovering(..) => Interaction::Copy,
 			Status::Selecting(..) => Interaction::Idle,
 			Status::Dragging(..) => Interaction::Grabbing,
 			Status::TrimmingStart(..) | Status::TrimmingEnd(..) | Status::DraggingSplit(..) => {

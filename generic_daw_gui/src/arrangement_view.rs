@@ -148,7 +148,6 @@ pub enum Message {
 	PluginMoveTo(NodeId, DragEvent),
 	PluginRemove(NodeId, usize),
 
-	LoadHoveredFile,
 	SampleLoaded(NoClone<Option<Box<SamplePair>>>, usize, MusicalTime),
 	MidiPatternLoaded(NoClone<Option<Box<MidiPatternPair>>>, usize, MusicalTime),
 	AddAudioClip(SampleId, usize, MusicalTime),
@@ -440,45 +439,6 @@ impl ArrangementView {
 				}
 			}
 			Message::PluginRemove(node, i) => _ = self.arrangement.plugin_remove(node, i),
-			Message::LoadHoveredFile => {
-				let playlist::Selection { file, .. } = self.playlist_selection.get_mut();
-				if let (Some((path, kind, Some((track, pos)))), Tab::Playlist) =
-					(std::mem::take(file), self.tab)
-				{
-					return if kind == FileKind::Midi {
-						self.clips_loading += 1;
-						let transport = *self.arrangement.transport();
-						Task::future(unblock(move || {
-							Message::MidiPatternLoaded(
-								MidiPatternPair::from_midi(path, &transport)
-									.map(Box::new)
-									.into(),
-								track,
-								pos,
-							)
-						}))
-						.into()
-					} else if let Some(sample) = self
-						.arrangement
-						.samples()
-						.values()
-						.find(|sample| sample.path == path)
-					{
-						self.update(Message::AddAudioClip(sample.id, track, pos), config)
-					} else {
-						self.clips_loading += 1;
-						let transport = *self.arrangement.transport();
-						Task::future(unblock(move || {
-							Message::SampleLoaded(
-								SamplePair::new(path, &transport).map(Box::new).into(),
-								track,
-								pos,
-							)
-						}))
-						.into()
-					};
-				}
-			}
 			Message::SampleLoaded(NoClone(sample), track, pos) => {
 				self.clips_loading -= 1;
 
@@ -910,19 +870,54 @@ impl ArrangementView {
 					config,
 				);
 			}
-			playlist::Action::Add(track, pos) => {
-				self.clips_loading += 1;
-				return self.update(
-					Message::MidiPatternLoaded(
-						NoClone(Some(Box::new(MidiPatternPair::from_notes(
-							Vec::new(),
-							"MIDI Pattern",
-						)))),
-						track,
-						pos,
-					),
-					config,
-				);
+			playlist::Action::Add(info, track, pos) => {
+				return if let Some((path, kind)) = info {
+					if kind == FileKind::Midi {
+						self.clips_loading += 1;
+						let transport = *self.arrangement.transport();
+						Task::future(unblock(move || {
+							Message::MidiPatternLoaded(
+								MidiPatternPair::from_midi(path, &transport)
+									.map(Box::new)
+									.into(),
+								track,
+								pos,
+							)
+						}))
+						.into()
+					} else if let Some(sample) = self
+						.arrangement
+						.samples()
+						.values()
+						.find(|sample| sample.path == path)
+					{
+						self.update(Message::AddAudioClip(sample.id, track, pos), config)
+					} else {
+						self.clips_loading += 1;
+						let transport = *self.arrangement.transport();
+						Task::future(unblock(move || {
+							Message::SampleLoaded(
+								SamplePair::new(path, &transport).map(Box::new).into(),
+								track,
+								pos,
+							)
+						}))
+						.into()
+					}
+				} else {
+					self.clips_loading += 1;
+					self.update(
+						Message::MidiPatternLoaded(
+							NoClone(Some(Box::new(MidiPatternPair::from_notes(
+								Vec::new(),
+								"MIDI Pattern",
+							)))),
+							track,
+							pos,
+						),
+						config,
+					)
+				};
 			}
 			playlist::Action::Open(track, clip) => {
 				if self.midi_clip != Some((track, clip)) {
@@ -1900,11 +1895,7 @@ impl ArrangementView {
 	}
 
 	pub fn hover_file(&mut self, file: Arc<Path>, kind: FileKind) {
-		self.playlist_selection.get_mut().file = Some((file, kind, None));
-	}
-
-	pub fn hovering_file(&self) -> bool {
-		self.playlist_selection.borrow().file.is_some()
+		self.playlist_selection.get_mut().status = playlist::Status::Hovering(file, kind, None);
 	}
 
 	pub fn tab(&self) -> &Tab {
