@@ -1,10 +1,11 @@
-use crate::{PluginDescriptor, host::Host};
+use crate::{PluginDescriptor, host::Host, main_thread::MainThread, shared::Shared};
 use clack_extensions::preset_discovery::prelude::*;
 use clack_host::prelude::*;
 use log::{log_enabled, warn};
 use std::{
 	ffi::{CStr, CString},
 	fmt::Write as _,
+	sync::mpsc,
 	sync::Arc,
 };
 use walkdir::WalkDir;
@@ -17,6 +18,16 @@ pub struct Preset {
 }
 
 impl Preset {
+	pub fn supports(
+		plugin: &PluginInstance<Host>,
+		entry: &PluginEntry,
+	) -> bool {
+		plugin.access_shared_handler(|s| s.ext.preset_load.get()).is_some()
+			&& entry
+				.get_factory::<PresetDiscoveryFactory<'_>>()
+				.is_some()
+	}
+
 	pub fn all(
 		plugin: &PluginInstance<Host>,
 		entry: &PluginEntry,
@@ -97,6 +108,23 @@ impl Preset {
 		}
 
 		Some(presets.into_boxed_slice())
+	}
+
+	pub fn scan(descriptor: PluginDescriptor, host: HostInfo) -> Option<Box<[Self]>> {
+		// SAFETY:
+		// Loading an external library object file is inherently unsafe.
+		let entry = unsafe { PluginEntry::load(&*descriptor.path) }.ok()?;
+		let (shared_sender, _receiver) = mpsc::channel();
+		let instance = PluginInstance::new(
+			|()| Shared::new(descriptor.clone(), shared_sender),
+			|shared| MainThread::new(shared),
+			&entry,
+			&descriptor.id,
+			&host,
+		)
+		.ok()?;
+
+		Self::all(&instance, &entry, &descriptor, &host)
 	}
 }
 

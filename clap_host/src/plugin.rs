@@ -15,15 +15,29 @@ use rtrb::{Producer, PushError, RingBuffer};
 use std::{
 	io::Cursor,
 	num::NonZero,
-	sync::{atomic::Ordering::Relaxed, mpsc::Receiver},
+	sync::{
+		atomic::Ordering::Relaxed,
+		mpsc::{self, Receiver},
+	},
+	thread,
 };
 use utils::{NoClone, NoDebug};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PresetScanState {
+	Idle,
+	Scanning,
+	Ready,
+	Failed,
+}
 
 #[derive(Debug)]
 pub struct Plugin<Event: EventImpl> {
 	gui: Gui,
 	params: Box<[Param]>,
 	presets: Box<[Preset]>,
+	preset_scan: Option<Receiver<Option<Box<[Preset]>>>>,
+	preset_scan_state: PresetScanState,
 	instance: NoDebug<PluginInstance<Host>>,
 	descriptor: PluginDescriptor,
 	producer: Producer<AudioThreadMessage<Event>>,
@@ -45,7 +59,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		// Loading an external library object file is inherently unsafe.
 		let entry = unsafe { PluginEntry::load(&*descriptor.path) }.unwrap();
 
-		let (shared_sender, receiver) = std::sync::mpsc::channel();
+		let (shared_sender, receiver) = mpsc::channel();
 		let (producer, audio_consumer) = RingBuffer::new(frames.get() as usize);
 
 		let mut instance = PluginInstance::new(
@@ -63,6 +77,21 @@ impl<Event: EventImpl> Plugin<Event> {
 			max_frames_count: frames.get(),
 		};
 
+		let (preset_scan, preset_scan_state) = if Preset::supports(&instance, &entry) {
+			let (sender, receiver) = mpsc::channel();
+			let descriptor = descriptor.clone();
+			let host = host.clone();
+			thread::Builder::new()
+				.name(format!("preset-scan-{}", descriptor.name))
+				.spawn(move || {
+					_ = sender.send(Preset::scan(descriptor, host));
+				})
+				.ok();
+			(Some(receiver), PresetScanState::Scanning)
+		} else {
+			(None, PresetScanState::Idle)
+		};
+
 		(
 			AudioProcessor::new(
 				descriptor.clone(),
@@ -73,7 +102,9 @@ impl<Event: EventImpl> Plugin<Event> {
 			Self {
 				gui: Gui::new(&mut instance),
 				params: Param::all(&mut instance).unwrap_or_default(),
-				presets: Preset::all(&instance, &entry, &descriptor, host).unwrap_or_default(),
+				presets: Box::default(),
+				preset_scan,
+				preset_scan_state,
 				instance: instance.into(),
 				descriptor,
 				producer,
@@ -89,7 +120,7 @@ impl<Event: EventImpl> Plugin<Event> {
 	fn send(&mut self, mut message: AudioThreadMessage<Event>) {
 		while let Err(PushError::Full(msg)) = self.producer.push(message) {
 			message = msg;
-			std::thread::yield_now();
+			thread::yield_now();
 		}
 	}
 
@@ -227,6 +258,34 @@ impl<Event: EventImpl> Plugin<Event> {
 	#[must_use]
 	pub fn presets(&self) -> &[Preset] {
 		&self.presets
+	}
+
+	#[must_use]
+	pub fn preset_scan_state(&self) -> PresetScanState {
+		self.preset_scan_state
+	}
+
+	pub fn poll_preset_scan(&mut self) {
+		let Some(scan) = &self.preset_scan else {
+			return;
+		};
+
+		match scan.try_recv() {
+			Ok(Some(presets)) => {
+				self.presets = presets;
+				self.preset_scan = None;
+				self.preset_scan_state = PresetScanState::Ready;
+			}
+			Ok(None) => {
+				self.preset_scan = None;
+				self.preset_scan_state = PresetScanState::Failed;
+			}
+			Err(mpsc::TryRecvError::Empty) => {}
+			Err(mpsc::TryRecvError::Disconnected) => {
+				self.preset_scan = None;
+				self.preset_scan_state = PresetScanState::Failed;
+			}
+		}
 	}
 
 	pub fn load_preset(&mut self, preset: usize) {

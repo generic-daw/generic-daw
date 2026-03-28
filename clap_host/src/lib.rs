@@ -37,7 +37,7 @@ pub use clack_host::{
 };
 pub use event_impl::EventImpl;
 pub use main_thread::MainThreadMessage;
-pub use plugin::Plugin;
+pub use plugin::{Plugin, PresetScanState};
 pub use plugin_descriptor::PluginDescriptor;
 pub use size::Size;
 

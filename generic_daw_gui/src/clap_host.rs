@@ -29,6 +29,7 @@ pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
 	SendEvent(PluginId, Event),
 	TickTimer(Duration),
+	PollPresetScan,
 	GuiOpen(PluginId),
 	GuiOpened(PluginId, NoClone<Box<Fragile<Plugin<Event>>>>),
 	WindowResized(window::Id, iced::Size),
@@ -76,6 +77,9 @@ impl ClapHost {
 							plugin.tick_timer(timer_id);
 						}
 					});
+			}
+			Message::PollPresetScan => {
+				self.plugins.values_mut().for_each(Plugin::poll_preset_scan);
 			}
 			Message::GuiOpen(id) => {
 				let Some(plugin) = self.plugins.get_mut(&id) else {
@@ -340,6 +344,16 @@ impl ClapHost {
 				.iter()
 				.filter(|(_, v)| v.values().any(|v| !v.is_empty()))
 				.map(|(&k, _)| every(k).with(k).map(|(k, _)| Message::TickTimer(k)))
+				.chain(
+					self.plugins
+						.values()
+						.any(|plugin| {
+							plugin.preset_scan_state()
+								== generic_daw_core::clap_host::PresetScanState::Scanning
+						})
+						.then(|| every(Duration::from_millis(250)).map(|_| Message::PollPresetScan))
+						.into_iter(),
+				)
 				.chain([window::events().filter_map(|(id, event)| match event {
 					window::Event::Resized(size) => Some(Message::WindowResized(id, size)),
 					window::Event::Opened { scale_factor, .. }
