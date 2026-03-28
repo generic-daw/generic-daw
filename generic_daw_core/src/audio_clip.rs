@@ -13,19 +13,13 @@ impl AudioClip {
 		let sample = &state.samples[&self.sample];
 
 		let (start, end, offset) = self.position.to_samples(&state.transport);
-		let len = sample.samples.len().saturating_sub(offset).min(end - start);
+		let len = sample.len().saturating_sub(offset).min(end - start);
 		let uidx = state.transport.sample.abs_diff(start).min(len);
 
 		if state.transport.sample > start {
-			sample.samples[offset..][..len][uidx..]
-				.iter()
-				.zip(audio)
-				.for_each(|(sample, buf)| *buf += sample);
+			sample.mix_into(offset + uidx, &mut audio[..len - uidx]);
 		} else {
-			sample.samples[offset..][..len]
-				.iter()
-				.zip(&mut audio[uidx..])
-				.for_each(|(sample, buf)| *buf += sample);
+			sample.mix_into(offset, &mut audio[uidx..uidx + len]);
 		}
 	}
 }

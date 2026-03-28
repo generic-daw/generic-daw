@@ -1,5 +1,5 @@
 use crate::{
-	DeviceId, Sample, SampleId, Stream, Transport, build_input_stream, resampler::Resampler,
+	DeviceId, Sample, Stream, Transport, build_input_stream, resampler::Resampler,
 	stream::frames_of_config,
 };
 use cpal::StreamConfig;
@@ -7,6 +7,12 @@ use hound::{SampleFormat, WavSpec, WavWriter};
 use rtrb::Consumer;
 use std::{io, num::NonZero};
 use utils::NoDebug;
+
+#[derive(Debug)]
+pub struct RecordedSample {
+	pub sample: Sample,
+	pub samples: Box<[f32]>,
+}
 
 #[derive(Debug)]
 pub struct Recording<W: io::Write + io::Seek> {
@@ -81,7 +87,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		}
 	}
 
-	pub fn split_off(&mut self, writer: W, transport: &Transport) -> Sample {
+	pub fn split_off(&mut self, writer: W, transport: &Transport) -> RecordedSample {
 		let mut resampler = Resampler::new(
 			NonZero::new(self.config.sample_rate).unwrap(),
 			transport.sample_rate,
@@ -110,9 +116,11 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		}
 		writer.finalize().unwrap();
 
-		Sample {
-			id: SampleId::unique(),
-			samples: NoDebug(samples.into()),
+		let samples = samples.into_boxed_slice();
+
+		RecordedSample {
+			sample: Sample::from_samples(samples.clone()).unwrap(),
+			samples,
 		}
 	}
 
@@ -121,7 +129,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	}
 
 	#[must_use]
-	pub fn finalize(self) -> Sample {
+	pub fn finalize(self) -> RecordedSample {
 		let Self {
 			resampler,
 			writer: NoDebug(mut writer),
@@ -139,9 +147,11 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		}
 		writer.finalize().unwrap();
 
-		Sample {
-			id: SampleId::unique(),
-			samples: NoDebug(samples.into()),
+		let samples = samples.into_boxed_slice();
+
+		RecordedSample {
+			sample: Sample::from_samples(samples.clone()).unwrap(),
+			samples,
 		}
 	}
 }

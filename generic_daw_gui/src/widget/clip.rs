@@ -383,7 +383,6 @@ where
 				if cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
 						inner.sample.lods.mesh(
-							&inner.sample.samples,
 							self.transport,
 							inner.clip.position,
 							self.scale.x,
@@ -463,7 +462,6 @@ where
 						.into();
 
 						inner.lods.mesh(
-							inner.core.samples(),
 							self.transport,
 							position,
 							self.scale.x,

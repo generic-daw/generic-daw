@@ -66,7 +66,7 @@ impl Recording {
 		let core = self
 			.core
 			.split_off(BufWriter::new(File::create(&path).unwrap()), transport);
-		self.lods.update(self.core.samples(), start);
+		self.lods.update(&core.samples, start);
 
 		let mut lods = Lods::default();
 		std::mem::swap(&mut self.lods, &mut lods);
@@ -80,16 +80,16 @@ impl Recording {
 
 		SamplePair {
 			gui: Sample {
-				id: core.id,
+				id: core.sample.id,
 				lods: lods.finalize(),
 				name,
 				path: path.clone(),
-				samples: core.samples.clone(),
+				sample_len: core.sample.len(),
 				crc: crc(File::open(&path).unwrap()),
 				len: std::fs::metadata(path).unwrap().len(),
 				refs: 0,
 			},
-			core,
+			core: core.sample,
 		}
 	}
 
@@ -104,16 +104,16 @@ impl Recording {
 
 		SamplePair {
 			gui: Sample {
-				id: core.id,
+				id: core.sample.id,
 				lods: self.lods.finalize(),
 				name: self.name,
 				path: self.path.clone(),
-				samples: core.samples.clone(),
+				sample_len: core.sample.len(),
 				crc: crc(File::open(&self.path).unwrap()),
 				len: std::fs::metadata(self.path).unwrap().len(),
 				refs: 0,
 			},
-			core,
+			core: core.sample,
 		}
 	}
 }

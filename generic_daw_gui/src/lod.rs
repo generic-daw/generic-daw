@@ -11,16 +11,22 @@ use utils::NoDebug;
 
 const STEP_SIZE: usize = 3;
 const CHUNK_SIZE: usize = 1 << STEP_SIZE;
-const TOTAL_LOD_LEVELS: usize = 5;
-const SAVED_LOD_LEVELS: usize = TOTAL_LOD_LEVELS - 1;
+const BASE_SAMPLES: usize = 2 * CHUNK_SIZE;
+const LOD_LEVELS: usize = 5;
 
 #[derive(Debug, Default)]
-pub struct Lods<T: AsRef<[(f32, f32)]>>(NoDebug<[T; SAVED_LOD_LEVELS]>);
+pub struct Lods<T: AsRef<[(f32, f32)]>>(NoDebug<[T; LOD_LEVELS]>);
+
+#[derive(Debug)]
+pub struct LodsBuilder {
+	lods: [Vec<(f32, f32)>; LOD_LEVELS],
+	pending_samples: Vec<f32>,
+	pending_lods: [Vec<(f32, f32)>; LOD_LEVELS - 1],
+}
 
 impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 	pub fn mesh(
 		&self,
-		samples: &[f32],
 		transport: &Transport,
 		position: OffsetPosition,
 		x_scale: f32,
@@ -73,70 +79,50 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 				.collect()
 		}
 
-		let mesh_lod = x_scale as usize - 1;
-		let saved_lod = mesh_lod / STEP_SIZE;
-		let lod_slices_per_mesh_slice = 1 << (mesh_lod % STEP_SIZE);
-
-		let samples_per_mesh_slice = x_scale.floor().exp2();
 		let samples_per_px = x_scale.exp2();
+		let saved_lod = (x_scale.floor().exp2() as usize / BASE_SAMPLES)
+			.max(1)
+			.ilog2() as usize
+			/ STEP_SIZE;
+		let saved_lod = saved_lod.min(LOD_LEVELS - 1);
 
-		let px_per_mesh_slice = samples_per_mesh_slice / samples_per_px;
-
-		let lod_slices_per_sample = lod_slices_per_mesh_slice as f32 / samples_per_mesh_slice;
-		let lod_slices_per_px = lod_slices_per_mesh_slice as f32 / px_per_mesh_slice;
+		let samples_per_lod_slice = BASE_SAMPLES << (saved_lod * STEP_SIZE);
+		let samples_per_mesh_slice = samples_per_px.floor().max(samples_per_lod_slice as f32);
+		let samples_per_mesh_slice = samples_per_mesh_slice as usize;
+		let lod_slices_per_mesh_slice =
+			(samples_per_mesh_slice / samples_per_lod_slice).next_power_of_two();
+		let samples_per_mesh_slice = samples_per_lod_slice * lod_slices_per_mesh_slice;
+		let px_per_mesh_slice = samples_per_mesh_slice as f32 / samples_per_px;
 
 		let (start, end, offset) = position.to_samples(transport);
+		let hidden_start_samples = 0.0f32.max(hidden_start_px * -samples_per_px).round() as usize;
+		let visible_start = offset + hidden_start_samples;
+		let visible_len = (end - start).saturating_sub(hidden_start_samples).min(
+			(clipped_size.width * samples_per_px).ceil() as usize + samples_per_mesh_slice,
+		);
+		let visible_end = visible_start + visible_len;
 
-		let hidden_start_samples = 0f32.max(hidden_start_px * -samples_per_px);
+		let first_lod = (visible_start / samples_per_lod_slice / lod_slices_per_mesh_slice)
+			* lod_slices_per_mesh_slice;
+		let last_lod = visible_end.div_ceil(samples_per_lod_slice);
+		let last_lod = last_lod.div_ceil(lod_slices_per_mesh_slice) * lod_slices_per_mesh_slice;
+		let last_lod = last_lod.min(self.0[saved_lod].as_ref().len());
 
-		let lod_start_f = (offset as f32 + hidden_start_samples) * lod_slices_per_sample;
-		let view_len_f = (end - start) as f32 * lod_slices_per_sample;
-		let view_len_f = view_len_f.min(clipped_size.width * lod_slices_per_px);
-		let lod_end_f = lod_start_f + view_len_f;
-
-		let lod_start = lod_start_f / lod_slices_per_mesh_slice as f32;
-		let lod_start = lod_start as usize * lod_slices_per_mesh_slice;
-		let lod_end = lod_end_f / lod_slices_per_mesh_slice as f32;
-		let lod_end = lod_end as usize * lod_slices_per_mesh_slice;
-
-		let lod_len = saved_lod
-			.checked_sub(1)
-			.map_or(samples.len() / 2, |saved_lod| {
-				self.0[saved_lod].as_ref().len()
-			});
-		let lod_end = lod_end.min(lod_len);
-
-		if lod_end <= lod_start {
+		if last_lod <= first_lod {
 			return None;
 		}
 
 		let color = color::pack(color);
-		let jitter_correct = -(offset as f32 / samples_per_mesh_slice).fract() * px_per_mesh_slice;
-		let vertices = saved_lod.checked_sub(1).map_or_else(
-			|| {
-				vertices(
-					samples[2 * lod_start..2 * lod_end]
-						.chunks(2 * lod_slices_per_mesh_slice)
-						.map(samples_min_max),
-					height,
-					color,
-					px_per_mesh_slice,
-					jitter_correct,
-					hidden_top_px,
-				)
-			},
-			|saved_lod| {
-				vertices(
-					self.0[saved_lod].as_ref()[lod_start..lod_end]
-						.chunks(lod_slices_per_mesh_slice)
-						.map(lod_min_max),
-					height,
-					color,
-					px_per_mesh_slice,
-					jitter_correct,
-					hidden_top_px,
-				)
-			},
+		let jitter_correct = -((offset % samples_per_mesh_slice) as f32 / samples_per_px);
+		let vertices = vertices(
+			self.0[saved_lod].as_ref()[first_lod..last_lod]
+				.chunks(lod_slices_per_mesh_slice)
+				.map(lod_min_max),
+			height,
+			color,
+			px_per_mesh_slice,
+			jitter_correct,
+			hidden_top_px,
 		);
 
 		if vertices.len() < 3 {
@@ -158,7 +144,7 @@ impl<T: AsRef<[(f32, f32)]>> Lods<T> {
 impl Lods<Box<[(f32, f32)]>> {
 	pub fn new(samples: &[f32]) -> Self {
 		let mut lods = Lods(NoDebug(std::array::from_fn(|i| {
-			Vec::with_capacity(samples.len().div_ceil(1 << ((i + 1) * STEP_SIZE + 1)))
+			Vec::with_capacity(samples.len().div_ceil(BASE_SAMPLES << (i * STEP_SIZE)))
 		})));
 		lods.update(samples, 0);
 		lods.finalize()
@@ -167,12 +153,11 @@ impl Lods<Box<[(f32, f32)]>> {
 
 impl Lods<Vec<(f32, f32)>> {
 	pub fn update(&mut self, samples: &[f32], mut start: usize) {
-		const FIRST: usize = 2 * CHUNK_SIZE;
-		start /= FIRST;
+		start /= BASE_SAMPLES;
 		self.0[0].truncate(start);
-		self.0[0].extend(samples[FIRST * start..].chunks(FIRST).map(samples_min_max));
+		self.0[0].extend(samples[BASE_SAMPLES * start..].chunks(BASE_SAMPLES).map(samples_min_max));
 
-		for i in 1..SAVED_LOD_LEVELS {
+		for i in 1..LOD_LEVELS {
 			let [last, current] = &mut self.0[i - 1..=i] else {
 				unreachable!();
 			};
@@ -189,6 +174,72 @@ impl Lods<Vec<(f32, f32)>> {
 
 	pub fn finalize(self) -> Lods<Box<[(f32, f32)]>> {
 		Lods(self.0.0.map(Vec::into_boxed_slice).into())
+	}
+}
+
+impl Default for LodsBuilder {
+	fn default() -> Self {
+		Self {
+			lods: std::array::from_fn(|_| Vec::new()),
+			pending_samples: Vec::new(),
+			pending_lods: std::array::from_fn(|_| Vec::new()),
+		}
+	}
+}
+
+impl LodsBuilder {
+	pub fn push_samples(&mut self, mut samples: &[f32]) {
+		if !self.pending_samples.is_empty() {
+			let take = (BASE_SAMPLES - self.pending_samples.len()).min(samples.len());
+			self.pending_samples.extend_from_slice(&samples[..take]);
+			samples = &samples[take..];
+
+			if self.pending_samples.len() == BASE_SAMPLES {
+				let pair = samples_min_max(&self.pending_samples);
+				self.pending_samples.clear();
+				self.push_lod(0, pair);
+			}
+		}
+
+		while samples.len() >= BASE_SAMPLES {
+			self.push_lod(0, samples_min_max(&samples[..BASE_SAMPLES]));
+			samples = &samples[BASE_SAMPLES..];
+		}
+
+		self.pending_samples.extend_from_slice(samples);
+	}
+
+	pub fn finish(mut self) -> Lods<Box<[(f32, f32)]>> {
+		if !self.pending_samples.is_empty() {
+			let pair = samples_min_max(&self.pending_samples);
+			self.pending_samples.clear();
+			self.push_lod(0, pair);
+		}
+
+		for level in 0..self.pending_lods.len() {
+			if !self.pending_lods[level].is_empty() {
+				let pair = lod_min_max(&self.pending_lods[level]);
+				self.pending_lods[level].clear();
+				self.push_lod(level + 1, pair);
+			}
+		}
+
+		Lods(self.lods.map(Vec::into_boxed_slice).into())
+	}
+
+	fn push_lod(&mut self, level: usize, pair: (f32, f32)) {
+		self.lods[level].push(pair);
+
+		let Some(pending) = self.pending_lods.get_mut(level) else {
+			return;
+		};
+
+		pending.push(pair);
+		if pending.len() == CHUNK_SIZE {
+			let pair = lod_min_max(pending);
+			pending.clear();
+			self.push_lod(level + 1, pair);
+		}
 	}
 }
 

@@ -1,7 +1,9 @@
-use crate::{arrangement_view::crc, lod::Lods};
+use crate::{
+	arrangement_view::crc,
+	lod::{Lods, LodsBuilder},
+};
 use generic_daw_core::{SampleId, Transport};
 use std::{fs::File, path::Path, sync::Arc};
-use utils::NoDebug;
 
 #[derive(Debug)]
 pub struct Sample {
@@ -9,7 +11,7 @@ pub struct Sample {
 	pub lods: Lods<Box<[(f32, f32)]>>,
 	pub name: Arc<str>,
 	pub path: Arc<Path>,
-	pub samples: NoDebug<Arc<[f32]>>,
+	pub sample_len: usize,
 	pub crc: u32,
 	pub len: u64,
 	pub refs: usize,
@@ -38,13 +40,18 @@ impl SamplePair {
 		len: u64,
 	) -> Option<Self> {
 		let name = path.file_name()?.to_str()?.into();
-		let core = generic_daw_core::Sample::new(Box::from(File::open(&path).ok()?), transport)?;
+		let mut lods = LodsBuilder::default();
+		let core = generic_daw_core::Sample::new_with_callback(
+			Box::from(File::open(&path).ok()?),
+			transport,
+			|samples, _| lods.push_samples(samples),
+		)?;
 		let gui = Sample {
 			id: core.id,
-			lods: Lods::new(&core.samples),
+			lods: lods.finish(),
 			path,
 			name,
-			samples: core.samples.clone(),
+			sample_len: core.len(),
 			crc,
 			len,
 			refs: 0,
