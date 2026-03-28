@@ -60,6 +60,7 @@ pub enum Message {
 #[derive(Debug)]
 pub enum NodeAction {
 	ClipAdd(Clip, usize),
+	ClipReplace(Clip, usize),
 	ClipRemove(usize),
 	ClipMoveTo(usize, MusicalTime),
 	ClipTrimStartTo(usize, MusicalTime),

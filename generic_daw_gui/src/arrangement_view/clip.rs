@@ -52,9 +52,21 @@ impl From<MidiClip> for Clip {
 impl From<Clip> for generic_daw_core::Clip {
 	fn from(value: Clip) -> Self {
 		match value {
-			Clip::Audio(AudioClip { sample, position }) => {
-				Self::Audio(generic_daw_core::AudioClip { sample, position })
-			}
+			Clip::Audio(AudioClip {
+				sample,
+				position,
+				gain,
+				fade_in,
+				fade_out,
+				reversed,
+			}) => Self::Audio(generic_daw_core::AudioClip {
+				sample,
+				position,
+				gain,
+				fade_in,
+				fade_out,
+				reversed,
+			}),
 			Clip::Midi(MidiClip { pattern, position }) => {
 				Self::Midi(generic_daw_core::MidiClip { pattern, position })
 			}

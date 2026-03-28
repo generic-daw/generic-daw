@@ -44,8 +44,8 @@ use iced::{
 	padding, stream,
 	time::every,
 	widget::{
-		button, center_x, column, combo_box, container, mouse_area, opaque, row, rule, scrollable,
-		slider, text, vertical_slider,
+		button, center, center_x, column, combo_box, container, mouse_area, opaque, row, rule,
+		scrollable, slider, space, stack, text, vertical_slider,
 	},
 	window,
 };
@@ -179,6 +179,12 @@ pub enum Message {
 	TypingKeyboardPress(keyboard::key::Physical),
 	TypingKeyboardRelease(keyboard::key::Physical),
 	ReleaseTypingKeyboard,
+	CloseAudioClipInspector,
+	AudioClipGainChanged(f32),
+	AudioClipFadeInChanged(f32),
+	AudioClipFadeOutChanged(f32),
+	AudioClipToggleReverse,
+	AudioClipReset,
 
 	PlaylistAction(playlist::Action),
 	PianoRollAction(piano_roll::Action),
@@ -215,6 +221,7 @@ pub struct ArrangementView {
 	midi_recording: Option<(MidiRecording, NodeId)>,
 	armed_track: Option<NodeId>,
 	live_midi: LiveMidiState,
+	audio_clip_inspector: Option<(usize, usize)>,
 
 	playlist_position: Vector,
 	playlist_scale: Vector,
@@ -262,6 +269,7 @@ impl ArrangementView {
 				midi_recording: None,
 				armed_track: None,
 				live_midi: LiveMidiState::default(),
+				audio_clip_inspector: None,
 
 				playlist_position: Vector::default(),
 				playlist_scale: Vector::new(playlist_scale_x, 87.0),
@@ -305,6 +313,7 @@ impl ArrangementView {
 				self.midi_recording = None;
 				self.armed_track = None;
 				self.live_midi = LiveMidiState::default();
+				self.audio_clip_inspector = None;
 
 				if self.arrangement.transport().metronome {
 					arrangement.toggle_metronome();
@@ -360,6 +369,9 @@ impl ArrangementView {
 					Tab::PianoRoll => self.piano_roll_selection.get_mut().reset(),
 				}
 
+				if !matches!(tab, Tab::Playlist) {
+					self.audio_clip_inspector = None;
+				}
 				self.tab = tab;
 			}
 			Message::ChannelAdd => {
@@ -561,6 +573,7 @@ impl ArrangementView {
 				return self.update(Message::Connect(id, self.arrangement.master().id), config);
 			}
 			Message::TrackRemove(id) => {
+				self.audio_clip_inspector = None;
 				if self.midi_recording.as_ref().is_some_and(|&(_, node)| node == id) {
 					self.finalize_midi_recording();
 				}
@@ -722,6 +735,25 @@ impl ArrangementView {
 				}
 			}
 			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().0.write(&samples),
+			Message::CloseAudioClipInspector => self.audio_clip_inspector = None,
+			Message::AudioClipGainChanged(gain) => self.update_audio_clip(|clip| clip.gain = gain),
+			Message::AudioClipFadeInChanged(ratio) => self.update_audio_clip(|clip| {
+				clip.fade_in =
+					MusicalTime::from_raw((clip.position.len().into_raw() as f32 * ratio) as u64);
+			}),
+			Message::AudioClipFadeOutChanged(ratio) => self.update_audio_clip(|clip| {
+				clip.fade_out =
+					MusicalTime::from_raw((clip.position.len().into_raw() as f32 * ratio) as u64);
+			}),
+			Message::AudioClipToggleReverse => {
+				self.update_audio_clip(|clip| clip.reversed ^= true);
+			}
+			Message::AudioClipReset => self.update_audio_clip(|clip| {
+				clip.gain = 1.0;
+				clip.fade_in = MusicalTime::ZERO;
+				clip.fade_out = MusicalTime::ZERO;
+				clip.reversed = false;
+			}),
 			Message::MidiInput(input) => {
 				let Some(event) = self.live_input_event(input) else {
 					return Action::none();
@@ -1006,6 +1038,10 @@ impl ArrangementView {
 		action: playlist::Action,
 		config: &Config,
 	) -> Action<f32, Message> {
+		if !matches!(action, playlist::Action::Open(..)) {
+			self.audio_clip_inspector = None;
+		}
+
 		let playlist::Selection {
 			primary, secondary, ..
 		} = self.playlist_selection.get_mut();
@@ -1026,6 +1062,14 @@ impl ArrangementView {
 				);
 			}
 			playlist::Action::Open(track, clip) => {
+				if matches!(
+					self.arrangement.tracks()[track].clips[clip],
+					clip::Clip::Audio(..)
+				) {
+					self.audio_clip_inspector = Some((track, clip));
+					return Action::none();
+				}
+
 				if self.midi_clip != Some((track, clip)) {
 					self.midi_clip = Some((track, clip));
 					self.piano_roll_selection.get_mut().clear();
@@ -1380,7 +1424,12 @@ impl ArrangementView {
 
 	pub fn view(&self) -> Element<'_, Message> {
 		match self.tab {
-			Tab::Playlist => self.arrangement(),
+			Tab::Playlist => stack![
+				self.arrangement(),
+				self.audio_clip_inspector
+					.and_then(|_| self.audio_clip_inspector_view())
+			]
+			.into(),
 			Tab::Mixer => self.mixer(),
 			Tab::PianoRoll => self.piano_roll(),
 		}
@@ -1556,6 +1605,63 @@ impl ArrangementView {
 			Message::Zoom,
 		)
 		.into()
+	}
+
+	fn audio_clip_inspector_view(&self) -> Option<Element<'_, Message>> {
+		let (track, clip_idx) = self.audio_clip_inspector?;
+		let clip::Clip::Audio(clip) = self.arrangement.tracks()[track].clips[clip_idx] else {
+			return None;
+		};
+		let clip_len = clip.position.len().into_raw().max(1);
+		let fade_in = clip.fade_in.into_raw() as f32 / clip_len as f32;
+		let fade_out = clip.fade_out.into_raw() as f32 / clip_len as f32;
+
+		Some(
+			opaque(
+				container(
+					center(
+						container(
+							column![
+								row![
+									text("Audio Clip").font(iced::Font::MONOSPACE),
+									space::horizontal(),
+									button(x()).padding(0).on_press(Message::CloseAudioClipInspector)
+								]
+								.align_y(Center),
+								text("Gain"),
+								slider(0.0..=2.0, clip.gain, Message::AudioClipGainChanged)
+									.step(0.01)
+									.style(slider_with_radius(slider::default, 5)),
+								text("Fade In"),
+								slider(0.0..=1.0, fade_in, Message::AudioClipFadeInChanged)
+									.step(0.01)
+									.style(slider_with_radius(slider::default, 5)),
+								text("Fade Out"),
+								slider(0.0..=1.0, fade_out, Message::AudioClipFadeOutChanged)
+									.step(0.01)
+									.style(slider_with_radius(slider::default, 5)),
+								row![
+									button(if clip.reversed { "Reversed" } else { "Forward" })
+										.on_press(Message::AudioClipToggleReverse)
+										.style(button_with_radius(button::primary, 5)),
+									button("Reset")
+										.on_press(Message::AudioClipReset)
+										.style(button_with_radius(button::secondary, 5)),
+								]
+								.spacing(10)
+							]
+							.spacing(10),
+						)
+						.padding(15)
+						.style(bordered_box_with_radius(10)),
+					),
+				)
+				.width(Fill)
+				.height(Fill)
+				.style(|_| container::background(iced::Color::BLACK.scale_alpha(0.5))),
+			)
+			.into(),
+		)
 	}
 
 	fn mixer(&self) -> Element<'_, Message> {
@@ -2118,6 +2224,27 @@ impl ArrangementView {
 
 	pub fn loading(&self) -> bool {
 		self.clips_loading > 0 || self.scan.is_some()
+	}
+
+	fn update_audio_clip(&mut self, f: impl FnOnce(&mut AudioClip)) {
+		let Some((track, clip_idx)) = self.audio_clip_inspector else {
+			return;
+		};
+		let Some(track_ref) = self.arrangement.tracks().get(track) else {
+			self.audio_clip_inspector = None;
+			return;
+		};
+		let Some(&clip::Clip::Audio(mut clip)) = track_ref.clips.get(clip_idx) else {
+			self.audio_clip_inspector = None;
+			return;
+		};
+
+		f(&mut clip);
+		let len = clip.position.len();
+		clip.fade_in = clip.fade_in.min(len);
+		clip.fade_out = clip.fade_out.min(len);
+
+		self.arrangement.replace_clip(track, clip_idx, clip);
 	}
 }
 

@@ -169,6 +169,14 @@ pub struct AudioClip {
 	pub sample: SampleIndex,
 	#[prost(message, required)]
 	pub position: OffsetPosition,
+	#[prost(float, default = 1.0)]
+	pub gain: f32,
+	#[prost(uint64)]
+	pub fade_in: u64,
+	#[prost(uint64)]
+	pub fade_out: u64,
+	#[prost(bool)]
+	pub reversed: bool,
 }
 
 #[derive(Clone, Copy, Message)]

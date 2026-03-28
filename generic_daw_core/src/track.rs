@@ -72,6 +72,7 @@ impl Track {
 	pub fn apply(&mut self, action: NodeAction) {
 		match action {
 			NodeAction::ClipAdd(clip, idx) => self.clips.insert(idx, clip),
+			NodeAction::ClipReplace(clip, idx) => self.clips[idx] = clip,
 			NodeAction::ClipRemove(index) => _ = self.clips.remove(index),
 			NodeAction::ClipMoveTo(index, pos) => self.clips[index].position().move_to(pos),
 			NodeAction::ClipTrimStartTo(index, pos) => {

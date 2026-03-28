@@ -432,6 +432,12 @@ impl Arrangement {
 		idx
 	}
 
+	pub fn replace_clip(&mut self, track: usize, idx: usize, clip: impl Into<Clip>) {
+		let clip = clip.into();
+		self.tracks[track].clips[idx] = clip;
+		self.node_action(self.tracks[track].id, NodeAction::ClipReplace(clip.into(), idx));
+	}
+
 	pub fn remove_clip(&mut self, track: usize, clip: usize) -> Clip {
 		self.node_action(self.tracks[track].id, NodeAction::ClipRemove(clip));
 		let clip = self.tracks[track].clips.remove(clip);

@@ -194,16 +194,13 @@ where
 
 				match button {
 					mouse::Button::Left => {
-						if matches!(self.inner, Inner::MidiClip(..)) {
-							let new_click =
-								Click::new(cursor, mouse::Button::Left, state.last_click);
-							state.last_click = Some(new_click);
+						let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
+						state.last_click = Some(new_click);
 
-							if new_click.kind() == Kind::Double {
-								shell.publish((self.f)(Action::Open(idx.0, idx.1)));
-								shell.capture_event();
-								return;
-							}
+						if new_click.kind() == Kind::Double {
+							shell.publish((self.f)(Action::Open(idx.0, idx.1)));
+							shell.capture_event();
+							return;
 						}
 
 						let time =
@@ -394,6 +391,38 @@ where
 						)
 					}) {
 					cache.update(Arc::from([mesh]));
+				}
+
+				let fade_in_width = (inner.clip.fade_in.to_samples(self.transport) as f32
+					/ self.scale.x.exp2())
+				.min(lower_bounds.width);
+				if fade_in_width > 0.0 {
+					renderer.fill_quad(
+						Quad {
+							bounds: Rectangle::new(
+								lower_bounds.position(),
+								Size::new(fade_in_width, lower_bounds.height),
+							),
+							..Quad::default()
+						},
+						theme.palette().primary.base.color.scale_alpha(ALPHA_1_3),
+					);
+				}
+
+				let fade_out_width = (inner.clip.fade_out.to_samples(self.transport) as f32
+					/ self.scale.x.exp2())
+				.min(lower_bounds.width);
+				if fade_out_width > 0.0 {
+					renderer.fill_quad(
+						Quad {
+							bounds: Rectangle::new(
+								Point::new(lower_bounds.x + lower_bounds.width - fade_out_width, lower_bounds.y),
+								Size::new(fade_out_width, lower_bounds.height),
+							),
+							..Quad::default()
+						},
+						theme.palette().primary.base.color.scale_alpha(ALPHA_1_3),
+					);
 				}
 			}
 			Inner::MidiClip(inner) => 'blk: {

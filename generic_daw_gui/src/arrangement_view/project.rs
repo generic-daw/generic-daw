@@ -93,6 +93,10 @@ impl Arrangement {
 								},
 								offset: audio.position.offset().into_raw(),
 							},
+							gain: audio.gain,
+							fade_in: audio.fade_in.into_raw(),
+							fade_out: audio.fade_out.into_raw(),
+							reversed: audio.reversed,
 						}
 						.into(),
 						Clip::Midi(midi) => proto::MidiClip {
@@ -456,6 +460,10 @@ impl Arrangement {
 									),
 									MusicalTime::from_raw(audio.position.offset),
 								),
+								gain: audio.gain,
+								fade_in: MusicalTime::from_raw(audio.fade_in),
+								fade_out: MusicalTime::from_raw(audio.fade_out),
+								reversed: audio.reversed,
 							})
 						}
 						proto::Clip::Midi(midi) => Clip::Midi(MidiClip {

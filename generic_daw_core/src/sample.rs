@@ -91,6 +91,15 @@ impl Sample {
 		self.stream.mix_into(offset, audio);
 	}
 
+	pub fn prefetch(&self, offset: usize, len: usize) {
+		self.stream.prefetch(offset, len);
+	}
+
+	#[must_use]
+	pub fn sample_at(&self, offset: usize) -> Option<f32> {
+		self.stream.sample_at(offset)
+	}
+
 	fn from_cache_path(id: SampleId, cache_path: Arc<Path>, len: usize) -> Option<Self> {
 		Some(Self {
 			id,
@@ -160,6 +169,12 @@ impl StreamedSample {
 		}
 		self.request_page(last + 1);
 		self.request_page(last + 2);
+	}
+
+	fn sample_at(&self, offset: usize) -> Option<f32> {
+		let page = self.pages.get(offset / PAGE_SAMPLES)?;
+		let data = page.loaded.get()?;
+		data.get(offset % PAGE_SAMPLES).copied()
 	}
 
 	fn request_page(&self, page_idx: usize) {
