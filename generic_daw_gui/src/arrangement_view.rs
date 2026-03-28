@@ -28,7 +28,8 @@ use crate::{
 use audio_clip::AudioClip;
 use generic_daw_core::{
 	MidiInputEvent, MidiKey, MidiNote, MidiPatternId, MusicalTime, NodeId, PanMode, Position,
-	SampleId, clap_host::{DEFAULT_CLAP_PATHS, HostInfo, Plugin, PluginDescriptor, get_installed_plugins},
+	SampleId,
+	clap_host::{DEFAULT_CLAP_PATHS, HostInfo, Plugin, PluginDescriptor, get_installed_plugins},
 	connect_midi_input,
 };
 use generic_daw_widget::{
@@ -52,8 +53,8 @@ use iced::{
 use iced_split::{Split, Strategy};
 use live_midi::LiveMidiState;
 use midi_clip::MidiClip;
-use midi_recording::MidiRecording;
 use midi_pattern::MidiPatternPair;
+use midi_recording::MidiRecording;
 use node::{Node, NodeType};
 use rtrb::Consumer;
 use sample::SamplePair;
@@ -78,8 +79,8 @@ mod audio_clip;
 mod clip;
 mod live_midi;
 mod midi_clip;
-mod midi_recording;
 mod midi_pattern;
+mod midi_recording;
 mod node;
 mod plugin;
 mod project;
@@ -203,7 +204,7 @@ pub enum Message {
 	OnDoubleClick,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Tab {
 	Playlist,
 	Mixer,
@@ -574,7 +575,11 @@ impl ArrangementView {
 			}
 			Message::TrackRemove(id) => {
 				self.audio_clip_inspector = None;
-				if self.midi_recording.as_ref().is_some_and(|&(_, node)| node == id) {
+				if self
+					.midi_recording
+					.as_ref()
+					.is_some_and(|&(_, node)| node == id)
+				{
 					self.finalize_midi_recording();
 				}
 				if self.armed_track == Some(id) {
@@ -643,7 +648,8 @@ impl ArrangementView {
 				if self.midi_recording.is_some() {
 					self.finalize_midi_recording();
 				} else if let Some(node) = self.armed_track {
-					self.midi_recording = Some((MidiRecording::new(self.arrangement.transport()), node));
+					self.midi_recording =
+						Some((MidiRecording::new(self.arrangement.transport()), node));
 					self.arrangement.play();
 				}
 			}
@@ -1416,8 +1422,11 @@ impl ArrangementView {
 		self.arrangement.add_midi_pattern(pattern);
 
 		let mut clip = MidiClip::new(id);
-		clip.position
-			.trim_end_to(self.arrangement.midi_patterns()[&id].len().max(MusicalTime::TICK));
+		clip.position.trim_end_to(
+			self.arrangement.midi_patterns()[&id]
+				.len()
+				.max(MusicalTime::TICK),
+		);
 		clip.position.move_to(pos);
 		self.arrangement.add_clip(track, clip);
 	}
@@ -1618,44 +1627,44 @@ impl ArrangementView {
 
 		Some(
 			opaque(
-				container(
-					center(
-						container(
-							column![
-								row![
-									text("Audio Clip").font(iced::Font::MONOSPACE),
-									space::horizontal(),
-									button(x()).padding(0).on_press(Message::CloseAudioClipInspector)
-								]
-								.align_y(Center),
-								text("Gain"),
-								slider(0.0..=2.0, clip.gain, Message::AudioClipGainChanged)
-									.step(0.01)
-									.style(slider_with_radius(slider::default, 5)),
-								text("Fade In"),
-								slider(0.0..=1.0, fade_in, Message::AudioClipFadeInChanged)
-									.step(0.01)
-									.style(slider_with_radius(slider::default, 5)),
-								text("Fade Out"),
-								slider(0.0..=1.0, fade_out, Message::AudioClipFadeOutChanged)
-									.step(0.01)
-									.style(slider_with_radius(slider::default, 5)),
-								row![
-									button(if clip.reversed { "Reversed" } else { "Forward" })
-										.on_press(Message::AudioClipToggleReverse)
-										.style(button_with_radius(button::primary, 5)),
-									button("Reset")
-										.on_press(Message::AudioClipReset)
-										.style(button_with_radius(button::secondary, 5)),
-								]
-								.spacing(10)
+				container(center(
+					container(
+						column![
+							row![
+								text("Audio Clip").font(iced::Font::MONOSPACE),
+								space::horizontal(),
+								button(x())
+									.padding(0)
+									.on_press(Message::CloseAudioClipInspector)
 							]
-							.spacing(10),
-						)
-						.padding(15)
-						.style(bordered_box_with_radius(10)),
-					),
-				)
+							.align_y(Center),
+							text("Gain"),
+							slider(0.0..=2.0, clip.gain, Message::AudioClipGainChanged)
+								.step(0.01)
+								.style(slider_with_radius(slider::default, 5)),
+							text("Fade In"),
+							slider(0.0..=1.0, fade_in, Message::AudioClipFadeInChanged)
+								.step(0.01)
+								.style(slider_with_radius(slider::default, 5)),
+							text("Fade Out"),
+							slider(0.0..=1.0, fade_out, Message::AudioClipFadeOutChanged)
+								.step(0.01)
+								.style(slider_with_radius(slider::default, 5)),
+							row![
+								button(if clip.reversed { "Reversed" } else { "Forward" })
+									.on_press(Message::AudioClipToggleReverse)
+									.style(button_with_radius(button::primary, 5)),
+								button("Reset")
+									.on_press(Message::AudioClipReset)
+									.style(button_with_radius(button::secondary, 5)),
+							]
+							.spacing(10)
+						]
+						.spacing(10),
+					)
+					.padding(15)
+					.style(bordered_box_with_radius(10)),
+				))
 				.width(Fill)
 				.height(Fill)
 				.style(|_| container::background(iced::Color::BLACK.scale_alpha(0.5))),
@@ -2057,58 +2066,8 @@ impl ArrangementView {
 		Subscription::batch([
 			self.clap_host.subscription().map(Message::ClapHost),
 			every(Duration::from_secs(1)).map(|_| Message::UpdateRequest),
-			Subscription::run_with(
-				config.preferred_midi_input_port.clone(),
-				midi_input_stream,
-			),
+			Subscription::run_with(config.preferred_midi_input_port.clone(), midi_input_stream),
 		])
-	}
-
-	pub fn keybinds(
-		key: &keyboard::Key,
-		physical_key: keyboard::key::Physical,
-		modifiers: keyboard::Modifiers,
-		repeat: bool,
-	) -> Option<Message> {
-		match (
-			modifiers.command(),
-			modifiers.shift(),
-			modifiers.alt(),
-			repeat,
-		) {
-			(false, false, false, false) => match key.as_ref() {
-				keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::CycleTabForwards),
-				keyboard::Key::Named(
-					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
-				) => Some(Message::Delete),
-				keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::UnselectAll),
-				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => Some(Message::ArrowLeft),
-				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
-				_ => None,
-			},
-			(false, false, false, true) => match key.as_ref() {
-				keyboard::Key::Named(
-					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
-				) => Some(Message::Delete),
-				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => Some(Message::ArrowLeft),
-				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
-				_ => None,
-			},
-			(true, false, false, false) => match key.to_latin(physical_key)? {
-				'a' => Some(Message::SelectAll),
-				'd' => Some(Message::Duplicate),
-				_ => None,
-			},
-			(true, false, false, true) => match key.to_latin(physical_key)? {
-				'd' => Some(Message::Duplicate),
-				_ => None,
-			},
-			(false, true, false, false) => match key.as_ref() {
-				keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::CycleTabBackwards),
-				_ => None,
-			},
-			_ => None,
-		}
 	}
 
 	pub fn typing_keyboard_press(
@@ -2213,6 +2172,10 @@ impl ArrangementView {
 		self.midi_recording.is_some()
 	}
 
+	pub fn audio_clip_inspector_open(&self) -> bool {
+		self.audio_clip_inspector.is_some()
+	}
+
 	pub fn midi_clip(&self) -> Option<MidiClip> {
 		let (track, clip) = self.midi_clip?;
 		if let clip::Clip::Midi(clip) = self.arrangement.tracks()[track].clips[clip] {
@@ -2296,7 +2259,9 @@ pub fn format_now() -> jiff::fmt::strtime::Display<'static> {
 	jiff::Zoned::now().strftime("%F %H-%M-%S")
 }
 
-fn midi_input_stream(port_name: &Option<Arc<str>>) -> iced::futures::stream::BoxStream<'static, Message> {
+fn midi_input_stream(
+	port_name: &Option<Arc<str>>,
+) -> iced::futures::stream::BoxStream<'static, Message> {
 	let port_name = port_name.clone();
 
 	stream::channel(64, async move |mut output| {

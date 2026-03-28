@@ -3,6 +3,7 @@ use crate::{
 	arrangement_view::{
 		self, AUTOSAVE_DIR, Arrangement, ArrangementView, Feedback, PROJECT_DIR, Tab, format_now,
 	},
+	commands,
 	components::{PICK_LIST_HANDLE, number_input},
 	config::Config,
 	config_view::{self, ConfigView},
@@ -116,6 +117,11 @@ pub enum Message {
 	OpenConfigView,
 	CloseConfigView,
 	MergeConfig(Box<Config>, bool),
+	OpenCommandPalette,
+	CloseCommandPalette,
+	CommandPaletteAppend(char),
+	CommandPaletteBackspace,
+	CommandPaletteExecute(commands::CommandId),
 
 	CloseRequested(window::Id),
 	WindowFocused(window::Id),
@@ -151,6 +157,7 @@ pub struct Daw {
 	progress: Option<f32>,
 	status: Option<Arc<str>>,
 	missing_samples: Vec<(Arc<str>, oneshot::Sender<Feedback<Arc<Path>>>)>,
+	command_palette: Option<String>,
 
 	main_window_id: window::Id,
 	main_window_focused: bool,
@@ -199,6 +206,7 @@ impl Daw {
 				progress: None,
 				status: None,
 				missing_samples: Vec::new(),
+				command_palette: None,
 
 				main_window_id,
 				main_window_focused: true,
@@ -380,12 +388,36 @@ impl Daw {
 				self.progress = None;
 			}
 			Message::OpenConfigView => {
+				self.command_palette = None;
 				self.config_view = Some(ConfigView::new(self.main_window_id));
 				return Task::done(Message::Arrangement(
 					arrangement_view::Message::ReleaseTypingKeyboard,
 				));
 			}
 			Message::CloseConfigView => self.config_view = None,
+			Message::OpenCommandPalette => {
+				if self.command_palette.is_none() {
+					self.command_palette = Some(String::new());
+					return Task::done(Message::Arrangement(
+						arrangement_view::Message::ReleaseTypingKeyboard,
+					));
+				}
+			}
+			Message::CloseCommandPalette => self.command_palette = None,
+			Message::CommandPaletteAppend(ch) => {
+				if let Some(query) = &mut self.command_palette {
+					query.push(ch);
+				}
+			}
+			Message::CommandPaletteBackspace => {
+				if let Some(query) = &mut self.command_palette {
+					query.pop();
+				}
+			}
+			Message::CommandPaletteExecute(command) => {
+				self.command_palette = None;
+				return Task::done(commands::dispatch(command));
+			}
 			Message::MergeConfig(config, live) => {
 				let fut = (self.config.clap_paths != config.clap_paths)
 					.then(|| self.arrangement_view.get_installed_plugins(&config));
@@ -416,6 +448,7 @@ impl Daw {
 			}
 			Message::WindowUnfocused(window) => {
 				if window == self.main_window_id {
+					self.command_palette = None;
 					self.main_window_focused = false;
 					return Task::done(Message::Arrangement(
 						arrangement_view::Message::ReleaseTypingKeyboard,
@@ -542,7 +575,9 @@ impl Daw {
 								border::right(5)
 							))
 							.padding(padding::horizontal(7).vertical(5))
-							.on_press(Message::Arrangement(arrangement_view::Message::ToggleRecord)),
+							.on_press(Message::Arrangement(
+								arrangement_view::Message::ToggleRecord
+							)),
 					],
 					number_input(
 						transport.numerator.get().into(),
@@ -687,6 +722,11 @@ impl Daw {
 				)
 				.on_press(Message::CloseConfigView),
 			)),
+			self.command_palette.as_ref().map(|_| mouse_area(
+				center(opaque(self.command_palette_view()))
+					.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))),
+			)
+			.on_press(Message::CloseCommandPalette)),
 			self.progress.map(|progress| mouse_area(
 				container(
 					column![
@@ -828,36 +868,56 @@ impl Daw {
 		} else {
 			Subscription::none()
 		};
+		let command_context = self.command_context();
+		let config_open = self.config_view.is_some();
+		let command_palette_open = self.command_palette.is_some();
+		let command_palette_selection = self.command_palette_selection();
 
 		let keybinds = if self.progress.is_some() || !self.main_window_focused {
 			Subscription::none()
-		} else if self.config_view.is_some() {
-			keyboard::listen().filter_map(|e| match e {
-				keyboard::Event::KeyPressed {
-					key,
-					physical_key,
-					modifiers,
-					repeat,
-					..
-				} => ConfigView::keybinds(&key, modifiers, repeat)
-					.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
-				_ => None,
-			})
 		} else {
-			keyboard::listen().filter_map(|e| match e {
+			keyboard::listen().filter_map(move |e| match e {
 				keyboard::Event::KeyPressed {
 					key,
 					physical_key,
 					modifiers,
 					repeat,
 					..
-				} => ArrangementView::typing_keyboard_press(physical_key, repeat)
-					.or_else(|| ArrangementView::keybinds(&key, physical_key, modifiers, repeat))
-					.map(Message::Arrangement)
-					.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
-				keyboard::Event::KeyReleased { physical_key, .. } => {
-					ArrangementView::typing_keyboard_release(physical_key).map(Message::Arrangement)
+				} => {
+					if command_palette_open {
+						return Self::command_palette_keybinds(
+							command_palette_selection,
+							&key,
+							modifiers,
+							repeat,
+						);
+					}
+
+					Self::open_command_palette_keybind(&key, physical_key, modifiers, repeat)
+						.or_else(|| {
+							(!config_open)
+								.then_some(())
+								.and_then(|_| {
+									ArrangementView::typing_keyboard_press(physical_key, repeat)
+								})
+								.map(Message::Arrangement)
+						})
+						.or_else(|| {
+							commands::matching_shortcut(
+								command_context,
+								&key,
+								physical_key,
+								modifiers,
+								repeat,
+							)
+							.map(commands::dispatch)
+						})
 				}
+				keyboard::Event::KeyReleased { physical_key, .. } => (!config_open
+					&& !command_palette_open)
+					.then_some(())
+					.and_then(|_| ArrangementView::typing_keyboard_release(physical_key))
+					.map(Message::Arrangement),
 				_ => None,
 			})
 		};
@@ -880,37 +940,160 @@ impl Daw {
 		])
 	}
 
-	fn keybinds(
+	fn command_context(&self) -> commands::Context {
+		commands::Context {
+			config_open: self.config_view.is_some(),
+			has_midi_clip: self.arrangement_view.midi_clip().is_some(),
+			tab: *self.arrangement_view.tab(),
+			audio_clip_inspector_open: self.arrangement_view.audio_clip_inspector_open(),
+			armed_track: self.arrangement_view.armed_track().is_some(),
+			midi_recording: self.arrangement_view.recording_active(),
+		}
+	}
+
+	fn command_palette_query(&self) -> &str {
+		self.command_palette.as_deref().unwrap_or_default()
+	}
+
+	fn command_palette_view(&self) -> Element<'_, Message> {
+		let ctx = self.command_context();
+		let query = self.command_palette_query();
+		let commands = commands::COMMANDS
+			.iter()
+			.filter(|command| commands::matches_query(command, query))
+			.collect::<Vec<_>>();
+		let selected = commands
+			.iter()
+			.find(|command| (command.enabled)(ctx))
+			.map(|command| command.id);
+
+		let list: Element<'_, Message> = if commands.is_empty() {
+			container(text("No matching commands"))
+				.padding(10)
+				.style(|t| {
+					bordered_box_with_radius(5)(t).background(t.palette().background.weak.color)
+				})
+				.into()
+		} else {
+			scrollable(
+				column(commands.iter().copied().map(|command| {
+					let content = row![
+						text(command.label),
+						space::horizontal(),
+						command.shortcut.map_or_else(
+							|| text("").font(Font::MONOSPACE),
+							|shortcut| text(shortcut.display).font(Font::MONOSPACE),
+						),
+					]
+					.align_y(Center)
+					.spacing(10);
+					let enabled = (command.enabled)(ctx);
+
+					if enabled {
+						button(content)
+							.width(Fill)
+							.padding(10)
+							.style(button_with_radius(
+								if selected == Some(command.id) {
+									button::primary
+								} else {
+									button::secondary
+								},
+								5,
+							))
+							.on_press(Message::CommandPaletteExecute(command.id))
+							.into()
+					} else {
+						container(content)
+							.width(Fill)
+							.padding(10)
+							.style(|t| {
+								bordered_box_with_radius(5)(t)
+									.background(t.palette().background.weak.color)
+							})
+							.into()
+					}
+				}))
+				.spacing(8),
+			)
+			.height(320)
+			.into()
+		};
+
+		container(
+			column![
+				text("Command Palette"),
+				container(
+					text(if query.is_empty() {
+						"Type to filter commands"
+					} else {
+						query
+					})
+					.font(Font::MONOSPACE)
+				)
+				.padding(padding::horizontal(10).vertical(8))
+				.width(Fill)
+				.style(|t| bordered_box_with_radius(5)(t)
+					.background(t.palette().background.weakest.color)),
+				list,
+			]
+			.spacing(10),
+		)
+		.width(540)
+		.padding(15)
+		.style(|t| bordered_box_with_radius(10)(t).background(t.palette().background.strong.color))
+		.into()
+	}
+
+	fn command_palette_keybinds(
+		selected: Option<commands::CommandId>,
+		key: &keyboard::Key,
+		modifiers: keyboard::Modifiers,
+		repeat: bool,
+	) -> Option<Message> {
+		match key.as_ref() {
+			keyboard::Key::Named(keyboard::key::Named::Escape) if !repeat => {
+				Some(Message::CloseCommandPalette)
+			}
+			keyboard::Key::Named(keyboard::key::Named::Enter) if !repeat => {
+				selected.map(Message::CommandPaletteExecute)
+			}
+			keyboard::Key::Named(
+				keyboard::key::Named::Backspace | keyboard::key::Named::Delete,
+			) => Some(Message::CommandPaletteBackspace),
+			keyboard::Key::Character(text)
+				if !repeat && !modifiers.command() && !modifiers.control() && !modifiers.alt() =>
+			{
+				let mut chars = text.chars();
+				let ch = chars.next()?;
+				(chars.next().is_none() && !ch.is_control())
+					.then_some(Message::CommandPaletteAppend(ch))
+			}
+			_ => None,
+		}
+	}
+
+	fn command_palette_selection(&self) -> Option<commands::CommandId> {
+		let ctx = self.command_context();
+		let query = self.command_palette_query();
+
+		commands::available(ctx)
+			.filter(|command| commands::matches_query(command, query))
+			.find(|command| (command.enabled)(ctx))
+			.map(|command| command.id)
+	}
+
+	fn open_command_palette_keybind(
 		key: &keyboard::Key,
 		physical_key: keyboard::key::Physical,
 		modifiers: keyboard::Modifiers,
 		repeat: bool,
 	) -> Option<Message> {
-		match (
-			modifiers.command(),
-			modifiers.shift(),
-			modifiers.alt(),
-			repeat,
-		) {
-			(false, false, false, false) => match key.as_ref() {
-				keyboard::Key::Named(keyboard::key::Named::Space) => Some(Message::Arrangement(
-					arrangement_view::Message::TogglePlayback,
-				)),
-				keyboard::Key::Named(keyboard::key::Named::F11) => Some(Message::ToggleFullscreen),
-				_ => None,
-			},
-			(true, false, false, false) => match key.to_latin(physical_key)? {
-				'e' => Some(Message::ExportFileDialog),
-				'n' => Some(Message::NewFile),
-				'o' => Some(Message::OpenFileDialog),
-				's' => Some(Message::SaveFile),
-				_ => None,
-			},
-			(true, true, false, false) => match key.to_latin(physical_key)? {
-				's' => Some(Message::SaveAsFileDialog),
-				_ => None,
-			},
-			_ => None,
-		}
+		(!repeat
+			&& modifiers.command()
+			&& !modifiers.shift()
+			&& !modifiers.alt()
+			&& key.to_latin(physical_key) == Some('k'))
+		.then_some(Message::OpenCommandPalette)
 	}
 }

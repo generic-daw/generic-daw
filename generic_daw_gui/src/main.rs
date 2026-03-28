@@ -8,6 +8,7 @@ use log::LevelFilter;
 mod action;
 mod arrangement_view;
 mod clap_host;
+mod commands;
 mod components;
 mod config;
 mod config_view;
