@@ -16,7 +16,7 @@ An early-in-development, open source, cross-platform digital audio workstation (
 
 ### Requirements
 
-- Rust & Cargo: this project is developed using the latest stable [Rust toolchain](https://rustup.rs/)
+- Rust & Cargo: Generic DAW is developed using the latest stable [Rust toolchain](https://rustup.rs)
 - on Linux you'll also need to install the alsa development headers:
   - Debian: `sudo apt install libasound2-dev`
   - Fedora: `sudo dnf install alsa-lib-devel`
@@ -34,6 +34,10 @@ cargo build --release
 ## Roadmap
 
 See the current development status and future plans in the dedicated [GitHub project](https://github.com/orgs/generic-daw/projects/1).
+
+## Contributing
+
+This project adheres to the [Rust Audio AI policy](https://rust.audio/community/ai). Additionally, if you'd like to work on a larger feature or bugfix, coordinating your work with what I'm currently doing is generally a good idea, to ensure conflicts stay at a minimum. If that's the case, feel free to get in touch via a [GitHub discussion](https://github.com/generic-daw/generic-daw/discussions) or on Discord.
 
 ## License
 
