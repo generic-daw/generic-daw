@@ -33,7 +33,7 @@ pub use clip::Clip;
 pub use cpal::{DeviceDescription, DeviceId, Stream};
 pub use event::Event;
 pub use midi_clip::MidiClip;
-pub use midi_note::{Key, MidiKey, MidiNote};
+pub use midi_note::{Key, MidiKey, MidiNote, NoteId};
 pub use midi_pattern::{MidiPattern, MidiPatternAction, MidiPatternId};
 pub use musical_time::MusicalTime;
 pub use node::Node;

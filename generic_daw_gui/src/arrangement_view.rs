@@ -1110,11 +1110,7 @@ impl ArrangementView {
 			piano_roll::Action::Add(key, pos) => {
 				let note = self.arrangement.add_note(
 					clip.pattern,
-					MidiNote {
-						key,
-						velocity: 1.0,
-						position: Position::new(pos, pos + MusicalTime::new(1, 0)),
-					},
+					MidiNote::new(key, 1.0, Position::new(pos, pos + MusicalTime::new(1, 0))),
 				);
 				primary.insert(note);
 			}

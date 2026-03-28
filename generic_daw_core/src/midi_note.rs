@@ -1,5 +1,9 @@
 use crate::Position;
-use std::fmt::{Debug, Display, Formatter};
+use std::{
+	fmt::{Debug, Display, Formatter},
+	num::NonZero,
+	sync::atomic::{AtomicU32, Ordering::Relaxed},
+};
 use utils::variants;
 
 variants! {
@@ -70,9 +74,47 @@ impl Display for MidiKey {
 	}
 }
 
+static NEXT_NOTE_ID: AtomicU32 = AtomicU32::new(1);
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct NoteId(NonZero<u32>);
+
+impl NoteId {
+	#[must_use]
+	pub fn unique() -> Self {
+		Self(NEXT_NOTE_ID.fetch_add(1, Relaxed).try_into().unwrap())
+	}
+
+	#[must_use]
+	pub const fn from_raw(raw: u32) -> Option<Self> {
+		match NonZero::new(raw) {
+			Some(raw) => Some(Self(raw)),
+			None => None,
+		}
+	}
+
+	#[must_use]
+	pub const fn get(self) -> u32 {
+		self.0.get()
+	}
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct MidiNote {
+	pub id: NoteId,
 	pub key: MidiKey,
 	pub velocity: f32,
 	pub position: Position,
+}
+
+impl MidiNote {
+	#[must_use]
+	pub fn new(key: MidiKey, velocity: f32, position: Position) -> Self {
+		Self {
+			id: NoteId::unique(),
+			key,
+			velocity,
+			position,
+		}
+	}
 }

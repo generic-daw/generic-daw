@@ -5,6 +5,7 @@ use crate::clap_host::{
 		NoteOnEvent, ParamValueEvent, Pckn, UnknownEvent, spaces::CoreEventSpace,
 	},
 };
+use crate::NoteId;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Event {
@@ -12,19 +13,23 @@ pub enum Event {
 		time: u32,
 		key: u8,
 		velocity: f32,
+		note_id: NoteId,
 	},
 	Off {
 		time: u32,
 		key: u8,
 		velocity: f32,
+		note_id: NoteId,
 	},
 	Choke {
 		time: u32,
 		key: u8,
+		note_id: Option<NoteId>,
 	},
 	End {
 		time: u32,
 		key: u8,
+		note_id: Option<NoteId>,
 	},
 	ParamValue {
 		time: u32,
@@ -67,27 +72,39 @@ impl clap_host::EventImpl for Event {
 				time,
 				key,
 				velocity,
+				note_id,
 			} => ClapEvent::NoteOn(NoteOnEvent::new(
 				time,
-				Pckn::new(port_index, 0u16, key, Match::All),
+				Pckn::new(port_index, 0u16, key, note_id.get()),
 				velocity.into(),
 			)),
 			Self::Off {
 				time,
 				key,
 				velocity,
+				note_id,
 			} => ClapEvent::NoteOff(NoteOffEvent::new(
 				time,
-				Pckn::new(port_index, 0u16, key, Match::All),
+				Pckn::new(port_index, 0u16, key, note_id.get()),
 				velocity.into(),
 			)),
-			Self::Choke { time, key } => ClapEvent::NoteChoke(NoteChokeEvent::new(
+			Self::Choke { time, key, note_id } => ClapEvent::NoteChoke(NoteChokeEvent::new(
 				time,
-				Pckn::new(port_index, 0u16, key, Match::All),
+				Pckn::new(
+					port_index,
+					0u16,
+					key,
+					note_id.map_or(Match::All, |note_id| Match::Specific(note_id.get())),
+				),
 			)),
-			Self::End { time, key } => ClapEvent::NoteEnd(NoteEndEvent::new(
+			Self::End { time, key, note_id } => ClapEvent::NoteEnd(NoteEndEvent::new(
 				time,
-				Pckn::new(port_index, 0u16, key, Match::All),
+				Pckn::new(
+					port_index,
+					0u16,
+					key,
+					note_id.map_or(Match::All, |note_id| Match::Specific(note_id.get())),
+				),
 			)),
 			Self::ParamValue {
 				time,
@@ -110,16 +127,19 @@ impl clap_host::EventImpl for Event {
 				time,
 				key,
 				velocity,
+				..
 			} => MidiEvent::new(time, port_index, [0x90, key, (velocity * 127.0) as u8]),
 			Self::Off {
 				time,
 				key,
 				velocity,
+				..
 			} => MidiEvent::new(time, port_index, [0x80, key, (velocity * 127.0) as u8]),
-			Self::Choke { time, key } | Self::End { time, key } => Self::Off {
+			Self::Choke { time, key, .. } | Self::End { time, key, .. } => Self::Off {
 				time,
 				key,
 				velocity: 1.0,
+				note_id: NoteId::unique(),
 			}
 			.to_midi(port_index),
 			Self::ParamValue {
@@ -141,19 +161,23 @@ impl clap_host::EventImpl for Event {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,
 				velocity: event.velocity() as f32,
+				note_id: NoteId::from_raw(event.note_id().into_specific()?)?,
 			}),
 			CoreEventSpace::NoteOff(event) => Some(Self::Off {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,
 				velocity: event.velocity() as f32,
+				note_id: NoteId::from_raw(event.note_id().into_specific()?)?,
 			}),
 			CoreEventSpace::NoteChoke(event) => Some(Self::Choke {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,
+				note_id: event.note_id().into_specific().and_then(NoteId::from_raw),
 			}),
 			CoreEventSpace::NoteEnd(event) => Some(Self::End {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,
+				note_id: event.note_id().into_specific().and_then(NoteId::from_raw),
 			}),
 			CoreEventSpace::ParamValue(event) => Some(Self::ParamValue {
 				time: event.time(),
@@ -171,11 +195,13 @@ impl clap_host::EventImpl for Event {
 						time,
 						key: data[1],
 						velocity: value,
+						note_id: NoteId::unique(),
 					}),
 					0x80 => Some(Self::Off {
 						time,
 						key: data[1],
 						velocity: value,
+						note_id: NoteId::unique(),
 					}),
 					0xb0 if data[1] < 0x78 => Some(Self::ParamValue {
 						time,

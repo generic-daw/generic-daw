@@ -1,4 +1,4 @@
-use crate::{Event, MidiPatternId, OffsetPosition, audio_processor::State};
+use crate::{Event, MidiPatternId, OffsetPosition, audio_processor::State, track::ActiveNote};
 
 #[derive(Clone, Copy, Debug)]
 pub struct MidiClip {
@@ -7,13 +7,14 @@ pub struct MidiClip {
 }
 
 impl MidiClip {
-	pub fn collect_notes(&self, state: &State, notes: &mut [u8; 128]) {
+	pub(crate) fn collect_notes(&self, state: &State, notes: &mut Vec<ActiveNote>) {
 		debug_assert!(state.transport.playing);
 
 		state.midi_patterns[&self.pattern]
 			.notes
 			.iter()
-			.filter_map(|&(mut note)| {
+			.filter_map(|&note| {
+				let mut note = note;
 				note.position = (note.position + self.position.start())
 					.saturating_sub(self.position.offset())?
 					.clamp(self.position.position())?;
@@ -22,24 +23,23 @@ impl MidiClip {
 			.for_each(|note| {
 				let (start, end) = note.position.to_samples(&state.transport);
 				if start < state.transport.sample && end >= state.transport.sample {
-					notes[usize::from(note.key.0)] += 1;
+					notes.push(ActiveNote {
+						note_id: note.id,
+						key: note.key.0,
+						velocity: note.velocity,
+					});
 				}
 			});
 	}
 
-	pub fn process(
-		&self,
-		state: &State,
-		audio: &[f32],
-		events: &mut Vec<Event>,
-		notes: &mut [u8; 128],
-	) {
+	pub fn process(&self, state: &State, audio: &[f32], events: &mut Vec<Event>) {
 		debug_assert!(state.transport.playing);
 
 		state.midi_patterns[&self.pattern]
 			.notes
 			.iter()
-			.filter_map(|&(mut note)| {
+			.filter_map(|&note| {
+				let mut note = note;
 				note.position = (note.position + self.position.start())
 					.saturating_sub(self.position.offset())?
 					.clamp(self.position.position())?;
@@ -55,8 +55,8 @@ impl MidiClip {
 						time: time as u32 / 2,
 						key: note.key.0,
 						velocity: note.velocity,
+						note_id: note.id,
 					});
-					notes[usize::from(note.key.0)] += 1;
 				}
 
 				if let Some(time) = end.checked_sub(state.transport.sample)
@@ -66,8 +66,8 @@ impl MidiClip {
 						time: time as u32 / 2,
 						key: note.key.0,
 						velocity: note.velocity,
+						note_id: note.id,
 					});
-					notes[usize::from(note.key.0)] -= 1;
 				}
 			});
 	}

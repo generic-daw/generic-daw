@@ -12,11 +12,10 @@ impl Clip {
 		state: &State,
 		audio: &mut [f32],
 		events: &mut Vec<Event>,
-		notes: &mut [u8; 128],
 	) {
 		match self {
 			Self::Audio(clip) => clip.process(state, audio),
-			Self::Midi(clip) => clip.process(state, audio, events, notes),
+			Self::Midi(clip) => clip.process(state, audio, events),
 		}
 	}
 

@@ -351,13 +351,15 @@ impl Arrangement {
 			let notes = pattern
 				.notes
 				.iter()
-				.map(|note| MidiNote {
-					key: MidiKey(note.key as u8),
-					velocity: note.velocity,
-					position: Position::new(
-						MusicalTime::from_raw(note.position.start),
-						MusicalTime::from_raw(note.position.end),
-					),
+				.map(|note| {
+					MidiNote::new(
+						MidiKey(note.key as u8),
+						note.velocity,
+						Position::new(
+							MusicalTime::from_raw(note.position.start),
+							MusicalTime::from_raw(note.position.end),
+						),
+					)
 				})
 				.collect();
 

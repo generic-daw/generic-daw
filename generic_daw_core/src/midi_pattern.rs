@@ -92,14 +92,14 @@ impl MidiPattern {
 						let entry = &mut playing[usize::from(key.as_int())];
 
 						if let Entry::Some(start, vel) = std::mem::take(entry) {
-							let note = MidiNote {
-								key: MidiKey(key.as_int()),
-								velocity: f32::from(vel.as_int()) / 127.0,
-								position: Position::new(
+							let note = MidiNote::new(
+								MidiKey(key.as_int()),
+								f32::from(vel.as_int()) / 127.0,
+								Position::new(
 									midi_tick_to_musical_time(start.as_int()),
 									midi_tick_to_musical_time(time.as_int()),
 								),
-							};
+							);
 
 							notes.push(note);
 						}
@@ -110,14 +110,14 @@ impl MidiPattern {
 
 			for (key, entry) in playing.iter_mut().enumerate() {
 				if let Entry::Some(start, vel) = std::mem::take(entry) {
-					let note = MidiNote {
-						key: MidiKey(key as u8),
-						velocity: f32::from(vel.as_int()) / 127.0,
-						position: Position::new(
+					let note = MidiNote::new(
+						MidiKey(key as u8),
+						f32::from(vel.as_int()) / 127.0,
+						Position::new(
 							midi_tick_to_musical_time(start.as_int()),
 							midi_tick_to_musical_time(time.as_int()),
 						),
-					};
+					);
 
 					warn!("note {note:?} wasn't ended");
 
