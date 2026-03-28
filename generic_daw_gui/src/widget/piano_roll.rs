@@ -10,7 +10,7 @@ use iced::{
 		mouse::{self, Cursor, Interaction},
 		overlay,
 		renderer::{Quad, Style},
-		widget::{Operation, Tree, tree},
+		widget::{Operation, Tree},
 	},
 	border, keyboard, window,
 };
@@ -18,6 +18,8 @@ use std::{cell::RefCell, collections::HashSet, time::Instant};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
+	Pan(Vector, f32, f32),
+	Zoom(Vector, Point, f32, f32),
 	Add(MidiKey, MusicalTime),
 	Clone,
 	Drag(Delta<MidiKey>, Delta<MusicalTime>),
@@ -43,13 +45,25 @@ pub enum Status {
 }
 
 #[derive(Debug, Default)]
-pub struct Selection {
+pub struct State {
 	pub status: Status,
 	pub primary: HashSet<usize>,
 	pub secondary: HashSet<usize>,
+	pub position: Vector,
+	pub scale: Vector,
+	autoscroll_start: Option<Instant>,
+	last_autoscroll: Option<Instant>,
 }
 
-impl Selection {
+impl State {
+	pub fn new(position: Vector, scale: Vector) -> Self {
+		Self {
+			position,
+			scale,
+			..Self::default()
+		}
+	}
+
 	pub fn reset(&mut self) {
 		self.status = Status::None;
 		self.primary.extend(self.secondary.drain());
@@ -62,32 +76,15 @@ impl Selection {
 	}
 }
 
-#[derive(Default)]
-struct State {
-	autoscroll_start: Option<Instant>,
-	last_autoscroll: Option<Instant>,
-}
-
 #[derive(Debug)]
 pub struct PianoRoll<'a, Message> {
-	selection: &'a RefCell<Selection>,
+	state: &'a RefCell<State>,
 	transport: &'a Transport,
-	position: &'a Vector,
-	scale: &'a Vector,
 	notes: Box<[Note<'a, Message>]>,
-	pan: fn(Vector, f32, f32) -> Message,
 	action: fn(Action) -> Message,
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
-	fn tag(&self) -> tree::Tag {
-		tree::Tag::of::<State>()
-	}
-
-	fn state(&self) -> tree::State {
-		tree::State::new(State::default())
-	}
-
 	fn diff(&self, tree: &mut Tree) {
 		tree.diff_children(&self.notes);
 	}
@@ -97,12 +94,12 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 	}
 
 	fn size(&self) -> Size<Length> {
-		Size::new(Fill, Length::Fixed(128.0 * self.scale.y))
+		Size::new(Fill, Length::Fixed(128.0 * self.state.borrow().scale.y))
 	}
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
 		Node::with_children(
-			limits.height(128.0 * self.scale.y).max(),
+			limits.height(128.0 * self.state.borrow().scale.y).max(),
 			self.notes
 				.iter_mut()
 				.zip(&mut tree.children)
@@ -134,7 +131,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			return;
 		}
 
-		let selection = &mut *self.selection.borrow_mut();
+		let state = &mut *self.state.borrow_mut();
 
 		cursor = cursor.land();
 
@@ -143,12 +140,12 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				break 'block cursor;
 			}
 
-			if selection.status == Status::None {
+			if state.status == Status::None {
 				return;
 			}
 
 			let Some(cursor) = cursor.position_from(viewport.position()) else {
-				selection.reset();
+				state.reset();
 				shell.request_redraw();
 				return;
 			};
@@ -157,8 +154,6 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				cursor.x.clamp(0.0, viewport.width),
 				cursor.y.clamp(0.0, viewport.height),
 			);
-
-			let state = tree.state.downcast_mut::<State>();
 
 			if cursor == clamped {
 				state.autoscroll_start = None;
@@ -192,7 +187,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					},
 				);
 
-				shell.publish((self.pan)(delta, height, visible));
+				shell.publish((self.action)(Action::Pan(delta, height, visible)));
 
 				state.last_autoscroll = Some(now);
 			} else {
@@ -202,57 +197,55 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			clamped
 		};
 
-		let new_time = px_to_time(cursor.x, *self.position, *self.scale, self.transport);
+		let new_time = px_to_time(cursor.x, state.position, state.scale, self.transport);
 
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
-				if selection.status == Status::None =>
+				if state.status == Status::None =>
 			{
 				match button {
 					mouse::Button::Left => {
 						let time = maybe_snap(new_time, *modifiers, |time| {
-							time.snap_round(self.scale.x, self.transport)
+							time.snap_round(state.scale.x, self.transport)
 						});
-						let key = px_to_key(cursor.y, *self.position, *self.scale);
+						let key = px_to_key(cursor.y, state.position, state.scale);
 
 						if modifiers.command() {
-							selection.status = Status::Selecting(key, key, time, time);
+							state.status = Status::Selecting(key, key, time, time);
 							shell.capture_event();
 							shell.request_redraw();
 						} else {
-							selection.clear();
-							selection.status = Status::Dragging(key, time);
+							state.clear();
+							state.status = Status::Dragging(key, time);
 							shell.publish((self.action)(Action::Add(key, time)));
 						}
 					}
 					mouse::Button::Right => {
-						selection.clear();
-						selection.status = Status::Deleting;
+						state.clear();
+						state.status = Status::Deleting;
 					}
 					_ => {}
 				}
 			}
-			Event::Mouse(mouse::Event::ButtonReleased { .. })
-				if selection.status != Status::None =>
-			{
-				selection.reset();
+			Event::Mouse(mouse::Event::ButtonReleased { .. }) if state.status != Status::None => {
+				state.reset();
 				shell.capture_event();
 				shell.request_redraw();
 			}
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
-			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match selection.status {
+			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.status {
 				Status::Selecting(start_key, last_end_key, start_pos, last_end_pos) => {
-					let end_key = px_to_key(cursor.y, *self.position, *self.scale);
+					let end_key = px_to_key(cursor.y, state.position, state.scale);
 
 					let end_pos = maybe_snap(new_time, *modifiers, |time| {
-						time.snap_round(self.scale.x, self.transport)
+						time.snap_round(state.scale.x, self.transport)
 					});
 
 					if end_key == last_end_key && end_pos == last_end_pos {
 						return;
 					}
 
-					selection.status = Status::Selecting(start_key, end_key, start_pos, end_pos);
+					state.status = Status::Selecting(start_key, end_key, start_pos, end_pos);
 
 					let (start_key, end_key) = (start_key.min(end_key), start_key.max(end_key));
 					let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
@@ -262,19 +255,19 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							&& (start_pos.max(note.note.position.start())
 								< end_pos.min(note.note.position.end()))
 						{
-							selection.secondary.insert(idx);
+							state.secondary.insert(idx);
 						} else {
-							selection.secondary.remove(&idx);
+							state.secondary.remove(&idx);
 						}
 					});
 
 					shell.request_redraw();
 				}
 				Status::Dragging(key, time) => {
-					let new_key = px_to_key(cursor.y, *self.position, *self.scale);
+					let new_key = px_to_key(cursor.y, state.position, state.scale);
 
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.snap_round(self.scale.x, self.transport)
+						abs_diff.snap_round(state.scale.x, self.transport)
 					});
 
 					if new_key != key || abs_diff != MusicalTime::ZERO {
@@ -290,14 +283,14 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							Delta::Negative
 						}(abs_diff);
 
-						selection.status = Status::Dragging(new_key, time + time_delta);
+						state.status = Status::Dragging(new_key, time + time_delta);
 						shell.publish((self.action)(Action::Drag(key_delta, time_delta)));
 						shell.capture_event();
 					}
 				}
 				Status::TrimmingStart(time) => {
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.snap_round(self.scale.x, self.transport)
+						abs_diff.snap_round(state.scale.x, self.transport)
 					});
 
 					if abs_diff != MusicalTime::ZERO {
@@ -307,14 +300,14 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							Delta::Negative
 						}(abs_diff);
 
-						selection.status = Status::TrimmingStart(time + delta);
+						state.status = Status::TrimmingStart(time + delta);
 						shell.publish((self.action)(Action::TrimStart(delta)));
 						shell.capture_event();
 					}
 				}
 				Status::TrimmingEnd(time) => {
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.snap_round(self.scale.x, self.transport)
+						abs_diff.snap_round(state.scale.x, self.transport)
 					});
 
 					if abs_diff != MusicalTime::ZERO {
@@ -324,18 +317,18 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							Delta::Negative
 						}(abs_diff);
 
-						selection.status = Status::TrimmingEnd(time + delta);
+						state.status = Status::TrimmingEnd(time + delta);
 						shell.publish((self.action)(Action::TrimEnd(delta)));
 						shell.capture_event();
 					}
 				}
 				Status::DraggingSplit(time) => {
 					let new_time = maybe_snap(new_time, *modifiers, |time| {
-						time.snap_round(self.scale.x, self.transport)
+						time.snap_round(state.scale.x, self.transport)
 					});
 
 					if new_time != time {
-						selection.status = Status::DraggingSplit(new_time);
+						state.status = Status::DraggingSplit(new_time);
 						shell.publish((self.action)(Action::DragSplit(new_time)));
 						shell.capture_event();
 					}
@@ -350,14 +343,14 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							(val * 127.0).round() / 127.0
 						});
 						if val != new_val {
-							selection.status = Status::DraggingVelocity(note, new_val);
+							state.status = Status::DraggingVelocity(note, new_val);
 							shell.publish((self.action)(Action::DragVelocity(new_val)));
 							shell.capture_event();
 						}
 					}
 				}
 				Status::Deleting => {
-					if !selection.primary.is_empty() {
+					if !state.primary.is_empty() {
 						shell.publish((self.action)(Action::Delete));
 						shell.capture_event();
 					}
@@ -378,9 +371,11 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		cursor: Cursor,
 		viewport: &Rectangle,
 	) {
+		let state = self.state.borrow();
+
 		for key in (0..127).map(MidiKey) {
 			let Some(bounds) = Rectangle::new(
-				viewport.position() + Vector::new(0.0, key_to_px(key, *self.position, *self.scale)),
+				viewport.position() + Vector::new(0.0, key_to_px(key, state.position, state.scale)),
 				Size::new(viewport.width, 1.0),
 			)
 			.intersection(viewport) else {
@@ -406,19 +401,18 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				});
 			});
 
-		if let Status::Selecting(start_key, end_key, start_pos, end_pos) =
-			self.selection.borrow().status
+		if let Status::Selecting(start_key, end_key, start_pos, end_pos) = state.status
 			&& start_pos != end_pos
 		{
 			let (start_key, end_key) = (start_key.max(end_key), start_key.min(end_key));
 			let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
 
-			let y = key_to_px(start_key, *self.position, *self.scale);
-			let height = key_to_px(end_key, *self.position, *self.scale) + self.scale.y - y;
+			let y = key_to_px(start_key, state.position, state.scale);
+			let height = key_to_px(end_key, state.position, state.scale) + state.scale.y - y;
 			let y = y + viewport.y;
 
-			let x = time_to_px(start_pos, *self.position, *self.scale, self.transport);
-			let width = time_to_px(end_pos, *self.position, *self.scale, self.transport) - x;
+			let x = time_to_px(start_pos, state.position, state.scale, self.transport);
+			let width = time_to_px(end_pos, state.position, state.scale, self.transport) - x;
 			let x = x + viewport.x;
 
 			renderer.with_layer(*viewport, |renderer| {
@@ -447,7 +441,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		viewport: &Rectangle,
 		renderer: &Renderer,
 	) -> Interaction {
-		match self.selection.borrow().status {
+		match self.state.borrow().status {
 			Status::Selecting(..) => Interaction::Idle,
 			Status::Dragging(..) => Interaction::Grabbing,
 			Status::TrimmingStart(..)
@@ -511,21 +505,15 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 impl<'a, Message> PianoRoll<'a, Message> {
 	pub fn new(
-		selection: &'a RefCell<Selection>,
+		state: &'a RefCell<State>,
 		transport: &'a Transport,
-		position: &'a Vector,
-		scale: &'a Vector,
 		notes: impl IntoIterator<Item = Note<'a, Message>>,
-		pan: fn(Vector, f32, f32) -> Message,
 		action: fn(Action) -> Message,
 	) -> Self {
 		Self {
-			selection,
+			state,
 			notes: notes.into_iter().collect(),
 			transport,
-			position,
-			scale,
-			pan,
 			action,
 		}
 	}

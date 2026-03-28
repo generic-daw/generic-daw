@@ -1,6 +1,6 @@
 use crate::widget::{
 	ALPHA_1_3, key_to_px, maybe_snap,
-	piano_roll::{Action, Selection, Status},
+	piano_roll::{self, Action, Status},
 	px_to_time, time_to_px,
 };
 use generic_daw_core::{MidiNote, Transport};
@@ -24,10 +24,8 @@ use std::{borrow::Borrow, cell::RefCell};
 pub struct Note<'a, Message> {
 	idx: usize,
 	pub(super) note: &'a MidiNote,
-	selection: &'a RefCell<Selection>,
+	piano_roll: &'a RefCell<piano_roll::State>,
 	transport: &'a Transport,
-	position: &'a Vector,
-	scale: &'a Vector,
 	f: fn(Action) -> Message,
 }
 
@@ -37,14 +35,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
+		let piano_roll = self.piano_roll.borrow();
+
 		let (start, end) = (self.note.position.start(), self.note.position.end());
 
-		let start = time_to_px(start, *self.position, *self.scale, self.transport);
-		let end = time_to_px(end, *self.position, *self.scale, self.transport);
+		let start = time_to_px(start, piano_roll.position, piano_roll.scale, self.transport);
+		let end = time_to_px(end, piano_roll.position, piano_roll.scale, self.transport);
 
-		Node::new(Size::new(end - start, self.scale.y)).translate(Vector::new(
+		Node::new(Size::new(end - start, piano_roll.scale.y)).translate(Vector::new(
 			start,
-			key_to_px(self.note.key, *self.position, *self.scale) + self.position.y,
+			key_to_px(self.note.key, piano_roll.position, piano_roll.scale) + piano_roll.position.y,
 		))
 	}
 
@@ -71,19 +71,23 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 			return;
 		}
 
-		let selection = &mut *self.selection.borrow_mut();
+		let piano_roll = &mut *self.piano_roll.borrow_mut();
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
-				if selection.status == Status::None =>
+				if piano_roll.status == Status::None =>
 			{
-				let mut clear = selection.primary.insert(self.idx);
+				let mut clear = piano_roll.primary.insert(self.idx);
 
 				match button {
 					mouse::Button::Left => {
-						let time =
-							px_to_time(cursor.x, *self.position, *self.scale, self.transport);
+						let time = px_to_time(
+							cursor.x,
+							piano_roll.position,
+							piano_roll.scale,
+							self.transport,
+						);
 
-						selection.status = match (modifiers.command(), modifiers.shift()) {
+						piano_roll.status = match (modifiers.command(), modifiers.shift()) {
 							(false, false) => {
 								let start_offset = cursor.x - note_bounds.x;
 								let end_offset = note_bounds.width - start_offset;
@@ -111,7 +115,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 							(true, false) => {
 								clear = false;
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.snap_round(self.scale.x, self.transport)
+									time.snap_round(piano_roll.scale.x, self.transport)
 								});
 								Status::Selecting(self.note.key, self.note.key, time, time)
 							}
@@ -121,7 +125,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 							}
 							(true, true) => {
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.snap_round(self.scale.x, self.transport)
+									time.snap_round(piano_roll.scale.x, self.transport)
 								});
 								shell.publish((self.f)(Action::SplitAt(time)));
 								Status::DraggingSplit(time)
@@ -131,9 +135,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 						shell.capture_event();
 						shell.request_redraw();
 					}
-					mouse::Button::Right if selection.status != Status::Deleting => {
+					mouse::Button::Right if piano_roll.status != Status::Deleting => {
 						clear = true;
-						selection.status = Status::Deleting;
+						piano_roll.status = Status::Deleting;
 						shell.publish((self.f)(Action::Delete));
 						shell.capture_event();
 					}
@@ -141,14 +145,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 				}
 
 				if clear {
-					selection.primary.clear();
-					selection.primary.insert(self.idx);
+					piano_roll.primary.clear();
+					piano_roll.primary.insert(self.idx);
 				}
 			}
 			Event::Mouse(mouse::Event::CursorMoved { .. })
-				if selection.status == Status::Deleting =>
+				if piano_roll.status == Status::Deleting =>
 			{
-				selection.primary.insert(self.idx);
+				piano_roll.primary.insert(self.idx);
 			}
 			_ => {}
 		}
@@ -168,10 +172,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 			return;
 		};
 
-		let selection = self.selection.borrow();
+		let piano_roll = self.piano_roll.borrow();
 
 		let color =
-			if selection.primary.contains(&self.idx) || selection.secondary.contains(&self.idx) {
+			if piano_roll.primary.contains(&self.idx) || piano_roll.secondary.contains(&self.idx) {
 				theme.palette().danger.weak.color
 			} else {
 				theme.palette().primary.weak.color
@@ -224,9 +228,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 					+ Vector::new(
 						3.0,
 						if bounds.y == viewport.y {
-							bounds.height - self.scale.y / 2.0
+							bounds.height - piano_roll.scale.y / 2.0
 						} else {
-							self.scale.y / 2.0
+							piano_roll.scale.y / 2.0
 						},
 					),
 				theme.palette().background.strong.text,
@@ -273,19 +277,15 @@ impl<'a, Message> Note<'a, Message> {
 	pub fn new(
 		idx: usize,
 		note: &'a MidiNote,
-		selection: &'a RefCell<Selection>,
+		piano_roll: &'a RefCell<piano_roll::State>,
 		transport: &'a Transport,
-		position: &'a Vector,
-		scale: &'a Vector,
 		f: fn(Action) -> Message,
 	) -> Self {
 		Self {
 			idx,
 			note,
-			selection,
+			piano_roll,
 			transport,
-			position,
-			scale,
 			f,
 		}
 	}

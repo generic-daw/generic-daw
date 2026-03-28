@@ -12,7 +12,7 @@ use iced::{
 		mouse::{self, Click, Cursor, Interaction},
 		overlay,
 		renderer::{Quad, Style},
-		widget::{Operation, Tree, Widget, tree},
+		widget::{Operation, Tree, Widget},
 	},
 	border,
 	gradient::Linear,
@@ -27,9 +27,11 @@ use std::{
 	time::Instant,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Action {
-	Add(usize, MusicalTime),
+	Pan(Vector, f32),
+	Zoom(Vector, Point, f32),
+	Add(Option<(Arc<Path>, FileKind)>, usize, MusicalTime),
 	Open(usize, usize),
 	Clone,
 	Drag(isize, Delta<MusicalTime>),
@@ -40,8 +42,9 @@ pub enum Action {
 	Delete,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum Status {
+	Hovering(Arc<Path>, FileKind, Option<(usize, MusicalTime)>),
 	Selecting(usize, usize, MusicalTime, MusicalTime),
 	Dragging(usize, MusicalTime),
 	TrimmingStart(MusicalTime),
@@ -53,14 +56,26 @@ pub enum Status {
 }
 
 #[derive(Debug, Default)]
-pub struct Selection {
+pub struct State {
 	pub status: Status,
 	pub primary: HashSet<(usize, usize)>,
 	pub secondary: HashSet<(usize, usize)>,
-	pub file: Option<(Arc<Path>, FileKind, Option<(usize, MusicalTime)>)>,
+	pub position: Vector,
+	pub scale: Vector,
+	last_click: Option<Click>,
+	autoscroll_start: Option<Instant>,
+	last_autoscroll: Option<Instant>,
 }
 
-impl Selection {
+impl State {
+	pub fn new(position: Vector, scale: Vector) -> Self {
+		Self {
+			position,
+			scale,
+			..Self::default()
+		}
+	}
+
 	pub fn reset(&mut self) {
 		self.status = Status::None;
 		self.primary.extend(self.secondary.drain());
@@ -73,21 +88,11 @@ impl Selection {
 	}
 }
 
-#[derive(Default)]
-struct State {
-	last_click: Option<Click>,
-	autoscroll_start: Option<Instant>,
-	last_autoscroll: Option<Instant>,
-}
-
 #[derive(Debug)]
 pub struct Playlist<'a, Message> {
-	selection: &'a RefCell<Selection>,
+	state: &'a RefCell<State>,
 	transport: &'a Transport,
-	position: &'a Vector,
-	scale: &'a Vector,
 	tracks: Box<[Track<'a, Message>]>,
-	pan: fn(Vector, f32, f32) -> Message,
 	action: fn(Action) -> Message,
 }
 
@@ -95,14 +100,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message>
 where
 	Message: Clone,
 {
-	fn tag(&self) -> tree::Tag {
-		tree::Tag::of::<State>()
-	}
-
-	fn state(&self) -> tree::State {
-		tree::State::new(State::default())
-	}
-
 	fn diff(&self, tree: &mut Tree) {
 		tree.diff_children(&self.tracks);
 	}
@@ -123,7 +120,7 @@ where
 			.zip(&mut tree.children)
 			.map(|(child, tree)| {
 				let node = child
-					.layout(tree, renderer, &limits.height(self.scale.y))
+					.layout(tree, renderer, &limits.height(self.state.borrow().scale.y))
 					.translate(Vector::new(0.0, height));
 				height += node.bounds().height;
 				node
@@ -155,7 +152,7 @@ where
 			return;
 		}
 
-		let selection = &mut *self.selection.borrow_mut();
+		let state = &mut *self.state.borrow_mut();
 
 		cursor = cursor.land();
 
@@ -164,18 +161,12 @@ where
 				break 'block cursor;
 			}
 
-			if selection.status == Status::None {
-				if let Some((_, _, hovering)) = &mut selection.file
-					&& hovering.is_some()
-				{
-					*hovering = None;
-					shell.request_redraw();
-				}
+			if state.status == Status::None {
 				return;
 			}
 
 			let Some(cursor) = cursor.position_from(viewport.position()) else {
-				selection.reset();
+				state.reset();
 				shell.request_redraw();
 				return;
 			};
@@ -184,8 +175,6 @@ where
 				cursor.x.clamp(0.0, viewport.width),
 				cursor.y.clamp(0.0, viewport.height),
 			);
-
-			let state = tree.state.downcast_mut::<State>();
 
 			if cursor == clamped {
 				state.autoscroll_start = None;
@@ -201,7 +190,6 @@ where
 
 			if state.last_autoscroll == Some(now) {
 			} else if let Some(autoscroll_start) = state.autoscroll_start {
-				let height = viewport.height;
 				let visible = layout.position().y + layout.bounds().height - viewport.y;
 
 				let autoscroll_amt = (now - autoscroll_start).as_secs_f32().sqrt();
@@ -219,7 +207,7 @@ where
 					},
 				);
 
-				shell.publish((self.pan)(delta, height, visible));
+				shell.publish((self.action)(Action::Pan(delta, visible)));
 
 				state.last_autoscroll = Some(now);
 			} else {
@@ -229,17 +217,16 @@ where
 			clamped
 		};
 
-		let new_time = px_to_time(cursor.x, *self.position, *self.scale, self.transport);
+		let new_time = px_to_time(cursor.x, state.position, state.scale, self.transport);
 
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers }) => match button {
 				mouse::Button::Left => {
-					let state = tree.state.downcast_mut::<State>();
 					let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
 					state.last_click = Some(new_click);
 
 					let time = maybe_snap(new_time, *modifiers, |time| {
-						time.snap_round(self.scale.x, self.transport)
+						time.snap_round(state.scale.x, self.transport)
 					});
 					let track = track_idx(&layout, *viewport, cursor);
 
@@ -248,190 +235,181 @@ where
 						else {
 							return;
 						};
-						selection.status = Status::Selecting(track, track, time, time);
+						state.status = Status::Selecting(track, track, time, time);
 						shell.capture_event();
 						shell.request_redraw();
 					} else if let Some(track) = track
 						&& new_click.kind() == mouse::click::Kind::Double
 					{
-						selection.primary.clear();
-						selection.status = Status::Dragging(track, time);
-						shell.publish((self.action)(Action::Add(track, time)));
+						state.primary.clear();
+						state.status = Status::Dragging(track, time);
+						shell.publish((self.action)(Action::Add(None, track, time)));
 					} else {
-						selection.primary.clear();
+						state.primary.clear();
 						shell.capture_event();
 						shell.request_redraw();
 					}
 				}
 				mouse::Button::Right => {
-					selection.primary.clear();
-					selection.status = Status::Deleting;
+					state.primary.clear();
+					state.status = Status::Deleting;
 				}
 				_ => {}
 			},
-			Event::Mouse(mouse::Event::ButtonReleased { .. })
-				if selection.status != Status::None =>
-			{
-				selection.reset();
+			Event::Mouse(mouse::Event::ButtonReleased { .. }) if state.status != Status::None => {
+				if let Status::Hovering(path, kind, Some((track, time))) = state.status.clone() {
+					shell.publish((self.action)(Action::Add(Some((path, kind)), track, time)));
+				}
+
+				state.reset();
 				shell.capture_event();
 				shell.request_redraw();
 			}
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
-			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match &mut selection.file {
-				Some((_, _, time)) => {
+			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.status.clone() {
+				Status::Hovering(path, kind, time) => {
 					let track = track_idx(&layout, *viewport, cursor)
 						.unwrap_or_else(|| layout.children().len());
 
 					let new_time = maybe_snap(new_time, *modifiers, |time| {
-						time.snap_floor(self.scale.x, self.transport)
+						time.snap_floor(state.scale.x, self.transport)
 					});
 
 					let new_time = Some((track, new_time));
 
-					if *time != new_time {
-						*time = new_time;
+					if time != new_time {
+						state.status = Status::Hovering(path, kind, new_time);
 						shell.capture_event();
 						shell.request_redraw();
 					}
 				}
-				None => match selection.status {
-					Status::Selecting(start_track, last_end_track, start_pos, last_end_pos) => {
-						let Some(end_track) = track_idx(&layout, *viewport, cursor)
-							.or_else(|| layout.children().len().checked_sub(1))
-						else {
-							return;
-						};
+				Status::Selecting(start_track, last_end_track, start_pos, last_end_pos) => {
+					let Some(end_track) = track_idx(&layout, *viewport, cursor)
+						.or_else(|| layout.children().len().checked_sub(1))
+					else {
+						return;
+					};
 
-						let end_pos = maybe_snap(new_time, *modifiers, |time| {
-							time.snap_round(self.scale.x, self.transport)
+					let end_pos = maybe_snap(new_time, *modifiers, |time| {
+						time.snap_round(state.scale.x, self.transport)
+					});
+
+					if end_track == last_end_track && end_pos == last_end_pos {
+						return;
+					}
+
+					state.status = Status::Selecting(start_track, end_track, start_pos, end_pos);
+
+					let (start_track, end_track) =
+						(start_track.min(end_track), start_track.max(end_track));
+					let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
+
+					self.tracks
+						.iter()
+						.enumerate()
+						.flat_map(|(t_idx, track)| {
+							track
+								.clips
+								.iter()
+								.enumerate()
+								.map(move |(c_idx, clip)| ((t_idx, c_idx), clip))
+						})
+						.for_each(|(idx, clip)| {
+							let clip_pos = match clip.inner {
+								clip::Inner::AudioClip(AudioClipRef { clip, .. }) => clip.position,
+								clip::Inner::MidiClip(MidiClipRef { clip, .. }) => clip.position,
+								clip::Inner::Recording(..) => return,
+							};
+
+							if (start_track..=end_track).contains(&idx.0)
+								&& (start_pos.max(clip_pos.start()) < end_pos.min(clip_pos.end()))
+							{
+								state.secondary.insert(idx);
+							} else {
+								state.secondary.remove(&idx);
+							}
 						});
 
-						if end_track == last_end_track && end_pos == last_end_pos {
-							return;
-						}
+					shell.request_redraw();
+				}
+				Status::Dragging(track, time) => {
+					let Some(new_track) = track_idx(&layout, *viewport, cursor)
+						.or_else(|| layout.children().len().checked_sub(1))
+					else {
+						return;
+					};
 
-						selection.status =
-							Status::Selecting(start_track, end_track, start_pos, end_pos);
+					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+						abs_diff.snap_round(state.scale.x, self.transport)
+					});
 
-						let (start_track, end_track) =
-							(start_track.min(end_track), start_track.max(end_track));
-						let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
+					if new_track != track || abs_diff != MusicalTime::ZERO {
+						let delta = if new_time > time {
+							Delta::Positive
+						} else {
+							Delta::Negative
+						}(abs_diff);
 
-						self.tracks
-							.iter()
-							.enumerate()
-							.flat_map(|(t_idx, track)| {
-								track
-									.clips
-									.iter()
-									.enumerate()
-									.map(move |(c_idx, clip)| ((t_idx, c_idx), clip))
-							})
-							.for_each(|(idx, clip)| {
-								let clip_pos = match clip.inner {
-									clip::Inner::AudioClip(AudioClipRef { clip, .. }) => {
-										clip.position
-									}
-									clip::Inner::MidiClip(MidiClipRef { clip, .. }) => {
-										clip.position
-									}
-									clip::Inner::Recording(..) => return,
-								};
-
-								if (start_track..=end_track).contains(&idx.0)
-									&& (start_pos.max(clip_pos.start())
-										< end_pos.min(clip_pos.end()))
-								{
-									selection.secondary.insert(idx);
-								} else {
-									selection.secondary.remove(&idx);
-								}
-							});
-
-						shell.request_redraw();
+						state.status = Status::Dragging(new_track, time + delta);
+						shell.publish((self.action)(Action::Drag(
+							new_track.cast_signed() - track.cast_signed(),
+							delta,
+						)));
+						shell.capture_event();
 					}
-					Status::Dragging(track, time) => {
-						let Some(new_track) = track_idx(&layout, *viewport, cursor)
-							.or_else(|| layout.children().len().checked_sub(1))
-						else {
-							return;
-						};
+				}
+				Status::TrimmingStart(time) => {
+					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+						abs_diff.snap_round(state.scale.x, self.transport)
+					});
 
-						let abs_diff =
-							maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-								abs_diff.snap_round(self.scale.x, self.transport)
-							});
+					if abs_diff != MusicalTime::ZERO {
+						let delta = if new_time > time {
+							Delta::Positive
+						} else {
+							Delta::Negative
+						}(abs_diff);
 
-						if new_track != track || abs_diff != MusicalTime::ZERO {
-							let delta = if new_time > time {
-								Delta::Positive
-							} else {
-								Delta::Negative
-							}(abs_diff);
-
-							selection.status = Status::Dragging(new_track, time + delta);
-							shell.publish((self.action)(Action::Drag(
-								new_track.cast_signed() - track.cast_signed(),
-								delta,
-							)));
-							shell.capture_event();
-						}
+						state.status = Status::TrimmingStart(time + delta);
+						shell.publish((self.action)(Action::TrimStart(delta)));
+						shell.capture_event();
 					}
-					Status::TrimmingStart(time) => {
-						let abs_diff =
-							maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-								abs_diff.snap_round(self.scale.x, self.transport)
-							});
+				}
+				Status::TrimmingEnd(time) => {
+					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+						abs_diff.snap_round(state.scale.x, self.transport)
+					});
 
-						if abs_diff != MusicalTime::ZERO {
-							let delta = if new_time > time {
-								Delta::Positive
-							} else {
-								Delta::Negative
-							}(abs_diff);
+					if abs_diff != MusicalTime::ZERO {
+						let delta = if new_time > time {
+							Delta::Positive
+						} else {
+							Delta::Negative
+						}(abs_diff);
 
-							selection.status = Status::TrimmingStart(time + delta);
-							shell.publish((self.action)(Action::TrimStart(delta)));
-							shell.capture_event();
-						}
+						state.status = Status::TrimmingEnd(time + delta);
+						shell.publish((self.action)(Action::TrimEnd(delta)));
+						shell.capture_event();
 					}
-					Status::TrimmingEnd(time) => {
-						let abs_diff =
-							maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-								abs_diff.snap_round(self.scale.x, self.transport)
-							});
+				}
+				Status::DraggingSplit(time) => {
+					let new_time = maybe_snap(new_time, *modifiers, |time| {
+						time.snap_round(state.scale.x, self.transport)
+					});
 
-						if abs_diff != MusicalTime::ZERO {
-							let delta = if new_time > time {
-								Delta::Positive
-							} else {
-								Delta::Negative
-							}(abs_diff);
-
-							selection.status = Status::TrimmingEnd(time + delta);
-							shell.publish((self.action)(Action::TrimEnd(delta)));
-							shell.capture_event();
-						}
+					if new_time != time {
+						state.status = Status::DraggingSplit(new_time);
+						shell.publish((self.action)(Action::DragSplit(new_time)));
+						shell.capture_event();
 					}
-					Status::DraggingSplit(time) => {
-						let new_time = maybe_snap(new_time, *modifiers, |time| {
-							time.snap_round(self.scale.x, self.transport)
-						});
-
-						if new_time != time {
-							selection.status = Status::DraggingSplit(new_time);
-							shell.publish((self.action)(Action::DragSplit(new_time)));
-							shell.capture_event();
-						}
+				}
+				Status::Deleting => {
+					if !state.primary.is_empty() {
+						shell.publish((self.action)(Action::Delete));
+						shell.capture_event();
 					}
-					Status::Deleting => {
-						if !selection.primary.is_empty() {
-							shell.publish((self.action)(Action::Delete));
-							shell.capture_event();
-						}
-					}
-					Status::None => {}
-				},
+				}
+				Status::None => {}
 			},
 			_ => {}
 		}
@@ -447,7 +425,7 @@ where
 		cursor: Cursor,
 		viewport: &Rectangle,
 	) {
-		let selection = &*self.selection.borrow();
+		let state = &*self.state.borrow();
 
 		for layout in layout.children() {
 			let Some(bounds) = Rectangle::new(
@@ -467,14 +445,14 @@ where
 			);
 		}
 
-		if let Some((_, _, Some((track, time)))) = selection.file {
+		if let Status::Hovering(_, _, Some((track, time))) = state.status {
 			if let Some(bounds) = layout.children().nth(track).map(|layout| layout.bounds()) {
 				renderer.fill_quad(
 					Quad {
 						bounds: Rectangle::new(
 							bounds.position()
 								+ Vector::new(
-									time_to_px(time, *self.position, *self.scale, self.transport),
+									time_to_px(time, state.position, state.scale, self.transport),
 									0.0,
 								),
 							Size::new(50.0, bounds.height),
@@ -494,7 +472,7 @@ where
 								|layout| {
 									layout.position() + Vector::new(0.0, layout.bounds().height)
 								},
-							) + Vector::new(self.position.x, 0.0),
+							) + Vector::new(state.position.x, 0.0),
 							Size::new(viewport.width, 50.0),
 						),
 						..Quad::default()
@@ -532,8 +510,7 @@ where
 			});
 		}
 
-		if let Status::Selecting(start_track, end_track, start_pos, end_pos) =
-			self.selection.borrow().status
+		if let Status::Selecting(start_track, end_track, start_pos, end_pos) = state.status
 			&& start_pos != end_pos
 		{
 			let (start_track, end_track) = (start_track.min(end_track), start_track.max(end_track));
@@ -543,8 +520,8 @@ where
 			let height =
 				layout.child(end_track).position().y + layout.child(end_track).bounds().height - y;
 
-			let x = time_to_px(start_pos, *self.position, *self.scale, self.transport);
-			let width = time_to_px(end_pos, *self.position, *self.scale, self.transport) - x;
+			let x = time_to_px(start_pos, state.position, state.scale, self.transport);
+			let width = time_to_px(end_pos, state.position, state.scale, self.transport) - x;
 			let x = x + viewport.x;
 
 			renderer.with_layer(*viewport, |renderer| {
@@ -573,7 +550,8 @@ where
 		viewport: &Rectangle,
 		renderer: &Renderer,
 	) -> Interaction {
-		match self.selection.borrow().status {
+		match self.state.borrow().status {
+			Status::Hovering(..) => Interaction::Copy,
 			Status::Selecting(..) => Interaction::Idle,
 			Status::Dragging(..) => Interaction::Grabbing,
 			Status::TrimmingStart(..) | Status::TrimmingEnd(..) | Status::DraggingSplit(..) => {
@@ -639,21 +617,15 @@ where
 	Message: 'a,
 {
 	pub fn new(
-		selection: &'a RefCell<Selection>,
+		state: &'a RefCell<State>,
 		transport: &'a Transport,
-		position: &'a Vector,
-		scale: &'a Vector,
 		tracks: impl IntoIterator<Item = Track<'a, Message>>,
-		pan: fn(Vector, f32, f32) -> Message,
 		action: fn(Action) -> Message,
 	) -> Self {
 		Self {
-			selection,
+			state,
 			transport,
-			position,
-			scale,
 			tracks: tracks.into_iter().collect(),
-			pan,
 			action,
 		}
 	}

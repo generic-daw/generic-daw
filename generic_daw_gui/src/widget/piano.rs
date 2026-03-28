@@ -17,12 +17,12 @@ use iced::{
 const PIANO_WIDTH: f32 = 2.5 * LINE_HEIGHT;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Piano<'a> {
-	position: &'a Vector,
-	scale: &'a Vector,
+pub struct Piano {
+	position: Vector,
+	scale: Vector,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
+impl<Message> Widget<Message, Theme, Renderer> for Piano {
 	fn size(&self) -> Size<Length> {
 		Size::new(
 			Length::Fixed(PIANO_WIDTH),
@@ -58,7 +58,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 
 		for key in (0..128).map(MidiKey) {
 			let note_position =
-				bounds.position() + Vector::new(0.0, key_to_px(key, *self.position, *self.scale));
+				bounds.position() + Vector::new(0.0, key_to_px(key, self.position, self.scale));
 
 			let Some(bounds) = Rectangle::new(
 				note_position,
@@ -102,14 +102,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Piano<'_> {
 	}
 }
 
-impl<'a> Piano<'a> {
-	pub fn new(position: &'a Vector, scale: &'a Vector) -> Self {
+impl Piano {
+	pub fn new(position: Vector, scale: Vector) -> Self {
 		Self { position, scale }
 	}
 }
 
-impl<'a, Message> From<Piano<'a>> for Element<'a, Message> {
-	fn from(value: Piano<'a>) -> Self {
+impl<Message> From<Piano> for Element<'_, Message> {
+	fn from(value: Piano) -> Self {
 		Element::new(value)
 	}
 }
