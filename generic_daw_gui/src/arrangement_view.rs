@@ -338,7 +338,12 @@ impl ArrangementView {
 			Message::ChannelAdd => {
 				let id = self.arrangement.add_channel();
 				self.selected_node = id;
-				return self.update(Message::Connect(id, self.arrangement.master().id), config);
+				return self
+					.update(Message::Connect(id, self.arrangement.master().id), config)
+					.batch_task(scroll_into_view(
+						"mixer",
+						self.arrangement.node(self.selected_node).widget_id.clone(),
+					));
 			}
 			Message::ChannelRemove(id) => {
 				_ = self.update(Message::ArrowRight, config);
@@ -444,7 +449,7 @@ impl ArrangementView {
 					self.arrangement.plugin_move_to(node, index, target_index);
 				}
 			}
-			Message::PluginRemove(node, i) => _ = self.arrangement.plugin_remove(node, i),
+			Message::PluginRemove(node, i) => self.arrangement.plugin_remove(node, i),
 			Message::SampleLoaded(NoClone(sample), track, pos) => {
 				self.clips_loading -= 1;
 

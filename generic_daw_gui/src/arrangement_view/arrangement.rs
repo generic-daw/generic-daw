@@ -195,9 +195,9 @@ impl Arrangement {
 		plugin_id
 	}
 
-	pub fn plugin_remove(&mut self, id: NodeId, index: usize) -> Plugin {
+	pub fn plugin_remove(&mut self, id: NodeId, index: usize) {
 		self.node_action(id, NodeAction::PluginRemove(index));
-		self.node_mut(id).plugins.remove(index)
+		self.node_mut(id).plugins.remove(index);
 	}
 
 	pub fn plugin_move_to(&mut self, id: NodeId, from: usize, to: usize) {

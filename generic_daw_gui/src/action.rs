@@ -36,6 +36,14 @@ impl<Instruction, Message> Action<Instruction, Message> {
 		self.task = task;
 		self
 	}
+
+	pub fn batch_task(mut self, task: Task<Message>) -> Self
+	where
+		Message: 'static,
+	{
+		self.task = Task::batch([self.task, task]);
+		self
+	}
 }
 
 impl<Instruction, Message> From<Task<Message>> for Action<Instruction, Message> {
