@@ -35,16 +35,15 @@ use generic_daw_widget::{
 	peak_meter::{MAX_VOL, PeakMeter},
 };
 use iced::{
-	Center, Element, Fill, Shrink, Subscription, Task, Vector,
-	border::{self, Radius},
+	Center, Element, Fill, Shrink, Subscription, Task, Vector, border,
 	futures::SinkExt as _,
 	keyboard,
 	mouse::Interaction,
 	padding, stream,
 	time::every,
 	widget::{
-		button, center_x, column, combo_box, container, mouse_area, opaque, row, rule, scrollable,
-		slider, text, vertical_slider,
+		button, center_x, column, combo_box, container, mouse_area, opaque, operation::snap_to_end,
+		row, rule, scrollable, slider, text, vertical_slider,
 	},
 	window,
 };
@@ -340,10 +339,7 @@ impl ArrangementView {
 				self.selected_node = id;
 				return self
 					.update(Message::Connect(id, self.arrangement.master().id), config)
-					.batch_task(scroll_into_view(
-						"mixer",
-						self.arrangement.node(self.selected_node).widget_id.clone(),
-					));
+					.batch_task(snap_to_end("mixer"));
 			}
 			Message::ChannelRemove(id) => {
 				_ = self.update(Message::ArrowRight, config);
@@ -1659,7 +1655,7 @@ impl ArrangementView {
 						let incoming = self.arrangement.outgoing(node.id).get(&self.selected_node);
 						let outgoing = self.arrangement.outgoing(self.selected_node).get(&node.id);
 
-						let down = |r: Radius| {
+						let down = |r: border::Radius| {
 							button(chevron_down())
 								.padding(0)
 								.style(button_with_radius(
@@ -1679,7 +1675,7 @@ impl ArrangementView {
 								})
 						};
 
-						let up = |r: Radius| {
+						let up = |r: border::Radius| {
 							button(chevron_up())
 								.padding(0)
 								.style(button_with_radius(

@@ -11,13 +11,13 @@ pub fn scroll_into_view<T: MaybeSend + 'static>(
 	let scrollable = scrollable.into();
 	let child = child.into();
 
-	selector::find(scrollable.clone()).and_then(move |s| {
-		let selector::Target::Scrollable { translation, .. } = s else {
-			unreachable!();
-		};
+	selector::find(scrollable.clone())
+		.and_then(move |s| selector::find(child.clone()).map(move |c| c.map(|c| (s.clone(), c))))
+		.and_then(move |(s, c)| {
+			let selector::Target::Scrollable { translation, .. } = s else {
+				panic!();
+			};
 
-		let scrollable = scrollable.clone();
-		selector::find(child.clone()).and_then(move |c| {
 			operation::scroll_to(
 				scrollable.clone(),
 				operation::AbsoluteOffset {
@@ -44,5 +44,4 @@ pub fn scroll_into_view<T: MaybeSend + 'static>(
 				},
 			)
 		})
-	})
 }
