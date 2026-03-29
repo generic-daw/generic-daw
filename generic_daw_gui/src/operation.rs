@@ -24,21 +24,21 @@ pub fn scroll_into_view<T: MaybeSend + 'static>(
 					x: c.visible_bounds()
 						.is_none_or(|vb| vb.width != c.bounds().width)
 						.then_some(
-							c.bounds().x - s.bounds().x - s.bounds().width
+							c.bounds().x - s.bounds().x
 								+ if c.bounds().x - s.bounds().x < translation.x {
-									s.bounds().width
+									0.0
 								} else {
-									c.bounds().width
+									c.bounds().width - s.bounds().width
 								},
 						),
 					y: c.visible_bounds()
 						.is_none_or(|vb| vb.height != c.bounds().height)
 						.then_some(
-							c.bounds().y - s.bounds().y - s.bounds().height
+							c.bounds().y - s.bounds().y
 								+ if c.bounds().y - s.bounds().y < translation.y {
-									s.bounds().height
+									0.0
 								} else {
-									c.bounds().height
+									c.bounds().height - s.bounds().height
 								},
 						),
 				},
