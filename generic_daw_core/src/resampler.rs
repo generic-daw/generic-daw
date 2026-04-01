@@ -1,5 +1,4 @@
-use audioadapter_buffers::direct::InterleavedSlice;
-use rubato::{Fft, FixedSync, Resampler as _};
+use rubato::{Fft, FixedSync, Resampler as _, audioadapter_buffers::direct::InterleavedSlice};
 use std::num::NonZero;
 use utils::boxed_slice;
 
