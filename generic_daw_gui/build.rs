@@ -35,6 +35,7 @@ static GLYPHS: &[(&str, char, f32)] = &[
 	icon!(volume_2 = 57771),
 	icon!(x = 57778),
 	icon!(move_vertical = 57799 + 0.025),
+	icon!(arrow_big_right = 57827),
 	icon!(power_off = 57865),
 	icon!(arrow_left_right = 57930),
 	icon!(file_headphone = 58138),

@@ -259,19 +259,59 @@ impl ArrangementView {
 		)
 	}
 
-	pub fn update(&mut self, message: Message, config: &Config) -> Action<f32, Message> {
+	pub fn update(
+		&mut self,
+		message: Message,
+		config: &Config,
+		state: &State,
+	) -> Action<f32, Message> {
 		match message {
 			Message::ClapHost(msg) => {
 				return self.clap_host.update(msg).map(Message::ClapHost).into();
 			}
 			Message::Batch(msg) => {
-				return Task::batch(
+				let before = self.arrangement.transport().sample;
+
+				let task = Task::batch(
 					self.arrangement
 						.update(msg)
 						.into_iter()
-						.map(|msg| self.update(msg, config).task),
-				)
-				.into();
+						.map(|msg| self.update(msg, config, state).task),
+				);
+
+				let after = self.arrangement.transport().sample;
+
+				if state.autoscroll && after != before {
+					match self.tab {
+						Tab::Playlist => {
+							let pos_diff = Vector::new(
+								(after as f32 - before as f32)
+									/ self.playlist.get_mut().scale.x.exp2(),
+								0.0,
+							);
+							return self
+								.handle_playlist_action(
+									playlist::Action::Pan(pos_diff, 0.0),
+									config,
+									state,
+								)
+								.batch_task(task);
+						}
+						Tab::Mixer => {}
+						Tab::PianoRoll => {
+							let pos_diff = Vector::new(
+								(after as f32 - before as f32)
+									/ self.piano_roll.get_mut().scale.x.exp2(),
+								0.0,
+							);
+							self.handle_piano_roll_action(piano_roll::Action::Pan(
+								pos_diff, 0.0, 0.0,
+							));
+						}
+					}
+				}
+
+				return task.into();
 			}
 			Message::SetArrangement(NoClone(mut arrangement)) => {
 				if let Some((recording, _)) = &mut self.recording {
@@ -313,6 +353,7 @@ impl ArrangementView {
 						Tab::Mixer | Tab::PianoRoll => Tab::Playlist,
 					}),
 					config,
+					state,
 				);
 			}
 			Message::CycleTabBackwards => {
@@ -323,6 +364,7 @@ impl ArrangementView {
 						Tab::Playlist | Tab::PianoRoll => Tab::Mixer,
 					}),
 					config,
+					state,
 				);
 			}
 			Message::ChangedTab(tab) => {
@@ -338,13 +380,17 @@ impl ArrangementView {
 				let id = self.arrangement.add_channel();
 				self.selected_node = id;
 				return self
-					.update(Message::Connect(id, self.arrangement.master().id), config)
+					.update(
+						Message::Connect(id, self.arrangement.master().id),
+						config,
+						state,
+					)
 					.batch_task(snap_to_end("mixer"));
 			}
 			Message::ChannelRemove(id) => {
-				_ = self.update(Message::ArrowRight, config);
+				_ = self.update(Message::ArrowRight, config, state);
 				if self.selected_node == id {
-					_ = self.update(Message::ArrowLeft, config);
+					_ = self.update(Message::ArrowLeft, config, state);
 				}
 
 				self.arrangement.remove_channel(id);
@@ -452,7 +498,7 @@ impl ArrangementView {
 				if let Some(sample) = sample {
 					let id = sample.gui.id;
 					self.arrangement.add_sample(*sample);
-					return self.update(Message::AddAudioClip(id, track, pos), config);
+					return self.update(Message::AddAudioClip(id, track, pos), config, state);
 				}
 			}
 			Message::MidiPatternLoaded(NoClone(pattern), track, pos) => {
@@ -461,7 +507,7 @@ impl ArrangementView {
 				if let Some(pattern) = pattern {
 					let id = pattern.gui.id;
 					self.arrangement.add_midi_pattern(*pattern);
-					return self.update(Message::AddMidiClip(id, track, pos), config);
+					return self.update(Message::AddMidiClip(id, track, pos), config, state);
 				}
 			}
 			Message::AddAudioClip(id, track, pos) => {
@@ -472,7 +518,7 @@ impl ArrangementView {
 				));
 				clip.position.move_to(pos);
 				let task = if track == self.arrangement.tracks().len() {
-					self.update(Message::TrackAdd, config)
+					self.update(Message::TrackAdd, config, state)
 				} else {
 					Action::none()
 				};
@@ -490,7 +536,7 @@ impl ArrangementView {
 					));
 				clip.position.move_to(pos);
 				let task = if track == self.arrangement.tracks().len() {
-					self.update(Message::TrackAdd, config)
+					self.update(Message::TrackAdd, config, state)
 				} else {
 					Action::none()
 				};
@@ -503,7 +549,11 @@ impl ArrangementView {
 				if self.soloed_track.is_some() {
 					self.arrangement.channel_toggle_enabled(id);
 				}
-				return self.update(Message::Connect(id, self.arrangement.master().id), config);
+				return self.update(
+					Message::Connect(id, self.arrangement.master().id),
+					config,
+					state,
+				);
 			}
 			Message::TrackRemove(id) => {
 				if self.soloed_track == Some(id) {
@@ -511,9 +561,9 @@ impl ArrangementView {
 				}
 
 				if self.tab == Tab::Mixer {
-					_ = self.update(Message::ArrowRight, config);
+					_ = self.update(Message::ArrowRight, config, state);
 					if self.selected_node == id {
-						_ = self.update(Message::ArrowLeft, config);
+						_ = self.update(Message::ArrowLeft, config, state);
 					}
 				}
 
@@ -532,12 +582,12 @@ impl ArrangementView {
 					.collect();
 
 				if self.recording.as_ref().is_some_and(|&(_, node)| node == id) {
-					return self.update(Message::RecordingEndStream, config);
+					return self.update(Message::RecordingEndStream, config, state);
 				}
 			}
 			Message::TrackToggleEnabled(id) => {
 				self.soloed_track = None;
-				return self.update(Message::ChannelToggleEnabled(id), config);
+				return self.update(Message::ChannelToggleEnabled(id), config, state);
 			}
 			Message::TrackToggleSolo(id) => {
 				if self.soloed_track == Some(id) {
@@ -550,15 +600,15 @@ impl ArrangementView {
 			}
 			Message::TogglePlayback => {
 				self.arrangement.toggle_playback();
-				return self.update(Message::RecordingEndStream, config);
+				return self.update(Message::RecordingEndStream, config, state);
 			}
 			Message::Stop => {
 				self.arrangement.stop();
-				return self.update(Message::RecordingEndStream, config);
+				return self.update(Message::RecordingEndStream, config, state);
 			}
 			Message::SeekTo(pos) => {
 				self.arrangement.seek_to(pos);
-				return self.update(Message::RecordingEndStream, config);
+				return self.update(Message::RecordingEndStream, config, state);
 			}
 			Message::SetLoopMarker(marker) => self.arrangement.set_loop_marker(marker),
 			Message::Recording(node) => {
@@ -566,7 +616,7 @@ impl ArrangementView {
 
 				if let Some((recording, r_node)) = &mut self.recording {
 					if node == *r_node {
-						return self.update(Message::RecordingEndStream, config);
+						return self.update(Message::RecordingEndStream, config, state);
 					}
 
 					let pos = recording.position;
@@ -633,7 +683,9 @@ impl ArrangementView {
 				}
 			}
 			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().0.write(&samples),
-			Message::PlaylistAction(action) => return self.handle_playlist_action(action, config),
+			Message::PlaylistAction(action) => {
+				return self.handle_playlist_action(action, config, state);
+			}
 			Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
 			Message::ArrowLeft => match self.tab {
 				Tab::Playlist => {
@@ -779,10 +831,11 @@ impl ArrangementView {
 							Position::new(old.start().min(new.start()), old.end().max(new.end()))
 						}) {
 						self.playlist.get_mut().reset();
-						_ = self.handle_playlist_action(playlist::Action::Clone, config);
+						_ = self.handle_playlist_action(playlist::Action::Clone, config, state);
 						_ = self.handle_playlist_action(
 							playlist::Action::Drag(0, Delta::Positive(delta.len())),
 							config,
+							state,
 						);
 					}
 				}
@@ -812,15 +865,23 @@ impl ArrangementView {
 			Message::Delete => match self.tab {
 				Tab::Playlist => {
 					self.playlist.get_mut().reset();
-					_ = self.handle_playlist_action(playlist::Action::Delete, config);
+					_ = self.handle_playlist_action(playlist::Action::Delete, config, state);
 				}
 				Tab::Mixer => match self.arrangement.node(self.selected_node).ty {
 					NodeType::Master => {}
 					NodeType::Channel => {
-						return self.update(Message::ChannelRemove(self.selected_node), config);
+						return self.update(
+							Message::ChannelRemove(self.selected_node),
+							config,
+							state,
+						);
 					}
 					NodeType::Track => {
-						return self.update(Message::TrackRemove(self.selected_node), config);
+						return self.update(
+							Message::TrackRemove(self.selected_node),
+							config,
+							state,
+						);
 					}
 				},
 				Tab::PianoRoll => {
@@ -843,6 +904,7 @@ impl ArrangementView {
 		&mut self,
 		action: playlist::Action,
 		config: &Config,
+		state: &State,
 	) -> Action<f32, Message> {
 		let playlist::State {
 			primary,
@@ -870,8 +932,11 @@ impl ArrangementView {
 					(cursor.y + position.y) * ((scale.y / old_scale.y) - 1.0),
 				);
 
-				return self
-					.handle_playlist_action(playlist::Action::Pan(pos_diff, visible), config);
+				return self.handle_playlist_action(
+					playlist::Action::Pan(pos_diff, visible),
+					config,
+					state,
+				);
 			}
 			playlist::Action::Add(info, track, pos) => {
 				return if let Some((path, kind)) = info {
@@ -894,7 +959,7 @@ impl ArrangementView {
 						.values()
 						.find(|sample| sample.path == path)
 					{
-						self.update(Message::AddAudioClip(sample.id, track, pos), config)
+						self.update(Message::AddAudioClip(sample.id, track, pos), config, state)
 					} else {
 						self.clips_loading += 1;
 						let transport = *self.arrangement.transport();
@@ -919,6 +984,7 @@ impl ArrangementView {
 							pos,
 						),
 						config,
+						state,
 					)
 				};
 			}
@@ -928,7 +994,7 @@ impl ArrangementView {
 					self.piano_roll.get_mut().clear();
 				}
 
-				return self.update(Message::ChangedTab(Tab::PianoRoll), config);
+				return self.update(Message::ChangedTab(Tab::PianoRoll), config, state);
 			}
 			playlist::Action::Clone => {
 				let mut sorted = primary.drain().collect::<Vec<_>>();

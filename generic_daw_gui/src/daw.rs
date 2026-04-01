@@ -8,8 +8,8 @@ use crate::{
 	config_view::{self, ConfigView},
 	file_tree::{self, FileTree},
 	icons::{
-		chart_no_axes_gantt, cpu, keyboard_music, metronome, pause, play, plus, sliders_vertical,
-		square,
+		arrow_big_right, chart_no_axes_gantt, cpu, keyboard_music, metronome, pause, play, plus,
+		sliders_vertical, square,
 	},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
@@ -124,6 +124,7 @@ pub enum Message {
 
 	ToggleShowSeconds,
 	ToggleMetronome,
+	ToggleAutoscroll,
 	ChangedBpm(u16),
 	ChangedBpmText(String),
 	ChangedNumerator(u8),
@@ -146,7 +147,6 @@ pub struct Daw {
 	file_tree: FileTree,
 	config_view: Option<ConfigView>,
 	split_at: f32,
-	show_seconds: bool,
 
 	progress: Option<f32>,
 	status: Option<Arc<str>>,
@@ -181,7 +181,6 @@ impl Daw {
 		};
 
 		let split_at = state.file_tree_split_at;
-		let show_seconds = state.show_seconds;
 
 		(
 			Self {
@@ -193,7 +192,6 @@ impl Daw {
 				file_tree,
 				config_view: None,
 				split_at,
-				show_seconds,
 
 				progress: None,
 				status: None,
@@ -216,7 +214,8 @@ impl Daw {
 		match message {
 			Message::Arrangement(message) => {
 				let Action { instruction, task } =
-					self.arrangement_view.update(message, &self.config);
+					self.arrangement_view
+						.update(message, &self.config, &self.state);
 
 				if let Some(plugins_panel_split_at) = instruction {
 					self.state.plugins_panel_split_at = plugins_panel_split_at;
@@ -415,13 +414,16 @@ impl Daw {
 			}
 			Message::FileHoveredLeft => self.files_hovered = false,
 			Message::ToggleShowSeconds => {
-				self.show_seconds ^= true;
-				self.state.show_seconds = self.show_seconds;
+				self.state.show_seconds ^= true;
 				self.state.write();
 			}
 			Message::ToggleMetronome => {
 				self.arrangement_view.arrangement.toggle_metronome();
-				self.state.metronome = self.arrangement_view.arrangement.transport().metronome;
+				self.state.metronome ^= true;
+				self.state.write();
+			}
+			Message::ToggleAutoscroll => {
+				self.state.autoscroll ^= true;
 				self.state.write();
 			}
 			Message::ChangedBpm(bpm) => self
@@ -530,7 +532,7 @@ impl Daw {
 					row![
 						mouse_area(
 							container(
-								if self.show_seconds {
+								if self.state.show_seconds {
 									let duration = now.to_duration(transport);
 									text!(
 										"{:02}:{:02}:{:02}",
@@ -556,7 +558,7 @@ impl Daw {
 						.interaction(Interaction::Pointer),
 						button(metronome())
 							.style(button_with_radius(
-								if transport.metronome {
+								if self.state.metronome {
 									button::primary
 								} else {
 									button::secondary
@@ -566,6 +568,17 @@ impl Daw {
 							.padding(padding::all(5).left(4))
 							.on_press(Message::ToggleMetronome),
 					],
+					button(arrow_big_right())
+						.style(button_with_radius(
+							if self.state.autoscroll {
+								button::primary
+							} else {
+								button::secondary
+							},
+							5
+						))
+						.padding(5)
+						.on_press(Message::ToggleAutoscroll),
 					space::horizontal(),
 					row![
 						cpu(),

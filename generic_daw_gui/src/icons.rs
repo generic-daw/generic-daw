@@ -190,6 +190,14 @@ pub const fn move_vertical() -> Icon {
 	}
 }
 
+pub const fn arrow_big_right() -> Icon {
+	Icon {
+		glyph: '\u{e1e3}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
 pub const fn power_off() -> Icon {
 	Icon {
 		glyph: '\u{e209}',
