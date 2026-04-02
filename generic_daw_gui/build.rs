@@ -59,15 +59,12 @@ pub fn main() {
 
 use crate::widget::LINE_HEIGHT;
 use iced::{
-	Element, Font, font, padding,
+	Element, Font, padding,
 	widget::{container, text},
 };
 
 pub static LUCIDE_BYTES: &[u8] = include_bytes!("../../icons.ttf");
-pub static LUCIDE_FONT: Font = Font {
-	family: font::Family::Name("lucide"),
-	..Font::MONOSPACE
-};
+pub static LUCIDE_FONT: Font = Font::new("lucide");
 
 #[derive(Clone, Copy, Debug)]
 pub struct Icon {
