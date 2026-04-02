@@ -335,9 +335,11 @@ impl ArrangementView {
 				]);
 			}
 			Message::ChannelRemove(id) => {
-				self.select_next();
 				if self.selected == id {
-					self.select_prev();
+					self.select_next();
+					if self.selected == id {
+						self.select_prev();
+					}
 				}
 
 				self.arrangement.remove_channel(id);
@@ -496,9 +498,11 @@ impl ArrangementView {
 					self.soloed = None;
 				}
 
-				self.select_next();
 				if self.selected == id {
-					self.select_prev();
+					self.select_next();
+					if self.selected == id {
+						self.select_prev();
+					}
 				}
 
 				let track = self.arrangement.track_of(id).unwrap();
