@@ -143,8 +143,9 @@ impl ClapHost {
 			}
 			Message::WindowResized(window, size) => {
 				if let Some(&scale_factor) = self.scale_factor_of_window.get(&window)
-					&& let Some(&id) = self.plugin_of_window.get(&window)
-					&& let Some(plugin) = self.plugins.get_mut(&id)
+					&& let Some(&plugin) = self.plugin_of_window.get(&window)
+					&& let Some(plugin) = self.plugins.get_mut(&plugin)
+					&& plugin.has_gui()
 					&& let size = size * scale_factor
 					&& let size = Size::from_physical((size.width, size.height))
 					&& let Some(new_size) = plugin.resize(size)

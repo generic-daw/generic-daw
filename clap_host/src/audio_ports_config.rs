@@ -10,14 +10,14 @@ pub struct AudioPortsConfig {
 
 impl AudioPortsConfig {
 	pub fn from_ports(plugin: &mut PluginInstance<Host>, is_input: bool) -> Option<Self> {
-		let ports = *plugin.access_shared_handler(|s| s.ext.audio_ports.get())?;
+		let audio_ports = *plugin.access_shared_handler(|s| s.ext.audio_ports.get())?;
 
 		let mut buffer = AudioPortInfoBuffer::new();
 		let mut main_port_index = None;
 		let mut port_channel_counts = Vec::new();
 
-		for i in 0..ports.count(&mut plugin.plugin_handle(), is_input) {
-			let Some(info) = ports.get(&mut plugin.plugin_handle(), i, is_input, &mut buffer)
+		for i in 0..audio_ports.count(&mut plugin.plugin_handle(), is_input) {
+			let Some(info) = audio_ports.get(&mut plugin.plugin_handle(), i, is_input, &mut buffer)
 			else {
 				continue;
 			};

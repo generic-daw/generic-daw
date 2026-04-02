@@ -26,15 +26,15 @@ impl EventBuffers {
 	}
 
 	fn from_ports(plugin: &mut PluginInstance<Host>, is_input: bool) -> Option<(u16, bool)> {
-		let ports = *plugin.access_shared_handler(|s| s.ext.note_ports.get())?;
+		let note_ports = *plugin.access_shared_handler(|s| s.ext.note_ports.get())?;
 
 		let mut buffer = NotePortInfoBuffer::new();
 
-		(0..ports
+		(0..note_ports
 			.count(&mut plugin.plugin_handle(), is_input)
 			.min(u16::MAX.into()))
 			.find_map(|i| {
-				let port = ports.get(&mut plugin.plugin_handle(), i, is_input, &mut buffer)?;
+				let port = note_ports.get(&mut plugin.plugin_handle(), i, is_input, &mut buffer)?;
 
 				(port.supported_dialects.supports(NoteDialect::Clap)
 					|| port.supported_dialects.supports(NoteDialect::Midi))

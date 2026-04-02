@@ -78,8 +78,8 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 	fn initializing(&self, instance: InitializingPluginHandle<'a>) {
 		macro_rules! initializing {
 			($($ident:ident),*) => {$(
-				if let Some(ext) = instance.get_extension() {
-					self.ext.$ident.set(NoDebug(ext)).unwrap();
+				if let Some($ident) = instance.get_extension() {
+					self.ext.$ident.set(NoDebug($ident)).unwrap();
 					info!(concat!("{}: implements '", stringify!($ident), "'"), &self.descriptor);
 				}
 			)*};

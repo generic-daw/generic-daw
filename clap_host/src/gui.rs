@@ -16,8 +16,8 @@ impl Gui {
 	pub fn new(plugin: &mut PluginInstance<Host>) -> Self {
 		plugin
 			.access_shared_handler(|s| s.ext.gui.get().copied())
-			.map_or(Self::None, |ext| {
-				if let Some(config) = ext.get_preferred_api(&mut plugin.plugin_handle())
+			.map_or(Self::None, |gui| {
+				if let Some(config) = gui.get_preferred_api(&mut plugin.plugin_handle())
 					&& config.api_type == API_TYPE
 				{
 					return if config.is_floating {
@@ -35,14 +35,14 @@ impl Gui {
 					is_floating: false,
 				};
 
-				if ext.is_api_supported(&mut plugin.plugin_handle(), config) {
+				if gui.is_api_supported(&mut plugin.plugin_handle(), config) {
 					Self::Embedded {
 						can_resize: None,
 						scale_factor: 1.0,
 					}
 				} else {
 					config.is_floating = true;
-					if ext.is_api_supported(&mut plugin.plugin_handle(), config) {
+					if gui.is_api_supported(&mut plugin.plugin_handle(), config) {
 						Self::Floating
 					} else {
 						Self::None

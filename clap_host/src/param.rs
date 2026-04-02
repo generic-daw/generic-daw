@@ -18,9 +18,9 @@ pub struct Param {
 
 impl Param {
 	pub fn all(plugin: &mut PluginInstance<Host>) -> Option<Box<[Self]>> {
-		let ext = *plugin.access_shared_handler(|s| s.ext.params.get())?;
+		let params = *plugin.access_shared_handler(|s| s.ext.params.get())?;
 
-		let count = ext.count(&mut plugin.plugin_handle());
+		let count = params.count(&mut plugin.plugin_handle());
 
 		let mut params = (0..count)
 			.filter_map(|index| Self::try_new(plugin, index))
@@ -34,9 +34,9 @@ impl Param {
 	}
 
 	fn try_new(plugin: &mut PluginInstance<Host>, index: u32) -> Option<Self> {
-		let ext = *plugin.access_shared_handler(|s| s.ext.params.get())?;
+		let params = *plugin.access_shared_handler(|s| s.ext.params.get())?;
 		let mut buffer = ParamInfoBuffer::new();
-		let param = ext.get_info(&mut plugin.plugin_handle(), index, &mut buffer)?;
+		let param = params.get_info(&mut plugin.plugin_handle(), index, &mut buffer)?;
 
 		Some(Self {
 			id: param.id,
@@ -52,7 +52,7 @@ impl Param {
 	}
 
 	pub fn rescan(&mut self, plugin: &mut PluginInstance<Host>, flags: ParamRescanFlags) {
-		let ext = plugin.access_shared_handler(|s| *s.ext.params.get().unwrap());
+		let params = plugin.access_shared_handler(|s| *s.ext.params.get().unwrap());
 
 		if flags.contains(ParamRescanFlags::INFO)
 			&& let Some(param) = Self::try_new(plugin, self.index)
@@ -62,14 +62,14 @@ impl Param {
 		}
 
 		if flags.contains(ParamRescanFlags::VALUES)
-			&& let Some(value) = ext.get_value(&mut plugin.plugin_handle(), self.id)
+			&& let Some(value) = params.get_value(&mut plugin.plugin_handle(), self.id)
 		{
 			self.value = value as f32;
 			plugin.access_handler_mut(|mt| mt.mark_dirty());
 		}
 
 		if (flags.contains(ParamRescanFlags::VALUES) || flags.contains(ParamRescanFlags::TEXT))
-			&& let Ok(value_text) = ext.value_to_text(
+			&& let Ok(value_text) = params.value_to_text(
 				&mut plugin.plugin_handle(),
 				self.id,
 				self.value.into(),

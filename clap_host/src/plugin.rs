@@ -186,9 +186,9 @@ impl<Event: EventImpl> Plugin<Event> {
 		let latency = if self
 			.instance
 			.access_handler_mut(|mt| std::mem::take(&mut mt.latency_changed))
-			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.latency.get())
+			&& let Some(&latency) = self.instance.access_shared_handler(|s| s.ext.latency.get())
 		{
-			Some(ext.get(&mut self.instance.plugin_handle()))
+			Some(latency.get(&mut self.instance.plugin_handle()))
 		} else {
 			None
 		};
@@ -265,8 +265,8 @@ impl<Event: EventImpl> Plugin<Event> {
 		};
 
 		if !self.is_created
-			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get())
-			&& let Err(err) = ext.create(&mut self.instance.plugin_handle(), config)
+			&& let Some(&gui) = self.instance.access_shared_handler(|s| s.ext.gui.get())
+			&& let Err(err) = gui.create(&mut self.instance.plugin_handle(), config)
 		{
 			warn!("{}: {err}", self.descriptor);
 		}
@@ -278,9 +278,9 @@ impl<Event: EventImpl> Plugin<Event> {
 		self.hide();
 
 		if self.is_created
-			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get())
+			&& let Some(&gui) = self.instance.access_shared_handler(|s| s.ext.gui.get())
 		{
-			ext.destroy(&mut self.instance.plugin_handle());
+			gui.destroy(&mut self.instance.plugin_handle());
 		}
 
 		self.is_created = false;
@@ -336,8 +336,8 @@ impl<Event: EventImpl> Plugin<Event> {
 		self.create();
 
 		if !self.is_shown
-			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get())
-			&& let Err(err) = ext.show(&mut self.instance.plugin_handle())
+			&& let Some(&gui) = self.instance.access_shared_handler(|s| s.ext.gui.get())
+			&& let Err(err) = gui.show(&mut self.instance.plugin_handle())
 		{
 			warn!("{}: {err}", self.descriptor);
 		}
@@ -347,8 +347,8 @@ impl<Event: EventImpl> Plugin<Event> {
 
 	pub fn hide(&mut self) {
 		if self.is_shown
-			&& let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.gui.get())
-			&& let Err(err) = ext.hide(&mut self.instance.plugin_handle())
+			&& let Some(&gui) = self.instance.access_shared_handler(|s| s.ext.gui.get())
+			&& let Err(err) = gui.hide(&mut self.instance.plugin_handle())
 		{
 			warn!("{}: {err}", self.descriptor);
 		}
@@ -360,21 +360,18 @@ impl<Event: EventImpl> Plugin<Event> {
 	pub fn get_size(&mut self) -> Option<Size> {
 		self.create();
 
-		if !matches!(self.gui, Gui::Embedded { .. }) {
-			return None;
-		}
-
 		let GuiSize { width, height } = self
 			.instance
 			.access_shared_handler(|s| *s.ext.gui.get().unwrap())
 			.get_size(&mut self.instance.plugin_handle())?;
+
 		Some(Size::from_native((width as f32, height as f32)))
 	}
 
 	#[must_use]
 	pub fn resize(&mut self, size: Size) -> Option<Size> {
 		let Gui::Embedded { scale_factor, .. } = self.gui else {
-			return None;
+			panic!("called \"resize\" on a non-embedded gui");
 		};
 
 		if !self.can_resize() {
@@ -387,11 +384,11 @@ impl<Event: EventImpl> Plugin<Event> {
 			height: height as u32,
 		};
 
-		let ext = self
+		let gui = self
 			.instance
 			.access_shared_handler(|s| *s.ext.gui.get().unwrap());
-		let size = ext.adjust_size(&mut self.instance.plugin_handle(), size)?;
-		ext.set_size(&mut self.instance.plugin_handle(), size)
+		let size = gui.adjust_size(&mut self.instance.plugin_handle(), size)?;
+		gui.set_size(&mut self.instance.plugin_handle(), size)
 			.inspect_err(|err| warn!("{}: {err}", self.descriptor))
 			.ok()?;
 
@@ -406,10 +403,14 @@ impl<Event: EventImpl> Plugin<Event> {
 	pub fn set_render_mode(&mut self, render_mode: RenderMode) {
 		self.send(AudioThreadMessage::RenderMode(render_mode));
 
-		if let Some(&render) = self.instance.access_shared_handler(|s| s.ext.render.get())
-			&& let Err(err) = render.set(&mut self.instance.plugin_handle(), render_mode)
-		{
-			warn!("{}: {err}", self.descriptor);
+		if let Some(&render) = self.instance.access_shared_handler(|s| s.ext.render.get()) {
+			if render_mode == RenderMode::Offline
+				&& render.has_realtime_requirement(&mut self.instance.plugin_handle())
+			{
+				warn!("{}: Plugin has hard realtime requirement.", self.descriptor);
+			} else if let Err(err) = render.set(&mut self.instance.plugin_handle(), render_mode) {
+				warn!("{}: {err}", self.descriptor);
+			}
 		}
 	}
 
@@ -418,13 +419,14 @@ impl<Event: EventImpl> Plugin<Event> {
 		if self.last_state.is_none() || self.instance.access_handler(|mt| mt.state_mark_dirty) {
 			let mut buf = Vec::new();
 
-			if let Err(err) = if let Some(&ext) = self
+			if let Err(err) = if let Some(&state_context) = self
 				.instance
 				.access_shared_handler(|s| s.ext.state_context.get())
 			{
-				ext.save(&mut self.instance.plugin_handle(), &mut buf, context_type)
-			} else if let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.state.get()) {
-				ext.save(&mut self.instance.plugin_handle(), &mut buf)
+				state_context.save(&mut self.instance.plugin_handle(), &mut buf, context_type)
+			} else if let Some(&state) = self.instance.access_shared_handler(|s| s.ext.state.get())
+			{
+				state.save(&mut self.instance.plugin_handle(), &mut buf)
 			} else {
 				return None;
 			} {
@@ -441,17 +443,17 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 
 	pub fn set_state(&mut self, buf: &[u8], context_type: StateContextType) {
-		if let Err(err) = if let Some(&ext) = self
+		if let Err(err) = if let Some(&state_context) = self
 			.instance
 			.access_shared_handler(|s| s.ext.state_context.get())
 		{
-			ext.load(
+			state_context.load(
 				&mut self.instance.plugin_handle(),
 				&mut Cursor::new(buf),
 				context_type,
 			)
-		} else if let Some(&ext) = self.instance.access_shared_handler(|s| s.ext.state.get()) {
-			ext.load(&mut self.instance.plugin_handle(), &mut Cursor::new(buf))
+		} else if let Some(&state) = self.instance.access_shared_handler(|s| s.ext.state.get()) {
+			state.load(&mut self.instance.plugin_handle(), &mut Cursor::new(buf))
 		} else {
 			return;
 		} {
