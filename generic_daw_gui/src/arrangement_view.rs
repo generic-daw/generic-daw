@@ -1,8 +1,8 @@
 use crate::{
 	action::Action,
-	clap_host::{self, ClapHost},
 	components::{icon_button, text_icon_button},
 	config::Config,
+	daw::{self, HOST},
 	file_tree::FileKind,
 	icons::{
 		arrow_left_right, arrow_up_down, chevron_down, chevron_up, grip_vertical, mic, plus, power,
@@ -27,8 +27,9 @@ use crate::{
 };
 use audio_clip::AudioClip;
 use generic_daw_core::{
-	MidiKey, MidiNote, MidiPatternId, MusicalTime, NodeId, PanMode, Position, SampleId,
-	clap_host::{DEFAULT_CLAP_PATHS, HostInfo, Plugin, PluginDescriptor, get_installed_plugins},
+	Batch, MidiKey, MidiNote, MidiPatternId, MusicalTime, NodeId, PanMode, PluginId, Position,
+	SampleId,
+	clap_host::{Plugin, PluginDescriptor},
 };
 use generic_daw_widget::{
 	knob::Knob,
@@ -45,7 +46,6 @@ use iced::{
 		button, center_x, column, combo_box, container, mouse_area, opaque, operation::snap_to_end,
 		row, rule, scrollable, slider, text, vertical_slider,
 	},
-	window,
 };
 use iced_split::{Split, Strategy};
 use midi_clip::MidiClip;
@@ -53,7 +53,6 @@ use midi_pattern::MidiPatternPair;
 use node::{Node, NodeType};
 use rtrb::Consumer;
 use sample::SamplePair;
-use scan::Id as Scan;
 use smol::{Timer, stream::Stream, unblock};
 use std::{
 	cell::RefCell,
@@ -67,7 +66,7 @@ use std::{
 	time::Duration,
 };
 use sweeten::widget::drag::DragEvent;
-use utils::{NoClone, NoDebug, natural_cmp, unique_id};
+use utils::{NoClone, NoDebug};
 
 mod arrangement;
 mod audio_clip;
@@ -81,9 +80,7 @@ mod recording;
 mod sample;
 mod track;
 
-unique_id!(scan);
-
-pub use arrangement::{Arrangement, Batch};
+pub use arrangement::Arrangement;
 pub use audio_clip::AudioClipRef;
 pub use midi_clip::MidiClipRef;
 pub use project::Feedback;
@@ -115,11 +112,7 @@ pub static AUTOSAVE_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 
 #[derive(Clone, Debug)]
 pub enum Message {
-	ClapHost(clap_host::Message),
 	Batch(Batch),
-
-	SetArrangement(NoClone<Box<Arrangement>>),
-
 	UpdateRequest,
 
 	Connect(NodeId, NodeId),
@@ -138,32 +131,28 @@ pub enum Message {
 	ChannelToggleEnabled(NodeId),
 	ChannelToggleBypassed(NodeId),
 
-	PluginDiscovered(Scan, PluginDescriptor),
-	PluginFinishedScan,
 	PluginLoad(NodeId, PluginDescriptor, bool),
 	PluginSetState(NodeId, usize, NoDebug<Box<[u8]>>),
+	PluginShow(PluginId),
 	PluginMixChanged(NodeId, usize, f32),
 	PluginToggleEnabled(NodeId, usize),
 	PluginMoveTo(NodeId, DragEvent),
 	PluginRemove(NodeId, usize),
 
-	SampleLoaded(NoClone<Option<Box<SamplePair>>>, usize, MusicalTime),
-	MidiPatternLoaded(NoClone<Option<Box<MidiPatternPair>>>, usize, MusicalTime),
-	AddAudioClip(SampleId, usize, MusicalTime),
-	AddMidiClip(MidiPatternId, usize, MusicalTime),
+	SampleLoaded(NoClone<Option<(Box<SamplePair>, Option<usize>, MusicalTime)>>),
+	MidiPatternLoaded(NoClone<Option<(Box<MidiPatternPair>, Option<usize>, MusicalTime)>>),
+	AddAudioClip(SampleId, Option<usize>, MusicalTime),
+	AddMidiClip(MidiPatternId, Option<usize>, MusicalTime),
 
 	TrackAdd,
 	TrackRemove(NodeId),
 	TrackToggleEnabled(NodeId),
 	TrackToggleSolo(NodeId),
 
-	TogglePlayback,
-	Stop,
 	SeekTo(MusicalTime),
 	SetLoopMarker(Option<Position>),
 
 	Recording(NodeId),
-	RecordingEndStream,
 	RecordingFinalize,
 	RecordingWrite(NoDebug<Box<[f32]>>),
 
@@ -192,33 +181,27 @@ pub enum Tab {
 #[derive(Debug)]
 pub struct ArrangementView {
 	pub arrangement: Arrangement,
-	pub clap_host: ClapHost,
 
 	tab: Tab,
 	midi_clip: Option<(usize, usize)>,
-	recording: Option<(Recording, NodeId)>,
+	recording: Option<Recording>,
 
 	playlist: RefCell<playlist::State>,
 	piano_roll: RefCell<piano_roll::State>,
 
-	soloed_track: Option<NodeId>,
-	selected_node: NodeId,
+	soloed: Option<NodeId>,
+	selected: NodeId,
 
-	split_at: f32,
-	plugins: combo_box::State<PluginDescriptor>,
-
-	clips_loading: usize,
-	scan: Option<Scan>,
+	loading: usize,
 }
 
 impl ArrangementView {
-	pub fn create(
-		config: &Config,
-		state: &State,
-		main_window_id: window::Id,
-	) -> (Self, Task<Message>) {
-		let (mut arrangement, task) = Arrangement::create(config);
+	pub fn create(config: &Config, state: &State) -> (Self, Task<Message>) {
+		let (arrangement, batches) = Arrangement::create(config);
+		(Self::new(arrangement, state), batches.map(Message::Batch))
+	}
 
+	pub fn new(mut arrangement: Arrangement, state: &State) -> Self {
 		if state.metronome {
 			arrangement.toggle_metronome();
 		}
@@ -228,55 +211,46 @@ impl ArrangementView {
 
 		let selected_node = arrangement.master().id;
 
-		(
-			Self {
-				arrangement,
-				clap_host: ClapHost::new(main_window_id),
+		Self {
+			arrangement,
 
-				tab: Tab::Playlist,
-				midi_clip: None,
-				recording: None,
+			tab: Tab::Playlist,
+			midi_clip: None,
+			recording: None,
 
-				playlist: RefCell::new(playlist::State::new(
-					Vector::default(),
-					Vector::new(playlist_scale_x, 87.0),
-				)),
-				piano_roll: RefCell::new(piano_roll::State::new(
-					Vector::new(0.0, 1000.0),
-					Vector::new(piano_roll_scale_x, LINE_HEIGHT),
-				)),
+			playlist: RefCell::new(playlist::State::new(
+				Vector::default(),
+				Vector::new(playlist_scale_x, 87.0),
+			)),
+			piano_roll: RefCell::new(piano_roll::State::new(
+				Vector::new(0.0, 1000.0),
+				Vector::new(piano_roll_scale_x, LINE_HEIGHT),
+			)),
 
-				soloed_track: None,
-				selected_node,
+			soloed: None,
+			selected: selected_node,
 
-				split_at: state.plugins_panel_split_at,
-				plugins: combo_box::State::default(),
-
-				clips_loading: 0,
-				scan: None,
-			},
-			task.map(Message::Batch),
-		)
+			loading: 0,
+		}
 	}
 
 	pub fn update(
 		&mut self,
 		message: Message,
 		config: &Config,
-		state: &State,
-	) -> Action<f32, Message> {
+		state: &mut State,
+	) -> Action<daw::Instruction, Message> {
 		match message {
-			Message::ClapHost(msg) => {
-				return self.clap_host.update(msg).map(Message::ClapHost).into();
-			}
 			Message::Batch(msg) => {
 				let before = self.arrangement.transport().sample;
 
-				let task = Task::batch(
+				let action = Action::batch(
 					self.arrangement
 						.update(msg)
 						.into_iter()
-						.map(|msg| self.update(msg, config, state).task),
+						.map(daw::Message::ClapHost)
+						.map(daw::Instruction::Message)
+						.map(Action::instruction),
 				);
 
 				let after = self.arrangement.transport().sample;
@@ -289,13 +263,14 @@ impl ArrangementView {
 									/ self.playlist.get_mut().scale.x.exp2(),
 								0.0,
 							);
-							return self
-								.handle_playlist_action(
+							return Action::batch([
+								action,
+								self.handle_playlist_action(
 									playlist::Action::Pan(pos_diff, 0.0),
 									config,
 									state,
-								)
-								.batch_task(task);
+								),
+							]);
 						}
 						Tab::Mixer => {}
 						Tab::PianoRoll => {
@@ -311,35 +286,7 @@ impl ArrangementView {
 					}
 				}
 
-				return task.into();
-			}
-			Message::SetArrangement(NoClone(mut arrangement)) => {
-				if let Some((recording, _)) = &mut self.recording {
-					recording.end_stream();
-				}
-
-				if self.arrangement.transport().metronome {
-					arrangement.toggle_metronome();
-				}
-
-				let pos_fact = arrangement.transport().sample_rate.get() as f32
-					/ self.arrangement.transport().sample_rate.get() as f32;
-				let scale_diff = pos_fact.log2();
-
-				self.arrangement = *arrangement;
-
-				self.tab = Tab::Playlist;
-
-				self.playlist.get_mut().position.x *= pos_fact;
-				self.playlist.get_mut().scale.x += scale_diff;
-				self.playlist.get_mut().clear();
-				self.soloed_track = None;
-
-				self.selected_node = self.arrangement.master().id;
-
-				self.piano_roll.get_mut().position.x *= pos_fact;
-				self.piano_roll.get_mut().scale.x += scale_diff;
-				self.piano_roll.get_mut().clear();
+				return action;
 			}
 			Message::UpdateRequest => self.arrangement.request_update(),
 			Message::Connect(from, to) => self.arrangement.connect(from, to),
@@ -377,31 +324,30 @@ impl ArrangementView {
 				self.tab = tab;
 			}
 			Message::ChannelAdd => {
-				let id = self.arrangement.add_channel();
-				self.selected_node = id;
-				return self
-					.update(
-						Message::Connect(id, self.arrangement.master().id),
+				self.selected = self.arrangement.add_channel();
+				return Action::batch([
+					self.update(
+						Message::Connect(self.selected, self.arrangement.master().id),
 						config,
 						state,
-					)
-					.batch_task(snap_to_end("mixer"));
+					),
+					snap_to_end("mixer").into(),
+				]);
 			}
 			Message::ChannelRemove(id) => {
-				_ = self.update(Message::ArrowRight, config, state);
-				if self.selected_node == id {
-					_ = self.update(Message::ArrowLeft, config, state);
+				self.select_next();
+				if self.selected == id {
+					self.select_prev();
 				}
 
 				self.arrangement.remove_channel(id);
 			}
 			Message::ChannelSelect(id) => {
-				self.selected_node = id;
-
+				self.selected = id;
 				if self.tab == Tab::Mixer {
 					return scroll_into_view(
 						"mixer",
-						self.arrangement.node(self.selected_node).widget_id.clone(),
+						self.arrangement.node(self.selected).widget_id.clone(),
 					)
 					.into();
 				}
@@ -434,27 +380,7 @@ impl ArrangementView {
 			}
 			Message::ChannelToggleEnabled(id) => self.arrangement.channel_toggle_enabled(id),
 			Message::ChannelToggleBypassed(id) => self.arrangement.channel_toggle_bypassed(id),
-			Message::PluginDiscovered(scan, descriptor) => {
-				if self.scan == Some(scan) {
-					self.plugins.insert(
-						self.plugins.options().partition_point(|d| {
-							natural_cmp(d.name.as_bytes(), descriptor.name.as_bytes()).is_lt()
-						}),
-						descriptor,
-					);
-				}
-			}
-			Message::PluginFinishedScan => self.scan = None,
 			Message::PluginLoad(node, descriptor, show) => {
-				static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
-					HostInfo::new_from_cstring(
-						c"Generic DAW".to_owned(),
-						c"Generic DAW".to_owned(),
-						c"https://github.com/generic-daw/generic-daw".to_owned(),
-						c"0.0.0".to_owned(),
-					)
-				});
-
 				let (audio_processor, plugin, receiver) = Plugin::new(
 					descriptor,
 					self.arrangement.transport().sample_rate,
@@ -463,18 +389,22 @@ impl ArrangementView {
 				);
 
 				let id = self.arrangement.plugin_load(node, audio_processor);
-				let mut fut = self.clap_host.plugin_load(id, plugin, receiver);
-
+				let mut action =
+					Action::instruction(daw::Instruction::PluginLoad(id, plugin, receiver));
 				if show {
-					fut =
-						Task::batch([fut, self.clap_host.update(clap_host::Message::GuiOpen(id))]);
+					action = Action::batch([
+						action,
+						Action::instruction(daw::Instruction::PluginShow(id)),
+					]);
 				}
-
-				return fut.map(Message::ClapHost).into();
+				return action;
 			}
 			Message::PluginSetState(node, i, state) => {
 				let id = self.arrangement.node(node).plugins[i].id;
-				self.clap_host.set_state(id, &state);
+				return Action::instruction(daw::Instruction::PluginSetState(id, state));
+			}
+			Message::PluginShow(plugin) => {
+				return Action::instruction(daw::Instruction::PluginShow(plugin));
 			}
 			Message::PluginMixChanged(node, i, mix) => {
 				self.arrangement.plugin_mix_changed(node, i, mix);
@@ -492,19 +422,19 @@ impl ArrangementView {
 				}
 			}
 			Message::PluginRemove(node, i) => self.arrangement.plugin_remove(node, i),
-			Message::SampleLoaded(NoClone(sample), track, pos) => {
-				self.clips_loading -= 1;
+			Message::SampleLoaded(NoClone(loaded)) => {
+				self.loading -= 1;
 
-				if let Some(sample) = sample {
+				if let Some((sample, track, pos)) = loaded {
 					let id = sample.gui.id;
 					self.arrangement.add_sample(*sample);
 					return self.update(Message::AddAudioClip(id, track, pos), config, state);
 				}
 			}
-			Message::MidiPatternLoaded(NoClone(pattern), track, pos) => {
-				self.clips_loading -= 1;
+			Message::MidiPatternLoaded(NoClone(loaded)) => {
+				self.loading -= 1;
 
-				if let Some(pattern) = pattern {
+				if let Some((pattern, track, pos)) = loaded {
 					let id = pattern.gui.id;
 					self.arrangement.add_midi_pattern(*pattern);
 					return self.update(Message::AddMidiClip(id, track, pos), config, state);
@@ -517,10 +447,13 @@ impl ArrangementView {
 					self.arrangement.transport(),
 				));
 				clip.position.move_to(pos);
-				let task = if track == self.arrangement.tracks().len() {
-					self.update(Message::TrackAdd, config, state)
+				let (track, task) = if let Some(track) = track {
+					(track, Action::none())
 				} else {
-					Action::none()
+					(
+						self.arrangement.tracks().len(),
+						self.update(Message::TrackAdd, config, state),
+					)
 				};
 				self.arrangement.add_clip(track, clip);
 				return task;
@@ -535,10 +468,13 @@ impl ArrangementView {
 						),
 					));
 				clip.position.move_to(pos);
-				let task = if track == self.arrangement.tracks().len() {
-					self.update(Message::TrackAdd, config, state)
+				let (track, task) = if let Some(track) = track {
+					(track, Action::none())
 				} else {
-					Action::none()
+					(
+						self.arrangement.tracks().len(),
+						self.update(Message::TrackAdd, config, state),
+					)
 				};
 				self.arrangement.add_clip(track, clip);
 				return task;
@@ -546,7 +482,7 @@ impl ArrangementView {
 			Message::TrackAdd => {
 				let track = self.arrangement.add_track();
 				let id = self.arrangement.tracks()[track].id;
-				if self.soloed_track.is_some() {
+				if self.soloed.is_some() {
 					self.arrangement.channel_toggle_enabled(id);
 				}
 				return self.update(
@@ -556,15 +492,13 @@ impl ArrangementView {
 				);
 			}
 			Message::TrackRemove(id) => {
-				if self.soloed_track == Some(id) {
-					self.soloed_track = None;
+				if self.soloed == Some(id) {
+					self.soloed = None;
 				}
 
-				if self.tab == Tab::Mixer {
-					_ = self.update(Message::ArrowRight, config, state);
-					if self.selected_node == id {
-						_ = self.update(Message::ArrowLeft, config, state);
-					}
+				self.select_next();
+				if self.selected == id {
+					self.select_prev();
 				}
 
 				let track = self.arrangement.track_of(id).unwrap();
@@ -581,61 +515,57 @@ impl ArrangementView {
 					.filter_map(|clip| update_selection(clip, track, None))
 					.collect();
 
-				if self.recording.as_ref().is_some_and(|&(_, node)| node == id) {
-					return self.update(Message::RecordingEndStream, config, state);
+				if self
+					.recording
+					.as_ref()
+					.is_some_and(|recording| recording.node == id)
+				{
+					self.end_recording();
 				}
 			}
 			Message::TrackToggleEnabled(id) => {
-				self.soloed_track = None;
+				self.soloed = None;
 				return self.update(Message::ChannelToggleEnabled(id), config, state);
 			}
 			Message::TrackToggleSolo(id) => {
-				if self.soloed_track == Some(id) {
-					self.soloed_track = None;
+				if self.soloed == Some(id) {
+					self.soloed = None;
 					self.arrangement.enable_all_tracks();
 				} else {
-					self.soloed_track = Some(id);
+					self.soloed = Some(id);
 					self.arrangement.solo_track(id);
 				}
 			}
-			Message::TogglePlayback => {
-				self.arrangement.toggle_playback();
-				return self.update(Message::RecordingEndStream, config, state);
-			}
-			Message::Stop => {
-				self.arrangement.stop();
-				return self.update(Message::RecordingEndStream, config, state);
-			}
 			Message::SeekTo(pos) => {
 				self.arrangement.seek_to(pos);
-				return self.update(Message::RecordingEndStream, config, state);
+				self.end_recording();
 			}
 			Message::SetLoopMarker(marker) => self.arrangement.set_loop_marker(marker),
 			Message::Recording(node) => {
 				let path = RECORDING_DIR.join(format!("{}.wav", format_now())).into();
 
-				if let Some((recording, r_node)) = &mut self.recording {
-					if node == *r_node {
-						return self.update(Message::RecordingEndStream, config, state);
+				if let Some(recording) = &mut self.recording {
+					if node == recording.node {
+						self.end_recording();
+					} else {
+						let pos = recording.position;
+
+						let sample = recording.split_off(path, self.arrangement.transport());
+						let id = sample.gui.id;
+						self.arrangement.add_sample(sample);
+
+						let track = self.arrangement.track_of(recording.node).unwrap();
+
+						let mut clip = AudioClip::new(id);
+						clip.position.trim_end_to(MusicalTime::from_samples(
+							self.arrangement.samples()[&id].samples.len(),
+							self.arrangement.transport(),
+						));
+						clip.position.move_to(pos);
+						self.arrangement.add_clip(track, clip);
+
+						recording.node = node;
 					}
-
-					let pos = recording.position;
-
-					let sample = recording.split_off(path, self.arrangement.transport());
-					let id = sample.gui.id;
-					self.arrangement.add_sample(sample);
-
-					let track = self.arrangement.track_of(*r_node).unwrap();
-
-					let mut clip = AudioClip::new(id);
-					clip.position.trim_end_to(MusicalTime::from_samples(
-						self.arrangement.samples()[&id].samples.len(),
-						self.arrangement.transport(),
-					));
-					clip.position.move_to(pos);
-					self.arrangement.add_clip(track, clip);
-
-					*r_node = node;
 				} else {
 					let (recording, task) = Recording::create(
 						path,
@@ -643,12 +573,13 @@ impl ArrangementView {
 						config.input_device.id.as_ref(),
 						config.input_device.sample_rate,
 						config.input_device.buffer_size,
+						node,
 					);
 
 					let sample_rate = recording.sample_rate();
 					let frames = recording.frames().or(config.input_device.buffer_size);
 
-					self.recording = Some((recording, node));
+					self.recording = Some(recording);
 					self.arrangement.play();
 
 					return Task::run(poll_consumer(task, sample_rate, frames), |samples| {
@@ -658,14 +589,10 @@ impl ArrangementView {
 					.into();
 				}
 			}
-			Message::RecordingEndStream => {
-				if let Some((recording, _)) = &mut self.recording {
-					recording.end_stream();
-				}
-			}
 			Message::RecordingFinalize => {
-				let (recording, node) = self.recording.take().unwrap();
+				let recording = self.recording.take().unwrap();
 				let pos = recording.position;
+				let node = recording.node;
 
 				let sample = recording.finalize();
 
@@ -682,7 +609,7 @@ impl ArrangementView {
 					self.arrangement.add_clip(track, clip);
 				}
 			}
-			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().0.write(&samples),
+			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().write(&samples),
 			Message::PlaylistAction(action) => {
 				return self.handle_playlist_action(action, config, state);
 			}
@@ -701,25 +628,10 @@ impl ArrangementView {
 					);
 				}
 				Tab::Mixer => {
-					self.selected_node =
-						if self.arrangement.node(self.selected_node).ty == NodeType::Channel {
-							self.arrangement
-								.channels()
-								.rfind(|channel| channel.id < self.selected_node)
-								.map(|channel| channel.id)
-								.or_else(|| self.arrangement.tracks().last().map(|track| track.id))
-						} else {
-							self.arrangement
-								.tracks()
-								.iter()
-								.rfind(|track| track.id < self.selected_node)
-								.map(|track| track.id)
-						}
-						.unwrap_or_else(|| self.arrangement.master().id);
-
+					self.select_prev();
 					return scroll_into_view(
 						"mixer",
-						self.arrangement.node(self.selected_node).widget_id.clone(),
+						self.arrangement.node(self.selected).widget_id.clone(),
 					)
 					.into();
 				}
@@ -749,31 +661,10 @@ impl ArrangementView {
 					);
 				}
 				Tab::Mixer => {
-					self.selected_node =
-						if self.arrangement.node(self.selected_node).ty == NodeType::Channel {
-							self.arrangement
-								.channels()
-								.find(|&channel| channel.id > self.selected_node)
-								.map(|channel| channel.id)
-								.or_else(|| {
-									self.arrangement.channels().last().map(|channel| channel.id)
-								})
-						} else {
-							self.arrangement
-								.tracks()
-								.iter()
-								.find(|track| track.id > self.selected_node)
-								.map(|track| track.id)
-								.or_else(|| {
-									self.arrangement.channels().next().map(|channel| channel.id)
-								})
-								.or_else(|| self.arrangement.tracks().last().map(|track| track.id))
-						}
-						.unwrap_or_else(|| self.arrangement.master().id);
-
+					self.select_next();
 					return scroll_into_view(
 						"mixer",
-						self.arrangement.node(self.selected_node).widget_id.clone(),
+						self.arrangement.node(self.selected).widget_id.clone(),
 					)
 					.into();
 				}
@@ -831,12 +722,14 @@ impl ArrangementView {
 							Position::new(old.start().min(new.start()), old.end().max(new.end()))
 						}) {
 						self.playlist.get_mut().reset();
-						_ = self.handle_playlist_action(playlist::Action::Clone, config, state);
-						_ = self.handle_playlist_action(
-							playlist::Action::Drag(0, Delta::Positive(delta.len())),
-							config,
-							state,
-						);
+						return Action::batch([
+							self.handle_playlist_action(playlist::Action::Clone, config, state),
+							self.handle_playlist_action(
+								playlist::Action::Drag(0, Delta::Positive(delta.len())),
+								config,
+								state,
+							),
+						]);
 					}
 				}
 				Tab::Mixer => {}
@@ -865,23 +758,15 @@ impl ArrangementView {
 			Message::Delete => match self.tab {
 				Tab::Playlist => {
 					self.playlist.get_mut().reset();
-					_ = self.handle_playlist_action(playlist::Action::Delete, config, state);
+					return self.handle_playlist_action(playlist::Action::Delete, config, state);
 				}
-				Tab::Mixer => match self.arrangement.node(self.selected_node).ty {
+				Tab::Mixer => match self.arrangement.node(self.selected).ty {
 					NodeType::Master => {}
 					NodeType::Channel => {
-						return self.update(
-							Message::ChannelRemove(self.selected_node),
-							config,
-							state,
-						);
+						return self.update(Message::ChannelRemove(self.selected), config, state);
 					}
 					NodeType::Track => {
-						return self.update(
-							Message::TrackRemove(self.selected_node),
-							config,
-							state,
-						);
+						return self.update(Message::TrackRemove(self.selected), config, state);
 					}
 				},
 				Tab::PianoRoll => {
@@ -889,11 +774,15 @@ impl ArrangementView {
 					self.handle_piano_roll_action(piano_roll::Action::Delete);
 				}
 			},
-			Message::OnDrag(split_at) => self.split_at = split_at.clamp(200.0, 400.0),
-			Message::OnDragEnd => return Action::instruction(self.split_at),
+			Message::OnDrag(split_at) => {
+				state.plugins_panel_split_at = split_at.clamp(200.0, 400.0);
+			}
+			Message::OnDragEnd => state.write(),
 			Message::OnDoubleClick => {
-				self.split_at = DEFAULT_SPLIT_POSITION;
-				return Action::instruction(self.split_at);
+				return Action::batch([
+					self.update(Message::OnDrag(DEFAULT_SPLIT_POSITION), config, state),
+					self.update(Message::OnDragEnd, config, state),
+				]);
 			}
 		}
 
@@ -904,8 +793,8 @@ impl ArrangementView {
 		&mut self,
 		action: playlist::Action,
 		config: &Config,
-		state: &State,
-	) -> Action<f32, Message> {
+		state: &mut State,
+	) -> Action<daw::Instruction, Message> {
 		let playlist::State {
 			primary,
 			secondary,
@@ -941,15 +830,13 @@ impl ArrangementView {
 			playlist::Action::Add(info, track, pos) => {
 				return if let Some((path, kind)) = info {
 					if kind == FileKind::Midi {
-						self.clips_loading += 1;
+						self.loading += 1;
 						let transport = *self.arrangement.transport();
 						Task::future(unblock(move || {
 							Message::MidiPatternLoaded(
 								MidiPatternPair::from_midi(path, &transport)
-									.map(Box::new)
+									.map(|pair| (Box::new(pair), track, pos))
 									.into(),
-								track,
-								pos,
 							)
 						}))
 						.into()
@@ -961,28 +848,25 @@ impl ArrangementView {
 					{
 						self.update(Message::AddAudioClip(sample.id, track, pos), config, state)
 					} else {
-						self.clips_loading += 1;
+						self.loading += 1;
 						let transport = *self.arrangement.transport();
 						Task::future(unblock(move || {
 							Message::SampleLoaded(
-								SamplePair::new(path, &transport).map(Box::new).into(),
-								track,
-								pos,
+								SamplePair::new(path, &transport)
+									.map(|pair| (Box::new(pair), track, pos))
+									.into(),
 							)
 						}))
 						.into()
 					}
 				} else {
-					self.clips_loading += 1;
+					self.loading += 1;
 					self.update(
-						Message::MidiPatternLoaded(
-							NoClone(Some(Box::new(MidiPatternPair::from_notes(
-								Vec::new(),
-								"MIDI Pattern",
-							)))),
+						Message::MidiPatternLoaded(NoClone(Some((
+							Box::new(MidiPatternPair::from_notes(Vec::new(), "MIDI Pattern")),
 							track,
 							pos,
-						),
+						)))),
 						config,
 						state,
 					)
@@ -1304,15 +1188,19 @@ impl ArrangementView {
 		}
 	}
 
-	pub fn view(&self) -> Element<'_, Message> {
+	pub fn view<'a>(
+		&'a self,
+		state: &'a State,
+		plugins: &'a combo_box::State<PluginDescriptor>,
+	) -> Element<'a, Message> {
 		match self.tab {
-			Tab::Playlist => self.arrangement(),
-			Tab::Mixer => self.mixer(),
-			Tab::PianoRoll => self.piano_roll(),
+			Tab::Playlist => self.view_arrangement(),
+			Tab::Mixer => self.view_mixer(state, plugins),
+			Tab::PianoRoll => self.view_piano_roll(),
 		}
 	}
 
-	fn arrangement(&self) -> Element<'_, Message> {
+	fn view_arrangement(&self) -> Element<'_, Message> {
 		Seeker::new(
 			self.arrangement.transport(),
 			self.playlist.borrow().position,
@@ -1369,15 +1257,14 @@ impl ArrangementView {
 									.on_press(Message::TrackRemove(id)),
 									text_icon_button("M", button_style(false))
 										.on_press(Message::TrackToggleEnabled(id)),
-									text_icon_button(
-										"S",
-										button_style(self.soloed_track == Some(id))
-									)
-									.on_press(Message::TrackToggleSolo(id)),
+									text_icon_button("S", button_style(self.soloed == Some(id)))
+										.on_press(Message::TrackToggleSolo(id)),
 									icon_button(
 										mic(),
 										button_style(
-											self.recording.as_ref().is_some_and(|&(_, i)| i == id)
+											self.recording
+												.as_ref()
+												.is_some_and(|recording| recording.node == id)
 										)
 									)
 									.on_press(Message::Recording(id))
@@ -1447,8 +1334,8 @@ impl ArrangementView {
 								.chain(
 									self.recording
 										.as_ref()
-										.filter(|&&(_, i)| i == track.id)
-										.map(|(recording, _)| {
+										.filter(|recording| recording.node == track.id)
+										.map(|recording| {
 											Clip::new(
 												recording,
 												&self.playlist,
@@ -1474,12 +1361,16 @@ impl ArrangementView {
 		.into()
 	}
 
-	fn mixer(&self) -> Element<'_, Message> {
-		let node = self.arrangement.node(self.selected_node);
+	fn view_mixer<'a>(
+		&'a self,
+		state: &'a State,
+		plugins: &'a combo_box::State<PluginDescriptor>,
+	) -> Element<'a, Message> {
+		let node = self.arrangement.node(self.selected);
 
 		Split::new(
 			scrollable(
-				row(once(self.channel(self.arrangement.master(), "M"))
+				row(once(self.view_channel(self.arrangement.master(), "M"))
 					.chain(once(rule::vertical(1).into()))
 					.chain({
 						let mut iter = self
@@ -1488,7 +1379,7 @@ impl ArrangementView {
 							.iter()
 							.map(|track| self.arrangement.node(track.id))
 							.enumerate()
-							.map(|(i, node)| self.channel(node, format!("T{}", i + 1)))
+							.map(|(i, node)| self.view_channel(node, format!("T{}", i + 1)))
 							.peekable();
 
 						let one = iter.peek().map(|_| rule::vertical(1).into());
@@ -1498,7 +1389,7 @@ impl ArrangementView {
 						self.arrangement
 							.channels()
 							.enumerate()
-							.map(|(i, node)| self.channel(node, format!("C{}", i + 1))),
+							.map(|(i, node)| self.view_channel(node, format!("C{}", i + 1))),
 					)
 					.chain(once(
 						button(plus().size(LINE_HEIGHT + 6.0))
@@ -1518,8 +1409,8 @@ impl ArrangementView {
 			.style(scrollable_style)
 			.width(Fill),
 			column![
-				combo_box(&self.plugins, "Add Plugin", None, move |descriptor| {
-					Message::PluginLoad(self.selected_node, descriptor, true)
+				combo_box(plugins, "Add Plugin", None, move |descriptor| {
+					Message::PluginLoad(self.selected, descriptor, true)
 				})
 				.menu_style(menu_style)
 				.width(Fill),
@@ -1542,7 +1433,7 @@ impl ArrangementView {
 
 								row![
 									Knob::new(0.0..=1.0, plugin.mix, move |mix| {
-										Message::PluginMixChanged(self.selected_node, i, mix)
+										Message::PluginMixChanged(self.selected, i, mix)
 									})
 									.radius(TEXT_HEIGHT)
 									.enabled(plugin.enabled && node.enabled)
@@ -1555,9 +1446,7 @@ impl ArrangementView {
 									.padding(7)
 									.style(button_with_radius(button_style(false), border::left(5)))
 									.width(Fill)
-									.on_press(Message::ClapHost(
-										clap_host::Message::GuiOpen(plugin.id)
-									)),
+									.on_press(Message::PluginShow(plugin.id)),
 									column![
 										icon_button(
 											if plugin.enabled && !node.bypassed {
@@ -1567,10 +1456,7 @@ impl ArrangementView {
 											},
 											button_style(node.bypassed)
 										)
-										.on_press(Message::PluginToggleEnabled(
-											self.selected_node,
-											i
-										)),
+										.on_press(Message::PluginToggleEnabled(self.selected, i)),
 										icon_button(
 											x(),
 											if plugin.enabled && node.enabled {
@@ -1579,7 +1465,7 @@ impl ArrangementView {
 												button::secondary
 											}
 										)
-										.on_press(Message::PluginRemove(self.selected_node, i)),
+										.on_press(Message::PluginRemove(self.selected, i)),
 									]
 									.spacing(5),
 								]
@@ -1602,14 +1488,14 @@ impl ArrangementView {
 							})
 					)
 					.spacing(5)
-					.on_drag(|node| Message::PluginMoveTo(self.selected_node, node))
+					.on_drag(|node| Message::PluginMoveTo(self.selected, node))
 					.style(sweeten_column_style),
 				)
 				.spacing(5)
 				.style(scrollable_style)
 				.height(Fill)
 			],
-			self.split_at,
+			state.plugins_panel_split_at,
 		)
 		.on_drag(Message::OnDrag)
 		.on_drag_end(Message::OnDragEnd)
@@ -1620,7 +1506,7 @@ impl ArrangementView {
 		.into()
 	}
 
-	fn channel<'a>(
+	fn view_channel<'a>(
 		&'a self,
 		node: &'a Node,
 		name: impl text::IntoFragment<'a>,
@@ -1643,7 +1529,7 @@ impl ArrangementView {
 					row![
 						text_icon_button("M", button_style(false))
 							.on_press(Message::ChannelToggleEnabled(node.id)),
-						text_icon_button("S", button_style(self.soloed_track == Some(node.id)))
+						text_icon_button("S", button_style(self.soloed == Some(node.id)))
 							.on_press_maybe(
 								(node.ty == NodeType::Track)
 									.then_some(Message::TrackToggleSolo(node.id)),
@@ -1718,8 +1604,8 @@ impl ArrangementView {
 					]
 					.spacing(3),
 					{
-						let incoming = self.arrangement.outgoing(node.id).get(&self.selected_node);
-						let outgoing = self.arrangement.outgoing(self.selected_node).get(&node.id);
+						let incoming = self.arrangement.outgoing(node.id).get(&self.selected);
+						let outgoing = self.arrangement.outgoing(self.selected).get(&node.id);
 
 						let down = |r: border::Radius| {
 							button(chevron_down())
@@ -1735,9 +1621,9 @@ impl ArrangementView {
 								.on_press_maybe(if outgoing.is_some() {
 									None
 								} else if incoming.is_some() {
-									Some(Message::Disconnect(node.id, self.selected_node))
+									Some(Message::Disconnect(node.id, self.selected))
 								} else {
-									Some(Message::Connect(node.id, self.selected_node))
+									Some(Message::Connect(node.id, self.selected))
 								})
 						};
 
@@ -1755,16 +1641,16 @@ impl ArrangementView {
 								.on_press_maybe(if incoming.is_some() {
 									None
 								} else if outgoing.is_some() {
-									Some(Message::Disconnect(self.selected_node, node.id))
+									Some(Message::Disconnect(self.selected, node.id))
 								} else {
-									Some(Message::Connect(self.selected_node, node.id))
+									Some(Message::Connect(self.selected, node.id))
 								})
 						};
 
 						column![
 							incoming
-								.map(|val| (val, node.id, self.selected_node))
-								.or_else(|| outgoing.map(|val| (val, self.selected_node, node.id)))
+								.map(|val| (val, node.id, self.selected))
+								.or_else(|| outgoing.map(|val| (val, self.selected, node.id)))
 								.map(|(val, from, to)| {
 									slider(0.0..=1.0, val.cbrt(), move |val| {
 										Message::SetMix(from, to, val.powi(3))
@@ -1773,10 +1659,10 @@ impl ArrangementView {
 									.step(f32::EPSILON)
 									.handle((4, 4))
 								}),
-							if self.selected_node == node.id {
+							if node.id == self.selected {
 								row![]
 							} else {
-								match (node.ty, self.arrangement.node(self.selected_node).ty) {
+								match (node.ty, self.arrangement.node(self.selected).ty) {
 									(NodeType::Track, NodeType::Track) => row![],
 									(_, NodeType::Master)
 									| (NodeType::Track, NodeType::Channel) => {
@@ -1801,7 +1687,7 @@ impl ArrangementView {
 			.id(node.widget_id.clone())
 			.padding(5)
 			.style(|t| {
-				if self.selected_node == node.id {
+				if node.id == self.selected {
 					container::background(t.palette().background.weakest.color)
 						.border(border::width(1.5).color(t.palette().primary.base.color))
 				} else {
@@ -1815,7 +1701,7 @@ impl ArrangementView {
 		.into()
 	}
 
-	fn piano_roll(&self) -> Element<'_, Message> {
+	fn view_piano_roll(&self) -> Element<'_, Message> {
 		let clip = self.midi_clip().unwrap();
 
 		Seeker::new(
@@ -1867,11 +1753,8 @@ impl ArrangementView {
 		.into()
 	}
 
-	pub fn subscription(&self) -> Subscription<Message> {
-		Subscription::batch([
-			self.clap_host.subscription().map(Message::ClapHost),
-			every(Duration::from_secs(1)).map(|_| Message::UpdateRequest),
-		])
+	pub fn subscription() -> Subscription<Message> {
+		every(Duration::from_secs(1)).map(|_| Message::UpdateRequest)
 	}
 
 	pub fn keybinds(
@@ -1921,31 +1804,10 @@ impl ArrangementView {
 		}
 	}
 
-	pub fn get_installed_plugins(&mut self, config: &Config) -> Task<Message> {
-		let scan = Scan::unique();
-
-		self.plugins = combo_box::State::default();
-		self.scan = Some(scan);
-
-		let (sender, receiver) = smol::channel::unbounded();
-		let clap_paths = config.clap_paths.clone();
-
-		Task::batch([
-			Task::future(unblock(move || {
-				get_installed_plugins(DEFAULT_CLAP_PATHS.iter().chain(&clap_paths), |descriptor| {
-					_ = sender.try_send(descriptor);
-				});
-			}))
-			.discard(),
-			Task::run(receiver, move |descriptor| {
-				Message::PluginDiscovered(scan, descriptor)
-			})
-			.chain(Task::done(Message::PluginFinishedScan)),
-		])
-	}
-
-	pub fn get_discovered_plugins(&self) -> Vec<PluginDescriptor> {
-		self.plugins.clone().into_options()
+	pub fn end_recording(&mut self) {
+		if let Some(recording) = &mut self.recording {
+			recording.end_stream();
+		}
 	}
 
 	pub fn hover_file(&mut self, file: Arc<Path>, kind: FileKind) {
@@ -1966,7 +1828,43 @@ impl ArrangementView {
 	}
 
 	pub fn loading(&self) -> bool {
-		self.clips_loading > 0 || self.scan.is_some()
+		self.loading > 0
+	}
+
+	fn select_prev(&mut self) {
+		self.selected = if self.arrangement.node(self.selected).ty == NodeType::Channel {
+			self.arrangement
+				.channels()
+				.rfind(|channel| channel.id < self.selected)
+				.map(|channel| channel.id)
+				.or_else(|| self.arrangement.tracks().last().map(|track| track.id))
+		} else {
+			self.arrangement
+				.tracks()
+				.iter()
+				.rfind(|track| track.id < self.selected)
+				.map(|track| track.id)
+		}
+		.unwrap_or_else(|| self.arrangement.master().id);
+	}
+
+	fn select_next(&mut self) {
+		self.selected = if self.arrangement.node(self.selected).ty == NodeType::Channel {
+			self.arrangement
+				.channels()
+				.find(|&channel| channel.id > self.selected)
+				.map(|channel| channel.id)
+				.or_else(|| self.arrangement.channels().last().map(|channel| channel.id))
+		} else {
+			self.arrangement
+				.tracks()
+				.iter()
+				.find(|track| track.id > self.selected)
+				.map(|track| track.id)
+				.or_else(|| self.arrangement.channels().next().map(|channel| channel.id))
+				.or_else(|| self.arrangement.tracks().last().map(|track| track.id))
+		}
+		.unwrap_or_else(|| self.arrangement.master().id);
 	}
 }
 

@@ -32,7 +32,6 @@ fn main() -> Result {
 		.theme(Daw::theme)
 		.scale_factor(Daw::scale_factor)
 		.subscription(Daw::subscription)
-		.antialiasing(true)
 		.font(LUCIDE_BYTES)
 		.run()
 }

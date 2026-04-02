@@ -31,7 +31,7 @@ use std::{
 pub enum Action {
 	Pan(Vector, f32),
 	Zoom(Vector, Point, f32),
-	Add(Option<(Arc<Path>, FileKind)>, usize, MusicalTime),
+	Add(Option<(Arc<Path>, FileKind)>, Option<usize>, MusicalTime),
 	Open(usize, usize),
 	Clone,
 	Drag(isize, Delta<MusicalTime>),
@@ -44,7 +44,7 @@ pub enum Action {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum Status {
-	Hovering(Arc<Path>, FileKind, Option<(usize, MusicalTime)>),
+	Hovering(Arc<Path>, FileKind, Option<(Option<usize>, MusicalTime)>),
 	Selecting(usize, usize, MusicalTime, MusicalTime),
 	Dragging(usize, MusicalTime),
 	TrimmingStart(MusicalTime),
@@ -243,7 +243,7 @@ where
 					{
 						state.primary.clear();
 						state.status = Status::Dragging(track, time);
-						shell.publish((self.action)(Action::Add(None, track, time)));
+						shell.publish((self.action)(Action::Add(None, Some(track), time)));
 					} else {
 						state.primary.clear();
 						shell.capture_event();
@@ -268,8 +268,7 @@ where
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.status.clone() {
 				Status::Hovering(path, kind, time) => {
-					let track = track_idx(&layout, *viewport, cursor)
-						.unwrap_or_else(|| layout.children().len());
+					let track = track_idx(&layout, *viewport, cursor);
 
 					let new_time = maybe_snap(new_time, *modifiers, |time| {
 						time.snap_floor(state.scale.x, self.transport)
@@ -446,7 +445,8 @@ where
 		}
 
 		if let Status::Hovering(_, _, Some((track, time))) = state.status {
-			if let Some(bounds) = layout.children().nth(track).map(|layout| layout.bounds()) {
+			if let Some(track) = track {
+				let bounds = layout.child(track).bounds();
 				renderer.fill_quad(
 					Quad {
 						bounds: Rectangle::new(

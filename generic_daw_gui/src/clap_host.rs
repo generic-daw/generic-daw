@@ -351,7 +351,7 @@ impl ClapHost {
 		)
 	}
 
-	pub fn plugin_load(
+	pub fn load(
 		&mut self,
 		id: PluginId,
 		mut plugin: Plugin<Event>,

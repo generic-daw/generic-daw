@@ -1,6 +1,5 @@
 use crate::{
 	arrangement_view::{
-		self,
 		clip::Clip,
 		midi_pattern::{MidiPattern, MidiPatternPair},
 		node::{Node, NodeType},
@@ -14,24 +13,20 @@ use crate::{
 	daw,
 };
 use generic_daw_core::{
-	Event, Message, MidiKey, MidiNote, MidiPatternAction, MidiPatternId, MusicalTime, NodeAction,
-	NodeId, NodeImpl, PanMode, PluginId, Position, SampleId, Stream, Transport, Update, Version,
-	build_output_stream,
+	Batch, Event, Message, MidiKey, MidiNote, MidiPatternAction, MidiPatternId, MusicalTime,
+	NodeAction, NodeId, NodeImpl, PanMode, PluginId, Position, SampleId, Stream, Transport, Update,
+	Version, build_output_stream,
 	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
 };
 use iced::Task;
-use project::Id as Project;
 use rtrb::{Producer, PushError};
 use smol::unblock;
 use std::{collections::BTreeMap, num::NonZero, path::Path, sync::Arc};
-use utils::{NoDebug, ShiftMoveExt as _, unique_id};
-
-unique_id!(project);
+use utils::{NoDebug, ShiftMoveExt as _};
 
 #[derive(Debug)]
 pub struct Arrangement {
 	transport: Transport,
-	project: Project,
 	load: Option<f32>,
 
 	samples: BTreeMap<SampleId, Sample>,
@@ -43,12 +38,6 @@ pub struct Arrangement {
 
 	producer: Producer<Message>,
 	_stream: NoDebug<Stream>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Batch {
-	core: generic_daw_core::Batch,
-	project: Project,
 }
 
 impl Arrangement {
@@ -65,12 +54,9 @@ impl Arrangement {
 			(Node::new(NodeType::Master, master_node_id), BTreeMap::new()),
 		);
 
-		let project = Project::unique();
-
 		(
 			Self {
 				transport,
-				project,
 				load: None,
 
 				samples: BTreeMap::new(),
@@ -83,36 +69,32 @@ impl Arrangement {
 				producer,
 				_stream: stream.into(),
 			},
-			Task::run(
-				poll_consumer(consumer, transport.sample_rate, Some(transport.frames)),
-				move |core| Batch { core, project },
-			),
+			Task::stream(poll_consumer(
+				consumer,
+				transport.sample_rate,
+				Some(transport.frames),
+			)),
 		)
 	}
 
-	pub fn update(&mut self, Batch { mut core, project }: Batch) -> Vec<arrangement_view::Message> {
+	pub fn update(&mut self, mut batch: Batch) -> Vec<clap_host::Message> {
 		let mut messages = Vec::new();
-		if project != self.project {
-			return messages;
+
+		if batch.version == self.transport.version {
+			self.transport.sample = batch.sample;
 		}
 
-		if core.version == self.transport.version {
-			self.transport.sample = core.sample;
-		}
-
-		for update in core.updates.drain(..) {
+		for update in batch.updates.drain(..) {
 			match update {
 				Update::Peaks(node, peaks) => {
 					if let Some((node, _)) = self.nodes.get_mut(&node) {
-						node.update(peaks, core.now);
+						node.update(peaks, batch.now);
 					}
 				}
 				Update::Param(id, param_id) => {
-					messages.push(arrangement_view::Message::ClapHost(
-						clap_host::Message::MainThread(
-							id,
-							MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
-						),
+					messages.push(clap_host::Message::MainThread(
+						id,
+						MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
 					));
 				}
 				Update::Connect(from, to) => _ = self.outgoing_mut(from).entry(to).or_insert(1.0),
@@ -127,7 +109,7 @@ impl Arrangement {
 			}
 		}
 
-		self.send(Message::ReturnUpdate(core.updates));
+		self.send(Message::ReturnUpdate(batch.updates));
 
 		messages
 	}
@@ -519,7 +501,7 @@ impl Arrangement {
 		self.midi_pattern_action(pattern, MidiPatternAction::TrimEndTo(note, pos));
 	}
 
-	pub fn start_export(&mut self, path: Arc<Path>) -> Task<daw::Message> {
+	pub fn export(&mut self, path: Arc<Path>) -> Task<daw::Message> {
 		let (a_sender, p_receiver) = oneshot::channel();
 		let (p_sender, a_receiver) = oneshot::channel();
 		self.send(Message::RequestExport(a_sender, a_receiver));

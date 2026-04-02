@@ -1,8 +1,8 @@
 use crate::{
-	action::Action,
 	arrangement_view::{
 		self, AUTOSAVE_DIR, Arrangement, ArrangementView, Feedback, PROJECT_DIR, Tab, format_now,
 	},
+	clap_host::{self, ClapHost},
 	components::{PICK_LIST_HANDLE, number_input},
 	config::Config,
 	config_view::{self, ConfigView},
@@ -18,29 +18,50 @@ use crate::{
 	},
 	widget::ALPHA_2_3,
 };
-use generic_daw_core::{MusicalTime, clap_host::RenderMode};
+use generic_daw_core::{
+	Event, MusicalTime, PluginId,
+	clap_host::{
+		DEFAULT_CLAP_PATHS, HostInfo, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
+	},
+};
 use iced::{
 	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
 	mouse::Interaction,
 	padding,
 	time::every,
 	widget::{
-		bottom_center, button, center, column, container, mouse_area, opaque, pick_list,
+		bottom_center, button, center, column, combo_box, container, mouse_area, opaque, pick_list,
 		progress_bar, row, scrollable, space, stack, text,
 	},
 	window,
 };
 use iced_split::{Strategy, vertical_split};
-use log::trace;
+use log::{trace, warn};
 use rfd::AsyncFileDialog;
+use scan::Id as Scan;
+use smol::unblock;
 use std::{
 	fmt::{Display, Formatter},
 	num::NonZero,
 	path::Path,
-	sync::Arc,
+	sync::{Arc, LazyLock, mpsc::Receiver},
 	time::Duration,
 };
-use utils::{NoClone, variants};
+use utils::{NoClone, NoDebug, natural_cmp, unique_id, variants};
+
+unique_id!(scan);
+unique_id!(project);
+
+pub use project::Id as Project;
+
+pub static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
+	HostInfo::new_from_cstring(
+		c"Generic DAW".to_owned(),
+		c"Generic DAW".to_owned(),
+		c"https://github.com/generic-daw/generic-daw".to_owned(),
+		c"0.0.0".to_owned(),
+	)
+});
 
 variants! {
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -83,11 +104,25 @@ impl Display for FileMenu {
 	}
 }
 
+pub enum Instruction {
+	Message(Message),
+	PluginLoad(PluginId, Plugin<Event>, Receiver<MainThreadMessage>),
+	PluginSetState(PluginId, NoDebug<Box<[u8]>>),
+	PluginShow(PluginId),
+}
+
 #[derive(Clone, Debug)]
 pub enum Message {
-	Arrangement(arrangement_view::Message),
+	Arrangement(Project, arrangement_view::Message),
+	ClapHost(clap_host::Message),
 	FileTree(file_tree::Message),
 	ConfigView(config_view::Message),
+
+	CloseRequested(window::Id),
+	ProjectLoaded(Project, NoClone<Box<Arrangement>>),
+
+	PluginScanned(Scan, PluginDescriptor),
+	PluginScanFinished(Scan),
 
 	NewFile,
 	OpenLastFile,
@@ -105,10 +140,10 @@ pub enum Message {
 	SetStatus(Arc<str>),
 	ClearStatus,
 
-	OpenFile(Arc<Path>),
+	FileOpen(Arc<Path>),
 	CantLoadSample(Arc<str>, NoClone<oneshot::Sender<Feedback<Arc<Path>>>>),
 	FoundSampleResponse(usize, Feedback<Arc<Path>>),
-	OpenedFile(Option<Arc<Path>>),
+	FileOpened(Option<Arc<Path>>),
 
 	ExportFile(Arc<Path>),
 	ExportedFile,
@@ -117,11 +152,12 @@ pub enum Message {
 	CloseConfigView,
 	MergeConfig(Box<Config>, bool),
 
-	CloseRequested(window::Id),
 	FileHovered,
 	FileDropped(Arc<Path>),
 	FileHoveredLeft,
 
+	TogglePlayback,
+	Stop,
 	ToggleShowSeconds,
 	ToggleMetronome,
 	ToggleAutoscroll,
@@ -144,15 +180,19 @@ pub struct Daw {
 	current_project: Option<Arc<Path>>,
 
 	arrangement_view: ArrangementView,
+	clap_host: ClapHost,
 	file_tree: FileTree,
 	config_view: Option<ConfigView>,
-	split_at: f32,
+
+	plugins: combo_box::State<PluginDescriptor>,
 
 	progress: Option<f32>,
 	status: Option<Arc<str>>,
 	missing_samples: Vec<(Arc<str>, oneshot::Sender<Feedback<Arc<Path>>>)>,
 
 	main_window_id: window::Id,
+	project: Project,
+	scan: Option<Scan>,
 	files_hovered: bool,
 }
 
@@ -168,11 +208,10 @@ impl Daw {
 		let config = Config::read();
 		let state = State::read();
 
+		let project = Project::unique();
+		let (arrangement_view, batches) = ArrangementView::create(&config, &state);
+		let clap_host = ClapHost::new(main_window_id);
 		let file_tree = FileTree::new(&config.sample_paths);
-
-		let (mut arrangement_view, batches) =
-			ArrangementView::create(&config, &state, main_window_id);
-		let scan = arrangement_view.get_installed_plugins(&config);
 
 		let open = if config.open_last_project {
 			Task::done(Message::OpenLastFile)
@@ -180,7 +219,8 @@ impl Daw {
 			Task::none()
 		};
 
-		let split_at = state.file_tree_split_at;
+		let scan = Scan::unique();
+		let plugins = get_installed_plugins(&config);
 
 		(
 			Self {
@@ -189,21 +229,28 @@ impl Daw {
 				current_project: None,
 
 				arrangement_view,
+				clap_host,
 				file_tree,
 				config_view: None,
-				split_at,
+
+				plugins: combo_box::State::default(),
 
 				progress: None,
 				status: None,
 				missing_samples: Vec::new(),
 
 				main_window_id,
+				project,
+				scan: Some(scan),
 				files_hovered: false,
 			},
 			Task::batch([
 				window,
-				batches.map(Message::Arrangement),
-				scan.map(Message::Arrangement).chain(open),
+				batches.map(move |message| Message::Arrangement(project, message)),
+				plugins
+					.map(move |descriptor| Message::PluginScanned(scan, descriptor))
+					.chain(Task::done(Message::PluginScanFinished(scan)))
+					.chain(open),
 			]),
 		)
 	}
@@ -212,34 +259,56 @@ impl Daw {
 		trace!("{message:?}");
 
 		match message {
-			Message::Arrangement(message) => {
-				let Action { instruction, task } =
-					self.arrangement_view
-						.update(message, &self.config, &self.state);
-
-				if let Some(plugins_panel_split_at) = instruction {
-					self.state.plugins_panel_split_at = plugins_panel_split_at;
-					self.state.write();
+			Message::Arrangement(project, message) => {
+				if project == self.project {
+					return self
+						.arrangement_view
+						.update(message, &self.config, &mut self.state)
+						.handle(
+							move |message| Message::Arrangement(project, message),
+							|instruction| self.handle_instruction(instruction),
+						);
 				}
-
-				return task.map(Message::Arrangement);
 			}
-			Message::FileTree(action) => return self.handle_file_tree_message(action),
+			Message::ClapHost(message) => {
+				return self.clap_host.update(message).map(Message::ClapHost);
+			}
+			Message::FileTree(message) => return self.handle_file_tree_message(message),
 			Message::ConfigView(message) => {
 				if let Some(config_view) = self.config_view.as_mut() {
-					let Action { instruction, task } = config_view.update(message);
-					return Task::batch([
-						task.map(Message::ConfigView),
-						instruction.map_or_else(Task::none, |config| {
+					return config_view
+						.update(message)
+						.handle(Message::ConfigView, |config| {
 							self.update(Message::MergeConfig(config.into(), true))
-						}),
-					]);
+						});
+				}
+			}
+			Message::CloseRequested(window) => {
+				if window == self.main_window_id {
+					return iced::exit();
+				}
+			}
+			Message::ProjectLoaded(project, NoClone(arrangement)) => {
+				self.arrangement_view = ArrangementView::new(*arrangement, &self.state);
+				self.project = project;
+			}
+			Message::PluginScanned(scan, descriptor) => {
+				if self.scan == Some(scan)
+					&& let Err(i) = self.plugins.options().binary_search_by(|d| {
+						natural_cmp(d.name.as_bytes(), descriptor.name.as_bytes())
+					}) {
+					self.plugins.insert(i, descriptor);
+				}
+			}
+			Message::PluginScanFinished(scan) => {
+				if self.scan == Some(scan) {
+					self.scan = None;
 				}
 			}
 			Message::NewFile => return Arrangement::empty(),
 			Message::OpenLastFile => {
 				if let Some(last_project) = self.state.last_project.clone() {
-					return self.update(Message::OpenFile(last_project));
+					return self.update(Message::FileOpen(last_project));
 				}
 			}
 			Message::SaveFile => {
@@ -250,13 +319,13 @@ impl Daw {
 				);
 			}
 			Message::SaveAsFile(path) => {
-				if self
+				match self
 					.arrangement_view
 					.arrangement
-					.save(&path, &mut self.arrangement_view.clap_host)
-					.is_ok()
+					.save(&path, &mut self.clap_host)
 				{
-					return self.update(Message::OpenedFile(Some(path)));
+					Ok(()) => return self.update(Message::FileOpened(Some(path))),
+					Err(err) => warn!("{err}"),
 				}
 			}
 			Message::AutosaveFile => {
@@ -269,10 +338,13 @@ impl Daw {
 
 				let path = AUTOSAVE_DIR.join(format!("{} {}.gdp", name, format_now()));
 
-				_ = self
+				if let Err(err) = self
 					.arrangement_view
 					.arrangement
-					.save(&path, &mut self.arrangement_view.clap_host);
+					.save(&path, &mut self.clap_host)
+				{
+					warn!("{err}");
+				}
 			}
 			Message::ToggleFullscreen => {
 				let id = self.main_window_id;
@@ -293,7 +365,7 @@ impl Daw {
 				.then(Task::future)
 				.and_then(Task::done)
 				.map(|p| p.path().into())
-				.map(Message::OpenFile);
+				.map(Message::FileOpen);
 			}
 			Message::SaveAsFileDialog => {
 				return window::run(self.main_window_id, |window| {
@@ -334,13 +406,10 @@ impl Daw {
 			Message::Progress(progress) => self.progress = Some(progress),
 			Message::SetStatus(scanning) => self.status = Some(scanning),
 			Message::ClearStatus => self.status = None,
-			Message::OpenFile(path) => {
+			Message::FileOpen(path) => {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
-					return Arrangement::start_load(
-						path,
-						self.arrangement_view.get_discovered_plugins(),
-					);
+					return Arrangement::start_load(path, self.plugins.clone().into_options());
 				}
 			}
 			Message::CantLoadSample(name, NoClone(sender)) => {
@@ -351,7 +420,7 @@ impl Daw {
 			Message::FoundSampleResponse(idx, response) => {
 				self.missing_samples.remove(idx).1.send(response).unwrap();
 			}
-			Message::OpenedFile(path) => {
+			Message::FileOpened(path) => {
 				if let Some(path) = path {
 					self.current_project = Some(path.clone());
 					self.state.last_project = Some(path);
@@ -364,16 +433,12 @@ impl Daw {
 			Message::ExportFile(path) => {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
-					self.arrangement_view
-						.clap_host
-						.set_render_mode(RenderMode::Offline);
-					return self.arrangement_view.arrangement.start_export(path);
+					self.clap_host.set_render_mode(RenderMode::Offline);
+					return self.arrangement_view.arrangement.export(path);
 				}
 			}
 			Message::ExportedFile => {
-				self.arrangement_view
-					.clap_host
-					.set_render_mode(RenderMode::Realtime);
+				self.clap_host.set_render_mode(RenderMode::Realtime);
 				self.progress = None;
 			}
 			Message::OpenConfigView => {
@@ -381,8 +446,16 @@ impl Daw {
 			}
 			Message::CloseConfigView => self.config_view = None,
 			Message::MergeConfig(config, live) => {
-				let fut = (self.config.clap_paths != config.clap_paths)
-					.then(|| self.arrangement_view.get_installed_plugins(&config));
+				let fut = if self.config.clap_paths == config.clap_paths {
+					Task::none()
+				} else {
+					let scan = Scan::unique();
+					self.scan = Some(scan);
+					self.plugins = combo_box::State::default();
+					get_installed_plugins(&config)
+						.map(move |descriptor| Message::PluginScanned(scan, descriptor))
+						.chain(Task::done(Message::PluginScanFinished(scan)))
+				};
 
 				if self.config.sample_paths != config.sample_paths {
 					self.file_tree.diff(&config.sample_paths);
@@ -394,25 +467,28 @@ impl Daw {
 					self.config = *config;
 				}
 
-				if let Some(fut) = fut {
-					return fut.map(Message::Arrangement);
-				}
-			}
-			Message::CloseRequested(window) => {
-				if window == self.main_window_id {
-					return iced::exit();
-				}
+				return fut;
 			}
 			Message::FileHovered => self.files_hovered = true,
 			Message::FileDropped(path) => {
 				self.files_hovered = false;
-				if self.split_at != 0.0 && path.metadata().is_ok_and(|metadata| metadata.is_dir()) {
+				if self.state.file_tree_split_at != 0.0
+					&& path.metadata().is_ok_and(|metadata| metadata.is_dir())
+				{
 					self.config.sample_paths.push(path);
 					self.file_tree.diff(&self.config.sample_paths);
 					self.config.write();
 				}
 			}
 			Message::FileHoveredLeft => self.files_hovered = false,
+			Message::TogglePlayback => {
+				self.arrangement_view.arrangement.toggle_playback();
+				self.arrangement_view.end_recording();
+			}
+			Message::Stop => {
+				self.arrangement_view.arrangement.stop();
+				self.arrangement_view.end_recording();
+			}
 			Message::ToggleShowSeconds => {
 				self.state.show_seconds ^= true;
 				self.state.write();
@@ -446,16 +522,13 @@ impl Daw {
 				}
 			}
 			Message::OnDrag(split_at) => {
-				self.split_at = if split_at >= 20.0 {
+				self.state.file_tree_split_at = if split_at >= 20.0 {
 					split_at.clamp(200.0, 1000.0)
 				} else {
 					0.0
 				};
 			}
-			Message::OnDragEnd => {
-				self.state.file_tree_split_at = self.split_at;
-				self.state.write();
-			}
+			Message::OnDragEnd => self.state.write(),
 			Message::OnDoubleClick => {
 				return Task::batch([
 					self.update(Message::OnDrag(DEFAULT_SPLIT_POSITION)),
@@ -467,8 +540,26 @@ impl Daw {
 		Task::none()
 	}
 
-	fn handle_file_tree_message(&mut self, action: file_tree::Message) -> Task<Message> {
-		match action {
+	fn handle_instruction(&mut self, instruction: Instruction) -> Task<Message> {
+		match instruction {
+			Instruction::Message(message) => self.update(message),
+			Instruction::PluginLoad(id, plugin, receiver) => self
+				.clap_host
+				.load(id, plugin, receiver)
+				.map(Message::ClapHost),
+			Instruction::PluginSetState(id, state) => {
+				self.clap_host.set_state(id, &state);
+				Task::none()
+			}
+			Instruction::PluginShow(id) => self
+				.clap_host
+				.update(clap_host::Message::GuiOpen(id))
+				.map(Message::ClapHost),
+		}
+	}
+
+	fn handle_file_tree_message(&mut self, message: file_tree::Message) -> Task<Message> {
+		match message {
 			file_tree::Message::File(file, kind) => {
 				self.arrangement_view.hover_file(file, kind);
 			}
@@ -483,10 +574,8 @@ impl Daw {
 	}
 
 	pub fn view(&self, window: window::Id) -> Element<'_, Message> {
-		if let Some(gui) = self.arrangement_view.clap_host.view(window) {
-			return gui
-				.map(arrangement_view::Message::ClapHost)
-				.map(Message::Arrangement);
+		if let Some(gui) = self.clap_host.view(window) {
+			return gui.map(Message::ClapHost);
 		}
 
 		debug_assert_eq!(window, self.main_window_id);
@@ -507,13 +596,11 @@ impl Daw {
 						button(if transport.playing { pause() } else { play() })
 							.style(button_with_radius(button::primary, border::left(5)))
 							.padding(padding::horizontal(7).vertical(5))
-							.on_press(Message::Arrangement(
-								arrangement_view::Message::TogglePlayback
-							)),
+							.on_press(Message::TogglePlayback),
 						button(square())
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding(padding::horizontal(7).vertical(5))
-							.on_press(Message::Arrangement(arrangement_view::Message::Stop)),
+							.on_press(Message::Stop),
 					],
 					number_input(
 						transport.numerator.get().into(),
@@ -592,18 +679,20 @@ impl Daw {
 							.padding(padding::horizontal(7).vertical(5))
 							.on_press_maybe(
 								(self.arrangement_view.tab() != Tab::Playlist).then_some(
-									Message::Arrangement(arrangement_view::Message::ChangedTab(
-										Tab::Playlist
-									))
+									Message::Arrangement(
+										self.project,
+										arrangement_view::Message::ChangedTab(Tab::Playlist)
+									)
 								)
 							),
 						button(sliders_vertical())
 							.style(button_with_radius(button::primary, 0))
 							.padding(padding::horizontal(7).vertical(5))
 							.on_press_maybe((self.arrangement_view.tab() != Tab::Mixer).then_some(
-								Message::Arrangement(arrangement_view::Message::ChangedTab(
-									Tab::Mixer
-								))
+								Message::Arrangement(
+									self.project,
+									arrangement_view::Message::ChangedTab(Tab::Mixer)
+								)
 							)),
 						button(keyboard_music())
 							.style(button_with_radius(
@@ -619,6 +708,7 @@ impl Daw {
 								(self.arrangement_view.midi_clip().is_some()
 									&& self.arrangement_view.tab() != Tab::PianoRoll)
 									.then_some(Message::Arrangement(
+										self.project,
 										arrangement_view::Message::ChangedTab(Tab::PianoRoll)
 									))
 							),
@@ -632,8 +722,10 @@ impl Daw {
 						self.files_hovered.then(|| center(plus().size(40.0))
 							.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))))
 					],
-					self.arrangement_view.view().map(Message::Arrangement),
-					self.split_at,
+					self.arrangement_view
+						.view(&self.state, &self.plugins)
+						.map(|message| Message::Arrangement(self.project, message)),
+					self.state.file_tree_split_at,
 					Message::OnDrag
 				)
 				.on_drag_end(Message::OnDragEnd)
@@ -772,8 +864,7 @@ impl Daw {
 	}
 
 	pub fn title(&self, window: window::Id) -> String {
-		self.arrangement_view
-			.clap_host
+		self.clap_host
 			.title(window)
 			.unwrap_or_else(|| "Generic DAW".to_owned())
 	}
@@ -783,8 +874,7 @@ impl Daw {
 	}
 
 	pub fn scale_factor(&self, window: window::Id) -> f32 {
-		self.arrangement_view
-			.clap_host
+		self.clap_host
 			.scale_factor(window)
 			.unwrap_or(self.config.scale_factor)
 	}
@@ -802,7 +892,7 @@ impl Daw {
 		let keybinds = if self.progress.is_some() {
 			Subscription::none()
 		} else if self.config_view.is_some() {
-			keyboard::listen().filter_map(|e| match e {
+			keyboard::listen().filter_map(|event| match event {
 				keyboard::Event::KeyPressed {
 					key,
 					physical_key,
@@ -814,24 +904,27 @@ impl Daw {
 				_ => None,
 			})
 		} else {
-			keyboard::listen().filter_map(|e| match e {
-				keyboard::Event::KeyPressed {
-					key,
-					physical_key,
-					modifiers,
-					repeat,
-					..
-				} => ArrangementView::keybinds(&key, physical_key, modifiers, repeat)
-					.map(Message::Arrangement)
-					.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
-				_ => None,
-			})
+			keyboard::listen()
+				.with(self.project)
+				.filter_map(|(project, event)| match event {
+					keyboard::Event::KeyPressed {
+						key,
+						physical_key,
+						modifiers,
+						repeat,
+						..
+					} => ArrangementView::keybinds(&key, physical_key, modifiers, repeat)
+						.map(|message| Message::Arrangement(project, message))
+						.or_else(|| Self::keybinds(&key, physical_key, modifiers, repeat)),
+					_ => None,
+				})
 		};
 
 		Subscription::batch([
-			self.arrangement_view
-				.subscription()
-				.map(Message::Arrangement),
+			ArrangementView::subscription()
+				.with(self.project)
+				.map(|(project, message)| Message::Arrangement(project, message)),
+			self.clap_host.subscription().map(Message::ClapHost),
 			autosave,
 			keybinds,
 			window::events().filter_map(|(window, event)| match event {
@@ -857,9 +950,7 @@ impl Daw {
 			repeat,
 		) {
 			(false, false, false, false) => match key.as_ref() {
-				keyboard::Key::Named(keyboard::key::Named::Space) => Some(Message::Arrangement(
-					arrangement_view::Message::TogglePlayback,
-				)),
+				keyboard::Key::Named(keyboard::key::Named::Space) => Some(Message::TogglePlayback),
 				keyboard::Key::Named(keyboard::key::Named::F11) => Some(Message::ToggleFullscreen),
 				_ => None,
 			},
@@ -877,4 +968,20 @@ impl Daw {
 			_ => None,
 		}
 	}
+}
+
+fn get_installed_plugins(config: &Config) -> Task<PluginDescriptor> {
+	let (sender, receiver) = smol::channel::unbounded();
+	let clap_paths = config.clap_paths.clone();
+
+	Task::batch([
+		Task::future(unblock(move || {
+			generic_daw_core::clap_host::get_installed_plugins(
+				DEFAULT_CLAP_PATHS.iter().chain(&clap_paths),
+				|descriptor| _ = sender.try_send(descriptor),
+			);
+		}))
+		.discard(),
+		Task::stream(receiver),
+	])
 }

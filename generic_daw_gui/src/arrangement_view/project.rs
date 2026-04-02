@@ -7,7 +7,7 @@ use crate::{
 	},
 	clap_host::ClapHost,
 	config::Config,
-	daw,
+	daw::{self, Project},
 };
 use generic_daw_core::{
 	MidiKey, MidiNote, MusicalTime, OffsetPosition, PanMode, Position, clap_host::PluginDescriptor,
@@ -169,15 +169,18 @@ impl Arrangement {
 
 	pub fn empty() -> Task<daw::Message> {
 		let config = Config::read();
+
+		let project = Project::unique();
 		let (arrangement, task) = Self::create(&config);
 
 		Task::done(daw::Message::MergeConfig(config.into(), false))
-			.chain(Task::done(daw::Message::Arrangement(
-				arrangement_view::Message::SetArrangement(Box::new(arrangement).into()),
+			.chain(Task::done(daw::Message::ProjectLoaded(
+				project,
+				Box::new(arrangement).into(),
 			)))
 			.chain(
 				task.map(arrangement_view::Message::Batch)
-					.map(daw::Message::Arrangement),
+					.map(move |message| daw::Message::Arrangement(project, message)),
 			)
 	}
 
@@ -197,7 +200,7 @@ impl Arrangement {
 			.discard(),
 			Task::stream(progress_receiver).chain(
 				Task::perform(partial_receiver.into_future(), Result::ok).and_then(|tasks| {
-					tasks.unwrap_or_else(|| Task::done(daw::Message::OpenedFile(None)))
+					tasks.unwrap_or_else(|| Task::done(daw::Message::FileOpened(None)))
 				}),
 			),
 		])
@@ -523,20 +526,23 @@ impl Arrangement {
 		drop(channels);
 		drop(reader);
 
+		let project = Project::unique();
+
 		Some(
 			Task::done(daw::Message::MergeConfig(config.into(), false))
-				.chain(Task::done(daw::Message::Arrangement(
-					arrangement_view::Message::SetArrangement(Box::new(arrangement).into()),
+				.chain(Task::done(daw::Message::ProjectLoaded(
+					project,
+					Box::new(arrangement).into(),
 				)))
 				.chain(Task::batch([
 					task.map(arrangement_view::Message::Batch)
-						.map(daw::Message::Arrangement),
+						.map(move |message| daw::Message::Arrangement(project, message)),
 					messages
 						.into_iter()
 						.map(Task::done)
 						.fold(Task::none(), Task::chain)
-						.map(daw::Message::Arrangement)
-						.chain(Task::done(daw::Message::OpenedFile(Some(path)))),
+						.map(move |message| daw::Message::Arrangement(project, message))
+						.chain(Task::done(daw::Message::FileOpened(Some(path)))),
 				])),
 		)
 	}
