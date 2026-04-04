@@ -19,10 +19,11 @@ use iced::{
 use std::time::Instant;
 use utils::NoDebug;
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Status {
 	Seeking(MusicalTime),
 	DraggingLoop(MusicalTime),
+	Panning(Point),
 	#[default]
 	None,
 }
@@ -151,6 +152,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				return;
 			};
 
+			if matches!(state.status, Status::Panning(..)) {
+				break 'block cursor;
+			}
+
 			let clamped = Point::new(
 				cursor.x.clamp(0.0, viewport.width),
 				cursor.y.clamp(0.0, viewport.height),
@@ -225,6 +230,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 							shell.capture_event();
 						}
 					}
+					Status::Panning(last_pos) => {
+						let delta = last_pos - cursor;
+
+						if delta != Vector::ZERO {
+							state.status = Status::Panning(cursor);
+							shell.publish((self.pan)(delta, height, visible));
+							shell.capture_event();
+						}
+					}
 					Status::None => {}
 				}
 			}
@@ -262,10 +276,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				};
 				shell.capture_event();
 			}
-			Event::Mouse(mouse::Event::ButtonReleased {
-				button: mouse::Button::Left,
-				..
-			}) if matches!(state.status, Status::Seeking(..) | Status::DraggingLoop(..)) => {
+			Event::Mouse(mouse::Event::ButtonPressed {
+				button: mouse::Button::Middle,
+				modifiers,
+			}) if cursor.y >= LINE_HEIGHT => {
+				state.status = Status::Panning(cursor);
+			}
+			Event::Mouse(mouse::Event::ButtonReleased { .. }) if state.status != Status::None => {
 				state.status = Status::None;
 				shell.capture_event();
 			}
@@ -366,33 +383,38 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		_viewport: &Rectangle,
 		renderer: &Renderer,
 	) -> Interaction {
-		if tree.state.downcast_ref::<State>().status == Status::None
-			&& cursor
-				.position_in(Self::right_viewport(layout).expand(padding::top(LINE_HEIGHT)))
-				.is_none_or(|cursor| cursor.y >= LINE_HEIGHT)
-		{
-			self.children
-				.iter()
-				.zip(&tree.children)
-				.zip(layout.children())
-				.zip(Self::viewports(layout))
-				.map(|(((child, tree), layout), viewport)| {
-					child.as_widget().mouse_interaction(
-						tree,
-						layout,
-						if cursor.is_over(viewport) {
-							cursor
-						} else {
-							cursor.levitate()
-						},
-						&viewport,
-						renderer,
-					)
-				})
-				.max()
-				.unwrap_or_default()
-		} else {
-			Interaction::ResizingHorizontally
+		match tree.state.downcast_ref::<State>().status {
+			Status::Seeking(..) | Status::DraggingLoop(..) => Interaction::ResizingHorizontally,
+			Status::Panning(..) => Interaction::Move,
+			Status::None => {
+				if cursor
+					.position_in(Self::right_viewport(layout).expand(padding::top(LINE_HEIGHT)))
+					.is_none_or(|cursor| cursor.y >= LINE_HEIGHT)
+				{
+					self.children
+						.iter()
+						.zip(&tree.children)
+						.zip(layout.children())
+						.zip(Self::viewports(layout))
+						.map(|(((child, tree), layout), viewport)| {
+							child.as_widget().mouse_interaction(
+								tree,
+								layout,
+								if cursor.is_over(viewport) {
+									cursor
+								} else {
+									cursor.levitate()
+								},
+								&viewport,
+								renderer,
+							)
+						})
+						.max()
+						.unwrap_or_default()
+				} else {
+					Interaction::ResizingHorizontally
+				}
+			}
 		}
 	}
 
