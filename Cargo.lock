@@ -3044,7 +3044,7 @@ dependencies = [
 [[package]]
 name = "sweeten"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/sweeten.git?branch=generic-daw#b6d7f5cabeb092f1adb5ab40226399730a5981e4"
+source = "git+https://github.com/edwloef/sweeten.git?branch=generic-daw#44b5eb39d6197cebb3a60cec6c1e205b803117d9"
 dependencies = [
  "iced_core",
  "iced_runtime",

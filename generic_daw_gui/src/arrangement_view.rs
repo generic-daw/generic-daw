@@ -162,6 +162,7 @@ pub enum Message {
 	ArrowLeft,
 	ArrowRight,
 	SelectAll,
+	SelectInverse,
 	UnselectAll,
 	Duplicate,
 	Delete,
@@ -703,6 +704,28 @@ impl ArrangementView {
 						.get_mut()
 						.primary
 						.extend(0..self.arrangement.midi_patterns()[&clip.pattern].notes.len());
+				}
+			},
+			Message::SelectInverse => match self.tab {
+				Tab::Playlist => {
+					self.playlist.get_mut().reset();
+					for track in 0..self.arrangement.tracks().len() {
+						for clip in 0..self.arrangement.tracks()[track].clips.len() {
+							if !self.playlist.get_mut().primary.insert((track, clip)) {
+								self.playlist.get_mut().primary.remove(&(track, clip));
+							}
+						}
+					}
+				}
+				Tab::Mixer => {}
+				Tab::PianoRoll => {
+					let clip = self.midi_clip().unwrap();
+					self.piano_roll.get_mut().clear();
+					for note in 0..self.arrangement.midi_patterns()[&clip.pattern].notes.len() {
+						if !self.piano_roll.get_mut().primary.insert(note) {
+							self.piano_roll.get_mut().primary.remove(&note);
+						}
+					}
 				}
 			},
 			Message::UnselectAll => match self.tab {
@@ -1798,6 +1821,7 @@ impl ArrangementView {
 			(true, false, false, false) => match key.to_latin(physical_key)? {
 				'a' => Some(Message::SelectAll),
 				'd' => Some(Message::Duplicate),
+				'i' => Some(Message::SelectInverse),
 				_ => None,
 			},
 			(true, false, false, true) => match key.to_latin(physical_key)? {
