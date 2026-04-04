@@ -956,6 +956,7 @@ impl Daw {
 			},
 			(true, false, false, false) => match key.to_latin(physical_key)? {
 				'e' => Some(Message::ExportFileDialog),
+				'm' => Some(Message::ToggleMetronome),
 				'n' => Some(Message::NewFile),
 				'o' => Some(Message::OpenFileDialog),
 				's' => Some(Message::SaveFile),
