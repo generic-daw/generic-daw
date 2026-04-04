@@ -159,6 +159,8 @@ pub enum Message {
 	PlaylistAction(playlist::Action),
 	PianoRollAction(piano_roll::Action),
 
+	ArrowUp,
+	ArrowDown,
 	ArrowLeft,
 	ArrowRight,
 	SelectAll,
@@ -619,17 +621,54 @@ impl ArrangementView {
 				return self.handle_playlist_action(action, config, state);
 			}
 			Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
+			Message::ArrowUp => match self.tab {
+				Tab::Playlist => {
+					return self.handle_playlist_action(
+						playlist::Action::Drag(
+							Delta::Negative(1),
+							Delta::Positive(MusicalTime::ZERO),
+						),
+						config,
+						state,
+					);
+				}
+				Tab::Mixer => {}
+				Tab::PianoRoll => {
+					self.handle_piano_roll_action(piano_roll::Action::Drag(
+						Delta::Positive(MidiKey(1)),
+						Delta::Positive(MusicalTime::ZERO),
+					));
+				}
+			},
+			Message::ArrowDown => match self.tab {
+				Tab::Playlist => {
+					return self.handle_playlist_action(
+						playlist::Action::Drag(
+							Delta::Positive(1),
+							Delta::Positive(MusicalTime::ZERO),
+						),
+						config,
+						state,
+					);
+				}
+				Tab::Mixer => {}
+				Tab::PianoRoll => {
+					self.handle_piano_roll_action(piano_roll::Action::Drag(
+						Delta::Negative(MidiKey(1)),
+						Delta::Positive(MusicalTime::ZERO),
+					));
+				}
+			},
 			Message::ArrowLeft => match self.tab {
 				Tab::Playlist => {
-					self.arrangement.seek_to(
-						MusicalTime::from_samples(
-							self.arrangement.transport().sample,
-							self.arrangement.transport(),
-						)
-						.saturating_sub(MusicalTime::snap_step(
-							self.playlist.get_mut().scale.x,
-							self.arrangement.transport(),
-						)),
+					let step = MusicalTime::snap_step(
+						self.playlist.get_mut().scale.x,
+						self.arrangement.transport(),
+					);
+					return self.handle_playlist_action(
+						playlist::Action::Drag(Delta::Positive(0), Delta::Negative(step)),
+						config,
+						state,
 					);
 				}
 				Tab::Mixer => {
@@ -641,28 +680,26 @@ impl ArrangementView {
 					.into();
 				}
 				Tab::PianoRoll => {
-					self.arrangement.seek_to(
-						MusicalTime::from_samples(
-							self.arrangement.transport().sample,
-							self.arrangement.transport(),
-						)
-						.saturating_sub(MusicalTime::snap_step(
-							self.piano_roll.get_mut().scale.x,
-							self.arrangement.transport(),
-						)),
+					let step = MusicalTime::snap_step(
+						self.playlist.get_mut().scale.x,
+						self.arrangement.transport(),
 					);
+					self.handle_piano_roll_action(piano_roll::Action::Drag(
+						Delta::Positive(MidiKey(0)),
+						Delta::Negative(step),
+					));
 				}
 			},
 			Message::ArrowRight => match self.tab {
 				Tab::Playlist => {
-					self.arrangement.seek_to(
-						MusicalTime::from_samples(
-							self.arrangement.transport().sample,
-							self.arrangement.transport(),
-						) + MusicalTime::snap_step(
-							self.playlist.get_mut().scale.x,
-							self.arrangement.transport(),
-						),
+					let step = MusicalTime::snap_step(
+						self.playlist.get_mut().scale.x,
+						self.arrangement.transport(),
+					);
+					return self.handle_playlist_action(
+						playlist::Action::Drag(Delta::Positive(0), Delta::Positive(step)),
+						config,
+						state,
 					);
 				}
 				Tab::Mixer => {
@@ -674,15 +711,14 @@ impl ArrangementView {
 					.into();
 				}
 				Tab::PianoRoll => {
-					self.arrangement.seek_to(
-						MusicalTime::from_samples(
-							self.arrangement.transport().sample,
-							self.arrangement.transport(),
-						) + MusicalTime::snap_step(
-							self.piano_roll.get_mut().scale.x,
-							self.arrangement.transport(),
-						),
+					let step = MusicalTime::snap_step(
+						self.playlist.get_mut().scale.x,
+						self.arrangement.transport(),
 					);
+					self.handle_piano_roll_action(piano_roll::Action::Drag(
+						Delta::Positive(MidiKey(0)),
+						Delta::Positive(step),
+					));
 				}
 			},
 			Message::SelectAll => match self.tab {
@@ -752,7 +788,10 @@ impl ArrangementView {
 						return Action::batch([
 							self.handle_playlist_action(playlist::Action::Clone, config, state),
 							self.handle_playlist_action(
-								playlist::Action::Drag(0, Delta::Positive(delta.len())),
+								playlist::Action::Drag(
+									Delta::Positive(0),
+									Delta::Positive(delta.len()),
+								),
 								config,
 								state,
 							),
@@ -924,18 +963,16 @@ impl ArrangementView {
 			}
 			playlist::Action::Drag(track_diff, pos_diff) => {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
-				match track_diff.cmp(&0) {
-					Ordering::Equal => {}
-					Ordering::Less => sorted.sort_unstable_by_key(|&(t, c)| (t, Reverse(c))),
-					Ordering::Greater => {
+				match track_diff {
+					Delta::Positive(0) | Delta::Negative(0) => {}
+					Delta::Negative(..) => sorted.sort_unstable_by_key(|&(t, c)| (t, Reverse(c))),
+					Delta::Positive(..) => {
 						sorted.sort_unstable_by_key(|&(t, c)| (Reverse(t), Reverse(c)));
 					}
 				}
 
 				for (mut track, mut clip) in sorted {
-					let new_track = track
-						.saturating_add_signed(track_diff)
-						.min(self.arrangement.tracks().len() - 1);
+					let new_track = (track + track_diff).min(self.arrangement.tracks().len() - 1);
 					if track != new_track {
 						clip = self.arrangement.clip_switch_track(track, clip, new_track);
 						track = new_track;
@@ -1806,6 +1843,8 @@ impl ArrangementView {
 					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
 				) => Some(Message::Delete),
 				keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::UnselectAll),
+				keyboard::Key::Named(keyboard::key::Named::ArrowUp) => Some(Message::ArrowUp),
+				keyboard::Key::Named(keyboard::key::Named::ArrowDown) => Some(Message::ArrowDown),
 				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => Some(Message::ArrowLeft),
 				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
 				_ => None,
@@ -1814,6 +1853,8 @@ impl ArrangementView {
 				keyboard::Key::Named(
 					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
 				) => Some(Message::Delete),
+				keyboard::Key::Named(keyboard::key::Named::ArrowUp) => Some(Message::ArrowUp),
+				keyboard::Key::Named(keyboard::key::Named::ArrowDown) => Some(Message::ArrowDown),
 				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => Some(Message::ArrowLeft),
 				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
 				_ => None,

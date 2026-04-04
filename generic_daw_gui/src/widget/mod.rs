@@ -22,6 +22,17 @@ pub enum Delta<T> {
 	Negative(T),
 }
 
+impl Add<Delta<Self>> for usize {
+	type Output = Self;
+
+	fn add(self, rhs: Delta<Self>) -> Self::Output {
+		match rhs {
+			Delta::Positive(diff) => self + diff,
+			Delta::Negative(diff) => self.saturating_sub(diff),
+		}
+	}
+}
+
 impl Add<Delta<Self>> for MusicalTime {
 	type Output = Self;
 

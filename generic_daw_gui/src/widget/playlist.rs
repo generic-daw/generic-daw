@@ -34,7 +34,7 @@ pub enum Action {
 	Add(Option<(Arc<Path>, FileKind)>, Option<usize>, MusicalTime),
 	Open(usize, usize),
 	Clone,
-	Drag(isize, Delta<MusicalTime>),
+	Drag(Delta<usize>, Delta<MusicalTime>),
 	TrimStart(Delta<MusicalTime>),
 	TrimEnd(Delta<MusicalTime>),
 	SplitAt(MusicalTime),
@@ -337,17 +337,20 @@ where
 					});
 
 					if new_track != track || abs_diff != MusicalTime::ZERO {
-						let delta = if new_time > time {
+						let track_delta = if new_track > track {
+							Delta::Positive
+						} else {
+							Delta::Negative
+						}(new_track.abs_diff(track));
+
+						let time_delta = if new_time > time {
 							Delta::Positive
 						} else {
 							Delta::Negative
 						}(abs_diff);
 
-						state.status = Status::Dragging(new_track, time + delta);
-						shell.publish((self.action)(Action::Drag(
-							new_track.cast_signed() - track.cast_signed(),
-							delta,
-						)));
+						state.status = Status::Dragging(new_track, time + time_delta);
+						shell.publish((self.action)(Action::Drag(track_delta, time_delta)));
 						shell.capture_event();
 					}
 				}
