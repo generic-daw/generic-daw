@@ -865,7 +865,7 @@ impl ArrangementView {
 					}
 				} else {
 					self.loading += 1;
-					self.update(
+					let action = self.update(
 						Message::MidiPatternLoaded(NoClone(Some((
 							Box::new(MidiPatternPair::from_notes(Vec::new(), "MIDI Pattern")),
 							track,
@@ -873,7 +873,11 @@ impl ArrangementView {
 						)))),
 						config,
 						state,
-					)
+					);
+					let track = track.unwrap_or_else(|| self.arrangement.tracks().len() - 1);
+					let clip = self.arrangement.tracks()[track].clips.len() - 1;
+					self.playlist.get_mut().primary.insert((track, clip));
+					action
 				};
 			}
 			playlist::Action::Open(track, clip) => {

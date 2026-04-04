@@ -9,7 +9,7 @@ use iced::{
 	advanced::{
 		Renderer as _, Shell,
 		layout::{Layout, Limits, Node},
-		mouse::{self, Click, Cursor, Interaction},
+		mouse::{self, Cursor, Interaction},
 		overlay,
 		renderer::{Quad, Style},
 		widget::{Operation, Tree, Widget},
@@ -62,7 +62,6 @@ pub struct State {
 	pub secondary: HashSet<(usize, usize)>,
 	pub position: Vector,
 	pub scale: Vector,
-	last_click: Option<Click>,
 	autoscroll_start: Option<Instant>,
 	last_autoscroll: Option<Instant>,
 }
@@ -222,9 +221,6 @@ where
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers }) => match button {
 				mouse::Button::Left => {
-					let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
-					state.last_click = Some(new_click);
-
 					let time = maybe_snap(new_time, *modifiers, |time| {
 						time.snap_round(state.scale.x, self.transport)
 					});
@@ -238,9 +234,7 @@ where
 						state.status = Status::Selecting(track, track, time, time);
 						shell.capture_event();
 						shell.request_redraw();
-					} else if let Some(track) = track
-						&& new_click.kind() == mouse::click::Kind::Double
-					{
+					} else if let Some(track) = track {
 						state.primary.clear();
 						state.status = Status::Dragging(track, time);
 						shell.publish((self.action)(Action::Add(None, Some(track), time)));
