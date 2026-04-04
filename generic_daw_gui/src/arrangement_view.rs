@@ -163,6 +163,8 @@ pub enum Message {
 	ArrowDown,
 	ArrowLeft,
 	ArrowRight,
+	TransposeOctUp,
+	TransposeOctDown,
 	SelectAll,
 	SelectInverse,
 	UnselectAll,
@@ -718,6 +720,24 @@ impl ArrangementView {
 					self.handle_piano_roll_action(piano_roll::Action::Drag(
 						Delta::Positive(MidiKey(0)),
 						Delta::Positive(step),
+					));
+				}
+			},
+			Message::TransposeOctUp => match self.tab {
+				Tab::Playlist | Tab::Mixer => {}
+				Tab::PianoRoll => {
+					self.handle_piano_roll_action(piano_roll::Action::Drag(
+						Delta::Positive(MidiKey(12)),
+						Delta::Positive(MusicalTime::ZERO),
+					));
+				}
+			},
+			Message::TransposeOctDown => match self.tab {
+				Tab::Playlist | Tab::Mixer => {}
+				Tab::PianoRoll => {
+					self.handle_piano_roll_action(piano_roll::Action::Drag(
+						Delta::Negative(MidiKey(12)),
+						Delta::Positive(MusicalTime::ZERO),
 					));
 				}
 			},
@@ -1859,15 +1879,31 @@ impl ArrangementView {
 				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
 				_ => None,
 			},
-			(true, false, false, false) => match key.to_latin(physical_key)? {
-				'a' => Some(Message::SelectAll),
-				'd' => Some(Message::Duplicate),
-				'i' => Some(Message::SelectInverse),
-				_ => None,
+			(true, false, false, false) => match key.to_latin(physical_key) {
+				Some('a') => Some(Message::SelectAll),
+				Some('d') => Some(Message::Duplicate),
+				Some('i') => Some(Message::SelectInverse),
+				_ => match key.as_ref() {
+					keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
+						Some(Message::TransposeOctUp)
+					}
+					keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
+						Some(Message::TransposeOctDown)
+					}
+					_ => None,
+				},
 			},
-			(true, false, false, true) => match key.to_latin(physical_key)? {
-				'd' => Some(Message::Duplicate),
-				_ => None,
+			(true, false, false, true) => match key.to_latin(physical_key) {
+				Some('d') => Some(Message::Duplicate),
+				_ => match key.as_ref() {
+					keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
+						Some(Message::TransposeOctUp)
+					}
+					keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
+						Some(Message::TransposeOctDown)
+					}
+					_ => None,
+				},
 			},
 			(false, true, false, false) => match key.as_ref() {
 				keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::CycleTabBackwards),

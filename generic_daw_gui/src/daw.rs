@@ -954,16 +954,16 @@ impl Daw {
 				keyboard::Key::Named(keyboard::key::Named::F11) => Some(Message::ToggleFullscreen),
 				_ => None,
 			},
-			(true, false, false, false) => match key.to_latin(physical_key)? {
-				'e' => Some(Message::ExportFileDialog),
-				'm' => Some(Message::ToggleMetronome),
-				'n' => Some(Message::NewFile),
-				'o' => Some(Message::OpenFileDialog),
-				's' => Some(Message::SaveFile),
+			(true, false, false, false) => match key.to_latin(physical_key) {
+				Some('e') => Some(Message::ExportFileDialog),
+				Some('m') => Some(Message::ToggleMetronome),
+				Some('n') => Some(Message::NewFile),
+				Some('o') => Some(Message::OpenFileDialog),
+				Some('s') => Some(Message::SaveFile),
 				_ => None,
 			},
-			(true, true, false, false) => match key.to_latin(physical_key)? {
-				's' => Some(Message::SaveAsFileDialog),
+			(true, true, false, false) => match key.to_latin(physical_key) {
+				Some('s') => Some(Message::SaveAsFileDialog),
 				_ => None,
 			},
 			_ => None,
