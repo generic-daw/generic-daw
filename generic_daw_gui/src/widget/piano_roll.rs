@@ -64,7 +64,7 @@ impl State {
 		}
 	}
 
-	pub fn reset(&mut self) {
+	pub fn finish(&mut self) {
 		self.status = Status::None;
 		self.primary.extend(self.secondary.drain());
 	}
@@ -145,7 +145,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			}
 
 			let Some(cursor) = cursor.position_from(viewport.position()) else {
-				state.reset();
+				state.finish();
 				shell.request_redraw();
 				return;
 			};
@@ -228,7 +228,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				}
 			}
 			Event::Mouse(mouse::Event::ButtonReleased { .. }) if state.status != Status::None => {
-				state.reset();
+				state.finish();
 				shell.capture_event();
 				shell.request_redraw();
 			}

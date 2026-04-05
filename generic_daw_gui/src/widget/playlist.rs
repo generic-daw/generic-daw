@@ -75,7 +75,7 @@ impl State {
 		}
 	}
 
-	pub fn reset(&mut self) {
+	pub fn finish(&mut self) {
 		self.status = Status::None;
 		self.primary.extend(self.secondary.drain());
 	}
@@ -165,7 +165,7 @@ where
 			}
 
 			let Some(cursor) = cursor.position_from(viewport.position()) else {
-				state.reset();
+				state.finish();
 				shell.request_redraw();
 				return;
 			};
@@ -255,7 +255,7 @@ where
 					shell.publish((self.action)(Action::Add(Some((path, kind)), track, time)));
 				}
 
-				state.reset();
+				state.finish();
 				shell.capture_event();
 				shell.request_redraw();
 			}

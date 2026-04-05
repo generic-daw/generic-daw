@@ -322,9 +322,9 @@ impl ArrangementView {
 			}
 			Message::ChangedTab(tab) => {
 				match self.tab {
-					Tab::Playlist => self.playlist.get_mut().reset(),
+					Tab::Playlist => self.playlist.get_mut().finish(),
 					Tab::Mixer => {}
-					Tab::PianoRoll => self.piano_roll.get_mut().reset(),
+					Tab::PianoRoll => self.piano_roll.get_mut().finish(),
 				}
 
 				self.tab = tab;
@@ -630,6 +630,7 @@ impl ArrangementView {
 			Message::PianoRollAction(action) => self.handle_piano_roll_action(action),
 			Message::ArrowUp => match self.tab {
 				Tab::Playlist => {
+					self.playlist.get_mut().finish();
 					return self.handle_playlist_action(
 						playlist::Action::Drag(
 							Delta::Negative(1),
@@ -641,6 +642,7 @@ impl ArrangementView {
 				}
 				Tab::Mixer => {}
 				Tab::PianoRoll => {
+					self.piano_roll.get_mut().finish();
 					self.handle_piano_roll_action(piano_roll::Action::Drag(
 						Delta::Positive(MidiKey(1)),
 						Delta::Positive(MusicalTime::ZERO),
@@ -649,6 +651,7 @@ impl ArrangementView {
 			},
 			Message::ArrowDown => match self.tab {
 				Tab::Playlist => {
+					self.playlist.get_mut().finish();
 					return self.handle_playlist_action(
 						playlist::Action::Drag(
 							Delta::Positive(1),
@@ -660,6 +663,7 @@ impl ArrangementView {
 				}
 				Tab::Mixer => {}
 				Tab::PianoRoll => {
+					self.piano_roll.get_mut().finish();
 					self.handle_piano_roll_action(piano_roll::Action::Drag(
 						Delta::Negative(MidiKey(1)),
 						Delta::Positive(MusicalTime::ZERO),
@@ -668,6 +672,7 @@ impl ArrangementView {
 			},
 			Message::ArrowLeft => match self.tab {
 				Tab::Playlist => {
+					self.playlist.get_mut().finish();
 					let step = MusicalTime::snap_step(
 						self.playlist.get_mut().scale.x,
 						self.arrangement.transport(),
@@ -687,6 +692,7 @@ impl ArrangementView {
 					.into();
 				}
 				Tab::PianoRoll => {
+					self.piano_roll.get_mut().finish();
 					let step = MusicalTime::snap_step(
 						self.playlist.get_mut().scale.x,
 						self.arrangement.transport(),
@@ -699,6 +705,7 @@ impl ArrangementView {
 			},
 			Message::ArrowRight => match self.tab {
 				Tab::Playlist => {
+					self.playlist.get_mut().finish();
 					let step = MusicalTime::snap_step(
 						self.playlist.get_mut().scale.x,
 						self.arrangement.transport(),
@@ -718,6 +725,7 @@ impl ArrangementView {
 					.into();
 				}
 				Tab::PianoRoll => {
+					self.piano_roll.get_mut().finish();
 					let step = MusicalTime::snap_step(
 						self.playlist.get_mut().scale.x,
 						self.arrangement.transport(),
@@ -731,6 +739,7 @@ impl ArrangementView {
 			Message::TransposeOctUp => match self.tab {
 				Tab::Playlist | Tab::Mixer => {}
 				Tab::PianoRoll => {
+					self.piano_roll.get_mut().finish();
 					self.handle_piano_roll_action(piano_roll::Action::Drag(
 						Delta::Positive(MidiKey(12)),
 						Delta::Positive(MusicalTime::ZERO),
@@ -740,6 +749,7 @@ impl ArrangementView {
 			Message::TransposeOctDown => match self.tab {
 				Tab::Playlist | Tab::Mixer => {}
 				Tab::PianoRoll => {
+					self.piano_roll.get_mut().finish();
 					self.handle_piano_roll_action(piano_roll::Action::Drag(
 						Delta::Negative(MidiKey(12)),
 						Delta::Positive(MusicalTime::ZERO),
@@ -749,6 +759,7 @@ impl ArrangementView {
 			Message::Quantize => match self.tab {
 				Tab::Playlist => {
 					let playlist = self.playlist.get_mut();
+					playlist.finish();
 					for &(track, clip) in &playlist.primary {
 						let pos = self.arrangement.tracks()[track].clips[clip]
 							.position()
@@ -764,6 +775,7 @@ impl ArrangementView {
 				Tab::PianoRoll => {
 					let clip = self.midi_clip().unwrap();
 					let piano_roll = self.piano_roll.get_mut();
+					piano_roll.finish();
 					for &note in &piano_roll.primary {
 						let pos = self.arrangement.midi_patterns()[&clip.pattern].notes[note]
 							.position
@@ -799,7 +811,7 @@ impl ArrangementView {
 			},
 			Message::SelectInverse => match self.tab {
 				Tab::Playlist => {
-					self.playlist.get_mut().reset();
+					self.playlist.get_mut().finish();
 					for (t_idx, track) in self.arrangement.tracks().iter().enumerate() {
 						for c_idx in 0..track.clips.len() {
 							if !self.playlist.get_mut().primary.insert((t_idx, c_idx)) {
@@ -811,7 +823,7 @@ impl ArrangementView {
 				Tab::Mixer => {}
 				Tab::PianoRoll => {
 					let clip = self.midi_clip().unwrap();
-					self.piano_roll.get_mut().clear();
+					self.piano_roll.get_mut().finish();
 					for note in 0..self.arrangement.midi_patterns()[&clip.pattern].notes.len() {
 						if !self.piano_roll.get_mut().primary.insert(note) {
 							self.piano_roll.get_mut().primary.remove(&note);
@@ -839,7 +851,7 @@ impl ArrangementView {
 						.reduce(|old, new| {
 							Position::new(old.start().min(new.start()), old.end().max(new.end()))
 						}) {
-						self.playlist.get_mut().reset();
+						self.playlist.get_mut().finish();
 						return Action::batch([
 							self.handle_playlist_action(playlist::Action::Clone, config, state),
 							self.handle_playlist_action(
@@ -867,7 +879,7 @@ impl ArrangementView {
 						.reduce(|old, new| {
 							Position::new(old.start().min(new.start()), old.end().max(new.end()))
 						}) {
-						self.piano_roll.get_mut().reset();
+						self.piano_roll.get_mut().finish();
 						self.handle_piano_roll_action(piano_roll::Action::Clone);
 						self.handle_piano_roll_action(piano_roll::Action::Drag(
 							Delta::Positive(MidiKey(0)),
@@ -878,7 +890,7 @@ impl ArrangementView {
 			},
 			Message::Delete => match self.tab {
 				Tab::Playlist => {
-					self.playlist.get_mut().reset();
+					self.playlist.get_mut().finish();
 					return self.handle_playlist_action(playlist::Action::Delete, config, state);
 				}
 				Tab::Mixer => match self.arrangement.node(self.selected).ty {
@@ -891,7 +903,7 @@ impl ArrangementView {
 					}
 				},
 				Tab::PianoRoll => {
-					self.piano_roll.get_mut().reset();
+					self.piano_roll.get_mut().finish();
 					self.handle_piano_roll_action(piano_roll::Action::Delete);
 				}
 			},
