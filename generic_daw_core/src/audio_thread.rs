@@ -4,7 +4,7 @@ use crate::{
 	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
-use audio_graph::{AudioGraph, NodeImpl as _};
+use audio_graph::AudioGraph;
 use clap_host::{
 	Cookie,
 	events::{EventFlags, EventHeader, TransportEvent, TransportFlags},

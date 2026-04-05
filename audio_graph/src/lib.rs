@@ -10,4 +10,5 @@ unique_id!(node_id);
 pub use audio_graph::AudioGraph;
 pub use event_impl::EventImpl;
 pub use node_id::Id as NodeId;
-pub use node_impl::NodeImpl;
+pub use node_impl::{Inject, NodeImpl};
+pub use thread_pool;

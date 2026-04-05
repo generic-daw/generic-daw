@@ -1,7 +1,8 @@
 use crate::{
-	Channel, Clip, ClipId, Event, MidiNote, NodeAction, NodeId, NodeImpl, Update,
-	audio_thread::State, midi_clip::VoiceId, voice_alloc::VoiceAlloc,
+	Channel, Clip, ClipId, Event, MidiNote, Node, NodeAction, NodeId, Update, audio_thread::State,
+	midi_clip::VoiceId, voice_alloc::VoiceAlloc,
 };
+use audio_graph::{Inject, thread_pool::Injector};
 use clap_host::events::Match;
 use std::{collections::HashMap, num::NonZero};
 
@@ -24,11 +25,14 @@ impl Default for Track {
 	}
 }
 
-impl NodeImpl for Track {
-	type Event = Event;
-	type State = State;
-
-	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
+impl Track {
+	pub fn process(
+		&mut self,
+		state: &State,
+		audio: &mut [f32],
+		events: &mut Vec<Event>,
+		injector: &Injector<Inject<Node>>,
+	) {
 		self.voice_alloc.deactivate_all();
 
 		if state.transport.playing {
@@ -52,23 +56,23 @@ impl NodeImpl for Track {
 			}
 		}
 
-		self.channel.process(state, audio, events);
+		self.channel.process(state, audio, events, injector);
 	}
 
-	fn id(&self) -> NodeId {
+	#[must_use]
+	pub fn id(&self) -> NodeId {
 		self.channel.id()
 	}
 
-	fn latency(&self) -> usize {
+	#[must_use]
+	pub fn latency(&self) -> usize {
 		self.channel.latency()
 	}
 
-	fn reset(&mut self) {
+	pub fn reset(&mut self) {
 		self.channel.reset();
 	}
-}
 
-impl Track {
 	pub fn apply(&mut self, action: NodeAction, state: &State) {
 		match action {
 			NodeAction::ClipAdd(clip) => _ = self.clips.insert(clip.id(), clip),

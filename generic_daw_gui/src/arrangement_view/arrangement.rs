@@ -18,8 +18,8 @@ use crate::{
 };
 use generic_daw_core::{
 	AudioClipId, Batch, Message, MidiClipId, MidiKey, MidiNote, MidiNoteId, MidiPatternAction,
-	MidiPatternId, NodeAction, NodeId, NodeImpl, PanMode, PluginId, SampleId, Stream, Transport,
-	Update, Version, build_output_stream,
+	MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode, PluginId, SampleId, Stream,
+	Transport, Update, Version, build_output_stream,
 	clap_host::{HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime},
 };
@@ -354,10 +354,11 @@ impl Arrangement {
 		&mut self.nodes.get_mut(&id).unwrap().1
 	}
 
-	fn add(&mut self, node: impl Into<generic_daw_core::Node> + NodeImpl, ty: NodeType) -> NodeId {
+	fn add(&mut self, node: impl Into<generic_daw_core::Node>, ty: NodeType) -> NodeId {
+		let node = node.into();
 		let id = node.id();
 		self.nodes.insert(id, (Node::new(ty, id), BTreeMap::new()));
-		self.send(Message::NodeAdd(Box::new(node.into())));
+		self.send(Message::NodeAdd(Box::new(node)));
 		id
 	}
 

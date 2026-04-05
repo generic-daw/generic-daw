@@ -25,6 +25,7 @@ mod preset;
 mod shared;
 mod size;
 
+pub use audio_processor::{ThreadPoolExecutor, ThreadPoolInjector};
 pub use audio_thread::AudioThread;
 pub use clack_extensions::{
 	params::{ParamInfoFlags, ParamRescanFlags},

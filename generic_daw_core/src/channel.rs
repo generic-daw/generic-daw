@@ -1,12 +1,41 @@
-use crate::{
-	Event, NodeAction, NodeId, NodeImpl, Update, audio_thread::State, clap_host::AudioThread,
+use crate::{Event, Node, NodeAction, NodeId, Update, audio_thread::State};
+use audio_graph::{
+	Inject,
+	thread_pool::{Injector, WorkList},
 };
-use std::f32::consts::{FRAC_PI_4, SQRT_2};
+use clap_host::AudioThread;
+use std::{
+	convert::Infallible,
+	f32::consts::{FRAC_PI_4, SQRT_2},
+};
 use utils::{ShiftMoveExt as _, unique_id};
 
 unique_id!(plugin);
 
 pub use plugin::Id as PluginId;
+
+#[derive(Debug)]
+pub struct ThreadPoolExecutor<'a>(clap_host::ThreadPoolExecutor<'a>);
+
+impl WorkList for ThreadPoolExecutor<'_> {
+	type Item = u32;
+	type Scratch = ();
+	type Inject = Infallible;
+
+	fn next_item(&self) -> Option<Self::Item> {
+		self.0.next_task()
+	}
+
+	fn do_work(
+		&self,
+		item: Self::Item,
+		_scratch: &mut Self::Scratch,
+		_injector: &Injector<Self::Inject>,
+	) -> Option<Self::Item> {
+		self.0.exec_task(item);
+		None
+	}
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PanMode {
@@ -79,11 +108,14 @@ pub struct Channel {
 	updates: Vec<Update>,
 }
 
-impl NodeImpl for Channel {
-	type Event = Event;
-	type State = State;
-
-	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
+impl Channel {
+	pub fn process(
+		&mut self,
+		state: &State,
+		audio: &mut [f32],
+		events: &mut Vec<Event>,
+		injector: &Injector<Inject<Node>>,
+	) {
 		let acc = self
 			.updates
 			.pop_if(|update| matches!(update, Update::Peaks(..)));
@@ -98,6 +130,11 @@ impl NodeImpl for Channel {
 					audio,
 					events,
 					Some(&state.transport.as_clap()),
+					Some(&mut |executor| {
+						let task_count = executor.task_count() as usize;
+						let executor = ThreadPoolExecutor(executor);
+						injector.inject(&executor, task_count);
+					}),
 					plugin.mix,
 				);
 			} else {
@@ -139,11 +176,13 @@ impl NodeImpl for Channel {
 		}
 	}
 
-	fn id(&self) -> NodeId {
+	#[must_use]
+	pub fn id(&self) -> NodeId {
 		self.id
 	}
 
-	fn latency(&self) -> usize {
+	#[must_use]
+	pub fn latency(&self) -> usize {
 		if self.enabled && !self.bypassed {
 			self.plugins
 				.iter()
@@ -154,14 +193,12 @@ impl NodeImpl for Channel {
 		}
 	}
 
-	fn reset(&mut self) {
+	pub fn reset(&mut self) {
 		for plugin in &mut self.plugins {
 			plugin.processor.reset();
 		}
 	}
-}
 
-impl Channel {
 	pub fn apply(&mut self, action: NodeAction) {
 		match action {
 			NodeAction::ChannelToggleEnabled => self.enabled ^= true,

@@ -1,4 +1,8 @@
-use crate::{Channel, Event, NodeAction, NodeImpl, Track, Update, audio_thread::State};
+use crate::{
+	Channel, Event, NodeAction, NodeImpl, Track, Update, audio_thread::State,
+	channel::ThreadPoolExecutor,
+};
+use audio_graph::{Inject, thread_pool::Injector};
 
 #[derive(Debug)]
 pub enum Node {
@@ -9,11 +13,18 @@ pub enum Node {
 impl NodeImpl for Node {
 	type Event = Event;
 	type State = State;
+	type Inject<'a> = ThreadPoolExecutor<'a>;
 
-	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
+	fn process(
+		&mut self,
+		state: &Self::State,
+		audio: &mut [f32],
+		events: &mut Vec<Self::Event>,
+		injector: &Injector<Inject<Self>>,
+	) {
 		match self {
-			Self::Channel(node) => node.process(state, audio, events),
-			Self::Track(node) => node.process(state, audio, events),
+			Self::Channel(node) => node.process(state, audio, events, injector),
+			Self::Track(node) => node.process(state, audio, events, injector),
 		}
 	}
 

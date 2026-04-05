@@ -1,5 +1,5 @@
 use crate::{
-	EventImpl as _, NodeId, NodeImpl,
+	EventImpl as _, Inject, NodeId, NodeImpl,
 	entry::{Entry, Incoming},
 };
 use crossbeam_queue::ArrayQueue;
@@ -8,19 +8,25 @@ use std::{
 	num::NonZero,
 	sync::{RwLockWriteGuard, atomic::Ordering::Relaxed},
 };
-use thread_pool::{ThreadPool, WorkList};
+use thread_pool::{Injector, ThreadPool, WorkList};
 use utils::{NoDebug, boxed_slice};
 
 impl<Node: NodeImpl> WorkList for AudioGraph<Node> {
 	type Item = NodeId;
 	type Scratch = Box<[f32]>;
+	type Inject = Inject<Node>;
 
 	fn next_item(&self) -> Option<Self::Item> {
 		self.queue.pop()
 	}
 
-	fn do_work(&self, item: Self::Item, scratch: &mut Self::Scratch) -> Option<Self::Item> {
-		self.process_node(&self.graph[&item], scratch)
+	fn do_work(
+		&self,
+		item: Self::Item,
+		scratch: &mut Self::Scratch,
+		injector: &Injector<Inject<Node>>,
+	) -> Option<Self::Item> {
+		self.process_node(&self.graph[&item], scratch, injector)
 	}
 }
 
@@ -114,7 +120,12 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	#[expect(clippy::significant_drop_tightening)]
-	pub(crate) fn process_node(&self, entry: &Entry<Node>, scratch: &mut [f32]) -> Option<NodeId> {
+	pub(crate) fn process_node(
+		&self,
+		entry: &Entry<Node>,
+		scratch: &mut [f32],
+		injector: &Injector<Inject<Node>>,
+	) -> Option<NodeId> {
 		debug_assert_eq!(entry.indegree.load(Relaxed), 0);
 
 		let mut node = entry.node_uncontended();
@@ -190,6 +201,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			&self.state,
 			&mut buffers.audio[..self.curr_len],
 			&mut buffers.events,
+			injector,
 		);
 		entry.latency.store(node.latency() + max_latency, Relaxed);
 

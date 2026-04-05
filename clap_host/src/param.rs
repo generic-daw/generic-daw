@@ -1,6 +1,9 @@
-use crate::{Cookie, ParamInfoFlags, ParamRescanFlags, host::Host};
-use clack_extensions::{params::ParamInfoBuffer, state::HostStateImpl as _};
-use clack_host::prelude::*;
+use crate::host::Host;
+use clack_extensions::{
+	params::{ParamInfoBuffer, ParamInfoFlags, ParamRescanFlags},
+	state::HostStateImpl as _,
+};
+use clack_host::{prelude::*, utils::Cookie};
 use std::{ops::RangeInclusive, sync::Arc};
 
 #[derive(Debug)]

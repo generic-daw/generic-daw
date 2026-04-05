@@ -1,6 +1,6 @@
 use crate::{
-	EventImpl, MainThreadMessage, PluginDescriptor, events::TransportEvent, host::Host,
-	shared::CURRENT_THREAD_ID,
+	EventImpl, MainThreadMessage, PluginDescriptor, ThreadPoolInjector, events::TransportEvent,
+	host::Host, shared::CURRENT_THREAD_ID,
 };
 use clack_extensions::tail::TailLength;
 use clack_host::prelude::*;
@@ -100,6 +100,7 @@ impl AudioThread {
 		audio: &mut [f32],
 		events: &mut Vec<impl EventImpl>,
 		transport: Option<&TransportEvent>,
+		injector: Option<ThreadPoolInjector<'_>>,
 		mix_level: f32,
 	) {
 		let Some(processor) = &mut self.processor else {
@@ -138,6 +139,19 @@ impl AudioThread {
 					self.last_input = Some(steady_time);
 				}
 
+				started_processor.access_handler_mut(|ap| {
+					ap.injector = injector
+						.map(|injector|
+							// SAFETY:
+							// `injector` is a valid reference to a `ThreadPoolInjector` at least
+							// until this function returns. `ap.injector` is overwritten after the
+							// call to `process`, and `AudioProcessor` never creates any copies of
+							// `ap.injector` that may outlive `process`. Any possible panics that
+							// may happen during `process` are caught by clack.
+							unsafe { std::mem::transmute(injector) })
+						.map(NoDebug);
+				});
+
 				let process_status = started_processor.process(
 					&input_audio,
 					&mut output_audio,
@@ -146,6 +160,8 @@ impl AudioThread {
 					Some(steady_time),
 					transport,
 				);
+
+				started_processor.access_handler_mut(|ap| ap.injector = None);
 
 				self.processing = match process_status {
 					Ok(ProcessStatus::Continue) => true,

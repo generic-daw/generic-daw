@@ -1,12 +1,12 @@
-use crate::{ParamRescanFlags, Size, TimerId, host::Host, preset::Preset, shared::Shared};
+use crate::{Size, host::Host, preset::Preset, shared::Shared};
 use clack_extensions::{
 	audio_ports::{AudioPortRescanFlags, HostAudioPortsImpl},
 	latency::HostLatencyImpl,
 	note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
-	params::{HostParamsImplMainThread, ParamClearFlags},
+	params::{HostParamsImplMainThread, ParamClearFlags, ParamRescanFlags},
 	preset_discovery::{HostPresetLoadImpl, prelude::*},
 	state::HostStateImpl,
-	timer::HostTimerImpl,
+	timer::{HostTimerImpl, TimerId},
 };
 use clack_host::prelude::*;
 use std::{ffi::CStr, time::Duration};
