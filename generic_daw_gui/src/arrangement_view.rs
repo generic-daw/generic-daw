@@ -465,7 +465,6 @@ impl ArrangementView {
 					)
 				};
 				let clip = self.arrangement.add_clip(track, clip);
-				self.playlist.get_mut().clear();
 				self.playlist.get_mut().primary.insert((track, clip));
 				return task;
 			}
@@ -488,7 +487,6 @@ impl ArrangementView {
 					)
 				};
 				let clip = self.arrangement.add_clip(track, clip);
-				self.playlist.get_mut().clear();
 				self.playlist.get_mut().primary.insert((track, clip));
 				return task;
 			}

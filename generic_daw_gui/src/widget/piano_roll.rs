@@ -206,20 +206,27 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			{
 				match button {
 					mouse::Button::Left => {
-						let time = maybe_snap(new_time, *modifiers, |time| {
-							time.round(snap_step(state.scale.x, self.transport))
-						});
 						let key = px_to_key(cursor.y, state.position, state.scale);
 
 						if modifiers.command() {
+							let time = maybe_snap(new_time, *modifiers, |time| {
+								time.round(snap_step(state.scale.x, self.transport))
+							});
+
 							state.status = Status::Selecting(key, key, time, time);
-							shell.capture_event();
-							shell.request_redraw();
 						} else {
+							let time = maybe_snap(new_time, *modifiers, |time| {
+								time.floor(snap_step(state.scale.x, self.transport))
+							});
+
 							state.clear();
-							state.status = Status::Dragging(key, time);
 							shell.publish((self.action)(Action::Add(key, time)));
+
+							state.status = Status::Dragging(key, new_time);
 						}
+
+						shell.capture_event();
+						shell.request_redraw();
 					}
 					mouse::Button::Right => {
 						state.clear();

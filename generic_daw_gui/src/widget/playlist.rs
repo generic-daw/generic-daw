@@ -221,9 +221,6 @@ where
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers }) => match button {
 				mouse::Button::Left => {
-					let time = maybe_snap(new_time, *modifiers, |time| {
-						time.round(snap_step(state.scale.x, self.transport))
-					});
 					let track = track_idx(&layout, *viewport, cursor);
 
 					if modifiers.command() {
@@ -231,18 +228,27 @@ where
 						else {
 							return;
 						};
+
+						let time = maybe_snap(new_time, *modifiers, |time| {
+							time.round(snap_step(state.scale.x, self.transport))
+						});
+
 						state.status = Status::Selecting(track, track, time, time);
-						shell.capture_event();
-						shell.request_redraw();
 					} else if let Some(track) = track {
+						let time = maybe_snap(new_time, *modifiers, |time| {
+							time.floor(snap_step(state.scale.x, self.transport))
+						});
+
 						state.primary.clear();
-						state.status = Status::Dragging(track, time);
 						shell.publish((self.action)(Action::Add(None, Some(track), time)));
+
+						state.status = Status::Dragging(track, new_time);
 					} else {
 						state.primary.clear();
-						shell.capture_event();
-						shell.request_redraw();
 					}
+
+					shell.capture_event();
+					shell.request_redraw();
 				}
 				mouse::Button::Right => {
 					state.primary.clear();
