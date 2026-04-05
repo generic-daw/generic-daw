@@ -205,12 +205,12 @@ impl Arrangement {
 	}
 
 	pub fn seek_to(&mut self, position: MusicalTime) {
-		let sample = position.to_samples(&self.transport);
-		if self.transport.sample != sample {
-			self.transport.sample = sample;
-			self.transport.version = Version::unique();
-			self.send(Message::Sample(self.transport.version, sample));
-		}
+		self.transport.version = Version::unique();
+		self.transport.sample = position.to_samples(&self.transport);
+		self.send(Message::Sample(
+			self.transport.version,
+			self.transport.sample,
+		));
 	}
 
 	pub fn set_bpm(&mut self, bpm: NonZero<u16>) {
