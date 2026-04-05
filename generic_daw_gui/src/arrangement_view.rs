@@ -575,9 +575,10 @@ impl ArrangementView {
 					let (recording, task) = Recording::create(
 						path,
 						self.arrangement.transport(),
-						config.input_device.id.as_ref(),
-						config.input_device.sample_rate,
-						config.input_device.buffer_size,
+						config.devices.host,
+						config.devices.input.id.as_ref(),
+						config.devices.input.sample_rate,
+						config.devices.input.buffer_size,
 						node,
 					);
 

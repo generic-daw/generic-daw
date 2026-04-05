@@ -2,7 +2,7 @@ use crate::{
 	daw::{CONFIG_DIR, DATA_DIR},
 	theme::Theme,
 };
-use generic_daw_core::DeviceId;
+use generic_daw_core::{DeviceId, HostId};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -25,8 +25,7 @@ pub static DEFAULT_SAMPLE_PATHS: LazyLock<Box<[Arc<Path>]>> =
 pub struct Config {
 	pub sample_paths: Vec<Arc<Path>>,
 	pub clap_paths: Vec<Arc<Path>>,
-	pub input_device: Device,
-	pub output_device: Device,
+	pub devices: Devices,
 	pub autosave: Autosave,
 	pub open_last_project: bool,
 	pub scale_factor: f32,
@@ -38,8 +37,7 @@ impl Default for Config {
 		Self {
 			sample_paths: DEFAULT_SAMPLE_PATHS.clone().into_vec(),
 			clap_paths: Vec::new(),
-			input_device: Device::default(),
-			output_device: Device::default(),
+			devices: Devices::default(),
 			autosave: Autosave::default(),
 			open_last_project: false,
 			scale_factor: 1.0,
@@ -51,12 +49,22 @@ impl Default for Config {
 impl Config {
 	pub fn merge_with(&mut self, mut other: Self) {
 		std::mem::swap(self, &mut other);
-		self.output_device = other.output_device;
+		self.devices.host = other.devices.host;
+		self.devices.output = other.devices.output;
 	}
 
 	pub fn is_mergeable(&self, other: &Self) -> bool {
-		self.output_device == other.output_device
+		self.devices.host == other.devices.host && self.devices.output == other.devices.output
 	}
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default)]
+pub struct Devices {
+	#[serde(with = "option")]
+	pub host: Option<HostId>,
+	pub input: Device,
+	pub output: Device,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

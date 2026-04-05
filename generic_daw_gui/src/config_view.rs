@@ -12,7 +12,10 @@ use crate::{
 	theme::Theme,
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
 };
-use generic_daw_core::{DeviceDescription, DeviceId, clap_host::DEFAULT_CLAP_PATHS, get_devices};
+use generic_daw_core::{
+	DeviceDescription, DeviceId, HostId, clap_host::DEFAULT_CLAP_PATHS, default_host, get_devices,
+	get_hosts,
+};
 use iced::{
 	Center, Element, Fill, Font, Task, border, keyboard,
 	mouse::Interaction,
@@ -68,7 +71,8 @@ pub enum Message {
 	RemoveClapPath(usize),
 	MoveClapPath(DragEvent),
 	ChangedTab(Tab),
-	ChangedId(Option<DeviceId>),
+	ChangedHost(Option<HostId>),
+	ChangedDeviceId(Option<DeviceId>),
 	ChangedSampleRate(NonZero<u32>),
 	ChangedBufferSize(Option<NonZero<u32>>),
 	ToggledAutosave,
@@ -86,33 +90,53 @@ pub struct ConfigView {
 	config: Config,
 	prev_config: Config,
 	tab: Tab,
-	devices: HashMap<DeviceId, DeviceDescription>,
-	input_devices: Box<[DeviceId]>,
-	output_devices: Box<[DeviceId]>,
+	hosts: Vec<HostId>,
+	default_host: HostId,
+	devices: HashMap<HostId, Devices>,
+	device_info: HashMap<DeviceId, DeviceDescription>,
 	main_window_id: window::Id,
+}
+
+#[derive(Debug, Default)]
+struct Devices {
+	input: Vec<DeviceId>,
+	output: Vec<DeviceId>,
 }
 
 impl ConfigView {
 	pub fn new(main_window_id: window::Id) -> Self {
-		let devices = get_devices();
+		let device_info = get_devices();
 
-		let mut input_devices = devices
-			.iter()
-			.filter(|(_, device)| device.supports_input())
-			.map(|(id, _)| id.clone())
-			.collect::<Box<_>>();
-		let mut output_devices = devices
-			.iter()
-			.filter(|(_, device)| device.supports_output())
-			.map(|(id, _)| id.clone())
-			.collect::<Box<_>>();
+		let mut devices =
+			device_info
+				.iter()
+				.fold(HashMap::<_, Devices>::new(), |mut acc, (id, device)| {
+					if device.supports_input() {
+						acc.entry(id.0).or_default().input.push(id.clone());
+					}
 
-		input_devices.sort_unstable_by(|l, r| {
-			natural_cmp(devices[l].name().as_bytes(), devices[r].name().as_bytes())
-		});
-		output_devices.sort_unstable_by(|l, r| {
-			natural_cmp(devices[l].name().as_bytes(), devices[r].name().as_bytes())
-		});
+					if device.supports_output() {
+						acc.entry(id.0).or_default().output.push(id.clone());
+					}
+
+					acc
+				});
+
+		for device in devices.values_mut() {
+			device.input.sort_unstable_by(|l, r| {
+				natural_cmp(
+					device_info[l].name().as_bytes(),
+					device_info[r].name().as_bytes(),
+				)
+			});
+
+			device.output.sort_unstable_by(|l, r| {
+				natural_cmp(
+					device_info[l].name().as_bytes(),
+					device_info[r].name().as_bytes(),
+				)
+			});
+		}
 
 		let config = Config::read();
 
@@ -120,9 +144,10 @@ impl ConfigView {
 			config: config.clone(),
 			prev_config: config,
 			tab: Tab::Output,
+			hosts: get_hosts(),
+			default_host: default_host(),
 			devices,
-			input_devices,
-			output_devices,
+			device_info,
 			main_window_id,
 		}
 	}
@@ -172,7 +197,8 @@ impl ConfigView {
 				}
 			}
 			Message::ChangedTab(tab) => self.tab = tab,
-			Message::ChangedId(id) => self.with_device_mut(|device| {
+			Message::ChangedHost(host) => self.config.devices.host = host,
+			Message::ChangedDeviceId(id) => self.with_device_mut(|device| {
 				device.id = id;
 			}),
 			Message::ChangedSampleRate(sample_rate) => self.with_device_mut(|device| {
@@ -208,8 +234,14 @@ impl ConfigView {
 
 	pub fn view(&self, live_config: &Config) -> Element<'_, Message> {
 		let (device, devices) = match self.tab {
-			Tab::Input => (&self.config.input_device, &*self.input_devices),
-			Tab::Output => (&self.config.output_device, &*self.output_devices),
+			Tab::Input => (
+				&self.config.devices.input,
+				&*self.devices[&self.config.devices.host.unwrap_or(self.default_host)].input,
+			),
+			Tab::Output => (
+				&self.config.devices.output,
+				&*self.devices[&self.config.devices.host.unwrap_or(self.default_host)].output,
+			),
 		};
 
 		container(
@@ -358,6 +390,31 @@ impl ConfigView {
 						}
 					]
 					.align_y(Center),
+					row![
+						text("Host:").width(Fill),
+						row![
+							pick_list(self.config.devices.host.as_ref(), &*self.hosts, |host| host
+								.name()
+								.to_owned())
+							.on_select(|host| Message::ChangedHost(Some(host)))
+							.handle(PICK_LIST_HANDLE)
+							.placeholder("Default")
+							.width(Fill)
+							.style(pick_list_with_radius(border::left(5)))
+							.menu_style(menu_style),
+							button(rotate_ccw())
+								.style(button_with_radius(button::primary, border::right(5)))
+								.padding(5)
+								.on_press_maybe(
+									self.config
+										.devices
+										.host
+										.as_ref()
+										.map(|_| Message::ChangedHost(None))
+								)
+						]
+					]
+					.align_y(Center),
 					column![
 						row![
 							text("Name:").width(Fill),
@@ -366,11 +423,11 @@ impl ConfigView {
 									device
 										.id
 										.as_ref()
-										.filter(|id| self.devices.contains_key(id)),
+										.filter(|id| self.device_info.contains_key(id)),
 									devices,
-									|id| self.devices[id].to_string()
+									|id| self.device_info[id].to_string()
 								)
-								.on_select(|id| Message::ChangedId(Some(id)))
+								.on_select(|id| Message::ChangedDeviceId(Some(id)))
 								.handle(PICK_LIST_HANDLE)
 								.placeholder("Default")
 								.width(Fill)
@@ -383,7 +440,7 @@ impl ConfigView {
 									))
 									.padding(5)
 									.on_press_maybe(
-										device.id.as_ref().map(|_| Message::ChangedId(None))
+										device.id.as_ref().map(|_| Message::ChangedDeviceId(None))
 									)
 							]
 						]
@@ -570,8 +627,8 @@ impl ConfigView {
 
 	fn with_device_mut<T>(&mut self, f: impl FnOnce(&mut Device) -> T) -> T {
 		match self.tab {
-			Tab::Input => f(&mut self.config.input_device),
-			Tab::Output => f(&mut self.config.output_device),
+			Tab::Input => f(&mut self.config.devices.input),
+			Tab::Output => f(&mut self.config.devices.output),
 		}
 	}
 }

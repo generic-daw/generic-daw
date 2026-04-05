@@ -5,7 +5,7 @@ use crate::{
 	},
 	lod::LodsBuilder,
 };
-use generic_daw_core::{DeviceId, NodeId, Transport, time::BeatTime};
+use generic_daw_core::{DeviceId, HostId, NodeId, Transport, time::BeatTime};
 use rtrb::Consumer;
 use std::{fs::File, io::BufWriter, num::NonZero, path::Path, sync::Arc};
 
@@ -23,6 +23,7 @@ impl Recording {
 	pub fn create(
 		path: Arc<Path>,
 		transport: &Transport,
+		host_id: Option<HostId>,
 		device_id: Option<&DeviceId>,
 		sample_rate: NonZero<u32>,
 		frames: Option<NonZero<u32>>,
@@ -30,6 +31,7 @@ impl Recording {
 	) -> (Self, Consumer<f32>) {
 		let (core, consumer) = generic_daw_core::Recording::create(
 			BufWriter::new(File::create(&path).unwrap()),
+			host_id,
 			device_id,
 			sample_rate,
 			frames,

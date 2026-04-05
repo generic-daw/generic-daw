@@ -3,7 +3,7 @@ use crate::{
 	audio_thread::AudioThread,
 };
 use cpal::{
-	BufferSize, Device, StreamConfig, SupportedBufferSize, SupportedStreamConfig,
+	BufferSize, Device, HostId, StreamConfig, SupportedBufferSize, SupportedStreamConfig,
 	SupportedStreamConfigRange,
 	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
 };
@@ -13,20 +13,35 @@ use std::{cmp::Ordering, collections::HashMap, num::NonZero};
 use utils::boxed_slice;
 
 #[must_use]
+pub fn default_host() -> HostId {
+	cpal::default_host().id()
+}
+
+#[must_use]
+pub fn get_hosts() -> Vec<HostId> {
+	cpal::available_hosts()
+}
+
+#[must_use]
 pub fn get_devices() -> HashMap<DeviceId, DeviceDescription> {
-	cpal::default_host()
-		.devices()
-		.unwrap()
+	cpal::available_hosts()
+		.into_iter()
+		.filter_map(|host| cpal::host_from_id(host).ok())
+		.filter_map(|host| host.devices().ok())
+		.flatten()
 		.filter_map(|device| Some((device.id().ok()?, device.description().ok()?)))
 		.collect()
 }
 
 pub fn build_input_stream(
+	host_id: Option<HostId>,
 	device_id: Option<&DeviceId>,
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
 ) -> (StreamConfig, Consumer<f32>, Stream) {
-	let host = cpal::default_host();
+	let host = host_id
+		.and_then(|host_id| cpal::host_from_id(host_id).ok())
+		.unwrap_or_else(cpal::default_host);
 
 	let device = device_id
 		.and_then(|device_id| host.device_by_id(device_id))
@@ -78,6 +93,7 @@ pub fn build_input_stream(
 }
 
 pub fn build_output_stream(
+	host_id: Option<HostId>,
 	device_id: Option<&DeviceId>,
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
@@ -88,7 +104,9 @@ pub fn build_output_stream(
 	Consumer<Batch>,
 	Stream,
 ) {
-	let host = cpal::default_host();
+	let host = host_id
+		.and_then(|host_id| cpal::host_from_id(host_id).ok())
+		.unwrap_or_else(cpal::default_host);
 
 	let device = device_id
 		.and_then(|device_id| host.device_by_id(device_id))

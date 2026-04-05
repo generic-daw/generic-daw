@@ -62,9 +62,10 @@ pub struct Arrangement {
 impl Arrangement {
 	pub fn create(config: &Config) -> (Self, Task<Batch>) {
 		let (master, transport, producer, consumer, stream) = build_output_stream(
-			config.output_device.id.as_ref(),
-			config.output_device.sample_rate,
-			config.output_device.buffer_size,
+			config.devices.host,
+			config.devices.output.id.as_ref(),
+			config.devices.output.sample_rate,
+			config.devices.output.buffer_size,
 		);
 
 		let mut nodes = BTreeMap::new();

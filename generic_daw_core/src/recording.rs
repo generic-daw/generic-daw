@@ -1,7 +1,7 @@
 use crate::{
 	DeviceId, Sample, SampleId, Stream, Transport, build_input_stream, stream::frames_of_config,
 };
-use cpal::StreamConfig;
+use cpal::{HostId, StreamConfig};
 use hound::{SampleFormat, WavSpec, WavWriter};
 use rtrb::Consumer;
 use std::{io, num::NonZero};
@@ -20,11 +20,13 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	#[must_use]
 	pub fn create(
 		writer: W,
+		host_id: Option<HostId>,
 		device_id: Option<&DeviceId>,
 		sample_rate: NonZero<u32>,
 		frames: Option<NonZero<u32>>,
 	) -> (Self, Consumer<f32>) {
-		let (config, consumer, stream) = build_input_stream(device_id, sample_rate, frames);
+		let (config, consumer, stream) =
+			build_input_stream(host_id, device_id, sample_rate, frames);
 
 		let writer = WavWriter::new(
 			writer,
