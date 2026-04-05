@@ -200,7 +200,7 @@ impl Arrangement {
 			.discard(),
 			Task::stream(progress_receiver).chain(
 				Task::perform(partial_receiver.into_future(), Result::ok).and_then(|tasks| {
-					tasks.unwrap_or_else(|| Task::done(daw::Message::FileOpened(None)))
+					tasks.unwrap_or_else(|| Task::done(daw::Message::OpenedFile(None)))
 				}),
 			),
 		])
@@ -303,7 +303,7 @@ impl Arrangement {
 
 					done.send((
 						idx,
-						Feedback::Use(Err(daw::Message::CantLoadSample(
+						Feedback::Use(Err(daw::Message::CantFindSample(
 							sample.name.deref().into(),
 							sender.into(),
 						))),
@@ -542,7 +542,7 @@ impl Arrangement {
 						.map(Task::done)
 						.fold(Task::none(), Task::chain)
 						.map(move |message| daw::Message::Arrangement(project, message))
-						.chain(Task::done(daw::Message::FileOpened(Some(path)))),
+						.chain(Task::done(daw::Message::OpenedFile(Some(path)))),
 				])),
 		)
 	}

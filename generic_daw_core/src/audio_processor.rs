@@ -51,7 +51,7 @@ pub enum Message {
 	RequestUpdate,
 	ReturnUpdate(Vec<Update>),
 
-	RequestExport(
+	RequestRender(
 		oneshot::Sender<AudioProcessor>,
 		oneshot::Receiver<AudioProcessor>,
 	),
@@ -264,7 +264,7 @@ impl AudioProcessor {
 					debug_assert!(update.is_empty());
 					self.update_buffers.push(update);
 				}
-				Message::RequestExport(sender, receiver) => return Some((sender, receiver)),
+				Message::RequestRender(sender, receiver) => return Some((sender, receiver)),
 			}
 		}
 
@@ -404,7 +404,7 @@ impl AudioProcessor {
 		}
 	}
 
-	pub fn export(
+	pub fn render(
 		&mut self,
 		path: impl AsRef<Path>,
 		len: MusicalTime,

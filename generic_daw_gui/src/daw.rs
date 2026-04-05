@@ -71,7 +71,7 @@ enum FileMenu {
 	OpenLast,
 	Save,
 	SaveAs,
-	Export,
+	Render,
 	Settings,
 }
 }
@@ -84,7 +84,7 @@ impl From<FileMenu> for Message {
 			FileMenu::OpenLast => Self::OpenLastFile,
 			FileMenu::Save => Self::SaveFile,
 			FileMenu::SaveAs => Self::SaveAsFileDialog,
-			FileMenu::Export => Self::ExportFileDialog,
+			FileMenu::Render => Self::RenderFileDialog,
 			FileMenu::Settings => Self::OpenConfigView,
 		}
 	}
@@ -98,7 +98,7 @@ impl Display for FileMenu {
 			Self::OpenLast => "Open Last",
 			Self::Save => "Save",
 			Self::SaveAs => "Save As",
-			Self::Export => "Export",
+			Self::Render => "Render",
 			Self::Settings => "Settings",
 		})
 	}
@@ -127,26 +127,25 @@ pub enum Message {
 	NewFile,
 	OpenLastFile,
 	SaveFile,
+	SaveAsFileDialog,
 	SaveAsFile(Arc<Path>),
 	AutosaveFile,
 	ToggleFullscreen,
-
-	OpenFileDialog,
-	SaveAsFileDialog,
-	ExportFileDialog,
-	PickSampleFileDialog(usize),
 
 	Progress(f32),
 	SetStatus(Arc<str>),
 	ClearStatus,
 
-	FileOpen(Arc<Path>),
-	CantLoadSample(Arc<str>, NoClone<oneshot::Sender<Feedback<Arc<Path>>>>),
-	FoundSampleResponse(usize, Feedback<Arc<Path>>),
-	FileOpened(Option<Arc<Path>>),
+	OpenFileDialog,
+	OpenFile(Arc<Path>),
+	CantFindSample(Arc<str>, NoClone<oneshot::Sender<Feedback<Arc<Path>>>>),
+	FindSampleFileDialog(usize),
+	FindSampleFile(usize, Feedback<Arc<Path>>),
+	OpenedFile(Option<Arc<Path>>),
 
-	ExportFile(Arc<Path>),
-	ExportedFile,
+	RenderFileDialog,
+	RenderFile(Arc<Path>),
+	RenderedFile,
 
 	OpenConfigView,
 	CloseConfigView,
@@ -308,7 +307,7 @@ impl Daw {
 			Message::NewFile => return Arrangement::empty(),
 			Message::OpenLastFile => {
 				if let Some(last_project) = self.state.last_project.clone() {
-					return self.update(Message::FileOpen(last_project));
+					return self.update(Message::OpenFile(last_project));
 				}
 			}
 			Message::SaveFile => {
@@ -318,13 +317,26 @@ impl Daw {
 						.map_or(Message::SaveAsFileDialog, Message::SaveAsFile),
 				);
 			}
+			Message::SaveAsFileDialog => {
+				return window::run(self.main_window_id, |window| {
+					AsyncFileDialog::new()
+						.set_parent(window)
+						.add_filter("Generic DAW project file", &["gdp"])
+						.set_directory(&*PROJECT_DIR)
+						.save_file()
+				})
+				.then(Task::future)
+				.and_then(Task::done)
+				.map(|p| p.path().with_extension("gdp").into())
+				.map(Message::SaveAsFile);
+			}
 			Message::SaveAsFile(path) => {
 				match self
 					.arrangement_view
 					.arrangement
 					.save(&path, &mut self.clap_host)
 				{
-					Ok(()) => return self.update(Message::FileOpened(Some(path))),
+					Ok(()) => return self.update(Message::OpenedFile(Some(path))),
 					Err(err) => warn!("{err}"),
 				}
 			}
@@ -354,6 +366,9 @@ impl Daw {
 					window::Mode::Hidden => Task::none(),
 				});
 			}
+			Message::Progress(progress) => self.progress = Some(progress),
+			Message::SetStatus(scanning) => self.status = Some(scanning),
+			Message::ClearStatus => self.status = None,
 			Message::OpenFileDialog => {
 				return window::run(self.main_window_id, |window| {
 					AsyncFileDialog::new()
@@ -365,22 +380,42 @@ impl Daw {
 				.then(Task::future)
 				.and_then(Task::done)
 				.map(|p| p.path().into())
-				.map(Message::FileOpen);
+				.map(Message::OpenFile);
 			}
-			Message::SaveAsFileDialog => {
+			Message::OpenFile(path) => {
+				if self.progress.is_none() {
+					self.progress = Some(0.0);
+					return Arrangement::start_load(path, self.plugins.clone().into_options());
+				}
+			}
+			Message::CantFindSample(name, NoClone(sender)) => {
+				if self.progress.is_some() {
+					self.missing_samples.push((name, sender));
+				}
+			}
+			Message::FindSampleFileDialog(idx) => {
 				return window::run(self.main_window_id, |window| {
-					AsyncFileDialog::new()
-						.set_parent(window)
-						.add_filter("Generic DAW project file", &["gdp"])
-						.set_directory(&*PROJECT_DIR)
-						.save_file()
+					AsyncFileDialog::new().set_parent(window).pick_file()
 				})
 				.then(Task::future)
 				.and_then(Task::done)
-				.map(|p| p.path().with_extension("gdp").into())
-				.map(Message::SaveAsFile);
+				.map(|p| p.path().into())
+				.map(move |response| Message::FindSampleFile(idx, Feedback::Use(response)));
 			}
-			Message::ExportFileDialog => {
+			Message::FindSampleFile(idx, response) => {
+				self.missing_samples.remove(idx).1.send(response).unwrap();
+			}
+			Message::OpenedFile(path) => {
+				if let Some(path) = path {
+					self.current_project = Some(path.clone());
+					self.state.last_project = Some(path);
+					self.state.write();
+				}
+				self.progress = None;
+				self.status = None;
+				self.missing_samples.clear();
+			}
+			Message::RenderFileDialog => {
 				return window::run(self.main_window_id, |window| {
 					AsyncFileDialog::new()
 						.set_parent(window)
@@ -391,53 +426,16 @@ impl Daw {
 				.then(Task::future)
 				.and_then(Task::done)
 				.map(|p| p.path().with_extension("wav").into())
-				.map(Message::ExportFile);
+				.map(Message::RenderFile);
 			}
-			Message::PickSampleFileDialog(idx) => {
-				return window::run(self.main_window_id, |window| {
-					AsyncFileDialog::new().set_parent(window).pick_file()
-				})
-				.then(Task::future)
-				.and_then(Task::done)
-				.map(|p| p.path().into())
-				.map(Feedback::Use)
-				.map(move |response| Message::FoundSampleResponse(idx, response));
-			}
-			Message::Progress(progress) => self.progress = Some(progress),
-			Message::SetStatus(scanning) => self.status = Some(scanning),
-			Message::ClearStatus => self.status = None,
-			Message::FileOpen(path) => {
-				if self.progress.is_none() {
-					self.progress = Some(0.0);
-					return Arrangement::start_load(path, self.plugins.clone().into_options());
-				}
-			}
-			Message::CantLoadSample(name, NoClone(sender)) => {
-				if self.progress.is_some() {
-					self.missing_samples.push((name, sender));
-				}
-			}
-			Message::FoundSampleResponse(idx, response) => {
-				self.missing_samples.remove(idx).1.send(response).unwrap();
-			}
-			Message::FileOpened(path) => {
-				if let Some(path) = path {
-					self.current_project = Some(path.clone());
-					self.state.last_project = Some(path);
-					self.state.write();
-				}
-				self.progress = None;
-				self.status = None;
-				self.missing_samples.clear();
-			}
-			Message::ExportFile(path) => {
+			Message::RenderFile(path) => {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
 					self.clap_host.set_render_mode(RenderMode::Offline);
-					return self.arrangement_view.arrangement.export(path);
+					return self.arrangement_view.arrangement.render(path);
 				}
 			}
-			Message::ExportedFile => {
+			Message::RenderedFile => {
 				self.clap_host.set_render_mode(RenderMode::Realtime);
 				self.progress = None;
 			}
@@ -808,14 +806,14 @@ impl Daw {
 													row![
 														button("Pick")
 															.on_press(
-																Message::PickSampleFileDialog(i)
+																Message::FindSampleFileDialog(i)
 															)
 															.style(button_with_radius(
 																button::success,
 																border::left(5)
 															)),
 														button("Ignore")
-															.on_press(Message::FoundSampleResponse(
+															.on_press(Message::FindSampleFile(
 																i,
 																Feedback::Ignore
 															))
@@ -824,7 +822,7 @@ impl Daw {
 																0
 															)),
 														button("Cancel")
-															.on_press(Message::FoundSampleResponse(
+															.on_press(Message::FindSampleFile(
 																i,
 																Feedback::Cancel
 															))
@@ -955,10 +953,10 @@ impl Daw {
 				_ => None,
 			},
 			(true, false, false, false) => match key.to_latin(physical_key) {
-				Some('e') => Some(Message::ExportFileDialog),
 				Some('m') => Some(Message::ToggleMetronome),
 				Some('n') => Some(Message::NewFile),
 				Some('o') => Some(Message::OpenFileDialog),
+				Some('r') => Some(Message::RenderFileDialog),
 				Some('s') => Some(Message::SaveFile),
 				_ => None,
 			},

@@ -501,10 +501,10 @@ impl Arrangement {
 		self.midi_pattern_action(pattern, MidiPatternAction::TrimEndTo(note, pos));
 	}
 
-	pub fn export(&mut self, path: Arc<Path>) -> Task<daw::Message> {
+	pub fn render(&mut self, path: Arc<Path>) -> Task<daw::Message> {
 		let (a_sender, p_receiver) = oneshot::channel();
 		let (p_sender, a_receiver) = oneshot::channel();
-		self.send(Message::RequestExport(a_sender, a_receiver));
+		self.send(Message::RequestRender(a_sender, a_receiver));
 		let mut processor = p_receiver.recv().unwrap();
 
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
@@ -518,14 +518,13 @@ impl Arrangement {
 
 		Task::batch([
 			Task::future(unblock(move || {
-				processor.export(&path, len, |f| {
-					progress_sender.try_send(daw::Message::Progress(f)).unwrap();
-				});
+				processor.render(&path, len, |f| progress_sender.try_send(f).unwrap());
 				p_sender.send(processor).unwrap();
-				daw::Message::ExportedFile
 			}))
 			.discard(),
-			Task::stream(progress_receiver).chain(Task::done(daw::Message::ExportedFile)),
+			Task::stream(progress_receiver)
+				.map(daw::Message::Progress)
+				.chain(Task::done(daw::Message::RenderedFile)),
 		])
 	}
 }
