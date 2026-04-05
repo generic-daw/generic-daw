@@ -60,7 +60,8 @@ impl File {
 					.spacing(2)
 					.width(Fill),
 				)
-				.on_press(Message::File(self.path.clone(), self.kind)),
+				.on_press(Message::DragFile(self.path.clone(), self.kind))
+				.on_double_click(Message::OpenFile(self.path.clone(), self.kind)),
 			)
 			.padding(0)
 			.style(button::text)

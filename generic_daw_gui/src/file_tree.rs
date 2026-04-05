@@ -15,7 +15,8 @@ pub use file::FileKind;
 #[derive(Clone, Debug)]
 pub enum Message {
 	Action(DirId, Action),
-	File(Arc<Path>, FileKind),
+	DragFile(Arc<Path>, FileKind),
+	OpenFile(Arc<Path>, FileKind),
 }
 
 #[derive(Clone, Debug)]

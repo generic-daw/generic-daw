@@ -6,7 +6,7 @@ use crate::{
 	components::{PICK_LIST_HANDLE, number_input},
 	config::Config,
 	config_view::{self, ConfigView},
-	file_tree::{self, FileTree},
+	file_tree::{self, FileKind, FileTree},
 	icons::{
 		arrow_big_right, chart_no_axes_gantt, cpu, keyboard_music, metronome, pause, play, plus,
 		sliders_vertical, square,
@@ -558,12 +558,21 @@ impl Daw {
 
 	fn handle_file_tree_message(&mut self, message: file_tree::Message) -> Task<Message> {
 		match message {
-			file_tree::Message::File(file, kind) => {
-				self.arrangement_view.hover_file(file, kind);
-			}
 			file_tree::Message::Action(id, action) => {
-				if let Some(task) = self.file_tree.update(id, &action) {
-					return task.map(Message::FileTree);
+				return self
+					.file_tree
+					.update(id, &action)
+					.unwrap_or_default()
+					.map(Message::FileTree);
+			}
+			file_tree::Message::DragFile(file, kind) => {
+				if kind != FileKind::Project {
+					self.arrangement_view.hover_file(file, kind);
+				}
+			}
+			file_tree::Message::OpenFile(file, kind) => {
+				if kind == FileKind::Project {
+					return self.update(Message::OpenFile(file));
 				}
 			}
 		}
