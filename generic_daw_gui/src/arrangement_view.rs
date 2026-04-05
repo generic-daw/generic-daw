@@ -165,6 +165,7 @@ pub enum Message {
 	ArrowRight,
 	TransposeOctUp,
 	TransposeOctDown,
+	Quantize,
 	SelectAll,
 	SelectInverse,
 	UnselectAll,
@@ -745,6 +746,36 @@ impl ArrangementView {
 					));
 				}
 			},
+			Message::Quantize => match self.tab {
+				Tab::Playlist => {
+					let playlist = self.playlist.get_mut();
+					for &(track, clip) in &playlist.primary {
+						let pos = self.arrangement.tracks()[track].clips[clip]
+							.position()
+							.position()
+							.snap_round(playlist.scale.x, self.arrangement.transport());
+
+						self.arrangement.clip_trim_end_to(track, clip, pos.end());
+						self.arrangement
+							.clip_trim_start_to(track, clip, pos.start());
+					}
+				}
+				Tab::Mixer => {}
+				Tab::PianoRoll => {
+					let clip = self.midi_clip().unwrap();
+					let piano_roll = self.piano_roll.get_mut();
+					for &note in &piano_roll.primary {
+						let pos = self.arrangement.midi_patterns()[&clip.pattern].notes[note]
+							.position
+							.snap_round(piano_roll.scale.x, self.arrangement.transport());
+
+						self.arrangement
+							.note_trim_end_to(clip.pattern, note, pos.end());
+						self.arrangement
+							.note_trim_start_to(clip.pattern, note, pos.start());
+					}
+				}
+			},
 			Message::SelectAll => match self.tab {
 				Tab::Playlist => {
 					self.playlist.get_mut().clear();
@@ -753,7 +784,7 @@ impl ArrangementView {
 							.tracks()
 							.iter()
 							.enumerate()
-							.flat_map(|(i, t)| repeat(i).zip(0..t.clips.len())),
+							.flat_map(|(t_idx, track)| repeat(t_idx).zip(0..track.clips.len())),
 					);
 				}
 				Tab::Mixer => {}
@@ -769,10 +800,10 @@ impl ArrangementView {
 			Message::SelectInverse => match self.tab {
 				Tab::Playlist => {
 					self.playlist.get_mut().reset();
-					for track in 0..self.arrangement.tracks().len() {
-						for clip in 0..self.arrangement.tracks()[track].clips.len() {
-							if !self.playlist.get_mut().primary.insert((track, clip)) {
-								self.playlist.get_mut().primary.remove(&(track, clip));
+					for (t_idx, track) in self.arrangement.tracks().iter().enumerate() {
+						for c_idx in 0..track.clips.len() {
+							if !self.playlist.get_mut().primary.insert((t_idx, c_idx)) {
+								self.playlist.get_mut().primary.remove(&(t_idx, c_idx));
 							}
 						}
 					}
@@ -1907,6 +1938,10 @@ impl ArrangementView {
 			},
 			(false, true, false, false) => match key.as_ref() {
 				keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::CycleTabBackwards),
+				_ => None,
+			},
+			(false, false, true, false) => match key.to_latin(physical_key) {
+				Some('q') => Some(Message::Quantize),
 				_ => None,
 			},
 			_ => None,

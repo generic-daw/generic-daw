@@ -72,9 +72,79 @@ impl Position {
 
 	#[must_use]
 	pub fn clamp(mut self, other: Self) -> Option<Self> {
-		self.start = self.start.clamp(other.start(), other.end());
-		self.end = self.end.clamp(other.start(), other.end());
+		self.start = self.start.clamp(other.start, other.end);
+		self.end = self.end.clamp(other.start, other.end);
 		(self.start != self.end).then_some(self)
+	}
+
+	fn adjust(self, start: MusicalTime, end: MusicalTime, modulo: MusicalTime) -> Self {
+		if start != end {
+			Self::new(start, end)
+		} else if self.start.abs_diff(start) < self.end.abs_diff(end) {
+			Self::new(start, start + modulo)
+		} else {
+			Self::new(end - modulo, end)
+		}
+	}
+
+	#[must_use]
+	pub fn floor(self, modulo: MusicalTime) -> Self {
+		self.adjust(self.start.floor(modulo), self.end.floor(modulo), modulo)
+	}
+
+	#[must_use]
+	pub fn ceil(self, modulo: MusicalTime) -> Self {
+		self.adjust(self.start.ceil(modulo), self.end.ceil(modulo), modulo)
+	}
+
+	#[must_use]
+	pub fn round(self, modulo: MusicalTime) -> Self {
+		self.adjust(self.start.round(modulo), self.end.round(modulo), modulo)
+	}
+
+	#[must_use]
+	pub fn beat_floor(self) -> Self {
+		self.floor(MusicalTime::BEAT)
+	}
+
+	#[must_use]
+	pub fn beat_ceil(self) -> Self {
+		self.ceil(MusicalTime::BEAT)
+	}
+
+	#[must_use]
+	pub fn beat_round(self) -> Self {
+		self.round(MusicalTime::BEAT)
+	}
+
+	#[must_use]
+	pub fn bar_floor(self, transport: &Transport) -> Self {
+		self.floor(MusicalTime::new(transport.numerator.get().into(), 0))
+	}
+
+	#[must_use]
+	pub fn bar_ceil(self, transport: &Transport) -> Self {
+		self.ceil(MusicalTime::new(transport.numerator.get().into(), 0))
+	}
+
+	#[must_use]
+	pub fn bar_round(self, transport: &Transport) -> Self {
+		self.round(MusicalTime::new(transport.numerator.get().into(), 0))
+	}
+
+	#[must_use]
+	pub fn snap_floor(self, scale: f32, transport: &Transport) -> Self {
+		self.floor(MusicalTime::snap_step(scale, transport))
+	}
+
+	#[must_use]
+	pub fn snap_ceil(self, scale: f32, transport: &Transport) -> Self {
+		self.ceil(MusicalTime::snap_step(scale, transport))
+	}
+
+	#[must_use]
+	pub fn snap_round(self, scale: f32, transport: &Transport) -> Self {
+		self.round(MusicalTime::snap_step(scale, transport))
 	}
 }
 
