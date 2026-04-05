@@ -462,7 +462,9 @@ impl ArrangementView {
 						self.update(Message::TrackAdd, config, state),
 					)
 				};
-				self.arrangement.add_clip(track, clip);
+				let clip = self.arrangement.add_clip(track, clip);
+				self.playlist.get_mut().clear();
+				self.playlist.get_mut().primary.insert((track, clip));
 				return task;
 			}
 			Message::AddMidiClip(id, track, pos) => {
@@ -483,7 +485,9 @@ impl ArrangementView {
 						self.update(Message::TrackAdd, config, state),
 					)
 				};
-				self.arrangement.add_clip(track, clip);
+				let clip = self.arrangement.add_clip(track, clip);
+				self.playlist.get_mut().clear();
+				self.playlist.get_mut().primary.insert((track, clip));
 				return task;
 			}
 			Message::TrackAdd => {
@@ -947,7 +951,7 @@ impl ArrangementView {
 					}
 				} else {
 					self.loading += 1;
-					let action = self.update(
+					self.update(
 						Message::MidiPatternLoaded(NoClone(Some((
 							Box::new(MidiPatternPair::from_notes(Vec::new(), "MIDI Pattern")),
 							track,
@@ -955,11 +959,7 @@ impl ArrangementView {
 						)))),
 						config,
 						state,
-					);
-					let track = track.unwrap_or_else(|| self.arrangement.tracks().len() - 1);
-					let clip = self.arrangement.tracks()[track].clips.len() - 1;
-					self.playlist.get_mut().primary.insert((track, clip));
-					action
+					)
 				};
 			}
 			playlist::Action::Open(track, clip) => {
