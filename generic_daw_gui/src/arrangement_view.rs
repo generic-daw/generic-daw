@@ -22,6 +22,7 @@ use crate::{
 		piano_roll::{self, PianoRoll},
 		playlist::{self, Playlist},
 		seeker::Seeker,
+		snap_step,
 		track::Track,
 	},
 };
@@ -673,12 +674,12 @@ impl ArrangementView {
 			Message::ArrowLeft => match self.tab {
 				Tab::Playlist => {
 					self.playlist.get_mut().finish();
-					let step = MusicalTime::snap_step(
+					let snap_step = snap_step(
 						self.playlist.get_mut().scale.x,
 						self.arrangement.transport(),
 					);
 					return self.handle_playlist_action(
-						playlist::Action::Drag(Delta::Positive(0), Delta::Negative(step)),
+						playlist::Action::Drag(Delta::Positive(0), Delta::Negative(snap_step)),
 						config,
 						state,
 					);
@@ -693,25 +694,25 @@ impl ArrangementView {
 				}
 				Tab::PianoRoll => {
 					self.piano_roll.get_mut().finish();
-					let step = MusicalTime::snap_step(
+					let snap_step = snap_step(
 						self.playlist.get_mut().scale.x,
 						self.arrangement.transport(),
 					);
 					self.handle_piano_roll_action(piano_roll::Action::Drag(
 						Delta::Positive(MidiKey(0)),
-						Delta::Negative(step),
+						Delta::Negative(snap_step),
 					));
 				}
 			},
 			Message::ArrowRight => match self.tab {
 				Tab::Playlist => {
 					self.playlist.get_mut().finish();
-					let step = MusicalTime::snap_step(
+					let snap_step = snap_step(
 						self.playlist.get_mut().scale.x,
 						self.arrangement.transport(),
 					);
 					return self.handle_playlist_action(
-						playlist::Action::Drag(Delta::Positive(0), Delta::Positive(step)),
+						playlist::Action::Drag(Delta::Positive(0), Delta::Positive(snap_step)),
 						config,
 						state,
 					);
@@ -726,13 +727,13 @@ impl ArrangementView {
 				}
 				Tab::PianoRoll => {
 					self.piano_roll.get_mut().finish();
-					let step = MusicalTime::snap_step(
+					let snap_step = snap_step(
 						self.playlist.get_mut().scale.x,
 						self.arrangement.transport(),
 					);
 					self.handle_piano_roll_action(piano_roll::Action::Drag(
 						Delta::Positive(MidiKey(0)),
-						Delta::Positive(step),
+						Delta::Positive(snap_step),
 					));
 				}
 			},
@@ -764,7 +765,7 @@ impl ArrangementView {
 						let pos = self.arrangement.tracks()[track].clips[clip]
 							.position()
 							.position()
-							.snap_round(playlist.scale.x, self.arrangement.transport());
+							.round(snap_step(playlist.scale.x, self.arrangement.transport()));
 
 						self.arrangement.clip_trim_end_to(track, clip, pos.end());
 						self.arrangement
@@ -779,7 +780,7 @@ impl ArrangementView {
 					for &note in &piano_roll.primary {
 						let pos = self.arrangement.midi_patterns()[&clip.pattern].notes[note]
 							.position
-							.snap_round(piano_roll.scale.x, self.arrangement.transport());
+							.round(snap_step(piano_roll.scale.x, self.arrangement.transport()));
 
 						self.arrangement
 							.note_trim_end_to(clip.pattern, note, pos.end());

@@ -55,6 +55,21 @@ impl Add<Delta<Self>> for MidiKey {
 	}
 }
 
+pub fn snap_step(mut scale: f32, transport: &Transport) -> MusicalTime {
+	scale += (f32::from(transport.bpm.get()) / transport.sample_rate.get() as f32).log2() - 3.5;
+	let extra = f32::from(transport.numerator.get()).log2();
+	if scale < 0.0 {
+		MusicalTime::new(0, MusicalTime::TICKS_PER_BEAT >> -scale as u8)
+	} else if scale < extra {
+		MusicalTime::new(u64::from(transport.numerator.get()), 0)
+	} else {
+		MusicalTime::new(
+			u64::from(transport.numerator.get()) << (scale - extra).ceil() as u8,
+			0,
+		)
+	}
+}
+
 fn maybe_snap<T>(t: T, modifiers: Modifiers, f: impl FnOnce(T) -> T) -> T {
 	if modifiers.alt() { t } else { f(t) }
 }

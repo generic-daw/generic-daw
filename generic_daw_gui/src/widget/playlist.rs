@@ -1,7 +1,7 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef},
 	file_tree::FileKind,
-	widget::{ALPHA_1_3, Delta, clip, maybe_snap, px_to_time, time_to_px, track::Track},
+	widget::{ALPHA_1_3, Delta, clip, maybe_snap, px_to_time, snap_step, time_to_px, track::Track},
 };
 use generic_daw_core::{MusicalTime, Transport};
 use iced::{
@@ -222,7 +222,7 @@ where
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers }) => match button {
 				mouse::Button::Left => {
 					let time = maybe_snap(new_time, *modifiers, |time| {
-						time.snap_round(state.scale.x, self.transport)
+						time.round(snap_step(state.scale.x, self.transport))
 					});
 					let track = track_idx(&layout, *viewport, cursor);
 
@@ -265,7 +265,7 @@ where
 					let track = track_idx(&layout, *viewport, cursor);
 
 					let new_time = maybe_snap(new_time, *modifiers, |time| {
-						time.snap_floor(state.scale.x, self.transport)
+						time.floor(snap_step(state.scale.x, self.transport))
 					});
 
 					let new_time = Some((track, new_time));
@@ -284,7 +284,7 @@ where
 					};
 
 					let end_pos = maybe_snap(new_time, *modifiers, |time| {
-						time.snap_round(state.scale.x, self.transport)
+						time.round(snap_step(state.scale.x, self.transport))
 					});
 
 					if end_track == last_end_track && end_pos == last_end_pos {
@@ -333,7 +333,7 @@ where
 					};
 
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.snap_round(state.scale.x, self.transport)
+						abs_diff.round(snap_step(state.scale.x, self.transport))
 					});
 
 					if new_track != track || abs_diff != MusicalTime::ZERO {
@@ -356,7 +356,7 @@ where
 				}
 				Status::TrimmingStart(time) => {
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.snap_round(state.scale.x, self.transport)
+						abs_diff.round(snap_step(state.scale.x, self.transport))
 					});
 
 					if abs_diff != MusicalTime::ZERO {
@@ -373,7 +373,7 @@ where
 				}
 				Status::TrimmingEnd(time) => {
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.snap_round(state.scale.x, self.transport)
+						abs_diff.round(snap_step(state.scale.x, self.transport))
 					});
 
 					if abs_diff != MusicalTime::ZERO {
@@ -390,7 +390,7 @@ where
 				}
 				Status::DraggingSplit(time) => {
 					let new_time = maybe_snap(new_time, *modifiers, |time| {
-						time.snap_round(state.scale.x, self.transport)
+						time.round(snap_step(state.scale.x, self.transport))
 					});
 
 					if new_time != time {

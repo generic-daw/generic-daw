@@ -1,4 +1,4 @@
-use crate::widget::{ALPHA_1_3, LINE_HEIGHT, maybe_snap, px_to_time, time_to_px};
+use crate::widget::{ALPHA_1_3, LINE_HEIGHT, maybe_snap, px_to_time, snap_step, time_to_px};
 use generic_daw_core::{MusicalTime, Position, Transport};
 use iced::{
 	Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
@@ -196,19 +196,19 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			clamped
 		};
 
+		let new_time = px_to_time(
+			cursor.x + self.offset,
+			self.position,
+			self.scale,
+			self.transport,
+		);
+
 		match event {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
-				let time = maybe_snap(
-					px_to_time(
-						cursor.x + self.offset,
-						self.position,
-						self.scale,
-						self.transport,
-					),
-					*modifiers,
-					|time| time.snap_round(self.scale.x, self.transport),
-				);
+				let time = maybe_snap(new_time, *modifiers, |time| {
+					time.round(snap_step(self.scale.x, self.transport))
+				});
 
 				match state.status {
 					Status::Seeking(last_time) => {
@@ -246,16 +246,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				button: mouse::Button::Left,
 				modifiers,
 			}) if cursor.y < LINE_HEIGHT => {
-				let time = maybe_snap(
-					px_to_time(
-						cursor.x + self.offset,
-						self.position,
-						self.scale,
-						self.transport,
-					),
-					*modifiers,
-					|time| time.snap_round(self.scale.x, self.transport),
-				);
+				let time = maybe_snap(new_time, *modifiers, |time| {
+					time.round(snap_step(self.scale.x, self.transport))
+				});
 				state.status = if modifiers.command() {
 					if let Some(loop_marker) = self.transport.loop_marker {
 						if time == loop_marker.start() {
@@ -519,6 +512,8 @@ impl<'a, Message> Seeker<'a, Message> {
 				)
 		};
 
+		let snap_step = snap_step(self.scale.x + 1.0, self.transport);
+
 		let mut beat = px_to_time(self.offset, self.position, self.scale, self.transport);
 		let end_beat = px_to_time(
 			self.offset + bounds.width,
@@ -526,7 +521,7 @@ impl<'a, Message> Seeker<'a, Message> {
 			self.scale,
 			self.transport,
 		);
-		beat = beat.snap_floor(self.scale.x + 1.0, self.transport);
+		beat = beat.floor(snap_step);
 
 		let background_step = MusicalTime::new(8 * u64::from(self.transport.numerator.get()), 0);
 		let mut background_beat = beat.round(background_step);
@@ -548,8 +543,6 @@ impl<'a, Message> Seeker<'a, Message> {
 			);
 			background_beat += background_step;
 		}
-
-		let snap_step = MusicalTime::snap_step(self.scale.x + 1.0, self.transport);
 
 		while beat <= end_beat {
 			let color = if snap_step >= MusicalTime::BEAT {
@@ -682,6 +675,8 @@ impl<'a, Message> Seeker<'a, Message> {
 			theme.palette().primary.base.color,
 		);
 
+		let snap_step = snap_step(self.scale.x + 3.0, self.transport).bar_ceil(self.transport);
+
 		let mut beat = px_to_time(self.offset, self.position, self.scale, self.transport);
 		let end_beat = px_to_time(
 			self.offset + bounds.width,
@@ -689,12 +684,7 @@ impl<'a, Message> Seeker<'a, Message> {
 			self.scale,
 			self.transport,
 		);
-		beat = beat
-			.snap_floor(self.scale.x + 3.0, self.transport)
-			.bar_floor(self.transport);
-
-		let snap_step =
-			MusicalTime::snap_step(self.scale.x + 3.0, self.transport).bar_ceil(self.transport);
+		beat = beat.floor(snap_step).bar_floor(self.transport);
 
 		while beat <= end_beat {
 			let bar = Text {

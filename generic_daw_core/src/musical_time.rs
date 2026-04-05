@@ -153,37 +153,6 @@ impl MusicalTime {
 	}
 
 	#[must_use]
-	pub fn snap_floor(self, scale: f32, transport: &Transport) -> Self {
-		self.floor(Self::snap_step(scale, transport))
-	}
-
-	#[must_use]
-	pub fn snap_ceil(self, scale: f32, transport: &Transport) -> Self {
-		self.ceil(Self::snap_step(scale, transport))
-	}
-
-	#[must_use]
-	pub fn snap_round(self, scale: f32, transport: &Transport) -> Self {
-		self.round(Self::snap_step(scale, transport))
-	}
-
-	#[must_use]
-	pub fn snap_step(mut scale: f32, transport: &Transport) -> Self {
-		scale += (f32::from(transport.bpm.get()) / transport.sample_rate.get() as f32).log2() - 3.5;
-		let extra = f32::from(transport.numerator.get()).log2();
-		if scale < 0.0 {
-			Self::new(0, Self::TICKS_PER_BEAT >> -scale as u8)
-		} else if scale < extra {
-			Self::new(u64::from(transport.numerator.get()), 0)
-		} else {
-			Self::new(
-				u64::from(transport.numerator.get()) << (scale - extra).ceil() as u8,
-				0,
-			)
-		}
-	}
-
-	#[must_use]
 	pub const fn saturating_sub(self, other: Self) -> Self {
 		Self(self.0.saturating_sub(other.0))
 	}

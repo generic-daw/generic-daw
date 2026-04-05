@@ -131,21 +131,6 @@ impl Position {
 	pub fn bar_round(self, transport: &Transport) -> Self {
 		self.round(MusicalTime::new(transport.numerator.get().into(), 0))
 	}
-
-	#[must_use]
-	pub fn snap_floor(self, scale: f32, transport: &Transport) -> Self {
-		self.floor(MusicalTime::snap_step(scale, transport))
-	}
-
-	#[must_use]
-	pub fn snap_ceil(self, scale: f32, transport: &Transport) -> Self {
-		self.ceil(MusicalTime::snap_step(scale, transport))
-	}
-
-	#[must_use]
-	pub fn snap_round(self, scale: f32, transport: &Transport) -> Self {
-		self.round(MusicalTime::snap_step(scale, transport))
-	}
 }
 
 impl Add<MusicalTime> for Position {

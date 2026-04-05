@@ -1,7 +1,7 @@
 use crate::widget::{
 	ALPHA_1_3, key_to_px, maybe_snap,
 	piano_roll::{self, Action, Status},
-	px_to_time, time_to_px,
+	px_to_time, snap_step, time_to_px,
 };
 use generic_daw_core::{MidiNote, Transport};
 use iced::{
@@ -115,7 +115,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 							(true, false) => {
 								clear = false;
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.snap_round(piano_roll.scale.x, self.transport)
+									time.round(snap_step(piano_roll.scale.x, self.transport))
 								});
 								Status::Selecting(self.note.key, self.note.key, time, time)
 							}
@@ -125,7 +125,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 							}
 							(true, true) => {
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.snap_round(piano_roll.scale.x, self.transport)
+									time.round(snap_step(piano_roll.scale.x, self.transport))
 								});
 								shell.publish((self.f)(Action::SplitAt(time)));
 								Status::DraggingSplit(time)

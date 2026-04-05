@@ -3,7 +3,7 @@ use crate::{
 	widget::{
 		ALPHA_1_3, LINE_HEIGHT, maybe_snap,
 		playlist::{self, Action, Status},
-		px_to_time, time_to_px,
+		px_to_time, snap_step, time_to_px,
 	},
 };
 use generic_daw_core::{MusicalTime, Position, Transport};
@@ -228,7 +228,7 @@ where
 							(true, false) => {
 								clear = false;
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.snap_round(playlist.scale.x, self.transport)
+									time.round(snap_step(playlist.scale.x, self.transport))
 								});
 								Status::Selecting(idx.0, idx.0, time, time)
 							}
@@ -238,7 +238,7 @@ where
 							}
 							(true, true) => {
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.snap_round(playlist.scale.x, self.transport)
+									time.round(snap_step(playlist.scale.x, self.transport))
 								});
 								shell.publish((self.f)(Action::SplitAt(time)));
 								Status::DraggingSplit(time)
