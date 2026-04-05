@@ -1033,19 +1033,16 @@ impl ArrangementView {
 					}
 				}
 
-				for (mut track, mut clip) in sorted {
-					let new_track = (track + track_diff).min(self.arrangement.tracks().len() - 1);
-					if track != new_track {
-						clip = self.arrangement.clip_switch_track(track, clip, new_track);
-						track = new_track;
-					}
-
+				for (track, clip) in sorted {
 					let pos = self.arrangement.tracks()[track].clips[clip]
 						.position()
 						.start();
 					self.arrangement.clip_move_to(track, clip, pos + pos_diff);
 
-					primary.insert((track, clip));
+					let new_track = (track + track_diff).min(self.arrangement.tracks().len() - 1);
+					let new_clip = self.arrangement.clip_switch_track(track, clip, new_track);
+
+					primary.insert((new_track, new_clip));
 				}
 			}
 			playlist::Action::TrimStart(pos_diff) => {
@@ -1205,15 +1202,16 @@ impl ArrangementView {
 				}
 			}
 			piano_roll::Action::Drag(key_diff, pos_diff) => {
-				for &idx in &*primary {
-					let note = self.arrangement.midi_patterns()[&clip.pattern].notes[idx];
-					let new_key = note.key + key_diff;
-					if new_key != note.key {
-						self.arrangement.note_change_key(clip.pattern, idx, new_key);
-					}
-					let pos = note.position.start();
+				for &note in &*primary {
+					let pos = self.arrangement.midi_patterns()[&clip.pattern].notes[note]
+						.position
+						.start();
 					self.arrangement
-						.note_move_to(clip.pattern, idx, pos + pos_diff);
+						.note_move_to(clip.pattern, note, pos + pos_diff);
+
+					let key = self.arrangement.midi_patterns()[&clip.pattern].notes[note].key;
+					self.arrangement
+						.note_change_key(clip.pattern, note, key + key_diff);
 				}
 			}
 			piano_roll::Action::TrimStart(pos_diff) => {

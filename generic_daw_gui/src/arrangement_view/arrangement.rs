@@ -363,7 +363,7 @@ impl Arrangement {
 	}
 
 	pub fn set_mix(&mut self, from: NodeId, to: NodeId, mix: f32) {
-		self.outgoing_mut(from).insert(to, mix);
+		*self.outgoing_mut(from).get_mut(&to).unwrap() = mix;
 		self.send(Message::NodeSetMix(from, to, mix));
 	}
 
@@ -425,26 +425,36 @@ impl Arrangement {
 	}
 
 	pub fn clip_switch_track(&mut self, track: usize, clip: usize, new_track: usize) -> usize {
-		let clip = self.remove_clip(track, clip);
-		self.add_clip(new_track, clip)
+		if track == new_track {
+			clip
+		} else {
+			let clip = self.remove_clip(track, clip);
+			self.add_clip(new_track, clip)
+		}
 	}
 
 	pub fn clip_move_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
-		self.tracks[track].clips[clip].move_to(pos);
-		self.node_action(self.tracks[track].id, NodeAction::ClipMoveTo(clip, pos));
+		if self.tracks[track].clips[clip].position().start() != pos {
+			self.tracks[track].clips[clip].move_to(pos);
+			self.node_action(self.tracks[track].id, NodeAction::ClipMoveTo(clip, pos));
+		}
 	}
 
 	pub fn clip_trim_start_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
-		self.tracks[track].clips[clip].trim_start_to(pos);
-		self.node_action(
-			self.tracks[track].id,
-			NodeAction::ClipTrimStartTo(clip, pos),
-		);
+		if self.tracks[track].clips[clip].position().start() != pos {
+			self.tracks[track].clips[clip].trim_start_to(pos);
+			self.node_action(
+				self.tracks[track].id,
+				NodeAction::ClipTrimStartTo(clip, pos),
+			);
+		}
 	}
 
 	pub fn clip_trim_end_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
-		self.tracks[track].clips[clip].trim_end_to(pos);
-		self.node_action(self.tracks[track].id, NodeAction::ClipTrimEndTo(clip, pos));
+		if self.tracks[track].clips[clip].position().end() != pos {
+			self.tracks[track].clips[clip].trim_end_to(pos);
+			self.node_action(self.tracks[track].id, NodeAction::ClipTrimEndTo(clip, pos));
+		}
 	}
 
 	pub fn add_note(&mut self, pattern: MidiPatternId, note: MidiNote) -> usize {
@@ -470,35 +480,45 @@ impl Arrangement {
 			.remove(note)
 	}
 
-	pub fn note_change_key(&mut self, pattern: MidiPatternId, note: usize, key: MidiKey) {
-		self.midi_patterns.get_mut(&pattern).unwrap().notes[note].key = key;
-		self.midi_pattern_action(pattern, MidiPatternAction::ChangeKey(note, key));
+	pub fn note_change_velocity(&mut self, pattern: MidiPatternId, note: usize, velocity: f32) {
+		if self.midi_patterns[&pattern].notes[note].velocity != velocity {
+			self.midi_patterns.get_mut(&pattern).unwrap().notes[note].velocity = velocity;
+			self.midi_pattern_action(pattern, MidiPatternAction::ChangeVelocity(note, velocity));
+		}
 	}
 
-	pub fn note_change_velocity(&mut self, pattern: MidiPatternId, note: usize, val: f32) {
-		self.midi_patterns.get_mut(&pattern).unwrap().notes[note].velocity = val;
-		self.midi_pattern_action(pattern, MidiPatternAction::ChangeVelocity(note, val));
+	pub fn note_change_key(&mut self, pattern: MidiPatternId, note: usize, key: MidiKey) {
+		if self.midi_patterns[&pattern].notes[note].key != key {
+			self.midi_patterns.get_mut(&pattern).unwrap().notes[note].key = key;
+			self.midi_pattern_action(pattern, MidiPatternAction::ChangeKey(note, key));
+		}
 	}
 
 	pub fn note_move_to(&mut self, pattern: MidiPatternId, note: usize, pos: MusicalTime) {
-		self.midi_patterns.get_mut(&pattern).unwrap().notes[note]
-			.position
-			.move_to(pos);
-		self.midi_pattern_action(pattern, MidiPatternAction::MoveTo(note, pos));
+		if self.midi_patterns[&pattern].notes[note].position.start() != pos {
+			self.midi_patterns.get_mut(&pattern).unwrap().notes[note]
+				.position
+				.move_to(pos);
+			self.midi_pattern_action(pattern, MidiPatternAction::MoveTo(note, pos));
+		}
 	}
 
 	pub fn note_trim_start_to(&mut self, pattern: MidiPatternId, note: usize, pos: MusicalTime) {
-		self.midi_patterns.get_mut(&pattern).unwrap().notes[note]
-			.position
-			.trim_start_to(pos);
-		self.midi_pattern_action(pattern, MidiPatternAction::TrimStartTo(note, pos));
+		if self.midi_patterns[&pattern].notes[note].position.start() != pos {
+			self.midi_patterns.get_mut(&pattern).unwrap().notes[note]
+				.position
+				.trim_start_to(pos);
+			self.midi_pattern_action(pattern, MidiPatternAction::TrimStartTo(note, pos));
+		}
 	}
 
 	pub fn note_trim_end_to(&mut self, pattern: MidiPatternId, note: usize, pos: MusicalTime) {
-		self.midi_patterns.get_mut(&pattern).unwrap().notes[note]
-			.position
-			.trim_end_to(pos);
-		self.midi_pattern_action(pattern, MidiPatternAction::TrimEndTo(note, pos));
+		if self.midi_patterns[&pattern].notes[note].position.end() != pos {
+			self.midi_patterns.get_mut(&pattern).unwrap().notes[note]
+				.position
+				.trim_end_to(pos);
+			self.midi_pattern_action(pattern, MidiPatternAction::TrimEndTo(note, pos));
+		}
 	}
 
 	pub fn render(&mut self, path: Arc<Path>) -> Task<daw::Message> {
