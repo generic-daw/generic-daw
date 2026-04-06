@@ -2,7 +2,7 @@ use crate::{
 	action::Action,
 	components::{icon_button, text_icon_button},
 	config::Config,
-	daw::{self, HOST},
+	daw,
 	file_tree::FileKind,
 	icons::{
 		arrow_left_right, arrow_up_down, chevron_down, chevron_up, grip_vertical, mic, plus, power,
@@ -29,8 +29,7 @@ use crate::{
 use audio_clip::AudioClip;
 use generic_daw_core::{
 	Batch, MidiKey, MidiNote, MidiPatternId, MusicalTime, NodeId, PanMode, PluginId, Position,
-	SampleId,
-	clap_host::{Plugin, PluginDescriptor},
+	SampleId, clap_host::PluginDescriptor,
 };
 use generic_daw_widget::{
 	knob::Knob,
@@ -390,16 +389,8 @@ impl ArrangementView {
 			Message::ChannelToggleEnabled(id) => self.arrangement.channel_toggle_enabled(id),
 			Message::ChannelToggleBypassed(id) => self.arrangement.channel_toggle_bypassed(id),
 			Message::PluginLoad(node, descriptor, show) => {
-				let (audio_processor, plugin, receiver) = Plugin::new(
-					descriptor,
-					self.arrangement.transport().sample_rate,
-					self.arrangement.transport().frames,
-					&HOST,
-				);
-
-				let id = self.arrangement.plugin_load(node, audio_processor);
-				let mut action =
-					Action::instruction(daw::Instruction::PluginLoad(id, plugin, receiver));
+				let (id, instruction) = self.arrangement.plugin_load(node, descriptor);
+				let mut action = Action::instruction(instruction);
 				if show {
 					action = Action::batch([
 						action,

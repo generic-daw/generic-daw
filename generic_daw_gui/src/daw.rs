@@ -20,9 +20,7 @@ use crate::{
 };
 use generic_daw_core::{
 	Event, MusicalTime, PluginId,
-	clap_host::{
-		DEFAULT_CLAP_PATHS, HostInfo, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
-	},
+	clap_host::{DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode},
 };
 use iced::{
 	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
@@ -44,7 +42,7 @@ use std::{
 	fmt::{Display, Formatter},
 	num::NonZero,
 	path::Path,
-	sync::{Arc, LazyLock, mpsc::Receiver},
+	sync::{Arc, mpsc::Receiver},
 	time::Duration,
 };
 use utils::{NoClone, NoDebug, natural_cmp, unique_id, variants};
@@ -53,15 +51,6 @@ unique_id!(scan);
 unique_id!(project);
 
 pub use project::Id as Project;
-
-pub static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
-	HostInfo::new_from_cstring(
-		c"Generic DAW".to_owned(),
-		c"Generic DAW".to_owned(),
-		c"https://github.com/generic-daw/generic-daw".to_owned(),
-		c"0.0.0".to_owned(),
-	)
-});
 
 variants! {
 #[derive(Clone, Copy, Eq, PartialEq)]

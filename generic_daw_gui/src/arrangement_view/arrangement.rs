@@ -3,7 +3,7 @@ use crate::{
 		clip::Clip,
 		midi_pattern::{MidiPattern, MidiPatternPair},
 		node::{Node, NodeType},
-		plugin::Plugin,
+		plugin::PluginPair,
 		poll_consumer,
 		sample::{Sample, SamplePair},
 		track::Track,
@@ -13,16 +13,30 @@ use crate::{
 	daw,
 };
 use generic_daw_core::{
-	Batch, Event, Message, MidiKey, MidiNote, MidiPatternAction, MidiPatternId, MusicalTime,
-	NodeAction, NodeId, NodeImpl, PanMode, PluginId, Position, SampleId, Stream, Transport, Update,
-	Version, build_output_stream,
-	clap_host::{AudioProcessor, MainThreadMessage, ParamRescanFlags},
+	Batch, Message, MidiKey, MidiNote, MidiPatternAction, MidiPatternId, MusicalTime, NodeAction,
+	NodeId, NodeImpl, PanMode, PluginId, Position, SampleId, Stream, Transport, Update, Version,
+	build_output_stream,
+	clap_host::{HostInfo, MainThreadMessage, ParamRescanFlags, PluginDescriptor},
 };
 use iced::Task;
 use rtrb::{Producer, PushError};
 use smol::unblock;
-use std::{collections::BTreeMap, num::NonZero, path::Path, sync::Arc};
+use std::{
+	collections::BTreeMap,
+	num::NonZero,
+	path::Path,
+	sync::{Arc, LazyLock},
+};
 use utils::{NoDebug, ShiftMoveExt as _};
+
+static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
+	HostInfo::new_from_cstring(
+		c"Generic DAW".to_owned(),
+		c"Generic DAW".to_owned(),
+		c"https://github.com/generic-daw/generic-daw".to_owned(),
+		c"0.0.0".to_owned(),
+	)
+});
 
 #[derive(Debug)]
 pub struct Arrangement {
@@ -169,12 +183,19 @@ impl Arrangement {
 		self.node_action(id, NodeAction::ChannelToggleBypassed);
 	}
 
-	pub fn plugin_load(&mut self, id: NodeId, processor: AudioProcessor<Event>) -> PluginId {
-		let plugin = Plugin::new(processor.descriptor().clone());
-		let plugin_id = plugin.id;
-		self.node_mut(id).plugins.push(plugin);
+	pub fn plugin_load(
+		&mut self,
+		id: NodeId,
+		descriptor: PluginDescriptor,
+	) -> (PluginId, daw::Instruction) {
+		let (plugin, processor, receiver) = PluginPair::new(descriptor, &self.transport, &HOST);
+		let plugin_id = plugin.gui.id;
+		self.node_mut(id).plugins.push(plugin.gui);
 		self.node_action(id, NodeAction::PluginLoad(plugin_id, Box::new(processor)));
-		plugin_id
+		(
+			plugin_id,
+			daw::Instruction::PluginLoad(plugin_id, plugin.core, receiver),
+		)
 	}
 
 	pub fn plugin_remove(&mut self, id: NodeId, index: usize) {

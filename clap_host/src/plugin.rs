@@ -40,7 +40,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		sample_rate: NonZero<u32>,
 		frames: NonZero<u32>,
 		host: &HostInfo,
-	) -> (AudioProcessor<Event>, Self, Receiver<MainThreadMessage>) {
+	) -> (Self, AudioProcessor<Event>, Receiver<MainThreadMessage>) {
 		// SAFETY:
 		// Loading an external library object file is inherently unsafe.
 		let entry = unsafe { PluginEntry::load(&*descriptor.path) }.unwrap();
@@ -63,27 +63,27 @@ impl<Event: EventImpl> Plugin<Event> {
 			max_frames_count: frames.get(),
 		};
 
-		(
-			AudioProcessor::new(
-				descriptor.clone(),
-				AudioBuffers::new(&mut instance, config),
-				EventBuffers::new(&mut instance),
-				audio_consumer,
-			),
-			Self {
-				gui: Gui::new(&mut instance),
-				params: Param::all(&mut instance).unwrap_or_default(),
-				presets: Preset::all(&instance, &entry, &descriptor, host).unwrap_or_default(),
-				instance: instance.into(),
-				descriptor,
-				producer,
-				config,
-				last_state: None,
-				is_created: false,
-				is_shown: false,
-			},
-			receiver,
-		)
+		let processor = AudioProcessor::new(
+			descriptor.clone(),
+			AudioBuffers::new(&mut instance, config),
+			EventBuffers::new(&mut instance),
+			audio_consumer,
+		);
+
+		let plugin = Self {
+			gui: Gui::new(&mut instance),
+			params: Param::all(&mut instance).unwrap_or_default(),
+			presets: Preset::all(&instance, &entry, &descriptor, host).unwrap_or_default(),
+			instance: instance.into(),
+			descriptor,
+			producer,
+			config,
+			last_state: None,
+			is_created: false,
+			is_shown: false,
+		};
+
+		(plugin, processor, receiver)
 	}
 
 	fn send(&mut self, mut message: AudioThreadMessage<Event>) {

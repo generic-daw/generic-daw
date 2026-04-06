@@ -17,8 +17,8 @@ pub struct Sample {
 
 #[derive(Debug)]
 pub struct SamplePair {
-	pub gui: Sample,
 	pub core: generic_daw_core::Sample,
+	pub gui: Sample,
 }
 
 impl SamplePair {
@@ -49,6 +49,6 @@ impl SamplePair {
 			len,
 			refs: 0,
 		};
-		Some(Self { gui, core })
+		Some(Self { core, gui })
 	}
 }

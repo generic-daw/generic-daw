@@ -81,19 +81,18 @@ impl Recording {
 
 		std::mem::swap(&mut self.path, &mut path);
 
-		SamplePair {
-			gui: Sample {
-				id: core.id,
-				lods: lods.finalize(),
-				name,
-				path: path.clone(),
-				samples: core.samples.clone(),
-				crc: crc(File::open(&path).unwrap()),
-				len: std::fs::metadata(path).unwrap().len(),
-				refs: 0,
-			},
-			core,
-		}
+		let gui = Sample {
+			id: core.id,
+			lods: lods.finalize(),
+			name,
+			path: path.clone(),
+			samples: core.samples.clone(),
+			crc: crc(File::open(&path).unwrap()),
+			len: std::fs::metadata(path).unwrap().len(),
+			refs: 0,
+		};
+
+		SamplePair { core, gui }
 	}
 
 	pub fn end_stream(&mut self) {
@@ -105,18 +104,17 @@ impl Recording {
 		let core = self.core.finalize();
 		self.lods.update(&core.samples, start);
 
-		SamplePair {
-			gui: Sample {
-				id: core.id,
-				lods: self.lods.finalize(),
-				name: self.name,
-				path: self.path.clone(),
-				samples: core.samples.clone(),
-				crc: crc(File::open(&self.path).unwrap()),
-				len: std::fs::metadata(self.path).unwrap().len(),
-				refs: 0,
-			},
-			core,
-		}
+		let gui = Sample {
+			id: core.id,
+			lods: self.lods.finalize(),
+			name: self.name,
+			path: self.path.clone(),
+			samples: core.samples.clone(),
+			crc: crc(File::open(&self.path).unwrap()),
+			len: std::fs::metadata(self.path).unwrap().len(),
+			refs: 0,
+		};
+
+		SamplePair { core, gui }
 	}
 }

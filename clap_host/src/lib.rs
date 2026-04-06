@@ -104,9 +104,9 @@ pub fn get_installed_plugins(
 		.for_each(|path| {
 			// SAFETY:
 			// Loading an external library object file is inherently unsafe.
-			if let Some(entry) = unsafe { PluginEntry::load(&path) }
+			if let Ok(entry) = unsafe { PluginEntry::load(&path) }
 				.inspect_err(|err| warn!("{}: {err}", path.display()))
-				.ok() && let Some(factory) = entry.get_plugin_factory()
+				&& let Some(factory) = entry.get_plugin_factory()
 			{
 				factory
 					.plugin_descriptors()
