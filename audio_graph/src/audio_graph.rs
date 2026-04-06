@@ -74,7 +74,11 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		self.curr_len = audio.len();
 
 		let mut pool = self.pool.take().unwrap();
-		pool.run(self, self.graph.len());
+		pool.run(
+			self,
+			self.graph.len(),
+			NonZero::new(self.queue.len()).unwrap(),
+		);
 		self.pool = Some(pool);
 
 		self.needs_reset = false;

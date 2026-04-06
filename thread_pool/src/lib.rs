@@ -96,10 +96,15 @@ impl<W: WorkList> ThreadPool<W> {
 		}
 	}
 
-	pub fn run(&mut self, work_list: &W, to_do: usize) {
+	#[must_use]
+	pub fn threads(&self) -> NonZero<usize> {
+		NonZero::new(self.threads.len() + 1).unwrap()
+	}
+
+	pub fn run(&mut self, work_list: &W, to_do: usize, threads: NonZero<usize>) {
 		self.shared.install(work_list, to_do);
 
-		for thread in self.threads.iter().take(to_do.saturating_sub(1)) {
+		for thread in self.threads.iter().take(threads.get() - 1) {
 			thread.thread().unpark();
 		}
 

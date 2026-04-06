@@ -14,7 +14,7 @@ macro_rules! unique_id {
 
 			impl Id {
 				pub fn unique() -> Self {
-					Self(NEXT_ID.fetch_add(1, Relaxed).try_into().unwrap())
+					Self(NonZero::new(NEXT_ID.fetch_add(1, Relaxed)).unwrap())
 				}
 			}
 		}
