@@ -188,7 +188,8 @@ impl Arrangement {
 		id: NodeId,
 		descriptor: PluginDescriptor,
 	) -> (PluginId, daw::Instruction) {
-		let (plugin, processor, receiver) = PluginPair::new(descriptor, &self.transport, &HOST);
+		let (plugin, processor, receiver) =
+			PluginPair::new(descriptor, &self.transport, HOST.clone());
 		let plugin_id = plugin.gui.id;
 		self.node_mut(id).plugins.push(plugin.gui);
 		self.node_action(id, NodeAction::PluginLoad(plugin_id, Box::new(processor)));

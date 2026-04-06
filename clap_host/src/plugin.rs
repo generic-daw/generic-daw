@@ -23,7 +23,7 @@ use utils::{NoClone, NoDebug};
 pub struct Plugin<Event: EventImpl> {
 	gui: Gui,
 	params: Box<[Param]>,
-	presets: Box<[Preset]>,
+	presets: Vec<Preset>,
 	instance: NoDebug<PluginInstance<Host>>,
 	descriptor: PluginDescriptor,
 	producer: Producer<AudioThreadMessage<Event>>,
@@ -39,21 +39,21 @@ impl<Event: EventImpl> Plugin<Event> {
 		descriptor: PluginDescriptor,
 		sample_rate: NonZero<u32>,
 		frames: NonZero<u32>,
-		host: &HostInfo,
+		host: HostInfo,
 	) -> (Self, AudioProcessor<Event>, Receiver<MainThreadMessage>) {
 		// SAFETY:
 		// Loading an external library object file is inherently unsafe.
 		let entry = unsafe { PluginEntry::load(&*descriptor.path) }.unwrap();
 
-		let (shared_sender, receiver) = std::sync::mpsc::channel();
-		let (producer, audio_consumer) = RingBuffer::new(frames.get() as usize);
+		let (sender, receiver) = std::sync::mpsc::channel();
+		let (producer, consumer) = RingBuffer::new(frames.get() as usize);
 
 		let mut instance = PluginInstance::new(
-			|()| Shared::new(descriptor.clone(), shared_sender),
+			|()| Shared::new(descriptor.clone(), sender.clone()),
 			|shared| MainThread::new(shared),
 			&entry,
 			&descriptor.id,
-			host,
+			&host,
 		)
 		.unwrap();
 
@@ -67,13 +67,15 @@ impl<Event: EventImpl> Plugin<Event> {
 			descriptor.clone(),
 			AudioBuffers::new(&mut instance, config),
 			EventBuffers::new(&mut instance),
-			audio_consumer,
+			consumer,
 		);
+
+		Preset::start_discover(&instance, entry, descriptor.clone(), host, sender);
 
 		let plugin = Self {
 			gui: Gui::new(&mut instance),
 			params: Param::all(&mut instance).unwrap_or_default(),
-			presets: Preset::all(&instance, &entry, &descriptor, host).unwrap_or_default(),
+			presets: Vec::new(),
 			instance: instance.into(),
 			descriptor,
 			producer,
@@ -227,6 +229,10 @@ impl<Event: EventImpl> Plugin<Event> {
 	#[must_use]
 	pub fn presets(&self) -> &[Preset] {
 		&self.presets
+	}
+
+	pub fn preset_discovered(&mut self, preset: Preset) {
+		self.presets.push(preset);
 	}
 
 	pub fn load_preset(&mut self, preset: usize) {

@@ -1,15 +1,15 @@
-use crate::{PluginDescriptor, host::Host};
+use crate::{MainThreadMessage, PluginDescriptor, host::Host};
 use clack_extensions::preset_discovery::prelude::*;
 use clack_host::prelude::*;
 use log::{log_enabled, warn};
 use std::{
 	ffi::{CStr, CString},
 	fmt::Write as _,
-	sync::Arc,
+	sync::{Arc, mpsc::Sender},
 };
 use walkdir::WalkDir;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Preset {
 	pub name: Arc<str>,
 	pub location: MyLocation,
@@ -17,27 +17,39 @@ pub struct Preset {
 }
 
 impl Preset {
-	pub fn all(
+	pub fn start_discover(
 		plugin: &PluginInstance<Host>,
+		entry: PluginEntry,
+		descriptor: PluginDescriptor,
+		host: HostInfo,
+		sender: Sender<MainThreadMessage>,
+	) {
+		if plugin
+			.access_shared_handler(|s| s.ext.preset_load.get())
+			.is_some()
+		{
+			std::thread::spawn(move || Self::discover(&entry, &descriptor, &host, &sender));
+		}
+	}
+
+	fn discover(
 		entry: &PluginEntry,
 		descriptor: &PluginDescriptor,
 		host: &HostInfo,
-	) -> Option<Box<[Self]>> {
-		plugin.access_shared_handler(|s| s.ext.preset_load.get())?;
-
-		let preset_discovery_factory = entry.get_factory::<PresetDiscoveryFactory<'_>>()?;
+		sender: &Sender<MainThreadMessage>,
+	) {
+		let Some(preset_discovery_factory) = entry.get_factory::<PresetDiscoveryFactory<'_>>()
+		else {
+			return;
+		};
 
 		let mut cached_indexer = Indexer::default();
-		let mut presets = Vec::new();
 
 		for provider_descriptor in preset_discovery_factory.provider_descriptors() {
 			let Some(provider_id) = provider_descriptor.id() else {
 				continue;
 			};
 
-			cached_indexer.match_all = false;
-			cached_indexer.file_types.clear();
-			cached_indexer.locations.clear();
 			let Ok(mut provider) =
 				Provider::instantiate(&mut cached_indexer, entry, provider_id, host)
 			else {
@@ -48,7 +60,7 @@ impl Preset {
 
 			for location in &indexer.locations {
 				let mut metadata_receiver = MetadataReceiver {
-					presets: &mut presets,
+					sender,
 					current_preset: None,
 					applicable: false,
 					descriptor,
@@ -94,9 +106,11 @@ impl Preset {
 
 			drop(provider);
 			cached_indexer = indexer;
-		}
 
-		Some(presets.into_boxed_slice())
+			cached_indexer.match_all = false;
+			cached_indexer.file_types.clear();
+			cached_indexer.locations.clear();
+		}
 	}
 }
 
@@ -159,16 +173,28 @@ impl IndexerImpl for &mut Indexer {
 }
 
 struct MetadataReceiver<'a> {
-	presets: &'a mut Vec<Preset>,
+	sender: &'a Sender<MainThreadMessage>,
 	current_preset: Option<Preset>,
 	applicable: bool,
 	descriptor: &'a PluginDescriptor,
 	location: &'a MyLocation,
 }
 
+impl MetadataReceiver<'_> {
+	fn finish_preset(&mut self) {
+		if let Some(preset) = self.current_preset.take()
+			&& self.applicable
+		{
+			_ = self
+				.sender
+				.send(MainThreadMessage::PresetDiscovered(preset));
+		}
+	}
+}
+
 impl Drop for MetadataReceiver<'_> {
 	fn drop(&mut self) {
-		self.presets.extend(self.current_preset.take());
+		self.finish_preset();
 	}
 }
 
@@ -187,7 +213,7 @@ impl MetadataReceiverImpl for MetadataReceiver<'_> {
 		}
 
 		if let Some(error_message) = error_message {
-			write!(message, ": {error_message:?}").unwrap();
+			write!(message, ": {}", error_message.to_string_lossy()).unwrap();
 
 			if error_code != 0 {
 				write!(message, " (os error {error_code})").unwrap();
@@ -204,8 +230,7 @@ impl MetadataReceiverImpl for MetadataReceiver<'_> {
 		name: Option<&CStr>,
 		load_key: Option<&CStr>,
 	) -> Result<(), HostError> {
-		self.presets
-			.extend(self.current_preset.take().filter(|_| self.applicable));
+		self.finish_preset();
 		self.applicable = false;
 
 		if let Some(name) = name {

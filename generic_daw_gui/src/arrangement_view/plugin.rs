@@ -21,7 +21,7 @@ impl PluginPair {
 	pub fn new(
 		descriptor: PluginDescriptor,
 		transport: &Transport,
-		host: &HostInfo,
+		host: HostInfo,
 	) -> (Self, AudioProcessor<Event>, Receiver<MainThreadMessage>) {
 		let (core, processor, receiver) = clap_host::Plugin::new(
 			descriptor.clone(),

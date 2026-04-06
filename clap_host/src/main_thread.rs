@@ -1,4 +1,4 @@
-use crate::{ParamRescanFlags, Size, TimerId, host::Host, shared::Shared};
+use crate::{ParamRescanFlags, Size, TimerId, host::Host, preset::Preset, shared::Shared};
 use clack_extensions::{
 	audio_ports::{AudioPortRescanFlags, HostAudioPortsImpl},
 	latency::HostLatencyImpl,
@@ -25,6 +25,7 @@ pub enum MainThreadMessage {
 	UnregisterTimer(TimerId),
 	RescanParams(ParamRescanFlags),
 	RescanParam(ClapId, ParamRescanFlags),
+	PresetDiscovered(Preset),
 }
 
 #[derive(Debug)]

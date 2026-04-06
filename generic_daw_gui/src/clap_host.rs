@@ -255,6 +255,9 @@ impl ClapHost {
 			MainThreadMessage::RescanParam(param_id, flags) => {
 				plugin!().rescan_param(param_id, flags);
 			}
+			MainThreadMessage::PresetDiscovered(preset) => {
+				plugin!(MainThreadMessage::PresetDiscovered(preset)).preset_discovered(preset);
+			}
 		}
 
 		Task::none()
