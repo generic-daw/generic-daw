@@ -4,11 +4,11 @@ use clack_host::prelude::*;
 
 #[derive(Debug, Default)]
 pub struct EventBuffers {
-	pub input_events: EventBuffer,
-	pub output_events: EventBuffer,
+	input_events: EventBuffer,
+	output_events: EventBuffer,
 
-	pub main_input_port: u16,
-	pub input_prefers_midi: bool,
+	main_input_port: u16,
+	input_prefers_midi: bool,
 }
 
 impl EventBuffers {
@@ -46,7 +46,7 @@ impl EventBuffers {
 			})
 	}
 
-	pub fn read_in(&mut self, events: &[impl EventImpl]) {
+	pub fn read_in(&mut self, events: &[impl EventImpl]) -> (InputEvents<'_>, OutputEvents<'_>) {
 		self.input_events.clear();
 
 		if self.input_prefers_midi {
@@ -60,6 +60,8 @@ impl EventBuffers {
 		}
 
 		self.input_events.sort();
+
+		(self.input_events.as_input(), self.output_events.as_output())
 	}
 
 	pub fn write_out(&mut self, events: &mut Vec<impl EventImpl>) {

@@ -122,13 +122,13 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 			Ok(started_processor) => {
 				let (input_audio, mut output_audio, steady_time) =
 					self.audio_buffers.read_in(audio);
-				self.event_buffers.read_in(events);
+				let (input_events, mut output_events) = self.event_buffers.read_in(events);
 
 				if match started_processor.process(
 					&input_audio,
 					&mut output_audio,
-					&self.event_buffers.input_events.as_input(),
-					&mut self.event_buffers.output_events.as_output(),
+					&input_events,
+					&mut output_events,
 					Some(steady_time),
 					None,
 				) {
@@ -171,12 +171,12 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		}
 
 		if let Some(&params) = processor.access_shared_handler(|s| s.ext.params.get()) {
-			self.event_buffers.read_in(events);
+			let (input_events, mut output_events) = self.event_buffers.read_in(events);
 
 			params.flush_active(
 				&mut processor.plugin_handle(),
-				&self.event_buffers.input_events.as_input(),
-				&mut self.event_buffers.output_events.as_output(),
+				&input_events,
+				&mut output_events,
 			);
 
 			self.event_buffers.write_out(events);
