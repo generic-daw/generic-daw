@@ -82,25 +82,29 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	}
 
 	pub fn split_off(&mut self, writer: W, transport: &Transport) -> Sample {
-		let mut resampler = Resampler::new(
-			NonZero::new(self.config.sample_rate).unwrap(),
-			transport.sample_rate,
-			NonZero::new(2).unwrap(),
-		)
-		.unwrap();
-		std::mem::swap(&mut self.resampler, &mut resampler);
+		let resampler = std::mem::replace(
+			&mut self.resampler,
+			Resampler::new(
+				NonZero::new(self.config.sample_rate).unwrap(),
+				transport.sample_rate,
+				NonZero::new(2).unwrap(),
+			)
+			.unwrap(),
+		);
 
-		let mut writer = WavWriter::new(
-			writer,
-			WavSpec {
-				channels: 2,
-				sample_rate: self.config.sample_rate,
-				bits_per_sample: 32,
-				sample_format: SampleFormat::Float,
-			},
-		)
-		.unwrap();
-		std::mem::swap(&mut *self.writer, &mut writer);
+		let mut writer = std::mem::replace(
+			&mut *self.writer,
+			WavWriter::new(
+				writer,
+				WavSpec {
+					channels: 2,
+					sample_rate: self.config.sample_rate,
+					bits_per_sample: 32,
+					sample_format: SampleFormat::Float,
+				},
+			)
+			.unwrap(),
+		);
 
 		let start = resampler.samples().len();
 		let samples = resampler.finish();

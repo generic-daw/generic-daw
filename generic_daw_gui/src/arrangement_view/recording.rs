@@ -71,13 +71,14 @@ impl Recording {
 			.split_off(BufWriter::new(File::create(&path).unwrap()), transport);
 		self.lods.update(self.core.samples(), start);
 
-		let mut lods = Lods::default();
-		std::mem::swap(&mut self.lods, &mut lods);
+		let lods = std::mem::take(&mut self.lods);
 
 		self.position = MusicalTime::from_samples(transport.sample, transport);
 
-		let mut name = path.file_name().unwrap().to_str().unwrap().into();
-		std::mem::swap(&mut self.name, &mut name);
+		let name = std::mem::replace(
+			&mut self.name,
+			path.file_name().unwrap().to_str().unwrap().into(),
+		);
 
 		std::mem::swap(&mut self.path, &mut path);
 
