@@ -94,6 +94,7 @@ fn alloc_or_steal(
 				.start()
 				.cmp(&r.info.position.start())
 				.then_with(|| l.info.velocity.total_cmp(&r.info.velocity))
+				.then_with(|| l.info.key.cmp(&r.info.key).reverse())
 		});
 
 		events.push(Event::Off {
@@ -120,7 +121,7 @@ fn dealloc(
 	id: (MidiClipId, MidiNoteId),
 	time: usize,
 ) {
-	if let Some(voice) = voice_alloc.dealloc(&id) {
+	if let Some(voice) = voice_alloc.dealloc(id) {
 		events.push(Event::Off {
 			time: time as u32 / 2,
 			key: voice.info.key.0,

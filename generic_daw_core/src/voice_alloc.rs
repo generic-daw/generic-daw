@@ -85,10 +85,10 @@ impl<Id: Copy + Eq, Info: Copy> VoiceAlloc<Id, Info> {
 		}
 	}
 
-	pub fn dealloc(&mut self, id: &Id) -> Option<Voice<Id, Info>> {
+	pub fn dealloc(&mut self, id: Id) -> Option<Voice<Id, Info>> {
 		self.voices
 			.iter()
-			.position(|voice| voice.id == *id)
+			.position(|voice| voice.id == id)
 			.map(|i| self.voices.swap_remove(i))
 	}
 }
