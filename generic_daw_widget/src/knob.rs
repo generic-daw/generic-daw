@@ -410,10 +410,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 	}
 }
 
-impl<'a, Message> From<Knob<'a, Message>> for Element<'a, Message, Theme, Renderer>
-where
-	Message: 'a,
-{
+impl<'a, Message: 'a> From<Knob<'a, Message>> for Element<'a, Message, Theme, Renderer> {
 	fn from(value: Knob<'a, Message>) -> Self {
 		Self::new(value)
 	}

@@ -291,19 +291,13 @@ impl<'a, Message> Note<'a, Message> {
 	}
 }
 
-impl<'a, Message> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Note<'a, Message>
-where
-	Message: 'a,
-{
+impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Note<'a, Message> {
 	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
 		self
 	}
 }
 
-impl<'a, Message> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for &Note<'a, Message>
-where
-	Message: 'a,
-{
+impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for &Note<'a, Message> {
 	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
 		*self
 	}

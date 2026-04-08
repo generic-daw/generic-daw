@@ -527,10 +527,7 @@ impl<'a, Message> PianoRoll<'a, Message> {
 	}
 }
 
-impl<'a, Message> From<PianoRoll<'a, Message>> for Element<'a, Message>
-where
-	Message: 'a,
-{
+impl<'a, Message: 'a> From<PianoRoll<'a, Message>> for Element<'a, Message> {
 	fn from(value: PianoRoll<'a, Message>) -> Self {
 		Self::new(value)
 	}

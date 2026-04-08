@@ -127,23 +127,19 @@ mod option {
 	use std::{fmt::Display, str::FromStr};
 
 	#[expect(clippy::ref_option)]
-	pub fn serialize<S, T>(value: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-		T: ToString,
-	{
+	pub fn serialize<S: Serializer, T: ToString>(
+		value: &Option<T>,
+		serializer: S,
+	) -> Result<S::Ok, S::Error> {
 		match value {
 			Some(v) => serializer.serialize_some(&v.to_string()),
 			None => serializer.serialize_none(),
 		}
 	}
 
-	pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-	where
-		D: Deserializer<'de>,
-		T: FromStr,
-		T::Err: Display,
-	{
+	pub fn deserialize<'de, D: Deserializer<'de>, T: FromStr<Err: Display>>(
+		deserializer: D,
+	) -> Result<Option<T>, D::Error> {
 		match Option::<&str>::deserialize(deserializer)? {
 			Some(s) => Ok(Some(T::from_str(s).map_err(serde::de::Error::custom)?)),
 			None => Ok(None),

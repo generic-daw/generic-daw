@@ -248,10 +248,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 	}
 }
 
-impl<'a, Message> From<DragHandle<'a, Message>> for Element<'a, Message, Theme, Renderer>
-where
-	Message: 'a,
-{
+impl<'a, Message: 'a> From<DragHandle<'a, Message>> for Element<'a, Message, Theme, Renderer> {
 	fn from(value: DragHandle<'a, Message>) -> Self {
 		Self::new(value)
 	}

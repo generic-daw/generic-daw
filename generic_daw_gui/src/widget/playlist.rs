@@ -95,10 +95,7 @@ pub struct Playlist<'a, Message> {
 	action: fn(Action) -> Message,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message>
-where
-	Message: Clone,
-{
+impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 	fn diff(&self, tree: &mut Tree) {
 		tree.diff_children(&self.tracks);
 	}
@@ -615,10 +612,7 @@ where
 	}
 }
 
-impl<'a, Message> Playlist<'a, Message>
-where
-	Message: 'a,
-{
+impl<'a, Message: 'a> Playlist<'a, Message> {
 	pub fn new(
 		state: &'a RefCell<State>,
 		transport: &'a Transport,
@@ -634,10 +628,7 @@ where
 	}
 }
 
-impl<'a, Message> From<Playlist<'a, Message>> for Element<'a, Message>
-where
-	Message: Clone + 'a,
-{
+impl<'a, Message: 'a> From<Playlist<'a, Message>> for Element<'a, Message> {
 	fn from(value: Playlist<'a, Message>) -> Self {
 		Self::new(value)
 	}

@@ -8,40 +8,31 @@ use iced::{
 	widget::{Button, button, container, pick_list, row, text, text_input},
 };
 
-pub fn icon_button<'a, Message>(
+pub fn icon_button<'a, Message: 'a>(
 	t: Icon,
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
-) -> Button<'a, Message>
-where
-	Message: 'a,
-{
+) -> Button<'a, Message> {
 	button(t.size(13.0))
 		.style(button_with_radius(style, 0))
 		.padding(1)
 }
 
-pub fn text_icon_button<'a, Message>(
+pub fn text_icon_button<'a, Message: 'a>(
 	t: impl text::IntoFragment<'a>,
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
-) -> Button<'a, Message>
-where
-	Message: 'a,
-{
+) -> Button<'a, Message> {
 	button(container(text(t).size(13).line_height(1.0)).center_x(13))
 		.style(button_with_radius(style, 0))
 		.padding(1)
 }
 
-pub fn number_input<'a, Message>(
+pub fn number_input<'a, Message: Clone + 'a>(
 	current: usize,
 	default: usize,
 	max_digits: u32,
 	drag_update: fn(usize) -> Message,
 	text_update: fn(String) -> Message,
-) -> Element<'a, Message>
-where
-	Message: Clone + 'a,
-{
+) -> Element<'a, Message> {
 	row![
 		DragHandle::new(
 			container(move_vertical())

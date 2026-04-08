@@ -81,10 +81,7 @@ pub struct Clip<'a, Message> {
 	f: fn(Action) -> Message,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message>
-where
-	Message: Clone,
-{
+impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 	fn tag(&self) -> tree::Tag {
 		tree::Tag::of::<State>()
 	}
@@ -534,19 +531,13 @@ impl<'a, Message> Clip<'a, Message> {
 	}
 }
 
-impl<'a, Message> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Clip<'a, Message>
-where
-	Message: Clone + 'a,
-{
+impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Clip<'a, Message> {
 	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
 		self
 	}
 }
 
-impl<'a, Message> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for &Clip<'a, Message>
-where
-	Message: Clone + 'a,
-{
+impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for &Clip<'a, Message> {
 	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
 		*self
 	}

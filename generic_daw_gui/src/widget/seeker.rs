@@ -713,10 +713,7 @@ impl<'a, Message> Seeker<'a, Message> {
 	}
 }
 
-impl<'a, Message> From<Seeker<'a, Message>> for Element<'a, Message>
-where
-	Message: 'a,
-{
+impl<'a, Message: 'a> From<Seeker<'a, Message>> for Element<'a, Message> {
 	fn from(value: Seeker<'a, Message>) -> Self {
 		Self::new(value)
 	}

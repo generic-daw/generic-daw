@@ -17,10 +17,7 @@ pub struct Track<'a, Message> {
 	pub(super) clips: Box<[Clip<'a, Message>]>,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message>
-where
-	Message: Clone,
-{
+impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 	fn diff(&self, tree: &mut Tree) {
 		tree.diff_children(&self.clips);
 	}
@@ -139,10 +136,7 @@ where
 }
 
 impl<'a, Message> Track<'a, Message> {
-	pub fn new(children: impl IntoIterator<Item = Clip<'a, Message>>) -> Self
-	where
-		Message: 'a,
-	{
+	pub fn new(children: impl IntoIterator<Item = Clip<'a, Message>>) -> Self {
 		Self {
 			clips: children.into_iter().collect(),
 		}
@@ -177,19 +171,13 @@ impl<'a, Message> Track<'a, Message> {
 	}
 }
 
-impl<'a, Message> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Track<'a, Message>
-where
-	Message: Clone + 'a,
-{
+impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Track<'a, Message> {
 	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
 		self
 	}
 }
 
-impl<'a, Message> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for &Track<'a, Message>
-where
-	Message: Clone + 'a,
-{
+impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for &Track<'a, Message> {
 	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
 		*self
 	}
