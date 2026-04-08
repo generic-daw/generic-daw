@@ -36,7 +36,6 @@ impl<Id: Copy + Eq, Info: Copy> VoiceAlloc<Id, Info> {
 		self.voices.extract_if(.., |voice| !voice.active)
 	}
 
-	#[must_use]
 	pub fn activate(&mut self, id: Id) -> bool {
 		if let Some(voice) = self.voices.iter_mut().find(|voice| voice.id == id) {
 			voice.active = true;
@@ -46,7 +45,6 @@ impl<Id: Copy + Eq, Info: Copy> VoiceAlloc<Id, Info> {
 		}
 	}
 
-	#[must_use]
 	pub fn alloc(&mut self, id: Id, info: Info) -> Option<Voice<Id, Info>> {
 		if self.voices.len() == self.voices.capacity() {
 			return None;
@@ -59,7 +57,6 @@ impl<Id: Copy + Eq, Info: Copy> VoiceAlloc<Id, Info> {
 		Some(voice)
 	}
 
-	#[must_use]
 	pub fn steal(
 		&mut self,
 		id: Id,
@@ -88,7 +85,6 @@ impl<Id: Copy + Eq, Info: Copy> VoiceAlloc<Id, Info> {
 		}
 	}
 
-	#[must_use]
 	pub fn dealloc(&mut self, id: &Id) -> Option<Voice<Id, Info>> {
 		self.voices
 			.iter()
