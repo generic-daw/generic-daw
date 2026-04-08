@@ -7,6 +7,19 @@ pub enum Clip {
 }
 
 impl Clip {
+	pub fn diff(
+		&self,
+		state: &State,
+		audio: &[f32],
+		events: &mut Vec<Event>,
+		voice_alloc: &mut VoiceAlloc,
+	) {
+		match self {
+			Self::Audio(..) => {}
+			Self::Midi(clip) => clip.diff(state, audio, events, voice_alloc),
+		}
+	}
+
 	pub fn process(
 		&self,
 		state: &State,

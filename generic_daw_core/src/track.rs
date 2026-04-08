@@ -28,17 +28,26 @@ impl NodeImpl for Track {
 	type State = State;
 
 	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
-		if self.channel.enabled() {
-			self.diff_notes(state, audio, events);
+		self.voices.deactivate_all();
 
-			if state.transport.playing {
-				for clip in &mut self.clips {
-					let (start, end) = clip.position().position().to_samples(&state.transport);
-					if start < state.transport.sample + audio.len() && end >= state.transport.sample
-					{
-						clip.process(state, audio, events, &mut self.voices);
-					}
-				}
+		if state.transport.playing {
+			for clip in &mut self.clips {
+				clip.diff(state, audio, events, &mut self.voices);
+			}
+		}
+
+		for voice in self.voices.drain_inactive() {
+			events.push(Event::Off {
+				time: 0,
+				key: voice.info.key.0,
+				velocity: voice.info.velocity,
+				note_id: Match::Specific(voice.note_id),
+			});
+		}
+
+		if self.channel.enabled() && state.transport.playing {
+			for clip in &mut self.clips {
+				clip.process(state, audio, events, &mut self.voices);
 			}
 		}
 
@@ -80,31 +89,5 @@ impl Track {
 		}
 
 		self.channel.collect_updates(updates);
-	}
-
-	pub fn diff_notes(&mut self, state: &State, audio: &[f32], events: &mut Vec<Event>) {
-		self.voices.deactivate_all();
-
-		if state.transport.playing {
-			for clip in &mut self.clips {
-				let Clip::Midi(clip) = clip else {
-					continue;
-				};
-
-				let (start, end) = clip.position.position().to_samples(&state.transport);
-				if start < state.transport.sample + audio.len() && end >= state.transport.sample {
-					clip.collect_notes(state, events, &mut self.voices);
-				}
-			}
-		}
-
-		for voice in self.voices.drain_inactive() {
-			events.push(Event::Off {
-				time: 0,
-				key: voice.info.key.0,
-				velocity: voice.info.velocity,
-				note_id: Match::Specific(voice.note_id),
-			});
-		}
 	}
 }

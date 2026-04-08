@@ -16,13 +16,19 @@ pub struct MidiClip {
 }
 
 impl MidiClip {
-	pub fn collect_notes(
+	pub fn diff(
 		&self,
 		state: &State,
+		audio: &[f32],
 		events: &mut Vec<Event>,
 		voice_alloc: &mut VoiceAlloc,
 	) {
 		debug_assert!(state.transport.playing);
+
+		let (start, end) = self.position.position().to_samples(&state.transport);
+		if !(start < state.transport.sample + audio.len() && end >= state.transport.sample) {
+			return;
+		}
 
 		state.midi_patterns[&self.pattern]
 			.notes
@@ -35,9 +41,8 @@ impl MidiClip {
 			})
 			.for_each(|note| {
 				let (start, end) = note.position.to_samples(&state.transport);
-				if start < state.transport.sample
-					&& end >= state.transport.sample
-					&& !voice_alloc.activate((self.id, note.id))
+				if (start..end).contains(&state.transport.sample)
+					&& !voice_alloc.activate((self.id, note.id), note)
 				{
 					alloc_or_steal(events, voice_alloc, (self.id, note.id), note, 0);
 				}
@@ -52,6 +57,11 @@ impl MidiClip {
 		voice_alloc: &mut VoiceAlloc,
 	) {
 		debug_assert!(state.transport.playing);
+
+		let (start, end) = self.position.position().to_samples(&state.transport);
+		if !(start < state.transport.sample + audio.len() && end >= state.transport.sample) {
+			return;
+		}
 
 		state.midi_patterns[&self.pattern]
 			.notes
