@@ -1,6 +1,6 @@
 use crate::{
 	EventImpl, MainThreadMessage, PluginDescriptor, audio_buffers::AudioBuffers,
-	event_buffers::EventBuffers, host::Host, shared::CURRENT_THREAD_ID,
+	event_buffers::EventBuffers, events::TransportEvent, host::Host, shared::CURRENT_THREAD_ID,
 };
 use clack_extensions::render::RenderMode;
 use clack_host::prelude::*;
@@ -103,7 +103,13 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		}
 	}
 
-	pub fn process(&mut self, audio: &mut [f32], events: &mut Vec<Event>, mix_level: f32) {
+	pub fn process(
+		&mut self,
+		audio: &mut [f32],
+		events: &mut Vec<Event>,
+		transport: Option<&TransportEvent>,
+		mix_level: f32,
+	) {
 		let Some(processor) = &mut self.processor else {
 			self.audio_buffers.flush(audio, mix_level);
 			return;
@@ -130,7 +136,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 					&input_events,
 					&mut output_events,
 					Some(steady_time),
-					None,
+					transport,
 				) {
 					Ok(ProcessStatus::Continue | ProcessStatus::Tail) => false,
 					Ok(ProcessStatus::ContinueIfNotQuiet) => self.audio_buffers.are_outputs_quiet(),

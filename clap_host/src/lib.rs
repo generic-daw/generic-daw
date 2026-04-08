@@ -33,7 +33,7 @@ pub use clack_extensions::{
 };
 pub use clack_host::{
 	host::HostInfo,
-	utils::{ClapId, Cookie},
+	utils::{BeatTime, ClapId, Cookie, SecondsTime},
 };
 pub use event_impl::EventImpl;
 pub use main_thread::MainThreadMessage;

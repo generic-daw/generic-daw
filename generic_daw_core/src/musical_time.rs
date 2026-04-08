@@ -1,4 +1,5 @@
 use crate::Transport;
+use clap_host::{BeatTime, SecondsTime};
 use std::{
 	fmt::{Debug, Formatter},
 	ops::{Add, AddAssign, Sub, SubAssign},
@@ -85,18 +86,30 @@ impl MusicalTime {
 	}
 
 	#[must_use]
-	pub const fn from_duration(duration: Duration, transport: &Transport) -> Self {
+	pub fn from_duration(duration: Duration, transport: &Transport) -> Self {
 		Self::from_samples(
-			(duration.as_secs_f32() * 2.0 * transport.sample_rate.get() as f32) as usize,
+			(duration.as_secs_f64() * 2.0 * f64::from(transport.sample_rate.get())) as usize,
 			transport,
 		)
 	}
 
 	#[must_use]
 	pub fn to_duration(self, transport: &Transport) -> Duration {
-		Duration::from_secs_f32(
-			self.to_samples(transport) as f32 / 2.0 / transport.sample_rate.get() as f32,
+		Duration::from_secs_f64(
+			self.to_samples(transport) as f64 / 2.0 / f64::from(transport.sample_rate.get()),
 		)
+	}
+
+	#[must_use]
+	pub fn to_beat_time(self, transport: &Transport) -> BeatTime {
+		BeatTime::from_float(
+			self.to_samples(transport) as f64 / Self::BEAT.to_samples(transport) as f64,
+		)
+	}
+
+	#[must_use]
+	pub fn to_seconds_time(self, transport: &Transport) -> SecondsTime {
+		SecondsTime::from_float(self.to_duration(transport).as_secs_f64())
 	}
 
 	#[must_use]

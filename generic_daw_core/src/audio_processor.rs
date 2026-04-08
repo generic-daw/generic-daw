@@ -3,6 +3,7 @@ use crate::{
 	Event, MidiPattern, MidiPatternAction, MidiPatternId, MusicalTime, Node, NodeId, PanMode,
 	PluginId, Position, Sample, SampleId, clap_host::ClapId, resampler::Resampler,
 };
+use clap_host::events::{EventFlags, EventHeader, TransportEvent, TransportFlags};
 use hound::WavWriter;
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, PushError, RingBuffer};
@@ -122,6 +123,52 @@ impl Transport {
 			metronome: false,
 			sample: 0,
 			loop_marker: None,
+		}
+	}
+
+	#[must_use]
+	pub fn as_clap(&self) -> TransportEvent {
+		TransportEvent {
+			header: EventHeader::new_core(0, EventFlags::empty()),
+			flags: TransportFlags::HAS_TEMPO
+				| TransportFlags::HAS_BEATS_TIMELINE
+				| TransportFlags::HAS_SECONDS_TIMELINE
+				| TransportFlags::HAS_TIME_SIGNATURE
+				| if self.playing {
+					TransportFlags::IS_PLAYING
+				} else {
+					TransportFlags::empty()
+				} | if self.loop_marker.is_some() {
+				TransportFlags::IS_LOOP_ACTIVE
+			} else {
+				TransportFlags::empty()
+			},
+			song_pos_beats: MusicalTime::from_samples(self.sample, self).to_beat_time(self),
+			song_pos_seconds: MusicalTime::from_samples(self.sample, self).to_seconds_time(self),
+			tempo: self.bpm.get().into(),
+			tempo_inc: 0.0,
+			loop_start_beats: self
+				.loop_marker
+				.map(|loop_marker| loop_marker.start().to_beat_time(self))
+				.unwrap_or_default(),
+			loop_end_beats: self
+				.loop_marker
+				.map(|loop_marker| loop_marker.end().to_beat_time(self))
+				.unwrap_or_default(),
+			loop_start_seconds: self
+				.loop_marker
+				.map(|loop_marker| loop_marker.start().to_seconds_time(self))
+				.unwrap_or_default(),
+			loop_end_seconds: self
+				.loop_marker
+				.map(|loop_marker| loop_marker.end().to_seconds_time(self))
+				.unwrap_or_default(),
+			bar_start: MusicalTime::from_samples(self.sample, self)
+				.bar_floor(self)
+				.to_beat_time(self),
+			bar_number: MusicalTime::from_samples(self.sample, self).bar(self) as i32,
+			time_signature_numerator: self.numerator.get().into(),
+			time_signature_denominator: 4,
 		}
 	}
 }

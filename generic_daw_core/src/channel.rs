@@ -101,7 +101,12 @@ impl NodeImpl for Channel {
 			plugin.processor.recv_events(events);
 
 			if self.enabled && !self.bypassed && plugin.enabled {
-				plugin.processor.process(audio, events, plugin.mix);
+				plugin.processor.process(
+					audio,
+					events,
+					Some(&state.transport.as_clap()),
+					plugin.mix,
+				);
 			} else {
 				plugin.processor.flush(events);
 			}
