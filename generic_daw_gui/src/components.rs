@@ -1,6 +1,6 @@
 use crate::{
 	icons::{Icon, LUCIDE_FONT, chevron_down, chevron_up, move_vertical},
-	stylefns::{bordered_box_with_radius, button_with_radius},
+	stylefns::{button_with_radius, container_with_radius, weakest_bordered_box},
 };
 use generic_daw_widget::drag_handle::DragHandle;
 use iced::{
@@ -36,8 +36,7 @@ pub fn number_input<'a, Message: Clone + 'a>(
 	row![
 		DragHandle::new(
 			container(move_vertical())
-				.style(|t| bordered_box_with_radius(border::left(5))(t)
-					.background(t.palette().background.weakest.color))
+				.style(container_with_radius(weakest_bordered_box, border::left(5)))
 				.padding(padding::vertical(5)),
 			current,
 			default,

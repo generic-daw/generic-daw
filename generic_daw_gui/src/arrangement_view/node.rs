@@ -26,6 +26,7 @@ pub struct Node {
 	pub enabled: bool,
 	pub bypassed: bool,
 	pub peaks: NoDebug<[peak_meter::State; 2]>,
+	pub polyphony: usize,
 }
 
 impl Node {
@@ -40,6 +41,7 @@ impl Node {
 			enabled: true,
 			bypassed: false,
 			peaks: [peak_meter::State::default(), peak_meter::State::default()].into(),
+			polyphony: 0,
 		}
 	}
 

@@ -12,19 +12,23 @@ pub enum Event {
 		time: u32,
 		key: u8,
 		velocity: f32,
+		note_id: Match<u32>,
 	},
 	Off {
 		time: u32,
 		key: u8,
 		velocity: f32,
+		note_id: Match<u32>,
 	},
 	Choke {
 		time: u32,
 		key: u8,
+		note_id: Match<u32>,
 	},
 	End {
 		time: u32,
 		key: u8,
+		note_id: Match<u32>,
 	},
 	ParamValue {
 		time: u32,
@@ -67,27 +71,29 @@ impl clap_host::EventImpl for Event {
 				time,
 				key,
 				velocity,
+				note_id,
 			} => ClapEvent::NoteOn(NoteOnEvent::new(
 				time,
-				Pckn::new(port_index, 0u16, key, Match::All),
+				Pckn::new(port_index, 0u16, key, note_id),
 				velocity.into(),
 			)),
 			Self::Off {
 				time,
 				key,
 				velocity,
+				note_id,
 			} => ClapEvent::NoteOff(NoteOffEvent::new(
 				time,
-				Pckn::new(port_index, 0u16, key, Match::All),
+				Pckn::new(port_index, 0u16, key, note_id),
 				velocity.into(),
 			)),
-			Self::Choke { time, key } => ClapEvent::NoteChoke(NoteChokeEvent::new(
+			Self::Choke { time, key, note_id } => ClapEvent::NoteChoke(NoteChokeEvent::new(
 				time,
-				Pckn::new(port_index, 0u16, key, Match::All),
+				Pckn::new(port_index, 0u16, key, note_id),
 			)),
-			Self::End { time, key } => ClapEvent::NoteEnd(NoteEndEvent::new(
+			Self::End { time, key, note_id } => ClapEvent::NoteEnd(NoteEndEvent::new(
 				time,
-				Pckn::new(port_index, 0u16, key, Match::All),
+				Pckn::new(port_index, 0u16, key, note_id),
 			)),
 			Self::ParamValue {
 				time,
@@ -110,16 +116,19 @@ impl clap_host::EventImpl for Event {
 				time,
 				key,
 				velocity,
+				note_id: _,
 			} => MidiEvent::new(time, port_index, [0x90, key, (velocity * 127.0) as u8]),
 			Self::Off {
 				time,
 				key,
 				velocity,
+				note_id: _,
 			} => MidiEvent::new(time, port_index, [0x80, key, (velocity * 127.0) as u8]),
-			Self::Choke { time, key } | Self::End { time, key } => Self::Off {
+			Self::Choke { time, key, note_id } | Self::End { time, key, note_id } => Self::Off {
 				time,
 				key,
 				velocity: 1.0,
+				note_id,
 			}
 			.to_midi(port_index),
 			Self::ParamValue {
@@ -141,19 +150,23 @@ impl clap_host::EventImpl for Event {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,
 				velocity: event.velocity() as f32,
+				note_id: event.note_id(),
 			}),
 			CoreEventSpace::NoteOff(event) => Some(Self::Off {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,
 				velocity: event.velocity() as f32,
+				note_id: event.note_id(),
 			}),
 			CoreEventSpace::NoteChoke(event) => Some(Self::Choke {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,
+				note_id: event.note_id(),
 			}),
 			CoreEventSpace::NoteEnd(event) => Some(Self::End {
 				time: event.time(),
 				key: *event.key().as_specific()? as u8,
+				note_id: event.note_id(),
 			}),
 			CoreEventSpace::ParamValue(event) => Some(Self::ParamValue {
 				time: event.time(),
@@ -171,11 +184,13 @@ impl clap_host::EventImpl for Event {
 						time,
 						key: data[1],
 						velocity: value,
+						note_id: Match::All,
 					}),
 					0x80 => Some(Self::Off {
 						time,
 						key: data[1],
 						velocity: value,
+						note_id: Match::All,
 					}),
 					0xb0 if data[1] < 0x78 => Some(Self::ParamValue {
 						time,

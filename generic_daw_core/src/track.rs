@@ -1,11 +1,14 @@
-use crate::{Channel, Clip, Event, NodeAction, NodeId, NodeImpl, Update, audio_processor::State};
-use std::{cmp::Ordering, iter::repeat_n};
-use utils::NoDebug;
+use crate::{
+	Channel, Clip, Event, NodeAction, NodeId, NodeImpl, Update, VoiceAlloc, audio_processor::State,
+};
+use clap_host::events::Match;
+use std::num::NonZero;
 
 #[derive(Debug)]
 pub struct Track {
 	clips: Vec<Clip>,
-	notes: NoDebug<Box<[u8; 128]>>,
+	voices: VoiceAlloc,
+	last_polyphony: usize,
 	channel: Channel,
 }
 
@@ -13,7 +16,8 @@ impl Default for Track {
 	fn default() -> Self {
 		Self {
 			clips: Vec::new(),
-			notes: Box::new([0; 128]).into(),
+			voices: VoiceAlloc::new(NonZero::new(128).unwrap()),
+			last_polyphony: 0,
 			channel: Channel::default(),
 		}
 	}
@@ -32,7 +36,7 @@ impl NodeImpl for Track {
 					let (start, end) = clip.position().position().to_samples(&state.transport);
 					if start < state.transport.sample + audio.len() && end >= state.transport.sample
 					{
-						clip.process(state, audio, events, &mut self.notes);
+						clip.process(state, audio, events, &mut self.voices);
 					}
 				}
 			}
@@ -69,11 +73,17 @@ impl Track {
 	}
 
 	pub fn collect_updates(&mut self, updates: &mut Vec<Update>) {
+		let polyphony = self.voices.current_polyphony();
+		if polyphony != self.last_polyphony {
+			self.last_polyphony = polyphony;
+			updates.push(Update::Polyphony(self.id(), polyphony));
+		}
+
 		self.channel.collect_updates(updates);
 	}
 
 	pub fn diff_notes(&mut self, state: &State, audio: &[f32], events: &mut Vec<Event>) {
-		let mut notes = [0; 128];
+		self.voices.deactivate_all();
 
 		if state.transport.playing {
 			for clip in &mut self.clips {
@@ -83,42 +93,18 @@ impl Track {
 
 				let (start, end) = clip.position.position().to_samples(&state.transport);
 				if start < state.transport.sample + audio.len() && end >= state.transport.sample {
-					clip.collect_notes(state, &mut notes);
+					clip.collect_notes(state, events, &mut self.voices);
 				}
 			}
 		}
 
-		for ((before, after), key) in self
-			.notes
-			.as_chunks_mut::<16>()
-			.0
-			.iter_mut()
-			.zip(notes.as_chunks::<16>().0)
-			.zip((0..).step_by(16))
-		{
-			if before == after {
-				continue;
-			}
-
-			for ((before, after), key) in before.iter().zip(after).zip(key..) {
-				let event = match before.cmp(after) {
-					Ordering::Equal => continue,
-					Ordering::Less => Event::On {
-						time: 0,
-						key,
-						velocity: 1.0,
-					},
-					Ordering::Greater => Event::Off {
-						time: 0,
-						key,
-						velocity: 1.0,
-					},
-				};
-
-				events.extend(repeat_n(event, before.abs_diff(*after).into()));
-			}
-
-			*before = *after;
+		for voice in self.voices.drain_inactive() {
+			events.push(Event::Off {
+				time: 0,
+				key: voice.info.key.0,
+				velocity: voice.info.velocity,
+				note_id: Match::Specific(voice.note_id),
+			});
 		}
 	}
 }

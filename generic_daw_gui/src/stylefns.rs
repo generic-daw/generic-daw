@@ -5,17 +5,26 @@ use iced::{
 };
 use sweeten::widget::column;
 
-pub fn bordered_box_with_radius(
+pub fn container_with_radius(
+	f: impl Fn(&Theme) -> container::Style,
 	r: impl Into<border::Radius>,
 ) -> impl Fn(&Theme) -> container::Style {
 	let r = r.into();
 	move |t| {
-		container::background(t.palette().background.weak.color).border(
-			border::width(1)
-				.color(t.palette().background.strong.color)
-				.rounded(r),
-		)
+		let mut style = f(t);
+		style.border.radius = r;
+		style
 	}
+}
+
+pub fn weak_bordered_box(t: &Theme) -> container::Style {
+	container::background(t.palette().background.weak.color)
+		.border(border::width(1).color(t.palette().background.strong.color))
+}
+
+pub fn weakest_bordered_box(t: &Theme) -> container::Style {
+	container::background(t.palette().background.weakest.color)
+		.border(border::width(1).color(t.palette().background.strong.color))
 }
 
 pub fn button_with_radius(

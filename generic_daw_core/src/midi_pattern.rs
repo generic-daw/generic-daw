@@ -1,4 +1,4 @@
-use crate::{MidiKey, MidiNote, MusicalTime, Position, Transport};
+use crate::{MidiKey, MidiNote, MusicalTime, Position, Transport, midi_note::MidiNoteId};
 use log::warn;
 use midly::{
 	Format, MidiMessage, Timing, TrackEventKind,
@@ -99,6 +99,7 @@ impl MidiPattern {
 									midi_tick_to_musical_time(start.as_int()),
 									midi_tick_to_musical_time(time.as_int()),
 								),
+								id: MidiNoteId::unique(),
 							};
 
 							notes.push(note);
@@ -117,6 +118,7 @@ impl MidiPattern {
 							midi_tick_to_musical_time(start.as_int()),
 							midi_tick_to_musical_time(time.as_int()),
 						),
+						id: MidiNoteId::unique(),
 					};
 
 					warn!("note {note:?} wasn't ended");

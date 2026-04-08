@@ -19,6 +19,7 @@ mod resampler;
 mod sample;
 mod stream;
 mod track;
+mod voice_alloc;
 
 pub use audio_clip::AudioClip;
 pub use audio_graph::{NodeId, NodeImpl};
@@ -32,8 +33,8 @@ pub use clap_host;
 pub use clip::Clip;
 pub use cpal::{DeviceDescription, DeviceId, Stream};
 pub use event::Event;
-pub use midi_clip::MidiClip;
-pub use midi_note::{Key, MidiKey, MidiNote};
+pub use midi_clip::{MidiClip, MidiClipId};
+pub use midi_note::{Key, MidiKey, MidiNote, MidiNoteId};
 pub use midi_pattern::{MidiPattern, MidiPatternAction, MidiPatternId};
 pub use musical_time::MusicalTime;
 pub use node::Node;
@@ -46,3 +47,4 @@ pub use symphonia::core::io::MediaSource;
 pub use track::Track;
 
 type AudioGraph = audio_graph::AudioGraph<Node>;
+type VoiceAlloc = voice_alloc::VoiceAlloc<(MidiClipId, MidiNoteId), MidiNote>;

@@ -11,8 +11,9 @@ use crate::{
 	operation::scroll_into_view,
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
-		bordered_box_with_radius, button_with_radius, menu_style, scrollable_style,
-		slider_secondary, slider_with_radius, split_style, sweeten_column_style,
+		button_with_radius, container_with_radius, menu_style, scrollable_style, slider_secondary,
+		slider_with_radius, split_style, sweeten_column_style, weak_bordered_box,
+		weakest_bordered_box,
 	},
 	widget::{
 		Delta, LINE_HEIGHT, TEXT_HEIGHT,
@@ -28,8 +29,8 @@ use crate::{
 };
 use audio_clip::AudioClip;
 use generic_daw_core::{
-	Batch, MidiKey, MidiNote, MidiPatternId, MusicalTime, NodeId, PanMode, PluginId, Position,
-	SampleId, clap_host::PluginDescriptor,
+	Batch, MidiKey, MidiNote, MidiNoteId, MidiPatternId, MusicalTime, NodeId, PanMode, PluginId,
+	Position, SampleId, clap_host::PluginDescriptor,
 };
 use generic_daw_widget::{
 	knob::Knob,
@@ -44,7 +45,7 @@ use iced::{
 	time::every,
 	widget::{
 		button, center_x, column, combo_box, container, mouse_area, opaque, operation::snap_to_end,
-		row, rule, scrollable, slider, text, vertical_slider,
+		row, rule, scrollable, slider, space, text, vertical_slider,
 	},
 };
 use iced_split::{Split, Strategy};
@@ -1007,11 +1008,7 @@ impl ArrangementView {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
 				sorted.sort_unstable_by_key(|&(_, c)| c);
 				for (track, clip) in sorted {
-					primary.insert((
-						track,
-						self.arrangement
-							.add_clip(track, self.arrangement.tracks()[track].clips[clip]),
-					));
+					primary.insert((track, self.arrangement.duplicate_clip(track, clip)));
 				}
 			}
 			playlist::Action::Drag(track_diff, pos_diff) => {
@@ -1178,6 +1175,7 @@ impl ArrangementView {
 						key,
 						velocity: 1.0,
 						position: Position::new(pos, pos + MusicalTime::new(1, 0)),
+						id: MidiNoteId::unique(),
 					},
 				);
 				primary.insert(note);
@@ -1186,10 +1184,7 @@ impl ArrangementView {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
 				sorted.sort_unstable();
 				for note in sorted {
-					primary.insert(self.arrangement.add_note(
-						clip.pattern,
-						self.arrangement.midi_patterns()[&clip.pattern].notes[note],
-					));
+					primary.insert(self.arrangement.duplicate_note(clip.pattern, note));
 				}
 			}
 			piano_roll::Action::Drag(key_diff, pos_diff) => {
@@ -1344,9 +1339,22 @@ impl ArrangementView {
 
 						container(
 							row![
-								row![
-									PeakMeter::new(&node.peaks[0]),
-									PeakMeter::new(&node.peaks[1])
+								column![
+									row![
+										PeakMeter::new(&node.peaks[0]),
+										PeakMeter::new(&node.peaks[1])
+									]
+									.spacing(2),
+									container(space().width(28).height(2)).style(
+										container_with_radius(
+											if node.polyphony > 0 {
+												container::primary
+											} else {
+												container::secondary
+											},
+											border::bottom(f32::INFINITY),
+										)
+									)
 								]
 								.spacing(2),
 								column![
@@ -1393,7 +1401,7 @@ impl ArrangementView {
 							]
 							.spacing(5),
 						)
-						.style(bordered_box_with_radius(0))
+						.style(weak_bordered_box)
 						.padding(5)
 						.height(self.playlist.borrow().scale.y)
 					})
@@ -1597,7 +1605,10 @@ impl ArrangementView {
 									mouse_area(
 										container(grip_vertical())
 											.center_y(LINE_HEIGHT + 14.0)
-											.style(bordered_box_with_radius(border::right(5)))
+											.style(container_with_radius(
+												weak_bordered_box,
+												border::right(5)
+											))
 									)
 									.interaction(Interaction::Grab),
 								]
@@ -1698,13 +1709,29 @@ impl ArrangementView {
 					]
 					.spacing(5),
 					center_x(text(format_db(node.volume.abs())).line_height(1.0))
-						.style(bordered_box_with_radius(0))
+						.style(weak_bordered_box)
 						.padding(2),
 					row![
-						container(PeakMeter::new(&node.peaks[0]).width(16.0))
-							.padding(padding::vertical(10)),
-						container(PeakMeter::new(&node.peaks[1]).width(16.0))
-							.padding(padding::vertical(10)),
+						column![
+							space().height(7),
+							row![
+								PeakMeter::new(&node.peaks[0]).width(16.0),
+								PeakMeter::new(&node.peaks[1]).width(16.0),
+							]
+							.spacing(3),
+							container((node.ty == NodeType::Track).then(|| {
+								container(space().width(35).height(3)).style(container_with_radius(
+									if node.polyphony > 0 {
+										container::primary
+									} else {
+										container::secondary
+									},
+									border::bottom(f32::INFINITY),
+								))
+							}))
+							.height(7)
+						]
+						.spacing(3),
 						vertical_slider(0.0..=MAX_VOL, node.volume.abs().cbrt(), |v| {
 							Message::ChannelVolumeChanged(node.id, v.powi(3).copysign(node.volume))
 						})
@@ -1806,13 +1833,12 @@ impl ArrangementView {
 			.id(node.widget_id.clone())
 			.padding(5)
 			.style(|t| {
+				let mut style = weakest_bordered_box(t);
 				if node.id == self.selected {
-					container::background(t.palette().background.weakest.color)
-						.border(border::width(1.5).color(t.palette().primary.base.color))
-				} else {
-					container::background(t.palette().background.weakest.color)
-						.border(border::width(1).color(t.palette().background.strong.color))
+					style.border.width = 1.5;
+					style.border.color = t.palette().primary.base.color;
 				}
+				style
 			}),
 		)
 		.interaction(Interaction::Pointer)

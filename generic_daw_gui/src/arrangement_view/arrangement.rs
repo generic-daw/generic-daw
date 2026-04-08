@@ -1,6 +1,7 @@
 use crate::{
 	arrangement_view::{
 		clip::Clip,
+		midi_clip::MidiClip,
 		midi_pattern::{MidiPattern, MidiPatternPair},
 		node::{Node, NodeType},
 		plugin::PluginPair,
@@ -13,9 +14,9 @@ use crate::{
 	daw,
 };
 use generic_daw_core::{
-	Batch, Message, MidiKey, MidiNote, MidiPatternAction, MidiPatternId, MusicalTime, NodeAction,
-	NodeId, NodeImpl, PanMode, PluginId, Position, SampleId, Stream, Transport, Update, Version,
-	build_output_stream,
+	Batch, Message, MidiClipId, MidiKey, MidiNote, MidiNoteId, MidiPatternAction, MidiPatternId,
+	MusicalTime, NodeAction, NodeId, NodeImpl, PanMode, PluginId, Position, SampleId, Stream,
+	Transport, Update, Version, build_output_stream,
 	clap_host::{HostInfo, MainThreadMessage, ParamRescanFlags, PluginDescriptor},
 };
 use iced::Task;
@@ -103,6 +104,11 @@ impl Arrangement {
 				Update::Peaks(node, peaks) => {
 					if let Some((node, _)) = self.nodes.get_mut(&node) {
 						node.update(peaks, batch.now);
+					}
+				}
+				Update::Polyphony(node, polyphony) => {
+					if let Some((node, _)) = self.nodes.get_mut(&node) {
+						node.polyphony = polyphony;
 					}
 				}
 				Update::Param(id, param_id) => {
@@ -425,6 +431,17 @@ impl Arrangement {
 		self.insert_clip(track, clip, self.tracks[track].clips.len())
 	}
 
+	pub fn duplicate_clip(&mut self, track: usize, clip: usize) -> usize {
+		let clip = match self.tracks[track].clips[clip] {
+			Clip::Audio(audio) => Clip::Audio(audio),
+			Clip::Midi(midi) => Clip::Midi(MidiClip {
+				id: MidiClipId::unique(),
+				..midi
+			}),
+		};
+		self.insert_clip(track, clip, self.tracks[track].clips.len())
+	}
+
 	pub fn insert_clip(&mut self, track: usize, clip: impl Into<Clip>, idx: usize) -> usize {
 		let clip = clip.into();
 		match clip {
@@ -480,6 +497,14 @@ impl Arrangement {
 	}
 
 	pub fn add_note(&mut self, pattern: MidiPatternId, note: MidiNote) -> usize {
+		self.insert_note(pattern, note, self.midi_patterns[&pattern].notes.len())
+	}
+
+	pub fn duplicate_note(&mut self, pattern: MidiPatternId, note: usize) -> usize {
+		let note = MidiNote {
+			id: MidiNoteId::unique(),
+			..self.midi_patterns[&pattern].notes[note]
+		};
 		self.insert_note(pattern, note, self.midi_patterns[&pattern].notes.len())
 	}
 

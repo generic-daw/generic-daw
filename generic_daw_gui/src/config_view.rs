@@ -5,8 +5,8 @@ use crate::{
 	daw,
 	icons::{grip_vertical, mic, plus, rotate_ccw, save, volume_2, x},
 	stylefns::{
-		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
-		scrollable_style, sweeten_column_style,
+		button_with_radius, container_with_radius, menu_style, pick_list_with_radius,
+		scrollable_style, sweeten_column_style, weak_bordered_box, weakest_bordered_box,
 	},
 	theme::Theme,
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
@@ -261,7 +261,7 @@ impl ConfigView {
 						.on_drag(Message::MoveSamplePath)
 						.style(sweeten_column_style)
 					)
-					.style(bordered_box_with_radius(5)),
+					.style(container_with_radius(weak_bordered_box, 5)),
 					rule::horizontal(1),
 					row![
 						"CLAP Plugin Paths",
@@ -323,7 +323,7 @@ impl ConfigView {
 						.padding(padding::all(5).left(2))
 						.spacing(5)
 					)
-					.style(bordered_box_with_radius(5)),
+					.style(container_with_radius(weak_bordered_box, 5)),
 					rule::horizontal(1),
 					row![
 						row![
@@ -508,9 +508,7 @@ impl ConfigView {
 						} else {
 							container("Some changes may only take effect after a reload!")
 								.padding(padding::horizontal(10).vertical(5))
-								.style(|t| {
-									container::warning(t).border(border::rounded(f32::INFINITY))
-								})
+								.style(container_with_radius(container::warning, f32::INFINITY))
 								.into()
 						},
 						space::horizontal(),
@@ -537,7 +535,7 @@ impl ConfigView {
 			.spacing(5)
 			.style(scrollable_style),
 		)
-		.style(|t| bordered_box_with_radius(5)(t).background(t.palette().background.weakest.color))
+		.style(container_with_radius(weakest_bordered_box, 5))
 		.into()
 	}
 

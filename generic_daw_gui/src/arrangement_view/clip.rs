@@ -55,9 +55,15 @@ impl From<Clip> for generic_daw_core::Clip {
 			Clip::Audio(AudioClip { sample, position }) => {
 				Self::Audio(generic_daw_core::AudioClip { sample, position })
 			}
-			Clip::Midi(MidiClip { pattern, position }) => {
-				Self::Midi(generic_daw_core::MidiClip { pattern, position })
-			}
+			Clip::Midi(MidiClip {
+				id,
+				pattern,
+				position,
+			}) => Self::Midi(generic_daw_core::MidiClip {
+				id,
+				pattern,
+				position,
+			}),
 		}
 	}
 }

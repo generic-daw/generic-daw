@@ -1,4 +1,4 @@
-use crate::{AudioClip, Event, MidiClip, OffsetPosition, audio_processor::State};
+use crate::{AudioClip, Event, MidiClip, OffsetPosition, VoiceAlloc, audio_processor::State};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Clip {
@@ -12,11 +12,11 @@ impl Clip {
 		state: &State,
 		audio: &mut [f32],
 		events: &mut Vec<Event>,
-		notes: &mut [u8; 128],
+		voice_alloc: &mut VoiceAlloc,
 	) {
 		match self {
 			Self::Audio(clip) => clip.process(state, audio),
-			Self::Midi(clip) => clip.process(state, audio, events, notes),
+			Self::Midi(clip) => clip.process(state, audio, events, voice_alloc),
 		}
 	}
 

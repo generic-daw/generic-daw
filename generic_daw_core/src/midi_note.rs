@@ -1,6 +1,10 @@
 use crate::Position;
 use std::fmt::{Debug, Display, Formatter};
-use utils::variants;
+use utils::{unique_id, variants};
+
+unique_id!(midi_note_id);
+
+pub use midi_note_id::Id as MidiNoteId;
 
 variants! {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -72,6 +76,7 @@ impl Display for MidiKey {
 
 #[derive(Clone, Copy, Debug)]
 pub struct MidiNote {
+	pub id: MidiNoteId,
 	pub key: MidiKey,
 	pub velocity: f32,
 	pub position: Position,

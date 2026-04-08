@@ -1,4 +1,4 @@
-use crate::stylefns::{bordered_box_with_radius, scrollable_style};
+use crate::stylefns::{scrollable_style, weakest_bordered_box};
 use dir::{Dir, DirId};
 use file::File;
 use iced::{
@@ -43,7 +43,7 @@ impl FileTree {
 				.spacing(5)
 				.style(scrollable_style),
 		)
-		.style(|t| bordered_box_with_radius(0)(t).background(t.palette().background.weakest.color))
+		.style(weakest_bordered_box)
 		.padding(padding::all(1).left(0))
 		.height(Fill)
 		.into()

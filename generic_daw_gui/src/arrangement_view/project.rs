@@ -10,7 +10,8 @@ use crate::{
 	daw::{self, Project},
 };
 use generic_daw_core::{
-	MidiKey, MidiNote, MusicalTime, OffsetPosition, PanMode, Position, clap_host::PluginDescriptor,
+	MidiClipId, MidiKey, MidiNote, MidiNoteId, MusicalTime, OffsetPosition, PanMode, Position,
+	clap_host::PluginDescriptor,
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use iced::Task;
@@ -355,6 +356,7 @@ impl Arrangement {
 				.notes
 				.iter()
 				.map(|note| MidiNote {
+					id: MidiNoteId::unique(),
 					key: MidiKey(note.key as u8),
 					velocity: note.velocity,
 					position: Position::new(
@@ -460,6 +462,7 @@ impl Arrangement {
 							})
 						}
 						proto::Clip::Midi(midi) => Clip::Midi(MidiClip {
+							id: MidiClipId::unique(),
 							pattern: *midi_patterns.get(&midi.pattern)?,
 							position: OffsetPosition::new(
 								Position::new(

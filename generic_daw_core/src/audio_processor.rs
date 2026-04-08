@@ -57,7 +57,7 @@ pub enum Message {
 	),
 }
 
-const _: () = assert!(size_of::<Message>() == 56);
+const _: () = assert!(size_of::<Message>() == 64);
 
 #[derive(Debug)]
 pub enum NodeAction {
@@ -82,6 +82,7 @@ pub enum NodeAction {
 #[derive(Clone, Copy, Debug)]
 pub enum Update {
 	Peaks(NodeId, [f32; 2]),
+	Polyphony(NodeId, usize),
 	Param(PluginId, ClapId),
 	Connect(NodeId, NodeId),
 	Load(Duration, usize),

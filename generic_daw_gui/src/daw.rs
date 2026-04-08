@@ -13,8 +13,8 @@ use crate::{
 	},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
-		bordered_box_with_radius, button_with_radius, menu_style, pick_list_with_radius,
-		progress_bar_with_radius, split_style,
+		button_with_radius, container_with_radius, menu_style, pick_list_with_radius,
+		progress_bar_with_radius, split_style, weak_bordered_box, weakest_bordered_box,
 	},
 	widget::ALPHA_2_3,
 };
@@ -634,8 +634,7 @@ impl Daw {
 								.font(Font::MONOSPACE)
 							)
 							.padding(padding::horizontal(7).vertical(5))
-							.style(|t| bordered_box_with_radius(border::left(5))(t)
-								.background(t.palette().background.weakest.color))
+							.style(container_with_radius(weakest_bordered_box, border::left(5)))
 						)
 						.on_press(Message::ToggleShowSeconds)
 						.interaction(Interaction::Pointer),
@@ -759,15 +758,14 @@ impl Daw {
 											.ellipsis(text::Ellipsis::Middle)
 									)
 									.padding(padding::horizontal(10).vertical(5))
-									.style(|t| bordered_box_with_radius(5)(t)
-										.background(t.palette().background.weakest.color)),
+									.style(container_with_radius(weakest_bordered_box, 5))
 								]
 								.spacing(10)
 								.width(Shrink)
 								.align_y(Center),
 							)
 							.padding(10)
-							.style(bordered_box_with_radius(5))
+							.style(container_with_radius(weak_bordered_box, 5))
 						})),
 						column![
 							progress_bar(0.0..=1.0, progress).style(progress_bar_with_radius(
@@ -795,11 +793,10 @@ impl Daw {
 															.ellipsis(text::Ellipsis::Middle)
 													)
 													.padding(padding::horizontal(10).vertical(5))
-													.style(|t| {
-														bordered_box_with_radius(5)(t).background(
-															t.palette().background.weakest.color,
-														)
-													}),
+													.style(container_with_radius(
+														weakest_bordered_box,
+														5
+													)),
 													space::horizontal(),
 													row![
 														button("Pick")
@@ -835,7 +832,7 @@ impl Daw {
 												.spacing(10),
 											)
 											.padding(10)
-											.style(bordered_box_with_radius(5))
+											.style(container_with_radius(weak_bordered_box, 5))
 											.into()
 										}),
 								)
