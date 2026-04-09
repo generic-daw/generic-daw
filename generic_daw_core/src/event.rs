@@ -65,7 +65,7 @@ impl audio_graph::EventImpl for Event {
 }
 
 impl clap_host::EventImpl for Event {
-	fn to_clap(&self, port_index: u16) -> ClapEvent {
+	fn as_clap(&self, port_index: u16) -> ClapEvent {
 		match *self {
 			Self::On {
 				time,
@@ -110,7 +110,7 @@ impl clap_host::EventImpl for Event {
 		}
 	}
 
-	fn to_midi(&self, port_index: u16) -> MidiEvent {
+	fn as_midi(&self, port_index: u16) -> MidiEvent {
 		match *self {
 			Self::On {
 				time,
@@ -130,7 +130,7 @@ impl clap_host::EventImpl for Event {
 				velocity: 1.0,
 				note_id,
 			}
-			.to_midi(port_index),
+			.as_midi(port_index),
 			Self::ParamValue {
 				time,
 				param_id,

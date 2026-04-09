@@ -51,11 +51,11 @@ impl EventBuffers {
 
 		if self.input_prefers_midi {
 			for e in events {
-				self.input_events.push(&e.to_midi(self.main_input_port));
+				self.input_events.push(&e.as_midi(self.main_input_port));
 			}
 		} else {
 			for e in events {
-				self.input_events.push(&e.to_clap(self.main_input_port));
+				self.input_events.push(&e.as_clap(self.main_input_port));
 			}
 		}
 
