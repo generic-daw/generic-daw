@@ -109,7 +109,9 @@ impl MusicalTime {
 
 	#[must_use]
 	pub fn to_seconds_time(self, transport: &Transport) -> SecondsTime {
-		SecondsTime::from_float(self.to_duration(transport).as_secs_f64())
+		SecondsTime::from_float(
+			self.to_samples(transport) as f64 / 2.0 / f64::from(transport.sample_rate.get()),
+		)
 	}
 
 	#[must_use]
