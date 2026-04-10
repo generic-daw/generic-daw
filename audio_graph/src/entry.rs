@@ -3,10 +3,7 @@ use dsp::DelayLine;
 use std::{
 	collections::{HashMap, HashSet},
 	num::NonZero,
-	sync::{
-		Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
-		atomic::{AtomicIsize, AtomicUsize},
-	},
+	sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard, atomic::AtomicUsize},
 };
 use utils::{NoDebug, boxed_slice};
 
@@ -31,7 +28,7 @@ impl<Node: NodeImpl> Default for Incoming<Node> {
 pub struct Entry<Node: NodeImpl> {
 	node: Mutex<Node>,
 	buffers: RwLock<Buffers<Node>>,
-	pub indegree: AtomicIsize,
+	pub indegree: AtomicUsize,
 	pub delay: AtomicUsize,
 }
 
@@ -53,7 +50,7 @@ impl<Node: NodeImpl> Entry<Node> {
 				audio: boxed_slice![0.0; 2 * frames.get() as usize].into(),
 				events: Vec::new(),
 			}),
-			indegree: AtomicIsize::new(0),
+			indegree: AtomicUsize::new(0),
 			delay: AtomicUsize::new(0),
 		}
 	}

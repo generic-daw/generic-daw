@@ -20,7 +20,7 @@ impl<Node: NodeImpl> WorkList for AudioGraph<Node> {
 	}
 
 	fn do_work(&self, item: Self::Item, scratch: &mut Self::Scratch) -> Option<Self::Item> {
-		self.process_node(item, scratch)
+		self.process_node(&self.graph[&item], scratch)
 	}
 }
 
@@ -61,12 +61,9 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	pub fn process(&mut self, audio: &mut [f32]) {
-		debug_assert!(audio.len() <= 2 * self.max_frames.get() as usize);
-
 		for (&id, entry) in &mut self.graph {
-			let indegree = entry.buffers().incoming.len().cast_signed();
-			*entry.indegree.get_mut() = indegree - 1;
-			if indegree == 0 {
+			*entry.indegree.get_mut() = entry.buffers().incoming.len();
+			if *entry.indegree.get_mut() == 0 {
 				self.queue.push(id).unwrap();
 			}
 		}
@@ -83,20 +80,16 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 		self.needs_reset = false;
 
-		if cfg!(debug_assertions) {
-			for entry in self.graph.values_mut() {
-				assert_eq!(*entry.indegree.get_mut(), -1);
-			}
+		for entry in self.graph.values_mut() {
+			debug_assert_eq!(*entry.indegree.get_mut(), 0);
 		}
 
 		audio.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..audio.len()]);
 	}
 
 	#[expect(clippy::significant_drop_tightening)]
-	pub(crate) fn process_node(&self, node: NodeId, scratch: &mut [f32]) -> Option<NodeId> {
-		let entry = &self.graph[&node];
-
-		debug_assert_eq!(entry.indegree.load(Relaxed), -1);
+	pub(crate) fn process_node(&self, entry: &Entry<Node>, scratch: &mut [f32]) -> Option<NodeId> {
+		debug_assert_eq!(entry.indegree.load(Relaxed), 0);
 
 		let mut node = entry.node_uncontended();
 
@@ -171,7 +164,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			.outgoing
 			.iter()
 			.copied()
-			.filter(|node| self.graph[node].indegree.fetch_sub(1, Relaxed) == 0);
+			.filter(|node| self.graph[node].indegree.fetch_sub(1, Relaxed) == 1);
 
 		let inline = iter.next();
 
@@ -283,7 +276,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 	fn has_cycle(&mut self) -> bool {
 		for entry in self.graph.values_mut() {
-			*entry.indegree.get_mut() = entry.buffers().incoming.len().cast_signed();
+			*entry.indegree.get_mut() = entry.buffers().incoming.len();
 		}
 
 		self.graph
@@ -291,14 +284,13 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 0)
 			.for_each(|entry| self.visit(entry));
 
-		!self
-			.graph
+		self.graph
 			.values_mut()
-			.all(|entry| *entry.indegree.get_mut() == -1)
+			.any(|entry| *entry.indegree.get_mut() != usize::MAX)
 	}
 
 	fn visit(&self, entry: &Entry<Node>) {
-		debug_assert_eq!(entry.indegree.load(Relaxed), -1);
+		debug_assert_eq!(entry.indegree.load(Relaxed), usize::MAX);
 
 		entry
 			.read_buffers_uncontended()

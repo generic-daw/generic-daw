@@ -161,7 +161,7 @@ impl<W: WorkList> Shared<W> {
 			}
 		}
 
-		assert_eq!(self.to_do.load(Relaxed), 0);
+		debug_assert_eq!(self.to_do.load(Relaxed), 0);
 
 		self.work_list.store(std::ptr::null_mut(), Release);
 	}
@@ -224,7 +224,8 @@ impl<W: WorkList> Shared<W> {
 				}
 
 				loop {
-					assert_ne!(self.to_do.fetch_sub(1, Relaxed), 0);
+					let to_do = self.to_do.fetch_sub(1, Relaxed);
+					debug_assert_ne!(to_do, 0);
 
 					if let Some(reserved) = work_list.do_work(work_item, scratch) {
 						work_item = reserved;
