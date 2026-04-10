@@ -1,7 +1,5 @@
 use crate::{
-	arrangement_view::{
-		self, AUTOSAVE_DIR, Arrangement, ArrangementView, Feedback, PROJECT_DIR, Tab, format_now,
-	},
+	arrangement_view::{self, Arrangement, ArrangementView, Feedback, Tab},
 	clap_host::{self, ClapHost},
 	components::{PICK_LIST_HANDLE, number_input},
 	config::Config,
@@ -42,7 +40,7 @@ use std::{
 	fmt::{Display, Formatter},
 	num::NonZero,
 	path::Path,
-	sync::{Arc, mpsc::Receiver},
+	sync::{Arc, LazyLock, mpsc::Receiver},
 	time::Duration,
 };
 use utils::{NoClone, NoDebug, natural_cmp, unique_id, variants};
@@ -51,6 +49,40 @@ unique_id!(scan);
 unique_id!(project);
 
 pub use project::Id as Project;
+
+pub static DATA_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
+	let data_dir = dirs::data_dir().unwrap().join("Generic DAW").into();
+	_ = std::fs::create_dir(&data_dir);
+	data_dir
+});
+
+pub static CRASHES_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
+	let recording_dir = DATA_DIR.join("crashes").into();
+	_ = std::fs::create_dir(&recording_dir);
+	recording_dir
+});
+
+pub static PROJECTS_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
+	let project_dir = DATA_DIR.join("projects").into();
+	_ = std::fs::create_dir(&project_dir);
+	project_dir
+});
+
+pub static AUTOSAVED_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
+	let autosave_dir = PROJECTS_DIR.join("autosaved").into();
+	_ = std::fs::create_dir(&autosave_dir);
+	autosave_dir
+});
+
+pub static RECORDINGS_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
+	let recording_dir = DATA_DIR.join("recordings").into();
+	_ = std::fs::create_dir(&recording_dir);
+	recording_dir
+});
+
+pub fn format_now() -> jiff::fmt::strtime::Display<'static> {
+	jiff::Zoned::now().strftime("%F %H-%M-%S")
+}
 
 variants! {
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -311,7 +343,7 @@ impl Daw {
 					AsyncFileDialog::new()
 						.set_parent(window)
 						.add_filter("Generic DAW project file", &["gdp"])
-						.set_directory(&*PROJECT_DIR)
+						.set_directory(&*PROJECTS_DIR)
 						.save_file()
 				})
 				.then(Task::future)
@@ -337,7 +369,7 @@ impl Daw {
 					.and_then(|name| name.to_str())
 					.unwrap_or("autosaved");
 
-				let path = AUTOSAVE_DIR.join(format!("{} {}.gdp", name, format_now()));
+				let path = AUTOSAVED_DIR.join(format!("{} {}.gdp", name, format_now()));
 
 				if let Err(err) = self
 					.arrangement_view
@@ -363,7 +395,7 @@ impl Daw {
 					AsyncFileDialog::new()
 						.set_parent(window)
 						.add_filter("Generic DAW project file", &["gdp"])
-						.set_directory(&*PROJECT_DIR)
+						.set_directory(&*PROJECTS_DIR)
 						.pick_file()
 				})
 				.then(Task::future)
@@ -409,7 +441,7 @@ impl Daw {
 					AsyncFileDialog::new()
 						.set_parent(window)
 						.add_filter("Wave file", &["wav"])
-						.set_directory(&*PROJECT_DIR)
+						.set_directory(&*PROJECTS_DIR)
 						.save_file()
 				})
 				.then(Task::future)

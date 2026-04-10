@@ -1,9 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use crate::daw::{CRASHES_DIR, format_now};
 use daw::Daw;
 use iced::{Result, daemon};
 use icons::LUCIDE_BYTES;
 use log::LevelFilter;
+use std::{backtrace::Backtrace, fs::File, io::Write as _};
 
 mod action;
 mod arrangement_view;
@@ -22,6 +24,8 @@ mod theme;
 mod widget;
 
 fn main() -> Result {
+	install_panic_hook();
+
 	env_logger::builder()
 		.filter_level(LevelFilter::Warn)
 		.parse_default_env()
@@ -34,4 +38,20 @@ fn main() -> Result {
 		.subscription(Daw::subscription)
 		.font(LUCIDE_BYTES)
 		.run()
+}
+
+fn install_panic_hook() {
+	let default_hook = std::panic::take_hook();
+	std::panic::set_hook(Box::new(move |info| {
+		default_hook(info);
+		if let Ok(mut file) = File::create(CRASHES_DIR.join(format!("{}.log", format_now()))) {
+			let current_thread = std::thread::current();
+			let current_thread_name = current_thread.name().unwrap_or("<unnamed>");
+			let backtrace = Backtrace::force_capture();
+			_ = write!(
+				file,
+				"thread '{current_thread_name}' {info}\nstack backtrace:\n{backtrace}",
+			);
+		}
+	}));
 }

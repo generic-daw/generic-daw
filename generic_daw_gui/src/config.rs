@@ -1,4 +1,4 @@
-use crate::{arrangement_view::DATA_DIR, theme::Theme};
+use crate::{daw::DATA_DIR, theme::Theme};
 use generic_daw_core::DeviceId;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};

@@ -2,7 +2,7 @@ use crate::{
 	action::Action,
 	components::{icon_button, text_icon_button},
 	config::Config,
-	daw,
+	daw::{self, RECORDINGS_DIR, format_now},
 	file_tree::FileKind,
 	icons::{
 		arrow_left_right, arrow_up_down, chevron_down, chevron_up, grip_vertical, mic, plus, power,
@@ -63,7 +63,7 @@ use std::{
 	iter::{once, repeat},
 	num::NonZero,
 	path::Path,
-	sync::{Arc, LazyLock},
+	sync::Arc,
 	time::Duration,
 };
 use sweeten::widget::drag::DragEvent;
@@ -86,30 +86,6 @@ pub use audio_clip::AudioClipRef;
 pub use midi_clip::MidiClipRef;
 pub use project::Feedback;
 pub use recording::Recording;
-
-pub static DATA_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let data_dir = dirs::data_dir().unwrap().join("Generic DAW").into();
-	_ = std::fs::create_dir(&data_dir);
-	data_dir
-});
-
-pub static RECORDING_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let recording_dir = DATA_DIR.join("recordings").into();
-	_ = std::fs::create_dir(&recording_dir);
-	recording_dir
-});
-
-pub static PROJECT_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let project_dir = DATA_DIR.join("projects").into();
-	_ = std::fs::create_dir(&project_dir);
-	project_dir
-});
-
-pub static AUTOSAVE_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let autosave_dir = PROJECT_DIR.join("autosaved").into();
-	_ = std::fs::create_dir(&autosave_dir);
-	autosave_dir
-});
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -547,7 +523,7 @@ impl ArrangementView {
 			}
 			Message::SetLoopMarker(marker) => self.arrangement.set_loop_marker(marker),
 			Message::Recording(node) => {
-				let path = RECORDING_DIR.join(format!("{}.wav", format_now())).into();
+				let path = RECORDINGS_DIR.join(format!("{}.wav", format_now())).into();
 
 				if let Some(recording) = &mut self.recording {
 					if node == recording.node {
@@ -2080,10 +2056,6 @@ fn format_db(amp: f32) -> String {
 		},
 		(dba < 99.95).into()
 	)
-}
-
-pub fn format_now() -> jiff::fmt::strtime::Display<'static> {
-	jiff::Zoned::now().strftime("%F %H-%M-%S")
 }
 
 fn crc(mut r: impl Read) -> u32 {
