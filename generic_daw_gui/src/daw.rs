@@ -129,7 +129,6 @@ pub enum Instruction {
 	Message(Message),
 	PluginLoad(PluginId, Plugin<Event>, Receiver<MainThreadMessage>),
 	PluginSetState(PluginId, NoDebug<Box<[u8]>>),
-	PluginShow(PluginId),
 }
 
 #[derive(Clone, Debug)]
@@ -570,10 +569,6 @@ impl Daw {
 				self.clap_host.set_state(id, &state);
 				Task::none()
 			}
-			Instruction::PluginShow(id) => self
-				.clap_host
-				.update(clap_host::Message::GuiOpen(id))
-				.map(Message::ClapHost),
 		}
 	}
 

@@ -142,10 +142,10 @@ impl ClapHost {
 				}
 			}
 			Message::WindowResized(window, size) => {
-				if let Some(&scale_factor) = self.scale_factor_of_window.get(&window)
-					&& let Some(&plugin) = self.plugin_of_window.get(&window)
+				if let Some(&plugin) = self.plugin_of_window.get(&window)
 					&& let Some(plugin) = self.plugins.get_mut(&plugin)
 					&& plugin.has_gui()
+					&& let Some(&scale_factor) = self.scale_factor_of_window.get(&window)
 					&& let size = size * scale_factor
 					&& let size = Size::from_physical((size.width, size.height))
 					&& let Some(new_size) = plugin.resize(size)
@@ -327,10 +327,10 @@ impl ClapHost {
 	}
 
 	pub fn scale_factor(&self, window: window::Id) -> Option<f32> {
-		if let Some(&scale_factor) = self.scale_factor_of_window.get(&window)
-			&& let Some(&plugin) = self.plugin_of_window.get(&window)
+		if let Some(&plugin) = self.plugin_of_window.get(&window)
 			&& let Some(plugin) = self.plugins.get(&plugin)
 			&& let Some(plugin_scale) = plugin.get_scale()
+			&& let Some(&scale_factor) = self.scale_factor_of_window.get(&window)
 		{
 			Some(plugin_scale / scale_factor)
 		} else {

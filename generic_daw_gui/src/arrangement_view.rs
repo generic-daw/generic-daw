@@ -1,5 +1,6 @@
 use crate::{
 	action::Action,
+	clap_host,
 	components::{icon_button, text_icon_button},
 	config::Config,
 	daw::{self, RECORDINGS_DIR, format_now},
@@ -192,7 +193,7 @@ impl ArrangementView {
 		let playlist_scale_x = (arrangement.transport().sample_rate.get() as f32).log2() - 5.0;
 		let piano_roll_scale_x = playlist_scale_x - 2.0;
 
-		let selected_node = arrangement.master().id;
+		let selected = arrangement.master().id;
 
 		Self {
 			arrangement,
@@ -211,7 +212,7 @@ impl ArrangementView {
 			)),
 
 			soloed: None,
-			selected: selected_node,
+			selected,
 
 			loading: 0,
 		}
@@ -317,18 +318,18 @@ impl ArrangementView {
 					snap_to_end("mixer").into(),
 				]);
 			}
-			Message::ChannelRemove(id) => {
-				if self.selected == id {
+			Message::ChannelRemove(node) => {
+				if self.selected == node {
 					self.select_next();
-					if self.selected == id {
+					if self.selected == node {
 						self.select_prev();
 					}
 				}
 
-				self.arrangement.remove_channel(id);
+				self.arrangement.remove_channel(node);
 			}
-			Message::ChannelSelect(id) => {
-				self.selected = id;
+			Message::ChannelSelect(node) => {
+				self.selected = node;
 				if self.tab == Tab::Mixer {
 					return scroll_into_view(
 						"mixer",
@@ -337,16 +338,16 @@ impl ArrangementView {
 					.into();
 				}
 			}
-			Message::ChannelVolumeChanged(id, mut volume) => {
+			Message::ChannelVolumeChanged(node, mut volume) => {
 				let db = amp_to_db(volume.abs());
 				let nearest = (db / 6.0).round() * 6.0;
 				if (db - nearest).abs() < 0.15 {
 					volume = db_to_amp(nearest).copysign(volume);
 				}
 
-				self.arrangement.channel_volume_changed(id, volume);
+				self.arrangement.channel_volume_changed(node, volume);
 			}
-			Message::ChannelPanChanged(id, mut pan) => {
+			Message::ChannelPanChanged(node, mut pan) => {
 				let snap = |pan: &mut f32| {
 					if pan.abs() < 0.015 {
 						*pan = 0.0;
@@ -361,27 +362,31 @@ impl ArrangementView {
 					}
 				}
 
-				self.arrangement.channel_pan_changed(id, pan);
+				self.arrangement.channel_pan_changed(node, pan);
 			}
-			Message::ChannelToggleEnabled(id) => self.arrangement.channel_toggle_enabled(id),
-			Message::ChannelToggleBypassed(id) => self.arrangement.channel_toggle_bypassed(id),
+			Message::ChannelToggleEnabled(node) => self.arrangement.channel_toggle_enabled(node),
+			Message::ChannelToggleBypassed(node) => self.arrangement.channel_toggle_bypassed(node),
 			Message::PluginLoad(node, descriptor, show) => {
-				let (id, instruction) = self.arrangement.plugin_load(node, descriptor);
+				let (plugin, instruction) = self.arrangement.plugin_load(node, descriptor);
 				let mut action = Action::instruction(instruction);
 				if show {
 					action = Action::batch([
 						action,
-						Action::instruction(daw::Instruction::PluginShow(id)),
+						Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
+							clap_host::Message::GuiOpen(plugin),
+						))),
 					]);
 				}
 				return action;
 			}
 			Message::PluginSetState(node, i, state) => {
-				let id = self.arrangement.node(node).plugins[i].id;
-				return Action::instruction(daw::Instruction::PluginSetState(id, state));
+				let plugin = self.arrangement.node(node).plugins[i].id;
+				return Action::instruction(daw::Instruction::PluginSetState(plugin, state));
 			}
 			Message::PluginShow(plugin) => {
-				return Action::instruction(daw::Instruction::PluginShow(plugin));
+				return Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
+					clap_host::Message::GuiOpen(plugin),
+				)));
 			}
 			Message::PluginMixChanged(node, i, mix) => {
 				self.arrangement.plugin_mix_changed(node, i, mix);
@@ -460,30 +465,30 @@ impl ArrangementView {
 			}
 			Message::TrackAdd => {
 				let track = self.arrangement.add_track();
-				let id = self.arrangement.tracks()[track].id;
+				let node = self.arrangement.tracks()[track].id;
 				if self.soloed.is_some() {
-					self.arrangement.channel_toggle_enabled(id);
+					self.arrangement.channel_toggle_enabled(node);
 				}
 				return self.update(
-					Message::Connect(id, self.arrangement.master().id),
+					Message::Connect(node, self.arrangement.master().id),
 					config,
 					state,
 				);
 			}
-			Message::TrackRemove(id) => {
-				if self.soloed == Some(id) {
+			Message::TrackRemove(node) => {
+				if self.soloed == Some(node) {
 					self.soloed = None;
 				}
 
-				if self.selected == id {
+				if self.selected == node {
 					self.select_next();
-					if self.selected == id {
+					if self.selected == node {
 						self.select_prev();
 					}
 				}
 
-				let track = self.arrangement.track_of(id).unwrap();
-				self.arrangement.remove_track(id);
+				let track = self.arrangement.track_of(node).unwrap();
+				self.arrangement.remove_track(node);
 
 				self.midi_clip = self
 					.midi_clip
@@ -499,22 +504,22 @@ impl ArrangementView {
 				if self
 					.recording
 					.as_ref()
-					.is_some_and(|recording| recording.node == id)
+					.is_some_and(|recording| recording.node == node)
 				{
 					self.end_recording();
 				}
 			}
-			Message::TrackToggleEnabled(id) => {
+			Message::TrackToggleEnabled(node) => {
 				self.soloed = None;
-				return self.update(Message::ChannelToggleEnabled(id), config, state);
+				return self.update(Message::ChannelToggleEnabled(node), config, state);
 			}
-			Message::TrackToggleSolo(id) => {
-				if self.soloed == Some(id) {
+			Message::TrackToggleSolo(node) => {
+				if self.soloed == Some(node) {
 					self.soloed = None;
 					self.arrangement.enable_all_tracks();
 				} else {
-					self.soloed = Some(id);
-					self.arrangement.solo_track(id);
+					self.soloed = Some(node);
+					self.arrangement.solo_track(node);
 				}
 			}
 			Message::SeekTo(pos) => {
