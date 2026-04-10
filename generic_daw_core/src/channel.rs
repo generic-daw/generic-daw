@@ -123,7 +123,7 @@ impl NodeImpl for Channel {
 		let mut peaks = if self.enabled {
 			self.pan.pan(audio, self.volume);
 
-			max_peaks(audio).map(|x| if x < f32::EPSILON { 0.0 } else { x })
+			max_peaks(audio).map(|x| if x >= f32::EPSILON { x } else { 0.0 })
 		} else {
 			audio.fill(0.0);
 			events.clear();

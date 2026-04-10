@@ -117,7 +117,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 
 		if processor.access_shared_handler(|s| !s.needs_process.load(Relaxed))
 			&& events.is_empty()
-			&& audio.iter().all(|f| f.abs() < f32::EPSILON)
+			&& !audio.iter().any(|f| f.abs() >= f32::EPSILON)
 		{
 			self.audio_buffers.flush(audio, mix_level);
 			self.flush(events);

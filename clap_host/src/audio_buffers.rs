@@ -114,10 +114,11 @@ impl AudioBuffers {
 	}
 
 	pub fn are_outputs_quiet(&self) -> bool {
-		self.output_buffers
+		!self
+			.output_buffers
 			.iter()
 			.flatten()
-			.all(|f| f.abs() < f32::EPSILON)
+			.any(|f| f.abs() >= f32::EPSILON)
 	}
 
 	pub fn flush(&mut self, buf: &mut [f32], mix_level: f32) {
