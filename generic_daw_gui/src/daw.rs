@@ -57,27 +57,27 @@ pub static DATA_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 });
 
 pub static CRASHES_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let recording_dir = DATA_DIR.join("crashes").into();
-	_ = std::fs::create_dir(&recording_dir);
-	recording_dir
+	let crashes_dir = DATA_DIR.join("crashes").into();
+	_ = std::fs::create_dir(&crashes_dir);
+	crashes_dir
 });
 
 pub static PROJECTS_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let project_dir = DATA_DIR.join("projects").into();
-	_ = std::fs::create_dir(&project_dir);
-	project_dir
+	let projects_dir = DATA_DIR.join("projects").into();
+	_ = std::fs::create_dir(&projects_dir);
+	projects_dir
 });
 
 pub static AUTOSAVED_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let autosave_dir = PROJECTS_DIR.join("autosaved").into();
-	_ = std::fs::create_dir(&autosave_dir);
-	autosave_dir
+	let autosaved_dir = PROJECTS_DIR.join("autosaved").into();
+	_ = std::fs::create_dir(&autosaved_dir);
+	autosaved_dir
 });
 
 pub static RECORDINGS_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let recording_dir = DATA_DIR.join("recordings").into();
-	_ = std::fs::create_dir(&recording_dir);
-	recording_dir
+	let recordings_dir = DATA_DIR.join("recordings").into();
+	_ = std::fs::create_dir(&recordings_dir);
+	recordings_dir
 });
 
 pub fn format_now() -> jiff::fmt::strtime::Display<'static> {
