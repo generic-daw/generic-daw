@@ -282,6 +282,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 				} if state.dragging.is_none() && state.hovering => {
 					let pos = cursor.position().unwrap();
 					state.dragging = Some(pos.y);
+					state.scroll = 0.0;
 
 					if modifiers.control() || modifiers.command() {
 						shell.publish((self.f)(self.info.default));
@@ -299,6 +300,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					}
 
 					state.dragging = None;
+					state.scroll = 0.0;
 					shell.capture_event();
 				}
 				mouse::Event::CursorMoved {
@@ -306,15 +308,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					..
 				} => {
 					if let Some(last_y) = state.dragging {
-						let diff = (last_y - y)
+						let mut diff = (last_y - y)
 							* (self.info.range.end() - self.info.range.start())
-							* 0.005;
+							* 0.005 + state.scroll;
 
-						let mut new_value = (self.info.value + diff)
-							.clamp(*self.info.range.start(), *self.info.range.end());
 						if self.info.stepped {
-							new_value = new_value.round();
+							state.scroll = diff - diff.round();
+							diff = diff.round();
 						}
+
+						let new_value = (self.info.value + diff)
+							.clamp(*self.info.range.start(), *self.info.range.end());
 						if new_value != self.info.value
 							|| (diff < 0.0 && new_value == *self.info.range.start())
 							|| (diff > 0.0 && new_value == *self.info.range.end())
@@ -348,8 +352,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 						/ 101.0 + state.scroll;
 
 					if self.info.stepped {
-						state.scroll = diff.fract();
-						diff = diff.floor();
+						state.scroll = diff - diff.round();
+						diff = diff.round();
 					}
 
 					let new_value = (self.info.value + diff)

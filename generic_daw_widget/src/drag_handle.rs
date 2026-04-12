@@ -109,6 +109,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 				} if state.dragging.is_none() && state.hovering => {
 					let pos = cursor.position().unwrap();
 					state.dragging = Some(pos.y);
+					state.scroll = 0.0;
 
 					let new_click = Click::new(pos, mouse::Button::Left, state.last_click);
 					state.last_click = Some(new_click);
@@ -124,6 +125,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 					..
 				} if state.dragging.is_some() => {
 					state.dragging = None;
+					state.scroll = 0.0;
 					shell.capture_event();
 				}
 				mouse::Event::CursorMoved {
@@ -131,9 +133,10 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 					..
 				} => {
 					if let Some(last_y) = state.dragging {
-						let diff = (last_y - y) * 0.1;
+						let diff = (last_y - y) * 0.1 + state.scroll;
+						state.scroll = diff.round() - diff;
 
-						let new_value = self.value.saturating_add_signed(diff as isize);
+						let new_value = self.value.saturating_add_signed(diff.round() as isize);
 						if new_value != self.value {
 							shell.publish((self.f)(new_value));
 							state.dragging = Some(*y);
@@ -152,9 +155,9 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 						ScrollDelta::Pixels { y, .. } => y / 60.0,
 					} * if modifiers.command() { 10.0 } else { 1.0 }
 						+ state.scroll;
-					state.scroll = diff.fract();
+					state.scroll = diff.round() - diff;
 
-					let new_value = self.value.saturating_add_signed(diff as isize);
+					let new_value = self.value.saturating_add_signed(diff.round() as isize);
 					if new_value != self.value {
 						shell.publish((self.f)(new_value));
 						shell.capture_event();
