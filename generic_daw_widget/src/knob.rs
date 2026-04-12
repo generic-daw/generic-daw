@@ -22,7 +22,7 @@ use std::{
 use utils::NoDebug;
 
 struct State {
-	dragging: Option<(f32, f32)>,
+	dragging: Option<f32>,
 	hovering: bool,
 	scroll: f32,
 	cache: Cache,
@@ -283,7 +283,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					..
 				} if state.dragging.is_none() && state.hovering => {
 					let pos = cursor.position().unwrap();
-					state.dragging = Some((self.info.value, pos.y));
+					state.dragging = Some(pos.y);
 
 					if modifiers.control() || modifiers.command() {
 						shell.publish((self.f)(self.info.default));
@@ -307,17 +307,24 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					position: Point { y, .. },
 					..
 				} => {
-					if let Some((value, pos)) = state.dragging {
-						let diff =
-							(pos - y) * (self.info.range.end() - self.info.range.start()) * 0.005;
-						let mut new_value =
-							(value + diff).clamp(*self.info.range.start(), *self.info.range.end());
+					if let Some(last_y) = state.dragging {
+						let diff = (last_y - y)
+							* (self.info.range.end() - self.info.range.start())
+							* 0.005;
+
+						let mut new_value = (self.info.value + diff)
+							.clamp(*self.info.range.start(), *self.info.range.end());
 						if self.info.stepped {
 							new_value = new_value.round();
 						}
-						if new_value != self.info.value {
+						if new_value != self.info.value
+							|| new_value == *self.info.range.start()
+							|| new_value == *self.info.range.end()
+						{
 							shell.publish((self.f)(new_value));
+							state.dragging = Some(*y);
 						}
+
 						shell.capture_event();
 					}
 
