@@ -299,11 +299,17 @@ impl ClapHost {
 							.enabled(!param.flags.contains(ParamInfoFlags::IS_READONLY))
 							.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
 							.maybe_tooltip(param.value_text.as_deref()),
-							text(&*param.name).wrapping(text::Wrapping::WordOrGlyph)
+							if param.module.is_empty() {
+								text(&*param.name)
+							} else {
+								text!("{}/{}", &param.module, &param.name)
+							}
+							.align_x(Center)
+							.wrapping(text::Wrapping::WordOrGlyph)
 						]
-						.spacing(5)
 						.width(70)
 						.align_x(Center)
+						.spacing(5)
 						.into()
 					}))
 					.spacing(10)

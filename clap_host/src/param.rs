@@ -9,6 +9,7 @@ pub struct Param {
 	pub flags: ParamInfoFlags,
 	pub cookie: Cookie,
 	pub name: Arc<str>,
+	pub module: Arc<str>,
 	pub range: RangeInclusive<f32>,
 	pub reset: f32,
 	pub value: f32,
@@ -43,6 +44,7 @@ impl Param {
 			flags: param.flags,
 			cookie: param.cookie,
 			name: str::from_utf8(param.name).ok()?.into(),
+			module: str::from_utf8(param.module).ok()?.into(),
 			range: param.min_value as f32..=param.max_value as f32,
 			reset: param.default_value as f32,
 			value: param.default_value as f32,
@@ -58,6 +60,7 @@ impl Param {
 			&& let Some(param) = Self::try_new(plugin, self.index)
 		{
 			self.name = param.name;
+			self.module = param.module;
 			self.flags = param.flags;
 		}
 

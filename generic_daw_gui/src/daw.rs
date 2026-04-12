@@ -736,8 +736,8 @@ impl Daw {
 							),
 					],
 				]
-				.spacing(10)
-				.align_y(Center),
+				.align_y(Center)
+				.spacing(10),
 				vertical_split(
 					stack![
 						self.file_tree.view().map(Message::FileTree),
@@ -787,9 +787,9 @@ impl Daw {
 									.padding(padding::horizontal(10).vertical(5))
 									.style(container_with_radius(weakest_bordered_box, 5))
 								]
-								.spacing(10)
 								.width(Shrink)
-								.align_y(Center),
+								.align_y(Center)
+								.spacing(10),
 							)
 							.padding(10)
 							.style(container_with_radius(weak_bordered_box, 5))

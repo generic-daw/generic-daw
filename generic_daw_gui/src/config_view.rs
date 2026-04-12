@@ -448,8 +448,8 @@ impl ConfigView {
 							),
 							" s"
 						]
-						.align_y(Center)
-						.width(Fill),
+						.width(Fill)
+						.align_y(Center),
 						container(
 							checkbox(self.config.open_last_project)
 								.label("Open last project on startup")

@@ -38,7 +38,7 @@ use generic_daw_widget::{
 	peak_meter::{MAX_VOL, PeakMeter},
 };
 use iced::{
-	Center, Element, Fill, Shrink, Subscription, Task, Vector, border,
+	Center, Element, Fill, Subscription, Task, Vector, border,
 	futures::SinkExt as _,
 	keyboard,
 	mouse::Interaction,
@@ -1803,13 +1803,12 @@ impl ArrangementView {
 							}
 							.height(LINE_HEIGHT)
 						]
-						.spacing(3)
 						.align_x(Center)
+						.spacing(3)
 					}
 				]
-				.width(Shrink)
-				.spacing(5)
-				.align_x(Center),
+				.align_x(Center)
+				.spacing(5),
 			)
 			.id(node.widget_id.clone())
 			.padding(5)
