@@ -85,7 +85,7 @@ pub enum Update {
 	Peaks(NodeId, [f32; 2]),
 	Polyphony(NodeId, usize),
 	Param(PluginId, ClapId),
-	Connect(NodeId, NodeId),
+	ConnectFailed(NodeId, NodeId),
 	Load(Duration, usize),
 }
 
@@ -291,8 +291,8 @@ impl AudioProcessor {
 				Message::NodeAdd(node) => self.audio_graph.insert(*node),
 				Message::NodeRemove(node) => self.audio_graph.remove(node),
 				Message::NodeConnect(from, to) => {
-					if self.audio_graph.connect(from, to) {
-						self.updates.push(Update::Connect(from, to));
+					if !self.audio_graph.connect(from, to) {
+						self.updates.push(Update::ConnectFailed(from, to));
 					}
 				}
 				Message::NodeSetMix(from, to, mix) => self.audio_graph.set_mix(from, to, mix),

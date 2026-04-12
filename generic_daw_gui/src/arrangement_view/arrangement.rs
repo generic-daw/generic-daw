@@ -117,7 +117,7 @@ impl Arrangement {
 						MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
 					));
 				}
-				Update::Connect(from, to) => _ = self.outgoing_mut(from).entry(to).or_insert(1.0),
+				Update::ConnectFailed(from, to) => _ = self.outgoing_mut(from).remove(&to),
 				Update::Load(duration, frames) => {
 					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
 					let load = duration.as_secs_f32() * mix;
@@ -387,6 +387,7 @@ impl Arrangement {
 	}
 
 	pub fn connect(&mut self, from: NodeId, to: NodeId) {
+		self.outgoing_mut(from).insert(to, 1.0);
 		self.send(Message::NodeConnect(from, to));
 	}
 
