@@ -13,7 +13,12 @@ use iced_widget::{
 	graphics::geometry::Renderer as _,
 	text,
 };
-use std::{cell::RefCell, f32::consts::PI, fmt::Debug, ops::RangeInclusive};
+use std::{
+	cell::RefCell,
+	f32::consts::{FRAC_PI_2, PI},
+	fmt::Debug,
+	ops::RangeInclusive,
+};
 use utils::NoDebug;
 
 #[derive(Default)]
@@ -170,15 +175,20 @@ impl<'a, Message> Knob<'a, Message> {
 		);
 
 		if self.stepped {
-			for step in *self.range.start() as i32..=*self.range.end() as i32 {
-				frame.fill(
-					&dot(
-						value_to_rad(step as f32),
-						self.radius.midpoint(dot_radius),
-						dot_radius / 2.0,
-					),
-					swatch.base.color.mix(swatch.base.text, 0.5),
-				);
+			let num_steps = *self.range.end() - *self.range.start() + 1.0;
+			let max_steps = ((3.0 * FRAC_PI_2) / (dot_radius / self.radius).asin()).floor() + 1.0;
+
+			if num_steps <= max_steps {
+				for step in *self.range.start() as i32..=*self.range.end() as i32 {
+					frame.fill(
+						&dot(
+							value_to_rad(step as f32),
+							self.radius.midpoint(dot_radius),
+							dot_radius / 2.0,
+						),
+						swatch.base.color.mix(swatch.base.text, 0.5),
+					);
+				}
 			}
 		}
 
