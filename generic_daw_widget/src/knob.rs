@@ -316,8 +316,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 							new_value = new_value.round();
 						}
 						if new_value != self.info.value
-							|| new_value == *self.info.range.start()
-							|| new_value == *self.info.range.end()
+							|| (diff < 0.0 && new_value == *self.info.range.start())
+							|| (diff > 0.0 && new_value == *self.info.range.end())
 						{
 							shell.publish((self.f)(new_value));
 							state.dragging = Some(*y);
