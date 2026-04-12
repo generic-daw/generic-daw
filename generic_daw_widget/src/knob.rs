@@ -21,27 +21,30 @@ use std::{
 };
 use utils::NoDebug;
 
-#[derive(Default)]
 struct State {
 	dragging: Option<(f32, f32)>,
 	hovering: bool,
 	scroll: f32,
 	cache: Cache,
-	last_value: f32,
-	last_enabled: bool,
+	last_info: KnobInfo,
 	last_theme: RefCell<Option<Theme>>,
 }
 
-#[derive(Debug)]
-pub struct Knob<'a, Message> {
+#[derive(Clone, Debug, PartialEq)]
+struct KnobInfo {
 	range: RangeInclusive<f32>,
 	value: f32,
 	center: f32,
 	default: f32,
 	enabled: bool,
-	f: NoDebug<Box<dyn Fn(f32) -> Message + 'a>>,
 	radius: f32,
 	stepped: bool,
+}
+
+#[derive(Debug)]
+pub struct Knob<'a, Message> {
+	info: KnobInfo,
+	f: NoDebug<Box<dyn Fn(f32) -> Message + 'a>>,
 	tooltip: Option<NoDebug<Text<'a, Theme, Renderer>>>,
 }
 
@@ -49,45 +52,47 @@ impl<'a, Message> Knob<'a, Message> {
 	#[must_use]
 	pub fn new(range: RangeInclusive<f32>, value: f32, f: impl Fn(f32) -> Message + 'a) -> Self {
 		Self {
-			value: value.clamp(*range.start(), *range.end()),
-			center: *range.start(),
-			default: *range.end(),
-			range,
-			enabled: true,
+			info: KnobInfo {
+				range: range.clone(),
+				value,
+				center: *range.start(),
+				default: *range.end(),
+				enabled: true,
+				radius: 20.0,
+				stepped: false,
+			},
 			f: NoDebug(Box::from(f)),
-			radius: 20.0,
-			stepped: false,
 			tooltip: None,
 		}
 	}
 
 	#[must_use]
 	pub fn center(mut self, center: f32) -> Self {
-		self.center = center;
+		self.info.center = center;
 		self
 	}
 
 	#[must_use]
 	pub fn default(mut self, default: f32) -> Self {
-		self.default = default;
+		self.info.default = default;
 		self
 	}
 
 	#[must_use]
 	pub fn radius(mut self, radius: f32) -> Self {
-		self.radius = radius;
+		self.info.radius = radius;
 		self
 	}
 
 	#[must_use]
 	pub fn enabled(mut self, enabled: bool) -> Self {
-		self.enabled = enabled;
+		self.info.enabled = enabled;
 		self
 	}
 
 	#[must_use]
 	pub fn stepped(mut self, stepped: bool) -> Self {
-		self.stepped = stepped;
+		self.info.stepped = stepped;
 		self
 	}
 
@@ -103,11 +108,11 @@ impl<'a, Message> Knob<'a, Message> {
 	}
 
 	fn border_radius(&self) -> f32 {
-		(self.radius * 0.1).min(3.0)
+		(self.info.radius * 0.1).min(3.0)
 	}
 
 	fn fill_canvas(&self, state: &State, frame: &mut Frame, theme: &Theme) {
-		let swatch = if self.enabled {
+		let swatch = if self.info.enabled {
 			theme.palette().primary
 		} else {
 			theme.palette().secondary
@@ -129,14 +134,15 @@ impl<'a, Message> Knob<'a, Message> {
 
 		let value_to_rad = |value: f32| {
 			Radians(
-				(value - self.range.start()) / (self.range.end() - self.range.start())
+				(value - self.info.range.start())
+					/ (self.info.range.end() - self.info.range.start())
 					* (3.0 / 2.0 * PI)
 					- (5.0 / 4.0 * PI),
 			)
 		};
 
-		let center_angle = value_to_rad(self.center);
-		let value_angle = value_to_rad(self.value);
+		let center_angle = value_to_rad(self.info.center);
+		let value_angle = value_to_rad(self.info.value);
 
 		let dot = |angle: Radians, offset: f32, radius: f32| {
 			Path::circle(
@@ -149,7 +155,7 @@ impl<'a, Message> Knob<'a, Message> {
 			&Path::new(|b| {
 				b.arc(Arc {
 					center,
-					radius: self.radius,
+					radius: self.info.radius,
 					start_angle: center_angle,
 					end_angle: value_angle,
 				});
@@ -160,30 +166,35 @@ impl<'a, Message> Knob<'a, Message> {
 		);
 
 		frame.fill(
-			&Path::circle(center, self.radius - border_radius - border_radius),
+			&Path::circle(center, self.info.radius - border_radius - border_radius),
 			color,
 		);
 
 		frame.fill(
-			&dot(center_angle, self.radius - border_radius, border_radius),
+			&dot(
+				center_angle,
+				self.info.radius - border_radius,
+				border_radius,
+			),
 			text,
 		);
 
 		frame.fill(
-			&dot(value_angle, self.radius - border_radius, border_radius),
+			&dot(value_angle, self.info.radius - border_radius, border_radius),
 			text,
 		);
 
-		if self.stepped {
-			let num_steps = *self.range.end() - *self.range.start() + 1.0;
-			let max_steps = ((3.0 * FRAC_PI_2) / (dot_radius / self.radius).asin()).floor() + 1.0;
+		if self.info.stepped {
+			let num_steps = *self.info.range.end() - *self.info.range.start() + 1.0;
+			let max_steps =
+				((3.0 * FRAC_PI_2) / (dot_radius / self.info.radius).asin()).floor() + 1.0;
 
 			if num_steps <= max_steps {
-				for step in *self.range.start() as i32..=*self.range.end() as i32 {
+				for step in *self.info.range.start() as i32..=*self.info.range.end() as i32 {
 					frame.fill(
 						&dot(
 							value_to_rad(step as f32),
-							self.radius.midpoint(dot_radius),
+							self.info.radius.midpoint(dot_radius),
 							dot_radius / 2.0,
 						),
 						swatch.base.color.mix(swatch.base.text, 0.5),
@@ -192,15 +203,15 @@ impl<'a, Message> Knob<'a, Message> {
 			}
 		}
 
-		frame.fill(&dot(value_angle, self.radius / 2.0, dot_radius), text);
+		frame.fill(&dot(value_angle, self.info.radius / 2.0, dot_radius), text);
 	}
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 	fn size(&self) -> Size<Length> {
 		Size::new(
-			Length::Fixed(2.0 * self.radius),
-			Length::Fixed(2.0 * (self.radius - self.border_radius())),
+			Length::Fixed(2.0 * self.info.radius),
+			Length::Fixed(2.0 * (self.info.radius - self.border_radius())),
 		)
 	}
 
@@ -211,13 +222,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 	fn diff(&self, tree: &mut Tree) {
 		let state = tree.state.downcast_mut::<State>();
 
-		if self.enabled != state.last_enabled {
-			state.last_enabled = self.enabled;
-			state.cache.clear();
-		}
-
-		if self.value != state.last_value {
-			state.last_value = self.value;
+		if self.info != state.last_info {
+			state.last_info = self.info.clone();
 			state.cache.clear();
 		}
 
@@ -236,13 +242,20 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 	}
 
 	fn state(&self) -> tree::State {
-		tree::State::new(State::default())
+		tree::State::new(State {
+			dragging: None,
+			hovering: false,
+			scroll: 0.0,
+			cache: Cache::new(),
+			last_info: self.info.clone(),
+			last_theme: RefCell::default(),
+		})
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
 		Node::new(Size::new(
-			2.0 * self.radius,
-			2.0 * (self.radius - self.border_radius()),
+			2.0 * self.info.radius,
+			2.0 * (self.info.radius - self.border_radius()),
 		))
 	}
 
@@ -270,10 +283,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					..
 				} if state.dragging.is_none() && state.hovering => {
 					let pos = cursor.position().unwrap();
-					state.dragging = Some((self.value, pos.y));
+					state.dragging = Some((self.info.value, pos.y));
 
 					if modifiers.control() || modifiers.command() {
-						shell.publish((self.f)(self.default));
+						shell.publish((self.f)(self.info.default));
 					}
 
 					shell.capture_event();
@@ -295,13 +308,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					..
 				} => {
 					if let Some((value, pos)) = state.dragging {
-						let diff = (pos - y) * (self.range.end() - self.range.start()) * 0.005;
+						let diff =
+							(pos - y) * (self.info.range.end() - self.info.range.start()) * 0.005;
 						let mut new_value =
-							(value + diff).clamp(*self.range.start(), *self.range.end());
-						if self.stepped {
+							(value + diff).clamp(*self.info.range.start(), *self.info.range.end());
+						if self.info.stepped {
 							new_value = new_value.round();
 						}
-						if new_value != self.value {
+						if new_value != self.info.value {
 							shell.publish((self.f)(new_value));
 						}
 						shell.capture_event();
@@ -310,7 +324,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					if (cursor.is_over(layout.bounds())
 						&& cursor.position().unwrap().distance(
 							layout.bounds().center() + Vector::new(0.0, self.border_radius()),
-						) <= self.radius) != state.hovering
+						) <= self.info.radius)
+						!= state.hovering
 					{
 						state.hovering ^= true;
 						state.cache.clear();
@@ -323,18 +338,18 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					let mut diff = match delta {
 						ScrollDelta::Lines { y, .. } => *y,
 						ScrollDelta::Pixels { y, .. } => y / 60.0,
-					} * (self.range.end() - self.range.start())
+					} * (self.info.range.end() - self.info.range.start())
 						* if modifiers.command() { 10.0 } else { 1.0 }
 						/ 101.0 + state.scroll;
 
-					if self.stepped {
+					if self.info.stepped {
 						state.scroll = diff.fract();
 						diff = diff.floor();
 					}
 
-					let new_value =
-						(self.value + diff).clamp(*self.range.start(), *self.range.end());
-					if new_value != self.value {
+					let new_value = (self.info.value + diff)
+						.clamp(*self.info.range.start(), *self.info.range.end());
+					if new_value != self.info.value {
 						shell.publish((self.f)(new_value));
 						shell.capture_event();
 					} else if diff != 0.0 {
