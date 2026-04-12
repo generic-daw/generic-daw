@@ -13,12 +13,7 @@ use iced_widget::{
 	graphics::geometry::Renderer as _,
 	text,
 };
-use std::{
-	cell::RefCell,
-	f32::consts::{FRAC_PI_2, PI},
-	fmt::Debug,
-	ops::RangeInclusive,
-};
+use std::{cell::RefCell, f32::consts::PI, fmt::Debug, ops::RangeInclusive};
 use utils::NoDebug;
 
 struct State {
@@ -134,10 +129,13 @@ impl<'a, Message> Knob<'a, Message> {
 
 		let value_to_rad = |value: f32| {
 			Radians(
-				(value - self.info.range.start())
-					/ (self.info.range.end() - self.info.range.start())
-					* (3.0 / 2.0 * PI)
-					- (5.0 / 4.0 * PI),
+				if self.info.range.start() == self.info.range.end() {
+					0.0
+				} else {
+					(value - self.info.range.start())
+						/ (self.info.range.end() - self.info.range.start())
+						* (3.0 / 2.0 * PI)
+				} - (5.0 / 4.0 * PI),
 			)
 		};
 
@@ -187,7 +185,7 @@ impl<'a, Message> Knob<'a, Message> {
 		if self.info.stepped {
 			let num_steps = *self.info.range.end() - *self.info.range.start() + 1.0;
 			let max_steps =
-				((3.0 * FRAC_PI_2) / (dot_radius / self.info.radius).asin()).floor() + 1.0;
+				((3.0 / 2.0 * PI) / (dot_radius / self.info.radius).asin()).floor() + 1.0;
 
 			if num_steps <= max_steps {
 				for step in *self.info.range.start() as i32..=*self.info.range.end() as i32 {
