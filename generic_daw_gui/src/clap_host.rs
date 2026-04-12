@@ -3,7 +3,8 @@ use fragile::Fragile;
 use generic_daw_core::{
 	Event, PluginId,
 	clap_host::{
-		MainThreadMessage, ParamInfoFlags, Plugin, RenderMode, Size, StateContextType, TimerId,
+		ClapId, MainThreadMessage, ParamInfoFlags, Plugin, RenderMode, Size, StateContextType,
+		TimerId,
 	},
 };
 use generic_daw_widget::knob::Knob;
@@ -27,7 +28,7 @@ use utils::NoClone;
 #[derive(Clone, Debug)]
 pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
-	SendEvent(PluginId, Event),
+	ParamChange(PluginId, ClapId, f32),
 	TickTimer(Duration),
 	GuiOpen(PluginId),
 	GuiOpened(PluginId, NoClone<Box<Fragile<Plugin<Event>>>>),
@@ -64,7 +65,18 @@ impl ClapHost {
 			Message::MainThread(id, msg) => {
 				return self.handle_main_thread_message(id, msg);
 			}
-			Message::SendEvent(id, event) => self.plugins.get_mut(&id).unwrap().send_event(event),
+			Message::ParamChange(id, param_id, value) => {
+				let plugin = self.plugins.get_mut(&id).unwrap();
+				let param = plugin.adjust_param_value(param_id, value);
+				let param_id = param.id;
+				let cookie = param.cookie;
+				plugin.send_event(Event::ParamValue {
+					time: 0,
+					param_id,
+					value,
+					cookie,
+				});
+			}
 			Message::TickTimer(duration) => {
 				self.timers_of_duration
 					.get(&duration)
@@ -284,15 +296,7 @@ impl ClapHost {
 					row(plugin.params().map(|param| {
 						column![
 							Knob::new(param.range.clone(), param.value, move |value| {
-								Message::SendEvent(
-									id,
-									Event::ParamValue {
-										time: 0,
-										param_id: param.id,
-										value,
-										cookie: param.cookie,
-									},
-								)
+								Message::ParamChange(id, param.id, value)
 							})
 							.default(param.reset)
 							.radius(25.0)

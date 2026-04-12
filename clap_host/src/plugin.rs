@@ -212,6 +212,18 @@ impl<Event: EventImpl> Plugin<Event> {
 			.filter(|param| !param.flags.contains(ParamInfoFlags::IS_HIDDEN))
 	}
 
+	pub fn adjust_param_value(&mut self, param_id: ClapId, value: f32) -> &Param {
+		let param = self
+			.params
+			.iter_mut()
+			.find(|param| param.id == param_id)
+			.unwrap();
+
+		param.adjust_value(&mut self.instance, value);
+
+		param
+	}
+
 	pub fn rescan_param(&mut self, param_id: ClapId, flags: ParamRescanFlags) {
 		self.params
 			.iter_mut()
