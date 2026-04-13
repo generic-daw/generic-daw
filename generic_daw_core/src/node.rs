@@ -1,4 +1,4 @@
-use crate::{Channel, Event, NodeAction, NodeImpl, Track, Update, audio_processor::State};
+use crate::{Channel, Event, NodeAction, NodeImpl, Track, Update, audio_thread::State};
 
 #[derive(Debug)]
 pub enum Node {

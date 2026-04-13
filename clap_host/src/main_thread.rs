@@ -9,13 +9,13 @@ use clack_extensions::{
 	timer::HostTimerImpl,
 };
 use clack_host::prelude::*;
-use std::{ffi::CStr, time::Duration};
+use std::{ffi::CStr, sync::atomic::Ordering::Relaxed, time::Duration};
 use utils::{NoClone, NoDebug};
 
 #[derive(Clone, Debug)]
 pub enum MainThreadMessage {
 	RequestCallback,
-	Restart(NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>),
+	Deactivate(NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>),
 	Destroy(NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>),
 	GuiRequestResize(Size),
 	GuiRequestShow,
@@ -24,14 +24,12 @@ pub enum MainThreadMessage {
 	RegisterTimer(TimerId, Duration),
 	UnregisterTimer(TimerId),
 	RescanParams(ParamRescanFlags),
-	RescanParam(ClapId, ParamRescanFlags),
 	PresetDiscovered(Preset),
 }
 
 #[derive(Debug)]
 pub struct MainThread<'a> {
 	pub shared: &'a Shared<'a>,
-	pub latency_changed: bool,
 	pub params_rescan: bool,
 	pub state_mark_dirty: bool,
 	pub next_timer_id: u32,
@@ -41,7 +39,6 @@ impl<'a> MainThread<'a> {
 	pub fn new(shared: &'a Shared<'a>) -> Self {
 		Self {
 			shared,
-			latency_changed: false,
 			params_rescan: false,
 			state_mark_dirty: false,
 			next_timer_id: 0,
@@ -56,17 +53,19 @@ impl<'a> MainThreadHandler<'a> for MainThread<'a> {
 }
 
 impl HostAudioPortsImpl for MainThread<'_> {
-	fn is_rescan_flag_supported(&self, _flags: AudioPortRescanFlags) -> bool {
-		false
+	fn is_rescan_flag_supported(&self, _flag: AudioPortRescanFlags) -> bool {
+		true
 	}
 
-	fn rescan(&mut self, _flags: AudioPortRescanFlags) {}
+	fn rescan(&mut self, flags: AudioPortRescanFlags) {
+		if flags.requires_deactivate() {
+			self.shared.needs_deactivate.store(true, Relaxed);
+		}
+	}
 }
 
 impl HostLatencyImpl for MainThread<'_> {
-	fn changed(&mut self) {
-		self.latency_changed = true;
-	}
+	fn changed(&mut self) {}
 }
 
 impl HostNotePortsImpl for MainThread<'_> {

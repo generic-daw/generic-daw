@@ -4,9 +4,8 @@ pub use clack_host::events::{event_types::*, *};
 pub enum ClapEvent {
 	NoteOn(NoteOnEvent),
 	NoteOff(NoteOffEvent),
-	NoteChoke(NoteChokeEvent),
-	NoteEnd(NoteEndEvent),
 	ParamValue(ParamValueEvent),
+	Midi(MidiEvent),
 }
 
 impl AsRef<UnknownEvent> for ClapEvent {
@@ -14,9 +13,8 @@ impl AsRef<UnknownEvent> for ClapEvent {
 		match self {
 			Self::NoteOn(inner) => inner.as_ref(),
 			Self::NoteOff(inner) => inner.as_ref(),
-			Self::NoteChoke(inner) => inner.as_ref(),
-			Self::NoteEnd(inner) => inner.as_ref(),
 			Self::ParamValue(inner) => inner.as_ref(),
+			Self::Midi(inner) => inner.as_ref(),
 		}
 	}
 }

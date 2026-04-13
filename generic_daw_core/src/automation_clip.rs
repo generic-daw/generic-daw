@@ -1,4 +1,4 @@
-use crate::{AutomationPatternId, audio_processor::State, time::OffsetBeatRange};
+use crate::{AutomationPatternId, audio_thread::State, time::OffsetBeatRange};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AutomationClip {

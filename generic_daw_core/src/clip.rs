@@ -1,5 +1,5 @@
 use crate::{
-	AudioClip, Event, MidiClip, MidiNote, Transport, audio_processor::State, midi_clip::VoiceId,
+	AudioClip, Event, MidiClip, MidiNote, Transport, audio_thread::State, midi_clip::VoiceId,
 	time::BeatTime, voice_alloc::VoiceAlloc,
 };
 

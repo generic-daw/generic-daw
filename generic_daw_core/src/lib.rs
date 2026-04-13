@@ -1,5 +1,5 @@
 mod audio_clip;
-mod audio_processor;
+mod audio_thread;
 mod automation_clip;
 mod automation_lane;
 mod automation_pattern;
@@ -21,7 +21,7 @@ mod voice_alloc;
 
 pub use audio_clip::AudioClip;
 pub use audio_graph::{NodeId, NodeImpl};
-pub use audio_processor::{Batch, Message, NodeAction, Transport, Update, Version};
+pub use audio_thread::{Batch, Message, NodeAction, Transport, Update, Version};
 pub use automation_clip::AutomationClip;
 pub use automation_lane::AutomationLane;
 pub use automation_pattern::{AutomationPattern, AutomationPatternAction, AutomationPatternId};

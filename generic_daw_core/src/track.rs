@@ -1,5 +1,5 @@
 use crate::{
-	Channel, Clip, Event, MidiNote, NodeAction, NodeId, NodeImpl, Update, audio_processor::State,
+	Channel, Clip, Event, MidiNote, NodeAction, NodeId, NodeImpl, Update, audio_thread::State,
 	midi_clip::VoiceId, voice_alloc::VoiceAlloc,
 };
 use clap_host::events::Match;

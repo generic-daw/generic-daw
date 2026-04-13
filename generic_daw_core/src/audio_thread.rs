@@ -58,10 +58,7 @@ pub enum Message {
 	RequestUpdate,
 	ReturnUpdate(Vec<Update>),
 
-	RequestProcessor(
-		oneshot::Sender<AudioProcessor>,
-		oneshot::Receiver<AudioProcessor>,
-	),
+	RequestProcessor(oneshot::Sender<AudioThread>, oneshot::Receiver<AudioThread>),
 }
 
 const _: () = assert!(size_of::<Message>() == 64);
@@ -82,10 +79,9 @@ pub enum NodeAction {
 	ChannelVolumeChanged(f32),
 	ChannelPanChanged(PanMode),
 
-	PluginLoad(PluginId, Box<clap_host::AudioProcessor>),
+	PluginAdd(PluginId, Box<clap_host::AudioThread>),
 	PluginRemove(usize),
 	PluginMoveTo(usize, usize),
-	PluginToggleEnabled(usize),
 	PluginMixChanged(usize, f32),
 	PluginParamChanged(usize, ClapId, f32, Cookie),
 }
@@ -190,7 +186,7 @@ pub struct State {
 }
 
 #[derive(Debug)]
-pub struct AudioProcessor {
+pub struct AudioThread {
 	audio_graph: AudioGraph<Node>,
 	master: NodeId,
 	producer: Producer<Batch>,
@@ -200,8 +196,10 @@ pub struct AudioProcessor {
 	update_buffers: Vec<Vec<Update>>,
 }
 
-impl AudioProcessor {
-	pub fn create(transport: Transport) -> (Callback, NodeId, Producer<Message>, Consumer<Batch>) {
+impl AudioThread {
+	pub fn create(
+		transport: Transport,
+	) -> (AudioCallback, NodeId, Producer<Message>, Consumer<Batch>) {
 		let (r_producer, consumer) = RingBuffer::new(transport.frames.get() as usize);
 		let (producer, r_consumer) = RingBuffer::new(transport.frames.get() as usize);
 
@@ -231,7 +229,7 @@ impl AudioProcessor {
 		};
 
 		(
-			Callback::Processing(processor),
+			AudioCallback::Processing(processor),
 			master,
 			r_producer,
 			r_consumer,
@@ -357,9 +355,6 @@ impl AudioProcessor {
 
 			self.audio_graph.process(len);
 			self.audio_graph.copy_output(self.master, &mut buf[..len]);
-			for s in &mut buf[..len] {
-				*s = s.clamp(-1.0, 1.0);
-			}
 			self.metronome(&mut buf[..len]);
 
 			if let Some(position) = looped {
@@ -566,12 +561,12 @@ impl AudioProcessor {
 
 #[derive(Debug)]
 #[expect(clippy::large_enum_variant)]
-pub enum Callback {
-	Processing(AudioProcessor),
-	Away(oneshot::Receiver<AudioProcessor>),
+pub enum AudioCallback {
+	Processing(AudioThread),
+	Away(oneshot::Receiver<AudioThread>),
 }
 
-impl Callback {
+impl AudioCallback {
 	pub fn process(&mut self, buf: &mut [f32]) {
 		match self {
 			Self::Processing(processor) => {
@@ -582,11 +577,18 @@ impl Callback {
 					};
 
 					sender.send(processor).unwrap();
+
+					self.process(buf);
+				} else {
+					for s in buf {
+						*s = s.clamp(-1.0, 1.0);
+					}
 				}
 			}
 			Self::Away(receiver) => {
 				if let Ok(processor) = receiver.try_recv() {
 					*self = Self::Processing(processor);
+
 					self.process(buf);
 				} else {
 					buf.fill(0.0);

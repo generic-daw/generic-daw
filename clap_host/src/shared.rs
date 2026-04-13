@@ -51,7 +51,8 @@ pub struct Shared<'a> {
 	pub audio_thread: AtomicU64,
 	pub needs_process: AtomicBool,
 	pub needs_callback: AtomicBool,
-	pub needs_restart: AtomicBool,
+	pub needs_activate: AtomicBool,
+	pub needs_deactivate: AtomicBool,
 	pub needs_flush: AtomicBool,
 }
 
@@ -68,7 +69,8 @@ impl Shared<'_> {
 			audio_thread: AtomicU64::new(main_thread),
 			needs_process: AtomicBool::new(true),
 			needs_callback: AtomicBool::new(false),
-			needs_restart: AtomicBool::new(false),
+			needs_activate: AtomicBool::new(false),
+			needs_deactivate: AtomicBool::new(false),
 			needs_flush: AtomicBool::new(false),
 		}
 	}
@@ -112,7 +114,8 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 	}
 
 	fn request_restart(&self) {
-		self.needs_restart.store(true, Relaxed);
+		self.needs_activate.store(true, Relaxed);
+		self.needs_deactivate.store(true, Relaxed);
 	}
 }
 

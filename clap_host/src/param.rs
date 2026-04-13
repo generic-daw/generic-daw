@@ -84,9 +84,15 @@ impl Param {
 		}
 	}
 
-	pub fn adjust_value(&mut self, plugin: &mut PluginInstance<Host>, value: f32) {
+	pub fn adjust_value(&mut self, plugin: &mut PluginInstance<Host>, value: f32) -> bool {
+		if self.flags.contains(ParamInfoFlags::IS_READONLY) {
+			return false;
+		}
+
 		self.value = value;
 		plugin.access_handler_mut(|mt| mt.mark_dirty());
 		self.rescan(plugin, ParamRescanFlags::TEXT);
+
+		true
 	}
 }

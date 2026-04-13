@@ -1,7 +1,7 @@
 use crate::{action::Action, daw, stylefns::scrollable_style, widget::LINE_HEIGHT};
 use fragile::Fragile;
 use generic_daw_core::{
-	PluginId,
+	PluginId, Transport,
 	clap_host::{
 		ClapId, MainThreadMessage, ParamInfoFlags, Plugin, RenderMode, Size, StateContextType,
 		TimerId,
@@ -14,7 +14,7 @@ use iced::{
 	widget::{column, container, row, rule, scrollable, space, text},
 	window,
 };
-use log::info;
+use log::{info, warn};
 use smol::{Timer, unblock};
 use std::{
 	collections::{HashMap, HashSet},
@@ -23,13 +23,15 @@ use std::{
 	sync::mpsc::Receiver,
 	time::Duration,
 };
-use utils::NoClone;
+use utils::{NoClone, NoDebug};
 
 #[derive(Clone, Debug)]
 pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
 	ParamChange(PluginId, ClapId, f32),
 	TickTimer(Duration),
+	ToggleActivated(PluginId),
+	SetState(PluginId, NoDebug<Box<[u8]>>),
 	GuiOpen(PluginId),
 	GuiOpened(PluginId, NoClone<Box<Fragile<Plugin>>>),
 	WindowResized(window::Id, iced::Size),
@@ -60,19 +62,42 @@ impl ClapHost {
 		}
 	}
 
-	pub fn update(&mut self, message: Message) -> Action<daw::Instruction, Message> {
+	pub fn update(
+		&mut self,
+		message: Message,
+		transport: &Transport,
+	) -> Action<daw::Instruction, Message> {
+		macro_rules! plugin {
+			($id:expr) => {
+				plugin!($id, message)
+			};
+			($id:expr,$expr:expr) => {{
+				let Some(plugin) = self.plugins.get_mut(&$id) else {
+					let message = $expr;
+					info!("retrying {message:?}");
+					return Task::perform(Timer::after(Duration::from_millis(100)), |_| message)
+						.into();
+				};
+				plugin
+			}};
+		}
+
 		match message {
 			Message::MainThread(id, msg) => {
-				return self.handle_main_thread_message(id, msg);
+				return self.handle_main_thread_message(id, msg, transport);
 			}
 			Message::ParamChange(id, param_id, value) => {
-				let plugin = self.plugins.get_mut(&id).unwrap();
-				let param = plugin.adjust_param_value(param_id, value);
-				let param_id = param.id;
-				let cookie = param.cookie;
-				return Action::instruction(daw::Instruction::PluginParamChange(
-					id, param_id, value, cookie,
-				));
+				let plugin = plugin!(id);
+				if plugin.is_active()
+					&& let Some(param) = plugin.adjust_param_value(param_id, value)
+				{
+					return Action::instruction(daw::Instruction::PluginParamChange(
+						id,
+						param.id,
+						value,
+						param.cookie,
+					));
+				}
 			}
 			Message::TickTimer(duration) => {
 				self.timers_of_duration
@@ -86,12 +111,20 @@ impl ClapHost {
 						}
 					});
 			}
+			Message::ToggleActivated(id) => {
+				let plugin = plugin!(id);
+				if plugin.is_active() {
+					plugin.request_deactivate();
+				} else if let Err(err) = plugin.activate(transport.sample_rate, transport.frames) {
+					warn!("{err}");
+				}
+			}
+			Message::SetState(id, state) => {
+				plugin!(id, Message::SetState(id, state))
+					.set_state(&state, StateContextType::ForProject);
+			}
 			Message::GuiOpen(id) => {
-				let Some(plugin) = self.plugins.get_mut(&id) else {
-					info!("retrying {message:?}");
-					return Task::perform(Timer::after(Duration::from_millis(100)), |_| message)
-						.into();
-				};
+				let plugin = plugin!(id);
 
 				return if plugin.is_shown() {
 					Task::none()
@@ -149,7 +182,7 @@ impl ClapHost {
 				if let Some(&window) = self.window_of_plugin.get(&id)
 					&& let Some(&scale_factor) = self.scale_factor_of_window.get(&window)
 				{
-					return self.update(Message::WindowRescaled(window, scale_factor));
+					return self.update(Message::WindowRescaled(window, scale_factor), transport);
 				}
 			}
 			Message::WindowResized(window, size) => {
@@ -199,6 +232,7 @@ impl ClapHost {
 		&mut self,
 		id: PluginId,
 		message: MainThreadMessage,
+		transport: &Transport,
 	) -> Action<daw::Instruction, Message> {
 		macro_rules! plugin {
 			() => {
@@ -217,10 +251,12 @@ impl ClapHost {
 
 		match message {
 			MainThreadMessage::RequestCallback => plugin!().call_on_main_thread_callback(),
-			MainThreadMessage::Restart(processor) => {
-				let plugin = plugin!(MainThreadMessage::Restart(processor));
+			MainThreadMessage::Deactivate(processor) => {
+				let plugin = plugin!(MainThreadMessage::Deactivate(processor));
 				plugin.deactivate(processor);
-				plugin.activate();
+				if let Err(err) = plugin.maybe_activate(transport.sample_rate, transport.frames) {
+					warn!("{err}");
+				}
 			}
 			MainThreadMessage::Destroy(processor) => {
 				plugin!(MainThreadMessage::Destroy(processor));
@@ -229,7 +265,10 @@ impl ClapHost {
 				self.timers_of_duration
 					.retain(|_, set| set.remove(&id).is_none() || !set.is_empty());
 
-				return self.update(Message::MainThread(id, MainThreadMessage::GuiClosed));
+				return self.update(
+					Message::MainThread(id, MainThreadMessage::GuiClosed),
+					transport,
+				);
 			}
 			MainThreadMessage::GuiRequestResize(size) => {
 				if let Some(&window) = self.window_of_plugin.get(&id)
@@ -264,9 +303,6 @@ impl ClapHost {
 				}
 			}
 			MainThreadMessage::RescanParams(flags) => plugin!().rescan_params(flags),
-			MainThreadMessage::RescanParam(param_id, flags) => {
-				plugin!().rescan_param(param_id, flags);
-			}
 			MainThreadMessage::PresetDiscovered(preset) => {
 				plugin!(MainThreadMessage::PresetDiscovered(preset)).preset_discovered(preset);
 			}
@@ -368,10 +404,9 @@ impl ClapHost {
 	pub fn load(
 		&mut self,
 		id: PluginId,
-		mut plugin: Plugin,
+		plugin: Plugin,
 		receiver: Receiver<MainThreadMessage>,
 	) -> Task<Message> {
-		plugin.activate();
 		self.plugins.insert(id, plugin);
 		let (sender, stream) = smol::channel::unbounded();
 		Task::batch([
@@ -395,15 +430,11 @@ impl ClapHost {
 
 	pub fn get_state(&mut self, id: PluginId) -> Option<&[u8]> {
 		self.plugins
-			.get_mut(&id)
-			.unwrap()
+			.get_mut(&id)?
 			.get_state(StateContextType::ForProject)
 	}
 
-	pub fn set_state(&mut self, id: PluginId, state: &[u8]) {
-		self.plugins
-			.get_mut(&id)
-			.unwrap()
-			.set_state(state, StateContextType::ForProject);
+	pub fn is_active(&self, id: PluginId) -> bool {
+		self.plugins.get(&id).is_some_and(Plugin::is_active)
 	}
 }

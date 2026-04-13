@@ -1,4 +1,4 @@
-use crate::{main_thread::MainThread, shared::Shared};
+use crate::{audio_processor::AudioProcessor, main_thread::MainThread, shared::Shared};
 use clack_extensions::{
 	audio_ports::HostAudioPorts, gui::HostGui, latency::HostLatency, log::HostLog,
 	note_ports::HostNotePorts, params::HostParams, preset_discovery::HostPresetLoad,
@@ -12,7 +12,7 @@ pub struct Host;
 impl HostHandlers for Host {
 	type Shared<'a> = Shared<'a>;
 	type MainThread<'a> = MainThread<'a>;
-	type AudioProcessor<'a> = ();
+	type AudioProcessor<'a> = AudioProcessor<'a>;
 
 	fn declare_extensions(builder: &mut HostExtensions<'_, Self>, _shared: &Self::Shared<'_>) {
 		builder

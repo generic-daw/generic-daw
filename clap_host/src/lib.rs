@@ -11,6 +11,7 @@ use walkdir::WalkDir;
 mod audio_buffers;
 mod audio_ports_config;
 mod audio_processor;
+mod audio_thread;
 mod event_buffers;
 mod event_impl;
 pub mod events;
@@ -24,7 +25,7 @@ mod preset;
 mod shared;
 mod size;
 
-pub use audio_processor::AudioProcessor;
+pub use audio_thread::AudioThread;
 pub use clack_extensions::{
 	params::{ParamInfoFlags, ParamRescanFlags},
 	render::RenderMode,

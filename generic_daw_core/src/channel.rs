@@ -1,6 +1,6 @@
 use crate::{
-	AutomationLane, Event, NodeAction, NodeId, NodeImpl, Update, audio_processor::State,
-	clap_host::AudioProcessor,
+	AutomationLane, Event, NodeAction, NodeId, NodeImpl, Update, audio_thread::State,
+	clap_host::AudioThread,
 };
 use std::f32::consts::{FRAC_PI_4, SQRT_2};
 use utils::{ShiftMoveExt as _, unique_id};
@@ -54,20 +54,18 @@ impl PanMode {
 #[derive(Debug)]
 struct Plugin {
 	id: PluginId,
-	processor: AudioProcessor,
+	processor: AudioThread,
 	lanes: Vec<AutomationLane>,
 	mix: f32,
-	enabled: bool,
 }
 
 impl Plugin {
-	pub fn new(id: PluginId, processor: AudioProcessor) -> Self {
+	pub fn new(id: PluginId, processor: AudioThread) -> Self {
 		Self {
 			id,
 			processor,
 			lanes: Vec::new(),
 			mix: 1.0,
-			enabled: true,
 		}
 	}
 }
@@ -94,13 +92,14 @@ impl NodeImpl for Channel {
 			.pop_if(|update| matches!(update, Update::Peaks(..)));
 
 		for plugin in &mut self.plugins {
+			plugin.processor.maybe_activate();
+			plugin.processor.set_audio_thread();
+
 			for lane in &mut plugin.lanes {
 				lane.process(state, events);
 			}
 
-			plugin.processor.recv_events();
-
-			if self.enabled && !self.bypassed && plugin.enabled {
+			if self.enabled && !self.bypassed {
 				plugin.processor.process(
 					audio,
 					events,
@@ -108,10 +107,10 @@ impl NodeImpl for Channel {
 					plugin.mix,
 				);
 			} else {
-				plugin.processor.flush(events);
+				plugin.processor.flush(audio, events, plugin.mix);
 			}
 
-			plugin.processor.maybe_restart();
+			plugin.processor.maybe_deactivate();
 
 			for event in events.drain(..) {
 				if let Event::ParamValue {
@@ -151,7 +150,6 @@ impl NodeImpl for Channel {
 		if self.enabled && !self.bypassed {
 			self.plugins
 				.iter()
-				.filter(|plugin| plugin.enabled)
 				.map(|plugin| plugin.processor.delay())
 				.sum()
 		} else {
@@ -173,10 +171,9 @@ impl Channel {
 			NodeAction::ChannelToggleBypassed => self.bypassed ^= true,
 			NodeAction::ChannelVolumeChanged(volume) => self.volume = volume,
 			NodeAction::ChannelPanChanged(pan) => self.pan = pan,
-			NodeAction::PluginLoad(id, processor) => self.plugins.push(Plugin::new(id, *processor)),
+			NodeAction::PluginAdd(id, processor) => self.plugins.push(Plugin::new(id, *processor)),
 			NodeAction::PluginRemove(index) => _ = self.plugins.remove(index),
 			NodeAction::PluginMoveTo(from, to) => self.plugins.shift_move(from, to),
-			NodeAction::PluginToggleEnabled(index) => self.plugins[index].enabled ^= true,
 			NodeAction::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
 			NodeAction::PluginParamChanged(index, param_id, value, cookie) => {
 				self.plugins[index].processor.push_event(Event::ParamValue {

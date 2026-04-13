@@ -1,7 +1,7 @@
 use crate::{
-	API_TYPE, AudioProcessor, MainThreadMessage, ParamInfoFlags, ParamRescanFlags,
-	PluginDescriptor, StateContextType, TimerId, audio_buffers::AudioBuffers,
-	audio_processor::AudioThreadMessage, event_buffers::EventBuffers, gui::Gui, host::Host,
+	API_TYPE, AudioThread, MainThreadMessage, ParamInfoFlags, ParamRescanFlags, PluginDescriptor,
+	StateContextType, TimerId, audio_buffers::AudioBuffers, audio_processor::AudioProcessor,
+	audio_thread::AudioThreadMessage, event_buffers::EventBuffers, gui::Gui, host::Host,
 	main_thread::MainThread, param::Param, preset::Preset, shared::Shared, size::Size,
 };
 use clack_extensions::{
@@ -27,7 +27,6 @@ pub struct Plugin {
 	instance: NoDebug<PluginInstance<Host>>,
 	descriptor: PluginDescriptor,
 	producer: Producer<AudioThreadMessage>,
-	config: PluginAudioConfiguration,
 	last_state: Option<Box<[u8]>>,
 	is_created: bool,
 	is_shown: bool,
@@ -37,16 +36,14 @@ impl Plugin {
 	#[must_use]
 	pub fn new(
 		descriptor: PluginDescriptor,
-		sample_rate: NonZero<u32>,
-		frames: NonZero<u32>,
 		host: HostInfo,
-	) -> (Self, AudioProcessor, Receiver<MainThreadMessage>) {
+	) -> (Self, AudioThread, Receiver<MainThreadMessage>) {
 		// SAFETY:
 		// Loading an external library object file is inherently unsafe.
 		let entry = unsafe { PluginEntry::load(&*descriptor.path) }.unwrap();
 
 		let (sender, receiver) = std::sync::mpsc::channel();
-		let (producer, consumer) = RingBuffer::new(frames.get() as usize);
+		let (producer, consumer) = RingBuffer::new(16);
 
 		let mut instance = PluginInstance::new(
 			|()| Shared::new(descriptor.clone(), sender.clone()),
@@ -57,20 +54,9 @@ impl Plugin {
 		)
 		.unwrap();
 
-		let config = PluginAudioConfiguration {
-			sample_rate: sample_rate.get().into(),
-			min_frames_count: 1,
-			max_frames_count: frames.get(),
-		};
-
-		let processor = AudioProcessor::new(
-			descriptor.clone(),
-			AudioBuffers::new(&mut instance, config),
-			EventBuffers::new(&mut instance),
-			consumer,
-		);
-
 		Preset::start_discover(&instance, entry, descriptor.clone(), host, sender);
+
+		let processor = AudioThread::new(descriptor.clone(), consumer);
 
 		let plugin = Self {
 			gui: Gui::new(&mut instance),
@@ -79,7 +65,6 @@ impl Plugin {
 			instance: instance.into(),
 			descriptor,
 			producer,
-			config,
 			last_state: None,
 			is_created: false,
 			is_shown: false,
@@ -171,7 +156,30 @@ impl Plugin {
 		}
 	}
 
-	pub fn activate(&mut self) {
+	pub fn is_active(&self) -> bool {
+		self.instance.is_active()
+	}
+
+	pub fn maybe_activate(
+		&mut self,
+		sample_rate: NonZero<u32>,
+		frames: NonZero<u32>,
+	) -> Result<(), PluginInstanceError> {
+		if self
+			.instance
+			.access_shared_handler(|s| s.needs_activate.load(Relaxed))
+		{
+			self.activate(sample_rate, frames)
+		} else {
+			Ok(())
+		}
+	}
+
+	pub fn activate(
+		&mut self,
+		sample_rate: NonZero<u32>,
+		frames: NonZero<u32>,
+	) -> Result<(), PluginInstanceError> {
 		if self
 			.instance
 			.access_handler_mut(|mt| std::mem::take(&mut mt.params_rescan))
@@ -179,23 +187,37 @@ impl Plugin {
 			self.params = Param::all(&mut self.instance).unwrap_or_default();
 		}
 
-		let processor = self
-			.instance
-			.activate(|s, _| s.needs_restart.store(false, Relaxed), self.config)
-			.unwrap()
-			.into();
-
-		let latency = if self
-			.instance
-			.access_handler_mut(|mt| std::mem::take(&mut mt.latency_changed))
-			&& let Some(&latency) = self.instance.access_shared_handler(|s| s.ext.latency.get())
-		{
-			Some(latency.get(&mut self.instance.plugin_handle()))
-		} else {
-			None
+		let config = PluginAudioConfiguration {
+			sample_rate: sample_rate.get().into(),
+			min_frames_count: 1,
+			max_frames_count: frames.get(),
 		};
 
-		self.send(AudioThreadMessage::Activated(NoDebug(processor), latency));
+		let audio_buffers = AudioBuffers::new(&mut self.instance, config);
+		let event_buffers = EventBuffers::new(&mut self.instance, &self.params);
+
+		let mut processor = self.instance.activate(
+			|shared, _| AudioProcessor::new(shared, audio_buffers, event_buffers),
+			config,
+		)?;
+
+		if let Some(&latency) = self.instance.access_shared_handler(|s| s.ext.latency.get()) {
+			processor.access_handler_mut(|at| {
+				at.audio_buffers
+					.as_mut()
+					.unwrap()
+					.set_delay(latency.get(&mut self.instance.plugin_handle()));
+			});
+		}
+
+		self.send(AudioThreadMessage::Activated(NoDebug(processor.into())));
+
+		Ok(())
+	}
+
+	pub fn request_deactivate(&self) {
+		self.instance
+			.access_shared_handler(|s| s.needs_deactivate.store(true, Relaxed));
 	}
 
 	pub fn deactivate(
@@ -212,16 +234,16 @@ impl Plugin {
 			.filter(|param| !param.flags.contains(ParamInfoFlags::IS_HIDDEN))
 	}
 
-	pub fn adjust_param_value(&mut self, param_id: ClapId, value: f32) -> &Param {
+	pub fn adjust_param_value(&mut self, param_id: ClapId, value: f32) -> Option<&Param> {
 		let param = self
 			.params
 			.iter_mut()
 			.find(|param| param.id == param_id)
 			.unwrap();
 
-		param.adjust_value(&mut self.instance, value);
-
 		param
+			.adjust_value(&mut self.instance, value)
+			.then_some(param)
 	}
 
 	pub fn rescan_param(&mut self, param_id: ClapId, flags: ParamRescanFlags) {

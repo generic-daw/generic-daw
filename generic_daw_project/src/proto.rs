@@ -118,7 +118,7 @@ pub struct Plugin {
 	#[prost(float, default = 1.0)]
 	pub mix: f32,
 	#[prost(bool, default = true)]
-	pub enabled: bool,
+	pub active: bool,
 }
 
 #[derive(Clone, Copy, Message)]

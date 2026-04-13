@@ -1,4 +1,4 @@
-use crate::{SampleId, audio_processor::State, time::OffsetBeatSpan};
+use crate::{SampleId, audio_thread::State, time::OffsetBeatSpan};
 use dsp::resample_cubic;
 
 #[derive(Clone, Copy, Debug)]

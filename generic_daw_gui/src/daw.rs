@@ -47,7 +47,7 @@ use std::{
 	sync::{Arc, LazyLock, mpsc::Receiver},
 	time::Duration,
 };
-use utils::{NoClone, NoDebug, natural_cmp, unique_id, variants};
+use utils::{NoClone, natural_cmp, unique_id, variants};
 
 unique_id!(scan);
 unique_id!(project);
@@ -155,7 +155,6 @@ pub enum Instruction {
 	Message(Message),
 	Freeze(NodeId),
 	PluginLoad(PluginId, Plugin, Receiver<MainThreadMessage>),
-	PluginSetState(PluginId, NoDebug<Box<[u8]>>),
 	PluginParamChange(PluginId, ClapId, f32, Cookie),
 }
 
@@ -327,7 +326,7 @@ impl Daw {
 			Message::ClapHost(message) => {
 				return self
 					.clap_host
-					.update(message)
+					.update(message, self.arrangement_view.arrangement.transport())
 					.handle(Message::ClapHost, |instruction| {
 						self.handle_instruction(instruction)
 					});
@@ -634,7 +633,6 @@ impl Daw {
 					.load(id, plugin, receiver)
 					.map(Message::ClapHost);
 			}
-			Instruction::PluginSetState(id, state) => self.clap_host.set_state(id, &state),
 			Instruction::PluginParamChange(id, param_id, value, cookie) => {
 				if let Some((node, idx)) = self.arrangement_view.arrangement.plugin_of(id) {
 					self.arrangement_view
@@ -834,7 +832,7 @@ impl Daw {
 							.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))))
 					],
 					self.arrangement_view
-						.view(&self.state, &self.plugins)
+						.view(&self.state, &self.clap_host, &self.plugins)
 						.map(|message| Message::Arrangement(self.project, message)),
 					self.state.file_tree_split_at,
 					Message::OnDrag

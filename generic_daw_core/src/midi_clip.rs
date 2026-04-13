@@ -1,5 +1,5 @@
 use crate::{
-	Event, MidiKey, MidiNote, MidiNoteId, MidiPatternId, audio_processor::State,
+	Event, MidiKey, MidiNote, MidiNoteId, MidiPatternId, audio_thread::State,
 	time::OffsetBeatRange, voice_alloc::VoiceAlloc,
 };
 use clap_host::events::Match;

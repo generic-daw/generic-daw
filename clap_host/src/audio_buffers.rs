@@ -162,16 +162,16 @@ impl AudioBuffers {
 		}
 	}
 
-	pub fn latency_changed(&mut self, latency: u32) {
-		self.delay_line.resize(2 * latency as usize);
+	pub fn delay(&self) -> usize {
+		self.delay_line.len()
+	}
+
+	pub fn set_delay(&mut self, delay: u32) {
+		self.delay_line.resize(2 * delay as usize);
 	}
 
 	pub fn reset(&mut self) {
 		self.steady_time = 0;
 		self.delay_line.reset();
-	}
-
-	pub fn delay(&self) -> usize {
-		self.delay_line.len()
 	}
 }

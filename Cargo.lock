@@ -392,7 +392,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 [[package]]
 name = "clack-common"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#bc499b32c6bca669579fbe826661afdea1c4cb6e"
+source = "git+https://github.com/prokopyl/clack.git#f874e858ad576c601367b3038af5088a4e671744"
 dependencies = [
  "bitflags 2.11.1",
  "clap-sys",
@@ -401,7 +401,7 @@ dependencies = [
 [[package]]
 name = "clack-extensions"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#bc499b32c6bca669579fbe826661afdea1c4cb6e"
+source = "git+https://github.com/prokopyl/clack.git#f874e858ad576c601367b3038af5088a4e671744"
 dependencies = [
  "bitflags 2.11.1",
  "clack-common",
@@ -413,7 +413,7 @@ dependencies = [
 [[package]]
 name = "clack-host"
 version = "0.1.0"
-source = "git+https://github.com/prokopyl/clack.git#bc499b32c6bca669579fbe826661afdea1c4cb6e"
+source = "git+https://github.com/prokopyl/clack.git#f874e858ad576c601367b3038af5088a4e671744"
 dependencies = [
  "clack-common",
  "clap-sys",
@@ -1759,9 +1759,9 @@ dependencies = [
 
 [[package]]
 name = "lyon_algorithms"
-version = "1.0.19"
+version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9815fac08e6fd96733a11dce4f9d15a3f338e96a2e2311ee21e1b738efc2bc0f"
+checksum = "8575c0d003ae459399623c4def180c63b77f343b1a7fee64f249b349e7699a31"
 dependencies = [
  "lyon_path",
  "num-traits",
@@ -2491,9 +2491,9 @@ dependencies = [
 
 [[package]]
 name = "profiling"
-version = "1.0.17"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3eb8486b569e12e2c32ad3e204dbaba5e4b5b216e9367044f25f1dba42341773"
+checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
 
 [[package]]
 name = "prost"

@@ -1,6 +1,6 @@
 use crate::{
 	AutomationClip, Event,
-	audio_processor::State,
+	audio_thread::State,
 	clap_host::{ClapId, Cookie},
 };
 

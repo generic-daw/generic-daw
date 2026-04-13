@@ -196,11 +196,10 @@ impl Arrangement {
 		id: NodeId,
 		descriptor: PluginDescriptor,
 	) -> (PluginId, daw::Instruction) {
-		let (plugin, processor, receiver) =
-			PluginPair::new(descriptor, &self.transport, HOST.clone());
+		let (plugin, processor, receiver) = PluginPair::new(descriptor, HOST.clone());
 		let plugin_id = plugin.gui.id;
 		self.node_mut(id).plugins.push(plugin.gui);
-		self.node_action(id, NodeAction::PluginLoad(plugin_id, Box::new(processor)));
+		self.node_action(id, NodeAction::PluginAdd(plugin_id, Box::new(processor)));
 		(
 			plugin_id,
 			daw::Instruction::PluginLoad(plugin_id, plugin.core, receiver),
@@ -215,11 +214,6 @@ impl Arrangement {
 	pub fn plugin_move_to(&mut self, id: NodeId, from: usize, to: usize) {
 		self.node_mut(id).plugins.shift_move(from, to);
 		self.node_action(id, NodeAction::PluginMoveTo(from, to));
-	}
-
-	pub fn plugin_toggle_enabled(&mut self, id: NodeId, index: usize) {
-		self.node_mut(id).plugins[index].enabled ^= true;
-		self.node_action(id, NodeAction::PluginToggleEnabled(index));
 	}
 
 	pub fn plugin_mix_changed(&mut self, id: NodeId, index: usize, mix: f32) {

@@ -1,6 +1,6 @@
 use crate::{
 	Batch, DeviceDescription, DeviceId, Message, NodeId, Stream, Transport,
-	audio_processor::AudioProcessor,
+	audio_thread::AudioThread,
 };
 use cpal::{
 	BufferSize, Device, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
@@ -110,7 +110,7 @@ pub fn build_output_stream(
 	let buffer_len = frames.get() * channels.get();
 
 	let transport = Transport::new(sample_rate, frames);
-	let (mut processor, master, producer, consumer) = AudioProcessor::create(transport);
+	let (mut processor, master, producer, consumer) = AudioThread::create(transport);
 
 	let mut stereo = boxed_slice![0.0; 2 * frames.get() as usize];
 

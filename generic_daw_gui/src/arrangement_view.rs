@@ -1,6 +1,6 @@
 use crate::{
 	action::Action,
-	clap_host,
+	clap_host::{self, ClapHost},
 	components::{icon_button, text_icon_button},
 	config::Config,
 	daw::{self, RECORDINGS_DIR, format_now},
@@ -116,7 +116,7 @@ pub enum Message {
 	PluginSetState(NodeId, usize, NoDebug<Box<[u8]>>),
 	PluginShow(PluginId),
 	PluginMixChanged(NodeId, usize, f32),
-	PluginToggleEnabled(NodeId, usize),
+	PluginToggleActive(NodeId, usize),
 	PluginMoveTo(NodeId, DragEvent),
 	PluginRemove(NodeId, usize),
 
@@ -365,6 +365,9 @@ impl ArrangementView {
 					action = Action::batch([
 						action,
 						Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
+							clap_host::Message::ToggleActivated(plugin),
+						))),
+						Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
 							clap_host::Message::GuiOpen(plugin),
 						))),
 					]);
@@ -373,7 +376,9 @@ impl ArrangementView {
 			}
 			Message::PluginSetState(node, i, state) => {
 				let plugin = self.arrangement.node(node).plugins[i].id;
-				return Action::instruction(daw::Instruction::PluginSetState(plugin, state));
+				return Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
+					clap_host::Message::SetState(plugin, state),
+				)));
 			}
 			Message::PluginShow(plugin) => {
 				return Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
@@ -383,8 +388,11 @@ impl ArrangementView {
 			Message::PluginMixChanged(node, i, mix) => {
 				self.arrangement.plugin_mix_changed(node, i, mix);
 			}
-			Message::PluginToggleEnabled(node, i) => {
-				self.arrangement.plugin_toggle_enabled(node, i);
+			Message::PluginToggleActive(node, i) => {
+				let plugin = self.arrangement.node(node).plugins[i].id;
+				return Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
+					clap_host::Message::ToggleActivated(plugin),
+				)));
 			}
 			Message::PluginMoveTo(node, event) => {
 				if let DragEvent::Dropped {
@@ -1336,11 +1344,12 @@ impl ArrangementView {
 	pub fn view<'a>(
 		&'a self,
 		state: &'a State,
+		clap_host: &'a ClapHost,
 		plugins: &'a combo_box::State<PluginDescriptor>,
 	) -> Element<'a, Message> {
 		match self.tab {
 			Tab::Playlist => self.view_arrangement(),
-			Tab::Mixer => self.view_mixer(state, plugins),
+			Tab::Mixer => self.view_mixer(state, clap_host, plugins),
 			Tab::PianoRoll => self.view_piano_roll(),
 		}
 	}
@@ -1572,6 +1581,7 @@ impl ArrangementView {
 	fn view_mixer<'a>(
 		&'a self,
 		state: &'a State,
+		clap_host: &'a ClapHost,
 		plugins: &'a combo_box::State<PluginDescriptor>,
 	) -> Element<'a, Message> {
 		let node = self.arrangement.node(self.selected);
@@ -1632,8 +1642,10 @@ impl ArrangementView {
 							.iter()
 							.enumerate()
 							.map(|(i, plugin)| {
+								let active = clap_host.is_active(plugin.id);
+
 								let button_style = |cond: bool| {
-									if !plugin.enabled || !node.enabled {
+									if !active || !node.enabled {
 										button::secondary
 									} else if cond {
 										button::warning
@@ -1647,7 +1659,7 @@ impl ArrangementView {
 										Message::PluginMixChanged(self.selected, i, mix)
 									})
 									.radius(TEXT_HEIGHT)
-									.enabled(plugin.enabled && node.enabled)
+									.enabled(active && node.enabled)
 									.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
 									button(
 										text(&*plugin.descriptor.name)
@@ -1660,17 +1672,17 @@ impl ArrangementView {
 									.on_press(Message::PluginShow(plugin.id)),
 									column![
 										icon_button(
-											if plugin.enabled && !node.bypassed {
+											if active && !node.bypassed {
 												power()
 											} else {
 												power_off()
 											},
 											button_style(node.bypassed)
 										)
-										.on_press(Message::PluginToggleEnabled(self.selected, i)),
+										.on_press(Message::PluginToggleActive(self.selected, i)),
 										icon_button(
 											x(),
-											if plugin.enabled && node.enabled {
+											if active && node.enabled {
 												button::danger
 											} else {
 												button::secondary

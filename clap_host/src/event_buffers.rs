@@ -1,5 +1,8 @@
-use crate::{EventImpl, host::Host};
-use clack_extensions::note_ports::{NoteDialect, NotePortInfoBuffer};
+use crate::{EventImpl, host::Host, param::Param};
+use clack_extensions::{
+	note_ports::{NoteDialect, NotePortInfoBuffer},
+	params::ParamInfoFlags,
+};
 use clack_host::prelude::*;
 
 #[derive(Debug, Default)]
@@ -12,13 +15,22 @@ pub struct EventBuffers {
 }
 
 impl EventBuffers {
-	pub fn new(plugin: &mut PluginInstance<Host>) -> Self {
-		let (main_input_port, input_prefers_midi) =
-			Self::from_ports(plugin, true).unwrap_or_default();
+	pub fn new(plugin: &mut PluginInstance<Host>, params: &[Param]) -> Self {
+		let input_ports = Self::from_ports(plugin, true);
+		let (main_input_port, input_prefers_midi) = input_ports.unwrap_or_default();
+
+		let event_buffers_cap = params
+			.iter()
+			.filter(|param| {
+				!param
+					.flags
+					.intersects(ParamInfoFlags::IS_HIDDEN | ParamInfoFlags::IS_READONLY)
+			})
+			.count() + 128;
 
 		Self {
-			input_events: EventBuffer::new(),
-			output_events: EventBuffer::new(),
+			input_events: EventBuffer::with_capacity(event_buffers_cap),
+			output_events: EventBuffer::with_capacity(event_buffers_cap),
 
 			main_input_port,
 			input_prefers_midi,
@@ -57,11 +69,8 @@ impl EventBuffers {
 	}
 
 	pub fn push(&mut self, event: impl EventImpl) {
-		if self.input_prefers_midi {
-			self.input_events.push(&event.to_midi(self.main_input_port));
-		} else {
-			self.input_events.push(&event.to_clap(self.main_input_port));
-		}
+		self.input_events
+			.push(&event.to_clap(self.main_input_port, self.input_prefers_midi));
 	}
 
 	pub fn write_out(&mut self, events: &mut Vec<impl EventImpl>) {
