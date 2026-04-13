@@ -1,7 +1,7 @@
-use crate::{stylefns::scrollable_style, widget::LINE_HEIGHT};
+use crate::{action::Action, daw, stylefns::scrollable_style, widget::LINE_HEIGHT};
 use fragile::Fragile;
 use generic_daw_core::{
-	Event, PluginId,
+	PluginId,
 	clap_host::{
 		ClapId, MainThreadMessage, ParamInfoFlags, Plugin, RenderMode, Size, StateContextType,
 		TimerId,
@@ -31,7 +31,7 @@ pub enum Message {
 	ParamChange(PluginId, ClapId, f32),
 	TickTimer(Duration),
 	GuiOpen(PluginId),
-	GuiOpened(PluginId, NoClone<Box<Fragile<Plugin<Event>>>>),
+	GuiOpened(PluginId, NoClone<Box<Fragile<Plugin>>>),
 	WindowResized(window::Id, iced::Size),
 	WindowRescaled(window::Id, f32),
 	WindowCloseRequested(window::Id),
@@ -40,7 +40,7 @@ pub enum Message {
 
 #[derive(Debug)]
 pub struct ClapHost {
-	plugins: HashMap<PluginId, Plugin<Event>>,
+	plugins: HashMap<PluginId, Plugin>,
 	timers_of_duration: HashMap<Duration, HashMap<PluginId, HashSet<TimerId>>>,
 	window_of_plugin: HashMap<PluginId, window::Id>,
 	plugin_of_window: HashMap<window::Id, PluginId>,
@@ -60,7 +60,7 @@ impl ClapHost {
 		}
 	}
 
-	pub fn update(&mut self, message: Message) -> Task<Message> {
+	pub fn update(&mut self, message: Message) -> Action<daw::Instruction, Message> {
 		match message {
 			Message::MainThread(id, msg) => {
 				return self.handle_main_thread_message(id, msg);
@@ -70,12 +70,9 @@ impl ClapHost {
 				let param = plugin.adjust_param_value(param_id, value);
 				let param_id = param.id;
 				let cookie = param.cookie;
-				plugin.send_event(Event::ParamValue {
-					time: 0,
-					param_id,
-					value,
-					cookie,
-				});
+				return Action::instruction(daw::Instruction::PluginParamChange(
+					id, param_id, value, cookie,
+				));
 			}
 			Message::TickTimer(duration) => {
 				self.timers_of_duration
@@ -92,7 +89,8 @@ impl ClapHost {
 			Message::GuiOpen(id) => {
 				let Some(plugin) = self.plugins.get_mut(&id) else {
 					info!("retrying {message:?}");
-					return Task::perform(Timer::after(Duration::from_millis(100)), |_| message);
+					return Task::perform(Timer::after(Duration::from_millis(100)), |_| message)
+						.into();
 				};
 
 				return if plugin.is_shown() {
@@ -140,7 +138,8 @@ impl ClapHost {
 					});
 
 					spawn.discard().chain(embed)
-				};
+				}
+				.into();
 			}
 			Message::GuiOpened(id, NoClone(plugin)) => {
 				let mut plugin = plugin.into_inner();
@@ -164,7 +163,7 @@ impl ClapHost {
 					&& let Some(plugin_scale) = plugin.get_scale()
 					&& !size.approx_eq(new_size, plugin_scale)
 				{
-					return window::resize(window, new_size.to_logical(plugin_scale).into());
+					return window::resize(window, new_size.to_logical(plugin_scale).into()).into();
 				}
 			}
 			Message::WindowRescaled(window, scale_factor) => {
@@ -176,14 +175,14 @@ impl ClapHost {
 				{
 					let plugin_scale = plugin.set_scale(scale_factor);
 					if let Some(size) = plugin.get_size() {
-						return window::resize(window, size.to_logical(plugin_scale).into());
+						return window::resize(window, size.to_logical(plugin_scale).into()).into();
 					}
 				}
 			}
 			Message::WindowCloseRequested(window) => {
 				if let Some(plugin) = self.plugin_of_window.get(&window) {
 					self.plugins.get_mut(plugin).unwrap().destroy();
-					return window::close(window);
+					return window::close(window).into();
 				}
 			}
 			Message::WindowClosed(window) => {
@@ -193,14 +192,14 @@ impl ClapHost {
 			}
 		}
 
-		Task::none()
+		Action::none()
 	}
 
 	fn handle_main_thread_message(
 		&mut self,
 		id: PluginId,
 		message: MainThreadMessage,
-	) -> Task<Message> {
+	) -> Action<daw::Instruction, Message> {
 		macro_rules! plugin {
 			() => {
 				plugin!(message)
@@ -209,7 +208,8 @@ impl ClapHost {
 				let Some(plugin) = self.plugins.get_mut(&id) else {
 					let message = Message::MainThread(id, $expr);
 					info!("retrying {message:?}");
-					return Task::perform(Timer::after(Duration::from_millis(100)), |_| message);
+					return Task::perform(Timer::after(Duration::from_millis(100)), |_| message)
+						.into();
 				};
 				plugin
 			}};
@@ -235,14 +235,14 @@ impl ClapHost {
 				if let Some(&window) = self.window_of_plugin.get(&id)
 					&& let Some(plugin_scale) = plugin!().get_scale()
 				{
-					return window::resize(window, size.to_logical(plugin_scale).into());
+					return window::resize(window, size.to_logical(plugin_scale).into()).into();
 				}
 			}
 			MainThreadMessage::GuiRequestShow => plugin!().show(),
 			MainThreadMessage::GuiRequestHide => plugin!().hide(),
 			MainThreadMessage::GuiClosed => {
 				if let Some(&window) = self.window_of_plugin.get(&id) {
-					return window::close(window);
+					return window::close(window).into();
 				}
 			}
 			MainThreadMessage::RegisterTimer(timer_id, duration) => {
@@ -272,7 +272,7 @@ impl ClapHost {
 			}
 		}
 
-		Task::none()
+		Action::none()
 	}
 
 	pub fn view(&self, window: window::Id) -> Option<Element<'_, Message>> {
@@ -368,7 +368,7 @@ impl ClapHost {
 	pub fn load(
 		&mut self,
 		id: PluginId,
-		mut plugin: Plugin<Event>,
+		mut plugin: Plugin,
 		receiver: Receiver<MainThreadMessage>,
 	) -> Task<Message> {
 		plugin.activate();

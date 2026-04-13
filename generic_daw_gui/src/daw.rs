@@ -17,8 +17,10 @@ use crate::{
 	widget::ALPHA_2_3,
 };
 use generic_daw_core::{
-	Event, MusicalTime, PluginId,
-	clap_host::{DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode},
+	MusicalTime, PluginId,
+	clap_host::{
+		ClapId, Cookie, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
+	},
 };
 use iced::{
 	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
@@ -127,8 +129,9 @@ impl Display for FileMenu {
 
 pub enum Instruction {
 	Message(Message),
-	PluginLoad(PluginId, Plugin<Event>, Receiver<MainThreadMessage>),
+	PluginLoad(PluginId, Plugin, Receiver<MainThreadMessage>),
 	PluginSetState(PluginId, NoDebug<Box<[u8]>>),
+	PluginParamChange(PluginId, ClapId, f32, Cookie),
 }
 
 #[derive(Clone, Debug)]
@@ -290,7 +293,12 @@ impl Daw {
 				}
 			}
 			Message::ClapHost(message) => {
-				return self.clap_host.update(message).map(Message::ClapHost);
+				return self
+					.clap_host
+					.update(message)
+					.handle(Message::ClapHost, |instruction| {
+						self.handle_instruction(instruction)
+					});
 			}
 			Message::FileTree(message) => return self.handle_file_tree_message(message),
 			Message::ConfigView(message) => {
@@ -560,16 +568,29 @@ impl Daw {
 
 	fn handle_instruction(&mut self, instruction: Instruction) -> Task<Message> {
 		match instruction {
-			Instruction::Message(message) => self.update(message),
-			Instruction::PluginLoad(id, plugin, receiver) => self
-				.clap_host
-				.load(id, plugin, receiver)
-				.map(Message::ClapHost),
-			Instruction::PluginSetState(id, state) => {
-				self.clap_host.set_state(id, &state);
-				Task::none()
+			Instruction::Message(message) => return self.update(message),
+			Instruction::PluginLoad(id, plugin, receiver) => {
+				return self
+					.clap_host
+					.load(id, plugin, receiver)
+					.map(Message::ClapHost);
+			}
+			Instruction::PluginSetState(id, state) => self.clap_host.set_state(id, &state),
+			Instruction::PluginParamChange(id, param_id, value, cookie) => {
+				if let Some((node, idx)) = self.arrangement_view.arrangement.plugin_of(id) {
+					self.arrangement_view
+						.arrangement
+						.send(generic_daw_core::Message::NodeAction(
+							node,
+							generic_daw_core::NodeAction::PluginParamChanged(
+								idx, param_id, value, cookie,
+							),
+						));
+				}
 			}
 		}
+
+		Task::none()
 	}
 
 	fn handle_file_tree_message(&mut self, message: file_tree::Message) -> Task<Message> {

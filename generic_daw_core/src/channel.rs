@@ -54,17 +54,19 @@ impl PanMode {
 #[derive(Debug)]
 struct Plugin {
 	id: PluginId,
-	processor: AudioProcessor<Event>,
+	processor: AudioProcessor,
+	events: Vec<Event>,
 	lanes: Vec<AutomationLane>,
 	mix: f32,
 	enabled: bool,
 }
 
 impl Plugin {
-	pub fn new(id: PluginId, processor: AudioProcessor<Event>) -> Self {
+	pub fn new(id: PluginId, processor: AudioProcessor) -> Self {
 		Self {
 			id,
 			processor,
+			events: Vec::new(),
 			lanes: Vec::new(),
 			mix: 1.0,
 			enabled: true,
@@ -94,11 +96,13 @@ impl NodeImpl for Channel {
 			.pop_if(|update| matches!(update, Update::Peaks(..)));
 
 		for plugin in &mut self.plugins {
+			events.append(&mut plugin.events);
+
 			for lane in &mut plugin.lanes {
 				lane.process(state, events);
 			}
 
-			plugin.processor.recv_events(events);
+			plugin.processor.recv_events();
 
 			if self.enabled && !self.bypassed && plugin.enabled {
 				plugin.processor.process(
@@ -114,8 +118,11 @@ impl NodeImpl for Channel {
 			plugin.processor.maybe_restart();
 
 			for event in events.drain(..) {
-				if let Event::ParamValue { param_id, .. } = event {
-					self.updates.push(Update::Param(plugin.id, param_id));
+				if let Event::ParamValue {
+					param_id, value, ..
+				} = event
+				{
+					self.updates.push(Update::Param(plugin.id, param_id, value));
 				}
 			}
 		}
@@ -175,6 +182,14 @@ impl Channel {
 			NodeAction::PluginMoveTo(from, to) => self.plugins.shift_move(from, to),
 			NodeAction::PluginToggleEnabled(index) => self.plugins[index].enabled ^= true,
 			NodeAction::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
+			NodeAction::PluginParamChanged(index, param_id, value, cookie) => {
+				self.plugins[index].events.push(Event::ParamValue {
+					time: 0,
+					param_id,
+					value,
+					cookie,
+				});
+			}
 			_ => panic!(),
 		}
 	}

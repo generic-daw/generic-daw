@@ -1,5 +1,5 @@
 use generic_daw_core::{
-	Event, PluginId, Transport,
+	PluginId, Transport,
 	clap_host::{self, AudioProcessor, HostInfo, MainThreadMessage, PluginDescriptor},
 };
 use std::sync::mpsc::Receiver;
@@ -13,7 +13,7 @@ pub struct Plugin {
 }
 
 pub struct PluginPair {
-	pub core: clap_host::Plugin<Event>,
+	pub core: clap_host::Plugin,
 	pub gui: Plugin,
 }
 
@@ -22,7 +22,7 @@ impl PluginPair {
 		descriptor: PluginDescriptor,
 		transport: &Transport,
 		host: HostInfo,
-	) -> (Self, AudioProcessor<Event>, Receiver<MainThreadMessage>) {
+	) -> (Self, AudioProcessor, Receiver<MainThreadMessage>) {
 		let (core, processor, receiver) = clap_host::Plugin::new(
 			descriptor.clone(),
 			transport.sample_rate,

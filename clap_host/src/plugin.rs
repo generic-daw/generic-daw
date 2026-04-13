@@ -1,5 +1,5 @@
 use crate::{
-	API_TYPE, AudioProcessor, EventImpl, MainThreadMessage, ParamInfoFlags, ParamRescanFlags,
+	API_TYPE, AudioProcessor, MainThreadMessage, ParamInfoFlags, ParamRescanFlags,
 	PluginDescriptor, StateContextType, TimerId, audio_buffers::AudioBuffers,
 	audio_processor::AudioThreadMessage, event_buffers::EventBuffers, gui::Gui, host::Host,
 	main_thread::MainThread, param::Param, preset::Preset, shared::Shared, size::Size,
@@ -20,27 +20,27 @@ use std::{
 use utils::{NoClone, NoDebug};
 
 #[derive(Debug)]
-pub struct Plugin<Event: EventImpl> {
+pub struct Plugin {
 	gui: Gui,
 	params: Box<[Param]>,
 	presets: Vec<Preset>,
 	instance: NoDebug<PluginInstance<Host>>,
 	descriptor: PluginDescriptor,
-	producer: Producer<AudioThreadMessage<Event>>,
+	producer: Producer<AudioThreadMessage>,
 	config: PluginAudioConfiguration,
 	last_state: Option<Box<[u8]>>,
 	is_created: bool,
 	is_shown: bool,
 }
 
-impl<Event: EventImpl> Plugin<Event> {
+impl Plugin {
 	#[must_use]
 	pub fn new(
 		descriptor: PluginDescriptor,
 		sample_rate: NonZero<u32>,
 		frames: NonZero<u32>,
 		host: HostInfo,
-	) -> (Self, AudioProcessor<Event>, Receiver<MainThreadMessage>) {
+	) -> (Self, AudioProcessor, Receiver<MainThreadMessage>) {
 		// SAFETY:
 		// Loading an external library object file is inherently unsafe.
 		let entry = unsafe { PluginEntry::load(&*descriptor.path) }.unwrap();
@@ -88,7 +88,7 @@ impl<Event: EventImpl> Plugin<Event> {
 		(plugin, processor, receiver)
 	}
 
-	fn send(&mut self, mut message: AudioThreadMessage<Event>) {
+	fn send(&mut self, mut message: AudioThreadMessage) {
 		while let Err(PushError::Full(msg)) = self.producer.push(message) {
 			message = msg;
 			std::thread::yield_now();
@@ -414,10 +414,6 @@ impl<Event: EventImpl> Plugin<Event> {
 		Some(Size::from_native((width as f32, height as f32)))
 	}
 
-	pub fn send_event(&mut self, event: Event) {
-		self.send(AudioThreadMessage::Event(event));
-	}
-
 	pub fn set_render_mode(&mut self, render_mode: RenderMode) {
 		self.send(AudioThreadMessage::RenderMode(render_mode));
 
@@ -483,7 +479,7 @@ impl<Event: EventImpl> Plugin<Event> {
 	}
 }
 
-impl<Event: EventImpl> Drop for Plugin<Event> {
+impl Drop for Plugin {
 	fn drop(&mut self) {
 		self.destroy();
 

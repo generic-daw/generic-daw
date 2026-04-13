@@ -1,9 +1,12 @@
 use crate::{
 	AudioGraph, AutomationPattern, AutomationPatternAction, AutomationPatternId, Channel, Clip,
-	Event, MidiPattern, MidiPatternAction, MidiPatternId, MusicalTime, Node, NodeId, PanMode,
-	PluginId, Position, Sample, SampleId, clap_host::ClapId, resampler::Resampler,
+	MidiPattern, MidiPatternAction, MidiPatternId, MusicalTime, Node, NodeId, PanMode, PluginId,
+	Position, Sample, SampleId, clap_host::ClapId, resampler::Resampler,
 };
-use clap_host::events::{EventFlags, EventHeader, TransportEvent, TransportFlags};
+use clap_host::{
+	Cookie,
+	events::{EventFlags, EventHeader, TransportEvent, TransportFlags},
+};
 use hound::WavWriter;
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, PushError, RingBuffer};
@@ -73,18 +76,19 @@ pub enum NodeAction {
 	ChannelVolumeChanged(f32),
 	ChannelPanChanged(PanMode),
 
-	PluginLoad(PluginId, Box<clap_host::AudioProcessor<Event>>),
+	PluginLoad(PluginId, Box<clap_host::AudioProcessor>),
 	PluginRemove(usize),
 	PluginMoveTo(usize, usize),
 	PluginToggleEnabled(usize),
 	PluginMixChanged(usize, f32),
+	PluginParamChanged(usize, ClapId, f32, Cookie),
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum Update {
 	Peaks(NodeId, [f32; 2]),
 	Polyphony(NodeId, usize),
-	Param(PluginId, ClapId),
+	Param(PluginId, ClapId, f32),
 	ConnectFailed(NodeId, NodeId),
 	Load(Duration, usize),
 }

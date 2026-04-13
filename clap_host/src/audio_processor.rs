@@ -10,30 +10,29 @@ use std::sync::atomic::Ordering::Relaxed;
 use utils::{NoClone, NoDebug};
 
 #[derive(Debug)]
-pub enum AudioThreadMessage<Event: EventImpl> {
+pub enum AudioThreadMessage {
 	Activated(NoDebug<PluginAudioProcessor<Host>>, Option<u32>),
 	RenderMode(RenderMode),
-	Event(Event),
 }
 
 #[derive(Debug)]
-pub struct AudioProcessor<Event: EventImpl> {
+pub struct AudioProcessor {
 	processor: Option<NoDebug<PluginAudioProcessor<Host>>>,
 	descriptor: PluginDescriptor,
 	audio_buffers: AudioBuffers,
 	event_buffers: EventBuffers,
-	consumer: Consumer<AudioThreadMessage<Event>>,
+	consumer: Consumer<AudioThreadMessage>,
 	needs_reset: bool,
 	render_mode: RenderMode,
 }
 
-impl<Event: EventImpl> AudioProcessor<Event> {
+impl AudioProcessor {
 	#[must_use]
 	pub fn new(
 		descriptor: PluginDescriptor,
 		audio_buffers: AudioBuffers,
 		event_buffers: EventBuffers,
-		consumer: Consumer<AudioThreadMessage<Event>>,
+		consumer: Consumer<AudioThreadMessage>,
 	) -> Self {
 		Self {
 			processor: None,
@@ -51,7 +50,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		&self.descriptor
 	}
 
-	pub fn recv_events(&mut self, events: &mut Vec<Event>) {
+	pub fn recv_events(&mut self) {
 		loop {
 			while let Ok(msg) = self.consumer.pop() {
 				trace!("{}: {msg:?}", self.descriptor);
@@ -64,7 +63,6 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 						}
 					}
 					AudioThreadMessage::RenderMode(render_mode) => self.render_mode = render_mode,
-					AudioThreadMessage::Event(event) => events.push(event),
 				}
 			}
 
@@ -106,7 +104,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	pub fn process(
 		&mut self,
 		audio: &mut [f32],
-		events: &mut Vec<Event>,
+		events: &mut Vec<impl EventImpl>,
 		transport: Option<&TransportEvent>,
 		mix_level: f32,
 	) {
@@ -165,7 +163,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 		}
 	}
 
-	pub fn flush(&mut self, events: &mut Vec<Event>) {
+	pub fn flush(&mut self, events: &mut Vec<impl EventImpl>) {
 		let Some(processor) = &mut self.processor else {
 			return;
 		};
@@ -199,7 +197,7 @@ impl<Event: EventImpl> AudioProcessor<Event> {
 	}
 }
 
-impl<Event: EventImpl> Drop for AudioProcessor<Event> {
+impl Drop for AudioProcessor {
 	fn drop(&mut self) {
 		if let Some(NoDebug(processor)) = self.processor.take() {
 			processor

@@ -17,7 +17,7 @@ use generic_daw_core::{
 	Batch, Message, MidiClipId, MidiKey, MidiNote, MidiNoteId, MidiPatternAction, MidiPatternId,
 	MusicalTime, NodeAction, NodeId, NodeImpl, PanMode, PluginId, Position, SampleId, Stream,
 	Transport, Update, Version, build_output_stream,
-	clap_host::{HostInfo, MainThreadMessage, ParamRescanFlags, PluginDescriptor},
+	clap_host::{HostInfo, PluginDescriptor},
 };
 use iced::Task;
 use rtrb::{Producer, PushError};
@@ -111,11 +111,8 @@ impl Arrangement {
 						node.polyphony = polyphony;
 					}
 				}
-				Update::Param(id, param_id) => {
-					messages.push(clap_host::Message::MainThread(
-						id,
-						MainThreadMessage::RescanParam(param_id, ParamRescanFlags::VALUES),
-					));
+				Update::Param(id, param_id, value) => {
+					messages.push(clap_host::Message::ParamChange(id, param_id, value));
 				}
 				Update::ConnectFailed(from, to) => _ = self.outgoing_mut(from).remove(&to),
 				Update::Load(duration, frames) => {
@@ -150,7 +147,7 @@ impl Arrangement {
 		&self.midi_patterns
 	}
 
-	fn send(&mut self, mut message: Message) {
+	pub fn send(&mut self, mut message: Message) {
 		while let Err(PushError::Full(msg)) = self.producer.push(message) {
 			message = msg;
 			std::thread::yield_now();
@@ -297,6 +294,12 @@ impl Arrangement {
 
 	pub fn track_of(&self, id: NodeId) -> Option<usize> {
 		self.tracks.iter().position(|t| t.id == id)
+	}
+
+	pub fn plugin_of(&self, id: PluginId) -> Option<(NodeId, usize)> {
+		self.nodes
+			.values()
+			.find_map(|(node, _)| Some((node.id, node.plugins.iter().position(|p| p.id == id)?)))
 	}
 
 	pub fn solo_track(&mut self, id: NodeId) {
