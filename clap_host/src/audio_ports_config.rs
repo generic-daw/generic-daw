@@ -4,7 +4,7 @@ use clack_host::prelude::*;
 
 #[derive(Debug, Default)]
 pub struct AudioPortsConfig {
-	pub port_channel_counts: Box<[usize]>,
+	pub port_channel_counts: Box<[u32]>,
 	pub main_port_index: usize,
 }
 
@@ -14,22 +14,19 @@ impl AudioPortsConfig {
 
 		let mut buffer = AudioPortInfoBuffer::new();
 		let mut main_port_index = None;
-		let mut port_channel_counts = Vec::new();
+		let port_channel_counts = (0..audio_ports.count(&mut plugin.plugin_handle(), is_input))
+			.map(|i| {
+				audio_ports
+					.get(&mut plugin.plugin_handle(), i, is_input, &mut buffer)
+					.map_or(0, |info| {
+						if info.flags.contains(AudioPortFlags::IS_MAIN) {
+							main_port_index.get_or_insert(i);
+						}
 
-		for i in 0..audio_ports.count(&mut plugin.plugin_handle(), is_input) {
-			let Some(info) = audio_ports.get(&mut plugin.plugin_handle(), i, is_input, &mut buffer)
-			else {
-				continue;
-			};
-
-			if info.flags.contains(AudioPortFlags::IS_MAIN) {
-				main_port_index.get_or_insert(i);
-			}
-
-			port_channel_counts.push(info.channel_count as usize);
-		}
-
-		let port_channel_counts = port_channel_counts.into_boxed_slice();
+						info.channel_count
+					})
+			})
+			.collect::<Box<_>>();
 
 		let main_port_index = main_port_index
 			.map(|i| i as usize)
@@ -47,7 +44,7 @@ impl AudioPortsConfig {
 impl From<&AudioPortsConfig> for AudioPorts {
 	fn from(value: &AudioPortsConfig) -> Self {
 		Self::with_capacity(
-			value.port_channel_counts.iter().sum(),
+			value.port_channel_counts.iter().sum::<u32>() as usize,
 			value.port_channel_counts.len(),
 		)
 	}

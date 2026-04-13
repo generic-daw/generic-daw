@@ -31,13 +31,13 @@ impl AudioBuffers {
 		let input_buffers = input_config
 			.port_channel_counts
 			.iter()
-			.map(|c| boxed_slice![0.0; config.max_frames_count as usize * c])
+			.map(|c| boxed_slice![0.0; (config.max_frames_count * c) as usize])
 			.collect::<Box<_>>()
 			.into();
 		let output_buffers = output_config
 			.port_channel_counts
 			.iter()
-			.map(|c| boxed_slice![0.0; config.max_frames_count as usize * c])
+			.map(|c| boxed_slice![0.0; (config.max_frames_count * c) as usize])
 			.collect::<Box<_>>()
 			.into();
 
