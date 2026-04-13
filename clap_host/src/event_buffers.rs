@@ -30,20 +30,17 @@ impl EventBuffers {
 
 		let mut buffer = NotePortInfoBuffer::new();
 
-		(0..note_ports
-			.count(&mut plugin.plugin_handle(), is_input)
-			.min(u16::MAX.into()))
-			.find_map(|i| {
-				let port = note_ports.get(&mut plugin.plugin_handle(), i, is_input, &mut buffer)?;
+		(0..note_ports.count(&mut plugin.plugin_handle(), is_input)).find_map(|i| {
+			let port = note_ports.get(&mut plugin.plugin_handle(), i, is_input, &mut buffer)?;
 
-				(port.supported_dialects.supports(NoteDialect::Clap)
-					|| port.supported_dialects.supports(NoteDialect::Midi))
-				.then_some((
-					i as u16,
-					port.preferred_dialect == Some(NoteDialect::Midi)
-						|| !port.supported_dialects.supports(NoteDialect::Clap),
-				))
-			})
+			(port.supported_dialects.supports(NoteDialect::Clap)
+				|| port.supported_dialects.supports(NoteDialect::Midi))
+			.then_some((
+				i as u16,
+				port.preferred_dialect == Some(NoteDialect::Midi)
+					|| !port.supported_dialects.supports(NoteDialect::Clap),
+			))
+		})
 	}
 
 	pub fn read_in(
