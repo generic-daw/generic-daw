@@ -6,7 +6,7 @@ use utils::NoDebug;
 #[derive(Debug)]
 pub struct Sample {
 	pub id: SampleId,
-	pub lods: Lods<Box<[(f32, f32)]>>,
+	pub lods: Lods,
 	pub name: Arc<str>,
 	pub path: Arc<Path>,
 	pub samples: NoDebug<Arc<[f32]>>,

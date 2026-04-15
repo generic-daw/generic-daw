@@ -3,7 +3,7 @@ use crate::{
 		crc,
 		sample::{Sample, SamplePair},
 	},
-	lod::Lods,
+	lod::LodsBuilder,
 };
 use generic_daw_core::{DeviceId, MusicalTime, NodeId, Transport};
 use rtrb::Consumer;
@@ -12,7 +12,7 @@ use std::{fs::File, io::BufWriter, num::NonZero, path::Path, sync::Arc};
 #[derive(Debug)]
 pub struct Recording {
 	pub core: generic_daw_core::Recording<BufWriter<File>>,
-	pub lods: Lods<Vec<(f32, f32)>>,
+	pub lods: LodsBuilder,
 	pub position: MusicalTime,
 	pub name: Arc<str>,
 	pub path: Arc<Path>,
@@ -40,7 +40,7 @@ impl Recording {
 		(
 			Self {
 				core,
-				lods: Lods::default(),
+				lods: LodsBuilder::default(),
 				position: MusicalTime::from_samples(transport.sample, transport),
 				path,
 				name,
