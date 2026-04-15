@@ -12,9 +12,15 @@ An early-in-development, open source, cross-platform digital audio workstation (
 
 ![screenshot](assets/screenshot.png)
 
-## Installation & Getting Started
+## Running
 
-### Requirements
+### Download
+
+Binaries are built for x64 Windows and Linux, as well as ARM MacOS. If you're signed in to GitHub, they are downloadable from the [automated builds](https://github.com/generic-daw/generic-daw/actions/workflows/rust.yml?query=branch:main) page.
+
+### Build from Source
+
+#### 1. Requirements
 
 - Rust & Cargo: Generic DAW is developed using the latest stable [Rust toolchain](https://rustup.rs)
 - on Linux you'll also need to install the alsa development headers:
@@ -22,14 +28,18 @@ An early-in-development, open source, cross-platform digital audio workstation (
   - Fedora: `sudo dnf install alsa-lib-devel`
   - Arch: `sudo pacman -S alsa-lib`
 
-### Build from Source
+#### 2. Compiling
 
-```bash
+Run the following shell commands to clone the source code and compile a release build:
+
+```
 git clone https://github.com/generic-daw/generic-daw.git
 cd generic-daw
 curl https://unpkg.com/lucide-static@latest/font/Lucide.ttf -Lo Lucide.ttf
 cargo build --release
 ```
+
+The binary will then be located at `./target/release/generic-daw`.
 
 ## Roadmap
 
