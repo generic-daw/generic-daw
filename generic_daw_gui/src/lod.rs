@@ -180,8 +180,12 @@ fn mesh(
 	}
 
 	let mesh_lod = (x_scale - 1.0) as usize;
-	let saved_lod = mesh_lod / STEP_SIZE;
+	let saved_lod = (mesh_lod / STEP_SIZE).checked_sub(1);
 	let lod_slices_per_mesh_slice = 1 << (mesh_lod % STEP_SIZE);
+
+	if saved_lod.is_some_and(|saved_lod| lods.len() <= saved_lod) {
+		return None;
+	}
 
 	let samples_per_mesh_slice = x_scale.floor().exp2();
 	let samples_per_px = x_scale.exp2();
@@ -205,11 +209,9 @@ fn mesh(
 	let lod_end = lod_end_f / lod_slices_per_mesh_slice as f32;
 	let lod_end = lod_end as usize * lod_slices_per_mesh_slice;
 
-	let lod_len = saved_lod
-		.checked_sub(1)
-		.map_or(samples.len() / 2, |saved_lod| {
-			lods[saved_lod].as_ref().len()
-		});
+	let lod_len = saved_lod.map_or(samples.len() / 2, |saved_lod| {
+		lods[saved_lod].as_ref().len()
+	});
 	let lod_end = lod_end.min(lod_len);
 
 	if lod_end <= lod_start {
@@ -218,29 +220,32 @@ fn mesh(
 
 	let color = color::pack(color);
 	let jitter_correct = -(offset as f32 / samples_per_mesh_slice).fract() * px_per_mesh_slice;
-	let vertices = if let Some(saved_lod) = saved_lod.checked_sub(1) {
-		vertices(
-			lods.get(saved_lod)?.as_ref()[lod_start..lod_end]
-				.chunks(lod_slices_per_mesh_slice)
-				.map(lod_min_max),
-			height,
-			color,
-			px_per_mesh_slice,
-			jitter_correct,
-			hidden_top_px,
-		)
-	} else {
-		vertices(
-			samples[2 * lod_start..2 * lod_end]
-				.chunks(2 * lod_slices_per_mesh_slice)
-				.map(samples_min_max),
-			height,
-			color,
-			px_per_mesh_slice,
-			jitter_correct,
-			hidden_top_px,
-		)
-	};
+	let vertices = saved_lod.map_or_else(
+		|| {
+			vertices(
+				samples[2 * lod_start..2 * lod_end]
+					.chunks(2 * lod_slices_per_mesh_slice)
+					.map(samples_min_max),
+				height,
+				color,
+				px_per_mesh_slice,
+				jitter_correct,
+				hidden_top_px,
+			)
+		},
+		|saved_lod| {
+			vertices(
+				lods[saved_lod].as_ref()[lod_start..lod_end]
+					.chunks(lod_slices_per_mesh_slice)
+					.map(lod_min_max),
+				height,
+				color,
+				px_per_mesh_slice,
+				jitter_correct,
+				hidden_top_px,
+			)
+		},
+	);
 
 	if vertices.len() < 3 {
 		return None;
