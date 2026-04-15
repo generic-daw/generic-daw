@@ -6,7 +6,7 @@ use crate::{
 		px_to_time, snap_step, time_to_px,
 	},
 };
-use generic_daw_core::{MusicalTime, Position, Transport};
+use generic_daw_core::{MusicalTime, OffsetPosition, Position, Transport};
 use iced::{
 	Event, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
@@ -208,38 +208,40 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						let time =
 							px_to_time(cursor.x, playlist.position, playlist.scale, self.transport);
 
-						playlist.status = match (modifiers.command(), modifiers.shift()) {
-							(false, false) => {
-								let start_pixel = clip_bounds.x;
-								let end_pixel = clip_bounds.x + clip_bounds.width;
-								let start_offset = cursor.x - start_pixel;
-								let end_offset = end_pixel - cursor.x;
-								let border = 10f32.min(clip_bounds.width / 3.0);
-								match (start_offset < border, end_offset < border) {
-									(false, false) => Status::Dragging(idx.0, time),
-									(true, false) => Status::TrimmingStart(time),
-									(false, true) => Status::TrimmingEnd(time),
-									(true, true) => unreachable!(),
-								}
-							}
-							(true, false) => {
+						let start_pixel = clip_bounds.x;
+						let end_pixel = clip_bounds.x + clip_bounds.width;
+						let start_offset = cursor.x - start_pixel;
+						let end_offset = end_pixel - cursor.x;
+						let border = 10f32.min(clip_bounds.width / 3.0);
+
+						playlist.status = match (
+							modifiers.command(),
+							modifiers.shift(),
+							start_offset < border,
+							end_offset < border,
+						) {
+							(false, false, false, false) => Status::Dragging(idx.0, time),
+							(false, _, true, false) => Status::TrimmingStart(time),
+							(false, _, false, true) => Status::TrimmingEnd(time),
+							(true, false, _, _) => {
 								clear = false;
 								let time = maybe_snap(time, *modifiers, |time| {
 									time.round(snap_step(playlist.scale.x, self.transport))
 								});
 								Status::Selecting(idx.0, idx.0, time, time)
 							}
-							(false, true) => {
+							(false, true, _, _) => {
 								shell.publish((self.f)(Action::Clone));
 								Status::Dragging(idx.0, time)
 							}
-							(true, true) => {
+							(true, true, _, _) => {
 								let time = maybe_snap(time, *modifiers, |time| {
 									time.round(snap_step(playlist.scale.x, self.transport))
 								});
 								shell.publish((self.f)(Action::SplitAt(time)));
 								Status::DraggingSplit(time)
 							}
+							(_, _, true, true) => unreachable!(),
 						};
 
 						shell.capture_event();
@@ -381,11 +383,20 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			Inner::AudioClip(inner) => {
 				if cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
+						let position = OffsetPosition::new(
+							Position::new(
+								inner.clip.position.start(),
+								inner.clip.position.start()
+									+ inner.clip.position.len() * inner.clip.stretch,
+							),
+							inner.clip.position.offset(),
+						);
+
 						inner.sample.lods.mesh(
 							&inner.sample.samples,
 							self.transport,
-							inner.clip.position,
-							playlist.scale.x,
+							position,
+							playlist.scale.x + inner.clip.stretch.log2(),
 							height,
 							theme.palette().background.strong.text,
 							lower_bounds.size(),

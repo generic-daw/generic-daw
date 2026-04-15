@@ -15,6 +15,13 @@ impl Clip {
 		}
 	}
 
+	pub fn stretch(&mut self) -> &mut f32 {
+		match self {
+			Self::Audio(audio) => &mut audio.stretch,
+			Self::Midi(..) => panic!(),
+		}
+	}
+
 	pub fn move_to(&mut self, pos: MusicalTime) {
 		match self {
 			Self::Audio(audio) => audio.position.move_to(pos),
@@ -52,9 +59,15 @@ impl From<MidiClip> for Clip {
 impl From<Clip> for generic_daw_core::Clip {
 	fn from(value: Clip) -> Self {
 		match value {
-			Clip::Audio(AudioClip { sample, position }) => {
-				Self::Audio(generic_daw_core::AudioClip { sample, position })
-			}
+			Clip::Audio(AudioClip {
+				sample,
+				position,
+				stretch,
+			}) => Self::Audio(generic_daw_core::AudioClip {
+				sample,
+				position,
+				stretch,
+			}),
 			Clip::Midi(MidiClip {
 				id,
 				pattern,

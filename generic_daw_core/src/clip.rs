@@ -39,6 +39,13 @@ impl Clip {
 			Self::Midi(clip) => &mut clip.position,
 		}
 	}
+
+	pub fn stretch(&mut self) -> &mut f32 {
+		match self {
+			Self::Audio(clip) => &mut clip.stretch,
+			Self::Midi(..) => panic!(),
+		}
+	}
 }
 
 impl From<AudioClip> for Clip {

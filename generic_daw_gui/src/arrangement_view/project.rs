@@ -94,6 +94,7 @@ impl Arrangement {
 								},
 								offset: audio.position.offset().into_raw(),
 							},
+							stretch: audio.stretch,
 						}
 						.into(),
 						Clip::Midi(midi) => proto::MidiClip {
@@ -459,6 +460,7 @@ impl Arrangement {
 									),
 									MusicalTime::from_raw(audio.position.offset),
 								),
+								stretch: audio.stretch,
 							})
 						}
 						proto::Clip::Midi(midi) => Clip::Midi(MidiClip {

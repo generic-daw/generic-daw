@@ -70,6 +70,8 @@ pub enum NodeAction {
 	ClipMoveTo(usize, MusicalTime),
 	ClipTrimStartTo(usize, MusicalTime),
 	ClipTrimEndTo(usize, MusicalTime),
+	ClipStretchStartTo(usize, MusicalTime),
+	ClipStretchEndTo(usize, MusicalTime),
 
 	ChannelToggleEnabled,
 	ChannelToggleBypassed,

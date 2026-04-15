@@ -169,6 +169,8 @@ pub struct AudioClip {
 	pub sample: SampleIndex,
 	#[prost(message, required)]
 	pub position: OffsetPosition,
+	#[prost(float, default = 1.0)]
+	pub stretch: f32,
 }
 
 #[derive(Clone, Copy, Message)]

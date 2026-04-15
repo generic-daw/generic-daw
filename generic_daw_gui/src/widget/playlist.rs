@@ -37,6 +37,8 @@ pub enum Action {
 	Drag(Delta<usize>, Delta<MusicalTime>),
 	TrimStart(Delta<MusicalTime>),
 	TrimEnd(Delta<MusicalTime>),
+	StretchStart(Delta<MusicalTime>),
+	StretchEnd(Delta<MusicalTime>),
 	SplitAt(MusicalTime),
 	DragSplit(MusicalTime),
 	Delete,
@@ -370,7 +372,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 						}(abs_diff);
 
 						state.status = Status::TrimmingStart(time + delta);
-						shell.publish((self.action)(Action::TrimStart(delta)));
+						shell.publish((self.action)(if modifiers.shift() {
+							Action::StretchStart(delta)
+						} else {
+							Action::TrimStart(delta)
+						}));
 						shell.capture_event();
 					}
 				}
@@ -387,7 +393,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 						}(abs_diff);
 
 						state.status = Status::TrimmingEnd(time + delta);
-						shell.publish((self.action)(Action::TrimEnd(delta)));
+						shell.publish((self.action)(if modifiers.shift() {
+							Action::StretchEnd(delta)
+						} else {
+							Action::TrimEnd(delta)
+						}));
 						shell.capture_event();
 					}
 				}

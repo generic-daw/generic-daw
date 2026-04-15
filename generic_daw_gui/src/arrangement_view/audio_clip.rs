@@ -5,6 +5,7 @@ use generic_daw_core::{OffsetPosition, SampleId};
 pub struct AudioClip {
 	pub sample: SampleId,
 	pub position: OffsetPosition,
+	pub stretch: f32,
 }
 
 impl AudioClip {
@@ -12,6 +13,7 @@ impl AudioClip {
 		Self {
 			sample,
 			position: OffsetPosition::default(),
+			stretch: 1.0,
 		}
 	}
 }

@@ -1032,7 +1032,24 @@ impl ArrangementView {
 						.clip_trim_end_to(track, clip, pos + pos_diff);
 				}
 			}
-
+			playlist::Action::StretchStart(pos_diff) => {
+				for &(track, clip) in &*primary {
+					let pos = self.arrangement.tracks()[track].clips[clip]
+						.position()
+						.start();
+					self.arrangement
+						.clip_stretch_start_to(track, clip, pos + pos_diff);
+				}
+			}
+			playlist::Action::StretchEnd(pos_diff) => {
+				for &(track, clip) in &*primary {
+					let pos = self.arrangement.tracks()[track].clips[clip]
+						.position()
+						.end();
+					self.arrangement
+						.clip_stretch_from_end(track, clip, pos + pos_diff);
+				}
+			}
 			playlist::Action::SplitAt(mut pos) => {
 				let mut extra = HashMap::<_, usize>::new();
 

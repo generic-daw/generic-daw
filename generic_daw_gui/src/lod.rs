@@ -187,7 +187,7 @@ fn mesh(
 		return None;
 	}
 
-	let samples_per_mesh_slice = x_scale.floor().exp2();
+	let samples_per_mesh_slice = (2 << mesh_lod) as f32;
 	let samples_per_px = x_scale.exp2();
 
 	let px_per_mesh_slice = samples_per_mesh_slice / samples_per_px;
