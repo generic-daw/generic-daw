@@ -289,12 +289,10 @@ impl Arrangement {
 			let done = done.clone();
 			let path = paths.remove(&idx);
 			let sample = sample.clone();
-			let transport = *arrangement.transport();
 
 			std::thread::spawn(move || {
 				if let Some(path) = path
-					&& let Some(sample) =
-						SamplePair::with_crc_and_len(path, &transport, sample.crc, sample.len)
+					&& let Some(sample) = SamplePair::with_crc_and_len(path, sample.crc, sample.len)
 				{
 					done.send((idx, Feedback::Use(Ok(sample)))).unwrap();
 					return;
@@ -324,7 +322,7 @@ impl Arrangement {
 						}
 					};
 
-					if let Some(sample) = SamplePair::new(path, &transport) {
+					if let Some(sample) = SamplePair::new(path) {
 						done.send((idx, Feedback::Use(Ok(sample)))).unwrap();
 						return;
 					}

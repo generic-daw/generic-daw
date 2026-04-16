@@ -15,7 +15,6 @@ mod node;
 mod offset_position;
 mod position;
 mod recording;
-mod resampler;
 mod sample;
 mod stream;
 mod track;

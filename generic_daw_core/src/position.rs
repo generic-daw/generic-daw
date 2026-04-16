@@ -131,6 +131,11 @@ impl Position {
 	pub fn bar_round(self, transport: &Transport) -> Self {
 		self.round(MusicalTime::new(transport.numerator.get().into(), 0))
 	}
+
+	#[must_use]
+	pub fn stretch(self, stretch: f32) -> Self {
+		Self::new(self.start(), self.start() + self.len() * stretch)
+	}
 }
 
 impl Add<MusicalTime> for Position {

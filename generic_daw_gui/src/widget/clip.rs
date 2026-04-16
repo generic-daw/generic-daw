@@ -6,7 +6,7 @@ use crate::{
 		px_to_time, snap_step, time_to_px,
 	},
 };
-use generic_daw_core::{MusicalTime, OffsetPosition, Position, Transport};
+use generic_daw_core::{Position, Transport};
 use iced::{
 	Event, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
@@ -126,11 +126,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		let (start, end) = match self.inner {
 			Inner::AudioClip(inner) => (inner.clip.position.start(), inner.clip.position.end()),
 			Inner::MidiClip(inner) => (inner.clip.position.start(), inner.clip.position.end()),
-			Inner::Recording(inner) => (
-				inner.position,
-				inner.position
-					+ MusicalTime::from_samples(inner.core.samples().len(), self.transport),
-			),
+			Inner::Recording(inner) => (inner.position, inner.position + inner.len(self.transport)),
 		};
 
 		let start = time_to_px(start, playlist.position, playlist.scale, self.transport);
@@ -383,20 +379,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			Inner::AudioClip(inner) => {
 				if cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
-						let position = OffsetPosition::new(
-							Position::new(
-								inner.clip.position.start(),
-								inner.clip.position.start()
-									+ inner.clip.position.len() * inner.clip.stretch,
-							),
-							inner.clip.position.offset() * inner.clip.stretch,
-						);
+						let stretch =
+							inner.clip.stretch / inner.sample.resample_ratio(self.transport);
 
 						inner.sample.lods.mesh(
 							&inner.sample.samples,
 							self.transport,
-							position,
-							playlist.scale.x + inner.clip.stretch.log2(),
+							inner.clip.position.stretch(stretch),
+							playlist.scale.x + stretch.log2(),
 							height,
 							theme.palette().background.strong.text,
 							lower_bounds.size(),
@@ -462,21 +452,20 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			Inner::Recording(inner) => {
 				if cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
+						let stretch = 1.0 / inner.core.resample_ratio(self.transport);
+
 						let position = Position::new(
 							inner.position,
-							inner.position
-								+ MusicalTime::from_samples(
-									inner.core.samples().len(),
-									self.transport,
-								),
+							inner.position + inner.len(self.transport),
 						)
+						.stretch(stretch)
 						.into();
 
 						inner.lods.mesh(
 							inner.core.samples(),
 							self.transport,
 							position,
-							playlist.scale.x,
+							playlist.scale.x + stretch.log2(),
 							height,
 							theme.palette().background.strong.text,
 							lower_bounds.size(),

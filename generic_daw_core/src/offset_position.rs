@@ -75,12 +75,19 @@ impl OffsetPosition {
 	pub fn stretch_end_to(&mut self, new_end: MusicalTime) -> f32 {
 		let old_len = self.len();
 		self.trim_end_to(new_end);
-		old_len / self.len()
+		let fac = old_len / self.len();
+		self.offset /= fac;
+		fac
 	}
 
 	#[must_use]
 	pub fn position(self) -> Position {
 		self.position
+	}
+
+	#[must_use]
+	pub fn stretch(self, stretch: f32) -> Self {
+		Self::new(self.position().stretch(stretch), self.offset() * stretch)
 	}
 }
 

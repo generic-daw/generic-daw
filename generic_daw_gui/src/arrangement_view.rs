@@ -424,10 +424,8 @@ impl ArrangementView {
 			}
 			Message::AddAudioClip(id, track, pos) => {
 				let mut clip = AudioClip::new(id);
-				clip.position.trim_end_to(MusicalTime::from_samples(
-					self.arrangement.samples()[&id].samples.len(),
-					self.arrangement.transport(),
-				));
+				clip.position
+					.trim_end_to(self.arrangement.samples()[&id].len(self.arrangement.transport()));
 				clip.position.move_to(pos);
 				let (track, task) = if let Some(track) = track {
 					(track, Action::none())
@@ -543,10 +541,9 @@ impl ArrangementView {
 						let track = self.arrangement.track_of(recording.node).unwrap();
 
 						let mut clip = AudioClip::new(id);
-						clip.position.trim_end_to(MusicalTime::from_samples(
-							self.arrangement.samples()[&id].samples.len(),
-							self.arrangement.transport(),
-						));
+						clip.position.trim_end_to(
+							self.arrangement.samples()[&id].len(self.arrangement.transport()),
+						);
 						clip.position.move_to(pos);
 						self.arrangement.add_clip(track, clip);
 
@@ -562,8 +559,8 @@ impl ArrangementView {
 						node,
 					);
 
-					let sample_rate = recording.sample_rate();
-					let frames = recording.frames().or(config.input_device.buffer_size);
+					let sample_rate = recording.core.sample_rate();
+					let frames = recording.core.frames().or(config.input_device.buffer_size);
 
 					self.recording = Some(recording);
 					self.arrangement.play();
@@ -587,10 +584,9 @@ impl ArrangementView {
 					self.arrangement.add_sample(sample);
 
 					let mut clip = AudioClip::new(id);
-					clip.position.trim_end_to(MusicalTime::from_samples(
-						self.arrangement.samples()[&id].samples.len(),
-						self.arrangement.transport(),
-					));
+					clip.position.trim_end_to(
+						self.arrangement.samples()[&id].len(self.arrangement.transport()),
+					);
 					clip.position.move_to(pos);
 					self.arrangement.add_clip(track, clip);
 				}
@@ -954,10 +950,9 @@ impl ArrangementView {
 						self.update(Message::AddAudioClip(sample.id, track, pos), config, state)
 					} else {
 						self.loading += 1;
-						let transport = *self.arrangement.transport();
 						Task::future(unblock(move || {
 							Message::SampleLoaded(
-								SamplePair::new(path, &transport)
+								SamplePair::new(path)
 									.map(|pair| (Box::new(pair), track, pos))
 									.into(),
 							)

@@ -1,7 +1,7 @@
 use crate::{
 	AudioGraph, AutomationPattern, AutomationPatternAction, AutomationPatternId, Channel, Clip,
 	MidiPattern, MidiPatternAction, MidiPatternId, MusicalTime, Node, NodeId, PanMode, PluginId,
-	Position, Sample, SampleId, clap_host::ClapId, resampler::Resampler,
+	Position, Sample, SampleId, clap_host::ClapId, sample::resample_cubic,
 };
 use clap_host::{
 	Cookie,
@@ -16,7 +16,7 @@ use std::{
 	path::Path,
 	time::{Duration, Instant},
 };
-use utils::{NoDebug, boxed_slice, include_f32s, unique_id};
+use utils::{boxed_slice, include_f32s, unique_id};
 
 unique_id!(version);
 
@@ -192,8 +192,6 @@ pub struct AudioProcessor {
 	audio_graph: AudioGraph,
 	producer: Producer<Batch>,
 	consumer: Consumer<Message>,
-	on_bar_click: NoDebug<Box<[f32]>>,
-	off_bar_click: NoDebug<Box<[f32]>>,
 	needs_update: bool,
 	updates: Vec<Update>,
 	update_buffers: Vec<Vec<Update>>,
@@ -203,22 +201,6 @@ impl AudioProcessor {
 	pub fn create(transport: Transport) -> (Callback, NodeId, Producer<Message>, Consumer<Batch>) {
 		let (r_producer, consumer) = RingBuffer::new(transport.frames.get() as usize);
 		let (producer, r_consumer) = RingBuffer::new(transport.frames.get() as usize);
-
-		let mut on_bar_click = Resampler::new(
-			NonZero::new(44100).unwrap(),
-			transport.sample_rate,
-			NonZero::new(2).unwrap(),
-		)
-		.unwrap();
-		on_bar_click.process(&ON_BAR_CLICK);
-
-		let mut off_bar_click = Resampler::new(
-			NonZero::new(44100).unwrap(),
-			transport.sample_rate,
-			NonZero::new(2).unwrap(),
-		)
-		.unwrap();
-		off_bar_click.process(&OFF_BAR_CLICK);
 
 		let processor = Self {
 			audio_graph: AudioGraph::new(
@@ -233,8 +215,6 @@ impl AudioProcessor {
 			),
 			producer,
 			consumer,
-			on_bar_click: on_bar_click.finish().into_boxed_slice().into(),
-			off_bar_click: off_bar_click.finish().into_boxed_slice().into(),
 			needs_update: false,
 			updates: Vec::new(),
 			update_buffers: Vec::new(),
@@ -437,12 +417,14 @@ impl AudioProcessor {
 				.beat()
 				.is_multiple_of(self.transport().numerator.get().into())
 			{
-				&**self.on_bar_click
+				&ON_BAR_CLICK
 			} else {
-				&**self.off_bar_click
+				&OFF_BAR_CLICK
 			};
 
 			start += MusicalTime::BEAT;
+
+			let resample_ratio = 44100.0 / self.transport().sample_rate.get() as f32;
 
 			let buf_idx = start_samples.saturating_sub(self.transport().sample);
 			let click_idx = self.transport().sample.saturating_sub(start_samples);
@@ -451,10 +433,7 @@ impl AudioProcessor {
 				continue;
 			}
 
-			buf[buf_idx..]
-				.iter_mut()
-				.zip(&click[click_idx..])
-				.for_each(|(buf, sample)| *buf += sample);
+			resample_cubic(&mut buf[buf_idx..], click, resample_ratio, click_idx / 2);
 		}
 	}
 

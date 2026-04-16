@@ -1,6 +1,5 @@
 use crate::{
-	DeviceId, Sample, SampleId, Stream, Transport, build_input_stream, resampler::Resampler,
-	stream::frames_of_config,
+	DeviceId, Sample, SampleId, Stream, Transport, build_input_stream, stream::frames_of_config,
 };
 use cpal::StreamConfig;
 use hound::{SampleFormat, WavSpec, WavWriter};
@@ -10,8 +9,8 @@ use utils::NoDebug;
 
 #[derive(Debug)]
 pub struct Recording<W: io::Write + io::Seek> {
-	resampler: Resampler,
 	writer: NoDebug<WavWriter<W>>,
+	samples: Vec<f32>,
 
 	stream: Option<NoDebug<Stream>>,
 	config: StreamConfig,
@@ -21,19 +20,11 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	#[must_use]
 	pub fn create(
 		writer: W,
-		transport: &Transport,
 		device_id: Option<&DeviceId>,
 		sample_rate: NonZero<u32>,
 		frames: Option<NonZero<u32>>,
 	) -> (Self, Consumer<Box<[f32]>>) {
 		let (config, consumer, stream) = build_input_stream(device_id, sample_rate, frames);
-
-		let resampler = Resampler::new(
-			NonZero::new(config.sample_rate).unwrap(),
-			transport.sample_rate,
-			NonZero::new(2).unwrap(),
-		)
-		.unwrap();
 
 		let writer = WavWriter::new(
 			writer,
@@ -48,14 +39,18 @@ impl<W: io::Write + io::Seek> Recording<W> {
 
 		(
 			Self {
-				resampler,
 				writer: writer.into(),
+				samples: Vec::new(),
 
 				stream: Some(stream.into()),
 				config,
 			},
 			consumer,
 		)
+	}
+
+	pub fn resample_ratio(&self, transport: &Transport) -> f32 {
+		transport.sample_rate.get() as f32 / self.config.sample_rate as f32
 	}
 
 	#[must_use]
@@ -70,29 +65,20 @@ impl<W: io::Write + io::Seek> Recording<W> {
 
 	#[must_use]
 	pub fn samples(&self) -> &[f32] {
-		self.resampler.samples()
+		&self.samples
 	}
 
 	pub fn write(&mut self, samples: &[f32]) {
-		let start = self.resampler.samples().len();
-		self.resampler.process(samples);
-		for &s in &self.resampler.samples()[start..] {
+		self.samples.extend_from_slice(samples);
+		for &s in samples {
 			self.writer.write_sample(s).unwrap();
 		}
 	}
 
-	pub fn split_off(&mut self, writer: W, transport: &Transport) -> Sample {
-		let resampler = std::mem::replace(
-			&mut self.resampler,
-			Resampler::new(
-				NonZero::new(self.config.sample_rate).unwrap(),
-				transport.sample_rate,
-				NonZero::new(2).unwrap(),
-			)
-			.unwrap(),
-		);
+	pub fn split_off(&mut self, writer: W) -> Sample {
+		let samples = std::mem::take(&mut self.samples);
 
-		let mut writer = std::mem::replace(
+		let writer = std::mem::replace(
 			&mut *self.writer,
 			WavWriter::new(
 				writer,
@@ -106,17 +92,12 @@ impl<W: io::Write + io::Seek> Recording<W> {
 			.unwrap(),
 		);
 
-		let start = resampler.samples().len();
-		let samples = resampler.finish();
-
-		for &s in &samples[start..] {
-			writer.write_sample(s).unwrap();
-		}
 		writer.finalize().unwrap();
 
 		Sample {
 			id: SampleId::unique(),
 			samples: NoDebug(samples.into()),
+			sample_rate: NonZero::new(self.config.sample_rate).unwrap(),
 		}
 	}
 
@@ -127,25 +108,20 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	#[must_use]
 	pub fn finalize(self) -> Sample {
 		let Self {
-			resampler,
-			writer: NoDebug(mut writer),
+			samples,
+			writer: NoDebug(writer),
 			stream,
 			..
 		} = self;
 
 		debug_assert!(stream.is_none());
 
-		let start = resampler.samples().len();
-		let samples = resampler.finish();
-
-		for &s in &samples[start..] {
-			writer.write_sample(s).unwrap();
-		}
 		writer.finalize().unwrap();
 
 		Sample {
 			id: SampleId::unique(),
 			samples: NoDebug(samples.into()),
+			sample_rate: NonZero::new(self.config.sample_rate).unwrap(),
 		}
 	}
 }

@@ -30,7 +30,6 @@ impl Recording {
 	) -> (Self, Consumer<Box<[f32]>>) {
 		let (core, consumer) = generic_daw_core::Recording::create(
 			BufWriter::new(File::create(&path).unwrap()),
-			transport,
 			device_id,
 			sample_rate,
 			frames,
@@ -50,12 +49,9 @@ impl Recording {
 		)
 	}
 
-	pub fn sample_rate(&self) -> NonZero<u32> {
-		self.core.sample_rate()
-	}
-
-	pub fn frames(&self) -> Option<NonZero<u32>> {
-		self.core.frames()
+	pub fn len(&self, transport: &Transport) -> MusicalTime {
+		MusicalTime::from_samples(self.core.samples().len(), transport)
+			* self.core.resample_ratio(transport)
 	}
 
 	pub fn write(&mut self, samples: &[f32]) {
@@ -68,7 +64,7 @@ impl Recording {
 		let start = self.core.samples().len();
 		let core = self
 			.core
-			.split_off(BufWriter::new(File::create(&path).unwrap()), transport);
+			.split_off(BufWriter::new(File::create(&path).unwrap()));
 		self.lods.update(self.core.samples(), start);
 
 		let lods = std::mem::take(&mut self.lods);
@@ -88,6 +84,7 @@ impl Recording {
 			name,
 			path: path.clone(),
 			samples: core.samples.clone(),
+			sample_rate: core.sample_rate,
 			crc: crc(File::open(&path).unwrap()),
 			len: std::fs::metadata(path).unwrap().len(),
 			refs: 0,
@@ -111,6 +108,7 @@ impl Recording {
 			name: self.name,
 			path: self.path.clone(),
 			samples: core.samples.clone(),
+			sample_rate: core.sample_rate,
 			crc: crc(File::open(&self.path).unwrap()),
 			len: std::fs::metadata(self.path).unwrap().len(),
 			refs: 0,
