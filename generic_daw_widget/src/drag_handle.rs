@@ -134,7 +134,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 				} => {
 					if let Some(last_y) = state.dragging {
 						let diff = (last_y - y) * 0.1 + state.scroll;
-						state.scroll = diff.round() - diff;
+						state.scroll = diff - diff.round();
 
 						let new_value = self.value.saturating_add_signed(diff.round() as isize);
 						if new_value != self.value {
@@ -155,7 +155,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 						ScrollDelta::Pixels { y, .. } => y / 60.0,
 					} * if modifiers.command() { 10.0 } else { 1.0 }
 						+ state.scroll;
-					state.scroll = diff.round() - diff;
+					state.scroll = diff - diff.round();
 
 					let new_value = self.value.saturating_add_signed(diff.round() as isize);
 					if new_value != self.value {
