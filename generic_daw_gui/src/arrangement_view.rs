@@ -914,7 +914,10 @@ impl ArrangementView {
 			playlist::Action::Zoom(scale_diff, cursor, visible) => {
 				let old_scale = *scale;
 				*scale += scale_diff;
-				scale.x = scale.x.clamp(1.0, 16f32.next_down());
+				scale.x = scale.x.clamp(
+					1.0,
+					(self.arrangement.transport().sample_rate.get() as f32).log2(),
+				);
 				scale.y = scale.y.clamp(46.0, 200.0);
 
 				let pos_diff = Vector::new(
@@ -1151,7 +1154,10 @@ impl ArrangementView {
 			piano_roll::Action::Zoom(scale_diff, cursor, height, visible) => {
 				let old_scale = *scale;
 				*scale += scale_diff;
-				scale.x = scale.x.clamp(1.0, 16f32.next_down());
+				scale.x = scale.x.clamp(
+					1.0,
+					(self.arrangement.transport().sample_rate.get() as f32).log2(),
+				);
 				scale.y = scale.y.clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
 
 				let pos_diff = Vector::new(
