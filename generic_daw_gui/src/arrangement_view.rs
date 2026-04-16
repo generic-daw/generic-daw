@@ -343,6 +343,11 @@ impl ArrangementView {
 				let nearest = (db / 6.0).round() * 6.0;
 				if (db - nearest).abs() < 0.15 {
 					volume = db_to_amp(nearest).copysign(volume);
+				} else {
+					let nearest = (db / 3.0).round() * 3.0;
+					if (db - nearest).abs() < 0.05 {
+						volume = db_to_amp(nearest).copysign(volume);
+					}
 				}
 
 				self.arrangement.channel_volume_changed(node, volume);
