@@ -177,7 +177,7 @@ impl<W: WorkList> Shared<W> {
 
 			let Ok(_) = self
 				.active
-				.fetch_update(Acquire, Relaxed, |active| active.checked_add(1))
+				.try_update(Acquire, Relaxed, |active| active.checked_add(1))
 			else {
 				continue;
 			};
@@ -185,7 +185,7 @@ impl<W: WorkList> Shared<W> {
 			// SAFETY:
 			// `self.work_list` is a valid reference to a `W`, because `install` previously set it
 			// to a reference to a `W` that is valid at least until `join` finishes. `join` hasn't
-			// finished yet because `self.active` wasn't `usize::MAX` at the `fetch_update`, and
+			// finished yet because `self.active` wasn't `usize::MAX` at the `try_update`, and
 			// can't be `usize::MAX` again before the `fetch_sub`.
 			let work_list = unsafe { self.work_list.load(Relaxed).as_ref() }.unwrap();
 
