@@ -478,14 +478,16 @@ impl Arrangement {
 
 	pub fn clip_move_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
 		if self.tracks[track].clips[clip].position().start() != pos {
-			self.tracks[track].clips[clip].move_to(pos);
+			self.tracks[track].clips[clip].position_mut().move_to(pos);
 			self.node_action(self.tracks[track].id, NodeAction::ClipMoveTo(clip, pos));
 		}
 	}
 
 	pub fn clip_trim_start_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
 		if self.tracks[track].clips[clip].position().start() != pos {
-			self.tracks[track].clips[clip].trim_start_to(pos);
+			self.tracks[track].clips[clip]
+				.position_mut()
+				.trim_start_to(pos);
 			self.node_action(
 				self.tracks[track].id,
 				NodeAction::ClipTrimStartTo(clip, pos),
@@ -495,7 +497,9 @@ impl Arrangement {
 
 	pub fn clip_trim_end_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
 		if self.tracks[track].clips[clip].position().end() != pos {
-			self.tracks[track].clips[clip].trim_end_to(pos);
+			self.tracks[track].clips[clip]
+				.position_mut()
+				.trim_end_to(pos);
 			self.node_action(self.tracks[track].id, NodeAction::ClipTrimEndTo(clip, pos));
 		}
 	}
@@ -504,7 +508,7 @@ impl Arrangement {
 		let c = &mut self.tracks[track].clips[clip];
 		if c.position().start() != pos {
 			if matches!(c, Clip::Audio(..)) {
-				*c.stretch() *= c.stretch_start_to(pos);
+				*c.stretch() *= c.position_mut().stretch_start_to(pos);
 				self.node_action(
 					self.tracks[track].id,
 					NodeAction::ClipStretchStartTo(clip, pos),
@@ -519,7 +523,7 @@ impl Arrangement {
 		let c = &mut self.tracks[track].clips[clip];
 		if c.position().end() != pos {
 			if matches!(c, Clip::Audio(..)) {
-				*c.stretch() *= c.stretch_end_to(pos);
+				*c.stretch() *= c.position_mut().stretch_end_to(pos);
 				self.node_action(
 					self.tracks[track].id,
 					NodeAction::ClipStretchEndTo(clip, pos),

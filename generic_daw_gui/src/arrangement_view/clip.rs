@@ -1,5 +1,5 @@
 use crate::arrangement_view::{audio_clip::AudioClip, midi_clip::MidiClip};
-use generic_daw_core::{MusicalTime, OffsetPosition};
+use generic_daw_core::OffsetPosition;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Clip {
@@ -15,44 +15,17 @@ impl Clip {
 		}
 	}
 
+	pub fn position_mut(&mut self) -> &mut OffsetPosition {
+		match self {
+			Self::Audio(audio) => &mut audio.position,
+			Self::Midi(midi) => &mut midi.position,
+		}
+	}
+
 	pub fn stretch(&mut self) -> &mut f32 {
 		match self {
 			Self::Audio(audio) => &mut audio.stretch,
 			Self::Midi(..) => panic!(),
-		}
-	}
-
-	pub fn move_to(&mut self, pos: MusicalTime) {
-		match self {
-			Self::Audio(audio) => audio.position.move_to(pos),
-			Self::Midi(midi) => midi.position.move_to(pos),
-		}
-	}
-
-	pub fn trim_start_to(&mut self, pos: MusicalTime) {
-		match self {
-			Self::Audio(audio) => audio.position.trim_start_to(pos),
-			Self::Midi(midi) => midi.position.trim_start_to(pos),
-		}
-	}
-
-	pub fn trim_end_to(&mut self, pos: MusicalTime) {
-		match self {
-			Self::Audio(audio) => audio.position.trim_end_to(pos),
-			Self::Midi(midi) => midi.position.trim_end_to(pos),
-		}
-	}
-
-	pub fn stretch_start_to(&mut self, pos: MusicalTime) -> f32 {
-		match self {
-			Self::Audio(audio) => audio.position.stretch_start_to(pos),
-			Self::Midi(midi) => midi.position.stretch_start_to(pos),
-		}
-	}
-	pub fn stretch_end_to(&mut self, pos: MusicalTime) -> f32 {
-		match self {
-			Self::Audio(audio) => audio.position.stretch_end_to(pos),
-			Self::Midi(midi) => midi.position.stretch_end_to(pos),
 		}
 	}
 }
