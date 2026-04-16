@@ -2,7 +2,7 @@ use crate::Transport;
 use clap_host::{BeatTime, SecondsTime};
 use std::{
 	fmt::{Debug, Formatter},
-	ops::{Add, AddAssign, Div, Mul, Sub, SubAssign},
+	ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
 	time::Duration,
 };
 
@@ -211,6 +211,26 @@ impl Mul<f32> for MusicalTime {
 
 	fn mul(self, rhs: f32) -> Self::Output {
 		Self((self.0 as f64 * f64::from(rhs)) as u64)
+	}
+}
+
+impl MulAssign<f32> for MusicalTime {
+	fn mul_assign(&mut self, rhs: f32) {
+		*self = *self * rhs;
+	}
+}
+
+impl Div<f32> for MusicalTime {
+	type Output = Self;
+
+	fn div(self, rhs: f32) -> Self::Output {
+		Self((self.0 as f64 / f64::from(rhs)) as u64)
+	}
+}
+
+impl DivAssign<f32> for MusicalTime {
+	fn div_assign(&mut self, rhs: f32) {
+		*self = *self / rhs;
 	}
 }
 

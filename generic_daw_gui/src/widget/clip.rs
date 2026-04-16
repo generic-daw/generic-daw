@@ -389,7 +389,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 								inner.clip.position.start()
 									+ inner.clip.position.len() * inner.clip.stretch,
 							),
-							inner.clip.position.offset(),
+							inner.clip.position.offset() * inner.clip.stretch,
 						);
 
 						inner.sample.lods.mesh(

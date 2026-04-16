@@ -504,9 +504,7 @@ impl Arrangement {
 		let c = &mut self.tracks[track].clips[clip];
 		if c.position().start() != pos {
 			if matches!(c, Clip::Audio(..)) {
-				let old_len = c.position().len();
-				c.trim_start_to(pos);
-				*c.stretch() *= old_len / c.position().len();
+				*c.stretch() *= c.stretch_start_to(pos);
 				self.node_action(
 					self.tracks[track].id,
 					NodeAction::ClipStretchStartTo(clip, pos),
@@ -521,9 +519,7 @@ impl Arrangement {
 		let c = &mut self.tracks[track].clips[clip];
 		if c.position().end() != pos {
 			if matches!(c, Clip::Audio(..)) {
-				let old_len = c.position().len();
-				c.trim_end_to(pos);
-				*c.stretch() *= old_len / c.position().len();
+				*c.stretch() *= c.stretch_end_to(pos);
 				self.node_action(
 					self.tracks[track].id,
 					NodeAction::ClipStretchEndTo(clip, pos),

@@ -33,7 +33,7 @@ impl AudioClip {
 			.iter_mut()
 			.zip(write_start..)
 		{
-			let frame = offset as f32 + (uidx + frame) as f32 * self.stretch;
+			let frame = (offset + uidx + frame) as f32 * self.stretch;
 			let fract = frame.fract();
 			let idx = 2 * frame as usize;
 

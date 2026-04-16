@@ -42,6 +42,19 @@ impl Clip {
 			Self::Midi(midi) => midi.position.trim_end_to(pos),
 		}
 	}
+
+	pub fn stretch_start_to(&mut self, pos: MusicalTime) -> f32 {
+		match self {
+			Self::Audio(audio) => audio.position.stretch_start_to(pos),
+			Self::Midi(midi) => midi.position.stretch_start_to(pos),
+		}
+	}
+	pub fn stretch_end_to(&mut self, pos: MusicalTime) -> f32 {
+		match self {
+			Self::Audio(audio) => audio.position.stretch_end_to(pos),
+			Self::Midi(midi) => midi.position.stretch_end_to(pos),
+		}
+	}
 }
 
 impl From<AudioClip> for Clip {

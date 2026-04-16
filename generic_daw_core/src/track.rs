@@ -79,15 +79,11 @@ impl Track {
 			NodeAction::ClipTrimEndTo(index, pos) => self.clips[index].position().trim_end_to(pos),
 			NodeAction::ClipStretchStartTo(index, pos) => {
 				let c = &mut self.clips[index];
-				let old_len = c.position().len();
-				c.position().trim_start_to(pos);
-				*c.stretch() *= old_len / c.position().len();
+				*c.stretch() *= c.position().stretch_start_to(pos);
 			}
 			NodeAction::ClipStretchEndTo(index, pos) => {
 				let c = &mut self.clips[index];
-				let old_len = c.position().len();
-				c.position().trim_end_to(pos);
-				*c.stretch() *= old_len / c.position().len();
+				*c.stretch() *= c.position().stretch_end_to(pos);
 			}
 			action => self.channel.apply(action),
 		}
