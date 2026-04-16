@@ -1,12 +1,10 @@
 use crate::{MediaSource, Transport, time::SecondsTime};
 use std::{num::NonZero, sync::Arc};
 use symphonia::core::{
-	audio::SampleBuffer,
-	codecs::DecoderOptions,
-	formats::FormatOptions,
+	codecs::audio::AudioDecoderOptions,
+	formats::{FormatOptions, TrackType, probe::Hint},
 	io::{MediaSourceStream, MediaSourceStreamOptions},
 	meta::MetadataOptions,
-	probe::Hint,
 };
 use utils::{NoDebug, unique_id};
 
@@ -26,64 +24,53 @@ impl Sample {
 	#[must_use]
 	pub fn new(source: Box<dyn MediaSource>) -> Option<Self> {
 		let mut format = symphonia::default::get_probe()
-			.format(
+			.probe(
 				&Hint::default(),
 				MediaSourceStream::new(source, MediaSourceStreamOptions::default()),
-				&FormatOptions::default(),
-				&MetadataOptions::default(),
+				FormatOptions::default(),
+				MetadataOptions::default(),
 			)
-			.ok()?
-			.format;
-
-		let track = format.default_track()?;
-		let track_id = track.id;
-		let sample_rate = NonZero::new(track.codec_params.sample_rate?)?;
-		let n_frames = track.codec_params.n_frames.unwrap_or_default() as usize;
-		let n_channels = track.codec_params.channels?.count();
-		let mut delay = track.codec_params.delay.unwrap_or_default() as usize;
-		let padding = track.codec_params.padding.unwrap_or_default() as usize;
-
-		let mut samples = Vec::with_capacity(2 * n_frames);
-
-		let mut decoder = symphonia::default::get_codecs()
-			.make(&track.codec_params, &DecoderOptions::default())
 			.ok()?;
 
-		let mut sample_buf = None;
-		while let Ok(packet) = format.next_packet() {
-			if packet.track_id() != track_id {
+		let track = format.default_track(TrackType::Audio)?;
+		let track_id = track.id;
+		let num_frames = track.num_frames.unwrap_or_default() as usize;
+		let mut delay = track.delay.unwrap_or_default() as usize;
+		let padding = track.padding.unwrap_or_default() as usize;
+		let codec_params = track.codec_params.as_ref()?.audio()?;
+		let sample_rate = NonZero::new(codec_params.sample_rate?)?;
+		let channels = codec_params.channels.as_ref()?.count();
+		let max_frames_per_packet = codec_params.max_frames_per_packet.unwrap_or_default() as usize;
+
+		let mut decoder = symphonia::default::get_codecs()
+			.make_audio_decoder(codec_params, &AudioDecoderOptions::default())
+			.ok()?;
+
+		let mut samples = Vec::with_capacity(2 * num_frames);
+		let mut packet_buf = Vec::with_capacity(channels * max_frames_per_packet);
+
+		while let Some(packet) = format.next_packet().ok()? {
+			if packet.track_id != track_id {
 				continue;
 			}
 
-			let audio_buf = decoder.decode(&packet).ok()?;
+			decoder
+				.decode(&packet)
+				.ok()?
+				.copy_to_vec_interleaved(&mut packet_buf);
 
-			let sample_buf = sample_buf.get_or_insert_with(|| {
-				let capacity = audio_buf.capacity() as u64;
-				let spec = *audio_buf.spec();
-				SampleBuffer::new(capacity, spec)
-			});
-
-			sample_buf.copy_interleaved_ref(audio_buf.clone());
-
-			if n_channels == 1 {
+			if channels == 1 {
+				samples.extend(packet_buf.iter().skip(2 * delay).flat_map(|x| [x, x]));
+			} else if channels != 0 {
 				samples.extend(
-					sample_buf
-						.samples()
-						.iter()
-						.skip(2 * delay)
-						.flat_map(|x| [x, x]),
-				);
-			} else if n_channels != 0 {
-				samples.extend(
-					sample_buf
-						.samples()
-						.chunks_exact(n_channels)
+					packet_buf
+						.chunks_exact(channels)
 						.skip(2 * delay)
 						.flat_map(|x| [x[0], x[1]]),
 				);
 			}
 
-			delay = delay.saturating_sub(audio_buf.frames());
+			delay = delay.saturating_sub(packet_buf.len() / channels);
 		}
 
 		samples.truncate(samples.len().saturating_sub(2 * padding));
