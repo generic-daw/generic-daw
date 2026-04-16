@@ -39,6 +39,8 @@ use rfd::AsyncFileDialog;
 use scan::Id as Scan;
 use smol::unblock;
 use std::{
+	convert::Infallible,
+	ffi::CStr,
 	fmt::{Display, Formatter},
 	num::NonZero,
 	path::Path,
@@ -161,7 +163,9 @@ pub enum Message {
 
 	OpenFileDialog,
 	OpenFile(Arc<Path>),
+	CantFindPlugin(Arc<CStr>, NoClone<oneshot::Sender<Feedback<Infallible>>>),
 	CantFindSample(Arc<str>, NoClone<oneshot::Sender<Feedback<Arc<Path>>>>),
+	FindPlugin(usize, Feedback<Infallible>),
 	FindSampleFileDialog(usize),
 	FindSampleFile(usize, Feedback<Arc<Path>>),
 	OpenedFile(Option<Arc<Path>>),
@@ -210,6 +214,7 @@ pub struct Daw {
 
 	progress: Option<f32>,
 	status: Option<Arc<str>>,
+	missing_plugins: Vec<(Arc<CStr>, oneshot::Sender<Feedback<Infallible>>)>,
 	missing_samples: Vec<(Arc<str>, oneshot::Sender<Feedback<Arc<Path>>>)>,
 
 	main_window_id: window::Id,
@@ -259,6 +264,7 @@ impl Daw {
 
 				progress: None,
 				status: None,
+				missing_plugins: Vec::new(),
 				missing_samples: Vec::new(),
 
 				main_window_id,
@@ -416,10 +422,18 @@ impl Daw {
 					return Arrangement::start_load(path, self.plugins.clone().into_options());
 				}
 			}
+			Message::CantFindPlugin(name, NoClone(sender)) => {
+				if self.progress.is_some() {
+					self.missing_plugins.push((name, sender));
+				}
+			}
 			Message::CantFindSample(name, NoClone(sender)) => {
 				if self.progress.is_some() {
 					self.missing_samples.push((name, sender));
 				}
+			}
+			Message::FindPlugin(idx, response) => {
+				self.missing_plugins.remove(idx).1.send(response).unwrap();
 			}
 			Message::FindSampleFileDialog(idx) => {
 				return window::run(self.main_window_id, |window| {
@@ -817,25 +831,27 @@ impl Daw {
 						})),
 						column![
 							progress_bar(0.0..=1.0, progress).style(progress_bar_with_radius(
-								if self.missing_samples.is_empty() {
+								if self.missing_plugins.is_empty()
+									&& self.missing_samples.is_empty()
+								{
 									progress_bar::primary
 								} else {
 									progress_bar::danger
 								},
 								5
 							)),
-							(!self.missing_samples.is_empty()).then(|| scrollable(
+							scrollable(
 								column(
-									self.missing_samples
+									self.missing_plugins
 										.iter()
 										.map(|(name, _)| &**name)
 										.enumerate()
 										.map(|(i, name)| {
 											container(
 												row![
-													"can't find sample",
+													"can't find plugin",
 													container(
-														text(name)
+														text(name.to_string_lossy())
 															.font(Font::MONOSPACE)
 															.wrapping(text::Wrapping::None)
 															.ellipsis(text::Ellipsis::Middle)
@@ -845,27 +861,18 @@ impl Daw {
 														weakest_bordered_box,
 														5
 													)),
-													space::horizontal(),
 													row![
-														button("Pick")
-															.on_press(
-																Message::FindSampleFileDialog(i)
-															)
-															.style(button_with_radius(
-																button::success,
-																border::left(5)
-															)),
 														button("Ignore")
-															.on_press(Message::FindSampleFile(
+															.on_press(Message::FindPlugin(
 																i,
 																Feedback::Ignore
 															))
 															.style(button_with_radius(
 																button::warning,
-																0
+																border::left(5)
 															)),
 														button("Cancel")
-															.on_press(Message::FindSampleFile(
+															.on_press(Message::FindPlugin(
 																i,
 																Feedback::Cancel
 															))
@@ -875,19 +882,84 @@ impl Daw {
 															))
 													]
 												]
-												.width(Shrink)
 												.align_y(Center)
 												.spacing(10),
 											)
 											.padding(10)
 											.style(container_with_radius(weak_bordered_box, 5))
 											.into()
-										}),
+										})
+										.chain(
+											self.missing_samples
+												.iter()
+												.map(|(name, _)| &**name)
+												.enumerate()
+												.map(|(i, name)| {
+													container(
+														row![
+															"can't find sample",
+															container(
+																text(name)
+																	.font(Font::MONOSPACE)
+																	.wrapping(text::Wrapping::None)
+																	.ellipsis(
+																		text::Ellipsis::Middle
+																	)
+															)
+															.padding(
+																padding::horizontal(10).vertical(5)
+															)
+															.style(
+																container_with_radius(
+																	weakest_bordered_box,
+																	5
+																)
+															),
+															row![
+																button("Pick")
+																	.on_press(
+																		Message::FindSampleFileDialog(i)
+																	)
+																	.style(button_with_radius(
+																		button::success,
+																		border::left(5)
+																	)),
+																button("Ignore")
+																	.on_press(Message::FindSampleFile(
+																		i,
+																		Feedback::Ignore
+																	))
+																	.style(button_with_radius(
+																		button::warning,
+																		0
+																	)),
+																button("Cancel")
+																	.on_press(Message::FindSampleFile(
+																		i,
+																		Feedback::Cancel
+																	))
+																	.style(button_with_radius(
+																		button::danger,
+																		border::right(5)
+																	))
+															]
+														]
+														.align_y(Center)
+														.spacing(10),
+													)
+													.padding(10)
+													.style(container_with_radius(
+														weak_bordered_box,
+														5,
+													))
+													.into()
+												})
+										),
 								)
 								.align_x(Center)
 								.spacing(10)
 							)
-							.spacing(10))
+							.spacing(10)
 						]
 						.align_x(Center)
 						.spacing(20),

@@ -404,11 +404,31 @@ impl Arrangement {
 				messages.push(arrangement_view::Message::ChannelToggleBypassed(node.id));
 			}
 
+			let mut skipped = 0;
+
 			for (i, plugin) in channel.plugins.iter().enumerate() {
 				let id = plugin.id();
+
+				let Some(descriptor) = plugin_bundles.iter().find(|d| *d.id == id) else {
+					let (sender, receiver) = oneshot::channel();
+
+					daw.try_send(daw::Message::CantFindPlugin(id.into(), sender.into()))
+						.unwrap();
+
+					match receiver.recv() {
+						Ok(Feedback::Ignore) => {
+							skipped += 1;
+							continue;
+						}
+						Ok(Feedback::Cancel) | Err(..) => return None,
+					};
+				};
+
+				let i = i - skipped;
+
 				messages.push(arrangement_view::Message::PluginLoad(
 					node.id,
-					plugin_bundles.iter().find(|d| *d.id == id)?.clone(),
+					descriptor.clone(),
 					false,
 				));
 
