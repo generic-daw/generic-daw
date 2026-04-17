@@ -85,19 +85,8 @@ impl Param {
 	}
 
 	pub fn adjust_value(&mut self, plugin: &mut PluginInstance<Host>, value: f32) {
-		let params = plugin.access_shared_handler(|s| *s.ext.params.get().unwrap());
-
 		self.value = value;
-
-		if let Ok(value_text) = params.value_to_text(
-			&mut plugin.plugin_handle(),
-			self.id,
-			self.value.into(),
-			&mut [0; 256],
-		) && let Ok(value_text) = str::from_utf8(value_text)
-			&& !value_text.is_empty()
-		{
-			self.value_text = Some(value_text.into());
-		}
+		plugin.access_handler_mut(|mt| mt.mark_dirty());
+		self.rescan(plugin, ParamRescanFlags::TEXT);
 	}
 }
