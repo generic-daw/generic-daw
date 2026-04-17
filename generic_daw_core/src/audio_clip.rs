@@ -1,4 +1,5 @@
-use crate::{OffsetPosition, SampleId, audio_processor::State, sample::resample_cubic};
+use crate::{OffsetPosition, SampleId, audio_processor::State};
+use dsp::resample_cubic;
 
 #[derive(Clone, Copy, Debug)]
 pub struct AudioClip {

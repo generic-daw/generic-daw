@@ -10,6 +10,7 @@ workspace = true
 [dependencies]
 audio_graph.workspace = true
 clap_host.workspace = true
+dsp.workspace = true
 utils.workspace = true
 
 cpal = "0.17.3"

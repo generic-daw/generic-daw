@@ -1,12 +1,13 @@
 use crate::{
 	AudioGraph, AutomationPattern, AutomationPatternAction, AutomationPatternId, Channel, Clip,
 	MidiPattern, MidiPatternAction, MidiPatternId, MusicalTime, Node, NodeId, PanMode, PluginId,
-	Position, Sample, SampleId, clap_host::ClapId, sample::resample_cubic,
+	Position, Sample, SampleId, clap_host::ClapId,
 };
 use clap_host::{
 	Cookie,
 	events::{EventFlags, EventHeader, TransportEvent, TransportFlags},
 };
+use dsp::resample_cubic;
 use hound::WavWriter;
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, PushError, RingBuffer};

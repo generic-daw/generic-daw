@@ -1096,6 +1096,7 @@ dependencies = [
  "audio_graph",
  "clap_host",
  "cpal",
+ "dsp",
  "hound",
  "log",
  "midly",
