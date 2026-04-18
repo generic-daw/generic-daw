@@ -41,13 +41,11 @@ impl OffsetPosition {
 		self.position.len()
 	}
 
-	pub fn trim_start_to(&mut self, mut new_start: MusicalTime) {
+	pub fn trim_start_to(&mut self, new_start: MusicalTime) {
 		let old_start = self.start();
-		if self.offset() + new_start < old_start {
-			new_start = old_start - self.offset();
-		}
-		self.position.trim_start_to(new_start);
-		new_start = self.start();
+		self.position
+			.trim_start_to(new_start.max(old_start.saturating_sub(self.offset())));
+		let new_start = self.start();
 		let diff = new_start.abs_diff(old_start);
 		if old_start < new_start {
 			self.offset += diff;

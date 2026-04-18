@@ -28,15 +28,17 @@ impl AudioClip {
 
 		let resample_ratio = sample.resample_ratio(&state.transport) * self.stretch;
 
-		let (r_start, r_end, read_start) = self
+		let (r_start, r_end, r_offset) = self
 			.position
 			.stretch(resample_ratio)
 			.to_samples(&state.transport);
 
+		let read_start = r_offset.min(sample.samples.len());
+
 		let read_len = sample
 			.samples
 			.len()
-			.saturating_sub(read_start)
+			.saturating_sub(r_offset)
 			.min(r_end - r_start);
 
 		resample_cubic(
