@@ -21,13 +21,6 @@ impl Clip {
 			Self::Midi(midi) => &mut midi.position,
 		}
 	}
-
-	pub fn stretch(&mut self) -> &mut f32 {
-		match self {
-			Self::Audio(audio) => &mut audio.stretch,
-			Self::Midi(..) => panic!(),
-		}
-	}
 }
 
 impl From<AudioClip> for Clip {

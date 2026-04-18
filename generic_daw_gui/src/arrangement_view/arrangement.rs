@@ -505,10 +505,9 @@ impl Arrangement {
 	}
 
 	pub fn clip_stretch_start_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
-		let c = &mut self.tracks[track].clips[clip];
-		if c.position().start() != pos {
-			if matches!(c, Clip::Audio(..)) {
-				*c.stretch() *= c.position_mut().stretch_start_to(pos);
+		if self.tracks[track].clips[clip].position().start() != pos {
+			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
+				audio.stretch *= audio.position.stretch_start_to(pos);
 				self.node_action(
 					self.tracks[track].id,
 					NodeAction::ClipStretchStartTo(clip, pos),
@@ -520,10 +519,9 @@ impl Arrangement {
 	}
 
 	pub fn clip_stretch_from_end(&mut self, track: usize, clip: usize, pos: MusicalTime) {
-		let c = &mut self.tracks[track].clips[clip];
-		if c.position().end() != pos {
-			if matches!(c, Clip::Audio(..)) {
-				*c.stretch() *= c.position_mut().stretch_end_to(pos);
+		if self.tracks[track].clips[clip].position().end() != pos {
+			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
+				audio.stretch *= audio.position.stretch_end_to(pos);
 				self.node_action(
 					self.tracks[track].id,
 					NodeAction::ClipStretchEndTo(clip, pos),
