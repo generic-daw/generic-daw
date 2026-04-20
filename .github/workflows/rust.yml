@@ -25,6 +25,7 @@ jobs:
       - run: cargo clippy -- -D warnings
   build-release:
     name: build
+    if: github.ref == 'refs/heads/main'
     needs: [fmt, clippy]
     runs-on: ${{ matrix.os.os }}
     strategy:
