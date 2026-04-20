@@ -1,4 +1,6 @@
-use crate::{AudioClip, Event, MidiClip, OffsetPosition, VoiceAlloc, audio_processor::State};
+use crate::{
+	AudioClip, Event, MidiClip, Transport, VoiceAlloc, audio_processor::State, time::BeatTime,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Clip {
@@ -33,16 +35,51 @@ impl Clip {
 		}
 	}
 
-	pub fn position(&mut self) -> &mut OffsetPosition {
+	pub fn trim_start_to(&mut self, new_start: BeatTime, transport: &Transport) {
 		match self {
-			Self::Audio(clip) => &mut clip.position,
-			Self::Midi(clip) => &mut clip.position,
+			Self::Audio(clip) => clip
+				.position
+				.trim_start_to(new_start, transport, clip.stretch),
+			Self::Midi(clip) => clip.position.trim_start_to(new_start),
 		}
 	}
 
-	pub fn stretch(&mut self) -> &mut f32 {
+	pub fn trim_end_to(&mut self, new_end: BeatTime, transport: &Transport) {
 		match self {
-			Self::Audio(clip) => &mut clip.stretch,
+			Self::Audio(clip) => clip.position.trim_end_to(new_end, transport),
+			Self::Midi(clip) => clip.position.trim_end_to(new_end),
+		}
+	}
+
+	pub fn move_to(&mut self, new_start: BeatTime) {
+		match self {
+			Self::Audio(clip) => clip.position.move_to(new_start),
+			Self::Midi(clip) => clip.position.move_to(new_start),
+		}
+	}
+
+	pub fn stretch_start_to(&mut self, new_start: BeatTime, transport: &Transport) {
+		match self {
+			Self::Audio(clip) => {
+				let len = clip.position.len();
+				let end = clip.position.end(transport);
+				clip.position.move_to(new_start);
+				clip.position.trim_end_to(end, transport);
+				clip.stretch *= len / clip.position.len();
+				clip.stretch = clip.stretch.clamp(2f32.powi(-10), 2f32.powi(10));
+			}
+			Self::Midi(..) => panic!(),
+		}
+	}
+
+	pub fn stretch_end_to(&mut self, new_end: BeatTime, transport: &Transport) {
+		match self {
+			Self::Audio(clip) => {
+				let len = clip.position.len();
+				clip.position.trim_end_to(new_end, transport);
+				clip.stretch *= len / clip.position.len();
+				clip.stretch = clip.stretch.clamp(2f32.powi(-10), 2f32.powi(10));
+			}
 			Self::Midi(..) => panic!(),
 		}
 	}

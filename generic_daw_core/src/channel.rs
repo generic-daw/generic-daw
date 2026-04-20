@@ -46,7 +46,7 @@ impl PanMode {
 	}
 
 	#[must_use]
-	pub fn is_balance(self) -> bool {
+	pub const fn is_balance(self) -> bool {
 		matches!(self, Self::Balance(..))
 	}
 }
@@ -204,7 +204,7 @@ impl Channel {
 	}
 
 	#[must_use]
-	pub fn enabled(&self) -> bool {
+	pub const fn enabled(&self) -> bool {
 		self.enabled
 	}
 }

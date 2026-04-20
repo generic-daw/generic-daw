@@ -17,7 +17,7 @@ use crate::{
 	widget::ALPHA_2_3,
 };
 use generic_daw_core::{
-	MusicalTime, PluginId,
+	PluginId,
 	clap_host::{
 		ClapId, Cookie, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
 	},
@@ -639,7 +639,7 @@ impl Daw {
 		debug_assert_eq!(window, self.main_window_id);
 
 		let transport = self.arrangement_view.arrangement.transport();
-		let now = MusicalTime::from_samples(transport.sample, transport);
+		let now_beats = transport.position.to_beat_time(transport);
 
 		stack![
 			column![
@@ -678,18 +678,17 @@ impl Daw {
 						mouse_area(
 							container(
 								if self.state.show_seconds {
-									let duration = now.to_duration(transport);
 									text!(
 										"{:02}:{:02}:{:02}",
-										duration.as_secs() / 60,
-										duration.as_secs() % 60,
-										(duration.as_secs_f32().fract() * 100.0) as u8
+										transport.position.second() / 60,
+										transport.position.second() % 60,
+										(transport.position.to_float().fract() * 100.0) as u8
 									)
 								} else {
 									text!(
 										"{:03}:{:0digits$}",
-										now.bar(transport) + 1,
-										now.beat_in_bar(transport) + 1,
+										now_beats.bar(transport) + 1,
+										now_beats.beat_in_bar(transport) + 1,
 										digits = transport.numerator.ilog10() as usize + 1,
 									)
 								}

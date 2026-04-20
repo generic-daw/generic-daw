@@ -1,5 +1,5 @@
 use crate::arrangement_view::{audio_clip::AudioClip, midi_clip::MidiClip};
-use generic_daw_core::OffsetPosition;
+use generic_daw_core::{Transport, time::BeatTime};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Clip {
@@ -8,17 +8,47 @@ pub enum Clip {
 }
 
 impl Clip {
-	pub fn position(&self) -> &OffsetPosition {
+	pub fn start(&self) -> BeatTime {
 		match self {
-			Self::Audio(audio) => &audio.position,
-			Self::Midi(midi) => &midi.position,
+			Self::Audio(clip) => clip.position.start(),
+			Self::Midi(clip) => clip.position.start(),
 		}
 	}
 
-	pub fn position_mut(&mut self) -> &mut OffsetPosition {
+	pub fn end(&self, transport: &Transport) -> BeatTime {
 		match self {
-			Self::Audio(audio) => &mut audio.position,
-			Self::Midi(midi) => &mut midi.position,
+			Self::Audio(clip) => clip.position.end(transport),
+			Self::Midi(clip) => clip.position.end(),
+		}
+	}
+
+	pub fn len(&self, transport: &Transport) -> BeatTime {
+		match self {
+			Self::Audio(clip) => clip.position.len().to_beat_time(transport),
+			Self::Midi(clip) => clip.position.len(),
+		}
+	}
+
+	pub fn trim_start_to(&mut self, new_start: BeatTime, transport: &Transport) {
+		match self {
+			Self::Audio(clip) => clip
+				.position
+				.trim_start_to(new_start, transport, clip.stretch),
+			Self::Midi(clip) => clip.position.trim_start_to(new_start),
+		}
+	}
+
+	pub fn trim_end_to(&mut self, new_end: BeatTime, transport: &Transport) {
+		match self {
+			Self::Audio(clip) => clip.position.trim_end_to(new_end, transport),
+			Self::Midi(clip) => clip.position.trim_end_to(new_end),
+		}
+	}
+
+	pub fn move_to(&mut self, new_start: BeatTime) {
+		match self {
+			Self::Audio(clip) => clip.position.move_to(new_start),
+			Self::Midi(clip) => clip.position.move_to(new_start),
 		}
 	}
 }

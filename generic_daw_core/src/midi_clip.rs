@@ -1,5 +1,6 @@
 use crate::{
-	Event, MidiNote, MidiNoteId, MidiPatternId, OffsetPosition, VoiceAlloc, audio_processor::State,
+	Event, MidiNote, MidiNoteId, MidiPatternId, VoiceAlloc, audio_processor::State,
+	time::OffsetBeatRange,
 };
 use clap_host::events::Match;
 use utils::unique_id;
@@ -12,7 +13,7 @@ pub use midi_clip_id::Id as MidiClipId;
 pub struct MidiClip {
 	pub id: MidiClipId,
 	pub pattern: MidiPatternId,
-	pub position: OffsetPosition,
+	pub position: OffsetBeatRange,
 }
 
 impl MidiClip {
@@ -26,7 +27,9 @@ impl MidiClip {
 		debug_assert!(state.transport.playing);
 
 		let (start, end) = self.position.position().to_samples(&state.transport);
-		if !(start < state.transport.sample + audio.len() && end >= state.transport.sample) {
+		if !(start < state.transport.position.to_samples(&state.transport) + audio.len()
+			&& end >= state.transport.position.to_samples(&state.transport))
+		{
 			return;
 		}
 
@@ -41,7 +44,7 @@ impl MidiClip {
 			})
 			.for_each(|note| {
 				let (start, end) = note.position.to_samples(&state.transport);
-				if (start..end).contains(&state.transport.sample)
+				if (start..end).contains(&state.transport.position.to_samples(&state.transport))
 					&& !voice_alloc.activate((self.id, note.id), note)
 				{
 					alloc_or_steal(events, voice_alloc, (self.id, note.id), note, 0);
@@ -59,7 +62,9 @@ impl MidiClip {
 		debug_assert!(state.transport.playing);
 
 		let (start, end) = self.position.position().to_samples(&state.transport);
-		if !(start < state.transport.sample + audio.len() && end >= state.transport.sample) {
+		if !(start < state.transport.position.to_samples(&state.transport) + audio.len()
+			&& end >= state.transport.position.to_samples(&state.transport))
+		{
 			return;
 		}
 
@@ -75,13 +80,15 @@ impl MidiClip {
 			.for_each(|note| {
 				let (start, end) = note.position.to_samples(&state.transport);
 
-				if let Some(time) = start.checked_sub(state.transport.sample)
+				if let Some(time) =
+					start.checked_sub(state.transport.position.to_samples(&state.transport))
 					&& time < audio.len()
 				{
 					alloc_or_steal(events, voice_alloc, (self.id, note.id), note, time);
 				}
 
-				if let Some(time) = end.checked_sub(state.transport.sample)
+				if let Some(time) =
+					end.checked_sub(state.transport.position.to_samples(&state.transport))
 					&& time < audio.len()
 				{
 					dealloc(events, voice_alloc, (self.id, note.id), time);

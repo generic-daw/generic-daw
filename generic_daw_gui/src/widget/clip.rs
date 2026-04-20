@@ -6,7 +6,10 @@ use crate::{
 		px_to_time, snap_step, time_to_px,
 	},
 };
-use generic_daw_core::{Position, Transport};
+use generic_daw_core::{
+	Transport,
+	time::{BeatRange, OffsetBeatRange},
+};
 use iced::{
 	Event, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
@@ -124,7 +127,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		let playlist = self.playlist.borrow();
 
 		let (start, end) = match self.inner {
-			Inner::AudioClip(inner) => (inner.clip.position.start(), inner.clip.position.end()),
+			Inner::AudioClip(inner) => (
+				inner.clip.position.start(),
+				inner.clip.position.end(self.transport),
+			),
 			Inner::MidiClip(inner) => (inner.clip.position.start(), inner.clip.position.end()),
 			Inner::Recording(inner) => (inner.position, inner.position + inner.len(self.transport)),
 		};
@@ -382,10 +388,20 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						let stretch =
 							inner.clip.stretch / inner.sample.resample_ratio(self.transport);
 
+						let position = OffsetBeatRange::new(
+							BeatRange::new(
+								inner.clip.position.start(),
+								inner.clip.position.start()
+									+ (inner.clip.position.len() * stretch)
+										.to_beat_time(self.transport),
+							),
+							inner.clip.position.offset().to_beat_time(self.transport),
+						);
+
 						inner.sample.lods.mesh(
 							&inner.sample.samples,
 							self.transport,
-							inner.clip.position.stretch(stretch),
+							position,
 							playlist.scale.x + stretch.log2(),
 							height,
 							theme.palette().background.strong.text,
@@ -454,7 +470,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
 						let stretch = 1.0 / inner.core.resample_ratio(self.transport);
 
-						let position = Position::new(
+						let position = BeatRange::new(
 							inner.position,
 							inner.position + inner.len(self.transport),
 						)

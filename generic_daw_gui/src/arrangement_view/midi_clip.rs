@@ -1,11 +1,11 @@
 use crate::arrangement_view::midi_pattern::MidiPattern;
-use generic_daw_core::{MidiClipId, MidiPatternId, OffsetPosition};
+use generic_daw_core::{MidiClipId, MidiPatternId, time::OffsetBeatRange};
 
 #[derive(Clone, Copy, Debug)]
 pub struct MidiClip {
 	pub id: MidiClipId,
 	pub pattern: MidiPatternId,
-	pub position: OffsetPosition,
+	pub position: OffsetBeatRange,
 }
 
 impl MidiClip {
@@ -13,7 +13,7 @@ impl MidiClip {
 		Self {
 			id: MidiClipId::unique(),
 			pattern,
-			position: OffsetPosition::default(),
+			position: OffsetBeatRange::default(),
 		}
 	}
 }

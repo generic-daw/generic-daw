@@ -46,7 +46,7 @@ pub struct Transport {
 	#[prost(uint32)]
 	pub numerator: u32,
 	#[prost(message)]
-	pub loop_marker: Option<Position>,
+	pub loop_range: Option<BeatRange>,
 }
 
 #[derive(Clone, Message)]
@@ -74,7 +74,7 @@ pub struct Note {
 	#[prost(float, default = 1.0)]
 	pub velocity: f32,
 	#[prost(message, required)]
-	pub position: Position,
+	pub position: BeatRange,
 }
 
 #[derive(Clone, Message)]
@@ -167,10 +167,12 @@ pub enum Clip {
 pub struct AudioClip {
 	#[prost(message, required)]
 	pub sample: SampleIndex,
-	#[prost(message, required)]
-	pub position: OffsetPosition,
+	#[prost(message, optional)]
+	pub position_compat: Option<OffsetBeatRange>,
 	#[prost(float, default = 1.0)]
 	pub stretch: f32,
+	#[prost(message, required)]
+	pub position: OffsetBeatSpan,
 }
 
 #[derive(Clone, Copy, Message)]
@@ -178,11 +180,11 @@ pub struct MidiClip {
 	#[prost(message, required)]
 	pub pattern: MidiPatternIndex,
 	#[prost(message, required)]
-	pub position: OffsetPosition,
+	pub position: OffsetBeatRange,
 }
 
 #[derive(Clone, Copy, Message)]
-pub struct Position {
+pub struct BeatRange {
 	#[prost(uint64)]
 	pub start: u64,
 	#[prost(uint64)]
@@ -190,9 +192,25 @@ pub struct Position {
 }
 
 #[derive(Clone, Copy, Message)]
-pub struct OffsetPosition {
+pub struct OffsetBeatRange {
 	#[prost(message, required)]
-	pub position: Position,
+	pub position: BeatRange,
+	#[prost(uint64)]
+	pub offset: u64,
+}
+
+#[derive(Clone, Copy, Message)]
+pub struct BeatSpan {
+	#[prost(uint64)]
+	pub start: u64,
+	#[prost(uint64)]
+	pub len: u64,
+}
+
+#[derive(Clone, Copy, Message)]
+pub struct OffsetBeatSpan {
+	#[prost(message, required)]
+	pub position: BeatSpan,
 	#[prost(uint64)]
 	pub offset: u64,
 }

@@ -2,7 +2,7 @@ use crate::widget::{
 	ALPHA_1_3, Delta, key_to_px, maybe_snap, note::Note, px_to_key, px_to_time, snap_step,
 	time_to_px,
 };
-use generic_daw_core::{MidiKey, MusicalTime, Transport};
+use generic_daw_core::{MidiKey, Transport, time::BeatTime};
 use iced::{
 	Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
@@ -21,24 +21,24 @@ use std::{cell::RefCell, collections::HashSet, time::Instant};
 pub enum Action {
 	Pan(Vector, f32, f32),
 	Zoom(Vector, Point, f32, f32),
-	Add(MidiKey, MusicalTime),
+	Add(MidiKey, BeatTime),
 	Clone,
-	Drag(Delta<MidiKey>, Delta<MusicalTime>),
-	TrimStart(Delta<MusicalTime>),
-	TrimEnd(Delta<MusicalTime>),
-	SplitAt(MusicalTime),
-	DragSplit(MusicalTime),
+	Drag(Delta<MidiKey>, Delta<BeatTime>),
+	TrimStart(Delta<BeatTime>),
+	TrimEnd(Delta<BeatTime>),
+	SplitAt(BeatTime),
+	DragSplit(BeatTime),
 	DragVelocity(f32),
 	Delete,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Status {
-	Selecting(MidiKey, MidiKey, MusicalTime, MusicalTime),
-	Dragging(MidiKey, MusicalTime),
-	TrimmingStart(MusicalTime),
-	TrimmingEnd(MusicalTime),
-	DraggingSplit(MusicalTime),
+	Selecting(MidiKey, MidiKey, BeatTime, BeatTime),
+	Dragging(MidiKey, BeatTime),
+	TrimmingStart(BeatTime),
+	TrimmingEnd(BeatTime),
+	DraggingSplit(BeatTime),
 	DraggingVelocity(usize, f32),
 	Deleting,
 	#[default]
@@ -278,7 +278,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 						abs_diff.round(snap_step(state.scale.x, self.transport))
 					});
 
-					if new_key != key || abs_diff != MusicalTime::ZERO {
+					if new_key != key || abs_diff != BeatTime::ZERO {
 						let key_delta = if new_key > key {
 							Delta::Positive
 						} else {
@@ -301,7 +301,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 						abs_diff.round(snap_step(state.scale.x, self.transport))
 					});
 
-					if abs_diff != MusicalTime::ZERO {
+					if abs_diff != BeatTime::ZERO {
 						let delta = if new_time > time {
 							Delta::Positive
 						} else {
@@ -318,7 +318,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 						abs_diff.round(snap_step(state.scale.x, self.transport))
 					});
 
-					if abs_diff != MusicalTime::ZERO {
+					if abs_diff != BeatTime::ZERO {
 						let delta = if new_time > time {
 							Delta::Positive
 						} else {

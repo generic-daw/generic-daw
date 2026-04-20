@@ -1,4 +1,4 @@
-use crate::{MusicalTime, Transport};
+use crate::{Transport, time::BeatTime};
 use std::f32::consts::{FRAC_PI_2, PI};
 
 #[derive(Clone, Copy, Debug)]
@@ -31,7 +31,7 @@ impl AutomationTransition {
 #[derive(Clone, Copy, Debug)]
 pub struct AutomationPoint {
 	pub value: f32,
-	pub position: MusicalTime,
+	pub position: BeatTime,
 	pub to_next: AutomationTransition,
 }
 

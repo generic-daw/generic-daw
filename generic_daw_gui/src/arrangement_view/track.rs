@@ -1,5 +1,5 @@
 use crate::arrangement_view::clip::Clip;
-use generic_daw_core::{MusicalTime, NodeId};
+use generic_daw_core::{NodeId, Transport, time::BeatTime};
 
 #[derive(Debug)]
 pub struct Track {
@@ -15,10 +15,10 @@ impl Track {
 		}
 	}
 
-	pub fn len(&self) -> MusicalTime {
+	pub fn len(&self, transport: &Transport) -> BeatTime {
 		self.clips
 			.iter()
-			.map(|clip| clip.position().end())
+			.map(|clip| clip.end(transport))
 			.max()
 			.unwrap_or_default()
 	}

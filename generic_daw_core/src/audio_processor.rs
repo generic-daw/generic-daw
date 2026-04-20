@@ -1,7 +1,9 @@
 use crate::{
 	AudioGraph, AutomationPattern, AutomationPatternAction, AutomationPatternId, Channel, Clip,
-	MidiPattern, MidiPatternAction, MidiPatternId, MusicalTime, Node, NodeId, PanMode, PluginId,
-	Position, Sample, SampleId, clap_host::ClapId,
+	MidiPattern, MidiPatternAction, MidiPatternId, Node, NodeId, PanMode, PluginId, Sample,
+	SampleId,
+	clap_host::ClapId,
+	time::{BeatRange, BeatTime, SecondsTime},
 };
 use clap_host::{
 	Cookie,
@@ -49,8 +51,8 @@ pub enum Message {
 	Numerator(NonZero<u8>),
 	TogglePlayback,
 	ToggleMetronome,
-	Sample(Version, usize),
-	LoopMarker(Option<Position>),
+	Position(Version, SecondsTime),
+	LoopRange(Option<BeatRange>),
 	Reset,
 
 	RequestUpdate,
@@ -68,11 +70,11 @@ const _: () = assert!(size_of::<Message>() == 64);
 pub enum NodeAction {
 	ClipAdd(Clip, usize),
 	ClipRemove(usize),
-	ClipMoveTo(usize, MusicalTime),
-	ClipTrimStartTo(usize, MusicalTime),
-	ClipTrimEndTo(usize, MusicalTime),
-	ClipStretchStartTo(usize, MusicalTime),
-	ClipStretchEndTo(usize, MusicalTime),
+	ClipMoveTo(usize, BeatTime),
+	ClipTrimStartTo(usize, BeatTime),
+	ClipTrimEndTo(usize, BeatTime),
+	ClipStretchStartTo(usize, BeatTime),
+	ClipStretchEndTo(usize, BeatTime),
 
 	ChannelToggleEnabled,
 	ChannelToggleBypassed,
@@ -99,7 +101,7 @@ pub enum Update {
 #[derive(Clone, Debug)]
 pub struct Batch {
 	pub version: Version,
-	pub sample: usize,
+	pub position: SecondsTime,
 	pub updates: Vec<Update>,
 	pub now: Instant,
 }
@@ -113,8 +115,8 @@ pub struct Transport {
 	pub numerator: NonZero<u8>,
 	pub playing: bool,
 	pub metronome: bool,
-	pub sample: usize,
-	pub loop_marker: Option<Position>,
+	pub position: SecondsTime,
+	pub loop_range: Option<BeatRange>,
 }
 
 impl Transport {
@@ -128,8 +130,8 @@ impl Transport {
 			numerator: NonZero::new(4).unwrap(),
 			playing: false,
 			metronome: false,
-			sample: 0,
-			loop_marker: None,
+			position: SecondsTime::ZERO,
+			loop_range: None,
 		}
 	}
 
@@ -145,35 +147,33 @@ impl Transport {
 					TransportFlags::IS_PLAYING
 				} else {
 					TransportFlags::empty()
-				} | if self.loop_marker.is_some() {
+				} | if self.loop_range.is_some() {
 				TransportFlags::IS_LOOP_ACTIVE
 			} else {
 				TransportFlags::empty()
 			},
-			song_pos_beats: MusicalTime::from_samples(self.sample, self).to_beat_time(self),
-			song_pos_seconds: MusicalTime::from_samples(self.sample, self).to_seconds_time(self),
+			song_pos_beats: self.position.to_beat_time(self).to_clap(),
+			song_pos_seconds: self.position.to_clap(),
 			tempo: self.bpm.get().into(),
 			tempo_inc: 0.0,
 			loop_start_beats: self
-				.loop_marker
-				.map(|loop_marker| loop_marker.start().to_beat_time(self))
+				.loop_range
+				.map(|loop_range| loop_range.start().to_clap())
 				.unwrap_or_default(),
 			loop_end_beats: self
-				.loop_marker
-				.map(|loop_marker| loop_marker.end().to_beat_time(self))
+				.loop_range
+				.map(|loop_range| loop_range.end().to_clap())
 				.unwrap_or_default(),
 			loop_start_seconds: self
-				.loop_marker
-				.map(|loop_marker| loop_marker.start().to_seconds_time(self))
+				.loop_range
+				.map(|loop_range| loop_range.start().to_seconds_time(self).to_clap())
 				.unwrap_or_default(),
 			loop_end_seconds: self
-				.loop_marker
-				.map(|loop_marker| loop_marker.end().to_seconds_time(self))
+				.loop_range
+				.map(|loop_range| loop_range.end().to_seconds_time(self).to_clap())
 				.unwrap_or_default(),
-			bar_start: MusicalTime::from_samples(self.sample, self)
-				.bar_floor(self)
-				.to_beat_time(self),
-			bar_number: MusicalTime::from_samples(self.sample, self).bar(self) as i32,
+			bar_start: self.position.to_beat_time(self).bar_floor(self).to_clap(),
+			bar_number: self.position.to_beat_time(self).bar(self) as i32,
 			time_signature_numerator: self.numerator.get().into(),
 			time_signature_denominator: 4,
 		}
@@ -233,7 +233,7 @@ impl AudioProcessor {
 			match msg {
 				Message::NodeAction(node, action) => self
 					.audio_graph
-					.for_node_mut(node, move |node| node.apply(action)),
+					.for_node_mut(node, move |node, state| node.apply(action, state)),
 				Message::MidiPatternAction(pattern, action) => {
 					self.state_mut()
 						.midi_patterns
@@ -288,11 +288,11 @@ impl AudioProcessor {
 				Message::Numerator(numerator) => self.transport_mut().numerator = numerator,
 				Message::TogglePlayback => self.transport_mut().playing ^= true,
 				Message::ToggleMetronome => self.transport_mut().metronome ^= true,
-				Message::Sample(version, sample) => {
+				Message::Position(version, sample) => {
 					self.transport_mut().version = version;
-					self.transport_mut().sample = sample;
+					self.transport_mut().position = sample;
 				}
-				Message::LoopMarker(loop_marker) => self.transport_mut().loop_marker = loop_marker,
+				Message::LoopRange(loop_range) => self.transport_mut().loop_range = loop_range,
 				Message::Reset => self.audio_graph.reset(),
 				Message::RequestUpdate => self.needs_update = true,
 				Message::ReturnUpdate(update) => {
@@ -328,22 +328,20 @@ impl AudioProcessor {
 			self.updates = updates;
 		}
 
-		let loop_marker = self
-			.transport()
-			.loop_marker
-			.map(|loop_marker| loop_marker.to_samples(self.transport()));
-
 		while !buf.is_empty() {
-			if self.transport().playing
-				&& let Some((start, end)) = loop_marker
-				&& self.transport().sample == end
+			let (looped, len) = if self.transport().playing
+				&& let Some(loop_range) = self.transport().loop_range
+				&& let Some(len) = loop_range
+					.end()
+					.to_seconds_time(self.transport())
+					.checked_sub(self.transport().position)
+				&& let len = len.to_samples(self.transport())
+				&& len <= buf.len()
 			{
-				self.transport_mut().sample = start;
-			}
-
-			let len = loop_marker
-				.and_then(|(_, end)| end.checked_sub(self.transport().sample))
-				.map_or(buf.len(), |len| len.min(buf.len()));
+				(Some(loop_range.start()), len)
+			} else {
+				(None, buf.len())
+			};
 
 			self.audio_graph.process(&mut buf[..len]);
 			for s in &mut buf[..len] {
@@ -351,8 +349,11 @@ impl AudioProcessor {
 			}
 			self.metronome(&mut buf[..len]);
 
-			if self.transport().playing {
-				self.transport_mut().sample += len;
+			if let Some(position) = looped {
+				self.transport_mut().position = position.to_seconds_time(self.transport());
+			} else if self.transport().playing {
+				let len = SecondsTime::from_samples(len, self.transport());
+				self.transport_mut().position += len;
 			}
 
 			buf = &mut buf[len..];
@@ -378,7 +379,7 @@ impl AudioProcessor {
 		{
 			let batch = Batch {
 				version: self.transport().version,
-				sample: self.transport().sample,
+				position: self.transport().position,
 				updates: std::mem::take(&mut self.updates),
 				now,
 			};
@@ -398,21 +399,23 @@ impl AudioProcessor {
 			return;
 		}
 
-		let delay = self.audio_graph.delay();
+		let delay = SecondsTime::from_samples(self.audio_graph.delay(), self.transport());
 
-		let mut start = MusicalTime::from_samples(
-			self.transport().sample.saturating_sub(delay),
-			self.transport(),
-		)
-		.beat_floor();
-		let end = MusicalTime::from_samples(
-			(self.transport().sample + buf.len()).saturating_sub(delay),
-			self.transport(),
-		)
+		let mut start = self
+			.transport()
+			.position
+			.saturating_sub(delay)
+			.to_beat_time(self.transport())
+			.beat_floor();
+
+		let end = (self.transport().position
+			+ SecondsTime::from_samples(buf.len(), self.transport()))
+		.saturating_sub(delay)
+		.to_beat_time(self.transport())
 		.beat_ceil();
 
 		while start < end {
-			let start_samples = start.to_samples(self.transport()) + delay;
+			let start_offset = start.to_seconds_time(self.transport()) + delay;
 
 			let click = if start
 				.beat()
@@ -423,31 +426,38 @@ impl AudioProcessor {
 				&OFF_BAR_CLICK
 			};
 
-			start += MusicalTime::BEAT;
+			start += BeatTime::BEAT;
+
+			let write_start = start_offset
+				.saturating_sub(self.transport().position)
+				.to_samples(self.transport());
+
+			if write_start >= buf.len() {
+				return;
+			}
+
+			let play_pos = self
+				.transport()
+				.position
+				.saturating_sub(start_offset)
+				.to_samples(self.transport());
 
 			let resample_ratio = 44100.0 / self.transport().sample_rate.get() as f32;
 
-			let buf_idx = start_samples.saturating_sub(self.transport().sample);
-			let click_idx = self.transport().sample.saturating_sub(start_samples);
-
-			if buf_idx >= buf.len() || click_idx >= click.len() {
-				continue;
-			}
-
-			resample_cubic(&mut buf[buf_idx..], click, resample_ratio, click_idx / 2);
+			resample_cubic(&mut buf[write_start..], click, resample_ratio, play_pos / 2);
 		}
 	}
 
 	pub fn render(
 		&mut self,
 		path: impl AsRef<Path>,
-		len: MusicalTime,
+		len: BeatTime,
 		mut progress_fn: impl FnMut(f32),
 	) {
 		let old = *self.transport();
 		self.audio_graph.reset();
 
-		self.transport_mut().sample = 0;
+		self.transport_mut().position = SecondsTime::ZERO;
 		self.transport_mut().playing = true;
 
 		let mut writer = WavWriter::create(
@@ -463,6 +473,9 @@ impl AudioProcessor {
 
 		let buffer_size = 2 * self.transport().frames.get() as usize;
 		let mut buf = boxed_slice![0.0; buffer_size];
+		let buffer_size = SecondsTime::from_samples(buffer_size, self.transport());
+
+		let len = len.to_seconds_time(self.transport());
 
 		let mut updates = Vec::new();
 
@@ -470,39 +483,41 @@ impl AudioProcessor {
 		let mut end;
 
 		while {
-			delay = self.audio_graph.delay();
-			end = len.to_samples(self.transport()) + delay;
-			self.transport().sample < delay
+			delay = SecondsTime::from_samples(self.audio_graph.delay(), self.transport());
+			end = len + delay;
+			self.transport().position < delay
 		} {
-			let diff = buffer_size.min(delay - self.transport().sample);
+			let diff = buffer_size.min(delay - self.transport().position);
+			let diff_samples = diff.to_samples(self.transport());
 
-			self.audio_graph.process(&mut buf[..diff]);
+			self.audio_graph.process(&mut buf[..diff_samples]);
 			self.audio_graph
 				.for_each_node_mut(|node| node.collect_updates(&mut updates));
 			updates.clear();
 
-			self.transport_mut().sample += diff;
-			progress_fn(self.transport().sample as f32 / end as f32);
+			self.transport_mut().position += diff;
+			progress_fn(self.transport().position / end);
 		}
 
 		while {
-			delay = self.audio_graph.delay();
-			end = len.to_samples(self.transport()) + delay;
-			self.transport().sample < end
+			delay = SecondsTime::from_samples(self.audio_graph.delay(), self.transport());
+			end = len + delay;
+			self.transport().position < end
 		} {
-			let diff = buffer_size.min(end - self.transport().sample);
+			let diff = buffer_size.min(end - self.transport().position);
+			let diff_samples = diff.to_samples(self.transport());
 
-			self.audio_graph.process(&mut buf[..diff]);
+			self.audio_graph.process(&mut buf[..diff_samples]);
 			self.audio_graph
 				.for_each_node_mut(|node| node.collect_updates(&mut updates));
 			updates.clear();
 
-			for &s in &buf[..diff] {
+			for &s in &buf[..diff_samples] {
 				writer.write_sample(s).unwrap();
 			}
 
-			self.transport_mut().sample += diff;
-			progress_fn(self.transport().sample as f32 / end as f32);
+			self.transport_mut().position += diff;
+			progress_fn(self.transport().position / end);
 		}
 
 		writer.finalize().unwrap();

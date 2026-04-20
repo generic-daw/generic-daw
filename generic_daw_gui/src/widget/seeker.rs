@@ -1,5 +1,8 @@
 use crate::widget::{ALPHA_1_3, LINE_HEIGHT, maybe_snap, px_to_time, snap_step, time_to_px};
-use generic_daw_core::{MusicalTime, Position, Transport};
+use generic_daw_core::{
+	Transport,
+	time::{BeatRange, BeatTime},
+};
 use iced::{
 	Color, Element, Event, Fill, Font, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
@@ -21,8 +24,8 @@ use utils::NoDebug;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Status {
-	Seeking(MusicalTime),
-	DraggingLoop(MusicalTime),
+	Seeking(BeatTime),
+	DraggingLoop(BeatTime),
 	Panning(Point),
 	#[default]
 	None,
@@ -43,8 +46,8 @@ pub struct Seeker<'a, Message> {
 	scale: Vector,
 	offset: f32,
 	children: NoDebug<[Element<'a, Message>; 2]>,
-	seek_to: fn(MusicalTime) -> Message,
-	set_loop_marker: fn(Option<Position>) -> Message,
+	seek_to: fn(BeatTime) -> Message,
+	set_loop_range: fn(Option<BeatRange>) -> Message,
 	pan: fn(Vector, f32, f32) -> Message,
 	zoom: fn(Vector, Point, f32, f32) -> Message,
 }
@@ -219,14 +222,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 						}
 					}
 					Status::DraggingLoop(last_time) => {
-						let loop_marker = (last_time != time).then(|| {
+						let loop_range = (last_time != time).then(|| {
 							let start = last_time.min(time);
 							let end = last_time.max(time);
-							Position::new(start, end)
+							BeatRange::new(start, end)
 						});
 
-						if self.transport.loop_marker != loop_marker {
-							shell.publish((self.set_loop_marker)(loop_marker));
+						if self.transport.loop_range != loop_range {
+							shell.publish((self.set_loop_range)(loop_range));
 							shell.capture_event();
 						}
 					}
@@ -250,17 +253,17 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					time.round(snap_step(self.scale.x, self.transport))
 				});
 				state.status = if modifiers.command() {
-					if let Some(loop_marker) = self.transport.loop_marker {
-						if time == loop_marker.start() {
-							Status::DraggingLoop(loop_marker.end())
-						} else if time == loop_marker.end() {
-							Status::DraggingLoop(loop_marker.start())
+					if let Some(loop_range) = self.transport.loop_range {
+						if time == loop_range.start() {
+							Status::DraggingLoop(loop_range.end())
+						} else if time == loop_range.end() {
+							Status::DraggingLoop(loop_range.start())
 						} else {
-							shell.publish((self.set_loop_marker)(None));
+							shell.publish((self.set_loop_range)(None));
 							Status::DraggingLoop(time)
 						}
 					} else {
-						shell.publish((self.set_loop_marker)(None));
+						shell.publish((self.set_loop_range)(None));
 						Status::DraggingLoop(time)
 					}
 				} else {
@@ -464,8 +467,8 @@ impl<'a, Message> Seeker<'a, Message> {
 		scale: Vector,
 		left: impl Into<Element<'a, Message>>,
 		right: impl Into<Element<'a, Message>>,
-		seek_to: fn(MusicalTime) -> Message,
-		set_loop_marker: fn(Option<Position>) -> Message,
+		seek_to: fn(BeatTime) -> Message,
+		set_loop_range: fn(Option<BeatRange>) -> Message,
 		pan: fn(Vector, f32, f32) -> Message,
 		zoom: fn(Vector, Point, f32, f32) -> Message,
 	) -> Self {
@@ -476,7 +479,7 @@ impl<'a, Message> Seeker<'a, Message> {
 			offset: 0.0,
 			children: [left.into(), right.into()].into(),
 			seek_to,
-			set_loop_marker,
+			set_loop_range,
 			pan,
 			zoom,
 		}
@@ -504,7 +507,7 @@ impl<'a, Message> Seeker<'a, Message> {
 	}
 
 	fn grid(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-		let offset_time = |time: MusicalTime| {
+		let offset_time = |time: BeatTime| {
 			bounds.position()
 				+ Vector::new(
 					time_to_px(time, self.position, self.scale, self.transport) - self.offset,
@@ -523,7 +526,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		);
 		beat = beat.floor(snap_step);
 
-		let background_step = MusicalTime::new(8 * u64::from(self.transport.numerator.get()), 0);
+		let background_step = BeatTime::new(8 * u64::from(self.transport.numerator.get()), 0);
 		let mut background_beat = beat.round(background_step);
 		let background_width =
 			background_step.to_samples(self.transport) as f32 / self.scale.x.exp2() / 2.0;
@@ -545,7 +548,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		}
 
 		while beat <= end_beat {
-			let color = if snap_step >= MusicalTime::BEAT {
+			let color = if snap_step >= BeatTime::BEAT {
 				if beat.beat_in_bar(self.transport) == 0
 					&& beat.bar(self.transport).is_multiple_of(snap_step.beat())
 				{
@@ -582,7 +585,7 @@ impl<'a, Message> Seeker<'a, Message> {
 	}
 
 	fn header(&self, renderer: &mut Renderer, bounds: Rectangle, theme: &Theme) {
-		let offset_time = |time: MusicalTime| {
+		let offset_time = |time: BeatTime| {
 			bounds.position()
 				+ Vector::new(
 					time_to_px(time, self.position, self.scale, self.transport) - self.offset,
@@ -597,16 +600,16 @@ impl<'a, Message> Seeker<'a, Message> {
 					.unwrap_or_default(),
 				..Quad::default()
 			},
-			if self.transport.loop_marker.is_some() {
+			if self.transport.loop_range.is_some() {
 				theme.palette().secondary.base.color
 			} else {
 				theme.palette().primary.base.color
 			},
 		);
 
-		if let Some(loop_marker) = self.transport.loop_marker {
-			let start = offset_time(loop_marker.start());
-			let end = offset_time(loop_marker.end());
+		if let Some(loop_range) = self.transport.loop_range {
+			let start = offset_time(loop_range.start());
+			let end = offset_time(loop_range.end());
 
 			renderer.fill_quad(
 				Quad {
@@ -662,10 +665,7 @@ impl<'a, Message> Seeker<'a, Message> {
 		renderer.fill_quad(
 			Quad {
 				bounds: Rectangle::new(
-					offset_time(MusicalTime::from_samples(
-						self.transport.sample,
-						self.transport,
-					)),
+					offset_time(self.transport.position.to_beat_time(self.transport)),
 					Size::new(1.5, bounds.height),
 				)
 				.intersection(&bounds)

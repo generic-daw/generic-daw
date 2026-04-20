@@ -49,6 +49,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		)
 	}
 
+	#[must_use]
 	pub fn resample_ratio(&self, transport: &Transport) -> f32 {
 		transport.sample_rate.get() as f32 / self.config.sample_rate as f32
 	}

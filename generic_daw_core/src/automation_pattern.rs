@@ -1,4 +1,4 @@
-use crate::{AutomationPoint, MusicalTime};
+use crate::{AutomationPoint, time::BeatTime};
 use utils::unique_id;
 
 unique_id!(automation_pattern_id);
@@ -10,7 +10,7 @@ pub enum AutomationPatternAction {
 	Add(AutomationPoint, usize),
 	Remove(usize),
 	ChangeValue(usize, f32),
-	MoveTo(usize, MusicalTime),
+	MoveTo(usize, BeatTime),
 }
 
 #[derive(Debug)]

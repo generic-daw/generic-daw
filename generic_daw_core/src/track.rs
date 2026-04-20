@@ -68,22 +68,22 @@ impl NodeImpl for Track {
 }
 
 impl Track {
-	pub fn apply(&mut self, action: NodeAction) {
+	pub fn apply(&mut self, action: NodeAction, state: &State) {
 		match action {
 			NodeAction::ClipAdd(clip, idx) => self.clips.insert(idx, clip),
 			NodeAction::ClipRemove(index) => _ = self.clips.remove(index),
-			NodeAction::ClipMoveTo(index, pos) => self.clips[index].position().move_to(pos),
+			NodeAction::ClipMoveTo(index, pos) => self.clips[index].move_to(pos),
 			NodeAction::ClipTrimStartTo(index, pos) => {
-				self.clips[index].position().trim_start_to(pos);
+				self.clips[index].trim_start_to(pos, &state.transport);
 			}
-			NodeAction::ClipTrimEndTo(index, pos) => self.clips[index].position().trim_end_to(pos),
+			NodeAction::ClipTrimEndTo(index, pos) => {
+				self.clips[index].trim_end_to(pos, &state.transport);
+			}
 			NodeAction::ClipStretchStartTo(index, pos) => {
-				let c = &mut self.clips[index];
-				*c.stretch() *= c.position().stretch_start_to(pos);
+				self.clips[index].stretch_start_to(pos, &state.transport);
 			}
 			NodeAction::ClipStretchEndTo(index, pos) => {
-				let c = &mut self.clips[index];
-				*c.stretch() *= c.position().stretch_end_to(pos);
+				self.clips[index].stretch_end_to(pos, &state.transport);
 			}
 			action => self.channel.apply(action),
 		}

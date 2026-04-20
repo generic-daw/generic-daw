@@ -1,4 +1,4 @@
-use crate::Position;
+use crate::time::BeatRange;
 use std::fmt::{Debug, Display, Formatter};
 use utils::{unique_id, variants};
 
@@ -79,5 +79,5 @@ pub struct MidiNote {
 	pub id: MidiNoteId,
 	pub key: MidiKey,
 	pub velocity: f32,
-	pub position: Position,
+	pub position: BeatRange,
 }

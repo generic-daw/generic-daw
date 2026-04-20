@@ -1,10 +1,13 @@
-use crate::{MidiKey, MidiNote, MusicalTime, Position, Transport, midi_note::MidiNoteId};
+use crate::{
+	MidiKey, MidiNote, Transport,
+	midi_note::MidiNoteId,
+	time::{BeatRange, BeatTime, SecondsTime},
+};
 use log::warn;
 use midly::{
 	Format, MidiMessage, Timing, TrackEventKind,
 	num::{u7, u28},
 };
-use std::time::Duration;
 use utils::unique_id;
 
 unique_id!(midi_pattern_id);
@@ -17,9 +20,9 @@ pub enum MidiPatternAction {
 	Remove(usize),
 	ChangeKey(usize, MidiKey),
 	ChangeVelocity(usize, f32),
-	MoveTo(usize, MusicalTime),
-	TrimStartTo(usize, MusicalTime),
-	TrimEndTo(usize, MusicalTime),
+	MoveTo(usize, BeatTime),
+	TrimStartTo(usize, BeatTime),
+	TrimEndTo(usize, BeatTime),
 }
 
 #[derive(Debug)]
@@ -51,16 +54,16 @@ impl MidiPattern {
 		let midi_tick_to_musical_time = |tick: u32| match header.timing {
 			Timing::Metrical(ticks_per_beat) => {
 				let ticks_per_beat = u32::from(ticks_per_beat.as_int());
-				MusicalTime::new(
+				BeatTime::new(
 					u64::from(tick / ticks_per_beat),
 					((tick % ticks_per_beat) as f32 / ticks_per_beat as f32
-						* MusicalTime::TICKS_PER_BEAT as f32) as u64,
+						* BeatTime::FACTOR as f32) as u64,
 				)
 			}
-			Timing::Timecode(fps, subframe) => MusicalTime::from_duration(
-				Duration::from_secs_f32(tick as f32 / fps.as_f32() / f32::from(subframe)),
-				transport,
-			),
+			Timing::Timecode(fps, subframe) => SecondsTime::from_float(
+				f64::from(tick) / f64::from(fps.as_f32()) / f64::from(subframe),
+			)
+			.to_beat_time(transport),
 		};
 
 		let mut notes = Vec::new();
@@ -95,7 +98,7 @@ impl MidiPattern {
 							let note = MidiNote {
 								key: MidiKey(key.as_int()),
 								velocity: f32::from(vel.as_int()) / 127.0,
-								position: Position::new(
+								position: BeatRange::new(
 									midi_tick_to_musical_time(start.as_int()),
 									midi_tick_to_musical_time(time.as_int()),
 								),
@@ -114,7 +117,7 @@ impl MidiPattern {
 					let note = MidiNote {
 						key: MidiKey(key as u8),
 						velocity: f32::from(vel.as_int()) / 127.0,
-						position: Position::new(
+						position: BeatRange::new(
 							midi_tick_to_musical_time(start.as_int()),
 							midi_tick_to_musical_time(time.as_int()),
 						),

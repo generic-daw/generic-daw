@@ -1,9 +1,8 @@
 use crate::{
-	arrangement_view::{AudioClipRef, MidiClipRef},
 	file_tree::FileKind,
 	widget::{ALPHA_1_3, Delta, clip, maybe_snap, px_to_time, snap_step, time_to_px, track::Track},
 };
-use generic_daw_core::{MusicalTime, Transport};
+use generic_daw_core::{Transport, time::BeatTime};
 use iced::{
 	Color, Element, Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
@@ -31,27 +30,27 @@ use std::{
 pub enum Action {
 	Pan(Vector, f32),
 	Zoom(Vector, Point, f32),
-	Add(Option<(Arc<Path>, FileKind)>, Option<usize>, MusicalTime),
+	Add(Option<(Arc<Path>, FileKind)>, Option<usize>, BeatTime),
 	Open(usize, usize),
 	Clone,
-	Drag(Delta<usize>, Delta<MusicalTime>),
-	TrimStart(Delta<MusicalTime>),
-	TrimEnd(Delta<MusicalTime>),
-	StretchStart(Delta<MusicalTime>),
-	StretchEnd(Delta<MusicalTime>),
-	SplitAt(MusicalTime),
-	DragSplit(MusicalTime),
+	Drag(Delta<usize>, Delta<BeatTime>),
+	TrimStart(Delta<BeatTime>),
+	TrimEnd(Delta<BeatTime>),
+	StretchStart(Delta<BeatTime>),
+	StretchEnd(Delta<BeatTime>),
+	SplitAt(BeatTime),
+	DragSplit(BeatTime),
 	Delete,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum Status {
-	Hovering(Arc<Path>, FileKind, Option<(Option<usize>, MusicalTime)>),
-	Selecting(usize, usize, MusicalTime, MusicalTime),
-	Dragging(usize, MusicalTime),
-	TrimmingStart(MusicalTime),
-	TrimmingEnd(MusicalTime),
-	DraggingSplit(MusicalTime),
+	Hovering(Arc<Path>, FileKind, Option<(Option<usize>, BeatTime)>),
+	Selecting(usize, usize, BeatTime, BeatTime),
+	Dragging(usize, BeatTime),
+	TrimmingStart(BeatTime),
+	TrimmingEnd(BeatTime),
+	DraggingSplit(BeatTime),
 	Deleting,
 	#[default]
 	None,
@@ -313,14 +312,19 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 								.map(move |(c_idx, clip)| ((t_idx, c_idx), clip))
 						})
 						.for_each(|(idx, clip)| {
-							let clip_pos = match clip.inner {
-								clip::Inner::AudioClip(AudioClipRef { clip, .. }) => clip.position,
-								clip::Inner::MidiClip(MidiClipRef { clip, .. }) => clip.position,
+							let (start, end) = match clip.inner {
+								clip::Inner::AudioClip(inner) => (
+									inner.clip.position.start(),
+									inner.clip.position.end(self.transport),
+								),
+								clip::Inner::MidiClip(inner) => {
+									(inner.clip.position.start(), inner.clip.position.end())
+								}
 								clip::Inner::Recording(..) => return,
 							};
 
 							if (start_track..=end_track).contains(&idx.0)
-								&& (start_pos.max(clip_pos.start()) < end_pos.min(clip_pos.end()))
+								&& (start_pos.max(start) < end_pos.min(end))
 							{
 								state.secondary.insert(idx);
 							} else {
@@ -341,7 +345,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 						abs_diff.round(snap_step(state.scale.x, self.transport))
 					});
 
-					if new_track != track || abs_diff != MusicalTime::ZERO {
+					if new_track != track || abs_diff != BeatTime::ZERO {
 						let track_delta = if new_track > track {
 							Delta::Positive
 						} else {
@@ -364,7 +368,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 						abs_diff.round(snap_step(state.scale.x, self.transport))
 					});
 
-					if abs_diff != MusicalTime::ZERO {
+					if abs_diff != BeatTime::ZERO {
 						let delta = if new_time > time {
 							Delta::Positive
 						} else {
@@ -385,7 +389,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 						abs_diff.round(snap_step(state.scale.x, self.transport))
 					});
 
-					if abs_diff != MusicalTime::ZERO {
+					if abs_diff != BeatTime::ZERO {
 						let delta = if new_time > time {
 							Delta::Positive
 						} else {

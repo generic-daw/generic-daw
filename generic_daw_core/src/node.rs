@@ -40,10 +40,10 @@ impl NodeImpl for Node {
 }
 
 impl Node {
-	pub fn apply(&mut self, action: NodeAction) {
+	pub fn apply(&mut self, action: NodeAction, state: &State) {
 		match self {
 			Self::Channel(node) => node.apply(action),
-			Self::Track(node) => node.apply(action),
+			Self::Track(node) => node.apply(action, state),
 		}
 	}
 

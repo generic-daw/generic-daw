@@ -196,8 +196,8 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		self.graph.get_mut(&node).unwrap()
 	}
 
-	pub fn for_node_mut(&mut self, node: NodeId, f: impl FnOnce(&mut Node)) {
-		f(&mut *self.entry_mut(node).node());
+	pub fn for_node_mut(&mut self, node: NodeId, f: impl FnOnce(&mut Node, &Node::State)) {
+		f(&mut *self.graph.get_mut(&node).unwrap().node(), &self.state);
 	}
 
 	pub fn for_each_node_mut(&mut self, mut f: impl FnMut(&mut Node)) {

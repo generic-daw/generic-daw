@@ -30,8 +30,9 @@ use crate::{
 };
 use audio_clip::AudioClip;
 use generic_daw_core::{
-	Batch, MidiKey, MidiNote, MidiNoteId, MidiPatternId, MusicalTime, NodeId, PanMode, PluginId,
-	Position, SampleId, clap_host::PluginDescriptor,
+	Batch, MidiKey, MidiNote, MidiNoteId, MidiPatternId, NodeId, PanMode, PluginId, SampleId,
+	clap_host::PluginDescriptor,
+	time::{BeatRange, BeatTime},
 };
 use generic_daw_widget::{
 	knob::Knob,
@@ -117,18 +118,18 @@ pub enum Message {
 	PluginMoveTo(NodeId, DragEvent),
 	PluginRemove(NodeId, usize),
 
-	SampleLoaded(NoClone<Option<(Box<SamplePair>, Option<usize>, MusicalTime)>>),
-	MidiPatternLoaded(NoClone<Option<(Box<MidiPatternPair>, Option<usize>, MusicalTime)>>),
-	AddAudioClip(SampleId, Option<usize>, MusicalTime),
-	AddMidiClip(MidiPatternId, Option<usize>, MusicalTime),
+	SampleLoaded(NoClone<Option<(Box<SamplePair>, Option<usize>, BeatTime)>>),
+	MidiPatternLoaded(NoClone<Option<(Box<MidiPatternPair>, Option<usize>, BeatTime)>>),
+	AddAudioClip(SampleId, Option<usize>, BeatTime),
+	AddMidiClip(MidiPatternId, Option<usize>, BeatTime),
 
 	TrackAdd,
 	TrackRemove(NodeId),
 	TrackToggleEnabled(NodeId),
 	TrackToggleSolo(NodeId),
 
-	SeekTo(MusicalTime),
-	SetLoopMarker(Option<Position>),
+	SeekTo(BeatTime),
+	SetLoopMarker(Option<BeatRange>),
 
 	Recording(NodeId),
 	RecordingFinalize,
@@ -226,7 +227,7 @@ impl ArrangementView {
 	) -> Action<daw::Instruction, Message> {
 		match message {
 			Message::Batch(msg) => {
-				let before = self.arrangement.transport().sample;
+				let before = self.arrangement.transport().position;
 
 				let action = Action::batch(
 					self.arrangement
@@ -237,13 +238,14 @@ impl ArrangementView {
 						.map(Action::instruction),
 				);
 
-				let after = self.arrangement.transport().sample;
+				let after = self.arrangement.transport().position;
 
 				if state.autoscroll && after != before {
 					match self.tab {
 						Tab::Playlist => {
 							let pos_diff = Vector::new(
-								(after as f32 - before as f32)
+								(after.to_samples(self.arrangement.transport()) as f32
+									- before.to_samples(self.arrangement.transport()) as f32)
 									/ self.playlist.get_mut().scale.x.exp2(),
 								0.0,
 							);
@@ -259,7 +261,8 @@ impl ArrangementView {
 						Tab::Mixer => {}
 						Tab::PianoRoll => {
 							let pos_diff = Vector::new(
-								(after as f32 - before as f32)
+								(after.to_samples(self.arrangement.transport()) as f32
+									- before.to_samples(self.arrangement.transport()) as f32)
 									/ self.piano_roll.get_mut().scale.x.exp2(),
 								0.0,
 							);
@@ -429,8 +432,10 @@ impl ArrangementView {
 			}
 			Message::AddAudioClip(id, track, pos) => {
 				let mut clip = AudioClip::new(id);
-				clip.position
-					.trim_end_to(self.arrangement.samples()[&id].len(self.arrangement.transport()));
+				clip.position.trim_end_to(
+					self.arrangement.samples()[&id].len(self.arrangement.transport()),
+					self.arrangement.transport(),
+				);
 				clip.position.move_to(pos);
 				let (track, task) = if let Some(track) = track {
 					(track, Action::none())
@@ -447,12 +452,14 @@ impl ArrangementView {
 			Message::AddMidiClip(id, track, pos) => {
 				let mut clip = MidiClip::new(id);
 				clip.position
-					.trim_end_to(self.arrangement.midi_patterns()[&id].len().max(
-						MusicalTime::new(
-							u64::from(self.arrangement.transport().numerator.get()),
-							0,
-						),
-					));
+					.trim_end_to(
+						self.arrangement.midi_patterns()[&id]
+							.len()
+							.max(BeatTime::new(
+								u64::from(self.arrangement.transport().numerator.get()),
+								0,
+							)),
+					);
 				clip.position.move_to(pos);
 				let (track, task) = if let Some(track) = track {
 					(track, Action::none())
@@ -529,7 +536,7 @@ impl ArrangementView {
 				self.arrangement.seek_to(pos);
 				self.end_recording();
 			}
-			Message::SetLoopMarker(marker) => self.arrangement.set_loop_marker(marker),
+			Message::SetLoopMarker(marker) => self.arrangement.set_loop_range(marker),
 			Message::Recording(node) => {
 				let path = RECORDINGS_DIR.join(format!("{}.wav", format_now())).into();
 
@@ -548,6 +555,7 @@ impl ArrangementView {
 						let mut clip = AudioClip::new(id);
 						clip.position.trim_end_to(
 							self.arrangement.samples()[&id].len(self.arrangement.transport()),
+							self.arrangement.transport(),
 						);
 						clip.position.move_to(pos);
 						self.arrangement.add_clip(track, clip);
@@ -591,6 +599,7 @@ impl ArrangementView {
 					let mut clip = AudioClip::new(id);
 					clip.position.trim_end_to(
 						self.arrangement.samples()[&id].len(self.arrangement.transport()),
+						self.arrangement.transport(),
 					);
 					clip.position.move_to(pos);
 					self.arrangement.add_clip(track, clip);
@@ -605,10 +614,7 @@ impl ArrangementView {
 				Tab::Playlist => {
 					self.playlist.get_mut().finish();
 					return self.handle_playlist_action(
-						playlist::Action::Drag(
-							Delta::Negative(1),
-							Delta::Positive(MusicalTime::ZERO),
-						),
+						playlist::Action::Drag(Delta::Negative(1), Delta::Positive(BeatTime::ZERO)),
 						config,
 						state,
 					);
@@ -618,7 +624,7 @@ impl ArrangementView {
 					self.piano_roll.get_mut().finish();
 					self.handle_piano_roll_action(piano_roll::Action::Drag(
 						Delta::Positive(MidiKey(1)),
-						Delta::Positive(MusicalTime::ZERO),
+						Delta::Positive(BeatTime::ZERO),
 					));
 				}
 			},
@@ -626,10 +632,7 @@ impl ArrangementView {
 				Tab::Playlist => {
 					self.playlist.get_mut().finish();
 					return self.handle_playlist_action(
-						playlist::Action::Drag(
-							Delta::Positive(1),
-							Delta::Positive(MusicalTime::ZERO),
-						),
+						playlist::Action::Drag(Delta::Positive(1), Delta::Positive(BeatTime::ZERO)),
 						config,
 						state,
 					);
@@ -639,7 +642,7 @@ impl ArrangementView {
 					self.piano_roll.get_mut().finish();
 					self.handle_piano_roll_action(piano_roll::Action::Drag(
 						Delta::Negative(MidiKey(1)),
-						Delta::Positive(MusicalTime::ZERO),
+						Delta::Positive(BeatTime::ZERO),
 					));
 				}
 			},
@@ -715,7 +718,7 @@ impl ArrangementView {
 					self.piano_roll.get_mut().finish();
 					self.handle_piano_roll_action(piano_roll::Action::Drag(
 						Delta::Positive(MidiKey(12)),
-						Delta::Positive(MusicalTime::ZERO),
+						Delta::Positive(BeatTime::ZERO),
 					));
 				}
 			},
@@ -725,7 +728,7 @@ impl ArrangementView {
 					self.piano_roll.get_mut().finish();
 					self.handle_piano_roll_action(piano_roll::Action::Drag(
 						Delta::Negative(MidiKey(12)),
-						Delta::Positive(MusicalTime::ZERO),
+						Delta::Positive(BeatTime::ZERO),
 					));
 				}
 			},
@@ -734,10 +737,12 @@ impl ArrangementView {
 					let playlist = self.playlist.get_mut();
 					playlist.finish();
 					for &(track, clip) in &playlist.primary {
-						let pos = self.arrangement.tracks()[track].clips[clip]
-							.position()
-							.position()
-							.round(snap_step(playlist.scale.x, self.arrangement.transport()));
+						let pos = BeatRange::new(
+							self.arrangement.tracks()[track].clips[clip].start(),
+							self.arrangement.tracks()[track].clips[clip]
+								.end(self.arrangement.transport()),
+						)
+						.round(snap_step(playlist.scale.x, self.arrangement.transport()));
 
 						self.arrangement.clip_trim_end_to(track, clip, pos.end());
 						self.arrangement
@@ -817,20 +822,21 @@ impl ArrangementView {
 						.primary
 						.iter()
 						.map(|&(track, clip)| {
-							self.arrangement.tracks()[track].clips[clip]
-								.position()
-								.position()
+							(
+								self.arrangement.tracks()[track].clips[clip].start(),
+								self.arrangement.tracks()[track].clips[clip]
+									.end(self.arrangement.transport()),
+							)
 						})
-						.reduce(|old, new| {
-							Position::new(old.start().min(new.start()), old.end().max(new.end()))
-						}) {
+						.reduce(|old, new| (old.0.min(new.0), old.1.max(new.1)))
+					{
 						self.playlist.get_mut().finish();
 						return Action::batch([
 							self.handle_playlist_action(playlist::Action::Clone, config, state),
 							self.handle_playlist_action(
 								playlist::Action::Drag(
 									Delta::Positive(0),
-									Delta::Positive(delta.len()),
+									Delta::Positive(delta.1 - delta.0),
 								),
 								config,
 								state,
@@ -850,7 +856,7 @@ impl ArrangementView {
 							self.arrangement.midi_patterns()[&clip.pattern].notes[note].position
 						})
 						.reduce(|old, new| {
-							Position::new(old.start().min(new.start()), old.end().max(new.end()))
+							BeatRange::new(old.start().min(new.start()), old.end().max(new.end()))
 						}) {
 						self.piano_roll.get_mut().finish();
 						self.handle_piano_roll_action(piano_roll::Action::Clone);
@@ -1006,9 +1012,7 @@ impl ArrangementView {
 				}
 
 				for (track, clip) in sorted {
-					let pos = self.arrangement.tracks()[track].clips[clip]
-						.position()
-						.start();
+					let pos = self.arrangement.tracks()[track].clips[clip].start();
 					self.arrangement.clip_move_to(track, clip, pos + pos_diff);
 
 					let new_track = (track + track_diff).min(self.arrangement.tracks().len() - 1);
@@ -1019,9 +1023,7 @@ impl ArrangementView {
 			}
 			playlist::Action::TrimStart(pos_diff) => {
 				for &(track, clip) in &*primary {
-					let pos = self.arrangement.tracks()[track].clips[clip]
-						.position()
-						.start();
+					let pos = self.arrangement.tracks()[track].clips[clip].start();
 					self.arrangement
 						.clip_trim_start_to(track, clip, pos + pos_diff);
 				}
@@ -1029,17 +1031,14 @@ impl ArrangementView {
 			playlist::Action::TrimEnd(pos_diff) => {
 				for &(track, clip) in &*primary {
 					let pos = self.arrangement.tracks()[track].clips[clip]
-						.position()
-						.end();
+						.end(self.arrangement.transport());
 					self.arrangement
 						.clip_trim_end_to(track, clip, pos + pos_diff);
 				}
 			}
 			playlist::Action::StretchStart(pos_diff) => {
 				for &(track, clip) in &*primary {
-					let pos = self.arrangement.tracks()[track].clips[clip]
-						.position()
-						.start();
+					let pos = self.arrangement.tracks()[track].clips[clip].start();
 					self.arrangement
 						.clip_stretch_start_to(track, clip, pos + pos_diff);
 				}
@@ -1047,8 +1046,7 @@ impl ArrangementView {
 			playlist::Action::StretchEnd(pos_diff) => {
 				for &(track, clip) in &*primary {
 					let pos = self.arrangement.tracks()[track].clips[clip]
-						.position()
-						.end();
+						.end(self.arrangement.transport());
 					self.arrangement
 						.clip_stretch_from_end(track, clip, pos + pos_diff);
 				}
@@ -1059,8 +1057,10 @@ impl ArrangementView {
 				let mut sorted = primary
 					.drain()
 					.filter(|&(track, clip)| {
-						let position = self.arrangement.tracks()[track].clips[clip].position();
-						(position.start()..=position.end()).contains(&pos)
+						(self.arrangement.tracks()[track].clips[clip].start()
+							..=self.arrangement.tracks()[track].clips[clip]
+								.end(self.arrangement.transport()))
+							.contains(&pos)
 					})
 					.collect::<Vec<_>>();
 				sorted.sort_unstable_by_key(|&(_, c)| c);
@@ -1070,13 +1070,13 @@ impl ArrangementView {
 					lhs += *extra;
 
 					let clip = self.arrangement.tracks()[track].clips[lhs];
-					if clip.position().end() == pos {
+					if clip.end(self.arrangement.transport()) == pos {
 						primary.insert((track, lhs));
-					} else if clip.position().start() == pos {
+					} else if clip.start() == pos {
 						secondary.insert((track, lhs));
-					} else if clip.position().len() > MusicalTime::TICK {
-						let start = clip.position().start() + MusicalTime::TICK;
-						let end = clip.position().end() - MusicalTime::TICK;
+					} else if clip.len(self.arrangement.transport()) > BeatTime::TICK {
+						let start = clip.start() + BeatTime::TICK;
+						let end = clip.end(self.arrangement.transport()) - BeatTime::TICK;
 						pos = pos.clamp(start, end);
 						let rhs = self.arrangement.insert_clip(track, clip, lhs + 1);
 						self.arrangement.clip_trim_end_to(track, lhs, pos);
@@ -1091,9 +1091,7 @@ impl ArrangementView {
 				let mut clamped = HashMap::new();
 
 				for &(track, lhs) in &*primary {
-					let new = self.arrangement.tracks()[track].clips[lhs]
-						.position()
-						.start() + MusicalTime::TICK;
+					let new = self.arrangement.tracks()[track].clips[lhs].start() + BeatTime::TICK;
 
 					clamped
 						.entry(track)
@@ -1102,8 +1100,9 @@ impl ArrangementView {
 				}
 
 				for &(track, rhs) in &*secondary {
-					let new = self.arrangement.tracks()[track].clips[rhs].position().end()
-						- MusicalTime::TICK;
+					let new = self.arrangement.tracks()[track].clips[rhs]
+						.end(self.arrangement.transport())
+						- BeatTime::TICK;
 
 					clamped
 						.entry(track)
@@ -1178,7 +1177,7 @@ impl ArrangementView {
 					MidiNote {
 						key,
 						velocity: 1.0,
-						position: Position::new(pos, pos + MusicalTime::new(1, 0)),
+						position: BeatRange::new(pos, pos + BeatTime::new(1, 0)),
 						id: MidiNoteId::unique(),
 					},
 				);
@@ -1242,9 +1241,9 @@ impl ArrangementView {
 						primary.insert(lhs);
 					} else if note.position.start() == pos {
 						secondary.insert(lhs);
-					} else if note.position.len() > MusicalTime::TICK {
-						let start = note.position.start() + MusicalTime::TICK;
-						let end = note.position.end() - MusicalTime::TICK;
+					} else if note.position.len() > BeatTime::TICK {
+						let start = note.position.start() + BeatTime::TICK;
+						let end = note.position.end() - BeatTime::TICK;
 						pos = pos.clamp(start, end);
 						let rhs = self.arrangement.insert_note(clip.pattern, note, lhs + 1);
 						self.arrangement.note_trim_end_to(clip.pattern, lhs, pos);
@@ -1260,7 +1259,7 @@ impl ArrangementView {
 
 				for &lhs in &*primary {
 					let note = self.arrangement.midi_patterns()[&clip.pattern].notes[lhs];
-					let new = note.position.start() + MusicalTime::TICK;
+					let new = note.position.start() + BeatTime::TICK;
 
 					clamped
 						.entry(note.key)
@@ -1270,7 +1269,7 @@ impl ArrangementView {
 
 				for &rhs in &*secondary {
 					let note = self.arrangement.midi_patterns()[&clip.pattern].notes[rhs];
-					let new = note.position.end() - MusicalTime::TICK;
+					let new = note.position.end() - BeatTime::TICK;
 
 					clamped
 						.entry(note.key)

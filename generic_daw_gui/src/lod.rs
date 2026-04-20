@@ -1,4 +1,4 @@
-use generic_daw_core::{OffsetPosition, Transport};
+use generic_daw_core::{Transport, time::OffsetBeatRange};
 use iced::{
 	Color, Point, Rectangle, Size, Transformation,
 	advanced::graphics::{
@@ -26,7 +26,7 @@ impl Lods {
 		&self,
 		samples: &[f32],
 		transport: &Transport,
-		position: OffsetPosition,
+		position: OffsetBeatRange,
 		x_scale: f32,
 		height: f32,
 		color: Color,
@@ -91,7 +91,7 @@ impl LodsBuilder {
 		&self,
 		samples: &[f32],
 		transport: &Transport,
-		position: OffsetPosition,
+		position: OffsetBeatRange,
 		x_scale: f32,
 		height: f32,
 		color: Color,
@@ -128,7 +128,7 @@ fn mesh(
 	lods: &[impl AsRef<[(f32, f32)]>],
 	samples: &[f32],
 	transport: &Transport,
-	position: OffsetPosition,
+	position: OffsetBeatRange,
 	x_scale: f32,
 	height: f32,
 	color: Color,

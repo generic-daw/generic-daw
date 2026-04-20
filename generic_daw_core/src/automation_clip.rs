@@ -1,9 +1,9 @@
-use crate::{AutomationPatternId, OffsetPosition, audio_processor::State};
+use crate::{AutomationPatternId, audio_processor::State, time::OffsetBeatRange};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AutomationClip {
 	pub pattern: AutomationPatternId,
-	pub position: OffsetPosition,
+	pub position: OffsetBeatRange,
 }
 
 impl AutomationClip {
@@ -12,7 +12,12 @@ impl AutomationClip {
 		let pattern = &state.automation_patterns[&self.pattern];
 
 		let (start, end, offset) = self.position.to_samples(&state.transport);
-		let now = state.transport.sample.clamp(start, end) + offset;
+		let now = state
+			.transport
+			.position
+			.to_samples(&state.transport)
+			.clamp(start, end)
+			+ offset;
 
 		pattern
 			.points

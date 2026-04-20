@@ -15,9 +15,10 @@ use crate::{
 };
 use generic_daw_core::{
 	Batch, Message, MidiClipId, MidiKey, MidiNote, MidiNoteId, MidiPatternAction, MidiPatternId,
-	MusicalTime, NodeAction, NodeId, NodeImpl, PanMode, PluginId, Position, SampleId, Stream,
-	Transport, Update, Version, build_output_stream,
+	NodeAction, NodeId, NodeImpl, PanMode, PluginId, SampleId, Stream, Transport, Update, Version,
+	build_output_stream,
 	clap_host::{HostInfo, PluginDescriptor},
+	time::{BeatRange, BeatTime},
 };
 use iced::Task;
 use rtrb::{Producer, PushError};
@@ -96,7 +97,7 @@ impl Arrangement {
 		let mut messages = Vec::new();
 
 		if batch.version == self.transport.version {
-			self.transport.sample = batch.sample;
+			self.transport.position = batch.position;
 		}
 
 		for update in batch.updates.drain(..) {
@@ -222,19 +223,19 @@ impl Arrangement {
 		self.node_action(id, NodeAction::PluginMixChanged(index, mix));
 	}
 
-	pub fn set_loop_marker(&mut self, loop_marker: Option<Position>) {
-		if self.transport.loop_marker != loop_marker {
-			self.transport.loop_marker = loop_marker;
-			self.send(Message::LoopMarker(loop_marker));
+	pub fn set_loop_range(&mut self, loop_range: Option<BeatRange>) {
+		if self.transport.loop_range != loop_range {
+			self.transport.loop_range = loop_range;
+			self.send(Message::LoopRange(loop_range));
 		}
 	}
 
-	pub fn seek_to(&mut self, position: MusicalTime) {
+	pub fn seek_to(&mut self, position: BeatTime) {
 		self.transport.version = Version::unique();
-		self.transport.sample = position.to_samples(&self.transport);
-		self.send(Message::Sample(
+		self.transport.position = position.to_seconds_time(self.transport());
+		self.send(Message::Position(
 			self.transport.version,
-			self.transport.sample,
+			self.transport.position,
 		));
 	}
 
@@ -268,8 +269,8 @@ impl Arrangement {
 		self.pause();
 		self.seek_to(
 			self.transport
-				.loop_marker
-				.map_or(MusicalTime::ZERO, Position::start),
+				.loop_range
+				.map_or(BeatTime::ZERO, BeatRange::start),
 		);
 		self.send(Message::Reset);
 	}
@@ -381,8 +382,8 @@ impl Arrangement {
 		self.remove_channel(id);
 		for clip in track.clips {
 			match clip {
-				Clip::Audio(audio) => self.samples.get_mut(&audio.sample).unwrap().refs -= 1,
-				Clip::Midi(midi) => self.midi_patterns.get_mut(&midi.pattern).unwrap().refs -= 1,
+				Clip::Audio(clip) => self.samples.get_mut(&clip.sample).unwrap().refs -= 1,
+				Clip::Midi(clip) => self.midi_patterns.get_mut(&clip.pattern).unwrap().refs -= 1,
 			}
 
 			self.gc(clip);
@@ -411,16 +412,16 @@ impl Arrangement {
 
 	pub fn gc(&mut self, clip: impl Into<Clip>) {
 		match clip.into() {
-			Clip::Audio(audio) => {
-				if self.samples[&audio.sample].refs == 0 {
-					self.samples.remove(&audio.sample);
-					self.send(Message::SampleRemove(audio.sample));
+			Clip::Audio(clip) => {
+				if self.samples[&clip.sample].refs == 0 {
+					self.samples.remove(&clip.sample);
+					self.send(Message::SampleRemove(clip.sample));
 				}
 			}
-			Clip::Midi(midi) => {
-				if self.midi_patterns[&midi.pattern].refs == 0 {
-					self.midi_patterns.remove(&midi.pattern);
-					self.send(Message::MidiPatternRemove(midi.pattern));
+			Clip::Midi(clip) => {
+				if self.midi_patterns[&clip.pattern].refs == 0 {
+					self.midi_patterns.remove(&clip.pattern);
+					self.send(Message::MidiPatternRemove(clip.pattern));
 				}
 			}
 		}
@@ -437,10 +438,10 @@ impl Arrangement {
 
 	pub fn duplicate_clip(&mut self, track: usize, clip: usize) -> usize {
 		let clip = match self.tracks[track].clips[clip] {
-			Clip::Audio(audio) => Clip::Audio(audio),
-			Clip::Midi(midi) => Clip::Midi(MidiClip {
+			Clip::Audio(clip) => Clip::Audio(clip),
+			Clip::Midi(clip) => Clip::Midi(MidiClip {
 				id: MidiClipId::unique(),
-				..midi
+				..clip
 			}),
 		};
 		self.insert_clip(track, clip, self.tracks[track].clips.len())
@@ -449,8 +450,8 @@ impl Arrangement {
 	pub fn insert_clip(&mut self, track: usize, clip: impl Into<Clip>, idx: usize) -> usize {
 		let clip = clip.into();
 		match clip {
-			Clip::Audio(audio) => self.samples.get_mut(&audio.sample).unwrap().refs += 1,
-			Clip::Midi(midi) => self.midi_patterns.get_mut(&midi.pattern).unwrap().refs += 1,
+			Clip::Audio(clip) => self.samples.get_mut(&clip.sample).unwrap().refs += 1,
+			Clip::Midi(clip) => self.midi_patterns.get_mut(&clip.pattern).unwrap().refs += 1,
 		}
 		self.tracks[track].clips.insert(idx, clip);
 		self.node_action(self.tracks[track].id, NodeAction::ClipAdd(clip.into(), idx));
@@ -461,8 +462,8 @@ impl Arrangement {
 		self.node_action(self.tracks[track].id, NodeAction::ClipRemove(clip));
 		let clip = self.tracks[track].clips.remove(clip);
 		match clip {
-			Clip::Audio(audio) => self.samples.get_mut(&audio.sample).unwrap().refs -= 1,
-			Clip::Midi(midi) => self.midi_patterns.get_mut(&midi.pattern).unwrap().refs -= 1,
+			Clip::Audio(clip) => self.samples.get_mut(&clip.sample).unwrap().refs -= 1,
+			Clip::Midi(clip) => self.midi_patterns.get_mut(&clip.pattern).unwrap().refs -= 1,
 		}
 		clip
 	}
@@ -476,18 +477,16 @@ impl Arrangement {
 		}
 	}
 
-	pub fn clip_move_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
-		if self.tracks[track].clips[clip].position().start() != pos {
-			self.tracks[track].clips[clip].position_mut().move_to(pos);
+	pub fn clip_move_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
+		if self.tracks[track].clips[clip].start() != pos {
+			self.tracks[track].clips[clip].move_to(pos);
 			self.node_action(self.tracks[track].id, NodeAction::ClipMoveTo(clip, pos));
 		}
 	}
 
-	pub fn clip_trim_start_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
-		if self.tracks[track].clips[clip].position().start() != pos {
-			self.tracks[track].clips[clip]
-				.position_mut()
-				.trim_start_to(pos);
+	pub fn clip_trim_start_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
+		if self.tracks[track].clips[clip].start() != pos {
+			self.tracks[track].clips[clip].trim_start_to(pos, &self.transport);
 			self.node_action(
 				self.tracks[track].id,
 				NodeAction::ClipTrimStartTo(clip, pos),
@@ -495,19 +494,19 @@ impl Arrangement {
 		}
 	}
 
-	pub fn clip_trim_end_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
-		if self.tracks[track].clips[clip].position().end() != pos {
-			self.tracks[track].clips[clip]
-				.position_mut()
-				.trim_end_to(pos);
+	pub fn clip_trim_end_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
+		if self.tracks[track].clips[clip].end(&self.transport) != pos {
+			self.tracks[track].clips[clip].trim_end_to(pos, &self.transport);
 			self.node_action(self.tracks[track].id, NodeAction::ClipTrimEndTo(clip, pos));
 		}
 	}
 
-	pub fn clip_stretch_start_to(&mut self, track: usize, clip: usize, pos: MusicalTime) {
-		if self.tracks[track].clips[clip].position().start() != pos {
+	pub fn clip_stretch_start_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
+		if self.tracks[track].clips[clip].start() != pos {
 			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
-				audio.stretch *= audio.position.stretch_start_to(pos);
+				audio.stretch *= audio.position.stretch_start_to(pos, &self.transport);
+				audio.stretch = audio.stretch.clamp(2f32.powi(-10), 2f32.powi(10));
+
 				self.node_action(
 					self.tracks[track].id,
 					NodeAction::ClipStretchStartTo(clip, pos),
@@ -518,10 +517,12 @@ impl Arrangement {
 		}
 	}
 
-	pub fn clip_stretch_from_end(&mut self, track: usize, clip: usize, pos: MusicalTime) {
-		if self.tracks[track].clips[clip].position().end() != pos {
+	pub fn clip_stretch_from_end(&mut self, track: usize, clip: usize, pos: BeatTime) {
+		if self.tracks[track].clips[clip].end(&self.transport) != pos {
 			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
-				audio.stretch *= audio.position.stretch_end_to(pos);
+				audio.stretch *= audio.position.stretch_end_to(pos, &self.transport);
+				audio.stretch = audio.stretch.clamp(2f32.powi(-10), 2f32.powi(10));
+
 				self.node_action(
 					self.tracks[track].id,
 					NodeAction::ClipStretchEndTo(clip, pos),
@@ -577,7 +578,7 @@ impl Arrangement {
 		}
 	}
 
-	pub fn note_move_to(&mut self, pattern: MidiPatternId, note: usize, pos: MusicalTime) {
+	pub fn note_move_to(&mut self, pattern: MidiPatternId, note: usize, pos: BeatTime) {
 		if self.midi_patterns[&pattern].notes[note].position.start() != pos {
 			self.midi_patterns.get_mut(&pattern).unwrap().notes[note]
 				.position
@@ -586,7 +587,7 @@ impl Arrangement {
 		}
 	}
 
-	pub fn note_trim_start_to(&mut self, pattern: MidiPatternId, note: usize, pos: MusicalTime) {
+	pub fn note_trim_start_to(&mut self, pattern: MidiPatternId, note: usize, pos: BeatTime) {
 		if self.midi_patterns[&pattern].notes[note].position.start() != pos {
 			self.midi_patterns.get_mut(&pattern).unwrap().notes[note]
 				.position
@@ -595,7 +596,7 @@ impl Arrangement {
 		}
 	}
 
-	pub fn note_trim_end_to(&mut self, pattern: MidiPatternId, note: usize, pos: MusicalTime) {
+	pub fn note_trim_end_to(&mut self, pattern: MidiPatternId, note: usize, pos: BeatTime) {
 		if self.midi_patterns[&pattern].notes[note].position.end() != pos {
 			self.midi_patterns.get_mut(&pattern).unwrap().notes[note]
 				.position
@@ -615,7 +616,7 @@ impl Arrangement {
 		let len = self
 			.tracks()
 			.iter()
-			.map(Track::len)
+			.map(|track| track.len(&self.transport))
 			.max()
 			.unwrap_or_default();
 

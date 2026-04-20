@@ -10,8 +10,9 @@ use crate::{
 	daw::{self, Project},
 };
 use generic_daw_core::{
-	MidiClipId, MidiKey, MidiNote, MidiNoteId, MusicalTime, OffsetPosition, PanMode, Position,
+	MidiClipId, MidiKey, MidiNote, MidiNoteId, PanMode,
 	clap_host::PluginDescriptor,
+	time::{BeatRange, BeatSpan, BeatTime, OffsetBeatRange, OffsetBeatSpan, SecondsTime},
 };
 use generic_daw_project::{proto, reader::Reader, writer::Writer};
 use iced::Task;
@@ -43,12 +44,12 @@ impl Arrangement {
 		let mut writer = Writer::new(proto::Transport {
 			bpm: self.transport().bpm.get().into(),
 			numerator: self.transport().numerator.get().into(),
-			loop_marker: self
+			loop_range: self
 				.transport()
-				.loop_marker
-				.map(|loop_marker| proto::Position {
-					start: loop_marker.start().into_raw(),
-					end: loop_marker.end().into_raw(),
+				.loop_range
+				.map(|loop_range| proto::BeatRange {
+					start: loop_range.start().to_bits(),
+					end: loop_range.end().to_bits(),
 				}),
 		});
 
@@ -69,9 +70,9 @@ impl Arrangement {
 					pattern.notes.iter().map(|note| proto::Note {
 						key: note.key.0.into(),
 						velocity: note.velocity,
-						position: proto::Position {
-							start: note.position.start().into_raw(),
-							end: note.position.end().into_raw(),
+						position: proto::BeatRange {
+							start: note.position.start().to_bits(),
+							end: note.position.end().to_bits(),
 						},
 					}),
 				),
@@ -85,26 +86,37 @@ impl Arrangement {
 				track.id,
 				writer.push_track(
 					track.clips.iter().map(|clip| match clip {
-						Clip::Audio(audio) => proto::AudioClip {
-							sample: samples[&audio.sample],
-							position: proto::OffsetPosition {
-								position: proto::Position {
-									start: audio.position.start().into_raw(),
-									end: audio.position.end().into_raw(),
+						Clip::Audio(clip) => proto::AudioClip {
+							sample: samples[&clip.sample],
+							position_compat: Some(proto::OffsetBeatRange {
+								position: proto::BeatRange {
+									start: clip.position.start().to_bits(),
+									end: clip.position.end(self.transport()).to_bits(),
 								},
-								offset: audio.position.offset().into_raw(),
+								offset: clip
+									.position
+									.offset()
+									.to_beat_time(self.transport())
+									.to_bits(),
+							}),
+							stretch: clip.stretch,
+							position: proto::OffsetBeatSpan {
+								position: proto::BeatSpan {
+									start: clip.position.start().to_bits(),
+									len: clip.position.len().to_bits(),
+								},
+								offset: clip.position.offset().to_bits(),
 							},
-							stretch: audio.stretch,
 						}
 						.into(),
-						Clip::Midi(midi) => proto::MidiClip {
-							pattern: midi_patterns[&midi.pattern],
-							position: proto::OffsetPosition {
-								position: proto::Position {
-									start: midi.position.start().into_raw(),
-									end: midi.position.end().into_raw(),
+						Clip::Midi(clip) => proto::MidiClip {
+							pattern: midi_patterns[&clip.pattern],
+							position: proto::OffsetBeatRange {
+								position: proto::BeatRange {
+									start: clip.position.start().to_bits(),
+									end: clip.position.end().to_bits(),
 								},
-								offset: midi.position.offset().into_raw(),
+								offset: clip.position.offset().to_bits(),
 							},
 						}
 						.into(),
@@ -223,15 +235,15 @@ impl Arrangement {
 		let proto::Transport {
 			bpm,
 			numerator,
-			loop_marker,
+			loop_range,
 		} = reader.transport();
 
 		arrangement.set_bpm(NonZero::new(bpm as u16)?);
 		arrangement.set_numerator(NonZero::new(numerator as u8)?);
-		arrangement.set_loop_marker(loop_marker.map(|loop_marker| {
-			Position::new(
-				MusicalTime::from_raw(loop_marker.start),
-				MusicalTime::from_raw(loop_marker.end),
+		arrangement.set_loop_range(loop_range.map(|loop_range| {
+			BeatRange::new(
+				BeatTime::from_bits(loop_range.start),
+				BeatTime::from_bits(loop_range.end),
 			)
 		}));
 
@@ -358,9 +370,9 @@ impl Arrangement {
 					id: MidiNoteId::unique(),
 					key: MidiKey(note.key as u8),
 					velocity: note.velocity,
-					position: Position::new(
-						MusicalTime::from_raw(note.position.start),
-						MusicalTime::from_raw(note.position.end),
+					position: BeatRange::new(
+						BeatTime::from_bits(note.position.start),
+						BeatTime::from_bits(note.position.end),
 					),
 				})
 				.collect();
@@ -465,31 +477,49 @@ impl Arrangement {
 				arrangement.add_clip(
 					track,
 					match clip {
-						proto::Clip::Audio(audio) => {
-							let Feedback::Use(sample) = samples.get(&audio.sample)? else {
+						proto::Clip::Audio(clip) => {
+							let Feedback::Use(sample) = samples.get(&clip.sample)? else {
 								continue;
 							};
 							Clip::Audio(AudioClip {
 								sample: *sample,
-								position: OffsetPosition::new(
-									Position::new(
-										MusicalTime::from_raw(audio.position.position.start),
-										MusicalTime::from_raw(audio.position.position.end),
-									),
-									MusicalTime::from_raw(audio.position.offset),
+								position: clip.position_compat.map_or_else(
+									|| {
+										OffsetBeatSpan::new(
+											BeatSpan::new(
+												BeatTime::from_bits(clip.position.position.start),
+												SecondsTime::from_bits(clip.position.position.len),
+											),
+											SecondsTime::from_bits(clip.position.offset),
+										)
+									},
+									|position_compat| {
+										OffsetBeatSpan::new(
+											BeatSpan::new(
+												BeatTime::from_bits(position_compat.position.start),
+												BeatTime::from_bits(
+													position_compat.position.end
+														- position_compat.position.start,
+												)
+												.to_seconds_time(arrangement.transport()),
+											),
+											BeatTime::from_bits(position_compat.offset)
+												.to_seconds_time(arrangement.transport()),
+										)
+									},
 								),
-								stretch: audio.stretch,
+								stretch: clip.stretch,
 							})
 						}
-						proto::Clip::Midi(midi) => Clip::Midi(MidiClip {
+						proto::Clip::Midi(clip) => Clip::Midi(MidiClip {
 							id: MidiClipId::unique(),
-							pattern: *midi_patterns.get(&midi.pattern)?,
-							position: OffsetPosition::new(
-								Position::new(
-									MusicalTime::from_raw(midi.position.position.start),
-									MusicalTime::from_raw(midi.position.position.end),
+							pattern: *midi_patterns.get(&clip.pattern)?,
+							position: OffsetBeatRange::new(
+								BeatRange::new(
+									BeatTime::from_bits(clip.position.position.start),
+									BeatTime::from_bits(clip.position.position.end),
 								),
-								MusicalTime::from_raw(midi.position.offset),
+								BeatTime::from_bits(clip.position.offset),
 							),
 						}),
 					},

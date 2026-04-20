@@ -1,5 +1,5 @@
 use crate::{arrangement_view::crc, lod::Lods};
-use generic_daw_core::{MusicalTime, SampleId, Transport};
+use generic_daw_core::{SampleId, Transport, time::BeatTime};
 use std::{fs::File, num::NonZero, path::Path, sync::Arc};
 use utils::NoDebug;
 
@@ -22,8 +22,8 @@ impl Sample {
 		transport.sample_rate.get() as f32 / self.sample_rate.get() as f32
 	}
 
-	pub fn len(&self, transport: &Transport) -> MusicalTime {
-		MusicalTime::from_samples(self.samples.len(), transport) * self.resample_ratio(transport)
+	pub fn len(&self, transport: &Transport) -> BeatTime {
+		BeatTime::from_samples(self.samples.len(), transport) * self.resample_ratio(transport)
 	}
 }
 

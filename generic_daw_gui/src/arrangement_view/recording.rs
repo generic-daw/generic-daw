@@ -5,7 +5,7 @@ use crate::{
 	},
 	lod::LodsBuilder,
 };
-use generic_daw_core::{DeviceId, MusicalTime, NodeId, Transport};
+use generic_daw_core::{DeviceId, NodeId, Transport, time::BeatTime};
 use rtrb::Consumer;
 use std::{fs::File, io::BufWriter, num::NonZero, path::Path, sync::Arc};
 
@@ -13,7 +13,7 @@ use std::{fs::File, io::BufWriter, num::NonZero, path::Path, sync::Arc};
 pub struct Recording {
 	pub core: generic_daw_core::Recording<BufWriter<File>>,
 	pub lods: LodsBuilder,
-	pub position: MusicalTime,
+	pub position: BeatTime,
 	pub name: Arc<str>,
 	pub path: Arc<Path>,
 	pub node: NodeId,
@@ -40,7 +40,7 @@ impl Recording {
 			Self {
 				core,
 				lods: LodsBuilder::default(),
-				position: MusicalTime::from_samples(transport.sample, transport),
+				position: transport.position.to_beat_time(transport),
 				path,
 				name,
 				node,
@@ -49,8 +49,8 @@ impl Recording {
 		)
 	}
 
-	pub fn len(&self, transport: &Transport) -> MusicalTime {
-		MusicalTime::from_samples(self.core.samples().len(), transport)
+	pub fn len(&self, transport: &Transport) -> BeatTime {
+		BeatTime::from_samples(self.core.samples().len(), transport)
 			* self.core.resample_ratio(transport)
 	}
 
@@ -69,7 +69,7 @@ impl Recording {
 
 		let lods = std::mem::take(&mut self.lods);
 
-		self.position = MusicalTime::from_samples(transport.sample, transport);
+		self.position = transport.position.to_beat_time(transport);
 
 		let name = std::mem::replace(
 			&mut self.name,

@@ -1,4 +1,4 @@
-use generic_daw_core::{MidiNote, MidiPatternId, MusicalTime, Transport};
+use generic_daw_core::{MidiNote, MidiPatternId, Transport, time::BeatTime};
 use std::{path::Path, sync::Arc};
 
 #[derive(Debug)]
@@ -10,7 +10,7 @@ pub struct MidiPattern {
 }
 
 impl MidiPattern {
-	pub fn len(&self) -> MusicalTime {
+	pub fn len(&self) -> BeatTime {
 		self.notes
 			.iter()
 			.map(|note| note.position.end())

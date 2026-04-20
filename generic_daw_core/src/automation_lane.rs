@@ -22,8 +22,8 @@ impl AutomationLane {
 			let (start, end) = clip.position.position().to_samples(&state.transport);
 
 			match (
-				start <= state.transport.sample,
-				end >= state.transport.sample,
+				start <= state.transport.position.to_samples(&state.transport),
+				end >= state.transport.position.to_samples(&state.transport),
 			) {
 				(true, true) => {
 					inside = inside

@@ -1,4 +1,4 @@
-use generic_daw_core::{MidiKey, MusicalTime, Transport};
+use generic_daw_core::{MidiKey, Transport, time::BeatTime};
 use iced::{Vector, keyboard::Modifiers};
 use std::ops::Add;
 
@@ -33,7 +33,7 @@ impl Add<Delta<Self>> for usize {
 	}
 }
 
-impl Add<Delta<Self>> for MusicalTime {
+impl Add<Delta<Self>> for BeatTime {
 	type Output = Self;
 
 	fn add(self, rhs: Delta<Self>) -> Self::Output {
@@ -55,12 +55,12 @@ impl Add<Delta<Self>> for MidiKey {
 	}
 }
 
-pub fn snap_step(mut scale: f32, transport: &Transport) -> MusicalTime {
+pub fn snap_step(mut scale: f32, transport: &Transport) -> BeatTime {
 	scale += (f32::from(transport.bpm.get()) / transport.sample_rate.get() as f32).log2() - 3.5;
 	if scale < 0.0 {
-		MusicalTime::new(0, MusicalTime::TICKS_PER_BEAT >> -scale.max(-9.0) as u8)
+		BeatTime::new(0, BeatTime::FACTOR >> -scale.max(-9.0) as u8)
 	} else {
-		MusicalTime::new(
+		BeatTime::new(
 			u64::from(transport.numerator.get())
 				<< (scale - f32::from(transport.numerator.get()).log2()).ceil() as u8,
 			0,
@@ -72,12 +72,12 @@ fn maybe_snap<T>(t: T, modifiers: Modifiers, f: impl FnOnce(T) -> T) -> T {
 	if modifiers.alt() { t } else { f(t) }
 }
 
-fn time_to_px(time: MusicalTime, position: Vector, scale: Vector, transport: &Transport) -> f32 {
+fn time_to_px(time: BeatTime, position: Vector, scale: Vector, transport: &Transport) -> f32 {
 	(time.to_samples(transport) as f64 / f64::from(scale.x.exp2()) - f64::from(position.x)) as f32
 }
 
-fn px_to_time(px: f32, position: Vector, scale: Vector, transport: &Transport) -> MusicalTime {
-	MusicalTime::from_samples(
+fn px_to_time(px: f32, position: Vector, scale: Vector, transport: &Transport) -> BeatTime {
+	BeatTime::from_samples(
 		((f64::from(px) + f64::from(position.x)) * f64::from(scale.x.exp2())) as usize,
 		transport,
 	)
