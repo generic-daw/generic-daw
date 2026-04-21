@@ -54,8 +54,24 @@ unique_id!(project);
 
 pub use project::Id as Project;
 
+pub static CONFIG_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
+	let data_dir = dirs::config_dir().unwrap().join("Generic DAW").into();
+	_ = std::fs::create_dir(&data_dir);
+	data_dir
+});
+
 pub static DATA_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 	let data_dir = dirs::data_dir().unwrap().join("Generic DAW").into();
+	_ = std::fs::create_dir(&data_dir);
+	data_dir
+});
+
+pub static STATE_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
+	let data_dir = dirs::state_dir()
+		.or_else(dirs::data_dir)
+		.unwrap()
+		.join("Generic DAW")
+		.into();
 	_ = std::fs::create_dir(&data_dir);
 	data_dir
 });

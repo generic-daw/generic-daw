@@ -1,4 +1,7 @@
-use crate::{daw::DATA_DIR, theme::Theme};
+use crate::{
+	daw::{CONFIG_DIR, DATA_DIR},
+	theme::Theme,
+};
 use generic_daw_core::DeviceId;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
@@ -12,7 +15,7 @@ use std::{
 use utils::boxed_slice;
 
 pub static CONFIG_PATH: LazyLock<Arc<Path>> =
-	LazyLock::new(|| dirs::config_dir().unwrap().join("generic_daw.toml").into());
+	LazyLock::new(|| CONFIG_DIR.join("config.toml").into());
 
 pub static DEFAULT_SAMPLE_PATHS: LazyLock<Box<[Arc<Path>]>> =
 	LazyLock::new(|| boxed_slice![DATA_DIR.clone()]);

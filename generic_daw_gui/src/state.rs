@@ -1,3 +1,4 @@
+use crate::daw::STATE_DIR;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -7,13 +8,7 @@ use std::{
 	sync::{Arc, LazyLock},
 };
 
-pub static STATE_PATH: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	dirs::state_dir()
-		.or_else(dirs::data_dir)
-		.unwrap()
-		.join("generic_daw.toml")
-		.into()
-});
+pub static STATE_PATH: LazyLock<Arc<Path>> = LazyLock::new(|| STATE_DIR.join("state.toml").into());
 
 pub const DEFAULT_SPLIT_POSITION: f32 = 300.0;
 
