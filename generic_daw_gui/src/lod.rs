@@ -197,17 +197,15 @@ fn mesh(
 
 	let (start, end, offset) = position.to_samples(transport);
 
-	let hidden_start_samples = 0f32.max(hidden_start_px * -samples_per_px);
+	let hidden_start_samples = 0f32.max(-hidden_start_px * samples_per_px);
 
 	let lod_start_f = (offset as f32 + hidden_start_samples) * lod_slices_per_sample;
 	let view_len_f = (end - start) as f32 * lod_slices_per_sample;
 	let view_len_f = view_len_f.min(clipped_size.width * lod_slices_per_px);
 	let lod_end_f = lod_start_f + view_len_f;
 
-	let lod_start = lod_start_f / lod_slices_per_mesh_slice as f32;
-	let lod_start = lod_start as usize * lod_slices_per_mesh_slice;
-	let lod_end = lod_end_f / lod_slices_per_mesh_slice as f32;
-	let lod_end = lod_end as usize * lod_slices_per_mesh_slice;
+	let lod_start = lod_start_f as usize / lod_slices_per_mesh_slice * lod_slices_per_mesh_slice;
+	let lod_end = lod_end_f as usize / lod_slices_per_mesh_slice * lod_slices_per_mesh_slice;
 
 	let lod_len = saved_lod.map_or(samples.len() / 2, |saved_lod| {
 		lods[saved_lod].as_ref().len()

@@ -33,6 +33,7 @@ struct State {
 	last_click: Option<Click>,
 	last_bounds: Rectangle,
 	last_offset: BeatTime,
+	last_stretch: f32,
 	last_addr: usize,
 	last_theme: RefCell<Option<Theme>>,
 }
@@ -43,6 +44,7 @@ impl Default for State {
 			cache: RefCell::new(Cache::new(Arc::default())),
 			last_click: None,
 			last_bounds: Rectangle::default(),
+			last_stretch: 0.0,
 			last_offset: BeatTime::ZERO,
 			last_addr: 0,
 			last_theme: RefCell::default(),
@@ -143,12 +145,18 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		viewport: &Rectangle,
 	) {
 		let state = tree.state.downcast_mut::<State>();
+		let playlist = &mut *self.playlist.borrow_mut();
 
 		if let Event::Window(window::Event::RedrawRequested(..)) = event {
-			if state.last_bounds != layout.bounds() {
-				state.last_bounds = layout.bounds();
-				if !state.cache.get_mut().is_empty() {
-					state.cache.get_mut().update(Arc::default());
+			if let Some(mut bounds) = layout.bounds().intersection(viewport) {
+				bounds.x -= layout.bounds().x;
+				bounds.y -= layout.bounds().y;
+
+				if state.last_bounds != bounds {
+					state.last_bounds = bounds;
+					if !state.cache.get_mut().is_empty() {
+						state.cache.get_mut().update(Arc::default());
+					}
 				}
 			}
 
@@ -162,6 +170,19 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 			if state.last_offset != offset {
 				state.last_offset = offset;
+				if !state.cache.get_mut().is_empty() {
+					state.cache.get_mut().update(Arc::default());
+				}
+			}
+
+			let stretch = playlist.scale.x
+				+ match self.inner {
+					Inner::AudioClip(inner) => inner.clip.stretch.log2(),
+					Inner::MidiClip(..) | Inner::Recording(..) => 0.0,
+				};
+
+			if state.last_stretch != stretch {
+				state.last_stretch = stretch;
 				if !state.cache.get_mut().is_empty() {
 					state.cache.get_mut().update(Arc::default());
 				}
@@ -187,7 +208,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			return;
 		}
 
-		let playlist = &mut *self.playlist.borrow_mut();
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
 				if playlist.status == Status::None =>
