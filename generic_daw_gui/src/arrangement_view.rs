@@ -1048,7 +1048,7 @@ impl ArrangementView {
 					let pos = self.arrangement.tracks()[track].clips[clip]
 						.end(self.arrangement.transport());
 					self.arrangement
-						.clip_stretch_from_end(track, clip, pos + pos_diff);
+						.clip_stretch_end_to(track, clip, pos + pos_diff);
 				}
 			}
 			playlist::Action::SplitAt(mut pos) => {
@@ -1118,6 +1118,13 @@ impl ArrangementView {
 				for &(track, rhs) in &*secondary {
 					self.arrangement
 						.clip_trim_start_to(track, rhs, clamped[&track]);
+				}
+			}
+			playlist::Action::DragSlip(pos_diff) => {
+				for &(track, clip) in &*primary {
+					let pos = self.arrangement.tracks()[track].clips[clip]
+						.offset(self.arrangement.transport());
+					self.arrangement.clip_slip_to(track, clip, pos + pos_diff);
 				}
 			}
 			playlist::Action::Delete => {

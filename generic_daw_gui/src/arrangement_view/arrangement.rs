@@ -506,7 +506,6 @@ impl Arrangement {
 			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
 				audio.stretch *= audio.position.stretch_start_to(pos, &self.transport);
 				audio.stretch = audio.stretch.clamp(2f32.powi(-10), 2f32.powi(10));
-
 				self.node_action(
 					self.tracks[track].id,
 					NodeAction::ClipStretchStartTo(clip, pos),
@@ -517,12 +516,11 @@ impl Arrangement {
 		}
 	}
 
-	pub fn clip_stretch_from_end(&mut self, track: usize, clip: usize, pos: BeatTime) {
+	pub fn clip_stretch_end_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
 		if self.tracks[track].clips[clip].end(&self.transport) != pos {
 			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
 				audio.stretch *= audio.position.stretch_end_to(pos, &self.transport);
 				audio.stretch = audio.stretch.clamp(2f32.powi(-10), 2f32.powi(10));
-
 				self.node_action(
 					self.tracks[track].id,
 					NodeAction::ClipStretchEndTo(clip, pos),
@@ -530,6 +528,13 @@ impl Arrangement {
 			} else {
 				self.clip_trim_end_to(track, clip, pos);
 			}
+		}
+	}
+
+	pub fn clip_slip_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
+		if self.tracks[track].clips[clip].offset(&self.transport) != pos {
+			self.tracks[track].clips[clip].slip_to(pos, &self.transport);
+			self.node_action(self.tracks[track].id, NodeAction::ClipSlipTo(clip, pos));
 		}
 	}
 

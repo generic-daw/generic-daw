@@ -8,7 +8,7 @@ use crate::{
 };
 use generic_daw_core::{
 	Transport,
-	time::{BeatRange, OffsetBeatRange},
+	time::{BeatRange, BeatTime, OffsetBeatRange},
 };
 use iced::{
 	Event, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
@@ -32,7 +32,7 @@ struct State {
 	cache: RefCell<Cache>,
 	last_click: Option<Click>,
 	last_bounds: Rectangle,
-	last_scale: Vector,
+	last_offset: BeatTime,
 	last_addr: usize,
 	last_theme: RefCell<Option<Theme>>,
 }
@@ -43,7 +43,7 @@ impl Default for State {
 			cache: RefCell::new(Cache::new(Arc::default())),
 			last_click: None,
 			last_bounds: Rectangle::default(),
-			last_scale: Vector::default(),
+			last_offset: BeatTime::ZERO,
 			last_addr: 0,
 			last_theme: RefCell::default(),
 		}
@@ -108,15 +108,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				state.cache.get_mut().update(Arc::default());
 			}
 		}
-
-		let playlist = self.playlist.borrow();
-
-		if state.last_scale != playlist.scale {
-			state.last_scale = playlist.scale;
-			if !state.cache.get_mut().is_empty() {
-				state.cache.get_mut().update(Arc::default());
-			}
-		}
 	}
 
 	fn size(&self) -> Size<Length> {
@@ -153,14 +144,29 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 	) {
 		let state = tree.state.downcast_mut::<State>();
 
-		if let Event::Window(window::Event::RedrawRequested(..)) = event
-			&& let Some(mut bounds) = layout.bounds().intersection(viewport)
-		{
-			bounds.x = layout.position().x;
-			bounds.y = layout.position().y - bounds.y;
+		if let Event::Window(window::Event::RedrawRequested(..)) = event {
+			if let Some(mut bounds) = layout.bounds().intersection(viewport) {
+				bounds.x = layout.position().x;
+				bounds.y = layout.position().y - bounds.y;
 
-			if state.last_bounds != bounds {
-				state.last_bounds = bounds;
+				if state.last_bounds != bounds {
+					state.last_bounds = bounds;
+					if !state.cache.get_mut().is_empty() {
+						state.cache.get_mut().update(Arc::default());
+					}
+				}
+			}
+
+			let offset = match self.inner {
+				Inner::AudioClip(inner) => {
+					inner.clip.position.offset().to_beat_time(self.transport)
+				}
+				Inner::MidiClip(inner) => inner.clip.position.offset(),
+				Inner::Recording(..) => BeatTime::ZERO,
+			};
+
+			if state.last_offset != offset {
+				state.last_offset = offset;
 				if !state.cache.get_mut().is_empty() {
 					state.cache.get_mut().update(Arc::default());
 				}
@@ -221,29 +227,31 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							modifiers.shift(),
 							start_offset < border,
 							end_offset < border,
+							cursor.y - clip_bounds.y.max(0.0) < LINE_HEIGHT,
 						) {
-							(false, false, false, false) => Status::Dragging(idx.0, time),
-							(false, _, true, false) => Status::TrimmingStart(time),
-							(false, _, false, true) => Status::TrimmingEnd(time),
-							(true, false, _, _) => {
+							(false, false, false, false, _) => Status::Dragging(idx.0, time),
+							(false, _, true, false, _) => Status::TrimmingStart(time),
+							(false, _, false, true, _) => Status::TrimmingEnd(time),
+							(true, false, _, _, _) => {
 								clear = false;
 								let time = maybe_snap(time, *modifiers, |time| {
 									time.round(snap_step(playlist.scale.x, self.transport))
 								});
 								Status::Selecting(idx.0, idx.0, time, time)
 							}
-							(false, true, _, _) => {
+							(false, true, _, _, _) => {
 								shell.publish((self.f)(Action::Clone));
 								Status::Dragging(idx.0, time)
 							}
-							(true, true, _, _) => {
+							(true, true, _, _, false) => Status::DraggingSlip(time),
+							(true, true, _, _, true) => {
 								let time = maybe_snap(time, *modifiers, |time| {
 									time.round(snap_step(playlist.scale.x, self.transport))
 								});
 								shell.publish((self.f)(Action::SplitAt(time)));
 								Status::DraggingSplit(time)
 							}
-							(_, _, true, true) => unreachable!(),
+							(_, _, true, true, _) => unreachable!(),
 						};
 
 						shell.capture_event();

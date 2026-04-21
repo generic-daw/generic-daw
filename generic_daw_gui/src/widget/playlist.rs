@@ -40,6 +40,7 @@ pub enum Action {
 	StretchEnd(Delta<BeatTime>),
 	SplitAt(BeatTime),
 	DragSplit(BeatTime),
+	DragSlip(Delta<BeatTime>),
 	Delete,
 }
 
@@ -51,6 +52,7 @@ pub enum Status {
 	TrimmingStart(BeatTime),
 	TrimmingEnd(BeatTime),
 	DraggingSplit(BeatTime),
+	DraggingSlip(BeatTime),
 	Deleting,
 	#[default]
 	None,
@@ -416,6 +418,23 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 						shell.capture_event();
 					}
 				}
+				Status::DraggingSlip(time) => {
+					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+						abs_diff.round(snap_step(state.scale.x, self.transport))
+					});
+
+					if abs_diff != BeatTime::ZERO {
+						let delta = if new_time > time {
+							Delta::Positive
+						} else {
+							Delta::Negative
+						}(abs_diff);
+
+						state.status = Status::DraggingSlip(time + delta);
+						shell.publish((self.action)(Action::DragSlip(-delta)));
+						shell.capture_event();
+					}
+				}
 				Status::Deleting => {
 					if !state.primary.is_empty() {
 						shell.publish((self.action)(Action::Delete));
@@ -568,9 +587,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 			Status::Hovering(..) => Interaction::Copy,
 			Status::Selecting(..) => Interaction::Idle,
 			Status::Dragging(..) => Interaction::Grabbing,
-			Status::TrimmingStart(..) | Status::TrimmingEnd(..) | Status::DraggingSplit(..) => {
-				Interaction::ResizingHorizontally
-			}
+			Status::TrimmingStart(..)
+			| Status::TrimmingEnd(..)
+			| Status::DraggingSplit(..)
+			| Status::DraggingSlip(..) => Interaction::ResizingHorizontally,
 			Status::Deleting => Interaction::NoDrop,
 			Status::None => self
 				.tracks

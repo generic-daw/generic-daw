@@ -85,6 +85,9 @@ impl Track {
 			NodeAction::ClipStretchEndTo(index, pos) => {
 				self.clips[index].stretch_end_to(pos, &state.transport);
 			}
+			NodeAction::ClipSlipTo(index, pos) => {
+				self.clips[index].slip_to(pos, &state.transport);
+			}
 			action => self.channel.apply(action),
 		}
 	}

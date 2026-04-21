@@ -26,7 +26,7 @@ impl MidiClip {
 	) {
 		debug_assert!(state.transport.playing);
 
-		let (start, end) = self.position.position().to_samples(&state.transport);
+		let (start, end) = self.position.beat_range().to_samples(&state.transport);
 		if !(start < state.transport.position.to_samples(&state.transport) + audio.len()
 			&& end >= state.transport.position.to_samples(&state.transport))
 		{
@@ -39,7 +39,7 @@ impl MidiClip {
 			.filter_map(|&(mut note)| {
 				note.position = (note.position + self.position.start())
 					.saturating_sub(self.position.offset())?
-					.clamp(self.position.position())?;
+					.clamp(self.position.beat_range())?;
 				Some(note)
 			})
 			.for_each(|note| {
@@ -61,7 +61,7 @@ impl MidiClip {
 	) {
 		debug_assert!(state.transport.playing);
 
-		let (start, end) = self.position.position().to_samples(&state.transport);
+		let (start, end) = self.position.beat_range().to_samples(&state.transport);
 		if !(start < state.transport.position.to_samples(&state.transport) + audio.len()
 			&& end >= state.transport.position.to_samples(&state.transport))
 		{
@@ -74,7 +74,7 @@ impl MidiClip {
 			.filter_map(|&(mut note)| {
 				note.position = (note.position + self.position.start())
 					.saturating_sub(self.position.offset())?
-					.clamp(self.position.position())?;
+					.clamp(self.position.beat_range())?;
 				Some(note)
 			})
 			.for_each(|note| {

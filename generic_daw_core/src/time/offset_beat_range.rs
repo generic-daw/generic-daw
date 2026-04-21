@@ -65,8 +65,12 @@ impl OffsetBeatRange {
 		self.position.move_to(new_start);
 	}
 
+	pub const fn slip_to(&mut self, new_offset: BeatTime) {
+		self.offset = new_offset;
+	}
+
 	#[must_use]
-	pub const fn position(self) -> BeatRange {
+	pub const fn beat_range(self) -> BeatRange {
 		self.position
 	}
 }

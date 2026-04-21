@@ -80,8 +80,12 @@ impl OffsetBeatSpan {
 		len / self.len()
 	}
 
+	pub const fn slip_to(&mut self, new_offset: BeatTime, transport: &Transport) {
+		self.offset = new_offset.to_seconds_time(transport);
+	}
+
 	#[must_use]
-	pub const fn position(self) -> BeatSpan {
+	pub const fn beat_span(self) -> BeatSpan {
 		self.position
 	}
 }

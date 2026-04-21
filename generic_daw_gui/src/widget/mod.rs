@@ -1,6 +1,6 @@
 use generic_daw_core::{MidiKey, Transport, time::BeatTime};
 use iced::{Vector, keyboard::Modifiers};
-use std::ops::Add;
+use std::ops::{Add, Neg};
 
 pub mod clip;
 pub mod note;
@@ -51,6 +51,17 @@ impl Add<Delta<Self>> for MidiKey {
 		match rhs {
 			Delta::Positive(diff) => Self((self.0 + diff.0).min(127)),
 			Delta::Negative(diff) => Self(self.0.saturating_sub(diff.0)),
+		}
+	}
+}
+
+impl<T> Neg for Delta<T> {
+	type Output = Self;
+
+	fn neg(self) -> Self::Output {
+		match self {
+			Self::Positive(diff) => Self::Negative(diff),
+			Self::Negative(diff) => Self::Positive(diff),
 		}
 	}
 }
