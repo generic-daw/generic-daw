@@ -240,13 +240,14 @@ impl ConfigView {
 										value(path.display())
 											.font(Font::MONOSPACE)
 											.wrapping(text::Wrapping::None)
-											.ellipsis(text::Ellipsis::End),
-										space::horizontal(),
+											.ellipsis(text::Ellipsis::Middle)
+											.width(Fill),
 										button(x())
 											.style(button_with_radius(button::danger, 5))
 											.padding(0)
 											.on_press(Message::RemoveSamplePath(idx))
 									]
+									.spacing(5)
 									.align_y(Center)
 								})
 								.map(|widget| row![
@@ -279,13 +280,14 @@ impl ConfigView {
 									mouse_area(grip_vertical()).interaction(Interaction::NoDrop),
 									value(path.display())
 										.font(Font::MONOSPACE)
+										.width(Fill)
 										.wrapping(text::Wrapping::None)
-										.ellipsis(text::Ellipsis::End),
-									space::horizontal(),
+										.ellipsis(text::Ellipsis::Middle),
 									button(x())
 										.style(button_with_radius(button::danger, 5))
 										.padding(0)
 								]
+								.spacing(5)
 								.align_y(Center)
 								.into()
 							}))
@@ -299,14 +301,15 @@ impl ConfigView {
 										row![
 											value(path.display())
 												.font(Font::MONOSPACE)
+												.width(Fill)
 												.wrapping(text::Wrapping::None)
-												.ellipsis(text::Ellipsis::End),
-											space::horizontal(),
+												.ellipsis(text::Ellipsis::Middle),
 											button(x())
 												.style(button_with_radius(button::danger, 5))
 												.padding(0)
 												.on_press(Message::RemoveClapPath(idx))
 										]
+										.spacing(5)
 										.align_y(Center)
 									})
 									.map(|widget| row![
