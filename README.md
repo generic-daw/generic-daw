@@ -16,7 +16,7 @@ An early-in-development, open source, cross-platform digital audio workstation (
 
 ### Download
 
-Binaries are built for x64 Windows and Linux, as well as ARM MacOS. If you're signed in to GitHub, they are downloadable from the [automated builds](https://github.com/generic-daw/generic-daw/actions/workflows/rust.yml?query=branch:main) page.
+Binaries are built for x64 Windows and Linux, as well as ARM MacOS. If you're signed in to GitHub, they are downloadable from the [automated builds](https://github.com/generic-daw/generic-daw/actions/workflows/rust.yml?query=branch:main) page. Alternatively, if you're not signed in to GitHub, they are downloadable from [here](https://nightly.link/generic-daw/generic-daw/workflows/rust/main).
 
 ### Build from Source
 
@@ -39,7 +39,7 @@ curl https://unpkg.com/lucide-static@latest/font/Lucide.ttf -Lo Lucide.ttf
 cargo build --release
 ```
 
-The binary will then be located at `./target/release/generic-daw`.
+The binary will then be located at `./target/release/generic_daw`.
 
 ## Roadmap
 
