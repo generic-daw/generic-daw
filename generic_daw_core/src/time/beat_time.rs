@@ -61,24 +61,12 @@ impl BeatTime {
 
 	#[must_use]
 	pub const fn from_samples(samples: usize, transport: &Transport) -> Self {
-		let samples = samples.next_multiple_of(2) as u64;
-		let bpm = transport.bpm.get() as u64;
-		let sample_rate = transport.sample_rate.get() as u64;
-
-		let time = samples * bpm * (Self::FACTOR / 60 / 2) / sample_rate;
-
-		Self(FixedPoint::from_bits(time))
+		SecondsTime::from_samples(samples, transport).to_beat_time(transport)
 	}
 
 	#[must_use]
 	pub const fn to_samples(self, transport: &Transport) -> usize {
-		let time = self.to_bits();
-		let bpm = transport.bpm.get() as u64;
-		let sample_rate = transport.sample_rate.get() as u64;
-
-		let samples = (time * sample_rate) / bpm / (Self::FACTOR / 60 / 2);
-
-		samples.next_multiple_of(2) as usize
+		self.to_seconds_time(transport).to_samples(transport)
 	}
 
 	#[must_use]
@@ -88,7 +76,7 @@ impl BeatTime {
 
 	#[must_use]
 	pub const fn to_seconds_time(self, transport: &Transport) -> SecondsTime {
-		SecondsTime::from_bits(self.to_bits() * 60 / transport.bpm.get() as u64)
+		SecondsTime::from_bits((self.to_bits() * 60).div_ceil(transport.bpm.get() as u64))
 	}
 
 	#[must_use]
