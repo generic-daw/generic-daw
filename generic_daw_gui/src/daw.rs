@@ -1074,6 +1074,10 @@ impl Daw {
 				Some('s') => Some(Message::SaveFile),
 				_ => None,
 			},
+			(false, true, false, false) => match key.as_ref() {
+				keyboard::Key::Named(keyboard::key::Named::Space) => Some(Message::Stop),
+				_ => None,
+			},
 			(true, true, false, false) => match key.to_latin(physical_key) {
 				Some('s') => Some(Message::SaveAsFileDialog),
 				_ => None,
