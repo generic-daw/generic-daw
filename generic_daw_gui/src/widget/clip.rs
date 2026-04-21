@@ -323,7 +323,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			color,
 		);
 
-		if upper_bounds.width > 3.0 {
+		if upper_bounds.width > 6.0 {
 			let clip_name = match self.inner {
 				Inner::AudioClip(inner) => &*inner.sample.name,
 				Inner::MidiClip(inner) => &*inner.pattern.name,
