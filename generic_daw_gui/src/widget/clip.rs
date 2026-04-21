@@ -145,15 +145,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		let state = tree.state.downcast_mut::<State>();
 
 		if let Event::Window(window::Event::RedrawRequested(..)) = event {
-			if let Some(mut bounds) = layout.bounds().intersection(viewport) {
-				bounds.x = layout.position().x;
-				bounds.y = layout.position().y - bounds.y;
-
-				if state.last_bounds != bounds {
-					state.last_bounds = bounds;
-					if !state.cache.get_mut().is_empty() {
-						state.cache.get_mut().update(Arc::default());
-					}
+			if state.last_bounds != layout.bounds() {
+				state.last_bounds = layout.bounds();
+				if !state.cache.get_mut().is_empty() {
+					state.cache.get_mut().update(Arc::default());
 				}
 			}
 
