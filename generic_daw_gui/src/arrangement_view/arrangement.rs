@@ -625,9 +625,11 @@ impl Arrangement {
 			.max()
 			.unwrap_or_default();
 
+		let beat_range = BeatRange::new(BeatTime::ZERO, len);
+
 		Task::batch([
 			Task::future(unblock(move || {
-				processor.render(&path, len, |f| progress_sender.try_send(f).unwrap());
+				processor.render(&path, beat_range, |f| progress_sender.try_send(f).unwrap());
 				p_sender.send(processor).unwrap();
 			}))
 			.discard(),

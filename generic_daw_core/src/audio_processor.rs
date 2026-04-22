@@ -467,7 +467,7 @@ impl AudioProcessor {
 	pub fn render(
 		&mut self,
 		path: impl AsRef<Path>,
-		len: BeatTime,
+		beat_range: BeatRange,
 		mut progress_fn: impl FnMut(f32),
 	) {
 		let old = *self.transport();
@@ -491,20 +491,21 @@ impl AudioProcessor {
 		let mut buf = boxed_slice![0.0; buffer_size];
 		let buffer_size = SecondsTime::from_samples(buffer_size, self.transport());
 
-		let len = len.to_seconds_time(self.transport());
+		let range_start = beat_range.start().to_seconds_time(self.transport());
+		let range_len = beat_range.len().to_seconds_time(self.transport());
 
 		let mut updates = Vec::new();
 
-		let mut delay;
-		let mut end;
+		let mut render_start;
+		let mut render_end;
 
 		while {
-			delay =
-				SecondsTime::from_samples(self.audio_graph.delay(self.master), self.transport());
-			end = len + delay;
-			self.transport().position < delay
+			render_start = range_start
+				+ SecondsTime::from_samples(self.audio_graph.delay(self.master), self.transport());
+			render_end = render_start + range_len;
+			self.transport().position < render_start
 		} {
-			let diff = buffer_size.min(delay - self.transport().position);
+			let diff = buffer_size.min(render_start - self.transport().position);
 			let diff_samples = diff.to_samples(self.transport());
 
 			self.audio_graph.process(diff_samples);
@@ -513,16 +514,16 @@ impl AudioProcessor {
 			updates.clear();
 
 			self.transport_mut().position += diff;
-			progress_fn(self.transport().position / end);
+			progress_fn(self.transport().position / render_end);
 		}
 
 		while {
-			delay =
+			render_start =
 				SecondsTime::from_samples(self.audio_graph.delay(self.master), self.transport());
-			end = len + delay;
-			self.transport().position < end
+			render_end = render_start + range_len;
+			self.transport().position < render_end
 		} {
-			let diff = buffer_size.min(end - self.transport().position);
+			let diff = buffer_size.min(render_end - self.transport().position);
 			let diff_samples = diff.to_samples(self.transport());
 
 			self.audio_graph.process(diff_samples);
@@ -537,7 +538,7 @@ impl AudioProcessor {
 			}
 
 			self.transport_mut().position += diff;
-			progress_fn(self.transport().position / end);
+			progress_fn(self.transport().position / render_end);
 		}
 
 		writer.finalize().unwrap();
