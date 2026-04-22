@@ -5,6 +5,7 @@ use crate::{
 	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
+use audio_graph::NodeImpl as _;
 use clap_host::{
 	Cookie,
 	events::{EventFlags, EventHeader, TransportEvent, TransportFlags},
@@ -58,7 +59,7 @@ pub enum Message {
 	RequestUpdate,
 	ReturnUpdate(Vec<Update>),
 
-	RequestRender(
+	RequestProcessor(
 		oneshot::Sender<AudioProcessor>,
 		oneshot::Receiver<AudioProcessor>,
 	),
@@ -192,6 +193,7 @@ pub struct State {
 #[derive(Debug)]
 pub struct AudioProcessor {
 	audio_graph: AudioGraph,
+	master: NodeId,
 	producer: Producer<Batch>,
 	consumer: Consumer<Message>,
 	needs_update: bool,
@@ -204,17 +206,24 @@ impl AudioProcessor {
 		let (r_producer, consumer) = RingBuffer::new(transport.frames.get() as usize);
 		let (producer, r_consumer) = RingBuffer::new(transport.frames.get() as usize);
 
+		let master_channel = Channel::default();
+		let master = master_channel.id();
+
+		let mut audio_graph = AudioGraph::new(
+			State {
+				transport,
+				samples: HashMap::new(),
+				midi_patterns: HashMap::new(),
+				automation_patterns: HashMap::new(),
+			},
+			transport.frames,
+		);
+
+		audio_graph.insert(master_channel.into());
+
 		let processor = Self {
-			audio_graph: AudioGraph::new(
-				State {
-					transport,
-					samples: HashMap::new(),
-					midi_patterns: HashMap::new(),
-					automation_patterns: HashMap::new(),
-				},
-				Channel::default(),
-				transport.frames,
-			),
+			audio_graph,
+			master,
 			producer,
 			consumer,
 			needs_update: false,
@@ -222,8 +231,12 @@ impl AudioProcessor {
 			update_buffers: Vec::new(),
 		};
 
-		let id = processor.audio_graph.root();
-		(Callback::Processing(processor), id, r_producer, r_consumer)
+		(
+			Callback::Processing(processor),
+			master,
+			r_producer,
+			r_consumer,
+		)
 	}
 
 	#[must_use]
@@ -300,7 +313,7 @@ impl AudioProcessor {
 					debug_assert!(update.is_empty());
 					self.update_buffers.push(update);
 				}
-				Message::RequestRender(sender, receiver) => return Some((sender, receiver)),
+				Message::RequestProcessor(sender, receiver) => return Some((sender, receiver)),
 			}
 		}
 
@@ -344,7 +357,8 @@ impl AudioProcessor {
 				(None, buf.len())
 			};
 
-			self.audio_graph.process(&mut buf[..len]);
+			self.audio_graph.process(len);
+			self.audio_graph.copy_output(self.master, &mut buf[..len]);
 			for s in &mut buf[..len] {
 				*s = s.clamp(-1.0, 1.0);
 			}
@@ -400,7 +414,8 @@ impl AudioProcessor {
 			return;
 		}
 
-		let delay = SecondsTime::from_samples(self.audio_graph.delay(), self.transport());
+		let delay =
+			SecondsTime::from_samples(self.audio_graph.delay(self.master), self.transport());
 
 		let mut start = self
 			.transport()
@@ -484,14 +499,15 @@ impl AudioProcessor {
 		let mut end;
 
 		while {
-			delay = SecondsTime::from_samples(self.audio_graph.delay(), self.transport());
+			delay =
+				SecondsTime::from_samples(self.audio_graph.delay(self.master), self.transport());
 			end = len + delay;
 			self.transport().position < delay
 		} {
 			let diff = buffer_size.min(delay - self.transport().position);
 			let diff_samples = diff.to_samples(self.transport());
 
-			self.audio_graph.process(&mut buf[..diff_samples]);
+			self.audio_graph.process(diff_samples);
 			self.audio_graph
 				.for_each_node_mut(|node| node.collect_updates(&mut updates));
 			updates.clear();
@@ -501,14 +517,17 @@ impl AudioProcessor {
 		}
 
 		while {
-			delay = SecondsTime::from_samples(self.audio_graph.delay(), self.transport());
+			delay =
+				SecondsTime::from_samples(self.audio_graph.delay(self.master), self.transport());
 			end = len + delay;
 			self.transport().position < end
 		} {
 			let diff = buffer_size.min(end - self.transport().position);
 			let diff_samples = diff.to_samples(self.transport());
 
-			self.audio_graph.process(&mut buf[..diff_samples]);
+			self.audio_graph.process(diff_samples);
+			self.audio_graph
+				.copy_output(self.master, &mut buf[..diff_samples]);
 			self.audio_graph
 				.for_each_node_mut(|node| node.collect_updates(&mut updates));
 			updates.clear();
@@ -548,7 +567,7 @@ impl AudioProcessor {
 #[expect(clippy::large_enum_variant)]
 pub enum Callback {
 	Processing(AudioProcessor),
-	Exporting(oneshot::Receiver<AudioProcessor>),
+	Away(oneshot::Receiver<AudioProcessor>),
 }
 
 impl Callback {
@@ -556,8 +575,7 @@ impl Callback {
 		match self {
 			Self::Processing(processor) => {
 				if let Some((sender, receiver)) = processor.process(buf) {
-					let Self::Processing(processor) =
-						std::mem::replace(self, Self::Exporting(receiver))
+					let Self::Processing(processor) = std::mem::replace(self, Self::Away(receiver))
 					else {
 						unreachable!();
 					};
@@ -565,7 +583,7 @@ impl Callback {
 					sender.send(processor).unwrap();
 				}
 			}
-			Self::Exporting(receiver) => {
+			Self::Away(receiver) => {
 				if let Ok(processor) = receiver.try_recv() {
 					*self = Self::Processing(processor);
 					self.process(buf);

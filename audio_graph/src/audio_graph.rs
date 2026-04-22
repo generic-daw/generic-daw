@@ -30,7 +30,6 @@ pub struct AudioGraph<Node: NodeImpl> {
 	graph: HashMap<NodeId, Entry<Node>>,
 	pool: Option<NoDebug<ThreadPool<Self>>>,
 	queue: ArrayQueue<NodeId>,
-	root: NodeId,
 	max_frames: NonZero<u32>,
 	curr_len: usize,
 	needs_reset: bool,
@@ -38,10 +37,8 @@ pub struct AudioGraph<Node: NodeImpl> {
 
 impl<Node: NodeImpl> AudioGraph<Node> {
 	#[must_use]
-	pub fn new(state: Node::State, root: impl Into<Node>, max_frames: NonZero<u32>) -> Self {
-		let root = root.into();
-
-		let mut this = Self {
+	pub fn new(state: Node::State, max_frames: NonZero<u32>) -> Self {
+		Self {
 			state,
 			graph: HashMap::new(),
 			pool: Some(
@@ -49,26 +46,21 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 					.into(),
 			),
 			queue: ArrayQueue::new(4),
-			root: root.id(),
 			max_frames,
 			curr_len: 0,
 			needs_reset: false,
-		};
-
-		this.insert(root);
-
-		this
+		}
 	}
 
-	pub fn process(&mut self, audio: &mut [f32]) {
+	pub fn process(&mut self, len: usize) {
+		self.curr_len = len;
+
 		for (&id, entry) in &mut self.graph {
 			*entry.indegree.get_mut() = entry.buffers().incoming.len();
 			if *entry.indegree.get_mut() == 0 {
 				self.queue.push(id).unwrap();
 			}
 		}
-
-		self.curr_len = audio.len();
 
 		let mut pool = self.pool.take().unwrap();
 		pool.run(
@@ -83,8 +75,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		for entry in self.graph.values_mut() {
 			debug_assert_eq!(*entry.indegree.get_mut(), 0);
 		}
-
-		audio.copy_from_slice(&self.entry_mut(self.root()).buffers().audio[..audio.len()]);
 	}
 
 	#[expect(clippy::significant_drop_tightening)]
@@ -187,11 +177,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		&mut self.state
 	}
 
-	#[must_use]
-	pub fn root(&self) -> NodeId {
-		self.root
-	}
-
 	fn entry_mut(&mut self, node: NodeId) -> &mut Entry<Node> {
 		self.graph.get_mut(&node).unwrap()
 	}
@@ -206,9 +191,13 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		}
 	}
 
+	pub fn copy_output(&mut self, node: NodeId, audio: &mut [f32]) {
+		audio.copy_from_slice(&self.entry_mut(node).buffers().audio[..audio.len()]);
+	}
+
 	#[must_use]
-	pub fn delay(&self) -> usize {
-		self.graph[&self.root()].delay.load(Relaxed)
+	pub fn delay(&self, node: NodeId) -> usize {
+		self.graph[&node].delay.load(Relaxed)
 	}
 
 	#[must_use]

@@ -50,7 +50,7 @@ pub struct Arrangement {
 
 	tracks: Vec<Track>,
 	nodes: BTreeMap<NodeId, (Node, BTreeMap<NodeId, f32>)>,
-	master_node_id: NodeId,
+	master: NodeId,
 
 	producer: Producer<Message>,
 	_stream: NoDebug<Stream>,
@@ -58,7 +58,7 @@ pub struct Arrangement {
 
 impl Arrangement {
 	pub fn create(config: &Config) -> (Self, Task<Batch>) {
-		let (master_node_id, transport, producer, consumer, stream) = build_output_stream(
+		let (master, transport, producer, consumer, stream) = build_output_stream(
 			config.output_device.id.as_ref(),
 			config.output_device.sample_rate,
 			config.output_device.buffer_size,
@@ -66,8 +66,8 @@ impl Arrangement {
 
 		let mut nodes = BTreeMap::new();
 		nodes.insert(
-			master_node_id,
-			(Node::new(NodeType::Master, master_node_id), BTreeMap::new()),
+			master,
+			(Node::new(NodeType::Master, master), BTreeMap::new()),
 		);
 
 		(
@@ -80,7 +80,7 @@ impl Arrangement {
 
 				tracks: Vec::new(),
 				nodes,
-				master_node_id,
+				master,
 
 				producer,
 				_stream: stream.into(),
@@ -286,7 +286,7 @@ impl Arrangement {
 	}
 
 	pub fn master(&self) -> &Node {
-		self.node(self.master_node_id)
+		self.node(self.master)
 	}
 
 	pub fn tracks(&self) -> &[Track] {
@@ -613,7 +613,7 @@ impl Arrangement {
 	pub fn render(&mut self, path: Arc<Path>) -> Task<daw::Message> {
 		let (a_sender, p_receiver) = oneshot::channel();
 		let (p_sender, a_receiver) = oneshot::channel();
-		self.send(Message::RequestRender(a_sender, a_receiver));
+		self.send(Message::RequestProcessor(a_sender, a_receiver));
 		let mut processor = p_receiver.recv().unwrap();
 
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();

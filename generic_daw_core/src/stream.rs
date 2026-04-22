@@ -110,7 +110,7 @@ pub fn build_output_stream(
 	let buffer_len = frames.get() * channels.get();
 
 	let transport = Transport::new(sample_rate, frames);
-	let (mut processor, master_node_id, producer, consumer) = AudioProcessor::create(transport);
+	let (mut processor, master, producer, consumer) = AudioProcessor::create(transport);
 
 	let mut stereo = boxed_slice![0.0; 2 * frames.get() as usize];
 
@@ -131,7 +131,7 @@ pub fn build_output_stream(
 
 	stream.play().unwrap();
 
-	(master_node_id, transport, producer, consumer, stream)
+	(master, transport, producer, consumer, stream)
 }
 
 fn choose_config(
