@@ -627,9 +627,17 @@ impl Arrangement {
 
 		let beat_range = BeatRange::new(BeatTime::ZERO, len);
 
+		let master = self.master;
+
 		Task::batch([
 			Task::future(unblock(move || {
-				processor.render(&path, beat_range, |f| progress_sender.try_send(f).unwrap());
+				processor.render(
+					&path,
+					master,
+					beat_range,
+					|_| {},
+					|f| progress_sender.try_send(f).unwrap(),
+				);
 				p_sender.send(processor).unwrap();
 			}))
 			.discard(),

@@ -467,7 +467,9 @@ impl AudioProcessor {
 	pub fn render(
 		&mut self,
 		path: impl AsRef<Path>,
+		node: NodeId,
 		beat_range: BeatRange,
+		mut samples_fn: impl FnMut(&[f32]),
 		mut progress_fn: impl FnMut(f32),
 	) {
 		let old = *self.transport();
@@ -501,7 +503,7 @@ impl AudioProcessor {
 
 		while {
 			render_start = range_start
-				+ SecondsTime::from_samples(self.audio_graph.delay(self.master), self.transport());
+				+ SecondsTime::from_samples(self.audio_graph.delay(node), self.transport());
 			render_end = render_start + range_len;
 			self.transport().position < render_start
 		} {
@@ -519,7 +521,7 @@ impl AudioProcessor {
 
 		while {
 			render_start =
-				SecondsTime::from_samples(self.audio_graph.delay(self.master), self.transport());
+				SecondsTime::from_samples(self.audio_graph.delay(node), self.transport());
 			render_end = render_start + range_len;
 			self.transport().position < render_end
 		} {
@@ -527,12 +529,12 @@ impl AudioProcessor {
 			let diff_samples = diff.to_samples(self.transport());
 
 			self.audio_graph.process(diff_samples);
-			self.audio_graph
-				.copy_output(self.master, &mut buf[..diff_samples]);
+			self.audio_graph.copy_output(node, &mut buf[..diff_samples]);
 			self.audio_graph
 				.for_each_node_mut(|node| node.collect_updates(&mut updates));
 			updates.clear();
 
+			samples_fn(&buf[..diff_samples]);
 			for &s in &buf[..diff_samples] {
 				writer.write_sample(s).unwrap();
 			}
