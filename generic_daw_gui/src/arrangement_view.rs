@@ -6,8 +6,8 @@ use crate::{
 	daw::{self, RECORDINGS_DIR, format_now},
 	file_tree::FileKind,
 	icons::{
-		arrow_left_right, arrow_up_down, chevron_down, chevron_up, grip_vertical, mic, plus, power,
-		power_off, radius, x,
+		arrow_up_down, chevron_down, chevron_up, chevrons_left_right_ellipsis, circle_ellipsis,
+		grip_vertical, mic, plus, power, power_off, snowflake, x,
 	},
 	operation::scroll_into_view,
 	state::{DEFAULT_SPLIT_POSITION, State},
@@ -134,6 +134,9 @@ pub enum Message {
 	Recording(NodeId),
 	RecordingFinalize,
 	RecordingWrite(NoDebug<Box<[f32]>>),
+
+	Freeze(NodeId),
+	FreezeDone(NoClone<(NodeId, Box<SamplePair>, BeatTime)>),
 
 	PlaylistAction(playlist::Action),
 	PianoRollAction(piano_roll::Action),
@@ -474,7 +477,9 @@ impl ArrangementView {
 				return task;
 			}
 			Message::TrackAdd => {
-				let track = self.arrangement.add_track();
+				let track = self
+					.arrangement
+					.insert_track(self.arrangement.tracks().len());
 				let node = self.arrangement.tracks()[track].id;
 				if self.soloed.is_some() {
 					self.arrangement.channel_toggle_enabled(node);
@@ -499,17 +504,7 @@ impl ArrangementView {
 
 				let track = self.arrangement.track_of(node).unwrap();
 				self.arrangement.remove_track(node);
-
-				self.midi_clip = self
-					.midi_clip
-					.and_then(|midi_clip| update_selection(midi_clip, track, None));
-
-				let playlist = self.playlist.get_mut();
-				playlist.primary = playlist
-					.primary
-					.drain()
-					.filter_map(|clip| update_selection(clip, track, None))
-					.collect();
+				self.update_selection(track, None, update_selection_delete);
 
 				if self
 					.recording
@@ -606,6 +601,44 @@ impl ArrangementView {
 				}
 			}
 			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().write(&samples),
+			Message::Freeze(node) => return Action::instruction(daw::Instruction::Freeze(node)),
+			Message::FreezeDone(NoClone((node, sample, pos))) => {
+				let id = sample.gui.id;
+				self.arrangement.add_sample(*sample);
+
+				let mut clip = AudioClip::new(id);
+				clip.position.trim_end_to(
+					self.arrangement.samples()[&id].len(self.arrangement.transport()),
+					self.arrangement.transport(),
+				);
+				clip.position.move_to(pos);
+
+				let track = self
+					.arrangement
+					.insert_track(self.arrangement.track_of(node).unwrap() + 1);
+				let track_id = self.arrangement.tracks()[track].id;
+
+				self.update_selection(track, None, update_selection_insert);
+
+				let clip = self.arrangement.add_clip(track, clip);
+				self.playlist.get_mut().primary.insert((track, clip));
+
+				let outgoing = self
+					.arrangement
+					.outgoing(node)
+					.iter()
+					.map(|(&node, &mix)| (node, mix))
+					.collect::<Vec<_>>();
+
+				for (outgoing, mix) in outgoing {
+					self.arrangement.connect(track_id, outgoing);
+					if mix != 1.0 {
+						self.arrangement.set_mix(track_id, outgoing, mix);
+					}
+				}
+
+				self.arrangement.channel_toggle_enabled(node);
+			}
 			Message::PlaylistAction(action) => {
 				return self.handle_playlist_action(action, config, state);
 			}
@@ -1131,9 +1164,7 @@ impl ArrangementView {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
 				sorted.sort_unstable_by_key(|&(_, c)| Reverse(c));
 				for (track, clip) in sorted {
-					self.midi_clip = self
-						.midi_clip
-						.and_then(|midi_clip| update_selection(midi_clip, track, Some(clip)));
+					self.update_selection(track, Some(clip), update_selection_delete);
 
 					let clip = self.arrangement.remove_clip(track, clip);
 					self.arrangement.gc(clip);
@@ -1397,6 +1428,32 @@ impl ArrangementView {
 									text_icon_button("S", button_style(self.soloed == Some(id)))
 										.on_press(Message::TrackToggleSolo(id)),
 									icon_button(
+										if node.bypassed { power_off() } else { power() },
+										button_style(node.bypassed)
+									)
+									.on_press(Message::ChannelToggleBypassed(node.id)),
+									icon_button(
+										arrow_up_down(),
+										button_style(node.volume.is_sign_negative())
+									)
+									.on_press(Message::ChannelVolumeChanged(node.id, -node.volume)),
+									icon_button(
+										if node.pan.is_balance() {
+											chevrons_left_right_ellipsis()
+										} else {
+											circle_ellipsis()
+										},
+										button_style(false),
+									)
+									.on_press(Message::ChannelPanChanged(
+										node.id,
+										if node.pan.is_balance() {
+											PanMode::Stereo(-1.0, 1.0)
+										} else {
+											PanMode::Balance(0.0)
+										},
+									)),
+									icon_button(
 										mic(),
 										button_style(
 											self.recording
@@ -1404,7 +1461,10 @@ impl ArrangementView {
 												.is_some_and(|recording| recording.node == id)
 										)
 									)
-									.on_press(Message::Recording(id))
+									.on_press_maybe(node.enabled.then_some(Message::Recording(id))),
+									icon_button(snowflake(), button_style(false)).on_press_maybe(
+										node.enabled.then_some(Message::Freeze(id))
+									)
 								]
 								.spacing(5)
 								.wrap()
@@ -1702,9 +1762,9 @@ impl ArrangementView {
 						.on_press(Message::ChannelVolumeChanged(node.id, -node.volume)),
 						icon_button(
 							if node.pan.is_balance() {
-								arrow_left_right()
+								chevrons_left_right_ellipsis()
 							} else {
-								radius()
+								circle_ellipsis()
 							},
 							button_style(false),
 						)
@@ -2011,57 +2071,126 @@ impl ArrangementView {
 	}
 
 	fn select_prev(&mut self) {
-		self.selected = if self.arrangement.node(self.selected).ty == NodeType::Channel {
-			self.arrangement
-				.channels()
-				.rfind(|channel| channel.id < self.selected)
-				.map(|channel| channel.id)
-				.or_else(|| self.arrangement.tracks().last().map(|track| track.id))
-		} else {
-			self.arrangement
+		self.selected = match self.arrangement.node(self.selected).ty {
+			NodeType::Master => self.selected,
+			NodeType::Track => self
+				.arrangement
 				.tracks()
 				.iter()
-				.rfind(|track| track.id < self.selected)
-				.map(|track| track.id)
-		}
-		.unwrap_or_else(|| self.arrangement.master().id);
+				.rev()
+				.skip_while(|track| track.id != self.selected)
+				.nth(1)
+				.map_or_else(|| self.arrangement.master().id, |track| track.id),
+			NodeType::Channel => self
+				.arrangement
+				.channels()
+				.rev()
+				.skip_while(|channel| channel.id != self.selected)
+				.nth(1)
+				.map(|channel| channel.id)
+				.or_else(|| self.arrangement.tracks().last().map(|track| track.id))
+				.unwrap_or_else(|| self.arrangement.master().id),
+		};
 	}
 
 	fn select_next(&mut self) {
-		self.selected = if self.arrangement.node(self.selected).ty == NodeType::Channel {
-			self.arrangement
-				.channels()
-				.find(|&channel| channel.id > self.selected)
-				.map(|channel| channel.id)
-				.or_else(|| self.arrangement.channels().last().map(|channel| channel.id))
-		} else {
-			self.arrangement
+		self.selected = match self.arrangement.node(self.selected).ty {
+			NodeType::Master => self
+				.arrangement
 				.tracks()
-				.iter()
-				.find(|track| track.id > self.selected)
+				.first()
 				.map(|track| track.id)
 				.or_else(|| self.arrangement.channels().next().map(|channel| channel.id))
-				.or_else(|| self.arrangement.tracks().last().map(|track| track.id))
-		}
-		.unwrap_or_else(|| self.arrangement.master().id);
+				.unwrap_or(self.selected),
+			NodeType::Track => self
+				.arrangement
+				.tracks()
+				.iter()
+				.skip_while(|track| track.id != self.selected)
+				.nth(1)
+				.map(|track| track.id)
+				.or_else(|| self.arrangement.channels().next().map(|channel| channel.id))
+				.unwrap_or(self.selected),
+			NodeType::Channel => self
+				.arrangement
+				.channels()
+				.skip_while(|&channel| channel.id != self.selected)
+				.nth(1)
+				.map_or(self.selected, |channel| channel.id),
+		};
+	}
+
+	fn update_selection(
+		&mut self,
+		track: usize,
+		clip: Option<usize>,
+		f: fn((usize, usize), usize, Option<usize>) -> Option<(usize, usize)>,
+	) {
+		self.midi_clip = self
+			.midi_clip
+			.and_then(|midi_clip| f(midi_clip, track, clip));
+
+		let playlist = self.playlist.get_mut();
+		playlist.primary = playlist
+			.primary
+			.drain()
+			.filter_map(|primary| f(primary, track, clip))
+			.collect();
+
+		playlist.secondary = playlist
+			.secondary
+			.drain()
+			.filter_map(|secondary| f(secondary, track, clip))
+			.collect();
 	}
 }
 
-fn update_selection(
+fn update_selection_insert(
 	(ct, cc): (usize, usize),
 	track: usize,
 	clip: Option<usize>,
 ) -> Option<(usize, usize)> {
-	clip.filter(|_| ct == track).map_or_else(
+	clip.map_or_else(
 		|| match ct.cmp(&track) {
-			Ordering::Equal => None,
 			Ordering::Less => Some((ct, cc)),
+			Ordering::Equal | Ordering::Greater => Some((ct + 1, cc)),
+		},
+		|clip| match ct.cmp(&track) {
+			Ordering::Less => match cc.cmp(&clip) {
+				Ordering::Less => Some((ct, cc)),
+				Ordering::Equal | Ordering::Greater => Some((ct, cc + 1)),
+			},
+			Ordering::Equal | Ordering::Greater => match cc.cmp(&clip) {
+				Ordering::Less => Some((ct + 1, cc)),
+				Ordering::Equal | Ordering::Greater => Some((ct + 1, cc + 1)),
+			},
+		},
+	)
+}
+
+fn update_selection_delete(
+	(ct, cc): (usize, usize),
+	track: usize,
+	clip: Option<usize>,
+) -> Option<(usize, usize)> {
+	clip.map_or_else(
+		|| match ct.cmp(&track) {
+			Ordering::Less => Some((ct, cc)),
+			Ordering::Equal => None,
 			Ordering::Greater => Some((ct - 1, cc)),
 		},
-		|clip| match cc.cmp(&clip) {
+		|clip| match ct.cmp(&track) {
+			Ordering::Less => match cc.cmp(&clip) {
+				Ordering::Less => Some((ct, cc)),
+				Ordering::Equal => None,
+				Ordering::Greater => Some((ct, cc - 1)),
+			},
 			Ordering::Equal => None,
-			Ordering::Less => Some((ct, cc)),
-			Ordering::Greater => Some((ct, cc - 1)),
+			Ordering::Greater => match cc.cmp(&clip) {
+				Ordering::Less => Some((ct - 1, cc)),
+				Ordering::Equal => None,
+				Ordering::Greater => Some((ct - 1, cc - 1)),
+			},
 		},
 	)
 }

@@ -320,8 +320,7 @@ impl AudioProcessor {
 		None
 	}
 
-	#[must_use]
-	pub fn process(
+	fn process(
 		&mut self,
 		mut buf: &mut [f32],
 	) -> Option<(oneshot::Sender<Self>, oneshot::Receiver<Self>)> {
@@ -510,7 +509,7 @@ impl AudioProcessor {
 			let diff = buffer_size.min(render_start - self.transport().position);
 			let diff_samples = diff.to_samples(self.transport());
 
-			self.audio_graph.process(diff_samples);
+			self.audio_graph.process_subtree(node, diff_samples);
 			self.audio_graph
 				.for_each_node_mut(|node| node.collect_updates(&mut updates));
 			updates.clear();
@@ -520,15 +519,15 @@ impl AudioProcessor {
 		}
 
 		while {
-			render_start =
-				SecondsTime::from_samples(self.audio_graph.delay(node), self.transport());
+			render_start = range_start
+				+ SecondsTime::from_samples(self.audio_graph.delay(node), self.transport());
 			render_end = render_start + range_len;
 			self.transport().position < render_end
 		} {
 			let diff = buffer_size.min(render_end - self.transport().position);
 			let diff_samples = diff.to_samples(self.transport());
 
-			self.audio_graph.process(diff_samples);
+			self.audio_graph.process_subtree(node, diff_samples);
 			self.audio_graph.copy_output(node, &mut buf[..diff_samples]);
 			self.audio_graph
 				.for_each_node_mut(|node| node.collect_updates(&mut updates));

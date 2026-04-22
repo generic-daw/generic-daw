@@ -155,6 +155,14 @@ pub const fn sliders_vertical() -> Icon {
 	}
 }
 
+pub const fn snowflake() -> Icon {
+	Icon {
+		glyph: '\u{e165}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
 pub const fn square() -> Icon {
 	Icon {
 		glyph: '\u{e167}',
@@ -203,14 +211,6 @@ pub const fn power_off() -> Icon {
 	}
 }
 
-pub const fn arrow_left_right() -> Icon {
-	Icon {
-		glyph: '\u{e24a}',
-		size: LINE_HEIGHT,
-		offset: 0.05,
-	}
-}
-
 pub const fn file_headphone() -> Icon {
 	Icon {
 		glyph: '\u{e31a}',
@@ -222,6 +222,14 @@ pub const fn file_headphone() -> Icon {
 pub const fn file_play() -> Icon {
 	Icon {
 		glyph: '\u{e321}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn circle_ellipsis() -> Icon {
+	Icon {
+		glyph: '\u{e346}',
 		size: LINE_HEIGHT,
 		offset: 0.05,
 	}
@@ -243,14 +251,6 @@ pub const fn chart_no_axes_gantt() -> Icon {
 	}
 }
 
-pub const fn radius() -> Icon {
-	Icon {
-		glyph: '\u{e52d}',
-		size: LINE_HEIGHT,
-		offset: 0.05,
-	}
-}
-
 pub const fn file_music() -> Icon {
 	Icon {
 		glyph: '\u{e55e}',
@@ -262,6 +262,14 @@ pub const fn file_music() -> Icon {
 pub const fn keyboard_music() -> Icon {
 	Icon {
 		glyph: '\u{e560}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn chevrons_left_right_ellipsis() -> Icon {
+	Icon {
+		glyph: '\u{e61f}',
 		size: LINE_HEIGHT,
 		offset: 0.05,
 	}

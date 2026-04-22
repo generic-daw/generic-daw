@@ -1,5 +1,6 @@
 use crate::{
 	arrangement_view::{
+		self,
 		clip::Clip,
 		midi_clip::MidiClip,
 		midi_pattern::{MidiPattern, MidiPatternPair},
@@ -29,7 +30,7 @@ use std::{
 	path::Path,
 	sync::{Arc, LazyLock},
 };
-use utils::{NoDebug, ShiftMoveExt as _};
+use utils::{NoClone, NoDebug, ShiftMoveExt as _};
 
 static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
 	HostInfo::new_from_cstring(
@@ -370,10 +371,10 @@ impl Arrangement {
 		node
 	}
 
-	pub fn add_track(&mut self) -> usize {
+	pub fn insert_track(&mut self, idx: usize) -> usize {
 		let id = self.add(generic_daw_core::Track::default(), NodeType::Track);
-		self.tracks.push(Track::new(id));
-		self.tracks.len() - 1
+		self.tracks.insert(idx, Track::new(id));
+		idx
 	}
 
 	pub fn remove_track(&mut self, id: NodeId) {
@@ -611,26 +612,26 @@ impl Arrangement {
 	}
 
 	pub fn render(&mut self, path: Arc<Path>) -> Task<daw::Message> {
-		let (a_sender, p_receiver) = oneshot::channel();
-		let (p_sender, a_receiver) = oneshot::channel();
-		self.send(Message::RequestProcessor(a_sender, a_receiver));
-		let mut processor = p_receiver.recv().unwrap();
-
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
 
-		let len = self
-			.tracks()
-			.iter()
-			.map(|track| track.len(&self.transport))
-			.max()
-			.unwrap_or_default();
-
-		let beat_range = BeatRange::new(BeatTime::ZERO, len);
+		let beat_range = BeatRange::new(
+			BeatTime::ZERO,
+			self.tracks()
+				.iter()
+				.map(|track| track.len(&self.transport))
+				.max()
+				.unwrap_or_default(),
+		);
 
 		let master = self.master;
 
+		let (a_sender, p_receiver) = oneshot::channel();
+		let (p_sender, a_receiver) = oneshot::channel();
+		self.send(Message::RequestProcessor(a_sender, a_receiver));
+
 		Task::batch([
 			Task::future(unblock(move || {
+				let mut processor = p_receiver.recv().unwrap();
 				processor.render(
 					&path,
 					master,
@@ -641,6 +642,72 @@ impl Arrangement {
 				p_sender.send(processor).unwrap();
 			}))
 			.discard(),
+			Task::stream(progress_receiver)
+				.map(daw::Message::Progress)
+				.chain(Task::done(daw::Message::RenderedFile)),
+		])
+	}
+
+	pub fn freeze(
+		&mut self,
+		node: NodeId,
+		path: Arc<Path>,
+		project: daw::Project,
+	) -> Task<daw::Message> {
+		let beat_range = if let Some(loop_range) = self.transport.loop_range {
+			loop_range
+		} else {
+			let Some((start, end)) = self.tracks()[self.track_of(node).unwrap()]
+				.clips
+				.iter()
+				.map(|clip| (clip.start(), clip.end(&self.transport)))
+				.reduce(|l, r| (l.0.min(r.0), l.1.max(r.1)))
+			else {
+				return Task::done(daw::Message::RenderedFile);
+			};
+			BeatRange::new(start, end)
+		};
+
+		let (progress_sender, progress_receiver) = smol::channel::unbounded();
+		let transport = self.transport;
+
+		let (a_sender, p_receiver) = oneshot::channel();
+		let (p_sender, a_receiver) = oneshot::channel();
+		self.send(Message::RequestProcessor(a_sender, a_receiver));
+
+		Task::batch([
+			Task::future(unblock(move || {
+				let mut samples = Vec::with_capacity(beat_range.len().to_samples(&transport));
+
+				let mut processor = p_receiver.recv().unwrap();
+				processor.render(
+					&path,
+					node,
+					beat_range,
+					|buf| samples.extend_from_slice(buf),
+					|f| progress_sender.try_send(f).unwrap(),
+				);
+				p_sender.send(processor).unwrap();
+
+				daw::Message::Arrangement(
+					project,
+					arrangement_view::Message::FreezeDone(NoClone((
+						node,
+						Box::new(
+							SamplePair::from_core(
+								generic_daw_core::Sample {
+									id: SampleId::unique(),
+									samples: NoDebug(samples.into()),
+									sample_rate: transport.sample_rate,
+								},
+								path,
+							)
+							.unwrap(),
+						),
+						beat_range.start(),
+					))),
+				)
+			})),
 			Task::stream(progress_receiver)
 				.map(daw::Message::Progress)
 				.chain(Task::done(daw::Message::RenderedFile)),

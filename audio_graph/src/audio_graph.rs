@@ -77,6 +77,39 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		}
 	}
 
+	pub fn process_subtree(&mut self, node: NodeId, len: usize) {
+		fn visit<Node: NodeImpl>(this: &AudioGraph<Node>, node: NodeId) -> usize {
+			let entry = &this.graph[&node];
+			let buffers = entry.read_buffers_uncontended();
+
+			let indegree = buffers.incoming.len();
+			entry.indegree.store(indegree, Relaxed);
+			if indegree == 0 {
+				this.queue.push(node).unwrap();
+			}
+
+			1 + buffers
+				.incoming
+				.keys()
+				.map(|&node| visit(this, node))
+				.sum::<usize>()
+		}
+
+		self.curr_len = len;
+
+		for entry in self.graph.values_mut() {
+			*entry.indegree.get_mut() = usize::MAX;
+		}
+
+		let count = visit(self, node);
+
+		let mut pool = self.pool.take().unwrap();
+		pool.run(self, count, NonZero::new(self.queue.len()).unwrap());
+		self.pool = Some(pool);
+
+		self.needs_reset = false;
+	}
+
 	#[expect(clippy::significant_drop_tightening)]
 	pub(crate) fn process_node(&self, entry: &Entry<Node>, scratch: &mut [f32]) -> Option<NodeId> {
 		debug_assert_eq!(entry.indegree.load(Relaxed), 0);
@@ -264,6 +297,18 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	fn has_cycle(&mut self) -> bool {
+		fn visit<Node: NodeImpl>(this: &AudioGraph<Node>, entry: &Entry<Node>) {
+			debug_assert_eq!(entry.indegree.load(Relaxed), usize::MAX);
+
+			entry
+				.read_buffers_uncontended()
+				.outgoing
+				.iter()
+				.map(|node| &this.graph[node])
+				.filter(|dep| dep.indegree.fetch_sub(1, Relaxed) == 0)
+				.for_each(|dep| visit(this, dep));
+		}
+
 		for entry in self.graph.values_mut() {
 			*entry.indegree.get_mut() = entry.buffers().incoming.len();
 		}
@@ -271,22 +316,10 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		self.graph
 			.values()
 			.filter(|entry| entry.indegree.fetch_sub(1, Relaxed) == 0)
-			.for_each(|entry| self.visit(entry));
+			.for_each(|entry| visit(self, entry));
 
 		self.graph
 			.values_mut()
 			.any(|entry| *entry.indegree.get_mut() != usize::MAX)
-	}
-
-	fn visit(&self, entry: &Entry<Node>) {
-		debug_assert_eq!(entry.indegree.load(Relaxed), usize::MAX);
-
-		entry
-			.read_buffers_uncontended()
-			.outgoing
-			.iter()
-			.map(|node| &self.graph[node])
-			.filter(|dep| dep.indegree.fetch_sub(1, Relaxed) == 0)
-			.for_each(|dep| self.visit(dep));
 	}
 }

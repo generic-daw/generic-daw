@@ -58,4 +58,22 @@ impl SamplePair {
 		};
 		Some(Self { core, gui })
 	}
+
+	pub fn from_core(core: generic_daw_core::Sample, path: Arc<Path>) -> Option<Self> {
+		let name = path.file_name()?.to_str()?.into();
+		let crc = crc(File::open(&path).ok()?);
+		let len = std::fs::metadata(&path).ok()?.len();
+		let gui = Sample {
+			id: core.id,
+			lods: Lods::new(&core.samples),
+			path,
+			name,
+			samples: core.samples.clone(),
+			sample_rate: core.sample_rate,
+			crc,
+			len,
+			refs: 0,
+		};
+		Some(Self { core, gui })
+	}
 }

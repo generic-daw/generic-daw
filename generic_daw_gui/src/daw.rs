@@ -17,7 +17,7 @@ use crate::{
 	widget::ALPHA_2_3,
 };
 use generic_daw_core::{
-	PluginId,
+	NodeId, PluginId,
 	clap_host::{
 		ClapId, Cookie, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
 	},
@@ -55,9 +55,9 @@ unique_id!(project);
 pub use project::Id as Project;
 
 pub static CONFIG_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let data_dir = dirs::config_dir().unwrap().join("Generic DAW").into();
-	_ = std::fs::create_dir(&data_dir);
-	data_dir
+	let config_dir = dirs::config_dir().unwrap().join("Generic DAW").into();
+	_ = std::fs::create_dir(&config_dir);
+	config_dir
 });
 
 pub static DATA_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
@@ -67,13 +67,13 @@ pub static DATA_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 });
 
 pub static STATE_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
-	let data_dir = dirs::state_dir()
+	let state_dir = dirs::state_dir()
 		.or_else(dirs::data_dir)
 		.unwrap()
 		.join("Generic DAW")
 		.into();
-	_ = std::fs::create_dir(&data_dir);
-	data_dir
+	_ = std::fs::create_dir(&state_dir);
+	state_dir
 });
 
 pub static CRASHES_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
@@ -92,6 +92,12 @@ pub static AUTOSAVED_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 	let autosaved_dir = PROJECTS_DIR.join("autosaved").into();
 	_ = std::fs::create_dir(&autosaved_dir);
 	autosaved_dir
+});
+
+pub static FREEZES_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
+	let freezes_dir = DATA_DIR.join("freezes").into();
+	_ = std::fs::create_dir(&freezes_dir);
+	freezes_dir
 });
 
 pub static RECORDINGS_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
@@ -147,6 +153,7 @@ impl Display for FileMenu {
 
 pub enum Instruction {
 	Message(Message),
+	Freeze(NodeId),
 	PluginLoad(PluginId, Plugin, Receiver<MainThreadMessage>),
 	PluginSetState(PluginId, NoDebug<Box<[u8]>>),
 	PluginParamChange(PluginId, ClapId, f32, Cookie),
@@ -599,6 +606,15 @@ impl Daw {
 	fn handle_instruction(&mut self, instruction: Instruction) -> Task<Message> {
 		match instruction {
 			Instruction::Message(message) => return self.update(message),
+			Instruction::Freeze(node) => {
+				self.progress = Some(0.0);
+				self.clap_host.set_render_mode(RenderMode::Offline);
+				return self.arrangement_view.arrangement.freeze(
+					node,
+					FREEZES_DIR.join(format!("{}.wav", format_now())).into(),
+					self.project,
+				);
+			}
 			Instruction::PluginLoad(id, plugin, receiver) => {
 				return self
 					.clap_host
