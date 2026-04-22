@@ -47,21 +47,21 @@ impl EventBuffers {
 		&mut self,
 		events: &mut Vec<impl EventImpl>,
 	) -> (InputEvents<'_>, OutputEvents<'_>) {
-		self.input_events.clear();
-
-		if self.input_prefers_midi {
-			for e in events.drain(..) {
-				self.input_events.push(&e.to_midi(self.main_input_port));
-			}
-		} else {
-			for e in events.drain(..) {
-				self.input_events.push(&e.to_clap(self.main_input_port));
-			}
+		for event in events.drain(..) {
+			self.push(event);
 		}
 
 		self.input_events.sort();
 
 		(self.input_events.as_input(), self.output_events.as_output())
+	}
+
+	pub fn push(&mut self, event: impl EventImpl) {
+		if self.input_prefers_midi {
+			self.input_events.push(&event.to_midi(self.main_input_port));
+		} else {
+			self.input_events.push(&event.to_clap(self.main_input_port));
+		}
 	}
 
 	pub fn write_out(&mut self, events: &mut Vec<impl EventImpl>) {
@@ -71,6 +71,7 @@ impl EventBuffers {
 				.filter_map(EventImpl::try_from_unknown),
 		);
 
+		self.input_events.clear();
 		self.output_events.clear();
 	}
 }

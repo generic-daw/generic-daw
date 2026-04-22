@@ -55,7 +55,6 @@ impl PanMode {
 struct Plugin {
 	id: PluginId,
 	processor: AudioProcessor,
-	events: Vec<Event>,
 	lanes: Vec<AutomationLane>,
 	mix: f32,
 	enabled: bool,
@@ -66,7 +65,6 @@ impl Plugin {
 		Self {
 			id,
 			processor,
-			events: Vec::new(),
 			lanes: Vec::new(),
 			mix: 1.0,
 			enabled: true,
@@ -96,8 +94,6 @@ impl NodeImpl for Channel {
 			.pop_if(|update| matches!(update, Update::Peaks(..)));
 
 		for plugin in &mut self.plugins {
-			events.append(&mut plugin.events);
-
 			for lane in &mut plugin.lanes {
 				lane.process(state, events);
 			}
@@ -183,7 +179,7 @@ impl Channel {
 			NodeAction::PluginToggleEnabled(index) => self.plugins[index].enabled ^= true,
 			NodeAction::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
 			NodeAction::PluginParamChanged(index, param_id, value, cookie) => {
-				self.plugins[index].events.push(Event::ParamValue {
+				self.plugins[index].processor.push_event(Event::ParamValue {
 					time: 0,
 					param_id,
 					value,

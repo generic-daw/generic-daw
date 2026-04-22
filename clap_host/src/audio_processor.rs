@@ -50,6 +50,10 @@ impl AudioProcessor {
 		&self.descriptor
 	}
 
+	pub fn push_event(&mut self, event: impl EventImpl) {
+		self.event_buffers.push(event);
+	}
+
 	pub fn recv_events(&mut self) {
 		loop {
 			while let Ok(msg) = self.consumer.pop() {
