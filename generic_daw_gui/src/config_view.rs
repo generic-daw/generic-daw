@@ -364,8 +364,14 @@ impl ConfigView {
 						row![
 							text("Name:").width(Fill),
 							row![
-								pick_list(device.id.as_ref(), devices, |id| self.devices[id]
-									.to_string())
+								pick_list(
+									device
+										.id
+										.as_ref()
+										.filter(|id| self.devices.contains_key(id)),
+									devices,
+									|id| self.devices[id].to_string()
+								)
 								.on_select(|id| Message::ChangedId(Some(id)))
 								.handle(PICK_LIST_HANDLE)
 								.placeholder("Default")
