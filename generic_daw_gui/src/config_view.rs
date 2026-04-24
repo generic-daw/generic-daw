@@ -6,7 +6,8 @@ use crate::{
 	icons::{grip_vertical, mic, plus, rotate_ccw, save, volume_2, x},
 	stylefns::{
 		button_with_radius, container_with_radius, menu_style, pick_list_with_radius,
-		scrollable_style, sweeten_column_style, weak_bordered_box, weakest_bordered_box,
+		scrollable_style, sweeten_column_style, sweeten_column_with_radius, weak_bordered_box,
+		weakest_bordered_box,
 	},
 	theme::Theme,
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
@@ -260,7 +261,7 @@ impl ConfigView {
 						.padding(padding::all(5).left(2))
 						.spacing(5)
 						.on_drag(Message::MoveSamplePath)
-						.style(sweeten_column_style)
+						.style(sweeten_column_with_radius(sweeten_column_style, 5))
 					)
 					.style(container_with_radius(weak_bordered_box, 5)),
 					rule::horizontal(1),
@@ -321,7 +322,7 @@ impl ConfigView {
 							)
 							.spacing(5)
 							.on_drag(Message::MoveClapPath)
-							.style(sweeten_column_style))
+							.style(sweeten_column_with_radius(sweeten_column_style, 5)))
 						]
 						.padding(padding::all(5).left(2))
 						.spacing(5)

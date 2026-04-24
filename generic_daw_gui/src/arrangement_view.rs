@@ -13,8 +13,8 @@ use crate::{
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
 		button_with_radius, container_with_radius, menu_style, scrollable_style, slider_secondary,
-		slider_with_radius, split_style, sweeten_column_style, weak_bordered_box,
-		weakest_bordered_box,
+		slider_with_radius, split_style, sweeten_column_style, sweeten_column_with_radius,
+		weak_bordered_box, weakest_bordered_box,
 	},
 	widget::{
 		Delta, LINE_HEIGHT, TEXT_HEIGHT,
@@ -46,8 +46,8 @@ use iced::{
 	padding, stream,
 	time::every,
 	widget::{
-		button, center_x, column, combo_box, container, mouse_area, opaque, operation::snap_to_end,
-		row, rule, scrollable, slider, space, text, vertical_slider,
+		button, center_x, center_y, column, combo_box, container, mouse_area, opaque,
+		operation::snap_to_end, row, rule, scrollable, slider, space, text, vertical_slider,
 	},
 };
 use iced_split::{Split, Strategy};
@@ -125,6 +125,7 @@ pub enum Message {
 
 	TrackAdd,
 	TrackRemove(NodeId),
+	TrackMove(DragEvent),
 	TrackToggleEnabled(NodeId),
 	TrackToggleSolo(NodeId),
 
@@ -504,7 +505,7 @@ impl ArrangementView {
 
 				let track = self.arrangement.track_of(node).unwrap();
 				self.arrangement.remove_track(node);
-				self.update_selection(track, None, update_selection_delete);
+				self.update_selection(|c| update_selection_delete(c, track, None));
 
 				if self
 					.recording
@@ -512,6 +513,16 @@ impl ArrangementView {
 					.is_some_and(|recording| recording.node == node)
 				{
 					self.end_recording();
+				}
+			}
+			Message::TrackMove(event) => {
+				if let DragEvent::Dropped {
+					index,
+					target_index,
+				} = event && index != target_index
+				{
+					self.arrangement.move_track(index, target_index);
+					self.update_selection(|c| Some(update_selection_move(c, index, target_index)));
 				}
 			}
 			Message::TrackToggleEnabled(node) => {
@@ -618,7 +629,7 @@ impl ArrangementView {
 					.insert_track(self.arrangement.track_of(node).unwrap() + 1);
 				let track_id = self.arrangement.tracks()[track].id;
 
-				self.update_selection(track, None, update_selection_insert);
+				self.update_selection(|c| Some(update_selection_insert(c, track, None)));
 
 				let clip = self.arrangement.add_clip(track, clip);
 				self.playlist.get_mut().primary.insert((track, clip));
@@ -1164,7 +1175,7 @@ impl ArrangementView {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
 				sorted.sort_unstable_by_key(|&(_, c)| Reverse(c));
 				for (track, clip) in sorted {
-					self.update_selection(track, Some(clip), update_selection_delete);
+					self.update_selection(|c| update_selection_delete(c, track, Some(clip)));
 
 					let clip = self.arrangement.remove_clip(track, clip);
 					self.arrangement.gc(clip);
@@ -1360,133 +1371,154 @@ impl ArrangementView {
 			self.arrangement.transport(),
 			self.playlist.borrow().position,
 			self.playlist.borrow().scale,
-			column(
-				self.arrangement
-					.tracks()
-					.iter()
-					.map(|track| track.id)
-					.map(|id| {
-						let node = self.arrangement.node(id);
+			column![
+				sweeten::column(
+					self.arrangement
+						.tracks()
+						.iter()
+						.map(|track| track.id)
+						.map(|id| {
+							let node = self.arrangement.node(id);
 
-						let button_style = |cond: bool| {
-							if !node.enabled {
-								button::secondary
-							} else if cond {
-								button::warning
-							} else {
-								button::primary
-							}
-						};
+							let button_style = |cond: bool| {
+								if !node.enabled {
+									button::secondary
+								} else if cond {
+									button::warning
+								} else {
+									button::primary
+								}
+							};
 
-						container(
-							row![
-								column![
-									row![
-										PeakMeter::new(&node.peaks[0]),
-										PeakMeter::new(&node.peaks[1])
+							container(
+								row![
+									column![
+										row![
+											PeakMeter::new(&node.peaks[0]),
+											PeakMeter::new(&node.peaks[1])
+										]
+										.spacing(2),
+										container(space().width(28).height(2)).style(
+											container_with_radius(
+												if node.polyphony > 0 {
+													container::primary
+												} else {
+													container::secondary
+												},
+												border::bottom(f32::INFINITY),
+											)
+										)
 									]
 									.spacing(2),
-									container(space().width(28).height(2)).style(
-										container_with_radius(
-											if node.polyphony > 0 {
-												container::primary
+									column![
+										Knob::new(
+											0.0..=MAX_VOL,
+											node.volume.abs().cbrt(),
+											move |v| {
+												Message::ChannelVolumeChanged(
+													id,
+													v.powi(3).copysign(node.volume),
+												)
+											}
+										)
+										.default(1.0)
+										.enabled(node.enabled)
+										.tooltip(format_db(node.volume.abs())),
+										node.pan_knob(20.0),
+									]
+									.align_x(Center)
+									.spacing(5)
+									.wrap(),
+									column![
+										icon_button(
+											x(),
+											if node.enabled {
+												button::danger
 											} else {
-												container::secondary
-											},
-											border::bottom(f32::INFINITY),
+												button::secondary
+											}
 										)
-									)
-								]
-								.spacing(2),
-								column![
-									Knob::new(0.0..=MAX_VOL, node.volume.abs().cbrt(), move |v| {
-										Message::ChannelVolumeChanged(
-											id,
-											v.powi(3).copysign(node.volume),
+										.on_press(Message::TrackRemove(id)),
+										text_icon_button("M", button_style(false))
+											.on_press(Message::TrackToggleEnabled(id)),
+										text_icon_button(
+											"S",
+											button_style(self.soloed == Some(id))
 										)
-									})
-									.default(1.0)
-									.enabled(node.enabled)
-									.tooltip(format_db(node.volume.abs())),
-									node.pan_knob(20.0),
-								]
-								.align_x(Center)
-								.spacing(5)
-								.wrap(),
-								column![
-									icon_button(
-										x(),
-										if node.enabled {
-											button::danger
-										} else {
-											button::secondary
-										}
-									)
-									.on_press(Message::TrackRemove(id)),
-									text_icon_button("M", button_style(false))
-										.on_press(Message::TrackToggleEnabled(id)),
-									text_icon_button("S", button_style(self.soloed == Some(id)))
 										.on_press(Message::TrackToggleSolo(id)),
-									icon_button(
-										if node.bypassed { power_off() } else { power() },
-										button_style(node.bypassed)
-									)
-									.on_press(Message::ChannelToggleBypassed(node.id)),
-									icon_button(
-										arrow_up_down(),
-										button_style(node.volume.is_sign_negative())
-									)
-									.on_press(Message::ChannelVolumeChanged(node.id, -node.volume)),
-									icon_button(
-										if node.pan.is_balance() {
-											chevrons_left_right_ellipsis()
-										} else {
-											circle_ellipsis()
-										},
-										button_style(false),
-									)
-									.on_press(Message::ChannelPanChanged(
-										node.id,
-										if node.pan.is_balance() {
-											PanMode::Stereo(-1.0, 1.0)
-										} else {
-											PanMode::Balance(0.0)
-										},
-									)),
-									icon_button(
-										mic(),
-										button_style(
-											self.recording
-												.as_ref()
-												.is_some_and(|recording| recording.node == id)
+										icon_button(
+											if node.bypassed { power_off() } else { power() },
+											button_style(node.bypassed)
 										)
-									)
-									.on_press_maybe(node.enabled.then_some(Message::Recording(id))),
-									icon_button(snowflake(), button_style(false)).on_press_maybe(
-										node.enabled.then_some(Message::Freeze(id))
-									)
+										.on_press(Message::ChannelToggleBypassed(node.id)),
+										icon_button(
+											arrow_up_down(),
+											button_style(node.volume.is_sign_negative())
+										)
+										.on_press(Message::ChannelVolumeChanged(
+											node.id,
+											-node.volume
+										)),
+										icon_button(
+											if node.pan.is_balance() {
+												chevrons_left_right_ellipsis()
+											} else {
+												circle_ellipsis()
+											},
+											button_style(false),
+										)
+										.on_press(Message::ChannelPanChanged(
+											node.id,
+											if node.pan.is_balance() {
+												PanMode::Stereo(-1.0, 1.0)
+											} else {
+												PanMode::Balance(0.0)
+											},
+										)),
+										icon_button(
+											mic(),
+											button_style(
+												self.recording
+													.as_ref()
+													.is_some_and(|recording| recording.node == id)
+											)
+										)
+										.on_press_maybe(
+											node.enabled.then_some(Message::Recording(id))
+										),
+										icon_button(snowflake(), button_style(false))
+											.on_press_maybe(
+												node.enabled.then_some(Message::Freeze(id))
+											)
+									]
+									.spacing(5)
+									.wrap()
 								]
-								.spacing(5)
-								.wrap()
-							]
-							.spacing(5),
-						)
-						.style(weak_bordered_box)
-						.padding(5)
+								.spacing(5),
+							)
+							.padding(padding::all(5).left(0))
+						})
+						.map(|e| container(row![
+							mouse_area(center_y(grip_vertical())).interaction(Interaction::Grab),
+							opaque(e)
+						])
 						.height(self.playlist.borrow().scale.y)
-					})
-					.map(Element::new)
-					.chain(once(
-						container(
-							button(plus().size(LINE_HEIGHT + 6.0))
-								.padding(5)
-								.style(button_with_radius(button::primary, f32::INFINITY))
-								.on_press(Message::TrackAdd),
-						)
-						.padding(padding::right(5).top(5))
-						.into(),
-					)),
-			)
+						.style(container_with_radius(weakest_bordered_box, border::left(5)))
+						.into())
+				)
+				.on_drag(Message::TrackMove)
+				.style(sweeten_column_with_radius(
+					sweeten_column_style,
+					border::left(5)
+				)),
+				container(
+					button(plus().size(LINE_HEIGHT + 6.0))
+						.padding(5)
+						.style(button_with_radius(button::primary, f32::INFINITY))
+						.on_press(Message::TrackAdd),
+				)
+				.padding(padding::right(5).top(5))
+			]
 			.align_x(Center),
 			Playlist::new(
 				&self.playlist,
@@ -1689,7 +1721,7 @@ impl ArrangementView {
 					)
 					.spacing(5)
 					.on_drag(|node| Message::PluginMoveTo(self.selected, node))
-					.style(sweeten_column_style),
+					.style(sweeten_column_with_radius(sweeten_column_style, 5)),
 				)
 				.spacing(5)
 				.style(scrollable_style)
@@ -2120,28 +2152,12 @@ impl ArrangementView {
 		};
 	}
 
-	fn update_selection(
-		&mut self,
-		track: usize,
-		clip: Option<usize>,
-		f: fn((usize, usize), usize, Option<usize>) -> Option<(usize, usize)>,
-	) {
-		self.midi_clip = self
-			.midi_clip
-			.and_then(|midi_clip| f(midi_clip, track, clip));
+	fn update_selection(&mut self, mut f: impl FnMut((usize, usize)) -> Option<(usize, usize)>) {
+		self.midi_clip = self.midi_clip.and_then(&mut f);
 
 		let playlist = self.playlist.get_mut();
-		playlist.primary = playlist
-			.primary
-			.drain()
-			.filter_map(|primary| f(primary, track, clip))
-			.collect();
-
-		playlist.secondary = playlist
-			.secondary
-			.drain()
-			.filter_map(|secondary| f(secondary, track, clip))
-			.collect();
+		playlist.primary = playlist.primary.drain().filter_map(&mut f).collect();
+		playlist.secondary = playlist.secondary.drain().filter_map(&mut f).collect();
 	}
 }
 
@@ -2149,20 +2165,20 @@ fn update_selection_insert(
 	(ct, cc): (usize, usize),
 	track: usize,
 	clip: Option<usize>,
-) -> Option<(usize, usize)> {
+) -> (usize, usize) {
 	clip.map_or_else(
 		|| match ct.cmp(&track) {
-			Ordering::Less => Some((ct, cc)),
-			Ordering::Equal | Ordering::Greater => Some((ct + 1, cc)),
+			Ordering::Less => (ct, cc),
+			Ordering::Equal | Ordering::Greater => (ct + 1, cc),
 		},
 		|clip| match ct.cmp(&track) {
 			Ordering::Less => match cc.cmp(&clip) {
-				Ordering::Less => Some((ct, cc)),
-				Ordering::Equal | Ordering::Greater => Some((ct, cc + 1)),
+				Ordering::Less => (ct, cc),
+				Ordering::Equal | Ordering::Greater => (ct, cc + 1),
 			},
 			Ordering::Equal | Ordering::Greater => match cc.cmp(&clip) {
-				Ordering::Less => Some((ct + 1, cc)),
-				Ordering::Equal | Ordering::Greater => Some((ct + 1, cc + 1)),
+				Ordering::Less => (ct + 1, cc),
+				Ordering::Equal | Ordering::Greater => (ct + 1, cc + 1),
 			},
 		},
 	)
@@ -2193,6 +2209,19 @@ fn update_selection_delete(
 			},
 		},
 	)
+}
+
+fn update_selection_move(
+	(ct, cc): (usize, usize),
+	track: usize,
+	new_track: usize,
+) -> (usize, usize) {
+	match (ct.cmp(&track), ct.cmp(&new_track)) {
+		(Ordering::Less, Ordering::Less) | (Ordering::Greater, Ordering::Greater) => (ct, cc),
+		(Ordering::Equal, _) => (new_track, cc),
+		(Ordering::Less, Ordering::Equal | Ordering::Greater) => (ct + 1, cc),
+		(Ordering::Greater, Ordering::Less | Ordering::Equal) => (ct - 1, cc),
+	}
 }
 
 fn amp_to_db(amp: f32) -> f32 {

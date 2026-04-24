@@ -391,6 +391,10 @@ impl Arrangement {
 		}
 	}
 
+	pub fn move_track(&mut self, track: usize, new_track: usize) {
+		self.tracks.shift_move(track, new_track);
+	}
+
 	pub fn connect(&mut self, from: NodeId, to: NodeId) {
 		self.outgoing_mut(from).insert(to, 1.0);
 		self.send(Message::NodeConnect(from, to));

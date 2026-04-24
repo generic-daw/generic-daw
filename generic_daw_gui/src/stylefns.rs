@@ -118,7 +118,19 @@ pub fn split_style(t: &Theme) -> iced_split::Style {
 
 pub fn sweeten_column_style(t: &Theme) -> column::Style {
 	let mut style = column::default(t);
+	style.scale = 1.0;
 	style.moved_item_overlay = Color::TRANSPARENT;
-	style.ghost_border.radius = 5.into();
 	style
+}
+
+pub fn sweeten_column_with_radius(
+	f: impl Fn(&Theme) -> column::Style,
+	r: impl Into<border::Radius>,
+) -> impl Fn(&Theme) -> column::Style {
+	let r = r.into();
+	move |t| {
+		let mut style = f(t);
+		style.ghost_border.radius = r;
+		style
+	}
 }
