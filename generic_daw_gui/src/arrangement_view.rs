@@ -7,14 +7,14 @@ use crate::{
 	file_tree::FileKind,
 	icons::{
 		arrow_up_down, chevron_down, chevron_up, chevrons_left_right_ellipsis, circle_ellipsis,
-		grip_vertical, mic, plus, power, power_off, snowflake, x,
+		grip_horizontal, grip_vertical, mic, plus, power, power_off, snowflake, x,
 	},
 	operation::scroll_into_view,
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
 		button_with_radius, container_with_radius, menu_style, scrollable_style, slider_secondary,
 		slider_with_radius, split_style, sweeten_column_style, sweeten_column_with_radius,
-		weak_bordered_box, weakest_bordered_box,
+		sweeten_row_style, sweeten_row_with_radius, weak_bordered_box, weakest_bordered_box,
 	},
 	widget::{
 		Delta, LINE_HEIGHT, TEXT_HEIGHT,
@@ -62,7 +62,7 @@ use std::{
 	cmp::{Ordering, Reverse},
 	collections::HashMap,
 	io::Read,
-	iter::{once, repeat},
+	iter::repeat,
 	num::NonZero,
 	path::Path,
 	sync::Arc,
@@ -73,6 +73,7 @@ use utils::{NoClone, NoDebug};
 
 mod arrangement;
 mod audio_clip;
+mod channel;
 mod clip;
 mod midi_clip;
 mod midi_pattern;
@@ -104,6 +105,7 @@ pub enum Message {
 
 	ChannelAdd,
 	ChannelRemove(NodeId),
+	ChannelMove(DragEvent),
 	ChannelSelect(NodeId),
 	ChannelVolumeChanged(NodeId, f32),
 	ChannelPanChanged(NodeId, PanMode),
@@ -334,6 +336,15 @@ impl ArrangementView {
 				}
 
 				self.arrangement.remove_channel(node);
+			}
+			Message::ChannelMove(event) => {
+				if let DragEvent::Dropped {
+					index,
+					target_index,
+				} = event && index != target_index
+				{
+					self.arrangement.move_channel(index, target_index);
+				}
 			}
 			Message::ChannelSelect(node) => {
 				self.selected = node;
@@ -1599,34 +1610,37 @@ impl ArrangementView {
 
 		Split::new(
 			scrollable(
-				row(once(self.view_channel(self.arrangement.master(), "M"))
-					.chain(once(rule::vertical(1).into()))
-					.chain({
-						let mut iter = self
-							.arrangement
+				row![
+					self.view_channel(self.arrangement.master(), "M"),
+					rule::vertical(1),
+					(!self.arrangement.tracks().is_empty()).then(|| sweeten::row(
+						self.arrangement
 							.tracks()
 							.iter()
 							.map(|track| self.arrangement.node(track.id))
 							.enumerate()
 							.map(|(i, node)| self.view_channel(node, format!("T{}", i + 1)))
-							.peekable();
-
-						let one = iter.peek().map(|_| rule::vertical(1).into());
-						iter.chain(one)
-					})
-					.chain(
+					)
+					.on_drag(Message::TrackMove)
+					.style(sweeten_row_with_radius(sweeten_row_style, border::top(5)))
+					.spacing(5)),
+					(!self.arrangement.tracks().is_empty()).then(|| rule::vertical(1)),
+					(!self.arrangement.channels().is_empty()).then(|| sweeten::row(
 						self.arrangement
 							.channels()
+							.iter()
+							.map(|channel| self.arrangement.node(channel.id))
 							.enumerate()
-							.map(|(i, node)| self.view_channel(node, format!("C{}", i + 1))),
+							.map(|(i, node)| self.view_channel(node, format!("C{}", i + 1)))
 					)
-					.chain(once(
-						button(plus().size(LINE_HEIGHT + 6.0))
-							.padding(5)
-							.style(button_with_radius(button::primary, f32::INFINITY))
-							.on_press(Message::ChannelAdd)
-							.into(),
-					)))
+					.on_drag(Message::ChannelMove)
+					.style(sweeten_row_with_radius(sweeten_row_style, border::top(5)))
+					.spacing(5)),
+					button(plus().size(LINE_HEIGHT + 6.0))
+						.padding(5)
+						.style(button_with_radius(button::primary, f32::INFINITY))
+						.on_press(Message::ChannelAdd)
+				]
 				.align_y(Center)
 				.spacing(5),
 			)
@@ -1753,197 +1767,218 @@ impl ArrangementView {
 			}
 		};
 
-		mouse_area(
-			container(
-				column![
-					text(name).size(14).line_height(1.0),
-					node.pan_knob(23.0),
-					row![
-						text_icon_button("M", button_style(false))
-							.on_press(Message::ChannelToggleEnabled(node.id)),
-						text_icon_button("S", button_style(self.soloed == Some(node.id)))
-							.on_press_maybe(
-								(node.ty == NodeType::Track)
-									.then_some(Message::TrackToggleSolo(node.id)),
-							),
-						icon_button(
-							x(),
-							if node.enabled {
-								button::danger
-							} else {
-								button::secondary
-							},
-						)
-						.on_press_maybe(match node.ty {
-							NodeType::Master => None,
-							NodeType::Channel => Some(Message::ChannelRemove(node.id)),
-							NodeType::Track => Some(Message::TrackRemove(node.id)),
-						}),
-					]
-					.spacing(5),
-					row![
-						icon_button(
-							if node.bypassed { power_off() } else { power() },
-							button_style(node.bypassed)
-						)
-						.on_press(Message::ChannelToggleBypassed(node.id)),
-						icon_button(
-							arrow_up_down(),
-							button_style(node.volume.is_sign_negative())
-						)
-						.on_press(Message::ChannelVolumeChanged(node.id, -node.volume)),
-						icon_button(
-							if node.pan.is_balance() {
-								chevrons_left_right_ellipsis()
-							} else {
-								circle_ellipsis()
-							},
-							button_style(false),
-						)
-						.on_press(Message::ChannelPanChanged(
-							node.id,
-							if node.pan.is_balance() {
-								PanMode::Stereo(-1.0, 1.0)
-							} else {
-								PanMode::Balance(0.0)
-							},
-						))
-					]
-					.spacing(5),
-					center_x(text(format_db(node.volume.abs())).line_height(1.0))
-						.style(weak_bordered_box)
-						.padding(2),
-					row![
+		container(column![
+			mouse_area(center_x(grip_horizontal())).interaction(if node.ty == NodeType::Master {
+				Interaction::NoDrop
+			} else {
+				Interaction::Grab
+			}),
+			opaque(
+				mouse_area(
+					container(
 						column![
-							space().height(7),
+							text(name).size(14).line_height(1.0),
+							node.pan_knob(23.0),
 							row![
-								PeakMeter::new(&node.peaks[0]).width(16.0),
-								PeakMeter::new(&node.peaks[1]).width(16.0),
+								text_icon_button("M", button_style(false))
+									.on_press(Message::ChannelToggleEnabled(node.id)),
+								text_icon_button("S", button_style(self.soloed == Some(node.id)))
+									.on_press_maybe(
+										(node.ty == NodeType::Track)
+											.then_some(Message::TrackToggleSolo(node.id)),
+									),
+								icon_button(
+									x(),
+									if node.enabled {
+										button::danger
+									} else {
+										button::secondary
+									},
+								)
+								.on_press_maybe(match node.ty {
+									NodeType::Master => None,
+									NodeType::Channel => Some(Message::ChannelRemove(node.id)),
+									NodeType::Track => Some(Message::TrackRemove(node.id)),
+								}),
+							]
+							.spacing(5),
+							row![
+								icon_button(
+									if node.bypassed { power_off() } else { power() },
+									button_style(node.bypassed)
+								)
+								.on_press(Message::ChannelToggleBypassed(node.id)),
+								icon_button(
+									arrow_up_down(),
+									button_style(node.volume.is_sign_negative())
+								)
+								.on_press(Message::ChannelVolumeChanged(node.id, -node.volume)),
+								icon_button(
+									if node.pan.is_balance() {
+										chevrons_left_right_ellipsis()
+									} else {
+										circle_ellipsis()
+									},
+									button_style(false),
+								)
+								.on_press(Message::ChannelPanChanged(
+									node.id,
+									if node.pan.is_balance() {
+										PanMode::Stereo(-1.0, 1.0)
+									} else {
+										PanMode::Balance(0.0)
+									},
+								))
+							]
+							.spacing(5),
+							center_x(text(format_db(node.volume.abs())).line_height(1.0))
+								.style(weak_bordered_box)
+								.padding(2),
+							row![
+								column![
+									space().height(7),
+									row![
+										PeakMeter::new(&node.peaks[0]).width(16.0),
+										PeakMeter::new(&node.peaks[1]).width(16.0),
+									]
+									.spacing(3),
+									container((node.ty == NodeType::Track).then(|| {
+										container(space().width(35).height(3)).style(
+											container_with_radius(
+												if node.polyphony > 0 {
+													container::primary
+												} else {
+													container::secondary
+												},
+												border::bottom(f32::INFINITY),
+											),
+										)
+									}))
+									.height(7)
+								]
+								.spacing(3),
+								vertical_slider(0.0..=MAX_VOL, node.volume.abs().cbrt(), |v| {
+									Message::ChannelVolumeChanged(
+										node.id,
+										v.powi(3).copysign(node.volume),
+									)
+								})
+								.default(1.0)
+								.width(17)
+								.step(f32::EPSILON)
+								.handle((15, 20))
+								.style(slider_with_radius(
+									if node.enabled {
+										slider::default
+									} else {
+										slider_secondary
+									},
+									5
+								)),
 							]
 							.spacing(3),
-							container((node.ty == NodeType::Track).then(|| {
-								container(space().width(35).height(3)).style(container_with_radius(
-									if node.polyphony > 0 {
-										container::primary
-									} else {
-										container::secondary
-									},
-									border::bottom(f32::INFINITY),
-								))
-							}))
-							.height(7)
-						]
-						.spacing(3),
-						vertical_slider(0.0..=MAX_VOL, node.volume.abs().cbrt(), |v| {
-							Message::ChannelVolumeChanged(node.id, v.powi(3).copysign(node.volume))
-						})
-						.default(1.0)
-						.width(17)
-						.step(f32::EPSILON)
-						.handle((15, 20))
-						.style(slider_with_radius(
-							if node.enabled {
-								slider::default
-							} else {
-								slider_secondary
-							},
-							5
-						)),
-					]
-					.spacing(3),
-					{
-						let incoming = self.arrangement.outgoing(node.id).get(&self.selected);
-						let outgoing = self.arrangement.outgoing(self.selected).get(&node.id);
+							{
+								let incoming =
+									self.arrangement.outgoing(node.id).get(&self.selected);
+								let outgoing =
+									self.arrangement.outgoing(self.selected).get(&node.id);
 
-						let down = |r: border::Radius| {
-							button(chevron_down())
-								.padding(0)
-								.style(button_with_radius(
-									if node.enabled && incoming.is_some() {
-										button::primary
-									} else {
-										button::secondary
-									},
-									r,
-								))
-								.on_press_maybe(if outgoing.is_some() {
-									None
-								} else if incoming.is_some() {
-									Some(Message::Disconnect(node.id, self.selected))
-								} else {
-									Some(Message::Connect(node.id, self.selected))
-								})
-						};
+								let down = |r: border::Radius| {
+									button(chevron_down())
+										.padding(0)
+										.style(button_with_radius(
+											if node.enabled && incoming.is_some() {
+												button::primary
+											} else {
+												button::secondary
+											},
+											r,
+										))
+										.on_press_maybe(if outgoing.is_some() {
+											None
+										} else if incoming.is_some() {
+											Some(Message::Disconnect(node.id, self.selected))
+										} else {
+											Some(Message::Connect(node.id, self.selected))
+										})
+								};
 
-						let up = |r: border::Radius| {
-							button(chevron_up())
-								.padding(0)
-								.style(button_with_radius(
-									if node.enabled && outgoing.is_some() {
-										button::primary
-									} else {
-										button::secondary
-									},
-									r,
-								))
-								.on_press_maybe(if incoming.is_some() {
-									None
-								} else if outgoing.is_some() {
-									Some(Message::Disconnect(self.selected, node.id))
-								} else {
-									Some(Message::Connect(self.selected, node.id))
-								})
-						};
+								let up = |r: border::Radius| {
+									button(chevron_up())
+										.padding(0)
+										.style(button_with_radius(
+											if node.enabled && outgoing.is_some() {
+												button::primary
+											} else {
+												button::secondary
+											},
+											r,
+										))
+										.on_press_maybe(if incoming.is_some() {
+											None
+										} else if outgoing.is_some() {
+											Some(Message::Disconnect(self.selected, node.id))
+										} else {
+											Some(Message::Connect(self.selected, node.id))
+										})
+								};
 
-						column![
-							incoming
-								.map(|val| (val, node.id, self.selected))
-								.or_else(|| outgoing.map(|val| (val, self.selected, node.id)))
-								.map(|(val, from, to)| {
-									slider(0.0..=1.0, val.cbrt(), move |val| {
-										Message::SetMix(from, to, val.powi(3))
-									})
-									.default(1.0)
-									.step(f32::EPSILON)
-									.handle((4, 4))
-								}),
-							if node.id == self.selected {
-								row![]
-							} else {
-								match (node.ty, self.arrangement.node(self.selected).ty) {
-									(NodeType::Track, NodeType::Track) => row![],
-									(_, NodeType::Master)
-									| (NodeType::Track, NodeType::Channel) => {
-										row![down(border::radius(5))]
+								column![
+									incoming
+										.map(|val| (val, node.id, self.selected))
+										.or_else(|| outgoing.map(|val| (
+											val,
+											self.selected,
+											node.id
+										)))
+										.map(|(val, from, to)| {
+											slider(0.0..=1.0, val.cbrt(), move |val| {
+												Message::SetMix(from, to, val.powi(3))
+											})
+											.default(1.0)
+											.step(f32::EPSILON)
+											.handle((4, 4))
+										}),
+									if node.id == self.selected {
+										row![]
+									} else {
+										match (node.ty, self.arrangement.node(self.selected).ty) {
+											(NodeType::Track, NodeType::Track) => row![],
+											(_, NodeType::Master)
+											| (NodeType::Track, NodeType::Channel) => {
+												row![down(border::radius(5))]
+											}
+											(NodeType::Master, _) | (_, NodeType::Track) => {
+												row![up(border::radius(5))]
+											}
+											_ => row![down(border::left(5)), up(border::right(5))],
+										}
 									}
-									(NodeType::Master, _) | (_, NodeType::Track) => {
-										row![up(border::radius(5))]
-									}
-									_ => row![down(border::left(5)), up(border::right(5))],
-								}
+									.height(LINE_HEIGHT)
+								]
+								.align_x(Center)
+								.spacing(3)
 							}
-							.height(LINE_HEIGHT)
 						]
 						.align_x(Center)
-						.spacing(3)
-					}
-				]
-				.align_x(Center)
-				.spacing(5),
+						.spacing(5),
+					)
+					.id(node.widget_id.clone())
+					.padding(5)
+				)
+				.interaction(Interaction::Pointer)
+				.on_press(Message::ChannelSelect(node.id)),
 			)
-			.id(node.widget_id.clone())
-			.padding(5)
-			.style(|t| {
-				let mut style = weakest_bordered_box(t);
-				if node.id == self.selected {
-					style.border.width = 1.5;
-					style.border.color = t.palette().primary.base.color;
-				}
-				style
-			}),
-		)
-		.interaction(Interaction::Pointer)
-		.on_press(Message::ChannelSelect(node.id))
+		])
+		.width(65)
+		.style(|t| {
+			let mut style = container_with_radius(weakest_bordered_box, border::top(5))(t);
+			if node.id == self.selected {
+				style.border.width = 1.5;
+				style.border.color = t.palette().primary.base.color;
+			}
+			style
+		})
 		.into()
 	}
 
@@ -2116,6 +2151,7 @@ impl ArrangementView {
 			NodeType::Channel => self
 				.arrangement
 				.channels()
+				.iter()
 				.rev()
 				.skip_while(|channel| channel.id != self.selected)
 				.nth(1)
@@ -2132,7 +2168,12 @@ impl ArrangementView {
 				.tracks()
 				.first()
 				.map(|track| track.id)
-				.or_else(|| self.arrangement.channels().next().map(|channel| channel.id))
+				.or_else(|| {
+					self.arrangement
+						.channels()
+						.first()
+						.map(|channel| channel.id)
+				})
 				.unwrap_or(self.selected),
 			NodeType::Track => self
 				.arrangement
@@ -2141,11 +2182,17 @@ impl ArrangementView {
 				.skip_while(|track| track.id != self.selected)
 				.nth(1)
 				.map(|track| track.id)
-				.or_else(|| self.arrangement.channels().next().map(|channel| channel.id))
+				.or_else(|| {
+					self.arrangement
+						.channels()
+						.first()
+						.map(|channel| channel.id)
+				})
 				.unwrap_or(self.selected),
 			NodeType::Channel => self
 				.arrangement
 				.channels()
+				.iter()
 				.skip_while(|&channel| channel.id != self.selected)
 				.nth(1)
 				.map_or(self.selected, |channel| channel.id),

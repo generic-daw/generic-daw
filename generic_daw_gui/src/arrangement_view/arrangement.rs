@@ -1,6 +1,7 @@
 use crate::{
 	arrangement_view::{
 		self,
+		channel::Channel,
 		clip::Clip,
 		midi_clip::MidiClip,
 		midi_pattern::{MidiPattern, MidiPatternPair},
@@ -50,8 +51,9 @@ pub struct Arrangement {
 	midi_patterns: BTreeMap<MidiPatternId, MidiPattern>,
 
 	tracks: Vec<Track>,
-	nodes: BTreeMap<NodeId, (Node, BTreeMap<NodeId, f32>)>,
+	channels: Vec<Channel>,
 	master: NodeId,
+	nodes: BTreeMap<NodeId, (Node, BTreeMap<NodeId, f32>)>,
 
 	producer: Producer<Message>,
 	_stream: NoDebug<Stream>,
@@ -80,8 +82,9 @@ impl Arrangement {
 				midi_patterns: BTreeMap::new(),
 
 				tracks: Vec::new(),
-				nodes,
+				channels: Vec::new(),
 				master,
+				nodes,
 
 				producer,
 				_stream: stream.into(),
@@ -298,6 +301,10 @@ impl Arrangement {
 		self.tracks.iter().position(|t| t.id == id)
 	}
 
+	pub fn channel_of(&self, id: NodeId) -> Option<usize> {
+		self.channels.iter().position(|c| c.id == id)
+	}
+
 	pub fn plugin_of(&self, id: PluginId) -> Option<(NodeId, usize)> {
 		self.nodes
 			.values()
@@ -328,10 +335,8 @@ impl Arrangement {
 		}
 	}
 
-	pub fn channels(&self) -> impl DoubleEndedIterator<Item = &Node> {
-		self.nodes
-			.values()
-			.filter_map(|(node, _)| (node.ty == NodeType::Channel).then_some(node))
+	pub fn channels(&self) -> &[Channel] {
+		&self.channels
 	}
 
 	pub fn node(&self, id: NodeId) -> &Node {
@@ -357,18 +362,29 @@ impl Arrangement {
 		id
 	}
 
-	pub fn add_channel(&mut self) -> NodeId {
-		self.add(generic_daw_core::Channel::default(), NodeType::Channel)
-	}
-
-	pub fn remove_channel(&mut self, id: NodeId) -> Node {
-		debug_assert!(self.track_of(id).is_none());
+	fn remove(&mut self, id: NodeId) -> Node {
 		let node = self.nodes.remove(&id).unwrap().0;
 		for (_, outgoing) in self.nodes.values_mut() {
 			outgoing.remove(&id);
 		}
 		self.send(Message::NodeRemove(id));
 		node
+	}
+
+	pub fn add_channel(&mut self) -> NodeId {
+		let id = self.add(generic_daw_core::Channel::default(), NodeType::Channel);
+		self.channels.push(Channel::new(id));
+		id
+	}
+
+	pub fn remove_channel(&mut self, id: NodeId) -> Node {
+		let idx = self.channel_of(id).unwrap();
+		self.channels.remove(idx);
+		self.remove(id)
+	}
+
+	pub fn move_channel(&mut self, channel: usize, new_channel: usize) {
+		self.channels.shift_move(channel, new_channel);
 	}
 
 	pub fn insert_track(&mut self, idx: usize) -> usize {
@@ -380,7 +396,7 @@ impl Arrangement {
 	pub fn remove_track(&mut self, id: NodeId) {
 		let idx = self.track_of(id).unwrap();
 		let track = self.tracks.remove(idx);
-		self.remove_channel(id);
+		self.remove(id);
 		for clip in track.clips {
 			match clip {
 				Clip::Audio(clip) => self.samples.get_mut(&clip.sample).unwrap().refs -= 1,

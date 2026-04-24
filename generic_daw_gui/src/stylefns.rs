@@ -3,7 +3,7 @@ use iced::{
 	overlay::menu,
 	widget::{button, container, pick_list, progress_bar, scrollable, slider},
 };
-use sweeten::widget::column;
+use sweeten::widget::{column, row};
 
 pub fn container_with_radius(
 	f: impl Fn(&Theme) -> container::Style,
@@ -114,6 +114,25 @@ pub fn split_style(t: &Theme) -> iced_split::Style {
 		radius: 1.5.into(),
 	};
 	style
+}
+
+pub fn sweeten_row_style(t: &Theme) -> row::Style {
+	let mut style = row::default(t);
+	style.scale = 1.0;
+	style.moved_item_overlay = Color::TRANSPARENT;
+	style
+}
+
+pub fn sweeten_row_with_radius(
+	f: impl Fn(&Theme) -> row::Style,
+	r: impl Into<border::Radius>,
+) -> impl Fn(&Theme) -> row::Style {
+	let r = r.into();
+	move |t| {
+		let mut style = f(t);
+		style.ghost_border.radius = r;
+		style
+	}
 }
 
 pub fn sweeten_column_style(t: &Theme) -> column::Style {

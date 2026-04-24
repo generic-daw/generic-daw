@@ -142,7 +142,9 @@ impl Arrangement {
 		}
 
 		let mut channels = HashMap::new();
-		for channel in once(self.master()).chain(self.channels()) {
+		for channel in
+			once(self.master()).chain(self.channels().iter().map(|channel| self.node(channel.id)))
+		{
 			channels.insert(
 				channel.id,
 				writer.push_channel(

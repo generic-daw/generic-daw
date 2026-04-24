@@ -22,6 +22,7 @@ static GLYPHS: &[(&str, char, f32)] = &[
 	icon!(chevron_up = 57456),
 	icon!(cpu = 57513),
 	icon!(file = 57536),
+	icon!(grip_horizontal = 57578),
 	icon!(grip_vertical = 57579),
 	icon!(mic = 57624),
 	icon!(pause = 57646),
