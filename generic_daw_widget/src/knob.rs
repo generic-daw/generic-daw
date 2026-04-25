@@ -349,7 +349,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 						ScrollDelta::Pixels { y, .. } => y / 60.0,
 					} * (self.info.range.end() - self.info.range.start())
 						* if modifiers.command() { 10.0 } else { 1.0 }
-						/ 101.0 + state.scroll;
+						/ 100.0 + state.scroll;
 
 					if self.info.stepped {
 						state.scroll = diff - diff.round();
