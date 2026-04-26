@@ -22,7 +22,7 @@ pub enum Message {
 #[derive(Clone, Debug)]
 pub enum Action {
 	DirToggleOpen,
-	DirOpened(Box<[Dir]>, Box<[File]>),
+	DirLoaded(Result<(Box<[Dir]>, Box<[File]>), Arc<std::io::Error>>),
 }
 
 #[derive(Debug)]
@@ -40,12 +40,13 @@ impl FileTree {
 	pub fn view(&self) -> Element<'_, Message> {
 		container(
 			scrollable(column(self.dirs.iter().map(|dir| dir.view().0)))
+				.width(Fill)
+				.height(Fill)
 				.spacing(5)
 				.style(scrollable_style),
 		)
 		.style(weakest_bordered_box)
 		.padding(padding::all(1).left(0))
-		.height(Fill)
 		.into()
 	}
 

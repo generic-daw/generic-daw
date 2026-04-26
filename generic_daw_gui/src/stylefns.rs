@@ -27,6 +27,25 @@ pub fn weakest_bordered_box(t: &Theme) -> container::Style {
 		.border(border::width(1).color(t.palette().background.strong.color))
 }
 
+pub fn button_warning_text(theme: &Theme, status: button::Status) -> button::Style {
+	let base = button::Style {
+		text_color: theme.palette().warning.base.color,
+		..button::Style::default()
+	};
+
+	match status {
+		button::Status::Active | button::Status::Pressed => base,
+		button::Status::Hovered => button::Style {
+			text_color: base.text_color.scale_alpha(0.8),
+			..base
+		},
+		button::Status::Disabled => button::Style {
+			text_color: base.text_color.scale_alpha(0.5),
+			..base
+		},
+	}
+}
+
 pub fn button_with_radius(
 	f: impl Fn(&Theme, button::Status) -> button::Style,
 	r: impl Into<border::Radius>,

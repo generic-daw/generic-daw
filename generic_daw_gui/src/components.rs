@@ -1,6 +1,7 @@
 use crate::{
 	icons::{Icon, LUCIDE_FONT, chevron_down, chevron_up, move_vertical},
 	stylefns::{button_with_radius, container_with_radius, weakest_bordered_box},
+	widget::LINE_HEIGHT,
 };
 use generic_daw_widget::drag_handle::DragHandle;
 use iced::{
@@ -9,21 +10,39 @@ use iced::{
 };
 
 pub fn icon_button<'a, Message: 'a>(
-	t: Icon,
+	i: Icon,
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
 ) -> Button<'a, Message> {
-	button(t.size(13.0))
+	button(i.size(13.0))
 		.style(button_with_radius(style, 0))
 		.padding(1)
 }
 
 pub fn text_icon_button<'a, Message: 'a>(
-	t: impl text::IntoFragment<'a>,
+	i: impl text::IntoFragment<'a>,
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
 ) -> Button<'a, Message> {
-	button(container(text(t).size(13).line_height(1.0)).center_x(13))
+	button(container(text(i).size(13).line_height(1.0)).center_x(13))
 		.style(button_with_radius(style, 0))
 		.padding(1)
+}
+
+pub fn labeled_icon_button<'a, Message: 'a>(
+	i: Icon,
+	l: impl text::IntoFragment<'a>,
+	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
+) -> Button<'a, Message> {
+	button(
+		row![
+			i.size(LINE_HEIGHT),
+			text(l)
+				.wrapping(text::Wrapping::None)
+				.ellipsis(text::Ellipsis::End)
+		]
+		.spacing(2),
+	)
+	.style(button_with_radius(style, 0))
+	.padding(1)
 }
 
 pub fn number_input<'a, Message: Clone + 'a>(

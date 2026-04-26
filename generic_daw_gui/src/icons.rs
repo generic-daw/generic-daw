@@ -179,6 +179,14 @@ pub const fn square() -> Icon {
 	}
 }
 
+pub const fn triangle_alert() -> Icon {
+	Icon {
+		glyph: '\u{e193}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
 pub const fn volume_2() -> Icon {
 	Icon {
 		glyph: '\u{e1ab}',
@@ -214,6 +222,14 @@ pub const fn arrow_big_right() -> Icon {
 pub const fn power_off() -> Icon {
 	Icon {
 		glyph: '\u{e209}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn hourglass() -> Icon {
+	Icon {
+		glyph: '\u{e296}',
 		size: LINE_HEIGHT,
 		offset: 0.05,
 	}
