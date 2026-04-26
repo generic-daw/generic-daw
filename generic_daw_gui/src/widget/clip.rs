@@ -408,8 +408,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			Inner::AudioClip(inner) => {
 				if cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
-						let stretch =
-							inner.clip.stretch / inner.sample.resample_ratio(self.transport);
+						let resample_ratio = inner.sample.resample_ratio(self.transport).recip();
+						let stretch = inner.clip.stretch * resample_ratio;
 
 						let position = OffsetBeatRange::new(
 							BeatRange::new(
@@ -418,7 +418,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 									+ (inner.clip.position.len() * stretch)
 										.to_beat_time(self.transport),
 							),
-							inner.clip.position.offset().to_beat_time(self.transport),
+							(inner.clip.position.offset() * resample_ratio)
+								.to_beat_time(self.transport),
 						);
 
 						inner.sample.lods.mesh(
@@ -491,20 +492,18 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			Inner::Recording(inner) => {
 				if cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
-						let stretch = 1.0 / inner.core.resample_ratio(self.transport);
-
 						let position = BeatRange::new(
 							inner.position,
 							inner.position + inner.len(self.transport),
 						)
-						.stretch(stretch)
 						.into();
 
 						inner.lods.mesh(
 							inner.core.samples(),
 							self.transport,
 							position,
-							playlist.scale.x + stretch.log2(),
+							playlist.scale.x
+								+ inner.core.resample_ratio(self.transport).recip().log2(),
 							height,
 							theme.palette().background.strong.text,
 							lower_bounds.size(),

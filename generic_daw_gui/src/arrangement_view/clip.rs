@@ -24,7 +24,7 @@ impl Clip {
 
 	pub fn offset(&self, transport: &Transport) -> BeatTime {
 		match self {
-			Self::Audio(clip) => clip.position.offset().to_beat_time(transport) / clip.stretch,
+			Self::Audio(clip) => (clip.position.offset() / clip.stretch).to_beat_time(transport),
 			Self::Midi(clip) => clip.position.offset(),
 		}
 	}

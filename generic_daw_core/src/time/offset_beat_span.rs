@@ -46,11 +46,11 @@ impl OffsetBeatSpan {
 
 	pub fn trim_start_to(&mut self, new_start: BeatTime, transport: &Transport, stretch: f32) {
 		let old_start = self.start();
-		let min_start = old_start.saturating_sub(self.offset().to_beat_time(transport) / stretch);
+		let min_start = old_start.saturating_sub((self.offset() / stretch).to_beat_time(transport));
 		self.position
 			.trim_start_to(new_start.max(min_start), transport);
 		let new_start = self.start();
-		let diff = new_start.abs_diff(old_start).to_seconds_time(transport) * stretch;
+		let diff = (new_start.abs_diff(old_start) * stretch).to_seconds_time(transport);
 		if old_start < new_start {
 			self.offset += diff;
 		} else {

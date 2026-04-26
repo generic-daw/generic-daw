@@ -12,7 +12,7 @@ impl AudioClip {
 	pub fn process(&self, state: &State, audio: &mut [f32]) {
 		debug_assert!(state.transport.playing);
 
-		let (start, _, offset) = self.position.to_samples(&state.transport);
+		let start = self.position.start().to_samples(&state.transport);
 
 		let write_start =
 			start.saturating_sub(state.transport.position.to_samples(&state.transport));
@@ -29,7 +29,11 @@ impl AudioClip {
 
 		let sample = &state.samples[&self.sample];
 
-		let resample_ratio = sample.resample_ratio(&state.transport) * self.stretch;
+		let resample_ratio = sample.resample_ratio(&state.transport);
+
+		let offset = (self.position.offset() * resample_ratio).to_samples(&state.transport);
+
+		let resample_ratio = self.stretch * resample_ratio;
 
 		let read_start = offset.min(sample.samples.len());
 		let read_len = sample
