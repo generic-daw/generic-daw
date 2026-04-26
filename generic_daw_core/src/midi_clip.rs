@@ -44,7 +44,8 @@ impl MidiClip {
 			})
 			.for_each(|note| {
 				let (start, end) = note.position.to_samples(&state.transport);
-				if (start..end).contains(&state.transport.position.to_samples(&state.transport))
+				if start < state.transport.position.to_samples(&state.transport)
+					&& end > state.transport.position.to_samples(&state.transport)
 					&& !voice_alloc.activate((self.id, note.id), note)
 				{
 					alloc_or_steal(events, voice_alloc, (self.id, note.id), note, 0);
