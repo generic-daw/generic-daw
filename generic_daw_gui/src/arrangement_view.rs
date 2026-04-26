@@ -516,7 +516,7 @@ impl ArrangementView {
 
 				let track = self.arrangement.track_of(node).unwrap();
 				self.arrangement.remove_track(node);
-				self.update_selection(|c| update_selection_delete(c, track, None));
+				self.update_selection(|c| update_selection_delete_track(c, track));
 
 				if self
 					.recording
@@ -533,7 +533,9 @@ impl ArrangementView {
 				} = event && index != target_index
 				{
 					self.arrangement.move_track(index, target_index);
-					self.update_selection(|c| Some(update_selection_move(c, index, target_index)));
+					self.update_selection(|c| {
+						Some(update_selection_move_track(c, index, target_index))
+					});
 				}
 			}
 			Message::TrackToggleEnabled(node) => {
@@ -640,7 +642,7 @@ impl ArrangementView {
 					.insert_track(self.arrangement.track_of(node).unwrap() + 1);
 				let track_id = self.arrangement.tracks()[track].id;
 
-				self.update_selection(|c| Some(update_selection_insert(c, track, None)));
+				self.update_selection(|c| Some(update_selection_insert_track(c, track)));
 
 				let clip = self.arrangement.add_clip(track, clip);
 				self.playlist.get_mut().primary.insert((track, clip));
@@ -1186,7 +1188,7 @@ impl ArrangementView {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
 				sorted.sort_unstable_by_key(|&(_, c)| Reverse(c));
 				for (track, clip) in sorted {
-					self.update_selection(|c| update_selection_delete(c, track, Some(clip)));
+					self.update_selection(|c| update_selection_delete_clip(c, track, clip));
 
 					let clip = self.arrangement.remove_clip(track, clip);
 					self.arrangement.gc(clip);
@@ -2208,57 +2210,19 @@ impl ArrangementView {
 	}
 }
 
-fn update_selection_insert(
-	(ct, cc): (usize, usize),
-	track: usize,
-	clip: Option<usize>,
-) -> (usize, usize) {
-	clip.map_or_else(
-		|| match ct.cmp(&track) {
-			Ordering::Less => (ct, cc),
-			Ordering::Equal | Ordering::Greater => (ct + 1, cc),
-		},
-		|clip| match ct.cmp(&track) {
-			Ordering::Less => match cc.cmp(&clip) {
-				Ordering::Less => (ct, cc),
-				Ordering::Equal | Ordering::Greater => (ct, cc + 1),
-			},
-			Ordering::Equal | Ordering::Greater => match cc.cmp(&clip) {
-				Ordering::Less => (ct + 1, cc),
-				Ordering::Equal | Ordering::Greater => (ct + 1, cc + 1),
-			},
-		},
-	)
+fn update_selection_insert_track((ct, cc): (usize, usize), track: usize) -> (usize, usize) {
+	(if ct < track { ct } else { ct + 1 }, cc)
 }
 
-fn update_selection_delete(
-	(ct, cc): (usize, usize),
-	track: usize,
-	clip: Option<usize>,
-) -> Option<(usize, usize)> {
-	clip.map_or_else(
-		|| match ct.cmp(&track) {
-			Ordering::Less => Some((ct, cc)),
-			Ordering::Equal => None,
-			Ordering::Greater => Some((ct - 1, cc)),
-		},
-		|clip| match ct.cmp(&track) {
-			Ordering::Less => match cc.cmp(&clip) {
-				Ordering::Less => Some((ct, cc)),
-				Ordering::Equal => None,
-				Ordering::Greater => Some((ct, cc - 1)),
-			},
-			Ordering::Equal => None,
-			Ordering::Greater => match cc.cmp(&clip) {
-				Ordering::Less => Some((ct - 1, cc)),
-				Ordering::Equal => None,
-				Ordering::Greater => Some((ct - 1, cc - 1)),
-			},
-		},
-	)
+fn update_selection_delete_track((ct, cc): (usize, usize), track: usize) -> Option<(usize, usize)> {
+	match ct.cmp(&track) {
+		Ordering::Less => Some((ct, cc)),
+		Ordering::Equal => None,
+		Ordering::Greater => Some((ct - 1, cc)),
+	}
 }
 
-fn update_selection_move(
+fn update_selection_move_track(
 	(ct, cc): (usize, usize),
 	track: usize,
 	new_track: usize,
@@ -2268,6 +2232,22 @@ fn update_selection_move(
 		(Ordering::Equal, _) => (new_track, cc),
 		(Ordering::Less, Ordering::Equal | Ordering::Greater) => (ct + 1, cc),
 		(Ordering::Greater, Ordering::Less | Ordering::Equal) => (ct - 1, cc),
+	}
+}
+
+fn update_selection_delete_clip(
+	(ct, cc): (usize, usize),
+	track: usize,
+	clip: usize,
+) -> Option<(usize, usize)> {
+	if ct == track {
+		match cc.cmp(&clip) {
+			Ordering::Less => Some((ct, cc)),
+			Ordering::Equal => None,
+			Ordering::Greater => Some((ct, cc - 1)),
+		}
+	} else {
+		Some((ct, cc))
 	}
 }
 
