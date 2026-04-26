@@ -83,16 +83,19 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			let buffers = entry.read_buffers_uncontended();
 
 			let indegree = buffers.incoming.len();
-			entry.indegree.store(indegree, Relaxed);
-			if indegree == 0 {
-				this.queue.push(node).unwrap();
-			}
+			if entry.indegree.swap(indegree, Relaxed) == usize::MAX {
+				if indegree == 0 {
+					this.queue.push(node).unwrap();
+				}
 
-			1 + buffers
-				.incoming
-				.keys()
-				.map(|&node| visit(this, node))
-				.sum::<usize>()
+				1 + buffers
+					.incoming
+					.keys()
+					.map(|&node| visit(this, node))
+					.sum::<usize>()
+			} else {
+				0
+			}
 		}
 
 		self.curr_len = len;
