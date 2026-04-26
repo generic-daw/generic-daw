@@ -142,6 +142,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			let viewport = right_viewport.expand(padding::top(LINE_HEIGHT));
 
 			if let Some(cursor) = cursor.position_in(viewport) {
+				state.autoscroll_start = None;
+				state.last_autoscroll = None;
 				break 'block cursor;
 			}
 
@@ -150,8 +152,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			}
 
 			let Some(cursor) = cursor.position_from(viewport.position()) else {
-				state.status = Status::None;
-				shell.request_redraw();
 				return;
 			};
 
@@ -164,11 +164,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				cursor.y.clamp(0.0, viewport.height),
 			);
 
-			if cursor == clamped {
-				state.autoscroll_start = None;
-				state.last_autoscroll = None;
-				break 'block clamped;
-			}
+			debug_assert_ne!(cursor, clamped);
 
 			shell.request_redraw();
 

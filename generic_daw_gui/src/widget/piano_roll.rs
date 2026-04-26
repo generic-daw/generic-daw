@@ -138,6 +138,8 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 		let cursor = 'block: {
 			if let Some(cursor) = cursor.position_in(*viewport) {
+				state.autoscroll_start = None;
+				state.last_autoscroll = None;
 				break 'block cursor;
 			}
 
@@ -146,8 +148,6 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			}
 
 			let Some(cursor) = cursor.position_from(viewport.position()) else {
-				state.finish();
-				shell.request_redraw();
 				return;
 			};
 
@@ -156,11 +156,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				cursor.y.clamp(0.0, viewport.height),
 			);
 
-			if cursor == clamped {
-				state.autoscroll_start = None;
-				state.last_autoscroll = None;
-				break 'block clamped;
-			}
+			debug_assert_ne!(cursor, clamped);
 
 			shell.request_redraw();
 
