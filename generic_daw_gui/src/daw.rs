@@ -549,7 +549,11 @@ impl Daw {
 				self.arrangement_view.end_recording();
 			}
 			Message::Stop => {
+				let before = self.arrangement_view.arrangement.transport().position;
 				self.arrangement_view.arrangement.stop();
+				let after = self.arrangement_view.arrangement.transport().position;
+				self.arrangement_view
+					.autoscroll(before, after, &self.config, &mut self.state);
 				self.arrangement_view.end_recording();
 			}
 			Message::ToggleShowSeconds => {

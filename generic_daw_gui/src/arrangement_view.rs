@@ -32,7 +32,7 @@ use audio_clip::AudioClip;
 use generic_daw_core::{
 	Batch, MidiKey, MidiNote, MidiNoteId, MidiPatternId, NodeId, PanMode, PluginId, SampleId,
 	clap_host::PluginDescriptor,
-	time::{BeatRange, BeatTime},
+	time::{BeatRange, BeatTime, SecondsTime},
 };
 use generic_daw_widget::{
 	knob::Knob,
@@ -246,38 +246,7 @@ impl ArrangementView {
 
 				let after = self.arrangement.transport().position;
 
-				if state.autoscroll && after != before {
-					match self.tab {
-						Tab::Playlist => {
-							let pos_diff = Vector::new(
-								(after.to_samples(self.arrangement.transport()) as f32
-									- before.to_samples(self.arrangement.transport()) as f32)
-									/ self.playlist.get_mut().scale.x.exp2(),
-								0.0,
-							);
-							return Action::batch([
-								action,
-								self.handle_playlist_action(
-									playlist::Action::Pan(pos_diff, 0.0),
-									config,
-									state,
-								),
-							]);
-						}
-						Tab::Mixer => {}
-						Tab::PianoRoll => {
-							let pos_diff = Vector::new(
-								(after.to_samples(self.arrangement.transport()) as f32
-									- before.to_samples(self.arrangement.transport()) as f32)
-									/ self.piano_roll.get_mut().scale.x.exp2(),
-								0.0,
-							);
-							self.handle_piano_roll_action(piano_roll::Action::Pan(
-								pos_diff, 0.0, 0.0,
-							));
-						}
-					}
-				}
+				self.autoscroll(before, after, config, state);
 
 				return action;
 			}
@@ -2109,6 +2078,25 @@ impl ArrangementView {
 				_ => None,
 			},
 			_ => None,
+		}
+	}
+
+	pub fn autoscroll(
+		&mut self,
+		before: SecondsTime,
+		after: SecondsTime,
+		config: &Config,
+		state: &mut State,
+	) {
+		if state.autoscroll && after != before {
+			let pos_diff = Vector::new(
+				(after.to_samples(self.arrangement.transport()) as f32
+					- before.to_samples(self.arrangement.transport()) as f32)
+					/ self.playlist.get_mut().scale.x.exp2(),
+				0.0,
+			);
+
+			_ = self.handle_playlist_action(playlist::Action::Pan(pos_diff, 0.0), config, state);
 		}
 	}
 

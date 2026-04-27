@@ -6,6 +6,7 @@ enum Storage<Instruction> {
 	Many(Vec<Instruction>),
 }
 
+#[must_use = "`Action`s must be `handle`d to take effect."]
 pub struct Action<Instruction, Message> {
 	instruction: Storage<Instruction>,
 	task: Task<Message>,
