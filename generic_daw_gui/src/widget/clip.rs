@@ -440,7 +440,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			Inner::MidiClip(inner) => 'blk: {
 				debug_assert!(cache.is_empty());
 
-				if inner.pattern.notes.is_empty() {
+				if lower_bounds.width < 1.0 || inner.pattern.notes.is_empty() {
 					break 'blk;
 				}
 
