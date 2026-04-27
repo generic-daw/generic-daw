@@ -217,7 +217,8 @@ fn mesh(
 	}
 
 	let color = color::pack(color);
-	let jitter_correct = -(offset as f32 / samples_per_mesh_slice).fract() * px_per_mesh_slice;
+	let jitter_correct = ((lod_start as f32 - lod_start_f) / lod_slices_per_px)
+		- (offset as f32 / samples_per_mesh_slice).fract() * px_per_mesh_slice;
 	let vertices = saved_lod.map_or_else(
 		|| {
 			vertices(
