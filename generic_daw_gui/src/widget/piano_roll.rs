@@ -461,7 +461,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				.map(|((child, tree), layout)| {
 					child.mouse_interaction(tree, layout, cursor, viewport, renderer)
 				})
-				.find(|&i| i != Interaction::default())
+				.rfind(|&i| i != Interaction::default())
 				.unwrap_or_default(),
 		}
 	}

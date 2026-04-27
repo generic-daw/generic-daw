@@ -86,11 +86,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 			.iter()
 			.zip(&tree.children)
 			.zip(layout.children())
-			.rev()
 			.map(|((child, tree), clip_layout)| {
 				child.mouse_interaction(tree, clip_layout, cursor, viewport, renderer)
 			})
-			.find(|&i| i != Interaction::default())
+			.rfind(|&i| i != Interaction::default())
 			.unwrap_or_default()
 	}
 
