@@ -64,7 +64,7 @@ impl FixedPoint {
 
 	#[must_use]
 	pub const fn ceil(mut self, modulo: Self) -> Self {
-		self.0 += (modulo.0 - (self.0 % modulo.0)) % modulo.0;
+		self.0 = self.0.next_multiple_of(modulo.0);
 		self
 	}
 

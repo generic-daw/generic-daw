@@ -204,8 +204,11 @@ fn mesh(
 	let view_len_f = view_len_f.min(clipped_size.width * lod_slices_per_px);
 	let lod_end_f = lod_start_f + view_len_f;
 
-	let lod_start = lod_start_f as usize / lod_slices_per_mesh_slice * lod_slices_per_mesh_slice;
-	let lod_end = lod_end_f as usize / lod_slices_per_mesh_slice * lod_slices_per_mesh_slice;
+	let lod_start = lod_start_f.ceil() as usize;
+	let lod_end = lod_end_f as usize;
+
+	let lod_start = lod_start.next_multiple_of(lod_slices_per_mesh_slice);
+	let lod_end = lod_end - lod_end % lod_slices_per_mesh_slice;
 
 	let lod_len = saved_lod.map_or(samples.len() / 2, |saved_lod| {
 		lods[saved_lod].as_ref().len()
@@ -217,8 +220,7 @@ fn mesh(
 	}
 
 	let color = color::pack(color);
-	let jitter_correct = ((lod_start as f32 - lod_start_f) / lod_slices_per_px)
-		- (offset as f32 / samples_per_mesh_slice).fract() * px_per_mesh_slice;
+	let jitter_correct = (lod_start as f32 - lod_start_f) / lod_slices_per_px;
 	let vertices = saved_lod.map_or_else(
 		|| {
 			vertices(
