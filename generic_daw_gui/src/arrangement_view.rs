@@ -955,7 +955,7 @@ impl ArrangementView {
 					1.0,
 					(self.arrangement.transport().sample_rate.get() as f32).log2(),
 				);
-				scale.y = scale.y.clamp(46.0, 200.0);
+				scale.y = scale.y.clamp(45.0, 165.0);
 
 				let pos_diff = Vector::new(
 					(cursor.x + position.x) * ((old_scale.x - scale.x).exp2() - 1.0),
