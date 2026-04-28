@@ -1,6 +1,6 @@
 use crate::{
-	Event, MidiNote, MidiNoteId, MidiPatternId, VoiceAlloc, audio_processor::State,
-	time::OffsetBeatRange,
+	Event, MidiKey, MidiNote, MidiNoteId, MidiPatternId, audio_processor::State,
+	time::OffsetBeatRange, voice_alloc::VoiceAlloc,
 };
 use clap_host::events::Match;
 use utils::unique_id;
@@ -8,6 +8,7 @@ use utils::unique_id;
 unique_id!(midi_clip_id);
 
 pub use midi_clip_id::Id as MidiClipId;
+pub type VoiceId = (MidiClipId, MidiNoteId, MidiKey);
 
 #[derive(Clone, Copy, Debug)]
 pub struct MidiClip {
@@ -22,7 +23,7 @@ impl MidiClip {
 		state: &State,
 		audio: &[f32],
 		events: &mut Vec<Event>,
-		voice_alloc: &mut VoiceAlloc,
+		voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
 	) {
 		debug_assert!(state.transport.playing);
 
@@ -46,9 +47,9 @@ impl MidiClip {
 				let (start, end) = note.position.to_samples(&state.transport);
 				if start < state.transport.position.to_samples(&state.transport)
 					&& end > state.transport.position.to_samples(&state.transport)
-					&& !voice_alloc.activate((self.id, note.id), note)
+					&& !voice_alloc.activate((self.id, note.id, note.key))
 				{
-					alloc_or_steal(events, voice_alloc, (self.id, note.id), note, 0);
+					alloc_or_steal(events, voice_alloc, (self.id, note.id, note.key), note, 0);
 				}
 			});
 	}
@@ -58,7 +59,7 @@ impl MidiClip {
 		state: &State,
 		audio: &[f32],
 		events: &mut Vec<Event>,
-		voice_alloc: &mut VoiceAlloc,
+		voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
 	) {
 		debug_assert!(state.transport.playing);
 
@@ -85,14 +86,20 @@ impl MidiClip {
 					start.checked_sub(state.transport.position.to_samples(&state.transport))
 					&& time < audio.len()
 				{
-					alloc_or_steal(events, voice_alloc, (self.id, note.id), note, time);
+					alloc_or_steal(
+						events,
+						voice_alloc,
+						(self.id, note.id, note.key),
+						note,
+						time,
+					);
 				}
 
 				if let Some(time) =
 					end.checked_sub(state.transport.position.to_samples(&state.transport))
 					&& time < audio.len()
 				{
-					dealloc(events, voice_alloc, (self.id, note.id), time);
+					dealloc(events, voice_alloc, (self.id, note.id, note.key), time);
 				}
 			});
 	}
@@ -100,8 +107,8 @@ impl MidiClip {
 
 fn alloc_or_steal(
 	events: &mut Vec<Event>,
-	voice_alloc: &mut VoiceAlloc,
-	id: (MidiClipId, MidiNoteId),
+	voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
+	id: (MidiClipId, MidiNoteId, MidiKey),
 	info: MidiNote,
 	time: usize,
 ) {
@@ -135,8 +142,8 @@ fn alloc_or_steal(
 
 fn dealloc(
 	events: &mut Vec<Event>,
-	voice_alloc: &mut VoiceAlloc,
-	id: (MidiClipId, MidiNoteId),
+	voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
+	id: (MidiClipId, MidiNoteId, MidiKey),
 	time: usize,
 ) {
 	if let Some(voice) = voice_alloc.dealloc(id) {

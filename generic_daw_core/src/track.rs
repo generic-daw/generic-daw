@@ -1,5 +1,6 @@
 use crate::{
-	Channel, Clip, Event, NodeAction, NodeId, NodeImpl, Update, VoiceAlloc, audio_processor::State,
+	Channel, Clip, Event, MidiNote, NodeAction, NodeId, NodeImpl, Update, audio_processor::State,
+	midi_clip::VoiceId, voice_alloc::VoiceAlloc,
 };
 use clap_host::events::Match;
 use std::num::NonZero;
@@ -7,7 +8,7 @@ use std::num::NonZero;
 #[derive(Debug)]
 pub struct Track {
 	clips: Vec<Clip>,
-	voices: VoiceAlloc,
+	voices: VoiceAlloc<VoiceId, MidiNote>,
 	last_polyphony: usize,
 	channel: Channel,
 }
@@ -45,7 +46,7 @@ impl NodeImpl for Track {
 			});
 		}
 
-		if self.channel.enabled() && state.transport.playing {
+		if state.transport.playing {
 			for clip in &mut self.clips {
 				clip.process(state, audio, events, &mut self.voices);
 			}

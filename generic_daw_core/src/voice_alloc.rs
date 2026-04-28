@@ -36,10 +36,9 @@ impl<Id: Copy + Eq, Info: Copy> VoiceAlloc<Id, Info> {
 		self.voices.extract_if(.., |voice| !voice.active)
 	}
 
-	pub fn activate(&mut self, id: Id, info: Info) -> bool {
+	pub fn activate(&mut self, id: Id) -> bool {
 		if let Some(voice) = self.voices.iter_mut().find(|voice| voice.id == id) {
 			voice.active = true;
-			voice.info = info;
 			true
 		} else {
 			false

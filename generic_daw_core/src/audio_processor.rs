@@ -1,11 +1,10 @@
 use crate::{
-	AudioGraph, AutomationPattern, AutomationPatternAction, AutomationPatternId, Channel, Clip,
-	MidiPattern, MidiPatternAction, MidiPatternId, Node, NodeId, PanMode, PluginId, Sample,
-	SampleId,
+	AutomationPattern, AutomationPatternAction, AutomationPatternId, Channel, Clip, MidiPattern,
+	MidiPatternAction, MidiPatternId, Node, NodeId, PanMode, PluginId, Sample, SampleId,
 	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
-use audio_graph::NodeImpl as _;
+use audio_graph::{AudioGraph, NodeImpl as _};
 use clap_host::{
 	Cookie,
 	events::{EventFlags, EventHeader, TransportEvent, TransportFlags},
@@ -192,7 +191,7 @@ pub struct State {
 
 #[derive(Debug)]
 pub struct AudioProcessor {
-	audio_graph: AudioGraph,
+	audio_graph: AudioGraph<Node>,
 	master: NodeId,
 	producer: Producer<Batch>,
 	consumer: Consumer<Message>,

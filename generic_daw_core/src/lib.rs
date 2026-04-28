@@ -39,6 +39,3 @@ pub use sample::{Sample, SampleId};
 pub use stream::{build_input_stream, build_output_stream, get_devices};
 pub use symphonia::core::io::MediaSource;
 pub use track::Track;
-
-type AudioGraph = audio_graph::AudioGraph<Node>;
-type VoiceAlloc = voice_alloc::VoiceAlloc<(MidiClipId, MidiNoteId), MidiNote>;

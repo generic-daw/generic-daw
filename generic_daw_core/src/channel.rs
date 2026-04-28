@@ -198,11 +198,6 @@ impl Channel {
 
 		updates.append(&mut self.updates);
 	}
-
-	#[must_use]
-	pub const fn enabled(&self) -> bool {
-		self.enabled
-	}
 }
 
 impl Default for Channel {

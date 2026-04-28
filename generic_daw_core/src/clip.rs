@@ -1,5 +1,6 @@
 use crate::{
-	AudioClip, Event, MidiClip, Transport, VoiceAlloc, audio_processor::State, time::BeatTime,
+	AudioClip, Event, MidiClip, MidiNote, Transport, audio_processor::State, midi_clip::VoiceId,
+	time::BeatTime, voice_alloc::VoiceAlloc,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -14,7 +15,7 @@ impl Clip {
 		state: &State,
 		audio: &[f32],
 		events: &mut Vec<Event>,
-		voice_alloc: &mut VoiceAlloc,
+		voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
 	) {
 		match self {
 			Self::Audio(..) => {}
@@ -27,7 +28,7 @@ impl Clip {
 		state: &State,
 		audio: &mut [f32],
 		events: &mut Vec<Event>,
-		voice_alloc: &mut VoiceAlloc,
+		voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
 	) {
 		match self {
 			Self::Audio(clip) => clip.process(state, audio),
