@@ -7,39 +7,33 @@ pub fn resample_cubic(audio: &mut [f32], samples: &[f32], resample_ratio: f32, o
 		let fract = frame.fract();
 		let idx = 2 * frame as usize;
 
-		let mut done = true;
+		if idx > samples.len() {
+			break;
+		}
 
-		let [l3, r3] = if idx + 6 > samples.len() {
+		let [l0, r0] = if idx < 2 {
 			[0.0, 0.0]
 		} else {
-			done = false;
-			[samples[idx + 4], samples[idx + 5]]
-		};
-
-		let [l2, r2] = if idx + 4 > samples.len() {
-			[0.0, 0.0]
-		} else {
-			done = false;
-			[samples[idx + 2], samples[idx + 3]]
-		};
-
-		let [l1, r1] = if idx + 2 > samples.len() {
-			[0.0, 0.0]
-		} else {
-			done = false;
-			[samples[idx], samples[idx + 1]]
-		};
-
-		let [l0, r0] = if idx < 2 || idx > samples.len() {
-			[0.0, 0.0]
-		} else {
-			done = false;
 			[samples[idx - 2], samples[idx - 1]]
 		};
 
-		if done {
-			break;
-		}
+		let [l1, r1] = if idx + 1 >= samples.len() {
+			[0.0, 0.0]
+		} else {
+			[samples[idx], samples[idx + 1]]
+		};
+
+		let [l2, r2] = if idx + 3 >= samples.len() {
+			[0.0, 0.0]
+		} else {
+			[samples[idx + 2], samples[idx + 3]]
+		};
+
+		let [l3, r3] = if idx + 5 >= samples.len() {
+			[0.0, 0.0]
+		} else {
+			[samples[idx + 4], samples[idx + 5]]
+		};
 
 		*l += interp_cubic(l0, l1, l2, l3, fract);
 		*r += interp_cubic(r0, r1, r2, r3, fract);
