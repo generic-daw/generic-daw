@@ -10,7 +10,7 @@ pub fn resample_cubic(audio: &mut [f32], samples: &[f32], resample_ratio: f32, o
 		let fract = frame.fract() as f32;
 		let idx = 2 * frame as usize;
 
-		if idx > samples.len() {
+		if idx + 1 >= samples.len() {
 			break;
 		}
 
@@ -20,11 +20,7 @@ pub fn resample_cubic(audio: &mut [f32], samples: &[f32], resample_ratio: f32, o
 			[samples[idx - 2], samples[idx - 1]]
 		};
 
-		let [l1, r1] = if idx + 1 >= samples.len() {
-			[0.0, 0.0]
-		} else {
-			[samples[idx], samples[idx + 1]]
-		};
+		let [l1, r1] = [samples[idx], samples[idx + 1]];
 
 		let [l2, r2] = if idx + 3 >= samples.len() {
 			[0.0, 0.0]
