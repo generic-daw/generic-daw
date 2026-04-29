@@ -157,36 +157,36 @@ impl SubAssign for SecondsTime {
 	}
 }
 
-impl Mul<f32> for SecondsTime {
+impl Mul<f64> for SecondsTime {
 	type Output = Self;
 
-	fn mul(self, rhs: f32) -> Self::Output {
+	fn mul(self, rhs: f64) -> Self::Output {
 		Self(self.0 * rhs)
 	}
 }
 
-impl MulAssign<f32> for SecondsTime {
-	fn mul_assign(&mut self, rhs: f32) {
+impl MulAssign<f64> for SecondsTime {
+	fn mul_assign(&mut self, rhs: f64) {
 		*self = *self * rhs;
 	}
 }
 
-impl Div<f32> for SecondsTime {
+impl Div<f64> for SecondsTime {
 	type Output = Self;
 
-	fn div(self, rhs: f32) -> Self::Output {
+	fn div(self, rhs: f64) -> Self::Output {
 		Self(self.0 / rhs)
 	}
 }
 
-impl DivAssign<f32> for SecondsTime {
-	fn div_assign(&mut self, rhs: f32) {
+impl DivAssign<f64> for SecondsTime {
+	fn div_assign(&mut self, rhs: f64) {
 		*self = *self / rhs;
 	}
 }
 
 impl Div for SecondsTime {
-	type Output = f32;
+	type Output = f64;
 
 	fn div(self, rhs: Self) -> Self::Output {
 		self.0 / rhs.0

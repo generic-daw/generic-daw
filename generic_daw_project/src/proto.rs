@@ -169,10 +169,12 @@ pub struct AudioClip {
 	pub sample: SampleIndex,
 	#[prost(message, optional)]
 	pub position_compat: Option<OffsetBeatRange>,
-	#[prost(float, default = 1.0)]
-	pub stretch: f32,
+	#[prost(float, optional)]
+	pub stretch_compat: Option<f32>,
 	#[prost(message, required)]
 	pub position: OffsetBeatSpan,
+	#[prost(double, default = 1.0)]
+	pub stretch: f64,
 }
 
 #[derive(Clone, Copy, Message)]

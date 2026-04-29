@@ -96,7 +96,7 @@ impl Sample {
 	}
 
 	#[must_use]
-	pub fn resample_ratio(&self, transport: &Transport) -> f32 {
-		self.sample_rate.get() as f32 / transport.sample_rate.get() as f32
+	pub fn resample_ratio(&self, transport: &Transport) -> f64 {
+		f64::from(self.sample_rate.get()) / f64::from(transport.sample_rate.get())
 	}
 }

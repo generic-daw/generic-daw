@@ -1,12 +1,10 @@
-pub fn resample_cubic(audio: &mut [f32], samples: &[f32], resample_ratio: f32, offset: usize) {
+pub fn resample_cubic(audio: &mut [f32], samples: &[f32], resample_ratio: f64, offset: usize) {
 	debug_assert!(audio.len().is_multiple_of(2));
 	debug_assert!(samples.len().is_multiple_of(2));
 
-	let resample_ratio = f64::from(resample_ratio);
-	let offset = offset as f64 * resample_ratio;
+	let mut frame = offset as f64 * resample_ratio;
 
-	for (frame, [l, r]) in audio.as_chunks_mut().0.iter_mut().enumerate() {
-		let frame = offset + frame as f64 * resample_ratio;
+	for [l, r] in audio.as_chunks_mut().0 {
 		let fract = frame.fract() as f32;
 		let idx = 2 * frame as usize;
 
@@ -36,6 +34,8 @@ pub fn resample_cubic(audio: &mut [f32], samples: &[f32], resample_ratio: f32, o
 
 		*l += interp_cubic(l0, l1, l2, l3, fract);
 		*r += interp_cubic(r0, r1, r2, r3, fract);
+
+		frame += resample_ratio;
 	}
 }
 

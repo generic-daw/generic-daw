@@ -5,7 +5,7 @@ use generic_daw_core::{SampleId, time::OffsetBeatSpan};
 pub struct AudioClip {
 	pub sample: SampleId,
 	pub position: OffsetBeatSpan,
-	pub stretch: f32,
+	pub stretch: f64,
 }
 
 impl AudioClip {

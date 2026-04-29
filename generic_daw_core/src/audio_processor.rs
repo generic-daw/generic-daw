@@ -456,7 +456,7 @@ impl AudioProcessor {
 				.saturating_sub(start_offset)
 				.to_samples(self.transport());
 
-			let resample_ratio = 44100.0 / self.transport().sample_rate.get() as f32;
+			let resample_ratio = 44100.0 / f64::from(self.transport().sample_rate.get());
 
 			resample_cubic(&mut buf[write_start..], click, resample_ratio, play_pos / 2);
 		}
@@ -468,7 +468,7 @@ impl AudioProcessor {
 		node: NodeId,
 		beat_range: BeatRange,
 		mut samples_fn: impl FnMut(&[f32]),
-		mut progress_fn: impl FnMut(f32),
+		mut progress_fn: impl FnMut(f64),
 	) {
 		let old = *self.transport();
 		self.audio_graph.reset();

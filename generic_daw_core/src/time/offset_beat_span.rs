@@ -44,7 +44,7 @@ impl OffsetBeatSpan {
 		self.position.len()
 	}
 
-	pub fn trim_start_to(&mut self, new_start: BeatTime, transport: &Transport, stretch: f32) {
+	pub fn trim_start_to(&mut self, new_start: BeatTime, transport: &Transport, stretch: f64) {
 		let old_start = self.start();
 		let min_start = old_start.saturating_sub((self.offset() / stretch).to_beat_time(transport));
 		self.position
@@ -66,7 +66,7 @@ impl OffsetBeatSpan {
 		self.position.move_to(new_start);
 	}
 
-	pub fn stretch_start_to(&mut self, new_start: BeatTime, transport: &Transport) -> f32 {
+	pub fn stretch_start_to(&mut self, new_start: BeatTime, transport: &Transport) -> f64 {
 		let len = self.len();
 		let end = self.end(transport);
 		self.move_to(new_start);
@@ -74,7 +74,7 @@ impl OffsetBeatSpan {
 		len / self.len()
 	}
 
-	pub fn stretch_end_to(&mut self, new_end: BeatTime, transport: &Transport) -> f32 {
+	pub fn stretch_end_to(&mut self, new_end: BeatTime, transport: &Transport) -> f64 {
 		let len = self.len();
 		self.trim_end_to(new_end, transport);
 		len / self.len()

@@ -50,8 +50,8 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	}
 
 	#[must_use]
-	pub fn resample_ratio(&self, transport: &Transport) -> f32 {
-		transport.sample_rate.get() as f32 / self.config.sample_rate as f32
+	pub fn resample_ratio(&self, transport: &Transport) -> f64 {
+		f64::from(transport.sample_rate.get()) / f64::from(self.config.sample_rate)
 	}
 
 	#[must_use]

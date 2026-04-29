@@ -63,7 +63,7 @@ impl Clip {
 		match self {
 			Self::Audio(clip) => {
 				clip.stretch *= clip.position.stretch_start_to(new_start, transport);
-				clip.stretch = clip.stretch.clamp(2f32.powi(-10), 2f32.powi(10));
+				clip.stretch = clip.stretch.clamp(2f64.powi(-10), 2f64.powi(10));
 			}
 			Self::Midi(..) => panic!(),
 		}
@@ -73,7 +73,7 @@ impl Clip {
 		match self {
 			Self::Audio(clip) => {
 				clip.stretch *= clip.position.stretch_end_to(new_end, transport);
-				clip.stretch = clip.stretch.clamp(2f32.powi(-10), 2f32.powi(10));
+				clip.stretch = clip.stretch.clamp(2f64.powi(-10), 2f64.powi(10));
 			}
 			Self::Midi(..) => panic!(),
 		}

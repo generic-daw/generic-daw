@@ -88,18 +88,8 @@ impl Arrangement {
 					track.clips.iter().map(|clip| match clip {
 						Clip::Audio(clip) => proto::AudioClip {
 							sample: samples[&clip.sample],
-							position_compat: Some(proto::OffsetBeatRange {
-								position: proto::BeatRange {
-									start: clip.position.start().to_bits(),
-									end: clip.position.end(self.transport()).to_bits(),
-								},
-								offset: clip
-									.position
-									.offset()
-									.to_beat_time(self.transport())
-									.to_bits(),
-							}),
-							stretch: clip.stretch,
+							position_compat: None,
+							stretch_compat: None,
 							position: proto::OffsetBeatSpan {
 								position: proto::BeatSpan {
 									start: clip.position.start().to_bits(),
@@ -107,6 +97,7 @@ impl Arrangement {
 								},
 								offset: clip.position.offset().to_bits(),
 							},
+							stretch: clip.stretch,
 						}
 						.into(),
 						Clip::Midi(clip) => proto::MidiClip {
@@ -510,7 +501,11 @@ impl Arrangement {
 										)
 									},
 								),
-								stretch: clip.stretch,
+								stretch: clip
+									.stretch_compat
+									.map_or(clip.stretch, |stretch_compat| {
+										f64::from(stretch_compat)
+									}),
 							})
 						}
 						proto::Clip::Midi(clip) => Clip::Midi(MidiClip {

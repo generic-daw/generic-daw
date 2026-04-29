@@ -177,7 +177,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 			let stretch = playlist.scale.x
 				+ match self.inner {
-					Inner::AudioClip(inner) => inner.clip.stretch.log2(),
+					Inner::AudioClip(inner) => inner.clip.stretch.log2() as f32,
 					Inner::MidiClip(..) | Inner::Recording(..) => 0.0,
 				};
 
@@ -426,7 +426,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							&inner.sample.samples,
 							self.transport,
 							position,
-							playlist.scale.x + stretch.log2(),
+							playlist.scale.x + stretch.log2() as f32,
 							height,
 							theme.palette().background.strong.text,
 							lower_bounds.size(),
@@ -503,7 +503,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							self.transport,
 							position,
 							playlist.scale.x
-								+ inner.core.resample_ratio(self.transport).recip().log2(),
+								+ inner.core.resample_ratio(self.transport).recip().log2() as f32,
 							height,
 							theme.palette().background.strong.text,
 							lower_bounds.size(),
