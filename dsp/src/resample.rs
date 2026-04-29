@@ -45,8 +45,8 @@ pub fn resample_cubic(audio: &mut [f32], samples: &[f32], resample_ratio: f32, o
 
 fn interp_cubic(s0: f32, s1: f32, s2: f32, s3: f32, fract: f32) -> f32 {
 	let c0 = s1;
-	let c1 = 0.5 * (s2 - s0);
-	let c2 = s0 - 2.5 * s1 + 2.0 * s2 - 0.5 * s3;
-	let c3 = 0.5 * (s3 - s0) + 1.5 * (s1 - s2);
+	let c1 = (-2.0 * s0 - 3.0 * s1 + 6.0 * s2 - s3) * (1.0 / 6.0);
+	let c2 = (s0 - 2.0 * s1 + s2) * (1.0 / 2.0);
+	let c3 = (-s0 + 3.0 * s1 - 3.0 * s2 + s3) * (1.0 / 6.0);
 	((c3 * fract + c2) * fract + c1) * fract + c0
 }
