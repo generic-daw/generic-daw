@@ -1,0 +1,17 @@
+name: mirror
+on: [push]
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    environment:
+      name: mirror
+      deployment: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: yesolutions/mirror-action@master
+        with:
+          REMOTE: 'https://codeberg.org/generic-daw/generic-daw'
+          GIT_USERNAME: edwloef
+          GIT_PASSWORD: ${{ secrets.GIT_PASSWORD }}
