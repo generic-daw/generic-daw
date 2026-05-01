@@ -164,6 +164,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 
 			if state.status == Status::None {
 				return;
+			} else if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event {
+				if let Status::Hovering(path, kind, Some((track, time))) = state.status.clone() {
+					shell.publish((self.action)(Action::Add(Some((path, kind)), track, time)));
+				}
+
+				state.finish();
+				shell.capture_event();
+				shell.request_redraw();
+
+				return;
 			}
 
 			let Some(cursor) = cursor.position_from(viewport.position()) else {
@@ -252,15 +262,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 				}
 				_ => {}
 			},
-			Event::Mouse(mouse::Event::ButtonReleased { .. }) if state.status != Status::None => {
-				if let Status::Hovering(path, kind, Some((track, time))) = state.status.clone() {
-					shell.publish((self.action)(Action::Add(Some((path, kind)), track, time)));
-				}
-
-				state.finish();
-				shell.capture_event();
-				shell.request_redraw();
-			}
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.status.clone() {
 				Status::Hovering(path, kind, time) => {

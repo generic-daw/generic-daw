@@ -149,6 +149,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
 			if state.status == Status::None {
 				return;
+			} else if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event {
+				state.status = Status::None;
+				shell.capture_event();
+
+				return;
 			}
 
 			let Some(cursor) = cursor.position_from(viewport.position()) else {
@@ -273,10 +278,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				modifiers,
 			}) if cursor.y >= LINE_HEIGHT => {
 				state.status = Status::Panning(cursor);
-			}
-			Event::Mouse(mouse::Event::ButtonReleased { .. }) if state.status != Status::None => {
-				state.status = Status::None;
-				shell.capture_event();
 			}
 			Event::Mouse(mouse::Event::WheelScrolled { delta, modifiers }) => {
 				let (x, mut y) = match *delta {
