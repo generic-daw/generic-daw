@@ -134,7 +134,9 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 		let state = &mut *self.state.borrow_mut();
 
-		if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event {
+		if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event
+			&& state.status != Status::None
+		{
 			state.finish();
 			shell.capture_event();
 			shell.request_redraw();

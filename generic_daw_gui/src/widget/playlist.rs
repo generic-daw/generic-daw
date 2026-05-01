@@ -153,7 +153,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 
 		let state = &mut *self.state.borrow_mut();
 
-		if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event {
+		if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event
+			&& state.status != Status::None
+		{
 			if let Status::Hovering(path, kind, Some((track, time))) = state.status.clone() {
 				shell.publish((self.action)(Action::Add(Some((path, kind)), track, time)));
 			}

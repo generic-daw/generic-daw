@@ -138,7 +138,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			return;
 		}
 
-		if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event {
+		if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event
+			&& state.status != Status::None
+		{
 			state.status = Status::None;
 			shell.capture_event();
 			return;
