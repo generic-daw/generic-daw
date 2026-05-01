@@ -153,6 +153,20 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 
 		let state = &mut *self.state.borrow_mut();
 
+		if state.status == Status::None {
+			return;
+		} else if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event {
+			if let Status::Hovering(path, kind, Some((track, time))) = state.status.clone() {
+				shell.publish((self.action)(Action::Add(Some((path, kind)), track, time)));
+			}
+
+			state.finish();
+			shell.capture_event();
+			shell.request_redraw();
+
+			return;
+		}
+
 		cursor = cursor.land();
 
 		let cursor = 'block: {
@@ -160,20 +174,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 				state.autoscroll_start = None;
 				state.last_autoscroll = None;
 				break 'block cursor;
-			}
-
-			if state.status == Status::None {
-				return;
-			} else if let Event::Mouse(mouse::Event::ButtonReleased { .. }) = event {
-				if let Status::Hovering(path, kind, Some((track, time))) = state.status.clone() {
-					shell.publish((self.action)(Action::Add(Some((path, kind)), track, time)));
-				}
-
-				state.finish();
-				shell.capture_event();
-				shell.request_redraw();
-
-				return;
 			}
 
 			let Some(cursor) = cursor.position_from(viewport.position()) else {
