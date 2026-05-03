@@ -69,7 +69,7 @@ use std::{
 	time::Duration,
 };
 use sweeten::widget::drag::DragEvent;
-use utils::{NoClone, NoDebug};
+use utils::NoDebug;
 
 mod arrangement;
 mod audio_clip;
@@ -120,8 +120,8 @@ pub enum Message {
 	PluginMoveTo(NodeId, DragEvent),
 	PluginRemove(NodeId, usize),
 
-	SampleLoaded(NoClone<Option<(Box<SamplePair>, Option<usize>, BeatTime)>>),
-	MidiPatternLoaded(NoClone<Option<(Box<MidiPatternPair>, Option<usize>, BeatTime)>>),
+	SampleLoaded(Option<(Box<SamplePair>, Option<usize>, BeatTime)>),
+	MidiPatternLoaded(Option<(Box<MidiPatternPair>, Option<usize>, BeatTime)>),
 	AddAudioClip(SampleId, Option<usize>, BeatTime),
 	AddMidiClip(MidiPatternId, Option<usize>, BeatTime),
 
@@ -139,7 +139,7 @@ pub enum Message {
 	RecordingWrite(NoDebug<Box<[f32]>>),
 
 	Freeze(NodeId),
-	FreezeDone(NoClone<(NodeId, Box<SamplePair>, BeatTime)>),
+	FreezeDone(NodeId, Box<SamplePair>, BeatTime),
 
 	PlaylistAction(playlist::Action),
 	PianoRollAction(piano_roll::Action),
@@ -396,7 +396,7 @@ impl ArrangementView {
 				}
 			}
 			Message::PluginRemove(node, i) => self.arrangement.plugin_remove(node, i),
-			Message::SampleLoaded(NoClone(loaded)) => {
+			Message::SampleLoaded(loaded) => {
 				self.loading -= 1;
 
 				if let Some((sample, track, pos)) = loaded {
@@ -405,7 +405,7 @@ impl ArrangementView {
 					return self.update(Message::AddAudioClip(id, track, pos), config, state);
 				}
 			}
-			Message::MidiPatternLoaded(NoClone(loaded)) => {
+			Message::MidiPatternLoaded(loaded) => {
 				self.loading -= 1;
 
 				if let Some((pattern, track, pos)) = loaded {
@@ -595,7 +595,7 @@ impl ArrangementView {
 			}
 			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().write(&samples),
 			Message::Freeze(node) => return Action::instruction(daw::Instruction::Freeze(node)),
-			Message::FreezeDone(NoClone((node, sample, pos))) => {
+			Message::FreezeDone(node, sample, pos) => {
 				let id = sample.gui.id;
 				self.arrangement.add_sample(*sample);
 
@@ -976,8 +976,7 @@ impl ArrangementView {
 						Task::future(unblock(move || {
 							Message::MidiPatternLoaded(
 								MidiPatternPair::from_midi(path, &transport)
-									.map(|pair| (Box::new(pair), track, pos))
-									.into(),
+									.map(|pair| (Box::new(pair), track, pos)),
 							)
 						}))
 						.into()
@@ -992,9 +991,7 @@ impl ArrangementView {
 						self.loading += 1;
 						Task::future(unblock(move || {
 							Message::SampleLoaded(
-								SamplePair::new(path)
-									.map(|pair| (Box::new(pair), track, pos))
-									.into(),
+								SamplePair::new(path).map(|pair| (Box::new(pair), track, pos)),
 							)
 						}))
 						.into()
@@ -1002,11 +999,11 @@ impl ArrangementView {
 				} else {
 					self.loading += 1;
 					self.update(
-						Message::MidiPatternLoaded(NoClone(Some((
+						Message::MidiPatternLoaded(Some((
 							Box::new(MidiPatternPair::from_notes(Vec::new(), "MIDI Pattern")),
 							track,
 							pos,
-						)))),
+						))),
 						config,
 						state,
 					)

@@ -3,7 +3,7 @@ use generic_daw_core::{SampleId, Transport, time::BeatTime};
 use std::{fs::File, num::NonZero, path::Path, sync::Arc};
 use utils::NoDebug;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Sample {
 	pub id: SampleId,
 	pub lods: Lods,
@@ -27,7 +27,7 @@ impl Sample {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SamplePair {
 	pub core: generic_daw_core::Sample,
 	pub gui: Sample,

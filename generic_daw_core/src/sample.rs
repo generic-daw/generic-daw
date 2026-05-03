@@ -14,7 +14,7 @@ unique_id!(sample_id);
 
 pub use sample_id::Id as SampleId;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Sample {
 	pub id: SampleId,
 	pub samples: NoDebug<Arc<[f32]>>,

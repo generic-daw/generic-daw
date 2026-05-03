@@ -12,7 +12,7 @@ use utils::NoDebug;
 const STEP_SIZE: usize = 3;
 const CHUNK_SIZE: usize = 1 << STEP_SIZE;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Lods(NoDebug<Box<[Box<[(f32, f32)]>]>>);
 
 impl Lods {

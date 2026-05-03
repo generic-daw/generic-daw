@@ -31,7 +31,7 @@ use std::{
 	path::Path,
 	sync::{Arc, LazyLock},
 };
-use utils::{NoClone, NoDebug, ShiftMoveExt as _};
+use utils::{NoDebug, ShiftMoveExt as _};
 
 static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
 	HostInfo::new_from_cstring(
@@ -711,7 +711,7 @@ impl Arrangement {
 
 				daw::Message::Arrangement(
 					project,
-					arrangement_view::Message::FreezeDone(NoClone((
+					arrangement_view::Message::FreezeDone(
 						node,
 						Box::new(
 							SamplePair::from_core(
@@ -725,7 +725,7 @@ impl Arrangement {
 							.unwrap(),
 						),
 						beat_range.start(),
-					))),
+					),
 				)
 			})),
 			Task::stream(progress_receiver)

@@ -25,7 +25,7 @@ pub enum MidiPatternAction {
 	TrimEndTo(usize, BeatTime),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MidiPattern {
 	pub id: MidiPatternId,
 	pub notes: Vec<MidiNote>,

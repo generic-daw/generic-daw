@@ -1,7 +1,7 @@
 use generic_daw_core::{MidiNote, MidiPatternId, Transport, time::BeatTime};
 use std::{path::Path, sync::Arc};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MidiPattern {
 	pub id: MidiPatternId,
 	pub name: Arc<str>,
@@ -19,7 +19,7 @@ impl MidiPattern {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MidiPatternPair {
 	pub core: generic_daw_core::MidiPattern,
 	pub gui: MidiPattern,
