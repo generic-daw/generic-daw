@@ -454,7 +454,8 @@ impl ConfigView {
 								600,
 								3,
 								|interval| Message::ChangedAutosaveInterval(interval as u16),
-								Message::ChangedAutosaveIntervalText
+								Message::ChangedAutosaveIntervalText,
+								5
 							),
 							" s"
 						]

@@ -83,6 +83,14 @@ pub const fn file() -> Icon {
 	}
 }
 
+pub const fn gavel() -> Icon {
+	Icon {
+		glyph: '\u{e0e0}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
 pub const fn grip_horizontal() -> Icon {
 	Icon {
 		glyph: '\u{e0ea}',

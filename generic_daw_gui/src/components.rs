@@ -51,20 +51,22 @@ pub fn number_input<'a, Message: Clone + 'a>(
 	max_digits: u32,
 	drag_update: fn(usize) -> Message,
 	text_update: fn(String) -> Message,
+	radius: impl Into<border::Radius>,
 ) -> Element<'a, Message> {
+	let radius = radius.into();
 	row![
 		DragHandle::new(
 			container(move_vertical())
-				.style(container_with_radius(weakest_bordered_box, border::left(5)))
+				.style(container_with_radius(weakest_bordered_box, radius.right(0)))
 				.padding(padding::vertical(5)),
 			current,
 			default,
 			drag_update
 		),
 		text_input("", &current.to_string())
-			.style(|t, s| {
+			.style(move |t, s| {
 				let mut style = text_input::default(t, s);
-				style.border.radius = border::right(5);
+				style.border.radius = radius.left(0);
 				style
 			})
 			.font(Font::MONOSPACE)

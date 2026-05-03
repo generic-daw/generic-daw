@@ -6,8 +6,8 @@ use crate::{
 	config_view::{self, ConfigView},
 	file_tree::{self, FileKind, FileTree},
 	icons::{
-		arrow_big_right, chart_no_axes_gantt, cpu, keyboard_music, metronome, pause, play, plus,
-		sliders_vertical, square,
+		arrow_big_right, chart_no_axes_gantt, cpu, gavel, keyboard_music, metronome, pause, play,
+		plus, sliders_vertical, square,
 	},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
@@ -17,7 +17,7 @@ use crate::{
 	widget::ALPHA_2_3,
 };
 use generic_daw_core::{
-	NodeId, PluginId,
+	BpmTapper, NodeId, PluginId,
 	clap_host::{
 		ClapId, Cookie, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
 	},
@@ -210,6 +210,7 @@ pub enum Message {
 	ToggleShowSeconds,
 	ToggleMetronome,
 	ToggleAutoscroll,
+	TappedBpm,
 	ChangedBpm(u16),
 	ChangedBpmText(String),
 	ChangedNumerator(u8),
@@ -234,6 +235,7 @@ pub struct Daw {
 	config_view: Option<ConfigView>,
 
 	plugins: combo_box::State<PluginDescriptor>,
+	bpm_tapper: BpmTapper,
 
 	progress: Option<f32>,
 	status: Option<Arc<str>>,
@@ -284,6 +286,7 @@ impl Daw {
 				config_view: None,
 
 				plugins: combo_box::State::default(),
+				bpm_tapper: BpmTapper::default(),
 
 				progress: None,
 				status: None,
@@ -569,6 +572,12 @@ impl Daw {
 				self.state.autoscroll ^= true;
 				self.state.write();
 			}
+			Message::TappedBpm => {
+				self.bpm_tapper.tap();
+				if let Some(bpm) = self.bpm_tapper.get_bpm() {
+					return self.update(Message::ChangedBpm(bpm.get()));
+				}
+			}
 			Message::ChangedBpm(bpm) => self
 				.arrangement_view
 				.arrangement
@@ -701,15 +710,36 @@ impl Daw {
 						4,
 						2,
 						|numerator| Message::ChangedNumerator(numerator as u8),
-						Message::ChangedNumeratorText
+						Message::ChangedNumeratorText,
+						5
 					),
-					number_input(
-						transport.bpm.get().into(),
-						140,
-						3,
-						|bpm| Message::ChangedBpm(bpm as u16),
-						Message::ChangedBpmText
-					),
+					row![
+						number_input(
+							transport.bpm.get().into(),
+							140,
+							3,
+							|bpm| Message::ChangedBpm(bpm as u16),
+							Message::ChangedBpmText,
+							border::left(5)
+						),
+						button(metronome())
+							.style(button_with_radius(
+								if self.state.metronome {
+									button::primary
+								} else {
+									button::secondary
+								},
+								0
+							))
+							.padding(padding::all(5).left(4))
+							.on_press(Message::ToggleMetronome),
+						button(
+							mouse_area(container(gavel()).padding(5)).on_press(Message::TappedBpm)
+						)
+						.style(button_with_radius(button::primary, border::right(5)))
+						.padding(0)
+						.on_press_with(|| unreachable!()),
+					],
 					row![
 						mouse_area(
 							container(
@@ -735,29 +765,18 @@ impl Daw {
 						)
 						.on_press(Message::ToggleShowSeconds)
 						.interaction(Interaction::Pointer),
-						button(metronome())
+						button(arrow_big_right())
 							.style(button_with_radius(
-								if self.state.metronome {
+								if self.state.autoscroll {
 									button::primary
 								} else {
 									button::secondary
 								},
 								border::right(5)
 							))
-							.padding(padding::all(5).left(4))
-							.on_press(Message::ToggleMetronome),
+							.padding(5)
+							.on_press(Message::ToggleAutoscroll),
 					],
-					button(arrow_big_right())
-						.style(button_with_radius(
-							if self.state.autoscroll {
-								button::primary
-							} else {
-								button::secondary
-							},
-							5
-						))
-						.padding(5)
-						.on_press(Message::ToggleAutoscroll),
 					space::horizontal(),
 					row![
 						cpu(),
