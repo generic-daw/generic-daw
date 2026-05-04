@@ -71,13 +71,6 @@ impl AudioThread {
 				}
 			}
 
-			if let Some(processor) = &mut self.processor
-				&& std::mem::take(&mut self.needs_reset)
-			{
-				processor.reset();
-				processor.access_handler_mut(|at| at.audio_buffers.as_mut().unwrap().reset());
-			}
-
 			if self.render_mode == RenderMode::Realtime {
 				break;
 			}
@@ -132,6 +125,11 @@ impl AudioThread {
 					started_processor.access_handler_mut(|at| at.audio_buffers.take().unwrap());
 				let mut event_buffers =
 					started_processor.access_handler_mut(|at| at.event_buffers.take().unwrap());
+
+				if std::mem::take(&mut self.needs_reset) {
+					started_processor.reset();
+					audio_buffers.reset();
+				}
 
 				let (input_audio, mut output_audio, steady_time) = audio_buffers.read_in(audio);
 				let (input_events, mut output_events) = event_buffers.read_in(events);
