@@ -1,5 +1,5 @@
 use crate::{arrangement_view::crc, lod::Lods};
-use generic_daw_core::{SampleId, Transport, time::BeatTime};
+use generic_daw_core::{SampleId, Transport, time::SecondsTime};
 use std::{fs::File, num::NonZero, path::Path, sync::Arc};
 use utils::NoDebug;
 
@@ -22,8 +22,8 @@ impl Sample {
 		f64::from(transport.sample_rate.get()) / f64::from(self.sample_rate.get())
 	}
 
-	pub fn len(&self, transport: &Transport) -> BeatTime {
-		BeatTime::from_samples(self.samples.len(), transport) * self.resample_ratio(transport)
+	pub fn len(&self, transport: &Transport) -> SecondsTime {
+		SecondsTime::from_samples(self.samples.len(), transport) * self.resample_ratio(transport)
 	}
 }
 

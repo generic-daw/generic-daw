@@ -426,7 +426,9 @@ impl ArrangementView {
 			Message::AddAudioClip(id, track, pos) => {
 				let mut clip = AudioClip::new(id);
 				clip.position.trim_end_to(
-					self.arrangement.samples()[&id].len(self.arrangement.transport()),
+					self.arrangement.samples()[&id]
+						.len(self.arrangement.transport())
+						.to_beat_time(self.arrangement.transport()),
 					self.arrangement.transport(),
 				);
 				clip.position.move_to(pos);
@@ -551,7 +553,9 @@ impl ArrangementView {
 
 						let mut clip = AudioClip::new(id);
 						clip.position.trim_end_to(
-							self.arrangement.samples()[&id].len(self.arrangement.transport()),
+							self.arrangement.samples()[&id]
+								.len(self.arrangement.transport())
+								.to_beat_time(self.arrangement.transport()),
 							self.arrangement.transport(),
 						);
 						clip.position.move_to(pos);
@@ -595,7 +599,9 @@ impl ArrangementView {
 
 					let mut clip = AudioClip::new(id);
 					clip.position.trim_end_to(
-						self.arrangement.samples()[&id].len(self.arrangement.transport()),
+						self.arrangement.samples()[&id]
+							.len(self.arrangement.transport())
+							.to_beat_time(self.arrangement.transport()),
 						self.arrangement.transport(),
 					);
 					clip.position.move_to(pos);
@@ -610,7 +616,9 @@ impl ArrangementView {
 
 				let mut clip = AudioClip::new(id);
 				clip.position.trim_end_to(
-					self.arrangement.samples()[&id].len(self.arrangement.transport()),
+					self.arrangement.samples()[&id]
+						.len(self.arrangement.transport())
+						.to_beat_time(self.arrangement.transport()),
 					self.arrangement.transport(),
 				);
 				clip.position.move_to(pos);

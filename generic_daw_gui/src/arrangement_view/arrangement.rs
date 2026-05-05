@@ -20,7 +20,7 @@ use generic_daw_core::{
 	NodeAction, NodeId, NodeImpl, PanMode, PluginId, SampleId, Stream, Transport, Update, Version,
 	build_output_stream,
 	clap_host::{HostInfo, PluginDescriptor},
-	time::{BeatRange, BeatTime, SecondsTime},
+	time::{BeatRange, BeatTime},
 };
 use iced::Task;
 use rtrb::{Producer, PushError};
@@ -557,10 +557,9 @@ impl Arrangement {
 	pub fn clip_reverse(&mut self, track: usize, clip: usize) {
 		if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
 			audio.stretch *= -1.0;
-			audio.position.reverse(SecondsTime::from_samples(
-				self.samples[&audio.sample].samples.len(),
-				&self.transport,
-			));
+			audio
+				.position
+				.reverse(self.samples[&audio.sample].len(&self.transport));
 			self.node_action(self.tracks[track].id, NodeAction::ClipReverse(clip));
 		}
 	}

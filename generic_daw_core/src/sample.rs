@@ -1,4 +1,4 @@
-use crate::{MediaSource, Transport};
+use crate::{MediaSource, Transport, time::SecondsTime};
 use std::{num::NonZero, sync::Arc};
 use symphonia::core::{
 	audio::SampleBuffer,
@@ -93,6 +93,11 @@ impl Sample {
 			samples: NoDebug(samples.into()),
 			sample_rate,
 		})
+	}
+
+	#[must_use]
+	pub fn len(&self, transport: &Transport) -> SecondsTime {
+		SecondsTime::from_samples(self.samples.len(), transport) * self.resample_ratio(transport)
 	}
 
 	#[must_use]
