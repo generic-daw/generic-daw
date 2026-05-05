@@ -426,7 +426,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							&inner.sample.samples,
 							self.transport,
 							position,
-							playlist.scale.x + stretch.log2() as f32,
+							playlist.scale.x.exp2() * stretch as f32,
 							height,
 							theme.palette().background.strong.text,
 							lower_bounds.size(),
@@ -502,8 +502,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							inner.core.samples(),
 							self.transport,
 							position,
-							playlist.scale.x
-								+ inner.core.resample_ratio(self.transport).recip().log2() as f32,
+							playlist.scale.x.exp2()
+								/ inner.core.resample_ratio(self.transport) as f32,
 							height,
 							theme.palette().background.strong.text,
 							lower_bounds.size(),

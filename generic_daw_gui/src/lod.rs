@@ -27,7 +27,7 @@ impl Lods {
 		samples: &[f32],
 		transport: &Transport,
 		position: OffsetBeatRange,
-		x_scale: f32,
+		samples_per_px: f32,
 		height: f32,
 		color: Color,
 		clipped_size: Size,
@@ -39,7 +39,7 @@ impl Lods {
 			samples,
 			transport,
 			position,
-			x_scale,
+			samples_per_px,
 			height,
 			color,
 			clipped_size,
@@ -92,7 +92,7 @@ impl LodsBuilder {
 		samples: &[f32],
 		transport: &Transport,
 		position: OffsetBeatRange,
-		x_scale: f32,
+		samples_per_px: f32,
 		height: f32,
 		color: Color,
 		clipped_size: Size,
@@ -104,7 +104,7 @@ impl LodsBuilder {
 			samples,
 			transport,
 			position,
-			x_scale,
+			samples_per_px,
 			height,
 			color,
 			clipped_size,
@@ -129,7 +129,7 @@ fn mesh(
 	samples: &[f32],
 	transport: &Transport,
 	position: OffsetBeatRange,
-	x_scale: f32,
+	samples_per_px: f32,
 	height: f32,
 	color: Color,
 	clipped_size: Size,
@@ -179,7 +179,7 @@ fn mesh(
 			.collect()
 	}
 
-	let mesh_lod = (x_scale - 1.0) as usize;
+	let mesh_lod = (samples_per_px.log2() - 1.0) as usize;
 	let saved_lod = (mesh_lod / STEP_SIZE).checked_sub(1);
 	let lod_slices_per_mesh_slice = 1 << (mesh_lod % STEP_SIZE);
 
@@ -188,8 +188,6 @@ fn mesh(
 	}
 
 	let samples_per_mesh_slice = (2 << mesh_lod) as f32;
-	let samples_per_px = x_scale.exp2();
-
 	let px_per_mesh_slice = samples_per_mesh_slice / samples_per_px;
 
 	let lod_slices_per_sample = lod_slices_per_mesh_slice as f32 / samples_per_mesh_slice;
