@@ -960,7 +960,7 @@ impl ArrangementView {
 				let old_scale = *scale;
 				*scale += scale_diff;
 				scale.x = scale.x.clamp(
-					1.0,
+					(self.arrangement.transport().sample_rate.get() as f32).log2() - 15.0,
 					(self.arrangement.transport().sample_rate.get() as f32).log2(),
 				);
 				scale.y = scale.y.clamp(45.0, 165.0);
@@ -1195,7 +1195,7 @@ impl ArrangementView {
 				let old_scale = *scale;
 				*scale += scale_diff;
 				scale.x = scale.x.clamp(
-					1.0,
+					(self.arrangement.transport().sample_rate.get() as f32).log2() - 15.0,
 					(self.arrangement.transport().sample_rate.get() as f32).log2(),
 				);
 				scale.y = scale.y.clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);

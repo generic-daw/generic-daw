@@ -202,11 +202,11 @@ fn mesh(
 	let view_len_f = view_len_f.min(clipped_size.width * lod_slices_per_px);
 	let lod_end_f = lod_start_f + view_len_f;
 
-	let lod_start = lod_start_f.ceil() as usize;
-	let lod_end = lod_end_f as usize;
+	let lod_start = lod_start_f as usize;
+	let lod_end = lod_end_f.ceil() as usize;
 
-	let lod_start = lod_start.next_multiple_of(lod_slices_per_mesh_slice);
-	let lod_end = lod_end - lod_end % lod_slices_per_mesh_slice;
+	let lod_start = lod_start - lod_start % lod_slices_per_mesh_slice;
+	let lod_end = lod_end.next_multiple_of(lod_slices_per_mesh_slice) + 1;
 
 	let lod_len = saved_lod.map_or(samples.len() / 2, |saved_lod| {
 		lods[saved_lod].as_ref().len()
