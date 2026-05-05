@@ -1,4 +1,7 @@
-use generic_daw_core::{MidiKey, Transport, time::BeatTime};
+use generic_daw_core::{
+	MidiKey, Transport,
+	time::{BeatTime, SecondsTime},
+};
 use iced::{Vector, keyboard::Modifiers};
 use std::ops::{Add, Neg};
 
@@ -66,8 +69,8 @@ impl<T> Neg for Delta<T> {
 	}
 }
 
-pub fn snap_step(mut scale: f32, transport: &Transport) -> BeatTime {
-	scale += (f32::from(transport.bpm.get()) / transport.sample_rate.get() as f32).log2() - 3.5;
+pub fn beats_snap_step(mut scale: f32, transport: &Transport) -> BeatTime {
+	scale += -3.5 - (transport.sample_rate.get() as f32 / f32::from(transport.bpm.get())).log2();
 	if scale < 0.0 {
 		BeatTime::new(0, BeatTime::FACTOR >> -scale.max(-9.0) as u8)
 	} else {
@@ -76,6 +79,19 @@ pub fn snap_step(mut scale: f32, transport: &Transport) -> BeatTime {
 				<< (scale - f32::from(transport.numerator.get()).log2()).ceil() as u8,
 			0,
 		)
+	}
+}
+
+pub fn seconds_snap_step(mut scale: f32, transport: &Transport) -> SecondsTime {
+	scale += 2.5 - (transport.sample_rate.get() as f32).log2();
+	if scale < 0.0 {
+		SecondsTime::new(0, SecondsTime::FACTOR >> -scale.max(-9.0) as u8)
+	} else {
+		let seconds = [2, 5, 10, 15, 20, 30]
+			.into_iter()
+			.find(|&step| scale < f32::from(step).log2())
+			.unwrap_or(60u8);
+		SecondsTime::new(seconds.into(), 0)
 	}
 }
 

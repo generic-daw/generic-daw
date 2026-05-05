@@ -1,9 +1,9 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef, Recording},
 	widget::{
-		ALPHA_1_3, LINE_HEIGHT, maybe_snap,
+		ALPHA_1_3, LINE_HEIGHT, beats_snap_step, maybe_snap,
 		playlist::{self, Action, Status},
-		px_to_time, snap_step, time_to_px,
+		px_to_time, time_to_px,
 	},
 };
 use generic_daw_core::{Transport, time::BeatTime};
@@ -247,7 +247,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							(true, false, _, _, _) => {
 								clear = false;
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.round(snap_step(playlist.scale.x, self.transport))
+									time.round(beats_snap_step(playlist.scale.x, self.transport))
 								});
 								Status::Selecting(idx.0, idx.0, time, time)
 							}
@@ -258,7 +258,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							(true, true, _, _, false) => Status::DraggingSlip(time),
 							(true, true, _, _, true) => {
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.round(snap_step(playlist.scale.x, self.transport))
+									time.round(beats_snap_step(playlist.scale.x, self.transport))
 								});
 								shell.publish((self.f)(Action::SplitAt(time)));
 								Status::DraggingSplit(time)

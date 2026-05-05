@@ -1,5 +1,5 @@
 use crate::widget::{
-	ALPHA_1_3, Delta, key_to_px, maybe_snap, note::Note, px_to_key, px_to_time, snap_step,
+	ALPHA_1_3, Delta, beats_snap_step, key_to_px, maybe_snap, note::Note, px_to_key, px_to_time,
 	time_to_px,
 };
 use generic_daw_core::{MidiKey, Transport, time::BeatTime};
@@ -215,13 +215,13 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 						if modifiers.command() {
 							let time = maybe_snap(new_time, *modifiers, |time| {
-								time.round(snap_step(state.scale.x, self.transport))
+								time.round(beats_snap_step(state.scale.x, self.transport))
 							});
 
 							state.status = Status::Selecting(key, key, time, time);
 						} else {
 							let time = maybe_snap(new_time, *modifiers, |time| {
-								time.floor(snap_step(state.scale.x, self.transport))
+								time.floor(beats_snap_step(state.scale.x, self.transport))
 							});
 
 							state.clear();
@@ -246,7 +246,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					let end_key = px_to_key(cursor.y, state.position, state.scale);
 
 					let end_pos = maybe_snap(new_time, *modifiers, |time| {
-						time.round(snap_step(state.scale.x, self.transport))
+						time.round(beats_snap_step(state.scale.x, self.transport))
 					});
 
 					if end_key == last_end_key && end_pos == last_end_pos {
@@ -275,7 +275,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					let new_key = px_to_key(cursor.y, state.position, state.scale);
 
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(snap_step(state.scale.x, self.transport))
+						abs_diff.round(beats_snap_step(state.scale.x, self.transport))
 					});
 
 					if new_key != key || abs_diff != BeatTime::ZERO {
@@ -298,7 +298,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				}
 				Status::TrimmingStart(time) => {
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(snap_step(state.scale.x, self.transport))
+						abs_diff.round(beats_snap_step(state.scale.x, self.transport))
 					});
 
 					if abs_diff != BeatTime::ZERO {
@@ -315,7 +315,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				}
 				Status::TrimmingEnd(time) => {
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(snap_step(state.scale.x, self.transport))
+						abs_diff.round(beats_snap_step(state.scale.x, self.transport))
 					});
 
 					if abs_diff != BeatTime::ZERO {
@@ -332,7 +332,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				}
 				Status::DraggingSplit(time) => {
 					let new_time = maybe_snap(new_time, *modifiers, |time| {
-						time.round(snap_step(state.scale.x, self.transport))
+						time.round(beats_snap_step(state.scale.x, self.transport))
 					});
 
 					if new_time != time {

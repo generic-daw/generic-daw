@@ -17,14 +17,13 @@ use crate::{
 		sweeten_row_style, sweeten_row_with_radius, weak_bordered_box, weakest_bordered_box,
 	},
 	widget::{
-		Delta, LINE_HEIGHT, TEXT_HEIGHT,
+		Delta, LINE_HEIGHT, TEXT_HEIGHT, beats_snap_step,
 		clip::Clip,
 		note::Note,
 		piano::Piano,
 		piano_roll::{self, PianoRoll},
 		playlist::{self, Playlist},
 		seeker::Seeker,
-		snap_step,
 		track::Track,
 	},
 };
@@ -692,7 +691,7 @@ impl ArrangementView {
 			Message::ArrowLeft => match self.tab {
 				Tab::Playlist => {
 					self.playlist.get_mut().finish();
-					let snap_step = snap_step(
+					let snap_step = beats_snap_step(
 						self.playlist.get_mut().scale.x,
 						self.arrangement.transport(),
 					);
@@ -712,7 +711,7 @@ impl ArrangementView {
 				}
 				Tab::PianoRoll => {
 					self.piano_roll.get_mut().finish();
-					let snap_step = snap_step(
+					let snap_step = beats_snap_step(
 						self.playlist.get_mut().scale.x,
 						self.arrangement.transport(),
 					);
@@ -725,7 +724,7 @@ impl ArrangementView {
 			Message::ArrowRight => match self.tab {
 				Tab::Playlist => {
 					self.playlist.get_mut().finish();
-					let snap_step = snap_step(
+					let snap_step = beats_snap_step(
 						self.playlist.get_mut().scale.x,
 						self.arrangement.transport(),
 					);
@@ -745,7 +744,7 @@ impl ArrangementView {
 				}
 				Tab::PianoRoll => {
 					self.piano_roll.get_mut().finish();
-					let snap_step = snap_step(
+					let snap_step = beats_snap_step(
 						self.playlist.get_mut().scale.x,
 						self.arrangement.transport(),
 					);
@@ -785,7 +784,10 @@ impl ArrangementView {
 							self.arrangement.tracks()[track].clips[clip]
 								.end(self.arrangement.transport()),
 						)
-						.round(snap_step(playlist.scale.x, self.arrangement.transport()));
+						.round(beats_snap_step(
+							playlist.scale.x,
+							self.arrangement.transport(),
+						));
 
 						self.arrangement.clip_trim_end_to(track, clip, pos.end());
 						self.arrangement
@@ -800,7 +802,10 @@ impl ArrangementView {
 					for &note in &piano_roll.primary {
 						let pos = self.arrangement.midi_patterns()[&clip.pattern].notes[note]
 							.position
-							.round(snap_step(piano_roll.scale.x, self.arrangement.transport()));
+							.round(beats_snap_step(
+								piano_roll.scale.x,
+								self.arrangement.transport(),
+							));
 
 						self.arrangement
 							.note_trim_end_to(clip.pattern, note, pos.end());
