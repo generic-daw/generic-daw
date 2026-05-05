@@ -18,8 +18,8 @@ use iced::{
 	mouse::Interaction,
 	padding,
 	widget::{
-		button, checkbox, column, container, iced, mouse_area, opaque, pick_list, row, rule,
-		scrollable, slider, space, text, value,
+		button, center_x, checkbox, column, container, iced, mouse_area, opaque, pick_list, row,
+		rule, scrollable, slider, space, text, value,
 	},
 	window,
 };
@@ -330,31 +330,28 @@ impl ConfigView {
 					.style(container_with_radius(weak_bordered_box, 5)),
 					rule::horizontal(1),
 					row![
-						row![
-							button(mic())
-								.style(button_with_radius(button::primary, border::left(5)))
-								.padding(5)
-								.on_press_maybe(
-									(self.tab != Tab::Input)
-										.then_some(Message::ChangedTab(Tab::Input))
-								),
-							button(volume_2())
-								.style(button_with_radius(button::primary, border::right(5)))
-								.padding(5)
-								.on_press_maybe(
-									(self.tab != Tab::Output)
-										.then_some(Message::ChangedTab(Tab::Output))
-								)
-						],
-						space::horizontal(),
-						device.buffer_size.map(|buffer_size| text!(
-							"{buffer_size} smp @ {} hz = {:.1} ms",
-							device.sample_rate,
-							buffer_size.get() as f32 / device.sample_rate.get() as f32 * 1000.0
-						)
-						.font(Font::MONOSPACE)
-						.size(12)),
-						space::horizontal(),
+						button(mic())
+							.style(button_with_radius(button::primary, border::left(5)))
+							.padding(5)
+							.on_press_maybe(
+								(self.tab != Tab::Input).then_some(Message::ChangedTab(Tab::Input))
+							),
+						button(volume_2())
+							.style(button_with_radius(button::primary, border::right(5)))
+							.padding(5)
+							.on_press_maybe(
+								(self.tab != Tab::Output)
+									.then_some(Message::ChangedTab(Tab::Output))
+							),
+						center_x(device.buffer_size.map(|buffer_size| {
+							text!(
+								"{buffer_size} smp @ {} hz = {:.1} ms",
+								device.sample_rate,
+								buffer_size.get() as f32 / device.sample_rate.get() as f32 * 1000.0
+							)
+							.font(Font::MONOSPACE)
+							.size(12)
+						})),
 						match self.tab {
 							Tab::Input => "Input",
 							Tab::Output => "Output",
