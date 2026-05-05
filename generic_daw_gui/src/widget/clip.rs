@@ -6,10 +6,7 @@ use crate::{
 		px_to_time, snap_step, time_to_px,
 	},
 };
-use generic_daw_core::{
-	Transport,
-	time::{BeatRange, BeatTime, OffsetBeatRange},
-};
+use generic_daw_core::{Transport, time::BeatTime};
 use iced::{
 	Event, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
@@ -175,10 +172,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				}
 			}
 
-			let stretch = playlist.scale.x
-				+ match self.inner {
-					Inner::AudioClip(inner) => inner.clip.stretch.log2() as f32,
-					Inner::MidiClip(..) | Inner::Recording(..) => 0.0,
+			let stretch = playlist.scale.x.exp2()
+				* match self.inner {
+					Inner::AudioClip(inner) => inner.clip.stretch as f32,
+					Inner::MidiClip(..) | Inner::Recording(..) => 1.0,
 				};
 
 			if state.last_stretch != stretch {
@@ -400,10 +397,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			}
 		}
 
-		let height = layout.bounds().height - LINE_HEIGHT;
-		let hidden_start_px = layout.position().x - bounds.x;
-		let hidden_top_px = layout.position().y - bounds.y;
-
 		match self.inner {
 			Inner::AudioClip(inner) => {
 				if cache.is_empty()
@@ -411,27 +404,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						let resample_ratio = inner.sample.resample_ratio(self.transport).recip();
 						let stretch = inner.clip.stretch * resample_ratio;
 
-						let position = OffsetBeatRange::new(
-							BeatRange::new(
-								inner.clip.position.start(),
-								inner.clip.position.start()
-									+ (inner.clip.position.len() * stretch)
-										.to_beat_time(self.transport),
-							),
-							(inner.clip.position.offset() * resample_ratio)
-								.to_beat_time(self.transport),
-						);
-
 						inner.sample.lods.mesh(
 							&inner.sample.samples,
-							self.transport,
-							position,
+							(inner.clip.position.offset() * resample_ratio)
+								.to_samples(self.transport),
 							playlist.scale.x.exp2() * stretch as f32,
-							height,
 							theme.palette().background.strong.text,
-							lower_bounds.size(),
-							hidden_start_px,
-							hidden_top_px,
+							layout.bounds().shrink(padding::top(LINE_HEIGHT)),
+							lower_bounds,
 						)
 					}) {
 					cache.update(Arc::from([mesh]));
@@ -453,7 +433,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					});
 
 				let samples_per_px = playlist.scale.x.exp2();
-				let note_height = height / f32::from(max - min + 3);
+				let note_height = (layout.bounds().height - LINE_HEIGHT) / f32::from(max - min + 3);
 				let offset = Vector::new(layout.position().x, layout.position().y + LINE_HEIGHT);
 
 				for note in &inner.pattern.notes {
@@ -492,23 +472,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			Inner::Recording(inner) => {
 				if cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
-						let position = BeatRange::new(
-							inner.position,
-							inner.position + inner.len(self.transport),
-						)
-						.into();
-
 						inner.lods.mesh(
 							inner.core.samples(),
-							self.transport,
-							position,
+							0,
 							playlist.scale.x.exp2()
 								/ inner.core.resample_ratio(self.transport) as f32,
-							height,
 							theme.palette().background.strong.text,
-							lower_bounds.size(),
-							hidden_start_px,
-							hidden_top_px,
+							layout.bounds().shrink(padding::top(LINE_HEIGHT)),
+							lower_bounds,
 						)
 					}) {
 					cache.update(Arc::from([mesh]));

@@ -1,6 +1,5 @@
-use generic_daw_core::{Transport, time::OffsetBeatRange};
 use iced::{
-	Color, Point, Rectangle, Size, Transformation,
+	Color, Point, Rectangle, Transformation,
 	advanced::graphics::{
 		Mesh,
 		color::{self, Packed},
@@ -25,26 +24,20 @@ impl Lods {
 	pub fn mesh(
 		&self,
 		samples: &[f32],
-		transport: &Transport,
-		position: OffsetBeatRange,
+		offset: usize,
 		samples_per_px: f32,
-		height: f32,
 		color: Color,
-		clipped_size: Size,
-		hidden_start_px: f32,
-		hidden_top_px: f32,
+		unclipped_bounds: Rectangle,
+		clipped_bounds: Rectangle,
 	) -> Option<Mesh> {
 		mesh(
-			self.0.as_ref(),
+			&self.0,
 			samples,
-			transport,
-			position,
+			offset,
 			samples_per_px,
-			height,
 			color,
-			clipped_size,
-			hidden_start_px,
-			hidden_top_px,
+			unclipped_bounds,
+			clipped_bounds,
 		)
 	}
 }
@@ -90,26 +83,20 @@ impl LodsBuilder {
 	pub fn mesh(
 		&self,
 		samples: &[f32],
-		transport: &Transport,
-		position: OffsetBeatRange,
+		offset: usize,
 		samples_per_px: f32,
-		height: f32,
 		color: Color,
-		clipped_size: Size,
-		hidden_start_px: f32,
-		hidden_top_px: f32,
+		unclipped_bounds: Rectangle,
+		clipped_bounds: Rectangle,
 	) -> Option<Mesh> {
 		mesh(
-			self.0.as_ref(),
+			&self.0,
 			samples,
-			transport,
-			position,
+			offset,
 			samples_per_px,
-			height,
 			color,
-			clipped_size,
-			hidden_start_px,
-			hidden_top_px,
+			unclipped_bounds,
+			clipped_bounds,
 		)
 	}
 
@@ -127,14 +114,11 @@ impl LodsBuilder {
 fn mesh(
 	lods: &[impl AsRef<[(f32, f32)]>],
 	samples: &[f32],
-	transport: &Transport,
-	position: OffsetBeatRange,
+	offset: usize,
 	samples_per_px: f32,
-	height: f32,
 	color: Color,
-	clipped_size: Size,
-	hidden_start_px: f32,
-	hidden_top_px: f32,
+	unclipped_bounds: Rectangle,
+	clipped_bounds: Rectangle,
 ) -> Option<Mesh> {
 	fn vertices(
 		iter: impl IntoIterator<Item = (f32, f32)>,
@@ -179,7 +163,7 @@ fn mesh(
 			.collect()
 	}
 
-	let mesh_lod = (samples_per_px.log2() - 1.0) as usize;
+	let mesh_lod = (samples_per_px.abs().log2() - 1.0) as usize;
 	let saved_lod = (mesh_lod / STEP_SIZE).checked_sub(1);
 	let lod_slices_per_mesh_slice = 1 << (mesh_lod % STEP_SIZE);
 
@@ -188,19 +172,24 @@ fn mesh(
 	}
 
 	let samples_per_mesh_slice = (2 << mesh_lod) as f32;
-	let px_per_mesh_slice = samples_per_mesh_slice / samples_per_px;
+	let px_per_mesh_slice = samples_per_mesh_slice / samples_per_px.abs();
 
 	let lod_slices_per_sample = lod_slices_per_mesh_slice as f32 / samples_per_mesh_slice;
 	let lod_slices_per_px = lod_slices_per_mesh_slice as f32 / px_per_mesh_slice;
 
-	let (start, end, offset) = position.to_samples(transport);
+	let lod_len_f = (clipped_bounds.width * lod_slices_per_px)
+		.min((samples.len() as f32 - offset as f32) * lod_slices_per_sample);
 
-	let hidden_start_samples = 0f32.max(-hidden_start_px * samples_per_px);
+	let lod_start_f = if samples_per_px.is_sign_positive() {
+		offset as f32 * lod_slices_per_sample
+			+ (clipped_bounds.x - unclipped_bounds.x) * lod_slices_per_px
+	} else {
+		(samples.len() as f32 - offset as f32) * lod_slices_per_sample
+			- (clipped_bounds.x - unclipped_bounds.x) * lod_slices_per_px
+			- lod_len_f
+	};
 
-	let lod_start_f = (offset as f32 + hidden_start_samples) * lod_slices_per_sample;
-	let view_len_f = (end - start) as f32 * lod_slices_per_sample;
-	let view_len_f = view_len_f.min(clipped_size.width * lod_slices_per_px);
-	let lod_end_f = lod_start_f + view_len_f;
+	let lod_end_f = lod_start_f + lod_len_f;
 
 	let lod_start = lod_start_f as usize;
 	let lod_end = lod_end_f.ceil() as usize;
@@ -218,31 +207,56 @@ fn mesh(
 	}
 
 	let color = color::pack(color);
-	let jitter_correct = (lod_start as f32 - lod_start_f) / lod_slices_per_px;
 	let vertices = saved_lod.map_or_else(
 		|| {
-			vertices(
-				samples[2 * lod_start..2 * lod_end]
-					.chunks(2 * lod_slices_per_mesh_slice)
-					.map(samples_min_max),
-				height,
-				color,
-				px_per_mesh_slice,
-				jitter_correct,
-				hidden_top_px,
-			)
+			let base = samples[2 * lod_start..2 * lod_end]
+				.chunks(2 * lod_slices_per_mesh_slice)
+				.map(samples_min_max);
+
+			if samples_per_px.is_sign_positive() {
+				vertices(
+					base,
+					unclipped_bounds.height,
+					color,
+					px_per_mesh_slice,
+					(lod_start as f32 - lod_start_f) / lod_slices_per_px,
+					unclipped_bounds.y - clipped_bounds.y,
+				)
+			} else {
+				vertices(
+					base.rev(),
+					unclipped_bounds.height,
+					color,
+					px_per_mesh_slice,
+					(lod_end_f - lod_end as f32) / lod_slices_per_px,
+					unclipped_bounds.y - clipped_bounds.y,
+				)
+			}
 		},
 		|saved_lod| {
-			vertices(
-				lods[saved_lod].as_ref()[lod_start..lod_end]
-					.chunks(lod_slices_per_mesh_slice)
-					.map(lod_min_max),
-				height,
-				color,
-				px_per_mesh_slice,
-				jitter_correct,
-				hidden_top_px,
-			)
+			let base = lods[saved_lod].as_ref()[lod_start..lod_end]
+				.chunks(lod_slices_per_mesh_slice)
+				.map(lod_min_max);
+
+			if samples_per_px.is_sign_positive() {
+				vertices(
+					base,
+					unclipped_bounds.height,
+					color,
+					px_per_mesh_slice,
+					(lod_start as f32 - lod_start_f) / lod_slices_per_px,
+					unclipped_bounds.y - clipped_bounds.y,
+				)
+			} else {
+				vertices(
+					base.rev(),
+					unclipped_bounds.height,
+					color,
+					px_per_mesh_slice,
+					(lod_end_f - lod_end as f32) / lod_slices_per_px,
+					unclipped_bounds.y - clipped_bounds.y,
+				)
+			}
 		},
 	);
 
@@ -257,7 +271,7 @@ fn mesh(
 	Some(Mesh::Solid {
 		buffers: Indexed { vertices, indices },
 		transformation: Transformation::IDENTITY,
-		clip_bounds: Rectangle::new(Point::ORIGIN, clipped_size),
+		clip_bounds: Rectangle::new(Point::ORIGIN, clipped_bounds.size()),
 	})
 }
 

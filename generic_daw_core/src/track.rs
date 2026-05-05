@@ -1,6 +1,6 @@
 use crate::{
 	Channel, Clip, Event, MidiNote, NodeAction, NodeId, NodeImpl, Update, audio_thread::State,
-	midi_clip::VoiceId, voice_alloc::VoiceAlloc,
+	midi_clip::VoiceId, time::SecondsTime, voice_alloc::VoiceAlloc,
 };
 use clap_host::events::Match;
 use std::num::NonZero;
@@ -85,6 +85,16 @@ impl Track {
 			}
 			NodeAction::ClipStretchEndTo(index, pos) => {
 				self.clips[index].stretch_end_to(pos, &state.transport);
+			}
+			NodeAction::ClipReverse(index) => {
+				let Clip::Audio(clip) = &mut self.clips[index] else {
+					panic!();
+				};
+				clip.stretch *= -1.0;
+				clip.position.reverse(SecondsTime::from_samples(
+					state.samples[&clip.sample].samples.len(),
+					&state.transport,
+				));
 			}
 			NodeAction::ClipSlipTo(index, pos) => {
 				self.clips[index].slip_to(pos, &state.transport);

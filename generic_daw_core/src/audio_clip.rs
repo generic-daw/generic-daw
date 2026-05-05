@@ -35,12 +35,17 @@ impl AudioClip {
 
 		let resample_ratio = self.stretch * resample_ratio;
 
-		let read_start = offset.min(sample.samples.len());
 		let read_len = sample
 			.samples
 			.len()
 			.saturating_sub(offset)
-			.min((self.position.len() * resample_ratio).to_samples(&state.transport));
+			.min((self.position.len() * resample_ratio.abs()).to_samples(&state.transport));
+
+		let read_start = if resample_ratio.is_sign_positive() {
+			offset.min(sample.samples.len())
+		} else {
+			sample.samples.len().saturating_sub(read_len + offset)
+		};
 
 		resample_cubic(
 			&mut audio[write_start..],

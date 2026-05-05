@@ -72,6 +72,7 @@ pub enum NodeAction {
 	ClipTrimEndTo(usize, BeatTime),
 	ClipStretchStartTo(usize, BeatTime),
 	ClipStretchEndTo(usize, BeatTime),
+	ClipReverse(usize),
 	ClipSlipTo(usize, BeatTime),
 
 	ChannelToggleEnabled,

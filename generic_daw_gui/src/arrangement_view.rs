@@ -156,6 +156,7 @@ pub enum Message {
 	UnselectAll,
 	Duplicate,
 	Delete,
+	Reverse,
 
 	OnDrag(f32),
 	OnDragEnd,
@@ -919,6 +920,16 @@ impl ArrangementView {
 					self.piano_roll.get_mut().finish();
 					self.handle_piano_roll_action(piano_roll::Action::Delete);
 				}
+			},
+			Message::Reverse => match self.tab {
+				Tab::Playlist => {
+					let playlist = self.playlist.get_mut();
+					playlist.finish();
+					for &(track, clip) in &playlist.primary {
+						self.arrangement.clip_reverse(track, clip);
+					}
+				}
+				Tab::Mixer | Tab::PianoRoll => {}
 			},
 			Message::OnDrag(split_at) => {
 				state.plugins_panel_split_at = split_at.clamp(200.0, 400.0);
@@ -2056,6 +2067,7 @@ impl ArrangementView {
 				Some('a') => Some(Message::SelectAll),
 				Some('d') => Some(Message::Duplicate),
 				Some('i') => Some(Message::SelectInverse),
+				Some('r') => Some(Message::Reverse),
 				_ => match key.as_ref() {
 					keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
 						Some(Message::TransposeOctUp)

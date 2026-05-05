@@ -24,7 +24,9 @@ impl Clip {
 
 	pub fn offset(&self, transport: &Transport) -> BeatTime {
 		match self {
-			Self::Audio(clip) => (clip.position.offset() / clip.stretch).to_beat_time(transport),
+			Self::Audio(clip) => {
+				(clip.position.offset() / clip.stretch.abs()).to_beat_time(transport)
+			}
 			Self::Midi(clip) => clip.position.offset(),
 		}
 	}
@@ -38,9 +40,10 @@ impl Clip {
 
 	pub fn trim_start_to(&mut self, new_start: BeatTime, transport: &Transport) {
 		match self {
-			Self::Audio(clip) => clip
-				.position
-				.trim_start_to(new_start, transport, clip.stretch),
+			Self::Audio(clip) => {
+				clip.position
+					.trim_start_to(new_start, transport, clip.stretch.abs());
+			}
 			Self::Midi(clip) => clip.position.trim_start_to(new_start),
 		}
 	}
@@ -61,7 +64,9 @@ impl Clip {
 
 	pub fn slip_to(&mut self, new_start: BeatTime, transport: &Transport) {
 		match self {
-			Self::Audio(clip) => clip.position.slip_to(new_start * clip.stretch, transport),
+			Self::Audio(clip) => clip
+				.position
+				.slip_to(new_start * clip.stretch.abs(), transport),
 			Self::Midi(clip) => clip.position.slip_to(new_start),
 		}
 	}
