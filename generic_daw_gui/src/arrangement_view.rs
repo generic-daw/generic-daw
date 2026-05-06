@@ -1132,7 +1132,7 @@ impl ArrangementView {
 						let start = clip.start() + BeatTime::TICK;
 						let end = clip.end(self.arrangement.transport()) - BeatTime::TICK;
 						pos = pos.clamp(start, end);
-						let rhs = self.arrangement.insert_clip(track, clip, lhs + 1);
+						let rhs = self.arrangement.duplicate_clip(track, lhs);
 						self.arrangement.clip_trim_end_to(track, lhs, pos);
 						self.arrangement.clip_trim_start_to(track, rhs, pos);
 						primary.insert((track, lhs));
@@ -1304,7 +1304,7 @@ impl ArrangementView {
 						let start = note.position.start() + BeatTime::TICK;
 						let end = note.position.end() - BeatTime::TICK;
 						pos = pos.clamp(start, end);
-						let rhs = self.arrangement.insert_note(clip.pattern, note, lhs + 1);
+						let rhs = self.arrangement.duplicate_note(clip.pattern, lhs);
 						self.arrangement.note_trim_end_to(clip.pattern, lhs, pos);
 						self.arrangement.note_trim_start_to(clip.pattern, rhs, pos);
 						primary.insert(lhs);

@@ -467,7 +467,7 @@ impl Arrangement {
 		self.insert_clip(track, clip, self.tracks[track].clips.len())
 	}
 
-	pub fn insert_clip(&mut self, track: usize, clip: impl Into<Clip>, idx: usize) -> usize {
+	fn insert_clip(&mut self, track: usize, clip: impl Into<Clip>, idx: usize) -> usize {
 		let clip = clip.into();
 		match clip {
 			Clip::Audio(clip) => self.samples.get_mut(&clip.sample).unwrap().refs += 1,
@@ -597,7 +597,7 @@ impl Arrangement {
 		self.insert_note(pattern, note, self.midi_patterns[&pattern].notes.len())
 	}
 
-	pub fn insert_note(&mut self, pattern: MidiPatternId, note: MidiNote, idx: usize) -> usize {
+	fn insert_note(&mut self, pattern: MidiPatternId, note: MidiNote, idx: usize) -> usize {
 		self.midi_patterns
 			.get_mut(&pattern)
 			.unwrap()
