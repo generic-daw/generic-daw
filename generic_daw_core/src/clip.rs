@@ -74,20 +74,6 @@ impl Clip {
 		}
 	}
 
-	pub fn stretch_start_to(&mut self, new_start: BeatTime, transport: &Transport) {
-		match self {
-			Self::Audio(clip) => {
-				clip.stretch *= clip.position.stretch_start_to(new_start, transport);
-				clip.stretch = clip
-					.stretch
-					.abs()
-					.clamp(2f64.powi(-10), 2f64.powi(10))
-					.copysign(clip.stretch);
-			}
-			Self::Midi(..) => panic!(),
-		}
-	}
-
 	pub fn slip_to(&mut self, new_offset: BeatTime, transport: &Transport) {
 		match self {
 			Self::Audio(clip) => clip
