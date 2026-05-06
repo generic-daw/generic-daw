@@ -36,7 +36,7 @@ impl MidiClip {
 
 		state.midi_patterns[&self.pattern]
 			.notes
-			.iter()
+			.values()
 			.filter_map(|&(mut note)| {
 				note.position = (note.position + self.position.start())
 					.saturating_sub(self.position.offset())?
@@ -72,7 +72,7 @@ impl MidiClip {
 
 		state.midi_patterns[&self.pattern]
 			.notes
-			.iter()
+			.values()
 			.filter_map(|&(mut note)| {
 				note.position = (note.position + self.position.start())
 					.saturating_sub(self.position.offset())?

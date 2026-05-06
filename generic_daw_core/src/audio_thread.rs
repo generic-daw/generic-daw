@@ -1,6 +1,7 @@
 use crate::{
-	AutomationPattern, AutomationPatternAction, AutomationPatternId, Channel, Clip, MidiPattern,
-	MidiPatternAction, MidiPatternId, Node, NodeId, PanMode, PluginId, Sample, SampleId,
+	AudioClipId, AutomationPattern, AutomationPatternAction, AutomationPatternId, Channel, Clip,
+	ClipId, MidiPattern, MidiPatternAction, MidiPatternId, Node, NodeId, PanMode, PluginId, Sample,
+	SampleId,
 	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -65,15 +66,15 @@ const _: () = assert!(size_of::<Message>() == 64);
 
 #[derive(Debug)]
 pub enum NodeAction {
-	ClipAdd(Clip, usize),
-	ClipRemove(usize),
-	ClipMoveTo(usize, BeatTime),
-	ClipTrimStartTo(usize, BeatTime),
-	ClipTrimEndTo(usize, BeatTime),
-	ClipStretchStartTo(usize, BeatTime),
-	ClipStretchEndTo(usize, BeatTime),
-	ClipReverse(usize),
-	ClipSlipTo(usize, BeatTime),
+	ClipAdd(Clip),
+	ClipRemove(ClipId),
+	ClipMoveTo(ClipId, BeatTime),
+	ClipTrimStartTo(ClipId, BeatTime),
+	ClipTrimEndTo(ClipId, BeatTime),
+	ClipStretchStartTo(AudioClipId, BeatTime),
+	ClipStretchEndTo(AudioClipId, BeatTime),
+	ClipReverse(AudioClipId),
+	ClipSlipTo(ClipId, BeatTime),
 
 	ChannelToggleEnabled,
 	ChannelToggleBypassed,

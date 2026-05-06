@@ -493,8 +493,7 @@ impl ArrangementView {
 					}
 				}
 
-				let track = self.arrangement.track_of(node).unwrap();
-				self.arrangement.remove_track(node);
+				let track = self.arrangement.remove_track(node);
 				self.update_selection(|c| update_selection_delete_track(c, track));
 
 				if self
@@ -1007,7 +1006,7 @@ impl ArrangementView {
 						let transport = *self.arrangement.transport();
 						Task::future(unblock(move || {
 							Message::MidiPatternLoaded(
-								MidiPatternPair::from_midi(path, &transport)
+								MidiPatternPair::from_midi(&path, &transport)
 									.map(|pair| (Box::new(pair), track, pos)),
 							)
 						}))

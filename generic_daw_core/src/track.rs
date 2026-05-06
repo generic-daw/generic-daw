@@ -1,13 +1,13 @@
 use crate::{
-	Channel, Clip, Event, MidiNote, NodeAction, NodeId, NodeImpl, Update, audio_thread::State,
-	midi_clip::VoiceId, voice_alloc::VoiceAlloc,
+	Channel, Clip, ClipId, Event, MidiNote, NodeAction, NodeId, NodeImpl, Update,
+	audio_thread::State, midi_clip::VoiceId, voice_alloc::VoiceAlloc,
 };
 use clap_host::events::Match;
-use std::num::NonZero;
+use std::{collections::HashMap, num::NonZero};
 
 #[derive(Debug)]
 pub struct Track {
-	clips: Vec<Clip>,
+	clips: HashMap<ClipId, Clip>,
 	voices: VoiceAlloc<VoiceId, MidiNote>,
 	last_polyphony: usize,
 	channel: Channel,
@@ -16,7 +16,7 @@ pub struct Track {
 impl Default for Track {
 	fn default() -> Self {
 		Self {
-			clips: Vec::new(),
+			clips: HashMap::new(),
 			voices: VoiceAlloc::new(NonZero::new(128).unwrap()),
 			last_polyphony: 0,
 			channel: Channel::default(),
@@ -32,7 +32,7 @@ impl NodeImpl for Track {
 		self.voices.deactivate_all();
 
 		if state.transport.playing {
-			for clip in &mut self.clips {
+			for clip in self.clips.values_mut() {
 				clip.diff(state, audio, events, &mut self.voices);
 			}
 		}
@@ -47,7 +47,7 @@ impl NodeImpl for Track {
 		}
 
 		if state.transport.playing {
-			for clip in &mut self.clips {
+			for clip in self.clips.values_mut() {
 				clip.process(state, audio, events, &mut self.voices);
 			}
 		}
@@ -71,31 +71,56 @@ impl NodeImpl for Track {
 impl Track {
 	pub fn apply(&mut self, action: NodeAction, state: &State) {
 		match action {
-			NodeAction::ClipAdd(clip, idx) => self.clips.insert(idx, clip),
-			NodeAction::ClipRemove(index) => _ = self.clips.remove(index),
-			NodeAction::ClipMoveTo(index, pos) => self.clips[index].move_to(pos),
-			NodeAction::ClipTrimStartTo(index, pos) => {
-				self.clips[index].trim_start_to(pos, &state.transport);
+			NodeAction::ClipAdd(clip) => _ = self.clips.insert(clip.id(), clip),
+			NodeAction::ClipRemove(id) => _ = self.clips.remove(&id),
+			NodeAction::ClipMoveTo(id, pos) => self.clips.get_mut(&id).unwrap().move_to(pos),
+			NodeAction::ClipTrimStartTo(id, pos) => {
+				self.clips
+					.get_mut(&id)
+					.unwrap()
+					.trim_start_to(pos, &state.transport);
 			}
-			NodeAction::ClipTrimEndTo(index, pos) => {
-				self.clips[index].trim_end_to(pos, &state.transport);
+			NodeAction::ClipTrimEndTo(id, pos) => {
+				self.clips
+					.get_mut(&id)
+					.unwrap()
+					.trim_end_to(pos, &state.transport);
 			}
-			NodeAction::ClipStretchStartTo(index, pos) => {
-				self.clips[index].stretch_start_to(pos, &state.transport);
+			NodeAction::ClipStretchStartTo(id, pos) => {
+				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
+					unreachable!();
+				};
+				clip.stretch *= clip.position.stretch_start_to(pos, &state.transport);
+				clip.stretch = clip
+					.stretch
+					.abs()
+					.clamp(2f64.powi(-10), 2f64.powi(10))
+					.copysign(clip.stretch);
 			}
-			NodeAction::ClipStretchEndTo(index, pos) => {
-				self.clips[index].stretch_end_to(pos, &state.transport);
+			NodeAction::ClipStretchEndTo(id, pos) => {
+				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
+					unreachable!();
+				};
+				clip.stretch *= clip.position.stretch_end_to(pos, &state.transport);
+				clip.stretch = clip
+					.stretch
+					.abs()
+					.clamp(2f64.powi(-10), 2f64.powi(10))
+					.copysign(clip.stretch);
 			}
-			NodeAction::ClipReverse(index) => {
-				let Clip::Audio(clip) = &mut self.clips[index] else {
-					panic!();
+			NodeAction::ClipReverse(id) => {
+				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
+					unreachable!();
 				};
 				clip.stretch *= -1.0;
 				clip.position
 					.reverse(state.samples[&clip.sample].len(&state.transport));
 			}
-			NodeAction::ClipSlipTo(index, pos) => {
-				self.clips[index].slip_to(pos, &state.transport);
+			NodeAction::ClipSlipTo(id, pos) => {
+				self.clips
+					.get_mut(&id)
+					.unwrap()
+					.slip_to(pos, &state.transport);
 			}
 			action => self.channel.apply(action),
 		}

@@ -3,11 +3,11 @@ use crate::{
 	midi_note::MidiNoteId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
-use log::warn;
 use midly::{
 	Format, MidiMessage, Timing, TrackEventKind,
 	num::{u7, u28},
 };
+use std::collections::HashMap;
 use utils::unique_id;
 
 unique_id!(midi_pattern_id);
@@ -16,32 +16,32 @@ pub use midi_pattern_id::Id as MidiPatternId;
 
 #[derive(Clone, Copy, Debug)]
 pub enum MidiPatternAction {
-	Add(MidiNote, usize),
-	Remove(usize),
-	ChangeKey(usize, MidiKey),
-	ChangeVelocity(usize, f32),
-	MoveTo(usize, BeatTime),
-	TrimStartTo(usize, BeatTime),
-	TrimEndTo(usize, BeatTime),
+	Add(MidiNote),
+	Remove(MidiNoteId),
+	ChangeKey(MidiNoteId, MidiKey),
+	ChangeVelocity(MidiNoteId, f32),
+	MoveTo(MidiNoteId, BeatTime),
+	TrimStartTo(MidiNoteId, BeatTime),
+	TrimEndTo(MidiNoteId, BeatTime),
 }
 
 #[derive(Clone, Debug)]
 pub struct MidiPattern {
 	pub id: MidiPatternId,
-	pub notes: Vec<MidiNote>,
+	pub notes: HashMap<MidiNoteId, MidiNote>,
 }
 
 impl MidiPattern {
 	#[must_use]
-	pub fn from_notes(notes: Vec<MidiNote>) -> Self {
+	pub fn from_notes(notes: &[MidiNote]) -> Self {
 		Self {
 			id: MidiPatternId::unique(),
-			notes,
+			notes: notes.iter().copied().map(|note| (note.id, note)).collect(),
 		}
 	}
 
 	#[must_use]
-	pub fn from_midi(bytes: &[u8], transport: &Transport) -> Option<Self> {
+	pub fn parse_midi(bytes: &[u8], transport: &Transport) -> Option<Vec<MidiNote>> {
 		#[derive(Clone, Copy, Default, Eq, PartialEq)]
 		enum Entry {
 			Some(u28, u7),
@@ -67,7 +67,7 @@ impl MidiPattern {
 		};
 
 		let mut notes = Vec::new();
-		let mut playing = [Entry::None; 128];
+		let mut playing = [[Entry::None; 128]; 4];
 
 		let mut time = u28::new(0);
 		for track in tracks {
@@ -80,9 +80,10 @@ impl MidiPattern {
 				match event.kind {
 					TrackEventKind::Midi {
 						message: MidiMessage::NoteOn { key, vel },
-						..
+						channel,
 					} => {
-						let entry = &mut playing[usize::from(key.as_int())];
+						let entry =
+							&mut playing[usize::from(channel.as_int())][usize::from(key.as_int())];
 
 						if *entry == Entry::None {
 							*entry = Entry::Some(time, vel);
@@ -90,9 +91,10 @@ impl MidiPattern {
 					}
 					TrackEventKind::Midi {
 						message: MidiMessage::NoteOff { key, .. },
-						..
+						channel,
 					} => {
-						let entry = &mut playing[usize::from(key.as_int())];
+						let entry =
+							&mut playing[usize::from(channel.as_int())][usize::from(key.as_int())];
 
 						if let Entry::Some(start, vel) = std::mem::take(entry) {
 							let note = MidiNote {
@@ -112,9 +114,12 @@ impl MidiPattern {
 				}
 			}
 
-			for (key, entry) in playing.iter_mut().enumerate() {
+			for (key, entry) in playing
+				.iter_mut()
+				.flat_map(|playing| playing.iter_mut().enumerate())
+			{
 				if let Entry::Some(start, vel) = std::mem::take(entry) {
-					let note = MidiNote {
+					notes.push(MidiNote {
 						key: MidiKey(key as u8),
 						velocity: f32::from(vel.as_int()) / 127.0,
 						position: BeatRange::new(
@@ -122,11 +127,7 @@ impl MidiPattern {
 							midi_tick_to_musical_time(time.as_int()),
 						),
 						id: MidiNoteId::unique(),
-					};
-
-					warn!("note {note:?} wasn't ended");
-
-					notes.push(note);
+					});
 				}
 			}
 
@@ -135,25 +136,26 @@ impl MidiPattern {
 			}
 		}
 
-		Some(Self {
-			id: MidiPatternId::unique(),
-			notes,
-		})
+		Some(notes)
 	}
 
 	pub fn apply(&mut self, action: MidiPatternAction) {
 		match action {
-			MidiPatternAction::Add(note, index) => self.notes.insert(index, note),
-			MidiPatternAction::Remove(index) => _ = self.notes.remove(index),
-			MidiPatternAction::ChangeKey(index, key) => self.notes[index].key = key,
-			MidiPatternAction::ChangeVelocity(index, velocity) => {
-				self.notes[index].velocity = velocity;
+			MidiPatternAction::Add(note) => _ = self.notes.insert(note.id, note),
+			MidiPatternAction::Remove(id) => _ = self.notes.remove(&id),
+			MidiPatternAction::ChangeKey(id, key) => self.notes.get_mut(&id).unwrap().key = key,
+			MidiPatternAction::ChangeVelocity(id, velocity) => {
+				self.notes.get_mut(&id).unwrap().velocity = velocity;
 			}
-			MidiPatternAction::MoveTo(index, pos) => self.notes[index].position.move_to(pos),
-			MidiPatternAction::TrimStartTo(index, pos) => {
-				self.notes[index].position.trim_start_to(pos);
+			MidiPatternAction::MoveTo(id, pos) => {
+				self.notes.get_mut(&id).unwrap().position.move_to(pos);
 			}
-			MidiPatternAction::TrimEndTo(index, pos) => self.notes[index].position.trim_end_to(pos),
+			MidiPatternAction::TrimStartTo(id, pos) => {
+				self.notes.get_mut(&id).unwrap().position.trim_start_to(pos);
+			}
+			MidiPatternAction::TrimEndTo(id, pos) => {
+				self.notes.get_mut(&id).unwrap().position.trim_end_to(pos);
+			}
 		}
 	}
 }

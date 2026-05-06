@@ -1,8 +1,14 @@
 use crate::{SampleId, audio_thread::State, time::OffsetBeatSpan};
 use dsp::resample_cubic;
+use utils::unique_id;
+
+unique_id!(audio_clip_id);
+
+pub use audio_clip_id::Id as AudioClipId;
 
 #[derive(Clone, Copy, Debug)]
 pub struct AudioClip {
+	pub id: AudioClipId,
 	pub sample: SampleId,
 	pub position: OffsetBeatSpan,
 	pub stretch: f64,

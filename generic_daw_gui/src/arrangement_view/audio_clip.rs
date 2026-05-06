@@ -1,8 +1,9 @@
 use crate::arrangement_view::sample::Sample;
-use generic_daw_core::{SampleId, time::OffsetBeatSpan};
+use generic_daw_core::{AudioClipId, SampleId, time::OffsetBeatSpan};
 
 #[derive(Clone, Copy, Debug)]
 pub struct AudioClip {
+	pub id: AudioClipId,
 	pub sample: SampleId,
 	pub position: OffsetBeatSpan,
 	pub stretch: f64,
@@ -11,6 +12,7 @@ pub struct AudioClip {
 impl AudioClip {
 	pub fn new(sample: SampleId) -> Self {
 		Self {
+			id: AudioClipId::unique(),
 			sample,
 			position: OffsetBeatSpan::default(),
 			stretch: 1.0,

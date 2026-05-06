@@ -19,7 +19,7 @@ pub mod time;
 mod track;
 mod voice_alloc;
 
-pub use audio_clip::AudioClip;
+pub use audio_clip::{AudioClip, AudioClipId};
 pub use audio_graph::{NodeId, NodeImpl};
 pub use audio_thread::{Batch, Message, NodeAction, Transport, Update, Version};
 pub use automation_clip::AutomationClip;
@@ -29,7 +29,7 @@ pub use automation_point::{AutomationPoint, AutomationTransition};
 pub use bpm_tapper::BpmTapper;
 pub use channel::{Channel, PanMode, PluginId};
 pub use clap_host;
-pub use clip::Clip;
+pub use clip::{Clip, ClipId};
 pub use cpal::{DeviceDescription, DeviceId, Stream};
 pub use event::Event;
 pub use midi_clip::{MidiClip, MidiClipId};

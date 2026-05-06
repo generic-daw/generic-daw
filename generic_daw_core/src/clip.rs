@@ -1,7 +1,13 @@
 use crate::{
-	AudioClip, Event, MidiClip, MidiNote, Transport, audio_thread::State, midi_clip::VoiceId,
-	time::BeatTime, voice_alloc::VoiceAlloc,
+	AudioClip, AudioClipId, Event, MidiClip, MidiClipId, MidiNote, Transport, audio_thread::State,
+	midi_clip::VoiceId, time::BeatTime, voice_alloc::VoiceAlloc,
 };
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ClipId {
+	Audio(AudioClipId),
+	Midi(MidiClipId),
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum Clip {
@@ -10,6 +16,14 @@ pub enum Clip {
 }
 
 impl Clip {
+	#[must_use]
+	pub fn id(&self) -> ClipId {
+		match self {
+			Self::Audio(clip) => ClipId::Audio(clip.id),
+			Self::Midi(clip) => ClipId::Midi(clip.id),
+		}
+	}
+
 	pub fn diff(
 		&self,
 		state: &State,
@@ -64,20 +78,6 @@ impl Clip {
 		match self {
 			Self::Audio(clip) => {
 				clip.stretch *= clip.position.stretch_start_to(new_start, transport);
-				clip.stretch = clip
-					.stretch
-					.abs()
-					.clamp(2f64.powi(-10), 2f64.powi(10))
-					.copysign(clip.stretch);
-			}
-			Self::Midi(..) => panic!(),
-		}
-	}
-
-	pub fn stretch_end_to(&mut self, new_end: BeatTime, transport: &Transport) {
-		match self {
-			Self::Audio(clip) => {
-				clip.stretch *= clip.position.stretch_end_to(new_end, transport);
 				clip.stretch = clip
 					.stretch
 					.abs()

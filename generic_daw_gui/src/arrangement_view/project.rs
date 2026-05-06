@@ -10,7 +10,7 @@ use crate::{
 	daw::{self, Project},
 };
 use generic_daw_core::{
-	MidiClipId, MidiKey, MidiNote, MidiNoteId, PanMode,
+	AudioClipId, MidiClipId, MidiKey, MidiNote, MidiNoteId, PanMode,
 	clap_host::PluginDescriptor,
 	time::{BeatRange, BeatSpan, BeatTime, OffsetBeatRange, OffsetBeatSpan, SecondsTime},
 };
@@ -475,6 +475,7 @@ impl Arrangement {
 								continue;
 							};
 							Clip::Audio(AudioClip {
+								id: AudioClipId::unique(),
 								sample: *sample,
 								position: clip.position_compat.map_or_else(
 									|| {

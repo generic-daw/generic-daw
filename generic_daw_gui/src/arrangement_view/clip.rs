@@ -1,5 +1,5 @@
 use crate::arrangement_view::{audio_clip::AudioClip, midi_clip::MidiClip};
-use generic_daw_core::{Transport, time::BeatTime};
+use generic_daw_core::{ClipId, Transport, time::BeatTime};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Clip {
@@ -8,6 +8,13 @@ pub enum Clip {
 }
 
 impl Clip {
+	pub fn id(&self) -> ClipId {
+		match self {
+			Self::Audio(clip) => ClipId::Audio(clip.id),
+			Self::Midi(clip) => ClipId::Midi(clip.id),
+		}
+	}
+
 	pub fn start(&self) -> BeatTime {
 		match self {
 			Self::Audio(clip) => clip.position.start(),
@@ -88,10 +95,12 @@ impl From<Clip> for generic_daw_core::Clip {
 	fn from(value: Clip) -> Self {
 		match value {
 			Clip::Audio(AudioClip {
+				id,
 				sample,
 				position,
 				stretch,
 			}) => Self::Audio(generic_daw_core::AudioClip {
+				id,
 				sample,
 				position,
 				stretch,
