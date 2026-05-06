@@ -507,7 +507,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 								|layout| {
 									layout.position() + Vector::new(0.0, layout.bounds().height)
 								},
-							) + Vector::new(state.position.x, 0.0),
+							),
 							Size::new(viewport.width, 50.0),
 						),
 						..Quad::default()
