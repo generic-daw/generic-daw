@@ -1,6 +1,7 @@
 use crate::{
 	arrangement_view::{
 		self,
+		audio_clip::AudioClip,
 		channel::Channel,
 		clip::Clip,
 		midi_clip::MidiClip,
@@ -16,9 +17,9 @@ use crate::{
 	daw,
 };
 use generic_daw_core::{
-	Batch, Message, MidiClipId, MidiKey, MidiNote, MidiNoteId, MidiPatternAction, MidiPatternId,
-	NodeAction, NodeId, NodeImpl, PanMode, PluginId, SampleId, Stream, Transport, Update, Version,
-	build_output_stream,
+	AudioClipId, Batch, Message, MidiClipId, MidiKey, MidiNote, MidiNoteId, MidiPatternAction,
+	MidiPatternId, NodeAction, NodeId, NodeImpl, PanMode, PluginId, SampleId, Stream, Transport,
+	Update, Version, build_output_stream,
 	clap_host::{HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime},
 };
@@ -454,7 +455,10 @@ impl Arrangement {
 
 	pub fn duplicate_clip(&mut self, track: usize, clip: usize) -> usize {
 		let clip = match self.tracks[track].clips[clip] {
-			Clip::Audio(clip) => Clip::Audio(clip),
+			Clip::Audio(clip) => Clip::Audio(AudioClip {
+				id: AudioClipId::unique(),
+				..clip
+			}),
 			Clip::Midi(clip) => Clip::Midi(MidiClip {
 				id: MidiClipId::unique(),
 				..clip
