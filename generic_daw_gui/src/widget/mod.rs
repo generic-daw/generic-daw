@@ -70,7 +70,8 @@ impl<T> Neg for Delta<T> {
 }
 
 pub fn beats_snap_step(mut scale: f32, transport: &Transport) -> BeatTime {
-	scale += -3.5 - (transport.sample_rate.get() as f32 / f32::from(transport.bpm.get())).log2();
+	scale +=
+		2.5 - (60.0 * transport.sample_rate.get() as f32 / f32::from(transport.bpm.get())).log2();
 	if scale < 0.0 {
 		BeatTime::new(0, BeatTime::FACTOR >> -scale.max(-9.0) as u8)
 	} else {
