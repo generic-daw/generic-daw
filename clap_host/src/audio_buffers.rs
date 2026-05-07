@@ -69,12 +69,11 @@ impl AudioBuffers {
 				.get(self.input_config.main_port_index)
 				.unwrap_or(&0);
 
-			let buf = buf.as_chunks().0.iter();
+			let buf = buf.as_chunks::<2>().0.iter();
 
 			if n_channels == 1 {
-				buf.map(|[l, r]| l + r)
-					.zip(input_buffer)
-					.for_each(|(buf, sample)| *sample = buf);
+				buf.zip(input_buffer)
+					.for_each(|(buf, sample)| *sample = buf[0].midpoint(buf[1]));
 			} else if n_channels != 0 {
 				let (l, r) = input_buffer.split_at_mut(self.config.max_frames_count as usize);
 

@@ -245,11 +245,11 @@ fn from_stereo_to_other(a: &mut [f32], b: &[f32], frames: usize) {
 				a[0] = b[0];
 				a[1] = b[1];
 			}),
-		Ordering::Equal => a.iter_mut().zip(b).for_each(|(a, b)| *a = *b),
+		Ordering::Equal => a.copy_from_slice(b),
 		Ordering::Less => a
 			.iter_mut()
 			.zip(b.as_chunks::<2>().0)
-			.for_each(|(a, b)| *a = b[0] + b[1]),
+			.for_each(|(a, b)| *a = b[0].midpoint(b[1])),
 	}
 }
 
@@ -266,7 +266,7 @@ fn from_other_to_stereo(a: &mut [f32], b: &[f32], frames: usize) {
 				a[0] = b[0];
 				a[1] = b[1];
 			}),
-		Ordering::Equal => a.iter_mut().zip(b).for_each(|(a, b)| *a = *b),
+		Ordering::Equal => a.copy_from_slice(b),
 		Ordering::Greater => b.iter().zip(a.as_chunks_mut::<2>().0).for_each(|(b, a)| {
 			a[0] = *b;
 			a[1] = *b;
