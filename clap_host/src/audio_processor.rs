@@ -1,4 +1,5 @@
 use crate::{audio_buffers::AudioBuffers, event_buffers::EventBuffers, shared::Shared};
+use clack_extensions::tail::HostTailImpl;
 use clack_host::host::AudioProcessorHandler;
 use std::sync::atomic::Ordering::Relaxed;
 
@@ -26,6 +27,10 @@ impl<'a> AudioProcessor<'a> {
 }
 
 impl<'a> AudioProcessorHandler<'a> for AudioProcessor<'a> {}
+
+impl HostTailImpl for AudioProcessor<'_> {
+	fn changed(&mut self) {}
+}
 
 impl Drop for AudioProcessor<'_> {
 	fn drop(&mut self) {

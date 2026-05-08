@@ -9,7 +9,7 @@ use clack_extensions::{
 	timer::HostTimerImpl,
 };
 use clack_host::prelude::*;
-use std::{ffi::CStr, sync::atomic::Ordering::Relaxed, time::Duration};
+use std::{ffi::CStr, time::Duration};
 use utils::{NoClone, NoDebug};
 
 #[derive(Clone, Debug)]
@@ -31,7 +31,7 @@ pub enum MainThreadMessage {
 pub struct MainThread<'a> {
 	pub shared: &'a Shared<'a>,
 	pub params_rescan: bool,
-	pub state_mark_dirty: bool,
+	pub state: Option<Box<[u8]>>,
 	pub next_timer_id: u32,
 }
 
@@ -40,7 +40,7 @@ impl<'a> MainThread<'a> {
 		Self {
 			shared,
 			params_rescan: false,
-			state_mark_dirty: false,
+			state: None,
 			next_timer_id: 0,
 		}
 	}
@@ -57,11 +57,7 @@ impl HostAudioPortsImpl for MainThread<'_> {
 		true
 	}
 
-	fn rescan(&mut self, flags: AudioPortRescanFlags) {
-		if flags.requires_deactivate() {
-			self.shared.needs_deactivate.store(true, Relaxed);
-		}
-	}
+	fn rescan(&mut self, _flags: AudioPortRescanFlags) {}
 }
 
 impl HostLatencyImpl for MainThread<'_> {
@@ -106,7 +102,7 @@ impl HostPresetLoadImpl for MainThread<'_> {
 
 impl HostStateImpl for MainThread<'_> {
 	fn mark_dirty(&mut self) {
-		self.state_mark_dirty = true;
+		self.state = None;
 	}
 }
 

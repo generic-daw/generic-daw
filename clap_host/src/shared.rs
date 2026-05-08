@@ -10,6 +10,7 @@ use clack_extensions::{
 	render::PluginRender,
 	state::PluginState,
 	state_context::PluginStateContext,
+	tail::PluginTail,
 	thread_check::HostThreadCheckImpl,
 	timer::PluginTimer,
 };
@@ -38,6 +39,7 @@ pub struct Ext {
 	pub render: OnceLock<NoDebug<PluginRender>>,
 	pub state: OnceLock<NoDebug<PluginState>>,
 	pub state_context: OnceLock<NoDebug<PluginStateContext>>,
+	pub tail: OnceLock<NoDebug<PluginTail>>,
 	pub timer: OnceLock<NoDebug<PluginTimer>>,
 }
 
@@ -97,6 +99,7 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 			render,
 			state,
 			state_context,
+			tail,
 			timer
 		];
 	}

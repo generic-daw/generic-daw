@@ -27,7 +27,6 @@ pub struct Plugin {
 	instance: NoDebug<PluginInstance<Host>>,
 	descriptor: PluginDescriptor,
 	producer: Producer<AudioThreadMessage>,
-	last_state: Option<Box<[u8]>>,
 	is_created: bool,
 	is_shown: bool,
 }
@@ -65,7 +64,6 @@ impl Plugin {
 			instance: instance.into(),
 			descriptor,
 			producer,
-			last_state: None,
 			is_created: false,
 			is_shown: false,
 		};
@@ -449,7 +447,7 @@ impl Plugin {
 
 	#[must_use]
 	pub fn get_state(&mut self, context_type: StateContextType) -> Option<&[u8]> {
-		if self.last_state.is_none() || self.instance.access_handler(|mt| mt.state_mark_dirty) {
+		if self.instance.access_handler(|mt| mt.state.is_none()) {
 			let mut buf = Vec::new();
 
 			if let Err(err) = if let Some(&state_context) = self
@@ -468,11 +466,10 @@ impl Plugin {
 			}
 
 			self.instance
-				.access_handler_mut(|mt| mt.state_mark_dirty = false);
-			self.last_state = Some(buf.into_boxed_slice());
+				.access_handler_mut(|mt| mt.state = Some(buf.into_boxed_slice()));
 		}
 
-		self.last_state.as_deref()
+		self.instance.access_handler(|mt| mt.state.as_deref())
 	}
 
 	pub fn set_state(&mut self, buf: &[u8], context_type: StateContextType) {
@@ -494,7 +491,8 @@ impl Plugin {
 			return;
 		}
 
-		self.last_state = Some(buf.into());
+		self.instance
+			.access_handler_mut(|mt| mt.state = Some(buf.into()));
 	}
 }
 

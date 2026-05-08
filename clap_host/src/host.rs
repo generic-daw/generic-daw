@@ -2,7 +2,7 @@ use crate::{audio_processor::AudioProcessor, main_thread::MainThread, shared::Sh
 use clack_extensions::{
 	audio_ports::HostAudioPorts, gui::HostGui, latency::HostLatency, log::HostLog,
 	note_ports::HostNotePorts, params::HostParams, preset_discovery::HostPresetLoad,
-	state::HostState, thread_check::HostThreadCheck, timer::HostTimer,
+	state::HostState, tail::HostTail, thread_check::HostThreadCheck, timer::HostTimer,
 };
 use clack_host::prelude::*;
 
@@ -24,6 +24,7 @@ impl HostHandlers for Host {
 			.register::<HostParams>()
 			.register::<HostPresetLoad>()
 			.register::<HostState>()
+			.register::<HostTail>()
 			.register::<HostThreadCheck>()
 			.register::<HostTimer>();
 	}

@@ -8,7 +8,7 @@ use std::{collections::HashMap, num::NonZero};
 #[derive(Debug)]
 pub struct Track {
 	clips: HashMap<ClipId, Clip>,
-	voices: VoiceAlloc<VoiceId, MidiNote>,
+	voice_alloc: VoiceAlloc<VoiceId, MidiNote>,
 	last_polyphony: usize,
 	channel: Channel,
 }
@@ -17,7 +17,7 @@ impl Default for Track {
 	fn default() -> Self {
 		Self {
 			clips: HashMap::new(),
-			voices: VoiceAlloc::new(NonZero::new(128).unwrap()),
+			voice_alloc: VoiceAlloc::new(NonZero::new(128).unwrap()),
 			last_polyphony: 0,
 			channel: Channel::default(),
 		}
@@ -29,15 +29,15 @@ impl NodeImpl for Track {
 	type State = State;
 
 	fn process(&mut self, state: &Self::State, audio: &mut [f32], events: &mut Vec<Self::Event>) {
-		self.voices.deactivate_all();
+		self.voice_alloc.deactivate_all();
 
 		if state.transport.playing {
 			for clip in self.clips.values_mut() {
-				clip.diff(state, audio, events, &mut self.voices);
+				clip.diff(state, audio, events, &mut self.voice_alloc);
 			}
 		}
 
-		for voice in self.voices.drain_inactive() {
+		for voice in self.voice_alloc.drain_inactive() {
 			events.push(Event::Off {
 				time: 0,
 				key: voice.info.key.0,
@@ -48,7 +48,7 @@ impl NodeImpl for Track {
 
 		if state.transport.playing {
 			for clip in self.clips.values_mut() {
-				clip.process(state, audio, events, &mut self.voices);
+				clip.process(state, audio, events, &mut self.voice_alloc);
 			}
 		}
 
@@ -127,7 +127,7 @@ impl Track {
 	}
 
 	pub fn collect_updates(&mut self, updates: &mut Vec<Update>) {
-		let polyphony = self.voices.current_polyphony();
+		let polyphony = self.voice_alloc.current_polyphony();
 		if polyphony != self.last_polyphony {
 			self.last_polyphony = polyphony;
 			updates.push(Update::Polyphony(self.id(), polyphony));
