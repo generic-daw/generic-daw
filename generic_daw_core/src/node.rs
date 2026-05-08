@@ -24,10 +24,10 @@ impl NodeImpl for Node {
 		}
 	}
 
-	fn delay(&self) -> usize {
+	fn latency(&self) -> usize {
 		match self {
-			Self::Channel(node) => node.delay(),
-			Self::Track(node) => node.delay(),
+			Self::Channel(node) => node.latency(),
+			Self::Track(node) => node.latency(),
 		}
 	}
 

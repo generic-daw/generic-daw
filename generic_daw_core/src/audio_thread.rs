@@ -409,24 +409,24 @@ impl AudioThread {
 			return;
 		}
 
-		let delay =
-			SecondsTime::from_samples(self.audio_graph.delay(self.master), self.transport());
+		let latency =
+			SecondsTime::from_samples(self.audio_graph.latency(self.master), self.transport());
 
 		let mut start = self
 			.transport()
 			.position
-			.saturating_sub(delay)
+			.saturating_sub(latency)
 			.to_beat_time(self.transport())
 			.beat_floor();
 
 		let end = (self.transport().position
 			+ SecondsTime::from_samples(buf.len(), self.transport()))
-		.saturating_sub(delay)
+		.saturating_sub(latency)
 		.to_beat_time(self.transport())
 		.beat_ceil();
 
 		while start < end {
-			let start_offset = start.to_seconds_time(self.transport()) + delay;
+			let start_offset = start.to_seconds_time(self.transport()) + latency;
 
 			let click = if start
 				.beat()
@@ -498,7 +498,7 @@ impl AudioThread {
 
 		while {
 			render_start = range_start
-				+ SecondsTime::from_samples(self.audio_graph.delay(node), self.transport());
+				+ SecondsTime::from_samples(self.audio_graph.latency(node), self.transport());
 			render_end = render_start + range_len;
 			self.transport().position < render_start
 		} {
@@ -516,7 +516,7 @@ impl AudioThread {
 
 		while {
 			render_start = range_start
-				+ SecondsTime::from_samples(self.audio_graph.delay(node), self.transport());
+				+ SecondsTime::from_samples(self.audio_graph.latency(node), self.transport());
 			render_end = render_start + range_len;
 			self.transport().position < render_end
 		} {

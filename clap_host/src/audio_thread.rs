@@ -208,9 +208,9 @@ impl AudioThread {
 	}
 
 	#[must_use]
-	pub fn delay(&self) -> usize {
+	pub fn latency(&self) -> usize {
 		self.processor.as_ref().map_or(0, |processor| {
-			processor.access_handler(|at| at.audio_buffers.as_ref().unwrap().delay())
+			processor.access_handler(|ap| ap.audio_buffers.as_ref().unwrap().latency())
 		})
 	}
 }

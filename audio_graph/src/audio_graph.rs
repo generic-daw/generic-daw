@@ -125,8 +125,11 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		if self.needs_reset {
 			node.reset();
 
-			for Incoming { delay, events, .. } in buffers.incoming.values_mut() {
-				delay.reset();
+			for Incoming {
+				delay_line, events, ..
+			} in buffers.incoming.values_mut()
+			{
+				delay_line.reset();
 				events.clear();
 			}
 		}
@@ -134,24 +137,32 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		buffers.audio[..self.curr_len].fill(0.0);
 		buffers.events.clear();
 
-		let max_delay = buffers
+		let max_latency = buffers
 			.incoming
 			.keys()
-			.map(|node| self.graph[node].delay.load(Relaxed))
+			.map(|node| self.graph[node].latency.load(Relaxed))
 			.max()
 			.unwrap_or_default();
 
-		for (dep, Incoming { delay, events, mix }) in &mut buffers.incoming {
+		for (
+			dep,
+			Incoming {
+				delay_line,
+				events,
+				mix,
+			},
+		) in &mut buffers.incoming
+		{
 			let dep_entry = &self.graph[dep];
 			let dep_buffers = &*dep_entry.read_buffers_uncontended();
-			let delay_diff = max_delay - dep_entry.delay.load(Relaxed);
-			delay.resize(delay_diff);
+			let latency_diff = max_latency - dep_entry.latency.load(Relaxed);
+			delay_line.resize(latency_diff);
 
-			let audio = if delay_diff == 0 {
+			let audio = if latency_diff == 0 {
 				&dep_buffers.audio[..self.curr_len]
 			} else {
 				scratch[..self.curr_len].copy_from_slice(&dep_buffers.audio[..self.curr_len]);
-				delay.advance(&mut scratch[..self.curr_len]);
+				delay_line.advance(&mut scratch[..self.curr_len]);
 				&scratch[..self.curr_len]
 			};
 
@@ -164,7 +175,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 				dep_buffers
 					.events
 					.iter()
-					.map(|e| e.at(e.time() + delay_diff)),
+					.map(|e| e.at(e.time() + latency_diff)),
 			);
 
 			buffers.events.extend(events.extract_if(.., |e| {
@@ -180,7 +191,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			&mut buffers.audio[..self.curr_len],
 			&mut buffers.events,
 		);
-		entry.delay.store(node.delay() + max_delay, Relaxed);
+		entry.latency.store(node.latency() + max_latency, Relaxed);
 
 		drop(node);
 
@@ -232,8 +243,8 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	#[must_use]
-	pub fn delay(&self, node: NodeId) -> usize {
-		self.graph[&node].delay.load(Relaxed)
+	pub fn latency(&self, node: NodeId) -> usize {
+		self.graph[&node].latency.load(Relaxed)
 	}
 
 	#[must_use]

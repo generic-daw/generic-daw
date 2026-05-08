@@ -202,12 +202,9 @@ impl Plugin {
 		)?;
 
 		if let Some(&latency) = self.instance.access_shared_handler(|s| s.ext.latency.get()) {
-			processor.access_handler_mut(|at| {
-				at.audio_buffers
-					.as_mut()
-					.unwrap()
-					.set_delay(latency.get(&mut self.instance.plugin_handle()));
-			});
+			let latency = latency.get(&mut self.instance.plugin_handle());
+			processor
+				.access_handler_mut(|ap| ap.audio_buffers.as_mut().unwrap().set_latency(latency));
 		}
 
 		self.send(AudioThreadMessage::Activated(NoDebug(processor.into())));

@@ -59,8 +59,8 @@ impl NodeImpl for Track {
 		self.channel.id()
 	}
 
-	fn delay(&self) -> usize {
-		self.channel.delay()
+	fn latency(&self) -> usize {
+		self.channel.latency()
 	}
 
 	fn reset(&mut self) {

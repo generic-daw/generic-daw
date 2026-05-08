@@ -9,7 +9,7 @@ use utils::{NoDebug, boxed_slice};
 
 #[derive(Debug)]
 pub struct Incoming<Node: NodeImpl> {
-	pub delay: DelayLine,
+	pub delay_line: DelayLine,
 	pub events: Vec<Node::Event>,
 	pub mix: f32,
 }
@@ -17,7 +17,7 @@ pub struct Incoming<Node: NodeImpl> {
 impl<Node: NodeImpl> Default for Incoming<Node> {
 	fn default() -> Self {
 		Self {
-			delay: DelayLine::default(),
+			delay_line: DelayLine::default(),
 			events: Vec::default(),
 			mix: 1.0,
 		}
@@ -29,7 +29,7 @@ pub struct Entry<Node: NodeImpl> {
 	node: Mutex<Node>,
 	buffers: RwLock<Buffers<Node>>,
 	pub indegree: AtomicUsize,
-	pub delay: AtomicUsize,
+	pub latency: AtomicUsize,
 }
 
 #[derive(Debug)]
@@ -51,7 +51,7 @@ impl<Node: NodeImpl> Entry<Node> {
 				events: Vec::new(),
 			}),
 			indegree: AtomicUsize::new(0),
-			delay: AtomicUsize::new(0),
+			latency: AtomicUsize::new(0),
 		}
 	}
 

@@ -146,11 +146,11 @@ impl NodeImpl for Channel {
 		self.id
 	}
 
-	fn delay(&self) -> usize {
+	fn latency(&self) -> usize {
 		if self.enabled && !self.bypassed {
 			self.plugins
 				.iter()
-				.map(|plugin| plugin.processor.delay())
+				.map(|plugin| plugin.processor.latency())
 				.sum()
 		} else {
 			0

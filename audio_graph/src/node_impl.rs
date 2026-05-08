@@ -7,6 +7,6 @@ pub trait NodeImpl: Send + 'static {
 	#[must_use]
 	fn id(&self) -> NodeId;
 	#[must_use]
-	fn delay(&self) -> usize;
+	fn latency(&self) -> usize;
 	fn reset(&mut self);
 }
