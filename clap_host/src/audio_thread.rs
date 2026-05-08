@@ -162,12 +162,10 @@ impl AudioThread {
 
 						if tail.is_infinite() {
 							false
-						} else if tail.has_tail() {
-							self.last_input_audio.is_none_or(|last_input_audio| {
-								steady_time - last_input_audio > u64::from(tail.to_raw())
-							})
 						} else {
-							true
+							self.last_input_audio.is_none_or(|last_input_audio| {
+								steady_time - last_input_audio >= u64::from(tail.to_raw())
+							})
 						}
 					}
 					Ok(ProcessStatus::Sleep) => true,
