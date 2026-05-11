@@ -2,7 +2,7 @@ use crate::{
 	EventImpl, MainThreadMessage, PluginDescriptor, events::TransportEvent, host::Host,
 	shared::CURRENT_THREAD_ID,
 };
-use clack_extensions::render::RenderMode;
+use clack_extensions::{render::RenderMode, tail::TailLength};
 use clack_host::prelude::*;
 use log::{trace, warn};
 use rtrb::Consumer;
@@ -158,16 +158,16 @@ impl AudioThread {
 					Ok(ProcessStatus::Continue) => true,
 					Ok(ProcessStatus::ContinueIfNotQuiet) => !audio_buffers.are_outputs_quiet(),
 					Ok(ProcessStatus::Tail) => {
-						let tail = processor
+						match processor
 							.access_shared_handler(|s| *s.ext.tail.get().unwrap())
-							.get(&processor.plugin_handle());
-
-						if tail.is_infinite() {
-							true
-						} else {
-							self.last_input_audio.is_none_or(|last_input_audio| {
-								steady_time - last_input_audio < u64::from(tail.to_raw())
-							})
+							.get(&processor.plugin_handle())
+						{
+							TailLength::Infinite => true,
+							TailLength::Finite(tail) => {
+								self.last_input_audio.is_none_or(|last_input_audio| {
+									steady_time - last_input_audio < u64::from(tail)
+								})
+							}
 						}
 					}
 					Ok(ProcessStatus::Sleep) => false,
