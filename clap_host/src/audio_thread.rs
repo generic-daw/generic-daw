@@ -145,43 +145,43 @@ impl AudioThread {
 					self.last_input_audio = Some(steady_time);
 				}
 
-				if match started_processor.process(
+				let process_status = started_processor.process(
 					&input_audio,
 					&mut output_audio,
 					&input_events,
 					&mut output_events,
 					Some(steady_time),
 					transport,
-				) {
-					Ok(ProcessStatus::Continue) => false,
-					Ok(ProcessStatus::ContinueIfNotQuiet) => audio_buffers.are_outputs_quiet(),
+				);
+
+				let needs_process = match process_status {
+					Ok(ProcessStatus::Continue) => true,
+					Ok(ProcessStatus::ContinueIfNotQuiet) => !audio_buffers.are_outputs_quiet(),
 					Ok(ProcessStatus::Tail) => {
 						let tail = processor
 							.access_shared_handler(|s| *s.ext.tail.get().unwrap())
 							.get(&processor.plugin_handle());
 
 						if tail.is_infinite() {
-							false
+							true
 						} else {
 							self.last_input_audio.is_none_or(|last_input_audio| {
-								steady_time - last_input_audio >= u64::from(tail.to_raw())
+								steady_time - last_input_audio < u64::from(tail.to_raw())
 							})
 						}
 					}
-					Ok(ProcessStatus::Sleep) => true,
+					Ok(ProcessStatus::Sleep) => false,
 					Err(err) => {
 						warn!("{}: {err}", &self.descriptor);
 						self.flush(audio, events, mix_level);
 						return;
 					}
-				} {
-					processor.ensure_processing_stopped();
-					processor.access_shared_handler(|s| s.needs_process.store(false, Relaxed));
-				}
+				};
 
 				audio_buffers.write_out(audio, mix_level);
 				event_buffers.write_out(events);
 
+				processor.access_shared_handler(|s| s.needs_process.store(needs_process, Relaxed));
 				processor.access_shared_handler(|s| s.needs_flush.store(false, Relaxed));
 
 				processor.access_handler_mut(|ap| ap.audio_buffers = Some(audio_buffers));
@@ -198,6 +198,8 @@ impl AudioThread {
 		let Some(processor) = &mut self.processor else {
 			return;
 		};
+
+		processor.ensure_processing_stopped();
 
 		processor
 			.access_handler_mut(|ap| ap.audio_buffers.as_mut().unwrap().flush(audio, mix_level));
