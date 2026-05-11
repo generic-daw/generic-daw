@@ -112,14 +112,17 @@ impl NodeImpl for Channel {
 
 			plugin.processor.maybe_deactivate();
 
-			for event in events.drain(..) {
+			events.retain(|&event| {
 				if let Event::ParamValue {
 					param_id, value, ..
 				} = event
 				{
 					self.updates.push(Update::Param(plugin.id, param_id, value));
+					false
+				} else {
+					true
 				}
-			}
+			});
 		}
 
 		let mut peaks = if self.enabled {
