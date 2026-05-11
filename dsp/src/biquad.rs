@@ -13,12 +13,13 @@ impl BiquadCoeffs {
 	#[must_use]
 	pub fn lowpass(sample_rate: f32, cutoff: f32, q: f32) -> Self {
 		let omega = TAU * cutoff / sample_rate;
-		let alpha = omega.sin() / (2.0 * q);
-		let b0 = (1.0 - omega.cos()) / 2.0;
-		let b1 = 1.0 - omega.cos();
-		let b2 = (1.0 - omega.cos()) / 2.0;
+		let (sin_omega, cos_omega) = omega.sin_cos();
+		let alpha = sin_omega / (2.0 * q);
+		let b0 = (1.0 - cos_omega) / 2.0;
+		let b1 = 1.0 - cos_omega;
+		let b2 = (1.0 - cos_omega) / 2.0;
 		let a0 = 1.0 + alpha;
-		let a1 = -2.0 * omega.cos();
+		let a1 = -2.0 * cos_omega;
 		let a2 = 1.0 - alpha;
 		Self {
 			a1: a1 / a0,
@@ -33,12 +34,13 @@ impl BiquadCoeffs {
 	#[expect(clippy::manual_midpoint)]
 	pub fn highpass(sample_rate: f32, cutoff: f32, q: f32) -> Self {
 		let omega = TAU * cutoff / sample_rate;
-		let alpha = omega.sin() / (2.0 * q);
-		let b0 = (1.0 + omega.cos()) / 2.0;
-		let b1 = -1.0 + omega.cos();
-		let b2 = (1.0 + omega.cos()) / 2.0;
+		let (sin_omega, cos_omega) = omega.sin_cos();
+		let alpha = sin_omega / (2.0 * q);
+		let b0 = (1.0 + cos_omega) / 2.0;
+		let b1 = -(1.0 + cos_omega);
+		let b2 = (1.0 + cos_omega) / 2.0;
 		let a0 = 1.0 + alpha;
-		let a1 = -2.0 * omega.cos();
+		let a1 = -2.0 * cos_omega;
 		let a2 = 1.0 - alpha;
 		Self {
 			a1: a1 / a0,
@@ -52,12 +54,13 @@ impl BiquadCoeffs {
 	#[must_use]
 	pub fn bandpass(sample_rate: f32, center: f32, q: f32) -> Self {
 		let omega = TAU * center / sample_rate;
-		let alpha = omega.sin() / (2.0 * q);
+		let (sin_omega, cos_omega) = omega.sin_cos();
+		let alpha = sin_omega / (2.0 * q);
 		let b0 = alpha;
 		let b1 = 0.0;
 		let b2 = -alpha;
 		let a0 = 1.0 + alpha;
-		let a1 = -2.0 * omega.cos();
+		let a1 = -2.0 * cos_omega;
 		let a2 = 1.0 - alpha;
 		Self {
 			a1: a1 / a0,
@@ -71,12 +74,13 @@ impl BiquadCoeffs {
 	#[must_use]
 	pub fn notch(sample_rate: f32, center: f32, q: f32) -> Self {
 		let omega = TAU * center / sample_rate;
-		let alpha = omega.sin() / (2.0 * q);
+		let (sin_omega, cos_omega) = omega.sin_cos();
+		let alpha = sin_omega / (2.0 * q);
 		let b0 = 1.0;
-		let b1 = -2.0 * omega.cos();
+		let b1 = -2.0 * cos_omega;
 		let b2 = 1.0;
 		let a0 = 1.0 + alpha;
-		let a1 = -2.0 * omega.cos();
+		let a1 = -2.0 * cos_omega;
 		let a2 = 1.0 - alpha;
 		Self {
 			a1: a1 / a0,
@@ -90,12 +94,13 @@ impl BiquadCoeffs {
 	#[must_use]
 	pub fn allpass(sample_rate: f32, center: f32, q: f32) -> Self {
 		let omega = TAU * center / sample_rate;
-		let alpha = omega.sin() / (2.0 * q);
+		let (sin_omega, cos_omega) = omega.sin_cos();
+		let alpha = sin_omega / (2.0 * q);
 		let b0 = 1.0 - alpha;
-		let b1 = -2.0 * omega.cos();
+		let b1 = -2.0 * cos_omega;
 		let b2 = 1.0 + alpha;
 		let a0 = 1.0 + alpha;
-		let a1 = -2.0 * omega.cos();
+		let a1 = -2.0 * cos_omega;
 		let a2 = 1.0 - alpha;
 		Self {
 			a1: a1 / a0,
@@ -109,13 +114,14 @@ impl BiquadCoeffs {
 	#[must_use]
 	pub fn peaking(sample_rate: f32, center: f32, q: f32, gain: f32) -> Self {
 		let omega = TAU * center / sample_rate;
-		let alpha = omega.sin() / (2.0 * q);
+		let (sin_omega, cos_omega) = omega.sin_cos();
+		let alpha = sin_omega / (2.0 * q);
 		let a = gain.sqrt();
 		let b0 = 1.0 + alpha * a;
-		let b1 = -2.0 * omega.cos();
+		let b1 = -2.0 * cos_omega;
 		let b2 = 1.0 - alpha * a;
 		let a0 = 1.0 + alpha / a;
-		let a1 = -2.0 * omega.cos();
+		let a1 = -2.0 * cos_omega;
 		let a2 = 1.0 - alpha / a;
 		Self {
 			a1: a1 / a0,
@@ -129,14 +135,16 @@ impl BiquadCoeffs {
 	#[must_use]
 	pub fn lowshelf(sample_rate: f32, center: f32, q: f32, gain: f32) -> Self {
 		let omega = TAU * center / sample_rate;
-		let alpha = omega.sin() / (2.0 * q);
+		let (sin_omega, cos_omega) = omega.sin_cos();
+		let alpha = sin_omega / (2.0 * q);
 		let a = gain.sqrt();
-		let b0 = a * ((a + 1.0) - (a - 1.0) * omega.cos() + 2.0 * a.sqrt() * alpha);
-		let b1 = -2.0 * a * ((a - 1.0) - (a + 1.0) * omega.cos());
-		let b2 = a * ((a + 1.0) - (a - 1.0) * omega.cos() - 2.0 * a.sqrt() * alpha);
-		let a0 = (a + 1.0) + (a - 1.0) * omega.cos() + 2.0 * a.sqrt() * alpha;
-		let a1 = 2.0 * ((a - 1.0) + (a + 1.0) * omega.cos());
-		let a2 = (a + 1.0) + (a - 1.0) * omega.cos() - 2.0 * a.sqrt() * alpha;
+		let sqrt_a = a.sqrt();
+		let b0 = a * ((a + 1.0) - (a - 1.0) * cos_omega + 2.0 * sqrt_a * alpha);
+		let b1 = -2.0 * a * ((a - 1.0) - (a + 1.0) * cos_omega);
+		let b2 = a * ((a + 1.0) - (a - 1.0) * cos_omega - 2.0 * sqrt_a * alpha);
+		let a0 = (a + 1.0) + (a - 1.0) * cos_omega + 2.0 * sqrt_a * alpha;
+		let a1 = 2.0 * ((a - 1.0) + (a + 1.0) * cos_omega);
+		let a2 = (a + 1.0) + (a - 1.0) * cos_omega - 2.0 * sqrt_a * alpha;
 		Self {
 			a1: a1 / a0,
 			a2: a2 / a0,
@@ -149,14 +157,16 @@ impl BiquadCoeffs {
 	#[must_use]
 	pub fn highshelf(sample_rate: f32, center: f32, q: f32, gain: f32) -> Self {
 		let omega = TAU * center / sample_rate;
-		let alpha = omega.sin() / (2.0 * q);
+		let (sin_omega, cos_omega) = omega.sin_cos();
+		let alpha = sin_omega / (2.0 * q);
 		let a = gain.sqrt();
-		let b0 = a * ((a + 1.0) + (a - 1.0) * omega.cos() + 2.0 * a.sqrt() * alpha);
-		let b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * omega.cos());
-		let b2 = a * ((a + 1.0) + (a - 1.0) * omega.cos() - 2.0 * a.sqrt() * alpha);
-		let a0 = (a + 1.0) - (a - 1.0) * omega.cos() + 2.0 * a.sqrt() * alpha;
-		let a1 = 2.0 * ((a - 1.0) - (a + 1.0) * omega.cos());
-		let a2 = (a + 1.0) - (a - 1.0) * omega.cos() - 2.0 * a.sqrt() * alpha;
+		let sqrt_a = a.sqrt();
+		let b0 = a * ((a + 1.0) + (a - 1.0) * cos_omega + 2.0 * sqrt_a * alpha);
+		let b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * cos_omega);
+		let b2 = a * ((a + 1.0) + (a - 1.0) * cos_omega - 2.0 * sqrt_a * alpha);
+		let a0 = (a + 1.0) - (a - 1.0) * cos_omega + 2.0 * sqrt_a * alpha;
+		let a1 = 2.0 * ((a - 1.0) - (a + 1.0) * cos_omega);
+		let a2 = (a + 1.0) - (a - 1.0) * cos_omega - 2.0 * sqrt_a * alpha;
 		Self {
 			a1: a1 / a0,
 			a2: a2 / a0,
