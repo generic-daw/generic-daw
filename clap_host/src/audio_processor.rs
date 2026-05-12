@@ -16,7 +16,7 @@ impl<'a> AudioProcessor<'a> {
 		audio_buffers: AudioBuffers,
 		event_buffers: EventBuffers,
 	) -> Self {
-		shared.needs_activate.store(false, Relaxed);
+		shared.request_restart.store(false, Relaxed);
 
 		Self {
 			shared,
@@ -34,6 +34,6 @@ impl HostTailImpl for AudioProcessor<'_> {
 
 impl Drop for AudioProcessor<'_> {
 	fn drop(&mut self) {
-		self.shared.needs_deactivate.store(false, Relaxed);
+		self.shared.request_deactivate.store(false, Relaxed);
 	}
 }

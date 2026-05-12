@@ -94,6 +94,7 @@ impl NodeImpl for Channel {
 		for plugin in &mut self.plugins {
 			plugin.processor.maybe_activate();
 			plugin.processor.set_audio_thread();
+			plugin.processor.maybe_deactivate();
 
 			for lane in &mut plugin.lanes {
 				lane.process(state, events);
@@ -110,7 +111,7 @@ impl NodeImpl for Channel {
 				plugin.processor.flush(audio, events, plugin.mix);
 			}
 
-			plugin.processor.maybe_deactivate();
+			plugin.processor.maybe_restart();
 
 			events.retain(|&event| {
 				if let Event::ParamValue {

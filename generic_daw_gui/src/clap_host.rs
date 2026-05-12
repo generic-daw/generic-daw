@@ -251,12 +251,15 @@ impl ClapHost {
 
 		match message {
 			MainThreadMessage::RequestCallback => plugin!().call_on_main_thread_callback(),
-			MainThreadMessage::Deactivate(processor) => {
+			MainThreadMessage::Restart(processor) => {
 				let plugin = plugin!(MainThreadMessage::Deactivate(processor));
 				plugin.deactivate(processor);
-				if let Err(err) = plugin.maybe_activate(transport.sample_rate, transport.frames) {
+				if let Err(err) = plugin.activate(transport.sample_rate, transport.frames) {
 					warn!("{err}");
 				}
+			}
+			MainThreadMessage::Deactivate(processor) => {
+				plugin!(MainThreadMessage::Deactivate(processor)).deactivate(processor);
 			}
 			MainThreadMessage::Destroy(processor) => {
 				plugin!(MainThreadMessage::Destroy(processor));

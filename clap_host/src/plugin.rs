@@ -146,31 +146,11 @@ impl Plugin {
 	}
 
 	pub fn call_on_main_thread_callback(&mut self) {
-		if self
-			.instance
-			.access_shared_handler(|s| s.needs_callback.swap(false, Relaxed))
-		{
-			self.instance.call_on_main_thread_callback();
-		}
+		self.instance.call_on_main_thread_callback();
 	}
 
 	pub fn is_active(&self) -> bool {
 		self.instance.is_active()
-	}
-
-	pub fn maybe_activate(
-		&mut self,
-		sample_rate: NonZero<u32>,
-		frames: NonZero<u32>,
-	) -> Result<(), PluginInstanceError> {
-		if self
-			.instance
-			.access_shared_handler(|s| s.needs_activate.load(Relaxed))
-		{
-			self.activate(sample_rate, frames)
-		} else {
-			Ok(())
-		}
 	}
 
 	pub fn activate(
@@ -212,7 +192,7 @@ impl Plugin {
 
 	pub fn request_deactivate(&self) {
 		self.instance
-			.access_shared_handler(|s| s.needs_deactivate.store(true, Relaxed));
+			.access_shared_handler(|s| s.request_deactivate.store(true, Relaxed));
 	}
 
 	pub fn deactivate(

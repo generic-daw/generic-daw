@@ -51,11 +51,10 @@ pub struct Shared<'a> {
 	pub ext: Ext,
 	pub main_thread: u64,
 	pub audio_thread: AtomicU64,
-	pub needs_process: AtomicBool,
-	pub needs_callback: AtomicBool,
-	pub needs_activate: AtomicBool,
-	pub needs_deactivate: AtomicBool,
-	pub needs_flush: AtomicBool,
+	pub request_process: AtomicBool,
+	pub request_restart: AtomicBool,
+	pub request_flush: AtomicBool,
+	pub request_deactivate: AtomicBool,
 }
 
 impl Shared<'_> {
@@ -69,11 +68,10 @@ impl Shared<'_> {
 			ext: Ext::default(),
 			main_thread,
 			audio_thread: AtomicU64::new(main_thread),
-			needs_process: AtomicBool::new(true),
-			needs_callback: AtomicBool::new(false),
-			needs_activate: AtomicBool::new(false),
-			needs_deactivate: AtomicBool::new(false),
-			needs_flush: AtomicBool::new(false),
+			request_process: AtomicBool::new(true),
+			request_restart: AtomicBool::new(false),
+			request_flush: AtomicBool::new(false),
+			request_deactivate: AtomicBool::new(false),
 		}
 	}
 }
@@ -105,20 +103,17 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 	}
 
 	fn request_process(&self) {
-		self.needs_process.store(true, Relaxed);
+		self.request_process.store(true, Relaxed);
 	}
 
 	fn request_callback(&self) {
-		if !self.needs_callback.swap(true, Relaxed) {
-			self.sender
-				.send(MainThreadMessage::RequestCallback)
-				.unwrap();
-		}
+		self.sender
+			.send(MainThreadMessage::RequestCallback)
+			.unwrap();
 	}
 
 	fn request_restart(&self) {
-		self.needs_activate.store(true, Relaxed);
-		self.needs_deactivate.store(true, Relaxed);
+		self.request_restart.store(true, Relaxed);
 	}
 }
 
@@ -169,7 +164,7 @@ impl HostLogImpl for Shared<'_> {
 
 impl HostParamsImplShared for Shared<'_> {
 	fn request_flush(&self) {
-		self.needs_flush.store(true, Relaxed);
+		self.request_flush.store(true, Relaxed);
 	}
 }
 

@@ -20,9 +20,10 @@ pub struct AudioThread {
 	processor: Option<NoDebug<PluginAudioProcessor<Host>>>,
 	descriptor: PluginDescriptor,
 	consumer: Consumer<AudioThreadMessage>,
+	processing: bool,
 	needs_reset: bool,
 	render_mode: RenderMode,
-	last_input_audio: Option<u64>,
+	last_input: Option<u64>,
 }
 
 impl AudioThread {
@@ -32,9 +33,10 @@ impl AudioThread {
 			processor: None,
 			descriptor,
 			consumer,
+			processing: false,
 			needs_reset: false,
 			render_mode: RenderMode::Realtime,
-			last_input_audio: None,
+			last_input: None,
 		}
 	}
 
@@ -89,10 +91,25 @@ impl AudioThread {
 
 	pub fn maybe_deactivate(&mut self) {
 		if let Some(NoDebug(processor)) = self.processor.take() {
-			if processor.access_shared_handler(|s| s.needs_deactivate.load(Relaxed)) {
+			if processor.access_shared_handler(|s| s.request_deactivate.load(Relaxed)) {
 				processor
 					.access_shared_handler(|s| s.sender.clone())
 					.send(MainThreadMessage::Deactivate(NoClone(NoDebug(
+						processor.into_stopped(),
+					))))
+					.unwrap();
+			} else {
+				self.processor = Some(processor.into());
+			}
+		}
+	}
+
+	pub fn maybe_restart(&mut self) {
+		if let Some(NoDebug(processor)) = self.processor.take() {
+			if processor.access_shared_handler(|s| s.request_restart.load(Relaxed)) {
+				processor
+					.access_shared_handler(|s| s.sender.clone())
+					.send(MainThreadMessage::Restart(NoClone(NoDebug(
 						processor.into_stopped(),
 					))))
 					.unwrap();
@@ -113,12 +130,12 @@ impl AudioThread {
 			return;
 		};
 
-		let is_input_quiet = LazyCell::new(|| !audio.iter().any(|f| f.abs() >= f32::EPSILON));
+		let audio_in = LazyCell::new(|| audio.iter().any(|f| f.abs() >= f32::EPSILON));
+		let events_in = !events.is_empty();
+		let request_process =
+			processor.access_shared_handler(|s| s.request_process.swap(false, Relaxed));
 
-		if processor.access_shared_handler(|s| !s.needs_process.load(Relaxed))
-			&& events.is_empty()
-			&& *is_input_quiet
-		{
+		if !self.processing && !request_process && !events_in && !*audio_in {
 			self.flush(audio, events, mix_level);
 			return;
 		}
@@ -133,16 +150,16 @@ impl AudioThread {
 				if std::mem::take(&mut self.needs_reset) {
 					started_processor.reset();
 					audio_buffers.reset();
-					self.last_input_audio = None;
+					self.last_input = None;
 				}
 
 				let (input_audio, mut output_audio, steady_time) = audio_buffers.read_in(audio);
 				let (input_events, mut output_events) = event_buffers.read_in(events);
 
 				if started_processor.access_shared_handler(|s| s.ext.tail.get().is_some())
-					&& !*is_input_quiet
+					&& (request_process || events_in || *audio_in)
 				{
-					self.last_input_audio = Some(steady_time);
+					self.last_input = Some(steady_time);
 				}
 
 				let process_status = started_processor.process(
@@ -154,7 +171,7 @@ impl AudioThread {
 					transport,
 				);
 
-				let needs_process = match process_status {
+				self.processing = match process_status {
 					Ok(ProcessStatus::Continue) => true,
 					Ok(ProcessStatus::ContinueIfNotQuiet) => !audio_buffers.are_outputs_quiet(),
 					Ok(ProcessStatus::Tail) => {
@@ -163,11 +180,9 @@ impl AudioThread {
 							.get(&processor.plugin_handle())
 						{
 							TailLength::Infinite => true,
-							TailLength::Finite(tail) => {
-								self.last_input_audio.is_none_or(|last_input_audio| {
-									steady_time - last_input_audio < u64::from(tail)
-								})
-							}
+							TailLength::Finite(tail) => self.last_input.is_none_or(|last_input| {
+								steady_time - last_input < u64::from(tail)
+							}),
 						}
 					}
 					Ok(ProcessStatus::Sleep) => false,
@@ -181,8 +196,7 @@ impl AudioThread {
 				audio_buffers.write_out(audio, mix_level);
 				event_buffers.write_out(events);
 
-				processor.access_shared_handler(|s| s.needs_process.store(needs_process, Relaxed));
-				processor.access_shared_handler(|s| s.needs_flush.store(false, Relaxed));
+				processor.access_shared_handler(|s| s.request_flush.store(false, Relaxed));
 
 				processor.access_handler_mut(|ap| ap.audio_buffers = Some(audio_buffers));
 				processor.access_handler_mut(|ap| ap.event_buffers = Some(event_buffers));
@@ -204,9 +218,11 @@ impl AudioThread {
 		processor
 			.access_handler_mut(|ap| ap.audio_buffers.as_mut().unwrap().flush(audio, mix_level));
 
-		if !processor.access_shared_handler(|s| s.needs_flush.swap(false, Relaxed))
-			&& events.is_empty()
-		{
+		let events_in = !events.is_empty();
+		let request_flush =
+			processor.access_shared_handler(|s| s.request_flush.swap(false, Relaxed));
+
+		if !request_flush && !events_in {
 			return;
 		}
 

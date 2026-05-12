@@ -15,6 +15,7 @@ use utils::{NoClone, NoDebug};
 #[derive(Clone, Debug)]
 pub enum MainThreadMessage {
 	RequestCallback,
+	Restart(NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>),
 	Deactivate(NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>),
 	Destroy(NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>),
 	GuiRequestResize(Size),
