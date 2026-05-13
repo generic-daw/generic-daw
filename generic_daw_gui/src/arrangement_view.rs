@@ -1056,7 +1056,7 @@ impl ArrangementView {
 				}
 			}
 			playlist::Action::Drag(track_diff, pos_diff) => {
-				let mut sorted = primary.drain().collect::<Vec<_>>();
+				let mut sorted = primary.iter().copied().collect::<Vec<_>>();
 				match track_diff {
 					Delta::Positive(0) | Delta::Negative(0) => {}
 					Delta::Negative(..) => sorted.sort_unstable_by_key(|&(t, c)| (t, Reverse(c))),
@@ -1072,7 +1072,13 @@ impl ArrangementView {
 					let new_track = (track + track_diff).min(self.arrangement.tracks().len() - 1);
 					let new_clip = self.arrangement.clip_switch_track(track, clip, new_track);
 
-					primary.insert((new_track, new_clip));
+					self.update_selection(|c| {
+						Some(update_selection_move_clip(
+							c,
+							(track, clip),
+							(new_track, new_clip),
+						))
+					});
 				}
 			}
 			playlist::Action::TrimStart(pos_diff) => {
@@ -1185,7 +1191,7 @@ impl ArrangementView {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
 				sorted.sort_unstable_by_key(|&(_, c)| Reverse(c));
 				for (track, clip) in sorted {
-					self.update_selection(|c| update_selection_delete_clip(c, track, clip));
+					self.update_selection(|c| update_selection_delete_clip(c, (track, clip)));
 
 					let clip = self.arrangement.remove_clip(track, clip);
 					self.arrangement.gc(clip);
@@ -2258,11 +2264,10 @@ fn update_selection_move_track(
 
 fn update_selection_delete_clip(
 	(ct, cc): (usize, usize),
-	track: usize,
-	clip: usize,
+	clip: (usize, usize),
 ) -> Option<(usize, usize)> {
-	if ct == track {
-		match cc.cmp(&clip) {
+	if ct == clip.0 {
+		match cc.cmp(&clip.1) {
 			Ordering::Less => Some((ct, cc)),
 			Ordering::Equal => None,
 			Ordering::Greater => Some((ct, cc - 1)),
@@ -2270,6 +2275,14 @@ fn update_selection_delete_clip(
 	} else {
 		Some((ct, cc))
 	}
+}
+
+fn update_selection_move_clip(
+	(ct, cc): (usize, usize),
+	clip: (usize, usize),
+	new_clip: (usize, usize),
+) -> (usize, usize) {
+	if (ct, cc) == clip { new_clip } else { (ct, cc) }
 }
 
 fn amp_to_db(amp: f32) -> f32 {
