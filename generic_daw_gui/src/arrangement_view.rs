@@ -1074,9 +1074,7 @@ impl ArrangementView {
 
 					self.update_selection(|c| {
 						Some(update_selection_move_clip(
-							c,
-							(track, clip),
-							(new_track, new_clip),
+							c, track, clip, new_track, new_clip,
 						))
 					});
 				}
@@ -1191,7 +1189,7 @@ impl ArrangementView {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
 				sorted.sort_unstable_by_key(|&(_, c)| Reverse(c));
 				for (track, clip) in sorted {
-					self.update_selection(|c| update_selection_delete_clip(c, (track, clip)));
+					self.update_selection(|c| update_selection_delete_clip(c, track, clip));
 
 					let clip = self.arrangement.remove_clip(track, clip);
 					self.arrangement.gc(clip);
@@ -2264,10 +2262,11 @@ fn update_selection_move_track(
 
 fn update_selection_delete_clip(
 	(ct, cc): (usize, usize),
-	clip: (usize, usize),
+	track: usize,
+	clip: usize,
 ) -> Option<(usize, usize)> {
-	if ct == clip.0 {
-		match cc.cmp(&clip.1) {
+	if ct == track {
+		match cc.cmp(&clip) {
 			Ordering::Less => Some((ct, cc)),
 			Ordering::Equal => None,
 			Ordering::Greater => Some((ct, cc - 1)),
@@ -2279,10 +2278,27 @@ fn update_selection_delete_clip(
 
 fn update_selection_move_clip(
 	(ct, cc): (usize, usize),
-	clip: (usize, usize),
-	new_clip: (usize, usize),
+	track: usize,
+	clip: usize,
+	new_track: usize,
+	new_clip: usize,
 ) -> (usize, usize) {
-	if (ct, cc) == clip { new_clip } else { (ct, cc) }
+	match (
+		ct.cmp(&track),
+		cc.cmp(&clip),
+		ct.cmp(&new_track),
+		cc.cmp(&new_clip),
+	) {
+		(Ordering::Less | Ordering::Greater, _, Ordering::Less | Ordering::Greater, _) => (ct, cc),
+		(Ordering::Equal, Ordering::Equal, _, _) => (new_track, new_clip),
+		(_, Ordering::Greater, Ordering::Less | Ordering::Greater, _)
+		| (Ordering::Equal, Ordering::Greater, Ordering::Equal, Ordering::Less) => (ct, cc - 1),
+		(Ordering::Less | Ordering::Greater, _, _, Ordering::Equal | Ordering::Greater)
+		| (Ordering::Equal, Ordering::Less, Ordering::Equal, Ordering::Equal | Ordering::Greater) => {
+			(ct, cc + 1)
+		}
+		_ => (ct, cc),
+	}
 }
 
 fn amp_to_db(amp: f32) -> f32 {
