@@ -249,7 +249,7 @@ fn from_stereo_to_other(a: &mut [f32], b: &[f32], frames: usize) {
 		Ordering::Less => a
 			.iter_mut()
 			.zip(b.as_chunks::<2>().0)
-			.for_each(|(a, b)| *a = b[0].midpoint(b[1])),
+			.for_each(|(a, b)| *a = (b[0] + b[1]) / 2.0),
 	}
 }
 

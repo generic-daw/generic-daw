@@ -73,7 +73,7 @@ impl AudioBuffers {
 
 			if n_channels == 1 {
 				buf.zip(input_buffer)
-					.for_each(|(buf, sample)| *sample = buf[0].midpoint(buf[1]));
+					.for_each(|(buf, sample)| *sample = (buf[0] + buf[1]) / 2.0);
 			} else if n_channels != 0 {
 				let (l, r) = input_buffer.split_at_mut(self.config.max_frames_count as usize);
 

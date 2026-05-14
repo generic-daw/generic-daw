@@ -192,7 +192,7 @@ impl<'a, Message> Knob<'a, Message> {
 					frame.fill(
 						&dot(
 							value_to_rad(step as f32),
-							self.info.radius.midpoint(dot_radius),
+							(self.info.radius + dot_radius) / 2.0,
 							dot_radius / 2.0,
 						),
 						swatch.base.color.mix(swatch.base.text, 0.5),

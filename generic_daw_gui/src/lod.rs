@@ -140,7 +140,7 @@ fn mesh(
 			})
 			.map(|(min, max)| {
 				if max - min < 1.0 {
-					let avg = min.midpoint(max);
+					let avg = (min + max) / 2.0;
 					(avg - 0.5, avg + 0.5)
 				} else {
 					(min, max)
