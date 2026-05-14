@@ -129,6 +129,7 @@ fn mesh(
 		hidden_top_px: f32,
 	) -> Vec<SolidVertex2D> {
 		iter.into_iter()
+			.map(|(min, max)| ((min / 2.0 + 0.5), (max / 2.0 + 0.5)))
 			.map(|(min, max)| (min * height + hidden_top_px, max * height + hidden_top_px))
 			.scan(None, |acc, (mut min, mut max)| {
 				if let Some((l_max, l_min)) = *acc {
@@ -276,12 +277,11 @@ fn mesh(
 }
 
 fn samples_min_max(chunk: &[f32]) -> (f32, f32) {
-	let (min, max) = chunk
+	chunk
 		.iter()
 		.fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
 			(min.min(c), max.max(c))
-		});
-	((min + 1.0) * 0.5, (max + 1.0) * 0.5)
+		})
 }
 
 fn lod_min_max(chunk: &[(f32, f32)]) -> (f32, f32) {

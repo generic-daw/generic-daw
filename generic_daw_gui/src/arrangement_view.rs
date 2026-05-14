@@ -2354,7 +2354,7 @@ fn poll_consumer<T>(
 	let mut backoff = 0.0;
 	let mut backoff = move |counter: u16| {
 		let divisor = f32::from(counter).max(0.5);
-		backoff = ((backoff + backoff / divisor) * 0.5).clamp(min, max);
+		backoff = ((backoff + backoff / divisor) / 2.0).clamp(min, max);
 		Timer::after(Duration::from_secs_f32(backoff))
 	};
 
