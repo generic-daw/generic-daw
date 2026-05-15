@@ -1,6 +1,5 @@
 use crate::{
-	AutomationLane, Event, NodeAction, NodeId, NodeImpl, Update, audio_thread::State,
-	clap_host::AudioThread,
+	Event, NodeAction, NodeId, NodeImpl, Update, audio_thread::State, clap_host::AudioThread,
 };
 use std::f32::consts::{FRAC_PI_4, SQRT_2};
 use utils::{ShiftMoveExt as _, unique_id};
@@ -55,7 +54,6 @@ impl PanMode {
 struct Plugin {
 	id: PluginId,
 	processor: AudioThread,
-	lanes: Vec<AutomationLane>,
 	mix: f32,
 }
 
@@ -64,7 +62,6 @@ impl Plugin {
 		Self {
 			id,
 			processor,
-			lanes: Vec::new(),
 			mix: 1.0,
 		}
 	}
@@ -95,10 +92,6 @@ impl NodeImpl for Channel {
 			plugin.processor.maybe_activate();
 			plugin.processor.set_audio_thread();
 			plugin.processor.maybe_deactivate();
-
-			for lane in &mut plugin.lanes {
-				lane.process(state, events);
-			}
 
 			if self.enabled && !self.bypassed {
 				plugin.processor.process(

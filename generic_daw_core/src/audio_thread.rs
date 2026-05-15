@@ -1,7 +1,6 @@
 use crate::{
-	AudioClipId, AutomationPattern, AutomationPatternAction, AutomationPatternId, Channel, Clip,
-	ClipId, MidiPattern, MidiPatternAction, MidiPatternId, Node, NodeId, PanMode, PluginId, Sample,
-	SampleId,
+	AudioClipId, Channel, Clip, ClipId, MidiPattern, MidiPatternAction, MidiPatternId, Node,
+	NodeId, PanMode, PluginId, Sample, SampleId,
 	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -33,14 +32,11 @@ static OFF_BAR_CLICK: [f32; 2940] = include_f32s!("../../assets/off_bar_click.pc
 pub enum Message {
 	NodeAction(NodeId, NodeAction),
 	MidiPatternAction(MidiPatternId, MidiPatternAction),
-	AutomationPatternAction(AutomationPatternId, AutomationPatternAction),
 
 	SampleAdd(Sample),
 	SampleRemove(SampleId),
 	MidiPatternAdd(MidiPattern),
 	MidiPatternRemove(MidiPatternId),
-	AutomationPatternAdd(AutomationPattern),
-	AutomationPatternRemove(AutomationPatternId),
 
 	NodeAdd(Box<Node>),
 	NodeRemove(NodeId),
@@ -184,7 +180,6 @@ pub struct State {
 	pub transport: Transport,
 	pub samples: HashMap<SampleId, Sample>,
 	pub midi_patterns: HashMap<MidiPatternId, MidiPattern>,
-	pub automation_patterns: HashMap<AutomationPatternId, AutomationPattern>,
 }
 
 #[derive(Debug)]
@@ -213,7 +208,6 @@ impl AudioThread {
 				transport,
 				samples: HashMap::new(),
 				midi_patterns: HashMap::new(),
-				automation_patterns: HashMap::new(),
 			},
 			transport.frames,
 		);
@@ -254,13 +248,6 @@ impl AudioThread {
 						.unwrap()
 						.apply(action);
 				}
-				Message::AutomationPatternAction(pattern, action) => {
-					self.state_mut()
-						.automation_patterns
-						.get_mut(&pattern)
-						.unwrap()
-						.apply(action);
-				}
 				Message::SampleAdd(sample) => {
 					let sample = self.state_mut().samples.insert(sample.id, sample);
 					debug_assert!(sample.is_none());
@@ -275,17 +262,6 @@ impl AudioThread {
 				}
 				Message::MidiPatternRemove(pattern) => {
 					let pattern = self.state_mut().midi_patterns.remove(&pattern);
-					debug_assert!(pattern.is_some());
-				}
-				Message::AutomationPatternAdd(pattern) => {
-					let pattern = self
-						.state_mut()
-						.automation_patterns
-						.insert(pattern.id, pattern);
-					debug_assert!(pattern.is_none());
-				}
-				Message::AutomationPatternRemove(pattern) => {
-					let pattern = self.state_mut().automation_patterns.remove(&pattern);
 					debug_assert!(pattern.is_some());
 				}
 				Message::NodeAdd(node) => self.audio_graph.insert(*node),
