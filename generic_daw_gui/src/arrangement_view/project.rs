@@ -378,6 +378,8 @@ impl Arrangement {
 
 		let mut messages = Vec::new();
 
+		let mut ignored_plugins = HashSet::new();
+
 		let mut load_channel = |node: &Node, channel: &proto::Channel| {
 			if channel.volume != 1.0 {
 				messages.push(arrangement_view::Message::ChannelVolumeChanged(
@@ -415,6 +417,11 @@ impl Arrangement {
 				let id = plugin.id();
 
 				let Some(descriptor) = plugin_bundles.iter().find(|d| *d.id == id) else {
+					if ignored_plugins.contains(id) {
+						skipped += 1;
+						continue;
+					}
+
 					let (sender, receiver) = oneshot::channel();
 
 					daw.try_send(daw::Message::CantFindPlugin(id.into(), sender.into()))
@@ -422,6 +429,7 @@ impl Arrangement {
 
 					match receiver.recv() {
 						Ok(Feedback::Ignore) => {
+							ignored_plugins.insert(id.to_owned());
 							skipped += 1;
 							continue;
 						}
@@ -541,6 +549,8 @@ impl Arrangement {
 			channels.insert(idx, id);
 			load_channel(arrangement.node(id), channel)?;
 		}
+
+		drop(ignored_plugins);
 
 		for (from, to, mix) in reader.iter_track_to_channel() {
 			messages.push(arrangement_view::Message::Connect(
