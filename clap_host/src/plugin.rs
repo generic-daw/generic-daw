@@ -1,8 +1,8 @@
 use crate::{
 	API_TYPE, AudioThread, MainThreadMessage, ParamInfoFlags, ParamRescanFlags, PluginDescriptor,
 	StateContextType, TimerId, audio_buffers::AudioBuffers, audio_processor::AudioProcessor,
-	audio_thread::AudioThreadMessage, event_buffers::EventBuffers, gui::Gui, host::Host,
-	main_thread::MainThread, param::Param, preset::Preset, shared::Shared, size::Size,
+	event_buffers::EventBuffers, gui::Gui, host::Host, main_thread::MainThread, param::Param,
+	preset::Preset, shared::Shared, size::Size,
 };
 use clack_extensions::{
 	gui::{GuiConfiguration, GuiSize, Window},
@@ -11,7 +11,7 @@ use clack_extensions::{
 use clack_host::prelude::*;
 use log::{info, warn};
 use raw_window_handle::HasWindowHandle;
-use rtrb::{Producer, PushError, RingBuffer};
+use rtrb::{Producer, RingBuffer};
 use std::{
 	io::Cursor,
 	num::NonZero,
@@ -26,7 +26,7 @@ pub struct Plugin {
 	presets: Vec<Preset>,
 	instance: NoDebug<PluginInstance<Host>>,
 	descriptor: PluginDescriptor,
-	producer: Producer<AudioThreadMessage>,
+	producer: Producer<NoDebug<StoppedPluginAudioProcessor<Host>>>,
 	is_created: bool,
 	is_shown: bool,
 }
@@ -42,7 +42,7 @@ impl Plugin {
 		let entry = unsafe { PluginEntry::load(&*descriptor.path) }.unwrap();
 
 		let (sender, receiver) = std::sync::mpsc::channel();
-		let (producer, consumer) = RingBuffer::new(16);
+		let (producer, consumer) = RingBuffer::new(1);
 
 		let mut instance = PluginInstance::new(
 			|()| Shared::new(descriptor.clone(), sender.clone()),
@@ -69,13 +69,6 @@ impl Plugin {
 		};
 
 		(plugin, processor, receiver)
-	}
-
-	fn send(&mut self, mut message: AudioThreadMessage) {
-		while let Err(PushError::Full(msg)) = self.producer.push(message) {
-			message = msg;
-			std::thread::yield_now();
-		}
 	}
 
 	#[must_use]
@@ -185,7 +178,7 @@ impl Plugin {
 				.access_handler_mut(|ap| ap.audio_buffers.as_mut().unwrap().set_latency(latency));
 		}
 
-		self.send(AudioThreadMessage::Activated(NoDebug(processor.into())));
+		self.producer.push(NoDebug(processor)).unwrap();
 
 		Ok(())
 	}
@@ -412,8 +405,6 @@ impl Plugin {
 	}
 
 	pub fn set_render_mode(&mut self, render_mode: RenderMode) {
-		self.send(AudioThreadMessage::RenderMode(render_mode));
-
 		if let Some(&render) = self.instance.access_shared_handler(|s| s.ext.render.get()) {
 			if render_mode == RenderMode::Offline
 				&& render.has_realtime_requirement(&mut self.instance.plugin_handle())

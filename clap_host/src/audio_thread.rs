@@ -2,40 +2,35 @@ use crate::{
 	EventImpl, MainThreadMessage, PluginDescriptor, events::TransportEvent, host::Host,
 	shared::CURRENT_THREAD_ID,
 };
-use clack_extensions::{render::RenderMode, tail::TailLength};
+use clack_extensions::tail::TailLength;
 use clack_host::prelude::*;
-use log::{trace, warn};
+use log::warn;
 use rtrb::Consumer;
 use std::{cell::LazyCell, sync::atomic::Ordering::Relaxed};
 use utils::{NoClone, NoDebug};
 
 #[derive(Debug)]
-pub enum AudioThreadMessage {
-	Activated(NoDebug<PluginAudioProcessor<Host>>),
-	RenderMode(RenderMode),
-}
-
-#[derive(Debug)]
 pub struct AudioThread {
 	processor: Option<NoDebug<PluginAudioProcessor<Host>>>,
 	descriptor: PluginDescriptor,
-	consumer: Consumer<AudioThreadMessage>,
+	consumer: Consumer<NoDebug<StoppedPluginAudioProcessor<Host>>>,
 	processing: bool,
 	needs_reset: bool,
-	render_mode: RenderMode,
 	last_input: Option<u64>,
 }
 
 impl AudioThread {
 	#[must_use]
-	pub fn new(descriptor: PluginDescriptor, consumer: Consumer<AudioThreadMessage>) -> Self {
+	pub fn new(
+		descriptor: PluginDescriptor,
+		consumer: Consumer<NoDebug<StoppedPluginAudioProcessor<Host>>>,
+	) -> Self {
 		Self {
 			processor: None,
 			descriptor,
 			consumer,
 			processing: false,
 			needs_reset: false,
-			render_mode: RenderMode::Realtime,
 			last_input: None,
 		}
 	}
@@ -65,13 +60,8 @@ impl AudioThread {
 	}
 
 	pub fn maybe_activate(&mut self) {
-		while let Ok(msg) = self.consumer.pop() {
-			trace!("{}: {msg:?}", self.descriptor);
-
-			match msg {
-				AudioThreadMessage::Activated(processor) => self.processor = Some(processor),
-				AudioThreadMessage::RenderMode(render_mode) => self.render_mode = render_mode,
-			}
+		if let Ok(processor) = self.consumer.pop() {
+			self.processor = Some(NoDebug(processor.0.into()));
 		}
 	}
 

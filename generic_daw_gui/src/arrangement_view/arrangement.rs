@@ -24,6 +24,7 @@ use generic_daw_core::{
 	time::{BeatRange, BeatTime},
 };
 use iced::Task;
+use log::warn;
 use rtrb::{Producer, PushError};
 use smol::unblock;
 use std::{
@@ -153,10 +154,13 @@ impl Arrangement {
 		&self.midi_patterns
 	}
 
-	pub fn send(&mut self, mut message: Message) {
-		while let Err(PushError::Full(msg)) = self.producer.push(message) {
-			message = msg;
-			std::thread::yield_now();
+	pub fn send(&mut self, message: Message) {
+		if let Err(PushError::Full(mut message)) = self.producer.push(message) {
+			warn!("full ring buffer");
+			while let Err(PushError::Full(msg)) = self.producer.push(message) {
+				message = msg;
+				std::thread::yield_now();
+			}
 		}
 	}
 
