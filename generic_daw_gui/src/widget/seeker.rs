@@ -163,7 +163,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				return;
 			}
 
-			let Some(cursor) = cursor.position_from(viewport.position()) else {
+			let Some(cursor) = cursor.land().position_from(viewport.position()) else {
 				return;
 			};
 

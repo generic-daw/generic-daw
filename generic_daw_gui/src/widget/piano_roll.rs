@@ -114,7 +114,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		tree: &mut Tree,
 		event: &Event,
 		layout: Layout<'_>,
-		mut cursor: Cursor,
+		cursor: Cursor,
 		renderer: &Renderer,
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
@@ -143,8 +143,6 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			return;
 		}
 
-		cursor = cursor.land();
-
 		let cursor = 'block: {
 			if let Some(cursor) = cursor.position_in(*viewport) {
 				state.autoscroll_start = None;
@@ -156,7 +154,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 				return;
 			}
 
-			let Some(cursor) = cursor.position_from(viewport.position()) else {
+			let Some(cursor) = cursor.land().position_from(viewport.position()) else {
 				return;
 			};
 
