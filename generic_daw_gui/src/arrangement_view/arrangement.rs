@@ -684,14 +684,16 @@ impl Arrangement {
 	pub fn render(&mut self, path: Arc<Path>) -> Task<daw::Message> {
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
 
-		let beat_range = BeatRange::new(
-			BeatTime::ZERO,
-			self.tracks()
-				.iter()
-				.map(|track| track.len(&self.transport))
-				.max()
-				.unwrap_or_default(),
-		);
+		let beat_range = self.transport.loop_range.unwrap_or_else(|| {
+			BeatRange::new(
+				BeatTime::ZERO,
+				self.tracks()
+					.iter()
+					.map(|track| track.len(&self.transport))
+					.max()
+					.unwrap_or_default(),
+			)
+		});
 
 		let master = self.master;
 
