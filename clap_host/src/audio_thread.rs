@@ -65,27 +65,13 @@ impl AudioThread {
 	}
 
 	pub fn maybe_activate(&mut self) {
-		loop {
-			while let Ok(msg) = self.consumer.pop() {
-				trace!("{}: {msg:?}", self.descriptor);
+		while let Ok(msg) = self.consumer.pop() {
+			trace!("{}: {msg:?}", self.descriptor);
 
-				match msg {
-					AudioThreadMessage::Activated(processor) => self.processor = Some(processor),
-					AudioThreadMessage::RenderMode(render_mode) => self.render_mode = render_mode,
-				}
+			match msg {
+				AudioThreadMessage::Activated(processor) => self.processor = Some(processor),
+				AudioThreadMessage::RenderMode(render_mode) => self.render_mode = render_mode,
 			}
-
-			if self.render_mode == RenderMode::Realtime {
-				break;
-			}
-
-			self.maybe_deactivate();
-
-			if self.processor.is_some() {
-				break;
-			}
-
-			std::thread::yield_now();
 		}
 	}
 
