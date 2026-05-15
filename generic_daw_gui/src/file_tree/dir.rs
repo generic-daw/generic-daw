@@ -171,6 +171,11 @@ impl Dir {
 				};
 
 				let mut name = entry.file_name();
+
+				if cfg!(target_os = "macos") && name == ".DS_STORE" {
+					return;
+				}
+
 				name.make_ascii_lowercase();
 
 				if ty.is_file() {
