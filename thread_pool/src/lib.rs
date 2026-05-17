@@ -346,7 +346,7 @@ impl<W: Erased<Scratch = (), Inject = Infallible>> Injector<W> {
 		let mut reserved = None;
 		while to_do != 0 {
 			if to_do + usize::from(reserved.is_some()) != 1 && self.try_install(work_list, to_do) {
-				if let Some(item) = reserved.take() {
+				if let Some(item) = reserved {
 					self.do_item_and_reserved::<true>(work_list, item, &mut (), &Injector::new());
 				}
 
