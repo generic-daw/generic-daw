@@ -2,22 +2,22 @@
 macro_rules! variants {
 	(
 		$(#[$meta:meta])*
-		$vis:vis enum $name:ident {
+		$vis:vis enum $ident:ident {
 			$(
-				$(#[$field_meta:meta])*
+				$(#[$variant_meta:meta])*
 				$variant:ident,
 			)+
 		}
 	) => {
 		$(#[$meta])*
-		$vis enum $name {
+		$vis enum $ident {
 			$(
-				$(#[$field_meta])*
+				$(#[$variant_meta])*
 				$variant,
 			)+
 		}
 
-		impl $name {
+		impl $ident {
 			pub const VARIANTS: &[Self] = &[$(Self::$variant,)+];
 		}
 	};

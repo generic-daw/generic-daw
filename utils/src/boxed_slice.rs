@@ -5,5 +5,5 @@ macro_rules! boxed_slice {
 	};
 	($($x:expr),+ $(,)?) => {
 		vec![$($x),+].into_boxed_slice()
-	}
+	};
 }

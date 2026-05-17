@@ -3,9 +3,8 @@ macro_rules! include_f32s {
 	($file:expr $(,)?) => {
 		const {
 			const BYTES: &[u8] = ::core::include_bytes!($file);
-			::core::assert!(BYTES.len().is_multiple_of(4));
 
-			let mut f32s = [0.0; BYTES.len() / 4];
+			let mut f32s = [0.0; BYTES.len().div_ceil(4)];
 			let mut i = 0;
 
 			while i < f32s.len() {
