@@ -167,7 +167,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			let dep_entry = &self.graph[dep];
 			let dep_buffers = &*dep_entry.read_buffers_uncontended();
 			let latency_diff = max_latency - dep_entry.latency.load(Relaxed);
-			delay_line.resize(latency_diff);
+			delay_line.resize(2 * latency_diff);
 
 			let audio = if latency_diff == 0 {
 				&dep_buffers.audio[..self.curr_len]
@@ -191,7 +191,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 			buffers.events.extend(events.extract_if(.., |e| {
 				e.time()
-					.checked_sub(self.curr_len)
+					.checked_sub(self.curr_len / 2)
 					.map(|time| *e = e.at(time))
 					.is_none()
 			}));
