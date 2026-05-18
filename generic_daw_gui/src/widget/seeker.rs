@@ -153,7 +153,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		}
 
 		let cursor = 'block: {
-			let viewport = right_viewport.expand(padding::vertical(LINE_HEIGHT));
+			let mut viewport = right_viewport;
+			if !shell.is_event_captured() {
+				viewport = viewport.expand(padding::vertical(LINE_HEIGHT));
+			}
 
 			if let Some(cursor) = cursor.position_in(viewport) {
 				state.autoscroll_start = None;
@@ -196,7 +199,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					} else {
 						20.0 * autoscroll_amt.copysign(cursor.x - clamped.x)
 					},
-					0.0,
+					if !shell.is_event_captured() || cursor.y == clamped.y {
+						0.0
+					} else {
+						20.0 * autoscroll_amt.copysign(cursor.y - clamped.y)
+					},
 				);
 
 				shell.publish((self.pan)(delta, height, visible));
