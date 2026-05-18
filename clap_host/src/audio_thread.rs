@@ -14,9 +14,7 @@ pub struct AudioThread {
 	processor: Option<NoDebug<PluginAudioProcessor<Host>>>,
 	descriptor: PluginDescriptor,
 	consumer: Consumer<NoDebug<StoppedPluginAudioProcessor<Host>>>,
-	processing: bool,
 	needs_reset: bool,
-	last_input: Option<u64>,
 }
 
 impl AudioThread {
@@ -29,9 +27,7 @@ impl AudioThread {
 			processor: None,
 			descriptor,
 			consumer,
-			processing: false,
 			needs_reset: false,
-			last_input: None,
 		}
 	}
 
@@ -111,8 +107,9 @@ impl AudioThread {
 		let events_in = !events.is_empty();
 		let request_process =
 			processor.access_shared_handler(|s| s.request_process.swap(false, Relaxed));
+		let processing = processor.access_handler(|ap| ap.processing);
 
-		if !self.processing && !request_process && !events_in && !*audio_in {
+		if !processing && !request_process && !events_in && !*audio_in {
 			self.flush(audio, events, mix_level);
 			return;
 		}
@@ -127,7 +124,7 @@ impl AudioThread {
 				if std::mem::take(&mut self.needs_reset) {
 					started_processor.reset();
 					audio_buffers.reset();
-					self.last_input = None;
+					started_processor.access_handler_mut(|ap| ap.last_input = None);
 				}
 
 				let (input_audio, mut output_audio, steady_time) = audio_buffers.read_in(audio);
@@ -136,7 +133,7 @@ impl AudioThread {
 				if started_processor.access_shared_handler(|s| s.ext.tail.get().is_some())
 					&& (request_process || events_in || *audio_in)
 				{
-					self.last_input = Some(steady_time);
+					started_processor.access_handler_mut(|ap| ap.last_input = Some(steady_time));
 				}
 
 				started_processor.access_handler_mut(|ap| {
@@ -163,7 +160,7 @@ impl AudioThread {
 
 				started_processor.access_handler_mut(|ap| ap.injector = None);
 
-				self.processing = match process_status {
+				let processing = match process_status {
 					Ok(ProcessStatus::Continue) => true,
 					Ok(ProcessStatus::ContinueIfNotQuiet) => !audio_buffers.are_outputs_quiet(),
 					Ok(ProcessStatus::Tail) => {
@@ -172,8 +169,10 @@ impl AudioThread {
 							.get(&processor.plugin_handle())
 						{
 							TailLength::Infinite => true,
-							TailLength::Finite(tail) => self.last_input.is_none_or(|last_input| {
-								steady_time - last_input < u64::from(tail)
+							TailLength::Finite(tail) => processor.access_handler(|ap| {
+								ap.last_input.is_none_or(|last_input| {
+									steady_time - last_input < u64::from(tail)
+								})
 							}),
 						}
 					}
@@ -184,6 +183,8 @@ impl AudioThread {
 						return;
 					}
 				};
+
+				processor.access_handler_mut(|ap| ap.processing = processing);
 
 				audio_buffers.write_out(audio, mix_level);
 				event_buffers.write_out(events);

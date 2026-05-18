@@ -38,6 +38,8 @@ pub struct AudioProcessor<'a> {
 	pub shared: &'a Shared<'a>,
 	pub audio_buffers: Option<AudioBuffers>,
 	pub event_buffers: Option<EventBuffers>,
+	pub processing: bool,
+	pub last_input: Option<u64>,
 	pub injector: Option<NoDebug<ThreadPoolInjector<'a>>>,
 }
 
@@ -53,6 +55,8 @@ impl<'a> AudioProcessor<'a> {
 			shared,
 			audio_buffers: Some(audio_buffers),
 			event_buffers: Some(event_buffers),
+			processing: false,
+			last_input: None,
 			injector: None,
 		}
 	}
