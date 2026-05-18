@@ -228,8 +228,10 @@ impl Arrangement {
 
 	pub fn set_loop_range(&mut self, loop_range: Option<BeatRange>) {
 		if self.transport.loop_range != loop_range {
-			self.transport.loop_range = loop_range;
 			self.send(Message::LoopRange(loop_range));
+			if std::mem::replace(&mut self.transport.loop_range, loop_range).is_none() {
+				self.seek_to(loop_range.unwrap().start());
+			}
 		}
 	}
 
