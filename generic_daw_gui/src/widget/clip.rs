@@ -213,7 +213,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 				match button {
 					mouse::Button::Left => {
-						if matches!(self.inner, Inner::MidiClip(..)) {
+						if let Inner::MidiClip(..) = self.inner {
 							let new_click =
 								Click::new(cursor, mouse::Button::Left, state.last_click);
 							state.last_click = Some(new_click);

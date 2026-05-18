@@ -2,7 +2,7 @@ use crate::{API_TYPE, host::Host};
 use clack_extensions::gui::GuiConfiguration;
 use clack_host::prelude::*;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Gui {
 	Floating,
 	Embedded {

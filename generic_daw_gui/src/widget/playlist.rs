@@ -17,7 +17,7 @@ use iced::{
 	},
 	border,
 	gradient::Linear,
-	keyboard, window,
+	keyboard,
 };
 use std::{
 	cell::RefCell,
@@ -25,7 +25,6 @@ use std::{
 	f32::consts::{FRAC_PI_2, PI},
 	path::Path,
 	sync::Arc,
-	time::Instant,
 };
 
 #[derive(Clone, Debug)]
@@ -67,8 +66,6 @@ pub struct State {
 	pub secondary: HashSet<(usize, usize)>,
 	pub position: Vector,
 	pub scale: Vector,
-	autoscroll_start: Option<Instant>,
-	last_autoscroll: Option<Instant>,
 }
 
 impl State {
@@ -168,61 +165,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 			return;
 		}
 
-		let cursor = 'block: {
-			if let Some(cursor) = cursor.position_in(*viewport) {
-				state.autoscroll_start = None;
-				state.last_autoscroll = None;
-				break 'block cursor;
+		let Some(cursor) = cursor.position_in(*viewport) else {
+			if !matches!(state.status, Status::None | Status::Hovering(.., None)) {
+				shell.capture_event();
 			}
 
-			if state.status == Status::None {
-				return;
-			}
-
-			let Some(cursor) = cursor.land().position_from(viewport.position()) else {
-				return;
-			};
-
-			let clamped = Point::new(
-				cursor.x.clamp(0.0, viewport.width),
-				cursor.y.clamp(0.0, viewport.height),
-			);
-
-			debug_assert_ne!(cursor, clamped);
-
-			shell.request_redraw();
-
-			let &Event::Window(window::Event::RedrawRequested(now)) = event else {
-				break 'block clamped;
-			};
-
-			if state.last_autoscroll == Some(now) {
-			} else if let Some(autoscroll_start) = state.autoscroll_start {
-				let visible = layout.position().y + layout.bounds().height - viewport.y;
-
-				let autoscroll_amt = (now - autoscroll_start).as_secs_f32().sqrt();
-
-				let delta = Vector::new(
-					if cursor.x == clamped.x {
-						0.0
-					} else {
-						20.0 * autoscroll_amt.copysign(cursor.x - clamped.x)
-					},
-					if cursor.y == clamped.y {
-						0.0
-					} else {
-						10.0 * autoscroll_amt.copysign(cursor.y - clamped.y)
-					},
-				);
-
-				shell.publish((self.action)(Action::Pan(delta, visible)));
-
-				state.last_autoscroll = Some(now);
-			} else {
-				state.autoscroll_start = Some(now);
-			}
-
-			clamped
+			return;
 		};
 
 		let new_time = px_to_time(cursor.x, state.position, state.scale, self.transport);

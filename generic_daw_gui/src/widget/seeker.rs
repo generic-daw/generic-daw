@@ -102,6 +102,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 		shell: &mut Shell<'_, Message>,
 		_viewport: &Rectangle,
 	) {
+		let was_event_captured = shell.is_event_captured();
+
 		self.children
 			.iter_mut()
 			.zip(&mut tree.children)
@@ -138,7 +140,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			return;
 		}
 
-		if shell.is_event_captured() {
+		if was_event_captured {
 			return;
 		}
 
@@ -159,7 +161,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				break 'block cursor;
 			}
 
-			if state.status == Status::None {
+			if !shell.is_event_captured() && state.status == Status::None {
 				return;
 			}
 
@@ -167,7 +169,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				return;
 			};
 
-			if matches!(state.status, Status::Panning(..)) {
+			if let Status::Panning(..) = state.status {
 				break 'block cursor;
 			}
 
@@ -206,6 +208,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
 			clamped
 		};
+
+		if shell.is_event_captured() {
+			return;
+		}
 
 		let new_time = px_to_time(
 			cursor.x + self.offset,
