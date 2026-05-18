@@ -122,6 +122,10 @@ impl Writer {
 			});
 	}
 
+	pub fn set_view(&mut self, state: proto::ViewState) {
+		self.0.view = Some(state);
+	}
+
 	#[must_use]
 	pub fn finalize(self) -> Vec<u8> {
 		let mut gdp = Vec::new();

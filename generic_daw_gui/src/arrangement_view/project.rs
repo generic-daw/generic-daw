@@ -11,16 +11,15 @@ use crate::{
 };
 use generic_daw_core::{
 	AudioClipId, MidiClipId, MidiKey, MidiNote, MidiNoteId, PanMode,
-	clap_host::PluginDescriptor,
+	clap_host::{PluginDescriptor, StateContextType},
 	time::{BeatRange, BeatSpan, BeatTime, OffsetBeatRange, OffsetBeatSpan, SecondsTime},
 };
-use generic_daw_project::{proto, reader::Reader, writer::Writer};
+use generic_daw_project::{Reader, Writer, proto};
 use iced::Task;
 use smol::{channel::Sender, unblock};
 use std::{
 	collections::{HashMap, HashSet},
 	fs::File,
-	io::{self, Read as _, Write as _},
 	iter::once,
 	num::NonZero,
 	ops::Deref as _,
@@ -38,9 +37,7 @@ pub enum Feedback<T> {
 }
 
 impl Arrangement {
-	pub fn save(&self, path: &Path, clap_host: &mut ClapHost) -> io::Result<()> {
-		let mut file = File::create(path)?;
-
+	pub fn save(&self, clap_host: &mut ClapHost, view: proto::ViewState) -> Vec<u8> {
 		let mut writer = Writer::new(proto::Transport {
 			bpm: self.transport().bpm.get().into(),
 			numerator: self.transport().numerator.get().into(),
@@ -117,7 +114,9 @@ impl Arrangement {
 						.iter()
 						.map(|plugin| proto::Plugin {
 							id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
-							state: clap_host.get_state(plugin.id).map(Vec::from),
+							state: clap_host
+								.get_state(plugin.id, StateContextType::ForProject)
+								.map(Vec::from),
 							mix: plugin.mix,
 							active: clap_host.is_active(plugin.id),
 						}),
@@ -144,7 +143,9 @@ impl Arrangement {
 						.iter()
 						.map(|plugin| proto::Plugin {
 							id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
-							state: clap_host.get_state(plugin.id).map(Vec::from),
+							state: clap_host
+								.get_state(plugin.id, StateContextType::ForProject)
+								.map(Vec::from),
 							mix: plugin.mix,
 							active: clap_host.is_active(plugin.id),
 						}),
@@ -171,7 +172,9 @@ impl Arrangement {
 			}
 		}
 
-		file.write_all(&writer.finalize())
+		writer.set_view(view);
+
+		writer.finalize()
 	}
 
 	pub fn empty() -> Task<daw::Message> {
@@ -184,6 +187,7 @@ impl Arrangement {
 			.chain(Task::done(daw::Message::ProjectLoaded(
 				project,
 				Box::new(arrangement).into(),
+				None,
 			)))
 			.chain(
 				task.map(arrangement_view::Message::Batch)
@@ -221,8 +225,7 @@ impl Arrangement {
 		let config = Config::read();
 		let (mut arrangement, task) = Self::create(&config);
 
-		let mut gdp = Vec::new();
-		File::open(&path).ok()?.read_to_end(&mut gdp).ok()?;
+		let gdp = std::fs::read(&path).ok()?;
 		let reader = Reader::new(&gdp)?;
 
 		let proto::Transport {
@@ -585,6 +588,9 @@ impl Arrangement {
 		}
 
 		drop(channels);
+
+		let view = reader.view();
+
 		drop(reader);
 
 		let project = Project::unique();
@@ -594,6 +600,7 @@ impl Arrangement {
 				.chain(Task::done(daw::Message::ProjectLoaded(
 					project,
 					Box::new(arrangement).into(),
+					view,
 				)))
 				.chain(Task::batch([
 					task.map(arrangement_view::Message::Batch)

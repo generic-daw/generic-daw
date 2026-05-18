@@ -431,10 +431,8 @@ impl ClapHost {
 		}
 	}
 
-	pub fn get_state(&mut self, id: PluginId) -> Option<&[u8]> {
-		self.plugins
-			.get_mut(&id)?
-			.get_state(StateContextType::ForProject)
+	pub fn get_state(&mut self, id: PluginId, context_type: StateContextType) -> Option<&[u8]> {
+		self.plugins.get_mut(&id)?.get_state(context_type)
 	}
 
 	pub fn is_active(&self, id: PluginId) -> bool {

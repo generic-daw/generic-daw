@@ -87,4 +87,9 @@ impl Reader {
 					.map(move |conn| (index, proto::ChannelIndex { index: conn.index }, conn.mix))
 			})
 	}
+
+	#[must_use]
+	pub fn view(&self) -> Option<proto::ViewState> {
+		self.0.view
+	}
 }

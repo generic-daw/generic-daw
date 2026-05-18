@@ -22,6 +22,7 @@ use generic_daw_core::{
 		ClapId, Cookie, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
 	},
 };
+use generic_daw_project::proto;
 use iced::{
 	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
 	mouse::Interaction,
@@ -166,7 +167,7 @@ pub enum Message {
 	ConfigView(config_view::Message),
 
 	CloseRequested(window::Id),
-	ProjectLoaded(Project, NoClone<Box<Arrangement>>),
+	ProjectLoaded(Project, NoClone<Box<Arrangement>>, Option<proto::ViewState>),
 
 	PluginScanned(Scan, PluginDescriptor),
 	PluginScanFinished(Scan),
@@ -260,7 +261,8 @@ impl Daw {
 		let state = State::read();
 
 		let project = Project::unique();
-		let (arrangement_view, batches) = ArrangementView::create(&config, &state);
+		let (arrangement, batches) = Arrangement::create(&config);
+		let arrangement_view = ArrangementView::new(arrangement, &state, None);
 		let clap_host = ClapHost::new(main_window_id);
 		let file_tree = FileTree::new(&config.sample_paths);
 
@@ -299,7 +301,9 @@ impl Daw {
 			},
 			Task::batch([
 				window,
-				batches.map(move |message| Message::Arrangement(project, message)),
+				batches
+					.map(arrangement_view::Message::Batch)
+					.map(move |message| Message::Arrangement(project, message)),
 				plugins
 					.map(move |descriptor| Message::PluginScanned(scan, descriptor))
 					.chain(Task::done(Message::PluginScanFinished(scan)))
@@ -346,8 +350,8 @@ impl Daw {
 					return iced::exit();
 				}
 			}
-			Message::ProjectLoaded(project, NoClone(arrangement)) => {
-				self.arrangement_view = ArrangementView::new(*arrangement, &self.state);
+			Message::ProjectLoaded(project, NoClone(arrangement), view) => {
+				self.arrangement_view = ArrangementView::new(*arrangement, &self.state, view);
 				self.project = project;
 			}
 			Message::PluginScanned(scan, descriptor) => {
@@ -390,11 +394,7 @@ impl Daw {
 				.map(Message::SaveAsFile);
 			}
 			Message::SaveAsFile(path) => {
-				match self
-					.arrangement_view
-					.arrangement
-					.save(&path, &mut self.clap_host)
-				{
+				match std::fs::write(&path, self.arrangement_view.save(&mut self.clap_host)) {
 					Ok(()) => return self.update(Message::OpenedFile(Some(path))),
 					Err(err) => warn!("{err}"),
 				}
@@ -409,10 +409,8 @@ impl Daw {
 
 				let path = AUTOSAVED_DIR.join(format!("{} {}.gdp", name, format_now()));
 
-				if let Err(err) = self
-					.arrangement_view
-					.arrangement
-					.save(&path, &mut self.clap_host)
+				if let Err(err) =
+					std::fs::write(&path, self.arrangement_view.save(&mut self.clap_host))
 				{
 					warn!("{err}");
 				}

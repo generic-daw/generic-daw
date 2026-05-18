@@ -37,6 +37,8 @@ pub struct Project {
 	pub tracks: Vec<Track>,
 	#[prost(message, repeated)]
 	pub channels: Vec<Channel>,
+	#[prost(message)]
+	pub view: Option<ViewState>,
 }
 
 #[derive(Clone, Copy, Message)]
@@ -167,7 +169,7 @@ pub enum Clip {
 pub struct AudioClip {
 	#[prost(message, required)]
 	pub sample: SampleIndex,
-	#[prost(message, optional)]
+	#[prost(message)]
 	pub position_compat: Option<OffsetBeatRange>,
 	#[prost(float, optional)]
 	pub stretch_compat: Option<f32>,
@@ -215,6 +217,30 @@ pub struct OffsetBeatSpan {
 	pub position: BeatSpan,
 	#[prost(uint64)]
 	pub offset: u64,
+}
+
+#[derive(Clone, Copy, Message)]
+pub struct ViewState {
+	#[prost(message, required)]
+	pub playlist: TabState,
+	#[prost(message, required)]
+	pub piano_roll: TabState,
+}
+
+#[derive(Clone, Copy, Message)]
+pub struct TabState {
+	#[prost(message, required)]
+	pub position: Vector,
+	#[prost(message, required)]
+	pub scale: Vector,
+}
+
+#[derive(Clone, Copy, Message)]
+pub struct Vector {
+	#[prost(float)]
+	pub x: f32,
+	#[prost(float)]
+	pub y: f32,
 }
 
 impl Plugin {

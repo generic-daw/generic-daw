@@ -34,6 +34,7 @@ use generic_daw_core::{
 	clap_host::PluginDescriptor,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
+use generic_daw_project::proto;
 use generic_daw_widget::{
 	knob::Knob,
 	peak_meter::{MAX_VOL, PeakMeter},
@@ -188,12 +189,25 @@ pub struct ArrangementView {
 }
 
 impl ArrangementView {
-	pub fn create(config: &Config, state: &State) -> (Self, Task<Message>) {
-		let (arrangement, batches) = Arrangement::create(config);
-		(Self::new(arrangement, state), batches.map(Message::Batch))
-	}
+	pub fn new(
+		mut arrangement: Arrangement,
+		state: &State,
+		view: Option<proto::ViewState>,
+	) -> Self {
+		let view = view.unwrap_or(proto::ViewState {
+			playlist: proto::TabState {
+				position: proto::Vector { x: 0.0, y: 0.0 },
+				scale: proto::Vector { x: -5.0, y: 87.0 },
+			},
+			piano_roll: proto::TabState {
+				position: proto::Vector { x: 0.0, y: 0.0 },
+				scale: proto::Vector {
+					x: -7.0,
+					y: LINE_HEIGHT,
+				},
+			},
+		});
 
-	pub fn new(mut arrangement: Arrangement, state: &State) -> Self {
 		if state.metronome {
 			arrangement.toggle_metronome();
 		}
@@ -208,12 +222,12 @@ impl ArrangementView {
 			recording: None,
 
 			playlist: RefCell::new(playlist::State::new(
-				Vector::default(),
-				Vector::new(-5.0, 87.0),
+				Vector::new(view.playlist.position.x, view.playlist.position.y),
+				Vector::new(view.playlist.scale.x, view.playlist.scale.y),
 			)),
 			piano_roll: RefCell::new(piano_roll::State::new(
-				Vector::new(0.0, 1000.0),
-				Vector::new(-7.0, LINE_HEIGHT),
+				Vector::new(view.piano_roll.position.x, view.piano_roll.position.y),
+				Vector::new(view.piano_roll.scale.x, view.piano_roll.scale.y),
 			)),
 
 			soloed: None,
@@ -2129,6 +2143,36 @@ impl ArrangementView {
 
 			_ = self.handle_playlist_action(playlist::Action::Pan(pos_diff, 0.0), config, state);
 		}
+	}
+
+	pub fn save(&self, clap_host: &mut ClapHost) -> Vec<u8> {
+		let playlist = self.playlist.borrow();
+		let piano_roll = self.piano_roll.borrow();
+
+		let view = proto::ViewState {
+			playlist: proto::TabState {
+				position: proto::Vector {
+					x: playlist.position.x,
+					y: playlist.position.y,
+				},
+				scale: proto::Vector {
+					x: playlist.scale.x,
+					y: playlist.scale.y,
+				},
+			},
+			piano_roll: proto::TabState {
+				position: proto::Vector {
+					x: piano_roll.position.x,
+					y: piano_roll.position.y,
+				},
+				scale: proto::Vector {
+					x: piano_roll.scale.x,
+					y: piano_roll.scale.y,
+				},
+			},
+		};
+
+		self.arrangement.save(clap_host, view)
 	}
 
 	pub fn end_recording(&mut self) {
