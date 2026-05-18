@@ -23,6 +23,7 @@ use crate::{
 		piano::Piano,
 		piano_roll::{self, PianoRoll},
 		playlist::{self, Playlist},
+		samples_per_px,
 		seeker::Seeker,
 		track::Track,
 	},
@@ -197,9 +198,6 @@ impl ArrangementView {
 			arrangement.toggle_metronome();
 		}
 
-		let playlist_scale_x = (arrangement.transport().sample_rate.get() as f32).log2() - 5.0;
-		let piano_roll_scale_x = playlist_scale_x - 2.0;
-
 		let selected = arrangement.master().id;
 
 		Self {
@@ -211,11 +209,11 @@ impl ArrangementView {
 
 			playlist: RefCell::new(playlist::State::new(
 				Vector::default(),
-				Vector::new(playlist_scale_x, 87.0),
+				Vector::new(-5.0, 87.0),
 			)),
 			piano_roll: RefCell::new(piano_roll::State::new(
 				Vector::new(0.0, 1000.0),
-				Vector::new(piano_roll_scale_x, LINE_HEIGHT),
+				Vector::new(-7.0, LINE_HEIGHT),
 			)),
 
 			soloed: None,
@@ -691,7 +689,7 @@ impl ArrangementView {
 				Tab::Playlist => {
 					self.playlist.get_mut().finish();
 					let snap_step = beats_snap_step(
-						self.playlist.get_mut().scale.x,
+						self.playlist.get_mut().scale,
 						self.arrangement.transport(),
 					);
 					return self.handle_playlist_action(
@@ -711,7 +709,7 @@ impl ArrangementView {
 				Tab::PianoRoll => {
 					self.piano_roll.get_mut().finish();
 					let snap_step = beats_snap_step(
-						self.playlist.get_mut().scale.x,
+						self.playlist.get_mut().scale,
 						self.arrangement.transport(),
 					);
 					self.handle_piano_roll_action(piano_roll::Action::Drag(
@@ -724,7 +722,7 @@ impl ArrangementView {
 				Tab::Playlist => {
 					self.playlist.get_mut().finish();
 					let snap_step = beats_snap_step(
-						self.playlist.get_mut().scale.x,
+						self.playlist.get_mut().scale,
 						self.arrangement.transport(),
 					);
 					return self.handle_playlist_action(
@@ -744,7 +742,7 @@ impl ArrangementView {
 				Tab::PianoRoll => {
 					self.piano_roll.get_mut().finish();
 					let snap_step = beats_snap_step(
-						self.playlist.get_mut().scale.x,
+						self.playlist.get_mut().scale,
 						self.arrangement.transport(),
 					);
 					self.handle_piano_roll_action(piano_roll::Action::Drag(
@@ -784,7 +782,7 @@ impl ArrangementView {
 								.end(self.arrangement.transport()),
 						)
 						.round(beats_snap_step(
-							playlist.scale.x,
+							playlist.scale,
 							self.arrangement.transport(),
 						));
 
@@ -802,7 +800,7 @@ impl ArrangementView {
 						let pos = self.arrangement.midi_patterns()[&clip.pattern].notes[note]
 							.position
 							.round(beats_snap_step(
-								piano_roll.scale.x,
+								piano_roll.scale,
 								self.arrangement.transport(),
 							));
 
@@ -982,10 +980,7 @@ impl ArrangementView {
 			playlist::Action::Zoom(scale_diff, cursor, visible) => {
 				let old_scale = *scale;
 				*scale += scale_diff;
-				scale.x = scale.x.clamp(
-					(self.arrangement.transport().sample_rate.get() as f32).log2() - 15.0,
-					(self.arrangement.transport().sample_rate.get() as f32).log2(),
-				);
+				scale.x = scale.x.clamp(-15.0, 0.0);
 				scale.y = scale.y.clamp(45.0, 165.0);
 
 				let pos_diff = Vector::new(
@@ -1221,10 +1216,7 @@ impl ArrangementView {
 			piano_roll::Action::Zoom(scale_diff, cursor, height, visible) => {
 				let old_scale = *scale;
 				*scale += scale_diff;
-				scale.x = scale.x.clamp(
-					(self.arrangement.transport().sample_rate.get() as f32).log2() - 15.0,
-					(self.arrangement.transport().sample_rate.get() as f32).log2(),
-				);
+				scale.x = scale.x.clamp(-15.0, 0.0);
 				scale.y = scale.y.clamp(LINE_HEIGHT, 2.0 * LINE_HEIGHT);
 
 				let pos_diff = Vector::new(
@@ -2030,13 +2022,15 @@ impl ArrangementView {
 			},
 		)
 		.with_offset(
-			clip.position
+			(clip
+				.position
 				.start()
 				.to_samples(self.arrangement.transport()) as f32
 				- clip
 					.position
 					.offset()
-					.to_samples(self.arrangement.transport()) as f32,
+					.to_samples(self.arrangement.transport()) as f32)
+				/ samples_per_px(self.piano_roll.borrow().scale, self.arrangement.transport()),
 		)
 		.into()
 	}
@@ -2129,7 +2123,7 @@ impl ArrangementView {
 			let pos_diff = Vector::new(
 				(after.to_samples(self.arrangement.transport()) as f32
 					- before.to_samples(self.arrangement.transport()) as f32)
-					/ self.playlist.get_mut().scale.x.exp2(),
+					/ samples_per_px(self.playlist.get_mut().scale, self.arrangement.transport()),
 				0.0,
 			);
 

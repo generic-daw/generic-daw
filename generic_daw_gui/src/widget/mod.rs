@@ -69,28 +69,27 @@ impl<T> Neg for Delta<T> {
 	}
 }
 
-pub fn beats_snap_step(mut scale: f32, transport: &Transport) -> BeatTime {
-	scale +=
-		2.5 - (60.0 * transport.sample_rate.get() as f32 / f32::from(transport.bpm.get())).log2();
-	if scale < 0.0 {
-		BeatTime::new(0, BeatTime::FACTOR >> -scale.max(-9.0) as u8)
+pub fn beats_snap_step(mut scale: Vector, transport: &Transport) -> BeatTime {
+	scale.x += 2.5 + (f32::from(transport.bpm.get()) / 60.0).log2();
+	if scale.x < 0.0 {
+		BeatTime::new(0, BeatTime::FACTOR >> -scale.x.max(-9.0) as u8)
 	} else {
 		BeatTime::new(
 			u64::from(transport.numerator.get())
-				<< (scale - f32::from(transport.numerator.get()).log2()).ceil() as u8,
+				<< (scale.x - f32::from(transport.numerator.get()).log2()).ceil() as u8,
 			0,
 		)
 	}
 }
 
-pub fn seconds_snap_step(mut scale: f32, transport: &Transport) -> SecondsTime {
-	scale += 2.5 - (transport.sample_rate.get() as f32).log2();
-	if scale < 0.0 {
-		SecondsTime::new(0, SecondsTime::FACTOR >> -scale.max(-9.0) as u8)
+pub fn seconds_snap_step(mut scale: Vector) -> SecondsTime {
+	scale.x += 2.5;
+	if scale.x < 0.0 {
+		SecondsTime::new(0, SecondsTime::FACTOR >> -scale.x.max(-9.0) as u8)
 	} else {
 		let seconds = [2, 5, 10, 15, 20, 30]
 			.into_iter()
-			.find(|&step| scale < f32::from(step).log2())
+			.find(|&step| scale.x < f32::from(step).log2())
 			.unwrap_or(60u8);
 		SecondsTime::new(seconds.into(), 0)
 	}
@@ -100,13 +99,19 @@ fn maybe_snap<T>(t: T, modifiers: Modifiers, f: impl FnOnce(T) -> T) -> T {
 	if modifiers.alt() { t } else { f(t) }
 }
 
+pub fn samples_per_px(scale: Vector, transport: &Transport) -> f32 {
+	scale.x.exp2() * transport.sample_rate.get() as f32
+}
+
 fn time_to_px(time: BeatTime, position: Vector, scale: Vector, transport: &Transport) -> f32 {
-	(time.to_samples(transport) as f64 / f64::from(scale.x.exp2()) - f64::from(position.x)) as f32
+	(time.to_samples(transport) as f64 / f64::from(samples_per_px(scale, transport))
+		- f64::from(position.x)) as f32
 }
 
 fn px_to_time(px: f32, position: Vector, scale: Vector, transport: &Transport) -> BeatTime {
 	BeatTime::from_samples(
-		((f64::from(px) + f64::from(position.x)) * f64::from(scale.x.exp2())) as usize,
+		((f64::from(px) + f64::from(position.x)) * f64::from(samples_per_px(scale, transport)))
+			as usize,
 		transport,
 	)
 }

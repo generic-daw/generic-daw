@@ -218,7 +218,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
 				let time = maybe_snap(new_time, *modifiers, |time| {
-					time.round(beats_snap_step(self.scale.x, self.transport))
+					time.round(beats_snap_step(self.scale, self.transport))
 				});
 
 				match state.status {
@@ -245,7 +245,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 						let time = maybe_snap(
 							new_time.to_seconds_time(self.transport),
 							*modifiers,
-							|time| time.round(seconds_snap_step(self.scale.x, self.transport)),
+							|time| time.round(seconds_snap_step(self.scale)),
 						);
 
 						if last_time != time {
@@ -258,7 +258,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 						let time = maybe_snap(
 							new_time.to_seconds_time(self.transport),
 							*modifiers,
-							|time| time.round(seconds_snap_step(self.scale.x, self.transport)),
+							|time| time.round(seconds_snap_step(self.scale)),
 						);
 
 						let loop_range = (last_time != time).then(|| {
@@ -292,7 +292,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 				modifiers,
 			}) => {
 				if cursor.y < LINE_HEIGHT {
-					let snap_step = beats_snap_step(self.scale.x, self.transport);
+					let snap_step = beats_snap_step(self.scale, self.transport);
 					let time = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 					state.status = if modifiers.command() {
 						if let Some(loop_range) = self.transport.loop_range {
@@ -316,7 +316,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 					};
 					shell.capture_event();
 				} else if cursor.y > layout.bounds().height - LINE_HEIGHT {
-					let snap_step = seconds_snap_step(self.scale.x, self.transport);
+					let snap_step = seconds_snap_step(self.scale);
 					let time = maybe_snap(
 						new_time.to_seconds_time(self.transport),
 						*modifiers,
@@ -563,7 +563,7 @@ impl<'a, Message> Seeker<'a, Message> {
 	}
 
 	pub fn with_offset(mut self, offset: f32) -> Self {
-		self.offset = offset / self.scale.x.exp2();
+		self.offset = offset;
 		self
 	}
 
@@ -592,7 +592,7 @@ impl<'a, Message> Seeker<'a, Message> {
 				)
 		};
 
-		let snap_step = beats_snap_step(self.scale.x + 1.0, self.transport);
+		let snap_step = beats_snap_step(self.scale + Vector::new(1.0, 0.0), self.transport);
 
 		let mut beat = px_to_time(self.offset, self.position, self.scale, self.transport);
 		let end_beat = px_to_time(
@@ -606,14 +606,14 @@ impl<'a, Message> Seeker<'a, Message> {
 		let background_step = BeatTime::new(8 * u64::from(self.transport.numerator.get()), 0);
 		let mut background_beat = beat.round(background_step);
 		let background_width =
-			background_step.to_samples(self.transport) as f32 / self.scale.x.exp2() / 2.0;
+			time_to_px(background_step, Vector::ZERO, self.scale, self.transport);
 
 		while background_beat < end_beat {
 			renderer.fill_quad(
 				Quad {
 					bounds: Rectangle::new(
 						offset_time(background_beat),
-						Size::new(background_width, bounds.height),
+						Size::new(background_width / 2.0, bounds.height),
 					)
 					.intersection(&bounds)
 					.unwrap_or_default(),
@@ -781,8 +781,8 @@ impl<'a, Message> Seeker<'a, Message> {
 			theme.palette().primary.base.color,
 		);
 
-		let snap_step =
-			beats_snap_step(self.scale.x + 3.0, self.transport).bar_ceil(self.transport);
+		let snap_step = beats_snap_step(self.scale + Vector::new(3.0, 0.0), self.transport)
+			.bar_ceil(self.transport);
 
 		let mut beat = px_to_time(self.offset, self.position, self.scale, self.transport);
 		let end_beat = px_to_time(
@@ -818,7 +818,7 @@ impl<'a, Message> Seeker<'a, Message> {
 			beat += snap_step;
 		}
 
-		let snap_step = seconds_snap_step(self.scale.x + 3.0, self.transport).second_ceil();
+		let snap_step = seconds_snap_step(self.scale + Vector::new(3.0, 0.0)).second_ceil();
 
 		let mut second = px_to_time(self.offset, self.position, self.scale, self.transport)
 			.to_seconds_time(self.transport);

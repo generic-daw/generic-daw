@@ -239,13 +239,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 						};
 
 						let time = maybe_snap(new_time, *modifiers, |time| {
-							time.round(beats_snap_step(state.scale.x, self.transport))
+							time.round(beats_snap_step(state.scale, self.transport))
 						});
 
 						state.status = Status::Selecting(track, track, time, time);
 					} else if let Some(track) = track {
 						let time = maybe_snap(new_time, *modifiers, |time| {
-							time.floor(beats_snap_step(state.scale.x, self.transport))
+							time.floor(beats_snap_step(state.scale, self.transport))
 						});
 
 						state.primary.clear();
@@ -271,7 +271,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 					let track = track_idx(&layout, *viewport, cursor);
 
 					let new_time = maybe_snap(new_time, *modifiers, |time| {
-						time.floor(beats_snap_step(state.scale.x, self.transport))
+						time.floor(beats_snap_step(state.scale, self.transport))
 					});
 
 					let new_time = Some((track, new_time));
@@ -290,7 +290,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 					};
 
 					let end_pos = maybe_snap(new_time, *modifiers, |time| {
-						time.round(beats_snap_step(state.scale.x, self.transport))
+						time.round(beats_snap_step(state.scale, self.transport))
 					});
 
 					if end_track == last_end_track && end_pos == last_end_pos {
@@ -344,7 +344,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 					};
 
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(beats_snap_step(state.scale.x, self.transport))
+						abs_diff.round(beats_snap_step(state.scale, self.transport))
 					});
 
 					if new_track != track || abs_diff != BeatTime::ZERO {
@@ -367,7 +367,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 				}
 				Status::TrimmingStart(time) => {
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(beats_snap_step(state.scale.x, self.transport))
+						abs_diff.round(beats_snap_step(state.scale, self.transport))
 					});
 
 					if abs_diff != BeatTime::ZERO {
@@ -388,7 +388,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 				}
 				Status::TrimmingEnd(time) => {
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(beats_snap_step(state.scale.x, self.transport))
+						abs_diff.round(beats_snap_step(state.scale, self.transport))
 					});
 
 					if abs_diff != BeatTime::ZERO {
@@ -409,7 +409,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 				}
 				Status::DraggingSplit(time) => {
 					let new_time = maybe_snap(new_time, *modifiers, |time| {
-						time.round(beats_snap_step(state.scale.x, self.transport))
+						time.round(beats_snap_step(state.scale, self.transport))
 					});
 
 					if new_time != time {
@@ -420,7 +420,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 				}
 				Status::DraggingSlip(time) => {
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(beats_snap_step(state.scale.x, self.transport))
+						abs_diff.round(beats_snap_step(state.scale, self.transport))
 					});
 
 					if abs_diff != BeatTime::ZERO {

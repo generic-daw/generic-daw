@@ -115,7 +115,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 							(true, false) => {
 								clear = false;
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.round(beats_snap_step(piano_roll.scale.x, self.transport))
+									time.round(beats_snap_step(piano_roll.scale, self.transport))
 								});
 								Status::Selecting(self.note.key, self.note.key, time, time)
 							}
@@ -125,7 +125,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 							}
 							(true, true) => {
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.round(beats_snap_step(piano_roll.scale.x, self.transport))
+									time.round(beats_snap_step(piano_roll.scale, self.transport))
 								});
 								shell.publish((self.f)(Action::SplitAt(time)));
 								Status::DraggingSplit(time)

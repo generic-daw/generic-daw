@@ -3,7 +3,7 @@ use crate::{
 	widget::{
 		ALPHA_1_3, LINE_HEIGHT, beats_snap_step, maybe_snap,
 		playlist::{self, Action, Status},
-		px_to_time, time_to_px,
+		px_to_time, samples_per_px, time_to_px,
 	},
 };
 use generic_daw_core::{Transport, time::BeatTime};
@@ -172,7 +172,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				}
 			}
 
-			let stretch = playlist.scale.x.exp2()
+			let stretch = samples_per_px(playlist.scale, self.transport)
 				* match self.inner {
 					Inner::AudioClip(inner) => inner.clip.stretch as f32,
 					Inner::MidiClip(..) | Inner::Recording(..) => 1.0,
@@ -247,7 +247,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							(true, false, _, _, _) => {
 								clear = false;
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.round(beats_snap_step(playlist.scale.x, self.transport))
+									time.round(beats_snap_step(playlist.scale, self.transport))
 								});
 								Status::Selecting(idx.0, idx.0, time, time)
 							}
@@ -258,7 +258,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							(true, true, _, _, false) => Status::DraggingSlip(time),
 							(true, true, _, _, true) => {
 								let time = maybe_snap(time, *modifiers, |time| {
-									time.round(beats_snap_step(playlist.scale.x, self.transport))
+									time.round(beats_snap_step(playlist.scale, self.transport))
 								});
 								shell.publish((self.f)(Action::SplitAt(time)));
 								Status::DraggingSplit(time)
@@ -397,6 +397,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			}
 		}
 
+		let samples_per_px = samples_per_px(playlist.scale, self.transport);
+
 		match self.inner {
 			Inner::AudioClip(inner) => {
 				if cache.is_empty()
@@ -408,7 +410,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							&inner.sample.samples,
 							(inner.clip.position.offset() * resample_ratio)
 								.to_samples(self.transport),
-							playlist.scale.x.exp2() * stretch as f32,
+							samples_per_px * stretch as f32,
 							theme.palette().background.strong.text,
 							layout.bounds().shrink(padding::top(LINE_HEIGHT)),
 							lower_bounds,
@@ -432,7 +434,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						(note.key.0.min(min), note.key.0.max(max))
 					});
 
-				let samples_per_px = playlist.scale.x.exp2();
 				let note_height = (layout.bounds().height - LINE_HEIGHT) / f32::from(max - min + 3);
 				let offset = Vector::new(layout.position().x, layout.position().y + LINE_HEIGHT);
 
@@ -475,8 +476,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						inner.lods.mesh(
 							inner.core.samples(),
 							0,
-							playlist.scale.x.exp2()
-								/ inner.core.resample_ratio(self.transport) as f32,
+							samples_per_px / inner.core.resample_ratio(self.transport) as f32,
 							theme.palette().background.strong.text,
 							layout.bounds().shrink(padding::top(LINE_HEIGHT)),
 							lower_bounds,
