@@ -1951,6 +1951,11 @@ impl ArrangementView {
 											.default(1.0)
 											.step(f32::EPSILON)
 											.handle((4, 4))
+											.style(if node.enabled {
+												slider::default
+											} else {
+												slider_secondary
+											})
 										}),
 									if node.id == self.selected {
 										row![]
