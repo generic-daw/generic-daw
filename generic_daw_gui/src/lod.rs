@@ -58,7 +58,7 @@ impl LodsBuilder {
 		self.0[0].extend(samples[FIRST * start..].chunks(FIRST).map(samples_min_max));
 
 		for i in 1.. {
-			if self.0[i - 1].len() <= CHUNK_SIZE {
+			if self.0[i - 1].len() < CHUNK_SIZE {
 				return;
 			}
 
