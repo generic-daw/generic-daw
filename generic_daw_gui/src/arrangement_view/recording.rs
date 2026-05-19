@@ -65,8 +65,7 @@ impl Recording {
 			.core
 			.split_off(BufWriter::new(File::create(&path).unwrap()));
 
-		let mut lods = std::mem::take(&mut self.lods);
-		lods.update(&core.samples, core.samples.len());
+		let lods = std::mem::take(&mut self.lods);
 
 		self.position = transport.position.to_beat_time(transport);
 
@@ -99,12 +98,9 @@ impl Recording {
 	pub fn finalize(self) -> SamplePair {
 		let core = self.core.finalize();
 
-		let mut lods = self.lods;
-		lods.update(&core.samples, core.samples.len());
-
 		let gui = Sample {
 			id: core.id,
-			lods: lods.finalize(),
+			lods: self.lods.finalize(),
 			name: self.name,
 			path: self.path.clone(),
 			samples: core.samples.clone(),
