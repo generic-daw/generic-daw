@@ -1,12 +1,11 @@
 use iced::{
 	Color, Point, Rectangle, Transformation,
 	advanced::graphics::{
-		Mesh,
-		color::{self, Packed},
+		Mesh, color,
 		mesh::{Indexed, SolidVertex2D},
 	},
 };
-use utils::NoDebug;
+use utils::{NoDebug, left, right};
 
 const STEP_SIZE: usize = 3;
 const CHUNK_SIZE: usize = 1 << STEP_SIZE;
@@ -120,50 +119,6 @@ fn mesh(
 	unclipped_bounds: Rectangle,
 	clipped_bounds: Rectangle,
 ) -> Option<Mesh> {
-	fn vertices(
-		iter: impl IntoIterator<Item = (f32, f32)>,
-		height: f32,
-		color: Packed,
-		px_per_mesh_slice: f32,
-		jitter_correct: f32,
-		hidden_top_px: f32,
-	) -> Vec<SolidVertex2D> {
-		iter.into_iter()
-			.map(|(min, max)| ((min / 2.0 + 0.5), (max / 2.0 + 0.5)))
-			.map(|(min, max)| (min * height + hidden_top_px, max * height + hidden_top_px))
-			.scan(None, |acc, (mut min, mut max)| {
-				if let Some((l_max, l_min)) = *acc {
-					min = min.min(l_max);
-					max = max.max(l_min);
-				}
-				*acc = Some((max, min));
-				Some((min, max))
-			})
-			.map(|(min, max)| {
-				if max - min < 1.0 {
-					let avg = (min + max) / 2.0;
-					(avg - 0.5, avg + 0.5)
-				} else {
-					(min, max)
-				}
-			})
-			.enumerate()
-			.map(|(x, mm)| (x as f32 * px_per_mesh_slice + jitter_correct, mm))
-			.flat_map(|(x, (min, max))| {
-				[
-					SolidVertex2D {
-						position: [x, min],
-						color,
-					},
-					SolidVertex2D {
-						position: [x, max],
-						color,
-					},
-				]
-			})
-			.collect()
-	}
-
 	let mesh_lod = (samples_per_px.abs().log2() - 1.0) as usize;
 	let saved_lod = (mesh_lod / STEP_SIZE).checked_sub(1);
 	let lod_slices_per_mesh_slice = 1 << (mesh_lod % STEP_SIZE);
@@ -181,12 +136,14 @@ fn mesh(
 	let lod_len_f = (clipped_bounds.width * lod_slices_per_px)
 		.min((samples.len() as f32 - offset as f32) * lod_slices_per_sample);
 
+	let hidden_start_px = clipped_bounds.x - unclipped_bounds.x;
+	let hidden_top_px = unclipped_bounds.y - clipped_bounds.y;
+
 	let lod_start_f = if samples_per_px.is_sign_positive() {
-		offset as f32 * lod_slices_per_sample
-			+ (clipped_bounds.x - unclipped_bounds.x) * lod_slices_per_px
+		offset as f32 * lod_slices_per_sample + hidden_start_px * lod_slices_per_px
 	} else {
 		(samples.len() as f32 - offset as f32) * lod_slices_per_sample
-			- (clipped_bounds.x - unclipped_bounds.x) * lod_slices_per_px
+			- hidden_start_px * lod_slices_per_px
 			- lod_len_f
 	};
 
@@ -207,59 +164,68 @@ fn mesh(
 		return None;
 	}
 
-	let color = color::pack(color);
-	let vertices = saved_lod.map_or_else(
-		|| {
-			let base = samples[2 * lod_start..2 * lod_end]
-				.chunks(2 * lod_slices_per_mesh_slice)
-				.map(samples_min_max);
+	let jitter_correct_px = (lod_start as f32 - lod_start_f) / lod_slices_per_px;
 
-			if samples_per_px.is_sign_positive() {
-				vertices(
-					base,
-					unclipped_bounds.height,
-					color,
-					px_per_mesh_slice,
-					(lod_start as f32 - lod_start_f) / lod_slices_per_px,
-					unclipped_bounds.y - clipped_bounds.y,
-				)
-			} else {
-				vertices(
-					base.rev(),
-					unclipped_bounds.height,
-					color,
-					px_per_mesh_slice,
-					(lod_end_f - lod_end as f32) / lod_slices_per_px,
-					unclipped_bounds.y - clipped_bounds.y,
-				)
-			}
+	let color = color::pack(color);
+
+	let base = saved_lod.map_or_else(
+		|| {
+			left(
+				samples[2 * lod_start..2 * lod_end]
+					.chunks(2 * lod_slices_per_mesh_slice)
+					.map(samples_min_max),
+			)
 		},
 		|saved_lod| {
-			let base = lods[saved_lod].as_ref()[lod_start..lod_end]
-				.chunks(lod_slices_per_mesh_slice)
-				.map(lod_min_max);
-
-			if samples_per_px.is_sign_positive() {
-				vertices(
-					base,
-					unclipped_bounds.height,
-					color,
-					px_per_mesh_slice,
-					(lod_start as f32 - lod_start_f) / lod_slices_per_px,
-					unclipped_bounds.y - clipped_bounds.y,
-				)
-			} else {
-				vertices(
-					base.rev(),
-					unclipped_bounds.height,
-					color,
-					px_per_mesh_slice,
-					(lod_end_f - lod_end as f32) / lod_slices_per_px,
-					unclipped_bounds.y - clipped_bounds.y,
-				)
-			}
+			right(
+				lods[saved_lod].as_ref()[lod_start..lod_end]
+					.chunks(lod_slices_per_mesh_slice)
+					.map(lod_min_max),
+			)
 		},
 	);
+
+	let base = if samples_per_px.is_sign_positive() {
+		left(base)
+	} else {
+		right(base.rev())
+	};
+
+	let vertices = base
+		.map(|(min, max)| {
+			let min = (min / 2.0 + 0.5) * unclipped_bounds.height + hidden_top_px;
+			let max = (max / 2.0 + 0.5) * unclipped_bounds.height + hidden_top_px;
+			(min, max)
+		})
+		.scan(None, |acc, (min, max)| {
+			*acc = Some(acc.map_or((min, max), |(l_min, l_max)| {
+				(min.min(l_max), max.max(l_min))
+			}));
+			*acc
+		})
+		.map(|(min, max)| {
+			if max - min < 1.0 {
+				let avg = (min + max) / 2.0;
+				(avg - 0.5, avg + 0.5)
+			} else {
+				(min, max)
+			}
+		})
+		.enumerate()
+		.flat_map(|(x, (min, max))| {
+			let x = x as f32 * px_per_mesh_slice + jitter_correct_px;
+			[
+				SolidVertex2D {
+					position: [x, min],
+					color,
+				},
+				SolidVertex2D {
+					position: [x, max],
+					color,
+				},
+			]
+		})
+		.collect::<Vec<_>>();
 
 	if vertices.len() < 3 {
 		return None;

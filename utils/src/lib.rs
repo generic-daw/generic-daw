@@ -1,4 +1,5 @@
 mod boxed_slice;
+mod either;
 mod include_f32s;
 mod natural_cmp;
 mod no_clone;
@@ -7,6 +8,7 @@ mod shift_move_ext;
 mod unique_id;
 mod variants;
 
+pub use either::{left, right};
 pub use natural_cmp::natural_cmp;
 pub use no_clone::NoClone;
 pub use no_debug::NoDebug;
