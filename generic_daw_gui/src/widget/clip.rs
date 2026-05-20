@@ -25,13 +25,18 @@ use iced::{
 };
 use std::{borrow::Borrow, cell::RefCell, sync::Arc};
 
+#[derive(Default, PartialEq)]
+struct ClipInfo {
+	offset: BeatTime,
+	stretch: f32,
+	addr: usize,
+}
+
 struct State {
 	cache: RefCell<Cache>,
 	last_click: Option<Click>,
 	last_bounds: Rectangle,
-	last_offset: BeatTime,
-	last_stretch: f32,
-	last_addr: usize,
+	last_info: ClipInfo,
 	last_theme: RefCell<Option<Theme>>,
 }
 
@@ -41,9 +46,7 @@ impl Default for State {
 			cache: RefCell::new(Cache::new(Arc::default())),
 			last_click: None,
 			last_bounds: Rectangle::default(),
-			last_stretch: 0.0,
-			last_offset: BeatTime::ZERO,
-			last_addr: 0,
+			last_info: ClipInfo::default(),
 			last_theme: RefCell::default(),
 		}
 	}
@@ -95,14 +98,32 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 	fn diff(&self, tree: &mut Tree) {
 		let state = tree.state.downcast_mut::<State>();
 
-		let addr = match self.inner {
-			Inner::AudioClip(inner) => std::ptr::from_ref(inner.sample).addr(),
-			Inner::MidiClip(inner) => std::ptr::from_ref(inner.pattern).addr(),
-			Inner::Recording(inner) => std::ptr::from_ref(inner).addr(),
+		let playlist = self.playlist.borrow();
+
+		let info = ClipInfo {
+			offset: match self.inner {
+				Inner::AudioClip(inner) => {
+					inner.clip.position.offset().to_beat_time(self.transport)
+				}
+				Inner::MidiClip(inner) => inner.clip.position.offset(),
+				Inner::Recording(..) => BeatTime::ZERO,
+			},
+			stretch: match self.inner {
+				Inner::AudioClip(inner) => {
+					samples_per_px(playlist.scale, self.transport) * inner.clip.stretch as f32
+				}
+				Inner::MidiClip(..) => 1.0,
+				Inner::Recording(..) => samples_per_px(playlist.scale, self.transport),
+			},
+			addr: match self.inner {
+				Inner::AudioClip(inner) => std::ptr::from_ref(inner.sample).addr(),
+				Inner::MidiClip(inner) => std::ptr::from_ref(inner.pattern).addr(),
+				Inner::Recording(inner) => std::ptr::from_ref(inner).addr(),
+			},
 		};
 
-		if state.last_addr != addr {
-			state.last_addr = addr;
+		if state.last_info != info {
+			state.last_info = info;
 			if !state.cache.get_mut().is_empty() {
 				state.cache.get_mut().update(Arc::default());
 			}
@@ -144,42 +165,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		let state = tree.state.downcast_mut::<State>();
 		let playlist = &mut *self.playlist.borrow_mut();
 
-		if let Event::Window(window::Event::RedrawRequested(..)) = event {
-			if let Some(mut bounds) = layout.bounds().intersection(viewport) {
-				bounds.x -= layout.bounds().x;
-				bounds.y -= layout.bounds().y;
+		if let Event::Window(window::Event::RedrawRequested(..)) = event
+			&& let Some(mut bounds) = layout.bounds().intersection(viewport)
+		{
+			bounds.x -= layout.bounds().x;
+			bounds.y -= layout.bounds().y;
 
-				if state.last_bounds != bounds {
-					state.last_bounds = bounds;
-					if !state.cache.get_mut().is_empty() {
-						state.cache.get_mut().update(Arc::default());
-					}
-				}
-			}
-
-			let offset = match self.inner {
-				Inner::AudioClip(inner) => {
-					inner.clip.position.offset().to_beat_time(self.transport)
-				}
-				Inner::MidiClip(inner) => inner.clip.position.offset(),
-				Inner::Recording(..) => BeatTime::ZERO,
-			};
-
-			if state.last_offset != offset {
-				state.last_offset = offset;
-				if !state.cache.get_mut().is_empty() {
-					state.cache.get_mut().update(Arc::default());
-				}
-			}
-
-			let stretch = samples_per_px(playlist.scale, self.transport)
-				* match self.inner {
-					Inner::AudioClip(inner) => inner.clip.stretch as f32,
-					Inner::MidiClip(..) | Inner::Recording(..) => 1.0,
-				};
-
-			if state.last_stretch != stretch {
-				state.last_stretch = stretch;
+			if state.last_bounds != bounds {
+				state.last_bounds = bounds;
 				if !state.cache.get_mut().is_empty() {
 					state.cache.get_mut().update(Arc::default());
 				}
