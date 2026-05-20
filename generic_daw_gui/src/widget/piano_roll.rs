@@ -141,12 +141,19 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 			return;
 		}
 
-		let Some(cursor) = cursor.position_in(*viewport) else {
-			if state.status != Status::None {
+		let cursor = match cursor.position_in(*viewport) {
+			Some(cursor) => cursor,
+			None if state.status != Status::None => {
 				shell.capture_event();
+				match cursor.land().position_from(viewport.position()) {
+					Some(cursor) => Point::new(
+						cursor.x.clamp(0.0, viewport.width),
+						cursor.y.clamp(0.0, viewport.height),
+					),
+					None => return,
+				}
 			}
-
-			return;
+			None => return,
 		};
 
 		let new_time = px_to_time(cursor.x, state.position, state.scale, self.transport);
