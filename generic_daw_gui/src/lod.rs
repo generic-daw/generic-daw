@@ -1,3 +1,4 @@
+use generic_daw_core::{Transition, Transport, time::SecondsTime};
 use iced::{
 	Color, Point, Rectangle, Transformation,
 	advanced::graphics::{
@@ -23,7 +24,10 @@ impl Lods {
 	pub fn mesh(
 		&self,
 		samples: &[f32],
-		offset: usize,
+		offset: SecondsTime,
+		transport: &Transport,
+		fade_start: Transition,
+		fade_end: Transition,
 		samples_per_px: f32,
 		color: Color,
 		unclipped_bounds: Rectangle,
@@ -33,6 +37,9 @@ impl Lods {
 			&self.0,
 			samples,
 			offset,
+			transport,
+			fade_start,
+			fade_end,
 			samples_per_px,
 			color,
 			unclipped_bounds,
@@ -82,7 +89,7 @@ impl LodsBuilder {
 	pub fn mesh(
 		&self,
 		samples: &[f32],
-		offset: usize,
+		transport: &Transport,
 		samples_per_px: f32,
 		color: Color,
 		unclipped_bounds: Rectangle,
@@ -91,7 +98,10 @@ impl LodsBuilder {
 		mesh(
 			&self.0,
 			samples,
-			offset,
+			SecondsTime::ZERO,
+			transport,
+			Transition::default(),
+			Transition::default(),
 			samples_per_px,
 			color,
 			unclipped_bounds,
@@ -113,12 +123,17 @@ impl LodsBuilder {
 fn mesh(
 	lods: &[impl AsRef<[(f32, f32)]>],
 	samples: &[f32],
-	offset: usize,
+	offset: SecondsTime,
+	transport: &Transport,
+	fade_start_t: Transition,
+	fade_end_t: Transition,
 	samples_per_px: f32,
 	color: Color,
 	unclipped_bounds: Rectangle,
 	clipped_bounds: Rectangle,
 ) -> Option<Mesh> {
+	let offset = offset.to_samples(transport);
+
 	let mesh_lod = (samples_per_px.abs().log2() - 1.0) as usize;
 	let saved_lod = (mesh_lod / STEP_SIZE).checked_sub(1);
 	let lod_slices_per_mesh_slice = 1 << (mesh_lod % STEP_SIZE);
@@ -165,6 +180,8 @@ fn mesh(
 	}
 
 	let jitter_correct_px = (lod_start as f32 - lod_start_f) / lod_slices_per_px;
+	let fade_start_px = fade_start_t.len.to_samples(transport) as f32 / samples_per_px.abs();
+	let fade_end_px = fade_end_t.len.to_samples(transport) as f32 / samples_per_px.abs();
 
 	let color = color::pack(color);
 
@@ -192,9 +209,18 @@ fn mesh(
 	};
 
 	let vertices = base
-		.map(|(min, max)| {
-			let min = (min / 2.0 + 0.5) * unclipped_bounds.height + hidden_top_px;
-			let max = (max / 2.0 + 0.5) * unclipped_bounds.height + hidden_top_px;
+		.enumerate()
+		.map(|(x, (min, max))| {
+			let x = x as f32 * px_per_mesh_slice + jitter_correct_px + hidden_start_px;
+			let mix = if fade_start_px > 0.0 && x < fade_start_px {
+				fade_start_t.transition(x.max(0.0) / fade_start_px)
+			} else if fade_end_px > 0.0 && unclipped_bounds.width - x < fade_end_px {
+				fade_end_t.transition((unclipped_bounds.width - x).max(0.0) / fade_end_px)
+			} else {
+				1.0
+			};
+			let min = (min * mix / 2.0 + 0.5) * unclipped_bounds.height + hidden_top_px;
+			let max = (max * mix / 2.0 + 0.5) * unclipped_bounds.height + hidden_top_px;
 			(min, max)
 		})
 		.scan(None, |acc, (min, max)| {

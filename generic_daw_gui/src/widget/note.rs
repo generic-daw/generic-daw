@@ -262,7 +262,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 				let vel_pixel =
 					bounds.x + border + self.note.velocity * (bounds.width - 2.0 * border - 1.0);
 				if (vel_pixel - cursor.x).abs() < border / 2.0 {
-					Interaction::ResizingHorizontally
+					Interaction::Pointer
 				} else {
 					Interaction::Grab
 				}

@@ -1,6 +1,6 @@
 use crate::{
 	AudioClipId, Channel, Clip, ClipId, MidiPattern, MidiPatternAction, MidiPatternId, Node,
-	NodeId, PanMode, PluginId, Sample, SampleId,
+	NodeId, PanMode, PluginId, Point, Sample, SampleId,
 	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -62,11 +62,17 @@ const _: () = assert!(size_of::<Message>() == 64);
 
 #[derive(Debug)]
 pub enum NodeAction {
-	ClipAdd(Clip),
+	ClipAdd(Box<Clip>),
 	ClipRemove(ClipId),
 	ClipMoveTo(ClipId, BeatTime),
 	ClipTrimStartTo(ClipId, BeatTime),
 	ClipTrimEndTo(ClipId, BeatTime),
+	ClipFadeStartLen(AudioClipId, SecondsTime),
+	ClipFadeStartP(AudioClipId, Point),
+	ClipFadeStartToggleSymmetric(AudioClipId),
+	ClipFadeEndLen(AudioClipId, SecondsTime),
+	ClipFadeEndP(AudioClipId, Point),
+	ClipFadeEndToggleSymmetric(AudioClipId),
 	ClipStretchStartTo(AudioClipId, BeatTime),
 	ClipStretchEndTo(AudioClipId, BeatTime),
 	ClipReverse(AudioClipId),
@@ -435,7 +441,13 @@ impl AudioThread {
 
 			let resample_ratio = 44100.0 / f64::from(self.transport().sample_rate.get());
 
-			resample_cubic(&mut buf[write_start..], click, resample_ratio, play_pos / 2);
+			resample_cubic(click, resample_ratio, play_pos / 2)
+				.take((click.len() - play_pos) / 2)
+				.zip(buf[write_start..].as_chunks_mut::<2>().0)
+				.for_each(|((l, r), buf)| {
+					buf[0] += l;
+					buf[1] += r;
+				});
 		}
 	}
 

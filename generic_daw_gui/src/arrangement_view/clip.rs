@@ -98,11 +98,15 @@ impl From<Clip> for generic_daw_core::Clip {
 				id,
 				sample,
 				position,
+				fade_start,
+				fade_end,
 				stretch,
 			}) => Self::Audio(generic_daw_core::AudioClip {
 				id,
 				sample,
 				position,
+				fade_start,
+				fade_end,
 				stretch,
 			}),
 			Clip::Midi(MidiClip {

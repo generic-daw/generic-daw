@@ -75,42 +75,84 @@ impl Track {
 
 	pub fn apply(&mut self, action: NodeAction, state: &State) {
 		match action {
-			NodeAction::ClipAdd(clip) => _ = self.clips.insert(clip.id(), clip),
+			NodeAction::ClipAdd(clip) => _ = self.clips.insert(clip.id(), *clip),
 			NodeAction::ClipRemove(id) => _ = self.clips.remove(&id),
 			NodeAction::ClipMoveTo(id, pos) => self.clips.get_mut(&id).unwrap().move_to(pos),
 			NodeAction::ClipTrimStartTo(id, pos) => {
-				self.clips
-					.get_mut(&id)
-					.unwrap()
-					.trim_start_to(pos, &state.transport);
+				let clip = self.clips.get_mut(&id).unwrap();
+				clip.trim_start_to(pos, &state.transport);
+				if let Clip::Audio(audio) = clip {
+					audio.fade_start.len = audio.fade_start.len.min(audio.position.len());
+					audio.fade_end.len = audio
+						.fade_end
+						.len
+						.min(audio.position.len() - audio.fade_start.len);
+				}
 			}
 			NodeAction::ClipTrimEndTo(id, pos) => {
-				self.clips
-					.get_mut(&id)
-					.unwrap()
-					.trim_end_to(pos, &state.transport);
+				let clip = self.clips.get_mut(&id).unwrap();
+				clip.trim_end_to(pos, &state.transport);
+				if let Clip::Audio(audio) = clip {
+					audio.fade_end.len = audio.fade_end.len.min(audio.position.len());
+					audio.fade_start.len = audio
+						.fade_start
+						.len
+						.min(audio.position.len() - audio.fade_end.len);
+				}
+			}
+			NodeAction::ClipFadeStartLen(id, len) => {
+				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
+					unreachable!();
+				};
+				clip.fade_start.len = len;
+			}
+			NodeAction::ClipFadeStartP(id, p) => {
+				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
+					unreachable!();
+				};
+				clip.fade_start.p = p;
+			}
+			NodeAction::ClipFadeStartToggleSymmetric(id) => {
+				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
+					unreachable!();
+				};
+				clip.fade_start.symmetric ^= true;
+			}
+			NodeAction::ClipFadeEndLen(id, len) => {
+				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
+					unreachable!();
+				};
+				clip.fade_end.len = len;
+			}
+			NodeAction::ClipFadeEndP(id, p) => {
+				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
+					unreachable!();
+				};
+				clip.fade_end.p = p;
+			}
+			NodeAction::ClipFadeEndToggleSymmetric(id) => {
+				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
+					unreachable!();
+				};
+				clip.fade_end.symmetric ^= true;
 			}
 			NodeAction::ClipStretchStartTo(id, pos) => {
 				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
 					unreachable!();
 				};
-				clip.stretch *= clip.position.stretch_start_to(pos, &state.transport);
-				clip.stretch = clip
-					.stretch
-					.abs()
-					.clamp(2f64.powi(-10), 2f64.powi(10))
-					.copysign(clip.stretch);
+				let fac = clip.position.stretch_start_to(pos, &state.transport);
+				clip.fade_start.len /= fac;
+				clip.fade_end.len /= fac;
+				clip.stretch *= fac;
 			}
 			NodeAction::ClipStretchEndTo(id, pos) => {
 				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
 					unreachable!();
 				};
-				clip.stretch *= clip.position.stretch_end_to(pos, &state.transport);
-				clip.stretch = clip
-					.stretch
-					.abs()
-					.clamp(2f64.powi(-10), 2f64.powi(10))
-					.copysign(clip.stretch);
+				let fac = clip.position.stretch_end_to(pos, &state.transport);
+				clip.fade_start.len /= fac;
+				clip.fade_end.len /= fac;
+				clip.stretch *= fac;
 			}
 			NodeAction::ClipReverse(id) => {
 				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
@@ -119,6 +161,7 @@ impl Track {
 				clip.stretch *= -1.0;
 				clip.position
 					.reverse(state.samples[&clip.sample].len(&state.transport));
+				(clip.fade_start, clip.fade_end) = (clip.fade_end, clip.fade_start);
 			}
 			NodeAction::ClipSlipTo(id, pos) => {
 				self.clips

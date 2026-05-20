@@ -30,7 +30,8 @@ use crate::{
 };
 use audio_clip::AudioClip;
 use generic_daw_core::{
-	Batch, MidiKey, MidiNote, MidiNoteId, MidiPatternId, NodeId, PanMode, PluginId, SampleId,
+	Batch, MidiKey, MidiNote, MidiNoteId, MidiPatternId, NodeId, PanMode, PluginId, Point,
+	SampleId,
 	clap_host::PluginDescriptor,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -1103,6 +1104,59 @@ impl ArrangementView {
 						.clip_trim_end_to(track, clip, pos + pos_diff);
 				}
 			}
+			playlist::Action::FadeStartLen(pos_diff) => {
+				let pos_diff =
+					pos_diff.map(|pos_diff| pos_diff.to_seconds_time(self.arrangement.transport()));
+
+				for &(track, clip) in &*primary {
+					if let clip::Clip::Audio(audio) = &self.arrangement.tracks()[track].clips[clip]
+					{
+						self.arrangement.clip_fade_start_len(
+							track,
+							clip,
+							audio.fade_start.len + pos_diff,
+						);
+					}
+				}
+			}
+			playlist::Action::FadeStartP(p) => {
+				for &(track, clip) in &*primary {
+					self.arrangement
+						.clip_fade_start_p(track, clip, Point { x: p.x, y: p.y });
+				}
+			}
+			playlist::Action::FadeStartToggleSymmetric => {
+				for &(track, clip) in &*primary {
+					self.arrangement
+						.clip_fade_start_toggle_symmetric(track, clip);
+				}
+			}
+			playlist::Action::FadeEndLen(pos_diff) => {
+				let pos_diff =
+					pos_diff.map(|pos_diff| pos_diff.to_seconds_time(self.arrangement.transport()));
+
+				for &(track, clip) in &*primary {
+					if let clip::Clip::Audio(audio) = &self.arrangement.tracks()[track].clips[clip]
+					{
+						self.arrangement.clip_fade_end_len(
+							track,
+							clip,
+							audio.fade_end.len + pos_diff,
+						);
+					}
+				}
+			}
+			playlist::Action::FadeEndP(p) => {
+				for &(track, clip) in &*primary {
+					self.arrangement
+						.clip_fade_end_p(track, clip, Point { x: p.x, y: p.y });
+				}
+			}
+			playlist::Action::FadeEndToggleSymmetric => {
+				for &(track, clip) in &*primary {
+					self.arrangement.clip_fade_end_toggle_symmetric(track, clip);
+				}
+			}
 			playlist::Action::StretchStart(pos_diff) => {
 				for &(track, clip) in &*primary {
 					let pos = self.arrangement.tracks()[track].clips[clip].start();
@@ -1146,7 +1200,11 @@ impl ArrangementView {
 						let end = clip.end(self.arrangement.transport()) - BeatTime::TICK;
 						pos = pos.clamp(start, end);
 						let rhs = self.arrangement.duplicate_clip(track, lhs);
+						self.arrangement
+							.clip_fade_end_len(track, lhs, SecondsTime::ZERO);
 						self.arrangement.clip_trim_end_to(track, lhs, pos);
+						self.arrangement
+							.clip_fade_start_len(track, rhs, SecondsTime::ZERO);
 						self.arrangement.clip_trim_start_to(track, rhs, pos);
 						primary.insert((track, lhs));
 						secondary.insert((track, rhs));
@@ -1381,13 +1439,13 @@ impl ArrangementView {
 		plugins: &'a combo_box::State<PluginDescriptor>,
 	) -> Element<'a, Message> {
 		match self.tab {
-			Tab::Playlist => self.view_arrangement(),
+			Tab::Playlist => self.view_playlist(),
 			Tab::Mixer => self.view_mixer(state, clap_host, plugins),
 			Tab::PianoRoll => self.view_piano_roll(),
 		}
 	}
 
-	fn view_arrangement(&self) -> Element<'_, Message> {
+	fn view_playlist(&self) -> Element<'_, Message> {
 		Seeker::new(
 			self.arrangement.transport(),
 			self.playlist.borrow().position,

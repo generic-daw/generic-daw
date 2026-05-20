@@ -1,7 +1,8 @@
 use crate::{
 	file_tree::FileKind,
 	widget::{
-		ALPHA_1_3, Delta, beats_snap_step, clip, maybe_snap, px_to_time, time_to_px, track::Track,
+		ALPHA_1_3, Delta, LINE_HEIGHT, beats_snap_step, clip, maybe_snap, px_to_time,
+		samples_per_px, time_to_px, track::Track,
 	},
 };
 use generic_daw_core::{Transport, time::BeatTime};
@@ -37,6 +38,12 @@ pub enum Action {
 	Drag(Delta<usize>, Delta<BeatTime>),
 	TrimStart(Delta<BeatTime>),
 	TrimEnd(Delta<BeatTime>),
+	FadeStartLen(Delta<BeatTime>),
+	FadeStartP(Point),
+	FadeStartToggleSymmetric,
+	FadeEndLen(Delta<BeatTime>),
+	FadeEndP(Point),
+	FadeEndToggleSymmetric,
 	StretchStart(Delta<BeatTime>),
 	StretchEnd(Delta<BeatTime>),
 	SplitAt(BeatTime),
@@ -52,6 +59,10 @@ pub enum Status {
 	Dragging(usize, BeatTime),
 	TrimmingStart(BeatTime),
 	TrimmingEnd(BeatTime),
+	FadingStartLen(BeatTime),
+	FadingStartP(usize, usize),
+	FadingEndLen(BeatTime),
+	FadingEndP(usize, usize),
 	DraggingSplit(BeatTime),
 	DraggingSlip(BeatTime),
 	Deleting,
@@ -348,6 +359,79 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 						shell.capture_event();
 					}
 				}
+				Status::FadingStartLen(time) => {
+					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+						abs_diff.round(snap_step)
+					});
+
+					if abs_diff != BeatTime::ZERO {
+						let delta = if new_time > time {
+							Delta::Positive
+						} else {
+							Delta::Negative
+						}(abs_diff);
+
+						state.status = Status::FadingStartLen(time + delta);
+						shell.publish((self.action)(Action::FadeStartLen(delta)));
+						shell.capture_event();
+					}
+				}
+				Status::FadingStartP(track, clip) => {
+					let clip::Inner::AudioClip(inner) = self.tracks[track].clips[clip].inner else {
+						unreachable!();
+					};
+
+					let samples_per_px = samples_per_px(state.scale, self.transport);
+					let fade_start_px = inner.clip.fade_start.len.to_samples(self.transport) as f32
+						/ samples_per_px;
+
+					let clip_bounds = layout.child(track).child(clip).bounds()
+						- Vector::new(viewport.position().x, viewport.position().y);
+
+					let x = ((cursor.x - clip_bounds.x) / fade_start_px).clamp(0.0, 1.0);
+					let y = ((clip_bounds.height + clip_bounds.y - cursor.y)
+						/ (clip_bounds.height - LINE_HEIGHT))
+						.clamp(0.0, 1.0);
+
+					shell.publish((self.action)(Action::FadeStartP(Point::new(x, y))));
+				}
+				Status::FadingEndLen(time) => {
+					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
+						abs_diff.round(snap_step)
+					});
+
+					if abs_diff != BeatTime::ZERO {
+						let delta = if new_time > time {
+							Delta::Positive
+						} else {
+							Delta::Negative
+						}(abs_diff);
+
+						state.status = Status::FadingEndLen(time + delta);
+						shell.publish((self.action)(Action::FadeEndLen(-delta)));
+						shell.capture_event();
+					}
+				}
+				Status::FadingEndP(track, clip) => {
+					let clip::Inner::AudioClip(inner) = self.tracks[track].clips[clip].inner else {
+						unreachable!();
+					};
+
+					let samples_per_px = samples_per_px(state.scale, self.transport);
+					let fade_end_px =
+						inner.clip.fade_end.len.to_samples(self.transport) as f32 / -samples_per_px;
+
+					let clip_bounds = layout.child(track).child(clip).bounds()
+						- Vector::new(viewport.position().x, viewport.position().y);
+
+					let x = ((cursor.x - clip_bounds.x - clip_bounds.width) / fade_end_px)
+						.clamp(0.0, 1.0);
+					let y = ((clip_bounds.y + clip_bounds.height - cursor.y)
+						/ (clip_bounds.height - LINE_HEIGHT))
+						.clamp(0.0, 1.0);
+
+					shell.publish((self.action)(Action::FadeEndP(Point::new(x, y))));
+				}
 				Status::DraggingSplit(time) => {
 					let new_time = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
@@ -530,6 +614,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 			| Status::TrimmingEnd(..)
 			| Status::DraggingSplit(..)
 			| Status::DraggingSlip(..) => Interaction::ResizingHorizontally,
+			Status::FadingStartLen(..) | Status::FadingEndLen(..) => Interaction::Pointer,
+			Status::FadingStartP(..) | Status::FadingEndP(..) => Interaction::Crosshair,
 			Status::Deleting => Interaction::NoDrop,
 			Status::None => self
 				.tracks

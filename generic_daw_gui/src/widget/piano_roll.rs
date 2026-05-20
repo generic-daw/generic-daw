@@ -393,10 +393,10 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 		match self.state.borrow().status {
 			Status::Selecting(..) => Interaction::Idle,
 			Status::Dragging(..) => Interaction::Grabbing,
-			Status::TrimmingStart(..)
-			| Status::TrimmingEnd(..)
-			| Status::DraggingSplit(..)
-			| Status::DraggingVelocity(..) => Interaction::ResizingHorizontally,
+			Status::TrimmingStart(..) | Status::TrimmingEnd(..) | Status::DraggingSplit(..) => {
+				Interaction::ResizingHorizontally
+			}
+			Status::DraggingVelocity(..) => Interaction::Pointer,
 			Status::Deleting => Interaction::NoDrop,
 			Status::None => self
 				.notes

@@ -25,6 +25,15 @@ pub enum Delta<T> {
 	Negative(T),
 }
 
+impl<T> Delta<T> {
+	pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Delta<U> {
+		match self {
+			Self::Positive(diff) => Delta::Positive(f(diff)),
+			Self::Negative(diff) => Delta::Negative(f(diff)),
+		}
+	}
+}
+
 impl Add<Delta<Self>> for usize {
 	type Output = Self;
 
@@ -37,6 +46,17 @@ impl Add<Delta<Self>> for usize {
 }
 
 impl Add<Delta<Self>> for BeatTime {
+	type Output = Self;
+
+	fn add(self, rhs: Delta<Self>) -> Self::Output {
+		match rhs {
+			Delta::Positive(diff) => self + diff,
+			Delta::Negative(diff) => self.saturating_sub(diff),
+		}
+	}
+}
+
+impl Add<Delta<Self>> for SecondsTime {
 	type Output = Self;
 
 	fn add(self, rhs: Delta<Self>) -> Self::Output {

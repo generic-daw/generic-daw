@@ -1,4 +1,4 @@
-use crate::{SampleId, audio_thread::State, time::OffsetBeatSpan};
+use crate::{SampleId, Transition, audio_thread::State, time::OffsetBeatSpan};
 use dsp::resample_cubic;
 use utils::unique_id;
 
@@ -11,6 +11,8 @@ pub struct AudioClip {
 	pub id: AudioClipId,
 	pub sample: SampleId,
 	pub position: OffsetBeatSpan,
+	pub fade_start: Transition,
+	pub fade_end: Transition,
 	pub stretch: f64,
 }
 
@@ -54,11 +56,39 @@ impl AudioClip {
 			sample.samples.len().saturating_sub(read_len + offset)
 		};
 
-		resample_cubic(
-			&mut audio[write_start..],
+		let fade_start = self.fade_start.len.to_samples(&state.transport);
+		let fade_end = self.fade_end.len.to_samples(&state.transport);
+
+		let mut iter = resample_cubic(
 			&sample.samples[read_start..][..read_len],
 			resample_ratio,
 			play_pos / 2,
-		);
+		)
+		.take((len - play_pos) / 2)
+		.zip(audio[write_start..].as_chunks_mut::<2>().0)
+		.zip((play_pos..).step_by(2));
+
+		iter.by_ref()
+			.take(fade_start.saturating_sub(play_pos) / 2)
+			.for_each(|(((l, r), buf), pos)| {
+				let mix = self.fade_start.transition(pos as f32 / fade_start as f32);
+				buf[0] += l * mix;
+				buf[1] += r * mix;
+			});
+
+		iter.by_ref()
+			.take((len - fade_end).saturating_sub(play_pos) / 2)
+			.for_each(|(((l, r), buf), _)| {
+				buf[0] += l;
+				buf[1] += r;
+			});
+
+		iter.by_ref().for_each(|(((l, r), buf), pos)| {
+			let mix = self
+				.fade_end
+				.transition((len - pos) as f32 / fade_end as f32);
+			buf[0] += l * mix;
+			buf[1] += r * mix;
+		});
 	}
 }

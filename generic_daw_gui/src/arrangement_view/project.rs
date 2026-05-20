@@ -10,7 +10,7 @@ use crate::{
 	daw::{self, Project},
 };
 use generic_daw_core::{
-	AudioClipId, MidiClipId, MidiKey, MidiNote, MidiNoteId, PanMode,
+	AudioClipId, MidiClipId, MidiKey, MidiNote, MidiNoteId, PanMode, Point, Transition,
 	clap_host::{PluginDescriptor, StateContextType},
 	time::{BeatRange, BeatSpan, BeatTime, OffsetBeatRange, OffsetBeatSpan, SecondsTime},
 };
@@ -93,6 +93,22 @@ impl Arrangement {
 									len: clip.position.len().to_bits(),
 								},
 								offset: clip.position.offset().to_bits(),
+							},
+							fade_start: proto::Transition {
+								len: clip.fade_start.len.to_bits(),
+								p: proto::Point {
+									x: clip.fade_start.p.x,
+									y: clip.fade_start.p.y,
+								},
+								symmetric: clip.fade_start.symmetric,
+							},
+							fade_end: proto::Transition {
+								len: clip.fade_end.len.to_bits(),
+								p: proto::Point {
+									x: clip.fade_end.p.x,
+									y: clip.fade_end.p.y,
+								},
+								symmetric: clip.fade_end.symmetric,
 							},
 							stretch: clip.stretch,
 						}
@@ -513,6 +529,22 @@ impl Arrangement {
 										)
 									},
 								),
+								fade_start: Transition {
+									len: SecondsTime::from_bits(clip.fade_start.len),
+									p: Point {
+										x: clip.fade_start.p.x,
+										y: clip.fade_start.p.y,
+									},
+									symmetric: clip.fade_start.symmetric,
+								},
+								fade_end: Transition {
+									len: SecondsTime::from_bits(clip.fade_end.len),
+									p: Point {
+										x: clip.fade_end.p.x,
+										y: clip.fade_end.p.y,
+									},
+									symmetric: clip.fade_end.symmetric,
+								},
 								stretch: clip
 									.stretch_compat
 									.map_or(clip.stretch, |stretch_compat| {

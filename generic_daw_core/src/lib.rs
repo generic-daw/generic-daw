@@ -13,6 +13,7 @@ mod sample;
 mod stream;
 pub mod time;
 mod track;
+mod transition;
 mod voice_alloc;
 
 pub use audio_clip::{AudioClip, AudioClipId};
@@ -33,3 +34,4 @@ pub use sample::{Sample, SampleId};
 pub use stream::{build_input_stream, build_output_stream, get_devices};
 pub use symphonia::core::io::MediaSource;
 pub use track::Track;
+pub use transition::{Point, Transition};

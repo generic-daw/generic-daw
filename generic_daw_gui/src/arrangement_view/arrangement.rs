@@ -18,10 +18,10 @@ use crate::{
 };
 use generic_daw_core::{
 	AudioClipId, Batch, Message, MidiClipId, MidiKey, MidiNote, MidiNoteId, MidiPatternAction,
-	MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode, PluginId, SampleId, Stream,
+	MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode, PluginId, Point, SampleId, Stream,
 	Transport, Update, Version, build_output_stream,
 	clap_host::{HostInfo, PluginDescriptor},
-	time::{BeatRange, BeatTime},
+	time::{BeatRange, BeatTime, SecondsTime},
 };
 use iced::Task;
 use log::warn;
@@ -481,7 +481,8 @@ impl Arrangement {
 			Clip::Midi(clip) => self.midi_patterns.get_mut(&clip.pattern).unwrap().refs += 1,
 		}
 		self.tracks[track].clips.insert(idx, clip);
-		self.node_action(self.tracks[track].id, NodeAction::ClipAdd(clip.into()));
+		let clip = clip.into();
+		self.node_action(self.tracks[track].id, NodeAction::ClipAdd(Box::new(clip)));
 		idx
 	}
 
@@ -517,6 +518,13 @@ impl Arrangement {
 	pub fn clip_trim_start_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
 		if self.tracks[track].clips[clip].start() != pos {
 			self.tracks[track].clips[clip].trim_start_to(pos, &self.transport);
+			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
+				audio.fade_start.len = audio.fade_start.len.min(audio.position.len());
+				audio.fade_end.len = audio
+					.fade_end
+					.len
+					.min(audio.position.len() - audio.fade_start.len);
+			}
 			self.node_action(
 				self.tracks[track].id,
 				NodeAction::ClipTrimStartTo(self.tracks[track].clips[clip].id(), pos),
@@ -527,6 +535,13 @@ impl Arrangement {
 	pub fn clip_trim_end_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
 		if self.tracks[track].clips[clip].end(&self.transport) != pos {
 			self.tracks[track].clips[clip].trim_end_to(pos, &self.transport);
+			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
+				audio.fade_end.len = audio.fade_end.len.min(audio.position.len());
+				audio.fade_start.len = audio
+					.fade_start
+					.len
+					.min(audio.position.len() - audio.fade_end.len);
+			}
 			self.node_action(
 				self.tracks[track].id,
 				NodeAction::ClipTrimEndTo(self.tracks[track].clips[clip].id(), pos),
@@ -534,15 +549,79 @@ impl Arrangement {
 		}
 	}
 
+	pub fn clip_fade_start_len(&mut self, track: usize, clip: usize, len: SecondsTime) {
+		if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
+			let len = len.min(audio.position.len());
+			if audio.fade_start.len != len {
+				audio.fade_end.len = audio.fade_end.len.min(audio.position.len() - len);
+				audio.fade_start.len = len;
+				let id = audio.id;
+				self.node_action(self.tracks[track].id, NodeAction::ClipFadeStartLen(id, len));
+			}
+		}
+	}
+
+	pub fn clip_fade_start_p(&mut self, track: usize, clip: usize, p: Point) {
+		if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip]
+			&& audio.fade_start.p != p
+		{
+			audio.fade_start.p = p;
+			let id = audio.id;
+			self.node_action(self.tracks[track].id, NodeAction::ClipFadeStartP(id, p));
+		}
+	}
+
+	pub fn clip_fade_start_toggle_symmetric(&mut self, track: usize, clip: usize) {
+		if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
+			audio.fade_start.symmetric ^= true;
+			let id = audio.id;
+			self.node_action(
+				self.tracks[track].id,
+				NodeAction::ClipFadeStartToggleSymmetric(id),
+			);
+		}
+	}
+
+	pub fn clip_fade_end_len(&mut self, track: usize, clip: usize, len: SecondsTime) {
+		if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
+			let len = len.min(audio.position.len());
+			if audio.fade_end.len != len {
+				audio.fade_start.len = audio.fade_start.len.min(audio.position.len() - len);
+				audio.fade_end.len = len;
+				let id = audio.id;
+				self.node_action(self.tracks[track].id, NodeAction::ClipFadeEndLen(id, len));
+			}
+		}
+	}
+
+	pub fn clip_fade_end_p(&mut self, track: usize, clip: usize, p: Point) {
+		if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip]
+			&& audio.fade_end.p != p
+		{
+			audio.fade_end.p = p;
+			let id = audio.id;
+			self.node_action(self.tracks[track].id, NodeAction::ClipFadeEndP(id, p));
+		}
+	}
+
+	pub fn clip_fade_end_toggle_symmetric(&mut self, track: usize, clip: usize) {
+		if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
+			audio.fade_end.symmetric ^= true;
+			let id = audio.id;
+			self.node_action(
+				self.tracks[track].id,
+				NodeAction::ClipFadeEndToggleSymmetric(id),
+			);
+		}
+	}
+
 	pub fn clip_stretch_start_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
 		if self.tracks[track].clips[clip].start() != pos {
 			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
-				audio.stretch *= audio.position.stretch_start_to(pos, &self.transport);
-				audio.stretch = audio
-					.stretch
-					.abs()
-					.clamp(2f64.powi(-10), 2f64.powi(10))
-					.copysign(audio.stretch);
+				let fac = audio.position.stretch_start_to(pos, &self.transport);
+				audio.fade_start.len /= fac;
+				audio.fade_end.len /= fac;
+				audio.stretch *= fac;
 				let id = audio.id;
 				self.node_action(
 					self.tracks[track].id,
@@ -557,12 +636,10 @@ impl Arrangement {
 	pub fn clip_stretch_end_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
 		if self.tracks[track].clips[clip].end(&self.transport) != pos {
 			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
-				audio.stretch *= audio.position.stretch_end_to(pos, &self.transport);
-				audio.stretch = audio
-					.stretch
-					.abs()
-					.clamp(2f64.powi(-10), 2f64.powi(10))
-					.copysign(audio.stretch);
+				let fac = audio.position.stretch_end_to(pos, &self.transport);
+				audio.fade_start.len /= fac;
+				audio.fade_end.len /= fac;
+				audio.stretch *= fac;
 				let id = audio.id;
 				self.node_action(self.tracks[track].id, NodeAction::ClipStretchEndTo(id, pos));
 			} else {
@@ -577,6 +654,7 @@ impl Arrangement {
 			audio
 				.position
 				.reverse(self.samples[&audio.sample].len(&self.transport));
+			(audio.fade_start, audio.fade_end) = (audio.fade_end, audio.fade_start);
 			let id = audio.id;
 			self.node_action(self.tracks[track].id, NodeAction::ClipReverse(id));
 		}

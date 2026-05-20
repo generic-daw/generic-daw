@@ -177,6 +177,10 @@ pub struct AudioClip {
 	pub position: OffsetBeatSpan,
 	#[prost(double, default = 1.0)]
 	pub stretch: f64,
+	#[prost(message, required)]
+	pub fade_start: Transition,
+	#[prost(message, required)]
+	pub fade_end: Transition,
 }
 
 #[derive(Clone, Copy, Message)]
@@ -220,6 +224,16 @@ pub struct OffsetBeatSpan {
 }
 
 #[derive(Clone, Copy, Message)]
+pub struct Transition {
+	#[prost(message, required)]
+	pub len: u64,
+	#[prost(message, required)]
+	pub p: Point,
+	#[prost(bool)]
+	pub symmetric: bool,
+}
+
+#[derive(Clone, Copy, Message)]
 pub struct ViewState {
 	#[prost(message, required)]
 	pub playlist: TabState,
@@ -233,6 +247,14 @@ pub struct TabState {
 	pub position: Vector,
 	#[prost(message, required)]
 	pub scale: Vector,
+}
+
+#[derive(Clone, Copy, Message)]
+pub struct Point {
+	#[prost(float, default = 0.5)]
+	pub x: f32,
+	#[prost(float, default = 0.5)]
+	pub y: f32,
 }
 
 #[derive(Clone, Copy, Message)]

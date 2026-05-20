@@ -6,12 +6,15 @@ use crate::{
 		px_to_time, samples_per_px, time_to_px,
 	},
 };
-use generic_daw_core::{Transport, time::BeatTime};
+use generic_daw_core::{Transition, Transport, time::BeatTime};
 use iced::{
 	Event, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
 	advanced::{
 		Layout, Renderer as _, Shell, Text, Widget,
-		graphics::mesh::{Cache, Renderer as _},
+		graphics::{
+			geometry::Renderer as _,
+			mesh::{self, Renderer as _},
+		},
 		layout::{Limits, Node},
 		mouse::{self, Click, Cursor, Interaction, click::Kind},
 		renderer::{Quad, Style},
@@ -20,7 +23,10 @@ use iced::{
 	},
 	alignment::Vertical,
 	border, debug, padding,
-	widget::text::{Alignment, Ellipsis, LineHeight, Shaping, Wrapping},
+	widget::{
+		canvas::{self, Frame, Path, Stroke, path::Builder},
+		text::{Alignment, Ellipsis, LineHeight, Shaping, Wrapping},
+	},
 	window,
 };
 use std::{borrow::Borrow, cell::RefCell, sync::Arc};
@@ -29,24 +35,32 @@ use std::{borrow::Borrow, cell::RefCell, sync::Arc};
 struct ClipInfo {
 	offset: BeatTime,
 	stretch: f32,
+	fade_start: Transition,
+	fade_end: Transition,
 	addr: usize,
 }
 
 struct State {
-	cache: RefCell<Cache>,
+	mesh_cache: RefCell<mesh::Cache>,
+	canvas_cache: RefCell<canvas::Cache>,
 	last_click: Option<Click>,
 	last_bounds: Rectangle,
 	last_info: ClipInfo,
+	last_selected: bool,
+	last_enabled: bool,
 	last_theme: RefCell<Option<Theme>>,
 }
 
 impl Default for State {
 	fn default() -> Self {
 		Self {
-			cache: RefCell::new(Cache::new(Arc::default())),
+			mesh_cache: RefCell::new(mesh::Cache::new(Arc::default())),
+			canvas_cache: RefCell::default(),
 			last_click: None,
 			last_bounds: Rectangle::default(),
 			last_info: ClipInfo::default(),
+			last_selected: false,
+			last_enabled: true,
 			last_theme: RefCell::default(),
 		}
 	}
@@ -115,6 +129,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				Inner::MidiClip(..) => 1.0,
 				Inner::Recording(..) => samples_per_px(playlist.scale, self.transport),
 			},
+			fade_start: match self.inner {
+				Inner::AudioClip(inner) => inner.clip.fade_start,
+				Inner::MidiClip(..) | Inner::Recording(..) => Transition::default(),
+			},
+			fade_end: match self.inner {
+				Inner::AudioClip(inner) => inner.clip.fade_end,
+				Inner::MidiClip(..) | Inner::Recording(..) => Transition::default(),
+			},
 			addr: match self.inner {
 				Inner::AudioClip(inner) => std::ptr::from_ref(inner.sample).addr(),
 				Inner::MidiClip(inner) => std::ptr::from_ref(inner.pattern).addr(),
@@ -124,9 +146,15 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 		if state.last_info != info {
 			state.last_info = info;
-			if !state.cache.get_mut().is_empty() {
-				state.cache.get_mut().update(Arc::default());
+			state.canvas_cache.get_mut().clear();
+			if !state.mesh_cache.get_mut().is_empty() {
+				state.mesh_cache.get_mut().update(Arc::default());
 			}
+		}
+
+		if state.last_enabled != self.enabled {
+			state.last_enabled = self.enabled;
+			state.canvas_cache.get_mut().clear();
 		}
 	}
 
@@ -162,32 +190,41 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
+		let (Inner::AudioClip(AudioClipRef { idx, .. }) | Inner::MidiClip(MidiClipRef { idx, .. })) =
+			self.inner
+		else {
+			return;
+		};
+
 		let state = tree.state.downcast_mut::<State>();
 		let playlist = &mut *self.playlist.borrow_mut();
 
-		if let Event::Window(window::Event::RedrawRequested(..)) = event
-			&& let Some(mut bounds) = layout.bounds().intersection(viewport)
-		{
+		if let Event::Window(window::Event::RedrawRequested(..)) = event {
+			let Some(mut bounds) = layout.bounds().intersection(viewport) else {
+				return;
+			};
+
 			bounds.x -= layout.bounds().x;
 			bounds.y -= layout.bounds().y;
 
 			if state.last_bounds != bounds {
 				state.last_bounds = bounds;
-				if !state.cache.get_mut().is_empty() {
-					state.cache.get_mut().update(Arc::default());
+				state.canvas_cache.get_mut().clear();
+				if !state.mesh_cache.get_mut().is_empty() {
+					state.mesh_cache.get_mut().update(Arc::default());
 				}
+			}
+
+			let selected = playlist.primary.contains(&idx) || playlist.secondary.contains(&idx);
+			if state.last_selected != selected {
+				state.last_selected = selected;
+				state.canvas_cache.get_mut().clear();
 			}
 		}
 
 		if shell.is_event_captured() {
 			return;
 		}
-
-		let (Inner::AudioClip(AudioClipRef { idx, .. }) | Inner::MidiClip(MidiClipRef { idx, .. })) =
-			self.inner
-		else {
-			return;
-		};
 
 		let Some(cursor) = cursor.position_in(*viewport) else {
 			return;
@@ -206,20 +243,111 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 				match button {
 					mouse::Button::Left => {
-						if let Inner::MidiClip(..) = self.inner {
-							let new_click =
-								Click::new(cursor, mouse::Button::Left, state.last_click);
-							state.last_click = Some(new_click);
-
-							if new_click.kind() == Kind::Double {
-								shell.publish((self.f)(Action::Open(idx.0, idx.1)));
-								shell.capture_event();
-								return;
-							}
-						}
+						let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
+						state.last_click = Some(new_click);
 
 						let time =
 							px_to_time(cursor.x, playlist.position, playlist.scale, self.transport);
+
+						match self.inner {
+							Inner::AudioClip(inner) => 'block: {
+								if cursor.y - clip_bounds.y.max(0.0) < LINE_HEIGHT {
+									break 'block;
+								}
+
+								let samples_per_px = samples_per_px(playlist.scale, self.transport);
+								let fade_start_px =
+									inner.clip.fade_start.len.to_samples(self.transport) as f32
+										/ samples_per_px;
+								let fade_end_px = inner.clip.fade_end.len.to_samples(self.transport)
+									as f32 / -samples_per_px;
+
+								let fade_start_control = Point::new(
+									clip_bounds.x + inner.clip.fade_start.p.x * fade_start_px,
+									clip_bounds.y
+										+ LINE_HEIGHT + (1.0 - inner.clip.fade_start.p.y)
+										* (layout.bounds().height - LINE_HEIGHT),
+								);
+
+								let fade_end_control = Point::new(
+									clip_bounds.x
+										+ layout.bounds().width + inner.clip.fade_end.p.x * fade_end_px,
+									clip_bounds.y
+										+ LINE_HEIGHT + (1.0 - inner.clip.fade_end.p.y)
+										* (layout.bounds().height - LINE_HEIGHT),
+								);
+
+								let fade_start_control_dist = cursor.distance(fade_start_control);
+								let fade_end_control_dist = cursor.distance(fade_end_control);
+
+								match (
+									fade_start_px >= 8.0 && fade_start_control_dist <= 5.0,
+									fade_end_px <= -8.0 && fade_end_control_dist <= 5.0,
+									fade_start_control_dist <= fade_end_control_dist,
+								) {
+									(true, true, true) | (true, false, _) => {
+										if new_click.kind() == Kind::Double {
+											shell.publish((self.f)(
+												Action::FadeStartToggleSymmetric,
+											));
+										}
+										playlist.status =
+											Status::FadingStartP(inner.idx.0, inner.idx.1);
+										shell.capture_event();
+										return;
+									}
+									(true, true, false) | (false, true, _) => {
+										if new_click.kind() == Kind::Double {
+											shell.publish((self.f)(Action::FadeEndToggleSymmetric));
+										}
+										playlist.status =
+											Status::FadingEndP(inner.idx.0, inner.idx.1);
+										shell.capture_event();
+										return;
+									}
+									(false, false, _) => {}
+								}
+
+								if layout.bounds().width < 8.0
+									|| cursor.y - clip_bounds.y > LINE_HEIGHT + 12.0
+								{
+									break 'block;
+								}
+
+								let fade_start_tab_dist =
+									(clip_bounds.x + fade_start_px + 4.0 - cursor.x).abs();
+								let fade_end_tab_dist = (clip_bounds.x
+									+ layout.bounds().width + fade_end_px
+									- 4.0 - cursor.x)
+									.abs();
+
+								match (
+									fade_start_tab_dist <= 6.0,
+									fade_end_tab_dist <= 6.0,
+									fade_start_tab_dist <= fade_end_tab_dist,
+								) {
+									(true, true, true) | (true, false, _) => {
+										playlist.status = Status::FadingStartLen(time);
+										shell.capture_event();
+										return;
+									}
+									(true, true, false) | (false, true, _) => {
+										playlist.status = Status::FadingEndLen(time);
+										shell.capture_event();
+										return;
+									}
+									(false, false, _) => {}
+								}
+							}
+							Inner::MidiClip(..) => {
+								if new_click.kind() == Kind::Double {
+									shell.publish((self.f)(Action::Open(idx.0, idx.1)));
+									shell.capture_event();
+									return;
+								}
+							}
+							Inner::Recording(..) => {}
+						}
 
 						let start_pixel = clip_bounds.x;
 						let end_pixel = clip_bounds.x + clip_bounds.width;
@@ -299,18 +427,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			return;
 		};
 
-		let playlist = self.playlist.borrow();
+		let state = tree.state.downcast_ref::<State>();
 
 		let mut upper_bounds = bounds;
 		upper_bounds.height = upper_bounds.height.min(LINE_HEIGHT);
 
 		let color = match &self.inner {
-			Inner::AudioClip(AudioClipRef { idx, .. })
-			| Inner::MidiClip(MidiClipRef { idx, .. }) => {
-				match (
-					self.enabled,
-					playlist.primary.contains(idx) || playlist.secondary.contains(idx),
-				) {
+			Inner::AudioClip(AudioClipRef { .. }) | Inner::MidiClip(MidiClipRef { .. }) => {
+				match (state.last_enabled, state.last_selected) {
 					(true, true) => theme.palette().danger.weak.color,
 					(true, false) => theme.palette().primary.weak.color,
 					(false, true) => theme.palette().secondary.strong.color,
@@ -379,42 +503,193 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			color.scale_alpha(ALPHA_1_3),
 		);
 
-		let state = tree.state.downcast_ref::<State>();
-		let cache = &mut *state.cache.borrow_mut();
+		let mesh_cache = &mut *state.mesh_cache.borrow_mut();
+		let canvas_cache = &mut *state.canvas_cache.borrow_mut();
 		let last_theme = &mut *state.last_theme.borrow_mut();
 
 		if last_theme.as_ref() != Some(theme) {
 			*last_theme = Some(theme.clone());
-			if !cache.is_empty() {
-				cache.update(Arc::default());
+			canvas_cache.clear();
+			if !mesh_cache.is_empty() {
+				mesh_cache.update(Arc::default());
 			}
 		}
 
+		let playlist = self.playlist.borrow();
 		let samples_per_px = samples_per_px(playlist.scale, self.transport);
 
 		match self.inner {
 			Inner::AudioClip(inner) => {
-				if cache.is_empty()
+				let unclipped_bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
+
+				if mesh_cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
-						let resample_ratio = inner.sample.resample_ratio(self.transport).recip();
-						let stretch = inner.clip.stretch * resample_ratio;
+						let resample_ratio = inner.sample.resample_ratio(self.transport);
+						let stretch = inner.clip.stretch / resample_ratio;
 
 						inner.sample.lods.mesh(
 							&inner.sample.samples,
-							(inner.clip.position.offset() * resample_ratio)
-								.to_samples(self.transport),
+							inner.clip.position.offset() / resample_ratio,
+							self.transport,
+							Transition {
+								len: inner.clip.fade_start.len / resample_ratio,
+								..inner.clip.fade_start
+							},
+							Transition {
+								len: inner.clip.fade_end.len / resample_ratio,
+								..inner.clip.fade_end
+							},
 							samples_per_px * stretch as f32,
 							theme.palette().background.strong.text,
-							layout.bounds().shrink(padding::top(LINE_HEIGHT)),
+							unclipped_bounds,
 							lower_bounds,
 						)
 					}) {
-					cache.update(Arc::from([mesh]));
+					mesh_cache.update(Arc::from([mesh]));
 				}
+
+				let fill_canvas = |frame: &mut Frame| {
+					let start_offset = Vector::new(
+						unclipped_bounds.x - lower_bounds.x,
+						unclipped_bounds.y - lower_bounds.y,
+					);
+					let end_offset = start_offset + Vector::new(layout.bounds().width, 0.0);
+
+					let fade_start_px = inner.clip.fade_start.len.to_samples(self.transport) as f32
+						/ samples_per_px;
+					let fade_end_px =
+						inner.clip.fade_end.len.to_samples(self.transport) as f32 / -samples_per_px;
+
+					if layout.bounds().width >= 8.0 {
+						let fade =
+							|b: &mut Builder, fade: Transition, fade_px: f32, offset: Vector| {
+								b.move_to(Point::new(0.0, unclipped_bounds.height) + offset);
+								if fade.symmetric {
+									b.quadratic_curve_to(
+										Point::new(
+											(0.5 * fade.p.x) * fade_px,
+											(1.0 - 0.5 * fade.p.y) * unclipped_bounds.height,
+										) + offset,
+										Point::new(0.5 * fade_px, 0.5 * unclipped_bounds.height)
+											+ offset,
+									);
+									b.quadratic_curve_to(
+										Point::new(
+											(1.0 - 0.5 * fade.p.x) * fade_px,
+											(0.5 * fade.p.y) * unclipped_bounds.height,
+										) + offset,
+										Point::new(fade_px, 0.0) + offset,
+									);
+								} else {
+									b.quadratic_curve_to(
+										Point::new(
+											fade.p.x * fade_px,
+											(1.0 - fade.p.y) * unclipped_bounds.height,
+										) + offset,
+										Point::new(fade_px, 0.0) + offset,
+									);
+								}
+							};
+
+						frame.fill(
+							&Path::new(|b| {
+								b.move_to(Point::new(fade_start_px, 0.0) + start_offset);
+								b.line_to(Point::new(fade_start_px + 8.0, 0.0) + start_offset);
+								b.line_to(Point::new(fade_start_px, 12.0) + start_offset);
+								b.close();
+							}),
+							color,
+						);
+
+						frame.fill(
+							&Path::new(|b| {
+								b.move_to(Point::new(fade_end_px, 0.0) + end_offset);
+								b.line_to(Point::new(fade_end_px - 8.0, 0.0) + end_offset);
+								b.line_to(Point::new(fade_end_px, 12.0) + end_offset);
+								b.close();
+							}),
+							color,
+						);
+
+						if fade_start_px > 0.0 {
+							frame.stroke(
+								&Path::new(|b| {
+									fade(b, inner.clip.fade_start, fade_start_px, start_offset);
+								}),
+								Stroke::default().with_color(color).with_width(2.0),
+							);
+
+							frame.fill(
+								&Path::new(|b| {
+									fade(b, inner.clip.fade_start, fade_start_px, start_offset);
+									b.line_to(Point::ORIGIN + start_offset);
+									b.close();
+								}),
+								color.scale_alpha(ALPHA_1_3),
+							);
+						}
+
+						if fade_end_px > 0.0 {
+							frame.stroke(
+								&Path::new(|b| {
+									fade(b, inner.clip.fade_end, fade_end_px, end_offset);
+								}),
+								Stroke::default().with_color(color).with_width(2.0),
+							);
+
+							frame.fill(
+								&Path::new(|b| {
+									fade(b, inner.clip.fade_end, fade_end_px, end_offset);
+									b.line_to(Point::ORIGIN + end_offset);
+									b.close();
+								}),
+								color.scale_alpha(ALPHA_1_3),
+							);
+						}
+					}
+
+					if fade_start_px >= 8.0 {
+						let control = Point::new(
+							inner.clip.fade_start.p.x * fade_start_px,
+							(1.0 - inner.clip.fade_start.p.y) * unclipped_bounds.height,
+						) + start_offset;
+
+						frame.fill(
+							&Path::circle(control, 4.0),
+							theme.palette().background.strong.text,
+						);
+
+						frame.fill(&Path::circle(control, 2.5), color);
+					}
+
+					if fade_end_px <= -8.0 {
+						let control = Point::new(
+							inner.clip.fade_end.p.x * fade_end_px,
+							(1.0 - inner.clip.fade_end.p.y) * unclipped_bounds.height,
+						) + end_offset;
+
+						frame.fill(
+							&Path::circle(control, 4.0),
+							theme.palette().background.strong.text,
+						);
+
+						frame.fill(&Path::circle(control, 2.5), color);
+					}
+				};
+
+				renderer.with_translation(
+					Vector::new(lower_bounds.x, lower_bounds.y),
+					|renderer| {
+						renderer.draw_mesh_cache(mesh_cache.clone());
+						renderer.draw_geometry(canvas_cache.draw(
+							renderer,
+							lower_bounds.size(),
+							fill_canvas,
+						));
+					},
+				);
 			}
 			Inner::MidiClip(inner) => 'blk: {
-				debug_assert!(cache.is_empty());
-
 				if lower_bounds.width < 1.0 || inner.pattern.notes.is_empty() {
 					break 'blk;
 				}
@@ -464,25 +739,28 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				}
 			}
 			Inner::Recording(inner) => {
-				if cache.is_empty()
+				if mesh_cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
 						inner.lods.mesh(
 							inner.core.samples(),
-							0,
+							self.transport,
 							samples_per_px / inner.core.resample_ratio(self.transport) as f32,
 							theme.palette().background.strong.text,
 							layout.bounds().shrink(padding::top(LINE_HEIGHT)),
 							lower_bounds,
 						)
 					}) {
-					cache.update(Arc::from([mesh]));
+					mesh_cache.update(Arc::from([mesh]));
 				}
+
+				renderer.with_translation(
+					Vector::new(lower_bounds.x, lower_bounds.y),
+					|renderer| {
+						renderer.draw_mesh_cache(mesh_cache.clone());
+					},
+				);
 			}
 		}
-
-		renderer.with_translation(Vector::new(lower_bounds.x, lower_bounds.y), |renderer| {
-			renderer.draw_mesh_cache(cache.clone());
-		});
 	}
 
 	fn mouse_interaction(
@@ -500,6 +778,51 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		let Some(cursor) = cursor.position_in(layout.bounds()) else {
 			return Interaction::default();
 		};
+
+		let playlist = self.playlist.borrow();
+
+		match self.inner {
+			Inner::AudioClip(inner) => 'block: {
+				if cursor.y - (viewport.y - layout.position().y).max(0.0) < LINE_HEIGHT {
+					break 'block;
+				}
+
+				let samples_per_px = samples_per_px(playlist.scale, self.transport);
+				let fade_start_px =
+					inner.clip.fade_start.len.to_samples(self.transport) as f32 / samples_per_px;
+				let fade_end_px =
+					inner.clip.fade_end.len.to_samples(self.transport) as f32 / -samples_per_px;
+
+				let fade_start_control = Point::new(
+					inner.clip.fade_start.p.x * fade_start_px,
+					(1.0 - inner.clip.fade_start.p.y) * (layout.bounds().height - LINE_HEIGHT)
+						+ LINE_HEIGHT,
+				);
+
+				let fade_end_control = Point::new(
+					layout.bounds().width + inner.clip.fade_end.p.x * fade_end_px,
+					(1.0 - inner.clip.fade_end.p.y) * (layout.bounds().height - LINE_HEIGHT)
+						+ LINE_HEIGHT,
+				);
+
+				if fade_start_px >= 8.0 && cursor.distance(fade_start_control) <= 5.0
+					|| fade_end_px <= -8.0 && cursor.distance(fade_end_control) <= 5.0
+				{
+					return Interaction::Crosshair;
+				}
+
+				if layout.bounds().width < 8.0 || cursor.y > LINE_HEIGHT + 12.0 {
+					break 'block;
+				}
+
+				if (fade_start_px + 4.0 - cursor.x).abs() <= 6.0
+					|| (layout.bounds().width + fade_end_px - 4.0 - cursor.x).abs() <= 6.0
+				{
+					return Interaction::Pointer;
+				}
+			}
+			Inner::MidiClip(..) | Inner::Recording(..) => {}
+		}
 
 		match self.inner {
 			Inner::AudioClip(..) | Inner::MidiClip(..) => {
