@@ -644,19 +644,19 @@ impl<'a, Message> Seeker<'a, Message> {
 				if beat.beat_in_bar(self.transport) == 0
 					&& beat.bar(self.transport).is_multiple_of(snap_step.beat())
 				{
-					theme.palette().background.strong.color
+					theme.palette().background.strongest.color
 				} else {
 					theme.palette().background.weak.color
 				}
 			} else if beat.tick() == 0 {
-				theme.palette().background.strong.color
+				theme.palette().background.strongest.color
 			} else {
 				theme.palette().background.weak.color
 			};
 
 			renderer.fill_quad(
 				Quad {
-					bounds: Rectangle::new(offset_time(beat), Size::new(1.0, bounds.height))
+					bounds: Rectangle::new(offset_time(beat), Size::new(1.5, bounds.height))
 						.intersection(&bounds)
 						.unwrap_or_default(),
 					..Quad::default()
