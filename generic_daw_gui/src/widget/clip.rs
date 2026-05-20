@@ -629,7 +629,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							);
 						}
 
-						if fade_end_px > 0.0 {
+						if fade_end_px < 0.0 {
 							frame.stroke(
 								&Path::new(|b| {
 									fade(b, inner.clip.fade_end, fade_end_px, end_offset);
