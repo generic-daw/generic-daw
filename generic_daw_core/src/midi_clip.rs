@@ -27,10 +27,10 @@ impl MidiClip {
 	) {
 		debug_assert!(state.transport.playing);
 
+		let position = state.transport.position.to_samples(&state.transport);
+
 		let (start, end) = self.position.beat_range().to_samples(&state.transport);
-		if !(start < state.transport.position.to_samples(&state.transport) + audio.len()
-			&& end >= state.transport.position.to_samples(&state.transport))
-		{
+		if !(start < position + audio.len() && end >= position) {
 			return;
 		}
 
@@ -45,8 +45,8 @@ impl MidiClip {
 			})
 			.for_each(|note| {
 				let (start, end) = note.position.to_samples(&state.transport);
-				if start < state.transport.position.to_samples(&state.transport)
-					&& end > state.transport.position.to_samples(&state.transport)
+				if start < position
+					&& end > position
 					&& !voice_alloc.activate((self.id, note.id, note.key))
 				{
 					alloc_or_steal(events, voice_alloc, (self.id, note.id, note.key), note, 0);
@@ -63,10 +63,10 @@ impl MidiClip {
 	) {
 		debug_assert!(state.transport.playing);
 
+		let position = state.transport.position.to_samples(&state.transport);
+
 		let (start, end) = self.position.beat_range().to_samples(&state.transport);
-		if !(start < state.transport.position.to_samples(&state.transport) + audio.len()
-			&& end >= state.transport.position.to_samples(&state.transport))
-		{
+		if !(start < position + audio.len() && end >= position) {
 			return;
 		}
 
@@ -82,8 +82,7 @@ impl MidiClip {
 			.for_each(|note| {
 				let (start, end) = note.position.to_samples(&state.transport);
 
-				if let Some(time) =
-					start.checked_sub(state.transport.position.to_samples(&state.transport))
+				if let Some(time) = start.checked_sub(position)
 					&& time < audio.len()
 				{
 					alloc_or_steal(
@@ -95,8 +94,7 @@ impl MidiClip {
 					);
 				}
 
-				if let Some(time) =
-					end.checked_sub(state.transport.position.to_samples(&state.transport))
+				if let Some(time) = end.checked_sub(position)
 					&& time < audio.len()
 				{
 					dealloc(events, voice_alloc, (self.id, note.id, note.key), time);

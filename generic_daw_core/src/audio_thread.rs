@@ -429,6 +429,10 @@ impl AudioThread {
 				.saturating_sub(start_offset)
 				.to_samples(self.transport());
 
+			if play_pos >= click.len() {
+				continue;
+			}
+
 			let resample_ratio = 44100.0 / f64::from(self.transport().sample_rate.get());
 
 			resample_cubic(&mut buf[write_start..], click, resample_ratio, play_pos / 2);

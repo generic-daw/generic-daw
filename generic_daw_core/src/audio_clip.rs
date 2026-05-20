@@ -18,20 +18,21 @@ impl AudioClip {
 	pub fn process(&self, state: &State, audio: &mut [f32]) {
 		debug_assert!(state.transport.playing);
 
+		let position = state.transport.position.to_samples(&state.transport);
+
 		let start = self.position.start().to_samples(&state.transport);
 
-		let write_start =
-			start.saturating_sub(state.transport.position.to_samples(&state.transport));
-
+		let write_start = start.saturating_sub(position);
 		if write_start >= audio.len() {
 			return;
 		}
 
-		let play_pos = state
-			.transport
-			.position
-			.to_samples(&state.transport)
-			.saturating_sub(start);
+		let len = self.position.len().to_samples(&state.transport);
+
+		let play_pos = position.saturating_sub(start);
+		if play_pos >= len {
+			return;
+		}
 
 		let sample = &state.samples[&self.sample];
 
