@@ -174,6 +174,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 		};
 
 		let new_time = px_to_time(cursor.x, state.position, state.scale, self.transport);
+		let snap_step = beats_snap_step(state.scale, self.transport);
 
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers }) => match button {
@@ -186,15 +187,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 							return;
 						};
 
-						let time = maybe_snap(new_time, *modifiers, |time| {
-							time.round(beats_snap_step(state.scale, self.transport))
-						});
+						let time = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
 						state.status = Status::Selecting(track, track, time, time);
 					} else if let Some(track) = track {
-						let time = maybe_snap(new_time, *modifiers, |time| {
-							time.floor(beats_snap_step(state.scale, self.transport))
-						});
+						let time = maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
 
 						state.primary.clear();
 						shell.publish((self.action)(Action::Add(None, Some(track), time)));
@@ -218,9 +215,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 				Status::Hovering(path, kind, time) => {
 					let track = track_idx(&layout, *viewport, cursor);
 
-					let new_time = maybe_snap(new_time, *modifiers, |time| {
-						time.floor(beats_snap_step(state.scale, self.transport))
-					});
+					let new_time = maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
 
 					let new_time = Some((track, new_time));
 
@@ -237,9 +232,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 						return;
 					};
 
-					let end_pos = maybe_snap(new_time, *modifiers, |time| {
-						time.round(beats_snap_step(state.scale, self.transport))
-					});
+					let end_pos = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
 					if end_track == last_end_track && end_pos == last_end_pos {
 						return;
@@ -292,7 +285,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 					};
 
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(beats_snap_step(state.scale, self.transport))
+						abs_diff.round(snap_step)
 					});
 
 					if new_track != track || abs_diff != BeatTime::ZERO {
@@ -315,7 +308,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 				}
 				Status::TrimmingStart(time) => {
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(beats_snap_step(state.scale, self.transport))
+						abs_diff.round(snap_step)
 					});
 
 					if abs_diff != BeatTime::ZERO {
@@ -336,7 +329,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 				}
 				Status::TrimmingEnd(time) => {
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(beats_snap_step(state.scale, self.transport))
+						abs_diff.round(snap_step)
 					});
 
 					if abs_diff != BeatTime::ZERO {
@@ -356,9 +349,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 					}
 				}
 				Status::DraggingSplit(time) => {
-					let new_time = maybe_snap(new_time, *modifiers, |time| {
-						time.round(beats_snap_step(state.scale, self.transport))
-					});
+					let new_time = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
 					if new_time != time {
 						state.status = Status::DraggingSplit(new_time);
@@ -368,7 +359,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 				}
 				Status::DraggingSlip(time) => {
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
-						abs_diff.round(beats_snap_step(state.scale, self.transport))
+						abs_diff.round(snap_step)
 					});
 
 					if abs_diff != BeatTime::ZERO {

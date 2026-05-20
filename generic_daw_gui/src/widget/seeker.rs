@@ -229,77 +229,79 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
 		match event {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
-			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
-				let time = maybe_snap(new_time, *modifiers, |time| {
-					time.round(beats_snap_step(self.scale, self.transport))
-				});
+			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.status {
+				Status::SeekingBeats(last_time) => {
+					let time = maybe_snap(new_time, *modifiers, |time| {
+						time.round(beats_snap_step(self.scale, self.transport))
+					});
 
-				match state.status {
-					Status::SeekingBeats(last_time) => {
-						if last_time != time {
-							state.status = Status::SeekingBeats(time);
-							shell.publish((self.seek_to)(time));
-							shell.capture_event();
-						}
+					if last_time != time {
+						state.status = Status::SeekingBeats(time);
+						shell.publish((self.seek_to)(time));
+						shell.capture_event();
 					}
-					Status::DraggingLoopBeats(last_time) => {
-						let loop_range = (last_time != time).then(|| {
-							let start = last_time.min(time);
-							let end = last_time.max(time);
-							BeatRange::new(start, end)
-						});
-
-						if self.transport.loop_range != loop_range {
-							shell.publish((self.set_loop_range)(loop_range));
-							shell.capture_event();
-						}
-					}
-					Status::SeekingSeconds(last_time) => {
-						let time = maybe_snap(
-							new_time.to_seconds_time(self.transport),
-							*modifiers,
-							|time| time.round(seconds_snap_step(self.scale)),
-						);
-
-						if last_time != time {
-							state.status = Status::SeekingSeconds(time);
-							shell.publish((self.seek_to)(time.to_beat_time(self.transport)));
-							shell.capture_event();
-						}
-					}
-					Status::DraggingLoopSeconds(last_time) => {
-						let time = maybe_snap(
-							new_time.to_seconds_time(self.transport),
-							*modifiers,
-							|time| time.round(seconds_snap_step(self.scale)),
-						);
-
-						let loop_range = (last_time != time).then(|| {
-							let start = last_time.min(time);
-							let end = last_time.max(time);
-							BeatRange::new(
-								start.to_beat_time(self.transport),
-								end.to_beat_time(self.transport),
-							)
-						});
-
-						if self.transport.loop_range != loop_range {
-							shell.publish((self.set_loop_range)(loop_range));
-							shell.capture_event();
-						}
-					}
-					Status::Panning(last_pos) => {
-						let delta = last_pos - cursor;
-
-						if delta != Vector::ZERO {
-							state.status = Status::Panning(cursor);
-							shell.publish((self.pan)(delta, height, visible));
-							shell.capture_event();
-						}
-					}
-					Status::None => {}
 				}
-			}
+				Status::DraggingLoopBeats(last_time) => {
+					let time = maybe_snap(new_time, *modifiers, |time| {
+						time.round(beats_snap_step(self.scale, self.transport))
+					});
+
+					let loop_range = (last_time != time).then(|| {
+						let start = last_time.min(time);
+						let end = last_time.max(time);
+						BeatRange::new(start, end)
+					});
+
+					if self.transport.loop_range != loop_range {
+						shell.publish((self.set_loop_range)(loop_range));
+						shell.capture_event();
+					}
+				}
+				Status::SeekingSeconds(last_time) => {
+					let time = maybe_snap(
+						new_time.to_seconds_time(self.transport),
+						*modifiers,
+						|time| time.round(seconds_snap_step(self.scale)),
+					);
+
+					if last_time != time {
+						state.status = Status::SeekingSeconds(time);
+						shell.publish((self.seek_to)(time.to_beat_time(self.transport)));
+						shell.capture_event();
+					}
+				}
+				Status::DraggingLoopSeconds(last_time) => {
+					let time = maybe_snap(
+						new_time.to_seconds_time(self.transport),
+						*modifiers,
+						|time| time.round(seconds_snap_step(self.scale)),
+					);
+
+					let loop_range = (last_time != time).then(|| {
+						let start = last_time.min(time);
+						let end = last_time.max(time);
+						BeatRange::new(
+							start.to_beat_time(self.transport),
+							end.to_beat_time(self.transport),
+						)
+					});
+
+					if self.transport.loop_range != loop_range {
+						shell.publish((self.set_loop_range)(loop_range));
+						shell.capture_event();
+					}
+				}
+				Status::Panning(last_pos) => {
+					let delta = last_pos - cursor;
+
+					if delta != Vector::ZERO {
+						state.status = Status::Panning(cursor);
+						shell.publish((self.pan)(delta, height, visible));
+						shell.capture_event();
+					}
+				}
+				Status::None => {}
+			},
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Left,
 				modifiers,
