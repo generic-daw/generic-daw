@@ -97,11 +97,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 										let bounds =
 											layout.bounds().intersection(viewport).unwrap()
 												- Vector::new(viewport.x, viewport.y);
-										let vel_pixel = self.note.velocity
-											* (bounds.width - 2.0 * border - 1.0)
-											+ border;
-										let start_offset = cursor.x - bounds.x;
-										if (vel_pixel - start_offset).abs() < border / 2.0 {
+										let vel_pixel = bounds.x
+											+ border + self.note.velocity
+											* (bounds.width - 2.0 * border - 1.0);
+										if (vel_pixel - cursor.x).abs() < border / 2.0 {
 											Status::DraggingVelocity(self.idx, self.note.velocity)
 										} else {
 											Status::Dragging(self.note.key, time)
@@ -260,8 +259,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 			(false, false) => {
 				let bounds = layout.bounds().intersection(viewport).unwrap()
 					- Vector::new(layout.position().x, layout.position().y);
-				let vel_pixel = self.note.velocity * (bounds.width - 2.0 * border - 1.0) + border;
-				if (vel_pixel - cursor.x - bounds.x).abs() < border / 2.0 {
+				let vel_pixel =
+					bounds.x + border + self.note.velocity * (bounds.width - 2.0 * border - 1.0);
+				if (vel_pixel - cursor.x).abs() < border / 2.0 {
 					Interaction::ResizingHorizontally
 				} else {
 					Interaction::Grab
