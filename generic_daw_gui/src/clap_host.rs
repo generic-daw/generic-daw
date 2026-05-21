@@ -28,7 +28,8 @@ use utils::{NoClone, NoDebug};
 #[derive(Clone, Debug)]
 pub enum Message {
 	MainThread(PluginId, MainThreadMessage),
-	ParamChange(PluginId, ClapId, f32),
+	PluginParamChange(PluginId, ClapId, f32),
+	HostParamChange(PluginId, ClapId, f32),
 	TickTimer(Duration),
 	ToggleActivated(PluginId),
 	SetState(PluginId, NoDebug<Box<[u8]>>),
@@ -86,7 +87,10 @@ impl ClapHost {
 			Message::MainThread(id, msg) => {
 				return self.handle_main_thread_message(id, msg, transport);
 			}
-			Message::ParamChange(id, param_id, value) => {
+			Message::PluginParamChange(id, param_id, value) => {
+				_ = plugin!(id).adjust_param_value(param_id, value);
+			}
+			Message::HostParamChange(id, param_id, value) => {
 				let plugin = plugin!(id);
 				if plugin.is_active()
 					&& let Some(param) = plugin.adjust_param_value(param_id, value)
@@ -335,9 +339,9 @@ impl ClapHost {
 					row(plugin.params().map(|param| {
 						column![
 							Knob::new(param.range.clone(), param.value, move |value| {
-								Message::ParamChange(id, param.id, value)
+								Message::HostParamChange(id, param.id, value)
 							})
-							.default(param.reset)
+							.default(param.default)
 							.radius(25.0)
 							.enabled(!param.flags.contains(ParamInfoFlags::IS_READONLY))
 							.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))

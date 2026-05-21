@@ -16,10 +16,12 @@ pub struct ThreadPoolExecutor<'a> {
 }
 
 impl ThreadPoolExecutor<'_> {
+	#[must_use]
 	pub fn task_count(&self) -> u32 {
 		self.task_count
 	}
 
+	#[must_use]
 	pub fn next_task(&self) -> Option<u32> {
 		let task_index = self.task_index.fetch_add(1, Relaxed);
 		(task_index < self.task_count).then_some(task_index)

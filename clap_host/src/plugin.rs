@@ -144,6 +144,7 @@ impl Plugin {
 		self.instance.call_on_main_thread_callback();
 	}
 
+	#[must_use]
 	pub fn is_active(&self) -> bool {
 		self.instance.is_active()
 	}
@@ -204,6 +205,7 @@ impl Plugin {
 			.filter(|param| !param.flags.contains(ParamInfoFlags::IS_HIDDEN))
 	}
 
+	#[must_use]
 	pub fn adjust_param_value(&mut self, param_id: ClapId, value: f32) -> Option<&Param> {
 		let param = self
 			.params
@@ -214,14 +216,6 @@ impl Plugin {
 		param
 			.adjust_value(&mut self.instance, value)
 			.then_some(param)
-	}
-
-	pub fn rescan_param(&mut self, param_id: ClapId, flags: ParamRescanFlags) {
-		self.params
-			.iter_mut()
-			.find(|param| param.id == param_id)
-			.unwrap()
-			.rescan(&mut self.instance, flags);
 	}
 
 	pub fn rescan_params(&mut self, flags: ParamRescanFlags) {

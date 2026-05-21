@@ -29,10 +29,10 @@ struct State {
 struct KnobInfo {
 	range: RangeInclusive<f32>,
 	value: f32,
-	center: f32,
+	origin: f32,
 	default: f32,
-	enabled: bool,
 	radius: f32,
+	enabled: bool,
 	stepped: bool,
 }
 
@@ -50,10 +50,10 @@ impl<'a, Message> Knob<'a, Message> {
 			info: KnobInfo {
 				range: range.clone(),
 				value,
-				center: *range.start(),
+				origin: *range.start(),
 				default: *range.end(),
-				enabled: true,
 				radius: 20.0,
+				enabled: true,
 				stepped: false,
 			},
 			f: NoDebug(Box::from(f)),
@@ -62,8 +62,8 @@ impl<'a, Message> Knob<'a, Message> {
 	}
 
 	#[must_use]
-	pub fn center(mut self, center: f32) -> Self {
-		self.info.center = center;
+	pub fn origin(mut self, center: f32) -> Self {
+		self.info.origin = center;
 		self
 	}
 
@@ -139,7 +139,7 @@ impl<'a, Message> Knob<'a, Message> {
 			)
 		};
 
-		let center_angle = value_to_rad(self.info.center);
+		let origin_angle = value_to_rad(self.info.origin);
 		let value_angle = value_to_rad(self.info.value);
 
 		let dot = |angle: Radians, offset: f32, radius: f32| {
@@ -154,7 +154,7 @@ impl<'a, Message> Knob<'a, Message> {
 				b.arc(Arc {
 					center,
 					radius: self.info.radius,
-					start_angle: center_angle,
+					start_angle: origin_angle,
 					end_angle: value_angle,
 				});
 				b.line_to(center);
@@ -170,7 +170,7 @@ impl<'a, Message> Knob<'a, Message> {
 
 		frame.fill(
 			&dot(
-				center_angle,
+				origin_angle,
 				self.info.radius - border_radius,
 				border_radius,
 			),

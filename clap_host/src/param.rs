@@ -14,9 +14,9 @@ pub struct Param {
 	pub name: Arc<str>,
 	pub module: Arc<str>,
 	pub range: RangeInclusive<f32>,
-	pub reset: f32,
 	pub value: f32,
 	pub value_text: Option<Arc<str>>,
+	pub default: f32,
 	index: u32,
 }
 
@@ -49,9 +49,9 @@ impl Param {
 			name: str::from_utf8(param.name).ok()?.into(),
 			module: str::from_utf8(param.module).ok()?.into(),
 			range: param.min_value as f32..=param.max_value as f32,
-			reset: param.default_value as f32,
 			value: param.default_value as f32,
 			value_text: None,
+			default: param.default_value as f32,
 			index,
 		})
 	}

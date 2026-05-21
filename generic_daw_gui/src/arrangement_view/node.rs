@@ -58,7 +58,7 @@ impl Node {
 			PanMode::Balance(pan) => Knob::new(-1.0..=1.0, pan, |pan| {
 				Message::ChannelPanChanged(self.id, PanMode::Balance(pan))
 			})
-			.center(0.0)
+			.origin(0.0)
 			.default(0.0)
 			.radius(radius)
 			.enabled(self.enabled)
@@ -69,7 +69,7 @@ impl Node {
 					Knob::new(-1.0..=1.0, l, move |l| {
 						Message::ChannelPanChanged(self.id, PanMode::Stereo(l, r))
 					})
-					.center(0.0)
+					.origin(0.0)
 					.default(-1.0)
 					.radius(radius * RADIUS)
 					.enabled(self.enabled)
@@ -80,7 +80,7 @@ impl Node {
 					Knob::new(-1.0..=1.0, r, move |r| {
 						Message::ChannelPanChanged(self.id, PanMode::Stereo(l, r))
 					})
-					.center(0.0)
+					.origin(0.0)
 					.default(1.0)
 					.radius(radius * RADIUS)
 					.enabled(self.enabled)
