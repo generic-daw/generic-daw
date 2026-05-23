@@ -1092,6 +1092,27 @@ impl ArrangementView {
 						.clip_trim_end_to(track, clip, pos + pos_diff);
 				}
 			}
+			playlist::Action::InvertPolarity => {
+				for &(track, clip) in &*primary {
+					if let generic_daw_core::Clip::Audio(audio) =
+						&self.arrangement.tracks()[track].clips[clip]
+					{
+						self.arrangement
+							.clip_volume_changed(track, clip, -audio.volume);
+					}
+				}
+			}
+			playlist::Action::DragVolume(vol_diff) => {
+				let vol_diff = db_to_amp(vol_diff);
+				for &(track, clip) in &*primary {
+					if let generic_daw_core::Clip::Audio(audio) =
+						&self.arrangement.tracks()[track].clips[clip]
+					{
+						self.arrangement
+							.clip_volume_changed(track, clip, audio.volume * vol_diff);
+					}
+				}
+			}
 			playlist::Action::FadeStartLen(pos_diff) => {
 				let pos_diff =
 					pos_diff.map(|pos_diff| pos_diff.to_seconds_time(self.arrangement.transport()));
@@ -2400,7 +2421,7 @@ fn db_to_amp(db: f32) -> f32 {
 	10f32.powf(db / 20.0)
 }
 
-fn format_db(amp: f32) -> String {
+pub fn format_db(amp: f32) -> String {
 	let db = amp_to_db(amp);
 	let dba = db.abs();
 

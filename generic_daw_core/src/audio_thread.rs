@@ -67,6 +67,7 @@ pub enum NodeAction {
 	ClipMoveTo(ClipId, BeatTime),
 	ClipTrimStartTo(ClipId, BeatTime),
 	ClipTrimEndTo(ClipId, BeatTime),
+	ClipVolumeChanged(AudioClipId, f32),
 	ClipFadeStartLen(AudioClipId, SecondsTime),
 	ClipFadeStartP(AudioClipId, Point),
 	ClipFadeStartToggleSymmetric(AudioClipId),

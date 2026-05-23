@@ -181,6 +181,8 @@ pub struct AudioClip {
 	pub fade_start: Transition,
 	#[prost(message, required)]
 	pub fade_end: Transition,
+	#[prost(float, default = 1.0)]
+	pub volume: f32,
 }
 
 #[derive(Clone, Copy, Message)]

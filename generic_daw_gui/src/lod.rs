@@ -26,6 +26,7 @@ impl Lods {
 		samples: &[f32],
 		offset: SecondsTime,
 		transport: &Transport,
+		volume: f32,
 		fade_start: Transition,
 		fade_end: Transition,
 		samples_per_px: f32,
@@ -38,6 +39,7 @@ impl Lods {
 			samples,
 			offset,
 			transport,
+			volume,
 			fade_start,
 			fade_end,
 			samples_per_px,
@@ -100,6 +102,7 @@ impl LodsBuilder {
 			samples,
 			SecondsTime::ZERO,
 			transport,
+			1.0,
 			Transition::default(),
 			Transition::default(),
 			samples_per_px,
@@ -125,6 +128,7 @@ fn mesh(
 	samples: &[f32],
 	offset: SecondsTime,
 	transport: &Transport,
+	volume: f32,
 	fade_start_t: Transition,
 	fade_end_t: Transition,
 	samples_per_px: f32,
@@ -209,6 +213,13 @@ fn mesh(
 	};
 
 	let vertices = base
+		.map(|(min, max)| {
+			if volume.is_sign_positive() {
+				(min * volume, max * volume)
+			} else {
+				(max * volume, min * volume)
+			}
+		})
 		.enumerate()
 		.map(|(x, (min, max))| {
 			let x = x as f32 * px_per_mesh_slice + jitter_correct_px + hidden_start_px;

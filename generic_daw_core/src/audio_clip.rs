@@ -11,6 +11,7 @@ pub struct AudioClip {
 	pub id: AudioClipId,
 	pub sample: SampleId,
 	pub position: OffsetBeatSpan,
+	pub volume: f32,
 	pub fade_start: Transition,
 	pub fade_end: Transition,
 	pub stretch: f64,
@@ -23,6 +24,7 @@ impl AudioClip {
 			id: AudioClipId::unique(),
 			sample,
 			position: OffsetBeatSpan::default(),
+			volume: 1.0,
 			fade_start: Transition::default(),
 			fade_end: Transition::default(),
 			stretch: 1.0,
@@ -84,23 +86,23 @@ impl AudioClip {
 			.take(fade_start.saturating_sub(play_pos) / 2)
 			.for_each(|(((l, r), buf), pos)| {
 				let mix = self.fade_start.transition(pos as f32 / fade_start as f32);
-				buf[0] += l * mix;
-				buf[1] += r * mix;
+				buf[0] += l * self.volume * mix;
+				buf[1] += r * self.volume * mix;
 			});
 
 		iter.by_ref()
 			.take((len - fade_end).saturating_sub(play_pos) / 2)
 			.for_each(|(((l, r), buf), _)| {
-				buf[0] += l;
-				buf[1] += r;
+				buf[0] += l * self.volume;
+				buf[1] += r * self.volume;
 			});
 
 		iter.by_ref().for_each(|(((l, r), buf), pos)| {
 			let mix = self
 				.fade_end
 				.transition((len - pos) as f32 / fade_end as f32);
-			buf[0] += l * mix;
-			buf[1] += r * mix;
+			buf[0] += l * self.volume * mix;
+			buf[1] += r * self.volume * mix;
 		});
 	}
 }

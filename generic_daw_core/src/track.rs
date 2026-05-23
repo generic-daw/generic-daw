@@ -100,6 +100,12 @@ impl Track {
 						.min(audio.position.len() - audio.fade_end.len);
 				}
 			}
+			NodeAction::ClipVolumeChanged(id, volume) => {
+				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
+					unreachable!();
+				};
+				clip.volume = volume;
+			}
 			NodeAction::ClipFadeStartLen(id, len) => {
 				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
 					unreachable!();

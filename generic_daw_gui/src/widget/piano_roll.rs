@@ -143,7 +143,8 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 
 		let cursor = match cursor.position_in(*viewport) {
 			Some(cursor) => cursor,
-			None if state.status != Status::None => {
+			None if state.status == Status::None => return,
+			None => {
 				shell.capture_event();
 				match cursor.land().position_from(viewport.position()) {
 					Some(cursor) => Point::new(
@@ -153,7 +154,6 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					None => return,
 				}
 			}
-			None => return,
 		};
 
 		let new_time = px_to_time(cursor.x, state.position, state.scale, self.transport);

@@ -545,6 +545,19 @@ impl Arrangement {
 		}
 	}
 
+	pub fn clip_volume_changed(&mut self, track: usize, clip: usize, volume: f32) {
+		if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip]
+			&& audio.volume != volume
+		{
+			audio.volume = volume;
+			let id = audio.id;
+			self.node_action(
+				self.tracks[track].id,
+				NodeAction::ClipVolumeChanged(id, volume),
+			);
+		}
+	}
+
 	pub fn clip_fade_start_len(&mut self, track: usize, clip: usize, len: SecondsTime) {
 		if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
 			let len = len.min(audio.position.len());

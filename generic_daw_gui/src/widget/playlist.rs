@@ -38,6 +38,8 @@ pub enum Action {
 	Drag(Delta<usize>, Delta<BeatTime>),
 	TrimStart(Delta<BeatTime>),
 	TrimEnd(Delta<BeatTime>),
+	InvertPolarity,
+	DragVolume(f32),
 	FadeStartLen(Delta<BeatTime>),
 	FadeStartP(Point),
 	FadeStartToggleSymmetric,
@@ -52,13 +54,14 @@ pub enum Action {
 	Delete,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum Status {
 	Hovering(Arc<Path>, FileKind, Option<(Option<usize>, BeatTime)>),
 	Selecting(usize, usize, BeatTime, BeatTime),
 	Dragging(usize, BeatTime),
 	TrimmingStart(BeatTime),
 	TrimmingEnd(BeatTime),
+	DraggingVolume(f32),
 	FadingStartLen(BeatTime),
 	FadingStartP(usize, usize),
 	FadingEndLen(BeatTime),
@@ -178,7 +181,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 
 		let cursor = match cursor.position_in(*viewport) {
 			Some(cursor) => cursor,
-			None if !matches!(state.status, Status::None | Status::Hovering(.., None)) => {
+			None if let Status::None | Status::Hovering(.., None) = state.status => return,
+			None if let Status::DraggingVolume(..) = state.status => {
+				match cursor.land().position_from(viewport.position()) {
+					Some(cursor) => cursor,
+					None => return,
+				}
+			}
+			None => {
 				shell.capture_event();
 				match cursor.land().position_from(viewport.position()) {
 					Some(cursor) => Point::new(
@@ -188,7 +198,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 					None => return,
 				}
 			}
-			None => return,
 		};
 
 		let new_time = px_to_time(cursor.x, state.position, state.scale, self.transport);
@@ -365,6 +374,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 						}));
 						shell.capture_event();
 					}
+				}
+				Status::DraggingVolume(last_y) => {
+					state.status = Status::DraggingVolume(cursor.y);
+					shell.publish((self.action)(Action::DragVolume(
+						(last_y - cursor.y) / LINE_HEIGHT,
+					)));
+					shell.capture_event();
 				}
 				Status::FadingStartLen(time) => {
 					let abs_diff = maybe_snap(new_time.abs_diff(time), *modifiers, |abs_diff| {
@@ -621,6 +637,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 			| Status::TrimmingEnd(..)
 			| Status::DraggingSplit(..)
 			| Status::DraggingSlip(..) => Interaction::ResizingHorizontally,
+			Status::DraggingVolume(..) => Interaction::ResizingVertically,
 			Status::FadingStartLen(..) | Status::FadingEndLen(..) => Interaction::Pointer,
 			Status::FadingStartP(..) | Status::FadingEndP(..) => Interaction::Crosshair,
 			Status::Deleting => Interaction::NoDrop,

@@ -94,6 +94,7 @@ impl Arrangement {
 								},
 								offset: clip.position.offset().to_bits(),
 							},
+							volume: clip.volume,
 							fade_start: proto::Transition {
 								len: clip.fade_start.len.to_bits(),
 								p: proto::Point {
@@ -529,6 +530,7 @@ impl Arrangement {
 										)
 									},
 								),
+								volume: clip.volume,
 								fade_start: Transition {
 									len: SecondsTime::from_bits(clip.fade_start.len),
 									p: Point {
