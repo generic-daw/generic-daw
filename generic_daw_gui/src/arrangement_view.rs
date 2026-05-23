@@ -2426,7 +2426,7 @@ pub fn format_db(amp: f32) -> String {
 	let dba = db.abs();
 
 	format!(
-		"{}{dba:.*}",
+		"{}{dba:.*} dB",
 		if dba < 0.05 {
 			""
 		} else if db.is_sign_positive() {
