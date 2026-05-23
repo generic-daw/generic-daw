@@ -17,6 +17,18 @@ pub struct AudioClip {
 }
 
 impl AudioClip {
+	#[must_use]
+	pub fn new(sample: SampleId) -> Self {
+		Self {
+			id: AudioClipId::unique(),
+			sample,
+			position: OffsetBeatSpan::default(),
+			fade_start: Transition::default(),
+			fade_end: Transition::default(),
+			stretch: 1.0,
+		}
+	}
+
 	pub fn process(&self, state: &State, audio: &mut [f32]) {
 		debug_assert!(state.transport.playing);
 

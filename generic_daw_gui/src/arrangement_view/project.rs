@@ -2,15 +2,15 @@
 
 use crate::{
 	arrangement_view::{
-		self, Arrangement, Node, audio_clip::AudioClip, clip::Clip, crc, midi_clip::MidiClip,
-		midi_pattern::MidiPatternPair, sample::SamplePair,
+		self, Arrangement, Node, crc, midi_pattern::MidiPatternPair, sample::SamplePair,
 	},
 	clap_host::ClapHost,
 	config::Config,
 	daw::{self, Project},
 };
 use generic_daw_core::{
-	AudioClipId, MidiClipId, MidiKey, MidiNote, MidiNoteId, PanMode, Point, Transition,
+	AudioClip, AudioClipId, Clip, MidiClip, MidiClipId, MidiKey, MidiNote, MidiNoteId, PanMode,
+	Point, Transition,
 	clap_host::{PluginDescriptor, StateContextType},
 	time::{BeatRange, BeatSpan, BeatTime, OffsetBeatRange, OffsetBeatSpan, SecondsTime},
 };

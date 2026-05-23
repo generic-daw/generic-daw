@@ -1,5 +1,4 @@
-use crate::arrangement_view::clip::Clip;
-use generic_daw_core::{NodeId, Transport, time::BeatTime};
+use generic_daw_core::{Clip, NodeId, Transport, time::BeatTime};
 
 #[derive(Debug)]
 pub struct Track {

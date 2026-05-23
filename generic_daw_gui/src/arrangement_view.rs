@@ -17,21 +17,13 @@ use crate::{
 		sweeten_row_style, sweeten_row_with_radius, weak_bordered_box, weakest_bordered_box,
 	},
 	widget::{
-		Delta, LINE_HEIGHT, TEXT_HEIGHT, beats_snap_step,
-		clip::Clip,
-		note::Note,
-		piano::Piano,
-		piano_roll::{self, PianoRoll},
-		playlist::{self, Playlist},
-		samples_per_px,
-		seeker::Seeker,
-		track::Track,
+		Clip, Delta, LINE_HEIGHT, Note, Piano, PianoRoll, Playlist, Seeker, TEXT_HEIGHT, Track,
+		beats_snap_step, piano_roll, playlist, samples_per_px,
 	},
 };
-use audio_clip::AudioClip;
 use generic_daw_core::{
-	Batch, MidiKey, MidiNote, MidiNoteId, MidiPatternId, NodeId, PanMode, PluginId, Point,
-	SampleId,
+	AudioClip, Batch, MidiClip, MidiKey, MidiNote, MidiNoteId, MidiPatternId, NodeId, PanMode,
+	PluginId, Point, SampleId,
 	clap_host::PluginDescriptor,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -53,7 +45,6 @@ use iced::{
 	},
 };
 use iced_split::{Split, Strategy};
-use midi_clip::MidiClip;
 use midi_pattern::MidiPatternPair;
 use node::{Node, NodeType};
 use rtrb::Consumer;
@@ -74,10 +65,8 @@ use sweeten::widget::drag::DragEvent;
 use utils::NoDebug;
 
 mod arrangement;
-mod audio_clip;
 mod channel;
 mod clip;
-mod midi_clip;
 mod midi_pattern;
 mod node;
 mod plugin;
@@ -87,8 +76,7 @@ mod sample;
 mod track;
 
 pub use arrangement::Arrangement;
-pub use audio_clip::AudioClipRef;
-pub use midi_clip::MidiClipRef;
+pub use clip::{AudioClipRef, MidiClipRef};
 pub use project::Feedback;
 pub use recording::Recording;
 
@@ -1109,7 +1097,8 @@ impl ArrangementView {
 					pos_diff.map(|pos_diff| pos_diff.to_seconds_time(self.arrangement.transport()));
 
 				for &(track, clip) in &*primary {
-					if let clip::Clip::Audio(audio) = &self.arrangement.tracks()[track].clips[clip]
+					if let generic_daw_core::Clip::Audio(audio) =
+						&self.arrangement.tracks()[track].clips[clip]
 					{
 						self.arrangement.clip_fade_start_len(
 							track,
@@ -1136,7 +1125,8 @@ impl ArrangementView {
 					pos_diff.map(|pos_diff| pos_diff.to_seconds_time(self.arrangement.transport()));
 
 				for &(track, clip) in &*primary {
-					if let clip::Clip::Audio(audio) = &self.arrangement.tracks()[track].clips[clip]
+					if let generic_daw_core::Clip::Audio(audio) =
+						&self.arrangement.tracks()[track].clips[clip]
 					{
 						self.arrangement.clip_fade_end_len(
 							track,
@@ -1615,7 +1605,7 @@ impl ArrangementView {
 								.iter()
 								.enumerate()
 								.map(|(clip_idx, clip)| match clip {
-									clip::Clip::Audio(clip) => Clip::new(
+									generic_daw_core::Clip::Audio(clip) => Clip::new(
 										AudioClipRef {
 											sample: &self.arrangement.samples()[&clip.sample],
 											clip,
@@ -1626,7 +1616,7 @@ impl ArrangementView {
 										node.enabled,
 										Message::PlaylistAction,
 									),
-									clip::Clip::Midi(clip) => Clip::new(
+									generic_daw_core::Clip::Midi(clip) => Clip::new(
 										MidiClipRef {
 											pattern: &self.arrangement.midi_patterns()
 												[&clip.pattern],
@@ -2254,7 +2244,7 @@ impl ArrangementView {
 
 	pub fn midi_clip(&self) -> Option<MidiClip> {
 		let (track, clip) = self.midi_clip?;
-		if let clip::Clip::Midi(clip) = self.arrangement.tracks()[track].clips[clip] {
+		if let generic_daw_core::Clip::Midi(clip) = self.arrangement.tracks()[track].clips[clip] {
 			Some(clip)
 		} else {
 			None

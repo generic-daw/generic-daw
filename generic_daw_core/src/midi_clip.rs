@@ -18,6 +18,15 @@ pub struct MidiClip {
 }
 
 impl MidiClip {
+	#[must_use]
+	pub fn new(pattern: MidiPatternId) -> Self {
+		Self {
+			id: MidiClipId::unique(),
+			pattern,
+			position: OffsetBeatRange::default(),
+		}
+	}
+
 	pub fn diff(
 		&self,
 		state: &State,

@@ -18,10 +18,10 @@ pub fn transition_asymmetric(p: f32, x: f32, y: f32) -> f32 {
 	let a = 1.0 - 2.0 * x;
 	let b = 1.0 - 2.0 * y;
 
-	let t = if a.abs() < f32::EPSILON {
-		p
-	} else {
+	let t = if a.abs() >= f32::EPSILON {
 		((x.powi(2) + a * p).sqrt() - x) / a
+	} else {
+		p
 	};
 
 	b * t * (t - 1.0) + t

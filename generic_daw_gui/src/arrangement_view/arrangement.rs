@@ -1,10 +1,7 @@
 use crate::{
 	arrangement_view::{
 		self,
-		audio_clip::AudioClip,
 		channel::Channel,
-		clip::Clip,
-		midi_clip::MidiClip,
 		midi_pattern::{MidiPattern, MidiPatternPair},
 		node::{Node, NodeType},
 		plugin::PluginPair,
@@ -17,9 +14,9 @@ use crate::{
 	daw,
 };
 use generic_daw_core::{
-	AudioClipId, Batch, Message, MidiClipId, MidiKey, MidiNote, MidiNoteId, MidiPatternAction,
-	MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode, PluginId, Point, SampleId, Stream,
-	Transport, Update, Version, build_output_stream,
+	AudioClip, AudioClipId, Batch, Clip, Message, MidiClip, MidiClipId, MidiKey, MidiNote,
+	MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode,
+	PluginId, Point, SampleId, Stream, Transport, Update, Version, build_output_stream,
 	clap_host::{HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -481,7 +478,6 @@ impl Arrangement {
 			Clip::Midi(clip) => self.midi_patterns.get_mut(&clip.pattern).unwrap().refs += 1,
 		}
 		self.tracks[track].clips.insert(idx, clip);
-		let clip = clip.into();
 		self.node_action(self.tracks[track].id, NodeAction::ClipAdd(Box::new(clip)));
 		idx
 	}

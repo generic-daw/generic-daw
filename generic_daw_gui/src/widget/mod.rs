@@ -5,13 +5,21 @@ use generic_daw_core::{
 use iced::{Vector, keyboard::Modifiers};
 use std::ops::{Add, Neg};
 
-pub mod clip;
-pub mod note;
-pub mod piano;
+mod clip;
+mod note;
+mod piano;
 pub mod piano_roll;
 pub mod playlist;
-pub mod seeker;
-pub mod track;
+mod seeker;
+mod track;
+
+pub use clip::Clip;
+pub use note::Note;
+pub use piano::Piano;
+pub use piano_roll::PianoRoll;
+pub use playlist::Playlist;
+pub use seeker::Seeker;
+pub use track::Track;
 
 pub const LINE_HEIGHT: f32 = TEXT_HEIGHT * 1.3;
 pub const TEXT_HEIGHT: f32 = 16.0;

@@ -24,6 +24,40 @@ impl Clip {
 		}
 	}
 
+	#[must_use]
+	pub fn start(&self) -> BeatTime {
+		match self {
+			Self::Audio(clip) => clip.position.start(),
+			Self::Midi(clip) => clip.position.start(),
+		}
+	}
+
+	#[must_use]
+	pub fn end(&self, transport: &Transport) -> BeatTime {
+		match self {
+			Self::Audio(clip) => clip.position.end(transport),
+			Self::Midi(clip) => clip.position.end(),
+		}
+	}
+
+	#[must_use]
+	pub fn offset(&self, transport: &Transport) -> BeatTime {
+		match self {
+			Self::Audio(clip) => {
+				(clip.position.offset() / clip.stretch.abs()).to_beat_time(transport)
+			}
+			Self::Midi(clip) => clip.position.offset(),
+		}
+	}
+
+	#[must_use]
+	pub fn len(&self, transport: &Transport) -> BeatTime {
+		match self {
+			Self::Audio(clip) => clip.position.len().to_beat_time(transport),
+			Self::Midi(clip) => clip.position.len(),
+		}
+	}
+
 	pub fn diff(
 		&self,
 		state: &State,
