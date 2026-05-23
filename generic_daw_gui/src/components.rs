@@ -8,6 +8,7 @@ use iced::{
 	Element, Font, Shrink, Theme, border, padding,
 	widget::{Button, button, container, pick_list, row, text, text_input},
 };
+use std::ops::RangeInclusive;
 
 pub fn icon_button<'a, Message: 'a>(
 	i: Icon,
@@ -46,24 +47,26 @@ pub fn labeled_icon_button<'a, Message: 'a>(
 }
 
 pub fn number_input<'a, Message: Clone + 'a>(
-	current: usize,
+	range: RangeInclusive<usize>,
+	value: usize,
 	default: usize,
-	max_digits: u32,
 	drag_update: fn(usize) -> Message,
 	text_update: fn(String) -> Message,
 	radius: impl Into<border::Radius>,
 ) -> Element<'a, Message> {
 	let radius = radius.into();
+	let max_digits = (range.end() + 1).ilog10();
 	row![
 		DragHandle::new(
 			container(move_vertical())
 				.style(container_with_radius(weakest_bordered_box, radius.right(0)))
 				.padding(padding::vertical(5)),
-			current,
-			default,
+			range,
+			value,
 			drag_update
-		),
-		text_input("", &current.to_string())
+		)
+		.default(default),
+		text_input("", &value.to_string())
 			.style(move |t, s| {
 				let mut style = text_input::default(t, s);
 				style.border.radius = radius.left(0);

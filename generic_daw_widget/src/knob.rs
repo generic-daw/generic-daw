@@ -345,9 +345,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					let mut diff = match delta {
 						ScrollDelta::Lines { y, .. } => *y,
 						ScrollDelta::Pixels { y, .. } => y / 60.0,
-					} * (self.info.range.end() - self.info.range.start())
+					} * ((self.info.range.end() - self.info.range.start()) / 100.0)
 						* if modifiers.command() { 10.0 } else { 1.0 }
-						/ 100.0 + state.scroll;
+						+ state.scroll;
 
 					if self.info.stepped {
 						state.scroll = diff - diff.round();

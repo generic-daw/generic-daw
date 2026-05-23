@@ -702,18 +702,18 @@ impl Daw {
 							.on_press(Message::Stop),
 					],
 					number_input(
+						1..=99,
 						transport.numerator.get().into(),
 						4,
-						2,
 						|numerator| Message::ChangedNumerator(numerator as u8),
 						Message::ChangedNumeratorText,
 						5
 					),
 					row![
 						number_input(
+							10..=999,
 							transport.bpm.get().into(),
 							140,
-							3,
 							|bpm| Message::ChangedBpm(bpm as u16),
 							Message::ChangedBpmText,
 							border::left(5)

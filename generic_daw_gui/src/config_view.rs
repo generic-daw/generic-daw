@@ -447,9 +447,9 @@ impl ConfigView {
 								.label("Autosave every ")
 								.on_toggle(|_| Message::ToggledAutosave),
 							number_input(
+								1..=999,
 								self.config.autosave.interval.get().into(),
 								600,
-								3,
 								|interval| Message::ChangedAutosaveInterval(interval as u16),
 								Message::ChangedAutosaveIntervalText,
 								5

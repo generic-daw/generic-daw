@@ -9,6 +9,7 @@ use iced_widget::{
 		widget::{Operation, Tree, tree},
 	},
 };
+use std::ops::RangeInclusive;
 use utils::NoDebug;
 
 #[derive(Default)]
@@ -22,8 +23,9 @@ struct State {
 #[derive(Debug)]
 pub struct DragHandle<'a, Message> {
 	child: NoDebug<Element<'a, Message, Theme, Renderer>>,
+	range: RangeInclusive<usize>,
 	value: usize,
-	reset: usize,
+	default: usize,
 	f: NoDebug<Box<dyn Fn(usize) -> Message + 'a>>,
 }
 
@@ -31,16 +33,23 @@ impl<'a, Message> DragHandle<'a, Message> {
 	#[must_use]
 	pub fn new(
 		child: impl Into<Element<'a, Message, Theme, Renderer>>,
+		range: RangeInclusive<usize>,
 		value: usize,
-		reset: usize,
 		f: impl Fn(usize) -> Message + 'a,
 	) -> Self {
 		Self {
 			child: child.into().into(),
+			range: range.clone(),
 			value,
-			reset,
+			default: *range.end(),
 			f: NoDebug(Box::from(f)),
 		}
+	}
+
+	#[must_use]
+	pub fn default(mut self, default: usize) -> Self {
+		self.default = default;
+		self
 	}
 }
 
@@ -115,7 +124,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 					state.last_click = Some(new_click);
 
 					if new_click.kind() == Kind::Double {
-						shell.publish((self.f)(self.reset));
+						shell.publish((self.f)(self.default));
 					}
 
 					shell.capture_event();
@@ -133,9 +142,13 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 					..
 				} => {
 					if let Some((start_value, start_y)) = state.dragging {
-						let new_value = start_value.saturating_add_signed(
-							((start_y - y) * 0.1 + state.scroll).round() as isize,
-						);
+						let new_value = ((start_value as f32
+							+ (start_y - y)
+								* (self.range.end() - self.range.start()) as f32
+								* 0.0001)
+							.round() as usize)
+							.clamp(*self.range.start(), *self.range.end());
+
 						if new_value != self.value {
 							shell.publish((self.f)(new_value));
 						}
@@ -148,14 +161,17 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 				mouse::Event::WheelScrolled {
 					delta, modifiers, ..
 				} if state.dragging.is_none() && state.hovering => {
-					let diff = match delta {
+					let mut diff = match delta {
 						ScrollDelta::Lines { y, .. } => *y,
 						ScrollDelta::Pixels { y, .. } => y / 60.0,
 					} * if modifiers.command() { 10.0 } else { 1.0 }
 						+ state.scroll;
-					state.scroll = diff - diff.round();
 
-					let new_value = self.value.saturating_add_signed(diff.round() as isize);
+					state.scroll = diff - diff.round();
+					diff = diff.round();
+
+					let new_value = ((self.value as f32 + diff).round() as usize)
+						.clamp(*self.range.start(), *self.range.end());
 					if new_value != self.value {
 						shell.publish((self.f)(new_value));
 						shell.capture_event();
