@@ -321,23 +321,31 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 									- 4.0 - cursor.x)
 									.abs();
 
-								match (
-									fade_start_tab_dist <= 6.0,
-									fade_end_tab_dist <= 6.0,
-									fade_start_tab_dist <= fade_end_tab_dist,
-								) {
-									(true, true, true) | (true, false, _) => {
-										playlist.status = Status::FadingStartLen(time);
-										shell.capture_event();
-										return;
-									}
-									(true, true, false) | (false, true, _) => {
-										playlist.status = Status::FadingEndLen(time);
-										shell.capture_event();
-										return;
-									}
-									(false, false, _) => {}
-								}
+								let left_of_start_tab = clip_bounds.x + fade_start_px > cursor.x;
+								let left_of_end_tab =
+									clip_bounds.x + layout.bounds().width + fade_end_px > cursor.x;
+
+								let use_start =
+									match (fade_start_tab_dist <= 6.0, fade_end_tab_dist <= 6.0) {
+										(true, false) => left_of_end_tab,
+										(false, true) => left_of_start_tab,
+										(true, true) => {
+											if fade_start_tab_dist <= fade_end_tab_dist {
+												left_of_end_tab
+											} else {
+												left_of_start_tab
+											}
+										}
+										(false, false) => break 'block,
+									};
+
+								playlist.status = if use_start {
+									Status::FadingStartLen(time)
+								} else {
+									Status::FadingEndLen(time)
+								};
+								shell.capture_event();
+								return;
 							}
 							Inner::MidiClip(..) => {
 								if new_click.kind() == Kind::Double {
