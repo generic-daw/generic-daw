@@ -46,9 +46,10 @@ struct State {
 	last_click: Option<Click>,
 	last_bounds: Rectangle,
 	last_info: ClipInfo,
-	last_selected: bool,
-	last_enabled: bool,
 	last_theme: RefCell<Option<Theme>>,
+	show_controls: bool,
+	selected: bool,
+	enabled: bool,
 }
 
 impl Default for State {
@@ -59,9 +60,10 @@ impl Default for State {
 			last_click: None,
 			last_bounds: Rectangle::default(),
 			last_info: ClipInfo::default(),
-			last_selected: false,
-			last_enabled: true,
 			last_theme: RefCell::default(),
+			show_controls: false,
+			selected: false,
+			enabled: true,
 		}
 	}
 }
@@ -152,8 +154,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			}
 		}
 
-		if state.last_enabled != self.enabled {
-			state.last_enabled = self.enabled;
+		if state.enabled != self.enabled {
+			state.enabled = self.enabled;
 			state.canvas_cache.get_mut().clear();
 		}
 	}
@@ -199,11 +201,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		let state = tree.state.downcast_mut::<State>();
 		let playlist = &mut *self.playlist.borrow_mut();
 
-		if let Event::Window(window::Event::RedrawRequested(..)) = event {
-			let Some(mut bounds) = layout.bounds().intersection(viewport) else {
-				return;
-			};
-
+		if let Event::Window(window::Event::RedrawRequested(..)) = event
+			&& let Some(mut bounds) = layout.bounds().intersection(viewport)
+		{
 			bounds.x -= layout.bounds().x;
 			bounds.y -= layout.bounds().y;
 
@@ -216,14 +216,36 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			}
 
 			let selected = playlist.primary.contains(&idx) || playlist.secondary.contains(&idx);
-			if state.last_selected != selected {
-				state.last_selected = selected;
+			if state.selected != selected {
+				state.selected = selected;
 				state.canvas_cache.get_mut().clear();
 			}
 		}
 
 		if shell.is_event_captured() {
 			return;
+		}
+
+		if let Inner::AudioClip(..) = self.inner {
+			let show_controls = cursor
+				.is_over(layout.bounds().intersection(viewport).unwrap_or_default())
+				|| (state.selected
+					&& matches!(
+						playlist.status,
+						Status::FadingStartLen(..)
+							| Status::FadingStartP(..)
+							| Status::FadingEndLen(..)
+							| Status::FadingEndP(..)
+					));
+
+			if state.show_controls != show_controls {
+				state.show_controls = show_controls;
+				state.canvas_cache.get_mut().clear();
+
+				if !matches!(event, Event::Window(window::Event::RedrawRequested(..))) {
+					shell.request_redraw();
+				}
+			}
 		}
 
 		let Some(cursor) = cursor.position_in(*viewport) else {
@@ -308,9 +330,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 									(false, false, _) => {}
 								}
 
-								if layout.bounds().width < 8.0
-									|| cursor.y - clip_bounds.y > LINE_HEIGHT + 12.0
-								{
+								if cursor.y - clip_bounds.y > LINE_HEIGHT + 12.0 {
 									break 'block;
 								}
 
@@ -442,7 +462,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 		let color = match &self.inner {
 			Inner::AudioClip(AudioClipRef { .. }) | Inner::MidiClip(MidiClipRef { .. }) => {
-				match (state.last_enabled, state.last_selected) {
+				match (state.enabled, state.selected) {
 					(true, true) => theme.palette().danger.weak.color,
 					(true, false) => theme.palette().primary.weak.color,
 					(false, true) => theme.palette().secondary.strong.color,
@@ -568,93 +588,93 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					let fade_end_px =
 						inner.clip.fade_end.len.to_samples(self.transport) as f32 / -samples_per_px;
 
-					if layout.bounds().width >= 8.0 {
-						let fade =
-							|b: &mut Builder, fade: Transition, fade_px: f32, offset: Vector| {
-								b.move_to(Point::new(0.0, unclipped_bounds.height) + offset);
-								if fade.symmetric {
-									b.quadratic_curve_to(
-										Point::new(
-											(0.5 * fade.p.x) * fade_px,
-											(1.0 - 0.5 * fade.p.y) * unclipped_bounds.height,
-										) + offset,
-										Point::new(0.5 * fade_px, 0.5 * unclipped_bounds.height)
-											+ offset,
-									);
-									b.quadratic_curve_to(
-										Point::new(
-											(1.0 - 0.5 * fade.p.x) * fade_px,
-											(0.5 * fade.p.y) * unclipped_bounds.height,
-										) + offset,
-										Point::new(fade_px, 0.0) + offset,
-									);
-								} else {
-									b.quadratic_curve_to(
-										Point::new(
-											fade.p.x * fade_px,
-											(1.0 - fade.p.y) * unclipped_bounds.height,
-										) + offset,
-										Point::new(fade_px, 0.0) + offset,
-									);
-								}
-							};
+					let fade = |b: &mut Builder, fade: Transition, fade_px: f32, offset: Vector| {
+						b.move_to(Point::new(0.0, unclipped_bounds.height) + offset);
+						if fade.symmetric {
+							b.quadratic_curve_to(
+								Point::new(
+									(0.5 * fade.p.x) * fade_px,
+									(1.0 - 0.5 * fade.p.y) * unclipped_bounds.height,
+								) + offset,
+								Point::new(0.5 * fade_px, 0.5 * unclipped_bounds.height) + offset,
+							);
+							b.quadratic_curve_to(
+								Point::new(
+									(1.0 - 0.5 * fade.p.x) * fade_px,
+									(0.5 * fade.p.y) * unclipped_bounds.height,
+								) + offset,
+								Point::new(fade_px, 0.0) + offset,
+							);
+						} else {
+							b.quadratic_curve_to(
+								Point::new(
+									fade.p.x * fade_px,
+									(1.0 - fade.p.y) * unclipped_bounds.height,
+								) + offset,
+								Point::new(fade_px, 0.0) + offset,
+							);
+						}
+					};
 
-						frame.fill(
+					if fade_start_px > 0.0 {
+						frame.stroke(
 							&Path::new(|b| {
-								b.move_to(Point::new(fade_start_px, 0.0) + start_offset);
-								b.line_to(Point::new(fade_start_px + 8.0, 0.0) + start_offset);
-								b.line_to(Point::new(fade_start_px, 12.0) + start_offset);
-								b.close();
+								fade(b, inner.clip.fade_start, fade_start_px, start_offset);
 							}),
-							color,
+							Stroke::default().with_color(color).with_width(2.0),
 						);
 
 						frame.fill(
 							&Path::new(|b| {
-								b.move_to(Point::new(fade_end_px, 0.0) + end_offset);
-								b.line_to(Point::new(fade_end_px - 8.0, 0.0) + end_offset);
-								b.line_to(Point::new(fade_end_px, 12.0) + end_offset);
+								fade(b, inner.clip.fade_start, fade_start_px, start_offset);
+								b.line_to(Point::ORIGIN + start_offset);
 								b.close();
 							}),
-							color,
+							color.scale_alpha(ALPHA_1_3),
 						);
-
-						if fade_start_px > 0.0 {
-							frame.stroke(
-								&Path::new(|b| {
-									fade(b, inner.clip.fade_start, fade_start_px, start_offset);
-								}),
-								Stroke::default().with_color(color).with_width(2.0),
-							);
-
-							frame.fill(
-								&Path::new(|b| {
-									fade(b, inner.clip.fade_start, fade_start_px, start_offset);
-									b.line_to(Point::ORIGIN + start_offset);
-									b.close();
-								}),
-								color.scale_alpha(ALPHA_1_3),
-							);
-						}
-
-						if fade_end_px < 0.0 {
-							frame.stroke(
-								&Path::new(|b| {
-									fade(b, inner.clip.fade_end, fade_end_px, end_offset);
-								}),
-								Stroke::default().with_color(color).with_width(2.0),
-							);
-
-							frame.fill(
-								&Path::new(|b| {
-									fade(b, inner.clip.fade_end, fade_end_px, end_offset);
-									b.line_to(Point::ORIGIN + end_offset);
-									b.close();
-								}),
-								color.scale_alpha(ALPHA_1_3),
-							);
-						}
 					}
+
+					if fade_end_px < 0.0 {
+						frame.stroke(
+							&Path::new(|b| {
+								fade(b, inner.clip.fade_end, fade_end_px, end_offset);
+							}),
+							Stroke::default().with_color(color).with_width(2.0),
+						);
+
+						frame.fill(
+							&Path::new(|b| {
+								fade(b, inner.clip.fade_end, fade_end_px, end_offset);
+								b.line_to(Point::ORIGIN + end_offset);
+								b.close();
+							}),
+							color.scale_alpha(ALPHA_1_3),
+						);
+					}
+
+					if !state.show_controls {
+						return;
+					}
+
+					frame.fill(
+						&Path::new(|b| {
+							b.move_to(Point::new(fade_start_px, 0.0) + start_offset);
+							b.line_to(Point::new(fade_start_px + 8.0, 0.0) + start_offset);
+							b.line_to(Point::new(fade_start_px, 12.0) + start_offset);
+							b.close();
+						}),
+						color,
+					);
+
+					frame.fill(
+						&Path::new(|b| {
+							b.move_to(Point::new(fade_end_px, 0.0) + end_offset);
+							b.line_to(Point::new(fade_end_px - 8.0, 0.0) + end_offset);
+							b.line_to(Point::new(fade_end_px, 12.0) + end_offset);
+							b.close();
+						}),
+						color,
+					);
 
 					if fade_start_px >= 8.0 {
 						let control = Point::new(
@@ -819,7 +839,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					return Interaction::Crosshair;
 				}
 
-				if layout.bounds().width < 8.0 || cursor.y > LINE_HEIGHT + 12.0 {
+				if cursor.y > LINE_HEIGHT + 12.0 {
 					break 'block;
 				}
 
