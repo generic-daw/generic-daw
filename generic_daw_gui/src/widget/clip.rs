@@ -227,16 +227,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		}
 
 		if let Inner::AudioClip(..) = self.inner {
-			let show_controls = cursor
-				.is_over(layout.bounds().intersection(viewport).unwrap_or_default())
-				|| (state.selected
-					&& matches!(
-						playlist.status,
-						Status::FadingStartLen(..)
-							| Status::FadingStartP(..)
-							| Status::FadingEndLen(..)
-							| Status::FadingEndP(..)
-					));
+			let show_controls = match playlist.status {
+				Status::None => {
+					cursor.is_over(layout.bounds().intersection(viewport).unwrap_or_default())
+				}
+				Status::FadingStartLen(..)
+				| Status::FadingStartP(..)
+				| Status::FadingEndLen(..)
+				| Status::FadingEndP(..) => state.selected,
+				_ => false,
+			};
 
 			if state.show_controls != show_controls {
 				state.show_controls = show_controls;
