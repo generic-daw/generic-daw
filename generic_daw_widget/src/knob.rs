@@ -17,7 +17,7 @@ use std::{cell::RefCell, f32::consts::PI, fmt::Debug, ops::RangeInclusive};
 use utils::NoDebug;
 
 struct State {
-	dragging: Option<f32>,
+	dragging: Option<(f32, f32)>,
 	hovering: bool,
 	scroll: f32,
 	cache: Cache,
@@ -281,7 +281,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					..
 				} if state.dragging.is_none() && state.hovering => {
 					let pos = cursor.position().unwrap();
-					state.dragging = Some(pos.y);
+					state.dragging = Some((self.info.value, pos.y));
 					state.scroll = 0.0;
 
 					if modifiers.control() || modifiers.command() {
@@ -307,24 +307,22 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					position: Point { y, .. },
 					..
 				} => {
-					if let Some(last_y) = state.dragging {
-						let mut diff = (last_y - y)
-							* (self.info.range.end() - self.info.range.start())
-							* 0.005 + state.scroll;
+					if let Some((start_value, start_y)) = state.dragging {
+						let mut new_value = (start_value
+							+ (start_y - y)
+								* (self.info.range.end() - self.info.range.start())
+								* 0.005)
+							.clamp(*self.info.range.start(), *self.info.range.end());
 
 						if self.info.stepped {
-							state.scroll = diff - diff.round();
-							diff = diff.round();
+							new_value = new_value.round();
 						}
 
-						let new_value = (self.info.value + diff)
-							.clamp(*self.info.range.start(), *self.info.range.end());
 						if new_value != self.info.value
-							|| (diff < 0.0 && new_value == *self.info.range.start())
-							|| (diff > 0.0 && new_value == *self.info.range.end())
+							|| (new_value < 0.0 && new_value == *self.info.range.start())
+							|| (new_value > 0.0 && new_value == *self.info.range.end())
 						{
 							shell.publish((self.f)(new_value));
-							state.dragging = Some(*y);
 						}
 
 						shell.capture_event();

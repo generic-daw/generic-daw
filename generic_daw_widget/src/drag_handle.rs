@@ -13,7 +13,7 @@ use utils::NoDebug;
 
 #[derive(Default)]
 struct State {
-	dragging: Option<f32>,
+	dragging: Option<(usize, f32)>,
 	hovering: bool,
 	scroll: f32,
 	last_click: Option<Click>,
@@ -108,7 +108,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 					..
 				} if state.dragging.is_none() && state.hovering => {
 					let pos = cursor.position().unwrap();
-					state.dragging = Some(pos.y);
+					state.dragging = Some((self.value, pos.y));
 					state.scroll = 0.0;
 
 					let new_click = Click::new(pos, mouse::Button::Left, state.last_click);
@@ -132,14 +132,12 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 					position: Point { y, .. },
 					..
 				} => {
-					if let Some(last_y) = state.dragging {
-						let diff = (last_y - y) * 0.1 + state.scroll;
-						state.scroll = diff - diff.round();
-
-						let new_value = self.value.saturating_add_signed(diff.round() as isize);
+					if let Some((start_value, start_y)) = state.dragging {
+						let new_value = start_value.saturating_add_signed(
+							((start_y - y) * 0.1 + state.scroll).round() as isize,
+						);
 						if new_value != self.value {
 							shell.publish((self.f)(new_value));
-							state.dragging = Some(*y);
 						}
 
 						shell.capture_event();
