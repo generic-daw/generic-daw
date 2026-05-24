@@ -740,7 +740,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						content += " (i)";
 					}
 
-					if state.show_controls || content != "0.0" {
+					if state.show_controls || content != "0.0 dB" {
 						let text = Text {
 							content: &*content,
 							bounds: Size::INFINITE,

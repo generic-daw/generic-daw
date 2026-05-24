@@ -1282,7 +1282,7 @@ checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
 [[package]]
 name = "iced"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#a9eba3e14af305b27cb6743f1714395c36b1bdf7"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#90fa31940828044e09a5723abe716885e7c68a2b"
 dependencies = [
  "iced_core",
  "iced_debug",
@@ -1297,7 +1297,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#a9eba3e14af305b27cb6743f1714395c36b1bdf7"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#90fa31940828044e09a5723abe716885e7c68a2b"
 dependencies = [
  "bitflags 2.11.1",
  "bytes",
@@ -1315,7 +1315,7 @@ dependencies = [
 [[package]]
 name = "iced_debug"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#a9eba3e14af305b27cb6743f1714395c36b1bdf7"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#90fa31940828044e09a5723abe716885e7c68a2b"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1325,7 +1325,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#a9eba3e14af305b27cb6743f1714395c36b1bdf7"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#90fa31940828044e09a5723abe716885e7c68a2b"
 dependencies = [
  "futures",
  "iced_core",
@@ -1339,7 +1339,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#a9eba3e14af305b27cb6743f1714395c36b1bdf7"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#90fa31940828044e09a5723abe716885e7c68a2b"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -1358,7 +1358,7 @@ dependencies = [
 [[package]]
 name = "iced_program"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#a9eba3e14af305b27cb6743f1714395c36b1bdf7"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#90fa31940828044e09a5723abe716885e7c68a2b"
 dependencies = [
  "iced_graphics",
  "iced_runtime",
@@ -1367,7 +1367,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#a9eba3e14af305b27cb6743f1714395c36b1bdf7"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#90fa31940828044e09a5723abe716885e7c68a2b"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -1379,7 +1379,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#a9eba3e14af305b27cb6743f1714395c36b1bdf7"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#90fa31940828044e09a5723abe716885e7c68a2b"
 dependencies = [
  "bytes",
  "iced_core",
@@ -1391,7 +1391,7 @@ dependencies = [
 [[package]]
 name = "iced_selector"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#a9eba3e14af305b27cb6743f1714395c36b1bdf7"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#90fa31940828044e09a5723abe716885e7c68a2b"
 dependencies = [
  "iced_core",
 ]
@@ -1407,7 +1407,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#a9eba3e14af305b27cb6743f1714395c36b1bdf7"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#90fa31940828044e09a5723abe716885e7c68a2b"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -1423,7 +1423,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#a9eba3e14af305b27cb6743f1714395c36b1bdf7"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#90fa31940828044e09a5723abe716885e7c68a2b"
 dependencies = [
  "bitflags 2.11.1",
  "bytemuck",
@@ -1443,7 +1443,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#a9eba3e14af305b27cb6743f1714395c36b1bdf7"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#90fa31940828044e09a5723abe716885e7c68a2b"
 dependencies = [
  "iced_renderer",
  "log",
@@ -1456,7 +1456,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#a9eba3e14af305b27cb6743f1714395c36b1bdf7"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#90fa31940828044e09a5723abe716885e7c68a2b"
 dependencies = [
  "arboard",
  "iced_debug",
