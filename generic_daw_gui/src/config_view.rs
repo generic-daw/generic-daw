@@ -350,7 +350,7 @@ impl ConfigView {
 								buffer_size.get() as f32 / device.sample_rate.get() as f32 * 1000.0
 							)
 							.font(Font::MONOSPACE)
-							.size(12)
+							.size(13)
 						})),
 						match self.tab {
 							Tab::Input => "Input",

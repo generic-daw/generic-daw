@@ -1862,7 +1862,7 @@ impl ArrangementView {
 				mouse_area(
 					container(
 						column![
-							text(name).size(14).line_height(1.0),
+							text(name).size(13).line_height(1.0),
 							node.pan_knob(23.0),
 							row![
 								text_icon_button("M", button_style(false))
@@ -1916,7 +1916,7 @@ impl ArrangementView {
 								))
 							]
 							.spacing(5),
-							center_x(text(format_db(node.volume.abs())).line_height(1.0))
+							center_x(text(format_db(node.volume.abs())).size(13).line_height(1.0))
 								.style(weak_bordered_box)
 								.padding(2),
 							row![
