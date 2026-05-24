@@ -183,9 +183,14 @@ fn mesh(
 		return None;
 	}
 
-	let jitter_correct_px = (lod_start as f32 - lod_start_f) / lod_slices_per_px;
 	let fade_start_px = fade_start_t.len.to_samples(transport) as f32 / samples_per_px.abs();
 	let fade_end_px = fade_end_t.len.to_samples(transport) as f32 / samples_per_px.abs();
+
+	let jitter_correct_px = if samples_per_px.is_sign_positive() {
+		(lod_start as f32 - lod_start_f) / lod_slices_per_px
+	} else {
+		(lod_end_f - lod_end as f32) / lod_slices_per_px
+	};
 
 	let color = color::pack(color);
 

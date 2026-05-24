@@ -43,31 +43,30 @@ impl AudioClip {
 			return;
 		}
 
-		let len = self.position.len().to_samples(&state.transport);
+		let sample = &state.samples[&self.sample];
+
+		let read_len = sample
+			.len(&state.transport)
+			.saturating_sub(self.position.offset())
+			.min(self.position.len());
+
+		let len = read_len.to_samples(&state.transport);
 
 		let play_pos = position.saturating_sub(start);
 		if play_pos >= len {
 			return;
 		}
 
-		let sample = &state.samples[&self.sample];
-
 		let resample_ratio = sample.resample_ratio(&state.transport);
+		let offset = (self.position.offset() / resample_ratio).to_samples(&state.transport);
 
-		let offset = (self.position.offset() * resample_ratio).to_samples(&state.transport);
-
-		let resample_ratio = self.stretch * resample_ratio;
-
-		let read_len = sample
-			.samples
-			.len()
-			.saturating_sub(offset)
-			.min((self.position.len() * resample_ratio.abs()).to_samples(&state.transport));
+		let resample_ratio = self.stretch / resample_ratio;
+		let read_len = (read_len * resample_ratio.abs()).to_samples(&state.transport);
 
 		let read_start = if resample_ratio.is_sign_positive() {
-			offset.min(sample.samples.len())
+			offset
 		} else {
-			sample.samples.len().saturating_sub(read_len + offset)
+			sample.samples.len() - offset - read_len
 		};
 
 		let fade_start = self.fade_start.len.to_samples(&state.transport);
