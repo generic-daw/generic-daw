@@ -45,8 +45,7 @@ impl AudioClip {
 
 		let sample = &state.samples[&self.sample];
 
-		let read_len = sample
-			.len(&state.transport)
+		let read_len = (sample.len(&state.transport) / self.stretch.abs())
 			.saturating_sub(self.position.offset())
 			.min(self.position.len());
 
