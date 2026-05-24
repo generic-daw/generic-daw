@@ -112,8 +112,8 @@ pub enum Message {
 
 	SampleLoaded(Option<(Box<SamplePair>, Option<usize>, BeatTime)>),
 	MidiPatternLoaded(Option<(Box<MidiPatternPair>, Option<usize>, BeatTime)>),
-	AddAudioClip(SampleId, Option<usize>, BeatTime),
-	AddMidiClip(MidiPatternId, Option<usize>, BeatTime),
+	AudioClipAdd(SampleId, Option<usize>, BeatTime),
+	MidiClipAdd(MidiPatternId, Option<usize>, BeatTime),
 
 	TrackAdd,
 	TrackRemove(NodeId),
@@ -411,7 +411,7 @@ impl ArrangementView {
 				if let Some((sample, track, pos)) = loaded {
 					let id = sample.gui.id;
 					self.arrangement.add_sample(*sample);
-					return self.update(Message::AddAudioClip(id, track, pos), config, state);
+					return self.update(Message::AudioClipAdd(id, track, pos), config, state);
 				}
 			}
 			Message::MidiPatternLoaded(loaded) => {
@@ -420,10 +420,10 @@ impl ArrangementView {
 				if let Some((pattern, track, pos)) = loaded {
 					let id = pattern.gui.id;
 					self.arrangement.add_midi_pattern(*pattern);
-					return self.update(Message::AddMidiClip(id, track, pos), config, state);
+					return self.update(Message::MidiClipAdd(id, track, pos), config, state);
 				}
 			}
-			Message::AddAudioClip(id, track, pos) => {
+			Message::AudioClipAdd(id, track, pos) => {
 				let mut clip = AudioClip::new(id);
 				clip.position.trim_end_to(
 					self.arrangement.samples()[&id]
@@ -441,10 +441,11 @@ impl ArrangementView {
 					)
 				};
 				let clip = self.arrangement.add_clip(track, clip);
+				self.playlist.get_mut().clear();
 				self.playlist.get_mut().primary.insert((track, clip));
 				return task;
 			}
-			Message::AddMidiClip(id, track, pos) => {
+			Message::MidiClipAdd(id, track, pos) => {
 				let mut clip = MidiClip::new(id);
 				clip.position
 					.trim_end_to(
@@ -465,6 +466,7 @@ impl ArrangementView {
 					)
 				};
 				let clip = self.arrangement.add_clip(track, clip);
+				self.playlist.get_mut().clear();
 				self.playlist.get_mut().primary.insert((track, clip));
 				return task;
 			}
@@ -1015,7 +1017,7 @@ impl ArrangementView {
 						.values()
 						.find(|sample| sample.path == path)
 					{
-						self.update(Message::AddAudioClip(sample.id, track, pos), config, state)
+						self.update(Message::AudioClipAdd(sample.id, track, pos), config, state)
 					} else {
 						self.loading += 1;
 						Task::future(unblock(move || {
@@ -1319,7 +1321,8 @@ impl ArrangementView {
 						id: MidiNoteId::unique(),
 					},
 				);
-				primary.insert(note);
+				self.piano_roll.get_mut().clear();
+				self.piano_roll.get_mut().primary.insert(note);
 			}
 			piano_roll::Action::Clone => {
 				let mut sorted = primary.drain().collect::<Vec<_>>();
