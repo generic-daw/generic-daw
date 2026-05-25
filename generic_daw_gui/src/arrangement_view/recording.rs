@@ -27,7 +27,7 @@ impl Recording {
 		sample_rate: NonZero<u32>,
 		frames: Option<NonZero<u32>>,
 		node: NodeId,
-	) -> (Self, Consumer<Box<[f32]>>) {
+	) -> (Self, Consumer<f32>) {
 		let (core, consumer) = generic_daw_core::Recording::create(
 			BufWriter::new(File::create(&path).unwrap()),
 			device_id,

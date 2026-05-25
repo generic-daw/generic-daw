@@ -23,7 +23,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		device_id: Option<&DeviceId>,
 		sample_rate: NonZero<u32>,
 		frames: Option<NonZero<u32>>,
-	) -> (Self, Consumer<Box<[f32]>>) {
+	) -> (Self, Consumer<f32>) {
 		let (config, consumer, stream) = build_input_stream(device_id, sample_rate, frames);
 
 		let writer = WavWriter::new(

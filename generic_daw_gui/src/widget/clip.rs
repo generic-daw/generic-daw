@@ -198,28 +198,31 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
+		let state = tree.state.downcast_mut::<State>();
+
+		if let Event::Window(window::Event::RedrawRequested(..)) = event
+			&& let Some(bounds) = layout.bounds().intersection(viewport)
+		{
+			let bounds = bounds - Vector::new(layout.position().x, layout.position().y);
+
+			if state.last_bounds != bounds {
+				state.last_bounds = bounds;
+				state.canvas_cache.get_mut().clear();
+				if !state.mesh_cache.get_mut().is_empty() {
+					state.mesh_cache.get_mut().update(Arc::default());
+				}
+			}
+		}
+
 		let (Inner::AudioClip(AudioClipRef { idx, .. }) | Inner::MidiClip(MidiClipRef { idx, .. })) =
 			self.inner
 		else {
 			return;
 		};
 
-		let state = tree.state.downcast_mut::<State>();
 		let playlist = &mut *self.playlist.borrow_mut();
 
 		if let Event::Window(window::Event::RedrawRequested(..)) = event {
-			if let Some(bounds) = layout.bounds().intersection(viewport) {
-				let bounds = bounds - Vector::new(layout.position().x, layout.position().y);
-
-				if state.last_bounds != bounds {
-					state.last_bounds = bounds;
-					state.canvas_cache.get_mut().clear();
-					if !state.mesh_cache.get_mut().is_empty() {
-						state.mesh_cache.get_mut().update(Arc::default());
-					}
-				}
-			}
-
 			let selected = playlist.primary.contains(&idx) || playlist.secondary.contains(&idx);
 			if state.selected != selected {
 				state.selected = selected;

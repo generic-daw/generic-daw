@@ -56,13 +56,14 @@ use std::{
 	collections::HashMap,
 	io::Read,
 	iter::repeat,
+	mem::MaybeUninit,
 	num::NonZero,
 	path::Path,
 	sync::Arc,
 	time::Duration,
 };
 use sweeten::widget::drag::DragEvent;
-use utils::NoDebug;
+use utils::{NoDebug, boxed_slice};
 
 mod arrangement;
 mod channel;
@@ -584,9 +585,10 @@ impl ArrangementView {
 					self.recording = Some(recording);
 					self.arrangement.play();
 
-					return Task::run(poll_consumer(task, sample_rate, frames), |samples| {
-						Message::RecordingWrite(NoDebug(samples))
-					})
+					return Task::run(
+						poll_chunked_consumer(task, sample_rate, frames),
+						|samples| Message::RecordingWrite(NoDebug(samples)),
+					)
 					.chain(Task::done(Message::RecordingFinalize))
 					.into();
 				}
@@ -2468,9 +2470,10 @@ fn poll_consumer<T>(
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
 ) -> impl Stream<Item = T> {
+	let frames = frames.or(NonZero::new(8192)).unwrap();
 	let min = 64.0 / sample_rate.get() as f32;
-	let max = frames.or(NonZero::new(8192)).unwrap().get() as f32 / sample_rate.get() as f32;
-	let mut backoff = 0.0;
+	let max = frames.get() as f32 / sample_rate.get() as f32;
+	let mut backoff = min;
 	let mut backoff = move |counter: u16| {
 		let divisor = f32::from(counter).max(0.5);
 		backoff = ((backoff + backoff / divisor) / 2.0).clamp(min, max);
@@ -2483,6 +2486,41 @@ fn poll_consumer<T>(
 			while let Ok(t) = consumer.pop() {
 				counter += 1;
 				if sender.send(t).await.is_err() {
+					return;
+				}
+			}
+			if consumer.is_abandoned() {
+				return;
+			}
+			backoff(counter).await;
+		}
+	})
+}
+
+fn poll_chunked_consumer<T: Copy>(
+	mut consumer: Consumer<T>,
+	sample_rate: NonZero<u32>,
+	frames: Option<NonZero<u32>>,
+) -> impl Stream<Item = Box<[T]>> {
+	let frames = frames.or(NonZero::new(8192)).unwrap();
+	let min = 64.0 / sample_rate.get() as f32;
+	let max = frames.get() as f32 / sample_rate.get() as f32;
+	let mut backoff = min;
+	let mut backoff = move |counter: u16| {
+		let divisor = f32::from(counter).max(0.5);
+		backoff = ((backoff + backoff / divisor) / 2.0).clamp(min, max);
+		Timer::after(Duration::from_secs_f32(backoff))
+	};
+
+	stream::channel(consumer.buffer().capacity(), async move |mut sender| {
+		let mut buf = boxed_slice![MaybeUninit::uninit(); frames.get() as usize];
+		loop {
+			let mut counter = 0;
+			while let (t, _) = consumer.pop_partial_slice_uninit(&mut buf)
+				&& !t.is_empty()
+			{
+				counter += 1;
+				if sender.send(t.into()).await.is_err() {
 					return;
 				}
 			}

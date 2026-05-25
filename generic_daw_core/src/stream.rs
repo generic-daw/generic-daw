@@ -6,7 +6,7 @@ use cpal::{
 	BufferSize, Device, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
 	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
 };
-use log::{error, info};
+use log::{error, info, warn};
 use rtrb::{Consumer, Producer, RingBuffer};
 use std::{cmp::Ordering, collections::HashMap, num::NonZero};
 use utils::boxed_slice;
@@ -24,7 +24,7 @@ pub fn build_input_stream(
 	device_id: Option<&DeviceId>,
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
-) -> (StreamConfig, Consumer<Box<[f32]>>, Stream) {
+) -> (StreamConfig, Consumer<f32>, Stream) {
 	let host = cpal::default_host();
 
 	let device = device_id
@@ -49,8 +49,7 @@ pub fn build_input_stream(
 	let channels = NonZero::new(u32::from(config.channels)).unwrap();
 	let buffer_len = frames.get() * channels.get();
 
-	let (mut producer, consumer) =
-		RingBuffer::new(sample_rate.get().div_ceil(frames.get()) as usize);
+	let (mut producer, consumer) = RingBuffer::new(2 * sample_rate.get() as usize);
 
 	let mut stereo = boxed_slice![0.0; 2 * frames.get() as usize];
 
@@ -61,7 +60,9 @@ pub fn build_input_stream(
 				for buf in buf.chunks(buffer_len as usize) {
 					let frames = buf.len() / usize::from(config.channels);
 					from_other_to_stereo(&mut stereo[..2 * frames], buf, frames);
-					producer.push(stereo[..2 * frames].into()).unwrap();
+					if let Err(err) = producer.push_entire_slice(&stereo[..2 * frames]) {
+						warn!("{err}");
+					}
 				}
 			},
 			|err| error!("{err}"),
