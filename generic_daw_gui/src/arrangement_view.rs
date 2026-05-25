@@ -432,7 +432,9 @@ impl ArrangementView {
 					self.arrangement.transport(),
 				);
 				clip.position.move_to(pos);
-				let (track, task) = if let Some(track) = track {
+				let (track, task) = if let Some(track) = track
+					&& track < self.arrangement.tracks().len()
+				{
 					(track, Action::none())
 				} else {
 					(
@@ -457,7 +459,9 @@ impl ArrangementView {
 							)),
 					);
 				clip.position.move_to(pos);
-				let (track, task) = if let Some(track) = track {
+				let (track, task) = if let Some(track) = track
+					&& track < self.arrangement.tracks().len()
+				{
 					(track, Action::none())
 				} else {
 					(
