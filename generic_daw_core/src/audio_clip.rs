@@ -45,11 +45,11 @@ impl AudioClip {
 
 		let sample = &state.samples[&self.sample];
 
-		let read_len = (sample.len(&state.transport) / self.stretch.abs())
+		let read_len = (sample.len(&state.transport))
 			.saturating_sub(self.position.offset())
-			.min(self.position.len());
+			.min(self.position.len() * self.stretch.abs());
 
-		let len = read_len.to_samples(&state.transport);
+		let len = (read_len / self.stretch.abs()).to_samples(&state.transport);
 
 		let play_pos = position.saturating_sub(start);
 		if play_pos >= len {
@@ -58,10 +58,9 @@ impl AudioClip {
 
 		let resample_ratio = sample.resample_ratio(&state.transport);
 		let offset = (self.position.offset() / resample_ratio).to_samples(&state.transport);
+		let read_len = (read_len / resample_ratio.abs()).to_samples(&state.transport);
 
 		let resample_ratio = self.stretch / resample_ratio;
-		let read_len = (read_len * resample_ratio.abs()).to_samples(&state.transport);
-
 		let read_start = if resample_ratio.is_sign_positive() {
 			offset
 		} else {
