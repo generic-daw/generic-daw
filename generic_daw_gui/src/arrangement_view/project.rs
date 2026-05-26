@@ -489,8 +489,8 @@ impl Arrangement {
 
 		let mut tracks = HashMap::new();
 		for (idx, clips, channel) in reader.iter_tracks() {
-			let track = arrangement.insert_track(arrangement.tracks().len());
-			let id = arrangement.tracks()[track].id;
+			let track = arrangement.tracks().len();
+			let id = arrangement.insert_track(arrangement.tracks().len());
 			tracks.insert(idx, id);
 			load_channel(arrangement.node(id), channel)?;
 

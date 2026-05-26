@@ -386,10 +386,10 @@ impl Arrangement {
 		self.channels.shift_move(channel, new_channel);
 	}
 
-	pub fn insert_track(&mut self, idx: usize) -> usize {
+	pub fn insert_track(&mut self, idx: usize) -> NodeId {
 		let id = self.add(generic_daw_core::Track::default(), NodeType::Track);
 		self.tracks.insert(idx, Track::new(id));
-		idx
+		id
 	}
 
 	pub fn remove_track(&mut self, id: NodeId) -> usize {

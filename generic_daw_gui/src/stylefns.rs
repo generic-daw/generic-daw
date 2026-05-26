@@ -27,6 +27,11 @@ pub fn weakest_bordered_box(t: &Theme) -> container::Style {
 		.border(border::width(1).color(t.palette().background.strong.color))
 }
 
+pub fn weakest_selected_box(t: &Theme) -> container::Style {
+	container::background(t.palette().background.weakest.color)
+		.border(border::width(1.5).color(t.palette().primary.base.color))
+}
+
 pub fn button_warning_text(theme: &Theme, status: button::Status) -> button::Style {
 	let base = button::Style {
 		text_color: theme.palette().warning.base.color,

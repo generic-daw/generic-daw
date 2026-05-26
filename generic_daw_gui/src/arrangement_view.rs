@@ -15,6 +15,7 @@ use crate::{
 		button_with_radius, container_with_radius, menu_style, scrollable_style, slider_secondary,
 		slider_with_radius, split_style, sweeten_column_style, sweeten_column_with_radius,
 		sweeten_row_style, sweeten_row_with_radius, weak_bordered_box, weakest_bordered_box,
+		weakest_selected_box,
 	},
 	widget::{
 		Clip, Delta, LINE_HEIGHT, Note, Piano, PianoRoll, Playlist, Seeker, TEXT_HEIGHT, Track,
@@ -475,15 +476,14 @@ impl ArrangementView {
 				return task;
 			}
 			Message::TrackAdd => {
-				let track = self
+				self.selected = self
 					.arrangement
 					.insert_track(self.arrangement.tracks().len());
-				let node = self.arrangement.tracks()[track].id;
 				if self.soloed.is_some() {
-					self.arrangement.channel_toggle_enabled(node);
+					self.arrangement.channel_toggle_enabled(self.selected);
 				}
 				return self.update(
-					Message::Connect(node, self.arrangement.master().id),
+					Message::Connect(self.selected, self.arrangement.master().id),
 					config,
 					state,
 				);
@@ -629,10 +629,8 @@ impl ArrangementView {
 				);
 				clip.position.move_to(pos);
 
-				let track = self
-					.arrangement
-					.insert_track(self.arrangement.track_of(node).unwrap() + 1);
-				let track_id = self.arrangement.tracks()[track].id;
+				let track = self.arrangement.track_of(node).unwrap() + 1;
+				let track_id = self.arrangement.insert_track(track);
 
 				self.update_selection(|c| Some(update_selection_insert_track(c, track)));
 
@@ -1503,121 +1501,148 @@ impl ArrangementView {
 								}
 							};
 
-							container(
-								row![
-									column![
-										row![
-											PeakMeter::new(&node.peaks[0]),
-											PeakMeter::new(&node.peaks[1])
-										]
-										.spacing(2),
-										container(space().width(28).height(2)).style(
-											container_with_radius(
-												if node.polyphony > 0 {
-													container::primary
-												} else {
-													container::secondary
-												},
-												border::bottom(f32::INFINITY),
-											)
+							container(row![
+								mouse_area(center_y(grip_vertical()))
+									.interaction(Interaction::Grab),
+								opaque(
+									mouse_area(
+										container(
+											row![
+												column![
+													row![
+														PeakMeter::new(&node.peaks[0]),
+														PeakMeter::new(&node.peaks[1])
+													]
+													.spacing(2),
+													container(space().width(28).height(2)).style(
+														container_with_radius(
+															if node.polyphony > 0 {
+																container::primary
+															} else {
+																container::secondary
+															},
+															border::bottom(f32::INFINITY),
+														)
+													)
+												]
+												.spacing(2),
+												column![
+													Knob::new(
+														0.0..=MAX_VOL,
+														node.volume.abs().cbrt(),
+														move |v| {
+															Message::ChannelVolumeChanged(
+																id,
+																v.powi(3).copysign(node.volume),
+															)
+														}
+													)
+													.default(1.0)
+													.enabled(node.enabled)
+													.tooltip(format_db(node.volume.abs())),
+													node.pan_knob(20.0),
+												]
+												.align_x(Center)
+												.spacing(5)
+												.wrap(),
+												column![
+													icon_button(
+														x(),
+														if node.enabled {
+															button::danger
+														} else {
+															button::secondary
+														}
+													)
+													.on_press(Message::TrackRemove(id)),
+													text_icon_button("M", button_style(false))
+														.on_press(Message::TrackToggleEnabled(id)),
+													text_icon_button(
+														"S",
+														button_style(self.soloed == Some(id))
+													)
+													.on_press(Message::TrackToggleSolo(id)),
+													icon_button(
+														if node.bypassed {
+															power_off()
+														} else {
+															power()
+														},
+														button_style(node.bypassed)
+													)
+													.on_press(
+														Message::ChannelToggleBypassed(node.id)
+													),
+													icon_button(
+														arrow_up_down(),
+														button_style(
+															node.volume.is_sign_negative()
+														)
+													)
+													.on_press(
+														Message::ChannelVolumeChanged(
+															node.id,
+															-node.volume
+														)
+													),
+													icon_button(
+														if node.pan.is_balance() {
+															chevrons_left_right_ellipsis()
+														} else {
+															circle_ellipsis()
+														},
+														button_style(false),
+													)
+													.on_press(
+														Message::ChannelPanChanged(
+															node.id,
+															if node.pan.is_balance() {
+																PanMode::Stereo(-1.0, 1.0)
+															} else {
+																PanMode::Balance(0.0)
+															},
+														)
+													),
+													icon_button(
+														mic(),
+														button_style(
+															self.recording.as_ref().is_some_and(
+																|recording| recording.node == id
+															)
+														)
+													)
+													.on_press_maybe(
+														node.enabled
+															.then_some(Message::Recording(id))
+													),
+													icon_button(snowflake(), button_style(false))
+														.on_press_maybe(
+															node.enabled
+																.then_some(Message::Freeze(id))
+														)
+												]
+												.spacing(5)
+												.wrap()
+											]
+											.spacing(5),
 										)
-									]
-									.spacing(2),
-									column![
-										Knob::new(
-											0.0..=MAX_VOL,
-											node.volume.abs().cbrt(),
-											move |v| {
-												Message::ChannelVolumeChanged(
-													id,
-													v.powi(3).copysign(node.volume),
-												)
-											}
-										)
-										.default(1.0)
-										.enabled(node.enabled)
-										.tooltip(format_db(node.volume.abs())),
-										node.pan_knob(20.0),
-									]
-									.align_x(Center)
-									.spacing(5)
-									.wrap(),
-									column![
-										icon_button(
-											x(),
-											if node.enabled {
-												button::danger
-											} else {
-												button::secondary
-											}
-										)
-										.on_press(Message::TrackRemove(id)),
-										text_icon_button("M", button_style(false))
-											.on_press(Message::TrackToggleEnabled(id)),
-										text_icon_button(
-											"S",
-											button_style(self.soloed == Some(id))
-										)
-										.on_press(Message::TrackToggleSolo(id)),
-										icon_button(
-											if node.bypassed { power_off() } else { power() },
-											button_style(node.bypassed)
-										)
-										.on_press(Message::ChannelToggleBypassed(node.id)),
-										icon_button(
-											arrow_up_down(),
-											button_style(node.volume.is_sign_negative())
-										)
-										.on_press(Message::ChannelVolumeChanged(
-											node.id,
-											-node.volume
-										)),
-										icon_button(
-											if node.pan.is_balance() {
-												chevrons_left_right_ellipsis()
-											} else {
-												circle_ellipsis()
-											},
-											button_style(false),
-										)
-										.on_press(Message::ChannelPanChanged(
-											node.id,
-											if node.pan.is_balance() {
-												PanMode::Stereo(-1.0, 1.0)
-											} else {
-												PanMode::Balance(0.0)
-											},
-										)),
-										icon_button(
-											mic(),
-											button_style(
-												self.recording
-													.as_ref()
-													.is_some_and(|recording| recording.node == id)
-											)
-										)
-										.on_press_maybe(
-											node.enabled.then_some(Message::Recording(id))
-										),
-										icon_button(snowflake(), button_style(false))
-											.on_press_maybe(
-												node.enabled.then_some(Message::Freeze(id))
-											)
-									]
-									.spacing(5)
-									.wrap()
-								]
-								.spacing(5),
-							)
-							.padding(padding::all(5).left(0))
+										.padding(padding::all(5).left(0))
+									)
+									.interaction(Interaction::Pointer)
+									.on_press(Message::ChannelSelect(node.id)),
+								)
+							])
+							.height(self.playlist.borrow().scale.y)
+							.style(container_with_radius(
+								if node.id == self.selected {
+									weakest_selected_box
+								} else {
+									weakest_bordered_box
+								},
+								border::top(5),
+							))
+							.into()
 						})
-						.map(|e| container(row![
-							mouse_area(center_y(grip_vertical())).interaction(Interaction::Grab),
-							opaque(e)
-						])
-						.height(self.playlist.borrow().scale.y)
-						.style(container_with_radius(weakest_bordered_box, border::left(5)))
-						.into())
 				)
 				.on_drag(Message::TrackMove)
 				.style(sweeten_column_with_radius(
@@ -2081,14 +2106,14 @@ impl ArrangementView {
 			)
 		])
 		.width(65)
-		.style(|t| {
-			let mut style = container_with_radius(weakest_bordered_box, border::top(5))(t);
+		.style(container_with_radius(
 			if node.id == self.selected {
-				style.border.width = 1.5;
-				style.border.color = t.palette().primary.base.color;
-			}
-			style
-		})
+				weakest_selected_box
+			} else {
+				weakest_bordered_box
+			},
+			border::top(5),
+		))
 		.into()
 	}
 
