@@ -130,7 +130,7 @@ impl Writer {
 	pub fn finalize(self) -> Vec<u8> {
 		let mut gdp = Vec::new();
 		self.0.encode(&mut gdp).unwrap();
-		let mut gdp = compress(&gdp, Format::Raw, CompressionLevel::BestSize).unwrap();
+		let mut gdp = compress(&gdp, Format::Raw, CompressionLevel::BestSpeed).unwrap();
 		gdp.splice(0..0, *b"gdp");
 		gdp
 	}
