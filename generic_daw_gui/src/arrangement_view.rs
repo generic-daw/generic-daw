@@ -444,7 +444,6 @@ impl ArrangementView {
 					)
 				};
 				let clip = self.arrangement.add_clip(track, clip);
-				self.playlist.get_mut().clear();
 				self.playlist.get_mut().primary.insert((track, clip));
 				return task;
 			}
@@ -471,7 +470,6 @@ impl ArrangementView {
 					)
 				};
 				let clip = self.arrangement.add_clip(track, clip);
-				self.playlist.get_mut().clear();
 				self.playlist.get_mut().primary.insert((track, clip));
 				return task;
 			}
@@ -824,7 +822,7 @@ impl ArrangementView {
 			},
 			Message::SelectAll => match self.tab {
 				Tab::Playlist => {
-					self.playlist.get_mut().clear();
+					self.playlist.get_mut().finish();
 					self.playlist.get_mut().primary.extend(
 						self.arrangement
 							.tracks()
@@ -836,7 +834,7 @@ impl ArrangementView {
 				Tab::Mixer => {}
 				Tab::PianoRoll => {
 					let clip = self.midi_clip().unwrap();
-					self.piano_roll.get_mut().clear();
+					self.piano_roll.get_mut().finish();
 					self.piano_roll
 						.get_mut()
 						.primary
@@ -1047,11 +1045,7 @@ impl ArrangementView {
 				};
 			}
 			playlist::Action::Open(track, clip) => {
-				if self.midi_clip != Some((track, clip)) {
-					self.midi_clip = Some((track, clip));
-					self.piano_roll.get_mut().clear();
-				}
-
+				self.midi_clip = Some((track, clip));
 				return self.update(Message::ChangedTab(Tab::PianoRoll), config, state);
 			}
 			playlist::Action::Clone => {
@@ -1327,7 +1321,6 @@ impl ArrangementView {
 						id: MidiNoteId::unique(),
 					},
 				);
-				self.piano_roll.get_mut().clear();
 				self.piano_roll.get_mut().primary.insert(note);
 			}
 			piano_roll::Action::Clone => {

@@ -176,7 +176,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 							let time =
 								maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
 
-							state.clear();
+							state.primary.clear();
 							shell.publish((self.action)(Action::Add(key, time)));
 
 							state.status = Status::Dragging(key, new_time);
@@ -186,7 +186,7 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 						shell.request_redraw();
 					}
 					mouse::Button::Right => {
-						state.clear();
+						state.primary.clear();
 						state.status = Status::Deleting;
 					}
 					_ => {}

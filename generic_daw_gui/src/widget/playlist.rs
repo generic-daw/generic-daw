@@ -170,6 +170,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 			&& state.status != Status::None
 		{
 			if let Status::Hovering(path, kind, Some((track, time))) = state.status.clone() {
+				state.primary.clear();
 				shell.publish((self.action)(Action::Add(Some((path, kind)), track, time)));
 			}
 
