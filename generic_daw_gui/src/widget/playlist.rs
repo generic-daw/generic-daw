@@ -182,7 +182,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 		let cursor = match cursor.position_in(*viewport) {
 			Some(cursor) => cursor,
 			None if let Status::None | Status::Hovering(.., None) = state.status => return,
-			None if let Status::DraggingVolume(..) = state.status => {
+			None if let Status::DraggingVolume(..) | Status::DraggingSlip(..) = state.status => {
 				match cursor.land().position_from(viewport.position()) {
 					Some(cursor) => cursor,
 					None => return,
