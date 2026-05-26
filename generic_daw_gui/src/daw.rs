@@ -635,12 +635,7 @@ impl Daw {
 				if let Some((node, idx)) = self.arrangement_view.arrangement.plugin_of(id) {
 					self.arrangement_view
 						.arrangement
-						.send(generic_daw_core::Message::NodeAction(
-							node,
-							generic_daw_core::NodeAction::PluginParamChanged(
-								idx, param_id, value, cookie,
-							),
-						));
+						.plugin_param_changed(node, idx, param_id, value, cookie);
 				}
 			}
 		}

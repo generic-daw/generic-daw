@@ -17,7 +17,7 @@ use generic_daw_core::{
 	AudioClip, AudioClipId, Batch, Clip, Message, MidiClip, MidiClipId, MidiKey, MidiNote,
 	MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode,
 	PluginId, Point, SampleId, Stream, Transport, Update, Version, build_output_stream,
-	clap_host::{HostInfo, PluginDescriptor},
+	clap_host::{ClapId, Cookie, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
 use iced::Task;
@@ -151,7 +151,7 @@ impl Arrangement {
 		&self.midi_patterns
 	}
 
-	pub fn send(&mut self, message: Message) {
+	fn send(&mut self, message: Message) {
 		if let Err(PushError::Full(mut message)) = self.producer.push(message) {
 			warn!("full ring buffer");
 			while let Err(PushError::Full(msg)) = self.producer.push(message) {
@@ -221,6 +221,20 @@ impl Arrangement {
 	pub fn plugin_mix_changed(&mut self, id: NodeId, index: usize, mix: f32) {
 		self.node_mut(id).plugins[index].mix = mix;
 		self.node_action(id, NodeAction::PluginMixChanged(index, mix));
+	}
+
+	pub fn plugin_param_changed(
+		&mut self,
+		id: NodeId,
+		index: usize,
+		clap_id: ClapId,
+		value: f32,
+		cookie: Cookie,
+	) {
+		self.node_action(
+			id,
+			NodeAction::PluginParamChanged(index, clap_id, value, cookie),
+		);
 	}
 
 	pub fn set_loop_range(&mut self, loop_range: Option<BeatRange>) {
