@@ -147,6 +147,7 @@ pub enum Message {
 	UnselectAll,
 	Duplicate,
 	Delete,
+	Invert,
 	Reverse,
 
 	OnDrag(f32),
@@ -939,6 +940,26 @@ impl ArrangementView {
 					self.piano_roll.get_mut().finish();
 					self.handle_piano_roll_action(piano_roll::Action::Delete);
 				}
+			},
+			Message::Invert => match self.tab {
+				Tab::Playlist => {
+					let playlist = self.playlist.get_mut();
+					playlist.finish();
+					return self.handle_playlist_action(
+						playlist::Action::InvertPolarity,
+						config,
+						state,
+					);
+				}
+				Tab::Mixer => {
+					let node = self.arrangement.node(self.selected);
+					return self.update(
+						Message::ChannelVolumeChanged(self.selected, -node.volume),
+						config,
+						state,
+					);
+				}
+				Tab::PianoRoll => {}
 			},
 			Message::Reverse => match self.tab {
 				Tab::Playlist => {
@@ -2166,7 +2187,7 @@ impl ArrangementView {
 			(true, false, false, false) => match key.to_latin(physical_key) {
 				Some('a') => Some(Message::SelectAll),
 				Some('d') => Some(Message::Duplicate),
-				Some('i') => Some(Message::SelectInverse),
+				Some('i') => Some(Message::Invert),
 				Some('r') => Some(Message::Reverse),
 				_ => match key.as_ref() {
 					keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
@@ -2192,6 +2213,10 @@ impl ArrangementView {
 			},
 			(false, true, false, false) => match key.as_ref() {
 				keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::CycleTabBackwards),
+				_ => None,
+			},
+			(true, true, false, false) => match key.to_latin(physical_key) {
+				Some('a') => Some(Message::SelectInverse),
 				_ => None,
 			},
 			(false, false, true, false) => match key.to_latin(physical_key) {
