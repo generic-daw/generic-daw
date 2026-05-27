@@ -5,12 +5,12 @@ use generic_daw_core::{AudioClip, MidiClip};
 pub struct AudioClipRef<'a> {
 	pub sample: &'a Sample,
 	pub clip: &'a AudioClip,
-	pub idx: (usize, usize),
+	pub index: (usize, usize),
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct MidiClipRef<'a> {
 	pub pattern: &'a MidiPattern,
 	pub clip: &'a MidiClip,
-	pub idx: (usize, usize),
+	pub index: (usize, usize),
 }

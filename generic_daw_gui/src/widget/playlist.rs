@@ -207,7 +207,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers }) => match button {
 				mouse::Button::Left => {
-					let track = track_idx(&layout, *viewport, cursor);
+					let track = track_index(&layout, *viewport, cursor);
 
 					if modifiers.command() {
 						let Some(track) = track.or_else(|| layout.children().len().checked_sub(1))
@@ -241,7 +241,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.status.clone() {
 				Status::Hovering(path, kind, time) => {
-					let track = track_idx(&layout, *viewport, cursor);
+					let track = track_index(&layout, *viewport, cursor);
 
 					let new_time = maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
 
@@ -254,7 +254,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 					}
 				}
 				Status::Selecting(start_track, last_end_track, start_pos, last_end_pos) => {
-					let Some(end_track) = track_idx(&layout, *viewport, cursor)
+					let Some(end_track) = track_index(&layout, *viewport, cursor)
 						.or_else(|| layout.children().len().checked_sub(1))
 					else {
 						return;
@@ -274,39 +274,35 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 
 					self.tracks
 						.iter()
-						.enumerate()
-						.flat_map(|(t_idx, track)| {
-							track
-								.clips
-								.iter()
-								.enumerate()
-								.map(move |(c_idx, clip)| ((t_idx, c_idx), clip))
-						})
-						.for_each(|(idx, clip)| {
-							let (start, end) = match clip.inner {
+						.flat_map(|track| &track.clips)
+						.for_each(|clip| {
+							let (start, end, index) = match clip.inner {
 								clip::Inner::AudioClip(inner) => (
 									inner.clip.position.start(),
 									inner.clip.position.end(self.transport),
+									inner.index,
 								),
-								clip::Inner::MidiClip(inner) => {
-									(inner.clip.position.start(), inner.clip.position.end())
-								}
+								clip::Inner::MidiClip(inner) => (
+									inner.clip.position.start(),
+									inner.clip.position.end(),
+									inner.index,
+								),
 								clip::Inner::Recording(..) => return,
 							};
 
-							if (start_track..=end_track).contains(&idx.0)
+							if (start_track..=end_track).contains(&index.0)
 								&& (start_pos.max(start) < end_pos.min(end))
 							{
-								state.secondary.insert(idx);
+								state.secondary.insert(index);
 							} else {
-								state.secondary.remove(&idx);
+								state.secondary.remove(&index);
 							}
 						});
 
 					shell.request_redraw();
 				}
 				Status::Dragging(track, time) => {
-					let Some(new_track) = track_idx(&layout, *viewport, cursor)
+					let Some(new_track) = track_index(&layout, *viewport, cursor)
 						.or_else(|| layout.children().len().checked_sub(1))
 					else {
 						return;
@@ -718,7 +714,7 @@ impl<'a, Message: 'a> From<Playlist<'a, Message>> for Element<'a, Message> {
 	}
 }
 
-fn track_idx(layout: &Layout<'_>, viewport: Rectangle, cursor: Point) -> Option<usize> {
+fn track_index(layout: &Layout<'_>, viewport: Rectangle, cursor: Point) -> Option<usize> {
 	let offset = Vector::new(viewport.position().x, viewport.position().y);
 	layout
 		.children()

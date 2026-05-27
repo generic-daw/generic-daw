@@ -208,14 +208,14 @@ impl<Message> Widget<Message, Theme, Renderer> for PianoRoll<'_, Message> {
 					let (start_key, end_key) = (start_key.min(end_key), start_key.max(end_key));
 					let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
 
-					self.notes.iter().enumerate().for_each(|(idx, note)| {
+					self.notes.iter().for_each(|note| {
 						if (start_key..=end_key).contains(&note.note.key)
 							&& (start_pos.max(note.note.position.start())
 								< end_pos.min(note.note.position.end()))
 						{
-							state.secondary.insert(idx);
+							state.secondary.insert(note.index);
 						} else {
-							state.secondary.remove(&idx);
+							state.secondary.remove(&note.index);
 						}
 					});
 

@@ -22,7 +22,7 @@ use std::{borrow::Borrow, cell::RefCell};
 #[derive(Debug)]
 #[expect(clippy::struct_field_names)]
 pub struct Note<'a, Message> {
-	idx: usize,
+	pub(super) index: usize,
 	pub(super) note: &'a MidiNote,
 	piano_roll: &'a RefCell<piano_roll::State>,
 	transport: &'a Transport,
@@ -76,7 +76,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
 				if piano_roll.status == Status::None =>
 			{
-				let mut clear = piano_roll.primary.insert(self.idx);
+				let mut clear = piano_roll.primary.insert(self.index);
 
 				match button {
 					mouse::Button::Left => {
@@ -101,7 +101,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 											+ border + self.note.velocity
 											* (bounds.width - 2.0 * border - 1.0);
 										if (vel_pixel - cursor.x).abs() < border / 2.0 {
-											Status::DraggingVelocity(self.idx, self.note.velocity)
+											Status::DraggingVelocity(self.index, self.note.velocity)
 										} else {
 											Status::Dragging(self.note.key, time)
 										}
@@ -145,13 +145,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 
 				if clear {
 					piano_roll.primary.clear();
-					piano_roll.primary.insert(self.idx);
+					piano_roll.primary.insert(self.index);
 				}
 			}
 			Event::Mouse(mouse::Event::CursorMoved { .. })
 				if piano_roll.status == Status::Deleting =>
 			{
-				piano_roll.primary.insert(self.idx);
+				piano_roll.primary.insert(self.index);
 			}
 			_ => {}
 		}
@@ -173,12 +173,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 
 		let piano_roll = self.piano_roll.borrow();
 
-		let color =
-			if piano_roll.primary.contains(&self.idx) || piano_roll.secondary.contains(&self.idx) {
-				theme.palette().danger.weak.color
-			} else {
-				theme.palette().primary.weak.color
-			};
+		let color = if piano_roll.primary.contains(&self.index)
+			|| piano_roll.secondary.contains(&self.index)
+		{
+			theme.palette().danger.weak.color
+		} else {
+			theme.palette().primary.weak.color
+		};
 
 		renderer.fill_quad(
 			Quad {
@@ -275,14 +276,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 
 impl<'a, Message> Note<'a, Message> {
 	pub fn new(
-		idx: usize,
+		index: usize,
 		note: &'a MidiNote,
 		piano_roll: &'a RefCell<piano_roll::State>,
 		transport: &'a Transport,
 		f: fn(Action) -> Message,
 	) -> Self {
 		Self {
-			idx,
+			index,
 			note,
 			piano_roll,
 			transport,

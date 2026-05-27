@@ -261,13 +261,13 @@ impl Arrangement {
 		}));
 
 		let mut samples = HashMap::<_, HashMap<_, HashMap<_, _>>>::new();
-		for (idx, sample) in reader.iter_samples() {
+		for (index, sample) in reader.iter_samples() {
 			samples
 				.entry(&*sample.name)
 				.or_default()
 				.entry(sample.len)
 				.or_default()
-				.insert(sample.crc, idx);
+				.insert(sample.crc, index);
 		}
 
 		let mut current_progress = 0.0;
@@ -298,7 +298,7 @@ impl Arrangement {
 					.and_then(|(name, crc, len)| {
 						samples[name][&len]
 							.get(&crc)
-							.map(|&idx| (idx, path.as_path().into()))
+							.map(|&index| (index, path.as_path().into()))
 					})
 			})
 			.collect::<HashMap<_, _>>();
@@ -310,16 +310,16 @@ impl Arrangement {
 
 		let (done, receiver) = mpsc::channel();
 
-		for (idx, sample) in reader.iter_samples() {
+		for (index, sample) in reader.iter_samples() {
 			let done = done.clone();
-			let path = paths.remove(&idx);
+			let path = paths.remove(&index);
 			let sample = sample.clone();
 
 			std::thread::spawn(move || {
 				if let Some(path) = path
 					&& let Some(sample) = SamplePair::with_crc_and_len(path, sample.crc, sample.len)
 				{
-					done.send((idx, Feedback::Use(Ok(sample)))).unwrap();
+					done.send((index, Feedback::Use(Ok(sample)))).unwrap();
 					return;
 				}
 
@@ -327,7 +327,7 @@ impl Arrangement {
 					let (sender, receiver) = oneshot::channel();
 
 					done.send((
-						idx,
+						index,
 						Feedback::Use(Err(daw::Message::CantFindSample(
 							sample.name.deref().into(),
 							sender.into(),
@@ -338,17 +338,17 @@ impl Arrangement {
 					let path = match receiver.recv() {
 						Ok(Feedback::Use(path)) => path,
 						Ok(Feedback::Ignore) => {
-							_ = done.send((idx, Feedback::Ignore));
+							_ = done.send((index, Feedback::Ignore));
 							return;
 						}
 						Ok(Feedback::Cancel) | Err(..) => {
-							_ = done.send((idx, Feedback::Cancel));
+							_ = done.send((index, Feedback::Cancel));
 							return;
 						}
 					};
 
 					if let Some(sample) = SamplePair::new(path) {
-						done.send((idx, Feedback::Use(Ok(sample)))).unwrap();
+						done.send((index, Feedback::Use(Ok(sample)))).unwrap();
 						return;
 					}
 				}
@@ -358,15 +358,15 @@ impl Arrangement {
 		drop(paths);
 		drop(done);
 
-		for (idx, sample) in receiver {
+		for (index, sample) in receiver {
 			match sample {
 				Feedback::Use(Ok(sample)) => {
 					let id = sample.gui.id;
 					arrangement.add_sample(sample);
-					samples.insert(idx, Feedback::Use(id));
+					samples.insert(index, Feedback::Use(id));
 				}
 				Feedback::Use(Err(msg)) => daw.try_send(msg).unwrap(),
-				Feedback::Ignore => _ = samples.insert(idx, Feedback::Ignore),
+				Feedback::Ignore => _ = samples.insert(index, Feedback::Ignore),
 				Feedback::Cancel => return None,
 			}
 			current_progress += progress_per_audio;
@@ -375,7 +375,7 @@ impl Arrangement {
 		}
 
 		let mut midi_patterns = HashMap::new();
-		for (idx, pattern) in reader.iter_midi_patterns() {
+		for (index, pattern) in reader.iter_midi_patterns() {
 			let notes = pattern
 				.notes
 				.iter()
@@ -393,7 +393,7 @@ impl Arrangement {
 			let pattern = MidiPatternPair::from_notes(notes, &pattern.name);
 			let id = pattern.gui.id;
 			arrangement.add_midi_pattern(pattern);
-			midi_patterns.insert(idx, id);
+			midi_patterns.insert(index, id);
 		}
 
 		let mut messages = Vec::new();
@@ -488,10 +488,10 @@ impl Arrangement {
 		};
 
 		let mut tracks = HashMap::new();
-		for (idx, clips, channel) in reader.iter_tracks() {
+		for (index, clips, channel) in reader.iter_tracks() {
 			let track = arrangement.tracks().len();
 			let id = arrangement.insert_track(arrangement.tracks().len());
-			tracks.insert(idx, id);
+			tracks.insert(index, id);
 			load_channel(arrangement.node(id), channel)?;
 
 			for clip in clips {
@@ -577,13 +577,13 @@ impl Arrangement {
 		let mut iter_channels = reader.iter_channels();
 
 		let node = arrangement.master();
-		let (idx, channel) = iter_channels.next()?;
+		let (index, channel) = iter_channels.next()?;
 		load_channel(node, channel)?;
-		channels.insert(idx, node.id);
+		channels.insert(index, node.id);
 
-		for (idx, channel) in iter_channels {
+		for (index, channel) in iter_channels {
 			let id = arrangement.add_channel();
-			channels.insert(idx, id);
+			channels.insert(index, id);
 			load_channel(arrangement.node(id), channel)?;
 		}
 

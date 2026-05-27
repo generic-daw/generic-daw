@@ -140,7 +140,7 @@ impl ConfigView {
 				.into();
 			}
 			Message::AddSamplePath(path) => self.config.sample_paths.push(path),
-			Message::RemoveSamplePath(idx) => _ = self.config.sample_paths.remove(idx),
+			Message::RemoveSamplePath(index) => _ = self.config.sample_paths.remove(index),
 			Message::MoveSamplePath(event) => {
 				if let DragEvent::Dropped {
 					index,
@@ -161,7 +161,7 @@ impl ConfigView {
 				.into();
 			}
 			Message::AddClapPath(path) => self.config.clap_paths.push(path),
-			Message::RemoveClapPath(idx) => _ = self.config.clap_paths.remove(idx),
+			Message::RemoveClapPath(index) => _ = self.config.clap_paths.remove(index),
 			Message::MoveClapPath(event) => {
 				if let DragEvent::Dropped {
 					index,
@@ -236,7 +236,7 @@ impl ConfigView {
 								.sample_paths
 								.iter()
 								.enumerate()
-								.map(|(idx, path)| {
+								.map(|(index, path)| {
 									row![
 										value(path.display())
 											.font(Font::MONOSPACE)
@@ -246,7 +246,7 @@ impl ConfigView {
 										button(x())
 											.style(button_with_radius(button::danger, 5))
 											.padding(0)
-											.on_press(Message::RemoveSamplePath(idx))
+											.on_press(Message::RemoveSamplePath(index))
 									]
 									.spacing(5)
 									.align_y(Center)
@@ -298,7 +298,7 @@ impl ConfigView {
 									.clap_paths
 									.iter()
 									.enumerate()
-									.map(|(idx, path)| {
+									.map(|(index, path)| {
 										row![
 											value(path.display())
 												.font(Font::MONOSPACE)
@@ -308,7 +308,7 @@ impl ConfigView {
 											button(x())
 												.style(button_with_radius(button::danger, 5))
 												.padding(0)
-												.on_press(Message::RemoveClapPath(idx))
+												.on_press(Message::RemoveClapPath(index))
 										]
 										.spacing(5)
 										.align_y(Center)

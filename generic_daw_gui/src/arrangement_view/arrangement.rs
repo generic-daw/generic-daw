@@ -391,8 +391,8 @@ impl Arrangement {
 	}
 
 	pub fn remove_channel(&mut self, id: NodeId) -> Node {
-		let idx = self.channel_of(id).unwrap();
-		self.channels.remove(idx);
+		let index = self.channel_of(id).unwrap();
+		self.channels.remove(index);
 		self.remove(id)
 	}
 
@@ -400,15 +400,15 @@ impl Arrangement {
 		self.channels.shift_move(channel, new_channel);
 	}
 
-	pub fn insert_track(&mut self, idx: usize) -> NodeId {
+	pub fn insert_track(&mut self, index: usize) -> NodeId {
 		let id = self.add(generic_daw_core::Track::default(), NodeType::Track);
-		self.tracks.insert(idx, Track::new(id));
+		self.tracks.insert(index, Track::new(id));
 		id
 	}
 
 	pub fn remove_track(&mut self, id: NodeId) -> usize {
-		let idx = self.track_of(id).unwrap();
-		let track = self.tracks.remove(idx);
+		let index = self.track_of(id).unwrap();
+		let track = self.tracks.remove(index);
 		self.remove(id);
 		for clip in track.clips {
 			match clip {
@@ -418,7 +418,7 @@ impl Arrangement {
 
 			self.gc(clip);
 		}
-		idx
+		index
 	}
 
 	pub fn move_track(&mut self, track: usize, new_track: usize) {
@@ -485,15 +485,15 @@ impl Arrangement {
 		self.insert_clip(track, clip, self.tracks[track].clips.len())
 	}
 
-	fn insert_clip(&mut self, track: usize, clip: impl Into<Clip>, idx: usize) -> usize {
+	fn insert_clip(&mut self, track: usize, clip: impl Into<Clip>, index: usize) -> usize {
 		let clip = clip.into();
 		match clip {
 			Clip::Audio(clip) => self.samples.get_mut(&clip.sample).unwrap().refs += 1,
 			Clip::Midi(clip) => self.midi_patterns.get_mut(&clip.pattern).unwrap().refs += 1,
 		}
-		self.tracks[track].clips.insert(idx, clip);
+		self.tracks[track].clips.insert(index, clip);
 		self.node_action(self.tracks[track].id, NodeAction::ClipAdd(Box::new(clip)));
-		idx
+		index
 	}
 
 	pub fn remove_clip(&mut self, track: usize, clip: usize) -> Clip {
@@ -705,14 +705,14 @@ impl Arrangement {
 		self.insert_note(pattern, note, self.midi_patterns[&pattern].notes.len())
 	}
 
-	fn insert_note(&mut self, pattern: MidiPatternId, note: MidiNote, idx: usize) -> usize {
+	fn insert_note(&mut self, pattern: MidiPatternId, note: MidiNote, index: usize) -> usize {
 		self.midi_patterns
 			.get_mut(&pattern)
 			.unwrap()
 			.notes
-			.insert(idx, note);
+			.insert(index, note);
 		self.midi_pattern_action(pattern, MidiPatternAction::Add(note));
-		idx
+		index
 	}
 
 	pub fn remove_note(&mut self, pattern: MidiPatternId, note: usize) -> MidiNote {

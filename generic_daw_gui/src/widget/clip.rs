@@ -214,8 +214,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			}
 		}
 
-		let (Inner::AudioClip(AudioClipRef { idx, .. }) | Inner::MidiClip(MidiClipRef { idx, .. })) =
-			self.inner
+		let (Inner::AudioClip(AudioClipRef { index, .. })
+		| Inner::MidiClip(MidiClipRef { index, .. })) = self.inner
 		else {
 			return;
 		};
@@ -223,7 +223,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		let playlist = &mut *self.playlist.borrow_mut();
 
 		if let Event::Window(window::Event::RedrawRequested(..)) = event {
-			let selected = playlist.primary.contains(&idx) || playlist.secondary.contains(&idx);
+			let selected = playlist.primary.contains(&index) || playlist.secondary.contains(&index);
 			if state.selected != selected {
 				state.selected = selected;
 				state.canvas_cache.get_mut().clear();
@@ -270,7 +270,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
 				if playlist.status == Status::None =>
 			{
-				let mut clear = playlist.primary.insert(idx);
+				let mut clear = playlist.primary.insert(index);
 
 				match button {
 					mouse::Button::Left => {
@@ -323,7 +323,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 											));
 										}
 										playlist.status =
-											Status::FadingStartP(inner.idx.0, inner.idx.1);
+											Status::FadingStartP(inner.index.0, inner.index.1);
 										shell.capture_event();
 										return;
 									}
@@ -332,7 +332,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 											shell.publish((self.f)(Action::FadeEndToggleSymmetric));
 										}
 										playlist.status =
-											Status::FadingEndP(inner.idx.0, inner.idx.1);
+											Status::FadingEndP(inner.index.0, inner.index.1);
 										shell.capture_event();
 										return;
 									}
@@ -394,7 +394,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							}
 							Inner::MidiClip(..) => {
 								if new_click.kind() == Kind::Double {
-									shell.publish((self.f)(Action::Open(idx.0, idx.1)));
+									shell.publish((self.f)(Action::Open(index.0, index.1)));
 									shell.capture_event();
 									return;
 								}
@@ -415,7 +415,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							end_offset < border,
 							cursor.y - clip_bounds.y.max(0.0) < LINE_HEIGHT,
 						) {
-							(false, false, false, false, _) => Status::Dragging(idx.0, time),
+							(false, false, false, false, _) => Status::Dragging(index.0, time),
 							(false, _, true, false, _) => Status::TrimmingStart(time),
 							(false, _, false, true, _) => Status::TrimmingEnd(time),
 							(true, false, _, _, _) => {
@@ -423,11 +423,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 								let time = maybe_snap(time, *modifiers, |time| {
 									time.round(beats_snap_step(playlist.scale, self.transport))
 								});
-								Status::Selecting(idx.0, idx.0, time, time)
+								Status::Selecting(index.0, index.0, time, time)
 							}
 							(false, true, _, _, _) => {
 								shell.publish((self.f)(Action::Clone));
-								Status::Dragging(idx.0, time)
+								Status::Dragging(index.0, time)
 							}
 							(true, true, _, _, false) => Status::DraggingSlip(time),
 							(true, true, _, _, true) => {
@@ -454,13 +454,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 				if clear {
 					playlist.primary.clear();
-					playlist.primary.insert(idx);
+					playlist.primary.insert(index);
 				}
 			}
 			Event::Mouse(mouse::Event::CursorMoved { .. })
 				if playlist.status == Status::Deleting =>
 			{
-				playlist.primary.insert(idx);
+				playlist.primary.insert(index);
 			}
 			_ => {}
 		}

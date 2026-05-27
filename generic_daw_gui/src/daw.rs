@@ -455,20 +455,20 @@ impl Daw {
 					self.missing_samples.push((name, sender));
 				}
 			}
-			Message::FindPlugin(idx, response) => {
-				self.missing_plugins.remove(idx).1.send(response).unwrap();
+			Message::FindPlugin(index, response) => {
+				self.missing_plugins.remove(index).1.send(response).unwrap();
 			}
-			Message::FindSampleFileDialog(idx) => {
+			Message::FindSampleFileDialog(index) => {
 				return window::run(self.main_window_id, |window| {
 					AsyncFileDialog::new().set_parent(window).pick_file()
 				})
 				.then(Task::future)
 				.and_then(Task::done)
 				.map(|p| p.path().into())
-				.map(move |response| Message::FindSampleFile(idx, Feedback::Use(response)));
+				.map(move |response| Message::FindSampleFile(index, Feedback::Use(response)));
 			}
-			Message::FindSampleFile(idx, response) => {
-				self.missing_samples.remove(idx).1.send(response).unwrap();
+			Message::FindSampleFile(index, response) => {
+				self.missing_samples.remove(index).1.send(response).unwrap();
 			}
 			Message::OpenedFile(path) => {
 				if let Some(path) = path {
@@ -632,10 +632,10 @@ impl Daw {
 					.map(Message::ClapHost);
 			}
 			Instruction::PluginParamChange(id, param_id, value, cookie) => {
-				if let Some((node, idx)) = self.arrangement_view.arrangement.plugin_of(id) {
+				if let Some((node, index)) = self.arrangement_view.arrangement.plugin_of(id) {
 					self.arrangement_view
 						.arrangement
-						.plugin_param_changed(node, idx, param_id, value, cookie);
+						.plugin_param_changed(node, index, param_id, value, cookie);
 				}
 			}
 		}

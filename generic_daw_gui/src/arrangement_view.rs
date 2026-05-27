@@ -827,7 +827,7 @@ impl ArrangementView {
 							.tracks()
 							.iter()
 							.enumerate()
-							.flat_map(|(t_idx, track)| repeat(t_idx).zip(0..track.clips.len())),
+							.flat_map(|(t, track)| repeat(t).zip(0..track.clips.len())),
 					);
 				}
 				Tab::Mixer => {}
@@ -843,10 +843,10 @@ impl ArrangementView {
 			Message::SelectInverse => match self.tab {
 				Tab::Playlist => {
 					self.playlist.get_mut().finish();
-					for (t_idx, track) in self.arrangement.tracks().iter().enumerate() {
-						for c_idx in 0..track.clips.len() {
-							if !self.playlist.get_mut().primary.insert((t_idx, c_idx)) {
-								self.playlist.get_mut().primary.remove(&(t_idx, c_idx));
+					for (t, track) in self.arrangement.tracks().iter().enumerate() {
+						for c in 0..track.clips.len() {
+							if !self.playlist.get_mut().primary.insert((t, c)) {
+								self.playlist.get_mut().primary.remove(&(t, c));
 							}
 						}
 					}
@@ -1655,7 +1655,7 @@ impl ArrangementView {
 					.tracks()
 					.iter()
 					.enumerate()
-					.map(|(track_idx, track)| {
+					.map(|(t, track)| {
 						let node = self.arrangement.node(track.id);
 
 						Track::new(
@@ -1663,12 +1663,12 @@ impl ArrangementView {
 								.clips
 								.iter()
 								.enumerate()
-								.map(|(clip_idx, clip)| match clip {
+								.map(|(c, clip)| match clip {
 									generic_daw_core::Clip::Audio(clip) => Clip::new(
 										AudioClipRef {
 											sample: &self.arrangement.samples()[&clip.sample],
 											clip,
-											idx: (track_idx, clip_idx),
+											index: (t, c),
 										},
 										&self.playlist,
 										self.arrangement.transport(),
@@ -1680,7 +1680,7 @@ impl ArrangementView {
 											pattern: &self.arrangement.midi_patterns()
 												[&clip.pattern],
 											clip,
-											idx: (track_idx, clip_idx),
+											index: (t, c),
 										},
 										&self.playlist,
 										self.arrangement.transport(),
@@ -2116,9 +2116,9 @@ impl ArrangementView {
 					.notes
 					.iter()
 					.enumerate()
-					.map(|(idx, note)| {
+					.map(|(index, note)| {
 						Note::new(
-							idx,
+							index,
 							note,
 							&self.piano_roll,
 							self.arrangement.transport(),
