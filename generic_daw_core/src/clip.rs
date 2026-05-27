@@ -1,13 +1,12 @@
 use crate::{
-	AudioClip, AudioClipId, Event, MidiClip, MidiClipId, MidiNote, Transport, audio_thread::State,
-	midi_clip::VoiceId, time::BeatTime, voice_alloc::VoiceAlloc,
+	AudioClip, Event, MidiClip, MidiNote, Transport, audio_thread::State, midi_clip::VoiceId,
+	time::BeatTime, voice_alloc::VoiceAlloc,
 };
+use utils::unique_id;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum ClipId {
-	Audio(AudioClipId),
-	Midi(MidiClipId),
-}
+unique_id!(clip_id);
+
+pub use clip_id::Id as ClipId;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Clip {
@@ -19,8 +18,8 @@ impl Clip {
 	#[must_use]
 	pub fn id(&self) -> ClipId {
 		match self {
-			Self::Audio(clip) => ClipId::Audio(clip.id),
-			Self::Midi(clip) => ClipId::Midi(clip.id),
+			Self::Audio(clip) => clip.id,
+			Self::Midi(clip) => clip.id,
 		}
 	}
 

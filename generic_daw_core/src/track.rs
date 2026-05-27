@@ -101,50 +101,50 @@ impl Track {
 				}
 			}
 			NodeAction::ClipVolumeChanged(id, volume) => {
-				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
-					unreachable!();
+				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
+					panic!();
 				};
 				clip.volume = volume;
 			}
 			NodeAction::ClipFadeStartLen(id, len) => {
-				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
-					unreachable!();
+				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
+					panic!();
 				};
 				clip.fade_start.len = len;
 			}
 			NodeAction::ClipFadeStartP(id, p) => {
-				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
-					unreachable!();
+				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
+					panic!();
 				};
 				clip.fade_start.p = p;
 			}
 			NodeAction::ClipFadeStartToggleSymmetric(id) => {
-				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
-					unreachable!();
+				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
+					panic!();
 				};
 				clip.fade_start.symmetric ^= true;
 			}
 			NodeAction::ClipFadeEndLen(id, len) => {
-				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
-					unreachable!();
+				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
+					panic!();
 				};
 				clip.fade_end.len = len;
 			}
 			NodeAction::ClipFadeEndP(id, p) => {
-				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
-					unreachable!();
+				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
+					panic!();
 				};
 				clip.fade_end.p = p;
 			}
 			NodeAction::ClipFadeEndToggleSymmetric(id) => {
-				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
-					unreachable!();
+				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
+					panic!();
 				};
 				clip.fade_end.symmetric ^= true;
 			}
 			NodeAction::ClipStretchStartTo(id, pos) => {
-				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
-					unreachable!();
+				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
+					panic!();
 				};
 				let fac = clip.position.stretch_start_to(pos, &state.transport);
 				clip.fade_start.len /= fac;
@@ -152,8 +152,8 @@ impl Track {
 				clip.stretch *= fac;
 			}
 			NodeAction::ClipStretchEndTo(id, pos) => {
-				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
-					unreachable!();
+				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
+					panic!();
 				};
 				let fac = clip.position.stretch_end_to(pos, &state.transport);
 				clip.fade_start.len /= fac;
@@ -161,8 +161,8 @@ impl Track {
 				clip.stretch *= fac;
 			}
 			NodeAction::ClipReverse(id) => {
-				let Clip::Audio(clip) = self.clips.get_mut(&ClipId::Audio(id)).unwrap() else {
-					unreachable!();
+				let Clip::Audio(clip) = self.clips.get_mut(&id).unwrap() else {
+					panic!();
 				};
 				clip.stretch *= -1.0;
 				clip.position

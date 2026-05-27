@@ -398,7 +398,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 				}
 				Status::FadingStartP(track, clip) => {
 					let clip::Inner::AudioClip(inner) = self.tracks[track].clips[clip].inner else {
-						unreachable!();
+						panic!();
 					};
 
 					let samples_per_px = samples_per_px(state.scale, self.transport);
@@ -434,7 +434,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Playlist<'_, Message> {
 				}
 				Status::FadingEndP(track, clip) => {
 					let clip::Inner::AudioClip(inner) = self.tracks[track].clips[clip].inner else {
-						unreachable!();
+						panic!();
 					};
 
 					let samples_per_px = samples_per_px(state.scale, self.transport);

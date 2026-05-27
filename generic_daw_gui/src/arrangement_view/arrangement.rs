@@ -14,9 +14,9 @@ use crate::{
 	daw,
 };
 use generic_daw_core::{
-	AudioClip, AudioClipId, Batch, Clip, Message, MidiClip, MidiClipId, MidiKey, MidiNote,
-	MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode,
-	PluginId, Point, SampleId, Stream, Transport, Update, Version, build_output_stream,
+	AudioClip, Batch, Clip, ClipId, Message, MidiClip, MidiKey, MidiNote, MidiNoteId,
+	MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode, PluginId, Point,
+	SampleId, Stream, Transport, Update, Version, build_output_stream,
 	clap_host::{ClapId, Cookie, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -491,11 +491,11 @@ impl Arrangement {
 	pub fn duplicate_clip(&mut self, track: usize, clip: usize) -> usize {
 		let clip = match self.tracks[track].clips[clip] {
 			Clip::Audio(clip) => Clip::Audio(AudioClip {
-				id: AudioClipId::unique(),
+				id: ClipId::unique(),
 				..clip
 			}),
 			Clip::Midi(clip) => Clip::Midi(MidiClip {
-				id: MidiClipId::unique(),
+				id: ClipId::unique(),
 				..clip
 			}),
 		};

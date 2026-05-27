@@ -9,8 +9,7 @@ use crate::{
 	daw::{self, Project},
 };
 use generic_daw_core::{
-	AudioClip, AudioClipId, Clip, MidiClip, MidiClipId, MidiKey, MidiNote, MidiNoteId, PanMode,
-	Point, Transition,
+	AudioClip, Clip, ClipId, MidiClip, MidiKey, MidiNote, MidiNoteId, PanMode, Point, Transition,
 	clap_host::{PluginDescriptor, StateContextType},
 	time::{BeatRange, BeatSpan, BeatTime, OffsetBeatRange, OffsetBeatSpan, SecondsTime},
 };
@@ -503,7 +502,7 @@ impl Arrangement {
 								continue;
 							};
 							Clip::Audio(AudioClip {
-								id: AudioClipId::unique(),
+								id: ClipId::unique(),
 								sample: *sample,
 								position: clip.position_compat.map_or_else(
 									|| {
@@ -555,7 +554,7 @@ impl Arrangement {
 							})
 						}
 						proto::Clip::Midi(clip) => Clip::Midi(MidiClip {
-							id: MidiClipId::unique(),
+							id: ClipId::unique(),
 							pattern: *midi_patterns.get(&clip.pattern)?,
 							position: OffsetBeatRange::new(
 								BeatRange::new(

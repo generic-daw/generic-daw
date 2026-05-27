@@ -1,18 +1,14 @@
 use crate::{
-	Event, MidiKey, MidiNote, MidiNoteId, MidiPatternId, audio_thread::State,
+	ClipId, Event, MidiKey, MidiNote, MidiNoteId, MidiPatternId, audio_thread::State,
 	time::OffsetBeatRange, voice_alloc::VoiceAlloc,
 };
 use clap_host::events::Match;
-use utils::unique_id;
 
-unique_id!(midi_clip_id);
-
-pub use midi_clip_id::Id as MidiClipId;
-pub type VoiceId = (MidiClipId, MidiNoteId, MidiKey);
+pub type VoiceId = (ClipId, MidiNoteId, MidiKey);
 
 #[derive(Clone, Copy, Debug)]
 pub struct MidiClip {
-	pub id: MidiClipId,
+	pub id: ClipId,
 	pub pattern: MidiPatternId,
 	pub position: OffsetBeatRange,
 }
@@ -21,7 +17,7 @@ impl MidiClip {
 	#[must_use]
 	pub fn new(pattern: MidiPatternId) -> Self {
 		Self {
-			id: MidiClipId::unique(),
+			id: ClipId::unique(),
 			pattern,
 			position: OffsetBeatRange::default(),
 		}
@@ -115,7 +111,7 @@ impl MidiClip {
 fn alloc_or_steal(
 	events: &mut Vec<Event>,
 	voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
-	id: (MidiClipId, MidiNoteId, MidiKey),
+	id: VoiceId,
 	info: MidiNote,
 	time: usize,
 ) {
@@ -150,7 +146,7 @@ fn alloc_or_steal(
 fn dealloc(
 	events: &mut Vec<Event>,
 	voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
-	id: (MidiClipId, MidiNoteId, MidiKey),
+	id: VoiceId,
 	time: usize,
 ) {
 	if let Some(voice) = voice_alloc.dealloc(id) {
