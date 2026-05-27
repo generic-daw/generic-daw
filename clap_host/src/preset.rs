@@ -20,7 +20,6 @@ impl Preset {
 	pub fn start_discover(
 		plugin: &PluginInstance<Host>,
 		entry: PluginEntry,
-		descriptor: PluginDescriptor,
 		host: HostInfo,
 		sender: Sender<MainThreadMessage>,
 	) {
@@ -28,6 +27,7 @@ impl Preset {
 			.access_shared_handler(|s| s.ext.preset_load.get())
 			.is_some()
 		{
+			let descriptor = plugin.access_shared_handler(|s| s.descriptor.clone());
 			std::thread::spawn(move || Self::discover(&entry, &descriptor, &host, &sender));
 		}
 	}

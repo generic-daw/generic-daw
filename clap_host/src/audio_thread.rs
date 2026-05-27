@@ -1,6 +1,6 @@
 use crate::{
-	EventImpl, MainThreadMessage, PluginDescriptor, ThreadPoolInjector, events::TransportEvent,
-	host::Host, shared::CURRENT_THREAD_ID,
+	EventImpl, MainThreadMessage, ThreadPoolInjector, events::TransportEvent, host::Host,
+	shared::CURRENT_THREAD_ID,
 };
 use clack_extensions::tail::TailLength;
 use clack_host::prelude::*;
@@ -12,38 +12,23 @@ use utils::{NoClone, NoDebug};
 #[derive(Debug)]
 pub struct AudioThread {
 	processor: Option<NoDebug<PluginAudioProcessor<Host>>>,
-	descriptor: PluginDescriptor,
 	consumer: Consumer<NoDebug<StoppedPluginAudioProcessor<Host>>>,
 	needs_reset: bool,
 }
 
 impl AudioThread {
 	#[must_use]
-	pub fn new(
-		descriptor: PluginDescriptor,
-		consumer: Consumer<NoDebug<StoppedPluginAudioProcessor<Host>>>,
-	) -> Self {
+	pub fn new(consumer: Consumer<NoDebug<StoppedPluginAudioProcessor<Host>>>) -> Self {
 		Self {
 			processor: None,
-			descriptor,
 			consumer,
 			needs_reset: false,
 		}
 	}
 
-	#[must_use]
-	pub fn descriptor(&self) -> &PluginDescriptor {
-		&self.descriptor
-	}
-
 	pub fn push_event(&mut self, event: impl EventImpl) {
 		if let Some(processor) = &mut self.processor {
 			processor.access_handler_mut(|ap| ap.event_buffers.as_mut().unwrap().push(event));
-		} else {
-			warn!(
-				"{}: received {:?} while deactivated",
-				&self.descriptor, event
-			);
 		}
 	}
 
@@ -178,7 +163,10 @@ impl AudioThread {
 					}
 					Ok(ProcessStatus::Sleep) => false,
 					Err(err) => {
-						warn!("{}: {err}", &self.descriptor);
+						warn!(
+							"{}: {err}",
+							processor.access_shared_handler(|s| &s.descriptor)
+						);
 						self.flush(audio, events, mix_level);
 						return;
 					}
@@ -195,7 +183,10 @@ impl AudioThread {
 				processor.access_handler_mut(|ap| ap.event_buffers = Some(event_buffers));
 			}
 			Err(err) => {
-				warn!("{}: {err}", self.descriptor);
+				warn!(
+					"{}: {err}",
+					processor.access_shared_handler(|s| &s.descriptor)
+				);
 				self.flush(audio, events, mix_level);
 			}
 		}

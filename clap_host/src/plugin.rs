@@ -27,7 +27,6 @@ pub struct Plugin {
 	params: Box<[Param]>,
 	presets: Vec<Preset>,
 	instance: NoDebug<PluginInstance<Host>>,
-	descriptor: PluginDescriptor,
 	producer: Producer<NoDebug<StoppedPluginAudioProcessor<Host>>>,
 	is_created: bool,
 	is_shown: bool,
@@ -36,7 +35,7 @@ pub struct Plugin {
 impl Plugin {
 	#[must_use]
 	pub fn new(
-		descriptor: PluginDescriptor,
+		descriptor: &PluginDescriptor,
 		host: HostInfo,
 	) -> (Self, AudioThread, Receiver<MainThreadMessage>) {
 		// SAFETY:
@@ -55,16 +54,15 @@ impl Plugin {
 		)
 		.unwrap();
 
-		Preset::start_discover(&instance, entry, descriptor.clone(), host, sender);
+		Preset::start_discover(&instance, entry, host, sender);
 
-		let processor = AudioThread::new(descriptor.clone(), consumer);
+		let processor = AudioThread::new(consumer);
 
 		let plugin = Self {
 			gui: Gui::new(&mut instance),
 			params: Param::all(&mut instance).unwrap_or_default(),
 			presets: Vec::new(),
 			instance: instance.into(),
-			descriptor,
 			producer,
 			is_created: false,
 			is_shown: false,
@@ -75,7 +73,7 @@ impl Plugin {
 
 	#[must_use]
 	pub fn descriptor(&self) -> &PluginDescriptor {
-		&self.descriptor
+		self.instance.access_shared_handler(|s| &s.descriptor)
 	}
 
 	#[must_use]
@@ -117,7 +115,10 @@ impl Plugin {
 			.access_shared_handler(|s| *s.ext.gui.get().unwrap())
 			.set_scale(&mut self.instance.plugin_handle(), scale.into())
 		{
-			warn!("{}: {err}", self.descriptor);
+			warn!(
+				"{}: {err}",
+				self.instance.access_shared_handler(|s| &s.descriptor)
+			);
 		} else {
 			*scale_factor = scale;
 		}
@@ -242,7 +243,10 @@ impl Plugin {
 				(&self.presets[preset].location).into(),
 				self.presets[preset].load_key.as_deref(),
 			) {
-			warn!("{}: {err}", self.descriptor);
+			warn!(
+				"{}: {err}",
+				self.instance.access_shared_handler(|s| &s.descriptor)
+			);
 		}
 	}
 
@@ -272,7 +276,10 @@ impl Plugin {
 			&& let Some(&gui) = self.instance.access_shared_handler(|s| s.ext.gui.get())
 			&& let Err(err) = gui.create(&mut self.instance.plugin_handle(), config)
 		{
-			warn!("{}: {err}", self.descriptor);
+			warn!(
+				"{}: {err}",
+				self.instance.access_shared_handler(|s| &s.descriptor)
+			);
 		}
 
 		self.is_created = true;
@@ -309,7 +316,10 @@ impl Plugin {
 					Window::from_window(&window).unwrap(),
 				)
 		} {
-			warn!("{}: {err}", self.descriptor);
+			warn!(
+				"{}: {err}",
+				self.instance.access_shared_handler(|s| &s.descriptor)
+			);
 		}
 	}
 
@@ -332,7 +342,10 @@ impl Plugin {
 					Window::from_window(&window).unwrap(),
 				)
 		} {
-			warn!("{}: {err}", self.descriptor);
+			warn!(
+				"{}: {err}",
+				self.instance.access_shared_handler(|s| &s.descriptor)
+			);
 		}
 	}
 
@@ -343,7 +356,10 @@ impl Plugin {
 			&& let Some(&gui) = self.instance.access_shared_handler(|s| s.ext.gui.get())
 			&& let Err(err) = gui.show(&mut self.instance.plugin_handle())
 		{
-			warn!("{}: {err}", self.descriptor);
+			warn!(
+				"{}: {err}",
+				self.instance.access_shared_handler(|s| &s.descriptor)
+			);
 		}
 
 		self.is_shown = true;
@@ -354,7 +370,10 @@ impl Plugin {
 			&& let Some(&gui) = self.instance.access_shared_handler(|s| s.ext.gui.get())
 			&& let Err(err) = gui.hide(&mut self.instance.plugin_handle())
 		{
-			warn!("{}: {err}", self.descriptor);
+			warn!(
+				"{}: {err}",
+				self.instance.access_shared_handler(|s| &s.descriptor)
+			);
 		}
 
 		self.is_shown = false;
@@ -393,7 +412,12 @@ impl Plugin {
 			.access_shared_handler(|s| *s.ext.gui.get().unwrap());
 		let size = gui.adjust_size(&mut self.instance.plugin_handle(), size)?;
 		gui.set_size(&mut self.instance.plugin_handle(), size)
-			.inspect_err(|err| warn!("{}: {err}", self.descriptor))
+			.inspect_err(|err| {
+				warn!(
+					"{}: {err}",
+					self.instance.access_shared_handler(|s| &s.descriptor)
+				);
+			})
 			.ok()?;
 
 		let GuiSize { width, height } = size;
@@ -405,9 +429,15 @@ impl Plugin {
 			if render_mode == RenderMode::Offline
 				&& render.has_realtime_requirement(&mut self.instance.plugin_handle())
 			{
-				warn!("{}: Plugin has hard realtime requirement.", self.descriptor);
+				warn!(
+					"{}: Plugin has hard realtime requirement.",
+					self.instance.access_shared_handler(|s| &s.descriptor)
+				);
 			} else if let Err(err) = render.set(&mut self.instance.plugin_handle(), render_mode) {
-				warn!("{}: {err}", self.descriptor);
+				warn!(
+					"{}: {err}",
+					self.instance.access_shared_handler(|s| &s.descriptor)
+				);
 			}
 		}
 	}
@@ -428,7 +458,10 @@ impl Plugin {
 			} else {
 				return None;
 			} {
-				warn!("{}: {err}", self.descriptor);
+				warn!(
+					"{}: {err}",
+					self.instance.access_shared_handler(|s| &s.descriptor)
+				);
 				return None;
 			}
 
@@ -454,7 +487,10 @@ impl Plugin {
 		} else {
 			return;
 		} {
-			warn!("{}: {err}", self.descriptor);
+			warn!(
+				"{}: {err}",
+				self.instance.access_shared_handler(|s| &s.descriptor)
+			);
 			return;
 		}
 
@@ -468,9 +504,15 @@ impl Drop for Plugin {
 		self.destroy();
 
 		if self.instance.try_deactivate() == Err(PluginInstanceError::StillActivatedPlugin) {
-			warn!("{}: leaked instance", self.descriptor);
+			warn!(
+				"{}: leaked instance",
+				self.instance.access_shared_handler(|s| &s.descriptor)
+			);
 		} else {
-			info!("{}: dropped instance", self.descriptor);
+			info!(
+				"{}: dropped instance",
+				self.instance.access_shared_handler(|s| &s.descriptor)
+			);
 		}
 	}
 }

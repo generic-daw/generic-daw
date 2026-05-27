@@ -21,7 +21,7 @@ impl PluginPair {
 		descriptor: PluginDescriptor,
 		host: HostInfo,
 	) -> (Self, AudioThread, Receiver<MainThreadMessage>) {
-		let (core, processor, receiver) = clap_host::Plugin::new(descriptor.clone(), host);
+		let (core, processor, receiver) = clap_host::Plugin::new(&descriptor, host);
 		let gui = Plugin {
 			id: PluginId::unique(),
 			descriptor,
