@@ -1079,7 +1079,8 @@ impl Daw {
 		};
 
 		Subscription::batch([
-			ArrangementView::subscription()
+			self.arrangement_view
+				.subscription()
 				.with(self.project)
 				.map(|(project, message)| Message::Arrangement(project, message)),
 			self.clap_host.subscription().map(Message::ClapHost),

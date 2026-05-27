@@ -25,7 +25,7 @@ use log::warn;
 use rtrb::{Producer, PushError};
 use smol::unblock;
 use std::{
-	collections::BTreeMap,
+	collections::{BTreeMap, VecDeque},
 	num::NonZero,
 	path::Path,
 	sync::{Arc, LazyLock},
@@ -55,6 +55,7 @@ pub struct Arrangement {
 	nodes: BTreeMap<NodeId, (Node, BTreeMap<NodeId, f32>)>,
 
 	producer: Producer<Message>,
+	queue: VecDeque<Message>,
 	_stream: NoDebug<Stream>,
 }
 
@@ -86,6 +87,7 @@ impl Arrangement {
 				nodes,
 
 				producer,
+				queue: VecDeque::new(),
 				_stream: stream.into(),
 			},
 			Task::stream(poll_consumer(
@@ -135,6 +137,20 @@ impl Arrangement {
 		messages
 	}
 
+	pub fn drain_queue(&mut self) {
+		while let Some(message) = self.queue.pop_front() {
+			if let Err(PushError::Full(message)) = self.producer.push(message) {
+				warn!("full ring buffer");
+				self.queue.push_front(message);
+				return;
+			}
+		}
+	}
+
+	pub fn queue_empty(&self) -> bool {
+		self.queue.is_empty()
+	}
+
 	pub fn transport(&self) -> &Transport {
 		&self.transport
 	}
@@ -152,12 +168,13 @@ impl Arrangement {
 	}
 
 	fn send(&mut self, message: Message) {
-		if let Err(PushError::Full(mut message)) = self.producer.push(message) {
-			warn!("full ring buffer");
-			while let Err(PushError::Full(msg)) = self.producer.push(message) {
-				message = msg;
-				std::thread::yield_now();
+		if self.queue_empty() {
+			if let Err(PushError::Full(message)) = self.producer.push(message) {
+				warn!("full ring buffer");
+				self.queue.push_back(message);
 			}
+		} else {
+			self.queue.push_back(message);
 		}
 	}
 

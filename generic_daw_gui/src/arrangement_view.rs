@@ -44,6 +44,7 @@ use iced::{
 		button, center_x, center_y, column, combo_box, container, mouse_area, opaque,
 		operation::snap_to_end, row, rule, scrollable, slider, space, text, vertical_slider,
 	},
+	window::frames,
 };
 use iced_split::{Split, Strategy};
 use midi_pattern::MidiPatternPair;
@@ -85,7 +86,8 @@ pub use recording::Recording;
 #[derive(Clone, Debug)]
 pub enum Message {
 	Batch(Batch),
-	UpdateRequest,
+	DrainQueue,
+	RequestUpdate,
 
 	Connect(NodeId, NodeId),
 	SetMix(NodeId, NodeId, f32),
@@ -254,7 +256,8 @@ impl ArrangementView {
 
 				return action;
 			}
-			Message::UpdateRequest => self.arrangement.request_update(),
+			Message::DrainQueue => self.arrangement.drain_queue(),
+			Message::RequestUpdate => self.arrangement.request_update(),
 			Message::Connect(from, to) => self.arrangement.connect(from, to),
 			Message::SetMix(from, to, mix) => self.arrangement.set_mix(from, to, mix),
 			Message::Disconnect(from, to) => self.arrangement.disconnect(from, to),
@@ -2152,8 +2155,15 @@ impl ArrangementView {
 		.into()
 	}
 
-	pub fn subscription() -> Subscription<Message> {
-		every(Duration::from_secs(1)).map(|_| Message::UpdateRequest)
+	pub fn subscription(&self) -> Subscription<Message> {
+		Subscription::batch([
+			every(Duration::from_secs(1)).map(|_| Message::RequestUpdate),
+			if self.arrangement.queue_empty() {
+				Subscription::none()
+			} else {
+				frames().map(|_| Message::DrainQueue)
+			},
+		])
 	}
 
 	pub fn keybinds(
