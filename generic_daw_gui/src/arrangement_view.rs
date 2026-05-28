@@ -582,7 +582,7 @@ impl ArrangementView {
 					);
 
 					let sample_rate = recording.core.sample_rate();
-					let frames = recording.core.frames().or(config.input_device.buffer_size);
+					let frames = recording.core.frames();
 
 					self.recording = Some(recording);
 					self.arrangement.play();
@@ -2502,9 +2502,8 @@ fn crc(mut r: impl Read) -> u32 {
 fn poll_consumer<T>(
 	mut consumer: Consumer<T>,
 	sample_rate: NonZero<u32>,
-	frames: Option<NonZero<u32>>,
+	frames: NonZero<u32>,
 ) -> impl Stream<Item = T> {
-	let frames = frames.or(NonZero::new(8192)).unwrap();
 	let min = 64.0 / sample_rate.get() as f32;
 	let max = frames.get() as f32 / sample_rate.get() as f32;
 	let mut backoff = min;
@@ -2534,9 +2533,8 @@ fn poll_consumer<T>(
 fn poll_chunked_consumer<T: Copy>(
 	mut consumer: Consumer<T>,
 	sample_rate: NonZero<u32>,
-	frames: Option<NonZero<u32>>,
+	frames: NonZero<u32>,
 ) -> impl Stream<Item = Box<[T]>> {
-	let frames = frames.or(NonZero::new(8192)).unwrap();
 	let min = 64.0 / sample_rate.get() as f32;
 	let max = frames.get() as f32 / sample_rate.get() as f32;
 	let mut backoff = min;

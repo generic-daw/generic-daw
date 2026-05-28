@@ -3,7 +3,8 @@ use crate::{
 	audio_thread::AudioThread,
 };
 use cpal::{
-	BufferSize, Device, StreamConfig, SupportedBufferSize, SupportedStreamConfigRange,
+	BufferSize, Device, StreamConfig, SupportedBufferSize, SupportedStreamConfig,
+	SupportedStreamConfigRange,
 	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
 };
 use log::{error, info, warn};
@@ -33,21 +34,20 @@ pub fn build_input_stream(
 		.or_else(|| host.default_input_device())
 		.unwrap();
 
-	let config = choose_config(
+	let supported_config = choose_supported_config(
 		device.supported_input_configs().unwrap(),
 		sample_rate,
 		frames,
 	);
 
+	let config = supported_config_to_config(&supported_config, frames);
+
 	info!("starting input stream with config {config:#?}");
 
 	let sample_rate = NonZero::new(config.sample_rate).unwrap();
-	let frames = frames_of_config(&config)
-		.or(frames)
-		.or(NonZero::new(8192))
-		.unwrap();
+	let frames = frames_of_config(&config).or(NonZero::new(8192)).unwrap();
 	let channels = NonZero::new(u32::from(config.channels)).unwrap();
-	let buffer_len = frames.get() * channels.get();
+	let chunk_size = NonZero::new(frames.get() * channels.get()).unwrap();
 
 	let (mut producer, consumer) = RingBuffer::new(2 * sample_rate.get() as usize);
 
@@ -57,11 +57,13 @@ pub fn build_input_stream(
 		.build_input_stream(
 			&config,
 			move |buf, _| {
-				for buf in buf.chunks(buffer_len as usize) {
-					let frames = buf.len() / usize::from(config.channels);
+				for buf in buf.chunks(chunk_size.get() as usize) {
+					let frames = buf.len() / channels.get() as usize;
 					from_other_to_stereo(&mut stereo[..2 * frames], buf, frames);
-					if let Err(err) = producer.push_entire_slice(&stereo[..2 * frames]) {
-						warn!("{err}");
+					if let (_, t) = producer.push_partial_slice(&stereo[..2 * frames])
+						&& !t.is_empty()
+					{
+						warn!("full ring buffer");
 					}
 				}
 			},
@@ -94,21 +96,20 @@ pub fn build_output_stream(
 		.or_else(|| host.default_output_device())
 		.unwrap();
 
-	let config = choose_config(
+	let supported_config = choose_supported_config(
 		device.supported_output_configs().unwrap(),
 		sample_rate,
 		frames,
 	);
 
+	let config = supported_config_to_config(&supported_config, frames);
+
 	info!("starting output stream with config {config:#?}");
 
 	let sample_rate = NonZero::new(config.sample_rate).unwrap();
-	let frames = frames_of_config(&config)
-		.or(frames)
-		.or(NonZero::new(8192))
-		.unwrap();
+	let frames = frames_of_config(&config).or(NonZero::new(8192)).unwrap();
 	let channels = NonZero::new(u32::from(config.channels)).unwrap();
-	let buffer_len = frames.get() * channels.get();
+	let chunk_size = NonZero::new(frames.get() * channels.get()).unwrap();
 
 	let transport = Transport::new(sample_rate, frames);
 	let (mut processor, master, producer, consumer) = AudioThread::create(transport);
@@ -119,7 +120,7 @@ pub fn build_output_stream(
 		.build_output_stream(
 			&config,
 			move |buf, _| {
-				for buf in buf.chunks_mut(buffer_len as usize) {
+				for buf in buf.chunks_mut(chunk_size.get() as usize) {
 					let frames = buf.len() / channels.get() as usize;
 					processor.process(&mut stereo[..2 * frames]);
 					from_stereo_to_other(buf, &stereo[..2 * frames], frames);
@@ -135,11 +136,11 @@ pub fn build_output_stream(
 	(master, transport, producer, consumer, stream)
 }
 
-fn choose_config(
+fn choose_supported_config(
 	configs: impl IntoIterator<Item = SupportedStreamConfigRange>,
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
-) -> StreamConfig {
+) -> SupportedStreamConfig {
 	let config = configs
 		.into_iter()
 		.filter(|config| config.channels() != 0)
@@ -156,18 +157,7 @@ fn choose_config(
 		.get()
 		.clamp(config.min_sample_rate(), config.max_sample_rate());
 
-	let buffer_size = match (*config.buffer_size(), frames) {
-		(SupportedBufferSize::Unknown, _) | (_, None) => BufferSize::Default,
-		(SupportedBufferSize::Range { min, max }, Some(frames)) => {
-			BufferSize::Fixed(frames.get().clamp(min, max))
-		}
-	};
-
-	StreamConfig {
-		channels: config.channels(),
-		sample_rate,
-		buffer_size,
-	}
+	config.with_sample_rate(sample_rate)
 }
 
 fn compare_by_sample_rate(
@@ -272,6 +262,24 @@ fn from_other_to_stereo(a: &mut [f32], b: &[f32], frames: usize) {
 			a[0] = *b;
 			a[1] = *b;
 		}),
+	}
+}
+
+pub fn supported_config_to_config(
+	supported_config: &SupportedStreamConfig,
+	frames: Option<NonZero<u32>>,
+) -> StreamConfig {
+	let buffer_size = match (*supported_config.buffer_size(), frames) {
+		(SupportedBufferSize::Unknown, _) | (_, None) => BufferSize::Default,
+		(SupportedBufferSize::Range { min, max }, Some(frames)) => {
+			BufferSize::Fixed(frames.get().clamp(min, max))
+		}
+	};
+
+	StreamConfig {
+		channels: supported_config.channels(),
+		sample_rate: supported_config.sample_rate(),
+		buffer_size,
 	}
 }
 

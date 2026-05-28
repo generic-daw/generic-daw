@@ -93,7 +93,7 @@ impl Arrangement {
 			Task::stream(poll_consumer(
 				consumer,
 				transport.sample_rate,
-				Some(transport.frames),
+				transport.frames,
 			)),
 		)
 	}

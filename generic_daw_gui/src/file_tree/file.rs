@@ -5,10 +5,10 @@ use crate::{
 };
 use iced::{
 	Element, Fill,
-	futures::AsyncReadExt as _,
 	widget::{button, mouse_area, row, text},
 };
 use infer::{audio::is_midi, is_audio};
+use smol::io::AsyncReadExt as _;
 use std::{io, path::Path, sync::Arc};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

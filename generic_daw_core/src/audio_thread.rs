@@ -326,10 +326,8 @@ impl AudioThread {
 		while !buf.is_empty() {
 			let (looped, len) = if self.transport().playing
 				&& let Some(loop_range) = self.transport().loop_range
-				&& let Some(len) = loop_range
-					.end()
-					.to_seconds_time(self.transport())
-					.checked_sub(self.transport().position)
+				&& let end = loop_range.end().to_seconds_time(self.transport())
+				&& let Some(len) = end.checked_sub(self.transport().position)
 				&& let len = len.to_samples(self.transport())
 				&& len <= buf.len()
 			{

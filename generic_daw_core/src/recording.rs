@@ -60,8 +60,10 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	}
 
 	#[must_use]
-	pub fn frames(&self) -> Option<NonZero<u32>> {
+	pub fn frames(&self) -> NonZero<u32> {
 		frames_of_config(&self.config)
+			.or(NonZero::new(8192))
+			.unwrap()
 	}
 
 	#[must_use]
