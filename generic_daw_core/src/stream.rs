@@ -70,7 +70,7 @@ pub fn build_input_stream(
 
 	let stream = device
 		.build_input_stream(
-			&config,
+			config,
 			move |buf, _| {
 				for buf in buf.chunks(chunk_size.get() as usize) {
 					let frames = buf.len() / channels.get() as usize;
@@ -136,7 +136,7 @@ pub fn build_output_stream(
 
 	let stream = device
 		.build_output_stream(
-			&config,
+			config,
 			move |buf, _| {
 				for buf in buf.chunks_mut(chunk_size.get() as usize) {
 					let frames = buf.len() / channels.get() as usize;

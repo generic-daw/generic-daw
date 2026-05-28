@@ -23,10 +23,10 @@ Binaries are built for x64 Windows and Linux, as well as ARM MacOS. If you're si
 #### 1. Requirements
 
 - Rust & Cargo: Generic DAW is developed using the latest stable [Rust toolchain](https://rustup.rs)
-- on Linux you'll also need to install the alsa development headers:
-  - Debian: `sudo apt install libasound2-dev`
-  - Fedora: `sudo dnf install alsa-lib-devel`
-  - Arch: `sudo pacman -S alsa-lib`
+- on Linux you'll also need to install the ALSA and PipeWire development headers:
+  - Debian: `sudo apt install libasound2-dev libpipewire-0.3-dev`
+  - Fedora: `sudo dnf install alsa-lib-devel pipewire-devel`
+  - Arch: `sudo pacman -S alsa-lib libpipewire`
 
 #### 2. Compiling
 

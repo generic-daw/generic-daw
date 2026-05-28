@@ -112,11 +112,11 @@ impl ConfigView {
 				.iter()
 				.fold(HashMap::<_, Devices>::new(), |mut acc, (id, device)| {
 					if device.supports_input() {
-						acc.entry(id.0).or_default().input.push(id.clone());
+						acc.entry(id.host()).or_default().input.push(id.clone());
 					}
 
 					if device.supports_output() {
-						acc.entry(id.0).or_default().output.push(id.clone());
+						acc.entry(id.host()).or_default().output.push(id.clone());
 					}
 
 					acc
