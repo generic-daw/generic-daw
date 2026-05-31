@@ -59,7 +59,7 @@ pub fn build_input_stream(
 			move |buf, _| {
 				for buf in buf.chunks(chunk_size.get() as usize) {
 					let frames = buf.len() / channels.get() as usize;
-					from_other_to_stereo(&mut stereo[..2 * frames], buf, frames);
+					from_other_to_stereo(&mut stereo[..2 * frames], buf);
 					if let (_, t) = producer.push_partial_slice(&stereo[..2 * frames])
 						&& !t.is_empty()
 					{
@@ -123,7 +123,7 @@ pub fn build_output_stream(
 				for buf in buf.chunks_mut(chunk_size.get() as usize) {
 					let frames = buf.len() / channels.get() as usize;
 					processor.process(&mut stereo[..2 * frames]);
-					from_stereo_to_other(buf, &stereo[..2 * frames], frames);
+					from_stereo_to_other(buf, &stereo[..2 * frames]);
 				}
 			},
 			|err| error!("{err}"),
@@ -223,14 +223,10 @@ fn compare_by_channel_count(
 	ldiff.cmp(&rdiff)
 }
 
-fn from_stereo_to_other(a: &mut [f32], b: &[f32], frames: usize) {
-	debug_assert!(a.len().is_multiple_of(frames));
-	debug_assert!(b.len().is_multiple_of(frames));
-	debug_assert!(b.len() / frames == 2);
-
+fn from_stereo_to_other(a: &mut [f32], b: &[f32]) {
 	match a.len().cmp(&b.len()) {
 		Ordering::Greater => a
-			.chunks_exact_mut(a.len() / frames)
+			.chunks_exact_mut(a.len() / (b.len() / 2))
 			.zip(b.as_chunks::<2>().0)
 			.for_each(|(a, b)| {
 				a[0] = b[0];
@@ -244,14 +240,10 @@ fn from_stereo_to_other(a: &mut [f32], b: &[f32], frames: usize) {
 	}
 }
 
-fn from_other_to_stereo(a: &mut [f32], b: &[f32], frames: usize) {
-	debug_assert!(a.len().is_multiple_of(frames));
-	debug_assert!(a.len() / frames == 2);
-	debug_assert!(b.len().is_multiple_of(frames));
-
+fn from_other_to_stereo(a: &mut [f32], b: &[f32]) {
 	match a.len().cmp(&b.len()) {
 		Ordering::Less => b
-			.chunks_exact(b.len() / frames)
+			.chunks_exact(b.len() / (a.len() / 2))
 			.zip(a.as_chunks_mut::<2>().0)
 			.for_each(|(b, a)| {
 				a[0] = b[0];

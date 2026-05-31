@@ -1984,7 +1984,7 @@ impl ArrangementView {
 									v.powi(3).copysign(node.volume),
 								)
 							})
-							.default(1.0)
+							.default(1f32)
 							.width(17)
 							.step(f32::EPSILON)
 							.handle((15, 20))
@@ -2050,7 +2050,7 @@ impl ArrangementView {
 										slider(0.0..=1.0, val.cbrt(), move |val| {
 											Message::SetMix(from, to, val.powi(3))
 										})
-										.default(1.0)
+										.default(1f32)
 										.step(f32::EPSILON)
 										.handle((4, 4))
 										.style(if node.enabled {

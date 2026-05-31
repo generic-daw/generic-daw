@@ -207,9 +207,9 @@ impl MetadataReceiverImpl for MetadataReceiver<'_> {
 		let mut message = String::new();
 
 		if let Some(preset) = &self.current_preset {
-			write!(message, "{}: {}", &self.descriptor, &preset.name).unwrap();
+			write!(message, "{}: {}", self.descriptor, preset.name).unwrap();
 		} else {
-			write!(message, "{}: preset error", &self.descriptor).unwrap();
+			write!(message, "{}: preset error", self.descriptor).unwrap();
 		}
 
 		if let Some(error_message) = error_message {
