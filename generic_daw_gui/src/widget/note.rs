@@ -1,5 +1,5 @@
 use crate::widget::{
-	ALPHA_1_3, beats_snap_step, key_to_px, maybe_snap,
+	ALPHA_1_3, ALPHA_2_3, beats_snap_step, key_to_px, maybe_snap,
 	piano_roll::{self, Action, Status},
 	px_to_time, time_to_px,
 };
@@ -15,7 +15,7 @@ use iced::{
 		widget::Tree,
 	},
 	alignment::Vertical,
-	border,
+	border, padding,
 };
 use std::{borrow::Borrow, cell::RefCell};
 
@@ -99,7 +99,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 												- Vector::new(viewport.x, viewport.y);
 										let vel_pixel = bounds.x
 											+ border + self.note.velocity
-											* (bounds.width - 2.0 * border - 1.0);
+											* (bounds.width - 2.0 * border);
 										if (vel_pixel - cursor.x).abs() < border / 2.0 {
 											Status::DraggingVelocity(self.index, self.note.velocity)
 										} else {
@@ -181,30 +181,25 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 			theme.palette().primary.weak.color
 		};
 
+		let border = 10f32.min(bounds.width / 3.0);
+		let vel_pixel = self.note.velocity * (bounds.width - 2.0 * border) + border;
+
 		renderer.fill_quad(
 			Quad {
-				bounds,
+				bounds: bounds.shrink(padding::right(bounds.width - vel_pixel)),
 				border: border::width(1).color(color),
 				..Quad::default()
 			},
-			color.scale_alpha(self.note.velocity * ALPHA_1_3 + ALPHA_1_3),
+			color.scale_alpha(ALPHA_2_3),
 		);
-
-		let border = 10f32.min(bounds.width / 3.0);
 
 		renderer.fill_quad(
 			Quad {
-				bounds: Rectangle::new(
-					bounds.position()
-						+ Vector::new(
-							self.note.velocity * (bounds.width - 2.0 * border - 1.0) + border,
-							0.0,
-						),
-					Size::new(1.0, bounds.height),
-				),
+				bounds: bounds.shrink(padding::left(vel_pixel)),
+				border: border::width(1).color(color),
 				..Quad::default()
 			},
-			theme.palette().background.strong.text,
+			color.scale_alpha(ALPHA_1_3),
 		);
 
 		if bounds.width > 3.0 {
@@ -261,7 +256,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 				let bounds = layout.bounds().intersection(viewport).unwrap()
 					- Vector::new(layout.position().x, layout.position().y);
 				let vel_pixel =
-					bounds.x + border + self.note.velocity * (bounds.width - 2.0 * border - 1.0);
+					bounds.x + border + self.note.velocity * (bounds.width - 2.0 * border);
 				if (vel_pixel - cursor.x).abs() < border / 2.0 {
 					Interaction::Pointer
 				} else {
