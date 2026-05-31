@@ -390,26 +390,20 @@ impl AudioThread {
 			return;
 		}
 
-		let latency =
-			SecondsTime::from_samples(self.audio_graph.latency(self.master), self.transport());
+		let position = self.transport().position.to_samples(self.transport());
+		let latency = self.audio_graph.latency(self.master);
 
-		let mut start = self
-			.transport()
-			.position
-			.saturating_sub(latency)
-			.to_beat_time(self.transport())
-			.beat_floor();
+		let mut click_beat =
+			BeatTime::from_samples(position.saturating_sub(latency), self.transport()).beat_floor();
 
-		let end = (self.transport().position
-			+ SecondsTime::from_samples(buf.len(), self.transport()))
-		.saturating_sub(latency)
-		.to_beat_time(self.transport())
+		let end_beat = BeatTime::from_samples(
+			(position + buf.len()).saturating_sub(latency),
+			self.transport(),
+		)
 		.beat_ceil();
 
-		while start < end {
-			let start_offset = start.to_seconds_time(self.transport()) + latency;
-
-			let click = if start
+		while click_beat < end_beat {
+			let click = if click_beat
 				.beat()
 				.is_multiple_of(self.transport().numerator.get().into())
 			{
@@ -418,22 +412,16 @@ impl AudioThread {
 				&OFF_BAR_CLICK
 			};
 
-			start += BeatTime::BEAT;
+			let start = click_beat.to_samples(self.transport()) + latency;
 
-			let write_start = start_offset
-				.saturating_sub(self.transport().position)
-				.to_samples(self.transport());
-
+			let write_start = start.saturating_sub(position);
 			if write_start >= buf.len() {
 				return;
 			}
 
-			let play_pos = self
-				.transport()
-				.position
-				.saturating_sub(start_offset)
-				.to_samples(self.transport());
+			click_beat += BeatTime::BEAT;
 
+			let play_pos = position.saturating_sub(start);
 			if play_pos >= click.len() {
 				continue;
 			}
