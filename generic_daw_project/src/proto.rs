@@ -49,6 +49,8 @@ pub struct Transport {
 	pub numerator: u32,
 	#[prost(message)]
 	pub loop_range: Option<BeatRange>,
+	#[prost(message)]
+	pub solo: Option<TrackIndex>,
 }
 
 #[derive(Clone, Message)]

@@ -75,17 +75,28 @@ impl State {
 pub struct PeakMeter<'a> {
 	state: &'a State,
 	width: f32,
+	enabled: bool,
 }
 
 impl<'a> PeakMeter<'a> {
 	#[must_use]
 	pub fn new(state: &'a State) -> Self {
-		Self { state, width: 13.0 }
+		Self {
+			state,
+			width: 13.0,
+			enabled: true,
+		}
 	}
 
 	#[must_use]
 	pub fn width(mut self, width: f32) -> Self {
 		self.width = width;
+		self
+	}
+
+	#[must_use]
+	pub fn enabled(mut self, enabled: bool) -> Self {
+		self.enabled = enabled;
 		self
 	}
 }
@@ -134,12 +145,17 @@ impl<Message> Widget<Message, Theme, Renderer> for PeakMeter<'_> {
 			return;
 		}
 
-		let success = theme.seed().success;
-		let warning = theme.seed().warning;
-		let danger = theme.seed().danger;
-		let background = theme.seed().background;
+		let weaker = |color: Color| color.mix(theme.seed().background, 0.6);
 
-		let weaker = |color: Color| color.mix(background, 0.6);
+		let mut success = theme.seed().success;
+		let mut warning = theme.seed().warning;
+		let mut danger = theme.seed().danger;
+
+		if !self.enabled {
+			success = weaker(success);
+			warning = weaker(warning);
+			danger = weaker(danger);
+		}
 
 		let bar = self
 			.state

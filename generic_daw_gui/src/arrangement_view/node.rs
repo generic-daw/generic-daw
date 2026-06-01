@@ -50,7 +50,7 @@ impl Node {
 		self.peaks[1].update(peaks[1], now);
 	}
 
-	pub fn pan_knob(&self, radius: f32) -> Element<'_, Message> {
+	pub fn pan_knob(&self, radius: f32, enabled: bool) -> Element<'_, Message> {
 		const RADIUS: f32 = 0.571_595_13; // 1.95 - sqrt(1.9)
 		const SPACING: f32 = -0.286_380_5; // 2 * (2 * sqrt(1.9) - 2.9)
 
@@ -61,7 +61,7 @@ impl Node {
 			.origin(0.0)
 			.default(0.0)
 			.radius(radius)
-			.enabled(self.enabled)
+			.enabled(enabled)
 			.tooltip(format_pan(pan))
 			.into(),
 			PanMode::Stereo(l, r) => row![
@@ -72,7 +72,7 @@ impl Node {
 					.origin(0.0)
 					.default(-1.0)
 					.radius(radius * RADIUS)
-					.enabled(self.enabled)
+					.enabled(enabled)
 					.tooltip(format_pan(l))
 				)
 				.align_top(Fill),
@@ -83,7 +83,7 @@ impl Node {
 					.origin(0.0)
 					.default(1.0)
 					.radius(radius * RADIUS)
-					.enabled(self.enabled)
+					.enabled(enabled)
 					.tooltip(format_pan(r))
 				)
 				.align_bottom(Fill)

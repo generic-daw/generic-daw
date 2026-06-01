@@ -47,6 +47,7 @@ impl Arrangement {
 					start: loop_range.start().to_bits(),
 					end: loop_range.end().to_bits(),
 				}),
+			solo: None,
 		});
 
 		let mut samples = HashMap::new();
@@ -145,6 +146,10 @@ impl Arrangement {
 					node.bypassed,
 				),
 			);
+		}
+
+		if let Some(solo) = self.transport().solo {
+			writer.set_solo(tracks[&solo]);
 		}
 
 		let mut channels = HashMap::new();
@@ -248,6 +253,7 @@ impl Arrangement {
 			bpm,
 			numerator,
 			loop_range,
+			solo,
 		} = reader.transport();
 
 		arrangement.set_bpm(NonZero::new(bpm as u16)?);
@@ -489,7 +495,7 @@ impl Arrangement {
 		let mut tracks = HashMap::new();
 		for (index, clips, channel) in reader.iter_tracks() {
 			let track = arrangement.tracks().len();
-			let id = arrangement.insert_track(arrangement.tracks().len());
+			let id = arrangement.insert_track(track);
 			tracks.insert(index, id);
 			load_channel(arrangement.node(id), channel)?;
 
@@ -567,6 +573,10 @@ impl Arrangement {
 					},
 				);
 			}
+		}
+
+		if let Some(solo) = solo {
+			arrangement.toggle_solo(tracks[&solo]);
 		}
 
 		drop(samples);

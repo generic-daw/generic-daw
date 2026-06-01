@@ -210,6 +210,24 @@ impl Arrangement {
 		self.node_action(id, NodeAction::ChannelToggleBypassed);
 	}
 
+	pub fn track_toggle_enabled(&mut self, id: NodeId) {
+		if let Some(solo) = self.transport.solo {
+			for i in 0..self.tracks.len() {
+				let node = self.node(self.tracks[i].id);
+
+				if node.enabled == (solo == node.id || solo == id || node.id == id) {
+					continue;
+				}
+
+				self.channel_toggle_enabled(node.id);
+			}
+
+			self.toggle_solo(solo);
+		} else {
+			self.channel_toggle_enabled(id);
+		}
+	}
+
 	pub fn plugin_add(
 		&mut self,
 		id: NodeId,
@@ -271,24 +289,6 @@ impl Arrangement {
 		);
 	}
 
-	pub fn set_loop_range(&mut self, loop_range: Option<BeatRange>) {
-		if self.transport.loop_range != loop_range {
-			self.send(Message::LoopRange(loop_range));
-			if std::mem::replace(&mut self.transport.loop_range, loop_range).is_none() {
-				self.seek_to(loop_range.unwrap().start());
-			}
-		}
-	}
-
-	pub fn seek_to(&mut self, position: BeatTime) {
-		self.transport.version = Version::unique();
-		self.transport.position = position.to_seconds_time(self.transport());
-		self.send(Message::Position(
-			self.transport.version,
-			self.transport.position,
-		));
-	}
-
 	pub fn set_bpm(&mut self, bpm: NonZero<u16>) {
 		if self.transport.bpm != bpm {
 			self.transport.bpm = bpm;
@@ -335,6 +335,32 @@ impl Arrangement {
 		self.send(Message::ToggleMetronome);
 	}
 
+	pub fn seek_to(&mut self, position: BeatTime) {
+		self.transport.version = Version::unique();
+		self.transport.position = position.to_seconds_time(self.transport());
+		self.send(Message::Position(
+			self.transport.version,
+			self.transport.position,
+		));
+	}
+
+	pub fn set_loop_range(&mut self, loop_range: Option<BeatRange>) {
+		if self.transport.loop_range != loop_range {
+			self.send(Message::LoopRange(loop_range));
+			if std::mem::replace(&mut self.transport.loop_range, loop_range).is_none() {
+				self.seek_to(loop_range.unwrap().start());
+			}
+		}
+	}
+
+	pub fn toggle_solo(&mut self, id: NodeId) {
+		let solo = (self.transport.solo != Some(id)).then_some(id);
+		if self.transport.solo != solo {
+			self.transport.solo = solo;
+			self.send(Message::Solo(solo));
+		}
+	}
+
 	pub fn master(&self) -> &Node {
 		self.node(self.master)
 	}
@@ -355,30 +381,6 @@ impl Arrangement {
 		self.nodes
 			.values()
 			.find_map(|(node, _)| Some((node.id, node.plugins.iter().position(|p| p.id == id)?)))
-	}
-
-	pub fn solo_track(&mut self, id: NodeId) {
-		for i in 0..self.tracks.len() {
-			let track_id = self.tracks[i].id;
-
-			if self.node_mut(track_id).enabled == (id == track_id) {
-				continue;
-			}
-
-			self.channel_toggle_enabled(track_id);
-		}
-	}
-
-	pub fn enable_all_tracks(&mut self) {
-		for i in 0..self.tracks.len() {
-			let track_id = self.tracks[i].id;
-
-			if self.node_mut(track_id).enabled {
-				continue;
-			}
-
-			self.channel_toggle_enabled(track_id);
-		}
 	}
 
 	pub fn channels(&self) -> &[Channel] {
@@ -413,6 +415,9 @@ impl Arrangement {
 		let node = self.nodes.remove(&id).unwrap().0;
 		for (_, outgoing) in self.nodes.values_mut() {
 			outgoing.remove(&id);
+		}
+		if self.transport.solo == Some(id) {
+			self.toggle_solo(id);
 		}
 		self.send(Message::NodeRemove(id));
 		node

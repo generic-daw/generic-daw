@@ -176,9 +176,7 @@ pub struct ArrangementView {
 	playlist: RefCell<playlist::State>,
 	piano_roll: RefCell<piano_roll::State>,
 
-	soloed: Option<NodeId>,
 	selected: NodeId,
-
 	loading: usize,
 }
 
@@ -224,9 +222,7 @@ impl ArrangementView {
 				Vector::new(view.piano_roll.scale.x, view.piano_roll.scale.y),
 			)),
 
-			soloed: None,
 			selected,
-
 			loading: 0,
 		}
 	}
@@ -495,9 +491,7 @@ impl ArrangementView {
 				self.selected = self
 					.arrangement
 					.insert_track(self.arrangement.tracks().len());
-				if self.soloed.is_some() {
-					self.arrangement.channel_toggle_enabled(self.selected);
-				}
+
 				return self.update(
 					Message::Connect(self.selected, self.arrangement.master().id),
 					config,
@@ -505,10 +499,6 @@ impl ArrangementView {
 				);
 			}
 			Message::TrackRemove(node) => {
-				if self.soloed == Some(node) {
-					self.soloed = None;
-				}
-
 				if self.selected == node {
 					self.select_next();
 					if self.selected == node {
@@ -539,19 +529,8 @@ impl ArrangementView {
 					});
 				}
 			}
-			Message::TrackToggleEnabled(node) => {
-				self.soloed = None;
-				return self.update(Message::ChannelToggleEnabled(node), config, state);
-			}
-			Message::TrackToggleSolo(node) => {
-				if self.soloed == Some(node) {
-					self.soloed = None;
-					self.arrangement.enable_all_tracks();
-				} else {
-					self.soloed = Some(node);
-					self.arrangement.solo_track(node);
-				}
-			}
+			Message::TrackToggleEnabled(node) => self.arrangement.track_toggle_enabled(node),
+			Message::TrackToggleSolo(node) => self.arrangement.toggle_solo(node),
 			Message::SeekTo(pos) => {
 				self.arrangement.seek_to(pos);
 				self.end_recording();
@@ -1502,12 +1481,19 @@ impl ArrangementView {
 					self.arrangement
 						.tracks()
 						.iter()
-						.map(|track| track.id)
-						.map(|id| {
-							let node = self.arrangement.node(id);
+						.map(|track| self.arrangement.node(track.id))
+						.map(|node| {
+							let enabled = node.enabled
+								&& self
+									.arrangement
+									.transport()
+									.solo
+									.is_none_or(|solo| solo == node.id);
+
+							let soloed = self.arrangement.transport().solo == Some(node.id);
 
 							let button_style = |cond: bool| {
-								if !node.enabled {
+								if !enabled {
 									button::secondary
 								} else if cond {
 									button::warning
@@ -1524,8 +1510,8 @@ impl ArrangementView {
 										row![
 											column![
 												row![
-													PeakMeter::new(&node.peaks[0]),
-													PeakMeter::new(&node.peaks[1])
+													PeakMeter::new(&node.peaks[0]).enabled(enabled),
+													PeakMeter::new(&node.peaks[1]).enabled(enabled),
 												]
 												.spacing(2),
 												container(space().width(28).height(2)).style(
@@ -1544,17 +1530,17 @@ impl ArrangementView {
 												Knob::new(
 													0.0..=MAX_VOL,
 													node.volume.abs().cbrt(),
-													move |v| {
+													|v| {
 														Message::ChannelVolumeChanged(
-															id,
+															node.id,
 															v.powi(3).copysign(node.volume),
 														)
 													}
 												)
 												.default(1.0)
-												.enabled(node.enabled)
+												.enabled(enabled)
 												.tooltip(format_db(node.volume.abs())),
-												node.pan_knob(20.0),
+												node.pan_knob(20.0, enabled),
 											]
 											.align_x(Center)
 											.spacing(5)
@@ -1562,20 +1548,20 @@ impl ArrangementView {
 											column![
 												icon_button(
 													x(),
-													if node.enabled {
+													if enabled {
 														button::danger
 													} else {
 														button::secondary
 													}
 												)
-												.on_press(Message::TrackRemove(id)),
-												text_icon_button("M", button_style(false))
-													.on_press(Message::TrackToggleEnabled(id)),
+												.on_press(Message::TrackRemove(node.id)),
 												text_icon_button(
-													"S",
-													button_style(self.soloed == Some(id))
+													if soloed { "U" } else { "M" },
+													button_style(soloed)
 												)
-												.on_press(Message::TrackToggleSolo(id)),
+												.on_press(Message::TrackToggleEnabled(node.id)),
+												text_icon_button("S", button_style(soloed))
+													.on_press(Message::TrackToggleSolo(node.id)),
 												icon_button(
 													if node.bypassed {
 														power_off()
@@ -1615,16 +1601,14 @@ impl ArrangementView {
 													mic(),
 													button_style(
 														self.recording.as_ref().is_some_and(
-															|recording| recording.node == id
+															|recording| recording.node == node.id
 														)
 													)
 												)
-												.on_press_maybe(
-													node.enabled.then_some(Message::Recording(id))
-												),
+												.on_press(Message::Recording(node.id)),
 												icon_button(snowflake(), button_style(false))
 													.on_press_maybe(
-														node.enabled.then_some(Message::Freeze(id))
+														enabled.then_some(Message::Freeze(node.id))
 													)
 											]
 											.spacing(5)
@@ -1673,6 +1657,13 @@ impl ArrangementView {
 					.map(|(t, track)| {
 						let node = self.arrangement.node(track.id);
 
+						let enabled = node.enabled
+							&& self
+								.arrangement
+								.transport()
+								.solo
+								.is_none_or(|solo| solo == node.id);
+
 						Track::new(
 							track
 								.clips
@@ -1687,7 +1678,7 @@ impl ArrangementView {
 										},
 										&self.playlist,
 										self.arrangement.transport(),
-										node.enabled,
+										enabled,
 										Message::PlaylistAction,
 									),
 									generic_daw_core::Clip::Midi(clip) => Clip::new(
@@ -1699,20 +1690,20 @@ impl ArrangementView {
 										},
 										&self.playlist,
 										self.arrangement.transport(),
-										node.enabled,
+										enabled,
 										Message::PlaylistAction,
 									),
 								})
 								.chain(
 									self.recording
 										.as_ref()
-										.filter(|recording| recording.node == track.id)
+										.filter(|recording| recording.node == node.id)
 										.map(|recording| {
 											Clip::new(
 												recording,
 												&self.playlist,
 												self.arrangement.transport(),
-												node.enabled,
+												enabled,
 												Message::PlaylistAction,
 											)
 										}),
@@ -1739,6 +1730,13 @@ impl ArrangementView {
 		plugins: &'a combo_box::State<PluginDescriptor>,
 	) -> Element<'a, Message> {
 		let node = self.arrangement.node(self.selected);
+
+		let enabled = node.enabled
+			&& self
+				.arrangement
+				.transport()
+				.solo
+				.is_none_or(|solo| solo == node.id);
 
 		Split::new(
 			scrollable(
@@ -1797,7 +1795,7 @@ impl ArrangementView {
 							.enumerate()
 							.map(|(i, plugin)| {
 								let button_style = |cond: bool| {
-									if !plugin.active || !node.enabled {
+									if !plugin.active || !enabled {
 										button::secondary
 									} else if cond {
 										button::warning
@@ -1811,7 +1809,7 @@ impl ArrangementView {
 										Message::PluginMixChanged(self.selected, i, mix)
 									})
 									.radius(TEXT_HEIGHT)
-									.enabled(plugin.active && node.enabled)
+									.enabled(plugin.active && enabled)
 									.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
 									button(
 										text(&*plugin.descriptor.name)
@@ -1834,7 +1832,7 @@ impl ArrangementView {
 										.on_press(Message::PluginToggleActive(self.selected, i)),
 										icon_button(
 											x(),
-											if plugin.active && node.enabled {
+											if plugin.active && enabled {
 												button::danger
 											} else {
 												button::secondary
@@ -1889,8 +1887,17 @@ impl ArrangementView {
 		node: &'a Node,
 		name: impl text::IntoFragment<'a>,
 	) -> Element<'a, Message> {
+		let enabled = node.enabled
+			&& self
+				.arrangement
+				.transport()
+				.solo
+				.is_none_or(|solo| solo == node.id);
+
+		let soloed = self.arrangement.transport().solo == Some(node.id);
+
 		let button_style = |cond: bool| {
-			if !node.enabled {
+			if !enabled {
 				button::secondary
 			} else if cond {
 				button::warning
@@ -1909,18 +1916,21 @@ impl ArrangementView {
 				mouse_area(
 					column![
 						text(name).size(13).line_height(1.0),
-						node.pan_knob(23.0),
+						node.pan_knob(23.0, enabled),
 						row![
-							text_icon_button("M", button_style(false))
-								.on_press(Message::ChannelToggleEnabled(node.id)),
-							text_icon_button("S", button_style(self.soloed == Some(node.id)))
-								.on_press_maybe(
-									(node.ty == NodeType::Track)
-										.then_some(Message::TrackToggleSolo(node.id)),
-								),
+							text_icon_button(if soloed { "U" } else { "M" }, button_style(soloed))
+								.on_press(if node.ty == NodeType::Track {
+									Message::TrackToggleEnabled(node.id)
+								} else {
+									Message::ChannelToggleEnabled(node.id)
+								}),
+							text_icon_button("S", button_style(soloed)).on_press_maybe(
+								(node.ty == NodeType::Track)
+									.then_some(Message::TrackToggleSolo(node.id)),
+							),
 							icon_button(
 								x(),
-								if node.enabled {
+								if enabled {
 									button::danger
 								} else {
 									button::secondary
@@ -1969,8 +1979,8 @@ impl ArrangementView {
 							column![
 								space().height(3),
 								row![
-									PeakMeter::new(&node.peaks[0]).width(16.0),
-									PeakMeter::new(&node.peaks[1]).width(16.0),
+									PeakMeter::new(&node.peaks[0]).width(16.0).enabled(enabled),
+									PeakMeter::new(&node.peaks[1]).width(16.0).enabled(enabled),
 								]
 								.spacing(3),
 								container(space().width(35).height(3)).style(
@@ -1998,7 +2008,7 @@ impl ArrangementView {
 							.step(f32::EPSILON)
 							.handle((15, 20))
 							.style(slider_with_radius(
-								if node.enabled {
+								if enabled {
 									slider::default
 								} else {
 									slider_secondary
@@ -2015,7 +2025,7 @@ impl ArrangementView {
 								button(chevron_down())
 									.padding(0)
 									.style(button_with_radius(
-										if node.enabled && incoming.is_some() {
+										if enabled && incoming.is_some() {
 											button::primary
 										} else {
 											button::secondary
@@ -2035,7 +2045,7 @@ impl ArrangementView {
 								button(chevron_up())
 									.padding(0)
 									.style(button_with_radius(
-										if node.enabled && outgoing.is_some() {
+										if enabled && outgoing.is_some() {
 											button::primary
 										} else {
 											button::secondary
@@ -2062,7 +2072,7 @@ impl ArrangementView {
 										.default(1f32)
 										.step(f32::EPSILON)
 										.handle((4, 4))
-										.style(if node.enabled {
+										.style(if enabled {
 											slider::default
 										} else {
 											slider_secondary

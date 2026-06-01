@@ -164,17 +164,8 @@ impl Channel {
 			}
 		}
 
-		let mut peaks = if self.enabled {
-			self.pan.pan(audio, self.volume);
-
-			max_peaks(audio).map(|x| if x >= f32::EPSILON { x } else { 0.0 })
-		} else {
-			audio.fill(0.0);
-			events.clear();
-			latency = 0;
-
-			[0.0, 0.0]
-		};
+		self.pan.pan(audio, self.volume);
+		let mut peaks = max_peaks(audio).map(|x| if x >= f32::EPSILON { x } else { 0.0 });
 
 		if let Some(Update::Peaks(_, p)) = acc {
 			peaks = [peaks[0].max(p[0]), peaks[1].max(p[1])];
@@ -184,7 +175,13 @@ impl Channel {
 			self.updates.push(Update::Peaks(self.id, peaks));
 		}
 
-		latency
+		if self.enabled {
+			latency
+		} else {
+			audio.fill(0.0);
+			events.clear();
+			0
+		}
 	}
 
 	#[must_use]

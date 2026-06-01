@@ -50,6 +50,7 @@ pub enum Message {
 	ToggleMetronome,
 	Position(Version, SecondsTime),
 	LoopRange(Option<BeatRange>),
+	Solo(Option<NodeId>),
 	Reset,
 
 	RequestUpdate,
@@ -121,6 +122,7 @@ pub struct Transport {
 	pub metronome: bool,
 	pub position: SecondsTime,
 	pub loop_range: Option<BeatRange>,
+	pub solo: Option<NodeId>,
 }
 
 impl Transport {
@@ -136,6 +138,7 @@ impl Transport {
 			metronome: false,
 			position: SecondsTime::ZERO,
 			loop_range: None,
+			solo: None,
 		}
 	}
 
@@ -291,6 +294,7 @@ impl AudioThread {
 					self.transport_mut().position = sample;
 				}
 				Message::LoopRange(loop_range) => self.transport_mut().loop_range = loop_range,
+				Message::Solo(solo) => self.transport_mut().solo = solo,
 				Message::Reset => self.audio_graph.reset(),
 				Message::RequestUpdate => self.needs_update = true,
 				Message::ReturnUpdate(update) => {

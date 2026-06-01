@@ -56,7 +56,15 @@ impl Track {
 			}
 		}
 
-		self.channel.process(state, audio, events, injector)
+		let latency = self.channel.process(state, audio, events, injector);
+
+		if state.transport.solo.is_none_or(|solo| solo == self.id()) {
+			latency
+		} else {
+			audio.fill(0.0);
+			events.clear();
+			0
+		}
 	}
 
 	#[must_use]
