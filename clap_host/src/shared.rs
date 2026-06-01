@@ -56,7 +56,6 @@ pub struct Shared<'a> {
 	pub request_process: AtomicBool,
 	pub request_restart: AtomicBool,
 	pub request_flush: AtomicBool,
-	pub request_deactivate: AtomicBool,
 }
 
 impl<'a> Shared<'a> {
@@ -73,7 +72,6 @@ impl<'a> Shared<'a> {
 			request_process: AtomicBool::new(true),
 			request_restart: AtomicBool::new(false),
 			request_flush: AtomicBool::new(false),
-			request_deactivate: AtomicBool::new(false),
 		}
 	}
 

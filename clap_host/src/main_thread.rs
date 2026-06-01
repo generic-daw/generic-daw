@@ -1,4 +1,4 @@
-use crate::{Size, host::Host, preset::Preset, shared::Shared};
+use crate::{AudioThread, Size, preset::Preset, shared::Shared};
 use clack_extensions::{
 	audio_ports::{AudioPortRescanFlags, HostAudioPortsImpl},
 	latency::HostLatencyImpl,
@@ -10,14 +10,14 @@ use clack_extensions::{
 };
 use clack_host::prelude::*;
 use std::{ffi::CStr, time::Duration};
-use utils::{NoClone, NoDebug};
+use utils::NoClone;
 
 #[derive(Clone, Debug)]
 pub enum MainThreadMessage {
 	RequestCallback,
-	Restart(NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>),
-	Deactivate(NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>),
-	Destroy(NoClone<NoDebug<StoppedPluginAudioProcessor<Host>>>),
+	Restart(NoClone<AudioThread>),
+	Deactivate(NoClone<AudioThread>),
+	Destroy(NoClone<AudioThread>),
 	GuiRequestResize(Size),
 	GuiRequestShow,
 	GuiRequestHide,

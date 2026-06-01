@@ -55,17 +55,12 @@ impl EventBuffers {
 		})
 	}
 
-	pub fn read_in(
-		&mut self,
-		events: &mut Vec<impl EventImpl>,
-	) -> (InputEvents<'_>, OutputEvents<'_>) {
-		for event in events.drain(..) {
-			self.push(event);
-		}
+	pub fn are_inputs_empty(&self) -> bool {
+		self.input_events.is_empty()
+	}
 
-		self.input_events.sort();
-
-		(self.input_events.as_input(), self.output_events.as_output())
+	pub fn are_outputs_empty(&self) -> bool {
+		self.output_events.is_empty()
 	}
 
 	pub fn push(&mut self, event: impl EventImpl) {
@@ -73,13 +68,24 @@ impl EventBuffers {
 			.push(&event.to_clap(self.main_input_port, self.input_prefers_midi));
 	}
 
-	pub fn write_out(&mut self, events: &mut Vec<impl EventImpl>) {
-		events.extend(
-			self.output_events
-				.iter()
-				.filter_map(EventImpl::try_from_unknown),
-		);
+	pub fn push_all(&mut self, events: impl IntoIterator<Item: EventImpl>) {
+		for event in events {
+			self.push(event);
+		}
+	}
 
+	pub fn prepare(&mut self) -> (InputEvents<'_>, OutputEvents<'_>) {
+		self.input_events.sort();
+		(self.input_events.as_input(), self.output_events.as_output())
+	}
+
+	pub fn output_events<Event: EventImpl>(&self) -> impl Iterator<Item = Event> {
+		self.output_events
+			.iter()
+			.filter_map(Event::try_from_unknown)
+	}
+
+	pub fn reset(&mut self) {
 		self.input_events.clear();
 		self.output_events.clear();
 	}

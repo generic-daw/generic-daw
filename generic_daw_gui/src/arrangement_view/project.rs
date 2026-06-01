@@ -134,7 +134,7 @@ impl Arrangement {
 								.get_state(plugin.id, StateContextType::ForProject)
 								.map(Vec::from),
 							mix: plugin.mix,
-							active: clap_host.is_active(plugin.id),
+							active: plugin.active,
 						}),
 					node.volume,
 					match node.pan {
@@ -163,7 +163,7 @@ impl Arrangement {
 								.get_state(plugin.id, StateContextType::ForProject)
 								.map(Vec::from),
 							mix: plugin.mix,
-							active: clap_host.is_active(plugin.id),
+							active: plugin.active,
 						}),
 					channel.volume,
 					match channel.pan {
@@ -458,7 +458,7 @@ impl Arrangement {
 
 				let i = i - skipped;
 
-				messages.push(arrangement_view::Message::PluginLoad(
+				messages.push(arrangement_view::Message::PluginAdd(
 					node.id,
 					descriptor.clone(),
 					false,

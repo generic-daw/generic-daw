@@ -2,7 +2,7 @@ use crate::{
 	Channel, Event, NodeAction, NodeImpl, Track, Update, audio_thread::State,
 	channel::ThreadPoolExecutor,
 };
-use audio_graph::{Inject, thread_pool::Injector};
+use audio_graph::{Inject, NodeId, thread_pool::Injector};
 
 #[derive(Debug)]
 pub enum Node {
@@ -28,7 +28,7 @@ impl NodeImpl for Node {
 		}
 	}
 
-	fn id(&self) -> audio_graph::NodeId {
+	fn id(&self) -> NodeId {
 		match self {
 			Self::Channel(node) => node.id(),
 			Self::Track(node) => node.id(),

@@ -82,15 +82,23 @@ impl PanMode {
 #[derive(Debug)]
 struct Plugin {
 	id: PluginId,
-	processor: AudioThread,
+	processor: Option<AudioThread>,
 	mix: f32,
 }
 
+impl Drop for Plugin {
+	fn drop(&mut self) {
+		if let Some(processor) = self.processor.take() {
+			processor.destroy();
+		}
+	}
+}
+
 impl Plugin {
-	pub fn new(id: PluginId, processor: AudioThread) -> Self {
+	pub fn new(id: PluginId) -> Self {
 		Self {
 			id,
-			processor,
+			processor: None,
 			mix: 1.0,
 		}
 	}
@@ -123,41 +131,37 @@ impl Channel {
 		let mut latency = 0;
 
 		for plugin in &mut self.plugins {
-			plugin.processor.maybe_activate();
-			plugin.processor.set_audio_thread();
-			plugin.processor.maybe_deactivate();
-
-			if self.enabled && !self.bypassed {
-				plugin.processor.process(
-					audio,
-					events,
-					Some(&state.transport.as_clap()),
-					Some(&mut |executor| {
-						let task_count = executor.task_count() as usize;
-						let executor = ThreadPoolExecutor(executor);
-						injector.inject(&executor, task_count);
-					}),
-					plugin.mix,
-				);
-			} else {
-				plugin.processor.flush(audio, events, plugin.mix);
-			}
-
-			latency += plugin.processor.latency();
-
-			plugin.processor.maybe_restart();
-
-			events.retain(|&event| {
-				if let Event::ParamValue {
-					param_id, value, ..
-				} = event
-				{
-					self.updates.push(Update::Param(plugin.id, param_id, value));
-					false
+			if let Some(processor) = &mut plugin.processor {
+				if self.bypassed {
+					processor.flush_active::<Event>(|event| {
+						self.updates.extend(event.into_update(plugin.id));
+					});
 				} else {
-					true
+					processor.process(
+						audio,
+						events,
+						Some(&state.transport.as_clap()),
+						Some(&mut |executor| {
+							let task_count = executor.task_count() as usize;
+							let executor = ThreadPoolExecutor(executor);
+							injector.inject(&executor, task_count);
+						}),
+						plugin.mix,
+					);
+
+					latency += processor.latency();
+
+					events.retain(|&event| {
+						let update = event.into_update(plugin.id);
+						self.updates.extend(update);
+						update.is_none()
+					});
 				}
-			});
+
+				if processor.needs_restart() {
+					plugin.processor.take().unwrap().restart();
+				}
+			}
 		}
 
 		let mut peaks = if self.enabled {
@@ -167,6 +171,7 @@ impl Channel {
 		} else {
 			audio.fill(0.0);
 			events.clear();
+			latency = 0;
 
 			[0.0, 0.0]
 		};
@@ -189,7 +194,9 @@ impl Channel {
 
 	pub fn reset(&mut self) {
 		for plugin in &mut self.plugins {
-			plugin.processor.reset();
+			if let Some(processor) = &mut plugin.processor {
+				processor.reset();
+			}
 		}
 	}
 
@@ -199,17 +206,26 @@ impl Channel {
 			NodeAction::ChannelToggleBypassed => self.bypassed ^= true,
 			NodeAction::ChannelVolumeChanged(volume) => self.volume = volume,
 			NodeAction::ChannelPanChanged(pan) => self.pan = pan,
-			NodeAction::PluginAdd(id, processor) => self.plugins.push(Plugin::new(id, *processor)),
+			NodeAction::PluginAdd(id) => self.plugins.push(Plugin::new(id)),
 			NodeAction::PluginRemove(index) => _ = self.plugins.remove(index),
+			NodeAction::PluginActivate(index, processor) => {
+				debug_assert!(self.plugins[index].processor.is_none());
+				self.plugins[index].processor = Some(*processor);
+			}
+			NodeAction::PluginDeactivate(index) => {
+				self.plugins[index].processor.take().unwrap().deactivate();
+			}
 			NodeAction::PluginMoveTo(from, to) => self.plugins.shift_move(from, to),
 			NodeAction::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
 			NodeAction::PluginParamChanged(index, param_id, value, cookie) => {
-				self.plugins[index].processor.push_event(Event::ParamValue {
-					time: 0,
-					param_id,
-					value,
-					cookie,
-				});
+				if let Some(processor) = &mut self.plugins[index].processor {
+					processor.push(Event::ParamValue {
+						time: 0,
+						param_id,
+						value,
+						cookie,
+					});
+				}
 			}
 			_ => panic!(),
 		}

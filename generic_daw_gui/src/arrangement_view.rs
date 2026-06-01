@@ -106,7 +106,7 @@ pub enum Message {
 	ChannelToggleEnabled(NodeId),
 	ChannelToggleBypassed(NodeId),
 
-	PluginLoad(NodeId, PluginDescriptor, bool),
+	PluginAdd(NodeId, PluginDescriptor, bool),
 	PluginSetState(NodeId, usize, NoDebug<Box<[u8]>>),
 	PluginShow(PluginId),
 	PluginMixChanged(NodeId, usize, f32),
@@ -365,21 +365,26 @@ impl ArrangementView {
 			}
 			Message::ChannelToggleEnabled(node) => self.arrangement.channel_toggle_enabled(node),
 			Message::ChannelToggleBypassed(node) => self.arrangement.channel_toggle_bypassed(node),
-			Message::PluginLoad(node, descriptor, show) => {
-				let (plugin, instruction) = self.arrangement.plugin_load(node, descriptor);
-				let mut action = Action::instruction(instruction);
-				if show {
-					action = Action::batch([
-						action,
-						Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
-							clap_host::Message::ToggleActivated(plugin),
-						))),
-						Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
-							clap_host::Message::GuiOpen(plugin),
-						))),
-					]);
+			Message::PluginAdd(node, descriptor, show) => {
+				if let Some((plugin, instruction)) = self.arrangement.plugin_add(node, descriptor) {
+					let mut action = Action::instruction(instruction);
+					if show {
+						action = Action::batch([
+							action,
+							Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
+								clap_host::Message::Activate(
+									plugin,
+									self.arrangement.transport().sample_rate,
+									self.arrangement.transport().frames,
+								),
+							))),
+							Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
+								clap_host::Message::GuiOpen(plugin),
+							))),
+						]);
+					}
+					return action;
 				}
-				return action;
 			}
 			Message::PluginSetState(node, i, state) => {
 				let plugin = self.arrangement.node(node).plugins[i].id;
@@ -396,10 +401,18 @@ impl ArrangementView {
 				self.arrangement.plugin_mix_changed(node, i, mix);
 			}
 			Message::PluginToggleActive(node, i) => {
-				let plugin = self.arrangement.node(node).plugins[i].id;
-				return Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
-					clap_host::Message::ToggleActivated(plugin),
-				)));
+				let plugin = &self.arrangement.node(node).plugins[i];
+				if plugin.active {
+					self.arrangement.plugin_deactivate(node, i);
+				} else {
+					return Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
+						clap_host::Message::Activate(
+							plugin.id,
+							self.arrangement.transport().sample_rate,
+							self.arrangement.transport().frames,
+						),
+					)));
+				}
 			}
 			Message::PluginMoveTo(node, event) => {
 				if let DragEvent::Dropped {
@@ -1470,12 +1483,11 @@ impl ArrangementView {
 	pub fn view<'a>(
 		&'a self,
 		state: &'a State,
-		clap_host: &'a ClapHost,
 		plugins: &'a combo_box::State<PluginDescriptor>,
 	) -> Element<'a, Message> {
 		match self.tab {
 			Tab::Playlist => self.view_playlist(),
-			Tab::Mixer => self.view_mixer(state, clap_host, plugins),
+			Tab::Mixer => self.view_mixer(state, plugins),
 			Tab::PianoRoll => self.view_piano_roll(),
 		}
 	}
@@ -1724,7 +1736,6 @@ impl ArrangementView {
 	fn view_mixer<'a>(
 		&'a self,
 		state: &'a State,
-		clap_host: &'a ClapHost,
 		plugins: &'a combo_box::State<PluginDescriptor>,
 	) -> Element<'a, Message> {
 		let node = self.arrangement.node(self.selected);
@@ -1774,7 +1785,7 @@ impl ArrangementView {
 			.width(Fill),
 			column![
 				combo_box(plugins, "Add Plugin", None, move |descriptor| {
-					Message::PluginLoad(self.selected, descriptor, true)
+					Message::PluginAdd(self.selected, descriptor, true)
 				})
 				.menu_style(menu_style)
 				.width(Fill),
@@ -1785,10 +1796,8 @@ impl ArrangementView {
 							.iter()
 							.enumerate()
 							.map(|(i, plugin)| {
-								let active = clap_host.is_active(plugin.id);
-
 								let button_style = |cond: bool| {
-									if !active || !node.enabled {
+									if !plugin.active || !node.enabled {
 										button::secondary
 									} else if cond {
 										button::warning
@@ -1802,7 +1811,7 @@ impl ArrangementView {
 										Message::PluginMixChanged(self.selected, i, mix)
 									})
 									.radius(TEXT_HEIGHT)
-									.enabled(active && node.enabled)
+									.enabled(plugin.active && node.enabled)
 									.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
 									button(
 										text(&*plugin.descriptor.name)
@@ -1815,7 +1824,7 @@ impl ArrangementView {
 									.on_press(Message::PluginShow(plugin.id)),
 									column![
 										icon_button(
-											if active && !node.bypassed {
+											if plugin.active && !node.bypassed {
 												power()
 											} else {
 												power_off()
@@ -1825,7 +1834,7 @@ impl ArrangementView {
 										.on_press(Message::PluginToggleActive(self.selected, i)),
 										icon_button(
 											x(),
-											if active && node.enabled {
+											if plugin.active && node.enabled {
 												button::danger
 											} else {
 												button::secondary

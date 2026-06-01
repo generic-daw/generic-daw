@@ -84,8 +84,10 @@ pub enum NodeAction {
 	ChannelVolumeChanged(f32),
 	ChannelPanChanged(PanMode),
 
-	PluginAdd(PluginId, Box<clap_host::AudioThread>),
+	PluginAdd(PluginId),
 	PluginRemove(usize),
+	PluginActivate(usize, Box<clap_host::AudioThread>),
+	PluginDeactivate(usize),
 	PluginMoveTo(usize, usize),
 	PluginMixChanged(usize, f32),
 	PluginParamChanged(usize, ClapId, f32, Cookie),
@@ -93,11 +95,11 @@ pub enum NodeAction {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Update {
+	Load(Duration, usize),
 	Peaks(NodeId, [f32; 2]),
 	Polyphony(NodeId, usize),
 	Param(PluginId, ClapId, f32),
 	ConnectFailed(NodeId, NodeId),
-	Load(Duration, usize),
 }
 
 #[derive(Clone, Debug)]

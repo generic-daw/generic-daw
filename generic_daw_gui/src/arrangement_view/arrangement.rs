@@ -17,7 +17,7 @@ use generic_daw_core::{
 	AudioClip, Batch, Clip, ClipId, Message, MidiClip, MidiKey, MidiNote, MidiNoteId,
 	MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode, PluginId, Point,
 	SampleId, Stream, Transport, Update, Version, build_output_stream,
-	clap_host::{ClapId, Cookie, HostInfo, PluginDescriptor},
+	clap_host::{AudioThread, ClapId, Cookie, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
 use iced::Task;
@@ -107,6 +107,14 @@ impl Arrangement {
 
 		for update in batch.updates.drain(..) {
 			match update {
+				Update::Load(duration, frames) => {
+					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
+					let load = duration.as_secs_f32() * mix;
+					self.load = Some(
+						self.load
+							.map_or(load, |new| (new * mix + load) / (mix + 1.0)),
+					);
+				}
 				Update::Peaks(node, peaks) => {
 					if let Some((node, _)) = self.nodes.get_mut(&node) {
 						node.update(peaks, batch.now);
@@ -121,14 +129,6 @@ impl Arrangement {
 					messages.push(clap_host::Message::PluginParamChange(id, param_id, value));
 				}
 				Update::ConnectFailed(from, to) => _ = self.outgoing_mut(from).remove(&to),
-				Update::Load(duration, frames) => {
-					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
-					let load = duration.as_secs_f32() * mix;
-					self.load = Some(
-						self.load
-							.map_or(load, |new| (new * mix + load) / (mix + 1.0)),
-					);
-				}
 			}
 		}
 
@@ -210,24 +210,41 @@ impl Arrangement {
 		self.node_action(id, NodeAction::ChannelToggleBypassed);
 	}
 
-	pub fn plugin_load(
+	pub fn plugin_add(
 		&mut self,
 		id: NodeId,
 		descriptor: PluginDescriptor,
-	) -> (PluginId, daw::Instruction) {
-		let (plugin, processor, receiver) = PluginPair::new(descriptor, HOST.clone());
+	) -> Option<(PluginId, daw::Instruction)> {
+		let (plugin, receiver) = PluginPair::new(descriptor, HOST.clone())?;
 		let plugin_id = plugin.gui.id;
 		self.node_mut(id).plugins.push(plugin.gui);
-		self.node_action(id, NodeAction::PluginAdd(plugin_id, Box::new(processor)));
-		(
+		self.node_action(id, NodeAction::PluginAdd(plugin_id));
+		Some((
 			plugin_id,
-			daw::Instruction::PluginLoad(plugin_id, plugin.core, receiver),
-		)
+			daw::Instruction::PluginAdd(plugin_id, plugin.core, receiver),
+		))
 	}
 
 	pub fn plugin_remove(&mut self, id: NodeId, index: usize) {
-		self.node_action(id, NodeAction::PluginRemove(index));
 		self.node_mut(id).plugins.remove(index);
+		self.node_action(id, NodeAction::PluginRemove(index));
+	}
+
+	pub fn plugin_activate(
+		&mut self,
+		id: NodeId,
+		index: usize,
+		processor: Option<Box<AudioThread>>,
+	) {
+		self.node_mut(id).plugins[index].active = processor.is_some();
+		if let Some(processor) = processor {
+			self.node_action(id, NodeAction::PluginActivate(index, processor));
+		}
+	}
+
+	pub fn plugin_deactivate(&mut self, id: NodeId, index: usize) {
+		self.node_mut(id).plugins[index].active = false;
+		self.node_action(id, NodeAction::PluginDeactivate(index));
 	}
 
 	pub fn plugin_move_to(&mut self, id: NodeId, from: usize, to: usize) {

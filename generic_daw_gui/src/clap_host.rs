@@ -14,11 +14,12 @@ use iced::{
 	widget::{column, container, row, rule, scrollable, space, text},
 	window,
 };
-use log::{info, warn};
+use log::info;
 use smol::{Timer, unblock};
 use std::{
 	collections::{HashMap, HashSet},
 	iter::repeat,
+	num::NonZero,
 	ops::Deref as _,
 	sync::mpsc::Receiver,
 	time::Duration,
@@ -27,11 +28,11 @@ use utils::{NoClone, NoDebug};
 
 #[derive(Clone, Debug)]
 pub enum Message {
-	MainThread(PluginId, MainThreadMessage),
+	MainThread(PluginId, Box<MainThreadMessage>),
 	PluginParamChange(PluginId, ClapId, f32),
 	HostParamChange(PluginId, ClapId, f32),
 	TickTimer(Duration),
-	ToggleActivated(PluginId),
+	Activate(PluginId, NonZero<u32>, NonZero<u32>),
 	SetState(PluginId, NoDebug<Box<[u8]>>),
 	GuiOpen(PluginId),
 	GuiOpened(PluginId, NoClone<Box<Fragile<Plugin>>>),
@@ -85,7 +86,7 @@ impl ClapHost {
 
 		match message {
 			Message::MainThread(id, msg) => {
-				return self.handle_main_thread_message(id, msg, transport);
+				return self.handle_main_thread_message(id, *msg, transport);
 			}
 			Message::PluginParamChange(id, param_id, value) => {
 				_ = plugin!(id).adjust_param_value(param_id, value);
@@ -95,7 +96,7 @@ impl ClapHost {
 				if plugin.is_active()
 					&& let Some(param) = plugin.adjust_param_value(param_id, value)
 				{
-					return Action::instruction(daw::Instruction::PluginParamChange(
+					return Action::instruction(daw::Instruction::PluginParamChanged(
 						id,
 						param.id,
 						value,
@@ -115,13 +116,12 @@ impl ClapHost {
 						}
 					});
 			}
-			Message::ToggleActivated(id) => {
+			Message::Activate(id, sample_rate, frames) => {
 				let plugin = plugin!(id);
-				if plugin.is_active() {
-					plugin.request_deactivate();
-				} else if let Err(err) = plugin.activate(transport.sample_rate, transport.frames) {
-					warn!("{err}");
-				}
+				return Action::instruction(daw::Instruction::PluginActivate(
+					id,
+					plugin.activate(sample_rate, frames).map(Box::new),
+				));
 			}
 			Message::SetState(id, state) => {
 				plugin!(id, Message::SetState(id, state))
@@ -244,7 +244,7 @@ impl ClapHost {
 			};
 			($expr:expr) => {{
 				let Some(plugin) = self.plugins.get_mut(&id) else {
-					let message = Message::MainThread(id, $expr);
+					let message = Message::MainThread(id, Box::new($expr));
 					info!("retrying {message:?}");
 					return Task::perform(Timer::after(Duration::from_millis(100)), |_| message)
 						.into();
@@ -258,9 +258,12 @@ impl ClapHost {
 			MainThreadMessage::Restart(processor) => {
 				let plugin = plugin!(MainThreadMessage::Restart(processor));
 				plugin.deactivate(processor);
-				if let Err(err) = plugin.activate(transport.sample_rate, transport.frames) {
-					warn!("{err}");
-				}
+				return Action::instruction(daw::Instruction::PluginActivate(
+					id,
+					plugin
+						.activate(transport.sample_rate, transport.frames)
+						.map(Box::new),
+				));
 			}
 			MainThreadMessage::Deactivate(processor) => {
 				plugin!(MainThreadMessage::Deactivate(processor)).deactivate(processor);
@@ -272,8 +275,9 @@ impl ClapHost {
 				self.timers_of_duration
 					.retain(|_, set| set.remove(&id).is_none() || !set.is_empty());
 
-				return self.update(
-					Message::MainThread(id, MainThreadMessage::GuiClosed),
+				return self.handle_main_thread_message(
+					id,
+					MainThreadMessage::GuiClosed,
 					transport,
 				);
 			}
@@ -408,7 +412,7 @@ impl ClapHost {
 		)
 	}
 
-	pub fn load(
+	pub fn plugin_add(
 		&mut self,
 		id: PluginId,
 		plugin: Plugin,
@@ -425,7 +429,7 @@ impl ClapHost {
 				}
 			}))
 			.discard(),
-			Task::run(stream, move |msg| Message::MainThread(id, msg)),
+			Task::run(stream, move |msg| Message::MainThread(id, Box::new(msg))),
 		])
 	}
 
@@ -437,9 +441,5 @@ impl ClapHost {
 
 	pub fn get_state(&mut self, id: PluginId, context_type: StateContextType) -> Option<&[u8]> {
 		self.plugins.get_mut(&id)?.get_state(context_type)
-	}
-
-	pub fn is_active(&self, id: PluginId) -> bool {
-		self.plugins.get(&id).is_some_and(Plugin::is_active)
 	}
 }

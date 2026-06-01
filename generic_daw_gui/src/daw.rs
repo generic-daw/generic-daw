@@ -19,7 +19,8 @@ use crate::{
 use generic_daw_core::{
 	BpmTapper, NodeId, PluginId,
 	clap_host::{
-		ClapId, Cookie, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
+		AudioThread, ClapId, Cookie, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin,
+		PluginDescriptor, RenderMode,
 	},
 };
 use generic_daw_project::proto;
@@ -155,8 +156,9 @@ impl Display for FileMenu {
 pub enum Instruction {
 	Message(Message),
 	Freeze(NodeId),
-	PluginLoad(PluginId, Plugin, Receiver<MainThreadMessage>),
-	PluginParamChange(PluginId, ClapId, f32, Cookie),
+	PluginAdd(PluginId, Plugin, Receiver<MainThreadMessage>),
+	PluginActivate(PluginId, Option<Box<AudioThread>>),
+	PluginParamChanged(PluginId, ClapId, f32, Cookie),
 }
 
 #[derive(Clone, Debug)]
@@ -625,13 +627,20 @@ impl Daw {
 					self.project,
 				);
 			}
-			Instruction::PluginLoad(id, plugin, receiver) => {
+			Instruction::PluginAdd(id, plugin, receiver) => {
 				return self
 					.clap_host
-					.load(id, plugin, receiver)
+					.plugin_add(id, plugin, receiver)
 					.map(Message::ClapHost);
 			}
-			Instruction::PluginParamChange(id, param_id, value, cookie) => {
+			Instruction::PluginActivate(id, processor) => {
+				if let Some((node, index)) = self.arrangement_view.arrangement.plugin_of(id) {
+					self.arrangement_view
+						.arrangement
+						.plugin_activate(node, index, processor);
+				}
+			}
+			Instruction::PluginParamChanged(id, param_id, value, cookie) => {
 				if let Some((node, index)) = self.arrangement_view.arrangement.plugin_of(id) {
 					self.arrangement_view
 						.arrangement
@@ -825,7 +834,7 @@ impl Daw {
 							.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))))
 					],
 					self.arrangement_view
-						.view(&self.state, &self.clap_host, &self.plugins)
+						.view(&self.state, &self.plugins)
 						.map(|message| Message::Arrangement(self.project, message)),
 					self.state.file_tree_split_at,
 					Message::OnDrag

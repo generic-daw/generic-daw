@@ -436,7 +436,6 @@ dependencies = [
  "dsp",
  "log",
  "raw-window-handle",
- "rtrb",
  "utils",
  "walkdir",
 ]

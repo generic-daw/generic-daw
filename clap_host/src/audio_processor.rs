@@ -1,4 +1,4 @@
-use crate::{audio_buffers::AudioBuffers, event_buffers::EventBuffers, shared::Shared};
+use crate::shared::Shared;
 use clack_extensions::{
 	tail::HostTailImpl,
 	thread_pool::{HostThreadPoolImpl, PluginThreadPool},
@@ -38,27 +38,15 @@ pub type ThreadPoolInjector<'a> = &'a mut (dyn for<'b> FnMut(ThreadPoolExecutor<
 #[derive(Debug)]
 pub struct AudioProcessor<'a> {
 	pub shared: &'a Shared<'a>,
-	pub audio_buffers: Option<AudioBuffers>,
-	pub event_buffers: Option<EventBuffers>,
-	pub processing: bool,
-	pub last_input: Option<u64>,
 	pub injector: Option<NoDebug<ThreadPoolInjector<'a>>>,
 }
 
 impl<'a> AudioProcessor<'a> {
-	pub fn new(
-		shared: &'a Shared<'a>,
-		audio_buffers: AudioBuffers,
-		event_buffers: EventBuffers,
-	) -> Self {
+	pub fn new(shared: &'a Shared<'a>) -> Self {
 		shared.request_restart.store(false, Relaxed);
 
 		Self {
 			shared,
-			audio_buffers: Some(audio_buffers),
-			event_buffers: Some(event_buffers),
-			processing: false,
-			last_input: None,
 			injector: None,
 		}
 	}
@@ -88,11 +76,5 @@ impl HostThreadPoolImpl for AudioProcessor<'_> {
 		self.injector = Some(injector);
 
 		Ok(())
-	}
-}
-
-impl Drop for AudioProcessor<'_> {
-	fn drop(&mut self) {
-		self.shared.request_deactivate.store(false, Relaxed);
 	}
 }
