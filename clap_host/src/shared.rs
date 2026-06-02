@@ -59,7 +59,7 @@ pub struct Shared<'a> {
 	pub request_deactivate: AtomicBool,
 }
 
-impl Shared<'_> {
+impl<'a> Shared<'a> {
 	pub fn new(descriptor: PluginDescriptor, sender: Sender<MainThreadMessage>) -> Self {
 		let main_thread = CURRENT_THREAD_ID.with(|id| *id);
 
@@ -76,11 +76,9 @@ impl Shared<'_> {
 			request_deactivate: AtomicBool::new(false),
 		}
 	}
-}
 
-impl<'a> SharedHandler<'a> for Shared<'a> {
-	fn initializing(&self, instance: InitializingPluginHandle<'a>) {
-		macro_rules! initializing {
+	pub fn initialized(&self, instance: InitializedPluginHandle<'a>) {
+		macro_rules! initialized {
 			($($ident:ident),*) => {$(
 				if let Some($ident) = instance.get_extension() {
 					self.ext.$ident.set(NoDebug($ident)).unwrap();
@@ -89,7 +87,7 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 			)*};
 		}
 
-		initializing![
+		initialized![
 			audio_ports,
 			gui,
 			latency,
@@ -103,7 +101,13 @@ impl<'a> SharedHandler<'a> for Shared<'a> {
 			thread_pool,
 			timer
 		];
+
+		self.instance.set(instance).unwrap();
 	}
+}
+
+impl<'a> SharedHandler<'a> for Shared<'a> {
+	fn initializing(&self, _instance: InitializingPluginHandle<'a>) {}
 
 	fn request_process(&self) {
 		self.request_process.store(true, Relaxed);
