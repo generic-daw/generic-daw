@@ -197,13 +197,15 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			}));
 		}
 
-		node.process(
-			&self.state,
-			&mut buffers.audio[..self.curr_len],
-			&mut buffers.events,
-			injector,
+		entry.latency.store(
+			node.process(
+				&self.state,
+				&mut buffers.audio[..self.curr_len],
+				&mut buffers.events,
+				injector,
+			) + max_latency,
+			Relaxed,
 		);
-		entry.latency.store(node.latency() + max_latency, Relaxed);
 
 		drop(node);
 

@@ -115,10 +115,12 @@ impl Channel {
 		audio: &mut [f32],
 		events: &mut Vec<Event>,
 		injector: &Injector<Inject<Node>>,
-	) {
+	) -> usize {
 		let acc = self
 			.updates
 			.pop_if(|update| matches!(update, Update::Peaks(..)));
+
+		let mut latency = 0;
 
 		for plugin in &mut self.plugins {
 			plugin.processor.maybe_activate();
@@ -140,6 +142,8 @@ impl Channel {
 			} else {
 				plugin.processor.flush(audio, events, plugin.mix);
 			}
+
+			latency += plugin.processor.latency();
 
 			plugin.processor.maybe_restart();
 
@@ -174,23 +178,13 @@ impl Channel {
 		if peaks != self.last_peaks {
 			self.updates.push(Update::Peaks(self.id, peaks));
 		}
+
+		latency
 	}
 
 	#[must_use]
 	pub fn id(&self) -> NodeId {
 		self.id
-	}
-
-	#[must_use]
-	pub fn latency(&self) -> usize {
-		if self.enabled && !self.bypassed {
-			self.plugins
-				.iter()
-				.map(|plugin| plugin.processor.latency())
-				.sum()
-		} else {
-			0
-		}
 	}
 
 	pub fn reset(&mut self) {

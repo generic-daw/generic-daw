@@ -32,7 +32,7 @@ impl Track {
 		audio: &mut [f32],
 		events: &mut Vec<Event>,
 		injector: &Injector<Inject<Node>>,
-	) {
+	) -> usize {
 		self.voice_alloc.deactivate_all();
 
 		if state.transport.playing {
@@ -56,17 +56,12 @@ impl Track {
 			}
 		}
 
-		self.channel.process(state, audio, events, injector);
+		self.channel.process(state, audio, events, injector)
 	}
 
 	#[must_use]
 	pub fn id(&self) -> NodeId {
 		self.channel.id()
-	}
-
-	#[must_use]
-	pub fn latency(&self) -> usize {
-		self.channel.latency()
 	}
 
 	pub fn reset(&mut self) {

@@ -21,7 +21,7 @@ impl NodeImpl for Node {
 		audio: &mut [f32],
 		events: &mut Vec<Self::Event>,
 		injector: &Injector<Inject<Self>>,
-	) {
+	) -> usize {
 		match self {
 			Self::Channel(node) => node.process(state, audio, events, injector),
 			Self::Track(node) => node.process(state, audio, events, injector),
@@ -32,13 +32,6 @@ impl NodeImpl for Node {
 		match self {
 			Self::Channel(node) => node.id(),
 			Self::Track(node) => node.id(),
-		}
-	}
-
-	fn latency(&self) -> usize {
-		match self {
-			Self::Channel(node) => node.latency(),
-			Self::Track(node) => node.latency(),
 		}
 	}
 

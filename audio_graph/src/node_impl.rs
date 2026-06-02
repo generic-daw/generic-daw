@@ -15,16 +15,15 @@ pub trait NodeImpl: Send + Sized + 'static {
 	type Event: EventImpl;
 	type State: Send + Sync;
 	type Inject<'a>: WorkList<Scratch = (), Inject = Infallible>;
+	#[must_use]
 	fn process(
 		&mut self,
 		state: &Self::State,
 		audio: &mut [f32],
 		events: &mut Vec<Self::Event>,
 		injector: &Injector<Inject<Self>>,
-	);
+	) -> usize;
 	#[must_use]
 	fn id(&self) -> NodeId;
-	#[must_use]
-	fn latency(&self) -> usize;
 	fn reset(&mut self);
 }
