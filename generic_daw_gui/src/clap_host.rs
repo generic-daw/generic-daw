@@ -190,8 +190,8 @@ impl ClapHost {
 				}
 			}
 			Message::WindowResized(window, size) => {
-				if let Some(&plugin) = self.plugin_of_window.get(&window)
-					&& let Some(plugin) = self.plugins.get_mut(&plugin)
+				if let Some(&id) = self.plugin_of_window.get(&window)
+					&& let plugin = plugin!(id)
 					&& plugin.has_gui()
 					&& let Some(&scale_factor) = self.scale_factor_of_window.get(&window)
 					&& let size = size * scale_factor
@@ -206,8 +206,8 @@ impl ClapHost {
 			Message::WindowRescaled(window, scale_factor) => {
 				self.scale_factor_of_window.insert(window, scale_factor);
 
-				if let Some(&plugin) = self.plugin_of_window.get(&window)
-					&& let Some(plugin) = self.plugins.get_mut(&plugin)
+				if let Some(&id) = self.plugin_of_window.get(&window)
+					&& let plugin = plugin!(id)
 					&& plugin.has_gui()
 				{
 					let plugin_scale = plugin.set_scale(scale_factor);
@@ -217,8 +217,8 @@ impl ClapHost {
 				}
 			}
 			Message::WindowCloseRequested(window) => {
-				if let Some(plugin) = self.plugin_of_window.get(&window) {
-					self.plugins.get_mut(plugin).unwrap().destroy();
+				if let Some(id) = self.plugin_of_window.get(&window) {
+					plugin!(id).destroy();
 					return window::close(window).into();
 				}
 			}
@@ -256,7 +256,7 @@ impl ClapHost {
 		match message {
 			MainThreadMessage::RequestCallback => plugin!().call_on_main_thread_callback(),
 			MainThreadMessage::Restart(processor) => {
-				let plugin = plugin!(MainThreadMessage::Deactivate(processor));
+				let plugin = plugin!(MainThreadMessage::Restart(processor));
 				plugin.deactivate(processor);
 				if let Err(err) = plugin.activate(transport.sample_rate, transport.frames) {
 					warn!("{err}");
