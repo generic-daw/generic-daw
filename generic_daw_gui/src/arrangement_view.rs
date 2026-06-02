@@ -1732,6 +1732,7 @@ impl ArrangementView {
 		let node = self.arrangement.node(self.selected);
 
 		let enabled = node.enabled
+			&& node.ty == NodeType::Track
 			&& self
 				.arrangement
 				.transport()
@@ -1888,6 +1889,7 @@ impl ArrangementView {
 		name: impl text::IntoFragment<'a>,
 	) -> Element<'a, Message> {
 		let enabled = node.enabled
+			&& node.ty == NodeType::Track
 			&& self
 				.arrangement
 				.transport()
