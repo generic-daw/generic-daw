@@ -49,7 +49,7 @@ impl<'a> MainThread<'a> {
 
 impl<'a> MainThreadHandler<'a> for MainThread<'a> {
 	fn initialized(&mut self, instance: InitializedPluginHandle<'a>) {
-		self.shared.instance.set(instance).unwrap();
+		self.shared.initialized(instance);
 	}
 }
 
