@@ -25,7 +25,7 @@ use generic_daw_core::{
 };
 use generic_daw_project::proto;
 use iced::{
-	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
+	Center, Color, Element, Fill, Font, Subscription, Task, Theme, border, keyboard,
 	mouse::Interaction,
 	padding,
 	time::every,
@@ -876,7 +876,6 @@ impl Daw {
 									.padding(padding::horizontal(10).vertical(5))
 									.style(container_with_radius(weakest_bordered_box, 5))
 								]
-								.width(Shrink)
 								.align_y(Center)
 								.spacing(10),
 							)

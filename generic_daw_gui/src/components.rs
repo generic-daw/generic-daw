@@ -5,7 +5,7 @@ use crate::{
 };
 use generic_daw_widget::drag_handle::DragHandle;
 use iced::{
-	Element, Font, Shrink, Theme, border, padding,
+	Element, Font, Theme, border, padding,
 	widget::{Button, button, container, pick_list, row, text, text_input},
 };
 use std::ops::RangeInclusive;
@@ -76,7 +76,6 @@ pub fn number_input<'a, Message: Clone + 'a>(
 			.width(max_digits * 10 + 14)
 			.on_input(text_update)
 	]
-	.height(Shrink)
 	.into()
 }
 

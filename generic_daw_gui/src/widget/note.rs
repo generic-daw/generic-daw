@@ -5,7 +5,7 @@ use crate::widget::{
 };
 use generic_daw_core::{MidiNote, Transport};
 use iced::{
-	Event, Length, Rectangle, Renderer, Shrink, Size, Theme, Vector,
+	Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
 		Layout, Renderer as _, Shell, Text, Widget,
 		layout::{Limits, Node},
@@ -31,7 +31,7 @@ pub struct Note<'a, Message> {
 
 impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 	fn size(&self) -> Size<Length> {
-		Size::new(Shrink, Shrink)
+		Size::new(Fill, Fill)
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {

@@ -8,7 +8,7 @@ use crate::{
 };
 use generic_daw_core::{Transition, Transport, time::BeatTime};
 use iced::{
-	Event, Length, Point, Rectangle, Renderer, Shrink, Size, Theme, Vector,
+	Event, Fill, Length, Point, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
 		Layout, Renderer as _, Shell, Text, Widget,
 		graphics::{
@@ -167,7 +167,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 	}
 
 	fn size(&self) -> Size<Length> {
-		Size::new(Shrink, Shrink)
+		Size::new(Fill, Fill)
 	}
 
 	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {

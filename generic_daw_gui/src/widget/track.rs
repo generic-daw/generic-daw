@@ -1,6 +1,6 @@
 use crate::widget::clip::Clip;
 use iced::{
-	Event, Fill, Length, Rectangle, Renderer, Shrink, Size, Theme, Vector,
+	Event, Fill, Length, Rectangle, Renderer, Size, Theme, Vector,
 	advanced::{
 		Layout, Shell, Widget,
 		layout::{Limits, Node},
@@ -27,7 +27,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 	}
 
 	fn size(&self) -> Size<Length> {
-		Size::new(Fill, Shrink)
+		Size::new(Fill, Fill)
 	}
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {

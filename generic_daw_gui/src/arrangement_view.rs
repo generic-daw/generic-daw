@@ -1732,12 +1732,12 @@ impl ArrangementView {
 		let node = self.arrangement.node(self.selected);
 
 		let enabled = node.enabled
-			&& node.ty == NodeType::Track
-			&& self
-				.arrangement
-				.transport()
-				.solo
-				.is_none_or(|solo| solo == node.id);
+			&& (node.ty != NodeType::Track
+				|| self
+					.arrangement
+					.transport()
+					.solo
+					.is_none_or(|solo| solo == node.id));
 
 		Split::new(
 			scrollable(
@@ -1889,12 +1889,12 @@ impl ArrangementView {
 		name: impl text::IntoFragment<'a>,
 	) -> Element<'a, Message> {
 		let enabled = node.enabled
-			&& node.ty == NodeType::Track
-			&& self
-				.arrangement
-				.transport()
-				.solo
-				.is_none_or(|solo| solo == node.id);
+			&& (node.ty != NodeType::Track
+				|| self
+					.arrangement
+					.transport()
+					.solo
+					.is_none_or(|solo| solo == node.id));
 
 		let soloed = self.arrangement.transport().solo == Some(node.id);
 
