@@ -31,6 +31,7 @@ pub enum Message {
 	PluginParamChange(PluginId, ClapId, f32),
 	HostParamChange(PluginId, ClapId, f32),
 	TickTimer(Duration),
+	DestroyInactive(PluginId),
 	Activate(PluginId),
 	SetState(PluginId, NoDebug<Box<[u8]>>),
 	GuiOpen(PluginId),
@@ -114,6 +115,21 @@ impl ClapHost {
 							plugin.tick_timer(timer_id);
 						}
 					});
+			}
+			Message::DestroyInactive(id) => {
+				plugin!(id);
+
+				let plugin = self.plugins.remove(&id).unwrap();
+				debug_assert!(!plugin.is_active());
+
+				self.timers_of_duration
+					.retain(|_, set| set.remove(&id).is_none() || !set.is_empty());
+
+				return self.handle_main_thread_message(
+					id,
+					MainThreadMessage::GuiClosed,
+					transport,
+				);
 			}
 			Message::Activate(id) => {
 				let plugin = plugin!(id);
@@ -270,17 +286,8 @@ impl ClapHost {
 				plugin!(MainThreadMessage::Deactivate(processor)).deactivate(processor);
 			}
 			MainThreadMessage::Destroy(processor) => {
-				plugin!(MainThreadMessage::Destroy(processor));
-
-				self.plugins.remove(&id).unwrap().deactivate(processor);
-				self.timers_of_duration
-					.retain(|_, set| set.remove(&id).is_none() || !set.is_empty());
-
-				return self.handle_main_thread_message(
-					id,
-					MainThreadMessage::GuiClosed,
-					transport,
-				);
+				plugin!(MainThreadMessage::Destroy(processor)).deactivate(processor);
+				return self.update(Message::DestroyInactive(id), transport);
 			}
 			MainThreadMessage::GuiRequestResize(size) => {
 				if let Some(&window) = self.window_of_plugin.get(&id)

@@ -411,7 +411,14 @@ impl ArrangementView {
 					self.arrangement.plugin_move_to(node, index, target_index);
 				}
 			}
-			Message::PluginRemove(node, i) => self.arrangement.plugin_remove(node, i),
+			Message::PluginRemove(node, i) => {
+				let plugin = self.arrangement.plugin_remove(node, i);
+				if !plugin.active {
+					return Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
+						clap_host::Message::DestroyInactive(plugin.id),
+					)));
+				}
+			}
 			Message::SampleLoaded(loaded) => {
 				self.loading -= 1;
 

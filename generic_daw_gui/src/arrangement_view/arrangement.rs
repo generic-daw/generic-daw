@@ -4,7 +4,7 @@ use crate::{
 		channel::Channel,
 		midi_pattern::{MidiPattern, MidiPatternPair},
 		node::{Node, NodeType},
-		plugin::PluginPair,
+		plugin::{Plugin, PluginPair},
 		poll_consumer,
 		sample::{Sample, SamplePair},
 		track::Track,
@@ -243,9 +243,10 @@ impl Arrangement {
 		))
 	}
 
-	pub fn plugin_remove(&mut self, id: NodeId, index: usize) {
-		self.node_mut(id).plugins.remove(index);
+	pub fn plugin_remove(&mut self, id: NodeId, index: usize) -> Plugin {
+		let plugin = self.node_mut(id).plugins.remove(index);
 		self.node_action(id, NodeAction::PluginRemove(index));
+		plugin
 	}
 
 	pub fn plugin_activate(
