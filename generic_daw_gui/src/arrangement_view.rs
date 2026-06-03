@@ -368,11 +368,7 @@ impl ArrangementView {
 						action = Action::batch([
 							action,
 							Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
-								clap_host::Message::Activate(
-									plugin,
-									self.arrangement.transport().sample_rate,
-									self.arrangement.transport().frames,
-								),
+								clap_host::Message::Activate(plugin),
 							))),
 							Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
 								clap_host::Message::GuiOpen(plugin),
@@ -402,11 +398,7 @@ impl ArrangementView {
 					self.arrangement.plugin_deactivate(node, i);
 				} else {
 					return Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
-						clap_host::Message::Activate(
-							plugin.id,
-							self.arrangement.transport().sample_rate,
-							self.arrangement.transport().frames,
-						),
+						clap_host::Message::Activate(plugin.id),
 					)));
 				}
 			}

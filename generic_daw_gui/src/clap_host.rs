@@ -19,7 +19,6 @@ use smol::{Timer, unblock};
 use std::{
 	collections::{HashMap, HashSet},
 	iter::repeat,
-	num::NonZero,
 	ops::Deref as _,
 	sync::mpsc::Receiver,
 	time::Duration,
@@ -32,7 +31,7 @@ pub enum Message {
 	PluginParamChange(PluginId, ClapId, f32),
 	HostParamChange(PluginId, ClapId, f32),
 	TickTimer(Duration),
-	Activate(PluginId, NonZero<u32>, NonZero<u32>),
+	Activate(PluginId),
 	SetState(PluginId, NoDebug<Box<[u8]>>),
 	GuiOpen(PluginId),
 	GuiOpened(PluginId, NoClone<Box<Fragile<Plugin>>>),
@@ -116,11 +115,13 @@ impl ClapHost {
 						}
 					});
 			}
-			Message::Activate(id, sample_rate, frames) => {
+			Message::Activate(id) => {
 				let plugin = plugin!(id);
 				return Action::instruction(daw::Instruction::PluginActivate(
 					id,
-					plugin.activate(sample_rate, frames).map(Box::new),
+					plugin
+						.activate(transport.sample_rate, transport.frames)
+						.map(Box::new),
 				));
 			}
 			Message::SetState(id, state) => {
