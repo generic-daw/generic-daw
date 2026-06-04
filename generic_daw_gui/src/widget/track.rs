@@ -10,20 +10,16 @@ use iced::{
 		widget::{Operation, Tree},
 	},
 };
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 
 #[derive(Debug)]
 pub struct Track<'a, Message> {
 	pub(super) clips: Box<[Clip<'a, Message>]>,
 }
 
-impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
-	fn diff(&self, tree: &mut Tree) {
-		tree.diff_children(&self.clips);
-	}
-
-	fn children(&self) -> Vec<Tree> {
-		self.clips.iter().map(Tree::new).collect()
+impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Track<'a, Message> {
+	fn diff(&mut self, tree: &mut Tree) {
+		tree.diff_children(&mut self.clips);
 	}
 
 	fn size(&self) -> Size<Length> {
@@ -93,14 +89,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Track<'_, Message> {
 			.unwrap_or_default()
 	}
 
-	fn overlay<'a>(
-		&'a mut self,
-		tree: &'a mut Tree,
-		layout: Layout<'a>,
+	fn overlay<'b>(
+		&'b mut self,
+		tree: &'b mut Tree,
+		layout: Layout<'b>,
 		renderer: &Renderer,
 		viewport: &Rectangle,
 		translation: Vector,
-	) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
+	) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
 		let children = self
 			.clips
 			.iter_mut()
@@ -176,8 +172,8 @@ impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Trac
 	}
 }
 
-impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for &Track<'a, Message> {
-	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
-		*self
+impl<'a, Message: 'a> BorrowMut<dyn Widget<Message, Theme, Renderer> + 'a> for Track<'a, Message> {
+	fn borrow_mut(&mut self) -> &mut (dyn Widget<Message, Theme, Renderer> + 'a) {
+		self
 	}
 }

@@ -30,7 +30,11 @@ use iced::{
 	},
 	window,
 };
-use std::{borrow::Borrow, cell::RefCell, sync::Arc};
+use std::{
+	borrow::{Borrow, BorrowMut},
+	cell::RefCell,
+	sync::Arc,
+};
 
 #[derive(Default, PartialEq)]
 struct ClipInfo {
@@ -113,7 +117,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		tree::State::new(State::default())
 	}
 
-	fn diff(&self, tree: &mut Tree) {
+	fn diff(&mut self, tree: &mut Tree) {
 		let state = tree.state.downcast_mut::<State>();
 
 		let playlist = self.playlist.borrow();
@@ -987,8 +991,8 @@ impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Clip
 	}
 }
 
-impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for &Clip<'a, Message> {
-	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
-		*self
+impl<'a, Message: 'a> BorrowMut<dyn Widget<Message, Theme, Renderer> + 'a> for Clip<'a, Message> {
+	fn borrow_mut(&mut self) -> &mut (dyn Widget<Message, Theme, Renderer> + 'a) {
+		self
 	}
 }

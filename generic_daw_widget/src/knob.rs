@@ -217,7 +217,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 		tree::Tag::of::<State>()
 	}
 
-	fn diff(&self, tree: &mut Tree) {
+	fn diff(&mut self, tree: &mut Tree) {
 		let state = tree.state.downcast_mut::<State>();
 
 		if self.info != state.last_info {
@@ -225,18 +225,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 			state.cache.clear();
 		}
 
-		if let Some(tooltip) = self.tooltip.as_deref() {
-			tree.diff_children(&[tooltip as &dyn Widget<Message, Theme, Renderer>]);
+		if let Some(tooltip) = self.tooltip.as_deref_mut() {
+			tree.diff_children(&mut [tooltip as &mut dyn Widget<Message, Theme, Renderer>]);
 		} else {
 			tree.children.clear();
 		}
-	}
-
-	fn children(&self) -> Vec<Tree> {
-		self.tooltip
-			.as_deref()
-			.map(|p| vec![Tree::new(p as &dyn Widget<Message, Theme, Renderer>)])
-			.unwrap_or_default()
 	}
 
 	fn state(&self) -> tree::State {

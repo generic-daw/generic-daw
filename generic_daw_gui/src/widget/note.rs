@@ -17,7 +17,10 @@ use iced::{
 	alignment::Vertical,
 	border, padding,
 };
-use std::{borrow::Borrow, cell::RefCell};
+use std::{
+	borrow::{Borrow, BorrowMut},
+	cell::RefCell,
+};
 
 #[derive(Debug)]
 #[expect(clippy::struct_field_names)]
@@ -293,8 +296,8 @@ impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Note
 	}
 }
 
-impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for &Note<'a, Message> {
-	fn borrow(&self) -> &(dyn Widget<Message, Theme, Renderer> + 'a) {
-		*self
+impl<'a, Message: 'a> BorrowMut<dyn Widget<Message, Theme, Renderer> + 'a> for Note<'a, Message> {
+	fn borrow_mut(&mut self) -> &mut (dyn Widget<Message, Theme, Renderer> + 'a) {
+		self
 	}
 }

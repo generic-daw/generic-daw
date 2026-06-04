@@ -58,10 +58,6 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		self.child.as_widget().size()
 	}
 
-	fn size_hint(&self) -> Size<Length> {
-		self.child.as_widget().size_hint()
-	}
-
 	fn tag(&self) -> tree::Tag {
 		tree::Tag::of::<State>()
 	}
@@ -70,12 +66,8 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 		tree::State::new(State::default())
 	}
 
-	fn children(&self) -> Vec<Tree> {
-		vec![Tree::new(&*self.child)]
-	}
-
-	fn diff(&self, tree: &mut Tree) {
-		tree.diff_children(&[&*self.child]);
+	fn diff(&mut self, tree: &mut Tree) {
+		tree.diff_children(&mut [&mut *self.child]);
 	}
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
