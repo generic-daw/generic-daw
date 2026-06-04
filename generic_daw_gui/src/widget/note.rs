@@ -76,80 +76,79 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 
 		let piano_roll = &mut *self.piano_roll.borrow_mut();
 		match event {
-			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
-				if piano_roll.status == Status::None =>
-			{
+			Event::Mouse(mouse::Event::ButtonPressed {
+				button: mouse::Button::Left,
+				modifiers,
+			}) if piano_roll.status == Status::None => {
 				let mut clear = piano_roll.primary.insert(self.index);
 
-				match button {
-					mouse::Button::Left => {
-						let time = px_to_time(
-							cursor.x,
-							piano_roll.position,
-							piano_roll.scale,
-							self.transport,
-						);
+				let time = px_to_time(
+					cursor.x,
+					piano_roll.position,
+					piano_roll.scale,
+					self.transport,
+				);
 
-						piano_roll.status = match (modifiers.command(), modifiers.shift()) {
+				piano_roll.status = match (modifiers.command(), modifiers.shift()) {
+					(false, false) => {
+						let start_offset = cursor.x - note_bounds.x;
+						let end_offset = note_bounds.width - start_offset;
+						let border = 10f32.min(note_bounds.width / 3.0);
+						match (start_offset < border, end_offset < border) {
 							(false, false) => {
-								let start_offset = cursor.x - note_bounds.x;
-								let end_offset = note_bounds.width - start_offset;
-								let border = 10f32.min(note_bounds.width / 3.0);
-								match (start_offset < border, end_offset < border) {
-									(false, false) => {
-										let bounds =
-											layout.bounds().intersection(viewport).unwrap()
-												- Vector::new(viewport.x, viewport.y);
-										let vel_pixel = bounds.x
-											+ border + self.note.velocity
-											* (bounds.width - 2.0 * border);
-										if (vel_pixel - cursor.x).abs() < border / 2.0 {
-											Status::DraggingVelocity(self.index, self.note.velocity)
-										} else {
-											Status::Dragging(self.note.key, time)
-										}
-									}
-									(true, false) => Status::TrimmingStart(time),
-									(false, true) => Status::TrimmingEnd(time),
-									(true, true) => unreachable!(),
+								let bounds = layout.bounds().intersection(viewport).unwrap()
+									- Vector::new(viewport.x, viewport.y);
+								let vel_pixel = bounds.x
+									+ border + self.note.velocity
+									* (bounds.width - 2.0 * border);
+								if (vel_pixel - cursor.x).abs() < border / 2.0 {
+									Status::DraggingVelocity(self.index, self.note.velocity)
+								} else {
+									Status::Dragging(self.note.key, time)
 								}
 							}
-							(true, false) => {
-								clear = false;
-								let time = maybe_snap(time, *modifiers, |time| {
-									time.round(beats_snap_step(piano_roll.scale, self.transport))
-								});
-								Status::Selecting(self.note.key, self.note.key, time, time)
-							}
-							(false, true) => {
-								shell.publish((self.f)(Action::Clone));
-								Status::Dragging(self.note.key, time)
-							}
-							(true, true) => {
-								let time = maybe_snap(time, *modifiers, |time| {
-									time.round(beats_snap_step(piano_roll.scale, self.transport))
-								});
-								shell.publish((self.f)(Action::SplitAt(time)));
-								Status::DraggingSplit(time)
-							}
-						};
+							(true, false) => Status::TrimmingStart(time),
+							(false, true) => Status::TrimmingEnd(time),
+							(true, true) => unreachable!(),
+						}
+					}
+					(true, false) => {
+						clear = false;
+						let time = maybe_snap(time, *modifiers, |time| {
+							time.round(beats_snap_step(piano_roll.scale, self.transport))
+						});
+						Status::Selecting(self.note.key, self.note.key, time, time)
+					}
+					(false, true) => {
+						shell.publish((self.f)(Action::Clone));
+						Status::Dragging(self.note.key, time)
+					}
+					(true, true) => {
+						let time = maybe_snap(time, *modifiers, |time| {
+							time.round(beats_snap_step(piano_roll.scale, self.transport))
+						});
+						shell.publish((self.f)(Action::SplitAt(time)));
+						Status::DraggingSplit(time)
+					}
+				};
 
-						shell.capture_event();
-						shell.request_redraw();
-					}
-					mouse::Button::Right if piano_roll.status != Status::Deleting => {
-						clear = true;
-						piano_roll.status = Status::Deleting;
-						shell.publish((self.f)(Action::Delete));
-						shell.capture_event();
-					}
-					_ => {}
-				}
+				shell.capture_event();
+				shell.request_redraw();
 
 				if clear {
 					piano_roll.primary.clear();
 					piano_roll.primary.insert(self.index);
 				}
+			}
+			Event::Mouse(mouse::Event::ButtonPressed {
+				button: mouse::Button::Right,
+				..
+			}) if piano_roll.status == Status::None => {
+				piano_roll.primary.clear();
+				piano_roll.primary.insert(self.index);
+				piano_roll.status = Status::Deleting;
+				shell.publish((self.f)(Action::Delete));
+				shell.capture_event();
 			}
 			Event::Mouse(mouse::Event::CursorMoved { .. })
 				if piano_roll.status == Status::Deleting =>

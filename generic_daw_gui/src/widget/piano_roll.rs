@@ -156,37 +156,36 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 		let snap_step = beats_snap_step(state.scale, self.transport);
 
 		match event {
-			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
-				if state.status == Status::None =>
-			{
-				match button {
-					mouse::Button::Left => {
-						let key = px_to_key(cursor.y, state.position, state.scale);
+			Event::Mouse(mouse::Event::ButtonPressed {
+				button: mouse::Button::Left,
+				modifiers,
+			}) if state.status == Status::None => {
+				let key = px_to_key(cursor.y, state.position, state.scale);
 
-						if modifiers.command() {
-							let time =
-								maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
+				if modifiers.command() {
+					let time = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
-							state.status = Status::Selecting(key, key, time, time);
-						} else {
-							let time =
-								maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
+					state.status = Status::Selecting(key, key, time, time);
+				} else {
+					let time = maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
 
-							state.primary.clear();
-							shell.publish((self.action)(Action::Add(key, time)));
+					state.primary.clear();
+					shell.publish((self.action)(Action::Add(key, time)));
 
-							state.status = Status::Dragging(key, new_time);
-						}
-
-						shell.capture_event();
-						shell.request_redraw();
-					}
-					mouse::Button::Right => {
-						state.primary.clear();
-						state.status = Status::Deleting;
-					}
-					_ => {}
+					state.status = Status::Dragging(key, new_time);
 				}
+
+				shell.capture_event();
+				shell.request_redraw();
+			}
+			Event::Mouse(mouse::Event::ButtonPressed {
+				button: mouse::Button::Right,
+				..
+			}) if state.status == Status::None => {
+				state.clear();
+				state.status = Status::Deleting;
+				shell.capture_event();
+				shell.request_redraw();
 			}
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.status {

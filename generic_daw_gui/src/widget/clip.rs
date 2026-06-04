@@ -271,195 +271,186 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		}
 
 		match event {
-			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers })
-				if playlist.status == Status::None =>
-			{
+			Event::Mouse(mouse::Event::ButtonPressed {
+				button: mouse::Button::Left,
+				modifiers,
+			}) if playlist.status == Status::None => {
 				let mut clear = playlist.primary.insert(index);
 
-				match button {
-					mouse::Button::Left => {
-						let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
-						state.last_click = Some(new_click);
+				let new_click = Click::new(cursor, mouse::Button::Left, state.last_click);
+				state.last_click = Some(new_click);
 
-						let time =
-							px_to_time(cursor.x, playlist.position, playlist.scale, self.transport);
+				let time = px_to_time(cursor.x, playlist.position, playlist.scale, self.transport);
 
-						match self.inner {
-							Inner::AudioClip(inner) => 'block: {
-								if cursor.y - clip_bounds.y.max(0.0) < LINE_HEIGHT {
-									break 'block;
+				match self.inner {
+					Inner::AudioClip(inner) => 'block: {
+						if cursor.y - clip_bounds.y.max(0.0) < LINE_HEIGHT {
+							break 'block;
+						}
+
+						let samples_per_px = samples_per_px(playlist.scale, self.transport);
+						let fade_start_px = inner.clip.fade_start.len.to_samples(self.transport)
+							as f32 / samples_per_px;
+						let fade_end_px = inner.clip.fade_end.len.to_samples(self.transport) as f32
+							/ -samples_per_px;
+
+						let fade_start_control = Point::new(
+							clip_bounds.x + inner.clip.fade_start.p.x * fade_start_px,
+							clip_bounds.y
+								+ LINE_HEIGHT + (1.0 - inner.clip.fade_start.p.y)
+								* (layout.bounds().height - LINE_HEIGHT),
+						);
+
+						let fade_end_control = Point::new(
+							clip_bounds.x
+								+ layout.bounds().width + inner.clip.fade_end.p.x * fade_end_px,
+							clip_bounds.y
+								+ LINE_HEIGHT + (1.0 - inner.clip.fade_end.p.y)
+								* (layout.bounds().height - LINE_HEIGHT),
+						);
+
+						let fade_start_control_dist = cursor.distance(fade_start_control);
+						let fade_end_control_dist = cursor.distance(fade_end_control);
+
+						match (
+							fade_start_px >= 8.0 && fade_start_control_dist <= 5.0,
+							fade_end_px <= -8.0 && fade_end_control_dist <= 5.0,
+							fade_start_control_dist <= fade_end_control_dist,
+						) {
+							(true, true, true) | (true, false, _) => {
+								if new_click.kind() == Kind::Double {
+									shell.publish((self.f)(Action::FadeStartToggleSymmetric));
 								}
-
-								let samples_per_px = samples_per_px(playlist.scale, self.transport);
-								let fade_start_px =
-									inner.clip.fade_start.len.to_samples(self.transport) as f32
-										/ samples_per_px;
-								let fade_end_px = inner.clip.fade_end.len.to_samples(self.transport)
-									as f32 / -samples_per_px;
-
-								let fade_start_control = Point::new(
-									clip_bounds.x + inner.clip.fade_start.p.x * fade_start_px,
-									clip_bounds.y
-										+ LINE_HEIGHT + (1.0 - inner.clip.fade_start.p.y)
-										* (layout.bounds().height - LINE_HEIGHT),
-								);
-
-								let fade_end_control = Point::new(
-									clip_bounds.x
-										+ layout.bounds().width + inner.clip.fade_end.p.x * fade_end_px,
-									clip_bounds.y
-										+ LINE_HEIGHT + (1.0 - inner.clip.fade_end.p.y)
-										* (layout.bounds().height - LINE_HEIGHT),
-								);
-
-								let fade_start_control_dist = cursor.distance(fade_start_control);
-								let fade_end_control_dist = cursor.distance(fade_end_control);
-
-								match (
-									fade_start_px >= 8.0 && fade_start_control_dist <= 5.0,
-									fade_end_px <= -8.0 && fade_end_control_dist <= 5.0,
-									fade_start_control_dist <= fade_end_control_dist,
-								) {
-									(true, true, true) | (true, false, _) => {
-										if new_click.kind() == Kind::Double {
-											shell.publish((self.f)(
-												Action::FadeStartToggleSymmetric,
-											));
-										}
-										playlist.status =
-											Status::FadingStartP(inner.index.0, inner.index.1);
-										shell.capture_event();
-										return;
-									}
-									(true, true, false) | (false, true, _) => {
-										if new_click.kind() == Kind::Double {
-											shell.publish((self.f)(Action::FadeEndToggleSymmetric));
-										}
-										playlist.status =
-											Status::FadingEndP(inner.index.0, inner.index.1);
-										shell.capture_event();
-										return;
-									}
-									(false, false, _) => {
-										let bounds =
-											layout.bounds().intersection(viewport).unwrap()
-												- Vector::new(viewport.x, viewport.y);
-										let volume_control = bounds.position()
-											+ Vector::new(bounds.width / 2.0, bounds.height);
-										if bounds.width >= 8.0
-											&& cursor.distance(volume_control) <= 10.0
-										{
-											if new_click.kind() == Kind::Double {
-												shell.publish((self.f)(Action::InvertPolarity));
-											}
-											playlist.status = Status::DraggingVolume(cursor.y);
-											shell.capture_event();
-											return;
-										}
-									}
-								}
-
-								if cursor.y - clip_bounds.y > LINE_HEIGHT + 12.0 {
-									break 'block;
-								}
-
-								let fade_start_tab_dist =
-									(clip_bounds.x + fade_start_px + 4.0 - cursor.x).abs();
-								let fade_end_tab_dist = (clip_bounds.x
-									+ layout.bounds().width + fade_end_px
-									- 4.0 - cursor.x)
-									.abs();
-
-								let left_of_start_tab = clip_bounds.x + fade_start_px > cursor.x;
-								let left_of_end_tab =
-									clip_bounds.x + layout.bounds().width + fade_end_px > cursor.x;
-
-								let use_start =
-									match (fade_start_tab_dist <= 6.0, fade_end_tab_dist <= 6.0) {
-										(true, false) => left_of_end_tab,
-										(false, true) => left_of_start_tab,
-										(true, true) => {
-											if fade_start_tab_dist <= fade_end_tab_dist {
-												left_of_end_tab
-											} else {
-												left_of_start_tab
-											}
-										}
-										(false, false) => break 'block,
-									};
-
-								playlist.status = if use_start {
-									Status::FadingStartLen(time)
-								} else {
-									Status::FadingEndLen(time)
-								};
+								playlist.status =
+									Status::FadingStartP(inner.index.0, inner.index.1);
 								shell.capture_event();
 								return;
 							}
-							Inner::MidiClip(..) => {
+							(true, true, false) | (false, true, _) => {
 								if new_click.kind() == Kind::Double {
-									shell.publish((self.f)(Action::Open(index.0, index.1)));
+									shell.publish((self.f)(Action::FadeEndToggleSymmetric));
+								}
+								playlist.status = Status::FadingEndP(inner.index.0, inner.index.1);
+								shell.capture_event();
+								return;
+							}
+							(false, false, _) => {
+								let bounds = layout.bounds().intersection(viewport).unwrap()
+									- Vector::new(viewport.x, viewport.y);
+								let volume_control = bounds.position()
+									+ Vector::new(bounds.width / 2.0, bounds.height);
+								if bounds.width >= 8.0 && cursor.distance(volume_control) <= 10.0 {
+									if new_click.kind() == Kind::Double {
+										shell.publish((self.f)(Action::InvertPolarity));
+									}
+									playlist.status = Status::DraggingVolume(cursor.y);
 									shell.capture_event();
 									return;
 								}
 							}
-							Inner::Recording(..) => {}
 						}
 
-						let start_pixel = clip_bounds.x;
-						let end_pixel = clip_bounds.x + clip_bounds.width;
-						let start_offset = cursor.x - start_pixel;
-						let end_offset = end_pixel - cursor.x;
-						let border = 10f32.min(clip_bounds.width / 3.0);
+						if cursor.y - clip_bounds.y > LINE_HEIGHT + 12.0 {
+							break 'block;
+						}
 
-						playlist.status = match (
-							modifiers.command(),
-							modifiers.shift(),
-							start_offset < border,
-							end_offset < border,
-							cursor.y - clip_bounds.y.max(0.0) < LINE_HEIGHT,
-						) {
-							(false, false, false, false, _) => Status::Dragging(index.0, time),
-							(false, _, true, false, _) => Status::TrimmingStart(time),
-							(false, _, false, true, _) => Status::TrimmingEnd(time),
-							(true, false, _, _, _) => {
-								clear = false;
-								let time = maybe_snap(time, *modifiers, |time| {
-									time.round(beats_snap_step(playlist.scale, self.transport))
-								});
-								Status::Selecting(index.0, index.0, time, time)
+						let fade_start_tab_dist =
+							(clip_bounds.x + fade_start_px + 4.0 - cursor.x).abs();
+						let fade_end_tab_dist =
+							(clip_bounds.x + layout.bounds().width + fade_end_px - 4.0 - cursor.x)
+								.abs();
+
+						let left_of_start_tab = clip_bounds.x + fade_start_px > cursor.x;
+						let left_of_end_tab =
+							clip_bounds.x + layout.bounds().width + fade_end_px > cursor.x;
+
+						let use_start = match (fade_start_tab_dist <= 6.0, fade_end_tab_dist <= 6.0)
+						{
+							(true, false) => left_of_end_tab,
+							(false, true) => left_of_start_tab,
+							(true, true) => {
+								if fade_start_tab_dist <= fade_end_tab_dist {
+									left_of_end_tab
+								} else {
+									left_of_start_tab
+								}
 							}
-							(false, true, _, _, _) => {
-								shell.publish((self.f)(Action::Clone));
-								Status::Dragging(index.0, time)
-							}
-							(true, true, _, _, false) => Status::DraggingSlip(time),
-							(true, true, _, _, true) => {
-								let time = maybe_snap(time, *modifiers, |time| {
-									time.round(beats_snap_step(playlist.scale, self.transport))
-								});
-								shell.publish((self.f)(Action::SplitAt(time)));
-								Status::DraggingSplit(time)
-							}
-							(_, _, true, true, _) => unreachable!(),
+							(false, false) => break 'block,
 						};
 
+						playlist.status = if use_start {
+							Status::FadingStartLen(time)
+						} else {
+							Status::FadingEndLen(time)
+						};
 						shell.capture_event();
-						shell.request_redraw();
+						return;
 					}
-					mouse::Button::Right if playlist.status != Status::Deleting => {
-						clear = true;
-						playlist.status = Status::Deleting;
-						shell.publish((self.f)(Action::Delete));
-						shell.capture_event();
+					Inner::MidiClip(..) => {
+						if new_click.kind() == Kind::Double {
+							shell.publish((self.f)(Action::Open(index.0, index.1)));
+							shell.capture_event();
+							return;
+						}
 					}
-					_ => {}
+					Inner::Recording(..) => {}
 				}
+
+				let start_pixel = clip_bounds.x;
+				let end_pixel = clip_bounds.x + clip_bounds.width;
+				let start_offset = cursor.x - start_pixel;
+				let end_offset = end_pixel - cursor.x;
+				let border = 10f32.min(clip_bounds.width / 3.0);
+
+				playlist.status = match (
+					modifiers.command(),
+					modifiers.shift(),
+					start_offset < border,
+					end_offset < border,
+					cursor.y - clip_bounds.y.max(0.0) < LINE_HEIGHT,
+				) {
+					(false, false, false, false, _) => Status::Dragging(index.0, time),
+					(false, _, true, false, _) => Status::TrimmingStart(time),
+					(false, _, false, true, _) => Status::TrimmingEnd(time),
+					(true, false, _, _, _) => {
+						clear = false;
+						let time = maybe_snap(time, *modifiers, |time| {
+							time.round(beats_snap_step(playlist.scale, self.transport))
+						});
+						Status::Selecting(index.0, index.0, time, time)
+					}
+					(false, true, _, _, _) => {
+						shell.publish((self.f)(Action::Clone));
+						Status::Dragging(index.0, time)
+					}
+					(true, true, _, _, false) => Status::DraggingSlip(time),
+					(true, true, _, _, true) => {
+						let time = maybe_snap(time, *modifiers, |time| {
+							time.round(beats_snap_step(playlist.scale, self.transport))
+						});
+						shell.publish((self.f)(Action::SplitAt(time)));
+						Status::DraggingSplit(time)
+					}
+					(_, _, true, true, _) => unreachable!(),
+				};
+
+				shell.capture_event();
+				shell.request_redraw();
 
 				if clear {
 					playlist.primary.clear();
 					playlist.primary.insert(index);
 				}
+			}
+			Event::Mouse(mouse::Event::ButtonPressed {
+				button: mouse::Button::Right,
+				..
+			}) if playlist.status == Status::None => {
+				playlist.primary.clear();
+				playlist.primary.insert(index);
+				playlist.status = Status::Deleting;
+				shell.publish((self.f)(Action::Delete));
+				shell.capture_event();
 			}
 			Event::Mouse(mouse::Event::CursorMoved { .. })
 				if playlist.status == Status::Deleting =>

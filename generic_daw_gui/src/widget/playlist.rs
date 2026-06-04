@@ -202,39 +202,44 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 		let snap_step = beats_snap_step(state.scale, self.transport);
 
 		match event {
-			Event::Mouse(mouse::Event::ButtonPressed { button, modifiers }) => match button {
-				mouse::Button::Left => {
-					let track = track_index(&layout, *viewport, cursor);
+			Event::Mouse(mouse::Event::ButtonPressed {
+				button: mouse::Button::Left,
+				modifiers,
+			}) if state.status == Status::None => {
+				let track = track_index(&layout, *viewport, cursor);
 
-					if modifiers.command() {
-						let Some(track) = track.or_else(|| layout.children().len().checked_sub(1))
-						else {
-							return;
-						};
+				if modifiers.command() {
+					let Some(track) = track.or_else(|| layout.children().len().checked_sub(1))
+					else {
+						return;
+					};
 
-						let time = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
+					let time = maybe_snap(new_time, *modifiers, |time| time.round(snap_step));
 
-						state.status = Status::Selecting(track, track, time, time);
-					} else if let Some(track) = track {
-						let time = maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
+					state.status = Status::Selecting(track, track, time, time);
+				} else if let Some(track) = track {
+					let time = maybe_snap(new_time, *modifiers, |time| time.floor(snap_step));
 
-						state.primary.clear();
-						shell.publish((self.action)(Action::Add(None, Some(track), time)));
-
-						state.status = Status::Dragging(track, new_time);
-					} else {
-						state.primary.clear();
-					}
-
-					shell.capture_event();
-					shell.request_redraw();
-				}
-				mouse::Button::Right => {
 					state.primary.clear();
-					state.status = Status::Deleting;
+					shell.publish((self.action)(Action::Add(None, Some(track), time)));
+
+					state.status = Status::Dragging(track, new_time);
+				} else {
+					state.primary.clear();
 				}
-				_ => {}
-			},
+
+				shell.capture_event();
+				shell.request_redraw();
+			}
+			Event::Mouse(mouse::Event::ButtonPressed {
+				button: mouse::Button::Right,
+				..
+			}) if state.status == Status::None => {
+				state.primary.clear();
+				state.status = Status::Deleting;
+				shell.capture_event();
+				shell.request_redraw();
+			}
 			Event::Mouse(mouse::Event::CursorMoved { modifiers, .. })
 			| Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => match state.status.clone() {
 				Status::Hovering(path, kind, time) => {
