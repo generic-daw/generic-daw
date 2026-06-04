@@ -292,7 +292,28 @@ impl<Message> Widget<Message, Theme, Renderer> for Seeker<'_, Message> {
 
 					if delta != Vector::ZERO {
 						state.status = Status::Panning(cursor);
-						shell.publish((self.pan)(delta, height, visible));
+						match (modifiers.command(), modifiers.shift(), modifiers.alt()) {
+							(false, false, false) => {
+								shell.publish((self.pan)(delta, height, visible));
+							}
+							(true, false, false) => {
+								shell.publish((self.zoom)(
+									Vector::new(delta.y / -64.0, 0.0),
+									cursor - Vector::new(0.0, LINE_HEIGHT),
+									height,
+									visible,
+								));
+							}
+							(false, false, true) => {
+								shell.publish((self.zoom)(
+									Vector::new(0.0, delta.y / 2.0),
+									cursor - Vector::new(0.0, LINE_HEIGHT),
+									height,
+									visible,
+								));
+							}
+							_ => {}
+						}
 						shell.capture_event();
 					}
 				}
