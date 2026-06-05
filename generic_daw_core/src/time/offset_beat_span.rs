@@ -80,8 +80,8 @@ impl OffsetBeatSpan {
 		len / self.len()
 	}
 
-	pub fn reverse(&mut self, len: SecondsTime) {
-		self.offset = len.saturating_sub(self.offset() + self.len());
+	pub fn reverse(&mut self, len: SecondsTime, stretch: f64) {
+		self.offset = len.saturating_sub(self.offset() + self.len() * stretch);
 	}
 
 	pub const fn slip_to(&mut self, new_offset: BeatTime, transport: &Transport) {

@@ -714,9 +714,10 @@ impl Arrangement {
 	pub fn clip_reverse(&mut self, track: usize, clip: usize) {
 		if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
 			audio.stretch *= -1.0;
-			audio
-				.position
-				.reverse(self.samples[&audio.sample].len(&self.transport));
+			audio.position.reverse(
+				self.samples[&audio.sample].len(&self.transport),
+				audio.stretch.abs(),
+			);
 			(audio.fade_start, audio.fade_end) = (audio.fade_end, audio.fade_start);
 			let id = audio.id;
 			self.node_action(self.tracks[track].id, NodeAction::ClipReverse(id));

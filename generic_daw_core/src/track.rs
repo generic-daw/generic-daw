@@ -168,8 +168,10 @@ impl Track {
 					panic!();
 				};
 				clip.stretch *= -1.0;
-				clip.position
-					.reverse(state.samples[&clip.sample].len(&state.transport));
+				clip.position.reverse(
+					state.samples[&clip.sample].len(&state.transport),
+					clip.stretch.abs(),
+				);
 				(clip.fade_start, clip.fade_end) = (clip.fade_end, clip.fade_start);
 			}
 			NodeAction::ClipSlipTo(id, pos) => {
