@@ -53,13 +53,13 @@ impl AudioClip {
 
 		let resample_ratio = sample.resample_ratio(&state.transport);
 		let offset = (self.position.offset() / resample_ratio).to_samples(&state.transport);
-		let read_len = (read_len / resample_ratio.abs()).to_samples(&state.transport);
+		let read_len = sample.samples.len() - offset;
 
 		let resample_ratio = self.stretch / resample_ratio;
 		let read_start = if resample_ratio.is_sign_positive() {
 			offset
 		} else {
-			sample.samples.len() - offset - read_len
+			0
 		};
 
 		let fade_start = self.fade_start.len.to_samples(&state.transport);
