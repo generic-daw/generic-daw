@@ -427,15 +427,17 @@ impl AudioThread {
 
 			click_beat += BeatTime::BEAT;
 
+			let resample_ratio = 44100.0 / f64::from(self.transport().sample_rate.get());
+
+			let len = ((click.len() as f64 / resample_ratio) as usize).next_multiple_of(2);
+
 			let play_pos = position.saturating_sub(start);
-			if play_pos >= click.len() {
+			if play_pos >= len {
 				continue;
 			}
 
-			let resample_ratio = 44100.0 / f64::from(self.transport().sample_rate.get());
-
 			resample_cubic(click, resample_ratio, play_pos / 2)
-				.take((click.len() - play_pos) / 2)
+				.take((len - play_pos) / 2)
 				.zip(buf[write_start..].as_chunks_mut::<2>().0)
 				.for_each(|((l, r), buf)| {
 					buf[0] += l;
