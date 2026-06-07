@@ -3,21 +3,25 @@ use crate::{
 	audio_thread::{AudioCallback, AudioThread},
 };
 use cpal::{
-	BufferSize, Device, FromSample, I24, InputCallbackInfo, OutputCallbackInfo, Sample,
+	BufferSize, Device, FromSample, HostId, I24, InputCallbackInfo, OutputCallbackInfo, Sample,
 	SampleFormat, StreamConfig, SupportedBufferSize, SupportedStreamConfig,
 	SupportedStreamConfigRange, U24,
 	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
 };
 use log::{error, info, warn};
 use rtrb::{Consumer, Producer, RingBuffer};
-use std::{cmp::Ordering, collections::HashMap, num::NonZero};
+use std::{cmp::Ordering, collections::HashMap, num::NonZero, sync::LazyLock};
 use utils::boxed_slice;
+
+pub static DEFAULT_HOST: LazyLock<HostId> = LazyLock::new(|| cpal::default_host().id());
 
 #[must_use]
 pub fn get_devices() -> HashMap<DeviceId, DeviceDescription> {
-	cpal::default_host()
-		.devices()
-		.unwrap()
+	cpal::available_hosts()
+		.into_iter()
+		.filter_map(|host| cpal::host_from_id(host).ok())
+		.filter_map(|host| host.devices().ok())
+		.flatten()
 		.filter_map(|device| Some((device.id().ok()?, device.description().ok()?)))
 		.collect()
 }
@@ -27,7 +31,9 @@ pub fn build_input_stream(
 	sample_rate: Option<NonZero<u32>>,
 	frames: Option<NonZero<u32>>,
 ) -> (Consumer<[f32; 2]>, Stream, NonZero<u32>, NonZero<u32>) {
-	let host = cpal::default_host();
+	let host = device_id
+		.and_then(|device_id| cpal::host_from_id(device_id.host()).ok())
+		.unwrap_or_else(cpal::default_host);
 
 	let device = device_id
 		.and_then(|device_id| host.device_by_id(device_id))
@@ -94,7 +100,9 @@ pub fn build_output_stream(
 	frames: Option<NonZero<u32>>,
 	receiver: oneshot::Receiver<AudioThread>,
 ) -> (Stream, NonZero<u32>, NonZero<u32>) {
-	let host = cpal::default_host();
+	let host = device_id
+		.and_then(|device_id| cpal::host_from_id(device_id.host()).ok())
+		.unwrap_or_else(cpal::default_host);
 
 	let device = device_id
 		.and_then(|device_id| host.device_by_id(device_id))

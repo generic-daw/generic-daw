@@ -12,7 +12,9 @@ use crate::{
 	theme::Theme,
 	widget::{LINE_HEIGHT, TEXT_HEIGHT},
 };
-use generic_daw_core::{DeviceDescription, DeviceId, clap_host::DEFAULT_CLAP_PATHS, get_devices};
+use generic_daw_core::{
+	DEFAULT_HOST, DeviceDescription, DeviceId, HostId, clap_host::DEFAULT_CLAP_PATHS, get_devices,
+};
 use iced::{
 	Center, Element, Fill, Font, Task, border, keyboard,
 	mouse::Interaction,
@@ -64,6 +66,7 @@ pub enum Message {
 	RemoveClapPath(usize),
 	MoveClapPath(DragEvent),
 	ChangedTab(Tab),
+	ChangedHost(HostId),
 	ChangedId(Option<DeviceId>),
 	ChangedSampleRate(Option<NonZero<u32>>),
 	ChangedBufferSize(Option<NonZero<u32>>),
@@ -82,43 +85,89 @@ pub struct ConfigView {
 	config: Config,
 	prev_config: Config,
 	tab: Tab,
-	devices: HashMap<DeviceId, DeviceDescription>,
-	input_devices: Box<[DeviceId]>,
-	output_devices: Box<[DeviceId]>,
+	hosts: Vec<HostId>,
+	host: HostId,
+	devices: HashMap<HostId, Devices>,
+	device_info: HashMap<DeviceId, DeviceDescription>,
 	main_window_id: window::Id,
+}
+
+#[derive(Debug, Default)]
+struct Devices {
+	input: Vec<DeviceId>,
+	output: Vec<DeviceId>,
 }
 
 impl ConfigView {
 	pub fn new(main_window_id: window::Id) -> Self {
-		let devices = get_devices();
+		let device_info = get_devices();
 
-		let mut input_devices = devices
-			.iter()
-			.filter(|(_, device)| device.supports_input())
-			.map(|(id, _)| id.clone())
-			.collect::<Box<_>>();
-		let mut output_devices = devices
-			.iter()
-			.filter(|(_, device)| device.supports_output())
-			.map(|(id, _)| id.clone())
-			.collect::<Box<_>>();
+		let mut devices =
+			device_info
+				.iter()
+				.fold(HashMap::<_, Devices>::new(), |mut acc, (id, device)| {
+					if device.supports_input() {
+						acc.entry(id.host()).or_default().input.push(id.clone());
+					}
 
-		input_devices.sort_unstable_by(|l, r| {
-			natural_cmp(devices[l].name().as_bytes(), devices[r].name().as_bytes())
-		});
-		output_devices.sort_unstable_by(|l, r| {
-			natural_cmp(devices[l].name().as_bytes(), devices[r].name().as_bytes())
-		});
+					if device.supports_output() {
+						acc.entry(id.host()).or_default().output.push(id.clone());
+					}
+
+					acc
+				});
+
+		for device in devices.values_mut() {
+			device.input.sort_unstable_by(|l, r| {
+				natural_cmp(
+					device_info[l].name().as_bytes(),
+					device_info[r].name().as_bytes(),
+				)
+			});
+
+			device.output.sort_unstable_by(|l, r| {
+				natural_cmp(
+					device_info[l].name().as_bytes(),
+					device_info[r].name().as_bytes(),
+				)
+			});
+		}
+
+		devices.entry(*DEFAULT_HOST).or_default();
+
+		let mut hosts = devices.keys().copied().collect::<Vec<_>>();
+		hosts.sort_unstable_by(|l, r| natural_cmp(l.name().as_bytes(), r.name().as_bytes()));
 
 		let config = Config::read();
+
+		let output_host = config
+			.output_device
+			.id
+			.as_ref()
+			.map(DeviceId::host)
+			.filter(|host| hosts.contains(host));
+
+		let input_host = config
+			.input_device
+			.id
+			.as_ref()
+			.map(DeviceId::host)
+			.filter(|host| hosts.contains(host));
+
+		let host = match (input_host, output_host) {
+			(Some(..), Some(..)) if input_host != output_host => *DEFAULT_HOST,
+			(Some(host), _) | (_, Some(host)) => host,
+			_ => *DEFAULT_HOST,
+		};
 
 		Self {
 			config: config.clone(),
 			prev_config: config,
 			tab: Tab::Output,
+			hosts,
+			host,
 			devices,
-			input_devices,
-			output_devices,
+			device_info,
 			main_window_id,
 		}
 	}
@@ -168,6 +217,7 @@ impl ConfigView {
 				}
 			}
 			Message::ChangedTab(tab) => self.tab = tab,
+			Message::ChangedHost(host) => self.host = host,
 			Message::ChangedId(id) => self.device_mut().id = id,
 			Message::ChangedSampleRate(sample_rate) => self.device_mut().sample_rate = sample_rate,
 			Message::ChangedBufferSize(buffer_size) => self.device_mut().buffer_size = buffer_size,
@@ -190,16 +240,43 @@ impl ConfigView {
 				self.prev_config = self.config.clone();
 				return Action::instruction(self.config.clone());
 			}
-			Message::ResetConfigToPrev => self.config = self.prev_config.clone(),
+			Message::ResetConfigToPrev => {
+				self.config = self.prev_config.clone();
+
+				let output_host = self
+					.config
+					.output_device
+					.id
+					.as_ref()
+					.map(DeviceId::host)
+					.filter(|host| self.hosts.contains(host));
+
+				let input_host = self
+					.config
+					.input_device
+					.id
+					.as_ref()
+					.map(DeviceId::host)
+					.filter(|host| self.hosts.contains(host));
+
+				self.host = match (input_host, output_host) {
+					(Some(..), Some(..)) if input_host != output_host => *DEFAULT_HOST,
+					(Some(host), _) | (_, Some(host)) => host,
+					_ => *DEFAULT_HOST,
+				};
+			}
 		}
 
 		Action::none()
 	}
 
 	pub fn view(&self) -> Element<'_, Message> {
-		let (device, devices) = match self.tab {
-			Tab::Input => (&self.config.input_device, &*self.input_devices),
-			Tab::Output => (&self.config.output_device, &*self.output_devices),
+		let (device, devices) = match &self.tab {
+			Tab::Input => (&self.config.input_device, &*self.devices[&self.host].input),
+			Tab::Output => (
+				&self.config.output_device,
+				&*self.devices[&self.host].output,
+			),
 		};
 
 		container(
@@ -352,17 +429,12 @@ impl ConfigView {
 					.align_y(Center),
 					column![
 						row![
-							text("Name:").width(Fill),
+							text("Host:").width(Fill),
 							row![
-								pick_list(
-									device
-										.id
-										.as_ref()
-										.filter(|id| self.devices.contains_key(id)),
-									devices,
-									|id| self.devices[id].to_string()
-								)
-								.on_select(|id| Message::ChangedId(Some(id)))
+								pick_list(Some(self.host), &*self.hosts, |host| host
+									.name()
+									.to_owned())
+								.on_select(Message::ChangedHost)
 								.handle(PICK_LIST_HANDLE)
 								.placeholder("Default")
 								.width(Fill)
@@ -373,6 +445,33 @@ impl ConfigView {
 										button::primary,
 										border::top_right(5)
 									))
+									.padding(5)
+									.on_press_maybe(
+										(self.host != *DEFAULT_HOST)
+											.then_some(Message::ChangedHost(*DEFAULT_HOST))
+									)
+							]
+						]
+						.align_y(Center),
+						row![
+							text("Name:").width(Fill),
+							row![
+								pick_list(
+									device
+										.id
+										.as_ref()
+										.filter(|id| self.device_info.contains_key(id)),
+									devices,
+									|id| self.device_info[id].to_string()
+								)
+								.on_select(|id| Message::ChangedId(Some(id)))
+								.handle(PICK_LIST_HANDLE)
+								.placeholder("Default")
+								.width(Fill)
+								.style(pick_list_with_radius(0))
+								.menu_style(menu_style),
+								button(rotate_ccw())
+									.style(button_with_radius(button::primary, 0))
 									.padding(5)
 									.on_press_maybe(
 										device.id.as_ref().map(|_| Message::ChangedId(None))
