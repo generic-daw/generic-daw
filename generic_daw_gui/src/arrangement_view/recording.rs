@@ -24,7 +24,7 @@ impl Recording {
 		path: Arc<Path>,
 		transport: &Transport,
 		device_id: Option<&DeviceId>,
-		sample_rate: NonZero<u32>,
+		sample_rate: Option<NonZero<u32>>,
 		frames: Option<NonZero<u32>>,
 		node: NodeId,
 	) -> (Self, Consumer<f32>) {

@@ -21,7 +21,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	pub fn create(
 		writer: W,
 		device_id: Option<&DeviceId>,
-		sample_rate: NonZero<u32>,
+		sample_rate: Option<NonZero<u32>>,
 		frames: Option<NonZero<u32>>,
 	) -> (Self, Consumer<f32>) {
 		let (config, consumer, stream) = build_input_stream(device_id, sample_rate, frames);
@@ -62,7 +62,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	#[must_use]
 	pub fn frames(&self) -> NonZero<u32> {
 		frames_of_config(&self.config)
-			.or(NonZero::new(8192))
+			.or(NonZero::new(2048))
 			.unwrap()
 	}
 

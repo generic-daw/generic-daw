@@ -28,18 +28,16 @@ use std::{collections::HashMap, num::NonZero, path::Path, sync::Arc};
 use sweeten::widget::drag::DragEvent;
 use utils::{ShiftMoveExt as _, natural_cmp};
 
-const SAMPLE_RATES: [NonZero<u32>; 7] = [
+const SAMPLE_RATES: [NonZero<u32>; 6] = [
 	NonZero::new(44_100).unwrap(),
 	NonZero::new(48_000).unwrap(),
-	NonZero::new(64_000).unwrap(),
 	NonZero::new(88_200).unwrap(),
 	NonZero::new(96_000).unwrap(),
 	NonZero::new(176_400).unwrap(),
 	NonZero::new(192_000).unwrap(),
 ];
 
-const BUFFER_SIZES: [NonZero<u32>; 10] = [
-	NonZero::new(16).unwrap(),
+const BUFFER_SIZES: [NonZero<u32>; 7] = [
 	NonZero::new(32).unwrap(),
 	NonZero::new(64).unwrap(),
 	NonZero::new(128).unwrap(),
@@ -47,8 +45,6 @@ const BUFFER_SIZES: [NonZero<u32>; 10] = [
 	NonZero::new(512).unwrap(),
 	NonZero::new(1024).unwrap(),
 	NonZero::new(2048).unwrap(),
-	NonZero::new(4096).unwrap(),
-	NonZero::new(8192).unwrap(),
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -69,7 +65,7 @@ pub enum Message {
 	MoveClapPath(DragEvent),
 	ChangedTab(Tab),
 	ChangedId(Option<DeviceId>),
-	ChangedSampleRate(NonZero<u32>),
+	ChangedSampleRate(Option<NonZero<u32>>),
 	ChangedBufferSize(Option<NonZero<u32>>),
 	ToggledAutosave,
 	ChangedAutosaveInterval(u16),
@@ -343,15 +339,17 @@ impl ConfigView {
 								(self.tab != Tab::Output)
 									.then_some(Message::ChangedTab(Tab::Output))
 							),
-						center_x(device.buffer_size.map(|buffer_size| {
-							text!(
-								"{buffer_size} smp @ {} hz = {:.1} ms",
-								device.sample_rate,
-								buffer_size.get() as f32 / device.sample_rate.get() as f32 * 1000.0
-							)
-							.font(Font::MONOSPACE)
-							.size(13)
-						})),
+						center_x(device.buffer_size.zip(device.sample_rate).map(
+							|(buffer_size, sample_rate)| {
+								text!(
+									"{buffer_size} smp @ {} hz = {:.1} ms",
+									sample_rate,
+									buffer_size.get() as f32 / sample_rate.get() as f32 * 1000.0
+								)
+								.font(Font::MONOSPACE)
+								.size(13)
+							}
+						)),
 						match self.tab {
 							Tab::Input => "Input",
 							Tab::Output => "Output",
@@ -391,12 +389,12 @@ impl ConfigView {
 						row![
 							text("Sample Rate:").width(Fill),
 							row![
-								pick_list(
-									Some(device.sample_rate),
-									SAMPLE_RATES,
-									|sample_rate| format!("{sample_rate} hz")
-								)
-								.on_select(Message::ChangedSampleRate)
+								pick_list(device.sample_rate, SAMPLE_RATES, |sample_rate| format!(
+									"{sample_rate} hz"
+								))
+								.on_select(|sample_rate| Message::ChangedSampleRate(Some(
+									sample_rate
+								)))
 								.handle(PICK_LIST_HANDLE)
 								.placeholder("Default")
 								.width(Fill)
@@ -405,9 +403,11 @@ impl ConfigView {
 								button(rotate_ccw())
 									.style(button_with_radius(button::primary, 0))
 									.padding(5)
-									.on_press_maybe((device.sample_rate.get() != 44100).then_some(
-										Message::ChangedSampleRate(NonZero::new(44100).unwrap())
-									))
+									.on_press_maybe(
+										device
+											.sample_rate
+											.map(|_| Message::ChangedSampleRate(None))
+									)
 							]
 						]
 						.align_y(Center),

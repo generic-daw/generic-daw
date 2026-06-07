@@ -2524,7 +2524,7 @@ fn poll_consumer<T>(
 	sample_rate: NonZero<u32>,
 	frames: NonZero<u32>,
 ) -> impl Stream<Item = T> {
-	let min = 64.0 / sample_rate.get() as f32;
+	let min = 32.0 / sample_rate.get() as f32;
 	let max = frames.get() as f32 / sample_rate.get() as f32;
 	let mut backoff = min;
 	let mut backoff = move |counter: u16| {
@@ -2555,7 +2555,7 @@ fn poll_chunked_consumer<T: Copy>(
 	sample_rate: NonZero<u32>,
 	frames: NonZero<u32>,
 ) -> impl Stream<Item = Box<[T]>> {
-	let min = 64.0 / sample_rate.get() as f32;
+	let min = 32.0 / sample_rate.get() as f32;
 	let max = frames.get() as f32 / sample_rate.get() as f32;
 	let mut backoff = min;
 	let mut backoff = move |counter: u16| {
