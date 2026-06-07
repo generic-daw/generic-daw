@@ -168,15 +168,9 @@ impl ConfigView {
 				}
 			}
 			Message::ChangedTab(tab) => self.tab = tab,
-			Message::ChangedId(id) => self.with_device_mut(|device| {
-				device.id = id;
-			}),
-			Message::ChangedSampleRate(sample_rate) => self.with_device_mut(|device| {
-				device.sample_rate = sample_rate;
-			}),
-			Message::ChangedBufferSize(buffer_size) => self.with_device_mut(|device| {
-				device.buffer_size = buffer_size;
-			}),
+			Message::ChangedId(id) => self.device_mut().id = id,
+			Message::ChangedSampleRate(sample_rate) => self.device_mut().sample_rate = sample_rate,
+			Message::ChangedBufferSize(buffer_size) => self.device_mut().buffer_size = buffer_size,
 			Message::ToggledAutosave => self.config.autosave.enabled ^= true,
 			Message::ChangedAutosaveInterval(interval) => {
 				self.config.autosave.interval = NonZero::new(interval.clamp(1, 999)).unwrap();
@@ -568,10 +562,10 @@ impl ConfigView {
 		}
 	}
 
-	fn with_device_mut<T>(&mut self, f: impl FnOnce(&mut Device) -> T) -> T {
+	fn device_mut(&mut self) -> &mut Device {
 		match self.tab {
-			Tab::Input => f(&mut self.config.input_device),
-			Tab::Output => f(&mut self.config.output_device),
+			Tab::Input => &mut self.config.input_device,
+			Tab::Output => &mut self.config.output_device,
 		}
 	}
 }
