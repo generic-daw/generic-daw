@@ -57,7 +57,7 @@ pub fn build_input_stream(
 			match supported_config.sample_format() {
 				$(
 					$pat => device.build_input_stream(
-						&config,
+						config,
 						build_input_callback::<$ty>(frames, channels, producer),
 						|err| error!("{err}"),
 						None,
@@ -131,7 +131,7 @@ pub fn build_output_stream(
 			match supported_config.sample_format() {
 				$(
 					$pat => device.build_output_stream(
-						&config,
+						config,
 						build_output_callback::<$ty>(frames, channels, processor),
 						|err| error!("{err}"),
 						None,
