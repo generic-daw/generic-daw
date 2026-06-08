@@ -3,15 +3,15 @@ use fragile::Fragile;
 use generic_daw_core::{
 	PluginId, Transport,
 	clap_host::{
-		ClapId, MainThreadMessage, ParamInfoFlags, Plugin, RenderMode, Size, StateContextType,
-		TimerId,
+		ClapId, MainThreadMessage, ParamInfoFlags, Plugin, Preset, RenderMode, Size,
+		StateContextType, TimerId,
 	},
 };
 use generic_daw_widget::knob::Knob;
 use iced::{
 	Center, Element, Fill, Font, Subscription, Task, padding,
 	time::every,
-	widget::{column, container, row, rule, scrollable, space, text},
+	widget::{column, combo_box, container, row, rule, scrollable, space, text},
 	window,
 };
 use log::info;
@@ -23,7 +23,7 @@ use std::{
 	sync::mpsc::Receiver,
 	time::Duration,
 };
-use utils::{NoClone, NoDebug};
+use utils::{NoClone, NoDebug, natural_cmp};
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -31,6 +31,7 @@ pub enum Message {
 	PluginParamChange(PluginId, ClapId, f32),
 	HostParamChange(PluginId, ClapId, f32),
 	TickTimer(Duration),
+	LoadPreset(PluginId, Preset),
 	DestroyInactive(PluginId),
 	Activate(PluginId),
 	SetState(PluginId, NoDebug<Box<[u8]>>),
@@ -46,6 +47,8 @@ pub enum Message {
 pub struct ClapHost {
 	plugins: HashMap<PluginId, Plugin>,
 	timers_of_duration: HashMap<Duration, HashMap<PluginId, HashSet<TimerId>>>,
+	presets_of_plugin: HashMap<PluginId, combo_box::State<Preset>>,
+	preset_of_plugin: HashMap<PluginId, Preset>,
 	window_of_plugin: HashMap<PluginId, window::Id>,
 	plugin_of_window: HashMap<window::Id, PluginId>,
 	scale_factor_of_window: HashMap<window::Id, f32>,
@@ -56,6 +59,8 @@ impl ClapHost {
 	pub fn new(main_window_id: window::Id) -> Self {
 		Self {
 			plugins: HashMap::new(),
+			presets_of_plugin: HashMap::new(),
+			preset_of_plugin: HashMap::new(),
 			timers_of_duration: HashMap::new(),
 			window_of_plugin: HashMap::new(),
 			plugin_of_window: HashMap::new(),
@@ -116,6 +121,9 @@ impl ClapHost {
 						}
 					});
 			}
+			Message::LoadPreset(id, preset) => {
+				plugin!(id, Message::LoadPreset(id, preset)).load_preset(&preset);
+			}
 			Message::DestroyInactive(id) => {
 				plugin!(id);
 
@@ -124,6 +132,9 @@ impl ClapHost {
 
 				self.timers_of_duration
 					.retain(|_, set| set.remove(&id).is_none() || !set.is_empty());
+
+				self.presets_of_plugin.remove(&id);
+				self.preset_of_plugin.remove(&id);
 
 				return self.handle_main_thread_message(
 					id,
@@ -323,8 +334,18 @@ impl ClapHost {
 			}
 			MainThreadMessage::RescanParams(flags) => plugin!().rescan_params(flags),
 			MainThreadMessage::PresetDiscovered(preset) => {
-				plugin!(MainThreadMessage::PresetDiscovered(preset)).preset_discovered(preset);
+				plugin!(MainThreadMessage::PresetDiscovered(preset))
+					.preset_discovered(preset.clone());
+
+				let presets = self.presets_of_plugin.entry(id).or_default();
+				if let Err(i) = presets
+					.options()
+					.binary_search_by(|p| natural_cmp(p.name.as_bytes(), preset.name.as_bytes()))
+				{
+					presets.insert(i, preset);
+				}
 			}
+			MainThreadMessage::PresetLoaded(preset) => _ = self.preset_of_plugin.insert(id, preset),
 		}
 
 		Action::none()
@@ -342,10 +363,20 @@ impl ClapHost {
 
 		Some(
 			column![
-				text(&*plugin.descriptor().name)
-					.size(LINE_HEIGHT)
-					.line_height(1.0)
-					.font(Font::MONOSPACE),
+				row![
+					text(&*plugin.descriptor().name)
+						.size(LINE_HEIGHT)
+						.line_height(1.0)
+						.font(Font::MONOSPACE),
+					space::horizontal(),
+					self.presets_of_plugin.get(&id).map(|state| combo_box(
+						state,
+						"Load Preset",
+						self.preset_of_plugin.get(&id),
+						move |preset| Message::LoadPreset(id, preset)
+					)),
+				]
+				.align_y(Center),
 				container(rule::horizontal(1)).padding(padding::vertical(5)),
 				scrollable(
 					row(plugin.params().map(|param| {

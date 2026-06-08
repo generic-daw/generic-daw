@@ -1,15 +1,16 @@
-use crate::{AudioThread, Size, preset::Preset, shared::Shared};
+use crate::{AudioThread, Preset, Size, shared::Shared};
 use clack_extensions::{
 	audio_ports::{AudioPortRescanFlags, HostAudioPortsImpl},
 	latency::HostLatencyImpl,
 	note_ports::{HostNotePortsImpl, NoteDialects, NotePortRescanFlags},
 	params::{HostParamsImplMainThread, ParamClearFlags, ParamRescanFlags},
-	preset_discovery::{HostPresetLoadImpl, prelude::*},
+	preset_discovery::{HostPresetLoadImpl, preset_data},
 	state::HostStateImpl,
 	timer::{HostTimerImpl, TimerId},
 };
 use clack_host::prelude::*;
-use std::{ffi::CStr, time::Duration};
+use log::{log_enabled, warn};
+use std::{ffi::CStr, fmt::Write as _, time::Duration};
 use utils::NoClone;
 
 #[derive(Clone, Debug)]
@@ -26,12 +27,14 @@ pub enum MainThreadMessage {
 	UnregisterTimer(TimerId),
 	RescanParams(ParamRescanFlags),
 	PresetDiscovered(Preset),
+	PresetLoaded(Preset),
 }
 
 #[derive(Debug)]
 pub struct MainThread<'a> {
 	pub shared: &'a Shared<'a>,
 	pub params_rescan: bool,
+	pub presets: Vec<Preset>,
 	pub state: Option<Box<[u8]>>,
 	pub next_timer_id: u32,
 }
@@ -41,6 +44,7 @@ impl<'a> MainThread<'a> {
 		Self {
 			shared,
 			params_rescan: false,
+			presets: Vec::new(),
 			state: None,
 			next_timer_id: 0,
 		}
@@ -89,15 +93,50 @@ impl HostParamsImplMainThread for MainThread<'_> {
 }
 
 impl HostPresetLoadImpl for MainThread<'_> {
-	fn loaded(&mut self, _location: Location<'_>, _load_key: Option<&CStr>) {}
+	fn loaded(&mut self, location: preset_data::Location<'_>, load_key: Option<&CStr>) {
+		if let Some(preset) = self.presets.iter().find(|preset| {
+			preset.location.as_clap() == location && preset.load_key.as_deref() == load_key
+		}) {
+			self.shared
+				.sender
+				.send(MainThreadMessage::PresetLoaded(preset.clone()))
+				.unwrap();
+		}
+	}
 
+	#[expect(clippy::renamed_function_params)]
 	fn on_error(
 		&mut self,
-		_location: Location<'_>,
-		_load_key: Option<&CStr>,
-		_os_error: i32,
-		_message: Option<&CStr>,
+		location: preset_data::Location<'_>,
+		load_key: Option<&CStr>,
+		error_code: i32,
+		error_message: Option<&CStr>,
 	) {
+		if !log_enabled!(log::Level::Warn) {
+			return;
+		}
+
+		let mut message = String::new();
+
+		if let Some(preset) = self.presets.iter().find(|preset| {
+			preset.location.as_clap() == location && preset.load_key.as_deref() == load_key
+		}) {
+			write!(message, "{}: {}", self.shared.descriptor, preset.name).unwrap();
+		} else {
+			write!(message, "{}: preset error", self.shared.descriptor).unwrap();
+		}
+
+		if let Some(error_message) = error_message {
+			write!(message, ": {}", error_message.to_string_lossy()).unwrap();
+
+			if error_code != 0 {
+				write!(message, " (os error {error_code})").unwrap();
+			}
+		} else if error_code != 0 {
+			write!(message, ": os error {error_code}").unwrap();
+		}
+
+		warn!("{message}");
 	}
 }
 

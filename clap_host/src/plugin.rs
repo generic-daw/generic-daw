@@ -1,5 +1,5 @@
 use crate::{
-	API_TYPE, AudioThread, MainThreadMessage, PluginDescriptor,
+	API_TYPE, AudioThread, MainThreadMessage, PluginDescriptor, Preset,
 	audio_buffers::AudioBuffers,
 	audio_processor::AudioProcessor,
 	event_buffers::EventBuffers,
@@ -7,7 +7,6 @@ use crate::{
 	host::Host,
 	main_thread::MainThread,
 	param::Param,
-	preset::Preset,
 	shared::{CURRENT_THREAD_ID, Shared},
 	size::Size,
 };
@@ -33,7 +32,6 @@ use utils::{NoClone, NoDebug};
 pub struct Plugin {
 	gui: Gui,
 	params: Box<[Param]>,
-	presets: Vec<Preset>,
 	instance: NoDebug<PluginInstance<Host>>,
 	is_created: bool,
 	is_shown: bool,
@@ -68,7 +66,6 @@ impl Plugin {
 		let plugin = Self {
 			gui: Gui::new(&mut instance),
 			params: Param::all(&mut instance).unwrap_or_default(),
-			presets: Vec::new(),
 			instance: instance.into(),
 			is_created: false,
 			is_shown: false,
@@ -235,21 +232,22 @@ impl Plugin {
 
 	#[must_use]
 	pub fn presets(&self) -> &[Preset] {
-		&self.presets
+		self.instance.access_handler(|mt| &mt.presets)
 	}
 
 	pub fn preset_discovered(&mut self, preset: Preset) {
-		self.presets.push(preset);
+		self.instance
+			.access_handler_mut(|mt| mt.presets.push(preset));
 	}
 
-	pub fn load_preset(&mut self, preset: usize) {
+	pub fn load_preset(&mut self, preset: &Preset) {
 		if let Err(err) = self
 			.instance
 			.access_shared_handler(|s| *s.ext.preset_load.get().unwrap())
 			.load_from_location(
 				&mut self.instance.plugin_handle(),
-				(&self.presets[preset].location).into(),
-				self.presets[preset].load_key.as_deref(),
+				preset.location.as_clap(),
+				preset.load_key.as_deref(),
 			) {
 			warn!(
 				"{}: {err}",

@@ -1,7 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use crate::daw::{CRASHES_DIR, format_now};
-use daw::Daw;
+use daw::{CRASHES_DIR, Daw, format_now};
 use iced::{Result, daemon};
 use icons::LUCIDE_BYTES;
 use log::LevelFilter;

@@ -41,6 +41,7 @@ pub use event_impl::EventImpl;
 pub use main_thread::MainThreadMessage;
 pub use plugin::Plugin;
 pub use plugin_descriptor::PluginDescriptor;
+pub use preset::Preset;
 pub use size::Size;
 
 const API_TYPE: GuiApiType<'_> = GuiApiType::default_for_current_platform().unwrap();

@@ -1,6 +1,6 @@
 use crate::{
 	Transport,
-	time::{BeatTime, SecondsTime, beat_span::BeatSpan},
+	time::{BeatSpan, BeatTime, SecondsTime},
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]

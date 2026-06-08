@@ -1,19 +1,25 @@
 use crate::{MainThreadMessage, PluginDescriptor, host::Host};
-use clack_extensions::preset_discovery::prelude::*;
+use clack_extensions::preset_discovery::{prelude::*, preset_data};
 use clack_host::prelude::*;
 use log::{log_enabled, warn};
 use std::{
 	ffi::{CStr, CString},
-	fmt::Write as _,
+	fmt::{Display, Formatter, Write as _},
 	sync::{Arc, mpsc::Sender},
 };
 use walkdir::WalkDir;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Preset {
 	pub name: Arc<str>,
-	pub location: MyLocation,
+	pub location: Location,
 	pub load_key: Option<Arc<CStr>>,
+}
+
+impl Display for Preset {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		self.name.fmt(f)
+	}
 }
 
 impl Preset {
@@ -52,6 +58,7 @@ impl Preset {
 
 			let Ok(mut provider) =
 				Provider::instantiate(&mut cached_indexer, entry, provider_id, host)
+					.inspect_err(|err| warn!("{descriptor}: {err}"))
 			else {
 				continue;
 			};
@@ -59,19 +66,20 @@ impl Preset {
 			let indexer = std::mem::take(*provider.indexer_mut());
 
 			for location in &indexer.locations {
-				let mut metadata_receiver = MetadataReceiver {
-					sender,
-					current_preset: None,
-					applicable: false,
-					descriptor,
-					location,
-				};
-
 				match location {
-					MyLocation::Plugin => {
-						provider.get_metadata(location.into(), &mut metadata_receiver);
+					Location::Plugin => {
+						provider.get_metadata(
+							location.as_clap(),
+							&mut MetadataReceiver {
+								sender,
+								current_preset: None,
+								applicable: false,
+								descriptor,
+								location,
+							},
+						);
 					}
-					MyLocation::File(path) => {
+					Location::File(path) => {
 						let Ok(path) = path.to_str() else {
 							continue;
 						};
@@ -94,9 +102,16 @@ impl Preset {
 								if let Some(path) = dir_entry.path().to_str()
 									&& let Ok(path) = CString::new(path)
 								{
+									let location = &Location::File(path.into());
 									provider.get_metadata(
-										Location::File { path: &path },
-										&mut metadata_receiver,
+										location.as_clap(),
+										&mut MetadataReceiver {
+											sender,
+											current_preset: None,
+											applicable: false,
+											descriptor,
+											location,
+										},
 									);
 								}
 							});
@@ -114,26 +129,26 @@ impl Preset {
 	}
 }
 
-#[derive(Clone, Debug)]
-pub enum MyLocation {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Location {
 	Plugin,
 	File(Arc<CStr>),
 }
 
-impl From<Location<'_>> for MyLocation {
-	fn from(value: Location<'_>) -> Self {
-		match value {
-			Location::File { path } => Self::File(path.into()),
-			Location::Plugin => Self::Plugin,
+impl Location {
+	pub fn as_clap(&self) -> preset_data::Location<'_> {
+		match self {
+			Self::File(path) => preset_data::Location::File { path },
+			Self::Plugin => preset_data::Location::Plugin,
 		}
 	}
 }
 
-impl<'a> From<&'a MyLocation> for Location<'a> {
-	fn from(value: &'a MyLocation) -> Self {
+impl From<preset_data::Location<'_>> for Location {
+	fn from(value: preset_data::Location<'_>) -> Self {
 		match value {
-			MyLocation::File(path) => Self::File { path },
-			MyLocation::Plugin => Self::Plugin,
+			preset_data::Location::File { path } => Self::File(path.into()),
+			preset_data::Location::Plugin => Self::Plugin,
 		}
 	}
 }
@@ -142,7 +157,7 @@ impl<'a> From<&'a MyLocation> for Location<'a> {
 struct Indexer {
 	match_all: bool,
 	file_types: Vec<Box<str>>,
-	locations: Vec<MyLocation>,
+	locations: Vec<Location>,
 }
 
 impl IndexerImpl for &mut Indexer {
@@ -177,7 +192,7 @@ struct MetadataReceiver<'a> {
 	current_preset: Option<Preset>,
 	applicable: bool,
 	descriptor: &'a PluginDescriptor,
-	location: &'a MyLocation,
+	location: &'a Location,
 }
 
 impl MetadataReceiver<'_> {

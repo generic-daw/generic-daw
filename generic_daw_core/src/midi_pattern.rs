@@ -1,6 +1,5 @@
 use crate::{
-	MidiKey, MidiNote, Transport,
-	midi_note::MidiNoteId,
+	MidiKey, MidiNote, MidiNoteId, Transport,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
 use midly::{
