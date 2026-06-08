@@ -293,7 +293,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 							};
 
 							if (start_track..=end_track).contains(&index.0)
-								&& (start_pos.max(start) <= end_pos.min(end))
+								&& (start_pos.max(start) < end_pos.min(end))
 							{
 								state.secondary.insert(index);
 							} else {

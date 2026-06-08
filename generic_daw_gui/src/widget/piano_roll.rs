@@ -208,7 +208,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 					self.notes.iter().for_each(|note| {
 						if (start_key..=end_key).contains(&note.note.key)
 							&& (start_pos.max(note.note.position.start())
-								<= end_pos.min(note.note.position.end()))
+								< end_pos.min(note.note.position.end()))
 						{
 							state.secondary.insert(note.index);
 						} else {
