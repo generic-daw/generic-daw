@@ -60,12 +60,12 @@ impl Sample {
 				.copy_to_vec_interleaved(&mut packet_buf);
 
 			if channels == 1 {
-				samples.extend(packet_buf.iter().skip(2 * delay).flat_map(|x| [x, x]));
+				samples.extend(packet_buf.iter().skip(delay).flat_map(|x| [x, x]));
 			} else if channels != 0 {
 				samples.extend(
 					packet_buf
 						.chunks_exact(channels)
-						.skip(2 * delay)
+						.skip(delay)
 						.flat_map(|x| [x[0], x[1]]),
 				);
 			}
