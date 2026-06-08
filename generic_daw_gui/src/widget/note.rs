@@ -37,18 +37,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 		Size::new(Fill, Fill)
 	}
 
-	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
+	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
 		let piano_roll = self.piano_roll.borrow();
 
-		let (start, end) = (self.note.position.start(), self.note.position.end());
+		let (start, len) = (self.note.position.start(), self.note.position.len());
 
 		let start = time_to_px(start, piano_roll.position, piano_roll.scale, self.transport);
-		let end = time_to_px(end, piano_roll.position, piano_roll.scale, self.transport);
+		let len = time_to_px(len, Vector::ZERO, piano_roll.scale, self.transport);
+		let key = key_to_px(self.note.key, Vector::ZERO, piano_roll.scale);
 
-		Node::new(Size::new(end - start, piano_roll.scale.y)).translate(Vector::new(
-			start,
-			key_to_px(self.note.key, piano_roll.position, piano_roll.scale) + piano_roll.position.y,
-		))
+		Node::new(Size::new(len, limits.max().height)).translate(Vector::new(start, key))
 	}
 
 	fn update(
@@ -225,9 +223,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 					+ Vector::new(
 						3.0,
 						if bounds.y == viewport.y {
-							bounds.height - piano_roll.scale.y / 2.0
+							bounds.height - layout.bounds().height / 2.0
 						} else {
-							piano_roll.scale.y / 2.0
+							layout.bounds().height / 2.0
 						},
 					),
 				theme.palette().background.strong.text,

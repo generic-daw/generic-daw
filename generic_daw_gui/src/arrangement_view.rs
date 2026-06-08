@@ -192,7 +192,10 @@ impl ArrangementView {
 				scale: proto::Vector { x: -5.0, y: 87.0 },
 			},
 			piano_roll: proto::TabState {
-				position: proto::Vector { x: 0.0, y: 0.0 },
+				position: proto::Vector {
+					x: 0.0,
+					y: 43.0 * LINE_HEIGHT,
+				},
 				scale: proto::Vector {
 					x: -7.0,
 					y: LINE_HEIGHT,

@@ -94,11 +94,13 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
 		Node::with_children(
-			limits.height(128.0 * self.state.borrow().scale.y).max(),
+			Size::new(limits.max().width, 128.0 * self.state.borrow().scale.y),
 			self.notes
 				.iter_mut()
 				.zip(&mut tree.children)
-				.map(|(child, tree)| child.layout(tree, renderer, limits))
+				.map(|(child, tree)| {
+					child.layout(tree, renderer, &limits.height(self.state.borrow().scale.y))
+				})
 				.collect(),
 		)
 	}
@@ -206,7 +208,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for PianoRoll<'a, Message
 					self.notes.iter().for_each(|note| {
 						if (start_key..=end_key).contains(&note.note.key)
 							&& (start_pos.max(note.note.position.start())
-								< end_pos.min(note.note.position.end()))
+								<= end_pos.min(note.note.position.end()))
 						{
 							state.secondary.insert(note.index);
 						} else {
