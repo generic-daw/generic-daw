@@ -44,14 +44,12 @@ pub enum PanMode {
 }
 
 impl PanMode {
-	pub fn pan(self, audio: &mut [f32], volume: f32) {
+	pub fn pan(self, audio: &mut [[f32; 2]], volume: f32) {
 		fn split(pan: f32, fac: f32) -> (f32, f32) {
 			let angle = (pan + 1.0) * FRAC_PI_4;
 			let (sin, cos) = angle.sin_cos();
 			(cos * fac, sin * fac)
 		}
-
-		let audio = audio.as_chunks_mut().0;
 
 		match self {
 			Self::Balance(pan) => {
@@ -120,7 +118,7 @@ impl Channel {
 	pub fn process(
 		&mut self,
 		state: &State,
-		audio: &mut [f32],
+		audio: &mut [[f32; 2]],
 		events: &mut Vec<Event>,
 		injector: &Injector<Inject<Node>>,
 	) -> usize {
@@ -178,7 +176,7 @@ impl Channel {
 		if self.enabled {
 			latency
 		} else {
-			audio.fill(0.0);
+			audio.fill([0.0; 2]);
 			events.clear();
 			0
 		}
@@ -247,14 +245,21 @@ impl Default for Channel {
 			pan: PanMode::Balance(0.0),
 			enabled: true,
 			bypassed: false,
-			last_peaks: [0.0, 0.0],
+			last_peaks: [0.0; 2],
 			updates: Vec::new(),
 		}
 	}
 }
 
-fn max_peaks(audio: &[f32]) -> [f32; 2] {
-	fn max_peaks<const N: usize>(mut old: [f32; N], new: [f32; N]) -> [f32; N] {
+fn max_peaks(audio: &[[f32; 2]]) -> [f32; 2] {
+	fn chunks_max_peaks(mut old: [[f32; 2]; 8], new: [[f32; 2]; 8]) -> [[f32; 2]; 8] {
+		for (old, new) in old.iter_mut().zip(new) {
+			*old = chunk_max_peaks(*old, new);
+		}
+		old
+	}
+
+	fn chunk_max_peaks(mut old: [f32; 2], new: [f32; 2]) -> [f32; 2] {
 		for (old, new) in old.iter_mut().zip(new) {
 			if new > *old {
 				*old = new;
@@ -263,17 +268,15 @@ fn max_peaks(audio: &[f32]) -> [f32; 2] {
 		old
 	}
 
-	let (chunks_16, rest) = audio.as_chunks::<16>();
-	let (chunks_2, rest) = rest.as_chunks::<2>();
-	debug_assert!(rest.is_empty());
+	let (chunks, rest) = audio.as_chunks::<8>();
 
-	chunks_16
+	chunks
 		.iter()
-		.map(|chunk| chunk.map(f32::abs))
-		.reduce(max_peaks)
+		.map(|chunk| chunk.map(|chunk| chunk.map(f32::abs)))
+		.reduce(chunks_max_peaks)
 		.into_iter()
-		.flat_map(|chunk| *chunk.as_chunks().0.as_array::<8>().unwrap())
-		.chain(chunks_2.iter().map(|chunk| chunk.map(f32::abs)))
-		.reduce(max_peaks)
+		.flatten()
+		.chain(rest.iter().map(|chunk| chunk.map(f32::abs)))
+		.reduce(chunk_max_peaks)
 		.unwrap_or([0.0; _])
 }

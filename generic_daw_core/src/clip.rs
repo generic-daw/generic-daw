@@ -60,7 +60,7 @@ impl Clip {
 	pub fn diff(
 		&self,
 		state: &State,
-		audio: &[f32],
+		audio: &[[f32; 2]],
 		events: &mut Vec<Event>,
 		voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
 	) {
@@ -73,7 +73,7 @@ impl Clip {
 	pub fn process(
 		&self,
 		state: &State,
-		audio: &mut [f32],
+		audio: &mut [[f32; 2]],
 		events: &mut Vec<Event>,
 		voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
 	) {

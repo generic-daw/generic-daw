@@ -29,7 +29,7 @@ impl Track {
 	pub fn process(
 		&mut self,
 		state: &State,
-		audio: &mut [f32],
+		audio: &mut [[f32; 2]],
 		events: &mut Vec<Event>,
 		injector: &Injector<Inject<Node>>,
 	) -> usize {
@@ -61,7 +61,7 @@ impl Track {
 		if state.transport.solo.is_none_or(|solo| solo == self.id()) {
 			latency
 		} else {
-			audio.fill(0.0);
+			audio.fill([0.0; 2]);
 			events.clear();
 			0
 		}

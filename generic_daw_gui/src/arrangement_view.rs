@@ -130,7 +130,7 @@ pub enum Message {
 
 	Recording(NodeId),
 	RecordingFinalize,
-	RecordingWrite(NoDebug<Box<[f32]>>),
+	RecordingWrite(NoDebug<Box<[[f32; 2]]>>),
 
 	Freeze(NodeId),
 	FreezeDone(NodeId, Box<SamplePair>, BeatTime),

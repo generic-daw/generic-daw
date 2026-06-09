@@ -51,10 +51,10 @@ impl SecondsTime {
 
 	#[must_use]
 	pub const fn from_frames(frames: usize, transport: &Transport) -> Self {
-		let frames = frames.next_multiple_of(2) as u64;
+		let frames = frames as u64;
 		let sample_rate = transport.sample_rate.get() as u64;
 
-		let time = frames * (Self::FACTOR / 2) / sample_rate;
+		let time = frames * Self::FACTOR / sample_rate;
 
 		Self::from_bits(time)
 	}
@@ -64,9 +64,9 @@ impl SecondsTime {
 		let time = self.to_bits();
 		let sample_rate = transport.sample_rate.get() as u64;
 
-		let frames = (time * sample_rate) / (Self::FACTOR / 2);
+		let frames = (time * sample_rate) / Self::FACTOR;
 
-		frames.next_multiple_of(2) as usize
+		frames as usize
 	}
 
 	#[must_use]

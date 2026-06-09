@@ -49,7 +49,7 @@ impl AudioThread {
 
 	pub fn process(
 		&mut self,
-		audio: &mut [f32],
+		audio: &mut [[f32; 2]],
 		events: &mut Vec<impl EventImpl>,
 		transport: Option<&TransportEvent>,
 		injector: Option<ThreadPoolInjector<'_>>,
@@ -155,7 +155,7 @@ impl AudioThread {
 
 	fn flush_process(
 		&mut self,
-		audio: &mut [f32],
+		audio: &mut [[f32; 2]],
 		events: &mut Vec<impl EventImpl>,
 		mix_level: f32,
 	) {

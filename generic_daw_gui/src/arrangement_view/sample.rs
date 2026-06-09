@@ -9,7 +9,7 @@ pub struct Sample {
 	pub lods: Lods,
 	pub name: Arc<str>,
 	pub path: Arc<Path>,
-	pub samples: NoDebug<Arc<[f32]>>,
+	pub samples: NoDebug<Arc<[[f32; 2]]>>,
 	#[expect(clippy::struct_field_names)]
 	pub sample_rate: NonZero<u32>,
 	pub crc: u32,

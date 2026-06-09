@@ -58,7 +58,7 @@ impl AudioBuffers {
 		}
 	}
 
-	pub fn read_in(&mut self, buf: &[f32]) -> u64 {
+	pub fn read_in(&mut self, buf: &[[f32; 2]]) -> u64 {
 		if let Some(input_buffer) = self
 			.input_buffers
 			.get_mut(self.input_config.main_port_index)
@@ -69,23 +69,24 @@ impl AudioBuffers {
 				.get(self.input_config.main_port_index)
 				.unwrap_or(&0);
 
-			let buf = buf.as_chunks::<2>().0.iter();
-
 			if n_channels == 1 {
-				buf.zip(input_buffer)
+				buf.iter()
+					.zip(input_buffer)
 					.for_each(|(buf, sample)| *sample = (buf[0] + buf[1]) / 2.0);
 			} else if n_channels != 0 {
 				let (l, r) = input_buffer.split_at_mut(self.config.max_frames_count as usize);
 
-				buf.zip(l.iter_mut().zip(r)).for_each(|(buf, (l, r))| {
-					*l = buf[0];
-					*r = buf[1];
-				});
+				buf.iter()
+					.zip(l.iter_mut().zip(r))
+					.for_each(|(buf, (l, r))| {
+						*l = buf[0];
+						*r = buf[1];
+					});
 			}
 		}
 
 		let steady_time = self.steady_time;
-		self.steady_time += buf.len() as u64 / 2;
+		self.steady_time += buf.len() as u64;
 		steady_time
 	}
 
@@ -97,7 +98,7 @@ impl AudioBuffers {
 					latency: 0,
 					channels: AudioPortBufferType::f32_input_only(
 						c.chunks_exact_mut(self.config.max_frames_count as usize)
-							.map(|b| &mut b[..len / 2])
+							.map(|b| &mut b[..len])
 							.map(InputChannel::variable),
 					),
 				}
@@ -110,7 +111,7 @@ impl AudioBuffers {
 						latency: 0,
 						channels: AudioPortBufferType::f32_output_only(
 							c.chunks_exact_mut(self.config.max_frames_count as usize)
-								.map(|b| &mut b[..len / 2]),
+								.map(|b| &mut b[..len]),
 						),
 					}
 				}));
@@ -134,15 +135,15 @@ impl AudioBuffers {
 			.any(|f| f.abs() >= f32::EPSILON)
 	}
 
-	pub fn flush(&mut self, buf: &mut [f32], mix_level: f32) {
+	pub fn flush(&mut self, buf: &mut [[f32; 2]], mix_level: f32) {
 		self.delay_line.advance(buf);
 
-		for sample in buf {
+		for sample in buf.as_flattened_mut() {
 			*sample *= 1.0 - mix_level;
 		}
 	}
 
-	pub fn write_out(&mut self, buf: &mut [f32], mix_level: f32) {
+	pub fn write_out(&mut self, buf: &mut [[f32; 2]], mix_level: f32) {
 		self.delay_line.advance(buf);
 
 		let Some(output_buffer) = self.output_buffers.get(self.output_config.main_port_index)
@@ -155,8 +156,6 @@ impl AudioBuffers {
 			.port_channel_counts
 			.get(self.output_config.main_port_index)
 			.unwrap_or(&0);
-
-		let buf = buf.as_chunks_mut::<2>().0.iter_mut();
 
 		if n_channels == 1 {
 			output_buffer.iter().zip(buf).for_each(|(sample, buf)| {
@@ -174,11 +173,11 @@ impl AudioBuffers {
 	}
 
 	pub fn latency(&self) -> usize {
-		self.delay_line.len() / 2
+		self.delay_line.len()
 	}
 
 	pub fn set_latency(&mut self, latency: u32) {
-		self.delay_line.resize(2 * latency as usize);
+		self.delay_line.resize(latency as usize);
 	}
 
 	pub fn reset(&mut self) {

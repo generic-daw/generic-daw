@@ -128,7 +128,7 @@ fn maybe_snap<T>(t: T, modifiers: Modifiers, f: impl FnOnce(T) -> T) -> T {
 }
 
 pub fn frames_per_px(scale: Vector, transport: &Transport) -> f32 {
-	scale.x.exp2() * transport.sample_rate.get() as f32
+	(scale.x - 1.0).exp2() * transport.sample_rate.get() as f32
 }
 
 fn time_to_px(time: BeatTime, position: Vector, scale: Vector, transport: &Transport) -> f32 {

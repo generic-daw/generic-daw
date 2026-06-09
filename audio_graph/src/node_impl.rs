@@ -19,7 +19,7 @@ pub trait NodeImpl: Send + Sized + 'static {
 	fn process(
 		&mut self,
 		state: &Self::State,
-		audio: &mut [f32],
+		audio: &mut [[f32; 2]],
 		events: &mut Vec<Self::Event>,
 		injector: &Injector<Inject<Self>>,
 	) -> usize;

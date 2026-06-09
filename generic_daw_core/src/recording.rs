@@ -10,7 +10,7 @@ use utils::NoDebug;
 #[derive(Debug)]
 pub struct Recording<W: io::Write + io::Seek> {
 	writer: NoDebug<WavWriter<W>>,
-	samples: Vec<f32>,
+	samples: Vec<[f32; 2]>,
 
 	stream: Option<NoDebug<Stream>>,
 	config: StreamConfig,
@@ -23,7 +23,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		device_id: Option<&DeviceId>,
 		sample_rate: Option<NonZero<u32>>,
 		frames: Option<NonZero<u32>>,
-	) -> (Self, Consumer<f32>) {
+	) -> (Self, Consumer<[f32; 2]>) {
 		let (config, consumer, stream) = build_input_stream(device_id, sample_rate, frames);
 
 		let writer = WavWriter::new(
@@ -67,13 +67,13 @@ impl<W: io::Write + io::Seek> Recording<W> {
 	}
 
 	#[must_use]
-	pub fn samples(&self) -> &[f32] {
+	pub fn samples(&self) -> &[[f32; 2]] {
 		&self.samples
 	}
 
-	pub fn write(&mut self, samples: &[f32]) {
+	pub fn write(&mut self, samples: &[[f32; 2]]) {
 		self.samples.extend_from_slice(samples);
-		for &s in samples {
+		for &s in samples.as_flattened() {
 			self.writer.write_sample(s).unwrap();
 		}
 	}

@@ -1,49 +1,31 @@
 pub fn resample_cubic(
-	samples: &[f32],
+	samples: &[[f32; 2]],
 	resample_ratio: f64,
 	offset: usize,
-) -> impl Iterator<Item = (f32, f32)> {
-	debug_assert!(samples.len().is_multiple_of(2));
-
+) -> impl Iterator<Item = [f32; 2]> {
 	let mut frame = offset as f64 * resample_ratio;
 
 	if resample_ratio.is_sign_negative() {
-		frame += (samples.len() / 2) as f64;
+		frame += samples.len() as f64;
 	}
 
 	std::iter::from_fn(move || {
 		let fract = frame.fract() as f32;
-		let idx = 2 * frame as usize;
+		let idx = frame as usize;
 		frame += resample_ratio;
 
-		let [l0, r0] = if idx < 2 {
-			[0.0, 0.0]
-		} else {
-			[samples[idx - 2], samples[idx - 1]]
-		};
+		let [l0, r0] = samples
+			.get(idx.wrapping_sub(1))
+			.copied()
+			.unwrap_or_default();
+		let [l1, r1] = samples.get(idx).copied().unwrap_or_default();
+		let [l2, r2] = samples.get(idx + 1).copied().unwrap_or_default();
+		let [l3, r3] = samples.get(idx + 2).copied().unwrap_or_default();
 
-		let [l1, r1] = if idx + 1 >= samples.len() {
-			[0.0, 0.0]
-		} else {
-			[samples[idx], samples[idx + 1]]
-		};
-
-		let [l2, r2] = if idx + 3 >= samples.len() {
-			[0.0, 0.0]
-		} else {
-			[samples[idx + 2], samples[idx + 3]]
-		};
-
-		let [l3, r3] = if idx + 5 >= samples.len() {
-			[0.0, 0.0]
-		} else {
-			[samples[idx + 4], samples[idx + 5]]
-		};
-
-		Some((
+		Some([
 			interp_cubic(l0, l1, l2, l3, fract),
 			interp_cubic(r0, r1, r2, r3, fract),
-		))
+		])
 	})
 }
 

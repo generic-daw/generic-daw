@@ -3,7 +3,7 @@ use utils::NoDebug;
 
 #[derive(Clone, Debug, Default)]
 pub struct DelayLine {
-	buf: NoDebug<Vec<f32>>,
+	buf: NoDebug<Vec<[f32; 2]>>,
 	head: usize,
 }
 
@@ -15,7 +15,7 @@ impl DelayLine {
 		delay_line
 	}
 
-	pub fn advance(&mut self, buf: &mut [f32]) {
+	pub fn advance(&mut self, buf: &mut [[f32; 2]]) {
 		let diff = self.buf.len() - self.head;
 		if self.buf.len() < buf.len() {
 			buf.rotate_right(self.buf.len());
@@ -29,17 +29,6 @@ impl DelayLine {
 			self.buf[self.head..][..buf.len()].swap_with_slice(buf);
 			self.head += buf.len();
 		}
-	}
-
-	#[must_use]
-	pub fn read(&self) -> f32 {
-		self.buf[self.head]
-	}
-
-	pub fn write(&mut self, value: f32) -> f32 {
-		self.buf[self.head] = value;
-		self.head = (self.head + 1) % self.buf.len();
-		value
 	}
 
 	#[must_use]
@@ -69,11 +58,11 @@ impl DelayLine {
 			}
 		}
 
-		self.buf.resize(len, 0.0);
+		self.buf.resize(len, [0.0; 2]);
 	}
 
 	pub fn reset(&mut self) {
 		self.head = 0;
-		self.buf.fill(0.0);
+		self.buf.fill([0.0; 2]);
 	}
 }

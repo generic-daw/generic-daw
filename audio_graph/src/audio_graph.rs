@@ -13,7 +13,7 @@ use utils::{NoDebug, boxed_slice};
 
 impl<Node: NodeImpl> WorkList for AudioGraph<Node> {
 	type Item = NodeId;
-	type Scratch = Box<[f32]>;
+	type Scratch = Box<[[f32; 2]]>;
 	type Inject = Inject<Node>;
 
 	fn next_item(&self) -> Option<Self::Item> {
@@ -48,7 +48,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			state,
 			graph: HashMap::new(),
 			pool: Some(
-				ThreadPool::new_with_scratch(|| boxed_slice![0.0; 2 * max_frames.get() as usize])
+				ThreadPool::new_with_scratch(|| boxed_slice![[0.0; 2]; max_frames.get() as usize])
 					.into(),
 			),
 			queue: ArrayQueue::new(4),
@@ -123,7 +123,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	pub(crate) fn process_node(
 		&self,
 		entry: &Entry<Node>,
-		scratch: &mut [f32],
+		scratch: &mut [[f32; 2]],
 		injector: &Injector<Inject<Node>>,
 	) -> Option<NodeId> {
 		debug_assert_eq!(entry.indegree.load(Relaxed), 0);
@@ -145,7 +145,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			}
 		}
 
-		buffers.audio[..self.curr_len].fill(0.0);
+		buffers.audio[..self.curr_len].fill([0.0; 2]);
 		buffers.events.clear();
 
 		let max_latency = buffers
@@ -167,7 +167,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			let dep_entry = &self.graph[dep];
 			let dep_buffers = &*dep_entry.read_buffers_uncontended();
 			let latency_diff = max_latency - dep_entry.latency.load(Relaxed);
-			delay_line.resize(2 * latency_diff);
+			delay_line.resize(latency_diff);
 
 			let audio = if latency_diff == 0 {
 				&dep_buffers.audio[..self.curr_len]
@@ -178,8 +178,9 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			};
 
 			audio
+				.as_flattened()
 				.iter()
-				.zip(&mut buffers.audio[..self.curr_len])
+				.zip(buffers.audio[..self.curr_len].as_flattened_mut())
 				.for_each(|(&sample, buf)| *buf += *mix * sample);
 
 			events.extend(
@@ -191,7 +192,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 			buffers.events.extend(events.extract_if(.., |e| {
 				e.time()
-					.checked_sub(self.curr_len / 2)
+					.checked_sub(self.curr_len)
 					.map(|time| *e = e.at(time))
 					.is_none()
 			}));
@@ -252,7 +253,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		}
 	}
 
-	pub fn copy_output(&mut self, node: NodeId, audio: &mut [f32]) {
+	pub fn copy_output(&mut self, node: NodeId, audio: &mut [[f32; 2]]) {
 		audio.copy_from_slice(&self.entry_mut(node).buffers().audio[..audio.len()]);
 	}
 

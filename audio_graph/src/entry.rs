@@ -36,7 +36,7 @@ pub struct Entry<Node: NodeImpl> {
 pub struct Buffers<Node: NodeImpl> {
 	pub incoming: HashMap<NodeId, Incoming<Node>>,
 	pub outgoing: HashSet<NodeId>,
-	pub audio: NoDebug<Box<[f32]>>,
+	pub audio: NoDebug<Box<[[f32; 2]]>>,
 	pub events: Vec<Node::Event>,
 }
 
@@ -47,7 +47,7 @@ impl<Node: NodeImpl> Entry<Node> {
 			buffers: RwLock::new(Buffers {
 				incoming: HashMap::new(),
 				outgoing: HashSet::new(),
-				audio: boxed_slice![0.0; 2 * frames.get() as usize].into(),
+				audio: boxed_slice![[0.0; 2]; frames.get() as usize].into(),
 				events: Vec::new(),
 			}),
 			indegree: AtomicUsize::new(0),

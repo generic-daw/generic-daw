@@ -27,7 +27,7 @@ impl Recording {
 		sample_rate: Option<NonZero<u32>>,
 		frames: Option<NonZero<u32>>,
 		node: NodeId,
-	) -> (Self, Consumer<f32>) {
+	) -> (Self, Consumer<[f32; 2]>) {
 		let (core, consumer) = generic_daw_core::Recording::create(
 			BufWriter::new(File::create(&path).unwrap()),
 			device_id,
@@ -54,7 +54,7 @@ impl Recording {
 			* self.core.resample_ratio(transport)
 	}
 
-	pub fn write(&mut self, samples: &[f32]) {
+	pub fn write(&mut self, samples: &[[f32; 2]]) {
 		let start = self.core.samples().len();
 		self.core.write(samples);
 		self.lods.update(self.core.samples(), start);

@@ -26,7 +26,7 @@ pub fn build_input_stream(
 	device_id: Option<&DeviceId>,
 	sample_rate: Option<NonZero<u32>>,
 	frames: Option<NonZero<u32>>,
-) -> (StreamConfig, Consumer<f32>, Stream) {
+) -> (StreamConfig, Consumer<[f32; 2]>, Stream) {
 	let host = cpal::default_host();
 
 	let device = device_id
@@ -50,7 +50,7 @@ pub fn build_input_stream(
 	let frames = frames_of_config(&config).or(NonZero::new(2048)).unwrap();
 	let channels = NonZero::new(u32::from(config.channels)).unwrap();
 
-	let (producer, consumer) = RingBuffer::new(2 * sample_rate.get() as usize);
+	let (producer, consumer) = RingBuffer::new(sample_rate.get() as usize);
 
 	macro_rules! build_input_stream {
 		($($pat:pat => $ty:ty),*$(,)?) => {
@@ -278,18 +278,18 @@ fn compare_by_sample_format(
 fn build_input_callback<T: Sample>(
 	frames: NonZero<u32>,
 	channels: NonZero<u32>,
-	mut producer: Producer<f32>,
+	mut producer: Producer<[f32; 2]>,
 ) -> impl FnMut(&[T], &InputCallbackInfo)
 where
 	f32: FromSample<T>,
 {
 	let chunk_size = NonZero::new(frames.get() * channels.get()).unwrap();
-	let mut stereo = boxed_slice![0.0; 2 * frames.get() as usize];
+	let mut stereo = boxed_slice![[0.0; 2]; frames.get() as usize];
 	move |buf, _| {
 		for buf in buf.chunks(chunk_size.get() as usize) {
 			let frames = buf.len() / channels.get() as usize;
-			from_other_to_stereo(&mut stereo[..2 * frames], buf);
-			if let (_, t) = producer.push_partial_slice(&stereo[..2 * frames])
+			from_other_to_stereo(&mut stereo[..frames], buf);
+			if let (_, t) = producer.push_partial_slice(&stereo[..frames])
 				&& !t.is_empty()
 			{
 				warn!("full ring buffer");
@@ -304,53 +304,51 @@ fn build_output_callback<T: Sample + FromSample<f32>>(
 	mut processor: AudioCallback,
 ) -> impl FnMut(&mut [T], &OutputCallbackInfo) {
 	let chunk_size = NonZero::new(frames.get() * channels.get()).unwrap();
-	let mut stereo = boxed_slice![0.0; 2 * frames.get() as usize];
+	let mut stereo = boxed_slice![[0.0; 2]; frames.get() as usize];
 	move |buf, _| {
 		for buf in buf.chunks_mut(chunk_size.get() as usize) {
 			let frames = buf.len() / channels.get() as usize;
-			processor.process(&mut stereo[..2 * frames]);
-			from_stereo_to_other(buf, &stereo[..2 * frames]);
+			processor.process(&mut stereo[..frames]);
+			from_stereo_to_other(buf, &stereo[..frames]);
 		}
 	}
 }
 
-fn from_stereo_to_other<S: Sample + FromSample<f32>>(a: &mut [S], b: &[f32]) {
+fn from_stereo_to_other<S: Sample + FromSample<f32>>(a: &mut [S], b: &[[f32; 2]]) {
 	match a.len().cmp(&b.len()) {
 		Ordering::Greater => a
-			.chunks_exact_mut(a.len() / (b.len() / 2))
-			.zip(b.as_chunks::<2>().0)
+			.chunks_exact_mut(a.len() / b.len())
+			.zip(b)
 			.for_each(|(a, b)| {
 				a[0] = S::from_sample(b[0]);
 				a[1] = S::from_sample(b[1]);
 			}),
 		Ordering::Equal => a
 			.iter_mut()
-			.zip(b)
+			.zip(b.as_flattened())
 			.for_each(|(a, b)| *a = S::from_sample(*b)),
 		Ordering::Less => a
 			.iter_mut()
-			.zip(b.as_chunks::<2>().0)
+			.zip(b)
 			.for_each(|(a, b)| *a = S::from_sample((b[0] + b[1]) / 2.0)),
 	}
 }
 
-fn from_other_to_stereo<S: Sample>(a: &mut [f32], b: &[S])
+fn from_other_to_stereo<S: Sample>(a: &mut [[f32; 2]], b: &[S])
 where
 	f32: FromSample<S>,
 {
 	match a.len().cmp(&b.len()) {
-		Ordering::Less => b
-			.chunks_exact(b.len() / (a.len() / 2))
-			.zip(a.as_chunks_mut::<2>().0)
-			.for_each(|(b, a)| {
-				a[0] = f32::from_sample(b[0]);
-				a[1] = f32::from_sample(b[1]);
-			}),
+		Ordering::Less => b.chunks_exact(b.len() / a.len()).zip(a).for_each(|(b, a)| {
+			a[0] = f32::from_sample(b[0]);
+			a[1] = f32::from_sample(b[1]);
+		}),
 		Ordering::Equal => a
+			.as_flattened_mut()
 			.iter_mut()
 			.zip(b)
 			.for_each(|(a, b)| *a = f32::from_sample(*b)),
-		Ordering::Greater => b.iter().zip(a.as_chunks_mut::<2>().0).for_each(|(b, a)| {
+		Ordering::Greater => b.iter().zip(a).for_each(|(b, a)| {
 			a[0] = f32::from_sample(*b);
 			a[1] = f32::from_sample(*b);
 		}),

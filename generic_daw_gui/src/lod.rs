@@ -15,7 +15,7 @@ const CHUNK_SIZE: usize = 1 << STEP_SIZE;
 pub struct Lods(NoDebug<Box<[Box<[(f32, f32)]>]>>);
 
 impl Lods {
-	pub fn new(samples: &[f32]) -> Self {
+	pub fn new(samples: &[[f32; 2]]) -> Self {
 		let mut builder = LodsBuilder::default();
 		builder.update(samples, 0);
 		builder.finalize()
@@ -23,7 +23,7 @@ impl Lods {
 
 	pub fn mesh(
 		&self,
-		samples: &[f32],
+		samples: &[[f32; 2]],
 		offset: SecondsTime,
 		transport: &Transport,
 		volume: f32,
@@ -54,16 +54,19 @@ impl Lods {
 pub struct LodsBuilder(NoDebug<Vec<Vec<(f32, f32)>>>);
 
 impl LodsBuilder {
-	pub fn update(&mut self, samples: &[f32], mut start: usize) {
-		const FIRST: usize = 2 * CHUNK_SIZE;
-		start /= FIRST;
+	pub fn update(&mut self, samples: &[[f32; 2]], mut start: usize) {
+		start /= CHUNK_SIZE;
 
 		if self.0.is_empty() {
 			self.0.push(Vec::new());
 		}
 
 		self.0[0].truncate(start);
-		self.0[0].extend(samples[FIRST * start..].chunks(FIRST).map(samples_min_max));
+		self.0[0].extend(
+			samples[CHUNK_SIZE * start..]
+				.chunks(CHUNK_SIZE)
+				.map(samples_min_max),
+		);
 
 		for i in 1.. {
 			if self.0[i - 1].len() < CHUNK_SIZE {
@@ -90,7 +93,7 @@ impl LodsBuilder {
 
 	pub fn mesh(
 		&self,
-		samples: &[f32],
+		samples: &[[f32; 2]],
 		transport: &Transport,
 		frames_per_px: f32,
 		color: Color,
@@ -125,7 +128,7 @@ impl LodsBuilder {
 
 fn mesh(
 	lods: &[impl AsRef<[(f32, f32)]>],
-	samples: &[f32],
+	samples: &[[f32; 2]],
 	offset: SecondsTime,
 	transport: &Transport,
 	volume: f32,
@@ -146,7 +149,7 @@ fn mesh(
 		return None;
 	}
 
-	let frames_per_mesh_slice = (2 << mesh_lod) as f32;
+	let frames_per_mesh_slice = (1 << mesh_lod) as f32;
 	let px_per_mesh_slice = frames_per_mesh_slice / frames_per_px.abs();
 
 	let lod_slices_per_frame = lod_slices_per_mesh_slice as f32 / frames_per_mesh_slice;
@@ -174,9 +177,7 @@ fn mesh(
 	let lod_start = lod_start - lod_start % lod_slices_per_mesh_slice;
 	let lod_end = lod_end.next_multiple_of(lod_slices_per_mesh_slice) + 1;
 
-	let lod_len = saved_lod.map_or(samples.len() / 2, |saved_lod| {
-		lods[saved_lod].as_ref().len()
-	});
+	let lod_len = saved_lod.map_or(samples.len(), |saved_lod| lods[saved_lod].as_ref().len());
 	let lod_end = lod_end.min(lod_len);
 
 	if lod_end <= lod_start {
@@ -197,8 +198,8 @@ fn mesh(
 	let base = saved_lod.map_or_else(
 		|| {
 			left(
-				samples[2 * lod_start..2 * lod_end]
-					.chunks(2 * lod_slices_per_mesh_slice)
+				samples[lod_start..lod_end]
+					.chunks(lod_slices_per_mesh_slice)
 					.map(samples_min_max),
 			)
 		},
@@ -284,8 +285,9 @@ fn mesh(
 	})
 }
 
-fn samples_min_max(chunk: &[f32]) -> (f32, f32) {
+fn samples_min_max(chunk: &[[f32; 2]]) -> (f32, f32) {
 	chunk
+		.as_flattened()
 		.iter()
 		.fold((f32::INFINITY, f32::NEG_INFINITY), |(min, max), &c| {
 			(min.min(c), max.max(c))

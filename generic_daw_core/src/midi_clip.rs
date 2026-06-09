@@ -26,7 +26,7 @@ impl MidiClip {
 	pub fn diff(
 		&self,
 		state: &State,
-		audio: &[f32],
+		audio: &[[f32; 2]],
 		events: &mut Vec<Event>,
 		voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
 	) {
@@ -62,7 +62,7 @@ impl MidiClip {
 	pub fn process(
 		&self,
 		state: &State,
-		audio: &[f32],
+		audio: &[[f32; 2]],
 		events: &mut Vec<Event>,
 		voice_alloc: &mut VoiceAlloc<VoiceId, MidiNote>,
 	) {
@@ -126,7 +126,7 @@ fn alloc_or_steal(
 		});
 
 		events.push(Event::Off {
-			time: time as u32 / 2,
+			time: time as u32,
 			key: old_voice.info.key.0,
 			velocity: old_voice.info.velocity,
 			note_id: Match::Specific(old_voice.note_id),
@@ -136,7 +136,7 @@ fn alloc_or_steal(
 	});
 
 	events.push(Event::On {
-		time: time as u32 / 2,
+		time: time as u32,
 		key: voice.info.key.0,
 		velocity: voice.info.velocity,
 		note_id: Match::Specific(voice.note_id),
@@ -151,7 +151,7 @@ fn dealloc(
 ) {
 	if let Some(voice) = voice_alloc.dealloc(id) {
 		events.push(Event::Off {
-			time: time as u32 / 2,
+			time: time as u32,
 			key: voice.info.key.0,
 			velocity: voice.info.velocity,
 			note_id: Match::Specific(voice.note_id),

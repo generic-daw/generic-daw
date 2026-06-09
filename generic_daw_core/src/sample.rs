@@ -15,7 +15,7 @@ pub use sample_id::Id as SampleId;
 #[derive(Clone, Debug)]
 pub struct Sample {
 	pub id: SampleId,
-	pub samples: NoDebug<Arc<[f32]>>,
+	pub samples: NoDebug<Arc<[[f32; 2]]>>,
 	#[expect(clippy::struct_field_names)]
 	pub sample_rate: NonZero<u32>,
 }
@@ -46,7 +46,7 @@ impl Sample {
 			.make_audio_decoder(codec_params, &AudioDecoderOptions::default())
 			.ok()?;
 
-		let mut samples = Vec::with_capacity(2 * num_frames);
+		let mut samples = Vec::with_capacity(num_frames);
 		let mut packet_buf = Vec::with_capacity(channels * max_frames_per_packet);
 
 		while let Some(packet) = format.next_packet().ok()? {
@@ -60,20 +60,20 @@ impl Sample {
 				.copy_to_vec_interleaved(&mut packet_buf);
 
 			if channels == 1 {
-				samples.extend(packet_buf.iter().skip(delay).flat_map(|x| [x, x]));
+				samples.extend(packet_buf.iter().skip(delay).map(|&x| [x, x]));
 			} else if channels != 0 {
 				samples.extend(
 					packet_buf
 						.chunks_exact(channels)
 						.skip(delay)
-						.flat_map(|x| [x[0], x[1]]),
+						.map(|x| [x[0], x[1]]),
 				);
 			}
 
 			delay = delay.saturating_sub(packet_buf.len() / channels);
 		}
 
-		samples.truncate(samples.len().saturating_sub(2 * padding));
+		samples.truncate(samples.len().saturating_sub(padding));
 
 		Some(Self {
 			id: SampleId::unique(),

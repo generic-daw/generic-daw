@@ -26,7 +26,7 @@ impl AudioClip {
 		}
 	}
 
-	pub fn process(&self, state: &State, audio: &mut [f32]) {
+	pub fn process(&self, state: &State, audio: &mut [[f32; 2]]) {
 		debug_assert!(state.transport.playing);
 
 		let position = state.transport.position.to_frames(&state.transport);
@@ -68,28 +68,28 @@ impl AudioClip {
 		let mut iter = resample_cubic(
 			&sample.samples[read_start..][..read_len],
 			resample_ratio,
-			play_pos / 2,
+			play_pos,
 		)
-		.take((len - play_pos) / 2)
-		.zip(audio[write_start..].as_chunks_mut::<2>().0)
-		.zip((play_pos..).step_by(2));
+		.take(len - play_pos)
+		.zip(&mut audio[write_start..])
+		.zip(play_pos..);
 
 		iter.by_ref()
-			.take(fade_start.saturating_sub(play_pos) / 2)
-			.for_each(|(((l, r), buf), pos)| {
+			.take(fade_start.saturating_sub(play_pos))
+			.for_each(|(([l, r], buf), pos)| {
 				let mix = self.fade_start.transition(pos as f32 / fade_start as f32);
 				buf[0] += l * self.volume * mix;
 				buf[1] += r * self.volume * mix;
 			});
 
 		iter.by_ref()
-			.take((len - fade_end).saturating_sub(play_pos) / 2)
-			.for_each(|(((l, r), buf), _)| {
+			.take((len - fade_end).saturating_sub(play_pos))
+			.for_each(|(([l, r], buf), _)| {
 				buf[0] += l * self.volume;
 				buf[1] += r * self.volume;
 			});
 
-		iter.by_ref().for_each(|(((l, r), buf), pos)| {
+		iter.by_ref().for_each(|(([l, r], buf), pos)| {
 			let mix = self
 				.fade_end
 				.transition((len - pos) as f32 / fade_end as f32);

@@ -310,10 +310,10 @@ impl AudioThread {
 
 	fn process(
 		&mut self,
-		mut buf: &mut [f32],
+		mut buf: &mut [[f32; 2]],
 	) -> Option<(oneshot::Sender<Self>, oneshot::Receiver<Self>)> {
 		let start = Instant::now();
-		let frames = buf.len() / 2;
+		let frames = buf.len();
 
 		let acc = self
 			.updates
@@ -391,7 +391,7 @@ impl AudioThread {
 		None
 	}
 
-	fn metronome(&self, buf: &mut [f32]) {
+	fn metronome(&self, buf: &mut [[f32; 2]]) {
 		if !self.transport().metronome || !self.transport().playing {
 			return;
 		}
@@ -416,7 +416,9 @@ impl AudioThread {
 				&ON_BAR_CLICK
 			} else {
 				&OFF_BAR_CLICK
-			};
+			}
+			.as_chunks()
+			.0;
 
 			let start = click_beat.to_frames(self.transport()) + latency;
 
@@ -429,17 +431,17 @@ impl AudioThread {
 
 			let resample_ratio = 44100.0 / f64::from(self.transport().sample_rate.get());
 
-			let len = ((click.len() as f64 / resample_ratio) as usize).next_multiple_of(2);
+			let len = (click.len() as f64 / resample_ratio) as usize;
 
 			let play_pos = position.saturating_sub(start);
 			if play_pos >= len {
 				continue;
 			}
 
-			resample_cubic(click, resample_ratio, play_pos / 2)
-				.take((len - play_pos) / 2)
-				.zip(buf[write_start..].as_chunks_mut::<2>().0)
-				.for_each(|((l, r), buf)| {
+			resample_cubic(click, resample_ratio, play_pos)
+				.take(len - play_pos)
+				.zip(&mut buf[write_start..])
+				.for_each(|([l, r], buf)| {
 					buf[0] += l;
 					buf[1] += r;
 				});
@@ -451,7 +453,7 @@ impl AudioThread {
 		path: impl AsRef<Path>,
 		node: NodeId,
 		beat_range: BeatRange,
-		mut samples_fn: impl FnMut(&[f32]),
+		mut samples_fn: impl FnMut(&[[f32; 2]]),
 		mut progress_fn: impl FnMut(f64),
 	) {
 		let old = *self.transport();
@@ -471,8 +473,8 @@ impl AudioThread {
 		)
 		.unwrap();
 
-		let buffer_size = 2 * self.transport().frames.get() as usize;
-		let mut buf = boxed_slice![0.0; buffer_size];
+		let buffer_size = self.transport().frames.get() as usize;
+		let mut buf = boxed_slice![[0.0; 2]; buffer_size];
 		let buffer_size = SecondsTime::from_frames(buffer_size, self.transport());
 
 		let range_start = beat_range.start().to_seconds_time(self.transport());
@@ -517,7 +519,7 @@ impl AudioThread {
 			updates.clear();
 
 			samples_fn(&buf[..diff_frames]);
-			for &s in &buf[..diff_frames] {
+			for &s in buf[..diff_frames].as_flattened() {
 				writer.write_sample(s).unwrap();
 			}
 
@@ -556,7 +558,7 @@ pub enum AudioCallback {
 }
 
 impl AudioCallback {
-	pub fn process(&mut self, buf: &mut [f32]) {
+	pub fn process(&mut self, buf: &mut [[f32; 2]]) {
 		match self {
 			Self::Processing(processor) => {
 				if let Some((sender, receiver)) = processor.process(buf) {
@@ -569,7 +571,7 @@ impl AudioCallback {
 
 					self.process(buf);
 				} else {
-					for s in buf {
+					for s in buf.as_flattened_mut() {
 						*s = s.clamp(-1.0, 1.0);
 					}
 				}
@@ -580,7 +582,7 @@ impl AudioCallback {
 
 					self.process(buf);
 				} else {
-					buf.fill(0.0);
+					buf.fill([0.0; 2]);
 				}
 			}
 		}
