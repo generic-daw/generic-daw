@@ -19,7 +19,7 @@ use crate::{
 	},
 	widget::{
 		Clip, Delta, LINE_HEIGHT, Note, Piano, PianoRoll, Playlist, Seeker, TEXT_HEIGHT, Track,
-		beats_snap_step, piano_roll, playlist, samples_per_px,
+		beats_snap_step, frames_per_px, piano_roll, playlist,
 	},
 };
 use generic_daw_core::{
@@ -2168,12 +2168,12 @@ impl ArrangementView {
 			(clip
 				.position
 				.start()
-				.to_samples(self.arrangement.transport()) as f32
+				.to_frames(self.arrangement.transport()) as f32
 				- clip
 					.position
 					.offset()
-					.to_samples(self.arrangement.transport()) as f32)
-				/ samples_per_px(self.piano_roll.borrow().scale, self.arrangement.transport()),
+					.to_frames(self.arrangement.transport()) as f32)
+				/ frames_per_px(self.piano_roll.borrow().scale, self.arrangement.transport()),
 		)
 		.into()
 	}
@@ -2275,9 +2275,9 @@ impl ArrangementView {
 	) {
 		if state.autoscroll && after != before {
 			let pos_diff = Vector::new(
-				(after.to_samples(self.arrangement.transport()) as f32
-					- before.to_samples(self.arrangement.transport()) as f32)
-					/ samples_per_px(self.playlist.get_mut().scale, self.arrangement.transport()),
+				(after.to_frames(self.arrangement.transport()) as f32
+					- before.to_frames(self.arrangement.transport()) as f32)
+					/ frames_per_px(self.playlist.get_mut().scale, self.arrangement.transport()),
 				0.0,
 			);
 

@@ -84,7 +84,7 @@ impl Sample {
 
 	#[must_use]
 	pub fn len(&self, transport: &Transport) -> SecondsTime {
-		SecondsTime::from_samples(self.samples.len(), transport) * self.resample_ratio(transport)
+		SecondsTime::from_frames(self.samples.len(), transport) * self.resample_ratio(transport)
 	}
 
 	#[must_use]

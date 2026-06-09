@@ -894,7 +894,7 @@ impl Arrangement {
 
 		Task::batch([
 			Task::future(unblock(move || {
-				let mut samples = Vec::with_capacity(beat_range.len().to_samples(&transport));
+				let mut samples = Vec::with_capacity(beat_range.len().to_frames(&transport));
 
 				let mut processor = p_receiver.recv().unwrap();
 				processor.render(

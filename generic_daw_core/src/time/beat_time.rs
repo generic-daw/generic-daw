@@ -60,13 +60,13 @@ impl BeatTime {
 	}
 
 	#[must_use]
-	pub const fn from_samples(samples: usize, transport: &Transport) -> Self {
-		SecondsTime::from_samples(samples, transport).to_beat_time(transport)
+	pub const fn from_frames(frames: usize, transport: &Transport) -> Self {
+		SecondsTime::from_frames(frames, transport).to_beat_time(transport)
 	}
 
 	#[must_use]
-	pub const fn to_samples(self, transport: &Transport) -> usize {
-		self.to_seconds_time(transport).to_samples(transport)
+	pub const fn to_frames(self, transport: &Transport) -> usize {
+		self.to_seconds_time(transport).to_frames(transport)
 	}
 
 	#[must_use]

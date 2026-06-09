@@ -127,18 +127,18 @@ fn maybe_snap<T>(t: T, modifiers: Modifiers, f: impl FnOnce(T) -> T) -> T {
 	if modifiers.alt() { t } else { f(t) }
 }
 
-pub fn samples_per_px(scale: Vector, transport: &Transport) -> f32 {
+pub fn frames_per_px(scale: Vector, transport: &Transport) -> f32 {
 	scale.x.exp2() * transport.sample_rate.get() as f32
 }
 
 fn time_to_px(time: BeatTime, position: Vector, scale: Vector, transport: &Transport) -> f32 {
-	(time.to_samples(transport) as f64 / f64::from(samples_per_px(scale, transport))
+	(time.to_frames(transport) as f64 / f64::from(frames_per_px(scale, transport))
 		- f64::from(position.x)) as f32
 }
 
 fn px_to_time(px: f32, position: Vector, scale: Vector, transport: &Transport) -> BeatTime {
-	BeatTime::from_samples(
-		((f64::from(px) + f64::from(position.x)) * f64::from(samples_per_px(scale, transport)))
+	BeatTime::from_frames(
+		((f64::from(px) + f64::from(position.x)) * f64::from(frames_per_px(scale, transport)))
 			as usize,
 		transport,
 	)

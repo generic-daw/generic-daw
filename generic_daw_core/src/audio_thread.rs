@@ -334,7 +334,7 @@ impl AudioThread {
 				&& let Some(loop_range) = self.transport().loop_range
 				&& let end = loop_range.end().to_seconds_time(self.transport())
 				&& let Some(len) = end.checked_sub(self.transport().position)
-				&& let len = len.to_samples(self.transport())
+				&& let len = len.to_frames(self.transport())
 				&& len <= buf.len()
 			{
 				(Some(loop_range.start()), len)
@@ -349,7 +349,7 @@ impl AudioThread {
 			if let Some(position) = looped {
 				self.transport_mut().position = position.to_seconds_time(self.transport());
 			} else if self.transport().playing {
-				let len = SecondsTime::from_samples(len, self.transport());
+				let len = SecondsTime::from_frames(len, self.transport());
 				self.transport_mut().position += len;
 			}
 
@@ -396,13 +396,13 @@ impl AudioThread {
 			return;
 		}
 
-		let position = self.transport().position.to_samples(self.transport());
+		let position = self.transport().position.to_frames(self.transport());
 		let latency = self.audio_graph.latency(self.master);
 
 		let mut click_beat =
-			BeatTime::from_samples(position.saturating_sub(latency), self.transport()).beat_floor();
+			BeatTime::from_frames(position.saturating_sub(latency), self.transport()).beat_floor();
 
-		let end_beat = BeatTime::from_samples(
+		let end_beat = BeatTime::from_frames(
 			(position + buf.len()).saturating_sub(latency),
 			self.transport(),
 		)
@@ -418,7 +418,7 @@ impl AudioThread {
 				&OFF_BAR_CLICK
 			};
 
-			let start = click_beat.to_samples(self.transport()) + latency;
+			let start = click_beat.to_frames(self.transport()) + latency;
 
 			let write_start = start.saturating_sub(position);
 			if write_start >= buf.len() {
@@ -473,7 +473,7 @@ impl AudioThread {
 
 		let buffer_size = 2 * self.transport().frames.get() as usize;
 		let mut buf = boxed_slice![0.0; buffer_size];
-		let buffer_size = SecondsTime::from_samples(buffer_size, self.transport());
+		let buffer_size = SecondsTime::from_frames(buffer_size, self.transport());
 
 		let range_start = beat_range.start().to_seconds_time(self.transport());
 		let range_len = beat_range.len().to_seconds_time(self.transport());
@@ -485,14 +485,14 @@ impl AudioThread {
 
 		while {
 			render_start = range_start
-				+ SecondsTime::from_samples(self.audio_graph.latency(node), self.transport());
+				+ SecondsTime::from_frames(self.audio_graph.latency(node), self.transport());
 			render_end = render_start + range_len;
 			self.transport().position < render_start
 		} {
 			let diff = buffer_size.min(render_start - self.transport().position);
-			let diff_samples = diff.to_samples(self.transport());
+			let diff_frames = diff.to_frames(self.transport());
 
-			self.audio_graph.process_subtree(node, diff_samples);
+			self.audio_graph.process_subtree(node, diff_frames);
 			self.audio_graph
 				.for_each_node_mut(|node| node.collect_updates(&mut updates));
 			updates.clear();
@@ -503,21 +503,21 @@ impl AudioThread {
 
 		while {
 			render_start = range_start
-				+ SecondsTime::from_samples(self.audio_graph.latency(node), self.transport());
+				+ SecondsTime::from_frames(self.audio_graph.latency(node), self.transport());
 			render_end = render_start + range_len;
 			self.transport().position < render_end
 		} {
 			let diff = buffer_size.min(render_end - self.transport().position);
-			let diff_samples = diff.to_samples(self.transport());
+			let diff_frames = diff.to_frames(self.transport());
 
-			self.audio_graph.process_subtree(node, diff_samples);
-			self.audio_graph.copy_output(node, &mut buf[..diff_samples]);
+			self.audio_graph.process_subtree(node, diff_frames);
+			self.audio_graph.copy_output(node, &mut buf[..diff_frames]);
 			self.audio_graph
 				.for_each_node_mut(|node| node.collect_updates(&mut updates));
 			updates.clear();
 
-			samples_fn(&buf[..diff_samples]);
-			for &s in &buf[..diff_samples] {
+			samples_fn(&buf[..diff_frames]);
+			for &s in &buf[..diff_frames] {
 				writer.write_sample(s).unwrap();
 			}
 

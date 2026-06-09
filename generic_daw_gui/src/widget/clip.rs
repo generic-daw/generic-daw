@@ -1,9 +1,9 @@
 use crate::{
 	arrangement_view::{AudioClipRef, MidiClipRef, Recording, format_db},
 	widget::{
-		ALPHA_1_3, ALPHA_2_3, LINE_HEIGHT, beats_snap_step, maybe_snap,
+		ALPHA_1_3, ALPHA_2_3, LINE_HEIGHT, beats_snap_step, frames_per_px, maybe_snap,
 		playlist::{self, Action, Status},
-		px_to_time, samples_per_px, time_to_px,
+		px_to_time, time_to_px,
 	},
 };
 use generic_daw_core::{Transition, Transport, time::BeatTime};
@@ -132,10 +132,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			},
 			stretch: match self.inner {
 				Inner::AudioClip(inner) => {
-					samples_per_px(playlist.scale, self.transport) * inner.clip.stretch as f32
+					frames_per_px(playlist.scale, self.transport) * inner.clip.stretch as f32
 				}
 				Inner::MidiClip(..) => 1.0,
-				Inner::Recording(..) => samples_per_px(playlist.scale, self.transport),
+				Inner::Recording(..) => frames_per_px(playlist.scale, self.transport),
 			},
 			volume: match self.inner {
 				Inner::AudioClip(inner) => inner.clip.volume,
@@ -288,11 +288,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							break 'block;
 						}
 
-						let samples_per_px = samples_per_px(playlist.scale, self.transport);
-						let fade_start_px = inner.clip.fade_start.len.to_samples(self.transport)
-							as f32 / samples_per_px;
-						let fade_end_px = inner.clip.fade_end.len.to_samples(self.transport) as f32
-							/ -samples_per_px;
+						let frames_per_px = frames_per_px(playlist.scale, self.transport);
+						let fade_start_px = inner.clip.fade_start.len.to_frames(self.transport)
+							as f32 / frames_per_px;
+						let fade_end_px = inner.clip.fade_end.len.to_frames(self.transport) as f32
+							/ -frames_per_px;
 
 						let fade_start_control = Point::new(
 							clip_bounds.x + inner.clip.fade_start.p.x * fade_start_px,
@@ -564,7 +564,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		}
 
 		let playlist = self.playlist.borrow();
-		let samples_per_px = samples_per_px(playlist.scale, self.transport);
+		let frames_per_px = frames_per_px(playlist.scale, self.transport);
 
 		match self.inner {
 			Inner::AudioClip(inner) => {
@@ -586,7 +586,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 								len: inner.clip.fade_end.len / resample_ratio,
 								..inner.clip.fade_end
 							},
-							samples_per_px / resample_ratio as f32 * inner.clip.stretch as f32,
+							frames_per_px / resample_ratio as f32 * inner.clip.stretch as f32,
 							theme.palette().background.strong.text,
 							unclipped_bounds,
 							lower_bounds,
@@ -602,10 +602,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					);
 					let end_offset = start_offset + Vector::new(layout.bounds().width, 0.0);
 
-					let fade_start_px = inner.clip.fade_start.len.to_samples(self.transport) as f32
-						/ samples_per_px;
+					let fade_start_px =
+						inner.clip.fade_start.len.to_frames(self.transport) as f32 / frames_per_px;
 					let fade_end_px =
-						inner.clip.fade_end.len.to_samples(self.transport) as f32 / -samples_per_px;
+						inner.clip.fade_end.len.to_frames(self.transport) as f32 / -frames_per_px;
 
 					let fade = |b: &mut Builder, fade: Transition, fade_px: f32, offset: Vector| {
 						b.move_to(Point::new(0.0, unclipped_bounds.height) + offset);
@@ -821,14 +821,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						.position
 						.start()
 						.saturating_sub(inner.clip.position.offset())
-						.to_samples(self.transport) as f32
-						/ samples_per_px;
+						.to_frames(self.transport) as f32
+						/ frames_per_px;
 					let end_pixel = note
 						.position
 						.end()
 						.saturating_sub(inner.clip.position.offset())
-						.to_samples(self.transport) as f32
-						/ samples_per_px;
+						.to_frames(self.transport) as f32
+						/ frames_per_px;
 
 					let top_pixel = f32::from(max - note.key.0 + 1) * note_height;
 
@@ -856,7 +856,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						inner.lods.mesh(
 							inner.core.samples(),
 							self.transport,
-							samples_per_px / resample_ratio as f32,
+							frames_per_px / resample_ratio as f32,
 							theme.palette().background.strong.text,
 							layout.bounds().shrink(padding::top(LINE_HEIGHT)),
 							lower_bounds,
@@ -899,11 +899,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					break 'block;
 				}
 
-				let samples_per_px = samples_per_px(playlist.scale, self.transport);
+				let frames_per_px = frames_per_px(playlist.scale, self.transport);
 				let fade_start_px =
-					inner.clip.fade_start.len.to_samples(self.transport) as f32 / samples_per_px;
+					inner.clip.fade_start.len.to_frames(self.transport) as f32 / frames_per_px;
 				let fade_end_px =
-					inner.clip.fade_end.len.to_samples(self.transport) as f32 / -samples_per_px;
+					inner.clip.fade_end.len.to_frames(self.transport) as f32 / -frames_per_px;
 
 				let fade_start_control = Point::new(
 					inner.clip.fade_start.p.x * fade_start_px,

@@ -23,10 +23,10 @@ impl BeatRange {
 	}
 
 	#[must_use]
-	pub const fn to_samples(self, transport: &Transport) -> (usize, usize) {
+	pub const fn to_frames(self, transport: &Transport) -> (usize, usize) {
 		(
-			self.start().to_samples(transport),
-			self.end().to_samples(transport),
+			self.start().to_frames(transport),
+			self.end().to_frames(transport),
 		)
 	}
 

@@ -50,7 +50,7 @@ impl Recording {
 	}
 
 	pub fn len(&self, transport: &Transport) -> BeatTime {
-		BeatTime::from_samples(self.core.samples().len(), transport)
+		BeatTime::from_frames(self.core.samples().len(), transport)
 			* self.core.resample_ratio(transport)
 	}
 

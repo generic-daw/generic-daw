@@ -50,23 +50,23 @@ impl SecondsTime {
 	}
 
 	#[must_use]
-	pub const fn from_samples(samples: usize, transport: &Transport) -> Self {
-		let samples = samples.next_multiple_of(2) as u64;
+	pub const fn from_frames(frames: usize, transport: &Transport) -> Self {
+		let frames = frames.next_multiple_of(2) as u64;
 		let sample_rate = transport.sample_rate.get() as u64;
 
-		let time = samples * (Self::FACTOR / 2) / sample_rate;
+		let time = frames * (Self::FACTOR / 2) / sample_rate;
 
-		Self(FixedPoint::from_bits(time))
+		Self::from_bits(time)
 	}
 
 	#[must_use]
-	pub const fn to_samples(self, transport: &Transport) -> usize {
+	pub const fn to_frames(self, transport: &Transport) -> usize {
 		let time = self.to_bits();
 		let sample_rate = transport.sample_rate.get() as u64;
 
-		let samples = (time * sample_rate) / (Self::FACTOR / 2);
+		let frames = (time * sample_rate) / (Self::FACTOR / 2);
 
-		samples.next_multiple_of(2) as usize
+		frames.next_multiple_of(2) as usize
 	}
 
 	#[must_use]

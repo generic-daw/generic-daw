@@ -32,9 +32,9 @@ impl MidiClip {
 	) {
 		debug_assert!(state.transport.playing);
 
-		let position = state.transport.position.to_samples(&state.transport);
+		let position = state.transport.position.to_frames(&state.transport);
 
-		let (start, end) = self.position.beat_range().to_samples(&state.transport);
+		let (start, end) = self.position.beat_range().to_frames(&state.transport);
 		if !(start < position + audio.len() && end >= position) {
 			return;
 		}
@@ -49,7 +49,7 @@ impl MidiClip {
 				Some(note)
 			})
 			.for_each(|note| {
-				let (start, end) = note.position.to_samples(&state.transport);
+				let (start, end) = note.position.to_frames(&state.transport);
 				if start < position
 					&& end > position
 					&& !voice_alloc.activate((self.id, note.id, note.key))
@@ -68,9 +68,9 @@ impl MidiClip {
 	) {
 		debug_assert!(state.transport.playing);
 
-		let position = state.transport.position.to_samples(&state.transport);
+		let position = state.transport.position.to_frames(&state.transport);
 
-		let (start, end) = self.position.beat_range().to_samples(&state.transport);
+		let (start, end) = self.position.beat_range().to_frames(&state.transport);
 		if !(start < position + audio.len() && end >= position) {
 			return;
 		}
@@ -85,7 +85,7 @@ impl MidiClip {
 				Some(note)
 			})
 			.for_each(|note| {
-				let (start, end) = note.position.to_samples(&state.transport);
+				let (start, end) = note.position.to_frames(&state.transport);
 
 				if let Some(time) = start.checked_sub(position)
 					&& time < audio.len()

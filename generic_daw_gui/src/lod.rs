@@ -29,7 +29,7 @@ impl Lods {
 		volume: f32,
 		fade_start: Transition,
 		fade_end: Transition,
-		samples_per_px: f32,
+		frames_per_px: f32,
 		color: Color,
 		unclipped_bounds: Rectangle,
 		clipped_bounds: Rectangle,
@@ -42,7 +42,7 @@ impl Lods {
 			volume,
 			fade_start,
 			fade_end,
-			samples_per_px,
+			frames_per_px,
 			color,
 			unclipped_bounds,
 			clipped_bounds,
@@ -92,7 +92,7 @@ impl LodsBuilder {
 		&self,
 		samples: &[f32],
 		transport: &Transport,
-		samples_per_px: f32,
+		frames_per_px: f32,
 		color: Color,
 		unclipped_bounds: Rectangle,
 		clipped_bounds: Rectangle,
@@ -105,7 +105,7 @@ impl LodsBuilder {
 			1.0,
 			Transition::default(),
 			Transition::default(),
-			samples_per_px,
+			frames_per_px,
 			color,
 			unclipped_bounds,
 			clipped_bounds,
@@ -131,14 +131,14 @@ fn mesh(
 	volume: f32,
 	fade_start_t: Transition,
 	fade_end_t: Transition,
-	samples_per_px: f32,
+	frames_per_px: f32,
 	color: Color,
 	unclipped_bounds: Rectangle,
 	clipped_bounds: Rectangle,
 ) -> Option<Mesh> {
-	let offset = offset.to_samples(transport);
+	let offset = offset.to_frames(transport);
 
-	let mesh_lod = (samples_per_px.abs().log2() - 1.0) as usize;
+	let mesh_lod = (frames_per_px.abs().log2() - 1.0) as usize;
 	let saved_lod = (mesh_lod / STEP_SIZE).checked_sub(1);
 	let lod_slices_per_mesh_slice = 1 << (mesh_lod % STEP_SIZE);
 
@@ -146,22 +146,22 @@ fn mesh(
 		return None;
 	}
 
-	let samples_per_mesh_slice = (2 << mesh_lod) as f32;
-	let px_per_mesh_slice = samples_per_mesh_slice / samples_per_px.abs();
+	let frames_per_mesh_slice = (2 << mesh_lod) as f32;
+	let px_per_mesh_slice = frames_per_mesh_slice / frames_per_px.abs();
 
-	let lod_slices_per_sample = lod_slices_per_mesh_slice as f32 / samples_per_mesh_slice;
+	let lod_slices_per_frame = lod_slices_per_mesh_slice as f32 / frames_per_mesh_slice;
 	let lod_slices_per_px = lod_slices_per_mesh_slice as f32 / px_per_mesh_slice;
 
 	let lod_len_f = (clipped_bounds.width * lod_slices_per_px)
-		.min((samples.len() as f32 - offset as f32) * lod_slices_per_sample);
+		.min((samples.len() as f32 - offset as f32) * lod_slices_per_frame);
 
 	let hidden_start_px = clipped_bounds.x - unclipped_bounds.x;
 	let hidden_top_px = unclipped_bounds.y - clipped_bounds.y;
 
-	let lod_start_f = if samples_per_px.is_sign_positive() {
-		offset as f32 * lod_slices_per_sample + hidden_start_px * lod_slices_per_px
+	let lod_start_f = if frames_per_px.is_sign_positive() {
+		offset as f32 * lod_slices_per_frame + hidden_start_px * lod_slices_per_px
 	} else {
-		(samples.len() as f32 - offset as f32) * lod_slices_per_sample
+		(samples.len() as f32 - offset as f32) * lod_slices_per_frame
 			- hidden_start_px * lod_slices_per_px
 			- lod_len_f
 	};
@@ -183,10 +183,10 @@ fn mesh(
 		return None;
 	}
 
-	let fade_start_px = fade_start_t.len.to_samples(transport) as f32 / samples_per_px.abs();
-	let fade_end_px = fade_end_t.len.to_samples(transport) as f32 / samples_per_px.abs();
+	let fade_start_px = fade_start_t.len.to_frames(transport) as f32 / frames_per_px.abs();
+	let fade_end_px = fade_end_t.len.to_frames(transport) as f32 / frames_per_px.abs();
 
-	let jitter_correct_px = if samples_per_px.is_sign_positive() {
+	let jitter_correct_px = if frames_per_px.is_sign_positive() {
 		(lod_start as f32 - lod_start_f) / lod_slices_per_px
 	} else {
 		(lod_end_f - lod_end as f32) / lod_slices_per_px
@@ -211,7 +211,7 @@ fn mesh(
 		},
 	);
 
-	let base = if samples_per_px.is_sign_positive() {
+	let base = if frames_per_px.is_sign_positive() {
 		left(base)
 	} else {
 		right(base.rev())

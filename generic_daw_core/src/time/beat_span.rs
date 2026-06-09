@@ -26,10 +26,10 @@ impl BeatSpan {
 	}
 
 	#[must_use]
-	pub fn to_samples(self, transport: &Transport) -> (usize, usize) {
+	pub fn to_frames(self, transport: &Transport) -> (usize, usize) {
 		(
-			self.start().to_samples(transport),
-			self.end(transport).to_samples(transport),
+			self.start().to_frames(transport),
+			self.end(transport).to_frames(transport),
 		)
 	}
 

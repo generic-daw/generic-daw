@@ -1,8 +1,8 @@
 use crate::{
 	file_tree::FileKind,
 	widget::{
-		ALPHA_1_3, Delta, LINE_HEIGHT, beats_snap_step, clip, maybe_snap, px_to_time,
-		samples_per_px, time_to_px, track::Track,
+		ALPHA_1_3, Delta, LINE_HEIGHT, beats_snap_step, clip, frames_per_px, maybe_snap,
+		px_to_time, time_to_px, track::Track,
 	},
 };
 use generic_daw_core::{Transport, time::BeatTime};
@@ -403,9 +403,9 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						panic!();
 					};
 
-					let samples_per_px = samples_per_px(state.scale, self.transport);
-					let fade_start_px = inner.clip.fade_start.len.to_samples(self.transport) as f32
-						/ samples_per_px;
+					let frames_per_px = frames_per_px(state.scale, self.transport);
+					let fade_start_px =
+						inner.clip.fade_start.len.to_frames(self.transport) as f32 / frames_per_px;
 
 					let clip_bounds = layout.child(track).child(clip).bounds()
 						- Vector::new(viewport.position().x, viewport.position().y);
@@ -439,9 +439,9 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						panic!();
 					};
 
-					let samples_per_px = samples_per_px(state.scale, self.transport);
+					let frames_per_px = frames_per_px(state.scale, self.transport);
 					let fade_end_px =
-						inner.clip.fade_end.len.to_samples(self.transport) as f32 / -samples_per_px;
+						inner.clip.fade_end.len.to_frames(self.transport) as f32 / -frames_per_px;
 
 					let clip_bounds = layout.child(track).child(clip).bounds()
 						- Vector::new(viewport.position().x, viewport.position().y);

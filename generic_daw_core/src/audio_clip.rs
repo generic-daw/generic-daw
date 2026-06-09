@@ -29,9 +29,9 @@ impl AudioClip {
 	pub fn process(&self, state: &State, audio: &mut [f32]) {
 		debug_assert!(state.transport.playing);
 
-		let position = state.transport.position.to_samples(&state.transport);
+		let position = state.transport.position.to_frames(&state.transport);
 
-		let start = self.position.start().to_samples(&state.transport);
+		let start = self.position.start().to_frames(&state.transport);
 
 		let write_start = start.saturating_sub(position);
 		if write_start >= audio.len() {
@@ -44,7 +44,7 @@ impl AudioClip {
 			.saturating_sub(self.position.offset())
 			.min(self.position.len() * self.stretch.abs());
 
-		let len = (read_len / self.stretch.abs()).to_samples(&state.transport);
+		let len = (read_len / self.stretch.abs()).to_frames(&state.transport);
 
 		let play_pos = position.saturating_sub(start);
 		if play_pos >= len {
@@ -52,7 +52,7 @@ impl AudioClip {
 		}
 
 		let resample_ratio = sample.resample_ratio(&state.transport);
-		let offset = (self.position.offset() / resample_ratio).to_samples(&state.transport);
+		let offset = (self.position.offset() / resample_ratio).to_frames(&state.transport);
 		let read_len = sample.samples.len() - offset;
 
 		let resample_ratio = self.stretch / resample_ratio;
@@ -62,8 +62,8 @@ impl AudioClip {
 			0
 		};
 
-		let fade_start = self.fade_start.len.to_samples(&state.transport);
-		let fade_end = self.fade_end.len.to_samples(&state.transport);
+		let fade_start = self.fade_start.len.to_frames(&state.transport);
+		let fade_end = self.fade_end.len.to_frames(&state.transport);
 
 		let mut iter = resample_cubic(
 			&sample.samples[read_start..][..read_len],
