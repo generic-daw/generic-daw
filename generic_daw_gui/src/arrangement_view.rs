@@ -442,29 +442,44 @@ impl ArrangementView {
 				}
 			}
 			Message::AudioClipAdd(id, track, pos) => {
+				let (track, task) = track
+					.filter(|&track| track < self.arrangement.tracks().len())
+					.map_or_else(
+						|| {
+							let track = self.arrangement.tracks().len();
+							let task = self.update(Message::TrackAdd, config, state);
+							(track, task)
+						},
+						|track| (track, Action::none()),
+					);
+
+				let sample = &self.arrangement.samples()[&id];
 				let mut clip = AudioClip::new(id);
 				clip.position.trim_end_to(
-					self.arrangement.samples()[&id]
+					sample
 						.len(self.arrangement.transport())
 						.to_beat_time(self.arrangement.transport()),
 					self.arrangement.transport(),
 				);
 				clip.position.move_to(pos);
-				let (track, task) = if let Some(track) = track
-					&& track < self.arrangement.tracks().len()
-				{
-					(track, Action::none())
-				} else {
-					(
-						self.arrangement.tracks().len(),
-						self.update(Message::TrackAdd, config, state),
-					)
-				};
+				clip.fade_start.len = sample.fade_start;
+				clip.fade_end.len = sample.fade_end;
 				let clip = self.arrangement.add_clip(track, clip);
 				self.playlist.get_mut().primary.insert((track, clip));
 				return task;
 			}
 			Message::MidiClipAdd(id, track, pos) => {
+				let (track, task) = track
+					.filter(|&track| track < self.arrangement.tracks().len())
+					.map_or_else(
+						|| {
+							let track = self.arrangement.tracks().len();
+							let task = self.update(Message::TrackAdd, config, state);
+							(track, task)
+						},
+						|track| (track, Action::none()),
+					);
+
 				let mut clip = MidiClip::new(id);
 				clip.position
 					.trim_end_to(
@@ -476,16 +491,6 @@ impl ArrangementView {
 							)),
 					);
 				clip.position.move_to(pos);
-				let (track, task) = if let Some(track) = track
-					&& track < self.arrangement.tracks().len()
-				{
-					(track, Action::none())
-				} else {
-					(
-						self.arrangement.tracks().len(),
-						self.update(Message::TrackAdd, config, state),
-					)
-				};
 				let clip = self.arrangement.add_clip(track, clip);
 				self.playlist.get_mut().primary.insert((track, clip));
 				return task;
@@ -545,23 +550,24 @@ impl ArrangementView {
 				if let Some(recording) = &mut self.recording {
 					if node == recording.node {
 						self.end_recording();
-					} else {
+					} else if let Some(track) = self.arrangement.track_of(node) {
 						let pos = recording.position;
 
 						let sample = recording.split_off(path, self.arrangement.transport());
 						let id = sample.gui.id;
 						self.arrangement.add_sample(sample);
-
-						let track = self.arrangement.track_of(recording.node).unwrap();
+						let sample = &self.arrangement.samples()[&id];
 
 						let mut clip = AudioClip::new(id);
 						clip.position.trim_end_to(
-							self.arrangement.samples()[&id]
+							sample
 								.len(self.arrangement.transport())
 								.to_beat_time(self.arrangement.transport()),
 							self.arrangement.transport(),
 						);
 						clip.position.move_to(pos);
+						clip.fade_start.len = sample.fade_start;
+						clip.fade_end.len = sample.fade_end;
 						self.arrangement.add_clip(track, clip);
 
 						recording.node = node;
@@ -594,21 +600,23 @@ impl ArrangementView {
 				let recording = self.recording.take().unwrap();
 				let pos = recording.position;
 				let node = recording.node;
-
 				let sample = recording.finalize();
 
 				if let Some(track) = self.arrangement.track_of(node) {
 					let id = sample.gui.id;
 					self.arrangement.add_sample(sample);
+					let sample = &self.arrangement.samples()[&id];
 
 					let mut clip = AudioClip::new(id);
 					clip.position.trim_end_to(
-						self.arrangement.samples()[&id]
+						sample
 							.len(self.arrangement.transport())
 							.to_beat_time(self.arrangement.transport()),
 						self.arrangement.transport(),
 					);
 					clip.position.move_to(pos);
+					clip.fade_start.len = sample.fade_start;
+					clip.fade_end.len = sample.fade_end;
 					self.arrangement.add_clip(track, clip);
 				}
 			}
@@ -617,15 +625,18 @@ impl ArrangementView {
 			Message::FreezeDone(node, sample, pos) => {
 				let id = sample.gui.id;
 				self.arrangement.add_sample(*sample);
+				let sample = &self.arrangement.samples()[&id];
 
 				let mut clip = AudioClip::new(id);
 				clip.position.trim_end_to(
-					self.arrangement.samples()[&id]
+					sample
 						.len(self.arrangement.transport())
 						.to_beat_time(self.arrangement.transport()),
 					self.arrangement.transport(),
 				);
 				clip.position.move_to(pos);
+				clip.fade_start.len = sample.fade_start;
+				clip.fade_end.len = sample.fade_end;
 
 				let track = self.arrangement.track_of(node).unwrap() + 1;
 				let track_id = self.arrangement.insert_track(track);
