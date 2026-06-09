@@ -35,37 +35,52 @@ pub struct SamplePair {
 
 impl SamplePair {
 	pub fn new(path: Arc<Path>) -> Option<Self> {
-		Self::with_crc_and_len(
-			path.clone(),
-			crc(File::open(&path).ok()?),
-			std::fs::metadata(path).ok()?.len(),
-		)
+		let core = generic_daw_core::Sample::new(Box::from(File::open(&path).ok()?))?;
+		Self::from_core(core, path)
 	}
 
-	pub fn with_crc_and_len(path: Arc<Path>, crc: u32, len: u64) -> Option<Self> {
-		let name = path.file_name()?.to_str()?.into();
+	pub fn with_crc_and_len(crc: u32, len: u64, path: Arc<Path>) -> Option<Self> {
 		let core = generic_daw_core::Sample::new(Box::from(File::open(&path).ok()?))?;
-		let gui = Sample {
-			id: core.id,
-			lods: Lods::new(&core.samples),
-			path,
-			name,
-			samples: core.samples.clone(),
-			sample_rate: core.sample_rate,
-			crc,
-			len,
-			refs: 0,
-		};
-		Some(Self { core, gui })
+		Self::from_core_with_crc_and_len(core, crc, len, path)
 	}
 
 	pub fn from_core(core: generic_daw_core::Sample, path: Arc<Path>) -> Option<Self> {
-		let name = path.file_name()?.to_str()?.into();
 		let crc = crc(File::open(&path).ok()?);
 		let len = std::fs::metadata(&path).ok()?.len();
+		Self::from_core_with_crc_and_len(core, crc, len, path)
+	}
+
+	pub fn from_core_and_lods(
+		core: generic_daw_core::Sample,
+		lods: Lods,
+		path: Arc<Path>,
+	) -> Option<Self> {
+		let crc = crc(File::open(&path).ok()?);
+		let len = std::fs::metadata(&path).ok()?.len();
+		Self::from_core_and_lods_with_crc_and_len(core, lods, crc, len, path)
+	}
+
+	pub fn from_core_with_crc_and_len(
+		core: generic_daw_core::Sample,
+		crc: u32,
+		len: u64,
+		path: Arc<Path>,
+	) -> Option<Self> {
+		let lods = Lods::new(&core.samples);
+		Self::from_core_and_lods_with_crc_and_len(core, lods, crc, len, path)
+	}
+
+	pub fn from_core_and_lods_with_crc_and_len(
+		core: generic_daw_core::Sample,
+		lods: Lods,
+		crc: u32,
+		len: u64,
+		path: Arc<Path>,
+	) -> Option<Self> {
+		let name = path.file_name()?.to_str()?.into();
 		let gui = Sample {
 			id: core.id,
-			lods: Lods::new(&core.samples),
+			lods,
 			path,
 			name,
 			samples: core.samples.clone(),

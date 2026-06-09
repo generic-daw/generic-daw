@@ -1,10 +1,4 @@
-use crate::{
-	arrangement_view::{
-		crc,
-		sample::{Sample, SamplePair},
-	},
-	lod::LodsBuilder,
-};
+use crate::{arrangement_view::sample::SamplePair, lod::LodsBuilder};
 use generic_daw_core::{DeviceId, NodeId, Transport, time::BeatTime};
 use rtrb::Consumer;
 use std::{fs::File, io::BufWriter, num::NonZero, path::Path, sync::Arc};
@@ -64,31 +58,13 @@ impl Recording {
 		let core = self
 			.core
 			.split_off(BufWriter::new(File::create(&path).unwrap()));
-
 		let lods = std::mem::take(&mut self.lods);
-
-		self.position = transport.position.to_beat_time(transport);
-
-		let name = std::mem::replace(
-			&mut self.name,
-			path.file_name().unwrap().to_str().unwrap().into(),
-		);
-
 		std::mem::swap(&mut self.path, &mut path);
 
-		let gui = Sample {
-			id: core.id,
-			lods: lods.finalize(),
-			name,
-			path: path.clone(),
-			samples: core.samples.clone(),
-			sample_rate: core.sample_rate,
-			crc: crc(File::open(&path).unwrap()),
-			len: std::fs::metadata(path).unwrap().len(),
-			refs: 0,
-		};
+		self.position = transport.position.to_beat_time(transport);
+		self.name = path.file_name().unwrap().to_str().unwrap().into();
 
-		SamplePair { core, gui }
+		SamplePair::from_core_and_lods(core, lods.finalize(), path).unwrap()
 	}
 
 	pub fn end_stream(&mut self) {
@@ -96,20 +72,7 @@ impl Recording {
 	}
 
 	pub fn finalize(self) -> SamplePair {
-		let core = self.core.finalize();
-
-		let gui = Sample {
-			id: core.id,
-			lods: self.lods.finalize(),
-			name: self.name,
-			path: self.path.clone(),
-			samples: core.samples.clone(),
-			sample_rate: core.sample_rate,
-			crc: crc(File::open(&self.path).unwrap()),
-			len: std::fs::metadata(self.path).unwrap().len(),
-			refs: 0,
-		};
-
-		SamplePair { core, gui }
+		SamplePair::from_core_and_lods(self.core.finalize(), self.lods.finalize(), self.path)
+			.unwrap()
 	}
 }

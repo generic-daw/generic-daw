@@ -322,7 +322,7 @@ impl Arrangement {
 
 			std::thread::spawn(move || {
 				if let Some(path) = path
-					&& let Some(sample) = SamplePair::with_crc_and_len(path, sample.crc, sample.len)
+					&& let Some(sample) = SamplePair::with_crc_and_len(sample.crc, sample.len, path)
 				{
 					done.send((index, Feedback::Use(Ok(sample)))).unwrap();
 					return;
