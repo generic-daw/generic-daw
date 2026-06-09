@@ -12,13 +12,9 @@ use std::{
 	path::Path,
 	sync::{Arc, LazyLock},
 };
-use utils::boxed_slice;
 
 pub static CONFIG_PATH: LazyLock<Arc<Path>> =
 	LazyLock::new(|| CONFIG_DIR.join("config.toml").into());
-
-pub static DEFAULT_SAMPLE_PATHS: LazyLock<Box<[Arc<Path>]>> =
-	LazyLock::new(|| boxed_slice![DATA_DIR.clone()]);
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default)]
@@ -36,7 +32,7 @@ pub struct Config {
 impl Default for Config {
 	fn default() -> Self {
 		Self {
-			sample_paths: DEFAULT_SAMPLE_PATHS.clone().into_vec(),
+			sample_paths: vec![DATA_DIR.clone()],
 			clap_paths: Vec::new(),
 			input_device: Device::default(),
 			output_device: Device::default(),
