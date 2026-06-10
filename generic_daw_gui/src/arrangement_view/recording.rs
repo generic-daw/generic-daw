@@ -59,10 +59,10 @@ impl Recording {
 			.core
 			.split_off(BufWriter::new(File::create(&path).unwrap()));
 		let lods = std::mem::take(&mut self.lods);
-		std::mem::swap(&mut self.path, &mut path);
 
 		self.position = transport.position.to_beat_time(transport);
 		self.name = path.file_name().unwrap().to_str().unwrap().into();
+		std::mem::swap(&mut self.path, &mut path);
 
 		SamplePair::from_core_and_lods(core, lods.finalize(), path).unwrap()
 	}
