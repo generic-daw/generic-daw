@@ -522,46 +522,6 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 			);
 		}
 
-		if let Status::Hovering(_, _, Some((track, time))) = state.status {
-			if let Some(track) = track {
-				let bounds = layout.child(track).bounds();
-				renderer.fill_quad(
-					Quad {
-						bounds: Rectangle::new(
-							bounds.position()
-								+ Vector::new(
-									time_to_px(time, state.position, state.scale, self.transport),
-									0.0,
-								),
-							Size::new(50.0, bounds.height),
-						),
-						..Quad::default()
-					},
-					Linear::new(FRAC_PI_2)
-						.add_stop(0.0, theme.palette().background.strong.color)
-						.add_stop(1.0, Color::TRANSPARENT),
-				);
-			} else {
-				renderer.fill_quad(
-					Quad {
-						bounds: Rectangle::new(
-							layout.children().next_back().map_or_else(
-								|| layout.position(),
-								|layout| {
-									layout.position() + Vector::new(0.0, layout.bounds().height)
-								},
-							),
-							Size::new(viewport.width, 50.0),
-						),
-						..Quad::default()
-					},
-					Linear::new(PI)
-						.add_stop(0.0, theme.palette().background.strong.color)
-						.add_stop(1.0, Color::TRANSPARENT),
-				);
-			}
-		}
-
 		let active = &mut Vec::new();
 
 		let allocs = layout
@@ -588,21 +548,61 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 			});
 		}
 
-		if let Status::Selecting(start_track, end_track, start_pos, end_pos) = state.status
-			&& start_pos != end_pos
-		{
-			let (start_track, end_track) = (start_track.min(end_track), start_track.max(end_track));
-			let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
+		renderer.with_layer(*viewport, |renderer| match state.status {
+			Status::Hovering(_, _, Some((Some(track), time))) => {
+				let bounds = layout.child(track).bounds();
+				renderer.fill_quad(
+					Quad {
+						bounds: Rectangle::new(
+							bounds.position()
+								+ Vector::new(
+									time_to_px(time, state.position, state.scale, self.transport),
+									0.0,
+								),
+							Size::new(50.0, bounds.height),
+						),
+						..Quad::default()
+					},
+					Linear::new(FRAC_PI_2)
+						.add_stop(0.0, theme.palette().background.strong.color)
+						.add_stop(1.0, Color::TRANSPARENT),
+				);
+			}
+			Status::Hovering(_, _, Some(_)) => {
+				renderer.fill_quad(
+					Quad {
+						bounds: Rectangle::new(
+							layout.children().next_back().map_or_else(
+								|| layout.position(),
+								|layout| {
+									layout.position() + Vector::new(0.0, layout.bounds().height)
+								},
+							),
+							Size::new(viewport.width, 50.0),
+						),
+						..Quad::default()
+					},
+					Linear::new(PI)
+						.add_stop(0.0, theme.palette().background.strong.color)
+						.add_stop(1.0, Color::TRANSPARENT),
+				);
+			}
+			Status::Selecting(start_track, end_track, start_pos, end_pos)
+				if start_pos != end_pos =>
+			{
+				let (start_track, end_track) =
+					(start_track.min(end_track), start_track.max(end_track));
+				let (start_pos, end_pos) = (start_pos.min(end_pos), start_pos.max(end_pos));
 
-			let y = layout.child(start_track).position().y;
-			let height =
-				layout.child(end_track).position().y + layout.child(end_track).bounds().height - y;
+				let y = layout.child(start_track).position().y;
+				let height = layout.child(end_track).position().y
+					+ layout.child(end_track).bounds().height
+					- y;
 
-			let x = time_to_px(start_pos, state.position, state.scale, self.transport);
-			let width = time_to_px(end_pos, state.position, state.scale, self.transport) - x;
-			let x = x + viewport.x;
+				let x = time_to_px(start_pos, state.position, state.scale, self.transport);
+				let width = time_to_px(end_pos, state.position, state.scale, self.transport) - x;
+				let x = x + viewport.x;
 
-			renderer.with_layer(*viewport, |renderer| {
 				renderer.fill_quad(
 					Quad {
 						bounds: Rectangle {
@@ -616,8 +616,9 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 					},
 					theme.palette().danger.weak.color.scale_alpha(ALPHA_1_3),
 				);
-			});
-		}
+			}
+			_ => {}
+		});
 	}
 
 	fn mouse_interaction(
