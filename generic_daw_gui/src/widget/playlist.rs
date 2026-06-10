@@ -564,7 +564,15 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						..Quad::default()
 					},
 					Linear::new(FRAC_PI_2)
-						.add_stop(0.0, theme.palette().background.strong.color)
+						.add_stop(
+							0.0,
+							theme
+								.palette()
+								.background
+								.strong
+								.text
+								.scale_alpha(ALPHA_1_3),
+						)
 						.add_stop(1.0, Color::TRANSPARENT),
 				);
 			}
@@ -583,7 +591,15 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 						..Quad::default()
 					},
 					Linear::new(PI)
-						.add_stop(0.0, theme.palette().background.strong.color)
+						.add_stop(
+							0.0,
+							theme
+								.palette()
+								.background
+								.strong
+								.text
+								.scale_alpha(ALPHA_1_3),
+						)
 						.add_stop(1.0, Color::TRANSPARENT),
 				);
 			}
