@@ -635,7 +635,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						}
 					};
 
-					if fade_start_px > 0.0 {
+					if fade_start_px >= 0.5 {
 						frame.stroke(
 							&Path::new(|b| {
 								fade(b, inner.clip.fade_start, fade_start_px, start_offset);
@@ -653,7 +653,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						);
 					}
 
-					if fade_end_px < 0.0 {
+					if fade_end_px <= -0.5 {
 						frame.stroke(
 							&Path::new(|b| {
 								fade(b, inner.clip.fade_end, fade_end_px, end_offset);
