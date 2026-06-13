@@ -1125,6 +1125,7 @@ impl Daw {
 				Some('m') => Some(Message::ToggleMetronome),
 				Some('n') => Some(Message::NewFile),
 				Some('o') => Some(Message::OpenFileDialog),
+				Some('r') => Some(Message::RenderFileDialog),
 				Some('s') => Some(Message::SaveFile),
 				_ => None,
 			},
@@ -1133,7 +1134,6 @@ impl Daw {
 				_ => None,
 			},
 			(true, true, false, false) => match key.to_latin(physical_key) {
-				Some('r') => Some(Message::RenderFileDialog),
 				Some('s') => Some(Message::SaveAsFileDialog),
 				_ => None,
 			},

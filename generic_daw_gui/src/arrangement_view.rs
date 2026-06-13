@@ -152,6 +152,7 @@ pub enum Message {
 	Delete,
 	Invert,
 	Reverse,
+	Normalize,
 
 	OnDrag(f32),
 	OnDragEnd,
@@ -962,6 +963,16 @@ impl ArrangementView {
 					playlist.finish();
 					for &(track, clip) in &playlist.primary {
 						self.arrangement.clip_reverse(track, clip);
+					}
+				}
+				Tab::Mixer | Tab::PianoRoll => {}
+			},
+			Message::Normalize => match self.tab {
+				Tab::Playlist => {
+					let playlist = self.playlist.get_mut();
+					playlist.finish();
+					for &(track, clip) in &playlist.primary {
+						self.arrangement.clip_normalize(track, clip);
 					}
 				}
 				Tab::Mixer | Tab::PianoRoll => {}
@@ -2226,8 +2237,6 @@ impl ArrangementView {
 			(true, false, false, false) => match key.to_latin(physical_key) {
 				Some('a') => Some(Message::SelectAll),
 				Some('d') => Some(Message::Duplicate),
-				Some('i') => Some(Message::Invert),
-				Some('r') => Some(Message::Reverse),
 				_ => match key.as_ref() {
 					keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
 						Some(Message::TransposeOctUp)
@@ -2259,7 +2268,10 @@ impl ArrangementView {
 				_ => None,
 			},
 			(false, false, true, false) => match key.to_latin(physical_key) {
+				Some('i') => Some(Message::Invert),
+				Some('n') => Some(Message::Normalize),
 				Some('q') => Some(Message::Quantize),
+				Some('r') => Some(Message::Reverse),
 				_ => None,
 			},
 			_ => None,

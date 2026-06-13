@@ -21,6 +21,13 @@ impl Lods {
 		builder.finalize()
 	}
 
+	pub fn max_abs(&self) -> f32 {
+		self.0.last().map_or(0.0, |lod| {
+			lod.iter()
+				.fold(0.0, |acc, &(min, max)| min.abs().max(max.abs()).max(acc))
+		})
+	}
+
 	pub fn mesh(
 		&self,
 		samples: &[[f32; 2]],

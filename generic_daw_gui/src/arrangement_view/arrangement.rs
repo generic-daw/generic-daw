@@ -724,6 +724,16 @@ impl Arrangement {
 		}
 	}
 
+	pub fn clip_normalize(&mut self, track: usize, clip: usize) {
+		if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
+			let sample = &self.samples[&audio.sample];
+			let max_abs = sample.lods.max_abs();
+			if max_abs != 0.0 {
+				self.clip_volume_changed(track, clip, 1.0 / max_abs);
+			}
+		}
+	}
+
 	pub fn clip_slip_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
 		if self.tracks[track].clips[clip].offset(&self.transport) != pos {
 			self.tracks[track].clips[clip].slip_to(pos, &self.transport);
