@@ -1,5 +1,5 @@
 use crate::arrangement_view::{Message, plugin::Plugin};
-use generic_daw_core::{NodeId, PanMode};
+use generic_daw_core::{NodeId, PanMode, Utility};
 use generic_daw_widget::{knob::Knob, peak_meter};
 use iced::{
 	Element, Fill,
@@ -21,8 +21,7 @@ pub struct Node {
 	pub id: NodeId,
 	pub widget_id: widget::Id,
 	pub plugins: Vec<Plugin>,
-	pub volume: f32,
-	pub pan: PanMode,
+	pub utility: Utility,
 	pub enabled: bool,
 	pub bypassed: bool,
 	pub peaks: NoDebug<[peak_meter::State; 2]>,
@@ -36,8 +35,10 @@ impl Node {
 			id,
 			widget_id: widget::Id::unique(),
 			plugins: Vec::new(),
-			volume: 1.0,
-			pan: PanMode::Balance(0.0),
+			utility: Utility {
+				volume: 1.0,
+				pan: PanMode::Balance(0.0),
+			},
 			enabled: true,
 			bypassed: false,
 			peaks: [peak_meter::State::default(), peak_meter::State::default()].into(),
@@ -54,7 +55,7 @@ impl Node {
 		const RADIUS: f32 = 0.571_595_13; // 1.95 - sqrt(1.9)
 		const SPACING: f32 = -0.286_380_5; // 2 * (2 * sqrt(1.9) - 2.9)
 
-		match self.pan {
+		match self.utility.pan {
 			PanMode::Balance(pan) => Knob::new(-1.0..=1.0, pan, |pan| {
 				Message::ChannelPanChanged(self.id, PanMode::Balance(pan))
 			})

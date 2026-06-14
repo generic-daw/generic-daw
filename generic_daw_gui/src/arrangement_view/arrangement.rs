@@ -191,12 +191,12 @@ impl Arrangement {
 	}
 
 	pub fn channel_volume_changed(&mut self, id: NodeId, volume: f32) {
-		self.node_mut(id).volume = volume;
+		self.node_mut(id).utility.volume = volume;
 		self.node_action(id, NodeAction::ChannelVolumeChanged(volume));
 	}
 
 	pub fn channel_pan_changed(&mut self, id: NodeId, pan: PanMode) {
-		self.node_mut(id).pan = pan;
+		self.node_mut(id).utility.pan = pan;
 		self.node_action(id, NodeAction::ChannelPanChanged(pan));
 	}
 

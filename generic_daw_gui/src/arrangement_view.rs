@@ -950,7 +950,7 @@ impl ArrangementView {
 				Tab::Mixer => {
 					let node = self.arrangement.node(self.selected);
 					return self.update(
-						Message::ChannelVolumeChanged(self.selected, -node.volume),
+						Message::ChannelVolumeChanged(self.selected, -node.utility.volume),
 						config,
 						state,
 					);
@@ -1542,17 +1542,15 @@ impl ArrangementView {
 											column![
 												Knob::new(
 													0.0..=MAX_VOL,
-													node.volume.abs().cbrt(),
-													|v| {
-														Message::ChannelVolumeChanged(
-															node.id,
-															v.powi(3).copysign(node.volume),
-														)
-													}
+													node.utility.volume.abs().cbrt(),
+													|v| Message::ChannelVolumeChanged(
+														node.id,
+														v.powi(3).copysign(node.utility.volume),
+													)
 												)
 												.default(1.0)
 												.enabled(enabled)
-												.tooltip(format_db(node.volume.abs())),
+												.tooltip(format_db(node.utility.volume.abs())),
 												node.pan_knob(20.0, enabled),
 											]
 											.align_x(Center)
@@ -1586,28 +1584,31 @@ impl ArrangementView {
 												.on_press(Message::ChannelToggleBypassed(node.id)),
 												icon_button(
 													arrow_up_down(),
-													button_style(node.volume.is_sign_negative())
+													button_style(
+														node.utility.volume.is_sign_negative()
+													)
 												)
 												.on_press(
 													Message::ChannelVolumeChanged(
 														node.id,
-														-node.volume
+														-node.utility.volume
 													)
 												),
 												icon_button(
-													if node.pan.is_balance() {
-														chevrons_left_right_ellipsis()
-													} else {
-														circle_ellipsis()
+													match node.utility.pan {
+														PanMode::Balance(..) =>
+															chevrons_left_right_ellipsis(),
+														PanMode::Stereo(..) => circle_ellipsis(),
 													},
 													button_style(false),
 												)
 												.on_press(Message::ChannelPanChanged(
 													node.id,
-													if node.pan.is_balance() {
-														PanMode::Stereo(-1.0, 1.0)
-													} else {
-														PanMode::Balance(0.0)
+													match node.utility.pan {
+														PanMode::Balance(..) =>
+															PanMode::Stereo(-1.0, 1.0),
+														PanMode::Stereo(..) =>
+															PanMode::Balance(0.0),
 													},
 												)),
 												icon_button(
@@ -1966,30 +1967,32 @@ impl ArrangementView {
 							.on_press(Message::ChannelToggleBypassed(node.id)),
 							icon_button(
 								arrow_up_down(),
-								button_style(node.volume.is_sign_negative())
+								button_style(node.utility.volume.is_sign_negative())
 							)
-							.on_press(Message::ChannelVolumeChanged(node.id, -node.volume)),
+							.on_press(Message::ChannelVolumeChanged(node.id, -node.utility.volume)),
 							icon_button(
-								if node.pan.is_balance() {
-									chevrons_left_right_ellipsis()
-								} else {
-									circle_ellipsis()
+								match node.utility.pan {
+									PanMode::Balance(..) => chevrons_left_right_ellipsis(),
+									PanMode::Stereo(..) => circle_ellipsis(),
 								},
 								button_style(false),
 							)
 							.on_press(Message::ChannelPanChanged(
 								node.id,
-								if node.pan.is_balance() {
-									PanMode::Stereo(-1.0, 1.0)
-								} else {
-									PanMode::Balance(0.0)
+								match node.utility.pan {
+									PanMode::Balance(..) => PanMode::Stereo(-1.0, 1.0),
+									PanMode::Stereo(..) => PanMode::Balance(0.0),
 								},
 							))
 						]
 						.spacing(5),
-						center_x(text(format_db(node.volume.abs())).size(13).line_height(1.0))
-							.style(weak_bordered_box)
-							.padding(2),
+						center_x(
+							text(format_db(node.utility.volume.abs()))
+								.size(13)
+								.line_height(1.0)
+						)
+						.style(weak_bordered_box)
+						.padding(2),
 						row![
 							column![
 								space().height(3),
@@ -2012,10 +2015,10 @@ impl ArrangementView {
 								)
 							]
 							.spacing(5),
-							vertical_slider(0.0..=MAX_VOL, node.volume.abs().cbrt(), |v| {
+							vertical_slider(0.0..=MAX_VOL, node.utility.volume.abs().cbrt(), |v| {
 								Message::ChannelVolumeChanged(
 									node.id,
-									v.powi(3).copysign(node.volume),
+									v.powi(3).copysign(node.utility.volume),
 								)
 							})
 							.default(1f32)

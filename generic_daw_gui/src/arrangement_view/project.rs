@@ -137,8 +137,8 @@ impl Arrangement {
 							mix: plugin.mix,
 							active: plugin.active,
 						}),
-					node.volume,
-					match node.pan {
+					node.utility.volume,
+					match node.utility.pan {
 						PanMode::Balance(pan) => proto::PanModeBalance { pan }.into(),
 						PanMode::Stereo(l, r) => proto::PanModeStereo { l, r }.into(),
 					},
@@ -170,8 +170,8 @@ impl Arrangement {
 							mix: plugin.mix,
 							active: plugin.active,
 						}),
-					channel.volume,
-					match channel.pan {
+					channel.utility.volume,
+					match channel.utility.pan {
 						PanMode::Balance(pan) => proto::PanModeBalance { pan }.into(),
 						PanMode::Stereo(l, r) => proto::PanModeStereo { l, r }.into(),
 					},

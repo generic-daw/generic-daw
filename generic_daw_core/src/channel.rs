@@ -4,10 +4,8 @@ use audio_graph::{
 	thread_pool::{Injector, WorkList},
 };
 use clap_host::AudioThread;
-use std::{
-	convert::Infallible,
-	f32::consts::{FRAC_PI_4, SQRT_2},
-};
+use dsp::{PanMode, Utility};
+use std::convert::Infallible;
 use utils::{ShiftMoveExt as _, unique_id};
 
 unique_id!(plugin);
@@ -34,46 +32,6 @@ impl WorkList for ThreadPoolExecutor<'_> {
 	) -> Option<Self::Item> {
 		self.0.exec_task(item);
 		None
-	}
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum PanMode {
-	Balance(f32),
-	Stereo(f32, f32),
-}
-
-impl PanMode {
-	pub fn pan(self, audio: &mut [[f32; 2]], volume: f32) {
-		fn split(pan: f32, fac: f32) -> (f32, f32) {
-			let angle = (pan + 1.0) * FRAC_PI_4;
-			let (sin, cos) = angle.sin_cos();
-			(cos * fac, sin * fac)
-		}
-
-		match self {
-			Self::Balance(pan) => {
-				let (l, r) = split(pan, volume * SQRT_2);
-				for [ls, rs] in audio {
-					*ls *= l;
-					*rs *= r;
-				}
-			}
-			Self::Stereo(l, r) => {
-				let (ll, lr) = split(l, volume);
-				let (rl, rr) = split(r, volume);
-				for [ls, rs] in audio {
-					let ols = *ls;
-					*ls = *ls * ll + *rs * rl;
-					*rs = *rs * rr + ols * lr;
-				}
-			}
-		}
-	}
-
-	#[must_use]
-	pub const fn is_balance(self) -> bool {
-		matches!(self, Self::Balance(..))
 	}
 }
 
@@ -106,8 +64,7 @@ impl Plugin {
 pub struct Channel {
 	id: NodeId,
 	plugins: Vec<Plugin>,
-	volume: f32,
-	pan: PanMode,
+	utility: Utility,
 	enabled: bool,
 	bypassed: bool,
 	last_peaks: [f32; 2],
@@ -162,7 +119,7 @@ impl Channel {
 			}
 		}
 
-		self.pan.pan(audio, self.volume);
+		self.utility.process(audio);
 		let mut peaks = max_peaks(audio).map(|x| if x >= f32::EPSILON { x } else { 0.0 });
 
 		if let Some(Update::Peaks(_, p)) = acc {
@@ -199,8 +156,8 @@ impl Channel {
 		match action {
 			NodeAction::ChannelToggleEnabled => self.enabled ^= true,
 			NodeAction::ChannelToggleBypassed => self.bypassed ^= true,
-			NodeAction::ChannelVolumeChanged(volume) => self.volume = volume,
-			NodeAction::ChannelPanChanged(pan) => self.pan = pan,
+			NodeAction::ChannelVolumeChanged(volume) => self.utility.volume = volume,
+			NodeAction::ChannelPanChanged(pan) => self.utility.pan = pan,
 			NodeAction::PluginAdd(id) => self.plugins.push(Plugin::new(id)),
 			NodeAction::PluginRemove(index) => _ = self.plugins.remove(index),
 			NodeAction::PluginActivate(index, processor) => {
@@ -241,8 +198,10 @@ impl Default for Channel {
 		Self {
 			plugins: Vec::new(),
 			id: NodeId::unique(),
-			volume: 1.0,
-			pan: PanMode::Balance(0.0),
+			utility: Utility {
+				volume: 1.0,
+				pan: PanMode::Balance(0.0),
+			},
 			enabled: true,
 			bypassed: false,
 			last_peaks: [0.0; 2],
@@ -252,14 +211,7 @@ impl Default for Channel {
 }
 
 fn max_peaks(audio: &[[f32; 2]]) -> [f32; 2] {
-	fn chunks_max_peaks(mut old: [[f32; 2]; 8], new: [[f32; 2]; 8]) -> [[f32; 2]; 8] {
-		for (old, new) in old.iter_mut().zip(new) {
-			*old = chunk_max_peaks(*old, new);
-		}
-		old
-	}
-
-	fn chunk_max_peaks(mut old: [f32; 2], new: [f32; 2]) -> [f32; 2] {
+	fn max_peaks<const N: usize>(mut old: [f32; N], new: [f32; N]) -> [f32; N] {
 		for (old, new) in old.iter_mut().zip(new) {
 			if new > *old {
 				*old = new;
@@ -268,15 +220,17 @@ fn max_peaks(audio: &[[f32; 2]]) -> [f32; 2] {
 		old
 	}
 
-	let (chunks, rest) = audio.as_chunks::<8>();
+	let (chunks_16, rest) = audio.as_flattened().as_chunks::<16>();
+	let (chunks_2, rest) = rest.as_chunks::<2>();
+	debug_assert!(rest.is_empty());
 
-	chunks
+	chunks_16
 		.iter()
-		.map(|chunk| chunk.map(|chunk| chunk.map(f32::abs)))
-		.reduce(chunks_max_peaks)
+		.map(|chunk| chunk.map(f32::abs))
+		.reduce(max_peaks)
 		.into_iter()
-		.flatten()
-		.chain(rest.iter().map(|chunk| chunk.map(f32::abs)))
-		.reduce(chunk_max_peaks)
+		.flat_map(|chunk| *chunk.as_chunks().0.as_array::<8>().unwrap())
+		.chain(chunks_2.iter().map(|chunk| chunk.map(f32::abs)))
+		.reduce(max_peaks)
 		.unwrap_or([0.0; _])
 }
