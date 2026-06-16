@@ -381,7 +381,11 @@ impl Daw {
 				);
 				self.project = project;
 
-				return Task::future(unblock(|| drop((arrangement_view, processor)))).discard();
+				return Task::future(unblock(|| {
+					drop(arrangement_view);
+					drop(processor.recv().unwrap());
+				}))
+				.discard();
 			}
 			Message::PluginScanned(scan, descriptor) => {
 				if self.scan == Some(scan)

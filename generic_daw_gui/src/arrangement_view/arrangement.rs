@@ -131,12 +131,11 @@ impl Arrangement {
 		&mut self,
 		other: &mut Self,
 		a_receiver: oneshot::Receiver<AudioThread>,
-	) -> AudioThread {
+	) -> oneshot::Receiver<AudioThread> {
 		let (a_sender, p_receiver) = oneshot::channel();
 		other.send(Message::RequestProcessor(a_sender, a_receiver));
-		let processor = p_receiver.recv().unwrap();
 		self.stream = other.stream.take();
-		processor
+		p_receiver
 	}
 
 	pub fn update(&mut self, mut batch: Batch) -> Vec<clap_host::Message> {
