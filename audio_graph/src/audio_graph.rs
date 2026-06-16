@@ -58,8 +58,23 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		}
 	}
 
-	pub fn process(&mut self, len: usize) {
-		self.curr_len = len;
+	pub fn change_max_frames(&mut self, max_frames: NonZero<u32>) {
+		if self.max_frames == max_frames {
+			return;
+		}
+		self.graph
+			.values_mut()
+			.for_each(|entry| entry.change_max_frames(max_frames));
+		self.pool = None;
+		self.pool = Some(
+			ThreadPool::new_with_scratch(|| boxed_slice![[0.0; 2]; max_frames.get() as usize])
+				.into(),
+		);
+		self.max_frames = max_frames;
+	}
+
+	pub fn process_all(&mut self, node: NodeId, audio: &mut [[f32; 2]]) {
+		self.curr_len = audio.len();
 
 		for (&id, entry) in &mut self.graph {
 			*entry.indegree.get_mut() = entry.buffers().incoming.len();
@@ -81,9 +96,11 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		for entry in self.graph.values_mut() {
 			debug_assert_eq!(*entry.indegree.get_mut(), 0);
 		}
+
+		self.copy_output(node, audio);
 	}
 
-	pub fn process_subtree(&mut self, node: NodeId, len: usize) {
+	pub fn process_subtree(&mut self, node: NodeId, audio: &mut [[f32; 2]]) {
 		fn visit<Node: NodeImpl>(this: &AudioGraph<Node>, node: NodeId) -> usize {
 			let entry = &this.graph[&node];
 			let buffers = entry.read_buffers_uncontended();
@@ -104,7 +121,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			}
 		}
 
-		self.curr_len = len;
+		self.curr_len = audio.len();
 
 		for entry in self.graph.values_mut() {
 			*entry.indegree.get_mut() = usize::MAX;
@@ -117,6 +134,8 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		self.pool = Some(pool);
 
 		self.needs_reset = false;
+
+		self.copy_output(node, audio);
 	}
 
 	#[expect(clippy::significant_drop_tightening)]

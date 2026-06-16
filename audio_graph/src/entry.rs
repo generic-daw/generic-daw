@@ -55,6 +55,10 @@ impl<Node: NodeImpl> Entry<Node> {
 		}
 	}
 
+	pub fn change_max_frames(&mut self, frames: NonZero<u32>) {
+		self.buffers().audio = boxed_slice![[0.0; 2]; frames.get() as usize].into();
+	}
+
 	pub fn node(&mut self) -> &mut Node {
 		self.node.get_mut().unwrap()
 	}

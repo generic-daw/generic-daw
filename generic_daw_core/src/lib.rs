@@ -18,7 +18,7 @@ mod voice_alloc;
 
 pub use audio_clip::AudioClip;
 pub use audio_graph::{NodeId, NodeImpl};
-pub use audio_thread::{Batch, Message, NodeAction, Transport, Update, Version};
+pub use audio_thread::{AudioThread, Batch, Message, NodeAction, Transport, Update, Version};
 pub use bpm_tapper::BpmTapper;
 pub use channel::{Channel, PluginId};
 pub use clap_host;

@@ -57,6 +57,20 @@ impl Node {
 			Self::Track(node) => node.collect_updates(updates),
 		}
 	}
+
+	pub fn clear_updates(&mut self) {
+		match self {
+			Self::Channel(node) => node.clear_updates(),
+			Self::Track(node) => node.clear_updates(),
+		}
+	}
+
+	pub fn restart_all_plugins(&mut self) {
+		match self {
+			Self::Channel(node) => node.restart_all_plugins(),
+			Self::Track(node) => node.restart_all_plugins(),
+		}
+	}
 }
 
 impl From<Channel> for Node {

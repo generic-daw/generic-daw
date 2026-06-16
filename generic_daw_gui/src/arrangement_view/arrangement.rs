@@ -14,15 +14,15 @@ use crate::{
 	daw,
 };
 use generic_daw_core::{
-	AudioClip, Batch, Clip, ClipId, Message, MidiClip, MidiKey, MidiNote, MidiNoteId,
+	AudioClip, AudioThread, Batch, Clip, ClipId, Message, MidiClip, MidiKey, MidiNote, MidiNoteId,
 	MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode, PluginId, Point,
 	SampleId, Stream, Transport, Update, Version, build_output_stream,
-	clap_host::{AudioThread, ClapId, Cookie, HostInfo, PluginDescriptor},
+	clap_host::{ClapId, Cookie, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
 use iced::Task;
 use log::warn;
-use rtrb::{Producer, PushError};
+use rtrb::{Producer, PushError, RingBuffer};
 use smol::unblock;
 use std::{
 	collections::{BTreeMap, VecDeque},
@@ -56,16 +56,21 @@ pub struct Arrangement {
 
 	producer: Producer<Message>,
 	queue: VecDeque<Message>,
-	_stream: NoDebug<Stream>,
+	stream: Option<NoDebug<Stream>>,
 }
 
 impl Arrangement {
-	pub fn create(config: &Config) -> (Self, Task<Batch>) {
-		let (master, transport, producer, consumer, stream) = build_output_stream(
-			config.output_device.id.as_ref(),
-			config.output_device.sample_rate,
-			config.output_device.buffer_size,
-		);
+	pub fn create(
+		sample_rate: NonZero<u32>,
+		frames: NonZero<u32>,
+		p_sender: oneshot::Sender<AudioThread>,
+	) -> (Self, Task<Batch>) {
+		let (p_producer, consumer) = RingBuffer::new(2048);
+		let (producer, p_consumer) = RingBuffer::new(2048);
+
+		let (processor, master, transport) =
+			AudioThread::create(sample_rate, frames, p_producer, p_consumer);
+		p_sender.send(processor).unwrap();
 
 		let mut nodes = BTreeMap::new();
 		nodes.insert(
@@ -88,14 +93,50 @@ impl Arrangement {
 
 				producer,
 				queue: VecDeque::new(),
-				_stream: stream.into(),
+				stream: None,
 			},
-			Task::stream(poll_consumer(
-				consumer,
-				transport.sample_rate,
-				transport.frames,
-			)),
+			Task::stream(poll_consumer(consumer, sample_rate, frames)),
 		)
+	}
+
+	pub fn set_stream(&mut self, stream: Stream) {
+		self.stream = Some(stream.into());
+	}
+
+	pub fn change_config(&mut self, config: &Config) {
+		let (a_sender, p_receiver) = oneshot::channel();
+		let (_, a_receiver) = oneshot::channel();
+		self.send(Message::RequestProcessor(a_sender, a_receiver));
+
+		let mut processor = p_receiver.recv().unwrap();
+		let (p_sender, a_receiver) = oneshot::channel();
+
+		self.stream = None;
+		let (stream, sample_rate, frames) = build_output_stream(
+			config.output_device.id.as_ref(),
+			config.output_device.sample_rate,
+			config.output_device.buffer_size,
+			a_receiver,
+		);
+		self.stream = Some(stream.into());
+
+		processor.change_config(sample_rate, frames);
+		p_sender.send(processor).unwrap();
+
+		self.transport.sample_rate = sample_rate;
+		self.transport.frames = frames;
+	}
+
+	pub fn take_stream(
+		&mut self,
+		other: &mut Self,
+		a_receiver: oneshot::Receiver<AudioThread>,
+	) -> AudioThread {
+		let (a_sender, p_receiver) = oneshot::channel();
+		other.send(Message::RequestProcessor(a_sender, a_receiver));
+		let processor = p_receiver.recv().unwrap();
+		self.stream = other.stream.take();
+		processor
 	}
 
 	pub fn update(&mut self, mut batch: Batch) -> Vec<clap_host::Message> {
@@ -253,7 +294,7 @@ impl Arrangement {
 		&mut self,
 		id: NodeId,
 		index: usize,
-		processor: Option<Box<AudioThread>>,
+		processor: Option<Box<clap_host::AudioThread>>,
 	) {
 		self.node_mut(id).plugins[index].active = processor.is_some();
 		if let Some(processor) = processor {

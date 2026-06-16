@@ -196,7 +196,7 @@ impl ConfigView {
 		Action::none()
 	}
 
-	pub fn view(&self, live_config: &Config) -> Element<'_, Message> {
+	pub fn view(&self) -> Element<'_, Message> {
 		let (device, devices) = match self.tab {
 			Tab::Input => (&self.config.input_device, &*self.input_devices),
 			Tab::Output => (&self.config.output_device, &*self.output_devices),
@@ -505,14 +505,7 @@ impl ConfigView {
 					.align_y(Center),
 					rule::horizontal(1),
 					row![
-						if self.config.is_mergeable(live_config) {
-							iced(TEXT_HEIGHT)
-						} else {
-							container("Some changes may only take effect after a reload!")
-								.padding(padding::horizontal(10).vertical(5))
-								.style(container_with_radius(container::warning, f32::INFINITY))
-								.into()
-						},
+						iced(TEXT_HEIGHT),
 						space::horizontal(),
 						button(save())
 							.style(button_with_radius(button::primary, border::left(5)))

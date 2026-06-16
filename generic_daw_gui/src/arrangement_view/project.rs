@@ -23,7 +23,7 @@ use std::{
 	num::NonZero,
 	ops::Deref as _,
 	path::Path,
-	sync::{Arc, mpsc},
+	sync::Arc,
 };
 use utils::NoDebug;
 use walkdir::WalkDir;
@@ -198,27 +198,29 @@ impl Arrangement {
 		writer.finalize()
 	}
 
-	pub fn empty() -> Task<daw::Message> {
-		let config = Config::read();
-
+	pub fn empty(sample_rate: NonZero<u32>, buffer_size: NonZero<u32>) -> Task<daw::Message> {
 		let project = Project::unique();
-		let (arrangement, task) = Self::create(&config);
+		let (p_sender, p_receiver) = oneshot::channel();
+		let (arrangement, task) = Self::create(sample_rate, buffer_size, p_sender);
 
-		Task::done(daw::Message::MergeConfig(config.into(), false))
-			.chain(Task::done(daw::Message::ProjectLoaded(
-				project,
-				Box::new(arrangement).into(),
-				None,
-			)))
-			.chain(
-				task.map(arrangement_view::Message::Batch)
-					.map(move |message| daw::Message::Arrangement(project, message)),
-			)
+		Task::done(daw::Message::ProjectLoaded(
+			project,
+			Box::new(arrangement).into(),
+			p_receiver.into(),
+			None,
+		))
+		.chain(
+			task.map(arrangement_view::Message::Batch)
+				.map(move |message| daw::Message::Arrangement(project, message)),
+		)
 	}
 
 	pub fn start_load(
 		path: Arc<Path>,
-		plugin_bundles: Vec<PluginDescriptor>,
+		sample_rate: NonZero<u32>,
+		buffer_size: NonZero<u32>,
+		config: Config,
+		plugins: Vec<PluginDescriptor>,
 	) -> Task<daw::Message> {
 		let (partial_sender, partial_receiver) = oneshot::channel();
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
@@ -226,7 +228,14 @@ impl Arrangement {
 		Task::batch([
 			Task::future(unblock(move || {
 				partial_sender
-					.send(Self::do_load(path, &plugin_bundles, &progress_sender))
+					.send(Self::do_load(
+						path,
+						sample_rate,
+						buffer_size,
+						&plugins,
+						&config,
+						&progress_sender,
+					))
 					.unwrap();
 			}))
 			.discard(),
@@ -240,11 +249,14 @@ impl Arrangement {
 
 	fn do_load(
 		path: Arc<Path>,
-		plugin_bundles: &[PluginDescriptor],
+		sample_rate: NonZero<u32>,
+		buffer_size: NonZero<u32>,
+		plugins: &[PluginDescriptor],
+		config: &Config,
 		daw: &Sender<daw::Message>,
 	) -> Option<Task<daw::Message>> {
-		let config = Config::read();
-		let (mut arrangement, task) = Self::create(&config);
+		let (p_sender, p_receiver) = oneshot::channel();
+		let (mut arrangement, task) = Self::create(sample_rate, buffer_size, p_sender);
 
 		let gdp = std::fs::read(&path).ok()?;
 		let reader = Reader::new(&gdp)?;
@@ -313,7 +325,7 @@ impl Arrangement {
 
 		let mut samples = HashMap::new();
 
-		let (done, receiver) = mpsc::channel();
+		let (done, receiver) = std::sync::mpsc::channel();
 
 		for (index, sample) in reader.iter_samples() {
 			let done = done.clone();
@@ -441,7 +453,7 @@ impl Arrangement {
 			for (i, plugin) in channel.plugins.iter().enumerate() {
 				let id = plugin.id();
 
-				let Some(descriptor) = plugin_bundles.iter().find(|d| *d.id == id) else {
+				let Some(descriptor) = plugins.iter().find(|d| *d.id == id) else {
 					if ignored_plugins.contains(id) {
 						skipped += 1;
 						continue;
@@ -639,22 +651,22 @@ impl Arrangement {
 		let project = Project::unique();
 
 		Some(
-			Task::done(daw::Message::MergeConfig(config.into(), false))
-				.chain(Task::done(daw::Message::ProjectLoaded(
-					project,
-					Box::new(arrangement).into(),
-					view,
-				)))
-				.chain(Task::batch([
-					task.map(arrangement_view::Message::Batch)
-						.map(move |message| daw::Message::Arrangement(project, message)),
-					messages
-						.into_iter()
-						.map(Task::done)
-						.fold(Task::none(), Task::chain)
-						.map(move |message| daw::Message::Arrangement(project, message))
-						.chain(Task::done(daw::Message::OpenedFile(Some(path)))),
-				])),
+			Task::done(daw::Message::ProjectLoaded(
+				project,
+				Box::new(arrangement).into(),
+				p_receiver.into(),
+				view,
+			))
+			.chain(Task::batch([
+				task.map(arrangement_view::Message::Batch)
+					.map(move |message| daw::Message::Arrangement(project, message)),
+				messages
+					.into_iter()
+					.map(Task::done)
+					.fold(Task::none(), Task::chain)
+					.map(move |message| daw::Message::Arrangement(project, message))
+					.chain(Task::done(daw::Message::OpenedFile(Some(path)))),
+			])),
 		)
 	}
 }

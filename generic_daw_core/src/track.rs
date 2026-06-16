@@ -193,4 +193,12 @@ impl Track {
 
 		self.channel.collect_updates(updates);
 	}
+
+	pub fn clear_updates(&mut self) {
+		self.channel.clear_updates();
+	}
+
+	pub fn restart_all_plugins(&mut self) {
+		self.channel.restart_all_plugins();
+	}
 }

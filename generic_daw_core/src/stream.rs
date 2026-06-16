@@ -1,5 +1,5 @@
 use crate::{
-	Batch, DeviceDescription, DeviceId, Message, NodeId, Stream, Transport,
+	DeviceDescription, DeviceId, Stream,
 	audio_thread::{AudioCallback, AudioThread},
 };
 use cpal::{
@@ -26,7 +26,7 @@ pub fn build_input_stream(
 	device_id: Option<&DeviceId>,
 	sample_rate: Option<NonZero<u32>>,
 	frames: Option<NonZero<u32>>,
-) -> (StreamConfig, Consumer<[f32; 2]>, Stream) {
+) -> (Consumer<[f32; 2]>, Stream, NonZero<u32>, NonZero<u32>) {
 	let host = cpal::default_host();
 
 	let device = device_id
@@ -86,20 +86,15 @@ pub fn build_input_stream(
 
 	stream.play().unwrap();
 
-	(config, consumer, stream)
+	(consumer, stream, sample_rate, frames)
 }
 
 pub fn build_output_stream(
 	device_id: Option<&DeviceId>,
 	sample_rate: Option<NonZero<u32>>,
 	frames: Option<NonZero<u32>>,
-) -> (
-	NodeId,
-	Transport,
-	Producer<Message>,
-	Consumer<Batch>,
-	Stream,
-) {
+	receiver: oneshot::Receiver<AudioThread>,
+) -> (Stream, NonZero<u32>, NonZero<u32>) {
 	let host = cpal::default_host();
 
 	let device = device_id
@@ -123,16 +118,13 @@ pub fn build_output_stream(
 	let frames = frames_of_config(&config).or(NonZero::new(2048)).unwrap();
 	let channels = NonZero::new(u32::from(config.channels)).unwrap();
 
-	let transport = Transport::new(sample_rate, frames);
-	let (processor, master, producer, consumer) = AudioThread::create(transport);
-
 	macro_rules! build_output_stream {
 		($($pat:pat => $ty:ty),*$(,)?) => {
 			match supported_config.sample_format() {
 				$(
 					$pat => device.build_output_stream(
 						config,
-						build_output_callback::<$ty>(frames, channels, processor),
+						build_output_callback::<$ty>(frames, channels, AudioCallback::Away(receiver)),
 						|err| error!("{err}"),
 						None,
 					),
@@ -160,7 +152,7 @@ pub fn build_output_stream(
 
 	stream.play().unwrap();
 
-	(master, transport, producer, consumer, stream)
+	(stream, sample_rate, frames)
 }
 
 fn choose_supported_config(
@@ -355,7 +347,7 @@ where
 	}
 }
 
-pub fn supported_config_to_config(
+fn supported_config_to_config(
 	supported_config: &SupportedStreamConfig,
 	frames: Option<NonZero<u32>>,
 ) -> StreamConfig {
@@ -373,7 +365,7 @@ pub fn supported_config_to_config(
 	}
 }
 
-pub fn frames_of_config(config: &StreamConfig) -> Option<NonZero<u32>> {
+fn frames_of_config(config: &StreamConfig) -> Option<NonZero<u32>> {
 	match config.buffer_size {
 		BufferSize::Fixed(buffer_size) => NonZero::new(buffer_size),
 		BufferSize::Default => None,

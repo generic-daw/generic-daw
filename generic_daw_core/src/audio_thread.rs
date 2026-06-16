@@ -12,7 +12,7 @@ use clap_host::{
 use dsp::resample_cubic;
 use hound::WavWriter;
 use log::{trace, warn};
-use rtrb::{Consumer, Producer, PushError, RingBuffer};
+use rtrb::{Consumer, Producer, PushError};
 use std::{
 	collections::HashMap,
 	num::NonZero,
@@ -206,11 +206,14 @@ pub struct AudioThread {
 }
 
 impl AudioThread {
+	#[must_use]
 	pub fn create(
-		transport: Transport,
-	) -> (AudioCallback, NodeId, Producer<Message>, Consumer<Batch>) {
-		let (r_producer, consumer) = RingBuffer::new(transport.frames.get() as usize);
-		let (producer, r_consumer) = RingBuffer::new(transport.frames.get() as usize);
+		sample_rate: NonZero<u32>,
+		frames: NonZero<u32>,
+		producer: Producer<Batch>,
+		consumer: Consumer<Message>,
+	) -> (Self, NodeId, Transport) {
+		let transport = Transport::new(sample_rate, frames);
 
 		let master_channel = Channel::default();
 		let master = master_channel.id();
@@ -236,12 +239,18 @@ impl AudioThread {
 			update_buffers: Vec::new(),
 		};
 
-		(
-			AudioCallback::Processing(processor),
-			master,
-			r_producer,
-			r_consumer,
-		)
+		(processor, master, transport)
+	}
+
+	pub fn change_config(&mut self, sample_rate: NonZero<u32>, frames: NonZero<u32>) {
+		if self.transport().sample_rate == sample_rate && self.transport().frames == frames {
+			return;
+		}
+		self.audio_graph.change_max_frames(frames);
+		self.audio_graph
+			.for_each_node_mut(Node::restart_all_plugins);
+		self.transport_mut().sample_rate = sample_rate;
+		self.transport_mut().frames = frames;
 	}
 
 	#[must_use]
@@ -342,8 +351,7 @@ impl AudioThread {
 				(None, buf.len())
 			};
 
-			self.audio_graph.process(len);
-			self.audio_graph.copy_output(self.master, &mut buf[..len]);
+			self.audio_graph.process_all(self.master, &mut buf[..len]);
 			self.metronome(&mut buf[..len]);
 
 			if let Some(position) = looped {
@@ -480,8 +488,6 @@ impl AudioThread {
 		let range_start = beat_range.start().to_seconds_time(self.transport());
 		let range_len = beat_range.len().to_seconds_time(self.transport());
 
-		let mut updates = Vec::new();
-
 		let mut render_start;
 		let mut render_end;
 
@@ -494,10 +500,9 @@ impl AudioThread {
 			let diff = buffer_size.min(render_start - self.transport().position);
 			let diff_frames = diff.to_frames(self.transport());
 
-			self.audio_graph.process_subtree(node, diff_frames);
 			self.audio_graph
-				.for_each_node_mut(|node| node.collect_updates(&mut updates));
-			updates.clear();
+				.process_subtree(node, &mut buf[..diff_frames]);
+			self.audio_graph.for_each_node_mut(Node::clear_updates);
 
 			self.transport_mut().position += diff;
 			progress_fn(self.transport().position / render_end);
@@ -512,11 +517,9 @@ impl AudioThread {
 			let diff = buffer_size.min(render_end - self.transport().position);
 			let diff_frames = diff.to_frames(self.transport());
 
-			self.audio_graph.process_subtree(node, diff_frames);
-			self.audio_graph.copy_output(node, &mut buf[..diff_frames]);
 			self.audio_graph
-				.for_each_node_mut(|node| node.collect_updates(&mut updates));
-			updates.clear();
+				.process_subtree(node, &mut buf[..diff_frames]);
+			self.audio_graph.for_each_node_mut(Node::clear_updates);
 
 			samples_fn(&buf[..diff_frames]);
 			for &s in buf[..diff_frames].as_flattened() {

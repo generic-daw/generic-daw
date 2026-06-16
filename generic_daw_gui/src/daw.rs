@@ -17,10 +17,9 @@ use crate::{
 	widget::ALPHA_2_3,
 };
 use generic_daw_core::{
-	BpmTapper, NodeId, PluginId,
+	AudioThread, BpmTapper, NodeId, PluginId, build_output_stream,
 	clap_host::{
-		AudioThread, ClapId, Cookie, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin,
-		PluginDescriptor, RenderMode,
+		ClapId, Cookie, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
 	},
 };
 use generic_daw_project::proto;
@@ -157,7 +156,7 @@ pub enum Instruction {
 	Message(Message),
 	Freeze(NodeId),
 	PluginAdd(PluginId, Plugin, Receiver<MainThreadMessage>),
-	PluginActivate(PluginId, Option<Box<AudioThread>>),
+	PluginActivate(PluginId, Option<Box<clap_host::AudioThread>>),
 	PluginParamChanged(PluginId, ClapId, f32, Cookie),
 }
 
@@ -169,7 +168,12 @@ pub enum Message {
 	ConfigView(config_view::Message),
 
 	CloseRequested(window::Id),
-	ProjectLoaded(Project, NoClone<Box<Arrangement>>, Option<proto::ViewState>),
+	ProjectLoaded(
+		Project,
+		NoClone<Box<Arrangement>>,
+		NoClone<oneshot::Receiver<AudioThread>>,
+		Option<proto::ViewState>,
+	),
 
 	PluginScanned(Scan, PluginDescriptor),
 	PluginScanFinished(Scan),
@@ -201,7 +205,7 @@ pub enum Message {
 
 	OpenConfigView,
 	CloseConfigView,
-	MergeConfig(Box<Config>, bool),
+	MergeConfig(Box<Config>),
 
 	FileHovered,
 	FileDropped(Arc<Path>),
@@ -262,8 +266,18 @@ impl Daw {
 		let config = Config::read();
 		let state = State::read();
 
+		let (p_sender, p_receiver) = oneshot::channel();
+
+		let (stream, sample_rate, frames) = build_output_stream(
+			config.output_device.id.as_ref(),
+			config.output_device.sample_rate,
+			config.output_device.buffer_size,
+			p_receiver,
+		);
+
 		let project = Project::unique();
-		let (arrangement, batches) = Arrangement::create(&config);
+		let (mut arrangement, batches) = Arrangement::create(sample_rate, frames, p_sender);
+		arrangement.set_stream(stream);
 		let arrangement_view = ArrangementView::new(arrangement, &state, None);
 		let clap_host = ClapHost::new(main_window_id);
 		let file_tree = FileTree::new(&config.sample_paths);
@@ -343,7 +357,7 @@ impl Daw {
 					return config_view
 						.update(message)
 						.handle(Message::ConfigView, |config| {
-							self.update(Message::MergeConfig(config.into(), true))
+							self.update(Message::MergeConfig(config.into()))
 						});
 				}
 			}
@@ -352,9 +366,22 @@ impl Daw {
 					return iced::exit();
 				}
 			}
-			Message::ProjectLoaded(project, NoClone(arrangement), view) => {
-				self.arrangement_view = ArrangementView::new(*arrangement, &self.state, view);
+			Message::ProjectLoaded(
+				project,
+				NoClone(mut arrangement),
+				NoClone(a_receiver),
+				view,
+			) => {
+				let processor =
+					arrangement.take_stream(&mut self.arrangement_view.arrangement, a_receiver);
+
+				let arrangement_view = std::mem::replace(
+					&mut self.arrangement_view,
+					ArrangementView::new(*arrangement, &self.state, view),
+				);
 				self.project = project;
+
+				return Task::future(unblock(|| drop((arrangement_view, processor)))).discard();
 			}
 			Message::PluginScanned(scan, descriptor) => {
 				if self.scan == Some(scan)
@@ -369,7 +396,12 @@ impl Daw {
 					self.scan = None;
 				}
 			}
-			Message::NewFile => return Arrangement::empty(),
+			Message::NewFile => {
+				return Arrangement::empty(
+					self.arrangement_view.arrangement.transport().sample_rate,
+					self.arrangement_view.arrangement.transport().frames,
+				);
+			}
 			Message::OpenLastFile => {
 				if let Some(last_project) = self.state.last_project.clone() {
 					return self.update(Message::OpenFile(last_project));
@@ -444,7 +476,13 @@ impl Daw {
 			Message::OpenFile(path) => {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
-					return Arrangement::start_load(path, self.plugins.clone().into_options());
+					return Arrangement::start_load(
+						path,
+						self.arrangement_view.arrangement.transport().sample_rate,
+						self.arrangement_view.arrangement.transport().frames,
+						self.config.clone(),
+						self.plugins.clone().into_options(),
+					);
 				}
 			}
 			Message::CantFindPlugin(name, NoClone(sender)) => {
@@ -510,7 +548,7 @@ impl Daw {
 				self.config_view = Some(ConfigView::new(self.main_window_id));
 			}
 			Message::CloseConfigView => self.config_view = None,
-			Message::MergeConfig(config, live) => {
+			Message::MergeConfig(config) => {
 				let fut = if self.config.clap_paths == config.clap_paths {
 					Task::none()
 				} else {
@@ -526,11 +564,11 @@ impl Daw {
 					self.file_tree.diff(&config.sample_paths);
 				}
 
-				if live {
-					self.config.merge_with(*config);
-				} else {
-					self.config = *config;
+				if self.config.output_device != config.output_device {
+					self.arrangement_view.arrangement.change_config(&config);
 				}
+
+				self.config = *config;
 
 				return fut;
 			}
@@ -853,10 +891,8 @@ impl Daw {
 					.interaction(Interaction::Progress)),
 			self.config_view.as_ref().map(|config_view| opaque(
 				mouse_area(
-					center(opaque(
-						config_view.view(&self.config).map(Message::ConfigView)
-					))
-					.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))),
+					center(opaque(config_view.view().map(Message::ConfigView)))
+						.style(|_| container::background(Color::BLACK.scale_alpha(ALPHA_2_3))),
 				)
 				.on_press(Message::CloseConfigView),
 			)),

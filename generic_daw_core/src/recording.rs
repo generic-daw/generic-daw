@@ -1,7 +1,4 @@
-use crate::{
-	DeviceId, Sample, SampleId, Stream, Transport, build_input_stream, stream::frames_of_config,
-};
-use cpal::StreamConfig;
+use crate::{DeviceId, Sample, SampleId, Stream, Transport, build_input_stream};
 use hound::{SampleFormat, WavSpec, WavWriter};
 use rtrb::Consumer;
 use std::{io, num::NonZero};
@@ -13,7 +10,8 @@ pub struct Recording<W: io::Write + io::Seek> {
 	samples: Vec<[f32; 2]>,
 
 	stream: Option<NoDebug<Stream>>,
-	config: StreamConfig,
+	sample_rate: NonZero<u32>,
+	frames: NonZero<u32>,
 }
 
 impl<W: io::Write + io::Seek> Recording<W> {
@@ -24,13 +22,14 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		sample_rate: Option<NonZero<u32>>,
 		frames: Option<NonZero<u32>>,
 	) -> (Self, Consumer<[f32; 2]>) {
-		let (config, consumer, stream) = build_input_stream(device_id, sample_rate, frames);
+		let (consumer, stream, sample_rate, frames) =
+			build_input_stream(device_id, sample_rate, frames);
 
 		let writer = WavWriter::new(
 			writer,
 			WavSpec {
 				channels: 2,
-				sample_rate: config.sample_rate,
+				sample_rate: sample_rate.get(),
 				bits_per_sample: 32,
 				sample_format: SampleFormat::Float,
 			},
@@ -43,7 +42,8 @@ impl<W: io::Write + io::Seek> Recording<W> {
 				samples: Vec::new(),
 
 				stream: Some(stream.into()),
-				config,
+				sample_rate,
+				frames,
 			},
 			consumer,
 		)
@@ -51,19 +51,17 @@ impl<W: io::Write + io::Seek> Recording<W> {
 
 	#[must_use]
 	pub fn resample_ratio(&self, transport: &Transport) -> f64 {
-		f64::from(transport.sample_rate.get()) / f64::from(self.config.sample_rate)
+		f64::from(transport.sample_rate.get()) / f64::from(self.sample_rate.get())
 	}
 
 	#[must_use]
 	pub fn sample_rate(&self) -> NonZero<u32> {
-		NonZero::new(self.config.sample_rate).unwrap()
+		self.sample_rate
 	}
 
 	#[must_use]
 	pub fn frames(&self) -> NonZero<u32> {
-		frames_of_config(&self.config)
-			.or(NonZero::new(2048))
-			.unwrap()
+		self.frames
 	}
 
 	#[must_use]
@@ -87,7 +85,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 				writer,
 				WavSpec {
 					channels: 2,
-					sample_rate: self.config.sample_rate,
+					sample_rate: self.sample_rate.get(),
 					bits_per_sample: 32,
 					sample_format: SampleFormat::Float,
 				},
@@ -100,7 +98,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		Sample {
 			id: SampleId::unique(),
 			samples: NoDebug(samples.into()),
-			sample_rate: NonZero::new(self.config.sample_rate).unwrap(),
+			sample_rate: self.sample_rate,
 		}
 	}
 
@@ -124,7 +122,7 @@ impl<W: io::Write + io::Seek> Recording<W> {
 		Sample {
 			id: SampleId::unique(),
 			samples: NoDebug(samples.into()),
-			sample_rate: NonZero::new(self.config.sample_rate).unwrap(),
+			sample_rate: self.sample_rate,
 		}
 	}
 }

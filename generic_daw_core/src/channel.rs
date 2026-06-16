@@ -165,7 +165,9 @@ impl Channel {
 				self.plugins[index].processor = Some(*processor);
 			}
 			NodeAction::PluginDeactivate(index) => {
-				self.plugins[index].processor.take().unwrap().deactivate();
+				if let Some(processor) = self.plugins[index].processor.take() {
+					processor.deactivate();
+				}
 			}
 			NodeAction::PluginMoveTo(from, to) => self.plugins.shift_move(from, to),
 			NodeAction::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
@@ -190,6 +192,18 @@ impl Channel {
 		}
 
 		updates.append(&mut self.updates);
+	}
+
+	pub fn clear_updates(&mut self) {
+		self.updates.clear();
+	}
+
+	pub fn restart_all_plugins(&mut self) {
+		for plugin in &mut self.plugins {
+			if let Some(processor) = plugin.processor.take() {
+				processor.restart();
+			}
+		}
 	}
 }
 
