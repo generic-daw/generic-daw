@@ -1,5 +1,6 @@
 use crate::{action::Action, daw, stylefns::scrollable_style, widget::LINE_HEIGHT};
 use fragile::Fragile;
+pub use generic_daw_core::clap_host::*;
 use generic_daw_core::{PluginId, Transport};
 use generic_daw_widget::knob::Knob;
 use iced::{
@@ -18,8 +19,6 @@ use std::{
 	time::Duration,
 };
 use utils::{NoClone, NoDebug, natural_cmp};
-
-pub use generic_daw_core::clap_host::*;
 
 #[derive(Clone, Debug)]
 pub enum Message {

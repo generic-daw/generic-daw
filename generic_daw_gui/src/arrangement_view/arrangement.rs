@@ -395,6 +395,9 @@ impl Arrangement {
 	}
 
 	pub fn toggle_solo(&mut self, id: NodeId) {
+		if !self.node(id).enabled {
+			self.channel_toggle_enabled(id);
+		}
 		let solo = (self.transport.solo != Some(id)).then_some(id);
 		if self.transport.solo != solo {
 			self.transport.solo = solo;
