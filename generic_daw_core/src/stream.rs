@@ -165,16 +165,17 @@ fn choose_supported_config(
 		.into_iter()
 		.filter(|config| config.channels() != 0)
 		.min_by(|l, r| {
-			compare_by_sample_format(l, r)
+			sample_rate
+				.map_or(Ordering::Equal, |sample_rate| {
+					compare_by_sample_rate(l, r, sample_rate)
+				})
 				.then_with(|| {
-					sample_rate.map_or(Ordering::Equal, |sample_rate| {
-						compare_by_sample_rate(l, r, sample_rate)
+					frames.map_or(Ordering::Equal, |frames| {
+						compare_by_buffer_size(l, r, frames)
 					})
 				})
-				.then_with(|| {
-					frames.map_or(Ordering::Equal, |frames| compare_by_frames(l, r, frames))
-				})
-				.then_with(|| compare_by_channel_count(l, r))
+				.then_with(|| compare_by_channels(l, r))
+				.then_with(|| compare_by_sample_format(l, r))
 		})
 		.unwrap();
 
@@ -201,7 +202,7 @@ fn compare_by_sample_rate(
 	ldiff.cmp(&rdiff)
 }
 
-fn compare_by_frames(
+fn compare_by_buffer_size(
 	l: &SupportedStreamConfigRange,
 	r: &SupportedStreamConfigRange,
 	frames: NonZero<u32>,
@@ -228,24 +229,16 @@ fn compare_by_frames(
 	}
 }
 
-fn compare_by_channel_count(
-	l: &SupportedStreamConfigRange,
-	r: &SupportedStreamConfigRange,
-) -> Ordering {
-	let ldiff = match l.channels() {
-		0 => u16::MAX,
-		1 => u8::MAX.into(),
-		2 => 0,
-		x => x,
-	};
-	let rdiff = match r.channels() {
-		0 => u16::MAX,
-		1 => u8::MAX.into(),
-		2 => 0,
-		x => x,
-	};
-
-	ldiff.cmp(&rdiff)
+fn compare_by_channels(l: &SupportedStreamConfigRange, r: &SupportedStreamConfigRange) -> Ordering {
+	match (l.channels().cmp(&2), r.channels().cmp(&2)) {
+		(Ordering::Equal, _) | (Ordering::Greater, Ordering::Less) => Ordering::Less,
+		(_, Ordering::Equal) | (Ordering::Less, Ordering::Greater) => Ordering::Greater,
+		_ => {
+			let ldiff = l.channels().abs_diff(2);
+			let rdiff = r.channels().abs_diff(2);
+			ldiff.cmp(&rdiff)
+		}
+	}
 }
 
 fn compare_by_sample_format(
