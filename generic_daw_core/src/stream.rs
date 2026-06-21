@@ -35,14 +35,13 @@ pub fn build_input_stream(
 		.or_else(|| host.default_input_device())
 		.unwrap();
 
-	let supported_config = choose_supported_config(
+	let default_config = device.default_input_config().unwrap();
+	let config = choose_supported_config(
 		device.supported_input_configs().unwrap(),
-		&device.default_input_config().unwrap(),
+		&default_config,
 		sample_rate,
 		frames,
 	);
-
-	let config = supported_config_to_config(&supported_config, frames);
 
 	info!("starting input stream with config {config:#?}");
 
@@ -54,7 +53,7 @@ pub fn build_input_stream(
 
 	macro_rules! build_input_stream {
 		($($pat:pat => $ty:ty),*$(,)?) => {
-			match supported_config.sample_format() {
+			match default_config.sample_format() {
 				$(
 					$pat => device.build_input_stream(
 						config,
@@ -103,14 +102,13 @@ pub fn build_output_stream(
 		.or_else(|| host.default_output_device())
 		.unwrap();
 
-	let supported_config = choose_supported_config(
+	let default_config = device.default_output_config().unwrap();
+	let config = choose_supported_config(
 		device.supported_output_configs().unwrap(),
-		&device.default_output_config().unwrap(),
+		&default_config,
 		sample_rate,
 		frames,
 	);
-
-	let config = supported_config_to_config(&supported_config, frames);
 
 	info!("starting output stream with config {config:#?}");
 
@@ -120,7 +118,7 @@ pub fn build_output_stream(
 
 	macro_rules! build_output_stream {
 		($($pat:pat => $ty:ty),*$(,)?) => {
-			match supported_config.sample_format() {
+			match default_config.sample_format() {
 				$(
 					$pat => device.build_output_stream(
 						config,
@@ -160,30 +158,40 @@ fn choose_supported_config(
 	default_config: &SupportedStreamConfig,
 	sample_rate: Option<NonZero<u32>>,
 	frames: Option<NonZero<u32>>,
-) -> SupportedStreamConfig {
+) -> StreamConfig {
+	let sample_rate =
+		sample_rate.unwrap_or_else(|| NonZero::new(default_config.sample_rate()).unwrap());
+
 	let config = configs
 		.into_iter()
 		.filter(|config| config.channels() != 0)
 		.min_by(|l, r| {
-			sample_rate
-				.map_or(Ordering::Equal, |sample_rate| {
-					compare_by_sample_rate(l, r, sample_rate)
-				})
+			compare_by_sample_rate(l, r, sample_rate)
 				.then_with(|| {
 					frames.map_or(Ordering::Equal, |frames| {
 						compare_by_buffer_size(l, r, frames)
 					})
 				})
 				.then_with(|| compare_by_channels(l, r))
-				.then_with(|| compare_by_sample_format(l, r))
 		})
 		.unwrap();
 
 	let sample_rate = sample_rate
-		.map_or_else(|| default_config.sample_rate(), NonZero::get)
+		.get()
 		.clamp(config.min_sample_rate(), config.max_sample_rate());
 
-	config.with_sample_rate(sample_rate)
+	let buffer_size = match (*config.buffer_size(), frames) {
+		(SupportedBufferSize::Unknown, _) | (_, None) => BufferSize::Default,
+		(SupportedBufferSize::Range { min, max }, Some(frames)) => {
+			BufferSize::Fixed(frames.get().clamp(min, max))
+		}
+	};
+
+	StreamConfig {
+		channels: config.channels(),
+		sample_rate,
+		buffer_size,
+	}
 }
 
 fn compare_by_sample_rate(
@@ -238,25 +246,6 @@ fn compare_by_channels(l: &SupportedStreamConfigRange, r: &SupportedStreamConfig
 			let rdiff = r.channels().abs_diff(2);
 			ldiff.cmp(&rdiff)
 		}
-	}
-}
-
-fn compare_by_sample_format(
-	l: &SupportedStreamConfigRange,
-	r: &SupportedStreamConfigRange,
-) -> Ordering {
-	match (l.sample_format().is_dsd(), r.sample_format().is_dsd()) {
-		(true, true) => Ordering::Equal,
-		(true, false) => Ordering::Greater,
-		(false, true) => Ordering::Less,
-		(false, false) => match (l.sample_format().is_float(), r.sample_format().is_float()) {
-			(true, false) => Ordering::Greater,
-			(false, true) => Ordering::Less,
-			_ => l
-				.sample_format()
-				.bits_per_sample()
-				.cmp(&r.sample_format().bits_per_sample()),
-		},
 	}
 }
 
@@ -337,24 +326,6 @@ where
 			a[0] = f32::from_sample(*b);
 			a[1] = f32::from_sample(*b);
 		}),
-	}
-}
-
-fn supported_config_to_config(
-	supported_config: &SupportedStreamConfig,
-	frames: Option<NonZero<u32>>,
-) -> StreamConfig {
-	let buffer_size = match (*supported_config.buffer_size(), frames) {
-		(SupportedBufferSize::Unknown, _) | (_, None) => BufferSize::Default,
-		(SupportedBufferSize::Range { min, max }, Some(frames)) => {
-			BufferSize::Fixed(frames.get().clamp(min, max))
-		}
-	};
-
-	StreamConfig {
-		channels: supported_config.channels(),
-		sample_rate: supported_config.sample_rate(),
-		buffer_size,
 	}
 }
 
