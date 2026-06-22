@@ -500,6 +500,7 @@ impl AudioThread {
 			let diff = buffer_size.min(render_start - self.transport().position);
 			let diff_frames = diff.to_frames(self.transport());
 
+			assert!(self.recv_events().is_none());
 			self.audio_graph
 				.process_subtree(node, &mut buf[..diff_frames]);
 			self.audio_graph.for_each_node_mut(Node::clear_updates);
@@ -517,6 +518,7 @@ impl AudioThread {
 			let diff = buffer_size.min(render_end - self.transport().position);
 			let diff_frames = diff.to_frames(self.transport());
 
+			assert!(self.recv_events().is_none());
 			self.audio_graph
 				.process_subtree(node, &mut buf[..diff_frames]);
 			self.audio_graph.for_each_node_mut(Node::clear_updates);
