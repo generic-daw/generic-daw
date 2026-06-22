@@ -1072,7 +1072,10 @@ impl ArrangementView {
 				};
 			}
 			playlist::Action::Open(track, clip) => {
-				self.midi_clip = Some((track, clip));
+				if self.midi_clip != Some((track, clip)) {
+					self.midi_clip = Some((track, clip));
+					self.piano_roll.get_mut().clear();
+				}
 				return self.update(Message::ChangedTab(Tab::PianoRoll), config, state);
 			}
 			playlist::Action::Clone => {
