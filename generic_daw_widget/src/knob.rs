@@ -273,6 +273,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					modifiers,
 					..
 				} if state.dragging.is_none() && state.hovering => {
+					state.cache.clear();
+					shell.request_redraw();
+
 					let pos = cursor.position().unwrap();
 					state.dragging = Some((self.info.value, pos.y));
 					state.scroll = 0.0;
@@ -287,13 +290,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					button: mouse::Button::Left,
 					..
 				} if state.dragging.is_some() => {
-					if !state.hovering {
-						state.cache.clear();
-						shell.request_redraw();
-					}
+					state.cache.clear();
+					shell.request_redraw();
 
 					state.dragging = None;
 					state.scroll = 0.0;
+
 					shell.capture_event();
 				}
 				mouse::Event::CursorMoved {
