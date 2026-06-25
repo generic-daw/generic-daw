@@ -10,7 +10,6 @@ use iced_widget::{
 	},
 };
 use std::ops::RangeInclusive;
-use utils::NoDebug;
 
 #[derive(Default)]
 struct State {
@@ -20,13 +19,12 @@ struct State {
 	last_click: Option<Click>,
 }
 
-#[derive(Debug)]
 pub struct DragHandle<'a, Message> {
-	child: NoDebug<Element<'a, Message, Theme, Renderer>>,
+	child: Element<'a, Message, Theme, Renderer>,
 	range: RangeInclusive<usize>,
 	value: usize,
 	default: usize,
-	f: NoDebug<Box<dyn Fn(usize) -> Message + 'a>>,
+	f: Box<dyn Fn(usize) -> Message + 'a>,
 }
 
 impl<'a, Message> DragHandle<'a, Message> {
@@ -38,11 +36,11 @@ impl<'a, Message> DragHandle<'a, Message> {
 		f: impl Fn(usize) -> Message + 'a,
 	) -> Self {
 		Self {
-			child: child.into().into(),
+			child: child.into(),
 			range: range.clone(),
 			value,
 			default: *range.end(),
-			f: NoDebug(Box::from(f)),
+			f: Box::from(f),
 		}
 	}
 
@@ -67,7 +65,7 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 	}
 
 	fn diff(&mut self, tree: &mut Tree) {
-		tree.diff_children(&mut [&mut *self.child]);
+		tree.diff_children(&mut [&mut self.child]);
 	}
 
 	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {

@@ -10,16 +10,14 @@ use iced_widget::{
 		widget::{Operation, Tree, tree},
 	},
 };
-use utils::NoDebug;
 
 struct State {
 	position: Option<Point>,
 }
 
-#[derive(Debug)]
 pub struct ContextMenu<'a, Message> {
-	content: NoDebug<Element<'a, Message, Theme, Renderer>>,
-	context_menu: NoDebug<Element<'a, Message, Theme, Renderer>>,
+	content: Element<'a, Message, Theme, Renderer>,
+	context_menu: Element<'a, Message, Theme, Renderer>,
 }
 
 impl<'a, Message> ContextMenu<'a, Message> {
@@ -28,8 +26,8 @@ impl<'a, Message> ContextMenu<'a, Message> {
 		context_menu: impl Into<Element<'a, Message, Theme, Renderer>>,
 	) -> Self {
 		Self {
-			content: content.into().into(),
-			context_menu: context_menu.into().into(),
+			content: content.into(),
+			context_menu: context_menu.into(),
 		}
 	}
 }
@@ -75,7 +73,7 @@ impl<Message> Widget<Message, Theme, Renderer> for ContextMenu<'_, Message> {
 	}
 
 	fn diff(&mut self, tree: &mut Tree) {
-		tree.diff_children(&mut [&mut *self.content, &mut *self.context_menu]);
+		tree.diff_children(&mut [&mut self.content, &mut self.context_menu]);
 	}
 
 	fn operate(
@@ -153,7 +151,9 @@ impl<Message> Widget<Message, Theme, Renderer> for ContextMenu<'_, Message> {
 	) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
 		let state = tree.state.downcast_mut::<State>();
 
-		let (first, rest) = tree.children.split_first_mut().unwrap();
+		let [first, second] = &mut *tree.children else {
+			unreachable!();
+		};
 
 		let children = [
 			self.content
@@ -162,7 +162,7 @@ impl<Message> Widget<Message, Theme, Renderer> for ContextMenu<'_, Message> {
 			state.position.map(|position| {
 				overlay::Element::new(Box::new(Overlay {
 					context_menu: &mut self.context_menu,
-					tree: &mut rest[0],
+					tree: second,
 					state,
 					position,
 				}))

@@ -13,8 +13,7 @@ use iced_widget::{
 	graphics::geometry::Renderer as _,
 	text,
 };
-use std::{cell::RefCell, f32::consts::PI, fmt::Debug, ops::RangeInclusive};
-use utils::NoDebug;
+use std::{cell::RefCell, f32::consts::PI, ops::RangeInclusive};
 
 struct State {
 	dragging: Option<(f32, f32)>,
@@ -25,7 +24,7 @@ struct State {
 	last_theme: RefCell<Option<Theme>>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 struct KnobInfo {
 	range: RangeInclusive<f32>,
 	value: f32,
@@ -36,11 +35,10 @@ struct KnobInfo {
 	stepped: bool,
 }
 
-#[derive(Debug)]
 pub struct Knob<'a, Message> {
 	info: KnobInfo,
-	f: NoDebug<Box<dyn Fn(f32) -> Message + 'a>>,
-	tooltip: Option<NoDebug<Text<'a, Theme, Renderer>>>,
+	f: Box<dyn Fn(f32) -> Message + 'a>,
+	tooltip: Option<Text<'a, Theme, Renderer>>,
 }
 
 impl<'a, Message> Knob<'a, Message> {
@@ -56,7 +54,7 @@ impl<'a, Message> Knob<'a, Message> {
 				enabled: true,
 				stepped: false,
 			},
-			f: NoDebug(Box::from(f)),
+			f: Box::from(f),
 			tooltip: None,
 		}
 	}
@@ -98,7 +96,7 @@ impl<'a, Message> Knob<'a, Message> {
 
 	#[must_use]
 	pub fn maybe_tooltip(mut self, tooltip: Option<impl text::IntoFragment<'a>>) -> Self {
-		self.tooltip = tooltip.map(|tooltip| text(tooltip).line_height(1.0).into());
+		self.tooltip = tooltip.map(|tooltip| text(tooltip).line_height(1.0));
 		self
 	}
 
@@ -225,7 +223,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 			state.cache.clear();
 		}
 
-		if let Some(tooltip) = self.tooltip.as_deref_mut() {
+		if let Some(tooltip) = self.tooltip.as_mut() {
 			tree.diff_children(&mut [tooltip as &mut dyn Widget<Message, Theme, Renderer>]);
 		} else {
 			tree.children.clear();
@@ -423,7 +421,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 		let state = tree.state.downcast_ref::<State>();
 
 		if state.hovering || state.dragging.is_some() {
-			self.tooltip.as_deref_mut().map(|tooltip| {
+			self.tooltip.as_mut().map(|tooltip| {
 				overlay::Element::new(Box::new(Overlay {
 					tooltip,
 					tree: tree.children.iter_mut().next().unwrap(),

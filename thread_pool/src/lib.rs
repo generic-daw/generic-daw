@@ -1,3 +1,5 @@
+#![expect(missing_debug_implementations)]
+
 use crossbeam_utils::{Backoff, CachePadded};
 use std::{
 	convert::Infallible,
@@ -58,7 +60,6 @@ impl WorkList for Infallible {
 	}
 }
 
-#[expect(missing_debug_implementations)]
 pub struct ThreadPool<W: Erased<Inject: Erased<Scratch = (), Inject = Infallible>>> {
 	shared: Arc<Shared<W>>,
 	threads: Box<[JoinHandle<()>]>,
@@ -172,7 +173,6 @@ struct Shared<W: Erased<Inject: Erased<Scratch = (), Inject = Infallible>>> {
 	inject: CachePadded<Injector<W::Inject>>,
 }
 
-#[expect(missing_debug_implementations)]
 pub struct Injector<W: Erased> {
 	work_list: AtomicPtr<W::WorkList<'static>>,
 	epoch: AtomicUsize,

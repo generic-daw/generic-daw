@@ -8,8 +8,6 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-utils.workspace = true
-
 iced_widget = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", features = [
 	"canvas",
 ] }

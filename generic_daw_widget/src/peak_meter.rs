@@ -71,7 +71,6 @@ impl State {
 	}
 }
 
-#[derive(Debug)]
 pub struct PeakMeter<'a> {
 	state: &'a State,
 	width: f32,
