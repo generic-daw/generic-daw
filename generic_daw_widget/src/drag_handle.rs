@@ -3,7 +3,7 @@ use iced_widget::{
 	core::{
 		Element, Event, Layout, Length, Point, Rectangle, Shell, Size, Theme, Vector, Widget,
 		layout::{Limits, Node},
-		mouse::{self, Click, Cursor, Interaction, ScrollDelta, click::Kind},
+		mouse::{self, Cursor, Interaction, ScrollDelta},
 		overlay,
 		renderer::Style,
 		widget::{Operation, Tree, tree},
@@ -16,7 +16,6 @@ struct State {
 	dragging: Option<(usize, f32)>,
 	hovering: bool,
 	scroll: f32,
-	last_click: Option<Click>,
 }
 
 pub struct DragHandle<'a, Message> {
@@ -104,16 +103,13 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 			match event {
 				mouse::Event::ButtonPressed {
 					button: mouse::Button::Left,
-					..
+					modifiers,
 				} if state.dragging.is_none() && state.hovering => {
 					let pos = cursor.position().unwrap();
 					state.dragging = Some((self.value, pos.y));
 					state.scroll = 0.0;
 
-					let new_click = Click::new(pos, mouse::Button::Left, state.last_click);
-					state.last_click = Some(new_click);
-
-					if new_click.kind() == Kind::Double {
+					if modifiers.control() || modifiers.command() {
 						shell.publish((self.f)(self.default));
 					}
 
