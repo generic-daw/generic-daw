@@ -190,7 +190,7 @@ impl ArrangementView {
 		let view = view.unwrap_or(proto::ViewState {
 			playlist: proto::TabState {
 				position: proto::Vector { x: 0.0, y: 0.0 },
-				scale: proto::Vector { x: -5.0, y: 87.0 },
+				scale: proto::Vector { x: -5.0, y: 85.0 },
 			},
 			piano_roll: proto::TabState {
 				position: proto::Vector {
@@ -1552,9 +1552,10 @@ impl ArrangementView {
 													)
 												)
 												.default(1.0)
+												.radius(19.44444)
 												.enabled(enabled)
 												.tooltip(format_db(node.utility.volume.abs())),
-												node.pan_knob(20.0, enabled),
+												node.pan_knob(19.44444, enabled),
 											]
 											.align_x(Center)
 											.spacing(5)
