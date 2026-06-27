@@ -448,14 +448,13 @@ impl Arrangement {
 				messages.push(arrangement_view::Message::ChannelToggleBypassed(node.id));
 			}
 
-			let mut skipped = 0;
+			let mut i = 0;
 
-			for (i, plugin) in channel.plugins.iter().enumerate() {
+			for plugin in &channel.plugins {
 				let id = plugin.id();
 
 				let Some(descriptor) = plugins.iter().find(|d| *d.id == id) else {
 					if ignored_plugins.contains(id) {
-						skipped += 1;
 						continue;
 					}
 
@@ -467,14 +466,11 @@ impl Arrangement {
 					match receiver.recv() {
 						Ok(Feedback::Ignore) => {
 							ignored_plugins.insert(id.to_owned());
-							skipped += 1;
 							continue;
 						}
 						Ok(Feedback::Cancel) | Err(..) => return None,
 					};
 				};
-
-				let i = i - skipped;
 
 				messages.push(arrangement_view::Message::PluginAdd(
 					node.id,
@@ -499,6 +495,8 @@ impl Arrangement {
 				if plugin.active {
 					messages.push(arrangement_view::Message::PluginToggleActive(node.id, i));
 				}
+
+				i += 1;
 			}
 
 			Some(())

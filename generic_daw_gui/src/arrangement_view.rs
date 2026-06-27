@@ -7,7 +7,7 @@ use crate::{
 	file_tree::FileKind,
 	icons::{
 		arrow_up_down, chevron_down, chevron_up, chevrons_left_right_ellipsis, circle_ellipsis,
-		grip_horizontal, grip_vertical, mic, plus, power, power_off, rotate_ccw, x,
+		copy, grip_horizontal, grip_vertical, mic, plus, power, power_off, rotate_ccw, x,
 	},
 	operation::scroll_into_view,
 	state::{DEFAULT_SPLIT_POSITION, State},
@@ -99,21 +99,24 @@ pub enum Message {
 	ChangedTab(Tab),
 
 	ChannelAdd,
+	ChannelInsert(NodeId),
 	ChannelRemove(NodeId),
 	ChannelMove(DragEvent),
 	ChannelSelect(NodeId),
+	ChannelDuplicate(NodeId),
 	ChannelVolumeChanged(NodeId, f32),
 	ChannelPanChanged(NodeId, PanMode),
 	ChannelToggleEnabled(NodeId),
 	ChannelToggleBypassed(NodeId),
 
 	PluginAdd(NodeId, PluginDescriptor, bool),
+	PluginRemove(NodeId, usize),
+	PluginMove(NodeId, DragEvent),
+	PluginDuplicate(NodeId, usize),
 	PluginSetState(NodeId, usize, NoDebug<Box<[u8]>>),
 	PluginShow(PluginId),
 	PluginMixChanged(NodeId, usize, f32),
 	PluginToggleActive(NodeId, usize),
-	PluginMoveTo(NodeId, DragEvent),
-	PluginRemove(NodeId, usize),
 
 	SampleLoaded(Option<(Box<SamplePair>, Option<usize>, BeatTime)>),
 	MidiPatternLoaded(Option<(Box<MidiPatternPair>, Option<usize>, BeatTime)>),
@@ -121,8 +124,10 @@ pub enum Message {
 	MidiClipAdd(MidiPatternId, Option<usize>, BeatTime),
 
 	TrackAdd,
+	TrackInsert(NodeId),
 	TrackRemove(NodeId),
 	TrackMove(DragEvent),
+	TrackDuplicate(NodeId),
 	TrackToggleEnabled(NodeId),
 	TrackToggleSolo(NodeId),
 
@@ -304,6 +309,19 @@ impl ArrangementView {
 					snap_to_end("mixer").into(),
 				]);
 			}
+			Message::ChannelInsert(node) => {
+				let node = self
+					.arrangement
+					.insert_channel(self.arrangement.channel_of(node).unwrap() + 1);
+				return Action::batch([
+					self.update(
+						Message::Connect(node, self.arrangement.master().id),
+						config,
+						state,
+					),
+					self.update(Message::ChannelSelect(node), config, state),
+				]);
+			}
 			Message::ChannelRemove(node) => {
 				if self.selected == node {
 					self.select_next();
@@ -332,6 +350,15 @@ impl ArrangementView {
 					)
 					.into();
 				}
+			}
+			Message::ChannelDuplicate(node) => {
+				let (node, instructions) = self.arrangement.duplicate_channel(node);
+				return Action::batch(
+					instructions
+						.into_iter()
+						.map(Action::instruction)
+						.chain([self.update(Message::ChannelSelect(node), config, state)]),
+				);
 			}
 			Message::ChannelVolumeChanged(node, mut volume) => {
 				let db = amp_to_db(volume.abs());
@@ -383,6 +410,28 @@ impl ArrangementView {
 					return action;
 				}
 			}
+			Message::PluginRemove(node, i) => {
+				let plugin = self.arrangement.plugin_remove(node, i);
+				if !plugin.active {
+					return Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
+						clap_host::Message::DestroyInactive(plugin.id),
+					)));
+				}
+			}
+			Message::PluginMove(node, event) => {
+				if let DragEvent::Dropped {
+					index,
+					target_index,
+				} = event && index != target_index
+				{
+					self.arrangement.plugin_move(node, index, target_index);
+				}
+			}
+			Message::PluginDuplicate(node, i) => {
+				if let Some(instructions) = self.arrangement.plugin_duplicate(node, i) {
+					return Action::batch(instructions.into_iter().map(Action::instruction));
+				}
+			}
 			Message::PluginSetState(node, i, state) => {
 				let plugin = self.arrangement.node(node).plugins[i].id;
 				return Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
@@ -404,23 +453,6 @@ impl ArrangementView {
 				} else {
 					return Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
 						clap_host::Message::Activate(plugin.id),
-					)));
-				}
-			}
-			Message::PluginMoveTo(node, event) => {
-				if let DragEvent::Dropped {
-					index,
-					target_index,
-				} = event && index != target_index
-				{
-					self.arrangement.plugin_move_to(node, index, target_index);
-				}
-			}
-			Message::PluginRemove(node, i) => {
-				let plugin = self.arrangement.plugin_remove(node, i);
-				if !plugin.active {
-					return Action::instruction(daw::Instruction::Message(daw::Message::ClapHost(
-						clap_host::Message::DestroyInactive(plugin.id),
 					)));
 				}
 			}
@@ -456,10 +488,8 @@ impl ArrangementView {
 				{
 					(track, Action::none())
 				} else {
-					(
-						self.arrangement.tracks().len(),
-						self.update(Message::TrackAdd, config, state),
-					)
+					let track = self.arrangement.tracks().len();
+					(track, self.update(Message::TrackAdd, config, state))
 				};
 				let clip = self.arrangement.add_clip(track, clip);
 				self.playlist.get_mut().primary.insert((track, clip));
@@ -482,25 +512,33 @@ impl ArrangementView {
 				{
 					(track, Action::none())
 				} else {
-					(
-						self.arrangement.tracks().len(),
-						self.update(Message::TrackAdd, config, state),
-					)
+					let track = self.arrangement.tracks().len();
+					(track, self.update(Message::TrackAdd, config, state))
 				};
 				let clip = self.arrangement.add_clip(track, clip);
 				self.playlist.get_mut().primary.insert((track, clip));
 				return task;
 			}
 			Message::TrackAdd => {
-				self.selected = self
-					.arrangement
-					.insert_track(self.arrangement.tracks().len());
-
+				self.selected = self.arrangement.add_track();
 				return self.update(
 					Message::Connect(self.selected, self.arrangement.master().id),
 					config,
 					state,
 				);
+			}
+			Message::TrackInsert(node) => {
+				let node = self
+					.arrangement
+					.insert_track(self.arrangement.track_of(node).unwrap() + 1);
+				return Action::batch([
+					self.update(
+						Message::Connect(node, self.arrangement.master().id),
+						config,
+						state,
+					),
+					self.update(Message::ChannelSelect(node), config, state),
+				]);
 			}
 			Message::TrackRemove(node) => {
 				if self.selected == node {
@@ -532,6 +570,15 @@ impl ArrangementView {
 						Some(update_selection_move_track(c, index, target_index))
 					});
 				}
+			}
+			Message::TrackDuplicate(node) => {
+				let (node, instructions) = self.arrangement.duplicate_track(node);
+				return Action::batch(
+					instructions
+						.into_iter()
+						.map(Action::instruction)
+						.chain([self.update(Message::ChannelSelect(node), config, state)]),
+				);
 			}
 			Message::TrackToggleEnabled(node) => self.arrangement.track_toggle_enabled(node),
 			Message::TrackToggleSolo(node) => self.arrangement.toggle_solo(node),
@@ -896,7 +943,19 @@ impl ArrangementView {
 						]);
 					}
 				}
-				Tab::Mixer => {}
+				Tab::Mixer => match self.arrangement.node(self.selected).ty {
+					NodeType::Master => {}
+					NodeType::Channel => {
+						return self.update(
+							Message::ChannelDuplicate(self.selected),
+							config,
+							state,
+						);
+					}
+					NodeType::Track => {
+						return self.update(Message::TrackDuplicate(self.selected), config, state);
+					}
+				},
 				Tab::PianoRoll => {
 					let clip = self.midi_clip().unwrap();
 					if let Some(delta) = self
@@ -1526,7 +1585,7 @@ impl ArrangementView {
 									.interaction(Interaction::Grab),
 								opaque(
 									mouse_area(
-										node.track_context_menu(
+										node.playlist_context_menu(
 											row![
 												column![
 													row![
@@ -1799,58 +1858,76 @@ impl ArrangementView {
 									}
 								};
 
-								row![
-									ContextMenu::new(
-										Knob::new(0.0..=1.0, plugin.mix, move |mix| {
-											Message::PluginMixChanged(self.selected, i, mix)
-										})
-										.radius(TEXT_HEIGHT)
-										.enabled(plugin.active && enabled)
-										.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
-										container(
-											context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
+								ContextMenu::new(
+									row![
+										ContextMenu::new(
+											Knob::new(0.0..=1.0, plugin.mix, move |mix| {
+												Message::PluginMixChanged(self.selected, i, mix)
+											})
+											.radius(TEXT_HEIGHT)
+											.enabled(plugin.active && enabled)
+											.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
+											container(
+												context_menu_entry(
+													rotate_ccw(),
+													"Reset",
+													"Ctrl-Click"
+												)
 												.on_press(Message::PluginMixChanged(
 													self.selected,
 													i,
 													1.0
 												)),
+											)
+											.width(160)
+											.style(container_with_radius(weaker_bordered_box, 5)),
+										),
+										button(
+											text(&*plugin.descriptor.name)
+												.wrapping(text::Wrapping::None)
+												.ellipsis(text::Ellipsis::End)
 										)
-										.width(160)
-										.style(container_with_radius(weaker_bordered_box, 5)),
-									),
-									button(
-										text(&*plugin.descriptor.name)
-											.wrapping(text::Wrapping::None)
-											.ellipsis(text::Ellipsis::End)
-									)
-									.padding(7)
-									.style(button_with_radius(button_style(false), border::left(5)))
-									.width(Fill)
-									.on_press(Message::PluginShow(plugin.id)),
-									column![
-										icon_button(
-											if plugin.active && !node.bypassed {
-												power()
-											} else {
-												power_off()
-											},
-											button_style(node.bypassed)
-										)
-										.on_press(Message::PluginToggleActive(self.selected, i)),
-										icon_button(
-											x(),
-											if plugin.active && enabled {
-												button::danger
-											} else {
-												button::secondary
-											}
-										)
-										.on_press(Message::PluginRemove(self.selected, i)),
+										.padding(7)
+										.style(button_with_radius(
+											button_style(false),
+											border::left(5)
+										))
+										.width(Fill)
+										.on_press(Message::PluginShow(plugin.id)),
+										column![
+											icon_button(
+												if plugin.active && !node.bypassed {
+													power()
+												} else {
+													power_off()
+												},
+												button_style(node.bypassed)
+											)
+											.on_press(Message::PluginToggleActive(
+												self.selected,
+												i
+											)),
+											icon_button(
+												x(),
+												if plugin.active && enabled {
+													button::danger
+												} else {
+													button::secondary
+												}
+											)
+											.on_press(Message::PluginRemove(self.selected, i)),
+										]
+										.spacing(5),
 									]
+									.align_y(Center)
 									.spacing(5),
-								]
-								.align_y(Center)
-								.spacing(5)
+									container(
+										context_menu_entry(copy(), "Duplicate", "")
+											.on_press(Message::PluginDuplicate(self.selected, i)),
+									)
+									.width(160)
+									.style(container_with_radius(weaker_bordered_box, 5)),
+								)
 							})
 							.map(|widget| {
 								row![
@@ -1871,7 +1948,7 @@ impl ArrangementView {
 							})
 					)
 					.spacing(5)
-					.on_drag(|node| Message::PluginMoveTo(self.selected, node))
+					.on_drag(|node| Message::PluginMove(self.selected, node))
 					.style(sweeten_column_with_radius(sweeten_column_style, 5)),
 				)
 				.spacing(5)
@@ -1922,210 +1999,231 @@ impl ArrangementView {
 			}),
 			opaque(
 				mouse_area(
-					column![
-						text(name).size(13).line_height(1.0),
-						node.pan_knob(23.0, enabled),
-						row![
-							text_icon_button(if soloed { "U" } else { "M" }, button_style(soloed))
+					node.mixer_context_menu(
+						column![
+							text(name).size(13).line_height(1.0),
+							node.pan_knob(23.0, enabled),
+							row![
+								text_icon_button(
+									if soloed { "U" } else { "M" },
+									button_style(soloed)
+								)
 								.on_press(if node.ty == NodeType::Track {
 									Message::TrackToggleEnabled(node.id)
 								} else {
 									Message::ChannelToggleEnabled(node.id)
 								}),
-							text_icon_button("S", button_style(soloed)).on_press_maybe(
-								(node.ty == NodeType::Track)
-									.then_some(Message::TrackToggleSolo(node.id)),
-							),
-							icon_button(
-								x(),
-								if enabled {
-									button::danger
-								} else {
-									button::secondary
-								},
-							)
-							.on_press_maybe(match node.ty {
-								NodeType::Master => None,
-								NodeType::Channel => Some(Message::ChannelRemove(node.id)),
-								NodeType::Track => Some(Message::TrackRemove(node.id)),
-							}),
-						]
-						.spacing(5),
-						row![
-							icon_button(
-								if node.bypassed { power_off() } else { power() },
-								button_style(node.bypassed)
-							)
-							.on_press(Message::ChannelToggleBypassed(node.id)),
-							icon_button(
-								arrow_up_down(),
-								button_style(node.utility.volume.is_sign_negative())
-							)
-							.on_press(Message::ChannelVolumeChanged(node.id, -node.utility.volume)),
-							match node.utility.pan {
-								PanMode::Balance(..) =>
-									icon_button(chevrons_left_right_ellipsis(), button_style(false))
-										.on_press(Message::ChannelPanChanged(
-											node.id,
-											PanMode::Stereo(-1.0, 1.0),
-										)),
-								PanMode::Stereo(..) =>
-									icon_button(circle_ellipsis(), button_style(false)).on_press(
-										Message::ChannelPanChanged(node.id, PanMode::Balance(0.0),)
-									),
-							}
-						]
-						.spacing(5),
-						center_x(
-							text(format_db(node.utility.volume.abs()))
-								.size(13)
-								.line_height(1.0)
-						)
-						.style(weak_bordered_box)
-						.padding(2),
-						row![
-							column![
-								space().height(3),
-								row![
-									PeakMeter::new(&node.peaks[0]).width(16.0).enabled(enabled),
-									PeakMeter::new(&node.peaks[1]).width(16.0).enabled(enabled),
-								]
-								.spacing(3),
-								container(space().width(35).height(3)).style(
-									container_with_radius(
-										if node.ty != NodeType::Track {
-											container::transparent
-										} else if node.polyphony > 0 {
-											container::primary
-										} else {
-											container::secondary
-										},
-										border::bottom(f32::INFINITY),
-									),
+								text_icon_button("S", button_style(soloed)).on_press_maybe(
+									(node.ty == NodeType::Track)
+										.then_some(Message::TrackToggleSolo(node.id)),
+								),
+								icon_button(
+									x(),
+									if enabled {
+										button::danger
+									} else {
+										button::secondary
+									},
 								)
+								.on_press_maybe(match node.ty {
+									NodeType::Master => None,
+									NodeType::Channel => Some(Message::ChannelRemove(node.id)),
+									NodeType::Track => Some(Message::TrackRemove(node.id)),
+								}),
 							]
 							.spacing(5),
-							node.volume_context_menu(
-								vertical_slider(
-									0.0..=MAX_VOL,
-									node.utility.volume.abs().cbrt(),
-									|v| Message::ChannelVolumeChanged(
-										node.id,
-										v.powi(3).copysign(node.utility.volume),
-									)
+							row![
+								icon_button(
+									if node.bypassed { power_off() } else { power() },
+									button_style(node.bypassed)
 								)
-								.default(1f32)
-								.width(17)
-								.step(f32::EPSILON)
-								.handle((15, 20))
-								.style(slider_with_radius(
-									if enabled {
-										slider::default
-									} else {
-										slider_secondary
-									},
-									5
-								))
-							),
-						]
-						.spacing(3),
-						{
-							let incoming = self.arrangement.outgoing(node.id).get(&self.selected);
-							let outgoing = self.arrangement.outgoing(self.selected).get(&node.id);
-
-							let down = |r: border::Radius| {
-								button(chevron_down())
-									.padding(0)
-									.style(button_with_radius(
-										if enabled && incoming.is_some() {
-											button::primary
-										} else {
-											button::secondary
-										},
-										r,
-									))
-									.on_press_maybe(if outgoing.is_some() {
-										None
-									} else if incoming.is_some() {
-										Some(Message::Disconnect(node.id, self.selected))
-									} else {
-										Some(Message::Connect(node.id, self.selected))
-									})
-							};
-
-							let up = |r: border::Radius| {
-								button(chevron_up())
-									.padding(0)
-									.style(button_with_radius(
-										if enabled && outgoing.is_some() {
-											button::primary
-										} else {
-											button::secondary
-										},
-										r,
-									))
-									.on_press_maybe(if incoming.is_some() {
-										None
-									} else if outgoing.is_some() {
-										Some(Message::Disconnect(self.selected, node.id))
-									} else {
-										Some(Message::Connect(self.selected, node.id))
-									})
-							};
-
-							column![
-								incoming
-									.map(|val| (val, node.id, self.selected))
-									.or_else(|| outgoing.map(|val| (val, self.selected, node.id)))
-									.map(|(val, from, to)| {
-										ContextMenu::new(
-											slider(0.0..=1.0, val.cbrt(), move |val| {
-												Message::SetMix(from, to, val.powi(3))
-											})
-											.default(1f32)
-											.step(f32::EPSILON)
-											.handle((4, 4))
-											.style(if enabled {
-												slider::default
-											} else {
-												slider_secondary
-											}),
-											container(
-												context_menu_entry(
-													rotate_ccw(),
-													"Reset",
-													"Ctrl-Click",
-												)
-												.on_press(Message::SetMix(from, to, 1.0)),
-											)
-											.width(160)
-											.style(container_with_radius(weaker_bordered_box, 5)),
-										)
-									}),
-								if node.id == self.selected {
-									row![]
-								} else {
-									match (node.ty, self.arrangement.node(self.selected).ty) {
-										(NodeType::Track, NodeType::Track) => row![],
-										(_, NodeType::Master)
-										| (NodeType::Track, NodeType::Channel) => {
-											row![down(border::radius(5))]
-										}
-										(NodeType::Master, _) | (_, NodeType::Track) => {
-											row![up(border::radius(5))]
-										}
-										_ => row![down(border::left(5)), up(border::right(5))],
-									}
+								.on_press(Message::ChannelToggleBypassed(node.id)),
+								icon_button(
+									arrow_up_down(),
+									button_style(node.utility.volume.is_sign_negative())
+								)
+								.on_press(Message::ChannelVolumeChanged(
+									node.id,
+									-node.utility.volume
+								)),
+								match node.utility.pan {
+									PanMode::Balance(..) => icon_button(
+										chevrons_left_right_ellipsis(),
+										button_style(false)
+									)
+									.on_press(Message::ChannelPanChanged(
+										node.id,
+										PanMode::Stereo(-1.0, 1.0),
+									)),
+									PanMode::Stereo(..) =>
+										icon_button(circle_ellipsis(), button_style(false))
+											.on_press(Message::ChannelPanChanged(
+												node.id,
+												PanMode::Balance(0.0),
+											)),
 								}
-								.height(LINE_HEIGHT)
 							]
-							.align_x(Center)
-							.spacing(3)
-						}
-					]
-					.align_x(Center)
-					.padding(5)
-					.spacing(5),
+							.spacing(5),
+							center_x(
+								text(format_db(node.utility.volume.abs()))
+									.size(13)
+									.line_height(1.0)
+							)
+							.style(weak_bordered_box)
+							.padding(2),
+							row![
+								column![
+									space().height(3),
+									row![
+										PeakMeter::new(&node.peaks[0]).width(16.0).enabled(enabled),
+										PeakMeter::new(&node.peaks[1]).width(16.0).enabled(enabled),
+									]
+									.spacing(3),
+									container(space().width(35).height(3)).style(
+										container_with_radius(
+											if node.ty != NodeType::Track {
+												container::transparent
+											} else if node.polyphony > 0 {
+												container::primary
+											} else {
+												container::secondary
+											},
+											border::bottom(f32::INFINITY),
+										),
+									)
+								]
+								.spacing(5),
+								node.volume_context_menu(
+									vertical_slider(
+										0.0..=MAX_VOL,
+										node.utility.volume.abs().cbrt(),
+										|v| Message::ChannelVolumeChanged(
+											node.id,
+											v.powi(3).copysign(node.utility.volume),
+										)
+									)
+									.default(1f32)
+									.width(17)
+									.step(f32::EPSILON)
+									.handle((15, 20))
+									.style(slider_with_radius(
+										if enabled {
+											slider::default
+										} else {
+											slider_secondary
+										},
+										5
+									))
+								),
+							]
+							.spacing(3),
+							{
+								let incoming =
+									self.arrangement.outgoing(node.id).get(&self.selected);
+								let outgoing =
+									self.arrangement.outgoing(self.selected).get(&node.id);
+
+								let down = |r: border::Radius| {
+									button(chevron_down())
+										.padding(0)
+										.style(button_with_radius(
+											if enabled && incoming.is_some() {
+												button::primary
+											} else {
+												button::secondary
+											},
+											r,
+										))
+										.on_press_maybe(if outgoing.is_some() {
+											None
+										} else if incoming.is_some() {
+											Some(Message::Disconnect(node.id, self.selected))
+										} else {
+											Some(Message::Connect(node.id, self.selected))
+										})
+								};
+
+								let up = |r: border::Radius| {
+									button(chevron_up())
+										.padding(0)
+										.style(button_with_radius(
+											if enabled && outgoing.is_some() {
+												button::primary
+											} else {
+												button::secondary
+											},
+											r,
+										))
+										.on_press_maybe(if incoming.is_some() {
+											None
+										} else if outgoing.is_some() {
+											Some(Message::Disconnect(self.selected, node.id))
+										} else {
+											Some(Message::Connect(self.selected, node.id))
+										})
+								};
+
+								column![
+									incoming
+										.map(|val| (val, node.id, self.selected))
+										.or_else(|| outgoing.map(|val| (
+											val,
+											self.selected,
+											node.id
+										)))
+										.map(|(val, from, to)| {
+											ContextMenu::new(
+												slider(0.0..=1.0, val.cbrt(), move |val| {
+													Message::SetMix(from, to, val.powi(3))
+												})
+												.default(1f32)
+												.step(f32::EPSILON)
+												.handle((4, 4))
+												.style(if enabled {
+													slider::default
+												} else {
+													slider_secondary
+												}),
+												container(
+													context_menu_entry(
+														rotate_ccw(),
+														"Reset",
+														"Ctrl-Click",
+													)
+													.on_press(Message::SetMix(from, to, 1.0)),
+												)
+												.width(160)
+												.style(container_with_radius(
+													weaker_bordered_box,
+													5,
+												)),
+											)
+										}),
+									if node.id == self.selected {
+										row![]
+									} else {
+										match (node.ty, self.arrangement.node(self.selected).ty) {
+											(NodeType::Track, NodeType::Track) => row![],
+											(_, NodeType::Master)
+											| (NodeType::Track, NodeType::Channel) => {
+												row![down(border::radius(5))]
+											}
+											(NodeType::Master, _) | (_, NodeType::Track) => {
+												row![up(border::radius(5))]
+											}
+											_ => row![down(border::left(5)), up(border::right(5))],
+										}
+									}
+									.height(LINE_HEIGHT)
+								]
+								.align_x(Center)
+								.spacing(3)
+							}
+						]
+						.align_x(Center)
+						.padding(5)
+						.spacing(5)
+					),
 				)
 				.interaction(Interaction::Pointer)
 				.on_press(Message::ChannelSelect(node.id)),

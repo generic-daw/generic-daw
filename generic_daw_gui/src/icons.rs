@@ -67,6 +67,14 @@ pub const fn chevron_up() -> Icon {
 	}
 }
 
+pub const fn copy() -> Icon {
+	Icon {
+		glyph: '\u{e09e}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
 pub const fn cpu() -> Icon {
 	Icon {
 		glyph: '\u{e0a9}',
@@ -294,6 +302,22 @@ pub const fn file_music() -> Icon {
 pub const fn keyboard_music() -> Icon {
 	Icon {
 		glyph: '\u{e560}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn between_horizontal_start() -> Icon {
+	Icon {
+		glyph: '\u{e592}',
+		size: LINE_HEIGHT,
+		offset: 0.05,
+	}
+}
+
+pub const fn between_vertical_start() -> Icon {
+	Icon {
+		glyph: '\u{e594}',
 		size: LINE_HEIGHT,
 		offset: 0.05,
 	}

@@ -2,7 +2,8 @@ use crate::{
 	arrangement_view::{Message, format_pan, plugin::Plugin},
 	components::context_menu_entry,
 	icons::{
-		arrow_up_down, chevrons_left_right_ellipsis, circle_ellipsis, power, power_off, rotate_ccw,
+		arrow_up_down, between_horizontal_start, between_vertical_start,
+		chevrons_left_right_ellipsis, circle_ellipsis, copy, power, power_off, rotate_ccw,
 		snowflake,
 	},
 	stylefns::{container_with_radius, weaker_bordered_box},
@@ -59,13 +60,18 @@ impl Node {
 		self.peaks[1].update(peaks[1], now);
 	}
 
-	pub fn track_context_menu<'a>(
+	pub fn playlist_context_menu<'a>(
 		&'a self,
 		content: impl Into<Element<'a, Message>>,
 	) -> Element<'a, Message> {
 		ContextMenu::new(
 			content,
 			container(column![
+				context_menu_entry(between_horizontal_start(), "Insert", "")
+					.on_press(Message::TrackInsert(self.id)),
+				context_menu_entry(copy(), "Duplicate", "")
+					.on_press(Message::TrackDuplicate(self.id)),
+				container(rule::horizontal(1)).padding(padding::horizontal(5)),
 				if self.bypassed {
 					context_menu_entry(power_off(), "Engage FX", "")
 				} else {
@@ -86,6 +92,32 @@ impl Node {
 					PanMode::Stereo(..) => context_menu_entry(circle_ellipsis(), "Balance pan", "")
 						.on_press(Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))),
 				}
+			])
+			.width(160)
+			.style(container_with_radius(weaker_bordered_box, 5)),
+		)
+		.into()
+	}
+
+	pub fn mixer_context_menu<'a>(
+		&'a self,
+		content: impl Into<Element<'a, Message>>,
+	) -> Element<'a, Message> {
+		ContextMenu::new(
+			content,
+			container(column![
+				context_menu_entry(between_vertical_start(), "Insert", "").on_press_maybe(
+					match self.ty {
+						NodeType::Master => None,
+						NodeType::Track => Some(Message::TrackInsert(self.id)),
+						NodeType::Channel => Some(Message::ChannelInsert(self.id)),
+					}
+				),
+				context_menu_entry(copy(), "Duplicate", "Ctrl-D").on_press_maybe(match self.ty {
+					NodeType::Master => None,
+					NodeType::Track => Some(Message::TrackDuplicate(self.id)),
+					NodeType::Channel => Some(Message::ChannelDuplicate(self.id)),
+				})
 			])
 			.width(160)
 			.style(container_with_radius(weaker_bordered_box, 5)),

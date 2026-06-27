@@ -127,7 +127,7 @@ impl ClapHost {
 				plugin!(id, Message::LoadPreset(id, preset)).load_preset(&preset);
 			}
 			Message::DestroyInactive(id) => {
-				plugin!(id);
+				plugin!(id).destroy();
 
 				let plugin = self.plugins.remove(&id).unwrap();
 				debug_assert!(!plugin.is_active());
@@ -138,11 +138,9 @@ impl ClapHost {
 				self.presets_of_plugin.remove(&id);
 				self.preset_of_plugin.remove(&id);
 
-				return self.handle_main_thread_message(
-					id,
-					MainThreadMessage::GuiClosed,
-					transport,
-				);
+				if let Some(&window) = self.window_of_plugin.get(&id) {
+					return window::close(window).into();
+				}
 			}
 			Message::Activate(id) => {
 				let plugin = plugin!(id);

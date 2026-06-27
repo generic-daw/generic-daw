@@ -231,13 +231,17 @@ impl Arrangement {
 	}
 
 	pub fn channel_volume_changed(&mut self, id: NodeId, volume: f32) {
-		self.node_mut(id).utility.volume = volume;
-		self.node_action(id, NodeAction::ChannelVolumeChanged(volume));
+		if self.node(id).utility.volume != volume {
+			self.node_mut(id).utility.volume = volume;
+			self.node_action(id, NodeAction::ChannelVolumeChanged(volume));
+		}
 	}
 
 	pub fn channel_pan_changed(&mut self, id: NodeId, pan: PanMode) {
-		self.node_mut(id).utility.pan = pan;
-		self.node_action(id, NodeAction::ChannelPanChanged(pan));
+		if self.node(id).utility.pan != pan {
+			self.node_mut(id).utility.pan = pan;
+			self.node_action(id, NodeAction::ChannelPanChanged(pan));
+		}
 	}
 
 	pub fn channel_toggle_enabled(&mut self, id: NodeId) {
@@ -273,9 +277,18 @@ impl Arrangement {
 		id: NodeId,
 		descriptor: PluginDescriptor,
 	) -> Option<(PluginId, daw::Instruction)> {
+		self.plugin_insert(id, descriptor, self.node(id).plugins.len())
+	}
+
+	pub fn plugin_insert(
+		&mut self,
+		id: NodeId,
+		descriptor: PluginDescriptor,
+		index: usize,
+	) -> Option<(PluginId, daw::Instruction)> {
 		let (plugin, receiver) = PluginPair::new(descriptor, HOST.clone())?;
 		let plugin_id = plugin.gui.id;
-		self.node_mut(id).plugins.push(plugin.gui);
+		self.node_mut(id).plugins.insert(index, plugin.gui);
 		self.node_action(id, NodeAction::PluginAdd(plugin_id));
 		Some((
 			plugin_id,
@@ -287,6 +300,46 @@ impl Arrangement {
 		let plugin = self.node_mut(id).plugins.remove(index);
 		self.node_action(id, NodeAction::PluginRemove(index));
 		plugin
+	}
+
+	pub fn plugin_move(&mut self, id: NodeId, from: usize, to: usize) {
+		self.node_mut(id).plugins.shift_move(from, to);
+		self.node_action(id, NodeAction::PluginMoveTo(from, to));
+	}
+
+	fn plugin_copy(
+		&mut self,
+		from: NodeId,
+		from_i: usize,
+		to: NodeId,
+		to_i: usize,
+	) -> impl Iterator<Item = daw::Instruction> {
+		self.plugin_mix_changed(to, to_i, self.node(from).plugins[from_i].mix);
+
+		[
+			Some(daw::Instruction::PluginCopyState(
+				self.node(from).plugins[from_i].id,
+				self.node(to).plugins[to_i].id,
+			)),
+			self.node(from).plugins[from_i]
+				.active
+				.then_some(daw::Instruction::Message(daw::Message::ClapHost(
+					clap_host::Message::Activate(self.node(to).plugins[to_i].id),
+				))),
+		]
+		.into_iter()
+		.flatten()
+	}
+
+	pub fn plugin_duplicate(&mut self, id: NodeId, index: usize) -> Option<Vec<daw::Instruction>> {
+		let (_, instruction) = self.plugin_insert(
+			id,
+			self.node(id).plugins[index].descriptor.clone(),
+			index + 1,
+		)?;
+		let mut instructions = vec![instruction];
+		instructions.extend(self.plugin_copy(id, index, id, index + 1));
+		Some(instructions)
 	}
 
 	pub fn plugin_activate(
@@ -306,14 +359,11 @@ impl Arrangement {
 		self.node_action(id, NodeAction::PluginDeactivate(index));
 	}
 
-	pub fn plugin_move_to(&mut self, id: NodeId, from: usize, to: usize) {
-		self.node_mut(id).plugins.shift_move(from, to);
-		self.node_action(id, NodeAction::PluginMoveTo(from, to));
-	}
-
 	pub fn plugin_mix_changed(&mut self, id: NodeId, index: usize, mix: f32) {
-		self.node_mut(id).plugins[index].mix = mix;
-		self.node_action(id, NodeAction::PluginMixChanged(index, mix));
+		if self.node(id).plugins[index].mix != mix {
+			self.node_mut(id).plugins[index].mix = mix;
+			self.node_action(id, NodeAction::PluginMixChanged(index, mix));
+		}
 	}
 
 	pub fn plugin_param_changed(
@@ -456,7 +506,6 @@ impl Arrangement {
 	}
 
 	fn remove(&mut self, id: NodeId) -> Node {
-		let node = self.nodes.remove(&id).unwrap().0;
 		for (_, outgoing) in self.nodes.values_mut() {
 			outgoing.remove(&id);
 		}
@@ -464,12 +513,16 @@ impl Arrangement {
 			self.toggle_solo(id);
 		}
 		self.send(Message::NodeRemove(id));
-		node
+		self.nodes.remove(&id).unwrap().0
 	}
 
 	pub fn add_channel(&mut self) -> NodeId {
+		self.insert_channel(self.channels.len())
+	}
+
+	pub fn insert_channel(&mut self, index: usize) -> NodeId {
 		let id = self.add(generic_daw_core::Channel::default(), NodeType::Channel);
-		self.channels.push(Channel::new(id));
+		self.channels.insert(index, Channel::new(id));
 		id
 	}
 
@@ -481,6 +534,60 @@ impl Arrangement {
 
 	pub fn move_channel(&mut self, channel: usize, new_channel: usize) {
 		self.channels.shift_move(channel, new_channel);
+	}
+
+	fn copy_node(&mut self, from: NodeId, to: NodeId) -> Vec<daw::Instruction> {
+		self.channel_volume_changed(to, self.node(from).utility.volume);
+		self.channel_pan_changed(to, self.node(from).utility.pan);
+
+		if !self.node(from).enabled {
+			self.channel_toggle_enabled(to);
+		}
+
+		if self.node(from).bypassed {
+			self.channel_toggle_bypassed(to);
+		}
+
+		let mut instructions = Vec::new();
+
+		for i in 0..self.node(from).plugins.len() {
+			let j = self.node(to).plugins.len();
+			let Some((_, instruction)) =
+				self.plugin_add(to, self.node(from).plugins[i].descriptor.clone())
+			else {
+				continue;
+			};
+			instructions.push(instruction);
+			instructions.extend(self.plugin_copy(from, i, to, j));
+		}
+
+		let incoming = self
+			.nodes
+			.values()
+			.filter_map(|(node, outgoing)| outgoing.get(&from).map(|&mix| (node.id, mix)))
+			.collect::<Vec<_>>();
+
+		for (incoming, mix) in incoming {
+			self.connect(incoming, to);
+			self.set_mix(incoming, to, mix);
+		}
+
+		for (outgoing, mix) in self.outgoing(from).clone() {
+			self.connect(to, outgoing);
+			self.set_mix(to, outgoing, mix);
+		}
+
+		instructions
+	}
+
+	pub fn duplicate_channel(&mut self, id: NodeId) -> (NodeId, Vec<daw::Instruction>) {
+		let new_id = self.insert_channel(self.channel_of(id).unwrap() + 1);
+		let instructions = self.copy_node(id, new_id);
+		(new_id, instructions)
+	}
+
+	pub fn add_track(&mut self) -> NodeId {
+		self.insert_track(self.tracks.len())
 	}
 
 	pub fn insert_track(&mut self, index: usize) -> NodeId {
@@ -508,14 +615,26 @@ impl Arrangement {
 		self.tracks.shift_move(track, new_track);
 	}
 
+	pub fn duplicate_track(&mut self, id: NodeId) -> (NodeId, Vec<daw::Instruction>) {
+		let track = self.track_of(id).unwrap();
+		let new_id = self.insert_track(track + 1);
+		let instructions = self.copy_node(id, new_id);
+		for clip in self.tracks[track].clips.clone() {
+			self.add_clip(track + 1, clip);
+		}
+		(new_id, instructions)
+	}
+
 	pub fn connect(&mut self, from: NodeId, to: NodeId) {
 		self.outgoing_mut(from).insert(to, 1.0);
 		self.send(Message::NodeConnect(from, to));
 	}
 
 	pub fn set_mix(&mut self, from: NodeId, to: NodeId, mix: f32) {
-		*self.outgoing_mut(from).get_mut(&to).unwrap() = mix;
-		self.send(Message::NodeSetMix(from, to, mix));
+		if self.outgoing(from)[&to] != mix {
+			*self.outgoing_mut(from).get_mut(&to).unwrap() = mix;
+			self.send(Message::NodeSetMix(from, to, mix));
+		}
 	}
 
 	pub fn disconnect(&mut self, from: NodeId, to: NodeId) {

@@ -20,6 +20,7 @@ static GLYPHS: &[(&str, char, f32)] = &[
 	icon!(chevron_down = 57453),
 	icon!(chevron_right = 57455),
 	icon!(chevron_up = 57456),
+	icon!(copy = 57502),
 	icon!(cpu = 57513),
 	icon!(file = 57536),
 	icon!(gavel = 57568),
@@ -49,6 +50,8 @@ static GLYPHS: &[(&str, char, f32)] = &[
 	icon!(chart_no_axes_gantt = 58564),
 	icon!(file_music = 58718),
 	icon!(keyboard_music = 58720),
+	icon!(between_horizontal_start = 58770),
+	icon!(between_vertical_start = 58772),
 	icon!(chevrons_left_right_ellipsis = 58911),
 	icon!(metronome = 59068 + 0.025),
 ];

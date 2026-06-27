@@ -19,7 +19,8 @@ use crate::{
 use generic_daw_core::{
 	AudioThread, BpmTapper, NodeId, PluginId, build_output_stream,
 	clap_host::{
-		ClapId, Cookie, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
+		ClapId, Cookie, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor,
+		RenderMode, StateContextType,
 	},
 };
 use generic_daw_project::proto;
@@ -48,7 +49,7 @@ use std::{
 	sync::{Arc, LazyLock, mpsc::Receiver},
 	time::Duration,
 };
-use utils::{NoClone, natural_cmp, unique_id, variants};
+use utils::{NoClone, NoDebug, natural_cmp, unique_id, variants};
 
 unique_id!(scan);
 unique_id!(project);
@@ -156,6 +157,7 @@ pub enum Instruction {
 	Message(Message),
 	Freeze(NodeId),
 	PluginAdd(PluginId, Plugin, Receiver<MainThreadMessage>),
+	PluginCopyState(PluginId, PluginId),
 	PluginActivate(PluginId, Option<Box<clap_host::AudioThread>>),
 	PluginParamChanged(PluginId, ClapId, f32, Cookie),
 }
@@ -674,6 +676,18 @@ impl Daw {
 					.clap_host
 					.plugin_add(id, plugin, receiver)
 					.map(Message::ClapHost);
+			}
+			Instruction::PluginCopyState(from, to) => {
+				if let Some(state) = self
+					.clap_host
+					.get_state(from, StateContextType::ForDuplicate)
+					.map(Box::from)
+				{
+					return self.update(Message::ClapHost(clap_host::Message::SetState(
+						to,
+						NoDebug(state),
+					)));
+				}
 			}
 			Instruction::PluginActivate(id, processor) => {
 				if let Some((node, index)) = self.arrangement_view.arrangement.plugin_of(id) {
