@@ -74,13 +74,13 @@ pub enum Message {
 	ChangedTheme(Theme),
 	ChangedScaleFactor(f32),
 	WriteConfig,
-	ResetConfigToPrev,
+	ResetConfigToLast,
 }
 
 #[derive(Debug)]
 pub struct ConfigView {
 	config: Config,
-	prev_config: Config,
+	last_config: Config,
 	tab: Tab,
 	devices: HashMap<DeviceId, DeviceDescription>,
 	input_devices: Box<[DeviceId]>,
@@ -114,7 +114,7 @@ impl ConfigView {
 
 		Self {
 			config: config.clone(),
-			prev_config: config,
+			last_config: config,
 			tab: Tab::Output,
 			devices,
 			input_devices,
@@ -187,10 +187,10 @@ impl ConfigView {
 			}
 			Message::WriteConfig => {
 				self.config.write();
-				self.prev_config = self.config.clone();
+				self.last_config = self.config.clone();
 				return Action::instruction(self.config.clone());
 			}
-			Message::ResetConfigToPrev => self.config = self.prev_config.clone(),
+			Message::ResetConfigToLast => self.config = self.last_config.clone(),
 		}
 
 		Action::none()
@@ -443,7 +443,7 @@ impl ConfigView {
 							number_input(
 								1..=999,
 								self.config.autosave.interval.get().into(),
-								600,
+								self.last_config.autosave.interval.get().into(),
 								|interval| Message::ChangedAutosaveInterval(interval as u16),
 								Message::ChangedAutosaveIntervalText,
 								5
@@ -511,14 +511,14 @@ impl ConfigView {
 							.style(button_with_radius(button::primary, border::left(5)))
 							.padding(5)
 							.on_press_maybe(
-								(self.config != self.prev_config).then_some(Message::WriteConfig)
+								(self.config != self.last_config).then_some(Message::WriteConfig)
 							),
 						button(rotate_ccw())
 							.style(button_with_radius(button::primary, border::right(5)))
 							.padding(5)
 							.on_press_maybe(
-								(self.config != self.prev_config)
-									.then_some(Message::ResetConfigToPrev)
+								(self.config != self.last_config)
+									.then_some(Message::ResetConfigToLast)
 							)
 					]
 					.align_y(Center)
