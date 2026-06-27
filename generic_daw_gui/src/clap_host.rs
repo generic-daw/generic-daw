@@ -240,9 +240,12 @@ impl ClapHost {
 				}
 			}
 			Message::WindowCloseRequested(window) => {
-				if let Some(id) = self.plugin_of_window.get(&window) {
-					plugin!(id).destroy();
-					return window::close(window).into();
+				if let Some(&id) = self.plugin_of_window.get(&window) {
+					return self.handle_main_thread_message(
+						id,
+						MainThreadMessage::GuiClosed,
+						transport,
+					);
 				}
 			}
 			Message::WindowClosed(window) => {
@@ -306,6 +309,7 @@ impl ClapHost {
 			MainThreadMessage::GuiRequestHide => plugin!().hide(),
 			MainThreadMessage::GuiClosed => {
 				if let Some(&window) = self.window_of_plugin.get(&id) {
+					plugin!().destroy();
 					return window::close(window).into();
 				}
 			}
