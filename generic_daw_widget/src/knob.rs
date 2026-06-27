@@ -425,7 +425,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 				overlay::Element::new(Box::new(Overlay {
 					tooltip,
 					tree: tree.children.iter_mut().next().unwrap(),
-					bounds: layout.bounds() + translation,
+					position: layout.position()
+						+ Vector::new(layout.bounds().width / 2.0, layout.bounds().height)
+						+ translation,
 					viewport: *viewport,
 				}))
 			})
@@ -444,7 +446,7 @@ impl<'a, Message: 'a> From<Knob<'a, Message>> for Element<'a, Message, Theme, Re
 struct Overlay<'a, 'b> {
 	tooltip: &'b mut Text<'a, Theme, Renderer>,
 	tree: &'b mut Tree,
-	bounds: Rectangle,
+	position: Point,
 	viewport: Rectangle,
 }
 
@@ -464,11 +466,7 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 			bounds.expand(padding).size(),
 			vec![layout.translate(Vector::new(padding, padding))],
 		)
-		.move_to(self.bounds.position())
-		.translate(Vector::new(
-			(self.bounds.width - bounds.width) / 2.0 - padding,
-			self.bounds.height,
-		));
+		.move_to(self.position - Vector::new(bounds.width / 2.0 + padding, 0.0));
 
 		let clamp = self.viewport.x - layout.bounds().x;
 		if clamp + padding > 0.0 {

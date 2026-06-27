@@ -164,7 +164,7 @@ impl<Message> Widget<Message, Theme, Renderer> for ContextMenu<'_, Message> {
 					context_menu: &mut self.context_menu,
 					tree: second,
 					state,
-					position,
+					position: position + translation,
 				}))
 			}),
 		]
@@ -232,6 +232,8 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
 		renderer: &Renderer,
 		shell: &mut Shell<'_, Message>,
 	) {
+		let was_event_captured = shell.is_event_captured();
+
 		self.context_menu.as_widget_mut().update(
 			self.tree,
 			event,
@@ -242,7 +244,7 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
 			&layout.bounds(),
 		);
 
-		if shell.is_event_captured() {
+		if was_event_captured {
 			return;
 		}
 
@@ -255,11 +257,18 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
 					shell.request_redraw();
 				}
 			}
+			Event::Mouse(mouse::Event::ButtonReleased { .. })
+				if shell.is_event_captured() && cursor.is_over(layout.bounds()) =>
+			{
+				self.state.position = None;
+				shell.request_redraw();
+			}
 			Event::Keyboard(keyboard::Event::KeyPressed {
 				key: keyboard::Key::Named(keyboard::key::Named::Escape),
 				..
 			}) => {
 				self.state.position = None;
+				shell.capture_event();
 				shell.request_redraw();
 			}
 			_ => {}
@@ -272,13 +281,19 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
 		cursor: Cursor,
 		renderer: &Renderer,
 	) -> Interaction {
-		self.context_menu.as_widget().mouse_interaction(
+		let interaction = self.context_menu.as_widget().mouse_interaction(
 			self.tree,
 			layout,
 			cursor,
 			&layout.bounds(),
 			renderer,
-		)
+		);
+
+		if interaction == Interaction::None && cursor.is_over(layout.bounds()) {
+			Interaction::Idle
+		} else {
+			interaction
+		}
 	}
 
 	fn overlay<'a>(
