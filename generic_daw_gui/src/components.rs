@@ -1,29 +1,37 @@
 use crate::{
-	icons::{Icon, LUCIDE_FONT, chevron_down, chevron_up, move_vertical},
-	stylefns::{button_with_radius, container_with_radius, weakest_bordered_box},
-	widget::LINE_HEIGHT,
+	icons::{Icon, LUCIDE_FONT, chevron_down, chevron_up, move_vertical, rotate_ccw},
+	stylefns::{
+		button_with_radius, container_with_radius, weaker_bordered_box, weakest_bordered_box,
+	},
+	widget::{LINE_HEIGHT, TEXT_HEIGHT},
 };
-use generic_daw_widget::drag_handle::DragHandle;
+use generic_daw_widget::{context_menu::ContextMenu, drag_handle::DragHandle};
 use iced::{
 	Element, Font, Theme, border, padding,
-	widget::{Button, button, container, pick_list, row, text, text_input},
+	widget::{Button, button, container, pick_list, right, row, space, text, text_input},
 };
 use std::ops::RangeInclusive;
+
+pub fn context_menu_entry<'a, Message: 'a>(
+	i: Icon,
+	l: impl text::IntoFragment<'a>,
+	r: impl text::IntoFragment<'a>,
+) -> Button<'a, Message> {
+	button(row![
+		i.size(TEXT_HEIGHT),
+		space::horizontal().width(5),
+		text(l).line_height(1.0),
+		right(text(r).line_height(1.0).style(text::secondary))
+	])
+	.style(button_with_radius(button::text, 0))
+	.padding(5)
+}
 
 pub fn icon_button<'a, Message: 'a>(
 	i: Icon,
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
 ) -> Button<'a, Message> {
 	button(i.size(13.0))
-		.style(button_with_radius(style, 0))
-		.padding(1)
-}
-
-pub fn text_icon_button<'a, Message: 'a>(
-	i: impl text::IntoFragment<'a>,
-	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
-) -> Button<'a, Message> {
-	button(container(text(i).size(13).line_height(1.0)).center_x(13))
 		.style(button_with_radius(style, 0))
 		.padding(1)
 }
@@ -57,15 +65,23 @@ pub fn number_input<'a, Message: Clone + 'a>(
 	let radius = radius.into();
 	let max_digits = (range.end() + 1).ilog10();
 	row![
-		DragHandle::new(
-			container(move_vertical())
-				.style(container_with_radius(weakest_bordered_box, radius.right(0)))
-				.padding(padding::vertical(5)),
-			range,
-			value,
-			drag_update
-		)
-		.default(default),
+		ContextMenu::new(
+			DragHandle::new(
+				container(move_vertical())
+					.style(container_with_radius(weakest_bordered_box, radius.right(0)))
+					.padding(padding::vertical(5)),
+				range,
+				value,
+				drag_update
+			)
+			.default(default),
+			container(
+				context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
+					.on_press(drag_update(default)),
+			)
+			.width(160)
+			.style(container_with_radius(weaker_bordered_box, 5))
+		),
 		text_input("", &value.to_string())
 			.style(move |t, s| {
 				let mut style = text_input::default(t, s);
@@ -77,6 +93,15 @@ pub fn number_input<'a, Message: Clone + 'a>(
 			.on_input(text_update)
 	]
 	.into()
+}
+
+pub fn text_icon_button<'a, Message: 'a>(
+	i: impl text::IntoFragment<'a>,
+	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
+) -> Button<'a, Message> {
+	button(container(text(i).size(13).line_height(1.0)).center_x(13))
+		.style(button_with_radius(style, 0))
+		.padding(1)
 }
 
 pub const PICK_LIST_HANDLE: pick_list::Handle<Font> = pick_list::Handle::Dynamic {

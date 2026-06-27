@@ -1,21 +1,21 @@
 use crate::{
 	action::Action,
 	clap_host::{self, ClapHost},
-	components::{icon_button, text_icon_button},
+	components::{context_menu_entry, icon_button, text_icon_button},
 	config::Config,
 	daw::{self, RECORDINGS_DIR, format_now},
 	file_tree::FileKind,
 	icons::{
 		arrow_up_down, chevron_down, chevron_up, chevrons_left_right_ellipsis, circle_ellipsis,
-		grip_horizontal, grip_vertical, mic, plus, power, power_off, snowflake, x,
+		grip_horizontal, grip_vertical, mic, plus, power, power_off, rotate_ccw, x,
 	},
 	operation::scroll_into_view,
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
-		button_with_radius, container_with_radius, menu_style, scrollable_style, slider_secondary,
-		slider_with_radius, split_style, sweeten_column_style, sweeten_column_with_radius,
-		sweeten_row_style, sweeten_row_with_radius, weak_bordered_box, weakest_bordered_box,
-		weakest_selected_box,
+		button_with_radius, container_with_radius, menu_style, scrollable_style, selectable_box,
+		slider_secondary, slider_with_radius, split_style, sweeten_column_style,
+		sweeten_column_with_radius, sweeten_row_style, sweeten_row_with_radius, weak_bordered_box,
+		weaker_bordered_box, weakest_bordered_box,
 	},
 	widget::{
 		Clip, Delta, LINE_HEIGHT, Note, Piano, PianoRoll, Playlist, Seeker, TEXT_HEIGHT, Track,
@@ -30,6 +30,7 @@ use generic_daw_core::{
 };
 use generic_daw_project::proto;
 use generic_daw_widget::{
+	context_menu::ContextMenu,
 	knob::Knob,
 	peak_meter::{MAX_VOL, PeakMeter},
 };
@@ -1011,7 +1012,9 @@ impl ArrangementView {
 				let old_position = *position;
 				*position += pos_diff;
 				position.x = position.x.max(0.0);
-				position.y = position.y.clamp(0.0, old_position.y + visible);
+				position.y = position
+					.y
+					.clamp(0.0, 0f32.max(old_position.y + visible - scale.y));
 			}
 			playlist::Action::Zoom(scale_diff, cursor, visible) => {
 				let old_scale = *scale;
@@ -1523,129 +1526,102 @@ impl ArrangementView {
 									.interaction(Interaction::Grab),
 								opaque(
 									mouse_area(
-										row![
-											column![
-												row![
-													PeakMeter::new(&node.peaks[0]).enabled(enabled),
-													PeakMeter::new(&node.peaks[1]).enabled(enabled),
-												]
-												.spacing(2),
-												container(space().width(28).height(2)).style(
-													container_with_radius(
-														if node.polyphony > 0 {
-															container::primary
-														} else {
-															container::secondary
-														},
-														border::bottom(f32::INFINITY),
-													)
-												)
-											]
-											.spacing(2),
-											column![
-												Knob::new(
-													0.0..=MAX_VOL,
-													node.utility.volume.abs().cbrt(),
-													|v| Message::ChannelVolumeChanged(
-														node.id,
-														v.powi(3).copysign(node.utility.volume),
-													)
-												)
-												.default(1.0)
-												.radius(19.44444)
-												.enabled(enabled)
-												.tooltip(format_db(node.utility.volume.abs())),
-												node.pan_knob(19.44444, enabled),
-											]
-											.align_x(Center)
-											.spacing(5)
-											.wrap(),
-											column![
-												icon_button(
-													x(),
-													if enabled {
-														button::danger
-													} else {
-														button::secondary
-													}
-												)
-												.on_press(Message::TrackRemove(node.id)),
-												text_icon_button(
-													if soloed { "U" } else { "M" },
-													button_style(soloed)
-												)
-												.on_press(Message::TrackToggleEnabled(node.id)),
-												text_icon_button("S", button_style(soloed))
-													.on_press(Message::TrackToggleSolo(node.id)),
-												icon_button(
-													if node.bypassed {
-														power_off()
-													} else {
-														power()
-													},
-													button_style(node.bypassed)
-												)
-												.on_press(Message::ChannelToggleBypassed(node.id)),
-												icon_button(
-													arrow_up_down(),
-													button_style(
-														node.utility.volume.is_sign_negative()
-													)
-												)
-												.on_press(
-													Message::ChannelVolumeChanged(
-														node.id,
-														-node.utility.volume
-													)
-												),
-												icon_button(
-													match node.utility.pan {
-														PanMode::Balance(..) =>
-															chevrons_left_right_ellipsis(),
-														PanMode::Stereo(..) => circle_ellipsis(),
-													},
-													button_style(false),
-												)
-												.on_press(Message::ChannelPanChanged(
-													node.id,
-													match node.utility.pan {
-														PanMode::Balance(..) =>
-															PanMode::Stereo(-1.0, 1.0),
-														PanMode::Stereo(..) =>
-															PanMode::Balance(0.0),
-													},
-												)),
-												icon_button(
-													mic(),
-													button_style(
-														self.recording.as_ref().is_some_and(
-															|recording| recording.node == node.id
+										node.track_context_menu(
+											row![
+												column![
+													row![
+														PeakMeter::new(&node.peaks[0])
+															.enabled(enabled),
+														PeakMeter::new(&node.peaks[1])
+															.enabled(enabled),
+													]
+													.spacing(2),
+													container(space().width(28).height(2)).style(
+														container_with_radius(
+															if node.polyphony > 0 {
+																container::primary
+															} else {
+																container::secondary
+															},
+															border::bottom(f32::INFINITY),
 														)
 													)
-												)
-												.on_press(Message::Recording(node.id)),
-												icon_button(snowflake(), button_style(false))
-													.on_press_maybe(
-														enabled.then_some(Message::Freeze(node.id))
-													)
+												]
+												.spacing(2),
+												column![
+													node.volume_context_menu(
+														Knob::new(
+															0.0..=MAX_VOL,
+															node.utility.volume.abs().cbrt(),
+															|v| Message::ChannelVolumeChanged(
+																node.id,
+																v.powi(3)
+																	.copysign(node.utility.volume),
+															)
+														)
+														.default(1.0)
+														.radius(19.44444)
+														.enabled(enabled)
+														.tooltip(format_db(node.utility.volume))
+													),
+													node.pan_knob(19.44444, enabled),
+												]
+												.align_x(Center)
+												.spacing(5)
+												.wrap(),
+												column![
+													column![
+														icon_button(
+															x(),
+															if enabled {
+																button::danger
+															} else {
+																button::secondary
+															}
+														)
+														.on_press(Message::TrackRemove(node.id)),
+														text_icon_button(
+															if soloed { "U" } else { "M" },
+															button_style(soloed)
+														)
+														.on_press(
+															Message::TrackToggleEnabled(node.id)
+														)
+													]
+													.spacing(5),
+													column![
+														text_icon_button("S", button_style(soloed))
+															.on_press(Message::TrackToggleSolo(
+																node.id
+															)),
+														icon_button(
+															mic(),
+															button_style(
+																self.recording
+																	.as_ref()
+																	.is_some_and(|recording| {
+																		recording.node == node.id
+																	})
+															)
+														)
+														.on_press(Message::Recording(node.id))
+													]
+													.spacing(5),
+												]
+												.spacing(5)
+												.wrap()
 											]
-											.spacing(5)
-											.wrap()
-										]
-										.padding(padding::all(5).left(0))
-										.spacing(5),
+											.padding(padding::all(5).left(0))
+											.spacing(5),
+										)
 									)
 									.interaction(Interaction::Pointer)
-									.on_press(Message::ChannelSelect(node.id)),
+									.on_press(Message::ChannelSelect(node.id))
 								)
 							])
 							.height(self.playlist.borrow().scale.y)
 							.style(container_with_radius(
-								if node.id == self.selected {
-									weakest_selected_box
-								} else {
-									weakest_bordered_box
-								},
+								selectable_box(weakest_bordered_box, node.id == self.selected),
 								border::left(5),
 							))
 							.into()
@@ -1824,12 +1800,24 @@ impl ArrangementView {
 								};
 
 								row![
-									Knob::new(0.0..=1.0, plugin.mix, move |mix| {
-										Message::PluginMixChanged(self.selected, i, mix)
-									})
-									.radius(TEXT_HEIGHT)
-									.enabled(plugin.active && enabled)
-									.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
+									ContextMenu::new(
+										Knob::new(0.0..=1.0, plugin.mix, move |mix| {
+											Message::PluginMixChanged(self.selected, i, mix)
+										})
+										.radius(TEXT_HEIGHT)
+										.enabled(plugin.active && enabled)
+										.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
+										container(
+											context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
+												.on_press(Message::PluginMixChanged(
+													self.selected,
+													i,
+													1.0
+												)),
+										)
+										.width(160)
+										.style(container_with_radius(weaker_bordered_box, 5)),
+									),
 									button(
 										text(&*plugin.descriptor.name)
 											.wrapping(text::Wrapping::None)
@@ -1974,20 +1962,18 @@ impl ArrangementView {
 								button_style(node.utility.volume.is_sign_negative())
 							)
 							.on_press(Message::ChannelVolumeChanged(node.id, -node.utility.volume)),
-							icon_button(
-								match node.utility.pan {
-									PanMode::Balance(..) => chevrons_left_right_ellipsis(),
-									PanMode::Stereo(..) => circle_ellipsis(),
-								},
-								button_style(false),
-							)
-							.on_press(Message::ChannelPanChanged(
-								node.id,
-								match node.utility.pan {
-									PanMode::Balance(..) => PanMode::Stereo(-1.0, 1.0),
-									PanMode::Stereo(..) => PanMode::Balance(0.0),
-								},
-							))
+							match node.utility.pan {
+								PanMode::Balance(..) =>
+									icon_button(chevrons_left_right_ellipsis(), button_style(false))
+										.on_press(Message::ChannelPanChanged(
+											node.id,
+											PanMode::Stereo(-1.0, 1.0),
+										)),
+								PanMode::Stereo(..) =>
+									icon_button(circle_ellipsis(), button_style(false)).on_press(
+										Message::ChannelPanChanged(node.id, PanMode::Balance(0.0),)
+									),
+							}
 						]
 						.spacing(5),
 						center_x(
@@ -2019,24 +2005,28 @@ impl ArrangementView {
 								)
 							]
 							.spacing(5),
-							vertical_slider(0.0..=MAX_VOL, node.utility.volume.abs().cbrt(), |v| {
-								Message::ChannelVolumeChanged(
-									node.id,
-									v.powi(3).copysign(node.utility.volume),
+							node.volume_context_menu(
+								vertical_slider(
+									0.0..=MAX_VOL,
+									node.utility.volume.abs().cbrt(),
+									|v| Message::ChannelVolumeChanged(
+										node.id,
+										v.powi(3).copysign(node.utility.volume),
+									)
 								)
-							})
-							.default(1f32)
-							.width(17)
-							.step(f32::EPSILON)
-							.handle((15, 20))
-							.style(slider_with_radius(
-								if enabled {
-									slider::default
-								} else {
-									slider_secondary
-								},
-								5
-							)),
+								.default(1f32)
+								.width(17)
+								.step(f32::EPSILON)
+								.handle((15, 20))
+								.style(slider_with_radius(
+									if enabled {
+										slider::default
+									} else {
+										slider_secondary
+									},
+									5
+								))
+							),
 						]
 						.spacing(3),
 						{
@@ -2088,17 +2078,29 @@ impl ArrangementView {
 									.map(|val| (val, node.id, self.selected))
 									.or_else(|| outgoing.map(|val| (val, self.selected, node.id)))
 									.map(|(val, from, to)| {
-										slider(0.0..=1.0, val.cbrt(), move |val| {
-											Message::SetMix(from, to, val.powi(3))
-										})
-										.default(1f32)
-										.step(f32::EPSILON)
-										.handle((4, 4))
-										.style(if enabled {
-											slider::default
-										} else {
-											slider_secondary
-										})
+										ContextMenu::new(
+											slider(0.0..=1.0, val.cbrt(), move |val| {
+												Message::SetMix(from, to, val.powi(3))
+											})
+											.default(1f32)
+											.step(f32::EPSILON)
+											.handle((4, 4))
+											.style(if enabled {
+												slider::default
+											} else {
+												slider_secondary
+											}),
+											container(
+												context_menu_entry(
+													rotate_ccw(),
+													"Reset",
+													"Ctrl-Click",
+												)
+												.on_press(Message::SetMix(from, to, 1.0)),
+											)
+											.width(160)
+											.style(container_with_radius(weaker_bordered_box, 5)),
+										)
 									}),
 								if node.id == self.selected {
 									row![]
@@ -2132,11 +2134,7 @@ impl ArrangementView {
 		.width(65)
 		.id(node.widget_id.clone())
 		.style(container_with_radius(
-			if node.id == self.selected {
-				weakest_selected_box
-			} else {
-				weakest_bordered_box
-			},
+			selectable_box(weakest_bordered_box, node.id == self.selected),
 			border::top(5),
 		))
 		.into()
@@ -2498,20 +2496,21 @@ fn update_selection_move_clip(
 	}
 }
 
-fn amp_to_db(amp: f32) -> f32 {
+pub fn amp_to_db(amp: f32) -> f32 {
 	20.0 * amp.log10()
 }
 
-fn db_to_amp(db: f32) -> f32 {
+pub fn db_to_amp(db: f32) -> f32 {
 	10f32.powf(db / 20.0)
 }
 
 pub fn format_db(amp: f32) -> String {
-	let db = amp_to_db(amp);
+	let inverted = amp.is_sign_negative();
+	let db = amp_to_db(amp.abs());
 	let dba = db.abs();
 
 	format!(
-		"{}{dba:.*} dB",
+		"{}{dba:.*} dB{}",
 		if dba < 0.05 {
 			""
 		} else if db.is_sign_positive() {
@@ -2519,8 +2518,18 @@ pub fn format_db(amp: f32) -> String {
 		} else {
 			"-"
 		},
-		(dba < 99.95).into()
+		(dba < 99.95).into(),
+		if inverted { " (i)" } else { "" }
 	)
+}
+
+pub fn format_pan(pan: f32) -> String {
+	let pan = (pan * 100.0).round() as i8;
+	match pan.cmp(&0) {
+		Ordering::Greater => format!("{}% right", pan.abs()),
+		Ordering::Equal => "center".to_owned(),
+		Ordering::Less => format!("{}% left", pan.abs()),
+	}
 }
 
 fn crc(mut r: impl Read) -> u32 {

@@ -732,12 +732,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						}
 					}
 
-					let mut content = format_db(inner.clip.volume.abs());
-
-					if inner.clip.volume.is_sign_negative() {
-						content += " (i)";
-					}
-
+					let content = format_db(inner.clip.volume);
 					if state.show_controls || content != "0.0 dB" {
 						let text = Text {
 							content: &*content,

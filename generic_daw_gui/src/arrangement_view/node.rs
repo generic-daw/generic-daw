@@ -1,11 +1,19 @@
-use crate::arrangement_view::{Message, plugin::Plugin};
-use generic_daw_core::{NodeId, PanMode, Utility};
-use generic_daw_widget::{knob::Knob, peak_meter};
-use iced::{
-	Element, Fill,
-	widget::{self, container, row},
+use crate::{
+	arrangement_view::{Message, format_pan, plugin::Plugin},
+	components::context_menu_entry,
+	icons::{
+		arrow_up_down, chevrons_left_right_ellipsis, circle_ellipsis, power, power_off, rotate_ccw,
+		snowflake,
+	},
+	stylefns::{container_with_radius, weaker_bordered_box},
 };
-use std::{cmp::Ordering, time::Instant};
+use generic_daw_core::{NodeId, PanMode, Utility};
+use generic_daw_widget::{context_menu::ContextMenu, knob::Knob, peak_meter};
+use iced::{
+	Element, Fill, padding,
+	widget::{self, column, container, row, rule},
+};
+use std::time::Instant;
 use utils::NoDebug;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -51,22 +59,87 @@ impl Node {
 		self.peaks[1].update(peaks[1], now);
 	}
 
+	pub fn track_context_menu<'a>(
+		&'a self,
+		content: impl Into<Element<'a, Message>>,
+	) -> Element<'a, Message> {
+		ContextMenu::new(
+			content,
+			container(column![
+				if self.bypassed {
+					context_menu_entry(power_off(), "Engage FX", "")
+				} else {
+					context_menu_entry(power(), "Bypass FX", "")
+				}
+				.on_press(Message::ChannelToggleBypassed(self.id)),
+				context_menu_entry(snowflake(), "Freeze", "").on_press(Message::Freeze(self.id)),
+				container(rule::horizontal(1)).padding(padding::horizontal(5)),
+				context_menu_entry(arrow_up_down(), "Invert polarity", "")
+					.on_press(Message::ChannelVolumeChanged(self.id, -self.utility.volume)),
+				match self.utility.pan {
+					PanMode::Balance(..) =>
+						context_menu_entry(chevrons_left_right_ellipsis(), "Stereo pan", "")
+							.on_press(Message::ChannelPanChanged(
+								self.id,
+								PanMode::Stereo(-1.0, 1.0)
+							)),
+					PanMode::Stereo(..) => context_menu_entry(circle_ellipsis(), "Balance pan", "")
+						.on_press(Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))),
+				}
+			])
+			.width(160)
+			.style(container_with_radius(weaker_bordered_box, 5)),
+		)
+		.into()
+	}
+
+	pub fn volume_context_menu<'a>(
+		&'a self,
+		content: impl Into<Element<'a, Message>>,
+	) -> Element<'a, Message> {
+		ContextMenu::new(
+			content,
+			container(column![
+				context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
+					.on_press(Message::ChannelVolumeChanged(self.id, 1.0)),
+				container(rule::horizontal(1)).padding(padding::horizontal(5)),
+				context_menu_entry(arrow_up_down(), "Invert polarity", "")
+					.on_press(Message::ChannelVolumeChanged(self.id, -self.utility.volume)),
+			])
+			.width(160)
+			.style(container_with_radius(weaker_bordered_box, 5)),
+		)
+		.into()
+	}
+
 	pub fn pan_knob(&self, radius: f32, enabled: bool) -> Element<'_, Message> {
 		const RADIUS: f32 = 0.571_595_13; // 1.95 - sqrt(1.9)
 		const SPACING: f32 = -0.286_380_5; // 2 * (2 * sqrt(1.9) - 2.9)
 
 		match self.utility.pan {
-			PanMode::Balance(pan) => Knob::new(-1.0..=1.0, pan, |pan| {
-				Message::ChannelPanChanged(self.id, PanMode::Balance(pan))
-			})
-			.origin(0.0)
-			.default(0.0)
-			.radius(radius)
-			.enabled(enabled)
-			.tooltip(format_pan(pan))
+			PanMode::Balance(pan) => ContextMenu::new(
+				Knob::new(-1.0..=1.0, pan, |pan| {
+					Message::ChannelPanChanged(self.id, PanMode::Balance(pan))
+				})
+				.origin(0.0)
+				.default(0.0)
+				.radius(radius)
+				.enabled(enabled)
+				.tooltip(format_pan(pan)),
+				container(column![
+					context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
+						.on_press(Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))),
+					container(rule::horizontal(1)).padding(padding::horizontal(5)),
+					context_menu_entry(chevrons_left_right_ellipsis(), "Stereo pan", "").on_press(
+						Message::ChannelPanChanged(self.id, PanMode::Stereo(-1.0, 1.0))
+					),
+				])
+				.width(160)
+				.style(container_with_radius(weaker_bordered_box, 5)),
+			)
 			.into(),
 			PanMode::Stereo(l, r) => row![
-				container(
+				container(ContextMenu::new(
 					Knob::new(-1.0..=1.0, l, move |l| {
 						Message::ChannelPanChanged(self.id, PanMode::Stereo(l, r))
 					})
@@ -74,10 +147,20 @@ impl Node {
 					.default(-1.0)
 					.radius(radius * RADIUS)
 					.enabled(enabled)
-					.tooltip(format_pan(l))
-				)
+					.tooltip(format_pan(l)),
+					container(column![
+						context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
+							Message::ChannelPanChanged(self.id, PanMode::Stereo(-1.0, r))
+						),
+						container(rule::horizontal(1)).padding(padding::horizontal(5)),
+						context_menu_entry(circle_ellipsis(), "Balance pan", "")
+							.on_press(Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))),
+					])
+					.width(160)
+					.style(container_with_radius(weaker_bordered_box, 5))
+				),)
 				.align_top(Fill),
-				container(
+				container(ContextMenu::new(
 					Knob::new(-1.0..=1.0, r, move |r| {
 						Message::ChannelPanChanged(self.id, PanMode::Stereo(l, r))
 					})
@@ -85,8 +168,17 @@ impl Node {
 					.default(1.0)
 					.radius(radius * RADIUS)
 					.enabled(enabled)
-					.tooltip(format_pan(r))
-				)
+					.tooltip(format_pan(r)),
+					container(column![
+						context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
+							.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(l, 1.0))),
+						container(rule::horizontal(1)).padding(padding::horizontal(5)),
+						context_menu_entry(circle_ellipsis(), "Balance pan", "")
+							.on_press(Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))),
+					])
+					.width(160)
+					.style(container_with_radius(weaker_bordered_box, 5))
+				))
 				.align_bottom(Fill)
 			]
 			.spacing(radius * SPACING)
@@ -94,14 +186,5 @@ impl Node {
 			.height(1.8 * radius)
 			.into(),
 		}
-	}
-}
-
-fn format_pan(pan: f32) -> String {
-	let pan = (pan * 100.0).round() as i8;
-	match pan.cmp(&0) {
-		Ordering::Greater => format!("{}% right", pan.abs()),
-		Ordering::Equal => "center".to_owned(),
-		Ordering::Less => format!("{}% left", pan.abs()),
 	}
 }

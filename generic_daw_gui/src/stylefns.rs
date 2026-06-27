@@ -17,21 +17,6 @@ pub fn container_with_radius(
 	}
 }
 
-pub fn weak_bordered_box(t: &Theme) -> container::Style {
-	container::background(t.palette().background.weak.color)
-		.border(border::width(1).color(t.palette().background.strong.color))
-}
-
-pub fn weakest_bordered_box(t: &Theme) -> container::Style {
-	container::background(t.palette().background.weakest.color)
-		.border(border::width(1).color(t.palette().background.strong.color))
-}
-
-pub fn weakest_selected_box(t: &Theme) -> container::Style {
-	container::background(t.palette().background.weakest.color)
-		.border(border::width(1.5).color(t.palette().primary.base.color))
-}
-
 pub fn button_warning_text(theme: &Theme, status: button::Status) -> button::Style {
 	let base = button::Style {
 		text_color: theme.palette().warning.base.color,
@@ -100,6 +85,19 @@ pub fn scrollable_style(t: &Theme, s: scrollable::Status) -> scrollable::Style {
 	style.horizontal_rail.border.radius = 0.into();
 	style.horizontal_rail.scroller.border.radius = 0.into();
 	style
+}
+
+pub fn selectable_box(
+	f: impl Fn(&Theme) -> container::Style,
+	s: bool,
+) -> impl Fn(&Theme) -> container::Style {
+	move |t| {
+		if s {
+			f(t).border(border::width(1.5).color(t.palette().primary.base.color))
+		} else {
+			f(t)
+		}
+	}
 }
 
 pub fn slider_secondary(theme: &Theme, status: slider::Status) -> slider::Style {
@@ -176,4 +174,19 @@ pub fn sweeten_column_with_radius(
 		style.ghost_border.radius = r;
 		style
 	}
+}
+
+pub fn weak_bordered_box(t: &Theme) -> container::Style {
+	container::background(t.palette().background.weak.color)
+		.border(border::width(1).color(t.palette().background.strong.color))
+}
+
+pub fn weaker_bordered_box(t: &Theme) -> container::Style {
+	container::background(t.palette().background.weaker.color)
+		.border(border::width(1).color(t.palette().background.strong.color))
+}
+
+pub fn weakest_bordered_box(t: &Theme) -> container::Style {
+	container::background(t.palette().background.weakest.color)
+		.border(border::width(1).color(t.palette().background.strong.color))
 }

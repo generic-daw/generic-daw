@@ -1,8 +1,15 @@
-use crate::{action::Action, daw, stylefns::scrollable_style, widget::LINE_HEIGHT};
+use crate::{
+	action::Action,
+	components::context_menu_entry,
+	daw,
+	icons::rotate_ccw,
+	stylefns::{container_with_radius, scrollable_style, weaker_bordered_box},
+	widget::LINE_HEIGHT,
+};
 use fragile::Fragile;
 pub use generic_daw_core::clap_host::*;
 use generic_daw_core::{PluginId, Transport};
-use generic_daw_widget::knob::Knob;
+use generic_daw_widget::{context_menu::ContextMenu, knob::Knob};
 use iced::{
 	Center, Element, Fill, Font, Subscription, Task, padding,
 	time::every,
@@ -380,14 +387,26 @@ impl ClapHost {
 				scrollable(
 					row(plugin.params().map(|param| {
 						column![
-							Knob::new(param.range.clone(), param.value, move |value| {
-								Message::HostParamChange(id, param.id, value)
-							})
-							.default(param.default)
-							.radius(25.0)
-							.enabled(!param.flags.contains(ParamInfoFlags::IS_READONLY))
-							.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
-							.maybe_tooltip(param.value_text.as_deref()),
+							ContextMenu::new(
+								Knob::new(param.range.clone(), param.value, move |value| {
+									Message::HostParamChange(id, param.id, value)
+								})
+								.default(param.default)
+								.radius(25.0)
+								.enabled(!param.flags.contains(ParamInfoFlags::IS_READONLY))
+								.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
+								.maybe_tooltip(param.value_text.as_deref()),
+								container(
+									context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click",)
+										.on_press(Message::HostParamChange(
+											id,
+											param.id,
+											param.default
+										)),
+								)
+								.width(160)
+								.style(container_with_radius(weaker_bordered_box, 5))
+							),
 							if param.module.is_empty() {
 								text(&*param.name)
 							} else {
