@@ -289,7 +289,7 @@ impl Arrangement {
 		let (plugin, receiver) = PluginPair::new(descriptor, HOST.clone())?;
 		let plugin_id = plugin.gui.id;
 		self.node_mut(id).plugins.insert(index, plugin.gui);
-		self.node_action(id, NodeAction::PluginAdd(plugin_id));
+		self.node_action(id, NodeAction::PluginInsert(index, plugin_id));
 		Some((
 			plugin_id,
 			daw::Instruction::PluginAdd(plugin_id, plugin.core, receiver),

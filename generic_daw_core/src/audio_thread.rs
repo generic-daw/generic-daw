@@ -85,7 +85,7 @@ pub enum NodeAction {
 	ChannelVolumeChanged(f32),
 	ChannelPanChanged(PanMode),
 
-	PluginAdd(PluginId),
+	PluginInsert(usize, PluginId),
 	PluginRemove(usize),
 	PluginActivate(usize, Box<clap_host::AudioThread>),
 	PluginDeactivate(usize),

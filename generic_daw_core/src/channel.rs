@@ -158,7 +158,7 @@ impl Channel {
 			NodeAction::ChannelToggleBypassed => self.bypassed ^= true,
 			NodeAction::ChannelVolumeChanged(volume) => self.utility.volume = volume,
 			NodeAction::ChannelPanChanged(pan) => self.utility.pan = pan,
-			NodeAction::PluginAdd(id) => self.plugins.push(Plugin::new(id)),
+			NodeAction::PluginInsert(index, id) => self.plugins.insert(index, Plugin::new(id)),
 			NodeAction::PluginRemove(index) => _ = self.plugins.remove(index),
 			NodeAction::PluginActivate(index, processor) => {
 				debug_assert!(self.plugins[index].processor.is_none());
