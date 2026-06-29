@@ -1874,7 +1874,7 @@ impl ArrangementView {
 											})
 											.radius(TEXT_HEIGHT)
 											.enabled(plugin.active && enabled)
-											.tooltip(format!("{:.0}%", plugin.mix.abs() * 100.0)),
+											.tooltip(format_mix(plugin.mix)),
 											container(column![
 												context_menu_entry(
 													rotate_ccw(),
@@ -2631,7 +2631,6 @@ pub fn db_to_amp(db: f32) -> f32 {
 }
 
 pub fn format_db(amp: f32) -> String {
-	let inverted = amp.is_sign_negative();
 	let db = amp_to_db(amp.abs());
 	let dba = db.abs();
 
@@ -2645,7 +2644,7 @@ pub fn format_db(amp: f32) -> String {
 			"-"
 		},
 		(dba < 99.95).into(),
-		if inverted { " (i)" } else { "" }
+		if amp.is_sign_positive() { "" } else { " (i)" }
 	)
 }
 
@@ -2656,6 +2655,14 @@ pub fn format_pan(pan: f32) -> String {
 		Ordering::Equal => "center".to_owned(),
 		Ordering::Less => format!("{}% left", pan.abs()),
 	}
+}
+
+pub fn format_mix(amt: f32) -> String {
+	format!(
+		"{:.0}%{}",
+		amt.abs() * 100.0,
+		if amt.is_sign_positive() { "" } else { " (i)" }
+	)
 }
 
 fn crc(mut r: impl Read) -> u32 {
