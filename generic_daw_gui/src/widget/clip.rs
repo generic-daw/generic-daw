@@ -571,7 +571,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				let unclipped_bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
 
 				if mesh_cache.is_empty()
-					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
+					&& let Some(mesh) = debug::time_with("Waveform", || {
 						let resample_ratio = inner.sample.resample_ratio(self.transport);
 						inner.sample.lods.mesh(
 							&inner.sample.samples,
@@ -790,7 +790,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						renderer.draw_geometry(canvas_cache.draw(
 							renderer,
 							lower_bounds.size(),
-							|frame| fill_canvas(renderer, frame),
+							|frame| {
+								debug::time_with("Clip Overlay", || fill_canvas(renderer, frame));
+							},
 						));
 					},
 				);
@@ -846,7 +848,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			}
 			Inner::Recording(inner) => {
 				if mesh_cache.is_empty()
-					&& let Some(mesh) = debug::time_with("Waveform Mesh", || {
+					&& let Some(mesh) = debug::time_with("Waveform", || {
 						let resample_ratio = inner.core.resample_ratio(self.transport);
 						inner.lods.mesh(
 							inner.core.samples(),
