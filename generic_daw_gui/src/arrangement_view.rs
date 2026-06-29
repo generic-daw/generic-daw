@@ -1589,7 +1589,7 @@ impl ArrangementView {
 									.interaction(Interaction::Grab),
 								opaque(
 									mouse_area(
-										node.playlist_context_menu(
+										node.main_context_menu(
 											row![
 												column![
 													row![
@@ -1625,7 +1625,8 @@ impl ArrangementView {
 														.default(1.0)
 														.radius(19.44444)
 														.enabled(enabled)
-														.tooltip(format_db(node.utility.volume))
+														.tooltip(format_db(node.utility.volume)),
+														self.tab
 													),
 													node.pan_knob(19.44444, enabled),
 												]
@@ -1676,6 +1677,7 @@ impl ArrangementView {
 											]
 											.padding(padding::all(5).left(0))
 											.spacing(5),
+											self.tab
 										)
 									)
 									.interaction(Interaction::Pointer)
@@ -2027,7 +2029,7 @@ impl ArrangementView {
 			}),
 			opaque(
 				mouse_area(
-					node.mixer_context_menu(
+					node.main_context_menu(
 						column![
 							text(name).size(13).line_height(1.0),
 							node.pan_knob(23.0, enabled),
@@ -2141,7 +2143,8 @@ impl ArrangementView {
 											slider_secondary
 										},
 										5
-									))
+									)),
+									self.tab
 								),
 							]
 							.spacing(3),
@@ -2250,7 +2253,8 @@ impl ArrangementView {
 						]
 						.align_x(Center)
 						.padding(5)
-						.spacing(5)
+						.spacing(5),
+						self.tab
 					),
 				)
 				.interaction(Interaction::Pointer)

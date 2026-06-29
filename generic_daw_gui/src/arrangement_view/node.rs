@@ -1,5 +1,5 @@
 use crate::{
-	arrangement_view::{Message, format_pan, plugin::Plugin},
+	arrangement_view::{Message, Tab, format_pan, plugin::Plugin},
 	components::context_menu_entry,
 	icons::{
 		arrow_up_down, between_horizontal_start, between_vertical_start,
@@ -60,17 +60,38 @@ impl Node {
 		self.peaks[1].update(peaks[1], now);
 	}
 
-	pub fn playlist_context_menu<'a>(
+	pub fn main_context_menu<'a>(
 		&'a self,
 		content: impl Into<Element<'a, Message>>,
+		tab: Tab,
 	) -> Element<'a, Message> {
 		ContextMenu::new(
 			content,
 			container(column![
-				context_menu_entry(between_horizontal_start(), "Insert", "")
-					.on_press(Message::TrackInsert(self.id)),
-				context_menu_entry(copy(), "Duplicate", "")
-					.on_press(Message::TrackDuplicate(self.id)),
+				context_menu_entry(
+					if tab == Tab::Mixer {
+						between_vertical_start()
+					} else {
+						between_horizontal_start()
+					},
+					"Insert",
+					""
+				)
+				.on_press_maybe(match self.ty {
+					NodeType::Master => None,
+					NodeType::Track => Some(Message::TrackInsert(self.id)),
+					NodeType::Channel => Some(Message::ChannelInsert(self.id)),
+				}),
+				context_menu_entry(
+					copy(),
+					"Duplicate",
+					if tab == Tab::Mixer { "Ctrl-D" } else { "" }
+				)
+				.on_press_maybe(match self.ty {
+					NodeType::Master => None,
+					NodeType::Track => Some(Message::TrackDuplicate(self.id)),
+					NodeType::Channel => Some(Message::ChannelDuplicate(self.id)),
+				}),
 				container(rule::horizontal(1)).padding(padding::horizontal(5)),
 				if self.bypassed {
 					context_menu_entry(power_off(), "Engage FX", "")
@@ -78,10 +99,15 @@ impl Node {
 					context_menu_entry(power(), "Bypass FX", "")
 				}
 				.on_press(Message::ChannelToggleBypassed(self.id)),
-				context_menu_entry(snowflake(), "Freeze", "").on_press(Message::Freeze(self.id)),
+				(tab == Tab::Playlist).then(|| context_menu_entry(snowflake(), "Freeze", "")
+					.on_press(Message::Freeze(self.id))),
 				container(rule::horizontal(1)).padding(padding::horizontal(5)),
-				context_menu_entry(arrow_up_down(), "Invert polarity", "")
-					.on_press(Message::ChannelVolumeChanged(self.id, -self.utility.volume)),
+				context_menu_entry(
+					arrow_up_down(),
+					"Invert polarity",
+					if tab == Tab::Mixer { "Alt-I" } else { "" }
+				)
+				.on_press(Message::ChannelVolumeChanged(self.id, -self.utility.volume)),
 				match self.utility.pan {
 					PanMode::Balance(..) =>
 						context_menu_entry(chevrons_left_right_ellipsis(), "Stereo pan", "")
@@ -93,33 +119,7 @@ impl Node {
 						.on_press(Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))),
 				}
 			])
-			.width(160)
-			.style(container_with_radius(weaker_bordered_box, 5)),
-		)
-		.into()
-	}
-
-	pub fn mixer_context_menu<'a>(
-		&'a self,
-		content: impl Into<Element<'a, Message>>,
-	) -> Element<'a, Message> {
-		ContextMenu::new(
-			content,
-			container(column![
-				context_menu_entry(between_vertical_start(), "Insert", "").on_press_maybe(
-					match self.ty {
-						NodeType::Master => None,
-						NodeType::Track => Some(Message::TrackInsert(self.id)),
-						NodeType::Channel => Some(Message::ChannelInsert(self.id)),
-					}
-				),
-				context_menu_entry(copy(), "Duplicate", "Ctrl-D").on_press_maybe(match self.ty {
-					NodeType::Master => None,
-					NodeType::Track => Some(Message::TrackDuplicate(self.id)),
-					NodeType::Channel => Some(Message::ChannelDuplicate(self.id)),
-				})
-			])
-			.width(160)
+			.width(if tab == Tab::Mixer { 180 } else { 160 })
 			.style(container_with_radius(weaker_bordered_box, 5)),
 		)
 		.into()
@@ -128,6 +128,7 @@ impl Node {
 	pub fn volume_context_menu<'a>(
 		&'a self,
 		content: impl Into<Element<'a, Message>>,
+		tab: Tab,
 	) -> Element<'a, Message> {
 		ContextMenu::new(
 			content,
@@ -135,10 +136,14 @@ impl Node {
 				context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
 					.on_press(Message::ChannelVolumeChanged(self.id, 1.0)),
 				container(rule::horizontal(1)).padding(padding::horizontal(5)),
-				context_menu_entry(arrow_up_down(), "Invert polarity", "")
-					.on_press(Message::ChannelVolumeChanged(self.id, -self.utility.volume)),
+				context_menu_entry(
+					arrow_up_down(),
+					"Invert polarity",
+					if tab == Tab::Mixer { "Alt-I" } else { "" }
+				)
+				.on_press(Message::ChannelVolumeChanged(self.id, -self.utility.volume)),
 			])
-			.width(160)
+			.width(if tab == Tab::Mixer { 180 } else { 160 })
 			.style(container_with_radius(weaker_bordered_box, 5)),
 		)
 		.into()
@@ -170,52 +175,63 @@ impl Node {
 				.style(container_with_radius(weaker_bordered_box, 5)),
 			)
 			.into(),
-			PanMode::Stereo(l, r) => row![
-				container(ContextMenu::new(
-					Knob::new(-1.0..=1.0, l, move |l| {
-						Message::ChannelPanChanged(self.id, PanMode::Stereo(l, r))
-					})
-					.origin(0.0)
-					.default(-1.0)
-					.radius(radius * RADIUS)
-					.enabled(enabled)
-					.tooltip(format_pan(l)),
-					container(column![
-						context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
-							Message::ChannelPanChanged(self.id, PanMode::Stereo(-1.0, r))
-						),
-						container(rule::horizontal(1)).padding(padding::horizontal(5)),
-						context_menu_entry(circle_ellipsis(), "Balance pan", "")
-							.on_press(Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))),
-					])
-					.width(160)
-					.style(container_with_radius(weaker_bordered_box, 5))
-				),)
-				.align_top(Fill),
-				container(ContextMenu::new(
-					Knob::new(-1.0..=1.0, r, move |r| {
-						Message::ChannelPanChanged(self.id, PanMode::Stereo(l, r))
-					})
-					.origin(0.0)
-					.default(1.0)
-					.radius(radius * RADIUS)
-					.enabled(enabled)
-					.tooltip(format_pan(r)),
-					container(column![
-						context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
-							.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(l, 1.0))),
-						container(rule::horizontal(1)).padding(padding::horizontal(5)),
-						context_menu_entry(circle_ellipsis(), "Balance pan", "")
-							.on_press(Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))),
-					])
-					.width(160)
-					.style(container_with_radius(weaker_bordered_box, 5))
-				))
-				.align_bottom(Fill)
-			]
-			.spacing(radius * SPACING)
-			.width(2.0 * radius)
-			.height(1.8 * radius)
+			PanMode::Stereo(l, r) => ContextMenu::new(
+				row![
+					container(ContextMenu::new(
+						Knob::new(-1.0..=1.0, l, move |l| {
+							Message::ChannelPanChanged(self.id, PanMode::Stereo(l, r))
+						})
+						.origin(0.0)
+						.default(-1.0)
+						.radius(radius * RADIUS)
+						.enabled(enabled)
+						.tooltip(format_pan(l)),
+						container(column![
+							context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
+								Message::ChannelPanChanged(self.id, PanMode::Stereo(-1.0, r))
+							),
+							container(rule::horizontal(1)).padding(padding::horizontal(5)),
+							context_menu_entry(circle_ellipsis(), "Balance pan", "").on_press(
+								Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))
+							),
+						])
+						.width(160)
+						.style(container_with_radius(weaker_bordered_box, 5))
+					),)
+					.align_top(Fill),
+					container(ContextMenu::new(
+						Knob::new(-1.0..=1.0, r, move |r| {
+							Message::ChannelPanChanged(self.id, PanMode::Stereo(l, r))
+						})
+						.origin(0.0)
+						.default(1.0)
+						.radius(radius * RADIUS)
+						.enabled(enabled)
+						.tooltip(format_pan(r)),
+						container(column![
+							context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
+								Message::ChannelPanChanged(self.id, PanMode::Stereo(l, 1.0))
+							),
+							container(rule::horizontal(1)).padding(padding::horizontal(5)),
+							context_menu_entry(circle_ellipsis(), "Balance pan", "").on_press(
+								Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))
+							),
+						])
+						.width(160)
+						.style(container_with_radius(weaker_bordered_box, 5))
+					))
+					.align_bottom(Fill)
+				]
+				.spacing(radius * SPACING)
+				.width(2.0 * radius)
+				.height(1.8 * radius),
+				container(
+					context_menu_entry(circle_ellipsis(), "Balance pan", "")
+						.on_press(Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))),
+				)
+				.width(160)
+				.style(container_with_radius(weaker_bordered_box, 5)),
+			)
 			.into(),
 		}
 	}
