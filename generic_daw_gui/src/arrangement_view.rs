@@ -443,7 +443,11 @@ impl ArrangementView {
 					clap_host::Message::GuiOpen(plugin),
 				)));
 			}
-			Message::PluginMixChanged(node, i, mix) => {
+			Message::PluginMixChanged(node, i, mut mix) => {
+				if (mix.abs() - 0.5).abs() < 0.005 {
+					mix = 0.5f32.copysign(mix);
+				}
+
 				self.arrangement.plugin_mix_changed(node, i, mix);
 			}
 			Message::PluginToggleActive(node, i) => {
@@ -1861,13 +1865,17 @@ impl ArrangementView {
 								ContextMenu::new(
 									row![
 										ContextMenu::new(
-											Knob::new(0.0..=1.0, plugin.mix, move |mix| {
-												Message::PluginMixChanged(self.selected, i, mix)
+											Knob::new(0.0..=1.0, plugin.mix.abs(), move |mix| {
+												Message::PluginMixChanged(
+													self.selected,
+													i,
+													mix.copysign(plugin.mix),
+												)
 											})
 											.radius(TEXT_HEIGHT)
 											.enabled(plugin.active && enabled)
-											.tooltip(format!("{:.0}%", plugin.mix * 100.0)),
-											container(
+											.tooltip(format!("{:.0}%", plugin.mix.abs() * 100.0)),
+											container(column![
 												context_menu_entry(
 													rotate_ccw(),
 													"Reset",
@@ -1878,7 +1886,19 @@ impl ArrangementView {
 													i,
 													1.0
 												)),
-											)
+												container(rule::horizontal(1))
+													.padding(padding::horizontal(5)),
+												context_menu_entry(
+													arrow_up_down(),
+													"Invert polarity",
+													""
+												)
+												.on_press(Message::PluginMixChanged(
+													self.selected,
+													i,
+													-plugin.mix
+												)),
+											])
 											.width(160)
 											.style(container_with_radius(weaker_bordered_box, 5)),
 										),
@@ -1921,10 +1941,18 @@ impl ArrangementView {
 									]
 									.align_y(Center)
 									.spacing(5),
-									container(
+									container(column![
 										context_menu_entry(copy(), "Duplicate", "")
 											.on_press(Message::PluginDuplicate(self.selected, i)),
-									)
+										container(rule::horizontal(1))
+											.padding(padding::horizontal(5)),
+										context_menu_entry(arrow_up_down(), "Invert polarity", "")
+											.on_press(Message::PluginMixChanged(
+												self.selected,
+												i,
+												-plugin.mix
+											)),
+									])
 									.width(160)
 									.style(container_with_radius(weaker_bordered_box, 5)),
 								)

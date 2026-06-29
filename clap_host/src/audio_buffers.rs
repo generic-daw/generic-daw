@@ -157,17 +157,20 @@ impl AudioBuffers {
 			.get(self.output_config.main_port_index)
 			.unwrap_or(&0);
 
+		let buf_mix = 1f32.copysign(mix_level) - mix_level;
+		let sample_mix = mix_level.abs();
+
 		if n_channels == 1 {
 			output_buffer.iter().zip(buf).for_each(|(sample, buf)| {
-				buf[0] = buf[0] * (1.0 - mix_level) + sample * mix_level;
-				buf[1] = buf[1] * (1.0 - mix_level) + sample * mix_level;
+				buf[0] = buf[0] * buf_mix + sample * sample_mix;
+				buf[1] = buf[1] * buf_mix + sample * sample_mix;
 			});
 		} else if n_channels != 0 {
 			let (l, r) = output_buffer.split_at(self.config.max_frames_count as usize);
 
 			l.iter().zip(r).zip(buf).for_each(|((l, r), buf)| {
-				buf[0] = buf[0] * (1.0 - mix_level) + l * mix_level;
-				buf[1] = buf[1] * (1.0 - mix_level) + r * mix_level;
+				buf[0] = buf[0] * buf_mix + l * sample_mix;
+				buf[1] = buf[1] * buf_mix + r * sample_mix;
 			});
 		}
 	}
