@@ -121,7 +121,6 @@ impl<Message> Widget<Message, Theme, Renderer> for DragHandle<'_, Message> {
 				} if state.dragging.is_some() => {
 					state.dragging = None;
 					state.scroll = 0.0;
-					shell.capture_event();
 				}
 				mouse::Event::CursorMoved {
 					position: Point { y, .. },

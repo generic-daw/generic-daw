@@ -293,8 +293,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 
 					state.dragging = None;
 					state.scroll = 0.0;
-
-					shell.capture_event();
 				}
 				mouse::Event::CursorMoved {
 					position: Point { y, .. },
