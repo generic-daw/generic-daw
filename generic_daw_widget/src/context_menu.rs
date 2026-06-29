@@ -306,7 +306,7 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
 			layout,
 			renderer,
 			&layout.bounds(),
-			Vector::new(self.position.x, self.position.y),
+			Vector::ZERO,
 		)
 	}
 }
