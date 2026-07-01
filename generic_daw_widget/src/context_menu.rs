@@ -263,6 +263,9 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
 				self.state.position = None;
 				shell.request_redraw();
 			}
+			Event::Mouse(mouse::Event::WheelScrolled { .. }) => {
+				shell.capture_event();
+			}
 			Event::Keyboard(keyboard::Event::KeyPressed {
 				key: keyboard::Key::Named(keyboard::key::Named::Escape),
 				..
