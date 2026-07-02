@@ -413,7 +413,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 		tree: &'a mut Tree,
 		layout: Layout<'a>,
 		_renderer: &Renderer,
-		viewport: &Rectangle,
+		_viewport: &Rectangle,
 		translation: Vector,
 	) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
 		let state = tree.state.downcast_ref::<State>();
@@ -426,7 +426,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 					position: layout.position()
 						+ Vector::new(layout.bounds().width / 2.0, layout.bounds().height)
 						+ translation,
-					viewport: *viewport,
 				}))
 			})
 		} else {
@@ -445,18 +444,18 @@ struct Overlay<'a, 'b> {
 	tooltip: &'b mut Text<'a, Theme, Renderer>,
 	tree: &'b mut Tree,
 	position: Point,
-	viewport: Rectangle,
 }
 
 impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 	fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
 		let padding = 3.0;
 
+		let viewport = Rectangle::with_size(bounds);
 		let layout = Widget::<Message, _, _>::layout(
 			self.tooltip,
 			self.tree,
 			renderer,
-			&Limits::new(Size::ZERO, bounds).shrink(Size::new(padding, padding)),
+			&Limits::new(Size::ZERO, bounds),
 		);
 		let bounds = layout.bounds();
 
@@ -464,13 +463,13 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 			bounds.expand(padding).size(),
 			vec![layout.translate(Vector::new(padding, padding))],
 		)
-		.move_to(self.position - Vector::new(bounds.width / 2.0 + padding, 0.0));
+		.move_to(self.position - Vector::new(bounds.width / 2.0 + padding, -padding));
 
-		let clamp = self.viewport.x - layout.bounds().x;
+		let clamp = viewport.x - layout.bounds().x;
 		if clamp + padding > 0.0 {
 			layout.translate_mut(Vector::new(clamp + padding, 0.0));
 		} else {
-			let clamp = clamp + self.viewport.width - layout.bounds().width;
+			let clamp = clamp + viewport.width - layout.bounds().width;
 			if clamp - padding < 0.0 {
 				layout.translate_mut(Vector::new(clamp - padding, 0.0));
 			}
