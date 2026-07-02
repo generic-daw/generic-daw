@@ -19,7 +19,7 @@ use iced::{
 		layout::{Limits, Node},
 		mouse::{self, Click, Cursor, Interaction, click::Kind},
 		renderer::{Quad, Style},
-		text::{Paragraph as _, Renderer as _},
+		text::{Renderer as _, paragraph::Plain},
 		widget::{Tree, tree},
 	},
 	alignment::Vertical,
@@ -49,6 +49,7 @@ struct ClipInfo {
 struct State {
 	mesh_cache: RefCell<mesh::Cache>,
 	canvas_cache: RefCell<canvas::Cache>,
+	volume_text: Plain<Paragraph>,
 	last_click: Option<Click>,
 	last_bounds: Rectangle,
 	last_info: ClipInfo,
@@ -63,6 +64,7 @@ impl Default for State {
 		Self {
 			mesh_cache: RefCell::new(mesh::Cache::new(Arc::default())),
 			canvas_cache: RefCell::default(),
+			volume_text: Plain::default(),
 			last_click: None,
 			last_bounds: Rectangle::default(),
 			last_info: ClipInfo::default(),
@@ -174,7 +176,24 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 		Size::new(Fill, Fill)
 	}
 
-	fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+	fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+		if let Inner::AudioClip(inner) = self.inner {
+			let content = format_db(inner.clip.volume);
+			tree.state.downcast_mut::<State>().volume_text.update(Text {
+				content: &*content,
+				bounds: Size::INFINITE,
+				size: renderer.default_size(),
+				line_height: 1.0.into(),
+				font: renderer.default_font(),
+				align_x: Alignment::Center,
+				align_y: Vertical::Bottom,
+				shaping: Shaping::Auto,
+				wrapping: Wrapping::None,
+				ellipsis: Ellipsis::None,
+				hint_factor: None,
+			});
+		}
+
 		let playlist = self.playlist.borrow();
 
 		let (start, len) = match self.inner {
@@ -732,23 +751,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						}
 					}
 
-					let content = format_db(inner.clip.volume);
-					if state.show_controls || content != "0.0 dB" {
-						let text = Text {
-							content: &*content,
-							bounds: Size::INFINITE,
-							size: renderer.default_size(),
-							line_height: 1.0.into(),
-							font: renderer.default_font(),
-							align_x: Alignment::Center,
-							align_y: Vertical::Bottom,
-							shaping: Shaping::Auto,
-							wrapping: Wrapping::None,
-							ellipsis: Ellipsis::None,
-							hint_factor: None,
-						};
-
-						let size = Paragraph::with_text(text).min_bounds().expand((4.0, 4.0));
+					if state.show_controls || state.volume_text.content() != "0.0 dB" {
+						let size = state.volume_text.min_bounds().expand((4.0, 4.0));
 
 						if lower_bounds.width >= size.width
 							&& lower_bounds.height >= size.height + 5.0
@@ -766,7 +770,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							);
 
 							frame.fill_text(canvas::Text {
-								content,
+								content: state.volume_text.content().to_owned(),
 								position: control,
 								max_width: f32::INFINITY,
 								color: theme.palette().background.strong.text,
