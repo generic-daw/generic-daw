@@ -60,11 +60,15 @@ impl FileTree {
 			let j = self.dirs[i..]
 				.iter()
 				.position(|entry| entry.path() == dir.as_ref())
-				.map_or(self.dirs.len(), |j| j + i);
-			self.dirs.drain(i..j);
+				.unwrap_or_default();
+			self.dirs.drain(i..i + j);
 
-			if i >= self.dirs.len() {
-				self.dirs.push(Dir::new(dir));
+			if self
+				.dirs
+				.get(i)
+				.is_none_or(|entry| entry.path() != dir.as_ref())
+			{
+				self.dirs.insert(i, Dir::new(dir));
 			}
 		}
 

@@ -99,11 +99,14 @@ impl Dir {
 								let j = old_dirs[i..]
 									.iter()
 									.position(|old_dir| old_dir.path() == dir.path())
-									.map_or(old_dirs.len(), |j| j + i);
-								old_dirs.drain(i..j);
+									.unwrap_or_default();
+								old_dirs.drain(i..i + j);
 
-								if let Some(dir) = old_dirs.get_mut(i) {
-									tasks.push(dir.update(dir.id, &Action::Reload).unwrap());
+								if let Some(old_dir) = old_dirs.get_mut(i)
+									&& old_dir.path() == dir.path()
+								{
+									tasks
+										.push(old_dir.update(old_dir.id, &Action::Reload).unwrap());
 								} else {
 									old_dirs.push(dir);
 								}
