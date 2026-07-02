@@ -191,22 +191,18 @@ struct Overlay<'a, 'b, Message> {
 
 impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Message> {
 	fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
-		let viewport = Rectangle::with_size(bounds);
 		let mut layout = self
 			.context_menu
 			.as_widget_mut()
 			.layout(self.tree, renderer, &Limits::new(Size::ZERO, bounds))
 			.move_to(self.position);
-		let bounds = layout.bounds();
 
-		if bounds.intersection(&viewport) != Some(bounds) {
-			if viewport.x + viewport.width < bounds.x + bounds.width {
-				layout.translate_mut(Vector::new(-bounds.width, 0.0));
-			}
+		if bounds.width < layout.bounds().x + layout.bounds().width {
+			layout.translate_mut(Vector::new(-layout.bounds().width, 0.0));
+		}
 
-			if viewport.y + viewport.height < bounds.y + bounds.height {
-				layout.translate_mut(Vector::new(0.0, -bounds.height));
-			}
+		if bounds.height < layout.bounds().y + layout.bounds().height {
+			layout.translate_mut(Vector::new(0.0, -layout.bounds().height));
 		}
 
 		layout

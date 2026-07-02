@@ -450,30 +450,21 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 	fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
 		let padding = 3.0;
 
-		let viewport = Rectangle::with_size(bounds);
-		let layout = Widget::<Message, _, _>::layout(
+		let mut layout = Widget::<Message, _, _>::layout(
 			self.tooltip,
 			self.tree,
 			renderer,
 			&Limits::new(Size::ZERO, bounds),
 		);
-		let bounds = layout.bounds();
 
-		let mut layout = Node::with_children(
-			bounds.expand(padding).size(),
+		layout = Node::with_children(
+			layout.bounds().expand(padding).size(),
 			vec![layout.translate(Vector::new(padding, padding))],
 		)
-		.move_to(self.position - Vector::new(bounds.width / 2.0 + padding, -padding));
+		.move_to(self.position);
 
-		let clamp = viewport.x - layout.bounds().x;
-		if clamp + padding > 0.0 {
-			layout.translate_mut(Vector::new(clamp + padding, 0.0));
-		} else {
-			let clamp = clamp + viewport.width - layout.bounds().width;
-			if clamp - padding < 0.0 {
-				layout.translate_mut(Vector::new(clamp - padding, 0.0));
-			}
-		}
+		layout.translate_mut(Vector::new(layout.bounds().width / -2.0, padding));
+		layout.translate_mut(layout.bounds().offset(&Rectangle::with_size(bounds)));
 
 		layout
 	}
