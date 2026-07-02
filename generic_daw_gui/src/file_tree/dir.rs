@@ -1,10 +1,13 @@
 use crate::{
-	components::labeled_icon_button,
+	components::{context_menu_entry, labeled_icon_button},
 	file_tree::{Action, Message, file::File},
-	icons::{chevron_down, chevron_right, hourglass, triangle_alert},
-	stylefns::{button_warning_text, container_with_radius, weak_bordered_box},
+	icons::{chevron_down, chevron_right, hourglass, rotate_ccw, triangle_alert},
+	stylefns::{
+		button_warning_text, container_with_radius, weak_bordered_box, weaker_bordered_box,
+	},
 	widget::LINE_HEIGHT,
 };
+use generic_daw_widget::context_menu::ContextMenu;
 use iced::{
 	Element, Fill, Task,
 	futures::{StreamExt as _, TryStreamExt as _},
@@ -30,9 +33,13 @@ pub struct Dir {
 enum Status {
 	Unloaded,
 	Loading,
+	Reloading {
+		dirs: Vec<Dir>,
+		files: Vec<File>,
+	},
 	Loaded {
-		dirs: Box<[Dir]>,
-		files: Box<[File]>,
+		dirs: Vec<Dir>,
+		files: Vec<File>,
 		open: bool,
 	},
 	Errored(Arc<std::io::Error>),
@@ -54,32 +61,72 @@ impl Dir {
 	pub fn update(&mut self, id: DirId, action: &Action) -> Option<Task<Message>> {
 		if id == self.id {
 			Some(match action {
-				Action::DirLoaded(res) => {
-					self.children = match res.clone() {
-						Ok((dirs, files)) => Status::Loaded {
-							dirs,
-							files,
-							open: true,
-						},
-						Err(err) => Status::Errored(err),
-					};
-
-					Task::none()
-				}
-				Action::DirToggleOpen => {
+				Action::ToggleOpen => {
 					if let Status::Loaded { open, .. } = &mut self.children {
 						*open ^= true;
 						Task::none()
 					} else {
-						let path = self.path.clone();
-						let id = self.id;
 						self.children = Status::Loading;
-
-						Task::perform(Self::load(path), move |res| {
-							Message::Action(id, Action::DirLoaded(res))
+						Task::perform(Self::load(self.path.clone()), move |res| {
+							Message::Action(id, Action::Loaded(res))
 						})
 					}
 				}
+				Action::Reload => {
+					if let Status::Loaded { dirs, files, open } = &mut self.children {
+						if *open {
+							self.children = Status::Reloading {
+								dirs: std::mem::take(dirs),
+								files: std::mem::take(files),
+							};
+							Task::perform(Self::load(self.path.clone()), move |res| {
+								Message::Action(id, Action::Loaded(res))
+							})
+						} else {
+							self.children = Status::Unloaded;
+							Task::none()
+						}
+					} else {
+						Task::none()
+					}
+				}
+				Action::Loaded(res) => match res.clone() {
+					Ok((mut dirs, files)) => {
+						let mut tasks = Vec::new();
+
+						if let Status::Reloading { dirs: old_dirs, .. } = &mut self.children {
+							for (i, dir) in dirs.into_iter().enumerate() {
+								let j = old_dirs[i..]
+									.iter()
+									.position(|old_dir| old_dir.path() == dir.path())
+									.map_or(old_dirs.len(), |j| j + i);
+								old_dirs.drain(i..j);
+
+								if let Some(dir) = old_dirs.get_mut(i) {
+									tasks.push(dir.update(dir.id, &Action::Reload).unwrap());
+								} else {
+									old_dirs.push(dir);
+								}
+							}
+
+							old_dirs.truncate(old_dirs.len());
+
+							dirs = std::mem::take(old_dirs);
+						}
+
+						self.children = Status::Loaded {
+							dirs,
+							files,
+							open: true,
+						};
+
+						Task::batch(tasks)
+					}
+					Err(err) => {
+						self.children = Status::Errored(err);
+						Task::none()
+					}
+				},
 			})
 		} else if let Status::Loaded { dirs, open, .. } = &mut self.children
 			&& *open
@@ -98,35 +145,49 @@ impl Dir {
 					Status::Unloaded =>
 						labeled_icon_button(chevron_right(), &*self.name, button::text)
 							.width(Fill)
-							.on_press(Message::Action(self.id, Action::DirToggleOpen))
+							.on_press(Message::Action(self.id, Action::ToggleOpen))
 							.into(),
-					Status::Loading => labeled_icon_button(hourglass(), &*self.name, button::text)
+					Status::Loading | Status::Reloading { .. } =>
+						labeled_icon_button(hourglass(), &*self.name, button::text)
+							.width(Fill)
+							.into(),
+					Status::Loaded { open, .. } => ContextMenu::new(
+						labeled_icon_button(
+							if *open {
+								chevron_down()
+							} else {
+								chevron_right()
+							},
+							&*self.name,
+							button::text
+						)
 						.width(Fill)
-						.into(),
-					Status::Loaded { open, .. } => labeled_icon_button(
-						if *open {
-							chevron_down()
-						} else {
-							chevron_right()
-						},
-						&*self.name,
-						button::text
+						.on_press(Message::Action(self.id, Action::ToggleOpen)),
+						container(
+							context_menu_entry(rotate_ccw(), "Reload Tree", "")
+								.on_press(Message::Action(self.id, Action::Reload)),
+						)
+						.width(160)
+						.style(container_with_radius(weaker_bordered_box, 5)),
 					)
-					.width(Fill)
-					.on_press(Message::Action(self.id, Action::DirToggleOpen))
 					.into(),
 					Status::Errored(err) => Element::new(tooltip(
 						labeled_icon_button(triangle_alert(), &*self.name, button_warning_text)
 							.width(Fill)
-							.on_press(Message::Action(self.id, Action::DirToggleOpen)),
+							.on_press(Message::Action(self.id, Action::ToggleOpen)),
 						container(value(err).line_height(1.0))
 							.padding(3)
 							.style(container_with_radius(weak_bordered_box, 2)),
 						tooltip::Position::Bottom,
 					)),
 				},
-				if let Status::Loaded { dirs, files, open } = &self.children
-					&& *open && !(dirs.is_empty() && files.is_empty())
+				if let Status::Loaded {
+					dirs,
+					files,
+					open: true,
+				}
+				| Status::Reloading { dirs, files } = &self.children
+					&& !(dirs.is_empty() && files.is_empty())
 				{
 					let children = column(
 						dirs.iter()
@@ -153,7 +214,7 @@ impl Dir {
 		)
 	}
 
-	async fn load(path: Arc<Path>) -> Result<(Box<[Self]>, Box<[File]>), Arc<std::io::Error>> {
+	async fn load(path: Arc<Path>) -> Result<(Vec<Self>, Vec<File>), Arc<std::io::Error>> {
 		let entry = smol::fs::read_dir(path).await?;
 
 		let files = smol::lock::Mutex::new(Vec::new());

@@ -21,8 +21,9 @@ pub enum Message {
 
 #[derive(Clone, Debug)]
 pub enum Action {
-	DirToggleOpen,
-	DirLoaded(Result<(Box<[Dir]>, Box<[File]>), Arc<std::io::Error>>),
+	ToggleOpen,
+	Reload,
+	Loaded(Result<(Vec<Dir>, Vec<File>), Arc<std::io::Error>>),
 }
 
 #[derive(Debug)]
