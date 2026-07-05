@@ -687,18 +687,9 @@ impl ArrangementView {
 				let clip = self.arrangement.add_clip(track, clip);
 				self.playlist.get_mut().primary.insert((track, clip));
 
-				let outgoing = self
-					.arrangement
-					.outgoing(node)
-					.iter()
-					.map(|(&node, &mix)| (node, mix))
-					.collect::<Vec<_>>();
-
-				for (outgoing, mix) in outgoing {
+				for (outgoing, mix) in self.arrangement.outgoing(node).clone() {
 					self.arrangement.connect(track_id, outgoing);
-					if mix != 1.0 {
-						self.arrangement.set_mix(track_id, outgoing, mix);
-					}
+					self.arrangement.set_mix(track_id, outgoing, mix);
 				}
 
 				self.arrangement.channel_toggle_enabled(node);
