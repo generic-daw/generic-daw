@@ -79,7 +79,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		for (&id, entry) in &mut self.graph {
 			*entry.indegree.get_mut() = entry.buffers().incoming.len();
 			if *entry.indegree.get_mut() == 0 {
-				self.queue.push(id).unwrap();
+				self.queue.push_mut(id).unwrap();
 			}
 		}
 
@@ -101,23 +101,14 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	pub fn process_subtree(&mut self, node: NodeId, audio: &mut [[f32; 2]]) {
-		fn visit<Node: NodeImpl>(this: &AudioGraph<Node>, node: NodeId) -> usize {
-			let entry = &this.graph[&node];
+		fn visit<Node: NodeImpl>(this: &AudioGraph<Node>, entry: &Entry<Node>) {
 			let buffers = entry.read_buffers_uncontended();
-
-			let indegree = buffers.incoming.len();
-			if entry.indegree.swap(indegree, Relaxed) == usize::MAX {
-				if indegree == 0 {
-					this.queue.push(node).unwrap();
-				}
-
-				1 + buffers
+			if entry.indegree.swap(buffers.incoming.len(), Relaxed) == usize::MAX {
+				buffers
 					.incoming
 					.keys()
-					.map(|&node| visit(this, node))
-					.sum::<usize>()
-			} else {
-				0
+					.map(|node| &this.graph[node])
+					.for_each(|dep| visit(this, dep));
 			}
 		}
 
@@ -127,7 +118,19 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			*entry.indegree.get_mut() = usize::MAX;
 		}
 
-		let count = visit(self, node);
+		visit(self, &self.graph[&node]);
+
+		let mut count = 0;
+		for (&id, entry) in &mut self.graph {
+			if *entry.indegree.get_mut() == usize::MAX {
+				continue;
+			}
+
+			count += 1;
+			if *entry.indegree.get_mut() == 0 {
+				self.queue.push_mut(id).unwrap();
+			}
+		}
 
 		let mut pool = self.pool.take().unwrap();
 		pool.run(self, count, NonZero::new(self.queue.len()).unwrap());
