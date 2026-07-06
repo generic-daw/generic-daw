@@ -46,7 +46,7 @@ impl Node {
 			plugins: Vec::new(),
 			utility: Utility {
 				volume: 1.0,
-				pan: PanMode::Balance(0.0),
+				pan: PanMode::Stereo(0.0),
 			},
 			enabled: true,
 			bypassed: false,
@@ -109,14 +109,15 @@ impl Node {
 				)
 				.on_press(Message::ChannelVolumeChanged(self.id, -self.utility.volume)),
 				match self.utility.pan {
-					PanMode::Balance(..) =>
-						context_menu_entry(chevrons_left_right_ellipsis(), "Stereo pan", "")
+					PanMode::Stereo(..) =>
+						context_menu_entry(chevrons_left_right_ellipsis(), "Split stereo pan", "")
 							.on_press(Message::ChannelPanChanged(
 								self.id,
-								PanMode::Stereo(-1.0, 1.0)
+								PanMode::SplitStereo(-1.0, 1.0)
 							)),
-					PanMode::Stereo(..) => context_menu_entry(circle_ellipsis(), "Balance pan", "")
-						.on_press(Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))),
+					PanMode::SplitStereo(..) =>
+						context_menu_entry(circle_ellipsis(), "Stereo pan", "")
+							.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
 				}
 			])
 			.width(if tab == Tab::Mixer { 180 } else { 160 })
@@ -154,9 +155,9 @@ impl Node {
 		const SPACING: f32 = -0.286_380_5; // 2 * (2 * sqrt(1.9) - 2.9)
 
 		match self.utility.pan {
-			PanMode::Balance(pan) => ContextMenu::new(
+			PanMode::Stereo(pan) => ContextMenu::new(
 				Knob::new(-1.0..=1.0, pan, |pan| {
-					Message::ChannelPanChanged(self.id, PanMode::Balance(pan))
+					Message::ChannelPanChanged(self.id, PanMode::Stereo(pan))
 				})
 				.origin(0.0)
 				.default(0.0)
@@ -165,21 +166,23 @@ impl Node {
 				.tooltip(format_pan(pan)),
 				container(column![
 					context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
-						.on_press(Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))),
+						.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
 					container(rule::horizontal(1)).padding(padding::horizontal(5)),
-					context_menu_entry(chevrons_left_right_ellipsis(), "Stereo pan", "").on_press(
-						Message::ChannelPanChanged(self.id, PanMode::Stereo(-1.0, 1.0))
-					),
+					context_menu_entry(chevrons_left_right_ellipsis(), "Split stereo pan", "")
+						.on_press(Message::ChannelPanChanged(
+							self.id,
+							PanMode::SplitStereo(-1.0, 1.0)
+						)),
 				])
 				.width(160)
 				.style(container_with_radius(weaker_bordered_box, 5)),
 			)
 			.into(),
-			PanMode::Stereo(l, r) => ContextMenu::new(
+			PanMode::SplitStereo(l, r) => ContextMenu::new(
 				row![
 					container(ContextMenu::new(
 						Knob::new(-1.0..=1.0, l, move |l| {
-							Message::ChannelPanChanged(self.id, PanMode::Stereo(l, r))
+							Message::ChannelPanChanged(self.id, PanMode::SplitStereo(l, r))
 						})
 						.origin(0.0)
 						.default(-1.0)
@@ -188,11 +191,11 @@ impl Node {
 						.tooltip(format_pan(l)),
 						container(column![
 							context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
-								Message::ChannelPanChanged(self.id, PanMode::Stereo(-1.0, r))
+								Message::ChannelPanChanged(self.id, PanMode::SplitStereo(-1.0, r))
 							),
 							container(rule::horizontal(1)).padding(padding::horizontal(5)),
-							context_menu_entry(circle_ellipsis(), "Balance pan", "").on_press(
-								Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))
+							context_menu_entry(circle_ellipsis(), "Stereo pan", "").on_press(
+								Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))
 							),
 						])
 						.width(160)
@@ -201,7 +204,7 @@ impl Node {
 					.align_top(Fill),
 					container(ContextMenu::new(
 						Knob::new(-1.0..=1.0, r, move |r| {
-							Message::ChannelPanChanged(self.id, PanMode::Stereo(l, r))
+							Message::ChannelPanChanged(self.id, PanMode::SplitStereo(l, r))
 						})
 						.origin(0.0)
 						.default(1.0)
@@ -210,11 +213,11 @@ impl Node {
 						.tooltip(format_pan(r)),
 						container(column![
 							context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
-								Message::ChannelPanChanged(self.id, PanMode::Stereo(l, 1.0))
+								Message::ChannelPanChanged(self.id, PanMode::SplitStereo(l, 1.0))
 							),
 							container(rule::horizontal(1)).padding(padding::horizontal(5)),
-							context_menu_entry(circle_ellipsis(), "Balance pan", "").on_press(
-								Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))
+							context_menu_entry(circle_ellipsis(), "Stereo pan", "").on_press(
+								Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))
 							),
 						])
 						.width(160)
@@ -226,8 +229,8 @@ impl Node {
 				.width(2.0 * radius)
 				.height(1.8 * radius),
 				container(
-					context_menu_entry(circle_ellipsis(), "Balance pan", "")
-						.on_press(Message::ChannelPanChanged(self.id, PanMode::Balance(0.0))),
+					context_menu_entry(circle_ellipsis(), "Stereo pan", "")
+						.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
 				)
 				.width(160)
 				.style(container_with_radius(weaker_bordered_box, 5)),

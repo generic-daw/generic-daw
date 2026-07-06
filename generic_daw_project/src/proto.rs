@@ -134,19 +134,19 @@ pub struct OptionPanMode {
 #[derive(Clone, Copy, Oneof, PartialEq)]
 pub enum PanMode {
 	#[prost(message, tag = "1")]
-	Balance(PanModeBalance),
-	#[prost(message, tag = "2")]
 	Stereo(PanModeStereo),
+	#[prost(message, tag = "2")]
+	SplitStereo(PanModeSplitStereo),
 }
 
 #[derive(Clone, Copy, Message, PartialEq)]
-pub struct PanModeBalance {
+pub struct PanModeStereo {
 	#[prost(float, default = 0.0)]
 	pub pan: f32,
 }
 
 #[derive(Clone, Copy, Message, PartialEq)]
-pub struct PanModeStereo {
+pub struct PanModeSplitStereo {
 	#[prost(float, default = -1.0)]
 	pub l: f32,
 	#[prost(float, default = 1.0)]
@@ -276,18 +276,18 @@ impl Plugin {
 	}
 }
 
-impl From<PanModeBalance> for OptionPanMode {
-	fn from(value: PanModeBalance) -> Self {
-		Self {
-			pan_mode: Some(PanMode::Balance(value)),
-		}
-	}
-}
-
 impl From<PanModeStereo> for OptionPanMode {
 	fn from(value: PanModeStereo) -> Self {
 		Self {
 			pan_mode: Some(PanMode::Stereo(value)),
+		}
+	}
+}
+
+impl From<PanModeSplitStereo> for OptionPanMode {
+	fn from(value: PanModeSplitStereo) -> Self {
+		Self {
+			pan_mode: Some(PanMode::SplitStereo(value)),
 		}
 	}
 }

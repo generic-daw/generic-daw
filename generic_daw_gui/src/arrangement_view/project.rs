@@ -139,8 +139,8 @@ impl Arrangement {
 						}),
 					node.utility.volume,
 					match node.utility.pan {
-						PanMode::Balance(pan) => proto::PanModeBalance { pan }.into(),
-						PanMode::Stereo(l, r) => proto::PanModeStereo { l, r }.into(),
+						PanMode::Stereo(pan) => proto::PanModeStereo { pan }.into(),
+						PanMode::SplitStereo(l, r) => proto::PanModeSplitStereo { l, r }.into(),
 					},
 					node.enabled,
 					node.bypassed,
@@ -172,8 +172,8 @@ impl Arrangement {
 						}),
 					channel.utility.volume,
 					match channel.utility.pan {
-						PanMode::Balance(pan) => proto::PanModeBalance { pan }.into(),
-						PanMode::Stereo(l, r) => proto::PanModeStereo { l, r }.into(),
+						PanMode::Stereo(pan) => proto::PanModeStereo { pan }.into(),
+						PanMode::SplitStereo(l, r) => proto::PanModeSplitStereo { l, r }.into(),
 					},
 					channel.enabled,
 					channel.bypassed,
@@ -425,16 +425,15 @@ impl Arrangement {
 				));
 			}
 
-			if channel.pan.pan_mode? != proto::PanMode::Balance(proto::PanModeBalance { pan: 0.0 })
-			{
+			if channel.pan.pan_mode? != proto::PanMode::Stereo(proto::PanModeStereo { pan: 0.0 }) {
 				messages.push(arrangement_view::Message::ChannelPanChanged(
 					node.id,
 					match channel.pan.pan_mode? {
-						proto::PanMode::Balance(proto::PanModeBalance { pan }) => {
-							PanMode::Balance(pan)
+						proto::PanMode::Stereo(proto::PanModeStereo { pan }) => {
+							PanMode::Stereo(pan)
 						}
-						proto::PanMode::Stereo(proto::PanModeStereo { l, r }) => {
-							PanMode::Stereo(l, r)
+						proto::PanMode::SplitStereo(proto::PanModeSplitStereo { l, r }) => {
+							PanMode::SplitStereo(l, r)
 						}
 					},
 				));

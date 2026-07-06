@@ -382,8 +382,8 @@ impl ArrangementView {
 				};
 
 				match &mut pan {
-					PanMode::Balance(pan) => snap(pan),
-					PanMode::Stereo(l, r) => {
+					PanMode::Stereo(pan) => snap(pan),
+					PanMode::SplitStereo(l, r) => {
 						snap(l);
 						snap(r);
 					}
@@ -2068,19 +2068,19 @@ impl ArrangementView {
 									-node.utility.volume
 								)),
 								match node.utility.pan {
-									PanMode::Balance(..) => icon_button(
+									PanMode::Stereo(..) => icon_button(
 										chevrons_left_right_ellipsis(),
 										button_style(false)
 									)
 									.on_press(Message::ChannelPanChanged(
 										node.id,
-										PanMode::Stereo(-1.0, 1.0),
+										PanMode::SplitStereo(-1.0, 1.0),
 									)),
-									PanMode::Stereo(..) =>
+									PanMode::SplitStereo(..) =>
 										icon_button(circle_ellipsis(), button_style(false))
 											.on_press(Message::ChannelPanChanged(
 												node.id,
-												PanMode::Balance(0.0),
+												PanMode::Stereo(0.0),
 											)),
 								}
 							]

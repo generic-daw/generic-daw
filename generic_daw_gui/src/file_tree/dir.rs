@@ -167,7 +167,7 @@ impl Dir {
 						.width(Fill)
 						.on_press(Message::Action(self.id, Action::ToggleOpen)),
 						container(
-							context_menu_entry(rotate_ccw(), "Reload Tree", "")
+							context_menu_entry(rotate_ccw(), "Reload", "")
 								.on_press(Message::Action(self.id, Action::Reload)),
 						)
 						.width(160)

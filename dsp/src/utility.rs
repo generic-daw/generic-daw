@@ -2,8 +2,8 @@ use std::f32::consts::{FRAC_PI_4, SQRT_2};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PanMode {
-	Balance(f32),
-	Stereo(f32, f32),
+	Stereo(f32),
+	SplitStereo(f32, f32),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -21,14 +21,14 @@ impl Utility {
 		}
 
 		match self.pan {
-			PanMode::Balance(pan) => {
+			PanMode::Stereo(pan) => {
 				let (l, r) = split(pan, self.volume * SQRT_2);
 				for [ls, rs] in audio {
 					*ls *= l;
 					*rs *= r;
 				}
 			}
-			PanMode::Stereo(l, r) => {
+			PanMode::SplitStereo(l, r) => {
 				let (ll, lr) = split(l, self.volume);
 				let (rl, rr) = split(r, self.volume);
 				for [ls, rs] in audio {

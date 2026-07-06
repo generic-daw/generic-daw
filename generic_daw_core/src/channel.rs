@@ -214,7 +214,7 @@ impl Default for Channel {
 			id: NodeId::unique(),
 			utility: Utility {
 				volume: 1.0,
-				pan: PanMode::Balance(0.0),
+				pan: PanMode::Stereo(0.0),
 			},
 			enabled: true,
 			bypassed: false,
