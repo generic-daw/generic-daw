@@ -154,6 +154,8 @@ pub enum Message {
 	SelectAll,
 	SelectInverse,
 	UnselectAll,
+	ToggleEnabled,
+	ToggleSolo,
 	Duplicate,
 	Delete,
 	Invert,
@@ -908,6 +910,35 @@ impl ArrangementView {
 				Tab::Mixer => {}
 				Tab::PianoRoll => self.piano_roll.get_mut().clear(),
 			},
+			Message::ToggleEnabled => match self.tab {
+				Tab::Mixer => match self.arrangement.node(self.selected).ty {
+					NodeType::Master => {}
+					NodeType::Channel => {
+						return self.update(
+							Message::ChannelToggleEnabled(self.selected),
+							config,
+							state,
+						);
+					}
+					NodeType::Track => {
+						return self.update(
+							Message::TrackToggleEnabled(self.selected),
+							config,
+							state,
+						);
+					}
+				},
+				Tab::Playlist | Tab::PianoRoll => {}
+			},
+			Message::ToggleSolo => match self.tab {
+				Tab::Mixer => match self.arrangement.node(self.selected).ty {
+					NodeType::Master | NodeType::Channel => {}
+					NodeType::Track => {
+						return self.update(Message::TrackToggleSolo(self.selected), config, state);
+					}
+				},
+				Tab::Playlist | Tab::PianoRoll => {}
+			},
 			Message::Duplicate => match self.tab {
 				Tab::Playlist => {
 					if let Some(delta) = self
@@ -1635,13 +1666,10 @@ impl ArrangementView {
 															}
 														)
 														.on_press(Message::TrackRemove(node.id)),
-														text_icon_button(
-															if soloed { "U" } else { "M" },
-															button_style(soloed)
-														)
-														.on_press(
-															Message::TrackToggleEnabled(node.id)
-														)
+														text_icon_button("M", button_style(soloed))
+															.on_press(Message::TrackToggleEnabled(
+																node.id
+															))
 													]
 													.spacing(5),
 													column![
@@ -2025,15 +2053,13 @@ impl ArrangementView {
 							text(name).size(13).line_height(1.0),
 							node.pan_knob(23.0, enabled),
 							row![
-								text_icon_button(
-									if soloed { "U" } else { "M" },
-									button_style(soloed)
-								)
-								.on_press(if node.ty == NodeType::Track {
-									Message::TrackToggleEnabled(node.id)
-								} else {
-									Message::ChannelToggleEnabled(node.id)
-								}),
+								text_icon_button("M", button_style(soloed)).on_press(
+									if node.ty == NodeType::Track {
+										Message::TrackToggleEnabled(node.id)
+									} else {
+										Message::ChannelToggleEnabled(node.id)
+									}
+								),
 								text_icon_button("S", button_style(soloed)).on_press_maybe(
 									(node.ty == NodeType::Track)
 										.then_some(Message::TrackToggleSolo(node.id)),
@@ -2338,8 +2364,10 @@ impl ArrangementView {
 			modifiers.alt(),
 			repeat,
 		) {
-			(false, false, false, false) => match key.as_ref() {
-				keyboard::Key::Named(keyboard::key::Named::Tab) => Some(Message::CycleTabForwards),
+			(false, false, false, repeat) => match key.as_ref() {
+				keyboard::Key::Named(keyboard::key::Named::Tab) if !repeat => {
+					Some(Message::CycleTabForwards)
+				}
 				keyboard::Key::Named(
 					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
 				) => Some(Message::Delete),
@@ -2350,31 +2378,9 @@ impl ArrangementView {
 				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
 				_ => None,
 			},
-			(false, false, false, true) => match key.as_ref() {
-				keyboard::Key::Named(
-					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
-				) => Some(Message::Delete),
-				keyboard::Key::Named(keyboard::key::Named::ArrowUp) => Some(Message::ArrowUp),
-				keyboard::Key::Named(keyboard::key::Named::ArrowDown) => Some(Message::ArrowDown),
-				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => Some(Message::ArrowLeft),
-				keyboard::Key::Named(keyboard::key::Named::ArrowRight) => Some(Message::ArrowRight),
-				_ => None,
-			},
-			(true, false, false, false) => match key.to_latin(physical_key) {
-				Some('a') => Some(Message::SelectAll),
-				Some('d') => Some(Message::Duplicate),
-				_ => match key.as_ref() {
-					keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
-						Some(Message::TransposeOctUp)
-					}
-					keyboard::Key::Named(keyboard::key::Named::ArrowDown) => {
-						Some(Message::TransposeOctDown)
-					}
-					_ => None,
-				},
-			},
-			(true, false, false, true) => match key.to_latin(physical_key) {
-				Some('d') => Some(Message::Duplicate),
+			(true, false, false, repeat) => match key.to_latin(physical_key) {
+				Some('a') if !repeat => Some(Message::SelectAll),
+				Some('d') if !repeat => Some(Message::Duplicate),
 				_ => match key.as_ref() {
 					keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
 						Some(Message::TransposeOctUp)
@@ -2395,9 +2401,11 @@ impl ArrangementView {
 			},
 			(false, false, true, false) => match key.to_latin(physical_key) {
 				Some('i') => Some(Message::Invert),
+				Some('m') => Some(Message::ToggleEnabled),
 				Some('n') => Some(Message::Normalize),
 				Some('q') => Some(Message::Quantize),
 				Some('r') => Some(Message::Reverse),
+				Some('s') => Some(Message::ToggleSolo),
 				_ => None,
 			},
 			_ => None,
