@@ -196,19 +196,19 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 		let playlist = self.playlist.borrow();
 
-		let (start, len) = match self.inner {
+		let (start, end) = match self.inner {
 			Inner::AudioClip(inner) => (
 				inner.clip.position.start(),
-				inner.clip.position.len().to_beat_time(self.transport),
+				inner.clip.position.end(self.transport),
 			),
-			Inner::MidiClip(inner) => (inner.clip.position.start(), inner.clip.position.len()),
-			Inner::Recording(inner) => (inner.position, inner.len(self.transport)),
+			Inner::MidiClip(inner) => (inner.clip.position.start(), inner.clip.position.end()),
+			Inner::Recording(inner) => (inner.position, inner.end(self.transport)),
 		};
 
 		let start = time_to_px(start, playlist.position, playlist.scale, self.transport);
-		let len = time_to_px(len, Vector::ZERO, playlist.scale, self.transport);
+		let end = time_to_px(end, playlist.position, playlist.scale, self.transport);
 
-		Node::new(Size::new(len, limits.max().height)).translate(Vector::new(start, 0.0))
+		Node::new(Size::new(end - start, limits.max().height)).translate(Vector::new(start, 0.0))
 	}
 
 	fn update(

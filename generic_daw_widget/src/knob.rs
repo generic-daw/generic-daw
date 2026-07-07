@@ -457,12 +457,7 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 			&Limits::new(Size::ZERO, bounds),
 		);
 
-		layout = Node::with_children(
-			layout.bounds().expand(padding).size(),
-			vec![layout.translate(Vector::new(padding, padding))],
-		)
-		.move_to(self.position);
-
+		layout = Node::container(layout, padding.into()).move_to(self.position);
 		layout.translate_mut(Vector::new(layout.bounds().width / -2.0, padding));
 		layout.translate_mut(layout.bounds().offset(&Rectangle::with_size(bounds)));
 
