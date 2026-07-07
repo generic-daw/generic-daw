@@ -15,7 +15,7 @@ use generic_daw_core::{
 };
 use generic_daw_project::{Reader, Writer, proto};
 use iced::Task;
-use smol::{channel::Sender, unblock};
+use smol::{channel::Sender, stream, unblock};
 use std::{
 	collections::{HashMap, HashSet},
 	fs::File,
@@ -657,12 +657,10 @@ impl Arrangement {
 			.chain(Task::batch([
 				task.map(arrangement_view::Message::Batch)
 					.map(move |message| daw::Message::Arrangement(project, message)),
-				messages
-					.into_iter()
-					.map(Task::done)
-					.fold(Task::none(), Task::chain)
-					.map(move |message| daw::Message::Arrangement(project, message))
-					.chain(Task::done(daw::Message::OpenedFile(Some(path)))),
+				Task::run(stream::iter(messages), move |message| {
+					daw::Message::Arrangement(project, message)
+				})
+				.chain(Task::done(daw::Message::OpenedFile(Some(path)))),
 			])),
 		)
 	}
