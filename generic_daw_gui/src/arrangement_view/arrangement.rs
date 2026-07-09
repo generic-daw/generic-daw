@@ -127,7 +127,7 @@ impl Arrangement {
 		self.transport.frames = frames;
 	}
 
-	pub fn take_stream(
+	pub fn take_stream_from(
 		&mut self,
 		other: &mut Self,
 		a_receiver: oneshot::Receiver<AudioThread>,
@@ -177,14 +177,14 @@ impl Arrangement {
 		messages
 	}
 
-	pub fn drain_queue(&mut self) {
+	pub fn drain_queue(&mut self) -> bool {
 		while let Some(message) = self.queue.pop_front() {
 			if let Err(PushError::Full(message)) = self.producer.push(message) {
-				warn!("full ring buffer");
 				self.queue.push_front(message);
-				return;
+				return false;
 			}
 		}
+		true
 	}
 
 	pub fn queue_empty(&self) -> bool {
@@ -214,6 +214,7 @@ impl Arrangement {
 				self.queue.push_back(message);
 			}
 		} else {
+			warn!("full ring buffer");
 			self.queue.push_back(message);
 		}
 	}

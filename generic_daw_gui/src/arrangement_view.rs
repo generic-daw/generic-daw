@@ -264,7 +264,7 @@ impl ArrangementView {
 
 				return action;
 			}
-			Message::DrainQueue => self.arrangement.drain_queue(),
+			Message::DrainQueue => _ = self.arrangement.drain_queue(),
 			Message::RequestUpdate => self.arrangement.request_update(),
 			Message::Connect(from, to) => self.arrangement.connect(from, to),
 			Message::SetMix(from, to, mix) => self.arrangement.set_mix(from, to, mix),

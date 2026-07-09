@@ -350,9 +350,9 @@ dependencies = [
 
 [[package]]
 name = "bytes"
-version = "1.12.0"
+version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ae3f5d315924270530207e2a68396c3cc547f6dca3fbdca317cfb1a51edb593"
+checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "calloop"
@@ -1304,7 +1304,7 @@ checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
 [[package]]
 name = "iced"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#af103e70d651dc9d53639c8e811b8106abcef4ac"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#8471d927fff9e8121410b11427b3bf6d98b49ebd"
 dependencies = [
  "iced_core",
  "iced_debug",
@@ -1319,7 +1319,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#af103e70d651dc9d53639c8e811b8106abcef4ac"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#8471d927fff9e8121410b11427b3bf6d98b49ebd"
 dependencies = [
  "bitflags 2.13.0",
  "bytes",
@@ -1337,7 +1337,7 @@ dependencies = [
 [[package]]
 name = "iced_debug"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#af103e70d651dc9d53639c8e811b8106abcef4ac"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#8471d927fff9e8121410b11427b3bf6d98b49ebd"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1347,7 +1347,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#af103e70d651dc9d53639c8e811b8106abcef4ac"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#8471d927fff9e8121410b11427b3bf6d98b49ebd"
 dependencies = [
  "futures",
  "iced_core",
@@ -1361,7 +1361,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#af103e70d651dc9d53639c8e811b8106abcef4ac"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#8471d927fff9e8121410b11427b3bf6d98b49ebd"
 dependencies = [
  "bitflags 2.13.0",
  "bytemuck",
@@ -1380,7 +1380,7 @@ dependencies = [
 [[package]]
 name = "iced_program"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#af103e70d651dc9d53639c8e811b8106abcef4ac"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#8471d927fff9e8121410b11427b3bf6d98b49ebd"
 dependencies = [
  "iced_graphics",
  "iced_runtime",
@@ -1389,7 +1389,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#af103e70d651dc9d53639c8e811b8106abcef4ac"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#8471d927fff9e8121410b11427b3bf6d98b49ebd"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -1401,7 +1401,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#af103e70d651dc9d53639c8e811b8106abcef4ac"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#8471d927fff9e8121410b11427b3bf6d98b49ebd"
 dependencies = [
  "bytes",
  "iced_core",
@@ -1413,7 +1413,7 @@ dependencies = [
 [[package]]
 name = "iced_selector"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#af103e70d651dc9d53639c8e811b8106abcef4ac"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#8471d927fff9e8121410b11427b3bf6d98b49ebd"
 dependencies = [
  "iced_core",
 ]
@@ -1429,7 +1429,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#af103e70d651dc9d53639c8e811b8106abcef4ac"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#8471d927fff9e8121410b11427b3bf6d98b49ebd"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -1445,7 +1445,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#af103e70d651dc9d53639c8e811b8106abcef4ac"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#8471d927fff9e8121410b11427b3bf6d98b49ebd"
 dependencies = [
  "bitflags 2.13.0",
  "bytemuck",
@@ -1463,7 +1463,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#af103e70d651dc9d53639c8e811b8106abcef4ac"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#8471d927fff9e8121410b11427b3bf6d98b49ebd"
 dependencies = [
  "iced_renderer",
  "iced_runtime",
@@ -1477,7 +1477,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#af103e70d651dc9d53639c8e811b8106abcef4ac"
+source = "git+https://github.com/edwloef/iced.git?branch=generic-daw#8471d927fff9e8121410b11427b3bf6d98b49ebd"
 dependencies = [
  "arboard",
  "iced_debug",
@@ -1520,9 +1520,9 @@ dependencies = [
 
 [[package]]
 name = "jiff"
-version = "0.2.31"
+version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccfe6121cbe750cf81efa362d85c0bde7ea298ec43092d3a193baca59cdbd634"
+checksum = "961d16382652bfdd8c6f68b223b26a8c93e0d475c672f414411db31c6c5c900e"
 dependencies = [
  "defmt",
  "jiff-static",
@@ -1534,9 +1534,9 @@ dependencies = [
 
 [[package]]
 name = "jiff-static"
-version = "0.2.31"
+version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e165e897f662d428f3cd3828a919dbe067c2d42bb1031eede74ef9d27ecdedd2"
+checksum = "d0879bd39df99c4c5e2c6615ccc026391a423dde10532c573e6086eb94a802cc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1803,9 +1803,9 @@ checksum = "dae608c151f68243f2b000364e1f7b186d9c29845f7d2d85bd31b9ad77ad552b"
 
 [[package]]
 name = "memchr"
-version = "2.8.2"
+version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88904434abc2901f197fe8cc55f0445e7ded921dba5911dad2e2b39b48e663c4"
+checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "memmap2"
@@ -2608,9 +2608,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.12.4"
+version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1292b7759ae1cb9ec195452d1390a074f0cd8541ab7a5a8c31cd6db45d4a6ba"
+checksum = "2a0e75113e14dc5acb068cd0786884f214f1312650a3d36d269f5c4f3cdee8a2"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -2620,9 +2620,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.14"
+version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e1dd4122fc1595e8162618945476892eefca7b88c52820e74af6262213cae8f"
+checksum = "1f388202e4b80542a0921078cc23b6333bcf1409c1e3f86404cae4766a6131db"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -2985,7 +2985,7 @@ dependencies = [
 [[package]]
 name = "sweeten"
 version = "0.15.0-dev"
-source = "git+https://github.com/edwloef/sweeten.git?branch=generic-daw#28b9380ce050338d2159b1394054152c41dab234"
+source = "git+https://github.com/edwloef/sweeten.git?branch=generic-daw#e1936593f66261ecb93ccad4242bc2c128fba732"
 dependencies = [
  "iced_core",
  "iced_runtime",
@@ -4160,18 +4160,18 @@ checksum = "6df3dc4292935e51816d896edcd52aa30bc297907c26167fec31e2b0c6a32524"
 
 [[package]]
 name = "zerocopy"
-version = "0.8.53"
+version = "0.8.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75726053136156d419e285b9b7eddaaea9e3fea6ce32eed44a89901f0bd98de1"
+checksum = "b7cbbc0a705a0fd05cc3676525980d2bf5a9bc4adac6d6475209a7887cf59d19"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.53"
+version = "0.8.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4714fd92cf900833d49538023a9b3915155210801d1c1169eba513b2addefd71"
+checksum = "e2e817b7b52d0c7358d3246da9d69935ebb18116b2b102b4230dac079b4862f5"
 dependencies = [
  "proc-macro2",
  "quote",

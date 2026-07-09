@@ -374,18 +374,23 @@ impl Daw {
 				NoClone(a_receiver),
 				view,
 			) => {
-				let processor =
-					arrangement.take_stream(&mut self.arrangement_view.arrangement, a_receiver);
+				let p_receiver = arrangement
+					.take_stream_from(&mut self.arrangement_view.arrangement, a_receiver);
 
-				let arrangement_view = std::mem::replace(
+				let mut arrangement = std::mem::replace(
 					&mut self.arrangement_view,
 					ArrangementView::new(*arrangement, &self.state, view),
-				);
+				)
+				.arrangement;
+
 				self.project = project;
 
 				return Task::future(unblock(|| {
-					drop(arrangement_view);
-					drop(processor.recv().unwrap());
+					while !arrangement.drain_queue() {
+						std::thread::yield_now();
+					}
+					drop(arrangement);
+					drop(p_receiver.recv().unwrap());
 				}))
 				.discard();
 			}
