@@ -113,9 +113,9 @@ impl Arrangement {
 
 		self.stream = None;
 		let (stream, sample_rate, frames) = build_output_stream(
-			config.output_device.id.as_ref(),
-			config.output_device.sample_rate,
-			config.output_device.buffer_size,
+			&config.audio.devices.get_output(),
+			config.audio.sample_rate,
+			config.audio.buffer_size,
 			a_receiver,
 		);
 		self.stream = Some(stream.into());

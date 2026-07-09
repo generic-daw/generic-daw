@@ -2,7 +2,7 @@ use crate::{
 	daw::{CONFIG_DIR, DATA_DIR},
 	theme::Theme,
 };
-use generic_daw_core::DeviceId;
+use generic_daw_core::{Device, DeviceId, HostId};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -21,8 +21,7 @@ pub static CONFIG_PATH: LazyLock<Arc<Path>> =
 pub struct Config {
 	pub sample_paths: Vec<Arc<Path>>,
 	pub clap_paths: Vec<Arc<Path>>,
-	pub input_device: Device,
-	pub output_device: Device,
+	pub audio: Audio,
 	pub autosave: Autosave,
 	pub open_last_project: bool,
 	pub scale_factor: f32,
@@ -34,8 +33,7 @@ impl Default for Config {
 		Self {
 			sample_paths: vec![DATA_DIR.clone()],
 			clap_paths: Vec::new(),
-			input_device: Device::default(),
-			output_device: Device::default(),
+			audio: Audio::default(),
 			autosave: Autosave::default(),
 			open_last_project: false,
 			scale_factor: 1.0,
@@ -46,11 +44,104 @@ impl Default for Config {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
-pub struct Device {
-	#[serde(with = "option")]
-	pub id: Option<DeviceId>,
+pub struct Audio {
+	pub devices: Devices,
 	pub sample_rate: Option<NonZero<u32>>,
 	pub buffer_size: Option<NonZero<u32>>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub enum Devices {
+	#[default]
+	Default,
+	WithHost {
+		host: HostId,
+		input: Option<Box<str>>,
+		output: Option<Box<str>>,
+	},
+}
+
+impl Devices {
+	pub fn get_host(&self) -> Option<HostId> {
+		match self {
+			Self::Default => None,
+			Self::WithHost { host, .. } => Some(*host),
+		}
+	}
+
+	pub fn set_host(&mut self, host: Option<HostId>) {
+		*self = host.map_or(Self::Default, |host| Self::WithHost {
+			host,
+			input: None,
+			output: None,
+		});
+	}
+
+	pub fn get_input(&self) -> Device {
+		match self {
+			Self::Default => Device::Default,
+			Self::WithHost {
+				host,
+				input: Some(input),
+				..
+			} => Device::Specific(DeviceId::new(*host, input)),
+			Self::WithHost { host, .. } => Device::DefaultForHost(*host),
+		}
+	}
+
+	pub fn set_input(&mut self, input: Option<DeviceId>) {
+		*self = match (self.clone(), input) {
+			(Self::Default, None) => Self::Default,
+			(Self::WithHost { host, output, .. }, None) => Self::WithHost {
+				host,
+				input: None,
+				output,
+			},
+			(Self::Default, Some(input)) => Self::WithHost {
+				host: input.host(),
+				input: Some(input.id().into()),
+				output: None,
+			},
+			(Self::WithHost { host, output, .. }, Some(input)) => Self::WithHost {
+				output: output.filter(|_| host == input.host()),
+				host: input.host(),
+				input: Some(input.id().into()),
+			},
+		};
+	}
+
+	pub fn get_output(&self) -> Device {
+		match self {
+			Self::Default => Device::Default,
+			Self::WithHost {
+				host,
+				output: Some(output),
+				..
+			} => Device::Specific(DeviceId::new(*host, output)),
+			Self::WithHost { host, .. } => Device::DefaultForHost(*host),
+		}
+	}
+
+	pub fn set_output(&mut self, output: Option<DeviceId>) {
+		*self = match (self.clone(), output) {
+			(Self::Default, None) => Self::Default,
+			(Self::WithHost { host, input, .. }, None) => Self::WithHost {
+				host,
+				input,
+				output: None,
+			},
+			(Self::Default, Some(output)) => Self::WithHost {
+				host: output.host(),
+				input: None,
+				output: Some(output.id().into()),
+			},
+			(Self::WithHost { host, input, .. }, Some(output)) => Self::WithHost {
+				input: input.filter(|_| host == output.host()),
+				host: output.host(),
+				output: Some(output.id().into()),
+			},
+		};
+	}
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -100,27 +191,53 @@ impl Config {
 	}
 }
 
-mod option {
-	use serde::{Deserialize as _, Deserializer, Serializer};
-	use std::{fmt::Display, str::FromStr};
+mod devices_serde {
+	use crate::config::Devices;
+	use generic_daw_core::HostId;
+	use serde::{Deserialize, Deserializer, Serialize, Serializer};
+	use std::str::FromStr as _;
 
-	#[expect(clippy::ref_option)]
-	pub fn serialize<S: Serializer, T: ToString>(
-		value: &Option<T>,
-		serializer: S,
-	) -> Result<S::Ok, S::Error> {
-		match value {
-			Some(v) => serializer.serialize_some(&v.to_string()),
-			None => serializer.serialize_none(),
+	#[derive(Deserialize, Serialize)]
+	struct DevicesData {
+		host: Box<str>,
+		input: Option<Box<str>>,
+		output: Option<Box<str>>,
+	}
+
+	impl Serialize for Devices {
+		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+		where
+			S: Serializer,
+		{
+			match self {
+				Self::Default => None,
+				Self::WithHost {
+					host,
+					input,
+					output,
+				} => Some(DevicesData {
+					host: host.to_string().into(),
+					input: input.clone(),
+					output: output.clone(),
+				}),
+			}
+			.serialize(serializer)
 		}
 	}
 
-	pub fn deserialize<'de, D: Deserializer<'de>, T: FromStr<Err: Display>>(
-		deserializer: D,
-	) -> Result<Option<T>, D::Error> {
-		match Option::<&str>::deserialize(deserializer)? {
-			Some(s) => Ok(Some(T::from_str(s).map_err(serde::de::Error::custom)?)),
-			None => Ok(None),
+	impl<'de> Deserialize<'de> for Devices {
+		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+		where
+			D: Deserializer<'de>,
+		{
+			Ok(match Option::<DevicesData>::deserialize(deserializer)? {
+				None => Self::Default,
+				Some(data) => Self::WithHost {
+					host: HostId::from_str(&data.host).map_err(serde::de::Error::custom)?,
+					input: data.input,
+					output: data.output,
+				},
+			})
 		}
 	}
 }

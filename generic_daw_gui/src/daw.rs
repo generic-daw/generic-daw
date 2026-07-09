@@ -271,9 +271,9 @@ impl Daw {
 		let (p_sender, p_receiver) = oneshot::channel();
 
 		let (stream, sample_rate, frames) = build_output_stream(
-			config.output_device.id.as_ref(),
-			config.output_device.sample_rate,
-			config.output_device.buffer_size,
+			&config.audio.devices.get_output(),
+			config.audio.sample_rate,
+			config.audio.buffer_size,
 			p_receiver,
 		);
 
@@ -591,7 +591,8 @@ impl Daw {
 					self.file_tree.diff(&config.sample_paths);
 				}
 
-				if self.config.output_device != config.output_device {
+				if self.config.audio != config.audio {
+					self.arrangement_view.end_recording();
 					self.arrangement_view.arrangement.change_config(&config);
 				}
 

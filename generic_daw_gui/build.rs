@@ -37,7 +37,6 @@ static GLYPHS: &[(&str, char, f32)] = &[
 	icon!(snowflake = 57701),
 	icon!(square = 57703),
 	icon!(triangle_alert = 57747),
-	icon!(volume_2 = 57771),
 	icon!(x = 57778),
 	icon!(move_vertical = 57799 + 0.025),
 	icon!(arrow_big_right = 57827),
