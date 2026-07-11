@@ -95,24 +95,27 @@ impl Dir {
 						let mut tasks = Vec::new();
 
 						if let Status::Reloading { dirs: old_dirs, .. } = &mut self.children {
-							for (i, dir) in dirs.into_iter().enumerate() {
+							for (i, dir) in dirs.iter().enumerate() {
 								let j = old_dirs[i..]
 									.iter()
 									.position(|old_dir| old_dir.path() == dir.path())
 									.unwrap_or_default();
 								old_dirs.drain(i..i + j);
 
-								if let Some(old_dir) = old_dirs.get_mut(i)
-									&& old_dir.path() == dir.path()
-								{
-									tasks
-										.push(old_dir.update(old_dir.id, &Action::Reload).unwrap());
+								if let Some(old_dir) = old_dirs.get_mut(i) {
+									if old_dir.path() == dir.path() {
+										tasks.push(
+											old_dir.update(old_dir.id, &Action::Reload).unwrap(),
+										);
+									} else {
+										old_dirs.insert(i, dir.clone());
+									}
 								} else {
-									old_dirs.push(dir);
+									old_dirs.push(dir.clone());
 								}
 							}
 
-							old_dirs.truncate(old_dirs.len());
+							old_dirs.truncate(dirs.len());
 
 							dirs = std::mem::take(old_dirs);
 						}
@@ -230,7 +233,7 @@ impl Dir {
 					return;
 				};
 
-				let Ok(ty) = entry.file_type().await else {
+				let Ok(ty) = smol::fs::metadata(entry.path()).await else {
 					return;
 				};
 
