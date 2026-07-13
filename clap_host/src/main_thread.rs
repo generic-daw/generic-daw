@@ -79,6 +79,10 @@ impl HostNotePortsImpl for MainThread<'_> {
 
 impl HostParamsImplMainThread for MainThread<'_> {
 	fn rescan(&mut self, flags: ParamRescanFlags) {
+		if flags.contains(ParamRescanFlags::VALUES) {
+			self.mark_dirty();
+		}
+
 		if flags.requires_restart() {
 			self.params_rescan = true;
 		} else if !flags.is_empty() {

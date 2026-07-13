@@ -71,7 +71,6 @@ impl Param {
 			&& let Some(value) = params.get_value(&mut plugin.plugin_handle(), self.id)
 		{
 			self.value = value as f32;
-			plugin.access_handler_mut(|mt| mt.mark_dirty());
 		}
 
 		if (flags.contains(ParamRescanFlags::VALUES) || flags.contains(ParamRescanFlags::TEXT))
