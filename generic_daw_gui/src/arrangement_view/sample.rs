@@ -45,7 +45,7 @@ impl SamplePair {
 	}
 
 	pub fn from_core(core: generic_daw_core::Sample, path: Arc<Path>) -> Option<Self> {
-		let crc = crc(File::open(&path).ok()?);
+		let crc = crc(File::open(&path).ok()?).ok()?;
 		let len = std::fs::metadata(&path).ok()?.len();
 		Self::from_core_with_crc_and_len(core, crc, len, path)
 	}
@@ -55,7 +55,7 @@ impl SamplePair {
 		lods: Lods,
 		path: Arc<Path>,
 	) -> Option<Self> {
-		let crc = crc(File::open(&path).ok()?);
+		let crc = crc(File::open(&path).ok()?).ok()?;
 		let len = std::fs::metadata(&path).ok()?.len();
 		Self::from_core_and_lods_with_crc_and_len(core, lods, crc, len, path)
 	}

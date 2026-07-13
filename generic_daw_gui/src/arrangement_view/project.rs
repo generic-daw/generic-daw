@@ -308,7 +308,7 @@ impl Arrangement {
 					.and_then(|(name, len)| {
 						daw.try_send(daw::Message::SetStatus(path.to_string_lossy().into()))
 							.unwrap();
-						let crc = File::open(&path).ok().map(crc);
+						let crc = File::open(&path).ok().and_then(|file| crc(file).ok());
 						daw.try_send(daw::Message::ClearStatus).unwrap();
 						crc.map(|crc| (name, crc, len))
 					})

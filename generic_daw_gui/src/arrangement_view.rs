@@ -57,10 +57,9 @@ use std::{
 	cell::RefCell,
 	cmp::{Ordering, Reverse},
 	collections::HashMap,
-	io::Read,
+	io::{self, Read},
 	iter::repeat,
 	mem::MaybeUninit,
-	num::NonZero,
 	path::Path,
 	sync::Arc,
 	time::Duration,
@@ -630,14 +629,13 @@ impl ArrangementView {
 						node,
 					);
 
-					let sample_rate = recording.core.sample_rate();
 					let frames = recording.core.frames();
 
 					self.recording = Some(recording);
 					self.arrangement.play();
 
 					return Task::run(
-						poll_chunked_consumer(task, sample_rate, frames),
+						poll_chunked_consumer(task, frames.get() as usize),
 						|samples| Message::RecordingWrite(NoDebug(samples)),
 					)
 					.chain(Task::done(Message::RecordingFinalize))
@@ -2668,7 +2666,7 @@ pub fn format_mix(amt: f32) -> String {
 	)
 }
 
-fn crc(mut r: impl Read) -> u32 {
+fn crc(mut r: impl Read) -> io::Result<u32> {
 	#[repr(align(8))]
 	struct Aligned([u8; 4096]);
 	let Aligned(buf) = &mut Aligned([0; 4096]);
@@ -2677,34 +2675,33 @@ fn crc(mut r: impl Read) -> u32 {
 	let mut len;
 
 	while {
-		len = r.read(buf).unwrap();
+		len = r.read(buf)?;
 		len != 0
 	} {
 		crc = crc32c::crc32c_append(crc, &buf[..len]);
 	}
 
-	crc
+	Ok(crc)
 }
 
-fn poll_consumer<T>(
-	mut consumer: Consumer<T>,
-	sample_rate: NonZero<u32>,
-	frames: NonZero<u32>,
-) -> impl Stream<Item = T> {
-	let min = 32.0 / sample_rate.get() as f32;
-	let max = frames.get() as f32 / sample_rate.get() as f32;
+fn backoff(chunk_size: usize) -> impl FnMut(usize) -> Timer {
+	let min = 32.0 / 192_000.0;
+	let max = 2048.0 / 44_100.0;
 	let mut backoff = min;
-	let mut backoff = move |counter: u16| {
-		let divisor = f32::from(counter).max(0.5);
+	move |count: usize| {
+		let divisor = (count as f32 / chunk_size as f32).max(0.5);
 		backoff = ((backoff + backoff / divisor) / 2.0).clamp(min, max);
 		Timer::after(Duration::from_secs_f32(backoff))
-	};
+	}
+}
 
+fn poll_consumer<T>(mut consumer: Consumer<T>) -> impl Stream<Item = T> {
+	let mut backoff = backoff(1);
 	stream::channel(consumer.buffer().capacity(), async move |mut sender| {
 		loop {
-			let mut counter = 0;
+			let mut count = 0;
 			while let Ok(t) = consumer.pop() {
-				counter += 1;
+				count += 1;
 				if sender.send(t).await.is_err() {
 					return;
 				}
@@ -2712,33 +2709,24 @@ fn poll_consumer<T>(
 			if consumer.is_abandoned() {
 				return;
 			}
-			backoff(counter).await;
+			backoff(count).await;
 		}
 	})
 }
 
 fn poll_chunked_consumer<T: Copy>(
 	mut consumer: Consumer<T>,
-	sample_rate: NonZero<u32>,
-	frames: NonZero<u32>,
+	chunk_size: usize,
 ) -> impl Stream<Item = Box<[T]>> {
-	let min = 32.0 / sample_rate.get() as f32;
-	let max = frames.get() as f32 / sample_rate.get() as f32;
-	let mut backoff = min;
-	let mut backoff = move |counter: u16| {
-		let divisor = f32::from(counter).max(0.5);
-		backoff = ((backoff + backoff / divisor) / 2.0).clamp(min, max);
-		Timer::after(Duration::from_secs_f32(backoff))
-	};
-
+	let mut backoff = backoff(chunk_size);
 	stream::channel(consumer.buffer().capacity(), async move |mut sender| {
-		let mut buf = boxed_slice![MaybeUninit::uninit(); frames.get() as usize];
+		let mut buf = boxed_slice![MaybeUninit::uninit(); chunk_size];
 		loop {
-			let mut counter = 0;
+			let mut count = 0;
 			while let (t, _) = consumer.pop_partial_slice_uninit(&mut buf)
 				&& !t.is_empty()
 			{
-				counter += 1;
+				count += t.len();
 				if sender.send(t.into()).await.is_err() {
 					return;
 				}
@@ -2746,7 +2734,7 @@ fn poll_chunked_consumer<T: Copy>(
 			if consumer.is_abandoned() {
 				return;
 			}
-			backoff(counter).await;
+			backoff(count).await;
 		}
 	})
 }

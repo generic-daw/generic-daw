@@ -95,7 +95,7 @@ impl Arrangement {
 				queue: VecDeque::new(),
 				stream: None,
 			},
-			Task::stream(poll_consumer(consumer, sample_rate, frames)),
+			Task::stream(poll_consumer(consumer)),
 		)
 	}
 

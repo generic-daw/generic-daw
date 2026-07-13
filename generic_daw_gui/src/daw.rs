@@ -426,8 +426,16 @@ impl Daw {
 				);
 			}
 			Message::SaveAsFileDialog => {
+				let current_project = self.current_project.clone();
 				return window::run(self.main_window_id, |window| {
-					AsyncFileDialog::new()
+					let mut dialog = AsyncFileDialog::new();
+					if let Some(current_project) = current_project
+						&& let Some(current_project) = current_project.file_name()
+						&& let Some(current_project) = current_project.to_str()
+					{
+						dialog = dialog.set_file_name(current_project);
+					}
+					dialog
 						.set_parent(window)
 						.add_filter("Generic DAW project file", &["gdp"])
 						.set_directory(&*PROJECTS_DIR)
@@ -532,8 +540,16 @@ impl Daw {
 				self.missing_samples.clear();
 			}
 			Message::RenderFileDialog => {
+				let current_project = self.current_project.clone();
 				return window::run(self.main_window_id, |window| {
-					AsyncFileDialog::new()
+					let mut dialog = AsyncFileDialog::new();
+					if let Some(current_project) = current_project
+						&& let Some(current_project) = current_project.file_prefix()
+						&& let Some(current_project) = current_project.to_str()
+					{
+						dialog = dialog.set_file_name(format!("{current_project}.wav"));
+					}
+					dialog
 						.set_parent(window)
 						.add_filter("Wave file", &["wav"])
 						.set_directory(&*PROJECTS_DIR)
@@ -1091,6 +1107,13 @@ impl Daw {
 	pub fn title(&self, window: window::Id) -> String {
 		self.clap_host
 			.title(window)
+			.or_else(|| {
+				self.current_project
+					.as_deref()
+					.and_then(|current_project| current_project.file_prefix())
+					.and_then(|current_project| current_project.to_str())
+					.map(|current_project| format!("{current_project} - Generic DAW"))
+			})
 			.unwrap_or_else(|| "Generic DAW".to_owned())
 	}
 
