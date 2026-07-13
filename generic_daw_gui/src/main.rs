@@ -6,6 +6,8 @@ use icons::LUCIDE_BYTES;
 use log::LevelFilter;
 use std::{backtrace::Backtrace, fs::File, io::Write as _};
 
+include!(concat!(env!("OUT_DIR"), "/icons.rs"));
+
 mod action;
 mod arrangement_view;
 mod clap_host;
@@ -14,7 +16,6 @@ mod config;
 mod config_view;
 mod daw;
 mod file_tree;
-mod icons;
 mod lod;
 mod operation;
 mod state;

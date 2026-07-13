@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, fs::File, io::Write as _};
+use std::{collections::BTreeSet, fs::File, io::Write as _, path::PathBuf};
 
 static LUCIDE_BYTES: &[u8] = include_bytes!("../Lucide.ttf");
 
@@ -59,11 +59,12 @@ static GLYPHS: &[(&str, char, f32)] = &[
 pub fn main() {
 	println!("cargo::rerun-if-changed=../Lucide.ttf");
 
-	let mut icons_rs = File::create("src/icons.rs").unwrap();
+	let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+	let mut icons_rs = File::create(out_dir.join("icons.rs")).unwrap();
 
 	icons_rs
 		.write_all(
-			br#"// automatically generated
+			br#"mod icons {
 
 use crate::widget::LINE_HEIGHT;
 use iced::{
@@ -71,7 +72,7 @@ use iced::{
 	widget::{container, text},
 };
 
-pub static LUCIDE_BYTES: &[u8] = include_bytes!("../../icons.ttf");
+pub static LUCIDE_BYTES: &[u8] = include_bytes!("icons.ttf");
 pub static LUCIDE_FONT: Font = Font::new("lucide");
 
 #[derive(Clone, Copy, Debug)]
@@ -133,8 +134,15 @@ pub const fn {name}() -> Icon {{
 			.unwrap();
 	}
 
+	icons_rs
+		.write_all(
+			b"
+}",
+		)
+		.unwrap();
+
 	std::fs::write(
-		"../icons.ttf",
+		out_dir.join("icons.ttf"),
 		font_subset::FontReader::new(LUCIDE_BYTES)
 			.unwrap()
 			.read()
