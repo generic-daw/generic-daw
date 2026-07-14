@@ -282,8 +282,14 @@ impl AudioThread {
 					let pattern = self.state_mut().midi_patterns.remove(&pattern);
 					debug_assert!(pattern.is_some());
 				}
-				Message::NodeAdd(node) => self.audio_graph.insert(*node),
-				Message::NodeRemove(node) => self.audio_graph.remove(node),
+				Message::NodeAdd(node) => {
+					let node = self.audio_graph.insert(*node);
+					debug_assert!(node.is_none());
+				}
+				Message::NodeRemove(node) => {
+					let node = self.audio_graph.remove(node);
+					debug_assert!(node.is_some());
+				}
 				Message::NodeConnect(from, to) => {
 					if !self.audio_graph.connect(from, to) {
 						self.updates.push(Update::ConnectFailed(from, to));

@@ -41,13 +41,13 @@ pub struct Buffers<Node: NodeImpl> {
 }
 
 impl<Node: NodeImpl> Entry<Node> {
-	pub fn new(node: Node, frames: NonZero<u32>) -> Self {
+	pub fn new(node: Node, max_frames: NonZero<u32>) -> Self {
 		Self {
 			node: Mutex::new(node),
 			buffers: RwLock::new(Buffers {
 				incoming: HashMap::new(),
 				outgoing: HashSet::new(),
-				audio: boxed_slice![[0.0; 2]; frames.get() as usize].into(),
+				audio: boxed_slice![[0.0; 2]; max_frames.get() as usize].into(),
 				events: Vec::new(),
 			}),
 			indegree: AtomicUsize::new(0),
@@ -55,8 +55,12 @@ impl<Node: NodeImpl> Entry<Node> {
 		}
 	}
 
-	pub fn change_max_frames(&mut self, frames: NonZero<u32>) {
-		self.buffers().audio = boxed_slice![[0.0; 2]; frames.get() as usize].into();
+	pub fn change_max_frames(&mut self, max_frames: NonZero<u32>) {
+		self.buffers().audio = boxed_slice![[0.0; 2]; max_frames.get() as usize].into();
+	}
+
+	pub fn into_node(self) -> Node {
+		self.node.into_inner().unwrap()
 	}
 
 	pub fn node(&mut self) -> &mut Node {

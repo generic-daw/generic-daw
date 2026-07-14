@@ -4,7 +4,7 @@ use crate::{
 };
 use crossbeam_queue::ArrayQueue;
 use std::{
-	collections::HashMap,
+	collections::{HashMap, hash_map},
 	num::NonZero,
 	sync::{RwLockWriteGuard, atomic::Ordering::Relaxed},
 };
@@ -322,29 +322,33 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		self.entry_mut(to).buffers().incoming.remove(&from);
 	}
 
-	pub fn insert(&mut self, node: Node) {
-		let id = node.id();
-
-		if let Some(entry) = self.graph.get_mut(&id) {
-			*entry.node() = node;
-		} else {
-			self.graph.insert(id, Entry::new(node, self.max_frames));
-			if self.queue.capacity() < self.graph.len() {
-				self.queue = ArrayQueue::new(2 * self.queue.capacity());
+	pub fn insert(&mut self, node: Node) -> Option<Node> {
+		match self.graph.entry(node.id()) {
+			hash_map::Entry::Occupied(mut entry) => {
+				Some(std::mem::replace(entry.get_mut().node(), node))
+			}
+			hash_map::Entry::Vacant(entry) => {
+				entry.insert(Entry::new(node, self.max_frames));
+				if self.queue.capacity() < self.graph.len() {
+					self.queue = ArrayQueue::new(2 * self.queue.capacity());
+				}
+				None
 			}
 		}
 	}
 
-	pub fn remove(&mut self, node: NodeId) {
-		if let Some(mut entry) = self.graph.remove(&node) {
-			for &incoming in entry.buffers().incoming.keys() {
-				self.entry_mut(incoming).buffers().outgoing.remove(&node);
-			}
+	pub fn remove(&mut self, node: NodeId) -> Option<Node> {
+		let mut entry = self.graph.remove(&node)?;
 
-			for &outgoing in &entry.buffers().outgoing {
-				self.entry_mut(outgoing).buffers().incoming.remove(&node);
-			}
+		for &incoming in entry.buffers().incoming.keys() {
+			self.entry_mut(incoming).buffers().outgoing.remove(&node);
 		}
+
+		for &outgoing in &entry.buffers().outgoing {
+			self.entry_mut(outgoing).buffers().incoming.remove(&node);
+		}
+
+		Some(entry.into_node())
 	}
 
 	fn has_cycle(&mut self) -> bool {
