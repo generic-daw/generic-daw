@@ -212,16 +212,14 @@ impl Plugin {
 	}
 
 	#[must_use]
-	pub fn adjust_param_value(&mut self, param_id: ClapId, value: f32) -> Option<&Param> {
+	pub fn adjust_param_value(&mut self, param_id: ClapId, value: f32) -> bool {
 		let param = self
 			.params
 			.iter_mut()
 			.find(|param| param.id == param_id)
 			.unwrap();
 
-		param
-			.adjust_value(&mut self.instance, value)
-			.then_some(param)
+		param.adjust_value(&mut self.instance, value)
 	}
 
 	pub fn rescan_params(&mut self, flags: ParamRescanFlags) {

@@ -171,13 +171,12 @@ impl Channel {
 			}
 			NodeAction::PluginMoveTo(from, to) => self.plugins.shift_move(from, to),
 			NodeAction::PluginMixChanged(index, mix) => self.plugins[index].mix = mix,
-			NodeAction::PluginParamChanged(index, param_id, value, cookie) => {
+			NodeAction::PluginParamChanged(index, param_id, value) => {
 				if let Some(processor) = &mut self.plugins[index].processor {
 					processor.push(Event::ParamValue {
 						time: 0,
 						param_id,
 						value,
-						cookie,
 					});
 				}
 			}

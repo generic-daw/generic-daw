@@ -17,7 +17,7 @@ use generic_daw_core::{
 	AudioClip, AudioThread, Batch, Clip, ClipId, Message, MidiClip, MidiKey, MidiNote, MidiNoteId,
 	MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode, PluginId, Point,
 	SampleId, Stream, Transport, Update, Version, build_output_stream,
-	clap_host::{ClapId, Cookie, HostInfo, PluginDescriptor},
+	clap_host::{ClapId, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
 use iced::Task;
@@ -367,18 +367,8 @@ impl Arrangement {
 		}
 	}
 
-	pub fn plugin_param_changed(
-		&mut self,
-		id: NodeId,
-		index: usize,
-		clap_id: ClapId,
-		value: f32,
-		cookie: Cookie,
-	) {
-		self.node_action(
-			id,
-			NodeAction::PluginParamChanged(index, clap_id, value, cookie),
-		);
+	pub fn plugin_param_changed(&mut self, id: NodeId, index: usize, clap_id: ClapId, value: f32) {
+		self.node_action(id, NodeAction::PluginParamChanged(index, clap_id, value));
 	}
 
 	pub fn set_bpm(&mut self, bpm: NonZero<u16>) {

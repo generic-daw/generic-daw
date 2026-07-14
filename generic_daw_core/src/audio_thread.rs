@@ -5,10 +5,7 @@ use crate::{
 	time::{BeatRange, BeatTime, SecondsTime},
 };
 use audio_graph::AudioGraph;
-use clap_host::{
-	Cookie,
-	events::{EventFlags, EventHeader, TransportEvent, TransportFlags},
-};
+use clap_host::events::{EventFlags, EventHeader, TransportEvent, TransportFlags};
 use dsp::resample_cubic;
 use hound::WavWriter;
 use log::{trace, warn};
@@ -91,7 +88,7 @@ pub enum NodeAction {
 	PluginDeactivate(usize),
 	PluginMoveTo(usize, usize),
 	PluginMixChanged(usize, f32),
-	PluginParamChanged(usize, ClapId, f32, Cookie),
+	PluginParamChanged(usize, ClapId, f32),
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -11,14 +11,14 @@ pub struct Voice<Id, Info> {
 #[derive(Debug)]
 pub struct VoiceAlloc<Id, Info> {
 	voices: Vec<Voice<Id, Info>>,
-	note_id: u32,
+	next_note_id: u32,
 }
 
 impl<Id: Copy + Eq, Info: Copy> VoiceAlloc<Id, Info> {
 	pub fn new(count: NonZero<usize>) -> Self {
 		Self {
 			voices: Vec::with_capacity(count.get()),
-			note_id: 0,
+			next_note_id: 0,
 		}
 	}
 
@@ -74,8 +74,8 @@ impl<Id: Copy + Eq, Info: Copy> VoiceAlloc<Id, Info> {
 	}
 
 	fn new_voice(&mut self, id: Id, info: Info) -> Voice<Id, Info> {
-		let note_id = self.note_id;
-		self.note_id = (self.note_id + 1) % i32::MAX as u32;
+		let note_id = self.next_note_id;
+		self.next_note_id = (self.next_note_id + 1) % i32::MAX as u32;
 
 		Voice {
 			id,

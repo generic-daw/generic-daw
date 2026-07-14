@@ -100,14 +100,9 @@ impl ClapHost {
 			}
 			Message::HostParamChange(id, param_id, value) => {
 				let plugin = plugin!(id);
-				if plugin.is_active()
-					&& let Some(param) = plugin.adjust_param_value(param_id, value)
-				{
+				if plugin.is_active() && plugin.adjust_param_value(param_id, value) {
 					return Action::instruction(daw::Instruction::PluginParamChanged(
-						id,
-						param.id,
-						value,
-						param.cookie,
+						id, param_id, value,
 					));
 				}
 			}

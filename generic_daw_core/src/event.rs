@@ -25,7 +25,6 @@ pub enum Event {
 		time: u32,
 		param_id: ClapId,
 		value: f32,
-		cookie: Cookie,
 	},
 }
 
@@ -108,13 +107,12 @@ impl clap_host::EventImpl for Event {
 				time,
 				param_id,
 				value,
-				cookie,
 			} => ClapEvent::ParamValue(ParamValueEvent::new(
 				time,
 				param_id,
 				Pckn::new(port_index, 0u16, Match::All, Match::All),
 				value.into(),
-				cookie,
+				Cookie::empty(),
 			)),
 		}
 	}
@@ -137,7 +135,6 @@ impl clap_host::EventImpl for Event {
 				time: event.time(),
 				param_id: event.param_id()?,
 				value: event.value() as f32,
-				cookie: event.cookie(),
 			}),
 			CoreEventSpace::Midi(event) => {
 				let data = event.data();

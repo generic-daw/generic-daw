@@ -19,8 +19,8 @@ use crate::{
 use generic_daw_core::{
 	AudioThread, BpmTapper, NodeId, PluginId, build_output_stream,
 	clap_host::{
-		ClapId, Cookie, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor,
-		RenderMode, StateContextType,
+		ClapId, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
+		StateContextType,
 	},
 };
 use generic_daw_project::proto;
@@ -159,7 +159,7 @@ pub enum Instruction {
 	PluginAdd(PluginId, Plugin, Receiver<MainThreadMessage>),
 	PluginCopyState(PluginId, PluginId),
 	PluginActivate(PluginId, Option<Box<clap_host::AudioThread>>),
-	PluginParamChanged(PluginId, ClapId, f32, Cookie),
+	PluginParamChanged(PluginId, ClapId, f32),
 }
 
 #[derive(Clone, Debug)]
@@ -717,11 +717,11 @@ impl Daw {
 						.plugin_activate(node, index, processor);
 				}
 			}
-			Instruction::PluginParamChanged(id, param_id, value, cookie) => {
+			Instruction::PluginParamChanged(id, param_id, value) => {
 				if let Some((node, index)) = self.arrangement_view.arrangement.plugin_of(id) {
 					self.arrangement_view
 						.arrangement
-						.plugin_param_changed(node, index, param_id, value, cookie);
+						.plugin_param_changed(node, index, param_id, value);
 				}
 			}
 		}
