@@ -233,24 +233,20 @@ impl Dir {
 					return;
 				};
 
+				if cfg!(target_os = "macos") && entry.file_name() == ".DS_STORE" {
+					return;
+				}
+
 				let Ok(ty) = smol::fs::metadata(entry.path()).await else {
 					return;
 				};
 
-				let mut name = entry.file_name();
-
-				if cfg!(target_os = "macos") && name == ".DS_STORE" {
-					return;
-				}
-
-				name.make_ascii_lowercase();
-
 				if ty.is_file() {
 					let file = File::new(entry.path()).await;
-					files.lock().await.push((file, name));
+					files.lock().await.push(file);
 				} else if ty.is_dir() {
 					let dir = Self::new(entry.path());
-					dirs.lock().await.push((dir, name));
+					dirs.lock().await.push(dir);
 				}
 			})
 			.await;
@@ -258,15 +254,8 @@ impl Dir {
 		let mut files = files.into_inner();
 		let mut dirs = dirs.into_inner();
 
-		files.sort_unstable_by(|(_, aname), (_, bname)| {
-			natural_cmp(aname.as_encoded_bytes(), bname.as_encoded_bytes())
-		});
-		dirs.sort_unstable_by(|(_, aname), (_, bname)| {
-			natural_cmp(aname.as_encoded_bytes(), bname.as_encoded_bytes())
-		});
-
-		let files = files.into_iter().map(|(file, _)| file).collect();
-		let dirs = dirs.into_iter().map(|(dir, _)| dir).collect();
+		dirs.sort_unstable_by(|a, b| natural_cmp(a.name.as_bytes(), b.name.as_bytes()));
+		files.sort_unstable_by(|a, b| natural_cmp(a.name().as_bytes(), b.name().as_bytes()));
 
 		Ok((dirs, files))
 	}

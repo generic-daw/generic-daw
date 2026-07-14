@@ -8,7 +8,11 @@ pub fn natural_cmp(mut a: &[u8], mut b: &[u8]) -> Ordering {
 		(a_cut, a) = cut(a, u8::is_ascii_digit);
 		(b_cut, b) = cut(b, u8::is_ascii_digit);
 
-		match a_cut.cmp(b_cut) {
+		match a_cut
+			.iter()
+			.map(u8::to_ascii_lowercase)
+			.cmp(b_cut.iter().map(u8::to_ascii_lowercase))
+		{
 			Ordering::Equal => {}
 			ord => return ord,
 		}

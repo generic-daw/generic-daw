@@ -70,6 +70,10 @@ impl File {
 			LINE_HEIGHT + 2.0,
 		)
 	}
+
+	pub fn name(&self) -> &str {
+		&self.name
+	}
 }
 
 async fn file_kind(path: &Path) -> io::Result<FileKind> {
