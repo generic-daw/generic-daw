@@ -2368,8 +2368,10 @@ impl ArrangementView {
 				}
 				keyboard::Key::Named(
 					keyboard::key::Named::Delete | keyboard::key::Named::Backspace,
-				) => Some(Message::Delete),
-				keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::UnselectAll),
+				) if !repeat => Some(Message::Delete),
+				keyboard::Key::Named(keyboard::key::Named::Escape) if !repeat => {
+					Some(Message::UnselectAll)
+				}
 				keyboard::Key::Named(keyboard::key::Named::ArrowUp) => Some(Message::ArrowUp),
 				keyboard::Key::Named(keyboard::key::Named::ArrowDown) => Some(Message::ArrowDown),
 				keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => Some(Message::ArrowLeft),
@@ -2378,7 +2380,7 @@ impl ArrangementView {
 			},
 			(true, false, false, repeat) => match key.to_latin(physical_key) {
 				Some('a') if !repeat => Some(Message::SelectAll),
-				Some('d') if !repeat => Some(Message::Duplicate),
+				Some('d') => Some(Message::Duplicate),
 				_ => match key.as_ref() {
 					keyboard::Key::Named(keyboard::key::Named::ArrowUp) => {
 						Some(Message::TransposeOctUp)
