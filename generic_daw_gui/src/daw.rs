@@ -748,6 +748,11 @@ impl Daw {
 					return self.update(Message::OpenFile(file));
 				}
 			}
+			file_tree::Message::OpenDir(dir) => {
+				if let Err(err) = open::that_detached(&*dir) {
+					warn!("{err}");
+				}
+			}
 		}
 
 		Task::none()

@@ -1,7 +1,7 @@
 use crate::{
 	components::{context_menu_entry, labeled_icon_button},
 	file_tree::{Action, Message, file::File},
-	icons::{chevron_down, chevron_right, hourglass, rotate_ccw, triangle_alert},
+	icons::{chevron_down, chevron_right, folder_open, folder_sync, hourglass, triangle_alert},
 	stylefns::{
 		button_warning_text, container_with_radius, weak_bordered_box, weaker_bordered_box,
 	},
@@ -33,9 +33,10 @@ pub struct Dir {
 enum Status {
 	Unloaded,
 	Loading,
-	Reloading {
+	Syncing {
 		dirs: Vec<Dir>,
 		files: Vec<File>,
+		open: bool,
 	},
 	Loaded {
 		dirs: Vec<Dir>,
@@ -72,20 +73,17 @@ impl Dir {
 						})
 					}
 				}
-				Action::Reload => {
+				Action::Sync => {
 					if let Status::Loaded { dirs, files, open } = &mut self.children {
-						if *open {
-							self.children = Status::Reloading {
-								dirs: std::mem::take(dirs),
-								files: std::mem::take(files),
-							};
-							Task::perform(Self::load(self.path.clone()), move |res| {
-								Message::Action(id, Action::Loaded(res))
-							})
-						} else {
-							self.children = Status::Unloaded;
-							Task::none()
-						}
+						self.children = Status::Syncing {
+							dirs: std::mem::take(dirs),
+							files: std::mem::take(files),
+							open: *open,
+						};
+
+						Task::perform(Self::load(self.path.clone()), move |res| {
+							Message::Action(id, Action::Loaded(res))
+						})
 					} else {
 						Task::none()
 					}
@@ -93,8 +91,16 @@ impl Dir {
 				Action::Loaded(res) => match res.clone() {
 					Ok((mut dirs, files)) => {
 						let mut tasks = Vec::new();
+						let mut open = true;
 
-						if let Status::Reloading { dirs: old_dirs, .. } = &mut self.children {
+						if let Status::Syncing {
+							dirs: old_dirs,
+							open: old_open,
+							..
+						} = &mut self.children
+						{
+							open = *old_open;
+
 							for (i, dir) in dirs.iter().enumerate() {
 								let j = old_dirs[i..]
 									.iter()
@@ -105,7 +111,7 @@ impl Dir {
 								if let Some(old_dir) = old_dirs.get_mut(i) {
 									if old_dir.path() == dir.path() {
 										tasks.push(
-											old_dir.update(old_dir.id, &Action::Reload).unwrap(),
+											old_dir.update(old_dir.id, &Action::Sync).unwrap(),
 										);
 									} else {
 										old_dirs.insert(i, dir.clone());
@@ -120,11 +126,7 @@ impl Dir {
 							dirs = std::mem::take(old_dirs);
 						}
 
-						self.children = Status::Loaded {
-							dirs,
-							files,
-							open: true,
-						};
+						self.children = Status::Loaded { dirs, files, open };
 
 						Task::batch(tasks)
 					}
@@ -134,9 +136,7 @@ impl Dir {
 					}
 				},
 			})
-		} else if let Status::Loaded { dirs, open, .. } = &mut self.children
-			&& *open
-		{
+		} else if let Status::Loaded { dirs, .. } = &mut self.children {
 			dirs.iter_mut().find_map(|dir| dir.update(id, action))
 		} else {
 			None
@@ -147,18 +147,18 @@ impl Dir {
 		let mut height = 0.0;
 		(
 			column![
-				match &self.children {
-					Status::Unloaded =>
-						labeled_icon_button(chevron_right(), &*self.name, button::text)
-							.width(Fill)
-							.on_press(Message::Action(self.id, Action::ToggleOpen))
-							.into(),
-					Status::Loading | Status::Reloading { .. } =>
-						labeled_icon_button(hourglass(), &*self.name, button::text)
-							.width(Fill)
-							.into(),
-					Status::Loaded { open, .. } => ContextMenu::new(
-						labeled_icon_button(
+				ContextMenu::new(
+					match &self.children {
+						Status::Unloaded =>
+							labeled_icon_button(chevron_right(), &*self.name, button::text)
+								.width(Fill)
+								.on_press(Message::Action(self.id, Action::ToggleOpen))
+								.into(),
+						Status::Loading | Status::Syncing { .. } =>
+							labeled_icon_button(hourglass(), &*self.name, button::text)
+								.width(Fill)
+								.into(),
+						Status::Loaded { open, .. } => labeled_icon_button(
 							if *open {
 								chevron_down()
 							} else {
@@ -168,31 +168,49 @@ impl Dir {
 							button::text
 						)
 						.width(Fill)
-						.on_press(Message::Action(self.id, Action::ToggleOpen)),
-						container(
-							context_menu_entry(rotate_ccw(), "Reload", "")
-								.on_press(Message::Action(self.id, Action::Reload)),
+						.on_press(Message::Action(self.id, Action::ToggleOpen))
+						.into(),
+						Status::Errored(err) => Element::new(tooltip(
+							labeled_icon_button(triangle_alert(), &*self.name, button_warning_text)
+								.width(Fill)
+								.on_press(Message::Action(self.id, Action::ToggleOpen)),
+							container(value(err).line_height(1.0))
+								.padding(3)
+								.style(container_with_radius(weak_bordered_box, 2)),
+							tooltip::Position::Bottom,
+						)),
+					},
+					container(column![
+						context_menu_entry(folder_sync(), "Sync", "").on_press_maybe(
+							matches!(self.children, Status::Loaded { .. })
+								.then_some(Message::Action(self.id, Action::Sync))
+						),
+						context_menu_entry(
+							folder_open(),
+							concat!(
+								"Open in ",
+								cfg_select!(
+								target_os = "windows" => "File Explorer",
+								target_os = "macos" => "Finder",
+								_ => "File Manager")
+							),
+							""
 						)
-						.width(160)
-						.style(container_with_radius(weaker_bordered_box, 5)),
-					)
-					.into(),
-					Status::Errored(err) => Element::new(tooltip(
-						labeled_icon_button(triangle_alert(), &*self.name, button_warning_text)
-							.width(Fill)
-							.on_press(Message::Action(self.id, Action::ToggleOpen)),
-						container(value(err).line_height(1.0))
-							.padding(3)
-							.style(container_with_radius(weak_bordered_box, 2)),
-						tooltip::Position::Bottom,
-					)),
-				},
+						.on_press(Message::OpenDir(self.path.clone())),
+					])
+					.width(if cfg!(target_os = "macos") { 160 } else { 200 })
+					.style(container_with_radius(weaker_bordered_box, 5)),
+				),
 				if let Status::Loaded {
 					dirs,
 					files,
 					open: true,
 				}
-				| Status::Reloading { dirs, files } = &self.children
+				| Status::Syncing {
+					dirs,
+					files,
+					open: true,
+				} = &self.children
 					&& !(dirs.is_empty() && files.is_empty())
 				{
 					let children = column(

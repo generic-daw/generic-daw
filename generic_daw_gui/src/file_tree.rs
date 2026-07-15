@@ -17,12 +17,13 @@ pub enum Message {
 	Action(DirId, Action),
 	DragFile(Arc<Path>, FileKind),
 	OpenFile(Arc<Path>, FileKind),
+	OpenDir(Arc<Path>),
 }
 
 #[derive(Clone, Debug)]
 pub enum Action {
 	ToggleOpen,
-	Reload,
+	Sync,
 	Loaded(Result<(Vec<Dir>, Vec<File>), Arc<std::io::Error>>),
 }
 
