@@ -735,7 +735,16 @@ impl Arrangement {
 		}
 	}
 
-	pub fn clip_trim_end_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
+	pub fn clip_trim_end_to(&mut self, track: usize, clip: usize, mut pos: BeatTime) {
+		if let Clip::Audio(audio) = &self.tracks[track].clips[clip] {
+			pos = pos.min(
+				audio.position.start()
+					+ (self.samples[&audio.sample].len(&self.transport) / audio.stretch
+						- audio.position.offset())
+					.to_beat_time(&self.transport),
+			);
+		}
+
 		if self.tracks[track].clips[clip].end(&self.transport) != pos {
 			self.tracks[track].clips[clip].trim_end_to(pos, &self.transport);
 			if let Clip::Audio(audio) = &mut self.tracks[track].clips[clip] {
@@ -887,7 +896,15 @@ impl Arrangement {
 		}
 	}
 
-	pub fn clip_slip_to(&mut self, track: usize, clip: usize, pos: BeatTime) {
+	pub fn clip_slip_to(&mut self, track: usize, clip: usize, mut pos: BeatTime) {
+		if let Clip::Audio(audio) = &self.tracks[track].clips[clip] {
+			pos = pos.min(
+				(self.samples[&audio.sample].len(&self.transport) / audio.stretch
+					- audio.position.len())
+				.to_beat_time(&self.transport),
+			);
+		}
+
 		if self.tracks[track].clips[clip].offset(&self.transport) != pos {
 			self.tracks[track].clips[clip].slip_to(pos, &self.transport);
 			self.node_action(
