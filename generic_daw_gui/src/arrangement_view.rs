@@ -1588,13 +1588,9 @@ impl ArrangementView {
 						.map(|track| self.arrangement.node(track.id))
 						.map(|node| {
 							let enabled = node.enabled
-								&& self
-									.arrangement
-									.transport()
-									.solo
-									.is_none_or(|solo| solo == node.id);
+								&& self.arrangement.solo().is_none_or(|solo| solo == node.id);
 
-							let soloed = self.arrangement.transport().solo == Some(node.id);
+							let soloed = self.arrangement.solo() == Some(node.id);
 
 							let button_style = |cond: bool| {
 								if !enabled {
@@ -1736,11 +1732,7 @@ impl ArrangementView {
 						let node = self.arrangement.node(track.id);
 
 						let enabled = node.enabled
-							&& self
-								.arrangement
-								.transport()
-								.solo
-								.is_none_or(|solo| solo == node.id);
+							&& self.arrangement.solo().is_none_or(|solo| solo == node.id);
 
 						Track::new(
 							track
@@ -1811,11 +1803,7 @@ impl ArrangementView {
 
 		let enabled = node.enabled
 			&& (node.ty != NodeType::Track
-				|| self
-					.arrangement
-					.transport()
-					.solo
-					.is_none_or(|solo| solo == node.id));
+				|| self.arrangement.solo().is_none_or(|solo| solo == node.id));
 
 		Split::new(
 			scrollable(
@@ -2022,13 +2010,9 @@ impl ArrangementView {
 	) -> Element<'a, Message> {
 		let enabled = node.enabled
 			&& (node.ty != NodeType::Track
-				|| self
-					.arrangement
-					.transport()
-					.solo
-					.is_none_or(|solo| solo == node.id));
+				|| self.arrangement.solo().is_none_or(|solo| solo == node.id));
 
-		let soloed = self.arrangement.transport().solo == Some(node.id);
+		let soloed = self.arrangement.solo() == Some(node.id);
 
 		let button_style = |cond: bool| {
 			if !enabled {

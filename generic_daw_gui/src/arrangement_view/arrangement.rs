@@ -48,6 +48,7 @@ pub struct Arrangement {
 
 	samples: BTreeMap<SampleId, Sample>,
 	midi_patterns: BTreeMap<MidiPatternId, MidiPattern>,
+	solo: Option<NodeId>,
 
 	tracks: Vec<Track>,
 	channels: Vec<Channel>,
@@ -85,6 +86,7 @@ impl Arrangement {
 
 				samples: BTreeMap::new(),
 				midi_patterns: BTreeMap::new(),
+				solo: None,
 
 				tracks: Vec::new(),
 				channels: Vec::new(),
@@ -204,6 +206,10 @@ impl Arrangement {
 		&self.midi_patterns
 	}
 
+	pub fn solo(&self) -> Option<NodeId> {
+		self.solo
+	}
+
 	fn send(&mut self, message: Message) {
 		if self.queue_empty() {
 			if let Err(PushError::Full(message)) = self.producer.push(message) {
@@ -253,18 +259,18 @@ impl Arrangement {
 	}
 
 	pub fn track_toggle_enabled(&mut self, id: NodeId) {
-		if let Some(solo) = self.transport.solo {
+		if let Some(solo) = self.solo.take() {
 			for i in 0..self.tracks.len() {
-				let node = self.node(self.tracks[i].id);
+				let node = self.node_mut(self.tracks[i].id);
 
-				if node.enabled == (solo == node.id || solo == id || node.id == id) {
+				node.enabled = solo == node.id || solo == id || node.id == id;
+				if (solo == node.id) == node.enabled {
 					continue;
 				}
 
-				self.channel_toggle_enabled(node.id);
+				let id = node.id;
+				self.node_action(id, NodeAction::ChannelToggleEnabled);
 			}
-
-			self.toggle_solo(solo);
 		} else {
 			self.channel_toggle_enabled(id);
 		}
@@ -416,7 +422,7 @@ impl Arrangement {
 
 	pub fn seek_to(&mut self, position: BeatTime) {
 		self.transport.version = Version::unique();
-		self.transport.position = position.to_seconds_time(self.transport());
+		self.transport.position = position.to_seconds_time(&self.transport);
 		self.send(Message::Position(
 			self.transport.version,
 			self.transport.position,
@@ -433,13 +439,27 @@ impl Arrangement {
 	}
 
 	pub fn toggle_solo(&mut self, id: NodeId) {
-		if !self.node(id).enabled {
-			self.channel_toggle_enabled(id);
-		}
-		let solo = (self.transport.solo != Some(id)).then_some(id);
-		if self.transport.solo != solo {
-			self.transport.solo = solo;
-			self.send(Message::Solo(solo));
+		let solo = (self.solo != Some(id)).then_some(id);
+
+		if self.solo != solo {
+			if !self.node(id).enabled {
+				self.channel_toggle_enabled(id);
+			}
+
+			for i in 0..self.tracks.len() {
+				let node = self.node(self.tracks[i].id);
+
+				if !node.enabled
+					|| self.solo.is_none_or(|solo| solo == node.id)
+						== solo.is_none_or(|solo| solo == node.id)
+				{
+					continue;
+				}
+
+				self.node_action(node.id, NodeAction::ChannelToggleEnabled);
+			}
+
+			self.solo = solo;
 		}
 	}
 
@@ -497,7 +517,7 @@ impl Arrangement {
 		for (_, outgoing) in self.nodes.values_mut() {
 			outgoing.remove(&id);
 		}
-		if self.transport.solo == Some(id) {
+		if self.solo == Some(id) {
 			self.toggle_solo(id);
 		}
 		self.send(Message::NodeRemove(id));

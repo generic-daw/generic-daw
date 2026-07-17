@@ -39,6 +39,8 @@ pub struct Project {
 	pub channels: Vec<Channel>,
 	#[prost(message)]
 	pub view: Option<ViewState>,
+	#[prost(message)]
+	pub solo: Option<TrackIndex>,
 }
 
 #[derive(Clone, Copy, Message)]
@@ -49,8 +51,6 @@ pub struct Transport {
 	pub numerator: u32,
 	#[prost(message)]
 	pub loop_range: Option<BeatRange>,
-	#[prost(message)]
-	pub solo: Option<TrackIndex>,
 }
 
 #[derive(Clone, Message)]

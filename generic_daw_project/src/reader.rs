@@ -18,6 +18,11 @@ impl Reader {
 		self.0.transport
 	}
 
+	#[must_use]
+	pub fn solo(&self) -> Option<proto::TrackIndex> {
+		self.0.solo
+	}
+
 	pub fn iter_samples(&self) -> impl Iterator<Item = (proto::SampleIndex, &proto::Sample)> {
 		(0..)
 			.map(|index| proto::SampleIndex { index })

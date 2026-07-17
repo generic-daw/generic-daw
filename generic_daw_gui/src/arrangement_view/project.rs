@@ -47,7 +47,6 @@ impl Arrangement {
 					start: loop_range.start().to_bits(),
 					end: loop_range.end().to_bits(),
 				}),
-			solo: None,
 		});
 
 		let mut samples = HashMap::new();
@@ -148,7 +147,7 @@ impl Arrangement {
 			);
 		}
 
-		if let Some(solo) = self.transport().solo {
+		if let Some(solo) = self.solo() {
 			writer.set_solo(tracks[&solo]);
 		}
 
@@ -265,7 +264,6 @@ impl Arrangement {
 			bpm,
 			numerator,
 			loop_range,
-			solo,
 		} = reader.transport();
 
 		arrangement.set_bpm(NonZero::new(bpm as u16)?);
@@ -584,7 +582,7 @@ impl Arrangement {
 			}
 		}
 
-		if let Some(solo) = solo {
+		if let Some(solo) = reader.solo() {
 			arrangement.toggle_solo(tracks[&solo]);
 		}
 

@@ -70,8 +70,8 @@ impl Writer {
 		}
 	}
 
-	pub fn set_solo(&mut self, soloed: proto::TrackIndex) {
-		self.0.transport.solo = Some(soloed);
+	pub fn set_solo(&mut self, solo: proto::TrackIndex) {
+		self.0.solo = Some(solo);
 	}
 
 	#[must_use]
