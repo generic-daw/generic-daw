@@ -222,12 +222,12 @@ impl Arrangement {
 		config: Config,
 		plugins: Vec<PluginDescriptor>,
 	) -> Task<daw::Message> {
-		let (partial_sender, partial_receiver) = oneshot::async_channel();
+		let (tasks_sender, tasks_receiver) = oneshot::async_channel();
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
 
 		Task::batch([
 			Task::future(unblock(move || {
-				partial_sender
+				tasks_sender
 					.send(Self::do_load(
 						path,
 						sample_rate,
@@ -240,7 +240,7 @@ impl Arrangement {
 			}))
 			.discard(),
 			Task::stream(progress_receiver).chain(
-				Task::perform(partial_receiver, Result::ok).and_then(|tasks| {
+				Task::perform(tasks_receiver, Result::ok).and_then(|tasks| {
 					tasks.unwrap_or_else(|| Task::done(daw::Message::OpenedFile(None)))
 				}),
 			),

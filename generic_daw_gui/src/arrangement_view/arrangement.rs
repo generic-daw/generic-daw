@@ -30,7 +30,7 @@ use std::{
 	path::Path,
 	sync::{Arc, LazyLock},
 };
-use utils::{NoDebug, ShiftMoveExt as _};
+use utils::{NoClone, NoDebug, ShiftMoveExt as _};
 
 static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
 	HostInfo::new_from_cstring(
@@ -99,16 +99,24 @@ impl Arrangement {
 		)
 	}
 
+	pub fn take_stream(&mut self) -> Stream {
+		self.stream.take().unwrap().0
+	}
+
 	pub fn set_stream(&mut self, stream: Stream) {
 		self.stream = Some(stream.into());
 	}
 
-	pub fn change_config(&mut self, config: &Config) {
+	pub fn request_processor(
+		&mut self,
+		a_receiver: oneshot::Receiver<AudioThread>,
+	) -> oneshot::Receiver<AudioThread> {
 		let (a_sender, p_receiver) = oneshot::channel();
-		let (_, a_receiver) = oneshot::channel();
 		self.send(Message::RequestProcessor(a_sender, a_receiver));
+		p_receiver
+	}
 
-		let mut processor = p_receiver.recv().unwrap();
+	pub fn change_config(&mut self, NoClone(mut processor): NoClone<AudioThread>, config: &Config) {
 		let (p_sender, a_receiver) = oneshot::channel();
 
 		self.stream = None;
@@ -125,17 +133,6 @@ impl Arrangement {
 
 		self.transport.sample_rate = sample_rate;
 		self.transport.frames = frames;
-	}
-
-	pub fn take_stream_from(
-		&mut self,
-		other: &mut Self,
-		a_receiver: oneshot::Receiver<AudioThread>,
-	) -> oneshot::Receiver<AudioThread> {
-		let (a_sender, p_receiver) = oneshot::channel();
-		other.send(Message::RequestProcessor(a_sender, a_receiver));
-		self.stream = other.stream.take();
-		p_receiver
 	}
 
 	pub fn update(&mut self, mut batch: Batch) -> Vec<clap_host::Message> {
@@ -1022,9 +1019,8 @@ impl Arrangement {
 
 		let master = self.master;
 
-		let (a_sender, p_receiver) = oneshot::channel();
 		let (p_sender, a_receiver) = oneshot::channel();
-		self.send(Message::RequestProcessor(a_sender, a_receiver));
+		let p_receiver = self.request_processor(a_receiver);
 
 		Task::batch([
 			Task::future(unblock(move || {
@@ -1068,9 +1064,8 @@ impl Arrangement {
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
 		let transport = self.transport;
 
-		let (a_sender, p_receiver) = oneshot::channel();
 		let (p_sender, a_receiver) = oneshot::channel();
-		self.send(Message::RequestProcessor(a_sender, a_receiver));
+		let p_receiver = self.request_processor(a_receiver);
 
 		Task::batch([
 			Task::future(unblock(move || {

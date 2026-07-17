@@ -23,8 +23,8 @@ use crate::{
 	},
 };
 use generic_daw_core::{
-	AudioClip, Batch, MidiClip, MidiKey, MidiNote, MidiNoteId, MidiPatternId, NodeId, PanMode,
-	PluginId, Point, SampleId,
+	AudioClip, AudioThread, Batch, MidiClip, MidiKey, MidiNote, MidiNoteId, MidiPatternId, NodeId,
+	PanMode, PluginId, Point, SampleId,
 	clap_host::PluginDescriptor,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -65,7 +65,7 @@ use std::{
 	time::Duration,
 };
 use sweeten::widget::drag::DragEvent;
-use utils::{NoDebug, boxed_slice};
+use utils::{NoClone, NoDebug, boxed_slice};
 
 mod arrangement;
 mod channel;
@@ -85,6 +85,7 @@ pub use recording::Recording;
 
 #[derive(Clone, Debug)]
 pub enum Message {
+	ChangeConfig(Box<NoClone<AudioThread>>),
 	Batch(Batch),
 	DrainQueue,
 	RequestUpdate,
@@ -245,6 +246,7 @@ impl ArrangementView {
 		state: &mut State,
 	) -> Action<daw::Instruction, Message> {
 		match message {
+			Message::ChangeConfig(processor) => self.arrangement.change_config(*processor, config),
 			Message::Batch(msg) => {
 				let before = self.arrangement.transport().position;
 
@@ -2459,6 +2461,19 @@ impl ArrangementView {
 		};
 
 		self.arrangement.save(clap_host, view)
+	}
+
+	pub fn change_config(&mut self) -> Task<Message> {
+		self.end_recording();
+		let (_, a_receiver) = oneshot::channel();
+		Task::perform(
+			self.arrangement.request_processor(a_receiver).into_future(),
+			Result::ok,
+		)
+		.and_then(Task::done)
+		.map(NoClone)
+		.map(Box::new)
+		.map(Message::ChangeConfig)
 	}
 
 	pub fn end_recording(&mut self) {

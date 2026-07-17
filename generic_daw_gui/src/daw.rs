@@ -374,16 +374,15 @@ impl Daw {
 				NoClone(a_receiver),
 				view,
 			) => {
-				let p_receiver = arrangement
-					.take_stream_from(&mut self.arrangement_view.arrangement, a_receiver);
-
+				self.project = project;
+				arrangement.set_stream(self.arrangement_view.arrangement.take_stream());
 				let mut arrangement = std::mem::replace(
 					&mut self.arrangement_view,
 					ArrangementView::new(*arrangement, &self.state, view),
 				)
 				.arrangement;
 
-				self.project = project;
+				let p_receiver = arrangement.request_processor(a_receiver);
 
 				return Task::future(unblock(|| {
 					while !arrangement.drain_queue() {
@@ -576,7 +575,7 @@ impl Daw {
 			}
 			Message::CloseConfigView => self.config_view = None,
 			Message::MergeConfig(config) => {
-				let fut = if self.config.clap_paths == config.clap_paths {
+				let mut fut = if self.config.clap_paths == config.clap_paths {
 					Task::none()
 				} else {
 					let scan = Scan::unique();
@@ -592,8 +591,13 @@ impl Daw {
 				}
 
 				if self.config.audio != config.audio {
-					self.arrangement_view.end_recording();
-					self.arrangement_view.arrangement.change_config(&config);
+					let project = self.project;
+					fut = Task::batch([
+						fut,
+						self.arrangement_view
+							.change_config()
+							.map(move |message| Message::Arrangement(project, message)),
+					]);
 				}
 
 				self.config = *config;
