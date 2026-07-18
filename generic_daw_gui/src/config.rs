@@ -192,30 +192,24 @@ impl Config {
 }
 
 mod devices_serde {
-	use crate::config::Devices;
-	use generic_daw_core::HostId;
 	use serde::{Deserialize, Deserializer, Serialize, Serializer};
-	use std::str::FromStr as _;
 
 	#[derive(Deserialize, Serialize)]
-	struct DevicesData {
+	struct Devices {
 		host: Box<str>,
 		input: Option<Box<str>>,
 		output: Option<Box<str>>,
 	}
 
-	impl Serialize for Devices {
-		fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where
-			S: Serializer,
-		{
+	impl Serialize for super::Devices {
+		fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 			match self {
 				Self::Default => None,
 				Self::WithHost {
 					host,
 					input,
 					output,
-				} => Some(DevicesData {
+				} => Some(Devices {
 					host: host.to_string().into(),
 					input: input.clone(),
 					output: output.clone(),
@@ -225,15 +219,12 @@ mod devices_serde {
 		}
 	}
 
-	impl<'de> Deserialize<'de> for Devices {
-		fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-		where
-			D: Deserializer<'de>,
-		{
-			Ok(match Option::<DevicesData>::deserialize(deserializer)? {
+	impl<'de> Deserialize<'de> for super::Devices {
+		fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+			Ok(match Option::<Devices>::deserialize(deserializer)? {
 				None => Self::Default,
 				Some(data) => Self::WithHost {
-					host: HostId::from_str(&data.host).map_err(serde::de::Error::custom)?,
+					host: data.host.parse().map_err(serde::de::Error::custom)?,
 					input: data.input,
 					output: data.output,
 				},
