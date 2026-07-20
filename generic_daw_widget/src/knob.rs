@@ -422,7 +422,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 			self.tooltip.as_mut().map(|tooltip| {
 				overlay::Element::new(Box::new(Overlay {
 					tooltip,
-					tree: tree.children.iter_mut().next().unwrap(),
+					tree: &mut tree.children[0],
 					position: layout.position()
 						+ Vector::new(layout.bounds().width / 2.0, layout.bounds().height)
 						+ translation,

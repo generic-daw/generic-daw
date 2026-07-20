@@ -223,7 +223,7 @@ impl Plugin {
 	}
 
 	pub fn rescan_params(&mut self, flags: ParamRescanFlags) {
-		for param in &mut *self.params {
+		for param in &mut self.params {
 			param.rescan(&mut self.instance, flags);
 		}
 	}

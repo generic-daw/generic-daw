@@ -267,7 +267,7 @@ impl<W: Erased> Injector<W> {
 	fn try_do_work(&self, scratch: &mut W::Scratch, injector: &Injector<W::Inject>) -> bool {
 		if self
 			.active
-			.fetch_update(Acquire, Relaxed, |active| active.checked_add(1))
+			.try_update(Acquire, Relaxed, |active| active.checked_add(1))
 			.is_err()
 		{
 			return false;

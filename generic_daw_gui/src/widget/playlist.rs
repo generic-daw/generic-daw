@@ -502,7 +502,7 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 		cursor: Cursor,
 		viewport: &Rectangle,
 	) {
-		let state = &*self.state.borrow();
+		let state = self.state.borrow();
 
 		for layout in layout.children() {
 			let Some(bounds) = Rectangle::new(

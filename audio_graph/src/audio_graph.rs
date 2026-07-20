@@ -187,7 +187,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		) in &mut buffers.incoming
 		{
 			let dep_entry = &self.graph[dep];
-			let dep_buffers = &*dep_entry.read_buffers_uncontended();
+			let dep_buffers = dep_entry.read_buffers_uncontended();
 			let latency_diff = max_latency - dep_entry.latency.load(Relaxed);
 			delay_line.resize(latency_diff);
 
@@ -266,12 +266,12 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	pub fn for_node_mut(&mut self, node: NodeId, f: impl FnOnce(&mut Node, &Node::State)) {
-		f(&mut *self.graph.get_mut(&node).unwrap().node(), &self.state);
+		f(self.graph.get_mut(&node).unwrap().node(), &self.state);
 	}
 
 	pub fn for_each_node_mut(&mut self, mut f: impl FnMut(&mut Node)) {
 		for entry in self.graph.values_mut() {
-			f(&mut *entry.node());
+			f(entry.node());
 		}
 	}
 
