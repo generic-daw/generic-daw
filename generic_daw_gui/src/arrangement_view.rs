@@ -504,15 +504,13 @@ impl ArrangementView {
 			}
 			Message::MidiClipAdd(id, track, pos) => {
 				let mut clip = MidiClip::new(id);
-				clip.position
-					.trim_end_to(
-						self.arrangement.midi_patterns()[&id]
-							.len()
-							.max(BeatTime::new(
-								u64::from(self.arrangement.transport().numerator.get()),
-								0,
-							)),
-					);
+				clip.position.trim_end_to(
+					if self.arrangement.midi_patterns()[&id].notes.is_empty() {
+						BeatTime::new(u64::from(self.arrangement.transport().numerator.get()), 0)
+					} else {
+						self.arrangement.midi_patterns()[&id].len()
+					},
+				);
 				clip.position.move_to(pos);
 				let (track, task) = if let Some(track) = track
 					&& track < self.arrangement.tracks().len()

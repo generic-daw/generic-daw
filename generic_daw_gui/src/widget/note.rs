@@ -214,7 +214,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Note<'_, Message> {
 				shaping: Shaping::Basic,
 				wrapping: Wrapping::None,
 				ellipsis: Ellipsis::None,
-				hint_factor: renderer.scale_factor(),
+				hint_factor: renderer.hint_factor(),
 			};
 
 			renderer.fill_text(

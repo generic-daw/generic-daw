@@ -837,7 +837,7 @@ impl<'a, Message> Seeker<'a, Message> {
 				shaping: Shaping::Basic,
 				wrapping: Wrapping::None,
 				ellipsis: Ellipsis::None,
-				hint_factor: renderer.scale_factor(),
+				hint_factor: renderer.hint_factor(),
 			};
 
 			renderer.fill_text(
@@ -875,7 +875,7 @@ impl<'a, Message> Seeker<'a, Message> {
 				shaping: Shaping::Basic,
 				wrapping: Wrapping::None,
 				ellipsis: Ellipsis::None,
-				hint_factor: renderer.scale_factor(),
+				hint_factor: renderer.hint_factor(),
 			};
 
 			renderer.fill_text(

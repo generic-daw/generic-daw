@@ -537,7 +537,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				shaping: Shaping::Auto,
 				wrapping: Wrapping::None,
 				ellipsis: Ellipsis::Middle,
-				hint_factor: renderer.scale_factor(),
+				hint_factor: renderer.hint_factor(),
 			};
 
 			renderer.fill_text(

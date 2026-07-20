@@ -142,7 +142,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	}
 
 	#[expect(clippy::significant_drop_tightening)]
-	pub(crate) fn process_node(
+	fn process_node(
 		&self,
 		entry: &Entry<Node>,
 		scratch: &mut [[f32; 2]],
