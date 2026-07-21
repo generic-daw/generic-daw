@@ -73,8 +73,8 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		self.max_frames = max_frames;
 	}
 
-	pub fn process_all(&mut self, node: NodeId, audio: &mut [[f32; 2]]) {
-		self.curr_len = audio.len();
+	pub fn process_all(&mut self, len: usize) {
+		self.curr_len = len;
 
 		for (&id, entry) in &mut self.graph {
 			*entry.indegree.get_mut() = entry.buffers().incoming.len();
@@ -96,8 +96,6 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		for entry in self.graph.values_mut() {
 			debug_assert_eq!(*entry.indegree.get_mut(), 0);
 		}
-
-		self.copy_output(node, audio);
 	}
 
 	pub fn process_subtree(&mut self, node: NodeId, audio: &mut [[f32; 2]]) {
@@ -138,7 +136,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 		self.needs_reset = false;
 
-		self.copy_output(node, audio);
+		audio.copy_from_slice(&self.output(node)[..audio.len()]);
 	}
 
 	#[expect(clippy::significant_drop_tightening)]
@@ -265,18 +263,35 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		self.graph.get_mut(&node).unwrap()
 	}
 
-	pub fn for_node_mut(&mut self, node: NodeId, f: impl FnOnce(&mut Node, &Node::State)) {
-		f(self.graph.get_mut(&node).unwrap().node(), &self.state);
+	pub fn for_node(&mut self, node: NodeId, f: impl FnOnce(&Node, &[[f32; 2]])) {
+		let entry = self.graph.get_mut(&node).unwrap();
+		f(
+			&*entry.node_uncontended(),
+			&entry.read_buffers_uncontended().audio,
+		);
 	}
 
-	pub fn for_each_node_mut(&mut self, mut f: impl FnMut(&mut Node)) {
+	pub fn for_node_mut(&mut self, node: NodeId, f: impl FnOnce(&mut Node, &mut Node::State)) {
+		f(self.graph.get_mut(&node).unwrap().node(), &mut self.state);
+	}
+
+	pub fn for_each_node(&mut self, mut f: impl FnMut(&Node, &[[f32; 2]])) {
 		for entry in self.graph.values_mut() {
-			f(entry.node());
+			f(
+				&*entry.node_uncontended(),
+				&entry.read_buffers_uncontended().audio,
+			);
 		}
 	}
 
-	pub fn copy_output(&mut self, node: NodeId, audio: &mut [[f32; 2]]) {
-		audio.copy_from_slice(&self.entry_mut(node).buffers().audio[..audio.len()]);
+	pub fn for_each_node_mut(&mut self, mut f: impl FnMut(&mut Node, &mut Node::State)) {
+		for entry in self.graph.values_mut() {
+			f(entry.node(), &mut self.state);
+		}
+	}
+
+	pub fn output(&mut self, node: NodeId) -> &mut [[f32; 2]] {
+		&mut self.entry_mut(node).buffers().audio
 	}
 
 	#[must_use]

@@ -1,15 +1,14 @@
 #![warn(clippy::iter_over_hash_type)]
 
 use crate::{
-	arrangement_view::{
-		self, Arrangement, Node, crc, midi_pattern::MidiPatternPair, sample::SamplePair,
-	},
+	arrangement_view::{self, Arrangement, crc, midi_pattern::MidiPatternPair, sample::SamplePair},
 	clap_host::ClapHost,
 	config::Config,
 	daw::{self, Project},
 };
 use generic_daw_core::{
-	AudioClip, Clip, ClipId, MidiClip, MidiKey, MidiNote, MidiNoteId, PanMode, Point, Transition,
+	AudioClip, Channels, Clip, ClipId, MidiClip, MidiKey, MidiNote, MidiNoteId, NodeId, PanMode,
+	Point, Transition,
 	clap_host::{PluginDescriptor, StateContextType},
 	time::{BeatRange, BeatSpan, BeatTime, OffsetBeatRange, OffsetBeatSpan, SecondsTime},
 };
@@ -125,17 +124,18 @@ impl Arrangement {
 						}
 						.into(),
 					}),
-					self.node(track.id)
-						.plugins
-						.iter()
-						.map(|plugin| proto::Plugin {
-							id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
-							state: clap_host
-								.get_state(plugin.id, StateContextType::ForProject)
-								.map(Vec::from),
-							mix: plugin.mix,
-							active: plugin.active,
-						}),
+					track.input.as_ref().map(|input| proto::Channels {
+						left: input.channels.left.into(),
+						right: input.channels.right.into(),
+					}),
+					node.plugins.iter().map(|plugin| proto::Plugin {
+						id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
+						state: clap_host
+							.get_state(plugin.id, StateContextType::ForProject)
+							.map(Vec::from),
+						mix: plugin.mix,
+						active: plugin.active,
+					}),
 					node.utility.volume,
 					match node.utility.pan {
 						PanMode::Stereo(pan) => proto::PanModeStereo { pan }.into(),
@@ -143,6 +143,10 @@ impl Arrangement {
 					},
 					node.enabled,
 					node.bypassed,
+					node.output.as_ref().map(|output| proto::Channels {
+						left: output.left.into(),
+						right: output.right.into(),
+					}),
 				),
 			);
 		}
@@ -176,6 +180,10 @@ impl Arrangement {
 					},
 					channel.enabled,
 					channel.bypassed,
+					channel.output.as_ref().map(|output| proto::Channels {
+						left: output.left.into(),
+						right: output.right.into(),
+					}),
 				),
 			);
 		}
@@ -197,10 +205,21 @@ impl Arrangement {
 		writer.finalize()
 	}
 
-	pub fn empty(sample_rate: NonZero<u32>, buffer_size: NonZero<u32>) -> Task<daw::Message> {
+	pub fn empty(
+		input_channels: u16,
+		output_channels: NonZero<u16>,
+		sample_rate: NonZero<u32>,
+		buffer_size: NonZero<u32>,
+	) -> Task<daw::Message> {
 		let project = Project::unique();
 		let (p_sender, p_receiver) = oneshot::channel();
-		let (arrangement, task) = Self::create(sample_rate, buffer_size, p_sender);
+		let (arrangement, task) = Self::create(
+			input_channels,
+			output_channels,
+			sample_rate,
+			buffer_size,
+			p_sender,
+		);
 
 		Task::done(daw::Message::ProjectLoaded(
 			project,
@@ -216,6 +235,8 @@ impl Arrangement {
 
 	pub fn start_load(
 		path: Arc<Path>,
+		input_channels: u16,
+		output_channels: NonZero<u16>,
 		sample_rate: NonZero<u32>,
 		buffer_size: NonZero<u32>,
 		config: Config,
@@ -229,6 +250,8 @@ impl Arrangement {
 				tasks_sender
 					.send(Self::do_load(
 						path,
+						input_channels,
+						output_channels,
 						sample_rate,
 						buffer_size,
 						&plugins,
@@ -248,6 +271,8 @@ impl Arrangement {
 
 	fn do_load(
 		path: Arc<Path>,
+		input_channels: u16,
+		output_channels: NonZero<u16>,
 		sample_rate: NonZero<u32>,
 		buffer_size: NonZero<u32>,
 		plugins: &[PluginDescriptor],
@@ -255,7 +280,13 @@ impl Arrangement {
 		daw: &Sender<daw::Message>,
 	) -> Option<Task<daw::Message>> {
 		let (p_sender, p_receiver) = oneshot::channel();
-		let (mut arrangement, task) = Self::create(sample_rate, buffer_size, p_sender);
+		let (mut arrangement, task) = Self::create(
+			input_channels,
+			output_channels,
+			sample_rate,
+			buffer_size,
+			p_sender,
+		);
 
 		let gdp = std::fs::read(&path).ok()?;
 		let reader = Reader::new(&gdp)?;
@@ -415,17 +446,14 @@ impl Arrangement {
 
 		let mut ignored_plugins = HashSet::new();
 
-		let mut load_channel = |node: &Node, channel: &proto::Channel| {
+		let mut load_channel = |arrangement: &mut Self, node: NodeId, channel: &proto::Channel| {
 			if channel.volume != 1.0 {
-				messages.push(arrangement_view::Message::ChannelVolumeChanged(
-					node.id,
-					channel.volume,
-				));
+				arrangement.channel_volume_changed(node, channel.volume);
 			}
 
 			if channel.pan.pan_mode? != proto::PanMode::Stereo(proto::PanModeStereo { pan: 0.0 }) {
-				messages.push(arrangement_view::Message::ChannelPanChanged(
-					node.id,
+				arrangement.channel_pan_changed(
+					node,
 					match channel.pan.pan_mode? {
 						proto::PanMode::Stereo(proto::PanModeStereo { pan }) => {
 							PanMode::Stereo(pan)
@@ -434,16 +462,26 @@ impl Arrangement {
 							PanMode::SplitStereo(l, r)
 						}
 					},
-				));
+				);
 			}
 
 			if !channel.enabled {
-				messages.push(arrangement_view::Message::ChannelToggleEnabled(node.id));
+				arrangement.channel_toggle_enabled(node);
 			}
 
 			if channel.bypassed {
-				messages.push(arrangement_view::Message::ChannelToggleBypassed(node.id));
+				arrangement.channel_toggle_bypassed(node);
 			}
+
+			arrangement.output_change_channels(
+				node,
+				channel
+					.output
+					.map(|proto::Channels { left, right }| Channels {
+						left: left as u16,
+						right: right as u16,
+					}),
+			);
 
 			let mut i = 0;
 
@@ -470,14 +508,14 @@ impl Arrangement {
 				};
 
 				messages.push(arrangement_view::Message::PluginAdd(
-					node.id,
+					node,
 					descriptor.clone(),
 					false,
 				));
 
 				if let Some(state) = plugin.state.as_deref() {
 					messages.push(arrangement_view::Message::PluginSetState(
-						node.id,
+						node,
 						i,
 						NoDebug(Box::from(state)),
 					));
@@ -485,12 +523,12 @@ impl Arrangement {
 
 				if plugin.mix != 1.0 {
 					messages.push(arrangement_view::Message::PluginMixChanged(
-						node.id, i, plugin.mix,
+						node, i, plugin.mix,
 					));
 				}
 
 				if plugin.active {
-					messages.push(arrangement_view::Message::PluginToggleActive(node.id, i));
+					messages.push(arrangement_view::Message::PluginToggleActive(node, i));
 				}
 
 				i += 1;
@@ -500,15 +538,23 @@ impl Arrangement {
 		};
 
 		let mut tracks = HashMap::new();
-		for (index, clips, channel) in reader.iter_tracks() {
-			let track = arrangement.tracks().len();
-			let id = arrangement.insert_track(track);
+		for (index, track) in reader.iter_tracks() {
+			let track_idx = arrangement.tracks().len();
+			let id = arrangement.insert_track(track_idx);
 			tracks.insert(index, id);
-			load_channel(arrangement.node(id), channel)?;
+			load_channel(&mut arrangement, id, &track.channel)?;
 
-			for clip in clips {
+			arrangement.input_change_channels(
+				id,
+				track.input.map(|proto::Channels { left, right }| Channels {
+					left: left as u16,
+					right: right as u16,
+				}),
+			);
+
+			for clip in track.clips.iter().filter_map(|clip| clip.clip) {
 				arrangement.add_clip(
-					track,
+					track_idx,
 					match clip {
 						proto::Clip::Audio(clip) => {
 							let Feedback::Use(sample) = samples.get(&clip.sample)? else {
@@ -592,15 +638,15 @@ impl Arrangement {
 		let mut channels = HashMap::new();
 		let mut iter_channels = reader.iter_channels();
 
-		let node = arrangement.master();
+		let id = arrangement.master().id;
 		let (index, channel) = iter_channels.next()?;
-		load_channel(node, channel)?;
-		channels.insert(index, node.id);
+		load_channel(&mut arrangement, id, channel)?;
+		channels.insert(index, id);
 
 		for (index, channel) in iter_channels {
 			let id = arrangement.add_channel();
 			channels.insert(index, id);
-			load_channel(arrangement.node(id), channel)?;
+			load_channel(&mut arrangement, id, channel)?;
 		}
 
 		drop(ignored_plugins);

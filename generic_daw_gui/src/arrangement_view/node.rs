@@ -8,13 +8,14 @@ use crate::{
 	},
 	stylefns::{container_with_radius, weaker_bordered_box},
 };
-use generic_daw_core::{NodeId, PanMode, Utility};
+use generic_daw_core::{Channels, NodeId, PanMode, Transport, Utility};
 use generic_daw_widget::{context_menu::ContextMenu, knob::Knob, peak_meter};
 use iced::{
+	Alignment::Center,
 	Element, Fill, padding,
-	widget::{self, column, container, row, rule},
+	widget::{self, column, container, radio, row, rule, space, text, value},
 };
-use std::time::Instant;
+use std::{iter::once, time::Instant};
 use utils::NoDebug;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -33,12 +34,13 @@ pub struct Node {
 	pub utility: Utility,
 	pub enabled: bool,
 	pub bypassed: bool,
+	pub output: Option<Channels>,
 	pub peaks: NoDebug<[peak_meter::State; 2]>,
 	pub polyphony: usize,
 }
 
 impl Node {
-	pub fn new(ty: NodeType, id: NodeId) -> Self {
+	pub fn new(ty: NodeType, id: NodeId, output: Option<Channels>) -> Self {
 		Self {
 			ty,
 			id,
@@ -50,6 +52,7 @@ impl Node {
 			},
 			enabled: true,
 			bypassed: false,
+			output,
 			peaks: [peak_meter::State::default(), peak_meter::State::default()].into(),
 			polyphony: 0,
 		}
@@ -237,5 +240,133 @@ impl Node {
 			)
 			.into(),
 		}
+	}
+
+	pub fn input_context_menu<'a>(
+		id: NodeId,
+		content: impl Into<Element<'a, Message>>,
+		input: Option<Channels>,
+		transport: &Transport,
+	) -> Element<'a, Message> {
+		ContextMenu::new(
+			content,
+			input.map(|input| {
+				container(
+					row![
+						column(once(space().height(15).into()).chain(
+							(0..transport.input_channels).map(|channel| {
+								container(value(channel + 1).size(13).line_height(1.0))
+									.padding(1)
+									.into()
+							})
+						))
+						.spacing(5)
+						.align_x(Center),
+						column(
+							once(
+								container(text("L").size(13).line_height(1.0))
+									.padding(1)
+									.into(),
+							)
+							.chain((0..transport.input_channels).map(|channel| {
+								radio("", channel, Some(input.left), |_| {
+									Message::InputChangeChannels(id, Some(input.left(channel)))
+								})
+								.size(15)
+								.text_size(1)
+								.spacing(0)
+								.into()
+							})),
+						)
+						.spacing(5)
+						.align_x(Center),
+						column(
+							once(
+								container(text("R").size(13).line_height(1.0))
+									.padding(1)
+									.into(),
+							)
+							.chain((0..transport.input_channels).map(|channel| {
+								radio("", channel, Some(input.right), |_| {
+									Message::InputChangeChannels(id, Some(input.right(channel)))
+								})
+								.size(15)
+								.text_size(1)
+								.spacing(0)
+								.into()
+							})),
+						)
+						.spacing(5)
+						.align_x(Center),
+					]
+					.spacing(5),
+				)
+				.padding(5)
+				.style(container_with_radius(weaker_bordered_box, 5))
+			}),
+		)
+		.into()
+	}
+
+	pub fn output_context_menu<'a>(
+		id: NodeId,
+		content: impl Into<Element<'a, Message>>,
+		output: Option<Channels>,
+		transport: &Transport,
+	) -> Element<'a, Message> {
+		ContextMenu::new(
+			content,
+			output.map(|output| {
+				container(
+					column![
+						row(once(space().width(15).into()).chain(
+							(0..transport.output_channels.get()).map(|channel| container(
+								value(channel + 1).size(13).line_height(1.0)
+							)
+							.padding(1)
+							.center_x(15)
+							.into())
+						))
+						.spacing(5),
+						row(once(
+							container(text("L").size(13).line_height(1.0))
+								.padding(1)
+								.center_x(15)
+								.into(),
+						)
+						.chain((0..transport.output_channels.get()).map(|channel| {
+							radio("", channel, Some(output.left), |_| {
+								Message::OutputChangeChannels(id, Some(output.left(channel)))
+							})
+							.size(15)
+							.text_size(1)
+							.spacing(0)
+							.into()
+						})))
+						.spacing(5),
+						row(once(
+							container(text("R").size(13).line_height(1.0))
+								.padding(1)
+								.center_x(15)
+								.into(),
+						)
+						.chain((0..transport.output_channels.get()).map(|channel| {
+							radio("", channel, Some(output.right), |_| {
+								Message::OutputChangeChannels(id, Some(output.right(channel)))
+							})
+							.size(15)
+							.text_size(1)
+							.spacing(0)
+							.into()
+						})))
+						.spacing(5),
+					]
+					.spacing(5),
+				)
+				.padding(5)
+				.style(container_with_radius(weaker_bordered_box, 5))
+			}),
+		)
+		.into()
 	}
 }

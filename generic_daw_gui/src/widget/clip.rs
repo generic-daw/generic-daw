@@ -853,11 +853,10 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			Inner::Recording(inner) => {
 				if mesh_cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform", || {
-						let resample_ratio = inner.core.resample_ratio(self.transport);
 						inner.lods.mesh(
-							inner.core.samples(),
+							&inner.samples,
 							self.transport,
-							frames_per_px / resample_ratio as f32,
+							frames_per_px,
 							theme.palette().background.strong.text,
 							layout.bounds().shrink(padding::top(LINE_HEIGHT)),
 							lower_bounds,

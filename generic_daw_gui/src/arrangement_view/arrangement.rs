@@ -6,31 +6,35 @@ use crate::{
 		node::{Node, NodeType},
 		plugin::{Plugin, PluginPair},
 		poll_consumer,
+		recording::Recording,
 		sample::{Sample, SamplePair},
-		track::Track,
+		track::{Input, Track},
 	},
 	clap_host,
 	config::Config,
-	daw,
+	daw::{self, FREEZES_DIR, format_now},
 };
 use generic_daw_core::{
-	AudioClip, AudioThread, Batch, Clip, ClipId, Message, MidiClip, MidiKey, MidiNote, MidiNoteId,
-	MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode, PluginId, Point,
-	SampleId, Stream, Transport, Update, Version, build_output_stream,
+	AudioClip, AudioThread, Batch, Channels, Clip, ClipId, Message, MidiClip, MidiKey, MidiNote,
+	MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode,
+	PluginId, Point, SampleId, Stream, Transport, Update, Version, build_audio_streams,
 	clap_host::{ClapId, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
+use hound::{WavSpec, WavWriter};
 use iced::Task;
 use log::warn;
 use rtrb::{Producer, PushError, RingBuffer};
 use smol::unblock;
 use std::{
 	collections::{BTreeMap, VecDeque},
+	fs::File,
+	io::BufWriter,
 	num::NonZero,
 	path::Path,
-	sync::{Arc, LazyLock},
+	sync::LazyLock,
 };
-use utils::{NoClone, NoDebug, ShiftMoveExt as _};
+use utils::{NoClone, NoDebug, ShiftMoveExt as _, boxed_slice};
 
 static HOST: LazyLock<HostInfo> = LazyLock::new(|| {
 	HostInfo::new_from_cstring(
@@ -57,11 +61,14 @@ pub struct Arrangement {
 
 	producer: Producer<Message>,
 	queue: VecDeque<Message>,
-	stream: Option<NoDebug<Stream>>,
+	input_stream: Option<NoDebug<Stream>>,
+	output_stream: Option<NoDebug<Stream>>,
 }
 
 impl Arrangement {
 	pub fn create(
+		input_channels: u16,
+		output_channels: NonZero<u16>,
 		sample_rate: NonZero<u32>,
 		frames: NonZero<u32>,
 		p_sender: oneshot::Sender<AudioThread>,
@@ -69,14 +76,27 @@ impl Arrangement {
 		let (p_producer, consumer) = RingBuffer::new(2048);
 		let (producer, p_consumer) = RingBuffer::new(2048);
 
-		let (processor, master, transport) =
-			AudioThread::create(sample_rate, frames, p_producer, p_consumer);
+		let (processor, master, transport) = AudioThread::create(
+			input_channels,
+			output_channels,
+			sample_rate,
+			frames,
+			p_producer,
+			p_consumer,
+		);
 		p_sender.send(processor).unwrap();
 
 		let mut nodes = BTreeMap::new();
 		nodes.insert(
 			master,
-			(Node::new(NodeType::Master, master), BTreeMap::new()),
+			(
+				Node::new(
+					NodeType::Master,
+					master,
+					Some(Channels::base(output_channels)),
+				),
+				BTreeMap::new(),
+			),
 		);
 
 		(
@@ -95,18 +115,23 @@ impl Arrangement {
 
 				producer,
 				queue: VecDeque::new(),
-				stream: None,
+				input_stream: None,
+				output_stream: None,
 			},
 			Task::stream(poll_consumer(consumer)),
 		)
 	}
 
-	pub fn take_stream(&mut self) -> Stream {
-		self.stream.take().unwrap().0
-	}
-
-	pub fn set_stream(&mut self, stream: Stream) {
-		self.stream = Some(stream.into());
+	pub fn replace_streams(
+		&mut self,
+		(input_stream, output_stream): (Option<Stream>, Option<Stream>),
+	) -> (Option<Stream>, Option<Stream>) {
+		(
+			std::mem::replace(&mut self.input_stream, input_stream.map(NoDebug))
+				.map(|stream| stream.0),
+			std::mem::replace(&mut self.output_stream, output_stream.map(NoDebug))
+				.map(|stream| stream.0),
+		)
 	}
 
 	pub fn request_processor(
@@ -119,20 +144,24 @@ impl Arrangement {
 	}
 
 	pub fn change_config(&mut self, NoClone(mut processor): NoClone<AudioThread>, config: &Config) {
+		self.interrupted(None);
+
+		self.replace_streams((None, None));
 		let (p_sender, a_receiver) = oneshot::channel();
+		let (input_stream, output_stream, input_channels, output_channels, sample_rate, frames) =
+			build_audio_streams(
+				&config.audio.devices.as_core(),
+				config.audio.sample_rate,
+				config.audio.buffer_size,
+				a_receiver,
+			);
+		self.replace_streams((input_stream, Some(output_stream)));
 
-		self.stream = None;
-		let (stream, sample_rate, frames) = build_output_stream(
-			&config.audio.devices.get_output(),
-			config.audio.sample_rate,
-			config.audio.buffer_size,
-			a_receiver,
-		);
-		self.stream = Some(stream.into());
-
-		processor.change_config(sample_rate, frames);
+		processor.change_config(input_channels, output_channels, sample_rate, frames);
 		p_sender.send(processor).unwrap();
 
+		self.transport.input_channels = input_channels;
+		self.transport.output_channels = output_channels;
 		self.transport.sample_rate = sample_rate;
 		self.transport.frames = frames;
 	}
@@ -140,12 +169,20 @@ impl Arrangement {
 	pub fn update(&mut self, mut batch: Batch) -> Vec<clap_host::Message> {
 		let mut messages = Vec::new();
 
-		if batch.version == self.transport.version {
-			self.transport.position = batch.position;
-		}
+		let position = self.transport.position;
 
 		for update in batch.updates.drain(..) {
 			match update {
+				Update::Recorded(frames) => {
+					let mut samples = boxed_slice![[0.0; 2]; frames];
+					for track in 0..self.tracks.len() {
+						self.tracks[track].recorded(&mut samples, &self.transport, track);
+					}
+				}
+				Update::Interrupted(node, position) => {
+					self.interrupted(node);
+					self.transport.position = position;
+				}
 				Update::Load(duration, frames) => {
 					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
 					let load = duration.as_secs_f32() * mix;
@@ -171,9 +208,29 @@ impl Arrangement {
 			}
 		}
 
+		self.transport.position = if batch.version == self.transport.version {
+			batch.position
+		} else {
+			position
+		};
+
 		self.send(Message::ReturnUpdate(batch.updates));
 
 		messages
+	}
+
+	fn interrupted(&mut self, node: Option<NodeId>) {
+		for track in 0..self.tracks.len() {
+			if node.is_some_and(|node| self.tracks[track].id != node) {
+				continue;
+			}
+
+			if let Some((pos, sample)) = self.tracks[track].interrupted() {
+				let id = sample.core.id;
+				self.add_sample(sample);
+				self.add_audio_clip_from_sample(track, pos, id);
+			}
+		}
 	}
 
 	pub fn drain_queue(&mut self) -> bool {
@@ -388,25 +445,17 @@ impl Arrangement {
 		}
 	}
 
-	pub fn play(&mut self) {
-		if !self.transport.playing {
-			self.toggle_playback();
-		}
-	}
-
-	pub fn pause(&mut self) {
+	pub fn stop(&mut self) {
 		if self.transport.playing {
 			self.toggle_playback();
 		}
-	}
 
-	pub fn stop(&mut self) {
-		self.pause();
 		self.seek_to(
 			self.transport
 				.loop_range
 				.map_or(BeatTime::ZERO, BeatRange::start),
 		);
+
 		self.send(Message::Reset);
 	}
 
@@ -508,7 +557,8 @@ impl Arrangement {
 	fn add(&mut self, node: impl Into<generic_daw_core::Node>, ty: NodeType) -> NodeId {
 		let node = node.into();
 		let id = node.id();
-		self.nodes.insert(id, (Node::new(ty, id), BTreeMap::new()));
+		self.nodes
+			.insert(id, (Node::new(ty, id, None), BTreeMap::new()));
 		self.send(Message::NodeAdd(Box::new(node)));
 		id
 	}
@@ -633,6 +683,36 @@ impl Arrangement {
 		(new_id, instructions)
 	}
 
+	pub fn input_change_channels(&mut self, id: NodeId, channels: Option<Channels>) {
+		let track = self.track_of(id).unwrap();
+		if let Some(channels) = channels {
+			if let Some(input) = &mut self.tracks[track].input {
+				if input.channels != channels {
+					input.channels = channels;
+					self.node_action(id, NodeAction::InputChangeChannels(channels));
+				}
+			} else {
+				let (producer, consumer) =
+					RingBuffer::new(self.transport.sample_rate.get() as usize);
+				self.tracks[track].input = Some(Input {
+					consumer,
+					channels,
+					recording: None,
+				});
+				self.node_action(id, NodeAction::InputStart(producer, channels));
+			}
+		} else if self.tracks[track].input.take().is_some() {
+			self.node_action(id, NodeAction::InputStop);
+		}
+	}
+
+	pub fn output_change_channels(&mut self, id: NodeId, channels: Option<Channels>) {
+		if self.node(id).output != channels && !(id == self.master && channels.is_none()) {
+			self.node_mut(id).output = channels;
+			self.node_action(id, NodeAction::OutputChangeChannels(channels));
+		}
+	}
+
 	pub fn connect(&mut self, from: NodeId, to: NodeId) {
 		self.outgoing_mut(from).insert(to, 1.0);
 		self.send(Message::NodeConnect(from, to));
@@ -675,6 +755,40 @@ impl Arrangement {
 	pub fn add_midi_pattern(&mut self, pattern: MidiPatternPair) {
 		self.midi_patterns.insert(pattern.gui.id, pattern.gui);
 		self.send(Message::MidiPatternAdd(pattern.core));
+	}
+
+	pub fn add_audio_clip_from_sample(
+		&mut self,
+		track: usize,
+		pos: BeatTime,
+		id: SampleId,
+	) -> usize {
+		let mut clip = AudioClip::new(id);
+		clip.position.trim_end_to(
+			self.samples[&id]
+				.len(&self.transport)
+				.to_beat_time(&self.transport),
+			&self.transport,
+		);
+		clip.position.move_to(pos);
+		self.add_clip(track, clip)
+	}
+
+	pub fn add_midi_clip_from_pattern(
+		&mut self,
+		track: usize,
+		pos: BeatTime,
+		id: MidiPatternId,
+	) -> usize {
+		let mut clip = MidiClip::new(id);
+		clip.position
+			.trim_end_to(if self.midi_patterns[&id].notes.is_empty() {
+				BeatTime::new(u64::from(self.transport.numerator.get()), 0)
+			} else {
+				self.midi_patterns[&id].len()
+			});
+		clip.position.move_to(pos);
+		self.add_clip(track, clip)
 	}
 
 	pub fn add_clip(&mut self, track: usize, clip: impl Into<Clip>) -> usize {
@@ -1023,9 +1137,7 @@ impl Arrangement {
 		}
 	}
 
-	pub fn render(&mut self, path: Arc<Path>) -> Task<daw::Message> {
-		let (progress_sender, progress_receiver) = smol::channel::unbounded();
-
+	pub fn render(&mut self, path: &Path) -> Task<daw::Message> {
 		let beat_range = self.transport.loop_range.unwrap_or_else(|| {
 			BeatRange::new(
 				BeatTime::ZERO,
@@ -1037,19 +1149,36 @@ impl Arrangement {
 			)
 		});
 
-		let master = self.master;
+		self.interrupted(None);
+
+		let (progress_sender, progress_receiver) = smol::channel::unbounded();
+		let mut writer = WavWriter::new(
+			BufWriter::new(File::create(path).unwrap()),
+			WavSpec {
+				bits_per_sample: 32,
+				channels: 2,
+				sample_format: hound::SampleFormat::Float,
+				sample_rate: self.transport.sample_rate.get(),
+			},
+		)
+		.unwrap();
 
 		let (p_sender, a_receiver) = oneshot::channel();
 		let p_receiver = self.request_processor(a_receiver);
 
+		let master = self.master;
 		Task::batch([
 			Task::future(unblock(move || {
 				let mut processor = p_receiver.recv().unwrap();
 				processor.render(
-					&path,
 					master,
 					beat_range,
-					|_| {},
+					|samples| {
+						for &[l, r] in samples {
+							writer.write_sample(l).unwrap();
+							writer.write_sample(r).unwrap();
+						}
+					},
 					|f| progress_sender.try_send(f).unwrap(),
 				);
 				p_sender.send(processor).unwrap();
@@ -1061,16 +1190,13 @@ impl Arrangement {
 		])
 	}
 
-	pub fn freeze(
-		&mut self,
-		node: NodeId,
-		path: Arc<Path>,
-		project: daw::Project,
-	) -> Task<daw::Message> {
+	pub fn freeze(&mut self, node: NodeId, project: daw::Project) -> Task<daw::Message> {
+		let track = self.track_of(node).unwrap();
+
 		let beat_range = if let Some(loop_range) = self.transport.loop_range {
 			loop_range
 		} else {
-			let Some((start, end)) = self.tracks()[self.track_of(node).unwrap()]
+			let Some((start, end)) = self.tracks()[track]
 				.clips
 				.iter()
 				.map(|clip| (clip.start(), clip.end(&self.transport)))
@@ -1081,22 +1207,26 @@ impl Arrangement {
 			BeatRange::new(start, end)
 		};
 
+		self.interrupted(None);
+
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
-		let transport = self.transport;
+		let mut recording = Recording::new(
+			FREEZES_DIR
+				.join(format!("{} T{}.wav", format_now(), track + 1))
+				.into(),
+			&self.transport,
+		);
 
 		let (p_sender, a_receiver) = oneshot::channel();
 		let p_receiver = self.request_processor(a_receiver);
 
 		Task::batch([
 			Task::future(unblock(move || {
-				let mut samples = Vec::with_capacity(beat_range.len().to_frames(&transport));
-
 				let mut processor = p_receiver.recv().unwrap();
 				processor.render(
-					&path,
 					node,
 					beat_range,
-					|buf| samples.extend_from_slice(buf),
+					|samples| recording.recorded(samples),
 					|f| progress_sender.try_send(f).unwrap(),
 				);
 				p_sender.send(processor).unwrap();
@@ -1105,17 +1235,7 @@ impl Arrangement {
 					project,
 					arrangement_view::Message::FreezeDone(
 						node,
-						Box::new(
-							SamplePair::from_core(
-								generic_daw_core::Sample {
-									id: SampleId::unique(),
-									samples: NoDebug(samples.into()),
-									sample_rate: transport.sample_rate,
-								},
-								path,
-							)
-							.unwrap(),
-						),
+						Box::new(recording.finalize().1),
 						beat_range.start(),
 					),
 				)

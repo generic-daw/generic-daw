@@ -17,7 +17,7 @@ use crate::{
 	widget::ALPHA_2_3,
 };
 use generic_daw_core::{
-	AudioThread, BpmTapper, NodeId, PluginId, build_output_stream,
+	AudioThread, BpmTapper, NodeId, PluginId, build_audio_streams,
 	clap_host::{
 		ClapId, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
 		StateContextType,
@@ -270,16 +270,23 @@ impl Daw {
 
 		let (p_sender, p_receiver) = oneshot::channel();
 
-		let (stream, sample_rate, frames) = build_output_stream(
-			&config.audio.devices.get_output(),
-			config.audio.sample_rate,
-			config.audio.buffer_size,
-			p_receiver,
-		);
+		let (input_stream, output_stream, input_channels, output_channels, sample_rate, frames) =
+			build_audio_streams(
+				&config.audio.devices.as_core(),
+				config.audio.sample_rate,
+				config.audio.buffer_size,
+				p_receiver,
+			);
 
 		let project = Project::unique();
-		let (mut arrangement, batches) = Arrangement::create(sample_rate, frames, p_sender);
-		arrangement.set_stream(stream);
+		let (mut arrangement, batches) = Arrangement::create(
+			input_channels,
+			output_channels,
+			sample_rate,
+			frames,
+			p_sender,
+		);
+		arrangement.replace_streams((input_stream, Some(output_stream)));
 		let arrangement_view = ArrangementView::new(arrangement, &state, None);
 		let clap_host = ClapHost::new(main_window_id);
 		let file_tree = FileTree::new(&config.sample_paths);
@@ -375,7 +382,11 @@ impl Daw {
 				view,
 			) => {
 				self.project = project;
-				arrangement.set_stream(self.arrangement_view.arrangement.take_stream());
+				arrangement.replace_streams(
+					self.arrangement_view
+						.arrangement
+						.replace_streams((None, None)),
+				);
 				let mut arrangement = std::mem::replace(
 					&mut self.arrangement_view,
 					ArrangementView::new(*arrangement, &self.state, view),
@@ -408,6 +419,11 @@ impl Daw {
 			}
 			Message::NewFile => {
 				return Arrangement::empty(
+					self.arrangement_view.arrangement.transport().input_channels,
+					self.arrangement_view
+						.arrangement
+						.transport()
+						.output_channels,
 					self.arrangement_view.arrangement.transport().sample_rate,
 					self.arrangement_view.arrangement.transport().frames,
 				);
@@ -496,6 +512,11 @@ impl Daw {
 					self.progress = Some(0.0);
 					return Arrangement::start_load(
 						path,
+						self.arrangement_view.arrangement.transport().input_channels,
+						self.arrangement_view
+							.arrangement
+							.transport()
+							.output_channels,
 						self.arrangement_view.arrangement.transport().sample_rate,
 						self.arrangement_view.arrangement.transport().frames,
 						self.config.clone(),
@@ -563,7 +584,7 @@ impl Daw {
 				if self.progress.is_none() {
 					self.progress = Some(0.0);
 					self.clap_host.set_render_mode(RenderMode::Offline);
-					return self.arrangement_view.arrangement.render(path);
+					return self.arrangement_view.arrangement.render(&path);
 				}
 			}
 			Message::RenderedFile => {
@@ -618,7 +639,6 @@ impl Daw {
 			Message::FileHoveredLeft => self.files_hovered = false,
 			Message::TogglePlayback => {
 				self.arrangement_view.arrangement.toggle_playback();
-				self.arrangement_view.end_recording();
 			}
 			Message::Stop => {
 				let before = self.arrangement_view.arrangement.transport().position;
@@ -626,7 +646,6 @@ impl Daw {
 				let after = self.arrangement_view.arrangement.transport().position;
 				self.arrangement_view
 					.autoscroll(before, after, &self.config, &mut self.state);
-				self.arrangement_view.end_recording();
 			}
 			Message::ToggleShowSeconds => {
 				self.state.show_seconds ^= true;
@@ -691,11 +710,7 @@ impl Daw {
 			Instruction::Freeze(node) => {
 				self.progress = Some(0.0);
 				self.clap_host.set_render_mode(RenderMode::Offline);
-				return self.arrangement_view.arrangement.freeze(
-					node,
-					FREEZES_DIR.join(format!("{}.wav", format_now())).into(),
-					self.project,
-				);
+				return self.arrangement_view.arrangement.freeze(node, self.project);
 			}
 			Instruction::PluginAdd(id, plugin, receiver) => {
 				return self

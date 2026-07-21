@@ -76,25 +76,25 @@ impl AudioClip {
 
 		iter.by_ref()
 			.take(fade_start.saturating_sub(play_pos))
-			.for_each(|(([l, r], buf), pos)| {
+			.for_each(|(([l, r], audio), pos)| {
 				let mix = self.fade_start.transition(pos as f32 / fade_start as f32);
-				buf[0] += l * self.volume * mix;
-				buf[1] += r * self.volume * mix;
+				audio[0] += l * self.volume * mix;
+				audio[1] += r * self.volume * mix;
 			});
 
 		iter.by_ref()
 			.take((len - fade_end).saturating_sub(play_pos))
-			.for_each(|(([l, r], buf), _)| {
-				buf[0] += l * self.volume;
-				buf[1] += r * self.volume;
+			.for_each(|(([l, r], audio), _)| {
+				audio[0] += l * self.volume;
+				audio[1] += r * self.volume;
 			});
 
-		iter.by_ref().for_each(|(([l, r], buf), pos)| {
+		iter.by_ref().for_each(|(([l, r], audio), pos)| {
 			let mix = self
 				.fade_end
 				.transition((len - pos) as f32 / fade_end as f32);
-			buf[0] += l * self.volume * mix;
-			buf[1] += r * self.volume * mix;
+			audio[0] += l * self.volume * mix;
+			audio[1] += r * self.volume * mix;
 		});
 	}
 }

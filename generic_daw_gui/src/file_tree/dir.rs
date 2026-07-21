@@ -251,7 +251,7 @@ impl Dir {
 					return;
 				};
 
-				if cfg!(target_os = "macos") && entry.file_name() == ".DS_STORE" {
+				if cfg!(target_os = "macos") && entry.file_name() == ".DS_Store" {
 					return;
 				}
 

@@ -81,12 +81,22 @@ pub struct Note {
 	pub position: BeatRange,
 }
 
+#[derive(Clone, Copy, Message)]
+pub struct Channels {
+	#[prost(uint32)]
+	pub left: u32,
+	#[prost(uint32)]
+	pub right: u32,
+}
+
 #[derive(Clone, Message)]
 pub struct Track {
 	#[prost(message, repeated)]
 	pub clips: Vec<OptionClip>,
 	#[prost(message, required)]
 	pub channel: Channel,
+	#[prost(message, optional)]
+	pub input: Option<Channels>,
 }
 
 #[derive(Clone, Message)]
@@ -103,6 +113,8 @@ pub struct Channel {
 	pub enabled: bool,
 	#[prost(bool, default = false)]
 	pub bypassed: bool,
+	#[prost(message, optional)]
+	pub output: Option<Channels>,
 }
 
 #[derive(Clone, Copy, Message, PartialEq)]

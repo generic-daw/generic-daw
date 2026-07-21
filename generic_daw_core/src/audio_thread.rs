@@ -1,19 +1,20 @@
 use crate::{
-	Channel, Clip, ClipId, MidiPattern, MidiPatternAction, MidiPatternId, Node, NodeId, PanMode,
-	PluginId, Point, Sample, SampleId,
+	Channel, Channels, Clip, ClipId, MidiPattern, MidiPatternAction, MidiPatternId, Node, NodeId,
+	PanMode, PluginId, Point, Sample, SampleId,
 	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
 use audio_graph::AudioGraph;
-use clap_host::events::{EventFlags, EventHeader, TransportEvent, TransportFlags};
+use clap_host::{
+	RenderMode,
+	events::{EventFlags, EventHeader, TransportEvent, TransportFlags},
+};
 use dsp::resample_cubic;
-use hound::WavWriter;
 use log::{trace, warn};
 use rtrb::{Consumer, Producer, PushError};
 use std::{
 	collections::HashMap,
 	num::NonZero,
-	path::Path,
 	time::{Duration, Instant},
 };
 use utils::{boxed_slice, include_f32s, unique_id};
@@ -59,6 +60,10 @@ const _: () = assert!(size_of::<Message>() == 64);
 
 #[derive(Debug)]
 pub enum NodeAction {
+	InputStart(Producer<[f32; 2]>, Channels),
+	InputChangeChannels(Channels),
+	InputStop,
+
 	ClipAdd(Box<Clip>),
 	ClipRemove(ClipId),
 	ClipMoveTo(ClipId, BeatTime),
@@ -76,6 +81,8 @@ pub enum NodeAction {
 	ClipReverse(ClipId),
 	ClipSlipTo(ClipId, BeatTime),
 
+	OutputChangeChannels(Option<Channels>),
+
 	ChannelToggleEnabled,
 	ChannelToggleBypassed,
 	ChannelVolumeChanged(f32),
@@ -92,6 +99,8 @@ pub enum NodeAction {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Update {
+	Recorded(usize),
+	Interrupted(Option<NodeId>, SecondsTime),
 	Load(Duration, usize),
 	Peaks(NodeId, [f32; 2]),
 	Polyphony(NodeId, usize),
@@ -110,6 +119,8 @@ pub struct Batch {
 #[derive(Clone, Copy, Debug)]
 pub struct Transport {
 	pub version: Version,
+	pub input_channels: u16,
+	pub output_channels: NonZero<u16>,
 	pub sample_rate: NonZero<u32>,
 	pub frames: NonZero<u32>,
 	pub bpm: NonZero<u16>,
@@ -122,9 +133,16 @@ pub struct Transport {
 
 impl Transport {
 	#[must_use]
-	pub fn new(sample_rate: NonZero<u32>, frames: NonZero<u32>) -> Self {
+	pub fn new(
+		input_channels: u16,
+		output_channels: NonZero<u16>,
+		sample_rate: NonZero<u32>,
+		frames: NonZero<u32>,
+	) -> Self {
 		Self {
 			version: Version::unique(),
+			input_channels,
+			output_channels,
 			sample_rate,
 			frames,
 			bpm: NonZero::new(140).unwrap(),
@@ -186,6 +204,8 @@ pub struct State {
 	pub transport: Transport,
 	pub samples: HashMap<SampleId, Sample>,
 	pub midi_patterns: HashMap<MidiPatternId, MidiPattern>,
+	pub render_mode: RenderMode,
+	pub input: Box<[f32]>,
 }
 
 #[derive(Debug)]
@@ -202,14 +222,16 @@ pub struct AudioThread {
 impl AudioThread {
 	#[must_use]
 	pub fn create(
+		input_channels: u16,
+		output_channels: NonZero<u16>,
 		sample_rate: NonZero<u32>,
 		frames: NonZero<u32>,
 		producer: Producer<Batch>,
 		consumer: Consumer<Message>,
 	) -> (Self, NodeId, Transport) {
-		let transport = Transport::new(sample_rate, frames);
+		let transport = Transport::new(input_channels, output_channels, sample_rate, frames);
 
-		let master_channel = Channel::default();
+		let master_channel = Channel::new(Some(Channels::base(output_channels)));
 		let master = master_channel.id();
 
 		let mut audio_graph = AudioGraph::new(
@@ -217,6 +239,8 @@ impl AudioThread {
 				transport,
 				samples: HashMap::new(),
 				midi_patterns: HashMap::new(),
+				render_mode: RenderMode::Realtime,
+				input: boxed_slice![0.0; input_channels as usize * frames.get() as usize],
 			},
 			transport.frames,
 		);
@@ -236,13 +260,29 @@ impl AudioThread {
 		(processor, master, transport)
 	}
 
-	pub fn change_config(&mut self, sample_rate: NonZero<u32>, frames: NonZero<u32>) {
-		if self.transport().sample_rate == sample_rate && self.transport().frames == frames {
-			return;
+	pub fn change_config(
+		&mut self,
+		input_channels: u16,
+		output_channels: NonZero<u16>,
+		sample_rate: NonZero<u32>,
+		frames: NonZero<u32>,
+	) {
+		if self.transport().frames != frames {
+			self.audio_graph.change_max_frames(frames);
 		}
-		self.audio_graph.change_max_frames(frames);
-		self.audio_graph
-			.for_each_node_mut(Node::restart_all_plugins);
+
+		if self.transport().input_channels != input_channels || self.transport().frames != frames {
+			self.state_mut().input =
+				boxed_slice![0.0; input_channels as usize * frames.get() as usize];
+		}
+
+		if self.transport().sample_rate != sample_rate || self.transport().frames != frames {
+			self.audio_graph
+				.for_each_node_mut(|node, _| node.restart_all_plugins());
+		}
+
+		self.transport_mut().input_channels = input_channels;
+		self.transport_mut().output_channels = output_channels;
 		self.transport_mut().sample_rate = sample_rate;
 		self.transport_mut().frames = frames;
 	}
@@ -296,11 +336,17 @@ impl AudioThread {
 				Message::NodeDisconnect(from, to) => self.audio_graph.disconnect(from, to),
 				Message::Bpm(bpm) => self.transport_mut().bpm = bpm,
 				Message::Numerator(numerator) => self.transport_mut().numerator = numerator,
-				Message::TogglePlayback => self.transport_mut().playing ^= true,
+				Message::TogglePlayback => {
+					self.transport_mut().playing ^= true;
+					self.updates
+						.push(Update::Interrupted(None, self.transport().position));
+				}
 				Message::ToggleMetronome => self.transport_mut().metronome ^= true,
-				Message::Position(version, sample) => {
+				Message::Position(version, position) => {
 					self.transport_mut().version = version;
-					self.transport_mut().position = sample;
+					self.transport_mut().position = position;
+					self.updates
+						.push(Update::Interrupted(None, self.transport().position));
 				}
 				Message::LoopRange(loop_range) => self.transport_mut().loop_range = loop_range,
 				Message::Reset => self.audio_graph.reset(),
@@ -318,10 +364,11 @@ impl AudioThread {
 
 	fn process(
 		&mut self,
-		mut buf: &mut [[f32; 2]],
+		mut input: &[f32],
+		mut output: &mut [f32],
 	) -> Option<(oneshot::Sender<Self>, oneshot::Receiver<Self>)> {
 		let start = Instant::now();
-		let frames = buf.len();
+		let frames = output.len() / self.transport().output_channels.get() as usize;
 
 		let acc = self
 			.updates
@@ -337,34 +384,73 @@ impl AudioThread {
 			self.updates = updates;
 		}
 
-		while !buf.is_empty() {
-			let (looped, len) = if self.transport().playing
+		while !output.is_empty() {
+			let (looped, frames) = if self.transport().playing
 				&& let Some(loop_range) = self.transport().loop_range
 				&& let end = loop_range.end().to_seconds_time(self.transport())
 				&& let Some(len) = end.checked_sub(self.transport().position)
 				&& let len = len.to_frames(self.transport())
-				&& len <= buf.len()
+				&& len <= output.len() / self.transport().output_channels.get() as usize
 			{
 				(Some(loop_range.start()), len)
 			} else {
-				(None, buf.len())
+				(
+					None,
+					output.len() / self.transport().output_channels.get() as usize,
+				)
 			};
 
-			self.audio_graph.process_all(self.master, &mut buf[..len]);
-			self.metronome(&mut buf[..len]);
+			let in_len = self.transport().input_channels as usize * frames;
+			let out_len = self.transport().output_channels.get() as usize * frames;
+
+			self.state_mut().input[..in_len].copy_from_slice(&input[..in_len]);
+			self.audio_graph.process_all(frames);
+			self.metronome();
+
+			let output_channels = self.transport().output_channels;
+			self.audio_graph.for_each_node(|node, buf| {
+				let Some(channels) = node.output() else {
+					return;
+				};
+
+				if !channels.fits_in(output_channels.get()) {
+					return;
+				}
+
+				for (frame, &[l, r]) in output[..out_len]
+					.chunks_mut(output_channels.get().into())
+					.zip(buf)
+				{
+					if channels.left == channels.right {
+						frame[channels.left as usize] += (l + r) / 2.0;
+					} else {
+						frame[channels.left as usize] += l;
+						frame[channels.right as usize] += r;
+					}
+				}
+			});
 
 			if let Some(position) = looped {
 				self.transport_mut().position = position.to_seconds_time(self.transport());
 			} else if self.transport().playing {
-				let len = SecondsTime::from_frames(len, self.transport());
+				let len = SecondsTime::from_frames(frames, self.transport());
 				self.transport_mut().position += len;
 			}
 
-			buf = &mut buf[len..];
+			if self.transport().playing {
+				self.updates.push(Update::Recorded(frames));
+				if looped.is_some() {
+					self.updates
+						.push(Update::Interrupted(None, self.transport().position));
+				}
+			}
+
+			input = &input[in_len..];
+			output = &mut output[out_len..];
 		}
 
 		self.audio_graph
-			.for_each_node_mut(|node| node.collect_updates(&mut self.updates));
+			.for_each_node_mut(|node, _| node.collect_updates(&mut self.updates));
 
 		let now = Instant::now();
 		let mut duration = now - start;
@@ -374,7 +460,6 @@ impl AudioThread {
 			duration += d;
 			frames += f;
 		}
-
 		self.updates.push(Update::Load(duration, frames));
 
 		if std::mem::take(&mut self.needs_update)
@@ -398,27 +483,31 @@ impl AudioThread {
 		None
 	}
 
-	fn metronome(&self, buf: &mut [[f32; 2]]) {
-		if !self.transport().metronome || !self.transport().playing {
+	fn metronome(&mut self) {
+		let transport = *self.transport();
+
+		if !transport.metronome || !transport.playing {
 			return;
 		}
 
-		let position = self.transport().position.to_frames(self.transport());
 		let latency = self.audio_graph.latency(self.master);
+		let output = self.audio_graph.output(self.master);
+
+		let position = transport.position.to_frames(&transport);
 
 		let mut click_beat =
-			BeatTime::from_frames(position.saturating_sub(latency), self.transport()).beat_floor();
+			BeatTime::from_frames(position.saturating_sub(latency), &transport).beat_floor();
 
 		let end_beat = BeatTime::from_frames(
-			(position + buf.len()).saturating_sub(latency),
-			self.transport(),
+			(position + output.len()).saturating_sub(latency),
+			&transport,
 		)
 		.beat_ceil();
 
 		while click_beat < end_beat {
 			let click = if click_beat
 				.beat()
-				.is_multiple_of(self.transport().numerator.get().into())
+				.is_multiple_of(transport.numerator.get().into())
 			{
 				&ON_BAR_CLICK
 			} else {
@@ -427,16 +516,16 @@ impl AudioThread {
 			.as_chunks()
 			.0;
 
-			let start = click_beat.to_frames(self.transport()) + latency;
+			let start = click_beat.to_frames(&transport) + latency;
 
 			let write_start = start.saturating_sub(position);
-			if write_start >= buf.len() {
+			if write_start >= output.len() {
 				return;
 			}
 
 			click_beat += BeatTime::BEAT;
 
-			let resample_ratio = 44100.0 / f64::from(self.transport().sample_rate.get());
+			let resample_ratio = 44100.0 / f64::from(transport.sample_rate.get());
 
 			let len = (click.len() as f64 / resample_ratio) as usize;
 
@@ -447,17 +536,16 @@ impl AudioThread {
 
 			resample_cubic(click, resample_ratio, play_pos)
 				.take(len - play_pos)
-				.zip(&mut buf[write_start..])
-				.for_each(|([l, r], buf)| {
-					buf[0] += l;
-					buf[1] += r;
+				.zip(&mut output[write_start..])
+				.for_each(|([l, r], output)| {
+					output[0] += l;
+					output[1] += r;
 				});
 		}
 	}
 
 	pub fn render(
 		&mut self,
-		path: impl AsRef<Path>,
 		node: NodeId,
 		beat_range: BeatRange,
 		mut samples_fn: impl FnMut(&[[f32; 2]]),
@@ -468,20 +556,10 @@ impl AudioThread {
 
 		self.transport_mut().position = SecondsTime::ZERO;
 		self.transport_mut().playing = true;
-
-		let mut writer = WavWriter::create(
-			path,
-			hound::WavSpec {
-				channels: 2,
-				sample_rate: self.transport().sample_rate.get(),
-				bits_per_sample: 32,
-				sample_format: hound::SampleFormat::Float,
-			},
-		)
-		.unwrap();
+		self.state_mut().render_mode = RenderMode::Offline;
 
 		let buffer_size = self.transport().frames.get() as usize;
-		let mut buf = boxed_slice![[0.0; 2]; buffer_size];
+		let mut audio = boxed_slice![[0.0; 2]; buffer_size];
 		let buffer_size = SecondsTime::from_frames(buffer_size, self.transport());
 
 		let range_start = beat_range.start().to_seconds_time(self.transport());
@@ -501,8 +579,9 @@ impl AudioThread {
 
 			assert!(self.recv_events().is_none());
 			self.audio_graph
-				.process_subtree(node, &mut buf[..diff_frames]);
-			self.audio_graph.for_each_node_mut(Node::clear_updates);
+				.process_subtree(node, &mut audio[..diff_frames]);
+			self.audio_graph
+				.for_each_node_mut(|node, _| node.clear_updates());
 
 			self.transport_mut().position += diff;
 			progress_fn(self.transport().position / render_end);
@@ -519,19 +598,15 @@ impl AudioThread {
 
 			assert!(self.recv_events().is_none());
 			self.audio_graph
-				.process_subtree(node, &mut buf[..diff_frames]);
-			self.audio_graph.for_each_node_mut(Node::clear_updates);
+				.process_subtree(node, &mut audio[..diff_frames]);
+			self.audio_graph
+				.for_each_node_mut(|node, _| node.clear_updates());
 
-			samples_fn(&buf[..diff_frames]);
-			for &s in buf[..diff_frames].as_flattened() {
-				writer.write_sample(s).unwrap();
-			}
+			samples_fn(&audio[..diff_frames]);
 
 			self.transport_mut().position += diff;
 			progress_fn(self.transport().position / render_end);
 		}
-
-		writer.finalize().unwrap();
 
 		*self.transport_mut() = old;
 		self.audio_graph.reset();
@@ -562,10 +637,10 @@ pub enum AudioCallback {
 }
 
 impl AudioCallback {
-	pub fn process(&mut self, buf: &mut [[f32; 2]]) {
+	pub fn process(&mut self, input: &[f32], output: &mut [f32]) {
 		match self {
 			Self::Processing(processor) => {
-				if let Some((sender, receiver)) = processor.process(buf) {
+				if let Some((sender, receiver)) = processor.process(input, output) {
 					let Self::Processing(processor) = std::mem::replace(self, Self::Away(receiver))
 					else {
 						unreachable!();
@@ -573,9 +648,9 @@ impl AudioCallback {
 
 					sender.send(processor).unwrap();
 
-					self.process(buf);
+					self.process(input, output);
 				} else {
-					for s in buf.as_flattened_mut() {
+					for s in output {
 						*s = s.clamp(-1.0, 1.0);
 					}
 				}
@@ -584,9 +659,7 @@ impl AudioCallback {
 				if let Ok(processor) = receiver.try_recv() {
 					*self = Self::Processing(processor);
 
-					self.process(buf);
-				} else {
-					buf.fill([0.0; 2]);
+					self.process(input, output);
 				}
 			}
 		}

@@ -1,10 +1,10 @@
-use crate::{Event, Node, NodeAction, NodeId, Update, audio_thread::State};
+use crate::{Channels, Event, Node, NodeAction, NodeId, Update, audio_thread::State};
 use audio_graph::{
 	Inject,
 	thread_pool::{Injector, WorkList},
 };
 use clap_host::AudioThread;
-use dsp::{PanMode, Utility};
+use dsp::Utility;
 use std::convert::Infallible;
 use utils::{ShiftMoveExt as _, unique_id};
 
@@ -67,11 +67,20 @@ pub struct Channel {
 	utility: Utility,
 	enabled: bool,
 	bypassed: bool,
+	output: Option<Channels>,
 	last_peaks: [f32; 2],
 	updates: Vec<Update>,
 }
 
 impl Channel {
+	#[must_use]
+	pub fn new(output: Option<Channels>) -> Self {
+		Self {
+			output,
+			..Self::default()
+		}
+	}
+
 	pub fn process(
 		&mut self,
 		state: &State,
@@ -154,6 +163,7 @@ impl Channel {
 
 	pub fn apply(&mut self, action: NodeAction) {
 		match action {
+			NodeAction::OutputChangeChannels(output) => self.output = output,
 			NodeAction::ChannelToggleEnabled => self.enabled ^= true,
 			NodeAction::ChannelToggleBypassed => self.bypassed ^= true,
 			NodeAction::ChannelVolumeChanged(volume) => self.utility.volume = volume,
@@ -184,6 +194,10 @@ impl Channel {
 		}
 	}
 
+	pub fn push_update(&mut self, update: Update) {
+		self.updates.push(update);
+	}
+
 	pub fn collect_updates(&mut self, updates: &mut Vec<Update>) {
 		if let Some(&Update::Peaks(_, peaks)) = self.updates.last() {
 			debug_assert_ne!(self.last_peaks, peaks);
@@ -204,6 +218,11 @@ impl Channel {
 			}
 		}
 	}
+
+	#[must_use]
+	pub fn output(&self) -> Option<Channels> {
+		self.output.filter(|_| self.enabled)
+	}
 }
 
 impl Default for Channel {
@@ -211,12 +230,10 @@ impl Default for Channel {
 		Self {
 			plugins: Vec::new(),
 			id: NodeId::unique(),
-			utility: Utility {
-				volume: 1.0,
-				pan: PanMode::Stereo(0.0),
-			},
+			utility: Utility::default(),
 			enabled: true,
 			bypassed: false,
+			output: None,
 			last_peaks: [0.0; 2],
 			updates: Vec::new(),
 		}

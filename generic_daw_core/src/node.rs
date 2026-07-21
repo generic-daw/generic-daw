@@ -1,5 +1,5 @@
 use crate::{
-	Channel, Event, NodeAction, NodeImpl, Track, Update, audio_thread::State,
+	Channel, Channels, Event, NodeAction, NodeImpl, Track, Update, audio_thread::State,
 	channel::ThreadPoolExecutor,
 };
 use audio_graph::{Inject, NodeId, thread_pool::Injector};
@@ -69,6 +69,14 @@ impl Node {
 		match self {
 			Self::Channel(node) => node.restart_all_plugins(),
 			Self::Track(node) => node.restart_all_plugins(),
+		}
+	}
+
+	#[must_use]
+	pub fn output(&self) -> Option<Channels> {
+		match self {
+			Self::Channel(node) => node.output(),
+			Self::Track(node) => node.output(),
 		}
 	}
 }

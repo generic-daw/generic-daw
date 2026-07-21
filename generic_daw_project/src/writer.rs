@@ -47,11 +47,13 @@ impl Writer {
 	pub fn push_track(
 		&mut self,
 		clips: impl IntoIterator<Item = proto::OptionClip>,
+		input: Option<proto::Channels>,
 		plugins: impl IntoIterator<Item = proto::Plugin>,
 		volume: f32,
 		pan: proto::OptionPanMode,
 		enabled: bool,
 		bypassed: bool,
+		output: Option<proto::Channels>,
 	) -> proto::TrackIndex {
 		self.0.tracks.push(proto::Track {
 			clips: clips.into_iter().collect(),
@@ -62,7 +64,9 @@ impl Writer {
 				pan,
 				enabled,
 				bypassed,
+				output,
 			},
+			input,
 		});
 
 		proto::TrackIndex {
@@ -82,6 +86,7 @@ impl Writer {
 		pan: proto::OptionPanMode,
 		enabled: bool,
 		bypassed: bool,
+		output: Option<proto::Channels>,
 	) -> proto::ChannelIndex {
 		self.0.channels.push(proto::Channel {
 			connections: Vec::new(),
@@ -90,6 +95,7 @@ impl Writer {
 			pan,
 			enabled,
 			bypassed,
+			output,
 		});
 
 		proto::ChannelIndex {

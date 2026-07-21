@@ -37,25 +37,10 @@ impl Reader {
 			.zip(&self.0.midi_patterns)
 	}
 
-	pub fn iter_tracks(
-		&self,
-	) -> impl Iterator<
-		Item = (
-			proto::TrackIndex,
-			impl Iterator<Item = proto::Clip>,
-			&proto::Channel,
-		),
-	> {
+	pub fn iter_tracks(&self) -> impl Iterator<Item = (proto::TrackIndex, &proto::Track)> {
 		(0..)
 			.map(|index| proto::TrackIndex { index })
 			.zip(&self.0.tracks)
-			.map(|(index, track)| {
-				(
-					index,
-					track.clips.iter().filter_map(|clip| clip.clip),
-					&track.channel,
-				)
-			})
 	}
 
 	pub fn iter_channels(&self) -> impl Iterator<Item = (proto::ChannelIndex, &proto::Channel)> {

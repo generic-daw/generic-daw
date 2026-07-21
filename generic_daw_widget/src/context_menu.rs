@@ -117,6 +117,7 @@ impl<Message> Widget<Message, Theme, Renderer> for ContextMenu<'_, Message> {
 			..
 		}) = event && let Some(position) = cursor.position()
 			&& layout.bounds().contains(position)
+			&& !self.context_menu.as_widget().is_void()
 		{
 			tree.state.downcast_mut::<State>().position = Some(position);
 			shell.capture_event();

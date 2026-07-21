@@ -3,39 +3,89 @@ use crate::{
 	audio_thread::{AudioCallback, AudioThread},
 };
 use cpal::{
-	BufferSize, FromSample, I24, InputCallbackInfo, OutputCallbackInfo, Sample, SampleFormat,
-	StreamConfig, SupportedBufferSize, SupportedStreamConfig, SupportedStreamConfigRange, U24,
+	BufferSize, Device, FromSample, I24, InputCallbackInfo, OutputCallbackInfo, Sample,
+	SampleFormat, StreamConfig, U24,
 	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
 };
-use log::{error, info, warn};
+use log::{error, warn};
 use rtrb::{Consumer, Producer, RingBuffer};
-use std::{cmp::Ordering, collections::HashMap, num::NonZero, sync::LazyLock};
+use std::{collections::HashMap, num::NonZero, sync::LazyLock};
 use utils::boxed_slice;
 
 pub static DEFAULT_HOST: LazyLock<HostId> = LazyLock::new(|| cpal::default_host().id());
 
-#[derive(Debug)]
-pub enum Device {
-	Default,
-	DefaultForHost(HostId),
-	Specific(DeviceId),
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
+pub struct Channels {
+	pub left: u16,
+	pub right: u16,
 }
 
-impl Device {
+impl Channels {
 	#[must_use]
-	pub fn host(&self) -> Option<HostId> {
-		match self {
-			Self::Default => None,
-			Self::DefaultForHost(host) => Some(*host),
-			Self::Specific(device) => Some(device.host()),
+	pub fn base(channels: NonZero<u16>) -> Self {
+		Self {
+			left: 0,
+			right: channels.get().min(2) - 1,
 		}
 	}
 
 	#[must_use]
-	pub fn device(&self) -> Option<DeviceId> {
+	pub fn fits_in(self, channels: u16) -> bool {
+		self.left < channels && self.right < channels
+	}
+
+	#[must_use]
+	pub fn left(self, left: u16) -> Self {
+		Self { left, ..self }
+	}
+
+	#[must_use]
+	pub fn right(self, right: u16) -> Self {
+		Self { right, ..self }
+	}
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub enum Devices {
+	#[default]
+	Default,
+	WithHost {
+		host: HostId,
+		input: Option<Box<str>>,
+		output: Option<Box<str>>,
+	},
+}
+
+impl Devices {
+	#[must_use]
+	pub fn host(&self) -> Option<HostId> {
 		match self {
-			Self::Default | Self::DefaultForHost(..) => None,
-			Self::Specific(device) => Some(device.clone()),
+			Self::Default => None,
+			Self::WithHost { host, .. } => Some(*host),
+		}
+	}
+
+	#[must_use]
+	pub fn input(&self) -> Option<DeviceId> {
+		match self {
+			Self::WithHost {
+				host,
+				input: Some(input),
+				..
+			} => Some(DeviceId::new(*host, input)),
+			Self::Default | Self::WithHost { .. } => None,
+		}
+	}
+
+	#[must_use]
+	pub fn output(&self) -> Option<DeviceId> {
+		match self {
+			Self::WithHost {
+				host,
+				output: Some(output),
+				..
+			} => Some(DeviceId::new(*host, output)),
+			Self::Default | Self::WithHost { .. } => None,
 		}
 	}
 }
@@ -51,125 +101,112 @@ pub fn get_devices() -> HashMap<DeviceId, DeviceDescription> {
 		.collect()
 }
 
-pub fn build_input_stream(
-	device: &Device,
-	sample_rate: Option<NonZero<u32>>,
-	frames: Option<NonZero<u32>>,
-) -> (Consumer<[f32; 2]>, Stream, NonZero<u32>, NonZero<u32>) {
-	let host = device
-		.host()
-		.and_then(|host| cpal::host_from_id(host).ok())
-		.unwrap_or_else(cpal::default_host);
-
-	let device = device
-		.device()
-		.and_then(|device| host.device_by_id(&device))
-		.filter(cpal::Device::supports_input)
-		.or_else(|| host.default_input_device())
-		.unwrap();
-
-	let default_config = device.default_input_config().unwrap();
-	let config = choose_supported_config(
-		device.supported_input_configs().unwrap(),
-		&default_config,
-		sample_rate,
-		frames,
-	);
-
-	info!("starting input stream with config {config:#?}");
-
-	let sample_rate = NonZero::new(config.sample_rate).unwrap();
-	let frames = frames_of_config(&config).or(NonZero::new(2048)).unwrap();
-	let channels = NonZero::new(u32::from(config.channels)).unwrap();
-
-	let (producer, consumer) = RingBuffer::new(sample_rate.get() as usize);
-
-	macro_rules! build_input_stream {
-		($($pat:pat => $ty:ty),*$(,)?) => {
-			match default_config.sample_format() {
-				$(
-					$pat => device.build_input_stream(
-						config,
-						build_input_callback::<$ty>(frames, channels, producer),
-						|err| error!("{err}"),
-						None,
-					),
-				)*
-				sample_format => panic!("unsupported sample format {sample_format}"),
-			}
-		}
-	}
-
-	let stream = build_input_stream! {
-		SampleFormat::I8 => i8,
-		SampleFormat::I16 => i16,
-		SampleFormat::I24 => I24,
-		SampleFormat::I32 => i32,
-		SampleFormat::I64 => i64,
-		SampleFormat::U8 => u8,
-		SampleFormat::U16 => u16,
-		SampleFormat::U24 => U24,
-		SampleFormat::U32 => u32,
-		SampleFormat::U64 => u64,
-		SampleFormat::F32 => f32,
-		SampleFormat::F64 => f64,
-	}
-	.unwrap();
-
-	stream.play().unwrap();
-
-	(consumer, stream, sample_rate, frames)
-}
-
-pub fn build_output_stream(
-	device: &Device,
+pub fn build_audio_streams(
+	devices: &Devices,
 	sample_rate: Option<NonZero<u32>>,
 	frames: Option<NonZero<u32>>,
 	receiver: oneshot::Receiver<AudioThread>,
-) -> (Stream, NonZero<u32>, NonZero<u32>) {
-	let host = device
+) -> (
+	Option<Stream>,
+	Stream,
+	u16,
+	NonZero<u16>,
+	NonZero<u32>,
+	NonZero<u32>,
+) {
+	let host = devices
 		.host()
 		.and_then(|host| cpal::host_from_id(host).ok())
 		.unwrap_or_else(cpal::default_host);
 
-	let device = device
-		.device()
+	let input_device = devices
+		.input()
 		.and_then(|device| host.device_by_id(&device))
-		.filter(cpal::Device::supports_output)
+		.filter(Device::supports_input)
+		.or_else(|| host.default_input_device())
+		.unwrap();
+
+	let output_device = devices
+		.output()
+		.and_then(|device| host.device_by_id(&device))
+		.filter(Device::supports_output)
 		.or_else(|| host.default_output_device())
 		.unwrap();
 
-	let default_config = device.default_output_config().unwrap();
-	let config = choose_supported_config(
-		device.supported_output_configs().unwrap(),
-		&default_config,
+	let sample_rate = sample_rate
+		.or_else(|| NonZero::new(output_device.default_output_config().unwrap().sample_rate()))
+		.unwrap();
+
+	let (input_stream, input_channels, consumer) =
+		build_input_stream(&input_device, sample_rate, frames);
+
+	let (output_stream, output_channels) = build_output_stream(
+		&output_device,
 		sample_rate,
 		frames,
+		input_channels,
+		receiver,
+		consumer,
 	);
 
-	info!("starting output stream with config {config:#?}");
+	if let Some(input_stream) = &input_stream {
+		input_stream.play().unwrap();
+	}
 
-	let sample_rate = NonZero::new(config.sample_rate).unwrap();
-	let frames = frames_of_config(&config).or(NonZero::new(2048)).unwrap();
-	let channels = NonZero::new(u32::from(config.channels)).unwrap();
+	output_stream.play().unwrap();
 
-	macro_rules! build_output_stream {
+	(
+		input_stream,
+		output_stream,
+		input_channels,
+		output_channels,
+		sample_rate,
+		frames.or(NonZero::new(2048)).unwrap(),
+	)
+}
+
+pub fn build_input_stream(
+	device: &Device,
+	sample_rate: NonZero<u32>,
+	frames: Option<NonZero<u32>>,
+) -> (Option<Stream>, u16, Consumer<f32>) {
+	let default_input_config = device.default_input_config().ok();
+	let channels = device
+		.supported_input_configs()
+		.unwrap()
+		.map(|config| config.channels())
+		.max()
+		.or_else(|| Some(default_input_config?.channels()))
+		.unwrap_or_default();
+
+	let config = StreamConfig {
+		channels,
+		sample_rate: sample_rate.get(),
+		buffer_size: frames.map_or(BufferSize::Default, |frames| {
+			BufferSize::Fixed(frames.get())
+		}),
+	};
+
+	let (producer, consumer) = RingBuffer::new(channels as usize * sample_rate.get() as usize);
+
+	macro_rules! build_input_stream {
 		($($pat:pat => $ty:ty),*$(,)?) => {
-			match default_config.sample_format() {
+			match default_input_config.map(|config| config.sample_format()) {
 				$(
-					$pat => device.build_output_stream(
+					Some($pat) => device.build_input_stream(
 						config,
-						build_output_callback::<$ty>(frames, channels, AudioCallback::Away(receiver)),
+						build_input_callback::<$ty>(frames.or(NonZero::new(2048)).unwrap(), channels, producer),
 						|err| error!("{err}"),
 						None,
-					),
+					).ok(),
 				)*
-				sample_format => panic!("unsupported sample format {sample_format}"),
+				Some(sample_format) => panic!("unsupported sample format {sample_format}"),
+				None => None
 			}
 		}
 	}
 
-	let stream = build_output_stream! {
+	let input_stream = build_input_stream! {
 		SampleFormat::I8 => i8,
 		SampleFormat::I16 => i16,
 		SampleFormat::I24 => I24,
@@ -182,125 +219,28 @@ pub fn build_output_stream(
 		SampleFormat::U64 => u64,
 		SampleFormat::F32 => f32,
 		SampleFormat::F64 => f64,
-	}
-	.unwrap();
-
-	stream.play().unwrap();
-
-	(stream, sample_rate, frames)
-}
-
-fn choose_supported_config(
-	configs: impl IntoIterator<Item = SupportedStreamConfigRange>,
-	default_config: &SupportedStreamConfig,
-	sample_rate: Option<NonZero<u32>>,
-	frames: Option<NonZero<u32>>,
-) -> StreamConfig {
-	let sample_rate =
-		sample_rate.unwrap_or_else(|| NonZero::new(default_config.sample_rate()).unwrap());
-
-	let config = configs
-		.into_iter()
-		.filter(|config| config.channels() != 0)
-		.min_by(|l, r| {
-			compare_by_sample_rate(l, r, sample_rate)
-				.then_with(|| {
-					frames.map_or(Ordering::Equal, |frames| {
-						compare_by_buffer_size(l, r, frames)
-					})
-				})
-				.then_with(|| compare_by_channels(l, r))
-		})
-		.unwrap();
-
-	let sample_rate = sample_rate
-		.get()
-		.clamp(config.min_sample_rate(), config.max_sample_rate());
-
-	let buffer_size = match (*config.buffer_size(), frames) {
-		(SupportedBufferSize::Unknown, _) | (_, None) => BufferSize::Default,
-		(SupportedBufferSize::Range { min, max }, Some(frames)) => {
-			BufferSize::Fixed(frames.get().clamp(min, max))
-		}
 	};
 
-	StreamConfig {
-		channels: config.channels(),
-		sample_rate,
-		buffer_size,
-	}
-}
-
-fn compare_by_sample_rate(
-	l: &SupportedStreamConfigRange,
-	r: &SupportedStreamConfigRange,
-	sample_rate: NonZero<u32>,
-) -> Ordering {
-	let sample_rate = sample_rate.get();
-	let ldiff = sample_rate
-		.clamp(l.min_sample_rate(), l.max_sample_rate())
-		.abs_diff(sample_rate);
-	let rdiff = sample_rate
-		.clamp(r.min_sample_rate(), r.max_sample_rate())
-		.abs_diff(sample_rate);
-
-	ldiff.cmp(&rdiff)
-}
-
-fn compare_by_buffer_size(
-	l: &SupportedStreamConfigRange,
-	r: &SupportedStreamConfigRange,
-	frames: NonZero<u32>,
-) -> Ordering {
-	match (*l.buffer_size(), *r.buffer_size()) {
-		(SupportedBufferSize::Unknown, SupportedBufferSize::Unknown) => Ordering::Equal,
-		(SupportedBufferSize::Range { .. }, SupportedBufferSize::Unknown) => Ordering::Less,
-		(SupportedBufferSize::Unknown, SupportedBufferSize::Range { .. }) => Ordering::Greater,
-		(
-			SupportedBufferSize::Range {
-				min: lmin,
-				max: lmax,
-			},
-			SupportedBufferSize::Range {
-				min: rmin,
-				max: rmax,
-			},
-		) => {
-			let frames = frames.get();
-			let ldiff = frames.clamp(lmin, lmax).abs_diff(frames);
-			let rdiff = frames.clamp(rmin, rmax).abs_diff(frames);
-			ldiff.cmp(&rdiff)
-		}
-	}
-}
-
-fn compare_by_channels(l: &SupportedStreamConfigRange, r: &SupportedStreamConfigRange) -> Ordering {
-	match (l.channels().cmp(&2), r.channels().cmp(&2)) {
-		(Ordering::Equal, _) | (Ordering::Greater, Ordering::Less) => Ordering::Less,
-		(_, Ordering::Equal) | (Ordering::Less, Ordering::Greater) => Ordering::Greater,
-		_ => {
-			let ldiff = l.channels().abs_diff(2);
-			let rdiff = r.channels().abs_diff(2);
-			ldiff.cmp(&rdiff)
-		}
-	}
+	(input_stream, channels, consumer)
 }
 
 fn build_input_callback<T: Sample>(
 	frames: NonZero<u32>,
-	channels: NonZero<u32>,
-	mut producer: Producer<[f32; 2]>,
+	channels: u16,
+	mut producer: Producer<f32>,
 ) -> impl FnMut(&[T], &InputCallbackInfo)
 where
 	f32: FromSample<T>,
 {
-	let chunk_size = NonZero::new(frames.get() * channels.get()).unwrap();
-	let mut stereo = boxed_slice![[0.0; 2]; frames.get() as usize];
+	let chunk_size = NonZero::new(frames.get() * u32::from(channels)).unwrap();
+	let mut input = boxed_slice![0.0; chunk_size.get() as usize];
 	move |buf, _| {
 		for buf in buf.chunks(chunk_size.get() as usize) {
-			let frames = buf.len() / channels.get() as usize;
-			from_other_to_stereo(&mut stereo[..frames], buf);
-			if let (_, t) = producer.push_partial_slice(&stereo[..frames])
+			for (buf, input) in buf.iter().zip(&mut input[..buf.len()]) {
+				*input = f32::from_sample(*buf);
+			}
+
+			if let (_, t) = producer.push_partial_slice(&input[..buf.len()])
 				&& !t.is_empty()
 			{
 				warn!("full ring buffer");
@@ -309,66 +249,103 @@ where
 	}
 }
 
-fn build_output_callback<T: Sample + FromSample<f32>>(
-	frames: NonZero<u32>,
-	channels: NonZero<u32>,
-	mut processor: AudioCallback,
-) -> impl FnMut(&mut [T], &OutputCallbackInfo) {
-	let chunk_size = NonZero::new(frames.get() * channels.get()).unwrap();
-	let mut stereo = boxed_slice![[0.0; 2]; frames.get() as usize];
-	move |buf, _| {
-		for buf in buf.chunks_mut(chunk_size.get() as usize) {
-			let frames = buf.len() / channels.get() as usize;
-			processor.process(&mut stereo[..frames]);
-			from_stereo_to_other(buf, &stereo[..frames]);
+pub fn build_output_stream(
+	device: &Device,
+	sample_rate: NonZero<u32>,
+	frames: Option<NonZero<u32>>,
+	input_channels: u16,
+	receiver: oneshot::Receiver<AudioThread>,
+	consumer: Consumer<f32>,
+) -> (Stream, NonZero<u16>) {
+	let default_output_config = device.default_output_config().unwrap();
+	let channels = NonZero::new(
+		device
+			.supported_output_configs()
+			.unwrap()
+			.map(|config| config.channels())
+			.max()
+			.unwrap_or_else(|| default_output_config.channels()),
+	)
+	.unwrap();
+
+	let config = StreamConfig {
+		channels: channels.get(),
+		sample_rate: sample_rate.get(),
+		buffer_size: frames.map_or(BufferSize::Default, |frames| {
+			BufferSize::Fixed(frames.get())
+		}),
+	};
+
+	macro_rules! build_output_stream {
+		($($pat:pat => $ty:ty),*$(,)?) => {
+			match default_output_config.sample_format() {
+				$(
+					$pat => device.build_output_stream(
+						config,
+						build_output_callback::<$ty>(frames.or(NonZero::new(2048)).unwrap(), input_channels, channels, consumer, AudioCallback::Away(receiver)),
+						|err| error!("{err}"),
+						None,
+					).unwrap(),
+				)*
+				sample_format => panic!("unsupported sample format {sample_format}"),
+			}
 		}
 	}
+
+	(
+		build_output_stream! {
+			SampleFormat::I8 => i8,
+			SampleFormat::I16 => i16,
+			SampleFormat::I24 => I24,
+			SampleFormat::I32 => i32,
+			SampleFormat::I64 => i64,
+			SampleFormat::U8 => u8,
+			SampleFormat::U16 => u16,
+			SampleFormat::U24 => U24,
+			SampleFormat::U32 => u32,
+			SampleFormat::U64 => u64,
+			SampleFormat::F32 => f32,
+			SampleFormat::F64 => f64,
+		},
+		channels,
+	)
 }
 
-fn from_stereo_to_other<S: Sample + FromSample<f32>>(a: &mut [S], b: &[[f32; 2]]) {
-	match a.len().cmp(&b.len()) {
-		Ordering::Greater => a
-			.chunks_exact_mut(a.len() / b.len())
-			.zip(b)
-			.for_each(|(a, b)| {
-				a[0] = S::from_sample(b[0]);
-				a[1] = S::from_sample(b[1]);
-			}),
-		Ordering::Equal => a
-			.iter_mut()
-			.zip(b.as_flattened())
-			.for_each(|(a, b)| *a = S::from_sample(*b)),
-		Ordering::Less => a
-			.iter_mut()
-			.zip(b)
-			.for_each(|(a, b)| *a = S::from_sample((b[0] + b[1]) / 2.0)),
-	}
-}
+fn build_output_callback<T: Sample + FromSample<f32>>(
+	frames: NonZero<u32>,
+	input_channels: u16,
+	output_channels: NonZero<u16>,
+	mut consumer: Consumer<f32>,
+	mut processor: AudioCallback,
+) -> impl FnMut(&mut [T], &OutputCallbackInfo) {
+	let chunk_size = NonZero::new(frames.get() * u32::from(output_channels.get())).unwrap();
+	let mut input = boxed_slice![0.0; frames.get() as usize * input_channels as usize];
+	let mut output = boxed_slice![0.0; frames.get() as usize * output_channels.get() as usize];
+	let mut warn = false;
+	move |buf, _| {
+		for buf in buf.chunks_mut(chunk_size.get() as usize) {
+			let frames = buf.len() / output_channels.get() as usize;
+			let input_len = frames * input_channels as usize;
 
-fn from_other_to_stereo<S: Sample>(a: &mut [[f32; 2]], b: &[S])
-where
-	f32: FromSample<S>,
-{
-	match a.len().cmp(&b.len()) {
-		Ordering::Less => b.chunks_exact(b.len() / a.len()).zip(a).for_each(|(b, a)| {
-			a[0] = f32::from_sample(b[0]);
-			a[1] = f32::from_sample(b[1]);
-		}),
-		Ordering::Equal => a
-			.as_flattened_mut()
-			.iter_mut()
-			.zip(b)
-			.for_each(|(a, b)| *a = f32::from_sample(*b)),
-		Ordering::Greater => b.iter().zip(a).for_each(|(b, a)| {
-			a[0] = f32::from_sample(*b);
-			a[1] = f32::from_sample(*b);
-		}),
-	}
-}
+			if let (_, t) = consumer.pop_partial_slice(&mut input[..input_len])
+				&& !t.is_empty()
+			{
+				if warn {
+					warn!("empty ring buffer");
+				}
 
-fn frames_of_config(config: &StreamConfig) -> Option<NonZero<u32>> {
-	match config.buffer_size {
-		BufferSize::Fixed(buffer_size) => NonZero::new(buffer_size),
-		BufferSize::Default => None,
+				t.fill(0.0);
+			} else {
+				warn = true;
+			}
+
+			output[..buf.len()].fill(0.0);
+
+			processor.process(&input[..input_len], &mut output[..buf.len()]);
+
+			for (output, buf) in output[..buf.len()].iter().zip(buf) {
+				*buf = T::from_sample(*output);
+			}
+		}
 	}
 }

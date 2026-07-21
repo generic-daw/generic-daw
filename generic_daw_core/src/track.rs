@@ -1,16 +1,25 @@
 use crate::{
-	Channel, Clip, ClipId, Event, MidiNote, Node, NodeAction, NodeId, Update, audio_thread::State,
-	midi_clip::VoiceId, voice_alloc::VoiceAlloc,
+	Channel, Channels, Clip, ClipId, Event, MidiNote, Node, NodeAction, NodeId, Update,
+	audio_thread::State, midi_clip::VoiceId, voice_alloc::VoiceAlloc,
 };
 use audio_graph::{Inject, thread_pool::Injector};
-use clap_host::events::Match;
+use clap_host::{RenderMode, events::Match};
+use log::warn;
+use rtrb::Producer;
 use std::{collections::HashMap, num::NonZero};
+
+#[derive(Debug)]
+pub struct Input {
+	producer: Producer<[f32; 2]>,
+	channels: Channels,
+}
 
 #[derive(Debug)]
 pub struct Track {
 	clips: HashMap<ClipId, Clip>,
 	voice_alloc: VoiceAlloc<VoiceId, MidiNote>,
 	last_polyphony: usize,
+	input: Option<Input>,
 	channel: Channel,
 }
 
@@ -20,6 +29,7 @@ impl Default for Track {
 			clips: HashMap::new(),
 			voice_alloc: VoiceAlloc::new(NonZero::new(128).unwrap()),
 			last_polyphony: 0,
+			input: None,
 			channel: Channel::default(),
 		}
 	}
@@ -50,6 +60,27 @@ impl Track {
 			});
 		}
 
+		if let Some(input) = &mut self.input
+			&& state.render_mode == RenderMode::Realtime
+			&& input.channels.fits_in(state.transport.input_channels)
+		{
+			for ([l, r], frame) in audio.iter_mut().zip(
+				state
+					.input
+					.chunks_exact(state.transport.input_channels.into()),
+			) {
+				*l = frame[input.channels.left as usize];
+				*r = frame[input.channels.right as usize];
+			}
+
+			if state.transport.playing
+				&& let (_, t) = input.producer.push_partial_slice(audio)
+				&& !t.is_empty()
+			{
+				warn!("full ring buffer");
+			}
+		}
+
 		if state.transport.playing {
 			for clip in self.clips.values_mut() {
 				clip.process(state, audio, events, &mut self.voice_alloc);
@@ -70,6 +101,21 @@ impl Track {
 
 	pub fn apply(&mut self, action: NodeAction, state: &State) {
 		match action {
+			NodeAction::InputStart(producer, channels) => {
+				let input = self.input.replace(Input { producer, channels });
+				debug_assert!(input.is_none());
+			}
+			NodeAction::InputChangeChannels(channels) => {
+				self.input.as_mut().unwrap().channels = channels;
+				self.channel.push_update(Update::Interrupted(
+					Some(self.id()),
+					state.transport.position,
+				));
+			}
+			NodeAction::InputStop => {
+				let input = self.input.take();
+				debug_assert!(input.is_some());
+			}
 			NodeAction::ClipAdd(clip) => _ = self.clips.insert(clip.id(), *clip),
 			NodeAction::ClipRemove(id) => _ = self.clips.remove(&id),
 			NodeAction::ClipMoveTo(id, pos) => self.clips.get_mut(&id).unwrap().move_to(pos),
@@ -192,5 +238,10 @@ impl Track {
 
 	pub fn restart_all_plugins(&mut self) {
 		self.channel.restart_all_plugins();
+	}
+
+	#[must_use]
+	pub fn output(&self) -> Option<Channels> {
+		self.channel.output()
 	}
 }

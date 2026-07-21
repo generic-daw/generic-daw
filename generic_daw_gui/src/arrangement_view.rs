@@ -3,11 +3,12 @@ use crate::{
 	clap_host::{self, ClapHost},
 	components::{context_menu_entry, icon_button, text_icon_button},
 	config::Config,
-	daw::{self, RECORDINGS_DIR, format_now},
+	daw,
 	file_tree::FileKind,
 	icons::{
-		arrow_up_down, chevron_down, chevron_up, chevrons_left_right_ellipsis, circle_ellipsis,
-		copy, grip_horizontal, grip_vertical, mic, plus, power, power_off, rotate_ccw, x,
+		arrow_up_down, chevron_down, chevron_up, chevrons_down, chevrons_left_right_ellipsis,
+		circle_ellipsis, copy, grip_horizontal, grip_vertical, plus, power, power_off, rotate_ccw,
+		x,
 	},
 	operation::scroll_into_view,
 	state::{DEFAULT_SPLIT_POSITION, State},
@@ -23,7 +24,7 @@ use crate::{
 	},
 };
 use generic_daw_core::{
-	AudioClip, AudioThread, Batch, MidiClip, MidiKey, MidiNote, MidiNoteId, MidiPatternId, NodeId,
+	AudioThread, Batch, Channels, MidiClip, MidiKey, MidiNote, MidiNoteId, MidiPatternId, NodeId,
 	PanMode, PluginId, Point, SampleId,
 	clap_host::PluginDescriptor,
 	time::{BeatRange, BeatTime, SecondsTime},
@@ -59,13 +60,12 @@ use std::{
 	collections::HashMap,
 	io::{self, Read},
 	iter::repeat,
-	mem::MaybeUninit,
 	path::Path,
 	sync::Arc,
 	time::Duration,
 };
 use sweeten::widget::drag::DragEvent;
-use utils::{NoClone, NoDebug, boxed_slice};
+use utils::{NoClone, NoDebug};
 
 mod arrangement;
 mod channel;
@@ -134,9 +134,8 @@ pub enum Message {
 	SeekTo(BeatTime),
 	SetLoopMarker(Option<BeatRange>),
 
-	Recording(NodeId),
-	RecordingFinalize,
-	RecordingWrite(NoDebug<Box<[[f32; 2]]>>),
+	InputChangeChannels(NodeId, Option<Channels>),
+	OutputChangeChannels(NodeId, Option<Channels>),
 
 	Freeze(NodeId),
 	FreezeDone(NodeId, Box<SamplePair>, BeatTime),
@@ -180,7 +179,6 @@ pub struct ArrangementView {
 
 	tab: Tab,
 	midi_clip: Option<(usize, usize)>,
-	recording: Option<Recording>,
 
 	playlist: RefCell<playlist::State>,
 	piano_roll: RefCell<piano_roll::State>,
@@ -223,7 +221,6 @@ impl ArrangementView {
 
 			tab: Tab::Playlist,
 			midi_clip: None,
-			recording: None,
 
 			playlist: RefCell::new(playlist::State::new(
 				Vector::new(view.playlist.position.x, view.playlist.position.y),
@@ -482,14 +479,6 @@ impl ArrangementView {
 				}
 			}
 			Message::AudioClipAdd(id, track, pos) => {
-				let mut clip = AudioClip::new(id);
-				clip.position.trim_end_to(
-					self.arrangement.samples()[&id]
-						.len(self.arrangement.transport())
-						.to_beat_time(self.arrangement.transport()),
-					self.arrangement.transport(),
-				);
-				clip.position.move_to(pos);
 				let (track, task) = if let Some(track) = track
 					&& track < self.arrangement.tracks().len()
 				{
@@ -498,20 +487,11 @@ impl ArrangementView {
 					let track = self.arrangement.tracks().len();
 					(track, self.update(Message::TrackAdd, config, state))
 				};
-				let clip = self.arrangement.add_clip(track, clip);
+				let clip = self.arrangement.add_audio_clip_from_sample(track, pos, id);
 				self.playlist.get_mut().primary.insert((track, clip));
 				return task;
 			}
 			Message::MidiClipAdd(id, track, pos) => {
-				let mut clip = MidiClip::new(id);
-				clip.position.trim_end_to(
-					if self.arrangement.midi_patterns()[&id].notes.is_empty() {
-						BeatTime::new(u64::from(self.arrangement.transport().numerator.get()), 0)
-					} else {
-						self.arrangement.midi_patterns()[&id].len()
-					},
-				);
-				clip.position.move_to(pos);
 				let (track, task) = if let Some(track) = track
 					&& track < self.arrangement.tracks().len()
 				{
@@ -520,7 +500,7 @@ impl ArrangementView {
 					let track = self.arrangement.tracks().len();
 					(track, self.update(Message::TrackAdd, config, state))
 				};
-				let clip = self.arrangement.add_clip(track, clip);
+				let clip = self.arrangement.add_midi_clip_from_pattern(track, pos, id);
 				self.playlist.get_mut().primary.insert((track, clip));
 				return task;
 			}
@@ -555,14 +535,6 @@ impl ArrangementView {
 
 				let track = self.arrangement.remove_track(node);
 				self.update_selection(|c| update_selection_delete_track(c, track));
-
-				if self
-					.recording
-					.as_ref()
-					.is_some_and(|recording| recording.node == node)
-				{
-					self.end_recording();
-				}
 			}
 			Message::TrackMove(event) => {
 				if let DragEvent::Dropped {
@@ -587,104 +559,25 @@ impl ArrangementView {
 			}
 			Message::TrackToggleEnabled(node) => self.arrangement.track_toggle_enabled(node),
 			Message::TrackToggleSolo(node) => self.arrangement.toggle_solo(node),
-			Message::SeekTo(pos) => {
-				self.arrangement.seek_to(pos);
-				self.end_recording();
-			}
+			Message::SeekTo(pos) => self.arrangement.seek_to(pos),
 			Message::SetLoopMarker(marker) => self.arrangement.set_loop_range(marker),
-			Message::Recording(node) => {
-				let path = RECORDINGS_DIR.join(format!("{}.wav", format_now())).into();
-
-				if let Some(recording) = &mut self.recording {
-					if node == recording.node {
-						self.end_recording();
-					} else {
-						let pos = recording.position;
-
-						let sample = recording.split_off(path, self.arrangement.transport());
-						let id = sample.gui.id;
-						self.arrangement.add_sample(sample);
-
-						let track = self.arrangement.track_of(recording.node).unwrap();
-
-						let mut clip = AudioClip::new(id);
-						clip.position.trim_end_to(
-							self.arrangement.samples()[&id]
-								.len(self.arrangement.transport())
-								.to_beat_time(self.arrangement.transport()),
-							self.arrangement.transport(),
-						);
-						clip.position.move_to(pos);
-						self.arrangement.add_clip(track, clip);
-
-						recording.node = node;
-					}
-				} else {
-					let (recording, task) = Recording::create(
-						path,
-						self.arrangement.transport(),
-						&config.audio.devices.get_input(),
-						config.audio.sample_rate,
-						config.audio.buffer_size,
-						node,
-					);
-
-					let frames = recording.core.frames();
-
-					self.recording = Some(recording);
-					self.arrangement.play();
-
-					return Task::run(
-						poll_chunked_consumer(task, frames.get() as usize),
-						|samples| Message::RecordingWrite(NoDebug(samples)),
-					)
-					.chain(Task::done(Message::RecordingFinalize))
-					.into();
-				}
+			Message::InputChangeChannels(node, channels) => {
+				self.arrangement.input_change_channels(node, channels);
 			}
-			Message::RecordingFinalize => {
-				let recording = self.recording.take().unwrap();
-				let pos = recording.position;
-				let node = recording.node;
-
-				let sample = recording.finalize();
-
-				if let Some(track) = self.arrangement.track_of(node) {
-					let id = sample.gui.id;
-					self.arrangement.add_sample(sample);
-
-					let mut clip = AudioClip::new(id);
-					clip.position.trim_end_to(
-						self.arrangement.samples()[&id]
-							.len(self.arrangement.transport())
-							.to_beat_time(self.arrangement.transport()),
-						self.arrangement.transport(),
-					);
-					clip.position.move_to(pos);
-					self.arrangement.add_clip(track, clip);
-				}
+			Message::OutputChangeChannels(node, channels) => {
+				self.arrangement.output_change_channels(node, channels);
 			}
-			Message::RecordingWrite(samples) => self.recording.as_mut().unwrap().write(&samples),
 			Message::Freeze(node) => return Action::instruction(daw::Instruction::Freeze(node)),
 			Message::FreezeDone(node, sample, pos) => {
 				let id = sample.gui.id;
 				self.arrangement.add_sample(*sample);
-
-				let mut clip = AudioClip::new(id);
-				clip.position.trim_end_to(
-					self.arrangement.samples()[&id]
-						.len(self.arrangement.transport())
-						.to_beat_time(self.arrangement.transport()),
-					self.arrangement.transport(),
-				);
-				clip.position.move_to(pos);
 
 				let track = self.arrangement.track_of(node).unwrap() + 1;
 				let track_id = self.arrangement.insert_track(track);
 
 				self.update_selection(|c| Some(update_selection_insert_track(c, track)));
 
-				let clip = self.arrangement.add_clip(track, clip);
+				let clip = self.arrangement.add_audio_clip_from_sample(track, pos, id);
 				self.playlist.get_mut().primary.insert((track, clip));
 
 				for (outgoing, mix) in self.arrangement.outgoing(node).clone() {
@@ -1579,132 +1472,113 @@ impl ArrangementView {
 			self.playlist.borrow().position,
 			self.playlist.borrow().scale,
 			column![
-				sweeten::column(
-					self.arrangement
-						.tracks()
-						.iter()
-						.map(|track| self.arrangement.node(track.id))
-						.map(|node| {
-							let enabled = node.enabled
-								&& self.arrangement.solo().is_none_or(|solo| solo == node.id);
+				sweeten::column(self.arrangement.tracks().iter().map(|track| {
+					let node = self.arrangement.node(track.id);
 
-							let soloed = self.arrangement.solo() == Some(node.id);
+					let enabled =
+						node.enabled && self.arrangement.solo().is_none_or(|solo| solo == node.id);
 
-							let button_style = |cond: bool| {
-								if !enabled {
-									button::secondary
-								} else if cond {
-									button::warning
-								} else {
-									button::primary
-								}
-							};
+					let soloed = self.arrangement.solo() == Some(node.id);
 
-							container(row![
-								mouse_area(center_y(grip_vertical()))
-									.interaction(Interaction::Grab),
-								opaque(
-									mouse_area(
-										node.main_context_menu(
+					let button_style = |cond: bool| {
+						if !enabled {
+							button::secondary
+						} else if cond {
+							button::warning
+						} else {
+							button::primary
+						}
+					};
+
+					container(row![
+						mouse_area(center_y(grip_vertical())).interaction(Interaction::Grab),
+						opaque(
+							mouse_area(
+								node.main_context_menu(
+									row![
+										column![
 											row![
-												column![
-													row![
-														PeakMeter::new(&node.peaks[0])
-															.enabled(enabled),
-														PeakMeter::new(&node.peaks[1])
-															.enabled(enabled),
-													]
-													.spacing(2),
-													container(space().width(28).height(2)).style(
-														container_with_radius(
-															if node.polyphony > 0 {
-																container::primary
-															} else {
-																container::secondary
-															},
-															border::bottom(f32::INFINITY),
-														)
-													)
-												]
-												.spacing(2),
-												column![
-													node.volume_context_menu(
-														Knob::new(
-															0.0..=MAX_VOL,
-															node.utility.volume.abs().cbrt(),
-															|v| Message::ChannelVolumeChanged(
-																node.id,
-																v.powi(3)
-																	.copysign(node.utility.volume),
-															)
-														)
-														.default(1.0)
-														.radius(19.44444)
-														.enabled(enabled)
-														.tooltip(format_db(node.utility.volume)),
-														self.tab
-													),
-													node.pan_knob(19.44444, enabled),
-												]
-												.align_x(Center)
-												.spacing(5)
-												.wrap(),
-												column![
-													column![
-														icon_button(
-															x(),
-															if enabled {
-																button::danger
-															} else {
-																button::secondary
-															}
-														)
-														.on_press(Message::TrackRemove(node.id)),
-														text_icon_button("M", button_style(soloed))
-															.on_press(Message::TrackToggleEnabled(
-																node.id
-															))
-													]
-													.spacing(5),
-													column![
-														text_icon_button("S", button_style(soloed))
-															.on_press(Message::TrackToggleSolo(
-																node.id
-															)),
-														icon_button(
-															mic(),
-															button_style(
-																self.recording
-																	.as_ref()
-																	.is_some_and(|recording| {
-																		recording.node == node.id
-																	})
-															)
-														)
-														.on_press(Message::Recording(node.id))
-													]
-													.spacing(5),
-												]
-												.spacing(5)
-												.wrap()
+												PeakMeter::new(&node.peaks[0]).enabled(enabled),
+												PeakMeter::new(&node.peaks[1]).enabled(enabled),
 											]
-											.padding(padding::all(5).left(0))
+											.spacing(2),
+											container(space().width(28).height(2)).style(
+												container_with_radius(
+													if node.polyphony > 0 {
+														container::primary
+													} else {
+														container::secondary
+													},
+													border::bottom(f32::INFINITY),
+												)
+											)
+										]
+										.spacing(2),
+										column![
+											node.volume_context_menu(
+												Knob::new(
+													0.0..=MAX_VOL,
+													node.utility.volume.abs().cbrt(),
+													|v| Message::ChannelVolumeChanged(
+														node.id,
+														v.powi(3).copysign(node.utility.volume),
+													)
+												)
+												.default(1.0)
+												.radius(19.44444)
+												.enabled(enabled)
+												.tooltip(format_db(node.utility.volume)),
+												self.tab
+											),
+											node.pan_knob(19.44444, enabled),
+										]
+										.align_x(Center)
+										.spacing(5)
+										.wrap(),
+										column![
+											column![
+												icon_button(
+													x(),
+													if enabled {
+														button::danger
+													} else {
+														button::secondary
+													}
+												)
+												.on_press(Message::TrackRemove(node.id)),
+												text_icon_button("M", button_style(soloed))
+													.on_press(Message::TrackToggleEnabled(node.id))
+											]
 											.spacing(5),
-											self.tab
-										)
-									)
-									.interaction(Interaction::Pointer)
-									.on_press(Message::ChannelSelect(node.id))
+											column![
+												text_icon_button("S", button_style(soloed))
+													.on_press(Message::TrackToggleSolo(node.id)),
+												track.recording_button(
+													enabled,
+													self.arrangement.transport()
+												)
+											]
+											.spacing(5),
+										]
+										.spacing(5)
+										.wrap()
+									]
+									.padding(padding::all(5).left(0))
+									.spacing(5),
+									self.tab
 								)
-							])
-							.height(self.playlist.borrow().scale.y)
-							.style(container_with_radius(
-								selectable_box(weakest_bordered_box, node.id == self.selected),
-								border::left(5),
-							))
-							.into()
-						})
-				)
+							)
+							.interaction(Interaction::Pointer)
+							.on_press(Message::ChannelSelect(node.id))
+						)
+					])
+					.height(self.playlist.borrow().scale.y)
+					.style(container_with_radius(
+						selectable_box(weakest_bordered_box, node.id == self.selected),
+						border::left(5),
+					))
+					.into()
+				}))
 				.on_drag(Message::TrackMove)
 				.style(sweeten_column_with_radius(
 					sweeten_column_style,
@@ -1763,9 +1637,10 @@ impl ArrangementView {
 									),
 								})
 								.chain(
-									self.recording
+									track
+										.input
 										.as_ref()
-										.filter(|recording| recording.node == node.id)
+										.and_then(|input| input.recording.as_ref())
 										.map(|recording| {
 											Clip::new(
 												recording,
@@ -1806,15 +1681,18 @@ impl ArrangementView {
 		Split::new(
 			scrollable(
 				row![
-					self.view_channel(self.arrangement.master(), "M"),
+					self.view_channel(self.arrangement.master(), "M", None),
 					rule::vertical(1),
 					(!self.arrangement.tracks().is_empty()).then(|| sweeten::row(
 						self.arrangement
 							.tracks()
 							.iter()
-							.map(|track| self.arrangement.node(track.id))
 							.enumerate()
-							.map(|(i, node)| self.view_channel(node, format!("T{}", i + 1)))
+							.map(|(i, track)| self.view_channel(
+								self.arrangement.node(track.id),
+								format!("T{}", i + 1),
+								Some(track)
+							))
 					)
 					.on_drag(Message::TrackMove)
 					.style(sweeten_row_with_radius(sweeten_row_style, border::top(5)))
@@ -1824,9 +1702,12 @@ impl ArrangementView {
 						self.arrangement
 							.channels()
 							.iter()
-							.map(|channel| self.arrangement.node(channel.id))
 							.enumerate()
-							.map(|(i, node)| self.view_channel(node, format!("C{}", i + 1)))
+							.map(|(i, channel)| self.view_channel(
+								self.arrangement.node(channel.id),
+								format!("C{}", i + 1),
+								None
+							))
 					)
 					.on_drag(Message::ChannelMove)
 					.style(sweeten_row_with_radius(sweeten_row_style, border::top(5)))
@@ -2005,6 +1886,7 @@ impl ArrangementView {
 		&'a self,
 		node: &'a Node,
 		name: impl text::IntoFragment<'a>,
+		track: Option<&'a track::Track>,
 	) -> Element<'a, Message> {
 		let enabled = node.enabled
 			&& (node.ty != NodeType::Track
@@ -2075,22 +1957,28 @@ impl ArrangementView {
 									node.id,
 									-node.utility.volume
 								)),
-								match node.utility.pan {
-									PanMode::Stereo(..) => icon_button(
-										chevrons_left_right_ellipsis(),
-										button_style(false)
-									)
-									.on_press(Message::ChannelPanChanged(
-										node.id,
-										PanMode::SplitStereo(-1.0, 1.0),
-									)),
-									PanMode::SplitStereo(..) =>
-										icon_button(circle_ellipsis(), button_style(false))
-											.on_press(Message::ChannelPanChanged(
-												node.id,
-												PanMode::Stereo(0.0),
-											)),
-								}
+								track.map_or_else(
+									|| match node.utility.pan {
+										PanMode::Stereo(..) => icon_button(
+											chevrons_left_right_ellipsis(),
+											button_style(false),
+										)
+										.on_press(Message::ChannelPanChanged(
+											node.id,
+											PanMode::SplitStereo(-1.0, 1.0),
+										)),
+										PanMode::SplitStereo(..) => {
+											icon_button(circle_ellipsis(), button_style(false))
+												.on_press(Message::ChannelPanChanged(
+													node.id,
+													PanMode::Stereo(0.0),
+												))
+										}
+									}
+									.into(),
+									|track| track
+										.recording_button(enabled, self.arrangement.transport())
+								),
 							]
 							.spacing(5),
 							center_x(
@@ -2147,7 +2035,47 @@ impl ArrangementView {
 								),
 							]
 							.spacing(3),
-							{
+							if node.id == self.selected {
+								Node::output_context_menu(
+									node.id,
+									button(chevrons_down())
+										.padding(0)
+										.style(button_with_radius(
+											node.output.map_or(button::secondary as _, |output| {
+												if output.fits_in(
+													self.arrangement
+														.transport()
+														.output_channels
+														.get(),
+												) {
+													if enabled {
+														button::primary
+													} else {
+														button::secondary
+													}
+												} else {
+													button::warning
+												}
+											}),
+											5,
+										))
+										.on_press(Message::OutputChangeChannels(
+											node.id,
+											node.output.map_or_else(
+												|| {
+													Some(Channels::base(
+														self.arrangement
+															.transport()
+															.output_channels,
+													))
+												},
+												|_| None,
+											),
+										)),
+									node.output,
+									self.arrangement.transport(),
+								)
+							} else {
 								let incoming =
 									self.arrangement.outgoing(node.id).get(&self.selected);
 								let outgoing =
@@ -2229,25 +2157,23 @@ impl ArrangementView {
 												)),
 											)
 										}),
-									if node.id == self.selected {
-										row![]
-									} else {
-										match (node.ty, self.arrangement.node(self.selected).ty) {
-											(NodeType::Track, NodeType::Track) => row![],
-											(_, NodeType::Master)
-											| (NodeType::Track, NodeType::Channel) => {
-												row![down(border::radius(5))]
-											}
-											(NodeType::Master, _) | (_, NodeType::Track) => {
-												row![up(border::radius(5))]
-											}
-											_ => row![down(border::left(5)), up(border::right(5))],
+									match (node.ty, self.arrangement.node(self.selected).ty) {
+										(NodeType::Track, NodeType::Track) => {
+											row![].height(LINE_HEIGHT)
 										}
+										(_, NodeType::Master)
+										| (NodeType::Track, NodeType::Channel) => {
+											row![down(border::radius(5))]
+										}
+										(NodeType::Master, _) | (_, NodeType::Track) => {
+											row![up(border::radius(5))]
+										}
+										_ => row![down(border::left(5)), up(border::right(5))],
 									}
-									.height(LINE_HEIGHT)
 								]
 								.align_x(Center)
 								.spacing(3)
+								.into()
 							}
 						]
 						.align_x(Center)
@@ -2446,7 +2372,6 @@ impl ArrangementView {
 	}
 
 	pub fn change_config(&mut self) -> Task<Message> {
-		self.end_recording();
 		let (_, a_receiver) = oneshot::channel();
 		Task::perform(
 			self.arrangement.request_processor(a_receiver).into_future(),
@@ -2456,12 +2381,6 @@ impl ArrangementView {
 		.map(NoClone)
 		.map(Box::new)
 		.map(Message::ChangeConfig)
-	}
-
-	pub fn end_recording(&mut self) {
-		if let Some(recording) = &mut self.recording {
-			recording.end_stream();
-		}
 	}
 
 	pub fn hover_file(&mut self, file: Arc<Path>, kind: FileKind) {
@@ -2702,31 +2621,6 @@ fn poll_consumer<T>(mut consumer: Consumer<T>) -> impl Stream<Item = T> {
 			while let Ok(t) = consumer.pop() {
 				count += 1;
 				if sender.send(t).await.is_err() {
-					return;
-				}
-			}
-			if consumer.is_abandoned() {
-				return;
-			}
-			backoff(count).await;
-		}
-	})
-}
-
-fn poll_chunked_consumer<T: Copy>(
-	mut consumer: Consumer<T>,
-	chunk_size: usize,
-) -> impl Stream<Item = Box<[T]>> {
-	let mut backoff = backoff(chunk_size);
-	stream::channel(consumer.buffer().capacity(), async move |mut sender| {
-		let mut buf = boxed_slice![MaybeUninit::uninit(); chunk_size];
-		loop {
-			let mut count = 0;
-			while let (t, _) = consumer.pop_partial_slice_uninit(&mut buf)
-				&& !t.is_empty()
-			{
-				count += t.len();
-				if sender.send(t.into()).await.is_err() {
 					return;
 				}
 			}

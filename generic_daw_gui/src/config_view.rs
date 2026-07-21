@@ -364,7 +364,7 @@ impl ConfigView {
 							text("Input Device:").width(Fill),
 							row![
 								pick_list(
-									self.config.audio.devices.get_input().device(),
+									self.config.audio.devices.get_input(),
 									&*self.devices[&self
 										.config
 										.audio
@@ -374,7 +374,7 @@ impl ConfigView {
 										.input,
 									|id| self.device_info.get(id).map_or_else(
 										|| format!("Unknown ({id})"),
-										DeviceDescription::to_string
+										|device| device.name().to_owned()
 									)
 								)
 								.on_select(|id| Message::ChangedInput(Some(id)))
@@ -394,7 +394,6 @@ impl ConfigView {
 											.audio
 											.devices
 											.get_input()
-											.device()
 											.map(|_| Message::ChangedInput(None))
 									)
 							]
@@ -404,7 +403,7 @@ impl ConfigView {
 							text("Output Device:").width(Fill),
 							row![
 								pick_list(
-									self.config.audio.devices.get_output().device(),
+									self.config.audio.devices.get_output(),
 									&*self.devices[&self
 										.config
 										.audio
@@ -414,7 +413,7 @@ impl ConfigView {
 										.output,
 									|id| self.device_info.get(id).map_or_else(
 										|| format!("Unknown ({id})"),
-										DeviceDescription::to_string
+										|device| device.name().to_owned()
 									)
 								)
 								.on_select(|id| Message::ChangedOutput(Some(id)))
@@ -434,7 +433,6 @@ impl ConfigView {
 											.audio
 											.devices
 											.get_output()
-											.device()
 											.map(|_| Message::ChangedOutput(None))
 									)
 							]

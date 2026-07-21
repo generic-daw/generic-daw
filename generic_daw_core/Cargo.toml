@@ -14,7 +14,6 @@ dsp.workspace = true
 utils.workspace = true
 
 cpal = { version = "0.18.1", features = ["asio", "pipewire"] }
-hound = "3.5.1"
 log = "0.4.33"
 midly = { version = "0.5.3", default-features = false, features = ["std", "strict"] }
 oneshot = { version = "0.2.1", features = ["std"] }

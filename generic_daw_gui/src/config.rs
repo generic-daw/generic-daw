@@ -2,7 +2,7 @@ use crate::{
 	daw::{CONFIG_DIR, DATA_DIR},
 	theme::Theme,
 };
-use generic_daw_core::{Device, DeviceId, HostId};
+use generic_daw_core::{DeviceId, HostId};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -77,15 +77,14 @@ impl Devices {
 		});
 	}
 
-	pub fn get_input(&self) -> Device {
+	pub fn get_input(&self) -> Option<DeviceId> {
 		match self {
-			Self::Default => Device::Default,
 			Self::WithHost {
 				host,
 				input: Some(input),
 				..
-			} => Device::Specific(DeviceId::new(*host, input)),
-			Self::WithHost { host, .. } => Device::DefaultForHost(*host),
+			} => Some(DeviceId::new(*host, input)),
+			Self::Default | Self::WithHost { .. } => None,
 		}
 	}
 
@@ -110,15 +109,14 @@ impl Devices {
 		};
 	}
 
-	pub fn get_output(&self) -> Device {
+	pub fn get_output(&self) -> Option<DeviceId> {
 		match self {
-			Self::Default => Device::Default,
 			Self::WithHost {
 				host,
 				output: Some(output),
 				..
-			} => Device::Specific(DeviceId::new(*host, output)),
-			Self::WithHost { host, .. } => Device::DefaultForHost(*host),
+			} => Some(DeviceId::new(*host, output)),
+			Self::Default | Self::WithHost { .. } => None,
 		}
 	}
 
@@ -141,6 +139,21 @@ impl Devices {
 				output: Some(output.id().into()),
 			},
 		};
+	}
+
+	pub fn as_core(&self) -> generic_daw_core::Devices {
+		match self.clone() {
+			Self::Default => generic_daw_core::Devices::Default,
+			Self::WithHost {
+				host,
+				input,
+				output,
+			} => generic_daw_core::Devices::WithHost {
+				host,
+				input,
+				output,
+			},
+		}
 	}
 }
 

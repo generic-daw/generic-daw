@@ -40,3 +40,12 @@ impl Utility {
 		}
 	}
 }
+
+impl Default for Utility {
+	fn default() -> Self {
+		Self {
+			volume: 1.0,
+			pan: PanMode::Stereo(0.0),
+		}
+	}
+}

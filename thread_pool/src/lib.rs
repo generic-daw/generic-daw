@@ -133,11 +133,6 @@ impl<W: Erased<Inject: Erased<Scratch = (), Inject = Infallible>>> ThreadPool<W>
 		}
 	}
 
-	#[must_use]
-	pub fn threads(&self) -> NonZero<usize> {
-		NonZero::new(self.threads.len() + 1).unwrap()
-	}
-
 	pub fn run(&mut self, work_list: &W::WorkList<'_>, to_do: usize, threads: NonZero<usize>) {
 		assert!(self.shared.main.try_install(work_list, to_do));
 
