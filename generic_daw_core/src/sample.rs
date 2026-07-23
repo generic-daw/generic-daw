@@ -61,6 +61,8 @@ impl Sample {
 
 			if channels == 1 {
 				samples.extend(packet_buf.iter().skip(delay).map(|&x| [x, x]));
+			} else if channels == 2 {
+				samples.extend(packet_buf.as_chunks::<2>().0.iter().skip(delay));
 			} else if channels != 0 {
 				samples.extend(
 					packet_buf
