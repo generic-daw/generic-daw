@@ -123,8 +123,7 @@ pub fn build_audio_streams(
 		.input()
 		.and_then(|device| host.device_by_id(&device))
 		.filter(Device::supports_input)
-		.or_else(|| host.default_input_device())
-		.unwrap();
+		.or_else(|| host.default_input_device());
 
 	let output_device = devices
 		.output()
@@ -138,7 +137,7 @@ pub fn build_audio_streams(
 		.unwrap();
 
 	let (input_stream, input_channels, consumer) =
-		build_input_stream(&input_device, sample_rate, frames);
+		build_input_stream(input_device.as_ref(), sample_rate, frames);
 
 	let (output_stream, output_channels) = build_output_stream(
 		&output_device,
@@ -166,73 +165,89 @@ pub fn build_audio_streams(
 }
 
 pub fn build_input_stream(
-	device: &Device,
+	device: Option<&Device>,
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
 ) -> (Option<Stream>, u16, Consumer<f32>) {
-	let default_input_config = device.default_input_config().ok();
-	let channels = device
-		.supported_input_configs()
-		.unwrap()
-		.map(|config| config.channels())
-		.max()
-		.or_else(|| Some(default_input_config?.channels()))
-		.unwrap_or_default();
+	pub fn build_input_stream(
+		device: Option<&Device>,
+		sample_rate: NonZero<u32>,
+		frames: Option<NonZero<u32>>,
+	) -> Result<(Stream, NonZero<u16>, Consumer<f32>), Option<cpal::Error>> {
+		let device = device.ok_or(None)?;
 
-	let config = StreamConfig {
-		channels,
-		sample_rate: sample_rate.get(),
-		buffer_size: frames.map_or(BufferSize::Default, |frames| {
-			BufferSize::Fixed(frames.get())
-		}),
-	};
+		let channels = device
+			.supported_input_configs()?
+			.map(|config| config.channels())
+			.max()
+			.and_then(NonZero::new)
+			.ok_or(None)?;
 
-	let (producer, consumer) = RingBuffer::new(channels as usize * sample_rate.get() as usize);
+		let config = StreamConfig {
+			channels: channels.into(),
+			sample_rate: sample_rate.get(),
+			buffer_size: frames.map_or(BufferSize::Default, |frames| {
+				BufferSize::Fixed(frames.get())
+			}),
+		};
 
-	macro_rules! build_input_stream {
-		($($pat:pat => $ty:ty),*$(,)?) => {
-			match default_input_config.map(|config| config.sample_format()) {
-				$(
-					Some($pat) => device.build_input_stream(
-						config,
-						build_input_callback::<$ty>(frames.or(NonZero::new(2048)).unwrap(), channels, producer),
-						|err| error!("{err}"),
-						None,
-					).ok(),
-				)*
-				Some(sample_format) => panic!("unsupported sample format {sample_format}"),
-				None => None
+		let (producer, consumer) =
+			RingBuffer::new(channels.get() as usize * sample_rate.get() as usize);
+
+		macro_rules! build_input_stream {
+			($($pat:pat => $ty:ty),*$(,)?) => {
+				match device.default_input_config()?.sample_format() {
+					$(
+						$pat => device.build_input_stream(
+							config,
+							build_input_callback::<$ty>(frames.or(NonZero::new(2048)).unwrap(), channels, producer),
+							|err| error!("{err}"),
+							None,
+						)?,
+					)*
+					sample_format => panic!("unsupported sample format {sample_format}"),
+				}
 			}
 		}
+
+		Ok((
+			build_input_stream! {
+				SampleFormat::I8 => i8,
+				SampleFormat::I16 => i16,
+				SampleFormat::I24 => I24,
+				SampleFormat::I32 => i32,
+				SampleFormat::I64 => i64,
+				SampleFormat::U8 => u8,
+				SampleFormat::U16 => u16,
+				SampleFormat::U24 => U24,
+				SampleFormat::U32 => u32,
+				SampleFormat::U64 => u64,
+				SampleFormat::F32 => f32,
+				SampleFormat::F64 => f64,
+			},
+			channels,
+			consumer,
+		))
 	}
 
-	let input_stream = build_input_stream! {
-		SampleFormat::I8 => i8,
-		SampleFormat::I16 => i16,
-		SampleFormat::I24 => I24,
-		SampleFormat::I32 => i32,
-		SampleFormat::I64 => i64,
-		SampleFormat::U8 => u8,
-		SampleFormat::U16 => u16,
-		SampleFormat::U24 => U24,
-		SampleFormat::U32 => u32,
-		SampleFormat::U64 => u64,
-		SampleFormat::F32 => f32,
-		SampleFormat::F64 => f64,
+	let Ok((stream, channels, consumer)) = build_input_stream(device, sample_rate, frames)
+		.inspect_err(|err| _ = err.as_ref().inspect(|err| warn!("{err}")))
+	else {
+		return (None, 0, RingBuffer::new(0).1);
 	};
 
-	(input_stream, channels, consumer)
+	(Some(stream), channels.get(), consumer)
 }
 
 fn build_input_callback<T: Sample>(
 	frames: NonZero<u32>,
-	channels: u16,
+	channels: NonZero<u16>,
 	mut producer: Producer<f32>,
 ) -> impl FnMut(&[T], &InputCallbackInfo)
 where
 	f32: FromSample<T>,
 {
-	let chunk_size = NonZero::new(frames.get() * u32::from(channels)).unwrap();
+	let chunk_size = NonZero::new(frames.get() * u32::from(channels.get())).unwrap();
 	let mut input = boxed_slice![0.0; chunk_size.get() as usize];
 	move |buf, _| {
 		for buf in buf.chunks(chunk_size.get() as usize) {
@@ -257,16 +272,13 @@ pub fn build_output_stream(
 	receiver: oneshot::Receiver<AudioThread>,
 	consumer: Consumer<f32>,
 ) -> (Stream, NonZero<u16>) {
-	let default_output_config = device.default_output_config().unwrap();
-	let channels = NonZero::new(
-		device
-			.supported_output_configs()
-			.unwrap()
-			.map(|config| config.channels())
-			.max()
-			.unwrap_or_else(|| default_output_config.channels()),
-	)
-	.unwrap();
+	let channels = device
+		.supported_output_configs()
+		.unwrap()
+		.map(|config| config.channels())
+		.max()
+		.and_then(NonZero::new)
+		.unwrap();
 
 	let config = StreamConfig {
 		channels: channels.get(),
@@ -278,7 +290,7 @@ pub fn build_output_stream(
 
 	macro_rules! build_output_stream {
 		($($pat:pat => $ty:ty),*$(,)?) => {
-			match default_output_config.sample_format() {
+			match device.default_output_config().unwrap().sample_format() {
 				$(
 					$pat => device.build_output_stream(
 						config,
