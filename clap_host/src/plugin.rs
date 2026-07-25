@@ -1,5 +1,5 @@
 use crate::{
-	API_TYPE, AudioThread, MainThreadMessage, PluginDescriptor, Preset,
+	API_TYPE, AudioThread, EventImpl, MainThreadMessage, PluginDescriptor, Preset,
 	audio_buffers::AudioBuffers,
 	audio_processor::AudioProcessor,
 	event_buffers::EventBuffers,
@@ -21,7 +21,6 @@ use clack_host::prelude::*;
 use log::{info, warn};
 use raw_window_handle::HasWindowHandle;
 use std::{
-	convert::Infallible,
 	io::Cursor,
 	num::NonZero,
 	sync::{atomic::Ordering::Relaxed, mpsc::Receiver},
@@ -193,12 +192,12 @@ impl Plugin {
 		Some(AudioThread::new(processor, audio_buffers, event_buffers))
 	}
 
-	pub fn deactivate(&mut self, NoClone(mut processor): NoClone<AudioThread>) {
+	pub fn deactivate<Event: EventImpl>(&mut self, NoClone(mut processor): NoClone<AudioThread>) {
 		self.instance.access_shared_handler(|s| {
 			CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
 		});
 
-		processor.flush_active::<Infallible>(|_| {});
+		processor.flush_events::<Event>(|_| {});
 
 		self.instance
 			.deactivate(processor.processor.0.into_stopped());

@@ -97,29 +97,31 @@ impl Channel {
 		for plugin in &mut self.plugins {
 			if let Some(processor) = &mut plugin.processor {
 				if self.bypassed {
-					processor.flush_active::<Event>(|event| {
-						self.updates.extend(event.into_update(plugin.id));
-					});
+					processor.push_all(events.iter().copied());
 				} else {
-					processor.process(
-						audio,
-						events,
-						Some(&state.transport.as_clap()),
-						Some(&mut |executor| {
-							let task_count = executor.task_count() as usize;
-							let executor = ThreadPoolExecutor(executor);
-							injector.inject(&executor, task_count);
-						}),
-						plugin.mix,
-					);
+					processor.push_all(events.drain(..));
+				}
 
+				processor.process::<Event>(
+					audio,
+					|event| {
+						if let Some(update) = event.into_update(plugin.id) {
+							self.updates.push(update);
+						} else if !self.bypassed {
+							events.push(event);
+						}
+					},
+					Some(&state.transport.as_clap()),
+					Some(&mut |executor| {
+						let task_count = executor.task_count() as usize;
+						let executor = ThreadPoolExecutor(executor);
+						injector.inject(&executor, task_count);
+					}),
+					if self.bypassed { 0.0 } else { plugin.mix },
+				);
+
+				if !self.bypassed {
 					latency += processor.latency();
-
-					events.retain(|&event| {
-						let update = event.into_update(plugin.id);
-						self.updates.extend(update);
-						update.is_none()
-					});
 				}
 
 				if processor.needs_restart() {

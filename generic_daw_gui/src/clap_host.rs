@@ -8,7 +8,7 @@ use crate::{
 };
 use fragile::Fragile;
 pub use generic_daw_core::clap_host::*;
-use generic_daw_core::{PluginId, Transport};
+use generic_daw_core::{Event, PluginId, Transport};
 use generic_daw_widget::{context_menu::ContextMenu, knob::Knob};
 use iced::{
 	Center, Element, Fill, Font, Subscription, Task, padding,
@@ -283,7 +283,7 @@ impl ClapHost {
 			MainThreadMessage::RequestCallback => plugin!().call_on_main_thread_callback(),
 			MainThreadMessage::Restart(processor) => {
 				let plugin = plugin!(MainThreadMessage::Restart(processor));
-				plugin.deactivate(processor);
+				plugin.deactivate::<Event>(processor);
 				return Action::instruction(daw::Instruction::PluginActivate(
 					id,
 					plugin
@@ -292,10 +292,10 @@ impl ClapHost {
 				));
 			}
 			MainThreadMessage::Deactivate(processor) => {
-				plugin!(MainThreadMessage::Deactivate(processor)).deactivate(processor);
+				plugin!(MainThreadMessage::Deactivate(processor)).deactivate::<Event>(processor);
 			}
 			MainThreadMessage::Destroy(processor) => {
-				plugin!(MainThreadMessage::Destroy(processor)).deactivate(processor);
+				plugin!(MainThreadMessage::Destroy(processor)).deactivate::<Event>(processor);
 				return self.update(Message::DestroyInactive(id), transport);
 			}
 			MainThreadMessage::GuiRequestResize(size) => {

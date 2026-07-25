@@ -47,10 +47,10 @@ impl AudioThread {
 			.access_shared_handler(|s| s.request_restart.load(Relaxed))
 	}
 
-	pub fn process(
+	pub fn process<Event: EventImpl>(
 		&mut self,
 		audio: &mut [[f32; 2]],
-		events: &mut Vec<impl EventImpl>,
+		mut events: impl FnMut(Event),
 		transport: Option<&TransportEvent>,
 		injector: Option<ThreadPoolInjector<'_>>,
 		mix_level: f32,
@@ -60,7 +60,6 @@ impl AudioThread {
 		});
 
 		let steady_time = self.audio_buffers.read_in(audio);
-		self.event_buffers.push_all(events.drain(..));
 
 		let audio_in = LazyCell::new(|| !self.audio_buffers.are_inputs_quiet());
 		let events_in = !self.event_buffers.are_inputs_empty();
@@ -69,7 +68,7 @@ impl AudioThread {
 			.access_shared_handler(|s| s.request_process.swap(false, Relaxed));
 
 		if !self.processing && !request_process && !events_in && !*audio_in {
-			self.flush_process(audio, events, mix_level);
+			self.flush(audio, events, mix_level);
 			return;
 		}
 
@@ -131,13 +130,17 @@ impl AudioThread {
 							"{}: {err}",
 							self.processor.access_shared_handler(|s| &s.descriptor)
 						);
-						self.flush_process(audio, events, mix_level);
+						self.flush(audio, events, mix_level);
 						return;
 					}
 				};
 
 				self.audio_buffers.write_out(audio, mix_level);
-				events.extend(self.event_buffers.output_events());
+
+				for event in self.event_buffers.output_events() {
+					events(event);
+				}
+
 				self.event_buffers.reset();
 
 				self.processor
@@ -148,51 +151,22 @@ impl AudioThread {
 					"{}: {err}",
 					self.processor.access_shared_handler(|s| &s.descriptor)
 				);
-				self.flush_process(audio, events, mix_level);
+				self.flush(audio, events, mix_level);
 			}
 		}
 	}
 
-	fn flush_process(
+	fn flush<Event: EventImpl>(
 		&mut self,
 		audio: &mut [[f32; 2]],
-		events: &mut Vec<impl EventImpl>,
+		events: impl FnMut(Event),
 		mix_level: f32,
 	) {
-		debug_assert!(events.is_empty());
-
-		self.processor.ensure_processing_stopped();
-
 		self.audio_buffers.flush(audio, mix_level);
-
-		let events_in = !events.is_empty();
-		let request_flush = self
-			.processor
-			.access_shared_handler(|s| s.request_flush.swap(false, Relaxed));
-
-		if !request_flush && !events_in {
-			return;
-		}
-
-		if let Some(&params) = self.processor.access_shared_handler(|s| s.ext.params.get()) {
-			let (input_events, mut output_events) = self.event_buffers.prepare();
-
-			params.flush_active(
-				&mut self.processor.plugin_handle(),
-				&input_events,
-				&mut output_events,
-			);
-
-			events.extend(self.event_buffers.output_events());
-			self.event_buffers.reset();
-		}
+		self.flush_events(events);
 	}
 
-	pub fn flush_active<Event: EventImpl>(&mut self, f: impl FnMut(Event)) {
-		self.processor.access_shared_handler(|s| {
-			CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
-		});
-
+	pub(crate) fn flush_events<Event: EventImpl>(&mut self, mut events: impl FnMut(Event)) {
 		self.processor.ensure_processing_stopped();
 
 		let events_in = !self.event_buffers.are_inputs_empty();
@@ -213,7 +187,10 @@ impl AudioThread {
 				&mut output_events,
 			);
 
-			self.event_buffers.output_events().for_each(f);
+			for event in self.event_buffers.output_events() {
+				events(event);
+			}
+
 			self.event_buffers.reset();
 		}
 	}
