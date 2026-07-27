@@ -192,7 +192,7 @@ impl Channel {
 					});
 				}
 			}
-			_ => panic!(),
+			_ => panic!("{action:?}"),
 		}
 	}
 
@@ -213,17 +213,17 @@ impl Channel {
 		self.updates.clear();
 	}
 
+	#[must_use]
+	pub fn output(&self) -> Option<Channels> {
+		self.output.filter(|_| self.enabled)
+	}
+
 	pub fn restart_all_plugins(&mut self) {
 		for plugin in &mut self.plugins {
 			if let Some(processor) = plugin.processor.take() {
 				processor.restart();
 			}
 		}
-	}
-
-	#[must_use]
-	pub fn output(&self) -> Option<Channels> {
-		self.output.filter(|_| self.enabled)
 	}
 }
 

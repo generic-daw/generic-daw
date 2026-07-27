@@ -3,7 +3,7 @@ use crate::{
 	components::context_menu_entry,
 	icons::{
 		arrow_up_down, between_horizontal_start, between_vertical_start,
-		chevrons_left_right_ellipsis, circle_ellipsis, copy, power, power_off, rotate_ccw,
+		chevrons_left_right_ellipsis, circle_ellipsis, copy, power, power_off, replace, rotate_ccw,
 		snowflake,
 	},
 	stylefns::{container_with_radius, weaker_bordered_box},
@@ -15,7 +15,7 @@ use iced::{
 	Element, Fill, padding,
 	widget::{self, column, container, radio, row, rule, space, text, value},
 };
-use std::{iter::once, time::Instant};
+use std::{collections::BTreeMap, iter::once, time::Instant};
 use utils::NoDebug;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,6 +34,7 @@ pub struct Node {
 	pub utility: Utility,
 	pub enabled: bool,
 	pub bypassed: bool,
+	pub outgoing: BTreeMap<NodeId, f32>,
 	pub output: Option<Channels>,
 	pub peaks: NoDebug<[peak_meter::State; 2]>,
 	pub polyphony: usize,
@@ -52,6 +53,7 @@ impl Node {
 			},
 			enabled: true,
 			bypassed: false,
+			outgoing: BTreeMap::new(),
 			output,
 			peaks: [peak_meter::State::default(), peak_meter::State::default()].into(),
 			polyphony: 0,
@@ -67,6 +69,7 @@ impl Node {
 		&'a self,
 		content: impl Into<Element<'a, Message>>,
 		tab: Tab,
+		solo: Option<NodeId>,
 	) -> Element<'a, Message> {
 		ContextMenu::new(
 			content,
@@ -77,13 +80,13 @@ impl Node {
 					} else {
 						between_horizontal_start()
 					},
-					"Insert",
+					"Insert after",
 					""
 				)
 				.on_press_maybe(match self.ty {
 					NodeType::Master => None,
-					NodeType::Track => Some(Message::TrackInsert(self.id)),
 					NodeType::Channel => Some(Message::ChannelInsert(self.id)),
+					NodeType::Track => Some(Message::TrackInsert(self.id)),
 				}),
 				context_menu_entry(
 					copy(),
@@ -92,9 +95,21 @@ impl Node {
 				)
 				.on_press_maybe(match self.ty {
 					NodeType::Master => None,
-					NodeType::Track => Some(Message::TrackDuplicate(self.id)),
 					NodeType::Channel => Some(Message::ChannelDuplicate(self.id)),
+					NodeType::Track => Some(Message::TrackDuplicate(self.id)),
 				}),
+				(tab == Tab::Mixer).then(|| context_menu_entry(
+					replace(),
+					if self.ty == NodeType::Channel {
+						"Convert to track"
+					} else {
+						"Convert to channel"
+					},
+					""
+				)
+				.on_press_maybe(
+					(self.ty != NodeType::Master).then_some(Message::ToggleKind(self.id))
+				)),
 				container(rule::horizontal(1)).padding(padding::horizontal(5)),
 				if self.bypassed {
 					context_menu_entry(power_off(), "Engage FX", "")
@@ -103,7 +118,10 @@ impl Node {
 				}
 				.on_press(Message::ChannelToggleBypassed(self.id)),
 				(tab == Tab::Playlist).then(|| context_menu_entry(snowflake(), "Freeze", "")
-					.on_press(Message::Freeze(self.id))),
+					.on_press_maybe(
+						(self.enabled && solo.is_none_or(|solo| solo == self.id))
+							.then_some(Message::Freeze(self.id))
+					)),
 				container(rule::horizontal(1)).padding(padding::horizontal(5)),
 				context_menu_entry(
 					arrow_up_down(),
@@ -123,7 +141,7 @@ impl Node {
 							.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
 				}
 			])
-			.width(if tab == Tab::Mixer { 180 } else { 160 })
+			.width(180)
 			.style(container_with_radius(weaker_bordered_box, 5)),
 		)
 		.into()

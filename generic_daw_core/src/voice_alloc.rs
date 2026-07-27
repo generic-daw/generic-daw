@@ -14,6 +14,12 @@ pub struct VoiceAlloc<Id, Info> {
 	next_note_id: u32,
 }
 
+impl<Id: Copy + Eq, Info: Copy> Default for VoiceAlloc<Id, Info> {
+	fn default() -> Self {
+		Self::new(NonZero::new(128).unwrap())
+	}
+}
+
 impl<Id: Copy + Eq, Info: Copy> VoiceAlloc<Id, Info> {
 	pub fn new(count: NonZero<usize>) -> Self {
 		Self {

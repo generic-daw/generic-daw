@@ -57,7 +57,7 @@ pub struct Arrangement {
 	tracks: Vec<Track>,
 	channels: Vec<Channel>,
 	master: NodeId,
-	nodes: BTreeMap<NodeId, (Node, BTreeMap<NodeId, f32>)>,
+	nodes: BTreeMap<NodeId, Node>,
 
 	producer: Producer<Message>,
 	queue: VecDeque<Message>,
@@ -89,13 +89,10 @@ impl Arrangement {
 		let mut nodes = BTreeMap::new();
 		nodes.insert(
 			master,
-			(
-				Node::new(
-					NodeType::Master,
-					master,
-					Some(Channels::base(output_channels)),
-				),
-				BTreeMap::new(),
+			Node::new(
+				NodeType::Master,
+				master,
+				Some(Channels::base(output_channels)),
 			),
 		);
 
@@ -192,19 +189,19 @@ impl Arrangement {
 					);
 				}
 				Update::Peaks(node, peaks) => {
-					if let Some((node, _)) = self.nodes.get_mut(&node) {
+					if let Some(node) = self.nodes.get_mut(&node) {
 						node.update(peaks, batch.now);
 					}
 				}
 				Update::Polyphony(node, polyphony) => {
-					if let Some((node, _)) = self.nodes.get_mut(&node) {
+					if let Some(node) = self.nodes.get_mut(&node) {
 						node.polyphony = polyphony;
 					}
 				}
 				Update::Param(id, param_id, value) => {
 					messages.push(clap_host::Message::PluginParamChange(id, param_id, value));
 				}
-				Update::ConnectFailed(from, to) => _ = self.outgoing_mut(from).remove(&to),
+				Update::ConnectFailed(from, to) => _ = self.node_mut(from).outgoing.remove(&to),
 			}
 		}
 
@@ -531,7 +528,7 @@ impl Arrangement {
 	pub fn plugin_of(&self, id: PluginId) -> Option<(NodeId, usize)> {
 		self.nodes
 			.values()
-			.find_map(|(node, _)| Some((node.id, node.plugins.iter().position(|p| p.id == id)?)))
+			.find_map(|node| Some((node.id, node.plugins.iter().position(|p| p.id == id)?)))
 	}
 
 	pub fn channels(&self) -> &[Channel] {
@@ -539,39 +536,30 @@ impl Arrangement {
 	}
 
 	pub fn node(&self, id: NodeId) -> &Node {
-		&self.nodes[&id].0
+		&self.nodes[&id]
 	}
 
 	fn node_mut(&mut self, id: NodeId) -> &mut Node {
-		&mut self.nodes.get_mut(&id).unwrap().0
-	}
-
-	pub fn outgoing(&self, id: NodeId) -> &BTreeMap<NodeId, f32> {
-		&self.nodes[&id].1
-	}
-
-	fn outgoing_mut(&mut self, id: NodeId) -> &mut BTreeMap<NodeId, f32> {
-		&mut self.nodes.get_mut(&id).unwrap().1
+		self.nodes.get_mut(&id).unwrap()
 	}
 
 	fn add(&mut self, node: impl Into<generic_daw_core::Node>, ty: NodeType) -> NodeId {
 		let node = node.into();
 		let id = node.id();
-		self.nodes
-			.insert(id, (Node::new(ty, id, None), BTreeMap::new()));
+		self.nodes.insert(id, Node::new(ty, id, None));
 		self.send(Message::NodeAdd(Box::new(node)));
 		id
 	}
 
 	fn remove(&mut self, id: NodeId) -> Node {
-		for (_, outgoing) in self.nodes.values_mut() {
-			outgoing.remove(&id);
+		for node in self.nodes.values_mut() {
+			node.outgoing.remove(&id);
 		}
 		if self.solo == Some(id) {
 			self.toggle_solo(id);
 		}
 		self.send(Message::NodeRemove(id));
-		self.nodes.remove(&id).unwrap().0
+		self.nodes.remove(&id).unwrap()
 	}
 
 	pub fn add_channel(&mut self) -> NodeId {
@@ -584,10 +572,11 @@ impl Arrangement {
 		id
 	}
 
-	pub fn remove_channel(&mut self, id: NodeId) -> Node {
+	pub fn remove_channel(&mut self, id: NodeId) -> usize {
 		let index = self.channel_of(id).unwrap();
 		self.channels.remove(index);
-		self.remove(id)
+		self.remove(id);
+		index
 	}
 
 	pub fn move_channel(&mut self, channel: usize, new_channel: usize) {
@@ -622,7 +611,7 @@ impl Arrangement {
 		let incoming = self
 			.nodes
 			.values()
-			.filter_map(|(node, outgoing)| outgoing.get(&from).map(|&mix| (node.id, mix)))
+			.filter_map(|node| node.outgoing.get(&from).map(|&mix| (node.id, mix)))
 			.collect::<Vec<_>>();
 
 		for (incoming, mix) in incoming {
@@ -630,7 +619,7 @@ impl Arrangement {
 			self.set_mix(incoming, to, mix);
 		}
 
-		for (outgoing, mix) in self.outgoing(from).clone() {
+		for (outgoing, mix) in self.node(from).outgoing.clone() {
 			self.connect(to, outgoing);
 			self.set_mix(to, outgoing, mix);
 		}
@@ -663,7 +652,6 @@ impl Arrangement {
 				Clip::Audio(clip) => self.samples.get_mut(&clip.sample).unwrap().refs -= 1,
 				Clip::Midi(clip) => self.midi_patterns.get_mut(&clip.pattern).unwrap().refs -= 1,
 			}
-
 			self.gc(clip);
 		}
 		index
@@ -681,6 +669,54 @@ impl Arrangement {
 			self.add_clip(track + 1, clip);
 		}
 		(new_id, instructions)
+	}
+
+	pub fn toggle_kind(&mut self, id: NodeId) -> Option<usize> {
+		match self.node(id).ty {
+			NodeType::Master => None,
+			NodeType::Channel => {
+				self.node_mut(id).ty = NodeType::Track;
+				self.send(Message::NodeToggleKind(id));
+
+				let index = self.channel_of(id).unwrap();
+				self.channels.remove(index);
+				self.tracks.push(Track::new(id));
+
+				let incoming = self
+					.nodes
+					.values()
+					.filter_map(|node| node.outgoing.contains_key(&id).then_some(node.id))
+					.collect::<Vec<_>>();
+
+				for incoming in incoming {
+					self.disconnect(incoming, id);
+				}
+
+				None
+			}
+			NodeType::Track => {
+				self.input_change_channels(id, None);
+
+				self.node_mut(id).ty = NodeType::Channel;
+				self.send(Message::NodeToggleKind(id));
+
+				let index = self.track_of(id).unwrap();
+				let track = self.tracks.remove(index);
+				self.channels.insert(0, Channel::new(id));
+
+				for clip in track.clips {
+					match clip {
+						Clip::Audio(clip) => self.samples.get_mut(&clip.sample).unwrap().refs -= 1,
+						Clip::Midi(clip) => {
+							self.midi_patterns.get_mut(&clip.pattern).unwrap().refs -= 1;
+						}
+					}
+					self.gc(clip);
+				}
+
+				Some(index)
+			}
+		}
 	}
 
 	pub fn input_change_channels(&mut self, id: NodeId, channels: Option<Channels>) {
@@ -714,19 +750,19 @@ impl Arrangement {
 	}
 
 	pub fn connect(&mut self, from: NodeId, to: NodeId) {
-		self.outgoing_mut(from).insert(to, 1.0);
+		self.node_mut(from).outgoing.insert(to, 1.0);
 		self.send(Message::NodeConnect(from, to));
 	}
 
 	pub fn set_mix(&mut self, from: NodeId, to: NodeId, mix: f32) {
-		if self.outgoing(from)[&to] != mix {
-			*self.outgoing_mut(from).get_mut(&to).unwrap() = mix;
+		if self.node(from).outgoing[&to] != mix {
+			*self.node_mut(from).outgoing.get_mut(&to).unwrap() = mix;
 			self.send(Message::NodeSetMix(from, to, mix));
 		}
 	}
 
 	pub fn disconnect(&mut self, from: NodeId, to: NodeId) {
-		self.outgoing_mut(from).remove(&to);
+		self.node_mut(from).outgoing.remove(&to);
 		self.send(Message::NodeDisconnect(from, to));
 	}
 

@@ -98,6 +98,8 @@ pub enum Message {
 	CycleTabBackwards,
 	ChangedTab(Tab),
 
+	ToggleKind(NodeId),
+
 	ChannelAdd,
 	ChannelInsert(NodeId),
 	ChannelRemove(NodeId),
@@ -297,6 +299,11 @@ impl ArrangementView {
 				}
 
 				self.tab = tab;
+			}
+			Message::ToggleKind(node) => {
+				if let Some(track) = self.arrangement.toggle_kind(node) {
+					self.update_selection(|c| update_selection_delete_track(c, track));
+				}
 			}
 			Message::ChannelAdd => {
 				self.selected = self.arrangement.add_channel();
@@ -580,7 +587,7 @@ impl ArrangementView {
 				let clip = self.arrangement.add_audio_clip_from_sample(track, pos, id);
 				self.playlist.get_mut().primary.insert((track, clip));
 
-				for (outgoing, mix) in self.arrangement.outgoing(node).clone() {
+				for (outgoing, mix) in self.arrangement.node(node).outgoing.clone() {
 					self.arrangement.connect(track_id, outgoing);
 					self.arrangement.set_mix(track_id, outgoing, mix);
 				}
@@ -1565,7 +1572,8 @@ impl ArrangementView {
 									]
 									.padding(padding::all(5).left(0))
 									.spacing(5),
-									self.tab
+									self.tab,
+									self.arrangement.solo()
 								)
 							)
 							.interaction(Interaction::Pointer)
@@ -1682,35 +1690,33 @@ impl ArrangementView {
 			scrollable(
 				row![
 					self.view_channel(self.arrangement.master(), "M", None),
-					rule::vertical(1),
-					(!self.arrangement.tracks().is_empty()).then(|| sweeten::row(
-						self.arrangement
-							.tracks()
-							.iter()
-							.enumerate()
-							.map(|(i, track)| self.view_channel(
+					(!self.arrangement.tracks().is_empty()).then(|| row![
+						rule::vertical(1),
+						sweeten::row(self.arrangement.tracks().iter().enumerate().map(
+							|(i, track)| self.view_channel(
 								self.arrangement.node(track.id),
 								format!("T{}", i + 1),
 								Some(track)
-							))
-					)
-					.on_drag(Message::TrackMove)
-					.style(sweeten_row_with_radius(sweeten_row_style, border::top(5)))
+							)
+						))
+						.on_drag(Message::TrackMove)
+						.style(sweeten_row_with_radius(sweeten_row_style, border::top(5)))
+						.spacing(5)
+					]
 					.spacing(5)),
-					(!self.arrangement.tracks().is_empty()).then(|| rule::vertical(1)),
-					(!self.arrangement.channels().is_empty()).then(|| sweeten::row(
-						self.arrangement
-							.channels()
-							.iter()
-							.enumerate()
-							.map(|(i, channel)| self.view_channel(
+					(!self.arrangement.channels().is_empty()).then(|| row![
+						rule::vertical(1),
+						sweeten::row(self.arrangement.channels().iter().enumerate().map(
+							|(i, channel)| self.view_channel(
 								self.arrangement.node(channel.id),
 								format!("C{}", i + 1),
 								None
-							))
-					)
-					.on_drag(Message::ChannelMove)
-					.style(sweeten_row_with_radius(sweeten_row_style, border::top(5)))
+							)
+						))
+						.on_drag(Message::ChannelMove)
+						.style(sweeten_row_with_radius(sweeten_row_style, border::top(5)))
+						.spacing(5)
+					]
 					.spacing(5)),
 					button(plus().size(LINE_HEIGHT + 6.0))
 						.padding(5)
@@ -2077,9 +2083,9 @@ impl ArrangementView {
 								)
 							} else {
 								let incoming =
-									self.arrangement.outgoing(node.id).get(&self.selected);
+									self.arrangement.node(node.id).outgoing.get(&self.selected);
 								let outgoing =
-									self.arrangement.outgoing(self.selected).get(&node.id);
+									self.arrangement.node(self.selected).outgoing.get(&node.id);
 
 								let down = |r: border::Radius| {
 									button(chevron_down())
@@ -2179,7 +2185,8 @@ impl ArrangementView {
 						.align_x(Center)
 						.padding(5)
 						.spacing(5),
-						self.tab
+						self.tab,
+						self.arrangement.solo()
 					),
 				)
 				.interaction(Interaction::Pointer)

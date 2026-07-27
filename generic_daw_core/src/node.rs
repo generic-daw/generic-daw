@@ -51,6 +51,17 @@ impl Node {
 		}
 	}
 
+	pub fn toggle_kind(&mut self) {
+		match self {
+			Self::Channel(node) => {
+				*self = Self::Track(Track::from_channel(std::mem::take(node)));
+			}
+			Self::Track(node) => {
+				*self = Self::Channel(Track::into_channel(std::mem::take(node)));
+			}
+		}
+	}
+
 	pub fn collect_updates(&mut self, updates: &mut Vec<Update>) {
 		match self {
 			Self::Channel(node) => node.collect_updates(updates),
@@ -65,18 +76,18 @@ impl Node {
 		}
 	}
 
-	pub fn restart_all_plugins(&mut self) {
-		match self {
-			Self::Channel(node) => node.restart_all_plugins(),
-			Self::Track(node) => node.restart_all_plugins(),
-		}
-	}
-
 	#[must_use]
 	pub fn output(&self) -> Option<Channels> {
 		match self {
 			Self::Channel(node) => node.output(),
 			Self::Track(node) => node.output(),
+		}
+	}
+
+	pub fn restart_all_plugins(&mut self) {
+		match self {
+			Self::Channel(node) => node.restart_all_plugins(),
+			Self::Track(node) => node.restart_all_plugins(),
 		}
 	}
 }

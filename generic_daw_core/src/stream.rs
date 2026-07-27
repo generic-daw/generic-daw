@@ -14,7 +14,7 @@ use utils::boxed_slice;
 
 pub static DEFAULT_HOST: LazyLock<HostId> = LazyLock::new(|| cpal::default_host().id());
 
-#[derive(Clone, Debug, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Channels {
 	pub left: u16,
 	pub right: u16,

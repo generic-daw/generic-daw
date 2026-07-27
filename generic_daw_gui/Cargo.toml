@@ -28,7 +28,7 @@ iced = { git = "https://github.com/edwloef/iced.git", branch = "generic-daw", de
 ] }
 iced_split = { git = "https://github.com/edwloef/iced_split.git", branch = "generic-daw" }
 infer = { version = "0.22.0", default-features = false }
-jiff = { version = "0.2.34", default-features = false, features = ["std"] }
+jiff = { version = "0.2.35", default-features = false, features = ["std"] }
 log = "0.4.33"
 oneshot = { version = "0.2.1", features = ["async", "std"] }
 open = "5.4.0"

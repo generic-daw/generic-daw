@@ -41,6 +41,7 @@ pub enum Message {
 	NodeConnect(NodeId, NodeId),
 	NodeSetMix(NodeId, NodeId, f32),
 	NodeDisconnect(NodeId, NodeId),
+	NodeToggleKind(NodeId),
 
 	Bpm(NonZero<u16>),
 	Numerator(NonZero<u8>),
@@ -60,10 +61,6 @@ const _: () = assert!(size_of::<Message>() == 64);
 
 #[derive(Debug)]
 pub enum NodeAction {
-	InputStart(Producer<[f32; 2]>, Channels),
-	InputChangeChannels(Channels),
-	InputStop,
-
 	ClipAdd(Box<Clip>),
 	ClipRemove(ClipId),
 	ClipMoveTo(ClipId, BeatTime),
@@ -80,6 +77,10 @@ pub enum NodeAction {
 	ClipStretchEndTo(ClipId, BeatTime),
 	ClipReverse(ClipId),
 	ClipSlipTo(ClipId, BeatTime),
+
+	InputStart(Producer<[f32; 2]>, Channels),
+	InputChangeChannels(Channels),
+	InputStop,
 
 	OutputChangeChannels(Option<Channels>),
 
@@ -334,6 +335,9 @@ impl AudioThread {
 				}
 				Message::NodeSetMix(from, to, mix) => self.audio_graph.set_mix(from, to, mix),
 				Message::NodeDisconnect(from, to) => self.audio_graph.disconnect(from, to),
+				Message::NodeToggleKind(node) => self
+					.audio_graph
+					.for_node_mut(node, |node, _| node.toggle_kind()),
 				Message::Bpm(bpm) => self.transport_mut().bpm = bpm,
 				Message::Numerator(numerator) => self.transport_mut().numerator = numerator,
 				Message::TogglePlayback => {

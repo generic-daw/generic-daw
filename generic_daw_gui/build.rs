@@ -47,6 +47,7 @@ static GLYPHS: &[(&str, char, f32)] = &[
 	icon!(file_play = 58145),
 	icon!(circle_ellipsis = 58182),
 	icon!(arrow_up_down = 58237),
+	icon!(replace = 58331),
 	icon!(chart_no_axes_gantt = 58564),
 	icon!(folder_sync = 58569),
 	icon!(file_music = 58718),

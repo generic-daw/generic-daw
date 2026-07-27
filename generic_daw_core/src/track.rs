@@ -6,7 +6,7 @@ use audio_graph::{Inject, thread_pool::Injector};
 use clap_host::{RenderMode, events::Match};
 use log::warn;
 use rtrb::Producer;
-use std::{collections::HashMap, num::NonZero};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Input {
@@ -14,25 +14,13 @@ pub struct Input {
 	channels: Channels,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Track {
 	clips: HashMap<ClipId, Clip>,
 	voice_alloc: VoiceAlloc<VoiceId, MidiNote>,
 	last_polyphony: usize,
 	input: Option<Input>,
 	channel: Channel,
-}
-
-impl Default for Track {
-	fn default() -> Self {
-		Self {
-			clips: HashMap::new(),
-			voice_alloc: VoiceAlloc::new(NonZero::new(128).unwrap()),
-			last_polyphony: 0,
-			input: None,
-			channel: Channel::default(),
-		}
-	}
 }
 
 impl Track {
@@ -101,21 +89,6 @@ impl Track {
 
 	pub fn apply(&mut self, action: NodeAction, state: &State) {
 		match action {
-			NodeAction::InputStart(producer, channels) => {
-				let input = self.input.replace(Input { producer, channels });
-				debug_assert!(input.is_none());
-			}
-			NodeAction::InputChangeChannels(channels) => {
-				self.input.as_mut().unwrap().channels = channels;
-				self.channel.push_update(Update::Interrupted(
-					Some(self.id()),
-					state.transport.position,
-				));
-			}
-			NodeAction::InputStop => {
-				let input = self.input.take();
-				debug_assert!(input.is_some());
-			}
 			NodeAction::ClipAdd(clip) => _ = self.clips.insert(clip.id(), *clip),
 			NodeAction::ClipRemove(id) => _ = self.clips.remove(&id),
 			NodeAction::ClipMoveTo(id, pos) => self.clips.get_mut(&id).unwrap().move_to(pos),
@@ -218,6 +191,21 @@ impl Track {
 					.unwrap()
 					.slip_to(pos, &state.transport);
 			}
+			NodeAction::InputStart(producer, channels) => {
+				let input = self.input.replace(Input { producer, channels });
+				debug_assert!(input.is_none());
+			}
+			NodeAction::InputChangeChannels(channels) => {
+				self.input.as_mut().unwrap().channels = channels;
+				self.channel.push_update(Update::Interrupted(
+					Some(self.id()),
+					state.transport.position,
+				));
+			}
+			NodeAction::InputStop => {
+				let input = self.input.take();
+				debug_assert!(input.is_some());
+			}
 			action => self.channel.apply(action),
 		}
 	}
@@ -236,12 +224,25 @@ impl Track {
 		self.channel.clear_updates();
 	}
 
+	#[must_use]
+	pub fn output(&self) -> Option<Channels> {
+		self.channel.output()
+	}
+
 	pub fn restart_all_plugins(&mut self) {
 		self.channel.restart_all_plugins();
 	}
 
 	#[must_use]
-	pub fn output(&self) -> Option<Channels> {
-		self.channel.output()
+	pub fn from_channel(channel: Channel) -> Self {
+		Self {
+			channel,
+			..Self::default()
+		}
+	}
+
+	#[must_use]
+	pub fn into_channel(track: Self) -> Channel {
+		track.channel
 	}
 }

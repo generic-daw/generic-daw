@@ -189,13 +189,13 @@ impl Arrangement {
 		}
 
 		for track in self.tracks() {
-			for (outgoing, &mix) in self.outgoing(track.id) {
+			for (outgoing, &mix) in &self.node(track.id).outgoing {
 				writer.connect_track_to_channel(tracks[&track.id], channels[outgoing], mix);
 			}
 		}
 
 		for channel in self.channels() {
-			for (outgoing, &mix) in self.outgoing(channel.id) {
+			for (outgoing, &mix) in &self.node(channel.id).outgoing {
 				writer.connect_channel_to_channel(channels[&channel.id], channels[outgoing], mix);
 			}
 		}
