@@ -62,8 +62,8 @@ impl Track {
 			}
 
 			if state.transport.playing
-				&& let (_, t) = input.producer.push_partial_slice(audio)
-				&& !t.is_empty()
+				&& let (_, rest) = input.producer.push_partial_slice(audio)
+				&& !rest.is_empty()
 			{
 				warn!("full ring buffer");
 			}

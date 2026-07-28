@@ -1,5 +1,5 @@
 use crate::{
-	MidiKey, MidiNote, MidiNoteId, Transport,
+	MidiKey, MidiNote, MidiNoteId, MidiPatternAction, Transport,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
 use midly::{
@@ -12,17 +12,6 @@ use utils::unique_id;
 unique_id!(midi_pattern_id);
 
 pub use midi_pattern_id::Id as MidiPatternId;
-
-#[derive(Clone, Copy, Debug)]
-pub enum MidiPatternAction {
-	Add(MidiNote),
-	Remove(MidiNoteId),
-	ChangeKey(MidiNoteId, MidiKey),
-	ChangeVelocity(MidiNoteId, f32),
-	MoveTo(MidiNoteId, BeatTime),
-	TrimStartTo(MidiNoteId, BeatTime),
-	TrimEndTo(MidiNoteId, BeatTime),
-}
 
 #[derive(Clone, Debug)]
 pub struct MidiPattern {
@@ -66,7 +55,7 @@ impl MidiPattern {
 		};
 
 		let mut notes = Vec::new();
-		let mut playing = [[Entry::None; 128]; 4];
+		let mut playing = [[Entry::None; 128]; 16];
 
 		let mut time = u28::new(0);
 		for track in tracks {

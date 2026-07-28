@@ -3,9 +3,9 @@ use std::{cmp::Ordering, fmt::Debug, num::NonZero};
 #[derive(Clone, Copy, Debug)]
 pub struct Voice<Id, Info> {
 	pub id: Id,
+	pub info: Info,
 	pub note_id: u32,
 	pub active: bool,
-	pub info: Info,
 }
 
 #[derive(Debug)]
@@ -43,12 +43,10 @@ impl<Id: Copy + Eq, Info: Copy> VoiceAlloc<Id, Info> {
 	}
 
 	pub fn activate(&mut self, id: Id) -> bool {
-		if let Some(voice) = self.voices.iter_mut().find(|voice| voice.id == id) {
-			voice.active = true;
-			true
-		} else {
-			false
-		}
+		self.voices
+			.iter_mut()
+			.find_map(|voice| (voice.id == id).then(|| voice.active = true))
+			.is_some()
 	}
 
 	pub fn alloc(&mut self, id: Id, info: Info) -> Option<Voice<Id, Info>> {
@@ -85,9 +83,9 @@ impl<Id: Copy + Eq, Info: Copy> VoiceAlloc<Id, Info> {
 
 		Voice {
 			id,
+			info,
 			note_id,
 			active: true,
-			info,
 		}
 	}
 

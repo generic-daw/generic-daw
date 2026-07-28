@@ -17,7 +17,9 @@ mod voice_alloc;
 
 pub use audio_clip::AudioClip;
 pub use audio_graph::{NodeId, NodeImpl};
-pub use audio_thread::{AudioThread, Batch, Message, NodeAction, Transport, Update, Version};
+pub use audio_thread::{
+	AudioThread, Batch, Message, MidiPatternAction, NodeAction, Transport, Update, Version,
+};
 pub use bpm_tapper::BpmTapper;
 pub use channel::{Channel, PluginId};
 pub use clap_host;
@@ -27,7 +29,7 @@ pub use dsp::{PanMode, Utility};
 pub use event::Event;
 pub use midi_clip::MidiClip;
 pub use midi_note::{Key, MidiKey, MidiNote, MidiNoteId};
-pub use midi_pattern::{MidiPattern, MidiPatternAction, MidiPatternId};
+pub use midi_pattern::{MidiPattern, MidiPatternId};
 pub use node::Node;
 pub use sample::{Sample, SampleId};
 pub use stream::{Channels, DEFAULT_HOST, Devices, build_audio_streams, get_devices};

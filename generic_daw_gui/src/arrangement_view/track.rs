@@ -52,11 +52,11 @@ impl Track {
 			return;
 		};
 
-		if let (_, t) = input.consumer.pop_partial_slice(samples)
-			&& !t.is_empty()
+		if let (_, rest) = input.consumer.pop_partial_slice(samples)
+			&& !rest.is_empty()
 		{
 			warn!("empty ring buffer");
-			t.fill([0.0; 2]);
+			rest.fill([0.0; 2]);
 		}
 
 		input

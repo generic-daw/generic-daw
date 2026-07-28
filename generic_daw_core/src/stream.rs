@@ -255,8 +255,8 @@ where
 				*input = f32::from_sample(*buf);
 			}
 
-			if let (_, t) = producer.push_partial_slice(&input[..buf.len()])
-				&& !t.is_empty()
+			if let (_, rest) = producer.push_partial_slice(&input[..buf.len()])
+				&& !rest.is_empty()
 			{
 				warn!("full ring buffer");
 			}
@@ -339,14 +339,14 @@ fn build_output_callback<T: Sample + FromSample<f32>>(
 			let frames = buf.len() / output_channels.get() as usize;
 			let input_len = frames * input_channels as usize;
 
-			if let (_, t) = consumer.pop_partial_slice(&mut input[..input_len])
-				&& !t.is_empty()
+			if let (_, rest) = consumer.pop_partial_slice(&mut input[..input_len])
+				&& !rest.is_empty()
 			{
 				if warn {
 					warn!("empty ring buffer");
 				}
 
-				t.fill(0.0);
+				rest.fill(0.0);
 			} else {
 				warn = true;
 			}

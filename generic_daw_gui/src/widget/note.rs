@@ -23,9 +23,9 @@ use std::{
 };
 
 #[derive(Debug)]
-#[expect(clippy::struct_field_names)]
 pub struct Note<'a, Message> {
 	pub(super) index: usize,
+	#[expect(clippy::struct_field_names)]
 	pub(super) note: &'a MidiNote,
 	piano_roll: &'a RefCell<piano_roll::State>,
 	transport: &'a Transport,

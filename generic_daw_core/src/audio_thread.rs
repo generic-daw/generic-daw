@@ -1,6 +1,6 @@
 use crate::{
-	Channel, Channels, Clip, ClipId, MidiPattern, MidiPatternAction, MidiPatternId, Node, NodeId,
-	PanMode, PluginId, Point, Sample, SampleId,
+	Channel, Channels, Clip, ClipId, MidiKey, MidiNote, MidiNoteId, MidiPattern, MidiPatternId,
+	Node, NodeId, PanMode, PluginId, Point, Sample, SampleId,
 	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -96,6 +96,17 @@ pub enum NodeAction {
 	PluginMoveTo(usize, usize),
 	PluginMixChanged(usize, f32),
 	PluginParamChanged(usize, ClapId, f32),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum MidiPatternAction {
+	Add(MidiNote),
+	Remove(MidiNoteId),
+	ChangeKey(MidiNoteId, MidiKey),
+	ChangeVelocity(MidiNoteId, f32),
+	MoveTo(MidiNoteId, BeatTime),
+	TrimStartTo(MidiNoteId, BeatTime),
+	TrimEndTo(MidiNoteId, BeatTime),
 }
 
 #[derive(Clone, Copy, Debug)]

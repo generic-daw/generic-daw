@@ -373,7 +373,7 @@ impl ConfigView {
 										.unwrap_or_else(|| *DEFAULT_HOST)]
 										.input,
 									|id| self.device_info.get(id).map_or_else(
-										|| format!("Unknown ({id})"),
+										|| format!("Unknown ({})", id.id()),
 										|device| device.name().to_owned()
 									)
 								)
@@ -412,7 +412,7 @@ impl ConfigView {
 										.unwrap_or_else(|| *DEFAULT_HOST)]
 										.output,
 									|id| self.device_info.get(id).map_or_else(
-										|| format!("Unknown ({id})"),
+										|| format!("Unknown ({})", id.id()),
 										|device| device.name().to_owned()
 									)
 								)
