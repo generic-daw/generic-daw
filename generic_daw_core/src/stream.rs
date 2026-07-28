@@ -192,7 +192,7 @@ pub fn build_input_stream(
 		};
 
 		let (producer, consumer) =
-			RingBuffer::new(channels.get() as usize * sample_rate.get() as usize);
+			RingBuffer::new(usize::from(channels.get()) * sample_rate.get() as usize);
 
 		macro_rules! build_input_stream {
 			($($pat:pat => $ty:ty),*$(,)?) => {
@@ -331,13 +331,13 @@ fn build_output_callback<T: Sample + FromSample<f32>>(
 	mut processor: AudioCallback,
 ) -> impl FnMut(&mut [T], &OutputCallbackInfo) {
 	let chunk_size = NonZero::new(frames.get() * u32::from(output_channels.get())).unwrap();
-	let mut input = boxed_slice![0.0; frames.get() as usize * input_channels as usize];
-	let mut output = boxed_slice![0.0; frames.get() as usize * output_channels.get() as usize];
+	let mut input = boxed_slice![0.0; frames.get() as usize * usize::from(input_channels)];
+	let mut output = boxed_slice![0.0; frames.get() as usize * usize::from(output_channels.get())];
 	let mut warn = false;
 	move |buf, _| {
 		for buf in buf.chunks_mut(chunk_size.get() as usize) {
-			let frames = buf.len() / output_channels.get() as usize;
-			let input_len = frames * input_channels as usize;
+			let frames = buf.len() / usize::from(output_channels.get());
+			let input_len = frames * usize::from(input_channels);
 
 			if let (_, rest) = consumer.pop_partial_slice(&mut input[..input_len])
 				&& !rest.is_empty()

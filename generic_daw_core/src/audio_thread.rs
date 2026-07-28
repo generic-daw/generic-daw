@@ -252,7 +252,7 @@ impl AudioThread {
 				samples: HashMap::new(),
 				midi_patterns: HashMap::new(),
 				render_mode: RenderMode::Realtime,
-				input: boxed_slice![0.0; input_channels as usize * frames.get() as usize],
+				input: boxed_slice![0.0; usize::from(input_channels) * frames.get() as usize],
 			},
 			transport.frames,
 		);
@@ -285,7 +285,7 @@ impl AudioThread {
 
 		if self.transport().input_channels != input_channels || self.transport().frames != frames {
 			self.state_mut().input =
-				boxed_slice![0.0; input_channels as usize * frames.get() as usize];
+				boxed_slice![0.0; usize::from(input_channels) * frames.get() as usize];
 		}
 
 		if self.transport().sample_rate != sample_rate || self.transport().frames != frames {
@@ -383,7 +383,7 @@ impl AudioThread {
 		mut output: &mut [f32],
 	) -> Option<(oneshot::Sender<Self>, oneshot::Receiver<Self>)> {
 		let start = Instant::now();
-		let frames = output.len() / self.transport().output_channels.get() as usize;
+		let frames = output.len() / usize::from(self.transport().output_channels.get());
 
 		let acc = self
 			.updates
@@ -405,18 +405,18 @@ impl AudioThread {
 				&& let end = loop_range.end().to_seconds_time(self.transport())
 				&& let Some(len) = end.checked_sub(self.transport().position)
 				&& let len = len.to_frames(self.transport())
-				&& len <= output.len() / self.transport().output_channels.get() as usize
+				&& len <= output.len() / usize::from(self.transport().output_channels.get())
 			{
 				(Some(loop_range.start()), len)
 			} else {
 				(
 					None,
-					output.len() / self.transport().output_channels.get() as usize,
+					output.len() / usize::from(self.transport().output_channels.get()),
 				)
 			};
 
-			let in_len = self.transport().input_channels as usize * frames;
-			let out_len = self.transport().output_channels.get() as usize * frames;
+			let in_len = usize::from(self.transport().input_channels) * frames;
+			let out_len = usize::from(self.transport().output_channels.get()) * frames;
 
 			self.state_mut().input[..in_len].copy_from_slice(&input[..in_len]);
 			self.audio_graph.process_all(frames);
@@ -437,10 +437,10 @@ impl AudioThread {
 					.zip(buf)
 				{
 					if channels.left == channels.right {
-						frame[channels.left as usize] += (l + r) / 2.0;
+						frame[usize::from(channels.left)] += (l + r) / 2.0;
 					} else {
-						frame[channels.left as usize] += l;
-						frame[channels.right as usize] += r;
+						frame[usize::from(channels.left)] += l;
+						frame[usize::from(channels.right)] += r;
 					}
 				}
 			});

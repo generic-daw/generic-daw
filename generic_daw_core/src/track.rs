@@ -57,8 +57,8 @@ impl Track {
 					.input
 					.chunks_exact(state.transport.input_channels.into()),
 			) {
-				*l = frame[input.channels.left as usize];
-				*r = frame[input.channels.right as usize];
+				*l = frame[usize::from(input.channels.left)];
+				*r = frame[usize::from(input.channels.right)];
 			}
 
 			if state.transport.playing
