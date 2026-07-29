@@ -1,6 +1,7 @@
 use crate::{
-	EventImpl, MainThreadMessage, ThreadPoolInjector, audio_buffers::AudioBuffers,
-	event_buffers::EventBuffers, events::TransportEvent, host::Host, shared::CURRENT_THREAD_ID,
+	MainThreadMessage, ThreadPoolInjector, audio_buffers::AudioBuffers,
+	event_buffers::EventBuffers, events::EventImpl, events::TransportEvent, host::Host,
+	shared::CURRENT_THREAD_ID,
 };
 use clack_extensions::tail::TailLength;
 use clack_host::prelude::*;

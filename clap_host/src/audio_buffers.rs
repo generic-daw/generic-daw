@@ -25,17 +25,25 @@ impl AudioBuffers {
 		let input_config = AudioPortsConfig::from_ports(plugin, true).unwrap_or_default();
 		let output_config = AudioPortsConfig::from_ports(plugin, false).unwrap_or_default();
 
-		let input_ports = AudioPorts::from(&input_config).into();
-		let output_ports = AudioPorts::from(&output_config).into();
+		let input_ports = AudioPorts::with_capacity(
+			input_config.channel_counts.iter().sum::<u32>() as usize,
+			input_config.channel_counts.len(),
+		)
+		.into();
+		let output_ports = AudioPorts::with_capacity(
+			output_config.channel_counts.iter().sum::<u32>() as usize,
+			output_config.channel_counts.len(),
+		)
+		.into();
 
 		let input_buffers = input_config
-			.port_channel_counts
+			.channel_counts
 			.iter()
 			.map(|c| boxed_slice![0.0; (config.max_frames_count * c) as usize])
 			.collect::<Box<_>>()
 			.into();
 		let output_buffers = output_config
-			.port_channel_counts
+			.channel_counts
 			.iter()
 			.map(|c| boxed_slice![0.0; (config.max_frames_count * c) as usize])
 			.collect::<Box<_>>()
@@ -59,16 +67,9 @@ impl AudioBuffers {
 	}
 
 	pub fn read_in(&mut self, buf: &[[f32; 2]]) -> u64 {
-		if let Some(input_buffer) = self
-			.input_buffers
-			.get_mut(self.input_config.main_port_index)
+		if let Some(input_buffer) = self.input_buffers.first_mut()
+			&& let Some(&n_channels) = self.input_config.channel_counts.first()
 		{
-			let n_channels = *self
-				.input_config
-				.port_channel_counts
-				.get(self.input_config.main_port_index)
-				.unwrap_or(&0);
-
 			if n_channels == 1 {
 				buf.iter()
 					.zip(input_buffer)
@@ -146,16 +147,13 @@ impl AudioBuffers {
 	pub fn write_out(&mut self, buf: &mut [[f32; 2]], mix_level: f32) {
 		self.delay_line.advance(buf);
 
-		let Some(output_buffer) = self.output_buffers.get(self.output_config.main_port_index)
-		else {
+		let Some(output_buffer) = self.output_buffers.first() else {
 			return;
 		};
 
-		let n_channels = *self
-			.output_config
-			.port_channel_counts
-			.get(self.output_config.main_port_index)
-			.unwrap_or(&0);
+		let Some(&n_channels) = self.output_config.channel_counts.first() else {
+			return;
+		};
 
 		let buf_mix = 1f32.copysign(mix_level) - mix_level;
 		let sample_mix = mix_level.abs();

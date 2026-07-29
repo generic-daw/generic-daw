@@ -1,8 +1,9 @@
 use crate::{
-	API_TYPE, AudioThread, EventImpl, MainThreadMessage, PluginDescriptor, Preset,
+	API_TYPE, AudioThread, MainThreadMessage, PluginDescriptor, Preset,
 	audio_buffers::AudioBuffers,
 	audio_processor::AudioProcessor,
 	event_buffers::EventBuffers,
+	events::EventImpl,
 	gui::Gui,
 	host::Host,
 	main_thread::MainThread,

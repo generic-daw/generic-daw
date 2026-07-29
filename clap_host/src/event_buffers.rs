@@ -1,23 +1,23 @@
-use crate::{EventImpl, host::Host, param::Param};
-use clack_extensions::{
-	note_ports::{NoteDialect, NotePortInfoBuffer},
-	params::ParamInfoFlags,
+use crate::{
+	event_ports_config::EventPortsConfig,
+	events::{EventImpl, NoteDialect},
+	host::Host,
+	param::Param,
 };
+use clack_extensions::params::ParamInfoFlags;
 use clack_host::prelude::*;
 
 #[derive(Debug, Default)]
 pub struct EventBuffers {
+	input_config: EventPortsConfig,
+
 	input_events: EventBuffer,
 	output_events: EventBuffer,
-
-	main_input_port: u16,
-	input_prefers_midi: bool,
 }
 
 impl EventBuffers {
 	pub fn new(plugin: &mut PluginInstance<Host>, params: &[Param]) -> Self {
-		let input_ports = Self::from_ports(plugin, true);
-		let (main_input_port, input_prefers_midi) = input_ports.unwrap_or_default();
+		let input_config = EventPortsConfig::from_ports(plugin, true).unwrap_or_default();
 
 		let event_buffers_cap = params
 			.iter()
@@ -29,30 +29,11 @@ impl EventBuffers {
 			.count() + 128;
 
 		Self {
+			input_config,
+
 			input_events: EventBuffer::with_capacity(event_buffers_cap),
 			output_events: EventBuffer::with_capacity(event_buffers_cap),
-
-			main_input_port,
-			input_prefers_midi,
 		}
-	}
-
-	fn from_ports(plugin: &mut PluginInstance<Host>, is_input: bool) -> Option<(u16, bool)> {
-		let note_ports = *plugin.access_shared_handler(|s| s.ext.note_ports.get())?;
-
-		let mut buffer = NotePortInfoBuffer::new();
-
-		(0..note_ports.count(&mut plugin.plugin_handle(), is_input)).find_map(|i| {
-			let port = note_ports.get(&mut plugin.plugin_handle(), i, is_input, &mut buffer)?;
-
-			(port.supported_dialects.supports(NoteDialect::Clap)
-				|| port.supported_dialects.supports(NoteDialect::Midi))
-			.then_some((
-				i as u16,
-				port.preferred_dialect == Some(NoteDialect::Midi)
-					|| !port.supported_dialects.supports(NoteDialect::Clap),
-			))
-		})
 	}
 
 	pub fn are_inputs_empty(&self) -> bool {
@@ -64,8 +45,15 @@ impl EventBuffers {
 	}
 
 	pub fn push(&mut self, event: impl EventImpl) {
-		self.input_events
-			.push(&event.to_clap(self.main_input_port, self.input_prefers_midi));
+		self.input_events.push(
+			&event.to_clap(
+				self.input_config
+					.preferred_dialects
+					.first()
+					.copied()
+					.unwrap_or(NoteDialect::Clap),
+			),
+		);
 	}
 
 	pub fn push_all(&mut self, events: impl IntoIterator<Item: EventImpl>) {

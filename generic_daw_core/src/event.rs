@@ -2,8 +2,8 @@ use crate::{PluginId, Update};
 use clap_host::{
 	ClapId, Cookie,
 	events::{
-		ClapEvent, Event as _, Match, MidiEvent, NoteOffEvent, NoteOnEvent, ParamValueEvent, Pckn,
-		UnknownEvent, spaces::CoreEventSpace,
+		self, ClapEvent, Event as _, Match, Midi2Event, MidiEvent, NoteDialect, NoteOffEvent,
+		NoteOnEvent, ParamValueEvent, Pckn, UnknownEvent, spaces::CoreEventSpace,
 	},
 };
 
@@ -60,49 +60,63 @@ impl audio_graph::EventImpl for Event {
 	}
 }
 
-impl clap_host::EventImpl for Event {
-	fn to_clap(self, port_index: u16, prefers_midi: bool) -> ClapEvent {
+impl events::EventImpl for Event {
+	fn to_clap(self, dialect: NoteDialect) -> ClapEvent {
 		match self {
 			Self::On {
 				time,
 				key,
 				velocity,
-				note_id: _,
-			} if prefers_midi => ClapEvent::Midi(MidiEvent::new(
-				time,
-				port_index,
-				[0x90, key, (velocity * 127.0).round() as u8],
-			)),
-			Self::Off {
-				time,
-				key,
-				velocity,
-				note_id: _,
-			} if prefers_midi => ClapEvent::Midi(MidiEvent::new(
-				time,
-				port_index,
-				[0x80, key, (velocity * 127.0).round() as u8],
-			)),
-			Self::On {
-				time,
-				key,
-				velocity,
 				note_id,
-			} => ClapEvent::NoteOn(NoteOnEvent::new(
-				time,
-				Pckn::new(port_index, 0u16, key, note_id),
-				velocity.into(),
-			)),
+			} => match dialect {
+				NoteDialect::Clap => ClapEvent::NoteOn(NoteOnEvent::new(
+					time,
+					Pckn::new(0u16, 0u16, key, note_id),
+					velocity.into(),
+				)),
+				NoteDialect::Midi | NoteDialect::MidiMpe => ClapEvent::Midi(MidiEvent::new(
+					time,
+					0u16,
+					[0x90, key, (velocity * 127.0).round().max(1.0) as u8],
+				)),
+				NoteDialect::Midi2 => ClapEvent::Midi2(Midi2Event::new(
+					time,
+					0u16,
+					[
+						(0x4090 << 16) | (u32::from(key) << 8),
+						(u32::from((velocity * 65535.0).round() as u16) << 16),
+						0,
+						0,
+					],
+				)),
+			},
 			Self::Off {
 				time,
 				key,
 				velocity,
 				note_id,
-			} => ClapEvent::NoteOff(NoteOffEvent::new(
-				time,
-				Pckn::new(port_index, 0u16, key, note_id),
-				velocity.into(),
-			)),
+			} => match dialect {
+				NoteDialect::Clap => ClapEvent::NoteOff(NoteOffEvent::new(
+					time,
+					Pckn::new(0u16, 0u16, key, note_id),
+					velocity.into(),
+				)),
+				NoteDialect::Midi | NoteDialect::MidiMpe => ClapEvent::Midi(MidiEvent::new(
+					time,
+					0u16,
+					[0x80, key, (velocity * 127.0).round() as u8],
+				)),
+				NoteDialect::Midi2 => ClapEvent::Midi2(Midi2Event::new(
+					time,
+					0u16,
+					[
+						(0x4080 << 16) | (u32::from(key) << 8),
+						(u32::from((velocity * 65535.0).round() as u16) << 16),
+						0,
+						0,
+					],
+				)),
+			},
 			Self::ParamValue {
 				time,
 				param_id,
@@ -110,7 +124,7 @@ impl clap_host::EventImpl for Event {
 			} => ClapEvent::ParamValue(ParamValueEvent::new(
 				time,
 				param_id,
-				Pckn::new(port_index, 0u16, Match::All, Match::All),
+				Pckn::new(0u16, 0u16, Match::All, Match::All),
 				value.into(),
 				Cookie::empty(),
 			)),
@@ -139,16 +153,34 @@ impl clap_host::EventImpl for Event {
 			CoreEventSpace::Midi(event) => {
 				let data = event.data();
 				match data[0] & 0xf0 {
-					0x90 => Some(Self::On {
+					0x90 if data[2] != 0 => Some(Self::On {
 						time: event.time(),
 						key: data[1],
 						velocity: f32::from(data[2]) / 127.0,
 						note_id: Match::All,
 					}),
-					0x80 => Some(Self::Off {
+					0x90 | 0x80 => Some(Self::Off {
 						time: event.time(),
 						key: data[1],
 						velocity: f32::from(data[2]) / 127.0,
+						note_id: Match::All,
+					}),
+					_ => None,
+				}
+			}
+			CoreEventSpace::Midi2(event) => {
+				let data = event.data();
+				match data[0] >> 16 {
+					0x4090 => Some(Self::On {
+						time: event.time(),
+						key: (data[0] >> 8) as u8,
+						velocity: f32::from((data[1] >> 16) as u16) / 65535.0,
+						note_id: Match::All,
+					}),
+					0x4080 => Some(Self::Off {
+						time: event.time(),
+						key: (data[0] >> 8) as u8,
+						velocity: f32::from((data[1] >> 16) as u16) / 65535.0,
 						note_id: Match::All,
 					}),
 					_ => None,

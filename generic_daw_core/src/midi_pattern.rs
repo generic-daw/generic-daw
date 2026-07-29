@@ -69,7 +69,7 @@ impl MidiPattern {
 					TrackEventKind::Midi {
 						message: MidiMessage::NoteOn { key, vel },
 						channel,
-					} => {
+					} if vel != 0 => {
 						let entry =
 							&mut playing[usize::from(channel.as_int())][usize::from(key.as_int())];
 
@@ -78,7 +78,7 @@ impl MidiPattern {
 						}
 					}
 					TrackEventKind::Midi {
-						message: MidiMessage::NoteOff { key, .. },
+						message: MidiMessage::NoteOn { key, .. } | MidiMessage::NoteOff { key, .. },
 						channel,
 					} => {
 						let entry =
