@@ -506,7 +506,7 @@ impl AudioThread {
 		}
 
 		let latency = self.audio_graph.latency(self.master);
-		let output = self.audio_graph.output(self.master);
+		let output = self.audio_graph.output_audio(self.master);
 
 		let position = transport.position.to_frames(&transport);
 

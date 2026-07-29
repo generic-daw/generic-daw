@@ -136,7 +136,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 
 		self.needs_reset = false;
 
-		audio.copy_from_slice(&self.output(node)[..audio.len()]);
+		audio.copy_from_slice(&self.output_audio(node)[..audio.len()]);
 	}
 
 	#[expect(clippy::significant_drop_tightening)]
@@ -290,16 +290,18 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		}
 	}
 
-	pub fn output(&mut self, node: NodeId) -> &mut [[f32; 2]] {
+	pub fn output_audio(&mut self, node: NodeId) -> &mut [[f32; 2]] {
 		&mut self.entry_mut(node).buffers().audio
 	}
 
-	#[must_use]
+	pub fn output_events(&mut self, node: NodeId) -> &mut [Node::Event] {
+		&mut self.entry_mut(node).buffers().events
+	}
+
 	pub fn latency(&self, node: NodeId) -> usize {
 		self.graph[&node].latency.load(Relaxed)
 	}
 
-	#[must_use]
 	pub fn connect(&mut self, from: NodeId, to: NodeId) -> bool {
 		if !self.graph.contains_key(&from) || !self.graph.contains_key(&to) {
 			return false;

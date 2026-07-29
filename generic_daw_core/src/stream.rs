@@ -332,7 +332,7 @@ fn build_output_callback<T: Sample + FromSample<f32>>(
 ) -> impl FnMut(&mut [T], &OutputCallbackInfo) {
 	let chunk_size = NonZero::new(frames.get() * u32::from(output_channels.get())).unwrap();
 	let mut input = boxed_slice![0.0; frames.get() as usize * usize::from(input_channels)];
-	let mut output = boxed_slice![0.0; frames.get() as usize * usize::from(output_channels.get())];
+	let mut output = boxed_slice![0.0; chunk_size.get() as usize];
 	let mut warn = false;
 	move |buf, _| {
 		for buf in buf.chunks_mut(chunk_size.get() as usize) {
