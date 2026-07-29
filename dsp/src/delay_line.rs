@@ -15,12 +15,29 @@ impl DelayLine {
 		delay_line
 	}
 
-	pub fn advance(&mut self, buf: &mut [[f32; 2]]) {
+	pub fn advance(&mut self, buf: &[[f32; 2]]) {
 		let diff = self.buf.len() - self.head;
 		if self.buf.len() < buf.len() {
+			let start = buf.len() - self.buf.len();
+			self.buf[self.head..].copy_from_slice(&buf[start..][..diff]);
+			self.buf[..self.head].copy_from_slice(&buf[start..][diff..]);
+		} else if diff < buf.len() {
+			self.buf[self.head..].copy_from_slice(&buf[..diff]);
+			self.head = buf.len() - diff;
+			self.buf[..self.head].copy_from_slice(&buf[diff..]);
+		} else {
+			self.buf[self.head..][..buf.len()].copy_from_slice(buf);
+			self.head += buf.len();
+		}
+	}
+
+	pub fn advance_mut(&mut self, buf: &mut [[f32; 2]]) {
+		let diff = self.buf.len() - self.head;
+		if self.buf.len() < buf.len() {
+			let start = buf.len() - self.buf.len();
+			self.buf[self.head..].swap_with_slice(&mut buf[start..][..diff]);
+			self.buf[..self.head].swap_with_slice(&mut buf[start..][diff..]);
 			buf.rotate_right(self.buf.len());
-			buf[..self.buf.len()][..diff].swap_with_slice(&mut self.buf[self.head..]);
-			buf[..self.buf.len()][diff..].swap_with_slice(&mut self.buf[..self.head]);
 		} else if diff < buf.len() {
 			self.buf[self.head..].swap_with_slice(&mut buf[..diff]);
 			self.head = buf.len() - diff;

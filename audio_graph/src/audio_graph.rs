@@ -193,7 +193,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 				&dep_buffers.audio[..self.curr_len]
 			} else {
 				scratch[..self.curr_len].copy_from_slice(&dep_buffers.audio[..self.curr_len]);
-				delay_line.advance(&mut scratch[..self.curr_len]);
+				delay_line.advance_mut(&mut scratch[..self.curr_len]);
 				&scratch[..self.curr_len]
 			};
 

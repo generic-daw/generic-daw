@@ -136,16 +136,26 @@ impl AudioBuffers {
 			.any(|f| f.abs() >= f32::EPSILON)
 	}
 
-	pub fn flush(&mut self, buf: &mut [[f32; 2]], mix_level: f32) {
-		self.delay_line.advance(buf);
+	pub fn flush(&mut self, buf: &mut [[f32; 2]], mix_level: f32, bypass: bool) {
+		if bypass {
+			self.delay_line.advance(buf);
+			return;
+		}
+
+		self.delay_line.advance_mut(buf);
 
 		for sample in buf.as_flattened_mut() {
 			*sample *= 1.0 - mix_level;
 		}
 	}
 
-	pub fn write_out(&mut self, buf: &mut [[f32; 2]], mix_level: f32) {
-		self.delay_line.advance(buf);
+	pub fn write_out(&mut self, buf: &mut [[f32; 2]], mix_level: f32, bypass: bool) {
+		if bypass {
+			self.delay_line.advance(buf);
+			return;
+		}
+
+		self.delay_line.advance_mut(buf);
 
 		let Some(output_buffer) = self.output_buffers.first() else {
 			return;

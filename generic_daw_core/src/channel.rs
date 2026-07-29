@@ -117,7 +117,8 @@ impl Channel {
 						let executor = ThreadPoolExecutor(executor);
 						injector.inject(&executor, task_count);
 					}),
-					if self.bypassed { 0.0 } else { plugin.mix },
+					plugin.mix,
+					self.bypassed,
 				);
 
 				if !self.bypassed {
