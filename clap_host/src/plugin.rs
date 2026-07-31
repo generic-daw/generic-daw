@@ -469,8 +469,18 @@ impl Plugin {
 				return None;
 			}
 
+			info!(
+				"{}: state cache miss",
+				self.instance.access_shared_handler(|s| &s.descriptor)
+			);
+
 			self.instance
 				.access_handler_mut(|mt| mt.state = Some(buf.into_boxed_slice()));
+		} else {
+			info!(
+				"{}: state cache hit",
+				self.instance.access_shared_handler(|s| &s.descriptor)
+			);
 		}
 
 		self.instance.access_handler(|mt| mt.state.as_deref())
