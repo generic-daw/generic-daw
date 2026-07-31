@@ -54,14 +54,12 @@ pub fn labeled_icon_button<'a, Message: 'a>(
 	.padding(1)
 }
 
-pub fn number_input<'a, Message: Clone + 'a>(
+pub fn number_input<'a>(
 	range: RangeInclusive<usize>,
 	value: usize,
 	default: usize,
-	drag_update: fn(usize) -> Message,
-	text_update: fn(String) -> Message,
 	radius: impl Into<border::Radius>,
-) -> Element<'a, Message> {
+) -> Element<'a, Option<usize>> {
 	let radius = radius.into();
 	let max_digits = (range.end() + 1).ilog10();
 	row![
@@ -72,12 +70,11 @@ pub fn number_input<'a, Message: Clone + 'a>(
 					.padding(padding::vertical(5)),
 				range,
 				value,
-				drag_update
+				Some
 			)
 			.default(default),
 			container(
-				context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
-					.on_press(drag_update(default)),
+				context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(Some(default)),
 			)
 			.width(160)
 			.style(container_with_radius(weaker_bordered_box, 5))
@@ -90,7 +87,7 @@ pub fn number_input<'a, Message: Clone + 'a>(
 			})
 			.font(Font::MONOSPACE)
 			.width(max_digits * 10 + 14)
-			.on_input(text_update)
+			.on_input(|text| text.parse().ok())
 	]
 	.into()
 }

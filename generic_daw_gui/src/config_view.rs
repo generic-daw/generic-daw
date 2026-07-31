@@ -65,8 +65,7 @@ pub enum Message {
 	ChangedSampleRate(Option<NonZero<u32>>),
 	ChangedBufferSize(Option<NonZero<u32>>),
 	ToggledAutosave,
-	ChangedAutosaveInterval(u16),
-	ChangedAutosaveIntervalText(String),
+	ChangedAutosaveInterval(Option<u16>),
 	ToggledOpenLastProject,
 	ChangedTheme(Theme),
 	ChangedScaleFactor(f32),
@@ -193,11 +192,8 @@ impl ConfigView {
 			Message::ChangedBufferSize(buffer_size) => self.config.audio.buffer_size = buffer_size,
 			Message::ToggledAutosave => self.config.autosave.enabled ^= true,
 			Message::ChangedAutosaveInterval(interval) => {
-				self.config.autosave.interval = NonZero::new(interval.clamp(1, 999)).unwrap();
-			}
-			Message::ChangedAutosaveIntervalText(text) => {
-				if let Ok(interval) = text.parse() {
-					return self.update(Message::ChangedAutosaveInterval(interval));
+				if let Some(interval) = interval {
+					self.config.autosave.interval = NonZero::new(interval.clamp(1, 999)).unwrap();
 				}
 			}
 			Message::ToggledOpenLastProject => self.config.open_last_project ^= true,
@@ -513,10 +509,11 @@ impl ConfigView {
 								1..=999,
 								self.config.autosave.interval.get().into(),
 								self.last_config.autosave.interval.get().into(),
-								|interval| Message::ChangedAutosaveInterval(interval as u16),
-								Message::ChangedAutosaveIntervalText,
 								5
-							),
+							)
+							.map(|interval| Message::ChangedAutosaveInterval(
+								interval.map(|interval| interval as u16)
+							)),
 							" s"
 						]
 						.width(Fill)

@@ -219,10 +219,8 @@ pub enum Message {
 	ToggleMetronome,
 	ToggleAutoscroll,
 	TappedBpm,
-	ChangedBpm(u16),
-	ChangedBpmText(String),
-	ChangedNumerator(u8),
-	ChangedNumeratorText(String),
+	ChangedBpm(Option<u16>),
+	ChangedNumerator(Option<u8>),
 
 	OnDrag(f32),
 	OnDragEnd,
@@ -662,27 +660,22 @@ impl Daw {
 			}
 			Message::TappedBpm => {
 				self.bpm_tapper.tap();
-				if let Some(bpm) = self.bpm_tapper.get_bpm() {
-					return self.update(Message::ChangedBpm(bpm.get()));
-				}
+				return self.update(Message::ChangedBpm(
+					self.bpm_tapper.get_bpm().map(NonZero::get),
+				));
 			}
-			Message::ChangedBpm(bpm) => self
-				.arrangement_view
-				.arrangement
-				.set_bpm(NonZero::new(bpm.clamp(10, 999)).unwrap()),
-			Message::ChangedBpmText(bpm) => {
-				if let Ok(bpm) = bpm.parse() {
-					return self.update(Message::ChangedBpm(bpm));
+			Message::ChangedBpm(bpm) => {
+				if let Some(bpm) = bpm {
+					self.arrangement_view
+						.arrangement
+						.set_bpm(NonZero::new(bpm.clamp(10, 999)).unwrap());
 				}
 			}
 			Message::ChangedNumerator(numerator) => {
-				self.arrangement_view
-					.arrangement
-					.set_numerator(NonZero::new(numerator.clamp(1, 99)).unwrap());
-			}
-			Message::ChangedNumeratorText(numerator) => {
-				if let Ok(numerator) = numerator.parse() {
-					return self.update(Message::ChangedNumerator(numerator));
+				if let Some(numerator) = numerator {
+					self.arrangement_view
+						.arrangement
+						.set_numerator(NonZero::new(numerator.clamp(1, 99)).unwrap());
 				}
 			}
 			Message::OnDrag(split_at) => {
@@ -807,23 +800,12 @@ impl Daw {
 							.padding(padding::horizontal(7).vertical(5))
 							.on_press(Message::Stop),
 					],
-					number_input(
-						1..=99,
-						transport.numerator.get().into(),
-						4,
-						|numerator| Message::ChangedNumerator(numerator as u8),
-						Message::ChangedNumeratorText,
-						5
-					),
+					number_input(1..=99, transport.numerator.get().into(), 4, 5).map(|numerator| {
+						Message::ChangedNumerator(numerator.map(|numerator| numerator as u8))
+					}),
 					row![
-						number_input(
-							10..=999,
-							transport.bpm.get().into(),
-							140,
-							|bpm| Message::ChangedBpm(bpm as u16),
-							Message::ChangedBpmText,
-							border::left(5)
-						),
+						number_input(10..=999, transport.bpm.get().into(), 140, border::left(5))
+							.map(|bpm| Message::ChangedBpm(bpm.map(|bpm| bpm as u16))),
 						button(metronome())
 							.style(button_with_radius(
 								if self.state.metronome {
