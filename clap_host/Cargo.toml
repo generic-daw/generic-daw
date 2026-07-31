@@ -11,7 +11,7 @@ workspace = true
 dsp.workspace = true
 utils.workspace = true
 
-clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
+clack-extensions = { version = "0.1.1", features = [
 	"audio-ports",
 	"clack-host",
 	"gui",
@@ -29,7 +29,7 @@ clack-extensions = { git = "https://github.com/prokopyl/clack.git", features = [
 	"thread-pool",
 	"timer",
 ] }
-clack-host = { git = "https://github.com/prokopyl/clack.git" }
+clack-host = "0.1.1"
 log = "0.4.33"
 raw-window-handle = "0.6.2"
 walkdir = "2.5.0"
