@@ -117,7 +117,7 @@ fn alloc_or_steal(
 ) {
 	let voice = voice_alloc.alloc(id, info).unwrap_or_else(|| {
 		let (voice, old_voice) = voice_alloc.steal(id, info, |l, r| {
-			r.info
+			l.info
 				.position
 				.start()
 				.cmp(&r.info.position.start())

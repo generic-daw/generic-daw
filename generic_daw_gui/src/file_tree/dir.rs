@@ -1,5 +1,5 @@
 use crate::{
-	components::{context_menu_entry, labeled_icon_button},
+	components::{labeled_icon_button, menu_entry},
 	file_tree::{Action, Message, file::File},
 	icons::{chevron_down, chevron_right, folder_open, folder_sync, hourglass, triangle_alert},
 	stylefns::{
@@ -181,11 +181,11 @@ impl Dir {
 						)),
 					},
 					container(column![
-						context_menu_entry(folder_sync(), "Sync", "").on_press_maybe(
+						menu_entry(folder_sync(), "Sync", "").on_press_maybe(
 							matches!(self.children, Status::Loaded { .. })
 								.then_some(Message::Action(self.id, Action::Sync))
 						),
-						context_menu_entry(
+						menu_entry(
 							folder_open(),
 							concat!(
 								"Open in ",

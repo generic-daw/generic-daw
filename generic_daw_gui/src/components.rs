@@ -8,24 +8,9 @@ use crate::{
 use generic_daw_widget::{context_menu::ContextMenu, drag_handle::DragHandle};
 use iced::{
 	Element, Font, Theme, border, padding,
-	widget::{Button, button, container, pick_list, right, row, space, text, text_input},
+	widget::{Button, button, container, pick_list, right, row, text, text_input},
 };
 use std::ops::RangeInclusive;
-
-pub fn context_menu_entry<'a, Message: 'a>(
-	i: Icon,
-	l: impl text::IntoFragment<'a>,
-	r: impl text::IntoFragment<'a>,
-) -> Button<'a, Message> {
-	button(row![
-		i.size(TEXT_HEIGHT),
-		space::horizontal().width(5),
-		text(l).line_height(1.0),
-		right(text(r).line_height(1.0).style(text::secondary))
-	])
-	.style(button_with_radius(button::text, 0))
-	.padding(5)
-}
 
 pub fn icon_button<'a, Message: 'a>(
 	i: Icon,
@@ -54,6 +39,21 @@ pub fn labeled_icon_button<'a, Message: 'a>(
 	.padding(1)
 }
 
+pub fn menu_entry<'a, Message: 'a>(
+	i: impl Into<Option<Icon>>,
+	l: impl text::IntoFragment<'a>,
+	r: impl text::IntoFragment<'a>,
+) -> Button<'a, Message> {
+	button(row![
+		i.into()
+			.map(|i| container(i.size(TEXT_HEIGHT)).padding(padding::right(5))),
+		text(l).line_height(1.0),
+		right(text(r).line_height(1.0).style(text::secondary))
+	])
+	.style(button_with_radius(button::text, 0))
+	.padding(5)
+}
+
 pub fn number_input<'a>(
 	range: RangeInclusive<usize>,
 	value: usize,
@@ -73,11 +73,9 @@ pub fn number_input<'a>(
 				Some
 			)
 			.default(default),
-			container(
-				context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(Some(default)),
-			)
-			.width(160)
-			.style(container_with_radius(weaker_bordered_box, 5))
+			container(menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(Some(default)),)
+				.width(160)
+				.style(container_with_radius(weaker_bordered_box, 5))
 		),
 		text_input("", &value.to_string())
 			.style(move |t, s| {

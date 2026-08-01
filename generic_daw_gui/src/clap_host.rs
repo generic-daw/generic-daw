@@ -1,6 +1,6 @@
 use crate::{
 	action::Action,
-	components::context_menu_entry,
+	components::menu_entry,
 	daw,
 	icons::rotate_ccw,
 	stylefns::{container_with_radius, scrollable_style, weaker_bordered_box},
@@ -390,12 +390,9 @@ impl ClapHost {
 								.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
 								.maybe_tooltip(param.value_text.as_deref()),
 								container(
-									context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click",)
-										.on_press(Message::HostParamChange(
-											id,
-											param.id,
-											param.default
-										)),
+									menu_entry(rotate_ccw(), "Reset", "Ctrl-Click",).on_press(
+										Message::HostParamChange(id, param.id, param.default)
+									),
 								)
 								.width(160)
 								.style(container_with_radius(weaker_bordered_box, 5))

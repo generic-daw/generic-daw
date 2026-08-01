@@ -1,7 +1,7 @@
 use crate::{
 	action::Action,
 	clap_host::{self, ClapHost},
-	components::{context_menu_entry, icon_button, text_icon_button},
+	components::{icon_button, menu_entry, text_icon_button},
 	config::Config,
 	daw,
 	file_tree::FileKind,
@@ -1770,28 +1770,20 @@ impl ArrangementView {
 											.enabled(plugin.active && enabled)
 											.tooltip(format_mix(plugin.mix)),
 											container(column![
-												context_menu_entry(
-													rotate_ccw(),
-													"Reset",
-													"Ctrl-Click"
-												)
-												.on_press(Message::PluginMixChanged(
-													self.selected,
-													i,
-													1.0
-												)),
+												menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
+													.on_press(Message::PluginMixChanged(
+														self.selected,
+														i,
+														1.0
+													)),
 												container(rule::horizontal(1))
 													.padding(padding::horizontal(5)),
-												context_menu_entry(
-													arrow_up_down(),
-													"Invert polarity",
-													""
-												)
-												.on_press(Message::PluginMixChanged(
-													self.selected,
-													i,
-													-plugin.mix
-												)),
+												menu_entry(arrow_up_down(), "Invert polarity", "")
+													.on_press(Message::PluginMixChanged(
+														self.selected,
+														i,
+														-plugin.mix
+													)),
 											])
 											.width(160)
 											.style(container_with_radius(weaker_bordered_box, 5)),
@@ -1836,11 +1828,11 @@ impl ArrangementView {
 									.align_y(Center)
 									.spacing(5),
 									container(column![
-										context_menu_entry(copy(), "Duplicate", "")
+										menu_entry(copy(), "Duplicate", "")
 											.on_press(Message::PluginDuplicate(self.selected, i)),
 										container(rule::horizontal(1))
 											.padding(padding::horizontal(5)),
-										context_menu_entry(arrow_up_down(), "Invert polarity", "")
+										menu_entry(arrow_up_down(), "Invert polarity", "")
 											.on_press(Message::PluginMixChanged(
 												self.selected,
 												i,
@@ -2149,12 +2141,8 @@ impl ArrangementView {
 													slider_secondary
 												}),
 												container(
-													context_menu_entry(
-														rotate_ccw(),
-														"Reset",
-														"Ctrl-Click",
-													)
-													.on_press(Message::SetMix(from, to, 1.0)),
+													menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
+														.on_press(Message::SetMix(from, to, 1.0)),
 												)
 												.width(160)
 												.style(container_with_radius(

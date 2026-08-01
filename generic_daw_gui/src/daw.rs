@@ -1,7 +1,7 @@
 use crate::{
 	arrangement_view::{self, Arrangement, ArrangementView, Feedback, Tab},
 	clap_host::{self, ClapHost},
-	components::{PICK_LIST_HANDLE, number_input},
+	components::{menu_entry, number_input},
 	config::Config,
 	config_view::{self, ConfigView},
 	file_tree::{self, FileKind, FileTree},
@@ -11,8 +11,8 @@ use crate::{
 	},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
-		button_with_radius, container_with_radius, menu_style, pick_list_with_radius,
-		progress_bar_with_radius, split_style, weak_bordered_box, weakest_bordered_box,
+		button_with_radius, container_with_radius, progress_bar_with_radius, split_style,
+		weak_bordered_box, weaker_bordered_box, weakest_bordered_box,
 	},
 	widget::ALPHA_2_3,
 };
@@ -24,14 +24,17 @@ use generic_daw_core::{
 	},
 };
 use generic_daw_project::proto;
+use generic_daw_widget::menu::{Menu, Side};
 use iced::{
-	Center, Color, Element, Fill, Font, Subscription, Task, Theme, border, keyboard,
+	Center, Color, Element, Fill, Font,
+	Length::Shrink,
+	Subscription, Task, Theme, border, keyboard,
 	mouse::Interaction,
 	padding,
 	time::every,
 	widget::{
-		bottom_center, button, center, column, combo_box, container, mouse_area, opaque, pick_list,
-		progress_bar, row, scrollable, space, stack, text,
+		bottom_center, button, center, column, combo_box, container, mouse_area, opaque,
+		progress_bar, row, rule, scrollable, space, stack, text,
 	},
 	window,
 };
@@ -43,13 +46,12 @@ use smol::unblock;
 use std::{
 	convert::Infallible,
 	ffi::CStr,
-	fmt::{Display, Formatter},
 	num::NonZero,
 	path::Path,
 	sync::{Arc, LazyLock, mpsc::Receiver},
 	time::Duration,
 };
-use utils::{NoClone, NoDebug, natural_cmp, unique_id, variants};
+use utils::{NoClone, NoDebug, natural_cmp, unique_id};
 
 unique_id!(scan);
 unique_id!(project);
@@ -110,47 +112,6 @@ pub static RECORDINGS_DIR: LazyLock<Arc<Path>> = LazyLock::new(|| {
 
 pub fn format_now() -> jiff::fmt::strtime::Display<'static> {
 	jiff::Zoned::now().strftime("%F %H-%M-%S")
-}
-
-variants! {
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum FileMenu {
-	New,
-	Open,
-	OpenLast,
-	Save,
-	SaveAs,
-	Render,
-	Settings,
-}
-}
-
-impl From<FileMenu> for Message {
-	fn from(value: FileMenu) -> Self {
-		match value {
-			FileMenu::New => Self::NewFile,
-			FileMenu::Open => Self::OpenFileDialog,
-			FileMenu::OpenLast => Self::OpenLastFile,
-			FileMenu::Save => Self::SaveFile,
-			FileMenu::SaveAs => Self::SaveAsFileDialog,
-			FileMenu::Render => Self::RenderFileDialog,
-			FileMenu::Settings => Self::OpenConfigView,
-		}
-	}
-}
-
-impl Display for FileMenu {
-	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		f.write_str(match self {
-			Self::New => "New",
-			Self::Open => "Open",
-			Self::OpenLast => "Open Last",
-			Self::Save => "Save",
-			Self::SaveAs => "Save As",
-			Self::Render => "Render",
-			Self::Settings => "Settings",
-		})
-	}
 }
 
 pub enum Instruction {
@@ -784,12 +745,28 @@ impl Daw {
 		stack![
 			column![
 				row![
-					pick_list(None::<FileMenu>, FileMenu::VARIANTS, FileMenu::to_string)
-						.on_select(Message::from)
-						.handle(PICK_LIST_HANDLE)
-						.placeholder("File")
-						.style(pick_list_with_radius(5))
-						.menu_style(menu_style),
+					Menu::new(
+						"File",
+						container(column![
+							menu_entry(None, "New", "Ctrl+N").on_press(Message::NewFile),
+							menu_entry(None, "Open", "Ctrl+O").on_press(Message::OpenFileDialog),
+							menu_entry(None, "Open Last", "Ctrl+Shift+O")
+								.on_press(Message::OpenLastFile),
+							menu_entry(None, "Save", "Ctrl+S").on_press(Message::SaveFile),
+							menu_entry(None, "Save As", "Ctrl+Shift+S")
+								.on_press(Message::SaveAsFileDialog),
+							menu_entry(None, "Render", "Ctrl+R")
+								.on_press(Message::RenderFileDialog),
+							menu_entry(None, "Settings", "Ctrl+,")
+								.on_press(Message::OpenConfigView),
+						])
+						.width(200)
+						.style(container_with_radius(weaker_bordered_box, 5))
+					)
+					.side(Side::Bottom)
+					.style(button_with_radius(button::background, 5))
+					.padding(padding::horizontal(7).vertical(5)),
+					rule::vertical(1),
 					row![
 						button(if transport.playing { pause() } else { play() })
 							.style(button_with_radius(button::primary, border::left(5)))
@@ -909,6 +886,7 @@ impl Daw {
 							),
 					],
 				]
+				.height(Shrink)
 				.align_y(Center)
 				.spacing(10),
 				vertical_split(

@@ -1,6 +1,6 @@
 use crate::{
 	arrangement_view::{Message, Tab, format_pan, plugin::Plugin},
-	components::context_menu_entry,
+	components::menu_entry,
 	icons::{
 		arrow_up_down, between_horizontal_start, between_vertical_start,
 		chevrons_left_right_ellipsis, circle_ellipsis, copy, power, power_off, replace, rotate_ccw,
@@ -74,7 +74,7 @@ impl Node {
 		ContextMenu::new(
 			content,
 			container(column![
-				context_menu_entry(
+				menu_entry(
 					if tab == Tab::Mixer {
 						between_vertical_start()
 					} else {
@@ -88,7 +88,7 @@ impl Node {
 					NodeType::Channel => Some(Message::ChannelInsert(self.id)),
 					NodeType::Track => Some(Message::TrackInsert(self.id)),
 				}),
-				context_menu_entry(
+				menu_entry(
 					copy(),
 					"Duplicate",
 					if tab == Tab::Mixer { "Ctrl-D" } else { "" }
@@ -98,7 +98,7 @@ impl Node {
 					NodeType::Channel => Some(Message::ChannelDuplicate(self.id)),
 					NodeType::Track => Some(Message::TrackDuplicate(self.id)),
 				}),
-				(tab == Tab::Mixer).then(|| context_menu_entry(
+				(tab == Tab::Mixer).then(|| menu_entry(
 					replace(),
 					if self.ty == NodeType::Channel {
 						"Convert to track"
@@ -112,18 +112,18 @@ impl Node {
 				)),
 				container(rule::horizontal(1)).padding(padding::horizontal(5)),
 				if self.bypassed {
-					context_menu_entry(power_off(), "Engage FX", "")
+					menu_entry(power_off(), "Engage FX", "")
 				} else {
-					context_menu_entry(power(), "Bypass FX", "")
+					menu_entry(power(), "Bypass FX", "")
 				}
 				.on_press(Message::ChannelToggleBypassed(self.id)),
-				(tab == Tab::Playlist).then(|| context_menu_entry(snowflake(), "Freeze", "")
+				(tab == Tab::Playlist).then(|| menu_entry(snowflake(), "Freeze", "")
 					.on_press_maybe(
 						(self.enabled && solo.is_none_or(|solo| solo == self.id))
 							.then_some(Message::Freeze(self.id))
 					)),
 				container(rule::horizontal(1)).padding(padding::horizontal(5)),
-				context_menu_entry(
+				menu_entry(
 					arrow_up_down(),
 					"Invert polarity",
 					if tab == Tab::Mixer { "Alt-I" } else { "" }
@@ -131,14 +131,11 @@ impl Node {
 				.on_press(Message::ChannelVolumeChanged(self.id, -self.utility.volume)),
 				match self.utility.pan {
 					PanMode::Stereo(..) =>
-						context_menu_entry(chevrons_left_right_ellipsis(), "Split stereo pan", "")
-							.on_press(Message::ChannelPanChanged(
-								self.id,
-								PanMode::SplitStereo(-1.0, 1.0)
-							)),
-					PanMode::SplitStereo(..) =>
-						context_menu_entry(circle_ellipsis(), "Stereo pan", "")
-							.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
+						menu_entry(chevrons_left_right_ellipsis(), "Split stereo pan", "").on_press(
+							Message::ChannelPanChanged(self.id, PanMode::SplitStereo(-1.0, 1.0))
+						),
+					PanMode::SplitStereo(..) => menu_entry(circle_ellipsis(), "Stereo pan", "")
+						.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
 				}
 			])
 			.width(180)
@@ -155,10 +152,10 @@ impl Node {
 		ContextMenu::new(
 			content,
 			container(column![
-				context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
+				menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
 					.on_press(Message::ChannelVolumeChanged(self.id, 1.0)),
 				container(rule::horizontal(1)).padding(padding::horizontal(5)),
-				context_menu_entry(
+				menu_entry(
 					arrow_up_down(),
 					"Invert polarity",
 					if tab == Tab::Mixer { "Alt-I" } else { "" }
@@ -186,14 +183,12 @@ impl Node {
 				.enabled(enabled)
 				.tooltip(format_pan(pan)),
 				container(column![
-					context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
+					menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
 						.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
 					container(rule::horizontal(1)).padding(padding::horizontal(5)),
-					context_menu_entry(chevrons_left_right_ellipsis(), "Split stereo pan", "")
-						.on_press(Message::ChannelPanChanged(
-							self.id,
-							PanMode::SplitStereo(-1.0, 1.0)
-						)),
+					menu_entry(chevrons_left_right_ellipsis(), "Split stereo pan", "").on_press(
+						Message::ChannelPanChanged(self.id, PanMode::SplitStereo(-1.0, 1.0))
+					),
 				])
 				.width(160)
 				.style(container_with_radius(weaker_bordered_box, 5)),
@@ -211,11 +206,11 @@ impl Node {
 						.enabled(enabled)
 						.tooltip(format_pan(l)),
 						container(column![
-							context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
+							menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
 								Message::ChannelPanChanged(self.id, PanMode::SplitStereo(-1.0, r))
 							),
 							container(rule::horizontal(1)).padding(padding::horizontal(5)),
-							context_menu_entry(circle_ellipsis(), "Stereo pan", "").on_press(
+							menu_entry(circle_ellipsis(), "Stereo pan", "").on_press(
 								Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))
 							),
 						])
@@ -233,11 +228,11 @@ impl Node {
 						.enabled(enabled)
 						.tooltip(format_pan(r)),
 						container(column![
-							context_menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
+							menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
 								Message::ChannelPanChanged(self.id, PanMode::SplitStereo(l, 1.0))
 							),
 							container(rule::horizontal(1)).padding(padding::horizontal(5)),
-							context_menu_entry(circle_ellipsis(), "Stereo pan", "").on_press(
+							menu_entry(circle_ellipsis(), "Stereo pan", "").on_press(
 								Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))
 							),
 						])
@@ -250,7 +245,7 @@ impl Node {
 				.width(2.0 * radius)
 				.height(1.8 * radius),
 				container(
-					context_menu_entry(circle_ellipsis(), "Stereo pan", "")
+					menu_entry(circle_ellipsis(), "Stereo pan", "")
 						.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
 				)
 				.width(160)
