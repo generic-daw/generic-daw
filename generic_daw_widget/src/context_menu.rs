@@ -304,7 +304,7 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_, Mes
 			renderer,
 		);
 
-		if interaction == Interaction::None && cursor.is_over(layout.bounds()) {
+		if interaction == Interaction::default() && cursor.is_over(layout.bounds()) {
 			Interaction::Idle
 		} else {
 			interaction

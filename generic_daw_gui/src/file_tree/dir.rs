@@ -190,9 +190,10 @@ impl Dir {
 							concat!(
 								"Open in ",
 								cfg_select!(
-								target_os = "windows" => "File Explorer",
-								target_os = "macos" => "Finder",
-								_ => "File Manager")
+									target_os = "windows" => "File Explorer",
+									target_os = "macos" => "Finder",
+									_ => "File Manager",
+								)
 							),
 							""
 						)

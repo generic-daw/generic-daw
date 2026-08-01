@@ -42,19 +42,29 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Track<'a, Message> {
 		tree: &mut Tree,
 		event: &Event,
 		layout: Layout<'_>,
-		cursor: Cursor,
+		mut cursor: Cursor,
 		renderer: &Renderer,
 		shell: &mut Shell<'_, Message>,
 		viewport: &Rectangle,
 	) {
-		self.clips
+		for (i, ((child, tree), layout)) in self
+			.clips
 			.iter_mut()
 			.zip(&mut tree.children)
 			.zip(layout.children())
+			.enumerate()
 			.rev()
-			.for_each(|((child, tree), layout)| {
-				child.update(tree, event, layout, cursor, renderer, shell, viewport);
-			});
+		{
+			child.update(tree, event, layout, cursor, renderer, shell, viewport);
+
+			if i != 0
+				&& !cursor.is_levitating()
+				&& child.mouse_interaction(tree, layout, cursor, viewport, renderer)
+					!= Interaction::default()
+			{
+				cursor = cursor.levitate();
+			}
+		}
 	}
 
 	fn draw(
