@@ -18,7 +18,7 @@ use iced_widget::{
 	},
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Side {
 	Bottom,
 	Right,
@@ -92,7 +92,7 @@ impl<'a, Message> Menu<'a, Message> {
 	}
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 struct State {
 	is_pressed: bool,
 	position: Option<Point>,
@@ -178,11 +178,9 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, Renderer> for Menu<'a, Mess
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Left,
 				..
-			}) if !self.menu.as_widget().is_void() => {
-				if cursor.is_over(layout.bounds()) {
-					state.is_pressed = true;
-					shell.capture_event();
-				}
+			}) if !self.menu.as_widget().is_void() && cursor.is_over(layout.bounds()) => {
+				state.is_pressed = true;
+				shell.capture_event();
 			}
 			Event::Mouse(mouse::Event::ButtonReleased {
 				button: mouse::Button::Left,
@@ -213,19 +211,15 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, Renderer> for Menu<'a, Mess
 			button::Status::Disabled
 		} else if state.position.is_some() {
 			button::Status::Pressed
-		} else if cursor.is_over(layout.bounds()) {
-			let state = tree.state.downcast_ref::<State>();
-
-			if state.is_pressed {
-				button::Status::Pressed
-			} else {
-				button::Status::Hovered
-			}
-		} else {
+		} else if !cursor.is_over(layout.bounds()) {
 			button::Status::Active
+		} else if state.is_pressed {
+			button::Status::Pressed
+		} else {
+			button::Status::Hovered
 		};
 
-		if let Event::Window(window::Event::RedrawRequested(_now)) = event {
+		if let Event::Window(window::Event::RedrawRequested(..)) = event {
 			self.status = Some(current_status);
 		} else if self.status.is_some_and(|status| status != current_status) {
 			shell.request_redraw();
