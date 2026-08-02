@@ -6,8 +6,8 @@ use crate::{
 	config_view::{self, ConfigView},
 	file_tree::{self, FileKind, FileTree},
 	icons::{
-		arrow_big_right, chart_no_axes_gantt, cpu, gavel, keyboard_music, metronome, pause, play,
-		plus, sliders_vertical, square,
+		arrow_big_right, chart_no_axes_gantt, cpu, gavel, keyboard_music, menu, metronome, pause,
+		play, plus, sliders_vertical, square,
 	},
 	state::{DEFAULT_SPLIT_POSITION, State},
 	stylefns::{
@@ -746,7 +746,7 @@ impl Daw {
 			column![
 				row![
 					Menu::new(
-						"File",
+						menu(),
 						container(column![
 							menu_entry(None, "New", "Ctrl+N").on_press(Message::NewFile),
 							menu_entry(None, "Open", "Ctrl+O").on_press(Message::OpenFileDialog),

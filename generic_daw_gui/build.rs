@@ -27,6 +27,7 @@ static GLYPHS: &[(&str, char, f32)] = &[
 	icon!(gavel = 57568),
 	icon!(grip_horizontal = 57578),
 	icon!(grip_vertical = 57579),
+	icon!(menu = 57621),
 	icon!(pause = 57646),
 	icon!(play = 57660),
 	icon!(plus = 57661 + 0.025),
