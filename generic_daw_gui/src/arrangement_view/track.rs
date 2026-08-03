@@ -1,7 +1,7 @@
 use crate::{
 	arrangement_view::{Message, node::Node, recording::Recording, sample::SamplePair},
 	daw::{RECORDINGS_DIR, format_now},
-	stylefns::{container_with_radius, weak_bordered_box},
+	stylefns::{button_with_radius, container_with_radius, weak_bordered_box},
 };
 use generic_daw_core::{Channels, Clip, NodeId, Transport, time::BeatTime};
 use iced::{
@@ -107,19 +107,22 @@ impl Track {
 			),
 		))
 		.padding(2.5)
-		.style(self.input.as_ref().map_or(
-			if enabled {
-				button::primary
-			} else {
-				button::secondary
-			},
-			|input| {
-				if input.channels.fits_in(transport.output_channels.get()) {
-					button::danger
+		.style(button_with_radius(
+			self.input.as_ref().map_or(
+				if enabled {
+					button::primary
 				} else {
-					button::warning
-				}
-			},
+					button::secondary
+				},
+				|input| {
+					if input.channels.fits_in(transport.output_channels.get()) {
+						button::danger
+					} else {
+						button::warning
+					}
+				},
+			),
+			0,
 		));
 
 		if let Some(channels) = NonZero::new(transport.input_channels) {
