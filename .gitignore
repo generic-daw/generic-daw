@@ -3,4 +3,5 @@ target
 **/*.rs.bk
 *.pdb
 Lucide.ttf
-profile.json.gz
+profile.json*
+heaptrack.*

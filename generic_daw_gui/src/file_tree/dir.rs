@@ -180,7 +180,7 @@ impl Dir {
 							tooltip::Position::Bottom,
 						)),
 					},
-					container(column![
+					move || container(column![
 						menu_entry(folder_sync(), "Sync", "").on_press_maybe(
 							matches!(self.children, Status::Loaded { .. })
 								.then_some(Message::Action(self.id, Action::Sync))
@@ -200,7 +200,8 @@ impl Dir {
 						.on_press(Message::OpenDir(self.path.clone())),
 					])
 					.width(if cfg!(target_os = "macos") { 160 } else { 200 })
-					.style(container_with_radius(weaker_bordered_box, 5)),
+					.style(container_with_radius(weaker_bordered_box, 5))
+					.into(),
 				),
 				if let Status::Loaded {
 					dirs,

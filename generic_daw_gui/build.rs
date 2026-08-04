@@ -17,10 +17,10 @@ macro_rules! icon {
 
 // https://unpkg.com/lucide-static@latest/font/codepoints.json
 static GLYPHS: &[(&str, char, f32)] = &[
+	icon!(arrow_down_wide_narrow = 57415),
 	icon!(chevron_down = 57453),
 	icon!(chevron_right = 57455),
 	icon!(chevron_up = 57456),
-	icon!(chevrons_down = 57457),
 	icon!(copy = 57502),
 	icon!(cpu = 57513),
 	icon!(file = 57536),
@@ -28,6 +28,7 @@ static GLYPHS: &[(&str, char, f32)] = &[
 	icon!(grip_horizontal = 57578),
 	icon!(grip_vertical = 57579),
 	icon!(menu = 57621),
+	icon!(mic = 57624),
 	icon!(pause = 57646),
 	icon!(play = 57660),
 	icon!(plus = 57661 + 0.025),
@@ -51,12 +52,14 @@ static GLYPHS: &[(&str, char, f32)] = &[
 	icon!(replace = 58331),
 	icon!(chart_no_axes_gantt = 58564),
 	icon!(folder_sync = 58569),
+	icon!(audio_lines = 58714),
 	icon!(file_music = 58718),
 	icon!(keyboard_music = 58720),
 	icon!(between_horizontal_start = 58770),
 	icon!(between_vertical_start = 58772),
 	icon!(chevrons_left_right_ellipsis = 58911),
 	icon!(metronome = 59068 + 0.025),
+	icon!(square_arrow_right_enter = 59075),
 ];
 
 pub fn main() {
@@ -67,50 +70,9 @@ pub fn main() {
 
 	icons_rs
 		.write_all(
-			br#"mod icons {
-
-use crate::widget::LINE_HEIGHT;
-use iced::{
-	Element, Font, padding,
-	widget::{container, text},
-};
-
+			br#"
 pub static LUCIDE_BYTES: &[u8] = include_bytes!("icons.ttf");
-pub static LUCIDE_FONT: Font = Font::new("lucide");
-
-#[derive(Clone, Copy, Debug)]
-pub struct Icon {
-	glyph: char,
-	size: f32,
-	offset: f32,
-}
-
-impl Icon {
-	pub const fn size(mut self, size: f32) -> Self {
-		self.size = size;
-		self
-	}
-
-	pub const fn glyph(self) -> char {
-		self.glyph
-	}
-}
-
-impl<'a, Message: 'a> From<Icon> for Element<'a, Message> {
-	fn from(value: Icon) -> Self {
-		container(
-			text(value.glyph)
-				.font(LUCIDE_FONT)
-				.shaping(text::Shaping::Basic)
-				.line_height(1.0)
-				.size(value.size)
-				.width(value.size)
-				.center(),
-		)
-		.padding(padding::top(value.offset * value.size).bottom(-value.offset * value.size))
-		.into()
-	}
-}
+pub static LUCIDE_FONT: iced::Font = iced::Font::new("lucide");
 "#,
 		)
 		.unwrap();
@@ -126,7 +88,7 @@ impl<'a, Message: 'a> From<Icon> for Element<'a, Message> {
 pub const fn {name}() -> Icon {{
 	Icon {{
 		glyph: {glyph:?},
-		size: LINE_HEIGHT,
+		size: crate::widget::LINE_HEIGHT,
 		offset: {offset},
 	}}
 }}
@@ -136,13 +98,6 @@ pub const fn {name}() -> Icon {{
 			)
 			.unwrap();
 	}
-
-	icons_rs
-		.write_all(
-			b"
-}",
-		)
-		.unwrap();
 
 	std::fs::write(
 		out_dir.join("icons.ttf"),

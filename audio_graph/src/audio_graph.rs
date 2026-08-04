@@ -271,11 +271,12 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		f(self.graph.get_mut(&node).unwrap().node(), &mut self.state);
 	}
 
-	pub fn for_each_node(&mut self, mut f: impl FnMut(&Node, &[[f32; 2]])) {
+	pub fn for_each_node(&mut self, mut f: impl FnMut(&Node, &[[f32; 2]], &[Node::Event])) {
 		for entry in self.graph.values_mut() {
 			f(
 				&*entry.node_uncontended(),
 				&entry.read_buffers_uncontended().audio,
+				&entry.read_buffers_uncontended().events,
 			);
 		}
 	}

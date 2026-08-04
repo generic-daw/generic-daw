@@ -14,6 +14,7 @@ use crate::{
 };
 use generic_daw_core::{
 	DEFAULT_HOST, DeviceDescription, DeviceId, HostId, clap_host::DEFAULT_CLAP_PATHS, get_devices,
+	get_input_ports, get_output_ports,
 };
 use iced::{
 	Center, Element, Fill, Font, Task, border, keyboard,
@@ -60,10 +61,12 @@ pub enum Message {
 	RemoveClapPath(usize),
 	MoveClapPath(DragEvent),
 	ChangedHost(Option<HostId>),
-	ChangedInput(Option<DeviceId>),
-	ChangedOutput(Option<DeviceId>),
+	ChangedAudioInput(Option<DeviceId>),
+	ChangedAudioOutput(Option<DeviceId>),
 	ChangedSampleRate(Option<NonZero<u32>>),
 	ChangedBufferSize(Option<NonZero<u32>>),
+	ChangedMidiInput(Option<Arc<str>>),
+	ChangedMidiOutput(Option<Arc<str>>),
 	ToggledAutosave,
 	ChangedAutosaveInterval(Option<u16>),
 	ToggledOpenLastProject,
@@ -80,6 +83,10 @@ pub struct ConfigView {
 	hosts: Vec<HostId>,
 	devices: HashMap<HostId, Devices>,
 	device_info: HashMap<DeviceId, DeviceDescription>,
+	input_ports: Vec<Arc<str>>,
+	input_port_info: HashMap<Arc<str>, Arc<str>>,
+	output_ports: Vec<Arc<str>>,
+	output_port_info: HashMap<Arc<str>, Arc<str>>,
 	main_window_id: window::Id,
 }
 
@@ -92,6 +99,8 @@ struct Devices {
 impl ConfigView {
 	pub fn new(main_window_id: window::Id) -> Self {
 		let device_info = get_devices();
+		let input_port_info = get_input_ports();
+		let output_port_info = get_output_ports();
 
 		let mut devices =
 			device_info
@@ -129,6 +138,12 @@ impl ConfigView {
 		let mut hosts = devices.keys().copied().collect::<Vec<_>>();
 		hosts.sort_unstable_by(|l, r| natural_cmp(l.name().as_bytes(), r.name().as_bytes()));
 
+		let mut input_ports = input_port_info.keys().cloned().collect::<Vec<_>>();
+		input_ports.sort_unstable_by(|l, r| natural_cmp(l.as_bytes(), r.as_bytes()));
+
+		let mut output_ports = output_port_info.keys().cloned().collect::<Vec<_>>();
+		output_ports.sort_unstable_by(|l, r| natural_cmp(l.as_bytes(), r.as_bytes()));
+
 		let config = Config::read();
 
 		Self {
@@ -137,6 +152,10 @@ impl ConfigView {
 			hosts,
 			devices,
 			device_info,
+			input_ports,
+			input_port_info,
+			output_ports,
+			output_port_info,
 			main_window_id,
 		}
 	}
@@ -186,10 +205,12 @@ impl ConfigView {
 				}
 			}
 			Message::ChangedHost(host) => self.config.audio.devices.set_host(host),
-			Message::ChangedInput(input) => self.config.audio.devices.set_input(input),
-			Message::ChangedOutput(output) => self.config.audio.devices.set_output(output),
+			Message::ChangedAudioInput(input) => self.config.audio.devices.set_input(input),
+			Message::ChangedAudioOutput(output) => self.config.audio.devices.set_output(output),
 			Message::ChangedSampleRate(sample_rate) => self.config.audio.sample_rate = sample_rate,
 			Message::ChangedBufferSize(buffer_size) => self.config.audio.buffer_size = buffer_size,
+			Message::ChangedMidiInput(input) => self.config.midi.input = input,
+			Message::ChangedMidiOutput(output) => self.config.midi.output = output,
 			Message::ToggledAutosave => self.config.autosave.enabled ^= true,
 			Message::ChangedAutosaveInterval(interval) => {
 				if let Some(interval) = interval {
@@ -357,7 +378,7 @@ impl ConfigView {
 					.align_y(Center),
 					column![
 						row![
-							text("Input Device:").width(Fill),
+							text("Audio Input:").width(Fill),
 							row![
 								pick_list(
 									self.config.audio.devices.get_input(),
@@ -373,7 +394,7 @@ impl ConfigView {
 										|device| device.name().to_owned()
 									)
 								)
-								.on_select(|id| Message::ChangedInput(Some(id)))
+								.on_select(|id| Message::ChangedAudioInput(Some(id)))
 								.handle(PICK_LIST_HANDLE)
 								.placeholder("Default")
 								.width(Fill)
@@ -390,13 +411,13 @@ impl ConfigView {
 											.audio
 											.devices
 											.get_input()
-											.map(|_| Message::ChangedInput(None))
+											.map(|_| Message::ChangedAudioInput(None))
 									)
 							]
 						]
 						.align_y(Center),
 						row![
-							text("Output Device:").width(Fill),
+							text("Audio Output:").width(Fill),
 							row![
 								pick_list(
 									self.config.audio.devices.get_output(),
@@ -412,7 +433,7 @@ impl ConfigView {
 										|device| device.name().to_owned()
 									)
 								)
-								.on_select(|id| Message::ChangedOutput(Some(id)))
+								.on_select(|id| Message::ChangedAudioOutput(Some(id)))
 								.handle(PICK_LIST_HANDLE)
 								.placeholder("Default")
 								.width(Fill)
@@ -429,7 +450,7 @@ impl ConfigView {
 											.audio
 											.devices
 											.get_output()
-											.map(|_| Message::ChangedOutput(None))
+											.map(|_| Message::ChangedAudioOutput(None))
 									)
 							]
 						]
@@ -498,6 +519,75 @@ impl ConfigView {
 							]
 						]
 						.align_y(Center)
+					],
+					rule::horizontal(1),
+					column![
+						row![
+							text("MIDI Input:").width(Fill),
+							row![
+								pick_list(
+									self.config.midi.input.as_ref(),
+									&*self.input_ports,
+									|id| self.input_port_info.get(id).map_or_else(
+										|| format!("Unknown ({id})"),
+										|device| (**device).to_owned()
+									)
+								)
+								.on_select(|id| Message::ChangedMidiInput(Some(id)))
+								.handle(PICK_LIST_HANDLE)
+								.placeholder("None")
+								.width(Fill)
+								.style(pick_list_with_radius(border::top_left(5)))
+								.menu_style(menu_style),
+								button(rotate_ccw())
+									.style(button_with_radius(
+										button::primary,
+										border::top_right(5)
+									))
+									.padding(5)
+									.on_press_maybe(
+										self.config
+											.midi
+											.input
+											.as_ref()
+											.map(|_| Message::ChangedMidiInput(None))
+									)
+							]
+						]
+						.align_y(Center),
+						row![
+							text("MIDI Output:").width(Fill),
+							row![
+								pick_list(
+									self.config.midi.output.as_ref(),
+									&*self.output_ports,
+									|id| self.output_port_info.get(id).map_or_else(
+										|| format!("Unknown ({id})"),
+										|device| (**device).to_owned()
+									)
+								)
+								.on_select(|id| Message::ChangedMidiOutput(Some(id)))
+								.handle(PICK_LIST_HANDLE)
+								.placeholder("None")
+								.width(Fill)
+								.style(pick_list_with_radius(border::bottom_left(5)))
+								.menu_style(menu_style),
+								button(rotate_ccw())
+									.style(button_with_radius(
+										button::primary,
+										border::bottom_right(5)
+									))
+									.padding(5)
+									.on_press_maybe(
+										self.config
+											.midi
+											.output
+											.as_ref()
+											.map(|_| Message::ChangedMidiOutput(None))
+									)
+							]
+						]
+						.align_y(Center),
 					],
 					rule::horizontal(1),
 					row![

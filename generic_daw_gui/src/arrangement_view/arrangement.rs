@@ -1,14 +1,14 @@
 use crate::{
 	arrangement_view::{
 		self,
+		audio_recording::AudioRecording,
 		channel::Channel,
 		midi_pattern::{MidiPattern, MidiPatternPair},
 		node::{Node, NodeType},
 		plugin::{Plugin, PluginPair},
 		poll_consumer,
-		recording::Recording,
 		sample::{Sample, SamplePair},
-		track::{Input, Track},
+		track::Track,
 	},
 	clap_host,
 	config::Config,
@@ -17,7 +17,7 @@ use crate::{
 use generic_daw_core::{
 	AudioClip, AudioThread, Batch, Channels, Clip, ClipId, Message, MidiClip, MidiKey, MidiNote,
 	MidiNoteId, MidiPatternAction, MidiPatternId, NodeAction, NodeId, NodeImpl as _, PanMode,
-	PluginId, Point, SampleId, Stream, Transport, Update, Version, build_audio_streams,
+	PluginId, Point, SampleId, Stream, Transport, Update, Version, build_streams,
 	clap_host::{ClapId, HostInfo, PluginDescriptor},
 	time::{BeatRange, BeatTime, SecondsTime},
 };
@@ -30,6 +30,7 @@ use std::{
 	collections::{BTreeMap, VecDeque},
 	fs::File,
 	io::BufWriter,
+	mem::MaybeUninit,
 	num::NonZero,
 	path::Path,
 	sync::LazyLock,
@@ -61,8 +62,7 @@ pub struct Arrangement {
 
 	producer: Producer<Message>,
 	queue: VecDeque<Message>,
-	input_stream: Option<NoDebug<Stream>>,
-	output_stream: Option<NoDebug<Stream>>,
+	stream: Option<NoDebug<Stream>>,
 }
 
 impl Arrangement {
@@ -92,7 +92,7 @@ impl Arrangement {
 			Node::new(
 				NodeType::Master,
 				master,
-				Some(Channels::base(output_channels)),
+				Channels::base(output_channels.get()).enable_audio(true),
 			),
 		);
 
@@ -112,23 +112,14 @@ impl Arrangement {
 
 				producer,
 				queue: VecDeque::new(),
-				input_stream: None,
-				output_stream: None,
+				stream: None,
 			},
 			Task::stream(poll_consumer(consumer)),
 		)
 	}
 
-	pub fn replace_streams(
-		&mut self,
-		(input_stream, output_stream): (Option<Stream>, Option<Stream>),
-	) -> (Option<Stream>, Option<Stream>) {
-		(
-			std::mem::replace(&mut self.input_stream, input_stream.map(NoDebug))
-				.map(|stream| stream.0),
-			std::mem::replace(&mut self.output_stream, output_stream.map(NoDebug))
-				.map(|stream| stream.0),
-		)
+	pub fn replace_stream(&mut self, stream: Option<Stream>) -> Option<Stream> {
+		std::mem::replace(&mut self.stream, stream.map(NoDebug)).map(|stream| stream.0)
 	}
 
 	pub fn request_processor(
@@ -141,18 +132,19 @@ impl Arrangement {
 	}
 
 	pub fn change_config(&mut self, NoClone(mut processor): NoClone<AudioThread>, config: &Config) {
-		self.interrupted(None);
+		self.interrupted();
 
-		self.replace_streams((None, None));
+		self.replace_stream(None);
 		let (p_sender, a_receiver) = oneshot::channel();
-		let (input_stream, output_stream, input_channels, output_channels, sample_rate, frames) =
-			build_audio_streams(
-				&config.audio.devices.as_core(),
-				config.audio.sample_rate,
-				config.audio.buffer_size,
-				a_receiver,
-			);
-		self.replace_streams((input_stream, Some(output_stream)));
+		let (stream, input_channels, output_channels, sample_rate, frames) = build_streams(
+			&config.audio.devices.as_core(),
+			config.midi.input.as_deref(),
+			config.midi.output.as_deref(),
+			config.audio.sample_rate,
+			config.audio.buffer_size,
+			a_receiver,
+		);
+		self.replace_stream(Some(stream));
 
 		processor.change_config(input_channels, output_channels, sample_rate, frames);
 		p_sender.send(processor).unwrap();
@@ -172,14 +164,18 @@ impl Arrangement {
 			match update {
 				Update::Recorded(frames) => {
 					let mut samples = boxed_slice![[0.0; 2]; frames];
+					let mut events = boxed_slice![MaybeUninit::uninit(); 256];
 					for track in 0..self.tracks.len() {
-						self.tracks[track].recorded(&mut samples, &self.transport, track);
+						self.tracks[track].audio_recorded(&mut samples, &self.transport, track);
+						self.tracks[track].midi_recorded(&mut events, &self.transport, track);
 					}
 				}
-				Update::Interrupted(node, position) => {
-					self.interrupted(node);
+				Update::Interrupted(position) => {
+					self.interrupted();
 					self.transport.position = position;
 				}
+				Update::AudioInterrupted(node) => self.audio_interrupted(node),
+				Update::MidiInterrupted(node) => self.midi_interrupted(node),
 				Update::Load(duration, frames) => {
 					let mix = self.transport.sample_rate.get() as f32 / frames as f32;
 					let load = duration.as_secs_f32() * mix;
@@ -216,16 +212,43 @@ impl Arrangement {
 		messages
 	}
 
-	fn interrupted(&mut self, node: Option<NodeId>) {
+	fn interrupted(&mut self) {
+		self.audio_interrupted(None);
+		self.midi_interrupted(None);
+	}
+
+	fn audio_interrupted(&mut self, node: impl Into<Option<NodeId>>) {
+		let node = node.into();
+
 		for track in 0..self.tracks.len() {
 			if node.is_some_and(|node| self.tracks[track].id != node) {
 				continue;
 			}
 
-			if let Some((pos, sample)) = self.tracks[track].interrupted() {
+			if let Some((pos, sample)) = self.tracks[track].audio_finalize() {
 				let id = sample.core.id;
 				self.add_sample(sample);
 				self.add_audio_clip_from_sample(track, pos, id);
+			}
+		}
+	}
+
+	fn midi_interrupted(&mut self, node: impl Into<Option<NodeId>>) {
+		let node = node.into();
+
+		for track in 0..self.tracks.len() {
+			if node.is_some_and(|node| self.tracks[track].id != node) {
+				continue;
+			}
+
+			if let Some((pos, pattern)) = self.tracks[track].midi_finalize(&self.transport) {
+				let id = pattern.core.id;
+				self.add_midi_pattern(pattern);
+				let mut clip = MidiClip::new(id);
+				clip.position
+					.trim_end_to(self.transport.position.to_beat_time(&self.transport));
+				clip.position.move_to(pos);
+				self.add_clip(track, clip);
 			}
 		}
 	}
@@ -546,7 +569,10 @@ impl Arrangement {
 	fn add(&mut self, node: impl Into<generic_daw_core::Node>, ty: NodeType) -> NodeId {
 		let node = node.into();
 		let id = node.id();
-		self.nodes.insert(id, Node::new(ty, id, None));
+		self.nodes.insert(
+			id,
+			Node::new(ty, id, Channels::base(self.transport.output_channels.get())),
+		);
 		self.send(Message::NodeAdd(Box::new(node)));
 		id
 	}
@@ -567,7 +593,10 @@ impl Arrangement {
 	}
 
 	pub fn insert_channel(&mut self, index: usize) -> NodeId {
-		let id = self.add(generic_daw_core::Channel::default(), NodeType::Channel);
+		let id = self.add(
+			generic_daw_core::Channel::new(Channels::base(self.transport.output_channels.get())),
+			NodeType::Channel,
+		);
 		self.channels.insert(index, Channel::new(id));
 		id
 	}
@@ -638,8 +667,17 @@ impl Arrangement {
 	}
 
 	pub fn insert_track(&mut self, index: usize) -> NodeId {
-		let id = self.add(generic_daw_core::Track::default(), NodeType::Track);
-		self.tracks.insert(index, Track::new(id));
+		let id = self.add(
+			generic_daw_core::Track::new(
+				Channels::base(self.transport.input_channels),
+				Channels::base(self.transport.output_channels.get()),
+			),
+			NodeType::Track,
+		);
+		self.tracks.insert(
+			index,
+			Track::new(id, Channels::base(self.transport.input_channels)),
+		);
 		id
 	}
 
@@ -680,7 +718,10 @@ impl Arrangement {
 
 				let index = self.channel_of(id).unwrap();
 				self.channels.remove(index);
-				self.tracks.push(Track::new(id));
+				self.tracks.push(Track::new(
+					id,
+					Channels::base(self.transport.input_channels),
+				));
 
 				let incoming = self
 					.nodes
@@ -695,12 +736,14 @@ impl Arrangement {
 				None
 			}
 			NodeType::Track => {
-				self.input_change_channels(id, None);
+				let index = self.track_of(id).unwrap();
+				if self.tracks[index].audio_consumer.is_some() {
+					self.input_toggle_audio_recording(id);
+				}
 
 				self.node_mut(id).ty = NodeType::Channel;
 				self.send(Message::NodeToggleKind(id));
 
-				let index = self.track_of(id).unwrap();
 				let track = self.tracks.remove(index);
 				self.channels.insert(0, Channel::new(id));
 
@@ -719,33 +762,41 @@ impl Arrangement {
 		}
 	}
 
-	pub fn input_change_channels(&mut self, id: NodeId, channels: Option<Channels>) {
+	pub fn input_change_channels(&mut self, id: NodeId, channels: Channels) {
 		let track = self.track_of(id).unwrap();
-		if let Some(channels) = channels {
-			if let Some(input) = &mut self.tracks[track].input {
-				if input.channels != channels {
-					input.channels = channels;
-					self.node_action(id, NodeAction::InputChangeChannels(channels));
-				}
-			} else {
-				let (producer, consumer) =
-					RingBuffer::new(self.transport.sample_rate.get() as usize);
-				self.tracks[track].input = Some(Input {
-					consumer,
-					channels,
-					recording: None,
-				});
-				self.node_action(id, NodeAction::InputStart(producer, channels));
-			}
-		} else if self.tracks[track].input.take().is_some() {
-			self.node_action(id, NodeAction::InputStop);
+		if self.tracks[track].input != channels {
+			self.tracks[track].input = channels;
+			self.node_action(id, NodeAction::InputSetChannels(channels));
 		}
 	}
 
-	pub fn output_change_channels(&mut self, id: NodeId, channels: Option<Channels>) {
-		if self.node(id).output != channels && !(id == self.master && channels.is_none()) {
+	pub fn input_toggle_audio_recording(&mut self, id: NodeId) {
+		let track = self.track_of(id).unwrap();
+		if self.tracks[track].audio_consumer.take().is_some() {
+			self.node_action(id, NodeAction::InputSetAudioRecording(None));
+		} else {
+			let (producer, consumer) = RingBuffer::new(4096);
+			self.tracks[track].audio_consumer = Some(consumer);
+			self.node_action(id, NodeAction::InputSetAudioRecording(Some(producer)));
+		}
+	}
+
+	pub fn input_toggle_midi_recording(&mut self, id: NodeId) {
+		let track = self.track_of(id).unwrap();
+		if self.tracks[track].midi_consumer.take().is_some() {
+			self.node_action(id, NodeAction::InputSetMidiRecording(None));
+		} else {
+			let (producer, consumer) = RingBuffer::new(256);
+			self.tracks[track].midi_consumer = Some(consumer);
+			self.node_action(id, NodeAction::InputSetMidiRecording(Some(producer)));
+		}
+	}
+
+	pub fn output_change_channels(&mut self, id: NodeId, mut channels: Channels) {
+		channels = channels.enable_audio(channels.enable_audio || id == self.master);
+		if self.node(id).output != channels {
 			self.node_mut(id).output = channels;
-			self.node_action(id, NodeAction::OutputChangeChannels(channels));
+			self.node_action(id, NodeAction::OutputSetChannels(channels));
 		}
 	}
 
@@ -1185,7 +1236,7 @@ impl Arrangement {
 			)
 		});
 
-		self.interrupted(None);
+		self.interrupted();
 
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
 		let mut writer = WavWriter::new(
@@ -1243,10 +1294,10 @@ impl Arrangement {
 			BeatRange::new(start, end)
 		};
 
-		self.interrupted(None);
+		self.interrupted();
 
 		let (progress_sender, progress_receiver) = smol::channel::unbounded();
-		let mut recording = Recording::new(
+		let mut recording = AudioRecording::new(
 			FREEZES_DIR
 				.join(format!("{} T{}.wav", format_now(), track + 1))
 				.into(),

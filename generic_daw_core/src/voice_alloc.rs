@@ -79,7 +79,7 @@ impl<Id: Copy + Eq, Info: Copy> VoiceAlloc<Id, Info> {
 
 	fn new_voice(&mut self, id: Id, info: Info) -> Voice<Id, Info> {
 		let note_id = self.next_note_id;
-		self.next_note_id = (self.next_note_id + 1) % i32::MAX as u32;
+		self.next_note_id = (self.next_note_id + 1) % (i32::MAX.cast_unsigned() - 16);
 
 		Voice {
 			id,

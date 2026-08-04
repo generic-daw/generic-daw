@@ -1,10 +1,10 @@
 use iced_widget::{
 	Renderer,
 	core::{
-		Element, Event, Layout, Point, Renderer as _, Shell, Size, Theme, Vector, keyboard,
+		Element, Event, Layout, Point, Rectangle, Renderer as _, Shell, Size, Theme, Vector,
+		keyboard,
 		layout::{Limits, Node},
-		mouse,
-		mouse::{Cursor, Interaction},
+		mouse::{self, Cursor, Interaction},
 		overlay,
 		renderer::Style,
 		widget::{Operation, tree::Tree},
@@ -15,31 +15,31 @@ pub struct MenuOverlay<'a, 'b, Message> {
 	pub content: &'b mut Element<'a, Message, Theme, Renderer>,
 	pub tree: &'b mut Tree,
 	pub state: &'b mut Option<Point>,
-	pub position: Point,
+	pub bounds: Rectangle,
 }
 
 impl<Message> overlay::Overlay<Message, Theme, Renderer> for MenuOverlay<'_, '_, Message> {
 	fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
+		let size = Size::new(self.bounds.x, self.bounds.y);
 		let mut layout = self
 			.content
 			.as_widget_mut()
 			.layout(
 				self.tree,
 				renderer,
-				&Limits::new(
-					Size::ZERO,
-					Size::new(self.position.x, self.position.y)
-						.max(bounds - Size::new(self.position.x, self.position.y)),
-				),
+				&Limits::new(Size::ZERO, size.max(bounds - size + self.bounds.size())),
 			)
-			.move_to(self.position);
+			.move_to(self.bounds.position());
 
 		if bounds.width < layout.bounds().x + layout.bounds().width {
-			layout.translate_mut(Vector::new(-layout.bounds().width, 0.0));
+			layout.translate_mut(Vector::new(self.bounds.width - layout.bounds().width, 0.0));
 		}
 
 		if bounds.height < layout.bounds().y + layout.bounds().height {
-			layout.translate_mut(Vector::new(0.0, -layout.bounds().height));
+			layout.translate_mut(Vector::new(
+				0.0,
+				self.bounds.height - layout.bounds().height,
+			));
 		}
 
 		layout

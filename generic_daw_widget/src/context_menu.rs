@@ -1,4 +1,4 @@
-use crate::menu_overlay::MenuOverlay;
+use crate::{LazyElement, menu_overlay::MenuOverlay};
 use iced_widget::{
 	Renderer, Theme,
 	core::{
@@ -17,17 +17,17 @@ struct State {
 
 pub struct ContextMenu<'a, Message> {
 	content: Element<'a, Message, Theme, Renderer>,
-	context_menu: Element<'a, Message, Theme, Renderer>,
+	context_menu: LazyElement<'a, Message, Theme, Renderer>,
 }
 
 impl<'a, Message> ContextMenu<'a, Message> {
 	pub fn new(
 		content: impl Into<Element<'a, Message, Theme, Renderer>>,
-		context_menu: impl Into<Element<'a, Message, Theme, Renderer>>,
+		context_menu: impl Fn() -> Element<'a, Message, Theme, Renderer> + 'a,
 	) -> Self {
 		Self {
 			content: content.into(),
-			context_menu: context_menu.into(),
+			context_menu: LazyElement::new(Box::new(context_menu)),
 		}
 	}
 }
@@ -73,7 +73,11 @@ impl<Message> Widget<Message, Theme, Renderer> for ContextMenu<'_, Message> {
 	}
 
 	fn diff(&mut self, tree: &mut Tree) {
-		tree.diff_children(&mut [&mut self.content, &mut self.context_menu]);
+		if tree.state.downcast_ref::<State>().position.is_some() {
+			tree.diff_children(&mut [&mut self.content, &mut self.context_menu]);
+		} else {
+			tree.diff_children(&mut [&mut self.content]);
+		}
 	}
 
 	fn operate(
@@ -117,11 +121,17 @@ impl<Message> Widget<Message, Theme, Renderer> for ContextMenu<'_, Message> {
 			..
 		}) = event && let Some(position) = cursor.position()
 			&& layout.bounds().contains(position)
-			&& !self.context_menu.as_widget().is_void()
 		{
 			tree.state.downcast_mut::<State>().position = Some(position);
 			shell.capture_event();
 			shell.request_redraw();
+
+			if tree.children.len() == 1 {
+				tree.children.push(Tree::new(&*self.context_menu));
+			}
+			self.context_menu
+				.as_widget_mut()
+				.diff(&mut tree.children[1]);
 		}
 	}
 
@@ -152,28 +162,36 @@ impl<Message> Widget<Message, Theme, Renderer> for ContextMenu<'_, Message> {
 	) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
 		let state = tree.state.downcast_mut::<State>();
 
+		let Some(position) = state.position else {
+			return self.content.as_widget_mut().overlay(
+				&mut tree.children[0],
+				layout,
+				renderer,
+				viewport,
+				translation,
+			);
+		};
+
 		let [first, second] = &mut *tree.children else {
 			unreachable!();
 		};
 
-		let children = [
+		let context_menu = overlay::Element::new(Box::new(MenuOverlay {
+			content: &mut self.context_menu,
+			tree: second,
+			state: &mut state.position,
+			bounds: Rectangle::new(position + translation, Size::ZERO),
+		}));
+
+		let Some(content_overlay) =
 			self.content
 				.as_widget_mut()
-				.overlay(first, layout, renderer, viewport, translation),
-			state.position.map(|position| {
-				overlay::Element::new(Box::new(MenuOverlay {
-					content: &mut self.context_menu,
-					tree: second,
-					state: &mut state.position,
-					position: position + translation,
-				}))
-			}),
-		]
-		.into_iter()
-		.flatten()
-		.collect::<Vec<_>>();
+				.overlay(first, layout, renderer, viewport, translation)
+		else {
+			return Some(context_menu);
+		};
 
-		(!children.is_empty()).then(|| overlay::Group::with_children(children).overlay())
+		Some(overlay::Group::with_children(vec![content_overlay, context_menu]).overlay())
 	}
 }
 

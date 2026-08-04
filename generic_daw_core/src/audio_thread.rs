@@ -14,6 +14,8 @@ use clap_host::{
 };
 use dsp::resample_cubic;
 use log::{trace, warn};
+use midir::MidiOutputConnection;
+use midly::num::{u4, u7};
 use rtrb::{Consumer, Producer, PushError};
 use std::{
 	collections::HashMap,
@@ -63,6 +65,28 @@ pub enum Message {
 
 const _: () = assert!(size_of::<Message>() == 64);
 
+#[derive(Clone, Copy, Debug)]
+pub enum MidiAction {
+	NoteOn(u4, u7, u7),
+	NoteOff(u4, u7, u7),
+}
+
+impl MidiAction {
+	#[must_use]
+	pub fn channel(self) -> u4 {
+		match self {
+			Self::NoteOn(channel, _, _) | Self::NoteOff(channel, _, _) => channel,
+		}
+	}
+
+	#[must_use]
+	pub fn key(self) -> u7 {
+		match self {
+			Self::NoteOn(_, key, _) | Self::NoteOff(_, key, _) => key,
+		}
+	}
+}
+
 #[derive(Debug)]
 pub enum NodeAction {
 	ClipAdd(Box<Clip>),
@@ -82,11 +106,11 @@ pub enum NodeAction {
 	ClipReverse(ClipId),
 	ClipSlipTo(ClipId, BeatTime),
 
-	InputStart(Producer<[f32; 2]>, Channels),
-	InputChangeChannels(Channels),
-	InputStop,
+	InputSetChannels(Channels),
+	InputSetAudioRecording(Option<Producer<[f32; 2]>>),
+	InputSetMidiRecording(Option<Producer<MidiAction>>),
 
-	OutputChangeChannels(Option<Channels>),
+	OutputSetChannels(Channels),
 
 	ChannelToggleEnabled,
 	ChannelToggleBypassed,
@@ -116,7 +140,9 @@ pub enum MidiPatternAction {
 #[derive(Clone, Copy, Debug)]
 pub enum Update {
 	Recorded(usize),
-	Interrupted(Option<NodeId>, SecondsTime),
+	Interrupted(SecondsTime),
+	AudioInterrupted(NodeId),
+	MidiInterrupted(NodeId),
 	Load(Duration, usize),
 	Peaks(NodeId, [f32; 2]),
 	Polyphony(NodeId, usize),
@@ -221,7 +247,19 @@ pub struct State {
 	pub samples: HashMap<SampleId, Sample>,
 	pub midi_patterns: HashMap<MidiPatternId, MidiPattern>,
 	pub render_mode: RenderMode,
-	pub input: Box<[f32]>,
+	pub audio_input: Box<[f32]>,
+	pub midi_input: Vec<MidiAction>,
+	pub playing: HashMap<(u4, u7), u7>,
+}
+
+impl State {
+	fn reset(&mut self) {
+		self.midi_input.extend(
+			self.playing
+				.drain()
+				.map(|((channel, key), velocity)| MidiAction::NoteOff(channel, key, velocity)),
+		);
+	}
 }
 
 #[derive(Debug)]
@@ -276,7 +314,7 @@ impl AudioThread {
 	) -> (Self, NodeId, Transport) {
 		let transport = Transport::new(input_channels, output_channels, sample_rate, frames);
 
-		let master_channel = Channel::new(Some(Channels::base(output_channels)));
+		let master_channel = Channel::new(Channels::base(output_channels.get()).enable_audio(true));
 		let master = master_channel.id();
 
 		let mut audio_graph = AudioGraph::new(
@@ -285,7 +323,9 @@ impl AudioThread {
 				samples: HashMap::new(),
 				midi_patterns: HashMap::new(),
 				render_mode: RenderMode::Realtime,
-				input: boxed_slice![0.0; usize::from(input_channels) * frames.get() as usize],
+				audio_input: boxed_slice![0.0; usize::from(input_channels) * frames.get() as usize],
+				midi_input: Vec::with_capacity(3 * 128),
+				playing: HashMap::with_capacity(16 * 128),
 			},
 			transport.frames,
 		);
@@ -317,7 +357,7 @@ impl AudioThread {
 		}
 
 		if self.transport().input_channels != input_channels || self.transport().frames != frames {
-			self.state_mut().input =
+			self.state_mut().audio_input =
 				boxed_slice![0.0; usize::from(input_channels) * frames.get() as usize];
 		}
 
@@ -381,23 +421,26 @@ impl AudioThread {
 				Message::NodeDisconnect(from, to) => self.audio_graph.disconnect(from, to),
 				Message::NodeToggleKind(node) => self
 					.audio_graph
-					.for_node_mut(node, |node, _| node.toggle_kind()),
+					.for_node_mut(node, |node, state| node.toggle_kind(&state.transport)),
 				Message::Bpm(bpm) => self.transport_mut().bpm = bpm,
 				Message::Numerator(numerator) => self.transport_mut().numerator = numerator,
 				Message::TogglePlayback => {
 					self.transport_mut().playing ^= true;
 					self.updates
-						.push(Update::Interrupted(None, self.transport().position));
+						.push(Update::Interrupted(self.transport().position));
 				}
 				Message::ToggleMetronome => self.transport_mut().metronome ^= true,
 				Message::Position(version, position) => {
 					self.transport_mut().version = version;
 					self.transport_mut().position = position;
 					self.updates
-						.push(Update::Interrupted(None, self.transport().position));
+						.push(Update::Interrupted(self.transport().position));
 				}
 				Message::LoopRange(loop_range) => self.transport_mut().loop_range = loop_range,
-				Message::Reset => self.audio_graph.reset(),
+				Message::Reset => {
+					self.audio_graph.reset();
+					self.state_mut().reset();
+				}
 				Message::RequestUpdate => self.needs_update = true,
 				Message::ReturnUpdate(update) => {
 					debug_assert!(update.is_empty());
@@ -412,15 +455,39 @@ impl AudioThread {
 
 	fn process(
 		&mut self,
-		mut input: &[f32],
-		mut output: &mut [f32],
+		midi_input: &[MidiAction],
+		mut midi_output: Option<&mut MidiOutputConnection>,
+		mut audio_input: &[f32],
+		mut audio_output: &mut [f32],
 	) -> Option<(oneshot::Sender<Self>, oneshot::Receiver<Self>)> {
 		let start = Instant::now();
-		let frames = output.len() / usize::from(self.transport().output_channels.get());
+		let frames = audio_output.len() / usize::from(self.transport().output_channels.get());
 
 		let acc = self
 			.updates
 			.pop_if(|update| matches!(update, Update::Load(..)));
+
+		self.state_mut().midi_input.clear();
+		for &action in midi_input {
+			trace!("{action:?}");
+
+			if let Some(velocity) = match action {
+				MidiAction::NoteOn(channel, key, velocity) => {
+					self.state_mut().playing.insert((channel, key), velocity)
+				}
+				MidiAction::NoteOff(channel, key, _) => {
+					self.state_mut().playing.remove(&(channel, key))
+				}
+			} {
+				self.state_mut().midi_input.push(MidiAction::NoteOff(
+					action.channel(),
+					action.key(),
+					velocity,
+				));
+			}
+
+			self.state_mut().midi_input.push(action);
+		}
 
 		if let Some((sender, receiver)) = self.recv_events() {
 			return Some((sender, receiver));
@@ -432,48 +499,71 @@ impl AudioThread {
 			self.updates = updates;
 		}
 
-		while !output.is_empty() {
+		while !audio_output.is_empty() {
 			let (looped, frames) = if self.transport().playing
 				&& let Some(loop_range) = self.transport().loop_range
 				&& let end = loop_range.end().to_seconds_time(self.transport())
 				&& let Some(len) = end.checked_sub(self.transport().position)
 				&& let len = len.to_frames(self.transport())
-				&& len <= output.len() / usize::from(self.transport().output_channels.get())
+				&& len <= audio_output.len() / usize::from(self.transport().output_channels.get())
 			{
 				(Some(loop_range.start()), len)
 			} else {
 				(
 					None,
-					output.len() / usize::from(self.transport().output_channels.get()),
+					audio_output.len() / usize::from(self.transport().output_channels.get()),
 				)
 			};
 
 			let in_len = usize::from(self.transport().input_channels) * frames;
 			let out_len = usize::from(self.transport().output_channels.get()) * frames;
 
-			self.state_mut().input[..in_len].copy_from_slice(&input[..in_len]);
+			self.state_mut().audio_input[..in_len].copy_from_slice(&audio_input[..in_len]);
 			self.audio_graph.process_all(frames);
 			self.metronome();
 
 			let output_channels = self.transport().output_channels;
-			self.audio_graph.for_each_node(|node, buf| {
-				let Some(channels) = node.output() else {
-					return;
-				};
+			self.audio_graph.for_each_node(|node, audio, events| {
+				let channels = node.output();
 
-				if !channels.fits_in(output_channels.get()) {
-					return;
+				if channels.enable_midi
+					&& channels.midi != 0
+					&& let Some(midi_output) = &mut midi_output
+				{
+					'events: for &event in events {
+						for channel in 0..16 {
+							if channels.midi & (1 << channel) != 0 {
+								let buf = match event {
+									Event::On { key, velocity, .. } => [
+										0x90 | channel,
+										key,
+										(velocity * 127.0).round().max(1.0) as u8,
+									],
+									Event::Off { key, velocity, .. } => {
+										[0x80 | channel, key, (velocity * 127.0).round() as u8]
+									}
+									Event::ParamValue { .. } => continue 'events,
+								};
+
+								if let Err(err) = midi_output.send(&buf) {
+									warn!("{err}");
+								}
+							}
+						}
+					}
 				}
 
-				for (frame, &[l, r]) in output[..out_len]
-					.chunks_mut(output_channels.get().into())
-					.zip(buf)
-				{
-					if channels.left == channels.right {
-						frame[usize::from(channels.left)] += (l + r) / 2.0;
-					} else {
-						frame[usize::from(channels.left)] += l;
-						frame[usize::from(channels.right)] += r;
+				if channels.enable_audio && channels.fits_in(output_channels.get()) {
+					for (frame, &[l, r]) in audio_output[..out_len]
+						.chunks_mut(output_channels.get().into())
+						.zip(audio)
+					{
+						if channels.left == channels.right {
+							frame[usize::from(channels.left)] += (l + r) / 2.0;
+						} else {
+							frame[usize::from(channels.left)] += l;
+							frame[usize::from(channels.right)] += r;
+						}
 					}
 				}
 			});
@@ -489,12 +579,12 @@ impl AudioThread {
 				self.updates.push(Update::Recorded(frames));
 				if looped.is_some() {
 					self.updates
-						.push(Update::Interrupted(None, self.transport().position));
+						.push(Update::Interrupted(self.transport().position));
 				}
 			}
 
-			input = &input[in_len..];
-			output = &mut output[out_len..];
+			audio_input = &audio_input[in_len..];
+			audio_output = &mut audio_output[out_len..];
 		}
 
 		self.audio_graph
@@ -685,10 +775,21 @@ pub enum AudioCallback {
 }
 
 impl AudioCallback {
-	pub fn process(&mut self, input: &[f32], output: &mut [f32]) {
+	pub fn process(
+		&mut self,
+		midi_input: &[MidiAction],
+		mut midi_output: Option<&mut MidiOutputConnection>,
+		audio_input: &[f32],
+		audio_output: &mut [f32],
+	) {
 		match self {
 			Self::Processing(processor) => {
-				if let Some((sender, receiver)) = processor.process(input, output) {
+				if let Some((sender, receiver)) = processor.process(
+					midi_input,
+					midi_output.as_deref_mut(),
+					audio_input,
+					audio_output,
+				) {
 					let Self::Processing(processor) = std::mem::replace(self, Self::Away(receiver))
 					else {
 						unreachable!();
@@ -696,9 +797,9 @@ impl AudioCallback {
 
 					sender.send(processor).unwrap();
 
-					self.process(input, output);
+					self.process(midi_input, midi_output, audio_input, audio_output);
 				} else {
-					for s in output {
+					for s in audio_output {
 						*s = s.clamp(-1.0, 1.0);
 					}
 				}
@@ -707,7 +808,7 @@ impl AudioCallback {
 				if let Ok(processor) = receiver.try_recv() {
 					*self = Self::Processing(processor);
 
-					self.process(input, output);
+					self.process(midi_input, midi_output, audio_input, audio_output);
 				}
 			}
 		}

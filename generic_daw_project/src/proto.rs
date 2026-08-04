@@ -87,6 +87,12 @@ pub struct Channels {
 	pub left: u32,
 	#[prost(uint32)]
 	pub right: u32,
+	#[prost(uint32)]
+	pub midi: u32,
+	#[prost(bool, default = false)]
+	pub enable_audio: bool,
+	#[prost(bool, default = false)]
+	pub enable_midi: bool,
 }
 
 #[derive(Clone, Message)]
@@ -245,7 +251,7 @@ pub struct Transition {
 	pub len: u64,
 	#[prost(message, required)]
 	pub p: Point,
-	#[prost(bool)]
+	#[prost(bool, default = false)]
 	pub symmetric: bool,
 }
 

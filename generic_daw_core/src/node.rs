@@ -1,5 +1,5 @@
 use crate::{
-	Channel, Channels, Event, NodeAction, NodeImpl, Track, Update,
+	Channel, Channels, Event, NodeAction, NodeImpl, Track, Transport, Update,
 	audio_thread::{Inject, Scratch, State},
 };
 use audio_graph::{Injector, NodeId};
@@ -10,6 +10,7 @@ use utils::boxed_slice;
 pub enum Node {
 	Channel(Channel),
 	Track(Track),
+	None,
 }
 
 impl NodeImpl for Node {
@@ -36,6 +37,7 @@ impl NodeImpl for Node {
 		match self {
 			Self::Channel(node) => node.process(state, audio, events, scratch, injector),
 			Self::Track(node) => node.process(state, audio, events, scratch, injector),
+			Self::None => unreachable!(),
 		}
 	}
 
@@ -43,6 +45,7 @@ impl NodeImpl for Node {
 		match self {
 			Self::Channel(node) => node.id(),
 			Self::Track(node) => node.id(),
+			Self::None => unreachable!(),
 		}
 	}
 
@@ -50,6 +53,7 @@ impl NodeImpl for Node {
 		match self {
 			Self::Channel(node) => node.reset(),
 			Self::Track(node) => node.reset(),
+			Self::None => unreachable!(),
 		}
 	}
 }
@@ -59,24 +63,27 @@ impl Node {
 		match self {
 			Self::Channel(node) => node.apply(action),
 			Self::Track(node) => node.apply(action, state),
+			Self::None => unreachable!(),
 		}
 	}
 
-	pub fn toggle_kind(&mut self) {
-		match self {
-			Self::Channel(node) => {
-				*self = Self::Track(Track::from_channel(std::mem::take(node)));
-			}
-			Self::Track(node) => {
-				*self = Self::Channel(Track::into_channel(std::mem::take(node)));
-			}
-		}
+	pub fn toggle_kind(&mut self, transport: &Transport) {
+		let this = std::mem::replace(self, Self::None);
+		*self = match this {
+			Self::Channel(node) => Self::Track(Track::from_channel(
+				Channels::base(transport.input_channels),
+				node,
+			)),
+			Self::Track(node) => Self::Channel(Track::into_channel(node)),
+			Self::None => unreachable!(),
+		};
 	}
 
 	pub fn collect_updates(&mut self, updates: &mut Vec<Update>) {
 		match self {
 			Self::Channel(node) => node.collect_updates(updates),
 			Self::Track(node) => node.collect_updates(updates),
+			Self::None => unreachable!(),
 		}
 	}
 
@@ -84,14 +91,16 @@ impl Node {
 		match self {
 			Self::Channel(node) => node.clear_updates(),
 			Self::Track(node) => node.clear_updates(),
+			Self::None => unreachable!(),
 		}
 	}
 
 	#[must_use]
-	pub fn output(&self) -> Option<Channels> {
+	pub fn output(&self) -> Channels {
 		match self {
 			Self::Channel(node) => node.output(),
 			Self::Track(node) => node.output(),
+			Self::None => unreachable!(),
 		}
 	}
 
@@ -99,6 +108,7 @@ impl Node {
 		match self {
 			Self::Channel(node) => node.restart_all_plugins(),
 			Self::Track(node) => node.restart_all_plugins(),
+			Self::None => unreachable!(),
 		}
 	}
 }

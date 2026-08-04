@@ -289,7 +289,10 @@ impl<'a, Message: 'a> Widget<Message, Theme, Renderer> for Playlist<'a, Message>
 									inner.clip.position.end(),
 									inner.index,
 								),
-								clip::Inner::Recording(..) => return,
+								clip::Inner::AudioRecording(..)
+								| clip::Inner::MidiRecording(..) => {
+									return;
+								}
 							};
 
 							if (start_track..=end_track).contains(&index.0)

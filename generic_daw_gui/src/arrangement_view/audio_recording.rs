@@ -5,7 +5,7 @@ use std::{fs::File, io::BufWriter, num::NonZero, path::Path, sync::Arc};
 use utils::NoDebug;
 
 #[derive(Debug)]
-pub struct Recording {
+pub struct AudioRecording {
 	pub writer: NoDebug<WavWriter<BufWriter<File>>>,
 	pub samples: Vec<[f32; 2]>,
 	pub lods: LodsBuilder,
@@ -14,7 +14,7 @@ pub struct Recording {
 	pub path: Arc<Path>,
 }
 
-impl Recording {
+impl AudioRecording {
 	pub fn new(path: Arc<Path>, transport: &Transport) -> Self {
 		let name = path.file_name().unwrap().to_str().unwrap().into();
 

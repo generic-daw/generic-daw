@@ -1,6 +1,6 @@
 use crate::{
 	DeviceDescription, DeviceId, HostId, Stream,
-	audio_thread::{AudioCallback, AudioThread},
+	audio_thread::{AudioCallback, AudioThread, MidiAction},
 };
 use cpal::{
 	BufferSize, Device, FromSample, I24, InputCallbackInfo, OutputCallbackInfo, Sample,
@@ -8,8 +8,15 @@ use cpal::{
 	traits::{DeviceTrait as _, HostTrait as _, StreamTrait as _},
 };
 use log::{error, warn};
+use midir::{Ignore, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
+use midly::{MidiMessage, live::LiveEvent};
 use rtrb::{Consumer, Producer, RingBuffer};
-use std::{collections::HashMap, num::NonZero, sync::LazyLock};
+use std::{
+	collections::HashMap,
+	mem::MaybeUninit,
+	num::NonZero,
+	sync::{Arc, LazyLock},
+};
 use utils::boxed_slice;
 
 pub static DEFAULT_HOST: LazyLock<HostId> = LazyLock::new(|| cpal::default_host().id());
@@ -18,14 +25,20 @@ pub static DEFAULT_HOST: LazyLock<HostId> = LazyLock::new(|| cpal::default_host(
 pub struct Channels {
 	pub left: u16,
 	pub right: u16,
+	pub midi: u16,
+	pub enable_audio: bool,
+	pub enable_midi: bool,
 }
 
 impl Channels {
 	#[must_use]
-	pub fn base(channels: NonZero<u16>) -> Self {
+	pub fn base(channels: u16) -> Self {
 		Self {
 			left: 0,
-			right: channels.get().min(2) - 1,
+			right: channels.clamp(1, 2) - 1,
+			midi: 0,
+			enable_audio: false,
+			enable_midi: false,
 		}
 	}
 
@@ -42,6 +55,27 @@ impl Channels {
 	#[must_use]
 	pub fn right(self, right: u16) -> Self {
 		Self { right, ..self }
+	}
+
+	#[must_use]
+	pub fn midi(self, midi: u16) -> Self {
+		Self { midi, ..self }
+	}
+
+	#[must_use]
+	pub fn enable_audio(self, enable_audio: bool) -> Self {
+		Self {
+			enable_audio,
+			..self
+		}
+	}
+
+	#[must_use]
+	pub fn enable_midi(self, enable_midi: bool) -> Self {
+		Self {
+			enable_midi,
+			..self
+		}
 	}
 }
 
@@ -101,19 +135,42 @@ pub fn get_devices() -> HashMap<DeviceId, DeviceDescription> {
 		.collect()
 }
 
-pub fn build_audio_streams(
+#[must_use]
+pub fn get_input_ports() -> HashMap<Arc<str>, Arc<str>> {
+	MidiInput::new("Generic DAW")
+		.into_iter()
+		.flat_map(|input| {
+			input.ports().into_iter().filter_map(move |port| {
+				Some((port.id().into(), input.port_name(&port).ok()?.into()))
+			})
+		})
+		.collect()
+}
+
+#[must_use]
+pub fn get_output_ports() -> HashMap<Arc<str>, Arc<str>> {
+	MidiOutput::new("Generic DAW")
+		.into_iter()
+		.flat_map(|input| {
+			input.ports().into_iter().filter_map(move |port| {
+				Some((port.id().into(), input.port_name(&port).ok()?.into()))
+			})
+		})
+		.collect()
+}
+
+pub fn build_streams(
 	devices: &Devices,
+	input_port: Option<&str>,
+	output_port: Option<&str>,
 	sample_rate: Option<NonZero<u32>>,
 	frames: Option<NonZero<u32>>,
 	receiver: oneshot::Receiver<AudioThread>,
-) -> (
-	Option<Stream>,
-	Stream,
-	u16,
-	NonZero<u16>,
-	NonZero<u32>,
-	NonZero<u32>,
-) {
+) -> (Stream, u16, NonZero<u16>, NonZero<u32>, NonZero<u32>) {
+	let (midi_input_connection, midi_consumer) = build_midi_input_connection(input_port);
+
+	let midi_output_connection = build_midi_output_connection(output_port);
+
 	let host = devices
 		.host()
 		.and_then(|host| cpal::host_from_id(host).ok())
@@ -136,27 +193,26 @@ pub fn build_audio_streams(
 		.or_else(|| NonZero::new(output_device.default_output_config().unwrap().sample_rate()))
 		.unwrap();
 
-	let (input_stream, input_channels, consumer) =
-		build_input_stream(input_device.as_ref(), sample_rate, frames);
+	let (audio_input_stream, input_channels, audio_consumer) =
+		build_audio_input_stream(input_device.as_ref(), sample_rate, frames);
 
-	let (output_stream, output_channels) = build_output_stream(
+	let (audio_output_stream, output_channels) = build_audio_output_stream(
 		&output_device,
 		sample_rate,
 		frames,
 		input_channels,
-		receiver,
-		consumer,
+		AudioCallback::Away(receiver),
+		midi_input_connection,
+		midi_output_connection,
+		midi_consumer,
+		audio_input_stream,
+		audio_consumer,
 	);
 
-	if let Some(input_stream) = &input_stream {
-		input_stream.play().unwrap();
-	}
-
-	output_stream.play().unwrap();
+	audio_output_stream.play().unwrap();
 
 	(
-		input_stream,
-		output_stream,
+		audio_output_stream,
 		input_channels,
 		output_channels,
 		sample_rate,
@@ -164,12 +220,87 @@ pub fn build_audio_streams(
 	)
 }
 
-pub fn build_input_stream(
+fn build_midi_input_connection(
+	port: Option<&str>,
+) -> (Option<MidiInputConnection<()>>, Consumer<MidiAction>) {
+	fn build_midi_input_connection(
+		port: Option<&str>,
+	) -> Option<(MidiInputConnection<()>, Consumer<MidiAction>)> {
+		let port = port?;
+
+		let mut input = MidiInput::new("Generic DAW").ok()?;
+		let port = input.find_port_by_id(port)?;
+
+		input.ignore(Ignore::All);
+
+		let (producer, consumer) = RingBuffer::new(256);
+
+		Some((
+			input
+				.connect(
+					&port,
+					"Generic DAW",
+					build_midi_input_callback(producer),
+					(),
+				)
+				.inspect_err(|err| warn!("{err}"))
+				.ok()?,
+			consumer,
+		))
+	}
+
+	let Some((stream, consumer)) = build_midi_input_connection(port) else {
+		return (None, RingBuffer::new(0).1);
+	};
+
+	(Some(stream), consumer)
+}
+
+fn build_midi_input_callback(
+	mut producer: Producer<MidiAction>,
+) -> impl FnMut(u64, &[u8], &mut ()) {
+	move |_, raw, ()| {
+		let Ok(event) = LiveEvent::parse(raw).inspect_err(|err| warn!("{err}")) else {
+			return;
+		};
+
+		let event = match event {
+			LiveEvent::Midi {
+				channel,
+				message: MidiMessage::NoteOn { key, vel },
+			} if vel != 0 => MidiAction::NoteOn(channel, key, vel),
+			LiveEvent::Midi {
+				channel,
+				message: MidiMessage::NoteOff { key, vel } | MidiMessage::NoteOn { key, vel },
+			} => MidiAction::NoteOff(channel, key, vel),
+			_ => return,
+		};
+
+		if producer.push(event).is_err() {
+			warn!("full ring buffer");
+		}
+	}
+}
+
+fn build_midi_output_connection(port: Option<&str>) -> Option<MidiOutputConnection> {
+	let port = port?;
+
+	let input = MidiOutput::new("Generic DAW").ok()?;
+
+	let port = input.find_port_by_id(port)?;
+
+	input
+		.connect(&port, "Generic DAW")
+		.inspect_err(|err| warn!("{err}"))
+		.ok()
+}
+
+fn build_audio_input_stream(
 	device: Option<&Device>,
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
 ) -> (Option<Stream>, u16, Consumer<f32>) {
-	pub fn build_input_stream(
+	fn build_audio_input_stream(
 		device: Option<&Device>,
 		sample_rate: NonZero<u32>,
 		frames: Option<NonZero<u32>>,
@@ -194,13 +325,13 @@ pub fn build_input_stream(
 		let (producer, consumer) =
 			RingBuffer::new(usize::from(channels.get()) * sample_rate.get() as usize);
 
-		macro_rules! build_input_stream {
+		macro_rules! build_audio_input_stream {
 			($($pat:pat => $ty:ty),*$(,)?) => {
 				match device.default_input_config()?.sample_format() {
 					$(
 						$pat => device.build_input_stream(
 							config,
-							build_input_callback::<$ty>(frames.or(NonZero::new(2048)).unwrap(), channels, producer),
+							build_audio_input_callback::<$ty>(frames.or(NonZero::new(2048)).unwrap(), channels, producer),
 							|err| error!("{err}"),
 							None,
 						)?,
@@ -211,7 +342,7 @@ pub fn build_input_stream(
 		}
 
 		Ok((
-			build_input_stream! {
+			build_audio_input_stream! {
 				SampleFormat::I8 => i8,
 				SampleFormat::I16 => i16,
 				SampleFormat::I24 => I24,
@@ -230,7 +361,7 @@ pub fn build_input_stream(
 		))
 	}
 
-	let Ok((stream, channels, consumer)) = build_input_stream(device, sample_rate, frames)
+	let Ok((stream, channels, consumer)) = build_audio_input_stream(device, sample_rate, frames)
 		.inspect_err(|err| _ = err.as_ref().inspect(|err| warn!("{err}")))
 	else {
 		return (None, 0, RingBuffer::new(0).1);
@@ -239,7 +370,7 @@ pub fn build_input_stream(
 	(Some(stream), channels.get(), consumer)
 }
 
-fn build_input_callback<T: Sample>(
+fn build_audio_input_callback<T: Sample>(
 	frames: NonZero<u32>,
 	channels: NonZero<u16>,
 	mut producer: Producer<f32>,
@@ -248,14 +379,14 @@ where
 	f32: FromSample<T>,
 {
 	let chunk_size = NonZero::new(frames.get() * u32::from(channels.get())).unwrap();
-	let mut input = boxed_slice![0.0; chunk_size.get() as usize];
+	let mut audio_in = boxed_slice![0.0; chunk_size.get() as usize];
 	move |buf, _| {
 		for buf in buf.chunks(chunk_size.get() as usize) {
-			for (buf, input) in buf.iter().zip(&mut input[..buf.len()]) {
+			for (buf, input) in buf.iter().zip(&mut audio_in[..buf.len()]) {
 				*input = f32::from_sample(*buf);
 			}
 
-			if let (_, rest) = producer.push_partial_slice(&input[..buf.len()])
+			if let (_, rest) = producer.push_partial_slice(&audio_in[..buf.len()])
 				&& !rest.is_empty()
 			{
 				warn!("full ring buffer");
@@ -264,13 +395,17 @@ where
 	}
 }
 
-pub fn build_output_stream(
+fn build_audio_output_stream(
 	device: &Device,
 	sample_rate: NonZero<u32>,
 	frames: Option<NonZero<u32>>,
 	input_channels: u16,
-	receiver: oneshot::Receiver<AudioThread>,
-	consumer: Consumer<f32>,
+	processor: AudioCallback,
+	midi_input: Option<MidiInputConnection<()>>,
+	midi_output: Option<MidiOutputConnection>,
+	midi_consumer: Consumer<MidiAction>,
+	audio_input: Option<Stream>,
+	audio_consumer: Consumer<f32>,
 ) -> (Stream, NonZero<u16>) {
 	let channels = device
 		.supported_output_configs()
@@ -288,13 +423,13 @@ pub fn build_output_stream(
 		}),
 	};
 
-	macro_rules! build_output_stream {
+	macro_rules! build_audio_output_stream {
 		($($pat:pat => $ty:ty),*$(,)?) => {
 			match device.default_output_config().unwrap().sample_format() {
 				$(
 					$pat => device.build_output_stream(
 						config,
-						build_output_callback::<$ty>(frames.or(NonZero::new(2048)).unwrap(), input_channels, channels, consumer, AudioCallback::Away(receiver)),
+						build_audio_output_callback::<$ty>(frames.or(NonZero::new(2048)).unwrap(), input_channels, channels, midi_input, midi_output, midi_consumer, audio_input, audio_consumer, processor),
 						|err| error!("{err}"),
 						None,
 					).unwrap(),
@@ -305,7 +440,7 @@ pub fn build_output_stream(
 	}
 
 	(
-		build_output_stream! {
+		build_audio_output_stream! {
 			SampleFormat::I8 => i8,
 			SampleFormat::I16 => i16,
 			SampleFormat::I24 => I24,
@@ -323,23 +458,37 @@ pub fn build_output_stream(
 	)
 }
 
-fn build_output_callback<T: Sample + FromSample<f32>>(
+fn build_audio_output_callback<T: Sample + FromSample<f32>>(
 	frames: NonZero<u32>,
 	input_channels: u16,
 	output_channels: NonZero<u16>,
-	mut consumer: Consumer<f32>,
+	midi_input: Option<MidiInputConnection<()>>,
+	mut midi_output: Option<MidiOutputConnection>,
+	mut midi_consumer: Consumer<MidiAction>,
+	mut audio_input: Option<Stream>,
+	mut audio_consumer: Consumer<f32>,
 	mut processor: AudioCallback,
 ) -> impl FnMut(&mut [T], &OutputCallbackInfo) {
 	let chunk_size = NonZero::new(frames.get() * u32::from(output_channels.get())).unwrap();
-	let mut input = boxed_slice![0.0; frames.get() as usize * usize::from(input_channels)];
-	let mut output = boxed_slice![0.0; chunk_size.get() as usize];
+	let mut midi_in = boxed_slice![MaybeUninit::uninit(); midi_consumer.buffer().capacity()];
+	let mut audio_in = boxed_slice![0.0; frames.get() as usize * usize::from(input_channels)];
+	let mut audio_out = boxed_slice![0.0; chunk_size.get() as usize];
 	let mut warn = false;
+
+	if let Some(audio_input) = &mut audio_input {
+		audio_input.play().unwrap();
+	}
+
 	move |buf, _| {
 		for buf in buf.chunks_mut(chunk_size.get() as usize) {
 			let frames = buf.len() / usize::from(output_channels.get());
 			let input_len = frames * usize::from(input_channels);
 
-			if let (_, rest) = consumer.pop_partial_slice(&mut input[..input_len])
+			midi_input.as_ref();
+			let midi_input = midi_consumer.pop_partial_slice_uninit(&mut midi_in).0;
+
+			audio_input.as_ref();
+			if let (_, rest) = audio_consumer.pop_partial_slice(&mut audio_in[..input_len])
 				&& !rest.is_empty()
 			{
 				if warn {
@@ -351,11 +500,16 @@ fn build_output_callback<T: Sample + FromSample<f32>>(
 				warn = true;
 			}
 
-			output[..buf.len()].fill(0.0);
+			audio_out[..buf.len()].fill(0.0);
 
-			processor.process(&input[..input_len], &mut output[..buf.len()]);
+			processor.process(
+				midi_input,
+				midi_output.as_mut(),
+				&audio_in[..input_len],
+				&mut audio_out[..buf.len()],
+			);
 
-			for (output, buf) in output[..buf.len()].iter().zip(buf) {
+			for (output, buf) in audio_out[..buf.len()].iter().zip(buf) {
 				*buf = T::from_sample(*output);
 			}
 		}

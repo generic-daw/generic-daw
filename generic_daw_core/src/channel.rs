@@ -43,17 +43,23 @@ pub struct Channel {
 	utility: Utility,
 	enabled: bool,
 	bypassed: bool,
-	output: Option<Channels>,
+	output: Channels,
 	last_peaks: [f32; 2],
 	updates: Vec<Update>,
 }
 
 impl Channel {
 	#[must_use]
-	pub fn new(output: Option<Channels>) -> Self {
+	pub fn new(output: Channels) -> Self {
 		Self {
+			plugins: Vec::new(),
+			id: NodeId::unique(),
+			utility: Utility::default(),
+			enabled: true,
+			bypassed: false,
 			output,
-			..Self::default()
+			last_peaks: [0.0; 2],
+			updates: Vec::new(),
 		}
 	}
 
@@ -154,7 +160,7 @@ impl Channel {
 
 	pub fn apply(&mut self, action: NodeAction) {
 		match action {
-			NodeAction::OutputChangeChannels(output) => self.output = output,
+			NodeAction::OutputSetChannels(output) => self.output = output,
 			NodeAction::ChannelToggleEnabled => self.enabled ^= true,
 			NodeAction::ChannelToggleBypassed => self.bypassed ^= true,
 			NodeAction::ChannelVolumeChanged(volume) => self.utility.volume = volume,
@@ -203,8 +209,8 @@ impl Channel {
 	}
 
 	#[must_use]
-	pub fn output(&self) -> Option<Channels> {
-		self.output.filter(|_| self.enabled)
+	pub fn output(&self) -> Channels {
+		self.output
 	}
 
 	pub fn restart_all_plugins(&mut self) {
@@ -212,21 +218,6 @@ impl Channel {
 			if let Some(processor) = plugin.processor.take() {
 				processor.restart();
 			}
-		}
-	}
-}
-
-impl Default for Channel {
-	fn default() -> Self {
-		Self {
-			plugins: Vec::new(),
-			id: NodeId::unique(),
-			utility: Utility::default(),
-			enabled: true,
-			bypassed: false,
-			output: None,
-			last_peaks: [0.0; 2],
-			updates: Vec::new(),
 		}
 	}
 }

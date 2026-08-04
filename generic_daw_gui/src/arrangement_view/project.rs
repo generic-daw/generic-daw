@@ -74,6 +74,9 @@ impl Arrangement {
 			);
 		}
 
+		let input_base = Channels::base(self.transport().input_channels);
+		let output_base = Channels::base(self.transport().output_channels.get());
+
 		let mut tracks = HashMap::new();
 		for track in self.tracks() {
 			let node = self.node(track.id);
@@ -124,9 +127,12 @@ impl Arrangement {
 						}
 						.into(),
 					}),
-					track.input.as_ref().map(|input| proto::Channels {
-						left: input.channels.left.into(),
-						right: input.channels.right.into(),
+					(track.input != input_base).then_some(proto::Channels {
+						left: track.input.left.into(),
+						right: track.input.right.into(),
+						midi: track.input.midi.into(),
+						enable_audio: track.input.enable_audio,
+						enable_midi: track.input.enable_midi,
 					}),
 					node.plugins.iter().map(|plugin| proto::Plugin {
 						id: plugin.descriptor.id.to_bytes_with_nul().to_owned(),
@@ -143,9 +149,12 @@ impl Arrangement {
 					},
 					node.enabled,
 					node.bypassed,
-					node.output.as_ref().map(|output| proto::Channels {
-						left: output.left.into(),
-						right: output.right.into(),
+					(node.output != output_base).then_some(proto::Channels {
+						left: node.output.left.into(),
+						right: node.output.right.into(),
+						midi: node.output.midi.into(),
+						enable_audio: node.output.enable_audio,
+						enable_midi: node.output.enable_midi,
 					}),
 				),
 			);
@@ -180,9 +189,12 @@ impl Arrangement {
 					},
 					channel.enabled,
 					channel.bypassed,
-					channel.output.as_ref().map(|output| proto::Channels {
-						left: output.left.into(),
-						right: output.right.into(),
+					(channel.output != output_base).then_some(proto::Channels {
+						left: channel.output.left.into(),
+						right: channel.output.right.into(),
+						midi: channel.output.midi.into(),
+						enable_audio: channel.output.enable_audio,
+						enable_midi: channel.output.enable_midi,
 					}),
 				),
 			);
@@ -473,15 +485,25 @@ impl Arrangement {
 				arrangement.channel_toggle_bypassed(node);
 			}
 
-			arrangement.output_change_channels(
-				node,
-				channel
-					.output
-					.map(|proto::Channels { left, right }| Channels {
+			if let Some(proto::Channels {
+				left,
+				right,
+				midi,
+				enable_audio,
+				enable_midi,
+			}) = channel.output
+			{
+				arrangement.output_change_channels(
+					node,
+					Channels {
 						left: left as u16,
 						right: right as u16,
-					}),
-			);
+						midi: midi as u16,
+						enable_audio,
+						enable_midi,
+					},
+				);
+			}
 
 			let mut i = 0;
 
@@ -544,13 +566,25 @@ impl Arrangement {
 			tracks.insert(index, id);
 			load_channel(&mut arrangement, id, &track.channel)?;
 
-			arrangement.input_change_channels(
-				id,
-				track.input.map(|proto::Channels { left, right }| Channels {
-					left: left as u16,
-					right: right as u16,
-				}),
-			);
+			if let Some(proto::Channels {
+				left,
+				right,
+				midi,
+				enable_audio,
+				enable_midi,
+			}) = track.input
+			{
+				arrangement.input_change_channels(
+					id,
+					Channels {
+						left: left as u16,
+						right: right as u16,
+						midi: midi as u16,
+						enable_audio,
+						enable_midi,
+					},
+				);
+			}
 
 			for clip in track.clips.iter().filter_map(|clip| clip.clip) {
 				arrangement.add_clip(

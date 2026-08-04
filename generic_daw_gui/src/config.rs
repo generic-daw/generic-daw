@@ -22,6 +22,7 @@ pub struct Config {
 	pub sample_paths: Vec<Arc<Path>>,
 	pub clap_paths: Vec<Arc<Path>>,
 	pub audio: Audio,
+	pub midi: Midi,
 	pub autosave: Autosave,
 	pub open_last_project: bool,
 	pub scale_factor: f32,
@@ -34,6 +35,7 @@ impl Default for Config {
 			sample_paths: vec![DATA_DIR.clone()],
 			clap_paths: Vec::new(),
 			audio: Audio::default(),
+			midi: Midi::default(),
 			autosave: Autosave::default(),
 			open_last_project: false,
 			scale_factor: 1.0,
@@ -155,6 +157,13 @@ impl Devices {
 			},
 		}
 	}
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default)]
+pub struct Midi {
+	pub input: Option<Arc<str>>,
+	pub output: Option<Arc<str>>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -6,9 +6,9 @@ use crate::{
 	daw,
 	file_tree::FileKind,
 	icons::{
-		arrow_up_down, chevron_down, chevron_up, chevrons_down, chevrons_left_right_ellipsis,
-		circle_ellipsis, copy, grip_horizontal, grip_vertical, plus, power, power_off, rotate_ccw,
-		x,
+		arrow_down_wide_narrow, arrow_up_down, audio_lines, chevron_down, chevron_up,
+		chevrons_left_right_ellipsis, circle_ellipsis, copy, grip_horizontal, grip_vertical, plus,
+		power, power_off, rotate_ccw, snowflake, x,
 	},
 	operation::scroll_into_view,
 	state::{DEFAULT_SPLIT_POSITION, State},
@@ -36,7 +36,7 @@ use generic_daw_widget::{
 	peak_meter::{MAX_VOL, PeakMeter},
 };
 use iced::{
-	Center, Element, Fill, Subscription, Task, Vector, border,
+	Center, Element, Fill, Shrink, Subscription, Task, Vector, border,
 	futures::SinkExt as _,
 	keyboard,
 	mouse::Interaction,
@@ -68,20 +68,22 @@ use sweeten::widget::drag::DragEvent;
 use utils::{NoClone, NoDebug};
 
 mod arrangement;
+mod audio_recording;
 mod channel;
 mod clip;
 mod midi_pattern;
+mod midi_recording;
 mod node;
 mod plugin;
 mod project;
-mod recording;
 mod sample;
 mod track;
 
 pub use arrangement::Arrangement;
+pub use audio_recording::AudioRecording;
 pub use clip::{AudioClipRef, MidiClipRef};
+pub use midi_recording::MidiRecording;
 pub use project::Feedback;
-pub use recording::Recording;
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -136,8 +138,11 @@ pub enum Message {
 	SeekTo(BeatTime),
 	SetLoopMarker(Option<BeatRange>),
 
-	InputChangeChannels(NodeId, Option<Channels>),
-	OutputChangeChannels(NodeId, Option<Channels>),
+	InputChangeChannels(NodeId, Channels),
+	InputToggleAudioRecording(NodeId),
+	InputToggleMidiRecording(NodeId),
+
+	OutputChangeChannels(NodeId, Channels),
 
 	Freeze(NodeId),
 	FreezeDone(NodeId, Box<SamplePair>, BeatTime),
@@ -570,6 +575,12 @@ impl ArrangementView {
 			Message::SetLoopMarker(marker) => self.arrangement.set_loop_range(marker),
 			Message::InputChangeChannels(node, channels) => {
 				self.arrangement.input_change_channels(node, channels);
+			}
+			Message::InputToggleAudioRecording(node) => {
+				self.arrangement.input_toggle_audio_recording(node);
+			}
+			Message::InputToggleMidiRecording(node) => {
+				self.arrangement.input_toggle_midi_recording(node);
 			}
 			Message::OutputChangeChannels(node, channels) => {
 				self.arrangement.output_change_channels(node, channels);
@@ -1020,7 +1031,7 @@ impl ArrangementView {
 				let old_scale = *scale;
 				*scale += scale_diff;
 				scale.x = scale.x.clamp(-15.0, 0.0);
-				scale.y = scale.y.clamp(45.0, 165.0);
+				scale.y = scale.y.clamp(25.0, 165.0);
 
 				let pos_diff = Vector::new(
 					(cursor.x + position.x) * ((old_scale.x - scale.x).exp2() - 1.0),
@@ -1496,114 +1507,158 @@ impl ArrangementView {
 			self.playlist.borrow().position,
 			self.playlist.borrow().scale,
 			column![
-				sweeten::column(self.arrangement.tracks().iter().map(|track| {
-					let node = self.arrangement.node(track.id);
+				sweeten::column(
+					self.arrangement
+						.tracks()
+						.iter()
+						.enumerate()
+						.map(|(i, track)| {
+							let node = self.arrangement.node(track.id);
 
-					let enabled =
-						node.enabled && self.arrangement.solo().is_none_or(|solo| solo == node.id);
+							let enabled = node.enabled
+								&& self.arrangement.solo().is_none_or(|solo| solo == node.id);
 
-					let soloed = self.arrangement.solo() == Some(node.id);
+							let soloed = self.arrangement.solo() == Some(node.id);
 
-					let button_style = |cond: bool| {
-						if !enabled {
-							button::secondary
-						} else if cond {
-							button::warning
-						} else {
-							button::primary
-						}
-					};
+							let button_style = |cond: bool| {
+								if !enabled {
+									button::secondary
+								} else if cond {
+									button::warning
+								} else {
+									button::primary
+								}
+							};
 
-					container(row![
-						mouse_area(center_y(grip_vertical())).interaction(Interaction::Grab),
-						opaque(
-							mouse_area(
-								node.main_context_menu(
-									row![
-										column![
-											row![
-												PeakMeter::new(&node.peaks[0]).enabled(enabled),
-												PeakMeter::new(&node.peaks[1]).enabled(enabled),
-											]
-											.spacing(2),
-											container(space().width(28).height(2)).style(
-												container_with_radius(
-													if node.polyphony > 0 {
-														container::primary
-													} else {
-														container::secondary
-													},
-													border::bottom(f32::INFINITY),
-												)
-											)
-										]
-										.spacing(2),
-										column![
-											node.volume_context_menu(
-												Knob::new(
-													0.0..=MAX_VOL,
-													node.utility.volume.abs().cbrt(),
-													|v| Message::ChannelVolumeChanged(
-														node.id,
-														v.powi(3).copysign(node.utility.volume),
+							container(row![
+								mouse_area(center_y(grip_vertical()))
+									.interaction(Interaction::Grab),
+								opaque(
+									mouse_area(ContextMenu::new(
+										row![
+											column![
+												row![
+													PeakMeter::new(&node.peaks[0]).enabled(enabled),
+													PeakMeter::new(&node.peaks[1]).enabled(enabled),
+												]
+												.spacing(2),
+												container(space().width(28).height(2)).style(
+													container_with_radius(
+														if node.polyphony > 0 {
+															container::primary
+														} else {
+															container::secondary
+														},
+														border::bottom(f32::INFINITY),
 													)
 												)
-												.default(1.0)
-												.radius(19.44444)
-												.enabled(enabled)
-												.tooltip(format_db(node.utility.volume)),
-												self.tab
-											),
-											node.pan_knob(19.44444, enabled),
-										]
-										.align_x(Center)
-										.spacing(5)
-										.wrap(),
-										column![
-											column![
-												icon_button(
-													x(),
-													if enabled {
-														button::danger
-													} else {
-														button::secondary
-													}
-												)
-												.on_press(Message::TrackRemove(node.id)),
-												text_icon_button("M", button_style(soloed))
-													.on_press(Message::TrackToggleEnabled(node.id))
+											]
+											.spacing(2),
+											row![
+												row![
+													rule::vertical(1),
+													column![
+														text!("Track {}", i + 1)
+															.size(13)
+															.line_height(1.0)
+															.width(55)
+															.height(35)
+															.center(),
+														(self.playlist.borrow().scale.y >= 85.0)
+															.then(|| track.inputs_toolbar(
+																enabled,
+																self.arrangement.transport()
+															)),
+													]
+													.spacing(5),
+													rule::vertical(1),
+												]
+												.spacing(5)
+												.height(Shrink),
+												(self.playlist.borrow().scale.y >= 45.0).then(
+													|| column![
+														ContextMenu::new(
+															Knob::new(
+																0.0..=MAX_VOL,
+																node.utility.volume.abs().cbrt(),
+																|v| Message::ChannelVolumeChanged(
+																	node.id,
+																	v.powi(3).copysign(
+																		node.utility.volume,
+																	),
+																)
+															)
+															.default(1.0)
+															.radius(19.44444)
+															.enabled(enabled)
+															.tooltip(format_db(
+																node.utility.volume
+															)),
+															|| node.volume_context_menu(self.tab)
+														),
+														node.pan_knob(19.44444, enabled),
+													]
+													.align_x(Center)
+													.spacing(5)
+													.wrap()
+												),
+												column![
+													column![
+														icon_button(
+															x(),
+															if enabled {
+																button::danger
+															} else {
+																button::secondary
+															}
+														)
+														.on_press(Message::TrackRemove(node.id)),
+														text_icon_button("M", button_style(soloed))
+															.on_press(Message::TrackToggleEnabled(
+																node.id
+															))
+													]
+													.spacing(5)
+													.wrap(),
+													column![
+														text_icon_button("S", button_style(soloed))
+															.on_press(Message::TrackToggleSolo(
+																node.id
+															)),
+														icon_button(
+															snowflake(),
+															button_style(false)
+														)
+														.on_press_maybe(
+															enabled.then_some(Message::Freeze(
+																node.id
+															))
+														),
+													]
+													.spacing(5)
+													.wrap(),
+												]
+												.spacing(5)
+												.wrap(),
 											]
 											.spacing(5),
-											column![
-												text_icon_button("S", button_style(soloed))
-													.on_press(Message::TrackToggleSolo(node.id)),
-												track.recording_button(
-													enabled,
-													self.arrangement.transport()
-												)
-											]
-											.spacing(5),
 										]
-										.spacing(5)
-										.wrap()
-									]
-									.padding(padding::all(5).left(0))
-									.spacing(5),
-									self.tab,
-									self.arrangement.solo()
+										.padding(padding::all(5).left(0))
+										.spacing(5),
+										|| node.main_context_menu(self.tab)
+									))
+									.interaction(Interaction::Pointer)
+									.on_press(Message::ChannelSelect(node.id))
 								)
-							)
-							.interaction(Interaction::Pointer)
-							.on_press(Message::ChannelSelect(node.id))
-						)
-					])
-					.height(self.playlist.borrow().scale.y)
-					.style(container_with_radius(
-						selectable_box(weakest_bordered_box, node.id == self.selected),
-						border::left(5),
-					))
-					.into()
-				}))
+							])
+							.height(self.playlist.borrow().scale.y)
+							.style(container_with_radius(
+								selectable_box(weakest_bordered_box, node.id == self.selected),
+								border::left(5),
+							))
+							.into()
+						})
+				)
 				.on_drag(Message::TrackMove)
 				.style(sweeten_column_with_radius(
 					sweeten_column_style,
@@ -1661,21 +1716,24 @@ impl ArrangementView {
 										Message::PlaylistAction,
 									),
 								})
-								.chain(
-									track
-										.input
-										.as_ref()
-										.and_then(|input| input.recording.as_ref())
-										.map(|recording| {
-											Clip::new(
-												recording,
-												&self.playlist,
-												self.arrangement.transport(),
-												enabled,
-												Message::PlaylistAction,
-											)
-										}),
-								),
+								.chain(track.audio_recording.as_ref().map(|recording| {
+									Clip::new(
+										recording,
+										&self.playlist,
+										self.arrangement.transport(),
+										enabled,
+										Message::PlaylistAction,
+									)
+								}))
+								.chain(track.midi_recording.as_ref().map(|recording| {
+									Clip::new(
+										recording,
+										&self.playlist,
+										self.arrangement.transport(),
+										enabled,
+										Message::PlaylistAction,
+									)
+								})),
 						)
 					}),
 				Message::PlaylistAction,
@@ -1786,7 +1844,7 @@ impl ArrangementView {
 											.radius(TEXT_HEIGHT)
 											.enabled(plugin.active && enabled)
 											.tooltip(format_mix(plugin.mix)),
-											container(column![
+											move || container(column![
 												menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
 													.on_press(Message::PluginMixChanged(
 														self.selected,
@@ -1803,7 +1861,8 @@ impl ArrangementView {
 													)),
 											])
 											.width(160)
-											.style(container_with_radius(weaker_bordered_box, 5)),
+											.style(container_with_radius(weaker_bordered_box, 5))
+											.into(),
 										),
 										button(
 											text(&*plugin.descriptor.name)
@@ -1844,20 +1903,24 @@ impl ArrangementView {
 									]
 									.align_y(Center)
 									.spacing(5),
-									container(column![
-										menu_entry(copy(), "Duplicate", "")
-											.on_press(Message::PluginDuplicate(self.selected, i)),
-										container(rule::horizontal(1))
-											.padding(padding::horizontal(5)),
-										menu_entry(arrow_up_down(), "Invert polarity", "")
-											.on_press(Message::PluginMixChanged(
-												self.selected,
-												i,
-												-plugin.mix
-											)),
-									])
-									.width(160)
-									.style(container_with_radius(weaker_bordered_box, 5)),
+									move || {
+										container(column![
+											menu_entry(copy(), "Duplicate", "").on_press(
+												Message::PluginDuplicate(self.selected, i)
+											),
+											container(rule::horizontal(1))
+												.padding(padding::horizontal(5)),
+											menu_entry(arrow_up_down(), "Invert polarity", "")
+												.on_press(Message::PluginMixChanged(
+													self.selected,
+													i,
+													-plugin.mix
+												)),
+										])
+										.width(160)
+										.style(container_with_radius(weaker_bordered_box, 5))
+										.into()
+									},
 								)
 							})
 							.map(|widget| {
@@ -1926,225 +1989,177 @@ impl ArrangementView {
 				Interaction::Grab
 			}),
 			opaque(
-				mouse_area(
-					node.main_context_menu(
-						column![
-							text(name).size(13).line_height(1.0),
-							node.pan_knob(23.0, enabled),
-							row![
-								text_icon_button("M", button_style(soloed)).on_press(
-									if node.ty == NodeType::Track {
-										Message::TrackToggleEnabled(node.id)
-									} else {
-										Message::ChannelToggleEnabled(node.id)
-									}
-								),
-								text_icon_button("S", button_style(soloed)).on_press_maybe(
-									(node.ty == NodeType::Track)
-										.then_some(Message::TrackToggleSolo(node.id)),
-								),
-								icon_button(
-									x(),
-									if enabled {
-										button::danger
-									} else {
-										button::secondary
-									},
-								)
-								.on_press_maybe(match node.ty {
-									NodeType::Master => None,
-									NodeType::Channel => Some(Message::ChannelRemove(node.id)),
-									NodeType::Track => Some(Message::TrackRemove(node.id)),
-								}),
-							]
-							.spacing(5),
-							row![
-								icon_button(
-									if node.bypassed { power_off() } else { power() },
-									button_style(node.bypassed)
-								)
-								.on_press(Message::ChannelToggleBypassed(node.id)),
-								icon_button(
-									arrow_up_down(),
-									button_style(node.utility.volume.is_sign_negative())
-								)
-								.on_press(Message::ChannelVolumeChanged(
-									node.id,
-									-node.utility.volume
-								)),
-								track.map_or_else(
-									|| match node.utility.pan {
-										PanMode::Stereo(..) => icon_button(
-											chevrons_left_right_ellipsis(),
-											button_style(false),
-										)
-										.on_press(Message::ChannelPanChanged(
-											node.id,
-											PanMode::SplitStereo(-1.0, 1.0),
-										)),
-										PanMode::SplitStereo(..) => {
-											icon_button(circle_ellipsis(), button_style(false))
-												.on_press(Message::ChannelPanChanged(
-													node.id,
-													PanMode::Stereo(0.0),
-												))
-										}
-									}
-									.into(),
-									|track| track
-										.recording_button(enabled, self.arrangement.transport())
-								),
-							]
-							.spacing(5),
-							center_x(
-								text(format_db(node.utility.volume.abs()))
-									.size(13)
-									.line_height(1.0)
+				mouse_area(ContextMenu::new(
+					column![
+						text(name).size(13).line_height(1.0),
+						node.pan_knob(23.0, enabled),
+						row![
+							text_icon_button("M", button_style(soloed)).on_press(
+								if node.ty == NodeType::Track {
+									Message::TrackToggleEnabled(node.id)
+								} else {
+									Message::ChannelToggleEnabled(node.id)
+								}
+							),
+							text_icon_button("S", button_style(soloed)).on_press_maybe(
+								(node.ty == NodeType::Track)
+									.then_some(Message::TrackToggleSolo(node.id)),
+							),
+							icon_button(
+								x(),
+								if enabled {
+									button::danger
+								} else {
+									button::secondary
+								},
 							)
-							.style(weak_bordered_box)
-							.padding(2),
-							row![
-								column![
-									space().height(3),
-									row![
-										PeakMeter::new(&node.peaks[0]).width(16.0).enabled(enabled),
-										PeakMeter::new(&node.peaks[1]).width(16.0).enabled(enabled),
-									]
-									.spacing(3),
-									container(space().width(35).height(3)).style(
-										container_with_radius(
-											if node.ty != NodeType::Track {
-												container::transparent
-											} else if node.polyphony > 0 {
-												container::primary
-											} else {
-												container::secondary
-											},
-											border::bottom(f32::INFINITY),
-										),
-									)
-								]
-								.spacing(5),
-								node.volume_context_menu(
-									vertical_slider(
-										0.0..=MAX_VOL,
-										node.utility.volume.abs().cbrt(),
-										|v| Message::ChannelVolumeChanged(
-											node.id,
-											v.powi(3).copysign(node.utility.volume),
-										)
-									)
-									.default(1f32)
-									.width(17)
-									.step(f32::EPSILON)
-									.handle((15, 20))
-									.style(slider_with_radius(
-										if enabled {
-											slider::default
-										} else {
-											slider_secondary
-										},
-										5
-									)),
-									self.tab
-								),
-							]
-							.spacing(3),
-							if node.id == self.selected {
-								Node::output_context_menu(
-									node.id,
-									button(chevrons_down())
-										.padding(0)
-										.style(button_with_radius(
-											node.output.map_or(button::secondary as _, |output| {
-												if output.fits_in(
-													self.arrangement
-														.transport()
-														.output_channels
-														.get(),
-												) {
-													if enabled {
-														button::primary
-													} else {
-														button::secondary
-													}
-												} else {
-													button::warning
-												}
-											}),
-											5,
-										))
-										.on_press(Message::OutputChangeChannels(
-											node.id,
-											node.output.map_or_else(
-												|| {
-													Some(Channels::base(
-														self.arrangement
-															.transport()
-															.output_channels,
-													))
-												},
-												|_| None,
-											),
-										)),
-									node.output,
-									self.arrangement.transport(),
+							.on_press_maybe(match node.ty {
+								NodeType::Master => None,
+								NodeType::Channel => Some(Message::ChannelRemove(node.id)),
+								NodeType::Track => Some(Message::TrackRemove(node.id)),
+							}),
+						]
+						.spacing(5),
+						row![
+							icon_button(
+								if node.bypassed { power_off() } else { power() },
+								button_style(node.bypassed)
+							)
+							.on_press(Message::ChannelToggleBypassed(node.id)),
+							icon_button(
+								arrow_up_down(),
+								button_style(node.utility.volume.is_sign_negative())
+							)
+							.on_press(Message::ChannelVolumeChanged(node.id, -node.utility.volume)),
+							match node.utility.pan {
+								PanMode::Stereo(..) => icon_button(
+									chevrons_left_right_ellipsis(),
+									button_style(false),
 								)
-							} else {
-								let incoming =
-									self.arrangement.node(node.id).outgoing.get(&self.selected);
-								let outgoing =
-									self.arrangement.node(self.selected).outgoing.get(&node.id);
-
-								let down = |r: border::Radius| {
-									button(chevron_down())
-										.padding(0)
-										.style(button_with_radius(
-											if enabled && incoming.is_some() {
-												button::primary
-											} else {
-												button::secondary
-											},
-											r,
-										))
-										.on_press_maybe(if outgoing.is_some() {
-											None
-										} else if incoming.is_some() {
-											Some(Message::Disconnect(node.id, self.selected))
+								.on_press(Message::ChannelPanChanged(
+									node.id,
+									PanMode::SplitStereo(-1.0, 1.0),
+								)),
+								PanMode::SplitStereo(..) => {
+									icon_button(circle_ellipsis(), button_style(false)).on_press(
+										Message::ChannelPanChanged(node.id, PanMode::Stereo(0.0)),
+									)
+								}
+							}
+						]
+						.spacing(5),
+						center_x(
+							text(format_db(node.utility.volume.abs()))
+								.size(13)
+								.line_height(1.0)
+						)
+						.style(weak_bordered_box)
+						.padding(2),
+						row![
+							column![
+								space().height(3),
+								row![
+									PeakMeter::new(&node.peaks[0]).width(16.0).enabled(enabled),
+									PeakMeter::new(&node.peaks[1]).width(16.0).enabled(enabled),
+								]
+								.spacing(3),
+								container(space().width(35).height(3)).style(
+									container_with_radius(
+										if node.ty != NodeType::Track {
+											container::transparent
+										} else if node.polyphony > 0 {
+											container::primary
 										} else {
-											Some(Message::Connect(node.id, self.selected))
-										})
-								};
+											container::secondary
+										},
+										border::bottom(f32::INFINITY),
+									),
+								)
+							]
+							.spacing(5),
+							ContextMenu::new(
+								vertical_slider(
+									0.0..=MAX_VOL,
+									node.utility.volume.abs().cbrt(),
+									|v| Message::ChannelVolumeChanged(
+										node.id,
+										v.powi(3).copysign(node.utility.volume),
+									)
+								)
+								.default(1f32)
+								.width(17)
+								.step(f32::EPSILON)
+								.handle((15, 20))
+								.style(slider_with_radius(
+									if enabled {
+										slider::default
+									} else {
+										slider_secondary
+									},
+									5
+								)),
+								|| node.volume_context_menu(self.tab)
+							),
+						]
+						.spacing(3),
+						{
+							let incoming =
+								self.arrangement.node(node.id).outgoing.get(&self.selected);
+							let outgoing =
+								self.arrangement.node(self.selected).outgoing.get(&node.id);
 
-								let up = |r: border::Radius| {
-									button(chevron_up())
-										.padding(0)
-										.style(button_with_radius(
-											if enabled && outgoing.is_some() {
-												button::primary
-											} else {
-												button::secondary
-											},
-											r,
-										))
-										.on_press_maybe(if incoming.is_some() {
-											None
-										} else if outgoing.is_some() {
-											Some(Message::Disconnect(self.selected, node.id))
+							let down = |r: border::Radius| {
+								button(chevron_down())
+									.padding(0)
+									.style(button_with_radius(
+										if enabled && incoming.is_some() {
+											button::primary
 										} else {
-											Some(Message::Connect(self.selected, node.id))
-										})
-								};
+											button::secondary
+										},
+										r,
+									))
+									.on_press_maybe(if outgoing.is_some() {
+										None
+									} else if incoming.is_some() {
+										Some(Message::Disconnect(node.id, self.selected))
+									} else {
+										Some(Message::Connect(node.id, self.selected))
+									})
+							};
 
-								column![
-									incoming
-										.map(|val| (val, node.id, self.selected))
-										.or_else(|| outgoing.map(|val| (
-											val,
-											self.selected,
-											node.id
-										)))
-										.map(|(val, from, to)| {
+							let up = |r: border::Radius| {
+								button(chevron_up())
+									.padding(0)
+									.style(button_with_radius(
+										if enabled && outgoing.is_some() {
+											button::primary
+										} else {
+											button::secondary
+										},
+										r,
+									))
+									.on_press_maybe(if incoming.is_some() {
+										None
+									} else if outgoing.is_some() {
+										Some(Message::Disconnect(self.selected, node.id))
+									} else {
+										Some(Message::Connect(self.selected, node.id))
+									})
+							};
+
+							column![
+								track.map_or_else(
+									|| space::vertical().height(36).into(),
+									|track| track
+										.inputs_toolbar(enabled, self.arrangement.transport())
+								),
+								incoming
+									.map(|val| (val, node.id, self.selected))
+									.or_else(|| outgoing.map(|val| (val, self.selected, node.id)))
+									.map_or_else(
+										|| Element::new(space::vertical().height(14)),
+										|(val, from, to)| {
 											ContextMenu::new(
 												slider(0.0..=1.0, val.cbrt(), move |val| {
 													Message::SetMix(from, to, val.powi(3))
@@ -2152,48 +2167,106 @@ impl ArrangementView {
 												.default(1f32)
 												.step(f32::EPSILON)
 												.handle((4, 4))
+												.height(14)
 												.style(if enabled {
 													slider::default
 												} else {
 													slider_secondary
 												}),
-												container(
-													menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
+												move || {
+													container(
+														menu_entry(
+															rotate_ccw(),
+															"Reset",
+															"Ctrl-Click",
+														)
 														.on_press(Message::SetMix(from, to, 1.0)),
-												)
-												.width(160)
-												.style(container_with_radius(
-													weaker_bordered_box,
-													5,
-												)),
+													)
+													.width(160)
+													.style(container_with_radius(
+														weaker_bordered_box,
+														5,
+													))
+													.into()
+												},
 											)
-										}),
+											.into()
+										}
+									),
+								if node.id == self.selected {
+									row![
+										ContextMenu::new(
+											button(audio_lines().size(TEXT_HEIGHT))
+												.padding((LINE_HEIGHT - TEXT_HEIGHT) / 2.0)
+												.style(button_with_radius(
+													if !node.output.enable_audio {
+														button::secondary
+													} else if !node.output.fits_in(
+														self.arrangement
+															.transport()
+															.output_channels
+															.get(),
+													) {
+														button::warning
+													} else if enabled {
+														button::primary
+													} else {
+														button::secondary
+													},
+													border::left(5),
+												))
+												.on_press(Message::OutputChangeChannels(
+													node.id,
+													node.output
+														.enable_audio(!node.output.enable_audio),
+												)),
+											|| node.audio_output_context_menu(
+												self.arrangement.transport()
+											)
+										),
+										ContextMenu::new(
+											button(arrow_down_wide_narrow().size(TEXT_HEIGHT))
+												.padding((LINE_HEIGHT - TEXT_HEIGHT) / 2.0)
+												.style(button_with_radius(
+													if !node.output.enable_midi {
+														button::secondary
+													} else if enabled {
+														button::primary
+													} else {
+														button::secondary
+													},
+													border::right(5),
+												))
+												.on_press(Message::OutputChangeChannels(
+													node.id,
+													node.output
+														.enable_midi(!node.output.enable_midi),
+												)),
+											|| node.midi_output_context_menu()
+										)
+									]
+								} else {
 									match (node.ty, self.arrangement.node(self.selected).ty) {
 										(NodeType::Track, NodeType::Track) => {
 											row![].height(LINE_HEIGHT)
 										}
 										(_, NodeType::Master)
-										| (NodeType::Track, NodeType::Channel) => {
-											row![down(border::radius(5))]
-										}
+										| (NodeType::Track, NodeType::Channel) => row![down(border::radius(5))],
 										(NodeType::Master, _) | (_, NodeType::Track) => {
 											row![up(border::radius(5))]
 										}
 										_ => row![down(border::left(5)), up(border::right(5))],
 									}
-								]
-								.align_x(Center)
-								.spacing(3)
-								.into()
-							}
-						]
-						.align_x(Center)
-						.padding(5)
-						.spacing(5),
-						self.tab,
-						self.arrangement.solo()
-					),
-				)
+								}
+							]
+							.align_x(Center)
+						},
+					]
+					.align_x(Center)
+					.padding(5)
+					.spacing(5),
+					|| node.main_context_menu(self.tab)
+				))
 				.interaction(Interaction::Pointer)
 				.on_press(Message::ChannelSelect(node.id)),
 			)

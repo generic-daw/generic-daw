@@ -73,9 +73,12 @@ pub fn number_input<'a>(
 				Some
 			)
 			.default(default),
-			container(menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(Some(default)),)
-				.width(160)
-				.style(container_with_radius(weaker_bordered_box, 5))
+			move || container(
+				menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(Some(default)),
+			)
+			.width(160)
+			.style(container_with_radius(weaker_bordered_box, 5))
+			.into()
 		),
 		text_input("", &value.to_string())
 			.style(move |t, s| {
@@ -94,7 +97,7 @@ pub fn text_icon_button<'a, Message: 'a>(
 	i: impl text::IntoFragment<'a>,
 	style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
 ) -> Button<'a, Message> {
-	button(container(text(i).size(13).line_height(1.0)).center_x(13))
+	button(container(text(i).size(13).line_height(1.0)).center(13))
 		.style(button_with_radius(style, 0))
 		.padding(1)
 }

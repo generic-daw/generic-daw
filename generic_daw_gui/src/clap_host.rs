@@ -389,13 +389,14 @@ impl ClapHost {
 								.enabled(!param.flags.contains(ParamInfoFlags::IS_READONLY))
 								.stepped(param.flags.contains(ParamInfoFlags::IS_STEPPED))
 								.maybe_tooltip(param.value_text.as_deref()),
-								container(
-									menu_entry(rotate_ccw(), "Reset", "Ctrl-Click",).on_press(
+								move || container(
+									menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
 										Message::HostParamChange(id, param.id, param.default)
 									),
 								)
 								.width(160)
 								.style(container_with_radius(weaker_bordered_box, 5))
+								.into()
 							),
 							if param.module.is_empty() {
 								text(&*param.name)

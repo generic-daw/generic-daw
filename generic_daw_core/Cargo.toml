@@ -15,6 +15,7 @@ utils.workspace = true
 
 cpal = { version = "0.18.1", features = ["asio", "pipewire"] }
 log = "0.4.33"
+midir = "0.11.0"
 midly = { version = "0.5.3", default-features = false }
 oneshot = "0.2.1"
 rtrb = "0.3.4"

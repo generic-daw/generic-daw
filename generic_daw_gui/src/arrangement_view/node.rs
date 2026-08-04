@@ -4,16 +4,14 @@ use crate::{
 	icons::{
 		arrow_up_down, between_horizontal_start, between_vertical_start,
 		chevrons_left_right_ellipsis, circle_ellipsis, copy, power, power_off, replace, rotate_ccw,
-		snowflake,
 	},
 	stylefns::{container_with_radius, weaker_bordered_box},
 };
 use generic_daw_core::{Channels, NodeId, PanMode, Transport, Utility};
 use generic_daw_widget::{context_menu::ContextMenu, knob::Knob, peak_meter};
 use iced::{
-	Alignment::Center,
-	Element, Fill, padding,
-	widget::{self, column, container, radio, row, rule, space, text, value},
+	Center, Element, Fill, padding,
+	widget::{self, checkbox, column, container, radio, row, rule, space, text, value},
 };
 use std::{collections::BTreeMap, iter::once, time::Instant};
 use utils::NoDebug;
@@ -35,13 +33,13 @@ pub struct Node {
 	pub enabled: bool,
 	pub bypassed: bool,
 	pub outgoing: BTreeMap<NodeId, f32>,
-	pub output: Option<Channels>,
+	pub output: Channels,
 	pub peaks: NoDebug<[peak_meter::State; 2]>,
 	pub polyphony: usize,
 }
 
 impl Node {
-	pub fn new(ty: NodeType, id: NodeId, output: Option<Channels>) -> Self {
+	pub fn new(ty: NodeType, id: NodeId, output: Channels) -> Self {
 		Self {
 			ty,
 			id,
@@ -65,106 +63,84 @@ impl Node {
 		self.peaks[1].update(peaks[1], now);
 	}
 
-	pub fn main_context_menu<'a>(
-		&'a self,
-		content: impl Into<Element<'a, Message>>,
-		tab: Tab,
-		solo: Option<NodeId>,
-	) -> Element<'a, Message> {
-		ContextMenu::new(
-			content,
-			container(column![
-				menu_entry(
-					if tab == Tab::Mixer {
-						between_vertical_start()
-					} else {
-						between_horizontal_start()
-					},
-					"Insert after",
-					""
-				)
-				.on_press_maybe(match self.ty {
-					NodeType::Master => None,
-					NodeType::Channel => Some(Message::ChannelInsert(self.id)),
-					NodeType::Track => Some(Message::TrackInsert(self.id)),
-				}),
-				menu_entry(
-					copy(),
-					"Duplicate",
-					if tab == Tab::Mixer { "Ctrl-D" } else { "" }
-				)
-				.on_press_maybe(match self.ty {
-					NodeType::Master => None,
-					NodeType::Channel => Some(Message::ChannelDuplicate(self.id)),
-					NodeType::Track => Some(Message::TrackDuplicate(self.id)),
-				}),
-				(tab == Tab::Mixer).then(|| menu_entry(
-					replace(),
-					if self.ty == NodeType::Channel {
-						"Convert to track"
-					} else {
-						"Convert to channel"
-					},
-					""
-				)
-				.on_press_maybe(
-					(self.ty != NodeType::Master).then_some(Message::ToggleKind(self.id))
-				)),
-				container(rule::horizontal(1)).padding(padding::horizontal(5)),
-				if self.bypassed {
-					menu_entry(power_off(), "Engage FX", "")
+	pub fn main_context_menu(&self, tab: Tab) -> Element<'_, Message> {
+		container(column![
+			menu_entry(
+				if tab == Tab::Mixer {
+					between_vertical_start()
 				} else {
-					menu_entry(power(), "Bypass FX", "")
-				}
-				.on_press(Message::ChannelToggleBypassed(self.id)),
-				(tab == Tab::Playlist).then(|| menu_entry(snowflake(), "Freeze", "")
-					.on_press_maybe(
-						(self.enabled && solo.is_none_or(|solo| solo == self.id))
-							.then_some(Message::Freeze(self.id))
-					)),
-				container(rule::horizontal(1)).padding(padding::horizontal(5)),
-				menu_entry(
-					arrow_up_down(),
-					"Invert polarity",
-					if tab == Tab::Mixer { "Alt-I" } else { "" }
-				)
-				.on_press(Message::ChannelVolumeChanged(self.id, -self.utility.volume)),
-				match self.utility.pan {
-					PanMode::Stereo(..) =>
-						menu_entry(chevrons_left_right_ellipsis(), "Split stereo pan", "").on_press(
-							Message::ChannelPanChanged(self.id, PanMode::SplitStereo(-1.0, 1.0))
-						),
-					PanMode::SplitStereo(..) => menu_entry(circle_ellipsis(), "Stereo pan", "")
-						.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
-				}
-			])
-			.width(180)
-			.style(container_with_radius(weaker_bordered_box, 5)),
-		)
+					between_horizontal_start()
+				},
+				"Insert after",
+				""
+			)
+			.on_press_maybe(match self.ty {
+				NodeType::Master => None,
+				NodeType::Channel => Some(Message::ChannelInsert(self.id)),
+				NodeType::Track => Some(Message::TrackInsert(self.id)),
+			}),
+			menu_entry(
+				copy(),
+				"Duplicate",
+				if tab == Tab::Mixer { "Ctrl-D" } else { "" }
+			)
+			.on_press_maybe(match self.ty {
+				NodeType::Master => None,
+				NodeType::Channel => Some(Message::ChannelDuplicate(self.id)),
+				NodeType::Track => Some(Message::TrackDuplicate(self.id)),
+			}),
+			(tab == Tab::Mixer).then(|| menu_entry(
+				replace(),
+				if self.ty == NodeType::Channel {
+					"Convert to track"
+				} else {
+					"Convert to channel"
+				},
+				""
+			)
+			.on_press_maybe((self.ty != NodeType::Master).then_some(Message::ToggleKind(self.id)))),
+			container(rule::horizontal(1)).padding(padding::horizontal(5)),
+			if self.bypassed {
+				menu_entry(power_off(), "Engage FX", "")
+			} else {
+				menu_entry(power(), "Bypass FX", "")
+			}
+			.on_press(Message::ChannelToggleBypassed(self.id)),
+			container(rule::horizontal(1)).padding(padding::horizontal(5)),
+			menu_entry(
+				arrow_up_down(),
+				"Invert polarity",
+				if tab == Tab::Mixer { "Alt-I" } else { "" }
+			)
+			.on_press(Message::ChannelVolumeChanged(self.id, -self.utility.volume)),
+			match self.utility.pan {
+				PanMode::Stereo(..) =>
+					menu_entry(chevrons_left_right_ellipsis(), "Split stereo pan", "").on_press(
+						Message::ChannelPanChanged(self.id, PanMode::SplitStereo(-1.0, 1.0))
+					),
+				PanMode::SplitStereo(..) => menu_entry(circle_ellipsis(), "Stereo pan", "")
+					.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
+			}
+		])
+		.width(180)
+		.style(container_with_radius(weaker_bordered_box, 5))
 		.into()
 	}
 
-	pub fn volume_context_menu<'a>(
-		&'a self,
-		content: impl Into<Element<'a, Message>>,
-		tab: Tab,
-	) -> Element<'a, Message> {
-		ContextMenu::new(
-			content,
-			container(column![
-				menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
-					.on_press(Message::ChannelVolumeChanged(self.id, 1.0)),
-				container(rule::horizontal(1)).padding(padding::horizontal(5)),
-				menu_entry(
-					arrow_up_down(),
-					"Invert polarity",
-					if tab == Tab::Mixer { "Alt-I" } else { "" }
-				)
-				.on_press(Message::ChannelVolumeChanged(self.id, -self.utility.volume)),
-			])
-			.width(if tab == Tab::Mixer { 180 } else { 160 })
-			.style(container_with_radius(weaker_bordered_box, 5)),
-		)
+	pub fn volume_context_menu(&self, tab: Tab) -> Element<'_, Message> {
+		container(column![
+			menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
+				.on_press(Message::ChannelVolumeChanged(self.id, 1.0)),
+			container(rule::horizontal(1)).padding(padding::horizontal(5)),
+			menu_entry(
+				arrow_up_down(),
+				"Invert polarity",
+				if tab == Tab::Mixer { "Alt-I" } else { "" }
+			)
+			.on_press(Message::ChannelVolumeChanged(self.id, -self.utility.volume)),
+		])
+		.width(if tab == Tab::Mixer { 180 } else { 160 })
+		.style(container_with_radius(weaker_bordered_box, 5))
 		.into()
 	}
 
@@ -182,16 +158,21 @@ impl Node {
 				.radius(radius)
 				.enabled(enabled)
 				.tooltip(format_pan(pan)),
-				container(column![
-					menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
-						.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
-					container(rule::horizontal(1)).padding(padding::horizontal(5)),
-					menu_entry(chevrons_left_right_ellipsis(), "Split stereo pan", "").on_press(
-						Message::ChannelPanChanged(self.id, PanMode::SplitStereo(-1.0, 1.0))
-					),
-				])
-				.width(160)
-				.style(container_with_radius(weaker_bordered_box, 5)),
+				move || {
+					container(column![
+						menu_entry(rotate_ccw(), "Reset", "Ctrl-Click")
+							.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
+						container(rule::horizontal(1)).padding(padding::horizontal(5)),
+						menu_entry(chevrons_left_right_ellipsis(), "Split stereo pan", "")
+							.on_press(Message::ChannelPanChanged(
+								self.id,
+								PanMode::SplitStereo(-1.0, 1.0)
+							)),
+					])
+					.width(160)
+					.style(container_with_radius(weaker_bordered_box, 5))
+					.into()
+				},
 			)
 			.into(),
 			PanMode::SplitStereo(l, r) => ContextMenu::new(
@@ -205,7 +186,7 @@ impl Node {
 						.radius(radius * RADIUS)
 						.enabled(enabled)
 						.tooltip(format_pan(l)),
-						container(column![
+						move || container(column![
 							menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
 								Message::ChannelPanChanged(self.id, PanMode::SplitStereo(-1.0, r))
 							),
@@ -216,7 +197,8 @@ impl Node {
 						])
 						.width(160)
 						.style(container_with_radius(weaker_bordered_box, 5))
-					),)
+						.into()
+					))
 					.align_top(Fill),
 					container(ContextMenu::new(
 						Knob::new(-1.0..=1.0, r, move |r| {
@@ -227,7 +209,7 @@ impl Node {
 						.radius(radius * RADIUS)
 						.enabled(enabled)
 						.tooltip(format_pan(r)),
-						container(column![
+						move || container(column![
 							menu_entry(rotate_ccw(), "Reset", "Ctrl-Click").on_press(
 								Message::ChannelPanChanged(self.id, PanMode::SplitStereo(l, 1.0))
 							),
@@ -238,148 +220,88 @@ impl Node {
 						])
 						.width(160)
 						.style(container_with_radius(weaker_bordered_box, 5))
+						.into()
 					))
 					.align_bottom(Fill)
 				]
 				.spacing(radius * SPACING)
 				.width(2.0 * radius)
 				.height(1.8 * radius),
-				container(
-					menu_entry(circle_ellipsis(), "Stereo pan", "")
-						.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
-				)
-				.width(160)
-				.style(container_with_radius(weaker_bordered_box, 5)),
+				move || {
+					container(
+						menu_entry(circle_ellipsis(), "Stereo pan", "")
+							.on_press(Message::ChannelPanChanged(self.id, PanMode::Stereo(0.0))),
+					)
+					.width(160)
+					.style(container_with_radius(weaker_bordered_box, 5))
+					.into()
+				},
 			)
 			.into(),
 		}
 	}
 
-	pub fn input_context_menu<'a>(
-		id: NodeId,
-		content: impl Into<Element<'a, Message>>,
-		input: Option<Channels>,
-		transport: &Transport,
-	) -> Element<'a, Message> {
-		ContextMenu::new(
-			content,
-			input.map(|input| {
-				container(
-					row![
-						column(once(space().height(15).into()).chain(
-							(0..transport.input_channels).map(|channel| {
-								container(value(channel + 1).size(13).line_height(1.0))
-									.padding(1)
-									.into()
-							})
-						))
-						.spacing(5)
-						.align_x(Center),
-						column(
-							once(
-								container(text("L").size(13).line_height(1.0))
-									.padding(1)
-									.into(),
-							)
-							.chain((0..transport.input_channels).map(|channel| {
-								radio("", channel, Some(input.left), |_| {
-									Message::InputChangeChannels(id, Some(input.left(channel)))
-								})
-								.size(15)
-								.text_size(1)
-								.spacing(0)
-								.into()
-							})),
-						)
-						.spacing(5)
-						.align_x(Center),
-						column(
-							once(
-								container(text("R").size(13).line_height(1.0))
-									.padding(1)
-									.into(),
-							)
-							.chain((0..transport.input_channels).map(|channel| {
-								radio("", channel, Some(input.right), |_| {
-									Message::InputChangeChannels(id, Some(input.right(channel)))
-								})
-								.size(15)
-								.text_size(1)
-								.spacing(0)
-								.into()
-							})),
-						)
-						.spacing(5)
-						.align_x(Center),
-					]
-					.spacing(5),
-				)
-				.padding(5)
-				.style(container_with_radius(weaker_bordered_box, 5))
-			}),
+	pub fn audio_output_context_menu(&self, transport: &Transport) -> Element<'_, Message> {
+		container(
+			row(once(
+				column![
+					space().width(15).height(15),
+					container(text("L").size(13).line_height(1.0)).padding(1),
+					container(text("R").size(13).line_height(1.0)).padding(1),
+				]
+				.align_x(Center)
+				.spacing(5)
+				.into(),
+			)
+			.chain((0..transport.output_channels.get()).map(|channel| {
+				column![
+					container(value(channel + 1).size(13).line_height(1.0)).padding(1),
+					radio("", channel, Some(self.output.left), |_| {
+						Message::OutputChangeChannels(self.id, self.output.left(channel))
+					})
+					.size(15)
+					.text_size(1)
+					.spacing(0),
+					radio("", channel, Some(self.output.right), |_| {
+						Message::OutputChangeChannels(self.id, self.output.right(channel))
+					})
+					.size(15)
+					.text_size(1)
+					.spacing(0)
+				]
+				.align_x(Center)
+				.spacing(5)
+				.into()
+			})))
+			.spacing(5),
 		)
+		.padding(5)
+		.style(container_with_radius(weaker_bordered_box, 5))
 		.into()
 	}
 
-	pub fn output_context_menu<'a>(
-		id: NodeId,
-		content: impl Into<Element<'a, Message>>,
-		output: Option<Channels>,
-		transport: &Transport,
-	) -> Element<'a, Message> {
-		ContextMenu::new(
-			content,
-			output.map(|output| {
-				container(
-					column![
-						row(once(space().width(15).into()).chain(
-							(0..transport.output_channels.get()).map(|channel| container(
-								value(channel + 1).size(13).line_height(1.0)
+	pub fn midi_output_context_menu(&self) -> Element<'_, Message> {
+		container(
+			row((0..16).map(|channel| {
+				column![
+					container(value(channel + 1).size(13).line_height(1.0)).padding(1),
+					checkbox(self.output.midi & (1 << channel) != 0)
+						.on_toggle(move |_| {
+							Message::OutputChangeChannels(
+								self.id,
+								self.output.midi(self.output.midi ^ (1 << channel)),
 							)
-							.padding(1)
-							.center_x(15)
-							.into())
-						))
-						.spacing(5),
-						row(once(
-							container(text("L").size(13).line_height(1.0))
-								.padding(1)
-								.center_x(15)
-								.into(),
-						)
-						.chain((0..transport.output_channels.get()).map(|channel| {
-							radio("", channel, Some(output.left), |_| {
-								Message::OutputChangeChannels(id, Some(output.left(channel)))
-							})
-							.size(15)
-							.text_size(1)
-							.spacing(0)
-							.into()
-						})))
-						.spacing(5),
-						row(once(
-							container(text("R").size(13).line_height(1.0))
-								.padding(1)
-								.center_x(15)
-								.into(),
-						)
-						.chain((0..transport.output_channels.get()).map(|channel| {
-							radio("", channel, Some(output.right), |_| {
-								Message::OutputChangeChannels(id, Some(output.right(channel)))
-							})
-							.size(15)
-							.text_size(1)
-							.spacing(0)
-							.into()
-						})))
-						.spacing(5),
-					]
-					.spacing(5),
-				)
-				.padding(5)
-				.style(container_with_radius(weaker_bordered_box, 5))
-			}),
+						})
+						.size(15)
+				]
+				.align_x(Center)
+				.spacing(5)
+				.into()
+			}))
+			.spacing(5),
 		)
+		.padding(5)
+		.style(container_with_radius(weaker_bordered_box, 5))
 		.into()
 	}
 }

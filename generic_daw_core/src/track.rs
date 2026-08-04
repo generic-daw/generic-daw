@@ -1,5 +1,5 @@
 use crate::{
-	Channel, Channels, Clip, ClipId, Event, MidiNote, Node, NodeAction, NodeId, Update,
+	Channel, Channels, Clip, ClipId, Event, MidiAction, MidiNote, Node, NodeAction, NodeId, Update,
 	audio_thread::{Scratch, State},
 	midi_clip::VoiceId,
 	voice_alloc::VoiceAlloc,
@@ -11,21 +11,30 @@ use rtrb::Producer;
 use std::collections::HashMap;
 
 #[derive(Debug)]
-pub struct Input {
-	producer: Producer<[f32; 2]>,
-	channels: Channels,
-}
-
-#[derive(Debug, Default)]
 pub struct Track {
 	clips: HashMap<ClipId, Clip>,
 	voice_alloc: VoiceAlloc<VoiceId, MidiNote>,
 	last_polyphony: usize,
-	input: Option<Input>,
+	input: Channels,
+	audio_producer: Option<Producer<[f32; 2]>>,
+	midi_producer: Option<Producer<MidiAction>>,
 	channel: Channel,
 }
 
 impl Track {
+	#[must_use]
+	pub fn new(input: Channels, output: Channels) -> Self {
+		Self {
+			clips: HashMap::new(),
+			voice_alloc: VoiceAlloc::default(),
+			last_polyphony: 0,
+			input,
+			audio_producer: None,
+			midi_producer: None,
+			channel: Channel::new(output),
+		}
+	}
+
 	pub fn process(
 		&mut self,
 		state: &State,
@@ -51,24 +60,66 @@ impl Track {
 			});
 		}
 
-		if let Some(input) = &mut self.input
-			&& state.render_mode == RenderMode::Realtime
-			&& input.channels.fits_in(state.transport.input_channels)
-		{
-			for ([l, r], frame) in audio.iter_mut().zip(
-				state
-					.input
-					.chunks_exact(state.transport.input_channels.into()),
-			) {
-				*l = frame[usize::from(input.channels.left)];
-				*r = frame[usize::from(input.channels.right)];
+		if state.render_mode == RenderMode::Realtime {
+			let iter = state
+				.midi_input
+				.iter()
+				.filter(|action| self.input.midi & (1 << action.channel().as_int()) != 0);
+
+			if self.input.enable_midi {
+				events.extend(iter.clone().map(|action| match action {
+					MidiAction::NoteOn(channel, key, velocity) => Event::On {
+						time: 0,
+						key: key.as_int(),
+						velocity: f32::from(velocity.as_int()) / 127.0,
+						note_id: Match::Specific(
+							i32::MAX.cast_unsigned() - 1 - u32::from(channel.as_int()),
+						),
+					},
+					MidiAction::NoteOff(channel, key, velocity) => Event::Off {
+						time: 0,
+						key: key.as_int(),
+						velocity: f32::from(velocity.as_int()) / 127.0,
+						note_id: Match::Specific(
+							i32::MAX.cast_unsigned() - 1 - u32::from(channel.as_int()),
+						),
+					},
+				}));
 			}
 
-			if state.transport.playing
-				&& let (_, rest) = input.producer.push_partial_slice(audio)
-				&& !rest.is_empty()
+			if let Some(producer) = &mut self.midi_producer {
+				for &event in iter {
+					if producer.push(event).is_err() {
+						warn!("full ring buffer");
+						break;
+					}
+				}
+			}
+
+			if self.input.fits_in(state.transport.input_channels)
+				&& (self.audio_producer.is_some() || self.input.enable_audio)
 			{
-				warn!("full ring buffer");
+				for ([l, r], frame) in audio.iter_mut().zip(
+					state
+						.audio_input
+						.chunks_exact(state.transport.input_channels.into()),
+				) {
+					*l = frame[usize::from(self.input.left)];
+					*r = frame[usize::from(self.input.right)];
+				}
+
+				if let Some(producer) = &mut self.audio_producer {
+					if state.transport.playing
+						&& let (_, rest) = producer.push_partial_slice(audio)
+						&& !rest.is_empty()
+					{
+						warn!("full ring buffer");
+					}
+
+					if !self.input.enable_audio {
+						audio.fill([0.0; 2]);
+					}
+				}
 			}
 		}
 
@@ -195,20 +246,33 @@ impl Track {
 					.unwrap()
 					.slip_to(pos, &state.transport);
 			}
-			NodeAction::InputStart(producer, channels) => {
-				let input = self.input.replace(Input { producer, channels });
-				debug_assert!(input.is_none());
+			NodeAction::InputSetChannels(channels) => {
+				if self.input.left != channels.left || self.input.right != channels.right {
+					self.channel
+						.push_update(Update::AudioInterrupted(self.channel.id()));
+				}
+
+				if self.input.midi != channels.midi {
+					self.channel
+						.push_update(Update::MidiInterrupted(self.channel.id()));
+				}
+
+				self.input = channels;
 			}
-			NodeAction::InputChangeChannels(channels) => {
-				self.input.as_mut().unwrap().channels = channels;
-				self.channel.push_update(Update::Interrupted(
-					Some(self.id()),
-					state.transport.position,
-				));
-			}
-			NodeAction::InputStop => {
-				let input = self.input.take();
-				debug_assert!(input.is_some());
+			NodeAction::InputSetAudioRecording(producer) => self.audio_producer = producer,
+			NodeAction::InputSetMidiRecording(producer) => {
+				self.midi_producer = producer;
+				if let Some(producer) = &mut self.midi_producer {
+					for (&(channel, key), &velocity) in &state.playing {
+						if producer
+							.push(MidiAction::NoteOn(channel, key, velocity))
+							.is_err()
+						{
+							warn!("full ring buffer");
+							break;
+						}
+					}
+				}
 			}
 			action => self.channel.apply(action),
 		}
@@ -229,7 +293,7 @@ impl Track {
 	}
 
 	#[must_use]
-	pub fn output(&self) -> Option<Channels> {
+	pub fn output(&self) -> Channels {
 		self.channel.output()
 	}
 
@@ -238,10 +302,15 @@ impl Track {
 	}
 
 	#[must_use]
-	pub fn from_channel(channel: Channel) -> Self {
+	pub fn from_channel(input: Channels, channel: Channel) -> Self {
 		Self {
+			clips: HashMap::new(),
+			voice_alloc: VoiceAlloc::default(),
+			last_polyphony: 0,
+			input,
+			audio_producer: None,
+			midi_producer: None,
 			channel,
-			..Self::default()
 		}
 	}
 

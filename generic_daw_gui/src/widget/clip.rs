@@ -1,5 +1,5 @@
 use crate::{
-	arrangement_view::{AudioClipRef, MidiClipRef, Recording, format_db},
+	arrangement_view::{AudioClipRef, AudioRecording, MidiClipRef, MidiRecording, format_db},
 	widget::{
 		ALPHA_1_3, ALPHA_2_3, LINE_HEIGHT, beats_snap_step, frames_per_px, maybe_snap,
 		playlist::{self, Action, Status},
@@ -80,7 +80,8 @@ impl Default for State {
 pub enum Inner<'a> {
 	AudioClip(AudioClipRef<'a>),
 	MidiClip(MidiClipRef<'a>),
-	Recording(&'a Recording),
+	AudioRecording(&'a AudioRecording),
+	MidiRecording(&'a MidiRecording),
 }
 
 impl<'a> From<AudioClipRef<'a>> for Inner<'a> {
@@ -95,9 +96,15 @@ impl<'a> From<MidiClipRef<'a>> for Inner<'a> {
 	}
 }
 
-impl<'a> From<&'a Recording> for Inner<'a> {
-	fn from(value: &'a Recording) -> Self {
-		Self::Recording(value)
+impl<'a> From<&'a AudioRecording> for Inner<'a> {
+	fn from(value: &'a AudioRecording) -> Self {
+		Self::AudioRecording(value)
+	}
+}
+
+impl<'a> From<&'a MidiRecording> for Inner<'a> {
+	fn from(value: &'a MidiRecording) -> Self {
+		Self::MidiRecording(value)
 	}
 }
 
@@ -130,31 +137,38 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					inner.clip.position.offset().to_beat_time(self.transport)
 				}
 				Inner::MidiClip(inner) => inner.clip.position.offset(),
-				Inner::Recording(..) => BeatTime::ZERO,
+				Inner::AudioRecording(..) | Inner::MidiRecording(..) => BeatTime::ZERO,
 			},
 			stretch: match self.inner {
 				Inner::AudioClip(inner) => {
 					frames_per_px(playlist.scale, self.transport) * inner.clip.stretch as f32
 				}
 				Inner::MidiClip(..) => 1.0,
-				Inner::Recording(..) => frames_per_px(playlist.scale, self.transport),
+				Inner::AudioRecording(..) | Inner::MidiRecording(..) => {
+					frames_per_px(playlist.scale, self.transport)
+				}
 			},
 			volume: match self.inner {
 				Inner::AudioClip(inner) => inner.clip.volume,
-				Inner::MidiClip(..) | Inner::Recording(..) => 1.0,
+				Inner::MidiClip(..) | Inner::AudioRecording(..) | Inner::MidiRecording(..) => 1.0,
 			},
 			fade_start: match self.inner {
 				Inner::AudioClip(inner) => inner.clip.fade_start,
-				Inner::MidiClip(..) | Inner::Recording(..) => Transition::default(),
+				Inner::MidiClip(..) | Inner::AudioRecording(..) | Inner::MidiRecording(..) => {
+					Transition::default()
+				}
 			},
 			fade_end: match self.inner {
 				Inner::AudioClip(inner) => inner.clip.fade_end,
-				Inner::MidiClip(..) | Inner::Recording(..) => Transition::default(),
+				Inner::MidiClip(..) | Inner::AudioRecording(..) | Inner::MidiRecording(..) => {
+					Transition::default()
+				}
 			},
 			addr: match self.inner {
 				Inner::AudioClip(inner) => std::ptr::from_ref(inner.sample).addr(),
 				Inner::MidiClip(inner) => std::ptr::from_ref(inner.pattern).addr(),
-				Inner::Recording(inner) => std::ptr::from_ref(inner).addr(),
+				Inner::AudioRecording(inner) => std::ptr::from_ref(inner).addr(),
+				Inner::MidiRecording(inner) => std::ptr::from_ref(inner).addr(),
 			},
 		};
 
@@ -202,7 +216,11 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				inner.clip.position.end(self.transport),
 			),
 			Inner::MidiClip(inner) => (inner.clip.position.start(), inner.clip.position.end()),
-			Inner::Recording(inner) => (inner.position, inner.end(self.transport)),
+			Inner::AudioRecording(inner) => (inner.position, inner.end(self.transport)),
+			Inner::MidiRecording(inner) => (
+				inner.position,
+				self.transport.position.to_beat_time(self.transport),
+			),
 		};
 
 		let start = time_to_px(start, playlist.position, playlist.scale, self.transport);
@@ -289,6 +307,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			return;
 		}
 
+		let header_height = header_height(&layout);
+
 		match event {
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Left,
@@ -303,7 +323,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 				match self.inner {
 					Inner::AudioClip(inner) => 'block: {
-						if cursor.y - clip_bounds.y.max(0.0) < LINE_HEIGHT {
+						if cursor.y - clip_bounds.y.max(0.0) < header_height {
 							break 'block;
 						}
 
@@ -316,16 +336,16 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						let fade_start_control = Point::new(
 							clip_bounds.x + inner.clip.fade_start.p.x * fade_start_px,
 							clip_bounds.y
-								+ LINE_HEIGHT + (1.0 - inner.clip.fade_start.p.y)
-								* (layout.bounds().height - LINE_HEIGHT),
+								+ header_height + (1.0 - inner.clip.fade_start.p.y)
+								* (layout.bounds().height - header_height),
 						);
 
 						let fade_end_control = Point::new(
 							clip_bounds.x
 								+ layout.bounds().width + inner.clip.fade_end.p.x * fade_end_px,
 							clip_bounds.y
-								+ LINE_HEIGHT + (1.0 - inner.clip.fade_end.p.y)
-								* (layout.bounds().height - LINE_HEIGHT),
+								+ header_height + (1.0 - inner.clip.fade_end.p.y)
+								* (layout.bounds().height - header_height),
 						);
 
 						let fade_start_control_dist = cursor.distance(fade_start_control);
@@ -369,7 +389,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							}
 						}
 
-						if cursor.y - clip_bounds.y > LINE_HEIGHT + 12.0 {
+						if cursor.y - clip_bounds.y > header_height + 12.0 {
 							break 'block;
 						}
 
@@ -412,7 +432,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							return;
 						}
 					}
-					Inner::Recording(..) => {}
+					Inner::AudioRecording(..) | Inner::MidiRecording(..) => unreachable!(),
 				}
 
 				let start_pixel = clip_bounds.x;
@@ -426,7 +446,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					modifiers.shift(),
 					start_offset < border,
 					end_offset < border,
-					cursor.y - clip_bounds.y.max(0.0) < LINE_HEIGHT,
+					cursor.y - clip_bounds.y.max(0.0) < header_height,
 				) {
 					(false, false, false, false, _) => Status::Dragging(index.0, time),
 					(false, _, true, false, _) => Status::TrimmingStart(time),
@@ -496,19 +516,21 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 		let state = tree.state.downcast_ref::<State>();
 
+		let header_height = header_height(&layout);
+
 		let mut upper_bounds = bounds;
-		upper_bounds.height = upper_bounds.height.min(LINE_HEIGHT);
+		upper_bounds.height = upper_bounds.height.min(header_height);
 
 		let color = match &self.inner {
-			Inner::AudioClip(AudioClipRef { .. }) | Inner::MidiClip(MidiClipRef { .. }) => {
-				match (state.enabled, state.selected) {
-					(true, true) => theme.palette().danger.weak.color,
-					(true, false) => theme.palette().primary.weak.color,
-					(false, true) => theme.palette().secondary.strong.color,
-					(false, false) => theme.palette().secondary.weak.color,
-				}
+			Inner::AudioClip(..) | Inner::MidiClip(..) => match (state.enabled, state.selected) {
+				(true, true) => theme.palette().danger.weak.color,
+				(true, false) => theme.palette().primary.weak.color,
+				(false, true) => theme.palette().secondary.strong.color,
+				(false, false) => theme.palette().secondary.weak.color,
+			},
+			Inner::AudioRecording(..) | Inner::MidiRecording(..) => {
+				theme.palette().warning.weak.color
 			}
-			Inner::Recording(..) => theme.palette().warning.weak.color,
 		};
 
 		renderer.fill_quad(
@@ -523,7 +545,8 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			let clip_name = match self.inner {
 				Inner::AudioClip(inner) => &*inner.sample.name,
 				Inner::MidiClip(inner) => &*inner.pattern.name,
-				Inner::Recording(inner) => &*inner.name,
+				Inner::AudioRecording(inner) => &*inner.name,
+				Inner::MidiRecording(inner) => &*inner.name,
 			};
 
 			let clip_name = Text {
@@ -546,9 +569,9 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					+ Vector::new(
 						3.0,
 						if upper_bounds.y == viewport.y {
-							upper_bounds.height - LINE_HEIGHT / 2.0
+							upper_bounds.height - header_height / 2.0
 						} else {
-							LINE_HEIGHT / 2.0
+							header_height / 2.0
 						},
 					),
 				theme.palette().background.strong.text,
@@ -587,7 +610,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 		match self.inner {
 			Inner::AudioClip(inner) => {
-				let unclipped_bounds = layout.bounds().shrink(padding::top(LINE_HEIGHT));
+				let unclipped_bounds = layout.bounds().shrink(padding::top(header_height));
 
 				if mesh_cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform", || {
@@ -810,12 +833,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					.pattern
 					.notes
 					.iter()
-					.fold((255, 0), |(min, max), note| {
-						(note.key.0.min(min), note.key.0.max(max))
-					});
+					.map(|note| note.key.0)
+					.fold((255, 0), |(min, max), key| (key.min(min), key.max(max)));
 
-				let note_height = (layout.bounds().height - LINE_HEIGHT) / f32::from(max - min + 3);
-				let offset = Vector::new(layout.position().x, layout.position().y + LINE_HEIGHT);
+				let note_height =
+					(layout.bounds().height - header_height) / f32::from(max - min + 3);
+				let offset = Vector::new(layout.position().x, layout.position().y + header_height);
 
 				for note in &inner.pattern.notes {
 					let start_pixel = note
@@ -850,7 +873,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					);
 				}
 			}
-			Inner::Recording(inner) => {
+			Inner::AudioRecording(inner) => {
 				if mesh_cache.is_empty()
 					&& let Some(mesh) = debug::time_with("Waveform", || {
 						inner.lods.mesh(
@@ -858,7 +881,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 							self.transport,
 							frames_per_px,
 							theme.palette().background.strong.text,
-							layout.bounds().shrink(padding::top(LINE_HEIGHT)),
+							layout.bounds().shrink(padding::top(header_height)),
 							lower_bounds,
 						)
 					}) {
@@ -871,6 +894,72 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 						renderer.draw_mesh_cache(mesh_cache.clone());
 					},
 				);
+			}
+			Inner::MidiRecording(inner) => 'blk: {
+				if lower_bounds.width < 1.0 || (inner.notes.is_empty() && inner.playing.is_empty())
+				{
+					break 'blk;
+				}
+
+				let (min, max) = inner
+					.notes
+					.iter()
+					.map(|note| note.key.0)
+					.chain(inner.playing.keys().map(|(_, key)| key.as_int()))
+					.fold((255, 0), |(min, max), key| (key.min(min), key.max(max)));
+
+				let note_height =
+					(layout.bounds().height - header_height) / f32::from(max - min + 3);
+				let offset = Vector::new(layout.position().x, layout.position().y + header_height);
+
+				for note in &inner.notes {
+					let start_pixel =
+						note.position.start().to_frames(self.transport) as f32 / frames_per_px;
+					let end_pixel =
+						note.position.end().to_frames(self.transport) as f32 / frames_per_px;
+
+					let top_pixel = f32::from(max - note.key.0 + 1) * note_height;
+
+					let Some(bounds) = Rectangle::new(
+						Point::new(start_pixel, top_pixel) + offset,
+						Size::new(end_pixel - start_pixel, note_height),
+					)
+					.intersection(&lower_bounds) else {
+						continue;
+					};
+
+					renderer.fill_quad(
+						Quad {
+							bounds,
+							..Quad::default()
+						},
+						theme.palette().background.strong.text,
+					);
+				}
+
+				for ((_, key), (_, start)) in &inner.playing {
+					let start_pixel = start.to_frames(self.transport) as f32 / frames_per_px;
+					let end_pixel =
+						self.transport.position.to_frames(self.transport) as f32 / frames_per_px;
+
+					let top_pixel = f32::from(max - key.as_int() + 1) * note_height;
+
+					let Some(bounds) = Rectangle::new(
+						Point::new(start_pixel, top_pixel) + offset,
+						Size::new(end_pixel - start_pixel, note_height),
+					)
+					.intersection(&lower_bounds) else {
+						continue;
+					};
+
+					renderer.fill_quad(
+						Quad {
+							bounds,
+							..Quad::default()
+						},
+						theme.palette().background.strong.text,
+					);
+				}
 			}
 		}
 	}
@@ -891,11 +980,12 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 			return Interaction::default();
 		};
 
+		let header_height = header_height(&layout);
 		let playlist = self.playlist.borrow();
 
 		match self.inner {
 			Inner::AudioClip(inner) => 'block: {
-				if cursor.y - (viewport.y - layout.position().y).max(0.0) < LINE_HEIGHT {
+				if cursor.y - (viewport.y - layout.position().y).max(0.0) < header_height {
 					break 'block;
 				}
 
@@ -907,14 +997,14 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 
 				let fade_start_control = Point::new(
 					inner.clip.fade_start.p.x * fade_start_px,
-					(1.0 - inner.clip.fade_start.p.y) * (layout.bounds().height - LINE_HEIGHT)
-						+ LINE_HEIGHT,
+					(1.0 - inner.clip.fade_start.p.y) * (layout.bounds().height - header_height)
+						+ header_height,
 				);
 
 				let fade_end_control = Point::new(
 					layout.bounds().width + inner.clip.fade_end.p.x * fade_end_px,
-					(1.0 - inner.clip.fade_end.p.y) * (layout.bounds().height - LINE_HEIGHT)
-						+ LINE_HEIGHT,
+					(1.0 - inner.clip.fade_end.p.y) * (layout.bounds().height - header_height)
+						+ header_height,
 				);
 
 				if fade_start_px >= 8.0 && cursor.distance(fade_start_control) <= 5.0
@@ -931,7 +1021,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					return Interaction::ResizingVertically;
 				}
 
-				if cursor.y > LINE_HEIGHT + 12.0 {
+				if cursor.y > header_height + 12.0 {
 					break 'block;
 				}
 
@@ -941,7 +1031,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					return Interaction::Pointer;
 				}
 			}
-			Inner::MidiClip(..) | Inner::Recording(..) => {}
+			Inner::MidiClip(..) | Inner::AudioRecording(..) | Inner::MidiRecording(..) => {}
 		}
 
 		match self.inner {
@@ -953,7 +1043,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 					(true, true) => unreachable!(),
 				}
 			}
-			Inner::Recording(..) => Interaction::NotAllowed,
+			Inner::AudioRecording(..) | Inner::MidiRecording(..) => Interaction::NotAllowed,
 		}
 	}
 }
@@ -985,5 +1075,13 @@ impl<'a, Message: 'a> Borrow<dyn Widget<Message, Theme, Renderer> + 'a> for Clip
 impl<'a, Message: 'a> BorrowMut<dyn Widget<Message, Theme, Renderer> + 'a> for Clip<'a, Message> {
 	fn borrow_mut(&mut self) -> &mut (dyn Widget<Message, Theme, Renderer> + 'a) {
 		self
+	}
+}
+
+fn header_height(layout: &Layout<'_>) -> f32 {
+	if layout.bounds().height < 2.0 * LINE_HEIGHT {
+		0.0
+	} else {
+		LINE_HEIGHT
 	}
 }

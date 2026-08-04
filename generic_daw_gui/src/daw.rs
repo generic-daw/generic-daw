@@ -17,7 +17,7 @@ use crate::{
 	widget::ALPHA_2_3,
 };
 use generic_daw_core::{
-	AudioThread, BpmTapper, NodeId, PluginId, build_audio_streams,
+	AudioThread, BpmTapper, NodeId, PluginId, build_streams,
 	clap_host::{
 		ClapId, DEFAULT_CLAP_PATHS, MainThreadMessage, Plugin, PluginDescriptor, RenderMode,
 		StateContextType,
@@ -26,9 +26,7 @@ use generic_daw_core::{
 use generic_daw_project::proto;
 use generic_daw_widget::menu::{Menu, Side};
 use iced::{
-	Center, Color, Element, Fill, Font,
-	Length::Shrink,
-	Subscription, Task, Theme, border, keyboard,
+	Center, Color, Element, Fill, Font, Shrink, Subscription, Task, Theme, border, keyboard,
 	mouse::Interaction,
 	padding,
 	time::every,
@@ -229,13 +227,14 @@ impl Daw {
 
 		let (p_sender, p_receiver) = oneshot::channel();
 
-		let (input_stream, output_stream, input_channels, output_channels, sample_rate, frames) =
-			build_audio_streams(
-				&config.audio.devices.as_core(),
-				config.audio.sample_rate,
-				config.audio.buffer_size,
-				p_receiver,
-			);
+		let (stream, input_channels, output_channels, sample_rate, frames) = build_streams(
+			&config.audio.devices.as_core(),
+			config.midi.input.as_deref(),
+			config.midi.output.as_deref(),
+			config.audio.sample_rate,
+			config.audio.buffer_size,
+			p_receiver,
+		);
 
 		let project = Project::unique();
 		let (mut arrangement, batches) = Arrangement::create(
@@ -245,7 +244,7 @@ impl Daw {
 			frames,
 			p_sender,
 		);
-		arrangement.replace_streams((input_stream, Some(output_stream)));
+		arrangement.replace_stream(Some(stream));
 		let arrangement_view = ArrangementView::new(arrangement, &state, None);
 		let clap_host = ClapHost::new(main_window_id);
 		let file_tree = FileTree::new(&config.sample_paths);
@@ -341,11 +340,7 @@ impl Daw {
 				view,
 			) => {
 				self.project = project;
-				arrangement.replace_streams(
-					self.arrangement_view
-						.arrangement
-						.replace_streams((None, None)),
-				);
+				arrangement.replace_stream(self.arrangement_view.arrangement.replace_stream(None));
 				let mut arrangement = std::mem::replace(
 					&mut self.arrangement_view,
 					ArrangementView::new(*arrangement, &self.state, view),
@@ -570,7 +565,7 @@ impl Daw {
 					self.file_tree.diff(&config.sample_paths);
 				}
 
-				if self.config.audio != config.audio {
+				if self.config.audio != config.audio || self.config.midi != config.midi {
 					let project = self.project;
 					fut = Task::batch([
 						fut,
@@ -745,24 +740,20 @@ impl Daw {
 		stack![
 			column![
 				row![
-					Menu::new(
-						menu(),
-						container(column![
-							menu_entry(None, "New", "Ctrl+N").on_press(Message::NewFile),
-							menu_entry(None, "Open", "Ctrl+O").on_press(Message::OpenFileDialog),
-							menu_entry(None, "Open Last", "Ctrl+Shift+O")
-								.on_press(Message::OpenLastFile),
-							menu_entry(None, "Save", "Ctrl+S").on_press(Message::SaveFile),
-							menu_entry(None, "Save As", "Ctrl+Shift+S")
-								.on_press(Message::SaveAsFileDialog),
-							menu_entry(None, "Render", "Ctrl+R")
-								.on_press(Message::RenderFileDialog),
-							menu_entry(None, "Settings", "Ctrl+,")
-								.on_press(Message::OpenConfigView),
-						])
-						.width(200)
-						.style(container_with_radius(weaker_bordered_box, 5))
-					)
+					Menu::new(menu(), || container(column![
+						menu_entry(None, "New", "Ctrl+N").on_press(Message::NewFile),
+						menu_entry(None, "Open", "Ctrl+O").on_press(Message::OpenFileDialog),
+						menu_entry(None, "Open Last", "Ctrl+Shift+O")
+							.on_press(Message::OpenLastFile),
+						menu_entry(None, "Save", "Ctrl+S").on_press(Message::SaveFile),
+						menu_entry(None, "Save As", "Ctrl+Shift+S")
+							.on_press(Message::SaveAsFileDialog),
+						menu_entry(None, "Render", "Ctrl+R").on_press(Message::RenderFileDialog),
+						menu_entry(None, "Settings", "Ctrl+,").on_press(Message::OpenConfigView),
+					])
+					.width(200)
+					.style(container_with_radius(weaker_bordered_box, 5))
+					.into())
 					.side(Side::Bottom)
 					.style(button_with_radius(button::background, 5))
 					.padding(padding::horizontal(7).vertical(5)),

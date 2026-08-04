@@ -1,4 +1,4 @@
-use crate::menu_overlay::MenuOverlay;
+use crate::{LazyElement, menu_overlay::MenuOverlay};
 use iced_widget::{
 	Renderer, button,
 	button::Catalog as _,
@@ -27,7 +27,7 @@ pub enum Side {
 pub struct Menu<'a, Message> {
 	content: Element<'a, Message, Theme, Renderer>,
 	#[expect(clippy::struct_field_names)]
-	menu: Element<'a, Message, Theme, Renderer>,
+	menu: LazyElement<'a, Message, Theme, Renderer>,
 	width: Length,
 	height: Length,
 	padding: Padding,
@@ -40,11 +40,11 @@ pub struct Menu<'a, Message> {
 impl<'a, Message> Menu<'a, Message> {
 	pub fn new(
 		content: impl Into<Element<'a, Message, Theme, Renderer>>,
-		menu: impl Into<Element<'a, Message, Theme, Renderer>>,
+		menu: impl Fn() -> Element<'a, Message, Theme, Renderer> + 'a,
 	) -> Self {
 		Menu {
 			content: content.into(),
-			menu: menu.into(),
+			menu: LazyElement::new(Box::new(menu)),
 			width: Length::Fit,
 			height: Length::Fit,
 			padding: button::DEFAULT_PADDING,
@@ -108,7 +108,11 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, Renderer> for Menu<'a, Mess
 	}
 
 	fn diff(&mut self, tree: &mut Tree) {
-		tree.diff_children(&mut [&mut self.content, &mut self.menu]);
+		if tree.state.downcast_ref::<State>().position.is_some() {
+			tree.diff_children(&mut [&mut self.content, &mut self.menu]);
+		} else {
+			tree.diff_children(&mut [&mut self.content]);
+		}
 
 		let size = self.content.as_widget().size();
 		self.width = self.width.stack(size.width);
@@ -178,38 +182,31 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, Renderer> for Menu<'a, Mess
 			Event::Mouse(mouse::Event::ButtonPressed {
 				button: mouse::Button::Left,
 				..
-			}) if !self.menu.as_widget().is_void() && cursor.is_over(layout.bounds()) => {
+			}) if cursor.is_over(layout.bounds()) => {
 				state.is_pressed = true;
 				shell.capture_event();
 			}
 			Event::Mouse(mouse::Event::ButtonReleased {
 				button: mouse::Button::Left,
 				..
-			}) if !self.menu.as_widget().is_void() && state.is_pressed => {
+			}) if state.is_pressed => {
 				state.is_pressed = false;
 				shell.capture_event();
 
 				if cursor.is_over(layout.bounds()) {
-					state.position = Some(
-						layout.position()
-							+ match self.side {
-								Side::Bottom => {
-									Vector::new(0.0, layout.bounds().height + self.spacing)
-								}
-								Side::Right => {
-									Vector::new(layout.bounds().width + self.spacing, 0.0)
-								}
-							},
-					);
+					state.position = Some(layout.position());
 					shell.request_redraw();
+
+					if tree.children.len() == 1 {
+						tree.children.push(Tree::new(&*self.menu));
+					}
+					self.menu.as_widget_mut().diff(&mut tree.children[1]);
 				}
 			}
 			_ => {}
 		}
 
-		let current_status = if self.menu.as_widget().is_void() {
-			button::Status::Disabled
-		} else if state.position.is_some() {
+		let current_status = if state.position.is_some() {
 			button::Status::Pressed
 		} else if !cursor.is_over(layout.bounds()) {
 			button::Status::Active
@@ -275,7 +272,7 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, Renderer> for Menu<'a, Mess
 		_viewport: &Rectangle,
 		_renderer: &Renderer,
 	) -> Interaction {
-		if cursor.is_over(layout.bounds()) && !self.menu.as_widget().is_void() {
+		if cursor.is_over(layout.bounds()) {
 			Interaction::Pointer
 		} else {
 			Interaction::default()
@@ -292,28 +289,51 @@ impl<'a, Message: Clone + 'a> Widget<Message, Theme, Renderer> for Menu<'a, Mess
 	) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
 		let state = tree.state.downcast_mut::<State>();
 
+		let Some(_) = state.position else {
+			return self.content.as_widget_mut().overlay(
+				&mut tree.children[0],
+				layout,
+				renderer,
+				viewport,
+				translation,
+			);
+		};
+
 		let [first, second] = &mut *tree.children else {
 			unreachable!();
 		};
 
-		let children = [
+		let menu = overlay::Element::new(Box::new(MenuOverlay {
+			content: &mut self.menu,
+			tree: second,
+			state: &mut state.position,
+			bounds: match self.side {
+				Side::Right => Rectangle::new(
+					layout.position() + Vector::new(layout.bounds().width, 0.0),
+					Size::new(
+						-layout.bounds().width - self.spacing,
+						layout.bounds().height + self.spacing,
+					),
+				),
+				Side::Bottom => Rectangle::new(
+					layout.position() + Vector::new(0.0, layout.bounds().height),
+					Size::new(
+						layout.bounds().width + self.spacing,
+						-layout.bounds().height - self.spacing,
+					),
+				),
+			},
+		}));
+
+		let Some(content_overlay) =
 			self.content
 				.as_widget_mut()
-				.overlay(first, layout, renderer, viewport, translation),
-			state.position.map(|position| {
-				overlay::Element::new(Box::new(MenuOverlay {
-					content: &mut self.menu,
-					tree: second,
-					state: &mut state.position,
-					position: position + translation,
-				}))
-			}),
-		]
-		.into_iter()
-		.flatten()
-		.collect::<Vec<_>>();
+				.overlay(first, layout, renderer, viewport, translation)
+		else {
+			return Some(menu);
+		};
 
-		(!children.is_empty()).then(|| overlay::Group::with_children(children).overlay())
+		Some(overlay::Group::with_children(vec![content_overlay, menu]).overlay())
 	}
 }
 
