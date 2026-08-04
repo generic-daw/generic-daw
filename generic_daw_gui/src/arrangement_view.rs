@@ -809,6 +809,15 @@ impl ArrangementView {
 				Tab::PianoRoll => self.piano_roll.get_mut().clear(),
 			},
 			Message::ToggleEnabled => match self.tab {
+				Tab::Playlist => {
+					if self.arrangement.node(self.selected).ty == NodeType::Track {
+						return self.update(
+							Message::TrackToggleEnabled(self.selected),
+							config,
+							state,
+						);
+					}
+				}
 				Tab::Mixer => match self.arrangement.node(self.selected).ty {
 					NodeType::Master => {}
 					NodeType::Channel => {
@@ -826,16 +835,16 @@ impl ArrangementView {
 						);
 					}
 				},
-				Tab::Playlist | Tab::PianoRoll => {}
+				Tab::PianoRoll => {}
 			},
 			Message::ToggleSolo => match self.tab {
-				Tab::Mixer => match self.arrangement.node(self.selected).ty {
+				Tab::Playlist | Tab::Mixer => match self.arrangement.node(self.selected).ty {
 					NodeType::Master | NodeType::Channel => {}
 					NodeType::Track => {
 						return self.update(Message::TrackToggleSolo(self.selected), config, state);
 					}
 				},
-				Tab::Playlist | Tab::PianoRoll => {}
+				Tab::PianoRoll => {}
 			},
 			Message::Duplicate => match self.tab {
 				Tab::Playlist => {
@@ -905,7 +914,15 @@ impl ArrangementView {
 			Message::Delete => match self.tab {
 				Tab::Playlist => {
 					self.playlist.get_mut().finish();
-					return self.handle_playlist_action(playlist::Action::Delete, config, state);
+					if !self.playlist.get_mut().primary.is_empty() {
+						return self.handle_playlist_action(
+							playlist::Action::Delete,
+							config,
+							state,
+						);
+					} else if self.arrangement.node(self.selected).ty == NodeType::Track {
+						return self.update(Message::TrackRemove(self.selected), config, state);
+					}
 				}
 				Tab::Mixer => match self.arrangement.node(self.selected).ty {
 					NodeType::Master => {}
