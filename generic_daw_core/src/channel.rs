@@ -1,39 +1,15 @@
-use crate::{Channels, Event, Node, NodeAction, NodeId, Update, audio_thread::State};
-use audio_graph::{
-	Inject,
-	thread_pool::{Injector, WorkList},
+use crate::{
+	Channels, Event, Node, NodeAction, NodeId, Update,
+	audio_thread::{Inject, Scratch, State},
 };
+use audio_graph::Injector;
 use clap_host::AudioThread;
 use dsp::Utility;
-use std::convert::Infallible;
 use utils::{ShiftMoveExt as _, unique_id};
 
 unique_id!(plugin);
 
 pub use plugin::Id as PluginId;
-
-#[derive(Debug)]
-pub struct ThreadPoolExecutor<'a>(clap_host::ThreadPoolExecutor<'a>);
-
-impl WorkList for ThreadPoolExecutor<'_> {
-	type Item = u32;
-	type Scratch = ();
-	type Inject = Infallible;
-
-	fn next_item(&self) -> Option<Self::Item> {
-		self.0.next_task()
-	}
-
-	fn do_work(
-		&self,
-		item: Self::Item,
-		_scratch: &mut Self::Scratch,
-		_injector: &Injector<Self::Inject>,
-	) -> Option<Self::Item> {
-		self.0.exec_task(item);
-		None
-	}
-}
 
 #[derive(Debug)]
 struct Plugin {
@@ -86,13 +62,20 @@ impl Channel {
 		state: &State,
 		audio: &mut [[f32; 2]],
 		events: &mut Vec<Event>,
-		injector: &Injector<Inject<Node>>,
+		scratch: &mut Scratch,
+		injector: &Injector<Node>,
 	) -> usize {
 		let acc = self
 			.updates
 			.pop_if(|update| matches!(update, Update::Peaks(..)));
 
 		let mut latency = 0;
+
+		if self.bypassed {
+			scratch.audio[..audio.len()].copy_from_slice(audio);
+			scratch.events.clear();
+			scratch.events.extend_from_slice(events);
+		}
 
 		for plugin in &mut self.plugins {
 			if let Some(processor) = &mut plugin.processor {
@@ -107,18 +90,17 @@ impl Channel {
 					|event| {
 						if let Some(update) = event.into_update(plugin.id) {
 							self.updates.push(update);
-						} else if !self.bypassed {
+						} else {
 							events.push(event);
 						}
 					},
 					Some(&state.transport.as_clap()),
 					Some(&mut |executor| {
 						let task_count = executor.task_count() as usize;
-						let executor = ThreadPoolExecutor(executor);
+						let executor = Inject(executor);
 						injector.inject(&executor, task_count);
 					}),
 					plugin.mix,
-					self.bypassed,
 				);
 
 				if !self.bypassed {
@@ -129,6 +111,12 @@ impl Channel {
 					plugin.processor.take().unwrap().restart();
 				}
 			}
+		}
+
+		if self.bypassed {
+			audio.copy_from_slice(&scratch.audio[..audio.len()]);
+			events.clear();
+			events.extend_from_slice(&scratch.events);
 		}
 
 		self.utility.process(audio);

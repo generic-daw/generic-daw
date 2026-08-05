@@ -1,6 +1,7 @@
 use crate::{
-	EventImpl as _, Inject, NodeId, NodeImpl,
-	entry::{Entry, Incoming},
+	EventImpl as _, Injector, NodeId, NodeImpl,
+	entry::{Entry, Incoming, Scratch},
+	node_impl::Inject,
 };
 use crossbeam_queue::ArrayQueue;
 use std::{
@@ -8,12 +9,12 @@ use std::{
 	num::NonZero,
 	sync::{RwLockWriteGuard, atomic::Ordering::Relaxed},
 };
-use thread_pool::{Injector, ThreadPool, WorkList};
-use utils::{NoDebug, boxed_slice};
+use thread_pool::{ThreadPool, WorkList};
+use utils::NoDebug;
 
 impl<Node: NodeImpl> WorkList for AudioGraph<Node> {
 	type Item = NodeId;
-	type Scratch = Box<[[f32; 2]]>;
+	type Scratch = Scratch<Node>;
 	type Inject = Inject<Node>;
 
 	fn next_item(&self) -> Option<Self::Item> {
@@ -24,7 +25,7 @@ impl<Node: NodeImpl> WorkList for AudioGraph<Node> {
 		&self,
 		item: Self::Item,
 		scratch: &mut Self::Scratch,
-		injector: &Injector<Inject<Node>>,
+		injector: &Injector<Node>,
 	) -> Option<Self::Item> {
 		self.process_node(&self.graph[&item], scratch, injector)
 	}
@@ -47,10 +48,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 		Self {
 			state,
 			graph: HashMap::new(),
-			pool: Some(
-				ThreadPool::new_with_scratch(|| boxed_slice![[0.0; 2]; max_frames.get() as usize])
-					.into(),
-			),
+			pool: Some(ThreadPool::new_with_scratch(|| Scratch::new(max_frames)).into()),
 			queue: ArrayQueue::new(4),
 			max_frames,
 			curr_len: 0,
@@ -66,10 +64,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			.values_mut()
 			.for_each(|entry| entry.change_max_frames(max_frames));
 		self.pool = None;
-		self.pool = Some(
-			ThreadPool::new_with_scratch(|| boxed_slice![[0.0; 2]; max_frames.get() as usize])
-				.into(),
-		);
+		self.pool = Some(ThreadPool::new_with_scratch(|| Scratch::new(max_frames)).into());
 		self.max_frames = max_frames;
 	}
 
@@ -143,8 +138,8 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 	fn process_node(
 		&self,
 		entry: &Entry<Node>,
-		scratch: &mut [[f32; 2]],
-		injector: &Injector<Inject<Node>>,
+		scratch: &mut Scratch<Node>,
+		injector: &Injector<Node>,
 	) -> Option<NodeId> {
 		debug_assert_eq!(entry.indegree.load(Relaxed), 0);
 
@@ -192,9 +187,9 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 			let audio = if latency_diff == 0 {
 				&dep_buffers.audio[..self.curr_len]
 			} else {
-				scratch[..self.curr_len].copy_from_slice(&dep_buffers.audio[..self.curr_len]);
-				delay_line.advance_mut(&mut scratch[..self.curr_len]);
-				&scratch[..self.curr_len]
+				scratch.buf[..self.curr_len].copy_from_slice(&dep_buffers.audio[..self.curr_len]);
+				delay_line.advance_mut(&mut scratch.buf[..self.curr_len]);
+				&scratch.buf[..self.curr_len]
 			};
 
 			audio
@@ -223,6 +218,7 @@ impl<Node: NodeImpl> AudioGraph<Node> {
 				&self.state,
 				&mut buffers.audio[..self.curr_len],
 				&mut buffers.events,
+				&mut scratch.node,
 				injector,
 			) + max_latency,
 			Relaxed,

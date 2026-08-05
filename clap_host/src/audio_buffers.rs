@@ -136,25 +136,25 @@ impl AudioBuffers {
 			.any(|f| f.abs() >= f32::EPSILON)
 	}
 
-	pub fn flush(&mut self, buf: &mut [[f32; 2]], mix_level: f32, bypass: bool) {
-		if bypass {
-			self.delay_line.advance(buf);
+	pub fn flush(&mut self, buf: &mut [[f32; 2]], mix_level: f32) {
+		self.delay_line.advance_mut(buf);
+
+		if self.output_buffers.is_empty() {
 			return;
 		}
 
-		self.delay_line.advance_mut(buf);
+		let Some(&n_channels) = self.output_config.channel_counts.first() else {
+			return;
+		};
 
-		for sample in buf.as_flattened_mut() {
-			*sample *= 1.0 - mix_level;
+		if n_channels != 0 {
+			for sample in buf.as_flattened_mut() {
+				*sample *= 1.0 - mix_level;
+			}
 		}
 	}
 
-	pub fn write_out(&mut self, buf: &mut [[f32; 2]], mix_level: f32, bypass: bool) {
-		if bypass {
-			self.delay_line.advance(buf);
-			return;
-		}
-
+	pub fn write_out(&mut self, buf: &mut [[f32; 2]], mix_level: f32) {
 		self.delay_line.advance_mut(buf);
 
 		let Some(output_buffer) = self.output_buffers.first() else {

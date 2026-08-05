@@ -1,12 +1,15 @@
 use crate::{
-	Channel, Channels, Clip, ClipId, MidiKey, MidiNote, MidiNoteId, MidiPattern, MidiPatternId,
-	Node, NodeId, PanMode, PluginId, Point, Sample, SampleId,
+	Channel, Channels, Clip, ClipId, Event, MidiKey, MidiNote, MidiNoteId, MidiPattern,
+	MidiPatternId, Node, NodeId, PanMode, PluginId, Point, Sample, SampleId,
 	clap_host::ClapId,
 	time::{BeatRange, BeatTime, SecondsTime},
 };
-use audio_graph::AudioGraph;
+use audio_graph::{
+	AudioGraph,
+	thread_pool::{Injector, WorkList},
+};
 use clap_host::{
-	RenderMode,
+	RenderMode, ThreadPoolExecutor,
 	events::{EventFlags, EventHeader, TransportEvent, TransportFlags},
 };
 use dsp::resample_cubic;
@@ -14,10 +17,11 @@ use log::{trace, warn};
 use rtrb::{Consumer, Producer, PushError};
 use std::{
 	collections::HashMap,
+	convert::Infallible,
 	num::NonZero,
 	time::{Duration, Instant},
 };
-use utils::{boxed_slice, include_f32s, unique_id};
+use utils::{NoDebug, boxed_slice, include_f32s, unique_id};
 
 unique_id!(version);
 
@@ -218,6 +222,35 @@ pub struct State {
 	pub midi_patterns: HashMap<MidiPatternId, MidiPattern>,
 	pub render_mode: RenderMode,
 	pub input: Box<[f32]>,
+}
+
+#[derive(Debug)]
+pub struct Scratch {
+	pub audio: NoDebug<Box<[[f32; 2]]>>,
+	pub events: Vec<Event>,
+}
+
+#[derive(Debug)]
+pub struct Inject<'a>(pub ThreadPoolExecutor<'a>);
+
+impl WorkList for Inject<'_> {
+	type Item = u32;
+	type Scratch = ();
+	type Inject = Infallible;
+
+	fn next_item(&self) -> Option<Self::Item> {
+		self.0.next_task()
+	}
+
+	fn do_work(
+		&self,
+		item: Self::Item,
+		_scratch: &mut Self::Scratch,
+		_injector: &Injector<Self::Inject>,
+	) -> Option<Self::Item> {
+		self.0.exec_task(item);
+		None
+	}
 }
 
 #[derive(Debug)]

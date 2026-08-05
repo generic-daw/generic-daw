@@ -58,7 +58,6 @@ impl AudioThread {
 		transport: Option<&TransportEvent>,
 		injector: Option<ThreadPoolInjector<'_>>,
 		mix_level: f32,
-		bypass: bool,
 	) {
 		self.processor.access_shared_handler(|s| {
 			CURRENT_THREAD_ID.with(|&id| s.audio_thread.store(id, Relaxed));
@@ -73,7 +72,7 @@ impl AudioThread {
 			.access_shared_handler(|s| s.request_process.swap(false, Relaxed));
 
 		if !self.processing && !request_process && !events_in && !*audio_in {
-			self.flush(audio, events, mix_level, bypass);
+			self.flush(audio, events, mix_level);
 			return;
 		}
 
@@ -135,12 +134,12 @@ impl AudioThread {
 							"{}: {err}",
 							self.processor.access_shared_handler(|s| &s.descriptor)
 						);
-						self.flush(audio, events, mix_level, bypass);
+						self.flush(audio, events, mix_level);
 						return;
 					}
 				};
 
-				self.audio_buffers.write_out(audio, mix_level, bypass);
+				self.audio_buffers.write_out(audio, mix_level);
 
 				for event in self.event_buffers.output_events() {
 					events(event);
@@ -156,7 +155,7 @@ impl AudioThread {
 					"{}: {err}",
 					self.processor.access_shared_handler(|s| &s.descriptor)
 				);
-				self.flush(audio, events, mix_level, bypass);
+				self.flush(audio, events, mix_level);
 			}
 		}
 	}
@@ -166,9 +165,8 @@ impl AudioThread {
 		audio: &mut [[f32; 2]],
 		events: impl FnMut(Event),
 		mix_level: f32,
-		bypass: bool,
 	) {
-		self.audio_buffers.flush(audio, mix_level, bypass);
+		self.audio_buffers.flush(audio, mix_level);
 		self.flush_events(events);
 	}
 

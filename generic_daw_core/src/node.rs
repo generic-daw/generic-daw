@@ -1,8 +1,10 @@
 use crate::{
-	Channel, Channels, Event, NodeAction, NodeImpl, Track, Update, audio_thread::State,
-	channel::ThreadPoolExecutor,
+	Channel, Channels, Event, NodeAction, NodeImpl, Track, Update,
+	audio_thread::{Inject, Scratch, State},
 };
-use audio_graph::{Inject, NodeId, thread_pool::Injector};
+use audio_graph::{Injector, NodeId};
+use std::num::NonZero;
+use utils::boxed_slice;
 
 #[derive(Debug)]
 pub enum Node {
@@ -13,18 +15,27 @@ pub enum Node {
 impl NodeImpl for Node {
 	type Event = Event;
 	type State = State;
-	type Inject<'a> = ThreadPoolExecutor<'a>;
+	type Scratch = Scratch;
+	type Inject<'a> = Inject<'a>;
+
+	fn make_scratch(max_frames: NonZero<u32>) -> Scratch {
+		Scratch {
+			audio: boxed_slice![[0.0; 2]; max_frames.get() as usize].into(),
+			events: Vec::new(),
+		}
+	}
 
 	fn process(
 		&mut self,
-		state: &Self::State,
+		state: &State,
 		audio: &mut [[f32; 2]],
-		events: &mut Vec<Self::Event>,
-		injector: &Injector<Inject<Self>>,
+		events: &mut Vec<Event>,
+		scratch: &mut Scratch,
+		injector: &Injector<Self>,
 	) -> usize {
 		match self {
-			Self::Channel(node) => node.process(state, audio, events, injector),
-			Self::Track(node) => node.process(state, audio, events, injector),
+			Self::Channel(node) => node.process(state, audio, events, scratch, injector),
+			Self::Track(node) => node.process(state, audio, events, scratch, injector),
 		}
 	}
 

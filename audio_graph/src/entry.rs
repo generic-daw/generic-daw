@@ -8,6 +8,21 @@ use std::{
 use utils::{NoDebug, boxed_slice};
 
 #[derive(Debug)]
+pub struct Scratch<Node: NodeImpl> {
+	pub buf: NoDebug<Box<[[f32; 2]]>>,
+	pub node: Node::Scratch,
+}
+
+impl<Node: NodeImpl> Scratch<Node> {
+	pub fn new(max_frames: NonZero<u32>) -> Self {
+		Self {
+			buf: boxed_slice![[0.0; 2]; max_frames.get() as usize].into(),
+			node: Node::make_scratch(max_frames),
+		}
+	}
+}
+
+#[derive(Debug)]
 pub struct Incoming<Node: NodeImpl> {
 	pub delay_line: DelayLine,
 	pub events: Vec<Node::Event>,

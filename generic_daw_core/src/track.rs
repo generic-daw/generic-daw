@@ -1,8 +1,10 @@
 use crate::{
 	Channel, Channels, Clip, ClipId, Event, MidiNote, Node, NodeAction, NodeId, Update,
-	audio_thread::State, midi_clip::VoiceId, voice_alloc::VoiceAlloc,
+	audio_thread::{Scratch, State},
+	midi_clip::VoiceId,
+	voice_alloc::VoiceAlloc,
 };
-use audio_graph::{Inject, thread_pool::Injector};
+use audio_graph::Injector;
 use clap_host::{RenderMode, events::Match};
 use log::warn;
 use rtrb::Producer;
@@ -29,7 +31,8 @@ impl Track {
 		state: &State,
 		audio: &mut [[f32; 2]],
 		events: &mut Vec<Event>,
-		injector: &Injector<Inject<Node>>,
+		scratch: &mut Scratch,
+		injector: &Injector<Node>,
 	) -> usize {
 		self.voice_alloc.deactivate_all();
 
@@ -75,7 +78,8 @@ impl Track {
 			}
 		}
 
-		self.channel.process(state, audio, events, injector)
+		self.channel
+			.process(state, audio, events, scratch, injector)
 	}
 
 	#[must_use]
