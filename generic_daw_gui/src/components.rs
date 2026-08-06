@@ -80,7 +80,7 @@ pub fn number_input<'a>(
 			.style(container_with_radius(weaker_bordered_box, 5))
 			.into()
 		),
-		text_input("", value.to_string())
+		text_input("", &value.to_string())
 			.style(move |t, s| {
 				let mut style = text_input::default(t, s);
 				style.border.radius = radius.left(0);
