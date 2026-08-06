@@ -3,15 +3,20 @@ use iced_widget::{
 	canvas::{Cache, Frame, Path, path::Arc},
 	core::{
 		Element, Event, Layout, Length, Point, Radians, Rectangle, Renderer as _, Shell, Size,
-		Theme, Vector, Widget, border,
+		Text, Theme, Vector, Widget,
+		alignment::Vertical,
+		border,
 		layout::{Limits, Node},
 		mouse::{self, Cursor, Interaction, ScrollDelta},
 		overlay,
 		renderer::{Quad, Style},
-		widget::{Text, Tree, tree},
+		text::{
+			self, Alignment, Ellipsis, LineHeight, Renderer as _, Shaping, Wrapping,
+			paragraph::Plain,
+		},
+		widget::{Tree, tree},
 	},
-	graphics::geometry::Renderer as _,
-	text,
+	graphics::{geometry::Renderer as _, text::Paragraph},
 };
 use std::{cell::RefCell, f32::consts::PI, ops::RangeInclusive};
 
@@ -22,6 +27,7 @@ struct State {
 	cache: Cache,
 	last_info: KnobInfo,
 	last_theme: RefCell<Option<Theme>>,
+	tooltip: Plain<Paragraph>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -38,7 +44,7 @@ struct KnobInfo {
 pub struct Knob<'a, Message> {
 	info: KnobInfo,
 	f: Box<dyn Fn(f32) -> Message + 'a>,
-	tooltip: Option<Text<'a, Theme, Renderer>>,
+	tooltip: Option<text::Fragment<'a>>,
 }
 
 impl<'a, Message> Knob<'a, Message> {
@@ -96,7 +102,7 @@ impl<'a, Message> Knob<'a, Message> {
 
 	#[must_use]
 	pub fn maybe_tooltip(mut self, tooltip: Option<impl text::IntoFragment<'a>>) -> Self {
-		self.tooltip = tooltip.map(|tooltip| text(tooltip).line_height(1.0));
+		self.tooltip = tooltip.map(text::IntoFragment::into_fragment);
 		self
 	}
 
@@ -222,12 +228,6 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 			state.last_info = self.info.clone();
 			state.cache.clear();
 		}
-
-		if let Some(tooltip) = self.tooltip.as_mut() {
-			tree.diff_children(&mut [tooltip as &mut dyn Widget<Message, Theme, Renderer>]);
-		} else {
-			tree.children.clear();
-		}
 	}
 
 	fn state(&self) -> tree::State {
@@ -238,6 +238,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 			cache: Cache::new(),
 			last_info: self.info.clone(),
 			last_theme: RefCell::default(),
+			tooltip: Plain::default(),
 		})
 	}
 
@@ -422,7 +423,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Knob<'_, Message> {
 			self.tooltip.as_mut().map(|tooltip| {
 				overlay::Element::new(Box::new(Overlay {
 					tooltip,
-					tree: &mut tree.children[0],
+					tree,
 					position: layout.position()
 						+ Vector::new(layout.bounds().width / 2.0, layout.bounds().height)
 						+ translation,
@@ -441,24 +442,34 @@ impl<'a, Message: 'a> From<Knob<'a, Message>> for Element<'a, Message, Theme, Re
 }
 
 struct Overlay<'a, 'b> {
-	tooltip: &'b mut Text<'a, Theme, Renderer>,
+	tooltip: &'b text::Fragment<'a>,
 	tree: &'b mut Tree,
 	position: Point,
 }
 
 impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 	fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
-		let padding = 3.0;
+		self.tree
+			.state
+			.downcast_mut::<State>()
+			.tooltip
+			.update(Text {
+				content: self.tooltip,
+				bounds,
+				size: renderer.default_size(),
+				line_height: LineHeight::Relative(1.0),
+				font: renderer.default_font(),
+				align_x: Alignment::Left,
+				align_y: Vertical::Top,
+				shaping: Shaping::Auto,
+				wrapping: Wrapping::None,
+				ellipsis: Ellipsis::None,
+				hint_factor: renderer.hint_factor(),
+			});
 
-		let mut layout = Widget::<Message, _, _>::layout(
-			self.tooltip,
-			self.tree,
-			renderer,
-			&Limits::new(Size::ZERO, bounds),
-		);
-
-		layout = Node::container(layout, padding.into()).move_to(self.position);
-		layout.translate_mut(Vector::new(layout.bounds().width / -2.0, padding));
+		let mut layout = Node::new(self.tree.state.downcast_ref::<State>().tooltip.min_bounds())
+			.move_to(self.position);
+		layout.translate_mut(Vector::new(layout.bounds().width / -2.0, 6.0));
 		layout.translate_mut(layout.bounds().offset(&Rectangle::with_size(bounds)));
 
 		layout
@@ -470,11 +481,11 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 		theme: &Theme,
 		style: &Style,
 		layout: Layout<'_>,
-		cursor: Cursor,
+		_cursor: Cursor,
 	) {
 		renderer.fill_quad(
 			Quad {
-				bounds: layout.bounds(),
+				bounds: layout.bounds().expand(3.0),
 				border: border::width(1)
 					.rounded(2)
 					.color(theme.palette().background.strong.color),
@@ -483,15 +494,11 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for Overlay<'_, '_> {
 			theme.palette().background.weak.color,
 		);
 
-		Widget::<Message, _, _>::draw(
-			self.tooltip,
-			self.tree,
-			renderer,
-			theme,
-			style,
-			layout.child(0),
-			cursor,
-			&Rectangle::INFINITE,
+		renderer.fill_paragraph(
+			self.tree.state.downcast_ref::<State>().tooltip.raw(),
+			layout.position(),
+			style.text_color,
+			Rectangle::INFINITE,
 		);
 	}
 }

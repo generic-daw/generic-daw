@@ -5,13 +5,13 @@ use iced::{
 };
 use sweeten::widget::{column, row};
 
-pub fn button_warning_text(theme: &Theme, status: button::Status) -> button::Style {
+pub fn button_warning_text(t: &Theme, s: button::Status) -> button::Style {
 	let base = button::Style {
-		text_color: theme.palette().warning.base.color,
+		text_color: t.palette().warning.base.color,
 		..button::Style::default()
 	};
 
-	match status {
+	match s {
 		button::Status::Active | button::Status::Pressed => base,
 		button::Status::Hovered => button::Style {
 			text_color: base.text_color.scale_alpha(0.8),
@@ -100,16 +100,16 @@ pub fn selectable_box(
 	}
 }
 
-pub fn slider_secondary(theme: &Theme, status: slider::Status) -> slider::Style {
-	let palette = theme.palette();
+pub fn slider_secondary(t: &Theme, s: slider::Status) -> slider::Style {
+	let palette = t.palette();
 
-	let color = match status {
+	let color = match s {
 		slider::Status::Active => palette.secondary.base.color,
 		slider::Status::Hovered => palette.secondary.strong.color,
 		slider::Status::Dragged => palette.secondary.weak.color,
 	};
 
-	let mut style = slider::default(theme, status);
+	let mut style = slider::default(t, s);
 	style.rail.backgrounds.0 = color.into();
 	style.handle.background = color.into();
 
@@ -176,8 +176,8 @@ pub fn sweeten_row_with_radius(
 	}
 }
 
-pub fn text_input_transparent(theme: &Theme, _status: text_input::Status) -> text_input::Style {
-	let palette = theme.palette();
+pub fn text_input_transparent(t: &Theme, _s: text_input::Status) -> text_input::Style {
+	let palette = t.palette();
 
 	text_input::Style {
 		background: Color::TRANSPARENT.into(),

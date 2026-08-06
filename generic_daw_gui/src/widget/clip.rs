@@ -19,15 +19,14 @@ use iced::{
 		layout::{Limits, Node},
 		mouse::{self, Click, Cursor, Interaction, click::Kind},
 		renderer::{Quad, Style},
-		text::{Renderer as _, paragraph::Plain},
+		text::{
+			Alignment, Ellipsis, LineHeight, Renderer as _, Shaping, Wrapping, paragraph::Plain,
+		},
 		widget::{Tree, tree},
 	},
 	alignment::Vertical,
 	border, debug, padding,
-	widget::{
-		canvas::{self, Frame, Path, Stroke, path::Builder},
-		text::{Alignment, Ellipsis, LineHeight, Shaping, Wrapping},
-	},
+	widget::canvas::{self, Frame, Path, Stroke, path::Builder},
 	window,
 };
 use std::{
@@ -204,7 +203,7 @@ impl<Message> Widget<Message, Theme, Renderer> for Clip<'_, Message> {
 				shaping: Shaping::Auto,
 				wrapping: Wrapping::None,
 				ellipsis: Ellipsis::None,
-				hint_factor: None,
+				hint_factor: renderer.hint_factor(),
 			});
 		}
 
