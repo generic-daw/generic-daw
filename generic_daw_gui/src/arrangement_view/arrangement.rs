@@ -511,21 +511,18 @@ impl Arrangement {
 		let solo = (self.solo != Some(id)).then_some(id);
 
 		if self.solo != solo {
-			if !self.node(id).enabled {
-				self.channel_toggle_enabled(id);
-			}
-
 			for i in 0..self.tracks.len() {
 				let node = self.node(self.tracks[i].id);
 
-				if !node.enabled
-					|| self.solo.is_none_or(|solo| solo == node.id)
-						== solo.is_none_or(|solo| solo == node.id)
-				{
-					continue;
+				if node.enabled {
+					if self.solo.is_none_or(|solo| solo == node.id)
+						!= solo.is_none_or(|solo| solo == node.id)
+					{
+						self.node_action(node.id, NodeAction::ChannelToggleEnabled);
+					}
+				} else if node.id == id {
+					self.channel_toggle_enabled(id);
 				}
-
-				self.node_action(node.id, NodeAction::ChannelToggleEnabled);
 			}
 
 			self.solo = solo;
