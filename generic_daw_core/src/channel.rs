@@ -85,11 +85,7 @@ impl Channel {
 
 		for plugin in &mut self.plugins {
 			if let Some(processor) = &mut plugin.processor {
-				if self.bypassed {
-					processor.push_all(events.iter().copied());
-				} else {
-					processor.push_all(events.drain(..));
-				}
+				processor.push_all(events.drain(..));
 
 				processor.process::<Event>(
 					audio,
